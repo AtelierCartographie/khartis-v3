@@ -1,0 +1,56 @@
+{
+  "limit-level-0": {
+    "description_fr": "Limites du niveau le plus fin (communes, NUTS 3, etc.)",
+    "description_en": "Finest level boundaries (communes, NUTS 3, etc.)",
+    "layer_type": "path",
+    "width": 0.5,
+    "widthUnits": "pixels",
+    "color": [150, 150, 150, 200]
+  },
+  "limit-level-1": {
+    "description_fr": "Limites du niveau intermédiaire (départements, NUTS 2, etc.)",
+    "description_en": "Intermediate level boundaries (departments, NUTS 2, etc.)",
+    "layer_type": "path",
+    "width": 1.0,
+    "widthUnits": "pixels",
+    "color": [100, 100, 100, 220]
+  },
+  "limit-level-2": {
+    "description_fr": "Limites du niveau large (régions, NUTS 1, États, etc.)",
+    "description_en": "Broad level boundaries (regions, NUTS 1, states, etc.)",
+    "layer_type": "path",
+    "width": 1.5,
+    "widthUnits": "pixels",
+    "color": [60, 60, 60, 255]
+  },
+  "land": {
+    "description_fr": "Territoire général (fond polygone)",
+    "description_en": "General territory (polygon fill)",
+    "layer_type": "solid-polygon",
+    "fillColor": [220, 220, 220, 255],
+    "stroked": false
+  },
+  "nuts-land": {
+    "description_fr": "Territoire NUTS (fond polygone pour le contour des zones NUTS)",
+    "description_en": "NUTS territory (polygon fill for NUTS zones outline)",
+    "layer_type": "solid-polygon",
+    "fillColor": [232, 232, 232, 255],
+    "stroked": false
+  },
+  "graticule": {
+    "description_fr": "Graticules (méridiens et parallèles réguliers, générés à la volée)",
+    "description_en": "Graticules (regular meridians and parallels, generated on the fly)",
+    "layer_type": "path",
+    "width": 0.5,
+    "widthUnits": "pixels",
+    "color": [160, 190, 220, 90]
+  },
+  "geographic-lines": {
+    "description_fr": "Lignes géographiques remarquables (équateur, tropiques, cercles polaires, méridien de Greenwich)",
+    "description_en": "Notable geographic lines (equator, tropics, polar circles, Greenwich meridian)",
+    "layer_type": "path",
+    "width": 1.0,
+    "widthUnits": "pixels",
+    "color": [100, 150, 210, 160]
+  }
+}

@@ -1,132 +1,1940 @@
 [
   {
-    "file": "world-countries-50m",
-    "title": "World > countries",
-    "description": "Natural Earth 50m admin 0 countries",
-    "level": "Pays",
-    "source": "Natural Earth",
-    "date": "2024",
-    "bbox": [-180, -90, 180, 90],
-    "projection": "WGS84",
-    "layers": []
-  },
-  {
-    "file": "nuts2-europe-2021",
-    "title": "Europe > NUTS 2 regions",
-    "description": "NUTS level 2 regions (basic regions for the application of regional policies) - 2021 classification",
-    "level": "NUTS 2",
-    "source": "Eurostat GISCO",
+    "file": "europe-nuts1-2021-low",
+    "title_fr": "Europe",
+    "subtitle_fr": "par NUTS 1",
+    "title_en": "Europe",
+    "subtitle_en": "by NUTS 1",
+    "source": "Eurostat - GISCO",
     "date": "2021",
-    "bbox": [-31.27, 27.64, 44.82, 71.19],
-    "projection": "WGS84",
-    "layers": []
-  },
-  {
-    "file": "france-canton-2025",
-    "title": "France > cantons",
-    "description": "Fond de carte des cantons français issus d'ADMIN EXPRESS COG CARTOPLUS 2025",
-    "level": "Cantons",
-    "source": "IGN - ADMIN EXPRESS COG CARTOPLUS",
-    "date": "2025",
-    "bbox": [-5.52, 40.98, 10.7, 50.85],
-    "projection": "Lambert-93",
+    "bbox": [
+      -63.13,
+      -21.4,
+      55.86,
+      80.4
+    ],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "EUROPE_DOM_TOM",
+      "proj4": null
+    },
+    "simplification_level": "low",
     "layers": [
       {
-        "title": "Centroids des cantons",
+        "title_fr": "Centroids des NUTS 1",
+        "title_en": "NUTS 1 centroids",
         "type": "centroid",
-        "file": "france-canton-centroids-2025"
+        "file": "europe-nuts1-centroids-2021-low",
+        "style": null
       },
       {
-        "title": "Limites des cantons",
+        "title_fr": "Limites des NUTS 1",
+        "title_en": "NUTS 1 boundaries",
         "type": "limit",
-        "file": "france-canton-limites-2025"
+        "file": "europe-nuts1-limites-2021-low",
+        "style": "limit-level-0"
       },
       {
-        "title": "Limites des départements",
-        "type": "limit",
-        "file": "france-departement-limites-2025"
+        "title_fr": "Graticules (10°)",
+        "title_en": "Graticules (10°)",
+        "type": "graticule",
+        "file": "europe-graticule-10",
+        "style": "graticule",
+        "step": 10
       },
       {
-        "title": "Limites des régions",
-        "type": "limit",
-        "file": "france-region-limites-2025"
+        "title_fr": "Territoire NUTS",
+        "title_en": "NUTS territory",
+        "type": "land",
+        "file": "europe-nuts-land-2021-low",
+        "style": "nuts-land"
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "europe-land-2020-low",
+        "style": "land"
       }
-    ]
+    ],
+    "description_fr": "Fond de carte des régions NUTS 1 européennes issue de GISCO 2021",
+    "description_en": "Map of European NUTS 1 regions from GISCO 2021"
   },
   {
-    "file": "france-commune-2025",
-    "title": "France > communes",
-    "description": "Fond de carte des communes françaises compatible COG 2025",
-    "level": "Communes",
-    "source": "IGN - ADMIN EXPRESS COG CARTOPLUS",
-    "date": "2025",
-    "bbox": [-5.52, 40.98, 10.7, 50.85],
-    "projection": "Lambert-93",
+    "file": "europe-nuts1-2024-low",
+    "title_fr": "Europe",
+    "subtitle_fr": "par NUTS 1",
+    "title_en": "Europe",
+    "subtitle_en": "by NUTS 1",
+    "source": "Eurostat - GISCO",
+    "date": "2024",
+    "bbox": [
+      -63.13,
+      -21.4,
+      55.86,
+      80.4
+    ],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "EUROPE_DOM_TOM",
+      "proj4": null
+    },
+    "simplification_level": "low",
     "layers": [
       {
-        "title": "Chefs-lieux des communes",
+        "title_fr": "Centroids des NUTS 1",
+        "title_en": "NUTS 1 centroids",
         "type": "centroid",
-        "file": "france-commune-centroids-2025"
+        "file": "europe-nuts1-centroids-2024-low",
+        "style": null
       },
       {
-        "title": "Limites des départements",
+        "title_fr": "Limites des NUTS 1",
+        "title_en": "NUTS 1 boundaries",
         "type": "limit",
-        "file": "france-departement-limites-2025"
+        "file": "europe-nuts1-limites-2024-low",
+        "style": "limit-level-0"
       },
       {
-        "title": "Limites des régions",
-        "type": "limit",
-        "file": "france-region-limites-2025"
+        "title_fr": "Graticules (10°)",
+        "title_en": "Graticules (10°)",
+        "type": "graticule",
+        "file": "europe-graticule-10",
+        "style": "graticule",
+        "step": 10
+      },
+      {
+        "title_fr": "Territoire NUTS",
+        "title_en": "NUTS territory",
+        "type": "land",
+        "file": "europe-nuts-land-2024-low",
+        "style": "nuts-land"
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "europe-land-2024-low",
+        "style": "land"
       }
-    ]
+    ],
+    "description_fr": "Fond de carte des régions NUTS 1 européennes issue de GISCO 2024",
+    "description_en": "Map of European NUTS 1 regions from GISCO 2024"
   },
   {
-    "file": "france-departement-2025",
-    "title": "France > départements",
-    "description": "Fond de carte des départements français issus d'ADMIN EXPRESS COG CARTOPLUS 2025",
-    "level": "Départements",
-    "source": "IGN - ADMIN EXPRESS COG CARTOPLUS",
-    "date": "2025",
-    "bbox": [-5.52, 40.98, 10.7, 50.85],
-    "projection": "Lambert-93",
+    "file": "europe-nuts2-2021-low",
+    "title_fr": "Europe",
+    "subtitle_fr": "par NUTS 2",
+    "title_en": "Europe",
+    "subtitle_en": "by NUTS 2",
+    "source": "Eurostat - GISCO",
+    "date": "2021",
+    "bbox": [
+      -63.13,
+      -21.4,
+      55.86,
+      80.4
+    ],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "EUROPE_DOM_TOM",
+      "proj4": null
+    },
+    "simplification_level": "low",
     "layers": [
       {
-        "title": "Centroids des départements",
+        "title_fr": "Centroids des NUTS 2",
+        "title_en": "NUTS 2 centroids",
         "type": "centroid",
-        "file": "france-departement-centroids-2025"
+        "file": "europe-nuts2-centroids-2021-low",
+        "style": null
       },
       {
-        "title": "Limites des départements",
+        "title_fr": "Limites des NUTS 2",
+        "title_en": "NUTS 2 boundaries",
         "type": "limit",
-        "file": "france-departement-limites-2025"
+        "file": "europe-nuts2-limites-2021-low",
+        "style": "limit-level-0"
       },
       {
-        "title": "Limites des régions",
+        "title_fr": "Limites des NUTS 1",
+        "title_en": "NUTS 1 boundaries",
         "type": "limit",
-        "file": "france-region-limites-2025"
+        "file": "europe-nuts1-limites-2021-low",
+        "style": "limit-level-1"
+      },
+      {
+        "title_fr": "Graticules (10°)",
+        "title_en": "Graticules (10°)",
+        "type": "graticule",
+        "file": "europe-graticule-10",
+        "style": "graticule",
+        "step": 10
+      },
+      {
+        "title_fr": "Territoire NUTS",
+        "title_en": "NUTS territory",
+        "type": "land",
+        "file": "europe-nuts-land-2021-low",
+        "style": "nuts-land"
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "europe-land-2020-low",
+        "style": "land"
       }
-    ]
+    ],
+    "description_fr": "Fond de carte des régions NUTS 2 européennes issue de GISCO 2021",
+    "description_en": "Map of European NUTS 2 regions from GISCO 2021"
   },
   {
-    "file": "france-region-2025",
-    "title": "France > régions",
-    "description": "Fond de carte des régions françaises issus d'ADMIN EXPRESS COG CARTOPLUS 2025",
-    "level": "Régions",
-    "source": "IGN - ADMIN EXPRESS COG CARTOPLUS",
-    "date": "2025",
-    "bbox": [-5.52, 40.98, 10.7, 50.85],
-    "projection": "Lambert-93",
+    "file": "europe-nuts2-2024-low",
+    "title_fr": "Europe",
+    "subtitle_fr": "par NUTS 2",
+    "title_en": "Europe",
+    "subtitle_en": "by NUTS 2",
+    "source": "Eurostat - GISCO",
+    "date": "2024",
+    "bbox": [
+      -63.13,
+      -21.4,
+      55.86,
+      80.4
+    ],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "EUROPE_DOM_TOM",
+      "proj4": null
+    },
+    "simplification_level": "low",
     "layers": [
       {
-        "title": "Centroids des régions",
+        "title_fr": "Centroids des NUTS 2",
+        "title_en": "NUTS 2 centroids",
         "type": "centroid",
-        "file": "france-region-centroids-2025"
+        "file": "europe-nuts2-centroids-2024-low",
+        "style": null
       },
       {
-        "title": "Limites des régions",
+        "title_fr": "Limites des NUTS 2",
+        "title_en": "NUTS 2 boundaries",
         "type": "limit",
-        "file": "france-region-limites-2025"
+        "file": "europe-nuts2-limites-2024-low",
+        "style": "limit-level-0"
+      },
+      {
+        "title_fr": "Limites des NUTS 1",
+        "title_en": "NUTS 1 boundaries",
+        "type": "limit",
+        "file": "europe-nuts1-limites-2024-low",
+        "style": "limit-level-1"
+      },
+      {
+        "title_fr": "Graticules (10°)",
+        "title_en": "Graticules (10°)",
+        "type": "graticule",
+        "file": "europe-graticule-10",
+        "style": "graticule",
+        "step": 10
+      },
+      {
+        "title_fr": "Territoire NUTS",
+        "title_en": "NUTS territory",
+        "type": "land",
+        "file": "europe-nuts-land-2024-low",
+        "style": "nuts-land"
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "europe-land-2024-low",
+        "style": "land"
       }
-    ]
+    ],
+    "description_fr": "Fond de carte des régions NUTS 2 européennes issue de GISCO 2024",
+    "description_en": "Map of European NUTS 2 regions from GISCO 2024"
+  },
+  {
+    "file": "europe-nuts3-2021-low",
+    "title_fr": "Europe",
+    "subtitle_fr": "par NUTS 3",
+    "title_en": "Europe",
+    "subtitle_en": "by NUTS 3",
+    "source": "Eurostat - GISCO",
+    "date": "2021",
+    "bbox": [
+      -63.13,
+      -21.4,
+      55.86,
+      80.4
+    ],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "EUROPE_DOM_TOM",
+      "proj4": null
+    },
+    "simplification_level": "low",
+    "layers": [
+      {
+        "title_fr": "Centroids des NUTS 3",
+        "title_en": "NUTS 3 centroids",
+        "type": "centroid",
+        "file": "europe-nuts3-centroids-2021-low",
+        "style": null
+      },
+      {
+        "title_fr": "Limites des NUTS 3",
+        "title_en": "NUTS 3 boundaries",
+        "type": "limit",
+        "file": "europe-nuts3-limites-2021-low",
+        "style": "limit-level-0"
+      },
+      {
+        "title_fr": "Limites des NUTS 2",
+        "title_en": "NUTS 2 boundaries",
+        "type": "limit",
+        "file": "europe-nuts2-limites-2021-low",
+        "style": "limit-level-1"
+      },
+      {
+        "title_fr": "Limites des NUTS 1",
+        "title_en": "NUTS 1 boundaries",
+        "type": "limit",
+        "file": "europe-nuts1-limites-2021-low",
+        "style": "limit-level-2"
+      },
+      {
+        "title_fr": "Graticules (10°)",
+        "title_en": "Graticules (10°)",
+        "type": "graticule",
+        "file": "europe-graticule-10",
+        "style": "graticule",
+        "step": 10
+      },
+      {
+        "title_fr": "Territoire NUTS",
+        "title_en": "NUTS territory",
+        "type": "land",
+        "file": "europe-nuts-land-2021-low",
+        "style": "nuts-land"
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "europe-land-2020-low",
+        "style": "land"
+      }
+    ],
+    "description_fr": "Fond de carte des régions NUTS 3 européennes issue de GISCO 2021",
+    "description_en": "Map of European NUTS 3 regions from GISCO 2021"
+  },
+  {
+    "file": "europe-nuts3-2024-low",
+    "title_fr": "Europe",
+    "subtitle_fr": "par NUTS 3",
+    "title_en": "Europe",
+    "subtitle_en": "by NUTS 3",
+    "source": "Eurostat - GISCO",
+    "date": "2024",
+    "bbox": [
+      -63.13,
+      -21.4,
+      55.86,
+      80.4
+    ],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "EUROPE_DOM_TOM",
+      "proj4": null
+    },
+    "simplification_level": "low",
+    "layers": [
+      {
+        "title_fr": "Centroids des NUTS 3",
+        "title_en": "NUTS 3 centroids",
+        "type": "centroid",
+        "file": "europe-nuts3-centroids-2024-low",
+        "style": null
+      },
+      {
+        "title_fr": "Limites des NUTS 3",
+        "title_en": "NUTS 3 boundaries",
+        "type": "limit",
+        "file": "europe-nuts3-limites-2024-low",
+        "style": "limit-level-0"
+      },
+      {
+        "title_fr": "Limites des NUTS 2",
+        "title_en": "NUTS 2 boundaries",
+        "type": "limit",
+        "file": "europe-nuts2-limites-2024-low",
+        "style": "limit-level-1"
+      },
+      {
+        "title_fr": "Limites des NUTS 1",
+        "title_en": "NUTS 1 boundaries",
+        "type": "limit",
+        "file": "europe-nuts1-limites-2024-low",
+        "style": "limit-level-2"
+      },
+      {
+        "title_fr": "Graticules (10°)",
+        "title_en": "Graticules (10°)",
+        "type": "graticule",
+        "file": "europe-graticule-10",
+        "style": "graticule",
+        "step": 10
+      },
+      {
+        "title_fr": "Territoire NUTS",
+        "title_en": "NUTS territory",
+        "type": "land",
+        "file": "europe-nuts-land-2024-low",
+        "style": "nuts-land"
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "europe-land-2024-low",
+        "style": "land"
+      }
+    ],
+    "description_fr": "Fond de carte des régions NUTS 3 européennes issue de GISCO 2024",
+    "description_en": "Map of European NUTS 3 regions from GISCO 2024"
+  },
+  {
+    "file": "europe-nuts1-2021-medium",
+    "title_fr": "Europe",
+    "subtitle_fr": "par NUTS 1",
+    "title_en": "Europe",
+    "subtitle_en": "by NUTS 1",
+    "source": "Eurostat - GISCO",
+    "date": "2021",
+    "bbox": [
+      -63.13,
+      -21.4,
+      55.86,
+      80.4
+    ],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "EUROPE_DOM_TOM",
+      "proj4": null
+    },
+    "simplification_level": "medium",
+    "layers": [
+      {
+        "title_fr": "Centroids des NUTS 1",
+        "title_en": "NUTS 1 centroids",
+        "type": "centroid",
+        "file": "europe-nuts1-centroids-2021-medium",
+        "style": null
+      },
+      {
+        "title_fr": "Limites des NUTS 1",
+        "title_en": "NUTS 1 boundaries",
+        "type": "limit",
+        "file": "europe-nuts1-limites-2021-medium",
+        "style": "limit-level-0"
+      },
+      {
+        "title_fr": "Graticules (10°)",
+        "title_en": "Graticules (10°)",
+        "type": "graticule",
+        "file": "europe-graticule-10",
+        "style": "graticule",
+        "step": 10
+      },
+      {
+        "title_fr": "Territoire NUTS",
+        "title_en": "NUTS territory",
+        "type": "land",
+        "file": "europe-nuts-land-2021-medium",
+        "style": "nuts-land"
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "europe-land-2020-medium",
+        "style": "land"
+      }
+    ],
+    "description_fr": "Fond de carte des régions NUTS 1 européennes issue de GISCO 2021",
+    "description_en": "Map of European NUTS 1 regions from GISCO 2021"
+  },
+  {
+    "file": "europe-nuts1-2024-medium",
+    "title_fr": "Europe",
+    "subtitle_fr": "par NUTS 1",
+    "title_en": "Europe",
+    "subtitle_en": "by NUTS 1",
+    "source": "Eurostat - GISCO",
+    "date": "2024",
+    "bbox": [
+      -63.13,
+      -21.4,
+      55.86,
+      80.4
+    ],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "EUROPE_DOM_TOM",
+      "proj4": null
+    },
+    "simplification_level": "medium",
+    "layers": [
+      {
+        "title_fr": "Centroids des NUTS 1",
+        "title_en": "NUTS 1 centroids",
+        "type": "centroid",
+        "file": "europe-nuts1-centroids-2024-medium",
+        "style": null
+      },
+      {
+        "title_fr": "Limites des NUTS 1",
+        "title_en": "NUTS 1 boundaries",
+        "type": "limit",
+        "file": "europe-nuts1-limites-2024-medium",
+        "style": "limit-level-0"
+      },
+      {
+        "title_fr": "Graticules (10°)",
+        "title_en": "Graticules (10°)",
+        "type": "graticule",
+        "file": "europe-graticule-10",
+        "style": "graticule",
+        "step": 10
+      },
+      {
+        "title_fr": "Territoire NUTS",
+        "title_en": "NUTS territory",
+        "type": "land",
+        "file": "europe-nuts-land-2024-medium",
+        "style": "nuts-land"
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "europe-land-2024-medium",
+        "style": "land"
+      }
+    ],
+    "description_fr": "Fond de carte des régions NUTS 1 européennes issue de GISCO 2024",
+    "description_en": "Map of European NUTS 1 regions from GISCO 2024"
+  },
+  {
+    "file": "europe-nuts2-2021-medium",
+    "title_fr": "Europe",
+    "subtitle_fr": "par NUTS 2",
+    "title_en": "Europe",
+    "subtitle_en": "by NUTS 2",
+    "source": "Eurostat - GISCO",
+    "date": "2021",
+    "bbox": [
+      -63.13,
+      -21.4,
+      55.86,
+      80.4
+    ],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "EUROPE_DOM_TOM",
+      "proj4": null
+    },
+    "simplification_level": "medium",
+    "layers": [
+      {
+        "title_fr": "Centroids des NUTS 2",
+        "title_en": "NUTS 2 centroids",
+        "type": "centroid",
+        "file": "europe-nuts2-centroids-2021-medium",
+        "style": null
+      },
+      {
+        "title_fr": "Limites des NUTS 2",
+        "title_en": "NUTS 2 boundaries",
+        "type": "limit",
+        "file": "europe-nuts2-limites-2021-medium",
+        "style": "limit-level-0"
+      },
+      {
+        "title_fr": "Limites des NUTS 1",
+        "title_en": "NUTS 1 boundaries",
+        "type": "limit",
+        "file": "europe-nuts1-limites-2021-medium",
+        "style": "limit-level-1"
+      },
+      {
+        "title_fr": "Graticules (10°)",
+        "title_en": "Graticules (10°)",
+        "type": "graticule",
+        "file": "europe-graticule-10",
+        "style": "graticule",
+        "step": 10
+      },
+      {
+        "title_fr": "Territoire NUTS",
+        "title_en": "NUTS territory",
+        "type": "land",
+        "file": "europe-nuts-land-2021-medium",
+        "style": "nuts-land"
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "europe-land-2020-medium",
+        "style": "land"
+      }
+    ],
+    "description_fr": "Fond de carte des régions NUTS 2 européennes issue de GISCO 2021",
+    "description_en": "Map of European NUTS 2 regions from GISCO 2021"
+  },
+  {
+    "file": "europe-nuts2-2024-medium",
+    "title_fr": "Europe",
+    "subtitle_fr": "par NUTS 2",
+    "title_en": "Europe",
+    "subtitle_en": "by NUTS 2",
+    "source": "Eurostat - GISCO",
+    "date": "2024",
+    "bbox": [
+      -63.13,
+      -21.4,
+      55.86,
+      80.4
+    ],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "EUROPE_DOM_TOM",
+      "proj4": null
+    },
+    "simplification_level": "medium",
+    "layers": [
+      {
+        "title_fr": "Centroids des NUTS 2",
+        "title_en": "NUTS 2 centroids",
+        "type": "centroid",
+        "file": "europe-nuts2-centroids-2024-medium",
+        "style": null
+      },
+      {
+        "title_fr": "Limites des NUTS 2",
+        "title_en": "NUTS 2 boundaries",
+        "type": "limit",
+        "file": "europe-nuts2-limites-2024-medium",
+        "style": "limit-level-0"
+      },
+      {
+        "title_fr": "Limites des NUTS 1",
+        "title_en": "NUTS 1 boundaries",
+        "type": "limit",
+        "file": "europe-nuts1-limites-2024-medium",
+        "style": "limit-level-1"
+      },
+      {
+        "title_fr": "Graticules (10°)",
+        "title_en": "Graticules (10°)",
+        "type": "graticule",
+        "file": "europe-graticule-10",
+        "style": "graticule",
+        "step": 10
+      },
+      {
+        "title_fr": "Territoire NUTS",
+        "title_en": "NUTS territory",
+        "type": "land",
+        "file": "europe-nuts-land-2024-medium",
+        "style": "nuts-land"
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "europe-land-2024-medium",
+        "style": "land"
+      }
+    ],
+    "description_fr": "Fond de carte des régions NUTS 2 européennes issue de GISCO 2024",
+    "description_en": "Map of European NUTS 2 regions from GISCO 2024"
+  },
+  {
+    "file": "europe-nuts3-2021-medium",
+    "title_fr": "Europe",
+    "subtitle_fr": "par NUTS 3",
+    "title_en": "Europe",
+    "subtitle_en": "by NUTS 3",
+    "source": "Eurostat - GISCO",
+    "date": "2021",
+    "bbox": [
+      -63.13,
+      -21.4,
+      55.86,
+      80.4
+    ],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "EUROPE_DOM_TOM",
+      "proj4": null
+    },
+    "simplification_level": "medium",
+    "layers": [
+      {
+        "title_fr": "Centroids des NUTS 3",
+        "title_en": "NUTS 3 centroids",
+        "type": "centroid",
+        "file": "europe-nuts3-centroids-2021-medium",
+        "style": null
+      },
+      {
+        "title_fr": "Limites des NUTS 3",
+        "title_en": "NUTS 3 boundaries",
+        "type": "limit",
+        "file": "europe-nuts3-limites-2021-medium",
+        "style": "limit-level-0"
+      },
+      {
+        "title_fr": "Limites des NUTS 2",
+        "title_en": "NUTS 2 boundaries",
+        "type": "limit",
+        "file": "europe-nuts2-limites-2021-medium",
+        "style": "limit-level-1"
+      },
+      {
+        "title_fr": "Limites des NUTS 1",
+        "title_en": "NUTS 1 boundaries",
+        "type": "limit",
+        "file": "europe-nuts1-limites-2021-medium",
+        "style": "limit-level-2"
+      },
+      {
+        "title_fr": "Graticules (10°)",
+        "title_en": "Graticules (10°)",
+        "type": "graticule",
+        "file": "europe-graticule-10",
+        "style": "graticule",
+        "step": 10
+      },
+      {
+        "title_fr": "Territoire NUTS",
+        "title_en": "NUTS territory",
+        "type": "land",
+        "file": "europe-nuts-land-2021-medium",
+        "style": "nuts-land"
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "europe-land-2020-medium",
+        "style": "land"
+      }
+    ],
+    "description_fr": "Fond de carte des régions NUTS 3 européennes issue de GISCO 2021",
+    "description_en": "Map of European NUTS 3 regions from GISCO 2021"
+  },
+  {
+    "file": "europe-nuts3-2024-medium",
+    "title_fr": "Europe",
+    "subtitle_fr": "par NUTS 3",
+    "title_en": "Europe",
+    "subtitle_en": "by NUTS 3",
+    "source": "Eurostat - GISCO",
+    "date": "2024",
+    "bbox": [
+      -63.13,
+      -21.4,
+      55.86,
+      80.4
+    ],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "EUROPE_DOM_TOM",
+      "proj4": null
+    },
+    "simplification_level": "medium",
+    "layers": [
+      {
+        "title_fr": "Centroids des NUTS 3",
+        "title_en": "NUTS 3 centroids",
+        "type": "centroid",
+        "file": "europe-nuts3-centroids-2024-medium",
+        "style": null
+      },
+      {
+        "title_fr": "Limites des NUTS 3",
+        "title_en": "NUTS 3 boundaries",
+        "type": "limit",
+        "file": "europe-nuts3-limites-2024-medium",
+        "style": "limit-level-0"
+      },
+      {
+        "title_fr": "Limites des NUTS 2",
+        "title_en": "NUTS 2 boundaries",
+        "type": "limit",
+        "file": "europe-nuts2-limites-2024-medium",
+        "style": "limit-level-1"
+      },
+      {
+        "title_fr": "Limites des NUTS 1",
+        "title_en": "NUTS 1 boundaries",
+        "type": "limit",
+        "file": "europe-nuts1-limites-2024-medium",
+        "style": "limit-level-2"
+      },
+      {
+        "title_fr": "Graticules (10°)",
+        "title_en": "Graticules (10°)",
+        "type": "graticule",
+        "file": "europe-graticule-10",
+        "style": "graticule",
+        "step": 10
+      },
+      {
+        "title_fr": "Territoire NUTS",
+        "title_en": "NUTS territory",
+        "type": "land",
+        "file": "europe-nuts-land-2024-medium",
+        "style": "nuts-land"
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "europe-land-2024-medium",
+        "style": "land"
+      }
+    ],
+    "description_fr": "Fond de carte des régions NUTS 3 européennes issue de GISCO 2024",
+    "description_en": "Map of European NUTS 3 regions from GISCO 2024"
+  },
+  {
+    "file": "europe-nuts1-2021-high",
+    "title_fr": "Europe",
+    "subtitle_fr": "par NUTS 1",
+    "title_en": "Europe",
+    "subtitle_en": "by NUTS 1",
+    "source": "Eurostat - GISCO",
+    "date": "2021",
+    "bbox": [
+      -63.13,
+      -21.4,
+      55.86,
+      80.4
+    ],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "EUROPE_DOM_TOM",
+      "proj4": null
+    },
+    "simplification_level": "high",
+    "layers": [
+      {
+        "title_fr": "Centroids des NUTS 1",
+        "title_en": "NUTS 1 centroids",
+        "type": "centroid",
+        "file": "europe-nuts1-centroids-2021-high",
+        "style": null
+      },
+      {
+        "title_fr": "Limites des NUTS 1",
+        "title_en": "NUTS 1 boundaries",
+        "type": "limit",
+        "file": "europe-nuts1-limites-2021-high",
+        "style": "limit-level-0"
+      },
+      {
+        "title_fr": "Graticules (10°)",
+        "title_en": "Graticules (10°)",
+        "type": "graticule",
+        "file": "europe-graticule-10",
+        "style": "graticule",
+        "step": 10
+      },
+      {
+        "title_fr": "Territoire NUTS",
+        "title_en": "NUTS territory",
+        "type": "land",
+        "file": "europe-nuts-land-2021-high",
+        "style": "nuts-land"
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "europe-land-2020-high",
+        "style": "land"
+      }
+    ],
+    "description_fr": "Fond de carte des régions NUTS 1 européennes issue de GISCO 2021",
+    "description_en": "Map of European NUTS 1 regions from GISCO 2021"
+  },
+  {
+    "file": "europe-nuts1-2024-high",
+    "title_fr": "Europe",
+    "subtitle_fr": "par NUTS 1",
+    "title_en": "Europe",
+    "subtitle_en": "by NUTS 1",
+    "source": "Eurostat - GISCO",
+    "date": "2024",
+    "bbox": [
+      -63.13,
+      -21.4,
+      55.86,
+      80.4
+    ],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "EUROPE_DOM_TOM",
+      "proj4": null
+    },
+    "simplification_level": "high",
+    "layers": [
+      {
+        "title_fr": "Centroids des NUTS 1",
+        "title_en": "NUTS 1 centroids",
+        "type": "centroid",
+        "file": "europe-nuts1-centroids-2024-high",
+        "style": null
+      },
+      {
+        "title_fr": "Limites des NUTS 1",
+        "title_en": "NUTS 1 boundaries",
+        "type": "limit",
+        "file": "europe-nuts1-limites-2024-high",
+        "style": "limit-level-0"
+      },
+      {
+        "title_fr": "Graticules (10°)",
+        "title_en": "Graticules (10°)",
+        "type": "graticule",
+        "file": "europe-graticule-10",
+        "style": "graticule",
+        "step": 10
+      },
+      {
+        "title_fr": "Territoire NUTS",
+        "title_en": "NUTS territory",
+        "type": "land",
+        "file": "europe-nuts-land-2024-high",
+        "style": "nuts-land"
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "europe-land-2024-high",
+        "style": "land"
+      }
+    ],
+    "description_fr": "Fond de carte des régions NUTS 1 européennes issue de GISCO 2024",
+    "description_en": "Map of European NUTS 1 regions from GISCO 2024"
+  },
+  {
+    "file": "europe-nuts2-2021-high",
+    "title_fr": "Europe",
+    "subtitle_fr": "par NUTS 2",
+    "title_en": "Europe",
+    "subtitle_en": "by NUTS 2",
+    "source": "Eurostat - GISCO",
+    "date": "2021",
+    "bbox": [
+      -63.13,
+      -21.4,
+      55.86,
+      80.4
+    ],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "EUROPE_DOM_TOM",
+      "proj4": null
+    },
+    "simplification_level": "high",
+    "layers": [
+      {
+        "title_fr": "Centroids des NUTS 2",
+        "title_en": "NUTS 2 centroids",
+        "type": "centroid",
+        "file": "europe-nuts2-centroids-2021-high",
+        "style": null
+      },
+      {
+        "title_fr": "Limites des NUTS 2",
+        "title_en": "NUTS 2 boundaries",
+        "type": "limit",
+        "file": "europe-nuts2-limites-2021-high",
+        "style": "limit-level-0"
+      },
+      {
+        "title_fr": "Limites des NUTS 1",
+        "title_en": "NUTS 1 boundaries",
+        "type": "limit",
+        "file": "europe-nuts1-limites-2021-high",
+        "style": "limit-level-1"
+      },
+      {
+        "title_fr": "Graticules (10°)",
+        "title_en": "Graticules (10°)",
+        "type": "graticule",
+        "file": "europe-graticule-10",
+        "style": "graticule",
+        "step": 10
+      },
+      {
+        "title_fr": "Territoire NUTS",
+        "title_en": "NUTS territory",
+        "type": "land",
+        "file": "europe-nuts-land-2021-high",
+        "style": "nuts-land"
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "europe-land-2020-high",
+        "style": "land"
+      }
+    ],
+    "description_fr": "Fond de carte des régions NUTS 2 européennes issue de GISCO 2021",
+    "description_en": "Map of European NUTS 2 regions from GISCO 2021"
+  },
+  {
+    "file": "europe-nuts2-2024-high",
+    "title_fr": "Europe",
+    "subtitle_fr": "par NUTS 2",
+    "title_en": "Europe",
+    "subtitle_en": "by NUTS 2",
+    "source": "Eurostat - GISCO",
+    "date": "2024",
+    "bbox": [
+      -63.13,
+      -21.4,
+      55.86,
+      80.4
+    ],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "EUROPE_DOM_TOM",
+      "proj4": null
+    },
+    "simplification_level": "high",
+    "layers": [
+      {
+        "title_fr": "Centroids des NUTS 2",
+        "title_en": "NUTS 2 centroids",
+        "type": "centroid",
+        "file": "europe-nuts2-centroids-2024-high",
+        "style": null
+      },
+      {
+        "title_fr": "Limites des NUTS 2",
+        "title_en": "NUTS 2 boundaries",
+        "type": "limit",
+        "file": "europe-nuts2-limites-2024-high",
+        "style": "limit-level-0"
+      },
+      {
+        "title_fr": "Limites des NUTS 1",
+        "title_en": "NUTS 1 boundaries",
+        "type": "limit",
+        "file": "europe-nuts1-limites-2024-high",
+        "style": "limit-level-1"
+      },
+      {
+        "title_fr": "Graticules (10°)",
+        "title_en": "Graticules (10°)",
+        "type": "graticule",
+        "file": "europe-graticule-10",
+        "style": "graticule",
+        "step": 10
+      },
+      {
+        "title_fr": "Territoire NUTS",
+        "title_en": "NUTS territory",
+        "type": "land",
+        "file": "europe-nuts-land-2024-high",
+        "style": "nuts-land"
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "europe-land-2024-high",
+        "style": "land"
+      }
+    ],
+    "description_fr": "Fond de carte des régions NUTS 2 européennes issue de GISCO 2024",
+    "description_en": "Map of European NUTS 2 regions from GISCO 2024"
+  },
+  {
+    "file": "europe-nuts3-2021-high",
+    "title_fr": "Europe",
+    "subtitle_fr": "par NUTS 3",
+    "title_en": "Europe",
+    "subtitle_en": "by NUTS 3",
+    "source": "Eurostat - GISCO",
+    "date": "2021",
+    "bbox": [
+      -63.13,
+      -21.4,
+      55.86,
+      80.4
+    ],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "EUROPE_DOM_TOM",
+      "proj4": null
+    },
+    "simplification_level": "high",
+    "layers": [
+      {
+        "title_fr": "Centroids des NUTS 3",
+        "title_en": "NUTS 3 centroids",
+        "type": "centroid",
+        "file": "europe-nuts3-centroids-2021-high",
+        "style": null
+      },
+      {
+        "title_fr": "Limites des NUTS 3",
+        "title_en": "NUTS 3 boundaries",
+        "type": "limit",
+        "file": "europe-nuts3-limites-2021-high",
+        "style": "limit-level-0"
+      },
+      {
+        "title_fr": "Limites des NUTS 2",
+        "title_en": "NUTS 2 boundaries",
+        "type": "limit",
+        "file": "europe-nuts2-limites-2021-high",
+        "style": "limit-level-1"
+      },
+      {
+        "title_fr": "Limites des NUTS 1",
+        "title_en": "NUTS 1 boundaries",
+        "type": "limit",
+        "file": "europe-nuts1-limites-2021-high",
+        "style": "limit-level-2"
+      },
+      {
+        "title_fr": "Graticules (10°)",
+        "title_en": "Graticules (10°)",
+        "type": "graticule",
+        "file": "europe-graticule-10",
+        "style": "graticule",
+        "step": 10
+      },
+      {
+        "title_fr": "Territoire NUTS",
+        "title_en": "NUTS territory",
+        "type": "land",
+        "file": "europe-nuts-land-2021-high",
+        "style": "nuts-land"
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "europe-land-2020-high",
+        "style": "land"
+      }
+    ],
+    "description_fr": "Fond de carte des régions NUTS 3 européennes issue de GISCO 2021",
+    "description_en": "Map of European NUTS 3 regions from GISCO 2021"
+  },
+  {
+    "file": "europe-nuts3-2024-high",
+    "title_fr": "Europe",
+    "subtitle_fr": "par NUTS 3",
+    "title_en": "Europe",
+    "subtitle_en": "by NUTS 3",
+    "source": "Eurostat - GISCO",
+    "date": "2024",
+    "bbox": [
+      -63.13,
+      -21.4,
+      55.86,
+      80.4
+    ],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "EUROPE_DOM_TOM",
+      "proj4": null
+    },
+    "simplification_level": "high",
+    "layers": [
+      {
+        "title_fr": "Centroids des NUTS 3",
+        "title_en": "NUTS 3 centroids",
+        "type": "centroid",
+        "file": "europe-nuts3-centroids-2024-high",
+        "style": null
+      },
+      {
+        "title_fr": "Limites des NUTS 3",
+        "title_en": "NUTS 3 boundaries",
+        "type": "limit",
+        "file": "europe-nuts3-limites-2024-high",
+        "style": "limit-level-0"
+      },
+      {
+        "title_fr": "Limites des NUTS 2",
+        "title_en": "NUTS 2 boundaries",
+        "type": "limit",
+        "file": "europe-nuts2-limites-2024-high",
+        "style": "limit-level-1"
+      },
+      {
+        "title_fr": "Limites des NUTS 1",
+        "title_en": "NUTS 1 boundaries",
+        "type": "limit",
+        "file": "europe-nuts1-limites-2024-high",
+        "style": "limit-level-2"
+      },
+      {
+        "title_fr": "Graticules (10°)",
+        "title_en": "Graticules (10°)",
+        "type": "graticule",
+        "file": "europe-graticule-10",
+        "style": "graticule",
+        "step": 10
+      },
+      {
+        "title_fr": "Territoire NUTS",
+        "title_en": "NUTS territory",
+        "type": "land",
+        "file": "europe-nuts-land-2024-high",
+        "style": "nuts-land"
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "europe-land-2024-high",
+        "style": "land"
+      }
+    ],
+    "description_fr": "Fond de carte des régions NUTS 3 européennes issue de GISCO 2024",
+    "description_en": "Map of European NUTS 3 regions from GISCO 2024"
+  },
+  {
+    "file": "france-canton-2025-medium",
+    "title_fr": "France",
+    "subtitle_fr": "par cantons",
+    "title_en": "France",
+    "subtitle_en": "by cantons",
+    "source": "IGN - ADMIN EXPRESS COG CARTO",
+    "date": "2025",
+    "bbox": [
+      -61.81,
+      -21.39,
+      55.84,
+      51.09
+    ],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "FRANCE_DOM_TOM",
+      "proj4": null
+    },
+    "simplification_level": "medium",
+    "layers": [
+      {
+        "title_fr": "Centroids des cantons",
+        "title_en": "Canton centroids",
+        "type": "centroid",
+        "file": "france-canton-centroids-2025-medium",
+        "style": null
+      },
+      {
+        "title_fr": "Limites des cantons",
+        "title_en": "Canton boundaries",
+        "type": "limit",
+        "file": "france-canton-limites-2025-medium",
+        "style": "limit-level-0"
+      },
+      {
+        "title_fr": "Limites des départements",
+        "title_en": "Department boundaries",
+        "type": "limit",
+        "file": "france-departement-limites-2025-medium",
+        "style": "limit-level-1"
+      },
+      {
+        "title_fr": "Limites des régions",
+        "title_en": "Region boundaries",
+        "type": "limit",
+        "file": "france-region-limites-2025-medium",
+        "style": "limit-level-2"
+      },
+      {
+        "title_fr": "Graticules (5°)",
+        "title_en": "Graticules (5°)",
+        "type": "graticule",
+        "file": "france-graticule-5",
+        "style": "graticule",
+        "step": 5
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "france-land-2025-medium",
+        "style": "land"
+      }
+    ],
+    "description_fr": "Fond de carte des cantons français issue de ADMIN EXPRESS COG CARTO 2025",
+    "description_en": "Map of French cantons from ADMIN EXPRESS COG CARTO 2025"
+  },
+  {
+    "file": "france-commune-2025-medium",
+    "title_fr": "France",
+    "subtitle_fr": "par communes",
+    "title_en": "France",
+    "subtitle_en": "by communes",
+    "source": "IGN - ADMIN EXPRESS COG CARTO",
+    "date": "2025",
+    "bbox": [
+      -61.81,
+      -21.39,
+      55.84,
+      51.09
+    ],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "FRANCE_DOM_TOM",
+      "proj4": null
+    },
+    "simplification_level": "medium",
+    "layers": [
+      {
+        "title_fr": "Chefs-lieux des communes",
+        "title_en": "Heads of municipalities",
+        "type": "centroid",
+        "file": "france-commune-centroids-2025-medium",
+        "style": null
+      },
+      {
+        "title_fr": "Limites des communes",
+        "title_en": "Commune boundaries",
+        "type": "limit",
+        "file": "france-commune-limites-2025-medium",
+        "style": "limit-level-0"
+      },
+      {
+        "title_fr": "Limites des départements",
+        "title_en": "Department boundaries",
+        "type": "limit",
+        "file": "france-departement-limites-2025-medium",
+        "style": "limit-level-1"
+      },
+      {
+        "title_fr": "Limites des régions",
+        "title_en": "Region boundaries",
+        "type": "limit",
+        "file": "france-region-limites-2025-medium",
+        "style": "limit-level-2"
+      },
+      {
+        "title_fr": "Graticules (5°)",
+        "title_en": "Graticules (5°)",
+        "type": "graticule",
+        "file": "france-graticule-5",
+        "style": "graticule",
+        "step": 5
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "france-land-2025-medium",
+        "style": "land"
+      }
+    ],
+    "description_fr": "Fond de carte des communes françaises issue de ADMIN EXPRESS COG CARTO 2025",
+    "description_en": "Map of French communes from ADMIN EXPRESS COG CARTO 2025"
+  },
+  {
+    "file": "france-departement-2025-medium",
+    "title_fr": "France",
+    "subtitle_fr": "par départements",
+    "title_en": "France",
+    "subtitle_en": "by departments",
+    "source": "IGN - ADMIN EXPRESS COG CARTO",
+    "date": "2025",
+    "bbox": [
+      -61.81,
+      -21.39,
+      55.84,
+      51.09
+    ],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "FRANCE_DOM_TOM",
+      "proj4": null
+    },
+    "simplification_level": "medium",
+    "layers": [
+      {
+        "title_fr": "Centroids des départements",
+        "title_en": "Department centroids",
+        "type": "centroid",
+        "file": "france-departement-centroids-2025-medium",
+        "style": null
+      },
+      {
+        "title_fr": "Limites des départements",
+        "title_en": "Department boundaries",
+        "type": "limit",
+        "file": "france-departement-limites-2025-medium",
+        "style": "limit-level-0"
+      },
+      {
+        "title_fr": "Limites des régions",
+        "title_en": "Region boundaries",
+        "type": "limit",
+        "file": "france-region-limites-2025-medium",
+        "style": "limit-level-1"
+      },
+      {
+        "title_fr": "Graticules (5°)",
+        "title_en": "Graticules (5°)",
+        "type": "graticule",
+        "file": "france-graticule-5",
+        "style": "graticule",
+        "step": 5
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "france-land-2025-medium",
+        "style": "land"
+      }
+    ],
+    "description_fr": "Fond de carte des départements français issue de ADMIN EXPRESS COG CARTO 2025",
+    "description_en": "Map of French departments from ADMIN EXPRESS COG CARTO 2025"
+  },
+  {
+    "file": "france-region-2025-medium",
+    "title_fr": "France",
+    "subtitle_fr": "par régions",
+    "title_en": "France",
+    "subtitle_en": "by regions",
+    "source": "IGN - ADMIN EXPRESS COG CARTO",
+    "date": "2025",
+    "bbox": [
+      -61.81,
+      -21.39,
+      55.84,
+      51.09
+    ],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "FRANCE_DOM_TOM",
+      "proj4": null
+    },
+    "simplification_level": "medium",
+    "layers": [
+      {
+        "title_fr": "Centroids des régions",
+        "title_en": "Region centroids",
+        "type": "centroid",
+        "file": "france-region-centroids-2025-medium",
+        "style": null
+      },
+      {
+        "title_fr": "Limites des régions",
+        "title_en": "Region boundaries",
+        "type": "limit",
+        "file": "france-region-limites-2025-medium",
+        "style": "limit-level-0"
+      },
+      {
+        "title_fr": "Graticules (5°)",
+        "title_en": "Graticules (5°)",
+        "type": "graticule",
+        "file": "france-graticule-5",
+        "style": "graticule",
+        "step": 5
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "france-land-2025-medium",
+        "style": "land"
+      }
+    ],
+    "description_fr": "Fond de carte des régions françaises issue de ADMIN EXPRESS COG CARTO 2025",
+    "description_en": "Map of French regions from ADMIN EXPRESS COG CARTO 2025"
+  },
+  {
+    "file": "france-canton-2025-high",
+    "title_fr": "France",
+    "subtitle_fr": "par cantons",
+    "title_en": "France",
+    "subtitle_en": "by cantons",
+    "source": "IGN - ADMIN EXPRESS COG CARTO-PE",
+    "date": "2025",
+    "bbox": [
+      -61.81,
+      -21.39,
+      55.83,
+      51.09
+    ],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "FRANCE_DOM_TOM",
+      "proj4": null
+    },
+    "simplification_level": "high",
+    "layers": [
+      {
+        "title_fr": "Centroids des cantons",
+        "title_en": "Canton centroids",
+        "type": "centroid",
+        "file": "france-canton-centroids-2025-high",
+        "style": null
+      },
+      {
+        "title_fr": "Limites des cantons",
+        "title_en": "Canton boundaries",
+        "type": "limit",
+        "file": "france-canton-limites-2025-high",
+        "style": "limit-level-0"
+      },
+      {
+        "title_fr": "Limites des départements",
+        "title_en": "Department boundaries",
+        "type": "limit",
+        "file": "france-departement-limites-2025-high",
+        "style": "limit-level-1"
+      },
+      {
+        "title_fr": "Limites des régions",
+        "title_en": "Region boundaries",
+        "type": "limit",
+        "file": "france-region-limites-2025-high",
+        "style": "limit-level-2"
+      },
+      {
+        "title_fr": "Graticules (5°)",
+        "title_en": "Graticules (5°)",
+        "type": "graticule",
+        "file": "france-graticule-5",
+        "style": "graticule",
+        "step": 5
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "france-land-2025-high",
+        "style": "land"
+      }
+    ],
+    "description_fr": "Fond de carte des cantons français issue de ADMIN EXPRESS COG CARTO-PE 2025",
+    "description_en": "Map of French cantons from ADMIN EXPRESS COG CARTO-PE 2025"
+  },
+  {
+    "file": "france-commune-2025-high",
+    "title_fr": "France",
+    "subtitle_fr": "par communes",
+    "title_en": "France",
+    "subtitle_en": "by communes",
+    "source": "IGN - ADMIN EXPRESS COG CARTO-PE",
+    "date": "2025",
+    "bbox": [
+      -61.81,
+      -21.39,
+      55.83,
+      51.09
+    ],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "FRANCE_DOM_TOM",
+      "proj4": null
+    },
+    "simplification_level": "high",
+    "layers": [
+      {
+        "title_fr": "Chefs-lieux des communes",
+        "title_en": "Heads of municipalities",
+        "type": "centroid",
+        "file": "france-commune-centroids-2025-high",
+        "style": null
+      },
+      {
+        "title_fr": "Limites des communes",
+        "title_en": "Commune boundaries",
+        "type": "limit",
+        "file": "france-commune-limites-2025-high",
+        "style": "limit-level-0"
+      },
+      {
+        "title_fr": "Limites des départements",
+        "title_en": "Department boundaries",
+        "type": "limit",
+        "file": "france-departement-limites-2025-high",
+        "style": "limit-level-1"
+      },
+      {
+        "title_fr": "Limites des régions",
+        "title_en": "Region boundaries",
+        "type": "limit",
+        "file": "france-region-limites-2025-high",
+        "style": "limit-level-2"
+      },
+      {
+        "title_fr": "Graticules (5°)",
+        "title_en": "Graticules (5°)",
+        "type": "graticule",
+        "file": "france-graticule-5",
+        "style": "graticule",
+        "step": 5
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "france-land-2025-high",
+        "style": "land"
+      }
+    ],
+    "description_fr": "Fond de carte des communes françaises issue de ADMIN EXPRESS COG CARTO-PE 2025",
+    "description_en": "Map of French communes from ADMIN EXPRESS COG CARTO-PE 2025"
+  },
+  {
+    "file": "france-departement-2025-high",
+    "title_fr": "France",
+    "subtitle_fr": "par départements",
+    "title_en": "France",
+    "subtitle_en": "by departments",
+    "source": "IGN - ADMIN EXPRESS COG CARTO-PE",
+    "date": "2025",
+    "bbox": [
+      -61.81,
+      -21.39,
+      55.83,
+      51.09
+    ],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "FRANCE_DOM_TOM",
+      "proj4": null
+    },
+    "simplification_level": "high",
+    "layers": [
+      {
+        "title_fr": "Centroids des départements",
+        "title_en": "Department centroids",
+        "type": "centroid",
+        "file": "france-departement-centroids-2025-high",
+        "style": null
+      },
+      {
+        "title_fr": "Limites des départements",
+        "title_en": "Department boundaries",
+        "type": "limit",
+        "file": "france-departement-limites-2025-high",
+        "style": "limit-level-0"
+      },
+      {
+        "title_fr": "Limites des régions",
+        "title_en": "Region boundaries",
+        "type": "limit",
+        "file": "france-region-limites-2025-high",
+        "style": "limit-level-1"
+      },
+      {
+        "title_fr": "Graticules (5°)",
+        "title_en": "Graticules (5°)",
+        "type": "graticule",
+        "file": "france-graticule-5",
+        "style": "graticule",
+        "step": 5
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "france-land-2025-high",
+        "style": "land"
+      }
+    ],
+    "description_fr": "Fond de carte des départements français issue de ADMIN EXPRESS COG CARTO-PE 2025",
+    "description_en": "Map of French departments from ADMIN EXPRESS COG CARTO-PE 2025"
+  },
+  {
+    "file": "france-region-2025-high",
+    "title_fr": "France",
+    "subtitle_fr": "par régions",
+    "title_en": "France",
+    "subtitle_en": "by regions",
+    "source": "IGN - ADMIN EXPRESS COG CARTO-PE",
+    "date": "2025",
+    "bbox": [
+      -61.81,
+      -21.39,
+      55.83,
+      51.09
+    ],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "composite",
+      "preset": "FRANCE_DOM_TOM",
+      "proj4": null
+    },
+    "simplification_level": "high",
+    "layers": [
+      {
+        "title_fr": "Centroids des régions",
+        "title_en": "Region centroids",
+        "type": "centroid",
+        "file": "france-region-centroids-2025-high",
+        "style": null
+      },
+      {
+        "title_fr": "Limites des régions",
+        "title_en": "Region boundaries",
+        "type": "limit",
+        "file": "france-region-limites-2025-high",
+        "style": "limit-level-0"
+      },
+      {
+        "title_fr": "Graticules (5°)",
+        "title_en": "Graticules (5°)",
+        "type": "graticule",
+        "file": "france-graticule-5",
+        "style": "graticule",
+        "step": 5
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "france-land-2025-high",
+        "style": "land"
+      }
+    ],
+    "description_fr": "Fond de carte des régions françaises issue de ADMIN EXPRESS COG CARTO-PE 2025",
+    "description_en": "Map of French regions from ADMIN EXPRESS COG CARTO-PE 2025"
+  },
+  {
+    "file": "monde-countries-2024-low",
+    "title_fr": "Monde",
+    "subtitle_fr": "par pays",
+    "title_en": "World",
+    "subtitle_en": "by countries",
+    "source": "Eurostat - GISCO",
+    "date": "2024",
+    "bbox": [
+      -180,
+      -90,
+      180,
+      90
+    ],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "simple",
+      "preset": null,
+      "proj4": "+proj=natearth2"
+    },
+    "simplification_level": "low",
+    "layers": [
+      {
+        "title_fr": "Centroids des pays",
+        "title_en": "Country centroids",
+        "type": "centroid",
+        "file": "monde-countries-centroids-2024-low",
+        "style": null
+      },
+      {
+        "title_fr": "Limites des pays",
+        "title_en": "Country boundaries",
+        "type": "limit",
+        "file": "monde-countries-limites-2024-low",
+        "style": "limit-level-0"
+      },
+      {
+        "title_fr": "Graticules (10°)",
+        "title_en": "Graticules (10°)",
+        "type": "graticule",
+        "file": "monde-graticule-10",
+        "style": "graticule",
+        "step": 10
+      },
+      {
+        "title_fr": "Lignes remarquables",
+        "title_en": "Notable geographic lines",
+        "type": "geographic-lines",
+        "file": "monde-geographic-lines",
+        "style": "geographic-lines"
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "monde-land-2024-low",
+        "style": "land"
+      }
+    ],
+    "description_fr": "Fond de carte des pays du monde issue de GISCO 2024",
+    "description_en": "World countries map from GISCO 2024"
+  },
+  {
+    "file": "monde-countries-2024-medium",
+    "title_fr": "Monde",
+    "subtitle_fr": "par pays",
+    "title_en": "World",
+    "subtitle_en": "by countries",
+    "source": "Eurostat - GISCO",
+    "date": "2024",
+    "bbox": [
+      -180,
+      -90,
+      180,
+      90
+    ],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "simple",
+      "preset": null,
+      "proj4": "+proj=natearth2"
+    },
+    "simplification_level": "medium",
+    "layers": [
+      {
+        "title_fr": "Centroids des pays",
+        "title_en": "Country centroids",
+        "type": "centroid",
+        "file": "monde-countries-centroids-2024-medium",
+        "style": null
+      },
+      {
+        "title_fr": "Limites des pays",
+        "title_en": "Country boundaries",
+        "type": "limit",
+        "file": "monde-countries-limites-2024-medium",
+        "style": "limit-level-0"
+      },
+      {
+        "title_fr": "Graticules (10°)",
+        "title_en": "Graticules (10°)",
+        "type": "graticule",
+        "file": "monde-graticule-10",
+        "style": "graticule",
+        "step": 10
+      },
+      {
+        "title_fr": "Lignes remarquables",
+        "title_en": "Notable geographic lines",
+        "type": "geographic-lines",
+        "file": "monde-geographic-lines",
+        "style": "geographic-lines"
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "monde-land-2024-medium",
+        "style": "land"
+      }
+    ],
+    "description_fr": "Fond de carte des pays du monde issue de GISCO 2024",
+    "description_en": "World countries map from GISCO 2024"
+  },
+  {
+    "file": "monde-countries-2024-high",
+    "title_fr": "Monde",
+    "subtitle_fr": "par pays",
+    "title_en": "World",
+    "subtitle_en": "by countries",
+    "source": "Eurostat - GISCO",
+    "date": "2024",
+    "bbox": [
+      -180,
+      -90,
+      180,
+      90
+    ],
+    "proj_source": "EPSG:4326",
+    "proj_to": {
+      "type": "simple",
+      "preset": null,
+      "proj4": "+proj=natearth2"
+    },
+    "simplification_level": "high",
+    "layers": [
+      {
+        "title_fr": "Centroids des pays",
+        "title_en": "Country centroids",
+        "type": "centroid",
+        "file": "monde-countries-centroids-2024-high",
+        "style": null
+      },
+      {
+        "title_fr": "Limites des pays",
+        "title_en": "Country boundaries",
+        "type": "limit",
+        "file": "monde-countries-limites-2024-high",
+        "style": "limit-level-0"
+      },
+      {
+        "title_fr": "Graticules (10°)",
+        "title_en": "Graticules (10°)",
+        "type": "graticule",
+        "file": "monde-graticule-10",
+        "style": "graticule",
+        "step": 10
+      },
+      {
+        "title_fr": "Lignes remarquables",
+        "title_en": "Notable geographic lines",
+        "type": "geographic-lines",
+        "file": "monde-geographic-lines",
+        "style": "geographic-lines"
+      },
+      {
+        "title_fr": "Territoire",
+        "title_en": "Territory",
+        "type": "land",
+        "file": "monde-land-2024-high",
+        "style": "land"
+      }
+    ],
+    "description_fr": "Fond de carte des pays du monde issue de GISCO 2024",
+    "description_en": "World countries map from GISCO 2024"
   }
 ]
