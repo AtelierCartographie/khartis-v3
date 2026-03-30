@@ -44,12 +44,13 @@ const FOSSIL_CSV_PATH = join(
 
 const TEST_BASEMAP: BasemapMetadata = {
   file: 'test-basemap.parquet',
-  title: 'Test Basemap',
-  description: 'Test basemap for join validation',
+  title_fr: 'Test Basemap',
+  title_en: 'Test Basemap',
   source: 'tests',
   date: '2026',
   bbox: [-180, -90, 180, 90],
-  projection: 'EPSG:4326',
+  proj_source: 'EPSG:4326',
+  proj_to: { type: 'identity' },
   layers: []
 };
 
