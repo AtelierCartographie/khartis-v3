@@ -109,9 +109,11 @@ async function ensureSimilarityCached(
   const escapedGeoCol = escapeIdentifier(geoColumn);
   const escapedCacheTable = escapeIdentifier(cacheTableName);
 
-  // Build the cache: for each distinct source value, run get_similarity
-  // against ALL basemap_attributes, storing the raw match rows.
-  // We also capture source_dup_count for later duplicate detection.
+  // Build the cache: cross-join candidates × basemap_attributes, compute
+  // jaro_winkler inline and filter score > 0 early (score_cutoff=0.85 returns
+  // 0 for pairs below threshold, so score > 0 ≡ typo_match != 'toofar').
+  // This avoids the LATERAL+get_similarity pattern which forces full
+  // materialization of N_candidates × N_attrs rows (OOM with large basemaps).
   await Duck.query(`
     CREATE OR REPLACE TEMP TABLE "${escapedCacheTable}" AS
     WITH source_data AS (
@@ -124,18 +126,39 @@ async function ensureSimilarityCached(
     candidates AS (
       SELECT DISTINCT original_name, source_dup_count FROM source_data
     ),
+    jw_pairs AS (
+      SELECT
+        c.original_name,
+        c.source_dup_count,
+        jaro_winkler_similarity(normalize_text_join(CAST(c.original_name AS VARCHAR)), ba.normalized, 0.85) AS score,
+        ba.id AS match_id,
+        ba.raw AS match_raw,
+        ba.basemap AS match_basemap,
+        ba.basemap_count AS match_basemap_count
+      FROM candidates c, basemap_attributes ba
+    ),
     matches AS (
-      FROM candidates, LATERAL (SELECT * FROM get_similarity(original_name, 'basemap_attributes'))
+      SELECT
+        original_name,
+        source_dup_count,
+        score AS match_score,
+        CASE WHEN score = 1 THEN 'exact' ELSE 'partial' END AS typo_match,
+        match_id,
+        match_raw,
+        match_basemap,
+        match_basemap_count
+      FROM jw_pairs
+      WHERE score > 0
     )
     SELECT
       c.original_name,
       c.source_dup_count,
-      m.id as match_id,
-      m.raw as match_raw,
-      m.score as match_score,
+      m.match_id,
+      m.match_raw,
+      m.match_score,
       m.typo_match,
-      m.basemap as match_basemap,
-      m.basemap_count as match_basemap_count
+      m.match_basemap,
+      m.match_basemap_count
     FROM candidates c
     LEFT JOIN matches m ON c.original_name = m.original_name
   `);
@@ -796,7 +819,7 @@ export async function getJoinedArrowTable(
       ON ${colList}
       INTO NAME _attr_col VALUE _attr_val
     )
-    SELECT d.*, gu.geom
+    SELECT d.*, gu.geom AS geometry
     FROM "${escapedDataset}" d
     INNER JOIN (
       SELECT DISTINCT _attr_val, geom
