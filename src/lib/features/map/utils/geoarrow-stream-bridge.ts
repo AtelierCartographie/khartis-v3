@@ -1,40 +1,64 @@
 /**
  * Bridge between geoarrow-deck-stream and Deck.gl layers.
  *
- * Encapsulates the shared parser config (geoIdentity passthrough) and
- * provides khartis-specific helpers (point attribute builders, row accessor).
- *
- * For now, uses geoIdentity() so coordinates stay as lon/lat —
- * Deck.gl's MapView handles web mercator projection.
+ * Provides both identity (lon/lat passthrough) and projection-aware parsing.
+ * Identity parsing is used for custom basemaps and MapLibre mode.
+ * Projection-aware parsing applies composite/simple/identity projections
+ * from basemap metadata for built-in basemaps in orthographic mode.
  */
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import {
   geoIdentity,
   parseGeometry,
   parsePolygonsToSolid,
-  parsePoints
+  parsePoints,
+  buildCompositeProjection
 } from 'geoarrow-deck-stream';
 import type {
   BinaryPathData,
   BinaryPolygonData,
   BinaryPointData,
   DeckBinaryAttribute,
-  ParserOptions
+  ParserOptions,
+  ProjectionLike
 } from 'geoarrow-deck-stream';
+import type { GeoProjection } from 'd3-geo';
+// d3-geo-projection has no bundled type declarations — import via namespace cast
+import * as _d3GeoProjection from 'd3-geo-projection';
+const { geoNaturalEarth2 } = _d3GeoProjection as unknown as Record<
+  string,
+  () => GeoProjection
+>;
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import type {
+  BasemapMetadata,
+  ProjectionPresets
+} from '../types/basemap.types';
+import { proj4d3 } from './proj4d3';
 
-// Shared parser config — identity projection (lon/lat passthrough)
+// Proj4 projection names not supported by proj4.js — mapped to d3-geo equivalents
+const D3_GEO_PROJECTION_MAP: Record<string, () => GeoProjection> = {
+  natearth2: geoNaturalEarth2
+};
+
+function resolveSimpleProjection(proj4String: string): GeoProjection {
+  const match = proj4String.match(/\+proj=([^\s+]+)/);
+  if (match) {
+    const factory = D3_GEO_PROJECTION_MAP[match[1]];
+    if (factory) return factory();
+  }
+  return proj4d3(proj4String);
+}
+
+// ---------------------------------------------------------------------------
+// Identity parsing (lon/lat passthrough — for custom basemaps, MapLibre mode)
+// ---------------------------------------------------------------------------
+
 const IDENTITY_OPTIONS: ParserOptions = {
   projection: geoIdentity(),
   capacityMultiplier: 1.0,
-  rewind: true
+  rewind: false
 };
-
-// ---------------------------------------------------------------------------
-// Parsing helpers (encapsulate shared IDENTITY_OPTIONS)
-// WeakMap caches ensure each Arrow table is parsed at most once per type.
-// When the table is GC'd, the cached result is automatically released.
-// ---------------------------------------------------------------------------
 
 const pathCache = new WeakMap<ArrowTable, BinaryPathData>();
 const solidPolygonCache = new WeakMap<ArrowTable, BinaryPolygonData>();
@@ -92,6 +116,204 @@ export function parsePointData(table: ArrowTable): BinaryPointData {
     pointCache.set(table, result);
   }
   return result;
+}
+
+// ---------------------------------------------------------------------------
+// Projection-aware parsing (for built-in basemaps with composite/simple proj)
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a d3-compatible projection from basemap metadata.
+ * Returns geoIdentity for custom/identity basemaps, a composite projection
+ * for DOM-TOM layouts, or a simple proj4-based projection.
+ */
+export function buildProjectionForBasemap(
+  metadata: BasemapMetadata,
+  width: number,
+  height: number,
+  projectionPresets: ProjectionPresets | null
+): ProjectionLike {
+  const projTo = metadata.proj_to;
+
+  if (!projTo || projTo.type === 'identity') {
+    return geoIdentity();
+  }
+
+  if (projTo.type === 'simple' && projTo.proj4) {
+    try {
+      return resolveSimpleProjection(projTo.proj4);
+    } catch (error) {
+      logger.warn(
+        'Failed to build simple projection, falling back to identity',
+        LogCategory.MAP,
+        { proj4: projTo.proj4, error }
+      );
+      return geoIdentity();
+    }
+  }
+
+  if (projTo.type === 'composite' && projTo.preset && projectionPresets) {
+    const preset = projectionPresets[projTo.preset];
+    if (preset?.entries?.length) {
+      try {
+        return buildCompositeProjection({
+          width,
+          height,
+          entries: preset.entries.map((entry) => ({
+            id: entry.id,
+            projection: resolveSimpleProjection(entry.proj4),
+            bounds: [
+              entry.bounds[0][0],
+              entry.bounds[0][1],
+              entry.bounds[1][0],
+              entry.bounds[1][1]
+            ],
+            layout: entry.layout,
+            scaleMultiplier: entry.scaleMultiplier
+          }))
+        });
+      } catch (error) {
+        logger.warn(
+          'Failed to build composite projection, falling back to identity',
+          LogCategory.MAP,
+          { preset: projTo.preset, error }
+        );
+        return geoIdentity();
+      }
+    }
+  }
+
+  logger.warn(
+    `Unknown projection config, falling back to identity`,
+    LogCategory.MAP,
+    { projTo }
+  );
+  return geoIdentity();
+}
+
+/**
+ * For composite basemaps (DOM-TOM), the full bbox spans ~120° of longitude.
+ * Without composite projection (identity fallback), we use the mainland
+ * bounds from the first preset entry for viewport fitting.
+ */
+export function getMainlandBboxForBasemap(
+  metadata: BasemapMetadata,
+  projectionPresets: ProjectionPresets | null
+): [number, number, number, number] | null {
+  const projTo = metadata.proj_to;
+  if (projTo?.type !== 'composite' || !projTo.preset || !projectionPresets) {
+    return null;
+  }
+
+  const preset = projectionPresets[projTo.preset];
+  if (!preset?.entries?.length) return null;
+
+  const mainEntry =
+    preset.entries.find((e) => e.id === 'mainland') ?? preset.entries[0];
+  const b = mainEntry.bounds;
+  return [b[0][0], b[0][1], b[1][0], b[1][1]];
+}
+
+/**
+ * Compute the bounding box of a basemap's output coordinates in projected space.
+ * When a non-identity projection is active, the layers output coordinates in the
+ * projection's pixel space (e.g. [0,960]×[0,500] for Natural Earth 2). The model
+ * matrix must be computed in that same space, not in WGS84 lon/lat.
+ *
+ * Samples the WGS84 bbox boundary through the projection to find the projected extent.
+ * Returns null for identity projections (use original WGS84 bbox unchanged).
+ */
+export function computeProjectedBboxForBasemap(
+  metadata: BasemapMetadata,
+  projectionPresets: ProjectionPresets | null,
+  width = 960,
+  height = 600,
+  /** Override the WGS84 bbox to project (e.g., mainland-only bounds for composites) */
+  overrideBbox?: [number, number, number, number]
+): [number, number, number, number] | null {
+  const projTo = metadata.proj_to;
+  if (!projTo || projTo.type === 'identity') return null;
+
+  const wgs84Bbox = overrideBbox ?? metadata.bbox;
+  if (!wgs84Bbox) return null;
+
+  const projection = buildProjectionForBasemap(
+    metadata,
+    width,
+    height,
+    projectionPresets
+  );
+
+  const [west, south, east, north] = wgs84Bbox;
+  const steps = 20;
+  const xs: number[] = [];
+  const ys: number[] = [];
+
+  const tryProject = (lon: number, lat: number) => {
+    const proj = projection as unknown as (
+      c: [number, number]
+    ) => [number, number] | null;
+    const result = proj([lon, lat]);
+    if (result && isFinite(result[0]) && isFinite(result[1])) {
+      xs.push(result[0]);
+      ys.push(result[1]);
+    }
+  };
+
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const lon = west + t * (east - west);
+    const lat = south + t * (north - south);
+    tryProject(lon, south);
+    tryProject(lon, north);
+    tryProject(west, lat);
+    tryProject(east, lat);
+  }
+  tryProject((west + east) / 2, (south + north) / 2);
+
+  if (xs.length === 0) return null;
+
+  return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+}
+
+/**
+ * Parse geometry with a specific projection.
+ * Does NOT cache results (projection may change with resize).
+ */
+export function parseSolidPolygonsWithProjection(
+  table: ArrowTable,
+  projection: ProjectionLike,
+  rewind = true
+): BinaryPolygonData {
+  return parsePolygonsToSolid(table, {
+    projection,
+    capacityMultiplier: 1.0,
+    rewind
+  });
+}
+
+export function parsePathsWithProjection(
+  table: ArrowTable,
+  projection: ProjectionLike,
+  rewind = true
+): BinaryPathData {
+  return parseGeometry(table, {
+    projection,
+    capacityMultiplier: 1.0,
+    rewind
+  });
+}
+
+export function parsePointDataWithProjection(
+  table: ArrowTable,
+  projection: ProjectionLike,
+  rewind = true
+): BinaryPointData {
+  return parsePoints(table, {
+    projection,
+    capacityMultiplier: 1.0,
+    rewind
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -275,4 +497,102 @@ export function pointPositions(data: BinaryPointData): Float64Array {
     result[i] = data.positions[i];
   }
   return result;
+}
+
+// ---------------------------------------------------------------------------
+// GeoJSON coordinate projection (for WKB fallback path)
+// ---------------------------------------------------------------------------
+
+/**
+ * Project GeoJSON coordinates through a d3-compatible projection.
+ * Used when WKB data falls through to the GeoJSON path and needs to align
+ * with basemap layers that are in projected coordinate space.
+ *
+ * Features where ANY vertex fails to project (outside basemap bounds) are
+ * dropped entirely. This prevents mixed pixel-space / degree-space coordinates
+ * which would produce diagonal streaks connecting correctly-projected vertices
+ * to unprojectable ones.
+ */
+export function projectGeoJSON(
+  geojson: GeoJSON.FeatureCollection,
+  projection: ProjectionLike
+): GeoJSON.FeatureCollection {
+  const proj = projection as unknown as (
+    c: [number, number]
+  ) => [number, number] | null;
+
+  function projectCoord(coord: number[]): [number, number] | null {
+    const result = proj([coord[0], coord[1]]);
+    if (result && isFinite(result[0]) && isFinite(result[1])) {
+      return [result[0], result[1]];
+    }
+    return null;
+  }
+
+  function projectCoords(coords: number[][]): number[][] | null {
+    const out: number[][] = [];
+    for (const c of coords) {
+      const p = projectCoord(c);
+      if (!p) return null;
+      out.push(p);
+    }
+    return out;
+  }
+
+  function projectRings(rings: number[][][]): number[][][] | null {
+    const out: number[][][] = [];
+    for (const ring of rings) {
+      const r = projectCoords(ring);
+      if (!r) return null;
+      out.push(r);
+    }
+    return out;
+  }
+
+  function projectGeometry(geom: GeoJSON.Geometry): GeoJSON.Geometry | null {
+    switch (geom.type) {
+      case 'Point': {
+        const c = projectCoord(geom.coordinates);
+        return c ? { ...geom, coordinates: c } : null;
+      }
+      case 'MultiPoint': {
+        const cs = projectCoords(geom.coordinates);
+        return cs ? { ...geom, coordinates: cs } : null;
+      }
+      case 'LineString': {
+        const cs = projectCoords(geom.coordinates);
+        return cs ? { ...geom, coordinates: cs } : null;
+      }
+      case 'MultiLineString': {
+        const rs = projectRings(geom.coordinates);
+        return rs ? { ...geom, coordinates: rs } : null;
+      }
+      case 'Polygon': {
+        const rs = projectRings(geom.coordinates);
+        return rs ? { ...geom, coordinates: rs } : null;
+      }
+      case 'MultiPolygon': {
+        const projected = geom.coordinates.map(projectRings);
+        if (projected.some((r) => r === null)) return null;
+        return { ...geom, coordinates: projected as number[][][][] };
+      }
+      case 'GeometryCollection': {
+        const geoms = geom.geometries.map(projectGeometry);
+        if (geoms.some((g) => g === null)) return null;
+        return { ...geom, geometries: geoms as GeoJSON.Geometry[] };
+      }
+      default:
+        return geom;
+    }
+  }
+
+  return {
+    ...geojson,
+    features: geojson.features
+      .map((f) => {
+        const geometry = projectGeometry(f.geometry);
+        return geometry ? ({ ...f, geometry } as GeoJSON.Feature) : null;
+      })
+      .filter((f): f is GeoJSON.Feature => f !== null)
+  };
 }
