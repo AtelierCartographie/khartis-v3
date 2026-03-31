@@ -9,6 +9,7 @@ import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte'
 import {
   basemapLayersStore,
   BASEMAP_LAYER_ID,
+  type BasemapLayerConfig,
   type BasemapLayerId
 } from '$lib/features/map/stores/basemap-layers.store.svelte';
 import * as m from '$lib/paraglide/messages';
@@ -165,6 +166,16 @@ function isVisualizationParentLayer(layer: Layer): boolean {
   return isVisualizationLayer(layer) && !layer.isSubLayer;
 }
 
+function getBasemapLayerOpacity(layer: BasemapLayerConfig): number {
+  if (layer.id === 'terre') {
+    return layer.fillOpacity;
+  }
+  if ('opacity' in layer && typeof layer.opacity === 'number') {
+    return layer.opacity;
+  }
+  return 100;
+}
+
 function buildLayers(): Layer[] {
   const activeVisualizationIds = new Set(
     visualizationStore.activeVisualizations.map((v) => v.id)
@@ -177,10 +188,7 @@ function buildLayers(): Layer[] {
       visible: layer.visible,
       type: 'geographic' as const,
       color: BASEMAP_SUBLAYER_COLOR,
-      opacity:
-        'opacity' in layer && typeof layer.opacity === 'number'
-          ? layer.opacity
-          : 100,
+      opacity: getBasemapLayerOpacity(layer),
       order,
       basemapLayerId: layer.id
     }));
@@ -199,7 +207,8 @@ function buildLayers(): Layer[] {
       order: vizOrder
     };
 
-    const vizSubLayers = VISUALIZATION_SUBLAYER_ORDER.map(
+    const vizPrimitiveOrder = viz.primitiveOrder ?? VISUALIZATION_SUBLAYER_ORDER;
+    const vizSubLayers = vizPrimitiveOrder.map(
       (primitive, i): Layer => ({
         id: buildVisualizationSubLayerId(viz.id, primitive),
         parentId: viz.id,
@@ -350,6 +359,14 @@ const { state, actions } = createToolStore<LayersState, LayersActions>(
           .sort((a, b) => a.order - b.order);
 
         const reordered = reorderIds(subLayers, fromIndex, toIndex);
+
+        const vizPrimitives = reordered
+          .filter((layer) => layer.type === 'visualization' && layer.primitive)
+          .map((layer) => layer.primitive as PrimitiveFilter);
+
+        if (vizPrimitives.length > 0) {
+          visualizationStore.setPrimitiveFilterOrder(parentId, vizPrimitives);
+        }
 
         const basemapIds = reordered
           .filter((layer) => layer.basemapLayerId)
