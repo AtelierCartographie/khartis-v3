@@ -45,7 +45,6 @@
   import { SvelteMap } from 'svelte/reactivity';
   import { onDestroy } from 'svelte';
   import { activateStylingToolFromMap } from '../utils/styling-tool-activation.utils';
-
   function hasColorScale(viz: VisualizationConfig | undefined): boolean {
     if (
       !viz?.classification?.colors?.length ||
@@ -53,8 +52,16 @@
     ) {
       return false;
     }
-    const fillMode = viz.modes?.fill;
-    return fillMode === FillMode.CLASSES || fillMode === FillMode.CATEGORIES;
+    return viz.modes?.fill === FillMode.CLASSES;
+  }
+
+  function hasCategoricalScale(viz: VisualizationConfig | undefined): boolean {
+    if (!viz?.classification?.colors?.length) return false;
+    return viz.modes?.fill === FillMode.CATEGORIES;
+  }
+
+  function getCategoryLabels(viz: VisualizationConfig | undefined): string[] {
+    return viz?.classification?.labels ?? [];
   }
 
   function formatBreakValue(value: number): string {
@@ -290,6 +297,33 @@
                       ≥ {formatBreakValue(breaks[breaks.length - 1])}
                     {/if}
                   </span>
+                </div>
+              {/each}
+              {#if viz?.missingData?.show}
+                <div class="legend-scale-row">
+                  <span
+                    class="legend-color-swatch"
+                    style="background-color: {viz.missingData.color};"
+                  ></span>
+                  <span class="legend-scale-label">{m.missing_data_text()}</span
+                  >
+                </div>
+              {/if}
+            </div>
+          {/if}
+          {#if hasCategoricalScale(viz)}
+            {@const colors = viz!.classification!.colors!}
+            {@const catLabels = getCategoryLabels(viz)}
+            {@const displayCount =
+              catLabels.length > 0 ? catLabels.length : colors.length}
+            <div class="legend-color-scale">
+              {#each colors.slice(0, displayCount) as color, i (i)}
+                <div class="legend-scale-row">
+                  <span
+                    class="legend-color-swatch"
+                    style="background-color: {color};"
+                  ></span>
+                  <span class="legend-scale-label">{catLabels[i] ?? ''}</span>
                 </div>
               {/each}
               {#if viz?.missingData?.show}
