@@ -25,6 +25,7 @@ import type {
 import type { GeoProjection } from 'd3-geo';
 // d3-geo-projection has no bundled type declarations — import via namespace cast
 import * as _d3GeoProjection from 'd3-geo-projection';
+
 const { geoNaturalEarth2 } = _d3GeoProjection as unknown as Record<
   string,
   () => GeoProjection

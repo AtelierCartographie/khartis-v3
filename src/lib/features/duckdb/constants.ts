@@ -44,7 +44,6 @@ export const DUCK_CONST = {
   }
 } as const;
 
-
 /**
  * Reader configuration for geometry processing.
  */

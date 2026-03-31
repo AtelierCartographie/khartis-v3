@@ -219,7 +219,10 @@ Use the hierarchical error system defined in `src/lib/features/commons/errors/pi
 ### Error Patterns
 
 ```typescript
-import { DataValidationError, isPipelineError } from '$lib/features/commons/errors/pipeline.errors';
+import {
+  DataValidationError,
+  isPipelineError
+} from '$lib/features/commons/errors/pipeline.errors';
 
 try {
   await operation();

@@ -8,12 +8,12 @@
 
 ## Les 4 couches d'etat
 
-| Couche | Role | Duree de vie | Stockage |
-|--------|------|--------------|----------|
-| **Composant local** | Etat UI ephemere (inputs, modales) | Montage composant | `$state` dans le `.svelte` |
-| **Store feature** | Modele domaine + actions | Session | `$state` dans le store `.svelte.ts` |
-| **Store global** | Coordination cross-feature | Session | Singleton `ProjectStore` |
-| **IndexedDB / localforage** | Projets et datasets durables | Persistant | IndexedDB + localforage (metadonnees) |
+| Couche                      | Role                               | Duree de vie      | Stockage                              |
+| --------------------------- | ---------------------------------- | ----------------- | ------------------------------------- |
+| **Composant local**         | Etat UI ephemere (inputs, modales) | Montage composant | `$state` dans le `.svelte`            |
+| **Store feature**           | Modele domaine + actions           | Session           | `$state` dans le store `.svelte.ts`   |
+| **Store global**            | Coordination cross-feature         | Session           | Singleton `ProjectStore`              |
+| **IndexedDB / localforage** | Projets et datasets durables       | Persistant        | IndexedDB + localforage (metadonnees) |
 
 **Flux** : Composant --> Store feature --> Store global --> IndexedDB (debounce 30 s)
 
@@ -33,16 +33,28 @@ export function createFeatureStore() {
 
   return {
     // Getters publics (lecture seule)
-    get enabled() { return state.enabled; },
-    get data() { return state.data; },
+    get enabled() {
+      return state.enabled;
+    },
+    get data() {
+      return state.data;
+    },
 
     // Getter pour etat derive (renvoie la valeur, ne cree pas le $derived)
-    get isValid() { return isValid; },
+    get isValid() {
+      return isValid;
+    },
 
     // Actions (mutations explicites)
-    enable() { state.enabled = true; },
-    disable() { state.enabled = false; },
-    setData(data: MyData) { state.data = data; }
+    enable() {
+      state.enabled = true;
+    },
+    disable() {
+      state.enabled = false;
+    },
+    setData(data: MyData) {
+      state.data = data;
+    }
   };
 }
 
@@ -51,6 +63,7 @@ export const featureStore = createFeatureStore();
 ```
 
 **Regles** :
+
 - Pas d'affectation directe (toujours via methode)
 - `$derived` declare au top level de la factory, jamais dans un getter (un `$derived` dans un getter cree un nouveau signal a chaque acces)
 - UI ephemere local au composant, seul l'etat domaine est persiste
@@ -138,11 +151,11 @@ Mutation d'etat --> Flag dirty --> Demarrage/reset timer debounce (30 s)
 
 ### Limites de stockage
 
-| Limite | Valeur | Comportement |
-|--------|--------|--------------|
-| Taille max fichier | 50 Mo | Erreur de validation |
-| Taille max projet | 100 Mo | Avertissement a 80 % |
-| Nombre max projets | 50 | Avertissement a 80 % |
+| Limite             | Valeur | Comportement         |
+| ------------------ | ------ | -------------------- |
+| Taille max fichier | 50 Mo  | Erreur de validation |
+| Taille max projet  | 100 Mo | Avertissement a 80 % |
+| Nombre max projets | 50     | Avertissement a 80 % |
 
 ## Undo / Redo
 
@@ -154,11 +167,11 @@ Mutation d'etat --> Flag dirty --> Demarrage/reset timer debounce (30 s)
 
 ### Historique
 
-| Parametre | Valeur | Comportement |
-|-----------|--------|--------------|
-| Max snapshots | 50 | FIFO -- le plus ancien est supprime |
-| Stockage | Snapshots complets | Pas de diffs structurels |
-| Timeline | Lineaire | Tronquee apres undo + nouvelle mutation |
+| Parametre     | Valeur             | Comportement                            |
+| ------------- | ------------------ | --------------------------------------- |
+| Max snapshots | 50                 | FIFO -- le plus ancien est supprime     |
+| Stockage      | Snapshots complets | Pas de diffs structurels                |
+| Timeline      | Lineaire           | Tronquee apres undo + nouvelle mutation |
 
 ## Format d'archive (.kh)
 
@@ -167,9 +180,9 @@ Mutation d'etat --> Flag dirty --> Demarrage/reset timer debounce (30 s)
 
 ## Metadonnees (localforage)
 
-| Cle | Type | Role |
-|-----|------|------|
-| `CURRENT` | `string` | Dernier projet ouvert |
+| Cle        | Type                     | Role                                       |
+| ---------- | ------------------------ | ------------------------------------------ |
+| `CURRENT`  | `string`                 | Dernier projet ouvert                      |
 | `METADATA` | `SavedProjectMetadata[]` | Liste des projets (id, nom, taille, dates) |
 
 ## Pattern pour ajouter un store feature
@@ -192,12 +205,12 @@ src/lib/features/<nom-feature>/
 
 ## Interactions cross-features
 
-| Declencheur | Features impactees | Action |
-|-------------|-------------------|--------|
-| Changement de projection | Annotations, Geo-indicateurs | Recalcul des positions |
-| Simplification | Couches, Carte | Rafraichissement geometrie |
-| Edition legende | Carte, Export | Re-rendu legende |
-| Changement de format | Mise en page, Export | Ajustement d'echelle |
+| Declencheur              | Features impactees           | Action                     |
+| ------------------------ | ---------------------------- | -------------------------- |
+| Changement de projection | Annotations, Geo-indicateurs | Recalcul des positions     |
+| Simplification           | Couches, Carte               | Rafraichissement geometrie |
+| Edition legende          | Carte, Export                | Re-rendu legende           |
+| Changement de format     | Mise en page, Export         | Ajustement d'echelle       |
 
 ## Gestion d'erreur
 

@@ -14,21 +14,25 @@ Khartis v3 utilise `vite-plugin-pwa` (Workbox) pour fonctionner hors-ligne apres
 adapter({
   pages: 'build',
   assets: 'build',
-  fallback: 'index.html',  // Mode SPA : toutes les routes -> index.html
+  fallback: 'index.html', // Mode SPA : toutes les routes -> index.html
   strict: true
-})
+});
 ```
 
 ### vite-plugin-pwa
 
 ```ts
 VitePWA({
-  registerType: 'prompt',   // Invite de mise a jour utilisateur
+  registerType: 'prompt', // Invite de mise a jour utilisateur
   devOptions: { enabled: true, type: 'module' },
   includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
-  workbox: { /* voir ci-dessous */ },
-  manifest: { /* voir ci-dessous */ }
-})
+  workbox: {
+    /* voir ci-dessous */
+  },
+  manifest: {
+    /* voir ci-dessous */
+  }
+});
 ```
 
 ## Strategies de cache
@@ -38,8 +42,8 @@ Khartis utilise exclusivement **CacheFirst** pour les ressources externes (conte
 ### Precache (app shell)
 
 ```ts
-globPatterns: ['**/*.{js,css,woff2,woff,ttf,eot,otf,splinecode}']
-globIgnores: ['**/node_modules/**/*']
+globPatterns: ['**/*.{js,css,woff2,woff,ttf,eot,otf,splinecode}'];
+globIgnores: ['**/node_modules/**/*'];
 ```
 
 Les fichiers WASM sont exclus du precache et charges a la demande via le cache runtime.
@@ -79,16 +83,16 @@ Fichiers concernes : `duckdb-mvp.wasm` (36 Mo), `duckdb-eh.wasm` (31 Mo), `index
 
 ## Tailles de cache estimees
 
-| Cache | Contenu | Entrees max | Expiration | Taille estimee |
-| --- | --- | --- | --- | --- |
-| `precache` | App shell (JS/CSS/HTML) | -- | -- | ~4 Mo |
-| `wasm-workers` | Binaires WASM, workers | 20 | 90 jours | ~81 Mo |
-| `basemaps-data` | GeoParquet fonds de carte | 100 | 1 an | ~25 Mo |
-| `duckdb-extensions` | Extensions DuckDB | 10 | 30 jours | < 1 Mo |
-| `osm-tiles` | Tuiles OpenStreetMap | 500 | 90 jours | ~25 Mo |
-| `carto-tiles` | Tuiles Carto | 500 | 90 jours | ~25 Mo |
-| `openfreemap-tiles` | Tuiles OpenFreeMap | 500 | 90 jours | ~25 Mo |
-| **Total** | | | | **~186 Mo** |
+| Cache               | Contenu                   | Entrees max | Expiration | Taille estimee |
+| ------------------- | ------------------------- | ----------- | ---------- | -------------- |
+| `precache`          | App shell (JS/CSS/HTML)   | --          | --         | ~4 Mo          |
+| `wasm-workers`      | Binaires WASM, workers    | 20          | 90 jours   | ~81 Mo         |
+| `basemaps-data`     | GeoParquet fonds de carte | 100         | 1 an       | ~25 Mo         |
+| `duckdb-extensions` | Extensions DuckDB         | 10          | 30 jours   | < 1 Mo         |
+| `osm-tiles`         | Tuiles OpenStreetMap      | 500         | 90 jours   | ~25 Mo         |
+| `carto-tiles`       | Tuiles Carto              | 500         | 90 jours   | ~25 Mo         |
+| `openfreemap-tiles` | Tuiles OpenFreeMap        | 500         | 90 jours   | ~25 Mo         |
+| **Total**           |                           |             |            | **~186 Mo**    |
 
 Installation initiale : ~4 Mo. Apres utilisation complete : ~186 Mo.
 
@@ -128,7 +132,9 @@ Le service worker tente de precacher des fichiers inexistants. Verifier `navigat
 - En dev, desinscription forcee :
 
 ```js
-navigator.serviceWorker.getRegistrations().then(r => r.forEach(sw => sw.unregister()));
+navigator.serviceWorker
+  .getRegistrations()
+  .then((r) => r.forEach((sw) => sw.unregister()));
 location.reload();
 ```
 

@@ -96,7 +96,8 @@ export function addGeoArrowMetadata(
       existingExtension.replace('geoarrow.', '')
     );
   } else if (geoParquetEncoding) {
-    const mapped = GEOPARQUET_ENCODING_TO_ARROW[geoParquetEncoding.toLowerCase()];
+    const mapped =
+      GEOPARQUET_ENCODING_TO_ARROW[geoParquetEncoding.toLowerCase()];
     if (mapped) {
       arrowExtension = mapped;
       geometryTypes = getGeometryTypesForEncoding(geoParquetEncoding);
@@ -159,10 +160,7 @@ function getGeometryTypesForEncoding(encoding: string): string[] {
     point: [GEOJSON_TYPE.POINT],
     multipoint: [GEOJSON_TYPE.POINT, GEOJSON_TYPE.MULTI_POINT],
     linestring: [GEOJSON_TYPE.LINE_STRING],
-    multilinestring: [
-      GEOJSON_TYPE.LINE_STRING,
-      GEOJSON_TYPE.MULTI_LINE_STRING
-    ],
+    multilinestring: [GEOJSON_TYPE.LINE_STRING, GEOJSON_TYPE.MULTI_LINE_STRING],
     polygon: [GEOJSON_TYPE.POLYGON, GEOJSON_TYPE.MULTI_POLYGON],
     multipolygon: [GEOJSON_TYPE.POLYGON, GEOJSON_TYPE.MULTI_POLYGON]
   };
@@ -529,10 +527,9 @@ async function reprojectParquetWithProj4(
     );
   }
 
-  const finalResult = await Duck.query(
-    `SELECT * FROM "${escapedTempTable}"`,
-    { format: 'arrow-ipc' }
-  );
+  const finalResult = await Duck.query(`SELECT * FROM "${escapedTempTable}"`, {
+    format: 'arrow-ipc'
+  });
   await Duck.query(`DROP TABLE IF EXISTS "${escapedTempTable}"`, {
     format: 'arrow-ipc'
   });
@@ -545,10 +542,7 @@ async function reprojectParquetWithProj4(
 /**
  * Recursively reproject GeoJSON coordinates in-place using proj4.
  */
-function reprojectGeoJSONCoords(
-  coords: unknown,
-  sourceCrs: string
-): void {
+function reprojectGeoJSONCoords(coords: unknown, sourceCrs: string): void {
   if (!Array.isArray(coords)) return;
 
   // Check if this is a coordinate pair [x, y]

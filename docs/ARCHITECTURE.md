@@ -31,12 +31,12 @@ Fichier  -->  Validation  -->  DuckDB (read_csv / ST_Read)  -->  DatasetResult
 
 ## Les 4 piliers
 
-| Pilier | Description |
-|--------|-------------|
-| **Confidentialite client-only** | Tout le traitement se fait dans le navigateur (IndexedDB + memoire). Aucun envoi serveur, aucun appel API externe pour les donnees utilisateur. Fonctionne hors-ligne. |
-| **Modularite par feature** | Chaque feature dans `src/lib/features/` possede son store, ses composants et ses types. Couplage minimal entre features. |
-| **Reactivite Svelte 5 Runes** | `$state` et `$derived` pour l'etat reactif. Mutations explicites via methodes dediees, jamais d'affectation directe. |
-| **Rendu GPU-first** | Deck.gl pour les couches thematiques. Deux modes : **orthographique** (Deck.gl standalone, fond vectoriel Deck.gl via GeoArrow binaire) ou **MapLibre interleaved** (MapboxOverlay, fond OSM tuile). Rendu, pan et zoom acceleres par le GPU. |
+| Pilier                          | Description                                                                                                                                                                                                                                   |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Confidentialite client-only** | Tout le traitement se fait dans le navigateur (IndexedDB + memoire). Aucun envoi serveur, aucun appel API externe pour les donnees utilisateur. Fonctionne hors-ligne.                                                                        |
+| **Modularite par feature**      | Chaque feature dans `src/lib/features/` possede son store, ses composants et ses types. Couplage minimal entre features.                                                                                                                      |
+| **Reactivite Svelte 5 Runes**   | `$state` et `$derived` pour l'etat reactif. Mutations explicites via methodes dediees, jamais d'affectation directe.                                                                                                                          |
+| **Rendu GPU-first**             | Deck.gl pour les couches thematiques. Deux modes : **orthographique** (Deck.gl standalone, fond vectoriel Deck.gl via GeoArrow binaire) ou **MapLibre interleaved** (MapboxOverlay, fond OSM tuile). Rendu, pan et zoom acceleres par le GPU. |
 
 ## Interfaces cles
 
@@ -74,12 +74,12 @@ interface Project {
 
 ## Couches de stockage
 
-| Couche | Role | Exemple |
-|--------|------|---------|
-| **Composant local** | Etat ephemere UI | Inputs de formulaire, visibilite modale |
-| **Store feature** | Etat domaine canonique | Liste datasets, config visualisation |
-| **Store global** | Coordination cross-feature | Metadonnees projet, dataset actif |
-| **Persistance** | Stockage long terme | Snapshots IndexedDB, auto-sauvegarde |
+| Couche              | Role                       | Exemple                                 |
+| ------------------- | -------------------------- | --------------------------------------- |
+| **Composant local** | Etat ephemere UI           | Inputs de formulaire, visibilite modale |
+| **Store feature**   | Etat domaine canonique     | Liste datasets, config visualisation    |
+| **Store global**    | Coordination cross-feature | Metadonnees projet, dataset actif       |
+| **Persistance**     | Stockage long terme        | Snapshots IndexedDB, auto-sauvegarde    |
 
 **Flux** : Composant --> Store feature --> Store global --> IndexedDB
 
@@ -87,23 +87,23 @@ Voir [Gestion de l'etat](GESTION_ETAT.md) pour le detail de chaque couche.
 
 ## Performance
 
-| Defi | Solution |
-|------|----------|
-| Import de fichiers volumineux | Parsing natif DuckDB + `TABLESAMPLE` pour l'apercu |
-| Calculs lourds | DuckDB WASM (thread principal) |
-| Geometries complexes | Niveaux de simplification pre-calcules + LOD dynamique |
-| Editions rapides | Memoisation `$derived` + recalcul debounce |
+| Defi                          | Solution                                               |
+| ----------------------------- | ------------------------------------------------------ |
+| Import de fichiers volumineux | Parsing natif DuckDB + `TABLESAMPLE` pour l'apercu     |
+| Calculs lourds                | DuckDB WASM (thread principal)                         |
+| Geometries complexes          | Niveaux de simplification pre-calcules + LOD dynamique |
+| Editions rapides              | Memoisation `$derived` + recalcul debounce             |
 
 **Cibles** :
 
-| Metrique | Objectif |
-|----------|----------|
-| FCP | < 0.6 s |
-| LCP | < 1.0 s |
-| TTI | < 1.0 s |
-| TBT | 0 ms |
-| CLS | 0 |
-| Rendu | ~60 fps (datasets petits/moyens) |
+| Metrique | Objectif                         |
+| -------- | -------------------------------- |
+| FCP      | < 0.6 s                          |
+| LCP      | < 1.0 s                          |
+| TTI      | < 1.0 s                          |
+| TBT      | 0 ms                             |
+| CLS      | 0                                |
+| Rendu    | ~60 fps (datasets petits/moyens) |
 
 ## Strategie d'erreur
 
@@ -141,12 +141,12 @@ interface VizFactory {
 }
 ```
 
-| Tache | Point d'entree |
-|-------|----------------|
-| Nouveau format de fichier | `src/lib/features/data-pipeline/core/parsers.ts` |
-| Nouvelle visualisation | `src/lib/features/map/` |
-| Nouvelle classification | `src/lib/features/duckdb/macros/breaks.ts` |
-| Nouvel outil | `src/lib/features/step-toolbar/tools/<nom-outil>` |
+| Tache                     | Point d'entree                                    |
+| ------------------------- | ------------------------------------------------- |
+| Nouveau format de fichier | `src/lib/features/data-pipeline/core/parsers.ts`  |
+| Nouvelle visualisation    | `src/lib/features/map/`                           |
+| Nouvelle classification   | `src/lib/features/duckdb/macros/breaks.ts`        |
+| Nouvel outil              | `src/lib/features/step-toolbar/tools/<nom-outil>` |
 
 Toutes les extensions s'enregistrent dans leur registre respectif (parser, classification, export, visualisation).
 
