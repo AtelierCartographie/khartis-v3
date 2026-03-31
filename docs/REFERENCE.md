@@ -18,7 +18,7 @@ interface KhartisProject {
 }
 
 interface ProjectManifest {
-  version: string;       // '3.0.0'
+  version: string; // '3.0.0'
   createdAt: Date;
   updatedAt: Date;
   name: string;
@@ -40,10 +40,13 @@ interface ProjectData {
 ```ts
 // src/lib/features/commons/store/create-project.types.ts
 interface UploadedFile {
-  id: string; name: string; size: number; type: string;
+  id: string;
+  name: string;
+  size: number;
+  type: string;
   fileType: FileType;
-  status: FileStatus;  // uploading | processing | complete | edit | error | incomplete
-  relatedFiles?: string[];  // Composants Shapefile
+  status: FileStatus; // uploading | processing | complete | edit | error | incomplete
+  relatedFiles?: string[]; // Composants Shapefile
 }
 ```
 
@@ -52,42 +55,64 @@ interface UploadedFile {
 ```ts
 // src/lib/features/commons/store/visualization.store.svelte.ts
 enum VisualizationType {
-  CHOROPLETH = 'choropleth', PROPORTIONAL = 'proportional',
-  CATEGORICAL = 'categorical', BIVARIATE = 'bivariate'
+  CHOROPLETH = 'choropleth',
+  PROPORTIONAL = 'proportional',
+  CATEGORICAL = 'categorical',
+  BIVARIATE = 'bivariate'
 }
 
 enum ClassificationMethod {
-  EQUAL_INTERVAL = 'equal_interval', QUANTILES = 'quantiles',
-  JENKS = 'jenks', MANUAL = 'manual', STANDARD_DEVIATION = 'standard_deviation',
-  Q6 = 'q6', NESTED_MEANS = 'nested_means', HEAD_TAIL = 'head_tail'
+  EQUAL_INTERVAL = 'equal_interval',
+  QUANTILES = 'quantiles',
+  JENKS = 'jenks',
+  MANUAL = 'manual',
+  STANDARD_DEVIATION = 'standard_deviation',
+  Q6 = 'q6',
+  NESTED_MEANS = 'nested_means',
+  HEAD_TAIL = 'head_tail'
 }
 
 // src/lib/features/commons/store/create-project.types.ts
 enum FileType {
-  CSV = 'csv', TSV = 'tsv', GEOJSON = 'geojson', SHAPEFILE = 'shapefile',
-  GEOPACKAGE = 'geopackage', GEOPARQUET = 'geoparquet', ARROW = 'arrow',
-  KML = 'kml', KMZ = 'kmz', GPX = 'gpx', ZIP = 'zip', UNKNOWN = 'unknown'
+  CSV = 'csv',
+  TSV = 'tsv',
+  GEOJSON = 'geojson',
+  SHAPEFILE = 'shapefile',
+  GEOPACKAGE = 'geopackage',
+  GEOPARQUET = 'geoparquet',
+  ARROW = 'arrow',
+  KML = 'kml',
+  KMZ = 'kmz',
+  GPX = 'gpx',
+  ZIP = 'zip',
+  UNKNOWN = 'unknown'
 }
 
 // src/lib/features/data-pipeline/types.ts
-enum ColumnType { BOOLEAN = 'boolean', DATE = 'date', NUMBER = 'number', GEOMETRY = 'geometry', TEXT = 'text' }
+enum ColumnType {
+  BOOLEAN = 'boolean',
+  DATE = 'date',
+  NUMBER = 'number',
+  GEOMETRY = 'geometry',
+  TEXT = 'text'
+}
 ```
 
 ## Fonctions utilitaires
 
 ### Validation et assainissement
 
-| Fonction | Usage |
-| --- | --- |
-| `ProjectValidator.validateProjectName` | Max 255 car., pas de caracteres speciaux |
-| `ProjectValidator.validateFileSize` | Verif. taille avant import |
-| `ProjectValidator.validateProjectSize` | Verif. taille avant sauvegarde |
+| Fonction                                   | Usage                                           |
+| ------------------------------------------ | ----------------------------------------------- |
+| `ProjectValidator.validateProjectName`     | Max 255 car., pas de caracteres speciaux        |
+| `ProjectValidator.validateFileSize`        | Verif. taille avant import                      |
+| `ProjectValidator.validateProjectSize`     | Verif. taille avant sauvegarde                  |
 | `ProjectValidator.validateStorageCapacity` | Verif. capacite de stockage (nombre de projets) |
-| `DataValidator.validateCSVData` | Validation donnees CSV apres parsing |
-| `DataValidator.validateGeoData` | Validation GeoJSON apres parsing |
-| `sanitizeProjectName` | Nettoyage nom de projet |
-| `sanitizeTextInput` | Nettoyage saisie utilisateur |
-| `escapeSqlString` | Echappement chaines pour DuckDB |
+| `DataValidator.validateCSVData`            | Validation donnees CSV apres parsing            |
+| `DataValidator.validateGeoData`            | Validation GeoJSON apres parsing                |
+| `sanitizeProjectName`                      | Nettoyage nom de projet                         |
+| `sanitizeTextInput`                        | Nettoyage saisie utilisateur                    |
+| `escapeSqlString`                          | Echappement chaines pour DuckDB                 |
 
 Localisation : `src/lib/features/commons/utils/validation.utils.ts` et `sanitize.utils.ts`.
 
@@ -104,22 +129,28 @@ Toutes les erreurs du pipeline heritent de `PipelineError` (avec `code` et `deta
 
 Localisation : `src/lib/features/commons/errors/pipeline.errors.ts`.
 
-| Nom | Code | Contexte | Fatal |
-| --- | --- | --- | --- |
-| `PipelineError` | (variable) | Erreur de base du pipeline | Oui |
-| `DataValidationError` | `DATA_VALIDATION_ERROR` | Donnees invalides | Oui |
-| `ParseError` | `PARSE_ERROR` | Erreur de lecture de fichier | Oui |
-| `DuckDBError` | `DUCKDB_ERROR` | Echec de requete DuckDB | Oui |
-| `NonFatalError` | (variable) | Erreur non fatale (toast sans rollback) | Non |
-| `DuplicateFileError` | `DUPLICATE_FILE` | Fichier deja importe | Non |
+| Nom                   | Code                    | Contexte                                | Fatal |
+| --------------------- | ----------------------- | --------------------------------------- | ----- |
+| `PipelineError`       | (variable)              | Erreur de base du pipeline              | Oui   |
+| `DataValidationError` | `DATA_VALIDATION_ERROR` | Donnees invalides                       | Oui   |
+| `ParseError`          | `PARSE_ERROR`           | Erreur de lecture de fichier            | Oui   |
+| `DuckDBError`         | `DUCKDB_ERROR`          | Echec de requete DuckDB                 | Oui   |
+| `NonFatalError`       | (variable)              | Erreur non fatale (toast sans rollback) | Non   |
+| `DuplicateFileError`  | `DUPLICATE_FILE`        | Fichier deja importe                    | Non   |
 
 Helpers : `isPipelineError()`, `isFatalError()`, `formatError()`.
 
 ### Pattern d'utilisation
 
 ```ts
-import { isFatalError, formatError } from '$lib/features/commons/errors/pipeline.errors';
-import { showError, showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
+import {
+  isFatalError,
+  formatError
+} from '$lib/features/commons/errors/pipeline.errors';
+import {
+  showError,
+  showWarning
+} from '$lib/features/commons/utils/notification.utils.svelte';
 import { logger, LogCategory } from '$lib/features/commons/utils/logger';
 
 try {
@@ -145,23 +176,23 @@ try {
 
 Geres globalement dans `keyboard-shortcuts.svelte`. Les actions projet utilisent le prefixe `Ctrl+K` (K pour Khartis) suivi d'une lettre dans les 2 secondes.
 
-| Action | macOS | Windows/Linux |
-| --- | --- | --- |
-| Ouvrir navigation laterale | Ctrl+K, B | Ctrl+K, B |
-| Nouveau projet | Ctrl+K, N | Ctrl+K, N |
-| Ouvrir projet | Ctrl+K, O | Ctrl+K, O |
-| Sauvegarder projet | Ctrl+K, S | Ctrl+K, S |
-| Dupliquer projet | Ctrl+K, D | Ctrl+K, D |
-| Supprimer projet | Ctrl+K, X | Ctrl+K, X |
-| Onglet Donnees | 1 | 1 |
-| Onglet Visualisation | 2 | 2 |
-| Onglet Habillage | 3 | 3 |
-| Basculer mode zoom | Alt+Z | Alt+Z |
-| Zoom + / - / reset | Cmd +/-/0 | Ctrl +/-/0 |
-| Annuler | Cmd+Z | Ctrl+Z |
-| Retablir | Cmd+Shift+Z ou Cmd+Y | Ctrl+Shift+Z ou Ctrl+Y |
-| Zoom molette | Cmd+molette | Ctrl+molette |
-| Fermer modale/panneau | Escape | Escape |
+| Action                     | macOS                | Windows/Linux          |
+| -------------------------- | -------------------- | ---------------------- |
+| Ouvrir navigation laterale | Ctrl+K, B            | Ctrl+K, B              |
+| Nouveau projet             | Ctrl+K, N            | Ctrl+K, N              |
+| Ouvrir projet              | Ctrl+K, O            | Ctrl+K, O              |
+| Sauvegarder projet         | Ctrl+K, S            | Ctrl+K, S              |
+| Dupliquer projet           | Ctrl+K, D            | Ctrl+K, D              |
+| Supprimer projet           | Ctrl+K, X            | Ctrl+K, X              |
+| Onglet Donnees             | 1                    | 1                      |
+| Onglet Visualisation       | 2                    | 2                      |
+| Onglet Habillage           | 3                    | 3                      |
+| Basculer mode zoom         | Alt+Z                | Alt+Z                  |
+| Zoom + / - / reset         | Cmd +/-/0            | Ctrl +/-/0             |
+| Annuler                    | Cmd+Z                | Ctrl+Z                 |
+| Retablir                   | Cmd+Shift+Z ou Cmd+Y | Ctrl+Shift+Z ou Ctrl+Y |
+| Zoom molette               | Cmd+molette          | Ctrl+molette           |
+| Fermer modale/panneau      | Escape               | Escape                 |
 
 ## Logger
 
@@ -185,11 +216,11 @@ Utilitaires supplementaires : `logger.time(label, category, fn)` pour mesurer la
 
 ## Limites de stockage
 
-| Limite | Valeur | Seuil d'alerte |
-| --- | --- | --- |
-| Taille max. par fichier | 50 Mo | 25 Mo |
-| Taille max. par projet | 100 Mo | 80 Mo |
-| Nombre max. de projets | 50 | 40 |
+| Limite                  | Valeur | Seuil d'alerte |
+| ----------------------- | ------ | -------------- |
+| Taille max. par fichier | 50 Mo  | 25 Mo          |
+| Taille max. par projet  | 100 Mo | 80 Mo          |
+| Nombre max. de projets  | 50     | 40             |
 
 Stockage via IndexedDB (localforage). Les donnees ne quittent jamais le navigateur.
 

@@ -130,11 +130,11 @@ Deck.gl est une librairie de visualisation de donnees geospatiales construite su
 
 ```ts
 new SolidPolygonLayer({
-  id: 'countries',                    // ID stable — critique pour le diff interne Deck.gl
-  data: binaryPolygonData,            // BinaryPolygonData (Float64Array continu)
+  id: 'countries', // ID stable — critique pour le diff interne Deck.gl
+  data: binaryPolygonData, // BinaryPolygonData (Float64Array continu)
   getFillColor: [220, 220, 220, 255], // constante — pas d'accessor, pas d'updateTrigger
-  pickable: true,                     // active le hover/click GPU-side
-})
+  pickable: true // active le hover/click GPU-side
+});
 ```
 
 Deck.gl compare les props par reference a chaque appel `setProps()`. Un ID stable evite le re-upload GPU complet. Un accesseur constant (`[r,g,b,a]`) est plus performant qu'une fonction car Deck.gl n'a pas besoin d'iterer les features.
@@ -208,9 +208,9 @@ new SolidPolygonLayer({
   ...createSolidPolygonLayerProps(polyData),
   getFillColor: createPolygonFillColorAttribute(polyData, (featureId) => {
     const value = valueColumn.get(featureId); // acces O(1) dans Arrow
-    return colorScale(value);                 // -> [r, g, b, a]
+    return colorScale(value); // -> [r, g, b, a]
   })
-})
+});
 ```
 
 Sans `featureId`, il est impossible de retrouver a quelle entite appartient un vertex apres projection ou decoupage geometrique.
@@ -223,12 +223,12 @@ Sans `featureId`, il est impossible de retrouver a quelle entite appartient un v
 
 ```ts
 interface GeometryInfo {
-  type: string           // 'POLYGON', 'MULTIPOLYGON', 'POINT', 'LINESTRING'...
-  encoding: string | null // 'geoarrow.polygon', 'WKB', 'GEOJSON'...
-  geoColumn: string      // nom de la colonne geometrique
-  isNativeGeoArrow: boolean
-  isWkbEncoded: boolean
-  isGeoJsonEncoded: boolean
+  type: string; // 'POLYGON', 'MULTIPOLYGON', 'POINT', 'LINESTRING'...
+  encoding: string | null; // 'geoarrow.polygon', 'WKB', 'GEOJSON'...
+  geoColumn: string; // nom de la colonne geometrique
+  isNativeGeoArrow: boolean;
+  isWkbEncoded: boolean;
+  isGeoJsonEncoded: boolean;
 }
 ```
 
@@ -270,14 +270,14 @@ pnpm dev              # serveur de dev sur http://localhost:5176
 
 ## Commandes essentielles
 
-| Commande | Description |
-|---|---|
-| `pnpm dev` | Serveur de developpement (port 5176) |
-| `pnpm build` | Build de production (adaptateur statique SvelteKit) |
-| `pnpm check` | Verification TypeScript + Svelte |
-| `pnpm lint` | Prettier + ESLint |
-| `pnpm test:unit` | Tests unitaires Vitest |
-| `pnpm test:e2e` | Tests end-to-end Playwright |
+| Commande             | Description                                                |
+| -------------------- | ---------------------------------------------------------- |
+| `pnpm dev`           | Serveur de developpement (port 5176)                       |
+| `pnpm build`         | Build de production (adaptateur statique SvelteKit)        |
+| `pnpm check`         | Verification TypeScript + Svelte                           |
+| `pnpm lint`          | Prettier + ESLint                                          |
+| `pnpm test:unit`     | Tests unitaires Vitest                                     |
+| `pnpm test:e2e`      | Tests end-to-end Playwright                                |
 | `pnpm test:pipeline` | Tests d'integration DuckDB (ingestion de tous les formats) |
 
 ## Regles d'or
@@ -308,18 +308,18 @@ src/
 
 ### Les 10 features
 
-| Feature | Role |
-|---|---|
-| `commons/` | Stores globaux, services partages, composants Carbon, utilitaires |
-| `create-project/` | Modale de creation de projet (import, exemples, ouverture) |
-| `data-pipeline/` | Import de fichiers : parsers, validateurs, processeurs |
-| `duckdb/` | Moteur DuckDB WASM : singleton `Duck`, operations, macros SQL |
-| `header/` | Barre de navigation superieure (export, sauvegarde) |
-| `main-toolbar/` | Sidebar gauche : onglets Donnees, Visualisations, Style |
-| `map/` | Carte Deck.gl + MapLibre : hooks, layer factories, projections |
-| `project-management/` | Persistance `.kh`, serialisation, IndexedDB |
-| `side-nav/` | Menu lateral (langue, projets recents) |
-| `step-toolbar/` | Panneau droit : 10 outils (recherche, calques, projection, legende, annotations...) |
+| Feature               | Role                                                                                |
+| --------------------- | ----------------------------------------------------------------------------------- |
+| `commons/`            | Stores globaux, services partages, composants Carbon, utilitaires                   |
+| `create-project/`     | Modale de creation de projet (import, exemples, ouverture)                          |
+| `data-pipeline/`      | Import de fichiers : parsers, validateurs, processeurs                              |
+| `duckdb/`             | Moteur DuckDB WASM : singleton `Duck`, operations, macros SQL                       |
+| `header/`             | Barre de navigation superieure (export, sauvegarde)                                 |
+| `main-toolbar/`       | Sidebar gauche : onglets Donnees, Visualisations, Style                             |
+| `map/`                | Carte Deck.gl + MapLibre : hooks, layer factories, projections                      |
+| `project-management/` | Persistance `.kh`, serialisation, IndexedDB                                         |
+| `side-nav/`           | Menu lateral (langue, projets recents)                                              |
+| `step-toolbar/`       | Panneau droit : 10 outils (recherche, calques, projection, legende, annotations...) |
 
 ### Structure type d'une feature
 
@@ -365,7 +365,11 @@ const { state, actions, getState } = createToolStore<MonOutilState>(
   { key: 'mon-outil' }
 );
 
-export { state as monOutilState, actions as monOutilActions, getState as getMonOutilState };
+export {
+  state as monOutilState,
+  actions as monOutilActions,
+  getState as getMonOutilState
+};
 ```
 
 ### Pattern de store global (function + $state)
@@ -378,10 +382,18 @@ function createFeatureStore() {
   const state = $state({ count: 0, items: [] as string[] });
 
   return {
-    get count() { return state.count; },
-    get items() { return state.items; },
-    increment() { state.count += 1; },
-    addItem(item: string) { state.items.push(item); }
+    get count() {
+      return state.count;
+    },
+    get items() {
+      return state.items;
+    },
+    increment() {
+      state.count += 1;
+    },
+    addItem(item: string) {
+      state.items.push(item);
+    }
   };
 }
 
@@ -410,10 +422,10 @@ export const featureStore = createFeatureStore();
 
 ## URLs de developpement
 
-| Environnement | URL | Usage |
-|---|---|---|
-| Dev | http://localhost:5176 | Developpement avec hot-reload |
-| Preview | http://localhost:4173 | Build de production (`pnpm build && pnpm preview`) |
+| Environnement | URL                   | Usage                                              |
+| ------------- | --------------------- | -------------------------------------------------- |
+| Dev           | http://localhost:5176 | Developpement avec hot-reload                      |
+| Preview       | http://localhost:4173 | Build de production (`pnpm build && pnpm preview`) |
 
 ## Flux de donnees
 
@@ -425,11 +437,11 @@ Fichier -> validateFile() -> DuckDB (read_csv / ST_Read)
 
 ## Ressources complementaires
 
-| Besoin | Document |
-|---|---|
-| Architecture detaillee | [ARCHITECTURE.md](ARCHITECTURE.md) |
-| Pipeline de donnees | [PIPELINE_DONNEES.md](PIPELINE_DONNEES.md) |
-| Systeme de visualisation | [VISUALISATIONS.md](VISUALISATIONS.md) |
-| Gestion d'etat | [GESTION_ETAT.md](GESTION_ETAT.md) |
-| Reference des types | [REFERENCE.md](REFERENCE.md) |
-| Strategie de tests | [TESTS.md](TESTS.md) |
+| Besoin                   | Document                                   |
+| ------------------------ | ------------------------------------------ |
+| Architecture detaillee   | [ARCHITECTURE.md](ARCHITECTURE.md)         |
+| Pipeline de donnees      | [PIPELINE_DONNEES.md](PIPELINE_DONNEES.md) |
+| Systeme de visualisation | [VISUALISATIONS.md](VISUALISATIONS.md)     |
+| Gestion d'etat           | [GESTION_ETAT.md](GESTION_ETAT.md)         |
+| Reference des types      | [REFERENCE.md](REFERENCE.md)               |
+| Strategie de tests       | [TESTS.md](TESTS.md)                       |
