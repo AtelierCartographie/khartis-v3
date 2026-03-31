@@ -1380,7 +1380,7 @@
   "labels_disabled_no_geometry": "Labels require geographic data (points, lines or polygons)",
   "texts_disabled_no_geometry": "Texts require geographic data (points, lines or polygons)",
   "data_visualized_info": "Select the dataset to use for this visualization. Suggestions adapt to the geometry type of the selected dataset.",
-  "basemap_style_info": "Reference basemap style: desaturated to avoid interfering with data, simple for a neutral look, or aerial for a satellite view.",
+  "basemap_style_info": "Choose a zone (France or World) and a style: Colors for general mapping, Grayscale for data visualization, or Satellite for aerial imagery. Toggle individual layer groups below.",
   "map_projection_info": "Mercator: classic flat projection. Globe: 3D spherical representation, useful for worldwide data.",
   "basemap_tiled_info": "Enables the reference basemap (IGN & OpenStreetMap) instead of vector layers. Useful for geographic context but hides customizable layers.",
   "geo_step_info": "Georeferencing locates your data on the map by associating it with known geographic features or GPS coordinates.",
