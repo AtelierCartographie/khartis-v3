@@ -446,9 +446,41 @@
     const method = selectedViz?.classification?.method;
     const numClasses = selectedViz?.classification?.numClasses;
     const valueColumn = selectedViz?.mapping.valueColumn;
-    if (method && numClasses && valueColumn) {
+    if (
+      method &&
+      numClasses &&
+      valueColumn &&
+      selectedViz?.modes?.fill !== FillMode.CATEGORIES
+    ) {
       computeBreaksForVisualization('$effect:classificationParamsChanged');
     }
+  });
+
+  $effect(() => {
+    const viz = selectedViz;
+    const col = viz?.mapping.categoryColumn;
+    const isCategorical = viz?.modes?.fill === FillMode.CATEGORIES;
+    const hasLabels = (viz?.classification?.labels?.length ?? 0) > 0;
+    if (!isCategorical || !col || hasLabels) return;
+    const vizId = viz!.id;
+    const dataset = datasetsStore.datasets.find((d) => d.id === viz!.datasetId);
+    if (!dataset?.tableName) return;
+    const tableName = dataset.tableName;
+    Duck.query(
+      `SELECT DISTINCT "${col}" FROM "${tableName}" WHERE "${col}" IS NOT NULL ORDER BY "${col}"`,
+      { format: 'array' }
+    )
+      .then((rows) => {
+        const labels = (rows as Array<Record<string, unknown>>).map((row) =>
+          String(row[col])
+        );
+        if (labels.length > 0) {
+          untrack(() =>
+            visualizationStore.updateClassification(vizId, { labels })
+          );
+        }
+      })
+      .catch(() => {});
   });
 
   $effect(() => {
