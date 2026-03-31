@@ -112,9 +112,9 @@
         mappingUpdate.categoryColumn = column;
         break;
       case VisualizationType.BIVARIATE:
-        mappingUpdate.valueColumn = column;
+        mappingUpdate.sizeColumn = column;
         if (suggestion.columns.length > 1) {
-          mappingUpdate.colorColumn = suggestion.columns[1];
+          mappingUpdate.valueColumn = suggestion.columns[1];
         }
         break;
     }
