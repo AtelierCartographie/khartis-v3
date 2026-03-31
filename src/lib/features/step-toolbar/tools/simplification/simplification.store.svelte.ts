@@ -116,7 +116,27 @@ const { actions, getState } = createToolStore<
       { basemapId, level: s.level, variantFile }
     );
 
-    await basemapService.loadVariant(basemapId, variantFile, s.level);
+    const variantTable = await basemapService.loadVariant(
+      basemapId,
+      variantFile,
+      s.level
+    );
+
+    if (!variantTable) {
+      logger.debug(
+        'Basemap variant not available, simplification skipped',
+        LogCategory.DUCKDB,
+        { basemapId, level: s.level }
+      );
+      return {
+        type: SimplificationTarget.BASEMAP,
+        level: s.level,
+        simplified: false,
+        vertexReduction: 0,
+        originalVertices: 0,
+        simplifiedVertices: 0
+      };
+    }
 
     logger.debug('Basemap variant loaded', LogCategory.DUCKDB, {
       basemapId,
