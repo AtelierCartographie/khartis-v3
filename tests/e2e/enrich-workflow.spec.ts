@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { goToEnrichStep, uploadURL } from './helpers';
 
-const WORLD_SHP_ZIP_PATH = 'zip/shapefile-complete.zip';
+const TINY_GEO_PATH = 'geojson/tiny-geo-3features.geojson';
 const FOSSIL_CSV_PATH = 'csv/fossil-fuel-subsidies-gdp-2021.csv';
 const SINGLE_CSV_ZIP_PATH = 'zip/single-csv.zip';
 const EMPTY_CSV_PATH = 'csv/csv-malformed--with-nothing.csv';
@@ -11,7 +11,7 @@ const JOIN_TABULAR_SWITCH_NAME =
 
 async function openGeographicEnrichment(page: Page): Promise<Locator> {
   await page.goto('/');
-  await uploadURL(page, WORLD_SHP_ZIP_PATH);
+  await uploadURL(page, TINY_GEO_PATH);
   await goToEnrichStep(page);
 
   const enrichStep = page.locator('#enrich-data-step');
@@ -85,7 +85,7 @@ test.describe.serial('TC-ENRICH-001: Workflow géographique', () => {
     page
   }) => {
     await page.goto('/');
-    await uploadURL(page, WORLD_SHP_ZIP_PATH);
+    await uploadURL(page, TINY_GEO_PATH);
 
     const dataTab = page.locator('#khartis-data-tab');
     await expect(dataTab).toBeVisible();
