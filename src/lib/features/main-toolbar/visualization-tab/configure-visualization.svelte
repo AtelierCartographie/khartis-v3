@@ -21,7 +21,8 @@
   } from '$lib/features/commons/services/classification.service';
   import {
     findPaletteById,
-    generatePaletteColors
+    generatePaletteColors,
+    PALETTE_TYPE
   } from './components/palette-popover/palette.constants';
   import { getColorBlindnessState } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
   import {
@@ -33,6 +34,7 @@
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
+  import { Duck } from '$lib/features/duckdb';
   import { COLUMN_TYPE_GEOMETRY } from '$lib/features/commons/constants/data.constants';
   import { SettingsAdjust } from 'carbon-icons-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
@@ -80,9 +82,11 @@
       visualizationStore.updateModes(selectedViz.id, updates);
 
       // Initialize classification when switching to CLASSES mode if not already set
+      // Also reinitialize when coming from CATEGORIES mode (numClasses = 0 is the sentinel)
       if (
         updates.fill === FillMode.CLASSES &&
-        !selectedViz.classification?.method
+        (!selectedViz.classification?.method ||
+          !selectedViz.classification?.numClasses)
       ) {
         visualizationStore.updateClassification(selectedViz.id, {
           method: ClassificationMethod.QUANTILES,
@@ -92,16 +96,37 @@
         computeBreaksForVisualization('modesChange:fillClasses');
       }
 
-      // Initialize classification colors when switching to CATEGORIES mode if not already set
-      if (
-        updates.fill === FillMode.CATEGORIES &&
-        !selectedViz.classification?.colors?.length
-      ) {
-        visualizationStore.updateClassification(selectedViz.id, {
+      // Always reset classification when switching to CATEGORIES mode
+      // (colors from other modes like CLASSES are not valid for categorical display)
+      if (updates.fill === FillMode.CATEGORIES) {
+        const vizId = selectedViz.id;
+        visualizationStore.updateClassification(vizId, {
           method: ClassificationMethod.MANUAL,
           classes: 0,
-          colors: [...DEFAULT_CATEGORICAL_COLORS]
+          numClasses: 0,
+          colors: [...DEFAULT_CATEGORICAL_COLORS],
+          labels: []
         });
+        // Async: fetch actual unique values from DuckDB for label ordering
+        const categoryColumn = selectedViz.mapping.categoryColumn;
+        const dataset = datasetsStore.datasets.find(
+          (d) => d.id === selectedViz.datasetId
+        );
+        if (categoryColumn && dataset?.tableName) {
+          Duck.query(
+            `SELECT DISTINCT "${categoryColumn}" FROM "${dataset.tableName}" WHERE "${categoryColumn}" IS NOT NULL ORDER BY "${categoryColumn}"`,
+            { format: 'array' }
+          )
+            .then((rows) => {
+              const labels = (rows as Array<Record<string, unknown>>).map(
+                (row) => String(row[categoryColumn])
+              );
+              if (labels.length > 0) {
+                visualizationStore.updateClassification(vizId, { labels });
+              }
+            })
+            .catch(() => {});
+        }
       }
     }
   }
@@ -331,13 +356,20 @@
         if (existingColors && existingColors.length === actualNumClasses) {
           colors = existingColors;
         } else {
-          // Regenerate from user's palette when available, otherwise default blue
+          // Regenerate from user's palette when available (skip pattern palettes — they
+          // define a texture overlay, not a color scale), otherwise default blue
           const userPalette = selectedViz.classification?.paletteId
             ? findPaletteById(selectedViz.classification.paletteId)
             : undefined;
-          colors = userPalette
-            ? generatePaletteColors(userPalette, actualNumClasses, contrast)
-            : generateColorsForBreaks(actualNumClasses, 'sequential', contrast);
+          const isPatternPalette = userPalette?.type === PALETTE_TYPE.PATTERN;
+          colors =
+            userPalette && !isPatternPalette
+              ? generatePaletteColors(userPalette, actualNumClasses, contrast)
+              : generateColorsForBreaks(
+                  actualNumClasses,
+                  'sequential',
+                  contrast
+                );
         }
         const classificationUpdate: Parameters<
           typeof visualizationStore.updateClassification
@@ -397,6 +429,7 @@
     // deduplication guard without writing to lastComputedKey from async code.
     const duckVersion = duckDBOrchestrator.datasetsVersion;
     if (
+      selectedViz?.modes?.fill !== FillMode.CATEGORIES &&
       selectedViz?.mapping.valueColumn &&
       selectedViz?.classification?.method &&
       !selectedViz?.classification?.breaks?.length
