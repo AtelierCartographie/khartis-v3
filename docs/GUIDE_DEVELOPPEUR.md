@@ -277,8 +277,36 @@ pnpm dev              # serveur de dev sur http://localhost:5176
 | `pnpm check`         | Verification TypeScript + Svelte                           |
 | `pnpm lint`          | Prettier + ESLint                                          |
 | `pnpm test:unit`     | Tests unitaires Vitest                                     |
-| `pnpm test:e2e`      | Tests end-to-end Playwright                                |
+| `pnpm test:e2e`      | Tests end-to-end Playwright (local uniquement)             |
 | `pnpm test:pipeline` | Tests d'integration DuckDB (ingestion de tous les formats) |
+
+## CI / CD
+
+**GitHub Actions** (`.github/workflows/pr-validation.yml`) tourne sur chaque PR vers `staging` ou `main` :
+
+- Lint + type check
+- Tests pipeline + DuckDB (server-side, fiables en CI)
+- Build de production
+
+Les tests E2E ne tournent **pas** en CI -- voir la section Deploiement.
+
+## Deploiement
+
+Khartis est deploye manuellement sur un serveur FTP. Processus avant chaque deploiement :
+
+```bash
+# 1. S'assurer que la CI est verte (Quality Checks sur GitHub)
+
+# 2. Valider l'UX dans un vrai navigateur
+pnpm test:e2e
+
+# 3. Builder
+pnpm build
+
+# 4. Deployer build/ sur le FTP
+```
+
+Le dossier `build/` contient le site statique complet (HTML, JS, assets, fonds de carte).
 
 ## Regles d'or
 
