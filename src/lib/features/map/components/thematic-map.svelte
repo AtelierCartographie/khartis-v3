@@ -405,6 +405,7 @@
     onStyleLoaded: () => {
       mapBasemap.syncOSMRasterLayer();
       mapBasemap.syncLabelsVisibility();
+      mapBasemap.syncGroupVisibility();
       waitingForStyleIdle = false;
       if (pendingLayerUpdate) {
         pendingLayerUpdate = false;
@@ -829,6 +830,11 @@
   $effect(() => {
     void basemapStyleStore.showLabels;
     untrack(() => mapBasemap.syncLabelsVisibility());
+  });
+
+  $effect(() => {
+    void basemapStyleStore.groupVisibilityVersion;
+    untrack(() => mapBasemap.syncGroupVisibility());
   });
 
   $effect(() => {
