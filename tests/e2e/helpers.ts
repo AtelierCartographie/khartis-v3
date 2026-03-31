@@ -403,7 +403,7 @@ export async function uploadURL(
 
     await expect(createButton).toBeEnabled({ timeout: 30000 });
     // Guard: modal may have auto-closed during DuckDB processing
-    if (!await createProjectModal.isVisible().catch(() => false)) {
+    if (!(await createProjectModal.isVisible().catch(() => false))) {
       await page.waitForLoadState('networkidle').catch(() => {});
       return;
     }

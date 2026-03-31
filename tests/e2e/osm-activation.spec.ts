@@ -1,5 +1,10 @@
 import { expect, test } from '@playwright/test';
-import { createProject, goToJoinStep, selectGeolocationLinkedVariable, uploadURL } from './helpers';
+import {
+  createProject,
+  goToJoinStep,
+  selectGeolocationLinkedVariable,
+  uploadURL
+} from './helpers';
 
 const FOSSIL_CSV_PATH = 'csv/fossil-fuel-subsidies-gdp-2021.csv';
 const SEVESO_CSV_PATH = 'csv/sites-seveso-idf.csv';

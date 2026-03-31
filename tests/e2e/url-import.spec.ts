@@ -23,6 +23,9 @@ test('TC-URL-001: shows error notification for invalid URL', async ({
   await loadButton.click();
 
   await expect(
-    page.getByRole('alert').or(page.locator('.bx--inline-notification--error')).first()
+    page
+      .getByRole('alert')
+      .or(page.locator('.bx--inline-notification--error'))
+      .first()
   ).toBeVisible({ timeout: 30000 });
 });
