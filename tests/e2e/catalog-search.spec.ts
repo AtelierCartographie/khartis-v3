@@ -10,6 +10,8 @@ test('TC-CATALOG-001: create project modal is functional on load', async ({
   await expect(createProjectModal).toBeVisible({ timeout: 30000 });
 
   // URL input is accessible for online file loading
-  const urlInput = createProjectModal.locator('input[placeholder^="https"]').first();
+  const urlInput = createProjectModal
+    .locator('input[placeholder^="https"]')
+    .first();
   await expect(urlInput).toBeVisible({ timeout: 10000 });
 });
