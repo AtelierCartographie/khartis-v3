@@ -16,6 +16,9 @@ export default defineConfig({
     actionTimeout: process.env.CI ? 30000 : 10000,
     storageState: 'tests/e2e/storage-state.json'
   },
+  expect: {
+    timeout: process.env.CI ? 30000 : 10000
+  },
   projects: [
     {
       name: 'chromium',
