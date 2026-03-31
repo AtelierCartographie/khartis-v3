@@ -1423,43 +1423,42 @@ export function createPolygonLayers(
       : {};
 
     // Fill layer
-    layers.push(
-      new SolidPolygonLayer({
-        id: layerId,
-        ...(solidProps as unknown as Record<string, unknown>),
-        ...(!fillColorBinaryAttr && {
-          getFillColor: [fillColor[0], fillColor[1], fillColor[2], 255] as [
-            number,
-            number,
-            number,
-            number
-          ]
-        }),
-        opacity: hasPolyHighlights ? 1 : rawPolyFillOpacity,
-        pickable: true,
-        autoHighlight: true,
-        highlightColor: HOVER_HIGHLIGHT_COLOR,
-        ...(modelMatrix && { modelMatrix }),
-        ...(beforeId && { beforeId }),
-        ...polyYearFilterProps,
-        updateTriggers: {
-          getFillColor: [
-            useChoropleth,
-            useCategoricalColor,
-            viz?.mapping.valueColumn,
-            viz?.mapping.categoryColumn,
-            viz?.classification?.breaks,
-            viz?.classification?.colors,
-            viz?.classification?.labels,
-            fillColor,
-            hlVersion
-          ],
-          ...(ctx.yearFilter && {
-            getFilterValue: [ctx.yearFilter.column, ctx.yearFilter.value]
-          })
-        }
-      })
-    );
+    const fillLayer = new SolidPolygonLayer({
+      id: layerId,
+      ...(solidProps as unknown as Record<string, unknown>),
+      ...(!fillColorBinaryAttr && {
+        getFillColor: [fillColor[0], fillColor[1], fillColor[2], 255] as [
+          number,
+          number,
+          number,
+          number
+        ]
+      }),
+      opacity: hasPolyHighlights ? 1 : rawPolyFillOpacity,
+      pickable: true,
+      autoHighlight: true,
+      highlightColor: HOVER_HIGHLIGHT_COLOR,
+      parameters: { depthCompare: 'always' as const, stencilCompare: 'always' as const },
+      ...(modelMatrix && { modelMatrix }),
+      ...(beforeId && { beforeId }),
+      ...polyYearFilterProps,
+      updateTriggers: {
+        getFillColor: [
+          useChoropleth,
+          useCategoricalColor,
+          viz?.mapping.valueColumn,
+          viz?.mapping.categoryColumn,
+          viz?.classification?.breaks,
+          viz?.classification?.colors,
+          viz?.classification?.labels,
+          fillColor,
+          hlVersion
+        ],
+        ...(ctx.yearFilter && {
+          getFilterValue: [ctx.yearFilter.column, ctx.yearFilter.value]
+        })
+      }
+    });
 
     // Stroke layer — inject binary color into data.attributes if needed
     const strokePathProps = createPathLayerProps(outlineData);
@@ -1480,28 +1479,48 @@ export function createPolygonLayers(
         )
       : {};
 
-    layers.push(
-      new PathLayer({
-        id: `${layerId}-stroke`,
-        ...(strokePathProps as unknown as Record<string, unknown>),
-        ...(!strokeColorBinaryAttr && {
-          getColor: withOpacity(strokeColor, rawPolyStrokeOpacity)
-        }),
-        widthUnits: 'pixels',
-        getWidth: strokeWidth / 4,
-        pickable: false,
-        ...(modelMatrix && { modelMatrix }),
-        ...(beforeId && { beforeId }),
-        ...strokeYearFilterProps,
-        updateTriggers: {
-          getColor: [strokeColor, rawPolyStrokeOpacity, hlVersion],
-          getWidth: [strokeWidth],
-          ...(ctx.yearFilter && {
-            getFilterValue: [ctx.yearFilter.column, ctx.yearFilter.value]
-          })
-        }
-      })
-    );
+    const strokeLayer = new PathLayer({
+      id: `${layerId}-stroke`,
+      ...(strokePathProps as unknown as Record<string, unknown>),
+      ...(!strokeColorBinaryAttr && {
+        getColor: withOpacity(strokeColor, rawPolyStrokeOpacity)
+      }),
+      widthUnits: 'pixels',
+      getWidth: strokeWidth / 4,
+      pickable: false,
+      ...(modelMatrix && { modelMatrix }),
+      ...(beforeId && { beforeId }),
+      ...strokeYearFilterProps,
+      updateTriggers: {
+        getColor: [strokeColor, rawPolyStrokeOpacity, hlVersion],
+        getWidth: [strokeWidth],
+        ...(ctx.yearFilter && {
+          getFilterValue: [ctx.yearFilter.column, ctx.yearFilter.value]
+        })
+      }
+    });
+
+    // Determine layer order and stroke visibility from context
+    const DEFAULT_PRIMITIVE_ORDER: PrimitiveFilter[] = [
+      PrimitiveFilterType.POINT,
+      PrimitiveFilterType.LINE,
+      PrimitiveFilterType.POLYGON
+    ];
+    const primitiveOrder = ctx.primitiveOrder ?? DEFAULT_PRIMITIVE_ORDER;
+    const lineIdx = primitiveOrder.indexOf(PrimitiveFilterType.LINE);
+    const polygonIdx = primitiveOrder.indexOf(PrimitiveFilterType.POLYGON);
+    // deck.gl: last in array = on top; strokeOnTop means stroke renders above fill
+    const strokeOnTop = lineIdx === -1 || polygonIdx === -1 || lineIdx < polygonIdx;
+
+    const showStroke = !ctx.viz?.primitiveFilters || ctx.viz.primitiveFilters.includes(PrimitiveFilterType.LINE);
+
+    if (strokeOnTop) {
+      layers.push(fillLayer);
+      if (showStroke) layers.push(strokeLayer);
+    } else {
+      if (showStroke) layers.push(strokeLayer);
+      layers.push(fillLayer);
+    }
 
     // Pattern overlay: separate GeoJsonLayer on top with pattern as semi-transparent mask
     if (patternProps) {
@@ -1651,18 +1670,22 @@ export function createPolygonLayers(
       )
     : withOpacity(strokeColor, rawPolyStrokeOpacity);
 
+  const showGeoJsonStroke = !ctx.viz?.primitiveFilters || ctx.viz.primitiveFilters.includes(PrimitiveFilterType.LINE);
+
   const geoJsonLayers: Layer<DeckDataRow>[] = [
     new GeoJsonLayer({
       id: layerId,
       data: geojsonData,
       getFillColor: geoJsonFillColor,
       getLineColor: geoJsonStrokeColor,
+      stroked: showGeoJsonStroke,
       opacity: hasPolyHighlights ? 1 : rawPolyFillOpacity,
       lineWidthUnits: 'pixels',
       lineWidthScale: strokeWidth / 4,
       pickable: true,
       autoHighlight: true,
       highlightColor: HOVER_HIGHLIGHT_COLOR,
+      parameters: { depthCompare: 'always' as const, stencilCompare: 'always' as const },
       ...(modelMatrix && { modelMatrix }),
       ...(beforeId && { beforeId }),
       ...(ctx.yearFilter && buildGeoJsonYearFilterProps(ctx.yearFilter)),
@@ -1753,6 +1776,7 @@ export function createGeoJsonLayers(
       pickable: true,
       autoHighlight: true,
       highlightColor: HOVER_HIGHLIGHT_COLOR,
+      parameters: { depthCompare: 'always' as const, stencilCompare: 'always' as const },
       ...(modelMatrix && { modelMatrix }),
       ...(beforeId && { beforeId }),
       updateTriggers: {

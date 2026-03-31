@@ -406,6 +406,8 @@
       mapBasemap.syncOSMRasterLayer();
       mapBasemap.syncLabelsVisibility();
       mapBasemap.syncGroupVisibility();
+      // setStyle() resets the MapLibre projection to mercator — re-apply the stored projection
+      mapBasemap.syncProjection();
       waitingForStyleIdle = false;
       if (pendingLayerUpdate) {
         pendingLayerUpdate = false;
