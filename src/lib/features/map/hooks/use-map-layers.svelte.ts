@@ -167,10 +167,14 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         ? mapProjectionStore.projection
         : undefined;
 
-      // Build basemap projection from metadata (composite/simple/identity)
+      // Build basemap projection from metadata (composite/simple/identity).
+      // Only applies in orthographic mode — in MapLibre mode, the map handles
+      // projection natively (WebMercator/globe) and thematic data must stay in
+      // WGS84 lat/lng. Applying a d3-geo projection here would convert coordinates
+      // to metres, causing deck.gl "invalid latitude" errors.
       const currentMetadata = basemapService.currentBasemap?.metadata;
       const basemapProjection =
-        currentMetadata && !currentMetadata.isCustom
+        isOrthographicMode && currentMetadata && !currentMetadata.isCustom
           ? buildProjectionForBasemap(
               currentMetadata,
               960,
@@ -180,7 +184,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           : undefined;
 
       // Basemap projection takes priority to keep data and basemap aligned.
-      // Custom CRS from projection tool (proj4d3, in meters) only applies
+      // Custom CRS from projection tool (proj4d3, in metres) only applies
       // when no basemap projection exists (identity basemaps, custom imports).
       let customProjection: ProjectionLike | undefined = basemapProjection;
       if (!customProjection && isOrthographicMode) {
