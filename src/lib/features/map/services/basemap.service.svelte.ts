@@ -535,13 +535,25 @@ function createBasemapService() {
 
     const variantTableName = `basemap_variant_${basemapId.replace(/[^a-zA-Z0-9_]/g, '_')}_${level}`;
 
-    await Duck.query(
-      `CREATE OR REPLACE TABLE "${variantTableName}" AS SELECT * FROM '${variantFile}'`
-    );
-
-    const variantTable = await fetchArrowTableWithGeometry(
-      variantTableName,
-      Duck
+    const variantUrl = getGeometryParquetUrl(variantFile);
+    const response = await fetch(variantUrl);
+    if (!response.ok) {
+      if (response.status === 404) {
+        logger.warn('Basemap variant not available', LogCategory.MAP, {
+          basemapId,
+          variantFile,
+          level
+        });
+        return null as unknown as ArrowTable;
+      }
+      throw new Error(
+        `Failed to fetch basemap variant ${variantFile}: ${response.statusText}`
+      );
+    }
+    const arrayBuffer = await response.arrayBuffer();
+    const variantTable = await readGeoParquetViaDuckDB(
+      arrayBuffer,
+      variantTableName
     );
 
     loadedBasemap.simplifiedVariants.set(level, variantTable);

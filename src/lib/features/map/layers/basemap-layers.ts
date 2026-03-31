@@ -16,7 +16,7 @@ import {
   parseSolidPolygonsWithProjection,
   parsePointData,
   parsePointDataWithProjection,
-  projectGeoJSON
+  projectGeoJSON as _projectGeoJSON
 } from '../utils/geoarrow-stream-bridge';
 import type { ProjectionLike } from 'geoarrow-deck-stream';
 import * as d3 from 'd3-geo';
@@ -1345,7 +1345,7 @@ function createMetadataGeoLinesLayers(
   return layers;
 }
 
-function createMetadataCentroidLayers(
+function _createMetadataCentroidLayers(
   entries: MetadataLayerEntry[],
   ctx: BasemapLayerContext
 ): Layer<DeckDataRow>[] {
