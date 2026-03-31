@@ -155,7 +155,8 @@
   }
 
   function handleReorderLayers(fromIndex: number, toIndex: number): void {
-    store.reorderLayers('visualization', fromIndex, toIndex);
+    const type = parentLayers[0]?.type ?? 'visualization';
+    store.reorderLayers(type, fromIndex, toIndex);
   }
 
   function handleReorderSubLayers(
