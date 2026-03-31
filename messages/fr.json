@@ -1380,7 +1380,7 @@
   "labels_disabled_no_geometry": "Les étiquettes nécessitent des données géographiques (points, lignes ou polygones)",
   "texts_disabled_no_geometry": "Les textes nécessitent des données géographiques (points, lignes ou polygones)",
   "data_visualized_info": "Sélectionnez le jeu de données à utiliser pour cette visualisation. Les suggestions s'adaptent au type de géométrie du jeu de données sélectionné.",
-  "basemap_style_info": "Le style du fond de référence\u202F: désaturé pour ne pas interférer avec les données, simple pour un rendu neutre, ou aérien pour une vue satellite.",
+  "basemap_style_info": "Choisissez une zone (France ou Monde) et un style\u202F: Couleurs pour la cartographie générale, Niveaux de gris pour la datavisualisation, ou Satellite pour l'imagerie aérienne. Activez ou désactivez les groupes de calques ci-dessous.",
   "map_projection_info": "Mercator\u202F: projection plane classique. Globe\u202F: représentation sphérique 3D, utile pour les données mondiales.",
   "basemap_tiled_info": "Active le fond de référence (IGN & OpenStreetMap) en remplacement des couches vectorielles. Utile pour le contexte géographique mais masque les couches personnalisables.",
   "geo_step_info": "Le géoréférencement permet de localiser vos données sur la carte en les associant à des entités géographiques connues ou à des coordonnées GPS.",
