@@ -119,7 +119,8 @@ export function useMapState(options?: UseMapStateOptions): UseMapStateReturn {
       highlightedRowIds: mapHighlightStore.hasHighlights
         ? mapHighlightStore.highlightedRowIds
         : undefined,
-      highlightVersion: mapHighlightStore.version
+      highlightVersion: mapHighlightStore.version,
+      primitiveOrder: viz.primitiveOrder
     };
   }
 

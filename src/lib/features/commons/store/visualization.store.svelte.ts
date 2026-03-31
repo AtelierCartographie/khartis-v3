@@ -137,6 +137,7 @@ export interface VisualizationConfig {
   enabled: boolean;
   modes?: VisualizationModes;
   primitiveFilters?: PrimitiveFilter[];
+  primitiveOrder?: PrimitiveFilter[];
   style: {
     fillColor?: string | string[];
     fillColorB?: string;
@@ -220,6 +221,7 @@ export interface VisualizationStore {
   ) => VisualizationConfig;
   updateModes: (id: string, modes: Partial<VisualizationModes>) => void;
   togglePrimitiveFilter: (id: string, primitive: PrimitiveFilter) => void;
+  setPrimitiveFilterOrder: (id: string, order: PrimitiveFilter[]) => void;
   updateSymbols: (
     id: string,
     symbols: Partial<VisualizationConfig['symbols']>
@@ -474,7 +476,7 @@ function getDefaultPrimitiveFilters(
   const normalizedGeometryType = geometryType?.toLowerCase() ?? '';
 
   if (normalizedGeometryType.includes('polygon')) {
-    return [PrimitiveFilterType.POLYGON];
+    return [PrimitiveFilterType.POLYGON, PrimitiveFilterType.LINE];
   }
 
   if (normalizedGeometryType.includes('line')) {
@@ -584,10 +586,20 @@ function createVisualizationStore(): VisualizationStore {
         ? currentFilters.filter((item) => item !== primitive)
         : [...currentFilters, primitive];
 
+      if (nextFilters.length === 0) {
+        return {};
+      }
+
       return {
         primitiveFilters: nextFilters
       };
     });
+  }
+
+  function setPrimitiveFilterOrder(id: string, order: PrimitiveFilter[]): void {
+    applyVisualizationUpdate(id, () => ({
+      primitiveOrder: order
+    }));
   }
 
   function updateSymbols(
@@ -859,7 +871,17 @@ function createVisualizationStore(): VisualizationStore {
   function restoreFromSerialized(
     settings: SerializedVisualizationSettings
   ): void {
-    state.visualizations = settings.visualizations || [];
+    // Migrate old polygon vizzes: add LINE to primitiveFilters if only POLYGON was set
+    state.visualizations = (settings.visualizations || []).map((viz: VisualizationConfig) => {
+      if (
+        viz.primitiveFilters &&
+        viz.primitiveFilters.length === 1 &&
+        viz.primitiveFilters[0] === PrimitiveFilterType.POLYGON
+      ) {
+        return { ...viz, primitiveFilters: [PrimitiveFilterType.POLYGON, PrimitiveFilterType.LINE] };
+      }
+      return viz;
+    });
     state.selectedVisualizationId = settings.selectedVisualizationId;
     state.activeVisualizationIds = new Set(
       settings.activeVisualizationIds || []
@@ -888,6 +910,7 @@ function createVisualizationStore(): VisualizationStore {
     createVisualization,
     updateModes,
     togglePrimitiveFilter,
+    setPrimitiveFilterOrder,
     updateSymbols,
     updateMissingData,
     updateClassification,
