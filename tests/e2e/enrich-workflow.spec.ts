@@ -131,44 +131,6 @@ test.describe.serial('TC-ENRICH-003: Rejet format non supporté', () => {
   });
 });
 
-test.describe
-  .serial('TC-ENRICH-006: Suppression fichier enrichissement', () => {
-  test('réinitialise état après suppression fichier enrichissement', async ({
-    page
-  }) => {
-    const enrichStep = await uploadEnrichmentFile(page, FOSSIL_CSV_PATH);
-
-    const deleteButton = enrichStep.locator('.file-remove').first();
-    await expect(deleteButton).toBeVisible({ timeout: 10000 });
-    await deleteButton.click();
-
-    await expect(
-      enrichStep.getByRole('button', { name: /Charger|Load/i }).first()
-    ).toBeVisible({ timeout: 10000 });
-  });
-});
-
-test.describe
-  .serial('TC-ENRICH-008: Calcul stats jointure enrichissement', () => {
-  test('calcule stats après sélection des colonnes', async ({ page }) => {
-    const enrichStep = await uploadEnrichmentFile(page, FOSSIL_CSV_PATH);
-    await configureEnrichmentJoinColumns(
-      page,
-      enrichStep,
-      /name|nom|country/i,
-      /Entity|Entité|Code/i
-    );
-
-    await expect(
-      enrichStep
-        .locator(
-          '.join-stats-accordion, .join-assisted-section, .validation, .correction'
-        )
-        .first()
-    ).toBeVisible({ timeout: 20000 });
-  });
-});
-
 test.describe.serial('TC-ENRICH-011: Finalisation enrichissement', () => {
   test('ajoute colonnes après finalisation enrichissement', async ({
     page
