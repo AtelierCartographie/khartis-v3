@@ -219,6 +219,12 @@ const GEO_FILES: GeoTestCase[] = [
     expectedGeometryTypes: ['MULTIPOLYGON']
   },
   {
+    id: 'geojson-tiny-3features',
+    relativePath: 'geojson/tiny-geo-3features.geojson',
+    format: 'geojson',
+    expectedGeometryTypes: ['POLYGON']
+  },
+  {
     id: 'gpkg-compagnies-herault',
     relativePath: 'gpkg/compagnies-herault-l93.gpkg',
     format: 'gpkg',
