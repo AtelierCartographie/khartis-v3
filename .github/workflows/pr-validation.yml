@@ -34,7 +34,9 @@ jobs:
       - name: Setup SSH for private dependencies
         uses: webfactory/ssh-agent@v0.10.0
         with:
-          ssh-private-key: ${{ secrets.GIT_SSH_KEY }}
+          ssh-private-key: |
+            ${{ secrets.GEOARROW_SSH_KEY }}
+            ${{ secrets.PROJ_SSH_KEY }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -77,7 +79,9 @@ jobs:
       - name: Setup SSH for private dependencies
         uses: webfactory/ssh-agent@v0.10.0
         with:
-          ssh-private-key: ${{ secrets.GIT_SSH_KEY }}
+          ssh-private-key: |
+            ${{ secrets.GEOARROW_SSH_KEY }}
+            ${{ secrets.PROJ_SSH_KEY }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
