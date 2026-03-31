@@ -136,6 +136,28 @@
       if (updates.valueColumn) {
         computeBreaksForVisualization('mapping:valueColumn');
       }
+      if (updates.categoryColumn) {
+        const vizId = selectedViz.id;
+        const dataset = datasetsStore.datasets.find(
+          (d) => d.id === selectedViz.datasetId
+        );
+        if (dataset?.tableName) {
+          const col = updates.categoryColumn;
+          Duck.query(
+            `SELECT DISTINCT "${col}" FROM "${dataset.tableName}" WHERE "${col}" IS NOT NULL ORDER BY "${col}"`,
+            { format: 'array' }
+          )
+            .then((rows) => {
+              const labels = (rows as Array<Record<string, unknown>>).map(
+                (row) => String(row[col])
+              );
+              if (labels.length > 0) {
+                visualizationStore.updateClassification(vizId, { labels });
+              }
+            })
+            .catch(() => {});
+        }
+      }
     }
   }
 

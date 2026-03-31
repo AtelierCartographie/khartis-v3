@@ -43,7 +43,8 @@ import { FillMode } from '../../main-toolbar/constants';
 import { getColorBlindnessState } from '../../step-toolbar/tools/color-blindness/color-blindness.store.svelte';
 import {
   findPaletteById,
-  generatePaletteColors
+  generatePaletteColors,
+  PALETTE_TYPE
 } from '../../main-toolbar/visualization-tab/components/palette-popover/palette.constants';
 import {
   normalizeClassificationMethod,
@@ -279,16 +280,26 @@ function createDataOrchestratorService() {
 
           if (file.joinedBasemap && file.geoColumn) {
             await basemapCatalogService.loadCatalog();
-            const basemap = basemapCatalogService.getBasemapById(file.joinedBasemap);
+            const basemap = basemapCatalogService.getBasemapById(
+              file.joinedBasemap
+            );
             if (basemap) {
               try {
-                await duckDBOrchestrator.finalizeJoin(registered.id, basemap, file.geoColumn);
+                await duckDBOrchestrator.finalizeJoin(
+                  registered.id,
+                  basemap,
+                  file.geoColumn
+                );
               } catch (joinError) {
-                logger.warn('Failed to restore join on project load', LogCategory.DATA, {
-                  datasetId: registered.id,
-                  joinedBasemap: file.joinedBasemap,
-                  error: joinError
-                });
+                logger.warn(
+                  'Failed to restore join on project load',
+                  LogCategory.DATA,
+                  {
+                    datasetId: registered.id,
+                    joinedBasemap: file.joinedBasemap,
+                    error: joinError
+                  }
+                );
               }
             }
           }
@@ -827,9 +838,15 @@ function createDataOrchestratorService() {
           const userPalette = viz.classification?.paletteId
             ? findPaletteById(viz.classification.paletteId)
             : undefined;
-          colors = userPalette
-            ? generatePaletteColors(userPalette, actualNumClasses, contrast)
-            : generateColorsForBreaks(actualNumClasses, 'sequential', contrast);
+          const isPatternPalette = userPalette?.type === PALETTE_TYPE.PATTERN;
+          colors =
+            userPalette && !isPatternPalette
+              ? generatePaletteColors(userPalette, actualNumClasses, contrast)
+              : generateColorsForBreaks(
+                  actualNumClasses,
+                  'sequential',
+                  contrast
+                );
         }
 
         visualizationStore.updateClassification(viz.id, {
