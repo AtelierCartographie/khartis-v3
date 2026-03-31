@@ -101,6 +101,8 @@ export interface LayerContext {
   yearFilter?: YearFilterInfo;
   /** Custom CRS projection (from proj4d3) for thematic layer binary parsing */
   customProjection?: ProjectionLike;
+  /** Primitive sublayer render order (from viz store) */
+  primitiveOrder?: import('$lib/features/commons/store/visualization.store.svelte').PrimitiveFilter[];
 }
 
 export type BBox = [number, number, number, number];

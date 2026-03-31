@@ -1,5 +1,6 @@
 <script lang="ts">
   import { dndzone } from 'svelte-dnd-action';
+  import { untrack } from 'svelte';
   import LayerItem from './layer-item.svelte';
   import type { Layer } from './layers.types.js';
 
@@ -34,13 +35,30 @@
   const FLIP_DURATION_MS = 200;
   const PARENT_DND_TYPE = 'parent-layers';
 
+  function transformParentGhost(draggedEl: HTMLElement | undefined): void {
+    if (!draggedEl) return;
+    const sublayers = draggedEl.querySelector('.sublayers-container');
+    if (sublayers instanceof HTMLElement) {
+      sublayers.style.display = 'none';
+    }
+    const card = draggedEl.querySelector('.layer-card');
+    if (card instanceof HTMLElement) {
+      draggedEl.style.height = `${card.offsetHeight}px`;
+    }
+  }
+
   let parentItems = $state<Layer[]>([]);
   let childItems = $state<Record<string, Layer[]>>({});
-  let draggingParent = false;
+  let draggingParent = $state(false);
   let draggingChildOf: string | null = null;
+  let collapsedLayers = $state<Record<string, boolean>>({});
+
+  function toggleCollapse(id: string): void {
+    collapsedLayers[id] = !collapsedLayers[id];
+  }
 
   $effect(() => {
-    if (!draggingParent) {
+    if (!untrack(() => draggingParent)) {
       parentItems = parentLayers.map((l) => ({ ...l }));
     }
   });
@@ -65,19 +83,15 @@
   }
 
   function handleParentFinalize(e: Event): void {
-    const newItems: Layer[] = (e as CustomEvent).detail.items;
+    const { items: newItems, info } = (e as CustomEvent).detail;
     parentItems = newItems;
     draggingParent = false;
 
-    const oldIds = parentLayers.map((l) => l.id);
-    const newIds = newItems.map((l) => l.id);
+    const fromIndex = parentLayers.findIndex((l) => l.id === info.id);
+    const toIndex = (newItems as Layer[]).findIndex((l) => l.id === info.id);
 
-    for (let i = 0; i < newIds.length; i++) {
-      if (oldIds[i] !== newIds[i]) {
-        const fromIndex = oldIds.indexOf(newIds[i]);
-        onReorderLayers(fromIndex, i);
-        break;
-      }
+    if (fromIndex !== -1 && toIndex !== -1 && fromIndex !== toIndex) {
+      onReorderLayers(fromIndex, toIndex);
     }
   }
 
@@ -90,19 +104,16 @@
   }
 
   function handleChildFinalize(parentId: string, e: Event): void {
-    const newItems: Layer[] = (e as CustomEvent).detail.items;
+    const { items: newItems, info } = (e as CustomEvent).detail;
     childItems = { ...childItems, [parentId]: newItems };
     draggingChildOf = null;
 
-    const oldIds = (childLayersByParent[parentId] ?? []).map((l) => l.id);
-    const newIds = newItems.map((l) => l.id);
+    const oldChildren = childLayersByParent[parentId] ?? [];
+    const fromIndex = oldChildren.findIndex((l) => l.id === info.id);
+    const toIndex = (newItems as Layer[]).findIndex((l) => l.id === info.id);
 
-    for (let i = 0; i < newIds.length; i++) {
-      if (oldIds[i] !== newIds[i]) {
-        const fromIndex = oldIds.indexOf(newIds[i]);
-        onReorderSubLayers(parentId, fromIndex, i);
-        break;
-      }
+    if (fromIndex !== -1 && toIndex !== -1 && fromIndex !== toIndex) {
+      onReorderSubLayers(parentId, fromIndex, toIndex);
     }
   }
 </script>
@@ -114,7 +125,8 @@
     items: parentItems,
     flipDurationMs: FLIP_DURATION_MS,
     type: PARENT_DND_TYPE,
-    dropTargetStyle: {}
+    dropTargetStyle: {},
+    transformDraggedElement: transformParentGhost
   }}
   onconsider={handleParentConsider}
   onfinalize={handleParentFinalize}
@@ -123,6 +135,9 @@
     <div class="layer-group">
       <LayerItem
         layer={parentLayer}
+        hasChildren={getChildren(parentLayer.id).length > 0}
+        isCollapsed={!!collapsedLayers[parentLayer.id]}
+        onToggleCollapse={() => toggleCollapse(parentLayer.id)}
         onToggleVisibility={onToggleVisibility}
         onOpenSettings={onOpenSettings}
         onRenameLayer={onRenameLayer}
@@ -130,7 +145,7 @@
         onDeleteLayer={onDeleteLayer}
       />
 
-      {#if getChildren(parentLayer.id).length > 0}
+      {#if getChildren(parentLayer.id).length > 0 && !collapsedLayers[parentLayer.id] && !draggingParent}
         <div class="sublayers-container">
           <div class="sublayers-line"></div>
           <div
