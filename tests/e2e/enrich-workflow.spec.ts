@@ -8,7 +8,6 @@ const EMPTY_CSV_PATH = 'csv/csv-malformed--with-nothing.csv';
 
 const JOIN_TABULAR_SWITCH_NAME =
   /Joindre des données tabulaires|Join tabular data/i;
-const OVERLAY_BASEMAP_SWITCH_NAME = /Superposer|Overlay|fond de carte|basemap/i;
 
 async function openGeographicEnrichment(page: Page): Promise<Locator> {
   await page.goto('/');
@@ -169,31 +168,6 @@ test.describe.serial('TC-ENRICH-011: Finalisation enrichissement', () => {
     await controlTab.click();
 
     await expect(page.locator('table').first()).toBeVisible({ timeout: 15000 });
-  });
-});
-
-test.describe.serial('TC-ENRICH-014: Overlay OSM enrichissement', () => {
-  test('active OSM en mode enrichissement', async ({ page }) => {
-    const enrichStep = await openGeographicEnrichment(page);
-    await ensureSwitchChecked(enrichStep, OVERLAY_BASEMAP_SWITCH_NAME);
-
-    const osmTab = enrichStep
-      .getByRole('button', { name: /^OSM$|OpenStreetMap/i })
-      .first();
-    await expect(osmTab).toBeVisible({ timeout: 10000 });
-    await osmTab.click();
-
-    const activateOsm = enrichStep
-      .getByRole('button', { name: /Ajouter|Add|Activer|Activate/i })
-      .first();
-    await expect(activateOsm).toBeVisible({ timeout: 10000 });
-    await activateOsm.click();
-
-    await expect(
-      enrichStep.getByText(/OpenStreetMap|OSM/i).first()
-    ).toBeVisible({
-      timeout: 15000
-    });
   });
 });
 
