@@ -27,7 +27,12 @@ function createProjectionStore() {
   });
 
   function recalculateModelMatrix(): void {
-    const { referenceBbox, referenceGeoMetadata, canvasSize, isProjectedCoordinates } = state;
+    const {
+      referenceBbox,
+      referenceGeoMetadata,
+      canvasSize,
+      isProjectedCoordinates
+    } = state;
 
     if (referenceGeoMetadata) {
       state.modelMatrix = get_model_matrix(referenceGeoMetadata, canvasSize);

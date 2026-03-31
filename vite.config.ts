@@ -47,7 +47,7 @@ export default defineConfig(({ mode }) => {
         '@deck.gl/core',
         '@deck.gl/layers',
         'apache-arrow'
-      ],
+      ]
     },
     plugins: [
       process.env.ANALYZE === 'true' &&

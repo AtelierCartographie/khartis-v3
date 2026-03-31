@@ -9,10 +9,7 @@ import {
   getRowCountFromCache,
   setRowCountCache
 } from '$lib/features/duckdb/cache/cache-manager';
-import type {
-  DuckDBContext,
-  DescribeResult
-} from '$lib/features/duckdb/types';
+import type { DuckDBContext, DescribeResult } from '$lib/features/duckdb/types';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -105,7 +102,6 @@ describe('markTableMutated', () => {
     const ctx = makeCtx();
     expect(() => markTableMutated(ctx, 'tbl')).not.toThrow();
   });
-
 });
 
 // ── getTableMetadata ──────────────────────────────────────────────────────────

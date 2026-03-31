@@ -7,12 +7,7 @@
     "subtitle_en": "by NUTS 1",
     "source": "Eurostat - GISCO",
     "date": "2021",
-    "bbox": [
-      -63.13,
-      -21.4,
-      55.86,
-      80.4
-    ],
+    "bbox": [-63.13, -21.4, 55.86, 80.4],
     "proj_source": "EPSG:4326",
     "proj_to": {
       "type": "composite",
@@ -69,12 +64,7 @@
     "subtitle_en": "by NUTS 1",
     "source": "Eurostat - GISCO",
     "date": "2024",
-    "bbox": [
-      -63.13,
-      -21.4,
-      55.86,
-      80.4
-    ],
+    "bbox": [-63.13, -21.4, 55.86, 80.4],
     "proj_source": "EPSG:4326",
     "proj_to": {
       "type": "composite",
@@ -131,12 +121,7 @@
     "subtitle_en": "by NUTS 2",
     "source": "Eurostat - GISCO",
     "date": "2021",
-    "bbox": [
-      -63.13,
-      -21.4,
-      55.86,
-      80.4
-    ],
+    "bbox": [-63.13, -21.4, 55.86, 80.4],
     "proj_source": "EPSG:4326",
     "proj_to": {
       "type": "composite",
@@ -200,12 +185,7 @@
     "subtitle_en": "by NUTS 2",
     "source": "Eurostat - GISCO",
     "date": "2024",
-    "bbox": [
-      -63.13,
-      -21.4,
-      55.86,
-      80.4
-    ],
+    "bbox": [-63.13, -21.4, 55.86, 80.4],
     "proj_source": "EPSG:4326",
     "proj_to": {
       "type": "composite",
@@ -269,12 +249,7 @@
     "subtitle_en": "by NUTS 3",
     "source": "Eurostat - GISCO",
     "date": "2021",
-    "bbox": [
-      -63.13,
-      -21.4,
-      55.86,
-      80.4
-    ],
+    "bbox": [-63.13, -21.4, 55.86, 80.4],
     "proj_source": "EPSG:4326",
     "proj_to": {
       "type": "composite",
@@ -345,12 +320,7 @@
     "subtitle_en": "by NUTS 3",
     "source": "Eurostat - GISCO",
     "date": "2024",
-    "bbox": [
-      -63.13,
-      -21.4,
-      55.86,
-      80.4
-    ],
+    "bbox": [-63.13, -21.4, 55.86, 80.4],
     "proj_source": "EPSG:4326",
     "proj_to": {
       "type": "composite",
@@ -421,12 +391,7 @@
     "subtitle_en": "by NUTS 1",
     "source": "Eurostat - GISCO",
     "date": "2021",
-    "bbox": [
-      -63.13,
-      -21.4,
-      55.86,
-      80.4
-    ],
+    "bbox": [-63.13, -21.4, 55.86, 80.4],
     "proj_source": "EPSG:4326",
     "proj_to": {
       "type": "composite",
@@ -483,12 +448,7 @@
     "subtitle_en": "by NUTS 1",
     "source": "Eurostat - GISCO",
     "date": "2024",
-    "bbox": [
-      -63.13,
-      -21.4,
-      55.86,
-      80.4
-    ],
+    "bbox": [-63.13, -21.4, 55.86, 80.4],
     "proj_source": "EPSG:4326",
     "proj_to": {
       "type": "composite",
@@ -545,12 +505,7 @@
     "subtitle_en": "by NUTS 2",
     "source": "Eurostat - GISCO",
     "date": "2021",
-    "bbox": [
-      -63.13,
-      -21.4,
-      55.86,
-      80.4
-    ],
+    "bbox": [-63.13, -21.4, 55.86, 80.4],
     "proj_source": "EPSG:4326",
     "proj_to": {
       "type": "composite",
@@ -614,12 +569,7 @@
     "subtitle_en": "by NUTS 2",
     "source": "Eurostat - GISCO",
     "date": "2024",
-    "bbox": [
-      -63.13,
-      -21.4,
-      55.86,
-      80.4
-    ],
+    "bbox": [-63.13, -21.4, 55.86, 80.4],
     "proj_source": "EPSG:4326",
     "proj_to": {
       "type": "composite",
@@ -683,12 +633,7 @@
     "subtitle_en": "by NUTS 3",
     "source": "Eurostat - GISCO",
     "date": "2021",
-    "bbox": [
-      -63.13,
-      -21.4,
-      55.86,
-      80.4
-    ],
+    "bbox": [-63.13, -21.4, 55.86, 80.4],
     "proj_source": "EPSG:4326",
     "proj_to": {
       "type": "composite",
@@ -759,12 +704,7 @@
     "subtitle_en": "by NUTS 3",
     "source": "Eurostat - GISCO",
     "date": "2024",
-    "bbox": [
-      -63.13,
-      -21.4,
-      55.86,
-      80.4
-    ],
+    "bbox": [-63.13, -21.4, 55.86, 80.4],
     "proj_source": "EPSG:4326",
     "proj_to": {
       "type": "composite",
@@ -835,12 +775,7 @@
     "subtitle_en": "by NUTS 1",
     "source": "Eurostat - GISCO",
     "date": "2021",
-    "bbox": [
-      -63.13,
-      -21.4,
-      55.86,
-      80.4
-    ],
+    "bbox": [-63.13, -21.4, 55.86, 80.4],
     "proj_source": "EPSG:4326",
     "proj_to": {
       "type": "composite",
@@ -897,12 +832,7 @@
     "subtitle_en": "by NUTS 1",
     "source": "Eurostat - GISCO",
     "date": "2024",
-    "bbox": [
-      -63.13,
-      -21.4,
-      55.86,
-      80.4
-    ],
+    "bbox": [-63.13, -21.4, 55.86, 80.4],
     "proj_source": "EPSG:4326",
     "proj_to": {
       "type": "composite",
@@ -959,12 +889,7 @@
     "subtitle_en": "by NUTS 2",
     "source": "Eurostat - GISCO",
     "date": "2021",
-    "bbox": [
-      -63.13,
-      -21.4,
-      55.86,
-      80.4
-    ],
+    "bbox": [-63.13, -21.4, 55.86, 80.4],
     "proj_source": "EPSG:4326",
     "proj_to": {
       "type": "composite",
@@ -1028,12 +953,7 @@
     "subtitle_en": "by NUTS 2",
     "source": "Eurostat - GISCO",
     "date": "2024",
-    "bbox": [
-      -63.13,
-      -21.4,
-      55.86,
-      80.4
-    ],
+    "bbox": [-63.13, -21.4, 55.86, 80.4],
     "proj_source": "EPSG:4326",
     "proj_to": {
       "type": "composite",
@@ -1097,12 +1017,7 @@
     "subtitle_en": "by NUTS 3",
     "source": "Eurostat - GISCO",
     "date": "2021",
-    "bbox": [
-      -63.13,
-      -21.4,
-      55.86,
-      80.4
-    ],
+    "bbox": [-63.13, -21.4, 55.86, 80.4],
     "proj_source": "EPSG:4326",
     "proj_to": {
       "type": "composite",
@@ -1173,12 +1088,7 @@
     "subtitle_en": "by NUTS 3",
     "source": "Eurostat - GISCO",
     "date": "2024",
-    "bbox": [
-      -63.13,
-      -21.4,
-      55.86,
-      80.4
-    ],
+    "bbox": [-63.13, -21.4, 55.86, 80.4],
     "proj_source": "EPSG:4326",
     "proj_to": {
       "type": "composite",
@@ -1249,12 +1159,7 @@
     "subtitle_en": "by cantons",
     "source": "IGN - ADMIN EXPRESS COG CARTO",
     "date": "2025",
-    "bbox": [
-      -61.81,
-      -21.39,
-      55.84,
-      51.09
-    ],
+    "bbox": [-61.81, -21.39, 55.84, 51.09],
     "proj_source": "EPSG:4326",
     "proj_to": {
       "type": "composite",
@@ -1318,12 +1223,7 @@
     "subtitle_en": "by communes",
     "source": "IGN - ADMIN EXPRESS COG CARTO",
     "date": "2025",
-    "bbox": [
-      -61.81,
-      -21.39,
-      55.84,
-      51.09
-    ],
+    "bbox": [-61.81, -21.39, 55.84, 51.09],
     "proj_source": "EPSG:4326",
     "proj_to": {
       "type": "composite",
@@ -1387,12 +1287,7 @@
     "subtitle_en": "by departments",
     "source": "IGN - ADMIN EXPRESS COG CARTO",
     "date": "2025",
-    "bbox": [
-      -61.81,
-      -21.39,
-      55.84,
-      51.09
-    ],
+    "bbox": [-61.81, -21.39, 55.84, 51.09],
     "proj_source": "EPSG:4326",
     "proj_to": {
       "type": "composite",
@@ -1449,12 +1344,7 @@
     "subtitle_en": "by regions",
     "source": "IGN - ADMIN EXPRESS COG CARTO",
     "date": "2025",
-    "bbox": [
-      -61.81,
-      -21.39,
-      55.84,
-      51.09
-    ],
+    "bbox": [-61.81, -21.39, 55.84, 51.09],
     "proj_source": "EPSG:4326",
     "proj_to": {
       "type": "composite",
@@ -1504,12 +1394,7 @@
     "subtitle_en": "by cantons",
     "source": "IGN - ADMIN EXPRESS COG CARTO-PE",
     "date": "2025",
-    "bbox": [
-      -61.81,
-      -21.39,
-      55.83,
-      51.09
-    ],
+    "bbox": [-61.81, -21.39, 55.83, 51.09],
     "proj_source": "EPSG:4326",
     "proj_to": {
       "type": "composite",
@@ -1573,12 +1458,7 @@
     "subtitle_en": "by communes",
     "source": "IGN - ADMIN EXPRESS COG CARTO-PE",
     "date": "2025",
-    "bbox": [
-      -61.81,
-      -21.39,
-      55.83,
-      51.09
-    ],
+    "bbox": [-61.81, -21.39, 55.83, 51.09],
     "proj_source": "EPSG:4326",
     "proj_to": {
       "type": "composite",
@@ -1642,12 +1522,7 @@
     "subtitle_en": "by departments",
     "source": "IGN - ADMIN EXPRESS COG CARTO-PE",
     "date": "2025",
-    "bbox": [
-      -61.81,
-      -21.39,
-      55.83,
-      51.09
-    ],
+    "bbox": [-61.81, -21.39, 55.83, 51.09],
     "proj_source": "EPSG:4326",
     "proj_to": {
       "type": "composite",
@@ -1704,12 +1579,7 @@
     "subtitle_en": "by regions",
     "source": "IGN - ADMIN EXPRESS COG CARTO-PE",
     "date": "2025",
-    "bbox": [
-      -61.81,
-      -21.39,
-      55.83,
-      51.09
-    ],
+    "bbox": [-61.81, -21.39, 55.83, 51.09],
     "proj_source": "EPSG:4326",
     "proj_to": {
       "type": "composite",
@@ -1759,12 +1629,7 @@
     "subtitle_en": "by countries",
     "source": "Eurostat - GISCO",
     "date": "2024",
-    "bbox": [
-      -180,
-      -90,
-      180,
-      90
-    ],
+    "bbox": [-180, -90, 180, 90],
     "proj_source": "EPSG:4326",
     "proj_to": {
       "type": "simple",
@@ -1821,12 +1686,7 @@
     "subtitle_en": "by countries",
     "source": "Eurostat - GISCO",
     "date": "2024",
-    "bbox": [
-      -180,
-      -90,
-      180,
-      90
-    ],
+    "bbox": [-180, -90, 180, 90],
     "proj_source": "EPSG:4326",
     "proj_to": {
       "type": "simple",
@@ -1883,12 +1743,7 @@
     "subtitle_en": "by countries",
     "source": "Eurostat - GISCO",
     "date": "2024",
-    "bbox": [
-      -180,
-      -90,
-      180,
-      90
-    ],
+    "bbox": [-180, -90, 180, 90],
     "proj_source": "EPSG:4326",
     "proj_to": {
       "type": "simple",

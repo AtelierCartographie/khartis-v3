@@ -98,7 +98,9 @@
   const suggestedBasemaps = $derived(() => {
     return basemapSuggestions
       .map((s: BasemapSuggestion) => ({
-        basemap: allBasemapsForLookup.find((b: BasemapMetadata) => b.file === s.file),
+        basemap: allBasemapsForLookup.find(
+          (b: BasemapMetadata) => b.file === s.file
+        ),
         score: s.matchScore
       }))
       .filter((item) => item.basemap !== undefined) as {
@@ -500,7 +502,9 @@
 
       dataTabActions.applyCorrections();
 
-      const basemap = allBasemapsForLookup.find((b) => b.file === basemapSelected);
+      const basemap = allBasemapsForLookup.find(
+        (b) => b.file === basemapSelected
+      );
       if (basemap) {
         const stats = await duckDBOrchestrator.computeJoinStats(
           datasetIdForOrchestrator,
@@ -588,7 +592,9 @@
 
       if (abortSignal.aborted) return;
 
-      const basemap = allBasemapsForLookup.find((b) => b.file === basemapSelected);
+      const basemap = allBasemapsForLookup.find(
+        (b) => b.file === basemapSelected
+      );
       if (basemap) {
         const stats = await duckDBOrchestrator.computeJoinStats(
           datasetIdForOrchestrator,
@@ -638,7 +644,9 @@
     )
       return;
 
-    const basemap = allBasemapsForLookup.find((b) => b.file === basemapSelected);
+    const basemap = allBasemapsForLookup.find(
+      (b) => b.file === basemapSelected
+    );
     if (!basemap) {
       logger.warn('No basemap selected for join finalization', LogCategory.MAP);
       return;
@@ -813,7 +821,9 @@
 
           if (!selectedDataset || !datasetIdForOrchestrator) return;
 
-          const basemap = allBasemapsForLookup.find((b) => b.file === savedBasemap.id);
+          const basemap = allBasemapsForLookup.find(
+            (b) => b.file === savedBasemap.id
+          );
           if (!basemap) return;
 
           if (
@@ -976,7 +986,9 @@
 
     previousLinkedVariableName = linkedVariableName;
 
-    const basemap = allBasemapsForLookup.find((b) => b.file === selectedBasemapId);
+    const basemap = allBasemapsForLookup.find(
+      (b) => b.file === selectedBasemapId
+    );
     if (!basemap) return;
 
     logger.info(

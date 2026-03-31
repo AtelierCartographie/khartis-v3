@@ -8,12 +8,12 @@
 
 ## Types de visualisation
 
-| Type | Valeur enum | Usage | Prérequis |
-| --- | --- | --- | --- |
-| **Choroplèthe** | `choropleth` | Régions colorées selon une valeur | Géométrie + variable numérique |
-| **Symboles proportionnels** | `proportional` | Marqueurs dimensionnés | Géométrie + variable numérique |
-| **Catégorielle** | `categorical` | Catégories distinctes | Géométrie + variable catégorielle |
-| **Bivariée** | `bivariate` | Croisement de 2 variables | Géométrie + 2 variables numériques |
+| Type                        | Valeur enum    | Usage                             | Prérequis                          |
+| --------------------------- | -------------- | --------------------------------- | ---------------------------------- |
+| **Choroplèthe**             | `choropleth`   | Régions colorées selon une valeur | Géométrie + variable numérique     |
+| **Symboles proportionnels** | `proportional` | Marqueurs dimensionnés            | Géométrie + variable numérique     |
+| **Catégorielle**            | `categorical`  | Catégories distinctes             | Géométrie + variable catégorielle  |
+| **Bivariée**                | `bivariate`    | Croisement de 2 variables         | Géométrie + 2 variables numériques |
 
 ---
 
@@ -103,25 +103,32 @@ La librairie `geoarrow-deck-stream` convertit les colonnes GeoArrow en buffers b
 ```typescript
 import {
   parsePolygonsToSolid, // → BinaryPolygonData
-  parseGeometry,        // → BinaryPathData
-  parsePoints           // → BinaryPointData
+  parseGeometry, // → BinaryPathData
+  parsePoints // → BinaryPointData
 } from 'geoarrow-deck-stream';
 ```
 
 Le bridge `map/utils/geoarrow-stream-bridge.ts` encapsule ces fonctions avec :
+
 - **Cache WeakMap** pour le parsing identity (identité lon/lat) — la même table Arrow donne le même buffer sans recalcul
 - **Parsing avec projection** (sans cache) quand une projection d3-geo est active
 
 ```typescript
 // Mode identity — résultat mis en cache par table (WeakMap)
-export function parseSolidPolygons(table: ArrowTable): BinaryPolygonData
-export function parsePaths(table: ArrowTable): BinaryPathData
-export function parsePointData(table: ArrowTable): BinaryPointData
+export function parseSolidPolygons(table: ArrowTable): BinaryPolygonData;
+export function parsePaths(table: ArrowTable): BinaryPathData;
+export function parsePointData(table: ArrowTable): BinaryPointData;
 
 // Mode projeté — pas de cache (projection change avec la taille du canvas)
-export function parseSolidPolygonsWithProjection(table, projection): BinaryPolygonData
-export function parsePathsWithProjection(table, projection): BinaryPathData
-export function parsePointDataWithProjection(table, projection): BinaryPointData
+export function parseSolidPolygonsWithProjection(
+  table,
+  projection
+): BinaryPolygonData;
+export function parsePathsWithProjection(table, projection): BinaryPathData;
+export function parsePointDataWithProjection(
+  table,
+  projection
+): BinaryPointData;
 ```
 
 ### 3. Props Deck.gl : `createSolidPolygonLayerProps` etc.
@@ -131,18 +138,18 @@ export function parsePointDataWithProjection(table, projection): BinaryPointData
 ```typescript
 import {
   createSolidPolygonLayerProps, // pour SolidPolygonLayer
-  createPathLayerProps,         // pour PathLayer
-  createScatterplotLayerProps   // pour ScatterplotLayer
+  createPathLayerProps, // pour PathLayer
+  createScatterplotLayerProps // pour ScatterplotLayer
 } from 'geoarrow-deck-stream';
 
 // Exemple : couche de polygones choroplèthes
-const polyData = parseSolidPolygons(table);  // BinaryPolygonData
+const polyData = parseSolidPolygons(table); // BinaryPolygonData
 new SolidPolygonLayer({
   id: 'polygon-layer-viz-abc',
   ...createSolidPolygonLayerProps(polyData), // data, getPolygon, etc. en binaire
   getFillColor: withOpacity(fillColor, opacity),
   updateTriggers: { getFillColor: [fillColor, opacity] }
-})
+});
 ```
 
 ### 4. `featureIds` : liaison données → géométrie
@@ -151,13 +158,10 @@ Le champ `featureIds` (Uint32Array) dans chaque buffer binaire mappe chaque vert
 
 ```typescript
 // Accessor de couleur choroplèthe binaire
-const colorAttr = createPolygonFillColorAttribute(
-  polyData,
-  (featureId) => {
-    const value = valueVector.get(featureId); // lecture directe dans Arrow
-    return colorScale(value);                 // → [r, g, b, a]
-  }
-);
+const colorAttr = createPolygonFillColorAttribute(polyData, (featureId) => {
+  const value = valueVector.get(featureId); // lecture directe dans Arrow
+  return colorScale(value); // → [r, g, b, a]
+});
 ```
 
 ---
@@ -184,11 +188,11 @@ Ce flux se trouve dans `use-map-layers.svelte.ts:186-203`.
 
 Définis dans `BasemapMetadata.proj_to` (voir `FONDS_DE_CARTE.md`) :
 
-| Type | Comportement | Exemple |
-|------|-------------|---------|
-| `identity` | Lon/lat passthrough — `geoIdentity()` | Fonds personnalisés, mode MapLibre |
-| `simple` | Projection unique via `proj4d3(proj4string)` | Natural Earth, Robinson... |
-| `composite` | Projection composite avec encarts DOM-TOM via `buildCompositeProjection()` | France métropolitaine + DOM |
+| Type        | Comportement                                                               | Exemple                            |
+| ----------- | -------------------------------------------------------------------------- | ---------------------------------- |
+| `identity`  | Lon/lat passthrough — `geoIdentity()`                                      | Fonds personnalisés, mode MapLibre |
+| `simple`    | Projection unique via `proj4d3(proj4string)`                               | Natural Earth, Robinson...         |
+| `composite` | Projection composite avec encarts DOM-TOM via `buildCompositeProjection()` | France métropolitaine + DOM        |
 
 Certains noms proj4 non gérés par proj4.js (ex : `natearth2`) sont mappés vers des equivalents d3-geo dans `D3_GEO_PROJECTION_MAP` (`geoarrow-stream-bridge.ts:40`).
 
@@ -204,11 +208,11 @@ En mode OSM, c'est MapLibre qui gère la projection cartographique. `mapProjecti
 
 Point d'entrée principal pour les datasets Arrow. Inspecte le type géométrique de la table et délègue vers la factory appropriée :
 
-| Géométrie | Factory | Couche Deck.gl |
-|-----------|---------|----------------|
-| POLYGON / MULTIPOLYGON | `createPolygonLayers()` | `SolidPolygonLayer` + `PathLayer` (contour) |
-| LINESTRING / MULTILINESTRING | `createLineLayers()` | `PathLayer` |
-| POINT / MULTIPOINT | `createPointLayers()` | `ScatterplotLayer` |
+| Géométrie                    | Factory                 | Couche Deck.gl                              |
+| ---------------------------- | ----------------------- | ------------------------------------------- |
+| POLYGON / MULTIPOLYGON       | `createPolygonLayers()` | `SolidPolygonLayer` + `PathLayer` (contour) |
+| LINESTRING / MULTILINESTRING | `createLineLayers()`    | `PathLayer`                                 |
+| POINT / MULTIPOINT           | `createPointLayers()`   | `ScatterplotLayer`                          |
 
 Chaque factory reçoit un `LayerContext` qui transporte toute la configuration de visualisation.
 
@@ -228,18 +232,18 @@ Toute la configuration d'une visualisation est transmise aux factories via `Laye
 
 ```typescript
 interface LayerContext {
-  viz: VisualizationConfig | null;   // config complète de la viz (type, classification, palette...)
+  viz: VisualizationConfig | null; // config complète de la viz (type, classification, palette...)
   datasetId: string;
-  fillColor: RGBColor;               // couleur de remplissage de base
+  fillColor: RGBColor; // couleur de remplissage de base
   strokeColor: RGBColor;
   fillOpacity: number;
   strokeWidth: number;
   strokeOpacity: number;
   statistics: { min: number; max: number }; // pour les symboles proportionnels
   categoryColorMap: Map<string, RGBColor> | null; // pour les catégorielles
-  modelMatrix?: Matrix4 | null;      // mode orthographique uniquement
-  projectionSuffix?: string;         // forcer recréation sur changement de projection
-  beforeId?: string;                 // id du premier symbol layer MapLibre (mode interleaved)
+  modelMatrix?: Matrix4 | null; // mode orthographique uniquement
+  projectionSuffix?: string; // forcer recréation sur changement de projection
+  beforeId?: string; // id du premier symbol layer MapLibre (mode interleaved)
   customProjection?: ProjectionLike; // projection d3-geo à appliquer
   geometryInfo?: GeometryInfo;
   yearFilter?: { column: string; value: number }; // pour DataFilterExtension
@@ -258,7 +262,7 @@ Chaque couche a un ID stable de la forme `{layerType}-{vizId}-{projectionSuffix}
 
 ```typescript
 // ✓ ID stable — Deck.gl diff les props, pas de re-upload
-id: createLayerId(DeckLayerId.POLYGON_LAYER, viz.id, ctx.projectionSuffix)
+id: createLayerId(DeckLayerId.POLYGON_LAYER, viz.id, ctx.projectionSuffix);
 // → 'polygon-layer-viz-abc123-natural-earth-2'
 ```
 
@@ -273,19 +277,19 @@ new SolidPolygonLayer({
     getFillColor: [classBreaks, selectedPalette, fillOpacity]
     // Deck.gl recalcule getFillColor si l'une de ces valeurs change
   }
-})
+});
 ```
 
 Pour les **accessors constants** (`getFillColor: [255, 0, 0]`), `updateTriggers` est inutile — Deck.gl détecte le changement par comparaison directe.
 
 ### Coût des updates
 
-| Opération | Coût GPU | Quand |
-|-----------|---------|-------|
-| Redraw (déplacement/zoom) | Très faible | Chaque frame |
-| Mise à jour via `updateTriggers` | Faible–moyen | Changement de couleur, seuils |
-| Nouvelle prop `data` | Élevé (re-upload binaire) | Changement de dataset ou filtres JS |
-| Changement d'ID | Très élevé (reconstruction complète) | Jamais si évitable |
+| Opération                        | Coût GPU                             | Quand                               |
+| -------------------------------- | ------------------------------------ | ----------------------------------- |
+| Redraw (déplacement/zoom)        | Très faible                          | Chaque frame                        |
+| Mise à jour via `updateTriggers` | Faible–moyen                         | Changement de couleur, seuils       |
+| Nouvelle prop `data`             | Élevé (re-upload binaire)            | Changement de dataset ou filtres JS |
+| Changement d'ID                  | Très élevé (reconstruction complète) | Jamais si évitable                  |
 
 ### Extensions singleton
 
@@ -311,7 +315,7 @@ new SolidPolygonLayer({
   extensions: [DATA_FILTER_EXTENSION],
   filterRange: [yearFilter.value, yearFilter.value], // [min, max] exact
   updateTriggers: { getFilterValue: [yearFilter.column, yearFilter.value] }
-})
+});
 ```
 
 ### Patterns de remplissage
@@ -326,33 +330,33 @@ Les polygones choroplèthes peuvent recevoir un motif de hachures via `Rotatable
 
 ### Background (rendues sous les données)
 
-| ID store | DeckLayerId | Type Deck.gl | Propriétés |
-|----------|-------------|-------------|------------|
-| `terre` | `BASEMAP_TERRE` | `SolidPolygonLayer` + `PathLayer` | Couleur remplissage, ombre, opacité, contour pointillé |
-| `mers` | `BASEMAP_MERS` | `SolidPolygonLayer` | Couleur, opacité |
-| `lacs` | `BASEMAP_LACS` | `SolidPolygonLayer` | Couleur, épaisseur, opacité |
-| `relief` | `BASEMAP_RELIEF` | `PathLayer` | Représentation (ombrage/hachure), couleur |
+| ID store | DeckLayerId      | Type Deck.gl                      | Propriétés                                             |
+| -------- | ---------------- | --------------------------------- | ------------------------------------------------------ |
+| `terre`  | `BASEMAP_TERRE`  | `SolidPolygonLayer` + `PathLayer` | Couleur remplissage, ombre, opacité, contour pointillé |
+| `mers`   | `BASEMAP_MERS`   | `SolidPolygonLayer`               | Couleur, opacité                                       |
+| `lacs`   | `BASEMAP_LACS`   | `SolidPolygonLayer`               | Couleur, épaisseur, opacité                            |
+| `relief` | `BASEMAP_RELIEF` | `PathLayer`                       | Représentation (ombrage/hachure), couleur              |
 
 ### Foreground (rendues au-dessus des données)
 
-| ID store | DeckLayerId | Type Deck.gl | Propriétés |
-|----------|-------------|-------------|------------|
-| `frontieres` | `BASEMAP_FRONTIERES` | `PathLayer` | Couleur, pointillé, épaisseur, opacité |
-| `equateur` | `BASEMAP_EQUATEUR` | `PathLayer` / `GeoJsonLayer` | Couleur, pointillé, épaisseur, opacité |
-| `meridiens` | `BASEMAP_MERIDIENS` | `GeoJsonLayer` | Remarquables (TOUS/GREENWICH), pointillé |
-| `rivieres` | `BASEMAP_RIVIERES` | `PathLayer` | Couleur, pointillé, épaisseur, opacité |
-| `villes` | `BASEMAP_VILLES` | `ScatterplotLayer` + `TextLayer` | Catégorie (capitales/grandes), symbole, taille |
+| ID store     | DeckLayerId          | Type Deck.gl                     | Propriétés                                     |
+| ------------ | -------------------- | -------------------------------- | ---------------------------------------------- |
+| `frontieres` | `BASEMAP_FRONTIERES` | `PathLayer`                      | Couleur, pointillé, épaisseur, opacité         |
+| `equateur`   | `BASEMAP_EQUATEUR`   | `PathLayer` / `GeoJsonLayer`     | Couleur, pointillé, épaisseur, opacité         |
+| `meridiens`  | `BASEMAP_MERIDIENS`  | `GeoJsonLayer`                   | Remarquables (TOUS/GREENWICH), pointillé       |
+| `rivieres`   | `BASEMAP_RIVIERES`   | `PathLayer`                      | Couleur, pointillé, épaisseur, opacité         |
+| `villes`     | `BASEMAP_VILLES`     | `ScatterplotLayer` + `TextLayer` | Catégorie (capitales/grandes), symbole, taille |
 
 ### Couches issues des métadonnées
 
 En plus des couches de la config globale, les **fonds de carte du catalogue** peuvent déclarer des couches supplémentaires dans leurs métadonnées JSON (champ `layers`). Ces couches sont chargées depuis les fichiers Parquet dédiés du fond de carte :
 
-| Type metadata | DeckLayerId | Groupe |
-|--------------|-------------|--------|
-| `land` | `BASEMAP_META_LAND` | background |
-| `limit` | `BASEMAP_META_LIMIT` | foreground |
-| `centroid` | `BASEMAP_META_CENTROID` | foreground |
-| `graticule` | `BASEMAP_META_GRATICULE` | foreground |
+| Type metadata      | DeckLayerId              | Groupe     |
+| ------------------ | ------------------------ | ---------- |
+| `land`             | `BASEMAP_META_LAND`      | background |
+| `limit`            | `BASEMAP_META_LIMIT`     | foreground |
+| `centroid`         | `BASEMAP_META_CENTROID`  | foreground |
+| `graticule`        | `BASEMAP_META_GRATICULE` | foreground |
 | `geographic-lines` | `BASEMAP_META_GEO_LINES` | foreground |
 
 ### Bordures de continents : double-counting
@@ -382,16 +386,16 @@ En mode orthographique, lorsqu'aucun fond de carte du catalogue n'est chargé, u
 
 ## Méthodes de classification
 
-| Méthode | Valeur enum | Algorithme | Notes |
-| --- | --- | --- | --- |
-| **Intervalles égaux** | `equal_interval` | `(max - min) / k` | Simple, régulier |
-| **Quantiles** | `quantiles` | Effectifs égaux avec gestion des ex-aequo | Distribution équilibrée |
-| **Jenks** | `jenks` | Ruptures naturelles | Fallback vers Quantiles |
-| **Écart-type** | `standard_deviation` | `moyenne +/- n * sigma` | Ruptures statistiques |
-| **Q6** | `q6` | 6 classes par quantiles | Variante française classique |
-| **Moyennes emboîtées** | `nested_means` | Subdivision récursive par la moyenne | Arbre binaire de classes |
-| **Head/Tail** | `head_tail` | Partitionnement par la moyenne itérée | Données à distribution longue |
-| **Manuel** | `manual` | Seuils définis par l'utilisateur | Contrôle total |
+| Méthode                | Valeur enum          | Algorithme                                | Notes                         |
+| ---------------------- | -------------------- | ----------------------------------------- | ----------------------------- |
+| **Intervalles égaux**  | `equal_interval`     | `(max - min) / k`                         | Simple, régulier              |
+| **Quantiles**          | `quantiles`          | Effectifs égaux avec gestion des ex-aequo | Distribution équilibrée       |
+| **Jenks**              | `jenks`              | Ruptures naturelles                       | Fallback vers Quantiles       |
+| **Écart-type**         | `standard_deviation` | `moyenne +/- n * sigma`                   | Ruptures statistiques         |
+| **Q6**                 | `q6`                 | 6 classes par quantiles                   | Variante française classique  |
+| **Moyennes emboîtées** | `nested_means`       | Subdivision récursive par la moyenne      | Arbre binaire de classes      |
+| **Head/Tail**          | `head_tail`          | Partitionnement par la moyenne itérée     | Données à distribution longue |
+| **Manuel**             | `manual`             | Seuils définis par l'utilisateur          | Contrôle total                |
 
 **Par défaut** : 5 classes (recommandé : 3 à 9). Calcul via `classificationService`.
 
@@ -399,12 +403,12 @@ En mode orthographique, lorsqu'aucun fond de carte du catalogue n'est chargé, u
 
 ## Palettes de couleurs
 
-| Type | Description |
-| --- | --- |
+| Type             | Description                            |
+| ---------------- | -------------------------------------- |
 | **Séquentielle** | Progression monochrome (clair → foncé) |
-| **Divergente** | Deux teintes avec point neutre central |
-| **Qualitative** | Couleurs distinctes pour catégories |
-| **Bivariée** | Matrice 2D (3×3 ou 4×4) |
+| **Divergente**   | Deux teintes avec point neutre central |
+| **Qualitative**  | Couleurs distinctes pour catégories    |
+| **Bivariée**     | Matrice 2D (3×3 ou 4×4)                |
 
 **Accessibilité** : filtre signalant les problèmes de contraste WCAG et les combinaisons non accessibles aux daltoniens. Inversion de palette et color picker personnalisé disponibles.
 
@@ -439,10 +443,10 @@ Comparaison multi-cartes par variable de regroupement :
 
 ## Simplification géométrique
 
-| Source | Approche |
-| --- | --- |
+| Source                       | Approche                                         |
+| ---------------------------- | ------------------------------------------------ |
 | **Fonds de carte catalogue** | Niveaux de détail pré-simplifiés (LOD multiples) |
-| **Géométries importées** | Tolérance ajustable avec aperçu |
+| **Géométries importées**     | Tolérance ajustable avec aperçu                  |
 
 Simplification recommandée au-delà de 10 000 sommets. Avertissement en cas de perte excessive de géométrie.
 
@@ -450,12 +454,12 @@ Simplification recommandée au-delà de 10 000 sommets. Avertissement en cas de 
 
 ## Génération de légendes
 
-| Visualisation | Style de légende |
-| --- | --- |
-| **Choroplèthe** | Rampe de couleur avec valeurs de seuils |
-| **Symboles proportionnels** | Échantillons de taille (min, med, max) |
-| **Catégorielle** | Correspondance catégorie → couleur |
-| **Bivariée** | Matrice de couleurs 2D avec libellés d'axes |
+| Visualisation               | Style de légende                            |
+| --------------------------- | ------------------------------------------- |
+| **Choroplèthe**             | Rampe de couleur avec valeurs de seuils     |
+| **Symboles proportionnels** | Échantillons de taille (min, med, max)      |
+| **Catégorielle**            | Correspondance catégorie → couleur          |
+| **Bivariée**                | Matrice de couleurs 2D avec libellés d'axes |
 
 Régénération automatique à chaque modification de classification, couleur ou données.
 
@@ -465,12 +469,12 @@ Régénération automatique à chaque modification de classification, couleur ou
 
 Simulation par filtres SVG `feColorMatrix` appliqués sur le conteneur de la carte.
 
-| Type | Description |
-| --- | --- |
-| Protanopie / Deuteranopie / Tritanopie | Dichromates (absence de canal rouge/vert/bleu) |
-| Protanomalie / Deuteranomalie / Tritanomalie | Trichromates anomaux (canal réduit) |
-| Achromatopsie | Daltonisme complet (niveaux de gris) |
-| Achromatomalie | Daltonisme partiel (saturation réduite) |
+| Type                                         | Description                                    |
+| -------------------------------------------- | ---------------------------------------------- |
+| Protanopie / Deuteranopie / Tritanopie       | Dichromates (absence de canal rouge/vert/bleu) |
+| Protanomalie / Deuteranomalie / Tritanomalie | Trichromates anomaux (canal réduit)            |
+| Achromatopsie                                | Daltonisme complet (niveaux de gris)           |
+| Achromatomalie                               | Daltonisme partiel (saturation réduite)        |
 
 ```ts
 import { applyColorBlindnessFilter } from '$lib/features/commons/utils/color-blindness-filters';

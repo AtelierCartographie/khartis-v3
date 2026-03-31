@@ -18,14 +18,14 @@ Ce guide présente les fonctionnalités de Khartis v3, organisées selon les tro
 
 ### Formats supportés
 
-| Format | Type | Extension |
-| --- | --- | --- |
-| CSV / TSV / TXT | Tabulaire | `.csv`, `.tsv`, `.txt` |
-| GeoJSON | Géographique | `.geojson`, `.json` |
-| GeoPackage | Géographique | `.gpkg` |
-| Shapefile | Géographique | `.shp` (archive `.zip`) |
-| GPX | Géographique | `.gpx` |
-| KML / KMZ | Géographique | `.kml`, `.kmz` |
+| Format               | Type                      | Extension                         |
+| -------------------- | ------------------------- | --------------------------------- |
+| CSV / TSV / TXT      | Tabulaire                 | `.csv`, `.tsv`, `.txt`            |
+| GeoJSON              | Géographique              | `.geojson`, `.json`               |
+| GeoPackage           | Géographique              | `.gpkg`                           |
+| Shapefile            | Géographique              | `.shp` (archive `.zip`)           |
+| GPX                  | Géographique              | `.gpx`                            |
+| KML / KMZ            | Géographique              | `.kml`, `.kmz`                    |
 | Parquet / GeoParquet | Tabulaire ou géographique | `.parquet`, `.geoparquet`, `.gpq` |
 
 ### Import des données
@@ -88,12 +88,12 @@ Selon le type de vos variables, Khartis suggère automatiquement les visualisati
 
 ### Types de visualisation
 
-| Type | Usage |
-| --- | --- |
-| **Choroplèthe** | Colorier des zones selon une variable quantitative (taux, ratio) |
+| Type                        | Usage                                                                 |
+| --------------------------- | --------------------------------------------------------------------- |
+| **Choroplèthe**             | Colorier des zones selon une variable quantitative (taux, ratio)      |
 | **Symboles proportionnels** | Représenter des quantités par la taille de symboles (cercles, carrés) |
-| **Catégorielle** | Distinguer des catégories par la couleur |
-| **Bivariée** | Croiser deux variables sur une même carte |
+| **Catégorielle**            | Distinguer des catégories par la couleur                              |
+| **Bivariée**                | Croiser deux variables sur une même carte                             |
 
 ### Primitives graphiques
 
@@ -173,18 +173,18 @@ Choisir le format de la carte (A4, A3, carré, ou dimensions personnalisées), s
 
 ### Export de la carte
 
-| Format | Usage |
-| --- | --- |
-| SVG | Image vectorielle, retouchable dans un logiciel de dessin (Inkscape, Illustrator) |
-| JPG | Image bitmap avec choix de résolution (1080p, 2K, 4K) |
+| Format | Usage                                                                             |
+| ------ | --------------------------------------------------------------------------------- |
+| SVG    | Image vectorielle, retouchable dans un logiciel de dessin (Inkscape, Illustrator) |
+| JPG    | Image bitmap avec choix de résolution (1080p, 2K, 4K)                             |
 
 ### Export des données
 
-| Format | Usage |
-| --- | --- |
-| CSV | Tableau réutilisable dans un tableur |
+| Format             | Usage                                                 |
+| ------------------ | ----------------------------------------------------- |
+| CSV                | Tableau réutilisable dans un tableur                  |
 | CSV avec géométrie | Tableau incluant les coordonnées géographiques en WKT |
-| GeoJSON | Standard web pour les données géographiques |
+| GeoJSON            | Standard web pour les données géographiques           |
 
 ### Fichier projet
 

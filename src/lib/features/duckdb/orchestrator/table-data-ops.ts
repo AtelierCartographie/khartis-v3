@@ -55,8 +55,12 @@ export async function getTableData(
       const geomCols = columns
         .filter(
           (c) =>
-            String(c.type || '').toUpperCase().startsWith(GEOMETRY_COLUMN_TYPE) ||
-            String(c.type_simple || '').toUpperCase().startsWith(GEOMETRY_COLUMN_TYPE)
+            String(c.type || '')
+              .toUpperCase()
+              .startsWith(GEOMETRY_COLUMN_TYPE) ||
+            String(c.type_simple || '')
+              .toUpperCase()
+              .startsWith(GEOMETRY_COLUMN_TYPE)
         )
         .map((c) => `"${c.name}"`);
       if (geomCols.length > 0) {
