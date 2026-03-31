@@ -78,7 +78,8 @@ export function shouldApplyProportionalSymbols(
   viz: VisualizationConfig
 ): boolean {
   return (
-    viz.type === VisualizationType.PROPORTIONAL &&
+    (viz.type === VisualizationType.PROPORTIONAL ||
+      viz.type === VisualizationType.BIVARIATE) &&
     !!viz.mapping.sizeColumn &&
     !!viz.symbols
   );
