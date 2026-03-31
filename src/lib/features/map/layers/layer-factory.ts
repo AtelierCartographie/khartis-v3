@@ -948,6 +948,10 @@ export function createPointLayers(
       ...yearFilterProps,
       updateTriggers: {
         getFillColor: [
+          useChoropleth,
+          viz?.mapping.valueColumn,
+          viz?.classification?.breaks,
+          viz?.classification?.colors,
           useCategoricalColor,
           viz?.mapping.categoryColumn,
           categoryColorMap,
@@ -1311,7 +1315,8 @@ export function createPolygonLayers(
     strokeOpacity: rawPolyStrokeOpacity,
     highlightedRowIds: polyHighlightedRowIds,
     modelMatrix,
-    beforeId
+    beforeId,
+    categoryColorMap
   } = ctx;
   const hasPolyHighlights =
     polyHighlightedRowIds && polyHighlightedRowIds.size > 0;
@@ -1325,6 +1330,7 @@ export function createPolygonLayers(
   } = geometryInfo;
 
   const useChoropleth = viz && shouldApplyChoropleth(viz);
+  const useCategoricalColor = viz && shouldApplyCategorical(viz);
   const layerId = createThematicLayerId(DeckLayerId.POLYGON_LAYER, ctx);
   const patternProps = buildPatternProps(ctx);
 
@@ -1341,8 +1347,8 @@ export function createPolygonLayers(
     const polyData = resolvePolygonParser(ctx.customProjection)(jsTable);
     const outlineData = resolvePathParser(ctx.customProjection)(jsTable);
 
-    // Build fill color: choropleth or static, with optional highlight dimming
-    const baseFillAccessor =
+    // Build fill color: choropleth > categorical > static, with optional highlight dimming
+    const choroplethAccessor =
       useChoropleth && viz
         ? createChoroplethColorAccessor(
             viz.mapping.valueColumn!,
@@ -1350,6 +1356,16 @@ export function createPolygonLayers(
             viz.classification!.colors!
           )
         : null;
+
+    const categoricalAccessor =
+      useCategoricalColor && viz
+        ? createCategoricalColorAccessor(
+            viz.mapping.categoryColumn!,
+            categoryColorMap
+          )
+        : null;
+
+    const baseFillAccessor = choroplethAccessor ?? categoricalAccessor;
 
     const fillColorFn =
       hasPolyHighlights && polyHighlightedRowIds
@@ -1429,9 +1445,12 @@ export function createPolygonLayers(
         updateTriggers: {
           getFillColor: [
             useChoropleth,
+            useCategoricalColor,
             viz?.mapping.valueColumn,
+            viz?.mapping.categoryColumn,
             viz?.classification?.breaks,
             viz?.classification?.colors,
+            viz?.classification?.labels,
             fillColor,
             hlVersion
           ],
@@ -1556,6 +1575,34 @@ export function createPolygonLayers(
     return [];
   }
 
+  let effectiveCategoryColorMap = categoryColorMap;
+  if (
+    useCategoricalColor &&
+    viz?.mapping.categoryColumn &&
+    (!categoryColorMap || categoryColorMap.size === 0) &&
+    viz.classification?.colors?.length
+  ) {
+    const col = viz.mapping.categoryColumn;
+    const storedLabels = viz.classification?.labels;
+    const uniqueVals =
+      storedLabels && storedLabels.length > 0
+        ? storedLabels
+        : [
+            ...new Set(
+              geojsonData.features
+                .map((f) => f.properties?.[col])
+                .filter((v) => v !== null && v !== undefined)
+                .map(String)
+            )
+          ];
+    if (uniqueVals.length > 0) {
+      effectiveCategoryColorMap = getCategoricalColorMap(
+        uniqueVals,
+        viz.classification.colors
+      );
+    }
+  }
+
   const baseGeoJsonFillColor =
     useChoropleth && viz
       ? createGeoJsonChoroplethColorAccessor(
@@ -1564,7 +1611,13 @@ export function createPolygonLayers(
           viz.classification!.colors!,
           fillColor
         )
-      : null;
+      : useCategoricalColor && viz
+        ? createGeoJsonCategoricalColorAccessor(
+            viz.mapping.categoryColumn!,
+            effectiveCategoryColorMap,
+            fillColor
+          )
+        : null;
 
   const geoJsonFillColor =
     hasPolyHighlights && polyHighlightedRowIds
@@ -1616,9 +1669,12 @@ export function createPolygonLayers(
       updateTriggers: {
         getFillColor: [
           useChoropleth,
+          useCategoricalColor,
           viz?.mapping.valueColumn,
+          viz?.mapping.categoryColumn,
           viz?.classification?.breaks,
           viz?.classification?.colors,
+          viz?.classification?.labels,
           fillColor,
           hlVersion
         ],
