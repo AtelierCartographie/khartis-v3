@@ -12,7 +12,10 @@
   import LayerConfigVilles from './components/basemap-layers/layer-config-villes.svelte';
   import BasemapStyleSelector from './basemap-style-selector.svelte';
   import MapProjectionSelector from './map-projection-selector.svelte';
-  import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
+  import {
+    basemapStyleStore,
+    DEFAULT_TILED_BASEMAP_STYLE
+  } from '$lib/features/commons/store/basemap-style.store.svelte';
   import { BasemapStyle } from '$lib/features/map/constants/basemap-styles';
   import {
     basemapLayersStore,
@@ -65,7 +68,7 @@
 
   function handleTiledBasemapToggle(checked: boolean) {
     if (checked) {
-      basemapStyleStore.setStyle(BasemapStyle.CARTE_FACILE_DESATURATED);
+      basemapStyleStore.setStyle(DEFAULT_TILED_BASEMAP_STYLE);
     } else {
       basemapStyleStore.setStyle(BasemapStyle.BLANK_WHITE);
     }
