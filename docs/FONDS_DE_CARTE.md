@@ -35,13 +35,13 @@ ogr2ogr export.parquet input.shp \
     -nlt PROMOTE_TO_MULTI
 ```
 
-| Option | Rôle |
-|--------|------|
-| `GEOMETRY_NAME=geom` | Cohérence avec DuckDB |
-| `SORT_BY_BBOX=YES` | Fichier plus léger (GeoJSON uniquement) |
-| `COMPRESSION=ZSTD` | Bon compromis compression/décompression |
-| `WRITE_COVERING_BBOX=NO` | Pas besoin de bbox par entité |
-| `-nlt PROMOTE_TO_MULTI` | Force un seul type de géométrie (requis par GeoParquet) |
+| Option                   | Rôle                                                    |
+| ------------------------ | ------------------------------------------------------- |
+| `GEOMETRY_NAME=geom`     | Cohérence avec DuckDB                                   |
+| `SORT_BY_BBOX=YES`       | Fichier plus léger (GeoJSON uniquement)                 |
+| `COMPRESSION=ZSTD`       | Bon compromis compression/décompression                 |
+| `WRITE_COVERING_BBOX=NO` | Pas besoin de bbox par entité                           |
+| `-nlt PROMOTE_TO_MULTI`  | Force un seul type de géométrie (requis par GeoParquet) |
 
 > Documentation : https://gdal.org/en/stable/drivers/vector/parquet.html
 
@@ -49,10 +49,10 @@ ogr2ogr export.parquet input.shp \
 
 Les attributs sont stockés au **format long** :
 
-| raw | id | variant | normalized | basemap | basemap_count |
-|-----|-----|---------|------------|---------|---------------|
-| FR101 | FR101 | ign_code | fr101 | FR_DPT | 101 |
-| Ain | FR101 | name | ain | FR_DPT | 101 |
+| raw   | id    | variant  | normalized | basemap | basemap_count |
+| ----- | ----- | -------- | ---------- | ------- | ------------- |
+| FR101 | FR101 | ign_code | fr101      | FR_DPT  | 101           |
+| Ain   | FR101 | name     | ain        | FR_DPT  | 101           |
 
 Chaque variante d'identifiant (nom, code ISO, code officiel) est une ligne distincte. Le `basemap_count` sert au calcul du taux de réussite de jointure.
 
@@ -108,20 +108,20 @@ Chaque fond inclut un fichier JSON de métadonnées :
 
 ### Types de projection (`proj_to`)
 
-| Type | Description | `proj_source` |
-|------|-------------|---------------|
-| `composite` | Projection composite avec encarts DOM-TOM. `preset` référence `projection-presets.json` | `EPSG:4326` |
-| `simple` | Projection unique via `proj4d3(proj_to.proj4)` | `EPSG:4326` |
-| `identity` | Données pré-projetées, pas de reprojection → `geoIdentity()` | CRS effectif (ex: `EPSG:2154`) |
+| Type        | Description                                                                             | `proj_source`                  |
+| ----------- | --------------------------------------------------------------------------------------- | ------------------------------ |
+| `composite` | Projection composite avec encarts DOM-TOM. `preset` référence `projection-presets.json` | `EPSG:4326`                    |
+| `simple`    | Projection unique via `proj4d3(proj_to.proj4)`                                          | `EPSG:4326`                    |
+| `identity`  | Données pré-projetées, pas de reprojection → `geoIdentity()`                            | CRS effectif (ex: `EPSG:2154`) |
 
 ### Types de couches (`layers`)
 
-| Type | Source | Description |
-|------|--------|-------------|
-| `centroid` | fichier Parquet | Points centroïdes des entités |
-| `limit` | fichier Parquet | Lignes de frontières/limites |
-| `land` | fichier Parquet | Polygone de territoire (fond) |
-| `graticule` | fichier Parquet | Méridiens et parallèles (généré avec mapshaper) |
+| Type               | Source          | Description                                      |
+| ------------------ | --------------- | ------------------------------------------------ |
+| `centroid`         | fichier Parquet | Points centroïdes des entités                    |
+| `limit`            | fichier Parquet | Lignes de frontières/limites                     |
+| `land`             | fichier Parquet | Polygone de territoire (fond)                    |
+| `graticule`        | fichier Parquet | Méridiens et parallèles (généré avec mapshaper)  |
 | `geographic-lines` | fichier Parquet | Équateur, tropiques, cercles polaires, Greenwich |
 
 Génération d'un fichier graticule :
@@ -141,12 +141,12 @@ Les presets sont dans `presets/` et exportés à la racine d'`export/`.
 
 Projections composites avec encarts. Chaque entrée contient :
 
-| Champ | Description |
-|-------|-------------|
-| `id` | Identifiant de l'entrée |
-| `proj4` | Chaîne proj4 pour `proj4d3()` |
-| `bounds` | Étendue géographique `[[minLon, minLat], [maxLon, maxLat]]` |
-| `layout` | Position et taille relatives `{ x, y, width, height }` (0–1) |
+| Champ             | Description                                                   |
+| ----------------- | ------------------------------------------------------------- |
+| `id`              | Identifiant de l'entrée                                       |
+| `proj4`           | Chaîne proj4 pour `proj4d3()`                                 |
+| `bounds`          | Étendue géographique `[[minLon, minLat], [maxLon, maxLat]]`   |
+| `layout`          | Position et taille relatives `{ x, y, width, height }` (0–1)  |
 | `scaleMultiplier` | Facteur de grossissement (optionnel, pour petits territoires) |
 
 Presets disponibles : **FRANCE_DOM_TOM** (Lambert-93 + 6 encarts), **EUROPE_DOM_TOM** (ETRS89-LAEA + 6 encarts).
@@ -180,7 +180,9 @@ La librairie `geoarrow-deck-stream` transforme les géométries GeoArrow en buff
 // Chargement
 import { readGeoParquet } from '@geoarrow/geoparquet-wasm';
 import { tableFromIPC } from 'apache-arrow';
-const table = tableFromIPC(readGeoParquet(new Uint8Array(buffer)).intoIPCStream());
+const table = tableFromIPC(
+  readGeoParquet(new Uint8Array(buffer)).intoIPCStream()
+);
 
 // Données pré-projetées (identity) → geoIdentity(), rewind: false
 // Projection composite → buildCompositeProjection() avec les entrées du preset
@@ -192,13 +194,15 @@ Le champ `featureIds` permet de retrouver la ligne Arrow source pour chaque vert
 
 ```typescript
 const geoKeys = table.getChild('code');
-const userDataMap = new Map(userRows.map(row => [row.code, row.value]));
+const userDataMap = new Map(userRows.map((row) => [row.code, row.value]));
 
 new SolidPolygonLayer({
   ...createSolidPolygonLayerProps(data),
   getFillColor: (_, { index }) => {
     const key = geoKeys.get(data.featureIds[index]);
-    return userDataMap.get(key) ? colorScale(userDataMap.get(key)) : [200, 200, 200];
+    return userDataMap.get(key)
+      ? colorScale(userDataMap.get(key))
+      : [200, 200, 200];
   },
   updateTriggers: { getFillColor: [userDataMap] }
 });

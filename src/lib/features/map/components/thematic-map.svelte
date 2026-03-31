@@ -580,8 +580,7 @@
 
         if (bounds) {
           untrack(() => {
-            const currentBasemapMeta =
-              basemapService.currentBasemap?.metadata;
+            const currentBasemapMeta = basemapService.currentBasemap?.metadata;
             // For composite projections (e.g. France DOM-TOM), use mainland
             // bounds so the model matrix centers on metropolitan France.
             const mainlandBbox = currentBasemapMeta
@@ -924,7 +923,11 @@
                   mainlandBbox ?? undefined
                 );
                 if (projectedBbox) {
-                  projectionStore.setReferenceBbox(projectedBbox, undefined, true);
+                  projectionStore.setReferenceBbox(
+                    projectedBbox,
+                    undefined,
+                    true
+                  );
                 } else if (mainlandBbox) {
                   projectionStore.setReferenceBbox(mainlandBbox);
                 } else {
@@ -936,12 +939,7 @@
                       [number, number],
                       [number, number]
                     ];
-                    projectionStore.setReferenceBbox([
-                      minX,
-                      minY,
-                      maxX,
-                      maxY
-                    ]);
+                    projectionStore.setReferenceBbox([minX, minY, maxX, maxY]);
                   } else if (loaded.metadata.bbox) {
                     projectionStore.setReferenceBbox(loaded.metadata.bbox);
                   }

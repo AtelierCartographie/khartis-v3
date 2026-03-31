@@ -115,7 +115,9 @@
       <div class="suggestions-section">
         {#if suggestions && suggestions.national.length > 0}
           <div class="suggestions-group">
-            <div class="suggestions-title">{m.projection_suggestions_national()}</div>
+            <div class="suggestions-title">
+              {m.projection_suggestions_national()}
+            </div>
             <div class="projection-cards">
               {#each suggestions.national as s (s.id)}
                 <ProjectionCard
@@ -134,12 +136,16 @@
 
         {#if suggestions && suggestions.generic.length > 0}
           <div class="suggestions-group">
-            <div class="suggestions-title">{m.projection_suggestions_generic()}</div>
+            <div class="suggestions-title">
+              {m.projection_suggestions_generic()}
+            </div>
             <div class="projection-cards">
               {#each suggestions.generic.slice(0, 5) as s (s.id)}
                 <ProjectionCard
                   title={s.name}
-                  subtitle={s.equalArea ? m.projection_equal_area() : (s.shape ?? '')}
+                  subtitle={s.equalArea
+                    ? m.projection_equal_area()
+                    : (s.shape ?? '')}
                   tag={s.scale?.[0] ?? ''}
                   selected={false}
                   variant="default"

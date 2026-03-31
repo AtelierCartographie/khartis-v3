@@ -40,18 +40,40 @@ const D3_FACTORY_MAP: Record<string, (() => GeoProjection) | undefined> = {
   geoTransverseMercator: d3geo.geoTransverseMercator,
   geoNaturalEarth1: d3geo.geoNaturalEarth1,
   geoGnomonic: d3geo.geoGnomonic,
-  geoBonne: (d3geoProjection as Record<string, unknown>).geoBonne as (() => GeoProjection) | undefined,
-  geoCassini: (d3geoProjection as Record<string, unknown>).geoCassini as (() => GeoProjection) | undefined,
-  geoTimes: (d3geoProjection as Record<string, unknown>).geoTimes as (() => GeoProjection) | undefined,
-  geoBertin1953: (d3geoProjection as Record<string, unknown>).geoBertin1953 as (() => GeoProjection) | undefined,
-  geoArmadillo: (d3geoProjection as Record<string, unknown>).geoArmadillo as (() => GeoProjection) | undefined,
-  geoMollweide: (d3geoProjection as Record<string, unknown>).geoMollweide as (() => GeoProjection) | undefined,
-  geoInterruptedMollweide: (d3geoProjection as Record<string, unknown>).geoInterruptedMollweide as (() => GeoProjection) | undefined,
-  geoInterruptedMollweideHemispheres: (d3geoProjection as Record<string, unknown>).geoInterruptedMollweideHemispheres as (() => GeoProjection) | undefined,
-  geoAirocean: (d3geoProjection as Record<string, unknown>).geoAirocean as (() => GeoProjection) | undefined,
-  geoImago: (d3geoProjection as Record<string, unknown>).geoImago as (() => GeoProjection) | undefined,
-  geoCylindricalEqualArea: (d3geoProjection as Record<string, unknown>).geoCylindricalEqualArea as (() => GeoProjection) | undefined,
-  geoRobinson: (d3geoProjection as Record<string, unknown>).geoRobinson as (() => GeoProjection) | undefined
+  geoBonne: (d3geoProjection as Record<string, unknown>).geoBonne as
+    | (() => GeoProjection)
+    | undefined,
+  geoCassini: (d3geoProjection as Record<string, unknown>).geoCassini as
+    | (() => GeoProjection)
+    | undefined,
+  geoTimes: (d3geoProjection as Record<string, unknown>).geoTimes as
+    | (() => GeoProjection)
+    | undefined,
+  geoBertin1953: (d3geoProjection as Record<string, unknown>).geoBertin1953 as
+    | (() => GeoProjection)
+    | undefined,
+  geoArmadillo: (d3geoProjection as Record<string, unknown>).geoArmadillo as
+    | (() => GeoProjection)
+    | undefined,
+  geoMollweide: (d3geoProjection as Record<string, unknown>).geoMollweide as
+    | (() => GeoProjection)
+    | undefined,
+  geoInterruptedMollweide: (d3geoProjection as Record<string, unknown>)
+    .geoInterruptedMollweide as (() => GeoProjection) | undefined,
+  geoInterruptedMollweideHemispheres: (
+    d3geoProjection as Record<string, unknown>
+  ).geoInterruptedMollweideHemispheres as (() => GeoProjection) | undefined,
+  geoAirocean: (d3geoProjection as Record<string, unknown>).geoAirocean as
+    | (() => GeoProjection)
+    | undefined,
+  geoImago: (d3geoProjection as Record<string, unknown>).geoImago as
+    | (() => GeoProjection)
+    | undefined,
+  geoCylindricalEqualArea: (d3geoProjection as Record<string, unknown>)
+    .geoCylindricalEqualArea as (() => GeoProjection) | undefined,
+  geoRobinson: (d3geoProjection as Record<string, unknown>).geoRobinson as
+    | (() => GeoProjection)
+    | undefined
 };
 
 function nationalToSuggestion(country: MatchedCountry): ProjectionSuggestion {
@@ -81,7 +103,10 @@ function genericToSuggestion(proj: ResolvedProjection): ProjectionSuggestion {
 
 export function suggestProjectionsForBbox(
   bbox: [number, number, number, number]
-): { national: ProjectionSuggestion[]; generic: ProjectionSuggestion[] } | null {
+): {
+  national: ProjectionSuggestion[];
+  generic: ProjectionSuggestion[];
+} | null {
   const bboxInput: BBox = bbox;
   const validation = validate_bbox(bboxInput);
   if (!validation.valid) {
@@ -150,9 +175,9 @@ function buildD3Projection(config: D3Usage): GeoProjection | null {
     'parallels' in projection &&
     typeof (projection as Record<string, unknown>).parallels === 'function'
   ) {
-    (projection as unknown as { parallels: (p: [number, number]) => void }).parallels(
-      config.parallels
-    );
+    (
+      projection as unknown as { parallels: (p: [number, number]) => void }
+    ).parallels(config.parallels);
   }
 
   return projection;

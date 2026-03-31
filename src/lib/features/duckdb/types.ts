@@ -162,7 +162,6 @@ export interface SearchStats {
   isSampled?: boolean; // true if search was performed on a sample (large table)
 }
 
-
 export interface ExtensionsLoaded {
   spatial: boolean;
   httpfs: boolean;

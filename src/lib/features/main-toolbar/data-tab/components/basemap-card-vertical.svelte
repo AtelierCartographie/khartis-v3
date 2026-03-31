@@ -120,8 +120,7 @@
   <div class="content-section">
     <div class="title-row">
       <span class="card-title"
-        >{basemap.title_fr}{#if basemap.subtitle_fr}<span
-            class="card-subtitle"
+        >{basemap.title_fr}{#if basemap.subtitle_fr}<span class="card-subtitle"
             >&ensp;·&ensp;{basemap.subtitle_fr}</span
           >{/if}</span
       >

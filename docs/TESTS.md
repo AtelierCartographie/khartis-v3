@@ -1,14 +1,15 @@
 # Strategie de tests -- Khartis v3
 
 > Guide synthetique de la strategie de tests multi-couches.
+
 ## Vue d'ensemble
 
-| Couche | Outil | Environnement | Commande |
-|---|---|---|---|
-| Tests unitaires | Vitest | jsdom (client) / node (serveur) | `pnpm test:unit` |
-| Tests de composants | @testing-library/svelte | jsdom | `pnpm test:unit` |
-| Tests de pipeline | Vitest + @duckdb/node-api | node | `pnpm test:pipeline` |
-| Tests E2E | Playwright | Chromium (port 5176, max 2 workers local / 1 CI) | `pnpm test:e2e` |
+| Couche              | Outil                     | Environnement                                    | Commande             |
+| ------------------- | ------------------------- | ------------------------------------------------ | -------------------- |
+| Tests unitaires     | Vitest                    | jsdom (client) / node (serveur)                  | `pnpm test:unit`     |
+| Tests de composants | @testing-library/svelte   | jsdom                                            | `pnpm test:unit`     |
+| Tests de pipeline   | Vitest + @duckdb/node-api | node                                             | `pnpm test:pipeline` |
+| Tests E2E           | Playwright                | Chromium (port 5176, max 2 workers local / 1 CI) | `pnpm test:e2e`      |
 
 ## Configuration Vitest
 
@@ -45,7 +46,7 @@ test: {
         fileParallelism: false
       }
     }
-  ]
+  ];
 }
 ```
 
@@ -79,24 +80,24 @@ tests/
 
 `pipeline-integration.test.ts` teste l'**ingestion reelle** de chaque fichier de `tests-datasets/` via `@duckdb/node-api` :
 
-| Section CDC | Ce qui est teste | Fichiers |
-|---|---|---|
-| CSV import | Comptage lignes/colonnes + classification des types | CSV valides |
-| CSV edge cases | Gestion gracieuse (0-byte, header seul, structure cassee) | CSV malformes |
-| Detection de type | text/numeric, hints geo, variations NULL | CSV cibles |
-| Statistiques | count/uniques/nulls, min/max, histogramme | fossil-fuel CSV |
-| Import geo | Colonnes geometrie + donnees, extraction des bounds | GeoJSON, GPKG, GPX, KML, SHP |
-| ZIP | Extraction + ingestion (csv unique, csv multiples, shapefile) | 3 ZIP |
+| Section CDC       | Ce qui est teste                                              | Fichiers                     |
+| ----------------- | ------------------------------------------------------------- | ---------------------------- |
+| CSV import        | Comptage lignes/colonnes + classification des types           | CSV valides                  |
+| CSV edge cases    | Gestion gracieuse (0-byte, header seul, structure cassee)     | CSV malformes                |
+| Detection de type | text/numeric, hints geo, variations NULL                      | CSV cibles                   |
+| Statistiques      | count/uniques/nulls, min/max, histogramme                     | fossil-fuel CSV              |
+| Import geo        | Colonnes geometrie + donnees, extraction des bounds           | GeoJSON, GPKG, GPX, KML, SHP |
+| ZIP               | Extraction + ingestion (csv unique, csv multiples, shapefile) | 3 ZIP                        |
 
 **Note importante :** les macros DuckDB utilisant `query_table()` + `"colname"` ne peuvent pas etre testees via Node API (resolution differente entre Node API et WASM). Les tests d'integration utilisent du SQL direct equivalent.
 
 ## Tests DuckDB : Node API vs WASM
 
-| Contexte | API | Usage |
-|---|---|---|
-| Production (navigateur) | DuckDB WASM | `Duck.query()`, `Duck.read_csv()` |
-| Tests unitaires | Mock complet | `vi.mock('$lib/features/duckdb')` |
-| Tests d'integration | @duckdb/node-api | Ingestion reelle des fichiers |
+| Contexte                | API              | Usage                             |
+| ----------------------- | ---------------- | --------------------------------- |
+| Production (navigateur) | DuckDB WASM      | `Duck.query()`, `Duck.read_csv()` |
+| Tests unitaires         | Mock complet     | `vi.mock('$lib/features/duckdb')` |
+| Tests d'integration     | @duckdb/node-api | Ingestion reelle des fichiers     |
 
 ## Tests E2E (Playwright)
 
@@ -113,16 +114,16 @@ Configuration dans `playwright.config.ts` :
 
 Les fichiers de test sont dans `static/tests-datasets/` (servis par le serveur de dev a `/tests-datasets/`) :
 
-| Dossier | Contenu |
-|---|---|
-| `csv/` | 9 CSV valides + 12 CSV malformes (vide, header seul, formats mixtes...) |
-| `geojson/` | Lignes de transport, regions NUTS2 |
-| `gpkg/` | Lambert-93, IGN Admin Express, noms avec espaces |
-| `gpx/` | Arrets de transport en commun (Point) |
-| `kml-kmz/` | Aires de covoiturage |
-| `shp/` | Natural Earth, foncier, transport, zones maritimes |
-| `shp-incomplete/` | Shapefile incomplet (fichier .shp seul, sans .dbf/.shx) |
-| `zip/` | CSV unique, CSV multiples, shapefile complet |
+| Dossier           | Contenu                                                                 |
+| ----------------- | ----------------------------------------------------------------------- |
+| `csv/`            | 9 CSV valides + 12 CSV malformes (vide, header seul, formats mixtes...) |
+| `geojson/`        | Lignes de transport, regions NUTS2                                      |
+| `gpkg/`           | Lambert-93, IGN Admin Express, noms avec espaces                        |
+| `gpx/`            | Arrets de transport en commun (Point)                                   |
+| `kml-kmz/`        | Aires de covoiturage                                                    |
+| `shp/`            | Natural Earth, foncier, transport, zones maritimes                      |
+| `shp-incomplete/` | Shapefile incomplet (fichier .shp seul, sans .dbf/.shx)                 |
+| `zip/`            | CSV unique, CSV multiples, shapefile complet                            |
 
 ## Ecrire un test
 
@@ -135,7 +136,11 @@ import { validateFile } from '$lib/features/data-pipeline/core/validators';
 
 describe('validateFile', () => {
   it('rejects unsupported extension', async () => {
-    const file = { name: 'data.exe', size: 1024, type: 'application/octet-stream' } as File;
+    const file = {
+      name: 'data.exe',
+      size: 1024,
+      type: 'application/octet-stream'
+    } as File;
     const result = await validateFile(file);
 
     expect(result.isValid).toBe(false);
@@ -154,7 +159,8 @@ import { createProject } from './helpers';
 test.describe('URL Import', () => {
   test('should import CSV from URL and create project', async ({ page }) => {
     test.slow();
-    const csvUrl = 'http://localhost:5176/tests-datasets/csv/fossil-fuel-subsidies-gdp-2021.csv';
+    const csvUrl =
+      'http://localhost:5176/tests-datasets/csv/fossil-fuel-subsidies-gdp-2021.csv';
     await createProject(page, csvUrl, `Test ${Date.now()}`);
 
     await expect(page.locator('.map-container').first()).toBeVisible();

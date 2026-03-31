@@ -145,15 +145,11 @@ const { actions, getState } = createToolStore<
 
         s.suggestions = result;
 
-        logger.info(
-          'Projection suggestions computed',
-          LogCategory.MAP,
-          {
-            national: result.national.length,
-            generic: result.generic.length,
-            bbox: bounds
-          }
-        );
+        logger.info('Projection suggestions computed', LogCategory.MAP, {
+          national: result.national.length,
+          generic: result.generic.length,
+          bbox: bounds
+        });
 
         // Auto-apply the best suggestion: national first, then generic
         const best = result.national[0] ?? result.generic[0];
@@ -248,10 +244,14 @@ const { actions, getState } = createToolStore<
           s.customCode = suggestion.proj4String;
           s.selected = 'mercator'; // proj4 projections render in orthographic/mercator view
           mapProjectionStore.setProjection(MERCATOR_PROJECTION_TYPE);
-          logger.info('Applied projection suggestion via proj4', LogCategory.MAP, {
-            id: suggestion.id,
-            epsg: suggestion.epsg
-          });
+          logger.info(
+            'Applied projection suggestion via proj4',
+            LogCategory.MAP,
+            {
+              id: suggestion.id,
+              epsg: suggestion.epsg
+            }
+          );
           return;
         }
       }
@@ -272,11 +272,9 @@ const { actions, getState } = createToolStore<
         }
       }
 
-      logger.warn(
-        'Could not apply projection suggestion',
-        LogCategory.MAP,
-        { id: suggestion.id }
-      );
+      logger.warn('Could not apply projection suggestion', LogCategory.MAP, {
+        id: suggestion.id
+      });
     }
   },
   { key: 'projection' }
