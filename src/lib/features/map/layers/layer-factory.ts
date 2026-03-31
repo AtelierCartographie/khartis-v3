@@ -651,6 +651,7 @@ export function createPointLayers(
 
   const useProportionalSymbols = viz && shouldApplyProportionalSymbols(viz);
   const useCategoricalColor = viz && shouldApplyCategorical(viz);
+  const useChoropleth = viz && shouldApplyChoropleth(viz);
   const { min: minValue, max: maxValue } = statistics;
 
   const layerId = createThematicLayerId(DeckLayerId.POINT_LAYER, ctx);
@@ -702,14 +703,18 @@ export function createPointLayers(
       viz.classification?.colors?.length
     ) {
       const col = viz.mapping.categoryColumn;
-      const uniqueVals = [
-        ...new Set(
-          geojsonData.features
-            .map((f) => f.properties?.[col])
-            .filter((v) => v !== null && v !== undefined)
-            .map(String)
-        )
-      ];
+      const storedLabels = viz.classification?.labels;
+      const uniqueVals =
+        storedLabels && storedLabels.length > 0
+          ? storedLabels
+          : [
+              ...new Set(
+                geojsonData.features
+                  .map((f) => f.properties?.[col])
+                  .filter((v) => v !== null && v !== undefined)
+                  .map(String)
+              )
+            ];
       if (uniqueVals.length > 0) {
         effectiveCategoryColorMap = getCategoricalColorMap(
           uniqueVals,
@@ -719,13 +724,20 @@ export function createPointLayers(
     }
 
     const baseFillColor =
-      useCategoricalColor && viz
-        ? createGeoJsonCategoricalColorAccessor(
-            viz.mapping.categoryColumn!,
-            effectiveCategoryColorMap,
+      useChoropleth && viz
+        ? createGeoJsonChoroplethColorAccessor(
+            viz.mapping.valueColumn!,
+            viz.classification!.breaks!,
+            viz.classification!.colors!,
             fillColor
           )
-        : fillColor;
+        : useCategoricalColor && viz
+          ? createGeoJsonCategoricalColorAccessor(
+              viz.mapping.categoryColumn!,
+              effectiveCategoryColorMap,
+              fillColor
+            )
+          : fillColor;
 
     const geoJsonFillColor =
       hasHighlights && highlightedRowIds
@@ -787,6 +799,10 @@ export function createPointLayers(
         ...(ctx.yearFilter && buildGeoJsonYearFilterProps(ctx.yearFilter)),
         updateTriggers: {
           getFillColor: [
+            useChoropleth,
+            viz?.mapping.valueColumn,
+            viz?.classification?.breaks,
+            viz?.classification?.colors,
             useCategoricalColor,
             viz?.mapping.categoryColumn,
             categoryColorMap,
@@ -814,14 +830,20 @@ export function createPointLayers(
   // Parse Arrow table to binary point data
   const pointData = resolvePointParser(ctx.customProjection)(jsTable);
 
-  // Build fill color: static or per-feature attribute
+  // Build fill color: choropleth > categorical > static
   const baseFillAccessor =
-    useCategoricalColor && viz
-      ? createCategoricalColorAccessor(
-          viz.mapping.categoryColumn!,
-          categoryColorMap
+    useChoropleth && viz
+      ? createChoroplethColorAccessor(
+          viz.mapping.valueColumn!,
+          viz.classification!.breaks!,
+          viz.classification!.colors!
         )
-      : null;
+      : useCategoricalColor && viz
+        ? createCategoricalColorAccessor(
+            viz.mapping.categoryColumn!,
+            categoryColorMap
+          )
+        : null;
 
   const fillColorAccessor =
     hasHighlights && highlightedRowIds

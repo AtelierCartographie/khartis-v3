@@ -382,8 +382,8 @@ function getDefaultMapping(
       break;
 
     case VisualizationType.BIVARIATE:
-      mapping.valueColumn = numericColumns[0]?.name;
-      mapping.colorColumn = numericColumns[1]?.name;
+      mapping.sizeColumn = numericColumns[0]?.name;
+      mapping.valueColumn = numericColumns[1]?.name;
       break;
   }
 
@@ -434,6 +434,12 @@ function getDefaultModes(type: VisualizationType): VisualizationModes {
         symbol: SymbolMode.UNIQUE,
         fill: FillMode.CLASSES,
         stroke: StrokeMode.UNIQUE
+      };
+    case VisualizationType.BIVARIATE:
+      return {
+        symbol: SymbolMode.PROPORTIONAL,
+        fill: FillMode.CLASSES,
+        stroke: StrokeMode.NONE
       };
     default:
       return {
