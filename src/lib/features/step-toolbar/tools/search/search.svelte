@@ -11,10 +11,21 @@
     TextInput
   } from 'carbon-components-svelte';
   import { ChevronLeft, ChevronRight } from 'carbon-icons-svelte';
-  import { onDestroy } from 'svelte';
+  import { onDestroy, untrack } from 'svelte';
   import { searchState, searchActions } from './search.store.svelte';
 
   const ALL_SOURCES_ID = 'all';
+
+  // Local state for the replace input — bind:value is more reliable than
+  // on:input with e.target in the Svelte 5 / Carbon interop context.
+  let replaceInputValue = $state('');
+
+  $effect(() => {
+    const storeValue = searchState.replaceValue;
+    untrack(() => {
+      replaceInputValue = storeValue;
+    });
+  });
 
   function handleSearchInput(e: Event) {
     const target = e.target as HTMLInputElement;
@@ -144,9 +155,8 @@
         size="sm"
         labelText={m.search_replace_with()}
         placeholder={m.search_replace_placeholder()}
-        value={searchState.replaceValue}
-        on:input={(e) =>
-          searchActions.setReplaceValue((e.target as HTMLInputElement).value)}
+        bind:value={replaceInputValue}
+        on:input={() => searchActions.setReplaceValue(replaceInputValue)}
       />
       <p class="helper-text helper-text--info">
         {m.search_replace_exact_only()}
