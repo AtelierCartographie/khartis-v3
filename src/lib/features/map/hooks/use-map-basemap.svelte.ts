@@ -20,6 +20,7 @@ export interface UseMapBasemapReturn {
   syncBasemapStyle: () => void;
   syncOSMRasterLayer: () => void;
   syncLabelsVisibility: () => void;
+  syncGroupVisibility: () => void;
   syncProjection: () => void;
   cleanup: () => void;
   readonly isStyleLoading: boolean;
@@ -133,6 +134,9 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
       if (!style?.layers) return;
 
       for (const layer of style.layers) {
+        // Skip layers managed by the cartefacile group system
+        if ((layer.metadata as Record<string, unknown> | undefined)?.['cartefacile:group']) continue;
+
         if (
           layer.type === 'symbol' &&
           layer.layout &&
@@ -144,6 +148,33 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
       }
     } catch {
       logger.warn('Failed to sync labels visibility', LogCategory.MAP);
+    }
+  }
+
+  function syncGroupVisibility(): void {
+    const map = getMap();
+    if (!map || !getIsMapLoaded() || isStyleLoading) return;
+
+    const groupVisibility = basemapStyleStore.groupVisibility;
+
+    try {
+      const style = map.getStyle();
+      if (!style?.layers) return;
+
+      for (const layer of style.layers) {
+        const group = (layer.metadata as Record<string, unknown> | undefined)?.[
+          'cartefacile:group'
+        ];
+        if (typeof group === 'string' && group in groupVisibility) {
+          map.setLayoutProperty(
+            layer.id,
+            'visibility',
+            groupVisibility[group] ? 'visible' : 'none'
+          );
+        }
+      }
+    } catch {
+      logger.warn('Failed to sync group visibility', LogCategory.MAP);
     }
   }
 
@@ -176,6 +207,7 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
     syncBasemapStyle,
     syncOSMRasterLayer,
     syncLabelsVisibility,
+    syncGroupVisibility,
     syncProjection,
     cleanup,
     get isStyleLoading() {

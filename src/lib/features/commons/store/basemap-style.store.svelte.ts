@@ -3,15 +3,30 @@ import { persistenceRegistry } from '$lib/features/project-management/core/persi
 import {
   BasemapStyle,
   DEFAULT_BASEMAP_STYLE,
+  DEFAULT_TILED_BASEMAP_STYLE,
   getBasemapStyle
 } from '../../map/constants/basemap-styles';
+import {
+  getStyleConfig,
+  getDefaultVisibility,
+  type LayerGroupId
+} from '../../map/constants/carte-facile-layer-groups';
+
+function getInitialGroupVisibility(style: BasemapStyle): Record<string, boolean> {
+  const config = getStyleConfig(style);
+  if (!config) return {};
+  return getDefaultVisibility(config) as Record<string, boolean>;
+}
 
 function createBasemapStyleStore() {
   const state = $state({
     selectedStyle: DEFAULT_BASEMAP_STYLE,
     referenceBasemapId: null as string | null,
-    showLabels: true
+    showLabels: true,
+    groupVisibility: {} as Record<string, boolean>
   });
+
+  let groupVisibilityVersion = $state(0);
 
   function setReferenceBasemap(id: string | null): void {
     state.referenceBasemapId = id;
@@ -20,6 +35,8 @@ function createBasemapStyleStore() {
 
   function setStyle(style: BasemapStyle): void {
     state.selectedStyle = style;
+    state.groupVisibility = getInitialGroupVisibility(style);
+    groupVisibilityVersion++;
     persistenceRegistry.notifyChange('basemapStyle');
   }
 
@@ -28,22 +45,33 @@ function createBasemapStyleStore() {
     persistenceRegistry.notifyChange('basemapStyle');
   }
 
+  function setGroupVisibility(groupId: LayerGroupId, visible: boolean): void {
+    state.groupVisibility[groupId] = visible;
+    groupVisibilityVersion++;
+    persistenceRegistry.notifyChange('basemapStyle');
+  }
+
   function reset(): void {
     state.selectedStyle = DEFAULT_BASEMAP_STYLE;
     state.referenceBasemapId = null;
     state.showLabels = true;
+    state.groupVisibility = {};
+    groupVisibilityVersion++;
   }
 
   function restoreFromSerialized(
     style: BasemapStyle,
     referenceBasemapId?: string | null,
-    showLabels?: boolean
+    showLabels?: boolean,
+    groupVisibility?: Record<string, boolean>
   ): void {
     if (!style || !Object.values(BasemapStyle).includes(style)) {
       reset();
       return;
     }
     state.selectedStyle = style;
+    state.groupVisibility = groupVisibility ?? getInitialGroupVisibility(style);
+    groupVisibilityVersion++;
     if (referenceBasemapId !== undefined) {
       state.referenceBasemapId = referenceBasemapId;
     }
@@ -68,9 +96,16 @@ function createBasemapStyleStore() {
     get showLabels(): boolean {
       return state.showLabels;
     },
+    get groupVisibility(): Readonly<Record<string, boolean>> {
+      return state.groupVisibility;
+    },
+    get groupVisibilityVersion(): number {
+      return groupVisibilityVersion;
+    },
     setReferenceBasemap,
     setStyle,
     setShowLabels,
+    setGroupVisibility,
     reset,
     restoreFromSerialized
   };
@@ -83,20 +118,25 @@ persistenceRegistry.register({
   serialize: () => ({
     style: basemapStyleStore.selectedStyle,
     referenceBasemapId: basemapStyleStore.referenceBasemapId,
-    showLabels: basemapStyleStore.showLabels
+    showLabels: basemapStyleStore.showLabels,
+    groupVisibility: basemapStyleStore.groupVisibility
   }),
   deserialize: (data: unknown) => {
     const d = data as {
       style?: string;
       referenceBasemapId?: string | null;
       showLabels?: boolean;
+      groupVisibility?: Record<string, boolean>;
     };
     basemapStyleStore.restoreFromSerialized(
       d.style as Parameters<typeof basemapStyleStore.restoreFromSerialized>[0],
       d.referenceBasemapId,
-      d.showLabels
+      d.showLabels,
+      d.groupVisibility
     );
   },
   reset: () => basemapStyleStore.reset(),
   priority: 'debounced'
 });
+
+export { DEFAULT_TILED_BASEMAP_STYLE };

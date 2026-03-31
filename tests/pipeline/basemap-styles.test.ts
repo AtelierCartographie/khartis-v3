@@ -22,8 +22,8 @@ describe('getBasemapStyle', () => {
     const { BasemapStyle, getBasemapStyle } =
       await import('$lib/features/map/constants/basemap-styles');
 
-    expect(getBasemapStyle(BasemapStyle.CARTE_FACILE_SIMPLE)).toBe(
-      'http://127.0.0.1:5176/cartographie/khartisnewpprd/basemaps/styles/carte-facile-simple.json'
+    expect(getBasemapStyle(BasemapStyle.FRANCE_NIVEAUX_DE_GRIS)).toBe(
+      'http://127.0.0.1:5176/cartographie/khartisnewpprd/basemaps/styles/france-niveaux-de-gris.json'
     );
     expect(assetMock).not.toHaveBeenCalled();
   });
