@@ -29,7 +29,9 @@
     onOpenDiscretization
   }: SymbolModeProps = $props();
 
-  const qualitativePalette = DEFAULT_QUALITATIVE_PREVIEW;
+  const currentPalette = $derived(
+    visualization?.classification?.colors ?? DEFAULT_QUALITATIVE_PREVIEW
+  );
 
   let selectedFieldId = $state<number>(0);
   let categoryCount = $state<number>(4);
@@ -65,6 +67,7 @@
     }
     if (visualization?.classification) {
       categoryCount =
+        visualization.classification.labels?.length ??
         visualization.classification.numClasses ??
         visualization.classification.classes ??
         4;
@@ -127,7 +130,8 @@
 />
 <PalettePreview
   label={m.color_palette()}
-  colors={qualitativePalette}
+  colors={currentPalette}
+  selectedPaletteId={visualization?.classification?.paletteId}
   oninvert={onInvertPalette}
   onClassificationChange={onClassificationChange}
 />
