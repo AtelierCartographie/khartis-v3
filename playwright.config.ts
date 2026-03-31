@@ -13,7 +13,8 @@ export default defineConfig({
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
-    actionTimeout: process.env.CI ? 30000 : 10000
+    actionTimeout: process.env.CI ? 30000 : 10000,
+    storageState: 'tests/e2e/storage-state.json'
   },
   projects: [
     {

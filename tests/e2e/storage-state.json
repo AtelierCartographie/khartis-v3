@@ -1,0 +1,14 @@
+{
+  "cookies": [],
+  "origins": [
+    {
+      "origin": "http://localhost:5176",
+      "localStorage": [
+        {
+          "name": "khartis_consent",
+          "value": "{\"analytics\":false,\"consentDate\":\"2026-01-01T00:00:00.000Z\",\"consentVersion\":1}"
+        }
+      ]
+    }
+  ]
+}
