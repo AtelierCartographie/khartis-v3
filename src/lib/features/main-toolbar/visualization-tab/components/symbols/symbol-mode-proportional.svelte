@@ -83,8 +83,12 @@
   let fillOpacity = $state<number>(VISUALIZATION_DEFAULTS.fillOpacity);
   let fillPattern = $state<boolean>(false);
 
-  const sequentialPalette = DEFAULT_SEQUENTIAL_PREVIEW;
-  const qualitativePalette = DEFAULT_QUALITATIVE_PREVIEW;
+  const currentPalette = $derived(
+    visualization?.classification?.colors ?? DEFAULT_SEQUENTIAL_PREVIEW
+  );
+  const currentQualPalette = $derived(
+    visualization?.classification?.colors ?? DEFAULT_QUALITATIVE_PREVIEW
+  );
 
   $effect(() => {
     if (dataFields.length > 0 && visualization?.mapping) {
@@ -152,6 +156,7 @@
     }
     if (visualization?.classification) {
       categoryCount =
+        visualization.classification.labels?.length ??
         visualization.classification.numClasses ??
         visualization.classification.classes ??
         4;
@@ -493,7 +498,7 @@
   />
   <PalettePreview
     label={m.color_palette()}
-    colors={sequentialPalette}
+    colors={currentPalette}
     selectedPaletteId={visualization?.classification?.paletteId}
     oninvert={onInvertPalette}
     onClassificationChange={onClassificationChange}
@@ -533,7 +538,8 @@
   />
   <PalettePreview
     label={m.color_palette()}
-    colors={qualitativePalette}
+    colors={currentQualPalette}
+    selectedPaletteId={visualization?.classification?.paletteId}
     oninvert={onInvertPalette}
     onClassificationChange={onClassificationChange}
   />
