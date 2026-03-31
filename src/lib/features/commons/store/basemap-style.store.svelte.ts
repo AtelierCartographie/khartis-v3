@@ -18,6 +18,17 @@ function getInitialGroupVisibility(style: BasemapStyle): Record<string, boolean>
   return getDefaultVisibility(config) as Record<string, boolean>;
 }
 
+/** Maps legacy style IDs from pre-v2 projects to their closest new equivalent. */
+const LEGACY_STYLE_MIGRATION: Record<string, BasemapStyle> = {
+  'carte-facile-desaturated': BasemapStyle.FRANCE_NIVEAUX_DE_GRIS,
+  'carte-facile-simple': BasemapStyle.FRANCE_COULEURS,
+  'carte-facile-aerial': BasemapStyle.FRANCE_SATELLITE
+};
+
+function migrateLegacyStyle(raw: string): BasemapStyle | null {
+  return LEGACY_STYLE_MIGRATION[raw] ?? null;
+}
+
 function createBasemapStyleStore() {
   const state = $state({
     selectedStyle: DEFAULT_BASEMAP_STYLE,
@@ -65,9 +76,18 @@ function createBasemapStyleStore() {
     showLabels?: boolean,
     groupVisibility?: Record<string, boolean>
   ): void {
-    if (!style || !Object.values(BasemapStyle).includes(style)) {
+    if (!style) {
       reset();
       return;
+    }
+    if (!Object.values(BasemapStyle).includes(style)) {
+      const migrated = migrateLegacyStyle(style);
+      if (migrated) {
+        style = migrated;
+      } else {
+        reset();
+        return;
+      }
     }
     state.selectedStyle = style;
     state.groupVisibility = groupVisibility ?? getInitialGroupVisibility(style);
