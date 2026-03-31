@@ -81,7 +81,7 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
     // `style.load` fires once when the full style graph is ready.
     // Using `styledata` can flip the loading flag too early.
     map.once('style.load', styleLoadHandler);
-    map.setStyle(style);
+    map.setStyle(style, { diff: false });
   }
 
   function syncOSMRasterLayer(): void {

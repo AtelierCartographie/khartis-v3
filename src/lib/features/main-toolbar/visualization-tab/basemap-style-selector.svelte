@@ -6,7 +6,6 @@
   import { BasemapStyle } from '$lib/features/map/constants/basemap-styles';
   import {
     ZONES,
-    STYLE_CONFIGS,
     getStylesForZone,
     getToggleableGroups,
     getStyleConfig,
@@ -84,8 +83,7 @@
     basemapStyleStore.setGroupVisibility(groupId, e.detail.toggled);
   }
 
-  // All available style variants (deduplicated)
-  const allVariants = [...new Set(STYLE_CONFIGS.map((s) => s.style))];
+
 </script>
 
 <div class="basemap-style-selector">
