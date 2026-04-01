@@ -8278,8 +8278,7 @@
       },
       "minzoom": 10,
       "layout": {
-        "line-cap": "round",
-        "visibility": "none"
+        "line-cap": "round"
       },
       "paint": {
         "line-color": "rgba(40, 40, 40, 1)",
@@ -8320,8 +8319,7 @@
       },
       "minzoom": 10,
       "layout": {
-        "line-cap": "round",
-        "visibility": "none"
+        "line-cap": "round"
       },
       "paint": {
         "line-color": "rgb(255,202,0)",
@@ -8363,8 +8361,7 @@
       "minzoom": 10,
       "maxzoom": 24,
       "layout": {
-        "line-cap": "round",
-        "visibility": "none"
+        "line-cap": "round"
       },
       "paint": {
         "line-color": "rgba(40, 40, 40, 1)",
@@ -8395,8 +8392,7 @@
       "minzoom": 10,
       "maxzoom": 24,
       "layout": {
-        "line-cap": "round",
-        "visibility": "none"
+        "line-cap": "round"
       },
       "paint": {
         "line-color": "rgb(255,202,0)",
@@ -8427,8 +8423,7 @@
       "minzoom": 6.4,
       "maxzoom": 24,
       "layout": {
-        "line-cap": "round",
-        "visibility": "none"
+        "line-cap": "round"
       },
       "paint": {
         "line-color": "rgba(40, 40, 40, 1)",
@@ -8470,8 +8465,7 @@
       "minzoom": 6.4,
       "maxzoom": 24,
       "layout": {
-        "line-cap": "round",
-        "visibility": "none"
+        "line-cap": "round"
       },
       "paint": {
         "line-color": "rgb(255,202,0)",
@@ -8513,8 +8507,7 @@
       "minzoom": 5,
       "maxzoom": 24,
       "layout": {
-        "line-cap": "round",
-        "visibility": "none"
+        "line-cap": "round"
       },
       "paint": {
         "line-color": "rgba(40, 40, 40, 1)",
@@ -8557,8 +8550,7 @@
       "minzoom": 5,
       "maxzoom": 24,
       "layout": {
-        "line-cap": "round",
-        "visibility": "none"
+        "line-cap": "round"
       },
       "paint": {
         "line-color": "rgb(255,202,0)",
@@ -8599,9 +8591,7 @@
         "cartefacile:group": "cadastre"
       },
       "minzoom": 14.5,
-      "layout": {
-        "visibility": "none"
-      },
+      "layout": {},
       "paint": {
         "line-color": "rgba(40, 40, 40, 1)",
         "line-width": {
@@ -8631,9 +8621,7 @@
         "cartefacile:group": "cadastre"
       },
       "minzoom": 14.5,
-      "layout": {
-        "visibility": "none"
-      },
+      "layout": {},
       "paint": {
         "line-color": "rgb(255,202,0)",
         "line-width": {
@@ -8663,9 +8651,7 @@
         "cartefacile:group": "cadastre"
       },
       "minzoom": 12,
-      "layout": {
-        "visibility": "none"
-      },
+      "layout": {},
       "paint": {
         "line-color": "rgba(40, 40, 40, 1)",
         "line-opacity": 1,
@@ -8696,9 +8682,7 @@
         "cartefacile:group": "cadastre"
       },
       "minzoom": 12,
-      "layout": {
-        "visibility": "none"
-      },
+      "layout": {},
       "paint": {
         "line-color": "rgb(255,202,0)",
         "line-opacity": 1,
@@ -8745,8 +8729,7 @@
               16
             ]
           ]
-        },
-        "visibility": "none"
+        }
       },
       "paint": {
         "text-color": "rgb(255,202,0)",
@@ -8780,8 +8763,7 @@
               16
             ]
           ]
-        },
-        "visibility": "none"
+        }
       },
       "paint": {
         "text-color": "rgb(255,202,0)",
