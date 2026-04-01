@@ -12,6 +12,7 @@ import type {
   JoinQuality
 } from '$lib/features/map/types/basemap.types';
 import type { Table } from 'apache-arrow/Arrow';
+import { addGeoArrowMetadata } from '$lib/features/map/utils/read-geojson-arrow';
 import type { DuckDBDataset, FinalizeJoinResult } from '../types';
 import { detectGPSColumns } from './gps-ops';
 
@@ -346,7 +347,7 @@ export async function computeJoinSynthesis(
   return (rows || []).map((r) => ({
     basemap: r.basemap,
     shareBasemap: r.share_basemap,
-    shareCandidate: r.share_candidate
+    shareCandidate: r.share_candidate * 100
   }));
 }
 
@@ -829,11 +830,18 @@ export async function getJoinedArrowTable(
     WHERE gu.geom IS NOT NULL
   `);
 
-  const arrowTable = await getArrowTableDirect(joinedView);
+  let arrowTable = await getArrowTableDirect(joinedView);
+
+  // The joined view contains a geometry column from the basemap, but DuckDB
+  // does not propagate GeoArrow extension metadata through SQL VIEWs.
+  // addGeoArrowMetadata detects the native GeoArrow struct type from the
+  // Arrow field hierarchy and adds the required 'geo' schema metadata.
+  arrowTable = addGeoArrowMetadata(arrowTable);
 
   logger.success('Joined Arrow table created', LogCategory.MAP, {
     joinedView,
     rows: arrowTable.numRows,
+    hasGeoMetadata: Boolean(arrowTable.schema.metadata?.get('geo')),
     durationMs: (performance.now() - start).toFixed(2)
   });
 
