@@ -646,7 +646,8 @@ export function createPointLayers(
   } = ctx;
   const hasHighlights = highlightedRowIds && highlightedRowIds.size > 0;
   const hlVersion = ctx.highlightVersion ?? 0;
-  const { geoColumn, isWkbEncoded, isGeoJsonEncoded } = geometryInfo;
+  const { geoColumn, isNativeGeoArrow, isWkbEncoded, isGeoJsonEncoded } =
+    geometryInfo;
   const arrowExtension = geometryInfo.encoding;
 
   const useProportionalSymbols = viz && shouldApplyProportionalSymbols(viz);
@@ -661,7 +662,14 @@ export function createPointLayers(
     (arrowExtension === ArrowExtension.GEOARROW_POINT ||
       arrowExtension === ArrowExtension.GEOARROW_MULTIPOINT);
 
-  if (!isNativeGeoArrowPoint && (isWkbEncoded || isGeoJsonEncoded)) {
+  // GeoJSON fallback only for actual GeoJSON strings or legacy ogc.wkb without
+  // geoarrow-deck-stream support. geoarrow.wkb goes through the binary path
+  // (isNativeGeoArrow = true) since geoarrow-deck-stream handles WKB natively.
+  if (
+    !isNativeGeoArrowPoint &&
+    !isNativeGeoArrow &&
+    (isWkbEncoded || isGeoJsonEncoded)
+  ) {
     let geojsonData;
     try {
       const rawGeoJSON = getCachedGeoJSON(jsTable, geoColumn);
