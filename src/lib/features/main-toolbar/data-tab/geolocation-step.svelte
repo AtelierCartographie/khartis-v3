@@ -263,6 +263,13 @@
       columnAnalysisLoaded = false;
       previousAutoSelectedColumn = null;
       hasAutoGeoreferenceInitialization = false;
+
+      // Don't reset if the geo column was explicitly set (restored from
+      // project persistence or manually chosen by the user).
+      if (!dataTabState.geolocation.autoDetected && dataTabState.geolocation.linkedVariableName) {
+        return;
+      }
+
       dataTabActions.setGeolocationState({
         geoReference: GeoreferenceType.ENTITIES,
         linkedVariable: null,
