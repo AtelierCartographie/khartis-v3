@@ -1,16 +1,4 @@
-test-results
-node_modules
 
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-*-old
-.zed
-agent-browser.json
 
 # Diagnostic reports
 report.*.json
@@ -27,11 +15,17 @@ report.*.json
 dist
 dev-dist/
 
-# OS
-.DS_Store
-Thumbs.db
-.AppleDouble
-.LSOverride
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*-old
+.zed
+test-results
+node_modules
 
 # Env
 .env
@@ -43,6 +37,12 @@ Thumbs.db
 .env.development.local
 .env.production.local
 .env.test.local
+
+# OS
+.DS_Store
+Thumbs.db
+.AppleDouble
+.LSOverride
 
 # Vite
 vite.config.js.timestamp-*
@@ -65,11 +65,7 @@ src/lib/paraglide
 coverage/
 coverage-duckdb/
 .nyc_output
-
-# Playwright
-playwright-report/
-blob-report/
-.playwright
+test-screenshots
 
 # Yarn
 !.yarn/versions
@@ -78,7 +74,6 @@ blob-report/
 .yarn/build-state.yml
 .yarn/install-state.gz
 .claude/
-CLAUDE_BEST_PRACTICES.md
 CLAUDE.md
 .yarn/*
 !.yarn/patches
@@ -86,11 +81,29 @@ CLAUDE.md
 !.yarn/releases
 !.yarn/sdks
 
+# Playwright
+playwright-report/
+blob-report/
+.playwright
+.playwright-mcp
+*-TESTS.md
+.playwright-cli
+
 # Turbo
 .turbo
 
 # Vitest
 .vitest
+
+# Inlang cache
+project.inlang/cache/
+khartis-manual-bug-loop.md
+step-toolbar-viz-tests.md
+
+# Temporary files
+.tmp/
+tmp/
+*.tmp
 
 # Editors/IDEs
 .vscode/
@@ -102,18 +115,3 @@ CLAUDE.md
 *.sln
 *.sw?
 .history/
-
-# Temporary files
-.tmp/
-tmp/
-*.tmp
-
-# Local agent/tool state
-.codex/
-
-# Inlang cache
-project.inlang/cache/
-cdc.md
-dd.md
-khartis-manual-bug-loop.md
-step-toolbar-viz-tests.md

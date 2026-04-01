@@ -634,11 +634,12 @@
           <thead>
             <tr class:histograms-open={effectiveShowSummaryPlots}>
               {#if isSelectable && isEditMode}
-                <th class="selection-header-spacer"></th>
+                <th class="selection-header-spacer" scope="col"></th>
               {/if}
               <th
                 class="row-index-header"
                 class:histograms-open={effectiveShowSummaryPlots}
+                scope="col"
               >
                 <div class="row-index-header-content">
                   <div class="histogram-toggle-area">
