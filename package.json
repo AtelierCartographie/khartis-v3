@@ -138,7 +138,7 @@
     "d3-geo": "^3.1.1",
     "d3-geo-projection": "^4.0.0",
     "fflate": "^0.8.2",
-    "geoarrow-deck-stream": "github:AtelierCartographie/geoarrow-deck-stream#08bfcd4",
+    "geoarrow-deck-stream": "github:AtelierCartographie/geoarrow-deck-stream#30346ce",
     "html-to-image": "^1.11.13",
     "localforage": "^1.10.0",
     "maplibre-gl": "^5.21.1",

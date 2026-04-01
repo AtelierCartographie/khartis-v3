@@ -43,7 +43,7 @@ async function getParquetWasm(): Promise<typeof import('parquet-wasm')> {
 }
 
 const GEOPARQUET_ENCODING_TO_ARROW: Record<string, string> = {
-  wkb: ArrowExtension.OGC_WKB,
+  wkb: ArrowExtension.GEOARROW_WKB,
   point: ArrowExtension.GEOARROW_POINT,
   multipoint: ArrowExtension.GEOARROW_MULTIPOINT,
   linestring: ArrowExtension.GEOARROW_LINESTRING,
