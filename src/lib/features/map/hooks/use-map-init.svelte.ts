@@ -448,13 +448,19 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
       });
     });
 
+    let errorFallbackApplied = false;
     map.on('error', (e) => {
+      // Tile-loading errors (404, network) are common when switching styles
+      // and are not actionable — suppress them once the map is loaded.
+      if (isMapLoaded) return;
+
       logger.error(
         'MapLibre error, falling back to blank style',
         LogCategory.MAP,
         e
       );
-      if (!isMapLoaded && map) {
+      if (!errorFallbackApplied && map) {
+        errorFallbackApplied = true;
         map.setStyle(
           getBasemapStyle(
             BasemapStyle.BLANK_WHITE
