@@ -11,6 +11,7 @@ import {
 } from '$lib/features/duckdb/io/reprojection';
 import {
   Field,
+  RecordBatch,
   Schema,
   Table,
   tableFromIPC,
@@ -26,6 +27,20 @@ import { GEOJSON_TYPE } from '$lib/features/commons/constants';
 const GEO_METADATA_VERSION = '1.0.0';
 const DEFAULT_CRS_NAME = GEO_CONSTANTS.WGS84_CRS;
 const WORLD_BOUNDS: [number, number, number, number] = [-180, -90, 180, 90];
+
+// Lazy-loaded parquet-wasm module (initialized once on first use)
+let parquetWasmReady: Promise<typeof import('parquet-wasm')> | null = null;
+
+async function getParquetWasm(): Promise<typeof import('parquet-wasm')> {
+  if (!parquetWasmReady) {
+    parquetWasmReady = (async () => {
+      const mod = await import('parquet-wasm');
+      await mod.default();
+      return mod;
+    })();
+  }
+  return parquetWasmReady;
+}
 
 const GEOPARQUET_ENCODING_TO_ARROW: Record<string, string> = {
   wkb: ArrowExtension.OGC_WKB,
@@ -450,6 +465,92 @@ export async function readGeoParquetViaDuckDB(
   let table = tableFromIPC(result as Uint8Array);
 
   table = addGeoArrowMetadata(table, geoInfo.encoding, bbox);
+
+  return table;
+}
+
+/**
+ * Read a GeoParquet file directly via parquet-wasm, preserving native GeoArrow geometry.
+ *
+ * Built-in basemap parquet files encode geometry as native GeoArrow (geoarrow.point,
+ * geoarrow.polygon, etc.). Reading them through DuckDB causes 3 unnecessary conversions:
+ *   geoarrow native → DuckDB blob → geoarrow.wkb → geoarrow native (geoarrow-deck-stream)
+ *
+ * parquet-wasm decodes parquet directly to Arrow IPC, preserving the native encoding:
+ *   geoarrow native → Arrow table (geometry still native) → geoarrow-deck-stream
+ *
+ * Use for built-in basemaps (WGS84, no reprojection). Custom basemaps and projected
+ * CRS still go through readGeoParquetViaDuckDB for ST_Transform support.
+ */
+export async function readGeoParquetDirect(
+  arrayBuffer: ArrayBuffer,
+  bbox?: [number, number, number, number]
+): Promise<ArrowTable> {
+  const { readParquet } = await getParquetWasm();
+
+  const wasmTable = readParquet(new Uint8Array(arrayBuffer));
+  let table = tableFromIPC(wasmTable.intoIPCStream());
+
+  // Extract primary geometry column and encoding from parquet 'geo' metadata
+  const geoMetaStr = table.schema.metadata?.get('geo');
+  let primaryColumn = INTERNAL_COLUMN.GEOMETRY;
+  let encoding: string | undefined;
+
+  if (geoMetaStr) {
+    try {
+      const geo = JSON.parse(geoMetaStr);
+      primaryColumn = geo.primary_column ?? INTERNAL_COLUMN.GEOMETRY;
+      const colMeta = geo.columns?.[primaryColumn];
+      encoding = colMeta?.encoding;
+    } catch {
+      // ignore parse errors — will detect from Arrow type
+    }
+  }
+
+  // Rename geometry column to standard name if needed (geoarrow-deck-stream expects 'geometry')
+  if (
+    primaryColumn !== INTERNAL_COLUMN.GEOMETRY &&
+    primaryColumn !== INTERNAL_COLUMN.WKB_GEOMETRY &&
+    table.schema.fields.some((f) => f.name === primaryColumn)
+  ) {
+    const newFields = table.schema.fields.map((field) => {
+      if (field.name === primaryColumn) {
+        return new Field(
+          INTERNAL_COLUMN.GEOMETRY,
+          field.type,
+          field.nullable,
+          field.metadata
+        );
+      }
+      return field;
+    });
+
+    // Update 'geo' metadata to reflect renamed column
+    const newSchemaMetadata = new Map(table.schema.metadata);
+    if (geoMetaStr) {
+      try {
+        const geo = JSON.parse(geoMetaStr);
+        const colData = geo.columns?.[primaryColumn];
+        if (colData) {
+          delete geo.columns[primaryColumn];
+          geo.columns[INTERNAL_COLUMN.GEOMETRY] = colData;
+          geo.primary_column = INTERNAL_COLUMN.GEOMETRY;
+        }
+        newSchemaMetadata.set(GeoArrowMetadataKey.GEO, JSON.stringify(geo));
+      } catch {
+        // ignore
+      }
+    }
+
+    const newSchema = new Schema(newFields, newSchemaMetadata);
+    const newBatches = table.batches.map(
+      (batch) => new RecordBatch(newSchema, batch.data)
+    );
+    table = new Table(newBatches);
+  }
+
+  // Ensure GeoArrow metadata is complete (adds field-level ARROW:extension:name if missing)
+  table = addGeoArrowMetadata(table, encoding, bbox);
 
   return table;
 }
