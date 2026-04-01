@@ -20,6 +20,7 @@ import {
   FileType,
   COLUMN_TRANSFORMATION_TYPES
 } from '../store/create-project.types';
+import { dataTabActions } from '../store/data-tab.store.svelte';
 import { datasetsStore } from '../store/datasets.store.svelte';
 import { globalActions, globalState } from '../store/global.svelte';
 import { projectStore } from '../store/project.store.svelte';
@@ -143,7 +144,8 @@ function createDataOrchestratorService() {
       file.fileType === FileType.GEOPACKAGE ||
       file.fileType === FileType.GEOPARQUET ||
       file.fileType === FileType.KML ||
-      file.fileType === FileType.KMZ;
+      file.fileType === FileType.KMZ ||
+      file.fileType === FileType.GPX;
 
     if (!requiresGeoProcessing) return null;
     if (dataset?.metadata?.geoDuckTableReady && dataset.tableName) return null;
@@ -998,6 +1000,54 @@ function createDataOrchestratorService() {
 
     migrateOrphanedVizDatasetIds();
     await recomputeMissingBreaks();
+
+    // Restore the geo column selection in the data tab UI so users don't
+    // lose their manual choice (e.g. "entity" for fuzzy-countries) on reload.
+    if (currentProject?.data?.sourceFiles) {
+      const primaryFile = currentProject.data.sourceFiles.find(
+        (f) => f.geoColumn
+      );
+      logger.debug('Geo column restore check', LogCategory.DATA, {
+        hasSourceFiles: true,
+        primaryFileName: primaryFile?.name,
+        geoColumn: primaryFile?.geoColumn,
+        joinedBasemap: primaryFile?.joinedBasemap
+      });
+      if (primaryFile?.geoColumn) {
+        const geoCol = primaryFile.geoColumn;
+        const basemap = primaryFile.joinedBasemap;
+        // Defer restoration until dataset is fully loaded. The component's
+        // $effect resets linkedVariable when the dataset ID changes, so we
+        // must wait for that reset to happen first, then override.
+        const restoreGeoColumn = () => {
+          const dataset = datasetsStore.selectedDataset;
+          if (!dataset?.columns?.length) {
+            // Dataset not ready yet, retry
+            setTimeout(restoreGeoColumn, 200);
+            return;
+          }
+          const colIndex = dataset.columns
+            .filter((c) => c.name !== '__geom' && c.name !== '__id')
+            .findIndex((c) => c.name === geoCol);
+          if (colIndex >= 0) {
+            dataTabActions.setGeolocationState({
+              linkedVariable: colIndex,
+              linkedVariableName: geoCol,
+              autoDetected: false
+            });
+            logger.debug('Restored geo column from project', LogCategory.DATA, {
+              geoCol,
+              colIndex
+            });
+          }
+          if (basemap) {
+            dataTabActions.selectBasemap(basemap);
+          }
+        };
+        // Wait 2s for all Svelte $effects to settle after dataset loading
+        setTimeout(restoreGeoColumn, 2000);
+      }
+    }
 
     layersActions.syncWithVisualizations();
     legendActions.syncWithVisualizations();
