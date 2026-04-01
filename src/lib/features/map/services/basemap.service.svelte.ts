@@ -11,7 +11,7 @@ import type {
   ProjectionPresets,
   StylePresets
 } from '../types/basemap.types';
-import { readGeoParquetViaDuckDB } from '../utils/read-geojson-arrow';
+import { readGeoParquetDirect } from '../utils/read-geojson-arrow';
 import { SimplificationLevel } from '../../commons/types/enums';
 import {
   addGeoArrowMetadataFromDuckDB,
@@ -179,11 +179,7 @@ function createBasemapService() {
     }
 
     const arrayBuffer = await response.arrayBuffer();
-    const jsTable = await readGeoParquetViaDuckDB(
-      arrayBuffer,
-      `basemap_${filename}`,
-      bbox
-    );
+    const jsTable = await readGeoParquetDirect(arrayBuffer, bbox);
 
     logger.debug('Basemap geometry loaded', LogCategory.MAP, {
       filename,
@@ -533,8 +529,6 @@ function createBasemapService() {
       level
     });
 
-    const variantTableName = `basemap_variant_${basemapId.replace(/[^a-zA-Z0-9_]/g, '_')}_${level}`;
-
     const variantUrl = getGeometryParquetUrl(variantFile);
     const response = await fetch(variantUrl);
     if (!response.ok) {
@@ -551,10 +545,7 @@ function createBasemapService() {
       );
     }
     const arrayBuffer = await response.arrayBuffer();
-    const variantTable = await readGeoParquetViaDuckDB(
-      arrayBuffer,
-      variantTableName
-    );
+    const variantTable = await readGeoParquetDirect(arrayBuffer);
 
     loadedBasemap.simplifiedVariants.set(level, variantTable);
     loadedBasemap.activeSimplificationLevel = level;
