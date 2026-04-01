@@ -80,7 +80,16 @@
     groupId: LayerGroupId,
     e: CustomEvent<{ toggled: boolean }>
   ): void {
+    // Preserve scroll position — Carbon Toggle triggers browser auto-scroll
+    // on focus, which can push the toolbar content out of view.
+    const scrollable = (e.target as HTMLElement)?.closest('.toolbar-content, .scrollbar-hidden');
+    const scrollTop = scrollable?.scrollTop ?? 0;
     basemapStyleStore.setGroupVisibility(groupId, e.detail.toggled);
+    if (scrollable) {
+      requestAnimationFrame(() => {
+        scrollable.scrollTop = scrollTop;
+      });
+    }
   }
 
 

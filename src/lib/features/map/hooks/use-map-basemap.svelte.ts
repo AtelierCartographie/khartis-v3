@@ -64,7 +64,13 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
       map.off('style.load', styleLoadHandler);
     }
 
-    styleLoadHandler = () => {
+    let safetyTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    const completeStyleLoad = () => {
+      if (safetyTimeout) {
+        clearTimeout(safetyTimeout);
+        safetyTimeout = null;
+      }
       isStyleLoading = false;
       lastAppliedStyleKey = styleKey;
 
@@ -78,10 +84,31 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
       }
     };
 
+    styleLoadHandler = completeStyleLoad;
+
+    // Safety timeout: if style.load never fires (e.g. network error),
+    // unlock the loading flag after 10s to avoid permanent deadlock.
+    safetyTimeout = setTimeout(() => {
+      if (isStyleLoading) {
+        logger.warn(
+          'Basemap style.load timed out after 10s, unlocking',
+          LogCategory.MAP,
+          { styleKey }
+        );
+        completeStyleLoad();
+      }
+    }, 10_000);
+
     // `style.load` fires once when the full style graph is ready.
     // Using `styledata` can flip the loading flag too early.
     map.once('style.load', styleLoadHandler);
-    map.setStyle(style, { diff: false });
+
+    try {
+      map.setStyle(style, { diff: false });
+    } catch (error) {
+      logger.error('setStyle() threw, unlocking style loading', LogCategory.MAP, error);
+      completeStyleLoad();
+    }
   }
 
   function syncOSMRasterLayer(): void {
