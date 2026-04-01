@@ -113,7 +113,7 @@ function scoreQTR(indicators: QTRIndicators): SemioScore {
   if (indicators.shareFloats >= 0.7) score += 1;
   if (indicators.shareFloats >= 0.9) score += 1;
   if (indicators.ratioWords) score += 3;
-  if (indicators.extentMagnitude <= 2) score += 1;
+  if (indicators.extentMagnitude <= 2) score += 0.5;
   if (indicators.min < 0 && indicators.max > 0) score += 0.5;
   return { semioType: SEMIO_TYPES.QTR, score };
 }

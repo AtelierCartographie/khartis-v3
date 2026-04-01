@@ -22,7 +22,19 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] }
+      use: {
+        ...devices['Desktop Chrome'],
+        launchOptions: {
+          args: [
+            '--enable-webgl',
+            '--use-gl=angle',
+            '--use-angle=swiftshader',
+            '--enable-gpu-rasterization',
+            '--ignore-gpu-blocklist',
+            '--disable-gpu-sandbox'
+          ]
+        }
+      }
     }
   ],
   webServer: {
