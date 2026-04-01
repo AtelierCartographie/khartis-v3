@@ -17,6 +17,7 @@
   import CustomizeBasemap from './customize-basemap.svelte';
   import ToolbarTabLayout from '../components/toolbar-tab-layout.svelte';
   import {
+    applySuggestionMapping,
     mapSuggestionToType,
     resolveDatasetGeometryType
   } from './suggestion.utils';
@@ -76,6 +77,9 @@
       };
     }>;
     geometry?: { type?: string | null };
+    sourceFileId?: string;
+    joinedBasemap?: string;
+    gpsMode?: boolean;
   }): VizSuggestion | undefined {
     const geometryType = resolveDatasetGeometryType(dataset);
     if (!geometryType) return undefined;
@@ -89,43 +93,7 @@
     return suggestions[0];
   }
 
-  function applySuggestionMapping(
-    vizId: string,
-    vizType: VisualizationType,
-    suggestion: VizSuggestion
-  ): void {
-    if (!suggestion.columns || suggestion.columns.length === 0) {
-      return;
-    }
-
-    const column = suggestion.columns[0];
-    const mappingUpdate: Record<string, string> = {};
-
-    switch (vizType) {
-      case VisualizationType.CHOROPLETH:
-        mappingUpdate.valueColumn = column;
-        break;
-      case VisualizationType.PROPORTIONAL:
-        mappingUpdate.sizeColumn = column;
-        break;
-      case VisualizationType.CATEGORICAL:
-        mappingUpdate.categoryColumn = column;
-        break;
-      case VisualizationType.BIVARIATE:
-        mappingUpdate.sizeColumn = column;
-        if (suggestion.columns.length > 1) {
-          mappingUpdate.valueColumn = suggestion.columns[1];
-        }
-        break;
-    }
-
-    const viz = visualizationStore.visualizations.find((v) => v.id === vizId);
-    if (!viz) return;
-
-    visualizationStore.updateVisualization(vizId, {
-      mapping: { ...viz.mapping, ...mappingUpdate }
-    });
-  }
+  // applySuggestionMapping is now shared from suggestion.utils.ts
 
   function handleCreateVisualization() {
     if (configureSection) {

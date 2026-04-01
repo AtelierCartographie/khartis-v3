@@ -293,7 +293,7 @@
   });
 </script>
 
-<th>
+<th scope="col">
   <div class="col-header">
     <div class="col-title-row">
       <VariableBadge
@@ -304,7 +304,7 @@
         onmouseleave={hideTypeTooltip}
         onfocus={showTypeTooltip}
         onblur={hideTypeTooltip}
-        ariaLabel={typeTooltipMessage}
+        ariaLabel={m.column_type_badge_label({ column: column.name, type: typeTooltipMessage })}
       />
       {#if typeTooltipOpen}
         <Portal>
@@ -361,6 +361,7 @@
             onclick={toggleMenu}
             aria-haspopup="true"
             aria-expanded={menuOpen}
+            aria-label={m.column_menu_options({ column: column.name })}
           >
             <OverflowMenuVertical size={16} />
           </button>
@@ -806,7 +807,7 @@
   .sort-btn {
     border: none;
     background: none;
-    padding: 0;
+    padding: 4px;
     margin: 0;
     color: var(--cds-text-03, #8d8d8d);
     cursor: pointer;
@@ -816,8 +817,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 16px;
-    height: 16px;
+    min-width: 24px;
+    min-height: 24px;
   }
 
   .sort-btn:hover {

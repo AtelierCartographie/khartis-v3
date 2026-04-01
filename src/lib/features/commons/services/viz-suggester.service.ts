@@ -188,6 +188,27 @@ const VIZ_CRITERIA: readonly VizSuggestion[] = [
     nbColumns: 1,
     semioTypes: ['QLO'],
     geometries: ['line']
+  },
+  {
+    id: 'texts_colorful_QL',
+    label: m.viz_suggestion_texts_colorful_ql(),
+    nbColumns: 2,
+    semioTypes: ['QL', 'QL'],
+    geometries: ['point', 'polygon']
+  },
+  {
+    id: 'texts_colorful_QTR',
+    label: m.viz_suggestion_texts_colorful_qtr(),
+    nbColumns: 2,
+    semioTypes: ['QL', 'QTR'],
+    geometries: ['point', 'polygon']
+  },
+  {
+    id: 'texts_proportional',
+    label: m.viz_suggestion_texts_proportional(),
+    nbColumns: 2,
+    semioTypes: ['QL', 'QTA'],
+    geometries: ['point', 'polygon']
   }
 ] as const;
 
