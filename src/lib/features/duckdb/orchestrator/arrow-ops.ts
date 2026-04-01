@@ -222,11 +222,13 @@ export async function addGeoArrowMetadataFromDuckDB(
           )
         : undefined;
 
+    // ST_AsWKB() output is standard WKB binary — label it as geoarrow.wkb
+    // so the layer factory routes it through geoarrow-deck-stream (binary GPU
+    // path) instead of the slow GeoJSON fallback. The data is identical to
+    // ogc.wkb; geoarrow.wkb is the modern GeoArrow spec name.
     const encoding = isGeoJsonString
       ? ArrowExtension.GEOJSON
-      : existingExtension === ArrowExtension.GEOARROW_WKB
-        ? ArrowExtension.GEOARROW_WKB
-        : ArrowExtension.OGC_WKB;
+      : ArrowExtension.GEOARROW_WKB;
 
     const geoMetadata = {
       version: '1.0.0',
