@@ -6,7 +6,13 @@
  * Projection-aware parsing applies composite/simple/identity projections
  * from basemap metadata for built-in basemaps in orthographic mode.
  */
-import type { Table as ArrowTable } from 'apache-arrow/Arrow';
+import {
+  type Table as ArrowTable,
+  Schema,
+  Field,
+  RecordBatch,
+  Table as ArrowTableImpl
+} from 'apache-arrow/Arrow';
 import {
   geoIdentity,
   parseGeometry,
@@ -52,6 +58,60 @@ function resolveSimpleProjection(proj4String: string): GeoProjection {
 }
 
 // ---------------------------------------------------------------------------
+// Geometry column normalization
+// geoarrow-deck-stream expects the geometry column to be named "geometry".
+// DuckDB ST_Read typically names it "geom" or "wkb_geometry".
+// This helper renames the column in the Arrow schema so the library can find it.
+// ---------------------------------------------------------------------------
+
+const EXPECTED_GEOM_COL = 'geometry';
+const normalizedTableCache = new WeakMap<ArrowTable, ArrowTable>();
+
+function normalizeGeomColumnName(table: ArrowTable): ArrowTable {
+  const cached = normalizedTableCache.get(table);
+  if (cached) return cached;
+
+  const geoMeta = table.schema?.metadata?.get('geo');
+  if (!geoMeta) return table;
+
+  let primaryColumn: string;
+  try {
+    primaryColumn = JSON.parse(geoMeta).primary_column;
+  } catch {
+    return table;
+  }
+
+  if (!primaryColumn || primaryColumn === EXPECTED_GEOM_COL) return table;
+
+  // Rename the geometry column + update "geo" metadata to match
+  const updatedFields = table.schema.fields.map((f) =>
+    f.name === primaryColumn
+      ? new Field(EXPECTED_GEOM_COL, f.type, f.nullable, f.metadata)
+      : f
+  );
+
+  const parsedGeo = JSON.parse(geoMeta);
+  parsedGeo.primary_column = EXPECTED_GEOM_COL;
+  if (parsedGeo.columns?.[primaryColumn]) {
+    parsedGeo.columns[EXPECTED_GEOM_COL] = parsedGeo.columns[primaryColumn];
+    delete parsedGeo.columns[primaryColumn];
+  }
+
+  const metadataMap = new Map(table.schema.metadata);
+  metadataMap.set('geo', JSON.stringify(parsedGeo));
+
+  const newSchema = new Schema(updatedFields, metadataMap);
+  // Rebuild each RecordBatch with the new schema so that the Table and
+  // inner batch schemas stay equivalent (Apache Arrow enforces this).
+  const newBatches = table.batches.map(
+    (batch) => new RecordBatch(newSchema, batch.data)
+  );
+  const result = new ArrowTableImpl(newSchema, newBatches);
+  normalizedTableCache.set(table, result);
+  return result;
+}
+
+// ---------------------------------------------------------------------------
 // Identity parsing (lon/lat passthrough — for custom basemaps, MapLibre mode)
 // ---------------------------------------------------------------------------
 
@@ -69,7 +129,7 @@ export function parsePaths(table: ArrowTable): BinaryPathData {
   let result = pathCache.get(table);
   if (!result) {
     try {
-      result = parseGeometry(table, IDENTITY_OPTIONS);
+      result = parseGeometry(normalizeGeomColumnName(table), IDENTITY_OPTIONS);
     } catch (error) {
       logger.error(
         'Failed to parse paths from Arrow table',
@@ -87,7 +147,7 @@ export function parseSolidPolygons(table: ArrowTable): BinaryPolygonData {
   let result = solidPolygonCache.get(table);
   if (!result) {
     try {
-      result = parsePolygonsToSolid(table, IDENTITY_OPTIONS);
+      result = parsePolygonsToSolid(normalizeGeomColumnName(table), IDENTITY_OPTIONS);
     } catch (error) {
       logger.error(
         'Failed to parse solid polygons from Arrow table',
@@ -105,7 +165,7 @@ export function parsePointData(table: ArrowTable): BinaryPointData {
   let result = pointCache.get(table);
   if (!result) {
     try {
-      result = parsePoints(table, IDENTITY_OPTIONS);
+      result = parsePoints(normalizeGeomColumnName(table), IDENTITY_OPTIONS);
     } catch (error) {
       logger.error(
         'Failed to parse points from Arrow table',
@@ -286,7 +346,7 @@ export function parseSolidPolygonsWithProjection(
   projection: ProjectionLike,
   rewind = true
 ): BinaryPolygonData {
-  return parsePolygonsToSolid(table, {
+  return parsePolygonsToSolid(normalizeGeomColumnName(table), {
     projection,
     capacityMultiplier: 1.0,
     rewind
@@ -298,7 +358,7 @@ export function parsePathsWithProjection(
   projection: ProjectionLike,
   rewind = true
 ): BinaryPathData {
-  return parseGeometry(table, {
+  return parseGeometry(normalizeGeomColumnName(table), {
     projection,
     capacityMultiplier: 1.0,
     rewind
@@ -310,7 +370,7 @@ export function parsePointDataWithProjection(
   projection: ProjectionLike,
   rewind = true
 ): BinaryPointData {
-  return parsePoints(table, {
+  return parsePoints(normalizeGeomColumnName(table), {
     projection,
     capacityMultiplier: 1.0,
     rewind
