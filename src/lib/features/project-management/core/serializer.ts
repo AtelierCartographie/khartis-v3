@@ -1,4 +1,5 @@
 import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
+import { dataTabState } from '$lib/features/commons/store/data-tab.store.svelte';
 import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
 import { deepCloneForStorage } from '$lib/features/commons/utils/clone-for-storage.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
@@ -232,6 +233,15 @@ export async function serializeProjectData(
         if (duckDBDataset.gpsColumns) {
           serializedFile.gpsColumns = duckDBDataset.gpsColumns;
         }
+      }
+
+      // Fallback: persist geo column & basemap from UI state when DuckDB
+      // dataset doesn't have them yet (user selected but hasn't clicked Visualiser)
+      if (!serializedFile.geoColumn && dataTabState.geolocation.linkedVariableName) {
+        serializedFile.geoColumn = dataTabState.geolocation.linkedVariableName;
+      }
+      if (!serializedFile.joinedBasemap && dataTabState.basemapJoin.selectedBasemap) {
+        serializedFile.joinedBasemap = dataTabState.basemapJoin.selectedBasemap;
       }
 
       const storeDataset = datasetsStore.datasets.find(
