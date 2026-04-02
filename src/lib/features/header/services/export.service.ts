@@ -1,6 +1,5 @@
 import { projectStore } from '$lib/features/commons/store/project.store.svelte';
 import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
-import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
 import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
 import {
   exportProcessedDatasets,
@@ -9,11 +8,8 @@ import {
 } from '$lib/features/commons/utils/file-export.utils';
 import {
   exportMapToSvg,
-  exportMapToJpg,
-  exportMapToPng
+  exportMapToJpg
 } from '$lib/features/commons/utils/map-export.utils';
-import { getAnnotationsState } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
-import { getLegendState } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
 import { normalizeDatasets } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
 import { logger, LogCategory } from '$lib/features/commons/utils/logger';
 import { m } from '$lib/paraglide/messages.js';
@@ -57,39 +53,20 @@ Object.setPrototypeOf(ExportError.prototype, Error.prototype);
 
 export async function exportProject(fileName: string): Promise<void> {
   if (!projectStore.currentProject) {
-    logger.warn('No project to export', LogCategory.EXPORT);
     return;
   }
 
   await projectStore.exportProject(fileName);
-  logger.info('Project exported', LogCategory.EXPORT, { fileName });
+  logger.debug('Project exported', LogCategory.EXPORT, { fileName });
 }
 
 export async function exportMapAsSvg(fileName: string): Promise<void> {
   validateMapExportPrerequisites();
-  logger.info('Starting SVG export', LogCategory.EXPORT, {
-    datasetCount: datasetsStore.datasets.length,
-    visualizationCount: visualizationStore.activeVisualizations.length
-  });
 
-  const normalizedDatasets = normalizeDatasets(datasetsStore.datasets);
-
-  const processedDatasets = await fetchDatasetsWithGeometry(normalizedDatasets);
-
-  const annotations = getAnnotationsState();
-  const legend = getLegendState();
-
-  const blob = exportMapToSvg(
-    processedDatasets,
-    visualizationStore.activeVisualizations,
-    {},
-    annotations,
-    legend
-  );
+  const blob = await exportMapToSvg();
   const filename = generateExportFilename(fileName, 'svg');
 
   downloadFile(blob, filename);
-  logger.info('SVG export completed', LogCategory.EXPORT, { filename });
 }
 
 export async function exportMapAsJpg(
@@ -99,55 +76,10 @@ export async function exportMapAsJpg(
 ): Promise<void> {
   validateMapExportPrerequisites();
 
-  const normalizedDatasets = normalizeDatasets(datasetsStore.datasets);
-  const processedDatasets = await fetchDatasetsWithGeometry(normalizedDatasets);
-  const annotations = getAnnotationsState();
-  const legend = getLegendState();
-
-  const blob = await exportMapToJpg(
-    processedDatasets,
-    visualizationStore.activeVisualizations,
-    { width, height },
-    annotations,
-    legend
-  );
+  const blob = await exportMapToJpg({ width, height });
   const filename = generateExportFilename(fileName, 'jpg');
 
   downloadFile(blob, filename);
-  logger.info('JPG export completed', LogCategory.EXPORT, {
-    filename,
-    width,
-    height
-  });
-}
-
-export async function exportMapAsPng(
-  fileName: string,
-  width: number = 1920,
-  height: number = 1080
-): Promise<void> {
-  validateMapExportPrerequisites();
-
-  const normalizedDatasets = normalizeDatasets(datasetsStore.datasets);
-  const processedDatasets = await fetchDatasetsWithGeometry(normalizedDatasets);
-  const annotations = getAnnotationsState();
-  const legend = getLegendState();
-
-  const blob = await exportMapToPng(
-    processedDatasets,
-    visualizationStore.activeVisualizations,
-    { width, height },
-    annotations,
-    legend
-  );
-  const filename = generateExportFilename(fileName, 'png');
-
-  downloadFile(blob, filename);
-  logger.info('PNG export completed', LogCategory.EXPORT, {
-    filename,
-    width,
-    height
-  });
 }
 
 export async function exportData(
@@ -173,10 +105,6 @@ export async function exportData(
   const filename = generateExportFilename(fileName, formatConfig.extension);
 
   downloadFile(blob, filename);
-  logger.info('Data export completed', LogCategory.EXPORT, {
-    filename,
-    format
-  });
 }
 
 function validateMapExportPrerequisites(): void {
@@ -321,15 +249,6 @@ async function fetchDatasetsWithGeometry(
         }
       }
 
-      logger.warn(
-        'Skipping geometry hydration for dataset without table/geometry',
-        LogCategory.EXPORT,
-        {
-          id: dataset.id,
-          hasDuckdbTableName: !!dataset.duckdbTableName,
-          hasGeometry: !!dataset.geometry
-        }
-      );
       results.push(dataset);
       continue;
     }
@@ -338,13 +257,6 @@ async function fetchDatasetsWithGeometry(
       (col) => col.type === COLUMN_TYPE_GEOMETRY
     );
     if (!geomColumn) {
-      logger.warn(
-        'Skipping geometry hydration for dataset without geometry column',
-        LogCategory.EXPORT,
-        {
-          id: dataset.id
-        }
-      );
       results.push(dataset);
       continue;
     }
@@ -393,7 +305,7 @@ async function fetchDatasetsWithGeometry(
     }
   }
 
-  logger.info('Datasets prepared for export', LogCategory.EXPORT, {
+  logger.debug('Datasets prepared for export', LogCategory.EXPORT, {
     requested: datasets.length,
     prepared: results.length
   });

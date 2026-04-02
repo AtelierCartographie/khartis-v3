@@ -13,9 +13,11 @@ import { basemapLayersStore } from '../stores/basemap-layers.store.svelte';
 import {
   createBasemapLayers,
   createDeckLayers,
-  createGeoJsonLayers
+  createGeoJsonLayers,
+  type MetadataLayerEntry
 } from '../layers';
 import { extractGeometryInfo } from '../io';
+import { buildProjectionForBasemap } from '../utils/geoarrow-stream-bridge';
 import { GeometryType } from '../constants';
 import { PrimitiveFilterType } from '$lib/features/commons/store/visualization.store.svelte';
 import type { PrimitiveFilter } from '$lib/features/commons/store/visualization.store.svelte';
@@ -23,11 +25,13 @@ import type { DeckDataRow, LayerContext } from '../types';
 import type { DeckInstance } from './use-map-init.svelte';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import {
-  filterArrowTableByYear,
   filterArrowTableByDataFilters,
   filterArrowTableByTableFilters
 } from '../utils/arrow-filter.utils';
 import type { DataTableFilter } from '$lib/features/duckdb/types';
+import { getProjectionState } from '$lib/features/step-toolbar/tools/projections/projection.store.svelte';
+import { proj4d3 } from '../utils/proj4d3';
+import type { ProjectionLike } from 'geoarrow-deck-stream';
 
 const GEOMETRY_TO_PRIMITIVE: Partial<Record<GeometryType, PrimitiveFilter>> = {
   [GeometryType.POINT]: PrimitiveFilterType.POINT,
@@ -126,35 +130,28 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     }
   }
 
-  let updateCount = 0;
   let lastAppliedLayers: Layer<DeckDataRow>[] = [];
+
+  // Memoize basemap projection — buildProjectionForBasemap() is expensive and
+  // creates a new object reference each call, defeating downstream WeakMap caches.
+  // The projection only changes when the basemap metadata changes (user switches basemap).
+  let lastBasemapMetadataRef: unknown = undefined;
+  let lastBasemapProjectionRef: ProjectionLike | undefined = undefined;
 
   function updateLayers(
     tables: Map<string, ArrowTable>,
     geoJSONs: Map<string, FeatureCollection>
   ): void {
-    updateCount++;
-    const totalStart = performance.now();
-    logger.debug(`updateLayers #${updateCount} started`, LogCategory.MAP, {
-      tablesSize: tables.size,
-      geoJSONsSize: geoJSONs.size
-    });
-
     const deckOverlay = getDeckOverlay();
     const deckInstance = getDeckInstance();
     const map = getMap();
 
     if ((!deckOverlay && !deckInstance) || !getIsMapLoaded()) {
-      logger.debug('Early return - no deck context', LogCategory.MAP);
       return;
     }
 
     // In MapLibre mode, avoid pushing layers while style is being swapped/reloaded.
     if (deckOverlay && map && !map.isStyleLoaded()) {
-      logger.debug(
-        'Skipping layer update while MapLibre style is loading',
-        LogCategory.MAP
-      );
       return;
     }
 
@@ -176,23 +173,55 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         ? mapProjectionStore.projection
         : undefined;
 
+      // Build basemap projection from metadata (composite/simple/identity).
+      // Only applies in orthographic mode — in MapLibre mode, the map handles
+      // projection natively (WebMercator/globe) and thematic data must stay in
+      // WGS84 lat/lng. Applying a d3-geo projection here would convert coordinates
+      // to metres, causing deck.gl "invalid latitude" errors.
+      //
+      // Memoized: buildProjectionForBasemap() creates a new object each call,
+      // defeating downstream WeakMap caches. We keep the same reference until
+      // the basemap metadata actually changes.
+      const currentMetadata = basemapService.currentBasemap?.metadata;
+      let basemapProjection: ProjectionLike | undefined;
+      if (isOrthographicMode && currentMetadata && !currentMetadata.isCustom) {
+        if (currentMetadata !== lastBasemapMetadataRef) {
+          lastBasemapProjectionRef = buildProjectionForBasemap(
+            currentMetadata,
+            960,
+            600,
+            basemapService.projectionPresets
+          );
+          lastBasemapMetadataRef = currentMetadata;
+        }
+        basemapProjection = lastBasemapProjectionRef;
+      } else {
+        basemapProjection = undefined;
+        lastBasemapMetadataRef = null;
+      }
+
+      // Basemap projection takes priority to keep data and basemap aligned.
+      // Custom CRS from projection tool (proj4d3, in metres) only applies
+      // when no basemap projection exists (identity basemaps, custom imports).
+      let customProjection: ProjectionLike | undefined = basemapProjection;
+      if (!customProjection && isOrthographicMode) {
+        const projState = getProjectionState();
+        if (projState.customCode) {
+          try {
+            customProjection = proj4d3(projState.customCode);
+          } catch (error) {
+            logger.error(
+              'Custom CRS code failed for thematic layers, using identity',
+              LogCategory.MAP,
+              { customCode: projState.customCode, error }
+            );
+          }
+        }
+      }
+
       // In MapLibre interleaved mode, find the first symbol layer to render data layers below text
       const beforeId =
         map && deckOverlay ? findFirstSymbolLayerId(map) : undefined;
-
-      logger.debug(
-        'Updating Deck.gl layers for multi-dataset view',
-        LogCategory.MAP,
-        {
-          tablesCount: tables.size,
-          geoJSONsCount: geoJSONs.size,
-          activeVisualizationsCount: activeVisualizations.length,
-          hasWorldBase: Boolean(worldBaseTable),
-          isOSMActive,
-          isOrthographicMode,
-          beforeId
-        }
-      );
 
       const layers: Layer<DeckDataRow>[] = [];
 
@@ -200,31 +229,49 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       // In MapLibre mode, the tiled basemap provides the background (OSM, Carte Facile, etc.)
       const shouldShowBasemapLayers = !isOSMActive && isOrthographicMode;
 
+      // Basemap layers are split into background (terre, mers, lacs, relief)
+      // and foreground (frontières, rivières, graticules, villes).
+      // Foreground layers render ABOVE data so basemap borders remain visible
+      // even when polygon data covers the basemap fill.
+      let basemapForegroundLayers: Layer<DeckDataRow>[] = [];
+
       if (shouldShowBasemapLayers) {
         try {
-          const basemapStart = performance.now();
           const basemapCtx = {
             modelMatrix: matrixToApply ?? undefined,
-            projectionSuffix
+            projectionSuffix,
+            projection: basemapProjection
           };
+
+          const metadataLayers: MetadataLayerEntry[] = [];
+          if (currentMetadata && !currentMetadata.isCustom) {
+            for (const layer of currentMetadata.layers) {
+              if (!layer.file) continue;
+              const table = basemapService.currentLayers.get(layer.file);
+              if (!table) continue;
+              metadataLayers.push({
+                table,
+                style: layer.style ?? null,
+                type: layer.type,
+                file: layer.file
+              });
+            }
+          }
+
           const additionalData = {
-            lakesData: basemapService.lakesData ?? undefined,
-            riversData: basemapService.riversData ?? undefined,
-            citiesData: basemapService.citiesData ?? undefined,
             frontieresTable:
               basemapService.getLayerTableByType(BasemapLayerType.LIMIT) ??
-              undefined
+              undefined,
+            metadataLayers,
+            stylePresets: basemapService.stylePresets
           };
-          const basemapLayers = createBasemapLayers(
+          const basemapGroups = createBasemapLayers(
             worldBaseTable,
             basemapCtx,
             additionalData
           );
-          layers.push(...basemapLayers);
-          logger.debug(
-            `Basemap layers created in ${(performance.now() - basemapStart).toFixed(1)}ms (${basemapLayers.length} layers)`,
-            LogCategory.MAP
-          );
+          layers.push(...basemapGroups.background);
+          basemapForegroundLayers = basemapGroups.foreground;
         } catch (error) {
           logger.error(
             'Basemap layer creation failed; rendering thematic layers only',
@@ -234,33 +281,8 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         }
       }
 
-      logger.debug(
-        `Processing ${activeVisualizations.length} visualizations`,
-        LogCategory.MAP
-      );
-
-      // Pre-filter Arrow tables by (datasetId, yearFilter) to avoid
-      // redundant filtering when multiple visualizations share the same table + filter.
-      const yearFilteredTableCache = new Map<string, ArrowTable>();
-
-      function getFilteredTable(
-        table: ArrowTable,
-        datasetId: string,
-        yearFilter: (typeof activeVisualizations)[0]['yearFilter']
-      ): ArrowTable {
-        const cacheKey = yearFilter
-          ? `${datasetId}:${yearFilter.column}:${yearFilter.value}`
-          : datasetId;
-        const cached = yearFilteredTableCache.get(cacheKey);
-        if (cached) return cached;
-        const result = filterArrowTableByYear(table, yearFilter);
-        yearFilteredTableCache.set(cacheKey, result);
-        return result;
-      }
-
       const renderedDatasetIds = new Set<string>();
       for (const viz of activeVisualizations) {
-        const vizStart = performance.now();
         try {
           const datasetId = viz.datasetId;
           const table = tables.get(datasetId);
@@ -270,18 +292,14 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           ctx.modelMatrix = matrixToApply;
           ctx.projectionSuffix = projectionSuffix;
           ctx.beforeId = beforeId;
+          ctx.customProjection = customProjection;
 
           if (geojson) {
-            const geojsonStart = performance.now();
             const geojsonLayers = createGeoJsonLayers(geojson, ctx);
             layers.push(...geojsonLayers);
             if (geojsonLayers.length > 0) {
               renderedDatasetIds.add(datasetId);
             }
-            logger.debug(
-              `GeoJSON layers for ${datasetId} created in ${(performance.now() - geojsonStart).toFixed(1)}ms (${geojsonLayers.length} layers, ${geojson.features?.length || 0} features)`,
-              LogCategory.MAP
-            );
           } else if (table) {
             const geoMetadata = table.schema.metadata?.get('geo');
             if (!geoMetadata) {
@@ -292,18 +310,31 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
               );
               continue;
             }
-            const arrowStart = performance.now();
             const geoInfo = extractGeometryInfo(table);
+            ctx.geometryInfo = geoInfo ?? undefined;
             const tablePrimitiveType = geoInfo?.type
               ? GEOMETRY_TO_PRIMITIVE[geoInfo.type as GeometryType]
               : undefined;
-            const yearFiltered = getFilteredTable(
-              table,
-              datasetId,
-              viz.yearFilter
-            );
+
+            // Year filter: pass through context for GPU-side DataFilterExtension.
+            // The full (unfiltered) table is passed to createDeckLayers so that
+            // the GeoArrow binary parse cache (WeakMap) stays stable across year changes.
+            // Data filters and table filters still apply JS-side (they change table structure).
+            if (viz.yearFilter) {
+              const yearValue =
+                typeof viz.yearFilter.value === 'number'
+                  ? viz.yearFilter.value
+                  : parseInt(String(viz.yearFilter.value), 10);
+              if (!isNaN(yearValue)) {
+                ctx.yearFilter = {
+                  column: viz.yearFilter.column,
+                  value: yearValue
+                };
+              }
+            }
+
             const vizFiltered = filterArrowTableByDataFilters(
-              yearFiltered,
+              table,
               viz.dataFilters,
               tablePrimitiveType
             );
@@ -317,15 +348,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             if (arrowLayers.length > 0) {
               renderedDatasetIds.add(datasetId);
             }
-            logger.debug(
-              `Arrow layers for ${datasetId} created in ${(performance.now() - arrowStart).toFixed(1)}ms (${arrowLayers.length} layers, ${table.numRows} rows)`,
-              LogCategory.MAP
-            );
           }
-          logger.debug(
-            `Viz ${viz.id} processed in ${(performance.now() - vizStart).toFixed(1)}ms`,
-            LogCategory.MAP
-          );
         } catch (error) {
           logger.error(
             'Visualization layer creation failed; continuing with remaining visualizations',
@@ -359,6 +382,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           fallbackCtx.modelMatrix = matrixToApply;
           fallbackCtx.projectionSuffix = projectionSuffix;
           fallbackCtx.beforeId = beforeId;
+          fallbackCtx.customProjection = customProjection;
 
           if (geojson) {
             const fallbackGeoJsonLayers = createGeoJsonLayers(
@@ -382,7 +406,12 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         }
       }
 
-      const setStart = performance.now();
+      // Basemap foreground layers (borders, cities, rivers, graticules)
+      // render above data so administrative boundaries stay visible
+      if (basemapForegroundLayers.length > 0) {
+        layers.push(...basemapForegroundLayers);
+      }
+
       const hasExpectedActiveViz = activeVisualizations.length > 0;
       const hasExpectedDatasetFallbacks =
         shouldRenderDatasetFallbacks && (tables.size > 0 || geoJSONs.size > 0);
@@ -424,15 +453,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           lastAppliedLayers = [];
         }
       }
-      logger.debug(
-        `setLayers took ${(performance.now() - setStart).toFixed(1)}ms`,
-        LogCategory.MAP
-      );
-      logger.debug(
-        `updateLayers #${updateCount} TOTAL: ${(performance.now() - totalStart).toFixed(1)}ms (${layers.length} layers)`,
-        LogCategory.MAP
-      );
-
       logger.success('Deck.gl layers applied', LogCategory.MAP, {
         layerCount: layers.length,
         isOSMActive

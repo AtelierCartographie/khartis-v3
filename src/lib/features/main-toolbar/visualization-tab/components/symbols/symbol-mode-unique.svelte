@@ -10,6 +10,10 @@
     Tag
   } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
+  import {
+    DEFAULT_SEQUENTIAL_PREVIEW,
+    DEFAULT_QUALITATIVE_PREVIEW
+  } from '../palette-popover/palette.constants';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import {
     FillMode,
@@ -43,8 +47,8 @@
     onOpenDiscretization
   }: SymbolModeProps = $props();
 
-  const sequentialPalette = ['#c8ddf0', '#78a9cf', '#2171b5', '#084594'];
-  const qualitativePalette = ['#009d9a', '#f1c21b', '#ff832b', '#a56eff'];
+  const sequentialPalette = DEFAULT_SEQUENTIAL_PREVIEW;
+  const qualitativePalette = DEFAULT_QUALITATIVE_PREVIEW;
 
   let fillMode = $state<FillMode>(FillMode.UNIQUE);
   let symbolSize = $state<number>(VISUALIZATION_DEFAULTS.symbolSize);

@@ -61,4 +61,5 @@ export function clearState(): void {
   datasetsState.enabledDatasetIds.clear();
   datasetsState.error = undefined;
   datasetsState.hiddenColumns.clear();
+  datasetsInternals.pendingDatasetResolvers.clear();
 }

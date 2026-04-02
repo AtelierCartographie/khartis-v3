@@ -1,10 +1,12 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import * as m from '$lib/paraglide/messages';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import {
     visualizationStore,
     ALL_PRIMITIVE_FILTERS,
     ClassificationMethod,
+    DEFAULT_CATEGORICAL_COLORS,
     PrimitiveFilterType,
     type VisualizationConfig,
     type VisualizationModes,
@@ -18,6 +20,12 @@
     generateColorsForBreaks
   } from '$lib/features/commons/services/classification.service';
   import {
+    findPaletteById,
+    generatePaletteColors,
+    PALETTE_TYPE
+  } from './components/palette-popover/palette.constants';
+  import { getColorBlindnessState } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
+  import {
     normalizeClassificationMethod,
     resolveComputedClassCount,
     resolveRequestedClassCount
@@ -26,6 +34,7 @@
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
+  import { Duck } from '$lib/features/duckdb';
   import { COLUMN_TYPE_GEOMETRY } from '$lib/features/commons/constants/data.constants';
   import { SettingsAdjust } from 'carbon-icons-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
@@ -37,8 +46,8 @@
   import YearFilter from './components/year-filter.svelte';
 
   let selectedViz = $derived(visualizationStore.selectedVisualization);
-  let lastComputedKey = $state<string>('');
-  let computeRequestCounter = $state(0);
+  let lastComputedKey = '';
+  let computeRequestCounter = 0;
 
   const dataFieldItems = $derived.by(() => {
     const dataset = datasetsStore.selectedDataset;
@@ -73,9 +82,11 @@
       visualizationStore.updateModes(selectedViz.id, updates);
 
       // Initialize classification when switching to CLASSES mode if not already set
+      // Also reinitialize when coming from CATEGORIES mode (numClasses = 0 is the sentinel)
       if (
         updates.fill === FillMode.CLASSES &&
-        !selectedViz.classification?.method
+        (!selectedViz.classification?.method ||
+          !selectedViz.classification?.numClasses)
       ) {
         visualizationStore.updateClassification(selectedViz.id, {
           method: ClassificationMethod.QUANTILES,
@@ -83,6 +94,39 @@
           numClasses: 5
         });
         computeBreaksForVisualization('modesChange:fillClasses');
+      }
+
+      // Always reset classification when switching to CATEGORIES mode
+      // (colors from other modes like CLASSES are not valid for categorical display)
+      if (updates.fill === FillMode.CATEGORIES) {
+        const vizId = selectedViz.id;
+        visualizationStore.updateClassification(vizId, {
+          method: ClassificationMethod.MANUAL,
+          classes: 0,
+          numClasses: 0,
+          colors: [...DEFAULT_CATEGORICAL_COLORS],
+          labels: []
+        });
+        // Async: fetch actual unique values from DuckDB for label ordering
+        const categoryColumn = selectedViz.mapping.categoryColumn;
+        const dataset = datasetsStore.datasets.find(
+          (d) => d.id === selectedViz.datasetId
+        );
+        if (categoryColumn && dataset?.tableName) {
+          Duck.query(
+            `SELECT DISTINCT "${categoryColumn}" FROM "${dataset.tableName}" WHERE "${categoryColumn}" IS NOT NULL ORDER BY "${categoryColumn}"`,
+            { format: 'array' }
+          )
+            .then((rows) => {
+              const labels = (rows as Array<Record<string, unknown>>).map(
+                (row) => String(row[categoryColumn])
+              );
+              if (labels.length > 0) {
+                visualizationStore.updateClassification(vizId, { labels });
+              }
+            })
+            .catch(() => {});
+        }
       }
     }
   }
@@ -116,6 +160,28 @@
       });
       if (updates.valueColumn) {
         computeBreaksForVisualization('mapping:valueColumn');
+      }
+      if (updates.categoryColumn) {
+        const vizId = selectedViz.id;
+        const dataset = datasetsStore.datasets.find(
+          (d) => d.id === selectedViz.datasetId
+        );
+        if (dataset?.tableName) {
+          const col = updates.categoryColumn;
+          Duck.query(
+            `SELECT DISTINCT "${col}" FROM "${dataset.tableName}" WHERE "${col}" IS NOT NULL ORDER BY "${col}"`,
+            { format: 'array' }
+          )
+            .then((rows) => {
+              const labels = (rows as Array<Record<string, unknown>>).map(
+                (row) => String(row[col])
+              );
+              if (labels.length > 0) {
+                visualizationStore.updateClassification(vizId, { labels });
+              }
+            })
+            .catch(() => {});
+        }
       }
     }
   }
@@ -212,18 +278,11 @@
     });
   }
 
-  async function computeBreaksForVisualization(trigger = 'unknown') {
+  async function computeBreaksForVisualization(
+    trigger = 'unknown',
+    retryKey = ''
+  ) {
     if (!selectedViz?.datasetId || !selectedViz?.mapping.valueColumn) {
-      logger.debug(
-        '[configure-visualization] skipped breaks computation (missing dataset/valueColumn)',
-        LogCategory.UI,
-        {
-          trigger,
-          selectedVisualizationId: selectedViz?.id,
-          datasetId: selectedViz?.datasetId,
-          valueColumn: selectedViz?.mapping.valueColumn
-        }
-      );
       return;
     }
 
@@ -231,14 +290,6 @@
     const numClasses = selectedViz.classification?.numClasses ?? 5;
 
     if (!method) {
-      logger.debug(
-        '[configure-visualization] skipped breaks computation (missing method)',
-        LogCategory.UI,
-        {
-          trigger,
-          selectedVisualizationId: selectedViz.id
-        }
-      );
       return;
     }
 
@@ -247,16 +298,8 @@
       normalizedMethod,
       numClasses
     );
-    const computeKey = `${selectedViz.id}-${selectedViz.mapping.valueColumn}-${normalizedMethod}-${requestedClassCount}`;
+    const computeKey = `${selectedViz.id}-${selectedViz.mapping.valueColumn}-${normalizedMethod}-${requestedClassCount}-${retryKey}`;
     if (computeKey === lastComputedKey) {
-      logger.debug(
-        '[configure-visualization] skipped breaks computation (same compute key)',
-        LogCategory.UI,
-        {
-          trigger,
-          computeKey
-        }
-      );
       return;
     }
     lastComputedKey = computeKey;
@@ -279,7 +322,7 @@
       return;
     }
 
-    logger.info('[configure-visualization] computing breaks', LogCategory.UI, {
+    logger.debug('[configure-visualization] computing breaks', LogCategory.UI, {
       trigger,
       requestId,
       selectedVisualizationId: selectedViz.id,
@@ -297,6 +340,8 @@
         numClasses: requestedClassCount
       });
 
+      if (requestId !== computeRequestCounter) return;
+
       if (result && selectedViz?.id) {
         const actualNumClasses = resolveComputedClassCount(
           normalizedMethod,
@@ -304,10 +349,28 @@
           result.counts.length
         );
         const existingColors = selectedViz.classification?.colors;
-        const colors =
-          existingColors && existingColors.length === actualNumClasses
-            ? existingColors
-            : generateColorsForBreaks(actualNumClasses);
+        const contrast = getColorBlindnessState().enabled
+          ? ('high' as const)
+          : undefined;
+        let colors: string[];
+        if (existingColors && existingColors.length === actualNumClasses) {
+          colors = existingColors;
+        } else {
+          // Regenerate from user's palette when available (skip pattern palettes — they
+          // define a texture overlay, not a color scale), otherwise default blue
+          const userPalette = selectedViz.classification?.paletteId
+            ? findPaletteById(selectedViz.classification.paletteId)
+            : undefined;
+          const isPatternPalette = userPalette?.type === PALETTE_TYPE.PATTERN;
+          colors =
+            userPalette && !isPatternPalette
+              ? generatePaletteColors(userPalette, actualNumClasses, contrast)
+              : generateColorsForBreaks(
+                  actualNumClasses,
+                  'sequential',
+                  contrast
+                );
+        }
         const classificationUpdate: Parameters<
           typeof visualizationStore.updateClassification
         >[1] = {
@@ -328,7 +391,7 @@
           selectedViz.id,
           classificationUpdate
         );
-        logger.success(
+        logger.debug(
           '[configure-visualization] breaks computed and applied',
           LogCategory.UI,
           {
@@ -338,8 +401,6 @@
           }
         );
       } else {
-        // Reset compute key so a re-trigger (e.g., after DuckDB table registration) can retry
-        lastComputedKey = '';
         logger.warn(
           '[configure-visualization] breaks computation returned empty result, will retry',
           LogCategory.UI,
@@ -363,14 +424,20 @@
   }
 
   $effect(() => {
-    // Track DuckDB version so this re-fires after table registration
-    const _duckVersion = duckDBOrchestrator.datasetsVersion;
+    // datasetsVersion is read here (tracked) and passed as retryKey so that
+    // computeKey changes when a new DuckDB table is registered, bypassing the
+    // deduplication guard without writing to lastComputedKey from async code.
+    const duckVersion = duckDBOrchestrator.datasetsVersion;
     if (
+      selectedViz?.modes?.fill !== FillMode.CATEGORIES &&
       selectedViz?.mapping.valueColumn &&
       selectedViz?.classification?.method &&
       !selectedViz?.classification?.breaks?.length
     ) {
-      computeBreaksForVisualization('$effect:missingBreaks');
+      computeBreaksForVisualization(
+        '$effect:missingBreaks',
+        String(duckVersion)
+      );
     }
   });
 
@@ -379,9 +446,70 @@
     const method = selectedViz?.classification?.method;
     const numClasses = selectedViz?.classification?.numClasses;
     const valueColumn = selectedViz?.mapping.valueColumn;
-    if (method && numClasses && valueColumn) {
+    if (
+      method &&
+      numClasses &&
+      valueColumn &&
+      selectedViz?.modes?.fill !== FillMode.CATEGORIES
+    ) {
       computeBreaksForVisualization('$effect:classificationParamsChanged');
     }
+  });
+
+  $effect(() => {
+    const viz = selectedViz;
+    const col = viz?.mapping.categoryColumn;
+    const isCategorical = viz?.modes?.fill === FillMode.CATEGORIES;
+    const hasLabels = (viz?.classification?.labels?.length ?? 0) > 0;
+    if (!isCategorical || !col || hasLabels) return;
+    const vizId = viz!.id;
+    const dataset = datasetsStore.datasets.find((d) => d.id === viz!.datasetId);
+    if (!dataset?.tableName) return;
+    const tableName = dataset.tableName;
+    Duck.query(
+      `SELECT DISTINCT "${col}" FROM "${tableName}" WHERE "${col}" IS NOT NULL ORDER BY "${col}"`,
+      { format: 'array' }
+    )
+      .then((rows) => {
+        const labels = (rows as Array<Record<string, unknown>>).map((row) =>
+          String(row[col])
+        );
+        if (labels.length > 0) {
+          untrack(() =>
+            visualizationStore.updateClassification(vizId, { labels })
+          );
+        }
+      })
+      .catch(() => {});
+  });
+
+  $effect(() => {
+    const cbEnabled = getColorBlindnessState().enabled;
+    const paletteId = selectedViz?.classification?.paletteId;
+    const numColors = selectedViz?.classification?.classes;
+
+    untrack(() => {
+      const vizId = selectedViz?.id;
+      if (!vizId || !numColors) return;
+      const contrast = cbEnabled ? ('high' as const) : undefined;
+      let colors: string[];
+      if (paletteId) {
+        const palette = findPaletteById(paletteId);
+        if (!palette) return;
+        colors = generatePaletteColors(palette, numColors, contrast);
+      } else {
+        colors = generateColorsForBreaks(numColors, 'sequential', contrast);
+      }
+      const existing = selectedViz?.classification?.colors;
+      if (
+        existing &&
+        existing.length === colors.length &&
+        existing.every((c, i) => c === colors[i])
+      ) {
+        return;
+      }
+      visualizationStore.updateClassification(vizId, { colors });
+    });
   });
 </script>
 
@@ -496,10 +624,11 @@
   }
 
   .kh-help {
-    color: var(--cds-text-secondary, #6f6f6f);
+    color: var(--cds-text-helper, #6f6f6f);
     margin: 0;
-    font-size: 14px;
-    line-height: 18px;
+    font-size: 0.875rem;
+    line-height: 1.125rem;
+    letter-spacing: 0.16px;
   }
 
   .config-accordion {

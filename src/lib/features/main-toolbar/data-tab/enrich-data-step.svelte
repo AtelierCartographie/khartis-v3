@@ -44,8 +44,8 @@
 
   let enrichLinkedVariableId = $state<number | undefined>(undefined);
   let geoFileColumnId = $state<number | undefined>(undefined);
-  let previousDatasetId = $state<string | undefined>(undefined);
-  let previousEnrichmentDatasetId = $state<string | undefined>(undefined);
+  let previousDatasetId: string | undefined = undefined;
+  let previousEnrichmentDatasetId: string | undefined = undefined;
 
   const fileHook = useEnrichmentFile();
   const basemapHook = useEnrichmentBasemap();

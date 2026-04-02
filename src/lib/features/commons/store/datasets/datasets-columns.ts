@@ -1,6 +1,5 @@
 import type { DatasetsState } from './datasets-state.svelte';
 import { SvelteSet } from 'svelte/reactivity';
-import { LogCategory, logger } from '../../utils/logger';
 
 export function hideColumn(
   state: DatasetsState,
@@ -12,7 +11,6 @@ export function hideColumn(
   hiddenSet.add(columnName);
   state.hiddenColumns.set(datasetId, hiddenSet);
   state.hiddenColumns = new Map(state.hiddenColumns);
-  logger.debug('Column hidden', LogCategory.STORE, { datasetId, columnName });
 }
 
 export function showColumn(
@@ -28,7 +26,6 @@ export function showColumn(
     }
     state.hiddenColumns = new Map(state.hiddenColumns);
   }
-  logger.debug('Column shown', LogCategory.STORE, { datasetId, columnName });
 }
 
 export function toggleColumnHidden(

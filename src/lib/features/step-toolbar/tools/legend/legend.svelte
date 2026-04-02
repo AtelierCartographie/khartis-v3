@@ -386,16 +386,4 @@
     flex-shrink: 0;
     padding-bottom: 1px;
   }
-
-  :global(#khartis-legend-tool .slider .bx--slider) {
-    min-width: 200px !important;
-  }
-
-  :global(#khartis-legend-tool .slider .bx--slider__track) {
-    background: var(--cds-ui-03);
-  }
-
-  :global(#khartis-legend-tool .slider .bx--slider__filled-track) {
-    background: var(--cds-text-01);
-  }
 </style>

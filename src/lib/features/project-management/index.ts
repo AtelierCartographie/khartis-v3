@@ -13,6 +13,15 @@ export type {
 
 export { PROJECT_CONST } from './constants';
 
+export {
+  persistenceRegistry,
+  SavePriority,
+  type SavePriorityType,
+  type PersistenceEntry
+} from './core/persistence-registry';
+
+export { migrateIfNeeded, type SchemaMigration } from './core/schema-migration';
+
 export { projectRepository } from './core/persistence';
 
 export { projectStorage } from './core/storage';

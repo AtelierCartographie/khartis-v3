@@ -37,7 +37,9 @@
       selectedProjectId =
         projectsStore.currentProject?.id || projectsStore.projects[0].id;
       const selectedProject = projectsStore.getProjectById(selectedProjectId);
-      newProjectName = selectedProject ? `${selectedProject.name} (copie)` : '';
+      newProjectName = selectedProject
+        ? `${selectedProject.name}${m.copy_suffix()}`
+        : '';
     }
   });
 
@@ -47,13 +49,13 @@
 
     if (selectedProject) {
       const duplicateCount = projectsStore.projects.filter((p) =>
-        p.name.startsWith(selectedProject.name + ' (copie')
+        p.name.startsWith(selectedProject.name + m.copy_suffix())
       ).length;
 
       newProjectName =
         duplicateCount === 0
-          ? `${selectedProject.name} (copie)`
-          : `${selectedProject.name} (copie ${duplicateCount + 1})`;
+          ? `${selectedProject.name}${m.copy_suffix()}`
+          : `${selectedProject.name}${m.copy_suffix_numbered({ count: String(duplicateCount + 1) })}`;
     }
   }
 

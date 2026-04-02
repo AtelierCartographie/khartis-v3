@@ -16,7 +16,10 @@ vi.mock('$lib/features/commons/utils/logger', () => ({
   },
   logger: {
     info: mocks.loggerInfoMock,
-    success: mocks.loggerSuccessMock
+    success: mocks.loggerSuccessMock,
+    debug: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn()
   }
 }));
 

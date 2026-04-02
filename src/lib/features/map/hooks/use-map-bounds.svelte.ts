@@ -37,8 +37,8 @@ export function useMapBounds(props: UseMapBoundsProps): UseMapBoundsReturn {
     onFitComplete
   } = props;
 
-  let lastFitDatasetId = $state<string | null>(null);
-  let lastFitGeoJSON = $state<FeatureCollection | null>(null);
+  let lastFitDatasetId: string | null = null;
+  let lastFitGeoJSON: FeatureCollection | null = null;
   let shouldRestorePosition = $state(true);
 
   function executeFitBounds(bounds: LngLatBoundsLike, animate = false): void {

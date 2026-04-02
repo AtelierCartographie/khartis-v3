@@ -13,7 +13,10 @@ vi.mock('$lib/features/commons/utils/logger', () => ({
   },
   logger: {
     info: mocks.loggerInfoMock,
-    success: mocks.loggerSuccessMock
+    success: mocks.loggerSuccessMock,
+    debug: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn()
   }
 }));
 
@@ -25,8 +28,7 @@ import {
 function createDuck() {
   return {
     query: mocks.queryMock,
-    describe_table: vi.fn(),
-    copy_to_geoparquet_as_buffer: vi.fn()
+    describe_table: vi.fn()
   };
 }
 

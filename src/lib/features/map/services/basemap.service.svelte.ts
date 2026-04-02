@@ -1,86 +1,63 @@
 import { Duck } from '$lib/features/duckdb';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import { type Table as ArrowTable } from 'apache-arrow/Arrow';
-import { SvelteMap } from 'svelte/reactivity';
+// SvelteMap removed — basemap cache is non-reactive data processing
 import { LogCategory, logger } from '../../commons/utils/logger';
 import { resolveStaticAssetUrl } from '../../commons/utils/static-asset-url';
 import { escapeSqlString } from '../../commons/utils/sanitize.utils';
 import { projectionStore } from '../stores/projection.store.svelte';
-import type { BasemapMetadata } from '../types/basemap.types';
 import type {
-  FeatureCollection,
-  Point,
-  Polygon,
-  MultiPolygon,
-  LineString,
-  MultiLineString
-} from 'geojson';
-import {
-  readGeoJSONAsArrow,
-  readGeoParquetViaDuckDB
-} from '../utils/read-geojson-arrow';
+  BasemapMetadata,
+  ProjectionPresets,
+  StylePresets
+} from '../types/basemap.types';
+import { readGeoParquetDirect } from '../utils/read-geojson-arrow';
 import { SimplificationLevel } from '../../commons/types/enums';
 import {
   addGeoArrowMetadataFromDuckDB,
   fetchArrowTableWithGeometry
 } from '../../duckdb/orchestrator/arrow-ops';
 
-interface AdditionalBasemapData {
-  lakesData: FeatureCollection<Polygon | MultiPolygon> | null;
-  riversData: FeatureCollection<LineString | MultiLineString> | null;
-  citiesData: FeatureCollection<Point> | null;
-}
-
 const BASEMAP_METADATA_PATH = '/basemaps/all-basemaps-metadata.json';
 const BASEMAP_ATTRIBUTES_PATH = '/basemaps/all-basemaps-attributes.parquet';
+const PROJECTION_PRESETS_PATH = '/basemaps/projection-presets.json';
+const STYLE_PRESETS_PATH = '/basemaps/style-presets.json';
 const GEOMETRY_BASE_PATH = '/basemaps/geometry';
-const DEFAULT_BASEMAP_ID = 'world-countries-50m';
-const LAKES_FILE = 'ne_110m_lakes';
-const RIVERS_FILE = 'ne_110m_rivers_lake_centerlines';
-const CITIES_FILE = 'ne_110m_populated_places_simple';
+const DEFAULT_BASEMAP_ID = 'monde-countries-2024-medium';
 
-function getBasemapMetadataUrl(): string {
-  return resolveStaticAssetUrl(BASEMAP_METADATA_PATH);
-}
-
-function getBasemapAttributesUrl(): string {
-  return resolveStaticAssetUrl(BASEMAP_ATTRIBUTES_PATH);
-}
-
-function getGeometryUrl(
-  filename: string,
-  extension: 'geojson' | 'parquet'
-): string {
-  return resolveStaticAssetUrl(
-    `${GEOMETRY_BASE_PATH}/${filename}.${extension}`
-  );
+function getGeometryParquetUrl(filename: string): string {
+  return resolveStaticAssetUrl(`${GEOMETRY_BASE_PATH}/${filename}.parquet`);
 }
 
 interface LoadedBasemap {
   metadata: BasemapMetadata;
   geometryTable: ArrowTable;
-  layerTables: SvelteMap<string, ArrowTable>;
-  simplifiedVariants?: SvelteMap<SimplificationLevel, ArrowTable>;
+  layerTables: Map<string, ArrowTable>;
+  simplifiedVariants?: Map<SimplificationLevel, ArrowTable>;
   activeSimplificationLevel?: SimplificationLevel | null;
 }
 
 function createBasemapService() {
   let availableBasemaps: BasemapMetadata[] = [];
+  let isInitialized = false;
+  let initResolve: (() => void) | null = null;
+  const initPromise = new Promise<void>((resolve) => {
+    initResolve = resolve;
+  });
   let currentBasemap: LoadedBasemap | null = null;
   let attributesLoaded = false;
-  const basemapCache = new SvelteMap<string, LoadedBasemap>();
-  const additionalData: AdditionalBasemapData = {
-    lakesData: null,
-    riversData: null,
-    citiesData: null
-  };
+  let projectionPresetsData: ProjectionPresets | null = null;
+  let stylePresetsData: StylePresets | null = null;
+  const basemapCache = new Map<string, LoadedBasemap>();
   const geometryTablesInDuckDB = new Set<string>();
   const loadingBasemaps = new Map<string, Promise<LoadedBasemap | null>>();
 
   async function loadMetadata(): Promise<void> {
     try {
-      logger.info('Loading basemap metadata catalog', LogCategory.MAP);
-      const response = await fetch(getBasemapMetadataUrl());
+      logger.debug('Loading basemap metadata catalog', LogCategory.MAP);
+      const response = await fetch(
+        resolveStaticAssetUrl(BASEMAP_METADATA_PATH)
+      );
 
       if (!response.ok) {
         throw new Error(`Failed to fetch metadata: ${response.statusText}`);
@@ -100,13 +77,15 @@ function createBasemapService() {
     if (!Duck || attributesLoaded) return;
 
     try {
-      const response = await fetch(getBasemapAttributesUrl());
+      const response = await fetch(
+        resolveStaticAssetUrl(BASEMAP_ATTRIBUTES_PATH)
+      );
 
       if (!response.ok) {
         throw new Error(`Failed to fetch attributes: ${response.statusText}`);
       }
 
-      logger.info('Loading basemap attributes into DuckDB', LogCategory.MAP);
+      logger.debug('Loading basemap attributes into DuckDB', LogCategory.MAP);
       const arrayBuffer = await response.arrayBuffer();
       const blob = new Blob([arrayBuffer]);
       const attributesFile = new File(
@@ -138,56 +117,71 @@ function createBasemapService() {
         throw new Error('Failed to create basemap_attributes table');
       }
 
+      await Duck.query(
+        `UPDATE basemap_attributes SET id = raw WHERE variant = id`
+      );
+
       attributesLoaded = true;
-      logger.success('Basemap attributes stored in DuckDB', LogCategory.MAP);
     } catch (error) {
       logger.error('Failed to load basemap attributes', LogCategory.MAP, error);
       throw error;
     }
   }
 
-  async function fetchGeometryFile(
-    filename: string
-  ): Promise<{ response: Response; isGeoJSON: boolean }> {
-    let url = getGeometryUrl(filename, 'geojson');
-    let response = await fetch(url);
-
-    if (response.ok) {
-      return { response, isGeoJSON: true };
+  async function loadProjectionPresets(): Promise<void> {
+    try {
+      const response = await fetch(
+        resolveStaticAssetUrl(PROJECTION_PRESETS_PATH)
+      );
+      if (!response.ok) {
+        logger.warn('Failed to fetch projection presets', LogCategory.MAP);
+        return;
+      }
+      projectionPresetsData = await response.json();
+      logger.debug('Projection presets loaded', LogCategory.MAP, {
+        presets: Object.keys(projectionPresetsData ?? {})
+      });
+    } catch (error) {
+      logger.warn('Failed to load projection presets', LogCategory.MAP, error);
     }
+  }
 
-    url = getGeometryUrl(filename, 'parquet');
-    response = await fetch(url);
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch geometry: ${response.statusText}`);
+  async function loadStylePresets(): Promise<void> {
+    try {
+      const response = await fetch(resolveStaticAssetUrl(STYLE_PRESETS_PATH));
+      if (!response.ok) {
+        logger.warn('Failed to fetch style presets', LogCategory.MAP);
+        return;
+      }
+      stylePresetsData = await response.json();
+      logger.debug('Style presets loaded', LogCategory.MAP, {
+        styles: Object.keys(stylePresetsData ?? {})
+      });
+    } catch (error) {
+      logger.warn('Failed to load style presets', LogCategory.MAP, error);
     }
-
-    return { response, isGeoJSON: false };
   }
 
   async function loadGeometryFromParquet(
-    filename: string
+    filename: string,
+    bbox?: [number, number, number, number]
   ): Promise<ArrowTable> {
     const start = performance.now();
     logger.debug('Loading basemap geometry', LogCategory.MAP, { filename });
 
-    const { response, isGeoJSON } = await fetchGeometryFile(filename);
+    const url = getGeometryParquetUrl(filename);
+    const response = await fetch(url);
 
-    let jsTable: ArrowTable;
-
-    if (isGeoJSON) {
-      const geojsonText = await response.text();
-      jsTable = await readGeoJSONAsArrow(geojsonText, `basemap_${filename}`);
-    } else {
-      const arrayBuffer = await response.arrayBuffer();
-      jsTable = await readGeoParquetViaDuckDB(
-        arrayBuffer,
-        `basemap_${filename}`
+    if (!response.ok) {
+      throw new Error(
+        `Failed to fetch geometry ${filename}: ${response.statusText}`
       );
     }
 
-    logger.success('Basemap geometry loaded', LogCategory.MAP, {
+    const arrayBuffer = await response.arrayBuffer();
+    const jsTable = await readGeoParquetDirect(arrayBuffer, bbox);
+
+    logger.debug('Basemap geometry loaded', LogCategory.MAP, {
       filename,
       rows: jsTable.numRows,
       durationMs: (performance.now() - start).toFixed(2)
@@ -218,32 +212,43 @@ function createBasemapService() {
       throw new Error('DuckDB not initialized');
     }
 
-    const rawTable = await fetchArrowTableWithGeometry(tableName, Duck);
-    return addGeoArrowMetadataFromDuckDB(rawTable, tableName, Duck);
+    const { table: rawTable, geomColumn } = await fetchArrowTableWithGeometry(
+      tableName,
+      Duck
+    );
+    return addGeoArrowMetadataFromDuckDB(
+      rawTable,
+      tableName,
+      Duck,
+      undefined,
+      geomColumn
+    );
   }
 
   async function loadBasemapLayers(
     metadata: BasemapMetadata
-  ): Promise<SvelteMap<string, ArrowTable>> {
-    const layerTables = new SvelteMap<string, ArrowTable>();
+  ): Promise<Map<string, ArrowTable>> {
+    const layerTables = new Map<string, ArrowTable>();
 
-    for (const layer of metadata.layers) {
-      if (!layer.file) {
-        continue;
-      }
-      try {
-        logger.debug('Loading basemap layer geometry', LogCategory.MAP, {
-          layerFile: layer.file
-        });
+    const loadableLayers = metadata.layers.filter((l) => l.file);
+    if (loadableLayers.length === 0) return layerTables;
+
+    const results = await Promise.allSettled(
+      loadableLayers.map(async (layer) => {
         const table =
-          metadata.isCustom && (await doesDuckTableExist(layer.file))
-            ? await loadGeometryFromDuckTable(layer.file)
-            : await loadGeometryFromParquet(layer.file);
-        layerTables.set(layer.file, table);
-      } catch (error) {
+          metadata.isCustom && (await doesDuckTableExist(layer.file!))
+            ? await loadGeometryFromDuckTable(layer.file!)
+            : await loadGeometryFromParquet(layer.file!);
+        return { file: layer.file!, table };
+      })
+    );
+
+    for (const result of results) {
+      if (result.status === 'fulfilled') {
+        layerTables.set(result.value.file, result.value.table);
+      } else {
         logger.warn('Failed to load basemap layer', LogCategory.MAP, {
-          layerFile: layer.file,
-          error
+          error: result.reason
         });
       }
     }
@@ -275,23 +280,33 @@ function createBasemapService() {
   async function loadBasemapInternal(
     basemapId: string
   ): Promise<LoadedBasemap | null> {
+    if (!isInitialized) {
+      logger.debug(
+        `Basemap service not yet ready, waiting for initialization: ${basemapId}`,
+        LogCategory.MAP
+      );
+      await initPromise;
+    }
+
     const metadata = availableBasemaps.find(
       (basemap) => basemap.file === basemapId
     );
 
     if (!metadata) {
-      logger.error(`Basemap not found: ${basemapId}`, LogCategory.MAP);
+      logger.warn(`Basemap not found: ${basemapId}`, LogCategory.MAP);
       return null;
     }
 
     try {
       const start = performance.now();
-      logger.info('Loading basemap', LogCategory.MAP, { basemapId });
+      logger.debug('Loading basemap', LogCategory.MAP, { basemapId });
 
-      const geometryTable = metadata.isCustom
-        ? await loadCustomBasemapGeometry(metadata)
-        : await loadGeometryFromParquet(metadata.file);
-      const layerTables = await loadBasemapLayers(metadata);
+      const [geometryTable, layerTables] = await Promise.all([
+        metadata.isCustom
+          ? loadCustomBasemapGeometry(metadata)
+          : loadGeometryFromParquet(metadata.file, metadata.bbox),
+        loadBasemapLayers(metadata)
+      ]);
 
       currentBasemap = {
         metadata,
@@ -302,7 +317,7 @@ function createBasemapService() {
       basemapCache.set(basemapId, currentBasemap);
       updateProjectionFromTable(geometryTable);
 
-      logger.success('Basemap loaded', LogCategory.MAP, {
+      logger.debug('Basemap loaded', LogCategory.MAP, {
         basemapId,
         layerCount: metadata.layers.length,
         durationMs: (performance.now() - start).toFixed(2)
@@ -356,7 +371,6 @@ function createBasemapService() {
     }
 
     // Custom basemaps imported by the user are already materialized as DuckDB tables.
-    // Reuse that table directly instead of trying to fetch a static geometry file.
     if (isCustomBasemap) {
       const escapedBasemapId = escapeSqlString(normalizedBasemapId);
       const existingTable = (await Duck.query(
@@ -378,35 +392,32 @@ function createBasemapService() {
       }
     }
 
-    const start = performance.now();
-    logger.info('Loading basemap geometry into DuckDB', LogCategory.MAP, {
+    logger.debug('Loading basemap geometry into DuckDB', LogCategory.MAP, {
       basemapId: normalizedBasemapId
     });
 
     try {
-      const { response, isGeoJSON } =
-        await fetchGeometryFile(normalizedBasemapId);
+      const url = getGeometryParquetUrl(normalizedBasemapId);
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch geometry: ${response.statusText}`);
+      }
 
       const arrayBuffer = await response.arrayBuffer();
       const blob = new Blob([arrayBuffer]);
-      const geometryFile = new File(
-        [blob],
-        isGeoJSON
-          ? `${normalizedBasemapId}.geojson`
-          : `${normalizedBasemapId}.parquet`,
-        { type: 'application/octet-stream' }
-      );
+      const geometryFile = new File([blob], `${normalizedBasemapId}.parquet`, {
+        type: 'application/octet-stream'
+      });
 
       await Duck.register_files([geometryFile]);
-      await Duck.read_geofile(geometryFile, { tablename: tableName });
+      const fileId = (geometryFile as File & { id: string }).id;
+      const escapedFileId = escapeSqlString(fileId);
+      await Duck.query(
+        `CREATE OR REPLACE TABLE "${tableName}" AS SELECT * FROM read_parquet('${escapedFileId}')`
+      );
 
       geometryTablesInDuckDB.add(tableName);
-
-      logger.success('Basemap geometry loaded into DuckDB', LogCategory.MAP, {
-        basemapId: normalizedBasemapId,
-        tableName,
-        durationMs: (performance.now() - start).toFixed(2)
-      });
 
       return tableName;
     } catch (error) {
@@ -424,7 +435,9 @@ function createBasemapService() {
 
   async function loadBasemap(basemapId: string): Promise<LoadedBasemap | null> {
     if (basemapCache.has(basemapId)) {
-      logger.debug('Basemap loaded from cache', LogCategory.MAP, { basemapId });
+      logger.debug('Basemap loaded from cache', LogCategory.MAP, {
+        basemapId
+      });
       currentBasemap = basemapCache.get(basemapId)!;
       updateProjectionFromTable(currentBasemap.geometryTable);
       return currentBasemap;
@@ -486,80 +499,6 @@ function createBasemapService() {
     });
   }
 
-  async function loadLakesData(): Promise<void> {
-    if (additionalData.lakesData) return;
-
-    try {
-      const url = getGeometryUrl(LAKES_FILE, 'geojson');
-      const response = await fetch(url);
-
-      if (!response.ok) {
-        logger.debug('Lakes data not available', LogCategory.MAP);
-        return;
-      }
-
-      const geojson = await response.json();
-      additionalData.lakesData = geojson as FeatureCollection<
-        Polygon | MultiPolygon
-      >;
-      logger.debug('Lakes data loaded', LogCategory.MAP, {
-        features: additionalData.lakesData.features.length
-      });
-    } catch (error) {
-      logger.warn('Failed to load lakes data', LogCategory.MAP, error);
-    }
-  }
-
-  async function loadRiversData(): Promise<void> {
-    if (additionalData.riversData) return;
-
-    try {
-      const url = getGeometryUrl(RIVERS_FILE, 'geojson');
-      const response = await fetch(url);
-
-      if (!response.ok) {
-        logger.debug('Rivers data not available', LogCategory.MAP);
-        return;
-      }
-
-      const geojson = await response.json();
-      additionalData.riversData = geojson as FeatureCollection<
-        LineString | MultiLineString
-      >;
-      logger.debug('Rivers data loaded', LogCategory.MAP, {
-        features: additionalData.riversData.features.length
-      });
-    } catch (error) {
-      logger.warn('Failed to load rivers data', LogCategory.MAP, error);
-    }
-  }
-
-  async function loadCitiesData(): Promise<void> {
-    if (additionalData.citiesData) return;
-
-    try {
-      const url = getGeometryUrl(CITIES_FILE, 'geojson');
-      const response = await fetch(url);
-
-      if (!response.ok) {
-        logger.debug('Cities data not available', LogCategory.MAP);
-        return;
-      }
-
-      const geojson = await response.json();
-      additionalData.citiesData = geojson as FeatureCollection<Point>;
-      logger.debug('Cities data loaded', LogCategory.MAP, {
-        features: additionalData.citiesData.features.length
-      });
-    } catch (error) {
-      logger.warn('Failed to load cities data', LogCategory.MAP, error);
-    }
-  }
-
-  async function loadAdditionalLayers(): Promise<void> {
-    await Promise.all([loadLakesData(), loadRiversData(), loadCitiesData()]);
-  }
-
   function getResolvedLayerTables(
     loadedBasemap: LoadedBasemap | null
   ): Map<string, ArrowTable> {
@@ -581,7 +520,7 @@ function createBasemapService() {
     }
 
     if (!loadedBasemap.simplifiedVariants) {
-      loadedBasemap.simplifiedVariants = new SvelteMap<
+      loadedBasemap.simplifiedVariants = new Map<
         SimplificationLevel,
         ArrowTable
       >();
@@ -593,27 +532,34 @@ function createBasemapService() {
     }
 
     const start = performance.now();
-    logger.info('Loading basemap variant file', LogCategory.MAP, {
+    logger.debug('Loading basemap variant file', LogCategory.MAP, {
       basemapId,
       variantFile,
       level
     });
 
-    const variantTableName = `basemap_variant_${basemapId.replace(/[^a-zA-Z0-9_]/g, '_')}_${level}`;
-
-    await Duck.query(
-      `CREATE OR REPLACE TABLE "${variantTableName}" AS SELECT * FROM '${variantFile}'`
-    );
-
-    const variantTable = (await Duck.query(
-      `SELECT * FROM "${variantTableName}"`,
-      { format: 'arrow-table' }
-    )) as ArrowTable;
+    const variantUrl = getGeometryParquetUrl(variantFile);
+    const response = await fetch(variantUrl);
+    if (!response.ok) {
+      if (response.status === 404) {
+        logger.warn('Basemap variant not available', LogCategory.MAP, {
+          basemapId,
+          variantFile,
+          level
+        });
+        return null as unknown as ArrowTable;
+      }
+      throw new Error(
+        `Failed to fetch basemap variant ${variantFile}: ${response.statusText}`
+      );
+    }
+    const arrayBuffer = await response.arrayBuffer();
+    const variantTable = await readGeoParquetDirect(arrayBuffer);
 
     loadedBasemap.simplifiedVariants.set(level, variantTable);
     loadedBasemap.activeSimplificationLevel = level;
 
-    logger.success('Basemap variant loaded', LogCategory.MAP, {
+    logger.debug('Basemap variant loaded', LogCategory.MAP, {
       basemapId,
       variantFile,
       level,
@@ -670,25 +616,51 @@ function createBasemapService() {
     return getResolvedLayerTables(currentBasemap).get(layer.file) ?? null;
   }
 
+  interface ResolvedMetadataLayer {
+    table: ArrowTable;
+    style: string | null;
+    type: BasemapLayerType;
+    file: string;
+  }
+
+  function getLayersByType(
+    layerType: BasemapLayerType
+  ): ResolvedMetadataLayer[] {
+    if (!currentBasemap) return [];
+
+    const results: ResolvedMetadataLayer[] = [];
+    const layerTables = getResolvedLayerTables(currentBasemap);
+
+    for (const layer of currentBasemap.metadata.layers) {
+      if (layer.type !== layerType || !layer.file) continue;
+      const table = layerTables.get(layer.file);
+      if (!table) continue;
+      results.push({
+        table,
+        style: layer.style ?? null,
+        type: layer.type,
+        file: layer.file
+      });
+    }
+
+    return results;
+  }
+
   function clearSimplificationCache(basemapId?: string): void {
     if (basemapId) {
       const loadedBasemap = basemapCache.get(basemapId);
       if (loadedBasemap) {
         loadedBasemap.simplifiedVariants?.clear();
-
         loadedBasemap.activeSimplificationLevel = null;
         logger.debug(
           'Simplification cache cleared for basemap',
           LogCategory.MAP,
-          {
-            basemapId
-          }
+          { basemapId }
         );
       }
     } else {
       for (const [_id, basemap] of basemapCache) {
         basemap.simplifiedVariants?.clear();
-
         basemap.activeSimplificationLevel = null;
       }
       logger.debug(
@@ -711,8 +683,13 @@ function createBasemapService() {
 
   async function initialize(): Promise<void> {
     try {
-      logger.info('Initializing basemap service', LogCategory.MAP);
-      await loadMetadata();
+      logger.debug('Initializing basemap service', LogCategory.MAP);
+
+      await Promise.all([
+        loadMetadata(),
+        loadProjectionPresets(),
+        loadStylePresets()
+      ]);
 
       if (Duck) {
         await loadAttributesIntoDuckDB();
@@ -723,23 +700,16 @@ function createBasemapService() {
         );
       }
 
-      loadAdditionalLayers().catch((err) => {
-        logger.warn(
-          'Failed to load additional basemap layers',
-          LogCategory.MAP,
-          err
-        );
-      });
-
-      logger.success('Basemap service initialized', LogCategory.MAP, {
-        basemapCount: availableBasemaps.length
-      });
+      isInitialized = true;
+      initResolve?.();
     } catch (error) {
       logger.error(
         'Failed to initialize basemap service',
         LogCategory.MAP,
         error
       );
+      // Resolve even on error to unblock waiters
+      initResolve?.();
     }
   }
 
@@ -763,16 +733,13 @@ function createBasemapService() {
       return getResolvedLayerTables(currentBasemap);
     },
     getLayerTableByType,
-    get lakesData(): FeatureCollection<Polygon | MultiPolygon> | null {
-      return additionalData.lakesData;
+    getLayersByType,
+    get projectionPresets(): ProjectionPresets | null {
+      return projectionPresetsData;
     },
-    get riversData(): FeatureCollection<LineString | MultiLineString> | null {
-      return additionalData.riversData;
+    get stylePresets(): StylePresets | null {
+      return stylePresetsData;
     },
-    get citiesData(): FeatureCollection<Point> | null {
-      return additionalData.citiesData;
-    },
-    loadAdditionalLayers,
     loadVariant,
     getSimplifiedBasemapTable,
     clearSimplificationCache,

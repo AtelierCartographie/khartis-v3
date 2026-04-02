@@ -43,7 +43,7 @@ async function processWithSTRead(
   });
 
   return {
-    id: crypto.randomUUID(),
+    id: file.datasetId ?? file.id,
     tableName: actualTableName,
     sourceFileId: file.id,
     name: file.name,
@@ -99,7 +99,7 @@ async function processWithArrow(
   });
 
   return {
-    id: crypto.randomUUID(),
+    id: file.datasetId ?? file.id,
     tableName: ctx.tableName,
     sourceFileId: file.id,
     name: file.name,
@@ -133,7 +133,7 @@ async function processWithLegacy(
   });
 
   return {
-    id: crypto.randomUUID(),
+    id: file.datasetId ?? file.id,
     tableName: ctx.tableName,
     sourceFileId: file.id,
     name: file.name,

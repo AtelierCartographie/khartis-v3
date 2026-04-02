@@ -28,8 +28,11 @@ interface CacheEntry {
 const searchCache = new Map<string, CacheEntry>();
 
 registerTableMutationCallback((table: string) => {
+  // Use exact table prefix with separator to avoid substring false positives
+  // (e.g., mutating "users" should not invalidate "users_temp:..." cache entries)
+  const prefix = `${table}:`;
   for (const key of searchCache.keys()) {
-    if (key.startsWith(`${table}:`)) {
+    if (key.startsWith(prefix)) {
       searchCache.delete(key);
     }
   }
@@ -227,10 +230,16 @@ export async function searchInTable(
         { table, rowCount, colCount, estimatedCells, samplePercent }
       );
 
+      // Select only __id + text columns for search sample — excludes geometry
+      // WKB binaries (can be several MB per row) that are never used for text search.
+      const sampleColumns = [
+        `"${INTERNAL_COLUMN.ID}"`,
+        ...textColumns.map((c) => `"${escapeIdentifier(c)}"`)
+      ].join(', ');
       await executeQuery(
         ctx.connection,
         `CREATE OR REPLACE TEMP TABLE __search_sample AS
-         SELECT * FROM "${escapeIdentifier(table)}" USING SAMPLE ${samplePercent} PERCENT (bernoulli)`,
+         SELECT ${sampleColumns} FROM "${escapeIdentifier(table)}" USING SAMPLE ${samplePercent} PERCENT (bernoulli)`,
         { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
       );
       searchTable = '__search_sample';

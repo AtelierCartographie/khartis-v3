@@ -171,7 +171,7 @@ export function useEnrichmentJoin(
         });
 
       logger.info('Applying enrichment corrections', LogCategory.DATA, {
-        corrections
+        count: Object.keys(corrections).length
       });
 
       const geoTableName = getGeoTableName();
@@ -302,7 +302,7 @@ export function useEnrichmentJoin(
       logger.info('Finalizing enrichment join', LogCategory.DATA, {
         geoTable: geoTableName,
         enrichTable: enrichmentDataset.tableName,
-        enrichColumns: enrichmentColumns
+        enrichColumnsCount: enrichmentColumns.length
       });
 
       const oldTableName = geoTableName;
