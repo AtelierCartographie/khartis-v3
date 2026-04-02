@@ -29,6 +29,12 @@
   import { resolveStaticAssetUrl } from '$lib/features/commons/utils/static-asset-url';
   import * as m from '$lib/paraglide/messages';
   import { GEOJSON_TYPE } from '$lib/features/commons/constants';
+  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+  import { duckDBOrchestrator } from '$lib/features/duckdb';
+  import { readGeoParquetViaDuckDB } from '../utils/read-geojson-arrow';
+  import { arrowTableToGeoJSON, extractGeometryInfo } from '../io';
+
+  let { interactive = true }: { interactive?: boolean } = $props();
 
   const EARTH_CIRCUMFERENCE_KM = 40075.017;
   const EARTH_RADIUS_METERS = 6378137;
@@ -42,7 +48,8 @@
     (_, index) => index
   );
   const SCALE_FALLBACK_ZOOM = 2;
-  const INSET_MAP_DATA_PATH = '/basemaps/geometry/world-countries-50m.geojson';
+  const INSET_MAP_DATA_PATH =
+    '/basemaps/geometry/monde-countries-2024-low.parquet';
   const INSET_PLANISPHERE_RATIO = 0.62;
   const INSET_MAP_PADDING = 4;
   const INSET_MAP_MAX_RATIO = 0.34;
@@ -92,6 +99,7 @@
 
     const loadWorldFeatures = async (): Promise<void> => {
       try {
+        await duckDBOrchestrator.waitForInitialization();
         const response = await fetch(
           resolveStaticAssetUrl(INSET_MAP_DATA_PATH)
         );
@@ -99,11 +107,29 @@
           return;
         }
 
-        const payload = (await response.json()) as unknown;
-        if (!cancelled) {
-          worldFeatures = toWorldFeatureCollection(payload);
+        const arrayBuffer = await response.arrayBuffer();
+        const arrowTable = await readGeoParquetViaDuckDB(
+          arrayBuffer,
+          'inset_world_countries'
+        );
+        const geoInfo = extractGeometryInfo(arrowTable);
+        if (!geoInfo) {
+          logger.warn(
+            'Inset map: no geometry info found in parquet',
+            LogCategory.MAP
+          );
+          return;
         }
-      } catch {
+        const geojson = arrowTableToGeoJSON(arrowTable, geoInfo.geoColumn);
+        if (!cancelled && geojson) {
+          worldFeatures = toWorldFeatureCollection(geojson);
+        }
+      } catch (error) {
+        logger.warn(
+          'Failed to load inset map world features',
+          LogCategory.MAP,
+          error
+        );
         if (!cancelled) {
           worldFeatures = null;
         }
@@ -790,7 +816,11 @@
   });
 </script>
 
-<div class="geo-indications-overlay" bind:this={overlayElement}>
+<div
+  class="geo-indications-overlay"
+  class:non-interactive={!interactive}
+  bind:this={overlayElement}
+>
   {#if geoIndicationsState.visible && geoIndicationsState.scale.enabled}
     <div
       bind:this={scaleElement}
@@ -1080,6 +1110,13 @@
     cursor: pointer;
     touch-action: none;
     outline: none;
+  }
+
+  .geo-indications-overlay.non-interactive .scale-bar,
+  .geo-indications-overlay.non-interactive .north-arrow,
+  .geo-indications-overlay.non-interactive .inset-map-panel {
+    pointer-events: none;
+    cursor: default;
   }
 
   .north-arrow {

@@ -65,13 +65,32 @@
     { value: SHAPE_TYPE.TRIANGLE, text: m.triangle() }
   ];
 
+  const FILLED_SHAPES: ShapeTypeValue[] = [
+    SHAPE_TYPE.RECTANGLE,
+    SHAPE_TYPE.CIRCLE,
+    SHAPE_TYPE.TRIANGLE
+  ];
+
   let selectedShape = $state<ShapeTypeValue>(SHAPE_TYPE.ARROW);
-  let strokeColor = $state('#ffffff');
+  let strokeColor = $state('#000000');
   let hue = $state(0);
   let saturation = $state(0);
-  let lightness = $state(100);
+  let lightness = $state(0);
+
+  let fillColor = $state('#ffffff');
+  let fillHue = $state(0);
+  let fillSaturation = $state(0);
+  let fillLightness = $state(100);
 
   $effect(() => {
+    // Sync dropdown when user selects an existing shape annotation on the canvas
+    if (selectedShapeAnnotation) {
+      const content = String(selectedShapeAnnotation.content);
+      if (SHAPE_TYPES.includes(content as ShapeTypeValue)) {
+        selectedShape = content as ShapeTypeValue;
+      }
+    }
+
     const style = effectiveStyle;
     if (style.strokeColor) {
       if (typeof style.strokeColor === 'string') {
@@ -87,6 +106,27 @@
         lightness = c.lightness ?? 0;
         const cv = createColorValue('#ffffff', hue, saturation, lightness);
         strokeColor = cv.hex;
+      }
+    }
+    if (style.fillColor) {
+      if (typeof style.fillColor === 'string') {
+        fillColor = style.fillColor as string;
+        const hsl = hexToHsl(fillColor);
+        fillHue = hsl.hue;
+        fillSaturation = hsl.saturation;
+        fillLightness = hsl.lightness;
+      } else if (isStrokeColorDescriptor(style.fillColor)) {
+        const c = style.fillColor;
+        fillHue = c.hue ?? 0;
+        fillSaturation = c.saturation ?? 0;
+        fillLightness = c.lightness ?? 100;
+        const cv = createColorValue(
+          '#ffffff',
+          fillHue,
+          fillSaturation,
+          fillLightness
+        );
+        fillColor = cv.hex;
       }
     }
   });
@@ -108,6 +148,10 @@
 
   function handleCurvatureChange(e: CustomEvent<number>) {
     annotationsActions.applyStyle({ curvature: e.detail });
+  }
+
+  function handleRotationChange(e: CustomEvent<number>) {
+    annotationsActions.applyStyle({ rotation: e.detail });
   }
 
   function toggleDotted(on: boolean) {
@@ -168,17 +212,37 @@
     </Column>
   </Row>
 
+  {#if selectedShape === SHAPE_TYPE.ARROW}
+    <Row>
+      <Column>
+        <div class="section">
+          <Slider
+            labelText={m.annotations_curvature()}
+            value={effectiveStyle.curvature ?? 40}
+            min={0}
+            max={100}
+            step={1}
+            stepMultiplier={5}
+            on:change={handleCurvatureChange}
+            minLabel=""
+            maxLabel=""
+          />
+        </div>
+      </Column>
+    </Row>
+  {/if}
+
   <Row>
     <Column>
       <div class="section">
         <Slider
-          labelText={m.annotations_curvature()}
-          value={effectiveStyle.curvature ?? 40}
+          labelText={m.annotations_rotation()}
+          value={effectiveStyle.rotation ?? 0}
           min={0}
-          max={100}
+          max={359}
           step={1}
-          stepMultiplier={5}
-          on:change={handleCurvatureChange}
+          stepMultiplier={15}
+          on:change={handleRotationChange}
           minLabel=""
           maxLabel=""
         />
@@ -236,6 +300,39 @@
       </div>
     </Column>
   </Row>
+
+  {#if FILLED_SHAPES.includes(selectedShape)}
+    <Row>
+      <Column>
+        <div class="section">
+          <ColorPicker
+            hex={fillColor}
+            hue={fillHue}
+            saturation={fillSaturation}
+            lightness={fillLightness}
+            triggerLabel={m.annotations_fill_color()}
+            onValidate={({
+              hex,
+              hue,
+              saturation,
+              lightness
+            }: {
+              hex: string;
+              hue: number;
+              saturation: number;
+              lightness: number;
+            }) => {
+              fillColor = hex;
+              annotationsActions.applyStyle({
+                fillColor: { hue, saturation, lightness }
+              });
+            }}
+            onCancel={() => {}}
+          />
+        </div>
+      </Column>
+    </Row>
+  {/if}
 
   <Row>
     <Column>

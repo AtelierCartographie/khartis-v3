@@ -1,3 +1,4 @@
+import * as m from '$lib/paraglide/messages';
 import { FileStatus, GEOJSON_TYPE } from '$lib/features/commons/constants';
 import {
   FILE_EXTENSIONS,
@@ -197,18 +198,18 @@ export function validateGeospatialFile(
       const geojson = JSON.parse(content);
 
       if (!geojson.type) {
-        errors.push('Invalid GeoJSON: missing type property');
+        errors.push(m.validation_geojson_no_type());
       }
 
       if (
         geojson.type === GEOJSON_TYPE.FEATURE_COLLECTION &&
         !geojson.features
       ) {
-        errors.push('Invalid GeoJSON: FeatureCollection missing features');
+        errors.push(m.validation_geojson_fc_no_features());
       }
 
       if (geojson.features && geojson.features.length === 0) {
-        warnings.push('GeoJSON contains no features');
+        warnings.push(m.validation_geojson_empty_features());
       }
 
       if (geojson.features) {
@@ -220,7 +221,9 @@ export function validateGeospatialFile(
         ).filter((feature) => !feature.geometry || !feature.properties);
         if (invalidFeatures.length > 0) {
           warnings.push(
-            `${invalidFeatures.length} features have invalid structure`
+            m.validation_geojson_invalid_features({
+              count: String(invalidFeatures.length)
+            })
           );
         }
       }
@@ -231,7 +234,7 @@ export function validateGeospatialFile(
       LogCategory.FILE,
       error
     );
-    errors.push('Invalid JSON structure');
+    errors.push(m.validation_json_bad_structure());
   }
 
   return {

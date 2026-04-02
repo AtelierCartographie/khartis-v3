@@ -11,6 +11,7 @@
     PrimitiveFilterType
   } from '$lib/features/commons/store/visualization.store.svelte';
   import * as m from '$lib/paraglide/messages';
+  import { DEFAULT_SEQUENTIAL_PREVIEW } from './palette-popover/palette.constants';
   import {
     Category,
     MisuseOutline,
@@ -117,14 +118,11 @@
   }
 
   const currentPalette = $derived(
-    visualization?.classification?.colors ?? [
-      '#c8ddf0',
-      '#78a9cf',
-      '#2171b5',
-      '#084594'
-    ]
+    visualization?.classification?.colors ?? DEFAULT_SEQUENTIAL_PREVIEW
   );
-  const qualitativePalette = ['#009d9a', '#f1c21b', '#ff832b', '#a56eff'];
+  const categoryCount = $derived(
+    visualization?.classification?.labels?.length ?? 4
+  );
 
   let fillMode = $state<FillMode>(FillMode.UNIQUE);
   let fillColor = $state<string>(DEFAULT_COLORS.fill);
@@ -313,12 +311,12 @@
       </div>
       <DiscretizationRow
         label={m.category_aspect()}
-        value={m.categories_count({ count: 4 })}
+        value={m.categories_count({ count: categoryCount })}
         onsettings={handleOpenDiscretization}
       />
       <PalettePreview
         label={m.color_palette()}
-        colors={qualitativePalette}
+        colors={currentPalette}
         selectedPaletteId={visualization?.classification?.paletteId}
         oninvert={onInvertPalette}
         onClassificationChange={handleClassificationChange}

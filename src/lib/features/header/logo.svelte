@@ -18,6 +18,7 @@
           class:preprod={isNotProduction}
           src={logoSciencesPo}
           width={100}
+          height={16}
           alt={m.logo_sciences_po_alt()}
         />
       </Column>

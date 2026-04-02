@@ -3,6 +3,7 @@ import {
   VisualizationType,
   ScaleType
 } from '../../commons/store/visualization.store.svelte';
+import { FillMode } from '../../main-toolbar/constants';
 import { hexToRgb } from '../../commons/utils/color-utils';
 
 export function getColorForValue(
@@ -65,7 +66,7 @@ export function getCategoricalColorMap(
 
 export function shouldApplyChoropleth(viz: VisualizationConfig): boolean {
   return (
-    viz.type === VisualizationType.CHOROPLETH &&
+    viz.modes?.fill === FillMode.CLASSES &&
     !!viz.mapping.valueColumn &&
     !!viz.classification?.breaks &&
     !!viz.classification?.colors &&
@@ -77,7 +78,8 @@ export function shouldApplyProportionalSymbols(
   viz: VisualizationConfig
 ): boolean {
   return (
-    viz.type === VisualizationType.PROPORTIONAL &&
+    (viz.type === VisualizationType.PROPORTIONAL ||
+      viz.type === VisualizationType.BIVARIATE) &&
     !!viz.mapping.sizeColumn &&
     !!viz.symbols
   );
@@ -85,7 +87,7 @@ export function shouldApplyProportionalSymbols(
 
 export function shouldApplyCategorical(viz: VisualizationConfig): boolean {
   return (
-    viz.type === VisualizationType.CATEGORICAL &&
+    viz.modes?.fill === FillMode.CATEGORIES &&
     !!viz.mapping.categoryColumn &&
     !!viz.classification?.colors &&
     viz.classification.colors.length > 0

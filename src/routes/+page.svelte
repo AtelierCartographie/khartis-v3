@@ -1,9 +1,20 @@
 <script lang="ts">
-  import MainMap from '$lib/features/map/main-map.svelte';
+  import { onMount } from 'svelte';
+  import type { Component } from 'svelte';
+
+  let MainMap = $state<Component | null>(null);
+
+  onMount(() => {
+    import('$lib/features/map/main-map.svelte').then((mod) => {
+      MainMap = mod.default;
+    });
+  });
 </script>
 
 <div class="map-page">
-  <MainMap />
+  {#if MainMap}
+    <MainMap />
+  {/if}
 </div>
 
 <style>

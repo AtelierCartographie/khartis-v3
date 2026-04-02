@@ -46,17 +46,10 @@ export async function runInTransaction(
   await transactionMutex.acquire();
 
   try {
-    logger.debug('Starting DuckDB transaction', LogCategory.DUCKDB, {
-      context
-    });
     await connection.query('BEGIN TRANSACTION;');
     try {
       await callback();
       await connection.query('COMMIT;');
-      logger.info('DuckDB transaction committed', LogCategory.DUCKDB, {
-        context,
-        durationMs: (performance.now() - start).toFixed(2)
-      });
     } catch (error) {
       await connection.query('ROLLBACK;');
       logger.error('DuckDB transaction rolled back', LogCategory.DUCKDB, {

@@ -107,7 +107,7 @@
   });
 
   function handleStartDrawing() {
-    annotationsActions.addAnnotation(AnnotationKind.DRAWING, drawingType);
+    annotationsActions.startDrawingMode(drawingType);
   }
 
   function handleDrawingTypeChange(event: CustomEvent<string | number>) {
@@ -154,16 +154,41 @@
     </Column>
   </Row>
 
-  <Row>
-    <Column>
-      <div class="section">
-        <Button kind="primary" icon={Add} onclick={handleStartDrawing}>
-          {m.annotations_add_drawing()}
-        </Button>
-        <p class="helper">{m.annotations_drawing_helper()}</p>
-      </div>
-    </Column>
-  </Row>
+  {#if annotationsState.isDrawingMode}
+    <Row>
+      <Column>
+        <div class="section drawing-mode-active">
+          <p class="helper-hint">{m.annotations_drawing_instructions()}</p>
+          <div class="drawing-mode-actions">
+            <Button
+              kind="primary"
+              disabled={annotationsState.drawingInProgress.length < 2}
+              onclick={() => annotationsActions.finalizeDrawingMode()}
+            >
+              {m.annotations_drawing_finish()}
+            </Button>
+            <Button
+              kind="secondary"
+              onclick={() => annotationsActions.cancelDrawingMode()}
+            >
+              {m.button_cancel()}
+            </Button>
+          </div>
+        </div>
+      </Column>
+    </Row>
+  {:else}
+    <Row>
+      <Column>
+        <div class="section">
+          <Button kind="primary" icon={Add} onclick={handleStartDrawing}>
+            {m.annotations_add_drawing()}
+          </Button>
+          <p class="helper">{m.annotations_drawing_helper()}</p>
+        </div>
+      </Column>
+    </Row>
+  {/if}
 
   <Row>
     <Column>
@@ -349,6 +374,28 @@
     color: var(--cds-text-secondary);
     font-size: 0.75rem;
     line-height: 1rem;
+  }
+
+  .helper-hint {
+    margin: 0 0 var(--cds-spacing-04) 0;
+    color: var(--cds-text-secondary);
+    font-size: 0.75rem;
+    line-height: 1.2rem;
+  }
+
+  .drawing-mode-active {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .drawing-mode-actions {
+    display: flex;
+    gap: var(--cds-spacing-03);
+  }
+
+  .drawing-mode-actions :global(.bx--btn) {
+    flex: 1;
+    max-width: 100%;
   }
   .toggle-row {
     display: flex;

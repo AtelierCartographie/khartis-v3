@@ -247,37 +247,39 @@
         {/if}
       </div>
 
-      <div class="category-row category-row-duplicates">
-        <button
-          class="category-row-header"
-          onclick={() => (duplicatesExpanded = !duplicatesExpanded)}
-          aria-expanded={duplicatesExpanded}
-        >
-          <span class="category-icon icon-warning-alt">
-            <WarningAltFilled size={20} />
-          </span>
-          <div class="category-count count-warning-alt">{duplicateCount}</div>
-          <span class="category-label label-warning-alt"
-            >{m.join_entities_duplicate({ count: duplicateCount })}</span
+      {#if duplicateCount > 0}
+        <div class="category-row category-row-duplicates">
+          <button
+            class="category-row-header"
+            onclick={() => (duplicatesExpanded = !duplicatesExpanded)}
+            aria-expanded={duplicatesExpanded}
           >
-          <span class="category-chevron">
-            {#if duplicatesExpanded}
-              <ChevronUp size={20} />
-            {:else}
-              <ChevronDown size={20} />
-            {/if}
-          </span>
-        </button>
-        {#if duplicatesExpanded && duplicateCount > 0}
-          <div class="category-body">
-            <ul class="entity-list">
-              {#each duplicates as entity (entity)}
-                <li class="entity-item">{entity}</li>
-              {/each}
-            </ul>
-          </div>
-        {/if}
-      </div>
+            <span class="category-icon icon-warning-alt">
+              <WarningAltFilled size={20} />
+            </span>
+            <div class="category-count count-warning-alt">{duplicateCount}</div>
+            <span class="category-label label-warning-alt"
+              >{m.join_entities_duplicate({ count: duplicateCount })}</span
+            >
+            <span class="category-chevron">
+              {#if duplicatesExpanded}
+                <ChevronUp size={20} />
+              {:else}
+                <ChevronDown size={20} />
+              {/if}
+            </span>
+          </button>
+          {#if duplicatesExpanded}
+            <div class="category-body">
+              <ul class="entity-list">
+                {#each duplicates as entity (entity)}
+                  <li class="entity-item">{entity}</li>
+                {/each}
+              </ul>
+            </div>
+          {/if}
+        </div>
+      {/if}
 
       <div class="category-row category-row-unrecognized">
         <button

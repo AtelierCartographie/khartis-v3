@@ -41,11 +41,20 @@
       <SelectItem value={option.value} text={option.text} />
     {/each}
   </Select>
-  <p class="helper-text">{m.colorblind_helper()}</p>
+  <div class="helper-section">
+    <p class="helper-text">{m.colorblind_helper_p1()}</p>
+    <p class="helper-text">{m.colorblind_helper_p2()}</p>
+  </div>
 </div>
 
 <style>
   #khartis-color-blindness-tool {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-05);
+  }
+
+  .helper-section {
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-03);
@@ -55,7 +64,7 @@
     margin: 0;
     font-size: var(--cds-helper-text-01-font-size, 0.75rem);
     line-height: var(--cds-helper-text-01-line-height, 1rem);
-    color: var(--cds-text-helper, #6f6f6f);
+    color: var(--cds-text-secondary, #525252);
     letter-spacing: var(--cds-helper-text-01-letter-spacing, 0.32px);
   }
 </style>

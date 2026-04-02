@@ -110,13 +110,3 @@ export function isShortcutCode(
 ): boolean {
   return eventCode === expectedCode;
 }
-
-export function getProjectShortcutPrefixLabel(
-  isApplePlatform: boolean
-): string {
-  if (isApplePlatform) {
-    return PROJECT_SHORTCUT_PREFIX_LABEL_APPLE;
-  }
-
-  return PROJECT_SHORTCUT_PREFIX_LABEL_OTHER;
-}

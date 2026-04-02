@@ -19,6 +19,7 @@
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
   import { EVENT } from '$lib/features/commons/constants/dom.constants';
+  import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
 
   initializeStores();
   import { setLocale, locales, cookieName } from '$lib/paraglide/runtime.js';
@@ -42,7 +43,7 @@
   import StepToolbar from '$lib/features/step-toolbar/step-toolbar.svelte';
   import { Button, Tag, Theme } from 'carbon-components-svelte';
   import { WarningAltFilled } from 'carbon-icons-svelte';
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import * as m from '$lib/paraglide/messages';
 
   import 'carbon-components-svelte/css/all.css';
@@ -89,39 +90,55 @@
       window.addEventListener(EVENT.BEFOREUNLOAD, handleBeforeUnload);
     }
 
-    const initApp = async () => {
-      try {
-        await duckDBOrchestrator.initialize();
-        await basemapService.initialize();
-        isLoading = false;
-
-        logger.info(
-          'App ready - continuing background initialization',
-          LogCategory.SYSTEM
-        );
-      } catch (error) {
-        logger.error(
-          'DuckDB initialization failed - application cannot continue',
-          LogCategory.DUCKDB,
-          error
-        );
-        isLoading = false;
-        globalState.isCreateProjectModalOpen = true;
-        return;
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        persistenceRegistry.flush();
       }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    const initApp = async () => {
+      // Start DuckDB in background — don't block UI on it (LCP optimization)
+      const duckDBReadyPromise = duckDBOrchestrator
+        .initialize()
+        .then(() => basemapService.initialize())
+        .catch((error) => {
+          logger.error(
+            'DuckDB initialization failed',
+            LogCategory.DUCKDB,
+            error
+          );
+        });
 
       try {
+        // Project store uses IndexedDB only — fast (~100ms), independent of DuckDB
         await projectStore.waitForInit();
-        await dataOrchestratorService.initialize();
+        isLoading = false;
 
         if (!projectStore.currentProject) {
           globalState.isCreateProjectModalOpen = true;
         }
 
-        logger.success(
-          'Background initialization complete',
+        logger.debug(
+          'UI ready — DuckDB loading in background',
           LogCategory.SYSTEM
         );
+      } catch (error) {
+        logger.error(
+          'Project store initialization failed',
+          LogCategory.SYSTEM,
+          error
+        );
+        isLoading = false;
+        globalState.isCreateProjectModalOpen = true;
+      }
+
+      // Wait for DuckDB, then restore any existing project data
+      try {
+        await duckDBReadyPromise;
+        await dataOrchestratorService.initialize();
+
+        logger.debug('Background initialization complete', LogCategory.SYSTEM);
       } catch (error) {
         logger.error(
           'Background initialization failed',
@@ -134,11 +151,33 @@
 
     initApp();
 
+    // Fix Carbon ComboBox ARIA: outer wrapper incorrectly has role="listbox"
+    // causing "ARIA required children" violations. Options list (.bx--list-box__menu)
+    // keeps its correct role="listbox".
+    const fixComboboxAria = (root: Element | Document = document) => {
+      (root as Element)
+        .querySelectorAll?.('.bx--combo-box[role="listbox"]')
+        .forEach((el) => el.setAttribute('role', 'group'));
+    };
+    fixComboboxAria();
+    const ariaObserver = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            fixComboboxAria(node as Element);
+          }
+        }
+      }
+    });
+    ariaObserver.observe(document.body, { childList: true, subtree: true });
+
     return () => {
       window.removeEventListener(EVENT.RESIZE, handleResize);
       if (ENABLE_BEFOREUNLOAD_CONFIRMATION) {
         window.removeEventListener(EVENT.BEFOREUNLOAD, handleBeforeUnload);
       }
+      ariaObserver.disconnect();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   });
 
@@ -203,26 +242,32 @@
       previousStep === ToolbarStep.Styling &&
       currentStep !== ToolbarStep.Styling;
 
-    if (enteringStylingStep) {
-      zoomModeStore.setPageMode();
-    } else if (leavingStylingStep) {
-      zoomModeStore.setMapMode();
+    // Only switch zoom mode on actual step transitions, not on initial render.
+    // On page refresh, the user's zoom mode preference should be preserved.
+    if (previousStep !== null) {
+      if (enteringStylingStep) {
+        zoomModeStore.setPageMode();
+      } else if (leavingStylingStep) {
+        zoomModeStore.setMapMode();
+      }
     }
 
     if (shouldInitStylingElements) {
-      const hasPageElements = getAnnotationsState().items.some(
-        (item) => item.role != null
-      );
-
-      if (hasPageElements) {
-        annotationsActions.setPageElementsVisibility(true);
-      } else {
-        annotationsActions.initPageElements({
-          withPlaceholders: true,
-          visible: true
-        });
-      }
-
+      // untrack: these calls read+write s.items; tracking them would cause
+      // a write-triggers-read loop. currentStep/projectId are the right triggers.
+      untrack(() => {
+        const hasPageElements = getAnnotationsState().items.some(
+          (item) => item.role != null
+        );
+        if (hasPageElements) {
+          annotationsActions.setPageElementsVisibility(true);
+        } else {
+          annotationsActions.initPageElements({
+            withPlaceholders: true,
+            visible: true
+          });
+        }
+      });
       stylingElementsInitializedForProject = currentProjectId;
     }
 

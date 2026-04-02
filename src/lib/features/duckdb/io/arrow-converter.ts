@@ -30,12 +30,6 @@ export async function insertArrowTableIntoDuckDB(
   table: Table,
   tableName: string
 ): Promise<void> {
-  const startTime = performance.now();
-  logger.info('Inserting Arrow table into DuckDB', LogCategory.DUCKDB, {
-    tableName,
-    rows: table.numRows
-  });
-
   if (!isInitialized()) {
     throw new Error('DuckDB not initialized - call initDuckDB() first');
   }
@@ -54,13 +48,6 @@ export async function insertArrowTableIntoDuckDB(
     await ctx.connection.insertArrowFromIPCStream(ipcBuffer, {
       name: tableName,
       schema: 'main'
-    });
-
-    const duration = performance.now() - startTime;
-    logger.success('Arrow table inserted into DuckDB', LogCategory.DUCKDB, {
-      tableName,
-      rows: table.numRows,
-      durationMs: duration.toFixed(2)
     });
   } catch (error) {
     logger.error(

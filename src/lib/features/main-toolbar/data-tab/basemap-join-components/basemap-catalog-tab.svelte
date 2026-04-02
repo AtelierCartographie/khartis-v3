@@ -55,8 +55,8 @@
       const query = trimmedQuery.toLowerCase();
       results = results.filter(
         (b) =>
-          b.title.toLowerCase().includes(query) ||
-          b.description.toLowerCase().includes(query) ||
+          b.title_fr.toLowerCase().includes(query) ||
+          (b.subtitle_fr ?? '').toLowerCase().includes(query) ||
           b.source.toLowerCase().includes(query)
       );
     }
@@ -91,7 +91,9 @@
   const searchComboBoxItems = $derived((): SearchComboBoxItem[] => {
     return allBasemaps.map((b, index) => ({
       id: `basemap-${index}`,
-      text: `${b.title} (${b.date})`,
+      text: b.subtitle_fr
+        ? `${b.title_fr} — ${b.subtitle_fr} (${b.date})`
+        : `${b.title_fr} (${b.date})`,
       basemap: b
     }));
   });
@@ -100,7 +102,7 @@
     e: CustomEvent<{ selectedId: string; selectedItem: SearchComboBoxItem }>
   ) {
     if (e.detail.selectedItem) {
-      searchQuery = e.detail.selectedItem.basemap.title;
+      searchQuery = e.detail.selectedItem.basemap.title_fr;
       // Selecting from the ComboBox must trigger the same flow as clicking a card.
       onSelectBasemap(e.detail.selectedItem.basemap);
     } else {
@@ -169,8 +171,8 @@
           const query = value.toLowerCase();
           const basemap = (item as SearchComboBoxItem).basemap;
           return (
-            basemap.title.toLowerCase().includes(query) ||
-            basemap.description.toLowerCase().includes(query) ||
+            basemap.title_fr.toLowerCase().includes(query) ||
+            (basemap.subtitle_fr ?? '').toLowerCase().includes(query) ||
             basemap.source.toLowerCase().includes(query)
           );
         }}
@@ -238,7 +240,7 @@
   .section-subtitle {
     margin: 0 0 var(--cds-spacing-03) 0;
     font-size: 0.8125rem;
-    color: var(--cds-text-02);
+    color: var(--cds-link-01);
     line-height: 1.25rem;
   }
 

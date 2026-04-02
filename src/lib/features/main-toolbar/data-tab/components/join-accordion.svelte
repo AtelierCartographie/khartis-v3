@@ -1,16 +1,17 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
   import {
-    Accordion,
-    AccordionItem,
     Button,
     InlineNotification,
+    NotificationActionButton,
     Select,
     SelectItem,
     Tag
   } from 'carbon-components-svelte';
   import {
     CheckmarkFilled,
+    ChevronDown,
+    ChevronUp,
     ErrorFilled,
     WarningAltFilled,
     WarningFilled
@@ -61,229 +62,405 @@
       stats.unrecognizedCount > 0
   );
 
+  const showCorrectionNotification = $derived(
+    hasErrors && stats.toVerifyCount > 0
+  );
+
   const canFinalize = $derived(canFinalizeJoin(stats));
 </script>
 
 <div class="join-stats-accordion">
-  <Accordion>
-    <AccordionItem
-      open={joinedExpanded}
-      on:click={() => (joinedExpanded = !joinedExpanded)}
-    >
-      <svelte:fragment slot="title">
-        <div class="accordion-title">
-          <CheckmarkFilled size={20} class="icon-success" />
-          <span>{m.join_entities_joined({ count: stats.joinedCount })}</span>
+  <div class="category-rows">
+    <div class="category-row">
+      <button
+        class="category-row-header"
+        onclick={() => (joinedExpanded = !joinedExpanded)}
+        aria-expanded={joinedExpanded}
+      >
+        <span class="category-icon icon-success">
+          <CheckmarkFilled size={20} />
+        </span>
+        <div class="category-count count-success">{stats.joinedCount}</div>
+        <span class="category-label label-success">
+          {m.join_entities_joined({ count: stats.joinedCount })}
+        </span>
+        <span class="category-chevron">
+          {#if joinedExpanded}<ChevronUp size={20} />{:else}<ChevronDown
+              size={20}
+            />{/if}
+        </span>
+      </button>
+      {#if joinedExpanded}
+        <div class="category-body">
+          {#if joinedEntities.length > 0}
+            <ul class="entity-list">
+              {#each joinedEntities as entity (entity.dataValue)}
+                <li class="entity-item">{entity.dataValue}</li>
+              {/each}
+            </ul>
+          {:else}
+            <p class="helper-text">{m.join_entities_joined_desc()}</p>
+          {/if}
         </div>
-      </svelte:fragment>
-      {#if joinedEntities.length > 0}
-        <ul class="entities-list joined-list">
-          {#each joinedEntities as entity (entity.dataValue)}
-            <li>{entity.dataValue}</li>
-          {/each}
-        </ul>
-      {:else}
-        <p class="helper-text">{m.join_entities_joined_desc()}</p>
       {/if}
-    </AccordionItem>
+    </div>
 
-    <AccordionItem
-      open={toVerifyExpanded}
-      on:click={() => (toVerifyExpanded = !toVerifyExpanded)}
-    >
-      <svelte:fragment slot="title">
-        <div class="accordion-title">
-          <WarningFilled size={20} class="icon-warning" />
-          <span
-            >{m.join_entities_to_verify({ count: stats.toVerifyCount })}</span
-          >
-        </div>
-      </svelte:fragment>
-      {#if stats.toVerifyCount > 0}
-        {#if showCorrectionTable && toVerifyEntities.some((e) => e.basemapOptions)}
-          <div class="join-table">
-            <div class="head">
-              <div class="col a">
-                {m.join_data_column()}
-                {#if linkedVariableName}
-                  <Tag type="cyan" size="sm">{linkedVariableName}</Tag>
-                {/if}
-              </div>
-              <div class="col b">{m.join_basemap_column()}</div>
-            </div>
-            {#each toVerifyEntities as entity, i (entity.dataValue)}
-              {#if entity.basemapOptions}
-                <div class="join-row">
-                  <div class="col a">{entity.dataValue}</div>
-                  <div class="col eq">=</div>
-                  <div class="col b">
-                    <Select
-                      id={`join-${i}`}
-                      labelText=""
-                      selected={entity.selectedMapping}
-                      on:change={(e) => {
-                        const target = e.target as HTMLSelectElement;
-                        onMappingChange?.(
-                          i,
-                          target?.value || entity.selectedMapping || ''
-                        );
-                      }}
-                      size="xl"
-                    >
-                      {#each entity.basemapOptions as opt (opt)}
-                        <SelectItem value={opt} text={opt} />
-                      {/each}
-                    </Select>
-                  </div>
+    <div class="category-row">
+      <button
+        class="category-row-header"
+        onclick={() => (toVerifyExpanded = !toVerifyExpanded)}
+        aria-expanded={toVerifyExpanded}
+      >
+        <span class="category-icon icon-warning">
+          <WarningFilled size={20} />
+        </span>
+        <div class="category-count count-warning">{stats.toVerifyCount}</div>
+        <span class="category-label label-warning">
+          {m.join_entities_to_verify({ count: stats.toVerifyCount })}
+        </span>
+        <span class="category-chevron">
+          {#if toVerifyExpanded}<ChevronUp size={20} />{:else}<ChevronDown
+              size={20}
+            />{/if}
+        </span>
+      </button>
+      {#if toVerifyExpanded && stats.toVerifyCount > 0}
+        <div class="category-body">
+          {#if showCorrectionTable && toVerifyEntities.some((e) => e.basemapOptions)}
+            <div class="join-table">
+              <div class="table-header">
+                <div class="table-header-left">
+                  <span class="table-header-label">{m.join_data_column()}</span>
+                  {#if linkedVariableName}
+                    <Tag type="cyan" size="sm">{linkedVariableName}</Tag>
+                  {/if}
                 </div>
-              {/if}
-            {/each}
-          </div>
-        {:else}
-          <ul class="entities-list verify-list">
-            {#each toVerifyEntities as entity (entity.dataValue)}
-              <li>
-                <span class="entity-value">{entity.dataValue}</span>
-                {#if entity.matches && entity.matches.length > 0}
-                  <span class="entity-matches"
-                    >→ {entity.matches.join(', ')}</span
+                <div class="table-header-right">
+                  <span class="table-header-label"
+                    >{m.join_basemap_column()}</span
                   >
+                </div>
+              </div>
+              {#each toVerifyEntities as entity, i (entity.dataValue)}
+                {#if entity.basemapOptions}
+                  <div class="table-row">
+                    <div class="table-cell cell-data">{entity.dataValue}</div>
+                    <div class="table-cell cell-equals">=</div>
+                    <div class="table-cell cell-select">
+                      <Select
+                        id={`join-${i}`}
+                        labelText=""
+                        selected={entity.selectedMapping}
+                        on:change={(e) => {
+                          const target = e.target as HTMLSelectElement;
+                          onMappingChange?.(
+                            i,
+                            target?.value || entity.selectedMapping || ''
+                          );
+                        }}
+                        size="xl"
+                      >
+                        {#each entity.basemapOptions as opt (opt)}
+                          <SelectItem value={opt} text={opt} />
+                        {/each}
+                      </Select>
+                    </div>
+                  </div>
                 {/if}
-              </li>
+              {/each}
+            </div>
+          {:else}
+            <ul class="entity-list">
+              {#each toVerifyEntities as entity (entity.dataValue)}
+                <li class="entity-item">
+                  <span class="entity-value">{entity.dataValue}</span>
+                  {#if entity.matches && entity.matches.length > 0}
+                    <span class="entity-matches"
+                      >→ {entity.matches.join(', ')}</span
+                    >
+                  {/if}
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        </div>
+      {/if}
+    </div>
+
+    {#if stats.duplicateCount > 0}
+      <div class="category-row">
+        <button
+          class="category-row-header"
+          onclick={() => (duplicatesExpanded = !duplicatesExpanded)}
+          aria-expanded={duplicatesExpanded}
+        >
+          <span class="category-icon icon-warning-alt">
+            <WarningAltFilled size={20} />
+          </span>
+          <div class="category-count count-warning-alt">
+            {stats.duplicateCount}
+          </div>
+          <span class="category-label label-warning-alt">
+            {m.join_entities_duplicate({ count: stats.duplicateCount })}
+          </span>
+          <span class="category-chevron">
+            {#if duplicatesExpanded}<ChevronUp size={20} />{:else}<ChevronDown
+                size={20}
+              />{/if}
+          </span>
+        </button>
+        {#if duplicatesExpanded}
+          <div class="category-body">
+            <ul class="entity-list">
+              {#each duplicateEntities as entity (entity.dataValue)}
+                <li class="entity-item">{entity.dataValue}</li>
+              {/each}
+            </ul>
+          </div>
+        {/if}
+      </div>
+    {/if}
+
+    <div class="category-row">
+      <button
+        class="category-row-header"
+        onclick={() => (unrecognizedExpanded = !unrecognizedExpanded)}
+        aria-expanded={unrecognizedExpanded}
+      >
+        <span class="category-icon icon-error">
+          <ErrorFilled size={20} />
+        </span>
+        <div class="category-count count-error">{stats.unrecognizedCount}</div>
+        <span class="category-label label-error">
+          {m.join_entities_unrecognized({ count: stats.unrecognizedCount })}
+        </span>
+        <span class="category-chevron">
+          {#if unrecognizedExpanded}<ChevronUp size={20} />{:else}<ChevronDown
+              size={20}
+            />{/if}
+        </span>
+      </button>
+      {#if unrecognizedExpanded && stats.unrecognizedCount > 0}
+        <div class="category-body">
+          <ul class="entity-list">
+            {#each unrecognizedEntities as entity (entity.dataValue)}
+              <li class="entity-item">{entity.dataValue}</li>
             {/each}
           </ul>
-        {/if}
-      {/if}
-    </AccordionItem>
-
-    <AccordionItem
-      open={duplicatesExpanded}
-      on:click={() => (duplicatesExpanded = !duplicatesExpanded)}
-    >
-      <svelte:fragment slot="title">
-        <div class="accordion-title">
-          <WarningAltFilled size={20} class="icon-error" />
-          <span
-            >{m.join_entities_duplicate({ count: stats.duplicateCount })}</span
-          >
         </div>
-      </svelte:fragment>
-      {#if stats.duplicateCount > 0}
-        <ul class="entities-list">
-          {#each duplicateEntities as entity (entity.dataValue)}
-            <li>{entity.dataValue}</li>
-          {/each}
-        </ul>
       {/if}
-    </AccordionItem>
+    </div>
+  </div>
 
-    <AccordionItem
-      open={unrecognizedExpanded}
-      on:click={() => (unrecognizedExpanded = !unrecognizedExpanded)}
-    >
-      <svelte:fragment slot="title">
-        <div class="accordion-title">
-          <ErrorFilled size={20} class="icon-error" />
-          <span
-            >{m.join_entities_unrecognized({
-              count: stats.unrecognizedCount
-            })}</span
-          >
+  <div class="join-status-zone">
+    {#if hasErrors}
+      <div class="notifications-row">
+        <div class="notification-slot">
+          <InlineNotification
+            title={m.join_error_detected_title()}
+            subtitle={m.join_error_detected_subtitle()}
+            kind="warning"
+            lowContrast
+          />
         </div>
-      </svelte:fragment>
-      {#if stats.unrecognizedCount > 0}
-        <ul class="entities-list">
-          {#each unrecognizedEntities as entity (entity.dataValue)}
-            <li>{entity.dataValue}</li>
-          {/each}
-        </ul>
-      {/if}
-    </AccordionItem>
-  </Accordion>
+        <div class="notification-slot">
+          {#if showCorrectionNotification && onApplyCorrections}
+            <InlineNotification
+              title={m.join_correction_title()}
+              subtitle={m.join_correction_desc()}
+              kind="info"
+              lowContrast
+            >
+              <svelte:fragment slot="actions">
+                <NotificationActionButton on:click={onApplyCorrections}>
+                  {m.join_correction_button()}
+                </NotificationActionButton>
+              </svelte:fragment>
+            </InlineNotification>
+          {:else}
+            <div class="notification-placeholder" aria-hidden="true"></div>
+          {/if}
+        </div>
+      </div>
+    {:else if canFinalize && onFinalizeJoin}
+      <div class="notification-validation">
+        <div class="notification-title">{m.join_validation_title()}</div>
+        <p class="notification-message">{m.join_validation_desc()}</p>
+        <Button kind="primary" size="small" on:click={onFinalizeJoin}>
+          {m.join_validation_button()}
+        </Button>
+      </div>
+    {/if}
+  </div>
 </div>
-
-{#if hasErrors}
-  <InlineNotification
-    title={m.join_error_detected_title()}
-    subtitle={m.join_error_detected_subtitle()}
-    kind="warning"
-    lowContrast
-    hideCloseButton={false}
-  />
-{/if}
-
-{#if stats.toVerifyCount > 0 && onApplyCorrections}
-  <div class="correction">
-    <div class="title">{m.join_correction_title()}</div>
-    <p>{m.join_correction_desc()}</p>
-    <Button kind="secondary" size="small" on:click={onApplyCorrections}>
-      {m.join_correction_button()}
-    </Button>
-  </div>
-{:else if canFinalize && onFinalizeJoin}
-  <div class="validation">
-    <div class="validation-title">{m.join_validation_title()}</div>
-    <p>{m.join_validation_desc()}</p>
-    <Button kind="primary" size="small" on:click={onFinalizeJoin}>
-      {m.join_validation_button()}
-    </Button>
-  </div>
-{/if}
 
 <style>
   .join-stats-accordion {
-    margin-bottom: var(--cds-spacing-04);
+    display: flex;
+    flex-direction: column;
+    gap: 0;
   }
 
-  .join-stats-accordion :global(.bx--accordion) {
-    border: 1px solid var(--cds-border-subtle);
-    border-radius: var(--cds-spacing-02);
-    overflow: hidden;
+  /* Category rows */
+  .category-rows {
+    display: flex;
+    flex-direction: column;
   }
 
-  .join-stats-accordion :global(.bx--accordion__item) {
-    border-top: 1px solid var(--cds-border-subtle);
+  .category-row {
+    border-bottom: 1px solid #e0e0e0;
   }
 
-  .join-stats-accordion :global(.bx--accordion__item:first-child) {
-    border-top: none;
+  .category-row:first-child {
+    border-top: 1px solid #e0e0e0;
   }
 
-  .accordion-title {
+  .category-row-header {
     display: flex;
     align-items: center;
-    gap: var(--cds-spacing-03);
+    gap: 8px;
+    width: 100%;
+    padding: 12px 16px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    font: inherit;
+    transition: background-color 0.15s;
   }
 
-  .accordion-title :global(.icon-success) {
-    color: var(--cds-support-success);
+  .category-row-header:hover {
+    background-color: #f4f4f4;
   }
 
-  .accordion-title :global(.icon-warning) {
-    color: var(--cds-support-warning);
+  .category-icon {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
   }
 
-  .accordion-title :global(.icon-error) {
-    color: var(--cds-support-error);
+  .icon-success :global(svg) {
+    fill: #198038;
   }
 
-  .entities-list {
-    margin: 0;
-    padding-left: 1.2rem;
+  .icon-warning :global(svg) {
+    fill: #f1c21b;
+  }
+
+  .icon-warning-alt :global(svg) {
+    fill: #f1c21b;
+  }
+
+  .icon-error :global(svg) {
+    fill: #da1e28;
+  }
+
+  /* Count badge */
+  .category-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    min-width: 4.5ch;
+    width: 4.5ch;
+    padding: 2px 6px;
+    font-weight: 700;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    border-bottom: 2.5px solid;
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .count-success {
+    color: #198038;
+    background-color: #defbe6;
+    border-bottom-color: #198038;
+  }
+
+  .count-warning {
+    color: #8e6a00;
+    background-color: #fcf4d6;
+    border-bottom-color: #8e6a00;
+  }
+
+  .count-warning-alt {
+    color: #da1e28;
+    background-color: #fff1f1;
+    border-bottom-color: #da1e28;
+  }
+
+  .count-error {
+    color: #da1e28;
+    background-color: #fff1f1;
+    border-bottom-color: #da1e28;
+  }
+
+  /* Category label */
+  .category-label {
+    flex: 1;
+    font-weight: 400;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+
+  .label-success {
+    color: #044317;
+  }
+
+  .label-warning {
+    color: #8e6a00;
+  }
+
+  .label-warning-alt {
+    color: #003a6d;
+  }
+
+  .label-error {
+    color: #003a6d;
+  }
+
+  .category-chevron {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    color: #161616;
+  }
+
+  /* Category body */
+  .category-body {
+    padding: 0 16px 16px;
+  }
+
+  .helper-text {
     font-size: 0.8125rem;
-    color: var(--cds-text-02);
-    max-height: 200px;
-    overflow-y: auto;
+    line-height: 1.25rem;
+    color: #525252;
+    margin: 0;
   }
 
-  .entities-list li {
-    margin-bottom: var(--cds-spacing-02);
+  /* Entity list */
+  .entity-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
   }
 
-  .verify-list li {
+  .entity-item {
     display: flex;
     gap: var(--cds-spacing-03);
     flex-wrap: wrap;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    color: #161616;
+    padding: 10px 16px;
+    background-color: #f4f4f4;
+    border-bottom: 1px solid #e0e0e0;
+  }
+
+  .entity-item:last-child {
+    border-bottom: none;
   }
 
   .entity-value {
@@ -296,68 +473,159 @@
     font-size: 0.75rem;
   }
 
-  .helper-text {
-    color: var(--cds-text-secondary);
+  /* Correction table */
+  .join-table {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-radius: 4px;
+    background-color: #dbedf8;
+  }
+
+  .table-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background-color: #dbedf8;
+    padding: 10px 16px;
+    min-height: 40px;
+  }
+
+  .table-header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+  }
+
+  .table-header-right {
+    display: flex;
+    align-items: center;
+    flex: 1;
+  }
+
+  .table-header-label {
+    font-weight: 600;
     font-size: 0.875rem;
+    line-height: 1.125rem;
+    color: #161616;
+  }
+
+  .table-row {
+    display: flex;
+    align-items: center;
+    background-color: #dbedf8;
+    border-top: 1px solid #c6dde8;
+    padding: 10px 16px;
+    min-height: 48px;
+    gap: 10px;
+  }
+
+  .table-cell {
+    font-weight: 400;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    color: #161616;
+  }
+
+  .cell-data {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .cell-equals {
+    flex-shrink: 0;
+    font-weight: 700;
+    font-size: 0.75rem;
+    color: #ffffff;
+    width: 24px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #009d9a;
+    border-radius: 50%;
+  }
+
+  .cell-select {
+    flex: 1;
+    overflow: visible;
+  }
+
+  .cell-select :global(.bx--select) {
     margin: 0;
   }
 
-  .join-table {
-    border: 1px solid var(--cds-border-subtle);
-    border-radius: var(--cds-spacing-02);
-    overflow: hidden;
-    margin-bottom: var(--cds-spacing-05);
-  }
-
-  .join-table .head {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    background: var(--cds-layer-accent-01);
-    padding: var(--cds-spacing-03) var(--cds-spacing-04);
-    font-weight: 600;
-  }
-
-  .join-row {
-    display: grid;
-    grid-template-columns: 1fr auto 1fr;
-    gap: var(--cds-spacing-03);
-    padding: var(--cds-spacing-03) var(--cds-spacing-04);
-    border-top: 1px solid var(--cds-border-subtle);
-    align-items: center;
-  }
-
-  .correction {
-    border-left: 4px solid var(--cds-focus);
-    background: var(--cds-layer);
-    padding: var(--cds-spacing-04);
-    margin-top: var(--cds-spacing-05);
-    border-radius: var(--cds-spacing-02);
-  }
-
-  .correction .title {
-    font-weight: 700;
-    margin-bottom: var(--cds-spacing-03);
-  }
-
-  .validation {
-    margin-top: var(--cds-spacing-04);
-    padding: var(--cds-spacing-04);
-    background-color: var(--cds-layer-02);
-    border-radius: var(--cds-spacing-02);
-    border-left: 4px solid var(--cds-support-success);
-  }
-
-  .validation-title {
+  .cell-select :global(.bx--select-input) {
+    height: 32px;
+    padding: 0 2rem 0 0.75rem;
     font-size: 0.875rem;
-    font-weight: 600;
-    color: var(--cds-support-success);
-    margin-bottom: var(--cds-spacing-02);
+    background-color: var(--cds-field-01, #ffffff);
+    border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d);
   }
 
-  .validation p,
-  .correction p {
-    font-size: 0.8125rem;
-    color: var(--cds-text-02);
-    margin-bottom: var(--cds-spacing-03);
+  .cell-select :global(.bx--select__arrow) {
+    height: 32px;
+  }
+
+  .cell-select :global(.bx--label) {
+    display: none;
+  }
+
+  /* Notifications */
+  .join-status-zone {
+    flex-shrink: 0;
+    min-height: 128px;
+    padding-top: 12px;
+  }
+
+  .notifications-row {
+    display: flex;
+    gap: 12px;
+    align-items: stretch;
+  }
+
+  .notification-slot {
+    flex: 1;
+    min-width: 0;
+    min-height: 108px;
+    display: flex;
+  }
+
+  .notifications-row :global(.bx--inline-notification) {
+    flex: 1 1 auto;
+    max-width: none;
+    margin: 0;
+    min-height: 108px;
+  }
+
+  .notification-placeholder {
+    width: 100%;
+    min-height: 108px;
+    background: transparent;
+  }
+
+  .notification-validation {
+    padding: 16px;
+    background-color: #defbe6;
+    border-left: 3px solid #24a148;
+  }
+
+  .notification-title {
+    font-weight: 600;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    color: #161616;
+    margin-bottom: 4px;
+  }
+
+  .notification-message {
+    font-weight: 400;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    color: #525252;
+    margin-bottom: 8px;
   }
 </style>

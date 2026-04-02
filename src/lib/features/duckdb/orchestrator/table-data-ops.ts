@@ -55,8 +55,12 @@ export async function getTableData(
       const geomCols = columns
         .filter(
           (c) =>
-            String(c.type || '').toUpperCase() === GEOMETRY_COLUMN_TYPE ||
-            String(c.type_simple || '') === GEOMETRY_COLUMN_TYPE.toLowerCase()
+            String(c.type || '')
+              .toUpperCase()
+              .startsWith(GEOMETRY_COLUMN_TYPE) ||
+            String(c.type_simple || '')
+              .toUpperCase()
+              .startsWith(GEOMETRY_COLUMN_TYPE)
         )
         .map((c) => `"${c.name}"`);
       if (geomCols.length > 0) {
@@ -88,7 +92,7 @@ export async function getTableData(
 
     return (await Duck.query(query)) as ArrowTableLike;
   } catch (error) {
-    logger.error('Error getting table data', LogCategory.DUCKDB, error);
+    logger.warn('Error getting table data', LogCategory.DUCKDB, error);
     return { numRows: 0, get: () => ({}), toArray: () => [] };
   }
 }
@@ -120,7 +124,7 @@ export async function getRowCount(
   try {
     return await countRows(tableName, Duck, true);
   } catch (error) {
-    logger.error('Error getting row count', LogCategory.DUCKDB, error);
+    logger.warn('Error getting row count', LogCategory.DUCKDB, error);
     return 0;
   }
 }
@@ -142,7 +146,7 @@ export async function getRowPosition(
     const normalizedRowId = normalizeRowId(rowId);
 
     if (normalizedRowId === null) {
-      logger.error('Invalid rowId for getRowPosition', LogCategory.DUCKDB, {
+      logger.debug('Invalid rowId for getRowPosition', LogCategory.DUCKDB, {
         rowId
       });
       return -1;
@@ -230,12 +234,7 @@ export async function getExcludedRowIds(
   const query = `SELECT __id FROM "${escapedTable}" WHERE COALESCE(NOT (${whereClause}), TRUE)`;
   const result = (await Duck.query(query)) as ArrowTableLike;
 
-  const ids: number[] = [];
-  for (let i = 0; i < result.numRows; i++) {
-    const row = result.get(i) as { __id: number };
-    ids.push(row.__id);
-  }
-  return ids;
+  return result.toArray().map((row) => row.__id as number);
 }
 
 export async function analyzeTable(

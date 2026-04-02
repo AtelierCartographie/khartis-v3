@@ -1,7 +1,6 @@
 <script lang="ts">
-  import * as m from '$lib/paraglide/messages';
-  import { ChevronDown } from 'carbon-icons-svelte';
-  import ColorPickerModal from '../color-picker-modal.svelte';
+  import ColorPicker from '$lib/features/commons/components/color-picker.svelte';
+  import { hexToHsl } from '$lib/features/commons/utils/color-utils';
 
   interface Props {
     label?: string;
@@ -10,107 +9,29 @@
     onchange?: (color: string) => void;
   }
 
-  let { label, value, size = 'default', onchange }: Props = $props();
+  // size prop kept for API compatibility, no visual distinction in ColorPicker
+  let {
+    label = '',
+    value,
+    size: _size = 'default',
+    onchange
+  }: Props = $props();
 
-  let colorPickerOpen = $state(false);
-
-  function handleClick() {
-    colorPickerOpen = true;
-  }
-
-  function handleColorSelect(color: string) {
-    onchange?.(color);
-    colorPickerOpen = false;
-  }
-
-  function handleClose() {
-    colorPickerOpen = false;
-  }
+  const hsl = $derived(hexToHsl(value));
 </script>
 
-<div class="color-selector-wrapper">
-  {#if label}
-    <span class="field-label">{label}</span>
-  {/if}
-  <button
-    type="button"
-    class="color-selector"
-    class:small={size === 'small'}
-    onclick={handleClick}
-    aria-label={m.color()}
-  >
-    <div
-      class="color-preview"
-      class:small={size === 'small'}
-      style="background-color: {value}"
-    ></div>
-    <span class="color-chevron">
-      <ChevronDown size={16} />
-    </span>
-  </button>
-</div>
-
-<ColorPickerModal
-  bind:open={colorPickerOpen}
-  color={value}
-  onclose={handleClose}
-  onselect={handleColorSelect}
+<ColorPicker
+  triggerLabel={label}
+  hex={value}
+  hue={hsl.hue}
+  saturation={hsl.saturation}
+  lightness={hsl.lightness}
+  onValidate={({
+    hex
+  }: {
+    hex: string;
+    hue: number;
+    saturation: number;
+    lightness: number;
+  }) => onchange?.(hex)}
 />
-
-<style lang="scss">
-  .color-selector-wrapper {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-02);
-  }
-
-  .field-label {
-    font-size: 0.875rem;
-    color: var(--cds-text-secondary);
-    font-weight: 400;
-    margin-bottom: var(--cds-spacing-02);
-  }
-
-  .color-selector {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: var(--cds-spacing-03) var(--cds-spacing-04);
-    background: var(--cds-field);
-    border: none;
-    border-bottom: 1px solid var(--cds-border-strong);
-    cursor: pointer;
-    width: 100%;
-    gap: var(--cds-spacing-03);
-
-    &:hover {
-      background: var(--cds-field-hover);
-    }
-
-    &:focus {
-      outline: 2px solid var(--cds-focus);
-      outline-offset: -2px;
-    }
-
-    &.small {
-      padding: var(--cds-spacing-02) var(--cds-spacing-03);
-    }
-  }
-
-  .color-preview {
-    flex: 1;
-    height: 20px;
-    background-color: var(--cds-ui-01);
-
-    &.small {
-      height: 16px;
-    }
-  }
-
-  .color-chevron {
-    display: flex;
-    align-items: center;
-    color: var(--cds-icon-primary);
-    flex-shrink: 0;
-  }
-</style>

@@ -75,7 +75,10 @@ export function updateDataset(
   state: DatasetsState,
   datasetId: string,
   updates: Partial<
-    Pick<DatasetResult, 'tableName' | 'columns' | 'simplificationApplied'>
+    Pick<
+      DatasetResult,
+      'tableName' | 'columns' | 'simplificationApplied' | 'metadata'
+    >
   >
 ): void {
   const datasetIndex = state.datasets.findIndex((d) => d.id === datasetId);
@@ -93,11 +96,6 @@ export function updateDataset(
   };
 
   state.datasets = replaceAtIndex(state.datasets, datasetIndex, updatedDataset);
-
-  logger.debug('Dataset updated', LogCategory.STORE, {
-    datasetId,
-    updates: Object.keys(updates)
-  });
 }
 
 export function updateDatasetRowCount(
