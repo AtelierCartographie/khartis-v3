@@ -1,40 +1,40 @@
 # Khartis v3 -- Documentation
 
-Khartis est un outil de cartographie thématique open source développé par Sciences Po. Entièrement client-side, il permet de créer des cartes à partir de données tabulaires ou géographiques en trois étapes : **Données**, **Visualisations**, **Habillage**. Aucune donnée ne quitte le navigateur.
+Khartis est un outil de cartographie thematique open source developpe par Sciences Po. Entierement client-side, il permet de creer des cartes a partir de donnees tabulaires ou geographiques en trois etapes : **Donnees**, **Visualisations**, **Habillage**. Aucune donnee ne quitte le navigateur.
 
 ---
 
-## Table des matières
+## Table des matieres
 
 ### Pour les utilisateurs
 
 | Document                                  | Description                                               |
 | ----------------------------------------- | --------------------------------------------------------- |
-| [Guide utilisateur](GUIDE_UTILISATEUR.md) | Prise en main des 3 étapes, import, visualisation, export |
-| [Glossaire](GLOSSAIRE.md)                 | Définitions des termes cartographiques et techniques      |
+| [Guide utilisateur](GUIDE_UTILISATEUR.md) | Prise en main des 3 etapes, import, visualisation, export |
+| [Glossaire](GLOSSAIRE.md)                 | Definitions des termes cartographiques et techniques      |
 
-### Pour les développeurs
+### Pour les developpeurs
 
 | Document                                   | Description                                          |
 | ------------------------------------------ | ---------------------------------------------------- |
-| [Guide développeur](GUIDE_DEVELOPPEUR.md)  | Démarrage rapide, règles, tâches courantes           |
-| [Architecture](ARCHITECTURE.md)            | Conception du système, principes, modèles mentaux    |
-| [Pipeline de données](PIPELINE_DONNEES.md) | Import, validation, traitement, export               |
-| [Visualisations](VISUALISATIONS.md)        | Configuration des cartes thématiques et rendu GPU    |
-| [Gestion d'état](GESTION_ETAT.md)          | Stores, persistance, patterns de features            |
-| [Fonds de carte](FONDS_DE_CARTE.md)        | Préparation, formats et catalogue des fonds de carte |
-| [Tests](TESTS.md)                          | Tests unitaires, intégration et end-to-end           |
-| [Référence](REFERENCE.md)                  | Types, utilitaires, raccourcis clavier               |
+| [Guide developpeur](GUIDE_DEVELOPPEUR.md) | Demarrage rapide, regles, taches courantes           |
+| [Architecture](ARCHITECTURE.md)            | Conception du systeme, principes, modeles mentaux    |
+| [Pipeline de donnees](PIPELINE_DONNEES.md) | Import, validation, traitement, export               |
+| [Visualisations](VISUALISATIONS.md)        | Configuration des cartes thematiques et rendu GPU    |
+| [Gestion d'etat](GESTION_ETAT.md)          | Stores, persistance, patterns de features            |
+| [Fonds de carte](FONDS_DE_CARTE.md)        | Preparation, formats et catalogue des fonds de carte |
+| [Tests](TESTS.md)                          | Tests unitaires, integration et end-to-end           |
+| [Reference](REFERENCE.md)                  | Types, utilitaires, raccourcis clavier               |
 | [PWA](PWA.md)                              | Progressive Web App, support hors-ligne, cache       |
 
-### Contribution et sécurité
+### Contribution et securite
 
 - [CONTRIBUTING.md](../CONTRIBUTING.md) -- Guide de contribution
-- [SECURITY.md](../SECURITY.md) -- Politique de sécurité
+- [SECURITY.md](../SECURITY.md) -- Politique de securite
 
 ---
 
-## Démarrage rapide
+## Demarrage rapide
 
 ```bash
 corepack enable pnpm
@@ -48,15 +48,28 @@ Ouvrir [http://localhost:5176/](http://localhost:5176/).
 
 ## Stack technique
 
-| Technologie             | Rôle                                                      |
-| ----------------------- | --------------------------------------------------------- |
-| SvelteKit 2 (Svelte 5 Runes)     | Framework applicatif, rendu réactif                       |
-| TypeScript              | Typage statique strict                                    |
-| DuckDB WASM             | Moteur de requêtes SQL en mémoire, traitement des données |
-| Deck.gl 9               | Rendu cartographique GPU (couches thématiques)            |
-| MapLibre GL 5           | Rendu des fonds de carte (tuiles vectorielles)            |
-| Carbon Design System    | Composants UI (IBM)                                       |
-| Apache Arrow            | Format columnar en mémoire, passerelle DuckDB/Deck.gl     |
-| Paraglide               | Internationalisation compile-time (FR/EN)                 |
-| IndexedDB / localforage | Persistance locale des projets                            |
-| Vitest / Playwright     | Tests unitaires et end-to-end                             |
+| Technologie                  | Role                                                        |
+| ---------------------------- | ------------------------------------------------------------ |
+| SvelteKit 2 (Svelte 5 Runes) | Framework applicatif, rendu reactif (static adapter)         |
+| TypeScript                   | Typage statique strict                                       |
+| DuckDB WASM 1.33             | Moteur de requetes SQL en memoire, traitement des donnees    |
+| Deck.gl 9.2                  | Rendu cartographique GPU (couches thematiques GeoArrow)      |
+| MapLibre GL 5                | Rendu des fonds de carte tuiles (vectorielles OSM)           |
+| Carbon Components Svelte 0.96 | Composants UI (IBM)                                          |
+| Apache Arrow 21               | Format columnar en memoire, passerelle DuckDB/Deck.gl       |
+| geoarrow-deck-stream          | Parsing GeoArrow -> buffers binaires Deck.gl (fork custom)  |
+| d3-geo + d3-geo-projection   | Projections integrees (Robinson, Natural Earth, etc.)         |
+| proj4                        | Projections exotiques, fallback reprojection EPSG:2154/27572 |
+| parquet-wasm                  | Lecture GeoParquet cote client                              |
+| Paraglide JS 2               | Internationalisation compile-time (FR/EN)                    |
+| IndexedDB / localforage       | Persistance locale des projets                               |
+| Vitest 4 / Playwright         | Tests unitaires et end-to-end                               |
+
+---
+
+## Principes cles
+
+- **Client-only** : aucune donnee ne quitte le navigateur
+- **DuckDB-first** : tout le traitement de donnees via SQL (pas de parsers JS)
+- **GPU-first** : rendu via Deck.gl WebGL, pas de GeoJSON JS pour les visualisations
+- **Svelte 5 Runes** : `$state`, `$derived`, `$effect`, jamais de stores Svelte 4
