@@ -35,7 +35,6 @@
   const {
     column,
     analysis,
-    columnAnalysis: _columnAnalysis,
     sortColumn,
     sortOrder,
     showSummaryPlots,
@@ -304,7 +303,10 @@
         onmouseleave={hideTypeTooltip}
         onfocus={showTypeTooltip}
         onblur={hideTypeTooltip}
-        ariaLabel={m.column_type_badge_label({ column: column.name, type: typeTooltipMessage })}
+        ariaLabel={m.column_type_badge_label({
+          column: column.name,
+          type: typeTooltipMessage
+        })}
       />
       {#if typeTooltipOpen}
         <Portal>

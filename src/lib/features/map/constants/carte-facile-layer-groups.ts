@@ -169,13 +169,29 @@ export const STYLE_CONFIGS: StyleConfig[] = [
     id: 'monde-couleurs',
     zone: 'monde',
     style: 'couleurs',
-    groups: [BACKGROUND, LANDCOVER, HYDRO, BUILDINGS, STREETS, BOUNDARIES, LABELS]
+    groups: [
+      BACKGROUND,
+      LANDCOVER,
+      HYDRO,
+      BUILDINGS,
+      STREETS,
+      BOUNDARIES,
+      LABELS
+    ]
   },
   {
     id: 'monde-niveaux-de-gris',
     zone: 'monde',
     style: 'niveaux-de-gris',
-    groups: [BACKGROUND, LANDCOVER, HYDRO, BUILDINGS, STREETS, BOUNDARIES, LABELS]
+    groups: [
+      BACKGROUND,
+      LANDCOVER,
+      HYDRO,
+      BUILDINGS,
+      STREETS,
+      BOUNDARIES,
+      LABELS
+    ]
   },
   {
     id: 'monde-satellite',
@@ -201,27 +217,19 @@ export function getStyleConfig(id: string): StyleConfig | undefined {
 }
 
 /** Groupes affichés dans l'UI (avec toggle) pour un style donné */
-export function getToggleableGroups(config: StyleConfig): LayerGroupDefinition[] {
+export function getToggleableGroups(
+  config: StyleConfig
+): LayerGroupDefinition[] {
   return config.groups.filter((g) => g.showInUI);
 }
 
 /** État de visibilité par défaut pour un style donné */
-export function getDefaultVisibility(config: StyleConfig): Record<LayerGroupId, boolean> {
+export function getDefaultVisibility(
+  config: StyleConfig
+): Record<LayerGroupId, boolean> {
   const result = {} as Record<LayerGroupId, boolean>;
   for (const g of config.groups) {
     result[g.id] = g.defaultVisible;
   }
   return result;
-}
-
-/**
- * Résout le groupe d'un calque MapLibre à partir de sa métadonnée.
- * Retourne le LayerGroupId ou null si le calque n'a pas le tag.
- */
-export function resolveLayerGroup(layer: {
-  metadata?: Record<string, unknown>;
-}): LayerGroupId | null {
-  const group = layer.metadata?.['cartefacile:group'];
-  if (typeof group === 'string') return group as LayerGroupId;
-  return null;
 }

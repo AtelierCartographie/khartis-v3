@@ -187,53 +187,6 @@ function getGeometryTypesForEncoding(encoding: string): string[] {
   );
 }
 
-/**
- * @deprecated Not used in the main import pipeline. GeoJSON import goes through
- * geojson-processor.ts → processWithSTRead() → fetchArrowTableWithGeometry()
- * which already uses ST_AsWKB() (binary path). This function uses ST_AsGeoJSON()
- * which produces UTF8 string geometry (3-5× larger than WKB). Kept for
- * backwards compatibility but should not be called from new code.
- */
-export async function readGeoJSONAsArrow(
-  geojsonText: string,
-  tableName: string,
-  bbox?: [number, number, number, number]
-): Promise<ArrowTable> {
-  if (!Duck) {
-    throw new Error('DuckDB not initialized');
-  }
-
-  const sanitizedName = tableName
-    .replace(/dataset_/g, '')
-    .replace(/-/g, '_')
-    .replace('.geojson', '');
-
-  const geojsonFile = new File([geojsonText], `${sanitizedName}.geojson`, {
-    type: 'application/geo+json'
-  });
-
-  await Duck.register_files([geojsonFile]);
-
-  const fileWithId = geojsonFile as File & { id?: string };
-  const fileId =
-    fileWithId.id || `${geojsonFile.lastModified}-${geojsonFile.name}`;
-
-  const escapedFileId = escapeSqlString(fileId);
-
-  const result = await Duck.query(
-    `SELECT * EXCLUDE (geom), ST_AsGeoJSON(geom) as geom FROM ST_Read('${escapedFileId}')`,
-    {
-      format: 'arrow-ipc'
-    }
-  );
-
-  let table = tableFromIPC(result as Uint8Array);
-
-  table = addGeoJsonMetadata(table, bbox);
-
-  return table;
-}
-
 function addGeoJsonMetadata(
   table: ArrowTable,
   bbox?: [number, number, number, number]

@@ -61,7 +61,6 @@
 
 <div class="data-tools-bar">
   <div class="tools-left">
-    <!-- Figma order: Summary · Search · Filter · Calc · Delete · HiddenVar · Settings(CSV) · Restore -->
     <IconButton
       kind="ghost"
       size="small"

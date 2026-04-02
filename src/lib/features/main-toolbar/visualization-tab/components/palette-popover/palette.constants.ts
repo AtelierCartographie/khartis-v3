@@ -4,8 +4,7 @@ import {
   divergentSequential,
   categorical,
   resolvePalette,
-  presets,
-  temperature
+  presets
 } from '@ateliercartographie/ok-palette';
 import type {
   WebGLColor,
@@ -18,7 +17,7 @@ import { webglToHex } from '$lib/features/commons/utils/color-utils';
 import { PATTERN_TYPE_MAP } from '$lib/features/map/layers/pattern-texture';
 
 export type { PatternParams };
-export { presets, temperature };
+export { presets };
 export type { ContrastMode, CategoricalColorOptions };
 
 /** Default 4-color sequential preview (Blues ramp) — shared across all config components */

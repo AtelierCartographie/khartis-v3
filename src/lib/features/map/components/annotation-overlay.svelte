@@ -683,7 +683,9 @@
       role="button"
       tabindex="0"
       aria-disabled="false"
-      aria-label={item.type === AnnotationKind.TEXT && typeof item.content === 'string' && item.content.trim()
+      aria-label={item.type === AnnotationKind.TEXT &&
+      typeof item.content === 'string' &&
+      item.content.trim()
         ? item.content.trim()
         : m.annotationImageAlt()}
       onclick={(event: MouseEvent) => handleAnnotationClick(event, item.id)}
