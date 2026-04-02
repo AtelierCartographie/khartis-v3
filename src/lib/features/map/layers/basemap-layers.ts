@@ -71,6 +71,32 @@ import { ScatterplotLayer } from '@deck.gl/layers';
 // Shared extension instance — avoids re-allocation per layer per frame
 const DASH_EXTENSION = new PathStyleExtension({ dash: true });
 
+/**
+ * WeakMap cache for basemap GeoJSON conversions — avoids O(n) arrowTableToGeoJSON()
+ * on every basemap config change (color, opacity, stroke). Same pattern as layer-factory.ts.
+ */
+const basemapGeoJsonCache = new WeakMap<
+  ArrowTable,
+  Map<string, FeatureCollection | null>
+>();
+
+function getCachedBasemapGeoJSON(
+  table: ArrowTable,
+  geoColumn: string
+): FeatureCollection | null {
+  let columnMap = basemapGeoJsonCache.get(table);
+  if (columnMap) {
+    const cached = columnMap.get(geoColumn);
+    if (cached !== undefined) return cached;
+  } else {
+    columnMap = new Map();
+    basemapGeoJsonCache.set(table, columnMap);
+  }
+  const result = arrowTableToGeoJSON(table, geoColumn);
+  columnMap.set(geoColumn, result);
+  return result;
+}
+
 // --- Graticule cache (Opt #2) ---
 let cachedGraticuleKey: string | null = null;
 let cachedGraticuleData: FeatureCollection<
@@ -251,7 +277,10 @@ export function createTerreLayers(
   }
 
   if (geometryInfo.isWkbEncoded || geometryInfo.isGeoJsonEncoded) {
-    const geojson = arrowTableToGeoJSON(worldBaseTable, geometryInfo.geoColumn);
+    const geojson = getCachedBasemapGeoJSON(
+      worldBaseTable,
+      geometryInfo.geoColumn
+    );
     if (geojson) {
       if (config.fillShadow) {
         layers.push(
@@ -438,7 +467,7 @@ export function createFrontieresLayer(
     isLineGeometry(geometryInfo) &&
     (geometryInfo.isWkbEncoded || geometryInfo.isGeoJsonEncoded)
   ) {
-    const geojson = arrowTableToGeoJSON(
+    const geojson = getCachedBasemapGeoJSON(
       frontieresTable,
       geometryInfo.geoColumn
     );
@@ -490,7 +519,7 @@ export function createFrontieresLayer(
   }
 
   if (geometryInfo.isWkbEncoded || geometryInfo.isGeoJsonEncoded) {
-    const geojson = arrowTableToGeoJSON(
+    const geojson = getCachedBasemapGeoJSON(
       frontieresTable,
       geometryInfo.geoColumn
     );
@@ -811,7 +840,10 @@ export function createReliefLayers(
   }
 
   if (geometryInfo.isWkbEncoded || geometryInfo.isGeoJsonEncoded) {
-    const geojson = arrowTableToGeoJSON(worldBaseTable, geometryInfo.geoColumn);
+    const geojson = getCachedBasemapGeoJSON(
+      worldBaseTable,
+      geometryInfo.geoColumn
+    );
     if (geojson) {
       return [
         new GeoJsonLayer({
@@ -1104,7 +1136,10 @@ function createMetadataLandLayers(
         })
       );
     } else if (geometryInfo.isWkbEncoded || geometryInfo.isGeoJsonEncoded) {
-      const geojson = arrowTableToGeoJSON(entry.table, geometryInfo.geoColumn);
+      const geojson = getCachedBasemapGeoJSON(
+        entry.table,
+        geometryInfo.geoColumn
+      );
       if (geojson) {
         layers.push(
           new GeoJsonLayer({
@@ -1187,7 +1222,10 @@ function createMetadataLimitLayers(
         })
       );
     } else if (geometryInfo.isWkbEncoded || geometryInfo.isGeoJsonEncoded) {
-      const geojson = arrowTableToGeoJSON(entry.table, geometryInfo.geoColumn);
+      const geojson = getCachedBasemapGeoJSON(
+        entry.table,
+        geometryInfo.geoColumn
+      );
       if (geojson) {
         layers.push(
           new GeoJsonLayer({
@@ -1255,7 +1293,10 @@ function createMetadataGraticuleLayers(
         })
       );
     } else if (geometryInfo.isWkbEncoded || geometryInfo.isGeoJsonEncoded) {
-      const geojson = arrowTableToGeoJSON(entry.table, geometryInfo.geoColumn);
+      const geojson = getCachedBasemapGeoJSON(
+        entry.table,
+        geometryInfo.geoColumn
+      );
       if (geojson) {
         layers.push(
           new GeoJsonLayer({
@@ -1323,7 +1364,10 @@ function createMetadataGeoLinesLayers(
         })
       );
     } else if (geometryInfo.isWkbEncoded || geometryInfo.isGeoJsonEncoded) {
-      const geojson = arrowTableToGeoJSON(entry.table, geometryInfo.geoColumn);
+      const geojson = getCachedBasemapGeoJSON(
+        entry.table,
+        geometryInfo.geoColumn
+      );
       if (geojson) {
         layers.push(
           new GeoJsonLayer({
@@ -1378,7 +1422,10 @@ function _createMetadataCentroidLayers(
         })
       );
     } else if (geometryInfo.isWkbEncoded || geometryInfo.isGeoJsonEncoded) {
-      const geojson = arrowTableToGeoJSON(entry.table, geometryInfo.geoColumn);
+      const geojson = getCachedBasemapGeoJSON(
+        entry.table,
+        geometryInfo.geoColumn
+      );
       if (geojson) {
         layers.push(
           new GeoJsonLayer({
