@@ -8,6 +8,7 @@
     type SuggestionPreset,
     getSuggestionPalettes,
     generatePaletteColors,
+    generateIntensityShades,
     buildPatternBackground
   } from './palette.constants';
 
@@ -19,6 +20,7 @@
     onTypeChange?: (type: PaletteType) => void;
     onColorBlindChange?: (enabled: boolean) => void;
     onSelect?: (palette: Palette) => void;
+    onIntensitySelect?: (color: string) => void;
   }
 
   let {
@@ -28,10 +30,12 @@
     numClasses,
     onTypeChange: _onTypeChange,
     onColorBlindChange,
-    onSelect
+    onSelect,
+    onIntensitySelect
   }: Props = $props();
 
   let activePreset = $state<SuggestionPreset>('monochrome');
+  let selectedIntensityIndex = $state(3); // center = original color
 
   const palettes = $derived(
     getSuggestionPalettes(activePreset, colorBlindFilter)
@@ -56,6 +60,18 @@
 
   function selectPalette(palette: Palette) {
     onSelect?.(palette);
+  }
+
+  /** Intensity shades: 7 variations of the first color of the selected palette */
+  const intensityShades = $derived.by(() => {
+    const selected = palettes.find((p) => p.id === selectedPaletteId);
+    const seedColor = selected?.colors?.[0] ?? '#08519c';
+    return generateIntensityShades(seedColor);
+  });
+
+  function selectIntensity(index: number, color: string) {
+    selectedIntensityIndex = index;
+    onIntensitySelect?.(color);
   }
 </script>
 
@@ -131,6 +147,28 @@
       </button>
     {/each}
   </div>
+
+  {#if intensityShades.length > 0}
+    <div class="intensity-section">
+      <p class="intensity-label">{m.palette_intensity()}</p>
+      <div class="intensity-row">
+        {#each intensityShades as shade, i (i)}
+          <button
+            type="button"
+            class="intensity-cell"
+            class:selected={selectedIntensityIndex === i}
+            style="background-color: {shade}"
+            onclick={() => selectIntensity(i, shade)}
+            aria-label="{m.palette_intensity()} {i + 1}"
+          >
+            {#if selectedIntensityIndex === i}
+              <Checkmark size={20} />
+            {/if}
+          </button>
+        {/each}
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style lang="scss">
@@ -251,5 +289,49 @@
     filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
     display: flex;
     align-items: center;
+  }
+
+  .intensity-section {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .intensity-label {
+    font-size: 12px;
+    line-height: 16px;
+    letter-spacing: 0.32px;
+    color: var(--cds-text-secondary, #525252);
+    padding-bottom: 8px;
+  }
+
+  .intensity-row {
+    display: flex;
+    height: 32px;
+    overflow: hidden;
+  }
+
+  .intensity-cell {
+    flex: 1;
+    height: 100%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    padding: 0;
+    transition: border-color 0.15s ease;
+
+    &:hover {
+      border-color: var(--cds-border-strong);
+    }
+
+    &.selected {
+      border-color: #012749;
+    }
+
+    :global(svg) {
+      filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
+    }
   }
 </style>
