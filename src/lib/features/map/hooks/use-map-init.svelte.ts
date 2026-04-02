@@ -380,6 +380,7 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
   }
 
   let _initialStyleKey: string | null = null;
+  let mapEventSubscriptions: Array<{ unsubscribe: () => void }> = [];
 
   function initializeMapLibre(
     container: HTMLDivElement,
@@ -410,7 +411,8 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
       dragRotate: false,
       doubleClickZoom: true,
       touchZoomRotate: true,
-      canvasContextAttributes: { preserveDrawingBuffer: true }
+      canvasContextAttributes: { preserveDrawingBuffer: true },
+      cancelPendingTileRequestsWhileZooming: true
     });
 
     map.on('load', () => {
@@ -469,9 +471,11 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
       }
     });
 
-    map.on('zoom', onZoom);
-    map.on('moveend', onMoveEnd);
-    map.on('zoomend', onMoveEnd);
+    mapEventSubscriptions.push(
+      map.on('zoom', onZoom),
+      map.on('moveend', onMoveEnd),
+      map.on('zoomend', onMoveEnd)
+    );
   }
 
   function initialize(
@@ -507,12 +511,31 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
     // Clear reactive refs first so concurrent effects cannot read stale
     // Deck/Map instances during teardown.
     const mapToRemove = map;
+    const overlayToClean = deckOverlay;
     const deckToFinalize = deckInstance;
     map = null;
     deckInstance = null;
     deckOverlay = null;
     isMapLoaded = false;
 
+    // Unsubscribe MapLibre event listeners to prevent memory leaks
+    for (const sub of mapEventSubscriptions) {
+      try {
+        sub.unsubscribe();
+      } catch {
+        // Ignore — subscription may already be detached
+      }
+    }
+    mapEventSubscriptions = [];
+
+    // Release GPU buffers before removing overlay/map
+    if (overlayToClean) {
+      try {
+        overlayToClean.setProps({ layers: [] });
+      } catch {
+        // Ignore — overlay may already be detached
+      }
+    }
     if (mapToRemove) {
       mapToRemove.remove();
     }

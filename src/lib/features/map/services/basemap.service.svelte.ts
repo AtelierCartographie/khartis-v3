@@ -1,7 +1,7 @@
 import { Duck } from '$lib/features/duckdb';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import { type Table as ArrowTable } from 'apache-arrow/Arrow';
-import { SvelteMap } from 'svelte/reactivity';
+// SvelteMap removed — basemap cache is non-reactive data processing
 import { LogCategory, logger } from '../../commons/utils/logger';
 import { resolveStaticAssetUrl } from '../../commons/utils/static-asset-url';
 import { escapeSqlString } from '../../commons/utils/sanitize.utils';
@@ -32,8 +32,8 @@ function getGeometryParquetUrl(filename: string): string {
 interface LoadedBasemap {
   metadata: BasemapMetadata;
   geometryTable: ArrowTable;
-  layerTables: SvelteMap<string, ArrowTable>;
-  simplifiedVariants?: SvelteMap<SimplificationLevel, ArrowTable>;
+  layerTables: Map<string, ArrowTable>;
+  simplifiedVariants?: Map<SimplificationLevel, ArrowTable>;
   activeSimplificationLevel?: SimplificationLevel | null;
 }
 
@@ -48,7 +48,7 @@ function createBasemapService() {
   let attributesLoaded = false;
   let projectionPresetsData: ProjectionPresets | null = null;
   let stylePresetsData: StylePresets | null = null;
-  const basemapCache = new SvelteMap<string, LoadedBasemap>();
+  const basemapCache = new Map<string, LoadedBasemap>();
   const geometryTablesInDuckDB = new Set<string>();
   const loadingBasemaps = new Map<string, Promise<LoadedBasemap | null>>();
 
@@ -218,8 +218,8 @@ function createBasemapService() {
 
   async function loadBasemapLayers(
     metadata: BasemapMetadata
-  ): Promise<SvelteMap<string, ArrowTable>> {
-    const layerTables = new SvelteMap<string, ArrowTable>();
+  ): Promise<Map<string, ArrowTable>> {
+    const layerTables = new Map<string, ArrowTable>();
 
     const loadableLayers = metadata.layers.filter((l) => l.file);
     if (loadableLayers.length === 0) return layerTables;
@@ -511,7 +511,7 @@ function createBasemapService() {
     }
 
     if (!loadedBasemap.simplifiedVariants) {
-      loadedBasemap.simplifiedVariants = new SvelteMap<
+      loadedBasemap.simplifiedVariants = new Map<
         SimplificationLevel,
         ArrowTable
       >();

@@ -45,10 +45,10 @@
 
   const TOOLBAR_TRANSITION_SAFETY_MS = 400;
   const CONTAINER_RESIZE_DEBOUNCE_MS = 100;
-  let displayTables = $state<SvelteMap<string, ArrowTable>>(
+  let displayTables = $state.raw<SvelteMap<string, ArrowTable>>(
     new SvelteMap<string, ArrowTable>()
   );
-  let displayGeoJSONs = $state<SvelteMap<string, FeatureCollection>>(
+  let displayGeoJSONs = $state.raw<SvelteMap<string, FeatureCollection>>(
     new SvelteMap<string, FeatureCollection>()
   );
   let displayDataVersion = $state(0);
