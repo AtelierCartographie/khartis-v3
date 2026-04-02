@@ -84,8 +84,9 @@
   let currentJoinAbortController: AbortController | null = null;
   let previousJoinContext: string | null = null;
   let previousLinkedVariableName: string | null = null;
-  const DATASET_READY_RETRY_DELAY_MS = 120;
-  const DATASET_READY_MAX_RETRIES = 8;
+  let loadingSuggestions = false;
+  const DATASET_READY_RETRY_DELAY_MS = 200;
+  const DATASET_READY_MAX_RETRIES = 15;
 
   const hasGPSCoordinates = $derived(() => {
     if (!selectedDataset) return false;
@@ -205,6 +206,11 @@
       if (abortSignal.aborted) return;
 
       if (!datasetReady) {
+        logger.warn(
+          'Dataset not available after retries — join computation skipped',
+          LogCategory.MAP,
+          { datasetId: resolvedDatasetId }
+        );
         return;
       }
 
@@ -703,6 +709,8 @@
 
   async function loadSuggestions() {
     if (!selectedDataset) return;
+    if (loadingSuggestions) return;
+    loadingSuggestions = true;
 
     try {
       if (!basemapCatalogService.isLoaded) {
@@ -782,6 +790,8 @@
         error
       );
       basemapSuggestions = [];
+    } finally {
+      loadingSuggestions = false;
     }
   }
 
