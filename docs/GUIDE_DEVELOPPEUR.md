@@ -139,7 +139,7 @@ new SolidPolygonLayer({
 
 Deck.gl compare les props par reference a chaque appel `setProps()`. Un ID stable evite le re-upload GPU complet. Un accesseur constant (`[r,g,b,a]`) est plus performant qu'une fonction car Deck.gl n'a pas besoin d'iterer les features.
 
-**Deux modes d'integration dans Khartis** (detail dans `VISUALISATIONS.md`) :
+**Deux modes d'integration dans Khartis** (detail dans `MAP.md`) :
 
 - **`Deck` standalone** (`OrthographicView`) — mode par defaut, Deck.gl controle le rendu complet (fond de carte + donnees)
 - **`MapboxOverlay`** (`@deck.gl/mapbox`) — mode OSM, Deck.gl s'intercale dans le pipeline WebGL de MapLibre
@@ -250,7 +250,7 @@ En mode orthographique, Deck.gl utilise une `OrthographicView` (coordonnees pixe
 
 **`filterArrowTableByTableFilters(table, tableFilters)`** — filtre par la selection de lignes de la data table. Ces filtres sont cumulables avec les premiers.
 
-Ces deux operations se font **cote JavaScript sur la Arrow table en memoire** (pas via DuckDB SQL) pour eviter un aller-retour DuckDB a chaque interaction. Le `DataFilterExtension` de Deck.gl prend en charge un troisieme niveau de filtrage cote GPU (filtre par annee, voir `VISUALISATIONS.md`).
+Ces deux operations se font **cote JavaScript sur la Arrow table en memoire** (pas via DuckDB SQL) pour eviter un aller-retour DuckDB a chaque interaction. Le `DataFilterExtension` de Deck.gl prend en charge un troisieme niveau de filtrage cote GPU (filtre par annee, voir `MAP.md`).
 
 ---
 
@@ -336,17 +336,17 @@ src/
 
 ### Les 10 features
 
-| Feature               | Role                                                                                |
-| --------------------- | ----------------------------------------------------------------------------------- |
-| `commons/`            | Stores globaux, services partages, composants Carbon, utilitaires                   |
-| `create-project/`     | Modale de creation de projet (import, exemples, ouverture)                          |
-| `data-pipeline/`      | Import de fichiers : parsers, validateurs, processeurs                              |
-| `duckdb/`             | Moteur DuckDB WASM : singleton `Duck`, operations, macros SQL                       |
-| `header/`             | Barre de navigation superieure (export, sauvegarde)                                 |
-| `main-toolbar/`       | Sidebar gauche : onglets Donnees, Visualisations, Style                             |
-| `map/`                | Carte Deck.gl + MapLibre : hooks, layer factories, projections                      |
-| `project-management/` | Persistance `.kh`, serialisation, IndexedDB                                         |
-| `side-nav.svelte`     | Menu lateral (langue, projets recents) -- fichier unique, pas une feature directory |
+| Feature               | Role                                                                                                                                           |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `commons/`            | Stores globaux, services partages, composants Carbon, utilitaires                                                                              |
+| `create-project/`     | Modale de creation de projet (import, exemples, ouverture)                                                                                     |
+| `data-pipeline/`      | Import de fichiers : parsers, validateurs, processeurs                                                                                         |
+| `duckdb/`             | Moteur DuckDB WASM : singleton `Duck`, operations, macros SQL                                                                                  |
+| `header/`             | Barre de navigation superieure (export, sauvegarde)                                                                                            |
+| `main-toolbar/`       | Sidebar gauche : onglets Donnees, Visualisations, Style                                                                                        |
+| `map/`                | Carte Deck.gl + MapLibre : hooks, layer factories, projections                                                                                 |
+| `project-management/` | Persistance `.kh`, serialisation, IndexedDB                                                                                                    |
+| `side-nav.svelte`     | Menu lateral (langue, projets recents) -- fichier unique, pas une feature directory                                                            |
 | `step-toolbar/`       | Panneau droit : 10 outils (search, layers, projections, legend, annotations, color-blindness, facets, format, geo-indications, simplification) |
 
 ### Structure type d'une feature
@@ -465,11 +465,14 @@ Fichier -> validateFile() -> DuckDB (read_csv / ST_Read)
 
 ## Ressources complementaires
 
-| Besoin                   | Document                                   |
-| ------------------------ | ------------------------------------------ |
-| Architecture detaillee   | [ARCHITECTURE.md](ARCHITECTURE.md)         |
-| Pipeline de donnees      | [PIPELINE_DONNEES.md](PIPELINE_DONNEES.md) |
-| Systeme de visualisation | [VISUALISATIONS.md](VISUALISATIONS.md)     |
-| Gestion d'etat           | [GESTION_ETAT.md](GESTION_ETAT.md)         |
-| Reference des types      | [REFERENCE.md](REFERENCE.md)               |
-| Strategie de tests       | [TESTS.md](TESTS.md)                       |
+| Besoin                 | Document                                   |
+| ---------------------- | ------------------------------------------ |
+| Architecture detaillee | [ARCHITECTURE.md](ARCHITECTURE.md)         |
+| Pipeline (reference)   | [PIPELINE.md](PIPELINE.md)                 |
+| Pipeline de donnees    | [PIPELINE_DONNEES.md](PIPELINE_DONNEES.md) |
+| DuckDB WASM            | [DUCKDB.md](DUCKDB.md)                     |
+| Rendu map              | [MAP.md](MAP.md)                           |
+| Cartographie           | [CARTOGRAPHIE.md](CARTOGRAPHIE.md)         |
+| Gestion d'etat         | [GESTION_ETAT.md](GESTION_ETAT.md)         |
+| Reference des types    | [REFERENCE.md](REFERENCE.md)               |
+| Strategie de tests     | [TESTS.md](TESTS.md)                       |

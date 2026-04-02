@@ -1,324 +1,288 @@
-# Visualisations et rendu
+# Visualisations et outils — Guide développeur
 
-> Configuration des cartes thematiques et pipeline de rendu GPU. Document technique destine aux developeurs.
+> Parcours utilisateur, outils de viz et habillage. Lire ARCHITECTURE.md, MAP.md et CARTOGRAPHIE.md d'abord.
 
-**Voir aussi** : [Fonds de carte](./FONDS_DE_CARTE.md) | [Architecture](./ARCHITECTURE.md) | [Pipeline de donnees](./PIPELINE_DONNEES.md)
-
----
-
-## Types de visualisation
-
-| Type                        | Valeur enum      | Usage                              | Prerequis                        |
-| --------------------------- | ---------------- | ---------------------------------- | -------------------------------- |
-| **Choroplethe**             | `choropleth`     | Regions colorees selon une valeur  | Geometrie + variable numerique   |
-| **Symboles proportionnels** | `proportional`   | Marqueurs dimensionnes              | Geometrie + variable numerique   |
-| **Categorielle**            | `categorical`    | Categories distinctes              | Geometrie + variable categorielle |
-| **Bivariee**                | `bivariate`      | Croisement de 2 variables           | Geometrie + 2 variables numeriques |
+**Voir aussi** : [ARCHITECTURE](./ARCHITECTURE.md) — [CARTOGRAPHIE](./CARTOGRAPHIE.md) — [MAP](./MAP.md) — [PIPELINE](./PIPELINE.md) — [DUCKDB](./DUCKDB.md)
 
 ---
 
-## Deux modes de rendu
-
-Khartis utilise deux modes selon la presence d'un fond de carte OSM :
-
-### Mode orthographique (par defaut)
-
-[Deck.gl](https://context7.com/visgl/deck.gl) opère en **standalone** avec une `OrthographicView`. Le fond de carte vectoriel est rendu par Deck.gl lui-meme via GeoArrow binaire. C'est le mode principal pour les projections personalisees.
+## Les 3 étapes du parcours
 
 ```
-Deck.gl standalone (OrthographicView)
-├── Couches fond background  (SolidPolygonLayer, PathLayer)
-├── Couches thematiques     (SolidPolygonLayer, PathLayer, ScatterplotLayer)
-└── Couches fond foreground (PathLayer, TextLayer, ScatterplotLayer)
+Données → Visualisations → Habillage
 ```
 
-**Detection** : `!deckOverlay && deckInstance` dans `use-map-layers.svelte.ts`
-
-### Mode MapLibre interleaved (fond OSM)
-
-[Deck.gl](https://context7.com/visgl/deck.gl) s'attache a [MapLibre GL JS](https://context7.com/maplibre/maplibre-gl-js) via `MapboxOverlay` (`@deck.gl/mapbox`). Le fond est des tuiles vectorielles OSM. Les couches thematiques sont **intercalees** dans le style MapLibre (avant le premier `symbol` layer).
-
-```
-MapLibre GL (tuiles + fond)
-└── MapboxOverlay (Deck.gl intercale)
-    └── Couches thematiques uniquement
-```
-
-**Detection** : `deckOverlay` non null
-
-> En mode MapLibre, les couches de fond Deck.gl ne sont pas creees (`shouldShowBasemapLayers = false`). MapLibre gere le fond. La couche OSM raster est ajoutee/retiree dynamiquement via `useMapBasemap.syncOSMRasterLayer()`.
+Navigation libre entre étapes via 3 boutons principaux (gauche). Chaque étape a ses outils dédiés dans la barre d'outils (droite).
 
 ---
 
-## Stack de couches Deck.gl
+## Étape 1 — Données
 
-L'ordre dans `layers[]` determine le z-index : **les indices les plus grands sont rendus au-dessus**. En mode orthographique :
+### Import tabulaire [DATA-01]
 
-```
-[0]  basemap-mers              SolidPolygonLayer   fond marin
-[1]  basemap-meta-land         SolidPolygonLayer   polygone terrestre
-[2]  basemap-terre             SolidPolygonLayer   + PathLayer ombrage/contour
-[3]  basemap-relief            PathLayer           ombrage terrain
-[4]  basemap-lacs              SolidPolygonLayer   polygones lacustres
-     ─────── couches thematiques (N = index de depart, croissent vers M) ───────
-[N]  polygon-layer-{vizId}     SolidPolygonLayer   choroplethe / categorielle
-[N]  line-layer-{vizId}        PathLayer           choroplethe / categorielle (lignes)
-[N]  point-layer-{vizId}       ScatterplotLayer     symboles proportionnels
-[N]  label-layer-{vizId}       TextLayer            etiquettes de valeurs
-     ─────── foreground (M > N -- rendu au-dessus des donnees) ───────
-[M]  basemap-frontieres        PathLayer            frontieres
-[M]  basemap-meta-limit        PathLayer            limites metadonnees
-[M]  basemap-equateur          PathLayer / GeoJsonLayer
-[M]  basemap-meta-geo-lines    PathLayer            equateur, tropiques, cercles
-[M]  basemap-meridiens         GeoJsonLayer         meridiens et paralleles
-[M]  basemap-meta-graticule    PathLayer            graticule metadonnees
-[M]  basemap-villes            ScatterplotLayer + TextLayer
-[M]  basemap-meta-centroid     ScatterplotLayer
-```
+**Formats** : CSV, TSV. Trois méthodes :
 
-**Regle** : foreground (frontieres, graticules, villes) rendu au-dessus des donnees thematiques car M > N.
+- Fichier local (upload)
+- URL vers fichier hébergé
+- Copier-coller
 
-La separation background/foreground est geree par `createBasemapLayers()` qui retourne `{ background, foreground }` (`map/layers/basemap-layers.ts`).
+Détection automatique : séparateur, format numérique (virgule/point), en-tête (`csv-detector.ts`, 4 étapes).
 
----
+### Import géographique [DATA-02]
 
-## Pipeline GeoArrow -> GPU
+**Formats** : Shapefile, GeoJSON, GeoPackage, GeoParquet, KML, KMZ, GPX.
 
-Le coeur du rendu haute performance. Le pipeline evite tout passage par GeoJSON JavaScript.
+Deux usages : (1) viz directe, ou (2) fond de carte pour données tabulaires.
 
-### 1. Source : Arrow table avec metadonnees `geo`
+### Typage des variables [DATA-04]
 
-Les tables Arrow proviennent de [DuckDB](https://context7.com/apache/arrow) (lecture Parquet GeoArrow). Le schema contient une cle `geo` dans ses metadonnees qui identifie la colonne geometrique et son encoding (`geoarrow.polygon`, `geoarrow.multipolygon`, etc.).
+Détection automatique par colonne via `semio-detector.utils.ts` :
 
-```typescript
-const geoInfo = extractGeometryInfo(table);
-// -> { type, encoding, geoColumn, isNativeGeoArrow, isWkbEncoded, isGeoJsonEncoded }
-```
+- **Texte** / **Numérique**
+- Sous-type géographique (geoid, geolat, geolon)
 
-### 2. Parsing : Arrow -> buffers binaires
+L'utilisateur peut override manuellement.
 
-[geoarrow-deck-stream](https://github.com/AtelierCartographie/geoarrow-deck-stream) convertit les colonnes GeoArrow en buffers binaires pour [Deck.gl](https://context7.com/visgl/deck.gl) -- sans objets GeoJSON intermediaires.
+### Contrôle du tableau [DATA-05a–h]
 
-```typescript
-import {
-  parsePolygonsToSolid, // -> BinaryPolygonData
-  parsePaths,           // -> BinaryPathData
-  parsePoints           // -> BinaryPointData
-} from 'geoarrow-deck-stream';
-```
+| Action                         | Description                                                           |
+| ------------------------------ | --------------------------------------------------------------------- |
+| Renommer / Masquer / Supprimer | Colonnes ou lignes                                                    |
+| Statistiques                   | Histogramme, min/max, nulls, uniques                                  |
+| Tri                            | Croissant / décroissant / alphabétique                                |
+| Recherche                      | Recherche + remplacement sur table et carte                           |
+| Filtres                        | `gte`, `lte`, `contains`, `equals`, `between`, `top_asc`, `empty`...  |
+| Calculatrice                   | Nouvelle colonne par formule (moyenne, puissance, arrondi, concat...) |
+| Corbeille                      | Suppression sélective                                                 |
+| Reset                          | Rétablissement des données initiales                                  |
 
-Le bridge `map/utils/geoarrow-stream-bridge.ts` encapsule ces fonctions avec :
+### Géolocalisation [DATA-06]
 
-- **Cache WeakMap** pour le parsing identity (pas de reprojection) -- la meme table Arrow donne le meme buffer
-- **Parsing avec projection** (sans cache) quand une projection d3-geo est active
+Deux méthodes :
 
-### 3. Props Deck.gl : `createSolidPolygonLayerProps`
+- **Entités géographiques** : codes ISO, noms administratifs reconnus
+- **Coordonnées** : colonnes lat/lon distinctes
 
-[geoarrow-deck-stream](https://github.com/AtelierCartographie/geoarrow-deck-stream) fournit des factories qui generent les props binaires pour chaque layer :
+Détection automatique, correction manuelle.
 
-```typescript
-import {
-  createSolidPolygonLayerProps, // pour SolidPolygonLayer
-  createPathLayerProps,          // pour PathLayer
-  createScatterplotLayerProps    // pour ScatterplotLayer
-} from 'geoarrow-deck-stream';
+### Jointure [DATA-07]
 
-const polyData = parsePolygonsToSolid(table);
-new SolidPolygonLayer({
-  id: 'polygon-layer-viz-abc',
-  ...createSolidPolygonLayerProps(polyData), // data, getPolygon, etc. en binaire
-  getFillColor: withOpacity(fillColor, opacity),
-  updateTriggers: { getFillColor: [fillColor, opacity] }
-});
-```
+Liaison données tabulaires ↔ fond de carte via identifiant commun.
 
-### 4. `featureIds` : liaison donnees -> geometrie
+**Suggestion** : proposition du fond le plus adapté selon taux de correspondance.
 
-Le champ `featureIds` (`Uint32Array`) dans chaque buffer map chaque vertex vers son indice de ligne dans la table [Arrow](https://context7.com/apache/arrow) d'origine. Permet aux accesseurs de couleur/taille de retrouver la valeur pour chaque entite, meme apres decoupage ou reprojection.
+**Catalogue** : 111 fonds GeoParquet multi-résolution (France, Europe, Monde).
 
-```typescript
-const colorAttr = createPolygonFillColorAttribute(polyData, (featureId) => {
-  const value = valueVector.get(featureId); // lecture directe dans Arrow
-  return colorScale(value); // -> [r, g, b, a]
-});
-```
+**Jointure assistée** [DATA-07c] : 4 catégories de résultat
+
+- ✅ Jointes (vert) — correspondance exacte
+- ⚠️ À vérifier (jaune) — Jaro-Winkler 0.85–0.99
+- 🟠 Non uniques (orange) — plusieurs correspondances
+- ❌ Non reconnues (rouge) — aucune correspondance
+
+Correction possible dans le tableau. `invalidateSimilarityCache()` après correction.
+
+**OpenStreetMap** [DATA-07e] : superposition OSM pour données GPS — pas de jointure, superposition directe.
+
+### Enrichir un geo [DATA-08]
+
+Workflow fichier geo importé en début : aperçu tabulaire → jointure assistée.
 
 ---
 
-## Projections
+## Étape 2 — Visualisations
 
-### Propagation (mode orthographique)
+### Création [VIZ-01]
 
-```
-basemapService.currentBasemap.metadata.proj_to
-        |
-buildProjectionForBasemap(metadata, 960, 600, projectionPresets)
-        |  (GeoProjection d3-geo)
-customProjection  ->  toutes les couches thematiques
-        |
-resolvePolygonParser(customProjection)  // injecte la projection dans le parser
-```
+Une ou plusieurs viz par projet. Chaque viz = un calque sur la carte.
 
-Dans `use-map-layers.svelte.ts:186-203`.
+### Suggestion [VIZ-02a]
 
-### Types de projection des fonds (`BasemapMetadata.proj_to`)
+Basée sur géométrie + semioTypes + nombre de colonnes. 3 suggestions max. Score de correspondance.
 
-| Type        | Comportement                                   | Exemple                  |
-| ----------- | ---------------------------------------------- | ------------------------ |
-| `identity`  | Lon/lat passthrough (`geoIdentity()`)           | Fonds personnalises      |
-| `simple`    | Projection unique via `proj4d3(proj4string)`   | Natural Earth, Robinson  |
-| `composite` | Projection composite avec encarts DOM-TOM      | France metropolitaine + DOM |
+**4 types de viz** :
 
-Certains noms proj4 non gérés par proj4.js (ex : `natearth2`) sont mappés vers des equivalents d3-geo dans `D3_GEO_PROJECTION_MAP` (`geoarrow-stream-bridge.ts`).
+| Type           | Usage                     | Variable            | Géométries     |
+| -------------- | ------------------------- | ------------------- | -------------- |
+| `choropleth`   | Aplats colorés            | QTR (ratio, 0–100%) | Polygon, Line  |
+| `proportional` | Symboles proportionnels   | QTA (absolu)        | Point, Polygon |
+| `categorical`  | Couleurs par catégorie    | QL / QLO            | Toute          |
+| `bivariate`    | Taille + couleur (2 vars) | QTA + QL/QTR        | Point, Polygon |
 
-### Mode MapLibre : `mapProjectionStore`
+### Paramétrage [VIZ-02b]
 
-En mode OSM, [MapLibre GL JS](https://context7.com/maplibre/maplibre-gl-js) gere la projection. `mapProjectionStore.projection` est transmis a `map.setProjection({ type })`. Un `projectionSuffix` est ajoute aux IDs des couches Deck.gl pour forcer leur recreation lors d'un changement de projection (contournement du bug deck.gl #9466).
+4 primitives (symbole, polygone, ligne, texte) : affichable, masquable, filtrable indépendamment. Réglages : taille, épaisseur, forme, couleur fond, couleur contour.
 
----
+### Couleurs [VIZ-02c]
 
-## Factories de couches
+| Type                     | Usage                      | Familles                                |
+| ------------------------ | -------------------------- | --------------------------------------- |
+| **Qualitatives**         | Catégoriel                 | set1, set2, pastel, dark                |
+| **Intensité**            | Nuances d'une teinte       | Teinte unique                           |
+| **Palette séquentielle** | Choroplèthe, proportionnel | monochrome, bicolore, sépia (5 chacune) |
+| **Palette divergente**   | Avec valeur de rupture     | rdbu, rdylgn, brbg, piyg, prgn          |
+| **Motifs hatch**         | Accessibilité daltonisme   | 10 formes (diagonal, dots, cross...)    |
 
-### `createDeckLayers(table, ctx)` -- Arrow -> couches thematiques
+### Discrétisation [VIZ-02d]
 
-Point d'entree principal. Inspecte le type geometrique de la table et delegue :
+Découpage de données continues en classes. 8 méthodes :
 
-| Geometrie                  | Factory                | Couche [Deck.gl](https://context7.com/visgl/deck.gl)        |
-| -------------------------- | ---------------------- | ----------------------------------------------------------- |
-| POLYGON / MULTIPOLYGON    | `createPolygonLayers()` | `SolidPolygonLayer` + `PathLayer` (contour)                |
-| LINESTRING / MULTILINESTRING | `createLineLayers()`  | `PathLayer`                                                  |
-| POINT / MULTIPOINT         | `createPointLayers()`  | `ScatterplotLayer`                                           |
+| Méthode              | Principe                                            |
+| -------------------- | --------------------------------------------------- |
+| `quantiles`          | Effectifs égaux par classe                          |
+| `equal_interval`     | Intervalles de même amplitude                       |
+| `jenks`              | Ruptures naturelles (k-means)                       |
+| `q6`                 | 6 quantiles prédéfinis (5e, 27.5e, 50e, 72.5e, 95e) |
+| `nested_means`       | Moyennes emboîtées récursives                       |
+| `head_tail`          | Head/tail breaks (distributions lourdes)            |
+| `standard_deviation` | Écart-type (→ nested_means en fallback)             |
+| `manual`             | Bornes saisies manuellement                         |
 
-### `createGeoJsonLayers(geojson, ctx)` -- GeoJSON -> couches thematiques
+Options : méthode + nombre de classes. **Valeur de rupture** : active la palette divergente, positionnable.
 
-Pour datasets GeoJSON importes (WKB non natif). [GeoJsonLayer](https://context7.com/visgl/deck.gl) standard. Moins performant que le path GeoArrow (parsing CPU).
+### Légende [VIZ-02e]
 
-### `createBasemapLayers(worldBaseTable, ctx, additionalData)` -- fond de carte
+Générée automatiquement :
 
-Cree l'ensemble des couches d'habillage depuis `basemapLayersStore`. Retourne `{ background, foreground }`. Mode orthographique uniquement (`shouldShowBasemapLayers`).
-
----
-
-## LayerContext -- interface de configuration
-
-Toute la configuration transmise aux factories via `LayerContext` :
-
-```typescript
-interface LayerContext {
-  viz: VisualizationConfig | null;
-  datasetId: string;
-  fillColor: RGBColor;
-  strokeColor: RGBColor;
-  fillOpacity: number;
-  strokeWidth: number;
-  strokeOpacity: number;
-  statistics: { min: number; max: number };
-  categoryColorMap: Map<string, RGBColor> | null;
-  modelMatrix?: Matrix4 | null;       // mode orthographique
-  projectionSuffix?: string;          // force recreation sur changement projection
-  beforeId?: string;                 // id du premier symbol layer MapLibre (mode interleaved)
-  customProjection?: ProjectionLike;   // projection d3-geo
-  geometryInfo?: GeometryInfo;
-  yearFilter?: { column: string; value: number }; // DataFilterExtension
-}
-```
-
-`buildLayerContextForViz(viz)` dans `thematic-map.svelte` construit ce contexte depuis `visualizationStore`.
+- Choroplèthe → rampe de couleurs + seuils
+- Catégoriel → swatches discrètes
+- Proportionnel → échelle de tailles
+- Motifs → swatches hatchées
 
 ---
 
-## Regles Deck.gl essentielles
+## Outils de visualisation [VIZ-TOOLS]
 
-### IDs stables
+Barre d'outils disponible aux étapes Visualisations et Habillage.
 
-ID stable = pas de re-upload GPU complet. Forme : `{layerType}-{vizId}-{projectionSuffix}`.
+### Recherche [VIZ-TOOLS-a]
 
-```typescript
-// ✓ ID stable -- Deck.gl diff les props
-id: createLayerId(DeckLayerId.POLYGON_LAYER, viz.id, ctx.projectionSuffix);
-```
+Recherche d'entité ou valeur. Highlight sur la carte. Parcours des résultats. DuckDB `normalize_text()` pour la correspondance.
 
-### `updateTriggers`
+### Calques [VIZ-TOOLS-b]
 
-[Deck.gl](https://context7.com/visgl/deck.gl) compare les accesseurs par reference. Pour signaler qu'un accesseur doit etre recalcule :
+Chaque viz génère un calque avec sous-calques par primitive. Fond de carte = calques séparés.
 
-```typescript
-new SolidPolygonLayer({
-  getFillColor: (_, { index }) => colorScale(values[index]),
-  updateTriggers: {
-    getFillColor: [classBreaks, selectedPalette, fillOpacity]
-  }
-});
-```
+Actions : affichage/masquage, renommer, dupliquer, supprimer, déplacer. Sous-calques : mêmes options.
 
-Pour les **accesseurs constants** (`getFillColor: [255, 0, 0]`), `updateTriggers` est inutile.
+Collection : calques regroupés par facette.
 
-### Coût des updates
+### Projections [VIZ-TOOLS-c]
 
-| Operation                     | Impact GPU                          | Quand                           |
-| ----------------------------- | ----------------------------------- | ------------------------------- |
-| Redraw (pan/zoom)             | Tres faible                         | Chaque frame                    |
-| Update via `updateTriggers`   | Faible-moyen                        | Changement couleur, seuils      |
-| Nouvelle prop `data`          | Eleve (re-upload binaire)           | Changement dataset ou filtres JS |
-| Changement d'ID               | Tres eleve (reconstruction complete) | Eviter si possible              |
+12 projections d3-geo : Mercator, Robinson, Winkel Tripel, Orthographique, Natural Earth, Équirectangulaire, Albers, Conique Conforme, Stéréographique, Azimutale Équivalente, Aitoff, Mollweide.
 
-### Extensions singleton
+Projections composites : FRANCE_DOM_TOM (Lambert-93 + encarts ultra-marins), EUROPE_DOM_TOM.
 
-Les extensions Deck.gl sont stateless. Une seule instance par type au niveau module :
+Suggestions algorithmiques par emprise géographique. Catalogue exhaustif + code CRS WKT/PROJ.4 personnalisé. Paramètres : longitude, latitude, rotation.
 
-```typescript
-// ✓ Singletons
-const DATA_FILTER_EXTENSION = new DataFilterExtension({ filterSize: 1 });
-const DASH_EXTENSION = new PathStyleExtension({ dash: true });
-```
+### Simplification [VIZ-TOOLS-d]
 
-### DataFilterExtension -- filtrage par annee (GPU-side)
+| Type de fond | Approche                                                   |
+| ------------ | ---------------------------------------------------------- |
+| Catalogue    | 3 niveaux prédéfinis (fichiers GeoParquet low/medium/high) |
+| Importé      | Ratio utilisateur via `simplify_and_clean()`               |
+| OSM          | Impossible (tuiles vectorielles)                           |
 
-Pour les datasets temporels, le filtre par annee est applique cote GPU via [DataFilterExtension](https://context7.com/visgl/deck.gl). La table Arrow complete (non filtree) est passee a `createDeckLayers` pour stabiliser le cache WeakMap :
+### Collection / Facettes [VIZ-TOOLS-e]
 
-```typescript
-const filterAttr = filterValueAttr(binaryData, table, yearFilter.column);
-dataObj.attributes.getFilterValue = filterAttr;
+Small multiples : chaque variable → une carte distincte. Création via sélection de plusieurs variables dans une primitive.
 
-new SolidPolygonLayer({
-  extensions: [DATA_FILTER_EXTENSION],
-  filterRange: [yearFilter.value, yearFilter.value],
-  updateTriggers: { getFilterValue: [yearFilter.column, yearFilter.value] }
-});
-```
+Options : échelle commune ou propre, nombre de colonnes, distribution.
+
+**Chaque facette = full ThematicMap** (MapLibre + Deck.gl). Limite ~9 facets (8–16 WebGL2 contexts).
 
 ---
 
-## Methodes de classification
+## Étape 3 — Habillage
 
-| Methode                | Valeur enum            | Algorithme                              |
-| ---------------------- | ---------------------- | --------------------------------------- |
-| **Intervalles egaux**  | `equal_interval`       | `(max - min) / k`                       |
-| **Quantiles**          | `quantiles`            | Effectifs egaux, gestion des ex-aequo   |
-| **Jenks**              | `jenks`                | Ruptures naturelles (fallback: Quantiles) |
-| **Ecart-type**         | `standard_deviation`   | `moyenne +/- n * sigma`                 |
-| **Q6**                 | `q6`                   | 6 classes par quantiles                 |
-| **Moyennes emboitees** | `nested_means`         | Subdivision recursive par la moyenne     |
-| **Head/Tail**          | `head_tail`            | Partitionnement par la moyenne iteree    |
-| **Manuel**             | `manual`               | Seuils definis par l'utilisateur        |
+Usage libre — pas de structure prédéfinie.
 
-Calcul via `classificationService` (8 methodes, DuckDB SQL macros). **Par defaut** : 5 classes.
+### Habillage prédéfini [HAB-01]
+
+Dès création : titre, sous-titre, source, crédit, signature. Placeholder si vide (vierge = absent à l'export).
+
+### Format [HAB-02a]
+
+Formats prédéfinis (A4, A3, écran) + personnalisé pixels. Marges, couleur de page, grille d'alignement magnétique.
+
+### Légende [HAB-02b]
+
+Affichage/masquage par légende. Titre, sous-titre, note. Style : police, taille, couleur texte, arrière-plan.
+
+### Indications géographiques [HAB-02c]
+
+- **Échelle** : ligne ou boîte, unité (km/miles), couleur
+- **Orientation** : flèche ou rose des vents
+- **Carte en encart** : globe ou planisphère, taille, réutilisation des couleurs du fond principal
+
+### Annotations [HAB-02d]
+
+SVG overlay, ancrées page (non géolocalisées). 4 types :
+
+- **Texte** : style prédéfini ou personnalisé
+- **Forme** : flèche, ligne, rond, rectangle, triangle
+- **Dessin** : tracé manuel Bézier
+- **Image** : import jpg/png, placement libre
+
+### Daltonisme [HAB-02e]
+
+Simulation CSS (n'affecte pas l'export) : protanopie, deutéranopie, tritanopie.
 
 ---
 
-## Collections (facettes)
+## Personnalisation du fond [VIZ-07]
 
-Chaque facette instancie un `ThematicMap` complet ([Deck.gl](https://context7.com/visgl/deck.gl) + [MapLibre GL JS](https://context7.com/maplibre/maplibre-gl-js)). Les navigateurs limitent les contextes WebGL2 a 8-16 simultanes -- contrainte directe sur le nombre maximum de facettes.
+### Catalogue [VIZ-07a]
+
+9 couches affichables/masquables/personnalisables : terre, mers, lacs, relief, frontières, villes, équateur, méridiens, graticules.
+
+### Importé [VIZ-07b]
+
+Personnalisation réduite : couleur de fond, contour (couleur, épaisseur, pointillés, opacité, ombre).
+
+### OpenStreetMap [VIZ-07c]
+
+6 styles MapLibre (France/Monde × couleurs/grayscale/satellite). Calques toggleables : routes, étiquettes.
 
 ---
 
-## Points d'extension
+## Export [DL-01 à DL-03]
 
-- **Nouveau type de visualisation** : valeur dans `VisualizationType`, defauts dans `visualizationStore` (`getDefaultStyle`, `getDefaultModes`), factory dans `map/layers/`, regles dans `viz-suggester.service.ts`
-- **Nouvelle methode de classification** : valeur dans `ClassificationMethod`, implementation dans `classificationService`
-- **Nouvelle palette** : objet `ColorPalette` (id, type, couleurs, flag accessibilite)
-- **Nouveau type de couche de fond** : `DeckLayerId` dans `basemap-layers.store.svelte`, factory dans `basemap-layers.ts`
+| Format        | Contenu                               |
+| ------------- | ------------------------------------- |
+| JPG bitmap    | 1080p / 2K / 4K — carte complète      |
+| SVG vectoriel | Calques organisés par éléments et viz |
+| CSV           | Données tabulaires (géo exclue)       |
+| GeoJSON       | Données + géométrie                   |
+| .kh projet    | Fichier réimportable pour reprise     |
 
 ---
 
-**Voir aussi :** [FONDS_DE_CARTE.md](./FONDS_DE_CARTE.md) — [PIPELINE_DONNEES.md](./PIPELINE_DONNEES.md) — [ARCHITECTURE.md](./ARCHITECTURE.md) — [GESTION_ETAT.md](./GESTION_ETAT.md)
+## Flux d'intégration
+
+```
+Fichier → validateFile() → DuckDB → DatasetResult
+  → Semio detection → Viz suggestion → VisualizationConfig
+    → calculateBreaks() (DuckDB macros) → generateColorsForBreaks() (ok-palette)
+      → Arrow table → createDeckLayers() → MapboxOverlay → GPU
+```
+
+**Stores principaux** :
+
+- `datasetsStore` — jeux de données importés
+- `visualizationStore` — configurations de viz (type, mapping, style, classification)
+- `mapStyleStore` — fond de carte actif
+- `annotationsStore` — annotations SVG overlay
+- `legendStore` — légendes
+
+**Points d'entrée** :
+
+- `dataPipeline.processFile()` — import de fichier
+- `vizSuggester.suggestVisualizations()` — suggestion de viz
+- `calculateBreaks()` — discrétisation (8 méthodes)
+- `generateColorsForBreaks()` — palette (séquentielle/divergente)
+- `duckDBOrchestrator` — jointures, filtres, stats
+
+---
+
+**Voir aussi :** [ARCHITECTURE.md](./ARCHITECTURE.md) — [CARTOGRAPHIE.md](./CARTOGRAPHIE.md) — [MAP.md](./MAP.md) — [PIPELINE.md](./PIPELINE.md) — [DUCKDB.md](./DUCKDB.md) — [GUIDE_DEVELOPPEUR.md](./GUIDE_DEVELOPPEUR.md)

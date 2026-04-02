@@ -30,8 +30,12 @@ VitePWA({
   registerType: 'prompt',
   devOptions: { enabled: true, type: 'module' },
   includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
-  workbox: { /* voir ci-dessous */ },
-  manifest: { /* voir ci-dessous */ }
+  workbox: {
+    /* voir ci-dessous */
+  },
+  manifest: {
+    /* voir ci-dessous */
+  }
 });
 ```
 
@@ -72,16 +76,16 @@ Les fichiers WASM sont exclus du precache et charges a la demande via le cache r
 
 > **Note** : ces tailles sont des estimations susceptibles de changer. Verifier les valeurs reelles dans `vite.config.ts` et `tsconfig.json` avant de s'y fier pour le dimensionnement d'un dispositif de stockage.
 
-| Cache               | Contenu                    | Entrees max | Expiration | Taille estimee |
-| ------------------- | -------------------------- | ----------- | ---------- | -------------- |
-| `precache`          | App shell (JS/CSS/HTML)    | --          | --         | ~4 Mo          |
-| `wasm-workers`      | Binaires WASM, workers     | 20          | 90 jours   | ~81 Mo         |
-| `basemaps-data`     | GeoParquet fonds de carte   | 100         | 1 an       | ~25 Mo         |
-| `duckdb-extensions` | Extensions DuckDB          | 10          | 30 jours   | < 1 Mo         |
-| `osm-tiles`         | Tuiles OpenStreetMap       | 500         | 90 jours   | ~25 Mo         |
-| `carto-tiles`       | Tuiles Carto               | 500         | 90 jours   | ~25 Mo         |
-| `openfreemap-tiles` | Tuiles OpenFreeMap         | 500         | 90 jours   | ~25 Mo         |
-| **Total**           |                            |             |            | **~186 Mo**    |
+| Cache               | Contenu                   | Entrees max | Expiration | Taille estimee |
+| ------------------- | ------------------------- | ----------- | ---------- | -------------- |
+| `precache`          | App shell (JS/CSS/HTML)   | --          | --         | ~4 Mo          |
+| `wasm-workers`      | Binaires WASM, workers    | 20          | 90 jours   | ~81 Mo         |
+| `basemaps-data`     | GeoParquet fonds de carte | 100         | 1 an       | ~25 Mo         |
+| `duckdb-extensions` | Extensions DuckDB         | 10          | 30 jours   | < 1 Mo         |
+| `osm-tiles`         | Tuiles OpenStreetMap      | 500         | 90 jours   | ~25 Mo         |
+| `carto-tiles`       | Tuiles Carto              | 500         | 90 jours   | ~25 Mo         |
+| `openfreemap-tiles` | Tuiles OpenFreeMap        | 500         | 90 jours   | ~25 Mo         |
+| **Total**           |                           |             |            | **~186 Mo**    |
 
 Installation initiale : ~4 Mo. Apres utilisation complete : ~186 Mo.
 

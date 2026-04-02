@@ -17,7 +17,7 @@ Khartis est un outil de cartographie thematique open source developpe par Scienc
 
 | Document                                   | Description                                          |
 | ------------------------------------------ | ---------------------------------------------------- |
-| [Guide developpeur](GUIDE_DEVELOPPEUR.md) | Demarrage rapide, regles, taches courantes           |
+| [Guide developpeur](GUIDE_DEVELOPPEUR.md)  | Demarrage rapide, regles, taches courantes           |
 | [Architecture](ARCHITECTURE.md)            | Conception du systeme, principes, modeles mentaux    |
 | [Pipeline de donnees](PIPELINE_DONNEES.md) | Import, validation, traitement, export               |
 | [Visualisations](VISUALISATIONS.md)        | Configuration des cartes thematiques et rendu GPU    |
@@ -48,22 +48,22 @@ Ouvrir [http://localhost:5176/](http://localhost:5176/).
 
 ## Stack technique
 
-| Technologie                  | Role                                                        |
-| ---------------------------- | ------------------------------------------------------------ |
-| SvelteKit 2 (Svelte 5 Runes) | Framework applicatif, rendu reactif (static adapter)         |
-| TypeScript                   | Typage statique strict                                       |
-| DuckDB WASM 1.33             | Moteur de requetes SQL en memoire, traitement des donnees    |
-| Deck.gl 9.2                  | Rendu cartographique GPU (couches thematiques GeoArrow)      |
-| MapLibre GL 5                | Rendu des fonds de carte tuiles (vectorielles OSM)           |
+| Technologie                   | Role                                                         |
+| ----------------------------- | ------------------------------------------------------------ |
+| SvelteKit 2 (Svelte 5 Runes)  | Framework applicatif, rendu reactif (static adapter)         |
+| TypeScript                    | Typage statique strict                                       |
+| DuckDB WASM 1.33              | Moteur de requetes SQL en memoire, traitement des donnees    |
+| Deck.gl 9.2                   | Rendu cartographique GPU (couches thematiques GeoArrow)      |
+| MapLibre GL 5                 | Rendu des fonds de carte tuiles (vectorielles OSM)           |
 | Carbon Components Svelte 0.96 | Composants UI (IBM)                                          |
-| Apache Arrow 21               | Format columnar en memoire, passerelle DuckDB/Deck.gl       |
-| geoarrow-deck-stream          | Parsing GeoArrow -> buffers binaires Deck.gl (fork custom)  |
-| d3-geo + d3-geo-projection   | Projections integrees (Robinson, Natural Earth, etc.)         |
-| proj4                        | Projections exotiques, fallback reprojection EPSG:2154/27572 |
-| parquet-wasm                  | Lecture GeoParquet cote client                              |
-| Paraglide JS 2               | Internationalisation compile-time (FR/EN)                    |
+| Apache Arrow 21               | Format columnar en memoire, passerelle DuckDB/Deck.gl        |
+| geoarrow-deck-stream          | Parsing GeoArrow -> buffers binaires Deck.gl (fork custom)   |
+| d3-geo + d3-geo-projection    | Projections integrees (Robinson, Natural Earth, etc.)        |
+| proj4                         | Projections exotiques, fallback reprojection EPSG:2154/27572 |
+| parquet-wasm                  | Lecture GeoParquet cote client                               |
+| Paraglide JS 2                | Internationalisation compile-time (FR/EN)                    |
 | IndexedDB / localforage       | Persistance locale des projets                               |
-| Vitest 4 / Playwright         | Tests unitaires et end-to-end                               |
+| Vitest 4 / Playwright         | Tests unitaires et end-to-end                                |
 
 ---
 
