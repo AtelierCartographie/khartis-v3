@@ -51,11 +51,17 @@ export function buildYearFilterWhereClause(
  * it to standard WKB. When DuckDB >= 1.33 returns geoarrow.wkb natively,
  * the ST_AsWKB() call is a no-op.
  */
+/** Column info returned by fetchArrowTableWithGeometry for downstream reuse. */
+export interface GeomColumnInfo {
+  column_name: string;
+  column_type: string;
+}
+
 export async function fetchArrowTableWithGeometry(
   tableName: string,
   Duck: DuckDBClientForArrow,
   whereClause?: string | null
-): Promise<Table> {
+): Promise<{ table: Table; geomColumn: GeomColumnInfo | undefined }> {
   const tableInfo = await Duck.describe_table(tableName);
   const columns = tableInfo.name.map((name: string, index: number) => ({
     column_name: name,
@@ -93,7 +99,7 @@ export async function fetchArrowTableWithGeometry(
       const firstBatchEmpty =
         streamTable.batches.length > 0 && streamTable.batches[0].numRows === 0;
       if (!firstBatchEmpty) {
-        return streamTable;
+        return { table: streamTable, geomColumn };
       }
       logger.debug(
         'queryStreaming first batch is empty (schema header), retrying with regular query',
@@ -115,14 +121,16 @@ export async function fetchArrowTableWithGeometry(
   })) as ArrayBuffer | Uint8Array;
   ipcBuffer = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
 
-  return tableFromIPC(ipcBuffer);
+  return { table: tableFromIPC(ipcBuffer), geomColumn };
 }
 
 export async function addGeoArrowMetadataFromDuckDB(
   table: Table,
   tableName: string,
   Duck: DuckDBClientForArrow,
-  cachedGeoArrowMetadata?: GeoArrowMetadata
+  cachedGeoArrowMetadata?: GeoArrowMetadata,
+  /** Pre-fetched geometry column info from fetchArrowTableWithGeometry — avoids redundant describe_table() call */
+  prefetchedGeomColumn?: GeomColumnInfo
 ): Promise<Table> {
   try {
     let geomColumn: { column_name: string; column_type: string } | undefined;
@@ -145,15 +153,20 @@ export async function addGeoArrowMetadataFromDuckDB(
         geometryType
       });
     } else {
-      const tableInfo = await Duck.describe_table(tableName);
-      const columns = tableInfo.name.map((name: string, index: number) => ({
-        column_name: name,
-        column_type: tableInfo.type[index]
-      }));
+      // Resolve geometry column: reuse pre-fetched info or call describe_table()
+      if (prefetchedGeomColumn) {
+        geomColumn = prefetchedGeomColumn;
+      } else {
+        const tableInfo = await Duck.describe_table(tableName);
+        const columns = tableInfo.name.map((name: string, index: number) => ({
+          column_name: name,
+          column_type: tableInfo.type[index]
+        }));
 
-      geomColumn = columns.find((c: { column_type: string }) =>
-        isGeometryColumnType(c.column_type)
-      );
+        geomColumn = columns.find((c: { column_type: string }) =>
+          isGeometryColumnType(c.column_type)
+        );
+      }
 
       if (!geomColumn) {
         logger.warn(
@@ -164,10 +177,16 @@ export async function addGeoArrowMetadataFromDuckDB(
         return table;
       }
 
+      // Sample geometry types from first 1000 non-null rows instead of full table scan.
+      // DISTINCT on the full table is O(n) and expensive for large datasets.
+      // 1000 rows is sufficient to detect mixed types (Point + MultiPoint, etc.).
       const geomTypeResult = (await Duck.query(
-        `SELECT DISTINCT ST_GeometryType("${geomColumn.column_name}") as geom_type
-         FROM "${tableName}"
-         WHERE "${geomColumn.column_name}" IS NOT NULL`,
+        `SELECT DISTINCT geom_type FROM (
+           SELECT ST_GeometryType("${geomColumn.column_name}") as geom_type
+           FROM "${tableName}"
+           WHERE "${geomColumn.column_name}" IS NOT NULL
+           LIMIT 1000
+         )`,
         { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
       )) as Array<{ geom_type: string }>;
 
@@ -322,11 +341,16 @@ export async function createArrowTableWithMetadata(
   arrowTableWithMetadata: Table;
   geoArrowMetadata: GeoArrowMetadata | null;
 }> {
-  const arrowTable = await fetchArrowTableWithGeometry(tableName, Duck);
+  const { table: arrowTable, geomColumn } = await fetchArrowTableWithGeometry(
+    tableName,
+    Duck
+  );
   const arrowTableWithMetadata = await addGeoArrowMetadataFromDuckDB(
     arrowTable,
     tableName,
-    Duck
+    Duck,
+    undefined,
+    geomColumn
   );
   const geoArrowMetadata = extractMetadata(arrowTableWithMetadata);
   if (!geoArrowMetadata) {
@@ -369,7 +393,7 @@ export async function getArrowTableDirect(
   whereClause?: string | null
 ): Promise<Table> {
   if (whereClause) {
-    const baseTable = await fetchArrowTableWithGeometry(
+    const { table: baseTable, geomColumn } = await fetchArrowTableWithGeometry(
       tableName,
       Duck,
       whereClause
@@ -377,7 +401,9 @@ export async function getArrowTableDirect(
     const tableWithMetadata = await addGeoArrowMetadataFromDuckDB(
       baseTable,
       tableName,
-      Duck
+      Duck,
+      undefined,
+      geomColumn
     );
     logger.info(
       'Created filtered Arrow table with metadata',
@@ -398,11 +424,16 @@ export async function getArrowTableDirect(
     return cached;
   }
 
-  const baseTable = await fetchArrowTableWithGeometry(tableName, Duck);
+  const { table: baseTable, geomColumn } = await fetchArrowTableWithGeometry(
+    tableName,
+    Duck
+  );
   const tableWithMetadata = await addGeoArrowMetadataFromDuckDB(
     baseTable,
     tableName,
-    Duck
+    Duck,
+    undefined,
+    geomColumn
   );
 
   setCache(tableWithMetadata);
