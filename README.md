@@ -84,10 +84,12 @@ pnpm build && pnpm preview
 | `pnpm build`         | Production build                    |
 | `pnpm check`         | TypeScript + Svelte type check      |
 | `pnpm lint`          | ESLint + Prettier check             |
+| `pnpm test`          | Server-side CI test suite           |
 | `pnpm format`        | Auto-format code                    |
 | `pnpm test:unit`     | Vitest unit tests                   |
 | `pnpm test:e2e`      | Playwright E2E tests                |
 | `pnpm test:pipeline` | Pipeline + DuckDB integration tests |
+| `pnpm test:duckdb`   | DuckDB server-side tests            |
 
 **i18n**: Inlang Paraglide (English, French) — all user-facing strings via `m.key()` syntax.
 
@@ -107,7 +109,8 @@ Recent versions of Chrome, Firefox, Edge, and Safari on desktop.
 See [CONTRIBUTING.md](CONTRIBUTING.md). Before submitting a PR:
 
 - Follow [Conventional Commits](https://www.conventionalcommits.org/) — `feat:`, `fix:`, `refactor:`, `test:`, `chore:`
-- Run `pnpm lint && pnpm check && pnpm test:unit` locally
+- Run `pnpm lint && pnpm check && pnpm test` locally
+- Run `pnpm test:unit` for client, store, or utility changes, and `pnpm test:e2e` for workflow or rendering changes
 - Add/update i18n keys when adding user-facing text (no hardcoded strings)
 - Keep accessibility in mind (keyboard navigation, contrast)
 
