@@ -125,6 +125,21 @@ const pathCache = new WeakMap<ArrowTable, BinaryPathData>();
 const solidPolygonCache = new WeakMap<ArrowTable, BinaryPolygonData>();
 const pointCache = new WeakMap<ArrowTable, BinaryPointData>();
 
+// Projection-aware caches (2-key: table → projection → result).
+// The ProjectionLike key is stable per basemap thanks to memoization in use-map-layers.
+const projSolidPolygonCache = new WeakMap<
+  ArrowTable,
+  Map<ProjectionLike, BinaryPolygonData>
+>();
+const projPathCache = new WeakMap<
+  ArrowTable,
+  Map<ProjectionLike, BinaryPathData>
+>();
+const projPointCache = new WeakMap<
+  ArrowTable,
+  Map<ProjectionLike, BinaryPointData>
+>();
+
 export function parsePaths(table: ArrowTable): BinaryPathData {
   let result = pathCache.get(table);
   if (!result) {
@@ -147,7 +162,10 @@ export function parseSolidPolygons(table: ArrowTable): BinaryPolygonData {
   let result = solidPolygonCache.get(table);
   if (!result) {
     try {
-      result = parsePolygonsToSolid(normalizeGeomColumnName(table), IDENTITY_OPTIONS);
+      result = parsePolygonsToSolid(
+        normalizeGeomColumnName(table),
+        IDENTITY_OPTIONS
+      );
     } catch (error) {
       logger.error(
         'Failed to parse solid polygons from Arrow table',
@@ -339,18 +357,30 @@ export function computeProjectedBboxForBasemap(
 
 /**
  * Parse geometry with a specific projection.
- * Does NOT cache results (projection may change with resize).
+ * Cached by (table, projection) — the projection reference is stable per basemap
+ * (memoized in use-map-layers.svelte.ts), so the Map key is a reference equality check.
  */
 export function parseSolidPolygonsWithProjection(
   table: ArrowTable,
   projection: ProjectionLike,
   rewind = true
 ): BinaryPolygonData {
-  return parsePolygonsToSolid(normalizeGeomColumnName(table), {
+  let projMap = projSolidPolygonCache.get(table);
+  if (projMap) {
+    const cached = projMap.get(projection);
+    if (cached) return cached;
+  }
+  const result = parsePolygonsToSolid(normalizeGeomColumnName(table), {
     projection,
     capacityMultiplier: 1.0,
     rewind
   });
+  if (!projMap) {
+    projMap = new Map();
+    projSolidPolygonCache.set(table, projMap);
+  }
+  projMap.set(projection, result);
+  return result;
 }
 
 export function parsePathsWithProjection(
@@ -358,11 +388,22 @@ export function parsePathsWithProjection(
   projection: ProjectionLike,
   rewind = true
 ): BinaryPathData {
-  return parseGeometry(normalizeGeomColumnName(table), {
+  let projMap = projPathCache.get(table);
+  if (projMap) {
+    const cached = projMap.get(projection);
+    if (cached) return cached;
+  }
+  const result = parseGeometry(normalizeGeomColumnName(table), {
     projection,
     capacityMultiplier: 1.0,
     rewind
   });
+  if (!projMap) {
+    projMap = new Map();
+    projPathCache.set(table, projMap);
+  }
+  projMap.set(projection, result);
+  return result;
 }
 
 export function parsePointDataWithProjection(
@@ -370,11 +411,22 @@ export function parsePointDataWithProjection(
   projection: ProjectionLike,
   rewind = true
 ): BinaryPointData {
-  return parsePoints(normalizeGeomColumnName(table), {
+  let projMap = projPointCache.get(table);
+  if (projMap) {
+    const cached = projMap.get(projection);
+    if (cached) return cached;
+  }
+  const result = parsePoints(normalizeGeomColumnName(table), {
     projection,
     capacityMultiplier: 1.0,
     rewind
   });
+  if (!projMap) {
+    projMap = new Map();
+    projPointCache.set(table, projMap);
+  }
+  projMap.set(projection, result);
+  return result;
 }
 
 // ---------------------------------------------------------------------------

@@ -187,6 +187,13 @@ function getGeometryTypesForEncoding(encoding: string): string[] {
   );
 }
 
+/**
+ * @deprecated Not used in the main import pipeline. GeoJSON import goes through
+ * geojson-processor.ts → processWithSTRead() → fetchArrowTableWithGeometry()
+ * which already uses ST_AsWKB() (binary path). This function uses ST_AsGeoJSON()
+ * which produces UTF8 string geometry (3-5× larger than WKB). Kept for
+ * backwards compatibility but should not be called from new code.
+ */
 export async function readGeoJSONAsArrow(
   geojsonText: string,
   tableName: string,
