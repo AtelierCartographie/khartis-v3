@@ -6,12 +6,10 @@
     Slider,
     Toggle
   } from 'carbon-components-svelte';
-  import { Launch, SettingsAdjust } from 'carbon-icons-svelte';
+  import { Draggable, Launch, SettingsAdjust } from 'carbon-icons-svelte';
+  import { dndzone } from 'svelte-dnd-action';
   import { facetsStore, SCALE_MODE } from './facets.store.svelte';
-  import {
-    VisualizationType,
-    visualizationStore
-  } from '$lib/features/commons/store/visualization.store.svelte';
+  import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { createProjectActions } from '$lib/features/commons/store/create-project.store.svelte';
   import { COLUMN_TYPE_GEOMETRY } from '$lib/features/commons/constants/data.constants';
@@ -24,18 +22,11 @@
   const syncPanZoom = $derived(facetsStore.syncPanZoom);
   const scaleMode = $derived(facetsStore.scaleMode);
 
-  const isProportional = $derived(
-    selectedViz?.type === VisualizationType.PROPORTIONAL
-  );
-
   let selectedMapIndex = $state(0);
+  const safeMapIndex = $derived(
+    Math.min(selectedMapIndex, Math.max(0, facetVisualizations.length - 1))
+  );
   const columnsValue = $derived(layout.columns);
-
-  $effect(() => {
-    if (selectedMapIndex >= facetVisualizations.length) {
-      selectedMapIndex = 0;
-    }
-  });
 
   const dataFieldItems = $derived.by(() => {
     const dataset = datasetsStore.selectedDataset;
@@ -56,6 +47,45 @@
     await facetsStore.enable(selectedViz.id, selectedVariableIds);
   }
 
+  interface DndVariable {
+    id: string;
+    name: string;
+  }
+
+  const FLIP_DURATION_MS = 200;
+  const DND_TYPE = 'facet-variables';
+
+  let dndVariables = $state<DndVariable[]>([]);
+  let dragging = false;
+
+  $effect(() => {
+    if (!dragging) {
+      dndVariables = variables.map((v) => ({ id: v, name: v }));
+    }
+  });
+
+  function handleConsider(e: Event): void {
+    dragging = true;
+    dndVariables = (e as CustomEvent).detail.items;
+  }
+
+  function handleFinalize(e: Event): void {
+    const newItems: DndVariable[] = (e as CustomEvent).detail.items;
+    dndVariables = newItems;
+    dragging = false;
+
+    const oldIds = variables;
+    const newIds = newItems.map((item) => item.id);
+
+    for (let i = 0; i < newIds.length; i++) {
+      if (oldIds[i] !== newIds[i]) {
+        const fromIndex = oldIds.indexOf(newIds[i]);
+        facetsStore.reorderVariables(fromIndex, i);
+        break;
+      }
+    }
+  }
+
   const FACETS_HELP_URL =
     'https://cartographie.sciencespo.fr/khartis/help/facets';
 
@@ -73,8 +103,7 @@
   }
 
   function handleColumnsChange(value: number) {
-    const columns = Math.max(2, Math.min(4, value)) as 2 | 3 | 4;
-    facetsStore.setColumns(columns);
+    facetsStore.setColumns(Math.max(1, Math.min(6, value)) as number);
   }
 
   const mapCount = $derived(facetVisualizations.length);
@@ -82,11 +111,11 @@
     Array.from({ length: mapCount }, (_, i) => i + 1)
   );
 
-  // Grid of maps: rows of 2
-  const mapRows = $derived(() => {
+  const mapRows = $derived.by(() => {
     const rows: number[][] = [];
-    for (let i = 0; i < mapPositions.length; i += 2) {
-      rows.push(mapPositions.slice(i, i + 2));
+    const cols = layout.columns;
+    for (let i = 0; i < mapPositions.length; i += cols) {
+      rows.push(mapPositions.slice(i, i + cols));
     }
     return rows;
   });
@@ -105,8 +134,8 @@
         <p class="helper-text">{m.facets_display_helper()}</p>
         <div class="slider-wrapper">
           <Slider
-            min={2}
-            max={4}
+            min={1}
+            max={6}
             step={1}
             labelText={m.facets_columns_label()}
             value={columnsValue}
@@ -133,6 +162,9 @@
             on:toggle={() => facetsStore.toggleScaleMode()}
           />
         </div>
+        {#if mapCount > 9}
+          <p class="warning-text">{m.facets_performance_warning()}</p>
+        {/if}
       </div>
 
       <!-- Distribution section -->
@@ -148,12 +180,12 @@
           <div class="maps-switcher">
             <p class="maps-label">{m.facets_maps_label()}</p>
             <div class="maps-grid">
-              {#each mapRows() as row, rowIdx (rowIdx)}
+              {#each mapRows as row, rowIdx (rowIdx)}
                 <div class="maps-row">
                   {#each row as pos (pos)}
                     <button
                       class="map-btn"
-                      class:selected={selectedMapIndex === pos - 1}
+                      class:selected={safeMapIndex === pos - 1}
                       onclick={() => (selectedMapIndex = pos - 1)}
                     >
                       {pos}
@@ -164,58 +196,36 @@
             </div>
           </div>
 
-          <!-- Symboles section -->
-          <div class="symbols-section">
-            <p class="symbols-title">{m.facets_symbols_section()}</p>
-
-            {#if isProportional}
-              <!-- Taille et forme sub-section -->
-              <div class="primitive-section">
-                <div class="primitive-heading">
-                  <span class="primitive-title">{m.facets_size_shape()}</span>
-                  <div class="section-divider"></div>
-                </div>
-                <p class="variables-label">{m.facets_variables_label()}</p>
-                <div class="radio-group">
-                  {#each variables as variable, i (variable)}
-                    <div class="radio-row">
-                      <input
-                        type="radio"
-                        class="bx--radio-button__input"
-                        name="size-shape-var"
-                        value={variable}
-                        checked={i === selectedMapIndex}
-                        readonly
-                      />
-                      <span class="variable-tag">{variable}</span>
-                    </div>
-                  {/each}
-                </div>
-              </div>
-            {/if}
-
-            <!-- Fond sub-section -->
-            <div class="primitive-section">
-              <div class="primitive-heading">
-                <span class="primitive-title">{m.facets_fill()}</span>
-                <div class="section-divider"></div>
-              </div>
-              <p class="variables-label">{m.facets_variables_label()}</p>
-              <div class="radio-group">
-                {#each variables as variable, i (variable)}
-                  <div class="radio-row">
-                    <input
-                      type="radio"
-                      class="bx--radio-button__input"
-                      name="fill-var"
-                      value={variable}
-                      checked={i === selectedMapIndex}
-                      readonly
-                    />
-                    <span class="variable-tag">{variable}</span>
+          <!-- Variables order (drag-drop) -->
+          <div class="variables-section">
+            <p class="variables-label">{m.facets_variables_label()}</p>
+            <div
+              class="variables-dnd-list"
+              use:dndzone={{
+                items: dndVariables,
+                flipDurationMs: FLIP_DURATION_MS,
+                type: DND_TYPE,
+                dropTargetStyle: {}
+              }}
+              onconsider={handleConsider}
+              onfinalize={handleFinalize}
+            >
+              {#each dndVariables as item, i (item.id)}
+                <div class="variable-row">
+                  <div class="drag-handle">
+                    <Draggable size={16} />
                   </div>
-                {/each}
-              </div>
+                  <input
+                    type="radio"
+                    class="bx--radio-button__input"
+                    name="variable-order"
+                    value={item.name}
+                    checked={i === safeMapIndex}
+                    readonly
+                  />
+                  <span class="variable-tag">{item.name}</span>
+                </div>
+              {/each}
             </div>
           </div>
         </div>
@@ -429,44 +439,11 @@
     color: var(--cds-text-primary, #161616);
   }
 
-  /* Symboles section */
-  .symbols-section {
+  /* Variables drag-drop section */
+  .variables-section {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-  }
-
-  .symbols-title {
-    font-size: 0.875rem;
-    color: var(--cds-text-primary, #161616);
-    line-height: 18px;
-    letter-spacing: 0.16px;
-    margin: 0;
-  }
-
-  .primitive-section {
-    background-color: var(--cds-layer-01, #f4f4f4);
-    padding: var(--cds-spacing-03, 8px) var(--cds-spacing-05, 16px)
-      var(--cds-spacing-05, 16px);
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .primitive-heading {
-    display: flex;
-    align-items: center;
     gap: var(--cds-spacing-03, 8px);
-    height: 24px;
-  }
-
-  .primitive-title {
-    font-size: 0.75rem;
-    color: var(--cds-text-primary, #161616);
-    line-height: 1rem;
-    letter-spacing: 0.32px;
-    white-space: nowrap;
-    flex-shrink: 0;
   }
 
   .variables-label {
@@ -477,24 +454,44 @@
     margin: 0;
   }
 
-  .radio-group {
+  .variables-dnd-list {
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-03, 8px);
+    outline: none;
   }
 
-  .radio-row {
+  .variable-row {
     display: flex;
     align-items: center;
     gap: var(--cds-spacing-03, 8px);
+    background-color: var(--cds-layer-01, #f4f4f4);
+    padding: var(--cds-spacing-02, 4px) var(--cds-spacing-03, 8px);
+    border-radius: 4px;
+    cursor: grab;
   }
 
-  .radio-row input[type='radio'] {
+  .variable-row:active {
+    cursor: grabbing;
+  }
+
+  .drag-handle {
+    display: flex;
+    align-items: center;
+    color: var(--cds-icon-secondary, #525252);
+    flex-shrink: 0;
+  }
+
+  .variable-row input[type='radio'] {
     width: 20px;
     height: 20px;
     flex-shrink: 0;
     cursor: default;
     accent-color: var(--cds-icon-primary, #161616);
+  }
+
+  .variables-dnd-list :global([aria-grabbed='true']) {
+    opacity: 0.4;
   }
 
   /* Purple variable tag */

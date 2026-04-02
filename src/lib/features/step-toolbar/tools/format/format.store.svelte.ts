@@ -90,59 +90,63 @@ type FormatActions = {
 const { state, actions, getState } = createToolStore<
   FormatState,
   FormatActions
->(DEFAULT_STATE, (s) => ({
-  setMode: (mode: FormatMode) => {
-    s.mode = mode;
-  },
-  setModel: (model: PageModel) => {
-    s.model = model;
-    const preset = PAGE_PRESETS[model];
-    if (preset) {
-      s.width = preset.width;
-      s.height = preset.height;
+>(
+  DEFAULT_STATE,
+  (s) => ({
+    setMode: (mode: FormatMode) => {
+      s.mode = mode;
+    },
+    setModel: (model: PageModel) => {
+      s.model = model;
+      const preset = PAGE_PRESETS[model];
+      if (preset) {
+        s.width = preset.width;
+        s.height = preset.height;
+      }
+    },
+    setSize: (width: number, height: number) => {
+      s.width = Math.max(1, width);
+      s.height = Math.max(1, height);
+    },
+    setColor: (color) => {
+      s.color = normalizePageColor(color);
+    },
+    setMargins: (margins) => {
+      s.margins = margins;
+    },
+    toggleGrid: () => {
+      s.gridEnabled = !s.gridEnabled;
+    },
+    fitToContainer: (containerWidth: number, containerHeight: number) => {
+      const preset = PAGE_PRESETS[s.model];
+      if (!preset) return;
+
+      const aspectRatio = preset.width / preset.height;
+      const availableWidth = Math.max(0, containerWidth - CONTAINER_PADDING);
+      const availableHeight = Math.max(0, containerHeight - CONTAINER_PADDING);
+
+      if (availableWidth <= 0 || availableHeight <= 0) return;
+
+      let newWidth: number;
+      let newHeight: number;
+
+      if (availableWidth / availableHeight > aspectRatio) {
+        newHeight = availableHeight;
+        newWidth = newHeight * aspectRatio;
+      } else {
+        newWidth = availableWidth;
+        newHeight = newWidth / aspectRatio;
+      }
+
+      newWidth = Math.max(MIN_MAP_SIZE, Math.min(newWidth, availableWidth));
+      newHeight = Math.max(MIN_MAP_SIZE, Math.min(newHeight, availableHeight));
+
+      s.width = Math.round(newWidth);
+      s.height = Math.round(newHeight);
     }
-  },
-  setSize: (width: number, height: number) => {
-    s.width = Math.max(1, width);
-    s.height = Math.max(1, height);
-  },
-  setColor: (color) => {
-    s.color = normalizePageColor(color);
-  },
-  setMargins: (margins) => {
-    s.margins = margins;
-  },
-  toggleGrid: () => {
-    s.gridEnabled = !s.gridEnabled;
-  },
-  fitToContainer: (containerWidth: number, containerHeight: number) => {
-    const preset = PAGE_PRESETS[s.model];
-    if (!preset) return;
-
-    const aspectRatio = preset.width / preset.height;
-    const availableWidth = Math.max(0, containerWidth - CONTAINER_PADDING);
-    const availableHeight = Math.max(0, containerHeight - CONTAINER_PADDING);
-
-    if (availableWidth <= 0 || availableHeight <= 0) return;
-
-    let newWidth: number;
-    let newHeight: number;
-
-    if (availableWidth / availableHeight > aspectRatio) {
-      newHeight = availableHeight;
-      newWidth = newHeight * aspectRatio;
-    } else {
-      newWidth = availableWidth;
-      newHeight = newWidth / aspectRatio;
-    }
-
-    newWidth = Math.max(MIN_MAP_SIZE, Math.min(newWidth, availableWidth));
-    newHeight = Math.max(MIN_MAP_SIZE, Math.min(newHeight, availableHeight));
-
-    s.width = Math.round(newWidth);
-    s.height = Math.round(newHeight);
-  }
-}));
+  }),
+  { key: 'format' }
+);
 
 export const formatState = state;
 export const formatActions = actions;

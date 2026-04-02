@@ -6,6 +6,7 @@ import {
   visualizationStore,
   type VisualizationConfig
 } from '$lib/features/commons/store/visualization.store.svelte';
+import { FillMode } from '$lib/features/main-toolbar/constants';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
 import { LEGEND_DEFAULTS, LEGEND_ID_PREFIXES } from './legend.constants';
 import type {
@@ -15,19 +16,6 @@ import type {
   LegendStyle
 } from './legend.types';
 
-export const DEFAULT_LEGEND_TEXT_COLOR: LegendStyle['textColor'] = {
-  hue: 0,
-  saturation: 0,
-  lightness: 0
-};
-
-export const DEFAULT_LEGEND_BACKGROUND_COLOR: LegendStyle['background']['color'] =
-  {
-    hue: 0,
-    saturation: 0,
-    lightness: 100
-  };
-
 const DEFAULT_STATE: LegendState = {
   items: [],
   position: LegendPosition.TOP_RIGHT,
@@ -36,10 +24,10 @@ const DEFAULT_STATE: LegendState = {
   style: {
     fontFamily: LEGEND_DEFAULTS.FONT_FAMILY,
     fontSize: LEGEND_DEFAULTS.FONT_SIZE,
-    textColor: { ...DEFAULT_LEGEND_TEXT_COLOR },
+    textColor: { hue: 0, saturation: 0, lightness: 0 },
     background: {
       enabled: true,
-      color: { ...DEFAULT_LEGEND_BACKGROUND_COLOR },
+      color: { hue: 0, saturation: 0, lightness: 100 },
       opacity: LEGEND_DEFAULTS.OPACITY
     }
   },
@@ -73,6 +61,9 @@ type LegendActions = {
 };
 
 function getLegendSubtitle(visualization: VisualizationConfig): string {
+  if (visualization.modes?.fill === FillMode.CATEGORIES) {
+    return visualization.mapping.categoryColumn ?? '';
+  }
   return (
     visualization.mapping.valueColumn ??
     visualization.mapping.sizeColumn ??
@@ -118,11 +109,16 @@ function syncLegendItemsWithVisualizations(
     const defaultSubtitle = getLegendSubtitle(visualization);
     const hasDefaultTitle = !existing.title || existing.title === existing.name;
 
+    // Always sync subtitle to current mapped column unless user set a custom one.
+    // A subtitle is considered "auto" if it equals any mapping column value of the viz.
+    const mappingValues = Object.values(visualization.mapping).filter(Boolean);
+    const isAutoSubtitle =
+      !existing.subtitle || mappingValues.includes(existing.subtitle as string);
     return {
       ...existing,
       name: visualization.name,
       title: hasDefaultTitle ? visualization.name : existing.title,
-      subtitle: existing.subtitle || defaultSubtitle,
+      subtitle: isAutoSubtitle ? defaultSubtitle : existing.subtitle,
       variableId: visualization.id
     };
   });
@@ -224,7 +220,8 @@ const { actions, getState } = createToolStore<LegendState, LegendActions>(
         s.items = syncedItems;
       }
     }
-  })
+  }),
+  { key: 'legend' }
 );
 
 export const legendActions = actions;

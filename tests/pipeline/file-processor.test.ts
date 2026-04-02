@@ -34,7 +34,8 @@ vi.mock('$lib/features/data-pipeline/utils/csv-header-detector', () => ({
 }));
 
 vi.mock('$lib/features/data-pipeline/utils/decimal-detector', () => ({
-  detectDecimalSeparator: detectDecimalSeparatorMock
+  detectDecimalSeparator: detectDecimalSeparatorMock,
+  readFileHead: vi.fn().mockResolvedValue('header1,header2\nval1,val2\n')
 }));
 
 vi.mock('$lib/features/commons/utils/geo-detector.utils', () => ({

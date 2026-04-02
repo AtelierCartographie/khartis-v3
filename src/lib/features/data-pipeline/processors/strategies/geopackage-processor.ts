@@ -49,7 +49,7 @@ export const geopackageProcessor: FileProcessor = {
       ]);
 
     const dataset: ProcessorDataset = {
-      id: crypto.randomUUID(),
+      id: file.datasetId ?? file.id,
       tableName: actualTableName,
       sourceFileId: file.id,
       name: file.name,

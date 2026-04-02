@@ -12,9 +12,10 @@
   import LayerConfigVilles from './components/basemap-layers/layer-config-villes.svelte';
   import BasemapStyleSelector from './basemap-style-selector.svelte';
   import MapProjectionSelector from './map-projection-selector.svelte';
-  import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
-  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
-  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+  import {
+    basemapStyleStore,
+    DEFAULT_TILED_BASEMAP_STYLE
+  } from '$lib/features/commons/store/basemap-style.store.svelte';
   import { BasemapStyle } from '$lib/features/map/constants/basemap-styles';
   import {
     basemapLayersStore,
@@ -44,7 +45,6 @@
   function handleLacsRivieresToggle(checked: boolean): void {
     basemapLayersStore.setLayerVisibility('lacs', checked);
     basemapLayersStore.setLayerVisibility('rivieres', checked);
-    projectStore.markAsDirty();
   }
 
   function handleLacsRivieresChange(updates: Record<string, unknown>): void {
@@ -60,45 +60,25 @@
         thickness: updates.thickness
       });
     }
-    projectStore.markAsDirty();
   }
 
   function handleLayerToggle(layerId: BasemapLayerId, checked: boolean) {
-    logger.info(
-      '[customize-basemap] layer visibility toggled',
-      LogCategory.UI,
-      {
-        layerId,
-        checked
-      }
-    );
     basemapLayersStore.setLayerVisibility(layerId, checked);
-    projectStore.markAsDirty();
   }
 
   function handleTiledBasemapToggle(checked: boolean) {
-    logger.info('[customize-basemap] tiled basemap toggled', LogCategory.UI, {
-      checked,
-      previousStyle: basemapStyleStore.selectedStyle
-    });
     if (checked) {
-      basemapStyleStore.setStyle(BasemapStyle.CARTE_FACILE_DESATURATED);
+      basemapStyleStore.setStyle(DEFAULT_TILED_BASEMAP_STYLE);
     } else {
       basemapStyleStore.setStyle(BasemapStyle.BLANK_WHITE);
     }
-    projectStore.markAsDirty();
   }
 
   function handleLayerChange<T extends BasemapLayerId>(
     id: T,
     updates: Partial<Extract<BasemapLayerConfig, { id: T }>>
   ): void {
-    logger.debug('[customize-basemap] layer style updated', LogCategory.UI, {
-      layerId: id,
-      updates
-    });
     basemapLayersStore.updateLayer(id, updates);
-    projectStore.markAsDirty();
   }
 </script>
 
@@ -281,9 +261,10 @@
   }
 
   .kh-help {
-    color: var(--cds-text-secondary, #6f6f6f);
-    font-size: 14px;
-    line-height: 18px;
+    color: var(--cds-text-helper, #6f6f6f);
+    font-size: 0.875rem;
+    line-height: 1.125rem;
+    letter-spacing: 0.16px;
     margin: 0;
   }
 

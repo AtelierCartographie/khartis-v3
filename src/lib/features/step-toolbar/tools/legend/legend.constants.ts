@@ -22,12 +22,9 @@ export const LEGEND_ID_PREFIXES = {
 export const DOM_IDS = {
   LEGEND_TOOL: 'khartis-legend-tool',
   FONT_SELECT: 'legend-font-select',
-  FONT_SIZE: 'legend-font-size',
-  OPACITY: 'legend-opacity'
+  FONT_SIZE: 'legend-font-size'
 } as const;
 
 export const CSS_CLASSES = {
-  LEGEND_TABS: 'legend-tabs',
-  SLIDER: 'slider',
-  EXPANDABLE_STACK: 'expandable-stack'
+  LEGEND_TABS: 'legend-tabs'
 } as const;

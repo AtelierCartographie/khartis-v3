@@ -1,7 +1,7 @@
 <script lang="ts">
   import Calendar from 'carbon-icons-svelte/lib/Calendar.svelte';
-  import Earth from 'carbon-icons-svelte/lib/Earth.svelte';
   import LocationFilled from 'carbon-icons-svelte/lib/LocationFilled.svelte';
+  import LocationStarFilled from 'carbon-icons-svelte/lib/LocationStarFilled.svelte';
   import {
     VARIABLE_BADGE_STYLES,
     type VariableBadgeType
@@ -53,11 +53,11 @@
   <span class="badge-divider"></span>
   {#if type === 'geo'}
     <span class="badge-icon">
-      <Earth size={16} />
+      <LocationFilled size={16} />
     </span>
   {:else if type === 'geo-ref'}
     <span class="badge-icon">
-      <LocationFilled size={16} />
+      <LocationStarFilled size={16} />
     </span>
   {:else if type === 'date'}
     <span class="badge-icon">

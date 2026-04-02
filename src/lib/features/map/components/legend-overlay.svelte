@@ -1,3 +1,28 @@
+<script module lang="ts">
+  import { motif } from '@ateliercartographie/motif.js';
+  import { PATTERN_TYPE_MAP } from '../layers/pattern-texture';
+
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- module-level cache, no reactivity needed
+  const patternTileCache = new Map<string, string>();
+
+  function getPatternTileUrl(patternId: string): string | null {
+    if (patternTileCache.has(patternId))
+      return patternTileCache.get(patternId)!;
+    const config = PATTERN_TYPE_MAP[patternId as keyof typeof PATTERN_TYPE_MAP];
+    if (!config) return null;
+    const tile = motif({
+      type: config.type,
+      angle: config.angle,
+      fill: '#000000',
+      background: 'transparent',
+      patchSize: true
+    }).tile();
+    const url = tile.toDataURL();
+    patternTileCache.set(patternId, url);
+    return url;
+  }
+</script>
+
 <script lang="ts">
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import {
@@ -20,7 +45,6 @@
   import { SvelteMap } from 'svelte/reactivity';
   import { onDestroy } from 'svelte';
   import { activateStylingToolFromMap } from '../utils/styling-tool-activation.utils';
-
   function hasColorScale(viz: VisualizationConfig | undefined): boolean {
     if (
       !viz?.classification?.colors?.length ||
@@ -28,8 +52,16 @@
     ) {
       return false;
     }
-    const fillMode = viz.modes?.fill;
-    return fillMode === FillMode.CLASSES || fillMode === FillMode.CATEGORIES;
+    return viz.modes?.fill === FillMode.CLASSES;
+  }
+
+  function hasCategoricalScale(viz: VisualizationConfig | undefined): boolean {
+    if (!viz?.classification?.colors?.length) return false;
+    return viz.modes?.fill === FillMode.CATEGORIES;
+  }
+
+  function getCategoryLabels(viz: VisualizationConfig | undefined): string[] {
+    return viz?.classification?.labels ?? [];
   }
 
   function formatBreakValue(value: number): string {
@@ -239,13 +271,23 @@
           {#if hasColorScale(viz)}
             {@const colors = viz!.classification!.colors!}
             {@const breaks = viz!.classification!.breaks!}
+            {@const patternTileUrl = viz!.classification?.patternId
+              ? getPatternTileUrl(viz!.classification.patternId)
+              : null}
             <div class="legend-color-scale">
               {#each colors as color, i (i)}
                 <div class="legend-scale-row">
                   <span
                     class="legend-color-swatch"
                     style="background-color: {color};"
-                  ></span>
+                  >
+                    {#if patternTileUrl}
+                      <span
+                        class="legend-pattern-overlay"
+                        style="background-image: url({patternTileUrl});"
+                      ></span>
+                    {/if}
+                  </span>
                   <span class="legend-scale-label">
                     {#if i < breaks.length - 1}
                       {formatBreakValue(breaks[i])} – {formatBreakValue(
@@ -255,6 +297,33 @@
                       ≥ {formatBreakValue(breaks[breaks.length - 1])}
                     {/if}
                   </span>
+                </div>
+              {/each}
+              {#if viz?.missingData?.show}
+                <div class="legend-scale-row">
+                  <span
+                    class="legend-color-swatch"
+                    style="background-color: {viz.missingData.color};"
+                  ></span>
+                  <span class="legend-scale-label">{m.missing_data_text()}</span
+                  >
+                </div>
+              {/if}
+            </div>
+          {/if}
+          {#if hasCategoricalScale(viz)}
+            {@const colors = viz!.classification!.colors!}
+            {@const catLabels = getCategoryLabels(viz)}
+            {@const displayCount =
+              catLabels.length > 0 ? catLabels.length : colors.length}
+            <div class="legend-color-scale">
+              {#each colors.slice(0, displayCount) as color, i (i)}
+                <div class="legend-scale-row">
+                  <span
+                    class="legend-color-swatch"
+                    style="background-color: {color};"
+                  ></span>
+                  <span class="legend-scale-label">{catLabels[i] ?? ''}</span>
                 </div>
               {/each}
               {#if viz?.missingData?.show}
@@ -393,11 +462,19 @@
   }
 
   .legend-color-swatch {
+    position: relative;
     display: inline-block;
     width: 16px;
     height: 16px;
     min-width: 16px;
     border: 1px solid rgba(0, 0, 0, 0.15);
+  }
+
+  .legend-pattern-overlay {
+    position: absolute;
+    inset: 0;
+    background-repeat: repeat;
+    opacity: 0.6;
   }
 
   .legend-scale-label {

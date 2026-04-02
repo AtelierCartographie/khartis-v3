@@ -123,7 +123,6 @@ function validateProjectName(name: string): ValidationResult {
 
 function validateKhartisFiles(files: File[]): File[] {
   const validFiles: File[] = [];
-  let hasErrors = false;
 
   for (const file of files) {
     const extension = file.name.split('.').pop()?.toLowerCase();
@@ -133,20 +132,14 @@ function validateKhartisFiles(files: File[]): File[] {
     }
 
     if (file.size === 0) {
-      hasErrors = true;
       continue;
     }
 
     if (file.size > STORAGE_LIMITS.maxFileSize) {
-      hasErrors = true;
       continue;
     }
 
     validFiles.push(file);
-  }
-
-  if (validFiles.length === 0 && files.length > 0 && !hasErrors) {
-    logger.error('No valid files', LogCategory.FILE);
   }
 
   return validFiles;

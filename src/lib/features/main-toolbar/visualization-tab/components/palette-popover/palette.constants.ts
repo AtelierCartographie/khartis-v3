@@ -1,9 +1,40 @@
 import * as m from '$lib/paraglide/messages';
-import { resolveColor } from '@ateliercartographie/ok-palette';
-import type { WebGLColor } from '@ateliercartographie/ok-palette';
+import {
+  sequential,
+  divergentSequential,
+  categorical,
+  resolvePalette,
+  presets
+} from '@ateliercartographie/ok-palette';
+import type {
+  WebGLColor,
+  ContrastMode,
+  CategoricalColorOptions
+} from '@ateliercartographie/ok-palette';
+import { motif } from '@ateliercartographie/motif.js';
 import type { PatternParams } from '$lib/features/commons/store/visualization.store.svelte';
+import { webglToHex } from '$lib/features/commons/utils/color-utils';
+import { PATTERN_TYPE_MAP } from '$lib/features/map/layers/pattern-texture';
 
 export type { PatternParams };
+export { presets };
+export type { ContrastMode, CategoricalColorOptions };
+
+/** Default 4-color sequential preview (Blues ramp) — shared across all config components */
+export const DEFAULT_SEQUENTIAL_PREVIEW = [
+  '#c8ddf0',
+  '#78a9cf',
+  '#2171b5',
+  '#084594'
+];
+
+/** Default 4-color qualitative preview — shared across all config components */
+export const DEFAULT_QUALITATIVE_PREVIEW = [
+  '#009d9a',
+  '#f1c21b',
+  '#ff832b',
+  '#a56eff'
+];
 
 export const PALETTE_TYPE = {
   SEQUENTIAL: 'sequential',
@@ -19,7 +50,11 @@ export type PatternId =
   | 'horizontal'
   | 'vertical'
   | 'dots'
-  | 'cross';
+  | 'cross'
+  | 'triangle'
+  | 'square'
+  | 'diamond'
+  | 'plus';
 
 export interface Palette {
   id: string;
@@ -30,50 +65,127 @@ export interface Palette {
   patternId?: PatternId;
 }
 
-export const sequentialPalettes: Palette[] = [
+export type SuggestionPreset = 'monochrome' | 'bicolor' | 'sepia';
+
+/** Monochrome palettes — single seed color, ok-palette generates the light→dark ramp */
+export const monochromePalettes: Palette[] = [
+  {
+    id: 'mono-pink',
+    name: 'Rose',
+    colors: ['#c2185b'],
+    type: PALETTE_TYPE.SEQUENTIAL,
+    colorBlindSafe: true
+  },
+  {
+    id: 'mono-teal',
+    name: 'Turquoise',
+    colors: ['#00897b'],
+    type: PALETTE_TYPE.SEQUENTIAL,
+    colorBlindSafe: true
+  },
+  {
+    id: 'mono-gold',
+    name: 'Or',
+    colors: ['#f9a825'],
+    type: PALETTE_TYPE.SEQUENTIAL,
+    colorBlindSafe: true
+  },
+  {
+    id: 'mono-indigo',
+    name: 'Indigo',
+    colors: ['#1565c0'],
+    type: PALETTE_TYPE.SEQUENTIAL,
+    colorBlindSafe: true
+  },
+  {
+    id: 'mono-vermilion',
+    name: 'Vermillon',
+    colors: ['#d84315'],
+    type: PALETTE_TYPE.SEQUENTIAL,
+    colorBlindSafe: true
+  }
+];
+
+/** Bicolor palettes — two seed colors, ok-palette interpolates between them */
+export const bicolorPalettes: Palette[] = [
   {
     id: 'blues',
     name: 'Blues',
-    colors: ['#f7fbff', '#6baed6', '#08519c'],
+    colors: ['#f7fbff', '#08519c'],
     type: PALETTE_TYPE.SEQUENTIAL,
     colorBlindSafe: true
   },
   {
     id: 'greens',
     name: 'Greens',
-    colors: ['#f7fcf5', '#74c476', '#006d2c'],
+    colors: ['#f7fcf5', '#006d2c'],
     type: PALETTE_TYPE.SEQUENTIAL,
     colorBlindSafe: true
   },
   {
     id: 'oranges',
     name: 'Oranges',
-    colors: ['#fff5eb', '#fd8d3c', '#a63603'],
+    colors: ['#fff5eb', '#a63603'],
     type: PALETTE_TYPE.SEQUENTIAL,
     colorBlindSafe: true
   },
   {
     id: 'purples',
     name: 'Purples',
-    colors: ['#fcfbfd', '#9e9ac8', '#54278f'],
+    colors: ['#fcfbfd', '#54278f'],
     type: PALETTE_TYPE.SEQUENTIAL,
     colorBlindSafe: true
   },
   {
     id: 'reds',
     name: 'Reds',
-    colors: ['#fff5f0', '#fc9272', '#a50f15'],
-    type: PALETTE_TYPE.SEQUENTIAL,
-    colorBlindSafe: true
-  },
-  {
-    id: 'grays',
-    name: 'Grays',
-    colors: ['#ffffff', '#969696', '#252525'],
+    colors: ['#fff5f0', '#a50f15'],
     type: PALETTE_TYPE.SEQUENTIAL,
     colorBlindSafe: true
   }
 ];
+
+/** Sepia palettes — warm desaturated tones (hue 30°–90° oklch) */
+export const sepiaPalettes: Palette[] = [
+  {
+    id: 'sepia-sand',
+    name: 'Sable',
+    colors: ['#d7ccc8'],
+    type: PALETTE_TYPE.SEQUENTIAL,
+    colorBlindSafe: true
+  },
+  {
+    id: 'sepia-terre',
+    name: 'Terre',
+    colors: ['#8d6e63'],
+    type: PALETTE_TYPE.SEQUENTIAL,
+    colorBlindSafe: true
+  },
+  {
+    id: 'sepia-ochre',
+    name: 'Ocre',
+    colors: ['#bf8f00'],
+    type: PALETTE_TYPE.SEQUENTIAL,
+    colorBlindSafe: true
+  },
+  {
+    id: 'sepia-brique',
+    name: 'Brique',
+    colors: ['#a1887f'],
+    type: PALETTE_TYPE.SEQUENTIAL,
+    colorBlindSafe: true
+  },
+  {
+    id: 'sepia-olive',
+    name: 'Olive',
+    colors: ['#827717'],
+    type: PALETTE_TYPE.SEQUENTIAL,
+    colorBlindSafe: true
+  }
+];
+
+/** Standard sequential palettes — used by dropdown and getPalettesForType */
+export const sequentialPalettes: Palette[] = bicolorPalettes;
 
 export const divergingPalettes: Palette[] = [
   {
@@ -193,76 +305,213 @@ export function getPatternPalettes(): Palette[] {
       type: PALETTE_TYPE.PATTERN,
       colorBlindSafe: true,
       patternId: 'cross'
+    },
+    {
+      id: 'pattern-triangle',
+      name: m.pattern_triangle(),
+      colors: ['#3d3d3d', '#f4f4f4'],
+      type: PALETTE_TYPE.PATTERN,
+      colorBlindSafe: true,
+      patternId: 'triangle'
+    },
+    {
+      id: 'pattern-square',
+      name: m.pattern_square(),
+      colors: ['#3d3d3d', '#f4f4f4'],
+      type: PALETTE_TYPE.PATTERN,
+      colorBlindSafe: true,
+      patternId: 'square'
+    },
+    {
+      id: 'pattern-diamond',
+      name: m.pattern_diamond(),
+      colors: ['#3d3d3d', '#f4f4f4'],
+      type: PALETTE_TYPE.PATTERN,
+      colorBlindSafe: true,
+      patternId: 'diamond'
+    },
+    {
+      id: 'pattern-plus',
+      name: m.pattern_plus(),
+      colors: ['#3d3d3d', '#f4f4f4'],
+      type: PALETTE_TYPE.PATTERN,
+      colorBlindSafe: true,
+      patternId: 'plus'
     }
   ];
 }
 
-function webglToHex([r, g, b]: WebGLColor): string {
-  return (
-    '#' +
-    [r, g, b].map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')
+/**
+ * Generates palette colors using ok-palette's perceptual Oklch generators.
+ * Dispatches to the appropriate generator based on palette type.
+ *
+ * @param contrast Controls lightness range — 'high' improves accessibility (colorblind)
+ * @param categoricalOptions Override categorical generation (presets, temperature)
+ */
+export function generatePaletteColors(
+  palette: Palette,
+  count: number,
+  contrast?: ContrastMode,
+  categoricalOptions?: CategoricalColorOptions
+): string[] {
+  if (count <= 0) return [];
+  if (count === 1) return [palette.colors[0]];
+
+  switch (palette.type) {
+    case PALETTE_TYPE.SEQUENTIAL: {
+      const colorStart = palette.colors[0];
+      const isMonochrome = palette.colors.length === 1;
+      const cssColors = isMonochrome
+        ? sequential({ colorStart, steps: count, contrast })
+        : sequential({
+            colorStart,
+            colorEnd: palette.colors[palette.colors.length - 1],
+            steps: count,
+            contrast
+          });
+      return (
+        resolvePalette(cssColors, { format: 'webgl' }) as WebGLColor[]
+      ).map(webglToHex);
+    }
+    case PALETTE_TYPE.DIVERGING: {
+      const colorA = palette.colors[0];
+      const colorB = palette.colors[palette.colors.length - 1];
+      const hasCenterClass = count % 2 === 1;
+      const halfSteps = Math.floor(count / 2);
+      const cssColors = divergentSequential({
+        colorA,
+        colorB,
+        steps: [halfSteps, halfSteps],
+        hasCenterClass,
+        contrast
+      });
+      return (
+        resolvePalette(cssColors, { format: 'webgl' }) as WebGLColor[]
+      ).map(webglToHex);
+    }
+    case PALETTE_TYPE.QUALITATIVE: {
+      if (count <= palette.colors.length) {
+        return palette.colors.slice(0, count);
+      }
+      const cssColors = categorical(count, categoricalOptions ?? presets.vif);
+      return (
+        resolvePalette(cssColors, { format: 'webgl' }) as WebGLColor[]
+      ).map(webglToHex);
+    }
+    case PALETTE_TYPE.PATTERN:
+      return palette.colors;
+    default:
+      return palette.colors.slice(0, count);
+  }
+}
+
+/**
+ * Generates sequential colors from one color (monochrome ramp) via ok-palette.
+ */
+export function generateSequentialFromColor(
+  color: string,
+  count: number,
+  contrast?: ContrastMode
+): string[] {
+  if (count <= 0) return [];
+  const cssColors = sequential({ colorStart: color, steps: count, contrast });
+  return (resolvePalette(cssColors, { format: 'webgl' }) as WebGLColor[]).map(
+    webglToHex
   );
 }
 
 /**
- * Interpolates colors in Oklch perceptual color space via ok-palette.
- * Supports multi-stop palettes (sequential, diverging with center, etc.).
+ * Generates sequential colors from two colors (bi-tone ramp) via ok-palette.
  */
-export function interpolateColors(colors: string[], count: number): string[] {
-  if (colors.length === count) return colors;
-  if (colors.length >= count) return colors.slice(0, count);
-
-  const result: string[] = [];
-  for (let i = 0; i < count; i++) {
-    const t = i / (count - 1);
-    const idx = t * (colors.length - 1);
-    const lowIdx = Math.floor(idx);
-    const highIdx = Math.min(lowIdx + 1, colors.length - 1);
-    const frac = idx - lowIdx;
-
-    if (frac === 0) {
-      result.push(colors[lowIdx]);
-    } else {
-      const pct = Math.round(frac * 100);
-      const mixed = `color-mix(in oklch, ${colors[highIdx]} ${pct}%, ${colors[lowIdx]})`;
-      result.push(webglToHex(resolveColor(mixed, { format: 'webgl' })));
-    }
-  }
-  return result;
+export function generateSequentialFromColors(
+  colorStart: string,
+  colorEnd: string,
+  count: number,
+  contrast?: ContrastMode
+): string[] {
+  if (count <= 0) return [];
+  const cssColors = sequential({
+    colorStart,
+    colorEnd,
+    steps: count,
+    contrast
+  });
+  return (resolvePalette(cssColors, { format: 'webgl' }) as WebGLColor[]).map(
+    webglToHex
+  );
 }
 
+/**
+ * Builds a CSS background for pattern preview using motif.js.
+ * Returns a `url(data:...)` from the motif tile canvas.
+ */
 export function buildPatternBackground(
   palette: Palette,
   params?: PatternParams
 ): string {
   const accent = palette.colors[0] ?? '#3d3d3d';
   const base = palette.colors[1] ?? '#f4f4f4';
-  const size = params?.size ?? 4;
-  const total = params?.scale ?? 8;
+  const sizePx = params?.size ?? 4;
+  const scalePx = params?.scale ?? 8;
 
-  // Angle param overrides patternId for line-type patterns
-  let effectivePatternId = palette.patternId;
+  let effectivePatternId: PatternId = palette.patternId ?? 'diagonal';
   if (params?.angle !== undefined) {
     if (params.angle === 0) effectivePatternId = 'horizontal';
     else if (params.angle === 45) effectivePatternId = 'diagonal';
     else if (params.angle === 315) effectivePatternId = 'diagonal-reverse';
   }
 
-  switch (effectivePatternId) {
-    case 'horizontal':
-      return `repeating-linear-gradient(0deg, ${accent} 0 ${size}px, ${base} ${size}px ${total}px)`;
-    case 'vertical':
-      return `repeating-linear-gradient(90deg, ${accent} 0 ${size}px, ${base} ${size}px ${total}px)`;
-    case 'dots':
-      return `radial-gradient(${accent} 16%, transparent 17%), linear-gradient(${base}, ${base})`;
-    case 'cross':
-      return `repeating-linear-gradient(0deg, transparent 0 ${total - size}px, ${accent} ${total - size}px ${total}px), repeating-linear-gradient(90deg, transparent 0 ${total - size}px, ${accent} ${total - size}px ${total}px), linear-gradient(${base}, ${base})`;
-    case 'diagonal-reverse':
-      return `repeating-linear-gradient(315deg, ${accent} 0 ${size}px, ${base} ${size}px ${total}px)`;
-    case 'diagonal':
+  const motifConfig = PATTERN_TYPE_MAP[effectivePatternId];
+  const tile = motif({
+    type: motifConfig.type,
+    angle: motifConfig.angle,
+    fill: accent,
+    background: base,
+    size: Math.round((sizePx / scalePx) * 100),
+    scale: scalePx / 10,
+    patchSize: true
+  }).tile();
+
+  return `url(${tile.toDataURL()})`;
+}
+
+/**
+ * Generates 7 intensity shades of a single color via ok-palette sequential ramp.
+ * Produces a dark-to-light gradient centered on the seed color (CDC [VIZ-02c]).
+ */
+export function generateIntensityShades(seedColor: string): string[] {
+  const ramp = sequential({
+    colorStart: seedColor,
+    steps: 7,
+    contrast: 'high'
+  });
+  return (resolvePalette(ramp, { format: 'webgl' }) as WebGLColor[]).map(
+    webglToHex
+  );
+}
+
+export function getSuggestionPalettes(
+  preset: SuggestionPreset,
+  colorBlindFilter: boolean
+): Palette[] {
+  let palettes: Palette[];
+  switch (preset) {
+    case 'monochrome':
+      palettes = monochromePalettes;
+      break;
+    case 'bicolor':
+      palettes = bicolorPalettes;
+      break;
+    case 'sepia':
+      palettes = sepiaPalettes;
+      break;
     default:
-      return `repeating-linear-gradient(45deg, ${accent} 0 ${size}px, ${base} ${size}px ${total}px)`;
+      palettes = monochromePalettes;
   }
+  if (colorBlindFilter) {
+    return palettes.filter((p) => p.colorBlindSafe);
+  }
+  return palettes;
 }
 
 export function getPalettesForType(
@@ -294,7 +543,9 @@ export function getPalettesForType(
 
 export function findPaletteById(id: string): Palette | undefined {
   const all = [
-    ...sequentialPalettes,
+    ...monochromePalettes,
+    ...bicolorPalettes,
+    ...sepiaPalettes,
     ...divergingPalettes,
     ...qualitativePalettes,
     ...getPatternPalettes()

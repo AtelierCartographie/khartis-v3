@@ -145,26 +145,10 @@
     </Column>
   </Row>
 
+  <!-- Add button intentionally placed before textarea to match Figma spec -->
   <Row>
     <Column>
-      <div class="section">
-        <div class="textarea-wrapper">
-          <TextArea
-            id="text-content"
-            labelText={m.annotations_content()}
-            value={textEditorValue}
-            on:input={handleContentInput}
-            placeholder={selectedText ? '' : m.annotations_no_content()}
-            rows={5}
-          />
-        </div>
-      </div>
-    </Column>
-  </Row>
-
-  <Row>
-    <Column>
-      <div class="section">
+      <div class="section add-btn-section">
         <Button
           kind="primary"
           icon={Add}
@@ -174,6 +158,21 @@
           {m.annotations_add_text()}
         </Button>
         <p class="helper">{m.annotations_add_text_description()}</p>
+      </div>
+    </Column>
+  </Row>
+
+  <Row>
+    <Column>
+      <div class="section textarea-wrapper">
+        <TextArea
+          id="text-content"
+          labelText={m.annotations_content()}
+          value={textEditorValue}
+          on:input={handleContentInput}
+          placeholder={selectedText ? '' : m.annotations_no_content()}
+          rows={5}
+        />
       </div>
     </Column>
   </Row>
@@ -209,28 +208,6 @@
                 <SelectItem value={s} text={String(s)} />
               {/each}
             </Select>
-          </div>
-          <div class="text-style-color">
-            <ColorPicker
-              hex={effectiveTextColor.hex}
-              hue={effectiveTextColor.hue}
-              saturation={effectiveTextColor.saturation}
-              lightness={effectiveTextColor.lightness}
-              onValidate={({
-                hue,
-                saturation,
-                lightness
-              }: {
-                hex: string;
-                hue: number;
-                saturation: number;
-                lightness: number;
-              }) => {
-                annotationsActions.applyStyle({
-                  color: { hue, saturation, lightness }
-                });
-              }}
-            />
           </div>
         </div>
       </div>
@@ -320,6 +297,34 @@
   <Row>
     <Column>
       <div class="section">
+        <ColorPicker
+          triggerLabel={m.color()}
+          hex={effectiveTextColor.hex}
+          hue={effectiveTextColor.hue}
+          saturation={effectiveTextColor.saturation}
+          lightness={effectiveTextColor.lightness}
+          onValidate={({
+            hue,
+            saturation,
+            lightness
+          }: {
+            hex: string;
+            hue: number;
+            saturation: number;
+            lightness: number;
+          }) => {
+            annotationsActions.applyStyle({
+              color: { hue, saturation, lightness }
+            });
+          }}
+        />
+      </div>
+    </Column>
+  </Row>
+
+  <Row>
+    <Column>
+      <div class="section">
         <Slider
           labelText={m.annotations_opacity()}
           value={toOpacityPercent(effectiveStyle.opacity)}
@@ -338,38 +343,39 @@
   <Row>
     <Column>
       <div class="section">
-        <div class="switch-row">
-          <span class="switch-label">{m.legend_background()}</span>
-          <Switch
-            labelText={m.legend_background()}
-            hideLabel
-            toggled={backgroundEnabled}
-            labelA={m.no()}
-            labelB={m.yes()}
-            showStateLabel
-            onchange={(enabled: boolean) => {
-              if (enabled) {
-                annotationsActions.applyStyle({
-                  backgroundColor: '#ffffff',
-                  backgroundOpacity: bgOpacity
-                });
-              } else {
-                annotationsActions.applyStyle({
-                  backgroundColor: undefined,
-                  backgroundOpacity: undefined
-                });
-              }
-            }}
-          />
-        </div>
-        {#if backgroundEnabled}
-          <div class="bg-controls">
+        <div class="bg-row">
+          <div class="bg-toggle-col">
+            <span class="bg-col-label">{m.legend_background()}</span>
+            <Switch
+              labelText={m.legend_background()}
+              hideLabel
+              toggled={backgroundEnabled}
+              labelA={m.no()}
+              labelB={m.yes()}
+              showStateLabel
+              onchange={(enabled: boolean) => {
+                if (enabled) {
+                  annotationsActions.applyStyle({
+                    backgroundColor: '#ffffff',
+                    backgroundOpacity: bgOpacity
+                  });
+                } else {
+                  annotationsActions.applyStyle({
+                    backgroundColor: undefined,
+                    backgroundOpacity: undefined
+                  });
+                }
+              }}
+            />
+          </div>
+          <div class="bg-color-col">
             <ColorPicker
               triggerLabel={m.legend_background_color()}
               hex={bgColorValue.hex}
               hue={bgColorValue.hue}
               saturation={bgColorValue.saturation}
               lightness={bgColorValue.lightness}
+              disabled={!backgroundEnabled}
               onValidate={({
                 hue,
                 saturation,
@@ -385,23 +391,23 @@
                 });
               }}
             />
-            <Slider
-              labelText={m.legend_opacity()}
-              value={bgOpacity}
-              min={0}
-              max={100}
-              step={5}
-              on:change={(e) =>
-                annotationsActions.applyStyle({
-                  backgroundOpacity: (e as CustomEvent).detail
-                })}
-              minLabel=""
-              maxLabel=""
-              hideTextInput={false}
-              fullWidth
-            />
           </div>
-        {/if}
+        </div>
+        <Slider
+          labelText={m.legend_opacity()}
+          value={bgOpacity}
+          disabled={!backgroundEnabled}
+          min={0}
+          max={100}
+          step={5}
+          on:change={(e) =>
+            annotationsActions.applyStyle({
+              backgroundOpacity: (e as CustomEvent).detail
+            })}
+          minLabel=""
+          maxLabel=""
+          fullWidth
+        />
       </div>
     </Column>
   </Row>
@@ -436,10 +442,31 @@
     line-height: 1rem;
   }
 
+  .add-btn-section :global(.bx--btn) {
+    width: 100%;
+    max-width: 100%;
+  }
+
   .textarea-wrapper :global(.bx--text-area) {
     min-height: 128px;
     height: 128px;
     resize: vertical;
+  }
+
+  .text-style-row {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--cds-spacing-02);
+  }
+
+  .text-style-font {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .text-style-size {
+    width: 80px;
+    flex-shrink: 0;
   }
 
   .text-format-controls {
@@ -467,50 +494,35 @@
     flex-shrink: 0;
   }
 
-  .delete-section :global(.bx--btn) {
-    width: 100%;
-    max-width: 100%;
-  }
-
-  .text-style-row {
+  /* Arrière plan : toggle + color picker côte à côte */
+  .bg-row {
     display: flex;
     align-items: flex-end;
-    gap: var(--cds-spacing-02);
+    gap: var(--cds-spacing-03);
+    margin-bottom: var(--cds-spacing-03);
   }
 
-  .text-style-font {
+  .bg-toggle-col {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-02);
+    flex-shrink: 0;
+  }
+
+  .bg-col-label {
+    font-size: 0.75rem;
+    line-height: 1rem;
+    color: var(--cds-text-secondary, #525252);
+    letter-spacing: 0.32px;
+  }
+
+  .bg-color-col {
     flex: 1;
     min-width: 0;
   }
 
-  .text-style-size {
-    width: 80px;
-    flex-shrink: 0;
-  }
-
-  .text-style-color {
-    flex-shrink: 0;
-    padding-bottom: 1px;
-  }
-
-  .switch-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: var(--cds-spacing-04);
-    padding: var(--cds-spacing-02) 0;
-  }
-
-  .switch-label {
-    font-size: 0.875rem;
-    color: var(--cds-text-secondary);
-    font-weight: 400;
-  }
-
-  .bg-controls {
-    margin-top: var(--cds-spacing-03);
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-03);
+  .delete-section :global(.bx--btn) {
+    width: 100%;
+    max-width: 100%;
   }
 </style>

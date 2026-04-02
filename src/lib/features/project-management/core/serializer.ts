@@ -1,49 +1,26 @@
-import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
 import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
+import { dataTabState } from '$lib/features/commons/store/data-tab.store.svelte';
 import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
-import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
 import { deepCloneForStorage } from '$lib/features/commons/utils/clone-for-storage.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import { Duck } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { basemapCatalogService } from '$lib/features/map/services';
-import { basemapLayersStore } from '$lib/features/map/stores/basemap-layers.store.svelte';
-import { mapProjectionStore } from '$lib/features/map/stores/map-projection.store.svelte';
 import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
-import {
-  annotationsActions,
-  getAnnotationsState
-} from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
-import {
-  formatActions,
-  getFormatState
-} from '$lib/features/step-toolbar/tools/format/format.store.svelte';
-import {
-  geoIndicationsActions,
-  geoIndicationsState
-} from '$lib/features/step-toolbar/tools/geo-indications/geo-indications.store.svelte';
-import {
-  getLegendState,
-  legendActions
-} from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
-import {
-  getProjectionState,
-  projectionActions
-} from '$lib/features/step-toolbar/tools/projections/projection.store.svelte';
 import type {
   SerializedBasemapAttribute,
-  SerializedLayoutSettings,
   SerializedProject,
   SerializedProjectData,
-  SerializedUploadedFile,
-  SerializedVisualizationSettings
+  SerializedUploadedFile
 } from '$lib/types/serialization.types';
 import type { KhartisProject } from '../types';
 import {
   serializeUploadedFile,
   deserializeUploadedFile
 } from './file-serializer';
+import { persistenceRegistry } from './persistence-registry';
+
 export type { FileSerializationOptions } from './file-serializer';
 export { serializeUploadedFile, deserializeUploadedFile };
 
@@ -65,18 +42,25 @@ function isValidBasemapMetadata(value: unknown): value is BasemapMetadata {
     return false;
   }
 
-  const candidate = value as Partial<BasemapMetadata>;
+  const candidate = value as Record<string, unknown>;
+  // Accept both new format (title_fr, proj_source) and old .kh files (title, projection)
+  const hasTitle =
+    typeof candidate.title_fr === 'string' ||
+    typeof candidate.title === 'string';
+  const hasProjection =
+    typeof candidate.proj_source === 'string' ||
+    typeof candidate.projection === 'string';
+
   return (
     typeof candidate.file === 'string' &&
-    candidate.file.length > 0 &&
-    typeof candidate.title === 'string' &&
-    typeof candidate.description === 'string' &&
+    (candidate.file as string).length > 0 &&
+    hasTitle &&
     typeof candidate.source === 'string' &&
     typeof candidate.date === 'string' &&
-    typeof candidate.projection === 'string' &&
+    hasProjection &&
     Array.isArray(candidate.layers) &&
     Array.isArray(candidate.bbox) &&
-    candidate.bbox.length === 4
+    (candidate.bbox as unknown[]).length === 4
   );
 }
 
@@ -84,7 +68,7 @@ async function ensureDuckDbReady(operation: string): Promise<boolean> {
   try {
     await duckDBOrchestrator.waitForInitialization();
   } catch (error) {
-    logger.warn(
+    logger.debug(
       `DuckDB initialization failed while ${operation}`,
       LogCategory.PROJECT,
       error
@@ -148,6 +132,75 @@ export async function deserialize(
   return project;
 }
 
+/**
+ * Maps registry store data to the serialized format structure.
+ * Maintains backward compatibility with old project files.
+ */
+function mapRegistryToSerializedFormat(
+  stores: Record<string, unknown>
+): Pick<
+  SerializedProjectData,
+  'basemapSettings' | 'visualizationSettings' | 'layoutSettings'
+> {
+  return {
+    basemapSettings: {
+      layers: stores.basemapLayers,
+      style: (stores.basemapStyle as { style?: unknown })?.style,
+      referenceBasemapId: (
+        stores.basemapStyle as { referenceBasemapId?: string | null }
+      )?.referenceBasemapId,
+      mapProjection: stores.mapProjection,
+      mapViewState: stores.mapViewState
+    } as SerializedProjectData['basemapSettings'],
+    visualizationSettings:
+      stores.visualization as SerializedProjectData['visualizationSettings'],
+    layoutSettings: {
+      format: stores.format,
+      annotations: stores.annotations,
+      legend: stores.legend,
+      geoIndications: stores.geoIndications,
+      projection: stores.projection
+    } as SerializedProjectData['layoutSettings']
+  };
+}
+
+/**
+ * Maps the old serialized format back to flat registry keys for deserialization.
+ * Handles both old projects (basemapSettings/layoutSettings) and future flat format.
+ */
+function mapSerializedFormatToRegistry(
+  data: SerializedProjectData
+): Record<string, unknown> {
+  const stores: Record<string, unknown> = {};
+
+  if (data.basemapSettings) {
+    stores.basemapLayers = data.basemapSettings.layers;
+    stores.basemapStyle = {
+      style: data.basemapSettings.style,
+      referenceBasemapId: data.basemapSettings.referenceBasemapId
+    };
+    stores.mapProjection = data.basemapSettings.mapProjection;
+    if (data.basemapSettings.mapViewState) {
+      stores.mapViewState = data.basemapSettings.mapViewState;
+    }
+  }
+
+  if (data.visualizationSettings) {
+    stores.visualization = data.visualizationSettings;
+  }
+
+  if (data.layoutSettings) {
+    const ls = data.layoutSettings;
+    if (ls.format) stores.format = ls.format;
+    if (ls.annotations) stores.annotations = ls.annotations;
+    if (ls.legend) stores.legend = ls.legend;
+    if (ls.geoIndications) stores.geoIndications = ls.geoIndications;
+    if (ls.projection) stores.projection = ls.projection;
+  }
+
+  return stores;
+}
+
 export async function serializeProjectData(
   data: unknown,
   options?: SerializeOptions
@@ -157,6 +210,8 @@ export async function serializeProjectData(
 
   const serialized = { ...data } as SerializedProjectData;
   const dataObj = data as Record<string, unknown>;
+
+  // --- File serialization (data-layer, kept as-is) ---
 
   if (dataObj.sourceFiles && Array.isArray(dataObj.sourceFiles)) {
     serialized.sourceFiles = dataObj.sourceFiles.map((file: UploadedFile) => {
@@ -180,7 +235,21 @@ export async function serializeProjectData(
         }
       }
 
-      // Persist the DatasetResult ID so visualization.datasetId references survive restore
+      // Fallback: persist geo column & basemap from UI state when DuckDB
+      // dataset doesn't have them yet (user selected but hasn't clicked Visualiser)
+      if (
+        !serializedFile.geoColumn &&
+        dataTabState.geolocation.linkedVariableName
+      ) {
+        serializedFile.geoColumn = dataTabState.geolocation.linkedVariableName;
+      }
+      if (
+        !serializedFile.joinedBasemap &&
+        dataTabState.basemapJoin.selectedBasemap
+      ) {
+        serializedFile.joinedBasemap = dataTabState.basemapJoin.selectedBasemap;
+      }
+
       const storeDataset = datasetsStore.datasets.find(
         (d) => d.sourceFileId === file.id
       );
@@ -191,6 +260,8 @@ export async function serializeProjectData(
       return serializedFile;
     });
   }
+
+  // --- Custom basemap DuckDB serialization (data-layer, kept as-is) ---
 
   const customBasemaps = basemapCatalogService.basemaps.filter(
     (b: BasemapMetadata) => b.isCustom
@@ -218,7 +289,7 @@ export async function serializeProjectData(
         };
       }
     } catch (error) {
-      logger.warn(
+      logger.debug(
         'Failed to serialize custom basemap attributes',
         LogCategory.PROJECT,
         error
@@ -226,60 +297,10 @@ export async function serializeProjectData(
     }
   }
 
-  serialized.basemapSettings = {
-    layers: basemapLayersStore.layers,
-    style: basemapStyleStore.selectedStyle,
-    mapProjection: mapProjectionStore.projection,
-    referenceBasemapId: basemapStyleStore.referenceBasemapId
-  };
+  // --- Store state: read from persistence registry ---
 
-  const visualizations = visualizationStore.visualizations;
-  if (visualizations.length > 0) {
-    serialized.visualizationSettings = {
-      visualizations,
-      selectedVisualizationId: visualizationStore.selectedVisualization?.id,
-      activeVisualizationIds: visualizationStore.activeVisualizations.map(
-        (v) => v.id
-      )
-    } satisfies SerializedVisualizationSettings;
-  }
-
-  const annotationsState = getAnnotationsState();
-  const formatState = getFormatState();
-  const legendState = getLegendState();
-  const projectionState = getProjectionState();
-
-  serialized.layoutSettings = {
-    format: formatState,
-    annotations: {
-      visible: annotationsState.visible,
-      items: annotationsState.items,
-      activeType: annotationsState.activeType,
-      predefinedStyle: annotationsState.predefinedStyle,
-      defaultStyle: annotationsState.defaultStyle
-    },
-    legend: {
-      items: legendState.items,
-      position: legendState.position,
-      dragPosition: legendState.dragPosition,
-      visible: legendState.visible,
-      style: legendState.style,
-      hasBeenOpened: legendState.hasBeenOpened
-    },
-    geoIndications: geoIndicationsState,
-    projection: {
-      selected:
-        projectionActions.getCurrentProjectionInfo()?.id ||
-        projectionState.selected ||
-        'mercator',
-      longitude: projectionState.longitude ?? 0,
-      latitude: projectionState.latitude ?? 0,
-      rotation: projectionState.rotation ?? 0,
-      scale: projectionState.scale ?? 1,
-      center: projectionState.center,
-      customCode: projectionState.customCode
-    }
-  } satisfies SerializedLayoutSettings;
+  const storeData = persistenceRegistry.serializeAll();
+  Object.assign(serialized, mapRegistryToSerializedFormat(storeData));
 
   return serialized;
 }
@@ -291,11 +312,15 @@ export async function deserializeProjectData(
 
   const deserialized = { ...data };
 
+  // --- File deserialization (data-layer, kept as-is) ---
+
   if (data.sourceFiles && Array.isArray(data.sourceFiles)) {
     deserialized.sourceFiles = data.sourceFiles.map(
       (file: SerializedUploadedFile) => deserializeUploadedFile(file)
     ) as SerializedUploadedFile[];
   }
+
+  // --- Custom basemap DuckDB restoration (data-layer, kept as-is) ---
 
   if (
     data.customBasemaps &&
@@ -325,7 +350,7 @@ export async function deserializeProjectData(
         : [];
 
       if (Array.isArray(metadata) && validMetadata.length !== metadata.length) {
-        logger.warn(
+        logger.debug(
           'Skipping invalid custom basemap metadata entries during restore',
           LogCategory.PROJECT,
           {
@@ -366,7 +391,7 @@ export async function deserializeProjectData(
         basemapCatalogService.addCustomBasemap(basemap);
       });
     } catch (error) {
-      logger.warn(
+      logger.debug(
         'Failed to restore custom basemaps',
         LogCategory.PROJECT,
         error
@@ -374,117 +399,10 @@ export async function deserializeProjectData(
     }
   }
 
-  if (data.basemapSettings) {
-    try {
-      const { layers, style, mapProjection, referenceBasemapId } =
-        data.basemapSettings;
-      if (layers) {
-        basemapLayersStore.restoreFromSerialized(layers);
-      }
-      if (style) {
-        basemapStyleStore.restoreFromSerialized(style, referenceBasemapId);
-      }
-      if (mapProjection) {
-        mapProjectionStore.restoreFromSerialized(mapProjection);
-      }
-      logger.debug('Basemap settings restored', LogCategory.PROJECT);
-    } catch (error) {
-      logger.warn(
-        'Failed to restore basemap settings',
-        LogCategory.PROJECT,
-        error
-      );
-    }
-  }
+  // --- Store state: restore via persistence registry ---
 
-  if (data.visualizationSettings) {
-    try {
-      visualizationStore.restoreFromSerialized(data.visualizationSettings);
-      logger.debug('Visualization settings restored', LogCategory.PROJECT);
-    } catch (error) {
-      logger.warn(
-        'Failed to restore visualization settings',
-        LogCategory.PROJECT,
-        error
-      );
-    }
-  }
-
-  if (data.layoutSettings) {
-    try {
-      const { format, annotations, legend, geoIndications, projection } =
-        data.layoutSettings;
-
-      if (format) {
-        formatActions.setState(format);
-      }
-
-      if (annotations) {
-        annotationsActions.setState({
-          visible: annotations.visible ?? true,
-          items: annotations.items,
-          activeType: annotations.activeType,
-          predefinedStyle: annotations.predefinedStyle,
-          defaultStyle: annotations.defaultStyle,
-          selectedId: null,
-          textContent: ''
-        });
-      }
-
-      if (legend) {
-        legendActions.setState({
-          items: legend.items,
-          position: legend.position,
-          dragPosition: legend.dragPosition ?? null,
-          visible: legend.visible,
-          style: legend.style,
-          hasBeenOpened: legend.hasBeenOpened ?? false
-        });
-      }
-
-      if (geoIndications) {
-        geoIndicationsActions.setState({
-          ...geoIndications,
-          visible: geoIndications.visible ?? true
-        });
-      }
-
-      if (projection) {
-        if (projection.customCode !== undefined) {
-          projectionActions.setCustomCode(projection.customCode ?? null);
-        }
-        projectionActions.setSelected(projection.selected);
-        if (projection.center && projection.center.length === 2) {
-          projectionActions.setCenter(
-            projection.center[0],
-            projection.center[1]
-          );
-        } else if (
-          projection.longitude !== undefined &&
-          projection.latitude !== undefined
-        ) {
-          projectionActions.setCenter(
-            projection.longitude,
-            projection.latitude
-          );
-        }
-        if (projection.rotation !== undefined) {
-          projectionActions.setRotation(projection.rotation);
-        }
-        if (projection.scale !== undefined) {
-          projectionActions.setScale(projection.scale);
-        }
-      }
-
-      logger.debug('Layout settings restored', LogCategory.PROJECT);
-    } catch (error) {
-      logger.warn(
-        'Failed to restore layout settings',
-        LogCategory.PROJECT,
-        error
-      );
-    }
-  }
+  const storeData = mapSerializedFormatToRegistry(data);
+  persistenceRegistry.deserializeAll(storeData);
 
   return deserialized;
 }

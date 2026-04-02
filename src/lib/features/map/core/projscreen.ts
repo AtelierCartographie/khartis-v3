@@ -60,10 +60,13 @@ export function get_model_matrix(
 
 export function get_model_matrix_from_bbox(
   bbox: [number, number, number, number],
-  canvasSize: CanvasSize
+  canvasSize: CanvasSize,
+  /** Negate Y scale for d3-geo projected coordinates (Y-down convention) */
+  flipY = false
 ): Matrix4 {
   const [cx, cy] = get_bbox_center(bbox);
   const scale = get_max_scale(canvasSize, bbox);
+  const yScale = flipY ? -scale : scale;
 
-  return new Matrix4().scale([scale, scale, 1]).translate([-cx, -cy, 0]);
+  return new Matrix4().scale([scale, yScale, 1]).translate([-cx, -cy, 0]);
 }

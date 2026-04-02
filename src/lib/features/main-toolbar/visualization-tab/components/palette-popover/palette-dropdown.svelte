@@ -4,12 +4,12 @@
   import { ColorPalette, Checkmark } from 'carbon-icons-svelte';
   import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
   import { globalState } from '$lib/features/commons/store/global.svelte';
-  import { fly } from 'svelte/transition';
+
   import {
     type Palette,
     type PaletteType,
     getPalettesForType,
-    interpolateColors,
+    generatePaletteColors,
     buildPatternBackground,
     PALETTE_TYPE
   } from './palette.constants';
@@ -72,7 +72,11 @@
   }
 
   function handleSelect(palette: Palette) {
-    const colors = interpolateColors(palette.colors, numClasses);
+    const colors = generatePaletteColors(
+      palette,
+      numClasses,
+      colorBlindFilter ? 'high' : undefined
+    );
     onselect?.(palette, colors);
     open = false;
   }
@@ -137,6 +141,10 @@
       const target = e.target as Node;
       if (dropdownRef && !dropdownRef.contains(target)) {
         if (triggerElement && triggerElement.contains(target)) return;
+        const path = e.composedPath() as Element[];
+        if (path.some((el) => el.id === 'khartis-color-picker-dropdown')) {
+          return;
+        }
         handleClose();
       }
     }
@@ -178,7 +186,6 @@
       style="top: {dropdownPos.top}px; left: {dropdownPos.left}px; width: {dropdownPos.width}px;"
       role="listbox"
       aria-label={m.color_palette()}
-      transition:fly={{ y: -4, duration: 150 }}
     >
       <div class="dropdown-list">
         {#each palettes as palette (palette.id)}
@@ -197,7 +204,7 @@
               ></div>
             {:else}
               <div class="swatch-row">
-                {#each interpolateColors(palette.colors, numClasses) as color, i (i)}
+                {#each generatePaletteColors(palette, numClasses, colorBlindFilter ? 'high' : undefined) as color, i (i)}
                   <div
                     class="swatch-cell"
                     style="background-color: {color}"

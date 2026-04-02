@@ -24,7 +24,8 @@
   import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
   import * as m from '$lib/paraglide/messages';
   import { ComboBox, InlineNotification, Link } from 'carbon-components-svelte';
-  import { Launch, Location, Map as MapIcon } from 'carbon-icons-svelte';
+  import ChartTSne from 'carbon-icons-svelte/lib/ChartTSne.svelte';
+  import { Launch, List, Map as MapIcon } from 'carbon-icons-svelte';
   import { InfoPopover } from '../visualization-tab/components/shared';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import type { GeoComboBoxItem } from './data-tab.shared.types';
@@ -40,7 +41,7 @@
 
   let columnAnalysis = $state<AnalysisResult[]>([]);
   let columnAnalysisLoaded = $state(false);
-  let previousAutoSelectedColumn = $state<string | null>(null);
+  let previousAutoSelectedColumn: string | null = null;
   let columnAnalysisAbort: AbortController | null = null;
 
   async function loadColumnAnalysis() {
@@ -227,14 +228,14 @@
 
   const tabItems = [
     {
-      icon: MapIcon,
+      icon: List,
       label: m.geo_entities_tab(),
-      iconSize: 20
+      iconSize: 16
     },
     {
-      icon: Location,
+      icon: ChartTSne,
       label: m.geo_coordinates_tab(),
-      iconSize: 20
+      iconSize: 16
     }
   ];
 
@@ -248,9 +249,9 @@
 
   let latitudeFieldId = $state<number | undefined>(undefined);
   let longitudeFieldId = $state<number | undefined>(undefined);
-  let previousDatasetId = $state<string | undefined>(undefined);
+  let previousDatasetId: string | undefined = undefined;
   let gpsValidation = $state<GPSValidationResult | null>(null);
-  let hasAutoGeoreferenceInitialization = $state(false);
+  let hasAutoGeoreferenceInitialization = false;
 
   $effect(() => {
     const currentDatasetId = selectedDataset?.id;
@@ -262,6 +263,16 @@
       columnAnalysisLoaded = false;
       previousAutoSelectedColumn = null;
       hasAutoGeoreferenceInitialization = false;
+
+      // Don't reset if the geo column was explicitly set (restored from
+      // project persistence or manually chosen by the user).
+      if (
+        !dataTabState.geolocation.autoDetected &&
+        dataTabState.geolocation.linkedVariableName
+      ) {
+        return;
+      }
+
       dataTabActions.setGeolocationState({
         geoReference: GeoreferenceType.ENTITIES,
         linkedVariable: null,
@@ -738,5 +749,13 @@
   :global(.geo-tabs) {
     width: 100%;
     max-width: none;
+  }
+
+  :global(.geo-tabs .toggle-tab) {
+    height: 32px;
+  }
+
+  :global(.geo-tabs .toggle-tab.active) {
+    background-color: #cac5c4;
   }
 </style>

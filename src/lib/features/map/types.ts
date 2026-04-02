@@ -1,6 +1,7 @@
 import type { Matrix4 } from '@math.gl/core';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { FeatureCollection } from 'geojson';
+import type { ProjectionLike } from 'geoarrow-deck-stream';
 
 export type {
   PickingInfo,
@@ -9,7 +10,6 @@ export type {
 } from '@deck.gl/core';
 
 export type {
-  BasemapCatalog,
   BasemapLayer,
   BasemapMetadata,
   BasemapSuggestion,
@@ -72,6 +72,11 @@ export interface DeckMapProps {
   syncViewState?: FacetSyncViewState | null;
 }
 
+export interface YearFilterInfo {
+  column: string;
+  value: number;
+}
+
 export interface LayerContext {
   viz:
     | import('$lib/features/commons/store/visualization.store.svelte').VisualizationConfig
@@ -85,9 +90,19 @@ export interface LayerContext {
   statistics: { min: number; max: number };
   categoryColorMap: Map<string, RGBColor> | null;
   highlightedRowIds?: Set<number>;
+  /** Scalar version counter for highlight changes (avoids Set ref in updateTriggers) */
+  highlightVersion?: number;
   modelMatrix?: Matrix4 | null;
   projectionSuffix?: string;
   beforeId?: string;
+  /** Pre-computed geometry info — avoids redundant extractGeometryInfo() calls */
+  geometryInfo?: GeometryInfo;
+  /** GPU-side year filter via DataFilterExtension — avoids data prop changes on year switch */
+  yearFilter?: YearFilterInfo;
+  /** Custom CRS projection (from proj4d3) for thematic layer binary parsing */
+  customProjection?: ProjectionLike;
+  /** Primitive sublayer render order (from viz store) */
+  primitiveOrder?: import('$lib/features/commons/store/visualization.store.svelte').PrimitiveFilter[];
 }
 
 export type BBox = [number, number, number, number];

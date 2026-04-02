@@ -5,17 +5,8 @@ import {
   type UploadedFile
 } from '$lib/features/commons/store/create-project.types';
 
-const {
-  getArrayBufferMock,
-  insertArrowTableIntoDuckDBMock,
-  geoParquetReaderMock
-} = vi.hoisted(() => ({
-  getArrayBufferMock: vi.fn(),
-  insertArrowTableIntoDuckDBMock: vi.fn(),
-  geoParquetReaderMock: {
-    readGeoParquet: vi.fn(),
-    extractMetadata: vi.fn()
-  }
+const { getArrayBufferMock } = vi.hoisted(() => ({
+  getArrayBufferMock: vi.fn()
 }));
 
 vi.mock(
@@ -24,14 +15,6 @@ vi.mock(
     getArrayBuffer: getArrayBufferMock
   })
 );
-
-vi.mock('$lib/features/duckdb/io/arrow-converter', () => ({
-  insertArrowTableIntoDuckDB: insertArrowTableIntoDuckDBMock
-}));
-
-vi.mock('$lib/features/data-pipeline', () => ({
-  geoParquetReader: geoParquetReaderMock
-}));
 
 import { geoparquetProcessor } from '$lib/features/data-pipeline/processors/strategies/geoparquet-processor';
 
@@ -53,7 +36,8 @@ function ctx() {
     tableName: 'tbl_gpq',
     Duck: {
       query: vi.fn().mockResolvedValue(undefined),
-      analyse: vi.fn().mockResolvedValue([])
+      analyse: vi.fn().mockResolvedValue([]),
+      register_files: vi.fn().mockResolvedValue(undefined)
     },
     callbacks: {
       getRowCount: vi.fn().mockResolvedValue(4),
@@ -65,16 +49,7 @@ function ctx() {
 describe('geoparquetProcessor', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-
     getArrayBufferMock.mockResolvedValue(new Uint8Array([1, 2, 3]).buffer);
-    geoParquetReaderMock.readGeoParquet.mockResolvedValue({ rows: 4 });
-    geoParquetReaderMock.extractMetadata.mockReturnValue({
-      primary_column: 'geom',
-      columns: {
-        geom: { encoding: 'WKB' }
-      }
-    });
-    insertArrowTableIntoDuckDBMock.mockResolvedValue(undefined);
   });
 
   it('matches parquet and arrow extensions', () => {
@@ -90,39 +65,30 @@ describe('geoparquetProcessor', () => {
     ).toBe(false);
   });
 
-  it('processes geoparquet and attempts geometry conversion when metadata exists', async () => {
+  it('processes geoparquet via DuckDB read_parquet', async () => {
     const c = ctx();
 
     const result = await geoparquetProcessor.process(c as never, file());
 
     expect(getArrayBufferMock).toHaveBeenCalledTimes(1);
-    expect(insertArrowTableIntoDuckDBMock).toHaveBeenCalledWith(
-      { rows: 4 },
-      'tbl_gpq'
-    );
+    expect(c.Duck.register_files).toHaveBeenCalledTimes(1);
+    // CREATE TABLE + sequence/alter = 2 query calls
     expect(c.Duck.query).toHaveBeenCalledTimes(2);
     expect(result.rowCount).toBe(4);
-    expect(result.geoArrowMetadata).toBeDefined();
-  });
-
-  it('continues when geometry conversion query fails', async () => {
-    const c = ctx();
-    c.Duck.query
-      .mockRejectedValueOnce(new Error('geom conversion failed'))
-      .mockResolvedValueOnce(undefined);
-
-    const result = await geoparquetProcessor.process(c as never, file());
-
-    expect(c.Duck.query).toHaveBeenCalledTimes(2);
     expect(result.tableName).toBe('tbl_gpq');
   });
 
-  it('skips conversion query when metadata is missing', async () => {
-    geoParquetReaderMock.extractMetadata.mockReturnValue(null);
-
+  it('creates __id sequence column', async () => {
     const c = ctx();
+
     await geoparquetProcessor.process(c as never, file());
 
-    expect(c.Duck.query).toHaveBeenCalledTimes(1);
+    const calls = c.Duck.query.mock.calls.map(
+      (call: unknown[]) => call[0] as string
+    );
+    const seqCall = calls.find(
+      (sql: string) => sql.includes('SEQUENCE') && sql.includes('__id')
+    );
+    expect(seqCall).toBeDefined();
   });
 });

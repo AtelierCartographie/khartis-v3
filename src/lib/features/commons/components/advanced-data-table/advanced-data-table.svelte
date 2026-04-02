@@ -409,11 +409,6 @@
   }
 
   onMount(() => {
-    logger.debug('AdvancedDataTable mounted', LogCategory.UI, {
-      tableName,
-      datasetId: dataset?.id
-    });
-
     const handleResize = () => {
       viewportHeight = window.innerHeight;
     };
@@ -567,17 +562,11 @@
     lastDatasetVersion = currentDatasetVersion;
 
     if (isLocalUpdate) {
-      logger.debug('Ignoring update due to local update', LogCategory.UI);
       return;
     }
 
     if (currentDataset || currentTableName) {
       untrack(async () => {
-        logger.debug('$effect: reloading table data', LogCategory.UI, {
-          tableName: currentTableName,
-          datasetId: currentDataset?.id
-        });
-
         try {
           await tableData.loadColumnsInfo();
           await filters.refreshFiltersState();
@@ -645,11 +634,12 @@
           <thead>
             <tr class:histograms-open={effectiveShowSummaryPlots}>
               {#if isSelectable && isEditMode}
-                <th class="selection-header-spacer"></th>
+                <th class="selection-header-spacer" scope="col"></th>
               {/if}
               <th
                 class="row-index-header"
                 class:histograms-open={effectiveShowSummaryPlots}
+                scope="col"
               >
                 <div class="row-index-header-content">
                   <div class="histogram-toggle-area">

@@ -4,8 +4,11 @@ import {
   projectRepository,
   projectStorage
 } from '$lib/features/project-management';
+import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { m } from '$lib/paraglide/messages';
 import { dataOrchestratorService } from '../../services/data-orchestrator.service.svelte';
+import { dataTabState } from '../data-tab.store.svelte';
+import { datasetsStore } from '../datasets.store.svelte';
 import { downloadFile } from '../../utils/file-export.utils';
 import { LogCategory, logger } from '../../utils/logger';
 import { showError } from '../../utils/notification.utils.svelte';
@@ -13,6 +16,41 @@ import { generateProjectFilename } from '../../utils/string.utils';
 import { ProjectValidator } from '../../utils/validation.utils';
 import type { ProjectStateContainer } from './project-state.svelte';
 import { addToHistory, resetHistory } from './project-history';
+
+/**
+ * Sync geo column and basemap info from runtime state to source files
+ * before saving. This ensures manual column selections (like "entity"
+ * for fuzzy-countries) are persisted even before clicking Visualiser.
+ */
+function syncGeoInfoToSourceFiles(container: ProjectStateContainer): void {
+  const files = container._state.currentProject?.data?.sourceFiles;
+  if (!files) return;
+
+  for (const file of files) {
+    // First try DuckDB dataset (set after finalizeJoin)
+    const dataset = datasetsStore.datasets.find(
+      (d) => d.sourceFileId === file.id
+    );
+    const duckDataset = dataset?.id
+      ? duckDBOrchestrator.getDataset(dataset.id)
+      : null;
+
+    if (duckDataset?.geoColumn) {
+      file.geoColumn = duckDataset.geoColumn;
+    }
+    if (duckDataset?.joinedBasemap) {
+      file.joinedBasemap = duckDataset.joinedBasemap;
+    }
+
+    // Fallback: use UI state for the selected dataset
+    if (!file.geoColumn && dataTabState.geolocation.linkedVariableName) {
+      file.geoColumn = dataTabState.geolocation.linkedVariableName;
+    }
+    if (!file.joinedBasemap && dataTabState.basemapJoin.selectedBasemap) {
+      file.joinedBasemap = dataTabState.basemapJoin.selectedBasemap;
+    }
+  }
+}
 
 export async function saveCurrentProject(
   container: ProjectStateContainer
@@ -22,6 +60,8 @@ export async function saveCurrentProject(
   }
 
   try {
+    syncGeoInfoToSourceFiles(container);
+
     const projectValidation = ProjectValidator.validateProjectSize(
       container._state.currentProject
     );

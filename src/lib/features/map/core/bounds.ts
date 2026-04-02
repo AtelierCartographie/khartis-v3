@@ -12,6 +12,12 @@ const MAX_LAT = 90;
 const MIN_LNG = -180;
 const MAX_LNG = 180;
 
+/**
+ * Bounds cache — avoids repeated O(n) geometry scans + GeoJSON parsing
+ * for the same Arrow table. Auto-GC when table is dereferenced.
+ */
+const boundsCache = new WeakMap<ArrowTable, LngLatBoundsLike | null>();
+
 function isValidBbox(
   minLng: number,
   minLat: number,
@@ -165,7 +171,9 @@ function calculateBoundsFromGeometryData(
     if (parsed) {
       parsedCount++;
       const coords = extractCoordsFromGeometry(parsed);
-      for (const [lng, lat] of coords) {
+      for (const coord of coords) {
+        if (!Array.isArray(coord) || coord.length < 2) continue;
+        const [lng, lat] = coord;
         if (typeof lng === 'number' && typeof lat === 'number') {
           coordCount++;
           if (lng < minLng) minLng = lng;
@@ -209,11 +217,6 @@ function calculateBoundsFromGeometryData(
     return null;
   }
 
-  logger.debug('Calculated bounds from geometry data', LogCategory.MAP, {
-    geoColumn,
-    bounds: [minLng, minLat, maxLng, maxLat]
-  });
-
   return [
     [minLng, minLat],
     [maxLng, maxLat]
@@ -223,6 +226,9 @@ function calculateBoundsFromGeometryData(
 export function calculateBoundsFromGeoArrow(
   jsTable: ArrowTable
 ): LngLatBoundsLike | null {
+  const cached = boundsCache.get(jsTable);
+  if (cached !== undefined) return cached;
+
   try {
     logger.debug('Starting bounds calculation', LogCategory.MAP, {
       numRows: jsTable.numRows,
@@ -260,10 +266,12 @@ export function calculateBoundsFromGeoArrow(
             logger.debug('Using bbox from GeoArrow metadata', LogCategory.MAP, {
               bbox
             });
-            return [
+            const result: LngLatBoundsLike = [
               [minLng, minLat],
               [maxLng, maxLat]
             ];
+            boundsCache.set(jsTable, result);
+            return result;
           }
 
           if (isWorldBounds) {
@@ -277,36 +285,43 @@ export function calculateBoundsFromGeoArrow(
     }
 
     if (primaryColumn) {
-      logger.info(
+      logger.debug(
         'No bbox in metadata, calculating from primary column',
         LogCategory.MAP,
         { primaryColumn }
       );
       const bounds = calculateBoundsFromGeometryData(jsTable, primaryColumn);
-      if (bounds) return bounds;
+      if (bounds) {
+        boundsCache.set(jsTable, bounds);
+        return bounds;
+      }
     }
 
     const geoColumn = findGeoColumn(jsTable);
     if (geoColumn && geoColumn !== primaryColumn) {
-      logger.info(
+      logger.debug(
         'Calculating bounds from discovered geometry column',
         LogCategory.MAP,
         { geoColumn }
       );
       const bounds = calculateBoundsFromGeometryData(jsTable, geoColumn);
-      if (bounds) return bounds;
+      if (bounds) {
+        boundsCache.set(jsTable, bounds);
+        return bounds;
+      }
     }
 
-    logger.info('Trying all columns to find coordinates', LogCategory.MAP, {
+    logger.debug('Trying all columns to find coordinates', LogCategory.MAP, {
       fields: jsTable.schema.fields.map((f) => f.name)
     });
     for (const field of jsTable.schema.fields) {
       if (field.name === primaryColumn || field.name === geoColumn) continue;
       const bounds = calculateBoundsFromGeometryData(jsTable, field.name);
       if (bounds) {
-        logger.info('Found bounds in column', LogCategory.MAP, {
+        logger.debug('Found bounds in column', LogCategory.MAP, {
           column: field.name
         });
+        boundsCache.set(jsTable, bounds);
         return bounds;
       }
     }
@@ -316,13 +331,15 @@ export function calculateBoundsFromGeoArrow(
       LogCategory.MAP,
       { fields: jsTable.schema.fields.map((f) => f.name) }
     );
+    boundsCache.set(jsTable, null);
     return null;
   } catch (error) {
-    logger.error(
+    logger.warn(
       'Failed to calculate bounds from GeoArrow',
       LogCategory.MAP,
       error
     );
+    boundsCache.set(jsTable, null);
     return null;
   }
 }
@@ -371,7 +388,7 @@ export function calculateBoundsFromGeoJSON(
       [maxLng, maxLat]
     ];
   } catch (error) {
-    logger.error(
+    logger.warn(
       'Failed to calculate bounds from GeoJSON',
       LogCategory.MAP,
       error
