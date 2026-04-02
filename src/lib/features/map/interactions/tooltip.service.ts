@@ -149,6 +149,31 @@ export function extractTooltipEntries(
 }
 
 /**
+ * Extract the DuckDB `__id` from a picked object so the highlight store
+ * matches what `withRowHighlight` / `withGeoJsonRowHighlight` check.
+ * Deck.gl's `info.index` is 0-based but `__id` is 1-based (nextval).
+ */
+function extractRowId(info: PickingInfo): number | null {
+  if (info.index === undefined || info.index < 0) return null;
+
+  const obj = info.object as Record<string, unknown> | null;
+  if (!obj) return null;
+
+  // GeoJSON feature path
+  if ('properties' in obj) {
+    const props = obj.properties as Record<string, unknown> | undefined;
+    const id = props?.[INTERNAL_COLUMN.ID];
+    if (typeof id === 'number') return id;
+  }
+
+  // Arrow row path
+  const id = obj[INTERNAL_COLUMN.ID];
+  if (typeof id === 'number') return id;
+
+  return null;
+}
+
+/**
  * Creates an onHover handler that populates the tooltip store.
  */
 export function createHoverHandler(
@@ -158,7 +183,6 @@ export function createHoverHandler(
     const entries = extractTooltipEntries(info, getVisualizations?.());
     if (entries.length === 0) {
       mapTooltipStore.hide();
-      mapHighlightStore.clearHighlights();
       return;
     }
 
@@ -171,10 +195,6 @@ export function createHoverHandler(
       info.layer?.id ?? null,
       info.index ?? -1
     );
-
-    if (info.index !== undefined && info.index >= 0) {
-      mapHighlightStore.setHighlightedRows([info.index]);
-    }
   };
 }
 
@@ -219,5 +239,10 @@ export function createClickHandler(
       info.layer?.id ?? null,
       info.index ?? -1
     );
+
+    const rowId = extractRowId(info);
+    if (rowId !== null) {
+      mapHighlightStore.setHighlightedRows([rowId]);
+    }
   };
 }

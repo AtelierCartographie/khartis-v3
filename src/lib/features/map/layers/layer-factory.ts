@@ -1,7 +1,13 @@
 import type { Layer } from '@deck.gl/core';
-import { GeoJsonLayer, TextLayer } from '@deck.gl/layers';
+import {
+  GeoJsonLayer,
+  TextLayer,
+  SolidPolygonLayer,
+  PathLayer,
+  ScatterplotLayer
+} from '@deck.gl/layers';
+import { DataFilterExtension } from '@deck.gl/extensions';
 import RotatableFillStyleExtension from './rotatable-fill-style-extension';
-import * as geodecklayers from '@geoarrow/deck.gl-layers';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { FeatureCollection, Geometry } from 'geojson';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
@@ -25,10 +31,12 @@ import type {
   GeometryInfo,
   LayerContext,
   RGBColor,
-  ThematicLayer
+  ThematicLayer,
+  YearFilterInfo
 } from '../types';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import {
+  getCategoricalColorMap,
   shouldApplyCategorical,
   shouldApplyChoropleth,
   shouldApplyProportionalSymbols
@@ -46,13 +54,136 @@ import {
   withRowHighlight,
   withRowHighlightAccessor
 } from './layer-helpers';
-import { getPatternAtlas, isValidPatternId } from './pattern-texture';
+import {
+  getPatternAtlas,
+  isValidPatternId,
+  PATTERN_TYPE_MAP
+} from './pattern-texture';
+import {
+  createSolidPolygonLayerProps,
+  createPathLayerProps,
+  createScatterplotLayerProps,
+  createColorAttribute,
+  createPolygonFillColorAttribute,
+  createWidthAttribute
+} from 'geoarrow-deck-stream';
+import type { ProjectionLike } from 'geoarrow-deck-stream';
+import {
+  parsePaths,
+  parseSolidPolygons,
+  parsePointData,
+  parseSolidPolygonsWithProjection,
+  parsePathsWithProjection,
+  parsePointDataWithProjection,
+  pointColorAttr,
+  pointRadiusAttr,
+  rowAccessor,
+  filterValueAttr,
+  polygonCentroids,
+  pathCentroids,
+  pointPositions,
+  projectGeoJSON
+} from '../utils/geoarrow-stream-bridge';
 
 const HIGHLIGHT_DIMMING_FACTOR = 0.3;
 const DEFAULT_TEXT_SIZE = 12;
 const DEFAULT_HALO_WIDTH = 2;
 const DEFAULT_TEXT_FONT = 'IBM Plex Sans, sans-serif';
-const HOVER_HIGHLIGHT_COLOR: [number, number, number, number] = [0, 0, 0, 50];
+const HOVER_HIGHLIGHT_COLOR: [number, number, number, number] = [0, 0, 0, 80];
+
+function resolvePolygonParser(customProjection?: ProjectionLike) {
+  return customProjection
+    ? (table: ArrowTable) =>
+        parseSolidPolygonsWithProjection(table, customProjection)
+    : parseSolidPolygons;
+}
+
+function resolvePathParser(customProjection?: ProjectionLike) {
+  return customProjection
+    ? (table: ArrowTable) => parsePathsWithProjection(table, customProjection)
+    : parsePaths;
+}
+
+function resolvePointParser(customProjection?: ProjectionLike) {
+  return customProjection
+    ? (table: ArrowTable) =>
+        parsePointDataWithProjection(table, customProjection)
+    : parsePointData;
+}
+
+// WeakMap cache for arrowTableToGeoJSON — keyed by (table, geoColumn).
+// Avoids redundant full-table walks when the same table is converted
+// multiple times during a single layer-creation pass (labels, fallback, etc.).
+const geoJsonConversionCache = new WeakMap<
+  ArrowTable,
+  Map<string, FeatureCollection | null>
+>();
+
+/**
+ * WeakMap cache for createTextLayerDataFromBinary — avoids recomputing
+ * centroids + label extraction when only styling/highlight changes occur.
+ * Two-level keying: table → (ProjectionLike | null) → "geoType:col:col2" → result.
+ * The projection reference is stable per basemap (memoized in use-map-layers.svelte.ts).
+ */
+const textLabelCache = new WeakMap<
+  ArrowTable,
+  Map<ProjectionLike | null, Map<string, TextLayerDatum[]>>
+>();
+
+function getCachedGeoJSON(
+  table: ArrowTable,
+  geoColumn: string
+): FeatureCollection | null {
+  let columnMap = geoJsonConversionCache.get(table);
+  if (columnMap) {
+    const cached = columnMap.get(geoColumn);
+    if (cached !== undefined) return cached;
+  } else {
+    columnMap = new Map();
+    geoJsonConversionCache.set(table, columnMap);
+  }
+  const result = arrowTableToGeoJSON(table, geoColumn);
+  columnMap.set(geoColumn, result);
+  return result;
+}
+
+/** Cached DataFilterExtension singleton — reused across all layers with year filtering */
+const DATA_FILTER_EXTENSION = new DataFilterExtension({ filterSize: 1 });
+
+/**
+ * Build DataFilterExtension props for a binary layer when yearFilter is active.
+ * Injects getFilterValue binary attribute into data.attributes and returns
+ * layer props (extensions, filterRange, updateTriggers).
+ */
+function buildYearFilterProps(
+  binaryData: { readonly length: number; readonly featureIds: Uint32Array },
+  dataObj: { attributes: Record<string, unknown> },
+  table: ArrowTable,
+  yearFilter: YearFilterInfo
+): Record<string, unknown> {
+  const filterAttr = filterValueAttr(binaryData, table, yearFilter.column);
+  dataObj.attributes.getFilterValue = filterAttr;
+  return {
+    extensions: [DATA_FILTER_EXTENSION],
+    filterRange: [yearFilter.value, yearFilter.value] as [number, number]
+  };
+}
+
+/**
+ * Build DataFilterExtension props for a GeoJSON layer when yearFilter is active.
+ */
+function buildGeoJsonYearFilterProps(
+  yearFilter: YearFilterInfo
+): Record<string, unknown> {
+  return {
+    extensions: [DATA_FILTER_EXTENSION],
+    getFilterValue: (feature: { properties?: Record<string, unknown> }) => {
+      const raw = feature.properties?.[yearFilter.column];
+      return typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''));
+    },
+    filterRange: [yearFilter.value, yearFilter.value] as [number, number]
+  };
+}
 
 /** Cached RotatableFillStyleExtension instance (reused across renders) */
 let fillStyleExtensionInstance: RotatableFillStyleExtension | null = null;
@@ -92,8 +223,6 @@ function buildPatternProps(ctx: LayerContext): {
     return null;
   }
 
-  const patternAngle = ctx.viz?.classification?.patternParams?.angle ?? 0;
-
   return {
     extensions: [getFillStyleExtension()],
     fillPatternAtlas: atlas,
@@ -101,7 +230,7 @@ function buildPatternProps(ctx: LayerContext): {
     fillPatternMask: true,
     getFillPattern: () => patternId,
     getFillPatternScale: 200,
-    getFillPatternRotation: patternAngle
+    getFillPatternRotation: PATTERN_TYPE_MAP[patternId]?.angle ?? 0
   };
 }
 
@@ -255,6 +384,113 @@ function createTextLayerData(
   return output;
 }
 
+/**
+ * Create TextLayerDatum[] from binary geometry data + Arrow column values.
+ * Avoids the full ArrowTable → GeoJSON conversion for native GeoArrow data.
+ */
+function createTextLayerDataFromBinary(
+  table: ArrowTable,
+  geoInfo: GeometryInfo,
+  primaryColumn: string,
+  secondaryColumn?: string,
+  customProjection?: ProjectionLike
+): TextLayerDatum[] {
+  // Check text label cache — centroids + label text are stable for the same
+  // table + columns + projection. Uses projection reference as key (stable
+  // per basemap thanks to memoization in use-map-layers.svelte.ts).
+  const projKey = customProjection ?? null;
+  const labelCacheKey = `${geoInfo.type}:${primaryColumn}:${secondaryColumn ?? ''}`;
+  const tableMap = textLabelCache.get(table);
+  if (tableMap) {
+    const projMap = tableMap.get(projKey);
+    if (projMap) {
+      const cached = projMap.get(labelCacheKey);
+      if (cached) return cached;
+    }
+  }
+
+  const geoType = geoInfo.type;
+  let centroids: Float64Array;
+  let featureIds: Uint32Array;
+
+  const parsePolygons = resolvePolygonParser(customProjection);
+  const parseLines = resolvePathParser(customProjection);
+  const parsePoints = resolvePointParser(customProjection);
+
+  if (
+    geoType === GeometryType.POLYGON ||
+    geoType === GeometryType.MULTIPOLYGON
+  ) {
+    const polyData = parsePolygons(table);
+    centroids = polygonCentroids(polyData);
+    featureIds = polyData.featureIds;
+  } else if (
+    geoType === GeometryType.LINESTRING ||
+    geoType === GeometryType.MULTILINESTRING
+  ) {
+    const lineData = parseLines(table);
+    centroids = pathCentroids(lineData);
+    featureIds = lineData.featureIds;
+  } else if (
+    geoType === GeometryType.POINT ||
+    geoType === GeometryType.MULTIPOINT
+  ) {
+    const ptData = parsePoints(table);
+    centroids = pointPositions(ptData);
+    featureIds = ptData.featureIds;
+  } else {
+    return [];
+  }
+
+  const primaryVector = table.getChild(primaryColumn);
+  if (!primaryVector) return [];
+  const secondaryVector = secondaryColumn
+    ? table.getChild(secondaryColumn)
+    : null;
+
+  const output: TextLayerDatum[] = [];
+  const numFeatures = centroids.length / 2;
+  const seen = new Set<number>();
+
+  for (let i = 0; i < numFeatures; i++) {
+    const fid = featureIds[i];
+    // Deduplicate: multi-geometry features share the same featureId
+    if (seen.has(fid)) continue;
+    seen.add(fid);
+
+    const primaryText = toTextValue(primaryVector.get(fid));
+    if (!primaryText) continue;
+
+    const x = centroids[i * 2];
+    const y = centroids[i * 2 + 1];
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+
+    const secondaryText = secondaryVector
+      ? toTextValue(secondaryVector.get(fid))
+      : null;
+
+    output.push({
+      position: [x, y],
+      text: secondaryText ? `${primaryText}\n${secondaryText}` : primaryText
+    });
+  }
+
+  // Store in cache (table → projection → labelKey → result)
+  let tMap = textLabelCache.get(table);
+  if (!tMap) {
+    tMap = new Map();
+    textLabelCache.set(table, tMap);
+  }
+  let pMap = tMap.get(projKey);
+  if (!pMap) {
+    pMap = new Map();
+    tMap.set(projKey, pMap);
+  }
+  pMap.set(labelCacheKey, output);
+
+  return output;
+}
+
 function createTextOverlayLayers(
   jsTable: ArrowTable,
   geometryInfo: GeometryInfo,
@@ -274,29 +510,69 @@ function createTextOverlayLayers(
     return [];
   }
 
-  let geojsonData: FeatureCollection | null = null;
-  try {
-    geojsonData = arrowTableToGeoJSON(jsTable, geometryInfo.geoColumn);
-  } catch (error) {
-    logger.warn(
-      'Failed to convert geometry for text overlays, skipping labels/texts',
-      LogCategory.MAP,
-      {
-        datasetId: ctx.datasetId,
-        error: error instanceof Error ? error.message : String(error)
+  // Opt 3: For native GeoArrow data, compute centroids from binary data directly.
+  // This avoids a full ArrowTable → GeoJSON conversion just to get label positions.
+  const isNativeGeoArrow =
+    geometryInfo.isNativeGeoArrow ||
+    (geometryInfo.encoding && geometryInfo.encoding.startsWith('geoarrow.'));
+  let textLayerData: TextLayerDatum[] | null = null;
+  let textLayerDataWithSecondary: TextLayerDatum[] | null = null;
+
+  if (isNativeGeoArrow) {
+    try {
+      textLayerData = createTextLayerDataFromBinary(
+        jsTable,
+        geometryInfo,
+        viz.mapping.labelColumn,
+        undefined,
+        ctx.customProjection
+      );
+      if (viz.mapping.secondaryLabelColumn) {
+        textLayerDataWithSecondary = createTextLayerDataFromBinary(
+          jsTable,
+          geometryInfo,
+          viz.mapping.labelColumn,
+          viz.mapping.secondaryLabelColumn,
+          ctx.customProjection
+        );
       }
-    );
-    return [];
+    } catch {
+      // Fall through to GeoJSON path
+      textLayerData = null;
+    }
   }
 
-  if (!geojsonData) {
-    return [];
+  // Fallback: GeoJSON conversion (for WKB/GeoJSON-encoded data, or if binary failed)
+  if (!textLayerData) {
+    let geojsonData: FeatureCollection | null;
+    try {
+      geojsonData = getCachedGeoJSON(jsTable, geometryInfo.geoColumn);
+    } catch (error) {
+      logger.warn(
+        'Failed to convert geometry for text overlays, skipping labels/texts',
+        LogCategory.MAP,
+        {
+          datasetId: ctx.datasetId,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      );
+      return [];
+    }
+    if (!geojsonData) return [];
+    textLayerData = createTextLayerData(geojsonData, viz.mapping.labelColumn);
+    if (viz.mapping.secondaryLabelColumn) {
+      textLayerDataWithSecondary = createTextLayerData(
+        geojsonData,
+        viz.mapping.labelColumn,
+        viz.mapping.secondaryLabelColumn
+      );
+    }
   }
 
   const layers: ThematicLayer[] = [];
 
   if (shouldRenderLabelLayer) {
-    const labelData = createTextLayerData(geojsonData, viz.mapping.labelColumn);
+    const labelData = textLayerData;
     if (labelData.length > 0) {
       const labelColor = resolveStyleColor(viz.style.labelColor, ctx.fillColor);
       const labelLayerId = createThematicLayerId(DeckLayerId.LABEL_LAYER, ctx);
@@ -340,11 +616,7 @@ function createTextOverlayLayers(
   }
 
   if (shouldRenderTextLayer) {
-    const textData = createTextLayerData(
-      geojsonData,
-      viz.mapping.labelColumn,
-      viz.mapping.secondaryLabelColumn
-    );
+    const textData = textLayerDataWithSecondary ?? textLayerData;
     if (textData.length > 0) {
       const textColor = resolveStyleColor(viz.style.textColor, ctx.fillColor);
       const textLayerId = createThematicLayerId(DeckLayerId.TEXT_LAYER, ctx);
@@ -412,11 +684,14 @@ export function createPointLayers(
     beforeId
   } = ctx;
   const hasHighlights = highlightedRowIds && highlightedRowIds.size > 0;
-  const { geoColumn, isWkbEncoded, isGeoJsonEncoded } = geometryInfo;
+  const hlVersion = ctx.highlightVersion ?? 0;
+  const { geoColumn, isNativeGeoArrow, isWkbEncoded, isGeoJsonEncoded } =
+    geometryInfo;
   const arrowExtension = geometryInfo.encoding;
 
   const useProportionalSymbols = viz && shouldApplyProportionalSymbols(viz);
   const useCategoricalColor = viz && shouldApplyCategorical(viz);
+  const useChoropleth = viz && shouldApplyChoropleth(viz);
   const { min: minValue, max: maxValue } = statistics;
 
   const layerId = createThematicLayerId(DeckLayerId.POINT_LAYER, ctx);
@@ -426,16 +701,21 @@ export function createPointLayers(
     (arrowExtension === ArrowExtension.GEOARROW_POINT ||
       arrowExtension === ArrowExtension.GEOARROW_MULTIPOINT);
 
-  if (!isNativeGeoArrowPoint && (isWkbEncoded || isGeoJsonEncoded)) {
-    logger.info(
-      'Using GeoJsonLayer fallback for points (WKB/GeoJSON encoded)',
-      LogCategory.MAP,
-      { arrowExtension, geometryType: geometryInfo.type }
-    );
-
+  // GeoJSON fallback only for actual GeoJSON strings or legacy ogc.wkb without
+  // geoarrow-deck-stream support. geoarrow.wkb goes through the binary path
+  // (isNativeGeoArrow = true) since geoarrow-deck-stream handles WKB natively.
+  if (
+    !isNativeGeoArrowPoint &&
+    !isNativeGeoArrow &&
+    (isWkbEncoded || isGeoJsonEncoded)
+  ) {
     let geojsonData;
     try {
-      geojsonData = arrowTableToGeoJSON(jsTable, geoColumn);
+      const rawGeoJSON = getCachedGeoJSON(jsTable, geoColumn);
+      geojsonData =
+        rawGeoJSON && ctx.customProjection
+          ? projectGeoJSON(rawGeoJSON, ctx.customProjection)
+          : rawGeoJSON;
     } catch (error) {
       logger.error(
         'Error converting point geometry to GeoJSON',
@@ -462,14 +742,49 @@ export function createPointLayers(
       return [];
     }
 
+    let effectiveCategoryColorMap = categoryColorMap;
+    if (
+      useCategoricalColor &&
+      viz?.mapping.categoryColumn &&
+      (!categoryColorMap || categoryColorMap.size === 0) &&
+      viz.classification?.colors?.length
+    ) {
+      const col = viz.mapping.categoryColumn;
+      const storedLabels = viz.classification?.labels;
+      const uniqueVals =
+        storedLabels && storedLabels.length > 0
+          ? storedLabels
+          : [
+              ...new Set(
+                geojsonData.features
+                  .map((f) => f.properties?.[col])
+                  .filter((v) => v !== null && v !== undefined)
+                  .map(String)
+              )
+            ];
+      if (uniqueVals.length > 0) {
+        effectiveCategoryColorMap = getCategoricalColorMap(
+          uniqueVals,
+          viz.classification.colors
+        );
+      }
+    }
+
     const baseFillColor =
-      useCategoricalColor && viz
-        ? createGeoJsonCategoricalColorAccessor(
-            viz.mapping.categoryColumn!,
-            categoryColorMap,
+      useChoropleth && viz
+        ? createGeoJsonChoroplethColorAccessor(
+            viz.mapping.valueColumn!,
+            viz.classification!.breaks!,
+            viz.classification!.colors!,
             fillColor
           )
-        : fillColor;
+        : useCategoricalColor && viz
+          ? createGeoJsonCategoricalColorAccessor(
+              viz.mapping.categoryColumn!,
+              effectiveCategoryColorMap,
+              fillColor
+            )
+          : fillColor;
 
     const geoJsonFillColor =
       hasHighlights && highlightedRowIds
@@ -528,14 +843,18 @@ export function createPointLayers(
         highlightColor: HOVER_HIGHLIGHT_COLOR,
         ...(modelMatrix && { modelMatrix }),
         ...(beforeId && { beforeId }),
+        ...(ctx.yearFilter && buildGeoJsonYearFilterProps(ctx.yearFilter)),
         updateTriggers: {
           getFillColor: [
+            useChoropleth,
+            viz?.mapping.valueColumn,
+            viz?.classification?.breaks,
+            viz?.classification?.colors,
             useCategoricalColor,
             viz?.mapping.categoryColumn,
             categoryColorMap,
             fillColor,
-            hasHighlights,
-            highlightedRowIds
+            hlVersion
           ],
           getPointRadius: [
             useProportionalSymbols,
@@ -546,109 +865,161 @@ export function createPointLayers(
             viz?.symbols?.maxSize,
             viz?.symbols?.sizeScale
           ],
-          getLineColor: [
-            strokeColor,
-            rawStrokeOpacity,
-            hasHighlights,
-            highlightedRowIds
-          ]
+          getLineColor: [strokeColor, rawStrokeOpacity, hlVersion],
+          ...(ctx.yearFilter && {
+            getFilterValue: [ctx.yearFilter.column, ctx.yearFilter.value]
+          })
         }
       })
     ];
   }
 
-  const baseFillColor =
-    useCategoricalColor && viz
-      ? createCategoricalColorAccessor(
-          viz.mapping.categoryColumn!,
-          categoryColorMap
-        )
-      : fillColor;
+  // Parse Arrow table to binary point data
+  const pointData = resolvePointParser(ctx.customProjection)(jsTable);
 
-  const arrowFillColor =
+  // Build fill color: choropleth > categorical > static
+  const baseFillAccessor =
+    useChoropleth && viz
+      ? createChoroplethColorAccessor(
+          viz.mapping.valueColumn!,
+          viz.classification!.breaks!,
+          viz.classification!.colors!
+        )
+      : useCategoricalColor && viz
+        ? createCategoricalColorAccessor(
+            viz.mapping.categoryColumn!,
+            categoryColorMap
+          )
+        : null;
+
+  const fillColorAccessor =
     hasHighlights && highlightedRowIds
-      ? typeof baseFillColor === 'function'
+      ? baseFillAccessor
         ? withRowHighlightAccessor(
-            baseFillColor,
+            baseFillAccessor,
             rawFillOpacity,
             HIGHLIGHT_DIMMING_FACTOR,
             highlightedRowIds
           )
         : withRowHighlight(
-            baseFillColor,
+            fillColor,
             rawFillOpacity,
             HIGHLIGHT_DIMMING_FACTOR,
             highlightedRowIds
           )
-      : baseFillColor;
+      : baseFillAccessor;
 
-  const arrowLineColor = hasHighlights
+  // Binary attributes — must be in data.attributes for ScatterplotLayer binary data
+  const fillColorBinAttr = fillColorAccessor
+    ? pointColorAttr(pointData, rowAccessor(jsTable, fillColorAccessor))
+    : null;
+
+  // Build line color
+  const lineColorAccessor = hasHighlights
     ? withRowHighlight(
         strokeColor,
         rawStrokeOpacity,
         HIGHLIGHT_DIMMING_FACTOR,
         highlightedRowIds!
       )
-    : withOpacity(strokeColor, rawStrokeOpacity);
+    : null;
 
-  const scatterplotProps: ConstructorParameters<
-    typeof geodecklayers.GeoArrowScatterplotLayer
-  >[0] = {
-    id: layerId,
-    data: jsTable,
-    stroked: true,
-    getFillColor: arrowFillColor,
-    getLineColor: arrowLineColor,
-    opacity: hasHighlights ? 1 : rawFillOpacity,
-    getRadius:
-      useProportionalSymbols && viz
-        ? createProportionalSizeAccessor(
-            viz.mapping.sizeColumn!,
-            minValue,
-            maxValue,
-            viz.symbols!.minSize,
-            viz.symbols!.maxSize,
-            viz.symbols!.sizeScale
-          )
-        : 1,
-    radiusScale: useProportionalSymbols ? 1 : 5,
-    radiusUnits: 'pixels',
-    lineWidthUnits: 'pixels',
-    lineWidthScale: strokeWidth / 3,
-    pickable: true,
-    autoHighlight: true,
-    highlightColor: HOVER_HIGHLIGHT_COLOR,
-    ...(modelMatrix && { modelMatrix }),
-    ...(beforeId && { beforeId }),
-    updateTriggers: {
-      getFillColor: [
-        useCategoricalColor,
-        viz?.mapping.categoryColumn,
-        categoryColorMap,
-        fillColor,
-        hasHighlights,
-        highlightedRowIds
-      ],
-      getRadius: [
-        useProportionalSymbols,
-        viz?.mapping.sizeColumn,
-        minValue,
-        maxValue,
-        viz?.symbols?.minSize,
-        viz?.symbols?.maxSize,
-        viz?.symbols?.sizeScale
-      ],
-      getLineColor: [
-        strokeColor,
-        rawStrokeOpacity,
-        hasHighlights,
-        highlightedRowIds
-      ]
-    },
-    dataComparator: (newData, oldData) => newData === oldData
+  const lineColorBinAttr = lineColorAccessor
+    ? pointColorAttr(pointData, rowAccessor(jsTable, lineColorAccessor))
+    : null;
+
+  // Build radius: static or per-feature attribute
+  const radiusAccessor =
+    useProportionalSymbols && viz
+      ? createProportionalSizeAccessor(
+          viz.mapping.sizeColumn!,
+          minValue,
+          maxValue,
+          viz.symbols!.minSize,
+          viz.symbols!.maxSize,
+          viz.symbols!.sizeScale
+        )
+      : null;
+
+  const radiusBinAttr = radiusAccessor
+    ? pointRadiusAttr(pointData, rowAccessor(jsTable, radiusAccessor))
+    : null;
+
+  // Inject binary attributes into data.attributes for ScatterplotLayer
+  const scatterProps = createScatterplotLayerProps(pointData);
+  const scatterBinaryData = scatterProps.data as {
+    attributes: Record<string, unknown>;
   };
+  if (fillColorBinAttr) {
+    scatterBinaryData.attributes.getFillColor = fillColorBinAttr;
+  }
+  if (lineColorBinAttr) {
+    scatterBinaryData.attributes.getLineColor = lineColorBinAttr;
+  }
+  if (radiusBinAttr) {
+    scatterBinaryData.attributes.getPointRadius = radiusBinAttr;
+  }
 
-  return [new geodecklayers.GeoArrowScatterplotLayer(scatterplotProps)];
+  // DataFilterExtension for GPU-side year filtering (binary points)
+  const yearFilterProps = ctx.yearFilter
+    ? buildYearFilterProps(
+        pointData,
+        scatterBinaryData,
+        jsTable,
+        ctx.yearFilter
+      )
+    : null;
+
+  return [
+    new ScatterplotLayer({
+      id: layerId,
+      ...(scatterProps as unknown as Record<string, unknown>),
+      stroked: true,
+      ...(!fillColorBinAttr && {
+        getFillColor: withOpacity(fillColor, hasHighlights ? 1 : rawFillOpacity)
+      }),
+      ...(!lineColorBinAttr && {
+        getLineColor: withOpacity(strokeColor, rawStrokeOpacity)
+      }),
+      opacity: hasHighlights ? 1 : rawFillOpacity,
+      ...(!radiusBinAttr && { getRadius: 1 }),
+      radiusScale: useProportionalSymbols ? 1 : 5,
+      radiusUnits: 'pixels',
+      lineWidthUnits: 'pixels',
+      lineWidthScale: strokeWidth / 3,
+      pickable: true,
+      autoHighlight: true,
+      highlightColor: HOVER_HIGHLIGHT_COLOR,
+      ...(modelMatrix && { modelMatrix }),
+      ...(beforeId && { beforeId }),
+      ...yearFilterProps,
+      updateTriggers: {
+        getFillColor: [
+          useChoropleth,
+          viz?.mapping.valueColumn,
+          viz?.classification?.breaks,
+          viz?.classification?.colors,
+          useCategoricalColor,
+          viz?.mapping.categoryColumn,
+          categoryColorMap,
+          fillColor,
+          hlVersion
+        ],
+        getRadius: [
+          useProportionalSymbols,
+          viz?.mapping.sizeColumn,
+          minValue,
+          maxValue,
+          viz?.symbols?.minSize,
+          viz?.symbols?.maxSize,
+          viz?.symbols?.sizeScale
+        ],
+        getLineColor: [strokeColor, rawStrokeOpacity, hlVersion]
+        // Note: getFilterValue is a binary attribute (baked once via filterValueAttr),
+        // not a per-frame accessor. Year changes are handled by filterRange prop alone.
+      }
+    })
+  ];
 }
 
 export function createLineLayers(
@@ -682,6 +1053,7 @@ export function createLineLayers(
 
   const hasLineHighlights =
     lineHighlightedRowIds && lineHighlightedRowIds.size > 0;
+  const hlVersion = ctx.highlightVersion ?? 0;
   const {
     geoColumn,
     encoding: arrowExtension,
@@ -705,34 +1077,39 @@ export function createLineLayers(
       arrowExtension === ArrowExtension.GEOARROW_MULTILINESTRING);
 
   if (isNativeGeoArrowLine || isNativeGeoArrow) {
-    logger.info('Using GeoArrowPathLayer for lines', LogCategory.MAP, {
-      encoding: arrowExtension,
-      rows: jsTable.numRows
-    });
+    const lineData = resolvePathParser(ctx.customProjection)(jsTable);
 
-    const baseLineColorAccessor =
+    // Build color: choropleth > categorical > static
+    const choroplethAccessor =
       useChoropleth && viz
-        ? (row: DeckDataRow) =>
-            withOpacity(
-              createChoroplethColorAccessor(
-                viz.mapping.valueColumn!,
-                viz.classification!.breaks!,
-                viz.classification!.colors!
-              )(row),
-              normalizedLineOpacity
-            ) as [number, number, number, number]
-        : useCategoricalColor && viz
-          ? (row: DeckDataRow) =>
-              withOpacity(
-                createCategoricalColorAccessor(
-                  viz.mapping.categoryColumn!,
-                  categoryColorMap
-                )(row),
-                normalizedLineOpacity
-              ) as [number, number, number, number]
-          : null;
+        ? createChoroplethColorAccessor(
+            viz.mapping.valueColumn!,
+            viz.classification!.breaks!,
+            viz.classification!.colors!
+          )
+        : null;
 
-    const lineColorAccessor =
+    const categoricalAccessor =
+      useCategoricalColor && viz
+        ? createCategoricalColorAccessor(
+            viz.mapping.categoryColumn!,
+            categoryColorMap
+          )
+        : null;
+
+    const baseColorFn = choroplethAccessor ?? categoricalAccessor;
+
+    const baseLineColorAccessor = baseColorFn
+      ? (row: DeckDataRow) =>
+          withOpacity(baseColorFn(row), normalizedLineOpacity) as [
+            number,
+            number,
+            number,
+            number
+          ]
+      : null;
+
+    const lineColorFn =
       hasLineHighlights && lineHighlightedRowIds
         ? baseLineColorAccessor
           ? withRowHighlightAccessor(
@@ -747,10 +1124,15 @@ export function createLineLayers(
               HIGHLIGHT_DIMMING_FACTOR,
               lineHighlightedRowIds
             )
-        : (baseLineColorAccessor ??
-          withOpacity(resolvedLineColor, normalizedLineOpacity));
+        : baseLineColorAccessor;
 
-    const lineWidthAccessor =
+    // Binary color attribute — must be in data.attributes for PathLayer binary data
+    const colorBinaryAttr = lineColorFn
+      ? createColorAttribute(lineData, rowAccessor(jsTable, lineColorFn))
+      : null;
+
+    // Build width: proportional or static
+    const widthFn =
       useProportionalWidth && viz
         ? createProportionalSizeAccessor(
             viz.mapping.sizeColumn!,
@@ -760,50 +1142,70 @@ export function createLineLayers(
             maxLineWidth,
             resolvedSizeScale
           )
-        : resolvedLineWidth;
+        : null;
 
-    const pathProps: ConstructorParameters<
-      typeof geodecklayers.GeoArrowPathLayer
-    >[0] = {
-      id: layerId,
-      data: jsTable,
-      getColor: lineColorAccessor,
-      widthUnits: 'pixels',
-      getWidth: lineWidthAccessor,
-      widthMinPixels: 1,
-      pickable: true,
-      autoHighlight: true,
-      highlightColor: HOVER_HIGHLIGHT_COLOR,
-      ...(modelMatrix && { modelMatrix }),
-      ...(beforeId && { beforeId }),
-      updateTriggers: {
-        getColor: [
-          useChoropleth,
-          useCategoricalColor,
-          viz?.mapping.valueColumn,
-          viz?.mapping.categoryColumn,
-          viz?.classification?.breaks,
-          viz?.classification?.colors,
-          categoryColorMap,
-          resolvedLineColor,
-          normalizedLineOpacity,
-          hasLineHighlights,
-          lineHighlightedRowIds
-        ],
-        getWidth: [
-          useProportionalWidth,
-          viz?.mapping.sizeColumn,
-          minValue,
-          maxValue,
-          maxLineWidth,
-          resolvedSizeScale,
-          resolvedLineWidth
-        ]
-      },
-      dataComparator: (newData, oldData) => newData === oldData
+    const widthBinaryAttr = widthFn
+      ? createWidthAttribute(lineData, rowAccessor(jsTable, widthFn))
+      : null;
+
+    // Inject binary attributes into data.attributes for PathLayer
+    const pathProps = createPathLayerProps(lineData);
+    const pathBinaryData = pathProps.data as {
+      attributes: Record<string, unknown>;
     };
+    if (colorBinaryAttr) {
+      pathBinaryData.attributes.getColor = colorBinaryAttr;
+    }
+    if (widthBinaryAttr) {
+      pathBinaryData.attributes.getWidth = widthBinaryAttr;
+    }
 
-    return [new geodecklayers.GeoArrowPathLayer(pathProps)];
+    // DataFilterExtension for GPU-side year filtering (binary lines)
+    const lineYearFilterProps = ctx.yearFilter
+      ? buildYearFilterProps(lineData, pathBinaryData, jsTable, ctx.yearFilter)
+      : null;
+
+    return [
+      new PathLayer({
+        id: layerId,
+        ...(pathProps as unknown as Record<string, unknown>),
+        ...(!colorBinaryAttr && {
+          getColor: withOpacity(resolvedLineColor, normalizedLineOpacity)
+        }),
+        widthUnits: 'pixels',
+        ...(!widthBinaryAttr && { getWidth: resolvedLineWidth }),
+        widthMinPixels: 1,
+        pickable: true,
+        autoHighlight: true,
+        highlightColor: HOVER_HIGHLIGHT_COLOR,
+        ...(modelMatrix && { modelMatrix }),
+        ...(beforeId && { beforeId }),
+        ...lineYearFilterProps,
+        updateTriggers: {
+          getColor: [
+            useChoropleth,
+            useCategoricalColor,
+            viz?.mapping.valueColumn,
+            viz?.mapping.categoryColumn,
+            viz?.classification?.breaks,
+            viz?.classification?.colors,
+            categoryColorMap,
+            resolvedLineColor,
+            normalizedLineOpacity,
+            hlVersion
+          ],
+          getWidth: [
+            useProportionalWidth,
+            viz?.mapping.sizeColumn,
+            minValue,
+            maxValue,
+            maxLineWidth,
+            resolvedSizeScale,
+            resolvedLineWidth
+          ]
+        }
+      })
+    ];
   }
 
   if (!isWkbEncoded && !isGeoJsonEncoded) {
@@ -816,7 +1218,11 @@ export function createLineLayers(
 
   let lineGeojsonData;
   try {
-    lineGeojsonData = arrowTableToGeoJSON(jsTable, geoColumn);
+    const rawGeoJSON = getCachedGeoJSON(jsTable, geoColumn);
+    lineGeojsonData =
+      rawGeoJSON && ctx.customProjection
+        ? projectGeoJSON(rawGeoJSON, ctx.customProjection)
+        : rawGeoJSON;
   } catch (error) {
     logger.error('Error converting line geometry to GeoJSON', LogCategory.MAP, {
       encoding: arrowExtension,
@@ -836,11 +1242,6 @@ export function createLineLayers(
     );
     return [];
   }
-
-  logger.info('Using GeoJsonLayer fallback for lines', LogCategory.MAP, {
-    encoding: arrowExtension,
-    featureCount: lineGeojsonData.features.length
-  });
 
   const baseGeoJsonLineColor =
     useChoropleth && viz
@@ -912,6 +1313,7 @@ export function createLineLayers(
       highlightColor: HOVER_HIGHLIGHT_COLOR,
       ...(modelMatrix && { modelMatrix }),
       ...(beforeId && { beforeId }),
+      ...(ctx.yearFilter && buildGeoJsonYearFilterProps(ctx.yearFilter)),
       updateTriggers: {
         getLineColor: [
           useChoropleth,
@@ -923,8 +1325,7 @@ export function createLineLayers(
           categoryColorMap,
           resolvedLineColor,
           normalizedLineOpacity,
-          hasLineHighlights,
-          lineHighlightedRowIds
+          hlVersion
         ],
         getLineWidth: [
           useProportionalWidth,
@@ -934,7 +1335,10 @@ export function createLineLayers(
           maxLineWidth,
           resolvedSizeScale,
           resolvedLineWidth
-        ]
+        ],
+        ...(ctx.yearFilter && {
+          getFilterValue: [ctx.yearFilter.column, ctx.yearFilter.value]
+        })
       }
     })
   ];
@@ -954,10 +1358,12 @@ export function createPolygonLayers(
     strokeOpacity: rawPolyStrokeOpacity,
     highlightedRowIds: polyHighlightedRowIds,
     modelMatrix,
-    beforeId
+    beforeId,
+    categoryColorMap
   } = ctx;
   const hasPolyHighlights =
     polyHighlightedRowIds && polyHighlightedRowIds.size > 0;
+  const hlVersion = ctx.highlightVersion ?? 0;
   const {
     geoColumn,
     encoding: arrowExtension,
@@ -967,19 +1373,11 @@ export function createPolygonLayers(
   } = geometryInfo;
 
   const useChoropleth = viz && shouldApplyChoropleth(viz);
+  const useCategoricalColor = viz && shouldApplyCategorical(viz);
   const layerId = createThematicLayerId(DeckLayerId.POLYGON_LAYER, ctx);
   const patternProps = buildPatternProps(ctx);
 
   if (!isNativeGeoArrow && !isGeoJsonEncoded && !isWkbEncoded) {
-    logger.info(
-      'Skipping polygon layer - missing geometry extension metadata',
-      LogCategory.MAP,
-      {
-        geoColumn,
-        arrowExtension,
-        note: 'Polygons require proper geometry metadata to render'
-      }
-    );
     return [];
   }
 
@@ -988,21 +1386,12 @@ export function createPolygonLayers(
     (arrowExtension === ArrowExtension.GEOARROW_POLYGON ||
       arrowExtension === ArrowExtension.GEOARROW_MULTIPOLYGON);
 
-  // When a fill pattern is active, force GeoJSON path for reliable FillStyleExtension support.
-  // GeoArrow composite layers don't expose the attribute manager that FillStyleExtension requires.
-  const forceGeoJsonForPattern = Boolean(patternProps);
+  if (isNativeGeoArrowPolygon || isNativeGeoArrow) {
+    const polyData = resolvePolygonParser(ctx.customProjection)(jsTable);
+    const outlineData = resolvePathParser(ctx.customProjection)(jsTable);
 
-  if (
-    !forceGeoJsonForPattern &&
-    (isNativeGeoArrowPolygon || isNativeGeoArrow)
-  ) {
-    logger.info('Using GeoArrowPolygonLayer for polygons', LogCategory.MAP, {
-      encoding: arrowExtension,
-      rows: jsTable.numRows,
-      hasVisualization: Boolean(viz)
-    });
-
-    const baseArrowFillColor =
+    // Build fill color: choropleth > categorical > static, with optional highlight dimming
+    const choroplethAccessor =
       useChoropleth && viz
         ? createChoroplethColorAccessor(
             viz.mapping.valueColumn!,
@@ -1011,11 +1400,21 @@ export function createPolygonLayers(
           )
         : null;
 
-    const arrowFillColor =
+    const categoricalAccessor =
+      useCategoricalColor && viz
+        ? createCategoricalColorAccessor(
+            viz.mapping.categoryColumn!,
+            categoryColorMap
+          )
+        : null;
+
+    const baseFillAccessor = choroplethAccessor ?? categoricalAccessor;
+
+    const fillColorFn =
       hasPolyHighlights && polyHighlightedRowIds
-        ? baseArrowFillColor
+        ? baseFillAccessor
           ? withRowHighlightAccessor(
-              baseArrowFillColor,
+              baseFillAccessor,
               rawPolyFillOpacity,
               HIGHLIGHT_DIMMING_FACTOR,
               polyHighlightedRowIds
@@ -1026,66 +1425,195 @@ export function createPolygonLayers(
               HIGHLIGHT_DIMMING_FACTOR,
               polyHighlightedRowIds
             )
-        : (baseArrowFillColor ??
-          ([fillColor[0], fillColor[1], fillColor[2], 255] as [
-            number,
-            number,
-            number,
-            number
-          ]));
+        : baseFillAccessor;
 
-    const arrowStrokeColor = hasPolyHighlights
+    // Binary fill color attribute — must be in data.attributes for SolidPolygonLayer binary data
+    const fillColorBinaryAttr = fillColorFn
+      ? createPolygonFillColorAttribute(
+          polyData,
+          rowAccessor(jsTable, fillColorFn)
+        )
+      : null;
+
+    // Build stroke color
+    const strokeColorFn = hasPolyHighlights
       ? withRowHighlight(
           strokeColor,
           rawPolyStrokeOpacity,
           HIGHLIGHT_DIMMING_FACTOR,
           polyHighlightedRowIds!
         )
-      : withOpacity(strokeColor, rawPolyStrokeOpacity);
+      : null;
 
-    const polygonProps: ConstructorParameters<
-      typeof geodecklayers.GeoArrowPolygonLayer
-    >[0] = {
+    const strokeColorBinaryAttr = strokeColorFn
+      ? createColorAttribute(outlineData, rowAccessor(jsTable, strokeColorFn))
+      : null;
+
+    const layers: Layer<DeckDataRow>[] = [];
+
+    // Build SolidPolygonLayer props, injecting fill color into data.attributes when binary
+    const solidProps = createSolidPolygonLayerProps(polyData);
+    const solidBinaryData = solidProps.data as {
+      attributes: Record<string, unknown>;
+    };
+    if (fillColorBinaryAttr) {
+      solidBinaryData.attributes.getFillColor = fillColorBinaryAttr;
+    }
+
+    // DataFilterExtension for GPU-side year filtering (binary polygons)
+    const polyYearFilterProps = ctx.yearFilter
+      ? buildYearFilterProps(polyData, solidBinaryData, jsTable, ctx.yearFilter)
+      : {};
+
+    // Fill layer
+    const fillLayer = new SolidPolygonLayer({
       id: layerId,
-      data: jsTable,
-      filled: true,
-      stroked: true,
-      getFillColor: arrowFillColor,
-      getLineColor: arrowStrokeColor,
+      ...(solidProps as unknown as Record<string, unknown>),
+      ...(!fillColorBinaryAttr && {
+        getFillColor: [fillColor[0], fillColor[1], fillColor[2], 255] as [
+          number,
+          number,
+          number,
+          number
+        ]
+      }),
       opacity: hasPolyHighlights ? 1 : rawPolyFillOpacity,
-      lineWidthUnits: 'pixels',
-      lineWidthScale: strokeWidth / 4,
       pickable: true,
       autoHighlight: true,
       highlightColor: HOVER_HIGHLIGHT_COLOR,
+      parameters: {
+        depthCompare: 'always' as const,
+        stencilCompare: 'always' as const
+      },
       ...(modelMatrix && { modelMatrix }),
       ...(beforeId && { beforeId }),
+      ...polyYearFilterProps,
       updateTriggers: {
         getFillColor: [
           useChoropleth,
+          useCategoricalColor,
           viz?.mapping.valueColumn,
+          viz?.mapping.categoryColumn,
           viz?.classification?.breaks,
           viz?.classification?.colors,
+          viz?.classification?.labels,
           fillColor,
-          hasPolyHighlights,
-          polyHighlightedRowIds
-        ],
-        getLineColor: [
-          strokeColor,
-          rawPolyStrokeOpacity,
-          hasPolyHighlights,
-          polyHighlightedRowIds
+          hlVersion
         ]
-      },
-      dataComparator: (newData, oldData) => newData === oldData
-    };
+      }
+    });
 
-    return [new geodecklayers.GeoArrowPolygonLayer(polygonProps)];
+    // Stroke layer — inject binary color into data.attributes if needed
+    const strokePathProps = createPathLayerProps(outlineData);
+    const strokeBinaryData = strokePathProps.data as {
+      attributes: Record<string, unknown>;
+    };
+    if (strokeColorBinaryAttr) {
+      strokeBinaryData.attributes.getColor = strokeColorBinaryAttr;
+    }
+
+    // DataFilterExtension for GPU-side year filtering (binary polygon strokes)
+    const strokeYearFilterProps = ctx.yearFilter
+      ? buildYearFilterProps(
+          outlineData,
+          strokeBinaryData,
+          jsTable,
+          ctx.yearFilter
+        )
+      : {};
+
+    const strokeLayer = new PathLayer({
+      id: `${layerId}-stroke`,
+      ...(strokePathProps as unknown as Record<string, unknown>),
+      ...(!strokeColorBinaryAttr && {
+        getColor: withOpacity(strokeColor, rawPolyStrokeOpacity)
+      }),
+      widthUnits: 'pixels',
+      getWidth: strokeWidth / 4,
+      pickable: false,
+      ...(modelMatrix && { modelMatrix }),
+      ...(beforeId && { beforeId }),
+      ...strokeYearFilterProps,
+      updateTriggers: {
+        getColor: [strokeColor, rawPolyStrokeOpacity, hlVersion],
+        getWidth: [strokeWidth]
+      }
+    });
+
+    // Determine layer order and stroke visibility from context
+    const DEFAULT_PRIMITIVE_ORDER: PrimitiveFilter[] = [
+      PrimitiveFilterType.POINT,
+      PrimitiveFilterType.LINE,
+      PrimitiveFilterType.POLYGON
+    ];
+    const primitiveOrder = ctx.primitiveOrder ?? DEFAULT_PRIMITIVE_ORDER;
+    const lineIdx = primitiveOrder.indexOf(PrimitiveFilterType.LINE);
+    const polygonIdx = primitiveOrder.indexOf(PrimitiveFilterType.POLYGON);
+    // deck.gl: last in array = on top; strokeOnTop means stroke renders above fill
+    const strokeOnTop =
+      lineIdx === -1 || polygonIdx === -1 || lineIdx < polygonIdx;
+
+    const showStroke =
+      !ctx.viz?.primitiveFilters ||
+      ctx.viz.primitiveFilters.includes(PrimitiveFilterType.LINE);
+
+    if (strokeOnTop) {
+      layers.push(fillLayer);
+      if (showStroke) layers.push(strokeLayer);
+    } else {
+      if (showStroke) layers.push(strokeLayer);
+      layers.push(fillLayer);
+    }
+
+    // Pattern overlay: separate GeoJsonLayer on top with pattern as semi-transparent mask
+    if (patternProps) {
+      let patternGeojson;
+      try {
+        patternGeojson = getCachedGeoJSON(jsTable, geoColumn);
+      } catch {
+        // Silently skip pattern overlay if GeoJSON conversion fails
+      }
+      if (patternGeojson) {
+        layers.push(
+          new GeoJsonLayer({
+            id: `${layerId}-pattern-${viz?.classification?.patternId ?? 'none'}`,
+            data: patternGeojson,
+            getFillColor: [0, 0, 0, 255],
+            stroked: false,
+            opacity: 0.6,
+            pickable: false,
+            extensions: patternProps.extensions,
+            fillPatternAtlas: patternProps.fillPatternAtlas,
+            fillPatternMapping: patternProps.fillPatternMapping,
+            fillPatternMask: true,
+            getFillPattern: patternProps.getFillPattern,
+            getFillPatternScale: patternProps.getFillPatternScale,
+            getFillPatternRotation: patternProps.getFillPatternRotation,
+            ...(modelMatrix && { modelMatrix }),
+            ...(beforeId && { beforeId }),
+            updateTriggers: {
+              getFillPattern: [viz?.classification?.patternId],
+              getFillPatternScale: [viz?.classification?.patternId],
+              getFillPatternRotation: [viz?.classification?.patternId]
+            },
+            dataComparator: (newData, oldData) => newData === oldData
+          })
+        );
+      }
+    }
+
+    return layers;
   }
 
   let geojsonData;
   try {
-    geojsonData = arrowTableToGeoJSON(jsTable, geoColumn);
+    const rawGeoJSON = getCachedGeoJSON(jsTable, geoColumn);
+    // When a basemap projection is active, pre-project GeoJSON coordinates
+    // so data aligns with the projected basemap coordinate space.
+    geojsonData =
+      rawGeoJSON && ctx.customProjection
+        ? projectGeoJSON(rawGeoJSON, ctx.customProjection)
+        : rawGeoJSON;
   } catch (error) {
     logger.error(
       'Error converting polygon geometry to GeoJSON',
@@ -1109,12 +1637,33 @@ export function createPolygonLayers(
     return [];
   }
 
-  logger.info('Using GeoJsonLayer fallback for polygons', LogCategory.MAP, {
-    encoding: arrowExtension,
-    featureCount: geojsonData.features.length,
-    hasVisualization: Boolean(viz),
-    hasPattern: Boolean(patternProps)
-  });
+  let effectiveCategoryColorMap = categoryColorMap;
+  if (
+    useCategoricalColor &&
+    viz?.mapping.categoryColumn &&
+    (!categoryColorMap || categoryColorMap.size === 0) &&
+    viz.classification?.colors?.length
+  ) {
+    const col = viz.mapping.categoryColumn;
+    const storedLabels = viz.classification?.labels;
+    const uniqueVals =
+      storedLabels && storedLabels.length > 0
+        ? storedLabels
+        : [
+            ...new Set(
+              geojsonData.features
+                .map((f) => f.properties?.[col])
+                .filter((v) => v !== null && v !== undefined)
+                .map(String)
+            )
+          ];
+    if (uniqueVals.length > 0) {
+      effectiveCategoryColorMap = getCategoricalColorMap(
+        uniqueVals,
+        viz.classification.colors
+      );
+    }
+  }
 
   const baseGeoJsonFillColor =
     useChoropleth && viz
@@ -1124,7 +1673,13 @@ export function createPolygonLayers(
           viz.classification!.colors!,
           fillColor
         )
-      : null;
+      : useCategoricalColor && viz
+        ? createGeoJsonCategoricalColorAccessor(
+            viz.mapping.categoryColumn!,
+            effectiveCategoryColorMap,
+            fillColor
+          )
+        : null;
 
   const geoJsonFillColor =
     hasPolyHighlights && polyHighlightedRowIds
@@ -1158,54 +1713,81 @@ export function createPolygonLayers(
       )
     : withOpacity(strokeColor, rawPolyStrokeOpacity);
 
-  return [
+  const showGeoJsonStroke =
+    !ctx.viz?.primitiveFilters ||
+    ctx.viz.primitiveFilters.includes(PrimitiveFilterType.LINE);
+
+  const geoJsonLayers: Layer<DeckDataRow>[] = [
     new GeoJsonLayer({
       id: layerId,
       data: geojsonData,
       getFillColor: geoJsonFillColor,
       getLineColor: geoJsonStrokeColor,
+      stroked: showGeoJsonStroke,
       opacity: hasPolyHighlights ? 1 : rawPolyFillOpacity,
       lineWidthUnits: 'pixels',
       lineWidthScale: strokeWidth / 4,
       pickable: true,
       autoHighlight: true,
       highlightColor: HOVER_HIGHLIGHT_COLOR,
-      ...(patternProps && {
-        extensions: patternProps.extensions,
-        fillPatternAtlas: patternProps.fillPatternAtlas,
-        fillPatternMapping: patternProps.fillPatternMapping,
-        fillPatternMask: patternProps.fillPatternMask,
-        getFillPattern: patternProps.getFillPattern,
-        getFillPatternScale: patternProps.getFillPatternScale,
-        getFillPatternRotation: patternProps.getFillPatternRotation
-      }),
+      parameters: {
+        depthCompare: 'always' as const,
+        stencilCompare: 'always' as const
+      },
       ...(modelMatrix && { modelMatrix }),
       ...(beforeId && { beforeId }),
+      ...(ctx.yearFilter && buildGeoJsonYearFilterProps(ctx.yearFilter)),
       updateTriggers: {
         getFillColor: [
           useChoropleth,
+          useCategoricalColor,
           viz?.mapping.valueColumn,
+          viz?.mapping.categoryColumn,
           viz?.classification?.breaks,
           viz?.classification?.colors,
+          viz?.classification?.labels,
           fillColor,
-          hasPolyHighlights,
-          polyHighlightedRowIds
+          hlVersion
         ],
-        getLineColor: [
-          strokeColor,
-          rawPolyStrokeOpacity,
-          hasPolyHighlights,
-          polyHighlightedRowIds
-        ],
-        ...(patternProps && {
-          getFillPattern: [viz?.classification?.patternId],
-          getFillPatternScale: [viz?.classification?.patternId],
-          getFillPatternRotation: [viz?.classification?.patternParams?.angle]
+        getLineColor: [strokeColor, rawPolyStrokeOpacity, hlVersion],
+        ...(ctx.yearFilter && {
+          getFilterValue: [ctx.yearFilter.column, ctx.yearFilter.value]
         })
       },
       dataComparator: (newData, oldData) => newData === oldData
     })
   ];
+
+  // Pattern overlay: separate layer on top with pattern as semi-transparent mask
+  if (patternProps) {
+    geoJsonLayers.push(
+      new GeoJsonLayer({
+        id: `${layerId}-pattern-${viz?.classification?.patternId ?? 'none'}`,
+        data: geojsonData,
+        getFillColor: [0, 0, 0, 255],
+        stroked: false,
+        opacity: 0.6,
+        pickable: false,
+        extensions: patternProps.extensions,
+        fillPatternAtlas: patternProps.fillPatternAtlas,
+        fillPatternMapping: patternProps.fillPatternMapping,
+        fillPatternMask: true,
+        getFillPattern: patternProps.getFillPattern,
+        getFillPatternScale: patternProps.getFillPatternScale,
+        getFillPatternRotation: patternProps.getFillPatternRotation,
+        ...(modelMatrix && { modelMatrix }),
+        ...(beforeId && { beforeId }),
+        updateTriggers: {
+          getFillPattern: [viz?.classification?.patternId],
+          getFillPatternScale: [viz?.classification?.patternId],
+          getFillPatternRotation: [viz?.classification?.patternId]
+        },
+        dataComparator: (newData, oldData) => newData === oldData
+      })
+    );
+  }
+
+  return geoJsonLayers;
 }
 
 export function createGeoJsonLayers(
@@ -1224,10 +1806,15 @@ export function createGeoJsonLayers(
 
   const layerId = createThematicLayerId(DeckLayerId.GEOJSON_LAYER, ctx);
 
+  // When a basemap projection is active, pre-project GeoJSON coordinates
+  const data = ctx.customProjection
+    ? projectGeoJSON(geojson, ctx.customProjection)
+    : geojson;
+
   return [
     new GeoJsonLayer({
       id: layerId,
-      data: geojson,
+      data,
       filled: true,
       stroked: true,
       getFillColor: [...fillColor, Math.round(fillOpacity * 255)],
@@ -1237,6 +1824,10 @@ export function createGeoJsonLayers(
       pickable: true,
       autoHighlight: true,
       highlightColor: HOVER_HIGHLIGHT_COLOR,
+      parameters: {
+        depthCompare: 'always' as const,
+        stencilCompare: 'always' as const
+      },
       ...(modelMatrix && { modelMatrix }),
       ...(beforeId && { beforeId }),
       updateTriggers: {
@@ -1252,7 +1843,8 @@ export function createDeckLayers(
   jsTable: ArrowTable,
   ctx: LayerContext
 ): Layer<DeckDataRow>[] {
-  const geometryInfo = extractGeometryInfo(jsTable);
+  // Opt 5: reuse pre-computed geometryInfo from context when available
+  const geometryInfo = ctx.geometryInfo ?? extractGeometryInfo(jsTable);
 
   if (!geometryInfo) {
     const hasUserDataset = Boolean(ctx.datasetId);

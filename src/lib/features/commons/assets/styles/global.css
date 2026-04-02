@@ -167,3 +167,19 @@ label {
 .bx--radio-button-group-wrapper .bx--label {
   font-size: 0.875rem;
 }
+
+/* Carbon Slider: remove the 200px min-width so the track shrinks in narrow containers.
+   Override --slider-input-width per component to widen/shrink the value input. */
+.bx--slider-container {
+  width: 100%;
+  --slider-input-width: 3.75rem;
+}
+
+.bx--slider-container .bx--slider {
+  min-width: 0;
+}
+
+.bx--slider-container .bx--slider-text-input {
+  width: var(--slider-input-width);
+  flex-shrink: 0;
+}

@@ -3,7 +3,19 @@ import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrat
 import { ClassificationMethod } from '$lib/features/commons/store/visualization.store.svelte';
 import { LogCategory, logger } from '../utils/logger';
 import { escapeIdentifier, escapeSqlString } from '../utils/sanitize.utils';
+import { webglToHex } from '../utils/color-utils';
+import {
+  sequential,
+  divergentSequential,
+  resolvePalette
+} from '@ateliercartographie/ok-palette';
+import type { WebGLColor, ContrastMode } from '@ateliercartographie/ok-palette';
 import type { Table } from '@uwdata/flechette';
+
+const SEQUENTIAL_COLOR_START = '#f7fbff';
+const SEQUENTIAL_COLOR_END = '#08519c';
+const DIVERGING_COLOR_A = '#b2182b';
+const DIVERGING_COLOR_B = '#2166ac';
 
 export interface BreaksResult {
   breaks: number[];
@@ -18,8 +30,6 @@ export interface ClassificationOptions {
   method: ClassificationMethod;
   numClasses: number;
 }
-
-type BreaksRow = { breaks: number[] };
 
 function mapMethodToMacro(
   method: ClassificationMethod
@@ -46,10 +56,15 @@ function mapMethodToMacro(
   }
 }
 
+/** Memoization cache for breaks results — avoids redundant DuckDB queries on style-only changes */
+const breaksCache = new Map<string, BreaksResult>();
+const BREAKS_CACHE_MAX = 50;
+
 export async function calculateBreaks(
   options: ClassificationOptions
 ): Promise<BreaksResult | null> {
-  const { datasetId, columnName, method, numClasses } = options;
+  const { datasetId, columnName, method } = options;
+  let { numClasses } = options;
 
   const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(datasetId);
   if (!duckDBDataset?.tableName) {
@@ -60,10 +75,35 @@ export async function calculateBreaks(
   }
 
   const tableName = duckDBDataset.tableName;
+
+  // Check memoization cache
+  const cacheKey = `${tableName}:${columnName}:${method}:${numClasses}`;
+  const cached = breaksCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
   const escapedTable = escapeIdentifier(tableName);
   const escapedCol = escapeIdentifier(columnName);
 
   try {
+    // Clamp numClasses to distinct non-null values to avoid breaks errors on small datasets
+    const distinctResult = (await Duck.query(`
+      SELECT COUNT(DISTINCT "${escapedCol}") as cnt
+      FROM "${escapedTable}"
+      WHERE "${escapedCol}" IS NOT NULL
+    `)) as Table;
+    const distinctCountRaw = distinctResult.getChild?.('cnt')?.get(0);
+    if (distinctCountRaw != null) {
+      const distinctCount = Number(distinctCountRaw);
+      if (distinctCount <= 1) {
+        return null;
+      }
+      // DuckDB macros need more data points than classes; clamp conservatively
+      if (numClasses >= distinctCount) {
+        numClasses = Math.max(2, distinctCount - 1);
+      }
+    }
+
     const minMaxResult = (await Duck.query(`
       SELECT
         MIN("${escapedCol}") as min_val,
@@ -72,11 +112,7 @@ export async function calculateBreaks(
       WHERE "${escapedCol}" IS NOT NULL
     `)) as Table;
 
-    const minMaxRows = minMaxResult.toArray() as Array<{
-      min_val: number;
-      max_val: number;
-    }>;
-    if (!minMaxRows.length) {
+    if (minMaxResult.numRows === 0) {
       logger.warn('No valid data for classification', LogCategory.DATA, {
         tableName,
         columnName
@@ -84,8 +120,8 @@ export async function calculateBreaks(
       return null;
     }
 
-    const rawMin = minMaxRows[0].min_val;
-    const rawMax = minMaxRows[0].max_val;
+    const rawMin = minMaxResult.getChild?.('min_val')?.get(0);
+    const rawMax = minMaxResult.getChild?.('max_val')?.get(0);
     const min = rawMin != null ? Number(rawMin) : null;
     const max = rawMax != null ? Number(rawMax) : null;
 
@@ -116,16 +152,23 @@ export async function calculateBreaks(
     let breaks: number[] = [];
 
     const query = `SELECT ${macroName}('${escapeSqlString(tableName)}', '${escapeSqlString(columnName)}', ${numClasses}) as breaks`;
-    logger.debug('Executing breaks query', LogCategory.DATA, { query });
 
-    const result = (await Duck.query(query)) as Table;
-    const rows = result.toArray() as BreaksRow[];
+    try {
+      const result = (await Duck.query(query)) as Table;
+      const rawBreaks = result.getChild?.('breaks')?.get(0);
 
-    if (rows.length > 0 && rows[0].breaks) {
-      breaks = rows[0].breaks
-        .filter((b) => b !== null && b !== undefined)
-        .map((b) => Number(b))
-        .filter((b) => !isNaN(b));
+      if (rawBreaks && Array.isArray(rawBreaks)) {
+        breaks = rawBreaks
+          .filter((b: unknown) => b !== null && b !== undefined)
+          .map((b: unknown) => Number(b))
+          .filter((b: number) => !isNaN(b));
+      }
+    } catch (macroError) {
+      logger.warn(
+        'DuckDB macro failed, falling back to equal interval',
+        LogCategory.DATA,
+        { macroName, numClasses, error: macroError }
+      );
     }
 
     if (breaks.length === 0) {
@@ -145,14 +188,12 @@ export async function calculateBreaks(
         const breaksListLiteral = `[${breaks.join(', ')}]`;
         const roundQuery = `SELECT round_thresholds(${breaksListLiteral}, '${escapeSqlString(tableName)}', '${escapeSqlString(columnName)}') as rounded`;
         const roundResult = (await Duck.query(roundQuery)) as Table;
-        const roundRows = roundResult.toArray() as Array<{
-          rounded: number[];
-        }>;
-        if (roundRows.length > 0 && roundRows[0].rounded) {
-          const rounded = roundRows[0].rounded
-            .filter((b) => b !== null && b !== undefined)
-            .map((b) => Number(b))
-            .filter((b) => !isNaN(b));
+        const rawRounded = roundResult.getChild?.('rounded')?.get(0);
+        if (rawRounded && Array.isArray(rawRounded)) {
+          const rounded = rawRounded
+            .filter((b: unknown) => b !== null && b !== undefined)
+            .map((b: unknown) => Number(b))
+            .filter((b: number) => !isNaN(b));
           if (rounded.length === breaks.length) {
             breaks = rounded;
           }
@@ -179,17 +220,15 @@ export async function calculateBreaks(
 
     const countsQuery = `SELECT ${caseParts.join(', ')} FROM "${escapedTable}" WHERE "${escapedCol}" IS NOT NULL`;
     const countsResult = (await Duck.query(countsQuery)) as Table;
-    const countsRows = countsResult.toArray() as Array<
-      Record<string, bigint | number>
-    >;
 
-    if (countsRows.length > 0) {
+    if (countsResult.numRows > 0) {
       for (let i = 0; i < allBreaks.length - 1; i++) {
-        counts.push(Number(countsRows[0][`cnt_${i}`] ?? 0));
+        const cnt = countsResult.getChild?.(`cnt_${i}`)?.get(0);
+        counts.push(Number(cnt ?? 0));
       }
     }
 
-    logger.success('Breaks calculated successfully', LogCategory.DATA, {
+    logger.debug('Breaks calculated successfully', LogCategory.DATA, {
       method,
       numClasses,
       breaks: breaks.length,
@@ -197,12 +236,16 @@ export async function calculateBreaks(
       max
     });
 
-    return {
-      breaks,
-      counts,
-      min,
-      max
-    };
+    const result: BreaksResult = { breaks, counts, min, max };
+
+    // Store in cache (evict oldest if over limit)
+    if (breaksCache.size >= BREAKS_CACHE_MAX) {
+      const firstKey = breaksCache.keys().next().value;
+      if (firstKey) breaksCache.delete(firstKey);
+    }
+    breaksCache.set(cacheKey, result);
+
+    return result;
   } catch (error) {
     logger.error('Failed to calculate breaks', LogCategory.DATA, {
       datasetId,
@@ -216,87 +259,39 @@ export async function calculateBreaks(
   }
 }
 
+/**
+ * Generates palette colors for classification breaks via ok-palette.
+ * Uses Oklch perceptual color space for uniform luminosity across classes.
+ * Supports any class count (no longer clamped to 3–9).
+ */
 export function generateColorsForBreaks(
   numClasses: number,
-  palette: 'sequential' | 'diverging' = 'sequential'
+  palette: 'sequential' | 'diverging' = 'sequential',
+  contrast?: ContrastMode
 ): string[] {
-  const sequentialPalettes: Record<number, string[]> = {
-    3: ['#deebf7', '#9ecae1', '#3182bd'],
-    4: ['#eff3ff', '#bdd7e7', '#6baed6', '#2171b5'],
-    5: ['#eff3ff', '#bdd7e7', '#6baed6', '#3182bd', '#08519c'],
-    6: ['#eff3ff', '#c6dbef', '#9ecae1', '#6baed6', '#3182bd', '#08519c'],
-    7: [
-      '#eff3ff',
-      '#c6dbef',
-      '#9ecae1',
-      '#6baed6',
-      '#4292c6',
-      '#2171b5',
-      '#084594'
-    ],
-    8: [
-      '#f7fbff',
-      '#deebf7',
-      '#c6dbef',
-      '#9ecae1',
-      '#6baed6',
-      '#4292c6',
-      '#2171b5',
-      '#084594'
-    ],
-    9: [
-      '#f7fbff',
-      '#deebf7',
-      '#c6dbef',
-      '#9ecae1',
-      '#6baed6',
-      '#4292c6',
-      '#2171b5',
-      '#08519c',
-      '#08306b'
-    ]
-  };
+  const steps = Math.max(2, numClasses);
 
-  const divergingPalettes: Record<number, string[]> = {
-    3: ['#ef8a62', '#f7f7f7', '#67a9cf'],
-    4: ['#ca0020', '#f4a582', '#92c5de', '#0571b0'],
-    5: ['#ca0020', '#f4a582', '#f7f7f7', '#92c5de', '#0571b0'],
-    6: ['#b2182b', '#ef8a62', '#fddbc7', '#d1e5f0', '#67a9cf', '#2166ac'],
-    7: [
-      '#b2182b',
-      '#ef8a62',
-      '#fddbc7',
-      '#f7f7f7',
-      '#d1e5f0',
-      '#67a9cf',
-      '#2166ac'
-    ],
-    8: [
-      '#b2182b',
-      '#d6604d',
-      '#f4a582',
-      '#fddbc7',
-      '#d1e5f0',
-      '#92c5de',
-      '#4393c3',
-      '#2166ac'
-    ],
-    9: [
-      '#b2182b',
-      '#d6604d',
-      '#f4a582',
-      '#fddbc7',
-      '#f7f7f7',
-      '#d1e5f0',
-      '#92c5de',
-      '#4393c3',
-      '#2166ac'
-    ]
-  };
+  let cssColors: string[];
+  if (palette === 'diverging') {
+    const hasCenterClass = steps % 2 === 1;
+    const halfSteps = Math.floor(steps / 2);
+    cssColors = divergentSequential({
+      colorA: DIVERGING_COLOR_A,
+      colorB: DIVERGING_COLOR_B,
+      steps: [halfSteps, halfSteps],
+      hasCenterClass,
+      contrast
+    });
+  } else {
+    cssColors = sequential({
+      colorStart: SEQUENTIAL_COLOR_START,
+      colorEnd: SEQUENTIAL_COLOR_END,
+      steps,
+      contrast
+    });
+  }
 
-  const palettes =
-    palette === 'diverging' ? divergingPalettes : sequentialPalettes;
-  const clampedClasses = Math.max(3, Math.min(9, numClasses));
-
-  return palettes[clampedClasses] || palettes[5];
+  return (resolvePalette(cssColors, { format: 'webgl' }) as WebGLColor[]).map(
+    webglToHex
+  );
 }

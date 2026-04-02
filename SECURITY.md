@@ -13,9 +13,9 @@ Security concerns relevant to this project:
 
 ## Supported Versions
 
-| Version | Supported |
-| ------- | --------- |
-| latest (`staging`) | Yes |
+| Version            | Supported |
+| ------------------ | --------- |
+| latest (`staging`) | Yes       |
 
 ## Reporting a Vulnerability
 
@@ -24,6 +24,7 @@ Please **do not** open a public GitHub issue for security vulnerabilities.
 Report security issues by email to: **cartographie@sciencespo.fr**
 
 Include:
+
 - Description of the vulnerability
 - Steps to reproduce
 - Potential impact

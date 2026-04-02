@@ -1,8 +1,9 @@
 export const PROJECT_CONST = {
   DB: {
     NAME: 'KhartisDB',
-    VERSION: 1,
-    STORE_NAME: 'projects'
+    VERSION: 2,
+    STORE_NAME: 'projects',
+    METADATA_STORE_NAME: 'metadata'
   },
   LIMITS: {
     MAX_PROJECTS: 50,
@@ -10,7 +11,7 @@ export const PROJECT_CONST = {
     HISTORY_LIMIT: 50
   },
   TIMINGS: {
-    AUTO_SAVE_DELAY: 30000
+    AUTO_SAVE_DELAY: 5000
   },
-  APP_VERSION: '3.0.0'
+  APP_VERSION: '3.1.0'
 } as const;

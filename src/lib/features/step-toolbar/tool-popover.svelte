@@ -9,6 +9,7 @@
     CSS_CLASSES,
     POPOVER_DIMENSIONS
   } from './step-toolbar.constants';
+  import { getAnnotationsState } from './tools/annotations/annotations.store.svelte';
 
   const {
     open = false,
@@ -35,6 +36,9 @@
   const widthCss = $derived(viewMode === 'grid' ? gridWidth : `${listWidth}px`);
 
   function handleOutsideClick(event: CustomEvent) {
+    // Keep the tool open while the user is drawing on the map
+    if (getAnnotationsState().isDrawingMode) return;
+
     const toolbar = document.getElementById(DOM_IDS.STEP_TOOLBAR);
     const target = event.detail?.originalEvent?.target as Node;
 
@@ -48,6 +52,8 @@
 
     const handleKeydown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        // Let annotation-overlay handle Escape during drawing mode
+        if (getAnnotationsState().isDrawingMode) return;
         globalState.selectedTool = undefined;
       }
     };
@@ -61,7 +67,11 @@
   id={DOM_IDS.TOOL_POPOVER}
   use:clickOutside={{
     enabled: open,
-    excludeSelectors: [`#${DOM_IDS.STEP_TOOLBAR}`, `#${DOM_IDS.COLOR_PICKER}`]
+    excludeSelectors: [
+      `#${DOM_IDS.STEP_TOOLBAR}`,
+      `#${DOM_IDS.COLOR_PICKER}`,
+      `#${DOM_IDS.COLOR_PICKER_DROPDOWN}`
+    ]
   }}
   onoutsideclick={handleOutsideClick}
 >
@@ -84,14 +94,14 @@
     max-width: var(--tool-popover-width) !important;
     max-height: var(--popover-max-height);
     overflow: visible;
-    padding-bottom: var(--cds-spacing-03);
+    padding: 0;
   }
 
   .popover-scroll {
     max-height: var(--popover-max-height);
     overflow-y: auto;
     overflow-x: hidden;
-    padding: var(--cds-spacing-03) 0;
+    padding-bottom: var(--cds-spacing-03);
   }
 
   :global(#khartis-tool-popover .bx--list-box__menu) {

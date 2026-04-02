@@ -41,7 +41,7 @@ function getFileName(path: string): string {
 export async function extractZip(file: File): Promise<ZipExtractionResult> {
   const start = performance.now();
 
-  logger.info('Extracting ZIP archive', LogCategory.DATA, {
+  logger.debug('Extracting ZIP archive', LogCategory.DATA, {
     fileName: file.name,
     fileSize: file.size
   });

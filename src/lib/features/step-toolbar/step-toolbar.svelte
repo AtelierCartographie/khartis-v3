@@ -6,8 +6,9 @@
   import { ToolbarStep } from '$lib/features/commons/types/global';
   import { m } from '$lib/paraglide/messages.js';
   import { ColorPalette, DataBase, RulerAlt } from 'carbon-icons-svelte';
+  import { Popover } from 'carbon-components-svelte';
   import clsx from 'clsx';
-  import { tick } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import type { Snippet } from 'svelte';
   import {
     DOM_IDS,
@@ -19,6 +20,12 @@
   import StylingTools from './tools-list/styling-tools.svelte';
   import VisualizationTools from './tools-list/visualization-tools.svelte';
   import ToolContainer from './tools/tool-container.svelte';
+  import ColorBlindnessNotification from './tools/color-blindness/color-blindness-notification.svelte';
+  import {
+    colorBlindnessActions,
+    getColorBlindnessState
+  } from './tools/color-blindness/color-blindness.store.svelte';
+  import { annotationsActions } from './tools/annotations/annotations.store.svelte';
 
   const MAIN_TOOLBAR_CONTENT_SELECTOR =
     '#khartis-main-toolbar .toolbar-content';
@@ -27,6 +34,35 @@
     [ToolbarStep.Visualizations]: VisualizationTools,
     [ToolbarStep.Styling]: StylingTools
   };
+
+  const colorBlindnessState = $derived(getColorBlindnessState());
+  let notificationDismissed = $state(false);
+
+  const showColorBlindnessNotification = $derived(
+    colorBlindnessState.enabled &&
+      globalState.selectedStep !== ToolbarStep.Styling &&
+      !globalState.selectedTool &&
+      !notificationDismissed
+  );
+
+  $effect(() => {
+    if (!colorBlindnessState.enabled) {
+      notificationDismissed = false;
+    }
+  });
+
+  $effect(() => {
+    if (globalState.selectedStep === ToolbarStep.Styling) {
+      // untrack: initPageElements reads+writes s.items; tracking it would cause
+      // a write-triggers-read loop. Only selectedStep should drive this effect.
+      untrack(() =>
+        annotationsActions.initPageElements({
+          withPlaceholders: true,
+          visible: true
+        })
+      );
+    }
+  });
 
   const stepLabels = {
     [ToolbarStep.Data]: m.step_data(),
@@ -127,6 +163,18 @@
       <ToolContainer />
     {/snippet}
   </ToolPopover>
+
+  <div
+    id={DOM_IDS.COLORBLINDNESS_NOTIFICATION}
+    style="--cb-notif-width:{POPOVER_DIMENSIONS.DEFAULT_LIST_WIDTH}px;"
+  >
+    <Popover open={showColorBlindnessNotification} align="right-top" light>
+      <ColorBlindnessNotification
+        ondeactivate={() => colorBlindnessActions.toggleEnabled()}
+        onclose={() => (notificationDismissed = true)}
+      />
+    </Popover>
+  </div>
 </nav>
 
 <style>
@@ -137,7 +185,7 @@
   }
 
   header span {
-    color: var(--cds-ui-04);
+    color: var(--cds-text-01);
     font-weight: bold;
     font-size: 14px;
   }
@@ -185,6 +233,17 @@
 
   :global(#khartis-step-toolbar .bx--popover--right-top) {
     top: -13.5vh !important;
+  }
+
+  :global(#khartis-colorblindness-notification .bx--popover-contents) {
+    width: var(--cb-notif-width) !important;
+    max-width: var(--cb-notif-width) !important;
+    padding: 0;
+  }
+
+  :global(#khartis-colorblindness-notification .bx--inline-notification) {
+    max-width: 100%;
+    margin: 0;
   }
 
   .step-header {

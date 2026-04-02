@@ -17,7 +17,6 @@ import {
   exportProject,
   exportMapAsSvg,
   exportMapAsJpg,
-  exportMapAsPng,
   exportData,
   ExportError
 } from '../services/export.service';
@@ -55,7 +54,6 @@ export function useExportModal(): UseExportModalReturn {
   function open(): void {
     fileName = projectStore.projectName || DEFAULT_FILE_NAME;
     selectedTab = ExportTab.PROJECT;
-    logger.info('Export modal opened', LogCategory.EXPORT);
     isOpen = true;
   }
 
@@ -100,8 +98,6 @@ export function useExportModal(): UseExportModalReturn {
           const dims = RESOLUTION_DIMENSIONS[resolution];
           if (mapFormat === MAP_FORMAT.SVG) {
             await exportMapAsSvg(fileName);
-          } else if (mapFormat === MAP_FORMAT.PNG) {
-            await exportMapAsPng(fileName, dims.width, dims.height);
           } else {
             await exportMapAsJpg(fileName, dims.width, dims.height);
           }

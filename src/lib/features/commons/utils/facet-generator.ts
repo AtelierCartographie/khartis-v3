@@ -73,7 +73,7 @@ export async function generateFacetVisualizations(
   variables: string[],
   scaleMode: ScaleMode
 ): Promise<VisualizationConfig[]> {
-  logger.info('Generating facet visualizations', LogCategory.STORE, {
+  logger.debug('Generating facet visualizations', LogCategory.STORE, {
     baseVizId: baseViz.id,
     variablesCount: variables.length,
     scaleMode
@@ -104,7 +104,7 @@ export async function generateFacetVisualizations(
     facetConfigs.push(facetConfig);
   }
 
-  logger.success('Facet visualizations generated', LogCategory.STORE, {
+  logger.debug('Facet visualizations generated', LogCategory.STORE, {
     count: facetConfigs.length
   });
 

@@ -1,13 +1,7 @@
 <script lang="ts">
   import { PageModel } from '$lib/features/commons/constants/ui.constants';
   import { m } from '$lib/paraglide/messages';
-  import {
-    Column,
-    Grid,
-    Row,
-    Select,
-    SelectItem
-  } from 'carbon-components-svelte';
+  import { Select, SelectItem } from 'carbon-components-svelte';
   import { formatActions, formatState } from './format.store.svelte';
 
   const selectedModel = $derived(formatState.model);
@@ -32,20 +26,14 @@
   }
 </script>
 
-<Grid noGutter>
-  <Row>
-    <Column>
-      <Select
-        selected={selectedModel}
-        id="model-select"
-        labelText={m.format_model()}
-        size="sm"
-        on:change={handleModelChange}
-      >
-        {#each modelOptions as option (option.value)}
-          <SelectItem value={option.value} text={option.text} />
-        {/each}
-      </Select>
-    </Column>
-  </Row>
-</Grid>
+<Select
+  selected={selectedModel}
+  id="model-select"
+  labelText={m.format_model()}
+  size="sm"
+  on:change={handleModelChange}
+>
+  {#each modelOptions as option (option.value)}
+    <SelectItem value={option.value} text={option.text} />
+  {/each}
+</Select>

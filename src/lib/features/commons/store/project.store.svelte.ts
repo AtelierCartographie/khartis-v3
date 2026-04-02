@@ -8,6 +8,7 @@ import type {
 } from '$lib/features/project-management';
 import {
   createAutoSaveController,
+  persistenceRegistry,
   type AutoSaveController
 } from '$lib/features/project-management';
 import type {
@@ -57,6 +58,9 @@ function createProjectStore() {
       initPromise = value;
     }
   };
+
+  // Wire the persistence registry to auto-save via the project store
+  persistenceRegistry.setSaveCallback(() => saveCurrentProject());
 
   async function initialize(): Promise<void> {
     state.isLoading = true;
@@ -149,6 +153,7 @@ function createProjectStore() {
 
   function markAsDirty(): void {
     markDirtyFn(container);
+    container.autoSave.schedule(true);
   }
 
   function updateProjectName(name: string): void {

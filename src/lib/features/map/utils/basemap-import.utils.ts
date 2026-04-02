@@ -170,12 +170,13 @@ async function processGeofileBasemapImport(
 
   const customBasemap: BasemapMetadata = {
     file: tableName,
-    title: file.name.replace(/\.[^/.]+$/, ''),
-    description: m.basemap_custom_description(),
+    title_fr: file.name.replace(/\.[^/.]+$/, ''),
+    title_en: file.name.replace(/\.[^/.]+$/, ''),
     source: m.basemap_custom_source(),
     date: new Date().getFullYear().toString(),
     bbox: [bounds.minX, bounds.minY, bounds.maxX, bounds.maxY],
-    projection: GEO_CONSTANTS.WGS84_CRS,
+    proj_source: GEO_CONSTANTS.WGS84_CRS,
+    proj_to: { type: 'identity' },
     layers,
     isCustom: true
   };
@@ -230,12 +231,13 @@ async function processParquetBasemapImport(
 
   const customBasemap: BasemapMetadata = {
     file: tableName,
-    title: file.name.replace(/\.[^/.]+$/, ''),
-    description: m.basemap_custom_description(),
+    title_fr: file.name.replace(/\.[^/.]+$/, ''),
+    title_en: file.name.replace(/\.[^/.]+$/, ''),
     source: m.basemap_custom_source(),
     date: new Date().getFullYear().toString(),
     bbox: [bounds.minX, bounds.minY, bounds.maxX, bounds.maxY],
-    projection: GEO_CONSTANTS.WGS84_CRS,
+    proj_source: GEO_CONSTANTS.WGS84_CRS,
+    proj_to: { type: 'identity' },
     layers,
     isCustom: true
   };
@@ -287,15 +289,16 @@ function isPolygonBasemapLayerType(layerType: BasemapLayerType): boolean {
 
 function buildBasemapLayers(
   tableName: string,
-  geometryColumn: string,
+  _geometryColumn: string,
   layerType: BasemapLayerType,
-  rowCount: number
+  _rowCount: number
 ): BasemapLayer[] {
   const layers: BasemapLayer[] = [
     {
-      name: geometryColumn,
+      title_fr: tableName,
+      title_en: tableName,
       type: layerType,
-      count: rowCount
+      style: null
     }
   ];
 
@@ -305,15 +308,18 @@ function buildBasemapLayers(
 
   layers.push(
     {
-      name: INTERNAL_COLUMN.GEOM,
+      title_fr: 'Limites',
+      title_en: 'Limits',
       type: BasemapLayerType.LIMIT,
-      file: getBasemapInnerlinesTableName(tableName)
+      file: getBasemapInnerlinesTableName(tableName),
+      style: null
     },
     {
-      name: INTERNAL_COLUMN.GEOM,
+      title_fr: 'Centroïdes',
+      title_en: 'Centroids',
       type: BasemapLayerType.CENTROID,
       file: getBasemapCentroidsTableName(tableName),
-      count: rowCount
+      style: null
     }
   );
 
@@ -324,8 +330,17 @@ async function createArrowTableFromDuckTable(
   duck: typeof Duck,
   tableName: string
 ): Promise<ArrowTable> {
-  const rawTable = await fetchArrowTableWithGeometry(tableName, duck);
-  return addGeoArrowMetadataFromDuckDB(rawTable, tableName, duck);
+  const { table: rawTable, geomColumn } = await fetchArrowTableWithGeometry(
+    tableName,
+    duck
+  );
+  return addGeoArrowMetadataFromDuckDB(
+    rawTable,
+    tableName,
+    duck,
+    undefined,
+    geomColumn
+  );
 }
 
 async function preparePolygonBasemapTables(
@@ -389,13 +404,23 @@ export function createOSMBasemap(
 ): BasemapMetadata {
   return {
     file: `osm_${style.toLowerCase().replace(/\s+/g, '_')}_${Date.now()}`,
-    title: m.basemap_osm(),
-    description: m.osm_basemap_description(),
+    title_fr: m.basemap_osm(),
+    title_en: m.basemap_osm(),
+    subtitle_fr: m.osm_basemap_description(),
+    subtitle_en: m.osm_basemap_description(),
     source: m.osm_basemap_source(),
     date: new Date().getFullYear().toString(),
     bbox: [-180, -90, 180, 90],
-    projection: GEO_CONSTANTS.WEB_MERCATOR_CRS,
-    layers: [{ name: 'base', type: BasemapLayerType.POLYGON }],
+    proj_source: GEO_CONSTANTS.WEB_MERCATOR_CRS,
+    proj_to: { type: 'identity' },
+    layers: [
+      {
+        title_fr: 'base',
+        title_en: 'base',
+        type: BasemapLayerType.POLYGON,
+        style: null
+      }
+    ],
     isCustom: true
   };
 }

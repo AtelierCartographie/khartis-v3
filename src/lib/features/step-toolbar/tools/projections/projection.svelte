@@ -1,6 +1,7 @@
 <script lang="ts">
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import { m } from '$lib/paraglide/messages';
+  import { InlineNotification } from 'carbon-components-svelte';
   import {
     Catalog,
     MagicWandFilled,
@@ -14,12 +15,16 @@
 
   const title = m.projection_title();
 
+  let crsError = $state(false);
+
   function handleProjectionCodeApply(event: CustomEvent<{ code: string }>) {
     const parsed = parseProjectionCode(event.detail.code);
     if (!parsed) {
+      crsError = true;
       return;
     }
 
+    crsError = false;
     projectionActions.setCustomCode(parsed.normalizedCode);
     projectionActions.setSelected(parsed.projectionId);
   }
@@ -50,6 +55,14 @@
         on:apply={handleProjectionCodeApply}
         on:reset={handleProjectionCodeReset}
       />
+      {#if crsError}
+        <InlineNotification
+          kind="error"
+          lowContrast
+          title={m.projection_code_helper()}
+          on:close={() => (crsError = false)}
+        />
+      {/if}
     </ExpandableSection>
 
     <ExpandableSection title={m.projection_settings_title()}>

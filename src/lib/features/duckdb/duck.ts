@@ -5,8 +5,8 @@ import {
   isInitialized,
   loadMacros
 } from './core/engine';
-import { executeQuery } from './core/query';
-import { exportToCsv, exportToGeoparquet } from './io/exporters';
+import { executeQuery, executeQueryStreaming } from './core/query';
+import { exportToCsv } from './io/exporters';
 import { registerFiles } from './io/file-registry';
 import { readGeofile, readLink, readTabular } from './io/readers';
 import { analyse, describeColumns } from './operations/analysis';
@@ -56,7 +56,6 @@ import type {
  * - join_by_id(table, tableId, options?)
  * - apply_join_association(table, basemap)
  * - copy_to_csv_as_string(table, options?)
- * - copy_to_geoparquet_as_buffer(table)
  * - drop_rows(table, rowsId)
  * - get_table_metadata(table)
  * - invalidateTableCache(table)
@@ -82,13 +81,18 @@ export const Duck = {
     return isInitialized() ? getContext().table_metadata : new Map();
   },
 
-  get table_geoparquet_cache() {
-    return isInitialized() ? getContext().table_geoparquet_cache : new Map();
-  },
-
   async query(sql: string, options?: QueryOptions): Promise<unknown> {
     const ctx = getContext();
     return executeQuery(ctx.connection, sql, options);
+  },
+
+  /**
+   * Execute a query in streaming mode — reduces peak WASM memory for large results.
+   * Returns a raw IPC buffer (Uint8Array). Use for full-table exports with geometry.
+   */
+  async queryStreaming(sql: string): Promise<Uint8Array> {
+    const ctx = getContext();
+    return executeQueryStreaming(ctx.connection, sql);
   },
 
   async register_files(
@@ -143,11 +147,6 @@ export const Duck = {
   ): Promise<string> {
     const ctx = getContext();
     return exportToCsv(ctx, table, options);
-  },
-
-  async copy_to_geoparquet_as_buffer(table: string): Promise<Uint8Array> {
-    const ctx = getContext();
-    return exportToGeoparquet(ctx, table);
   },
 
   async describeColumns(table: string): Promise<AnalysisResults> {
@@ -210,7 +209,6 @@ export const Duck = {
     }
 
     ctx.table_metadata.delete(tableName);
-    ctx.table_geoparquet_cache.delete(tableName);
   }
 };
 

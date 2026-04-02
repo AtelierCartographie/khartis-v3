@@ -16,12 +16,19 @@
     getProjectionState,
     projectionActions
   } from './projection.store.svelte';
+  import type { ProjectionSuggestion } from './projection-suggest.service';
 
   const description = m.projection_description();
 
   const projections = PROJECTIONS;
 
   const projectionState = $derived(getProjectionState());
+  const suggestions = $derived(projectionState.suggestions);
+  const hasSuggestions = $derived(
+    suggestions &&
+      (suggestions.national.length > 0 || suggestions.generic.length > 0)
+  );
+
   const selectedCardId = $derived.by(() => {
     const selectedProjection = projectionState.selected;
     const matchingCard = projections.find(
@@ -47,6 +54,10 @@
 
   function selectProjection(projectionId: string) {
     projectionActions.setSelected(projectionId);
+  }
+
+  function applySuggestion(suggestion: ProjectionSuggestion) {
+    projectionActions.applySuggestion(suggestion);
   }
 
   function setFilter(id: ProjectionFilterId) {
@@ -100,6 +111,54 @@
   </div>
 
   {#if viewMode === ViewMode.LIST}
+    {#if hasSuggestions}
+      <div class="suggestions-section">
+        {#if suggestions && suggestions.national.length > 0}
+          <div class="suggestions-group">
+            <div class="suggestions-title">
+              {m.projection_suggestions_national()}
+            </div>
+            <div class="projection-cards">
+              {#each suggestions.national as s (s.id)}
+                <ProjectionCard
+                  title={s.name}
+                  subtitle={s.epsg ? `EPSG:${s.epsg}` : ''}
+                  tag={m.projection_tag_national()}
+                  selected={projectionState.customCode === s.proj4String}
+                  variant="blue"
+                  equalArea={s.equalArea}
+                  onclick={() => applySuggestion(s)}
+                />
+              {/each}
+            </div>
+          </div>
+        {/if}
+
+        {#if suggestions && suggestions.generic.length > 0}
+          <div class="suggestions-group">
+            <div class="suggestions-title">
+              {m.projection_suggestions_generic()}
+            </div>
+            <div class="projection-cards">
+              {#each suggestions.generic.slice(0, 5) as s (s.id)}
+                <ProjectionCard
+                  title={s.name}
+                  subtitle={s.equalArea
+                    ? m.projection_equal_area()
+                    : (s.shape ?? '')}
+                  tag={s.scale?.[0] ?? ''}
+                  selected={false}
+                  variant="default"
+                  equalArea={s.equalArea}
+                  onclick={() => applySuggestion(s)}
+                />
+              {/each}
+            </div>
+          </div>
+        {/if}
+      </div>
+    {/if}
+
     <div class="projection-tags">
       {#each filterOptions as opt (opt.id)}
         <button
@@ -121,6 +180,8 @@
           selected={selectedCardId === p.id}
           disabled={p.disabled}
           variant={p.variant}
+          equalArea={p.equalArea}
+          description={p.description}
           onclick={() => selectProjection(p.projectionId)}
         />
       {/each}
@@ -152,6 +213,8 @@
                   selected={selectedCardId === p.id}
                   disabled={p.disabled}
                   variant={p.variant}
+                  equalArea={p.equalArea}
+                  description={p.description}
                   layout="vertical"
                   fullWidth
                   onclick={() => selectProjection(p.projectionId)}
@@ -180,6 +243,30 @@
   .projection-buttons {
     display: flex;
     align-items: flex-start;
+  }
+
+  .suggestions-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-04);
+    padding-top: var(--cds-spacing-04);
+    padding-bottom: var(--cds-spacing-04);
+    border-bottom: 1px solid var(--cds-border-subtle-01);
+    margin-bottom: var(--cds-spacing-03);
+  }
+
+  .suggestions-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-03);
+  }
+
+  .suggestions-title {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.32px;
+    color: var(--cds-text-secondary);
   }
 
   .projection-tags {

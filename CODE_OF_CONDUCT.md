@@ -1,17 +1,29 @@
 # Code of Conduct
 
-Nous nous engageons à offrir une expérience ouverte, accueillante et respectueuse pour tous.
+We are committed to providing an open, welcoming, and respectful experience for everyone.
 
-Principes:
+## Principles
 
-- Respect, bienveillance, collaboration
-- Pas de harcèlement ni de propos discriminatoires
-- Feedback constructif, centré sur le code et les faits
+- Respect, kindness, and collaboration
+- No harassment or discriminatory language
+- Constructive feedback focused on code and facts
 
-Signalement:
+## Reporting
 
-Signaler tout incident via une issue privée ou par e‑mail aux mainteneurs listés dans `package.json` (contributors).
+Report any incident via a private issue or by email to the maintainers listed in `package.json` (contributors).
 
-Mesures:
+## Enforcement
 
-Les mainteneurs peuvent avertir, modérer ou bannir en cas d’abus.
+Maintainers may warn, moderate, or ban in case of violations.
+
+---
+
+## Code de conduite (FR)
+
+Nous nous engageons a offrir une experience ouverte, accueillante et respectueuse pour tous.
+
+**Principes**: respect, bienveillance, collaboration. Pas de harcelement ni de propos discriminatoires. Feedback constructif, centre sur le code et les faits.
+
+**Signalement**: signaler tout incident via une issue privee ou par e-mail aux mainteneurs listes dans `package.json` (contributors).
+
+**Mesures**: les mainteneurs peuvent avertir, moderer ou bannir en cas d’abus.

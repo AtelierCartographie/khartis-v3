@@ -48,7 +48,7 @@ export async function readTabular(
   let cleanupFileId: string | undefined;
 
   const sourceType = typeof input === 'string' ? 'text' : 'file';
-  logger.info('Ingesting tabular data into DuckDB', LogCategory.DUCKDB, {
+  logger.debug('Ingesting tabular data into DuckDB', LogCategory.DUCKDB, {
     tablename,
     sourceType
   });

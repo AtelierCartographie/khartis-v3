@@ -1,956 +1,244 @@
-import type { ProcessedDataset } from '$lib/features/data-pipeline';
-import { PIPELINE_CONST } from '$lib/features/data-pipeline/constants';
 import * as m from '$lib/paraglide/messages';
-import type { Geometry, Position } from 'geojson';
-import { SHAPE_TYPE } from '$lib/features/commons/constants';
+import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
 import {
-  getCategoricalColorMap,
-  getColorForValue,
-  getSizeForValue
-} from '../../map/utils/data-styling.utils';
-import {
-  VisualizationType,
-  type VisualizationConfig
-} from '../store/visualization.store.svelte';
-import { hexToRgb, hslToHex } from './color-utils';
-import { LogCategory, logger } from './logger';
-import type {
-  Annotation,
-  AnnotationsState
-} from '$lib/features/step-toolbar/tools/annotations/annotations.types';
-import type {
-  LegendItem,
-  LegendState,
-  LegendStyle
-} from '$lib/features/step-toolbar/tools/legend/legend.types';
-import {
-  AnnotationKind,
-  DrawingType,
-  LegendPosition
-} from '$lib/features/commons/constants/ui.constants';
-import { GEOJSON_TYPE } from '$lib/features/commons/constants';
-import { COLUMN_TYPE_GEOMETRY } from '../constants/data.constants';
+  toCanvas as htmlToImageCanvas,
+  toSvg as htmlToImageSvg
+} from 'html-to-image';
 
 interface ExportOptions {
   width: number;
   height: number;
-  includeBasemap: boolean;
-  backgroundColor: string;
 }
-
-const DEFAULT_EXPORT_WIDTH = 1920;
-const DEFAULT_EXPORT_HEIGHT = 1080;
-const DEFAULT_BACKGROUND_COLOR = '#ffffff';
-
-const LEGEND_WIDTH = 200;
-const LEGEND_HEIGHT = 150;
-const LEGEND_MARGIN = 20;
-
-const SVG_COLORS = {
-  DEFAULT_FILL: '#3b82f6',
-  DEFAULT_STROKE: '#1e40af',
-  BLACK: '#000000',
-  TEXT_PRIMARY: '#161616',
-  TEXT_SECONDARY: '#525252',
-  TEXT_MUTED: '#6f6f6f',
-  TEXT_LEGEND: '#333333',
-  SIGNATURE: '#666666'
-} as const;
 
 const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
-  width: DEFAULT_EXPORT_WIDTH,
-  height: DEFAULT_EXPORT_HEIGHT,
-  includeBasemap: false,
-  backgroundColor: DEFAULT_BACKGROUND_COLOR
+  width: 1920,
+  height: 1080
 };
 
-interface GeometryBounds {
-  minX: number;
-  minY: number;
-  maxX: number;
-  maxY: number;
+/**
+ * Shared html-to-image filter — excludes debug-only DOM nodes from exports.
+ */
+function exportFilter(domNode: HTMLElement): boolean {
+  if (domNode.classList?.contains('page-grid')) return false;
+  if (domNode.classList?.contains('view-mode-loader')) return false;
+  return true;
 }
 
-interface FeatureStyle {
-  fillColor: string;
-  fillOpacity: number;
-  strokeColor: string;
-  strokeWidth: number;
-  strokeOpacity: number;
-}
+/**
+ * Pre-renders the WebGL canvas at the requested pixel ratio, waits for the
+ * first 'render' frame, then returns a cleanup function that restores the
+ * original ratio.
+ *
+ * Uses 'render' (not 'idle') because in interleaved Deck.gl mode 'idle' can
+ * be delayed indefinitely by continuous triggerRepaint() calls.
+ */
+async function prerenderWebgl(pixelRatio: number): Promise<() => void> {
+  const map = mapInstanceStore.map;
+  if (!map) return () => {};
 
-type LonLat = [number, number];
+  const currentRatio = map.getPixelRatio();
+  const scale = Math.max(pixelRatio, currentRatio);
 
-function toLonLat(position: Position): LonLat {
-  const lon = position[0];
-  const lat = position[1];
-  if (typeof lon !== 'number' || typeof lat !== 'number') {
-    throw new Error(m.error_invalid_coordinate_position());
-  }
-  return [lon, lat];
-}
+  // Skip if the current ratio already meets or exceeds the target
+  if (scale <= currentRatio) return () => {};
 
-function resolveFillColor(color?: string | string[]): string | undefined {
-  if (Array.isArray(color)) {
-    return color[0];
-  }
-  return color;
-}
-
-function calculateDatasetBounds(
-  dataset: ProcessedDataset
-): GeometryBounds | null {
-  if (dataset.bounds) {
-    return {
-      minX: dataset.bounds.minLon,
-      minY: dataset.bounds.minLat,
-      maxX: dataset.bounds.maxLon,
-      maxY: dataset.bounds.maxLat
-    };
-  }
-
-  const geometryColumn = dataset.columns.find(
-    (col) => col.type === COLUMN_TYPE_GEOMETRY
-  );
-  if (!geometryColumn) return null;
-
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-
-  dataset.data.forEach((row) => {
-    const geometry = row[geometryColumn.name] as
-      | { coordinates?: unknown }
-      | undefined;
-    if (!geometry || !geometry.coordinates) return;
-
-    const processCoords = (coords: unknown): void => {
-      if (
-        Array.isArray(coords) &&
-        coords.length >= 2 &&
-        typeof coords[0] === 'number' &&
-        typeof coords[1] === 'number'
-      ) {
-        const [x, y] = coords as [number, number];
-        minX = Math.min(minX, x);
-        maxX = Math.max(maxX, x);
-        minY = Math.min(minY, y);
-        maxY = Math.max(maxY, y);
-      } else if (Array.isArray(coords)) {
-        coords.forEach((c) => processCoords(c));
-      }
-    };
-
-    processCoords(geometry.coordinates);
+  await new Promise<void>((resolve, reject) => {
+    const timeout = setTimeout(
+      () => reject(new Error('Map render timeout during export')),
+      10000
+    );
+    // Register BEFORE setPixelRatio — JS is single-threaded, no rAF can fire between
+    map.once('render', () => {
+      clearTimeout(timeout);
+      resolve();
+    });
+    map.setPixelRatio(scale);
+    map.triggerRepaint();
   });
 
-  if (!isFinite(minX)) return null;
-
-  return { minX, minY, maxX, maxY };
-}
-
-function createProjection(
-  bounds: GeometryBounds,
-  width: number,
-  height: number,
-  padding: number = 50
-): (coords: LonLat) => LonLat {
-  const dataWidth = bounds.maxX - bounds.minX;
-  const dataHeight = bounds.maxY - bounds.minY;
-
-  const availableWidth = width - 2 * padding;
-  const availableHeight = height - 2 * padding;
-
-  const scaleX = availableWidth / dataWidth;
-  const scaleY = availableHeight / dataHeight;
-  const scale = Math.min(scaleX, scaleY);
-
-  const centerX = (bounds.minX + bounds.maxX) / 2;
-  const centerY = (bounds.minY + bounds.maxY) / 2;
-
-  return ([lon, lat]: LonLat): LonLat => {
-    const x = (lon - centerX) * scale + width / 2;
-    const y = (centerY - lat) * scale + height / 2;
-    return [x, y];
+  return () => {
+    // Restore in next frame — html-to-image has already read canvas.toDataURL() synchronously
+    requestAnimationFrame(() => {
+      map.setPixelRatio(currentRatio);
+      map.triggerRepaint();
+    });
   };
 }
 
-function renderPointToSvg(
-  coordinates: Position,
-  project: (coords: LonLat) => LonLat,
-  style: FeatureStyle,
-  radius: number = 5
-): string {
-  const [x, y] = project(toLonLat(coordinates));
-  const [r, g, b] = hexToRgb(style.fillColor);
-  const [sr, sg, sb] = hexToRgb(style.strokeColor);
+/**
+ * Temporarily mutates .page-container for export:
+ *   - Adds the signature watermark div
+ *   - Strips the color-blindness CSS filter (CDC §2.C.2.e: not exported; the
+ *     filter also refs an SVG sibling outside the container so html-to-image
+ *     wouldn't resolve it anyway)
+ * Returns a cleanup function that undoes both mutations.
+ */
+function mutateDomForExport(pageContainer: HTMLElement): () => void {
+  const sig = document.createElement('div');
+  sig.style.cssText =
+    'position:absolute;bottom:10px;left:10px;font-family:Arial,sans-serif;' +
+    'font-size:12px;color:rgba(102,102,102,0.7);pointer-events:none;z-index:9999;';
+  sig.textContent = m.map_export_signature();
+  pageContainer.appendChild(sig);
 
-  return `<circle cx="${x}" cy="${y}" r="${radius}" fill="rgb(${r},${g},${b})" fill-opacity="${style.fillOpacity}" stroke="rgb(${sr},${sg},${sb})" stroke-width="${style.strokeWidth}" stroke-opacity="${style.strokeOpacity}" />`;
-}
+  const mapStage = pageContainer.querySelector(
+    '.map-stage'
+  ) as HTMLElement | null;
+  const savedFilter = mapStage?.style.filter ?? '';
+  if (mapStage) mapStage.style.filter = 'none';
 
-function renderLineToSvg(
-  coordinates: Position[],
-  project: (coords: LonLat) => LonLat,
-  style: FeatureStyle
-): string {
-  if (coordinates.length === 0) return '';
-
-  const points = coordinates.map((coord) => project(toLonLat(coord)));
-  const pathData = points
-    .map((p, i) => `${i === 0 ? 'M' : 'L'}${p[0]},${p[1]}`)
-    .join(' ');
-  const [r, g, b] = hexToRgb(style.strokeColor);
-
-  return `<path d="${pathData}" fill="none" stroke="rgb(${r},${g},${b})" stroke-width="${style.strokeWidth}" stroke-opacity="${style.strokeOpacity}" />`;
-}
-
-function renderPolygonToSvg(
-  coordinates: Position[][],
-  project: (coords: LonLat) => LonLat,
-  style: FeatureStyle
-): string {
-  if (coordinates.length === 0) return '';
-
-  const paths = coordinates
-    .map((ring) => {
-      if (ring.length === 0) return '';
-      const points = ring.map((coord) => project(toLonLat(coord)));
-      return (
-        points
-          .map((p, i) => `${i === 0 ? 'M' : 'L'}${p[0]},${p[1]}`)
-          .join(' ') + 'Z'
-      );
-    })
-    .filter((p) => p !== '');
-
-  const pathData = paths.join(' ');
-  const [r, g, b] = hexToRgb(style.fillColor);
-  const [sr, sg, sb] = hexToRgb(style.strokeColor);
-
-  return `<path d="${pathData}" fill="rgb(${r},${g},${b})" fill-opacity="${style.fillOpacity}" stroke="rgb(${sr},${sg},${sb})" stroke-width="${style.strokeWidth}" stroke-opacity="${style.strokeOpacity}" />`;
-}
-
-function renderGeometryToSvg(
-  geometry: Geometry | null | undefined,
-  project: (coords: LonLat) => LonLat,
-  style: FeatureStyle,
-  radius: number = 5
-): string {
-  if (!geometry || !geometry.type) return '';
-
-  switch (geometry.type) {
-    case GEOJSON_TYPE.POINT:
-      return renderPointToSvg(geometry.coordinates, project, style, radius);
-
-    case GEOJSON_TYPE.MULTI_POINT:
-      return geometry.coordinates
-        .map((coord) => renderPointToSvg(coord, project, style, radius))
-        .join('\n');
-
-    case GEOJSON_TYPE.LINE_STRING:
-      return renderLineToSvg(geometry.coordinates, project, style);
-
-    case GEOJSON_TYPE.MULTI_LINE_STRING:
-      return geometry.coordinates
-        .map((line) => renderLineToSvg(line, project, style))
-        .join('\n');
-
-    case GEOJSON_TYPE.POLYGON:
-      return renderPolygonToSvg(geometry.coordinates, project, style);
-
-    case GEOJSON_TYPE.MULTI_POLYGON:
-      return geometry.coordinates
-        .map((polygon) => renderPolygonToSvg(polygon, project, style))
-        .join('\n');
-
-    default:
-      return '';
-  }
-}
-
-function getFeatureStyle(
-  visualization: VisualizationConfig,
-  row: Record<string, unknown>,
-  dataset: ProcessedDataset
-): { style: FeatureStyle; radius?: number } {
-  const initialFillColor = resolveFillColor(visualization.style.fillColor);
-  const baseStyle: FeatureStyle = {
-    fillColor: initialFillColor || '#3b82f6',
-    fillOpacity: visualization.style.fillOpacity ?? 0.8,
-    strokeColor: visualization.style.strokeColor || '#1e40af',
-    strokeWidth: visualization.style.strokeWidth ?? 1,
-    strokeOpacity: visualization.style.strokeOpacity ?? 1
+  return () => {
+    pageContainer.removeChild(sig);
+    if (mapStage) mapStage.style.filter = savedFilter;
   };
+}
 
-  let radius = 5;
+/**
+ * Converts a data URL to a Blob without going through fetch().
+ * Handles both base64-encoded and URL-encoded data URLs.
+ * Avoids unnecessary network-stack overhead and CSP connect-src constraints.
+ */
+function dataUrlToBlob(dataUrl: string): Blob {
+  const commaIdx = dataUrl.indexOf(',');
+  const meta = dataUrl.slice(0, commaIdx);
+  const data = dataUrl.slice(commaIdx + 1);
+  const mimeType = meta.split(':')[1].split(';')[0];
 
-  if (
-    visualization.type === VisualizationType.CHOROPLETH &&
-    visualization.mapping.valueColumn
-  ) {
-    const value = row[visualization.mapping.valueColumn];
-    if (
-      typeof value === 'number' &&
-      visualization.classification?.breaks &&
-      visualization.classification?.colors
-    ) {
-      const color = getColorForValue(
-        value,
-        visualization.classification.breaks,
-        visualization.classification.colors
-      );
-      baseStyle.fillColor = `rgb(${color[0]},${color[1]},${color[2]})`;
+  if (meta.includes(';base64')) {
+    const binary = atob(data);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
     }
+    return new Blob([bytes], { type: mimeType });
   }
 
-  if (
-    visualization.type === VisualizationType.CATEGORICAL &&
-    visualization.mapping.categoryColumn
-  ) {
-    const category = row[visualization.mapping.categoryColumn];
-    if (
-      category !== null &&
-      category !== undefined &&
-      visualization.classification?.colors
-    ) {
-      const categories = Array.from(
-        new Set(
-          dataset.data.map((r) => r[visualization.mapping.categoryColumn!])
-        )
-      ).filter((c) => c !== null && c !== undefined) as string[];
-
-      const colorMap = getCategoricalColorMap(
-        categories,
-        visualization.classification.colors
-      );
-      const color = colorMap.get(String(category));
-      if (color) {
-        baseStyle.fillColor = `rgb(${color[0]},${color[1]},${color[2]})`;
-      }
-    }
-  }
-
-  if (
-    visualization.type === VisualizationType.PROPORTIONAL &&
-    visualization.mapping.sizeColumn
-  ) {
-    const value = row[visualization.mapping.sizeColumn];
-    if (typeof value === 'number' && visualization.symbols) {
-      const values = dataset.data
-        .map((r) => r[visualization.mapping.sizeColumn!])
-        .filter(
-          (v) => v !== null && v !== undefined && typeof v === 'number'
-        ) as number[];
-
-      const min = Math.min(...values);
-      const max = Math.max(...values);
-
-      radius = getSizeForValue(
-        value,
-        min,
-        max,
-        visualization.symbols.minSize,
-        visualization.symbols.maxSize,
-        visualization.symbols.sizeScale
-      );
-    }
-  }
-
-  return { style: baseStyle, radius };
+  // URL-encoded (html-to-image SVG output format)
+  return new Blob([decodeURIComponent(data)], { type: mimeType });
 }
 
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
-
-function resolveColor(
-  color:
-    | string
-    | { hue: number; saturation: number; lightness: number }
-    | undefined,
-  defaultColor: string
-): string {
-  if (!color) return defaultColor;
-  if (typeof color === 'string') return color;
-  return hslToHex(color.hue, color.saturation, color.lightness);
-}
-
-function toOpacityUnit(opacity: number | undefined): number {
-  if (opacity === undefined) {
-    return 1;
-  }
-
-  const rawValue = Number(opacity);
-  if (!Number.isFinite(rawValue)) {
-    return 1;
-  }
-
-  const percentValue = rawValue <= 1 ? rawValue * 100 : rawValue;
-  const clampedPercent = Math.max(0, Math.min(100, percentValue));
-  return clampedPercent / 100;
-}
-
-function renderTextAnnotation(item: Annotation): string {
-  const content = String(item.content || '');
-  if (!content.trim()) return '';
-
-  const { x, y } = item.position;
-  const style = item.style ?? {};
-  const fontSize = style.fontSize ?? 14;
-  const fontFamily = style.font ?? 'Arial';
-  const color = resolveColor(style.color, SVG_COLORS.BLACK);
-  const opacity = toOpacityUnit(style.opacity);
-  const fontWeight = style.bold ? 'bold' : 'normal';
-  const fontStyle = style.italic ? 'italic' : 'normal';
-  const textDecoration = style.underlined ? 'underline' : 'none';
-
-  return `    <text x="${x}" y="${y}" font-family="${fontFamily}, sans-serif" font-size="${fontSize}" fill="${color}" opacity="${opacity}" font-weight="${fontWeight}" font-style="${fontStyle}" text-decoration="${textDecoration}">${escapeHtml(content)}</text>`;
-}
-
-function renderShapeAnnotation(item: Annotation): string {
-  const { x, y } = item.position;
-  const originX = x;
-  const originY = y;
-  const shapeType = String(item.content ?? SHAPE_TYPE.CIRCLE);
-  const style = item.style ?? {};
-  const fill = resolveColor(style.fillColor, SVG_COLORS.DEFAULT_FILL);
-  const stroke = resolveColor(style.strokeColor, SVG_COLORS.DEFAULT_STROKE);
-  const strokeWidth = style.strokeWidth ?? 2;
-  const opacity = toOpacityUnit(style.opacity);
-  const size = style.size ?? 50;
-
-  switch (shapeType) {
-    case SHAPE_TYPE.CIRCLE:
-      return `    <circle cx="${originX + size / 2}" cy="${originY + size / 2}" r="${size / 2}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
-    case SHAPE_TYPE.LINE:
-      return `    <line x1="${originX}" y1="${originY + size / 2}" x2="${originX + size}" y2="${originY + size / 2}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
-    case SHAPE_TYPE.RECTANGLE:
-      return `    <rect x="${originX}" y="${originY}" width="${size}" height="${size}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
-    case SHAPE_TYPE.TRIANGLE: {
-      const points = `${originX + size / 2},${originY} ${originX},${originY + size} ${originX + size},${originY + size}`;
-      return `    <polygon points="${points}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
-    }
-    case SHAPE_TYPE.ARROW: {
-      const arrowPath = `M${originX},${originY + size / 2} L${originX + size * 0.7},${originY + size / 2} L${originX + size * 0.7},${originY + size * 0.2} L${originX + size},${originY + size / 2} L${originX + size * 0.7},${originY + size * 0.8} L${originX + size * 0.7},${originY + size / 2} Z`;
-      return `    <path d="${arrowPath}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
-    }
-    case SHAPE_TYPE.STAR: {
-      const outerR = size / 2;
-      const innerR = outerR * 0.4;
-      const centerX = originX + outerR;
-      const centerY = originY + outerR;
-      const points: string[] = [];
-      for (let i = 0; i < 10; i++) {
-        const r = i % 2 === 0 ? outerR : innerR;
-        const angle = (Math.PI / 5) * i - Math.PI / 2;
-        points.push(
-          `${centerX + r * Math.cos(angle)},${centerY + r * Math.sin(angle)}`
-        );
-      }
-      return `    <polygon points="${points.join(' ')}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
-    }
-    default:
-      return `    <circle cx="${originX + size / 2}" cy="${originY + size / 2}" r="${size / 2}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
-  }
-}
-
-function renderDrawingAnnotation(item: Annotation): string {
-  const points = Array.isArray(item.content) ? item.content : [];
-  if (points.length === 0) return '';
-
-  const { x: originX, y: originY } = item.position;
-  const style = item.style ?? {};
-  const stroke = resolveColor(style.strokeColor, SVG_COLORS.BLACK);
-  const fill =
-    style.drawingType === DrawingType.ZONE
-      ? resolveColor(style.fillColor, 'none')
-      : 'none';
-  const strokeWidth = style.strokeWidth ?? 2;
-  const opacity = toOpacityUnit(style.opacity);
-
-  const pathData = points
-    .map(
-      (p: { x: number; y: number }, i: number) =>
-        `${i === 0 ? 'M' : 'L'}${originX + p.x},${originY + p.y}`
-    )
-    .join(' ');
-
-  const closePath = style.drawingType === DrawingType.ZONE ? ' Z' : '';
-
-  return `    <path d="${pathData}${closePath}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"/>`;
-}
-
-function renderImageAnnotation(item: Annotation): string {
-  const imgSrc = String(item.content ?? '');
-  if (!imgSrc) return '';
-
-  const { x, y } = item.position;
-  const size = item.style?.size ?? 100;
-  const opacity = toOpacityUnit(item.style?.opacity);
-
-  return `    <image x="${x}" y="${y}" width="${size}" height="${size}" href="${imgSrc}" opacity="${opacity}"/>`;
-}
-
-function renderAnnotationItem(item: Annotation): string {
-  switch (item.type) {
-    case AnnotationKind.TEXT:
-      return renderTextAnnotation(item);
-    case AnnotationKind.SHAPE:
-      return renderShapeAnnotation(item);
-    case AnnotationKind.DRAWING:
-      return renderDrawingAnnotation(item);
-    case AnnotationKind.IMAGE:
-      return renderImageAnnotation(item);
-    default:
-      return '';
-  }
-}
-
-function renderAnnotationsToSvg(annotations: AnnotationsState): string {
-  if (!annotations.visible) return '';
-
-  const visibleItems = annotations.items.filter((i) => i.visible !== false);
-  if (visibleItems.length === 0) return '';
-
-  const elements = visibleItems
-    .map((item) => renderAnnotationItem(item))
-    .filter((e) => e !== '');
-
-  if (elements.length === 0) return '';
-
-  return `  <g id="annotations">\n${elements.join('\n')}\n  </g>\n`;
-}
-
-function calculateLegendPosition(
-  position: LegendPosition,
-  width: number,
-  height: number
-): { x: number; y: number } {
-  switch (position) {
-    case LegendPosition.TOP_LEFT:
-      return { x: LEGEND_MARGIN, y: LEGEND_MARGIN };
-    case LegendPosition.TOP_RIGHT:
-      return { x: width - LEGEND_WIDTH - LEGEND_MARGIN, y: LEGEND_MARGIN };
-    case LegendPosition.BOTTOM_LEFT:
-      return { x: LEGEND_MARGIN, y: height - LEGEND_HEIGHT - LEGEND_MARGIN };
-    case LegendPosition.BOTTOM_RIGHT:
-      return {
-        x: width - LEGEND_WIDTH - LEGEND_MARGIN,
-        y: height - LEGEND_HEIGHT - LEGEND_MARGIN
-      };
-    case LegendPosition.BOTTOM_CENTER:
-      return {
-        x: Math.max(LEGEND_MARGIN, Math.round((width - LEGEND_WIDTH) / 2)),
-        y: height - LEGEND_HEIGHT - LEGEND_MARGIN
-      };
-    default:
-      return { x: width - LEGEND_WIDTH - LEGEND_MARGIN, y: LEGEND_MARGIN };
-  }
-}
-
-function renderLegendBackground(
-  style: LegendStyle,
-  width: number,
-  height: number
-): string {
-  if (!style.background.enabled) return '';
-
-  const bgColor = hslToHex(
-    style.background.color.hue,
-    style.background.color.saturation,
-    style.background.color.lightness
-  );
-  const opacity = style.background.opacity / 100;
-
-  return `    <rect x="0" y="0" width="${width}" height="${height}" fill="${bgColor}" opacity="${opacity}" rx="4"/>`;
-}
-
-function renderClassificationLegend(
-  viz: VisualizationConfig,
-  startY: number,
-  style: LegendStyle
-): string {
-  const colors = viz.classification?.colors ?? [];
-  const breaks = viz.classification?.breaks ?? [];
-  if (colors.length === 0) return '';
-
-  const elements: string[] = [];
-  const textColorHex = hslToHex(
-    style.textColor.hue,
-    style.textColor.saturation,
-    style.textColor.lightness
-  );
-
-  colors.forEach((color, i) => {
-    const y = startY + i * 22;
-    elements.push(
-      `    <rect x="12" y="${y}" width="20" height="18" fill="${color}" rx="2"/>`
-    );
-
-    const minVal = i === 0 ? '' : (breaks[i - 1]?.toLocaleString() ?? '');
-    const maxVal = breaks[i]?.toLocaleString() ?? '';
-    const label = minVal && maxVal ? `${minVal} - ${maxVal}` : maxVal || minVal;
-
-    elements.push(
-      `    <text x="40" y="${y + 14}" font-family="${style.fontFamily}, sans-serif" font-size="${style.fontSize}" fill="${textColorHex}">${escapeHtml(label)}</text>`
-    );
-  });
-
-  return elements.join('\n');
-}
-
-function renderLegendContent(
-  items: LegendItem[],
-  visualizations: VisualizationConfig[],
-  style: LegendStyle
-): { content: string; height: number } {
-  let yOffset = 16;
-  const elements: string[] = [];
-  const textColorHex = hslToHex(
-    style.textColor.hue,
-    style.textColor.saturation,
-    style.textColor.lightness
-  );
-
-  for (const item of items) {
-    const viz = item.variableId
-      ? visualizations.find((v) => v.id === item.variableId)
-      : undefined;
-
-    if (item.title) {
-      elements.push(
-        `    <text x="12" y="${yOffset}" font-family="${style.fontFamily}, sans-serif" font-size="${style.fontSize + 2}" font-weight="600" fill="${textColorHex}">${escapeHtml(item.title)}</text>`
-      );
-      yOffset += style.fontSize + 10;
-    }
-
-    if (item.subtitle) {
-      elements.push(
-        `    <text x="12" y="${yOffset}" font-family="${style.fontFamily}, sans-serif" font-size="${style.fontSize}" fill="${textColorHex}">${escapeHtml(item.subtitle)}</text>`
-      );
-      yOffset += style.fontSize + 6;
-    }
-
-    if (viz?.classification?.colors && viz.classification.colors.length > 0) {
-      const classLegend = renderClassificationLegend(viz, yOffset, style);
-      if (classLegend) {
-        elements.push(classLegend);
-        yOffset += viz.classification.colors.length * 22 + 8;
-      }
-    }
-
-    if (item.note) {
-      elements.push(
-        `    <text x="12" y="${yOffset}" font-family="${style.fontFamily}, sans-serif" font-size="${style.fontSize - 2}" fill="${textColorHex}" font-style="italic">${escapeHtml(item.note)}</text>`
-      );
-      yOffset += style.fontSize + 4;
-    }
-
-    yOffset += 12;
-  }
-
-  return { content: elements.join('\n'), height: yOffset + 8 };
-}
-
-function renderLegendToSvg(
-  legend: LegendState,
-  visualizations: VisualizationConfig[],
-  width: number,
-  height: number
-): string {
-  if (!legend.visible || legend.items.length === 0) return '';
-
-  const visibleItems = legend.items.filter((i) => i.visible);
-  if (visibleItems.length === 0) return '';
-
-  const { content, height: contentHeight } = renderLegendContent(
-    visibleItems,
-    visualizations,
-    legend.style
-  );
-
-  const legendHeight = Math.max(contentHeight, 60);
-  const { x, y } = calculateLegendPosition(legend.position, width, height);
-
-  const background = renderLegendBackground(
-    legend.style,
-    LEGEND_WIDTH,
-    legendHeight
-  );
-
-  return `  <g id="legend" transform="translate(${x}, ${y})">
-${background}
-${content}
-  </g>\n`;
-}
-
-export function exportMapToSvg(
-  datasets: ProcessedDataset[],
-  visualizations: VisualizationConfig[],
-  options: Partial<ExportOptions> = {},
-  annotations?: AnnotationsState,
-  legend?: LegendState
-): Blob {
+/**
+ * Exports the map page as an SVG.
+ *
+ * Uses html-to-image to capture .page-container as-is: the page background,
+ * margins, annotations, legend, and geo-indications are captured from the DOM.
+ * The WebGL canvas (MapLibre + Deck.gl) is embedded as a PNG image inside the SVG.
+ *
+ * The WebGL canvas is pre-rendered at the target pixel ratio before capture so
+ * the embedded PNG has full-resolution content.
+ */
+export async function exportMapToSvg(
+  options: Partial<ExportOptions> = {}
+): Promise<Blob> {
   const opts = { ...DEFAULT_EXPORT_OPTIONS, ...options };
 
-  const geometricDatasets = datasets.filter((d) => d.geometry);
-  if (geometricDatasets.length === 0) {
-    throw new Error(m.error_no_geometric_data_export());
+  const pageContainer = document.querySelector(
+    '.page-container'
+  ) as HTMLElement | null;
+  if (!pageContainer) {
+    return Promise.reject(new Error(m.export_map_not_loaded()));
   }
 
-  const bounds = geometricDatasets
-    .map((d) => calculateDatasetBounds(d))
-    .filter((b): b is GeometryBounds => b !== null)
-    .reduce(
-      (acc, b) => ({
-        minX: Math.min(acc.minX, b.minX),
-        minY: Math.min(acc.minY, b.minY),
-        maxX: Math.max(acc.maxX, b.maxX),
-        maxY: Math.max(acc.maxY, b.maxY)
-      }),
-      { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity }
-    );
+  const pixelRatio = Math.min(
+    opts.width / pageContainer.offsetWidth,
+    opts.height / pageContainer.offsetHeight
+  );
 
-  if (!isFinite(bounds.minX)) {
-    throw new Error(m.error_unable_calculate_map_bounds());
+  const restoreRatio = await prerenderWebgl(pixelRatio);
+  const restoreDom = mutateDomForExport(pageContainer);
+
+  try {
+    const svgDataUrl = await htmlToImageSvg(pageContainer, {
+      pixelRatio,
+      style: { boxShadow: 'none' },
+      filter: exportFilter,
+      skipFonts: true // avoid CORS issues fetching CDN fonts into SVG
+    });
+
+    return dataUrlToBlob(svgDataUrl);
+  } finally {
+    restoreDom();
+    restoreRatio();
   }
-
-  const project = createProjection(bounds, opts.width, opts.height);
-
-  let svgContent = `<?xml version="1.0" encoding="${PIPELINE_CONST.ENCODING.DEFAULT}"?>
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${opts.width}" height="${opts.height}" viewBox="0 0 ${opts.width} ${opts.height}">
-  <defs></defs>
-  <rect id="background" width="100%" height="100%" fill="${opts.backgroundColor}"/>
-  <g id="basemap"></g>
-`;
-
-  const enabledVisualizations = visualizations.filter((v) => v.enabled);
-
-  for (const visualization of enabledVisualizations) {
-    // Direct ID match; fall back to sole dataset when IDs are stale (e.g. after page reload)
-    let dataset = datasets.find((d) => d.id === visualization.datasetId);
-    if (!dataset && datasets.length === 1 && datasets[0].geometry) {
-      dataset = datasets[0];
-      logger.warn(
-        'Dataset ID mismatch — using sole available dataset as fallback',
-        LogCategory.EXPORT,
-        {
-          vizDatasetId: visualization.datasetId,
-          fallbackDatasetId: datasets[0].id
-        }
-      );
-    }
-
-    if (!dataset || !dataset.geometry) continue;
-
-    const geometryColumn = dataset.columns.find(
-      (col) => col.type === COLUMN_TYPE_GEOMETRY
-    );
-
-    if (!geometryColumn) continue;
-
-    const polygons: string[] = [];
-    const symbols: string[] = [];
-
-    for (const row of dataset.data) {
-      const geometry = row[geometryColumn.name] as Geometry | null | undefined;
-      if (!geometry) continue;
-
-      const { style, radius } = getFeatureStyle(visualization, row, dataset);
-      const svgElement = renderGeometryToSvg(geometry, project, style, radius);
-
-      if (svgElement) {
-        const isPolygon =
-          geometry.type === GEOJSON_TYPE.POLYGON ||
-          geometry.type === GEOJSON_TYPE.MULTI_POLYGON;
-        const isLine =
-          geometry.type === GEOJSON_TYPE.LINE_STRING ||
-          geometry.type === GEOJSON_TYPE.MULTI_LINE_STRING;
-        if (isPolygon || isLine) {
-          polygons.push(`        ${svgElement}`);
-        } else {
-          symbols.push(`        ${svgElement}`);
-        }
-      }
-    }
-
-    svgContent += `  <g id="viz-${visualization.id}">
-    <g id="polygons">
-${polygons.join('\n')}
-    </g>
-    <g id="symbols">
-${symbols.join('\n')}
-    </g>
-    <g id="labels"></g>
-  </g>
-`;
-  }
-
-  if (annotations) {
-    svgContent += renderAnnotationsToSvg(annotations);
-  }
-
-  if (legend) {
-    svgContent += renderLegendToSvg(
-      legend,
-      visualizations,
-      opts.width,
-      opts.height
-    );
-  }
-
-  svgContent += `  <text id="signature" x="10" y="${opts.height - 10}" font-family="Arial, sans-serif" font-size="12" fill="${SVG_COLORS.SIGNATURE}" opacity="0.7">${m.map_export_signature()}</text>
-</svg>`;
-
-  return new Blob([svgContent], { type: 'image/svg+xml;charset=utf-8' });
 }
 
-export function exportMapToJpg(
-  datasets: ProcessedDataset[],
-  visualizations: VisualizationConfig[],
-  options: Partial<ExportOptions> = {},
-  annotations?: AnnotationsState,
-  legend?: LegendState
+/**
+ * Exports the map page as a JPEG at the requested resolution.
+ *
+ * Two-step process:
+ *   1. html-to-image captures .page-container as an HTMLCanvasElement, scaled
+ *      so the page fits within the target dimensions (preserving aspect ratio).
+ *      Using toCanvas (vs toBlob) avoids a wasteful PNG encode/decode round-trip.
+ *   2. The canvas is composited into an exact target-sized OffscreenCanvas
+ *      (white letterbox if the page aspect ratio differs from the target,
+ *      e.g. A4 portrait in a 16:9 export), then encoded as JPEG via
+ *      convertToBlob (Promise-based, avoids callback indirection).
+ *
+ * The WebGL canvas is pre-rendered at the correct pixel ratio before capture so
+ * canvas.toDataURL() returns full-resolution content. 'render' (not 'idle') is
+ * used because in interleaved Deck.gl mode 'idle' can be delayed indefinitely.
+ */
+export async function exportMapToJpg(
+  options: Partial<ExportOptions> = {}
 ): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    try {
-      const opts = { ...DEFAULT_EXPORT_OPTIONS, ...options };
-      const svgBlob = exportMapToSvg(
-        datasets,
-        visualizations,
-        options,
-        annotations,
-        legend
-      );
+  const opts = { ...DEFAULT_EXPORT_OPTIONS, ...options };
 
-      const reader = new FileReader();
-      reader.onload = () => {
-        const svgDataUrl = reader.result as string;
-        const img = new Image();
+  const pageContainer = document.querySelector(
+    '.page-container'
+  ) as HTMLElement | null;
+  if (!pageContainer) {
+    return Promise.reject(new Error(m.export_map_not_loaded()));
+  }
 
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          canvas.width = opts.width;
-          canvas.height = opts.height;
+  // Scale the page to fit within the target dimensions (letterbox if aspect ratios differ).
+  // Math.min ensures both dimensions stay within target; for identical aspect ratios (e.g.
+  // 16:9 page + 16:9 QHD target) both values are equal and the output is pixel-perfect.
+  const pagePixelRatio = Math.min(
+    opts.width / pageContainer.offsetWidth,
+    opts.height / pageContainer.offsetHeight
+  );
 
-          const ctx = canvas.getContext('2d');
-          if (!ctx) {
-            reject(new Error('Unable to get canvas context'));
-            return;
-          }
+  const restoreRatio = await prerenderWebgl(pagePixelRatio);
+  const restoreDom = mutateDomForExport(pageContainer);
 
-          ctx.fillStyle = opts.backgroundColor;
-          ctx.fillRect(0, 0, opts.width, opts.height);
-          ctx.drawImage(img, 0, 0);
+  let pageCanvas: HTMLCanvasElement | null = null;
+  try {
+    // Step 1 — capture as canvas. toCanvas skips the PNG Blob encode/decode
+    // round-trip that toBlob + createImageBitmap would incur.
+    pageCanvas = await htmlToImageCanvas(pageContainer, {
+      pixelRatio: pagePixelRatio,
+      style: { boxShadow: 'none' },
+      filter: exportFilter
+    });
+  } finally {
+    restoreDom();
+    restoreRatio();
+  }
 
-          ctx.font = '12px Arial, sans-serif';
-          ctx.fillStyle = 'rgba(102, 102, 102, 0.7)';
-          ctx.fillText(m.map_export_signature(), 10, opts.height - 10);
+  if (!pageCanvas) {
+    return Promise.reject(new Error('Failed to capture page'));
+  }
 
-          canvas.toBlob(
-            (blob) => {
-              if (blob) {
-                resolve(blob);
-              } else {
-                reject(new Error('Failed to create JPG blob'));
-              }
-            },
-            'image/jpeg',
-            0.95
-          );
-        };
+  // Step 2 — composite into an exact opts.width × opts.height canvas.
+  // If page aspect ratio === target (e.g. 16:9 page + QHD), pageCanvas fills exactly.
+  // Otherwise white letterbox bands appear on the shorter axis.
+  const offscreen = new OffscreenCanvas(opts.width, opts.height);
+  const ctx = offscreen.getContext('2d');
+  if (!ctx) {
+    return Promise.reject(
+      new Error('Failed to get 2D context for export canvas')
+    );
+  }
 
-        img.onerror = () => {
-          reject(new Error('Failed to load SVG image'));
-        };
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, opts.width, opts.height);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(
+    pageCanvas,
+    Math.round((opts.width - pageCanvas.width) / 2),
+    Math.round((opts.height - pageCanvas.height) / 2)
+  );
 
-        img.src = svgDataUrl;
-      };
-
-      reader.onerror = () => {
-        reject(new Error('Failed to read SVG blob'));
-      };
-
-      reader.readAsDataURL(svgBlob);
-    } catch (error) {
-      logger.error(
-        'Failed to convert SVG to data URL',
-        LogCategory.EXPORT,
-        error
-      );
-      reject(error);
-    }
-  });
-}
-
-export function exportMapToPng(
-  datasets: ProcessedDataset[],
-  visualizations: VisualizationConfig[],
-  options: Partial<ExportOptions> = {},
-  annotations?: AnnotationsState,
-  legend?: LegendState
-): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    try {
-      const opts = { ...DEFAULT_EXPORT_OPTIONS, ...options };
-      const svgBlob = exportMapToSvg(
-        datasets,
-        visualizations,
-        options,
-        annotations,
-        legend
-      );
-
-      const reader = new FileReader();
-      reader.onload = () => {
-        const svgDataUrl = reader.result as string;
-        const img = new Image();
-
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          canvas.width = opts.width;
-          canvas.height = opts.height;
-
-          const ctx = canvas.getContext('2d');
-          if (!ctx) {
-            reject(new Error('Unable to get canvas context'));
-            return;
-          }
-
-          ctx.fillStyle = opts.backgroundColor;
-          ctx.fillRect(0, 0, opts.width, opts.height);
-          ctx.drawImage(img, 0, 0);
-
-          canvas.toBlob((blob) => {
-            if (blob) {
-              resolve(blob);
-            } else {
-              reject(new Error('Failed to create PNG blob'));
-            }
-          }, 'image/png');
-        };
-
-        img.onerror = () => {
-          reject(new Error('Failed to load SVG image'));
-        };
-
-        img.src = svgDataUrl;
-      };
-
-      reader.onerror = () => {
-        reject(new Error('Failed to read SVG blob'));
-      };
-
-      reader.readAsDataURL(svgBlob);
-    } catch (error) {
-      logger.error('Failed to export PNG', LogCategory.EXPORT, error);
-      reject(error);
-    }
-  });
+  return offscreen.convertToBlob({ type: 'image/jpeg', quality: 1.0 });
 }

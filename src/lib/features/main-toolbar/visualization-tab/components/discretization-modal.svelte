@@ -11,6 +11,11 @@
     calculateBreaks,
     generateColorsForBreaks
   } from '$lib/features/commons/services/classification.service';
+  import {
+    findPaletteById,
+    generatePaletteColors
+  } from './palette-popover/palette.constants';
+  import { getColorBlindnessState } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { untrack } from 'svelte';
   import {
@@ -52,6 +57,7 @@
   }: Props = $props();
 
   let _isCalculating = $state(false);
+  let breaksRequestId = 0;
 
   function storeMethodToPanelMethod(method: ClassificationMethod): PanelMethod {
     const mapping: Record<ClassificationMethod, PanelMethod> = {
@@ -133,6 +139,7 @@
       return;
     }
 
+    const myRequestId = ++breaksRequestId;
     _isCalculating = true;
     try {
       const storeMethod = panelMethodToStoreMethod(currentMethod);
@@ -147,6 +154,8 @@
         numClasses: requestedClassCount
       });
 
+      if (myRequestId !== breaksRequestId) return;
+
       if (result) {
         const actualClassCount = result.counts.length;
         const resolvedClassCount = resolveComputedClassCount(
@@ -156,7 +165,14 @@
         );
         const paletteType =
           currentBreakpoint !== null ? 'diverging' : 'sequential';
-        const colors = generateColorsForBreaks(resolvedClassCount, paletteType);
+        const cbState = getColorBlindnessState();
+        const contrast = cbState.enabled ? ('high' as const) : undefined;
+        const userPalette = visualization?.classification?.paletteId
+          ? findPaletteById(visualization.classification.paletteId)
+          : undefined;
+        const colors = userPalette
+          ? generatePaletteColors(userPalette, resolvedClassCount, contrast)
+          : generateColorsForBreaks(resolvedClassCount, paletteType, contrast);
         const allBreaks = [result.min, ...result.breaks, result.max];
 
         currentNumClasses = resolvedClassCount;

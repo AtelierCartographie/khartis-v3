@@ -9,6 +9,17 @@ import {
   GEOMETRY_WKT_TYPES
 } from '$lib/features/commons/constants';
 
+/**
+ * DuckDB >= 1.33 may return geometry column types like `GEOMETRY('EPSG:4326')`
+ * instead of plain `GEOMETRY`. This helper matches both forms.
+ */
+function isGeometryColumnType(columnType: string): boolean {
+  return (
+    columnType === GEOMETRY_COLUMN_TYPE ||
+    columnType.startsWith(GEOMETRY_COLUMN_TYPE + '(')
+  );
+}
+
 const GEOMETRY_TYPE_TO_GEOJSON: Partial<Record<string, GeometryInfo['type']>> =
   {
     [GEOMETRY_WKT_TYPES.POINT]: GEOJSON_TYPE.POINT,
@@ -29,8 +40,8 @@ export async function extractGeometryInfo(
     let geometryColumn: { name: string; type: string } | undefined;
 
     if (knownColumns) {
-      geometryColumn = knownColumns.find(
-        (col) => col.type === GEOMETRY_COLUMN_TYPE
+      geometryColumn = knownColumns.find((col) =>
+        isGeometryColumnType(col.type)
       );
     } else {
       const describe = await Duck.describe_table(tableName);
@@ -38,8 +49,8 @@ export async function extractGeometryInfo(
         name,
         type: describe.type[index]
       }));
-      geometryColumn = columns.find(
-        (column) => column.type === GEOMETRY_COLUMN_TYPE
+      geometryColumn = columns.find((column) =>
+        isGeometryColumnType(column.type)
       );
     }
 

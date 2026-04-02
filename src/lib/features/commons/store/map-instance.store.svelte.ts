@@ -1,6 +1,12 @@
 import type { Deck, View } from '@deck.gl/core';
 import type { MapboxOverlay } from '@deck.gl/mapbox';
 import type { Map as MapLibreMap } from 'maplibre-gl';
+import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
+import { projectionStore } from '$lib/features/map/stores/projection.store.svelte';
+import {
+  get_bbox_center,
+  get_max_scale
+} from '$lib/features/map/core/projscreen';
 
 type DeckInstance = Deck<View | View[] | null>;
 
@@ -21,6 +27,44 @@ const DEFAULT_DECK_VIEW_STATE: DeckViewState = {
 const DECK_ZOOM_STEP = 0.1375;
 const MAPLIBRE_ZOOM_STEP = 0.275;
 
+/** Ensure target always has exactly 3 numeric elements. */
+function normalizeTarget(t: number[]): [number, number, number] {
+  return [t[0] ?? 0, t[1] ?? 0, t[2] ?? 0];
+}
+
+/**
+ * Convert a world-coordinate target to data coordinates using
+ * the inverse of the model matrix: `data = world / scale + center`.
+ */
+function worldToData(target: number[]): [number, number, number] {
+  const t = normalizeTarget(target);
+  const bbox = projectionStore.referenceBbox;
+  if (!bbox) return t;
+  const [cx, cy] = get_bbox_center(bbox);
+  const scale = get_max_scale(projectionStore.canvasSize, bbox);
+  if (scale === 0) return t;
+  return [t[0] / scale + cx, t[1] / scale + cy, 0];
+}
+
+/**
+ * Convert a data-coordinate target to world coordinates using
+ * the model matrix: `world = scale * (data - center)`.
+ */
+function dataToWorld(target: number[]): [number, number, number] {
+  const t = normalizeTarget(target);
+  const bbox = projectionStore.referenceBbox;
+  if (!bbox) return t;
+  const [cx, cy] = get_bbox_center(bbox);
+  const scale = get_max_scale(projectionStore.canvasSize, bbox);
+  return [scale * (t[0] - cx), scale * (t[1] - cy), 0];
+}
+
+interface PendingViewState {
+  zoom: number;
+  /** Target stored in data (geographic) coordinates, not world coordinates. */
+  target: [number, number, number];
+}
+
 function createMapInstanceStore() {
   const state = $state<{
     map: MapLibreMap | null;
@@ -39,6 +83,8 @@ function createMapInstanceStore() {
     baseZoomLevel: 1.5,
     deckViewState: { ...DEFAULT_DECK_VIEW_STATE }
   });
+
+  let pendingRestore: PendingViewState | null = null;
 
   function setMapInstance(map: MapLibreMap | null) {
     state.map = map;
@@ -100,12 +146,19 @@ function createMapInstanceStore() {
     }
   }
 
-  function updateDeckViewState(viewState: Partial<DeckViewState>) {
+  function updateDeckViewState(
+    viewState: Partial<DeckViewState>,
+    fromUserInteraction = false
+  ) {
     state.deckViewState = {
       ...state.deckViewState,
       ...viewState
     };
     updateZoomFromMap();
+    if (fromUserInteraction) {
+      pendingRestore = null;
+      persistenceRegistry.notifyChange('mapViewState');
+    }
   }
 
   function applyDeckViewState(): void {
@@ -118,6 +171,12 @@ function createMapInstanceStore() {
     });
   }
 
+  /** Clear pending restore and save the project immediately. */
+  function consumePendingRestore(): void {
+    pendingRestore = null;
+    persistenceRegistry.notifyChange('mapViewState', 'immediate');
+  }
+
   function zoomIn() {
     if (state.map) {
       const currentZoom = state.map.getZoom();
@@ -126,6 +185,7 @@ function createMapInstanceStore() {
     }
 
     if (state.deckInstance) {
+      pendingRestore = null;
       const newZoom = Math.min(
         state.deckViewState.zoom + DECK_ZOOM_STEP,
         state.deckViewState.maxZoom
@@ -136,6 +196,7 @@ function createMapInstanceStore() {
       };
       applyDeckViewState();
       updateZoomFromMap();
+      consumePendingRestore();
     }
   }
 
@@ -147,6 +208,7 @@ function createMapInstanceStore() {
     }
 
     if (state.deckInstance) {
+      pendingRestore = null;
       const newZoom = Math.max(
         state.deckViewState.zoom - DECK_ZOOM_STEP,
         state.deckViewState.minZoom
@@ -157,6 +219,7 @@ function createMapInstanceStore() {
       };
       applyDeckViewState();
       updateZoomFromMap();
+      consumePendingRestore();
     }
   }
 
@@ -167,6 +230,7 @@ function createMapInstanceStore() {
     }
 
     if (state.deckInstance) {
+      pendingRestore = null;
       const clampedZoom = Math.max(
         state.deckViewState.minZoom,
         Math.min(zoom, state.deckViewState.maxZoom)
@@ -177,6 +241,7 @@ function createMapInstanceStore() {
       };
       applyDeckViewState();
       updateZoomFromMap();
+      consumePendingRestore();
     }
   }
 
@@ -187,30 +252,71 @@ function createMapInstanceStore() {
     }
 
     if (state.deckInstance) {
+      pendingRestore = null;
       state.deckViewState = {
         ...state.deckViewState,
         zoom: 0
       };
       applyDeckViewState();
       updateZoomFromMap();
+      consumePendingRestore();
     }
   }
 
   /**
-   * Reset the Deck.gl orthographic camera to origin.
-   * The model matrix (from projectionStore) already centers and scales data
-   * to fit the canvas at zoom 0, so target [0,0,0] + zoom 0 = "fit bounds".
+   * Reset the Deck.gl orthographic camera to origin — or restore the
+   * project-saved view state if one exists.
+   *
+   * `pendingRestore` is kept alive across ALL calls to this function
+   * (data load, world basemap load, reference basemap load, …) so the
+   * last one wins.  It is only cleared when the user explicitly changes
+   * the zoom via the toolbar.
    */
   function fitToOrthographicBounds(): void {
     if (!state.deckInstance || !state.isMapLoaded) return;
 
-    state.deckViewState = {
-      ...state.deckViewState,
-      target: [0, 0, 0],
-      zoom: 0
-    };
+    if (pendingRestore) {
+      state.deckViewState = {
+        ...state.deckViewState,
+        target: dataToWorld(pendingRestore.target),
+        zoom: pendingRestore.zoom
+      };
+    } else {
+      state.deckViewState = {
+        ...state.deckViewState,
+        target: [0, 0, 0],
+        zoom: 0
+      };
+    }
+
     applyDeckViewState();
     updateZoomFromMap();
+  }
+
+  function restoreFromSerialized(data: {
+    zoom?: number;
+    target?: [number, number, number];
+  }): void {
+    const zoom =
+      typeof data.zoom === 'number' && Number.isFinite(data.zoom)
+        ? data.zoom
+        : null;
+
+    if (zoom == null) return;
+
+    const raw = data.target;
+    const hasValidXY =
+      Array.isArray(raw) &&
+      raw.length >= 2 &&
+      typeof raw[0] === 'number' &&
+      Number.isFinite(raw[0]) &&
+      typeof raw[1] === 'number' &&
+      Number.isFinite(raw[1]);
+    const target: [number, number, number] = hasValidXY
+      ? [raw[0], raw[1], 0]
+      : [0, 0, 0];
+
+    pendingRestore = { zoom, target };
   }
 
   function reset() {
@@ -221,6 +327,10 @@ function createMapInstanceStore() {
     state.zoomLevel = 100;
     state.baseZoomLevel = 1.5;
     state.deckViewState = { ...DEFAULT_DECK_VIEW_STATE };
+    // Note: pendingRestore is intentionally NOT cleared here.
+    // reset() is called during map teardown (view switch, destroy)
+    // but pendingRestore must survive until fitToOrthographicBounds()
+    // consumes it on the next initialization.
   }
 
   return {
@@ -235,6 +345,9 @@ function createMapInstanceStore() {
     },
     get isMapLoaded() {
       return state.isMapLoaded;
+    },
+    get hasPendingRestore() {
+      return pendingRestore !== null;
     },
     get currentZoom(): number {
       if (state.map) {
@@ -267,8 +380,26 @@ function createMapInstanceStore() {
     setZoom,
     resetZoom,
     fitToOrthographicBounds,
+    restoreFromSerialized,
     reset
   };
 }
 
 export const mapInstanceStore = createMapInstanceStore();
+
+persistenceRegistry.register({
+  key: 'mapViewState',
+  serialize: () => {
+    const worldTarget = normalizeTarget(mapInstanceStore.deckViewState.target);
+    const dataTarget = worldToData(worldTarget);
+    return { zoom: mapInstanceStore.deckViewState.zoom, target: dataTarget };
+  },
+  deserialize: (data: unknown) =>
+    mapInstanceStore.restoreFromSerialized(
+      data as { zoom?: number; target?: [number, number, number] }
+    ),
+  reset: () => {
+    /* handled by mapInstanceStore.reset() */
+  },
+  priority: 'debounced'
+});

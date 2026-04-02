@@ -47,12 +47,6 @@ export async function simplifyGeometryTable(
   const geometryColumn = options.geometryColumn ?? 'geom';
   const createView = options.createView ?? false;
 
-  logger.info(
-    'Starting topology-aware geometry simplification',
-    LogCategory.DUCKDB,
-    { sourceTable, tolerance, geometryColumn }
-  );
-
   const originalVertices = await countVertices(
     Duck,
     sourceTable,
@@ -81,6 +75,30 @@ export async function simplifyGeometryTable(
   // The simplify_and_clean macro always normalizes the geometry column to 'geom'
   const simplifiedVertices = await countVertices(Duck, targetTable, 'geom');
 
+  // Recompute innerlines from the simplified geometry so borders stay in sync
+  const innerlinesTable = `${sourceTable}__innerlines`;
+  const escapedInnerlines = escapeIdentifier(innerlinesTable);
+  try {
+    await Duck.query(`
+      CREATE OR REPLACE TABLE "${escapedInnerlines}" AS
+      FROM extract_innerlines('${escapedTarget}')
+    `);
+    logger.debug(
+      'Innerlines recomputed after simplification',
+      LogCategory.DUCKDB,
+      {
+        innerlinesTable,
+        sourceTable: targetTable
+      }
+    );
+  } catch (error) {
+    logger.warn(
+      'Failed to recompute innerlines after simplification',
+      LogCategory.DUCKDB,
+      error
+    );
+  }
+
   const reductionPercentage =
     originalVertices > 0
       ? Math.round(
@@ -90,7 +108,7 @@ export async function simplifyGeometryTable(
 
   const duration = performance.now() - start;
 
-  logger.success('Geometry simplification completed', LogCategory.DUCKDB, {
+  logger.debug('Geometry simplification completed', LogCategory.DUCKDB, {
     targetTable,
     originalVertices,
     simplifiedVertices,

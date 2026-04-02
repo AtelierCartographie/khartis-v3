@@ -95,12 +95,6 @@ export async function analyse(
         `CREATE TEMP TABLE "${sampleViewName}" AS SELECT * FROM "${escapedTableForSample}" USING SAMPLE ${SAMPLE_THRESHOLD} ROWS`
       );
       analysisTable = sampleViewName;
-      logger.debug('Using sampled view for analysis', LogCategory.DUCKDB, {
-        table,
-        sampleViewName,
-        rowCount,
-        sampleSize: SAMPLE_THRESHOLD
-      });
     } catch (error) {
       logger.warn(
         'Failed to create sample view, falling back to full table',
@@ -141,14 +135,7 @@ export async function analyse(
             { useProxy: false }
           )
             .then((r) => r as ArrowTableLike)
-            .catch((e) => {
-              logger.warn(
-                `Failed summary_general for ${d.name}`,
-                LogCategory.DUCKDB,
-                e
-              );
-              return null;
-            });
+            .catch(() => null);
 
           switch (type) {
             case DuckDBSimplifiedType.NUMERIC: {
@@ -160,25 +147,11 @@ export async function analyse(
                   { useProxy: false }
                 )
                   .then((r) => r as ArrowTableLike)
-                  .catch((e) => {
-                    logger.warn(
-                      `Failed summary_numeric for ${d.name}`,
-                      LogCategory.DUCKDB,
-                      e
-                    );
-                    return null;
-                  }),
+                  .catch(() => null),
                 executeQuery(
                   ctx.connection,
                   `FROM histogram_numeric('${escapedAnalysisTable}', "${escapedColName}")`
-                ).catch((e) => {
-                  logger.warn(
-                    `Failed histogram_numeric for ${d.name}`,
-                    LogCategory.DUCKDB,
-                    e
-                  );
-                  return null;
-                })
+                ).catch(() => null)
               ]);
               summary_general = general;
               summary_numeric = numeric;
@@ -195,25 +168,11 @@ export async function analyse(
                   { useProxy: false }
                 )
                   .then((r) => r as ArrowTableLike)
-                  .catch((e) => {
-                    logger.warn(
-                      `Failed summary_date for ${d.name}`,
-                      LogCategory.DUCKDB,
-                      e
-                    );
-                    return null;
-                  }),
+                  .catch(() => null),
                 executeQuery(
                   ctx.connection,
                   `FROM histogram_date('${escapedAnalysisTable}', "${escapedColName}")`
-                ).catch((e) => {
-                  logger.warn(
-                    `Failed histogram_date for ${d.name}`,
-                    LogCategory.DUCKDB,
-                    e
-                  );
-                  return null;
-                })
+                ).catch(() => null)
               ]);
               summary_general = general;
               summary_date = dateSum;
