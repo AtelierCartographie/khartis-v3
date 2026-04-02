@@ -42,7 +42,12 @@ async function ensureSpatialExtension(ctx: DuckDBContext): Promise<void> {
       format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
     });
     ctx.extensionsLoaded.spatial = true;
-  } catch {
+  } catch (loadError) {
+    logger.debug(
+      'LOAD spatial failed, trying INSTALL + LOAD',
+      LogCategory.DUCKDB,
+      loadError
+    );
     try {
       await executeQuery(
         ctx.connection,
