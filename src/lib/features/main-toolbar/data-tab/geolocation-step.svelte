@@ -266,7 +266,10 @@
 
       // Don't reset if the geo column was explicitly set (restored from
       // project persistence or manually chosen by the user).
-      if (!dataTabState.geolocation.autoDetected && dataTabState.geolocation.linkedVariableName) {
+      if (
+        !dataTabState.geolocation.autoDetected &&
+        dataTabState.geolocation.linkedVariableName
+      ) {
         return;
       }
 

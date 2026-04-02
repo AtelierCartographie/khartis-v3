@@ -23,9 +23,9 @@ import type {
 import { generateUniqueTableName, registerFiles } from './file-registry';
 import {
   applyProj4Reprojection,
-  isProjectionSupported,
   tryDuckDBReprojection
 } from './geofile-reprojection';
+import { isProjectionSupported } from './reprojection';
 import { addRowId } from './reader-utils';
 
 interface GeofileMetadata {

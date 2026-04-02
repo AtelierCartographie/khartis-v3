@@ -8,7 +8,7 @@ import type { Table as ArrowTable } from 'apache-arrow';
 import { DUCK_CONST, GEO_CONSTANTS, READER_CONSTANTS } from '../constants';
 import { executeQuery } from '../core/query';
 import type { DuckDBContext } from '../types';
-import { isProjectionSupported, reprojectPoint } from './reprojection';
+import { reprojectPoint } from './reprojection';
 
 function shouldUseDuckDBTransform(crs: string | null): boolean {
   if (!crs) return false;
@@ -304,5 +304,3 @@ export async function applyProj4Reprojection(
     { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
   );
 }
-
-export { isProjectionSupported };

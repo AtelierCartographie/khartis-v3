@@ -1,6 +1,5 @@
 <script lang="ts">
   import 'maplibre-gl/dist/maplibre-gl.css';
-  import type { LngLatBoundsLike } from 'maplibre-gl';
   import type { Table as ArrowTable } from 'apache-arrow/Arrow';
   import { SkeletonPlaceholder } from 'carbon-components-svelte';
   import { onMount, untrack } from 'svelte';

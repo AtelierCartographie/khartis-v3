@@ -60,19 +60,6 @@ function mapMethodToMacro(
 const breaksCache = new Map<string, BreaksResult>();
 const BREAKS_CACHE_MAX = 50;
 
-/** Invalidate breaks cache entries for a specific table (call on data mutation) */
-export function invalidateBreaksCache(tableName?: string): void {
-  if (!tableName) {
-    breaksCache.clear();
-    return;
-  }
-  for (const key of breaksCache.keys()) {
-    if (key.startsWith(`${tableName}:`)) {
-      breaksCache.delete(key);
-    }
-  }
-}
-
 export async function calculateBreaks(
   options: ClassificationOptions
 ): Promise<BreaksResult | null> {

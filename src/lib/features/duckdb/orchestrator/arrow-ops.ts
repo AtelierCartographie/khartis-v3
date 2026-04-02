@@ -233,14 +233,6 @@ export async function addGeoArrowMetadataFromDuckDB(
       geomColumnIndex !== -1 &&
       table.schema.fields[geomColumnIndex].typeId === Type.Utf8;
 
-    // Check if DuckDB already set a geoarrow extension on the field
-    const existingExtension =
-      geomColumnIndex !== -1
-        ? table.schema.fields[geomColumnIndex].metadata?.get(
-            'ARROW:extension:name'
-          )
-        : undefined;
-
     // ST_AsWKB() output is standard WKB binary — label it as geoarrow.wkb
     // so the layer factory routes it through geoarrow-deck-stream (binary GPU
     // path) instead of the slow GeoJSON fallback. The data is identical to
