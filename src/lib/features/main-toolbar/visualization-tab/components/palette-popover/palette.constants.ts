@@ -476,6 +476,21 @@ export function buildPatternBackground(
   return `url(${tile.toDataURL()})`;
 }
 
+/**
+ * Generates 7 intensity shades of a single color via ok-palette sequential ramp.
+ * Produces a dark-to-light gradient centered on the seed color (CDC [VIZ-02c]).
+ */
+export function generateIntensityShades(seedColor: string): string[] {
+  const ramp = sequential({
+    colorStart: seedColor,
+    steps: 7,
+    contrast: 'high'
+  });
+  return (resolvePalette(ramp, { format: 'webgl' }) as WebGLColor[]).map(
+    webglToHex
+  );
+}
+
 export function getSuggestionPalettes(
   preset: SuggestionPreset,
   colorBlindFilter: boolean
