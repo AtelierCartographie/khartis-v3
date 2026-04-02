@@ -177,9 +177,22 @@ export function useTableData(props: UseTableDataProps): UseTableDataReturn {
           tableData = [];
         }
       } else if (dataset) {
+        let sourceData = dataset.data;
+        if (sortColumn && sortOrder) {
+          sourceData = [...dataset.data].sort((a, b) => {
+            const aVal = a[sortColumn];
+            const bVal = b[sortColumn];
+            if (aVal == null && bVal == null) return 0;
+            if (aVal == null) return sortOrder === 'ASC' ? 1 : -1;
+            if (bVal == null) return sortOrder === 'ASC' ? -1 : 1;
+            if (aVal < bVal) return sortOrder === 'ASC' ? -1 : 1;
+            if (aVal > bVal) return sortOrder === 'ASC' ? 1 : -1;
+            return 0;
+          });
+        }
         const startIdx = rowIndices[0];
         const endIdx = startIdx + rowIndices.length;
-        tableData = dataset.data.slice(startIdx, endIdx);
+        tableData = sourceData.slice(startIdx, endIdx);
       }
     } catch (err) {
       logger.error('Error loading row data', LogCategory.UI, err);
