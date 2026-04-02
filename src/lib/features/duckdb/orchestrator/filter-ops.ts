@@ -43,6 +43,10 @@ export function assertFilterValue(
   }
 }
 
+function isNumericLiteral(formatted: string): boolean {
+  return formatted !== 'NULL' && !formatted.startsWith("'");
+}
+
 export function buildFilterSQL(
   tableName: string,
   filter: DataTableFilterInput
@@ -59,14 +63,22 @@ export function buildFilterSQL(
     return `${INTERNAL_COLUMN.ID} IN (SELECT ${INTERNAL_COLUMN.ID} FROM "${tableName}" ORDER BY ${columnRef} ${direction} NULLS LAST LIMIT ${limit})`;
   };
 
+  const isNumericValue = isNumericLiteral(value);
+  const isNumericSecond = isNumericLiteral(secondValue);
+  const numericRef = `TRY_CAST(${columnRef} AS DOUBLE)`;
+
   switch (filter.operator) {
     case FilterOperatorEnum.GTE:
       assertFilterValue(filter.value, filter.operator);
-      return `${columnRef} >= ${value}`;
+      return isNumericValue
+        ? `${numericRef} >= ${value}`
+        : `${columnRef} >= ${value}`;
 
     case FilterOperatorEnum.LTE:
       assertFilterValue(filter.value, filter.operator);
-      return `${columnRef} <= ${value}`;
+      return isNumericValue
+        ? `${numericRef} <= ${value}`
+        : `${columnRef} <= ${value}`;
 
     case FilterOperatorEnum.CONTAINS:
       assertFilterValue(filter.value, filter.operator);
@@ -86,14 +98,16 @@ export function buildFilterSQL(
       }
       const numMin = Number(filter.value);
       const numMax = Number(filter.secondaryValue);
+      const useNumericCast = isNumericValue && isNumericSecond;
+      const ref = useNumericCast ? numericRef : columnRef;
       if (
         Number.isFinite(numMin) &&
         Number.isFinite(numMax) &&
         numMin > numMax
       ) {
-        return `${columnRef} BETWEEN ${secondValue} AND ${value}`;
+        return `${ref} BETWEEN ${secondValue} AND ${value}`;
       }
-      return `${columnRef} BETWEEN ${value} AND ${secondValue}`;
+      return `${ref} BETWEEN ${value} AND ${secondValue}`;
     }
 
     case FilterOperatorEnum.TOP_ASC:
