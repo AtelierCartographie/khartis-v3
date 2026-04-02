@@ -88,7 +88,10 @@ describe('processBasemapImport', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     dateNowSpy = vi.spyOn(Date, 'now').mockReturnValue(1700000000000);
-    mocks.fetchArrowTableWithGeometryMock.mockResolvedValue(rawTable);
+    mocks.fetchArrowTableWithGeometryMock.mockResolvedValue({
+      table: rawTable,
+      geomColumn: { column_name: 'geom', column_type: 'GEOMETRY' }
+    });
     mocks.addGeoArrowMetadataFromDuckDBMock.mockResolvedValue(arrowTable);
     mocks.generateCustomBasemapAttributesMock.mockResolvedValue(undefined);
   });
