@@ -121,6 +121,12 @@ const CSV_VALID: CsvTestCase[] = [
     minCols: 3
   },
   {
+    id: 'seveso-swapped-gps',
+    relativePath: 'csv/sites-seveso-idf-swapped-gps.csv',
+    minRows: 90,
+    minCols: 3
+  },
+  {
     id: 'fuzzy-countries',
     relativePath: 'csv/fuzzy-countries.csv',
     minRows: 4,

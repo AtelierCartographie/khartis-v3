@@ -26,7 +26,7 @@ pnpm dev             # → http://localhost:5176
 **Development URLs:**
 
 - Dev server: http://localhost:5176
-- Preview/E2E: http://localhost:4173 (used by Playwright)
+- Preview build: http://localhost:4173 (`pnpm preview`)
 
 ## 2) Branching & pull requests
 
@@ -124,7 +124,8 @@ BREAKING CHANGE: Legacy authentication method removed
 
 ### Testing
 
-- [ ] `pnpm test:unit` and `pnpm test:pipeline` pass
+- [ ] `pnpm test` passes
+- [ ] `pnpm test:unit` passes when client, store, or utility code changed
 - [ ] New features include tests; bug fixes include regression tests
 - [ ] Manual validation on dev build
 - [ ] Cross‑browser spot‑check (Chrome, Firefox, Safari)
@@ -246,15 +247,17 @@ try {
 ### Test types
 
 - **Unit Tests**: Vitest with jsdom + node workspace
-- **E2E Tests**: Playwright (automatically runs `build` + `preview` on port 4173)
+- **E2E Tests**: Playwright (automatically runs `pnpm dev` on port 5176)
 - **Manual Testing**: Cross-browser compatibility, accessibility
 
 ### Running tests
 
 ```bash
 pnpm test:unit     # Unit tests (Vitest, jsdom + node)
-pnpm test:pipeline # Pipeline + DuckDB integration tests
-pnpm test:e2e      # E2E tests (Playwright, port 4173)
+pnpm test          # Full server-side CI suite (pipeline + DuckDB)
+pnpm test:pipeline # Pipeline integration tests only
+pnpm test:duckdb   # DuckDB server-side tests only
+pnpm test:e2e      # E2E tests (Playwright, port 5176)
 pnpm build         # Ensure production build works
 ```
 
