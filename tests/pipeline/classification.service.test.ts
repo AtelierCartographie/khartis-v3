@@ -53,8 +53,17 @@ const QUANTILES = 'quantiles' as ClassificationMethod;
 const STANDARD_DEVIATION = 'standard_deviation' as ClassificationMethod;
 
 function createTable<T>(rows: T[]) {
+  const firstRow = rows[0] as Record<string, unknown> | undefined;
+
   return {
-    toArray: () => rows
+    numRows: rows.length,
+    toArray: () => rows,
+    getChild: (name: string) => ({
+      get: (index: number) =>
+        rows[index] && firstRow && name in firstRow
+          ? (rows[index] as Record<string, unknown>)[name]
+          : undefined
+    })
   };
 }
 
@@ -68,6 +77,13 @@ describe('classification service', () => {
 
   it('uses the quantile macro and rounds thresholds by default', async () => {
     queryMock
+      .mockResolvedValueOnce(
+        createTable([
+          {
+            cnt: 30
+          }
+        ])
+      )
       .mockResolvedValueOnce(
         createTable([
           {
@@ -108,11 +124,11 @@ describe('classification service', () => {
     });
 
     expect(queryMock).toHaveBeenNthCalledWith(
-      2,
+      3,
       "SELECT quantile('demo_table', 'population', 3) as breaks"
     );
     expect(queryMock).toHaveBeenNthCalledWith(
-      3,
+      4,
       "SELECT round_thresholds([10, 20], 'demo_table', 'population') as rounded"
     );
     expect(result).toEqual({
@@ -125,6 +141,13 @@ describe('classification service', () => {
 
   it('maps legacy standard deviation classifications to nested means', async () => {
     queryMock
+      .mockResolvedValueOnce(
+        createTable([
+          {
+            cnt: 30
+          }
+        ])
+      )
       .mockResolvedValueOnce(
         createTable([
           {
@@ -166,7 +189,7 @@ describe('classification service', () => {
     });
 
     expect(queryMock).toHaveBeenNthCalledWith(
-      2,
+      3,
       "SELECT nested_means('demo_table', 'population', 4) as breaks"
     );
   });
