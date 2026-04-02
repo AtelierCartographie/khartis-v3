@@ -2,6 +2,10 @@
 
 > Progressive Web App : installation, cache hors-ligne et mises a jour.
 
+**Voir aussi** : [Architecture](./ARCHITECTURE.md) | [Fonds de carte](./FONDS_DE_CARTE.md)
+
+---
+
 ## Vue d'ensemble
 
 Khartis v3 utilise `vite-plugin-pwa` (Workbox) pour fonctionner hors-ligne apres la premiere visite. L'application peut etre installee sur l'appareil, met en cache les fonds de carte et le moteur DuckDB WASM, et propose des mises a jour automatiques.
@@ -14,7 +18,7 @@ Khartis v3 utilise `vite-plugin-pwa` (Workbox) pour fonctionner hors-ligne apres
 adapter({
   pages: 'build',
   assets: 'build',
-  fallback: 'index.html', // Mode SPA : toutes les routes -> index.html
+  fallback: 'index.html',
   strict: true
 });
 ```
@@ -23,21 +27,17 @@ adapter({
 
 ```ts
 VitePWA({
-  registerType: 'prompt', // Invite de mise a jour utilisateur
+  registerType: 'prompt',
   devOptions: { enabled: true, type: 'module' },
   includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
-  workbox: {
-    /* voir ci-dessous */
-  },
-  manifest: {
-    /* voir ci-dessous */
-  }
+  workbox: { /* voir ci-dessous */ },
+  manifest: { /* voir ci-dessous */ }
 });
 ```
 
 ## Strategies de cache
 
-Khartis utilise exclusivement **CacheFirst** pour les ressources externes (contenu statique, immutable par URL ou version). Aucune API distante n'est appelee (architecture client-only).
+CacheFirst pour toutes les ressources (contenu statique, immutable). Aucune API distante n'est appelee (architecture client-only).
 
 ### Precache (app shell)
 
@@ -50,49 +50,38 @@ Les fichiers WASM sont exclus du precache et charges a la demande via le cache r
 
 ### Cache runtime
 
-#### Extensions DuckDB
-
 ```ts
+// Extensions DuckDB
 { urlPattern: /^https:\/\/extensions\.duckdb\.org\/.*/, handler: 'CacheFirst',
   options: { cacheName: 'duckdb-extensions', expiration: { maxEntries: 10, maxAgeSeconds: 30 * 86400 } } }
-```
 
-#### Fonds de carte (GeoParquet)
-
-```ts
+// Fonds de carte (GeoParquet)
 { urlPattern: /\/basemaps\/.*\.(parquet|geojson|json)$/, handler: 'CacheFirst',
   options: { cacheName: 'basemaps-data', expiration: { maxEntries: 100, maxAgeSeconds: 365 * 86400 } } }
-```
 
-#### Fichiers WASM et workers
-
-```ts
+// WASM et workers
 { urlPattern: /.*\.(wasm|worker\.js)$/, handler: 'CacheFirst',
   options: { cacheName: 'wasm-workers', expiration: { maxEntries: 20, maxAgeSeconds: 90 * 86400 } } }
-```
 
-Fichiers concernes : `duckdb-mvp.wasm` (36 Mo), `duckdb-eh.wasm` (31 Mo), `index_bg.wasm` (7 Mo), `parquet_wasm_bg.wasm` (6,3 Mo), `sql-wasm.wasm` (644 Ko).
-
-#### Tuiles cartographiques (OSM, Carto, OpenFreeMap)
-
-```ts
+// Tuiles cartographiques (OSM, Carto, OpenFreeMap)
 { urlPattern: /^https:\/\/(tile\.openstreetmap\.org|...)\/.*/, handler: 'CacheFirst',
   options: { cacheName: 'osm-tiles', expiration: { maxEntries: 500, maxAgeSeconds: 90 * 86400 } } }
-// Idem pour carto-tiles et openfreemap-tiles
 ```
 
 ## Tailles de cache estimees
 
-| Cache               | Contenu                   | Entrees max | Expiration | Taille estimee |
-| ------------------- | ------------------------- | ----------- | ---------- | -------------- |
-| `precache`          | App shell (JS/CSS/HTML)   | --          | --         | ~4 Mo          |
-| `wasm-workers`      | Binaires WASM, workers    | 20          | 90 jours   | ~81 Mo         |
-| `basemaps-data`     | GeoParquet fonds de carte | 100         | 1 an       | ~25 Mo         |
-| `duckdb-extensions` | Extensions DuckDB         | 10          | 30 jours   | < 1 Mo         |
-| `osm-tiles`         | Tuiles OpenStreetMap      | 500         | 90 jours   | ~25 Mo         |
-| `carto-tiles`       | Tuiles Carto              | 500         | 90 jours   | ~25 Mo         |
-| `openfreemap-tiles` | Tuiles OpenFreeMap        | 500         | 90 jours   | ~25 Mo         |
-| **Total**           |                           |             |            | **~186 Mo**    |
+> **Note** : ces tailles sont des estimations susceptibles de changer. Verifier les valeurs reelles dans `vite.config.ts` et `tsconfig.json` avant de s'y fier pour le dimensionnement d'un dispositif de stockage.
+
+| Cache               | Contenu                    | Entrees max | Expiration | Taille estimee |
+| ------------------- | -------------------------- | ----------- | ---------- | -------------- |
+| `precache`          | App shell (JS/CSS/HTML)    | --          | --         | ~4 Mo          |
+| `wasm-workers`      | Binaires WASM, workers     | 20          | 90 jours   | ~81 Mo         |
+| `basemaps-data`     | GeoParquet fonds de carte   | 100         | 1 an       | ~25 Mo         |
+| `duckdb-extensions` | Extensions DuckDB          | 10          | 30 jours   | < 1 Mo         |
+| `osm-tiles`         | Tuiles OpenStreetMap       | 500         | 90 jours   | ~25 Mo         |
+| `carto-tiles`       | Tuiles Carto               | 500         | 90 jours   | ~25 Mo         |
+| `openfreemap-tiles` | Tuiles OpenFreeMap         | 500         | 90 jours   | ~25 Mo         |
+| **Total**           |                            |             |            | **~186 Mo**    |
 
 Installation initiale : ~4 Mo. Apres utilisation complete : ~186 Mo.
 
@@ -126,7 +115,6 @@ Le service worker tente de precacher des fichiers inexistants. Verifier `navigat
 
 ### L'application ne se met pas a jour
 
-- Verifier `registerType: 'prompt'`
 - Incrementer la version dans `package.json` avant le build
 - L'utilisateur doit cliquer sur "Mettre a jour"
 - En dev, desinscription forcee :
@@ -140,8 +128,8 @@ location.reload();
 
 ### Fichiers volumineux non caches
 
-Augmenter `maximumFileSizeToCacheInBytes` dans la config Workbox (valeur actuelle : 1 Go). Attention au quota de stockage sur mobile.
+Augmenter `maximumFileSizeToCacheInBytes` dans la config Workbox. Attention au quota de stockage sur mobile.
 
 ---
 
-**Voir aussi :** [ARCHITECTURE.md](ARCHITECTURE.md) -- [FONDS_DE_CARTE.md](FONDS_DE_CARTE.md)
+**Voir aussi :** [ARCHITECTURE.md](./ARCHITECTURE.md) -- [FONDS_DE_CARTE.md](./FONDS_DE_CARTE.md)

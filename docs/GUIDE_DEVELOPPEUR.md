@@ -346,8 +346,8 @@ src/
 | `main-toolbar/`       | Sidebar gauche : onglets Donnees, Visualisations, Style                             |
 | `map/`                | Carte Deck.gl + MapLibre : hooks, layer factories, projections                      |
 | `project-management/` | Persistance `.kh`, serialisation, IndexedDB                                         |
-| `side-nav/`           | Menu lateral (langue, projets recents)                                              |
-| `step-toolbar/`       | Panneau droit : 10 outils (recherche, calques, projection, legende, annotations...) |
+| `side-nav.svelte`     | Menu lateral (langue, projets recents) -- fichier unique, pas une feature directory |
+| `step-toolbar/`       | Panneau droit : 10 outils (search, layers, projections, legend, annotations, color-blindness, facets, format, geo-indications, simplification) |
 
 ### Structure type d'une feature
 
@@ -365,7 +365,7 @@ features/mon-outil/
 
 ### Pattern de store (createToolStore)
 
-Les tool stores utilisent la factory `createToolStore` qui gere l'etat reactif, les actions et la persistance automatique :
+Les tool stores utilisent la factory `createToolStore` qui gere l'etat reactif, les actions et la persistance automatique. **Note** : `facets` n'utilise pas `createToolStore` -- il utilise un `$state` direct avec un pattern distinct (gestion de `generatedVisualizationIds` plus complexe).
 
 ```typescript
 // mon-outil.store.svelte.ts
