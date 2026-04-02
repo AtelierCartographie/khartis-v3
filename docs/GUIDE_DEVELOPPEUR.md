@@ -276,9 +276,11 @@ pnpm dev              # serveur de dev sur http://localhost:5176
 | `pnpm build`         | Build de production (adaptateur statique SvelteKit)        |
 | `pnpm check`         | Verification TypeScript + Svelte                           |
 | `pnpm lint`          | Prettier + ESLint                                          |
+| `pnpm test`          | Suite serveur CI (pipeline + DuckDB)                       |
 | `pnpm test:unit`     | Tests unitaires Vitest                                     |
 | `pnpm test:e2e`      | Tests end-to-end Playwright (local uniquement)             |
 | `pnpm test:pipeline` | Tests d'integration DuckDB (ingestion de tous les formats) |
+| `pnpm test:duckdb`   | Tests DuckDB server-side                                   |
 
 ## CI / CD
 

@@ -11,7 +11,8 @@ vi.mock('$lib/features/data-pipeline/processors/strategies', () => ({
   geojsonProcessor: { id: 'geojson' },
   shapefileProcessor: { id: 'shp' },
   geopackageProcessor: { id: 'gpkg' },
-  geoparquetProcessor: { id: 'gpq' }
+  geoparquetProcessor: { id: 'gpq' },
+  gpxProcessor: { id: 'gpx' }
 }));
 
 describe('registerAllProcessors', () => {
@@ -26,7 +27,7 @@ describe('registerAllProcessors', () => {
 
     registerAllProcessors();
 
-    expect(registerProcessorMock).toHaveBeenCalledTimes(5);
+    expect(registerProcessorMock).toHaveBeenCalledTimes(6);
     expect(registerProcessorMock).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({ id: 'csv' }),
@@ -35,6 +36,11 @@ describe('registerAllProcessors', () => {
     expect(registerProcessorMock).toHaveBeenNthCalledWith(
       5,
       expect.objectContaining({ id: 'gpq' }),
+      10
+    );
+    expect(registerProcessorMock).toHaveBeenNthCalledWith(
+      6,
+      expect.objectContaining({ id: 'gpx' }),
       10
     );
   });
@@ -46,6 +52,6 @@ describe('registerAllProcessors', () => {
     registerAllProcessors();
     registerAllProcessors();
 
-    expect(registerProcessorMock).toHaveBeenCalledTimes(5);
+    expect(registerProcessorMock).toHaveBeenCalledTimes(6);
   });
 });

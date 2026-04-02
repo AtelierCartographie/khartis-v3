@@ -17,6 +17,11 @@ vi.mock('$lib/features/map/services/basemap.service.svelte', () => ({
     loadGeometryIntoDuckDB: vi.fn()
   }
 }));
+
+vi.mock('$lib/features/map/utils/read-geojson-arrow', () => ({
+  addGeoArrowMetadata: <T>(table: T) => table
+}));
+
 import {
   createTestInstance,
   destroyTestInstance,
@@ -227,7 +232,7 @@ describe('join-ops integration with test datasets', () => {
       {
         basemap: 'test-basemap',
         shareBasemap: 0.8,
-        shareCandidate: 0.8
+        shareCandidate: 80
       }
     ]);
   });
