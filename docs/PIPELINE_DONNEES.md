@@ -8,39 +8,45 @@
 
 ## Formats supportes
 
-| Format                | Extensions                           | Methode                  | Notes                                     |
-| --------------------- | ------------------------------------ | ------------------------ | ----------------------------------------- |
-| CSV / TSV            | `.csv`, `.tsv`, `.txt`               | DuckDB `read_csv()`      | Detection automatique du separateur decimal |
-| GeoJSON              | `.geojson`, `.json`                  | `geojsonProcessor`       | Detection CRS via `ST_Read_Meta()`         |
-| Shapefile            | `.shp` (+ `.dbf`, `.shx`)            | `shapefileProcessor`     | Bundle de fichiers requis                  |
-| GeoPackage           | `.gpkg`                              | `geopackageProcessor`    | Support spatial natif                      |
-| GeoParquet / Parquet | `.geoparquet`, `.parquet`, `.gpq`    | `geoparquetProcessor`    | DuckDB 1.33 geoarrow.wkb natif             |
-| GPX                  | `.gpx`                               | `gpxProcessor`          | Format supporte                             |
-| KML / KMZ            | `.kml`, `.kmz`                       | Conversion GeoJSON       | Convertit en GeoJSON d'abord              |
+| Format               | Extensions                        | Methode                         | Notes                                          |
+| -------------------- | --------------------------------- | ------------------------------- | ---------------------------------------------- |
+| CSV / TSV            | `.csv`, `.tsv`, `.txt`            | DuckDB `read_csv()`             | Detection automatique du separateur decimal    |
+| GeoJSON              | `.geojson`, `.json`               | `geojsonProcessor`              | Detection CRS via `ST_Read_Meta()`             |
+| Shapefile            | `.shp` (+ `.dbf`, `.shx`)         | `shapefileProcessor`            | Bundle de fichiers requis                      |
+| GeoPackage           | `.gpkg`                           | `geopackageProcessor`           | Support spatial natif                          |
+| GeoParquet / Parquet | `.geoparquet`, `.parquet`, `.gpq` | `geoparquetProcessor`           | DuckDB 1.33 geoarrow.wkb natif                 |
+| GPX                  | `.gpx`                            | `gpxProcessor`                  | Format supporte                                |
+| KML / KMZ            | `.kml`, `.kmz`                    | `Duck.read_geofile()` (ST_Read) | Support natif GDAL — pas de conversion GeoJSON |
 
 ## Flux de traitement
 
-```
-1. Upload fichier
-       |
-2. validateFile()  -->  taille, extension
-       |
-3. processFileInternal()  -->  delegation au processor appropriate
-       |
-       +-- csvProcessor       (Duck.read_csv() + retry all_varchar)
-       +-- geojsonProcessor  (ST_Read() via Duck)
-       +-- shapefileProcessor (ST_Read() + companion files)
-       +-- geopackageProcessor (ST_Read())
-       +-- geoparquetProcessor (DuckDB read_parquet)
-       +-- gpxProcessor      (ST_Read())
-       +-- (KML/KMZ converts to GeoJSON first)
-       |
-4. buildDatasetFromDuckTable()  -->  Duck.analyse() + Duck.get_row_count()
-       |
-5. DatasetResult  -->  colonnes enrichies, geometrie, avertissements
+```mermaid
+flowchart TB
+    subgraph Ingestion
+        A["1. Upload fichier"]
+        B["2. validateFile()<br/>(taille, extension)"]
+        C["3. processFileInternal()<br/>(delegation au processor)"]
+    end
+
+    subgraph "Geo vs Tabular routing (isGeoFile)"
+        GEO_ROUTE["Geo: Duck.read_geofile()<br/>(ST_Read — GeoJSON, SHP, GPKG,<br/>GPX, KML, KMZ, GeoParquet)"]
+        TAB_ROUTE["Tabular: Duck.read_tabular()<br/>(DuckDB read_csv + retry logic)"]
+    end
+
+    subgraph "Analyse"
+        D["4. buildDatasetFromDuckTable()<br/>(Duck.analyse + get_row_count)"]
+        E["5. DatasetResult<br/>(colonnes enrichies, géométrie, avertissements)"]
+    end
+
+    A --> B --> C
+    C --> GEO_ROUTE
+    C --> TAB_ROUTE
+    GEO_ROUTE --> D
+    TAB_ROUTE --> D
+    D --> E
 ```
 
-Les processeurs sont enregistres via `registerAllProcessors()` dans `processors/register-processors.ts` et deleguent a DuckDB pour la lecture reelle des fichiers.
+Le pipeline principal route via `isGeospatialFile()` : fichiers geo → `Duck.read_geofile()` (ST_Read, supporte nativement GeoJSON, SHP, GPKG, GPX, KML, KMZ, GeoParquet), fichiers tabulaires → `Duck.read_tabular()` (read_csv avec retry). Les 6 processeurs enregistres via `registerAllProcessors()` dans `processors/register-processors.ts` ne sont utilisés que pour le traitement des fichiers ZIP imbriqués.
 
 ## API publique
 
@@ -52,8 +58,13 @@ await dataPipeline.initialize();
 
 // Traitement de fichiers
 const result = await dataPipeline.processFile(file);
-const result = await dataPipeline.processUploadedFile(uploadedFile, originalFile);
-const result = await dataPipeline.processRemoteFile(url, { tableName: 'remote_data' });
+const result = await dataPipeline.processUploadedFile(
+  uploadedFile,
+  originalFile
+);
+const result = await dataPipeline.processRemoteFile(url, {
+  tableName: 'remote_data'
+});
 const result = await dataPipeline.processPastedData(csvContent, 'pasted');
 
 // Jointures
@@ -131,11 +142,17 @@ Cache memoire LRU (~100 Mo) pour les buffers GeoParquet, les descriptions de tab
 
 `ST_Transform` de DuckDB WASM ne supporte pas toutes les projections (le build WASM n'a pas acces a la base PROJ complete). Concernant notamment **Lambert-93 (EPSG:2154)**, frequent dans les datasets francais.
 
-```
-1. Tentative ST_Transform via DuckDB
-2. En cas d'echec --> extraction des geometries en WKT
-3. Reprojection des coordonnees avec proj4js (cote client)
-4. Mise a jour de la table DuckDB avec le WKT reprojete
+```mermaid
+flowchart TB
+    ST["1. Tentative<br/>ST_Transform via DuckDB"]
+    FAIL{"Echec ?"}
+    WKT["2. Extraction des<br/>geometries en WKT"]
+    PROJ4["3. Reprojection<br/>coordonnees proj4js<br/>(cote client)"]
+    UPDATE["4. Mise a jour table DuckDB<br/>(WKT reprojete)"]
+
+    ST --> FAIL
+    FAIL -->|"oui"| WKT --> PROJ4 --> UPDATE
+    FAIL -->|"non"| UPDATE
 ```
 
 **Projections supportees par le fallback** :
@@ -148,14 +165,14 @@ proj4js est utilise **uniquement** pour la transformation de coordonnees. Les do
 
 ## Optimisations
 
-| Defi                     | Solution                                                    |
-| ------------------------ | ----------------------------------------------------------- |
+| Defi                     | Solution                                                     |
+| ------------------------ | ------------------------------------------------------------ |
 | Imports volumineux       | Parsing natif DuckDB (`read_csv`, `read_parquet`, `ST_Read`) |
-| Conversions multiples    | Pipeline en une seule passe                                 |
-| Preservation metadonnees | GeoParquet avec encodage GeoArrow                           |
-| Concurrence              | `TransactionMutex` serialise les operations d'ingestion     |
-| Fichiers ephemeres       | Cleanup via `dropRegisteredFile` apres creation de la table |
-| CSV malformes            | Retry avec `ignore_errors=true, all_varchar=true`          |
+| Conversions multiples    | Pipeline en une seule passe                                  |
+| Preservation metadonnees | GeoParquet avec encodage GeoArrow                            |
+| Concurrence              | `TransactionMutex` serialise les operations d'ingestion      |
+| Fichiers ephemeres       | Cleanup via `dropRegisteredFile` apres creation de la table  |
+| CSV malformes            | Retry avec `ignore_errors=true, all_varchar=true`            |
 
 **Cible** : < 3 s de chargement pour un dataset standard, ~60 fps en pan/zoom.
 

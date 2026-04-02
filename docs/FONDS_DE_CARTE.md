@@ -120,8 +120,8 @@ Chaque fond inclut un fichier JSON de métadonnées :
 | ------------------ | --------------- | ------------------------------------------------ |
 | `centroid`         | fichier Parquet | Points centroïdes des entités                    |
 | `limit`            | fichier Parquet | Lignes de frontières/limites                     |
-| `land`             | fichier Parquet | Polygone de territoire (fond)                   |
-| `graticule`        | fichier Parquet | Méridiens et parallèles (généré avec mapshaper) |
+| `land`             | fichier Parquet | Polygone de territoire (fond)                    |
+| `graticule`        | fichier Parquet | Méridiens et parallèles (généré avec mapshaper)  |
 | `geographic-lines` | fichier Parquet | Équateur, tropiques, cercles polaires, Greenwich |
 
 Génération d'un fichier graticule :
