@@ -127,7 +127,7 @@
   let hasCalledOnReady = $state(false);
   let initStartTime = $state<number>(Date.now());
   let maxWaitTimeoutId: ReturnType<typeof setTimeout> | null = null;
-  let worldBaseTable = $state<ArrowTable | null>(null);
+  let worldBaseTable = $state.raw<ArrowTable | null>(null);
   let isLoadingBasemap = false;
   const RESIZE_DEBOUNCE_MS = 150;
   let resizeTimeoutId: ReturnType<typeof setTimeout> | null = null;

@@ -104,9 +104,13 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
     map.once('style.load', styleLoadHandler);
 
     try {
-      map.setStyle(style, { diff: false });
+      map.setStyle(style, { diff: true });
     } catch (error) {
-      logger.error('setStyle() threw, unlocking style loading', LogCategory.MAP, error);
+      logger.error(
+        'setStyle() threw, unlocking style loading',
+        LogCategory.MAP,
+        error
+      );
       completeStyleLoad();
     }
   }
@@ -162,7 +166,12 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
 
       for (const layer of style.layers) {
         // Skip layers managed by the cartefacile group system
-        if ((layer.metadata as Record<string, unknown> | undefined)?.['cartefacile:group']) continue;
+        if (
+          (layer.metadata as Record<string, unknown> | undefined)?.[
+            'cartefacile:group'
+          ]
+        )
+          continue;
 
         if (
           layer.type === 'symbol' &&
