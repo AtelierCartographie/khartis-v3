@@ -21,6 +21,37 @@ import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 const yearFilterCache = new WeakMap<ArrowTable, Map<string, ArrowTable>>();
 
 /**
+ * Multi-entry data filter cache (same pattern as yearFilterCache).
+ * Prevents creating a new ArrowTable on every render when filters haven't changed,
+ * preserving the downstream WeakMap cache chain (GeoArrow binary, GeoJSON, bounds).
+ */
+const dataFilterCache = new WeakMap<ArrowTable, Map<string, ArrowTable>>();
+
+/**
+ * Multi-entry table filter cache (same pattern as yearFilterCache).
+ */
+const tableFilterCache = new WeakMap<ArrowTable, Map<string, ArrowTable>>();
+
+/** Build a stable, order-independent cache key from a list of filter descriptors. */
+function buildFilterCacheKey(
+  filters: Array<{
+    column: string;
+    operator: string;
+    value?: string | number;
+    secondaryValue?: string | number;
+    primitiveType?: string;
+  }>
+): string {
+  return filters
+    .map(
+      (f) =>
+        `${f.column}:${f.operator}:${f.value ?? ''}:${f.secondaryValue ?? ''}:${f.primitiveType ?? ''}`
+    )
+    .sort()
+    .join('|');
+}
+
+/**
  * Build a new Arrow table containing only the rows at the given indices.
  * Uses table.slice() to preserve the original schema (including GeoArrow metadata).
  */
@@ -71,6 +102,17 @@ export function filterArrowTableByYear(
     if (cached) return cached;
   }
 
+  // Helper to cache pass-through results (including error states) so
+  // repeated calls with the same invalid filter skip re-validation.
+  function cacheYearResult(result: ArrowTable): void {
+    const existing = yearFilterCache.get(table);
+    if (existing) {
+      existing.set(cacheKey, result);
+    } else {
+      yearFilterCache.set(table, new Map([[cacheKey, result]]));
+    }
+  }
+
   const columnIndex = table.schema.fields.findIndex(
     (field) => field.name === column
   );
@@ -80,6 +122,7 @@ export function filterArrowTableByYear(
       column,
       availableColumns: table.schema.fields.map((f) => f.name)
     });
+    cacheYearResult(table);
     return table;
   }
 
@@ -88,6 +131,7 @@ export function filterArrowTableByYear(
     logger.warn('Year filter column vector not accessible', LogCategory.MAP, {
       column
     });
+    cacheYearResult(table);
     return table;
   }
 
@@ -99,6 +143,7 @@ export function filterArrowTableByYear(
     logger.warn('Year filter value is not a valid number', LogCategory.MAP, {
       value
     });
+    cacheYearResult(table);
     return table;
   }
 
@@ -123,23 +168,13 @@ export function filterArrowTableByYear(
     });
   }
 
-  // Store in multi-entry cache (same table ref → multiple year values cached)
-  function cacheResult(result: ArrowTable): void {
-    const existing = yearFilterCache.get(table);
-    if (existing) {
-      existing.set(cacheKey, result);
-    } else {
-      yearFilterCache.set(table, new Map([[cacheKey, result]]));
-    }
-  }
-
   if (matchingIndices.length === table.numRows) {
-    cacheResult(table);
+    cacheYearResult(table);
     return table;
   }
 
   const result = selectRowsByIndices(table, matchingIndices);
-  cacheResult(result);
+  cacheYearResult(result);
   return result;
 }
 
@@ -222,6 +257,14 @@ export function filterArrowTableByDataFilters(
     : filters;
   if (!applicableFilters.length) return table;
 
+  // Check multi-entry cache
+  const cacheKey = buildFilterCacheKey(applicableFilters);
+  const tableCache = dataFilterCache.get(table);
+  if (tableCache) {
+    const cached = tableCache.get(cacheKey);
+    if (cached) return cached;
+  }
+
   const columnVectors = new Map<
     string,
     { index: number; vector: ReturnType<ArrowTable['getChildAt']> }
@@ -272,7 +315,17 @@ export function filterArrowTableByDataFilters(
     }
   }
 
+  function cacheDataResult(result: ArrowTable): void {
+    const existing = dataFilterCache.get(table);
+    if (existing) {
+      existing.set(cacheKey, result);
+    } else {
+      dataFilterCache.set(table, new Map([[cacheKey, result]]));
+    }
+  }
+
   if (matchingIndices.length === table.numRows) {
+    cacheDataResult(table);
     return table;
   }
 
@@ -282,7 +335,9 @@ export function filterArrowTableByDataFilters(
     });
   }
 
-  return selectRowsByIndices(table, matchingIndices);
+  const result = selectRowsByIndices(table, matchingIndices);
+  cacheDataResult(result);
+  return result;
 }
 
 const ARROW_COMPATIBLE_OPERATORS = new Set<string>([
@@ -306,6 +361,14 @@ export function filterArrowTableByTableFilters(
     ARROW_COMPATIBLE_OPERATORS.has(f.operator)
   );
   if (compatible.length === 0) return table;
+
+  // Check multi-entry cache
+  const cacheKey = buildFilterCacheKey(compatible);
+  const tblCache = tableFilterCache.get(table);
+  if (tblCache) {
+    const cached = tblCache.get(cacheKey);
+    if (cached) return cached;
+  }
 
   const columnVectors = new Map<
     string,
@@ -352,7 +415,21 @@ export function filterArrowTableByTableFilters(
     }
   }
 
-  if (matchingIndices.length === table.numRows) return table;
+  function cacheTableResult(result: ArrowTable): void {
+    const existing = tableFilterCache.get(table);
+    if (existing) {
+      existing.set(cacheKey, result);
+    } else {
+      tableFilterCache.set(table, new Map([[cacheKey, result]]));
+    }
+  }
 
-  return selectRowsByIndices(table, matchingIndices);
+  if (matchingIndices.length === table.numRows) {
+    cacheTableResult(table);
+    return table;
+  }
+
+  const result = selectRowsByIndices(table, matchingIndices);
+  cacheTableResult(result);
+  return result;
 }

@@ -212,8 +212,17 @@ function createBasemapService() {
       throw new Error('DuckDB not initialized');
     }
 
-    const rawTable = await fetchArrowTableWithGeometry(tableName, Duck);
-    return addGeoArrowMetadataFromDuckDB(rawTable, tableName, Duck);
+    const { table: rawTable, geomColumn } = await fetchArrowTableWithGeometry(
+      tableName,
+      Duck
+    );
+    return addGeoArrowMetadataFromDuckDB(
+      rawTable,
+      tableName,
+      Duck,
+      undefined,
+      geomColumn
+    );
   }
 
   async function loadBasemapLayers(
