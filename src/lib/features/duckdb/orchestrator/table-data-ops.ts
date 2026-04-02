@@ -234,12 +234,7 @@ export async function getExcludedRowIds(
   const query = `SELECT __id FROM "${escapedTable}" WHERE COALESCE(NOT (${whereClause}), TRUE)`;
   const result = (await Duck.query(query)) as ArrowTableLike;
 
-  const ids: number[] = [];
-  for (let i = 0; i < result.numRows; i++) {
-    const row = result.get(i) as { __id: number };
-    ids.push(row.__id);
-  }
-  return ids;
+  return result.toArray().map((row) => row.__id as number);
 }
 
 export async function analyzeTable(
