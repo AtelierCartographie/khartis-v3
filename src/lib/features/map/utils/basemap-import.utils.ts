@@ -330,8 +330,17 @@ async function createArrowTableFromDuckTable(
   duck: typeof Duck,
   tableName: string
 ): Promise<ArrowTable> {
-  const rawTable = await fetchArrowTableWithGeometry(tableName, duck);
-  return addGeoArrowMetadataFromDuckDB(rawTable, tableName, duck);
+  const { table: rawTable, geomColumn } = await fetchArrowTableWithGeometry(
+    tableName,
+    duck
+  );
+  return addGeoArrowMetadataFromDuckDB(
+    rawTable,
+    tableName,
+    duck,
+    undefined,
+    geomColumn
+  );
 }
 
 async function preparePolygonBasemapTables(
