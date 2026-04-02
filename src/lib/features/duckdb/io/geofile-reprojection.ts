@@ -17,6 +17,18 @@ function shouldUseDuckDBTransform(crs: string | null): boolean {
   );
 }
 
+/**
+ * Reprojection pipeline for geofiles with non-WGS84 CRS.
+ *
+ * Strategy: DuckDB ST_Transform first → client-side proj4 fallback only for CRS
+ * that DuckDB doesn't support (EPSG:2154, 27572, 3035 — France-specific).
+ *
+ * The client-side fallback iterates row-by-row with proj4 and batches DuckDB UPDATEs.
+ * This is an acceptable performance trade-off for rare unsupported CRS — the alternative
+ * (embedding a full PROJ database in WASM) is not feasible.
+ *
+ * Batch sizes: 5,000 for point geometries, 1,000 for complex geometries (polygon/line).
+ */
 export async function tryDuckDBReprojection(
   ctx: DuckDBContext,
   tablename: string,
