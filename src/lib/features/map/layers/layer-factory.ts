@@ -119,6 +119,17 @@ const geoJsonConversionCache = new WeakMap<
   Map<string, FeatureCollection | null>
 >();
 
+/**
+ * WeakMap cache for createTextLayerDataFromBinary — avoids recomputing
+ * centroids + label extraction when only styling/highlight changes occur.
+ * Two-level keying: table → (ProjectionLike | null) → "geoType:col:col2" → result.
+ * The projection reference is stable per basemap (memoized in use-map-layers.svelte.ts).
+ */
+const textLabelCache = new WeakMap<
+  ArrowTable,
+  Map<ProjectionLike | null, Map<string, TextLayerDatum[]>>
+>();
+
 function getCachedGeoJSON(
   table: ArrowTable,
   geoColumn: string
@@ -384,6 +395,20 @@ function createTextLayerDataFromBinary(
   secondaryColumn?: string,
   customProjection?: ProjectionLike
 ): TextLayerDatum[] {
+  // Check text label cache — centroids + label text are stable for the same
+  // table + columns + projection. Uses projection reference as key (stable
+  // per basemap thanks to memoization in use-map-layers.svelte.ts).
+  const projKey = customProjection ?? null;
+  const labelCacheKey = `${geoInfo.type}:${primaryColumn}:${secondaryColumn ?? ''}`;
+  const tableMap = textLabelCache.get(table);
+  if (tableMap) {
+    const projMap = tableMap.get(projKey);
+    if (projMap) {
+      const cached = projMap.get(labelCacheKey);
+      if (cached) return cached;
+    }
+  }
+
   const geoType = geoInfo.type;
   let centroids: Float64Array;
   let featureIds: Uint32Array;
@@ -449,6 +474,20 @@ function createTextLayerDataFromBinary(
       text: secondaryText ? `${primaryText}\n${secondaryText}` : primaryText
     });
   }
+
+  // Store in cache (table → projection → labelKey → result)
+  let tMap = textLabelCache.get(table);
+  if (!tMap) {
+    tMap = new Map();
+    textLabelCache.set(table, tMap);
+  }
+  let pMap = tMap.get(projKey);
+  if (!pMap) {
+    pMap = new Map();
+    tMap.set(projKey, pMap);
+  }
+  pMap.set(labelCacheKey, output);
+
   return output;
 }
 
@@ -975,10 +1014,9 @@ export function createPointLayers(
           viz?.symbols?.maxSize,
           viz?.symbols?.sizeScale
         ],
-        getLineColor: [strokeColor, rawStrokeOpacity, hlVersion],
-        ...(ctx.yearFilter && {
-          getFilterValue: [ctx.yearFilter.column, ctx.yearFilter.value]
-        })
+        getLineColor: [strokeColor, rawStrokeOpacity, hlVersion]
+        // Note: getFilterValue is a binary attribute (baked once via filterValueAttr),
+        // not a per-frame accessor. Year changes are handled by filterRange prop alone.
       }
     })
   ];
@@ -1164,10 +1202,7 @@ export function createLineLayers(
             maxLineWidth,
             resolvedSizeScale,
             resolvedLineWidth
-          ],
-          ...(ctx.yearFilter && {
-            getFilterValue: [ctx.yearFilter.column, ctx.yearFilter.value]
-          })
+          ]
         }
       })
     ];
@@ -1446,7 +1481,10 @@ export function createPolygonLayers(
       pickable: true,
       autoHighlight: true,
       highlightColor: HOVER_HIGHLIGHT_COLOR,
-      parameters: { depthCompare: 'always' as const, stencilCompare: 'always' as const },
+      parameters: {
+        depthCompare: 'always' as const,
+        stencilCompare: 'always' as const
+      },
       ...(modelMatrix && { modelMatrix }),
       ...(beforeId && { beforeId }),
       ...polyYearFilterProps,
@@ -1461,10 +1499,7 @@ export function createPolygonLayers(
           viz?.classification?.labels,
           fillColor,
           hlVersion
-        ],
-        ...(ctx.yearFilter && {
-          getFilterValue: [ctx.yearFilter.column, ctx.yearFilter.value]
-        })
+        ]
       }
     });
 
@@ -1501,10 +1536,7 @@ export function createPolygonLayers(
       ...strokeYearFilterProps,
       updateTriggers: {
         getColor: [strokeColor, rawPolyStrokeOpacity, hlVersion],
-        getWidth: [strokeWidth],
-        ...(ctx.yearFilter && {
-          getFilterValue: [ctx.yearFilter.column, ctx.yearFilter.value]
-        })
+        getWidth: [strokeWidth]
       }
     });
 
@@ -1518,9 +1550,12 @@ export function createPolygonLayers(
     const lineIdx = primitiveOrder.indexOf(PrimitiveFilterType.LINE);
     const polygonIdx = primitiveOrder.indexOf(PrimitiveFilterType.POLYGON);
     // deck.gl: last in array = on top; strokeOnTop means stroke renders above fill
-    const strokeOnTop = lineIdx === -1 || polygonIdx === -1 || lineIdx < polygonIdx;
+    const strokeOnTop =
+      lineIdx === -1 || polygonIdx === -1 || lineIdx < polygonIdx;
 
-    const showStroke = !ctx.viz?.primitiveFilters || ctx.viz.primitiveFilters.includes(PrimitiveFilterType.LINE);
+    const showStroke =
+      !ctx.viz?.primitiveFilters ||
+      ctx.viz.primitiveFilters.includes(PrimitiveFilterType.LINE);
 
     if (strokeOnTop) {
       layers.push(fillLayer);
@@ -1678,7 +1713,9 @@ export function createPolygonLayers(
       )
     : withOpacity(strokeColor, rawPolyStrokeOpacity);
 
-  const showGeoJsonStroke = !ctx.viz?.primitiveFilters || ctx.viz.primitiveFilters.includes(PrimitiveFilterType.LINE);
+  const showGeoJsonStroke =
+    !ctx.viz?.primitiveFilters ||
+    ctx.viz.primitiveFilters.includes(PrimitiveFilterType.LINE);
 
   const geoJsonLayers: Layer<DeckDataRow>[] = [
     new GeoJsonLayer({
@@ -1693,7 +1730,10 @@ export function createPolygonLayers(
       pickable: true,
       autoHighlight: true,
       highlightColor: HOVER_HIGHLIGHT_COLOR,
-      parameters: { depthCompare: 'always' as const, stencilCompare: 'always' as const },
+      parameters: {
+        depthCompare: 'always' as const,
+        stencilCompare: 'always' as const
+      },
       ...(modelMatrix && { modelMatrix }),
       ...(beforeId && { beforeId }),
       ...(ctx.yearFilter && buildGeoJsonYearFilterProps(ctx.yearFilter)),
@@ -1784,7 +1824,10 @@ export function createGeoJsonLayers(
       pickable: true,
       autoHighlight: true,
       highlightColor: HOVER_HIGHLIGHT_COLOR,
-      parameters: { depthCompare: 'always' as const, stencilCompare: 'always' as const },
+      parameters: {
+        depthCompare: 'always' as const,
+        stencilCompare: 'always' as const
+      },
       ...(modelMatrix && { modelMatrix }),
       ...(beforeId && { beforeId }),
       updateTriggers: {

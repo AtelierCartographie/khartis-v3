@@ -132,6 +132,12 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
 
   let lastAppliedLayers: Layer<DeckDataRow>[] = [];
 
+  // Memoize basemap projection — buildProjectionForBasemap() is expensive and
+  // creates a new object reference each call, defeating downstream WeakMap caches.
+  // The projection only changes when the basemap metadata changes (user switches basemap).
+  let lastBasemapMetadataRef: unknown = undefined;
+  let lastBasemapProjectionRef: ProjectionLike | undefined = undefined;
+
   function updateLayers(
     tables: Map<string, ArrowTable>,
     geoJSONs: Map<string, FeatureCollection>
@@ -172,16 +178,27 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       // projection natively (WebMercator/globe) and thematic data must stay in
       // WGS84 lat/lng. Applying a d3-geo projection here would convert coordinates
       // to metres, causing deck.gl "invalid latitude" errors.
+      //
+      // Memoized: buildProjectionForBasemap() creates a new object each call,
+      // defeating downstream WeakMap caches. We keep the same reference until
+      // the basemap metadata actually changes.
       const currentMetadata = basemapService.currentBasemap?.metadata;
-      const basemapProjection =
-        isOrthographicMode && currentMetadata && !currentMetadata.isCustom
-          ? buildProjectionForBasemap(
-              currentMetadata,
-              960,
-              600,
-              basemapService.projectionPresets
-            )
-          : undefined;
+      let basemapProjection: ProjectionLike | undefined;
+      if (isOrthographicMode && currentMetadata && !currentMetadata.isCustom) {
+        if (currentMetadata !== lastBasemapMetadataRef) {
+          lastBasemapProjectionRef = buildProjectionForBasemap(
+            currentMetadata,
+            960,
+            600,
+            basemapService.projectionPresets
+          );
+          lastBasemapMetadataRef = currentMetadata;
+        }
+        basemapProjection = lastBasemapProjectionRef;
+      } else {
+        basemapProjection = undefined;
+        lastBasemapMetadataRef = null;
+      }
 
       // Basemap projection takes priority to keep data and basemap aligned.
       // Custom CRS from projection tool (proj4d3, in metres) only applies

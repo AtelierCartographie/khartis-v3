@@ -154,18 +154,8 @@
   /** True if triggerOnReady was called while reference basemap was loading */
   let pendingOnReady = false;
 
-  // Cache bounds computation per ArrowTable to avoid redundant O(n) scans
-  const boundsCache = new WeakMap<ArrowTable, LngLatBoundsLike | null>();
-  function cachedCalculateBoundsFromGeoArrow(
-    table: ArrowTable
-  ): LngLatBoundsLike | null {
-    if (boundsCache.has(table)) {
-      return boundsCache.get(table)!;
-    }
-    const bounds = calculateBoundsFromGeoArrow(table);
-    boundsCache.set(table, bounds);
-    return bounds;
-  }
+  // Bounds computation is cached at module level in bounds.ts via WeakMap<ArrowTable, ...>.
+  // No need for component-local cache.
 
   function queueStyleIdleRetry(_source?: string): void {
     const map = mapInit.map;
@@ -578,7 +568,7 @@
           referenceBasemapId: refBasemapId
         });
         const bounds = referenceTable
-          ? cachedCalculateBoundsFromGeoArrow(referenceTable)
+          ? calculateBoundsFromGeoArrow(referenceTable)
           : null;
 
         if (bounds) {
@@ -634,7 +624,7 @@
         }
       } else if (mapInit.map) {
         if (refBasemapId && worldBaseTable) {
-          const bBounds = cachedCalculateBoundsFromGeoArrow(worldBaseTable);
+          const bBounds = calculateBoundsFromGeoArrow(worldBaseTable);
           if (bBounds) {
             untrack(() => mapBounds.fitToBounds(bBounds, true));
           }
@@ -656,7 +646,7 @@
 
       if (mapInit.viewMode === ViewMode.MAPLIBRE && mapInit.map) {
         if (useBasemapBoundsForGeo) {
-          const bBounds = cachedCalculateBoundsFromGeoArrow(worldBaseTable!);
+          const bBounds = calculateBoundsFromGeoArrow(worldBaseTable!);
           if (bBounds) {
             untrack(() => mapBounds.fitToBounds(bBounds, true));
           }
@@ -667,7 +657,7 @@
         untrack(() => {
           let bounds: ReturnType<typeof calculateBoundsFromGeoJSON>;
           if (useBasemapBoundsForGeo) {
-            bounds = cachedCalculateBoundsFromGeoArrow(worldBaseTable!);
+            bounds = calculateBoundsFromGeoArrow(worldBaseTable!);
           } else {
             bounds = calculateBoundsFromGeoJSON(firstGeoJSON);
           }
@@ -806,7 +796,7 @@
           if (pendingViewReset && worldBaseTable) {
             pendingViewReset = false;
             if (mapInit.viewMode === ViewMode.MAPLIBRE && mapInit.map) {
-              const bounds = cachedCalculateBoundsFromGeoArrow(worldBaseTable);
+              const bounds = calculateBoundsFromGeoArrow(worldBaseTable);
               if (bounds) {
                 mapBounds.fitToBounds(bounds, true);
               }
@@ -905,9 +895,7 @@
 
               // Fit map view to new basemap bounds
               if (mapInit.viewMode === ViewMode.MAPLIBRE && mapInit.map) {
-                let bounds = cachedCalculateBoundsFromGeoArrow(
-                  loaded.geometryTable
-                );
+                let bounds = calculateBoundsFromGeoArrow(loaded.geometryTable);
                 if (!bounds && loaded.metadata.bbox) {
                   const [minLng, minLat, maxLng, maxLat] = loaded.metadata.bbox;
                   bounds = [
@@ -939,7 +927,7 @@
                 } else if (mainlandBbox) {
                   projectionStore.setReferenceBbox(mainlandBbox);
                 } else {
-                  const bounds = cachedCalculateBoundsFromGeoArrow(
+                  const bounds = calculateBoundsFromGeoArrow(
                     loaded.geometryTable
                   );
                   if (bounds) {
@@ -1006,7 +994,7 @@
               scheduleLayerUpdate('loadWorldBasemap:pendingRef');
 
               if (mapInit.viewMode === ViewMode.MAPLIBRE && mapInit.map) {
-                let refBounds = cachedCalculateBoundsFromGeoArrow(
+                let refBounds = calculateBoundsFromGeoArrow(
                   refLoaded.geometryTable
                 );
                 if (!refBounds && refLoaded.metadata.bbox) {
@@ -1028,7 +1016,7 @@
                 if (refMainlandBbox) {
                   projectionStore.setReferenceBbox(refMainlandBbox);
                 } else {
-                  const refBounds = cachedCalculateBoundsFromGeoArrow(
+                  const refBounds = calculateBoundsFromGeoArrow(
                     refLoaded.geometryTable
                   );
                   if (refBounds) {
@@ -1102,9 +1090,7 @@
           if (projectedBbox) {
             projectionStore.setReferenceBbox(projectedBbox, undefined, true);
           } else {
-            const bounds = cachedCalculateBoundsFromGeoArrow(
-              loaded.geometryTable
-            );
+            const bounds = calculateBoundsFromGeoArrow(loaded.geometryTable);
             if (bounds) {
               const [[minX, minY], [maxX, maxY]] = bounds as [
                 [number, number],
