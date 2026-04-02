@@ -26,7 +26,7 @@ Décrivez brièvement le changement et sa motivation.
 ## Checklist
 
 - [ ] Lint/format: `pnpm lint` et `pnpm format`
-- [ ] Tests pipeline: `pnpm test`
+- [ ] Tests serveur DuckDB: `pnpm test`
 - [ ] Build: `pnpm build`
 - [ ] i18n: clés ajoutées/MAJ (pas de texte en dur)
 - [ ] Docs: README/CONTRIBUTING mis à jour si besoin
