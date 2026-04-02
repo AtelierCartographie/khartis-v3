@@ -62,6 +62,12 @@ export function fromDuckDBType(duckType: string): ColumnType {
   if (normalized.includes('date') || normalized.includes('time'))
     return ColumnType.DATE;
   if (
+    normalized === 'string' ||
+    normalized === 'varchar' ||
+    normalized === 'text'
+  )
+    return ColumnType.TEXT;
+  if (
     normalized.includes('int') ||
     normalized.includes('double') ||
     normalized.includes('float') ||
