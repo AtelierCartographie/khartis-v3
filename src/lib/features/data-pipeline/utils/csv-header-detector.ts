@@ -1,3 +1,5 @@
+import { readFileHead } from './decimal-detector';
+
 interface DetectionOptions {
   sampleLines?: number;
   similarityThreshold?: number;
@@ -18,10 +20,10 @@ const QUOTED_VALUE_PATTERN = /^["'](.*)["']$/;
 export async function detectCsvHeader(
   file: File,
   delimiter: string,
-  options: DetectionOptions = {}
+  options: DetectionOptions & { cachedHead?: string } = {}
 ): Promise<CsvHeaderDetectionResult> {
   const { sampleLines = 5, similarityThreshold = 0.8 } = options;
-  const text = await readFileHead(file, sampleLines);
+  const text = options.cachedHead ?? (await readFileHead(file, sampleLines));
   const lines = text
     .split(/\r?\n/)
     .map((line) => line.trim())
@@ -122,9 +124,4 @@ function classifyCell(value: string): CellCategory {
 function unquote(value: string): string {
   const match = value.match(QUOTED_VALUE_PATTERN);
   return match ? match[1] : value;
-}
-
-async function readFileHead(file: File, lines: number): Promise<string> {
-  const bytesToRead = Math.min(lines * 500, file.size);
-  return file.slice(0, bytesToRead).text();
 }
