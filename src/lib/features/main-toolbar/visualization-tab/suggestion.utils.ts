@@ -16,6 +16,9 @@ interface DatasetGeometrySource {
   sourceFileId?: string;
   joinedBasemap?: string;
   gpsMode?: boolean;
+  geoDetection?: {
+    geoColumns?: Array<{ type?: string }>;
+  };
 }
 
 export function resolveDatasetGeometryType(
@@ -36,6 +39,19 @@ export function resolveDatasetGeometryType(
   }
   if (dataset.joinedBasemap) {
     return 'Polygon';
+  }
+
+  // Check geoDetection for auto-detected GPS columns (before join finalization)
+  if (dataset.geoDetection?.geoColumns) {
+    const hasLat = dataset.geoDetection.geoColumns.some(
+      (c) => c.type === 'latitude'
+    );
+    const hasLon = dataset.geoDetection.geoColumns.some(
+      (c) => c.type === 'longitude'
+    );
+    if (hasLat && hasLon) {
+      return 'Point';
+    }
   }
 
   if (!dataset.sourceFileId) {
