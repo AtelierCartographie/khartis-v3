@@ -610,7 +610,7 @@
           {:else if histogramData?.kind === 'numeric'}
             <div class="hist-num-area">
               <div class="hist-num-bars">
-                {#each histogramData.bins as bin (bin.bin)}
+                {#each histogramData.bins as bin ((bin.bin as unknown) instanceof Date ? (bin.bin as unknown as Date).getTime() : bin.bin)}
                   <div
                     class="hist-num-bar"
                     style="height: {(bin.count / histogramData.maxCount) *
