@@ -334,21 +334,31 @@ export function arrowTableToGeoJSON(
       return null;
     }
 
+    // Pre-fetch column vectors once — avoids repeated getChild() lookups
+    // inside the O(n×m) loop (n rows × m columns).
+    const propertyColumns: Array<{
+      name: string;
+      vector: NonNullable<ReturnType<ArrowTable['getChild']>>;
+    }> = [];
+    for (const field of table.schema.fields) {
+      if (
+        field.name === geoColumn ||
+        field.name === INTERNAL_COLUMN.GEOM ||
+        field.name === INTERNAL_COLUMN.GEOMETRY
+      )
+        continue;
+      const col = table.getChild(field.name);
+      if (col) {
+        propertyColumns.push({ name: field.name, vector: col });
+      }
+    }
+
     for (let i = 0; i < table.numRows; i++) {
       const properties: Record<string, unknown> = {};
 
-      for (const field of table.schema.fields) {
-        if (
-          field.name === geoColumn ||
-          field.name === INTERNAL_COLUMN.GEOM ||
-          field.name === INTERNAL_COLUMN.GEOMETRY
-        )
-          continue;
-        const col = table.getChild(field.name);
-        if (col) {
-          const val = col.get(i);
-          properties[field.name] = typeof val === 'bigint' ? Number(val) : val;
-        }
+      for (const { name, vector } of propertyColumns) {
+        const val = vector.get(i);
+        properties[name] = typeof val === 'bigint' ? Number(val) : val;
       }
 
       const geom = geomVector.get(i);
