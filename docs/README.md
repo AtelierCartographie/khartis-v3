@@ -50,7 +50,7 @@ Ouvrir [http://localhost:5176/](http://localhost:5176/).
 
 | Technologie             | Rôle                                                      |
 | ----------------------- | --------------------------------------------------------- |
-| SvelteKit 5 (Runes)     | Framework applicatif, rendu réactif                       |
+| SvelteKit 2 (Svelte 5 Runes)     | Framework applicatif, rendu réactif                       |
 | TypeScript              | Typage statique strict                                    |
 | DuckDB WASM             | Moteur de requêtes SQL en mémoire, traitement des données |
 | Deck.gl 9               | Rendu cartographique GPU (couches thématiques)            |

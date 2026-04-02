@@ -2,7 +2,7 @@
 
 > Stores Svelte 5, persistance, undo/redo et patterns de features
 
-**Voir aussi** : [Architecture](ARCHITECTURE.md) | [Pipeline de donnees](PIPELINE_DONNEES.md) | [Visualisation](VISUALISATIONS.md)
+**Voir aussi** : [Architecture](./ARCHITECTURE.md) | [Pipeline de donnees](./PIPELINE_DONNEES.md) | [Visualisation](./VISUALISATIONS.md)
 
 ---
 
@@ -15,7 +15,7 @@
 | **Store global**            | Coordination cross-feature         | Session           | Singleton `ProjectStore`              |
 | **IndexedDB / localforage** | Projets et datasets durables       | Persistant        | IndexedDB + localforage (metadonnees) |
 
-**Flux** : Composant --> Store feature --> Store global --> IndexedDB (debounce 30 s)
+**Flux** : Composant --> Store feature --> Store global --> IndexedDB (debounce 5 s sur mutations, auto-save intervalle 30 s)
 
 ## Pattern de store Svelte 5 Runes
 
@@ -64,8 +64,8 @@ export const featureStore = createFeatureStore();
 
 **Regles** :
 
-- Pas d'affectation directe (toujours via methode)
-- `$derived` declare au top level de la factory, jamais dans un getter (un `$derived` dans un getter cree un nouveau signal a chaque acces)
+- Pas d'affectation directe (toujours via methode), sauf pour les mutations UI ephemeres (`set settingPanel()`, etc.)
+- `$derived` est optionnel pour les valeurs derivees simples. Dans la pratique, le code utilise rarement `$derived` -- les getters qui recalculent (ex: `hasConsented`, `isMapMode`) sont acceptables pour des operations peu coteuses. Utiliser `$derived` uniquement pour des calculations coteuses (filtrage, mapping, etc.)
 - UI ephemere local au composant, seul l'etat domaine est persiste
 
 ## Stores principaux
@@ -93,8 +93,8 @@ updateLayout(patch: Partial<LayoutConfig>): void
 // Historique
 undo(): void
 redo(): void
-canUndo: boolean  // derived
-canRedo: boolean  // derived
+canUndo: boolean  // appel a canUndoFn() -- pas un $derived
+canRedo: boolean  // appel a canRedoFn() -- pas un $derived
 
 // Archive .kh
 createProjectArchive(name?: string): Promise<Blob>
@@ -105,13 +105,27 @@ importProjectArchive(file: File): Promise<void>
 
 Datasets charges, colonnes, statistiques.
 
+> **Pattern avance** : `datasetsState` et `datasetsInternals` sont exportes au niveau du module (`datasets-state.svelte.ts`) et non dans le store factory. Ce pattern "etat externe partage" permet a plusieurs sous-modules du store de partager le meme `$state`.
+
 ### visualizationStore
 
-Config visualisations. Types : `choropleth`, `proportional`, `categorical`, `bivariate`, `combined`. Classifications : `equal-interval`, `quantile`, `jenks`, `stddev`, `manual`.
+Config visualisations. Types : `choropleth`, `proportional`, `categorical`, `bivariate`. Classifications : `equal-interval`, `quantile`, `jenks`, `stddev`, `manual`.
 
-### globalState
+### globalState + globalActions
 
-Zoom page, pan, etape active.
+Zoom page, pan, etape active. `globalActions` est un export separe contenant les mutations coordonnees (ex: `setNavigationState`, `setToolbarState`).
+
+### projectsStore
+
+Liste des projets, projet actif. Localise dans `projects.store.svelte.ts`.
+
+### consentStore
+
+Consentement utilisateur (RGPD). Utilise un getter `hasConsented` qui recalcule (pas de `$derived`).
+
+### zoomModeStore
+
+Mode zoom (map vs page). Utilise un getter `isMapMode` qui recalcule (pas de `$derived`).
 
 ## Snapshot projet
 
