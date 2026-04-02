@@ -6,8 +6,6 @@
   import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import { ToolbarState } from '$lib/features/commons/types/global';
-  import { fly } from 'svelte/transition';
-  import { ToggleWithLabel } from '../shared';
   import PaletteSuggestions from './palette-suggestions.svelte';
   import PaletteCustom from './palette-custom.svelte';
   import PaletteComparison from './palette-comparison.svelte';
@@ -16,7 +14,8 @@
     type PaletteType,
     type Palette,
     type PatternParams,
-    interpolateColors,
+    type ContrastMode,
+    generatePaletteColors,
     findPaletteById
   } from './palette.constants';
 
@@ -86,7 +85,7 @@
       case ToolbarState.Collapsed:
         return '50px';
       case ToolbarState.Compact:
-        return '400px';
+        return '434px';
       default:
         return '50vw';
     }
@@ -122,7 +121,12 @@
 
   function handlePaletteSelect(palette: Palette) {
     draftPaletteId = palette.id;
-    draftColors = interpolateColors(palette.colors, numClasses);
+    draftInverted = false;
+    draftColors = generatePaletteColors(
+      palette,
+      numClasses,
+      draftColorBlindFilter ? 'high' : undefined
+    );
   }
 
   function handleTypeChange(type: PaletteType) {
@@ -135,13 +139,18 @@
 
   function handleCustomColorsChange(colors: string[]) {
     draftPaletteId = '__custom__';
+    draftInverted = false;
     draftColors = colors;
   }
 
   function handlePatternSelect(palette: Palette, params: PatternParams) {
     draftPaletteId = palette.id;
-    draftColors = palette.colors;
+    // Keep existing classification colors — pattern overlays on top, doesn't replace
     draftPatternParams = params;
+  }
+
+  function handleContrastChange(_contrast: ContrastMode | undefined) {
+    // Contrast is handled internally by PaletteCustom which re-emits colors
   }
 
   function handleInvertToggle(value: boolean) {
@@ -163,6 +172,10 @@
       const target = e.target as Node;
       if (popoverRef && !popoverRef.contains(target)) {
         if (triggerElement && triggerElement.contains(target)) return;
+        const path = e.composedPath() as Element[];
+        if (path.some((el) => el.id === 'khartis-color-picker-dropdown')) {
+          return;
+        }
         handleClose();
       }
     }
@@ -194,7 +207,6 @@
       style:right={popoverRight}
       role="dialog"
       aria-label={popoverTitle}
-      transition:fly={{ y: -10, duration: 200 }}
     >
       <header class="popover-header">
         <h3>{popoverTitle}</h3>
@@ -221,14 +233,12 @@
         <PaletteCustom
           selectedPaletteId={draftPaletteId}
           numClasses={numClasses}
+          colorBlindFilter={draftColorBlindFilter}
+          bind:inverted={draftInverted}
           onColorsChange={handleCustomColorsChange}
           onPatternSelect={handlePatternSelect}
-        />
-
-        <ToggleWithLabel
-          label={m.invert_palette_tooltip()}
-          toggled={draftInverted}
-          ontoggle={handleInvertToggle}
+          onContrastChange={handleContrastChange}
+          onInvertToggle={handleInvertToggle}
         />
 
         <PaletteComparison
@@ -238,7 +248,7 @@
       </div>
 
       <footer class="popover-footer">
-        <Button kind="secondary" size="small" on:click={handleCancel}>
+        <Button kind="tertiary" size="small" on:click={handleCancel}>
           {m.button_cancel()}
         </Button>
         <Button
@@ -276,21 +286,19 @@
     max-height: calc(100vh - 32px);
     display: flex;
     flex-direction: column;
-    background: var(--cds-ui-01);
+    background: var(--cds-background);
     border: 1px solid var(--cds-border-subtle);
     box-shadow:
       0 4px 16px rgba(0, 0, 0, 0.12),
       0 0 1px rgba(0, 0, 0, 0.15);
     z-index: var(--z-popover);
-    transition: right 0.2s ease-out;
   }
 
   .popover-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: var(--cds-spacing-04);
-    border-bottom: 1px solid var(--cds-border-subtle);
+    padding: 12px 4px 8px 16px;
     flex-shrink: 0;
 
     h3 {
@@ -304,18 +312,22 @@
   .popover-content {
     flex: 1;
     overflow-y: auto;
-    padding: var(--cds-spacing-04);
+    padding: 8px 16px;
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-04);
+    gap: var(--cds-spacing-06);
   }
 
   .popover-footer {
     display: flex;
-    justify-content: flex-end;
     gap: var(--cds-spacing-03);
     padding: var(--cds-spacing-04);
+    padding-top: 16px;
     border-top: 1px solid var(--cds-border-subtle);
     flex-shrink: 0;
+
+    :global(.bx--btn) {
+      flex: 1;
+    }
   }
 </style>

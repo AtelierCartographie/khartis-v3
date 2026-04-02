@@ -5,21 +5,6 @@ export function invalidateTableCache(ctx: DuckDBContext, table: string): void {
   ctx.rowCountCache.delete(table);
 }
 
-function evictGeoParquetEntry(ctx: DuckDBContext, table: string): void {
-  if (!ctx.table_geoparquet_cache.has(table)) return;
-
-  const cachedBuffer = ctx.table_geoparquet_cache.get(table);
-  if (cachedBuffer) {
-    ctx.cacheState.size -= cachedBuffer.byteLength;
-  }
-
-  ctx.table_geoparquet_cache.delete(table);
-  const index = ctx.cacheState.accessOrder.indexOf(table);
-  if (index > -1) {
-    ctx.cacheState.accessOrder.splice(index, 1);
-  }
-}
-
 let onTableMutatedCallback: ((table: string) => void) | null = null;
 
 export function registerTableMutationCallback(
@@ -30,7 +15,6 @@ export function registerTableMutationCallback(
 
 export function markTableMutated(ctx: DuckDBContext, table: string): void {
   invalidateTableCache(ctx, table);
-  evictGeoParquetEntry(ctx, table);
   onTableMutatedCallback?.(table);
 }
 

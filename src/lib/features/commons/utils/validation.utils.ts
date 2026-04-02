@@ -1,7 +1,5 @@
 import * as m from '$lib/paraglide/messages';
-import localforage from 'localforage';
 import { STORAGE_LIMITS } from '../configs/validation.config';
-import { LogCategory, logger } from './logger';
 import { estimateProjectStorageSize } from './size-estimation.utils';
 import { GEOJSON_TYPE } from '$lib/features/commons/constants';
 
@@ -12,10 +10,6 @@ export {
 } from '$lib/features/data-pipeline/types';
 
 import type { ValidationResult } from '$lib/features/data-pipeline/types';
-
-function bigIntReplacer(_key: string, value: unknown): unknown {
-  return typeof value === 'bigint' ? Number(value) : value;
-}
 
 export const ProjectValidator = {
   validateFileSize(file: File): ValidationResult {
@@ -118,45 +112,6 @@ export const ProjectValidator = {
           limit: String(STORAGE_LIMITS.maxProjectCount)
         })
       );
-    }
-
-    return result;
-  },
-
-  async checkStorageUsage(): Promise<ValidationResult> {
-    const result: ValidationResult = {
-      isValid: true,
-      errors: [],
-      warnings: []
-    };
-
-    try {
-      let totalSize = 0;
-      const keys = await localforage.keys();
-
-      for (const key of keys) {
-        const value = await localforage.getItem<string>(key);
-        if (value) {
-          totalSize +=
-            (typeof value === 'string'
-              ? value.length
-              : JSON.stringify(value, bigIntReplacer).length) + key.length;
-        }
-      }
-
-      const sizeInBytes = totalSize * 2;
-
-      if (sizeInBytes > STORAGE_LIMITS.maxStorageSize) {
-        result.warnings.push(m.validation_storage_approaching_limit());
-      }
-
-      if (sizeInBytes > STORAGE_LIMITS.maxStorageSize * 0.9) {
-        result.isValid = false;
-        result.errors.push(m.validation_storage_insufficient());
-      }
-    } catch (error) {
-      logger.error('Failed to check storage usage', LogCategory.STORE, error);
-      result.warnings.push(m.validation_storage_check_failed());
     }
 
     return result;

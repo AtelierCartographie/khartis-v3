@@ -32,11 +32,6 @@ export async function validateGPSColumns(
   Duck: DuckDBClientForGPS
 ): Promise<GPSValidationResult> {
   const start = performance.now();
-  logger.debug('Validating GPS columns', LogCategory.DATA, {
-    tableName,
-    latCol,
-    lonCol
-  });
 
   try {
     const escapedLat = escapeIdentifier(latCol);
@@ -44,14 +39,15 @@ export async function validateGPSColumns(
     const escapedTable = escapeIdentifier(tableName);
     const result = (await Duck.query(
       `SELECT
-        MIN("${escapedLat}") as lat_min,
-        MAX("${escapedLat}") as lat_max,
-        MEDIAN("${escapedLat}") as lat_median,
-        MIN("${escapedLon}") as lon_min,
-        MAX("${escapedLon}") as lon_max,
-        MEDIAN("${escapedLon}") as lon_median
+        MIN(TRY_CAST("${escapedLat}" AS DOUBLE)) as lat_min,
+        MAX(TRY_CAST("${escapedLat}" AS DOUBLE)) as lat_max,
+        MEDIAN(TRY_CAST("${escapedLat}" AS DOUBLE)) as lat_median,
+        MIN(TRY_CAST("${escapedLon}" AS DOUBLE)) as lon_min,
+        MAX(TRY_CAST("${escapedLon}" AS DOUBLE)) as lon_max,
+        MEDIAN(TRY_CAST("${escapedLon}" AS DOUBLE)) as lon_median
       FROM "${escapedTable}"
-      WHERE "${escapedLat}" IS NOT NULL AND "${escapedLon}" IS NOT NULL`,
+      WHERE TRY_CAST("${escapedLat}" AS DOUBLE) IS NOT NULL
+        AND TRY_CAST("${escapedLon}" AS DOUBLE) IS NOT NULL`,
       { format: 'array' }
     )) as Array<{
       lat_min: number;
@@ -122,7 +118,7 @@ export async function validateGPSColumns(
 
     const isValid = latInRange && lonInRange;
 
-    logger.info('GPS columns validated', LogCategory.DATA, {
+    logger.debug('GPS columns validated', LogCategory.DATA, {
       tableName,
       latCol,
       lonCol,
@@ -207,16 +203,22 @@ export async function getGPSArrowTable(
   const escapedLat = escapeIdentifier(lat);
   const escapedTableName = escapeIdentifier(dataset.tableName);
 
+  // TRY_CAST to DOUBLE handles VARCHAR columns with leading whitespace
+  // (e.g., CSV ` 2.497` after semicolon delimiter). Without it, BETWEEN
+  // uses string comparison where " 2.49" < "-180" → 0 rows.
   await Duck.query(`
     CREATE OR REPLACE VIEW "${gpsView}" AS
     SELECT
       *,
-      ST_Point("${escapedLon}", "${escapedLat}") AS geom
+      ST_Point(
+        TRY_CAST("${escapedLon}" AS DOUBLE),
+        TRY_CAST("${escapedLat}" AS DOUBLE)
+      ) AS geom
     FROM "${escapedTableName}"
-    WHERE "${escapedLat}" IS NOT NULL
-      AND "${escapedLon}" IS NOT NULL
-      AND "${escapedLat}" BETWEEN -90 AND 90
-      AND "${escapedLon}" BETWEEN -180 AND 180
+    WHERE TRY_CAST("${escapedLat}" AS DOUBLE) IS NOT NULL
+      AND TRY_CAST("${escapedLon}" AS DOUBLE) IS NOT NULL
+      AND TRY_CAST("${escapedLat}" AS DOUBLE) BETWEEN -90 AND 90
+      AND TRY_CAST("${escapedLon}" AS DOUBLE) BETWEEN -180 AND 180
   `);
 
   const arrowTable = await getArrowTableDirect(gpsView);
@@ -242,27 +244,16 @@ export async function getGPSBounds(
 ): Promise<GPSBounds | null> {
   const start = performance.now();
 
-  if (!dataset.gpsMode || !dataset.gpsColumns) {
-    logger.debug(
-      'GPS bounds skipped - dataset not in GPS mode',
-      LogCategory.MAP,
-      {
-        datasetId: dataset.id,
-        gpsMode: dataset.gpsMode,
-        hasGpsColumns: !!dataset.gpsColumns
-      }
-    );
+  if (!dataset.gpsMode) return null;
+
+  // In tabular-gps mode (no join), gpsColumns may not be set yet —
+  // fall back to auto-detecting GPS columns by name from the dataset schema.
+  const gpsColumns = dataset.gpsColumns ?? detectGPSColumns(dataset.columns);
+  if (!gpsColumns) {
     return null;
   }
 
-  const { lat, lon } = dataset.gpsColumns;
-
-  logger.debug('Computing GPS bounds', LogCategory.MAP, {
-    datasetId: dataset.id,
-    tableName: dataset.tableName,
-    latColumn: lat,
-    lonColumn: lon
-  });
+  const { lat, lon } = gpsColumns;
 
   try {
     const escapedLat = escapeIdentifier(lat);
@@ -270,16 +261,16 @@ export async function getGPSBounds(
     const escapedTableName = escapeIdentifier(dataset.tableName);
     const result = (await Duck.query(
       `SELECT
-        MIN("${escapedLon}") as min_lon,
-        MIN("${escapedLat}") as min_lat,
-        MAX("${escapedLon}") as max_lon,
-        MAX("${escapedLat}") as max_lat,
+        MIN(TRY_CAST("${escapedLon}" AS DOUBLE)) as min_lon,
+        MIN(TRY_CAST("${escapedLat}" AS DOUBLE)) as min_lat,
+        MAX(TRY_CAST("${escapedLon}" AS DOUBLE)) as max_lon,
+        MAX(TRY_CAST("${escapedLat}" AS DOUBLE)) as max_lat,
         COUNT(*) as valid_count
       FROM "${escapedTableName}"
-      WHERE "${escapedLat}" IS NOT NULL
-        AND "${escapedLon}" IS NOT NULL
-        AND "${escapedLat}" BETWEEN -90 AND 90
-        AND "${escapedLon}" BETWEEN -180 AND 180`,
+      WHERE TRY_CAST("${escapedLat}" AS DOUBLE) IS NOT NULL
+        AND TRY_CAST("${escapedLon}" AS DOUBLE) IS NOT NULL
+        AND TRY_CAST("${escapedLat}" AS DOUBLE) BETWEEN -90 AND 90
+        AND TRY_CAST("${escapedLon}" AS DOUBLE) BETWEEN -180 AND 180`,
       { format: 'array' }
     )) as Array<{
       min_lon: number;

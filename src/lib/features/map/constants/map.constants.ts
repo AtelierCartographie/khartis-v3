@@ -19,6 +19,7 @@ export enum ArrowExtension {
   GEOARROW_MULTILINESTRING = 'geoarrow.multilinestring',
   GEOARROW_POLYGON = 'geoarrow.polygon',
   GEOARROW_MULTIPOLYGON = 'geoarrow.multipolygon',
+  GEOARROW_WKB = 'geoarrow.wkb',
   OGC_WKB = 'ogc.wkb',
   GEOJSON = 'geojson'
 }
@@ -58,7 +59,12 @@ export enum DeckLayerId {
   BASEMAP_EQUATEUR = 'basemap-equateur',
   BASEMAP_MERIDIENS = 'basemap-meridiens',
   BASEMAP_FRONTIERES = 'basemap-frontieres',
-  BASEMAP_VILLES = 'basemap-villes'
+  BASEMAP_VILLES = 'basemap-villes',
+  BASEMAP_META_LAND = 'basemap-meta-land',
+  BASEMAP_META_LIMIT = 'basemap-meta-limit',
+  BASEMAP_META_GRATICULE = 'basemap-meta-graticule',
+  BASEMAP_META_GEO_LINES = 'basemap-meta-geo-lines',
+  BASEMAP_META_CENTROID = 'basemap-meta-centroid'
 }
 
 export enum MapStorageKey {

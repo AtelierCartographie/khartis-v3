@@ -97,7 +97,8 @@
     display: inline-flex;
     align-items: center;
     gap: var(--cds-spacing-02);
-    font-size: 0.875rem;
+    font-size: 0.75rem;
+    letter-spacing: 0.32px;
     color: var(--cds-text-secondary);
     font-weight: 400;
   }
@@ -106,6 +107,10 @@
     display: flex;
     align-items: center;
     gap: var(--cds-spacing-03);
+
+    :global(.compact-number-input input) {
+      height: 40px;
+    }
   }
 
   .slider-bound {

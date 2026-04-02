@@ -28,8 +28,6 @@ export async function renameColumn(
   Duck: DuckDBClient,
   options?: { skipAnalysis?: boolean }
 ): Promise<void> {
-  const start = performance.now();
-
   const escapedTable = escapeIdentifier(tableName);
   const escapedOld = escapeIdentifier(oldName);
   const escapedNew = escapeIdentifier(newName);
@@ -41,13 +39,6 @@ export async function renameColumn(
   if (!options?.skipAnalysis) {
     await Duck.analyse(tableName, { force: true });
   }
-
-  logger.info('Renamed DuckDB column', LogCategory.DUCKDB, {
-    tableName,
-    oldName,
-    newName,
-    durationMs: (performance.now() - start).toFixed(2)
-  });
 }
 
 export async function changeColumnType(
@@ -57,8 +48,6 @@ export async function changeColumnType(
   Duck: DuckDBClient,
   options?: { skipAnalysis?: boolean }
 ): Promise<void> {
-  const start = performance.now();
-
   const escapedTable = escapeIdentifier(tableName);
   const escapedCol = escapeIdentifier(columnName);
 
@@ -121,13 +110,6 @@ export async function changeColumnType(
   if (!options?.skipAnalysis) {
     await Duck.analyse(tableName, { force: true });
   }
-
-  logger.info('Changed DuckDB column type', LogCategory.DUCKDB, {
-    tableName,
-    columnName,
-    newType,
-    durationMs: (performance.now() - start).toFixed(2)
-  });
 }
 
 export async function dropColumn(
@@ -136,8 +118,6 @@ export async function dropColumn(
   Duck: DuckDBClient,
   options?: { skipAnalysis?: boolean }
 ): Promise<void> {
-  const start = performance.now();
-
   const escapedTable = escapeIdentifier(tableName);
   const escapedCol = escapeIdentifier(columnName);
 
@@ -146,12 +126,6 @@ export async function dropColumn(
   if (!options?.skipAnalysis) {
     await Duck.analyse(tableName, { force: true });
   }
-
-  logger.info('Dropped DuckDB column', LogCategory.DUCKDB, {
-    tableName,
-    columnName,
-    durationMs: (performance.now() - start).toFixed(2)
-  });
 }
 
 export async function dropRows(

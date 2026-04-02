@@ -51,6 +51,10 @@
     resolveOrthographicReferenceTable,
     shouldUseBasemapReferenceInOrthographicView
   } from '../utils/orthographic-reference';
+  import {
+    getMainlandBboxForBasemap,
+    computeProjectedBboxForBasemap
+  } from '../utils/geoarrow-stream-bridge';
   import AnnotationOverlay from './annotation-overlay.svelte';
   import GeoIndicationsOverlay from './geo-indications-overlay.svelte';
   import LegendOverlay from './legend-overlay.svelte';
@@ -122,7 +126,7 @@
   let hasCalledOnReady = $state(false);
   let initStartTime = $state<number>(Date.now());
   let maxWaitTimeoutId: ReturnType<typeof setTimeout> | null = null;
-  let worldBaseTable = $state<ArrowTable | null>(null);
+  let worldBaseTable = $state.raw<ArrowTable | null>(null);
   let isLoadingBasemap = false;
   const RESIZE_DEBOUNCE_MS = 150;
   let resizeTimeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -139,32 +143,26 @@
   let pendingOrthographicFit = $state(false);
   let projectEmptyResetTimeoutId: ReturnType<typeof setTimeout> | null = null;
   let lastDatasetCountSnapshot = -1;
-  let lastLayoutSnapshot = $state<string | null>(null);
+  let lastLayoutSnapshot: string | null = null;
 
-  let scheduleCount = 0;
-  let effectTriggerLog: string[] = [];
   let referenceBasemapRequestId = 0;
   let pendingWorldBasemapRequestId: number | null = null;
   let isApplyingMapLibreSync = false;
+  /** True while a reference basemap is being loaded — blocks triggerOnReady */
+  let isLoadingReferenceBasemap = false;
+  /** True if triggerOnReady was called while reference basemap was loading */
+  let pendingOnReady = false;
 
-  function logEffect(name: string): void {
-    effectTriggerLog.push(`${performance.now().toFixed(0)}ms: ${name}`);
-    if (effectTriggerLog.length > 50) {
-      effectTriggerLog.shift();
-    }
-  }
+  // Bounds computation is cached at module level in bounds.ts via WeakMap<ArrowTable, ...>.
+  // No need for component-local cache.
 
-  function queueStyleIdleRetry(source?: string): void {
+  function queueStyleIdleRetry(_source?: string): void {
     const map = mapInit.map;
     if (!map || waitingForStyleIdle) return;
 
     waitingForStyleIdle = true;
     map.once('idle', () => {
       waitingForStyleIdle = false;
-      logger.debug(
-        `Map idle after style reload (from: ${source || 'unknown'})`,
-        LogCategory.MAP
-      );
       if (pendingLayerUpdate) {
         pendingLayerUpdate = false;
         scheduleLayerUpdate('mapIdleAfterStyle');
@@ -173,22 +171,7 @@
   }
 
   function scheduleLayerUpdate(source?: string): void {
-    scheduleCount++;
-    const _now = performance.now();
-    logger.debug(
-      `scheduleLayerUpdate #${scheduleCount} from: ${source || 'unknown'}`,
-      LogCategory.MAP,
-      {
-        isSwitchingViewMode,
-        isStyleLoading: mapBasemap.isStyleLoading,
-        pendingLayerUpdate,
-        tablesSize: tables.size,
-        geoJSONsSize: geoJSONs.size
-      }
-    );
-
     if (isSwitchingViewMode || mapBasemap.isStyleLoading) {
-      logger.debug(`Deferred (pending=true) from: ${source}`, LogCategory.MAP);
       pendingLayerUpdate = true;
       return;
     }
@@ -198,19 +181,11 @@
       mapInit.map &&
       !mapInit.map.isStyleLoaded()
     ) {
-      logger.debug(
-        `Deferred (style not loaded, pending=true) from: ${source}`,
-        LogCategory.MAP
-      );
       pendingLayerUpdate = true;
       queueStyleIdleRetry(source);
       return;
     }
     if (layerUpdateTimeoutId) {
-      logger.debug(
-        `Debounced (clearing timeout) from: ${source}`,
-        LogCategory.MAP
-      );
       clearTimeout(layerUpdateTimeoutId);
     }
     layerUpdateTimeoutId = setTimeout(() => {
@@ -228,23 +203,13 @@
         mapInit.map &&
         !mapInit.map.isStyleLoaded()
       ) {
-        logger.debug(
-          `Deferred at execution (style not loaded, pending=true) from: ${source}`,
-          LogCategory.MAP
-        );
         pendingLayerUpdate = true;
         queueStyleIdleRetry(source);
         return;
       }
 
-      logger.debug(`Executing updateLayers from: ${source}`, LogCategory.MAP);
       mapLoadingStore.setUpdatingLayers(true);
-      const start = performance.now();
       mapLayers.updateLayers(tables, geoJSONs);
-      logger.debug(
-        `updateLayers took ${(performance.now() - start).toFixed(1)}ms`,
-        LogCategory.MAP
-      );
       requestAnimationFrame(() => {
         mapLoadingStore.setUpdatingLayers(false);
       });
@@ -253,6 +218,17 @@
 
   function triggerOnReady() {
     if (hasCalledOnReady) return;
+
+    // Don't reveal the map while the reference basemap is still loading
+    // — the user would see the world basemap flash before the correct one
+    if (isLoadingReferenceBasemap) {
+      pendingOnReady = true;
+      logger.debug(
+        'triggerOnReady deferred — reference basemap still loading',
+        LogCategory.MAP
+      );
+      return;
+    }
 
     if (maxWaitTimeoutId) {
       clearTimeout(maxWaitTimeoutId);
@@ -416,9 +392,11 @@
       }
     },
     onStyleLoaded: () => {
-      logger.debug('onStyleLoaded callback fired', LogCategory.MAP);
       mapBasemap.syncOSMRasterLayer();
       mapBasemap.syncLabelsVisibility();
+      mapBasemap.syncGroupVisibility();
+      // setStyle() resets the MapLibre projection to mercator — re-apply the stored projection
+      mapBasemap.syncProjection();
       waitingForStyleIdle = false;
       if (pendingLayerUpdate) {
         pendingLayerUpdate = false;
@@ -471,19 +449,23 @@
 
     untrack(() => {
       updateCanvasSize();
-      if (
-        mapInit.isMapLoaded &&
-        !isSwitchingViewMode &&
-        mapInit.viewMode === ViewMode.MAPLIBRE
-      ) {
-        mapInit.map?.resize();
+      if (mapInit.isMapLoaded && !isSwitchingViewMode) {
+        if (mapInit.viewMode === ViewMode.MAPLIBRE) {
+          mapInit.map?.resize();
+        } else if (
+          mapInit.viewMode === ViewMode.ORTHOGRAPHIC &&
+          mapInstanceStore.hasPendingRestore
+        ) {
+          // Canvas resized while a saved view state is pending — recompute
+          // the world-coordinate target with the updated model matrix scale.
+          mapInstanceStore.fitToOrthographicBounds();
+        }
       }
     });
   });
 
   $effect(() => {
     void osmBasemapStore.tileConfig;
-    logEffect('osmBasemapStore.tileConfig');
 
     const hasDeckContext = mapInit.deckOverlay || mapInit.deckInstance;
     // Note: isStyleLoading check is handled inside scheduleLayerUpdate() to avoid reactive dependency
@@ -522,7 +504,6 @@
 
   $effect(() => {
     if (mapInit.isMapLoaded && isSwitchingViewMode) {
-      logger.debug('View mode switch completed', LogCategory.MAP);
       isSwitchingViewMode = false;
       if (pendingLayerUpdate) {
         pendingLayerUpdate = false;
@@ -547,12 +528,6 @@
     const lastApplied = simplificationState.lastApplied;
 
     if (lastApplied) {
-      logEffect('simplification:lastApplied');
-      logger.debug(
-        'Simplification applied, updating basemap table',
-        LogCategory.MAP
-      );
-
       untrack(() => {
         const loaded = basemapService.currentBasemap;
         if (loaded) {
@@ -574,29 +549,58 @@
     // Note: isStyleLoading check is handled inside scheduleLayerUpdate() to avoid reactive dependency
     const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
     if (firstTable && canUpdate) {
-      logEffect('firstTable');
+      const refBasemapId = basemapStyleStore.referenceBasemapId;
       if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
         const dataset = getRenderedDataset(firstDatasetId);
         const duckDataset = getRenderedDuckDBDataset(firstDatasetId);
         const shouldUseBasemapReference =
-          shouldUseBasemapReferenceInOrthographicView(dataset, duckDataset);
+          shouldUseBasemapReferenceInOrthographicView(
+            dataset,
+            duckDataset,
+            refBasemapId
+          );
         const referenceTable = resolveOrthographicReferenceTable({
           dataset,
           duckDataset,
           datasetTable: firstTable,
-          basemapTable: worldBaseTable
+          basemapTable: worldBaseTable,
+          referenceBasemapId: refBasemapId
         });
         const bounds = referenceTable
           ? calculateBoundsFromGeoArrow(referenceTable)
           : null;
 
         if (bounds) {
-          const [[minX, minY], [maxX, maxY]] = bounds as [
-            [number, number],
-            [number, number]
-          ];
           untrack(() => {
-            projectionStore.setReferenceBbox([minX, minY, maxX, maxY]);
+            const currentBasemapMeta = basemapService.currentBasemap?.metadata;
+            // For composite projections (e.g. France DOM-TOM), use mainland
+            // bounds so the model matrix centers on metropolitan France.
+            const mainlandBbox = currentBasemapMeta
+              ? getMainlandBboxForBasemap(
+                  currentBasemapMeta,
+                  basemapService.projectionPresets
+                )
+              : null;
+            const projectedBbox = currentBasemapMeta
+              ? computeProjectedBboxForBasemap(
+                  currentBasemapMeta,
+                  basemapService.projectionPresets,
+                  960,
+                  600,
+                  mainlandBbox ?? undefined
+                )
+              : null;
+            if (projectedBbox) {
+              projectionStore.setReferenceBbox(projectedBbox, undefined, true);
+            } else if (mainlandBbox) {
+              projectionStore.setReferenceBbox(mainlandBbox);
+            } else {
+              const [[minX, minY], [maxX, maxY]] = bounds as [
+                [number, number],
+                [number, number]
+              ];
+              projectionStore.setReferenceBbox([minX, minY, maxX, maxY]);
+            }
             scheduleLayerUpdate('effect:firstTable-bounds');
             fitOrthographicViewport();
           });
@@ -618,7 +622,14 @@
           }
         }
       } else if (mapInit.map) {
-        untrack(() => mapBounds.fitToArrowBounds(firstTable, firstDatasetId));
+        if (refBasemapId && worldBaseTable) {
+          const bBounds = calculateBoundsFromGeoArrow(worldBaseTable);
+          if (bBounds) {
+            untrack(() => mapBounds.fitToBounds(bBounds, true));
+          }
+        } else {
+          untrack(() => mapBounds.fitToArrowBounds(firstTable, firstDatasetId));
+        }
       }
     }
   });
@@ -627,12 +638,28 @@
     // Note: isStyleLoading check is handled inside scheduleLayerUpdate() to avoid reactive dependency
     const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
     if (firstGeoJSON && canUpdate) {
-      logEffect('firstGeoJSON');
+      // When a reference basemap is selected, fit to basemap bounds
+      // so administrative boundaries are visible even with polygon data
+      const geoRefBasemapId = basemapStyleStore.referenceBasemapId;
+      const useBasemapBoundsForGeo = Boolean(geoRefBasemapId) && worldBaseTable;
+
       if (mapInit.viewMode === ViewMode.MAPLIBRE && mapInit.map) {
-        untrack(() => mapBounds.fitToGeoJSONBounds(firstGeoJSON));
+        if (useBasemapBoundsForGeo) {
+          const bBounds = calculateBoundsFromGeoArrow(worldBaseTable!);
+          if (bBounds) {
+            untrack(() => mapBounds.fitToBounds(bBounds, true));
+          }
+        } else {
+          untrack(() => mapBounds.fitToGeoJSONBounds(firstGeoJSON));
+        }
       } else if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
         untrack(() => {
-          const bounds = calculateBoundsFromGeoJSON(firstGeoJSON);
+          let bounds: ReturnType<typeof calculateBoundsFromGeoJSON>;
+          if (useBasemapBoundsForGeo) {
+            bounds = calculateBoundsFromGeoArrow(worldBaseTable!);
+          } else {
+            bounds = calculateBoundsFromGeoJSON(firstGeoJSON);
+          }
           if (bounds) {
             const [[minX, minY], [maxX, maxY]] = bounds as [
               [number, number],
@@ -660,12 +687,6 @@
 
     if (currentCount !== lastDatasetCountSnapshot) {
       lastDatasetCountSnapshot = currentCount;
-      logger.debug('[thematic-map] dataset/source snapshot', LogCategory.MAP, {
-        datasetsCount: currentCount,
-        previousDatasetCount,
-        sourceFileCount,
-        isMapLoaded: mapInit.isMapLoaded
-      });
     }
 
     if (currentCount > 0) {
@@ -673,13 +694,6 @@
       if (projectEmptyResetTimeoutId) {
         clearTimeout(projectEmptyResetTimeoutId);
         projectEmptyResetTimeoutId = null;
-        logger.debug(
-          '[thematic-map] canceled pending projectEmpty reset because datasets became non-empty',
-          LogCategory.MAP,
-          {
-            datasetsCount: currentCount
-          }
-        );
       }
     }
 
@@ -736,7 +750,6 @@
         }
 
         previousDatasetCount = 0;
-        logEffect('projectEmpty');
         logger.info(
           '[thematic-map] projectEmpty confirmed: resetting map state',
           LogCategory.MAP
@@ -758,7 +771,6 @@
     // Note: isStyleLoading check is handled inside scheduleLayerUpdate() to avoid reactive dependency
     const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
     if (!hasData && canUpdate) {
-      logEffect('noData');
       untrack(() => {
         scheduleLayerUpdate('effect:noData');
         // Retry basemap loading if it failed or hasn't completed yet
@@ -773,7 +785,6 @@
     // Note: isStyleLoading check is handled inside scheduleLayerUpdate() to avoid reactive dependency
     const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
     if (worldBaseTable && canUpdate) {
-      logEffect('worldBaseTable');
       untrack(() => {
         scheduleLayerUpdate('effect:worldBaseTable');
         // When no user data, basemap loading completes the init — trigger ready immediately
@@ -799,32 +810,26 @@
 
   $effect(() => {
     void basemapStyleStore.selectedStyleUrl;
-    logEffect('basemapStyleStore.selectedStyleUrl');
     untrack(() => {
       if (isSwitchingViewMode) {
-        logger.debug(
-          'basemapStyleStore.selectedStyleUrl changed but switching view mode, skipping syncBasemapStyle',
-          LogCategory.MAP
-        );
         return;
       }
-      logger.debug(
-        'basemapStyleStore.selectedStyleUrl changed, calling syncBasemapStyle',
-        LogCategory.MAP
-      );
       mapBasemap.syncBasemapStyle();
     });
   });
 
   $effect(() => {
     void basemapStyleStore.showLabels;
-    logEffect('basemapStyleStore.showLabels');
     untrack(() => mapBasemap.syncLabelsVisibility());
   });
 
   $effect(() => {
+    void basemapStyleStore.groupVisibilityVersion;
+    untrack(() => mapBasemap.syncGroupVisibility());
+  });
+
+  $effect(() => {
     void mapProjectionStore.projection;
-    logEffect('mapProjectionStore.projection');
     untrack(() => mapBasemap.syncProjection());
   });
 
@@ -845,7 +850,6 @@
 
   $effect(() => {
     void layerUpdateTrigger;
-    logEffect('layerUpdateTrigger');
 
     // Note: isStyleLoading check is handled inside scheduleLayerUpdate() to avoid reactive dependency
     const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
@@ -857,8 +861,6 @@
   $effect(() => {
     const refId = basemapStyleStore.referenceBasemapId;
     const requestId = ++referenceBasemapRequestId;
-    logEffect('referenceBasemapId');
-    logger.debug('Reference basemap changed', LogCategory.MAP, { refId });
 
     untrack(async () => {
       if (!mapInit.isMapLoaded) {
@@ -875,73 +877,88 @@
       }
 
       if (refId) {
+        isLoadingReferenceBasemap = true;
         logger.info('Loading reference basemap', LogCategory.MAP, {
           basemapId: refId
         });
-        const loaded = await basemapService.loadBasemap(refId);
-        if (requestId !== referenceBasemapRequestId) {
-          logger.debug(
-            'Ignoring stale reference basemap load',
-            LogCategory.MAP,
-            {
-              basemapId: refId,
-              requestId,
-              currentRequestId: referenceBasemapRequestId
-            }
-          );
-          return;
-        }
-
-        if (loaded) {
-          logger.debug(
-            'Reference basemap loaded, updating worldBaseTable',
-            LogCategory.MAP,
-            { basemapId: refId, rows: loaded.geometryTable.numRows }
-          );
-          worldBaseTable = loaded.geometryTable;
-          if (!isSwitchingViewMode) {
-            scheduleLayerUpdate('effect:referenceBasemapChanged');
-
-            // Fit map view to new basemap bounds
-            if (mapInit.viewMode === ViewMode.MAPLIBRE && mapInit.map) {
-              let bounds = calculateBoundsFromGeoArrow(loaded.geometryTable);
-              if (!bounds && loaded.metadata.bbox) {
-                const [minLng, minLat, maxLng, maxLat] = loaded.metadata.bbox;
-                bounds = [
-                  [minLng, minLat],
-                  [maxLng, maxLat]
-                ];
-              }
-              if (bounds) {
-                mapBounds.fitToBounds(bounds, true);
-              }
-            } else if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
-              const bounds = calculateBoundsFromGeoArrow(loaded.geometryTable);
-              if (bounds) {
-                const [[minX, minY], [maxX, maxY]] = bounds as [
-                  [number, number],
-                  [number, number]
-                ];
-                projectionStore.setReferenceBbox([minX, minY, maxX, maxY]);
-              } else if (loaded.metadata.bbox) {
-                // Fallback: native GeoArrow basemaps may have default world bounds
-                // in their schema metadata, causing calculateBoundsFromGeoArrow to
-                // return null. Use the catalog bbox (WGS84) instead.
-                projectionStore.setReferenceBbox(loaded.metadata.bbox);
-              }
-              if (mapInit.isMapLoaded) {
-                mapInstanceStore.fitToOrthographicBounds();
-              } else {
-                pendingOrthographicFit = true;
-              }
-            }
+        try {
+          const loaded = await basemapService.loadBasemap(refId);
+          if (requestId !== referenceBasemapRequestId) {
+            return;
           }
-        } else {
-          logger.error(
-            'Failed to load reference basemap — not found in service',
-            LogCategory.MAP,
-            { refId }
-          );
+
+          if (loaded) {
+            worldBaseTable = loaded.geometryTable;
+            if (!isSwitchingViewMode) {
+              scheduleLayerUpdate('effect:referenceBasemapChanged');
+
+              // Fit map view to new basemap bounds
+              if (mapInit.viewMode === ViewMode.MAPLIBRE && mapInit.map) {
+                let bounds = calculateBoundsFromGeoArrow(loaded.geometryTable);
+                if (!bounds && loaded.metadata.bbox) {
+                  const [minLng, minLat, maxLng, maxLat] = loaded.metadata.bbox;
+                  bounds = [
+                    [minLng, minLat],
+                    [maxLng, maxLat]
+                  ];
+                }
+                if (bounds) {
+                  mapBounds.fitToBounds(bounds, true);
+                }
+              } else if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
+                const mainlandBbox = getMainlandBboxForBasemap(
+                  loaded.metadata,
+                  basemapService.projectionPresets
+                );
+                const projectedBbox = computeProjectedBboxForBasemap(
+                  loaded.metadata,
+                  basemapService.projectionPresets,
+                  960,
+                  600,
+                  mainlandBbox ?? undefined
+                );
+                if (projectedBbox) {
+                  projectionStore.setReferenceBbox(
+                    projectedBbox,
+                    undefined,
+                    true
+                  );
+                } else if (mainlandBbox) {
+                  projectionStore.setReferenceBbox(mainlandBbox);
+                } else {
+                  const bounds = calculateBoundsFromGeoArrow(
+                    loaded.geometryTable
+                  );
+                  if (bounds) {
+                    const [[minX, minY], [maxX, maxY]] = bounds as [
+                      [number, number],
+                      [number, number]
+                    ];
+                    projectionStore.setReferenceBbox([minX, minY, maxX, maxY]);
+                  } else if (loaded.metadata.bbox) {
+                    projectionStore.setReferenceBbox(loaded.metadata.bbox);
+                  }
+                }
+                if (mapInit.isMapLoaded) {
+                  mapInstanceStore.fitToOrthographicBounds();
+                } else {
+                  pendingOrthographicFit = true;
+                }
+              }
+            }
+          } else {
+            logger.error(
+              'Failed to load reference basemap — not found in service',
+              LogCategory.MAP,
+              { refId }
+            );
+          }
+        } finally {
+          isLoadingReferenceBasemap = false;
+          if (pendingOnReady) {
+            pendingOnReady = false;
+            triggerOnReady();
+          }
         }
       } else {
         await loadWorldBasemap(requestId);
@@ -959,25 +976,138 @@
 
     isLoadingBasemap = true;
     pendingWorldBasemapRequestId = null;
-    logger.debug('loadWorldBasemap started', LogCategory.MAP);
-    const start = performance.now();
     try {
+      // If a reference basemap is configured, skip the world basemap entirely.
+      // Loading world first wastes ~800ms and causes a visual flash (world → reference).
+      const pendingRefId = basemapStyleStore.referenceBasemapId;
+      if (pendingRefId) {
+        const refRequestId = ++referenceBasemapRequestId;
+        try {
+          const refLoaded = await basemapService.loadBasemap(pendingRefId);
+          if (refRequestId !== referenceBasemapRequestId) {
+            return; // Stale request
+          }
+          if (refLoaded) {
+            worldBaseTable = refLoaded.geometryTable;
+            if (!isSwitchingViewMode) {
+              scheduleLayerUpdate('loadWorldBasemap:pendingRef');
+
+              if (mapInit.viewMode === ViewMode.MAPLIBRE && mapInit.map) {
+                let refBounds = calculateBoundsFromGeoArrow(
+                  refLoaded.geometryTable
+                );
+                if (!refBounds && refLoaded.metadata.bbox) {
+                  const [minLng, minLat, maxLng, maxLat] =
+                    refLoaded.metadata.bbox;
+                  refBounds = [
+                    [minLng, minLat],
+                    [maxLng, maxLat]
+                  ];
+                }
+                if (refBounds) {
+                  mapBounds.fitToBounds(refBounds, true);
+                }
+              } else if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
+                const refMainlandBbox = getMainlandBboxForBasemap(
+                  refLoaded.metadata,
+                  basemapService.projectionPresets
+                );
+                if (refMainlandBbox) {
+                  projectionStore.setReferenceBbox(refMainlandBbox);
+                } else {
+                  const refBounds = calculateBoundsFromGeoArrow(
+                    refLoaded.geometryTable
+                  );
+                  if (refBounds) {
+                    const [[rMinX, rMinY], [rMaxX, rMaxY]] = refBounds as [
+                      [number, number],
+                      [number, number]
+                    ];
+                    projectionStore.setReferenceBbox([
+                      rMinX,
+                      rMinY,
+                      rMaxX,
+                      rMaxY
+                    ]);
+                  } else if (refLoaded.metadata.bbox) {
+                    projectionStore.setReferenceBbox(refLoaded.metadata.bbox);
+                  }
+                }
+                if (mapInit.isMapLoaded) {
+                  mapInstanceStore.fitToOrthographicBounds();
+                } else {
+                  pendingOrthographicFit = true;
+                }
+              }
+            }
+          } else {
+            // Reference basemap failed — fall back to world basemap
+            logger.warn(
+              'Reference basemap failed, falling back to world',
+              LogCategory.MAP,
+              { refId: pendingRefId }
+            );
+            const fallback = await basemapService.loadDefaultBasemap();
+            if (fallback) {
+              worldBaseTable = fallback.geometryTable;
+              const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
+              if (canUpdate) {
+                scheduleLayerUpdate('loadWorldBasemap:refFailed');
+              }
+            }
+          }
+        } finally {
+          isLoadingReferenceBasemap = false;
+          if (pendingOnReady) {
+            pendingOnReady = false;
+            triggerOnReady();
+          }
+        }
+        return; // Skip the world basemap path below
+      }
+
       const loaded = await basemapService.loadDefaultBasemap();
 
       if (requestId !== referenceBasemapRequestId) {
-        logger.debug('Ignoring stale world basemap load', LogCategory.MAP, {
-          requestId,
-          currentRequestId: referenceBasemapRequestId
-        });
         return;
       }
 
-      logger.debug(
-        `loadWorldBasemap loaded in ${(performance.now() - start).toFixed(1)}ms`,
-        LogCategory.MAP
-      );
       if (loaded) {
-        // Use simplified version if active, otherwise use original
+        // Set up orthographic projection from world basemap bounds
+        if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
+          const mainlandBbox = getMainlandBboxForBasemap(
+            loaded.metadata,
+            basemapService.projectionPresets
+          );
+          const projectedBbox = computeProjectedBboxForBasemap(
+            loaded.metadata,
+            basemapService.projectionPresets,
+            960,
+            600,
+            mainlandBbox ?? undefined
+          );
+          if (projectedBbox) {
+            projectionStore.setReferenceBbox(projectedBbox, undefined, true);
+          } else {
+            const bounds = calculateBoundsFromGeoArrow(loaded.geometryTable);
+            if (bounds) {
+              const [[minX, minY], [maxX, maxY]] = bounds as [
+                [number, number],
+                [number, number]
+              ];
+              projectionStore.setReferenceBbox([minX, minY, maxX, maxY]);
+            } else if (loaded.metadata.bbox) {
+              projectionStore.setReferenceBbox(loaded.metadata.bbox);
+            }
+          }
+          if (mapInit.isMapLoaded) {
+            mapInstanceStore.fitToOrthographicBounds();
+          } else {
+            pendingOrthographicFit = true;
+          }
+        }
+
+        // No reference basemap — use world basemap directly
         if (loaded.activeSimplificationLevel) {
           const simplifiedTable = basemapService.getSimplifiedBasemapTable(
             loaded.metadata.file,
@@ -987,31 +1117,9 @@
         } else {
           worldBaseTable = loaded.geometryTable;
         }
-        // Note: isStyleLoading check is handled inside scheduleLayerUpdate()
         const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
         if (canUpdate) {
           scheduleLayerUpdate('loadWorldBasemap');
-        }
-
-        // Fit orthographic viewport to world basemap bounds
-        // (bypasses the guard in updateProjectionFromTable which skips
-        // when referenceBbox is already set from a previous basemap)
-        if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
-          const bounds = calculateBoundsFromGeoArrow(loaded.geometryTable);
-          if (bounds) {
-            const [[minX, minY], [maxX, maxY]] = bounds as [
-              [number, number],
-              [number, number]
-            ];
-            projectionStore.setReferenceBbox([minX, minY, maxX, maxY]);
-          } else if (loaded.metadata.bbox) {
-            projectionStore.setReferenceBbox(loaded.metadata.bbox);
-          }
-          if (mapInit.isMapLoaded) {
-            mapInstanceStore.fitToOrthographicBounds();
-          } else {
-            pendingOrthographicFit = true;
-          }
         }
       }
     } catch (error) {
@@ -1058,6 +1166,15 @@
     mapInit.initialize(mapContainer, initialViewMode);
 
     updateCanvasSize();
+
+    // If a reference basemap is configured (project restore), mark it early
+    // so triggerOnReady() stays blocked until the reference basemap is loaded.
+    // Without this, onReady fires after the first data table arrives but
+    // before the reference basemap is ready → user sees world → reference flash.
+    if (basemapStyleStore.referenceBasemapId) {
+      isLoadingReferenceBasemap = true;
+    }
+
     loadWorldBasemap();
 
     const resizeObserver = new ResizeObserver(() => {
@@ -1137,10 +1254,8 @@
 
     <LegendOverlay />
 
-    {#if isStylingMode}
-      <GeoIndicationsOverlay />
-      <AnnotationOverlay />
-    {/if}
+    <GeoIndicationsOverlay interactive={isStylingMode} />
+    <AnnotationOverlay interactive={isStylingMode} />
   </div>
 </div>
 

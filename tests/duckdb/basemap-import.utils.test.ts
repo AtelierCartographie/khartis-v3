@@ -60,7 +60,6 @@ vi.mock('$lib/paraglide/messages', () => ({
   }) => `Missing shapefile parts: ${components}`,
   error_shapefile_no_shp_found: () => 'Missing .shp file',
   basemap_import_modal_error_invalid_geometry: () => 'Invalid geometry',
-  basemap_custom_description: () => 'Custom basemap',
   basemap_custom_source: () => 'User import',
   basemap_url_error_load: ({ status }: { status: string }) =>
     `Load error ${status}`,
@@ -89,7 +88,10 @@ describe('processBasemapImport', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     dateNowSpy = vi.spyOn(Date, 'now').mockReturnValue(1700000000000);
-    mocks.fetchArrowTableWithGeometryMock.mockResolvedValue(rawTable);
+    mocks.fetchArrowTableWithGeometryMock.mockResolvedValue({
+      table: rawTable,
+      geomColumn: { column_name: 'geom', column_type: 'GEOMETRY' }
+    });
     mocks.addGeoArrowMetadataFromDuckDBMock.mockResolvedValue(arrowTable);
     mocks.generateCustomBasemapAttributesMock.mockResolvedValue(undefined);
   });
@@ -132,20 +134,24 @@ describe('processBasemapImport', () => {
     );
     expect(result.basemap.layers).toEqual([
       {
-        name: 'geom',
+        title_fr: 'custom_basemap_1700000000000',
+        title_en: 'custom_basemap_1700000000000',
         type: BasemapLayerType.POLYGON,
-        count: 2
+        style: null
       },
       {
-        name: 'geom',
+        title_fr: 'Limites',
+        title_en: 'Limits',
         type: BasemapLayerType.LIMIT,
-        file: getBasemapInnerlinesTableName('custom_basemap_1700000000000')
+        file: getBasemapInnerlinesTableName('custom_basemap_1700000000000'),
+        style: null
       },
       {
-        name: 'geom',
+        title_fr: 'Centroïdes',
+        title_en: 'Centroids',
         type: BasemapLayerType.CENTROID,
         file: getBasemapCentroidsTableName('custom_basemap_1700000000000'),
-        count: 2
+        style: null
       }
     ]);
     expect(result.geometryTable).toBe(arrowTable);
@@ -173,9 +179,10 @@ describe('processBasemapImport', () => {
     ).toBe(false);
     expect(result.basemap.layers).toEqual([
       {
-        name: 'geom',
+        title_fr: 'custom_basemap_1700000000000',
+        title_en: 'custom_basemap_1700000000000',
         type: BasemapLayerType.LINE,
-        count: 5
+        style: null
       }
     ]);
   });
@@ -215,9 +222,10 @@ describe('processBasemapImport', () => {
       )
     );
     expect(result.basemap.layers[0]).toEqual({
-      name: 'geom',
+      title_fr: 'custom_basemap_1700000000000',
+      title_en: 'custom_basemap_1700000000000',
       type: BasemapLayerType.POLYGON,
-      count: 4
+      style: null
     });
   });
 });

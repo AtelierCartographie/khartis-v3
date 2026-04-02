@@ -44,12 +44,13 @@ const FOSSIL_CSV_PATH = join(
 
 const TEST_BASEMAP: BasemapMetadata = {
   file: 'test-basemap.parquet',
-  title: 'Test Basemap',
-  description: 'Test basemap for join validation',
+  title_fr: 'Test Basemap',
+  title_en: 'Test Basemap',
   source: 'tests',
   date: '2026',
   bbox: [-180, -90, 180, 90],
-  projection: 'EPSG:4326',
+  proj_source: 'EPSG:4326',
+  proj_to: { type: 'identity' },
   layers: []
 };
 
@@ -423,9 +424,7 @@ describe('finalizeJoin behavior', () => {
 
     await expect(
       finalizeJoin(datasetWithoutGps, osmBasemap, '', duckClient)
-    ).rejects.toThrow(
-      'GPS columns (latitude/longitude) not found in dataset for OSM basemap'
-    );
+    ).rejects.toThrow('GPS columns (latitude/longitude) not found in dataset');
 
     expect(queryMock).not.toHaveBeenCalled();
     expect(joinByIdMock).not.toHaveBeenCalled();

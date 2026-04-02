@@ -20,6 +20,7 @@ export interface UseMapBasemapReturn {
   syncBasemapStyle: () => void;
   syncOSMRasterLayer: () => void;
   syncLabelsVisibility: () => void;
+  syncGroupVisibility: () => void;
   syncProjection: () => void;
   cleanup: () => void;
   readonly isStyleLoading: boolean;
@@ -36,55 +37,40 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
   }
 
   const currentStyleKey = getStyleKey(basemapStyleStore.selectedStyleUrl);
-  let lastAppliedStyleKey = $state<string | null>(currentStyleKey);
+  let lastAppliedStyleKey: string | null = currentStyleKey;
   let isStyleLoading = $state(false);
   let styleLoadHandler: (() => void) | null = null;
-  let styleLoadStartTime = 0;
 
   function syncBasemapStyle(): void {
     const map = getMap();
-    logger.debug('syncBasemapStyle called', LogCategory.MAP, {
-      hasMap: !!map,
-      isMapLoaded: getIsMapLoaded(),
-      isStyleLoading
-    });
 
     if (!map || !getIsMapLoaded()) return;
 
-    if (isStyleLoading) {
-      logger.debug('Style still loading, skipping', LogCategory.MAP);
-      return;
-    }
+    if (isStyleLoading) return;
 
     const style = basemapStyleStore.selectedStyleUrl;
     const styleKey = getStyleKey(style);
 
-    if (styleKey === lastAppliedStyleKey) {
-      logger.debug('Style already applied, skipping', LogCategory.MAP, {
-        styleKey
-      });
-      return;
-    }
+    if (styleKey === lastAppliedStyleKey) return;
 
-    logger.debug('Applying new style', LogCategory.MAP, {
+    logger.debug('Applying basemap style', LogCategory.MAP, {
       from: lastAppliedStyleKey,
       to: styleKey
     });
 
     isStyleLoading = true;
-    styleLoadStartTime = performance.now();
 
     if (styleLoadHandler) {
       map.off('style.load', styleLoadHandler);
     }
 
-    styleLoadHandler = () => {
-      const loadTime = performance.now() - styleLoadStartTime;
-      logger.debug(
-        `Style loaded in ${loadTime.toFixed(1)}ms`,
-        LogCategory.MAP,
-        { styleKey }
-      );
+    let safetyTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    const completeStyleLoad = () => {
+      if (safetyTimeout) {
+        clearTimeout(safetyTimeout);
+        safetyTimeout = null;
+      }
       isStyleLoading = false;
       lastAppliedStyleKey = styleKey;
 
@@ -94,16 +80,39 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
       }
 
       if (onStyleLoaded) {
-        logger.debug('Calling onStyleLoaded callback', LogCategory.MAP);
         onStyleLoaded();
       }
     };
 
+    styleLoadHandler = completeStyleLoad;
+
+    // Safety timeout: if style.load never fires (e.g. network error),
+    // unlock the loading flag after 10s to avoid permanent deadlock.
+    safetyTimeout = setTimeout(() => {
+      if (isStyleLoading) {
+        logger.warn(
+          'Basemap style.load timed out after 10s, unlocking',
+          LogCategory.MAP,
+          { styleKey }
+        );
+        completeStyleLoad();
+      }
+    }, 10_000);
+
     // `style.load` fires once when the full style graph is ready.
     // Using `styledata` can flip the loading flag too early.
     map.once('style.load', styleLoadHandler);
-    logger.debug('Calling map.setStyle()', LogCategory.MAP);
-    map.setStyle(style);
+
+    try {
+      map.setStyle(style, { diff: true });
+    } catch (error) {
+      logger.error(
+        'setStyle() threw, unlocking style loading',
+        LogCategory.MAP,
+        error
+      );
+      completeStyleLoad();
+    }
   }
 
   function syncOSMRasterLayer(): void {
@@ -139,7 +148,7 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
 
       logger.debug('OSM raster basemap applied', LogCategory.MAP, {
         basemap: osmBasemap.file,
-        title: osmBasemap.title
+        title: osmBasemap.title_fr
       });
     }
   }
@@ -156,6 +165,14 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
       if (!style?.layers) return;
 
       for (const layer of style.layers) {
+        // Skip layers managed by the cartefacile group system
+        if (
+          (layer.metadata as Record<string, unknown> | undefined)?.[
+            'cartefacile:group'
+          ]
+        )
+          continue;
+
         if (
           layer.type === 'symbol' &&
           layer.layout &&
@@ -167,6 +184,33 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
       }
     } catch {
       logger.warn('Failed to sync labels visibility', LogCategory.MAP);
+    }
+  }
+
+  function syncGroupVisibility(): void {
+    const map = getMap();
+    if (!map || !getIsMapLoaded() || isStyleLoading) return;
+
+    const groupVisibility = basemapStyleStore.groupVisibility;
+
+    try {
+      const style = map.getStyle();
+      if (!style?.layers) return;
+
+      for (const layer of style.layers) {
+        const group = (layer.metadata as Record<string, unknown> | undefined)?.[
+          'cartefacile:group'
+        ];
+        if (typeof group === 'string' && group in groupVisibility) {
+          map.setLayoutProperty(
+            layer.id,
+            'visibility',
+            groupVisibility[group] ? 'visible' : 'none'
+          );
+        }
+      }
+    } catch {
+      logger.warn('Failed to sync group visibility', LogCategory.MAP);
     }
   }
 
@@ -199,6 +243,7 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
     syncBasemapStyle,
     syncOSMRasterLayer,
     syncLabelsVisibility,
+    syncGroupVisibility,
     syncProjection,
     cleanup,
     get isStyleLoading() {

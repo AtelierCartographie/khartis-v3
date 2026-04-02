@@ -1,996 +1,249 @@
-# Technical Reference
+# Reference technique
 
-> **Types, utilities, performance, accessibility, and cross-cutting concerns**
+> Types principaux, erreurs, raccourcis clavier et conventions transversales. Voir [GUIDE_DEVELOPPEUR.md](./GUIDE_DEVELOPPEUR.md) pour le contexte architectural de chaque element.
 
-## Core Type Definitions
+**Voir aussi** : [ARCHITECTURE.md](./ARCHITECTURE.md) | [GESTION_ETAT.md](./GESTION_ETAT.md) | [GLOSSAIRE.md](./GLOSSAIRE.md)
 
-### Project Types
+---
+
+## Types principaux
+
+### Projet
 
 ```ts
+// src/lib/features/project-management/types.ts
+// Definition complete dans le fichier source (certains champs sont omis ici)
 interface KhartisProject {
   id: string;
-  manifest: {
-    version: string; // '3.0.0'
-    createdAt: Date;
-    updatedAt: Date;
-    name: string;
-    author?: string;
-    description?: string;
-    format: 'kh' | 'khartis';
-  };
-  data: {
-    sourceFiles: UploadedFile[];
-    processedData?: any;
-    joinedData?: any;
-    basemap?: BasemapConfig;
-  };
+  manifest: ProjectManifest;
+  data: ProjectData;
   visualization?: VisualizationConfig;
   layout?: LayoutConfig;
-  resources?: Record<string, any>;
-}
-
-interface SavedProjectMetadata {
-  id: string;
-  name: string;
-  createdAt: string;
-  updatedAt: string;
-  description?: string;
-  size: number; // Bytes
+  resources?: Record<string, unknown>;
 }
 ```
 
-### Data Types
+### Visualisation
 
 ```ts
-interface UploadedFile {
-  id: string;
-  name: string;
-  size: number;
-  type: string;
-  content?: ArrayBuffer | string;
-  parsedData?: any[];
-  fileType: FileType;
-  status: 'uploading' | 'processing' | 'complete' | 'error';
-  errorMessage?: string;
-  relatedFiles?: string[]; // Shapefile components
-  validation?: FileValidation;
-  statistics?: DataStatistics;
+// src/lib/features/commons/store/visualization.store.svelte.ts
+enum VisualizationType {
+  CHOROPLETH = 'choropleth',
+  PROPORTIONAL = 'proportional',
+  CATEGORICAL = 'categorical',
+  BIVARIATE = 'bivariate'
 }
 
-interface ProcessedDataset {
-  id: string;
-  name: string;
-  columns: DataColumn[];
-  rowCount: number;
-  geometry?: GeometryInfo;
-}
-
-interface DataColumn {
-  name: string;
-  type: ColumnType; // 'text' | 'numeric' | 'date' | 'boolean' | 'geometry'
-  stats?: ColumnStats;
-}
-
-interface ColumnStats {
-  min?: number;
-  max?: number;
-  mean?: number;
-  nullCount: number;
-  uniqueCount: number;
+enum ClassificationMethod {
+  EQUAL_INTERVAL = 'equal_interval',
+  QUANTILES = 'quantiles',
+  JENKS = 'jenks',
+  MANUAL = 'manual',
+  STANDARD_DEVIATION = 'standard_deviation',
+  Q6 = 'q6',
+  NESTED_MEANS = 'nested_means',
+  HEAD_TAIL = 'head_tail'
 }
 ```
 
-### Visualization Types
+### Fichier
 
 ```ts
-interface VisualizationConfig {
-  id: string;
-  datasetId: string;
-  type: 'choropleth' | 'proportional' | 'categorical' | 'bivariate' | 'facets';
-  classification?: Classification;
-  color?: ColorConfig;
-  proportional?: SymbolConfig;
-  categorical?: CategoryConfig;
-  bivariate?: BivariateConfig;
-}
-
-interface Classification {
-  method: 'equal-interval' | 'quantile' | 'jenks' | 'stddev' | 'manual';
-  classes: number; // 3-9 recommended
-  breaks: number[];
-}
-
-type ColumnType = 'text' | 'numeric' | 'date' | 'boolean' | 'geometry';
-```
-
-### File Types
-
-```ts
+// src/lib/features/commons/store/create-project.types.ts
 enum FileType {
   CSV = 'csv',
   TSV = 'tsv',
   GEOJSON = 'geojson',
   SHAPEFILE = 'shapefile',
   GEOPACKAGE = 'geopackage',
-  KML = 'kml', // Planned
-  KMZ = 'kmz', // Planned
+  GEOPARQUET = 'geoparquet',
+  ARROW = 'arrow',
+  KML = 'kml',
+  KMZ = 'kmz',
+  GPX = 'gpx',
+  ZIP = 'zip',
   UNKNOWN = 'unknown'
 }
+
+enum FileStatus {
+  UPLOADING = 'uploading',
+  PROCESSING = 'processing',
+  COMPLETE = 'complete',
+  EDIT = 'edit',
+  ERROR = 'error',
+  INCOMPLETE = 'incomplete'
+}
 ```
 
-## Utility Functions
+### Colonnes
 
-### Validation & Sanitization
+```ts
+// src/lib/features/data-pipeline/types.ts
+enum ColumnType {
+  BOOLEAN = 'boolean',
+  DATE = 'date',
+  NUMBER = 'number',
+  GEOMETRY = 'geometry',
+  TEXT = 'text'
+}
+```
 
-Located in `src/lib/features/commons/utils/validation.utils.ts`:
+---
 
-| Object/Function                        | Purpose                    | Usage                           |
-| -------------------------------------- | -------------------------- | ------------------------------- |
-| `ProjectValidator.validateProjectName` | Name constraints           | Max 255 chars, no special chars |
-| `ProjectValidator.validateFileSize`    | Check file size limit      | Before import                   |
-| `ProjectValidator.validateProjectSize` | Check project size limit   | Before save                     |
-| `ProjectValidator.checkStorageUsage`   | Estimate remaining storage | Before save                     |
-| `DataValidator.validateCSVData`        | CSV data validation        | After parsing                   |
-| `DataValidator.validateGeoData`        | GeoJSON validation         | After parsing                   |
+## Hierarchie d'erreurs
 
-Located in `src/lib/features/commons/utils/sanitize.utils.ts`:
+Toutes les erreurs du pipeline heritent de `PipelineError` (avec `code` et `details`). Localisation : `src/lib/features/commons/errors/pipeline.errors.ts`.
 
-| Function              | Purpose           | Usage            |
-| --------------------- | ----------------- | ---------------- |
-| `sanitizeProjectName` | Safe project name | Project creation |
-| `sanitizeTextInput`   | Safe text input   | User inputs      |
-| `escapeSqlString`     | SQL string escape | DuckDB queries   |
+| Nom                   | Code                    | Contexte                     | Fatal |
+| --------------------- | ----------------------- | ---------------------------- | ----- |
+| `PipelineError`       | (variable)              | Erreur de base du pipeline   | Oui   |
+| `DataValidationError` | `DATA_VALIDATION_ERROR` | Donnees invalides            | Oui   |
+| `ParseError`          | `PARSE_ERROR`           | Erreur de lecture de fichier | Oui   |
+| `DuckDBError`         | `DUCKDB_ERROR`          | Echec de requete DuckDB      | Oui   |
+| `NonFatalError`       | (variable)              | Toast sans rollback          | Non   |
+| `DuplicateFileError`  | `DUPLICATE_FILE`        | Fichier deja importe         | Non   |
 
-**Example:**
+Helpers : `isPipelineError()`, `isFatalError()`, `formatError()`.
 
 ```ts
 import {
-  ProjectValidator,
-  DataValidator
-} from '$lib/features/commons/utils/validation.utils';
-import { sanitizeProjectName } from '$lib/features/commons/utils/sanitize.utils';
-
-// Validate project name
-const nameResult = ProjectValidator.validateProjectName('My Project');
-if (!nameResult.isValid) {
-  console.error(nameResult.errors);
-}
-
-// Sanitize project name (removes invalid chars, limits to 255 chars)
-const safeName = sanitizeProjectName('My Project! (2024)');
-// → 'My Project 2024'
-
-// Validate CSV data
-const csvResult = DataValidator.validateCSVData(parsedRows);
-if (!csvResult.isValid) {
-  console.error(csvResult.errors);
-}
-```
-
-### Pipeline Helpers
-
-- **Type detection**: Infer column types from sample data
-- **Stats accumulation**: Streaming min/max/mean/count
-- **Geometry bounds**: Calculate bbox from features
-- **Filtering**: Apply column filters
-- **Aggregation**: Group-by operations
-
-### Caching Pattern
-
-```ts
-// Map keyed by deterministic hash
-const cache = new Map<string, CachedValue>();
-
-// Cache key from config
-const key = hashConfig(config);
-
-// Check cache
-if (cache.has(key)) {
-  return cache.get(key);
-}
-
-// Compute and cache
-const result = expensiveOperation(config);
-cache.set(key, result);
-
-// Clear on invalidation
-datasetMutation.subscribe(() => cache.clear());
-```
-
-### Error Classes
-
-```ts
-type DataValidationError = Error & { details?: unknown };
-
-function createDataValidationError(
-  message: string,
-  details?: unknown
-): DataValidationError {
-  const error = new Error(message) as DataValidationError;
-  error.name = 'DataValidationError';
-  error.details = details;
-  return error;
-}
-
-function createExpressionError(message: string): Error {
-  const error = new Error(message);
-  error.name = 'ExpressionError';
-  return error;
-}
-
-function createSizeLimitError(message: string): Error {
-  const error = new Error(message);
-  error.name = 'SizeLimitError';
-  return error;
-}
-
-function createFileGroupError(message: string): Error {
-  const error = new Error(message);
-  error.name = 'FileGroupError';
-  return error;
-}
-```
-
-**Usage:**
-
-```ts
-try {
-  validateData(dataset);
-} catch (error) {
-  if (error instanceof Error && error.name === 'DataValidationError') {
-    showNotification(error.message, 'error');
-  }
-}
-```
-
-## Error Handling
-
-### Error Class Hierarchy
-
-Located in `src/lib/features/commons/errors/pipeline.errors.ts`:
-
-```typescript
-type PipelineError = Error & {
-  code: string;
-  details?: Record<string, unknown>;
-};
-
-function createPipelineError(
-  message: string,
-  code: string,
-  details?: Record<string, unknown>
-): PipelineError {
-  const error = new Error(message) as PipelineError;
-  error.name = 'PipelineError';
-  error.code = code;
-  error.details = details;
-  return error;
-}
-
-export function createDataValidationError(
-  message: string,
-  field?: string,
-  details?: Record<string, unknown>
-): PipelineError {
-  const error = createPipelineError(message, 'DATA_VALIDATION_ERROR', {
-    field,
-    ...details
-  });
-  error.name = 'DataValidationError';
-  return error;
-}
-
-export function createFileGroupError(
-  message: string,
-  missingFiles: string[],
-  details?: Record<string, unknown>
-): PipelineError {
-  const error = createPipelineError(message, 'FILE_GROUP_ERROR', {
-    missingFiles,
-    ...details
-  });
-  error.name = 'FileGroupError';
-  return error;
-}
-
-export function createSizeLimitError(
-  message: string,
-  actualSize: number,
-  maxSize: number,
-  details?: Record<string, unknown>
-): PipelineError {
-  const error = createPipelineError(message, 'SIZE_LIMIT_ERROR', {
-    actualSize,
-    maxSize,
-    ...details
-  });
-  error.name = 'SizeLimitError';
-  return error;
-}
-
-export function createParseError(
-  message: string,
-  fileType?: string,
-  details?: Record<string, unknown>
-): PipelineError {
-  const error = createPipelineError(message, 'PARSE_ERROR', {
-    fileType,
-    ...details
-  });
-  error.name = 'ParseError';
-  return error;
-}
-
-export function createDuckDBError(
-  message: string,
-  query?: string,
-  details?: Record<string, unknown>
-): PipelineError {
-  const error = createPipelineError(message, 'DUCKDB_ERROR', {
-    query,
-    ...details
-  });
-  error.name = 'DuckDBError';
-  return error;
-}
-
-export function createNonFatalError(
-  message: string,
-  code: string,
-  details?: Record<string, unknown>
-): PipelineError {
-  const error = createPipelineError(message, code, details);
-  error.name = 'NonFatalError';
-  return error;
-}
-
-export function createDuplicateFileError(
-  message: string,
-  fileName: string
-): PipelineError {
-  const error = createNonFatalError(message, 'DUPLICATE_FILE', { fileName });
-  error.name = 'DuplicateFileError';
-  return error;
-}
-
-export function createExpressionError(
-  message: string,
-  expression?: string,
-  details?: Record<string, unknown>
-): PipelineError {
-  const error = createPipelineError(message, 'EXPRESSION_ERROR', {
-    expression,
-    ...details
-  });
-  error.name = 'ExpressionError';
-  return error;
-}
-
-export function createGeoMatchError(
-  message: string,
-  matchRate?: number,
-  details?: Record<string, unknown>
-): PipelineError {
-  const error = createPipelineError(message, 'GEO_MATCH_ERROR', {
-    matchRate,
-    ...details
-  });
-  error.name = 'GeoMatchError';
-  return error;
-}
-
-export function createTypeInferenceError(
-  message: string,
-  column?: string,
-  details?: Record<string, unknown>
-): PipelineError {
-  const error = createPipelineError(message, 'TYPE_INFERENCE_ERROR', {
-    column,
-    ...details
-  });
-  error.name = 'TypeInferenceError';
-  return error;
-}
-
-export function createDataQualityWarning(
-  message: string,
-  warnings: string[]
-): PipelineError {
-  const error = createNonFatalError(message, 'DATA_QUALITY_WARNING', {
-    warnings
-  });
-  error.name = 'DataQualityWarning';
-  return error;
-}
-```
-
-### Helper Functions
-
-```typescript
-import {
-  isPipelineError,
   isFatalError,
-  getErrorCode,
   formatError
 } from '$lib/features/commons/errors/pipeline.errors';
-
-// Check if error is a pipeline error
-if (isPipelineError(error)) {
-  console.log(error.code, error.details);
-}
-
-// Check if error requires rollback
-if (isFatalError(error)) {
-  await rollbackChanges();
-}
-
-// Format error for logging
-const logData = formatError(error);
-```
-
-### Error Handling Patterns
-
-#### 1. Try-Catch with Type Guards
-
-```typescript
 import {
-  DataValidationError,
-  DuckDBError,
-  ParseError,
-  isPipelineError,
-  isFatalError
-} from '$lib/features/commons/errors/pipeline.errors';
+  showError,
+  showWarning
+} from '$lib/features/commons/utils/notification.utils.svelte';
 
 try {
   const dataset = await dataPipeline.processFile(file);
 } catch (error) {
-  if (error instanceof DataValidationError) {
-    // Show validation error to user
-    notificationStore.error(error.message);
-  } else if (error instanceof ParseError) {
-    // Show parse error with file type context
-    notificationStore.error(
-      `Failed to parse ${error.fileType}: ${error.message}`
+  if (isFatalError(error)) {
+    showError(
+      m.error_fatal_import_title(),
+      error instanceof Error ? error.message : m.error_unknown_message()
     );
-  } else if (error instanceof DuckDBError) {
-    // Log technical error, show user-friendly message
-    logger.error('DuckDB query failed', error);
-    notificationStore.error('Failed to process data. Please try again.');
-  } else if (isPipelineError(error) && !isFatalError(error)) {
-    // Non-fatal error - show warning but continue
-    notificationStore.warning(error.message);
   } else {
-    // Unknown error
-    logger.error('Unexpected error', error);
-    notificationStore.error('An unexpected error occurred');
+    showWarning(
+      m.warning_generic_title(),
+      error instanceof Error ? error.message : m.warning_import_message()
+    );
   }
 }
 ```
-
-#### 2. Error Boundaries (Svelte)
-
-```svelte
-<!-- ErrorBoundary.svelte -->
-<script>
-  import { onMount } from 'svelte';
-  import { errorStore } from '$lib/stores';
-
-  let hasError = false;
-  let error = null;
-
-  onMount(() => {
-    // Catch unhandled promise rejections
-    window.addEventListener('unhandledrejection', (event) => {
-      hasError = true;
-      error = event.reason;
-      errorStore.capture(error);
-      event.preventDefault();
-    });
-
-    // Catch uncaught errors
-    window.addEventListener('error', (event) => {
-      hasError = true;
-      error = event.error;
-      errorStore.capture(error);
-      event.preventDefault();
-    });
-  });
-
-  function reset() {
-    hasError = false;
-    error = null;
-    errorStore.clear();
-  }
-</script>
-
-{#if hasError}
-  <div class="error-boundary">
-    <h2>Something went wrong</h2>
-    <p>{error?.message || 'Unknown error'}</p>
-    <button on:click={reset}>Try Again</button>
-  </div>
-{:else}
-  <slot />
-{/if}
-```
-
-#### 3. Async Error Handling
-
-```typescript
-// Wrapper for async operations
-export async function withErrorHandling<T>(
-  operation: () => Promise<T>,
-  errorMessage = 'Operation failed'
-): Promise<T | null> {
-  try {
-    return await operation();
-  } catch (error) {
-    logger.error(errorMessage, error);
-    notificationStore.error(errorMessage);
-    return null;
-  }
-}
-
-// Usage
-const dataset = await withErrorHandling(
-  () => dataPipeline.processFile(file),
-  'Failed to import file'
-);
-```
-
-#### 4. Validation with Result Type
-
-```typescript
-type Result<T, E = Error> = { ok: true; value: T } | { ok: false; error: E };
-
-function validateDataset(
-  data: any
-): Result<ProcessedDataset, DataValidationError> {
-  const errors: string[] = [];
-
-  if (!data.columns || data.columns.length === 0) {
-    errors.push('Dataset must have at least one column');
-  }
-
-  if (!data.rows || data.rows.length === 0) {
-    errors.push('Dataset must have at least one row');
-  }
-
-  if (errors.length > 0) {
-    return {
-      ok: false,
-      error: new DataValidationError('Dataset validation failed', errors, [])
-    };
-  }
-
-  return { ok: true, value: data as ProcessedDataset };
-}
-
-// Usage
-const result = validateDataset(rawData);
-if (!result.ok) {
-  handleValidationError(result.error);
-} else {
-  processDataset(result.value);
-}
-```
-
-### Error Recovery Strategies
-
-| Error Type              | Recovery Strategy        | User Action Required             |
-| ----------------------- | ------------------------ | -------------------------------- |
-| **File Too Large**      | Suggest file splitting   | Split file or sample data        |
-| **Invalid Format**      | Show format requirements | Fix file format                  |
-| **Parse Error**         | Show line/column         | Fix data at specific location    |
-| **Type Mismatch**       | Suggest type conversion  | Convert or cast column           |
-| **Classification Fail** | Fallback to quantiles    | Accept fallback or manual breaks |
-| **Quota Exceeded**      | Auto-delete old projects | Confirm deletion                 |
-| **Network Error**       | Retry with backoff       | Wait or retry manually           |
-| **Worker Crash**        | Fallback to main thread  | None (automatic)                 |
-| **Memory Error**        | Clear caches and retry   | Reduce dataset size              |
-| **Projection Error**    | Use default projection   | Select different projection      |
-
-### Error Monitoring
-
-```typescript
-export function createErrorMonitor() {
-  const errors = new Map<string, number>();
-  const threshold = 5;
-  const windowMs = 60000; // 1 minute
-
-  const alertHighFrequency = (error: Error): void => {
-    logger.warn(`High error frequency detected: ${error.name}`, {
-      message: error.message,
-      count: errors.get(`${error.name}:${error.message}`)
-    });
-  };
-
-  return {
-    track(error: Error): void {
-      const key = `${error.name}:${error.message}`;
-      const count = (errors.get(key) || 0) + 1;
-      errors.set(key, count);
-
-      // Alert if error frequency is too high
-      if (count >= threshold) {
-        alertHighFrequency(error);
-      }
-
-      // Clear old errors
-      setTimeout(() => {
-        errors.delete(key);
-      }, windowMs);
-    }
-  };
-}
-
-export const errorMonitor = createErrorMonitor();
-```
-
-### User-Friendly Error Messages
-
-```typescript
-// Map technical errors to user-friendly messages
-const ERROR_MESSAGES: Record<string, string> = {
-  ENOENT: 'File not found. Please check the file path.',
-  EACCES: 'Permission denied. Please check file permissions.',
-  EMFILE: 'Too many files open. Please close some files and try again.',
-  ENOMEM: 'Out of memory. Please try with a smaller dataset.',
-  ETIMEDOUT: 'Operation timed out. Please check your connection and try again.',
-  ECONNREFUSED: 'Connection refused. Please check if the service is running.',
-  DataCloneError:
-    'Cannot process this data type. Please use a different format.',
-  QuotaExceededError: 'Storage limit reached. Please delete old projects.',
-  NetworkError:
-    'Network connection lost. Please check your internet connection.'
-};
-
-export function getUserMessage(error: Error): string {
-  // Check for known error codes
-  if ('code' in error && error.code in ERROR_MESSAGES) {
-    return ERROR_MESSAGES[error.code];
-  }
-
-  // Check for error name
-  if (error.name in ERROR_MESSAGES) {
-    return ERROR_MESSAGES[error.name];
-  }
-
-  // Default message
-  return 'An unexpected error occurred. Please try again or contact support.';
-}
-```
-
-### Error Logging
-
-```typescript
-interface ErrorLog {
-  timestamp: Date;
-  message: string;
-  stack?: string;
-  code?: string;
-  context?: any;
-  userAgent: string;
-  url: string;
-}
-
-export function createErrorLogger() {
-  let logs: ErrorLog[] = [];
-  const maxLogs = 100;
-
-  return {
-    log(error: Error & { code?: string }, context?: unknown): void {
-      const log: ErrorLog = {
-        timestamp: new Date(),
-        message: error.message,
-        stack: error.stack,
-        code: error.code,
-        context,
-        userAgent: navigator.userAgent,
-        url: window.location.href
-      };
-
-      logs.push(log);
-
-      // Trim old logs
-      if (logs.length > maxLogs) {
-        logs = logs.slice(-maxLogs);
-      }
-
-      // Send to console in development
-      if (import.meta.env.DEV) {
-        console.error('Error logged:', log);
-      }
-    },
-    export(): string {
-      return JSON.stringify(logs, null, 2);
-    },
-    clear(): void {
-      logs = [];
-    }
-  };
-}
-
-export const errorLogger = createErrorLogger();
-```
-
-## Performance Strategy
-
-### Current Implementation
-
-| Aspect          | Strategy                                                    |
-| --------------- | ----------------------------------------------------------- |
-| **Load**        | Code splitting, lazy heavy libs (Deck.gl, MapLibre, DuckDB) |
-| **Compute**     | Main thread (classification, joins)                         |
-| **DuckDB**      | WASM in main thread                                         |
-| **Interaction** | Debounce + preview LOD                                      |
-| **Rendering**   | Attribute packing, minimal redraws                          |
-| **Caching**     | Palette + basic breaks reuse                                |
-
-### Planned Optimizations
-
-| Aspect          | Enhancement                           |
-| --------------- | ------------------------------------- |
-| **Load**        | Bundle budget CI gate                 |
-| **Compute**     | Worker pool + transferable buffers    |
-| **DuckDB**      | Dedicated worker + SharedArrayBuffer  |
-| **Interaction** | Predictive precompute                 |
-| **Rendering**   | GPU instancing refinements            |
-| **Caching**     | Formal cache with invalidation hashes |
-
-### Performance Targets
-
-- **Load time**: <3s on typical device
-- **Interaction**: ~60fps pan/zoom
-- **Classification**: <1s recompute
-- **File import**: <10s for large files (>5k rows)
-
-### Monitoring (Future)
-
-- Long task tracking
-- Frame pacing sampling
-- Bundle size CI gate
-- Lighthouse budget check
-
-## Accessibility
-
-### Keyboard Navigation
-
-- **Tab**: Navigate focusable elements
-- **Enter/Space**: Activate buttons, toggles
-- **Escape**: Close modals, dropdowns
-- **Arrow keys**: Navigate lists, toolbars
-
-### Application Keyboard Shortcuts
-
-Shortcuts are handled globally in `src/lib/features/commons/components/keyboard-shortcuts.svelte`.
-
-#### Why a `K` Prefix for Project Actions
-
-- Browser-reserved combinations (`Cmd/Ctrl+Shift+N`, `Cmd/Ctrl+O`, `Cmd/Ctrl+S`) are not reliable in web apps, especially in Arc.
-- Khartis uses a dedicated prefix chord: `Ctrl+K`, then an action letter.
-- `K` stands for **Khartis**, making shortcuts easy to remember and reducing collisions with browser shortcuts.
-- The second key must be pressed within `2s` after `Ctrl+K`.
-
-#### Key Notation by System
-
-| Concept                     | macOS | Windows/Linux |
-| --------------------------- | ----- | ------------- |
-| Project shortcut prefix     | `⌃K`  | `Ctrl+K`      |
-| Zoom modifier               | `⌘`   | `Ctrl`        |
-| Alt/Option modifier display | `⌥`   | `Alt`         |
-
-#### Global Shortcut Map
-
-| Action                  | macOS          | Windows/Linux      |
-| ----------------------- | -------------- | ------------------ |
-| Open side navigation    | `⌃K`, then `B` | `Ctrl+K`, then `B` |
-| New project             | `⌃K`, then `N` | `Ctrl+K`, then `N` |
-| Open project            | `⌃K`, then `O` | `Ctrl+K`, then `O` |
-| Save project            | `⌃K`, then `S` | `Ctrl+K`, then `S` |
-| Duplicate project       | `⌃K`, then `D` | `Ctrl+K`, then `D` |
-| Delete project          | `⌃K`, then `X` | `Ctrl+K`, then `X` |
-| Go to Data tab          | `1`            | `1`                |
-| Go to Visualization tab | `2`            | `2`                |
-| Go to Styling tab       | `3`            | `3`                |
-| Toggle zoom mode        | `⌥+Z`          | `Alt+Z`            |
-| Zoom in                 | `⌘ +`          | `Ctrl +`           |
-| Zoom out                | `⌘ -`          | `Ctrl -`           |
-| Reset zoom              | `⌘ 0`          | `Ctrl 0`           |
-| Close modal/panel       | `Escape`       | `Escape`           |
-
-### Visual Accessibility
-
-- **Focus ring**: Visible on all interactive elements
-- **Contrast**: WCAG AA minimum (4.5:1 text, 3:1 UI)
-- **Color palettes**: Accessibility filter flags unsafe combos
-- **Non-color encoding**: Patterns, shapes for color-blind users
-
-### Color-Blindness Simulation
-
-**Utility**: `src/lib/features/commons/utils/color-blindness-filters.ts`
-
-Applies SVG `feColorMatrix` filters to simulate 8 color-blindness types.
-
-| Type          | Description                     | Prevalence (M/F)                  |
-| ------------- | ------------------------------- | --------------------------------- |
-| Protanopia    | Red-blind (dichromacy)          | 1% males, 0.01% females           |
-| Deuteranopia  | Green-blind (dichromacy)        | 1% males, 0.01% females           |
-| Tritanopia    | Blue-blind (dichromacy)         | <0.01% both                       |
-| Protanomaly   | Red-weak (anomalous trichromat) | 1% males, 0.03% females           |
-| Deuteranomaly | Green-weak                      | 6% males, 0.4% females (most com) |
-| Tritanomaly   | Blue-weak                       | <0.01% both                       |
-| Achromatopsia | Complete color-blind            | 0.003% both                       |
-| Achromatomaly | Partial color-blind             | Rare                              |
-
-#### Usage
-
-```typescript
-import { applyColorBlindnessFilter } from '$lib/features/commons/utils/color-blindness-filters';
-import { ColorBlindnessType } from '$lib/features/commons/constants/ui.constants';
-
-const mapElement = document.getElementById('map-container');
-
-// Apply filter
-applyColorBlindnessFilter(mapElement, ColorBlindnessType.DEUTERANOPIA);
-
-// Remove filter
-applyColorBlindnessFilter(mapElement, ColorBlindnessType.NONE);
-```
-
-#### Implementation
-
-- Creates hidden SVG element: `<svg id="khartis-svg-filters">`
-- Inserts `<filter>` + `<feColorMatrix>` with transformation matrix
-- Applies via CSS: `filter: url(#khartis-color-blindness-filter)`
-- Auto-removes old filter when switching types or disabling
-
-**Workflow**: User selects type in UI → `applyColorBlindnessFilter()` → entire map container recolored → validates palette accessibility
-
-### Screen Readers
-
-- **Textual summaries**: Stats and map descriptions
-- **ARIA labels**: All interactive elements
-- **Semantic HTML**: Proper heading structure
-
-## Security & Privacy
-
-### Client-Only Architecture
-
-- **No server upload**: All processing in browser
-- **No external APIs**: User data stays local
-- **No tracking**: No analytics on user data
-
-### Input Sanitization
-
-- **Filenames**: Remove dangerous characters
-- **CSV cells**: Escape formula injection (`=`, `+`, `-`, `@`)
-- **User inputs**: Trim, validate, escape
-- **File uploads**: Extension and MIME type validation
-
-### Size Quotas
-
-| Limit             | Value  | Enforcement                   |
-| ----------------- | ------ | ----------------------------- |
-| **File size**     | 50 MB  | Hard limit (validation error) |
-| **Project size**  | 100 MB | Warning at 80%, error at 100% |
-| **Project count** | 50     | Warning at 80%                |
-
-### Dependency Auditing
-
-- Regular `npm audit` checks
-- Update vulnerable dependencies
-- Review supply chain security
-
-**Not Applicable**: CSRF, server auth, multi-tenant isolation (client-only app)
-
-## Internationalization (i18n)
-
-### Paraglide Integration
-
-**Compile-time messages**: Type-safe, zero runtime overhead
-
-```ts
-import * as m from '$paraglide/messages';
-
-// Use in components
-<button>{m.projectCreate()}</button>
-
-// With parameters
-<p>{m.fileSize({ size: formatBytes(bytes) })}</p>
-```
-
-### Supported Locales
-
-- **English** (en): Default
-- **French** (fr): Full translation
-
-### Message Keys
-
-- **Semantic naming**: `m.projectCreate()` not `m.button1()`
-- **No concatenation**: Use parameters instead
-- **Namespace by feature**: `tool_legend_title`, `validation_error_size`
-
-### Adding Translations
-
-1. Add key to `messages/en.json` and `messages/fr.json`
-2. Use `m.yourKey()` in code
-3. Paraglide auto-generates TypeScript types
-
-## Logger
-
-**Development only**: Stripped in production build
-
-```ts
-import { logger } from '$lib/features/commons/utils/logger';
-
-logger.debug('Debug info');
-logger.info('Info message');
-logger.warn('Warning');
-logger.error('Error', error);
-```
-
-**Levels**: DEBUG, INFO, WARN, ERROR
-
-**Rule**: No `console.log` in production code (use logger instead)
-
-## Storage Limits (Default Values)
-
-| Limit                 | Value  | Warning Threshold |
-| --------------------- | ------ | ----------------- |
-| **Max file size**     | 50 MB  | 25 MB             |
-| **Max project size**  | 100 MB | 80 MB             |
-| **Max project count** | 50     | 40                |
-
-## Glossary
-
-| Term                     | Definition                                              |
-| ------------------------ | ------------------------------------------------------- |
-| **Aggregation**          | Grouping and summarizing data (e.g., sum, average)      |
-| **Basemap**              | Background map layer (e.g., world countries, terrain)   |
-| **Bivariate**            | Visualization combining two variables                   |
-| **Choropleth**           | Map with regions colored by data values                 |
-| **Classification**       | Method to divide data into classes/bins                 |
-| **CRS**                  | Coordinate Reference System (e.g., WGS84, Web Mercator) |
-| **Dataset**              | Processed data with columns and rows                    |
-| **Deck.gl Layer**        | GPU-accelerated visualization layer                     |
-| **Facet**                | Small multiple map for comparison                       |
-| **Geometry**             | Geographic shapes (point, line, polygon)                |
-| **Jenks**                | Natural breaks classification (optimal binning)         |
-| **Join**                 | Merging datasets by common key                          |
-| **LOD**                  | Level of Detail (geometry simplification)               |
-| **Projection**           | Method to flatten 3D Earth onto 2D map                  |
-| **Proportional Symbols** | Sized markers based on data values                      |
-| **Quantile**             | Equal-count classification (balanced bins)              |
-| **Simplification**       | Reducing geometry complexity for performance            |
-| **Worker**               | Web Worker for background processing                    |
-
-## Extension Guidelines
-
-### Keep Utilities Pure
-
-- No side effects
-- Deterministic output
-- No DOM manipulation
-- No global state
-
-### Promote to Commons
-
-- Only after reuse in 2+ features
-- Well-tested
-- Well-documented
-- Generic enough for reuse
-
-### Avoid Data + DOM Mixing
-
-- Data utilities → `utils/`
-- DOM utilities → `components/` or `actions/`
-- Keep concerns separated
 
 ---
 
-**See also:**
+## Logger
 
-- [ARCHITECTURE.md](ARCHITECTURE.md) - Overall design principles
-- [DATA_PIPELINE.md](DATA_PIPELINE.md) - Data processing utilities
-- [STATE_AND_FEATURES.md](STATE_AND_FEATURES.md) - State management patterns
+** jamais de `console.log`** -- utiliser le logger conditionnel (desactive en test et production).
+
+```ts
+import { logger, LogCategory } from '$lib/features/commons/utils/logger';
+
+logger.debug('Debug info', LogCategory.DATA);
+logger.info('Info message', LogCategory.STORE);
+logger.warn('Warning', LogCategory.DUCKDB, { details: '...' });
+logger.error('Error', LogCategory.SYSTEM, error);
+logger.success('Operation done', LogCategory.PROJECT);
+```
+
+Categories : `DATA`, `STORE`, `DUCKDB`, `MAP`, `UI`, `PERSISTENCE`, `PROJECT`, `VISUALIZATION`, `FILE`, `NOTIFICATION`, `EXPORT`, `ERROR_HANDLER`, `SYSTEM`.
+
+Outils : `logger.time(label, category, fn)` pour mesurer une operation async.
+
+---
+
+## Raccourcis clavier
+
+Geres dans `keyboard-shortcuts.svelte`. Prefix `Ctrl+K` (K pour Khartis) + lettre dans les 2 secondes.
+
+| Action                | macOS               | Windows/Linux         |
+| --------------------- | ------------------- | --------------------- |
+| Navigation laterale   | Ctrl+K, B           | Ctrl+K, B             |
+| Nouveau projet        | Ctrl+K, N           | Ctrl+K, N             |
+| Ouvrir projet         | Ctrl+K, O           | Ctrl+K, O             |
+| Sauvegarder projet    | Ctrl+K, S           | Ctrl+K, S             |
+| Dupliquer projet      | Ctrl+K, D           | Ctrl+K, D             |
+| Supprimer projet      | Ctrl+K, X           | Ctrl+K, X             |
+| Onglet Donnees        | 1                   | 1                     |
+| Onglet Visualisation  | 2                   | 2                     |
+| Onglet Habillage      | 3                   | 3                     |
+| Basculer mode zoom    | Alt+Z               | Alt+Z                 |
+| Zoom + / - / reset    | Cmd +/-/0           | Ctrl +/-/0            |
+| Annuler               | Cmd+Z               | Ctrl+Z                |
+| Retablir              | Cmd+Shift+Z / Cmd+Y | Ctrl+Shift+Z / Ctrl+Y |
+| Zoom molette          | Cmd+molette         | Ctrl+molette          |
+| Fermer modale/panneau | Escape              | Escape                |
+
+---
+
+## Validation
+
+| Fonction                                   | Usage                                       |
+| ------------------------------------------ | ------------------------------------------- |
+| `ProjectValidator.validateProjectName`     | Max 255 car., pas de caracteres speciaux    |
+| `ProjectValidator.validateFileSize`        | Verif. taille avant import (max 50 Mo)      |
+| `ProjectValidator.validateProjectSize`     | Verif. taille avant sauvegarde (max 100 Mo) |
+| `ProjectValidator.validateStorageCapacity` | Quota de stockage (max 50 projets)          |
+| `DataValidator.validateCSVData`            | Validation donnees CSV apres parsing        |
+| `DataValidator.validateGeoData`            | Validation GeoJSON apres parsing            |
+| `sanitizeProjectName`                      | Nettoyage nom de projet                     |
+| `sanitizeTextInput`                        | Nettoyage saisie utilisateur                |
+| `escapeSqlString`                          | Echappement chaines pour DuckDB             |
+
+Localisation : `src/lib/features/commons/utils/validation.utils.ts` et `sanitize.utils.ts`.
+
+---
+
+## Limites de stockage
+
+| Limite                  | Valeur | Seuil d'alerte |
+| ----------------------- | ------ | -------------- |
+| Taille max. par fichier | 50 Mo  | 25 Mo          |
+| Taille max. par projet  | 100 Mo | 80 Mo          |
+| Nombre max. de projets  | 50     | 40             |
+
+Stockage via IndexedDB (localforage). Donnees ne quittent jamais le navigateur.
+
+---
+
+## Securite et vie privee
+
+- **Aucun serveur** : tout le traitement dans le navigateur
+- **Pas d'API externe** : donnees utilisateur locales
+- **Pas de tracking** : aucune analyse sur les donnees utilisateur
+- **Assainissement** : noms de fichiers, cellules CSV (anti-injection formule), saisies utilisateur
+
+---
+
+## Internationalisation (i18n)
+
+Messages compile-time via Paraglide JS 2 (type-safe, zero overhead runtime). Locales : FR (par defaut), EN.
+
+```ts
+import * as m from '$lib/paraglide/messages';
+<button>{m.create_project_process_button()}</button>
+<p>{m.create_project_processing_file({ name: file.name })}</p>
+```
+
+Convention de cles : `snake_case` semantique par feature (`tool_legend_title`, `validation_error_size`). Les cles dans `messages/en.json` et `messages/fr.json` deviennent des fonctions typees.
+
+---
+
+## Commandes
+
+| Commande                     | Description                               |
+| ---------------------------- | ----------------------------------------- |
+| `pnpm dev`                   | Serveur de dev (port 5176)                |
+| `pnpm build`                 | Build production (static adapter)         |
+| `pnpm check`                 | Verification TypeScript + Svelte          |
+| `pnpm lint`                  | Prettier + ESLint                         |
+| `pnpm test:unit`             | Tests Vitest (client jsdom + server node) |
+| `pnpm test:unit -- src/path` | Tests specifiques                         |
+| `pnpm test:e2e`              | Tests Playwright E2E (local uniquement)   |
+| `pnpm test:pipeline`         | Tests d'integration DuckDB (server-side)  |
+
+---
+
+**Voir aussi :** [ARCHITECTURE.md](./ARCHITECTURE.md) — [GESTION_ETAT.md](./GESTION_ETAT.md) — [GLOSSAIRE.md](./GLOSSAIRE.md)

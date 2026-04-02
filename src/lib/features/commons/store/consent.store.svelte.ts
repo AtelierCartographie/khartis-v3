@@ -64,7 +64,6 @@ function createConsentStore() {
     state.consentDate = new Date().toISOString();
     state.consentVersion = CURRENT_CONSENT_VERSION;
     save();
-    logger.info('User accepted analytics consent', LogCategory.SYSTEM);
   }
 
   function declineAll(): void {
@@ -72,7 +71,6 @@ function createConsentStore() {
     state.consentDate = new Date().toISOString();
     state.consentVersion = CURRENT_CONSENT_VERSION;
     save();
-    logger.info('User declined analytics consent', LogCategory.SYSTEM);
   }
 
   return {

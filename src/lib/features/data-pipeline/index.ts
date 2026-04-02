@@ -46,8 +46,5 @@ export { validateFile } from './core/validators';
 
 export {
   extractGeoArrowMetadata,
-  geoParquetReader,
-  initializeGeoParquetWasm,
-  readGeoParquet,
   tableHasGeoArrowMetadata
-} from './io/geoparquet-reader';
+} from './io/geoarrow-metadata';

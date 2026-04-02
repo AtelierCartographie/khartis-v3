@@ -12,6 +12,7 @@ import type {
   JoinQuality
 } from '$lib/features/map/types/basemap.types';
 import type { Table } from 'apache-arrow/Arrow';
+import { addGeoArrowMetadata } from '$lib/features/map/utils/read-geojson-arrow';
 import type { DuckDBDataset, FinalizeJoinResult } from '../types';
 import { detectGPSColumns } from './gps-ops';
 
@@ -96,9 +97,6 @@ async function ensureSimilarityCached(
     )) as Array<{ table_name: string }>;
 
     if (check && check.length > 0) {
-      logger.debug('Reusing existing similarity cache', LogCategory.DATA, {
-        cacheTableName
-      });
       return cacheTableName;
     }
     // Table was dropped externally — rebuild
@@ -112,9 +110,11 @@ async function ensureSimilarityCached(
   const escapedGeoCol = escapeIdentifier(geoColumn);
   const escapedCacheTable = escapeIdentifier(cacheTableName);
 
-  // Build the cache: for each distinct source value, run get_similarity
-  // against ALL basemap_attributes, storing the raw match rows.
-  // We also capture source_dup_count for later duplicate detection.
+  // Build the cache: cross-join candidates × basemap_attributes, compute
+  // jaro_winkler inline and filter score > 0 early (score_cutoff=0.85 returns
+  // 0 for pairs below threshold, so score > 0 ≡ typo_match != 'toofar').
+  // This avoids the LATERAL+get_similarity pattern which forces full
+  // materialization of N_candidates × N_attrs rows (OOM with large basemaps).
   await Duck.query(`
     CREATE OR REPLACE TEMP TABLE "${escapedCacheTable}" AS
     WITH source_data AS (
@@ -127,18 +127,39 @@ async function ensureSimilarityCached(
     candidates AS (
       SELECT DISTINCT original_name, source_dup_count FROM source_data
     ),
+    jw_pairs AS (
+      SELECT
+        c.original_name,
+        c.source_dup_count,
+        jaro_winkler_similarity(normalize_text_join(CAST(c.original_name AS VARCHAR)), ba.normalized, 0.85) AS score,
+        ba.id AS match_id,
+        ba.raw AS match_raw,
+        ba.basemap AS match_basemap,
+        ba.basemap_count AS match_basemap_count
+      FROM candidates c, basemap_attributes ba
+    ),
     matches AS (
-      FROM candidates, LATERAL (SELECT * FROM get_similarity(original_name, 'basemap_attributes'))
+      SELECT
+        original_name,
+        source_dup_count,
+        score AS match_score,
+        CASE WHEN score = 1 THEN 'exact' ELSE 'partial' END AS typo_match,
+        match_id,
+        match_raw,
+        match_basemap,
+        match_basemap_count
+      FROM jw_pairs
+      WHERE score > 0
     )
     SELECT
       c.original_name,
       c.source_dup_count,
-      m.id as match_id,
-      m.raw as match_raw,
-      m.score as match_score,
+      m.match_id,
+      m.match_raw,
+      m.match_score,
       m.typo_match,
-      m.basemap as match_basemap,
-      m.basemap_count as match_basemap_count
+      m.match_basemap,
+      m.match_basemap_count
     FROM candidates c
     LEFT JOIN matches m ON c.original_name = m.original_name
   `);
@@ -326,7 +347,7 @@ export async function computeJoinSynthesis(
   return (rows || []).map((r) => ({
     basemap: r.basemap,
     shareBasemap: r.share_basemap,
-    shareCandidate: r.share_candidate
+    shareCandidate: r.share_candidate * 100
   }));
 }
 
@@ -661,7 +682,12 @@ export async function finalizeJoin(
   });
 
   if (isOSMBasemap(basemap)) {
-    return finalizeOSMJoin(dataset, basemap);
+    return finalizeGPSJoin(dataset, basemap);
+  }
+
+  // GPS mode with a catalog/custom basemap: no textual join needed
+  if (!geoColumn && detectGPSColumns(dataset.columns)) {
+    return finalizeGPSJoin(dataset, basemap);
   }
 
   if (geoColumn) {
@@ -721,24 +747,26 @@ export async function finalizeJoin(
   };
 }
 
-function finalizeOSMJoin(
+function finalizeGPSJoin(
   dataset: DuckDBDataset,
   basemap: BasemapMetadata
 ): FinalizeJoinResult {
   const start = performance.now();
-  logger.info('Finalizing OSM join (GPS mode)', LogCategory.DATA, {
-    datasetId: dataset.id,
-    basemap: basemap.file
-  });
+  logger.info(
+    'Finalizing GPS join (no textual join needed)',
+    LogCategory.DATA,
+    {
+      datasetId: dataset.id,
+      basemap: basemap.file
+    }
+  );
 
   const gpsColumns = detectGPSColumns(dataset.columns);
   if (!gpsColumns) {
-    throw new Error(
-      'GPS columns (latitude/longitude) not found in dataset for OSM basemap'
-    );
+    throw new Error('GPS columns (latitude/longitude) not found in dataset');
   }
 
-  logger.success('OSM join finalized (GPS mode)', LogCategory.DATA, {
+  logger.success('GPS join finalized', LogCategory.DATA, {
     datasetId: dataset.id,
     basemap: basemap.file,
     gpsColumns,
@@ -792,7 +820,7 @@ export async function getJoinedArrowTable(
       ON ${colList}
       INTO NAME _attr_col VALUE _attr_val
     )
-    SELECT d.*, gu.geom
+    SELECT d.*, gu.geom AS geometry
     FROM "${escapedDataset}" d
     INNER JOIN (
       SELECT DISTINCT _attr_val, geom
@@ -802,11 +830,18 @@ export async function getJoinedArrowTable(
     WHERE gu.geom IS NOT NULL
   `);
 
-  const arrowTable = await getArrowTableDirect(joinedView);
+  let arrowTable = await getArrowTableDirect(joinedView);
+
+  // The joined view contains a geometry column from the basemap, but DuckDB
+  // does not propagate GeoArrow extension metadata through SQL VIEWs.
+  // addGeoArrowMetadata detects the native GeoArrow struct type from the
+  // Arrow field hierarchy and adds the required 'geo' schema metadata.
+  arrowTable = addGeoArrowMetadata(arrowTable);
 
   logger.success('Joined Arrow table created', LogCategory.MAP, {
     joinedView,
     rows: arrowTable.numRows,
+    hasGeoMetadata: Boolean(arrowTable.schema.metadata?.get('geo')),
     durationMs: (performance.now() - start).toFixed(2)
   });
 

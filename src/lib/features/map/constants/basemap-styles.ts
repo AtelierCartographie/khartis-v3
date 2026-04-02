@@ -4,10 +4,15 @@ import { MapLibreLayerType } from './map.constants';
 
 export enum BasemapStyle {
   BLANK_WHITE = 'blank-white',
-  CARTE_FACILE_DESATURATED = 'carte-facile-desaturated',
-  CARTE_FACILE_SIMPLE = 'carte-facile-simple',
-  CARTE_FACILE_AERIAL = 'carte-facile-aerial'
+  FRANCE_COULEURS = 'france-couleurs',
+  FRANCE_NIVEAUX_DE_GRIS = 'france-niveaux-de-gris',
+  FRANCE_SATELLITE = 'france-satellite',
+  MONDE_COULEURS = 'monde-couleurs',
+  MONDE_NIVEAUX_DE_GRIS = 'monde-niveaux-de-gris',
+  MONDE_SATELLITE = 'monde-satellite'
 }
+
+export const DEFAULT_TILED_BASEMAP_STYLE = BasemapStyle.FRANCE_NIVEAUX_DE_GRIS;
 
 type BasemapStyleResult = string | maplibregl.StyleSpecification;
 
@@ -28,12 +33,14 @@ const BLANK_WHITE_STYLE: maplibregl.StyleSpecification = {
 
 const BASEMAP_STYLE_PATHS: Record<BasemapStyle, string | null> = {
   [BasemapStyle.BLANK_WHITE]: null,
-  [BasemapStyle.CARTE_FACILE_DESATURATED]:
-    '/basemaps/styles/carte-facile-desaturated.json',
-  [BasemapStyle.CARTE_FACILE_SIMPLE]:
-    '/basemaps/styles/carte-facile-simple.json',
-  [BasemapStyle.CARTE_FACILE_AERIAL]:
-    '/basemaps/styles/carte-facile-aerial.json'
+  [BasemapStyle.FRANCE_COULEURS]: '/basemaps/styles/france-couleurs.json',
+  [BasemapStyle.FRANCE_NIVEAUX_DE_GRIS]:
+    '/basemaps/styles/france-niveaux-de-gris.json',
+  [BasemapStyle.FRANCE_SATELLITE]: '/basemaps/styles/france-satellite.json',
+  [BasemapStyle.MONDE_COULEURS]: '/basemaps/styles/monde-couleurs.json',
+  [BasemapStyle.MONDE_NIVEAUX_DE_GRIS]:
+    '/basemaps/styles/monde-niveaux-de-gris.json',
+  [BasemapStyle.MONDE_SATELLITE]: '/basemaps/styles/monde-satellite.json'
 };
 
 export function getBasemapStyle(style: BasemapStyle): BasemapStyleResult {

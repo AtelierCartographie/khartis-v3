@@ -2,8 +2,20 @@ import type { Layer } from '@deck.gl/core';
 import type { Matrix4 } from '@math.gl/core';
 import { GeoJsonLayer } from '@deck.gl/layers';
 import { PathStyleExtension } from '@deck.gl/extensions';
-import * as geodecklayers from '@geoarrow/deck.gl-layers';
+import { SolidPolygonLayer, PathLayer } from '@deck.gl/layers';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
+import {
+  createSolidPolygonLayerProps,
+  createPathLayerProps
+} from 'geoarrow-deck-stream';
+import {
+  parsePaths,
+  parseSolidPolygons,
+  parsePathsWithProjection,
+  parseSolidPolygonsWithProjection,
+  projectGeoJSON as _projectGeoJSON
+} from '../utils/geoarrow-stream-bridge';
+import type { ProjectionLike } from 'geoarrow-deck-stream';
 import * as d3 from 'd3-geo';
 import type {
   FeatureCollection,
@@ -44,10 +56,42 @@ import {
   BasemapCitySymbol
 } from '$lib/features/main-toolbar/constants';
 import type { DeckDataRow, GeometryInfo, RGBColor } from '../types';
+import type {
+  StylePreset,
+  StylePresets,
+  PathStylePreset
+} from '../types/basemap.types';
+import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import { withOpacity, dottedPatternToDashArray } from './layer-helpers';
 
 // Shared extension instance — avoids re-allocation per layer per frame
 const DASH_EXTENSION = new PathStyleExtension({ dash: true });
+
+/**
+ * WeakMap cache for basemap GeoJSON conversions — avoids O(n) arrowTableToGeoJSON()
+ * on every basemap config change (color, opacity, stroke). Same pattern as layer-factory.ts.
+ */
+const basemapGeoJsonCache = new WeakMap<
+  ArrowTable,
+  Map<string, FeatureCollection | null>
+>();
+
+function getCachedBasemapGeoJSON(
+  table: ArrowTable,
+  geoColumn: string
+): FeatureCollection | null {
+  let columnMap = basemapGeoJsonCache.get(table);
+  if (columnMap) {
+    const cached = columnMap.get(geoColumn);
+    if (cached !== undefined) return cached;
+  } else {
+    columnMap = new Map();
+    basemapGeoJsonCache.set(table, columnMap);
+  }
+  const result = arrowTableToGeoJSON(table, geoColumn);
+  columnMap.set(geoColumn, result);
+  return result;
+}
 
 // --- Graticule cache (Opt #2) ---
 let cachedGraticuleKey: string | null = null;
@@ -65,6 +109,7 @@ let cachedPolygonCities: FeatureCollection<Polygon> | null = null;
 interface BasemapLayerContext {
   modelMatrix?: Matrix4 | null;
   projectionSuffix?: string;
+  projection?: ProjectionLike;
 }
 
 interface BaseLayerProps {
@@ -163,55 +208,75 @@ export function createTerreLayers(
     isGeoArrowPolygonEncoding(geometryInfo) ||
     geometryInfo.isNativeGeoArrow
   ) {
+    const polyData = ctx.projection
+      ? parseSolidPolygonsWithProjection(worldBaseTable, ctx.projection)
+      : parseSolidPolygons(worldBaseTable);
+    const outlineData = ctx.projection
+      ? parsePathsWithProjection(worldBaseTable, ctx.projection)
+      : parsePaths(worldBaseTable);
+
     if (config.fillShadow) {
       layers.push(
-        new geodecklayers.GeoArrowPolygonLayer({
+        new PathLayer({
           id: `${layerId}-shadow`,
-          data: worldBaseTable,
-          filled: false,
-          stroked: true,
-          getLineColor: withOpacity([80, 80, 80], 0.15),
-          opacity: 1,
-          lineWidthUnits: 'pixels',
-          lineWidthScale: 1,
-          lineWidthMinPixels: 1,
-          lineWidthMaxPixels: 4,
+          ...createPathLayerProps(outlineData),
+          getColor: withOpacity([80, 80, 80], 0.15),
+          widthUnits: 'pixels',
+          getWidth: 1,
+          widthMinPixels: 1,
+          widthMaxPixels: 4,
           ...baseProps,
           updateTriggers: {
-            lineWidthScale: [config.strokeThickness]
+            getWidth: [config.strokeThickness]
           }
         })
       );
     }
 
+    // Fill layer
     layers.push(
-      new geodecklayers.GeoArrowPolygonLayer({
+      new SolidPolygonLayer({
         id: layerId,
-        data: worldBaseTable,
-        filled: true,
-        stroked: effectiveStrokeThickness > 0,
+        ...createSolidPolygonLayerProps(polyData),
         getFillColor: withOpacity(fillColor, fillOpacity),
-        getLineColor: withOpacity(strokeColor, effectiveStrokeOpacity),
-        opacity: 1,
-        lineWidthUnits: 'pixels',
-        lineWidthScale: effectiveStrokeThickness,
-        lineWidthMinPixels: 0,
-        lineWidthMaxPixels: 0.5,
-        extensions: config.strokeDotted ? [DASH_EXTENSION] : [],
-        getDashArray: dashArray,
         ...baseProps,
         updateTriggers: {
-          ...updateTriggers,
-          lineWidthScale: [effectiveStrokeThickness]
+          getFillColor: [config.fillColor, config.fillOpacity]
         }
       })
     );
+
+    // Stroke layer
+    if (effectiveStrokeThickness > 0) {
+      layers.push(
+        new PathLayer({
+          id: `${layerId}-stroke`,
+          ...createPathLayerProps(outlineData),
+          getColor: withOpacity(strokeColor, effectiveStrokeOpacity),
+          widthUnits: 'pixels',
+          getWidth: effectiveStrokeThickness,
+          widthMinPixels: 0,
+          widthMaxPixels: 0.5,
+          extensions: config.strokeDotted ? [DASH_EXTENSION] : [],
+          getDashArray: dashArray,
+          ...baseProps,
+          updateTriggers: {
+            getColor: [config.strokeColor, effectiveStrokeOpacity],
+            getWidth: [effectiveStrokeThickness],
+            getDashArray: [config.strokeDotted, config.strokeDottedPattern]
+          }
+        })
+      );
+    }
 
     return layers;
   }
 
   if (geometryInfo.isWkbEncoded || geometryInfo.isGeoJsonEncoded) {
-    const geojson = arrowTableToGeoJSON(worldBaseTable, geometryInfo.geoColumn);
+    const geojson = getCachedBasemapGeoJSON(
+      worldBaseTable,
+      geometryInfo.geoColumn
+    );
     if (geojson) {
       if (config.fillShadow) {
         layers.push(
@@ -299,9 +364,35 @@ export function createMersLayer(
     ]
   };
 
+  // When a projection is active, basemap layers are in d3-projected pixel space
+  // (~0-960, ~0-500). Create the ocean rectangle in that same space.
+  const oceanData = ctx.projection
+    ? {
+        type: GEOJSON_TYPE.FEATURE_COLLECTION,
+        features: [
+          {
+            type: GEOJSON_TYPE.FEATURE,
+            properties: {},
+            geometry: {
+              type: GEOJSON_TYPE.POLYGON,
+              coordinates: [
+                [
+                  [-1000, -1000],
+                  [2000, -1000],
+                  [2000, 2000],
+                  [-1000, 2000],
+                  [-1000, -1000]
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    : oceanGeoJSON;
+
   return new GeoJsonLayer({
     id: layerId,
-    data: oceanGeoJSON,
+    data: oceanData,
     filled: true,
     stroked: false,
     getFillColor: withOpacity(fillColor, opacity),
@@ -348,9 +439,12 @@ export function createFrontieresLayer(
     isLineGeometry(geometryInfo) &&
     (isGeoArrowLineEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow)
   ) {
-    return new geodecklayers.GeoArrowPathLayer({
+    const lineData = ctx.projection
+      ? parsePathsWithProjection(frontieresTable, ctx.projection)
+      : parsePaths(frontieresTable);
+    return new PathLayer({
       id: layerId,
-      data: frontieresTable,
+      ...createPathLayerProps(lineData),
       getColor: withOpacity(strokeColor, effectiveOpacity),
       widthUnits: 'pixels',
       getWidth: effectiveThickness,
@@ -369,7 +463,7 @@ export function createFrontieresLayer(
     isLineGeometry(geometryInfo) &&
     (geometryInfo.isWkbEncoded || geometryInfo.isGeoJsonEncoded)
   ) {
-    const geojson = arrowTableToGeoJSON(
+    const geojson = getCachedBasemapGeoJSON(
       frontieresTable,
       geometryInfo.geoColumn
     );
@@ -399,28 +493,29 @@ export function createFrontieresLayer(
     isGeoArrowPolygonEncoding(geometryInfo) ||
     geometryInfo.isNativeGeoArrow
   ) {
-    return new geodecklayers.GeoArrowPolygonLayer({
+    const outlineData = ctx.projection
+      ? parsePathsWithProjection(frontieresTable, ctx.projection)
+      : parsePaths(frontieresTable);
+    return new PathLayer({
       id: layerId,
-      data: frontieresTable,
-      filled: false,
-      stroked: true,
-      getLineColor: withOpacity(strokeColor, effectiveOpacity),
-      lineWidthUnits: 'pixels',
-      lineWidthScale: effectiveThickness,
-      lineWidthMinPixels: 0,
-      lineWidthMaxPixels: 0.5,
+      ...createPathLayerProps(outlineData),
+      getColor: withOpacity(strokeColor, effectiveOpacity),
+      widthUnits: 'pixels',
+      getWidth: effectiveThickness,
+      widthMinPixels: 0,
+      widthMaxPixels: 0.5,
       extensions: config.dotted ? [DASH_EXTENSION] : [],
       getDashArray: dashArray,
       ...baseProps,
       updateTriggers: {
         ...updateTriggers,
-        lineWidthScale: [effectiveThickness]
+        getWidth: [effectiveThickness]
       }
     });
   }
 
   if (geometryInfo.isWkbEncoded || geometryInfo.isGeoJsonEncoded) {
-    const geojson = arrowTableToGeoJSON(
+    const geojson = getCachedBasemapGeoJSON(
       frontieresTable,
       geometryInfo.geoColumn
     );
@@ -649,12 +744,12 @@ export function createRivieresLayer(
   });
 }
 
-export function createReliefLayer(
+export function createReliefLayers(
   worldBaseTable: ArrowTable,
   config: ReliefLayerConfig,
   ctx: BasemapLayerContext
-): Layer<DeckDataRow> | null {
-  if (!config.visible) return null;
+): Layer<DeckDataRow>[] {
+  if (!config.visible) return [];
 
   const geometryInfo = extractGeometryInfo(worldBaseTable);
   if (!geometryInfo) {
@@ -662,7 +757,7 @@ export function createReliefLayer(
       'World base table missing geo metadata for relief layer',
       LogCategory.MAP
     );
-    return null;
+    return [];
   }
 
   const baseColor = toRgbColor(config.color);
@@ -698,45 +793,73 @@ export function createReliefLayer(
     isGeoArrowPolygonEncoding(geometryInfo) ||
     geometryInfo.isNativeGeoArrow
   ) {
-    return new geodecklayers.GeoArrowPolygonLayer({
-      id: layerId,
-      data: worldBaseTable,
-      filled: !isContours,
-      stroked: true,
-      getFillColor: withOpacity(baseColor, fillOpacity),
-      getLineColor: withOpacity(lineColor, lineOpacity),
-      lineWidthUnits: 'pixels',
-      lineWidthScale: lineWidth,
-      lineWidthMinPixels: 0,
-      lineWidthMaxPixels: 1,
-      ...baseProps,
-      updateTriggers: {
-        ...updateTriggers,
-        lineWidthScale: [lineWidth]
-      }
-    });
+    const result: Layer<DeckDataRow>[] = [];
+    const outlineData = ctx.projection
+      ? parsePathsWithProjection(worldBaseTable, ctx.projection)
+      : parsePaths(worldBaseTable);
+
+    if (!isContours) {
+      const polyData = ctx.projection
+        ? parseSolidPolygonsWithProjection(worldBaseTable, ctx.projection)
+        : parseSolidPolygons(worldBaseTable);
+      result.push(
+        new SolidPolygonLayer({
+          id: layerId,
+          ...createSolidPolygonLayerProps(polyData),
+          getFillColor: withOpacity(baseColor, fillOpacity),
+          ...baseProps,
+          updateTriggers: {
+            getFillColor: [config.color, config.opacity, config.representation]
+          }
+        })
+      );
+    }
+
+    result.push(
+      new PathLayer({
+        id: `${layerId}-stroke`,
+        ...createPathLayerProps(outlineData),
+        getColor: withOpacity(lineColor, lineOpacity),
+        widthUnits: 'pixels',
+        getWidth: lineWidth,
+        widthMinPixels: 0,
+        widthMaxPixels: 1,
+        ...baseProps,
+        updateTriggers: {
+          getColor: [config.color, config.opacity, config.representation],
+          getWidth: [lineWidth]
+        }
+      })
+    );
+
+    return result;
   }
 
   if (geometryInfo.isWkbEncoded || geometryInfo.isGeoJsonEncoded) {
-    const geojson = arrowTableToGeoJSON(worldBaseTable, geometryInfo.geoColumn);
+    const geojson = getCachedBasemapGeoJSON(
+      worldBaseTable,
+      geometryInfo.geoColumn
+    );
     if (geojson) {
-      return new GeoJsonLayer({
-        id: layerId,
-        data: geojson,
-        filled: !isContours,
-        stroked: true,
-        getFillColor: withOpacity(baseColor, fillOpacity),
-        getLineColor: withOpacity(lineColor, lineOpacity),
-        lineWidthUnits: 'pixels',
-        getLineWidth: lineWidth,
-        lineWidthMinPixels: 0,
-        lineWidthMaxPixels: 1,
-        ...baseProps,
-        updateTriggers: {
-          ...updateTriggers,
-          getLineWidth: [lineWidth]
-        }
-      });
+      return [
+        new GeoJsonLayer({
+          id: layerId,
+          data: geojson,
+          filled: !isContours,
+          stroked: true,
+          getFillColor: withOpacity(baseColor, fillOpacity),
+          getLineColor: withOpacity(lineColor, lineOpacity),
+          lineWidthUnits: 'pixels',
+          getLineWidth: lineWidth,
+          lineWidthMinPixels: 0,
+          lineWidthMaxPixels: 1,
+          ...baseProps,
+          updateTriggers: {
+            ...updateTriggers,
+            getLineWidth: [lineWidth]
+          }
+        })
+      ];
     }
     logger.warn(
       'Failed to convert world base table to GeoJSON for relief layer',
@@ -744,7 +867,7 @@ export function createReliefLayer(
     );
   }
 
-  return null;
+  return [];
 }
 
 function getSymbolPolygonSides(symbol: BasemapCitySymbol): number {
@@ -952,110 +1075,468 @@ export function createVillesLayer(
   });
 }
 
-interface BasemapAdditionalData {
-  lakesData?: FeatureCollection<Polygon | MultiPolygon>;
-  riversData?: FeatureCollection<LineString | MultiLineString>;
-  citiesData?: FeatureCollection<Point>;
+// ---------------------------------------------------------------------------
+// Metadata-driven layer types (from basemap metadata + style-presets.json)
+// ---------------------------------------------------------------------------
+
+export interface MetadataLayerEntry {
+  table: ArrowTable;
+  style: string | null;
+  type: BasemapLayerType;
+  file: string;
+}
+
+function resolveStylePreset(
+  styleKey: string | null,
+  stylePresets: StylePresets | null
+): StylePreset | null {
+  if (!styleKey || !stylePresets) return null;
+  return stylePresets[styleKey] ?? null;
+}
+
+function createMetadataLandLayers(
+  entries: MetadataLayerEntry[],
+  stylePresets: StylePresets | null,
+  ctx: BasemapLayerContext
+): Layer<DeckDataRow>[] {
+  const layers: Layer<DeckDataRow>[] = [];
+  const baseProps = getBaseLayerProps(ctx);
+
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    const geometryInfo = extractGeometryInfo(entry.table);
+    if (!geometryInfo) continue;
+
+    const preset = resolveStylePreset(entry.style, stylePresets);
+    const fillColor: [number, number, number, number] =
+      preset && 'fillColor' in preset ? preset.fillColor : [220, 220, 220, 255];
+
+    const layerId = buildLayerId(
+      DeckLayerId.BASEMAP_META_LAND,
+      `${ctx.projectionSuffix}-${i}`
+    );
+
+    if (
+      isGeoArrowPolygonEncoding(geometryInfo) ||
+      geometryInfo.isNativeGeoArrow
+    ) {
+      const polyData = ctx.projection
+        ? parseSolidPolygonsWithProjection(entry.table, ctx.projection)
+        : parseSolidPolygons(entry.table);
+      layers.push(
+        new SolidPolygonLayer({
+          id: layerId,
+          ...createSolidPolygonLayerProps(polyData),
+          getFillColor: fillColor,
+          ...baseProps
+        })
+      );
+    } else if (geometryInfo.isWkbEncoded || geometryInfo.isGeoJsonEncoded) {
+      const geojson = getCachedBasemapGeoJSON(
+        entry.table,
+        geometryInfo.geoColumn
+      );
+      if (geojson) {
+        layers.push(
+          new GeoJsonLayer({
+            id: layerId,
+            data: geojson,
+            filled: true,
+            stroked: false,
+            getFillColor: fillColor,
+            ...baseProps
+          })
+        );
+      }
+    }
+  }
+
+  return layers;
+}
+
+function createMetadataLimitLayers(
+  entries: MetadataLayerEntry[],
+  stylePresets: StylePresets | null,
+  ctx: BasemapLayerContext,
+  visible: boolean
+): Layer<DeckDataRow>[] {
+  if (!visible) return [];
+
+  const layers: Layer<DeckDataRow>[] = [];
+  const baseProps = getBaseLayerProps(ctx);
+
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    const geometryInfo = extractGeometryInfo(entry.table);
+    if (!geometryInfo) continue;
+
+    const preset = resolveStylePreset(entry.style, stylePresets);
+    const color: [number, number, number, number] =
+      preset && 'color' in preset ? preset.color : [150, 150, 150, 200];
+    const width =
+      preset && 'width' in preset ? (preset as PathStylePreset).width : 0.5;
+
+    const layerId = buildLayerId(
+      DeckLayerId.BASEMAP_META_LIMIT,
+      `${ctx.projectionSuffix}-${i}`
+    );
+
+    if (
+      isLineGeometry(geometryInfo) &&
+      (isGeoArrowLineEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow)
+    ) {
+      const lineData = ctx.projection
+        ? parsePathsWithProjection(entry.table, ctx.projection)
+        : parsePaths(entry.table);
+      layers.push(
+        new PathLayer({
+          id: layerId,
+          ...createPathLayerProps(lineData),
+          getColor: color,
+          widthUnits: 'pixels',
+          getWidth: width,
+          widthMinPixels: 0,
+          ...baseProps
+        })
+      );
+    } else if (
+      isGeoArrowPolygonEncoding(geometryInfo) ||
+      geometryInfo.isNativeGeoArrow
+    ) {
+      const outlineData = ctx.projection
+        ? parsePathsWithProjection(entry.table, ctx.projection)
+        : parsePaths(entry.table);
+      layers.push(
+        new PathLayer({
+          id: layerId,
+          ...createPathLayerProps(outlineData),
+          getColor: color,
+          widthUnits: 'pixels',
+          getWidth: width,
+          widthMinPixels: 0,
+          ...baseProps
+        })
+      );
+    } else if (geometryInfo.isWkbEncoded || geometryInfo.isGeoJsonEncoded) {
+      const geojson = getCachedBasemapGeoJSON(
+        entry.table,
+        geometryInfo.geoColumn
+      );
+      if (geojson) {
+        layers.push(
+          new GeoJsonLayer({
+            id: layerId,
+            data: geojson,
+            filled: false,
+            stroked: true,
+            getLineColor: color,
+            lineWidthUnits: 'pixels',
+            getLineWidth: width,
+            lineWidthMinPixels: 0,
+            ...baseProps
+          })
+        );
+      }
+    }
+  }
+
+  return layers;
+}
+
+function createMetadataGraticuleLayers(
+  entries: MetadataLayerEntry[],
+  stylePresets: StylePresets | null,
+  ctx: BasemapLayerContext,
+  visible: boolean
+): Layer<DeckDataRow>[] {
+  if (!visible) return [];
+
+  const layers: Layer<DeckDataRow>[] = [];
+  const baseProps = getBaseLayerProps(ctx);
+
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    const geometryInfo = extractGeometryInfo(entry.table);
+    if (!geometryInfo) continue;
+
+    const preset = resolveStylePreset(entry.style, stylePresets);
+    const color: [number, number, number, number] =
+      preset && 'color' in preset ? preset.color : [160, 190, 220, 90];
+    const width =
+      preset && 'width' in preset ? (preset as PathStylePreset).width : 0.5;
+
+    const layerId = buildLayerId(
+      DeckLayerId.BASEMAP_META_GRATICULE,
+      `${ctx.projectionSuffix}-${i}`
+    );
+
+    if (
+      isLineGeometry(geometryInfo) &&
+      (isGeoArrowLineEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow)
+    ) {
+      const lineData = ctx.projection
+        ? parsePathsWithProjection(entry.table, ctx.projection)
+        : parsePaths(entry.table);
+      layers.push(
+        new PathLayer({
+          id: layerId,
+          ...createPathLayerProps(lineData),
+          getColor: color,
+          widthUnits: 'pixels',
+          getWidth: width,
+          widthMinPixels: 0,
+          ...baseProps
+        })
+      );
+    } else if (geometryInfo.isWkbEncoded || geometryInfo.isGeoJsonEncoded) {
+      const geojson = getCachedBasemapGeoJSON(
+        entry.table,
+        geometryInfo.geoColumn
+      );
+      if (geojson) {
+        layers.push(
+          new GeoJsonLayer({
+            id: layerId,
+            data: geojson,
+            filled: false,
+            stroked: true,
+            getLineColor: color,
+            lineWidthUnits: 'pixels',
+            getLineWidth: width,
+            lineWidthMinPixels: 0.5,
+            ...baseProps
+          })
+        );
+      }
+    }
+  }
+
+  return layers;
+}
+
+function createMetadataGeoLinesLayers(
+  entries: MetadataLayerEntry[],
+  stylePresets: StylePresets | null,
+  ctx: BasemapLayerContext,
+  visible: boolean
+): Layer<DeckDataRow>[] {
+  if (!visible) return [];
+
+  const layers: Layer<DeckDataRow>[] = [];
+  const baseProps = getBaseLayerProps(ctx);
+
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    const geometryInfo = extractGeometryInfo(entry.table);
+    if (!geometryInfo) continue;
+
+    const preset = resolveStylePreset(entry.style, stylePresets);
+    const color: [number, number, number, number] =
+      preset && 'color' in preset ? preset.color : [100, 150, 210, 160];
+    const width =
+      preset && 'width' in preset ? (preset as PathStylePreset).width : 1.0;
+
+    const layerId = buildLayerId(
+      DeckLayerId.BASEMAP_META_GEO_LINES,
+      `${ctx.projectionSuffix}-${i}`
+    );
+
+    if (
+      isLineGeometry(geometryInfo) &&
+      (isGeoArrowLineEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow)
+    ) {
+      const lineData = ctx.projection
+        ? parsePathsWithProjection(entry.table, ctx.projection)
+        : parsePaths(entry.table);
+      layers.push(
+        new PathLayer({
+          id: layerId,
+          ...createPathLayerProps(lineData),
+          getColor: color,
+          widthUnits: 'pixels',
+          getWidth: width,
+          widthMinPixels: 1,
+          ...baseProps
+        })
+      );
+    } else if (geometryInfo.isWkbEncoded || geometryInfo.isGeoJsonEncoded) {
+      const geojson = getCachedBasemapGeoJSON(
+        entry.table,
+        geometryInfo.geoColumn
+      );
+      if (geojson) {
+        layers.push(
+          new GeoJsonLayer({
+            id: layerId,
+            data: geojson,
+            filled: false,
+            stroked: true,
+            getLineColor: color,
+            lineWidthUnits: 'pixels',
+            getLineWidth: width,
+            lineWidthMinPixels: 1,
+            ...baseProps
+          })
+        );
+      }
+    }
+  }
+
+  return layers;
+}
+
+// ---------------------------------------------------------------------------
+// Main basemap layer orchestrator
+// ---------------------------------------------------------------------------
+
+export interface BasemapAdditionalData {
   frontieresTable?: ArrowTable;
+  metadataLayers?: MetadataLayerEntry[];
+  stylePresets?: StylePresets | null;
+}
+
+export interface BasemapLayerGroups {
+  /** Layers rendered below data: land fill, seas, lakes, relief */
+  background: Layer<DeckDataRow>[];
+  /** Layers rendered above data: borders, rivers, graticules, cities */
+  foreground: Layer<DeckDataRow>[];
 }
 
 export function createBasemapLayers(
   worldBaseTable: ArrowTable | null,
   ctx: BasemapLayerContext,
   additionalData?: BasemapAdditionalData
-): Layer<DeckDataRow>[] {
-  const layers: Layer<DeckDataRow>[] = [];
+): BasemapLayerGroups {
+  const background: Layer<DeckDataRow>[] = [];
+  const foreground: Layer<DeckDataRow>[] = [];
+
+  const metaLayers = additionalData?.metadataLayers ?? [];
+  const stylePresets = additionalData?.stylePresets ?? null;
+
+  const metaByType = (type: BasemapLayerType) =>
+    metaLayers.filter((l) => l.type === type);
+
+  const landEntries = metaByType(BasemapLayerType.LAND);
+  const limitEntries = metaByType(BasemapLayerType.LIMIT);
+  const graticuleEntries = metaByType(BasemapLayerType.GRATICULE);
+  const geoLinesEntries = metaByType(BasemapLayerType.GEOGRAPHIC_LINES);
+  const hasMetadataLimits = limitEntries.length > 0;
+  const hasMetadataGraticule = graticuleEntries.length > 0;
+  const hasMetadataGeoLines = geoLinesEntries.length > 0;
 
   for (const config of basemapLayersStore.layers) {
     if (!config.visible) continue;
 
     try {
       switch (config.id) {
+        // --- Background layers (below data) ---
         case BASEMAP_LAYER_ID.MERS: {
           const layer = createMersLayer(config as MersLayerConfig, ctx);
-          if (layer) layers.push(layer);
+          if (layer) background.push(layer);
           break;
         }
 
-        case BASEMAP_LAYER_ID.TERRE:
+        case BASEMAP_LAYER_ID.TERRE: {
           if (worldBaseTable) {
+            // Main basemap geometry provides full land coverage
             const terreLayers = createTerreLayers(
               worldBaseTable,
               config as TerreLayerConfig,
               ctx
             );
-            layers.push(...terreLayers);
+            background.push(...terreLayers);
+          } else if (landEntries.length > 0) {
+            // Fallback: metadata land layers when no main geometry table
+            const landLayers = createMetadataLandLayers(
+              landEntries,
+              stylePresets,
+              ctx
+            );
+            background.push(...landLayers);
           }
           break;
+        }
 
         case BASEMAP_LAYER_ID.LACS:
-          if (additionalData?.lakesData) {
-            const layer = createLacsLayer(
-              additionalData.lakesData,
-              config as LacsLayerConfig,
-              ctx
-            );
-            if (layer) layers.push(layer);
-          }
           break;
 
-        case BASEMAP_LAYER_ID.RIVIERES:
-          if (additionalData?.riversData) {
-            const layer = createRivieresLayer(
-              additionalData.riversData,
-              config as RivieresLayerConfig,
-              ctx
-            );
-            if (layer) layers.push(layer);
-          }
-          break;
-
-        case BASEMAP_LAYER_ID.FRONTIERES:
+        case BASEMAP_LAYER_ID.RELIEF:
           if (worldBaseTable) {
+            const reliefLayers = createReliefLayers(
+              worldBaseTable,
+              config as ReliefLayerConfig,
+              ctx
+            );
+            background.push(...reliefLayers);
+          }
+          break;
+
+        // --- Foreground layers (above data) ---
+        case BASEMAP_LAYER_ID.FRONTIERES: {
+          // Use metadata limits when available (supports multiple limit levels)
+          if (hasMetadataLimits) {
+            const limitLayers = createMetadataLimitLayers(
+              limitEntries,
+              stylePresets,
+              ctx,
+              config.visible
+            );
+            foreground.push(...limitLayers);
+          } else if (worldBaseTable) {
             const layer = createFrontieresLayer(
               additionalData?.frontieresTable ?? worldBaseTable,
               config as FrontieresLayerConfig,
               ctx
             );
-            if (layer) layers.push(layer);
+            if (layer) foreground.push(layer);
           }
+          break;
+        }
+
+        case BASEMAP_LAYER_ID.RIVIERES:
           break;
 
         case BASEMAP_LAYER_ID.EQUATEUR: {
-          const layer = createEquateurLayer(config as EquateurLayerConfig, ctx);
-          if (layer) layers.push(layer);
+          // Use metadata geographic-lines when available (richer than hardcoded equator)
+          if (hasMetadataGeoLines) {
+            const geoLineLayers = createMetadataGeoLinesLayers(
+              geoLinesEntries,
+              stylePresets,
+              ctx,
+              config.visible
+            );
+            foreground.push(...geoLineLayers);
+          } else {
+            const layer = createEquateurLayer(
+              config as EquateurLayerConfig,
+              ctx
+            );
+            if (layer) foreground.push(layer);
+          }
           break;
         }
 
         case BASEMAP_LAYER_ID.MERIDIENS: {
-          const layer = createMeridiensLayer(
-            config as MeridiensLayerConfig,
-            ctx
-          );
-          if (layer) layers.push(layer);
+          // Use metadata graticule when available (from parquet instead of d3-generated)
+          if (hasMetadataGraticule) {
+            const graticuleLayers = createMetadataGraticuleLayers(
+              graticuleEntries,
+              stylePresets,
+              ctx,
+              config.visible
+            );
+            foreground.push(...graticuleLayers);
+          } else {
+            const layer = createMeridiensLayer(
+              config as MeridiensLayerConfig,
+              ctx
+            );
+            if (layer) foreground.push(layer);
+          }
           break;
         }
 
         case BASEMAP_LAYER_ID.VILLES:
-          if (additionalData?.citiesData) {
-            const layer = createVillesLayer(
-              additionalData.citiesData,
-              config as VillesLayerConfig,
-              ctx
-            );
-            if (layer) layers.push(layer);
-          }
-          break;
-
-        case BASEMAP_LAYER_ID.RELIEF:
-          if (worldBaseTable) {
-            const layer = createReliefLayer(
-              worldBaseTable,
-              config as ReliefLayerConfig,
-              ctx
-            );
-            if (layer) layers.push(layer);
-          }
           break;
       }
     } catch (error) {
@@ -1070,5 +1551,8 @@ export function createBasemapLayers(
     }
   }
 
-  return layers;
+  // Centroid data from metadata is available for label placement but NOT
+  // rendered as visible dots — labels use computed polygon centroids instead.
+
+  return { background, foreground };
 }

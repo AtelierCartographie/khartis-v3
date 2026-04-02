@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Dropdown } from 'carbon-components-svelte';
   import * as m from '$lib/paraglide/messages';
+  import { DEFAULT_QUALITATIVE_PREVIEW } from '../palette-popover/palette.constants';
   import {
     MissingDataShape,
     SLIDER_LIMITS,
@@ -28,7 +29,9 @@
     onOpenDiscretization
   }: SymbolModeProps = $props();
 
-  const qualitativePalette = ['#009d9a', '#f1c21b', '#ff832b', '#a56eff'];
+  const currentPalette = $derived(
+    visualization?.classification?.colors ?? DEFAULT_QUALITATIVE_PREVIEW
+  );
 
   let selectedFieldId = $state<number>(0);
   let categoryCount = $state<number>(4);
@@ -64,6 +67,7 @@
     }
     if (visualization?.classification) {
       categoryCount =
+        visualization.classification.labels?.length ??
         visualization.classification.numClasses ??
         visualization.classification.classes ??
         4;
@@ -126,7 +130,8 @@
 />
 <PalettePreview
   label={m.color_palette()}
-  colors={qualitativePalette}
+  colors={currentPalette}
+  selectedPaletteId={visualization?.classification?.paletteId}
   oninvert={onInvertPalette}
   onClassificationChange={onClassificationChange}
 />

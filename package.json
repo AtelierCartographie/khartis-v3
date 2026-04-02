@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "engines": {
-    "node": ">=22.0.0 <23.0.0"
+    "node": ">=22.0.0 <25.0.0"
   },
   "contributors": [
     {
@@ -74,17 +74,17 @@
     "init:project": "npx husky init && pnpm install"
   },
   "devDependencies": {
-    "@commitlint/cli": "^20.4.3",
-    "@commitlint/config-conventional": "^20.4.3",
+    "@commitlint/cli": "^20.5.0",
+    "@commitlint/config-conventional": "^20.5.0",
     "@duckdb/node-api": "1.4.4-r.1",
     "@eslint/compat": "^2.0.3",
     "@eslint/js": "^9.39.4",
-    "@inlang/cli": "^3.1.6",
-    "@playwright/test": "^1.58.2",
+    "@inlang/cli": "^3.1.9",
+    "@playwright/test": "^1.59.0",
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/git": "^10.0.1",
     "@sveltejs/adapter-static": "^3.0.10",
-    "@sveltejs/kit": "^2.53.4",
+    "@sveltejs/kit": "^2.55.0",
     "@sveltejs/vite-plugin-svelte": "^6.2.4",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/svelte": "^5.3.1",
@@ -92,70 +92,80 @@
     "@types/geojson": "^7946.0.16",
     "@types/node": "^22.19.15",
     "@vite-pwa/assets-generator": "^1.0.2",
-    "@vitest/coverage-v8": "^4.0.18",
-    "@vitest/ui": "^4.0.18",
-    "carbon-preprocess-svelte": "^0.11.27",
-    "duckdb": "^1.4.4",
+    "carbon-preprocess-svelte": "^0.11.29",
     "eslint": "^9.39.4",
     "eslint-config-prettier": "^10.1.8",
-    "eslint-plugin-svelte": "^3.15.2",
+    "eslint-plugin-svelte": "^3.16.0",
     "globals": "^16.5.0",
     "husky": "^9.1.7",
     "jsdom": "^27.4.0",
-    "playwright": "^1.58.2",
+    "knip": "^6.2.0",
+    "lint-staged": "^16.4.0",
+    "playwright": "^1.59.0",
     "prettier": "^3.8.1",
     "prettier-plugin-svelte": "^3.5.1",
+    "rollup-plugin-visualizer": "^7.0.1",
     "sass-embedded": "^1.98.0",
     "semantic-release": "^25.0.3",
-    "svelte": "^5.53.10",
-    "svelte-check": "^4.4.5",
+    "svelte": "^5.55.1",
+    "svelte-check": "^4.4.6",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.57.0",
+    "typescript-eslint": "^8.58.0",
     "vite": "^7.3.1",
-    "vitest": "^4.0.18",
+    "vitest": "^4.1.2",
     "workbox-window": "^7.4.0"
   },
   "dependencies": {
     "@ateliercartographie/motif.js": "^0.1.5",
     "@ateliercartographie/ok-palette": "^0.1.4",
-    "@deck.gl/aggregation-layers": "^9.2.11",
     "@deck.gl/core": "^9.2.11",
     "@deck.gl/extensions": "^9.2.11",
-    "@deck.gl/geo-layers": "^9.2.11",
     "@deck.gl/layers": "^9.2.11",
     "@deck.gl/mapbox": "^9.2.11",
-    "@duckdb/duckdb-wasm": "1.31.0",
-    "@geoarrow/deck.gl-layers": "^0.3.1",
-    "@geoarrow/geoparquet-wasm": "0.2.0-beta.5",
-    "@inlang/paraglide-js": "^2.14.0",
-    "@luma.gl/core": "^9.2.6",
+    "@duckdb/duckdb-wasm": "1.33.1-dev41.0",
+    "@inlang/paraglide-js": "^2.15.1",
+    "@luma.gl/core": "9.2.6",
     "@math.gl/core": "^4.1.0",
-    "@observablehq/plot": "^0.6.17",
     "@uwdata/flechette": "^2.3.0",
     "apache-arrow": "^21.1.0",
     "carbon-components-svelte": "^0.96.3",
-    "carbon-icons-svelte": "^13.9.0",
+    "carbon-icons-svelte": "^13.10.0",
     "clsx": "^2.1.1",
     "d3-geo": "^3.1.1",
     "d3-geo-projection": "^4.0.0",
     "fflate": "^0.8.2",
+    "geoarrow-deck-stream": "github:AtelierCartographie/geoarrow-deck-stream#30346ce",
+    "html-to-image": "^1.11.13",
     "localforage": "^1.10.0",
-    "maplibre-gl": "^5.20.0",
+    "maplibre-gl": "^5.21.1",
+    "parquet-wasm": "^0.7.1",
+    "proj-suggest": "github:AtelierCartographie/proj-suggest",
     "proj4": "^2.20.4",
     "svelte-dnd-action": "^0.9.69",
     "vite-plugin-pwa": "^1.2.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
-      "esbuild"
+      "esbuild",
+      "geoarrow-deck-stream",
+      "proj-suggest"
     ],
     "overrides": {
-      "rollup": ">=4.59.0",
+      "rollup": "4.60.0",
       "fast-xml-parser": ">=4.5.4",
       "serialize-javascript": ">=7.0.3",
       "tar": ">=7.5.11",
       "cookie": ">=0.7.0"
     }
+  },
+  "lint-staged": {
+    "*.{ts,js,svelte}": [
+      "prettier --write",
+      "eslint --fix --no-warn-ignored"
+    ],
+    "*.{json,md,css,scss,html,yaml,yml}": [
+      "prettier --write"
+    ]
   },
   "packageManager": "pnpm@10.26.0+sha512.3b3f6c725ebe712506c0ab1ad4133cf86b1f4b687effce62a9b38b4d72e3954242e643190fc51fa1642949c735f403debd44f5cb0edd657abe63a8b6a7e1e402"
 }
