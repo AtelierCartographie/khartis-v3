@@ -80,6 +80,9 @@
     sourceFileId?: string;
     joinedBasemap?: string;
     gpsMode?: boolean;
+    geoDetection?: {
+      geoColumns?: Array<{ type?: string }>;
+    };
   }): VizSuggestion | undefined {
     const geometryType = resolveDatasetGeometryType(dataset);
     if (!geometryType) return undefined;

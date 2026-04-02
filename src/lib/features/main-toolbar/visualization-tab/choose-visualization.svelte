@@ -106,11 +106,13 @@
           sourceFileId?: string;
           joinedBasemap?: string;
           gpsMode?: boolean;
+          geoDetection?: {
+            geoColumns?: Array<{ type?: string }>;
+          };
         }
       ) ||
       (dataset.geometry?.type as GeometryType) ||
       null;
-
 
     return vizSuggester.suggestVisualizations(columnAnalysis, geometryType, {
       maxSuggestions: UI_CONSTANTS.MAX_SUGGESTIONS
@@ -172,8 +174,9 @@
     const dataset = selectedDataset;
     if (!dataset) return;
 
-    const existingVizs =
-      visualizationStore.getVisualizationsByDataset(dataset.id);
+    const existingVizs = visualizationStore.getVisualizationsByDataset(
+      dataset.id
+    );
     const selectedViz = visualizationStore.selectedVisualization;
 
     if (selectedViz && existingVizs.some((v) => v.id === selectedViz.id)) {
@@ -438,7 +441,9 @@
 
                 {#if suggestion.score != null && suggestion.score > 0}
                   <div class="card-score">
-                    {m.suggestion_score_label({ score: String(suggestion.score) })}
+                    {m.suggestion_score_label({
+                      score: String(suggestion.score)
+                    })}
                   </div>
                 {/if}
 
