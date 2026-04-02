@@ -1,4 +1,4 @@
-# Strategie de tests -- Khartis v3
+# Stratégie de tests -- Khartis v3
 
 > Guide synthetique de la strategie de tests multi-couches.
 
@@ -100,25 +100,25 @@ test: {
 tests/
   pipeline/
     pipeline-integration.test.ts    # Integration : ingestion DuckDB de tous les formats
-    serialization-safety.test.ts    # Round-trip binaire + compatibilite
-    validators.test.ts              # Validation de fichiers
-    format-detector.test.ts         # Detection de format
-    duckdb-node-helper.ts           # Utilitaire de connexion DuckDB Node
-    ...                             # 30+ fichiers de test (processeurs, orchestrateur, etc.)
+    serialization-safety.test.ts  # Round-trip binaire + compatibilite
+    validators.test.ts             # Validation de fichiers
+    format-detector.test.ts        # Detection de format
+    duckdb-node-helper.ts         # Utilitaire de connexion DuckDB Node
+    ...                            # 30+ fichiers de test (processeurs, orchestrateur, etc.)
   duckdb/
-    duck.test.ts                    # Tests DuckDB engine
-    column-ops.test.ts              # Operations sur les colonnes
-    join.test.ts                    # Jointures
-    ...                             # Tests cache, simplification, etc.
+    duck.test.ts                   # Tests DuckDB engine
+    column-ops.test.ts             # Operations sur les colonnes
+    join.test.ts                   # Jointures
+    ...                            # Tests cache, simplification, etc.
   e2e/
-    catalog-search.spec.ts          # L'app charge et le modal est accessible
-    enrich-workflow.spec.ts         # Import d'un fichier geo
-    join-workflow.spec.ts           # Workflow tabulaire (CSV)
-    join-second-dataset.spec.ts     # Ajout d'un second dataset
-    url-import.spec.ts              # Erreur sur URL invalide
-    osm-activation.spec.ts          # Upload CSV (tabular et GPS)
-    incomplete-shapefile.spec.ts    # Erreur sur shapefile incomplet
-    helpers.ts                      # Utilitaires E2E (upload, navigation)
+    catalog-search.spec.ts         # L'app charge et le modal est accessible
+    enrich-workflow.spec.ts        # Import d'un fichier geo
+    join-workflow.spec.ts          # Workflow tabulaire (CSV)
+    join-second-dataset.spec.ts    # Ajout d'un second dataset
+    url-import.spec.ts             # Erreur sur URL invalide
+    osm-activation.spec.ts         # Upload CSV (tabular et GPS)
+    incomplete-shapefile.spec.ts   # Erreur sur shapefile incomplet
+    helpers.ts                     # Utilitaires E2E (upload, navigation)
 ```
 
 ---

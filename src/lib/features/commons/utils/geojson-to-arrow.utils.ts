@@ -129,6 +129,8 @@ export function extractColumnarData(
 
     if (schema.hasGeometry) {
       if (feature.geometry) {
+        // JSON.stringify is required: Arrow tableFromArrays() only accepts primitives.
+        // DuckDB immediately converts back via ST_GeomFromGeoJSON() in geojson-processor.ts.
         columns[GEOMETRY_COLUMN_NAME].push(JSON.stringify(feature.geometry));
       } else {
         columns[GEOMETRY_COLUMN_NAME].push(null);
