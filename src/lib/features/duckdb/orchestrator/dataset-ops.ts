@@ -28,6 +28,7 @@ export interface DuckDBClientForDataset {
     tableName: string,
     options?: { force?: boolean }
   ): Promise<AnalysisResult[]>;
+  cleanupTableResources?(tableName: string): void;
 }
 
 export interface DatasetCallbacks {
@@ -238,6 +239,10 @@ export async function dropTable(
     if (state.currentTableName === tableName) {
       setCurrentTableName(null);
     }
+
+    // Clear cached metadata for the dropped table (prevents reference leaks)
+    Duck.cleanupTableResources?.(tableName);
+
     logger.info('Dropped DuckDB table', LogCategory.DUCKDB, {
       tableName,
       durationMs: (performance.now() - start).toFixed(2)
