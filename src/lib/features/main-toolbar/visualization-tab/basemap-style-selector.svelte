@@ -1,6 +1,10 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
-  import { RadioButtonGroup, RadioButton, Toggle } from 'carbon-components-svelte';
+  import {
+    RadioButtonGroup,
+    RadioButton,
+    Toggle
+  } from 'carbon-components-svelte';
   import { InfoPopover } from './components/shared';
   import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
   import { BasemapStyle } from '$lib/features/map/constants/basemap-styles';
@@ -15,7 +19,9 @@
   } from '$lib/features/map/constants/carte-facile-layer-groups';
 
   // Derive zone and style variant from the currently selected style
-  const currentConfig = $derived(getStyleConfig(basemapStyleStore.selectedStyle));
+  const currentConfig = $derived(
+    getStyleConfig(basemapStyleStore.selectedStyle)
+  );
 
   const selectedZone = $derived<ZoneId>(currentConfig?.zone ?? 'france');
 
@@ -30,12 +36,15 @@
   );
 
   function getZoneLabel(zone: ZoneId): string {
-    return zone === 'france' ? m.carte_facile_zone_france() : m.carte_facile_zone_monde();
+    return zone === 'france'
+      ? m.carte_facile_zone_france()
+      : m.carte_facile_zone_monde();
   }
 
   function getVariantLabel(variant: StyleVariantId): string {
     if (variant === 'couleurs') return m.carte_facile_style_couleurs();
-    if (variant === 'niveaux-de-gris') return m.carte_facile_style_niveaux_de_gris();
+    if (variant === 'niveaux-de-gris')
+      return m.carte_facile_style_niveaux_de_gris();
     return m.carte_facile_style_satellite();
   }
 
@@ -65,7 +74,9 @@
   function handleZoneChange(zone: ZoneId): void {
     // Keep the same style variant when switching zones
     const stylesInNewZone = getStylesForZone(zone);
-    const sameVariant = stylesInNewZone.find((s) => s.style === selectedVariant);
+    const sameVariant = stylesInNewZone.find(
+      (s) => s.style === selectedVariant
+    );
     const newStyle = sameVariant ?? stylesInNewZone[0];
     if (newStyle) {
       basemapStyleStore.setStyle(newStyle.id as BasemapStyle);
@@ -82,7 +93,9 @@
   ): void {
     // Preserve scroll position — Carbon Toggle triggers browser auto-scroll
     // on focus, which can push the toolbar content out of view.
-    const scrollable = (e.target as HTMLElement)?.closest('.toolbar-content, .scrollbar-hidden');
+    const scrollable = (e.target as HTMLElement)?.closest(
+      '.toolbar-content, .scrollbar-hidden'
+    );
     const scrollTop = scrollable?.scrollTop ?? 0;
     basemapStyleStore.setGroupVisibility(groupId, e.detail.toggled);
     if (scrollable) {
@@ -91,8 +104,6 @@
       });
     }
   }
-
-
 </script>
 
 <div class="basemap-style-selector">
@@ -122,7 +133,10 @@
     on:change={(e) => handleStyleChange(e.detail as string)}
   >
     {#each stylesForZone as styleConfig (styleConfig.id)}
-      <RadioButton labelText={getVariantLabel(styleConfig.style)} value={styleConfig.id} />
+      <RadioButton
+        labelText={getVariantLabel(styleConfig.style)}
+        value={styleConfig.id}
+      />
     {/each}
   </RadioButtonGroup>
 
@@ -135,7 +149,8 @@
           <Toggle
             size="sm"
             labelText={getGroupLabel(group.id)}
-            toggled={basemapStyleStore.groupVisibility[group.id] ?? group.defaultVisible}
+            toggled={basemapStyleStore.groupVisibility[group.id] ??
+              group.defaultVisible}
             on:toggle={(e) => handleGroupToggle(group.id, e)}
           />
         {/each}

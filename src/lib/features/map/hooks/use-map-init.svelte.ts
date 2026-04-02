@@ -379,7 +379,6 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
     }
   }
 
-  let _initialStyleKey: string | null = null;
   let mapEventSubscriptions: Array<{ unsubscribe: () => void }> = [];
 
   function initializeMapLibre(
@@ -387,8 +386,6 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
     config: MapInitConfig = DEFAULT_CONFIG
   ): void {
     const style = basemapStyleStore.selectedStyleUrl;
-    _initialStyleKey =
-      typeof style === 'string' ? style : style.name || 'inline-style';
 
     logger.info('Initializing MapLibre + Deck.gl overlay', LogCategory.MAP);
 

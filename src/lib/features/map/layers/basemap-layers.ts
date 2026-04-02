@@ -6,16 +6,13 @@ import { SolidPolygonLayer, PathLayer } from '@deck.gl/layers';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import {
   createSolidPolygonLayerProps,
-  createPathLayerProps,
-  createScatterplotLayerProps
+  createPathLayerProps
 } from 'geoarrow-deck-stream';
 import {
   parsePaths,
   parseSolidPolygons,
   parsePathsWithProjection,
   parseSolidPolygonsWithProjection,
-  parsePointData,
-  parsePointDataWithProjection,
   projectGeoJSON as _projectGeoJSON
 } from '../utils/geoarrow-stream-bridge';
 import type { ProjectionLike } from 'geoarrow-deck-stream';
@@ -66,7 +63,6 @@ import type {
 } from '../types/basemap.types';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import { withOpacity, dottedPatternToDashArray } from './layer-helpers';
-import { ScatterplotLayer } from '@deck.gl/layers';
 
 // Shared extension instance — avoids re-allocation per layer per frame
 const DASH_EXTENSION = new PathStyleExtension({ dash: true });
@@ -1379,65 +1375,6 @@ function createMetadataGeoLinesLayers(
             lineWidthUnits: 'pixels',
             getLineWidth: width,
             lineWidthMinPixels: 1,
-            ...baseProps
-          })
-        );
-      }
-    }
-  }
-
-  return layers;
-}
-
-function _createMetadataCentroidLayers(
-  entries: MetadataLayerEntry[],
-  ctx: BasemapLayerContext
-): Layer<DeckDataRow>[] {
-  const layers: Layer<DeckDataRow>[] = [];
-  const baseProps = getBaseLayerProps(ctx);
-
-  for (let i = 0; i < entries.length; i++) {
-    const entry = entries[i];
-    const geometryInfo = extractGeometryInfo(entry.table);
-    if (!geometryInfo) continue;
-
-    const layerId = buildLayerId(
-      DeckLayerId.BASEMAP_META_CENTROID,
-      `${ctx.projectionSuffix}-${i}`
-    );
-
-    if (geometryInfo.isNativeGeoArrow) {
-      const pointData = ctx.projection
-        ? parsePointDataWithProjection(entry.table, ctx.projection)
-        : parsePointData(entry.table);
-      layers.push(
-        new ScatterplotLayer({
-          id: layerId,
-          ...createScatterplotLayerProps(pointData),
-          getFillColor: [80, 80, 80, 180],
-          getRadius: 2,
-          radiusUnits: 'pixels',
-          radiusMinPixels: 1,
-          ...baseProps
-        })
-      );
-    } else if (geometryInfo.isWkbEncoded || geometryInfo.isGeoJsonEncoded) {
-      const geojson = getCachedBasemapGeoJSON(
-        entry.table,
-        geometryInfo.geoColumn
-      );
-      if (geojson) {
-        layers.push(
-          new GeoJsonLayer({
-            id: layerId,
-            data: geojson,
-            filled: true,
-            stroked: false,
-            pointType: 'circle',
-            getPointRadius: 2,
-            pointRadiusUnits: 'pixels',
-            pointRadiusMinPixels: 1,
-            getFillColor: [80, 80, 80, 180],
             ...baseProps
           })
         );

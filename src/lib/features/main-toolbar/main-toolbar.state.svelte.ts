@@ -1,8 +1,6 @@
-import { FileStatus } from '$lib/features/commons/constants/ui.constants';
 import { globalActions } from '$lib/features/commons/store/global.svelte';
 import { projectStore } from '$lib/features/commons/store/project.store.svelte';
 import { ToolbarStep } from '$lib/features/commons/types/global';
-import * as m from '$lib/paraglide/messages';
 
 export interface MainToolbarState {
   canNavigateToVisualization: boolean;
@@ -22,83 +20,17 @@ const DEFAULT_STATE: MainToolbarState = {
 
 export const mainToolbarState = $state<MainToolbarState>({ ...DEFAULT_STATE });
 
-export function getDerivedToolbarState() {
-  const hasProject = !!projectStore.currentProject;
-  const sourceFiles = projectStore.currentProject?.data?.sourceFiles || [];
-  const hasFiles = sourceFiles.length > 0;
-  const projectName = projectStore.currentProject?.manifest.name || '';
-
-  return {
-    hasProject,
-    hasFiles,
-    projectName,
-    canVisualize: hasProject && hasFiles
-  };
-}
-
 export const mainToolbarActions = {
-  updateToolbarState(): void {
-    const hasProject = !!projectStore.currentProject;
-    const hasValidFiles =
-      (projectStore.currentProject?.data?.sourceFiles?.length ?? 0) > 0;
-
-    mainToolbarState.hasValidData = hasValidFiles;
-    mainToolbarState.isProjectSaved = !projectStore.isDirty;
-    mainToolbarState.currentProjectName =
-      projectStore.currentProject?.manifest.name || '';
-    mainToolbarState.canNavigateToVisualization = hasProject && hasValidFiles;
-  },
-
   async navigateToVisualization(): Promise<void> {
     if (projectStore.isDirty) {
       await projectStore.saveCurrentProject();
     }
 
-    const derived = getDerivedToolbarState();
-    if (derived.canVisualize) {
+    const hasProject = !!projectStore.currentProject;
+    const sourceFiles = projectStore.currentProject?.data?.sourceFiles || [];
+    const hasFiles = sourceFiles.length > 0;
+    if (hasProject && hasFiles) {
       globalActions.setNavigationState(ToolbarStep.Visualizations);
     }
-  },
-
-  navigateToData(): void {
-    globalActions.setNavigationState(ToolbarStep.Data);
-  },
-
-  navigateToStyling(): void {
-    const derived = getDerivedToolbarState();
-    if (derived.hasProject) {
-      globalActions.setNavigationState(ToolbarStep.Styling);
-    }
-  },
-
-  checkDataCompleteness(): {
-    isComplete: boolean;
-    missingSteps: string[];
-  } {
-    const missingSteps = [];
-
-    if (!projectStore.currentProject) {
-      missingSteps.push(m.step_missing_create_project());
-    }
-
-    const derived = getDerivedToolbarState();
-    if (!derived.hasFiles) {
-      missingSteps.push(m.step_missing_import_data());
-    }
-
-    const files = projectStore.currentProject?.data?.sourceFiles || [];
-    const hasErrors = files.some((f) => f.status === FileStatus.ERROR);
-    if (hasErrors) {
-      missingSteps.push(m.step_missing_fix_errors());
-    }
-
-    return {
-      isComplete: missingSteps.length === 0,
-      missingSteps
-    };
-  },
-
-  reset(): void {
-    Object.assign(mainToolbarState, DEFAULT_STATE);
   }
 };

@@ -16,10 +16,7 @@
     },
     "maputnik:renderer": "mlgljs"
   },
-  "center": [
-    2.5,
-    47
-  ],
+  "center": [2.5, 47],
   "zoom": 5,
   "projection": {
     "type": "globe"
@@ -39,21 +36,15 @@
       "type": "background",
       "minzoom": 0,
       "maxzoom": 24,
-      "filter": [
-        "all"
-      ],
+      "filter": ["all"],
       "layout": {
         "visibility": "visible"
       },
       "paint": {
         "background-color": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           4,
           "rgba(229, 229, 217, 1)",
           5,
@@ -73,14 +64,7 @@
       "type": "fill",
       "source": "openmaptiles",
       "source-layer": "water",
-      "filter": [
-        "all",
-        [
-          "!=",
-          "class",
-          "swimming_pool"
-        ]
-      ],
+      "filter": ["all", ["!=", "class", "swimming_pool"]],
       "layout": {
         "visibility": "visible"
       },
@@ -98,9 +82,7 @@
       "source-layer": "aeroway",
       "minzoom": 6,
       "maxzoom": 24,
-      "filter": [
-        "all"
-      ],
+      "filter": ["all"],
       "layout": {
         "visibility": "visible"
       },
@@ -119,27 +101,13 @@
       "source-layer": "landuse",
       "minzoom": 7,
       "maxzoom": 24,
-      "filter": [
-        "all"
-      ],
+      "filter": ["all"],
       "layout": {
         "visibility": "visible"
       },
       "paint": {
         "fill-color": "rgba(240, 240, 237, 1)",
-        "fill-opacity": [
-          "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
-          7,
-          0,
-          8,
-          1
-        ]
+        "fill-opacity": ["interpolate", ["linear"], ["zoom"], 7, 0, 8, 1]
       },
       "metadata": {
         "cartefacile:group": "landcover"
@@ -151,14 +119,7 @@
       "source": "openmaptiles",
       "source-layer": "landcover",
       "minzoom": 10,
-      "filter": [
-        "any",
-        [
-          "==",
-          "class",
-          "farmland"
-        ]
-      ],
+      "filter": ["any", ["==", "class", "farmland"]],
       "layout": {
         "visibility": "none"
       },
@@ -176,14 +137,7 @@
       "source": "openmaptiles",
       "source-layer": "landcover",
       "minzoom": 10,
-      "filter": [
-        "any",
-        [
-          "==",
-          "class",
-          "grass"
-        ]
-      ],
+      "filter": ["any", ["==", "class", "grass"]],
       "layout": {
         "visibility": "visible"
       },
@@ -201,32 +155,13 @@
       "source": "openmaptiles",
       "source-layer": "landcover",
       "maxzoom": 24,
-      "filter": [
-        "all",
-        [
-          "==",
-          "class",
-          "sand"
-        ]
-      ],
+      "filter": ["all", ["==", "class", "sand"]],
       "layout": {
         "visibility": "visible"
       },
       "paint": {
         "fill-color": "rgba(192, 229, 219, 1)",
-        "fill-opacity": [
-          "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
-          7,
-          0,
-          8,
-          1
-        ]
+        "fill-opacity": ["interpolate", ["linear"], ["zoom"], 7, 0, 8, 1]
       },
       "metadata": {
         "cartefacile:group": "landcover"
@@ -238,19 +173,7 @@
       "source": "openmaptiles",
       "source-layer": "landcover",
       "maxzoom": 24,
-      "filter": [
-        "all",
-        [
-          "==",
-          "class",
-          "sand"
-        ],
-        [
-          "==",
-          "subclass",
-          "beach"
-        ]
-      ],
+      "filter": ["all", ["==", "class", "sand"], ["==", "subclass", "beach"]],
       "layout": {
         "visibility": "visible"
       },
@@ -268,32 +191,13 @@
       "source": "openmaptiles",
       "source-layer": "landcover",
       "maxzoom": 24,
-      "filter": [
-        "all",
-        [
-          "==",
-          "class",
-          "wetland"
-        ]
-      ],
+      "filter": ["all", ["==", "class", "wetland"]],
       "layout": {
         "visibility": "visible"
       },
       "paint": {
         "fill-color": "rgba(192, 229, 219, 1)",
-        "fill-opacity": [
-          "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
-          7,
-          0,
-          8,
-          1
-        ]
+        "fill-opacity": ["interpolate", ["linear"], ["zoom"], 7, 0, 8, 1]
       },
       "metadata": {
         "cartefacile:group": "landcover"
@@ -305,32 +209,13 @@
       "source": "openmaptiles",
       "source-layer": "landcover",
       "minzoom": 7,
-      "filter": [
-        "any",
-        [
-          "==",
-          "class",
-          "wood"
-        ]
-      ],
+      "filter": ["any", ["==", "class", "wood"]],
       "layout": {
         "visibility": "visible"
       },
       "paint": {
         "fill-color": "rgba(188, 223, 184, 1)",
-        "fill-opacity": [
-          "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
-          7,
-          0,
-          8,
-          1
-        ]
+        "fill-opacity": ["interpolate", ["linear"], ["zoom"], 7, 0, 8, 1]
       },
       "metadata": {
         "cartefacile:group": "landcover"
@@ -342,14 +227,7 @@
       "source": "openmaptiles",
       "source-layer": "landcover",
       "maxzoom": 24,
-      "filter": [
-        "all",
-        [
-          "==",
-          "class",
-          "ice"
-        ]
-      ],
+      "filter": ["all", ["==", "class", "ice"]],
       "layout": {
         "visibility": "visible"
       },
@@ -368,15 +246,7 @@
       "source-layer": "landuse",
       "minzoom": 7,
       "maxzoom": 24,
-      "filter": [
-        "all",
-        [
-          "in",
-          "class",
-          "pitch",
-          "track"
-        ]
-      ],
+      "filter": ["all", ["in", "class", "pitch", "track"]],
       "layout": {
         "visibility": "visible"
       },
@@ -393,29 +263,9 @@
       "type": "line",
       "source": "openmaptiles",
       "source-layer": "landuse",
-      "filter": [
-        "all",
-        [
-          "in",
-          "class",
-          "pitch",
-          "track"
-        ]
-      ],
+      "filter": ["all", ["in", "class", "pitch", "track"]],
       "paint": {
-        "line-opacity": [
-          "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
-          14,
-          0,
-          15,
-          1
-        ],
+        "line-opacity": ["interpolate", ["linear"], ["zoom"], 14, 0, 15, 1],
         "line-color": "rgba(183, 206, 182, 1)"
       },
       "metadata": {
@@ -429,14 +279,7 @@
       "source-layer": "landuse",
       "minzoom": 0,
       "maxzoom": 24,
-      "filter": [
-        "all",
-        [
-          "==",
-          "class",
-          "cemetery"
-        ]
-      ],
+      "filter": ["all", ["==", "class", "cemetery"]],
       "layout": {
         "visibility": "visible"
       },
@@ -454,38 +297,16 @@
       "source": "openmaptiles",
       "source-layer": "waterway",
       "minzoom": 16,
-      "filter": [
-        "all",
-        [
-          "==",
-          "brunnel",
-          "tunnel"
-        ]
-      ],
+      "filter": ["all", ["==", "brunnel", "tunnel"]],
       "layout": {
         "visibility": "visible",
         "line-cap": "round"
       },
       "paint": {
         "line-color": "rgba(151, 205, 213, 1)",
-        "line-width": [
-          "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
-          12,
-          1.5,
-          17,
-          6.5
-        ],
+        "line-width": ["interpolate", ["linear"], ["zoom"], 12, 1.5, 17, 6.5],
         "line-opacity": 0.5,
-        "line-dasharray": [
-          2,
-          2
-        ]
+        "line-dasharray": [2, 2]
       },
       "metadata": {
         "cartefacile:group": "hydro"
@@ -497,19 +318,7 @@
       "source": "openmaptiles",
       "source-layer": "waterway",
       "minzoom": 0,
-      "filter": [
-        "all",
-        [
-          "==",
-          "class",
-          "river"
-        ],
-        [
-          "!=",
-          "brunnel",
-          "tunnel"
-        ]
-      ],
+      "filter": ["all", ["==", "class", "river"], ["!=", "brunnel", "tunnel"]],
       "layout": {
         "visibility": "visible",
         "line-cap": "round"
@@ -518,22 +327,10 @@
         "line-color": "rgba(151, 205, 213, 1)",
         "line-width": {
           "stops": [
-            [
-              5,
-              1
-            ],
-            [
-              11,
-              2
-            ],
-            [
-              13,
-              4
-            ],
-            [
-              20,
-              30
-            ]
+            [5, 1],
+            [11, 2],
+            [13, 4],
+            [20, 30]
           ]
         }
       },
@@ -547,14 +344,7 @@
       "source": "openmaptiles",
       "source-layer": "waterway",
       "minzoom": 3,
-      "filter": [
-        "all",
-        [
-          "==",
-          "class",
-          "stream"
-        ]
-      ],
+      "filter": ["all", ["==", "class", "stream"]],
       "layout": {
         "visibility": "visible",
         "line-cap": "round"
@@ -563,18 +353,9 @@
         "line-color": "rgba(151, 205, 213, 1)",
         "line-width": {
           "stops": [
-            [
-              11,
-              1
-            ],
-            [
-              14,
-              2
-            ],
-            [
-              20,
-              15
-            ]
+            [11, 1],
+            [14, 2],
+            [20, 15]
           ]
         }
       },
@@ -590,17 +371,8 @@
       "minzoom": 0,
       "filter": [
         "all",
-        [
-          "!in",
-          "class",
-          "river",
-          "stream"
-        ],
-        [
-          "!=",
-          "brunnel",
-          "tunnel"
-        ]
+        ["!in", "class", "river", "stream"],
+        ["!=", "brunnel", "tunnel"]
       ],
       "layout": {
         "visibility": "visible",
@@ -610,14 +382,8 @@
         "line-color": "rgba(151, 205, 213, 1)",
         "line-width": {
           "stops": [
-            [
-              14,
-              1
-            ],
-            [
-              20,
-              8
-            ]
+            [14, 1],
+            [20, 8]
           ]
         }
       },
@@ -637,21 +403,9 @@
       "maxzoom": 24,
       "filter": [
         "all",
-        [
-          "==",
-          "class",
-          "path"
-        ],
-        [
-          "==",
-          "brunnel",
-          "tunnel"
-        ],
-        [
-          "==",
-          "subclass",
-          "cycleway"
-        ]
+        ["==", "class", "path"],
+        ["==", "brunnel", "tunnel"],
+        ["==", "subclass", "cycleway"]
       ],
       "layout": {
         "visibility": "visible",
@@ -662,12 +416,8 @@
         "line-color": "rgba(251, 251, 251, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           14,
           1.1,
           15,
@@ -680,10 +430,7 @@
           6
         ],
         "line-gap-width": 0,
-        "line-dasharray": [
-          6,
-          2
-        ],
+        "line-dasharray": [6, 2],
         "line-opacity": 0.5
       }
     },
@@ -696,19 +443,7 @@
       "source": "openmaptiles",
       "source-layer": "transportation",
       "minzoom": 5,
-      "filter": [
-        "all",
-        [
-          "==",
-          "class",
-          "track"
-        ],
-        [
-          "==",
-          "brunnel",
-          "tunnel"
-        ]
-      ],
+      "filter": ["all", ["==", "class", "track"], ["==", "brunnel", "tunnel"]],
       "layout": {
         "visibility": "visible",
         "line-cap": "round",
@@ -718,12 +453,8 @@
         "line-color": "rgba(198, 197, 183, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           14,
           3.2,
           15,
@@ -734,10 +465,7 @@
           16.8
         ],
         "line-gap-width": 0,
-        "line-dasharray": [
-          2,
-          2
-        ],
+        "line-dasharray": [2, 2],
         "line-opacity": 0.5
       }
     },
@@ -753,16 +481,8 @@
       "maxzoom": 24,
       "filter": [
         "all",
-        [
-          "==",
-          "class",
-          "service"
-        ],
-        [
-          "==",
-          "brunnel",
-          "tunnel"
-        ]
+        ["==", "class", "service"],
+        ["==", "brunnel", "tunnel"]
       ],
       "layout": {
         "visibility": "visible",
@@ -773,12 +493,8 @@
         "line-color": "rgba(198, 197, 183, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           14,
           3.2,
           15,
@@ -802,19 +518,7 @@
       "source-layer": "transportation",
       "minzoom": 5,
       "maxzoom": 24,
-      "filter": [
-        "all",
-        [
-          "==",
-          "class",
-          "minor"
-        ],
-        [
-          "==",
-          "brunnel",
-          "tunnel"
-        ]
-      ],
+      "filter": ["all", ["==", "class", "minor"], ["==", "brunnel", "tunnel"]],
       "layout": {
         "visibility": "visible",
         "line-cap": "round",
@@ -824,12 +528,8 @@
         "line-color": "rgba(198, 197, 183, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           14,
           3,
           15,
@@ -855,16 +555,8 @@
       "maxzoom": 24,
       "filter": [
         "all",
-        [
-          "==",
-          "class",
-          "tertiary"
-        ],
-        [
-          "==",
-          "brunnel",
-          "tunnel"
-        ]
+        ["==", "class", "tertiary"],
+        ["==", "brunnel", "tunnel"]
       ],
       "layout": {
         "visibility": "visible",
@@ -875,12 +567,8 @@
         "line-color": "rgba(198, 197, 183, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           9,
           2,
           14,
@@ -908,16 +596,8 @@
       "maxzoom": 24,
       "filter": [
         "all",
-        [
-          "==",
-          "class",
-          "secondary"
-        ],
-        [
-          "==",
-          "brunnel",
-          "tunnel"
-        ]
+        ["==", "class", "secondary"],
+        ["==", "brunnel", "tunnel"]
       ],
       "layout": {
         "visibility": "visible",
@@ -928,12 +608,8 @@
         "line-color": "rgba(198, 197, 183, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           6,
           1.5,
           9,
@@ -963,16 +639,8 @@
       "maxzoom": 24,
       "filter": [
         "all",
-        [
-          "==",
-          "class",
-          "primary"
-        ],
-        [
-          "==",
-          "brunnel",
-          "tunnel"
-        ]
+        ["==", "class", "primary"],
+        ["==", "brunnel", "tunnel"]
       ],
       "layout": {
         "visibility": "visible",
@@ -983,12 +651,8 @@
         "line-color": "rgba(198, 197, 183, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           6,
           1.8,
           9,
@@ -1018,17 +682,8 @@
       "maxzoom": 24,
       "filter": [
         "all",
-        [
-          "in",
-          "class",
-          "motorway",
-          "trunk"
-        ],
-        [
-          "==",
-          "brunnel",
-          "tunnel"
-        ]
+        ["in", "class", "motorway", "trunk"],
+        ["==", "brunnel", "tunnel"]
       ],
       "layout": {
         "visibility": "visible",
@@ -1039,12 +694,8 @@
         "line-color": "rgba(198, 197, 183, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           6,
           2.5,
           9,
@@ -1071,19 +722,7 @@
       "source": "openmaptiles",
       "source-layer": "transportation",
       "minzoom": 5,
-      "filter": [
-        "all",
-        [
-          "==",
-          "class",
-          "track"
-        ],
-        [
-          "==",
-          "brunnel",
-          "tunnel"
-        ]
-      ],
+      "filter": ["all", ["==", "class", "track"], ["==", "brunnel", "tunnel"]],
       "layout": {
         "visibility": "visible",
         "line-cap": "round",
@@ -1093,12 +732,8 @@
         "line-color": "rgba(255, 255, 255, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           14,
           2.3,
           15,
@@ -1124,16 +759,8 @@
       "maxzoom": 24,
       "filter": [
         "all",
-        [
-          "==",
-          "class",
-          "service"
-        ],
-        [
-          "==",
-          "brunnel",
-          "tunnel"
-        ]
+        ["==", "class", "service"],
+        ["==", "brunnel", "tunnel"]
       ],
       "layout": {
         "visibility": "visible",
@@ -1144,12 +771,8 @@
         "line-color": "rgba(255, 255, 255, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           14,
           2.3,
           15,
@@ -1173,19 +796,7 @@
       "source-layer": "transportation",
       "minzoom": 5,
       "maxzoom": 24,
-      "filter": [
-        "all",
-        [
-          "==",
-          "class",
-          "minor"
-        ],
-        [
-          "==",
-          "brunnel",
-          "tunnel"
-        ]
-      ],
+      "filter": ["all", ["==", "class", "minor"], ["==", "brunnel", "tunnel"]],
       "layout": {
         "visibility": "visible",
         "line-cap": "round",
@@ -1195,12 +806,8 @@
         "line-color": "rgba(255, 255, 255, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           14,
           2.3,
           15,
@@ -1226,16 +833,8 @@
       "maxzoom": 24,
       "filter": [
         "all",
-        [
-          "==",
-          "class",
-          "tertiary"
-        ],
-        [
-          "==",
-          "brunnel",
-          "tunnel"
-        ]
+        ["==", "class", "tertiary"],
+        ["==", "brunnel", "tunnel"]
       ],
       "layout": {
         "visibility": "visible",
@@ -1246,12 +845,8 @@
         "line-color": "rgba(255, 255, 255, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           9,
           1.3,
           14,
@@ -1279,16 +874,8 @@
       "maxzoom": 24,
       "filter": [
         "all",
-        [
-          "==",
-          "class",
-          "secondary"
-        ],
-        [
-          "==",
-          "brunnel",
-          "tunnel"
-        ]
+        ["==", "class", "secondary"],
+        ["==", "brunnel", "tunnel"]
       ],
       "layout": {
         "visibility": "visible",
@@ -1299,12 +886,8 @@
         "line-color": "rgba(255, 255, 255, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           4,
           1.1,
           9,
@@ -1334,16 +917,8 @@
       "maxzoom": 24,
       "filter": [
         "all",
-        [
-          "==",
-          "class",
-          "primary"
-        ],
-        [
-          "==",
-          "brunnel",
-          "tunnel"
-        ]
+        ["==", "class", "primary"],
+        ["==", "brunnel", "tunnel"]
       ],
       "layout": {
         "visibility": "visible",
@@ -1354,12 +929,8 @@
         "line-color": "rgba(255, 255, 255, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           4,
           0.6,
           9,
@@ -1389,17 +960,8 @@
       "maxzoom": 24,
       "filter": [
         "all",
-        [
-          "in",
-          "class",
-          "motorway",
-          "trunk"
-        ],
-        [
-          "==",
-          "brunnel",
-          "tunnel"
-        ]
+        ["in", "class", "motorway", "trunk"],
+        ["==", "brunnel", "tunnel"]
       ],
       "layout": {
         "visibility": "visible",
@@ -1410,12 +972,8 @@
         "line-color": "rgba(255, 255, 255, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           4,
           0.7,
           9,
@@ -1445,17 +1003,8 @@
       "maxzoom": 24,
       "filter": [
         "all",
-        [
-          "in",
-          "class",
-          "motorway",
-          "trunk"
-        ],
-        [
-          "==",
-          "brunnel",
-          "tunnel"
-        ]
+        ["in", "class", "motorway", "trunk"],
+        ["==", "brunnel", "tunnel"]
       ],
       "layout": {
         "visibility": "visible",
@@ -1466,12 +1015,8 @@
         "line-color": "rgba(197, 197, 197, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           9,
           0.6,
           14,
@@ -1484,10 +1029,7 @@
           2.1
         ],
         "line-gap-width": 0,
-        "line-dasharray": [
-          2,
-          4
-        ],
+        "line-dasharray": [2, 4],
         "line-opacity": 0.5
       }
     },
@@ -1503,19 +1045,7 @@
       "paint": {
         "fill-color": "rgba(213, 213, 208, 1)",
         "fill-outline-color": "rgba(151, 150, 137, 1)",
-        "fill-opacity": [
-          "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
-          14,
-          0,
-          15,
-          1
-        ]
+        "fill-opacity": ["interpolate", ["linear"], ["zoom"], 14, 0, 15, 1]
       }
     },
     {
@@ -1529,40 +1059,16 @@
       "minzoom": 0,
       "filter": [
         "all",
-        [
-          "==",
-          "class",
-          "rail"
-        ],
-        [
-          "!has",
-          "service"
-        ],
-        [
-          "!in",
-          "brunnel",
-          "bridge",
-          "tunnel"
-        ]
+        ["==", "class", "rail"],
+        ["!has", "service"],
+        ["!in", "brunnel", "bridge", "tunnel"]
       ],
       "layout": {
         "visibility": "visible"
       },
       "paint": {
         "line-color": "rgba(178, 178, 178, 1)",
-        "line-width": [
-          "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
-          14,
-          2,
-          20,
-          10
-        ],
+        "line-width": ["interpolate", ["linear"], ["zoom"], 14, 2, 20, 10],
         "line-opacity": 1
       }
     },
@@ -1577,21 +1083,9 @@
       "minzoom": 10,
       "filter": [
         "all",
-        [
-          "==",
-          "class",
-          "rail"
-        ],
-        [
-          "!has",
-          "service"
-        ],
-        [
-          "!in",
-          "brunnel",
-          "bridge",
-          "tunnel"
-        ]
+        ["==", "class", "rail"],
+        ["!has", "service"],
+        ["!in", "brunnel", "bridge", "tunnel"]
       ],
       "layout": {
         "visibility": "visible",
@@ -1600,24 +1094,9 @@
       },
       "paint": {
         "line-color": "rgba(178, 178, 178, 1)",
-        "line-width": [
-          "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
-          10,
-          3.5,
-          17,
-          14.7
-        ],
+        "line-width": ["interpolate", ["linear"], ["zoom"], 10, 3.5, 17, 14.7],
         "line-opacity": 1,
-        "line-dasharray": [
-          0.2,
-          6
-        ]
+        "line-dasharray": [0.2, 6]
       }
     },
     {
@@ -1631,47 +1110,18 @@
       "minzoom": 14,
       "filter": [
         "all",
-        [
-          "==",
-          "class",
-          "rail"
-        ],
-        [
-          "has",
-          "service"
-        ],
-        [
-          "!in",
-          "brunnel",
-          "bridge",
-          "tunnel"
-        ]
+        ["==", "class", "rail"],
+        ["has", "service"],
+        ["!in", "brunnel", "bridge", "tunnel"]
       ],
       "layout": {
         "visibility": "visible"
       },
       "paint": {
         "line-color": "rgba(178, 178, 178, 1)",
-        "line-width": [
-          "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
-          14,
-          1,
-          17,
-          2
-        ],
+        "line-width": ["interpolate", ["linear"], ["zoom"], 14, 1, 17, 2],
         "line-opacity": 1,
-        "line-dasharray": [
-          5,
-          2,
-          1,
-          2
-        ]
+        "line-dasharray": [5, 2, 1, 2]
       }
     },
     {
@@ -1686,22 +1136,9 @@
       "maxzoom": 24,
       "filter": [
         "all",
-        [
-          "==",
-          "class",
-          "path"
-        ],
-        [
-          "!in",
-          "brunnel",
-          "bridge",
-          "tunnel"
-        ],
-        [
-          "==",
-          "subclass",
-          "cycleway"
-        ]
+        ["==", "class", "path"],
+        ["!in", "brunnel", "bridge", "tunnel"],
+        ["==", "subclass", "cycleway"]
       ],
       "layout": {
         "visibility": "visible",
@@ -1712,12 +1149,8 @@
         "line-color": "rgba(251, 251, 251, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           14,
           1.1,
           15,
@@ -1730,10 +1163,7 @@
           6
         ],
         "line-gap-width": 0,
-        "line-dasharray": [
-          6,
-          2
-        ]
+        "line-dasharray": [6, 2]
       }
     },
     {
@@ -1746,19 +1176,7 @@
       "source-layer": "transportation",
       "minzoom": 14,
       "maxzoom": 24,
-      "filter": [
-        "all",
-        [
-          "==",
-          "class",
-          "path"
-        ],
-        [
-          "==",
-          "subclass",
-          "footway"
-        ]
-      ],
+      "filter": ["all", ["==", "class", "path"], ["==", "subclass", "footway"]],
       "layout": {
         "visibility": "visible",
         "line-cap": "round",
@@ -1768,12 +1186,8 @@
         "line-color": "rgba(251, 251, 251, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           14,
           1,
           15,
@@ -1786,10 +1200,7 @@
           5
         ],
         "line-gap-width": 0,
-        "line-dasharray": [
-          1,
-          3
-        ]
+        "line-dasharray": [1, 3]
       }
     },
     {
@@ -1802,19 +1213,7 @@
       "source-layer": "transportation",
       "minzoom": 12,
       "maxzoom": 24,
-      "filter": [
-        "all",
-        [
-          "==",
-          "class",
-          "path"
-        ],
-        [
-          "==",
-          "subclass",
-          "path"
-        ]
-      ],
+      "filter": ["all", ["==", "class", "path"], ["==", "subclass", "path"]],
       "layout": {
         "visibility": "visible",
         "line-cap": "round",
@@ -1824,12 +1223,8 @@
         "line-color": "rgba(251, 251, 251, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           14,
           1,
           15,
@@ -1842,10 +1237,7 @@
           6
         ],
         "line-gap-width": 0,
-        "line-dasharray": [
-          4,
-          3
-        ]
+        "line-dasharray": [4, 3]
       }
     },
     {
@@ -1859,17 +1251,8 @@
       "minzoom": 5,
       "filter": [
         "all",
-        [
-          "==",
-          "class",
-          "track"
-        ],
-        [
-          "!in",
-          "brunnel",
-          "bridge",
-          "tunnel"
-        ]
+        ["==", "class", "track"],
+        ["!in", "brunnel", "bridge", "tunnel"]
       ],
       "layout": {
         "visibility": "visible",
@@ -1880,12 +1263,8 @@
         "line-color": "rgba(198, 197, 183, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           14,
           3.2,
           15,
@@ -1896,10 +1275,7 @@
           16.8
         ],
         "line-gap-width": 0,
-        "line-dasharray": [
-          2,
-          2
-        ]
+        "line-dasharray": [2, 2]
       }
     },
     {
@@ -1914,17 +1290,8 @@
       "maxzoom": 24,
       "filter": [
         "all",
-        [
-          "==",
-          "class",
-          "service"
-        ],
-        [
-          "!in",
-          "brunnel",
-          "bridge",
-          "tunnel"
-        ]
+        ["==", "class", "service"],
+        ["!in", "brunnel", "bridge", "tunnel"]
       ],
       "layout": {
         "visibility": "visible",
@@ -1935,12 +1302,8 @@
         "line-color": "rgba(198, 197, 183, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           14,
           3.2,
           15,
@@ -1965,17 +1328,8 @@
       "maxzoom": 24,
       "filter": [
         "all",
-        [
-          "==",
-          "class",
-          "minor"
-        ],
-        [
-          "!in",
-          "brunnel",
-          "bridge",
-          "tunnel"
-        ]
+        ["==", "class", "minor"],
+        ["!in", "brunnel", "bridge", "tunnel"]
       ],
       "layout": {
         "visibility": "visible",
@@ -1986,12 +1340,8 @@
         "line-color": "rgba(198, 197, 183, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           14,
           3,
           15,
@@ -2016,17 +1366,8 @@
       "maxzoom": 24,
       "filter": [
         "all",
-        [
-          "==",
-          "class",
-          "tertiary"
-        ],
-        [
-          "!in",
-          "brunnel",
-          "bridge",
-          "tunnel"
-        ]
+        ["==", "class", "tertiary"],
+        ["!in", "brunnel", "bridge", "tunnel"]
       ],
       "layout": {
         "visibility": "visible",
@@ -2037,12 +1378,8 @@
         "line-color": "rgba(198, 197, 183, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           9,
           2,
           14,
@@ -2069,17 +1406,8 @@
       "maxzoom": 24,
       "filter": [
         "all",
-        [
-          "==",
-          "class",
-          "secondary"
-        ],
-        [
-          "!in",
-          "brunnel",
-          "bridge",
-          "tunnel"
-        ]
+        ["==", "class", "secondary"],
+        ["!in", "brunnel", "bridge", "tunnel"]
       ],
       "layout": {
         "visibility": "visible",
@@ -2090,12 +1418,8 @@
         "line-color": "rgba(198, 197, 183, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           6,
           1.5,
           9,
@@ -2124,17 +1448,8 @@
       "maxzoom": 24,
       "filter": [
         "all",
-        [
-          "==",
-          "class",
-          "primary"
-        ],
-        [
-          "!in",
-          "brunnel",
-          "bridge",
-          "tunnel"
-        ]
+        ["==", "class", "primary"],
+        ["!in", "brunnel", "bridge", "tunnel"]
       ],
       "layout": {
         "visibility": "visible",
@@ -2145,12 +1460,8 @@
         "line-color": "rgba(198, 197, 183, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           6,
           1.8,
           9,
@@ -2179,18 +1490,8 @@
       "maxzoom": 24,
       "filter": [
         "all",
-        [
-          "in",
-          "class",
-          "motorway",
-          "trunk"
-        ],
-        [
-          "!in",
-          "brunnel",
-          "bridge",
-          "tunnel"
-        ]
+        ["in", "class", "motorway", "trunk"],
+        ["!in", "brunnel", "bridge", "tunnel"]
       ],
       "layout": {
         "visibility": "visible",
@@ -2201,12 +1502,8 @@
         "line-color": "rgba(198, 197, 183, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           6,
           2.5,
           9,
@@ -2234,17 +1531,8 @@
       "minzoom": 5,
       "filter": [
         "all",
-        [
-          "==",
-          "class",
-          "track"
-        ],
-        [
-          "!in",
-          "brunnel",
-          "bridge",
-          "tunnel"
-        ]
+        ["==", "class", "track"],
+        ["!in", "brunnel", "bridge", "tunnel"]
       ],
       "layout": {
         "visibility": "visible",
@@ -2255,12 +1543,8 @@
         "line-color": "rgba(255, 255, 255, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           14,
           2.3,
           15,
@@ -2285,17 +1569,8 @@
       "maxzoom": 24,
       "filter": [
         "all",
-        [
-          "==",
-          "class",
-          "service"
-        ],
-        [
-          "!in",
-          "brunnel",
-          "bridge",
-          "tunnel"
-        ]
+        ["==", "class", "service"],
+        ["!in", "brunnel", "bridge", "tunnel"]
       ],
       "layout": {
         "visibility": "visible",
@@ -2306,12 +1581,8 @@
         "line-color": "rgba(255, 255, 255, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           14,
           2.3,
           15,
@@ -2336,17 +1607,8 @@
       "maxzoom": 24,
       "filter": [
         "all",
-        [
-          "==",
-          "class",
-          "minor"
-        ],
-        [
-          "!in",
-          "brunnel",
-          "bridge",
-          "tunnel"
-        ]
+        ["==", "class", "minor"],
+        ["!in", "brunnel", "bridge", "tunnel"]
       ],
       "layout": {
         "visibility": "visible",
@@ -2357,12 +1619,8 @@
         "line-color": "rgba(255, 255, 255, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           14,
           2.3,
           15,
@@ -2387,17 +1645,8 @@
       "maxzoom": 24,
       "filter": [
         "all",
-        [
-          "==",
-          "class",
-          "tertiary"
-        ],
-        [
-          "!in",
-          "brunnel",
-          "bridge",
-          "tunnel"
-        ]
+        ["==", "class", "tertiary"],
+        ["!in", "brunnel", "bridge", "tunnel"]
       ],
       "layout": {
         "visibility": "visible",
@@ -2408,12 +1657,8 @@
         "line-color": "rgba(255, 255, 255, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           9,
           1.3,
           14,
@@ -2440,17 +1685,8 @@
       "maxzoom": 24,
       "filter": [
         "all",
-        [
-          "==",
-          "class",
-          "secondary"
-        ],
-        [
-          "!in",
-          "brunnel",
-          "bridge",
-          "tunnel"
-        ]
+        ["==", "class", "secondary"],
+        ["!in", "brunnel", "bridge", "tunnel"]
       ],
       "layout": {
         "visibility": "visible",
@@ -2461,12 +1697,8 @@
         "line-color": "rgba(255, 255, 255, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           4,
           1.1,
           9,
@@ -2495,17 +1727,8 @@
       "maxzoom": 24,
       "filter": [
         "all",
-        [
-          "==",
-          "class",
-          "primary"
-        ],
-        [
-          "!in",
-          "brunnel",
-          "bridge",
-          "tunnel"
-        ]
+        ["==", "class", "primary"],
+        ["!in", "brunnel", "bridge", "tunnel"]
       ],
       "layout": {
         "visibility": "visible",
@@ -2516,12 +1739,8 @@
         "line-color": "rgba(255, 255, 255, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           4,
           0.6,
           9,
@@ -2550,18 +1769,8 @@
       "maxzoom": 24,
       "filter": [
         "all",
-        [
-          "in",
-          "class",
-          "motorway",
-          "trunk"
-        ],
-        [
-          "!in",
-          "brunnel",
-          "bridge",
-          "tunnel"
-        ]
+        ["in", "class", "motorway", "trunk"],
+        ["!in", "brunnel", "bridge", "tunnel"]
       ],
       "layout": {
         "visibility": "visible",
@@ -2572,12 +1781,8 @@
         "line-color": "rgba(255, 255, 255, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           4,
           0.7,
           9,
@@ -2606,18 +1811,8 @@
       "maxzoom": 24,
       "filter": [
         "all",
-        [
-          "in",
-          "class",
-          "motorway",
-          "trunk"
-        ],
-        [
-          "!in",
-          "brunnel",
-          "bridge",
-          "tunnel"
-        ]
+        ["in", "class", "motorway", "trunk"],
+        ["!in", "brunnel", "bridge", "tunnel"]
       ],
       "layout": {
         "visibility": "visible",
@@ -2628,12 +1823,8 @@
         "line-color": "rgba(197, 197, 197, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           9,
           0.6,
           14,
@@ -2646,10 +1837,7 @@
           2.1
         ],
         "line-gap-width": 0,
-        "line-dasharray": [
-          2,
-          4
-        ]
+        "line-dasharray": [2, 4]
       }
     },
     {
@@ -2664,21 +1852,9 @@
       "maxzoom": 24,
       "filter": [
         "all",
-        [
-          "==",
-          "class",
-          "path"
-        ],
-        [
-          "==",
-          "brunnel",
-          "bridge"
-        ],
-        [
-          "==",
-          "subclass",
-          "cycleway"
-        ]
+        ["==", "class", "path"],
+        ["==", "brunnel", "bridge"],
+        ["==", "subclass", "cycleway"]
       ],
       "layout": {
         "visibility": "visible",
@@ -2689,12 +1865,8 @@
         "line-color": "rgba(251, 251, 251, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           14,
           1.1,
           15,
@@ -2707,10 +1879,7 @@
           6
         ],
         "line-gap-width": 0,
-        "line-dasharray": [
-          6,
-          2
-        ]
+        "line-dasharray": [6, 2]
       }
     },
     {
@@ -2722,19 +1891,7 @@
       "source": "openmaptiles",
       "source-layer": "transportation",
       "minzoom": 5,
-      "filter": [
-        "all",
-        [
-          "==",
-          "class",
-          "track"
-        ],
-        [
-          "==",
-          "brunnel",
-          "bridge"
-        ]
-      ],
+      "filter": ["all", ["==", "class", "track"], ["==", "brunnel", "bridge"]],
       "layout": {
         "visibility": "visible",
         "line-cap": "round",
@@ -2744,12 +1901,8 @@
         "line-color": "rgba(198, 197, 183, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           14,
           3.2,
           15,
@@ -2760,10 +1913,7 @@
           16.8
         ],
         "line-gap-width": 0,
-        "line-dasharray": [
-          2,
-          2
-        ]
+        "line-dasharray": [2, 2]
       }
     },
     {
@@ -2778,16 +1928,8 @@
       "maxzoom": 24,
       "filter": [
         "all",
-        [
-          "==",
-          "class",
-          "service"
-        ],
-        [
-          "==",
-          "brunnel",
-          "bridge"
-        ]
+        ["==", "class", "service"],
+        ["==", "brunnel", "bridge"]
       ],
       "layout": {
         "visibility": "visible"
@@ -2796,12 +1938,8 @@
         "line-color": "rgba(198, 197, 183, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           14,
           3.2,
           15,
@@ -2824,19 +1962,7 @@
       "source-layer": "transportation",
       "minzoom": 5,
       "maxzoom": 24,
-      "filter": [
-        "all",
-        [
-          "==",
-          "class",
-          "minor"
-        ],
-        [
-          "==",
-          "brunnel",
-          "bridge"
-        ]
-      ],
+      "filter": ["all", ["==", "class", "minor"], ["==", "brunnel", "bridge"]],
       "layout": {
         "visibility": "visible"
       },
@@ -2844,12 +1970,8 @@
         "line-color": "rgba(198, 197, 183, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           14,
           3,
           15,
@@ -2874,16 +1996,8 @@
       "maxzoom": 24,
       "filter": [
         "all",
-        [
-          "==",
-          "class",
-          "tertiary"
-        ],
-        [
-          "==",
-          "brunnel",
-          "bridge"
-        ]
+        ["==", "class", "tertiary"],
+        ["==", "brunnel", "bridge"]
       ],
       "layout": {
         "visibility": "visible",
@@ -2894,12 +2008,8 @@
         "line-color": "rgba(198, 197, 183, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           9,
           2,
           14,
@@ -2926,16 +2036,8 @@
       "maxzoom": 24,
       "filter": [
         "all",
-        [
-          "==",
-          "class",
-          "secondary"
-        ],
-        [
-          "==",
-          "brunnel",
-          "bridge"
-        ]
+        ["==", "class", "secondary"],
+        ["==", "brunnel", "bridge"]
       ],
       "layout": {
         "visibility": "visible",
@@ -2946,12 +2048,8 @@
         "line-color": "rgba(198, 197, 183, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           6,
           1.5,
           9,
@@ -2980,16 +2078,8 @@
       "maxzoom": 24,
       "filter": [
         "all",
-        [
-          "==",
-          "class",
-          "primary"
-        ],
-        [
-          "==",
-          "brunnel",
-          "bridge"
-        ]
+        ["==", "class", "primary"],
+        ["==", "brunnel", "bridge"]
       ],
       "layout": {
         "visibility": "visible",
@@ -3000,12 +2090,8 @@
         "line-color": "rgba(198, 197, 183, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           6,
           1.8,
           9,
@@ -3034,17 +2120,8 @@
       "maxzoom": 24,
       "filter": [
         "all",
-        [
-          "in",
-          "class",
-          "motorway",
-          "trunk"
-        ],
-        [
-          "==",
-          "brunnel",
-          "bridge"
-        ]
+        ["in", "class", "motorway", "trunk"],
+        ["==", "brunnel", "bridge"]
       ],
       "layout": {
         "visibility": "visible",
@@ -3055,12 +2132,8 @@
         "line-color": "rgba(198, 197, 183, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           6,
           2.5,
           9,
@@ -3086,19 +2159,7 @@
       "source": "openmaptiles",
       "source-layer": "transportation",
       "minzoom": 5,
-      "filter": [
-        "all",
-        [
-          "==",
-          "class",
-          "track"
-        ],
-        [
-          "==",
-          "brunnel",
-          "bridge"
-        ]
-      ],
+      "filter": ["all", ["==", "class", "track"], ["==", "brunnel", "bridge"]],
       "layout": {
         "visibility": "visible",
         "line-cap": "round",
@@ -3108,12 +2169,8 @@
         "line-color": "rgba(255, 255, 255, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           14,
           2.3,
           15,
@@ -3138,16 +2195,8 @@
       "maxzoom": 24,
       "filter": [
         "all",
-        [
-          "==",
-          "class",
-          "service"
-        ],
-        [
-          "==",
-          "brunnel",
-          "bridge"
-        ]
+        ["==", "class", "service"],
+        ["==", "brunnel", "bridge"]
       ],
       "layout": {
         "visibility": "visible"
@@ -3156,12 +2205,8 @@
         "line-color": "rgba(255, 255, 255, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           14,
           2.3,
           15,
@@ -3184,19 +2229,7 @@
       "source-layer": "transportation",
       "minzoom": 5,
       "maxzoom": 24,
-      "filter": [
-        "all",
-        [
-          "==",
-          "class",
-          "minor"
-        ],
-        [
-          "==",
-          "brunnel",
-          "bridge"
-        ]
-      ],
+      "filter": ["all", ["==", "class", "minor"], ["==", "brunnel", "bridge"]],
       "layout": {
         "visibility": "visible",
         "line-cap": "butt",
@@ -3206,12 +2239,8 @@
         "line-color": "rgba(255, 255, 255, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           14,
           2.3,
           15,
@@ -3236,16 +2265,8 @@
       "maxzoom": 24,
       "filter": [
         "all",
-        [
-          "==",
-          "class",
-          "tertiary"
-        ],
-        [
-          "==",
-          "brunnel",
-          "bridge"
-        ]
+        ["==", "class", "tertiary"],
+        ["==", "brunnel", "bridge"]
       ],
       "layout": {
         "visibility": "visible",
@@ -3256,12 +2277,8 @@
         "line-color": "rgba(255, 255, 255, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           9,
           1.3,
           14,
@@ -3288,16 +2305,8 @@
       "maxzoom": 24,
       "filter": [
         "all",
-        [
-          "==",
-          "class",
-          "secondary"
-        ],
-        [
-          "==",
-          "brunnel",
-          "bridge"
-        ]
+        ["==", "class", "secondary"],
+        ["==", "brunnel", "bridge"]
       ],
       "layout": {
         "visibility": "visible",
@@ -3308,12 +2317,8 @@
         "line-color": "rgba(255, 255, 255, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           4,
           1.1,
           9,
@@ -3342,16 +2347,8 @@
       "maxzoom": 24,
       "filter": [
         "all",
-        [
-          "==",
-          "class",
-          "primary"
-        ],
-        [
-          "==",
-          "brunnel",
-          "bridge"
-        ]
+        ["==", "class", "primary"],
+        ["==", "brunnel", "bridge"]
       ],
       "layout": {
         "visibility": "visible",
@@ -3362,12 +2359,8 @@
         "line-color": "rgba(255, 255, 255, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           4,
           0.6,
           9,
@@ -3396,17 +2389,8 @@
       "maxzoom": 24,
       "filter": [
         "all",
-        [
-          "in",
-          "class",
-          "motorway",
-          "trunk"
-        ],
-        [
-          "==",
-          "brunnel",
-          "bridge"
-        ]
+        ["in", "class", "motorway", "trunk"],
+        ["==", "brunnel", "bridge"]
       ],
       "layout": {
         "visibility": "visible",
@@ -3417,12 +2401,8 @@
         "line-color": "rgba(255, 255, 255, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           4,
           0.7,
           9,
@@ -3451,17 +2431,8 @@
       "maxzoom": 24,
       "filter": [
         "all",
-        [
-          "in",
-          "class",
-          "motorway",
-          "trunk"
-        ],
-        [
-          "==",
-          "brunnel",
-          "bridge"
-        ]
+        ["in", "class", "motorway", "trunk"],
+        ["==", "brunnel", "bridge"]
       ],
       "layout": {
         "visibility": "visible",
@@ -3472,12 +2443,8 @@
         "line-color": "rgba(197, 197, 197, 1)",
         "line-width": [
           "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
+          ["linear"],
+          ["zoom"],
           9,
           0.6,
           14,
@@ -3490,10 +2457,7 @@
           2.1
         ],
         "line-gap-width": 0,
-        "line-dasharray": [
-          2,
-          4
-        ]
+        "line-dasharray": [2, 4]
       }
     },
     {
@@ -3505,19 +2469,7 @@
       "source": "openmaptiles",
       "source-layer": "boundary",
       "maxzoom": 24,
-      "filter": [
-        "all",
-        [
-          "<=",
-          "admin_level",
-          3
-        ],
-        [
-          "==",
-          "maritime",
-          0
-        ]
-      ],
+      "filter": ["all", ["<=", "admin_level", 3], ["==", "maritime", 0]],
       "layout": {
         "visibility": "visible"
       },
@@ -3525,10 +2477,7 @@
         "line-color": "rgba(141, 141, 141, 1)",
         "line-blur": 0,
         "line-width": 1,
-        "line-dasharray": [
-          1,
-          1
-        ],
+        "line-dasharray": [1, 1],
         "line-opacity": 1
       }
     },
@@ -3538,38 +2487,11 @@
       "source": "openmaptiles",
       "source-layer": "mountain_peak",
       "minzoom": 14,
-      "filter": [
-        "all",
-        [
-          "==",
-          "class",
-          "peak"
-        ],
-        [
-          "!in",
-          "rank",
-          1,
-          2
-        ]
-      ],
+      "filter": ["all", ["==", "class", "peak"], ["!in", "rank", 1, 2]],
       "layout": {
         "text-field": "{name:latin}\n{ele}m\n▲",
-        "text-font": [
-          "Noto Sans Italic"
-        ],
-        "text-size": [
-          "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
-          10,
-          10,
-          15,
-          14
-        ],
+        "text-font": ["Noto Sans Italic"],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 10, 10, 15, 14],
         "text-anchor": "bottom",
         "visibility": "visible"
       },
@@ -3589,37 +2511,11 @@
       "source": "openmaptiles",
       "source-layer": "mountain_peak",
       "minzoom": 12,
-      "filter": [
-        "all",
-        [
-          "==",
-          "class",
-          "peak"
-        ],
-        [
-          "in",
-          "rank",
-          2
-        ]
-      ],
+      "filter": ["all", ["==", "class", "peak"], ["in", "rank", 2]],
       "layout": {
         "text-field": "{name:latin}\n{ele}m\n▲",
-        "text-font": [
-          "Noto Sans Italic"
-        ],
-        "text-size": [
-          "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
-          10,
-          10,
-          15,
-          14
-        ],
+        "text-font": ["Noto Sans Italic"],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 10, 10, 15, 14],
         "text-anchor": "bottom",
         "visibility": "visible"
       },
@@ -3641,39 +2537,14 @@
       "minzoom": 10,
       "filter": [
         "all",
-        [
-          "==",
-          "class",
-          "peak"
-        ],
-        [
-          "in",
-          "rank",
-          1
-        ],
-        [
-          "!has",
-          "elev"
-        ]
+        ["==", "class", "peak"],
+        ["in", "rank", 1],
+        ["!has", "elev"]
       ],
       "layout": {
         "text-field": "{name:latin}\n▲",
-        "text-font": [
-          "Noto Sans Italic"
-        ],
-        "text-size": [
-          "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
-          10,
-          10,
-          15,
-          14
-        ],
+        "text-font": ["Noto Sans Italic"],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 10, 10, 15, 14],
         "text-anchor": "bottom",
         "visibility": "visible"
       },
@@ -3695,39 +2566,14 @@
       "minzoom": 10,
       "filter": [
         "all",
-        [
-          "==",
-          "class",
-          "peak"
-        ],
-        [
-          "in",
-          "rank",
-          1
-        ],
-        [
-          "has",
-          "ele"
-        ]
+        ["==", "class", "peak"],
+        ["in", "rank", 1],
+        ["has", "ele"]
       ],
       "layout": {
         "text-field": "{name:latin}\n{ele}m\n▲",
-        "text-font": [
-          "Noto Sans Italic"
-        ],
-        "text-size": [
-          "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
-          10,
-          10,
-          15,
-          14
-        ],
+        "text-font": ["Noto Sans Italic"],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 10, 10, 15, 14],
         "text-anchor": "bottom",
         "visibility": "visible"
       },
@@ -3747,30 +2593,15 @@
       "source": "openmaptiles",
       "source-layer": "water_name",
       "minzoom": 3,
-      "filter": [
-        "all",
-        [
-          "==",
-          "class",
-          "sea"
-        ]
-      ],
+      "filter": ["all", ["==", "class", "sea"]],
       "layout": {
         "symbol-placement": "point",
         "text-field": "{name:fr}",
-        "text-font": [
-          "Noto Sans Regular"
-        ],
+        "text-font": ["Noto Sans Regular"],
         "text-size": {
           "stops": [
-            [
-              5,
-              10
-            ],
-            [
-              10,
-              24
-            ]
+            [5, 10],
+            [10, 24]
           ]
         }
       },
@@ -3789,33 +2620,12 @@
       "type": "symbol",
       "source": "openmaptiles",
       "source-layer": "water_name",
-      "filter": [
-        "all",
-        [
-          "==",
-          "class",
-          "bay"
-        ]
-      ],
+      "filter": ["all", ["==", "class", "bay"]],
       "layout": {
         "symbol-placement": "line",
         "text-field": "{name}",
-        "text-font": [
-          "Noto Sans Regular"
-        ],
-        "text-size": [
-          "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
-          10,
-          12,
-          16,
-          22
-        ],
+        "text-font": ["Noto Sans Regular"],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 10, 12, 16, 22],
         "visibility": "visible"
       },
       "paint": {
@@ -3833,33 +2643,12 @@
       "type": "symbol",
       "source": "openmaptiles",
       "source-layer": "waterway",
-      "filter": [
-        "all",
-        [
-          "==",
-          "class",
-          "river"
-        ]
-      ],
+      "filter": ["all", ["==", "class", "river"]],
       "layout": {
         "symbol-placement": "line",
         "text-field": "{name}",
-        "text-font": [
-          "Noto Sans Regular"
-        ],
-        "text-size": [
-          "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
-          10,
-          10,
-          16,
-          16
-        ]
+        "text-font": ["Noto Sans Regular"],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 10, 10, 16, 16]
       },
       "paint": {
         "text-color": "rgba(34, 95, 108, 1)",
@@ -3876,33 +2665,12 @@
       "type": "symbol",
       "source": "openmaptiles",
       "source-layer": "waterway",
-      "filter": [
-        "all",
-        [
-          "==",
-          "class",
-          "stream"
-        ]
-      ],
+      "filter": ["all", ["==", "class", "stream"]],
       "layout": {
         "symbol-placement": "line",
         "text-field": "{name}",
-        "text-font": [
-          "Noto Sans Regular"
-        ],
-        "text-size": [
-          "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
-          12,
-          9,
-          16,
-          12
-        ]
+        "text-font": ["Noto Sans Regular"],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 12, 9, 16, 12]
       },
       "paint": {
         "text-color": "rgba(34, 95, 108, 1)",
@@ -3926,26 +2694,12 @@
       "maxzoom": 16,
       "filter": [
         "any",
-        [
-          "==",
-          "class",
-          "primary"
-        ],
-        [
-          "==",
-          "class",
-          "secondary"
-        ],
-        [
-          "==",
-          "class",
-          "tertiary"
-        ]
+        ["==", "class", "primary"],
+        ["==", "class", "secondary"],
+        ["==", "class", "tertiary"]
       ],
       "layout": {
-        "text-font": [
-          "Noto Sans Regular"
-        ],
+        "text-font": ["Noto Sans Regular"],
         "text-field": "{ref}",
         "visibility": "visible",
         "symbol-placement": "point",
@@ -3974,21 +2728,11 @@
       "maxzoom": 16,
       "filter": [
         "all",
-        [
-          "==",
-          "class",
-          "trunk"
-        ],
-        [
-          "!=",
-          "subclass",
-          "junction"
-        ]
+        ["==", "class", "trunk"],
+        ["!=", "subclass", "junction"]
       ],
       "layout": {
-        "text-font": [
-          "Noto Sans Regular"
-        ],
+        "text-font": ["Noto Sans Regular"],
         "text-field": "{ref}",
         "visibility": "visible",
         "symbol-placement": "point",
@@ -4014,18 +2758,9 @@
       "source": "openmaptiles",
       "source-layer": "transportation_name",
       "minzoom": 9,
-      "filter": [
-        "any",
-        [
-          "==",
-          "class",
-          "motorway"
-        ]
-      ],
+      "filter": ["any", ["==", "class", "motorway"]],
       "layout": {
-        "text-font": [
-          "Noto Sans Bold"
-        ],
+        "text-font": ["Noto Sans Bold"],
         "text-field": "{ref}",
         "symbol-placement": "line",
         "text-size": 10,
@@ -4054,18 +2789,9 @@
       "source": "openmaptiles",
       "source-layer": "transportation_name",
       "minzoom": 16,
-      "filter": [
-        "any",
-        [
-          "==",
-          "class",
-          "track"
-        ]
-      ],
+      "filter": ["any", ["==", "class", "track"]],
       "layout": {
-        "text-font": [
-          "Noto Sans Regular"
-        ],
+        "text-font": ["Noto Sans Regular"],
         "text-field": "{name}",
         "visibility": "visible",
         "symbol-placement": "line",
@@ -4089,23 +2815,9 @@
       "source": "openmaptiles",
       "source-layer": "transportation_name",
       "minzoom": 15,
-      "filter": [
-        "any",
-        [
-          "==",
-          "class",
-          "minor"
-        ],
-        [
-          "==",
-          "class",
-          "service"
-        ]
-      ],
+      "filter": ["any", ["==", "class", "minor"], ["==", "class", "service"]],
       "layout": {
-        "text-font": [
-          "Noto Sans Regular"
-        ],
+        "text-font": ["Noto Sans Regular"],
         "text-field": "{name}",
         "visibility": "visible",
         "symbol-placement": "line",
@@ -4131,31 +2843,13 @@
       "minzoom": 14,
       "filter": [
         "any",
-        [
-          "==",
-          "class",
-          "trunk"
-        ],
-        [
-          "==",
-          "class",
-          "primary"
-        ],
-        [
-          "==",
-          "class",
-          "secondary"
-        ],
-        [
-          "==",
-          "class",
-          "tertiary"
-        ]
+        ["==", "class", "trunk"],
+        ["==", "class", "primary"],
+        ["==", "class", "secondary"],
+        ["==", "class", "tertiary"]
       ],
       "layout": {
-        "text-font": [
-          "Noto Sans Regular"
-        ],
+        "text-font": ["Noto Sans Regular"],
         "text-field": "{name}",
         "visibility": "visible",
         "symbol-placement": "line",
@@ -4192,22 +2886,8 @@
       ],
       "layout": {
         "text-field": "{name}",
-        "text-font": [
-          "Noto Sans Regular"
-        ],
-        "text-size": [
-          "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
-          13,
-          12,
-          16,
-          14
-        ],
+        "text-font": ["Noto Sans Regular"],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 13, 12, 16, 14],
         "visibility": "visible",
         "text-transform": "none"
       },
@@ -4230,55 +2910,21 @@
       "source-layer": "place",
       "minzoom": 9,
       "maxzoom": 17,
-      "filter": [
-        "any",
-        [
-          "==",
-          "class",
-          "village"
-        ]
-      ],
+      "filter": ["any", ["==", "class", "village"]],
       "layout": {
         "text-field": "{name}",
         "text-font": [
           "step",
-          [
-            "zoom"
-          ],
-          [
-            "literal",
-            [
-              "Noto Sans Regular"
-            ]
-          ],
+          ["zoom"],
+          ["literal", ["Noto Sans Regular"]],
           13,
-          [
-            "literal",
-            [
-              "Noto Sans Bold"
-            ]
-          ]
+          ["literal", ["Noto Sans Bold"]]
         ],
-        "text-size": [
-          "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
-          9,
-          10,
-          14,
-          15
-        ],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 9, 10, 14, 15],
         "icon-anchor": "center",
         "text-justify": "center",
         "text-anchor": "center",
-        "text-offset": [
-          0,
-          0
-        ],
+        "text-offset": [0, 0],
         "visibility": "visible"
       },
       "paint": {
@@ -4300,57 +2946,23 @@
       "source-layer": "place",
       "minzoom": 7,
       "maxzoom": 16,
-      "filter": [
-        "all",
-        [
-          "==",
-          "class",
-          "town"
-        ]
-      ],
+      "filter": ["all", ["==", "class", "town"]],
       "layout": {
         "text-field": "{name}",
         "text-font": [
           "step",
-          [
-            "zoom"
-          ],
-          [
-            "literal",
-            [
-              "Noto Sans Regular"
-            ]
-          ],
+          ["zoom"],
+          ["literal", ["Noto Sans Regular"]],
           13,
-          [
-            "literal",
-            [
-              "Noto Sans Bold"
-            ]
-          ]
+          ["literal", ["Noto Sans Bold"]]
         ],
-        "text-size": [
-          "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
-          7,
-          12,
-          13,
-          15
-        ],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 7, 12, 13, 15],
         "icon-anchor": "center",
         "text-justify": "center",
         "text-anchor": "center",
         "icon-size": 0.5,
         "visibility": "visible",
-        "text-offset": [
-          0.5,
-          0
-        ]
+        "text-offset": [0.5, 0]
       },
       "paint": {
         "text-color": "#222222",
@@ -4369,29 +2981,14 @@
       "source-layer": "place",
       "minzoom": 7,
       "maxzoom": 16,
-      "filter": [
-        "all",
-        [
-          "==",
-          "class",
-          "city"
-        ]
-      ],
+      "filter": ["all", ["==", "class", "city"]],
       "layout": {
         "text-field": "{name:fr}",
-        "text-font": [
-          "Noto Sans Bold"
-        ],
+        "text-font": ["Noto Sans Bold"],
         "text-size": {
           "stops": [
-            [
-              7,
-              14
-            ],
-            [
-              10,
-              16
-            ]
+            [7, 14],
+            [10, 16]
           ]
         },
         "icon-anchor": "center",
@@ -4399,10 +2996,7 @@
         "text-anchor": "center",
         "icon-size": 0.5,
         "visibility": "visible",
-        "text-offset": [
-          0.5,
-          0
-        ]
+        "text-offset": [0.5, 0]
       },
       "paint": {
         "text-color": "#222222",
@@ -4421,32 +3015,17 @@
       "source-layer": "place",
       "minzoom": 7,
       "maxzoom": 16,
-      "filter": [
-        "all",
-        [
-          "in",
-          "capital",
-          2,
-          3,
-          4,
-          5
-        ]
-      ],
+      "filter": ["all", ["in", "capital", 2, 3, 4, 5]],
       "layout": {
         "text-field": "{name:fr}",
-        "text-font": [
-          "Noto Sans Bold"
-        ],
+        "text-font": ["Noto Sans Bold"],
         "text-size": 16,
         "icon-anchor": "center",
         "text-justify": "center",
         "text-anchor": "center",
         "icon-size": 0.5,
         "visibility": "visible",
-        "text-offset": [
-          0.5,
-          0
-        ]
+        "text-offset": [0.5, 0]
       },
       "paint": {
         "text-color": "#222222",
@@ -4465,51 +3044,15 @@
       "source-layer": "place",
       "minzoom": 6,
       "maxzoom": 7,
-      "filter": [
-        "any",
-        [
-          "in",
-          "capital",
-          6
-        ],
-        [
-          "==",
-          "class",
-          "city"
-        ]
-      ],
+      "filter": ["any", ["in", "capital", 6], ["==", "class", "city"]],
       "layout": {
-        "text-field": [
-          "concat",
-          "• ",
-          [
-            "get",
-            "name:fr"
-          ]
-        ],
-        "text-font": [
-          "Noto Sans Bold"
-        ],
-        "text-size": [
-          "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
-          5,
-          10,
-          7,
-          14
-        ],
+        "text-field": ["concat", "• ", ["get", "name:fr"]],
+        "text-font": ["Noto Sans Bold"],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 5, 10, 7, 14],
         "text-justify": "left",
         "text-anchor": "left",
         "visibility": "visible",
-        "text-offset": [
-          0,
-          0
-        ]
+        "text-offset": [0, 0]
       },
       "paint": {
         "text-color": "#222222",
@@ -4528,47 +3071,15 @@
       "source-layer": "place",
       "minzoom": 5,
       "maxzoom": 7,
-      "filter": [
-        "all",
-        [
-          "in",
-          "capital",
-          4,
-          5
-        ]
-      ],
+      "filter": ["all", ["in", "capital", 4, 5]],
       "layout": {
-        "text-field": [
-          "concat",
-          "• ",
-          [
-            "get",
-            "name:fr"
-          ]
-        ],
-        "text-font": [
-          "Noto Sans Bold"
-        ],
-        "text-size": [
-          "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
-          5,
-          10,
-          7,
-          14
-        ],
+        "text-field": ["concat", "• ", ["get", "name:fr"]],
+        "text-font": ["Noto Sans Bold"],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 5, 10, 7, 14],
         "text-justify": "left",
         "text-anchor": "left",
         "visibility": "visible",
-        "text-offset": [
-          0,
-          0
-        ]
+        "text-offset": [0, 0]
       },
       "paint": {
         "text-color": "#222222",
@@ -4587,46 +3098,15 @@
       "source-layer": "place",
       "minzoom": 4,
       "maxzoom": 7,
-      "filter": [
-        "all",
-        [
-          "in",
-          "capital",
-          2
-        ]
-      ],
+      "filter": ["all", ["in", "capital", 2]],
       "layout": {
-        "text-field": [
-          "concat",
-          "• ",
-          [
-            "get",
-            "name:fr"
-          ]
-        ],
-        "text-font": [
-          "Noto Sans Bold"
-        ],
-        "text-size": [
-          "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
-          4,
-          10,
-          7,
-          16
-        ],
+        "text-field": ["concat", "• ", ["get", "name:fr"]],
+        "text-font": ["Noto Sans Bold"],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 4, 10, 7, 16],
         "text-justify": "left",
         "text-anchor": "left",
         "visibility": "visible",
-        "text-offset": [
-          0,
-          0
-        ]
+        "text-offset": [0, 0]
       },
       "paint": {
         "text-color": "#222222",
@@ -4645,34 +3125,11 @@
       "source-layer": "place",
       "minzoom": 2,
       "maxzoom": 9,
-      "filter": [
-        "any",
-        [
-          "==",
-          "class",
-          "country"
-        ]
-      ],
+      "filter": ["any", ["==", "class", "country"]],
       "layout": {
         "text-field": "{name:fr}",
-        "text-size": [
-          "interpolate",
-          [
-            "linear"
-          ],
-          [
-            "zoom"
-          ],
-          4,
-          12,
-          6,
-          16,
-          9,
-          20
-        ],
-        "text-font": [
-          "Noto Sans Bold"
-        ],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 4, 12, 6, 16, 9, 20],
+        "text-font": ["Noto Sans Bold"],
         "visibility": "visible"
       },
       "paint": {
@@ -4692,29 +3149,14 @@
       "source-layer": "place",
       "minzoom": 0.2,
       "maxzoom": 2,
-      "filter": [
-        "all",
-        [
-          "==",
-          "class",
-          "continent"
-        ]
-      ],
+      "filter": ["all", ["==", "class", "continent"]],
       "layout": {
         "text-field": "{name:fr}",
-        "text-font": [
-          "Noto Sans Bold"
-        ],
+        "text-font": ["Noto Sans Bold"],
         "text-size": {
           "stops": [
-            [
-              1,
-              10
-            ],
-            [
-              2,
-              15
-            ]
+            [1, 10],
+            [2, 15]
           ]
         },
         "text-transform": "uppercase"

@@ -237,10 +237,16 @@ export async function serializeProjectData(
 
       // Fallback: persist geo column & basemap from UI state when DuckDB
       // dataset doesn't have them yet (user selected but hasn't clicked Visualiser)
-      if (!serializedFile.geoColumn && dataTabState.geolocation.linkedVariableName) {
+      if (
+        !serializedFile.geoColumn &&
+        dataTabState.geolocation.linkedVariableName
+      ) {
         serializedFile.geoColumn = dataTabState.geolocation.linkedVariableName;
       }
-      if (!serializedFile.joinedBasemap && dataTabState.basemapJoin.selectedBasemap) {
+      if (
+        !serializedFile.joinedBasemap &&
+        dataTabState.basemapJoin.selectedBasemap
+      ) {
         serializedFile.joinedBasemap = dataTabState.basemapJoin.selectedBasemap;
       }
 

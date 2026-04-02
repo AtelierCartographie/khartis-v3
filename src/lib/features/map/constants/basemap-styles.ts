@@ -34,10 +34,12 @@ const BLANK_WHITE_STYLE: maplibregl.StyleSpecification = {
 const BASEMAP_STYLE_PATHS: Record<BasemapStyle, string | null> = {
   [BasemapStyle.BLANK_WHITE]: null,
   [BasemapStyle.FRANCE_COULEURS]: '/basemaps/styles/france-couleurs.json',
-  [BasemapStyle.FRANCE_NIVEAUX_DE_GRIS]: '/basemaps/styles/france-niveaux-de-gris.json',
+  [BasemapStyle.FRANCE_NIVEAUX_DE_GRIS]:
+    '/basemaps/styles/france-niveaux-de-gris.json',
   [BasemapStyle.FRANCE_SATELLITE]: '/basemaps/styles/france-satellite.json',
   [BasemapStyle.MONDE_COULEURS]: '/basemaps/styles/monde-couleurs.json',
-  [BasemapStyle.MONDE_NIVEAUX_DE_GRIS]: '/basemaps/styles/monde-niveaux-de-gris.json',
+  [BasemapStyle.MONDE_NIVEAUX_DE_GRIS]:
+    '/basemaps/styles/monde-niveaux-de-gris.json',
   [BasemapStyle.MONDE_SATELLITE]: '/basemaps/styles/monde-satellite.json'
 };
 
