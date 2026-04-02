@@ -42,6 +42,10 @@ export interface SerializedBasemapSettings {
   style: BasemapStyle;
   mapProjection: MapProjectionType;
   referenceBasemapId?: string | null;
+  mapViewState?: {
+    zoom: number;
+    target: [number, number, number];
+  };
 }
 
 export interface SerializedVisualizationSettings {

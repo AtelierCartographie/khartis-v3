@@ -3,7 +3,7 @@
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
   import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
   import * as m from '$lib/paraglide/messages';
-  import { Catalog, Globe, Upload } from 'carbon-icons-svelte';
+  import { Grid, List, Upload } from 'carbon-icons-svelte';
   import { BasemapImportDropzone, OSMSelector } from '../../components';
   import BasemapCatalogTab from '../../basemap-join-components/basemap-catalog-tab.svelte';
   import { ACCEPTED_BASEMAP_EXTENSIONS } from '../utils/enrichment.utils';
@@ -46,9 +46,9 @@
   }: Props = $props();
 
   const basemapTabItems = [
-    { icon: Catalog, label: m.basemap_catalog(), iconSize: 20 },
-    { icon: Upload, label: m.basemap_import(), iconSize: 20 },
-    { icon: Globe, label: m.basemap_osm(), iconSize: 20 }
+    { icon: List, label: m.basemap_catalog(), iconSize: 16 },
+    { icon: Upload, label: m.basemap_import(), iconSize: 16 },
+    { icon: Grid, label: m.basemap_osm(), iconSize: 16 }
   ];
 </script>
 
@@ -105,5 +105,13 @@
   :global(.basemap-tabs) {
     width: 100%;
     max-width: none;
+  }
+
+  :global(.basemap-tabs .toggle-tab) {
+    height: 32px;
+  }
+
+  :global(.basemap-tabs .toggle-tab.active) {
+    background-color: #cac5c4;
   }
 </style>

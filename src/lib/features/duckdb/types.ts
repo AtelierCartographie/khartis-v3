@@ -70,6 +70,16 @@ export type DuckDBUnsafeBindings = {
   runQuery(conn: unknown, query: string): Promise<ArrayBuffer | Uint8Array>;
 };
 
+export type DuckDBStreamingBindings = DuckDBUnsafeBindings & {
+  startPendingQuery(
+    conn: unknown,
+    query: string,
+    allowStreamResult?: boolean
+  ): Promise<Uint8Array | null>;
+  fetchQueryResults(conn: unknown): Promise<Uint8Array | null>;
+  cancelPendingQuery(conn: unknown): Promise<boolean>;
+};
+
 export interface TableMetadata {
   analysis?: AnalysisResults | null;
   join: JoinInfo | null;
@@ -152,11 +162,6 @@ export interface SearchStats {
   isSampled?: boolean; // true if search was performed on a sample (large table)
 }
 
-export interface CacheState {
-  size: number;
-  accessOrder: string[];
-}
-
 export interface ExtensionsLoaded {
   spatial: boolean;
   httpfs: boolean;
@@ -235,10 +240,8 @@ export interface DuckDBContext {
   loaded_files: Map<string, string>;
   registered_files: Set<string>;
   table_metadata: Map<string, TableMetadata>;
-  table_geoparquet_cache: Map<string, Uint8Array>;
   describeCache: Map<string, DescribeResult>;
   rowCountCache: Map<string, number>;
-  cacheState: CacheState;
   extensionsLoaded: ExtensionsLoaded;
   extensionLoadPromises: ExtensionLoadPromises;
   localExtensionRepositoryConfigured: boolean;

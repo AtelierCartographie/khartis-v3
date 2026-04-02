@@ -3,6 +3,7 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import { svelteTesting } from '@testing-library/svelte/vite';
 import { createLogger, defineConfig, loadEnv } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import { visualizer } from 'rollup-plugin-visualizer';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
@@ -47,9 +48,29 @@ export default defineConfig(({ mode }) => {
         '@deck.gl/layers',
         'apache-arrow'
       ],
-      exclude: ['@geoarrow/geoparquet-wasm']
+      exclude: ['parquet-wasm']
     },
     plugins: [
+      process.env.ANALYZE === 'true' &&
+        visualizer({
+          filename: 'bundle-stats.html',
+          gzipSize: true,
+          brotliSize: true,
+          template: 'treemap'
+        }),
+      {
+        name: 'font-display-swap',
+        generateBundle(_, bundle) {
+          for (const chunk of Object.values(bundle)) {
+            if (chunk.type === 'asset' && chunk.fileName.endsWith('.css')) {
+              chunk.source = (chunk.source as string).replaceAll(
+                'font-display:auto',
+                'font-display:swap'
+              );
+            }
+          }
+        }
+      },
       sveltekit(),
       paraglideVitePlugin({
         project: './project.inlang',

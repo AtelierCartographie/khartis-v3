@@ -36,7 +36,7 @@ export async function computeDatasetJoinStats(
   const { sourceTableName, sourceColumn, targetTableName, targetColumn } =
     options;
 
-  logger.info('Computing dataset join stats', LogCategory.DATA, {
+  logger.debug('Computing dataset join stats', LogCategory.DATA, {
     sourceTableName,
     sourceColumn,
     targetTableName,
@@ -185,7 +185,7 @@ export async function computeDatasetJoinStats(
     totalEntities: entities.length
   };
 
-  logger.success('Dataset join stats computed', LogCategory.DATA, {
+  logger.debug('Dataset join stats computed', LogCategory.DATA, {
     joinedCount: stats.joinedCount,
     toVerifyCount: stats.toVerifyCount,
     duplicateCount: stats.duplicateCount,

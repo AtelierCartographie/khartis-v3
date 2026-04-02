@@ -8,6 +8,8 @@ export type ProjectionItem = {
   previewLabel?: string;
   disabled?: boolean;
   variant?: 'default' | 'blue' | 'gray';
+  equalArea?: boolean;
+  description?: string;
 };
 
 export const PROJECTIONS: ProjectionItem[] = [
@@ -19,7 +21,8 @@ export const PROJECTIONS: ProjectionItem[] = [
     tag: 'Rectangulaire',
     ratio: '16:9',
     previewLabel: 'Projection preview',
-    variant: 'default'
+    variant: 'default',
+    equalArea: true
   },
   {
     id: 'rect-2',
@@ -39,7 +42,8 @@ export const PROJECTIONS: ProjectionItem[] = [
     tag: 'Rectangulaire',
     ratio: '16:9',
     previewLabel: 'Projection preview',
-    variant: 'default'
+    variant: 'default',
+    equalArea: true
   },
   {
     id: 'arr-1',
@@ -49,7 +53,8 @@ export const PROJECTIONS: ProjectionItem[] = [
     tag: 'Arrondie',
     ratio: '16:9',
     previewLabel: 'Projection preview',
-    variant: 'default'
+    variant: 'default',
+    equalArea: true
   },
   {
     id: 'arr-2',
@@ -89,7 +94,8 @@ export const PROJECTIONS: ProjectionItem[] = [
     tag: 'Discontinue',
     ratio: '16:9',
     previewLabel: 'Projection preview',
-    variant: 'default'
+    variant: 'default',
+    equalArea: true
   },
   {
     id: 'disc-3',
@@ -99,7 +105,8 @@ export const PROJECTIONS: ProjectionItem[] = [
     tag: 'Discontinue',
     ratio: '16:9',
     previewLabel: 'Projection preview',
-    variant: 'default'
+    variant: 'default',
+    equalArea: true
   }
 ];
 

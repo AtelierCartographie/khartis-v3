@@ -91,7 +91,7 @@
     });
 
     if (!khFile) {
-      logger.error('No valid Khartis file found', LogCategory.PROJECT, {
+      logger.warn('No valid Khartis file found', LogCategory.PROJECT, {
         fileNames: files.map((f) => f.name)
       });
       error = m.validation_invalid_khartis_file();

@@ -11,7 +11,7 @@ export const SCALE_MODE = {
 export type ScaleMode = (typeof SCALE_MODE)[keyof typeof SCALE_MODE];
 
 export interface FacetsLayout {
-  columns: 2 | 3 | 4;
+  columns: number;
   gap: number;
 }
 
@@ -40,6 +40,7 @@ const DEFAULT_STATE: FacetsState = {
 
 function createFacetsStore() {
   const state = $state<FacetsState>({ ...DEFAULT_STATE });
+  let isRegenerating = false;
 
   function getFacetVisualizations(): VisualizationConfig[] {
     if (!state.enabled) {
@@ -53,15 +54,7 @@ function createFacetsStore() {
 
   async function enable(baseVizId: string, variables: string[]): Promise<void> {
     if (variables.length < 2) {
-      logger.warn('Facets require at least 2 variables', LogCategory.STORE);
       return;
-    }
-
-    if (variables.length > 9) {
-      logger.warn(
-        'More than 9 facets may impact performance',
-        LogCategory.STORE
-      );
     }
 
     const baseViz = visualizationStore.visualizations.find(
@@ -74,12 +67,6 @@ function createFacetsStore() {
       });
       return;
     }
-
-    logger.info('Enabling facets mode', LogCategory.STORE, {
-      baseVizId,
-      variablesCount: variables.length,
-      scaleMode: state.scaleMode
-    });
 
     try {
       const facetConfigs = await generateFacetVisualizations(
@@ -95,7 +82,7 @@ function createFacetsStore() {
       state.variables = [...variables];
       state.generatedVisualizationIds = facetConfigs.map((c) => c.id);
 
-      logger.success('Facets enabled', LogCategory.STORE, {
+      logger.debug('Facets enabled', LogCategory.STORE, {
         facetsCount: facetConfigs.length
       });
     } catch (error) {
@@ -108,8 +95,6 @@ function createFacetsStore() {
       return;
     }
 
-    logger.info('Disabling facets mode', LogCategory.STORE);
-
     visualizationStore.removeBulkVisualizations(
       state.generatedVisualizationIds
     );
@@ -119,14 +104,58 @@ function createFacetsStore() {
     state.variables = [];
     state.generatedVisualizationIds = [];
 
-    logger.success('Facets disabled', LogCategory.STORE);
+    logger.debug('Facets disabled', LogCategory.STORE);
   }
 
   function setVariables(variables: string[]): void {
     state.variables = [...variables];
   }
 
-  function setColumns(columns: 2 | 3 | 4): void {
+  async function reorderVariables(
+    fromIndex: number,
+    toIndex: number
+  ): Promise<void> {
+    if (fromIndex === toIndex) return;
+
+    const next = [...state.variables];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
+    state.variables = next;
+
+    if (state.enabled && state.baseVisualizationId) {
+      const baseViz = visualizationStore.visualizations.find(
+        (v) => v.id === state.baseVisualizationId
+      );
+
+      if (baseViz) {
+        isRegenerating = true;
+        try {
+          const newConfigs = await generateFacetVisualizations(
+            baseViz,
+            state.variables,
+            state.scaleMode
+          );
+
+          visualizationStore.removeBulkVisualizations(
+            state.generatedVisualizationIds
+          );
+          visualizationStore.createBulkVisualizations(newConfigs);
+          state.generatedVisualizationIds = newConfigs.map(
+            (config) => config.id
+          );
+
+          logger.debug(
+            'Variables reordered and facets regenerated',
+            LogCategory.STORE
+          );
+        } finally {
+          isRegenerating = false;
+        }
+      }
+    }
+  }
+
+  function setColumns(columns: number): void {
     state.layout.columns = columns;
   }
 
@@ -136,21 +165,15 @@ function createFacetsStore() {
 
   function toggleSyncPanZoom(): void {
     state.syncPanZoom = !state.syncPanZoom;
-    logger.info('Toggled syncPanZoom', LogCategory.STORE, {
-      syncPanZoom: state.syncPanZoom
-    });
   }
 
   async function toggleScaleMode(): Promise<void> {
+    if (isRegenerating) return;
+
     const newMode: ScaleMode =
       state.scaleMode === SCALE_MODE.SHARED
         ? SCALE_MODE.INDEPENDENT
         : SCALE_MODE.SHARED;
-
-    logger.info('Toggling scale mode', LogCategory.STORE, {
-      from: state.scaleMode,
-      to: newMode
-    });
 
     state.scaleMode = newMode;
 
@@ -160,22 +183,29 @@ function createFacetsStore() {
       );
 
       if (baseViz) {
-        const newConfigs = await generateFacetVisualizations(
-          baseViz,
-          state.variables,
-          newMode
-        );
+        isRegenerating = true;
+        try {
+          const newConfigs = await generateFacetVisualizations(
+            baseViz,
+            state.variables,
+            newMode
+          );
 
-        visualizationStore.removeBulkVisualizations(
-          state.generatedVisualizationIds
-        );
-        visualizationStore.createBulkVisualizations(newConfigs);
-        state.generatedVisualizationIds = newConfigs.map((config) => config.id);
+          visualizationStore.removeBulkVisualizations(
+            state.generatedVisualizationIds
+          );
+          visualizationStore.createBulkVisualizations(newConfigs);
+          state.generatedVisualizationIds = newConfigs.map(
+            (config) => config.id
+          );
 
-        logger.success(
-          'Scale mode toggled and facets regenerated',
-          LogCategory.STORE
-        );
+          logger.debug(
+            'Scale mode toggled and facets regenerated',
+            LogCategory.STORE
+          );
+        } finally {
+          isRegenerating = false;
+        }
       }
     }
   }
@@ -208,6 +238,7 @@ function createFacetsStore() {
     enable,
     disable,
     setVariables,
+    reorderVariables,
     setColumns,
     setGap,
     toggleScaleMode,

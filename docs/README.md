@@ -1,163 +1,75 @@
-# Khartis v3 - Documentation
+# Khartis v3 -- Documentation
 
-> **Thematic mapping application built with SvelteKit 5, TypeScript, and Deck.gl**
+Khartis est un outil de cartographie thematique open source developpe par Sciences Po. Entierement client-side, il permet de creer des cartes a partir de donnees tabulaires ou geographiques en trois etapes : **Donnees**, **Visualisations**, **Habillage**. Aucune donnee ne quitte le navigateur.
 
-## 📚 Documentation Structure
+---
 
-This documentation is organized into focused guides covering different aspects of the codebase:
+## Table des matieres
 
-| Document                                           | Description                                               |
-| -------------------------------------------------- | --------------------------------------------------------- |
-| **[DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)**       | Quick start, golden rules, and common development tasks   |
-| **[ARCHITECTURE.md](ARCHITECTURE.md)**             | System design, core principles, and mental models         |
-| **[DATA_PIPELINE.md](DATA_PIPELINE.md)**           | Data import, validation, processing, and export           |
-| **[VISUALIZATION.md](VISUALIZATION.md)**           | Thematic map configuration and GPU rendering              |
-| **[STATE_AND_FEATURES.md](STATE_AND_FEATURES.md)** | State management, persistence, and feature patterns       |
-| **[REFERENCE.md](REFERENCE.md)**                   | Types, utilities, performance, and cross-cutting concerns |
-| **[BASEMAPS.md](BASEMAPS.md)**                     | Basemap preparation, formats, and catalog management      |
-| **[PWA_CONFIGURATION.md](PWA_CONFIGURATION.md)**   | Progressive Web App setup, offline support, and caching   |
+### Pour les utilisateurs
 
-## 🚀 Quick Start
+| Document                                  | Description                                               |
+| ----------------------------------------- | --------------------------------------------------------- |
+| [Guide utilisateur](GUIDE_UTILISATEUR.md) | Prise en main des 3 etapes, import, visualisation, export |
+| [Glossaire](GLOSSAIRE.md)                 | Definitions des termes cartographiques et techniques      |
+
+### Pour les developpeurs
+
+| Document                                   | Description                                          |
+| ------------------------------------------ | ---------------------------------------------------- |
+| [Guide developpeur](GUIDE_DEVELOPPEUR.md)  | Demarrage rapide, regles, taches courantes           |
+| [Architecture](ARCHITECTURE.md)            | Conception du systeme, principes, modeles mentaux    |
+| [Pipeline de donnees](PIPELINE_DONNEES.md) | Import, validation, traitement, export               |
+| [Visualisations](VISUALISATIONS.md)        | Configuration des cartes thematiques et rendu GPU    |
+| [Gestion d'etat](GESTION_ETAT.md)          | Stores, persistance, patterns de features            |
+| [Fonds de carte](FONDS_DE_CARTE.md)        | Preparation, formats et catalogue des fonds de carte |
+| [Tests](TESTS.md)                          | Tests unitaires, integration et end-to-end           |
+| [Reference](REFERENCE.md)                  | Types, utilitaires, raccourcis clavier               |
+| [PWA](PWA.md)                              | Progressive Web App, support hors-ligne, cache       |
+
+### Contribution et securite
+
+- [CONTRIBUTING.md](../CONTRIBUTING.md) -- Guide de contribution
+- [SECURITY.md](../SECURITY.md) -- Politique de securite
+
+---
+
+## Demarrage rapide
 
 ```bash
-git clone <repo-url>
-cd khartis-v3
-corepack enable pnpm     # Enable pnpm
+corepack enable pnpm
 pnpm install
 pnpm dev
 ```
 
-Open http://localhost:5176/
-
-## 🎯 Core Concepts
-
-### Four Pillars
-
-1. **Client-only Privacy**: All processing in browser, no server upload
-2. **Feature-first Modularity**: Self-contained features in `src/lib/features/`
-3. **Runes Reactive State**: Svelte 5 `$state` and `$derived`
-4. **GPU-first Rendering**: Deck.gl + MapLibre for performance
-
-### Data Flow
-
-```
-Import → Validate → Parse → Type Inference → Statistics
-  ↓
-Dataset Store + DuckDB → Visualization Suggestion
-  ↓
-User Configuration → Layer Assembly → GPU Rendering → Export
-```
-
-## 📖 For New Developers
-
-Start here:
-
-1. Read [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) for onboarding
-2. Explore [ARCHITECTURE.md](ARCHITECTURE.md) for system overview
-3. Check [STATE_AND_FEATURES.md](STATE_AND_FEATURES.md) for feature patterns
-4. Reference [REFERENCE.md](REFERENCE.md) for types and utilities
-
-## 🛠️ Common Tasks
-
-| Task                        | Documentation                                                      |
-| --------------------------- | ------------------------------------------------------------------ |
-| **Add new feature**         | [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md#adding-a-feature)          |
-| **Add new tool**            | [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md#adding-a-tool)             |
-| **Add file format**         | [DATA_PIPELINE.md](DATA_PIPELINE.md#add-new-file-format)           |
-| **Add visualization**       | [VISUALIZATION.md](VISUALIZATION.md#add-new-visualization-type)    |
-| **Add classification**      | [VISUALIZATION.md](VISUALIZATION.md#add-new-classification-method) |
-| **Understand state**        | [STATE_AND_FEATURES.md](STATE_AND_FEATURES.md)                     |
-| **Find type definitions**   | [REFERENCE.md](REFERENCE.md#core-type-definitions)                 |
-| **Find keyboard shortcuts** | [REFERENCE.md](REFERENCE.md#application-keyboard-shortcuts)        |
-| **Configure PWA**           | [PWA_CONFIGURATION.md](PWA_CONFIGURATION.md)                       |
-| **Debug offline issues**    | [PWA_CONFIGURATION.md](PWA_CONFIGURATION.md#troubleshooting)       |
-
-## 🏗️ Project Structure
-
-```
-src/lib/
-├── features/              # Feature-based architecture
-│   ├── commons/           # Shared components, utils, services
-│   ├── create-project/    # Project creation modal
-│   ├── data-pipeline/     # Data import pipeline (parsers, models)
-│   ├── duckdb/            # DuckDB WASM integration (modular functional)
-│   ├── header/            # Top navigation
-│   ├── main-toolbar/      # Left sidebar
-│   ├── map/               # Map visualization
-│   ├── project-management/ # Project persistence & serialization
-│   └── step-toolbar/      # Right panel tools
-├── paraglide/             # i18n messages (en, fr)
-└── types/                 # Shared TypeScript types
-```
-
-## 📊 Tech Stack
-
-- **Framework**: SvelteKit 5 (Runes)
-- **Language**: TypeScript
-- **Rendering**: Deck.gl + MapLibre GL
-- **Data Engine**: DuckDB WASM
-- **Storage**: IndexedDB + localforage
-- **i18n**: Paraglide (compile-time)
-- **Testing**: Vitest + Playwright
-
-## 🎨 Supported Features
-
-### Data Import
-
-- CSV/TSV, GeoJSON, Shapefile, GeoPackage
-- Paste tabular text
-- URL fetch
-- Auto type inference and validation
-
-### Visualizations
-
-- Choropleth (color-coded regions)
-- Proportional symbols (sized markers)
-- Categorical (distinct categories)
-- Bivariate (two variables)
-- Collections/Facets (small multiples)
-
-### Export
-
-- Maps: PNG, JPEG, SVG, PDF
-- Data: CSV, GeoJSON
-- Projects: .kh archive
-
-### Tools
-
-- Annotations (text, shapes, drawings, images)
-- Legend editing
-- Layers management
-- Projections
-- Simplification
-- Color blindness simulation
-- Geo indicators (scale, north arrow)
-- Format & layout
-
-## 🧪 Testing
-
-```bash
-pnpm test:unit        # Unit tests
-pnpm test:e2e         # E2E tests
-pnpm test             # Run all tests
-```
-
-## 📝 Contributing
-
-1. Read [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) for guidelines
-2. Follow conventional commits: `feat:`, `fix:`, `docs:`, etc.
-3. Run lint + tests before PR
-4. Keep PRs focused and reviewable
-
-## 🔗 Additional Resources
-
-- **Root README**: [../README.md](../README.md) - Project overview
-- **Contributing**: [../CONTRIBUTING.md](../CONTRIBUTING.md) - Contribution guidelines
-- **E2E Tests**: [../e2e/README.md](../e2e/README.md) - Testing documentation
-- **Basemaps**: [basemaps/](basemaps/) - Basemap documentation
+Ouvrir [http://localhost:5176/](http://localhost:5176/).
 
 ---
 
-**Documentation Version**: 3.2.0
-**Last Updated**: 2026-02-13
-**Codebase**: Khartis v3
+## Stack technique
+
+| Technologie                   | Role                                                         |
+| ----------------------------- | ------------------------------------------------------------ |
+| SvelteKit 2 (Svelte 5 Runes)  | Framework applicatif, rendu reactif (static adapter)         |
+| TypeScript                    | Typage statique strict                                       |
+| DuckDB WASM 1.33              | Moteur de requetes SQL en memoire, traitement des donnees    |
+| Deck.gl 9.2                   | Rendu cartographique GPU (couches thematiques GeoArrow)      |
+| MapLibre GL 5                 | Rendu des fonds de carte tuiles (vectorielles OSM)           |
+| Carbon Components Svelte 0.96 | Composants UI (IBM)                                          |
+| Apache Arrow 21               | Format columnar en memoire, passerelle DuckDB/Deck.gl        |
+| geoarrow-deck-stream          | Parsing GeoArrow -> buffers binaires Deck.gl (fork custom)   |
+| d3-geo + d3-geo-projection    | Projections integrees (Robinson, Natural Earth, etc.)        |
+| proj4                         | Projections exotiques, fallback reprojection EPSG:2154/27572 |
+| parquet-wasm                  | Lecture GeoParquet cote client                               |
+| Paraglide JS 2                | Internationalisation compile-time (FR/EN)                    |
+| IndexedDB / localforage       | Persistance locale des projets                               |
+| Vitest 4 / Playwright         | Tests unitaires et end-to-end                                |
+
+---
+
+## Principes cles
+
+- **Client-only** : aucune donnee ne quitte le navigateur
+- **DuckDB-first** : tout le traitement de donnees via SQL (pas de parsers JS)
+- **GPU-first** : rendu via Deck.gl WebGL, pas de GeoJSON JS pour les visualisations
+- **Svelte 5 Runes** : `$state`, `$derived`, `$effect`, jamais de stores Svelte 4

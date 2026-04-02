@@ -42,7 +42,7 @@ export async function validateFile(file: File): Promise<ValidationResult> {
 
   const warnings: string[] = [];
   if (file.size > WARNING_FILE_SIZE) {
-    logger.info('Large file detected', LogCategory.DATA, {
+    logger.debug('Large file detected', LogCategory.DATA, {
       fileName: file.name,
       fileSize: file.size,
       warningThreshold: WARNING_FILE_SIZE
@@ -53,11 +53,6 @@ export async function validateFile(file: File): Promise<ValidationResult> {
       })
     );
   }
-
-  logger.debug('File passed basic validation', LogCategory.DATA, {
-    fileName: file.name,
-    fileSize: file.size
-  });
 
   return validationSuccess(warnings);
 }

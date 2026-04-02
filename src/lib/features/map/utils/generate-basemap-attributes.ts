@@ -98,7 +98,7 @@ export async function generateCustomBasemapAttributes(
       ${unionQueries.join('\nUNION ALL\n')}
     `);
   } catch (error) {
-    logger.error(
+    logger.warn(
       `Failed to generate attributes for basemap ${basemapId}`,
       LogCategory.MAP,
       error

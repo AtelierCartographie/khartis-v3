@@ -14,6 +14,7 @@
 
 <div id="khartis-header">
   <CbsHeader
+    href="."
     persistentHamburgerMenu={true}
     bind:isSideNavOpen={globalState.isSideNavOpen}
   >

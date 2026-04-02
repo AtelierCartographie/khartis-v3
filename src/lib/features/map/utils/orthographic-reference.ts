@@ -16,23 +16,38 @@ interface ResolveOrthographicReferenceTableOptions {
   duckDataset: OrthographicDuckDatasetRef;
   datasetTable: ArrowTable;
   basemapTable?: ArrowTable | null;
+  /** When set, a reference basemap is explicitly selected (overlay) */
+  referenceBasemapId?: string | null;
 }
 
 export function shouldUseBasemapReferenceInOrthographicView(
   dataset: OrthographicDatasetRef,
-  duckDataset: OrthographicDuckDatasetRef
+  duckDataset: OrthographicDuckDatasetRef,
+  referenceBasemapId?: string | null
 ): boolean {
-  return Boolean(duckDataset?.joinedBasemap) && !dataset?.geometry;
+  // Tabular data joined to basemap → use basemap bounds
+  if (Boolean(duckDataset?.joinedBasemap) && !dataset?.geometry) return true;
+  // Reference basemap explicitly selected (overlay) → use basemap bounds
+  // so administrative boundaries are visible even with polygon data
+  if (referenceBasemapId) return true;
+  return false;
 }
 
 export function resolveOrthographicReferenceTable({
   dataset,
   duckDataset,
   datasetTable,
-  basemapTable = null
+  basemapTable = null,
+  referenceBasemapId = null
 }: ResolveOrthographicReferenceTableOptions): ArrowTable | null {
-  if (shouldUseBasemapReferenceInOrthographicView(dataset, duckDataset)) {
-    return basemapTable;
+  if (
+    shouldUseBasemapReferenceInOrthographicView(
+      dataset,
+      duckDataset,
+      referenceBasemapId
+    )
+  ) {
+    return basemapTable ?? datasetTable;
   }
 
   return datasetTable;

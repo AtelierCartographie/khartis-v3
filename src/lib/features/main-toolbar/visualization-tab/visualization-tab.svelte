@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { SvelteSet } from 'svelte/reactivity';
   import {
     visualizationStore,
     VisualizationType
@@ -15,15 +16,16 @@
   import ConfigureVisualization from './configure-visualization.svelte';
   import CustomizeBasemap from './customize-basemap.svelte';
   import ToolbarTabLayout from '../components/toolbar-tab-layout.svelte';
-  import { onMount } from 'svelte';
   import {
+    applySuggestionMapping,
     mapSuggestionToType,
     resolveDatasetGeometryType
   } from './suggestion.utils';
 
   let configureSection: HTMLElement | undefined = $state();
-  let initializedDatasetIds = $state<string[]>([]);
-  let lastSnapshot = $state<string>('');
+  /** Datasets for which we already auto-created (or found existing) visualizations.
+   *  Prevents re-creation after the user explicitly deletes the last viz. */
+  const initializedDatasetIds = new SvelteSet<string>();
 
   function buildColumnAnalysis(dataset: {
     columns: Array<{
@@ -75,6 +77,12 @@
       };
     }>;
     geometry?: { type?: string | null };
+    sourceFileId?: string;
+    joinedBasemap?: string;
+    gpsMode?: boolean;
+    geoDetection?: {
+      geoColumns?: Array<{ type?: string }>;
+    };
   }): VizSuggestion | undefined {
     const geometryType = resolveDatasetGeometryType(dataset);
     if (!geometryType) return undefined;
@@ -88,43 +96,7 @@
     return suggestions[0];
   }
 
-  function applySuggestionMapping(
-    vizId: string,
-    vizType: VisualizationType,
-    suggestion: VizSuggestion
-  ): void {
-    if (!suggestion.columns || suggestion.columns.length === 0) {
-      return;
-    }
-
-    const column = suggestion.columns[0];
-    const mappingUpdate: Record<string, string> = {};
-
-    switch (vizType) {
-      case VisualizationType.CHOROPLETH:
-        mappingUpdate.valueColumn = column;
-        break;
-      case VisualizationType.PROPORTIONAL:
-        mappingUpdate.sizeColumn = column;
-        break;
-      case VisualizationType.CATEGORICAL:
-        mappingUpdate.categoryColumn = column;
-        break;
-      case VisualizationType.BIVARIATE:
-        mappingUpdate.valueColumn = column;
-        if (suggestion.columns.length > 1) {
-          mappingUpdate.colorColumn = suggestion.columns[1];
-        }
-        break;
-    }
-
-    const viz = visualizationStore.visualizations.find((v) => v.id === vizId);
-    if (!viz) return;
-
-    visualizationStore.updateVisualization(vizId, {
-      mapping: { ...viz.mapping, ...mappingUpdate }
-    });
-  }
+  // applySuggestionMapping is now shared from suggestion.utils.ts
 
   function handleCreateVisualization() {
     if (configureSection) {
@@ -132,72 +104,45 @@
     }
   }
 
-  onMount(() => {
-    logger.info('[visualization-tab] mounted', LogCategory.UI);
-    return () => {
-      logger.warn('[visualization-tab] unmounted', LogCategory.UI, {
-        selectedDatasetId: datasetsStore.selectedDataset?.id,
-        visualizationsCount: visualizationStore.visualizations.length
-      });
-    };
-  });
-
   $effect(() => {
     const dataset = datasetsStore.selectedDataset;
-    const datasetVisualizations = dataset
-      ? visualizationStore.getVisualizationsByDataset(dataset.id)
-      : [];
-    const hasNoDatasetViz = datasetVisualizations.length === 0;
-    const hasInitializedDataset = dataset
-      ? initializedDatasetIds.includes(dataset.id)
-      : false;
-    const snapshot = `${dataset?.id ?? 'none'}|${datasetVisualizations.length}|${initializedDatasetIds.join(',')}`;
+    if (!dataset) return;
 
-    if (snapshot !== lastSnapshot) {
-      lastSnapshot = snapshot;
-      logger.debug(
-        '[visualization-tab] auto-create check snapshot',
-        LogCategory.UI,
-        {
-          selectedDatasetId: dataset?.id,
-          hasNoDatasetViz,
-          hasInitializedDataset,
-          selectedVisualizationId: visualizationStore.selectedVisualization?.id
-        }
-      );
+    const datasetVisualizations = visualizationStore.getVisualizationsByDataset(
+      dataset.id
+    );
+
+    if (datasetVisualizations.length > 0) {
+      initializedDatasetIds.add(dataset.id);
+      return;
     }
 
-    if (dataset && !hasInitializedDataset) {
-      initializedDatasetIds = [...initializedDatasetIds, dataset.id];
+    // Don't re-create if this dataset already had a viz (user deleted it)
+    if (initializedDatasetIds.has(dataset.id)) return;
+    initializedDatasetIds.add(dataset.id);
 
-      if (hasNoDatasetViz) {
-        const bestSuggestion = resolveBestSuggestion(dataset);
-        const defaultType = bestSuggestion
-          ? mapSuggestionToType(bestSuggestion.id)
-          : dataset.geometry?.type?.toLowerCase().includes('point')
-            ? VisualizationType.PROPORTIONAL
-            : VisualizationType.CHOROPLETH;
-        const viz = visualizationStore.createVisualization(
-          defaultType,
-          dataset.id
-        );
+    const bestSuggestion = resolveBestSuggestion(dataset);
+    const defaultType = bestSuggestion
+      ? mapSuggestionToType(bestSuggestion.id)
+      : dataset.geometry?.type?.toLowerCase().includes('point')
+        ? VisualizationType.PROPORTIONAL
+        : VisualizationType.CHOROPLETH;
+    const viz = visualizationStore.createVisualization(defaultType, dataset.id);
 
-        if (bestSuggestion) {
-          applySuggestionMapping(viz.id, defaultType, bestSuggestion);
-        }
+    if (bestSuggestion) {
+      applySuggestionMapping(viz.id, defaultType, bestSuggestion);
+    }
 
-        logger.info(
-          '[visualization-tab] auto-created visualization from step entry',
-          LogCategory.UI,
-          {
-            datasetId: dataset.id,
-            defaultType,
-            suggestionId: bestSuggestion?.id,
-            suggestionColumns: bestSuggestion?.columns
-          }
-        );
+    logger.debug(
+      '[visualization-tab] auto-created visualization from step entry',
+      LogCategory.UI,
+      {
+        datasetId: dataset.id,
+        defaultType,
+        suggestionId: bestSuggestion?.id,
+        suggestionColumns: bestSuggestion?.columns
       }
-    }
+    );
   });
 </script>
 

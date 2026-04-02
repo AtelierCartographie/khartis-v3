@@ -1,12 +1,12 @@
 #!/bin/bash
 # Download DuckDB WASM extensions for local bundling
-# This script automatically detects the DuckDB version from node_modules
+# This script automatically detects the DuckDB core version from the WASM binary
 # and downloads matching extensions for offline PWA support.
 #
-# Features:
-# - Auto-detects DuckDB version from @duckdb/duckdb-wasm package
-# - Falls back to known working versions if detected version is unavailable
-# - Cleans up old extension versions automatically
+# How it works:
+# - The WASM binary embeds the DuckDB core version (e.g., "v1.4.3")
+# - DuckDB constructs extension URLs using this version
+# - This script extracts it and downloads matching extensions from the CDN
 #
 # Usage:
 #   pnpm download:extensions        # Manual download
@@ -19,40 +19,42 @@ PLATFORMS=("wasm_eh" "wasm_mvp")
 BASE_URL="https://extensions.duckdb.org"
 OUTPUT_DIR="static/duckdb-extensions"
 
-# Fallback versions to try if detected version is not available
-# Listed in order of preference (newest first)
-FALLBACK_VERSIONS=("v1.4.0" "v1.3.0" "v1.2.0" "v1.1.3" "v1.1.0")
-
-# Detect DuckDB version from node_modules
+# Detect DuckDB core version from the WASM binary
 detect_duckdb_version() {
-  local pkg_json="node_modules/@duckdb/duckdb-wasm/package.json"
+  local wasm_pkg_dir
+  wasm_pkg_dir=$(node -p "const m = require.resolve('@duckdb/duckdb-wasm'); const i = m.lastIndexOf('node_modules/@duckdb/duckdb-wasm'); m.substring(0, i) + 'node_modules/@duckdb/duckdb-wasm'")
 
-  if [ ! -f "$pkg_json" ]; then
+  if [ -z "$wasm_pkg_dir" ]; then
     echo "Error: @duckdb/duckdb-wasm not found. Run 'pnpm install' first."
     exit 1
   fi
 
-  # Extract version from package.json (e.g., "1.31.0" -> "v1.4.0")
-  local wasm_version=$(node -p "require('./$pkg_json').version")
+  # Try EH binary first, then COI, then MVP
+  local wasm_binary=""
+  for candidate in "dist/duckdb-eh.wasm" "dist/duckdb-coi.wasm" "dist/duckdb-mvp.wasm"; do
+    if [ -f "$wasm_pkg_dir/$candidate" ]; then
+      wasm_binary="$wasm_pkg_dir/$candidate"
+      break
+    fi
+  done
 
-  # Map WASM package version to DuckDB core version
-  # The WASM package version doesn't match the core version directly
-  # We need to check the duckdb dependency or use a mapping
-  local duckdb_version=$(node -p "
-    const pkg = require('./$pkg_json');
-    // Try to get from duckdb dependency or fall back to known mapping
-    const wasmVersion = pkg.version;
-    // Known mappings: 1.31.0 -> v1.4.0
-    const versionMap = {
-      '1.31.0': 'v1.4.0',
-      '1.30.0': 'v1.3.0',
-      '1.29.0': 'v1.2.0',
-      '1.28.0': 'v1.1.0'
-    };
-    versionMap[wasmVersion] || 'v' + wasmVersion.split('.').slice(0, 2).join('.') + '.0';
-  ")
+  if [ -z "$wasm_binary" ]; then
+    echo "Error: No WASM binary found in $wasm_pkg_dir/dist/"
+    exit 1
+  fi
 
-  echo "$duckdb_version"
+  # Extract the DuckDB core version from the binary
+  # The WASM binary contains all historical DuckDB versions (extension compatibility matrix).
+  # The core version is the highest one.
+  local core_version
+  core_version=$(strings "$wasm_binary" | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | sort -V | uniq | tail -1)
+
+  if [ -z "$core_version" ]; then
+    echo "Error: Could not extract DuckDB core version from $wasm_binary"
+    exit 1
+  fi
+
+  echo "$core_version"
 }
 
 # Check if extensions already exist for this version
@@ -66,7 +68,8 @@ check_existing() {
       return 1
     fi
 
-    local count=$(find "$dir" -maxdepth 1 -name '*.wasm' | wc -l | tr -d ' ')
+    local count
+    count=$(find "$dir" -maxdepth 1 -name '*.wasm' | wc -l | tr -d ' ')
     if [ "$count" -ne "${#EXTENSIONS[@]}" ]; then
       return 1
     fi
@@ -92,95 +95,47 @@ cleanup_old_versions() {
 # Check if a version is available on the CDN
 check_version_available() {
   local version=$1
-
-  for platform in "${PLATFORMS[@]}"; do
-    for ext in "${EXTENSIONS[@]}"; do
-      local test_url="$BASE_URL/$version/$platform/$ext.duckdb_extension.wasm"
-      if ! curl -s -f -I "$test_url" > /dev/null 2>&1; then
-        return 1
-      fi
-    done
-  done
-
-  return 0
-}
-
-# Find an available version (detected or fallback)
-# Sets AVAILABLE_VERSION global variable
-find_available_version() {
-  local detected_version=$1
-  AVAILABLE_VERSION=""
-
-  echo "Checking extension availability..."
-
-  # Try detected version first
-  if check_version_available "$detected_version"; then
-    echo "  $detected_version available"
-    AVAILABLE_VERSION="$detected_version"
-    return 0
-  else
-    echo "  $detected_version not available"
-  fi
-
-  # Try fallback versions
-  for version in "${FALLBACK_VERSIONS[@]}"; do
-    if check_version_available "$version"; then
-      echo "  $version available"
-      AVAILABLE_VERSION="$version"
-      return 0
-    else
-      echo "  $version not available"
-    fi
-  done
-
-  return 1
+  local test_url="$BASE_URL/$version/${PLATFORMS[0]}/${EXTENSIONS[0]}.duckdb_extension.wasm"
+  curl -s -f -I "$test_url" > /dev/null 2>&1
 }
 
 # Main
 DETECTED_VERSION=$(detect_duckdb_version)
-echo "Detected DuckDB version: $DETECTED_VERSION (from @duckdb/duckdb-wasm)"
+echo "Detected DuckDB core version: $DETECTED_VERSION (extracted from WASM binary)"
 
-# Find available version (detected or fallback)
-find_available_version "$DETECTED_VERSION"
-
-if [ -z "$AVAILABLE_VERSION" ]; then
+# Check CDN availability
+echo "Checking extension availability on CDN..."
+if ! check_version_available "$DETECTED_VERSION"; then
   echo ""
-  echo "ERROR: No available extension version found."
-  echo "Tried: $DETECTED_VERSION ${FALLBACK_VERSIONS[*]}"
+  echo "ERROR: Extensions for $DETECTED_VERSION are not available on the CDN."
+  echo "URL checked: $BASE_URL/$DETECTED_VERSION/${PLATFORMS[0]}/${EXTENSIONS[0]}.duckdb_extension.wasm"
   echo ""
-  echo "Possible solutions:"
-  echo "  1. Check your internet connection"
-  echo "  2. Add a new fallback version to FALLBACK_VERSIONS in this script"
-  echo "  3. Wait for DuckDB to publish extensions for $DETECTED_VERSION"
+  echo "This usually means DuckDB hasn't published extensions for this version yet."
+  echo "Check: https://extensions.duckdb.org"
   exit 1
 fi
+echo "  $DETECTED_VERSION available"
 
-# Show warning if using fallback
-if [ "$AVAILABLE_VERSION" != "$DETECTED_VERSION" ]; then
-  echo ""
-  echo "Using fallback version $AVAILABLE_VERSION (detected: $DETECTED_VERSION)"
-fi
-
-# Check if already downloaded for the available version
-if check_existing "$AVAILABLE_VERSION"; then
-  echo "Extensions already up-to-date for $AVAILABLE_VERSION"
+# Check if already downloaded
+if check_existing "$DETECTED_VERSION"; then
+  echo "Extensions already up-to-date for $DETECTED_VERSION"
   for platform in "${PLATFORMS[@]}"; do
-    echo "Location: $OUTPUT_DIR/$AVAILABLE_VERSION/$platform/"
+    echo "Location: $OUTPUT_DIR/$DETECTED_VERSION/$platform/"
   done
   exit 0
 fi
 
-echo "Downloading DuckDB extensions for version $AVAILABLE_VERSION..."
+echo "Downloading DuckDB extensions for version $DETECTED_VERSION..."
 
 # Clean up old versions
-cleanup_old_versions "$AVAILABLE_VERSION"
+cleanup_old_versions "$DETECTED_VERSION"
 
 for platform in "${PLATFORMS[@]}"; do
-  mkdir -p "$OUTPUT_DIR/$AVAILABLE_VERSION/$platform"
+  mkdir -p "$OUTPUT_DIR/$DETECTED_VERSION/$platform"
 
   for ext in "${EXTENSIONS[@]}"; do
-    OUTPUT_FILE="$OUTPUT_DIR/$AVAILABLE_VERSION/$platform/$ext.duckdb_extension.wasm"
-    URL="$BASE_URL/$AVAILABLE_VERSION/$platform/$ext.duckdb_extension.wasm"
+    OUTPUT_FILE="$OUTPUT_DIR/$DETECTED_VERSION/$platform/$ext.duckdb_extension.wasm"
+    URL="$BASE_URL/$DETECTED_VERSION/$platform/$ext.duckdb_extension.wasm"
 
     echo "Downloading $ext extension for $platform..."
     if curl -f -s -o "$OUTPUT_FILE" "$URL"; then
@@ -198,12 +153,12 @@ done
 echo ""
 echo "Extensions downloaded to:"
 for platform in "${PLATFORMS[@]}"; do
-  echo "  $OUTPUT_DIR/$AVAILABLE_VERSION/$platform/"
+  echo "  $OUTPUT_DIR/$DETECTED_VERSION/$platform/"
 done
 echo ""
 for platform in "${PLATFORMS[@]}"; do
-  du -h "$OUTPUT_DIR/$AVAILABLE_VERSION/$platform/"*
+  du -h "$OUTPUT_DIR/$DETECTED_VERSION/$platform/"*
 done
 echo ""
 echo "Total size:"
-du -sh "$OUTPUT_DIR/$AVAILABLE_VERSION"
+du -sh "$OUTPUT_DIR/$DETECTED_VERSION"

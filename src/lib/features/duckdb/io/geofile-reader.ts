@@ -23,14 +23,15 @@ import type {
 import { generateUniqueTableName, registerFiles } from './file-registry';
 import {
   applyProj4Reprojection,
-  isProjectionSupported,
   tryDuckDBReprojection
 } from './geofile-reprojection';
+import { isProjectionSupported } from './reprojection';
 import { addRowId } from './reader-utils';
 
 interface GeofileMetadata {
   crs: string | null;
   geometryColumn: string;
+  layerCount: number;
 }
 
 async function ensureSpatialExtension(ctx: DuckDBContext): Promise<void> {
@@ -41,7 +42,12 @@ async function ensureSpatialExtension(ctx: DuckDBContext): Promise<void> {
       format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
     });
     ctx.extensionsLoaded.spatial = true;
-  } catch {
+  } catch (loadError) {
+    logger.debug(
+      'LOAD spatial failed, trying INSTALL + LOAD',
+      LogCategory.DUCKDB,
+      loadError
+    );
     try {
       await executeQuery(
         ctx.connection,
@@ -68,7 +74,8 @@ async function detectGeofileMetadata(
 ): Promise<GeofileMetadata> {
   const defaultResult: GeofileMetadata = {
     crs: null,
-    geometryColumn: INTERNAL_COLUMN.GEOM
+    geometryColumn: INTERNAL_COLUMN.GEOM,
+    layerCount: 1
   };
   try {
     await ensureSpatialExtension(ctx);
@@ -78,13 +85,15 @@ async function detectGeofileMetadata(
       ctx.connection,
       `SELECT
          layers[1].geometry_fields[1].crs.auth_code AS crs_code,
-         layers[1].geometry_fields[1].name AS geom_name
+         layers[1].geometry_fields[1].name AS geom_name,
+         len(layers) AS layer_count
        FROM ST_Read_Meta('${escapedFileId}')`,
       { format: DUCK_CONST.QUERY_FORMAT.ARROW_TABLE }
     )) as ArrowTable;
     if (result && result.numRows > 0) {
       const crsCode = result.getChild('crs_code')?.get(0);
       const geomName = result.getChild('geom_name')?.get(0);
+      const layerCount = Number(result.getChild('layer_count')?.get(0) ?? 1);
       let crs: string | null = null;
       if (crsCode) {
         if (typeof crsCode === 'number') {
@@ -100,7 +109,8 @@ async function detectGeofileMetadata(
         geometryColumn:
           geomName && typeof geomName === 'string'
             ? geomName
-            : INTERNAL_COLUMN.GEOM
+            : INTERNAL_COLUMN.GEOM,
+        layerCount
       };
     }
     return defaultResult;
@@ -152,6 +162,13 @@ export async function readGeofile(
     }
 
     const geoMeta = await detectGeofileMetadata(ctx, geofileWithId.id);
+
+    if (geoMeta.layerCount > 1) {
+      throw new DuckDBError(
+        `Multiple layers found (${geoMeta.layerCount}) in file "${geofile.name}"`
+      );
+    }
+
     const shouldReproject = needsReprojection(geoMeta.crs);
     const geomCol = geoMeta.geometryColumn;
     let usedProj4Fallback = false;
@@ -167,11 +184,11 @@ export async function readGeofile(
 
     const finalTablename = tablename;
     const escapedFinalTable = escapeIdentifier(finalTablename);
+    const escapedGeoFileId = escapeSqlString(geofileWithId.id);
+
     await runInTransaction(
       ctx.connection,
       async () => {
-        const escapedGeoFileId = escapeSqlString(geofileWithId.id);
-
         if (shouldReproject) {
           const duckDBSuccess = await tryDuckDBReprojection(
             ctx,

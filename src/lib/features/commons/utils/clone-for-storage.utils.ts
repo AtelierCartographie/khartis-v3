@@ -15,6 +15,16 @@ export function deepCloneForStorage(obj: unknown): unknown {
       typed.buffer.slice(typed.byteOffset, typed.byteOffset + typed.byteLength)
     );
   }
+  if (obj instanceof Map) {
+    const entries: Array<[unknown, unknown]> = [];
+    obj.forEach((value, key) => {
+      entries.push([deepCloneForStorage(key), deepCloneForStorage(value)]);
+    });
+    return Object.fromEntries(entries);
+  }
+  if (obj instanceof Set) {
+    return [...obj].map(deepCloneForStorage);
+  }
   if (Array.isArray(obj)) return obj.map(deepCloneForStorage);
   if (typeof obj === 'object') {
     const result: Record<string, unknown> = {};

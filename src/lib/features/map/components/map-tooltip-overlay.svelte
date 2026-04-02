@@ -116,7 +116,7 @@
       <div class="tooltip-header">
         <button
           class="tooltip-close"
-          aria-label="Close"
+          aria-label={m.close()}
           onclick={handleClose}
           onkeydown={handleCloseKeyDown}
         >
@@ -134,7 +134,7 @@
       {/each}
     </div>
 
-    {#if hasSecondaryEntries}
+    {#if hasSecondaryEntries && tooltipState.pinned}
       <div class="tooltip-accordion" class:open={accordionOpen}>
         <button
           class="accordion-toggle"

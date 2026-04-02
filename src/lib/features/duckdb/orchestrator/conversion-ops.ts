@@ -11,16 +11,6 @@ export async function convertToProcessedDataset(
   duckDataset: DuckDBDataset,
   getTableData: GetTableDataFn
 ): Promise<ProcessedDataset> {
-  const start = performance.now();
-  logger.debug(
-    'Converting DuckDB dataset to processed dataset',
-    LogCategory.DUCKDB,
-    {
-      datasetId: duckDataset.id,
-      tableName: duckDataset.tableName
-    }
-  );
-
   let data: Record<string, unknown>[] = [];
   try {
     const tableData = await getTableData(duckDataset.tableName, {
@@ -41,7 +31,7 @@ export async function convertToProcessedDataset(
       }
     }
   } catch (error) {
-    logger.error('Error loading data', LogCategory.DUCKDB, error);
+    logger.warn('Error loading data', LogCategory.DUCKDB, error);
     data = [];
   }
 
@@ -104,16 +94,6 @@ export async function convertToProcessedDataset(
     },
     geoDetection: duckDataset.geoDetection
   };
-
-  logger.info(
-    'DuckDB dataset converted to processed dataset',
-    LogCategory.DUCKDB,
-    {
-      datasetId: duckDataset.id,
-      rowCount: duckDataset.rowCount,
-      durationMs: (performance.now() - start).toFixed(2)
-    }
-  );
 
   return processedDataset;
 }

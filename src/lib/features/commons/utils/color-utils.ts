@@ -98,3 +98,18 @@ export function hexToRgb(hex: string): [number, number, number] {
 
   return [r, g, b];
 }
+
+/**
+ * Converts an ok-palette WebGLColor [r, g, b, a] (0–255) to a hex string.
+ */
+export function webglToHex([r, g, b]: [
+  number,
+  number,
+  number,
+  number
+]): string {
+  return (
+    '#' +
+    [r, g, b].map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')
+  );
+}
