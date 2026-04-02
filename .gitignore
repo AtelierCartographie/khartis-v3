@@ -3,6 +3,7 @@
 # Diagnostic reports
 report.*.json
 *AGENTS.md
+.codex/
 *PROMPT.md
 # Output
 .output
@@ -33,7 +34,6 @@ node_modules
 !.env.example
 !.env.test
 .env.local
-.codex
 .env.development.local
 .env.production.local
 .env.test.local
