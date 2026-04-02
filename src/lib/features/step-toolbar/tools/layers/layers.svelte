@@ -2,6 +2,7 @@
   import * as m from '$lib/paraglide/messages';
   import { Modal, TextInput } from 'carbon-components-svelte';
   import { ColorPalette, Earth } from 'carbon-icons-svelte';
+  import { tick } from 'svelte';
   import LayersList from './layers-list.svelte';
   import { layersActions, layersState } from './layers.store.svelte';
   import type { Layer } from './layers.types.js';
@@ -29,7 +30,9 @@
         ? l.type === 'geographic'
           ? Earth
           : ColorPalette
-        : undefined
+        : l.type === 'visualization'
+          ? ColorPalette
+          : Earth
     }))
   );
 
@@ -57,6 +60,15 @@
   let renameModalOpen = $state(false);
   let renameLayerId = $state<string | null>(null);
   let renameValue = $state('');
+  let renameInputRef = $state<HTMLInputElement | null>(null);
+
+  $effect(() => {
+    if (renameModalOpen) {
+      tick().then(() => {
+        setTimeout(() => renameInputRef?.select(), 100);
+      });
+    }
+  });
 
   let deleteModalOpen = $state(false);
   let deleteLayerId = $state<string | null>(null);
@@ -143,7 +155,8 @@
   }
 
   function handleReorderLayers(fromIndex: number, toIndex: number): void {
-    store.reorderLayers('visualization', fromIndex, toIndex);
+    const type = parentLayers[0]?.type ?? 'visualization';
+    store.reorderLayers(type, fromIndex, toIndex);
   }
 
   function handleReorderSubLayers(
@@ -183,7 +196,11 @@
   on:submit={handleRenameConfirm}
   size="sm"
 >
-  <TextInput labelText={m.layers_rename_prompt()} bind:value={renameValue} />
+  <TextInput
+    labelText={m.layers_rename_prompt()}
+    bind:value={renameValue}
+    bind:ref={renameInputRef}
+  />
 </Modal>
 
 <Modal

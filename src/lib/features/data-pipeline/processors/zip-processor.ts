@@ -21,11 +21,6 @@ export async function processZipFile(
 ): Promise<DatasetResult | ZipDatasetResult> {
   const start = performance.now();
 
-  logger.info('Processing ZIP archive', LogCategory.DATA, {
-    fileName: file.name,
-    fileSize: file.size
-  });
-
   try {
     const extraction = await extractZip(file);
 
@@ -49,11 +44,6 @@ async function processShapefileArchive(
   extraction: Awaited<ReturnType<typeof extractZip>>,
   start: number
 ): Promise<DatasetResult | ZipDatasetResult> {
-  logger.info('ZIP contains shapefile archive', LogCategory.DATA, {
-    baseName: extraction.shapefileBaseName,
-    fileCount: extraction.files.length
-  });
-
   const shapefileFiles = getShapefileFilesFromArchive(
     extraction.files,
     extraction.shapefileBaseName!
@@ -104,15 +94,6 @@ async function processAdditionalFiles(
   otherFiles: Awaited<ReturnType<typeof extractZip>>['files'],
   _start: number
 ): Promise<DatasetResult | ZipDatasetResult> {
-  logger.info(
-    'ZIP contains additional files besides shapefile',
-    LogCategory.DATA,
-    {
-      shapefileBaseName: shapefileDataset.name,
-      additionalFiles: otherFiles.map((f) => f.name)
-    }
-  );
-
   const additionalDatasets: DatasetResult[] = [];
   const skippedOtherFiles: string[] = [];
 
@@ -203,10 +184,14 @@ async function processMultipleFilesFromZip(
   supportedFiles: ExtractedFile[],
   start: number
 ): Promise<ZipDatasetResult> {
-  logger.info('ZIP contains multiple files, processing all', LogCategory.DATA, {
-    fileCount: supportedFiles.length,
-    files: supportedFiles.map((f) => f.name)
-  });
+  logger.debug(
+    'ZIP contains multiple files, processing all',
+    LogCategory.DATA,
+    {
+      fileCount: supportedFiles.length,
+      files: supportedFiles.map((f) => f.name)
+    }
+  );
 
   const datasets: DatasetResult[] = [];
   const skippedFiles: string[] = [];
@@ -221,11 +206,6 @@ async function processMultipleFilesFromZip(
       dataset.sourceFileId = zipFile.name;
       dataset.name = extractedFileInfo.name;
       datasets.push(dataset);
-
-      logger.debug('Processed file from ZIP', LogCategory.DATA, {
-        fileName: extractedFileInfo.name,
-        datasetId: dataset.id
-      });
     } catch (error) {
       logger.warn(
         'Failed to process file from ZIP, skipping',

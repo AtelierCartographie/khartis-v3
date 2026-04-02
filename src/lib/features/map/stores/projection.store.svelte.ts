@@ -11,6 +11,8 @@ interface ProjectionState {
   referenceGeoMetadata: string | null;
   canvasSize: CanvasSize;
   modelMatrix: Matrix4 | null;
+  /** True when referenceBbox is in d3-geo projected coordinates (Y-down) */
+  isProjectedCoordinates: boolean;
 }
 
 const DEFAULT_CANVAS_SIZE: CanvasSize = { width: 800, height: 600 };
@@ -20,11 +22,17 @@ function createProjectionStore() {
     referenceBbox: null,
     referenceGeoMetadata: null,
     canvasSize: DEFAULT_CANVAS_SIZE,
-    modelMatrix: null
+    modelMatrix: null,
+    isProjectedCoordinates: false
   });
 
   function recalculateModelMatrix(): void {
-    const { referenceBbox, referenceGeoMetadata, canvasSize } = state;
+    const {
+      referenceBbox,
+      referenceGeoMetadata,
+      canvasSize,
+      isProjectedCoordinates
+    } = state;
 
     if (referenceGeoMetadata) {
       state.modelMatrix = get_model_matrix(referenceGeoMetadata, canvasSize);
@@ -32,7 +40,11 @@ function createProjectionStore() {
     }
 
     if (referenceBbox) {
-      state.modelMatrix = get_model_matrix_from_bbox(referenceBbox, canvasSize);
+      state.modelMatrix = get_model_matrix_from_bbox(
+        referenceBbox,
+        canvasSize,
+        isProjectedCoordinates
+      );
       return;
     }
 
@@ -44,13 +56,20 @@ function createProjectionStore() {
     if (bbox) {
       state.referenceBbox = bbox;
       state.referenceGeoMetadata = geoMetadata;
+      state.isProjectedCoordinates = false;
       recalculateModelMatrix();
     }
   }
 
-  function setReferenceBbox(bbox: BBox, geoMetadata?: string): void {
+  function setReferenceBbox(
+    bbox: BBox,
+    geoMetadata?: string,
+    /** True when bbox is in d3-geo projected coordinates (Y-down) */
+    isProjected = false
+  ): void {
     state.referenceBbox = bbox;
     state.referenceGeoMetadata = geoMetadata ?? null;
+    state.isProjectedCoordinates = isProjected;
     recalculateModelMatrix();
   }
 
@@ -68,6 +87,7 @@ function createProjectionStore() {
     state.referenceBbox = null;
     state.referenceGeoMetadata = null;
     state.modelMatrix = null;
+    state.isProjectedCoordinates = false;
   }
 
   function reset(): void {
@@ -75,6 +95,7 @@ function createProjectionStore() {
     state.referenceGeoMetadata = null;
     state.canvasSize = DEFAULT_CANVAS_SIZE;
     state.modelMatrix = null;
+    state.isProjectedCoordinates = false;
   }
 
   return {

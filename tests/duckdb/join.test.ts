@@ -25,13 +25,8 @@ function createBaseContext(): DuckDBContext {
     loaded_files: new Map(),
     registered_files: new Set(),
     table_metadata: new Map(),
-    table_geoparquet_cache: new Map(),
     describeCache: new Map(),
     rowCountCache: new Map(),
-    cacheState: {
-      size: 0,
-      accessOrder: []
-    },
     extensionsLoaded: {
       spatial: true,
       httpfs: true
@@ -179,20 +174,13 @@ describe('applyJoinAssociation', () => {
     executeQueryMock.mockResolvedValueOnce([]).mockResolvedValueOnce(undefined);
     const ctx = createContextWithJoinMetadata();
 
-    const cachedGeoParquet = new Uint8Array([1, 2, 3, 4]);
     ctx.describeCache.set('dataset_table', {} as never);
     ctx.rowCountCache.set('dataset_table', 42);
-    ctx.table_geoparquet_cache.set('dataset_table', cachedGeoParquet);
-    ctx.cacheState.size = cachedGeoParquet.byteLength;
-    ctx.cacheState.accessOrder = ['dataset_table'];
 
     await applyJoinAssociation(ctx, 'dataset_table', 'world-basemap');
 
     expect(executeQueryMock).toHaveBeenCalledTimes(2);
     expect(ctx.describeCache.has('dataset_table')).toBe(false);
     expect(ctx.rowCountCache.has('dataset_table')).toBe(false);
-    expect(ctx.table_geoparquet_cache.has('dataset_table')).toBe(false);
-    expect(ctx.cacheState.size).toBe(0);
-    expect(ctx.cacheState.accessOrder).toEqual([]);
   });
 });

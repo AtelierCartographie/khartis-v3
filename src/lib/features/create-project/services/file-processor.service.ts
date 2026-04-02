@@ -109,6 +109,17 @@ function getReadableErrorMessage(error: unknown): string {
     return m.pipeline_error_file_unreadable();
   }
 
+  if (
+    errorMessage.includes('read_csv') ||
+    errorMessage.includes('CSV') ||
+    errorMessage.includes('delimiter') ||
+    errorMessage.includes('column count')
+  ) {
+    return m.pipeline_error_csv_read_failed({
+      detail: errorMessage.slice(0, 200)
+    });
+  }
+
   return m.pipeline_error_generic();
 }
 
@@ -192,7 +203,7 @@ function createCsvProcessor(callbacks: ProcessingCallbacks): FileProcessor {
       if (duplicateCount > 0) {
         showWarning(
           WARNING_DUPLICATE_ROWS_TITLE(),
-          `Found ${duplicateCount} duplicate rows`
+          m.warning_duplicate_rows_message({ count: String(duplicateCount) })
         );
       }
     } catch (error) {

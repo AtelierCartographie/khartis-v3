@@ -20,7 +20,10 @@ import { createHoverHandler, createClickHandler } from '../interactions';
 import { projectionStore } from '../stores/projection.store.svelte';
 import { mapProjectionStore } from '../stores/map-projection.store.svelte';
 import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
-import type { DeckOrthographicViewStateMap } from '../types';
+import type {
+  DeckOrthographicViewStateMap,
+  OrthographicMainViewState
+} from '../types';
 
 interface OrthographicViewStateChangeParams {
   viewId: string;
@@ -291,27 +294,29 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
     const handleViewStateChange = ({
       viewState,
       interactionState
-    }: OrthographicViewStateChangeParams): DeckOrthographicViewStateMap => {
-      if (viewState.main) {
-        mapInstanceStore.updateDeckViewState({
-          target: viewState.main.target,
-          zoom: viewState.main.zoom
-        });
+    }: OrthographicViewStateChangeParams): OrthographicMainViewState => {
+      // Deck.gl passes the individual view's state as a flat object
+      // ({ target, zoom, … }), NOT nested under the view ID.
+      const vs: OrthographicMainViewState =
+        (viewState as unknown as DeckOrthographicViewStateMap).main ??
+        (viewState as unknown as OrthographicMainViewState);
 
-        if (
-          onOrthographicViewStateChanged &&
-          (interactionState.isDragging ||
-            interactionState.isPanning ||
-            interactionState.isZooming)
-        ) {
-          onOrthographicViewStateChanged(
-            viewState.main.target,
-            viewState.main.zoom
-          );
-        }
+      const isUserInteraction =
+        interactionState.isDragging ||
+        interactionState.isPanning ||
+        interactionState.isZooming;
+
+      mapInstanceStore.updateDeckViewState(
+        { target: vs.target, zoom: vs.zoom },
+        isUserInteraction
+      );
+
+      if (onOrthographicViewStateChanged && isUserInteraction) {
+        onOrthographicViewStateChanged(vs.target, vs.zoom);
       }
+
       onZoom();
-      return viewState;
+      return viewState as unknown as OrthographicMainViewState;
     };
 
     const orthographicDeck = createDeckWithDeferredResizeObserver(
@@ -374,15 +379,13 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
     }
   }
 
-  let _initialStyleKey: string | null = null;
+  let mapEventSubscriptions: Array<{ unsubscribe: () => void }> = [];
 
   function initializeMapLibre(
     container: HTMLDivElement,
     config: MapInitConfig = DEFAULT_CONFIG
   ): void {
     const style = basemapStyleStore.selectedStyleUrl;
-    _initialStyleKey =
-      typeof style === 'string' ? style : style.name || 'inline-style';
 
     logger.info('Initializing MapLibre + Deck.gl overlay', LogCategory.MAP);
 
@@ -404,7 +407,9 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
       dragPan: true,
       dragRotate: false,
       doubleClickZoom: true,
-      touchZoomRotate: true
+      touchZoomRotate: true,
+      canvasContextAttributes: { preserveDrawingBuffer: true },
+      cancelPendingTileRequestsWhileZooming: true
     });
 
     map.on('load', () => {
@@ -442,13 +447,19 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
       });
     });
 
+    let errorFallbackApplied = false;
     map.on('error', (e) => {
+      // Tile-loading errors (404, network) are common when switching styles
+      // and are not actionable — suppress them once the map is loaded.
+      if (isMapLoaded) return;
+
       logger.error(
         'MapLibre error, falling back to blank style',
         LogCategory.MAP,
         e
       );
-      if (!isMapLoaded && map) {
+      if (!errorFallbackApplied && map) {
+        errorFallbackApplied = true;
         map.setStyle(
           getBasemapStyle(
             BasemapStyle.BLANK_WHITE
@@ -457,9 +468,11 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
       }
     });
 
-    map.on('zoom', onZoom);
-    map.on('moveend', onMoveEnd);
-    map.on('zoomend', onMoveEnd);
+    mapEventSubscriptions.push(
+      map.on('zoom', onZoom),
+      map.on('moveend', onMoveEnd),
+      map.on('zoomend', onMoveEnd)
+    );
   }
 
   function initialize(
@@ -495,12 +508,31 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
     // Clear reactive refs first so concurrent effects cannot read stale
     // Deck/Map instances during teardown.
     const mapToRemove = map;
+    const overlayToClean = deckOverlay;
     const deckToFinalize = deckInstance;
     map = null;
     deckInstance = null;
     deckOverlay = null;
     isMapLoaded = false;
 
+    // Unsubscribe MapLibre event listeners to prevent memory leaks
+    for (const sub of mapEventSubscriptions) {
+      try {
+        sub.unsubscribe();
+      } catch {
+        // Ignore — subscription may already be detached
+      }
+    }
+    mapEventSubscriptions = [];
+
+    // Release GPU buffers before removing overlay/map
+    if (overlayToClean) {
+      try {
+        overlayToClean.setProps({ layers: [] });
+      } catch {
+        // Ignore — overlay may already be detached
+      }
+    }
     if (mapToRemove) {
       mapToRemove.remove();
     }

@@ -3,6 +3,8 @@
   import * as m from '$lib/paraglide/messages';
   import { OverflowMenu, OverflowMenuItem } from 'carbon-components-svelte';
   import {
+    ChevronDown,
+    ChevronUp,
     Draggable,
     Settings,
     ViewFilled,
@@ -12,6 +14,9 @@
 
   interface Props {
     layer: Layer;
+    hasChildren?: boolean;
+    isCollapsed?: boolean;
+    onToggleCollapse?: () => void;
     onToggleVisibility: (layerId: string) => void;
     onOpenSettings: (layerId: string) => void;
     onRenameLayer?: (layerId: string) => void;
@@ -21,6 +26,9 @@
 
   const {
     layer,
+    hasChildren = false,
+    isCollapsed = false,
+    onToggleCollapse,
     onToggleVisibility,
     onOpenSettings,
     onRenameLayer,
@@ -65,6 +73,15 @@
     <div class="drag-handle">
       <Draggable size={16} />
     </div>
+    {#if hasChildren}
+      <IconButton
+        kind="ghost"
+        size="small"
+        icon={isCollapsed ? ChevronDown : ChevronUp}
+        iconDescription={isCollapsed ? m.layers_expand() : m.layers_collapse()}
+        onclick={() => onToggleCollapse?.()}
+      />
+    {/if}
     <span class="layer-title">{layer.name}</span>
     <div class="layer-actions">
       <IconButton
@@ -74,23 +91,27 @@
         iconDescription={layer.visible ? m.layers_hide() : m.layers_show()}
         onclick={() => onToggleVisibility(layer.id)}
       />
-      <OverflowMenu size="sm" flipped iconDescription={m.layers_more_options()}>
-        {#if layer.type !== 'visualization'}
+      {#if layer.type === 'visualization'}
+        <OverflowMenu
+          size="sm"
+          flipped
+          iconDescription={m.layers_more_options()}
+        >
           <OverflowMenuItem
             text={m.layers_rename()}
             on:click={() => onRenameLayer?.(layer.id)}
           />
-        {/if}
-        <OverflowMenuItem
-          text={m.layers_duplicate()}
-          on:click={() => onDuplicateLayer?.(layer.id)}
-        />
-        <OverflowMenuItem
-          danger
-          text={m.layers_delete()}
-          on:click={() => onDeleteLayer?.(layer.id)}
-        />
-      </OverflowMenu>
+          <OverflowMenuItem
+            text={m.layers_duplicate()}
+            on:click={() => onDuplicateLayer?.(layer.id)}
+          />
+          <OverflowMenuItem
+            danger
+            text={m.layers_delete()}
+            on:click={() => onDeleteLayer?.(layer.id)}
+          />
+        </OverflowMenu>
+      {/if}
     </div>
   </div>
 {/if}
@@ -102,14 +123,14 @@
     height: 64px;
     padding: 16px 8px 16px 12px;
     gap: 8px;
-    background-color: var(--cds-layer-01);
+    background-color: var(--cds-layer);
     border: 1px solid var(--cds-border-strong-01);
     cursor: grab;
     transition: background-color 0.15s ease;
   }
 
   .layer-card:hover {
-    background-color: var(--cds-layer-hover-01);
+    background-color: var(--cds-layer-hover);
   }
 
   .drag-handle {
@@ -143,14 +164,14 @@
     height: 32px;
     padding: 0 8px 0 1px;
     gap: 7px;
-    background-color: var(--cds-layer-01);
+    background-color: var(--cds-layer);
     border: 1px solid var(--cds-border-tile-01);
     cursor: grab;
     transition: background-color 0.15s ease;
   }
 
   .sublayer-card:hover {
-    background-color: var(--cds-layer-hover-01);
+    background-color: var(--cds-layer-hover);
   }
 
   .color-bar {

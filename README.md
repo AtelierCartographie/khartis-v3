@@ -46,8 +46,8 @@ Khartis is a web application to create professional thematic maps without prior 
 
 ## Screenshots
 
-| Accueil | Visualisation | Habillage |
-|:---:|:---:|:---:|
+|                      Accueil                       |                        Visualisation                         |                     Habillage                      |
+| :------------------------------------------------: | :----------------------------------------------------------: | :------------------------------------------------: |
 | ![Écran d'accueil](static/screenshots/welcome.png) | ![Étape Visualisation](static/screenshots/visualization.png) | ![Étape Habillage](static/screenshots/styling.png) |
 
 ## Tech stack
@@ -78,16 +78,16 @@ pnpm build && pnpm preview
 
 ## Commands
 
-| Command               | Description                        |
-| --------------------- | ---------------------------------- |
-| `pnpm dev`            | Development server on :5176        |
-| `pnpm build`          | Production build                   |
-| `pnpm check`          | TypeScript + Svelte type check     |
-| `pnpm lint`           | ESLint + Prettier check            |
-| `pnpm format`         | Auto-format code                   |
-| `pnpm test:unit`      | Vitest unit tests                  |
-| `pnpm test:e2e`       | Playwright E2E tests               |
-| `pnpm test:pipeline`  | Pipeline + DuckDB integration tests|
+| Command              | Description                         |
+| -------------------- | ----------------------------------- |
+| `pnpm dev`           | Development server on :5176         |
+| `pnpm build`         | Production build                    |
+| `pnpm check`         | TypeScript + Svelte type check      |
+| `pnpm lint`          | ESLint + Prettier check             |
+| `pnpm format`        | Auto-format code                    |
+| `pnpm test:unit`     | Vitest unit tests                   |
+| `pnpm test:e2e`      | Playwright E2E tests                |
+| `pnpm test:pipeline` | Pipeline + DuckDB integration tests |
 
 **i18n**: Inlang Paraglide (English, French) — all user-facing strings via `m.key()` syntax.
 

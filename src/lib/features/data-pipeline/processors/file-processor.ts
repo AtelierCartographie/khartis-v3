@@ -17,7 +17,10 @@ import type {
   UploadedFilePayload
 } from '../types';
 import { detectCsvHeader } from '../utils/csv-header-detector';
-import { detectDecimalSeparator } from '../utils/decimal-detector';
+import {
+  detectDecimalSeparator,
+  readFileHead
+} from '../utils/decimal-detector';
 
 export interface ProcessFileOptions {
   originalName?: string;
@@ -86,13 +89,6 @@ export async function processFileInternal(
   const format = detectFileFormat(fileInfo.name);
 
   const start = performance.now();
-  logger.debug('Reading file into DuckDB via pipeline', LogCategory.DATA, {
-    fileName: fileInfo.name,
-    tableName,
-    isGeoFile,
-    isShapefile,
-    hasCompanionFiles: Boolean(options.companionFiles?.length)
-  });
 
   if (
     isShapefile &&
@@ -134,9 +130,21 @@ export async function processFileInternal(
 
   if (!isGeoFile) {
     try {
+      // Pre-filter columns to likely geo candidates — avoids querying all 100+ columns
+      // when only a few could be lat/lon/code/name. Geo detector checks column names
+      // against patterns (lat, lon, coord, iso, code, country, city, name, etc.)
+      const GEO_NAME_HINT =
+        /lat|lon|lng|coord|geo|point|location|wkt|iso|code|country|region|dept|commune|province|state|city|name|admin|id/i;
+      const geoColumns = dataset.columns
+        .filter((c) => GEO_NAME_HINT.test(c.name) || c.type === 'text')
+        .map((c) => c.name);
+      // If no likely candidates, still try all columns (fallback for unusual naming)
+      const columnsToCheck =
+        geoColumns.length > 0 ? geoColumns : dataset.columns.map((c) => c.name);
+
       const geoDetection = await detectGeoColumnsFromTable(
         dataset.tableName,
-        dataset.columns.map((column) => column.name)
+        columnsToCheck
       );
       applyGeoDetection(dataset, geoDetection);
     } catch (error) {
@@ -209,16 +217,20 @@ async function readTabularFile(
     return undefined;
   }
 
-  const detection = await detectDecimalSeparator(file);
+  // Read file head once, share between decimal and header detection (avoids double file.slice + decode)
+  const cachedHead = await readFileHead(file, 20);
+  const detection = await detectDecimalSeparator(file, { cachedHead });
   if (detection.separator === ',') {
-    logger.info('European decimal format detected', LogCategory.DATA, {
+    logger.debug('European decimal format detected', LogCategory.DATA, {
       confidence: detection.confidence,
       sampleSize: detection.sampleSize,
       delimiter: detection.delimiter,
       thousandsSeparator: detection.thousandsSeparator
     });
   }
-  const headerDetection = await detectCsvHeader(file, detection.delimiter);
+  const headerDetection = await detectCsvHeader(file, detection.delimiter, {
+    cachedHead
+  });
   logger.debug('CSV header detection completed', LogCategory.DATA, {
     hasHeader: headerDetection.hasHeader,
     confidence: headerDetection.confidence,

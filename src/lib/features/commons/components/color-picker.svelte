@@ -3,7 +3,7 @@
   import { clickOutside } from '$lib/features/commons/utils/click-outside';
   import { m } from '$lib/paraglide/messages';
   import { Button, Column, Grid, Row, Slider } from 'carbon-components-svelte';
-  import { ArrowRight, ChevronDown } from 'carbon-icons-svelte';
+  import { ChevronDown } from 'carbon-icons-svelte';
   import clsx from 'clsx';
   import { EVENT } from '../constants/dom.constants';
 
@@ -32,7 +32,21 @@
   let dropdownEl = $state<HTMLDivElement | null>(null);
   let dropdownPosition = $state({ top: 0, left: 0, width: 0 });
   let openUpward = $state(false);
-  let initialColor = $state<ColorPayload | null>(null);
+  let initialColor: ColorPayload | null = null;
+
+  // Portal the dropdown to document.body so position:fixed is relative to the
+  // true viewport — Carbon Popover uses transform:translateX which would
+  // otherwise make position:fixed position relative to the popover, not the screen.
+  function portal(node: HTMLElement): { destroy: () => void } {
+    document.body.appendChild(node);
+    return {
+      destroy() {
+        if (node.parentNode) {
+          node.parentNode.removeChild(node);
+        }
+      }
+    };
+  }
 
   function clamp(value: number, min: number, max: number): number {
     return Math.max(min, Math.min(max, value));
@@ -61,7 +75,7 @@
     saturationValue: number,
     lightnessValue: number
   ): ColorPayload {
-    const nextHue = clamp(Math.round(hueValue), 0, 360);
+    const nextHue = clamp(Math.round(hueValue), 0, 359);
     const nextSaturation = clamp(Math.round(saturationValue), 0, 100);
     const nextLightness = clamp(Math.round(lightnessValue), 0, 100);
 
@@ -103,28 +117,27 @@
   }
 
   function updateDropdownPosition() {
-    if (triggerEl && dropdownEl) {
-      const rect = triggerEl.getBoundingClientRect();
-      const dropdownHeight = 400;
-      const viewportHeight = window.innerHeight;
-      const spaceBelow = viewportHeight - rect.bottom;
-      const spaceAbove = rect.top;
+    if (!triggerEl) return;
+    const rect = triggerEl.getBoundingClientRect();
+    const dropdownHeight = dropdownEl?.offsetHeight || 400;
+    const viewportHeight = window.innerHeight;
+    const spaceBelow = viewportHeight - rect.bottom;
+    const spaceAbove = rect.top;
 
-      if (spaceBelow < dropdownHeight && spaceAbove > spaceBelow) {
-        openUpward = true;
-        dropdownPosition = {
-          top: rect.top - dropdownHeight - 26,
-          left: rect.left,
-          width: 370
-        };
-      } else {
-        openUpward = false;
-        dropdownPosition = {
-          top: rect.bottom - 95,
-          left: rect.left,
-          width: 370
-        };
-      }
+    if (spaceBelow < dropdownHeight && spaceAbove > spaceBelow) {
+      openUpward = true;
+      dropdownPosition = {
+        top: rect.top - dropdownHeight,
+        left: rect.left,
+        width: 370
+      };
+    } else {
+      openUpward = false;
+      dropdownPosition = {
+        top: rect.bottom,
+        left: rect.left,
+        width: 370
+      };
     }
   }
 
@@ -156,10 +169,13 @@
         initialColor = getValidatedColor();
       }
       updateDropdownPosition();
+      // Re-measure after browser layout so offsetHeight is accurate (needed for open-upward)
+      const rafId = requestAnimationFrame(updateDropdownPosition);
       window.addEventListener(EVENT.SCROLL, updateDropdownPosition, true);
       window.addEventListener(EVENT.RESIZE, updateDropdownPosition);
 
       return () => {
+        cancelAnimationFrame(rafId);
         window.removeEventListener(EVENT.SCROLL, updateDropdownPosition, true);
         window.removeEventListener(EVENT.RESIZE, updateDropdownPosition);
       };
@@ -172,7 +188,10 @@
 <div
   id="khartis-color-picker"
   class={clsx('color-picker-wrap', { 'is-disabled': disabled })}
-  use:clickOutside={{ enabled: colorOpen }}
+  use:clickOutside={{
+    enabled: colorOpen,
+    excludeSelectors: ['#khartis-color-picker-dropdown']
+  }}
   onoutsideclick={handleOutsideClick}
 >
   {#if triggerLabel}
@@ -195,10 +214,12 @@
 
   {#if colorOpen}
     <div
+      id="khartis-color-picker-dropdown"
       class="color-dropdown"
       class:open-upward={openUpward}
       style="top: {dropdownPosition.top}px; left: {dropdownPosition.left}px; width: {dropdownPosition.width}px;"
       bind:this={dropdownEl}
+      use:portal
     >
       <Grid condensed class="mt-5 mb-5">
         <Row noGutter>
@@ -206,7 +227,7 @@
             <div class="slider rainbow">
               <Slider
                 min={0}
-                max={360}
+                max={359}
                 step={1}
                 bind:value={hue}
                 hideTextInput
@@ -222,7 +243,7 @@
                 class="number"
                 type="number"
                 min={0}
-                max={360}
+                max={359}
                 step={1}
                 bind:value={hue}
                 inputmode="numeric"
@@ -351,11 +372,7 @@
                 colorOpen = false;
               }}
             >
-              {m.button_validate()}
-              <ArrowRight
-                size={16}
-                style="margin-left: var(--cds-spacing-03);"
-              />
+              {m.button_apply()}
             </Button>
           </Column>
         </Row>
@@ -365,10 +382,14 @@
 </div>
 
 <style>
-  .field-label {
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: var(--cds-text-01);
+  .form-label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 400;
+    line-height: 1rem;
+    letter-spacing: 0.32px;
+    color: var(--cds-text-secondary, #525252);
+    margin-bottom: var(--cds-spacing-02);
   }
 
   .color-picker-wrap {
@@ -440,19 +461,19 @@
     width: 100%;
   }
 
-  #khartis-color-picker .slider :global(.bx--slider) {
+  .slider :global(.bx--slider) {
     min-width: 160px !important;
   }
 
-  #khartis-color-picker .slider :global(.bx--slider__track) {
+  .slider :global(.bx--slider__track) {
     background: var(--cds-ui-03);
   }
 
-  #khartis-color-picker .slider :global(.bx--slider__filled-track) {
+  .slider :global(.bx--slider__filled-track) {
     background: var(--cds-text-01);
   }
 
-  #khartis-color-picker .slider.rainbow :global(.bx--slider__track) {
+  .slider.rainbow :global(.bx--slider__track) {
     background: linear-gradient(
       90deg,
       red,
@@ -465,7 +486,7 @@
     );
   }
 
-  #khartis-color-picker .slider.rainbow :global(.bx--slider__filled-track) {
+  .slider.rainbow :global(.bx--slider__filled-track) {
     background: transparent;
   }
 
@@ -540,7 +561,7 @@
     box-sizing: border-box;
   }
 
-  #khartis-color-picker :global(.action-button) {
+  .color-dropdown :global(.action-button) {
     width: 100%;
     max-width: 100%;
   }

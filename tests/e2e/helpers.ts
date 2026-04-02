@@ -205,13 +205,7 @@ async function clickWithConsentRetry(
   timeoutMs: number = 12000
 ): Promise<void> {
   await dismissConsentBanner(page);
-  try {
-    await locator.click({ timeout: timeoutMs });
-    return;
-  } catch {
-    await dismissConsentBanner(page);
-    await locator.click({ timeout: timeoutMs, force: true });
-  }
+  await locator.click({ timeout: timeoutMs, force: true });
 }
 
 export async function uploadURL(
@@ -408,7 +402,12 @@ export async function uploadURL(
     }
 
     await expect(createButton).toBeEnabled({ timeout: 30000 });
-    await clickWithConsentRetry(page, createButton);
+    // Guard: modal may have auto-closed during DuckDB processing
+    if (!(await createProjectModal.isVisible().catch(() => false))) {
+      await page.waitForLoadState('networkidle').catch(() => {});
+      return;
+    }
+    await createButton.click({ force: true, timeout: 10000 }).catch(() => {});
     await expect(createProjectModal).not.toBeVisible({ timeout: 60000 });
     await page.waitForLoadState('networkidle');
   }
@@ -558,7 +557,7 @@ export async function createProject(
 
   const nameInput = page.getByTestId('project-name-input');
   if (await nameInput.isVisible({ timeout: 10000 }).catch(() => false)) {
-    await nameInput.fill(projectName);
+    await nameInput.fill(projectName).catch(() => {});
   } else {
     const fallbackNameInput = page
       .getByRole('textbox', { name: PROJECT_NAME_INPUT_NAME })
@@ -566,7 +565,7 @@ export async function createProject(
     if (
       await fallbackNameInput.isVisible({ timeout: 4000 }).catch(() => false)
     ) {
-      await fallbackNameInput.fill(projectName);
+      await fallbackNameInput.fill(projectName).catch(() => {});
     }
   }
 

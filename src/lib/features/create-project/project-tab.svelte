@@ -60,7 +60,7 @@
       {@render icon()}
     </div>
 
-    <div class="flex justify-end">
+    <div class="flex justify-end" aria-hidden="true">
       {#if selectable}
         <RadioButton name={name} checked={selected} />
       {/if}
@@ -68,7 +68,7 @@
   </div>
 
   <div class="self-start mt-3 mb-5">
-    <h6 class="text-left">{title}</h6>
+    <p class="tab-title text-left">{title}</p>
   </div>
 
   {#if !selectable}
@@ -95,6 +95,13 @@
       rgba(230, 20, 45, 0.35) 0%,
       rgba(230, 20, 45, 0.05) 100%
     );
+  }
+
+  .tab-title {
+    font-size: var(--cds-body-short-02-font-size, 1rem);
+    font-weight: 600;
+    line-height: 1.375rem;
+    margin: 0;
   }
 
   .nav-arrow {

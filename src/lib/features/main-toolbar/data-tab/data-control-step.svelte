@@ -83,12 +83,15 @@
   let deleteFilteredModalOpen = $state(false);
   let filteredRowsToDelete = $state(0);
   let warningsNotificationDismissed = $state(false);
+  let variableTypesNotificationDismissed = $state(false);
   let isModalOpen = $state(false);
   let selectedRowIds = $state<number[]>([]);
 
   $effect(() => {
     void selectedDataset?.id;
     selectedRowIds = [];
+    warningsNotificationDismissed = false;
+    variableTypesNotificationDismissed = false;
   });
 
   let csvOptionsModalOpen = $state(false);
@@ -645,6 +648,17 @@
       </div>
     {/if}
   </div>
+
+  {#if processedDataset && !variableTypesNotificationDismissed}
+    <InlineNotification
+      title={m.data_control_variable_types_title()}
+      subtitle={m.data_control_variable_types_subtitle()}
+      kind="info"
+      lowContrast
+      hideCloseButton={false}
+      on:close={() => (variableTypesNotificationDismissed = true)}
+    />
+  {/if}
 
   {#if hasNullableColumns && !warningsNotificationDismissed}
     <InlineNotification
