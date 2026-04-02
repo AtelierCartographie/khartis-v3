@@ -99,15 +99,11 @@ async function reprojectPointGeometries(
     return;
   }
 
-  const ids = idCol.toArray();
-  const xs = xCol.toArray();
-  const ys = yCol.toArray();
-
   const valueRows: string[] = [];
   for (let i = 0; i < coordsResult.numRows; i++) {
-    const id = ids[i];
-    const x = xs[i];
-    const y = ys[i];
+    const id = idCol.get(i);
+    const x = xCol.get(i);
+    const y = yCol.get(i);
 
     if (id !== null && x !== null && y !== null) {
       const result = reprojectPoint(
@@ -189,13 +185,10 @@ async function reprojectComplexGeometries(
     return;
   }
 
-  const ids = idCol.toArray();
-  const wkts = wktCol.toArray();
-
   const updates: { id: number; wkt: string }[] = [];
   for (let i = 0; i < wktResult.numRows; i++) {
-    const id = ids[i];
-    const wkt = wkts[i];
+    const id = idCol.get(i);
+    const wkt = wktCol.get(i);
 
     if (id !== null && wkt !== null && typeof wkt === 'string') {
       const reprojectedWkt = reprojectWKT(wkt, sourceCRS);
