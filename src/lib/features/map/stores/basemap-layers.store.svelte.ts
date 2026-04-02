@@ -258,7 +258,7 @@ function createBasemapLayersStore() {
     }
 
     const layer = state.layers.find((currentLayer) => currentLayer.id === id);
-    if (!layer) {
+    if (!layer || layer.visible === visible) {
       return;
     }
 

@@ -780,7 +780,7 @@ function createVisualizationStore(): VisualizationStore {
   }
 
   function selectVisualization(id: string): void {
-    if (!getVisualizationById(id)) {
+    if (!getVisualizationById(id) || state.selectedVisualizationId === id) {
       return;
     }
     state.selectedVisualizationId = id;
@@ -872,16 +872,24 @@ function createVisualizationStore(): VisualizationStore {
     settings: SerializedVisualizationSettings
   ): void {
     // Migrate old polygon vizzes: add LINE to primitiveFilters if only POLYGON was set
-    state.visualizations = (settings.visualizations || []).map((viz: VisualizationConfig) => {
-      if (
-        viz.primitiveFilters &&
-        viz.primitiveFilters.length === 1 &&
-        viz.primitiveFilters[0] === PrimitiveFilterType.POLYGON
-      ) {
-        return { ...viz, primitiveFilters: [PrimitiveFilterType.POLYGON, PrimitiveFilterType.LINE] };
+    state.visualizations = (settings.visualizations || []).map(
+      (viz: VisualizationConfig) => {
+        if (
+          viz.primitiveFilters &&
+          viz.primitiveFilters.length === 1 &&
+          viz.primitiveFilters[0] === PrimitiveFilterType.POLYGON
+        ) {
+          return {
+            ...viz,
+            primitiveFilters: [
+              PrimitiveFilterType.POLYGON,
+              PrimitiveFilterType.LINE
+            ]
+          };
+        }
+        return viz;
       }
-      return viz;
-    });
+    );
     state.selectedVisualizationId = settings.selectedVisualizationId;
     state.activeVisualizationIds = new Set(
       settings.activeVisualizationIds || []
