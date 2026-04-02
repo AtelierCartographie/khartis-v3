@@ -94,28 +94,40 @@ enum ColumnType {
 
 Toutes les erreurs du pipeline heritent de `PipelineError` (avec `code` et `details`). Localisation : `src/lib/features/commons/errors/pipeline.errors.ts`.
 
-| Nom                    | Code                     | Contexte                          | Fatal |
-| ---------------------- | ------------------------ | --------------------------------- | ----- |
-| `PipelineError`        | (variable)               | Erreur de base du pipeline        | Oui   |
-| `DataValidationError`  | `DATA_VALIDATION_ERROR`  | Donnees invalides                 | Oui   |
-| `ParseError`           | `PARSE_ERROR`            | Erreur de lecture de fichier      | Oui   |
-| `DuckDBError`          | `DUCKDB_ERROR`           | Echec de requete DuckDB           | Oui   |
-| `NonFatalError`        | (variable)               | Toast sans rollback               | Non   |
-| `DuplicateFileError`   | `DUPLICATE_FILE`         | Fichier deja importe              | Non   |
+| Nom                   | Code                    | Contexte                     | Fatal |
+| --------------------- | ----------------------- | ---------------------------- | ----- |
+| `PipelineError`       | (variable)              | Erreur de base du pipeline   | Oui   |
+| `DataValidationError` | `DATA_VALIDATION_ERROR` | Donnees invalides            | Oui   |
+| `ParseError`          | `PARSE_ERROR`           | Erreur de lecture de fichier | Oui   |
+| `DuckDBError`         | `DUCKDB_ERROR`          | Echec de requete DuckDB      | Oui   |
+| `NonFatalError`       | (variable)              | Toast sans rollback          | Non   |
+| `DuplicateFileError`  | `DUPLICATE_FILE`        | Fichier deja importe         | Non   |
 
 Helpers : `isPipelineError()`, `isFatalError()`, `formatError()`.
 
 ```ts
-import { isFatalError, formatError } from '$lib/features/commons/errors/pipeline.errors';
-import { showError, showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
+import {
+  isFatalError,
+  formatError
+} from '$lib/features/commons/errors/pipeline.errors';
+import {
+  showError,
+  showWarning
+} from '$lib/features/commons/utils/notification.utils.svelte';
 
 try {
   const dataset = await dataPipeline.processFile(file);
 } catch (error) {
   if (isFatalError(error)) {
-    showError(m.error_fatal_import_title(), error instanceof Error ? error.message : m.error_unknown_message());
+    showError(
+      m.error_fatal_import_title(),
+      error instanceof Error ? error.message : m.error_unknown_message()
+    );
   } else {
-    showWarning(m.warning_generic_title(), error instanceof Error ? error.message : m.warning_import_message());
+    showWarning(
+      m.warning_generic_title(),
+      error instanceof Error ? error.message : m.warning_import_message()
+    );
   }
 }
 ```
@@ -146,39 +158,39 @@ Outils : `logger.time(label, category, fn)` pour mesurer une operation async.
 
 Geres dans `keyboard-shortcuts.svelte`. Prefix `Ctrl+K` (K pour Khartis) + lettre dans les 2 secondes.
 
-| Action                     | macOS                | Windows/Linux          |
-| -------------------------- | -------------------- | ---------------------- |
-| Navigation laterale        | Ctrl+K, B            | Ctrl+K, B              |
-| Nouveau projet             | Ctrl+K, N            | Ctrl+K, N              |
-| Ouvrir projet              | Ctrl+K, O            | Ctrl+K, O              |
-| Sauvegarder projet         | Ctrl+K, S            | Ctrl+K, S              |
-| Dupliquer projet           | Ctrl+K, D            | Ctrl+K, D              |
-| Supprimer projet           | Ctrl+K, X            | Ctrl+K, X              |
-| Onglet Donnees             | 1                    | 1                      |
-| Onglet Visualisation       | 2                    | 2                      |
-| Onglet Habillage           | 3                    | 3                      |
-| Basculer mode zoom         | Alt+Z                | Alt+Z                  |
-| Zoom + / - / reset         | Cmd +/-/0            | Ctrl +/-/0             |
-| Annuler                    | Cmd+Z                | Ctrl+Z                 |
-| Retablir                   | Cmd+Shift+Z / Cmd+Y  | Ctrl+Shift+Z / Ctrl+Y  |
-| Zoom molette               | Cmd+molette          | Ctrl+molette           |
-| Fermer modale/panneau      | Escape               | Escape                 |
+| Action                | macOS               | Windows/Linux         |
+| --------------------- | ------------------- | --------------------- |
+| Navigation laterale   | Ctrl+K, B           | Ctrl+K, B             |
+| Nouveau projet        | Ctrl+K, N           | Ctrl+K, N             |
+| Ouvrir projet         | Ctrl+K, O           | Ctrl+K, O             |
+| Sauvegarder projet    | Ctrl+K, S           | Ctrl+K, S             |
+| Dupliquer projet      | Ctrl+K, D           | Ctrl+K, D             |
+| Supprimer projet      | Ctrl+K, X           | Ctrl+K, X             |
+| Onglet Donnees        | 1                   | 1                     |
+| Onglet Visualisation  | 2                   | 2                     |
+| Onglet Habillage      | 3                   | 3                     |
+| Basculer mode zoom    | Alt+Z               | Alt+Z                 |
+| Zoom + / - / reset    | Cmd +/-/0           | Ctrl +/-/0            |
+| Annuler               | Cmd+Z               | Ctrl+Z                |
+| Retablir              | Cmd+Shift+Z / Cmd+Y | Ctrl+Shift+Z / Ctrl+Y |
+| Zoom molette          | Cmd+molette         | Ctrl+molette          |
+| Fermer modale/panneau | Escape              | Escape                |
 
 ---
 
 ## Validation
 
-| Fonction                               | Usage                                     |
-| -------------------------------------- | ----------------------------------------- |
-| `ProjectValidator.validateProjectName` | Max 255 car., pas de caracteres speciaux |
-| `ProjectValidator.validateFileSize`    | Verif. taille avant import (max 50 Mo)    |
-| `ProjectValidator.validateProjectSize` | Verif. taille avant sauvegarde (max 100 Mo) |
-| `ProjectValidator.validateStorageCapacity` | Quota de stockage (max 50 projets)    |
-| `DataValidator.validateCSVData`        | Validation donnees CSV apres parsing      |
-| `DataValidator.validateGeoData`        | Validation GeoJSON apres parsing          |
-| `sanitizeProjectName`                  | Nettoyage nom de projet                   |
-| `sanitizeTextInput`                    | Nettoyage saisie utilisateur              |
-| `escapeSqlString`                     | Echappement chaines pour DuckDB           |
+| Fonction                                   | Usage                                       |
+| ------------------------------------------ | ------------------------------------------- |
+| `ProjectValidator.validateProjectName`     | Max 255 car., pas de caracteres speciaux    |
+| `ProjectValidator.validateFileSize`        | Verif. taille avant import (max 50 Mo)      |
+| `ProjectValidator.validateProjectSize`     | Verif. taille avant sauvegarde (max 100 Mo) |
+| `ProjectValidator.validateStorageCapacity` | Quota de stockage (max 50 projets)          |
+| `DataValidator.validateCSVData`            | Validation donnees CSV apres parsing        |
+| `DataValidator.validateGeoData`            | Validation GeoJSON apres parsing            |
+| `sanitizeProjectName`                      | Nettoyage nom de projet                     |
+| `sanitizeTextInput`                        | Nettoyage saisie utilisateur                |
+| `escapeSqlString`                          | Echappement chaines pour DuckDB             |
 
 Localisation : `src/lib/features/commons/utils/validation.utils.ts` et `sanitize.utils.ts`.
 
@@ -186,11 +198,11 @@ Localisation : `src/lib/features/commons/utils/validation.utils.ts` et `sanitize
 
 ## Limites de stockage
 
-| Limite                  | Valeur   | Seuil d'alerte |
-| ----------------------- | -------- | -------------- |
-| Taille max. par fichier | 50 Mo    | 25 Mo          |
-| Taille max. par projet  | 100 Mo   | 80 Mo          |
-| Nombre max. de projets  | 50       | 40             |
+| Limite                  | Valeur | Seuil d'alerte |
+| ----------------------- | ------ | -------------- |
+| Taille max. par fichier | 50 Mo  | 25 Mo          |
+| Taille max. par projet  | 100 Mo | 80 Mo          |
+| Nombre max. de projets  | 50     | 40             |
 
 Stockage via IndexedDB (localforage). Donnees ne quittent jamais le navigateur.
 
@@ -221,16 +233,16 @@ Convention de cles : `snake_case` semantique par feature (`tool_legend_title`, `
 
 ## Commandes
 
-| Commande             | Description                                  |
-| -------------------- | -------------------------------------------- |
-| `pnpm dev`           | Serveur de dev (port 5176)                   |
-| `pnpm build`         | Build production (static adapter)             |
-| `pnpm check`         | Verification TypeScript + Svelte              |
-| `pnpm lint`          | Prettier + ESLint                             |
-| `pnpm test:unit`     | Tests Vitest (client jsdom + server node)    |
-| `pnpm test:unit -- src/path` | Tests specifiques                  |
-| `pnpm test:e2e`     | Tests Playwright E2E (local uniquement)       |
-| `pnpm test:pipeline` | Tests d'integration DuckDB (server-side)    |
+| Commande                     | Description                               |
+| ---------------------------- | ----------------------------------------- |
+| `pnpm dev`                   | Serveur de dev (port 5176)                |
+| `pnpm build`                 | Build production (static adapter)         |
+| `pnpm check`                 | Verification TypeScript + Svelte          |
+| `pnpm lint`                  | Prettier + ESLint                         |
+| `pnpm test:unit`             | Tests Vitest (client jsdom + server node) |
+| `pnpm test:unit -- src/path` | Tests specifiques                         |
+| `pnpm test:e2e`              | Tests Playwright E2E (local uniquement)   |
+| `pnpm test:pipeline`         | Tests d'integration DuckDB (server-side)  |
 
 ---
 

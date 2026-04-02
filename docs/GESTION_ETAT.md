@@ -155,10 +155,16 @@ Les fichiers sources (dont `parsedData`, `statistics`, `content`) sont embarques
 
 ## Auto-sauvegarde
 
-```
-Mutation d'etat --> Flag dirty --> Demarrage/reset timer debounce (30 s)
-                                          |
-                                   Timer expire --> Serialisation JSON --> Validation taille --> IndexedDB
+```mermaid
+flowchart LR
+    MUT["Mutation d'etat"] --> FLAG["Flag dirty"]
+    --> TIMER["Demarrage/reset timer<br/>(debounce 5 s)"]
+    --> JSON["Timer expire<br/>→ Serialisation JSON"]
+    --> VAL["Validation taille"]
+    --> IDB["IndexedDB"]
+
+    style MUT fill:#e3f2fd
+    style IDB fill:#e8f5e9
 ```
 
 **Sauvegarde immediate** (bypass debounce) : creation de projet, fin d'import, ajout/suppression de fichier, export explicite.
