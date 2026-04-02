@@ -7,7 +7,7 @@ import type { GeoArrowMetadata } from '$lib/features/commons/types/geoarrow.type
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { ArrowExtension } from '$lib/features/map/constants/map.constants';
 import { Field, Schema, Table, Type, tableFromIPC } from 'apache-arrow/Arrow';
-import { SvelteMap } from 'svelte/reactivity';
+// Plain Map — metadata is non-reactive data processing (no need for SvelteMap proxy)
 import { DUCK_CONST, GEO_CONSTANTS } from '../constants';
 
 /**
@@ -259,8 +259,8 @@ export async function addGeoArrowMetadataFromDuckDB(
     }
 
     const newMetadata = schema.metadata
-      ? new SvelteMap(schema.metadata)
-      : new SvelteMap<string, string>();
+      ? new Map(schema.metadata)
+      : new Map<string, string>();
     newMetadata.set('geo', JSON.stringify(geoMetadata));
 
     const updatedFields = (schema.fields ?? []).map((field) => {
@@ -268,8 +268,8 @@ export async function addGeoArrowMetadataFromDuckDB(
         return field;
       }
       const updatedMetadata = field.metadata
-        ? new SvelteMap(field.metadata)
-        : new SvelteMap<string, string>();
+        ? new Map(field.metadata)
+        : new Map<string, string>();
       updatedMetadata.set('ARROW:extension:name', encoding);
       updatedMetadata.set(
         'ARROW:extension:metadata',

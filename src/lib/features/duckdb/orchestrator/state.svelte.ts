@@ -12,11 +12,11 @@ const _state = $state<OrchestratorState>({
   currentTableName: null
 });
 
-let _filters = new SvelteMap<string, DataTableFilter[]>();
+let _filters = new Map<string, DataTableFilter[]>();
 
 let _filterIdCounter = 0;
 
-const _metadataPrefetches = new SvelteMap<string, Promise<void>>();
+const _metadataPrefetches = new Map<string, Promise<void>>();
 
 let _datasetsVersion = $state(0);
 
@@ -30,7 +30,7 @@ export function getState(): OrchestratorState {
   return _state;
 }
 
-export function getFiltersMap(): SvelteMap<string, DataTableFilter[]> {
+export function getFiltersMap(): Map<string, DataTableFilter[]> {
   return _filters;
 }
 
@@ -77,7 +77,7 @@ export function setInitPromise(promise: Promise<void> | null): void {
   _initPromise = promise;
 }
 
-export function getMetadataPrefetches(): SvelteMap<string, Promise<void>> {
+export function getMetadataPrefetches(): Map<string, Promise<void>> {
   return _metadataPrefetches;
 }
 
@@ -94,9 +94,9 @@ export function updateDatasets(
 }
 
 export function updateFilters(
-  updater: (filters: SvelteMap<string, DataTableFilter[]>) => void
+  updater: (filters: Map<string, DataTableFilter[]>) => void
 ): void {
-  const next = new SvelteMap(_filters);
+  const next = new Map(_filters);
   updater(next);
   _filters = next;
 }
@@ -112,7 +112,7 @@ export function getCurrentTableName(): string | null {
 export function clearState(): void {
   _state.datasets = new SvelteMap();
   _state.currentTableName = null;
-  _filters = new SvelteMap();
+  _filters = new Map();
   _datasetsVersion++;
 }
 
