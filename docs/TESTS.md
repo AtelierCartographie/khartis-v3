@@ -106,10 +106,18 @@ tests/
     duckdb-node-helper.ts         # Utilitaire de connexion DuckDB Node
     ...                            # 30+ fichiers de test (processeurs, orchestrateur, etc.)
   duckdb/
-    duck.test.ts                   # Tests DuckDB engine
-    column-ops.test.ts             # Operations sur les colonnes
-    join.test.ts                   # Jointures
-    ...                            # Tests cache, simplification, etc.
+    engine.test.ts                 # Init WASM, bundle eh/mvp, extension repo
+    duck.test.ts                   # Façade Duck, initDuckDB, macros, cache
+    orchestrator.svelte.test.ts    # Orchestrateur (20+ ops, filtres, Arrow)
+    dataset-ops.test.ts            # Jointures : stats, corrections, finalizeJoin
+    column-ops.test.ts             # Mutations colonnes + sécurité SQL
+    breaks.test.ts                 # Structure macros classification
+    gps-ops.test.ts                # Validation GPS, bounds, vue ST_Point
+    simplification.test.ts         # Simplification géométrique + macros
+    cache-manager.test.ts          # Cache describe/rowcount + callbacks mutation
+    basemap-import.utils.test.ts   # Import fond : polygon/ligne/geoparquet
+    join.test.ts                   # Jointures SQL (legacy)
+    join-ops.test.ts               # Opérations de jointure (nouveau pipeline)
   e2e/
     catalog-search.spec.ts         # L'app charge et le modal est accessible
     enrich-workflow.spec.ts        # Import d'un fichier geo
@@ -127,7 +135,7 @@ tests/
 
 `pipeline-integration.test.ts` teste l'**ingestion reelle** de chaque fichier de `tests-datasets/` via `@duckdb/node-api` :
 
-| Section CDC       | Ce qui est teste                                              | Fichiers                     |
+| Domaine           | Ce qui est teste                                              | Fichiers                     |
 | ----------------- | ------------------------------------------------------------- | ---------------------------- |
 | CSV import        | Comptage lignes/colonnes + classification des types           | CSV valides                  |
 | CSV edge cases    | Gestion gracieuse (0-byte, header seul, structure cassee)     | CSV malformes                |
@@ -135,6 +143,34 @@ tests/
 | Statistiques      | count/uniques/nulls, min/max, histogramme                     | fossil-fuel CSV              |
 | Import geo        | Colonnes geometrie + donnees, extraction des bounds           | GeoJSON, GPKG, GPX, KML, SHP |
 | ZIP               | Extraction + ingestion (csv unique, csv multiples, shapefile) | 3 ZIP                        |
+
+**Fichiers de test pipeline** (`tests/pipeline/`) :
+
+| Fichier                                 | API réelle ?   | Ce qui est testé                                |
+| --------------------------------------- | -------------- | ----------------------------------------------- |
+| `pipeline-integration.test.ts`          | Oui (Node API) | Ingestion réelle de tous les formats            |
+| `pipeline-orchestrator.test.ts`         | Non (mocks)    | Init once, zip routing, remote processing       |
+| `file-processor.test.ts`                | Non (mocks)    | CSV options, companion files, parquet path      |
+| `format-detector.test.ts`               | Non (mocks)    | Extension priority, case-insensitive, multi-dot |
+| `validators.test.ts`                    | Non (mocks)    | Extension reject, empty file, size limits       |
+| `csv-header-detector.test.ts`           | Non (mocks)    | Header-only low confidence, mixed types         |
+| `decimal-detector.test.ts`              | Non (mocks)    | European format, thousands separator            |
+| `zip-handler.test.ts`                   | Non (mocks)    | isZipFile, macOS filtering, shapefile detection |
+| `geometry.test.ts`                      | Non (mocks)    | No geometry, bounds query, null fallback        |
+| `quality.test.ts`                       | Non (mocks)    | Small dataset, null ratio, low cardinality      |
+| `classification.service.test.ts`        | Non (mocks)    | Quantile macro, std_dev → nested_means          |
+| `processor-utils.test.ts`               | Non (mocks)    | isTabularData, convertToCSV, getFileForDuckDB   |
+| `serialization-safety.test.ts`          | Non (mocks)    | BigInt round-trip, binary preserve              |
+| `csv-processor.strategy.test.ts`        | Non (mocks)    | Arrow path, fallback on failure                 |
+| `geojson-processor.strategy.test.ts`    | Non (mocks)    | ST_Read path, Arrow opt-in                      |
+| `geoparquet-processor.strategy.test.ts` | Non (mocks)    | read_parquet, \_\_id sequence                   |
+| `shapefile-processor.strategy.test.ts`  | Non (mocks)    | ParseError sans companions                      |
+| `geopackage-processor.strategy.test.ts` | Non (mocks)    | read_geofile, createArrowTableWithMetadata      |
+| `gpx-processor.strategy.test.ts`        | Non (mocks)    | GPX format support                              |
+| `register-processors.test.ts`           | Non (mocks)    | 6 processors registered at priority 10          |
+| `zip-processor.test.ts`                 | Non (mocks)    | Shapefile archive, multi-dataset routing        |
+| `remote-processor.test.ts`              | Non (mocks)    | read_link, standalone shp rejection             |
+| `analysis.test.ts`                      | Non (mocks)    | enrichColumns, buildDatasetFromDuckTable        |
 
 **Note importante :** les macros DuckDB utilisant `query_table()` + `"colname"` ne peuvent pas etre testees via Node API (resolution differente entre Node API et WASM). Les tests d'integration utilisent du SQL direct equivalent.
 
@@ -166,6 +202,22 @@ Configuration dans `playwright.config.ts` :
 DuckDB WASM s'initialise dans un vrai navigateur avec des dependances asynchrones (workers, extensions, IndexedDB). Ce comportement est difficile a reproduire de facon fiable sur des runners CI mutualisees (latence variable, memoire limitee). Le risque de tests flaky l'emporte sur la valeur ajoutee, d'autant que le deploiement est manuel.
 
 Les tests de pipeline (server-side, DuckDB Node API) couvrent la logique de traitement des donnees de facon fiable en CI.
+
+---
+
+## Tests rendu map
+
+Les tests de rendu map sont dans `tests/pipeline/` (ils ne dependent pas de DuckDB) :
+
+| Fichier                           | Ce qui est testé                        |
+| --------------------------------- | --------------------------------------- |
+| `orthographic-reference.test.ts`  | Références de projection orthographique |
+| `use-map-position.test.ts`        | Position camera / viewport              |
+| `basemap-styles.test.ts`          | Styles MapLibre, structure JSON         |
+| `map-tooltip-position.test.ts`    | Calcul position tooltip viewport        |
+| `carbon-tooltip-position.test.ts` | Position Carbon tooltip                 |
+
+Le rendu GPU reel (Deck.gl layers, GeoArrow binary parsing) n'est pas teste en unit. Les smoke tests E2E (`tests/e2e/`) couvrent le flux complet dans un vrai navigateur.
 
 ---
 
