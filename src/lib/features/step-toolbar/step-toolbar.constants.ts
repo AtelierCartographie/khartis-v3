@@ -1,7 +1,9 @@
 export const DOM_IDS = {
   STEP_TOOLBAR: 'khartis-step-toolbar',
   TOOL_POPOVER: 'khartis-tool-popover',
-  COLOR_PICKER: 'khartis-color-picker'
+  COLOR_PICKER: 'khartis-color-picker',
+  COLOR_PICKER_DROPDOWN: 'khartis-color-picker-dropdown',
+  COLORBLINDNESS_NOTIFICATION: 'khartis-colorblindness-notification'
 } as const;
 
 export const CSS_CLASSES = {

@@ -2,6 +2,7 @@ import type {
   DatasetResult,
   ProcessedDataset
 } from '$lib/features/data-pipeline';
+import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
 import {
   FillMode,
   MissingDataShape,
@@ -136,6 +137,7 @@ export interface VisualizationConfig {
   enabled: boolean;
   modes?: VisualizationModes;
   primitiveFilters?: PrimitiveFilter[];
+  primitiveOrder?: PrimitiveFilter[];
   style: {
     fillColor?: string | string[];
     fillColorB?: string;
@@ -219,6 +221,7 @@ export interface VisualizationStore {
   ) => VisualizationConfig;
   updateModes: (id: string, modes: Partial<VisualizationModes>) => void;
   togglePrimitiveFilter: (id: string, primitive: PrimitiveFilter) => void;
+  setPrimitiveFilterOrder: (id: string, order: PrimitiveFilter[]) => void;
   updateSymbols: (
     id: string,
     symbols: Partial<VisualizationConfig['symbols']>
@@ -235,7 +238,10 @@ export interface VisualizationStore {
     id: string,
     updates: Partial<VisualizationConfig>
   ) => void;
-  duplicateVisualization: (id: string) => VisualizationConfig | null;
+  duplicateVisualization: (
+    id: string,
+    targetDatasetId?: string
+  ) => VisualizationConfig | null;
   removeVisualization: (id: string) => void;
   createBulkVisualizations: (configs: VisualizationConfig[]) => void;
   removeBulkVisualizations: (ids: string[]) => void;
@@ -281,7 +287,7 @@ const DEFAULT_CHOROPLETH_COLORS = [
   '#08519c'
 ];
 
-const DEFAULT_CATEGORICAL_COLORS = [
+export const DEFAULT_CATEGORICAL_COLORS = [
   '#e41a1c',
   '#377eb8',
   '#4daf4a',
@@ -294,6 +300,7 @@ const DEFAULT_CATEGORICAL_COLORS = [
 
 function incrementVersion(state: VisualizationState): void {
   state.version++;
+  persistenceRegistry.notifyChange('visualization');
 }
 
 function getDefaultStyle(
@@ -377,8 +384,8 @@ function getDefaultMapping(
       break;
 
     case VisualizationType.BIVARIATE:
-      mapping.valueColumn = numericColumns[0]?.name;
-      mapping.colorColumn = numericColumns[1]?.name;
+      mapping.sizeColumn = numericColumns[0]?.name;
+      mapping.valueColumn = numericColumns[1]?.name;
       break;
   }
 
@@ -430,6 +437,12 @@ function getDefaultModes(type: VisualizationType): VisualizationModes {
         fill: FillMode.CLASSES,
         stroke: StrokeMode.UNIQUE
       };
+    case VisualizationType.BIVARIATE:
+      return {
+        symbol: SymbolMode.PROPORTIONAL,
+        fill: FillMode.CLASSES,
+        stroke: StrokeMode.NONE
+      };
     default:
       return {
         symbol: SymbolMode.UNIQUE,
@@ -463,7 +476,7 @@ function getDefaultPrimitiveFilters(
   const normalizedGeometryType = geometryType?.toLowerCase() ?? '';
 
   if (normalizedGeometryType.includes('polygon')) {
-    return [PrimitiveFilterType.POLYGON];
+    return [PrimitiveFilterType.POLYGON, PrimitiveFilterType.LINE];
   }
 
   if (normalizedGeometryType.includes('line')) {
@@ -573,10 +586,20 @@ function createVisualizationStore(): VisualizationStore {
         ? currentFilters.filter((item) => item !== primitive)
         : [...currentFilters, primitive];
 
+      if (nextFilters.length === 0) {
+        return {};
+      }
+
       return {
         primitiveFilters: nextFilters
       };
     });
+  }
+
+  function setPrimitiveFilterOrder(id: string, order: PrimitiveFilter[]): void {
+    applyVisualizationUpdate(id, () => ({
+      primitiveOrder: order
+    }));
   }
 
   function updateSymbols(
@@ -635,7 +658,10 @@ function createVisualizationStore(): VisualizationStore {
     applyVisualizationUpdate(id, () => updates);
   }
 
-  function duplicateVisualization(id: string): VisualizationConfig | null {
+  function duplicateVisualization(
+    id: string,
+    targetDatasetId?: string
+  ): VisualizationConfig | null {
     const original = getVisualizationById(id);
     if (!original) {
       return null;
@@ -649,7 +675,8 @@ function createVisualizationStore(): VisualizationStore {
     const duplicatedVisualization: VisualizationConfig = {
       ...deepClone(original),
       id: crypto.randomUUID(),
-      name: duplicatedName
+      name: duplicatedName,
+      ...(targetDatasetId ? { datasetId: targetDatasetId } : {})
     };
 
     state.visualizations.push(duplicatedVisualization);
@@ -753,10 +780,11 @@ function createVisualizationStore(): VisualizationStore {
   }
 
   function selectVisualization(id: string): void {
-    if (!getVisualizationById(id)) {
+    if (!getVisualizationById(id) || state.selectedVisualizationId === id) {
       return;
     }
     state.selectedVisualizationId = id;
+    incrementVersion(state);
   }
 
   function invertPalette(id: string): void {
@@ -843,7 +871,25 @@ function createVisualizationStore(): VisualizationStore {
   function restoreFromSerialized(
     settings: SerializedVisualizationSettings
   ): void {
-    state.visualizations = settings.visualizations || [];
+    // Migrate old polygon vizzes: add LINE to primitiveFilters if only POLYGON was set
+    state.visualizations = (settings.visualizations || []).map(
+      (viz: VisualizationConfig) => {
+        if (
+          viz.primitiveFilters &&
+          viz.primitiveFilters.length === 1 &&
+          viz.primitiveFilters[0] === PrimitiveFilterType.POLYGON
+        ) {
+          return {
+            ...viz,
+            primitiveFilters: [
+              PrimitiveFilterType.POLYGON,
+              PrimitiveFilterType.LINE
+            ]
+          };
+        }
+        return viz;
+      }
+    );
     state.selectedVisualizationId = settings.selectedVisualizationId;
     state.activeVisualizationIds = new Set(
       settings.activeVisualizationIds || []
@@ -872,6 +918,7 @@ function createVisualizationStore(): VisualizationStore {
     createVisualization,
     updateModes,
     togglePrimitiveFilter,
+    setPrimitiveFilterOrder,
     updateSymbols,
     updateMissingData,
     updateClassification,
@@ -897,3 +944,30 @@ function createVisualizationStore(): VisualizationStore {
 }
 
 export const visualizationStore = createVisualizationStore();
+
+persistenceRegistry.register({
+  key: 'visualization',
+  serialize: () => ({
+    visualizations: visualizationStore.visualizations,
+    selectedVisualizationId: visualizationStore.selectedVisualization?.id,
+    activeVisualizationIds: visualizationStore.activeVisualizations.map(
+      (v) => v.id
+    )
+  }),
+  deserialize: (data: unknown) => {
+    const settings = data as {
+      visualizations?: unknown[];
+      selectedVisualizationId?: string;
+      activeVisualizationIds?: string[];
+    };
+    visualizationStore.restoreFromSerialized({
+      visualizations: (settings.visualizations ?? []) as Parameters<
+        typeof visualizationStore.restoreFromSerialized
+      >[0]['visualizations'],
+      selectedVisualizationId: settings.selectedVisualizationId,
+      activeVisualizationIds: settings.activeVisualizationIds ?? []
+    });
+  },
+  reset: () => visualizationStore.clear(),
+  priority: 'debounced'
+});

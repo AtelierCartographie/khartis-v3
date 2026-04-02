@@ -4,7 +4,6 @@ import type { GPSBounds } from '$lib/features/duckdb';
 import { LogCategory, logger } from '../../commons/utils/logger';
 import { resolveStaticAssetUrl } from '../../commons/utils/static-asset-url';
 import type {
-  BasemapCatalog,
   BasemapMetadata,
   BasemapSuggestion
 } from '../types/basemap.types';
@@ -13,10 +12,10 @@ const BASEMAP_METADATA_PATH = '/basemaps/all-basemaps-metadata.json';
 
 function createBasemapCatalogService() {
   const state = $state<{
-    catalog: BasemapCatalog | null;
+    basemaps: BasemapMetadata[];
     isLoaded: boolean;
   }>({
-    catalog: null,
+    basemaps: [],
     isLoaded: false
   });
 
@@ -34,18 +33,27 @@ function createBasemapCatalogService() {
         throw new Error(`Failed to fetch catalog: ${response.statusText}`);
       }
 
-      const basemaps: BasemapMetadata[] = await response.json();
-
-      state.catalog = {
-        basemaps,
-        version: '1.0.0'
-      };
-
+      state.basemaps = await response.json();
       state.isLoaded = true;
     } catch (error) {
       logger.error('Failed to load basemap catalog', LogCategory.MAP, error);
       throw error;
     }
+  }
+
+  /**
+   * Helper to get searchable text from basemap metadata (handles i18n fields).
+   */
+  function getSearchableText(basemap: BasemapMetadata): string {
+    return [
+      basemap.title_fr,
+      basemap.title_en,
+      basemap.subtitle_fr ?? '',
+      basemap.subtitle_en ?? '',
+      basemap.file
+    ]
+      .join(' ')
+      .toLowerCase();
   }
 
   function calculateMatchScore(
@@ -58,8 +66,7 @@ function createBasemapCatalogService() {
     const reasons: string[] = [];
 
     const columnNameLower = geoColumnName.toLowerCase();
-    const basemapTitleLower = basemap.title.toLowerCase();
-    const basemapDescLower = basemap.description.toLowerCase();
+    const searchText = getSearchableText(basemap);
 
     const isCountryType =
       geoColumnType === 'country_name' ||
@@ -67,10 +74,12 @@ function createBasemapCatalogService() {
       geoColumnType === 'iso3';
 
     const isWorldBasemap =
+      basemap.file.includes('monde') ||
       basemap.file.includes('world') ||
-      basemapTitleLower.includes('world') ||
-      basemapTitleLower.includes('countries') ||
-      basemapTitleLower.includes('monde');
+      searchText.includes('world') ||
+      searchText.includes('countries') ||
+      searchText.includes('monde') ||
+      searchText.includes('pays');
 
     if (isCountryType && isWorldBasemap) {
       score += 60;
@@ -79,8 +88,7 @@ function createBasemapCatalogService() {
 
     if (
       columnNameLower.includes('region') &&
-      (basemapTitleLower.includes('region') ||
-        basemapDescLower.includes('région'))
+      (searchText.includes('region') || searchText.includes('région'))
     ) {
       score += 50;
       reasons.push('Region match');
@@ -88,17 +96,13 @@ function createBasemapCatalogService() {
 
     if (
       columnNameLower.includes('department') &&
-      (basemapTitleLower.includes('department') ||
-        basemapDescLower.includes('département'))
+      (searchText.includes('department') || searchText.includes('département'))
     ) {
       score += 50;
       reasons.push('Department match');
     }
 
-    if (
-      geoColumnType === 'nuts' &&
-      (basemapTitleLower.includes('nuts') || basemapDescLower.includes('nuts'))
-    ) {
+    if (geoColumnType === 'nuts' && searchText.includes('nuts')) {
       score += 60;
       reasons.push('NUTS type match');
     }
@@ -107,33 +111,23 @@ function createBasemapCatalogService() {
       columnNameLower.includes('country') ||
       columnNameLower.includes('iso') ||
       columnNameLower.includes('adm0') ||
-      (columnNameLower.includes('pays') &&
-        (basemapTitleLower.includes('country') ||
-          basemapTitleLower.includes('world') ||
-          basemapTitleLower.includes('monde')))
+      (columnNameLower.includes('pays') && isWorldBasemap)
     ) {
       score += 50;
       reasons.push('Country match');
     }
 
-    if (
-      columnNameLower.includes('code') &&
-      (basemapTitleLower.includes('world') ||
-        basemapTitleLower.includes('monde'))
-    ) {
+    if (columnNameLower.includes('code') && isWorldBasemap) {
       score += 30;
       reasons.push('Code match');
     }
 
-    if (
-      columnNameLower.includes('france') &&
-      basemapTitleLower.includes('france')
-    ) {
+    if (columnNameLower.includes('france') && searchText.includes('france')) {
       score += 30;
       reasons.push('France match');
     }
 
-    if (basemap.file.includes('world') || basemap.file.includes('countries')) {
+    if (basemap.file.includes('monde') || basemap.file.includes('countries')) {
       score += 10;
       reasons.push('Global basemap');
     }
@@ -161,7 +155,7 @@ function createBasemapCatalogService() {
     limit: number = 3,
     geoColumnName?: string
   ): BasemapSuggestion[] {
-    if (!state.catalog) {
+    if (state.basemaps.length === 0) {
       return [];
     }
 
@@ -185,7 +179,7 @@ function createBasemapCatalogService() {
     );
     const geoColumnType = geoColumnInfo?.type;
 
-    const suggestions = state.catalog.basemaps
+    const suggestions = getCatalogBasemaps()
       .map((basemap) => {
         const { score, reason } = calculateMatchScore(
           dataset,
@@ -211,7 +205,7 @@ function createBasemapCatalogService() {
     gpsBounds: GPSBounds,
     limit: number = 3
   ): BasemapSuggestion[] {
-    if (!state.catalog) return [];
+    if (state.basemaps.length === 0) return [];
 
     function overlapArea(bbox: [number, number, number, number]): number {
       const [bMinLon, bMinLat, bMaxLon, bMaxLat] = bbox;
@@ -229,11 +223,15 @@ function createBasemapCatalogService() {
       (gpsBounds.maxLon - gpsBounds.minLon) *
       (gpsBounds.maxLat - gpsBounds.minLat);
 
-    return state.catalog.basemaps
+    return getCatalogBasemaps()
       .map((basemap) => {
         const area = overlapArea(basemap.bbox);
         const matchScore =
-          dataArea > 0 ? Math.min((area / dataArea) * 100, 100) : 0;
+          dataArea > 0
+            ? Math.min((area / dataArea) * 100, 100)
+            : area > 0
+              ? 100
+              : 0;
         return { ...basemap, matchScore, matchReason: 'GPS bbox overlap' };
       })
       .filter((s) => s.matchScore > 0)
@@ -242,71 +240,75 @@ function createBasemapCatalogService() {
   }
 
   function searchBasemaps(query: string): BasemapMetadata[] {
-    if (!state.catalog) {
+    if (state.basemaps.length === 0) {
       return [];
     }
 
     const queryLower = query.toLowerCase();
 
-    return state.catalog.basemaps.filter((basemap) => {
-      return (
-        basemap.title.toLowerCase().includes(queryLower) ||
-        basemap.description.toLowerCase().includes(queryLower) ||
-        basemap.file.toLowerCase().includes(queryLower)
-      );
+    return state.basemaps.filter((basemap) => {
+      return getSearchableText(basemap).includes(queryLower);
     });
   }
 
   function getBasemapById(basemapId: string): BasemapMetadata | null {
-    if (!state.catalog) {
-      return null;
-    }
-
-    return (
-      state.catalog.basemaps.find((basemap) => basemap.file === basemapId) ??
-      null
-    );
+    return state.basemaps.find((basemap) => basemap.file === basemapId) ?? null;
   }
 
   function filterByYear(minYear: number, maxYear?: number): BasemapMetadata[] {
-    if (!state.catalog) {
-      return [];
-    }
-
-    return state.catalog.basemaps.filter((basemap) => {
+    return state.basemaps.filter((basemap) => {
       const year = parseInt(basemap.date);
       if (isNaN(year)) return false;
-
       if (maxYear) {
         return year >= minYear && year <= maxYear;
       }
-
       return year >= minYear;
     });
   }
 
   function addCustomBasemap(basemap: BasemapMetadata): void {
-    if (!state.catalog) {
-      return;
-    }
-
-    const existingIndex = state.catalog.basemaps.findIndex(
+    const existingIndex = state.basemaps.findIndex(
       (existingBasemap) => existingBasemap.file === basemap.file
     );
 
     if (existingIndex !== -1) {
-      state.catalog.basemaps[existingIndex] = basemap;
+      state.basemaps[existingIndex] = basemap;
     } else {
-      state.catalog.basemaps.push(basemap);
+      state.basemaps.push(basemap);
     }
   }
 
+  /**
+   * Basemaps deduplicated by base name for catalog display.
+   * Keeps one entry per base name, preferring "medium" simplification level.
+   */
+  function getCatalogBasemaps(): BasemapMetadata[] {
+    const byBaseName = new Map<string, BasemapMetadata>();
+    for (const bm of state.basemaps) {
+      if (bm.isCustom) {
+        byBaseName.set(bm.file, bm);
+        continue;
+      }
+      const baseName = bm.file.replace(/-(low|medium|high)$/, '');
+      const existing = byBaseName.get(baseName);
+      if (!existing) {
+        byBaseName.set(baseName, bm);
+      } else if (
+        bm.simplification_level === 'medium' &&
+        existing.simplification_level !== 'medium'
+      ) {
+        byBaseName.set(baseName, bm);
+      }
+    }
+    return Array.from(byBaseName.values());
+  }
+
   return {
-    get catalog(): BasemapCatalog | null {
-      return state.catalog;
-    },
     get basemaps(): BasemapMetadata[] {
-      return state.catalog?.basemaps ?? [];
+      return state.basemaps;
+    },
+    get catalogBasemaps(): BasemapMetadata[] {
+      return getCatalogBasemaps();
     },
     get isLoaded(): boolean {
       return state.isLoaded;

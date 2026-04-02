@@ -1,165 +1,140 @@
 # Architecture
 
-> **Mental model and core design principles of Khartis v3**
+> Principes fondamentaux et flux de donnees de Khartis v3.
 
-## Runtime Flow
-
-```
-Import → Validate → Parse → Type Inference + Stats → Dataset Store
-  ↓
-Visualization Suggestion → User Configuration → Layer Assembly (Deck.gl)
-  ↓
-Basemap (MapLibre) + Annotations + Layout → Export (PNG/SVG/PDF/CSV/GeoJSON)
-```
-
-## Core Data Shapes
-
-```ts
-interface DataColumn {
-  name: string;
-  type: ColumnType; // 'text' | 'numeric' | 'date' | 'boolean' | 'geometry'
-  stats?: ColumnStats; // min, max, mean, nulls, uniques
-}
-
-interface ProcessedDataset {
-  id: string;
-  name: string;
-  columns: DataColumn[];
-  rowCount: number;
-  geometry?: GeometryInfo; // type, bbox, crs
-}
-
-interface Visualization {
-  id: string;
-  datasetId: string;
-  type: VizType; // 'choropleth' | 'proportional' | 'categorical' | 'bivariate'
-  classification?: Classification;
-  color?: ColorConfig;
-}
-
-interface Project {
-  id: string;
-  datasets: ProcessedDataset[];
-  visualizations: Visualization[];
-  layout: LayoutConfig;
-  settings: ProjectSettings;
-}
-```
-
-## Four Pillars
-
-1. **Client-only Privacy**
-   - All processing in browser (IndexedDB + memory)
-   - No server upload or external API calls for user data
-   - Offline-capable
-
-2. **Feature-first Modularity**
-   - Self-contained features in `src/lib/features/`
-   - Each feature owns its store, components, types
-   - Minimal cross-feature coupling
-
-3. **Runes Reactive State**
-   - Svelte 5 `$state` and `$derived`
-   - Explicit mutation methods (no direct assignment)
-   - Predictable state updates
-
-4. **GPU-first Rendering**
-   - Deck.gl for thematic layers
-   - MapLibre for basemaps
-   - Hardware-accelerated pan/zoom/render
-
-## Store Layering
-
-| Layer               | Purpose                    | Example                            |
-| ------------------- | -------------------------- | ---------------------------------- |
-| **Component Local** | Ephemeral UI state         | Form inputs, modal visibility      |
-| **Feature Store**   | Canonical domain state     | Dataset list, visualization config |
-| **Global Store**    | Cross-feature coordination | Project metadata, active dataset   |
-| **Persistence**     | Long-term storage          | IndexedDB snapshots, auto-save     |
-
-**State flow**: Component → Feature Store → Global Store → IndexedDB
-
-## Performance Strategy
-
-| Challenge          | Solution                                        |
-| ------------------ | ----------------------------------------------- |
-| Large file imports | DuckDB native parsing + TABLESAMPLE for preview |
-| Heavy computations | DuckDB WASM (main thread)                       |
-| Complex geometry   | Pre-simplified tiers + dynamic LOD              |
-| Rapid edits        | `$derived` memoization + debounced recompute    |
-
-**Target**: <3s load, ~60fps rendering (small-medium datasets)
-
-## Extensibility Contracts
-
-```ts
-// Add new file parser
-type Parser = (file: File) => Promise<RawDataset>;
-
-// Add new classification method
-interface ClassificationStrategy {
-  id: string;
-  compute(values: number[], k: number): number[];
-}
-
-// Add new export format
-interface Exporter {
-  id: string;
-  export(project: Project): Promise<Blob>;
-}
-
-// Add new visualization type
-interface VizFactory {
-  id: string;
-  create(dataset: Dataset, config: VizConfig): Visualization;
-}
-```
-
-All extensions register in respective registries (parser, classification, export, visualization).
-
-## Error Handling Principles
-
-- **Fail fast** on invalid input (validation)
-- **Fallback gracefully** on computation errors (default projection, safe classification)
-- **Never block UI** for long tasks (workers + progress feedback)
-- **User-friendly messages** (contextual, actionable)
-
-## Security & Privacy
-
-- **Client-only**: No server attack surface
-- **Sanitization**: File names, CSV cells, user inputs
-- **Size quotas**: 50MB file, 100MB project, 50 projects max
-- **Dependency audits**: Regular security checks
-
-Not applicable: CSRF, server auth, multi-tenant isolation
-
-## Accessibility
-
-- **Keyboard-first**: Full keyboard navigation
-- **Focus management**: Visible focus indicators
-- **Contrast-aware**: Color palette suggestions respect WCAG
-- **Textual summaries**: Stats and map descriptions for screen readers
-
-## Internationalization
-
-- **Paraglide**: Compile-time message extraction
-- **Semantic keys**: `m.projectCreate()` not `m.label1()`
-- **No concatenation**: Use message parameters
-- **Supported locales**: en, fr
-
-## Extension Points Quick Reference
-
-| Task               | Entry Point                                       |
-| ------------------ | ------------------------------------------------- |
-| New file format    | `src/lib/features/data-pipeline/core/parsers.ts`  |
-| New visualization  | `src/lib/features/map/`                           |
-| New classification | `src/lib/features/duckdb/macros/breaks.ts`        |
-| New tool           | `src/lib/features/step-toolbar/tools/<tool-name>` |
+**Voir aussi** : [Gestion de l'etat](./GESTION_ETAT.md) | [Pipeline](./PIPELINE.md) | [DuckDB](./DUCKDB.md) | [Map](./MAP.md) | [Cartographie](./CARTOGRAPHIE.md) | [Tests](./TESTS.md)
 
 ---
 
-**See also:**
+## Flux global
 
-- [DATA_PIPELINE.md](DATA_PIPELINE.md) - Data processing details
-- [VISUALIZATION.md](VISUALIZATION.md) - Rendering system
-- [STATE_AND_FEATURES.md](STATE_AND_FEATURES.md) - State management
+```mermaid
+flowchart LR
+    F["Fichier"]
+    VF["validateFile()"]
+    DUCK["DuckDB<br/>(read_csv / ST_Read / read_parquet)"]
+    BD["buildDatasetFromDuckTable()"]
+    DR["DatasetResult<br/>(Arrow table)"]
+    GAD["geoarrow-deck-stream<br/>(parsePolygonsToSolid)"]
+    BPD["BinaryPolygonData<br/>/ BinaryPathData"]
+    ORT["Mode orthographique"]
+    ML["Mode MapLibre OSM"]
+    DECK["Deck.gl standalone<br/>(OrthographicView)"]
+    MAP["MapboxOverlay<br/>(@deck.gl/mapbox)"]
+    ANN["Annotations<br/>+ Légende<br/>+ Mise en page<br/>(SVG overlay)"]
+    EXP["Export<br/>PNG / SVG / PDF<br/>/ CSV / GeoJSON"]
+
+    F --> VF --> DUCK --> BD --> DR --> GAD --> BPD
+
+    subgraph Modes de rendu
+        ORT & ML
+    end
+
+    BPD --> ORT
+    BPD --> ML
+
+    ORT --> DECK
+    ML --> MAP
+
+    DECK --> ANN
+    MAP --> ANN
+    ANN --> EXP
+```
+
+**Librairies de rendu** : [Deck.gl](https://context7.com/visgl/deck.gl) (`@deck.gl/core`, `@deck.gl/layers`) · [MapLibre GL JS](https://context7.com/maplibre/maplibre-gl-js) · [Apache Arrow](https://context7.com/apache/arrow) (`tableFromIPC`)
+
+---
+
+## Les 4 piliers
+
+| Pilier                          | Description                                                                                                                                                                                                                                 |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Confidentialite client-only** | Tout le traitement dans le navigateur (IndexedDB + memoire). Aucun envoi serveur, aucune API externe pour les donnees utilisateur. Fonctionne hors-ligne.                                                                                   |
+| **Modularite par feature**      | Chaque feature dans `src/lib/features/` possede son store, ses composants et ses types. Couplage minimal entre features.                                                                                                                    |
+| **Reactivite Svelte 5 Runes**   | `$state` et `$derived` pour l'etat reactif. Mutations explicites via methodes, jamais d'affectation directe sur l'etat domaine.                                                                                                             |
+| **Rendu GPU-first**             | [Deck.gl](https://context7.com/visgl/deck.gl) pour les couches thematiques. Deux modes : **orthographique** (Deck.gl standalone, fond vectoriel GeoArrow) ou **MapLibre interleaved** (MapboxOverlay, fond OSM tuile). ~60 fps en pan/zoom. |
+
+---
+
+## Couches de stockage
+
+| Couche              | Role                         | Duree de vie      | Implementation                      |
+| ------------------- | ---------------------------- | ----------------- | ----------------------------------- |
+| **Composant local** | Etat UI ephemere             | Montage composant | `$state` dans le `.svelte`          |
+| **Store feature**   | Modele domaine               | Session           | `$state` dans le store `.svelte.ts` |
+| **Store global**    | Coordination cross-feature   | Session           | Singleton (`projectStore`, etc.)    |
+| **IndexedDB**       | Projets et datasets durables | Persistant        | localforage (metadonnees)           |
+
+**Flux** : Composant --> Store feature --> Store global --> IndexedDB (debounce 5 s sur mutations, auto-save intervalle 30 s)
+
+Voir [Gestion de l'etat](GESTION_ETAT.md) pour le detail complet.
+
+---
+
+## Performance
+
+| Defi                 | Solution                                                               |
+| -------------------- | ---------------------------------------------------------------------- |
+| Import volumineux    | Parsing natif DuckDB (`read_csv`, `ST_Read`, `read_parquet`)           |
+| Calculs lourds       | DuckDB WASM dans le navigateur                                         |
+| Geometries complexes | Simplification pre-calculee + LOD dynamique                            |
+| Rendu interactif     | GeoArrow binaire + [Deck.gl](https://context7.com/visgl/deck.gl) WebGL |
+
+**Cibles** :
+
+| Metrique | Objectif |
+| -------- | -------- |
+| FCP      | < 0.6 s  |
+| LCP      | < 1.0 s  |
+| TTI      | < 1.0 s  |
+| TBT      | 0 ms     |
+| CLS      | 0        |
+| Rendu    | ~60 fps  |
+
+---
+
+## Strategie d'erreur
+
+- **Echouer vite** sur entrees invalides (validation stricte)
+- **Degradation gracieuse** sur erreurs de calcul (projection par defaut, classification de secours)
+- **Ne jamais bloquer l'UI** pour les taches longues (feedback de progression)
+- **Messages utilisateur** contextuels et actionnables
+
+---
+
+## Securite et vie privee
+
+Aucune surface d'attaque serveur : toutes les donnees restent dans le navigateur. Les noms de fichier, cellules CSV et saisies utilisateur sont assainis. Quotas : 50 Mo/fichier, 100 Mo/projet, 50 projets max.
+
+---
+
+## Accessibilite
+
+- Navigation clavier complete avec indicateurs de focus visibles
+- Palettes respectant les contrastes WCAG
+- Descriptions textuelles des statistiques et de la carte pour lecteurs d'ecran
+
+---
+
+## Internationalisation
+
+[Paraglide JS 2](https://github.com/nicholasorlandi/ParaglideJS) : extraction des messages au build, cles semantiques (`m.key()`), FR/EN. Pas de concatenation -- utiliser les parametres de messages.
+
+---
+
+## Points d'entree principaux
+
+| Besoin                        | Point d'entree                                               | Fichier                                                       |
+| ----------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------- |
+| Traitement de fichiers        | `dataPipeline.processFile()`                                 | `src/lib/features/data-pipeline/index.ts`                     |
+| DuckDB (lecture/requetes SQL) | `Duck.query()`, `Duck.read_tabular()`, `Duck.read_geofile()` | `src/lib/features/duckdb/duck.ts`                             |
+| Operations de haut niveau     | `duckDBOrchestrator`                                         | `src/lib/features/duckdb/orchestrator/`                       |
+| Stores globaux                | `projectStore`, `datasetsStore`, `visualizationStore`        | `src/lib/features/commons/store/`                             |
+| Rendu carte                   | `useMapLayers`, `useMapInit`, `useMapBasemap`                | `src/lib/features/map/hooks/`                                 |
+| Classification                | `calculateBreaks()`, `generateColorsForBreaks()`             | `src/lib/features/commons/services/classification.service.ts` |
+| Suggestion de viz             | `vizSuggester`                                               | `src/lib/features/commons/services/viz-suggester.service.ts`  |
+| Messages i18n                 | `* as m` depuis `$lib/paraglide/messages`                    | `messages/fr.json`, `messages/en.json`                        |
+
+---
+
+**Voir aussi :** [GESTION_ETAT.md](./GESTION_ETAT.md) — [PIPELINE.md](./PIPELINE.md) — [DUCKDB.md](./DUCKDB.md) — [MAP.md](./MAP.md) — [CARTOGRAPHIE.md](./CARTOGRAPHIE.md) — [TESTS.md](./TESTS.md) — [GUIDE_DEVELOPPEUR.md](./GUIDE_DEVELOPPEUR.md)

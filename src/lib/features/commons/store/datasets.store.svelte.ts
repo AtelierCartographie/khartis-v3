@@ -116,7 +116,10 @@ function createDatasetsStore() {
   function updateDataset(
     datasetId: string,
     updates: Partial<
-      Pick<DatasetResult, 'tableName' | 'columns' | 'simplificationApplied'>
+      Pick<
+        DatasetResult,
+        'tableName' | 'columns' | 'simplificationApplied' | 'metadata'
+      >
     >
   ): void {
     updateDatasetFn(datasetsState, datasetId, updates);

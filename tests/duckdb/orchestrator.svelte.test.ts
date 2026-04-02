@@ -72,7 +72,6 @@ const mocks = vi.hoisted(() => {
     replaceInColumnMock: vi.fn(),
     addCalculatedColumnMock: vi.fn(),
     testExpressionMock: vi.fn(),
-    exportTableToGeoParquetMock: vi.fn(),
     buildYearFilterWhereClauseMock: vi.fn(),
     getArrowTableDirectMock: vi.fn(),
     getArrowTableWithCacheMock: vi.fn(),
@@ -175,9 +174,7 @@ vi.mock('$lib/paraglide/messages', () => ({
 }));
 
 vi.mock('$lib/features/data-pipeline', () => ({
-  geoParquetReader: {
-    extractMetadata: mocks.extractMetadataMock
-  }
+  extractGeoArrowMetadata: mocks.extractMetadataMock
 }));
 
 vi.mock('$lib/features/map/services/basemap.service.svelte', () => ({
@@ -192,7 +189,6 @@ vi.mock('$lib/features/commons/utils/semio-detector.utils', () => ({
 
 vi.mock('$lib/features/duckdb/orchestrator/arrow-ops', () => ({
   createArrowTableWithMetadata: mocks.createArrowTableWithMetadataMock,
-  exportTableToGeoParquet: mocks.exportTableToGeoParquetMock,
   buildYearFilterWhereClause: mocks.buildYearFilterWhereClauseMock,
   getArrowTableDirect: mocks.getArrowTableDirectMock,
   getArrowTableWithCache: mocks.getArrowTableWithCacheMock
@@ -442,9 +438,6 @@ describe('duckDBOrchestrator', () => {
     mocks.addCalculatedColumnMock.mockResolvedValueOnce([{ name: 'ratio' }]);
     mocks.testExpressionMock.mockResolvedValueOnce(42);
     mocks.runQueryMock.mockResolvedValueOnce({ rows: 1 });
-    mocks.exportTableToGeoParquetMock.mockResolvedValueOnce(
-      new Uint8Array([1])
-    );
     mocks.convertToProcessedDatasetMock.mockResolvedValueOnce({
       id: 'processed'
     });
@@ -537,9 +530,6 @@ describe('duckDBOrchestrator', () => {
       42
     );
     expect(await duckDBOrchestrator.runQuery('SELECT 1')).toEqual({ rows: 1 });
-    expect(
-      await duckDBOrchestrator.exportTableToGeoParquet('world_data')
-    ).toEqual(new Uint8Array([1]));
     expect(
       await duckDBOrchestrator.processFile({ id: 'f-1' } as never)
     ).toEqual({

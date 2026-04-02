@@ -118,13 +118,13 @@
   }
 
   .type-btn-active :global(.bx--btn--tertiary) {
-    background-color: #3c3838;
-    color: white;
-    border-color: #3c3838;
+    background-color: var(--cds-background-inverse, #393939);
+    color: var(--cds-text-inverse, #ffffff);
+    border-color: var(--cds-background-inverse, #393939);
   }
 
   .type-btn-active :global(.bx--btn--tertiary:hover) {
-    background-color: #2e2c2c;
-    border-color: #2e2c2c;
+    background-color: var(--cds-background-inverse-hover, #353535);
+    border-color: var(--cds-background-inverse-hover, #353535);
   }
 </style>

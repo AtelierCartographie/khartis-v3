@@ -4,6 +4,7 @@ import {
   geojsonProcessor,
   geopackageProcessor,
   geoparquetProcessor,
+  gpxProcessor,
   shapefileProcessor
 } from './strategies';
 
@@ -17,6 +18,7 @@ export function registerAllProcessors(): void {
   registerProcessor(shapefileProcessor, 10);
   registerProcessor(geopackageProcessor, 10);
   registerProcessor(geoparquetProcessor, 10);
+  registerProcessor(gpxProcessor, 10);
 
   registered = true;
 }

@@ -56,11 +56,6 @@ export async function processRemoteZipFile(
   url: string
 ): Promise<DatasetResult | ZipDatasetResult> {
   const start = performance.now();
-  logger.info(
-    'Downloading and processing remote MIME.ZIP archive',
-    LogCategory.DATA,
-    { url }
-  );
 
   try {
     const response = await fetch(url);

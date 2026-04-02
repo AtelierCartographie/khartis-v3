@@ -35,7 +35,6 @@
   const {
     column,
     analysis,
-    columnAnalysis: _columnAnalysis,
     sortColumn,
     sortOrder,
     showSummaryPlots,
@@ -235,6 +234,8 @@
   }
 
   function handleClickOutside(event: MouseEvent) {
+    const path = event.composedPath() as Element[];
+    if (path.some((el) => el.id === 'khartis-color-picker-dropdown')) return;
     if (menuButton && !menuButton.contains(event.target as Node)) {
       closeMenu();
     }
@@ -291,7 +292,7 @@
   });
 </script>
 
-<th>
+<th scope="col">
   <div class="col-header">
     <div class="col-title-row">
       <VariableBadge
@@ -302,7 +303,10 @@
         onmouseleave={hideTypeTooltip}
         onfocus={showTypeTooltip}
         onblur={hideTypeTooltip}
-        ariaLabel={typeTooltipMessage}
+        ariaLabel={m.column_type_badge_label({
+          column: column.name,
+          type: typeTooltipMessage
+        })}
       />
       {#if typeTooltipOpen}
         <Portal>
@@ -352,13 +356,14 @@
       {/if}
 
       {#if isEditMode}
-        <div class="col-actions">
+        <div class="col-actions" class:menu-open={menuOpen}>
           <button
             class="menu-trigger"
             bind:this={menuButton}
             onclick={toggleMenu}
             aria-haspopup="true"
             aria-expanded={menuOpen}
+            aria-label={m.column_menu_options({ column: column.name })}
           >
             <OverflowMenuVertical size={16} />
           </button>
@@ -522,20 +527,42 @@
       <div class="summary-plot-wrapper">
         <div class="summary-plot">
           {#if histogramData?.kind === 'geographic'}
-            <div class="hist-geo-pills">
-              <span class="hist-geo-pill hist-geo-uniques">
-                {m.summary_plot_unique_values({
-                  count: histogramData.uniques.toLocaleString()
-                })}
-              </span>
-              {#if histogramData.nulls > 0}
-                <span class="hist-geo-pill hist-geo-nulls">
-                  {m.column_warning_nulls({
-                    count: histogramData.nulls.toLocaleString()
+            {#if histogramData.nulls > 0 || histogramData.duplicates > 0}
+              <div class="hist-warnings">
+                {#if histogramData.nulls > 0}
+                  <div class="hist-warning-line">
+                    <span class="hist-warning-icon"
+                      ><WarningAlt size={14} /></span
+                    >
+                    <span
+                      >{m.column_warning_nulls({
+                        count: histogramData.nulls.toLocaleString()
+                      })}</span
+                    >
+                  </div>
+                {/if}
+                {#if histogramData.duplicates > 0}
+                  <div class="hist-warning-line">
+                    <span class="hist-warning-icon"
+                      ><WarningAlt size={14} /></span
+                    >
+                    <span
+                      >{m.column_warning_duplicates({
+                        count: histogramData.duplicates.toLocaleString()
+                      })}</span
+                    >
+                  </div>
+                {/if}
+              </div>
+            {:else}
+              <div class="hist-unique-bar">
+                <span class="hist-unique-text">
+                  {m.summary_plot_unique_values({
+                    count: histogramData.uniques.toLocaleString()
                   })}
                 </span>
-              {/if}
-            </div>
+              </div>
+            {/if}
           {:else if columnWarnings.length > 0 && (!histogramData || (histogramData.kind === 'categorical' && histogramData.isAllUnique))}
             <div class="hist-warnings">
               {#each columnWarnings as warning, index (warning.message + index)}
@@ -564,9 +591,9 @@
                     class:last={i === histogramData.items.length - 1}
                     style="background-color: {item.category === null
                       ? '#ff832b'
-                      : '#d02670'}"
+                      : '#9f1853'}"
                     title="{item.count?.toLocaleString()} – {item.category ??
-                      'nulls'}"
+                      m.column_null_label()}"
                   >
                     <span class="hist-cat-label">
                       {item.category ?? '⌀'}
@@ -583,7 +610,7 @@
           {:else if histogramData?.kind === 'numeric'}
             <div class="hist-num-area">
               <div class="hist-num-bars">
-                {#each histogramData.bins as bin (bin.bin)}
+                {#each histogramData.bins as bin ((bin.bin as unknown) instanceof Date ? (bin.bin as unknown as Date).getTime() : bin.bin)}
                   <div
                     class="hist-num-bar"
                     style="height: {(bin.count / histogramData.maxCount) *
@@ -600,7 +627,7 @@
                       (histogramData.nullCount / histogramData.maxCount) * 100,
                       100
                     )}%"
-                    title="{histogramData.nullCount.toLocaleString()} nulls"
+                    title="{histogramData.nullCount.toLocaleString()} {m.column_null_label()}"
                   ></div>
                 </div>
               {/if}
@@ -643,6 +670,10 @@
     background-color: var(--cds-ui-03, #e0e0e0);
   }
 
+  th:hover {
+    background-color: var(--cds-layer-accent-hover-01, #d1d1d1);
+  }
+
   .col-header {
     display: flex;
     flex-direction: column;
@@ -661,6 +692,13 @@
     gap: 2px;
     flex-shrink: 0;
     margin-left: auto;
+    opacity: 0;
+    transition: opacity 0.1s ease;
+  }
+
+  th:hover .col-actions,
+  .col-actions.menu-open {
+    opacity: 1;
   }
 
   .menu-trigger {
@@ -771,7 +809,7 @@
   .sort-btn {
     border: none;
     background: none;
-    padding: 0;
+    padding: 4px;
     margin: 0;
     color: var(--cds-text-03, #8d8d8d);
     cursor: pointer;
@@ -781,8 +819,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 16px;
-    height: 16px;
+    min-width: 24px;
+    min-height: 24px;
   }
 
   .sort-btn:hover {
@@ -810,7 +848,7 @@
 
   .hist-unique-bar {
     flex: 1;
-    background-color: #007d79;
+    background-color: #005d5d;
     border-radius: 4px;
     display: flex;
     align-items: center;
@@ -901,7 +939,7 @@
 
   .hist-num-bar {
     flex: 1 0 0;
-    background-color: #8a3ffc;
+    background-color: #6929c4;
     min-width: 0;
     min-height: 1px;
   }
@@ -987,38 +1025,9 @@
   }
 
   .hist-warning-line span {
-    color: var(--cds-text-02, #525252);
+    color: #ff832b;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-
-  .hist-geo-pills {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    flex: 1;
-    min-height: 0;
-  }
-
-  .hist-geo-pill {
-    font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 12px;
-    line-height: 16px;
-    letter-spacing: 0.32px;
-    color: #ffffff;
-    padding: 2px 8px;
-    border-radius: 4px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .hist-geo-uniques {
-    background-color: #007d79;
-  }
-
-  .hist-geo-nulls {
-    background-color: #ff832b;
   }
 
   .hist-empty {

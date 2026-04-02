@@ -181,7 +181,8 @@
   }
 
   #khartis-zoom-toolbar :global(.zoom-mode-tabs .toggle-tab) {
-    min-height: 44px;
+    min-height: 42px;
+    height: 42px;
     gap: 8px;
     transition:
       width 0.15s ease,
@@ -189,13 +190,13 @@
   }
 
   #khartis-zoom-toolbar :global(.zoom-mode-tabs .toggle-tab.full-width) {
-    width: calc(100% - 48px);
+    width: calc(100% - 50px);
     padding: 0 12px;
     justify-content: flex-start;
   }
 
   #khartis-zoom-toolbar :global(.zoom-mode-tabs .toggle-tab:not(.full-width)) {
-    width: 48px;
+    width: 50px;
     padding: 0;
     justify-content: center;
   }
@@ -213,22 +214,19 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
-    column-gap: 8px;
     min-height: 42px;
-    padding: 8px 10px 6px;
     background: var(--cds-background, #ffffff);
   }
 
   .zoom-value {
     min-width: 0;
-    padding-bottom: 2px;
   }
 
   .zoom-input {
     width: 100%;
-    height: 28px;
+    height: 100%;
     min-height: 28px;
-    padding: 0 0 6px;
+    padding: 0;
     border: none;
     background: transparent;
     color: var(--text-emphasis, #161616);
@@ -249,44 +247,54 @@
   }
 
   .zoom-controls {
-    display: flex;
+    display: grid;
+    grid-template-columns: 50px 50px;
     align-items: center;
-    gap: 12px;
+    justify-items: center;
+    align-self: stretch;
+    border-left: none;
     position: relative;
-    min-height: 28px;
-    padding-left: 8px;
-    border-left: 1px solid var(--cds-border-subtle-01, #c6c6c6);
+  }
+
+  .zoom-controls::before,
+  .zoom-controls::after {
+    content: '';
+    position: absolute;
+    top: 8px;
+    bottom: 8px;
+    width: 1px;
+    background: var(--cds-border-subtle-01, #c6c6c6);
   }
 
   .zoom-controls::before {
-    content: '';
-    position: absolute;
+    left: 0;
+  }
+
+  .zoom-controls::after {
     left: 50%;
-    top: 0;
-    bottom: 0;
-    width: 1px;
-    background: var(--cds-border-subtle-01, #c6c6c6);
     transform: translateX(-0.5px);
   }
 
   #khartis-zoom-toolbar :global(.zoom-button.bx--btn) {
-    min-width: 28px;
+    min-width: 50px;
     min-height: 28px;
-    width: 28px;
-    height: 28px;
+    width: 50px;
+    height: 100%;
     padding: 0;
     border: none;
     background: transparent;
     color: var(--text-emphasis, #161616);
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
-  #khartis-zoom-toolbar :global(.zoom-button.bx--btn:hover) {
-    background: var(--cds-hover-ui, #e8e8e8);
-  }
-
-  #khartis-zoom-toolbar :global(.zoom-button.bx--btn:focus-visible) {
-    outline: 2px solid var(--cds-focus);
-    outline-offset: -2px;
+  #khartis-zoom-toolbar :global(.zoom-button.bx--btn:hover),
+  #khartis-zoom-toolbar :global(.zoom-button.bx--btn:active),
+  #khartis-zoom-toolbar :global(.zoom-button.bx--btn:focus) {
+    background: transparent;
+    box-shadow: none;
+    outline: none;
   }
 
   @media (max-width: 1023px) {
@@ -302,16 +310,11 @@
 
     #khartis-zoom-toolbar
       :global(.zoom-mode-tabs .toggle-tab:not(.full-width)) {
-      width: 44px;
+      width: 50px;
     }
 
     .zoom-section {
-      column-gap: 6px;
-      padding-inline: 8px;
-    }
-
-    .zoom-controls {
-      padding-left: 6px;
+      padding-left: 0;
     }
   }
 </style>

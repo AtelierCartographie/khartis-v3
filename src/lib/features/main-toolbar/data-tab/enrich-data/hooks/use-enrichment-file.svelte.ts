@@ -87,9 +87,6 @@ export function useEnrichmentFile(): UseEnrichmentFileReturn {
       await Duck.query(
         `DROP TABLE IF EXISTS "${escapeIdentifier(dataset.tableName)}"`
       );
-      logger.debug('Cleaned enrichment temporary table', LogCategory.DATA, {
-        tableName: dataset.tableName
-      });
     } catch (error) {
       logger.warn(
         'Failed to cleanup enrichment temporary table',
@@ -139,7 +136,7 @@ export function useEnrichmentFile(): UseEnrichmentFileReturn {
         : result;
       await replaceEnrichmentDataset(dataset, file);
 
-      logger.success('Enrichment file loaded', LogCategory.DATA, {
+      logger.debug('Enrichment file loaded', LogCategory.DATA, {
         fileName: file.name,
         rowCount: dataset.rowCount
       });
@@ -195,7 +192,7 @@ export function useEnrichmentFile(): UseEnrichmentFileReturn {
       await replaceEnrichmentDataset(dataset, null);
       pastedDataValue = '';
 
-      logger.success('Pasted data loaded', LogCategory.DATA, {
+      logger.debug('Pasted data loaded', LogCategory.DATA, {
         rowCount: dataset.rowCount
       });
     } catch (error) {

@@ -20,14 +20,24 @@ const EUROPEAN_THOUSANDS_SPACE_PATTERN = /^-?\d{1,3}(?: \d{3})+,\d+$/;
 const STANDARD_THOUSANDS_COMMA_PATTERN = /^-?\d{1,3}(?:,\d{3})+\.\d+$/;
 const QUOTED_VALUE_PATTERN = /^["'](.*)["']$/;
 
+/**
+ * Read the first N lines of a file as text. Exported so callers can share
+ * a single read between decimal detection and CSV header detection.
+ */
+export async function readFileHead(file: File, lines: number): Promise<string> {
+  const bytesToRead = Math.min(lines * 500, file.size);
+  const slice = file.slice(0, bytesToRead);
+  return await slice.text();
+}
+
 export async function detectDecimalSeparator(
   file: File,
-  options: DetectionOptions = {}
+  options: DetectionOptions & { cachedHead?: string } = {}
 ): Promise<DecimalDetectionResult> {
   const { sampleLines = 20 } = options;
 
   try {
-    const text = await readFileHead(file, sampleLines);
+    const text = options.cachedHead ?? (await readFileHead(file, sampleLines));
     const lines = text.split(/\r?\n/).filter((line) => line.trim());
 
     if (lines.length < 2) {
@@ -80,11 +90,6 @@ export async function detectDecimalSeparator(
     const standardRatio = standardMatches / totalNumericValues;
 
     if (europeanRatio > standardRatio && europeanRatio > 0.3) {
-      logger.debug('European decimal format detected', LogCategory.DATA, {
-        europeanMatches,
-        standardMatches,
-        confidence: europeanRatio
-      });
       let thousandsSeparator: ',' | '.' | ' ' | undefined;
       const hasMixedDecimalFormats = standardMatches > 0;
 
@@ -166,10 +171,4 @@ function parseCSVLine(line: string, delimiter: string): string[] {
 function unquote(value: string): string {
   const match = value.match(QUOTED_VALUE_PATTERN);
   return match ? match[1] : value;
-}
-
-async function readFileHead(file: File, lines: number): Promise<string> {
-  const bytesToRead = Math.min(lines * 500, file.size);
-  const slice = file.slice(0, bytesToRead);
-  return await slice.text();
 }

@@ -6,8 +6,7 @@ const mocks = vi.hoisted(() => {
     connection: { id: 'conn' },
     loaded_files: new Map<string, unknown>(),
     registered_files: new Set<string>(),
-    table_metadata: new Map<string, unknown>(),
-    table_geoparquet_cache: new Map<string, unknown>()
+    table_metadata: new Map<string, unknown>()
   };
 
   return {
@@ -25,7 +24,6 @@ const mocks = vi.hoisted(() => {
     getRowCountMock: vi.fn(),
     dropRowsMock: vi.fn(),
     exportToCsvMock: vi.fn(),
-    exportToGeoparquetMock: vi.fn(),
     describeColumnsMock: vi.fn(),
     analyseMock: vi.fn(),
     searchInTableMock: vi.fn(),
@@ -58,8 +56,7 @@ vi.mock('$lib/features/duckdb/io/readers', () => ({
 }));
 
 vi.mock('$lib/features/duckdb/io/exporters', () => ({
-  exportToCsv: mocks.exportToCsvMock,
-  exportToGeoparquet: mocks.exportToGeoparquetMock
+  exportToCsv: mocks.exportToCsvMock
 }));
 
 vi.mock('$lib/features/duckdb/operations/table-ops', () => ({
@@ -114,7 +111,6 @@ describe('duck facade', () => {
     mocks.context.loaded_files = new Map<string, unknown>();
     mocks.context.registered_files = new Set<string>();
     mocks.context.table_metadata = new Map<string, unknown>();
-    mocks.context.table_geoparquet_cache = new Map<string, unknown>();
     mocks.isInitializedMock.mockReturnValue(true);
     mocks.getContextMock.mockReturnValue(mocks.context);
   });
@@ -127,9 +123,6 @@ describe('duck facade', () => {
     expect(Duck.loaded_files).toBe(mocks.context.loaded_files);
     expect(Duck.registered_files).toBe(mocks.context.registered_files);
     expect(Duck.table_metadata).toBe(mocks.context.table_metadata);
-    expect(Duck.table_geoparquet_cache).toBe(
-      mocks.context.table_geoparquet_cache
-    );
   });
 
   it('returns empty placeholders from getters when engine is not initialized', async () => {
@@ -144,8 +137,6 @@ describe('duck facade', () => {
     expect(Duck.registered_files.size).toBe(0);
     expect(Duck.table_metadata).toBeInstanceOf(Map);
     expect(Duck.table_metadata.size).toBe(0);
-    expect(Duck.table_geoparquet_cache).toBeInstanceOf(Map);
-    expect(Duck.table_geoparquet_cache.size).toBe(0);
   });
 
   it('forwards query/read/export operations to underlying modules', async () => {
@@ -160,7 +151,6 @@ describe('duck facade', () => {
     mocks.getRowCountMock.mockResolvedValueOnce(42);
     mocks.dropRowsMock.mockResolvedValueOnce(undefined);
     mocks.exportToCsvMock.mockResolvedValueOnce('csv-content');
-    mocks.exportToGeoparquetMock.mockResolvedValueOnce(new Uint8Array([1]));
     mocks.describeColumnsMock.mockResolvedValueOnce([{ name: 'x' }]);
     mocks.analyseMock.mockResolvedValueOnce([{ name: 'x' }]);
     mocks.searchInTableMock.mockResolvedValueOnce({ totalRows: 1 });
@@ -187,9 +177,6 @@ describe('duck facade', () => {
     await Duck.drop_rows('table_a', [1, 2]);
     await expect(Duck.copy_to_csv_as_string('table_a')).resolves.toBe(
       'csv-content'
-    );
-    await expect(Duck.copy_to_geoparquet_as_buffer('table_a')).resolves.toEqual(
-      new Uint8Array([1])
     );
     await expect(Duck.describeColumns('table_a')).resolves.toEqual([
       { name: 'x' }
@@ -240,7 +227,6 @@ describe('duck facade', () => {
     mocks.context.registered_files.add('tmp_cities.csv');
     mocks.context.registered_files.add('tmp_other.csv');
     mocks.context.table_metadata.set('cities', { analysis: null });
-    mocks.context.table_geoparquet_cache.set('cities', new Uint8Array([1]));
 
     Duck.cleanupTableResources('cities');
 
@@ -251,7 +237,6 @@ describe('duck facade', () => {
       )
     ).toBe(false);
     expect(mocks.context.table_metadata.has('cities')).toBe(false);
-    expect(mocks.context.table_geoparquet_cache.has('cities')).toBe(false);
     expect(mocks.context.registered_files.has('tmp_other.csv')).toBe(true);
   });
 

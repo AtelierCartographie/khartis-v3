@@ -135,7 +135,7 @@
     <div class="imported-file">
       <span class="file-label">{m.basemap_import_file_imported()}</span>
       <div class="file-row">
-        <span class="file-name">{importedBasemap.title}</span>
+        <span class="file-name">{importedBasemap.title_fr}</span>
         <CheckmarkFilled size={20} class="icon-success" />
       </div>
     </div>

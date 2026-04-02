@@ -16,10 +16,10 @@
     VisualizationType
   } from '$lib/features/commons/store/visualization.store.svelte';
   import { isNumericType } from '$lib/features/commons/utils/format.utils';
+  import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import * as m from '$lib/paraglide/messages';
   import { ComboBox, Link, Modal, RadioButton } from 'carbon-components-svelte';
   import {
-    ColorPalette,
     Edit,
     Launch,
     MagicWandFilled,
@@ -30,9 +30,14 @@
     TrashCan,
     Copy
   } from 'carbon-icons-svelte';
+  import SuggestionPreview from './components/suggestion-preview.svelte';
   import { InfoPopover } from './components/shared';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
-  import { resolveDatasetGeometryType } from './suggestion.utils';
+  import {
+    applySuggestionMapping,
+    mapSuggestionToType,
+    resolveDatasetGeometryType
+  } from './suggestion.utils';
   import { UI_CONSTANTS } from '../constants';
 
   interface Props {
@@ -70,6 +75,9 @@
   const datasetColumns = $derived(selectedDataset?.columns ?? []);
 
   const suggestions = $derived.by((): VizSuggestion[] => {
+    // Track orchestrator version so suggestions re-evaluate after join completes
+    void duckDBOrchestrator.datasetsVersion;
+
     const dataset = selectedDataset;
     if (!dataset?.columns) return [];
 
@@ -93,8 +101,14 @@
     const geometryType =
       resolveDatasetGeometryType(
         dataset as {
+          id?: string;
           geometry?: { type?: string | null };
           sourceFileId?: string;
+          joinedBasemap?: string;
+          gpsMode?: boolean;
+          geoDetection?: {
+            geoColumns?: Array<{ type?: string }>;
+          };
         }
       ) ||
       (dataset.geometry?.type as GeometryType) ||
@@ -137,7 +151,13 @@
   }
 
   function getSemioTypeLabel(semioType: string): string {
-    return semioType;
+    const labels: Record<string, () => string> = {
+      QTA: m.semio_label_QTA,
+      QTR: m.semio_label_QTR,
+      QL: m.semio_label_QL,
+      QLO: m.semio_label_QLO
+    };
+    return labels[semioType]?.() ?? semioType;
   }
 
   function handleShowMore() {
@@ -149,31 +169,48 @@
 
   function handleSelectSuggestion(suggestion: VizSuggestion) {
     selectedSuggestion = suggestion.id;
+
+    // Apply suggestion to the currently selected visualization
+    const dataset = selectedDataset;
+    if (!dataset) return;
+
+    const existingVizs = visualizationStore.getVisualizationsByDataset(
+      dataset.id
+    );
+    const selectedViz = visualizationStore.selectedVisualization;
+
+    if (selectedViz && existingVizs.some((v) => v.id === selectedViz.id)) {
+      const vizType = mapSuggestionToType(suggestion.id);
+      visualizationStore.updateVisualization(selectedViz.id, { type: vizType });
+      applySuggestionMapping(selectedViz.id, vizType, suggestion);
+    }
   }
 
   function handleCreateVisualization() {
     const dataset = selectedDataset;
     if (!dataset) return;
 
-    if (datasetVisualizations.length === 0) {
-      const geometryType = resolveDatasetGeometryType(
-        dataset as {
-          geometry?: { type?: string | null };
-          sourceFileId?: string;
-        }
-      );
-      const defaultType = geometryType?.toLowerCase().includes('point')
+    const currentSuggestion = selectedSuggestion
+      ? filteredSuggestions.find((s) => s.id === selectedSuggestion)
+      : undefined;
+
+    const vizType = currentSuggestion
+      ? mapSuggestionToType(currentSuggestion.id)
+      : resolveDatasetGeometryType(
+            dataset as {
+              geometry?: { type?: string | null };
+              sourceFileId?: string;
+            }
+          )
+            ?.toLowerCase()
+            .includes('point')
         ? VisualizationType.PROPORTIONAL
         : VisualizationType.CHOROPLETH;
-      visualizationStore.createVisualization(defaultType, dataset.id);
-    } else {
-      // Reset suggestion presets: clear column mappings so the user configures from scratch
-      const selectedViz = visualizationStore.selectedVisualization;
-      if (selectedViz) {
-        visualizationStore.updateVisualization(selectedViz.id, {
-          mapping: { geometryColumn: selectedViz.mapping?.geometryColumn }
-        });
-      }
+
+    const viz = visualizationStore.createVisualization(vizType, dataset.id);
+
+    if (currentSuggestion) {
+      applySuggestionMapping(viz.id, vizType, currentSuggestion);
     }
 
     suggestionsExpanded = false;
@@ -244,12 +281,8 @@
     const exists = datasets.some((ds) => ds.id === selectedDatasetId);
     if (!exists) {
       selectedDatasetId = datasetsStore.selectedDatasetId ?? datasets[0].id;
+      visibleCount = UI_CONSTANTS.SUGGESTIONS_PER_PAGE;
     }
-  });
-
-  $effect(() => {
-    void selectedDatasetId;
-    visibleCount = UI_CONSTANTS.SUGGESTIONS_PER_PAGE;
   });
 
   $effect(() => {
@@ -381,11 +414,10 @@
               aria-pressed={isSelected}
             >
               <div class="card-preview">
-                <div class="preview-icon">
-                  <ColorPalette size={32} />
-                </div>
-                <div class="preview-ratio">1:1</div>
-                <div class="preview-label">Viz preview</div>
+                <SuggestionPreview
+                  suggestionId={suggestion.id}
+                  geometries={suggestion.geometries}
+                />
                 <div class="preview-primitives">
                   {#each suggestion.geometries as geometry (geometry)}
                     {@const GeomIcon = getGeometryIcon(geometry)}
@@ -406,6 +438,14 @@
                     <RadioButton checked={isSelected} />
                   </span>
                 </div>
+
+                {#if suggestion.score != null && suggestion.score > 0}
+                  <div class="card-score">
+                    {m.suggestion_score_label({
+                      score: String(suggestion.score)
+                    })}
+                  </div>
+                {/if}
 
                 <div class="card-variables">
                   {#if suggestion.columns && suggestion.columns.length > 0}
@@ -639,22 +679,6 @@
     color: var(--khartis-additions-interactive-suggestions, #0072c3);
   }
 
-  .preview-icon {
-    margin-bottom: var(--cds-spacing-02);
-    color: var(--khartis-additions-interactive-suggestions, #0072c3);
-  }
-
-  .preview-ratio {
-    font-size: 1rem;
-    font-weight: 600;
-    line-height: 1.5rem;
-  }
-
-  .preview-label {
-    font-size: 0.75rem;
-    line-height: 1rem;
-  }
-
   .preview-primitives {
     display: flex;
     gap: var(--cds-spacing-02);
@@ -698,6 +722,14 @@
     font-weight: 600;
     margin: 0;
     color: var(--khartis-additions-text-primary-suggestions, #003a6d);
+  }
+
+  .card-score {
+    font-size: 0.6875rem;
+    font-weight: 500;
+    color: var(--khartis-additions-text-helper-suggestions, #0072c3);
+    line-height: 1rem;
+    letter-spacing: 0.32px;
   }
 
   .card-variables {
