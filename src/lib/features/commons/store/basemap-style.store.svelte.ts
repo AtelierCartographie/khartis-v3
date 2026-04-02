@@ -12,7 +12,9 @@ import {
   type LayerGroupId
 } from '../../map/constants/carte-facile-layer-groups';
 
-function getInitialGroupVisibility(style: BasemapStyle): Record<string, boolean> {
+function getInitialGroupVisibility(
+  style: BasemapStyle
+): Record<string, boolean> {
   const config = getStyleConfig(style);
   if (!config) return {};
   return getDefaultVisibility(config) as Record<string, boolean>;

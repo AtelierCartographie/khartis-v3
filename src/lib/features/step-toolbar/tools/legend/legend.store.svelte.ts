@@ -16,19 +16,6 @@ import type {
   LegendStyle
 } from './legend.types';
 
-export const DEFAULT_LEGEND_TEXT_COLOR: LegendStyle['textColor'] = {
-  hue: 0,
-  saturation: 0,
-  lightness: 0
-};
-
-export const DEFAULT_LEGEND_BACKGROUND_COLOR: LegendStyle['background']['color'] =
-  {
-    hue: 0,
-    saturation: 0,
-    lightness: 100
-  };
-
 const DEFAULT_STATE: LegendState = {
   items: [],
   position: LegendPosition.TOP_RIGHT,
@@ -37,10 +24,10 @@ const DEFAULT_STATE: LegendState = {
   style: {
     fontFamily: LEGEND_DEFAULTS.FONT_FAMILY,
     fontSize: LEGEND_DEFAULTS.FONT_SIZE,
-    textColor: { ...DEFAULT_LEGEND_TEXT_COLOR },
+    textColor: { hue: 0, saturation: 0, lightness: 0 },
     background: {
       enabled: true,
-      color: { ...DEFAULT_LEGEND_BACKGROUND_COLOR },
+      color: { hue: 0, saturation: 0, lightness: 100 },
       opacity: LEGEND_DEFAULTS.OPACITY
     }
   },

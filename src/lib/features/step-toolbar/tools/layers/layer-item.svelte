@@ -92,7 +92,11 @@
         onclick={() => onToggleVisibility(layer.id)}
       />
       {#if layer.type === 'visualization'}
-        <OverflowMenu size="sm" flipped iconDescription={m.layers_more_options()}>
+        <OverflowMenu
+          size="sm"
+          flipped
+          iconDescription={m.layers_more_options()}
+        >
           <OverflowMenuItem
             text={m.layers_rename()}
             on:click={() => onRenameLayer?.(layer.id)}

@@ -16,8 +16,7 @@ export const gpxProcessor: FileProcessor = {
 
   canHandle(file: UploadedFile): boolean {
     return (
-      file.fileType === FileType.GPX ||
-      file.name.toLowerCase().endsWith('.gpx')
+      file.fileType === FileType.GPX || file.name.toLowerCase().endsWith('.gpx')
     );
   },
 

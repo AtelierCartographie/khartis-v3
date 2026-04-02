@@ -65,18 +65,6 @@ function getStepCount(): number {
   return isTwoStepMode() ? 2 : 3;
 }
 
-function setWorkflowMode(mode: WorkflowMode) {
-  state.workflowMode = mode;
-}
-
-function setPrimaryDatasetId(id: string | undefined) {
-  state.primaryDatasetId = id;
-}
-
-function setPrimaryBasemapId(id: string | undefined) {
-  state.primaryBasemapId = id;
-}
-
 function setActiveStep(index: number) {
   const maxIndex = getStepCount() - 1;
   if (index < 0 || index > maxIndex) {
@@ -130,21 +118,6 @@ function reset() {
   state.workflowMode = 'auto';
   state.primaryDatasetId = undefined;
   state.primaryBasemapId = undefined;
-}
-
-function nextStep() {
-  const nextIndex = state.activeStepIndex + 1;
-  const maxIndex = getStepCount() - 1;
-  if (nextIndex <= maxIndex && state.canNavigateToStep[nextIndex]) {
-    setActiveStep(nextIndex);
-  }
-}
-
-function previousStep() {
-  const prevIndex = state.activeStepIndex - 1;
-  if (prevIndex >= 0) {
-    setActiveStep(prevIndex);
-  }
 }
 
 export const dataTabStore = {
@@ -202,14 +175,9 @@ export const dataTabStore = {
   get primaryBasemapId() {
     return state.primaryBasemapId;
   },
-  setWorkflowMode,
-  setPrimaryDatasetId,
-  setPrimaryBasemapId,
   setActiveStep,
   markStepComplete,
   resetStepCompletion,
   updateNavigationPermissions,
-  reset,
-  nextStep,
-  previousStep
+  reset
 };

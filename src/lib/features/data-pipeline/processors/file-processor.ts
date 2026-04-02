@@ -136,10 +136,7 @@ export async function processFileInternal(
       const GEO_NAME_HINT =
         /lat|lon|lng|coord|geo|point|location|wkt|iso|code|country|region|dept|commune|province|state|city|name|admin|id/i;
       const geoColumns = dataset.columns
-        .filter(
-          (c) =>
-            GEO_NAME_HINT.test(c.name) || c.type === 'text'
-        )
+        .filter((c) => GEO_NAME_HINT.test(c.name) || c.type === 'text')
         .map((c) => c.name);
       // If no likely candidates, still try all columns (fallback for unusual naming)
       const columnsToCheck =

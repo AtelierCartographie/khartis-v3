@@ -207,7 +207,8 @@ function buildLayers(): Layer[] {
       order: vizOrder
     };
 
-    const vizPrimitiveOrder = viz.primitiveOrder ?? VISUALIZATION_SUBLAYER_ORDER;
+    const vizPrimitiveOrder =
+      viz.primitiveOrder ?? VISUALIZATION_SUBLAYER_ORDER;
     const vizSubLayers = vizPrimitiveOrder.map(
       (primitive, i): Layer => ({
         id: buildVisualizationSubLayerId(viz.id, primitive),
