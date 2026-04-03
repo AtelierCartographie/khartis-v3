@@ -80,6 +80,7 @@ export interface ClassificationConfig {
   counts?: number[];
   colors?: string[];
   paletteId?: string;
+  inverted?: boolean;
   labels?: string[];
   breakpointValue?: number | null;
   patternId?: string;
@@ -793,10 +794,13 @@ function createVisualizationStore(): VisualizationStore {
         return null;
       }
 
+      const inverted = !(visualization.classification.inverted ?? false);
+
       return {
         classification: {
           ...visualization.classification,
-          colors: [...visualization.classification.colors].reverse()
+          colors: [...visualization.classification.colors].reverse(),
+          inverted
         }
       };
     });
