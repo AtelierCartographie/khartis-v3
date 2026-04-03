@@ -46,7 +46,10 @@ export async function registerExistingTable(
   fileName: string,
   Duck: DuckDBClientForDataset,
   callbacks: DatasetCallbacks,
-  options?: { geoDetection?: GeoDetectionResult }
+  options?: {
+    geoDetection?: GeoDetectionResult;
+    preserveExistingJoinState?: boolean;
+  }
 ): Promise<DuckDBDataset | null> {
   const start = performance.now();
 
@@ -69,6 +72,8 @@ export async function registerExistingTable(
     const columns = await Duck.analyse(tableName);
     const rowCount = await callbacks.getRowCount(tableName);
     const existingDataset = findDatasetByIdOrSourceFile(sourceFileId);
+    const preservedDataset =
+      options?.preserveExistingJoinState === false ? null : existingDataset;
 
     const dataset: DuckDBDataset = {
       id: existingDataset?.id ?? crypto.randomUUID(),
@@ -81,7 +86,11 @@ export async function registerExistingTable(
         processedAt: new Date(),
         fileType: FileType.CSV
       },
-      geoDetection: options?.geoDetection
+      geoDetection: options?.geoDetection,
+      joinedBasemap: preservedDataset?.joinedBasemap,
+      geoColumn: preservedDataset?.geoColumn,
+      gpsMode: preservedDataset?.gpsMode,
+      gpsColumns: preservedDataset?.gpsColumns
     };
 
     updateDatasets((datasets) => {

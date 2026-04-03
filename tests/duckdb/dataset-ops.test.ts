@@ -122,4 +122,43 @@ describe('duckdb dataset registration', () => {
       })
     );
   });
+
+  it('preserves persisted join metadata when re-registering a source file', async () => {
+    updateDatasets((datasets) => {
+      datasets.set('current', {
+        id: 'current',
+        sourceFileId: 'sf1',
+        tableName: 'table_old',
+        joinedBasemap: 'monde-countries-2024-medium',
+        geoColumn: 'code'
+      } as DuckDBDataset);
+    });
+
+    const duck = {
+      query: vi.fn().mockResolvedValue([{ table_name: 'table_registered' }]),
+      analyse: vi.fn().mockResolvedValue([{ name: 'value' }])
+    };
+    const callbacks = {
+      getRowCount: vi.fn().mockResolvedValue(42),
+      createArrowTableWithMetadata: vi.fn(),
+      prefetchArrowMetadata: vi.fn().mockResolvedValue(undefined)
+    };
+
+    const dataset = await registerExistingTable(
+      'table_registered',
+      'sf1',
+      'example.csv',
+      duck,
+      callbacks
+    );
+
+    expect(dataset).toEqual(
+      expect.objectContaining({
+        id: 'current',
+        tableName: 'table_registered',
+        joinedBasemap: 'monde-countries-2024-medium',
+        geoColumn: 'code'
+      })
+    );
+  });
 });

@@ -134,6 +134,7 @@ async function ensureSimilarityCached(
         jaro_winkler_similarity(normalize_text_join(CAST(c.original_name AS VARCHAR)), ba.normalized, 0.85) AS score,
         ba.id AS match_id,
         ba.raw AS match_raw,
+        ba.variant AS match_variant,
         ba.basemap AS match_basemap,
         ba.basemap_count AS match_basemap_count
       FROM candidates c, basemap_attributes ba
@@ -146,6 +147,7 @@ async function ensureSimilarityCached(
         CASE WHEN score = 1 THEN 'exact' ELSE 'partial' END AS typo_match,
         match_id,
         match_raw,
+        match_variant,
         match_basemap,
         match_basemap_count
       FROM jw_pairs
@@ -156,6 +158,7 @@ async function ensureSimilarityCached(
       c.source_dup_count,
       m.match_id,
       m.match_raw,
+      m.match_variant,
       m.match_score,
       m.typo_match,
       m.match_basemap,
@@ -360,7 +363,7 @@ async function ensureBasemapAttributesLoaded(
   )) as Array<{ table_name: string }>;
 
   if (!tableCheck || tableCheck.length === 0) {
-    await basemapService.initialize();
+    await basemapService.ensureAttributesLoaded();
 
     const recheck = (await Duck.query(
       `SELECT table_name FROM information_schema.tables WHERE table_name = 'basemap_attributes'`,
@@ -645,7 +648,17 @@ async function applyCachedJoinAssociation(
     WITH ranked_join AS (
       SELECT
         original_name AS geoname,
-        match_id AS id,
+        CASE
+          WHEN EXISTS (
+            SELECT 1
+            FROM basemap_attributes ba
+            WHERE ba.basemap = match_basemap
+              AND ba.variant = match_id
+            LIMIT 1
+          )
+            THEN match_raw
+          ELSE match_id
+        END AS id,
         match_score AS score,
         typo_match
       FROM "${escapedCacheTable}"
