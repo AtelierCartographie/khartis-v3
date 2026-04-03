@@ -201,7 +201,10 @@ export const duckDBOrchestrator = {
     tableName: string,
     sourceFileId: string,
     fileName: string,
-    options?: { geoDetection?: GeoDetectionResult }
+    options?: {
+      geoDetection?: GeoDetectionResult;
+      preserveExistingJoinState?: boolean;
+    }
   ): Promise<DuckDBDataset | null> {
     await ensureInitialized();
     if (!Duck) throw new DuckDBError('DuckDB not initialized');

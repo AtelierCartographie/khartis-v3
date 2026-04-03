@@ -102,8 +102,18 @@ function createProjectStore() {
     return addColumnTransformationFn(container, fileId, transformation);
   }
 
-  async function clearColumnTransformations(fileId: string): Promise<void> {
-    return clearColumnTransformationsFn(container, fileId);
+  async function clearColumnTransformations(
+    fileId: string,
+    options?: Pick<
+      UploadedFile,
+      | 'duckdbTableName'
+      | 'joinedBasemap'
+      | 'geoColumn'
+      | 'gpsMode'
+      | 'gpsColumns'
+    >
+  ): Promise<void> {
+    return clearColumnTransformationsFn(container, fileId, options);
   }
 
   async function addDeletedRows(

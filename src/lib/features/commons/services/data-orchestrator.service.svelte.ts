@@ -1,10 +1,15 @@
 import type { DatasetResult } from '$lib/features/data-pipeline';
-import { createFileFromUpload } from '$lib/features/data-pipeline';
+import {
+  createFileFromUpload,
+  dataPipeline,
+  isZipDatasetResult
+} from '$lib/features/data-pipeline';
 import { Duck, RefineOperation } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import {
   isGeoJSONFeatureCollection,
-  type GeoJSONFeatureCollection
+  type GeoJSONFeatureCollection,
+  type JsonValue
 } from '$lib/types/data';
 import type { SerializedProjectData } from '$lib/types/serialization.types';
 import { layersActions } from '../../step-toolbar/tools/layers/layers.store.svelte';
@@ -59,6 +64,48 @@ function createDataOrchestratorService() {
   let geometryDatasetsVersion = $state(0);
   const processedFileIds = new Set<string>();
   const processingFiles = new Set<string>();
+
+  function toJsonValue(value: unknown): JsonValue {
+    if (
+      value === null ||
+      value === undefined ||
+      typeof value === 'string' ||
+      typeof value === 'number' ||
+      typeof value === 'boolean'
+    ) {
+      return value ?? null;
+    }
+
+    if (value instanceof Date) {
+      return value.toISOString();
+    }
+
+    if (Array.isArray(value)) {
+      return value.map((item) => toJsonValue(item));
+    }
+
+    if (typeof value === 'object') {
+      return Object.fromEntries(
+        Object.entries(value).map(([key, item]) => [key, toJsonValue(item)])
+      );
+    }
+
+    return String(value);
+  }
+
+  function toParsedTabularData(
+    rows: DatasetResult['data']
+  ): UploadedFile['parsedData'] | undefined {
+    if (!rows) {
+      return undefined;
+    }
+
+    return rows.map((row) =>
+      Object.fromEntries(
+        Object.entries(row).map(([key, value]) => [key, toJsonValue(value)])
+      )
+    );
+  }
 
   async function cleanupDuckDBResources(tableName: string): Promise<void> {
     try {
@@ -220,6 +267,46 @@ function createDataOrchestratorService() {
     }
   }
 
+  async function restoreJoinState(
+    duckDatasetId: string,
+    file: UploadedFile
+  ): Promise<void> {
+    if (!file.joinedBasemap && !file.gpsMode) {
+      return;
+    }
+
+    duckDBOrchestrator.updateDatasetJoinInfo(duckDatasetId, {
+      joinedBasemap: file.joinedBasemap,
+      geoColumn: file.geoColumn,
+      gpsMode: file.gpsMode,
+      gpsColumns: file.gpsColumns
+    });
+
+    if (!file.joinedBasemap || !file.geoColumn) {
+      return;
+    }
+
+    await basemapCatalogService.loadCatalog();
+    const basemap = basemapCatalogService.getBasemapById(file.joinedBasemap);
+    if (!basemap) {
+      return;
+    }
+
+    try {
+      await duckDBOrchestrator.finalizeJoin(
+        duckDatasetId,
+        basemap,
+        file.geoColumn
+      );
+    } catch (joinError) {
+      logger.warn('Failed to restore join on project load', LogCategory.DATA, {
+        datasetId: duckDatasetId,
+        joinedBasemap: file.joinedBasemap,
+        error: joinError
+      });
+    }
+  }
+
   async function processFileInDuckDB(
     file: UploadedFile,
     datasetOverride?: DatasetResult
@@ -273,39 +360,8 @@ function createDataOrchestratorService() {
           }
         );
 
-        if (registered !== null && (file.joinedBasemap || file.gpsMode)) {
-          duckDBOrchestrator.updateDatasetJoinInfo(registered.id, {
-            joinedBasemap: file.joinedBasemap,
-            geoColumn: file.geoColumn,
-            gpsMode: file.gpsMode,
-            gpsColumns: file.gpsColumns
-          });
-
-          if (file.joinedBasemap && file.geoColumn) {
-            await basemapCatalogService.loadCatalog();
-            const basemap = basemapCatalogService.getBasemapById(
-              file.joinedBasemap
-            );
-            if (basemap) {
-              try {
-                await duckDBOrchestrator.finalizeJoin(
-                  registered.id,
-                  basemap,
-                  file.geoColumn
-                );
-              } catch (joinError) {
-                logger.warn(
-                  'Failed to restore join on project load',
-                  LogCategory.DATA,
-                  {
-                    datasetId: registered.id,
-                    joinedBasemap: file.joinedBasemap,
-                    error: joinError
-                  }
-                );
-              }
-            }
-          }
+        if (registered !== null) {
+          await restoreJoinState(registered.id, file);
         }
 
         if (registered === null) {
@@ -331,10 +387,12 @@ function createDataOrchestratorService() {
             file,
             strippedDataset
           );
+          let restoredDuckDatasetId: string | null = null;
           if (fileForDuckDB) {
             const duckResult =
               await duckDBOrchestrator.processFile(fileForDuckDB);
             if (duckResult && dataset) {
+              restoredDuckDatasetId = duckResult.id;
               datasetsStore.updateDatasetTableName(
                 dataset.id,
                 duckResult.tableName
@@ -349,8 +407,42 @@ function createDataOrchestratorService() {
 
               geometryDatasetsVersion++;
             }
+          } else if (file.content || file.originalFile) {
+            const restoredSourceFile =
+              file.originalFile ?? (await createFileFromUpload(file));
+            const processedResult = await dataPipeline.processUploadedFile(
+              file,
+              restoredSourceFile
+            );
+            const rebuiltDataset = isZipDatasetResult(processedResult)
+              ? processedResult.datasets[0]
+              : processedResult;
+            const duckRestoreFile: UploadedFile = {
+              ...file,
+              originalFile: restoredSourceFile,
+              parsedData: toParsedTabularData(rebuiltDataset.data)
+            };
+
+            const duckResult =
+              await duckDBOrchestrator.processFile(duckRestoreFile);
+            if (duckResult && dataset) {
+              restoredDuckDatasetId = duckResult.id;
+              datasetsStore.updateDatasetTableName(
+                dataset.id,
+                duckResult.tableName
+              );
+            }
           } else if (file.parsedData && Array.isArray(file.parsedData)) {
             await recreateTableFromParsedData(file, dataset.tableName, dataset);
+            restoredDuckDatasetId =
+              duckDBOrchestrator
+                .getAllDatasets()
+                .find((item) => item.sourceFileId === dataset.sourceFileId)
+                ?.id ?? null;
+          }
+
+          if (restoredDuckDatasetId) {
+            await restoreJoinState(restoredDuckDatasetId, file);
           }
         }
       } catch (registerError) {
