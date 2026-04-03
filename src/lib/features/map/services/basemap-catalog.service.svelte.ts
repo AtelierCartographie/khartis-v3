@@ -9,6 +9,57 @@ import type {
 } from '../types/basemap.types';
 
 const BASEMAP_METADATA_PATH = '/basemaps/all-basemaps-metadata.json';
+const FRANCE_COMMUNE_BASEMAP_PREFIX = 'france-commune-';
+const DEFAULT_CATALOG_VARIANT_PRIORITY: Record<string, number> = {
+  medium: 3,
+  high: 2,
+  low: 1
+};
+const FRANCE_COMMUNE_CATALOG_VARIANT_PRIORITY: Record<string, number> = {
+  high: 3,
+  medium: 2,
+  low: 1
+};
+
+function getCatalogBaseName(file: string): string {
+  return file.replace(/-(low|medium|high)$/, '');
+}
+
+function getCatalogVariantRank(basemap: BasemapMetadata): number {
+  const baseName = getCatalogBaseName(basemap.file);
+  const level = basemap.simplification_level;
+  const priorityMap = baseName.startsWith(FRANCE_COMMUNE_BASEMAP_PREFIX)
+    ? FRANCE_COMMUNE_CATALOG_VARIANT_PRIORITY
+    : DEFAULT_CATALOG_VARIANT_PRIORITY;
+
+  return level ? (priorityMap[level] ?? 0) : 0;
+}
+
+export function getCatalogBasemapsForDisplay(
+  basemaps: BasemapMetadata[]
+): BasemapMetadata[] {
+  const byBaseName = new Map<string, BasemapMetadata>();
+
+  for (const basemap of basemaps) {
+    if (basemap.isCustom) {
+      byBaseName.set(basemap.file, basemap);
+      continue;
+    }
+
+    const baseName = getCatalogBaseName(basemap.file);
+    const existing = byBaseName.get(baseName);
+    if (!existing) {
+      byBaseName.set(baseName, basemap);
+      continue;
+    }
+
+    if (getCatalogVariantRank(basemap) > getCatalogVariantRank(existing)) {
+      byBaseName.set(baseName, basemap);
+    }
+  }
+
+  return Array.from(byBaseName.values());
+}
 
 function createBasemapCatalogService() {
   const state = $state<{
@@ -280,27 +331,11 @@ function createBasemapCatalogService() {
 
   /**
    * Basemaps deduplicated by base name for catalog display.
-   * Keeps one entry per base name, preferring "medium" simplification level.
+   * Keeps one entry per base name, preferring "high" for France communes
+   * and "medium" elsewhere.
    */
   function getCatalogBasemaps(): BasemapMetadata[] {
-    const byBaseName = new Map<string, BasemapMetadata>();
-    for (const bm of state.basemaps) {
-      if (bm.isCustom) {
-        byBaseName.set(bm.file, bm);
-        continue;
-      }
-      const baseName = bm.file.replace(/-(low|medium|high)$/, '');
-      const existing = byBaseName.get(baseName);
-      if (!existing) {
-        byBaseName.set(baseName, bm);
-      } else if (
-        bm.simplification_level === 'medium' &&
-        existing.simplification_level !== 'medium'
-      ) {
-        byBaseName.set(baseName, bm);
-      }
-    }
-    return Array.from(byBaseName.values());
+    return getCatalogBasemapsForDisplay(state.basemaps);
   }
 
   return {

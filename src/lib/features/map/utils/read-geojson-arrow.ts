@@ -14,6 +14,7 @@ import {
   RecordBatch,
   Schema,
   Table,
+  Type,
   tableFromIPC,
   type Table as ArrowTable
 } from 'apache-arrow/Arrow';
@@ -52,22 +53,63 @@ const GEOPARQUET_ENCODING_TO_ARROW: Record<string, string> = {
   multipolygon: ArrowExtension.GEOARROW_MULTIPOLYGON
 };
 
+function normalizeArrowExtension(extension: string): string {
+  return extension === ArrowExtension.OGC_WKB
+    ? ArrowExtension.GEOARROW_WKB
+    : extension;
+}
+
+function getBinaryFallbackExtension(geomField: Field): string {
+  return geomField.type.typeId === Type.Binary ||
+    geomField.type.typeId === Type.FixedSizeBinary ||
+    geomField.type.typeId === Type.LargeBinary
+    ? ArrowExtension.GEOARROW_WKB
+    : ArrowExtension.OGC_WKB;
+}
+
 function detectNativeGeoArrowFromType(geomField: Field): string | null {
+  if (geomField.type.typeId === Type.FixedSizeList) {
+    return ArrowExtension.GEOARROW_POINT;
+  }
+
+  if (
+    geomField.type.typeId === Type.List &&
+    geomField.type.children.length === 1
+  ) {
+    const childField = geomField.type.children[0];
+
+    switch (childField.name) {
+      case 'lines':
+        return ArrowExtension.GEOARROW_MULTILINESTRING;
+      case 'rings':
+        return ArrowExtension.GEOARROW_POLYGON;
+      case 'polygons':
+        return ArrowExtension.GEOARROW_MULTIPOLYGON;
+      case 'vertices':
+        // List<FixedSizeList<[x,y]>> is shared by MultiPoint and LineString.
+        // Keep the historical MultiPoint fallback for this ambiguous shape.
+        if (childField.type.typeId === Type.FixedSizeList) {
+          return ArrowExtension.GEOARROW_MULTIPOINT;
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
   let type = geomField.type;
   let listDepth = 0;
 
-  while (type.children && type.children.length === 1) {
+  while (type.typeId === Type.List && type.children.length === 1) {
     type = type.children[0].type;
     listDepth++;
   }
 
-  if (!type.children || type.children.length < 2) {
+  if (type.typeId !== Type.FixedSizeList) {
     return null;
   }
 
   switch (listDepth) {
-    case 0:
-      return ArrowExtension.GEOARROW_POINT;
     case 1:
       return ArrowExtension.GEOARROW_MULTIPOINT;
     case 2:
@@ -104,11 +146,22 @@ export function addGeoArrowMetadata(
   // or detect native GeoArrow struct type from the Arrow schema.
   let arrowExtension: string;
   let geometryTypes: string[];
+  const detectedNativeExtension = detectNativeGeoArrowFromType(geomColumn);
 
-  if (existingExtension) {
-    arrowExtension = existingExtension;
+  if (
+    detectedNativeExtension &&
+    (!existingExtension ||
+      existingExtension === ArrowExtension.OGC_WKB ||
+      existingExtension === ArrowExtension.GEOARROW_WKB)
+  ) {
+    arrowExtension = detectedNativeExtension;
     geometryTypes = getGeometryTypesForEncoding(
-      existingExtension.replace('geoarrow.', '')
+      detectedNativeExtension.replace('geoarrow.', '')
+    );
+  } else if (existingExtension) {
+    arrowExtension = normalizeArrowExtension(existingExtension);
+    geometryTypes = getGeometryTypesForEncoding(
+      arrowExtension.replace('geoarrow.', '')
     );
   } else if (geoParquetEncoding) {
     const mapped =
@@ -117,19 +170,17 @@ export function addGeoArrowMetadata(
       arrowExtension = mapped;
       geometryTypes = getGeometryTypesForEncoding(geoParquetEncoding);
     } else {
-      arrowExtension = ArrowExtension.OGC_WKB;
+      arrowExtension = getBinaryFallbackExtension(geomColumn);
       geometryTypes = [GEOJSON_TYPE.POLYGON, GEOJSON_TYPE.MULTI_POLYGON];
     }
   } else {
-    // Try detecting native GeoArrow struct from Arrow type hierarchy
-    const detected = detectNativeGeoArrowFromType(geomColumn);
-    if (detected) {
-      arrowExtension = detected;
+    if (detectedNativeExtension) {
+      arrowExtension = detectedNativeExtension;
       geometryTypes = getGeometryTypesForEncoding(
-        detected.replace('geoarrow.', '')
+        detectedNativeExtension.replace('geoarrow.', '')
       );
     } else {
-      arrowExtension = ArrowExtension.OGC_WKB;
+      arrowExtension = getBinaryFallbackExtension(geomColumn);
       geometryTypes = [GEOJSON_TYPE.POLYGON, GEOJSON_TYPE.MULTI_POLYGON];
     }
   }
@@ -158,9 +209,19 @@ export function addGeoArrowMetadata(
   const newFields = table.schema.fields.map((field) => {
     if (field.name === geoColumnName) {
       const fieldMetadata = new Map(field.metadata || []);
-      if (!fieldMetadata.has(GeoArrowMetadataKey.EXTENSION_NAME)) {
+      if (
+        !fieldMetadata.has(GeoArrowMetadataKey.EXTENSION_NAME) ||
+        fieldMetadata.get(GeoArrowMetadataKey.EXTENSION_NAME) !== arrowExtension
+      ) {
         fieldMetadata.set(GeoArrowMetadataKey.EXTENSION_NAME, arrowExtension);
       }
+      fieldMetadata.set(
+        'ARROW:extension:metadata',
+        JSON.stringify({
+          geometry_type: geometryTypes[0],
+          crs: DEFAULT_CRS_NAME
+        })
+      );
       return new Field(field.name, field.type, field.nullable, fieldMetadata);
     }
     return new Field(field.name, field.type, field.nullable, field.metadata);

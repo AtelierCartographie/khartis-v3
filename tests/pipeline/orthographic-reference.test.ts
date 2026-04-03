@@ -2,6 +2,7 @@ import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import { describe, expect, it } from 'vitest';
 
 import {
+  resolveOrthographicReferenceBbox,
   resolveOrthographicReferenceTable,
   shouldUseBasemapReferenceInOrthographicView
 } from '$lib/features/map/utils/orthographic-reference';
@@ -67,5 +68,48 @@ describe('orthographic reference selection', () => {
         basemapTable
       })
     ).toBe(datasetTable);
+  });
+
+  it('keeps dataset bounds for imported geographic files even if a world basemap is loaded', () => {
+    const datasetBounds = [3.01, 43.35, 3.95, 43.9] as const;
+    const basemapProjectedBbox = [-180, -90, 180, 90] as const;
+    const basemapMainlandBbox = [-20, 10, 30, 75] as const;
+
+    expect(
+      resolveOrthographicReferenceBbox({
+        datasetBounds: [...datasetBounds],
+        shouldUseBasemapReference: false,
+        basemapProjectedBbox: [...basemapProjectedBbox],
+        basemapMainlandBbox: [...basemapMainlandBbox]
+      })
+    ).toEqual(datasetBounds);
+  });
+
+  it('prefers the projected dataset bbox for imported geographic files in orthographic mode', () => {
+    const datasetBounds = [3.01, 43.35, 3.95, 43.9] as const;
+    const datasetProjectedBbox = [402.1, 188.4, 417.9, 204.6] as const;
+
+    expect(
+      resolveOrthographicReferenceBbox({
+        datasetBounds: [...datasetBounds],
+        datasetProjectedBbox: [...datasetProjectedBbox],
+        shouldUseBasemapReference: false
+      })
+    ).toEqual(datasetProjectedBbox);
+  });
+
+  it('prefers the projected basemap bbox when a reference basemap is required', () => {
+    const datasetBounds = [3.01, 43.35, 3.95, 43.9] as const;
+    const datasetProjectedBbox = [402.1, 188.4, 417.9, 204.6] as const;
+    const basemapProjectedBbox = [-120, -60, 120, 60] as const;
+
+    expect(
+      resolveOrthographicReferenceBbox({
+        datasetBounds: [...datasetBounds],
+        datasetProjectedBbox: [...datasetProjectedBbox],
+        shouldUseBasemapReference: true,
+        basemapProjectedBbox: [...basemapProjectedBbox]
+      })
+    ).toEqual(basemapProjectedBbox);
   });
 });

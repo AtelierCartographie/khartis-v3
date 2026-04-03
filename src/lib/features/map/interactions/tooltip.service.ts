@@ -61,6 +61,32 @@ function extractEntriesFromArrowTable(
   return entries;
 }
 
+function isArrowTable(value: unknown): value is ArrowTable {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'schema' in value &&
+    'numRows' in value &&
+    'getChild' in value
+  );
+}
+
+function resolveSourceTable(info: PickingInfo): ArrowTable | null {
+  const layerData = info.layer?.props?.data;
+  if (isArrowTable(layerData)) {
+    return layerData;
+  }
+
+  if (typeof layerData === 'object' && layerData !== null) {
+    const sourceTable = Reflect.get(layerData, 'khartisSourceTable');
+    if (isArrowTable(sourceTable)) {
+      return sourceTable;
+    }
+  }
+
+  return null;
+}
+
 function extractDatasetIdFromLayerId(layerId: string): string | null {
   const parts = layerId.split('-');
   for (let i = 1; i < parts.length; i++) {
@@ -129,9 +155,9 @@ export function extractTooltipEntries(
     const feature = info.object as { properties?: Record<string, unknown> };
     entries = extractEntriesFromGeoJson(feature);
   } else {
-    const layerData = info.layer?.props?.data as ArrowTable | null;
-    if (layerData && 'schema' in layerData) {
-      entries = extractEntriesFromArrowTable(layerData, rowIndex);
+    const sourceTable = resolveSourceTable(info);
+    if (sourceTable) {
+      entries = extractEntriesFromArrowTable(sourceTable, rowIndex);
     }
   }
 
@@ -155,20 +181,30 @@ export function extractTooltipEntries(
  */
 function extractRowId(info: PickingInfo): number | null {
   if (info.index === undefined || info.index < 0) return null;
+  const rowIndex = info.index;
 
   const obj = info.object as Record<string, unknown> | null;
-  if (!obj) return null;
+  if (obj) {
+    // GeoJSON feature path
+    if ('properties' in obj) {
+      const props = obj.properties as Record<string, unknown> | undefined;
+      const id = props?.[INTERNAL_COLUMN.ID];
+      if (typeof id === 'number') return id;
+    }
 
-  // GeoJSON feature path
-  if ('properties' in obj) {
-    const props = obj.properties as Record<string, unknown> | undefined;
-    const id = props?.[INTERNAL_COLUMN.ID];
+    // Arrow row path
+    const id = obj[INTERNAL_COLUMN.ID];
     if (typeof id === 'number') return id;
   }
 
-  // Arrow row path
-  const id = obj[INTERNAL_COLUMN.ID];
-  if (typeof id === 'number') return id;
+  const sourceTable = resolveSourceTable(info);
+  if (sourceTable) {
+    const idColumn = sourceTable.getChild(INTERNAL_COLUMN.ID);
+    const tableId = idColumn?.get(rowIndex);
+    if (typeof tableId === 'number') {
+      return tableId;
+    }
+  }
 
   return null;
 }

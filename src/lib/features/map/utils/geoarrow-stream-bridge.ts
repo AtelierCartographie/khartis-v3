@@ -66,6 +66,10 @@ function resolveSimpleProjection(proj4String: string): GeoProjection {
 
 const EXPECTED_GEOM_COL = 'geometry';
 const normalizedTableCache = new WeakMap<ArrowTable, ArrowTable>();
+const projectedBboxCache = new WeakMap<
+  BasemapMetadata,
+  Map<string, [number, number, number, number] | null>
+>();
 
 function normalizeGeomColumnName(table: ArrowTable): ArrowTable {
   const cached = normalizedTableCache.get(table);
@@ -316,6 +320,12 @@ export function computeProjectedBboxForBasemap(
   const wgs84Bbox = overrideBbox ?? metadata.bbox;
   if (!wgs84Bbox) return null;
 
+  const cacheKey = `${width}x${height}:${wgs84Bbox.join(',')}`;
+  let metadataCache = projectedBboxCache.get(metadata);
+  if (metadataCache?.has(cacheKey)) {
+    return metadataCache.get(cacheKey) ?? null;
+  }
+
   const projection = buildProjectionForBasemap(
     metadata,
     width,
@@ -350,9 +360,18 @@ export function computeProjectedBboxForBasemap(
   }
   tryProject((west + east) / 2, (south + north) / 2);
 
-  if (xs.length === 0) return null;
+  const result: [number, number, number, number] | null =
+    xs.length === 0
+      ? null
+      : [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
 
-  return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+  if (!metadataCache) {
+    metadataCache = new Map();
+    projectedBboxCache.set(metadata, metadataCache);
+  }
+  metadataCache.set(cacheKey, result);
+
+  return result;
 }
 
 /**
@@ -480,6 +499,69 @@ export function pointRadiusAttr(
     radii[i] = radius;
   }
   return { value: radii, size: 1 };
+}
+
+/**
+ * Per-vertex color attribute for PathLayer binary data.
+ *
+ * Deck.gl's PathLayer expects binary attributes such as getColor/getWidth
+ * to follow the same vertex layout as getPath, not one value per path.
+ */
+export function pathColorAttr(
+  data: BinaryPathData,
+  colorLookup: (featureId: number) => [number, number, number, number]
+): DeckBinaryAttribute {
+  const vertexCount = data.positions.length / data.size;
+  const colors = new Uint8Array(vertexCount * 4);
+
+  for (let i = 0; i < data.length; i++) {
+    const color = colorLookup(data.featureIds[i]);
+    const vertexStart = data.startIndices[i];
+    const vertexEnd =
+      i + 1 < data.startIndices.length ? data.startIndices[i + 1] : vertexCount;
+
+    for (
+      let vertexIndex = vertexStart;
+      vertexIndex < vertexEnd;
+      vertexIndex++
+    ) {
+      const offset = vertexIndex * 4;
+      colors[offset] = color[0];
+      colors[offset + 1] = color[1];
+      colors[offset + 2] = color[2];
+      colors[offset + 3] = color[3];
+    }
+  }
+
+  return { value: colors, size: 4, normalized: true };
+}
+
+/**
+ * Per-vertex width attribute for PathLayer binary data.
+ */
+export function pathWidthAttr(
+  data: BinaryPathData,
+  widthLookup: (featureId: number) => number
+): DeckBinaryAttribute {
+  const vertexCount = data.positions.length / data.size;
+  const widths = new Float32Array(vertexCount);
+
+  for (let i = 0; i < data.length; i++) {
+    const width = widthLookup(data.featureIds[i]);
+    const vertexStart = data.startIndices[i];
+    const vertexEnd =
+      i + 1 < data.startIndices.length ? data.startIndices[i + 1] : vertexCount;
+
+    for (
+      let vertexIndex = vertexStart;
+      vertexIndex < vertexEnd;
+      vertexIndex++
+    ) {
+      widths[vertexIndex] = width;
+    }
+  }
+
+  return { value: widths, size: 1 };
 }
 
 // ---------------------------------------------------------------------------

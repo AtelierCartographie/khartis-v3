@@ -48,6 +48,7 @@
   import { getColorBlindnessState } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
   import { getColorBlindnessMatrix } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.filter';
   import {
+    resolveOrthographicReferenceBbox,
     resolveOrthographicReferenceTable,
     shouldUseBasemapReferenceInOrthographicView
   } from '../utils/orthographic-reference';
@@ -358,7 +359,9 @@
     buildLayerContextForViz: (viz) => mapState.buildLayerContextForViz(viz),
     getShouldRenderDatasetFallbacks: () =>
       globalState.selectedStep === ToolbarStep.Data,
-    getTableFilters: getTableFiltersForDataset
+    getTableFilters: getTableFiltersForDataset,
+    onBasemapLayersLoaded: () =>
+      scheduleLayerUpdate('useMapLayers:basemapLayersLoaded')
   });
 
   function updateCanvasSize() {
@@ -529,17 +532,9 @@
 
     if (lastApplied) {
       untrack(() => {
-        const loaded = basemapService.currentBasemap;
-        if (loaded) {
-          if (loaded.activeSimplificationLevel) {
-            const simplifiedTable = basemapService.getSimplifiedBasemapTable(
-              loaded.metadata.file,
-              loaded.activeSimplificationLevel
-            );
-            worldBaseTable = simplifiedTable ?? loaded.geometryTable;
-          } else {
-            worldBaseTable = loaded.geometryTable;
-          }
+        const resolvedGeometry = basemapService.currentGeometryTable;
+        if (resolvedGeometry) {
+          worldBaseTable = resolvedGeometry;
         }
       });
     }
@@ -572,7 +567,7 @@
 
         if (bounds) {
           untrack(() => {
-            const currentBasemapMeta = basemapService.currentBasemap?.metadata;
+            const currentBasemapMeta = basemapService.currentMetadata;
             // For composite projections (e.g. France DOM-TOM), use mainland
             // bounds so the model matrix centers on metropolitan France.
             const mainlandBbox = currentBasemapMeta
@@ -590,16 +585,40 @@
                   mainlandBbox ?? undefined
                 )
               : null;
-            if (projectedBbox) {
-              projectionStore.setReferenceBbox(projectedBbox, undefined, true);
-            } else if (mainlandBbox) {
-              projectionStore.setReferenceBbox(mainlandBbox);
-            } else {
-              const [[minX, minY], [maxX, maxY]] = bounds as [
-                [number, number],
-                [number, number]
-              ];
-              projectionStore.setReferenceBbox([minX, minY, maxX, maxY]);
+            const [[minX, minY], [maxX, maxY]] = bounds as [
+              [number, number],
+              [number, number]
+            ];
+            const datasetBbox: [number, number, number, number] = [
+              minX,
+              minY,
+              maxX,
+              maxY
+            ];
+            const datasetProjectedBbox = currentBasemapMeta
+              ? computeProjectedBboxForBasemap(
+                  currentBasemapMeta,
+                  basemapService.projectionPresets,
+                  960,
+                  600,
+                  datasetBbox
+                )
+              : null;
+            const referenceBbox = resolveOrthographicReferenceBbox({
+              datasetBounds: datasetBbox,
+              datasetProjectedBbox,
+              shouldUseBasemapReference,
+              basemapProjectedBbox: projectedBbox,
+              basemapMainlandBbox: mainlandBbox
+            });
+
+            if (referenceBbox) {
+              projectionStore.setReferenceBbox(
+                referenceBbox,
+                undefined,
+                projectedBbox === referenceBbox ||
+                  datasetProjectedBbox === referenceBbox
+              );
             }
             scheduleLayerUpdate('effect:firstTable-bounds');
             fitOrthographicViewport();
@@ -888,15 +907,23 @@
           }
 
           if (loaded) {
-            worldBaseTable = loaded.geometryTable;
+            const resolvedBasemap =
+              basemapService.getResolvedVariantData(
+                loaded.metadata.file,
+                loaded.activeSimplificationLevel ?? undefined
+              ) ?? loaded;
+            worldBaseTable = resolvedBasemap.geometryTable;
             if (!isSwitchingViewMode) {
               scheduleLayerUpdate('effect:referenceBasemapChanged');
 
               // Fit map view to new basemap bounds
               if (mapInit.viewMode === ViewMode.MAPLIBRE && mapInit.map) {
-                let bounds = calculateBoundsFromGeoArrow(loaded.geometryTable);
-                if (!bounds && loaded.metadata.bbox) {
-                  const [minLng, minLat, maxLng, maxLat] = loaded.metadata.bbox;
+                let bounds = calculateBoundsFromGeoArrow(
+                  resolvedBasemap.geometryTable
+                );
+                if (!bounds && resolvedBasemap.metadata.bbox) {
+                  const [minLng, minLat, maxLng, maxLat] =
+                    resolvedBasemap.metadata.bbox;
                   bounds = [
                     [minLng, minLat],
                     [maxLng, maxLat]
@@ -907,11 +934,11 @@
                 }
               } else if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
                 const mainlandBbox = getMainlandBboxForBasemap(
-                  loaded.metadata,
+                  resolvedBasemap.metadata,
                   basemapService.projectionPresets
                 );
                 const projectedBbox = computeProjectedBboxForBasemap(
-                  loaded.metadata,
+                  resolvedBasemap.metadata,
                   basemapService.projectionPresets,
                   960,
                   600,
@@ -927,7 +954,7 @@
                   projectionStore.setReferenceBbox(mainlandBbox);
                 } else {
                   const bounds = calculateBoundsFromGeoArrow(
-                    loaded.geometryTable
+                    resolvedBasemap.geometryTable
                   );
                   if (bounds) {
                     const [[minX, minY], [maxX, maxY]] = bounds as [
@@ -935,8 +962,10 @@
                       [number, number]
                     ];
                     projectionStore.setReferenceBbox([minX, minY, maxX, maxY]);
-                  } else if (loaded.metadata.bbox) {
-                    projectionStore.setReferenceBbox(loaded.metadata.bbox);
+                  } else if (resolvedBasemap.metadata.bbox) {
+                    projectionStore.setReferenceBbox(
+                      resolvedBasemap.metadata.bbox
+                    );
                   }
                 }
                 if (mapInit.isMapLoaded) {
@@ -988,17 +1017,22 @@
             return; // Stale request
           }
           if (refLoaded) {
-            worldBaseTable = refLoaded.geometryTable;
+            const resolvedBasemap =
+              basemapService.getResolvedVariantData(
+                refLoaded.metadata.file,
+                refLoaded.activeSimplificationLevel ?? undefined
+              ) ?? refLoaded;
+            worldBaseTable = resolvedBasemap.geometryTable;
             if (!isSwitchingViewMode) {
               scheduleLayerUpdate('loadWorldBasemap:pendingRef');
 
               if (mapInit.viewMode === ViewMode.MAPLIBRE && mapInit.map) {
                 let refBounds = calculateBoundsFromGeoArrow(
-                  refLoaded.geometryTable
+                  resolvedBasemap.geometryTable
                 );
-                if (!refBounds && refLoaded.metadata.bbox) {
+                if (!refBounds && resolvedBasemap.metadata.bbox) {
                   const [minLng, minLat, maxLng, maxLat] =
-                    refLoaded.metadata.bbox;
+                    resolvedBasemap.metadata.bbox;
                   refBounds = [
                     [minLng, minLat],
                     [maxLng, maxLat]
@@ -1009,14 +1043,14 @@
                 }
               } else if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
                 const refMainlandBbox = getMainlandBboxForBasemap(
-                  refLoaded.metadata,
+                  resolvedBasemap.metadata,
                   basemapService.projectionPresets
                 );
                 if (refMainlandBbox) {
                   projectionStore.setReferenceBbox(refMainlandBbox);
                 } else {
                   const refBounds = calculateBoundsFromGeoArrow(
-                    refLoaded.geometryTable
+                    resolvedBasemap.geometryTable
                   );
                   if (refBounds) {
                     const [[rMinX, rMinY], [rMaxX, rMaxY]] = refBounds as [
@@ -1029,8 +1063,10 @@
                       rMaxX,
                       rMaxY
                     ]);
-                  } else if (refLoaded.metadata.bbox) {
-                    projectionStore.setReferenceBbox(refLoaded.metadata.bbox);
+                  } else if (resolvedBasemap.metadata.bbox) {
+                    projectionStore.setReferenceBbox(
+                      resolvedBasemap.metadata.bbox
+                    );
                   }
                 }
                 if (mapInit.isMapLoaded) {
@@ -1049,7 +1085,12 @@
             );
             const fallback = await basemapService.loadDefaultBasemap();
             if (fallback) {
-              worldBaseTable = fallback.geometryTable;
+              const resolvedBasemap =
+                basemapService.getResolvedVariantData(
+                  fallback.metadata.file,
+                  fallback.activeSimplificationLevel ?? undefined
+                ) ?? fallback;
+              worldBaseTable = resolvedBasemap.geometryTable;
               const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
               if (canUpdate) {
                 scheduleLayerUpdate('loadWorldBasemap:refFailed');
@@ -1073,14 +1114,19 @@
       }
 
       if (loaded) {
+        const resolvedBasemap =
+          basemapService.getResolvedVariantData(
+            loaded.metadata.file,
+            loaded.activeSimplificationLevel ?? undefined
+          ) ?? loaded;
         // Set up orthographic projection from world basemap bounds
         if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
           const mainlandBbox = getMainlandBboxForBasemap(
-            loaded.metadata,
+            resolvedBasemap.metadata,
             basemapService.projectionPresets
           );
           const projectedBbox = computeProjectedBboxForBasemap(
-            loaded.metadata,
+            resolvedBasemap.metadata,
             basemapService.projectionPresets,
             960,
             600,
@@ -1089,15 +1135,17 @@
           if (projectedBbox) {
             projectionStore.setReferenceBbox(projectedBbox, undefined, true);
           } else {
-            const bounds = calculateBoundsFromGeoArrow(loaded.geometryTable);
+            const bounds = calculateBoundsFromGeoArrow(
+              resolvedBasemap.geometryTable
+            );
             if (bounds) {
               const [[minX, minY], [maxX, maxY]] = bounds as [
                 [number, number],
                 [number, number]
               ];
               projectionStore.setReferenceBbox([minX, minY, maxX, maxY]);
-            } else if (loaded.metadata.bbox) {
-              projectionStore.setReferenceBbox(loaded.metadata.bbox);
+            } else if (resolvedBasemap.metadata.bbox) {
+              projectionStore.setReferenceBbox(resolvedBasemap.metadata.bbox);
             }
           }
           if (mapInit.isMapLoaded) {
@@ -1108,15 +1156,7 @@
         }
 
         // No reference basemap — use world basemap directly
-        if (loaded.activeSimplificationLevel) {
-          const simplifiedTable = basemapService.getSimplifiedBasemapTable(
-            loaded.metadata.file,
-            loaded.activeSimplificationLevel
-          );
-          worldBaseTable = simplifiedTable ?? loaded.geometryTable;
-        } else {
-          worldBaseTable = loaded.geometryTable;
-        }
+        worldBaseTable = resolvedBasemap.geometryTable;
         const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
         if (canUpdate) {
           scheduleLayerUpdate('loadWorldBasemap');
