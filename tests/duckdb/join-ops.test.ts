@@ -14,6 +14,7 @@ import {
 vi.mock('$lib/features/map/services/basemap.service.svelte', () => ({
   basemapService: {
     initialize: vi.fn(),
+    ensureAttributesLoaded: vi.fn(),
     loadGeometryIntoDuckDB: vi.fn()
   }
 }));
@@ -276,6 +277,53 @@ describe('join-ops integration with test datasets', () => {
       { country: 'Angola', basemap_id: 'AGO', typo_match: 'exact' },
       { country: 'Armenia', basemap_id: 'ARM', typo_match: 'partial' },
       { country: 'Australia', basemap_id: null, typo_match: null }
+    ]);
+  });
+
+  it('falls back to the matched raw value when basemap attribute ids contain variant labels', async () => {
+    await db.connection.run('DROP TABLE IF EXISTS finalize_broken_id_cases');
+    await db.connection.run(`
+      CREATE TABLE finalize_broken_id_cases AS
+      SELECT * FROM (
+        VALUES
+          ('Germany'),
+          ('France')
+      ) AS rows(country)
+    `);
+
+    await db.connection.run('DELETE FROM basemap_attributes');
+    await db.connection.run(`
+      INSERT INTO basemap_attributes
+      SELECT raw, id, variant, normalize_text_join(raw), 'test-basemap', 2
+      FROM (
+        VALUES
+          ('DEU', 'DEU', 'iso3_code'),
+          ('Germany', 'iso3_code', 'name_engl'),
+          ('FRA', 'FRA', 'iso3_code'),
+          ('France', 'iso3_code', 'name_engl')
+      ) AS rows(raw, id, variant)
+    `);
+
+    await finalizeJoin(
+      {
+        ...createDataset('finalize_broken_id_cases'),
+        rowCount: 2
+      },
+      TEST_BASEMAP,
+      'country',
+      duckClient
+    );
+
+    const rows = await query(
+      db,
+      `SELECT country, basemap_id, typo_match
+       FROM finalize_broken_id_cases
+       ORDER BY country`
+    );
+
+    expect(rows).toEqual([
+      { country: 'France', basemap_id: 'France', typo_match: 'exact' },
+      { country: 'Germany', basemap_id: 'Germany', typo_match: 'exact' }
     ]);
   });
 });

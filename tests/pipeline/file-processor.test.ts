@@ -7,7 +7,9 @@ const {
   buildDatasetFromDuckTableMock,
   detectCsvHeaderMock,
   detectDecimalSeparatorMock,
-  detectGeoColumnsMock
+  detectGeoColumnsMock,
+  getProcessorMock,
+  registerAllProcessorsMock
 } = vi.hoisted(() => ({
   duckMock: {
     register_files: vi.fn(),
@@ -18,7 +20,9 @@ const {
   buildDatasetFromDuckTableMock: vi.fn(),
   detectCsvHeaderMock: vi.fn(),
   detectDecimalSeparatorMock: vi.fn(),
-  detectGeoColumnsMock: vi.fn()
+  detectGeoColumnsMock: vi.fn(),
+  getProcessorMock: vi.fn(),
+  registerAllProcessorsMock: vi.fn()
 }));
 
 vi.mock('$lib/features/duckdb', () => ({
@@ -27,6 +31,14 @@ vi.mock('$lib/features/duckdb', () => ({
 
 vi.mock('$lib/features/data-pipeline/operations/analysis', () => ({
   buildDatasetFromDuckTable: buildDatasetFromDuckTableMock
+}));
+
+vi.mock('$lib/features/data-pipeline/processors/processor-registry', () => ({
+  getProcessor: getProcessorMock
+}));
+
+vi.mock('$lib/features/data-pipeline/processors/register-processors', () => ({
+  registerAllProcessors: registerAllProcessorsMock
 }));
 
 vi.mock('$lib/features/data-pipeline/utils/csv-header-detector', () => ({
@@ -119,6 +131,7 @@ describe('file-processor', () => {
     duckMock.read_geofile.mockResolvedValue(undefined);
     duckMock.read_tabular.mockResolvedValue(undefined);
     duckMock.query.mockResolvedValue([]);
+    getProcessorMock.mockReturnValue(null);
     detectGeoColumnsMock.mockReturnValue({
       hasGeoColumns: false,
       geoColumns: [],
@@ -233,6 +246,56 @@ describe('file-processor', () => {
     const file = new File(['a,b\n1,2'], 'data.csv', { type: 'text/csv' });
 
     await expect(processFileInternal(ctx, file)).resolves.toBeDefined();
+  });
+
+  it('routes raw GPX files through the registered processor', async () => {
+    const file = new File(
+      ['<gpx><wpt lat="48.11" lon="-1.67"><name>Stop</name></wpt></gpx>'],
+      'stops.gpx',
+      { type: 'application/gpx+xml' }
+    );
+    const processorProcessMock = vi.fn().mockResolvedValue({
+      id: 'gpx-ds',
+      tableName: 'tbl_gpx',
+      sourceFileId: 'gpx-file',
+      name: 'stops.gpx',
+      columns: [],
+      rowCount: 1,
+      metadata: {
+        processedAt: new Date(),
+        fileType: 'gpx'
+      }
+    });
+
+    getProcessorMock.mockReturnValue({
+      supportedFileTypes: [],
+      canHandle: () => true,
+      process: processorProcessMock
+    });
+
+    const result = await processFileInternal(ctx, file);
+
+    expect(registerAllProcessorsMock).toHaveBeenCalledTimes(1);
+    expect(processorProcessMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tableName: expect.stringMatching(/^stops_/)
+      }),
+      expect.objectContaining({
+        name: 'stops.gpx',
+        originalFile: file
+      })
+    );
+    expect(duckMock.register_files).not.toHaveBeenCalled();
+    expect(duckMock.read_geofile).not.toHaveBeenCalled();
+    expect(buildDatasetFromDuckTableMock).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        tableName: 'tbl_gpx',
+        isGeoFile: true,
+        format: 'gpx'
+      })
+    );
+    expect(result.name).toBe('stops.gpx');
   });
 
   it('creates File from upload content (string and ArrayBuffer)', async () => {
