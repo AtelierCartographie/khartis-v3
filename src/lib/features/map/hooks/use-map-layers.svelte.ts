@@ -52,6 +52,7 @@ export interface UseMapLayersProps {
   buildLayerContextForViz: (viz: VisualizationConfig) => LayerContext;
   getShouldRenderDatasetFallbacks?: () => boolean;
   getTableFilters?: (datasetId: string) => DataTableFilter[] | undefined;
+  onBasemapLayersLoaded?: () => void;
 }
 
 export interface UseMapLayersReturn {
@@ -71,7 +72,8 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     getActiveVisualizations,
     buildLayerContextForViz,
     getShouldRenderDatasetFallbacks,
-    getTableFilters
+    getTableFilters,
+    onBasemapLayersLoaded
   } = props;
 
   const DATA_PREVIEW_FILL_COLOR: [number, number, number] = [96, 96, 96];
@@ -138,6 +140,33 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
   let lastBasemapMetadataRef: unknown = undefined;
   let lastBasemapProjectionRef: ProjectionLike | undefined = undefined;
 
+  function getRequestedMetadataLayerTypes(
+    worldBaseTable: ArrowTable | null
+  ): BasemapLayerType[] {
+    const requestedTypes = new Set<BasemapLayerType>();
+
+    for (const layer of basemapLayersStore.visibleLayers) {
+      switch (layer.id) {
+        case 'terre':
+          if (!worldBaseTable) {
+            requestedTypes.add(BasemapLayerType.LAND);
+          }
+          break;
+        case 'frontieres':
+          requestedTypes.add(BasemapLayerType.LIMIT);
+          break;
+        case 'meridiens':
+          requestedTypes.add(BasemapLayerType.GRATICULE);
+          break;
+        case 'equateur':
+          requestedTypes.add(BasemapLayerType.GEOGRAPHIC_LINES);
+          break;
+      }
+    }
+
+    return [...requestedTypes];
+  }
+
   function updateLayers(
     tables: Map<string, ArrowTable>,
     geoJSONs: Map<string, FeatureCollection>
@@ -182,7 +211,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       // Memoized: buildProjectionForBasemap() creates a new object each call,
       // defeating downstream WeakMap caches. We keep the same reference until
       // the basemap metadata actually changes.
-      const currentMetadata = basemapService.currentBasemap?.metadata;
+      const currentMetadata = basemapService.currentMetadata;
       let basemapProjection: ProjectionLike | undefined;
       if (isOrthographicMode && currentMetadata && !currentMetadata.isCustom) {
         if (currentMetadata !== lastBasemapMetadataRef) {
@@ -245,6 +274,25 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
 
           const metadataLayers: MetadataLayerEntry[] = [];
           if (currentMetadata && !currentMetadata.isCustom) {
+            const requestedLayerTypes =
+              getRequestedMetadataLayerTypes(worldBaseTable);
+            if (requestedLayerTypes.length > 0) {
+              void basemapService
+                .ensureCurrentLayersLoaded(requestedLayerTypes)
+                .then((didLoad) => {
+                  if (didLoad) {
+                    onBasemapLayersLoaded?.();
+                  }
+                })
+                .catch((error) => {
+                  logger.warn(
+                    'Deferred basemap layer loading failed',
+                    LogCategory.MAP,
+                    { basemapId: currentMetadata.file, error }
+                  );
+                });
+            }
+
             for (const layer of currentMetadata.layers) {
               if (!layer.file) continue;
               const table = basemapService.currentLayers.get(layer.file);
@@ -262,6 +310,9 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             frontieresTable:
               basemapService.getLayerTableByType(BasemapLayerType.LIMIT) ??
               undefined,
+            availableMetadataLayerTypes: currentMetadata?.layers.map(
+              (layer) => layer.type
+            ),
             metadataLayers,
             stylePresets: basemapService.stylePresets
           };
