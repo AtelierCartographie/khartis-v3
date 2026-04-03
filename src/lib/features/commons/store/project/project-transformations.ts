@@ -1,4 +1,5 @@
 import { LogCategory, logger } from '../../utils/logger';
+import type { UploadedFile } from '../create-project.types';
 import type { ColumnTransformation } from '../create-project.types';
 import type { ProjectStateContainer } from './project-state.svelte';
 import { getSourceFileIndex } from './project-files';
@@ -35,7 +36,11 @@ export async function addColumnTransformation(
 
 export async function clearColumnTransformations(
   container: ProjectStateContainer,
-  fileId: string
+  fileId: string,
+  options?: Pick<
+    UploadedFile,
+    'duckdbTableName' | 'joinedBasemap' | 'geoColumn' | 'gpsMode' | 'gpsColumns'
+  >
 ): Promise<void> {
   const fileIndex = getSourceFileIndex(container, fileId);
   if (fileIndex === -1) return;
@@ -45,7 +50,20 @@ export async function clearColumnTransformations(
   updatedFiles[fileIndex] = {
     ...updatedFiles[fileIndex],
     columnTransformations: [],
-    deletedRowIds: []
+    deletedRowIds: [],
+    ...(options?.duckdbTableName
+      ? { duckdbTableName: options.duckdbTableName }
+      : {}),
+    ...('joinedBasemap' in (options ?? {})
+      ? { joinedBasemap: options?.joinedBasemap }
+      : {}),
+    ...('geoColumn' in (options ?? {})
+      ? { geoColumn: options?.geoColumn }
+      : {}),
+    ...('gpsMode' in (options ?? {}) ? { gpsMode: options?.gpsMode } : {}),
+    ...('gpsColumns' in (options ?? {})
+      ? { gpsColumns: options?.gpsColumns }
+      : {})
   };
 
   container._state.currentProject = {
