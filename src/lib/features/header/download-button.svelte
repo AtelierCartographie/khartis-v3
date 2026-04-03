@@ -181,6 +181,18 @@
     margin-bottom: var(--cds-spacing-05);
   }
 
+  @media (max-width: 1023px) {
+    #khartis-download-button :global(.bx--btn) {
+      min-width: 3rem;
+      padding-inline: 0.75rem;
+      font-size: 0;
+    }
+
+    #khartis-download-button :global(.bx--btn__icon) {
+      margin-inline-start: 0;
+    }
+  }
+
   header {
     margin-bottom: 1rem;
   }

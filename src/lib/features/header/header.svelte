@@ -26,6 +26,7 @@
 
     <HeaderUtilities>
       <Button
+        class="header-help-button"
         size="small"
         tooltipPosition="bottom"
         tooltipAlignment="end"
@@ -56,5 +57,17 @@
 
   #khartis-header :global(.bx--header__action:hover) {
     background: var(--cds-background) !important;
+  }
+
+  @media (max-width: 1023px) {
+    #khartis-header :global(.header-help-button.bx--btn) {
+      min-width: 3rem;
+      padding-inline: 0.75rem;
+      font-size: 0;
+    }
+
+    #khartis-header :global(.header-help-button .bx--btn__icon) {
+      margin-inline-start: 0;
+    }
   }
 </style>
