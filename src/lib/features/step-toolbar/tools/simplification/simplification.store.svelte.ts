@@ -9,7 +9,10 @@ import type {
   SimplificationState
 } from './simplification.types';
 import { Duck } from '$lib/features/duckdb';
-import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
+import {
+  basemapService,
+  resolveBasemapVariantFile
+} from '$lib/features/map/services/basemap.service.svelte';
 import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
 import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
 import {
@@ -89,10 +92,11 @@ const { actions, getState } = createToolStore<
     const metadata = currentBasemap.metadata;
     const basemapId = metadata.file;
 
-    const currentLevel = metadata.simplification_level;
-    const variantFile = currentLevel
-      ? metadata.file.replace(new RegExp(`-${currentLevel}$`), `-${s.level}`)
-      : undefined;
+    const variantFile = resolveBasemapVariantFile(
+      metadata.file,
+      metadata.simplification_level,
+      s.level
+    );
     if (!variantFile) {
       logger.debug(
         'No variant available for this basemap at this level',
@@ -253,13 +257,16 @@ const { actions, getState } = createToolStore<
       if (source === SimplificationSource.Basemap && s.lastApplied) {
         const restoredLevel = s.lastApplied.level || SimplificationLevel.Medium;
         const metadata = basemapService.currentBasemap?.metadata;
-        const currentLevel = metadata?.simplification_level;
-        const hasVariant =
-          currentLevel &&
-          metadata!.file.replace(
-            new RegExp(`-${currentLevel}$`),
-            `-${restoredLevel}`
-          ) !== metadata!.file;
+        const variantFile = metadata
+          ? resolveBasemapVariantFile(
+              metadata.file,
+              metadata.simplification_level,
+              restoredLevel
+            )
+          : null;
+        const hasVariant = Boolean(
+          variantFile && variantFile !== metadata?.file
+        );
         s.level = hasVariant ? restoredLevel : SimplificationLevel.Medium;
       }
     },

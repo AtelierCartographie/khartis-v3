@@ -63,9 +63,7 @@ import {
   createSolidPolygonLayerProps,
   createPathLayerProps,
   createScatterplotLayerProps,
-  createColorAttribute,
-  createPolygonFillColorAttribute,
-  createWidthAttribute
+  createPolygonFillColorAttribute
 } from 'geoarrow-deck-stream';
 import type { ProjectionLike } from 'geoarrow-deck-stream';
 import {
@@ -75,6 +73,8 @@ import {
   parseSolidPolygonsWithProjection,
   parsePathsWithProjection,
   parsePointDataWithProjection,
+  pathColorAttr,
+  pathWidthAttr,
   pointColorAttr,
   pointRadiusAttr,
   rowAccessor,
@@ -949,7 +949,9 @@ export function createPointLayers(
   const scatterProps = createScatterplotLayerProps(pointData);
   const scatterBinaryData = scatterProps.data as {
     attributes: Record<string, unknown>;
+    khartisSourceTable?: ArrowTable;
   };
+  scatterBinaryData.khartisSourceTable = jsTable;
   if (fillColorBinAttr) {
     scatterBinaryData.attributes.getFillColor = fillColorBinAttr;
   }
@@ -1128,7 +1130,7 @@ export function createLineLayers(
 
     // Binary color attribute — must be in data.attributes for PathLayer binary data
     const colorBinaryAttr = lineColorFn
-      ? createColorAttribute(lineData, rowAccessor(jsTable, lineColorFn))
+      ? pathColorAttr(lineData, rowAccessor(jsTable, lineColorFn))
       : null;
 
     // Build width: proportional or static
@@ -1145,14 +1147,16 @@ export function createLineLayers(
         : null;
 
     const widthBinaryAttr = widthFn
-      ? createWidthAttribute(lineData, rowAccessor(jsTable, widthFn))
+      ? pathWidthAttr(lineData, rowAccessor(jsTable, widthFn))
       : null;
 
     // Inject binary attributes into data.attributes for PathLayer
     const pathProps = createPathLayerProps(lineData);
     const pathBinaryData = pathProps.data as {
       attributes: Record<string, unknown>;
+      khartisSourceTable?: ArrowTable;
     };
+    pathBinaryData.khartisSourceTable = jsTable;
     if (colorBinaryAttr) {
       pathBinaryData.attributes.getColor = colorBinaryAttr;
     }
@@ -1446,7 +1450,7 @@ export function createPolygonLayers(
       : null;
 
     const strokeColorBinaryAttr = strokeColorFn
-      ? createColorAttribute(outlineData, rowAccessor(jsTable, strokeColorFn))
+      ? pathColorAttr(outlineData, rowAccessor(jsTable, strokeColorFn))
       : null;
 
     const layers: Layer<DeckDataRow>[] = [];
@@ -1455,7 +1459,9 @@ export function createPolygonLayers(
     const solidProps = createSolidPolygonLayerProps(polyData);
     const solidBinaryData = solidProps.data as {
       attributes: Record<string, unknown>;
+      khartisSourceTable?: ArrowTable;
     };
+    solidBinaryData.khartisSourceTable = jsTable;
     if (fillColorBinaryAttr) {
       solidBinaryData.attributes.getFillColor = fillColorBinaryAttr;
     }

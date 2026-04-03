@@ -171,7 +171,7 @@ flowchart LR
 
 **JAMAIS via DuckDB**.
 
-Métadonnées dans `all-basemaps-metadata.json`. Attributs (noms de régions) dans `all-basemaps-attributes.parquet` (chargé via DuckDB pour les jointures). Couches d'habillage : terre, mers, lacs, relief, frontières, rivières, villes, équateur, méridiens.
+Métadonnées dans `all-basemaps-metadata.json`. Attributs (noms de régions) dans `all-basemaps-attributes.parquet` (chargé via DuckDB uniquement au moment d'une jointure). Les couches annexes de basemap (limites, graticules, lignes geographiques) sont chargées a la demande selon les couches visibles.
 
 ### Carte Facile
 

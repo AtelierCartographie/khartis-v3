@@ -246,6 +246,54 @@ export function parseWkbToGeoJson(wkb: Uint8Array): Geometry | null {
   }
 }
 
+function looksLikeWkbByteArray(value: unknown[]): value is number[] {
+  return (
+    value.length >= 5 &&
+    typeof value[0] === 'number' &&
+    (value[0] === 0 || value[0] === 1)
+  );
+}
+
+function normalizeArrowGeometryValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((entry) => normalizeArrowGeometryValue(entry));
+  }
+
+  if (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { x?: unknown }).x === 'number' &&
+    typeof (value as { y?: unknown }).y === 'number'
+  ) {
+    return [(value as { x: number }).x, (value as { y: number }).y] as [
+      number,
+      number
+    ];
+  }
+
+  if (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { toArray?: () => unknown }).toArray === 'function'
+  ) {
+    return normalizeArrowGeometryValue(
+      (value as { toArray: () => unknown }).toArray()
+    );
+  }
+
+  if (
+    typeof value === 'object' &&
+    value !== null &&
+    Symbol.iterator in (value as object)
+  ) {
+    return Array.from(value as Iterable<unknown>).map((entry) =>
+      normalizeArrowGeometryValue(entry)
+    );
+  }
+
+  return value;
+}
+
 export function parseGeoJsonGeometry(geom: unknown): Geometry | null {
   if (!geom) return null;
 
@@ -278,7 +326,16 @@ export function parseGeoJsonGeometry(geom: unknown): Geometry | null {
   }
 
   if (Array.isArray(geom)) {
-    return parseGeoArrowNative(geom);
+    const normalizedArray = normalizeArrowGeometryValue(geom);
+    if (
+      Array.isArray(normalizedArray) &&
+      looksLikeWkbByteArray(normalizedArray)
+    ) {
+      return parseWkbToGeoJson(new Uint8Array(normalizedArray));
+    }
+    return Array.isArray(normalizedArray)
+      ? parseGeoArrowNative(normalizedArray)
+      : null;
   }
 
   if (
@@ -286,7 +343,9 @@ export function parseGeoJsonGeometry(geom: unknown): Geometry | null {
     geom !== null &&
     typeof (geom as { toArray?: () => unknown }).toArray === 'function'
   ) {
-    const arr = (geom as { toArray: () => unknown }).toArray();
+    const arr = normalizeArrowGeometryValue(
+      (geom as { toArray: () => unknown }).toArray()
+    );
     if (arr instanceof Uint8Array) {
       return parseWkbToGeoJson(arr);
     }
@@ -299,11 +358,9 @@ export function parseGeoJsonGeometry(geom: unknown): Geometry | null {
       return parseWkbToGeoJson(uint8);
     }
     if (Array.isArray(arr)) {
-      if (arr.length > 0 && typeof arr[0] === 'number') {
+      if (looksLikeWkbByteArray(arr)) {
         const uint8 = new Uint8Array(arr as number[]);
-        if (uint8.length >= 5 && (uint8[0] === 0 || uint8[0] === 1)) {
-          return parseWkbToGeoJson(uint8);
-        }
+        return parseWkbToGeoJson(uint8);
       }
       return parseGeoArrowNative(arr);
     }
@@ -418,10 +475,14 @@ export function extractGeometryInfo(table: ArrowTable): GeometryInfo | null {
     const extensionGeometryType = arrowExtension
       ? GEO_EXTENSION_TO_TYPE[arrowExtension]
       : null;
+    const isWkbExtension =
+      arrowExtension === ArrowExtension.OGC_WKB ||
+      arrowExtension === ArrowExtension.GEOARROW_WKB;
 
     const hasMatchingGeoExtension =
       arrowExtension && expectedExtension
-        ? arrowExtension === expectedExtension ||
+        ? isWkbExtension ||
+          arrowExtension === expectedExtension ||
           (extensionGeometryType
             ? areGeometryTypesCompatible(
                 normalizedGeometryType,
@@ -446,9 +507,7 @@ export function extractGeometryInfo(table: ArrowTable): GeometryInfo | null {
         arrowExtension === ArrowExtension.GEOARROW_MULTIPOLYGON)
     );
 
-    const isWkbEncoded =
-      arrowExtension === ArrowExtension.OGC_WKB ||
-      arrowExtension === ArrowExtension.GEOARROW_WKB;
+    const isWkbEncoded = isWkbExtension;
     const isGeoJsonEncoded = arrowExtension === ArrowExtension.GEOJSON;
 
     if (!hasMatchingGeoExtension) {

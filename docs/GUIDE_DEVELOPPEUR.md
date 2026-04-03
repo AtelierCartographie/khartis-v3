@@ -103,8 +103,9 @@ Les **attributs** sont au format long (une ligne par variante d'identifiant : no
 **`basemapService`** (`map/services/basemap.service.svelte.ts`) orchestre le chargement :
 
 1. `loadMetadata()` — lit `all-basemaps-metadata.json` (catalogue global)
-2. `loadAttributesIntoDuckDB()` — enregistre `all-basemaps-attributes.parquet` dans DuckDB
-3. `loadBasemap(id)` — fetch les fichiers GeoParquet du fond selectionne, les parse en Arrow tables et les met en cache
+2. `loadBasemap(id)` — fetch le GeoParquet principal du fond selectionne, le parse en Arrow table et le met en cache
+3. `ensureCurrentLayersLoaded()` — charge a la demande les couches annexes visibles (limites, graticules, lignes geographiques)
+4. `ensureAttributesLoaded()` — enregistre `all-basemaps-attributes.parquet` dans DuckDB uniquement quand une jointure en a besoin
 
 ---
 
@@ -264,9 +265,12 @@ Ces deux operations se font **cote JavaScript sur la Arrow table en memoire** (p
 corepack enable pnpm
 git clone https://github.com/AtelierCartographie/khartis-v3.git
 cd khartis-v3
+cp .env.sample .env    # sample public, sans secrets
 pnpm install          # telecharge aussi les extensions DuckDB
 pnpm dev              # serveur de dev sur http://localhost:5176
 ```
+
+Le `.env` local doit etre en place avant de lancer le serveur. Le sample committe (`.env.sample`) reprend uniquement des valeurs non confidentielles. Par defaut, `BASE_PATH` pointe vers le chemin PPRD pour faciliter les tests de chemins deployes ; mettez `BASE_PATH=` si vous voulez servir l'application a la racine en local.
 
 ## Commandes essentielles
 
