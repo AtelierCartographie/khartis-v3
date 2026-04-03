@@ -81,6 +81,16 @@
     legendActions.updateLegendItem(id, { [field]: sanitizedValue });
   }
 
+  function getTextInputValue(
+    event: CustomEvent<string | number | null>
+  ): string {
+    return typeof event.detail === 'string'
+      ? event.detail
+      : event.detail == null
+        ? ''
+        : String(event.detail);
+  }
+
   function handleTabChange(newIndex: number): void {
     legendActions.setActiveTab(
       newIndex === 0 ? LegendTab.CONTENT : LegendTab.STYLE
@@ -165,12 +175,8 @@
                   placeholder={item.name}
                   id={`${item.id}-title`}
                   value={item.title}
-                  on:input={(e) =>
-                    updateItemField(
-                      item.id,
-                      'title',
-                      (e.currentTarget as HTMLInputElement)?.value ?? ''
-                    )}
+                  on:input={(e: CustomEvent<string | number | null>) =>
+                    updateItemField(item.id, 'title', getTextInputValue(e))}
                 />
               </Column>
             </Row>
@@ -183,12 +189,8 @@
                   placeholder={m.legend_no_subtitle()}
                   id={`${item.id}-subtitle`}
                   value={item.subtitle}
-                  on:input={(e) =>
-                    updateItemField(
-                      item.id,
-                      'subtitle',
-                      (e.currentTarget as HTMLInputElement)?.value ?? ''
-                    )}
+                  on:input={(e: CustomEvent<string | number | null>) =>
+                    updateItemField(item.id, 'subtitle', getTextInputValue(e))}
                 />
               </Column>
             </Row>
@@ -201,12 +203,8 @@
                   placeholder={m.legend_no_note()}
                   id={`${item.id}-note`}
                   value={item.note}
-                  on:input={(e) =>
-                    updateItemField(
-                      item.id,
-                      'note',
-                      (e.currentTarget as HTMLInputElement)?.value ?? ''
-                    )}
+                  on:input={(e: CustomEvent<string | number | null>) =>
+                    updateItemField(item.id, 'note', getTextInputValue(e))}
                 />
               </Column>
             </Row>

@@ -7,6 +7,7 @@ vi.mock('$lib/features/map/services/basemap.service.svelte', () => ({
 }));
 
 import { AnnotationKind } from '$lib/features/commons/constants/ui.constants';
+import { setLocale } from '$lib/paraglide/runtime.js';
 import {
   annotationsActions,
   getAnnotationsState
@@ -15,6 +16,7 @@ import { formatActions } from '$lib/features/step-toolbar/tools/format/format.st
 
 describe('annotations store grid snapping', () => {
   beforeEach(() => {
+    void setLocale('fr', { reload: false });
     formatActions.reset();
     annotationsActions.reset();
   });
@@ -48,5 +50,43 @@ describe('annotations store grid snapping', () => {
       x: 13,
       y: 37
     });
+  });
+
+  it('refreshes default page placeholders when the locale changes', async () => {
+    annotationsActions.initPageElements({
+      withPlaceholders: true,
+      visible: true
+    });
+
+    const titleBefore = getAnnotationsState().items.find(
+      (item) => item.role === 'title'
+    );
+    const sourceBefore = getAnnotationsState().items.find(
+      (item) => item.role === 'source'
+    );
+    const creditBefore = getAnnotationsState().items.find(
+      (item) => item.role === 'credit'
+    );
+
+    expect(titleBefore?.content).toBe('Ajouter un titre');
+    expect(sourceBefore?.content).toBe('Ajouter une source');
+    expect(creditBefore?.content).toBe('Réalisé avec Khartis');
+
+    await setLocale('en', { reload: false });
+    annotationsActions.refreshPageElementPlaceholders();
+
+    const titleAfter = getAnnotationsState().items.find(
+      (item) => item.role === 'title'
+    );
+    const sourceAfter = getAnnotationsState().items.find(
+      (item) => item.role === 'source'
+    );
+    const creditAfter = getAnnotationsState().items.find(
+      (item) => item.role === 'credit'
+    );
+
+    expect(titleAfter?.content).toBe('Add a title');
+    expect(sourceAfter?.content).toBe('Add a source');
+    expect(creditAfter?.content).toBe('Made with Khartis');
   });
 });
