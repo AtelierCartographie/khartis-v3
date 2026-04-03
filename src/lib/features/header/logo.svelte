@@ -61,4 +61,26 @@
   :global(html[theme='g100']) .sciences-po-logo:not(.preprod) {
     filter: invert(1);
   }
+
+  @media (max-width: 1023px) {
+    .sciences-po-logo {
+      width: 76px;
+      height: auto;
+    }
+
+    .khartis-logo {
+      width: 68px;
+      height: auto;
+    }
+  }
+
+  @media (max-width: 639px) {
+    .sciences-po-logo {
+      width: 58px;
+    }
+
+    .khartis-logo {
+      width: 54px;
+    }
+  }
 </style>
