@@ -32,11 +32,13 @@ node_modules
 .env
 .env.*
 !.env.example
+!.env.sample
 !.env.test
 .env.local
 .env.development.local
 .env.production.local
 .env.test.local
+scripts/
 
 # OS
 .DS_Store
@@ -104,6 +106,15 @@ step-toolbar-viz-tests.md
 .tmp/
 tmp/
 *.tmp
+
+# Audit artifacts
+/habillage-*.png
+/habillage-*.txt
+/viz-*.png
+/viz-*.txt
+/visualizations-lines-full.png
+/lines-import-timeout-state.png
+/lines-visualizations-console-warnings.txt
 
 # Editors/IDEs
 .vscode/
