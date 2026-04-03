@@ -47,7 +47,10 @@ vi.mock('$lib/features/commons/utils/logger', () => ({
   }
 }));
 
-import { calculateBreaks } from '$lib/features/commons/services/classification.service';
+import {
+  applyPaletteInversion,
+  calculateBreaks
+} from '$lib/features/commons/services/classification.service';
 
 const QUANTILES = 'quantiles' as ClassificationMethod;
 const STANDARD_DEVIATION = 'standard_deviation' as ClassificationMethod;
@@ -192,5 +195,17 @@ describe('classification service', () => {
       3,
       "SELECT nested_means('demo_table', 'population', 4) as breaks"
     );
+  });
+
+  it('preserves palette direction unless inversion is requested', () => {
+    const colors = ['#111111', '#222222', '#333333'];
+
+    expect(applyPaletteInversion(colors, false)).toEqual(colors);
+    expect(applyPaletteInversion(colors, true)).toEqual([
+      '#333333',
+      '#222222',
+      '#111111'
+    ]);
+    expect(colors).toEqual(['#111111', '#222222', '#333333']);
   });
 });

@@ -178,6 +178,7 @@
       label={m.color_palette()}
       colors={classesPalette}
       selectedPaletteId={visualization?.classification?.paletteId}
+      inverted={visualization?.classification?.inverted ?? false}
       oninvert={onInvertPalette}
       onClassificationChange={onClassificationChange}
     />
@@ -199,6 +200,7 @@
       label={m.color_palette()}
       colors={categoriesPalette}
       selectedPaletteId={visualization?.classification?.paletteId}
+      inverted={visualization?.classification?.inverted ?? false}
       oninvert={onInvertPalette}
       onClassificationChange={onClassificationChange}
     />

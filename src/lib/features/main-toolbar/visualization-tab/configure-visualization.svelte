@@ -16,6 +16,7 @@
     type VizDataFilter
   } from '$lib/features/commons/store/visualization.store.svelte';
   import {
+    applyPaletteInversion,
     calculateBreaks,
     generateColorsForBreaks
   } from '$lib/features/commons/services/classification.service';
@@ -105,6 +106,7 @@
           classes: 0,
           numClasses: 0,
           colors: [...DEFAULT_CATEGORICAL_COLORS],
+          inverted: false,
           labels: []
         });
         // Async: fetch actual unique values from DuckDB for label ordering
@@ -370,6 +372,10 @@
                   'sequential',
                   contrast
                 );
+          colors = applyPaletteInversion(
+            colors,
+            selectedViz.classification?.inverted ?? false
+          );
         }
         const classificationUpdate: Parameters<
           typeof visualizationStore.updateClassification
@@ -487,6 +493,7 @@
     const cbEnabled = getColorBlindnessState().enabled;
     const paletteId = selectedViz?.classification?.paletteId;
     const numColors = selectedViz?.classification?.classes;
+    const inverted = selectedViz?.classification?.inverted ?? false;
 
     untrack(() => {
       const vizId = selectedViz?.id;
@@ -500,6 +507,7 @@
       } else {
         colors = generateColorsForBreaks(numColors, 'sequential', contrast);
       }
+      colors = applyPaletteInversion(colors, inverted);
       const existing = selectedViz?.classification?.colors;
       if (
         existing &&
