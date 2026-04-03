@@ -37,6 +37,7 @@ import {
 import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
 import { importRollbackService } from './import-rollback.service';
 import {
+  applyPaletteInversion,
   calculateBreaks,
   generateColorsForBreaks
 } from './classification.service';
@@ -849,6 +850,10 @@ function createDataOrchestratorService() {
                   'sequential',
                   contrast
                 );
+          colors = applyPaletteInversion(
+            colors,
+            viz.classification?.inverted ?? false
+          );
         }
 
         visualizationStore.updateClassification(viz.id, {

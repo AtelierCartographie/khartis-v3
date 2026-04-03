@@ -8,6 +8,7 @@
     type VisualizationConfig
   } from '$lib/features/commons/store/visualization.store.svelte';
   import {
+    applyPaletteInversion,
     calculateBreaks,
     generateColorsForBreaks
   } from '$lib/features/commons/services/classification.service';
@@ -170,9 +171,16 @@
         const userPalette = visualization?.classification?.paletteId
           ? findPaletteById(visualization.classification.paletteId)
           : undefined;
-        const colors = userPalette
-          ? generatePaletteColors(userPalette, resolvedClassCount, contrast)
-          : generateColorsForBreaks(resolvedClassCount, paletteType, contrast);
+        const colors = applyPaletteInversion(
+          userPalette
+            ? generatePaletteColors(userPalette, resolvedClassCount, contrast)
+            : generateColorsForBreaks(
+                resolvedClassCount,
+                paletteType,
+                contrast
+              ),
+          visualization?.classification?.inverted ?? false
+        );
         const allBreaks = [result.min, ...result.breaks, result.max];
 
         currentNumClasses = resolvedClassCount;

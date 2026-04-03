@@ -430,6 +430,7 @@
             label={m.color_palette()}
             colors={currentPalette}
             selectedPaletteId={visualization?.classification?.paletteId}
+            inverted={visualization?.classification?.inverted ?? false}
             oninvert={onInvertPalette}
             onClassificationChange={handleClassificationChange}
           />
@@ -451,6 +452,7 @@
           <PalettePreview
             label={m.color_palette()}
             colors={qualitativePalette}
+            inverted={visualization?.classification?.inverted ?? false}
             oninvert={onInvertPalette}
             onClassificationChange={handleClassificationChange}
           />
