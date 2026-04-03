@@ -66,6 +66,9 @@ Khartis is a web application to create professional thematic maps without prior 
 # Enable Corepack (once)
 corepack enable pnpm
 
+# Create your local environment file
+cp .env.sample .env
+
 # Install dependencies (also downloads DuckDB WASM extensions)
 pnpm install
 
@@ -75,6 +78,8 @@ pnpm dev
 # Production build
 pnpm build && pnpm preview
 ```
+
+`.env` must exist before running the app locally. The committed sample (`.env.sample`) only contains non-sensitive values. By default it uses the pre-production `BASE_PATH`, which is convenient for testing deployed path prefixes; set `BASE_PATH=` in `.env` if you want a root local URL.
 
 ## Commands
 
