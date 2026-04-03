@@ -165,7 +165,10 @@ function toRgbColor(hex: string): RGBColor {
 export function createTerreLayers(
   worldBaseTable: ArrowTable,
   config: TerreLayerConfig,
-  ctx: BasemapLayerContext
+  ctx: BasemapLayerContext,
+  options?: {
+    suppressStroke?: boolean;
+  }
 ): Layer<DeckDataRow>[] {
   if (!config.visible) return [];
 
@@ -188,6 +191,8 @@ export function createTerreLayers(
   // Combined effect: ~2px borders. Cap to 0.5px max to keep borders subtle.
   const effectiveStrokeThickness = Math.min(config.strokeThickness, 0.5);
   const effectiveStrokeOpacity = Math.min(strokeOpacity, 0.4);
+  const shouldRenderStroke =
+    effectiveStrokeThickness > 0 && !options?.suppressStroke;
 
   const layerId = buildLayerId(DeckLayerId.BASEMAP_TERRE, ctx.projectionSuffix);
   const baseProps = getBaseLayerProps(ctx);
@@ -211,11 +216,14 @@ export function createTerreLayers(
     const polyData = ctx.projection
       ? parseSolidPolygonsWithProjection(worldBaseTable, ctx.projection)
       : parseSolidPolygons(worldBaseTable);
-    const outlineData = ctx.projection
-      ? parsePathsWithProjection(worldBaseTable, ctx.projection)
-      : parsePaths(worldBaseTable);
+    const outlineData =
+      config.fillShadow || shouldRenderStroke
+        ? ctx.projection
+          ? parsePathsWithProjection(worldBaseTable, ctx.projection)
+          : parsePaths(worldBaseTable)
+        : null;
 
-    if (config.fillShadow) {
+    if (config.fillShadow && outlineData) {
       layers.push(
         new PathLayer({
           id: `${layerId}-shadow`,
@@ -247,7 +255,7 @@ export function createTerreLayers(
     );
 
     // Stroke layer
-    if (effectiveStrokeThickness > 0) {
+    if (shouldRenderStroke && outlineData) {
       layers.push(
         new PathLayer({
           id: `${layerId}-stroke`,
@@ -1392,6 +1400,7 @@ function createMetadataGeoLinesLayers(
 export interface BasemapAdditionalData {
   frontieresTable?: ArrowTable;
   metadataLayers?: MetadataLayerEntry[];
+  availableMetadataLayerTypes?: BasemapLayerType[];
   stylePresets?: StylePresets | null;
 }
 
@@ -1411,6 +1420,9 @@ export function createBasemapLayers(
   const foreground: Layer<DeckDataRow>[] = [];
 
   const metaLayers = additionalData?.metadataLayers ?? [];
+  const availableMetadataLayerTypes = new Set(
+    additionalData?.availableMetadataLayerTypes ?? []
+  );
   const stylePresets = additionalData?.stylePresets ?? null;
 
   const metaByType = (type: BasemapLayerType) =>
@@ -1420,9 +1432,18 @@ export function createBasemapLayers(
   const limitEntries = metaByType(BasemapLayerType.LIMIT);
   const graticuleEntries = metaByType(BasemapLayerType.GRATICULE);
   const geoLinesEntries = metaByType(BasemapLayerType.GEOGRAPHIC_LINES);
-  const hasMetadataLimits = limitEntries.length > 0;
-  const hasMetadataGraticule = graticuleEntries.length > 0;
-  const hasMetadataGeoLines = geoLinesEntries.length > 0;
+  const hasMetadataLimits =
+    availableMetadataLayerTypes.has(BasemapLayerType.LIMIT) ||
+    limitEntries.length > 0;
+  const hasMetadataGraticule =
+    availableMetadataLayerTypes.has(BasemapLayerType.GRATICULE) ||
+    graticuleEntries.length > 0;
+  const hasMetadataGeoLines =
+    availableMetadataLayerTypes.has(BasemapLayerType.GEOGRAPHIC_LINES) ||
+    geoLinesEntries.length > 0;
+  const isFrontieresVisible = basemapLayersStore.layers.some(
+    (layer) => layer.id === BASEMAP_LAYER_ID.FRONTIERES && layer.visible
+  );
 
   for (const config of basemapLayersStore.layers) {
     if (!config.visible) continue;
@@ -1442,7 +1463,10 @@ export function createBasemapLayers(
             const terreLayers = createTerreLayers(
               worldBaseTable,
               config as TerreLayerConfig,
-              ctx
+              ctx,
+              {
+                suppressStroke: hasMetadataLimits && isFrontieresVisible
+              }
             );
             background.push(...terreLayers);
           } else if (landEntries.length > 0) {

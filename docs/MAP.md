@@ -111,6 +111,12 @@ La projection n'est recréée que quand l'utilisateur change de fond de carte. D
 
 Pourquoi c'est critique : `projSolidPolygonCache` etc. utilisent `ProjectionLike` comme clé de Map. Si un nouvel objet projection était créé à chaque render, le cache serait toujours vide.
 
+`computeProjectedBboxForBasemap()` memoize aussi ses resultats par fond + dimensions + bbox dans `geoarrow-stream-bridge.ts`, pour eviter de reprojeter plusieurs fois les memes bornes pendant les changements de vue et de fond de reference.
+
+## Chargement paresseux des fonds
+
+Le GeoParquet principal d'un fond de carte est charge immediatement, mais les couches annexes metadata-driven (limites, graticules, lignes geographiques) sont chargees a la demande selon les couches visibles. Les centroides metadata ne sont pas precharges, car le rendu courant des labels utilise les centroides calcules depuis la geometrie binaire.
+
 ---
 
 ## Pipeline GeoArrow → Deck.gl
@@ -256,6 +262,8 @@ Chaque factory dispatch :
 
 - **GeoArrow natif** → `parseSolidPolygons()` / `parsePaths()` (binaire)
 - **WKB/GeoJSON** → `getCachedBasemapGeoJSON()` → `GeoJsonLayer`
+- Quand un fond catalogue fournit déjà des couches `limit` visibles, la couche `terre`
+  évite de recalculer un `PathLayer` redondant sur le polygone principal.
 
 ---
 
