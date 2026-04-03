@@ -5,9 +5,8 @@
 
   const formatState = $derived(getFormatState());
 
-  function handleToggle(event: Event): void {
-    const e = event as CustomEvent<{ toggled: boolean }>;
-    if (e.detail.toggled !== formatState.gridEnabled) {
+  function handleToggle(event: CustomEvent<{ toggled: boolean }>): void {
+    if (event.detail.toggled !== formatState.gridEnabled) {
       formatActions.toggleGrid();
     }
   }
@@ -23,7 +22,7 @@
           labelA={m.projection_settings_no()}
           labelB={m.projection_settings_yes()}
           toggled={formatState.gridEnabled}
-          on:change={handleToggle}
+          on:toggle={handleToggle}
         />
         <p class="helper-text">{m.format_grid_description()}</p>
       </Column>

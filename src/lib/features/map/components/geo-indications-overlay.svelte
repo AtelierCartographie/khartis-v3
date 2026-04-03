@@ -61,6 +61,9 @@
   const INSET_WORLD_WINDOW_INSET = 1.5;
   const INSET_LAND_STROKE_MIN = 0.35;
   const INSET_LAND_STROKE_MAX = 0.8;
+  const OVERLAY_EDGE_OFFSET = 16;
+  const OVERLAY_STACK_GAP = 12;
+  const ORIENTATION_PANEL_VERTICAL_PADDING = 12;
 
   type WorldFeatureCollection = FeatureCollection<
     Polygon | MultiPolygon,
@@ -634,6 +637,42 @@
 
   const insetPanelBackgroundColor = $derived(insetWindowColor);
   const insetPanelBorderColor = $derived(insetWindowColor);
+  const defaultInsetTop = $derived.by(() => {
+    if (!geoIndicationsState.orientation.enabled) {
+      return OVERLAY_EDGE_OFFSET;
+    }
+
+    return (
+      OVERLAY_EDGE_OFFSET +
+      orientationSize +
+      ORIENTATION_PANEL_VERTICAL_PADDING +
+      OVERLAY_STACK_GAP
+    );
+  });
+
+  const insetPanelStyle = $derived.by(() => {
+    const styles = [
+      `background-color: ${insetPanelBackgroundColor}`,
+      `border: 1px solid ${insetPanelBorderColor}`
+    ];
+
+    if (geoIndicationsState.insetMap.dragPosition) {
+      styles.push(
+        `left: ${geoIndicationsState.insetMap.dragPosition.x}px`,
+        `top: ${geoIndicationsState.insetMap.dragPosition.y}px`,
+        'bottom: auto',
+        'right: auto'
+      );
+    } else {
+      styles.push(
+        `top: ${defaultInsetTop}px`,
+        `right: ${OVERLAY_EDGE_OFFSET}px`,
+        'bottom: auto'
+      );
+    }
+
+    return styles.join('; ');
+  });
 
   function clamp(value: number, min: number, max: number): number {
     return Math.min(max, Math.max(min, value));
@@ -974,10 +1013,7 @@
       class="inset-map-panel"
       class:draggable={isGeoIndicationsActive}
       class:dragging={currentDrag === 'inset'}
-      style="background-color: {insetPanelBackgroundColor}; border: 1px solid {insetPanelBorderColor};{geoIndicationsState
-        .insetMap.dragPosition
-        ? ` left: ${geoIndicationsState.insetMap.dragPosition.x}px; top: ${geoIndicationsState.insetMap.dragPosition.y}px; bottom: auto; right: auto;`
-        : ''}"
+      style={insetPanelStyle}
       role="button"
       tabindex="0"
       aria-label={m.tool_geo_indications()}
