@@ -204,7 +204,8 @@ export async function resetDataset(
       resetDatasetResult.name,
       {
         geoDetection: resetDatasetResult.geoDetection,
-        preserveExistingJoinState: false
+        preserveExistingJoinState: false,
+        preferredDatasetId: resetDatasetResult.id
       }
     );
 
@@ -374,7 +375,8 @@ export async function duplicateDataset(
       newDataset.sourceFileId,
       copyName,
       {
-        geoDetection: newDataset.geoDetection
+        geoDetection: newDataset.geoDetection,
+        preferredDatasetId: newDataset.id
       }
     );
 
