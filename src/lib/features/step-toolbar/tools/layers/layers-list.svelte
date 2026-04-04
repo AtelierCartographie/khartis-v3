@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { dndzone } from 'svelte-dnd-action';
+  import { dragHandleZone } from 'svelte-dnd-action';
   import { untrack } from 'svelte';
   import LayerItem from './layer-item.svelte';
   import type { Layer } from './layers.types.js';
@@ -9,7 +9,11 @@
     childLayersByParent: Record<string, Layer[]>;
     onToggleVisibility: (layerId: string) => void;
     onOpenSettings: (layerId: string) => void;
-    onReorderLayers: (fromIndex: number, toIndex: number) => void;
+    onReorderLayers: (
+      type: 'visualization' | 'geographic',
+      fromIndex: number,
+      toIndex: number
+    ) => void;
     onReorderSubLayers: (
       parentId: string,
       fromIndex: number,
@@ -87,11 +91,23 @@
     parentItems = newItems;
     draggingParent = false;
 
-    const fromIndex = parentLayers.findIndex((l) => l.id === info.id);
-    const toIndex = (newItems as Layer[]).findIndex((l) => l.id === info.id);
+    const movedLayer = parentLayers.find((layer) => layer.id === info.id);
+    if (!movedLayer) {
+      return;
+    }
+
+    const sourceItems = parentLayers.filter(
+      (layer) => layer.type === movedLayer.type
+    );
+    const targetItems = (newItems as Layer[]).filter(
+      (layer) => layer.type === movedLayer.type
+    );
+
+    const fromIndex = sourceItems.findIndex((layer) => layer.id === info.id);
+    const toIndex = targetItems.findIndex((layer) => layer.id === info.id);
 
     if (fromIndex !== -1 && toIndex !== -1 && fromIndex !== toIndex) {
-      onReorderLayers(fromIndex, toIndex);
+      onReorderLayers(movedLayer.type, fromIndex, toIndex);
     }
   }
 
@@ -121,12 +137,13 @@
 <div
   class="layers-container"
   role="list"
-  use:dndzone={{
+  use:dragHandleZone={{
     items: parentItems,
     flipDurationMs: FLIP_DURATION_MS,
     type: PARENT_DND_TYPE,
     dropTargetStyle: {},
-    transformDraggedElement: transformParentGhost
+    transformDraggedElement: transformParentGhost,
+    useCursorForDetection: true
   }}
   onconsider={handleParentConsider}
   onfinalize={handleParentFinalize}
@@ -150,11 +167,12 @@
           <div class="sublayers-line"></div>
           <div
             class="sublayers-list"
-            use:dndzone={{
+            use:dragHandleZone={{
               items: getChildren(parentLayer.id),
               flipDurationMs: FLIP_DURATION_MS,
               type: `sublayers-${parentLayer.id}`,
-              dropTargetStyle: {}
+              dropTargetStyle: {},
+              useCursorForDetection: true
             }}
             onconsider={(e: Event) => handleChildConsider(parentLayer.id, e)}
             onfinalize={(e: Event) => handleChildFinalize(parentLayer.id, e)}
