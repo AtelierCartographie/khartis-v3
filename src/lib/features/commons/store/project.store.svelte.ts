@@ -173,7 +173,7 @@ function createProjectStore() {
 
     state.currentProject.manifest.name = name;
     state.currentProject.manifest.updatedAt = new Date();
-    markDirtyFn(container);
+    markAsDirty();
     addToHistoryFn(container, 'Project name updated');
   }
 
@@ -187,7 +187,7 @@ function createProjectStore() {
       ...data
     };
     state.currentProject.manifest.updatedAt = new Date();
-    markDirtyFn(container);
+    markAsDirty();
     addToHistoryFn(container, 'Project data updated');
   }
 
@@ -202,7 +202,7 @@ function createProjectStore() {
     } as VisualizationConfig;
 
     state.currentProject.manifest.updatedAt = new Date();
-    markDirtyFn(container);
+    markAsDirty();
     addToHistoryFn(container, 'Visualization updated');
   }
 
@@ -217,19 +217,19 @@ function createProjectStore() {
     };
 
     state.currentProject.manifest.updatedAt = new Date();
-    markDirtyFn(container);
+    markAsDirty();
     addToHistoryFn(container, 'Layout updated');
   }
 
   function undo(): void {
     if (undoFn(container)) {
-      markDirtyFn(container);
+      markAsDirty();
     }
   }
 
   function redo(): void {
     if (redoFn(container)) {
-      markDirtyFn(container);
+      markAsDirty();
     }
   }
 

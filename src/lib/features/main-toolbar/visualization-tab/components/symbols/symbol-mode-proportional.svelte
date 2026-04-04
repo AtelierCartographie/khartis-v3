@@ -569,6 +569,7 @@
   visualization={visualization}
   dataFields={dataFields}
   infoText={m.stroke_section_info()}
+  showDashed={false}
   discretizationLabel={discretizationLabel}
   onStyleChange={onStyleChange}
   onModesChange={onModesChange}
