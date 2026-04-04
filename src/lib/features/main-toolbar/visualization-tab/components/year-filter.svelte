@@ -13,6 +13,8 @@
     type YearFilter
   } from '$lib/features/commons/store/visualization.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+  import { Duck } from '$lib/features/duckdb';
+  import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 
   interface Props {
     visualization: VisualizationConfig | undefined;
@@ -26,19 +28,99 @@
       : null
   );
 
-  const numericColumns = $derived(
+  const YEAR_MIN = 1000;
+  const YEAR_MAX = 3000;
+  const YEAR_NAME_PATTERN = /(^_?year$)|annee|année|year/i;
+  let yearValues = $state<number[]>([]);
+  let yearValuesRequestId = 0;
+
+  function parseYearValue(value: unknown): number | null {
+    if (typeof value === 'bigint') {
+      const numericValue = Number(value);
+      return Number.isInteger(numericValue) &&
+        numericValue >= YEAR_MIN &&
+        numericValue <= YEAR_MAX
+        ? numericValue
+        : null;
+    }
+
+    if (typeof value === 'number') {
+      return Number.isInteger(value) && value >= YEAR_MIN && value <= YEAR_MAX
+        ? value
+        : null;
+    }
+
+    if (typeof value !== 'string') {
+      return null;
+    }
+
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    const parsed = Number.parseInt(trimmed, 10);
+    return Number.isInteger(parsed) && parsed >= YEAR_MIN && parsed <= YEAR_MAX
+      ? parsed
+      : null;
+  }
+
+  function isYearColumn(columnName: string): boolean {
+    if (YEAR_NAME_PATTERN.test(columnName)) {
+      return true;
+    }
+
+    const rows = dataset?.data ?? [];
+    if (rows.length === 0) {
+      return false;
+    }
+
+    let validYears = 0;
+    let nonNullValues = 0;
+
+    for (const row of rows) {
+      const rawValue = row[columnName];
+      if (rawValue === null || rawValue === undefined || rawValue === '') {
+        continue;
+      }
+
+      nonNullValues++;
+      if (parseYearValue(rawValue) !== null) {
+        validYears++;
+      }
+    }
+
+    return nonNullValues > 0 && validYears / nonNullValues >= 0.8;
+  }
+
+  const yearColumns = $derived(
     dataset
       ? dataset.columns
-          .filter((col) => col.type === 'number')
+          .filter((col) => col.type === 'number' && isYearColumn(col.name))
           .map((col) => ({ name: col.name, text: col.name }))
       : []
   );
+
+  function collectYearValuesFromRows(
+    rows: Record<string, unknown>[],
+    columnName: string
+  ): number[] {
+    const values: number[] = [];
+    for (const row of rows) {
+      const parsed = parseYearValue(row[columnName]);
+      if (parsed !== null && !values.includes(parsed)) {
+        values.push(parsed);
+      }
+    }
+
+    return values.sort((a, b) => a - b);
+  }
 
   let selectedColumn = $state('');
   let selectedValue = $state<string | number>('');
 
   const hasYearFilter = $derived(!!visualization?.yearFilter);
-  const hasNumericColumns = $derived(numericColumns.length > 0);
+  const hasYearColumns = $derived(yearColumns.length > 0);
 
   function handleColumnChange(e: Event) {
     const target = e.target as HTMLSelectElement;
@@ -80,6 +162,24 @@
   }
 
   $effect(() => {
+    if (!selectedColumn) {
+      return;
+    }
+
+    const selectedYear =
+      typeof selectedValue === 'number'
+        ? selectedValue
+        : parseYearValue(selectedValue);
+
+    if (selectedYear === null || !yearValues.includes(selectedYear)) {
+      selectedValue = '';
+      if (visualization?.id && visualization.yearFilter) {
+        visualizationStore.setYearFilter(visualization.id, null);
+      }
+    }
+  });
+
+  $effect(() => {
     if (visualization?.yearFilter) {
       selectedColumn = visualization.yearFilter.column;
       selectedValue = visualization.yearFilter.value;
@@ -87,6 +187,49 @@
       selectedColumn = '';
       selectedValue = '';
     }
+  });
+
+  $effect(() => {
+    const currentDataset = dataset;
+    const currentColumn = selectedColumn;
+    const requestId = ++yearValuesRequestId;
+
+    if (!currentDataset || !currentColumn) {
+      yearValues = [];
+      return;
+    }
+
+    const localRows =
+      currentDataset.originalData?.data ?? currentDataset.data ?? [];
+    if (localRows.length > 0) {
+      yearValues = collectYearValuesFromRows(localRows, currentColumn);
+      return;
+    }
+
+    const escapedTable = escapeIdentifier(currentDataset.tableName);
+    const escapedColumn = escapeIdentifier(currentColumn);
+
+    void (async () => {
+      const rows = (await Duck.query(
+        `SELECT DISTINCT "${escapedColumn}" AS year_value
+         FROM "${escapedTable}"
+         WHERE "${escapedColumn}" IS NOT NULL
+         ORDER BY 1`,
+        { format: 'array' }
+      )) as Array<Record<string, unknown>>;
+
+      if (requestId !== yearValuesRequestId) {
+        return;
+      }
+
+      yearValues = rows
+        .map((row) => parseYearValue(row.year_value))
+        .filter((value): value is number => value !== null);
+    })().catch(() => {
+      if (requestId === yearValuesRequestId) {
+        yearValues = [];
+      }
+    });
   });
 </script>
 
@@ -104,7 +247,7 @@
     {/if}
   </div>
 
-  {#if !hasNumericColumns}
+  {#if !hasYearColumns}
     <InlineNotification
       kind="info"
       subtitle={m.year_filter_no_year_columns()}
@@ -120,7 +263,7 @@
         on:change={handleColumnChange}
       >
         <SelectItem value="" text={m.year_filter_select_column()} />
-        {#each numericColumns as col (col.name)}
+        {#each yearColumns as col (col.name)}
           <SelectItem value={col.name} text={col.text} />
         {/each}
       </Select>
@@ -133,12 +276,9 @@
           on:change={handleValueChange}
         >
           <SelectItem value="" text={m.year_filter_select_value()} />
-          <SelectItem value="2020" text="2020" />
-          <SelectItem value="2021" text="2021" />
-          <SelectItem value="2022" text="2022" />
-          <SelectItem value="2023" text="2023" />
-          <SelectItem value="2024" text="2024" />
-          <SelectItem value="2025" text="2025" />
+          {#each yearValues as year (year)}
+            <SelectItem value={String(year)} text={String(year)} />
+          {/each}
         </Select>
       {/if}
     </div>
