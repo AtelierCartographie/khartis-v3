@@ -204,6 +204,7 @@ export const duckDBOrchestrator = {
     options?: {
       geoDetection?: GeoDetectionResult;
       preserveExistingJoinState?: boolean;
+      preferredDatasetId?: string;
     }
   ): Promise<DuckDBDataset | null> {
     await ensureInitialized();

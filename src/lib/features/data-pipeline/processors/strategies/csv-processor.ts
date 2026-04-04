@@ -83,7 +83,7 @@ async function processWithLegacy(
   });
 
   return {
-    id: file.id,
+    id: file.datasetId ?? file.id,
     tableName: actualTableName,
     sourceFileId: file.id,
     name: file.name,
