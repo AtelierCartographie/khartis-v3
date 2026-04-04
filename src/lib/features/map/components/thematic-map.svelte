@@ -69,7 +69,10 @@
     onReady,
     forcedVisualizationIds,
     onMoveSync,
-    syncViewState
+    syncViewState,
+    showLegendOverlay = true,
+    showGeoIndicationsOverlay = true,
+    showAnnotationOverlay = true
   }: DeckMapProps = $props();
 
   const hasData = $derived(tables.size > 0 || geoJSONs.size > 0);
@@ -1292,10 +1295,16 @@
       </div>
     {/if}
 
-    <LegendOverlay />
+    {#if showLegendOverlay}
+      <LegendOverlay />
+    {/if}
 
-    <GeoIndicationsOverlay interactive={isStylingMode} />
-    <AnnotationOverlay interactive={isStylingMode} />
+    {#if showGeoIndicationsOverlay}
+      <GeoIndicationsOverlay interactive={isStylingMode} />
+    {/if}
+    {#if showAnnotationOverlay}
+      <AnnotationOverlay interactive={isStylingMode} />
+    {/if}
   </div>
 </div>
 
