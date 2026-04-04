@@ -152,7 +152,7 @@
     return primitiveFilters.includes(PrimitiveFilterType.LINE);
   });
   let dashed = $state<boolean>(false);
-  let showMissingData = $state<boolean>(false);
+  let showMissingData = $state<boolean>(true);
   let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
   let missingDataOpacity = $state<number>(VISUALIZATION_DEFAULTS.lineOpacity);
   let missingDataShape = $state<MissingDataShape>(MissingDataShape.CIRCLE);
@@ -179,7 +179,7 @@
       colorMode = visualization.modes.color ?? ColorMode.UNIQUE;
     }
     if (visualization?.missingData) {
-      showMissingData = visualization.missingData.enabled ?? false;
+      showMissingData = visualization.missingData.show ?? true;
       missingDataColor =
         visualization.missingData.color ?? DEFAULT_COLORS.missingData;
       missingDataOpacity =
@@ -251,7 +251,7 @@
 
   function handleMissingDataToggle(checked: boolean) {
     showMissingData = checked;
-    onMissingDataChange?.({ enabled: checked });
+    onMissingDataChange?.({ show: checked });
   }
 
   function handleMissingDataColorChange(value: string) {

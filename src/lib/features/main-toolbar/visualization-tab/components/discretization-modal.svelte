@@ -18,7 +18,7 @@
   } from './palette-popover/palette.constants';
   import { getColorBlindnessState } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
-  import { untrack } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import {
     DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX,
     normalizeClassificationMethod,
@@ -92,6 +92,7 @@
   let currentBreaks = $state<ClassBreak[]>([]);
   let currentBreakpoint = $state<number | null>(null);
   let headTailClassCountMax = $state(DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX);
+  let wasOpen = $state(false);
 
   $effect(() => {
     if (visualization?.classification) {
@@ -119,13 +120,24 @@
   });
 
   $effect(() => {
-    if (
+    const shouldComputeOnOpen =
       open &&
+      !wasOpen &&
       visualization?.datasetId &&
-      visualization?.mapping.valueColumn
-    ) {
-      untrack(() => computeBreaks());
+      visualization?.mapping.valueColumn;
+
+    wasOpen = open;
+
+    if (!shouldComputeOnOpen) {
+      return;
     }
+
+    untrack(async () => {
+      // Let the Carbon modal mount and settle its focus trap before kicking off
+      // classification work that updates parent state.
+      await tick();
+      await computeBreaks();
+    });
   });
 
   async function computeBreaks() {
