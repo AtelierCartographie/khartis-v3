@@ -245,7 +245,8 @@ function createDataOrchestratorService() {
         dataset.sourceFileId || file.id,
         file.name,
         {
-          geoDetection: dataset.geoDetection
+          geoDetection: dataset.geoDetection,
+          preferredDatasetId: dataset.id
         }
       );
 
@@ -356,7 +357,8 @@ function createDataOrchestratorService() {
           dataset.sourceFileId || file.id,
           file.name,
           {
-            geoDetection: dataset.geoDetection
+            geoDetection: dataset.geoDetection,
+            preferredDatasetId: dataset.id
           }
         );
 
@@ -987,12 +989,14 @@ function createDataOrchestratorService() {
     // No breaks at all
     if (!breaks || breaks.length < 2) return true;
 
-    // Breaks/colors mismatch: for N colors we expect N-1 or N+1 breaks
-    // A large mismatch (e.g. 32 breaks for 5 colors) means the
-    // serialized data is corrupted — recompute.
+    // Breaks/colors mismatch: for N colors we support either:
+    // - N-1 internal thresholds (current classification flow)
+    // - N lower bounds (legacy serialized projects)
+    // Anything else likely means corrupted serialized state — recompute.
     if (colors && colors.length > 0) {
-      const expectedBreaks = colors.length - 1;
-      if (Math.abs(breaks.length - expectedBreaks) > 2) {
+      const isInternalThresholdShape = breaks.length === colors.length - 1;
+      const isLegacyLowerBoundShape = breaks.length === colors.length;
+      if (!isInternalThresholdShape && !isLegacyLowerBoundShape) {
         logger.warn(
           'Breaks/colors mismatch detected, will recompute',
           LogCategory.DATA,
@@ -1000,7 +1004,7 @@ function createDataOrchestratorService() {
             vizId: viz.id,
             breaksLength: breaks.length,
             colorsLength: colors.length,
-            expectedBreaks
+            expectedBreaks: [colors.length - 1, colors.length]
           }
         );
         return true;
@@ -1102,17 +1106,29 @@ function createDataOrchestratorService() {
     // lose their manual choice (e.g. "entity" for fuzzy-countries) on reload.
     if (currentProject?.data?.sourceFiles) {
       const primaryFile = currentProject.data.sourceFiles.find(
-        (f) => f.geoColumn
+        (f) => f.geoColumn || f.joinedBasemap || f.gpsMode
       );
       logger.debug('Geo column restore check', LogCategory.DATA, {
         hasSourceFiles: true,
         primaryFileName: primaryFile?.name,
         geoColumn: primaryFile?.geoColumn,
-        joinedBasemap: primaryFile?.joinedBasemap
+        joinedBasemap: primaryFile?.joinedBasemap,
+        gpsMode: primaryFile?.gpsMode,
+        gpsColumns: primaryFile?.gpsColumns
       });
-      if (primaryFile?.geoColumn) {
+      if (primaryFile?.joinedBasemap) {
+        dataTabActions.selectBasemap(primaryFile.joinedBasemap);
+      }
+      if (primaryFile?.gpsMode && primaryFile.gpsColumns) {
+        dataTabActions.setGeolocationState({
+          linkedVariable: null,
+          linkedVariableName: '',
+          latitudeColumn: primaryFile.gpsColumns.lat,
+          longitudeColumn: primaryFile.gpsColumns.lon,
+          autoDetected: false
+        });
+      } else if (primaryFile?.geoColumn) {
         const geoCol = primaryFile.geoColumn;
-        const basemap = primaryFile.joinedBasemap;
         // Defer restoration until dataset is fully loaded. The component's
         // $effect resets linkedVariable when the dataset ID changes, so we
         // must wait for that reset to happen first, then override.
@@ -1136,9 +1152,6 @@ function createDataOrchestratorService() {
               geoCol,
               colIndex
             });
-          }
-          if (basemap) {
-            dataTabActions.selectBasemap(basemap);
           }
         };
         // Wait 2s for all Svelte $effects to settle after dataset loading
