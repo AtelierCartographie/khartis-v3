@@ -25,6 +25,15 @@ import { addToHistory, resetHistory } from './project-history';
 function syncGeoInfoToSourceFiles(container: ProjectStateContainer): void {
   const files = container._state.currentProject?.data?.sourceFiles;
   if (!files) return;
+  const selectedSourceFileId = datasetsStore.selectedDataset?.sourceFileId;
+  const selectedGpsColumns =
+    dataTabState.geolocation.latitudeColumn &&
+    dataTabState.geolocation.longitudeColumn
+      ? {
+          lat: dataTabState.geolocation.latitudeColumn,
+          lon: dataTabState.geolocation.longitudeColumn
+        }
+      : undefined;
 
   for (const file of files) {
     // First try DuckDB dataset (set after finalizeJoin)
@@ -41,12 +50,35 @@ function syncGeoInfoToSourceFiles(container: ProjectStateContainer): void {
     if (duckDataset?.joinedBasemap) {
       file.joinedBasemap = duckDataset.joinedBasemap;
     }
+    if (duckDataset?.gpsMode) {
+      file.gpsMode = true;
+      file.gpsColumns = duckDataset.gpsColumns;
+      file.geoColumn = undefined;
+    }
 
     // Fallback: use UI state for the selected dataset
-    if (!file.geoColumn && dataTabState.geolocation.linkedVariableName) {
+    if (
+      file.id === selectedSourceFileId &&
+      selectedGpsColumns &&
+      !file.gpsMode
+    ) {
+      file.gpsMode = true;
+      file.gpsColumns = selectedGpsColumns;
+      file.geoColumn = undefined;
+    }
+    if (
+      file.id === selectedSourceFileId &&
+      !file.gpsMode &&
+      !file.geoColumn &&
+      dataTabState.geolocation.linkedVariableName
+    ) {
       file.geoColumn = dataTabState.geolocation.linkedVariableName;
     }
-    if (!file.joinedBasemap && dataTabState.basemapJoin.selectedBasemap) {
+    if (
+      file.id === selectedSourceFileId &&
+      !file.joinedBasemap &&
+      dataTabState.basemapJoin.selectedBasemap
+    ) {
       file.joinedBasemap = dataTabState.basemapJoin.selectedBasemap;
     }
   }
