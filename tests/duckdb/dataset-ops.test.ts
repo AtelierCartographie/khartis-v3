@@ -161,4 +161,36 @@ describe('duckdb dataset registration', () => {
       })
     );
   });
+
+  it('reuses the preferred stable dataset id when no DuckDB entry exists yet', async () => {
+    const duck = {
+      query: vi.fn().mockResolvedValue([{ table_name: 'table_registered' }]),
+      analyse: vi.fn().mockResolvedValue([{ name: 'value' }])
+    };
+    const callbacks = {
+      getRowCount: vi.fn().mockResolvedValue(42),
+      createArrowTableWithMetadata: vi.fn(),
+      prefetchArrowMetadata: vi.fn().mockResolvedValue(undefined)
+    };
+
+    const dataset = await registerExistingTable(
+      'table_registered',
+      'sf1',
+      'example.csv',
+      duck,
+      callbacks,
+      {
+        preferredDatasetId: 'stable-dataset-id'
+      }
+    );
+
+    expect(dataset?.id).toBe('stable-dataset-id');
+    expect(getDatasetBySourceFile('sf1')).toEqual(
+      expect.objectContaining({
+        id: 'stable-dataset-id',
+        sourceFileId: 'sf1',
+        tableName: 'table_registered'
+      })
+    );
+  });
 });
