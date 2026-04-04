@@ -70,6 +70,53 @@
     return value.toFixed(1);
   }
 
+  function getColorScaleLabel(
+    breaks: number[],
+    colorCount: number,
+    index: number
+  ): string {
+    if (breaks.length === 0) {
+      return '';
+    }
+
+    if (colorCount === breaks.length + 1) {
+      const firstBreak = breaks[0];
+      if (index === 0) {
+        return firstBreak !== undefined
+          ? `< ${formatBreakValue(firstBreak)}`
+          : '';
+      }
+
+      if (index < breaks.length) {
+        const lowerBreak = breaks[index - 1];
+        const upperBreak = breaks[index];
+        return lowerBreak !== undefined && upperBreak !== undefined
+          ? `${formatBreakValue(lowerBreak)} – ${formatBreakValue(upperBreak)}`
+          : '';
+      }
+
+      const lastBreak = breaks[breaks.length - 1];
+      return lastBreak !== undefined ? `≥ ${formatBreakValue(lastBreak)}` : '';
+    }
+
+    if (colorCount === breaks.length) {
+      if (index < breaks.length - 1) {
+        const lowerBreak = breaks[index];
+        const upperBreak = breaks[index + 1];
+        return lowerBreak !== undefined && upperBreak !== undefined
+          ? `${formatBreakValue(lowerBreak)} – ${formatBreakValue(upperBreak)}`
+          : '';
+      }
+
+      const lastBreak = breaks[breaks.length - 1];
+      return lastBreak !== undefined ? `≥ ${formatBreakValue(lastBreak)}` : '';
+    }
+
+    const fallbackBreak =
+      index < breaks.length ? breaks[index] : breaks[breaks.length - 1];
+    return fallbackBreak !== undefined ? formatBreakValue(fallbackBreak) : '';
+  }
+
   const legendState = $derived(getLegendState());
   const visibleItems = $derived(legendState.items.filter((i) => i.visible));
 
@@ -289,13 +336,7 @@
                     {/if}
                   </span>
                   <span class="legend-scale-label">
-                    {#if i < breaks.length - 1}
-                      {formatBreakValue(breaks[i])} – {formatBreakValue(
-                        breaks[i + 1]
-                      )}
-                    {:else if breaks.length > 0}
-                      ≥ {formatBreakValue(breaks[breaks.length - 1])}
-                    {/if}
+                    {getColorScaleLabel(breaks, colors.length, i)}
                   </span>
                 </div>
               {/each}
