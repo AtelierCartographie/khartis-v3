@@ -11,7 +11,11 @@
   import { facetsStore, SCALE_MODE } from './facets.store.svelte';
   import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
-  import { createProjectActions } from '$lib/features/commons/store/create-project.store.svelte';
+  import {
+    globalActions,
+    globalState
+  } from '$lib/features/commons/store/global.svelte';
+  import { ToolbarStep } from '$lib/features/commons/types/global';
   import { COLUMN_TYPE_GEOMETRY } from '$lib/features/commons/constants/data.constants';
 
   const selectedViz = $derived(visualizationStore.selectedVisualization);
@@ -94,7 +98,14 @@
   }
 
   function handleConfigureVisualization() {
-    createProjectActions.selectTab(2);
+    globalState.selectedTool = undefined;
+    globalActions.setNavigationState(ToolbarStep.Visualizations);
+
+    setTimeout(() => {
+      document
+        .querySelector('#choose-visualization')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
   }
 
   function handleExit() {

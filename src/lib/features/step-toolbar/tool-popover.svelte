@@ -39,6 +39,10 @@
     // Keep the tool open while the user is drawing on the map
     if (getAnnotationsState().isDrawingMode) return;
 
+    // Drag-and-drop interactions can end with a synthetic click target
+    // outside the popover while the dragged clone still exists.
+    if (document.getElementById('dnd-action-dragged-el')) return;
+
     const toolbar = document.getElementById(DOM_IDS.STEP_TOOLBAR);
     const target = event.detail?.originalEvent?.target as Node;
 

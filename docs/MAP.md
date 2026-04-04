@@ -258,6 +258,17 @@ Tente dans l'ordre :
 
 9 couches : `background` (terre, mers, lacs, relief) + `foreground` (frontières, rivières, équateur, méridiens, villes).
 
+Les sections `Lacs et rivières` et `Villes` sont maintenant explicitement
+désactivées quand le fond de carte actif ne fournit pas les données
+géométriques nécessaires. Cela évite un faux positif UX où un clic changeait
+des réglages sans aucun effet visuel sur la carte.
+
+Les toggles `Pointillés` des sections `Frontières/limites`, `Équateur` et
+`Méridiens/parallèles` sont aussi désactivés quand le fond actif est piloté par
+des couches metadata (`limit`, `graticule`, `geographic-lines`). Sur ces
+sources, le rendu en tirets n'était pas fiable visuellement ; Khartis préfère
+désormais l'indiquer clairement plutôt que de laisser un contrôle mensonger.
+
 Chaque factory dispatch :
 
 - **GeoArrow natif** → `parseSolidPolygons()` / `parsePaths()` (binaire)

@@ -97,15 +97,27 @@
     );
   }
 
-  function handleFontFamilyChange(): void {
-    if (localFontFamily !== legendState.style.fontFamily) {
-      legendActions.updateStyle({ fontFamily: localFontFamily });
+  function handleFontFamilyChange(event: Event): void {
+    const nextFontFamily = (event.currentTarget as HTMLSelectElement).value;
+    localFontFamily = nextFontFamily;
+
+    if (nextFontFamily !== legendState.style.fontFamily) {
+      legendActions.updateStyle({ fontFamily: nextFontFamily });
     }
   }
 
-  function handleFontSizeChange(): void {
-    if (localFontSize !== legendState.style.fontSize) {
-      legendActions.updateStyle({ fontSize: localFontSize });
+  function handleFontSizeChange(event: Event): void {
+    const nextFontSize = Number(
+      (event.currentTarget as HTMLSelectElement).value
+    );
+    if (!Number.isFinite(nextFontSize)) {
+      return;
+    }
+
+    localFontSize = nextFontSize;
+
+    if (nextFontSize !== legendState.style.fontSize) {
+      legendActions.updateStyle({ fontSize: nextFontSize });
     }
   }
 
@@ -229,7 +241,7 @@
               <Select
                 id={DOM_IDS.FONT_SELECT}
                 labelText={m.legend_font()}
-                bind:selected={localFontFamily}
+                selected={localFontFamily}
                 on:change={handleFontFamilyChange}
                 size="sm"
               >
@@ -242,7 +254,7 @@
               <Select
                 id={DOM_IDS.FONT_SIZE}
                 labelText={m.legend_font_size()}
-                bind:selected={localFontSize}
+                selected={String(localFontSize)}
                 on:change={handleFontSizeChange}
                 size="sm"
               >

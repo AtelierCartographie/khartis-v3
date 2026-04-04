@@ -41,7 +41,7 @@ Chaque colonne est classée selon son **type sémiotique** (semioType) à partir
 
 **Choroplèthe** : polygones colorés selon une variable de ratio (densité, taux, pourcentage). Classification en classes → palette séquentielle ou divergente.
 
-**Proportionnel** : symboles dont la taille est proportionnelle à une valeur absolue (QTA : population, surface). Échelle linéaire, sqrt ou log.
+**Proportionnel** : symboles dont la taille est proportionnelle à une valeur absolue (QTA : population, surface). Échelle linéaire, sqrt ou log. Sur données polygonales, les symboles sont rendus sur les centroïdes des entités, en complément du fond polygonal.
 
 **Catégoriel** : couleurs différentes par catégorie (QL : pays, régions). Palette qualitative. Pas de classement ordre.
 
@@ -121,6 +121,7 @@ Couleur via `@ateliercartographie/ok-palette` en **espace Oklch** (perceptuellem
 4. Retourner les 3 meilleures par score calculé (`avgScore / 6.5 * 100`)
 
 **Mapping** : `visualization-tab/suggestion.utils.ts::mapSuggestionToType()` fait la correspondance suggestion ID → `VisualizationType`.
+La sélection d'une suggestion réapplique le preset complet du type cible (modes, primitives, style, mapping, classification) avant d'affecter les colonnes proposées.
 
 ---
 

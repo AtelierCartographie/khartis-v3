@@ -174,6 +174,10 @@
       geoIndicationsState.scale.color.lightness
     )
   );
+  const scaleFontFamily = $derived(
+    `${geoIndicationsState.scale.fontFamily}, sans-serif`
+  );
+  const scaleFontSize = $derived(geoIndicationsState.scale.fontSize);
 
   const orientationColor = $derived(
     hslToHex(
@@ -754,15 +758,24 @@
 
     const scale = globalState.zoom.pageZoomLevel / 100;
     const rect = overlayElement.getBoundingClientRect();
+    const dragElement =
+      currentDrag === 'scale'
+        ? scaleElement
+        : currentDrag === 'orientation'
+          ? orientationElement
+          : insetMapElement;
+    const dragRect = dragElement?.getBoundingClientRect() ?? null;
+    const dragWidth = dragRect ? dragRect.width / scale : 0;
+    const dragHeight = dragRect ? dragRect.height / scale : 0;
     const x = clamp(
       (event.clientX - rect.left) / scale - dragOffsetX,
       0,
-      Math.max(0, rect.width / scale - 10)
+      Math.max(0, rect.width / scale - dragWidth)
     );
     const y = clamp(
       (event.clientY - rect.top) / scale - dragOffsetY,
       0,
-      Math.max(0, rect.height / scale - 10)
+      Math.max(0, rect.height / scale - dragHeight)
     );
 
     if (currentDrag === 'scale') {
@@ -887,8 +900,8 @@
             y="10"
             text-anchor="middle"
             fill={scaleColor}
-            font-size="11"
-            font-family="Arial, sans-serif"
+            font-size={scaleFontSize}
+            font-family={scaleFontFamily}
           >
             {scaleLabel}
           </text>
@@ -917,8 +930,8 @@
             y="11"
             text-anchor="middle"
             fill={scaleColor}
-            font-size="11"
-            font-family="Arial, sans-serif"
+            font-size={scaleFontSize}
+            font-family={scaleFontFamily}
           >
             {scaleLabel}
           </text>
