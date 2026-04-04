@@ -279,7 +279,8 @@ describe('duplicateDataset', () => {
       'new-file-id',
       'renamed-source.csv (copie)',
       {
-        geoDetection: undefined
+        geoDetection: undefined,
+        preferredDatasetId: 'new-dataset-id'
       }
     );
     expect(state.datasets).toEqual(
@@ -471,7 +472,8 @@ describe('resetDataset', () => {
         geoDetection: expect.objectContaining({
           geoColumns: expect.any(Array)
         }),
-        preserveExistingJoinState: false
+        preserveExistingJoinState: false,
+        preferredDatasetId: 'dataset-id'
       }
     );
     expect(mocks.loadBasemapCatalogMock).toHaveBeenCalled();
