@@ -64,6 +64,8 @@
     id: string;
     offsetX: number;
     offsetY: number;
+    width: number;
+    height: number;
   } | null>(null);
   let resizeState = $state<{
     id: string;
@@ -144,8 +146,8 @@
 
     const scale = globalState.zoom.pageZoomLevel / 100;
     const rect = overlayElement.getBoundingClientRect();
-    const maxX = Math.max(0, rect.width / scale - 10);
-    const maxY = Math.max(0, rect.height / scale - 10);
+    const maxX = Math.max(0, rect.width / scale - dragState.width);
+    const maxY = Math.max(0, rect.height / scale - dragState.height);
 
     let x = (event.clientX - rect.left) / scale - dragState.offsetX;
     let y = (event.clientY - rect.top) / scale - dragState.offsetY;
@@ -175,10 +177,17 @@
 
     const scale = globalState.zoom.pageZoomLevel / 100;
     const rect = overlayElement.getBoundingClientRect();
+    const currentTarget = event.currentTarget;
+    const targetRect =
+      currentTarget instanceof HTMLElement
+        ? currentTarget.getBoundingClientRect()
+        : null;
     dragState = {
       id: item.id,
       offsetX: (event.clientX - rect.left) / scale - item.position.x,
-      offsetY: (event.clientY - rect.top) / scale - item.position.y
+      offsetY: (event.clientY - rect.top) / scale - item.position.y,
+      width: targetRect ? targetRect.width / scale : 0,
+      height: targetRect ? targetRect.height / scale : 0
     };
 
     window.addEventListener(EVENT.POINTERMOVE, handlePointerMove);

@@ -30,6 +30,7 @@
     visualization?: VisualizationConfig;
     dataFields?: Array<{ id: number; text: string }>;
     infoText?: string;
+    showDashed?: boolean;
     classesPalette?: string[];
     categoriesPalette?: string[];
     discretizationLabel?: string;
@@ -58,6 +59,7 @@
     visualization,
     dataFields = [],
     infoText,
+    showDashed = true,
     classesPalette = DEFAULT_SEQUENTIAL_PALETTE,
     categoriesPalette = DEFAULT_QUALITATIVE_PALETTE,
     discretizationLabel,
@@ -206,11 +208,13 @@
     />
   {/if}
 
-  <ToggleWithLabel
-    label={m.dashed()}
-    toggled={strokeDashed}
-    ontoggle={handleStrokeDashedChange}
-  />
+  {#if showDashed}
+    <ToggleWithLabel
+      label={m.dashed()}
+      toggled={strokeDashed}
+      ontoggle={handleStrokeDashedChange}
+    />
+  {/if}
 
   <SliderWithInput
     label={m.opacity()}

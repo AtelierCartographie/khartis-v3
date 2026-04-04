@@ -181,7 +181,7 @@
 
     if (selectedViz && existingVizs.some((v) => v.id === selectedViz.id)) {
       const vizType = mapSuggestionToType(suggestion.id);
-      visualizationStore.updateVisualization(selectedViz.id, { type: vizType });
+      visualizationStore.applyVisualizationPreset(selectedViz.id, vizType);
       applySuggestionMapping(selectedViz.id, vizType, suggestion);
     }
   }
