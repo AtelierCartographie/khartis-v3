@@ -17,6 +17,25 @@ export interface CategoricalStatistics {
 
 export type ColumnStatistics = NumericStatistics | CategoricalStatistics;
 
+function parseNumericValue(value: unknown): number | null {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const normalized = trimmed.replace(/[\u00A0\u202F\s]/g, '').replace(',', '.');
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function calculateMedian(numbers: number[]): number {
   const sorted = [...numbers].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
@@ -58,7 +77,14 @@ export function getColumnStatistics(
   const nonNullValues = values.filter((v) => v !== null && v !== undefined);
 
   if (column.type === 'number') {
-    const numbers = nonNullValues.map(Number).filter((n) => !isNaN(n));
+    const numbers = nonNullValues
+      .map(parseNumericValue)
+      .filter((value): value is number => value !== null);
+
+    if (numbers.length === 0) {
+      return null;
+    }
+
     return {
       min: Math.min(...numbers),
       max: Math.max(...numbers),
