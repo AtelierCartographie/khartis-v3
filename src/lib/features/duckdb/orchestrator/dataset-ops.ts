@@ -49,6 +49,7 @@ export async function registerExistingTable(
   options?: {
     geoDetection?: GeoDetectionResult;
     preserveExistingJoinState?: boolean;
+    preferredDatasetId?: string;
   }
 ): Promise<DuckDBDataset | null> {
   const start = performance.now();
@@ -76,7 +77,10 @@ export async function registerExistingTable(
       options?.preserveExistingJoinState === false ? null : existingDataset;
 
     const dataset: DuckDBDataset = {
-      id: existingDataset?.id ?? crypto.randomUUID(),
+      id:
+        options?.preferredDatasetId ??
+        existingDataset?.id ??
+        crypto.randomUUID(),
       tableName,
       sourceFileId,
       name: fileName,
