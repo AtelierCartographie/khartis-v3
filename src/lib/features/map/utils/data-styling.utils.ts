@@ -87,7 +87,7 @@ export function getSizeForValue(
 ): number {
   if (max === min) return (minSize + maxSize) / 2;
 
-  const normalized = (value - min) / (max - min);
+  const normalized = Math.min(1, Math.max(0, (value - min) / (max - min)));
 
   switch (scale) {
     case ScaleType.SQRT:
@@ -179,6 +179,17 @@ export function getCategoricalColorMap(
   });
 
   return colorMap;
+}
+
+export function hasCompleteCategoricalColorMap(
+  categories: string[],
+  categoryColorMap: Map<string, [number, number, number]> | null | undefined
+): boolean {
+  if (!categoryColorMap || categoryColorMap.size !== categories.length) {
+    return false;
+  }
+
+  return categories.every((category) => categoryColorMap.has(category));
 }
 
 export function shouldApplyChoropleth(viz: VisualizationConfig): boolean {
