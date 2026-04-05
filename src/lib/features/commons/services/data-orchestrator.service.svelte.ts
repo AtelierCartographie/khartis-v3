@@ -763,7 +763,7 @@ function createDataOrchestratorService() {
           }
         }
 
-        if (!file.originalFile) {
+        if (!file.originalFile && file.content) {
           try {
             file.originalFile = await createFileFromUpload(file);
           } catch (err) {
