@@ -22,6 +22,11 @@ function parseNumericValue(value: unknown): number | null {
     return Number.isFinite(value) ? value : null;
   }
 
+  if (typeof value === 'bigint') {
+    const numericValue = Number(value);
+    return Number.isFinite(numericValue) ? numericValue : null;
+  }
+
   if (typeof value !== 'string') {
     return null;
   }
@@ -72,6 +77,30 @@ export function getColumnStatistics(
 
   const column = dataset.columns.find((c) => c.name === columnName);
   if (!column) return null;
+
+  if (column.stats) {
+    if (column.type === 'number') {
+      const min = parseNumericValue(column.stats.min);
+      const max = parseNumericValue(column.stats.max);
+
+      if (min !== null && max !== null) {
+        return {
+          min,
+          max,
+          mean: column.stats.mean ?? 0,
+          median: column.stats.median ?? 0,
+          count: column.stats.count ?? 0,
+          nullCount: column.stats.nulls ?? 0
+        };
+      }
+    } else {
+      return {
+        uniqueCount: column.stats.uniques ?? 0,
+        count: column.stats.count ?? 0,
+        nullCount: column.stats.nulls ?? 0
+      };
+    }
+  }
 
   const values = getColumnValues(state, datasetId, columnName);
   const nonNullValues = values.filter((v) => v !== null && v !== undefined);
