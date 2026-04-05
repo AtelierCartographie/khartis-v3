@@ -17,7 +17,7 @@
   import CustomizeBasemap from './customize-basemap.svelte';
   import ToolbarTabLayout from '../components/toolbar-tab-layout.svelte';
   import {
-    applySuggestionMapping,
+    applySuggestionToVisualization,
     mapSuggestionToType,
     resolveDatasetGeometryType
   } from './suggestion.utils';
@@ -130,7 +130,7 @@
     const viz = visualizationStore.createVisualization(defaultType, dataset.id);
 
     if (bestSuggestion) {
-      applySuggestionMapping(viz.id, defaultType, bestSuggestion);
+      applySuggestionToVisualization(viz.id, bestSuggestion);
     }
 
     logger.debug(

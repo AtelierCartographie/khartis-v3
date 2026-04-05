@@ -141,9 +141,23 @@ function detectKeywordsFromName(columnName: string): {
 } {
   const lowerName = columnName.toLowerCase();
   const nameParts = lowerName.split(/[^a-zA-Z0-9%]/);
+  const idKeywords = [
+    'id',
+    'fid',
+    'gid',
+    'oid',
+    'pk',
+    'code',
+    'iso',
+    'objectid',
+    'object_id',
+    'rowid'
+  ];
 
   return {
-    idWords: nameParts.some((p) => ['id', 'code', 'iso'].includes(p)),
+    idWords:
+      nameParts.some((p) => idKeywords.includes(p)) ||
+      idKeywords.some((keyword) => lowerName === keyword),
     latWords: nameParts.some((p) => ['lat', 'latitude'].includes(p)),
     lonWords: nameParts.some((p) => ['lon', 'lng', 'longitude'].includes(p)),
     ratioWords: nameParts.some((p) =>

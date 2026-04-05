@@ -34,7 +34,7 @@
   import { InfoPopover } from './components/shared';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import {
-    applySuggestionMapping,
+    applySuggestionToVisualization,
     mapSuggestionToType,
     resolveDatasetGeometryType
   } from './suggestion.utils';
@@ -180,9 +180,7 @@
     const selectedViz = visualizationStore.selectedVisualization;
 
     if (selectedViz && existingVizs.some((v) => v.id === selectedViz.id)) {
-      const vizType = mapSuggestionToType(suggestion.id);
-      visualizationStore.applyVisualizationPreset(selectedViz.id, vizType);
-      applySuggestionMapping(selectedViz.id, vizType, suggestion);
+      applySuggestionToVisualization(selectedViz.id, suggestion);
     }
   }
 
@@ -210,7 +208,7 @@
     const viz = visualizationStore.createVisualization(vizType, dataset.id);
 
     if (currentSuggestion) {
-      applySuggestionMapping(viz.id, vizType, currentSuggestion);
+      applySuggestionToVisualization(viz.id, currentSuggestion);
     }
 
     suggestionsExpanded = false;
@@ -648,7 +646,9 @@
 
   .suggestion-card {
     display: flex;
-    border: 1px solid
+    align-items: stretch;
+    border: 2px solid transparent;
+    box-shadow: inset 0 0 0 1px
       var(--khartis-additions-border-tile-01-suggestions, #82cfff);
     cursor: pointer;
     transition: all 0.15s ease;
@@ -656,13 +656,16 @@
     padding: 0;
     min-height: 120px;
     background: transparent;
+    box-sizing: border-box;
 
     &:hover {
-      border-color: var(--khartis-additions-interactive-suggestions, #0072c3);
+      box-shadow: inset 0 0 0 1px
+        var(--khartis-additions-interactive-suggestions, #0072c3);
     }
 
     &.selected {
-      border: 2px solid var(--khartis-additions-focus-suggestions, #0072c3);
+      border-color: var(--khartis-additions-focus-suggestions, #0072c3);
+      box-shadow: none;
     }
   }
 
@@ -671,12 +674,15 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    min-width: 120px;
+    flex: 1 1 50%;
+    width: 50%;
+    min-width: 0;
     padding: var(--cds-spacing-04);
     background: var(--khartis-additions-layer-02-suggestions, #ffffff);
     border-right: 1px solid
       var(--khartis-additions-border-tile-01-suggestions, #82cfff);
     color: var(--khartis-additions-interactive-suggestions, #0072c3);
+    box-sizing: border-box;
   }
 
   .preview-primitives {
@@ -696,15 +702,17 @@
   }
 
   .card-content {
-    flex: 1;
-    padding: var(--cds-spacing-04) var(--cds-spacing-04) var(--cds-spacing-04)
-      var(--cds-spacing-05);
+    flex: 1 1 50%;
+    width: 50%;
+    min-width: 0;
+    padding: var(--cds-spacing-04);
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-03);
     background: var(--khartis-additions-layer-01-suggestions, #e5f6ff);
     color: var(--khartis-additions-text-primary-suggestions, #003a6d);
     transition: background 0.15s ease;
+    box-sizing: border-box;
   }
 
   .card-header {
