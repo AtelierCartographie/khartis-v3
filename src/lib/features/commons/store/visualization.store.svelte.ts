@@ -9,7 +9,8 @@ import {
   ProportionalType,
   ShapeType,
   StrokeMode,
-  SymbolMode
+  SymbolMode,
+  VISUALIZATION_DEFAULTS
 } from '$lib/features/main-toolbar/constants';
 import { deepClone } from '../utils/clone.utils';
 import {
@@ -276,7 +277,7 @@ const COLUMN_TYPE_STRING = 'string';
 
 const DEFAULT_SYMBOL_SIZE = 12;
 const DEFAULT_SYMBOL_MIN_SIZE = 5;
-const DEFAULT_SYMBOL_MAX_SIZE = 50;
+const DEFAULT_SYMBOL_MAX_SIZE = VISUALIZATION_DEFAULTS.symbolMaxSize;
 const DEFAULT_SYMBOL_OPACITY = 0.8;
 const DEFAULT_LABEL_OPACITY = 0;
 const DEFAULT_TEXT_OPACITY = 0;
@@ -457,12 +458,38 @@ function getDefaultModes(type: VisualizationType): VisualizationModes {
   }
 }
 
-function getDefaultSymbols(type: VisualizationType): VisualizationSymbols {
+function getDefaultSymbols(
+  type: VisualizationType,
+  dataset: ProcessedDataset | DatasetResult
+): VisualizationSymbols {
+  const geometryType =
+    typeof dataset.geometry === 'string'
+      ? dataset.geometry
+      : dataset.geometry?.type;
+  const isPolygonGeometry =
+    geometryType?.toLowerCase().includes('polygon') ?? false;
+  const rowCount = 'rowCount' in dataset ? (dataset.rowCount ?? 0) : 0;
+  const densityAdjustedMaxSize =
+    isPolygonGeometry &&
+    (type === VisualizationType.PROPORTIONAL ||
+      type === VisualizationType.BIVARIATE)
+      ? Math.max(
+          6,
+          Math.min(
+            VISUALIZATION_DEFAULTS.symbolMaxSize,
+            Math.round(140 / Math.sqrt(Math.max(rowCount, 1)))
+          )
+        )
+      : DEFAULT_SYMBOL_MAX_SIZE;
+  const minSize = isPolygonGeometry
+    ? Math.max(1, Math.min(4, Math.round(densityAdjustedMaxSize / 4)))
+    : DEFAULT_SYMBOL_MIN_SIZE;
+
   return {
     type: ShapeType.POINT,
     size: DEFAULT_SYMBOL_SIZE,
-    minSize: DEFAULT_SYMBOL_MIN_SIZE,
-    maxSize: DEFAULT_SYMBOL_MAX_SIZE,
+    minSize,
+    maxSize: densityAdjustedMaxSize,
     sizeScale:
       type === VisualizationType.PROPORTIONAL
         ? ScaleType.SQRT
@@ -486,11 +513,7 @@ function getDefaultPrimitiveFilters(
       type === VisualizationType.PROPORTIONAL ||
       type === VisualizationType.BIVARIATE
     ) {
-      return [
-        PrimitiveFilterType.POINT,
-        PrimitiveFilterType.LINE,
-        PrimitiveFilterType.POLYGON
-      ];
+      return [PrimitiveFilterType.POINT, PrimitiveFilterType.LINE];
     }
 
     return [PrimitiveFilterType.POLYGON, PrimitiveFilterType.LINE];
@@ -528,7 +551,7 @@ function buildVisualizationPreset(
     style: getDefaultStyle(type),
     mapping: getDefaultMapping(type, dataset),
     classification: getDefaultClassification(type),
-    symbols: getDefaultSymbols(type),
+    symbols: getDefaultSymbols(type, dataset),
     missingData: getDefaultMissingData()
   };
 }

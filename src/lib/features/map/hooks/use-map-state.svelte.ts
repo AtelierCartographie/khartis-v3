@@ -4,12 +4,31 @@ import {
   type VisualizationConfig
 } from '$lib/features/commons/store/visualization.store.svelte';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
+import { ProportionalType } from '$lib/features/main-toolbar/constants';
 import { HIGHLIGHT_FILL_COLOR } from '../layers';
 import { mapHighlightStore } from '../stores/map-highlight.store.svelte';
 import { getCategoricalColorMap, shouldApplyCategorical } from '../styling';
 import type { LayerContext, RGBColor } from '../types';
 
 const BASE_STROKE_COLOR: RGBColor = [255, 255, 255];
+
+function toFiniteNumber(value: unknown): number | null {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (typeof value === 'bigint') {
+    const numericValue = Number(value);
+    return Number.isFinite(numericValue) ? numericValue : null;
+  }
+
+  if (typeof value === 'string' && value.trim().length > 0) {
+    const numericValue = Number(value);
+    return Number.isFinite(numericValue) ? numericValue : null;
+  }
+
+  return null;
+}
 
 export interface UseMapStateReturn {
   readonly activeVisualizations: VisualizationConfig[];
@@ -42,30 +61,50 @@ function getColorsForViz(viz: VisualizationConfig | null): {
   };
 }
 
+function getColumnStatisticsForViz(
+  viz: VisualizationConfig,
+  columnName: string | undefined
+): {
+  min: number;
+  max: number;
+} {
+  if (!columnName || !viz.datasetId) {
+    return { min: 0, max: 100 };
+  }
+
+  const stats = datasetsStore.getColumnStatistics(viz.datasetId, columnName);
+  const minValue = stats && 'min' in stats ? toFiniteNumber(stats.min) : null;
+  const maxValue = stats && 'max' in stats ? toFiniteNumber(stats.max) : null;
+
+  if (minValue !== null && maxValue !== null) {
+    return { min: minValue, max: maxValue };
+  }
+
+  return { min: 0, max: 100 };
+}
+
 function getStatisticsForViz(viz: VisualizationConfig): {
   min: number;
   max: number;
 } {
-  if (!viz.mapping.sizeColumn || !viz.datasetId) {
-    return { min: 0, max: 100 };
+  return getColumnStatisticsForViz(viz, viz.mapping.sizeColumn);
+}
+
+function getSecondaryStatisticsForViz(viz: VisualizationConfig):
+  | {
+      min: number;
+      max: number;
+    }
+  | undefined {
+  const isDoubleProportional =
+    viz.modes?.proportionalType === ProportionalType.DOUBLE &&
+    !!viz.mapping.valueColumn;
+
+  if (!isDoubleProportional) {
+    return undefined;
   }
 
-  const stats = datasetsStore.getColumnStatistics(
-    viz.datasetId,
-    viz.mapping.sizeColumn
-  );
-
-  if (
-    stats &&
-    'min' in stats &&
-    'max' in stats &&
-    typeof stats.min === 'number' &&
-    typeof stats.max === 'number'
-  ) {
-    return { min: stats.min, max: stats.max };
-  }
-
-  return { min: 0, max: 100 };
+  return getColumnStatisticsForViz(viz, viz.mapping.valueColumn);
 }
 
 function getCategoryColorMapForViz(
@@ -80,9 +119,21 @@ function getCategoryColorMapForViz(
     return null;
   }
 
-  const categories = datasetsStore
-    .getUniqueValues(viz.datasetId, viz.mapping.categoryColumn)
-    .map(String);
+  const categories =
+    viz.classification.labels
+      ?.map((label) => {
+        if (label === null || label === undefined) {
+          return null;
+        }
+
+        const normalized = String(label);
+        return normalized.length > 0 ? normalized : null;
+      })
+      .filter((label): label is string => label !== null) ?? [];
+
+  if (categories.length === 0) {
+    return null;
+  }
 
   return getCategoricalColorMap(categories, viz.classification.colors);
 }
@@ -104,6 +155,7 @@ export function useMapState(options?: UseMapStateOptions): UseMapStateReturn {
   function buildLayerContextForViz(viz: VisualizationConfig): LayerContext {
     const colors = getColorsForViz(viz);
     const statistics = getStatisticsForViz(viz);
+    const secondaryStatistics = getSecondaryStatisticsForViz(viz);
     const categoryColorMap = getCategoryColorMapForViz(viz);
 
     return {
@@ -115,6 +167,7 @@ export function useMapState(options?: UseMapStateOptions): UseMapStateReturn {
       strokeWidth: viz.style.strokeWidth ?? 1,
       strokeOpacity: viz.style.strokeOpacity ?? 1,
       statistics,
+      secondaryStatistics,
       categoryColorMap,
       highlightedRowIds: mapHighlightStore.hasHighlights
         ? mapHighlightStore.highlightedRowIds
