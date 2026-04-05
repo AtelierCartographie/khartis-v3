@@ -410,8 +410,31 @@ describe('getGPSBounds', () => {
     } as DuckDBDataset;
   }
 
-  it('returns null when dataset is not in GPS mode', async () => {
-    const dataset = createDataset({ gpsMode: false });
+  it('returns computed bounds when GPS columns are detectable before GPS mode is finalized', async () => {
+    const dataset = createDataset({
+      gpsMode: false,
+      gpsColumns: undefined,
+      columns: [
+        { name: 'Lat', type_simple: 'numeric' },
+        { name: 'Long', type_simple: 'numeric' }
+      ] as never
+    });
+    const Duck = { query: vi.fn() };
+
+    await getGPSBounds(dataset, Duck);
+    expect(Duck.query).toHaveBeenCalledTimes(1);
+    expect(Duck.query).toHaveBeenCalledWith(
+      expect.stringContaining('TRY_CAST("Long" AS DOUBLE)'),
+      { format: 'array' }
+    );
+  });
+
+  it('returns null when dataset has no GPS mode and no detectable GPS columns', async () => {
+    const dataset = createDataset({
+      gpsMode: false,
+      gpsColumns: undefined,
+      columns: [{ name: 'City', type_simple: 'string' }] as never
+    });
     const Duck = { query: vi.fn() };
 
     const bounds = await getGPSBounds(dataset, Duck);
