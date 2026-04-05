@@ -70,6 +70,9 @@ export interface DeckMapProps {
   forcedVisualizationIds?: string[];
   onMoveSync?: (state: FacetSyncViewState) => void;
   syncViewState?: FacetSyncViewState | null;
+  showLegendOverlay?: boolean;
+  showGeoIndicationsOverlay?: boolean;
+  showAnnotationOverlay?: boolean;
 }
 
 export interface YearFilterInfo {
@@ -88,6 +91,7 @@ export interface LayerContext {
   strokeWidth: number;
   strokeOpacity: number;
   statistics: { min: number; max: number };
+  secondaryStatistics?: { min: number; max: number };
   categoryColorMap: Map<string, RGBColor> | null;
   highlightedRowIds?: Set<number>;
   /** Scalar version counter for highlight changes (avoids Set ref in updateTriggers) */

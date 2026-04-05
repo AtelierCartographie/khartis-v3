@@ -107,6 +107,15 @@
       }
 
       if (visualization.mapping.valueColumn) {
+        const fieldBIndex = dataFields.findIndex(
+          (field) => field.text === visualization.mapping.valueColumn
+        );
+        if (fieldBIndex >= 0) {
+          selectedFieldBId = dataFields[fieldBIndex].id;
+        }
+      }
+
+      if (visualization.mapping.valueColumn) {
         const valueFieldIndex = dataFields.findIndex(
           (field) => field.text === visualization.mapping.valueColumn
         );
@@ -195,6 +204,10 @@
 
   function handleFieldBSelect(fieldId: number) {
     selectedFieldBId = fieldId;
+    const field = dataFields.find((item) => item.id === fieldId);
+    if (field) {
+      onMappingChange?.({ valueColumn: field.text });
+    }
   }
 
   function handleFillColorBChange(value: string) {
