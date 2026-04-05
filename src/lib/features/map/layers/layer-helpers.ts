@@ -1,6 +1,10 @@
 import type { Color } from '@deck.gl/core';
 import type { DeckDataRow, RGBColor } from '../types';
-import { getSizeForValue, getColorForValue } from '../utils/data-styling.utils';
+import {
+  getClassedSizeForValue,
+  getColorForValue,
+  getSizeForValue
+} from '../utils/data-styling.utils';
 import { BasemapDottedPattern } from '$lib/features/main-toolbar/constants';
 import { ScaleType } from '$lib/features/commons/store/visualization.store.svelte';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
@@ -46,6 +50,31 @@ export function createProportionalSizeAccessor(
       minSize,
       maxSize,
       sizeScale
+    );
+  };
+}
+
+export function createClassedSizeAccessor(
+  valueColumn: string,
+  breaks: number[],
+  minSize: number,
+  maxSize: number,
+  classCountHint?: number
+) {
+  return (object: DeckDataRow): number => {
+    const rawValue = object[valueColumn];
+    const numericValue =
+      typeof rawValue === 'number' ? rawValue : Number(rawValue);
+    if (!Number.isFinite(numericValue)) {
+      return minSize;
+    }
+
+    return getClassedSizeForValue(
+      numericValue,
+      breaks,
+      minSize,
+      maxSize,
+      classCountHint
     );
   };
 }
@@ -120,6 +149,31 @@ export function createGeoJsonProportionalSizeAccessor(
       minSize,
       maxSize,
       sizeScale
+    );
+  };
+}
+
+export function createGeoJsonClassedSizeAccessor(
+  valueColumn: string,
+  breaks: number[],
+  minSize: number,
+  maxSize: number,
+  classCountHint?: number,
+  defaultSize = 5
+) {
+  return (feature: { properties?: Record<string, unknown> }) => {
+    const value = feature.properties?.[valueColumn];
+    if (value === null || value === undefined) return defaultSize;
+    const numericValue =
+      typeof value === 'number' ? value : parseFloat(String(value));
+    if (!Number.isFinite(numericValue)) return defaultSize;
+
+    return getClassedSizeForValue(
+      numericValue,
+      breaks,
+      minSize,
+      maxSize,
+      classCountHint
     );
   };
 }
