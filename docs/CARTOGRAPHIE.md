@@ -41,11 +41,11 @@ Chaque colonne est classée selon son **type sémiotique** (semioType) à partir
 
 **Choroplèthe** : polygones colorés selon une variable de ratio (densité, taux, pourcentage). Classification en classes → palette séquentielle ou divergente.
 
-**Proportionnel** : symboles dont la taille est proportionnelle à une valeur absolue (QTA : population, surface). Échelle linéaire, sqrt ou log. Sur données polygonales, les symboles sont rendus sur les centroïdes des entités, en complément du fond polygonal.
+**Proportionnel** : symboles dont la taille est proportionnelle à une valeur absolue (QTA : population, surface). Échelle linéaire, sqrt ou log. Sur données polygonales, les symboles sont rendus sur les centroïdes des entités, avec les contours disponibles comme contexte sans réactiver un aplat polygonal par défaut. Le calcul de taille s’appuie sur les statistiques complètes de colonne et reste borné entre `minSize` et `maxSize` pour éviter les symboles hors gabarit.
 
-**Catégoriel** : couleurs différentes par catégorie (QL : pays, régions). Palette qualitative. Pas de classement ordre.
+**Catégoriel** : couleurs différentes par catégorie (QL : pays, régions). Palette qualitative. Pas de classement ordre. Les couleurs doivent être résolues à partir des labels complets de classification ou de la table Arrow complète, jamais depuis le simple preview `dataset.data`, pour éviter des catégories manquantes ou des couleurs incohérentes après import URL, restauration de projet ou changement de filtre.
 
-**Bivarié** : combinaison taille + couleur pour deux variables. Ex : taille = population, couleur = taux d'urbanisation.
+**Bivarié** : combinaison taille + couleur pour deux variables. Ex : taille = population, couleur = taux d'urbanisation. Le preset de suggestion `symbols_proportional_double` est un cas particulier : il réutilise le pipeline bivarié, mais bascule en mode `proportionalType = DOUBLE` pour rendre deux séries de symboles proportionnels superposées à partir de `sizeColumn` et `valueColumn`.
 
 ---
 
@@ -121,7 +121,9 @@ Couleur via `@ateliercartographie/ok-palette` en **espace Oklch** (perceptuellem
 4. Retourner les 3 meilleures par score calculé (`avgScore / 6.5 * 100`)
 
 **Mapping** : `visualization-tab/suggestion.utils.ts::mapSuggestionToType()` fait la correspondance suggestion ID → `VisualizationType`.
-La sélection d'une suggestion réapplique le preset complet du type cible (modes, primitives, style, mapping, classification) avant d'affecter les colonnes proposées.
+La sélection d'une suggestion réapplique le preset complet du type cible (modes, primitives, style, mapping, classification) avant d'affecter les colonnes proposées, puis applique des overrides spécifiques au pattern (`QTA+QL` → couleur catégorielle, `QTA+QTR` → couleur en classes, `QTA+QTA` → double proportionnel).
+Les suggestions `texts_*` réutilisent le type `BIVARIATE`, mais elles reconfigurent explicitement le rendu texte: `labelColumn` pour le contenu, `categoryColumn` ou `valueColumn` ou `sizeColumn` pour la variable secondaire, opacité texte activée, couches symboles rendues invisibles, et `texts_proportional` active `modes.size = proportional` afin que la taille des textes suive la variable quantitative.
+Les identifiants techniques de type SIG (`OGC_FID`, `FID`, `OBJECTID`, `GID`, `rowid`, etc.) doivent être classés comme identifiants et exclus du ranking final pour éviter de suggérer des cartes proportionnelles sur des clés auto-générées.
 
 ---
 

@@ -195,6 +195,8 @@ data.attributes.getFilterValue = filterAttr;
 
 Pour les données GeoJSON (fallback) : `getFilterValue` est un accesseur de fonction classique.
 
+Le sélecteur d'années côté UI doit, lui, récupérer les valeurs distinctes depuis DuckDB dès qu'une `tableName` existe, avec fallback local seulement en dernier recours. Sinon un preview partiel peut masquer des années valides et désynchroniser l'interface du filtre et le rendu effectif.
+
 ---
 
 ## Extensions Deck.gl (singletons)
