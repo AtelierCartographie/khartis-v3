@@ -62,8 +62,16 @@
   const hasResults = $derived(results.length > 0);
   const showResults = $derived(searchState.searchValue.trim().length >= 2);
   const noResults = $derived(showResults && !hasResults);
+  const hasExactReplaceCandidate = $derived(
+    results.some(
+      (result) => String(result.value ?? '') === searchState.searchValue.trim()
+    )
+  );
   const canReplace = $derived(
-    hasResults && searchState.replaceValue.trim().length > 0
+    hasResults &&
+      searchState.replaceValue.trim().length > 0 &&
+      hasExactReplaceCandidate &&
+      !searchState.useRegex
   );
 
   async function handleReplaceNext() {
