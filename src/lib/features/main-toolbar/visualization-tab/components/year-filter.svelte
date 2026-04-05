@@ -15,6 +15,12 @@
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { Duck } from '$lib/features/duckdb';
   import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
+  import {
+    collectYearValues,
+    collectYearValuesFromRows,
+    isLikelyYearColumn,
+    parseYearValue
+  } from './year-filter.utils';
 
   interface Props {
     visualization: VisualizationConfig | undefined;
@@ -28,93 +34,16 @@
       : null
   );
 
-  const YEAR_MIN = 1000;
-  const YEAR_MAX = 3000;
-  const YEAR_NAME_PATTERN = /(^_?year$)|annee|année|year/i;
   let yearValues = $state<number[]>([]);
   let yearValuesRequestId = 0;
-
-  function parseYearValue(value: unknown): number | null {
-    if (typeof value === 'bigint') {
-      const numericValue = Number(value);
-      return Number.isInteger(numericValue) &&
-        numericValue >= YEAR_MIN &&
-        numericValue <= YEAR_MAX
-        ? numericValue
-        : null;
-    }
-
-    if (typeof value === 'number') {
-      return Number.isInteger(value) && value >= YEAR_MIN && value <= YEAR_MAX
-        ? value
-        : null;
-    }
-
-    if (typeof value !== 'string') {
-      return null;
-    }
-
-    const trimmed = value.trim();
-    if (!trimmed) {
-      return null;
-    }
-
-    const parsed = Number.parseInt(trimmed, 10);
-    return Number.isInteger(parsed) && parsed >= YEAR_MIN && parsed <= YEAR_MAX
-      ? parsed
-      : null;
-  }
-
-  function isYearColumn(columnName: string): boolean {
-    if (YEAR_NAME_PATTERN.test(columnName)) {
-      return true;
-    }
-
-    const rows = dataset?.data ?? [];
-    if (rows.length === 0) {
-      return false;
-    }
-
-    let validYears = 0;
-    let nonNullValues = 0;
-
-    for (const row of rows) {
-      const rawValue = row[columnName];
-      if (rawValue === null || rawValue === undefined || rawValue === '') {
-        continue;
-      }
-
-      nonNullValues++;
-      if (parseYearValue(rawValue) !== null) {
-        validYears++;
-      }
-    }
-
-    return nonNullValues > 0 && validYears / nonNullValues >= 0.8;
-  }
 
   const yearColumns = $derived(
     dataset
       ? dataset.columns
-          .filter((col) => col.type === 'number' && isYearColumn(col.name))
+          .filter((col) => isLikelyYearColumn(col, dataset.data ?? []))
           .map((col) => ({ name: col.name, text: col.name }))
       : []
   );
-
-  function collectYearValuesFromRows(
-    rows: Record<string, unknown>[],
-    columnName: string
-  ): number[] {
-    const values: number[] = [];
-    for (const row of rows) {
-      const parsed = parseYearValue(row[columnName]);
-      if (parsed !== null && !values.includes(parsed)) {
-        values.push(parsed);
-      }
-    }
-
-    return values.sort((a, b) => a - b);
-  }
 
   let selectedColumn = $state('');
   let selectedValue = $state<string | number>('');
@@ -201,7 +130,8 @@
 
     const localRows =
       currentDataset.originalData?.data ?? currentDataset.data ?? [];
-    if (localRows.length > 0) {
+
+    if (!currentDataset.tableName) {
       yearValues = collectYearValuesFromRows(localRows, currentColumn);
       return;
     }
@@ -222,12 +152,10 @@
         return;
       }
 
-      yearValues = rows
-        .map((row) => parseYearValue(row.year_value))
-        .filter((value): value is number => value !== null);
+      yearValues = collectYearValues(rows.map((row) => row.year_value));
     })().catch(() => {
       if (requestId === yearValuesRequestId) {
-        yearValues = [];
+        yearValues = collectYearValuesFromRows(localRows, currentColumn);
       }
     });
   });

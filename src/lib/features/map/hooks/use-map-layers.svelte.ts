@@ -25,6 +25,7 @@ import type { DeckDataRow, LayerContext } from '../types';
 import type { DeckInstance } from './use-map-init.svelte';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import {
+  filterArrowTableByYear,
   filterArrowTableByDataFilters,
   filterArrowTableByTableFilters
 } from '../utils/arrow-filter.utils';
@@ -367,33 +368,19 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
               ? GEOMETRY_TO_PRIMITIVE[geoInfo.type as GeometryType]
               : undefined;
 
-            // Year filter: pass through context for GPU-side DataFilterExtension.
-            // The full (unfiltered) table is passed to createDeckLayers so that
-            // the GeoArrow binary parse cache (WeakMap) stays stable across year changes.
-            // Data filters and table filters still apply JS-side (they change table structure).
-            if (viz.yearFilter) {
-              const yearValue =
-                typeof viz.yearFilter.value === 'number'
-                  ? viz.yearFilter.value
-                  : parseInt(String(viz.yearFilter.value), 10);
-              if (!isNaN(yearValue)) {
-                ctx.yearFilter = {
-                  column: viz.yearFilter.column,
-                  value: yearValue
-                };
-              }
-            }
-
             const vizFiltered = filterArrowTableByDataFilters(
               table,
               viz.dataFilters,
               tablePrimitiveType
             );
             const tableFilters = getTableFilters?.(datasetId);
-            const filteredTable = filterArrowTableByTableFilters(
+            const tableFiltered = filterArrowTableByTableFilters(
               vizFiltered,
               tableFilters
             );
+            const filteredTable = viz.yearFilter
+              ? filterArrowTableByYear(tableFiltered, viz.yearFilter)
+              : tableFiltered;
             const arrowLayers = createDeckLayers(filteredTable, ctx);
             layers.push(...arrowLayers);
             if (arrowLayers.length > 0) {
