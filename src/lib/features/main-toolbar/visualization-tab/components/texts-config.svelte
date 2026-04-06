@@ -166,6 +166,7 @@
   let halo = $state<boolean>(false);
   let haloColor = $state<string>(DEFAULT_COLORS.halo);
   let haloWidth = $state<number>(VISUALIZATION_DEFAULTS.haloWidth);
+  let collisionDetection = $state<boolean>(true);
   let dxpMasking = $state<boolean>(false);
   let showMissingData = $state<boolean>(true);
   let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
@@ -188,6 +189,7 @@
       haloColor = visualization.style.textHaloColor ?? DEFAULT_COLORS.halo;
       haloWidth =
         visualization.style.textHaloWidth ?? VISUALIZATION_DEFAULTS.haloWidth;
+      collisionDetection = visualization.style.textCollisionDetection ?? true;
       dxpMasking = visualization.style.textDxpMasking ?? false;
     }
     if (visualization?.modes) {
@@ -272,6 +274,11 @@
   function handleHaloWidthChange(value: number) {
     haloWidth = value;
     onStyleChange?.({ textHaloWidth: value });
+  }
+
+  function handleCollisionDetectionChange(value: boolean) {
+    collisionDetection = value;
+    onStyleChange?.({ textCollisionDetection: value });
   }
 
   function handleDxpMaskingChange(value: boolean) {
@@ -531,6 +538,13 @@
             onchange={handleHaloWidthChange}
           />
         {/if}
+
+        <ToggleWithLabel
+          label={m.collision_detection()}
+          infoText={m.collision_detection_info()}
+          toggled={collisionDetection}
+          ontoggle={handleCollisionDetectionChange}
+        />
 
         <ToggleWithLabel
           label={m.dxp_masking()}

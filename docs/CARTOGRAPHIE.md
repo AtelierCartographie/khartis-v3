@@ -47,6 +47,8 @@ Chaque colonne est classée selon son **type sémiotique** (semioType) à partir
 
 **Bivarié** : combinaison taille + couleur pour deux variables. Ex : taille = population, couleur = taux d'urbanisation. Le preset de suggestion `symbols_proportional_double` est un cas particulier : il réutilise le pipeline bivarié, mais bascule en mode `proportionalType = DOUBLE` pour rendre deux séries de symboles proportionnels superposées à partir de `sizeColumn` et `valueColumn`.
 
+Par défaut, les primitives de texte (`labels`, `texts`) démarrent avec une couleur noire. Une couleur thématique n'est appliquée que si l'utilisateur active explicitement un mode couleur piloté par les données.
+
 ---
 
 ## Discrétisation (8 méthodes)
