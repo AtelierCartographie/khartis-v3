@@ -165,6 +165,9 @@ Chaque viz génère un calque avec sous-calques par primitive. Fond de carte = c
 
 Actions : affichage/masquage, renommer, dupliquer, supprimer, déplacer. Sous-calques : mêmes options.
 
+L'ordre de la liste est l'ordre visuel attendu : l'élément le plus haut dans `Calques` doit se rendre au-dessus des éléments placés en dessous.
+Les primitives de texte (`labels`, `texts`) restent sous les géométries thématiques pour éviter qu'un empilement de visualisations fasse repasser du texte au-dessus des formes, tout en restant au-dessus des aplats de fond de carte. Les collisions entre `labels` et `texts` d'un même jeu de données sont calculées ensemble pour limiter les recouvrements entre visualisations superposées.
+
 Collection : calques regroupés par facette.
 
 ### Projections [VIZ-TOOLS-c]

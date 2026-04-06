@@ -19,6 +19,56 @@ import {
 
 const VALID_LNG_RANGE = { min: -180, max: 180 };
 const VALID_LAT_RANGE = { min: -90, max: 90 };
+const GEOMETRY_READ_WARNING_LIMIT = 3;
+const geometryReadWarnings = new Map<string, number>();
+
+function normalizeGeometryEncoding(
+  encoding: string | null | undefined
+): string | null {
+  if (!encoding) {
+    return null;
+  }
+
+  return encoding === ArrowExtension.OGC_WKB
+    ? ArrowExtension.GEOARROW_WKB
+    : encoding;
+}
+
+function warnGeometryReadFailureOnce(
+  geoColumn: string,
+  rowIndex: number,
+  error: unknown
+): void {
+  const warningCount = geometryReadWarnings.get(geoColumn) ?? 0;
+
+  if (warningCount >= GEOMETRY_READ_WARNING_LIMIT) {
+    return;
+  }
+
+  geometryReadWarnings.set(geoColumn, warningCount + 1);
+  logger.warn(
+    'Failed to read geometry row from Arrow vector',
+    LogCategory.MAP,
+    {
+      geoColumn,
+      rowIndex,
+      error: error instanceof Error ? error.message : String(error)
+    }
+  );
+}
+
+function safeReadVectorValue(
+  vector: NonNullable<ReturnType<ArrowTable['getChild']>>,
+  rowIndex: number,
+  geoColumn: string
+): unknown {
+  try {
+    return vector.get(rowIndex);
+  } catch (error) {
+    warnGeometryReadFailureOnce(geoColumn, rowIndex, error);
+    return null;
+  }
+}
 
 export function isValidCoordinate(lng: number, lat: number): boolean {
   if (!Number.isFinite(lng) || !Number.isFinite(lat)) {
@@ -385,7 +435,7 @@ export function arrowTableToGeoJSON(
       return null;
     }
 
-    const firstGeom = geomVector.get(0);
+    const firstGeom = safeReadVectorValue(geomVector, 0, geoColumn);
     const parsedFirstGeom = parseGeoJsonGeometry(firstGeom);
     if (!parsedFirstGeom) {
       return null;
@@ -418,7 +468,7 @@ export function arrowTableToGeoJSON(
         properties[name] = typeof val === 'bigint' ? Number(val) : val;
       }
 
-      const geom = geomVector.get(i);
+      const geom = safeReadVectorValue(geomVector, i, geoColumn);
       const parsedGeom = parseGeoJsonGeometry(geom);
       if (parsedGeom) {
         features.push({
@@ -466,9 +516,9 @@ export function extractGeometryInfo(table: ArrowTable): GeometryInfo | null {
     );
     const arrowExtensionRaw =
       geometryField?.metadata?.get(GeoArrowMetadataKey.EXTENSION_NAME) ?? null;
-    const arrowExtension = arrowExtensionRaw
-      ? arrowExtensionRaw.toLowerCase()
-      : null;
+    const arrowExtension = normalizeGeometryEncoding(
+      arrowExtensionRaw ? arrowExtensionRaw.toLowerCase() : null
+    );
 
     const expectedExtension =
       GEO_TYPE_TO_EXTENSION[normalizedGeometryType] ?? null;
