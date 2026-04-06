@@ -32,9 +32,13 @@ function getStepNames(mode: WorkflowMode): DataTabStep[] {
     return ['control', 'enrich'];
   }
   if (mode === 'tabular-gps') {
-    return ['control', 'geolocate', 'basemap'];
+    return ['control', 'basemap'];
   }
   return ['control', 'geolocate', 'join'];
+}
+
+function usesTwoStepNavigation(mode: WorkflowMode): boolean {
+  return mode === 'geographic' || mode === 'tabular-gps';
 }
 
 function getEffectiveWorkflowMode(): WorkflowMode {
@@ -58,7 +62,7 @@ function isTabularGPSMode(): boolean {
 }
 
 function isTwoStepMode(): boolean {
-  return isGeographicMode();
+  return usesTwoStepNavigation(getEffectiveWorkflowMode());
 }
 
 function getStepCount(): number {
@@ -105,6 +109,7 @@ function updateNavigationPermissions() {
 
   if (isTwoStepMode()) {
     state.canNavigateToStep[1] = state.hasCompletedStep[0];
+    state.canNavigateToStep[2] = false;
   } else {
     state.canNavigateToStep[1] = state.hasCompletedStep[0];
     state.canNavigateToStep[2] = state.hasCompletedStep[1];
