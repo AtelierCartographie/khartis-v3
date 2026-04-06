@@ -647,8 +647,7 @@
   .suggestion-card {
     display: flex;
     align-items: stretch;
-    border: 2px solid transparent;
-    box-shadow: inset 0 0 0 1px
+    border: 1px solid
       var(--khartis-additions-border-tile-01-suggestions, #82cfff);
     cursor: pointer;
     transition: all 0.15s ease;
@@ -659,13 +658,14 @@
     box-sizing: border-box;
 
     &:hover {
-      box-shadow: inset 0 0 0 1px
-        var(--khartis-additions-interactive-suggestions, #0072c3);
+      border-color: var(
+        --khartis-additions-border-tile-01-suggestions,
+        #82cfff
+      );
     }
 
     &.selected {
-      border-color: var(--khartis-additions-focus-suggestions, #0072c3);
-      box-shadow: none;
+      border: 3px solid var(--tag-border, #1192e8);
     }
   }
 
