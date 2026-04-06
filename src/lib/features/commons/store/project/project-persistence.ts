@@ -4,6 +4,11 @@ import {
   projectRepository,
   projectStorage
 } from '$lib/features/project-management';
+import { deserializeUploadedFile } from '$lib/features/project-management/core/serializer';
+import type {
+  SerializedProjectData,
+  SerializedUploadedFile
+} from '$lib/types/serialization.types';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { m } from '$lib/paraglide/messages';
 import { dataOrchestratorService } from '../../services/data-orchestrator.service.svelte';
@@ -114,8 +119,14 @@ async function mergePersistedSourceFiles(
     return;
   }
 
-  const persistedProject = await projectRepository.load(currentProject.id);
-  const persistedFiles = persistedProject?.data?.sourceFiles;
+  const persistedProject = await projectRepository.loadSerialized(
+    currentProject.id
+  );
+  const persistedFiles = (
+    persistedProject?.data as SerializedProjectData | undefined
+  )?.sourceFiles?.map((file: SerializedUploadedFile) =>
+    deserializeUploadedFile(file)
+  );
   if (!persistedFiles?.length) {
     return;
   }
