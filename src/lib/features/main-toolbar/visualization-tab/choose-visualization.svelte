@@ -12,13 +12,12 @@
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import {
     PrimitiveFilterType,
-    visualizationStore,
-    VisualizationType
+    visualizationStore
   } from '$lib/features/commons/store/visualization.store.svelte';
   import { isNumericType } from '$lib/features/commons/utils/format.utils';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import * as m from '$lib/paraglide/messages';
-  import { ComboBox, Link, Modal, RadioButton } from 'carbon-components-svelte';
+  import { ComboBox, Link, Modal } from 'carbon-components-svelte';
   import {
     Edit,
     Launch,
@@ -35,7 +34,8 @@
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import {
     applySuggestionToVisualization,
-    mapSuggestionToType,
+    resolveNextSuggestionSelection,
+    resolveBlankVisualizationType,
     resolveDatasetGeometryType
   } from './suggestion.utils';
   import { UI_CONSTANTS } from '../constants';
@@ -168,9 +168,6 @@
   }
 
   function handleSelectSuggestion(suggestion: VizSuggestion) {
-    selectedSuggestion = suggestion.id;
-
-    // Apply suggestion to the currently selected visualization
     const dataset = selectedDataset;
     if (!dataset) return;
 
@@ -178,8 +175,21 @@
       dataset.id
     );
     const selectedViz = visualizationStore.selectedVisualization;
+    const nextSuggestionSelection = resolveNextSuggestionSelection(
+      selectedSuggestion,
+      suggestion.id
+    );
+    selectedSuggestion = nextSuggestionSelection;
 
     if (selectedViz && existingVizs.some((v) => v.id === selectedViz.id)) {
+      if (!nextSuggestionSelection) {
+        visualizationStore.applyVisualizationPreset(
+          selectedViz.id,
+          resolveBlankVisualizationType(dataset)
+        );
+        return;
+      }
+
       applySuggestionToVisualization(selectedViz.id, suggestion);
     }
   }
@@ -188,29 +198,11 @@
     const dataset = selectedDataset;
     if (!dataset) return;
 
-    const currentSuggestion = selectedSuggestion
-      ? filteredSuggestions.find((s) => s.id === selectedSuggestion)
-      : undefined;
-
-    const vizType = currentSuggestion
-      ? mapSuggestionToType(currentSuggestion.id)
-      : resolveDatasetGeometryType(
-            dataset as {
-              geometry?: { type?: string | null };
-              sourceFileId?: string;
-            }
-          )
-            ?.toLowerCase()
-            .includes('point')
-        ? VisualizationType.PROPORTIONAL
-        : VisualizationType.CHOROPLETH;
-
-    const viz = visualizationStore.createVisualization(vizType, dataset.id);
-
-    if (currentSuggestion) {
-      applySuggestionToVisualization(viz.id, currentSuggestion);
-    }
-
+    visualizationStore.createVisualization(
+      resolveBlankVisualizationType(dataset),
+      dataset.id
+    );
+    selectedSuggestion = undefined;
     suggestionsExpanded = false;
     onCreateVisualization?.();
   }
@@ -221,6 +213,7 @@
   });
 
   function handleSelectViz(id: string) {
+    selectedSuggestion = undefined;
     visualizationStore.selectVisualization(id);
   }
 
@@ -279,6 +272,7 @@
     const exists = datasets.some((ds) => ds.id === selectedDatasetId);
     if (!exists) {
       selectedDatasetId = datasetsStore.selectedDatasetId ?? datasets[0].id;
+      selectedSuggestion = undefined;
       visibleCount = UI_CONSTANTS.SUGGESTIONS_PER_PAGE;
     }
   });
@@ -297,7 +291,7 @@
       : false;
 
     if (!hasSelectedSuggestion) {
-      selectedSuggestion = suggestionsList[0].id;
+      selectedSuggestion = undefined;
     }
   });
 </script>
@@ -401,7 +395,11 @@
           {m.use_suggestion_description()}
         </p>
 
-        <div class="suggestions-group" role="list">
+        <div
+          class="suggestions-group"
+          role="radiogroup"
+          aria-label={m.section_suggestions()}
+        >
           {#each visibleSuggestions as suggestion (suggestion.id)}
             {@const isSelected = selectedSuggestion === suggestion.id}
             <button
@@ -409,7 +407,8 @@
               class="suggestion-card"
               class:selected={isSelected}
               onclick={() => handleSelectSuggestion(suggestion)}
-              aria-pressed={isSelected}
+              role="radio"
+              aria-checked={isSelected}
             >
               <div class="card-preview">
                 <SuggestionPreview
@@ -432,8 +431,12 @@
               <div class="card-content">
                 <div class="card-header">
                   <p class="card-title">{suggestion.label}</p>
-                  <span class="radio-indicator">
-                    <RadioButton checked={isSelected} />
+                  <span class="radio-indicator" aria-hidden="true">
+                    <span class="radio-indicator-ring">
+                      {#if isSelected}
+                        <span class="radio-indicator-dot"></span>
+                      {/if}
+                    </span>
                   </span>
                 </div>
 
@@ -656,6 +659,7 @@
     min-height: 120px;
     background: transparent;
     box-sizing: border-box;
+    outline: none;
 
     &:hover {
       border-color: var(
@@ -666,6 +670,11 @@
 
     &.selected {
       border: 3px solid var(--tag-border, #1192e8);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--cds-focus, #0f62fe);
+      outline-offset: 2px;
     }
   }
 
@@ -722,7 +731,30 @@
   }
 
   .radio-indicator {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     pointer-events: none;
+  }
+
+  .radio-indicator-ring {
+    width: 1.25rem;
+    height: 1.25rem;
+    border: 2px solid var(--tag-border, #1192e8);
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    background: var(--khartis-additions-layer-02-suggestions, #ffffff);
+  }
+
+  .radio-indicator-dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 999px;
+    background: var(--tag-border, #1192e8);
+    display: block;
   }
 
   .card-title {
