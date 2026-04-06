@@ -56,6 +56,7 @@ import {
 } from '$lib/features/commons/store/visualization.store.svelte';
 import {
   ColorMode,
+  DEFAULT_COLORS,
   FillMode,
   ProportionalType,
   SizeMode,
@@ -112,6 +113,18 @@ describe('visualizationStore suggestion presets', () => {
       PrimitiveFilterType.POINT,
       PrimitiveFilterType.LINE
     ]);
+  });
+
+  it('initializes visualization text and label colors with black defaults', () => {
+    const visualization = visualizationStore.createVisualization(
+      VisualizationType.CHOROPLETH,
+      'dataset-id'
+    );
+
+    expect(visualization.style.textColor).toBe(DEFAULT_COLORS.text);
+    expect(visualization.style.labelColor).toBe(DEFAULT_COLORS.label);
+    expect(visualization.style.textCollisionDetection).toBe(true);
+    expect(visualization.style.labelCollisionDetection).toBe(true);
   });
 
   it('replaces the current visualization with the full preset when switching type', () => {

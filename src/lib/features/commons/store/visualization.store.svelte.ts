@@ -4,6 +4,7 @@ import type {
 } from '$lib/features/data-pipeline';
 import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
 import {
+  DEFAULT_COLORS,
   FillMode,
   MissingDataShape,
   ProportionalType,
@@ -165,6 +166,7 @@ export interface VisualizationConfig {
     textHalo?: boolean;
     textHaloColor?: string;
     textHaloWidth?: number;
+    textCollisionDetection?: boolean;
     textDxpMasking?: boolean;
     labelColor?: string | string[];
     labelOpacity?: number;
@@ -313,8 +315,12 @@ function getDefaultStyle(
   type: VisualizationType
 ): VisualizationConfig['style'] {
   const textOverlayDefaults: VisualizationConfig['style'] = {
+    labelColor: DEFAULT_COLORS.label,
     labelOpacity: DEFAULT_LABEL_OPACITY,
-    textOpacity: DEFAULT_TEXT_OPACITY
+    labelCollisionDetection: true,
+    textColor: DEFAULT_COLORS.text,
+    textOpacity: DEFAULT_TEXT_OPACITY,
+    textCollisionDetection: true
   };
 
   switch (type) {
