@@ -12,6 +12,7 @@ import {
   type JsonValue
 } from '$lib/types/data';
 import type { SerializedProjectData } from '$lib/types/serialization.types';
+import { persistenceRegistry } from '$lib/features/project-management';
 import { layersActions } from '../../step-toolbar/tools/layers/layers.store.svelte';
 import { legendActions } from '../../step-toolbar/tools/legend/legend.store.svelte';
 import { projectionActions } from '../../step-toolbar/tools/projections/projection.store.svelte';
@@ -39,6 +40,8 @@ import {
   showError,
   showWarning
 } from '../utils/notification.utils.svelte';
+import { sanitizePreparedGeoJSON } from '../utils/persisted-geojson.utils';
+import { resolvePersistedJoinState } from '../utils/persisted-join-state.utils';
 import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
 import { importRollbackService } from './import-rollback.service';
 import {
@@ -181,6 +184,20 @@ function createDataOrchestratorService() {
     }
   }
 
+  function createGeoJsonSnapshotForDuckDB(file: UploadedFile): UploadedFile {
+    const normalizedName = file.name.replace(/\.[^.]+$/u, '.geojson');
+    const preparedGeoJSON = sanitizePreparedGeoJSON(file.preparedGeoJSON);
+
+    return {
+      ...file,
+      name: normalizedName,
+      type: 'application/geo+json',
+      fileType: FileType.GEOJSON,
+      content: preparedGeoJSON,
+      originalFile: undefined
+    };
+  }
+
   async function prepareFileForDuckDB(
     file: UploadedFile,
     dataset: DatasetResult | undefined
@@ -198,6 +215,10 @@ function createDataOrchestratorService() {
     if (!requiresGeoProcessing) return null;
     if (dataset?.metadata?.geoDuckTableReady && dataset.tableName) return null;
     if (dataset?.tableName) return null;
+
+    if (file.preparedGeoJSON) {
+      return createGeoJsonSnapshotForDuckDB(file);
+    }
 
     if (file.fileType === FileType.KML || file.fileType === FileType.KMZ) {
       return convertKMLForDuckDB(file);
@@ -272,23 +293,34 @@ function createDataOrchestratorService() {
     duckDatasetId: string,
     file: UploadedFile
   ): Promise<void> {
-    if (!file.joinedBasemap && !file.gpsMode) {
+    const duckDataset = duckDBOrchestrator.getDataset(duckDatasetId);
+    const restoredJoinState = resolvePersistedJoinState({
+      file,
+      duckDataset,
+      selectedBasemapId: projectStore.currentProject?.data?.basemap?.id,
+      linkedGeoColumn: file.geoColumn,
+      selectedGpsColumns: file.gpsColumns,
+      isSelectedSourceFile: true
+    });
+
+    if (!restoredJoinState.joinedBasemap && !restoredJoinState.gpsMode) {
       return;
     }
 
-    duckDBOrchestrator.updateDatasetJoinInfo(duckDatasetId, {
-      joinedBasemap: file.joinedBasemap,
-      geoColumn: file.geoColumn,
-      gpsMode: file.gpsMode,
-      gpsColumns: file.gpsColumns
-    });
+    duckDBOrchestrator.updateDatasetJoinInfo(duckDatasetId, restoredJoinState);
 
-    if (!file.joinedBasemap || !file.geoColumn) {
+    if (
+      !restoredJoinState.joinedBasemap ||
+      !restoredJoinState.geoColumn ||
+      restoredJoinState.gpsMode
+    ) {
       return;
     }
 
     await basemapCatalogService.loadCatalog();
-    const basemap = basemapCatalogService.getBasemapById(file.joinedBasemap);
+    const basemap = basemapCatalogService.getBasemapById(
+      restoredJoinState.joinedBasemap
+    );
     if (!basemap) {
       return;
     }
@@ -297,12 +329,12 @@ function createDataOrchestratorService() {
       await duckDBOrchestrator.finalizeJoin(
         duckDatasetId,
         basemap,
-        file.geoColumn
+        restoredJoinState.geoColumn
       );
     } catch (joinError) {
       logger.warn('Failed to restore join on project load', LogCategory.DATA, {
         datasetId: duckDatasetId,
-        joinedBasemap: file.joinedBasemap,
+        joinedBasemap: restoredJoinState.joinedBasemap,
         error: joinError
       });
     }
@@ -642,6 +674,17 @@ function createDataOrchestratorService() {
                   batch
                 );
               }
+            }
+            break;
+
+          case COLUMN_TRANSFORMATION_TYPES.CALCULATE:
+            if (transformation.newValue) {
+              await duckDBOrchestrator.addCalculatedColumn(
+                dataset.tableName,
+                currentColumnName,
+                transformation.newValue,
+                batch
+              );
             }
             break;
 
@@ -1065,6 +1108,7 @@ function createDataOrchestratorService() {
 
     layersActions.syncWithVisualizations();
     legendActions.syncWithVisualizations();
+    persistenceRegistry.markClean();
   }
 
   async function onProjectChanged(): Promise<void> {
@@ -1108,27 +1152,43 @@ function createDataOrchestratorService() {
       const primaryFile = currentProject.data.sourceFiles.find(
         (f) => f.geoColumn || f.joinedBasemap || f.gpsMode
       );
+      const primaryDuckDataset = primaryFile
+        ? duckDBOrchestrator.getDatasetBySourceFile(primaryFile.id)
+        : null;
+      const restoredPrimaryJoinState = primaryFile
+        ? resolvePersistedJoinState({
+            file: primaryFile,
+            duckDataset: primaryDuckDataset,
+            selectedBasemapId: currentProject.data.basemap?.id,
+            linkedGeoColumn: primaryFile.geoColumn,
+            selectedGpsColumns: primaryFile.gpsColumns,
+            isSelectedSourceFile: true
+          })
+        : null;
       logger.debug('Geo column restore check', LogCategory.DATA, {
         hasSourceFiles: true,
         primaryFileName: primaryFile?.name,
-        geoColumn: primaryFile?.geoColumn,
-        joinedBasemap: primaryFile?.joinedBasemap,
-        gpsMode: primaryFile?.gpsMode,
-        gpsColumns: primaryFile?.gpsColumns
+        geoColumn: restoredPrimaryJoinState?.geoColumn,
+        joinedBasemap: restoredPrimaryJoinState?.joinedBasemap,
+        gpsMode: restoredPrimaryJoinState?.gpsMode,
+        gpsColumns: restoredPrimaryJoinState?.gpsColumns
       });
-      if (primaryFile?.joinedBasemap) {
-        dataTabActions.selectBasemap(primaryFile.joinedBasemap);
+      if (restoredPrimaryJoinState?.joinedBasemap) {
+        dataTabActions.selectBasemap(restoredPrimaryJoinState.joinedBasemap);
       }
-      if (primaryFile?.gpsMode && primaryFile.gpsColumns) {
+      if (
+        restoredPrimaryJoinState?.gpsMode &&
+        restoredPrimaryJoinState.gpsColumns
+      ) {
         dataTabActions.setGeolocationState({
           linkedVariable: null,
           linkedVariableName: '',
-          latitudeColumn: primaryFile.gpsColumns.lat,
-          longitudeColumn: primaryFile.gpsColumns.lon,
+          latitudeColumn: restoredPrimaryJoinState.gpsColumns.lat,
+          longitudeColumn: restoredPrimaryJoinState.gpsColumns.lon,
           autoDetected: false
         });
-      } else if (primaryFile?.geoColumn) {
-        const geoCol = primaryFile.geoColumn;
+      } else if (restoredPrimaryJoinState?.geoColumn) {
+        const geoCol = restoredPrimaryJoinState.geoColumn;
         // Defer restoration until dataset is fully loaded. The component's
         // $effect resets linkedVariable when the dataset ID changes, so we
         // must wait for that reset to happen first, then override.
@@ -1162,6 +1222,7 @@ function createDataOrchestratorService() {
     layersActions.syncWithVisualizations();
     legendActions.syncWithVisualizations();
     globalActions.ensureTabSelected();
+    persistenceRegistry.markClean();
 
     projectAlreadyRestored = true;
   }

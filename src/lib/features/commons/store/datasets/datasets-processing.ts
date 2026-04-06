@@ -5,16 +5,23 @@ import type {
 } from '$lib/features/data-pipeline';
 import {
   ColumnType,
+  computeCentroid,
   dataPipeline,
   isZipDatasetResult
 } from '$lib/features/data-pipeline';
 import type { UploadedFile } from '../create-project.types';
+import { FileType } from '../create-project.types';
 import type { DatasetsState, DatasetsInternals } from './datasets-state.svelte';
 import { startProcessing, endProcessing } from './datasets-state.svelte';
 import { LogCategory, logger } from '../../utils/logger';
 import { DuplicateFileError } from '../../errors/pipeline.errors';
 import * as m from '$lib/paraglide/messages';
 import { showWarning } from '../../utils/notification.utils.svelte';
+import { sanitizePreparedGeoJSON } from '../../utils/persisted-geojson.utils';
+import {
+  isGeoJSONFeatureCollection,
+  type GeoJSONFeatureCollection
+} from '$lib/types/data';
 
 export interface VisualizationConfig {
   id: string;
@@ -36,6 +43,153 @@ export interface VisualizationStoreOperations {
     datasetId: string,
     name: string
   ) => void;
+}
+
+function isNonEmptyRow(
+  row: Record<string, unknown> | null | undefined
+): row is Record<string, unknown> {
+  return !!row && Object.keys(row).length > 0;
+}
+
+function extractCoordsFromGeometry(
+  geometry: Record<string, unknown> | null | undefined
+): Array<[number, number]> {
+  if (!geometry) {
+    return [];
+  }
+
+  const coordinates = geometry.coordinates;
+  if (!Array.isArray(coordinates)) {
+    return [];
+  }
+
+  const result: Array<[number, number]> = [];
+  const stack: unknown[] = [coordinates];
+
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (!Array.isArray(current)) {
+      continue;
+    }
+
+    const [first, second] = current;
+    if (typeof first === 'number' && typeof second === 'number') {
+      result.push([first, second]);
+      continue;
+    }
+
+    stack.push(...current);
+  }
+
+  return result;
+}
+
+function getPreparedGeoJSON(
+  file: UploadedFile
+): GeoJSONFeatureCollection | undefined {
+  if (!file.preparedGeoJSON) {
+    return undefined;
+  }
+
+  try {
+    const parsed = JSON.parse(file.preparedGeoJSON);
+    return isGeoJSONFeatureCollection(parsed) ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function buildRowsFromPreparedGeoJSON(
+  file: UploadedFile
+): Record<string, unknown>[] | undefined {
+  const preparedGeoJSON = getPreparedGeoJSON(file);
+  if (!preparedGeoJSON) {
+    return undefined;
+  }
+
+  return preparedGeoJSON.features.map((feature) => ({
+    ...(feature.properties ?? {})
+  }));
+}
+
+function buildGeometryInfoFromPreparedGeoJSON(file: UploadedFile) {
+  const preparedGeoJSON = getPreparedGeoJSON(file);
+  if (!preparedGeoJSON || preparedGeoJSON.features.length === 0) {
+    return undefined;
+  }
+
+  let minLon = Infinity;
+  let minLat = Infinity;
+  let maxLon = -Infinity;
+  let maxLat = -Infinity;
+
+  for (const feature of preparedGeoJSON.features) {
+    const coords = extractCoordsFromGeometry(
+      feature.geometry as Record<string, unknown> | null | undefined
+    );
+
+    for (const [lon, lat] of coords) {
+      if (lon < minLon) minLon = lon;
+      if (lat < minLat) minLat = lat;
+      if (lon > maxLon) maxLon = lon;
+      if (lat > maxLat) maxLat = lat;
+    }
+  }
+
+  if (
+    !Number.isFinite(minLon) ||
+    !Number.isFinite(minLat) ||
+    !Number.isFinite(maxLon) ||
+    !Number.isFinite(maxLat)
+  ) {
+    return undefined;
+  }
+
+  const firstGeometry = preparedGeoJSON.features.find(
+    (feature) => feature.geometry?.type
+  )?.geometry;
+  const bounds: [number, number, number, number] = [
+    minLon,
+    minLat,
+    maxLon,
+    maxLat
+  ];
+
+  return {
+    type: firstGeometry?.type ?? 'Polygon',
+    columnName: 'geom',
+    bounds,
+    centroid: computeCentroid(bounds),
+    featureCount: preparedGeoJSON.features.length
+  };
+}
+
+function createRestorableGeoSnapshot(file: UploadedFile): UploadedFile | null {
+  if (!file.preparedGeoJSON || !file.duckdbTableName) {
+    return null;
+  }
+
+  const isGeoSnapshot =
+    file.fileType === FileType.GEOJSON ||
+    file.fileType === FileType.SHAPEFILE ||
+    file.fileType === FileType.GEOPACKAGE ||
+    file.fileType === FileType.GEOPARQUET ||
+    file.fileType === FileType.KML ||
+    file.fileType === FileType.KMZ ||
+    file.fileType === FileType.GPX;
+
+  if (!isGeoSnapshot) {
+    return null;
+  }
+
+  return {
+    ...file,
+    name: file.name.replace(/\.[^.]+$/u, '.geojson'),
+    type: 'application/geo+json',
+    fileType: FileType.GEOJSON,
+    content: sanitizePreparedGeoJSON(file.preparedGeoJSON),
+    originalFile: undefined
+  };
 }
 
 export function createDatasetFromPreprocessedFile(
@@ -72,13 +226,31 @@ export function createDatasetFromPreprocessedFile(
     })
   );
 
-  const data = file.parsedData as Record<string, unknown>[] | undefined;
+  const parsedRows = Array.isArray(file.parsedData)
+    ? (file.parsedData as Record<string, unknown>[])
+    : undefined;
+  const data =
+    parsedRows && parsedRows.some((row) => isNonEmptyRow(row))
+      ? parsedRows
+      : buildRowsFromPreparedGeoJSON(file);
   const firstColStats = Object.values(statistics)[0];
-  const actualRowCount = firstColStats?.count ?? data?.length ?? 0;
+  const geometryInfo = buildGeometryInfoFromPreparedGeoJSON(file);
+  const actualRowCount =
+    firstColStats?.count ?? geometryInfo?.featureCount ?? data?.length ?? 0;
 
   const tableName =
     file.duckdbTableName ??
     `legacy_${file.name.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}`;
+
+  const isGeoDataset =
+    Boolean(geometryInfo) ||
+    file.fileType === FileType.GEOJSON ||
+    file.fileType === FileType.SHAPEFILE ||
+    file.fileType === FileType.GEOPACKAGE ||
+    file.fileType === FileType.GEOPARQUET ||
+    file.fileType === FileType.KML ||
+    file.fileType === FileType.KMZ ||
+    file.fileType === FileType.GPX;
 
   return {
     id: file.datasetId ?? file.id,
@@ -87,6 +259,7 @@ export function createDatasetFromPreprocessedFile(
     tableName,
     columns,
     rowCount: actualRowCount,
+    geometry: geometryInfo,
     metadata: {
       processedAt: new Date(),
       fileType: file.fileType,
@@ -95,6 +268,33 @@ export function createDatasetFromPreprocessedFile(
     data,
     fileSize: file.size,
     geoDetection: file.deepAnalysis?.geoDetection,
+    analysis: {
+      columns,
+      geoColumns: geometryInfo
+        ? [
+            {
+              columnName: geometryInfo.columnName ?? 'geom',
+              type: 'unknown' as const,
+              confidence: 1,
+              index: 0,
+              isValid: true
+            }
+          ]
+        : [],
+      hasGeoData: isGeoDataset,
+      suggestedGeoColumn: geometryInfo?.columnName,
+      rowCount: actualRowCount,
+      warnings: file.deepAnalysis?.geoDetection?.warnings ?? []
+    },
+    bounds: geometryInfo
+      ? {
+          minLon: geometryInfo.bounds[0],
+          minLat: geometryInfo.bounds[1],
+          maxLon: geometryInfo.bounds[2],
+          maxLat: geometryInfo.bounds[3]
+        }
+      : undefined,
+    format: file.fileType,
     createdAt: new Date()
   };
 }
@@ -172,6 +372,15 @@ export async function processFiles(
     const results = await Promise.all(
       files.map(async (file) => {
         return internals.processingSemaphore.run(async () => {
+          const restorableGeoSnapshot = createRestorableGeoSnapshot(file);
+          if (restorableGeoSnapshot) {
+            logger.debug(
+              `Restoring geo snapshot via data pipeline for: ${file.name}`,
+              LogCategory.STORE
+            );
+            return dataPipeline.processUploadedFile(restorableGeoSnapshot);
+          }
+
           if (file.duckdbTableName) {
             logger.debug(
               `Using pre-processed data for: ${file.name} (table: ${file.duckdbTableName})`,
@@ -255,6 +464,15 @@ export async function addFile(
 
   try {
     const result = await internals.processingSemaphore.run(async () => {
+      const restorableGeoSnapshot = createRestorableGeoSnapshot(file);
+      if (restorableGeoSnapshot) {
+        logger.debug(
+          `Restoring geo snapshot via data pipeline for: ${file.name}`,
+          LogCategory.STORE
+        );
+        return dataPipeline.processUploadedFile(restorableGeoSnapshot);
+      }
+
       if (file.duckdbTableName) {
         logger.debug(
           `Using pre-processed data for: ${file.name} (table: ${file.duckdbTableName})`,
