@@ -1,5 +1,4 @@
 import { JoinStatus } from '$lib/features/commons/constants/ui.constants';
-import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import {
   escapeIdentifier,
@@ -31,8 +30,24 @@ export interface DuckDBClientForJoin {
   ): Promise<unknown>;
 }
 
+interface InformationSchemaColumn {
+  column_name: string;
+  data_type: string;
+}
+
 export function getBasemapAttributesId(basemap: BasemapMetadata): string {
   return basemap.file.replace(/\.(parquet|geojson)$/i, '');
+}
+
+function isGeometryColumnName(columnName: string): boolean {
+  return /^(geom|geometry|wkb_geometry|the_geom)$/i.test(columnName);
+}
+
+function isDuckGeometryType(dataType: string): boolean {
+  const normalizedType = dataType.toUpperCase();
+  return (
+    normalizedType === 'GEOMETRY' || normalizedType.startsWith('GEOMETRY(')
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -814,17 +829,37 @@ export async function getJoinedArrowTable(
   const escapedDataset = escapeIdentifier(datasetTableName);
   const escapedGeometry = escapeIdentifier(geometryTable);
 
-  const geomColumns = (await Duck.query(
-    `SELECT column_name FROM information_schema.columns
-     WHERE table_name = '${escapeSqlString(geometryTable)}'
-     AND column_name NOT IN ('${INTERNAL_COLUMN.GEOM}', '${INTERNAL_COLUMN.GEOMETRY}', '${INTERNAL_COLUMN.WKB_GEOMETRY}', '${INTERNAL_COLUMN.THE_GEOM}')
-     AND data_type IN ('VARCHAR', 'TEXT')`,
+  const geometryTableColumns = (await Duck.query(
+    `SELECT column_name, data_type FROM information_schema.columns
+     WHERE table_name = '${escapeSqlString(geometryTable)}'`,
     { format: 'array' }
-  )) as Array<{ column_name: string }>;
+  )) as InformationSchemaColumn[];
 
-  const colList = geomColumns
+  const geometryColumn = geometryTableColumns.find((column) =>
+    isGeometryColumnName(column.column_name)
+  );
+
+  if (!geometryColumn) {
+    throw new Error(
+      `No geometry column found in basemap geometry table "${geometryTable}".`
+    );
+  }
+
+  const attrColumns = geometryTableColumns.filter((column) => {
+    if (isGeometryColumnName(column.column_name)) {
+      return false;
+    }
+
+    return ['VARCHAR', 'TEXT'].includes(column.data_type.toUpperCase());
+  });
+
+  const colList = attrColumns
     .map((c) => `"${escapeIdentifier(c.column_name)}"`)
     .join(', ');
+
+  const geometrySelectExpression = isDuckGeometryType(geometryColumn.data_type)
+    ? 'ST_AsWKB(gu._geom_value)'
+    : 'gu._geom_value';
 
   await Duck.query(`
     CREATE OR REPLACE VIEW "${joinedView}" AS
@@ -833,14 +868,14 @@ export async function getJoinedArrowTable(
       ON ${colList}
       INTO NAME _attr_col VALUE _attr_val
     )
-    SELECT d.*, gu.geom AS geometry
+    SELECT d.*, ${geometrySelectExpression} AS geometry
     FROM "${escapedDataset}" d
     INNER JOIN (
-      SELECT DISTINCT _attr_val, geom
+      SELECT DISTINCT _attr_val, "${escapeIdentifier(geometryColumn.column_name)}" AS _geom_value
       FROM geom_unpivot
     ) gu
     ON CAST(d.basemap_id AS VARCHAR) = CAST(gu._attr_val AS VARCHAR)
-    WHERE gu.geom IS NOT NULL
+    WHERE gu._geom_value IS NOT NULL
   `);
 
   let arrowTable = await getArrowTableDirect(joinedView);
