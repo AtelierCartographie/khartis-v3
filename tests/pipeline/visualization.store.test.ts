@@ -63,7 +63,11 @@ import {
   StrokeMode,
   SymbolMode
 } from '$lib/features/main-toolbar/constants';
-import { applySuggestionToVisualization } from '$lib/features/main-toolbar/visualization-tab/suggestion.utils';
+import {
+  applySuggestionToVisualization,
+  resolveNextSuggestionSelection,
+  resolveBlankVisualizationType
+} from '$lib/features/main-toolbar/visualization-tab/suggestion.utils';
 
 describe('visualizationStore suggestion presets', () => {
   beforeEach(() => {
@@ -113,6 +117,23 @@ describe('visualizationStore suggestion presets', () => {
       PrimitiveFilterType.POINT,
       PrimitiveFilterType.LINE
     ]);
+  });
+
+  it('creates ex nihilo polygon visualizations from a blank choropleth preset', () => {
+    expect(
+      resolveBlankVisualizationType(
+        mocks.datasets[0] as Parameters<typeof resolveBlankVisualizationType>[0]
+      )
+    ).toBe(VisualizationType.CHOROPLETH);
+  });
+
+  it('toggles the active suggestion selection off on a second click', () => {
+    expect(
+      resolveNextSuggestionSelection(undefined, 'texts_proportional')
+    ).toBe('texts_proportional');
+    expect(
+      resolveNextSuggestionSelection('texts_proportional', 'texts_proportional')
+    ).toBeUndefined();
   });
 
   it('initializes visualization text and label colors with black defaults', () => {
