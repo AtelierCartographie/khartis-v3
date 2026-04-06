@@ -29,6 +29,10 @@ import {
   filterArrowTableByDataFilters,
   filterArrowTableByTableFilters
 } from '../utils/arrow-filter.utils';
+import {
+  getMapLayerRenderOrder,
+  getVisualizationRenderOrder
+} from '../utils/layer-order.utils';
 import type { DataTableFilter } from '$lib/features/duckdb/types';
 import { getProjectionState } from '$lib/features/step-toolbar/tools/projections/projection.store.svelte';
 import { proj4d3 } from '../utils/proj4d3';
@@ -189,6 +193,8 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       const isOSMActive = Boolean(osmBasemapStore.activeOSMBasemap);
       const worldBaseTable = getWorldBaseTable();
       const activeVisualizations = getActiveVisualizations();
+      const visualizationsToRender =
+        getVisualizationRenderOrder(activeVisualizations);
 
       // Only apply modelMatrix in orthographic mode (Deck.gl standalone)
       // In MapLibre mode (deckOverlay), the map handles projection including globe
@@ -263,6 +269,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       // and foreground (frontières, rivières, graticules, villes).
       // Foreground layers render ABOVE data so basemap borders remain visible
       // even when polygon data covers the basemap fill.
+      let basemapBackgroundLayers: Layer<DeckDataRow>[] = [];
       let basemapForegroundLayers: Layer<DeckDataRow>[] = [];
 
       if (shouldShowBasemapLayers) {
@@ -322,7 +329,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             basemapCtx,
             additionalData
           );
-          layers.push(...basemapGroups.background);
+          basemapBackgroundLayers = basemapGroups.background;
           basemapForegroundLayers = basemapGroups.foreground;
         } catch (error) {
           logger.error(
@@ -334,7 +341,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       }
 
       const renderedDatasetIds = new Set<string>();
-      for (const viz of activeVisualizations) {
+      for (const viz of visualizationsToRender) {
         try {
           const datasetId = viz.datasetId;
           const table = tables.get(datasetId);
@@ -444,11 +451,13 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         }
       }
 
-      // Basemap foreground layers (borders, cities, rivers, graticules)
-      // render above data so administrative boundaries stay visible
-      if (basemapForegroundLayers.length > 0) {
-        layers.push(...basemapForegroundLayers);
-      }
+      const orderedLayers = getMapLayerRenderOrder({
+        basemapBackgroundLayers,
+        thematicLayers: layers,
+        basemapForegroundLayers
+      });
+      layers.length = 0;
+      layers.push(...orderedLayers);
 
       const hasExpectedActiveViz = activeVisualizations.length > 0;
       const hasExpectedDatasetFallbacks =
