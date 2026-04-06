@@ -140,6 +140,8 @@ function getCategoryColorMapForViz(
 
 export function useMapState(options?: UseMapStateOptions): UseMapStateReturn {
   const activeVisualizations = $derived.by(() => {
+    void visualizationStore.version;
+
     const forcedIds =
       options?.getForcedVisualizationIds?.() ?? options?.forcedVisualizationIds;
     if (!forcedIds || forcedIds.length === 0) {

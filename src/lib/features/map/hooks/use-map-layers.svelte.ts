@@ -474,16 +474,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         hasExpectedVisibleLayers;
 
       if (shouldPreservePreviousLayers) {
-        logger.warn(
-          'Computed empty layer stack unexpectedly; preserving last valid layers',
-          LogCategory.MAP,
-          {
-            activeVisualizationsCount: activeVisualizations.length,
-            tablesCount: tables.size,
-            geoJSONsCount: geoJSONs.size,
-            hasVisibleBasemapConfig
-          }
-        );
         const applied = setLayers(lastAppliedLayers);
         if (!applied) {
           return;
