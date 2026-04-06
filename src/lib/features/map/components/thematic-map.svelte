@@ -388,6 +388,203 @@
     }
   }
 
+  function syncOrthographicViewportAfterViewModeSwitch(): void {
+    if (mapInit.viewMode !== ViewMode.ORTHOGRAPHIC) {
+      return;
+    }
+
+    const refBasemapId = basemapStyleStore.referenceBasemapId;
+    const currentWorldBaseTable = worldBaseTable;
+
+    if (firstTable) {
+      const dataset = getRenderedDataset(firstDatasetId);
+      const duckDataset = getRenderedDuckDBDataset(firstDatasetId);
+      const shouldUseBasemapReference =
+        shouldUseBasemapReferenceInOrthographicView(
+          dataset,
+          duckDataset,
+          refBasemapId
+        );
+      const referenceTable = resolveOrthographicReferenceTable({
+        dataset,
+        duckDataset,
+        datasetTable: firstTable,
+        basemapTable: currentWorldBaseTable,
+        referenceBasemapId: refBasemapId
+      });
+      const bounds = referenceTable
+        ? calculateBoundsFromGeoArrow(referenceTable)
+        : null;
+
+      if (bounds) {
+        const currentBasemapMeta = basemapService.currentMetadata;
+        const mainlandBbox = currentBasemapMeta
+          ? getMainlandBboxForBasemap(
+              currentBasemapMeta,
+              basemapService.projectionPresets
+            )
+          : null;
+        const projectedBbox = currentBasemapMeta
+          ? computeProjectedBboxForBasemap(
+              currentBasemapMeta,
+              basemapService.projectionPresets,
+              960,
+              600,
+              mainlandBbox ?? undefined
+            )
+          : null;
+        const [[minX, minY], [maxX, maxY]] = bounds as [
+          [number, number],
+          [number, number]
+        ];
+        const datasetBbox: [number, number, number, number] = [
+          minX,
+          minY,
+          maxX,
+          maxY
+        ];
+        const datasetProjectedBbox = currentBasemapMeta
+          ? computeProjectedBboxForBasemap(
+              currentBasemapMeta,
+              basemapService.projectionPresets,
+              960,
+              600,
+              datasetBbox
+            )
+          : null;
+        const referenceBbox = resolveOrthographicReferenceBbox({
+          datasetBounds: datasetBbox,
+          datasetProjectedBbox,
+          shouldUseBasemapReference,
+          basemapProjectedBbox: projectedBbox,
+          basemapMainlandBbox: mainlandBbox
+        });
+
+        if (referenceBbox) {
+          projectionStore.setReferenceBbox(
+            referenceBbox,
+            undefined,
+            projectedBbox === referenceBbox ||
+              datasetProjectedBbox === referenceBbox
+          );
+        }
+
+        fitOrthographicViewport();
+        return;
+      }
+
+      if (shouldUseBasemapReference && projectionStore.referenceBbox) {
+        fitOrthographicViewport();
+        return;
+      }
+
+      const geoMetadata = firstTable.schema.metadata?.get('geo');
+      if (geoMetadata) {
+        projectionStore.setReferenceBboxFromMetadata(geoMetadata);
+        fitOrthographicViewport();
+        return;
+      }
+    }
+
+    if (firstGeoJSON) {
+      const useBasemapBounds = Boolean(refBasemapId) && currentWorldBaseTable;
+      const bounds = useBasemapBounds
+        ? calculateBoundsFromGeoArrow(currentWorldBaseTable)
+        : calculateBoundsFromGeoJSON(firstGeoJSON);
+
+      if (bounds) {
+        const [[minX, minY], [maxX, maxY]] = bounds as [
+          [number, number],
+          [number, number]
+        ];
+        projectionStore.setReferenceBbox([minX, minY, maxX, maxY]);
+        fitOrthographicViewport();
+        return;
+      }
+    }
+
+    if (currentWorldBaseTable) {
+      const currentBasemapMeta = basemapService.currentMetadata;
+      const mainlandBbox = currentBasemapMeta
+        ? getMainlandBboxForBasemap(
+            currentBasemapMeta,
+            basemapService.projectionPresets
+          )
+        : null;
+      const projectedBbox = currentBasemapMeta
+        ? computeProjectedBboxForBasemap(
+            currentBasemapMeta,
+            basemapService.projectionPresets,
+            960,
+            600,
+            mainlandBbox ?? undefined
+          )
+        : null;
+
+      if (projectedBbox) {
+        projectionStore.setReferenceBbox(projectedBbox, undefined, true);
+        fitOrthographicViewport();
+        return;
+      }
+
+      if (mainlandBbox) {
+        projectionStore.setReferenceBbox(mainlandBbox);
+        fitOrthographicViewport();
+        return;
+      }
+
+      const bounds = calculateBoundsFromGeoArrow(currentWorldBaseTable);
+      if (bounds) {
+        const [[minX, minY], [maxX, maxY]] = bounds as [
+          [number, number],
+          [number, number]
+        ];
+        projectionStore.setReferenceBbox([minX, minY, maxX, maxY]);
+        fitOrthographicViewport();
+      }
+    }
+  }
+
+  function fitMapLibreViewportAfterViewModeSwitch(): void {
+    if (mapInit.viewMode !== ViewMode.MAPLIBRE || !mapInit.map) {
+      return;
+    }
+
+    const refBasemapId = basemapStyleStore.referenceBasemapId;
+    const currentWorldBaseTable = worldBaseTable;
+
+    if (refBasemapId && currentWorldBaseTable) {
+      const bounds = calculateBoundsFromGeoArrow(currentWorldBaseTable);
+      if (bounds) {
+        mapBounds.fitToBounds(bounds);
+        return;
+      }
+    }
+
+    if (firstTable) {
+      const bounds = calculateBoundsFromGeoArrow(firstTable);
+      if (bounds) {
+        mapBounds.fitToBounds(bounds);
+        return;
+      }
+    }
+
+    if (firstGeoJSON) {
+      const bounds = calculateBoundsFromGeoJSON(firstGeoJSON);
+      if (bounds) {
+        mapBounds.fitToBounds(bounds);
+        return;
+      }
+    }
+
+    if (currentWorldBaseTable) {
+      const bounds = calculateBoundsFromGeoArrow(currentWorldBaseTable);
+      if (bounds) {
+        mapBounds.fitToBounds(bounds);
+      }
+    }
+  }
+
   const mapBasemap = useMapBasemap({
     getMap: () => mapInit.map,
     getIsMapLoaded: () => mapInit.isMapLoaded,
@@ -510,6 +707,13 @@
 
   $effect(() => {
     if (mapInit.isMapLoaded && isSwitchingViewMode) {
+      untrack(() => {
+        if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
+          syncOrthographicViewportAfterViewModeSwitch();
+        } else if (mapInit.viewMode === ViewMode.MAPLIBRE) {
+          fitMapLibreViewportAfterViewModeSwitch();
+        }
+      });
       isSwitchingViewMode = false;
       if (pendingLayerUpdate) {
         pendingLayerUpdate = false;
@@ -706,6 +910,7 @@
     const sourceFileCount = untrack(
       () => projectStore.currentProject?.data?.sourceFiles?.length ?? 0
     );
+    const visualizationCount = visualizationStore.visualizations.length;
 
     if (currentCount !== lastDatasetCountSnapshot) {
       lastDatasetCountSnapshot = currentCount;
@@ -720,17 +925,13 @@
     }
 
     if (currentCount === 0 && previousDatasetCount > 0 && mapInit.isMapLoaded) {
+      if (visualizationCount > 0) {
+        return;
+      }
+
       // Guard: don't reset if the project still has source files.
       // Datasets can be temporarily empty during reprocessing or lifecycle transitions.
       if (sourceFileCount > 0) {
-        logger.warn(
-          '[thematic-map] projectEmpty blocked: datasets=0 but sourceFiles still exist',
-          LogCategory.MAP,
-          {
-            previousDatasetCount,
-            sourceFileCount
-          }
-        );
         return;
       }
 
@@ -738,44 +939,23 @@
         return;
       }
 
-      logger.info(
-        '[thematic-map] projectEmpty candidate detected, scheduling reset',
-        LogCategory.MAP,
-        {
-          previousDatasetCount,
-          sourceFileCount,
-          debounceMs: PROJECT_EMPTY_RESET_DEBOUNCE_MS
-        }
-      );
-
       projectEmptyResetTimeoutId = setTimeout(() => {
         projectEmptyResetTimeoutId = null;
 
         const datasetsCountNow = datasetsStore.datasets.length;
         const sourceFileCountNow =
           projectStore.currentProject?.data?.sourceFiles?.length ?? 0;
+        const visualizationCountNow = visualizationStore.visualizations.length;
         if (
           datasetsCountNow !== 0 ||
           sourceFileCountNow > 0 ||
+          visualizationCountNow > 0 ||
           !mapInit.isMapLoaded
         ) {
-          logger.warn(
-            '[thematic-map] projectEmpty reset canceled after debounce',
-            LogCategory.MAP,
-            {
-              datasetsCountNow,
-              sourceFileCountNow,
-              isMapLoaded: mapInit.isMapLoaded
-            }
-          );
           return;
         }
 
         previousDatasetCount = 0;
-        logger.info(
-          '[thematic-map] projectEmpty confirmed: resetting map state',
-          LogCategory.MAP
-        );
 
         pendingViewReset = true;
         projectionStore.clear();
