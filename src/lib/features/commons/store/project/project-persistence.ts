@@ -12,8 +12,10 @@ import { datasetsStore } from '../datasets.store.svelte';
 import { downloadFile } from '../../utils/file-export.utils';
 import { LogCategory, logger } from '../../utils/logger';
 import { showError } from '../../utils/notification.utils.svelte';
+import { resolvePersistedJoinState } from '../../utils/persisted-join-state.utils';
 import { generateProjectFilename } from '../../utils/string.utils';
 import { ProjectValidator } from '../../utils/validation.utils';
+import type { UploadedFile } from '../create-project.types';
 import type { ProjectStateContainer } from './project-state.svelte';
 import { addToHistory, resetHistory } from './project-history';
 
@@ -26,6 +28,9 @@ function syncGeoInfoToSourceFiles(container: ProjectStateContainer): void {
   const files = container._state.currentProject?.data?.sourceFiles;
   if (!files) return;
   const selectedSourceFileId = datasetsStore.selectedDataset?.sourceFileId;
+  const selectedBasemapId =
+    dataTabState.basemapJoin.selectedBasemap ||
+    container._state.currentProject?.data?.basemap?.id;
   const selectedGpsColumns =
     dataTabState.geolocation.latitudeColumn &&
     dataTabState.geolocation.longitudeColumn
@@ -43,45 +48,85 @@ function syncGeoInfoToSourceFiles(container: ProjectStateContainer): void {
     const duckDataset = dataset?.id
       ? duckDBOrchestrator.getDataset(dataset.id)
       : null;
-
-    if (duckDataset?.geoColumn) {
-      file.geoColumn = duckDataset.geoColumn;
-    }
-    if (duckDataset?.joinedBasemap) {
-      file.joinedBasemap = duckDataset.joinedBasemap;
-    }
-    if (duckDataset?.gpsMode) {
-      file.gpsMode = true;
-      file.gpsColumns = duckDataset.gpsColumns;
-      file.geoColumn = undefined;
-    }
-
-    // Fallback: use UI state for the selected dataset
-    if (
-      file.id === selectedSourceFileId &&
-      selectedGpsColumns &&
-      !file.gpsMode
-    ) {
-      file.gpsMode = true;
-      file.gpsColumns = selectedGpsColumns;
-      file.geoColumn = undefined;
-    }
-    if (
-      file.id === selectedSourceFileId &&
-      !file.gpsMode &&
-      !file.geoColumn &&
-      dataTabState.geolocation.linkedVariableName
-    ) {
-      file.geoColumn = dataTabState.geolocation.linkedVariableName;
-    }
-    if (
-      file.id === selectedSourceFileId &&
-      !file.joinedBasemap &&
-      dataTabState.basemapJoin.selectedBasemap
-    ) {
-      file.joinedBasemap = dataTabState.basemapJoin.selectedBasemap;
-    }
+    Object.assign(
+      file,
+      resolvePersistedJoinState({
+        file,
+        duckDataset,
+        selectedBasemapId,
+        linkedGeoColumn: dataTabState.geolocation.linkedVariableName,
+        selectedGpsColumns,
+        isSelectedSourceFile: file.id === selectedSourceFileId
+      })
+    );
   }
+}
+
+function hasStoredStatistics(file: UploadedFile | undefined): boolean {
+  return Boolean(file?.statistics && Object.keys(file.statistics).length > 0);
+}
+
+function hasStoredParsedRows(file: UploadedFile | undefined): boolean {
+  return Boolean(
+    Array.isArray(file?.parsedData) &&
+    file.parsedData.some(
+      (row) => row && typeof row === 'object' && Object.keys(row).length > 0
+    )
+  );
+}
+
+function mergePersistedSourceFile(
+  currentFile: UploadedFile,
+  persistedFile?: UploadedFile
+): UploadedFile {
+  if (!persistedFile) {
+    return currentFile;
+  }
+
+  return {
+    ...currentFile,
+    content: currentFile.content ?? persistedFile.content,
+    deepAnalysis: currentFile.deepAnalysis ?? persistedFile.deepAnalysis,
+    relatedFilesData:
+      currentFile.relatedFilesData ?? persistedFile.relatedFilesData,
+    sourceArchive: currentFile.sourceArchive ?? persistedFile.sourceArchive,
+    datasetId: currentFile.datasetId ?? persistedFile.datasetId,
+    duckdbTableName:
+      currentFile.duckdbTableName ?? persistedFile.duckdbTableName,
+    statistics: hasStoredStatistics(currentFile)
+      ? currentFile.statistics
+      : persistedFile.statistics,
+    parsedData: hasStoredParsedRows(currentFile)
+      ? currentFile.parsedData
+      : persistedFile.parsedData,
+    preparedGeoJSON:
+      currentFile.preparedGeoJSON ?? persistedFile.preparedGeoJSON
+  };
+}
+
+async function mergePersistedSourceFiles(
+  container: ProjectStateContainer
+): Promise<void> {
+  const currentProject = container._state.currentProject;
+  const currentFiles = currentProject?.data?.sourceFiles;
+
+  if (!currentProject?.id || !currentFiles || currentFiles.length === 0) {
+    return;
+  }
+
+  const persistedProject = await projectRepository.load(currentProject.id);
+  const persistedFiles = persistedProject?.data?.sourceFiles;
+  if (!persistedFiles?.length) {
+    return;
+  }
+
+  const persistedById = new Map(
+    persistedFiles.map((file) => [file.id, file] as const)
+  );
+
+  currentProject.data.sourceFiles = currentFiles.map((file) =>
+    mergePersistedSourceFile(file, persistedById.get(file.id))
+  );
 }
 
 export async function saveCurrentProject(
@@ -93,6 +138,7 @@ export async function saveCurrentProject(
 
   try {
     syncGeoInfoToSourceFiles(container);
+    await mergePersistedSourceFiles(container);
 
     const projectValidation = ProjectValidator.validateProjectSize(
       container._state.currentProject
