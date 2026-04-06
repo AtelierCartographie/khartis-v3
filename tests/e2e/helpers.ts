@@ -584,9 +584,16 @@ export async function addDatasetViaModal(
 ): Promise<void> {
   await dismissConsentBanner(page);
 
-  const addFilesButton = page.getByRole('button', {
-    name: ADD_FILES_BUTTON_NAME
-  });
+  const addFilesButton = page
+    .getByRole('button', {
+      name: ADD_FILES_BUTTON_NAME
+    })
+    .or(
+      page.getByRole('button', {
+        name: /Ajouter des données au projet|Add data to the project|^Ajouter$|^Add$/i
+      })
+    )
+    .first();
   await expect(addFilesButton).toBeVisible({ timeout: 10000 });
   await addFilesButton.click();
 
