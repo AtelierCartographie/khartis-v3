@@ -161,6 +161,27 @@ export function mapSuggestionToType(suggestionId: string): VisualizationType {
   return mapping[suggestionId] ?? VisualizationType.CHOROPLETH;
 }
 
+export function resolveBlankVisualizationType(
+  dataset?: DatasetGeometrySource | null
+): VisualizationType {
+  const geometryType = resolveDatasetGeometryType(dataset);
+
+  if (geometryType?.toLowerCase().includes('point')) {
+    return VisualizationType.PROPORTIONAL;
+  }
+
+  return VisualizationType.CHOROPLETH;
+}
+
+export function resolveNextSuggestionSelection(
+  currentSuggestionId: string | undefined,
+  nextSuggestionId: string
+): string | undefined {
+  return currentSuggestionId === nextSuggestionId
+    ? undefined
+    : nextSuggestionId;
+}
+
 export function applySuggestionMapping(
   vizId: string,
   vizType: VisualizationType,
