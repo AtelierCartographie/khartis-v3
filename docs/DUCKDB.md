@@ -312,6 +312,7 @@ await duckDBOrchestrator.getFullAnalysis(tableName);
 ## GPS Mode
 
 Un dataset est en **GPS mode** quand il possède `gpsMode: true` et `gpsColumns: { lat, lon }`.
+Lorsqu'un fond OSM est choisi pour un CSV GPS, ces informations sont aussi persistées sur le `sourceFile` afin qu'un refresh recharge directement les points sans repasser par l'etape de jointure.
 
 ### Validation (`validateGPSColumns`)
 

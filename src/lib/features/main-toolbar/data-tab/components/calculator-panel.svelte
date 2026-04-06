@@ -11,6 +11,8 @@
   import { ArrowRight, Launch } from 'carbon-icons-svelte';
   import { dataToolsStore } from '../data-tools.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
+  import { COLUMN_TRANSFORMATION_TYPES } from '$lib/features/commons/store/create-project.types';
 
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
@@ -262,6 +264,18 @@
         effectiveName,
         formula
       );
+
+      if (selectedDataset?.sourceFileId) {
+        await projectStore.addColumnTransformation(
+          selectedDataset.sourceFileId,
+          {
+            type: COLUMN_TRANSFORMATION_TYPES.CALCULATE,
+            column: effectiveName,
+            newValue: formula,
+            timestamp: new Date().toISOString()
+          }
+        );
+      }
 
       variableCounter++;
       variableName = '';

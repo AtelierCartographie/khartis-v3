@@ -3,6 +3,7 @@ import { dataTabState } from '$lib/features/commons/store/data-tab.store.svelte'
 import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
 import { deepCloneForStorage } from '$lib/features/commons/utils/clone-for-storage.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { resolvePersistedJoinState } from '$lib/features/commons/utils/persisted-join-state.utils';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import { Duck } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
@@ -214,41 +215,34 @@ export async function serializeProjectData(
   // --- File serialization (data-layer, kept as-is) ---
 
   if (dataObj.sourceFiles && Array.isArray(dataObj.sourceFiles)) {
+    const selectedSourceFileId = datasetsStore.selectedDataset?.sourceFileId;
+    const selectedBasemapId = dataTabState.basemapJoin.selectedBasemap;
+    const selectedGpsColumns =
+      dataTabState.geolocation.latitudeColumn &&
+      dataTabState.geolocation.longitudeColumn
+        ? {
+            lat: dataTabState.geolocation.latitudeColumn,
+            lon: dataTabState.geolocation.longitudeColumn
+          }
+        : undefined;
+
     serialized.sourceFiles = dataObj.sourceFiles.map((file: UploadedFile) => {
       const serializedFile = serializeUploadedFile(file, {
         preserveBinary: options?.preserveBinary
       });
 
       const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(file.id);
-      if (duckDBDataset) {
-        if (duckDBDataset.joinedBasemap) {
-          serializedFile.joinedBasemap = duckDBDataset.joinedBasemap;
-        }
-        if (duckDBDataset.geoColumn) {
-          serializedFile.geoColumn = duckDBDataset.geoColumn;
-        }
-        if (duckDBDataset.gpsMode) {
-          serializedFile.gpsMode = duckDBDataset.gpsMode;
-        }
-        if (duckDBDataset.gpsColumns) {
-          serializedFile.gpsColumns = duckDBDataset.gpsColumns;
-        }
-      }
-
-      // Fallback: persist geo column & basemap from UI state when DuckDB
-      // dataset doesn't have them yet (user selected but hasn't clicked Visualiser)
-      if (
-        !serializedFile.geoColumn &&
-        dataTabState.geolocation.linkedVariableName
-      ) {
-        serializedFile.geoColumn = dataTabState.geolocation.linkedVariableName;
-      }
-      if (
-        !serializedFile.joinedBasemap &&
-        dataTabState.basemapJoin.selectedBasemap
-      ) {
-        serializedFile.joinedBasemap = dataTabState.basemapJoin.selectedBasemap;
-      }
+      Object.assign(
+        serializedFile,
+        resolvePersistedJoinState({
+          file,
+          duckDataset: duckDBDataset,
+          selectedBasemapId,
+          linkedGeoColumn: dataTabState.geolocation.linkedVariableName,
+          selectedGpsColumns,
+          isSelectedSourceFile: file.id === selectedSourceFileId
+        })
+      );
 
       const storeDataset = datasetsStore.datasets.find(
         (d) => d.sourceFileId === file.id

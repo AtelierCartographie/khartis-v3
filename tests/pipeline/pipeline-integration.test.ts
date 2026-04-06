@@ -155,6 +155,18 @@ const CSV_VALID: CsvTestCase[] = [
     relativePath: 'csv/test-csv-options-thousands.csv',
     minRows: 1,
     minCols: 2
+  },
+  {
+    id: 'tiny-geo-enrich',
+    relativePath: 'csv/tiny-geo-3features-enrich.csv',
+    minRows: 3,
+    minCols: 2
+  },
+  {
+    id: 'visualization-toolbox-cases-csv',
+    relativePath: 'csv/visualization-toolbox-cases.csv',
+    minRows: 4,
+    minCols: 6
   }
 ];
 
@@ -229,6 +241,12 @@ const GEO_FILES: GeoTestCase[] = [
     relativePath: 'geojson/tiny-geo-3features.geojson',
     format: 'geojson',
     expectedGeometryTypes: ['POLYGON']
+  },
+  {
+    id: 'geojson-visualization-toolbox-cases',
+    relativePath: 'geojson/visualization-toolbox-cases.geojson',
+    format: 'geojson',
+    expectedGeometryTypes: ['POINT']
   },
   {
     id: 'gpkg-compagnies-herault',
