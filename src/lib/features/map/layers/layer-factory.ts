@@ -123,6 +123,11 @@ const DASH_EXTENSION = new PathStyleExtension({ dash: true });
 const DEFAULT_DASH_ARRAY: [number, number] = [3, 2];
 const DEFAULT_TEXT_MASK_PADDING: [number, number] = [3, 1];
 const POINT_SYMBOL_ICON_VIEWBOX_SIZE = 64;
+const DEFAULT_LABEL_COLOR = hexToRgb(DEFAULT_COLORS.label);
+const DEFAULT_TEXT_COLOR = hexToRgb(DEFAULT_COLORS.text);
+const LABEL_COLLISION_PRIORITY = 100;
+const TEXT_COLLISION_PRIORITY = 0;
+const TEXT_COLLISION_GROUP_SUFFIX = 'text-overlays';
 const pointSymbolIconCache = new Map<string, string>();
 
 interface PointIconDatum {
@@ -1190,6 +1195,27 @@ function resolveThematicScopeId(ctx: LayerContext): string {
   return ctx.viz?.id ?? ctx.datasetId ?? 'default';
 }
 
+function resolveTextCollisionGroup(ctx: LayerContext): string {
+  const datasetScope = ctx.datasetId || resolveThematicScopeId(ctx);
+  return `${datasetScope}-${TEXT_COLLISION_GROUP_SUFFIX}`;
+}
+
+function createTextCollisionProps(
+  ctx: LayerContext,
+  enabled: boolean,
+  priority: number
+): Pick<
+  TextLayerWithCollisionProps,
+  'extensions' | 'collisionEnabled' | 'collisionGroup' | 'getCollisionPriority'
+> {
+  return {
+    extensions: [COLLISION_FILTER_EXTENSION],
+    collisionEnabled: enabled,
+    collisionGroup: resolveTextCollisionGroup(ctx),
+    getCollisionPriority: () => priority
+  };
+}
+
 function createThematicLayerId(
   layerType: DeckLayerId,
   ctx: LayerContext
@@ -1214,6 +1240,7 @@ type TextLayerWithCollisionProps = ConstructorParameters<
 >[0] & {
   collisionEnabled?: boolean;
   collisionGroup?: string;
+  getCollisionPriority?: (datum: TextLayerDatum) => number;
 };
 
 function normalizeOpacity(opacity: number | undefined, fallback = 1): number {
@@ -1660,8 +1687,11 @@ function createTextOverlayLayers(
   }
 
   const layers: ThematicLayer[] = [];
-  const labelColor = resolveStyleColor(viz.style.labelColor, ctx.fillColor);
-  const textColor = resolveStyleColor(viz.style.textColor, ctx.fillColor);
+  const labelColor = resolveStyleColor(
+    viz.style.labelColor,
+    DEFAULT_LABEL_COLOR
+  );
+  const textColor = resolveStyleColor(viz.style.textColor, DEFAULT_TEXT_COLOR);
   const missingTextColor = resolveStyleColor(
     viz.missingData?.color,
     hexToRgb(DEFAULT_COLORS.missingData)
@@ -1821,9 +1851,11 @@ function createTextOverlayLayers(
         getBorderWidth: 0,
         backgroundPadding: DEFAULT_TEXT_MASK_PADDING,
         backgroundBorderRadius: 2,
-        extensions: [COLLISION_FILTER_EXTENSION],
-        collisionEnabled: viz.style.labelCollisionDetection ?? true,
-        collisionGroup: `${resolveThematicScopeId(ctx)}-labels`,
+        ...createTextCollisionProps(
+          ctx,
+          viz.style.labelCollisionDetection ?? true,
+          LABEL_COLLISION_PRIORITY
+        ),
         billboard: true,
         pickable: false,
         ...(ctx.modelMatrix && { modelMatrix: ctx.modelMatrix }),
@@ -1932,6 +1964,11 @@ function createTextOverlayLayers(
           getBorderWidth: 0,
           backgroundPadding: DEFAULT_TEXT_MASK_PADDING,
           backgroundBorderRadius: 2,
+          ...createTextCollisionProps(
+            ctx,
+            viz.style.textCollisionDetection ?? true,
+            TEXT_COLLISION_PRIORITY
+          ),
           billboard: true,
           pickable: false,
           ...(ctx.modelMatrix && { modelMatrix: ctx.modelMatrix }),
@@ -3009,274 +3046,292 @@ export function createPolygonLayers(
       arrowExtension === ArrowExtension.GEOARROW_MULTIPOLYGON);
 
   if (isNativeGeoArrowPolygon || isNativeGeoArrow) {
-    const polyData = resolvePolygonParser(ctx.customProjection)(jsTable);
-    const outlineData = resolvePathParser(ctx.customProjection)(jsTable);
-    const effectiveCategoryColorMap = resolveEffectiveCategoryColorMap(
-      jsTable,
-      viz,
-      categoryColorMap,
-      viz?.mapping.categoryColumn
-    );
+    try {
+      const polyData = resolvePolygonParser(ctx.customProjection)(jsTable);
+      const outlineData = resolvePathParser(ctx.customProjection)(jsTable);
+      const effectiveCategoryColorMap = resolveEffectiveCategoryColorMap(
+        jsTable,
+        viz,
+        categoryColorMap,
+        viz?.mapping.categoryColumn
+      );
 
-    // Build fill color: choropleth > categorical > static, with optional highlight dimming
-    const choroplethAccessor =
-      useChoropleth && viz
-        ? createChoroplethColorAccessor(
-            viz.mapping.valueColumn!,
-            viz.classification!.breaks!,
-            viz.classification!.colors!
+      // Build fill color: choropleth > categorical > static, with optional highlight dimming
+      const choroplethAccessor =
+        useChoropleth && viz
+          ? createChoroplethColorAccessor(
+              viz.mapping.valueColumn!,
+              viz.classification!.breaks!,
+              viz.classification!.colors!
+            )
+          : null;
+
+      const categoricalAccessor =
+        useCategoricalColor && viz
+          ? createCategoricalColorAccessor(
+              viz.mapping.categoryColumn!,
+              effectiveCategoryColorMap
+            )
+          : null;
+
+      const baseFillAccessor = choroplethAccessor ?? categoricalAccessor;
+
+      const fillColorFn =
+        hasPolyHighlights && polyHighlightedRowIds
+          ? baseFillAccessor
+            ? withRowHighlightAccessor(
+                baseFillAccessor,
+                rawPolyFillOpacity,
+                HIGHLIGHT_DIMMING_FACTOR,
+                polyHighlightedRowIds
+              )
+            : withRowHighlight(
+                fillColor,
+                rawPolyFillOpacity,
+                HIGHLIGHT_DIMMING_FACTOR,
+                polyHighlightedRowIds
+              )
+          : baseFillAccessor;
+
+      // Binary fill color attribute — must be in data.attributes for SolidPolygonLayer binary data
+      const fillColorBinaryAttr = fillColorFn
+        ? createPolygonFillColorAttribute(
+            polyData,
+            rowAccessor(jsTable, fillColorFn)
           )
         : null;
 
-    const categoricalAccessor =
-      useCategoricalColor && viz
-        ? createCategoricalColorAccessor(
-            viz.mapping.categoryColumn!,
-            effectiveCategoryColorMap
+      // Build stroke color
+      const strokeColorFn = hasPolyHighlights
+        ? withRowHighlight(
+            strokeColor,
+            rawPolyStrokeOpacity,
+            HIGHLIGHT_DIMMING_FACTOR,
+            polyHighlightedRowIds!
           )
         : null;
 
-    const baseFillAccessor = choroplethAccessor ?? categoricalAccessor;
+      const strokeColorBinaryAttr = strokeColorFn
+        ? pathColorAttr(outlineData, rowAccessor(jsTable, strokeColorFn))
+        : null;
 
-    const fillColorFn =
-      hasPolyHighlights && polyHighlightedRowIds
-        ? baseFillAccessor
-          ? withRowHighlightAccessor(
-              baseFillAccessor,
-              rawPolyFillOpacity,
-              HIGHLIGHT_DIMMING_FACTOR,
-              polyHighlightedRowIds
-            )
-          : withRowHighlight(
-              fillColor,
-              rawPolyFillOpacity,
-              HIGHLIGHT_DIMMING_FACTOR,
-              polyHighlightedRowIds
-            )
-        : baseFillAccessor;
+      const layers: Layer<DeckDataRow>[] = [];
 
-    // Binary fill color attribute — must be in data.attributes for SolidPolygonLayer binary data
-    const fillColorBinaryAttr = fillColorFn
-      ? createPolygonFillColorAttribute(
-          polyData,
-          rowAccessor(jsTable, fillColorFn)
-        )
-      : null;
-
-    // Build stroke color
-    const strokeColorFn = hasPolyHighlights
-      ? withRowHighlight(
-          strokeColor,
-          rawPolyStrokeOpacity,
-          HIGHLIGHT_DIMMING_FACTOR,
-          polyHighlightedRowIds!
-        )
-      : null;
-
-    const strokeColorBinaryAttr = strokeColorFn
-      ? pathColorAttr(outlineData, rowAccessor(jsTable, strokeColorFn))
-      : null;
-
-    const layers: Layer<DeckDataRow>[] = [];
-
-    // Build SolidPolygonLayer props, injecting fill color into data.attributes when binary
-    const solidProps = createSolidPolygonLayerProps(polyData);
-    const solidBinaryData = solidProps.data as {
-      attributes: Record<string, unknown>;
-      khartisSourceTable?: ArrowTable;
-    };
-    solidBinaryData.khartisSourceTable = jsTable;
-    if (fillColorBinaryAttr) {
-      solidBinaryData.attributes.getFillColor = fillColorBinaryAttr;
-    }
-
-    // DataFilterExtension for GPU-side year filtering (binary polygons)
-    const polyYearFilterProps = ctx.yearFilter
-      ? buildYearFilterProps(polyData, solidBinaryData, jsTable, ctx.yearFilter)
-      : {};
-
-    // Fill layer
-    const fillLayer = new SolidPolygonLayer({
-      id: layerId,
-      ...(solidProps as unknown as Record<string, unknown>),
-      ...(!fillColorBinaryAttr && {
-        getFillColor: [fillColor[0], fillColor[1], fillColor[2], 255] as [
-          number,
-          number,
-          number,
-          number
-        ]
-      }),
-      opacity: hasPolyHighlights ? 1 : rawPolyFillOpacity,
-      pickable: true,
-      autoHighlight: true,
-      highlightColor: HOVER_HIGHLIGHT_COLOR,
-      parameters: {
-        depthCompare: 'always' as const,
-        stencilCompare: 'always' as const
-      },
-      ...(modelMatrix && { modelMatrix }),
-      ...(beforeId && { beforeId }),
-      ...polyYearFilterProps,
-      updateTriggers: {
-        getFillColor: [
-          useChoropleth,
-          useCategoricalColor,
-          viz?.mapping.valueColumn,
-          viz?.mapping.categoryColumn,
-          viz?.classification?.breaks,
-          viz?.classification?.colors,
-          categoryColorMap,
-          viz?.classification?.labels,
-          fillColor,
-          hlVersion
-        ]
+      // Build SolidPolygonLayer props, injecting fill color into data.attributes when binary
+      const solidProps = createSolidPolygonLayerProps(polyData);
+      const solidBinaryData = solidProps.data as {
+        attributes: Record<string, unknown>;
+        khartisSourceTable?: ArrowTable;
+      };
+      solidBinaryData.khartisSourceTable = jsTable;
+      if (fillColorBinaryAttr) {
+        solidBinaryData.attributes.getFillColor = fillColorBinaryAttr;
       }
-    });
 
-    // Stroke layer — inject binary color into data.attributes if needed
-    const strokePathProps = createPathLayerProps(outlineData);
-    const strokeBinaryData = strokePathProps.data as {
-      attributes: Record<string, unknown>;
-    };
-    if (strokeColorBinaryAttr) {
-      strokeBinaryData.attributes.getColor = strokeColorBinaryAttr;
-    }
+      // DataFilterExtension for GPU-side year filtering (binary polygons)
+      const polyYearFilterProps = ctx.yearFilter
+        ? buildYearFilterProps(
+            polyData,
+            solidBinaryData,
+            jsTable,
+            ctx.yearFilter
+          )
+        : {};
 
-    // DataFilterExtension for GPU-side year filtering (binary polygon strokes)
-    const strokeYearFilterProps = ctx.yearFilter
-      ? buildYearFilterProps(
-          outlineData,
-          strokeBinaryData,
-          jsTable,
-          ctx.yearFilter
-        )
-      : {};
-
-    let strokeLayer: Layer<DeckDataRow>;
-    if (strokeDashed) {
-      strokeLayer = new PathLayer({
-        id: `${layerId}-stroke-dashed`,
-        ...(strokePathProps as unknown as Record<string, unknown>),
-        ...(!strokeColorBinaryAttr && {
-          getColor: withOpacity(strokeColor, rawPolyStrokeOpacity)
+      // Fill layer
+      const fillLayer = new SolidPolygonLayer({
+        id: layerId,
+        ...(solidProps as unknown as Record<string, unknown>),
+        ...(!fillColorBinaryAttr && {
+          getFillColor: [fillColor[0], fillColor[1], fillColor[2], 255] as [
+            number,
+            number,
+            number,
+            number
+          ]
         }),
-        extensions: [DASH_EXTENSION],
-        getDashArray: DEFAULT_DASH_ARRAY,
-        dashJustified: true,
-        widthUnits: 'pixels',
-        getWidth: strokeWidth / 4,
-        widthMinPixels: 1,
-        pickable: false,
+        opacity: hasPolyHighlights ? 1 : rawPolyFillOpacity,
+        pickable: true,
+        autoHighlight: true,
+        highlightColor: HOVER_HIGHLIGHT_COLOR,
+        parameters: {
+          depthCompare: 'always' as const,
+          stencilCompare: 'always' as const
+        },
         ...(modelMatrix && { modelMatrix }),
         ...(beforeId && { beforeId }),
-        ...strokeYearFilterProps,
+        ...polyYearFilterProps,
         updateTriggers: {
-          getColor: [strokeColor, rawPolyStrokeOpacity, hlVersion],
-          getDashArray: [strokeDashed],
-          getWidth: [strokeWidth]
+          getFillColor: [
+            useChoropleth,
+            useCategoricalColor,
+            viz?.mapping.valueColumn,
+            viz?.mapping.categoryColumn,
+            viz?.classification?.breaks,
+            viz?.classification?.colors,
+            categoryColorMap,
+            viz?.classification?.labels,
+            fillColor,
+            hlVersion
+          ]
         }
       });
-    } else {
-      strokeLayer = new PathLayer({
-        id: `${layerId}-stroke-solid`,
-        ...(strokePathProps as unknown as Record<string, unknown>),
-        ...(!strokeColorBinaryAttr && {
-          getColor: withOpacity(strokeColor, rawPolyStrokeOpacity)
-        }),
-        widthUnits: 'pixels',
-        getWidth: strokeWidth / 4,
-        widthMinPixels: 1,
-        pickable: false,
-        ...(modelMatrix && { modelMatrix }),
-        ...(beforeId && { beforeId }),
-        ...strokeYearFilterProps,
-        updateTriggers: {
-          getColor: [strokeColor, rawPolyStrokeOpacity, hlVersion],
-          getWidth: [strokeWidth]
+
+      // Stroke layer — inject binary color into data.attributes if needed
+      const strokePathProps = createPathLayerProps(outlineData);
+      const strokeBinaryData = strokePathProps.data as {
+        attributes: Record<string, unknown>;
+      };
+      if (strokeColorBinaryAttr) {
+        strokeBinaryData.attributes.getColor = strokeColorBinaryAttr;
+      }
+
+      // DataFilterExtension for GPU-side year filtering (binary polygon strokes)
+      const strokeYearFilterProps = ctx.yearFilter
+        ? buildYearFilterProps(
+            outlineData,
+            strokeBinaryData,
+            jsTable,
+            ctx.yearFilter
+          )
+        : {};
+
+      let strokeLayer: Layer<DeckDataRow>;
+      if (strokeDashed) {
+        strokeLayer = new PathLayer({
+          id: `${layerId}-stroke-dashed`,
+          ...(strokePathProps as unknown as Record<string, unknown>),
+          ...(!strokeColorBinaryAttr && {
+            getColor: withOpacity(strokeColor, rawPolyStrokeOpacity)
+          }),
+          extensions: [DASH_EXTENSION],
+          getDashArray: DEFAULT_DASH_ARRAY,
+          dashJustified: true,
+          widthUnits: 'pixels',
+          getWidth: strokeWidth / 4,
+          widthMinPixels: 1,
+          pickable: false,
+          ...(modelMatrix && { modelMatrix }),
+          ...(beforeId && { beforeId }),
+          ...strokeYearFilterProps,
+          updateTriggers: {
+            getColor: [strokeColor, rawPolyStrokeOpacity, hlVersion],
+            getDashArray: [strokeDashed],
+            getWidth: [strokeWidth]
+          }
+        });
+      } else {
+        strokeLayer = new PathLayer({
+          id: `${layerId}-stroke-solid`,
+          ...(strokePathProps as unknown as Record<string, unknown>),
+          ...(!strokeColorBinaryAttr && {
+            getColor: withOpacity(strokeColor, rawPolyStrokeOpacity)
+          }),
+          widthUnits: 'pixels',
+          getWidth: strokeWidth / 4,
+          widthMinPixels: 1,
+          pickable: false,
+          ...(modelMatrix && { modelMatrix }),
+          ...(beforeId && { beforeId }),
+          ...strokeYearFilterProps,
+          updateTriggers: {
+            getColor: [strokeColor, rawPolyStrokeOpacity, hlVersion],
+            getWidth: [strokeWidth]
+          }
+        });
+      }
+
+      const pointLayers = createPolygonCentroidSymbolLayers(
+        polyData,
+        jsTable,
+        ctx,
+        layerId
+      );
+
+      // Determine layer order and stroke visibility from context
+      const DEFAULT_PRIMITIVE_ORDER: PrimitiveFilter[] = [
+        PrimitiveFilterType.POINT,
+        PrimitiveFilterType.LINE,
+        PrimitiveFilterType.POLYGON
+      ];
+      const primitiveFilters =
+        ctx.viz?.primitiveFilters ?? ALL_PRIMITIVE_FILTERS;
+      const primitiveOrder = ctx.primitiveOrder ?? DEFAULT_PRIMITIVE_ORDER;
+      const showStroke =
+        primitiveFilters.includes(PrimitiveFilterType.LINE) &&
+        (ctx.viz?.modes?.stroke ?? StrokeMode.UNIQUE) !== StrokeMode.NONE;
+      const showFill = primitiveFilters.includes(PrimitiveFilterType.POLYGON);
+      const getOrderIndex = (primitive: PrimitiveFilter): number => {
+        const index = primitiveOrder.indexOf(primitive);
+        return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+      };
+      const orderedLayers = [
+        ...(showFill
+          ? [{ primitive: PrimitiveFilterType.POLYGON, layer: fillLayer }]
+          : []),
+        ...(showStroke
+          ? [{ primitive: PrimitiveFilterType.LINE, layer: strokeLayer }]
+          : []),
+        ...pointLayers.map((layer) => ({
+          primitive: PrimitiveFilterType.POINT as PrimitiveFilter,
+          layer
+        }))
+      ].sort(
+        (left, right) =>
+          getOrderIndex(right.primitive) - getOrderIndex(left.primitive)
+      );
+
+      layers.push(...orderedLayers.map((entry) => entry.layer));
+
+      // Pattern overlay: separate GeoJsonLayer on top with pattern as semi-transparent mask
+      if (patternProps) {
+        let patternGeojson;
+        try {
+          patternGeojson = getCachedGeoJSON(jsTable, geoColumn);
+        } catch {
+          // Silently skip pattern overlay if GeoJSON conversion fails
         }
-      });
-    }
-
-    const pointLayers = createPolygonCentroidSymbolLayers(
-      polyData,
-      jsTable,
-      ctx,
-      layerId
-    );
-
-    // Determine layer order and stroke visibility from context
-    const DEFAULT_PRIMITIVE_ORDER: PrimitiveFilter[] = [
-      PrimitiveFilterType.POINT,
-      PrimitiveFilterType.LINE,
-      PrimitiveFilterType.POLYGON
-    ];
-    const primitiveFilters = ctx.viz?.primitiveFilters ?? ALL_PRIMITIVE_FILTERS;
-    const primitiveOrder = ctx.primitiveOrder ?? DEFAULT_PRIMITIVE_ORDER;
-    const showStroke =
-      primitiveFilters.includes(PrimitiveFilterType.LINE) &&
-      (ctx.viz?.modes?.stroke ?? StrokeMode.UNIQUE) !== StrokeMode.NONE;
-    const showFill = primitiveFilters.includes(PrimitiveFilterType.POLYGON);
-    const getOrderIndex = (primitive: PrimitiveFilter): number => {
-      const index = primitiveOrder.indexOf(primitive);
-      return index === -1 ? Number.MAX_SAFE_INTEGER : index;
-    };
-    const orderedLayers = [
-      ...(showFill
-        ? [{ primitive: PrimitiveFilterType.POLYGON, layer: fillLayer }]
-        : []),
-      ...(showStroke
-        ? [{ primitive: PrimitiveFilterType.LINE, layer: strokeLayer }]
-        : []),
-      ...pointLayers.map((layer) => ({
-        primitive: PrimitiveFilterType.POINT as PrimitiveFilter,
-        layer
-      }))
-    ].sort(
-      (left, right) =>
-        getOrderIndex(right.primitive) - getOrderIndex(left.primitive)
-    );
-
-    layers.push(...orderedLayers.map((entry) => entry.layer));
-
-    // Pattern overlay: separate GeoJsonLayer on top with pattern as semi-transparent mask
-    if (patternProps) {
-      let patternGeojson;
-      try {
-        patternGeojson = getCachedGeoJSON(jsTable, geoColumn);
-      } catch {
-        // Silently skip pattern overlay if GeoJSON conversion fails
+        if (patternGeojson) {
+          layers.push(
+            new GeoJsonLayer({
+              id: `${layerId}-pattern-${viz?.classification?.patternId ?? 'none'}`,
+              data: patternGeojson,
+              getFillColor: [0, 0, 0, 255],
+              stroked: false,
+              opacity: 0.6,
+              pickable: false,
+              extensions: patternProps.extensions,
+              fillPatternAtlas: patternProps.fillPatternAtlas,
+              fillPatternMapping: patternProps.fillPatternMapping,
+              fillPatternMask: true,
+              getFillPattern: patternProps.getFillPattern,
+              getFillPatternScale: patternProps.getFillPatternScale,
+              getFillPatternRotation: patternProps.getFillPatternRotation,
+              ...(modelMatrix && { modelMatrix }),
+              ...(beforeId && { beforeId }),
+              updateTriggers: {
+                getFillPattern: [viz?.classification?.patternId],
+                getFillPatternScale: [viz?.classification?.patternId],
+                getFillPatternRotation: [viz?.classification?.patternId]
+              },
+              dataComparator: (newData, oldData) => newData === oldData
+            })
+          );
+        }
       }
-      if (patternGeojson) {
-        layers.push(
-          new GeoJsonLayer({
-            id: `${layerId}-pattern-${viz?.classification?.patternId ?? 'none'}`,
-            data: patternGeojson,
-            getFillColor: [0, 0, 0, 255],
-            stroked: false,
-            opacity: 0.6,
-            pickable: false,
-            extensions: patternProps.extensions,
-            fillPatternAtlas: patternProps.fillPatternAtlas,
-            fillPatternMapping: patternProps.fillPatternMapping,
-            fillPatternMask: true,
-            getFillPattern: patternProps.getFillPattern,
-            getFillPatternScale: patternProps.getFillPatternScale,
-            getFillPatternRotation: patternProps.getFillPatternRotation,
-            ...(modelMatrix && { modelMatrix }),
-            ...(beforeId && { beforeId }),
-            updateTriggers: {
-              getFillPattern: [viz?.classification?.patternId],
-              getFillPatternScale: [viz?.classification?.patternId],
-              getFillPatternRotation: [viz?.classification?.patternId]
-            },
-            dataComparator: (newData, oldData) => newData === oldData
-          })
-        );
-      }
-    }
 
-    return layers;
+      return layers;
+    } catch (error) {
+      logger.warn(
+        'Binary polygon parsing failed, falling back to GeoJSON',
+        LogCategory.MAP,
+        {
+          encoding: arrowExtension,
+          geoColumn,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      );
+    }
   }
 
   let geojsonData;
@@ -3501,6 +3556,17 @@ export function createDeckLayers(
   jsTable: ArrowTable,
   ctx: LayerContext
 ): Layer<DeckDataRow>[] {
+  if (jsTable.numRows === 0) {
+    logger.debug(
+      'Skipping thematic layer creation for empty Arrow table',
+      LogCategory.MAP,
+      {
+        datasetId: ctx.datasetId
+      }
+    );
+    return [];
+  }
+
   // Opt 5: reuse pre-computed geometryInfo from context when available
   const geometryInfo = ctx.geometryInfo ?? extractGeometryInfo(jsTable);
 
