@@ -40,6 +40,7 @@ import {
   computeJoinSynthesis,
   computeJoinStats,
   finalizeJoin,
+  getJoinedArrowTable,
   type DuckDBClientForJoin
 } from '$lib/features/duckdb/orchestrator/join-ops';
 
@@ -325,6 +326,92 @@ describe('join-ops integration with test datasets', () => {
       { country: 'France', basemap_id: 'France', typo_match: 'exact' },
       { country: 'Germany', basemap_id: 'Germany', typo_match: 'exact' }
     ]);
+  });
+
+  it('exports joined geometry as explicit WKB for rendering', async () => {
+    const issuedSql: string[] = [];
+
+    const duckClientWithCapture: DuckDBClientForJoin = {
+      async query(sql: string): Promise<unknown> {
+        issuedSql.push(sql);
+        if (sql.includes('information_schema.columns')) {
+          return [
+            { column_name: 'iso3', data_type: 'VARCHAR' },
+            { column_name: 'geom', data_type: 'GEOMETRY' }
+          ];
+        }
+        return [];
+      },
+      async join_by_id(): Promise<unknown> {
+        throw new Error('join_by_id not used in this test setup');
+      },
+      async apply_join_association(): Promise<unknown> {
+        throw new Error('apply_join_association not used in this test setup');
+      }
+    };
+
+    await getJoinedArrowTable(
+      'source_join_cases',
+      TEST_BASEMAP.file,
+      duckClientWithCapture,
+      async () => 'basemap_geometry',
+      async () =>
+        ({
+          numRows: 0,
+          schema: { metadata: new Map<string, string>() }
+        }) as never
+    );
+
+    const createViewSql = issuedSql.find((sql) =>
+      sql.includes('CREATE OR REPLACE VIEW')
+    );
+
+    expect(createViewSql).toContain('ST_AsWKB(gu._geom_value) AS geometry');
+  });
+
+  it('keeps native GeoArrow geometry untouched when the basemap table is not a DuckDB GEOMETRY column', async () => {
+    const issuedSql: string[] = [];
+
+    const duckClientWithCapture: DuckDBClientForJoin = {
+      async query(sql: string): Promise<unknown> {
+        issuedSql.push(sql);
+        if (sql.includes('information_schema.columns')) {
+          return [
+            { column_name: 'iso3', data_type: 'VARCHAR' },
+            {
+              column_name: 'geom',
+              data_type: 'STRUCT(x DOUBLE, y DOUBLE)[][][]'
+            }
+          ];
+        }
+        return [];
+      },
+      async join_by_id(): Promise<unknown> {
+        throw new Error('join_by_id not used in this test setup');
+      },
+      async apply_join_association(): Promise<unknown> {
+        throw new Error('apply_join_association not used in this test setup');
+      }
+    };
+
+    await getJoinedArrowTable(
+      'source_join_cases',
+      TEST_BASEMAP.file,
+      duckClientWithCapture,
+      async () => 'basemap_geometry',
+      async () =>
+        ({
+          numRows: 0,
+          schema: { metadata: new Map<string, string>() }
+        }) as never
+    );
+
+    const createViewSql = issuedSql.find((sql) =>
+      sql.includes('CREATE OR REPLACE VIEW')
+    );
+
+    expect(createViewSql).toContain('SELECT d.*, gu._geom_value AS geometry');
+    expect(createViewSql).not.toContain('ST_AsWKB(gu._geom_value)');
   });
 });
 
