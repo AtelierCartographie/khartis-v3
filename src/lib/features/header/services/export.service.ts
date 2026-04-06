@@ -61,10 +61,14 @@ export async function exportProject(fileName: string): Promise<void> {
   logger.debug('Project exported', LogCategory.EXPORT, { fileName });
 }
 
-export async function exportMapAsSvg(fileName: string): Promise<void> {
+export async function exportMapAsSvg(
+  fileName: string,
+  width: number = 1920,
+  height: number = 1080
+): Promise<void> {
   validateMapExportPrerequisites();
 
-  const blob = await exportMapToSvg();
+  const blob = await exportMapToSvg({ width, height });
   const filename = generateExportFilename(fileName, 'svg');
 
   downloadFile(blob, filename);
