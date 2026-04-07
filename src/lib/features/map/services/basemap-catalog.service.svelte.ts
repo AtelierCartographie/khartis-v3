@@ -3,36 +3,32 @@ import type { GeoColumnInfo } from '$lib/features/data-pipeline/types';
 import type { GPSBounds } from '$lib/features/duckdb';
 import { LogCategory, logger } from '../../commons/utils/logger';
 import { resolveStaticAssetUrl } from '../../commons/utils/static-asset-url';
+import {
+  getBasemapVariantFamily,
+  getPreferredCatalogBasemapLevel
+} from './basemap.service.svelte';
 import type {
   BasemapMetadata,
   BasemapSuggestion
 } from '../types/basemap.types';
 
 const BASEMAP_METADATA_PATH = '/basemaps/all-basemaps-metadata.json';
-const FRANCE_COMMUNE_BASEMAP_PREFIX = 'france-commune-';
-const DEFAULT_CATALOG_VARIANT_PRIORITY: Record<string, number> = {
-  medium: 3,
-  high: 2,
-  low: 1
-};
-const FRANCE_COMMUNE_CATALOG_VARIANT_PRIORITY: Record<string, number> = {
-  high: 3,
-  medium: 2,
-  low: 1
-};
 
-function getCatalogBaseName(file: string): string {
-  return file.replace(/-(low|medium|high)$/, '');
-}
-
-function getCatalogVariantRank(basemap: BasemapMetadata): number {
-  const baseName = getCatalogBaseName(basemap.file);
+function getCatalogVariantRank(
+  basemaps: BasemapMetadata[],
+  basemap: BasemapMetadata
+): number {
   const level = basemap.simplification_level;
-  const priorityMap = baseName.startsWith(FRANCE_COMMUNE_BASEMAP_PREFIX)
-    ? FRANCE_COMMUNE_CATALOG_VARIANT_PRIORITY
-    : DEFAULT_CATALOG_VARIANT_PRIORITY;
+  const preferredLevel = getPreferredCatalogBasemapLevel(
+    basemaps,
+    basemap.file
+  );
 
-  return level ? (priorityMap[level] ?? 0) : 0;
+  if (!level || !preferredLevel) {
+    return 0;
+  }
+
+  return level === preferredLevel ? 1 : 0;
 }
 
 export function getCatalogBasemapsForDisplay(
@@ -46,14 +42,17 @@ export function getCatalogBasemapsForDisplay(
       continue;
     }
 
-    const baseName = getCatalogBaseName(basemap.file);
+    const baseName = getBasemapVariantFamily(basemap.file);
     const existing = byBaseName.get(baseName);
     if (!existing) {
       byBaseName.set(baseName, basemap);
       continue;
     }
 
-    if (getCatalogVariantRank(basemap) > getCatalogVariantRank(existing)) {
+    if (
+      getCatalogVariantRank(basemaps, basemap) >
+      getCatalogVariantRank(basemaps, existing)
+    ) {
       byBaseName.set(baseName, basemap);
     }
   }
@@ -297,7 +296,7 @@ function createBasemapCatalogService() {
 
     const queryLower = query.toLowerCase();
 
-    return state.basemaps.filter((basemap) => {
+    return getCatalogBasemaps().filter((basemap) => {
       return getSearchableText(basemap).includes(queryLower);
     });
   }
@@ -331,8 +330,7 @@ function createBasemapCatalogService() {
 
   /**
    * Basemaps deduplicated by base name for catalog display.
-   * Keeps one entry per base name, preferring "high" for France communes
-   * and "medium" elsewhere.
+   * Keeps one entry per base name, limited to supported simplification levels.
    */
   function getCatalogBasemaps(): BasemapMetadata[] {
     return getCatalogBasemapsForDisplay(state.basemaps);

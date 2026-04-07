@@ -16,6 +16,9 @@ vi.mock('$lib/features/duckdb/orchestrator/arrow-ops', () => ({
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import { SimplificationLevel } from '$lib/features/commons/types/enums';
 import {
+  getAvailableBasemapSimplificationLevels,
+  getPreferredBasemapFile,
+  getPreferredBasemapSimplificationLevel,
   getResolvedBasemapVariant,
   resolveBasemapVariantFile
 } from '$lib/features/map/services/basemap.service.svelte';
@@ -23,7 +26,7 @@ import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
 
 function createMetadata(
   file: string,
-  simplificationLevel: 'medium' | 'high'
+  simplificationLevel: 'low' | 'medium' | 'high'
 ): BasemapMetadata {
   return {
     file,
@@ -39,6 +42,10 @@ function createMetadata(
       {
         type: BasemapLayerType.LIMIT,
         file: `france-commune-limites-2025-${simplificationLevel}`
+      },
+      {
+        type: BasemapLayerType.GRATICULE,
+        file: 'france-graticule-5'
       }
     ]
   };
@@ -56,11 +63,43 @@ describe('basemap variant resolution', () => {
 
     expect(
       resolveBasemapVariantFile(
+        'france-commune-2025-high',
+        'high',
+        SimplificationLevel.Medium
+      )
+    ).toBeNull();
+
+    expect(
+      resolveBasemapVariantFile(
         'custom-basemap',
         undefined,
         SimplificationLevel.High
       )
     ).toBeNull();
+  });
+
+  it('exposes only supported simplification levels for France administrative basemaps', () => {
+    const basemaps = [
+      createMetadata('france-region-2025-medium', 'medium'),
+      createMetadata('france-region-2025-high', 'high')
+    ];
+
+    expect(
+      getAvailableBasemapSimplificationLevels(
+        basemaps,
+        'france-region-2025-medium'
+      )
+    ).toEqual([SimplificationLevel.High]);
+    expect(getPreferredBasemapFile(basemaps, 'france-region-2025-medium')).toBe(
+      'france-region-2025-high'
+    );
+    expect(
+      getPreferredBasemapSimplificationLevel(
+        basemaps,
+        basemaps[0]!,
+        SimplificationLevel.Medium
+      )
+    ).toBe(SimplificationLevel.High);
   });
 
   it('returns the active variant metadata and layer tables', () => {
@@ -74,18 +113,30 @@ describe('basemap variant resolution', () => {
     const highGeometry = { name: 'high-geometry' } as unknown as ArrowTable;
     const mediumLayer = { name: 'medium-layer' } as unknown as ArrowTable;
     const highLayer = { name: 'high-layer' } as unknown as ArrowTable;
+    const sharedMediumGraticule = {
+      name: 'shared-medium-graticule'
+    } as unknown as ArrowTable;
+    const sharedHighGraticule = {
+      name: 'shared-high-graticule'
+    } as unknown as ArrowTable;
 
     const loadedBasemap = {
       metadata: mediumMetadata,
       geometryTable: mediumGeometry,
-      layerTables: new Map([[mediumMetadata.layers[0].file!, mediumLayer]]),
+      layerTables: new Map([
+        [mediumMetadata.layers[0].file!, mediumLayer],
+        [mediumMetadata.layers[1].file!, sharedMediumGraticule]
+      ]),
       simplifiedVariants: new Map([
         [
           SimplificationLevel.High,
           {
             metadata: highMetadata,
             geometryTable: highGeometry,
-            layerTables: new Map([[highMetadata.layers[0].file!, highLayer]])
+            layerTables: new Map([
+              [highMetadata.layers[0].file!, highLayer],
+              [highMetadata.layers[1].file!, sharedHighGraticule]
+            ])
           }
         ]
       ]),
@@ -98,6 +149,9 @@ describe('basemap variant resolution', () => {
     expect(resolved?.geometryTable).toBe(highGeometry);
     expect(resolved?.layerTables.get(highMetadata.layers[0].file!)).toBe(
       highLayer
+    );
+    expect(resolved?.layerTables.get(highMetadata.layers[1].file!)).toBe(
+      sharedHighGraticule
     );
   });
 });
