@@ -47,7 +47,12 @@ function getEffectiveWorkflowMode(): WorkflowMode {
   if (selectedDataset.geometry) {
     return 'geographic';
   }
-  if (hasGPSCoordinateColumns(selectedDataset.columns)) {
+  if (
+    hasGPSCoordinateColumns(
+      selectedDataset.columns,
+      selectedDataset.geoDetection
+    )
+  ) {
     return 'tabular-gps';
   }
   return 'tabular';

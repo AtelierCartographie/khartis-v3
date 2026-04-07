@@ -31,7 +31,10 @@ export function restoreJoinStateFromFile(
   if (file.gpsMode) {
     updates.gpsMode = file.gpsMode;
     if (!file.gpsColumns) {
-      const detected = detectGPSColumns(dataset.columns as AnalysisResult[]);
+      const detected = detectGPSColumns(
+        dataset.columns as AnalysisResult[],
+        dataset.geoDetection
+      );
       if (detected) {
         updates.gpsColumns = detected;
         logger.info('Re-detected GPS columns', LogCategory.DUCKDB, {
