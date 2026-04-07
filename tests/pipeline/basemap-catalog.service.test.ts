@@ -1,4 +1,16 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('$lib/features/duckdb', () => ({
+  Duck: null,
+  GEO_CONSTANTS: {
+    WGS84_CRS: 'EPSG:4326'
+  }
+}));
+
+vi.mock('$lib/features/duckdb/orchestrator/arrow-ops', () => ({
+  addGeoArrowMetadataFromDuckDB: vi.fn(),
+  fetchArrowTableWithGeometry: vi.fn()
+}));
 
 import { getCatalogBasemapsForDisplay } from '$lib/features/map/services/basemap-catalog.service.svelte';
 import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
@@ -22,14 +34,25 @@ function createCatalogMetadata(
 }
 
 describe('catalog basemap selection', () => {
-  it('prefers the high variant for France communes', () => {
-    const selected = getCatalogBasemapsForDisplay([
-      createCatalogMetadata('france-commune-2025-medium', 'medium'),
-      createCatalogMetadata('france-commune-2025-high', 'high')
-    ]);
+  it('prefers the high variant for France administrative basemaps', () => {
+    const baseNames = [
+      'france-canton-2025',
+      'france-commune-2025',
+      'france-departement-2025',
+      'france-region-2025'
+    ];
 
-    expect(selected).toHaveLength(1);
-    expect(selected[0]?.file).toBe('france-commune-2025-high');
+    const selected = getCatalogBasemapsForDisplay(
+      baseNames.flatMap((baseName) => [
+        createCatalogMetadata(`${baseName}-medium`, 'medium'),
+        createCatalogMetadata(`${baseName}-high`, 'high')
+      ])
+    );
+
+    expect(selected).toHaveLength(baseNames.length);
+    expect(selected.map((basemap) => basemap.file)).toEqual(
+      baseNames.map((baseName) => `${baseName}-high`)
+    );
   });
 
   it('keeps preferring the medium variant for other catalog basemaps', () => {

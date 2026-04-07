@@ -33,6 +33,22 @@ const WORLD_COUNTRY_BASEMAP_IDS = [
   'monde-countries-2024-medium',
   'monde-countries-2024-low'
 ] as const;
+const SIMPLIFICATION_LEVEL_ORDER = [
+  SimplificationLevel.Low,
+  SimplificationLevel.Medium,
+  SimplificationLevel.High
+] as const;
+const CATALOG_SIMPLIFICATION_PRIORITY = [
+  SimplificationLevel.Medium,
+  SimplificationLevel.High,
+  SimplificationLevel.Low
+] as const;
+const FRANCE_ADMINISTRATIVE_BASEMAP_PREFIXES = [
+  'france-canton-',
+  'france-commune-',
+  'france-departement-',
+  'france-region-'
+] as const;
 
 interface WorldCountriesGeoJSON {
   features?: Array<{
@@ -108,12 +124,145 @@ function getBasemapSimplificationLevel(
     : null;
 }
 
+export function getBasemapVariantFamily(file: string): string {
+  return file.replace(/-(low|medium|high)$/, '');
+}
+
+function isFranceAdministrativeBasemapFamily(family: string): boolean {
+  return FRANCE_ADMINISTRATIVE_BASEMAP_PREFIXES.some((prefix) =>
+    family.startsWith(prefix)
+  );
+}
+
+function isSupportedBasemapSimplificationLevel(
+  basemapFile: string,
+  level: SimplificationLevel
+): boolean {
+  const family = getBasemapVariantFamily(basemapFile);
+
+  if (
+    isFranceAdministrativeBasemapFamily(family) &&
+    level === SimplificationLevel.Medium
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+export function getAvailableBasemapSimplificationLevels(
+  basemaps: BasemapMetadata[],
+  basemapFile: string
+): SimplificationLevel[] {
+  const family = getBasemapVariantFamily(basemapFile);
+  const levels = new Set<SimplificationLevel>();
+
+  for (const basemap of basemaps) {
+    if (getBasemapVariantFamily(basemap.file) !== family) {
+      continue;
+    }
+
+    const level = getBasemapSimplificationLevel(basemap);
+    if (!level || !isSupportedBasemapSimplificationLevel(family, level)) {
+      continue;
+    }
+
+    levels.add(level);
+  }
+
+  return SIMPLIFICATION_LEVEL_ORDER.filter((level) => levels.has(level));
+}
+
+export function getPreferredCatalogBasemapLevel(
+  basemaps: BasemapMetadata[],
+  basemapFile: string
+): SimplificationLevel | null {
+  const availableLevels = getAvailableBasemapSimplificationLevels(
+    basemaps,
+    basemapFile
+  );
+
+  for (const level of CATALOG_SIMPLIFICATION_PRIORITY) {
+    if (availableLevels.includes(level)) {
+      return level;
+    }
+  }
+
+  return null;
+}
+
+export function getPreferredBasemapFile(
+  basemaps: BasemapMetadata[],
+  basemapFile: string
+): string {
+  const metadata =
+    basemaps.find((candidate) => candidate.file === basemapFile) ?? null;
+  if (!metadata) {
+    return basemapFile;
+  }
+
+  const currentLevel = getBasemapSimplificationLevel(metadata);
+  if (!currentLevel) {
+    return basemapFile;
+  }
+
+  if (isSupportedBasemapSimplificationLevel(metadata.file, currentLevel)) {
+    return basemapFile;
+  }
+
+  const preferredLevel = getPreferredCatalogBasemapLevel(basemaps, basemapFile);
+  if (!preferredLevel) {
+    return basemapFile;
+  }
+
+  return basemapFile.replace(
+    new RegExp(`-${currentLevel}$`),
+    `-${preferredLevel}`
+  );
+}
+
+export function getPreferredBasemapSimplificationLevel(
+  basemaps: BasemapMetadata[],
+  metadata: BasemapMetadata,
+  requestedLevel?: SimplificationLevel | null
+): SimplificationLevel | null {
+  const availableLevels = getAvailableBasemapSimplificationLevels(
+    basemaps,
+    metadata.file
+  );
+
+  if (availableLevels.length === 0) {
+    return null;
+  }
+
+  const currentLevel = getBasemapSimplificationLevel(metadata);
+  const candidateLevels = [
+    requestedLevel,
+    currentLevel,
+    SimplificationLevel.Medium,
+    SimplificationLevel.High,
+    SimplificationLevel.Low
+  ];
+
+  for (const level of candidateLevels) {
+    if (level && availableLevels.includes(level)) {
+      return level;
+    }
+  }
+
+  return availableLevels[0] ?? null;
+}
+
 export function resolveBasemapVariantFile(
   file: string,
   currentLevel: string | undefined,
   nextLevel: SimplificationLevel
 ): string | null {
   if (!isSimplificationLevel(currentLevel)) {
+    return null;
+  }
+
+  if (!isSupportedBasemapSimplificationLevel(file, nextLevel)) {
     return null;
   }
 
@@ -497,8 +646,12 @@ function createBasemapService() {
       await initialize();
     }
 
+    const resolvedBasemapId = getPreferredBasemapFile(
+      availableBasemaps,
+      basemapId
+    );
     const metadata = availableBasemaps.find(
-      (basemap) => basemap.file === basemapId
+      (basemap) => basemap.file === resolvedBasemapId
     );
 
     if (!metadata) {
@@ -508,7 +661,10 @@ function createBasemapService() {
 
     try {
       const start = performance.now();
-      logger.debug('Loading basemap', LogCategory.MAP, { basemapId });
+      logger.debug('Loading basemap', LogCategory.MAP, {
+        basemapId,
+        resolvedBasemapId
+      });
 
       const geometryTable = metadata.isCustom
         ? await loadCustomBasemapGeometry(metadata)
@@ -520,11 +676,12 @@ function createBasemapService() {
         new Map()
       );
 
-      basemapCache.set(basemapId, currentBasemap);
+      basemapCache.set(resolvedBasemapId, currentBasemap);
       updateProjectionFromTable(geometryTable);
 
       logger.debug('Basemap loaded', LogCategory.MAP, {
         basemapId,
+        resolvedBasemapId,
         metadataLayerCount: metadata.layers.length,
         durationMs: (performance.now() - start).toFixed(2)
       });
@@ -559,14 +716,20 @@ function createBasemapService() {
       throw new Error('Invalid basemap id for geometry loading');
     }
 
-    const isCustomBasemap = /^custom_basemap_/i.test(normalizedBasemapId);
+    const resolvedBasemapId = getPreferredBasemapFile(
+      availableBasemaps,
+      normalizedBasemapId
+    );
+
+    const isCustomBasemap = /^custom_basemap_/i.test(resolvedBasemapId);
     const tableName = isCustomBasemap
-      ? normalizedBasemapId
-      : `basemap_geom_${normalizedBasemapId.replace(/[^a-zA-Z0-9_]/g, '_')}`;
+      ? resolvedBasemapId
+      : `basemap_geom_${resolvedBasemapId.replace(/[^a-zA-Z0-9_]/g, '_')}`;
 
     if (geometryTablesInDuckDB.has(tableName)) {
       logger.debug('Basemap geometry already in DuckDB', LogCategory.MAP, {
         basemapId: normalizedBasemapId,
+        resolvedBasemapId,
         tableName
       });
       return tableName;
@@ -578,7 +741,7 @@ function createBasemapService() {
 
     // Custom basemaps imported by the user are already materialized as DuckDB tables.
     if (isCustomBasemap) {
-      const escapedBasemapId = escapeSqlString(normalizedBasemapId);
+      const escapedBasemapId = escapeSqlString(resolvedBasemapId);
       const existingTable = (await Duck.query(
         `SELECT table_name FROM information_schema.tables WHERE table_name = '${escapedBasemapId}'`,
         { format: 'array' }
@@ -591,6 +754,7 @@ function createBasemapService() {
           LogCategory.MAP,
           {
             basemapId: normalizedBasemapId,
+            resolvedBasemapId,
             tableName
           }
         );
@@ -599,11 +763,12 @@ function createBasemapService() {
     }
 
     logger.debug('Loading basemap geometry into DuckDB', LogCategory.MAP, {
-      basemapId: normalizedBasemapId
+      basemapId: normalizedBasemapId,
+      resolvedBasemapId
     });
 
     try {
-      const url = getGeometryParquetUrl(normalizedBasemapId);
+      const url = getGeometryParquetUrl(resolvedBasemapId);
       const response = await fetch(url);
 
       if (!response.ok) {
@@ -612,7 +777,7 @@ function createBasemapService() {
 
       const arrayBuffer = await response.arrayBuffer();
       const blob = new Blob([arrayBuffer]);
-      const geometryFile = new File([blob], `${normalizedBasemapId}.parquet`, {
+      const geometryFile = new File([blob], `${resolvedBasemapId}.parquet`, {
         type: 'application/octet-stream'
       });
 
@@ -632,6 +797,7 @@ function createBasemapService() {
         LogCategory.MAP,
         {
           basemapId: normalizedBasemapId,
+          resolvedBasemapId,
           error
         }
       );
@@ -640,29 +806,35 @@ function createBasemapService() {
   }
 
   async function loadBasemap(basemapId: string): Promise<LoadedBasemap | null> {
-    if (basemapCache.has(basemapId)) {
+    const resolvedBasemapId = getPreferredBasemapFile(
+      availableBasemaps,
+      basemapId
+    );
+
+    if (basemapCache.has(resolvedBasemapId)) {
       logger.debug('Basemap loaded from cache', LogCategory.MAP, {
-        basemapId
+        basemapId,
+        resolvedBasemapId
       });
-      currentBasemap = basemapCache.get(basemapId)!;
+      currentBasemap = basemapCache.get(resolvedBasemapId)!;
       updateProjectionFromTable(
         getResolvedGeometryTable(currentBasemap) ?? currentBasemap.geometryTable
       );
       return currentBasemap;
     }
 
-    const existing = loadingBasemaps.get(basemapId);
+    const existing = loadingBasemaps.get(resolvedBasemapId);
     if (existing) {
       return existing;
     }
 
-    const promise = loadBasemapInternal(basemapId);
-    loadingBasemaps.set(basemapId, promise);
+    const promise = loadBasemapInternal(resolvedBasemapId);
+    loadingBasemaps.set(resolvedBasemapId, promise);
 
     try {
       return await promise;
     } finally {
-      loadingBasemaps.delete(basemapId);
+      loadingBasemaps.delete(resolvedBasemapId);
     }
   }
 
