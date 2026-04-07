@@ -197,16 +197,137 @@ export const GPS_COLUMN_PATTERNS = {
   longitude: COLUMN_NAME_PATTERNS.longitude
 } as const;
 
+type GPSResolvableColumn = {
+  name: string;
+  geo_type?: unknown;
+  geo_confidence?: unknown;
+  semioType?: unknown;
+  semioScore?: unknown;
+};
+
+type ResolvedGPSColumns = {
+  lat: string;
+  lon: string;
+};
+
+function getColumnMatchScore(
+  column: Pick<GPSResolvableColumn, 'geo_confidence' | 'semioScore'>
+): number {
+  const geoConfidence =
+    typeof column.geo_confidence === 'number' ? column.geo_confidence : 0;
+  const semioScore =
+    typeof column.semioScore === 'number' ? column.semioScore : 0;
+
+  return Math.max(geoConfidence, semioScore);
+}
+
+function tokenizeColumnName(name: string): string[] {
+  const normalized = name
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/([A-Za-z])(\d)/g, '$1 $2')
+    .replace(/(\d)([A-Za-z])/g, '$1 $2')
+    .replace(/[^A-Za-z0-9]+/g, ' ')
+    .trim()
+    .toLowerCase();
+
+  return normalized.length > 0 ? normalized.split(/\s+/) : [];
+}
+
+function matchesLatitudeTokens(tokens: string[]): boolean {
+  return tokens.some((token) => ['lat', 'latitude', 'geolat'].includes(token));
+}
+
+function matchesLongitudeTokens(tokens: string[]): boolean {
+  return tokens.some((token) =>
+    ['lon', 'long', 'longitude', 'lng', 'geolon'].includes(token)
+  );
+}
+
+function resolveByDetectionMetadata(
+  columns: GPSResolvableColumn[],
+  geoDetection?: Pick<GeoDetectionResult, 'geoColumns'> | null
+): ResolvedGPSColumns | null {
+  if (!geoDetection?.geoColumns?.length) {
+    return null;
+  }
+
+  const availableColumnNames = new Set(columns.map((column) => column.name));
+  const pickColumnName = (type: 'latitude' | 'longitude'): string | undefined =>
+    geoDetection.geoColumns
+      .filter(
+        (column) =>
+          column.type === type &&
+          (availableColumnNames.size === 0 ||
+            availableColumnNames.has(column.columnName))
+      )
+      .sort((left, right) => right.confidence - left.confidence)[0]?.columnName;
+
+  const lat = pickColumnName('latitude');
+  const lon = pickColumnName('longitude');
+
+  if (!lat || !lon || lat === lon) {
+    return null;
+  }
+
+  return { lat, lon };
+}
+
+function resolveByColumnMetadata(
+  columns: GPSResolvableColumn[]
+): ResolvedGPSColumns | null {
+  const pickColumnName = (
+    matcher: (column: GPSResolvableColumn) => boolean
+  ): string | undefined =>
+    [...columns]
+      .filter(matcher)
+      .sort(
+        (left, right) => getColumnMatchScore(right) - getColumnMatchScore(left)
+      )[0]?.name;
+
+  const lat =
+    pickColumnName(
+      (column) =>
+        column.geo_type === 'latitude' || column.semioType === 'geolat'
+    ) ??
+    columns.find((column) => GPS_COLUMN_PATTERNS.latitude.test(column.name))
+      ?.name ??
+    columns.find((column) =>
+      matchesLatitudeTokens(tokenizeColumnName(column.name))
+    )?.name;
+
+  const lon =
+    pickColumnName(
+      (column) =>
+        column.geo_type === 'longitude' || column.semioType === 'geolon'
+    ) ??
+    columns.find((column) => GPS_COLUMN_PATTERNS.longitude.test(column.name))
+      ?.name ??
+    columns.find((column) =>
+      matchesLongitudeTokens(tokenizeColumnName(column.name))
+    )?.name;
+
+  if (!lat || !lon || lat === lon) {
+    return null;
+  }
+
+  return { lat, lon };
+}
+
+export function resolveGPSCoordinateColumns(
+  columns: GPSResolvableColumn[],
+  geoDetection?: Pick<GeoDetectionResult, 'geoColumns'> | null
+): ResolvedGPSColumns | null {
+  return (
+    resolveByDetectionMetadata(columns, geoDetection) ??
+    resolveByColumnMetadata(columns)
+  );
+}
+
 export function hasGPSCoordinateColumns(
-  columns: Array<{ name: string }>
+  columns: GPSResolvableColumn[],
+  geoDetection?: Pick<GeoDetectionResult, 'geoColumns'> | null
 ): boolean {
-  const hasLat = columns.some((col) =>
-    GPS_COLUMN_PATTERNS.latitude.test(col.name)
-  );
-  const hasLon = columns.some((col) =>
-    GPS_COLUMN_PATTERNS.longitude.test(col.name)
-  );
-  return hasLat && hasLon;
+  return resolveGPSCoordinateColumns(columns, geoDetection) !== null;
 }
 
 export const GeoColumnDetector = {

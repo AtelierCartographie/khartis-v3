@@ -9,7 +9,12 @@ const OSM_BASEMAP_PREFIX = 'osm_';
 
 type DuckDatasetJoinState = Pick<
   DuckDBDataset,
-  'joinedBasemap' | 'geoColumn' | 'gpsMode' | 'gpsColumns' | 'columns'
+  | 'joinedBasemap'
+  | 'geoColumn'
+  | 'gpsMode'
+  | 'gpsColumns'
+  | 'columns'
+  | 'geoDetection'
 >;
 
 interface ResolvePersistedJoinStateOptions {
@@ -46,7 +51,10 @@ function resolveDatasetGpsColumns(
 
   return (
     duckDataset.gpsColumns ??
-    detectGPSColumns((duckDataset.columns ?? []) as AnalysisResult[]) ??
+    detectGPSColumns(
+      (duckDataset.columns ?? []) as AnalysisResult[],
+      duckDataset.geoDetection
+    ) ??
     undefined
   );
 }
