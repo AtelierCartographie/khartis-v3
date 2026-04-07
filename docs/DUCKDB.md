@@ -330,15 +330,18 @@ Détecte :
 ### Détection automatique (`detectGPSColumns`)
 
 ```typescript
-detectGPSColumns(columns: AnalysisResult[])
+detectGPSColumns(columns: AnalysisResult[], geoDetection?)
 // → { lat: string, lon: string } | null
 ```
 
-Patterns détectés (insensible à la casse) :
+La résolution des colonnes GPS s'appuie d'abord sur la détection géographique du dataset (`geoDetection`, `geo_type`, `semioType`), puis sur les noms de colonnes.
+
+Exemples pris en charge :
 
 - `lat`/`lon`, `latitude`/`longitude`
 - `y_coord`/`x_coord`
-- `lat_gps`/`lon_gps`, etc.
+- variantes détectées comme `Latitude_WGS84` / `Longitude_WGS84`
+- autres noms personnalisés déjà reconnus comme latitude/longitude par l'analyse
 
 ### Création de la vue GPS
 
