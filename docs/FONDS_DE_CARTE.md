@@ -124,6 +124,13 @@ Chaque fond inclut un fichier JSON de métadonnées :
 | `graticule`        | fichier Parquet | Méridiens et parallèles (généré avec mapshaper)  |
 | `geographic-lines` | fichier Parquet | Équateur, tropiques, cercles polaires, Greenwich |
 
+### Variantes de simplification
+
+- Le catalogue n'expose qu'une variante par famille de fond, choisie parmi les niveaux réellement supportés.
+- Par défaut, Khartis préfère `medium`, puis `high`, puis `low`.
+- Les fonds administratifs France (`canton`, `commune`, `departement`, `region`) excluent `medium` de la sélection interactive: le catalogue pointe donc vers `high` et l'outil de simplification n'affiche que les niveaux réellement disponibles, voire uniquement un message s'il n'existe pas d'alternative.
+- Les couches annexes suivent les métadonnées de la variante active. Une couche partagée entre plusieurs niveaux, comme un graticule, peut donc garder le même fichier sans détection implicite côté code.
+
 Génération d'un fichier graticule :
 
 ```bash

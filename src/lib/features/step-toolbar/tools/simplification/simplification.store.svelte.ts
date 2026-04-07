@@ -11,6 +11,7 @@ import type {
 import { Duck } from '$lib/features/duckdb';
 import {
   basemapService,
+  getPreferredBasemapSimplificationLevel,
   resolveBasemapVariantFile
 } from '$lib/features/map/services/basemap.service.svelte';
 import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
@@ -91,22 +92,28 @@ const { actions, getState } = createToolStore<
 
     const metadata = currentBasemap.metadata;
     const basemapId = metadata.file;
+    const requestedLevel =
+      getPreferredBasemapSimplificationLevel(
+        basemapService.availableBasemaps,
+        metadata,
+        s.level
+      ) ?? s.level;
 
     const variantFile = resolveBasemapVariantFile(
       metadata.file,
       metadata.simplification_level,
-      s.level
+      requestedLevel
     );
     if (!variantFile) {
       logger.debug(
         'No variant available for this basemap at this level',
         LogCategory.DUCKDB,
-        { basemapId, level: s.level }
+        { basemapId, level: requestedLevel }
       );
 
       return {
         type: SimplificationTarget.BASEMAP,
-        level: s.level,
+        level: requestedLevel,
         simplified: false,
         vertexReduction: 0,
         originalVertices: 0,
@@ -117,24 +124,24 @@ const { actions, getState } = createToolStore<
     logger.debug(
       'Loading basemap variant for simplification',
       LogCategory.DUCKDB,
-      { basemapId, level: s.level, variantFile }
+      { basemapId, level: requestedLevel, variantFile }
     );
 
     const variantTable = await basemapService.loadVariant(
       basemapId,
       variantFile,
-      s.level
+      requestedLevel
     );
 
     if (!variantTable) {
       logger.debug(
         'Basemap variant not available, simplification skipped',
         LogCategory.DUCKDB,
-        { basemapId, level: s.level }
+        { basemapId, level: requestedLevel }
       );
       return {
         type: SimplificationTarget.BASEMAP,
-        level: s.level,
+        level: requestedLevel,
         simplified: false,
         vertexReduction: 0,
         originalVertices: 0,
@@ -149,7 +156,7 @@ const { actions, getState } = createToolStore<
 
     return {
       type: SimplificationTarget.BASEMAP,
-      level: s.level,
+      level: requestedLevel,
       simplified: true,
       vertexReduction: 0,
       originalVertices: 0,
@@ -255,24 +262,28 @@ const { actions, getState } = createToolStore<
     setSource: (source: SimplificationSource) => {
       s.source = source;
       if (source === SimplificationSource.Basemap && s.lastApplied) {
-        const restoredLevel = s.lastApplied.level || SimplificationLevel.Medium;
         const metadata = basemapService.currentBasemap?.metadata;
-        const variantFile = metadata
-          ? resolveBasemapVariantFile(
-              metadata.file,
-              metadata.simplification_level,
-              restoredLevel
-            )
-          : null;
-        const hasVariant = Boolean(
-          variantFile && variantFile !== metadata?.file
-        );
-        s.level = hasVariant ? restoredLevel : SimplificationLevel.Medium;
+        const restoredLevel =
+          metadata &&
+          getPreferredBasemapSimplificationLevel(
+            basemapService.availableBasemaps,
+            metadata,
+            s.lastApplied.level
+          );
+        s.level = restoredLevel ?? SimplificationLevel.Medium;
       }
     },
     setLevel: (level: SimplificationLevel) => {
       if (s.source === SimplificationSource.Basemap) {
-        s.level = level;
+        const metadata = basemapService.currentBasemap?.metadata;
+        const resolvedLevel =
+          metadata &&
+          getPreferredBasemapSimplificationLevel(
+            basemapService.availableBasemaps,
+            metadata,
+            level
+          );
+        s.level = resolvedLevel ?? level;
       }
     },
     setRate: (rate: number) => {
