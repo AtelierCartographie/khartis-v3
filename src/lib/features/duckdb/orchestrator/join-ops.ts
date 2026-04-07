@@ -714,7 +714,7 @@ export async function finalizeJoin(
   }
 
   // GPS mode with a catalog/custom basemap: no textual join needed
-  if (!geoColumn && detectGPSColumns(dataset.columns)) {
+  if (!geoColumn && detectGPSColumns(dataset.columns, dataset.geoDetection)) {
     return finalizeGPSJoin(dataset, basemap);
   }
 
@@ -789,7 +789,7 @@ function finalizeGPSJoin(
     }
   );
 
-  const gpsColumns = detectGPSColumns(dataset.columns);
+  const gpsColumns = detectGPSColumns(dataset.columns, dataset.geoDetection);
   if (!gpsColumns) {
     throw new Error('GPS columns (latitude/longitude) not found in dataset');
   }

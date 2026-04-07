@@ -67,6 +67,58 @@ describe('resolvePersistedJoinState', () => {
     });
   });
 
+  it('rebuilds gps columns from geo detection when custom names are used', () => {
+    const result = resolvePersistedJoinState({
+      file: {
+        geoColumn: 'entity'
+      },
+      duckDataset: {
+        gpsMode: true,
+        columns: [
+          {
+            name: 'Latitude_WGS84',
+            type_simple: DuckDBSimplifiedType.NUMERIC
+          },
+          {
+            name: 'Longitude_WGS84',
+            type_simple: DuckDBSimplifiedType.NUMERIC
+          }
+        ],
+        geoDetection: {
+          hasGeoColumns: true,
+          geoColumns: [
+            {
+              index: 0,
+              columnName: 'Latitude_WGS84',
+              type: 'latitude',
+              confidence: 0.99
+            },
+            {
+              index: 1,
+              columnName: 'Longitude_WGS84',
+              type: 'longitude',
+              confidence: 0.98
+            }
+          ],
+          warnings: []
+        }
+      },
+      selectedBasemapId: 'osm_standard_123',
+      linkedGeoColumn: 'entity',
+      isSelectedSourceFile: true
+    });
+
+    expect(result).toEqual({
+      joinedBasemap: 'osm_standard_123',
+      geoColumn: undefined,
+      gpsMode: true,
+      gpsColumns: {
+        lat: 'Latitude_WGS84',
+        lon: 'Longitude_WGS84'
+      }
+    });
+  });
+
   it('persists only the linked geo column before a textual join is finalized', () => {
     const result = resolvePersistedJoinState({
       file: {},

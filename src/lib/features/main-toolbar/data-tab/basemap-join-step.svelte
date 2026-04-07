@@ -91,7 +91,7 @@
   const hasGPSCoordinates = $derived(() => {
     if (!selectedDataset) return false;
     const columns = selectedDataset.columns || [];
-    return hasGPSCoordinateColumns(columns);
+    return hasGPSCoordinateColumns(columns, selectedDataset.geoDetection);
   });
 
   const isGPSModeActive = $derived(hasGPSCoordinates());
