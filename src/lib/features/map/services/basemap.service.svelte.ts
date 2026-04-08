@@ -49,6 +49,7 @@ const FRANCE_ADMINISTRATIVE_BASEMAP_PREFIXES = [
   'france-departement-',
   'france-region-'
 ] as const;
+const SIMPLIFICATION_LEVEL_SUFFIX_REGEX = /-(low|medium|high)$/;
 
 interface WorldCountriesGeoJSON {
   features?: Array<{
@@ -124,8 +125,15 @@ function getBasemapSimplificationLevel(
     : null;
 }
 
+function getBasemapFileSimplificationLevel(
+  file: string
+): SimplificationLevel | null {
+  const suffix = SIMPLIFICATION_LEVEL_SUFFIX_REGEX.exec(file)?.[1];
+  return isSimplificationLevel(suffix) ? suffix : null;
+}
+
 export function getBasemapVariantFamily(file: string): string {
-  return file.replace(/-(low|medium|high)$/, '');
+  return file.replace(SIMPLIFICATION_LEVEL_SUFFIX_REGEX, '');
 }
 
 function isFranceAdministrativeBasemapFamily(family: string): boolean {
@@ -197,16 +205,25 @@ export function getPreferredBasemapFile(
 ): string {
   const metadata =
     basemaps.find((candidate) => candidate.file === basemapFile) ?? null;
-  if (!metadata) {
-    return basemapFile;
-  }
+  const currentLevel = metadata
+    ? getBasemapSimplificationLevel(metadata)
+    : getBasemapFileSimplificationLevel(basemapFile);
 
-  const currentLevel = getBasemapSimplificationLevel(metadata);
   if (!currentLevel) {
     return basemapFile;
   }
 
-  if (isSupportedBasemapSimplificationLevel(metadata.file, currentLevel)) {
+  if (
+    metadata &&
+    isSupportedBasemapSimplificationLevel(metadata.file, currentLevel)
+  ) {
+    return basemapFile;
+  }
+
+  if (
+    !metadata &&
+    isSupportedBasemapSimplificationLevel(basemapFile, currentLevel)
+  ) {
     return basemapFile;
   }
 
@@ -215,10 +232,7 @@ export function getPreferredBasemapFile(
     return basemapFile;
   }
 
-  return basemapFile.replace(
-    new RegExp(`-${currentLevel}$`),
-    `-${preferredLevel}`
-  );
+  return `${getBasemapVariantFamily(basemapFile)}-${preferredLevel}`;
 }
 
 export function getPreferredBasemapSimplificationLevel(
