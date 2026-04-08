@@ -118,6 +118,22 @@ const COUNTRY_SAMPLES = [
 
 const REGION_SAMPLES = [
   'ILE-DE-FRANCE',
+  'GUADELOUPE',
+  'MARTINIQUE',
+  'GUYANE',
+  'LA REUNION',
+  'MAYOTTE',
+  'CENTRE-VAL DE LOIRE',
+  'BOURGOGNE-FRANCHE-COMTE',
+  'NORMANDIE',
+  'HAUTS-DE-FRANCE',
+  'GRAND EST',
+  'PAYS DE LA LOIRE',
+  'NOUVELLE-AQUITAINE',
+  'OCCITANIE',
+  'AUVERGNE-RHONE-ALPES',
+  "PROVENCE-ALPES-COTE D'AZUR",
+  'CORSE',
   'BAVARIA',
   'CATALONIA',
   'LOMBARDY',
@@ -183,6 +199,44 @@ const NUTS_SAMPLES = [
   'NL31'
 ] as const;
 
+const HEADER_KEYWORDS = {
+  country: {
+    strong: ['country', 'pays', 'nation'],
+    weak: ['entity']
+  },
+  region: [
+    'region',
+    'rgion',
+    'province',
+    'department',
+    'departement',
+    'dpartement',
+    'county',
+    'oblast',
+    'prefecture'
+  ],
+  city: ['city', 'ville', 'town', 'commune', 'municipality', 'ciudad', 'stadt'],
+  coordinates: [
+    'coord',
+    'coords',
+    'coordinates',
+    'point',
+    'location',
+    'geometry',
+    'wkt'
+  ],
+  iso2: ['iso2', 'isoalpha2', 'countryiso2', 'codeiso2', 'alpha2'],
+  iso3: [
+    'iso3',
+    'isoalpha3',
+    'countryiso3',
+    'codeiso3',
+    'alpha3',
+    'countrycode'
+  ],
+  nuts: ['nuts', 'nutscode', 'nutsid', 'nuts2', 'nuts3', 'nutslevel']
+} as const;
+
 function hasSufficientDistinctCodeValues(values: string[]): boolean {
   const uniqueCount = new Set(values.map((v) => v.toUpperCase())).size;
   const requiredDistinctCount = Math.min(
@@ -221,8 +275,19 @@ function getColumnMatchScore(
   return Math.max(geoConfidence, semioScore);
 }
 
+function normalizeGeoText(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+function collapseGeoText(value: string): string {
+  return normalizeGeoText(value).replace(/[^a-z0-9]+/g, '');
+}
+
 function tokenizeColumnName(name: string): string[] {
-  const normalized = name
+  const normalized = normalizeGeoText(name)
     .replace(/([a-z])([A-Z])/g, '$1 $2')
     .replace(/([A-Za-z])(\d)/g, '$1 $2')
     .replace(/(\d)([A-Za-z])/g, '$1 $2')
@@ -231,6 +296,68 @@ function tokenizeColumnName(name: string): string[] {
     .toLowerCase();
 
   return normalized.length > 0 ? normalized.split(/\s+/) : [];
+}
+
+function expandHeaderTokens(tokens: string[]): string[] {
+  const expanded = new Set(tokens);
+
+  for (let index = 0; index < tokens.length - 1; index += 1) {
+    const left = tokens[index];
+    const right = tokens[index + 1];
+
+    if (left.length === 1 && right.length >= 3) {
+      expanded.add(`${left}${right}`);
+    }
+  }
+
+  return [...expanded];
+}
+
+function hasHeaderKeyword(
+  tokens: string[],
+  collapsedHeader: string,
+  keywords: readonly string[]
+): boolean {
+  return keywords.some(
+    (keyword) =>
+      tokens.includes(keyword) ||
+      (keyword.length >= 4 && collapsedHeader.includes(keyword))
+  );
+}
+
+function getStringValues(values: unknown[]): string[] {
+  return values
+    .filter((value) => value != null)
+    .map((value) => String(value).trim())
+    .filter((value) => value.length > 0);
+}
+
+function getNumericLikeShare(values: string[]): number {
+  if (values.length === 0) {
+    return 0;
+  }
+
+  const numericLikeValues = values.filter((value) =>
+    /^-?\d+(?:[.,]\d+)?$/.test(value)
+  );
+
+  return numericLikeValues.length / values.length;
+}
+
+function getSemanticSampleMatch(
+  type: GeoColumnResult['type'],
+  values: string[]
+): number {
+  switch (type) {
+    case 'country_name':
+      return GeoColumnDetector.matchAgainstSamples(values, COUNTRY_SAMPLES);
+    case 'region':
+      return GeoColumnDetector.matchAgainstSamples(values, REGION_SAMPLES);
+    case 'city':
+      return GeoColumnDetector.matchAgainstSamples(values, CITY_SAMPLES);
+    default:
+      return 0;
+  }
 }
 
 function matchesLatitudeTokens(tokens: string[]): boolean {
@@ -396,8 +523,217 @@ export const GeoColumnDetector = {
     header: string,
     values: unknown[]
   ): Omit<GeoColumnResult, 'index' | 'columnName'> | null {
-    const headerLower = header.toLowerCase().trim();
     const sampleValues = values.slice(0, 5).map((v) => String(v));
+    const headerDetection = GeoColumnDetector.detectByHeader(header, values);
+
+    const valueBasedType = GeoColumnDetector.detectByValues(values);
+    if (headerDetection && valueBasedType) {
+      if (headerDetection.type === valueBasedType.type) {
+        return {
+          ...valueBasedType,
+          confidence: Math.max(
+            headerDetection.confidence,
+            valueBasedType.confidence
+          ),
+          sampleValues,
+          matchedPatterns: [
+            ...(headerDetection.matchedPatterns ?? []),
+            ...(valueBasedType.matchedPatterns ?? [])
+          ]
+        };
+      }
+
+      if (valueBasedType.confidence > headerDetection.confidence + 0.15) {
+        return {
+          ...valueBasedType,
+          sampleValues
+        };
+      }
+
+      return {
+        ...headerDetection,
+        sampleValues
+      };
+    }
+
+    if (headerDetection) {
+      return {
+        ...headerDetection,
+        sampleValues
+      };
+    }
+
+    if (valueBasedType) {
+      return {
+        ...valueBasedType,
+        sampleValues
+      };
+    }
+
+    return null;
+  },
+
+  detectByHeader(
+    header: string,
+    values: unknown[]
+  ): Omit<GeoColumnResult, 'index' | 'columnName'> | null {
+    const tokens = expandHeaderTokens(tokenizeColumnName(header));
+    const collapsedHeader = collapseGeoText(header);
+    const stringValues = getStringValues(values);
+    const numericLikeShare = getNumericLikeShare(stringValues);
+
+    const headerMatchers: Array<{
+      type: GeoColumnResult['type'];
+      matches: boolean;
+      confidence: number;
+      reason: string;
+    }> = [
+      {
+        type: 'latitude',
+        matches: matchesLatitudeTokens(tokens),
+        confidence: GEO_DETECTION.EXCEPTIONAL,
+        reason: 'Header tokens: latitude'
+      },
+      {
+        type: 'longitude',
+        matches: matchesLongitudeTokens(tokens),
+        confidence: GEO_DETECTION.EXCEPTIONAL,
+        reason: 'Header tokens: longitude'
+      },
+      {
+        type: 'iso2',
+        matches: hasHeaderKeyword(
+          tokens,
+          collapsedHeader,
+          HEADER_KEYWORDS.iso2
+        ),
+        confidence: GEO_DETECTION.EXCEPTIONAL,
+        reason: 'Header keywords: ISO2'
+      },
+      {
+        type: 'iso3',
+        matches: hasHeaderKeyword(
+          tokens,
+          collapsedHeader,
+          HEADER_KEYWORDS.iso3
+        ),
+        confidence: GEO_DETECTION.EXCEPTIONAL,
+        reason: 'Header keywords: ISO3'
+      },
+      {
+        type: 'nuts',
+        matches: hasHeaderKeyword(
+          tokens,
+          collapsedHeader,
+          HEADER_KEYWORDS.nuts
+        ),
+        confidence: GEO_DETECTION.NEAR_CERTAIN,
+        reason: 'Header keywords: NUTS'
+      },
+      {
+        type: 'country_name',
+        matches: hasHeaderKeyword(
+          tokens,
+          collapsedHeader,
+          HEADER_KEYWORDS.country.strong
+        ),
+        confidence: 0.75,
+        reason: 'Header keywords: country'
+      },
+      {
+        type: 'country_name',
+        matches: hasHeaderKeyword(
+          tokens,
+          collapsedHeader,
+          HEADER_KEYWORDS.country.weak
+        ),
+        confidence: 0.6,
+        reason: 'Header keywords: entity'
+      },
+      {
+        type: 'region',
+        matches: hasHeaderKeyword(
+          tokens,
+          collapsedHeader,
+          HEADER_KEYWORDS.region
+        ),
+        confidence: 0.75,
+        reason: 'Header keywords: region'
+      },
+      {
+        type: 'city',
+        matches: hasHeaderKeyword(
+          tokens,
+          collapsedHeader,
+          HEADER_KEYWORDS.city
+        ),
+        confidence: 0.72,
+        reason: 'Header keywords: city'
+      },
+      {
+        type: 'coordinates',
+        matches: hasHeaderKeyword(
+          tokens,
+          collapsedHeader,
+          HEADER_KEYWORDS.coordinates
+        ),
+        confidence: 0.7,
+        reason: 'Header keywords: coordinates'
+      }
+    ];
+
+    for (const matcher of headerMatchers) {
+      if (!matcher.matches) {
+        continue;
+      }
+
+      if (Object.prototype.hasOwnProperty.call(VALUE_PATTERNS, matcher.type)) {
+        const valueConfidence = GeoColumnDetector.validateColumnValues(
+          matcher.type,
+          values
+        );
+        if (valueConfidence > GEO_DETECTION.MIN_CONFIDENCE) {
+          return {
+            type: matcher.type,
+            confidence: Math.max(matcher.confidence, valueConfidence),
+            matchedPatterns: [matcher.reason]
+          };
+        }
+        continue;
+      }
+
+      if (
+        (matcher.type === 'country_name' || matcher.type === 'city') &&
+        numericLikeShare > 0.8
+      ) {
+        continue;
+      }
+
+      if (
+        matcher.type === 'region' &&
+        numericLikeShare > 0.8 &&
+        !collapsedHeader.includes('code')
+      ) {
+        continue;
+      }
+
+      const semanticMatch = getSemanticSampleMatch(matcher.type, stringValues);
+      const confidence = Math.max(
+        matcher.confidence,
+        Math.min(
+          semanticMatch * GEO_DETECTION.MULTIPLIER_STRONG,
+          GEO_DETECTION.VERY_HIGH_CONFIDENCE
+        )
+      );
+
+      if (confidence > GEO_DETECTION.MIN_CONFIDENCE) {
+        return {
+          type: matcher.type,
+          confidence,
+          matchedPatterns: [matcher.reason]
+        };
+      }
+    }
 
     for (const [type, pattern] of Object.entries(COLUMN_NAME_PATTERNS)) {
       if (pattern.test(header)) {
@@ -406,46 +742,9 @@ export const GeoColumnDetector = {
           return {
             type: type as GeoColumnResult['type'],
             confidence,
-            sampleValues,
             matchedPatterns: [pattern.source]
           };
         }
-      }
-    }
-
-    const valueBasedType = GeoColumnDetector.detectByValues(values);
-    if (valueBasedType) {
-      return {
-        ...valueBasedType,
-        sampleValues
-      };
-    }
-
-    if (headerLower.includes('lat')) {
-      const latConfidence = GeoColumnDetector.validateColumnValues(
-        'latitude',
-        values
-      );
-      if (latConfidence > GEO_DETECTION.MIN_CONFIDENCE) {
-        return {
-          type: 'latitude',
-          confidence: latConfidence * GEO_DETECTION.MULTIPLIER_MODERATE,
-          sampleValues
-        };
-      }
-    }
-
-    if (headerLower.includes('lon') || headerLower.includes('lng')) {
-      const lonConfidence = GeoColumnDetector.validateColumnValues(
-        'longitude',
-        values
-      );
-      if (lonConfidence > GEO_DETECTION.MIN_CONFIDENCE) {
-        return {
-          type: 'longitude',
-          confidence: lonConfidence * GEO_DETECTION.MULTIPLIER_MODERATE,
-          sampleValues
-        };
       }
     }
 
@@ -455,9 +754,7 @@ export const GeoColumnDetector = {
   detectByValues(
     values: unknown[]
   ): Omit<GeoColumnResult, 'index' | 'columnName'> | null {
-    const stringValues = values
-      .filter((v) => v != null)
-      .map((v) => String(v).trim());
+    const stringValues = getStringValues(values);
 
     if (stringValues.length === 0) return null;
 
@@ -578,9 +875,29 @@ export const GeoColumnDetector = {
   },
 
   matchAgainstSamples(values: string[], samples: readonly string[]): number {
-    const upperValues = values.map((v) => v.toUpperCase());
-    const matchCount = upperValues.filter((v) =>
-      samples.some((s) => s === v || v.includes(s) || s.includes(v))
+    const normalizedValues = values.map((value) =>
+      normalizeGeoText(value)
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim()
+    );
+    const normalizedSamples = samples.map((sample) =>
+      normalizeGeoText(sample)
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim()
+    );
+
+    const matchCount = normalizedValues.filter((value) =>
+      normalizedSamples.some((sample) => {
+        if (sample === value) {
+          return true;
+        }
+
+        if (sample.length < 4 || value.length < 4) {
+          return false;
+        }
+
+        return value.includes(sample) || sample.includes(value);
+      })
     ).length;
 
     return matchCount / values.length;
@@ -592,10 +909,10 @@ export const GeoColumnDetector = {
     if (columns.length === 0) return undefined;
 
     const priorityOrder: GeoColumnResult['type'][] = [
-      'country_name',
       'iso3',
       'iso2',
       'nuts',
+      'country_name',
       'region',
       'city',
       'coordinates',
