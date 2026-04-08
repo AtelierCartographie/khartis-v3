@@ -52,10 +52,7 @@ describe('detectDecimalSeparator', () => {
     expect(result.separator).toBe('.');
   });
 
-  it('ne détecte pas automatiquement le séparateur de milliers espace pour les entiers sans partie décimale', async () => {
-    // Les valeurs comme "2 161 000" (entiers avec espace comme milliers, sans partie décimale)
-    // ne correspondent pas aux patterns décimaux — l'utilisateur doit configurer thousands=" "
-    // manuellement via la modale des options CSV.
+  it('détecte le séparateur de milliers espace pour les entiers sans partie décimale', async () => {
     const file = asFile(
       [
         'ville,population,superficie_km2',
@@ -69,7 +66,7 @@ describe('detectDecimalSeparator', () => {
     const result = await detectDecimalSeparator(file);
 
     expect(result.separator).toBe('.');
-    expect(result.thousandsSeparator).toBeUndefined();
+    expect(result.thousandsSeparator).toBe(' ');
   });
 
   it("retourne les valeurs par défaut quand le fichier ne contient que l'en-tête", async () => {
