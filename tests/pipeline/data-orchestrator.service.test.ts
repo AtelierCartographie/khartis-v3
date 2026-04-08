@@ -15,6 +15,11 @@ const beginBatchMock = vi.hoisted(() =>
     operationLog.push('beginBatch');
   })
 );
+const clearDuckDbMock = vi.hoisted(() =>
+  vi.fn(async () => {
+    operationLog.push('clearDuckDb');
+  })
+);
 const endBatchMock = vi.hoisted(() =>
   vi.fn(() => {
     operationLog.push('endBatch');
@@ -33,6 +38,11 @@ const restoreVisualizationMock = vi.hoisted(() =>
 const datasetsClearMock = vi.hoisted(() =>
   vi.fn(() => {
     operationLog.push('clearDatasets');
+  })
+);
+const applyPersistedViewStateMock = vi.hoisted(() =>
+  vi.fn(() => {
+    operationLog.push('applyPersistedViewState');
   })
 );
 const addFileMock = vi.hoisted(() =>
@@ -72,6 +82,11 @@ const ensureTabSelectedMock = vi.hoisted(() =>
     operationLog.push('ensureTabSelected');
   })
 );
+const applyPersistedTableFiltersMock = vi.hoisted(() =>
+  vi.fn(() => {
+    operationLog.push('applyPersistedTableFilters');
+  })
+);
 
 vi.mock('$lib/features/data-pipeline', () => ({
   createFileFromUpload: vi.fn(async (file: { name: string }) => {
@@ -81,6 +96,9 @@ vi.mock('$lib/features/data-pipeline', () => ({
 
 vi.mock('$lib/features/duckdb', () => ({
   Duck: undefined,
+  GEO_CONSTANTS: {
+    WGS84_CRS: 'EPSG:4326'
+  },
   RefineOperation: {
     UPPERCASE: 'uppercase',
     LOWERCASE: 'lowercase',
@@ -99,6 +117,7 @@ vi.mock('$lib/features/duckdb/orchestrator/orchestrator.svelte', () => ({
     waitForInitialization: waitForInitializationMock,
     beginBatch: beginBatchMock,
     endBatch: endBatchMock,
+    clear: clearDuckDbMock,
     processFile: vi.fn(),
     registerExistingTable: vi.fn(),
     updateDatasetJoinInfo: vi.fn(),
@@ -109,7 +128,8 @@ vi.mock('$lib/features/duckdb/orchestrator/orchestrator.svelte', () => ({
     changeColumnType: vi.fn(),
     refineColumn: vi.fn(),
     replaceInColumn: vi.fn(),
-    getAllDatasets: vi.fn(() => [])
+    getAllDatasets: vi.fn(() => []),
+    applyPersistedTableFilters: applyPersistedTableFiltersMock
   }
 }));
 
@@ -146,6 +166,7 @@ vi.mock('$lib/features/commons/store/datasets.store.svelte', () => ({
   datasetsStore: {
     clear: datasetsClearMock,
     addFile: addFileMock,
+    applyPersistedViewState: applyPersistedViewStateMock,
     getDatasetBySourceFile: vi.fn(() => undefined),
     removeDataset: vi.fn(),
     updateDatasetTableName: vi.fn(),
@@ -258,15 +279,26 @@ describe('dataOrchestratorService.onProjectChanged', () => {
       },
       []
     );
+    const clearDuckDbIndex = operationLog.indexOf('clearDuckDb');
     const addFileIndex = operationLog.indexOf('addFile');
     const legendSyncIndex = operationLog.lastIndexOf('legendSync');
     const finalEnsureIndex = operationLog.lastIndexOf('ensureTabSelected');
+    const applyViewStateIndex = operationLog.lastIndexOf(
+      'applyPersistedViewState'
+    );
+    const applyFiltersIndex = operationLog.lastIndexOf(
+      'applyPersistedTableFilters'
+    );
 
     expect(restoreIndexes).toHaveLength(2);
+    expect(clearDuckDbIndex).toBeGreaterThan(-1);
+    expect(clearDuckDbIndex).toBeLessThan(addFileIndex);
     expect(addFileIndex).toBeGreaterThan(-1);
     expect(restoreIndexes[0]).toBeLessThan(addFileIndex);
     expect(restoreIndexes[1]).toBeGreaterThan(addFileIndex);
+    expect(finalEnsureIndex).toBeLessThan(applyViewStateIndex);
+    expect(applyViewStateIndex).toBeLessThan(applyFiltersIndex);
     expect(legendSyncIndex).toBeGreaterThan(restoreIndexes[1]);
-    expect(finalEnsureIndex).toBeGreaterThan(legendSyncIndex);
+    expect(legendSyncIndex).toBeGreaterThan(applyFiltersIndex);
   });
 });

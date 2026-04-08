@@ -615,6 +615,15 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
         mapTooltipStore.unpin();
       }
     };
+  },
+  {
+    key: 'search',
+    serializeFilter: ({
+      results: _results,
+      currentResultIndex: _currentResultIndex,
+      isSearching: _isSearching,
+      ...persisted
+    }) => persisted
   }
 );
 

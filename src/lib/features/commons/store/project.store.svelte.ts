@@ -11,6 +11,8 @@ import {
   persistenceRegistry,
   type AutoSaveController
 } from '$lib/features/project-management';
+import { EVENT } from '$lib/features/commons/constants/dom.constants';
+import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type {
   ColumnTransformation,
   UploadedFile
@@ -43,6 +45,12 @@ import {
   clearColumnTransformations as clearColumnTransformationsFn,
   addDeletedRows as addDeletedRowsFn
 } from './project';
+
+const EXIT_FLUSH_DEDUP_MS = 1000;
+
+let flushPendingPersistenceRef: (() => void) | null = null;
+let areExitListenersRegistered = false;
+let lastExitFlushAt = 0;
 
 function createProjectStore() {
   const state = $state(createProjectState());
@@ -241,7 +249,54 @@ function createProjectStore() {
     setAutoSaveFn(container, enabled, interval);
   }
 
+  function flushPendingPersistence(): void {
+    if (!state.currentProject) {
+      return;
+    }
+
+    const now = Date.now();
+    if (now - lastExitFlushAt < EXIT_FLUSH_DEDUP_MS) {
+      return;
+    }
+    lastExitFlushAt = now;
+
+    container.autoSave.cancel();
+
+    if (persistenceRegistry.isDirty) {
+      persistenceRegistry.flush();
+      return;
+    }
+
+    if (!state.isDirty) {
+      return;
+    }
+
+    void saveCurrentProject().catch((error) => {
+      logger.error(
+        'Failed to save project during page lifecycle flush',
+        LogCategory.PERSISTENCE,
+        error
+      );
+    });
+  }
+
   if (typeof window !== 'undefined') {
+    flushPendingPersistenceRef = flushPendingPersistence;
+
+    if (!areExitListenersRegistered) {
+      const flushOnExit = () => flushPendingPersistenceRef?.();
+
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+          flushOnExit();
+        }
+      });
+      window.addEventListener('pagehide', flushOnExit);
+      window.addEventListener(EVENT.BEFOREUNLOAD, flushOnExit);
+
+      areExitListenersRegistered = true;
+    }
+
     initPromise = initialize();
   }
 

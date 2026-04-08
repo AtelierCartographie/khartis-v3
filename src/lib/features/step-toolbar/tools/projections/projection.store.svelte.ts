@@ -368,7 +368,10 @@ const { actions, getState } = createToolStore<
       });
     }
   },
-  { key: 'projection' }
+  {
+    key: 'projection',
+    serializeFilter: ({ suggestions: _suggestions, ...persisted }) => persisted
+  }
 );
 
 /** Maps d3 factory names from proj-suggest to internal projection IDs. */

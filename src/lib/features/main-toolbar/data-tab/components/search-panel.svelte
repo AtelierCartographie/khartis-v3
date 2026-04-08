@@ -47,9 +47,9 @@
   const selectedDataset = $derived(datasetsStore.selectedDataset);
   const columns = $derived(selectedDataset?.columns ?? []);
 
-  let searchQuery = $state('');
-  let searchSource = $state<SearchSource | string>(SearchSource.ALL);
-  let replaceValue = $state('');
+  let searchQuery = $state(dataToolsStore.searchQuery);
+  let searchSource = $state<SearchSource | string>(dataToolsStore.searchSource);
+  let replaceValue = $state(dataToolsStore.replaceValue);
   let searchStats = $state<SearchStats>({
     exactCount: 0,
     containsCount: 0,
@@ -78,6 +78,22 @@
   const highlightedRowIds = $derived([
     ...new Set(searchStats.results.map((r) => r.rowId))
   ]);
+
+  $effect(() => {
+    const persistedQuery = dataToolsStore.searchQuery;
+    const persistedSource = dataToolsStore.searchSource;
+    const persistedReplaceValue = dataToolsStore.replaceValue;
+
+    if (searchQuery !== persistedQuery) {
+      searchQuery = persistedQuery;
+    }
+    if (searchSource !== persistedSource) {
+      searchSource = persistedSource;
+    }
+    if (replaceValue !== persistedReplaceValue) {
+      replaceValue = persistedReplaceValue;
+    }
+  });
 
   function notifySearchResults() {
     const currentResult = searchStats.results[currentResultIndex];
@@ -227,6 +243,10 @@
     onReplace?.(query, value, source);
   }
 
+  function handleReplaceInput() {
+    dataToolsStore.setReplaceValue(replaceValue);
+  }
+
   function handlePrevResult() {
     if (searchStats.results.length === 0) return;
     currentResultIndex =
@@ -369,6 +389,7 @@
         labelText={m.search_replace_with()}
         placeholder={m.search_replace_placeholder()}
         bind:value={replaceValue}
+        on:input={handleReplaceInput}
       />
     </div>
 
