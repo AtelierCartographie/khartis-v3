@@ -223,4 +223,50 @@ describe('vizSuggester', () => {
       'symbols_differents'
     );
   });
+
+  it('prefers proportional suggestions for unique numeric values that are not ids', () => {
+    const suggestions = vizSuggester.suggestVisualizations(
+      [
+        makeColumn('code_region_2016', 'number', {
+          count: 18,
+          uniques: 18,
+          nulls: 0,
+          min: 1,
+          max: 94,
+          share_integers: 1,
+          share_floats: 0,
+          share_rank_interval: 0.06,
+          extent_magnitude: 2
+        }),
+        makeColumn('valeur_test', 'number', {
+          count: 18,
+          uniques: 18,
+          nulls: 0,
+          min: 7,
+          max: 42,
+          share_integers: 1,
+          share_floats: 0,
+          share_rank_interval: 0.47,
+          extent_magnitude: 1
+        }),
+        makeColumn('nom_region', 'string', {
+          count: 18,
+          uniques: 18,
+          nulls: 0
+        })
+      ],
+      'Polygon',
+      { maxSuggestions: 6 }
+    );
+
+    expect(suggestions.map((suggestion) => suggestion.id)).toContain(
+      'symbols_proportional'
+    );
+    expect(
+      ['symbols_proportional', 'texts_proportional'].includes(
+        suggestions[0]?.id ?? ''
+      )
+    ).toBe(true);
+    expect(suggestions[0]?.columns).toContain('valeur_test');
+  });
 });
