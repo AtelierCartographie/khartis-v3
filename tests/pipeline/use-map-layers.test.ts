@@ -5,6 +5,7 @@ import {
   getThematicLayerRenderOrder,
   getVisualizationRenderOrder
 } from '$lib/features/map/utils/layer-order.utils';
+import { resolveProjectionForRender } from '$lib/features/map/utils/projection-priority';
 import type { VisualizationConfig } from '$lib/features/commons/store/visualization.store.svelte';
 
 function createVisualizationStub(
@@ -115,5 +116,32 @@ describe('getMapLayerRenderOrder', () => {
       'point-layer-viz-b',
       'basemap-frontieres'
     ]);
+  });
+});
+
+describe('resolveProjectionForRender', () => {
+  it('keeps the basemap metadata projection as the default fallback', () => {
+    const metadataProjection = { id: 'france-default' };
+
+    expect(resolveProjectionForRender(metadataProjection, undefined)).toBe(
+      metadataProjection
+    );
+  });
+
+  it('keeps the basemap metadata projection authoritative when both are present', () => {
+    const metadataProjection = { id: 'world-default' };
+    const userOverride = { id: 'aitoff' };
+
+    expect(resolveProjectionForRender(metadataProjection, userOverride)).toBe(
+      metadataProjection
+    );
+  });
+
+  it('falls back to the user override when the basemap has no projection metadata', () => {
+    const userOverride = { id: 'aitoff' };
+
+    expect(resolveProjectionForRender(undefined, userOverride)).toBe(
+      userOverride
+    );
   });
 });
