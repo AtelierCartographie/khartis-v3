@@ -151,6 +151,8 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     NonNullable<BasemapMetadata>,
     ProjectionLike
   >();
+  let cachedProjectionOverrideKey: string | null = null;
+  let cachedProjectionOverrideRef: ProjectionLike | undefined;
 
   function getProjectionFromMetadata(
     metadata: BasemapMetadata | null | undefined,
@@ -187,21 +189,38 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       return undefined;
     }
 
+    const overrideKey = projState.customCode
+      ? `custom:${projState.customCode}`
+      : `preset:${projState.selected}`;
+
+    if (overrideKey === cachedProjectionOverrideKey) {
+      return cachedProjectionOverrideRef;
+    }
+
+    let projectionOverride: ProjectionLike | undefined;
+
     if (projState.customCode) {
       try {
-        return proj4d3(projState.customCode);
+        projectionOverride = proj4d3(projState.customCode);
       } catch (error) {
         logger.error(
           'Custom CRS code failed for thematic layers, using default basemap projection',
           LogCategory.MAP,
           { customCode: projState.customCode, error }
         );
-        return undefined;
       }
+    } else {
+      const projectionInfo = getProjectionById(projState.selected);
+      projectionOverride = projectionInfo?.projection();
     }
 
-    const projectionInfo = getProjectionById(projState.selected);
-    return projectionInfo?.projection();
+    // Downstream GeoArrow/projection caches key by ProjectionLike reference.
+    // Recreating the same override projection on every layer refresh defeats
+    // those caches and forces needless reprojection work.
+    cachedProjectionOverrideKey = overrideKey;
+    cachedProjectionOverrideRef = projectionOverride;
+
+    return projectionOverride;
   }
 
   function getDatasetDefaultProjection(
