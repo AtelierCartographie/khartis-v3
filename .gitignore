@@ -115,6 +115,8 @@ tmp/
 /visualizations-lines-full.png
 /lines-import-timeout-state.png
 /lines-visualizations-console-warnings.txt
+/skills-lock.json
+/.agents/
 
 # Editors/IDEs
 .vscode/
