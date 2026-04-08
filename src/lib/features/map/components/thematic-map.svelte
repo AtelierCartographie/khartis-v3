@@ -44,6 +44,8 @@
     PAGE_GRID_SIZE_PX
   } from '../../step-toolbar/tools/format/format.store.svelte';
   import { getSimplificationState } from '../../step-toolbar/tools/simplification/simplification.store.svelte';
+  import { getProjectionState } from '../../step-toolbar/tools/projections/projection.store.svelte';
+  import { buildProjectionRenderKey } from '../../step-toolbar/tools/projections/projection-render-key';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { getFiltersMap } from '$lib/features/duckdb/orchestrator/state.svelte';
   import { LegendPosition } from '$lib/features/commons/constants/ui.constants';
@@ -1106,6 +1108,11 @@
       .map(([k, v]) => `${k}:${v.length}:${v.map((f) => f.id).join(',')}`)
       .join('|')
   );
+  const projectionRenderTrigger = $derived.by(() => {
+    const projectionState = getProjectionState();
+
+    return `${buildProjectionRenderKey(projectionState)}|${mapProjectionStore.projection}`;
+  });
 
   const layerUpdateTrigger = $derived({
     vizVersion: visualizationStore.version,
@@ -1113,7 +1120,8 @@
     highlightVersion: mapHighlightStore.version,
     dataVersion,
     dataSize: `${tables.size}-${geoJSONs.size}`,
-    filtersVersion
+    filtersVersion,
+    projectionVersion: projectionRenderTrigger
   });
 
   $effect(() => {
