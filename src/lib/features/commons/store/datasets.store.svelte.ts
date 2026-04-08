@@ -8,6 +8,7 @@ import {
 } from '$lib/features/project-management/core/persistence-registry';
 import type { SerializedDatasetsViewState } from '$lib/types/serialization.types';
 import type { UploadedFile } from './create-project.types';
+import { deserializeDatasetsViewState } from './datasets-view-state';
 import {
   datasetsState,
   datasetsInternals,
@@ -103,12 +104,7 @@ function createDatasetsStore() {
   }
 
   function restorePersistedViewState(data: unknown): void {
-    pendingPersistedViewState =
-      (data as SerializedDatasetsViewState | null) ?? {
-        enabledSourceFileIds: [],
-        hiddenColumnsBySourceFileId: {},
-        simplificationBySourceFileId: {}
-      };
+    pendingPersistedViewState = deserializeDatasetsViewState(data);
   }
 
   function applyPersistedViewState(): void {
