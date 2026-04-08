@@ -15,6 +15,16 @@ import type {
 
 const BASEMAP_METADATA_PATH = '/basemaps/all-basemaps-metadata.json';
 const GPS_SCORE_EPSILON = 1e-9;
+const GPS_TEXT_REFINEMENT_MIN_SCORE = 80;
+const GPS_AUTO_SELECTION_FAMILY_PRIORITY = [
+  'france-region-',
+  'france-departement-',
+  'europe-nuts1-',
+  'europe-nuts2-',
+  'france-canton-',
+  'europe-nuts3-',
+  'france-commune-'
+] as const;
 
 interface GPSBboxMatchMetrics {
   overlapArea: number;
@@ -95,6 +105,30 @@ function getBasemapYearValue(basemap: BasemapMetadata): number {
   return Number.isNaN(parsedYear) ? Number.NEGATIVE_INFINITY : parsedYear;
 }
 
+function getGPSAutoSelectionFamilyRank(basemap: BasemapMetadata): number {
+  const index = GPS_AUTO_SELECTION_FAMILY_PRIORITY.findIndex((prefix) =>
+    basemap.file.startsWith(prefix)
+  );
+
+  return index === -1 ? GPS_AUTO_SELECTION_FAMILY_PRIORITY.length : index;
+}
+
+export function shouldPreferTextBasemapRefinementForGPS(
+  gpsSuggestions: BasemapSuggestion[],
+  bestTextScore: number
+): boolean {
+  const topGPSSuggestion = gpsSuggestions[0];
+
+  if (!topGPSSuggestion) {
+    return bestTextScore >= GPS_TEXT_REFINEMENT_MIN_SCORE;
+  }
+
+  return (
+    topGPSSuggestion.matchReason !== 'GPS bbox containment' &&
+    bestTextScore >= GPS_TEXT_REFINEMENT_MIN_SCORE
+  );
+}
+
 export function getGPSBboxMatchMetrics(
   gpsBounds: GPSBounds,
   bbox: [number, number, number, number]
@@ -154,6 +188,19 @@ export function rankBasemapsByGPSBbox(
         getBasemapYearValue(right.basemap) - getBasemapYearValue(left.basemap);
       if (yearDelta !== 0) {
         return yearDelta;
+      }
+
+      const familyDelta =
+        getGPSAutoSelectionFamilyRank(left.basemap) -
+        getGPSAutoSelectionFamilyRank(right.basemap);
+      if (familyDelta !== 0) {
+        return familyDelta;
+      }
+
+      const layerDelta =
+        left.basemap.layers.length - right.basemap.layers.length;
+      if (layerDelta !== 0) {
+        return layerDelta;
       }
 
       return left.basemap.file.localeCompare(right.basemap.file);

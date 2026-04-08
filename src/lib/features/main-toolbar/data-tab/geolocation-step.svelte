@@ -408,11 +408,15 @@
             1
           );
         } catch (error) {
-          logger.warn(
-            'Auto basemap selection fell back to heuristics',
-            LogCategory.MAP,
-            error
-          );
+          if (error instanceof Error && error.message === 'Dataset not found') {
+            suggestions = [];
+          } else {
+            logger.warn(
+              'Auto basemap selection fell back to heuristics',
+              LogCategory.MAP,
+              error
+            );
+          }
         }
       }
 
