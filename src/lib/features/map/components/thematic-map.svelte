@@ -24,7 +24,11 @@
     calculateBoundsFromGeoArrow,
     calculateBoundsFromGeoJSON
   } from '../core';
-  import { basemapService } from '../services/basemap.service.svelte';
+  import {
+    basemapService,
+    getPreferredBasemapFile
+  } from '../services/basemap.service.svelte';
+  import { shouldUseIdentityProjectionForDatasetCrs } from '../utils/dataset-crs';
   import { basemapLayersStore } from '../stores/basemap-layers.store.svelte';
   import { mapHighlightStore } from '../stores/map-highlight.store.svelte';
   import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
@@ -48,6 +52,7 @@
   import { getColorBlindnessState } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
   import { getColorBlindnessMatrix } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.filter';
   import {
+    resolveOrthographicDatasetBounds,
     resolveOrthographicReferenceBbox,
     resolveOrthographicReferenceTable,
     shouldUseBasemapReferenceInOrthographicView
@@ -352,6 +357,28 @@
     );
   }
 
+  function getProjectionMetadataForDataset(datasetId: string | undefined) {
+    if (basemapStyleStore.referenceBasemapId) {
+      return basemapService.currentMetadata;
+    }
+
+    const duckDataset = getRenderedDuckDBDataset(datasetId);
+    if (!duckDataset?.joinedBasemap) {
+      return basemapService.currentMetadata;
+    }
+
+    const resolvedBasemapId = getPreferredBasemapFile(
+      basemapService.availableBasemaps,
+      duckDataset.joinedBasemap
+    );
+
+    return (
+      basemapService.availableBasemaps.find(
+        (basemap) => basemap.file === resolvedBasemapId
+      ) ?? basemapService.currentMetadata
+    );
+  }
+
   const mapLayers = useMapLayers({
     getDeckOverlay: () => mapInit.deckOverlay,
     getDeckInstance: () => mapInit.deckInstance,
@@ -360,6 +387,8 @@
     getWorldBaseTable: () => worldBaseTable,
     getActiveVisualizations: () => mapState.activeVisualizations,
     buildLayerContextForViz: (viz) => mapState.buildLayerContextForViz(viz),
+    getProjectionMetadataForDataset: (datasetId) =>
+      getProjectionMetadataForDataset(datasetId),
     getShouldRenderDatasetFallbacks: () =>
       globalState.selectedStep === ToolbarStep.Data,
     getTableFilters: getTableFiltersForDataset,
@@ -388,6 +417,20 @@
     }
   }
 
+  function shouldPreferDatasetReferenceBounds(): boolean {
+    if (!firstTable && !firstGeoJSON) {
+      return false;
+    }
+
+    const dataset = getRenderedDataset(firstDatasetId);
+    const duckDataset = getRenderedDuckDBDataset(firstDatasetId);
+    return !shouldUseBasemapReferenceInOrthographicView(
+      dataset,
+      duckDataset,
+      basemapStyleStore.referenceBasemapId
+    );
+  }
+
   function syncOrthographicViewportAfterViewModeSwitch(): void {
     if (mapInit.viewMode !== ViewMode.ORTHOGRAPHIC) {
       return;
@@ -413,11 +456,19 @@
         referenceBasemapId: refBasemapId
       });
       const bounds = referenceTable
-        ? calculateBoundsFromGeoArrow(referenceTable)
+        ? shouldUseBasemapReference
+          ? calculateBoundsFromGeoArrow(referenceTable)
+          : resolveOrthographicDatasetBounds(
+              dataset,
+              calculateBoundsFromGeoArrow(referenceTable)
+            )
         : null;
 
       if (bounds) {
-        const currentBasemapMeta = basemapService.currentMetadata;
+        const currentBasemapMeta =
+          getProjectionMetadataForDataset(firstDatasetId);
+        const shouldUseIdentityReferenceBounds =
+          shouldUseIdentityProjectionForDatasetCrs(dataset?.geometry?.crs);
         const mainlandBbox = currentBasemapMeta
           ? getMainlandBboxForBasemap(
               currentBasemapMeta,
@@ -444,13 +495,15 @@
           maxY
         ];
         const datasetProjectedBbox = currentBasemapMeta
-          ? computeProjectedBboxForBasemap(
-              currentBasemapMeta,
-              basemapService.projectionPresets,
-              960,
-              600,
-              datasetBbox
-            )
+          ? shouldUseIdentityReferenceBounds
+            ? null
+            : computeProjectedBboxForBasemap(
+                currentBasemapMeta,
+                basemapService.projectionPresets,
+                960,
+                600,
+                datasetBbox
+              )
           : null;
         const referenceBbox = resolveOrthographicReferenceBbox({
           datasetBounds: datasetBbox,
@@ -643,6 +696,9 @@
         margins
       });
       legendActions.setPosition(LegendPosition.BOTTOM_CENTER);
+      if (mapInit.isMapLoaded && !isSwitchingViewMode) {
+        scheduleLayerUpdate('effect:formatLayoutChange');
+      }
     });
   });
 
@@ -769,12 +825,20 @@
           referenceBasemapId: refBasemapId
         });
         const bounds = referenceTable
-          ? calculateBoundsFromGeoArrow(referenceTable)
+          ? shouldUseBasemapReference
+            ? calculateBoundsFromGeoArrow(referenceTable)
+            : resolveOrthographicDatasetBounds(
+                dataset,
+                calculateBoundsFromGeoArrow(referenceTable)
+              )
           : null;
 
         if (bounds) {
           untrack(() => {
-            const currentBasemapMeta = basemapService.currentMetadata;
+            const currentBasemapMeta =
+              getProjectionMetadataForDataset(firstDatasetId);
+            const shouldUseIdentityReferenceBounds =
+              shouldUseIdentityProjectionForDatasetCrs(dataset?.geometry?.crs);
             // For composite projections (e.g. France DOM-TOM), use mainland
             // bounds so the model matrix centers on metropolitan France.
             const mainlandBbox = currentBasemapMeta
@@ -803,13 +867,15 @@
               maxY
             ];
             const datasetProjectedBbox = currentBasemapMeta
-              ? computeProjectedBboxForBasemap(
-                  currentBasemapMeta,
-                  basemapService.projectionPresets,
-                  960,
-                  600,
-                  datasetBbox
-                )
+              ? shouldUseIdentityReferenceBounds
+                ? null
+                : computeProjectedBboxForBasemap(
+                    currentBasemapMeta,
+                    basemapService.projectionPresets,
+                    960,
+                    600,
+                    datasetBbox
+                  )
               : null;
             const referenceBbox = resolveOrthographicReferenceBbox({
               datasetBounds: datasetBbox,
@@ -1303,7 +1369,10 @@
             loaded.activeSimplificationLevel ?? undefined
           ) ?? loaded;
         // Set up orthographic projection from world basemap bounds
-        if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
+        if (
+          mapInit.viewMode === ViewMode.ORTHOGRAPHIC &&
+          !shouldPreferDatasetReferenceBounds()
+        ) {
           const mainlandBbox = getMainlandBboxForBasemap(
             resolvedBasemap.metadata,
             basemapService.projectionPresets
