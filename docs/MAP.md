@@ -24,6 +24,12 @@ flowchart TB
 - **Orthographique** (Deck.gl standalone) : `OrthographicView` + projections d3-geo via geoarrow-deck-stream
 - **MapLibre** (interleaved) : `MapboxOverlay({ interleaved: true })` + web mercator/globe
 
+Regles importantes de projection :
+
+- Les fichiers geographiques importes avec un CRS projete (ex. `EPSG:2154`) restent dans leur CRS source en mode orthographique. Khartis garde alors un rendu `geoIdentity` et persiste le viewport dans les coordonnees du jeu de donnees pour eviter les cartes blanches ou renversees au rechargement.
+- La reprojection vers `EPSG:4326` n'est demandee que lorsqu'un fichier projete doit etre affiche sur un fond tuiles MapLibre.
+- Les suggestions de projection se basent d'abord sur l'emprise reelle des donnees. Pour un jeu exclusivement ponctuel ou un tableau GPS, Khartis utilise donc les bornes calculees depuis les coordonnees plutot que l'emprise du fond monde charge par defaut.
+
 ---
 
 ## WeakMap Cache Architecture

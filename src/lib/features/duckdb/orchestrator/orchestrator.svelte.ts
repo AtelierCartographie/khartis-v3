@@ -713,6 +713,13 @@ export const duckDBOrchestrator = {
     );
   },
 
+  async getArrowTableReprojectedToWGS84(tableName: string): Promise<Table> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+
+    return arrowOps.getArrowTableReprojected(tableName, Duck, 'EPSG:4326');
+  },
+
   async getArrowTable(tableName: string): Promise<Table> {
     await ensureInitialized();
     if (!Duck) throw new DuckDBError('DuckDB not initialized');

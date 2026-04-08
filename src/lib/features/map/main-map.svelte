@@ -11,6 +11,8 @@
   import { SvelteMap } from 'svelte/reactivity';
   import { fade } from 'svelte/transition';
   import { datasetsStore } from '../commons/store/datasets.store.svelte';
+  import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
+  import { isWgs84LikeCrs } from './utils/dataset-crs';
   import { globalState } from '../commons/store/global.svelte';
   import { ToolbarStep } from '../commons/types/global';
   import { LogCategory, logger } from '../commons/utils/logger';
@@ -56,6 +58,9 @@
   const enabledDatasets = $derived(datasetsStore.enabledDatasets);
   const duckDBDatasetsVersion = $derived(duckDBOrchestrator.datasetsVersion);
   const activeOSMBasemap = $derived(osmBasemapStore.activeOSMBasemap);
+  const usesTiledBasemap = $derived(
+    Boolean(activeOSMBasemap) || basemapStyleStore.requiresMapLibre
+  );
   const facetsEnabled = $derived(facetsStore.enabled);
   const facetsLayout = $derived(facetsStore.layout);
   const facetVisualizations = $derived(facetsStore.facetVisualizations);
@@ -122,23 +127,42 @@
         const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(
           dataset.sourceFileId
         );
+        const tableName = duckDBDataset?.tableName ?? dataset.tableName;
 
-        if (!duckDBDataset) {
+        if (!tableName) {
           return null;
         }
 
-        if (duckDBDataset.tableName) {
-          const arrowTable = duckDBDataset.arrowTableWithMetadata
-            ? duckDBDataset.arrowTableWithMetadata
-            : await duckDBOrchestrator.getArrowTableDirect(
-                duckDBDataset.tableName
-              );
+        if (!duckDBDataset) {
+          logger.debug(
+            'DuckDB dataset registry not ready yet, loading map table directly',
+            LogCategory.MAP,
+            {
+              datasetId: dataset.id,
+              tableName
+            }
+          );
+        }
+
+        if (tableName) {
+          const shouldReprojectForTiledBasemap =
+            usesTiledBasemap &&
+            Boolean(dataset.geometry?.crs) &&
+            !isWgs84LikeCrs(dataset.geometry?.crs);
+          const arrowTable = shouldReprojectForTiledBasemap
+            ? await duckDBOrchestrator.getArrowTableReprojectedToWGS84(
+                tableName
+              )
+            : duckDBDataset?.arrowTableWithMetadata
+              ? duckDBDataset.arrowTableWithMetadata
+              : await duckDBOrchestrator.getArrowTableDirect(tableName);
 
           if (arrowTable) {
             logger.success('Arrow table ready for Deck.gl', LogCategory.MAP, {
-              tableName: duckDBDataset.tableName,
+              tableName,
               rows: arrowTable.numRows,
-              cached: Boolean(duckDBDataset.arrowTableWithMetadata),
+              cached: Boolean(duckDBDataset?.arrowTableWithMetadata),
+              reprojectedForTiledBasemap: shouldReprojectForTiledBasemap,
               durationMs: (performance.now() - start).toFixed(2)
             });
             return arrowTable;
@@ -482,7 +506,8 @@
     if (!containerRef) return;
     formatActions.fitToContainer(
       containerRef.offsetWidth,
-      containerRef.offsetHeight
+      containerRef.offsetHeight,
+      globalState.isMobileView ? 'height' : 'auto'
     );
   }
 
@@ -889,5 +914,17 @@
     background: var(--cds-interactive-01, #0f62fe);
     opacity: 0.4;
     border-radius: 1px;
+  }
+
+  @media (max-width: 1023px) {
+    .main-map-container {
+      width: max-content;
+      min-width: 100%;
+      height: max-content;
+      min-height: 100%;
+      justify-content: flex-start;
+      align-items: flex-start;
+      overflow: visible;
+    }
   }
 </style>
