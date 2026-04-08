@@ -299,7 +299,9 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         isOrthographicMode
       );
       const projectionOverride = getProjectionOverride(isOrthographicMode);
-      const activeBasemapProjection = projectionOverride ?? basemapProjection;
+      // Keep catalog basemap projection authoritative when it exists.
+      // Projection overrides are only a fallback for identity/custom basemaps.
+      const activeBasemapProjection = basemapProjection ?? projectionOverride;
 
       // In MapLibre interleaved mode, find the first symbol layer to render data layers below text
       const beforeId =
@@ -404,7 +406,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           ctx.modelMatrix = matrixToApply;
           ctx.projectionSuffix = projectionSuffix;
           ctx.beforeId = beforeId;
-          ctx.customProjection = projectionOverride ?? datasetDefaultProjection;
+          ctx.customProjection = datasetDefaultProjection ?? projectionOverride;
 
           if (geojson) {
             const geojsonLayers = createGeoJsonLayers(geojson, ctx);
@@ -488,7 +490,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           fallbackCtx.projectionSuffix = projectionSuffix;
           fallbackCtx.beforeId = beforeId;
           fallbackCtx.customProjection =
-            projectionOverride ?? datasetDefaultProjection;
+            datasetDefaultProjection ?? projectionOverride;
 
           if (geojson) {
             const fallbackGeoJsonLayers = createGeoJsonLayers(
