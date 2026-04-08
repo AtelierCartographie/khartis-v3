@@ -2,6 +2,11 @@ import type {
   CsvImportOptions,
   DatasetResult
 } from '$lib/features/data-pipeline';
+import {
+  SavePriority,
+  persistenceRegistry
+} from '$lib/features/project-management/core/persistence-registry';
+import type { SerializedDatasetsViewState } from '$lib/types/serialization.types';
 import type { UploadedFile } from './create-project.types';
 import {
   datasetsState,
@@ -54,6 +59,96 @@ export type { VisualizationConfig, VisualizationStoreOperations };
 
 function createDatasetsStore() {
   let visualizationStoreOps: VisualizationStoreOperations | null = null;
+  let pendingPersistedViewState: SerializedDatasetsViewState | null = null;
+
+  function notifyPersistence(
+    priority: keyof typeof SavePriority = 'DEBOUNCED'
+  ): void {
+    persistenceRegistry.notifyChange('datasetsView', SavePriority[priority]);
+  }
+
+  function serializeViewState(): SerializedDatasetsViewState {
+    const enabledSourceFileIds = datasetsState.datasets.flatMap((dataset) =>
+      dataset.sourceFileId && datasetsState.enabledDatasetIds.has(dataset.id)
+        ? [dataset.sourceFileId]
+        : []
+    );
+
+    const hiddenColumnsBySourceFileId = Object.fromEntries(
+      datasetsState.datasets.flatMap((dataset) => {
+        if (!dataset.sourceFileId) {
+          return [];
+        }
+
+        const hiddenColumns = getHiddenColumnsFn(datasetsState, dataset.id);
+        return hiddenColumns.length > 0
+          ? [[dataset.sourceFileId, hiddenColumns]]
+          : [];
+      })
+    );
+
+    const simplificationBySourceFileId = Object.fromEntries(
+      datasetsState.datasets.flatMap((dataset) =>
+        dataset.sourceFileId && dataset.simplificationApplied
+          ? [[dataset.sourceFileId, dataset.simplificationApplied]]
+          : []
+      )
+    );
+
+    return {
+      enabledSourceFileIds,
+      hiddenColumnsBySourceFileId,
+      simplificationBySourceFileId
+    };
+  }
+
+  function restorePersistedViewState(data: unknown): void {
+    pendingPersistedViewState =
+      (data as SerializedDatasetsViewState | null) ?? {
+        enabledSourceFileIds: [],
+        hiddenColumnsBySourceFileId: {},
+        simplificationBySourceFileId: {}
+      };
+  }
+
+  function applyPersistedViewState(): void {
+    if (!pendingPersistedViewState) {
+      return;
+    }
+
+    const enabledSourceFileIds = new Set(
+      pendingPersistedViewState.enabledSourceFileIds ?? []
+    );
+    const hiddenColumnsBySourceFileId =
+      pendingPersistedViewState.hiddenColumnsBySourceFileId ?? {};
+    const simplificationBySourceFileId =
+      pendingPersistedViewState.simplificationBySourceFileId ?? {};
+
+    datasetsState.enabledDatasetIds.clear();
+    datasetsState.hiddenColumns = new Map();
+
+    for (const dataset of datasetsState.datasets) {
+      if (!dataset.sourceFileId) {
+        continue;
+      }
+
+      if (enabledSourceFileIds.has(dataset.sourceFileId)) {
+        enableDatasetFn(datasetsState, dataset.id);
+      }
+
+      const hiddenColumns = hiddenColumnsBySourceFileId[dataset.sourceFileId];
+      for (const columnName of hiddenColumns ?? []) {
+        hideColumnFn(datasetsState, dataset.id, columnName);
+      }
+
+      updateDatasetFn(datasetsState, dataset.id, {
+        simplificationApplied:
+          simplificationBySourceFileId[dataset.sourceFileId] ?? undefined
+      });
+    }
+
+    pendingPersistedViewState = serializeViewState();
+  }
 
   function injectVisualizationStore(ops: VisualizationStoreOperations): void {
     visualizationStoreOps = ops;
@@ -65,14 +160,17 @@ function createDatasetsStore() {
 
   function toggleDatasetVisibility(datasetId: string): void {
     toggleDatasetVisibilityFn(datasetsState, datasetId);
+    notifyPersistence('IMMEDIATE');
   }
 
   function enableDataset(datasetId: string): void {
     enableDatasetFn(datasetsState, datasetId);
+    notifyPersistence('IMMEDIATE');
   }
 
   function disableDataset(datasetId: string): void {
     disableDatasetFn(datasetsState, datasetId);
+    notifyPersistence('IMMEDIATE');
   }
 
   function addProcessedDataset(dataset: DatasetResult): void {
@@ -123,6 +221,9 @@ function createDatasetsStore() {
     >
   ): void {
     updateDatasetFn(datasetsState, datasetId, updates);
+    if ('simplificationApplied' in updates) {
+      notifyPersistence('IMMEDIATE');
+    }
   }
 
   function getAllDatasets(): DatasetResult[] {
@@ -207,14 +308,17 @@ function createDatasetsStore() {
 
   function hideColumn(datasetId: string, columnName: string): void {
     hideColumnFn(datasetsState, datasetId, columnName);
+    notifyPersistence('IMMEDIATE');
   }
 
   function showColumn(datasetId: string, columnName: string): void {
     showColumnFn(datasetsState, datasetId, columnName);
+    notifyPersistence('IMMEDIATE');
   }
 
   function toggleColumnHidden(datasetId: string, columnName: string): void {
     toggleColumnHiddenFn(datasetsState, datasetId, columnName);
+    notifyPersistence('IMMEDIATE');
   }
 
   function isColumnHidden(datasetId: string, columnName: string): boolean {
@@ -301,8 +405,19 @@ function createDatasetsStore() {
     getVisibleColumns,
     duplicateDataset,
     clear,
-    createVisualizationsForGeoDatasets: createVisualizationsForGeoDatasetsFn
+    createVisualizationsForGeoDatasets: createVisualizationsForGeoDatasetsFn,
+    applyPersistedViewState,
+    serializePersistedViewState: serializeViewState,
+    restorePersistedViewState
   };
 }
 
 export const datasetsStore = createDatasetsStore();
+
+persistenceRegistry.register({
+  key: 'datasetsView',
+  serialize: () => datasetsStore.serializePersistedViewState(),
+  deserialize: (data: unknown) => datasetsStore.restorePersistedViewState(data),
+  reset: () => datasetsStore.restorePersistedViewState(undefined),
+  priority: 'debounced'
+});

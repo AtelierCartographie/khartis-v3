@@ -23,6 +23,8 @@ export interface SimplificationState {
     source: SimplificationSource;
     level?: SimplificationLevel;
     rate?: number;
+    basemapId?: string;
+    datasetSourceFileId?: string;
     timestamp: number;
   };
 }

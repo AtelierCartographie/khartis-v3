@@ -1113,11 +1113,11 @@ function createDataOrchestratorService() {
 
   async function onProjectChanged(): Promise<void> {
     await duckDBOrchestrator.waitForInitialization();
+    await duckDBOrchestrator.clear();
 
     visualizationStore.clear();
     datasetsStore.clear();
     layersActions.reset();
-    projectionActions.reset();
 
     processedFileIds.clear();
 
@@ -1125,6 +1125,9 @@ function createDataOrchestratorService() {
     const vizSettings = (
       currentProject?.data as SerializedProjectData | undefined
     )?.visualizationSettings;
+    const projectionSettings = (
+      currentProject?.data as SerializedProjectData | undefined
+    )?.layoutSettings?.projection;
 
     // Preload persisted visualizations before datasets are restored so the
     // project reload path does not briefly recreate default visualizations.
@@ -1145,6 +1148,13 @@ function createDataOrchestratorService() {
 
     migrateOrphanedVizDatasetIds();
     await recomputeMissingBreaks();
+    if (projectionSettings) {
+      projectionActions.setState(projectionSettings);
+    }
+
+    globalActions.ensureTabSelected();
+    datasetsStore.applyPersistedViewState();
+    duckDBOrchestrator.applyPersistedTableFilters();
 
     // Restore the geo column selection in the data tab UI so users don't
     // lose their manual choice (e.g. "entity" for fuzzy-countries) on reload.
@@ -1221,7 +1231,6 @@ function createDataOrchestratorService() {
 
     layersActions.syncWithVisualizations();
     legendActions.syncWithVisualizations();
-    globalActions.ensureTabSelected();
     persistenceRegistry.markClean();
 
     projectAlreadyRestored = true;
