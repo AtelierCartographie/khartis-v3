@@ -92,7 +92,7 @@ Chaque fond inclut un fichier JSON de métadonnées :
 
 ```json
 {
-  "file": "france-commune-2025-medium",
+  "file": "france-commune-2025-high",
   "title_fr": "France > communes",
   "title_en": "France > communes",
   "description_fr": "Communes françaises — ADMIN EXPRESS COG CARTO 2025",
