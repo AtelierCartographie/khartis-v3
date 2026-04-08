@@ -188,12 +188,10 @@ export const gpxProcessor: FileProcessor = {
     const actualTableName =
       typeof resultTableName === 'string' ? resultTableName : ctx.tableName;
 
-    const [columns, rowCount, { arrowTableWithMetadata, geoArrowMetadata }] =
-      await Promise.all([
-        ctx.Duck.analyse(actualTableName),
-        ctx.callbacks.getRowCount(actualTableName),
-        ctx.callbacks.createArrowTableWithMetadata(actualTableName)
-      ]);
+    const [columns, rowCount] = await Promise.all([
+      ctx.Duck.analyse(actualTableName),
+      ctx.callbacks.getRowCount(actualTableName)
+    ]);
 
     const dataset: ProcessorDataset = {
       id: file.datasetId ?? file.id,
@@ -206,9 +204,7 @@ export const gpxProcessor: FileProcessor = {
         processedAt: new Date(),
         fileType: file.fileType
       },
-      geoDetection: file.deepAnalysis?.geoDetection,
-      arrowTableWithMetadata,
-      geoArrowMetadata: geoArrowMetadata ?? undefined
+      geoDetection: file.deepAnalysis?.geoDetection
     };
 
     logger.success('GPX processed', LogCategory.DUCKDB, {

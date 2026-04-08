@@ -162,6 +162,46 @@ describe('duckdb dataset registration', () => {
     );
   });
 
+  it('does not block table registration on Arrow metadata prefetch', async () => {
+    let resolvePrefetch: (() => void) | undefined;
+    const pendingPrefetch = new Promise<void>((resolve) => {
+      resolvePrefetch = resolve;
+    });
+
+    const duck = {
+      query: vi.fn().mockResolvedValue([{ table_name: 'table_registered' }]),
+      analyse: vi.fn().mockResolvedValue([{ name: 'value' }])
+    };
+    const callbacks = {
+      getRowCount: vi.fn().mockResolvedValue(42),
+      createArrowTableWithMetadata: vi.fn(),
+      prefetchArrowMetadata: vi.fn().mockReturnValue(pendingPrefetch)
+    };
+
+    let resolved = false;
+    const registrationPromise = registerExistingTable(
+      'table_registered',
+      'sf1',
+      'example.csv',
+      duck,
+      callbacks
+    ).then((dataset) => {
+      resolved = true;
+      return dataset;
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(resolved).toBe(true);
+    resolvePrefetch?.();
+    await expect(registrationPromise).resolves.toEqual(
+      expect.objectContaining({
+        tableName: 'table_registered',
+        sourceFileId: 'sf1'
+      })
+    );
+  });
+
   it('reuses the preferred stable dataset id when no DuckDB entry exists yet', async () => {
     const duck = {
       query: vi.fn().mockResolvedValue([{ table_name: 'table_registered' }]),
