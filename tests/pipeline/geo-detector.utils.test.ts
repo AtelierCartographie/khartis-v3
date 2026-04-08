@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  GeoColumnDetector,
   hasGPSCoordinateColumns,
   resolveGPSCoordinateColumns,
   type GeoDetectionResult
@@ -55,6 +56,19 @@ describe('resolveGPSCoordinateColumns', () => {
     });
   });
 
+  it('detects gcpnt latitude and longitude columns from tokenized headers', () => {
+    const columns = [
+      { name: 'gcpnt_lat' },
+      { name: 'gcpnt_lon' },
+      { name: 'city_name' }
+    ];
+
+    expect(resolveGPSCoordinateColumns(columns)).toEqual({
+      lat: 'gcpnt_lat',
+      lon: 'gcpnt_lon'
+    });
+  });
+
   it('uses semantic analysis markers when available', () => {
     const columns = [
       { name: 'coord_y', semioType: 'geolat', semioScore: 0.95 },
@@ -79,5 +93,43 @@ describe('hasGPSCoordinateColumns', () => {
     expect(hasGPSCoordinateColumns(columns, createGeoDetectionResult())).toBe(
       true
     );
+  });
+});
+
+describe('GeoColumnDetector', () => {
+  it('does not detect latitude from headers that merely contain the substring lat', () => {
+    expect(
+      GeoColumnDetector.detectColumnType('population', ['18.5', '15.2', '22.8'])
+    ).toBeNull();
+  });
+
+  it('does not classify short numeric measure columns as NUTS codes', () => {
+    expect(
+      GeoColumnDetector.detectColumnType('value', ['10', '20', '30', '40'])
+    ).toBeNull();
+  });
+
+  it('recognizes fuzzy country datasets through geographic headers', () => {
+    expect(
+      GeoColumnDetector.detectColumnType('entity', [
+        'Frnace',
+        'Gremany',
+        'Brazill'
+      ])
+    ).toMatchObject({
+      type: 'country_name'
+    });
+  });
+
+  it('recognizes normalized region headers that lost accented characters', () => {
+    expect(
+      GeoColumnDetector.detectColumnType('nom_r_gion', [
+        'Ile-de-France',
+        'Grand Est',
+        'Bretagne'
+      ])
+    ).toMatchObject({
+      type: 'region'
+    });
   });
 });
