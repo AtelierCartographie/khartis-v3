@@ -78,7 +78,13 @@
     isReadOnly?: boolean;
     datasetVersion?: number;
     activeJoinColumn?: string;
+    initialSortColumn?: string | null;
+    initialSortOrder?: 'ASC' | 'DESC' | null;
     onSelectionChange?: (selectedIds: number[], count: number) => void;
+    onSortChange?: (
+      column: string | null,
+      order: 'ASC' | 'DESC' | null
+    ) => void;
     onColumnDeleted?: (columnName: string) => void;
   }
 
@@ -95,7 +101,10 @@
     isReadOnly = false,
     datasetVersion,
     activeJoinColumn,
+    initialSortColumn = null,
+    initialSortOrder = null,
     onSelectionChange,
+    onSortChange,
     onColumnDeleted
   }: Props = $props();
 
@@ -151,11 +160,14 @@
   }
 
   const sort = useTableSort({
-    onSortChange: async () => {
+    initialSortColumn: untrack(() => initialSortColumn),
+    initialSortOrder: untrack(() => initialSortOrder),
+    onSortChange: async (column, order) => {
       await virtualScroll.initializeRows(0);
       if (tableContainer) {
         tableContainer.scrollTop = 0;
       }
+      onSortChange?.(column, order);
     }
   });
 

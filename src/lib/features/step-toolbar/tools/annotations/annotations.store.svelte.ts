@@ -914,7 +914,16 @@ const { actions, getState } = createToolStore<
       });
     }
   }),
-  { key: 'annotations' }
+  {
+    key: 'annotations',
+    serializeFilter: ({
+      selectedId: _selectedId,
+      textContent: _textContent,
+      isDrawingMode: _isDrawingMode,
+      drawingInProgress: _drawingInProgress,
+      ...persisted
+    }) => persisted
+  }
 );
 
 export const annotationsActions = actions;

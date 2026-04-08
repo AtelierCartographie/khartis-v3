@@ -8,6 +8,7 @@ import {
   type ProjectionViewMode
 } from '$lib/features/commons/types/global';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
 import { datasetsStore } from './datasets.store.svelte';
 import { projectStore } from './project.store.svelte';
 
@@ -187,6 +188,39 @@ function createGlobalStore() {
     }));
   });
 
+  function notifyPersistence(): void {
+    persistenceRegistry.notifyChange('globalUi');
+  }
+
+  function syncSelectedStepToStorage(selectedStep: ToolbarStep): void {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(SELECTED_STEP_STORAGE_KEY, selectedStep);
+    }
+  }
+
+  function syncToolbarStateToStorage(toolbarState: ToolbarState): void {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(TOOLBAR_STATE_STORAGE_KEY, toolbarState);
+    }
+  }
+
+  function syncSelectedTabToStorage(id: string | undefined): void {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    if (id) {
+      localStorage.setItem(SELECTED_TAB_STORAGE_KEY, id);
+    } else {
+      localStorage.removeItem(SELECTED_TAB_STORAGE_KEY);
+    }
+  }
+
+  function syncPageZoomToStorage(pageZoomLevel: number): void {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(PAGE_ZOOM_STORAGE_KEY, String(pageZoomLevel));
+    }
+  }
+
   function setMobileView(value: boolean): void {
     state.isMobileView = value;
     if (!value) {
@@ -219,16 +253,14 @@ function createGlobalStore() {
         preferred === ToolbarState.Collapsed ? ToolbarState.Full : preferred;
     }
 
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(SELECTED_STEP_STORAGE_KEY, selectedStep);
-    }
+    syncSelectedStepToStorage(selectedStep);
+    notifyPersistence();
   }
 
   function setToolbarState(nextState: ToolbarState): void {
     state.toolbarState = nextState;
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(TOOLBAR_STATE_STORAGE_KEY, nextState);
-    }
+    syncToolbarStateToStorage(nextState);
+    notifyPersistence();
   }
 
   function syncMapVisibilityWithSelectedTab(
@@ -251,20 +283,21 @@ function createGlobalStore() {
     }
     selectedDataButtonState.id = id;
 
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(SELECTED_TAB_STORAGE_KEY, id);
-    }
+    syncSelectedTabToStorage(id);
 
     ensureDatasetSelectionForSourceFile(id);
     syncMapVisibilityWithSelectedTab(id);
+    notifyPersistence();
   }
 
   function setProjectionFilter(id: ProjectionFilterId): void {
     state.projectionFilter = id;
+    notifyPersistence();
   }
 
   function setProjectionViewMode(mode: ProjectionViewMode): void {
     state.projectionViewMode = mode;
+    notifyPersistence();
   }
 
   function adjustPageZoom(direction: 1 | -1): void {
@@ -278,12 +311,8 @@ function createGlobalStore() {
     const newZoomLevel = clamp(currentLevel + direction * step, limit);
 
     state.zoom.pageZoomLevel = newZoomLevel;
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(
-        PAGE_ZOOM_STORAGE_KEY,
-        String(state.zoom.pageZoomLevel)
-      );
-    }
+    syncPageZoomToStorage(state.zoom.pageZoomLevel);
+    notifyPersistence();
   }
 
   function zoomInPage(): void {
@@ -297,9 +326,8 @@ function createGlobalStore() {
   function resetPageZoom(): void {
     state.zoom.pageZoomLevel = 100;
     state.zoom.pagePanOffset = { x: 0, y: 0 };
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(PAGE_ZOOM_STORAGE_KEY, '100');
-    }
+    syncPageZoomToStorage(100);
+    notifyPersistence();
   }
 
   function panPageBy(deltaX: number, deltaY: number): void {
@@ -307,10 +335,12 @@ function createGlobalStore() {
       x: state.zoom.pagePanOffset.x + deltaX,
       y: state.zoom.pagePanOffset.y + deltaY
     };
+    notifyPersistence();
   }
 
   function resetPagePan(): void {
     state.zoom.pagePanOffset = { x: 0, y: 0 };
+    notifyPersistence();
   }
 
   function setToolbarTransitioning(value: boolean): void {
@@ -322,12 +352,8 @@ function createGlobalStore() {
       state.zoom.minPageZoom,
       Math.min(level, state.zoom.maxPageZoom)
     );
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(
-        PAGE_ZOOM_STORAGE_KEY,
-        String(state.zoom.pageZoomLevel)
-      );
-    }
+    syncPageZoomToStorage(state.zoom.pageZoomLevel);
+    notifyPersistence();
   }
 
   if (typeof window !== 'undefined' && selectedDataButtonState.id) {
@@ -341,20 +367,56 @@ function createGlobalStore() {
 
   function resetNavigationState(): void {
     state.selectedStep = ToolbarStep.Data;
-    state.toolbarState = readToolbarStateFromStorage();
-    if (state.toolbarState === ToolbarState.Collapsed) {
-      state.toolbarState = ToolbarState.Full;
-    }
+    state.toolbarState = ToolbarState.Full;
     state.selectedTool = undefined;
+    state.projectionFilter = 'all';
+    state.projectionViewMode = 'list';
+    state.zoom.pageZoomLevel = 100;
     state.zoom.pagePanOffset = { x: 0, y: 0 };
 
     selectedDataButtonState.id = undefined;
     pendingDatasetSelections.clear();
 
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(SELECTED_STEP_STORAGE_KEY, ToolbarStep.Data);
-      localStorage.removeItem(SELECTED_TAB_STORAGE_KEY);
-    }
+    syncSelectedStepToStorage(ToolbarStep.Data);
+    syncToolbarStateToStorage(ToolbarState.Full);
+    syncSelectedTabToStorage(undefined);
+    syncPageZoomToStorage(100);
+  }
+
+  function restoreFromSerialized(data: unknown): void {
+    const persisted = (data ?? {}) as {
+      selectedStep?: ToolbarStep;
+      selectedTool?: StylingTools | VisualizationTools;
+      toolbarState?: ToolbarState;
+      projectionFilter?: ProjectionFilterId;
+      projectionViewMode?: ProjectionViewMode;
+      selectedSourceFileId?: string;
+      pageZoomLevel?: number;
+      pagePanOffset?: { x?: number; y?: number };
+    };
+
+    state.selectedStep = persisted.selectedStep ?? ToolbarStep.Data;
+    state.selectedTool = persisted.selectedTool;
+    state.toolbarState = persisted.toolbarState ?? ToolbarState.Full;
+    state.projectionFilter = persisted.projectionFilter ?? 'all';
+    state.projectionViewMode = persisted.projectionViewMode ?? 'list';
+    state.zoom.pageZoomLevel =
+      typeof persisted.pageZoomLevel === 'number'
+        ? Math.max(
+            state.zoom.minPageZoom,
+            Math.min(persisted.pageZoomLevel, state.zoom.maxPageZoom)
+          )
+        : 100;
+    state.zoom.pagePanOffset = {
+      x: persisted.pagePanOffset?.x ?? 0,
+      y: persisted.pagePanOffset?.y ?? 0
+    };
+    selectedDataButtonState.id = persisted.selectedSourceFileId;
+
+    syncSelectedStepToStorage(state.selectedStep);
+    syncToolbarStateToStorage(state.toolbarState);
+    syncSelectedTabToStorage(selectedDataButtonState.id);
+    syncPageZoomToStorage(state.zoom.pageZoomLevel);
   }
 
   return {
@@ -405,30 +467,37 @@ function createGlobalStore() {
     },
     set selectedStep(value: ToolbarStep) {
       state.selectedStep = value;
+      syncSelectedStepToStorage(value);
+      notifyPersistence();
     },
     get selectedTool() {
       return state.selectedTool;
     },
     set selectedTool(value: StylingTools | VisualizationTools | undefined) {
       state.selectedTool = value;
+      notifyPersistence();
     },
     get toolbarState() {
       return state.toolbarState;
     },
     set toolbarState(value: ToolbarState) {
       state.toolbarState = value;
+      syncToolbarStateToStorage(value);
+      notifyPersistence();
     },
     get projectionFilter(): ProjectionFilterId | undefined {
       return state.projectionFilter;
     },
     set projectionFilter(value: ProjectionFilterId | undefined) {
       state.projectionFilter = value;
+      notifyPersistence();
     },
     get projectionViewMode(): ProjectionViewMode | undefined {
       return state.projectionViewMode;
     },
     set projectionViewMode(value: ProjectionViewMode | undefined) {
       state.projectionViewMode = value;
+      notifyPersistence();
     },
     get zoom() {
       return state.zoom;
@@ -462,7 +531,8 @@ function createGlobalStore() {
     panPageBy,
     resetPagePan,
     setToolbarTransitioning,
-    resetNavigationState
+    resetNavigationState,
+    restoreFromSerialized
   };
 }
 
@@ -490,3 +560,20 @@ export const globalActions = {
 };
 
 export const MOBILE_BREAKPOINT = 1024;
+
+persistenceRegistry.register({
+  key: 'globalUi',
+  serialize: () => ({
+    selectedStep: globalState.selectedStep,
+    selectedTool: globalState.selectedTool,
+    toolbarState: globalState.toolbarState,
+    projectionFilter: globalState.projectionFilter,
+    projectionViewMode: globalState.projectionViewMode,
+    selectedSourceFileId: globalState.selectedDataButtonId,
+    pageZoomLevel: globalState.zoom.pageZoomLevel,
+    pagePanOffset: globalState.zoom.pagePanOffset
+  }),
+  deserialize: (data: unknown) => globalState.restoreFromSerialized(data),
+  reset: () => globalState.resetNavigationState(),
+  priority: 'debounced'
+});

@@ -8,6 +8,7 @@
   import { globalActions } from '$lib/features/commons/store/global.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { ToolbarStep } from '$lib/features/commons/types/global';
+  import { BasemapSource } from '$lib/features/commons/constants/ui.constants';
   import { hasGPSCoordinateColumns } from '$lib/features/commons/utils/geo-detector.utils';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
@@ -49,8 +50,34 @@
   import { hasBlockingJoinIssues } from './services/join-validation';
 
   const OSM_TAB_INDEX = 2;
+  const IMPORT_TAB_INDEX = 1;
 
-  let activeTabIndex = $state(0);
+  function basemapSourceToTabIndex(source: BasemapSource): number {
+    switch (source) {
+      case BasemapSource.IMPORT:
+        return IMPORT_TAB_INDEX;
+      case BasemapSource.OSM:
+        return OSM_TAB_INDEX;
+      case BasemapSource.CATALOG:
+      default:
+        return 0;
+    }
+  }
+
+  function tabIndexToBasemapSource(index: number): BasemapSource {
+    switch (index) {
+      case IMPORT_TAB_INDEX:
+        return BasemapSource.IMPORT;
+      case OSM_TAB_INDEX:
+        return BasemapSource.OSM;
+      default:
+        return BasemapSource.CATALOG;
+    }
+  }
+
+  let activeTabIndex = $state(
+    basemapSourceToTabIndex(dataTabState.basemapJoin.basemapSource)
+  );
 
   const tabItems = [
     { icon: List, label: m.basemap_catalog(), iconSize: 16 },
@@ -1084,6 +1111,15 @@
 
   let previousDatasetIdentity: string | null = null;
   $effect(() => {
+    const persistedTabIndex = basemapSourceToTabIndex(
+      dataTabState.basemapJoin.basemapSource
+    );
+    if (persistedTabIndex !== activeTabIndex) {
+      activeTabIndex = persistedTabIndex;
+    }
+  });
+
+  $effect(() => {
     const currentDatasetIdentity = getDatasetIdentity(selectedDataset);
     const hasDatasets = datasetsStore.datasets.length > 0;
 
@@ -1138,7 +1174,10 @@
     <ToggleTabs
       activeIndex={activeTabIndex}
       items={tabItems}
-      onChange={(index) => (activeTabIndex = index)}
+      onChange={(index) => {
+        activeTabIndex = index;
+        dataTabActions.setBasemapSource(tabIndexToBasemapSource(index));
+      }}
     />
   </div>
 

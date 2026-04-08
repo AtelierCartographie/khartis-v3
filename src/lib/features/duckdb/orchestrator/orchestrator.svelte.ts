@@ -10,7 +10,15 @@ import {
   extractGeoArrowMetadata,
   type ProcessedDataset
 } from '$lib/features/data-pipeline';
+import {
+  SavePriority,
+  persistenceRegistry
+} from '$lib/features/project-management/core/persistence-registry';
 import * as m from '$lib/paraglide/messages';
+import type {
+  SerializedTableFilterRecord,
+  SerializedTableFiltersState
+} from '$lib/types/serialization.types';
 import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
 import type {
   BasemapMetadata,
@@ -168,6 +176,78 @@ async function createArrowTableWithMetadata(tableName: string): Promise<{
 async function getRowCountInternal(tableName: string): Promise<number> {
   if (!Duck) throw new DuckDBError('DuckDB not initialized');
   return tableDataOps.getRowCount(tableName, Duck);
+}
+
+let pendingPersistedTableFilters: SerializedTableFiltersState | null = null;
+
+function notifyTableFiltersPersistence(
+  priority: keyof typeof SavePriority = 'DEBOUNCED'
+): void {
+  persistenceRegistry.notifyChange('tableFilters', SavePriority[priority]);
+}
+
+function serializePersistedTableFilters(): SerializedTableFiltersState {
+  const filtersBySourceFileId = Object.fromEntries(
+    state.getAllDatasets().flatMap((dataset) => {
+      if (!dataset.sourceFileId) {
+        return [];
+      }
+
+      const filters = state.getFilters(dataset.tableName).map((filter) => ({
+        id: filter.id,
+        column: filter.column,
+        operator: filter.operator,
+        value: filter.value,
+        secondaryValue: filter.secondaryValue,
+        limit: filter.limit
+      }));
+
+      return filters.length > 0 ? [[dataset.sourceFileId, filters]] : [];
+    })
+  ) as Record<string, SerializedTableFilterRecord[]>;
+
+  return { filtersBySourceFileId };
+}
+
+function restorePersistedTableFilters(data: unknown): void {
+  pendingPersistedTableFilters =
+    (data as SerializedTableFiltersState | null) ?? {
+      filtersBySourceFileId: {}
+    };
+}
+
+function applyPersistedTableFilters(): void {
+  if (!pendingPersistedTableFilters) {
+    return;
+  }
+
+  const filtersBySourceFileId =
+    pendingPersistedTableFilters.filtersBySourceFileId ?? {};
+
+  for (const dataset of state.getAllDatasets()) {
+    if (!dataset.sourceFileId) {
+      continue;
+    }
+
+    const serializedFilters = filtersBySourceFileId[dataset.sourceFileId] ?? [];
+    const filters = serializedFilters.map((filter) =>
+      createFilterRecord(
+        dataset.tableName,
+        {
+          column: filter.column,
+          operator: filter.operator,
+          value: filter.value,
+          secondaryValue: filter.secondaryValue,
+          limit: filter.limit
+        },
+        filter.id
+      )
+    );
+
+    state.setFilters(dataset.tableName, filters);
+  }
+
+  pendingPersistedTableFilters = serializePersistedTableFilters();
 }
 
 export const duckDBOrchestrator = {
@@ -666,6 +746,7 @@ export const duckDBOrchestrator = {
     const filter = createFilterRecord(tableName, input, filterId);
     const filters = [...state.getFilters(tableName), filter];
     state.setFilters(tableName, filters);
+    notifyTableFiltersPersistence('IMMEDIATE');
 
     return state.getFilters(tableName);
   },
@@ -677,11 +758,15 @@ export const duckDBOrchestrator = {
     const filters = state.getFilters(tableName);
     const updated = filters.filter((filter) => filter.id !== filterId);
     state.setFilters(tableName, updated);
+    notifyTableFiltersPersistence('IMMEDIATE');
 
     return state.getFilters(tableName);
   },
 
-  clearFilters: state.clearFiltersForTable,
+  clearFilters(tableName: string): void {
+    state.clearFiltersForTable(tableName);
+    notifyTableFiltersPersistence('IMMEDIATE');
+  },
 
   async getArrowTableDirect(
     tableName: string,
@@ -762,6 +847,9 @@ export const duckDBOrchestrator = {
   getAllDatasets: state.getAllDatasets,
   getCurrentTable: state.getCurrentTableName,
   setCurrentTable: state.setCurrentTableName,
+  serializePersistedTableFilters,
+  restorePersistedTableFilters,
+  applyPersistedTableFilters,
 
   async dropTable(tableName: string): Promise<void> {
     if (!state.isInitialized()) return;
@@ -822,3 +910,12 @@ export const duckDBOrchestrator = {
     return searchOps.searchInTable(tableName, query, Duck, options);
   }
 };
+
+persistenceRegistry.register({
+  key: 'tableFilters',
+  serialize: () => duckDBOrchestrator.serializePersistedTableFilters(),
+  deserialize: (data: unknown) =>
+    duckDBOrchestrator.restorePersistedTableFilters(data),
+  reset: () => duckDBOrchestrator.restorePersistedTableFilters(undefined),
+  priority: 'debounced'
+});

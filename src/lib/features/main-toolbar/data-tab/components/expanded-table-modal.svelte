@@ -13,11 +13,18 @@
     dataset?: ProcessedDataset;
     tableName?: string;
     datasetVersion?: number;
+    showSummaryPlots?: boolean;
+    initialSortColumn?: string | null;
+    initialSortOrder?: 'ASC' | 'DESC' | null;
     cellHighlights?: CellHighlight[];
     currentCell?: { rowId: number; columnName: string } | null;
     highlightedRowIds?: number[];
     isSelectable?: boolean;
     onSelectionChange?: (ids: number[], count: number) => void;
+    onSortChange?: (
+      column: string | null,
+      order: 'ASC' | 'DESC' | null
+    ) => void;
     onColumnDeleted?: (columnName: string) => void;
     onClose: () => void;
   }
@@ -27,11 +34,15 @@
     dataset,
     tableName,
     datasetVersion,
+    showSummaryPlots = true,
+    initialSortColumn = null,
+    initialSortOrder = null,
     cellHighlights = [],
     currentCell = null,
     highlightedRowIds = [],
     isSelectable = false,
     onSelectionChange,
+    onSortChange,
     onColumnDeleted,
     onClose
   }: Props = $props();
@@ -163,7 +174,9 @@
           dataset={dataset}
           tableName={tableName}
           datasetVersion={datasetVersion}
-          showSummaryPlots={true}
+          showSummaryPlots={showSummaryPlots}
+          initialSortColumn={initialSortColumn}
+          initialSortOrder={initialSortOrder}
           cellHighlights={cellHighlights}
           currentCell={currentCell}
           highlightedRowIds={highlightedRowIds}
@@ -171,6 +184,7 @@
           isSelectable={isSelectable}
           onColumnDeleted={onColumnDeleted}
           onSelectionChange={onSelectionChange}
+          onSortChange={onSortChange}
         />
       {/key}
     </div>
