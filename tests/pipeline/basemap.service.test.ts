@@ -102,6 +102,14 @@ describe('basemap variant resolution', () => {
     ).toBe(SimplificationLevel.High);
   });
 
+  it('maps stale France medium ids to the remaining high variant', () => {
+    const basemaps = [createMetadata('france-region-2025-high', 'high')];
+
+    expect(getPreferredBasemapFile(basemaps, 'france-region-2025-medium')).toBe(
+      'france-region-2025-high'
+    );
+  });
+
   it('returns the active variant metadata and layer tables', () => {
     const mediumMetadata = createMetadata(
       'france-commune-2025-medium',

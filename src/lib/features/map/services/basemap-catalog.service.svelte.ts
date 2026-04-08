@@ -5,6 +5,7 @@ import { LogCategory, logger } from '../../commons/utils/logger';
 import { resolveStaticAssetUrl } from '../../commons/utils/static-asset-url';
 import {
   getBasemapVariantFamily,
+  getPreferredBasemapFile,
   getPreferredCatalogBasemapLevel
 } from './basemap.service.svelte';
 import type {
@@ -73,6 +74,14 @@ export function getCatalogBasemapsForDisplay(
   }
 
   return Array.from(byBaseName.values());
+}
+
+export function getCatalogBasemapById(
+  basemaps: BasemapMetadata[],
+  basemapId: string
+): BasemapMetadata | null {
+  const resolvedBasemapId = getPreferredBasemapFile(basemaps, basemapId);
+  return basemaps.find((basemap) => basemap.file === resolvedBasemapId) ?? null;
 }
 
 function getBBoxArea(bbox: [number, number, number, number]): number {
@@ -452,7 +461,7 @@ function createBasemapCatalogService() {
   }
 
   function getBasemapById(basemapId: string): BasemapMetadata | null {
-    return state.basemaps.find((basemap) => basemap.file === basemapId) ?? null;
+    return getCatalogBasemapById(state.basemaps, basemapId);
   }
 
   function filterByYear(minYear: number, maxYear?: number): BasemapMetadata[] {
