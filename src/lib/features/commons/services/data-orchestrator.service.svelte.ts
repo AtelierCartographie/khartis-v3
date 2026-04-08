@@ -514,7 +514,7 @@ function createDataOrchestratorService() {
       await processFileInDuckDB(file, dataset);
       processedFileIds.add(file.id);
 
-      if (dataset.geometry) {
+      if (dataset.geometry || dataset.geoDetection) {
         projectionActions.suggestProjectionForCurrentData();
       }
 

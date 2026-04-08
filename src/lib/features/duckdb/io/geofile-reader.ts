@@ -21,11 +21,6 @@ import type {
   ReadGeofileOptions
 } from '../types';
 import { generateUniqueTableName, registerFiles } from './file-registry';
-import {
-  applyProj4Reprojection,
-  tryDuckDBReprojection
-} from './geofile-reprojection';
-import { isProjectionSupported } from './reprojection';
 import { addRowId } from './reader-utils';
 
 interface GeofileMetadata {
@@ -169,18 +164,8 @@ export async function readGeofile(
       );
     }
 
-    const shouldReproject = needsReprojection(geoMeta.crs);
     const geomCol = geoMeta.geometryColumn;
-    let usedProj4Fallback = false;
-
-    if (shouldReproject) {
-      logger.info('Reprojecting geometry to WGS84', LogCategory.DUCKDB, {
-        sourceCRS: geoMeta.crs,
-        targetCRS: GEO_CONSTANTS.WGS84_CRS,
-        geometryColumn: geomCol,
-        filename: geofile.name
-      });
-    }
+    const preservesSourceProjection = needsReprojection(geoMeta.crs);
 
     const finalTablename = tablename;
     const escapedFinalTable = escapeIdentifier(finalTablename);
@@ -189,56 +174,11 @@ export async function readGeofile(
     await runInTransaction(
       ctx.connection,
       async () => {
-        if (shouldReproject) {
-          const duckDBSuccess = await tryDuckDBReprojection(
-            ctx,
-            finalTablename,
-            geofileWithId.id,
-            geomCol,
-            geoMeta.crs
-          );
-
-          if (!duckDBSuccess) {
-            if (geoMeta.crs && isProjectionSupported(geoMeta.crs)) {
-              logger.info(
-                'Using proj4 fallback for reprojection',
-                LogCategory.DUCKDB,
-                {
-                  sourceCRS: geoMeta.crs,
-                  filename: geofile.name
-                }
-              );
-              await applyProj4Reprojection(
-                ctx,
-                finalTablename,
-                geofileWithId.id,
-                geomCol,
-                geoMeta.crs
-              );
-              usedProj4Fallback = true;
-            } else {
-              logger.warn(
-                'Unsupported projection, loading without reprojection',
-                LogCategory.DUCKDB,
-                {
-                  sourceCRS: geoMeta.crs,
-                  filename: geofile.name
-                }
-              );
-              await executeQuery(
-                ctx.connection,
-                `CREATE OR REPLACE TABLE "${escapedFinalTable}" AS FROM ST_Read('${escapedGeoFileId}');`,
-                { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
-              );
-            }
-          }
-        } else {
-          await executeQuery(
-            ctx.connection,
-            `CREATE OR REPLACE TABLE "${escapedFinalTable}" AS FROM ST_Read('${escapedGeoFileId}');`,
-            { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
-          );
-        }
+        await executeQuery(
+          ctx.connection,
+          `CREATE OR REPLACE TABLE "${escapedFinalTable}" AS FROM ST_Read('${escapedGeoFileId}');`,
+          { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
+        );
         await addRowId(ctx.connection, finalTablename!);
       },
       'read_geofile'
@@ -252,8 +192,9 @@ export async function readGeofile(
     logger.success('Geofile ingested', LogCategory.DUCKDB, {
       tablename,
       filename: geofile.name,
-      reprojected: shouldReproject,
-      usedProj4Fallback,
+      geometryColumn: geomCol,
+      preservesSourceProjection,
+      sourceCRS: geoMeta.crs,
       durationMs: (performance.now() - start).toFixed(2)
     });
     return tablename;

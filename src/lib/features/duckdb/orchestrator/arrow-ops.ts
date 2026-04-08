@@ -21,6 +21,77 @@ function isGeometryColumnType(columnType: string): boolean {
   );
 }
 
+function escapeSqlLiteral(value: string): string {
+  return value.replace(/'/g, "''");
+}
+
+function normalizeCrsName(crs: string | null | undefined): string | null {
+  if (!crs) return null;
+
+  const trimmed = crs.trim();
+  if (!trimmed) return null;
+
+  if (/^epsg:\d+$/i.test(trimmed)) {
+    return trimmed.toUpperCase();
+  }
+
+  if (/^\d+$/.test(trimmed)) {
+    return `EPSG:${trimmed}`;
+  }
+
+  if (/^wgs\s*84$/i.test(trimmed)) {
+    return GEO_CONSTANTS.WGS84_CRS;
+  }
+
+  return trimmed;
+}
+
+function extractGeometryColumnCrs(
+  columnType: string | null | undefined
+): string | null {
+  if (!columnType) {
+    return null;
+  }
+
+  const match = columnType.match(/^GEOMETRY\('([^']+)'\)$/i);
+  return normalizeCrsName(match?.[1]);
+}
+
+function getGeoArrowCrsName(
+  metadata: GeoArrowMetadata | null | undefined,
+  primaryColumn: string
+): string | null {
+  const crs = metadata?.columns?.[primaryColumn]?.crs;
+  if (!crs) {
+    return null;
+  }
+
+  if (crs.id?.authority && typeof crs.id.code === 'number') {
+    return `${crs.id.authority}:${crs.id.code}`;
+  }
+
+  return normalizeCrsName(crs.name);
+}
+
+function buildGeoArrowCrs(
+  crsName: string | null | undefined
+): GeoArrowMetadata['columns'][string]['crs'] | undefined {
+  const normalized = normalizeCrsName(crsName);
+  if (!normalized) {
+    return undefined;
+  }
+
+  const epsgMatch = normalized.match(/^EPSG:(\d+)$/i);
+  if (epsgMatch) {
+    return {
+      name: normalized,
+      id: { authority: 'EPSG', code: Number(epsgMatch[1]) }
+    };
+  }
+
+  return { name: normalized };
+}
+
 export interface DuckDBClientForArrow {
   query(sql: string, options?: { format?: string }): Promise<unknown>;
   queryStreaming?(sql: string): Promise<Uint8Array>;
@@ -60,7 +131,8 @@ export interface GeomColumnInfo {
 export async function fetchArrowTableWithGeometry(
   tableName: string,
   Duck: DuckDBClientForArrow,
-  whereClause?: string | null
+  whereClause?: string | null,
+  targetCrs?: string | null
 ): Promise<{ table: Table; geomColumn: GeomColumnInfo | undefined }> {
   const tableInfo = await Duck.describe_table(tableName);
   const columns = tableInfo.name.map((name: string, index: number) => ({
@@ -72,9 +144,16 @@ export async function fetchArrowTableWithGeometry(
     isGeometryColumnType(c.column_type)
   );
 
+  const normalizedTargetCrs = normalizeCrsName(targetCrs);
+
   let query: string;
   if (geomColumn) {
-    query = `SELECT * EXCLUDE ("${geomColumn.column_name}"), ST_AsWKB("${geomColumn.column_name}") AS "${geomColumn.column_name}" FROM "${tableName}"`;
+    const geometryExpression = normalizedTargetCrs
+      ? `ST_AsWKB(ST_Transform("${geomColumn.column_name}", '${escapeSqlLiteral(
+          normalizedTargetCrs
+        )}'))`
+      : `ST_AsWKB("${geomColumn.column_name}")`;
+    query = `SELECT * EXCLUDE ("${geomColumn.column_name}"), ${geometryExpression} AS "${geomColumn.column_name}" FROM "${tableName}"`;
   } else {
     query = `SELECT * FROM "${tableName}"`;
   }
@@ -99,7 +178,16 @@ export async function fetchArrowTableWithGeometry(
       const firstBatchEmpty =
         streamTable.batches.length > 0 && streamTable.batches[0].numRows === 0;
       if (!firstBatchEmpty) {
-        return { table: streamTable, geomColumn };
+        return {
+          table: streamTable,
+          geomColumn:
+            normalizedTargetCrs && geomColumn
+              ? {
+                  ...geomColumn,
+                  column_type: `${GEOMETRY_COLUMN_TYPE}('${normalizedTargetCrs}')`
+                }
+              : geomColumn
+        };
       }
       logger.debug(
         'queryStreaming first batch is empty (schema header), retrying with regular query',
@@ -121,7 +209,16 @@ export async function fetchArrowTableWithGeometry(
   })) as ArrayBuffer | Uint8Array;
   ipcBuffer = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
 
-  return { table: tableFromIPC(ipcBuffer), geomColumn };
+  return {
+    table: tableFromIPC(ipcBuffer),
+    geomColumn:
+      normalizedTargetCrs && geomColumn
+        ? {
+            ...geomColumn,
+            column_type: `${GEOMETRY_COLUMN_TYPE}('${normalizedTargetCrs}')`
+          }
+        : geomColumn
+  };
 }
 
 export async function addGeoArrowMetadataFromDuckDB(
@@ -135,6 +232,7 @@ export async function addGeoArrowMetadataFromDuckDB(
   try {
     let geomColumn: { column_name: string; column_type: string } | undefined;
     let geometryType: string;
+    let geometryCrs: string | null = null;
 
     if (cachedGeoArrowMetadata) {
       const primaryColumn = cachedGeoArrowMetadata.primary_column;
@@ -144,6 +242,7 @@ export async function addGeoArrowMetadataFromDuckDB(
       };
       const columnMeta = cachedGeoArrowMetadata.columns[primaryColumn];
       geometryType = columnMeta?.geometry_types?.[0] || GEOMETRY_COLUMN_TYPE;
+      geometryCrs = getGeoArrowCrsName(cachedGeoArrowMetadata, primaryColumn);
       if (!geometryType.startsWith('ST_')) {
         geometryType = 'ST_' + geometryType;
       }
@@ -176,6 +275,8 @@ export async function addGeoArrowMetadataFromDuckDB(
         );
         return table;
       }
+
+      geometryCrs = extractGeometryColumnCrs(geomColumn.column_type);
 
       // Sample geometry types from first 1000 non-null rows instead of full table scan.
       // DISTINCT on the full table is O(n) and expensive for large datasets.
@@ -240,6 +341,9 @@ export async function addGeoArrowMetadataFromDuckDB(
     const encoding = isGeoJsonString
       ? ArrowExtension.GEOJSON
       : ArrowExtension.GEOARROW_WKB;
+    const resolvedGeometryCrs =
+      geometryCrs ?? normalizeCrsName(GEO_CONSTANTS.WGS84_CRS);
+    const geoArrowCrs = buildGeoArrowCrs(resolvedGeometryCrs);
 
     const geoMetadata = {
       version: '1.0.0',
@@ -248,12 +352,7 @@ export async function addGeoArrowMetadataFromDuckDB(
         [geomColumn!.column_name]: {
           encoding,
           geometry_types: [geometryType.replace('ST_', '')],
-          crs: {
-            type: 'name',
-            properties: {
-              name: GEO_CONSTANTS.WGS84_CRS
-            }
-          },
+          ...(geoArrowCrs ? { crs: geoArrowCrs } : {}),
           bbox: [-180, -90, 180, 90]
         }
       }
@@ -286,7 +385,7 @@ export async function addGeoArrowMetadataFromDuckDB(
         'ARROW:extension:metadata',
         JSON.stringify({
           geometry_type: geometryType.replace('ST_', ''),
-          crs: GEO_CONSTANTS.WGS84_CRS
+          crs: resolvedGeometryCrs
         })
       );
       const fieldMetadataMap = new Map<string, string>(updatedMetadata);
@@ -434,4 +533,25 @@ export async function getArrowTableDirect(
   });
 
   return tableWithMetadata;
+}
+
+export async function getArrowTableReprojected(
+  tableName: string,
+  Duck: DuckDBClientForArrow,
+  targetCrs: string
+): Promise<Table> {
+  const { table: baseTable, geomColumn } = await fetchArrowTableWithGeometry(
+    tableName,
+    Duck,
+    null,
+    targetCrs
+  );
+
+  return addGeoArrowMetadataFromDuckDB(
+    baseTable,
+    tableName,
+    Duck,
+    undefined,
+    geomColumn
+  );
 }
