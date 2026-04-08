@@ -3,7 +3,8 @@ import type { GPSBounds } from '$lib/features/duckdb';
 import type { BasemapMetadata } from '../types/basemap.types';
 import {
   rankBasemapsByGPSBbox,
-  rankBasemapsByJoinSynthesis
+  rankBasemapsByJoinSynthesis,
+  shouldPreferTextBasemapRefinementForGPS
 } from './basemap-catalog.service.svelte';
 
 function createBasemap(
@@ -108,6 +109,108 @@ describe('rankBasemapsByGPSBbox', () => {
     expect(suggestions[0]?.matchScore).toBe(100);
     expect(suggestions[1]?.file).toBe('paris-window');
     expect(suggestions[1]?.matchScore).toBeLessThan(100);
+  });
+
+  it('prefers coarser France administrative basemaps over canton and commune when bbox metrics tie', () => {
+    const suggestions = rankBasemapsByGPSBbox(
+      [
+        createBasemap({
+          file: 'france-region-2025-high',
+          title_fr: 'France regions',
+          title_en: 'France regions',
+          date: '2025',
+          bbox: [-61.81, -21.39, 55.83, 51.09],
+          simplification_level: 'high',
+          layers: [{ type: 'land' }]
+        }),
+        createBasemap({
+          file: 'france-departement-2025-high',
+          title_fr: 'France departments',
+          title_en: 'France departments',
+          date: '2025',
+          bbox: [-61.81, -21.39, 55.83, 51.09],
+          simplification_level: 'high',
+          layers: [{ type: 'land' }, { type: 'limit' }]
+        }),
+        createBasemap({
+          file: 'france-canton-2025-high',
+          title_fr: 'France cantons',
+          title_en: 'France cantons',
+          date: '2025',
+          bbox: [-61.81, -21.39, 55.83, 51.09],
+          simplification_level: 'high',
+          layers: [{ type: 'land' }, { type: 'limit' }, { type: 'centroid' }]
+        }),
+        createBasemap({
+          file: 'france-commune-2025-high',
+          title_fr: 'France communes',
+          title_en: 'France communes',
+          date: '2025',
+          bbox: [-61.81, -21.39, 55.83, 51.09],
+          simplification_level: 'high',
+          layers: [
+            { type: 'land' },
+            { type: 'limit' },
+            { type: 'centroid' },
+            { type: 'graticule' }
+          ]
+        })
+      ],
+      sitesSevesoIdfBounds,
+      4
+    );
+
+    expect(suggestions.map((suggestion) => suggestion.file)).toEqual([
+      'france-region-2025-high',
+      'france-departement-2025-high',
+      'france-canton-2025-high',
+      'france-commune-2025-high'
+    ]);
+  });
+});
+
+describe('shouldPreferTextBasemapRefinementForGPS', () => {
+  it('keeps bbox-driven suggestions when the GPS extent is already fully contained', () => {
+    expect(
+      shouldPreferTextBasemapRefinementForGPS(
+        [
+          {
+            ...createBasemap({
+              file: 'france-region-2025-high',
+              title_fr: 'France regions',
+              title_en: 'France regions',
+              date: '2025',
+              bbox: [-61.81, -21.39, 55.83, 51.09]
+            }),
+            matchScore: 100,
+            matchReason: 'GPS bbox containment'
+          }
+        ],
+        96
+      )
+    ).toBe(false);
+  });
+
+  it('allows text refinement when bbox suggestions are missing or only partial', () => {
+    expect(shouldPreferTextBasemapRefinementForGPS([], 96)).toBe(true);
+    expect(
+      shouldPreferTextBasemapRefinementForGPS(
+        [
+          {
+            ...createBasemap({
+              file: 'monde-countries-2024-medium',
+              title_fr: 'Monde',
+              title_en: 'World',
+              date: '2024',
+              bbox: [-180, -90, 180, 90]
+            }),
+            matchScore: 54,
+            matchReason: 'GPS bbox overlap'
+          }
+        ],
+        96
+      )
+    ).toBe(true);
   });
 });
 
