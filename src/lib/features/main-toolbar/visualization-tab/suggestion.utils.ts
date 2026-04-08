@@ -34,7 +34,7 @@ interface DatasetGeometrySource {
 }
 
 export function resolveDatasetGeometryType(
-  dataset?: DatasetGeometrySource
+  dataset?: DatasetGeometrySource | null
 ): GeometryType | null {
   if (!dataset) {
     return null;
