@@ -63,6 +63,33 @@
       ) ?? simplState.level
     );
   });
+  const noVariantLevelLabel = $derived.by(() => {
+    const explicitLevel = availableBasemapLevels[0];
+    if (explicitLevel) {
+      return getLevelLabel(explicitLevel);
+    }
+
+    const currentLevel = basemapService.currentMetadata?.simplification_level;
+    switch (currentLevel) {
+      case SimplificationLevel.Low:
+        return getLevelLabel(SimplificationLevel.Low);
+      case SimplificationLevel.Medium:
+        return getLevelLabel(SimplificationLevel.Medium);
+      case SimplificationLevel.High:
+        return getLevelLabel(SimplificationLevel.High);
+      default:
+        return null;
+    }
+  });
+  const noVariantSubtitle = $derived.by(() => {
+    if (noVariantLevelLabel) {
+      return m.simplification_no_variants_active_level({
+        level: noVariantLevelLabel
+      });
+    }
+
+    return m.simplification_no_variants_fallback();
+  });
   const hasBasemapVariants = $derived(availableBasemapLevels.length > 1);
   const isBasemapSourceBlocked = $derived(
     simplState.source === SimplificationSource.Basemap &&
@@ -214,6 +241,7 @@
         kind="info"
         lowContrast
         title={m.simplification_no_variants()}
+        subtitle={noVariantSubtitle}
       />
     {/if}
 
