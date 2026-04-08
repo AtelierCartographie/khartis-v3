@@ -36,6 +36,8 @@ interface GeoIdIndicators {
   shareUniques: number;
   shareNulls: number;
   idWords: boolean;
+  shareRankInterval: number;
+  isNumeric: boolean;
 }
 
 interface GeoLatIndicators {
@@ -77,10 +79,13 @@ interface QLOIndicators {
 
 function scoreGeoId(indicators: GeoIdIndicators): SemioScore {
   let score = 0;
-  if (indicators.shareUniques >= 0.9) score += 1;
-  if (indicators.shareNulls <= 0.1) score += 1.5;
+  if (indicators.shareUniques >= 0.9) score += indicators.isNumeric ? 0.5 : 1;
+  if (indicators.shareNulls <= 0.1) score += indicators.isNumeric ? 0.5 : 1.5;
   if (indicators.idWords && indicators.shareUniques >= 0.5) score += 4;
-  return { semioType: SEMIO_TYPES.GEOID, score };
+  if (indicators.isNumeric && indicators.shareRankInterval >= 0.8) score += 2;
+  if (indicators.isNumeric && indicators.shareRankInterval >= 0.95)
+    score += 0.5;
+  return { semioType: SEMIO_TYPES.GEOID, score: Math.min(score, 6.5) };
 }
 
 function scoreGeoLat(indicators: GeoLatIndicators): SemioScore {
@@ -231,7 +236,9 @@ export function detectSemioType(
         scoreGeoId({
           shareUniques,
           shareNulls,
-          idWords: keywords.idWords
+          idWords: keywords.idWords,
+          shareRankInterval,
+          isNumeric: true
         }),
         scoreGeoLat({ latWords: keywords.latWords, min, max }),
         scoreGeoLon({ lonWords: keywords.lonWords, min, max })
@@ -253,7 +260,9 @@ export function detectSemioType(
         scoreGeoId({
           shareUniques,
           shareNulls,
-          idWords: keywords.idWords
+          idWords: keywords.idWords,
+          shareRankInterval,
+          isNumeric: false
         })
       );
       break;
