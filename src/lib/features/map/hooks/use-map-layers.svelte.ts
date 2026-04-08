@@ -41,6 +41,7 @@ import type { ProjectionLike } from 'geoarrow-deck-stream';
 import { getProjectionById } from '$lib/features/commons/utils/projection.utils';
 import type { BasemapMetadata } from '../types/basemap.types';
 import { shouldUseIdentityProjectionForDatasetCrs } from '../utils/dataset-crs';
+import { resolveProjectionForRender } from '../utils/projection-priority';
 
 const GEOMETRY_TO_PRIMITIVE: Partial<Record<GeometryType, PrimitiveFilter>> = {
   [GeometryType.POINT]: PrimitiveFilterType.POINT,
@@ -320,7 +321,10 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       const projectionOverride = getProjectionOverride(isOrthographicMode);
       // Keep catalog basemap projection authoritative when it exists.
       // Projection overrides are only a fallback for identity/custom basemaps.
-      const activeBasemapProjection = basemapProjection ?? projectionOverride;
+      const activeBasemapProjection = resolveProjectionForRender(
+        basemapProjection,
+        projectionOverride
+      );
 
       // In MapLibre interleaved mode, find the first symbol layer to render data layers below text
       const beforeId =
@@ -425,7 +429,10 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           ctx.modelMatrix = matrixToApply;
           ctx.projectionSuffix = projectionSuffix;
           ctx.beforeId = beforeId;
-          ctx.customProjection = datasetDefaultProjection ?? projectionOverride;
+          ctx.customProjection = resolveProjectionForRender(
+            datasetDefaultProjection,
+            projectionOverride
+          );
 
           if (geojson) {
             const geojsonLayers = createGeoJsonLayers(geojson, ctx);
@@ -508,8 +515,10 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           fallbackCtx.modelMatrix = matrixToApply;
           fallbackCtx.projectionSuffix = projectionSuffix;
           fallbackCtx.beforeId = beforeId;
-          fallbackCtx.customProjection =
-            datasetDefaultProjection ?? projectionOverride;
+          fallbackCtx.customProjection = resolveProjectionForRender(
+            datasetDefaultProjection,
+            projectionOverride
+          );
 
           if (geojson) {
             const fallbackGeoJsonLayers = createGeoJsonLayers(
