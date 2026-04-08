@@ -101,7 +101,9 @@ describe('gpxProcessor', () => {
       gpx_point_type: 'wpt'
     });
 
+    expect(c.callbacks.createArrowTableWithMetadata).not.toHaveBeenCalled();
     expect(result.tableName).toBe('tbl_gpx_actual');
     expect(result.rowCount).toBe(2);
+    expect(result.arrowTableWithMetadata).toBeUndefined();
   });
 });

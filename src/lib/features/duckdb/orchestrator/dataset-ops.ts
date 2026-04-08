@@ -40,6 +40,28 @@ export interface DatasetCallbacks {
   prefetchArrowMetadata: (dataset: DuckDBDataset) => Promise<void> | undefined;
 }
 
+function scheduleArrowMetadataPrefetch(
+  dataset: DuckDBDataset,
+  callbacks: DatasetCallbacks
+): void {
+  const prefetchPromise = callbacks.prefetchArrowMetadata(dataset);
+  if (!prefetchPromise) {
+    return;
+  }
+
+  void prefetchPromise.catch((error) => {
+    logger.debug(
+      'Arrow metadata prefetch failed after dataset registration',
+      LogCategory.DUCKDB,
+      {
+        datasetId: dataset.id,
+        tableName: dataset.tableName,
+        error
+      }
+    );
+  });
+}
+
 export async function registerExistingTable(
   tableName: string,
   sourceFileId: string,
@@ -106,7 +128,7 @@ export async function registerExistingTable(
       datasets.set(dataset.id, dataset);
     });
 
-    await callbacks.prefetchArrowMetadata(dataset);
+    scheduleArrowMetadataPrefetch(dataset, callbacks);
 
     bumpDatasetsVersion();
     setCurrentTableName(tableName);
@@ -185,7 +207,7 @@ export async function processFile(
     updateDatasets((datasets) => {
       datasets.set(result.id, result);
     });
-    await callbacks.prefetchArrowMetadata(result);
+    scheduleArrowMetadataPrefetch(result, callbacks);
     bumpDatasetsVersion();
     setCurrentTableName(result.tableName);
 
