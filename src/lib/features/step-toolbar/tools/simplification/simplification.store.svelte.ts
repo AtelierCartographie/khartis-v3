@@ -42,207 +42,86 @@ type SimplificationActions = {
 const { actions, getState } = createToolStore<
   SimplificationState,
   SimplificationActions
->(DEFAULT_STATE, (s) => {
-  async function simplifyCustomBasemap(): Promise<SimplificationResult> {
-    const currentBasemap = basemapService.currentBasemap;
-    if (!currentBasemap) {
-      logger.error('No basemap loaded for simplification', LogCategory.DUCKDB);
-      throw new Error('No basemap loaded');
-    }
-
-    const metadata = currentBasemap.metadata;
-    const basemapTableName = metadata.file;
-
-    const tolerance = calculateToleranceFromRate(s.rate, metadata.bbox);
-
-    logger.debug(
-      'Starting imported basemap simplification',
-      LogCategory.DUCKDB,
-      { basemapId: basemapTableName, rate: s.rate, tolerance }
-    );
-
-    const metrics = await simplifyGeometryTable(
-      Duck,
-      basemapTableName,
-      tolerance
-    );
-
-    logger.debug(
-      'Imported basemap simplification completed',
-      LogCategory.DUCKDB,
-      { basemapId: basemapTableName, metrics }
-    );
-
-    return {
-      type: SimplificationTarget.BASEMAP,
-      rate: s.rate,
-      simplified: true,
-      vertexReduction: metrics.reductionPercentage,
-      originalVertices: metrics.originalVertices,
-      simplifiedVertices: metrics.simplifiedVertices
-    };
-  }
-
-  async function simplifyBasemapVariant(): Promise<SimplificationResult> {
-    const currentBasemap = basemapService.currentBasemap;
-    if (!currentBasemap) {
-      logger.error('No basemap loaded for simplification', LogCategory.DUCKDB);
-      throw new Error('No basemap loaded');
-    }
-
-    const metadata = currentBasemap.metadata;
-    const basemapId = metadata.file;
-    const requestedLevel =
-      getPreferredBasemapSimplificationLevel(
-        basemapService.availableBasemaps,
-        metadata,
-        s.level
-      ) ?? s.level;
-
-    const variantFile = resolveBasemapVariantFile(
-      metadata.file,
-      metadata.simplification_level,
-      requestedLevel
-    );
-    if (!variantFile) {
-      logger.debug(
-        'No variant available for this basemap at this level',
-        LogCategory.DUCKDB,
-        { basemapId, level: requestedLevel }
-      );
-
-      return {
-        type: SimplificationTarget.BASEMAP,
-        level: requestedLevel,
-        simplified: false,
-        vertexReduction: 0,
-        originalVertices: 0,
-        simplifiedVertices: 0
-      };
-    }
-
-    logger.debug(
-      'Loading basemap variant for simplification',
-      LogCategory.DUCKDB,
-      { basemapId, level: requestedLevel, variantFile }
-    );
-
-    const variantTable = await basemapService.loadVariant(
-      basemapId,
-      variantFile,
-      requestedLevel
-    );
-
-    if (!variantTable) {
-      logger.debug(
-        'Basemap variant not available, simplification skipped',
-        LogCategory.DUCKDB,
-        { basemapId, level: requestedLevel }
-      );
-      return {
-        type: SimplificationTarget.BASEMAP,
-        level: requestedLevel,
-        simplified: false,
-        vertexReduction: 0,
-        originalVertices: 0,
-        simplifiedVertices: 0
-      };
-    }
-
-    logger.debug('Basemap variant loaded', LogCategory.DUCKDB, {
-      basemapId,
-      variantFile
-    });
-
-    return {
-      type: SimplificationTarget.BASEMAP,
-      level: requestedLevel,
-      simplified: true,
-      vertexReduction: 0,
-      originalVertices: 0,
-      simplifiedVertices: 0
-    };
-  }
-
-  async function simplifyGeoDataset(
-    datasetId?: string
-  ): Promise<SimplificationResult> {
-    const dataset = datasetId
-      ? datasetsStore.datasets.find((d) => d.id === datasetId)
-      : datasetsStore.selectedDataset;
-
-    if (!dataset) {
-      logger.error('No dataset found for simplification', LogCategory.DUCKDB, {
-        datasetId
-      });
-      throw new Error('No dataset found');
-    }
-
-    if (dataset.joinedBasemap) {
-      logger.error(
-        'Cannot simplify a dataset joined to a catalog basemap',
-        LogCategory.DUCKDB,
-        { datasetId: dataset.id, joinedBasemap: dataset.joinedBasemap }
-      );
-      throw new Error('Cannot simplify a catalog basemap dataset');
-    }
-
-    if (!dataset.geometry?.bounds) {
-      logger.error(
-        'Dataset has no geometry bounds for simplification',
-        LogCategory.DUCKDB
-      );
-      throw new Error('Dataset has no geometry bounds');
-    }
-
-    const tolerance = calculateToleranceFromRate(
-      s.rate,
-      dataset.geometry.bounds
-    );
-
-    logger.debug('Starting dataset simplification', LogCategory.DUCKDB, {
-      datasetId: dataset.id,
-      rate: s.rate,
-      tolerance
-    });
-
-    const metrics = await simplifyGeometryTable(
-      Duck,
-      dataset.tableName,
-      tolerance
-    );
-
-    await datasetsStore.updateDataset(dataset.id, {
-      simplificationApplied: {
-        rate: s.rate,
-        tolerance,
-        ...metrics
+>(
+  DEFAULT_STATE,
+  (s) => {
+    async function simplifyCustomBasemap(): Promise<SimplificationResult> {
+      const currentBasemap = basemapService.currentBasemap;
+      if (!currentBasemap) {
+        logger.error(
+          'No basemap loaded for simplification',
+          LogCategory.DUCKDB
+        );
+        throw new Error('No basemap loaded');
       }
-    });
 
-    logger.debug('Dataset simplification completed', LogCategory.DUCKDB, {
-      datasetId: dataset.id,
-      metrics
-    });
+      const metadata = currentBasemap.metadata;
+      const basemapTableName = metadata.file;
 
-    return {
-      type: SimplificationTarget.GEODATA,
-      rate: s.rate,
-      simplified: true,
-      vertexReduction: metrics.reductionPercentage,
-      originalVertices: metrics.originalVertices,
-      simplifiedVertices: metrics.simplifiedVertices
-    };
-  }
+      const tolerance = calculateToleranceFromRate(s.rate, metadata.bbox);
 
-  const performSimplification = async (options?: {
-    datasetId?: string;
-  }): Promise<SimplificationResult> => {
-    if (s.source === SimplificationSource.Basemap) {
-      if (osmBasemapStore.isActive) {
+      logger.debug(
+        'Starting imported basemap simplification',
+        LogCategory.DUCKDB,
+        { basemapId: basemapTableName, rate: s.rate, tolerance }
+      );
+
+      const metrics = await simplifyGeometryTable(
+        Duck,
+        basemapTableName,
+        tolerance
+      );
+
+      logger.debug(
+        'Imported basemap simplification completed',
+        LogCategory.DUCKDB,
+        { basemapId: basemapTableName, metrics }
+      );
+
+      return {
+        type: SimplificationTarget.BASEMAP,
+        rate: s.rate,
+        simplified: true,
+        vertexReduction: metrics.reductionPercentage,
+        originalVertices: metrics.originalVertices,
+        simplifiedVertices: metrics.simplifiedVertices
+      };
+    }
+
+    async function simplifyBasemapVariant(): Promise<SimplificationResult> {
+      const currentBasemap = basemapService.currentBasemap;
+      if (!currentBasemap) {
+        logger.error(
+          'No basemap loaded for simplification',
+          LogCategory.DUCKDB
+        );
+        throw new Error('No basemap loaded');
+      }
+
+      const metadata = currentBasemap.metadata;
+      const basemapId = metadata.file;
+      const requestedLevel =
+        getPreferredBasemapSimplificationLevel(
+          basemapService.availableBasemaps,
+          metadata,
+          s.level
+        ) ?? s.level;
+
+      const variantFile = resolveBasemapVariantFile(
+        metadata.file,
+        metadata.simplification_level,
+        requestedLevel
+      );
+      if (!variantFile) {
+        logger.debug(
+          'No variant available for this basemap at this level',
+          LogCategory.DUCKDB,
+          { basemapId, level: requestedLevel }
+        );
+
         return {
           type: SimplificationTarget.BASEMAP,
-          level: s.level,
+          level: requestedLevel,
           simplified: false,
           vertexReduction: 0,
           originalVertices: 0,
@@ -250,77 +129,234 @@ const { actions, getState } = createToolStore<
         };
       }
 
-      const isCustom =
-        basemapService.currentBasemap?.metadata.isCustom === true;
-      return isCustom ? simplifyCustomBasemap() : simplifyBasemapVariant();
-    } else {
-      return simplifyGeoDataset(options?.datasetId);
-    }
-  };
+      logger.debug(
+        'Loading basemap variant for simplification',
+        LogCategory.DUCKDB,
+        { basemapId, level: requestedLevel, variantFile }
+      );
 
-  return {
-    setSource: (source: SimplificationSource) => {
-      s.source = source;
-      if (source === SimplificationSource.Basemap && s.lastApplied) {
-        const metadata = basemapService.currentBasemap?.metadata;
-        const restoredLevel =
-          metadata &&
-          getPreferredBasemapSimplificationLevel(
-            basemapService.availableBasemaps,
-            metadata,
-            s.lastApplied.level
-          );
-        s.level = restoredLevel ?? SimplificationLevel.Medium;
+      const variantTable = await basemapService.loadVariant(
+        basemapId,
+        variantFile,
+        requestedLevel
+      );
+
+      if (!variantTable) {
+        logger.debug(
+          'Basemap variant not available, simplification skipped',
+          LogCategory.DUCKDB,
+          { basemapId, level: requestedLevel }
+        );
+        return {
+          type: SimplificationTarget.BASEMAP,
+          level: requestedLevel,
+          simplified: false,
+          vertexReduction: 0,
+          originalVertices: 0,
+          simplifiedVertices: 0
+        };
       }
-    },
-    setLevel: (level: SimplificationLevel) => {
-      if (s.source === SimplificationSource.Basemap) {
-        const metadata = basemapService.currentBasemap?.metadata;
-        const resolvedLevel =
-          metadata &&
-          getPreferredBasemapSimplificationLevel(
-            basemapService.availableBasemaps,
-            metadata,
-            level
-          );
-        s.level = resolvedLevel ?? level;
+
+      logger.debug('Basemap variant loaded', LogCategory.DUCKDB, {
+        basemapId,
+        variantFile
+      });
+
+      return {
+        type: SimplificationTarget.BASEMAP,
+        level: requestedLevel,
+        simplified: true,
+        vertexReduction: 0,
+        originalVertices: 0,
+        simplifiedVertices: 0
+      };
+    }
+
+    async function simplifyGeoDataset(
+      datasetId?: string
+    ): Promise<SimplificationResult> {
+      const dataset = datasetId
+        ? datasetsStore.datasets.find((d) => d.id === datasetId)
+        : datasetsStore.selectedDataset;
+
+      if (!dataset) {
+        logger.error(
+          'No dataset found for simplification',
+          LogCategory.DUCKDB,
+          {
+            datasetId
+          }
+        );
+        throw new Error('No dataset found');
       }
-    },
-    setRate: (rate: number) => {
-      s.rate = Math.max(0, Math.min(100, rate));
-    },
-    applySimplification: async (options?: {
+
+      if (dataset.joinedBasemap) {
+        logger.error(
+          'Cannot simplify a dataset joined to a catalog basemap',
+          LogCategory.DUCKDB,
+          { datasetId: dataset.id, joinedBasemap: dataset.joinedBasemap }
+        );
+        throw new Error('Cannot simplify a catalog basemap dataset');
+      }
+
+      if (!dataset.geometry?.bounds) {
+        logger.error(
+          'Dataset has no geometry bounds for simplification',
+          LogCategory.DUCKDB
+        );
+        throw new Error('Dataset has no geometry bounds');
+      }
+
+      const tolerance = calculateToleranceFromRate(
+        s.rate,
+        dataset.geometry.bounds
+      );
+
+      logger.debug('Starting dataset simplification', LogCategory.DUCKDB, {
+        datasetId: dataset.id,
+        rate: s.rate,
+        tolerance
+      });
+
+      const metrics = await simplifyGeometryTable(
+        Duck,
+        dataset.tableName,
+        tolerance
+      );
+
+      await datasetsStore.updateDataset(dataset.id, {
+        simplificationApplied: {
+          rate: s.rate,
+          tolerance,
+          ...metrics
+        }
+      });
+
+      logger.debug('Dataset simplification completed', LogCategory.DUCKDB, {
+        datasetId: dataset.id,
+        metrics
+      });
+
+      return {
+        type: SimplificationTarget.GEODATA,
+        rate: s.rate,
+        simplified: true,
+        vertexReduction: metrics.reductionPercentage,
+        originalVertices: metrics.originalVertices,
+        simplifiedVertices: metrics.simplifiedVertices
+      };
+    }
+
+    const performSimplification = async (options?: {
       datasetId?: string;
-    }): Promise<SimplificationResult | null> => {
-      if (s.isProcessing) {
-        return null;
-      }
-      s.isProcessing = true;
-      try {
-        const result = await performSimplification(options);
-        if (result?.simplified) {
-          s.lastApplied = {
-            source: s.source,
-            level:
-              s.source === SimplificationSource.Basemap ? s.level : undefined,
-            rate: s.source === SimplificationSource.Geo ? s.rate : undefined,
-            timestamp: Date.now()
+    }): Promise<SimplificationResult> => {
+      if (s.source === SimplificationSource.Basemap) {
+        if (osmBasemapStore.isActive) {
+          return {
+            type: SimplificationTarget.BASEMAP,
+            level: s.level,
+            simplified: false,
+            vertexReduction: 0,
+            originalVertices: 0,
+            simplifiedVertices: 0
           };
         }
-        return result;
-      } finally {
-        s.isProcessing = false;
+
+        const isCustom =
+          basemapService.currentBasemap?.metadata.isCustom === true;
+        return isCustom ? simplifyCustomBasemap() : simplifyBasemapVariant();
+      } else {
+        return simplifyGeoDataset(options?.datasetId);
       }
-    },
-    undoLastSimplification: (): boolean => {
-      if (s.lastApplied) {
-        s.lastApplied = undefined;
-        return true;
+    };
+
+    return {
+      setSource: (source: SimplificationSource) => {
+        s.source = source;
+        if (source === SimplificationSource.Basemap && s.lastApplied) {
+          const metadata = basemapService.currentBasemap?.metadata;
+          const restoredLevel =
+            metadata &&
+            getPreferredBasemapSimplificationLevel(
+              basemapService.availableBasemaps,
+              metadata,
+              s.lastApplied.level
+            );
+          s.level = restoredLevel ?? SimplificationLevel.Medium;
+        }
+      },
+      setLevel: (level: SimplificationLevel) => {
+        if (s.source === SimplificationSource.Basemap) {
+          const metadata = basemapService.currentBasemap?.metadata;
+          const resolvedLevel =
+            metadata &&
+            getPreferredBasemapSimplificationLevel(
+              basemapService.availableBasemaps,
+              metadata,
+              level
+            );
+          s.level = resolvedLevel ?? level;
+        }
+      },
+      setRate: (rate: number) => {
+        s.rate = Math.max(0, Math.min(100, rate));
+      },
+      applySimplification: async (options?: {
+        datasetId?: string;
+      }): Promise<SimplificationResult | null> => {
+        if (s.isProcessing) {
+          return null;
+        }
+        s.isProcessing = true;
+        try {
+          const result = await performSimplification(options);
+          if (result?.simplified) {
+            const activeDataset =
+              s.source === SimplificationSource.Geo
+                ? options?.datasetId
+                  ? datasetsStore.datasets.find(
+                      (d) => d.id === options.datasetId
+                    )
+                  : datasetsStore.selectedDataset
+                : undefined;
+            const activeBasemapId =
+              basemapService.currentBasemap?.metadata.file;
+            s.lastApplied = {
+              source: s.source,
+              level:
+                s.source === SimplificationSource.Basemap ? s.level : undefined,
+              rate: s.source === SimplificationSource.Geo ? s.rate : undefined,
+              basemapId:
+                s.source === SimplificationSource.Basemap
+                  ? activeBasemapId
+                  : undefined,
+              datasetSourceFileId:
+                s.source === SimplificationSource.Geo
+                  ? activeDataset?.sourceFileId
+                  : undefined,
+              timestamp: Date.now()
+            };
+          }
+          return result;
+        } finally {
+          s.isProcessing = false;
+        }
+      },
+      undoLastSimplification: (): boolean => {
+        if (s.lastApplied) {
+          s.lastApplied = undefined;
+          return true;
+        }
+        return false;
       }
-      return false;
-    }
-  };
-});
+    };
+  },
+  {
+    key: 'simplification',
+    serializeFilter: ({ isProcessing: _isProcessing, ...persisted }) =>
+      persisted
+  }
+);
 
 export const simplificationActions = actions;
 export const getSimplificationState = getState;

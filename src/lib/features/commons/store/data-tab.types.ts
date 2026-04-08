@@ -10,6 +10,9 @@ export interface DataControlState {
   searchQuery: string;
   filterActive: boolean;
   tableView: TableViewType;
+  showSummaryPlots: boolean;
+  sortColumn: string | null;
+  sortOrder: 'ASC' | 'DESC' | null;
 }
 
 export interface GeolocationState {

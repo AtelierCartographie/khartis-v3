@@ -77,6 +77,9 @@
     if (!selectedDataset?.id) return 0;
     return datasetsStore.getHiddenColumns(selectedDataset.id).length;
   });
+  const showSummaryPlots = $derived(dataTabState.dataControl.showSummaryPlots);
+  const tableSortColumn = $derived(dataTabState.dataControl.sortColumn);
+  const tableSortOrder = $derived(dataTabState.dataControl.sortOrder);
 
   let resetModalOpen = $state(false);
   let deleteModalOpen = $state(false);
@@ -90,12 +93,12 @@
   $effect(() => {
     void selectedDataset?.id;
     selectedRowIds = [];
+    dataTabActions.selectRows([]);
     warningsNotificationDismissed = false;
     variableTypesNotificationDismissed = false;
   });
 
   let csvOptionsModalOpen = $state(false);
-  let showSummaryPlots = $state(true);
   let currentCsvOptions = $state<CsvOptions>({
     header: true,
     decimalSeparator: '.',
@@ -395,6 +398,17 @@
 
   function handleSelectionChange(ids: number[], _count: number) {
     selectedRowIds = ids;
+    dataTabActions.selectRows(ids);
+  }
+
+  function handleSortChange(
+    column: string | null,
+    order: 'ASC' | 'DESC' | null
+  ) {
+    dataTabActions.setDataControlState({
+      sortColumn: column,
+      sortOrder: order
+    });
   }
 
   function handleOpenDeleteModal() {
@@ -512,10 +526,17 @@
       dataTabStore.markStepComplete(0);
     }
   });
+
+  const stepTitle = $derived.by(() => {
+    const stepNumber = dataTabStore.getDisplayedStepNumber('control');
+    const title = m.data_control_step_title();
+
+    return stepNumber === null ? title : `${stepNumber}. ${title}`;
+  });
 </script>
 
 <section id="data-control-step">
-  <MainToolBarHeader title={m.data_control_step_title()} icon={DataCheck} />
+  <MainToolBarHeader title={stepTitle} icon={DataCheck} />
 
   {#if isToolOpen}
     {#if activeTool === DataToolType.Search}
@@ -600,7 +621,10 @@
       onReset={handleOpenReset}
       onExpand={() => (isModalOpen = true)}
       onCsvOptions={handleOpenCsvOptions}
-      onToggleSummaryPlots={() => (showSummaryPlots = !showSummaryPlots)}
+      onToggleSummaryPlots={() =>
+        dataTabActions.setDataControlState({
+          showSummaryPlots: !showSummaryPlots
+        })}
       onShowHiddenColumns={handleShowHiddenColumns}
       selectionCount={selectedRowIds.length}
       resetDisabled={!hasDataModifications}
@@ -626,8 +650,11 @@
             undefined}
           isExpanded={false}
           isSelectable={true}
+          initialSortColumn={tableSortColumn}
+          initialSortOrder={tableSortOrder}
           onColumnDeleted={handleColumnDeleted}
           onSelectionChange={handleSelectionChange}
+          onSortChange={handleSortChange}
         />
       {/key}
     {:else if selectedDataset || isProcessingFiles || isBatchProcessing}
@@ -676,12 +703,16 @@
     dataset={processedDataset || undefined}
     tableName={currentDuckTable || undefined}
     datasetVersion={duckDBDatasetsVersion}
+    showSummaryPlots={showSummaryPlots}
+    initialSortColumn={tableSortColumn}
+    initialSortOrder={tableSortOrder}
     cellHighlights={searchHighlight.cellHighlights}
     currentCell={searchHighlight.currentCell}
     highlightedRowIds={searchHighlight.highlightedRowIds}
     isSelectable={true}
     onColumnDeleted={handleColumnDeleted}
     onSelectionChange={handleSelectionChange}
+    onSortChange={handleSortChange}
     onClose={() => (isModalOpen = false)}
   />
 </section>

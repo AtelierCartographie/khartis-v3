@@ -221,7 +221,10 @@ const { actions, getState } = createToolStore<LegendState, LegendActions>(
       }
     }
   }),
-  { key: 'legend' }
+  {
+    key: 'legend',
+    serializeFilter: ({ activeTab: _activeTab, ...persisted }) => persisted
+  }
 );
 
 export const legendActions = actions;

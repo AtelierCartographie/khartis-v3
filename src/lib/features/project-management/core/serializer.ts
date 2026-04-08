@@ -13,6 +13,7 @@ import type {
   SerializedBasemapAttribute,
   SerializedProject,
   SerializedProjectData,
+  SerializedUiSettings,
   SerializedUploadedFile
 } from '$lib/types/serialization.types';
 import type { KhartisProject } from '../types';
@@ -141,8 +142,28 @@ function mapRegistryToSerializedFormat(
   stores: Record<string, unknown>
 ): Pick<
   SerializedProjectData,
-  'basemapSettings' | 'visualizationSettings' | 'layoutSettings'
+  'basemapSettings' | 'visualizationSettings' | 'layoutSettings' | 'uiSettings'
 > {
+  const uiSettingsKeys = [
+    'globalUi',
+    'zoomMode',
+    'dataTab',
+    'dataWorkflow',
+    'dataTools',
+    'datasetsView',
+    'tableFilters',
+    'colorBlindness',
+    'facets',
+    'search',
+    'simplification'
+  ] as const;
+
+  const uiSettings = Object.fromEntries(
+    uiSettingsKeys.flatMap((key) =>
+      stores[key] !== undefined ? [[key, stores[key]]] : []
+    )
+  ) as SerializedUiSettings;
+
   return {
     basemapSettings: {
       layers: stores.basemapLayers,
@@ -150,6 +171,10 @@ function mapRegistryToSerializedFormat(
       referenceBasemapId: (
         stores.basemapStyle as { referenceBasemapId?: string | null }
       )?.referenceBasemapId,
+      showLabels: (stores.basemapStyle as { showLabels?: boolean })?.showLabels,
+      groupVisibility: (
+        stores.basemapStyle as { groupVisibility?: Record<string, boolean> }
+      )?.groupVisibility,
       mapProjection: stores.mapProjection,
       mapViewState: stores.mapViewState
     } as SerializedProjectData['basemapSettings'],
@@ -161,7 +186,8 @@ function mapRegistryToSerializedFormat(
       legend: stores.legend,
       geoIndications: stores.geoIndications,
       projection: stores.projection
-    } as SerializedProjectData['layoutSettings']
+    } as SerializedProjectData['layoutSettings'],
+    uiSettings: Object.keys(uiSettings).length > 0 ? uiSettings : undefined
   };
 }
 
@@ -178,7 +204,9 @@ function mapSerializedFormatToRegistry(
     stores.basemapLayers = data.basemapSettings.layers;
     stores.basemapStyle = {
       style: data.basemapSettings.style,
-      referenceBasemapId: data.basemapSettings.referenceBasemapId
+      referenceBasemapId: data.basemapSettings.referenceBasemapId,
+      showLabels: data.basemapSettings.showLabels,
+      groupVisibility: data.basemapSettings.groupVisibility
     };
     stores.mapProjection = data.basemapSettings.mapProjection;
     if (data.basemapSettings.mapViewState) {
@@ -197,6 +225,10 @@ function mapSerializedFormatToRegistry(
     if (ls.legend) stores.legend = ls.legend;
     if (ls.geoIndications) stores.geoIndications = ls.geoIndications;
     if (ls.projection) stores.projection = ls.projection;
+  }
+
+  if (data.uiSettings) {
+    Object.assign(stores, data.uiSettings);
   }
 
   return stores;
@@ -395,8 +427,10 @@ export async function deserializeProjectData(
 
   // --- Store state: restore via persistence registry ---
 
+  persistenceRegistry.resetAll();
   const storeData = mapSerializedFormatToRegistry(data);
   persistenceRegistry.deserializeAll(storeData);
+  persistenceRegistry.markClean();
 
   return deserialized;
 }
