@@ -99,6 +99,16 @@ function serializeDataTabState(): DataTabState {
   };
 }
 
+function areJoinStatsEmpty(): boolean {
+  return (
+    dataTabState.basemapJoin.joinedEntities === 0 &&
+    dataTabState.basemapJoin.entitiesToVerify === 0 &&
+    dataTabState.basemapJoin.duplicateEntities.length === 0 &&
+    dataTabState.basemapJoin.unrecognizedEntities.length === 0 &&
+    dataTabState.basemapJoin.joinMappings.length === 0
+  );
+}
+
 export const dataTabActions = {
   setDataControlState(updates: Partial<DataTabState['dataControl']>): void {
     Object.assign(dataTabState.dataControl, updates);
@@ -190,6 +200,10 @@ export const dataTabActions = {
   },
 
   clearJoinStats(): void {
+    if (areJoinStatsEmpty()) {
+      return;
+    }
+
     dataTabState.basemapJoin.joinedEntities = 0;
     dataTabState.basemapJoin.entitiesToVerify = 0;
     dataTabState.basemapJoin.duplicateEntities = [];
