@@ -10,6 +10,7 @@
     globalState,
     MOBILE_BREAKPOINT
   } from '$lib/features/commons/store/global.svelte';
+  import '$lib/features/commons/utils/uuid.utils';
   import { ToolbarStep } from '$lib/features/commons/types/global';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { initializeStores } from '$lib/features/commons/store/stores-init';
