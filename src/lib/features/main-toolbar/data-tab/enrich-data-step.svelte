@@ -156,10 +156,17 @@
       dataTabStore.markStepComplete(1);
     }
   });
+
+  const stepTitle = $derived.by(() => {
+    const stepNumber = dataTabStore.getDisplayedStepNumber('enrich');
+    const title = m.enrich_step_title();
+
+    return stepNumber === null ? title : `${stepNumber}. ${title}`;
+  });
 </script>
 
 <section id="enrich-data-step">
-  <MainToolBarHeader title={m.enrich_step_title()} icon={DataEnrichment} />
+  <MainToolBarHeader title={stepTitle} icon={DataEnrichment} />
 
   <p class="kh-help">
     {m.enrich_step_description()}
