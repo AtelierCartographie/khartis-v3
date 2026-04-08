@@ -3,6 +3,7 @@ import type { ProjectionSuggestion } from './projection-suggest.service';
 
 export interface ProjectionState {
   selected: string;
+  overrideActive?: boolean;
   viewMode: ViewMode;
   longitude: number;
   latitude: number;

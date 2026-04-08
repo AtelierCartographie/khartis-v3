@@ -1,4 +1,5 @@
 import { ViewMode } from '$lib/features/commons/constants/ui.constants';
+import type { DatasetResult } from '$lib/features/data-pipeline';
 import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
 import { globalActions } from '$lib/features/commons/store/global.svelte';
 import {
@@ -19,11 +20,14 @@ import {
   type ProjectionSuggestion
 } from './projection-suggest.service';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
+import { canUseBoundsForProjectionSuggestion } from '$lib/features/map/utils/dataset-crs';
 
 const DEFAULT_PROJECTION = 'mercator';
 
 const DEFAULT_STATE: ProjectionState = {
   selected: DEFAULT_PROJECTION,
+  overrideActive: false,
   viewMode: ViewMode.LIST,
   longitude: 0,
   latitude: 0,
@@ -61,6 +65,89 @@ type ProjectionActions = {
 
 const MERCATOR_PROJECTION_TYPE = 'mercator';
 
+function toBoundsTuple(
+  bounds: [number, number, number, number]
+): [number, number, number, number] {
+  return [bounds[0], bounds[1], bounds[2], bounds[3]];
+}
+
+function toBoundsFromGpsBounds(gpsBounds: {
+  minLon: number;
+  minLat: number;
+  maxLon: number;
+  maxLat: number;
+}): [number, number, number, number] {
+  return [
+    gpsBounds.minLon,
+    gpsBounds.minLat,
+    gpsBounds.maxLon,
+    gpsBounds.maxLat
+  ];
+}
+
+function getSuggestionCandidates(): DatasetResult[] {
+  const candidates: DatasetResult[] = [];
+  const seen = new Set<string>();
+
+  const pushCandidate = (dataset: DatasetResult | null | undefined) => {
+    if (!dataset || seen.has(dataset.id)) {
+      return;
+    }
+
+    seen.add(dataset.id);
+    candidates.push(dataset);
+  };
+
+  pushCandidate(datasetsStore.selectedDataset);
+
+  for (const dataset of datasetsStore.getDatasetsByType(true)) {
+    pushCandidate(dataset);
+  }
+
+  for (const dataset of datasetsStore.enabledDatasets) {
+    pushCandidate(dataset);
+  }
+
+  for (const dataset of datasetsStore.datasets) {
+    pushCandidate(dataset);
+  }
+
+  return candidates;
+}
+
+async function resolveSuggestionBounds(): Promise<
+  [number, number, number, number] | null
+> {
+  const candidates = getSuggestionCandidates();
+
+  for (const dataset of candidates) {
+    if (
+      dataset.geometry?.bounds &&
+      canUseBoundsForProjectionSuggestion(dataset.geometry.crs)
+    ) {
+      return toBoundsTuple(dataset.geometry.bounds);
+    }
+
+    if (!dataset.sourceFileId) {
+      continue;
+    }
+
+    const duckDataset = duckDBOrchestrator.getDatasetBySourceFile(
+      dataset.sourceFileId
+    );
+    if (!duckDataset) {
+      continue;
+    }
+
+    const gpsBounds = await duckDBOrchestrator.getGPSBounds(duckDataset.id);
+    if (gpsBounds) {
+      return toBoundsFromGpsBounds(gpsBounds);
+    }
+  }
+
+  return null;
+}
+
 function toMapProjectionType(projectionId: string): 'mercator' | 'globe' {
   const mercatorLike = new Set([
     MERCATOR_PROJECTION_TYPE,
@@ -81,9 +168,16 @@ const { actions, getState } = createToolStore<
 >(
   DEFAULT_STATE,
   (s) => {
-    const setSelectedInternal = (projectionId: string, applyToMap: boolean) => {
+    const setSelectedInternal = (
+      projectionId: string,
+      applyToMap: boolean,
+      markOverride = true
+    ) => {
       s.selected = projectionId;
       s.customCode = undefined;
+      if (markOverride) {
+        s.overrideActive = true;
+      }
       if (applyToMap) {
         mapProjectionStore.setProjection(toMapProjectionType(projectionId));
       }
@@ -97,6 +191,9 @@ const { actions, getState } = createToolStore<
       setSelected,
       setCustomCode: (code: string | null) => {
         s.customCode = code?.trim() || undefined;
+        if (s.customCode) {
+          s.overrideActive = true;
+        }
       },
       setViewMode: (mode: ViewMode) => {
         s.viewMode = mode;
@@ -127,35 +224,28 @@ const { actions, getState } = createToolStore<
         s.simplifiedPreview = value;
       },
       suggestProjectionForCurrentData: () => {
-        const geoDatasets = datasetsStore.getDatasetsByType(true);
-        if (geoDatasets.length === 0) return;
+        void (async () => {
+          const bounds = await resolveSuggestionBounds();
+          if (!bounds) return;
 
-        const firstDataset = geoDatasets[0];
-        if (!firstDataset.geometry?.bounds) return;
+          const result = suggestProjectionsForBbox(bounds);
 
-        const bounds = firstDataset.geometry.bounds as [
-          number,
-          number,
-          number,
-          number
-        ];
-        const result = suggestProjectionsForBbox(bounds);
+          if (!result) return;
 
-        if (!result) return;
+          s.suggestions = result;
 
-        s.suggestions = result;
+          logger.info('Projection suggestions computed', LogCategory.MAP, {
+            national: result.national.length,
+            generic: result.generic.length,
+            bbox: bounds
+          });
 
-        logger.info('Projection suggestions computed', LogCategory.MAP, {
-          national: result.national.length,
-          generic: result.generic.length,
-          bbox: bounds
-        });
-
-        // Auto-apply the best suggestion: national first, then generic
-        const best = result.national[0] ?? result.generic[0];
-        if (best) {
-          applyProjectionSuggestion(best);
-        }
+          // Auto-apply the best suggestion: national first, then generic
+          const best = result.national[0] ?? result.generic[0];
+          if (best) {
+            applyProjectionSuggestion(best);
+          }
+        })();
       },
       applySuggestion: (suggestion: ProjectionSuggestion) => {
         applyProjectionSuggestion(suggestion);
@@ -243,6 +333,7 @@ const { actions, getState } = createToolStore<
         if (projection) {
           s.customCode = suggestion.proj4String;
           s.selected = 'mercator'; // proj4 projections render in orthographic/mercator view
+          s.overrideActive = true;
           mapProjectionStore.setProjection(MERCATOR_PROJECTION_TYPE);
           logger.info(
             'Applied projection suggestion via proj4',
@@ -262,7 +353,7 @@ const { actions, getState } = createToolStore<
           suggestion.d3Config.projection
         );
         if (internalId) {
-          setSelectedInternal(internalId, true);
+          setSelectedInternal(internalId, true, true);
           logger.info(
             'Applied projection suggestion via d3 mapping',
             LogCategory.MAP,

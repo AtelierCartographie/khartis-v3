@@ -2,6 +2,7 @@ import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import { describe, expect, it } from 'vitest';
 
 import {
+  resolveOrthographicDatasetBounds,
   resolveOrthographicReferenceBbox,
   resolveOrthographicReferenceTable,
   shouldUseBasemapReferenceInOrthographicView
@@ -111,5 +112,45 @@ describe('orthographic reference selection', () => {
         basemapProjectedBbox: [...basemapProjectedBbox]
       })
     ).toEqual(basemapProjectedBbox);
+  });
+
+  it('falls back to stored dataset bounds for projected files when Arrow bounds are geographic-only', () => {
+    const dataset = {
+      geometry: {
+        type: 'Polygon',
+        bounds: [704320, 6276820, 783140, 6359140] as [
+          number,
+          number,
+          number,
+          number
+        ],
+        centroid: [743730, 6317980] as [number, number],
+        crs: 'EPSG:2154'
+      }
+    };
+
+    expect(resolveOrthographicDatasetBounds(dataset, null)).toEqual([
+      [dataset.geometry.bounds[0], dataset.geometry.bounds[1]],
+      [dataset.geometry.bounds[2], dataset.geometry.bounds[3]]
+    ]);
+  });
+
+  it('keeps Arrow-derived bounds for geographic files', () => {
+    const dataset = {
+      geometry: {
+        type: 'Polygon',
+        bounds: [3.01, 43.35, 3.95, 43.9] as [number, number, number, number],
+        centroid: [3.48, 43.62] as [number, number],
+        crs: 'EPSG:4326'
+      }
+    };
+    const tableBounds = [
+      [3.02, 43.36],
+      [3.94, 43.89]
+    ] as const;
+
+    expect(resolveOrthographicDatasetBounds(dataset, tableBounds)).toEqual(
+      tableBounds
+    );
   });
 });

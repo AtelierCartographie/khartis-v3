@@ -2,6 +2,7 @@ import type { DatasetResult } from '$lib/features/data-pipeline';
 import type { DuckDBDataset } from '$lib/features/duckdb';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { BBox } from '../types';
+import { shouldUseIdentityProjectionForDatasetCrs } from './dataset-crs';
 
 type OrthographicDatasetRef =
   | Pick<DatasetResult, 'geometry'>
@@ -27,6 +28,15 @@ interface ResolveOrthographicReferenceBboxOptions {
   shouldUseBasemapReference: boolean;
   basemapProjectedBbox?: BBox | null;
   basemapMainlandBbox?: BBox | null;
+}
+
+type OrthographicBounds = [[number, number], [number, number]];
+
+function toOrthographicBounds(bbox: BBox): OrthographicBounds {
+  return [
+    [bbox[0], bbox[1]],
+    [bbox[2], bbox[3]]
+  ];
 }
 
 export function shouldUseBasemapReferenceInOrthographicView(
@@ -79,4 +89,20 @@ export function resolveOrthographicReferenceBbox({
     datasetProjectedBbox ??
     datasetBounds
   );
+}
+
+export function resolveOrthographicDatasetBounds(
+  dataset: OrthographicDatasetRef,
+  tableBounds: OrthographicBounds | null
+): OrthographicBounds | null {
+  const datasetBounds = dataset?.geometry?.bounds ?? null;
+  const datasetOrthographicBounds = datasetBounds
+    ? toOrthographicBounds(datasetBounds)
+    : null;
+
+  if (shouldUseIdentityProjectionForDatasetCrs(dataset?.geometry?.crs)) {
+    return datasetOrthographicBounds;
+  }
+
+  return tableBounds ?? datasetOrthographicBounds;
 }
