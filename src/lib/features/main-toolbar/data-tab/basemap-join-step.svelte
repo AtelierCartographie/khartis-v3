@@ -15,7 +15,10 @@
 
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { DEFAULT_OSM_STYLE } from '$lib/features/map/constants';
-  import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
+  import {
+    basemapCatalogService,
+    rankBasemapsByJoinSynthesis
+  } from '$lib/features/map/services/basemap-catalog.service.svelte';
   import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
   import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
@@ -108,6 +111,13 @@
       basemap: BasemapMetadata;
       score: number;
     }[];
+  });
+
+  const stepTitle = $derived.by(() => {
+    const stepNumber = dataTabStore.getDisplayedStepNumber('basemap');
+    const title = m.basemap_step_title();
+
+    return stepNumber === null ? title : `${stepNumber}. ${title}`;
   });
 
   function hasAvailableBasemap(basemapId: string): boolean {
@@ -730,38 +740,71 @@
           suggestions =
             basemapCatalogService.getSuggestionsByGPSBbox(gpsBounds);
         }
-      } else {
-        suggestions = await basemapCatalogService.getSuggestions(
-          processedDataset,
-          3,
-          geoColumn
-        );
 
-        // Re-rank suggestions using actual join quality when possible
+        const textGeoColumns =
+          processedDataset.geoDetection?.geoColumns?.filter(
+            (column) =>
+              column.type !== 'latitude' && column.type !== 'longitude'
+          ) ?? [];
+        let bestTextSuggestions: BasemapSuggestion[] = [];
+        let bestTextScore = 0;
+
+        for (const column of textGeoColumns) {
+          try {
+            const synthesis = await duckDBOrchestrator.computeJoinSynthesis(
+              datasetIdForOrchestrator,
+              column.columnName
+            );
+            const ranked = rankBasemapsByJoinSynthesis(
+              basemapCatalogService.basemaps,
+              synthesis,
+              3
+            );
+            const topScore = ranked[0]?.matchScore ?? 0;
+
+            if (topScore > bestTextScore) {
+              bestTextScore = topScore;
+              bestTextSuggestions = ranked;
+            }
+          } catch (error) {
+            logger.debug(
+              'Text-based GPS refinement unavailable for basemap suggestions',
+              LogCategory.MAP,
+              error
+            );
+          }
+        }
+
+        if (bestTextScore >= 80 && bestTextSuggestions.length > 0) {
+          suggestions = bestTextSuggestions;
+        }
+      } else {
         if (geoColumn && datasetIdForOrchestrator) {
           try {
             const synthesis = await duckDBOrchestrator.computeJoinSynthesis(
               datasetIdForOrchestrator,
               geoColumn
             );
-            if (synthesis.length > 0) {
-              const scoreMap = new Map(
-                synthesis.map((s) => [s.basemap, s.shareCandidate])
-              );
-              suggestions = suggestions
-                .map((s) => ({
-                  ...s,
-                  matchScore: scoreMap.get(s.file) ?? s.matchScore
-                }))
-                .sort((a, b) => b.matchScore - a.matchScore);
-            }
+            suggestions = rankBasemapsByJoinSynthesis(
+              basemapCatalogService.basemaps,
+              synthesis,
+              3
+            );
           } catch (err) {
             logger.warn(
-              'Join synthesis unavailable, using heuristic ranking',
+              'Join synthesis unavailable, falling back to heuristic ranking',
               LogCategory.MAP,
               err
             );
           }
+        }
+
+        if (suggestions.length === 0) {
+          suggestions = basemapCatalogService.getSuggestions(
+            processedDataset,
+            3,
+            geoColumn
+          );
         }
       }
 
@@ -1084,7 +1127,7 @@
 </script>
 
 <section id="basemap-join-step">
-  <MainToolBarHeader title={m.basemap_step_title()} icon={Earth} />
+  <MainToolBarHeader title={stepTitle} icon={Earth} />
 
   <p class="kh-help">
     {m.basemap_step_description()}
