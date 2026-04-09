@@ -108,6 +108,10 @@ export interface YearFilterClause {
   value: number | string;
 }
 
+interface GeoArrowMetadataOverrides {
+  geometryType?: string;
+}
+
 export function buildYearFilterWhereClause(
   filter: YearFilterClause | undefined
 ): string | null {
@@ -301,7 +305,8 @@ export async function addGeoArrowMetadataFromDuckDB(
   Duck: DuckDBClientForArrow,
   cachedGeoArrowMetadata?: GeoArrowMetadata,
   /** Pre-fetched geometry column info from fetchArrowTableWithGeometry — avoids redundant describe_table() call */
-  prefetchedGeomColumn?: GeomColumnInfo
+  prefetchedGeomColumn?: GeomColumnInfo,
+  overrides?: GeoArrowMetadataOverrides
 ): Promise<Table> {
   try {
     let geomColumn: { column_name: string; column_type: string } | undefined;
@@ -352,52 +357,59 @@ export async function addGeoArrowMetadataFromDuckDB(
 
       geometryCrs = extractGeometryColumnCrs(geomColumn.column_type);
 
-      // Sample geometry types from first 1000 non-null rows instead of full table scan.
-      // DISTINCT on the full table is O(n) and expensive for large datasets.
-      // 1000 rows is sufficient to detect mixed types (Point + MultiPoint, etc.).
-      const geomTypeResult = (await Duck.query(
-        `SELECT DISTINCT geom_type FROM (
-           SELECT ST_GeometryType("${geomColumn.column_name}") as geom_type
-           FROM "${tableName}"
-           WHERE "${geomColumn.column_name}" IS NOT NULL
-           LIMIT 1000
-         )`,
-        { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
-      )) as Array<{ geom_type: string }>;
-
-      const types = geomTypeResult.map((r) => r.geom_type);
-
-      if (types.length === 0) {
-        geometryType = GEOMETRY_COLUMN_TYPE;
-      } else if (types.length === 1) {
-        geometryType = types[0];
+      if (overrides?.geometryType) {
+        geometryType = overrides.geometryType;
       } else {
-        const hasPoint = hasGeometryType(types, 'POINT');
-        const hasMultiPoint = hasGeometryType(types, 'MULTI_POINT');
-        const hasLineString = hasGeometryType(types, 'LINE_STRING');
-        const hasMultiLineString = hasGeometryType(types, 'MULTI_LINE_STRING');
-        const hasPolygon = hasGeometryType(types, 'POLYGON');
-        const hasMultiPolygon = hasGeometryType(types, 'MULTI_POLYGON');
+        // Sample geometry types from first 1000 non-null rows instead of full table scan.
+        // DISTINCT on the full table is O(n) and expensive for large datasets.
+        // 1000 rows is sufficient to detect mixed types (Point + MultiPoint, etc.).
+        const geomTypeResult = (await Duck.query(
+          `SELECT DISTINCT geom_type FROM (
+             SELECT ST_GeometryType("${geomColumn.column_name}") as geom_type
+             FROM "${tableName}"
+             WHERE "${geomColumn.column_name}" IS NOT NULL
+             LIMIT 1000
+           )`,
+          { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
+        )) as Array<{ geom_type: string }>;
 
-        if (hasPolygon || hasMultiPolygon) {
-          geometryType = GEOMETRY_WKT_TYPES.MULTI_POLYGON;
-        } else if (hasLineString || hasMultiLineString) {
-          geometryType = GEOMETRY_WKT_TYPES.MULTI_LINE_STRING;
-        } else if (hasPoint || hasMultiPoint) {
-          geometryType = GEOMETRY_WKT_TYPES.MULTI_POINT;
-        } else {
+        const types = geomTypeResult.map((r) => r.geom_type);
+
+        if (types.length === 0) {
           geometryType = GEOMETRY_COLUMN_TYPE;
-        }
+        } else if (types.length === 1) {
+          geometryType = types[0];
+        } else {
+          const hasPoint = hasGeometryType(types, 'POINT');
+          const hasMultiPoint = hasGeometryType(types, 'MULTI_POINT');
+          const hasLineString = hasGeometryType(types, 'LINE_STRING');
+          const hasMultiLineString = hasGeometryType(
+            types,
+            'MULTI_LINE_STRING'
+          );
+          const hasPolygon = hasGeometryType(types, 'POLYGON');
+          const hasMultiPolygon = hasGeometryType(types, 'MULTI_POLYGON');
 
-        logger.info(
-          'Mixed geometry types detected, normalized to Multi* variant',
-          LogCategory.DUCKDB,
-          {
-            tableName,
-            detectedTypes: types.join(', '),
-            normalizedType: geometryType
+          if (hasPolygon || hasMultiPolygon) {
+            geometryType = GEOMETRY_WKT_TYPES.MULTI_POLYGON;
+          } else if (hasLineString || hasMultiLineString) {
+            geometryType = GEOMETRY_WKT_TYPES.MULTI_LINE_STRING;
+          } else if (hasPoint || hasMultiPoint) {
+            geometryType = GEOMETRY_WKT_TYPES.MULTI_POINT;
+          } else {
+            geometryType = GEOMETRY_COLUMN_TYPE;
           }
-        );
+
+          logger.info(
+            'Mixed geometry types detected, normalized to Multi* variant',
+            LogCategory.DUCKDB,
+            {
+              tableName,
+              detectedTypes: types.join(', '),
+              normalizedType: geometryType
+            }
+          );
+        }
       }
     }
 
@@ -647,6 +659,7 @@ export async function getRepresentativePointArrowTable(
     tableName,
     Duck,
     undefined,
-    geomColumn
+    geomColumn,
+    { geometryType: GEOMETRY_WKT_TYPES.POINT }
   );
 }
