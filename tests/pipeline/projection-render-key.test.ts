@@ -72,4 +72,21 @@ describe('buildProjectionRenderKey', () => {
       buildProjectionRenderKey(withSuggestions)
     );
   });
+
+  it('changes when an override moves from auto to manual with the same projection', () => {
+    const autoState = createProjectionState({
+      selected: 'mercator',
+      overrideActive: true,
+      overrideSource: 'auto'
+    });
+    const manualState = createProjectionState({
+      selected: 'mercator',
+      overrideActive: true,
+      overrideSource: 'manual'
+    });
+
+    expect(buildProjectionRenderKey(autoState)).not.toBe(
+      buildProjectionRenderKey(manualState)
+    );
+  });
 });
