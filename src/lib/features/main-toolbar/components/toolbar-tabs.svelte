@@ -438,7 +438,8 @@
 <div
   class={clsx(
     'w-full flex items-center overflow-hidden',
-    globalState.toolbarState === ToolbarState.Collapsed && 'opacity-0'
+    globalState.toolbarState === ToolbarState.Collapsed &&
+      'toolbar-tabs-collapsed opacity-0'
   )}
 >
   <div
@@ -666,6 +667,10 @@
 </Modal>
 
 <style>
+  .toolbar-tabs-collapsed {
+    pointer-events: none;
+  }
+
   .tabs-scroller {
     display: flex;
     overflow-x: auto;

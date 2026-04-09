@@ -136,9 +136,8 @@
         icon={OpenPanelFilledRight}
         on:click={handleToolbarToggle}
       />
+      <ToolbarTabs />
     {/if}
-
-    <ToolbarTabs />
   </header>
 
   <article
