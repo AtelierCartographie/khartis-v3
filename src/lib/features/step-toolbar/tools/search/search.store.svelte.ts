@@ -1,5 +1,4 @@
 import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
-import { projectStore } from '$lib/features/commons/store/project.store.svelte';
 import {
   visualizationStore,
   type VisualizationConfig
@@ -22,9 +21,8 @@ const ALL_SOURCES_ID = 'all';
 const DEFAULT_STATE: SearchState = {
   searchValue: '',
   selectedSource: ALL_SOURCES_ID,
-  replaceValue: '',
   results: [],
-  currentResultIndex: 0,
+  currentResultIndex: -1,
   isSearching: false,
   caseSensitive: false,
   wholeWord: false,
@@ -34,10 +32,7 @@ const DEFAULT_STATE: SearchState = {
 type SearchActions = {
   setSearchValue: (value: string) => void;
   setSelectedSource: (source: string) => void;
-  setReplaceValue: (value: string) => void;
   performSearch: () => Promise<void>;
-  replaceNext: () => Promise<boolean>;
-  replaceAll: () => Promise<number>;
   goToNextResult: () => void;
   goToPreviousResult: () => void;
   goToResult: (index: number) => void;
@@ -225,39 +220,6 @@ async function performRegexSearch(
   }));
 }
 
-async function persistReplaceTransformations(
-  dataset: DatasetResult,
-  targetColumns: string[],
-  searchValue: string,
-  replaceValue: string,
-  replacedCount: number
-): Promise<void> {
-  if (replacedCount <= 0 || targetColumns.length === 0) {
-    return;
-  }
-
-  datasetsStore.recordTransformation(
-    dataset.id,
-    `Replaced "${searchValue}" with "${replaceValue}" (${replacedCount} occurrences)`
-  );
-
-  if (!dataset.sourceFileId) {
-    return;
-  }
-
-  const timestamp = new Date().toISOString();
-
-  for (const column of targetColumns) {
-    await projectStore.addColumnTransformation(dataset.sourceFileId, {
-      type: 'replace',
-      column,
-      searchValue,
-      newValue: replaceValue,
-      timestamp
-    });
-  }
-}
-
 const TOOLTIP_EXCLUDED_COLUMNS = new Set([
   INTERNAL_COLUMN.ID,
   INTERNAL_COLUMN.GEOM,
@@ -342,9 +304,10 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
 
       if (!query || query.length < MIN_SEARCH_LENGTH || !tableName) {
         s.results = [];
-        s.currentResultIndex = 0;
+        s.currentResultIndex = -1;
         s.isSearching = false;
         clearMapHighlights();
+        mapTooltipStore.unpin();
         return;
       }
 
@@ -396,7 +359,12 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
           }));
         s.currentResultIndex = s.results.length > 0 ? 0 : -1;
 
-        setHighlightsFromResults(s.results, s.currentResultIndex, false);
+        if (s.results.length > 0) {
+          navigateTo(0);
+        } else {
+          clearMapHighlights();
+          mapTooltipStore.unpin();
+        }
       } catch (error) {
         logger.error('Map search failed', LogCategory.UI, {
           tableName,
@@ -407,6 +375,7 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
         s.results = [];
         s.currentResultIndex = -1;
         clearMapHighlights();
+        mapTooltipStore.unpin();
       } finally {
         if (requestId === latestRequestId) {
           s.isSearching = false;
@@ -445,8 +414,9 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
           }, 250);
         } else {
           s.results = [];
-          s.currentResultIndex = 0;
+          s.currentResultIndex = -1;
           clearMapHighlights();
+          mapTooltipStore.unpin();
         }
       },
       setSelectedSource: (source: string) => {
@@ -455,123 +425,6 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
         if (s.searchValue.trim().length >= MIN_SEARCH_LENGTH) {
           void performSearch();
         }
-      },
-      setReplaceValue: (value: string) => {
-        s.replaceValue = value;
-      },
-      replaceNext: async (): Promise<boolean> => {
-        if (!s.results.length) {
-          return false;
-        }
-
-        const searchContext = getSearchContext();
-        const current = s.results[s.currentResultIndex];
-
-        if (!searchContext || !current) {
-          return false;
-        }
-
-        const searchValue = s.searchValue.trim();
-        const replaceValue = s.replaceValue.trim();
-
-        const replaced = await duckDBOrchestrator.replaceInColumn(
-          searchContext.tableName,
-          current.columnName,
-          searchValue,
-          replaceValue
-        );
-
-        if (replaced > 0) {
-          try {
-            await persistReplaceTransformations(
-              searchContext.dataset,
-              [current.columnName],
-              searchValue,
-              replaceValue,
-              replaced
-            );
-          } catch (error) {
-            logger.debug(
-              'Failed to persist search replace transformation',
-              LogCategory.UI,
-              {
-                datasetId: searchContext.dataset.id,
-                column: current.columnName,
-                searchValue,
-                replaceValue,
-                error
-              }
-            );
-          }
-
-          await performSearch();
-          return true;
-        }
-
-        return false;
-      },
-      replaceAll: async (): Promise<number> => {
-        const searchValue = s.searchValue.trim();
-        const replaceValue = s.replaceValue.trim();
-
-        if (!searchValue || !s.results.length) {
-          return 0;
-        }
-
-        const searchContext = getSearchContext();
-        if (!searchContext) {
-          return 0;
-        }
-
-        const targetColumns =
-          s.selectedSource === ALL_SOURCES_ID
-            ? [...new Set(s.results.map((result) => result.columnName))]
-            : [s.selectedSource];
-
-        let replacedCount = 0;
-        const replacedColumns = new Set<string>();
-
-        for (const columnName of targetColumns) {
-          const replacedInColumn = await duckDBOrchestrator.replaceInColumn(
-            searchContext.tableName,
-            columnName,
-            searchValue,
-            replaceValue
-          );
-          replacedCount += replacedInColumn;
-
-          if (replacedInColumn > 0) {
-            replacedColumns.add(columnName);
-          }
-        }
-
-        if (replacedCount > 0) {
-          try {
-            await persistReplaceTransformations(
-              searchContext.dataset,
-              [...replacedColumns],
-              searchValue,
-              replaceValue,
-              replacedCount
-            );
-          } catch (error) {
-            logger.debug(
-              'Failed to persist search replace transformations',
-              LogCategory.UI,
-              {
-                datasetId: searchContext.dataset.id,
-                columns: [...replacedColumns],
-                searchValue,
-                replaceValue,
-                error
-              }
-            );
-          }
-
-          await performSearch();
-        }
-
-        return replacedCount;
       },
       goToNextResult: () => {
         if (!s.results.length) return;
@@ -607,9 +460,8 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
           searchDebounceTimeoutId = null;
         }
         s.searchValue = '';
-        s.replaceValue = '';
         s.results = [];
-        s.currentResultIndex = 0;
+        s.currentResultIndex = -1;
         s.isSearching = false;
         clearMapHighlights();
         mapTooltipStore.unpin();

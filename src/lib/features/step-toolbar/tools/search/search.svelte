@@ -3,29 +3,12 @@
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
   import { m } from '$lib/paraglide/messages';
-  import {
-    Button,
-    Checkbox,
-    Dropdown,
-    Search,
-    TextInput
-  } from 'carbon-components-svelte';
+  import { Checkbox, Dropdown, Search } from 'carbon-components-svelte';
   import { ChevronLeft, ChevronRight } from 'carbon-icons-svelte';
-  import { onDestroy, untrack } from 'svelte';
+  import { onDestroy } from 'svelte';
   import { searchState, searchActions } from './search.store.svelte';
 
   const ALL_SOURCES_ID = 'all';
-
-  // Local state for the replace input — bind:value is more reliable than
-  // on:input with e.target in the Svelte 5 / Carbon interop context.
-  let replaceInputValue = $state('');
-
-  $effect(() => {
-    const storeValue = searchState.replaceValue;
-    untrack(() => {
-      replaceInputValue = storeValue;
-    });
-  });
 
   function handleSearchInput(e: Event) {
     const target = e.target as HTMLInputElement;
@@ -62,25 +45,9 @@
   const hasResults = $derived(results.length > 0);
   const showResults = $derived(searchState.searchValue.trim().length >= 2);
   const noResults = $derived(showResults && !hasResults);
-  const hasExactReplaceCandidate = $derived(
-    results.some(
-      (result) => String(result.value ?? '') === searchState.searchValue.trim()
-    )
+  const currentResult = $derived(
+    currentResultIndex >= 0 ? results[currentResultIndex] : null
   );
-  const canReplace = $derived(
-    hasResults &&
-      searchState.replaceValue.trim().length > 0 &&
-      hasExactReplaceCandidate &&
-      !searchState.useRegex
-  );
-
-  async function handleReplaceNext() {
-    await searchActions.replaceNext();
-  }
-
-  async function handleReplaceAll() {
-    await searchActions.replaceAll();
-  }
 
   onDestroy(() => {
     searchActions.clearSearch();
@@ -157,37 +124,12 @@
         />
       </div>
     </div>
-
-    <div class="replace-section">
-      <TextInput
-        size="sm"
-        labelText={m.search_replace_with()}
-        placeholder={m.search_replace_placeholder()}
-        bind:value={replaceInputValue}
-        on:input={() => searchActions.setReplaceValue(replaceInputValue)}
-      />
-      <p class="helper-text helper-text--info">
-        {m.search_replace_exact_only()}
-      </p>
-      <div class="replace-buttons">
-        <Button
-          size="small"
-          kind="secondary"
-          disabled={!canReplace}
-          on:click={handleReplaceNext}
-        >
-          {m.search_replace()}
-        </Button>
-        <Button
-          size="small"
-          kind="primary"
-          disabled={!canReplace}
-          on:click={handleReplaceAll}
-        >
-          {m.search_replace()} ({results.length})
-        </Button>
+    {#if currentResult}
+      <div class="current-result" aria-live="polite">
+        <p class="current-result__column">{currentResult.columnName}</p>
+        <p class="current-result__value">{currentResult.value}</p>
       </div>
-    </div>
+    {/if}
   {/if}
 </div>
 
@@ -208,19 +150,17 @@
     margin: 0;
   }
 
-  .helper-text--info {
-    font-style: italic;
-  }
-
   .results-navigation {
     display: flex;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: space-between;
     gap: var(--cds-spacing-05);
+    flex-wrap: wrap;
   }
 
   .results-text {
-    flex: 1 0 0;
+    flex: 1 1 10rem;
+    min-width: 0;
     font-family: 'IBM Plex Sans', sans-serif;
     font-size: 0.875rem;
     font-weight: 400;
@@ -239,12 +179,13 @@
     align-items: center;
   }
 
-  .replace-section {
+  .current-result {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-03);
-    padding-top: var(--cds-spacing-03);
-    border-top: 1px solid var(--cds-border-subtle-01);
+    gap: var(--cds-spacing-02);
+    padding: var(--cds-spacing-03);
+    border: 1px solid var(--cds-border-subtle-01);
+    background: var(--cds-layer-01, #f4f4f4);
   }
 
   .search-options {
@@ -253,9 +194,18 @@
     flex-wrap: wrap;
   }
 
-  .replace-buttons {
-    display: flex;
-    gap: var(--cds-spacing-03);
-    justify-content: flex-end;
+  .current-result__column {
+    margin: 0;
+    font-size: 0.75rem;
+    line-height: 1rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+
+  .current-result__value {
+    margin: 0;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    color: var(--cds-text-primary, #161616);
+    word-break: break-word;
   }
 </style>
