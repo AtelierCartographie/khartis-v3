@@ -644,55 +644,8 @@ export function filterValueAttr(
 }
 
 // ---------------------------------------------------------------------------
-// Binary centroid extraction (avoids GeoJSON conversion for label placement)
+// Binary point extraction
 // ---------------------------------------------------------------------------
-
-/**
- * Extract centroid positions from binary polygon data.
- * Computes bounding-box centroid per polygon from the vertex array directly.
- */
-export function polygonCentroids(data: BinaryPolygonData): Float64Array {
-  const centroids = new Float64Array(data.length * 2);
-  const positions = data.positions;
-  const polyIndices = data.polygonIndices;
-
-  for (let i = 0; i < data.length; i++) {
-    const start = polyIndices[i] * 2;
-    const end =
-      (i + 1 < data.length ? polyIndices[i + 1] : positions.length / 2) * 2;
-    // Use mean of coordinates instead of bbox centroid to handle antimeridian-crossing polygons
-    let sumX = 0,
-      sumY = 0,
-      count = 0;
-    for (let j = start; j < end; j += 2) {
-      sumX += positions[j];
-      sumY += positions[j + 1];
-      count++;
-    }
-    centroids[i * 2] = count > 0 ? sumX / count : 0;
-    centroids[i * 2 + 1] = count > 0 ? sumY / count : 0;
-  }
-  return centroids;
-}
-
-/**
- * Extract centroid positions from binary path data (line midpoints).
- */
-export function pathCentroids(data: BinaryPathData): Float64Array {
-  const centroids = new Float64Array(data.length * 2);
-  const positions = data.positions;
-  const startIndices = data.startIndices;
-
-  for (let i = 0; i < data.length; i++) {
-    const start = startIndices[i] * 2;
-    const end =
-      (i + 1 < data.length ? startIndices[i + 1] : positions.length / 2) * 2;
-    const midIdx = start + Math.floor((end - start) / 4) * 2;
-    centroids[i * 2] = positions[midIdx] ?? 0;
-    centroids[i * 2 + 1] = positions[midIdx + 1] ?? 0;
-  }
-  return centroids;
-}
 
 /**
  * Extract positions from binary point data.

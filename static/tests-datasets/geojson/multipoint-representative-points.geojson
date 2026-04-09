@@ -1,0 +1,35 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Cluster West",
+        "value": 10
+      },
+      "geometry": {
+        "type": "MultiPoint",
+        "coordinates": [
+          [-4.6, 48.4],
+          [-2.9, 47.9],
+          [-1.2, 48.5]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Cluster East",
+        "value": 20
+      },
+      "geometry": {
+        "type": "MultiPoint",
+        "coordinates": [
+          [2.1, 48.8],
+          [4.8, 47.6],
+          [6.4, 48.7]
+        ]
+      }
+    }
+  ]
+}

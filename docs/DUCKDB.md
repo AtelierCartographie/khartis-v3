@@ -397,7 +397,30 @@ Résultat : 3 couches dans le basemap :
 
 ### Pipeline lignes
 
-Pour `LINESTRING`/`POINT` : aucune simplification ni extraction de centroids (skip pipeline polygones).
+Pour `LINESTRING` / `MULTILINESTRING` :
+
+- clone de la table source
+- `simplify_and_clean_linestring(..., 0.0)` pour normaliser la géométrie sans simplification visuelle
+- `ST_PointOnSurface()` pour produire une table de points représentatifs
+
+Résultat : 2 couches dans le basemap :
+
+- `LINE` — géométries nettoyées
+- `CENTROID` — points représentatifs (pour symboles / labels)
+
+### Pipeline points
+
+Pour `POINT` / `MULTIPOINT` :
+
+- pas de simplification
+- `ST_PointOnSurface()` pour produire une table de points représentatifs stable par entité
+
+Résultat : 2 couches dans le basemap :
+
+- `POINT` — géométries source
+- `CENTROID` — point représentatif par entité
+
+Dans le rendu thematique, ces tables `CENTROID` sont maintenant le chemin nominal pour `Textes` et `Symboles` sur polygones, lignes et `MultiPoint`.
 
 ### GeoParquet
 
