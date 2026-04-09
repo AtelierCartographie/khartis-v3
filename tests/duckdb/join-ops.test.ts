@@ -328,7 +328,7 @@ describe('join-ops integration with test datasets', () => {
     ]);
   });
 
-  it('exports joined geometry as explicit WKB for rendering', async () => {
+  it('exports joined DuckDB geometry without forcing ST_AsWKB', async () => {
     const issuedSql: string[] = [];
 
     const duckClientWithCapture: DuckDBClientForJoin = {
@@ -366,7 +366,8 @@ describe('join-ops integration with test datasets', () => {
       sql.includes('CREATE OR REPLACE VIEW')
     );
 
-    expect(createViewSql).toContain('ST_AsWKB(gu._geom_value) AS geometry');
+    expect(createViewSql).toContain('SELECT d.*, gu._geom_value AS geometry');
+    expect(createViewSql).not.toContain('ST_AsWKB(gu._geom_value)');
   });
 
   it('keeps native GeoArrow geometry untouched when the basemap table is not a DuckDB GEOMETRY column', async () => {

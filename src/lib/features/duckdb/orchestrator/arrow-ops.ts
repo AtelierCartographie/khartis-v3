@@ -117,10 +117,9 @@ export function buildYearFilterWhereClause(
 }
 
 /**
- * Fetch an Arrow table from DuckDB with geometry converted to WKB.
- * DuckDB WASM < 1.33 returns geometry as an opaque blob — ST_AsWKB() converts
- * it to standard WKB. When DuckDB >= 1.33 returns geoarrow.wkb natively,
- * the ST_AsWKB() call is a no-op.
+ * Fetch an Arrow table from DuckDB, preserving native geometry export.
+ * DuckDB WASM >= 1.33 can export GEOMETRY columns directly through Arrow IPC,
+ * so we only rewrite the geometry column when a reprojection is requested.
  */
 /** Column info returned by fetchArrowTableWithGeometry for downstream reuse. */
 export interface GeomColumnInfo {
@@ -146,16 +145,12 @@ export async function fetchArrowTableWithGeometry(
 
   const normalizedTargetCrs = normalizeCrsName(targetCrs);
 
-  let query: string;
-  if (geomColumn) {
-    const geometryExpression = normalizedTargetCrs
-      ? `ST_AsWKB(ST_Transform("${geomColumn.column_name}", '${escapeSqlLiteral(
-          normalizedTargetCrs
-        )}'))`
-      : `ST_AsWKB("${geomColumn.column_name}")`;
+  let query = `SELECT * FROM "${tableName}"`;
+  if (geomColumn && normalizedTargetCrs) {
+    const geometryExpression = `ST_Transform("${geomColumn.column_name}", '${escapeSqlLiteral(
+      normalizedTargetCrs
+    )}')`;
     query = `SELECT * EXCLUDE ("${geomColumn.column_name}"), ${geometryExpression} AS "${geomColumn.column_name}" FROM "${tableName}"`;
-  } else {
-    query = `SELECT * FROM "${tableName}"`;
   }
 
   if (whereClause) {
@@ -334,10 +329,8 @@ export async function addGeoArrowMetadataFromDuckDB(
       geomColumnIndex !== -1 &&
       table.schema.fields[geomColumnIndex].typeId === Type.Utf8;
 
-    // ST_AsWKB() output is standard WKB binary — label it as geoarrow.wkb
-    // so the layer factory routes it through geoarrow-deck-stream (binary GPU
-    // path) instead of the slow GeoJSON fallback. The data is identical to
-    // ogc.wkb; geoarrow.wkb is the modern GeoArrow spec name.
+    // Normalize DuckDB geometry export to geoarrow.wkb so the layer factory
+    // always stays on the binary geoarrow-deck-stream path.
     const encoding = isGeoJsonString
       ? ArrowExtension.GEOJSON
       : ArrowExtension.GEOARROW_WKB;
