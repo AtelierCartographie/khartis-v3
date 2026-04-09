@@ -1,3 +1,66 @@
+# [1.0.0-staging.5](https://github.com/AtelierCartographie/khartis-v3/compare/v1.0.0-staging.4...v1.0.0-staging.5) (2026-04-09)
+
+### Bug Fixes
+
+- **basemap:** add dotted pattern support for metadata layers ([7e5c516](https://github.com/AtelierCartographie/khartis-v3/commit/7e5c5161a474d40d3e59b36df356a4d60587f7b4))
+- **basemap:** disable layer controls when active basemap does not support them ([aa576da](https://github.com/AtelierCartographie/khartis-v3/commit/aa576dac6c4904a4e35a1b6dec6532132a1dadae))
+- **basemaps:** keep only supported France variants ([#74](https://github.com/AtelierCartographie/khartis-v3/issues/74)) ([0050254](https://github.com/AtelierCartographie/khartis-v3/commit/005025445fbc52f1bfc9fe3de4d6d58d1b34232b))
+- **basemaps:** remove France medium variants and improve simplification fallback ([#74](https://github.com/AtelierCartographie/khartis-v3/issues/74)) ([5944132](https://github.com/AtelierCartographie/khartis-v3/commit/59441328d440179e81911be3a3c6733fd6fa9548))
+- **categorical:** resolve colors from classification labels, not dataset preview ([252176b](https://github.com/AtelierCartographie/khartis-v3/commit/252176b70b725d7500517232719f013d098d164d))
+- **create-project:** validate URL imports on click ([7e1abbc](https://github.com/AtelierCartographie/khartis-v3/commit/7e1abbc51a71b30ec44a3a808f23e800e221840c))
+- **data-tab:** improve basemap suggestions ([ef43ace](https://github.com/AtelierCartographie/khartis-v3/commit/ef43ace8816618d1c223f03bfa8931f4e7376359))
+- **data-tab:** keep geolocation visible in gps workflow ([#73](https://github.com/AtelierCartographie/khartis-v3/issues/73)) ([3d3f0ff](https://github.com/AtelierCartographie/khartis-v3/commit/3d3f0ff3faf2b5db671c659b4fbcb476a1d6409a))
+- **data-tab:** prefer coarse basemaps for gps suggestions ([19193c4](https://github.com/AtelierCartographie/khartis-v3/commit/19193c42285f92ce8db31a188ea5ad543c4aa1e2))
+- **data:** guard originalFile creation with content check ([44acb68](https://github.com/AtelierCartographie/khartis-v3/commit/44acb68768dd0e1574bf6cd431f11856921abb1f))
+- **data:** preserve dataset state across reload and export ([422bfd0](https://github.com/AtelierCartographie/khartis-v3/commit/422bfd086bb97d1549be91c04b53359b0bcb0726))
+- **data:** preserve stable dataset IDs across reload and export ([8995cf7](https://github.com/AtelierCartographie/khartis-v3/commit/8995cf75ae388668762cb0892c47cbb249f49612))
+- **duckdb:** keep representative point metadata as point ([516a5fb](https://github.com/AtelierCartographie/khartis-v3/commit/516a5fbcc1dd3595961d02cb436fd07c575b5faa))
+- **duckdb:** trim geoarrow workarounds ([#81](https://github.com/AtelierCartographie/khartis-v3/issues/81)) ([5447b40](https://github.com/AtelierCartographie/khartis-v3/commit/5447b404970753132970100547fba9c5bdd4aa28))
+- **gps:** remove premature gpsMode check in getGPSBounds ([688a3bf](https://github.com/AtelierCartographie/khartis-v3/commit/688a3bf59667a4c7821b8fd6a9fccebc67ac82ae))
+- **gps:** skip redundant geolocation step for custom headers ([#73](https://github.com/AtelierCartographie/khartis-v3/issues/73)) ([c3fe0f1](https://github.com/AtelierCartographie/khartis-v3/commit/c3fe0f19e6fbefbc72de98443d4c2da30d01fd16))
+- **header:** improve mobile header layout ([cdabbf5](https://github.com/AtelierCartographie/khartis-v3/commit/cdabbf5dc9067f75dac9b59bf0dff88b6db3d5b0))
+- **import:** harden validation join and export paths ([ae4c16c](https://github.com/AtelierCartographie/khartis-v3/commit/ae4c16c204ccfdabff18afd4a5c0fb4520cec0a7))
+- **layers:** use dragHandle zone for layer reordering ([43d617b](https://github.com/AtelierCartographie/khartis-v3/commit/43d617b40da314ec138c988bf67e16858679ca29))
+- **map:** disable annotation/geo overlays in facets grid ([00e891c](https://github.com/AtelierCartographie/khartis-v3/commit/00e891c10f4d0b49f874738db46606d21c5f19ff))
+- **map:** finalize representative point pipeline ([ccec7a8](https://github.com/AtelierCartographie/khartis-v3/commit/ccec7a88c7da797e9507c579efe0b6ab96e519fc)), closes [#85](https://github.com/AtelierCartographie/khartis-v3/issues/85)
+- **map:** harden geometry parsing and layer ordering ([4de6618](https://github.com/AtelierCartographie/khartis-v3/commit/4de661840a6943e09a871bc9e684ff45116aed10))
+- **map:** preserve viewport and layer state on view switches ([f954728](https://github.com/AtelierCartographie/khartis-v3/commit/f9547285dfd117d57bb2294b460d1f7fe9228c35))
+- **map:** refresh projection renders on override changes ([f59f199](https://github.com/AtelierCartographie/khartis-v3/commit/f59f1999c7928ab7fe9178276e9559d837a68477))
+- **map:** restore basemap projection precedence ([8ec6d11](https://github.com/AtelierCartographie/khartis-v3/commit/8ec6d1137296ed621d900eb7018fd24f9a1f461d))
+- **map:** stabilize basemap and binary geometry rendering ([70fc7c0](https://github.com/AtelierCartographie/khartis-v3/commit/70fc7c005908fade8b327ea716904ee7eb4a173e))
+- **persistence:** load serialized source files during autosave ([6fd9431](https://github.com/AtelierCartographie/khartis-v3/commit/6fd94317b4893b5a849d9ff86e12b6e0408c1754))
+- **persistence:** restore persisted geodata and gps joins ([81b1c08](https://github.com/AtelierCartographie/khartis-v3/commit/81b1c08ca94bbc2dd7b103286d12fb7f775aadc3))
+- **persistence:** restore project ui state ([82c7c87](https://github.com/AtelierCartographie/khartis-v3/commit/82c7c87bcf0ee8473d0dec114a89feb8eed2eb38))
+- **projection:** complete issue 75 regression fixes ([042d775](https://github.com/AtelierCartographie/khartis-v3/commit/042d7759a8dd7f6b181ab63b573a8991796098cf))
+- **projections:** preserve projected CRS and reload state ([#75](https://github.com/AtelierCartographie/khartis-v3/issues/75)) ([4262016](https://github.com/AtelierCartographie/khartis-v3/commit/426201671e6b68b326e90b88157b8c941c855dad))
+- **project:** sync GPS mode and columns to source files on save ([fc794f4](https://github.com/AtelierCartographie/khartis-v3/commit/fc794f4a6078bdb43b63d5f83a95dfe3fd109dfd))
+- **search:** add regex search and re-run on case/regex/whole-word toggle ([ba2ec8a](https://github.com/AtelierCartographie/khartis-v3/commit/ba2ec8ac89f1779c2e0cb598c74bfe7c1f46ddd8))
+- **search:** reset panel state on mount ([68d6dad](https://github.com/AtelierCartographie/khartis-v3/commit/68d6daddc4bff28a8e00a90d9918c07ea26f3265))
+- **state:** avoid redundant view-state persistence ([9e4404e](https://github.com/AtelierCartographie/khartis-v3/commit/9e4404eb844ed0c3323c9b3b82b7f43e80e7ffb4))
+- **step-toolbar:** adjust tool popover stacking ([df7fb2a](https://github.com/AtelierCartographie/khartis-v3/commit/df7fb2a3c400bb72ba2c593849bc850af08e56f9))
+- **styling:** stabilize legend and layout tools ([42594ac](https://github.com/AtelierCartographie/khartis-v3/commit/42594ac864cfb2f42449bc579eb4d5f444961daf))
+- **ui:** improve suggestion card CSS layout and categorical SVG preview ([4b7031a](https://github.com/AtelierCartographie/khartis-v3/commit/4b7031aa670ff6ade039d0b2aed6bb39f39af8c3))
+- **visualization:** align text and style defaults ([1e8c36d](https://github.com/AtelierCartographie/khartis-v3/commit/1e8c36d015e3a413b8dfe3a35760624abf039364))
+- **visualization:** harden suggestion scoring ([e456b93](https://github.com/AtelierCartographie/khartis-v3/commit/e456b93ad7c8df3d5bb0010f44f9c6af8bbd45dc))
+- **visualization:** persist palette inversion ([5f2cf01](https://github.com/AtelierCartographie/khartis-v3/commit/5f2cf015499fcc77270fb62f51ab219b2f841065))
+- **visualization:** reset khartis suggestion selection flow ([26c12fe](https://github.com/AtelierCartographie/khartis-v3/commit/26c12fec5180e13b77f347888c2debcb0e455ca9))
+- **viz:** handle both break/color shapes in legend and styling ([0d25064](https://github.com/AtelierCartographie/khartis-v3/commit/0d2506420e2e86e6d7f64735689b545e321ef414))
+- **year-filter:** detect year columns by name and values not just numeric type ([adb61fa](https://github.com/AtelierCartographie/khartis-v3/commit/adb61faf28a232c3726636b39081528deb448966))
+- **year-filter:** use DuckDB for year values when table exists, extract utils ([26a37d5](https://github.com/AtelierCartographie/khartis-v3/commit/26a37d5e5ae8fd79d1653048ed9537a97d6b6033))
+
+### Features
+
+- **ui:** compact basemap catalog and polish app shell ([a3e1fde](https://github.com/AtelierCartographie/khartis-v3/commit/a3e1fdeee4ed57027002cd2dee3093aa82f71529))
+- **viz:** add double proportional symbols and density-aware sizing ([fc4995e](https://github.com/AtelierCartographie/khartis-v3/commit/fc4995e12e6c99e0f82c5a378598448b1df396c2))
+- **viz:** add text/label visualization suggestions with full mapping ([3df99ed](https://github.com/AtelierCartographie/khartis-v3/commit/3df99ed2f5324908e8236c837c49a8d426fe469f))
+- **viz:** apply full preset when switching visualization type ([caaff36](https://github.com/AtelierCartographie/khartis-v3/commit/caaff369aa4b959bc9c0f2c5b91faa09bd7c5b6a))
+
+### Performance Improvements
+
+- **duckdb:** defer arrow metadata and streamline table reads ([20e2389](https://github.com/AtelierCartographie/khartis-v3/commit/20e238939cfcfcc639f95f01a84f3083bee0c381))
+- **map:** load datasets sequentially ([fbc4c9b](https://github.com/AtelierCartographie/khartis-v3/commit/fbc4c9b8bd88f330c4182b4541205bb36642ef2d))
+- **map:** memoize projection override refs ([1a0ab08](https://github.com/AtelierCartographie/khartis-v3/commit/1a0ab0878381eb1f4dc7edc05ff9c5dbd07702ef))
+
 # [1.0.0-staging.4](https://github.com/AtelierCartographie/khartis-v3/compare/v1.0.0-staging.3...v1.0.0-staging.4) (2026-04-02)
 
 ### Bug Fixes
