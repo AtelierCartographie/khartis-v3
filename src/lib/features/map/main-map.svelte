@@ -695,7 +695,11 @@
   }
 </script>
 
-<div class="main-map-container" bind:this={containerRef}>
+<div
+  class="main-map-container"
+  class:resizable={showResizeHandles}
+  bind:this={containerRef}
+>
   <!-- Skeleton loader - overlay above map, hidden via CSS when ready -->
   <div
     class="skeleton-loader"
@@ -778,6 +782,10 @@
     overflow: hidden;
   }
 
+  .main-map-container.resizable {
+    user-select: none;
+  }
+
   .thematic-map-wrapper {
     opacity: 0;
     transition: opacity 0.3s ease-out;
@@ -837,6 +845,7 @@
     position: absolute;
     pointer-events: auto;
     z-index: var(--z-content-raised, 2);
+    touch-action: none;
   }
 
   /* Edge handles — thin bars along each side */

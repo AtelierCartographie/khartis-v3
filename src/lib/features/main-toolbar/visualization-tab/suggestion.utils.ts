@@ -257,7 +257,8 @@ function syncLegendSubtitleAfterSuggestion(
   }
 
   legendActions.updateLegendItem(legendItem.id, {
-    subtitle: nextAutoSubtitle
+    subtitle: nextAutoSubtitle,
+    subtitleMode: 'auto'
   });
 }
 

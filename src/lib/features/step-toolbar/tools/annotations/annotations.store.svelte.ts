@@ -233,7 +233,10 @@ function clampPageElementPosition(
   const roleWidth = PAGE_ELEMENT_WIDTHS[role];
   const minX = margins.left;
   const maxX = Math.max(minX, width - margins.right - roleWidth);
-  const minY = margins.top + 12;
+  const minY =
+    role === ANNOTATION_ROLE.TITLE || role === ANNOTATION_ROLE.SUBTITLE
+      ? 12
+      : margins.top + 12;
   const maxY = Math.max(minY, height - margins.bottom - 4);
 
   if (!isGridEnabled()) {
@@ -412,7 +415,10 @@ function getPageElementPosition(
   const titleX = clamp(margins.left + 4, minX, maxX);
   const rightColumnX = clamp(width - margins.right - roleWidth, minX, maxX);
   const bottomY = height - margins.bottom;
-  const minY = margins.top + 12;
+  const minY =
+    role === ANNOTATION_ROLE.TITLE || role === ANNOTATION_ROLE.SUBTITLE
+      ? 12
+      : margins.top + 12;
   const maxY = Math.max(minY, bottomY - 4);
   const bottomStackIndex = BOTTOM_RIGHT_STACK_ORDER.indexOf(role);
 
@@ -426,9 +432,9 @@ function getPageElementPosition(
 
   switch (role) {
     case ANNOTATION_ROLE.TITLE:
-      return { x: titleX, y: clamp(margins.top + 24, minY, maxY) };
+      return { x: titleX, y: clamp(24, minY, maxY) };
     case ANNOTATION_ROLE.SUBTITLE:
-      return { x: titleX, y: clamp(margins.top + 52, minY, maxY) };
+      return { x: titleX, y: clamp(52, minY, maxY) };
     default:
       return { x: titleX, y: clamp(margins.top + 24, minY, maxY) };
   }
@@ -582,6 +588,7 @@ const { actions, getState } = createToolStore<
         type,
         content: normalizedContent,
         position,
+        positionMode: 'manual',
         style
       };
       s.items = [...s.items, newAnnotation];
@@ -662,6 +669,7 @@ const { actions, getState } = createToolStore<
         type: AnnotationKind.DRAWING,
         content: relativePoints,
         position,
+        positionMode: 'manual',
         style
       };
 
@@ -738,11 +746,12 @@ const { actions, getState } = createToolStore<
                 )
               : original.content;
 
-        const duplicate = {
+        const duplicate: Annotation = {
           ...original,
           id: `${ANNOTATION_ID_PREFIX}${Date.now()}`,
           content: duplicatedContent,
           style: original.style ? { ...original.style } : undefined,
+          positionMode: 'manual',
           position: snapPositionToGrid({
             x: original.position.x + 20,
             y: original.position.y + 20
@@ -755,7 +764,11 @@ const { actions, getState } = createToolStore<
     moveAnnotation: (id: string, newPosition: { x: number; y: number }) => {
       s.items = s.items.map((item) =>
         item.id === id
-          ? { ...item, position: snapPositionToGrid(newPosition) }
+          ? {
+              ...item,
+              position: snapPositionToGrid(newPosition),
+              positionMode: 'manual'
+            }
           : item
       );
     },
@@ -798,10 +811,21 @@ const { actions, getState } = createToolStore<
             basemapSource,
             withPlaceholders
           );
+          const positionMode = item.positionMode ?? 'auto';
+          const position =
+            positionMode === 'manual'
+              ? clampPageElementPosition(item.position, item.role, layout)
+              : clampPageElementPosition(
+                  getPageElementPosition(item.role, layout),
+                  item.role,
+                  layout
+                );
 
           return {
             ...item,
             visible,
+            positionMode,
+            position,
             content:
               withPlaceholders && isEmptyContent(item.content)
                 ? defaultContent
@@ -853,6 +877,7 @@ const { actions, getState } = createToolStore<
           el.role,
           layout
         ),
+        positionMode: 'auto',
         style: { ...s.defaultStyle, ...el.style },
         role: el.role,
         visible
@@ -903,8 +928,16 @@ const { actions, getState } = createToolStore<
           return item;
         }
 
+        if (item.positionMode === 'manual') {
+          return {
+            ...item,
+            position: clampPageElementPosition(item.position, item.role, layout)
+          };
+        }
+
         return {
           ...item,
+          positionMode: item.positionMode ?? 'auto',
           position: clampPageElementPosition(
             getPageElementPosition(item.role, layout),
             item.role,

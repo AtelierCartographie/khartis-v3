@@ -78,7 +78,11 @@
     value: string
   ): void {
     const sanitizedValue = sanitizeTextInput(value);
-    legendActions.updateLegendItem(id, { [field]: sanitizedValue });
+    legendActions.updateLegendItem(id, {
+      [field]: sanitizedValue,
+      ...(field === 'title' ? { titleMode: 'custom' } : {}),
+      ...(field === 'subtitle' ? { subtitleMode: 'custom' } : {})
+    });
   }
 
   function getTextInputValue(
@@ -259,7 +263,7 @@
                 size="sm"
               >
                 {#each LEGEND_FONT_SIZES as s (s)}
-                  <SelectItem value={s} text={String(s)} />
+                  <SelectItem value={String(s)} text={String(s)} />
                 {/each}
               </Select>
             </div>

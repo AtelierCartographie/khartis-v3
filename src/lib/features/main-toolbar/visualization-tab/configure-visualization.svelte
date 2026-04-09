@@ -27,6 +27,10 @@
   } from './components/palette-popover/palette.constants';
   import { getColorBlindnessState } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
   import {
+    getLegendState,
+    legendActions
+  } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
+  import {
     normalizeClassificationMethod,
     resolveComputedClassCount,
     resolveRequestedClassCount
@@ -279,9 +283,47 @@
     updates: Partial<VisualizationConfig['mapping']>
   ) {
     if (selectedViz?.id) {
+      const previousAutoSubtitle =
+        selectedViz.mapping.valueColumn ??
+        selectedViz.mapping.sizeColumn ??
+        selectedViz.mapping.categoryColumn ??
+        selectedViz.mapping.colorColumn ??
+        '';
+
       visualizationStore.updateVisualization(selectedViz.id, {
         mapping: { ...selectedViz.mapping, ...updates }
       });
+
+      const legendItem = getLegendState().items.find(
+        (item) => item.variableId === selectedViz.id
+      );
+      const updatedVisualization = visualizationStore.visualizations.find(
+        (item) => item.id === selectedViz.id
+      );
+      const nextAutoSubtitle =
+        updatedVisualization?.mapping.valueColumn ??
+        updatedVisualization?.mapping.sizeColumn ??
+        updatedVisualization?.mapping.categoryColumn ??
+        updatedVisualization?.mapping.colorColumn ??
+        '';
+      const usesAutomaticSubtitle =
+        legendItem?.subtitleMode === 'auto' ||
+        (!legendItem?.subtitleMode &&
+          (!legendItem?.subtitle ||
+            legendItem.subtitle === previousAutoSubtitle));
+
+      if (
+        legendItem &&
+        updatedVisualization &&
+        usesAutomaticSubtitle &&
+        legendItem.subtitle !== nextAutoSubtitle
+      ) {
+        legendActions.updateLegendItem(legendItem.id, {
+          subtitle: nextAutoSubtitle,
+          subtitleMode: 'auto'
+        });
+      }
+
       if (updates.valueColumn) {
         computeBreaksForVisualization('mapping:valueColumn');
       }

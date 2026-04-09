@@ -62,9 +62,7 @@
   } from '$lib/features/commons/utils/projection.utils';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { getFiltersMap } from '$lib/features/duckdb/orchestrator/state.svelte';
-  import { LegendPosition } from '$lib/features/commons/constants/ui.constants';
   import { annotationsActions } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
-  import { legendActions } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
   import { getColorBlindnessState } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
   import { getColorBlindnessMatrix } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.filter';
   import {
@@ -1061,7 +1059,6 @@
         height: fmtState.height,
         margins
       });
-      legendActions.setPosition(LegendPosition.BOTTOM_CENTER);
       if (mapInit.isMapLoaded && !isSwitchingViewMode) {
         scheduleLayerUpdate('effect:formatLayoutChange');
       }
@@ -1877,10 +1874,11 @@
     {#if showGeoIndicationsOverlay}
       <GeoIndicationsOverlay interactive={isStylingMode} />
     {/if}
-    {#if showAnnotationOverlay}
-      <AnnotationOverlay interactive={isStylingMode} />
-    {/if}
   </div>
+
+  {#if showAnnotationOverlay}
+    <AnnotationOverlay interactive={isStylingMode} />
+  {/if}
 </div>
 
 <style>

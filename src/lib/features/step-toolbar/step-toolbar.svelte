@@ -232,11 +232,11 @@
   }
 
   :global(#khartis-step-toolbar .bx--popover--right-top) {
-    top: -13.5vh !important;
+    top: 0 !important;
   }
 
-  :global(#khartis-tool-popover .bx--popover--right-top) {
-    z-index: -1 !important;
+  :global(#khartis-tool-popover .bx--popover) {
+    z-index: var(--z-toolbar);
   }
 
   :global(#khartis-colorblindness-notification .bx--popover-contents) {

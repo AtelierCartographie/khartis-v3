@@ -18,6 +18,7 @@ export interface Annotation {
   type: AnnotationKind;
   content: unknown;
   position: { x: number; y: number };
+  positionMode?: 'auto' | 'manual';
   style?: AnnotationStyle;
   visible?: boolean;
   role?: PageElementRole;

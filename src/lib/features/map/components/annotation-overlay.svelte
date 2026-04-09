@@ -16,6 +16,7 @@
     annotationsActions,
     getAnnotationsState
   } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
+  import { getFormatState } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
   import { activateStylingToolFromMap } from '../utils/styling-tool-activation.utils';
   import {
     computeDrawingBounds,
@@ -59,9 +60,13 @@
     return SHAPE_VIEW_BOXES[shapeType] ?? DEFAULT_VIEW_BOX;
   }
 
+  type AnnotationInteractionScope = 'map' | 'page';
+
   let overlayElement = $state<HTMLDivElement | null>(null);
+  let mapLayerElement = $state<HTMLDivElement | null>(null);
   let dragState = $state<{
     id: string;
+    scope: AnnotationInteractionScope;
     offsetX: number;
     offsetY: number;
     width: number;
@@ -87,6 +92,25 @@
   let hoverPoint = $state<{ x: number; y: number } | null>(null);
 
   const annotationsState = $derived(getAnnotationsState());
+  const formatState = $derived(getFormatState());
+  const pageMargins = $derived(formatState.margins);
+  const mapLayerStyle = $derived.by(() => {
+    const width = Math.max(
+      1,
+      formatState.width - pageMargins.left - pageMargins.right
+    );
+    const height = Math.max(
+      1,
+      formatState.height - pageMargins.top - pageMargins.bottom
+    );
+
+    return [
+      `left: ${pageMargins.left}px`,
+      `top: ${pageMargins.top}px`,
+      `width: ${width}px`,
+      `height: ${height}px`
+    ].join('; ');
+  });
   const isDrawingMode = $derived(annotationsState.isDrawingMode);
   const drawingPoints = $derived(annotationsState.drawingInProgress);
   const isAnnotationEditing = $derived(
@@ -117,6 +141,32 @@
     return Math.min(max, Math.max(min, value));
   }
 
+  function isPageElement(item: Annotation): boolean {
+    return item.role != null;
+  }
+
+  function getInteractionLayer(
+    scope: AnnotationInteractionScope
+  ): HTMLDivElement | null {
+    return scope === 'page' ? overlayElement : mapLayerElement;
+  }
+
+  function getRenderedPosition(item: Annotation): { x: number; y: number } {
+    if (isPageElement(item)) {
+      return item.position;
+    }
+
+    return {
+      x: item.position.x + pageMargins.left,
+      y: item.position.y + pageMargins.top
+    };
+  }
+
+  function getAnnotationPositionStyle(item: Annotation): string {
+    const { x, y } = getRenderedPosition(item);
+    return `left: ${x}px; top: ${y}px;`;
+  }
+
   function stopDragging(): void {
     window.removeEventListener('pointermove', handlePointerMove);
     window.removeEventListener('pointerup', handlePointerUp);
@@ -140,12 +190,17 @@
   }
 
   function handlePointerMove(event: PointerEvent): void {
-    if (!dragState || !overlayElement) {
+    if (!dragState) {
+      return;
+    }
+
+    const layer = getInteractionLayer(dragState.scope);
+    if (!layer) {
       return;
     }
 
     const scale = globalState.zoom.pageZoomLevel / 100;
-    const rect = overlayElement.getBoundingClientRect();
+    const rect = layer.getBoundingClientRect();
     const maxX = Math.max(0, rect.width / scale - dragState.width);
     const maxY = Math.max(0, rect.height / scale - dragState.height);
 
@@ -166,7 +221,9 @@
       return;
     }
 
-    if (!overlayElement) {
+    const scope = isPageElement(item) ? 'page' : 'map';
+    const layer = getInteractionLayer(scope);
+    if (!layer) {
       return;
     }
 
@@ -176,7 +233,7 @@
     annotationsActions.selectAnnotation(item.id);
 
     const scale = globalState.zoom.pageZoomLevel / 100;
-    const rect = overlayElement.getBoundingClientRect();
+    const rect = layer.getBoundingClientRect();
     const currentTarget = event.currentTarget;
     const targetRect =
       currentTarget instanceof HTMLElement
@@ -184,6 +241,7 @@
         : null;
     dragState = {
       id: item.id,
+      scope,
       offsetX: (event.clientX - rect.left) / scale - item.position.x,
       offsetY: (event.clientY - rect.top) / scale - item.position.y,
       width: targetRect ? targetRect.width / scale : 0,
@@ -338,10 +396,10 @@
     event.preventDefault();
     event.stopPropagation();
 
-    if (!overlayElement) return;
+    if (!mapLayerElement) return;
 
     const scale = globalState.zoom.pageZoomLevel / 100;
-    const rect = overlayElement.getBoundingClientRect();
+    const rect = mapLayerElement.getBoundingClientRect();
     const shapeType = String(item.content ?? '');
     const defaultSize = getShapeDefaultSize(shapeType);
     const shapeW = item.style?.shapeWidth ?? defaultSize.width;
@@ -394,9 +452,9 @@
   }
 
   function getOverlayPoint(event: MouseEvent): { x: number; y: number } | null {
-    if (!overlayElement) return null;
+    if (!mapLayerElement) return null;
     const scale = globalState.zoom.pageZoomLevel / 100;
-    const rect = overlayElement.getBoundingClientRect();
+    const rect = mapLayerElement.getBoundingClientRect();
     return {
       x: (event.clientX - rect.left) / scale,
       y: (event.clientY - rect.top) / scale
@@ -629,56 +687,62 @@
   class:non-interactive={!interactive}
   bind:this={overlayElement}
 >
-  {#if isDrawingMode}
-    <div
-      class="drawing-capture"
-      role="presentation"
-      onclick={handleDrawingClick}
-      ondblclick={handleDrawingDblClick}
-      onmousemove={handleDrawingMouseMove}
-      onmouseleave={() => (hoverPoint = null)}
-    >
-      {#if drawingPoints.length > 0}
-        <svg class="drawing-preview" width="100%" height="100%">
-          {#if drawingPoints.length >= 2}
-            <polyline
-              points={drawingPoints.map((p) => `${p.x},${p.y}`).join(' ')}
-              fill={annotationsState.drawingModeType === DrawingType.ZONE
-                ? 'rgba(0,114,195,0.08)'
-                : 'none'}
-              stroke="var(--cds-interactive-01, #0072c3)"
-              stroke-width="2"
-              stroke-dasharray="5,3"
-              stroke-linejoin="round"
-            />
-          {/if}
-          {#if hoverPoint && drawingPoints.length >= 1}
-            {@const last = drawingPoints[drawingPoints.length - 1]}
-            <line
-              x1={last.x}
-              y1={last.y}
-              x2={hoverPoint.x}
-              y2={hoverPoint.y}
-              stroke="var(--cds-interactive-01, #0072c3)"
-              stroke-width="1"
-              stroke-dasharray="3,3"
-              opacity="0.6"
-            />
-          {/if}
-          {#each drawingPoints as point, i (i)}
-            <circle
-              cx={point.x}
-              cy={point.y}
-              r={i === 0 ? 5 : 3}
-              fill={i === 0 ? 'var(--cds-interactive-01, #0072c3)' : 'white'}
-              stroke="var(--cds-interactive-01, #0072c3)"
-              stroke-width="2"
-            />
-          {/each}
-        </svg>
-      {/if}
-    </div>
-  {/if}
+  <div
+    class="annotation-map-layer"
+    bind:this={mapLayerElement}
+    style={mapLayerStyle}
+  >
+    {#if isDrawingMode}
+      <div
+        class="drawing-capture"
+        role="presentation"
+        onclick={handleDrawingClick}
+        ondblclick={handleDrawingDblClick}
+        onmousemove={handleDrawingMouseMove}
+        onmouseleave={() => (hoverPoint = null)}
+      >
+        {#if drawingPoints.length > 0}
+          <svg class="drawing-preview" width="100%" height="100%">
+            {#if drawingPoints.length >= 2}
+              <polyline
+                points={drawingPoints.map((p) => `${p.x},${p.y}`).join(' ')}
+                fill={annotationsState.drawingModeType === DrawingType.ZONE
+                  ? 'rgba(0,114,195,0.08)'
+                  : 'none'}
+                stroke="var(--cds-interactive-01, #0072c3)"
+                stroke-width="2"
+                stroke-dasharray="5,3"
+                stroke-linejoin="round"
+              />
+            {/if}
+            {#if hoverPoint && drawingPoints.length >= 1}
+              {@const last = drawingPoints[drawingPoints.length - 1]}
+              <line
+                x1={last.x}
+                y1={last.y}
+                x2={hoverPoint.x}
+                y2={hoverPoint.y}
+                stroke="var(--cds-interactive-01, #0072c3)"
+                stroke-width="1"
+                stroke-dasharray="3,3"
+                opacity="0.6"
+              />
+            {/if}
+            {#each drawingPoints as point, i (i)}
+              <circle
+                cx={point.x}
+                cy={point.y}
+                r={i === 0 ? 5 : 3}
+                fill={i === 0 ? 'var(--cds-interactive-01, #0072c3)' : 'white'}
+                stroke="var(--cds-interactive-01, #0072c3)"
+                stroke-width="2"
+              />
+            {/each}
+          </svg>
+        {/if}
+      </div>
+    {/if}
+  </div>
 
   {#each visibleItems as item (item.id)}
     <div
@@ -688,7 +752,8 @@
         selectedId === item.id &&
         item.type !== AnnotationKind.SHAPE}
       class:dragging={dragState?.id === item.id}
-      style="left: {item.position.x}px; top: {item.position.y}px;"
+      data-annotation-role={item.role}
+      style={getAnnotationPositionStyle(item)}
       role="button"
       tabindex="0"
       aria-disabled="false"
@@ -876,6 +941,11 @@
     height: 100%;
     pointer-events: none;
     z-index: var(--z-content-raised);
+  }
+
+  .annotation-map-layer {
+    position: absolute;
+    pointer-events: none;
   }
 
   .drawing-capture {
