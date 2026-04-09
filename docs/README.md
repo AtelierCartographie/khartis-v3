@@ -8,10 +8,11 @@ Khartis est un outil de cartographie thematique open source developpe par Scienc
 
 ### Pour les utilisateurs
 
-| Document                                  | Description                                               |
-| ----------------------------------------- | --------------------------------------------------------- |
-| [Guide utilisateur](GUIDE_UTILISATEUR.md) | Prise en main des 3 etapes, import, visualisation, export |
-| [Glossaire](GLOSSAIRE.md)                 | Definitions des termes cartographiques et techniques      |
+| Document                                        | Description                                               |
+| ----------------------------------------------- | --------------------------------------------------------- |
+| [Guide utilisateur](GUIDE_UTILISATEUR.md)       | Prise en main des 3 etapes, import, visualisation, export |
+| [Cheat sheet exemples](CHEAT_SHEET_EXEMPLES.md) | 5 exemples d'import par URL pour prendre Khartis en main  |
+| [Glossaire](GLOSSAIRE.md)                       | Definitions des termes cartographiques et techniques      |
 
 ### Pour les developpeurs
 
