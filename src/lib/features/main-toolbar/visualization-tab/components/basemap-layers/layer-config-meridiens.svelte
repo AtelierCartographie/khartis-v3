@@ -21,6 +21,8 @@
     color?: string;
     dotted?: boolean;
     dottedPattern?: BasemapDottedPattern;
+    disableDotted?: boolean;
+    dottedDisabledReason?: string;
     thickness?: number;
     opacity?: number;
     onchange?: (updates: Record<string, unknown>) => void;
@@ -52,6 +54,8 @@
     color = '#e0e0e0',
     dotted = true,
     dottedPattern = BasemapDottedPattern.DOTS,
+    disableDotted = false,
+    dottedDisabledReason,
     thickness = 1,
     opacity = 50,
     onchange
@@ -100,6 +104,8 @@
 
   <DottedToggle
     enabled={dotted}
+    disabled={disableDotted}
+    disabledReason={dottedDisabledReason}
     showPattern={true}
     pattern={dottedPattern}
     onenabledchange={handleDottedChange}

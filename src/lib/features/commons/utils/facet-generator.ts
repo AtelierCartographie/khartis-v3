@@ -94,6 +94,9 @@ export async function generateFacetVisualizations(
       ...baseViz,
       id: facetId,
       name: variable,
+      facet: {
+        baseVisualizationId: baseViz.id
+      },
       mapping: {
         ...baseViz.mapping,
         valueColumn: variable

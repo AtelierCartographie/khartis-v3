@@ -2,6 +2,7 @@
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import * as m from '$lib/paraglide/messages';
   import { OverflowMenu, OverflowMenuItem } from 'carbon-components-svelte';
+  import { dragHandle } from 'svelte-dnd-action';
   import {
     ChevronDown,
     ChevronUp,
@@ -40,7 +41,11 @@
 {#if layer.isSubLayer}
   <div class="sublayer-card">
     <div class="color-bar" style:background-color={layer.color}></div>
-    <div class="drag-handle">
+    <div
+      class="drag-handle"
+      use:dragHandle
+      aria-label={`${m.layers_reorder()} ${layer.name}`}
+    >
       <Draggable size={16} />
     </div>
     <div class="sublayer-content">
@@ -70,7 +75,11 @@
   </div>
 {:else}
   <div class="layer-card">
-    <div class="drag-handle">
+    <div
+      class="drag-handle"
+      use:dragHandle
+      aria-label={`${m.layers_reorder()} ${layer.name}`}
+    >
       <Draggable size={16} />
     </div>
     {#if hasChildren}

@@ -97,7 +97,7 @@ export function useExportModal(): UseExportModalReturn {
         case ExportTab.MAP: {
           const dims = RESOLUTION_DIMENSIONS[resolution];
           if (mapFormat === MAP_FORMAT.SVG) {
-            await exportMapAsSvg(fileName);
+            await exportMapAsSvg(fileName, dims.width, dims.height);
           } else {
             await exportMapAsJpg(fileName, dims.width, dims.height);
           }

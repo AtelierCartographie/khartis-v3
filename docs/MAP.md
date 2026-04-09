@@ -24,6 +24,12 @@ flowchart TB
 - **Orthographique** (Deck.gl standalone) : `OrthographicView` + projections d3-geo via geoarrow-deck-stream
 - **MapLibre** (interleaved) : `MapboxOverlay({ interleaved: true })` + web mercator/globe
 
+Regles importantes de projection :
+
+- Les fichiers geographiques importes avec un CRS projete (ex. `EPSG:2154`) restent dans leur CRS source en mode orthographique. Khartis garde alors un rendu `geoIdentity` et persiste le viewport dans les coordonnees du jeu de donnees pour eviter les cartes blanches ou renversees au rechargement.
+- La reprojection vers `EPSG:4326` n'est demandee que lorsqu'un fichier projete doit etre affiche sur un fond tuiles MapLibre.
+- Les suggestions de projection se basent d'abord sur l'emprise reelle des donnees. Pour un jeu exclusivement ponctuel ou un tableau GPS, Khartis utilise donc les bornes calculees depuis les coordonnees plutot que l'emprise du fond monde charge par defaut.
+
 ---
 
 ## WeakMap Cache Architecture
@@ -109,7 +115,19 @@ if (currentMetadata !== lastBasemapMetadataRef) {
 
 La projection n'est recréée que quand l'utilisateur change de fond de carte. Dimensions hardcodées 960×600 pour le centrage orthographique.
 
+Le même principe s'applique aux overrides de projection utilisateur (projection prédéfinie ou code proj4 custom) : la référence `ProjectionLike` doit rester stable tant que la sélection ne change pas. Sinon, les caches aval basés sur `WeakMap` pour `parseSolidPolygonsWithProjection()`, `parsePathsWithProjection()`, `parsePointDataWithProjection()`, les centroides de labels et les reprojections GeoJSON retombent en cold path à chaque simple refresh de layers.
+
+Priorité de rendu : la projection déclarée dans les métadonnées du fond de carte reste la projection par défaut, mais un choix explicite de l'utilisateur dans l'outil `Projection` doit reprendre la main immédiatement sur les couches du fond comme sur les couches thématiques.
+
+Corollaire côté UI : un changement explicite de projection doit aussi invalider le cycle de refresh des layers, même si la surface MapLibre reste dans la même famille (`mercator` ou `globe`). Sinon l'outil peut sembler sélectionné visuellement alors que le rendu reste figé.
+
 Pourquoi c'est critique : `projSolidPolygonCache` etc. utilisent `ProjectionLike` comme clé de Map. Si un nouvel objet projection était créé à chaque render, le cache serait toujours vide.
+
+`computeProjectedBboxForBasemap()` memoize aussi ses resultats par fond + dimensions + bbox dans `geoarrow-stream-bridge.ts`, pour eviter de reprojeter plusieurs fois les memes bornes pendant les changements de vue et de fond de reference.
+
+## Chargement paresseux des fonds
+
+Le GeoParquet principal d'un fond de carte est charge immediatement, mais les couches annexes metadata-driven (limites, graticules, lignes geographiques) sont chargees a la demande selon les couches visibles. Les centroides metadata ne sont toujours pas precharges comme couches visibles autonomes, mais les symboles et textes des couches thematiques s'appuient desormais sur une table de points representatifs derivee par DuckDB.
 
 ---
 
@@ -169,7 +187,9 @@ Fonctions utilitaires dans `geoarrow-stream-bridge.ts` :
 - `pointColorAttr(data, colorLookup)` — RGBA8 par point
 - `pointRadiusAttr(data, radiusLookup)` — rayon par point
 - `filterValueAttr(data, table, column)` — Float32Array pour `DataFilterExtension`
-- `polygonCentroids(data)` / `pathCentroids(data)` / `pointPositions(data)` — centroïdes pour `TextLayer`
+- `pointPositions(data)` — extraction directe des coordonnees pour les couches de points
+
+Les `Textes` et `Symboles` sur polygones, lignes et `MultiPoint` passent maintenant par les tables DuckDB de points representatifs. Les anciens fallback JS `polygonCentroids()` / `pathCentroids()` ont ete retires du rendu thematique.
 
 ---
 
@@ -188,6 +208,8 @@ data.attributes.getFilterValue = filterAttr;
 ```
 
 Pour les données GeoJSON (fallback) : `getFilterValue` est un accesseur de fonction classique.
+
+Le sélecteur d'années côté UI doit, lui, récupérer les valeurs distinctes depuis DuckDB dès qu'une `tableName` existe, avec fallback local seulement en dernier recours. Sinon un preview partiel peut masquer des années valides et désynchroniser l'interface du filtre et le rendu effectif.
 
 ---
 
@@ -252,10 +274,23 @@ Tente dans l'ordre :
 
 9 couches : `background` (terre, mers, lacs, relief) + `foreground` (frontières, rivières, équateur, méridiens, villes).
 
+Les sections `Lacs et rivières` et `Villes` sont maintenant explicitement
+désactivées quand le fond de carte actif ne fournit pas les données
+géométriques nécessaires. Cela évite un faux positif UX où un clic changeait
+des réglages sans aucun effet visuel sur la carte.
+
+Les toggles `Pointillés` des sections `Frontières/limites`, `Équateur` et
+`Méridiens/parallèles` sont aussi désactivés quand le fond actif est piloté par
+des couches metadata (`limit`, `graticule`, `geographic-lines`). Sur ces
+sources, le rendu en tirets n'était pas fiable visuellement ; Khartis préfère
+désormais l'indiquer clairement plutôt que de laisser un contrôle mensonger.
+
 Chaque factory dispatch :
 
 - **GeoArrow natif** → `parseSolidPolygons()` / `parsePaths()` (binaire)
 - **WKB/GeoJSON** → `getCachedBasemapGeoJSON()` → `GeoJsonLayer`
+- Quand un fond catalogue fournit déjà des couches `limit` visibles, la couche `terre`
+  évite de recalculer un `PathLayer` redondant sur le polygone principal.
 
 ---
 

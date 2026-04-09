@@ -61,6 +61,9 @@
   const INSET_WORLD_WINDOW_INSET = 1.5;
   const INSET_LAND_STROKE_MIN = 0.35;
   const INSET_LAND_STROKE_MAX = 0.8;
+  const OVERLAY_EDGE_OFFSET = 16;
+  const OVERLAY_STACK_GAP = 12;
+  const ORIENTATION_PANEL_VERTICAL_PADDING = 12;
 
   type WorldFeatureCollection = FeatureCollection<
     Polygon | MultiPolygon,
@@ -171,6 +174,10 @@
       geoIndicationsState.scale.color.lightness
     )
   );
+  const scaleFontFamily = $derived(
+    `${geoIndicationsState.scale.fontFamily}, sans-serif`
+  );
+  const scaleFontSize = $derived(geoIndicationsState.scale.fontSize);
 
   const orientationColor = $derived(
     hslToHex(
@@ -634,6 +641,42 @@
 
   const insetPanelBackgroundColor = $derived(insetWindowColor);
   const insetPanelBorderColor = $derived(insetWindowColor);
+  const defaultInsetTop = $derived.by(() => {
+    if (!geoIndicationsState.orientation.enabled) {
+      return OVERLAY_EDGE_OFFSET;
+    }
+
+    return (
+      OVERLAY_EDGE_OFFSET +
+      orientationSize +
+      ORIENTATION_PANEL_VERTICAL_PADDING +
+      OVERLAY_STACK_GAP
+    );
+  });
+
+  const insetPanelStyle = $derived.by(() => {
+    const styles = [
+      `background-color: ${insetPanelBackgroundColor}`,
+      `border: 1px solid ${insetPanelBorderColor}`
+    ];
+
+    if (geoIndicationsState.insetMap.dragPosition) {
+      styles.push(
+        `left: ${geoIndicationsState.insetMap.dragPosition.x}px`,
+        `top: ${geoIndicationsState.insetMap.dragPosition.y}px`,
+        'bottom: auto',
+        'right: auto'
+      );
+    } else {
+      styles.push(
+        `top: ${defaultInsetTop}px`,
+        `right: ${OVERLAY_EDGE_OFFSET}px`,
+        'bottom: auto'
+      );
+    }
+
+    return styles.join('; ');
+  });
 
   function clamp(value: number, min: number, max: number): number {
     return Math.min(max, Math.max(min, value));
@@ -715,15 +758,24 @@
 
     const scale = globalState.zoom.pageZoomLevel / 100;
     const rect = overlayElement.getBoundingClientRect();
+    const dragElement =
+      currentDrag === 'scale'
+        ? scaleElement
+        : currentDrag === 'orientation'
+          ? orientationElement
+          : insetMapElement;
+    const dragRect = dragElement?.getBoundingClientRect() ?? null;
+    const dragWidth = dragRect ? dragRect.width / scale : 0;
+    const dragHeight = dragRect ? dragRect.height / scale : 0;
     const x = clamp(
       (event.clientX - rect.left) / scale - dragOffsetX,
       0,
-      Math.max(0, rect.width / scale - 10)
+      Math.max(0, rect.width / scale - dragWidth)
     );
     const y = clamp(
       (event.clientY - rect.top) / scale - dragOffsetY,
       0,
-      Math.max(0, rect.height / scale - 10)
+      Math.max(0, rect.height / scale - dragHeight)
     );
 
     if (currentDrag === 'scale') {
@@ -848,8 +900,8 @@
             y="10"
             text-anchor="middle"
             fill={scaleColor}
-            font-size="11"
-            font-family="Arial, sans-serif"
+            font-size={scaleFontSize}
+            font-family={scaleFontFamily}
           >
             {scaleLabel}
           </text>
@@ -878,8 +930,8 @@
             y="11"
             text-anchor="middle"
             fill={scaleColor}
-            font-size="11"
-            font-family="Arial, sans-serif"
+            font-size={scaleFontSize}
+            font-family={scaleFontFamily}
           >
             {scaleLabel}
           </text>
@@ -974,10 +1026,7 @@
       class="inset-map-panel"
       class:draggable={isGeoIndicationsActive}
       class:dragging={currentDrag === 'inset'}
-      style="background-color: {insetPanelBackgroundColor}; border: 1px solid {insetPanelBorderColor};{geoIndicationsState
-        .insetMap.dragPosition
-        ? ` left: ${geoIndicationsState.insetMap.dragPosition.x}px; top: ${geoIndicationsState.insetMap.dragPosition.y}px; bottom: auto; right: auto;`
-        : ''}"
+      style={insetPanelStyle}
       role="button"
       tabindex="0"
       aria-label={m.tool_geo_indications()}

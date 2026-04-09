@@ -13,6 +13,7 @@
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import { ToolbarState } from '$lib/features/commons/types/global';
   import { GeoColumnDetector } from '$lib/features/commons/utils/geo-detector.utils';
+  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
   import {
     Duck,
@@ -21,7 +22,11 @@
     type GPSValidationResult
   } from '$lib/features/duckdb';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
-  import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
+  import {
+    basemapCatalogService,
+    rankBasemapsByJoinSynthesis
+  } from '$lib/features/map/services/basemap-catalog.service.svelte';
+  import type { BasemapSuggestion } from '$lib/features/map/types/basemap.types';
   import * as m from '$lib/paraglide/messages';
   import { ComboBox, InlineNotification, Link } from 'carbon-components-svelte';
   import ChartTSne from 'carbon-icons-svelte/lib/ChartTSne.svelte';
@@ -380,10 +385,48 @@
 
   async function autoSelectBasemap() {
     if (processedDataset && !dataTabState.basemapJoin.selectedBasemap) {
-      const suggestions = await basemapCatalogService.getSuggestions(
-        processedDataset,
-        1
-      );
+      if (!basemapCatalogService.isLoaded) {
+        await basemapCatalogService.loadCatalog();
+      }
+
+      const geoColumnName =
+        dataTabState.geolocation.linkedVariableName ??
+        processedDataset.analysis.suggestedGeoColumn;
+      const datasetId =
+        selectedDataset?.id ?? selectedDataset?.sourceFileId ?? null;
+      let suggestions: BasemapSuggestion[] = [];
+
+      if (datasetId && geoColumnName) {
+        try {
+          const synthesis = await duckDBOrchestrator.computeJoinSynthesis(
+            datasetId,
+            geoColumnName
+          );
+          suggestions = rankBasemapsByJoinSynthesis(
+            basemapCatalogService.basemaps,
+            synthesis,
+            1
+          );
+        } catch (error) {
+          if (error instanceof Error && error.message === 'Dataset not found') {
+            suggestions = [];
+          } else {
+            logger.warn(
+              'Auto basemap selection fell back to heuristics',
+              LogCategory.MAP,
+              error
+            );
+          }
+        }
+      }
+
+      if (suggestions.length === 0) {
+        suggestions = basemapCatalogService.getSuggestions(
+          processedDataset,
+          1,
+          geoColumnName
+        );
+      }
 
       if (suggestions.length > 0 && suggestions[0].matchScore >= 40) {
         dataTabActions.selectBasemap(suggestions[0].file);
@@ -445,6 +488,13 @@
     }
   });
 
+  const stepTitle = $derived.by(() => {
+    const stepNumber = dataTabStore.getDisplayedStepNumber('geolocate');
+    const title = m.geo_step_title();
+
+    return stepNumber === null ? title : `${stepNumber}. ${title}`;
+  });
+
   $effect(() => {
     const geo = dataTabState.geolocation;
     const tableName = selectedDataset?.tableName;
@@ -477,7 +527,7 @@
 </script>
 
 <section id="geolocation-step">
-  <MainToolBarHeader title={m.geo_step_title()} icon={MapIcon} />
+  <MainToolBarHeader title={stepTitle} icon={MapIcon} />
 
   <p class="kh-help">
     {m.geo_step_description()}

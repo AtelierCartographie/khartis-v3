@@ -56,16 +56,15 @@ import {
   BasemapCitySymbol
 } from '$lib/features/main-toolbar/constants';
 import type { DeckDataRow, GeometryInfo, RGBColor } from '../types';
-import type {
-  StylePreset,
-  StylePresets,
-  PathStylePreset
-} from '../types/basemap.types';
+import type { StylePreset, StylePresets } from '../types/basemap.types';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import { withOpacity, dottedPatternToDashArray } from './layer-helpers';
 
 // Shared extension instance — avoids re-allocation per layer per frame
-const DASH_EXTENSION = new PathStyleExtension({ dash: true });
+const DASH_EXTENSION = new PathStyleExtension({
+  dash: true,
+  highPrecisionDash: true
+});
 
 /**
  * WeakMap cache for basemap GeoJSON conversions — avoids O(n) arrowTableToGeoJSON()
@@ -165,7 +164,10 @@ function toRgbColor(hex: string): RGBColor {
 export function createTerreLayers(
   worldBaseTable: ArrowTable,
   config: TerreLayerConfig,
-  ctx: BasemapLayerContext
+  ctx: BasemapLayerContext,
+  options?: {
+    suppressStroke?: boolean;
+  }
 ): Layer<DeckDataRow>[] {
   if (!config.visible) return [];
 
@@ -188,6 +190,8 @@ export function createTerreLayers(
   // Combined effect: ~2px borders. Cap to 0.5px max to keep borders subtle.
   const effectiveStrokeThickness = Math.min(config.strokeThickness, 0.5);
   const effectiveStrokeOpacity = Math.min(strokeOpacity, 0.4);
+  const shouldRenderStroke =
+    effectiveStrokeThickness > 0 && !options?.suppressStroke;
 
   const layerId = buildLayerId(DeckLayerId.BASEMAP_TERRE, ctx.projectionSuffix);
   const baseProps = getBaseLayerProps(ctx);
@@ -211,11 +215,14 @@ export function createTerreLayers(
     const polyData = ctx.projection
       ? parseSolidPolygonsWithProjection(worldBaseTable, ctx.projection)
       : parseSolidPolygons(worldBaseTable);
-    const outlineData = ctx.projection
-      ? parsePathsWithProjection(worldBaseTable, ctx.projection)
-      : parsePaths(worldBaseTable);
+    const outlineData =
+      config.fillShadow || shouldRenderStroke
+        ? ctx.projection
+          ? parsePathsWithProjection(worldBaseTable, ctx.projection)
+          : parsePaths(worldBaseTable)
+        : null;
 
-    if (config.fillShadow) {
+    if (config.fillShadow && outlineData) {
       layers.push(
         new PathLayer({
           id: `${layerId}-shadow`,
@@ -247,7 +254,7 @@ export function createTerreLayers(
     );
 
     // Stroke layer
-    if (effectiveStrokeThickness > 0) {
+    if (shouldRenderStroke && outlineData) {
       layers.push(
         new PathLayer({
           id: `${layerId}-stroke`,
@@ -437,7 +444,8 @@ export function createFrontieresLayer(
 
   if (
     isLineGeometry(geometryInfo) &&
-    (isGeoArrowLineEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow)
+    (isGeoArrowLineEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow) &&
+    !config.dotted
   ) {
     const lineData = ctx.projection
       ? parsePathsWithProjection(frontieresTable, ctx.projection)
@@ -490,8 +498,9 @@ export function createFrontieresLayer(
   }
 
   if (
-    isGeoArrowPolygonEncoding(geometryInfo) ||
-    geometryInfo.isNativeGeoArrow
+    (isGeoArrowPolygonEncoding(geometryInfo) ||
+      geometryInfo.isNativeGeoArrow) &&
+    !config.dotted
   ) {
     const outlineData = ctx.projection
       ? parsePathsWithProjection(frontieresTable, ctx.projection)
@@ -1156,25 +1165,27 @@ function createMetadataLandLayers(
 
 function createMetadataLimitLayers(
   entries: MetadataLayerEntry[],
-  stylePresets: StylePresets | null,
   ctx: BasemapLayerContext,
-  visible: boolean
+  config: FrontieresLayerConfig
 ): Layer<DeckDataRow>[] {
-  if (!visible) return [];
+  if (!config.visible) return [];
 
   const layers: Layer<DeckDataRow>[] = [];
   const baseProps = getBaseLayerProps(ctx);
+  const strokeColor = toRgbColor(config.color);
+  const opacity = config.opacity / 100;
+  const effectiveThickness = config.dotted
+    ? Math.max(1, config.thickness)
+    : Math.min(config.thickness, 0.5);
+  const effectiveOpacity = config.dotted ? opacity : Math.min(opacity, 0.5);
+  const dashArray = config.dotted
+    ? dottedPatternToDashArray(config.dottedPattern)
+    : [0, 0];
 
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i];
     const geometryInfo = extractGeometryInfo(entry.table);
     if (!geometryInfo) continue;
-
-    const preset = resolveStylePreset(entry.style, stylePresets);
-    const color: [number, number, number, number] =
-      preset && 'color' in preset ? preset.color : [150, 150, 150, 200];
-    const width =
-      preset && 'width' in preset ? (preset as PathStylePreset).width : 0.5;
 
     const layerId = buildLayerId(
       DeckLayerId.BASEMAP_META_LIMIT,
@@ -1183,7 +1194,8 @@ function createMetadataLimitLayers(
 
     if (
       isLineGeometry(geometryInfo) &&
-      (isGeoArrowLineEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow)
+      (isGeoArrowLineEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow) &&
+      !config.dotted
     ) {
       const lineData = ctx.projection
         ? parsePathsWithProjection(entry.table, ctx.projection)
@@ -1192,16 +1204,20 @@ function createMetadataLimitLayers(
         new PathLayer({
           id: layerId,
           ...createPathLayerProps(lineData),
-          getColor: color,
+          getColor: withOpacity(strokeColor, effectiveOpacity),
           widthUnits: 'pixels',
-          getWidth: width,
+          getWidth: effectiveThickness,
           widthMinPixels: 0,
+          extensions: config.dotted ? [DASH_EXTENSION] : [],
+          getDashArray: dashArray,
+          dashJustified: true,
           ...baseProps
         })
       );
     } else if (
-      isGeoArrowPolygonEncoding(geometryInfo) ||
-      geometryInfo.isNativeGeoArrow
+      (isGeoArrowPolygonEncoding(geometryInfo) ||
+        geometryInfo.isNativeGeoArrow) &&
+      !config.dotted
     ) {
       const outlineData = ctx.projection
         ? parsePathsWithProjection(entry.table, ctx.projection)
@@ -1210,10 +1226,13 @@ function createMetadataLimitLayers(
         new PathLayer({
           id: layerId,
           ...createPathLayerProps(outlineData),
-          getColor: color,
+          getColor: withOpacity(strokeColor, effectiveOpacity),
           widthUnits: 'pixels',
-          getWidth: width,
+          getWidth: effectiveThickness,
           widthMinPixels: 0,
+          extensions: config.dotted ? [DASH_EXTENSION] : [],
+          getDashArray: dashArray,
+          dashJustified: true,
           ...baseProps
         })
       );
@@ -1229,10 +1248,13 @@ function createMetadataLimitLayers(
             data: geojson,
             filled: false,
             stroked: true,
-            getLineColor: color,
+            getLineColor: withOpacity(strokeColor, effectiveOpacity),
             lineWidthUnits: 'pixels',
-            getLineWidth: width,
+            getLineWidth: effectiveThickness,
             lineWidthMinPixels: 0,
+            extensions: config.dotted ? [DASH_EXTENSION] : [],
+            getDashArray: dashArray,
+            dashJustified: true,
             ...baseProps
           })
         );
@@ -1245,25 +1267,23 @@ function createMetadataLimitLayers(
 
 function createMetadataGraticuleLayers(
   entries: MetadataLayerEntry[],
-  stylePresets: StylePresets | null,
   ctx: BasemapLayerContext,
-  visible: boolean
+  config: MeridiensLayerConfig
 ): Layer<DeckDataRow>[] {
-  if (!visible) return [];
+  if (!config.visible) return [];
 
   const layers: Layer<DeckDataRow>[] = [];
   const baseProps = getBaseLayerProps(ctx);
+  const strokeColor = toRgbColor(config.color);
+  const opacity = config.opacity / 100;
+  const dashArray = config.dotted
+    ? dottedPatternToDashArray(config.dottedPattern)
+    : [0, 0];
 
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i];
     const geometryInfo = extractGeometryInfo(entry.table);
     if (!geometryInfo) continue;
-
-    const preset = resolveStylePreset(entry.style, stylePresets);
-    const color: [number, number, number, number] =
-      preset && 'color' in preset ? preset.color : [160, 190, 220, 90];
-    const width =
-      preset && 'width' in preset ? (preset as PathStylePreset).width : 0.5;
 
     const layerId = buildLayerId(
       DeckLayerId.BASEMAP_META_GRATICULE,
@@ -1272,7 +1292,8 @@ function createMetadataGraticuleLayers(
 
     if (
       isLineGeometry(geometryInfo) &&
-      (isGeoArrowLineEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow)
+      (isGeoArrowLineEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow) &&
+      !config.dotted
     ) {
       const lineData = ctx.projection
         ? parsePathsWithProjection(entry.table, ctx.projection)
@@ -1281,10 +1302,13 @@ function createMetadataGraticuleLayers(
         new PathLayer({
           id: layerId,
           ...createPathLayerProps(lineData),
-          getColor: color,
+          getColor: withOpacity(strokeColor, opacity),
           widthUnits: 'pixels',
-          getWidth: width,
+          getWidth: config.thickness,
           widthMinPixels: 0,
+          extensions: config.dotted ? [DASH_EXTENSION] : [],
+          getDashArray: dashArray,
+          dashJustified: true,
           ...baseProps
         })
       );
@@ -1300,10 +1324,13 @@ function createMetadataGraticuleLayers(
             data: geojson,
             filled: false,
             stroked: true,
-            getLineColor: color,
+            getLineColor: withOpacity(strokeColor, opacity),
             lineWidthUnits: 'pixels',
-            getLineWidth: width,
+            getLineWidth: config.thickness,
             lineWidthMinPixels: 0.5,
+            extensions: config.dotted ? [DASH_EXTENSION] : [],
+            getDashArray: dashArray,
+            dashJustified: true,
             ...baseProps
           })
         );
@@ -1316,25 +1343,23 @@ function createMetadataGraticuleLayers(
 
 function createMetadataGeoLinesLayers(
   entries: MetadataLayerEntry[],
-  stylePresets: StylePresets | null,
   ctx: BasemapLayerContext,
-  visible: boolean
+  config: EquateurLayerConfig
 ): Layer<DeckDataRow>[] {
-  if (!visible) return [];
+  if (!config.visible) return [];
 
   const layers: Layer<DeckDataRow>[] = [];
   const baseProps = getBaseLayerProps(ctx);
+  const strokeColor = toRgbColor(config.color);
+  const opacity = config.opacity / 100;
+  const dashArray = config.dotted
+    ? dottedPatternToDashArray(config.dottedPattern)
+    : [0, 0];
 
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i];
     const geometryInfo = extractGeometryInfo(entry.table);
     if (!geometryInfo) continue;
-
-    const preset = resolveStylePreset(entry.style, stylePresets);
-    const color: [number, number, number, number] =
-      preset && 'color' in preset ? preset.color : [100, 150, 210, 160];
-    const width =
-      preset && 'width' in preset ? (preset as PathStylePreset).width : 1.0;
 
     const layerId = buildLayerId(
       DeckLayerId.BASEMAP_META_GEO_LINES,
@@ -1343,7 +1368,8 @@ function createMetadataGeoLinesLayers(
 
     if (
       isLineGeometry(geometryInfo) &&
-      (isGeoArrowLineEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow)
+      (isGeoArrowLineEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow) &&
+      !config.dotted
     ) {
       const lineData = ctx.projection
         ? parsePathsWithProjection(entry.table, ctx.projection)
@@ -1352,10 +1378,13 @@ function createMetadataGeoLinesLayers(
         new PathLayer({
           id: layerId,
           ...createPathLayerProps(lineData),
-          getColor: color,
+          getColor: withOpacity(strokeColor, opacity),
           widthUnits: 'pixels',
-          getWidth: width,
+          getWidth: config.thickness,
           widthMinPixels: 1,
+          extensions: config.dotted ? [DASH_EXTENSION] : [],
+          getDashArray: dashArray,
+          dashJustified: true,
           ...baseProps
         })
       );
@@ -1371,10 +1400,13 @@ function createMetadataGeoLinesLayers(
             data: geojson,
             filled: false,
             stroked: true,
-            getLineColor: color,
+            getLineColor: withOpacity(strokeColor, opacity),
             lineWidthUnits: 'pixels',
-            getLineWidth: width,
+            getLineWidth: config.thickness,
             lineWidthMinPixels: 1,
+            extensions: config.dotted ? [DASH_EXTENSION] : [],
+            getDashArray: dashArray,
+            dashJustified: true,
             ...baseProps
           })
         );
@@ -1392,6 +1424,7 @@ function createMetadataGeoLinesLayers(
 export interface BasemapAdditionalData {
   frontieresTable?: ArrowTable;
   metadataLayers?: MetadataLayerEntry[];
+  availableMetadataLayerTypes?: BasemapLayerType[];
   stylePresets?: StylePresets | null;
 }
 
@@ -1411,6 +1444,9 @@ export function createBasemapLayers(
   const foreground: Layer<DeckDataRow>[] = [];
 
   const metaLayers = additionalData?.metadataLayers ?? [];
+  const availableMetadataLayerTypes = new Set(
+    additionalData?.availableMetadataLayerTypes ?? []
+  );
   const stylePresets = additionalData?.stylePresets ?? null;
 
   const metaByType = (type: BasemapLayerType) =>
@@ -1420,9 +1456,18 @@ export function createBasemapLayers(
   const limitEntries = metaByType(BasemapLayerType.LIMIT);
   const graticuleEntries = metaByType(BasemapLayerType.GRATICULE);
   const geoLinesEntries = metaByType(BasemapLayerType.GEOGRAPHIC_LINES);
-  const hasMetadataLimits = limitEntries.length > 0;
-  const hasMetadataGraticule = graticuleEntries.length > 0;
-  const hasMetadataGeoLines = geoLinesEntries.length > 0;
+  const hasMetadataLimits =
+    availableMetadataLayerTypes.has(BasemapLayerType.LIMIT) ||
+    limitEntries.length > 0;
+  const hasMetadataGraticule =
+    availableMetadataLayerTypes.has(BasemapLayerType.GRATICULE) ||
+    graticuleEntries.length > 0;
+  const hasMetadataGeoLines =
+    availableMetadataLayerTypes.has(BasemapLayerType.GEOGRAPHIC_LINES) ||
+    geoLinesEntries.length > 0;
+  const isFrontieresVisible = basemapLayersStore.layers.some(
+    (layer) => layer.id === BASEMAP_LAYER_ID.FRONTIERES && layer.visible
+  );
 
   for (const config of basemapLayersStore.layers) {
     if (!config.visible) continue;
@@ -1442,7 +1487,10 @@ export function createBasemapLayers(
             const terreLayers = createTerreLayers(
               worldBaseTable,
               config as TerreLayerConfig,
-              ctx
+              ctx,
+              {
+                suppressStroke: hasMetadataLimits && isFrontieresVisible
+              }
             );
             background.push(...terreLayers);
           } else if (landEntries.length > 0) {
@@ -1477,9 +1525,8 @@ export function createBasemapLayers(
           if (hasMetadataLimits) {
             const limitLayers = createMetadataLimitLayers(
               limitEntries,
-              stylePresets,
               ctx,
-              config.visible
+              config as FrontieresLayerConfig
             );
             foreground.push(...limitLayers);
           } else if (worldBaseTable) {
@@ -1501,9 +1548,8 @@ export function createBasemapLayers(
           if (hasMetadataGeoLines) {
             const geoLineLayers = createMetadataGeoLinesLayers(
               geoLinesEntries,
-              stylePresets,
               ctx,
-              config.visible
+              config as EquateurLayerConfig
             );
             foreground.push(...geoLineLayers);
           } else {
@@ -1521,9 +1567,8 @@ export function createBasemapLayers(
           if (hasMetadataGraticule) {
             const graticuleLayers = createMetadataGraticuleLayers(
               graticuleEntries,
-              stylePresets,
               ctx,
-              config.visible
+              config as MeridiensLayerConfig
             );
             foreground.push(...graticuleLayers);
           } else {
@@ -1550,9 +1595,6 @@ export function createBasemapLayers(
       );
     }
   }
-
-  // Centroid data from metadata is available for label placement but NOT
-  // rendered as visible dots — labels use computed polygon centroids instead.
 
   return { background, foreground };
 }

@@ -8,11 +8,18 @@ import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte
 import { projectStore } from '$lib/features/commons/store/project.store.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
+import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { DEFAULT_OSM_STYLE } from '$lib/features/map/constants';
-import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
+import {
+  basemapCatalogService,
+  rankBasemapsByJoinSynthesis
+} from '$lib/features/map/services/basemap-catalog.service.svelte';
 import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
 import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
-import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
+import type {
+  BasemapMetadata,
+  BasemapSuggestion
+} from '$lib/features/map/types/basemap.types';
 import {
   createOSMBasemap,
   loadBasemapFromUrl,
@@ -176,11 +183,38 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
       }
 
       const processedDataset = normalizeToProcessedDataset(selectedDataset);
-      const suggestions = basemapCatalogService.getSuggestions(
-        processedDataset,
-        3,
-        dataTabState.geolocation.linkedVariableName
-      );
+      const geoColumnName = dataTabState.geolocation.linkedVariableName;
+      const datasetId =
+        selectedDataset.id ?? selectedDataset.sourceFileId ?? null;
+      let suggestions: BasemapSuggestion[] = [];
+
+      if (datasetId && geoColumnName) {
+        try {
+          const synthesis = await duckDBOrchestrator.computeJoinSynthesis(
+            datasetId,
+            geoColumnName
+          );
+          suggestions = rankBasemapsByJoinSynthesis(
+            basemapCatalogService.basemaps,
+            synthesis,
+            3
+          );
+        } catch (error) {
+          logger.warn(
+            'Enrichment basemap suggestions fell back to heuristics',
+            LogCategory.MAP,
+            error
+          );
+        }
+      }
+
+      if (suggestions.length === 0) {
+        suggestions = basemapCatalogService.getSuggestions(
+          processedDataset,
+          3,
+          geoColumnName
+        );
+      }
 
       if (cancelled) return;
 

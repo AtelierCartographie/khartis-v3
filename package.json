@@ -123,7 +123,7 @@
     "@deck.gl/extensions": "^9.2.11",
     "@deck.gl/layers": "^9.2.11",
     "@deck.gl/mapbox": "^9.2.11",
-    "@duckdb/duckdb-wasm": "1.33.1-dev41.0",
+    "@duckdb/duckdb-wasm": "1.33.1-dev44.0",
     "@inlang/paraglide-js": "^2.15.1",
     "@luma.gl/core": "9.2.6",
     "@math.gl/core": "^4.1.0",

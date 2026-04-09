@@ -35,7 +35,6 @@ const extensionLoadPromises: ExtensionLoadPromises = {
 let localExtensionRepositoryConfigured = false;
 let threadsSupported = false;
 let bundleVariant: 'eh' | 'mvp' = 'eh';
-
 let initPromise: Promise<void> | null = null;
 
 export function isInitialized(): boolean {
@@ -90,12 +89,7 @@ async function configureRuntimeSettings(): Promise<void> {
     `PRAGMA preserve_insertion_order=false;`,
     `PRAGMA enable_object_cache=true;`,
     `PRAGMA temp_directory='/tmp/duckdb';`,
-    `PRAGMA max_temp_directory_size='5GB';`,
-    // Workaround for duckdb/duckdb-wasm#2199: spatial v1.5.x auto-converts
-    // GeoParquet columns to GEOMETRY('ogc:crs84') type which crashes Arrow IPC
-    // serialization (stoi bug in arrow_duck_schema.cpp). Disabling this keeps
-    // geometry as native GeoArrow structs, which geoarrow-deck-stream handles.
-    `SET enable_geoparquet_conversion = false;`
+    `PRAGMA max_temp_directory_size='5GB';`
   ];
 
   if (threadsSupported) {
@@ -143,6 +137,35 @@ async function configureLocalExtensionRepository(): Promise<void> {
       LogCategory.DUCKDB,
       { error }
     );
+  }
+}
+
+async function warmSpatialCoordinateSystems(): Promise<void> {
+  if (!connection) return;
+
+  const startTime = performance.now();
+
+  try {
+    await executeQuery(
+      connection,
+      `CREATE OR REPLACE TEMP TABLE "__khartis_crs_warmup" AS
+         SELECT 1 AS marker
+         FROM duckdb_coordinate_systems()
+         LIMIT 1;
+       DROP TABLE "__khartis_crs_warmup";`,
+      { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
+    );
+
+    logger.debug('Spatial coordinate systems warmed', LogCategory.DUCKDB, {
+      durationMs: (performance.now() - startTime).toFixed(2)
+    });
+  } catch (error) {
+    logger.error(
+      'Failed to warm spatial coordinate systems',
+      LogCategory.DUCKDB,
+      { error }
+    );
+    throw error;
   }
 }
 
@@ -244,6 +267,7 @@ export async function initEngine(): Promise<void> {
 
       await configureRuntimeSettings();
       await configureLocalExtensionRepository();
+      await warmSpatialCoordinateSystems();
       await preloadExtensions();
 
       logger.success('DuckDB initialization complete', LogCategory.DUCKDB, {
