@@ -17,6 +17,30 @@ export interface CategoricalStatistics {
 
 export type ColumnStatistics = NumericStatistics | CategoricalStatistics;
 
+function parseNumericValue(value: unknown): number | null {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (typeof value === 'bigint') {
+    const numericValue = Number(value);
+    return Number.isFinite(numericValue) ? numericValue : null;
+  }
+
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const normalized = trimmed.replace(/[\u00A0\u202F\s]/g, '').replace(',', '.');
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function calculateMedian(numbers: number[]): number {
   const sorted = [...numbers].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
@@ -54,11 +78,42 @@ export function getColumnStatistics(
   const column = dataset.columns.find((c) => c.name === columnName);
   if (!column) return null;
 
+  if (column.stats) {
+    if (column.type === 'number') {
+      const min = parseNumericValue(column.stats.min);
+      const max = parseNumericValue(column.stats.max);
+
+      if (min !== null && max !== null) {
+        return {
+          min,
+          max,
+          mean: column.stats.mean ?? 0,
+          median: column.stats.median ?? 0,
+          count: column.stats.count ?? 0,
+          nullCount: column.stats.nulls ?? 0
+        };
+      }
+    } else {
+      return {
+        uniqueCount: column.stats.uniques ?? 0,
+        count: column.stats.count ?? 0,
+        nullCount: column.stats.nulls ?? 0
+      };
+    }
+  }
+
   const values = getColumnValues(state, datasetId, columnName);
   const nonNullValues = values.filter((v) => v !== null && v !== undefined);
 
   if (column.type === 'number') {
-    const numbers = nonNullValues.map(Number).filter((n) => !isNaN(n));
+    const numbers = nonNullValues
+      .map(parseNumericValue)
+      .filter((value): value is number => value !== null);
+
+    if (numbers.length === 0) {
+      return null;
+    }
+
     return {
       min: Math.min(...numbers),
       max: Math.max(...numbers),

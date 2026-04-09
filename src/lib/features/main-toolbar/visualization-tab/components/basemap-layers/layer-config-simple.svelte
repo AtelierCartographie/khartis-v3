@@ -12,6 +12,8 @@
     showColor?: boolean;
     showDotted?: boolean;
     showThickness?: boolean;
+    disableDotted?: boolean;
+    dottedDisabledReason?: string;
     thicknessLabel?: string;
     thicknessMax?: number;
     color?: string;
@@ -26,6 +28,8 @@
     showColor = true,
     showDotted = false,
     showThickness = false,
+    disableDotted = false,
+    dottedDisabledReason,
     thicknessLabel = m.basemap_config_thickness(),
     thicknessMax = BASEMAP_LAYER_CONFIG.thickness.max,
     color = '#0072c3',
@@ -65,6 +69,8 @@
   {#if showDotted}
     <DottedToggle
       enabled={dotted}
+      disabled={disableDotted}
+      disabledReason={dottedDisabledReason}
       showPattern={true}
       pattern={dottedPattern}
       onenabledchange={handleDottedChange}

@@ -52,6 +52,18 @@ describe('simplification operations', () => {
       'FROM simplify_topology_normalized'
     );
     expect(simplification_macros).toContain('FROM prune_triangles');
+    expect(simplification_macros).toContain(
+      'CREATE OR REPLACE MACRO snap_linestring_normalized'
+    );
+    expect(simplification_macros).toContain(
+      'CREATE OR REPLACE MACRO simplify_linestring_normalized'
+    );
+    expect(simplification_macros).toContain(
+      'CREATE OR REPLACE MACRO simplify_and_clean_linestring'
+    );
+    expect(simplification_macros).toContain(
+      'FROM simplify_linestring_normalized'
+    );
   });
 
   it('clamps simplification rate between 0 and 1', () => {

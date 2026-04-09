@@ -77,7 +77,7 @@
     [2, '2:1']
   ];
 
-  const aspectRatio = $derived(() => {
+  const aspectRatio = $derived.by(() => {
     if (!basemap.bbox || basemap.bbox.length < 4) return null;
     const [minX, minY, maxX, maxY] = basemap.bbox;
     const width = Math.abs(maxX - minX);
@@ -110,8 +110,8 @@
   aria-disabled={disabled}
 >
   <div class="preview-section">
-    {#if aspectRatio()}
-      <span class="ratio-badge">{aspectRatio()}</span>
+    {#if aspectRatio}
+      <span class="ratio-badge">{aspectRatio}</span>
     {/if}
     <Earth size={32} />
     <span class="preview-label">{m.basemap_preview()}</span>
@@ -165,13 +165,13 @@
   .basemap-card {
     display: flex;
     flex-direction: column;
-    width: 184px;
-    min-width: 184px;
+    width: var(--basemap-card-width, 184px);
+    min-width: var(--basemap-card-width, 184px);
     flex-shrink: 0;
     overflow: hidden;
     cursor: pointer;
     box-sizing: border-box;
-    padding-bottom: 16px;
+    padding-bottom: var(--basemap-card-padding-bottom, 16px);
     position: relative;
   }
 
@@ -231,7 +231,7 @@
     align-items: center;
     justify-content: center;
     padding: 1px;
-    min-height: 100px;
+    min-height: var(--basemap-card-preview-min-height, 100px);
     gap: 8px;
     background-color: var(--cds-ui-01, #ffffff);
     position: relative;

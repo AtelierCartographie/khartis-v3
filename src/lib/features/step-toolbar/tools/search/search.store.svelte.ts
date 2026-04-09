@@ -72,6 +72,8 @@ type SearchContext = {
   tableName: string;
 };
 
+type SearchResultItem = SearchState['results'][number];
+
 function getSearchContext(): SearchContext | null {
   const dataset = resolveSearchDataset();
   if (!dataset?.sourceFileId) {
@@ -94,6 +96,133 @@ function getSearchContext(): SearchContext | null {
 
 function getSearchTableName(): string | null {
   return getSearchContext()?.tableName ?? null;
+}
+
+function escapeSqlString(value: string): string {
+  return value.replaceAll("'", "''");
+}
+
+function escapeIdentifier(identifier: string): string {
+  return identifier.replaceAll('"', '""');
+}
+
+function resolveSearchColumns(
+  dataset: DatasetResult,
+  selectedSource: string
+): string[] {
+  const columnNames = dataset.columns
+    .filter(
+      (column) =>
+        column.type !== 'geometry' && column.name !== INTERNAL_COLUMN.ID
+    )
+    .map((column) => column.name);
+
+  if (selectedSource === ALL_SOURCES_ID) {
+    return columnNames;
+  }
+
+  return columnNames.includes(selectedSource) ? [selectedSource] : [];
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function buildSearchMatcher(
+  query: string,
+  options: Pick<SearchState, 'caseSensitive' | 'wholeWord' | 'useRegex'>
+): (value: unknown) => boolean {
+  if (options.useRegex) {
+    try {
+      const regex = new RegExp(query, options.caseSensitive ? '' : 'i');
+      return (value: unknown) => regex.test(String(value ?? ''));
+    } catch {
+      return () => false;
+    }
+  }
+
+  if (options.wholeWord) {
+    const regex = new RegExp(
+      `(?:^|\\b)${escapeRegExp(query)}(?:\\b|$)`,
+      options.caseSensitive ? '' : 'i'
+    );
+    return (value: unknown) => regex.test(String(value ?? ''));
+  }
+
+  if (options.caseSensitive) {
+    return (value: unknown) => String(value ?? '').includes(query);
+  }
+
+  const loweredQuery = query.toLowerCase();
+  return (value: unknown) =>
+    String(value ?? '')
+      .toLowerCase()
+      .includes(loweredQuery);
+}
+
+async function performRegexSearch(
+  searchContext: SearchContext,
+  query: string,
+  options: Pick<SearchState, 'caseSensitive' | 'selectedSource'>
+): Promise<SearchResultItem[]> {
+  try {
+    new RegExp(query, options.caseSensitive ? '' : 'i');
+  } catch {
+    return [];
+  }
+
+  const targetColumns = resolveSearchColumns(
+    searchContext.dataset,
+    options.selectedSource
+  );
+
+  if (targetColumns.length === 0) {
+    return [];
+  }
+
+  const escapedPattern = escapeSqlString(query);
+  const regexFlags = options.caseSensitive ? 'c' : 'i';
+  const escapedTableName = escapeIdentifier(searchContext.tableName);
+
+  const unionQuery = targetColumns
+    .map((columnName) => {
+      const escapedColumnName = escapeIdentifier(columnName);
+      const escapedColumnLabel = escapeSqlString(columnName);
+      return `
+        SELECT
+          "${INTERNAL_COLUMN.ID}" AS row_id,
+          '${escapedColumnLabel}' AS column_name,
+          CAST("${escapedColumnName}" AS VARCHAR) AS column_value,
+          1.0 AS score
+        FROM "${escapedTableName}"
+        WHERE "${escapedColumnName}" IS NOT NULL
+          AND regexp_matches(
+            CAST("${escapedColumnName}" AS VARCHAR),
+            '${escapedPattern}',
+            '${regexFlags}'
+          )
+      `;
+    })
+    .join('\nUNION ALL\n');
+
+  const rows = (await Duck.query(
+    `${unionQuery}
+     ORDER BY row_id, column_name
+     LIMIT 500`,
+    { format: 'array' }
+  )) as Array<{
+    row_id: number;
+    column_name: string;
+    column_value: string;
+    score: number;
+  }>;
+
+  return rows.map((row) => ({
+    rowId: row.row_id,
+    columnName: row.column_name,
+    value: row.column_value,
+    score: row.score
+  }));
 }
 
 async function persistReplaceTransformations(
@@ -201,6 +330,12 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
     let latestRequestId = 0;
     let searchDebounceTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
+    const rerunSearchIfNeeded = () => {
+      if (s.searchValue.trim().length >= MIN_SEARCH_LENGTH) {
+        void performSearch();
+      }
+    };
+
     const performSearch = async (): Promise<void> => {
       const query = s.searchValue.trim();
       const tableName = getSearchTableName();
@@ -217,23 +352,48 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
       const requestId = ++latestRequestId;
 
       try {
+        const matcher = buildSearchMatcher(query, {
+          caseSensitive: s.caseSensitive,
+          wholeWord: s.wholeWord,
+          useRegex: s.useRegex
+        });
+        const searchContext = getSearchContext();
         const columnFilter =
           s.selectedSource === ALL_SOURCES_ID ? undefined : s.selectedSource;
-        const stats = await duckDBOrchestrator.searchInTable(tableName, query, {
-          threshold: 0.85,
-          column: columnFilter
-        });
+        const regexResults =
+          s.useRegex && searchContext
+            ? await performRegexSearch(searchContext, query, {
+                caseSensitive: s.caseSensitive,
+                selectedSource: s.selectedSource
+              })
+            : null;
+
+        const stats =
+          regexResults !== null
+            ? {
+                exactCount: regexResults.length,
+                containsCount: 0,
+                fuzzyCount: 0,
+                totalCount: regexResults.length,
+                results: regexResults
+              }
+            : await duckDBOrchestrator.searchInTable(tableName, query, {
+                threshold: 0.85,
+                column: columnFilter
+              });
 
         if (requestId !== latestRequestId) {
           return;
         }
 
-        s.results = stats.results.map((result) => ({
-          rowId: result.rowId,
-          columnName: result.columnName,
-          value: result.value,
-          score: result.score
-        }));
+        s.results = stats.results
+          .filter((result) => matcher(result.value))
+          .map((result) => ({
+            rowId: result.rowId,
+            columnName: result.columnName,
+            value: result.value,
+            score: result.score
+          }));
         s.currentResultIndex = s.results.length > 0 ? 0 : -1;
 
         setHighlightsFromResults(s.results, s.currentResultIndex, false);
@@ -431,12 +591,15 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
       },
       toggleCaseSensitive: () => {
         s.caseSensitive = !s.caseSensitive;
+        rerunSearchIfNeeded();
       },
       toggleUseRegex: () => {
         s.useRegex = !s.useRegex;
+        rerunSearchIfNeeded();
       },
       toggleWholeWord: () => {
         s.wholeWord = !s.wholeWord;
+        rerunSearchIfNeeded();
       },
       clearSearch: () => {
         if (searchDebounceTimeoutId) {
@@ -452,6 +615,15 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
         mapTooltipStore.unpin();
       }
     };
+  },
+  {
+    key: 'search',
+    serializeFilter: ({
+      results: _results,
+      currentResultIndex: _currentResultIndex,
+      isSearching: _isSearching,
+      ...persisted
+    }) => persisted
   }
 );
 

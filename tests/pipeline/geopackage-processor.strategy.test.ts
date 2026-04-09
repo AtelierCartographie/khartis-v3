@@ -68,17 +68,16 @@ describe('geopackageProcessor', () => {
     ).toBe(false);
   });
 
-  it('processes geopackage through read_geofile and metadata callback', async () => {
+  it('processes geopackage through read_geofile without eager Arrow export', async () => {
     const c = ctx();
     const result = await geopackageProcessor.process(c as never, file());
 
     expect(getFileForDuckDBMock).toHaveBeenCalledTimes(1);
     expect(c.Duck.register_files).toHaveBeenCalledTimes(1);
     expect(c.Duck.read_geofile).toHaveBeenCalledTimes(1);
-    expect(c.callbacks.createArrowTableWithMetadata).toHaveBeenCalledWith(
-      'tbl_gpkg_actual'
-    );
+    expect(c.callbacks.createArrowTableWithMetadata).not.toHaveBeenCalled();
     expect(result.tableName).toBe('tbl_gpkg_actual');
     expect(result.rowCount).toBe(5);
+    expect(result.arrowTableWithMetadata).toBeUndefined();
   });
 });

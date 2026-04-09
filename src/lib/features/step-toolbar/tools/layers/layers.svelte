@@ -154,8 +154,11 @@
     deleteLayerId = null;
   }
 
-  function handleReorderLayers(fromIndex: number, toIndex: number): void {
-    const type = parentLayers[0]?.type ?? 'visualization';
+  function handleReorderLayers(
+    type: 'visualization' | 'geographic',
+    fromIndex: number,
+    toIndex: number
+  ): void {
     store.reorderLayers(type, fromIndex, toIndex);
   }
 

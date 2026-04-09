@@ -40,13 +40,39 @@ export interface DatasetCallbacks {
   prefetchArrowMetadata: (dataset: DuckDBDataset) => Promise<void> | undefined;
 }
 
+function scheduleArrowMetadataPrefetch(
+  dataset: DuckDBDataset,
+  callbacks: DatasetCallbacks
+): void {
+  const prefetchPromise = callbacks.prefetchArrowMetadata(dataset);
+  if (!prefetchPromise) {
+    return;
+  }
+
+  void prefetchPromise.catch((error) => {
+    logger.debug(
+      'Arrow metadata prefetch failed after dataset registration',
+      LogCategory.DUCKDB,
+      {
+        datasetId: dataset.id,
+        tableName: dataset.tableName,
+        error
+      }
+    );
+  });
+}
+
 export async function registerExistingTable(
   tableName: string,
   sourceFileId: string,
   fileName: string,
   Duck: DuckDBClientForDataset,
   callbacks: DatasetCallbacks,
-  options?: { geoDetection?: GeoDetectionResult }
+  options?: {
+    geoDetection?: GeoDetectionResult;
+    preserveExistingJoinState?: boolean;
+    preferredDatasetId?: string;
+  }
 ): Promise<DuckDBDataset | null> {
   const start = performance.now();
 
@@ -69,9 +95,14 @@ export async function registerExistingTable(
     const columns = await Duck.analyse(tableName);
     const rowCount = await callbacks.getRowCount(tableName);
     const existingDataset = findDatasetByIdOrSourceFile(sourceFileId);
+    const preservedDataset =
+      options?.preserveExistingJoinState === false ? null : existingDataset;
 
     const dataset: DuckDBDataset = {
-      id: existingDataset?.id ?? crypto.randomUUID(),
+      id:
+        options?.preferredDatasetId ??
+        existingDataset?.id ??
+        crypto.randomUUID(),
       tableName,
       sourceFileId,
       name: fileName,
@@ -81,7 +112,11 @@ export async function registerExistingTable(
         processedAt: new Date(),
         fileType: FileType.CSV
       },
-      geoDetection: options?.geoDetection
+      geoDetection: options?.geoDetection,
+      joinedBasemap: preservedDataset?.joinedBasemap,
+      geoColumn: preservedDataset?.geoColumn,
+      gpsMode: preservedDataset?.gpsMode,
+      gpsColumns: preservedDataset?.gpsColumns
     };
 
     updateDatasets((datasets) => {
@@ -93,7 +128,7 @@ export async function registerExistingTable(
       datasets.set(dataset.id, dataset);
     });
 
-    await callbacks.prefetchArrowMetadata(dataset);
+    scheduleArrowMetadataPrefetch(dataset, callbacks);
 
     bumpDatasetsVersion();
     setCurrentTableName(tableName);
@@ -172,7 +207,7 @@ export async function processFile(
     updateDatasets((datasets) => {
       datasets.set(result.id, result);
     });
-    await callbacks.prefetchArrowMetadata(result);
+    scheduleArrowMetadataPrefetch(result, callbacks);
     bumpDatasetsVersion();
     setCurrentTableName(result.tableName);
 

@@ -53,13 +53,16 @@
     );
   }
 
+  const DEFAULT_DRAWING_STROKE_COLOR = '#000000';
+  const DEFAULT_DRAWING_FILL_COLOR = '#ffffff';
+
   let drawingType = $state<DrawingType>(DrawingType.LINE);
-  let strokeColor = $state('#ffffff');
+  let strokeColor = $state(DEFAULT_DRAWING_STROKE_COLOR);
   let hue = $state(0);
   let saturation = $state(0);
-  let lightness = $state(100);
+  let lightness = $state(0);
 
-  let fillColor = $state('#ffffff');
+  let fillColor = $state(DEFAULT_DRAWING_FILL_COLOR);
   let fillHue = $state(0);
   let fillSaturation = $state(0);
   let fillLightness = $state(100);
@@ -79,7 +82,12 @@
         hue = c.hue ?? 0;
         saturation = c.saturation ?? 0;
         lightness = c.lightness ?? 0;
-        const cv = createColorValue('#ffffff', hue, saturation, lightness);
+        const cv = createColorValue(
+          DEFAULT_DRAWING_STROKE_COLOR,
+          hue,
+          saturation,
+          lightness
+        );
         strokeColor = cv.hex;
       }
     }
@@ -96,7 +104,7 @@
         fillSaturation = c.saturation ?? 0;
         fillLightness = c.lightness ?? 100;
         const cv = createColorValue(
-          '#ffffff',
+          DEFAULT_DRAWING_FILL_COLOR,
           fillHue,
           fillSaturation,
           fillLightness

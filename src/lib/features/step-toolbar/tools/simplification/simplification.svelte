@@ -17,7 +17,11 @@
   import { Undo, Earth, LicenseGlobal } from 'carbon-icons-svelte';
   import type { SimplificationResult } from './simplification.types';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
-  import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
+  import {
+    basemapService,
+    getAvailableBasemapSimplificationLevels,
+    getPreferredBasemapSimplificationLevel
+  } from '$lib/features/map/services/basemap.service.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import {
     simplificationActions,
@@ -34,9 +38,59 @@
   const isImportedBasemap = $derived(
     basemapService.currentBasemap?.metadata.isCustom === true
   );
-  const hasBasemapVariants = $derived(
-    !!basemapService.currentBasemap?.metadata.simplification_level
-  );
+  const availableBasemapLevels = $derived.by(() => {
+    const metadata = basemapService.currentMetadata;
+    if (!metadata) {
+      return [];
+    }
+
+    return getAvailableBasemapSimplificationLevels(
+      basemapService.availableBasemaps,
+      metadata.file
+    );
+  });
+  const resolvedBasemapLevel = $derived.by(() => {
+    const metadata = basemapService.currentMetadata;
+    if (!metadata) {
+      return simplState.level;
+    }
+
+    return (
+      getPreferredBasemapSimplificationLevel(
+        basemapService.availableBasemaps,
+        metadata,
+        simplState.level
+      ) ?? simplState.level
+    );
+  });
+  const noVariantLevelLabel = $derived.by(() => {
+    const explicitLevel = availableBasemapLevels[0];
+    if (explicitLevel) {
+      return getLevelLabel(explicitLevel);
+    }
+
+    const currentLevel = basemapService.currentMetadata?.simplification_level;
+    switch (currentLevel) {
+      case SimplificationLevel.Low:
+        return getLevelLabel(SimplificationLevel.Low);
+      case SimplificationLevel.Medium:
+        return getLevelLabel(SimplificationLevel.Medium);
+      case SimplificationLevel.High:
+        return getLevelLabel(SimplificationLevel.High);
+      default:
+        return null;
+    }
+  });
+  const noVariantSubtitle = $derived.by(() => {
+    if (noVariantLevelLabel) {
+      return m.simplification_no_variants_active_level({
+        level: noVariantLevelLabel
+      });
+    }
+
+    return m.simplification_no_variants_fallback();
+  });
+  const hasBasemapVariants = $derived(availableBasemapLevels.length > 1);
   const isBasemapSourceBlocked = $derived(
     simplState.source === SimplificationSource.Basemap &&
       (isOsmBasemapActive || (!isImportedBasemap && !hasBasemapVariants))
@@ -96,6 +150,18 @@
     if (!applyTimeoutId) return;
     clearTimeout(applyTimeoutId);
     applyTimeoutId = null;
+  }
+
+  function getLevelLabel(level: SimplificationLevel): string {
+    switch (level) {
+      case SimplificationLevel.Low:
+        return m.simplification_level_low();
+      case SimplificationLevel.High:
+        return m.simplification_level_high();
+      case SimplificationLevel.Medium:
+      default:
+        return m.simplification_level_medium();
+    }
   }
 
   async function applySimplificationNow(trigger: string): Promise<void> {
@@ -175,6 +241,7 @@
         kind="info"
         lowContrast
         title={m.simplification_no_variants()}
+        subtitle={noVariantSubtitle}
       />
     {/if}
 
@@ -204,33 +271,25 @@
           />
         </div>
       </div>
-    {:else}
+    {:else if !isOsmBasemapActive && hasBasemapVariants}
       <div>
         <div class="form-label">{m.simplification_level_label()}</div>
         <RadioButtonGroup
           orientation="horizontal"
-          selected={simplState.level}
+          selected={resolvedBasemapLevel}
           on:change={(e) => {
             if (isBasemapSourceBlocked) return;
             store.setLevel((e as CustomEvent).detail as SimplificationLevel);
             scheduleSimplificationApply('level-change');
           }}
         >
-          <RadioButton
-            value={SimplificationLevel.Low}
-            labelText={m.simplification_level_low()}
-            disabled={isBasemapSourceBlocked}
-          />
-          <RadioButton
-            value={SimplificationLevel.Medium}
-            labelText={m.simplification_level_medium()}
-            disabled={isBasemapSourceBlocked}
-          />
-          <RadioButton
-            value={SimplificationLevel.High}
-            labelText={m.simplification_level_high()}
-            disabled={isBasemapSourceBlocked}
-          />
+          {#each availableBasemapLevels as level (level)}
+            <RadioButton
+              value={level}
+              labelText={getLevelLabel(level)}
+              disabled={isBasemapSourceBlocked}
+            />
+          {/each}
         </RadioButtonGroup>
       </div>
     {/if}

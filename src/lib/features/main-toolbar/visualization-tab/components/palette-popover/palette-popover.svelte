@@ -23,6 +23,7 @@
     open: boolean;
     triggerElement?: HTMLElement;
     currentColors: string[];
+    currentInverted?: boolean;
     selectedPaletteId?: string;
     paletteType?: PaletteType;
     colorBlindFilter?: boolean;
@@ -40,6 +41,7 @@
     open = $bindable(false),
     triggerElement,
     currentColors,
+    currentInverted = false,
     selectedPaletteId = 'blues',
     paletteType = $bindable<PaletteType>(PALETTE_TYPE.SEQUENTIAL),
     colorBlindFilter = $bindable(false),
@@ -98,7 +100,7 @@
   function initDraft() {
     draftPaletteId = selectedPaletteId;
     draftColors = [...currentColors];
-    draftInverted = false;
+    draftInverted = currentInverted;
     draftType = paletteType;
     draftColorBlindFilter = colorBlindFilter;
     draftPatternParams = undefined;

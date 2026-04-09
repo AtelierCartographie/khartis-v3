@@ -14,6 +14,7 @@ import {
 } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
 import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
 import { m } from '$lib/paraglide/messages';
+import { getLocale, type Locale } from '$lib/paraglide/runtime.js';
 import type {
   Annotation,
   AnnotationsState,
@@ -71,6 +72,7 @@ type AnnotationsActions = {
     withPlaceholders?: boolean;
     visible?: boolean;
   }) => void;
+  refreshPageElementPlaceholders: () => void;
   setPageElementsVisibility: (visible: boolean) => void;
   redistributePageElements: (layout?: {
     width?: number;
@@ -143,6 +145,44 @@ type MapCanvasLayout = {
   width: number;
   height: number;
 };
+
+type PageElementMessageBundle = {
+  annotations_placeholder_title: () => string;
+  annotations_placeholder_subtitle: () => string;
+  annotations_placeholder_source: () => string;
+  annotations_placeholder_note: () => string;
+  basemap_source: () => string;
+  map_export_signature: () => string;
+};
+
+const PAGE_ELEMENT_MESSAGE_BUNDLES = {
+  en: {
+    annotations_placeholder_title: () =>
+      String(m.annotations_placeholder_title({}, { locale: 'en' })),
+    annotations_placeholder_subtitle: () =>
+      String(m.annotations_placeholder_subtitle({}, { locale: 'en' })),
+    annotations_placeholder_source: () =>
+      String(m.annotations_placeholder_source({}, { locale: 'en' })),
+    annotations_placeholder_note: () =>
+      String(m.annotations_placeholder_note({}, { locale: 'en' })),
+    basemap_source: () => String(m.basemap_source({}, { locale: 'en' })),
+    map_export_signature: () =>
+      String(m.map_export_signature({}, { locale: 'en' }))
+  },
+  fr: {
+    annotations_placeholder_title: () =>
+      String(m.annotations_placeholder_title({}, { locale: 'fr' })),
+    annotations_placeholder_subtitle: () =>
+      String(m.annotations_placeholder_subtitle({}, { locale: 'fr' })),
+    annotations_placeholder_source: () =>
+      String(m.annotations_placeholder_source({}, { locale: 'fr' })),
+    annotations_placeholder_note: () =>
+      String(m.annotations_placeholder_note({}, { locale: 'fr' })),
+    basemap_source: () => String(m.basemap_source({}, { locale: 'fr' })),
+    map_export_signature: () =>
+      String(m.map_export_signature({}, { locale: 'fr' }))
+  }
+} satisfies Record<'en' | 'fr', PageElementMessageBundle>;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -427,6 +467,58 @@ function getPageElementDefaultContent(
     default:
       return '';
   }
+}
+
+function resolvePageElementMessageBundle(
+  locale: Locale
+): PageElementMessageBundle {
+  return locale === 'en'
+    ? PAGE_ELEMENT_MESSAGE_BUNDLES.en
+    : PAGE_ELEMENT_MESSAGE_BUNDLES.fr;
+}
+
+function getPageElementDefaultContentForLocale(
+  role: PageElementRole,
+  basemapSource: string,
+  withPlaceholders: boolean,
+  locale: Locale
+): string {
+  const bundle = resolvePageElementMessageBundle(locale);
+
+  switch (role) {
+    case ANNOTATION_ROLE.TITLE:
+      return withPlaceholders ? bundle.annotations_placeholder_title() : '';
+    case ANNOTATION_ROLE.SUBTITLE:
+      return withPlaceholders ? bundle.annotations_placeholder_subtitle() : '';
+    case ANNOTATION_ROLE.SOURCE:
+      return withPlaceholders ? bundle.annotations_placeholder_source() : '';
+    case ANNOTATION_ROLE.BASEMAP_SOURCE:
+      return basemapSource || (withPlaceholders ? bundle.basemap_source() : '');
+    case ANNOTATION_ROLE.SIGNATURE:
+      return withPlaceholders ? bundle.annotations_placeholder_note() : '';
+    case ANNOTATION_ROLE.CREDIT:
+      return bundle.map_export_signature();
+    default:
+      return '';
+  }
+}
+
+function getKnownPageElementDefaultContents(
+  role: PageElementRole,
+  basemapSource: string,
+  withPlaceholders: boolean
+): Set<string> {
+  return new Set(
+    (Object.keys(PAGE_ELEMENT_MESSAGE_BUNDLES) as Array<'en' | 'fr'>).map(
+      (locale) =>
+        getPageElementDefaultContentForLocale(
+          role,
+          basemapSource,
+          withPlaceholders,
+          locale
+        )
+    )
+  );
 }
 
 function normalizeOpacityPercent(
@@ -768,6 +860,37 @@ const { actions, getState } = createToolStore<
 
       s.items = [...s.items, ...newAnnotations];
     },
+    refreshPageElementPlaceholders: () => {
+      const basemapSource =
+        basemapService.currentBasemap?.metadata?.source || '';
+      const locale = getLocale();
+
+      s.items = s.items.map((item) => {
+        if (!isPageElementRole(item.role) || typeof item.content !== 'string') {
+          return item;
+        }
+
+        const knownContents = getKnownPageElementDefaultContents(
+          item.role,
+          basemapSource,
+          true
+        );
+
+        if (!knownContents.has(item.content)) {
+          return item;
+        }
+
+        return {
+          ...item,
+          content: getPageElementDefaultContentForLocale(
+            item.role,
+            basemapSource,
+            true,
+            locale
+          )
+        };
+      });
+    },
     setPageElementsVisibility: (visible: boolean) => {
       s.items = s.items.map((item) =>
         isPageElementRole(item.role) ? { ...item, visible } : item
@@ -791,7 +914,16 @@ const { actions, getState } = createToolStore<
       });
     }
   }),
-  { key: 'annotations' }
+  {
+    key: 'annotations',
+    serializeFilter: ({
+      selectedId: _selectedId,
+      textContent: _textContent,
+      isDrawingMode: _isDrawingMode,
+      drawingInProgress: _drawingInProgress,
+      ...persisted
+    }) => persisted
+  }
 );
 
 export const annotationsActions = actions;

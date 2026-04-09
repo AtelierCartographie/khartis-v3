@@ -157,9 +157,13 @@ describe('processBasemapImport', () => {
     expect(result.geometryTable).toBe(arrowTable);
   });
 
-  it('skips the polygon cleanup pipeline for line imports', async () => {
+  it('prepares imported line geofiles with a dedicated cleanup pipeline and representative points', async () => {
     mocks.queryMock
       .mockResolvedValueOnce([{ geom_type: 'LINESTRING' }])
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined)
       .mockResolvedValueOnce([{ minX: 0, minY: 0, maxX: 1, maxY: 1 }]);
     mocks.analyseMock.mockResolvedValueOnce([{ name: 'geom', count: 5 }]);
 
@@ -168,20 +172,69 @@ describe('processBasemapImport', () => {
     );
 
     const issuedSql = mocks.queryMock.mock.calls.map(([sql]) => String(sql));
-    expect(issuedSql.some((sql) => sql.includes('simplify_and_clean'))).toBe(
-      false
-    );
+    expect(
+      issuedSql.some((sql) =>
+        sql.includes(
+          "FROM simplify_and_clean_linestring('custom_basemap_1700000000000__raw', 'geom', 0.0)"
+        )
+      )
+    ).toBe(true);
     expect(issuedSql.some((sql) => sql.includes('extract_innerlines'))).toBe(
       false
     );
-    expect(
-      issuedSql.some((sql) => sql.includes('ST_MaximumInscribedCircle'))
-    ).toBe(false);
+    expect(issuedSql.some((sql) => sql.includes('ST_PointOnSurface'))).toBe(
+      true
+    );
     expect(result.basemap.layers).toEqual([
       {
         title_fr: 'custom_basemap_1700000000000',
         title_en: 'custom_basemap_1700000000000',
         type: BasemapLayerType.LINE,
+        style: null
+      },
+      {
+        title_fr: 'Centroïdes',
+        title_en: 'Centroids',
+        type: BasemapLayerType.CENTROID,
+        file: getBasemapCentroidsTableName('custom_basemap_1700000000000'),
+        style: null
+      }
+    ]);
+  });
+
+  it('prepares imported multipoint geofiles with representative points only', async () => {
+    mocks.queryMock
+      .mockResolvedValueOnce([{ geom_type: 'MULTIPOINT' }])
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce([{ minX: 2, minY: 3, maxX: 4, maxY: 5 }]);
+    mocks.analyseMock.mockResolvedValueOnce([{ name: 'geom', count: 6 }]);
+
+    const result = await processBasemapImport(
+      new File(['{}'], 'sites.geojson', { type: 'application/geo+json' })
+    );
+
+    const issuedSql = mocks.queryMock.mock.calls.map(([sql]) => String(sql));
+    expect(
+      issuedSql.some((sql) => sql.includes('simplify_and_clean_linestring'))
+    ).toBe(false);
+    expect(issuedSql.some((sql) => sql.includes('extract_innerlines'))).toBe(
+      false
+    );
+    expect(issuedSql.some((sql) => sql.includes('ST_PointOnSurface'))).toBe(
+      true
+    );
+    expect(result.basemap.layers).toEqual([
+      {
+        title_fr: 'custom_basemap_1700000000000',
+        title_en: 'custom_basemap_1700000000000',
+        type: BasemapLayerType.POINT,
+        style: null
+      },
+      {
+        title_fr: 'Centroïdes',
+        title_en: 'Centroids',
+        type: BasemapLayerType.CENTROID,
+        file: getBasemapCentroidsTableName('custom_basemap_1700000000000'),
         style: null
       }
     ]);
