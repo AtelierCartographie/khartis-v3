@@ -296,6 +296,7 @@ export interface UploadedFilePayload {
   name: string;
   size: number;
   type: string;
+  datasetId?: string;
   content?: string | ArrayBuffer;
   parsedData?: unknown;
   fileType?: string;

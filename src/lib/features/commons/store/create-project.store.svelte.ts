@@ -19,6 +19,7 @@ import {
   extractUrlsFromInput,
   FileType,
   getFilenameFromUrl,
+  getShapefileBaseName,
   groupShapefiles,
   isShapefileComponent,
   isValidUrl
@@ -615,7 +616,17 @@ export const createProjectActions = {
       }
 
       if (downloadedFiles.length === 1) {
-        await this.processSingleFile(downloadedFiles[0], DataSourceType.URL);
+        const [downloadedFile] = downloadedFiles;
+
+        if (isShapefileComponent(downloadedFile.name)) {
+          await this.processShapefileGroup(
+            getShapefileBaseName(downloadedFile.name),
+            [downloadedFile],
+            DataSourceType.URL
+          );
+        } else {
+          await this.processSingleFile(downloadedFile, DataSourceType.URL);
+        }
       } else {
         await this.processFiles(downloadedFiles, DataSourceType.URL);
       }

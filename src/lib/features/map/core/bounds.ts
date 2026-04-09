@@ -11,6 +11,44 @@ const MIN_LAT = -90;
 const MAX_LAT = 90;
 const MIN_LNG = -180;
 const MAX_LNG = 180;
+const BOUNDS_READ_WARNING_LIMIT = 3;
+const boundsReadWarnings = new Map<string, number>();
+
+function warnBoundsReadFailureOnce(
+  geoColumn: string,
+  rowIndex: number,
+  error: unknown
+): void {
+  const warningCount = boundsReadWarnings.get(geoColumn) ?? 0;
+
+  if (warningCount >= BOUNDS_READ_WARNING_LIMIT) {
+    return;
+  }
+
+  boundsReadWarnings.set(geoColumn, warningCount + 1);
+  logger.warn(
+    'Failed to read geometry row during bounds calculation',
+    LogCategory.MAP,
+    {
+      geoColumn,
+      rowIndex,
+      error: error instanceof Error ? error.message : String(error)
+    }
+  );
+}
+
+function safeReadGeometryValue(
+  geomVector: NonNullable<ReturnType<ArrowTable['getChild']>>,
+  geoColumn: string,
+  rowIndex: number
+): unknown {
+  try {
+    return geomVector.get(rowIndex);
+  } catch (error) {
+    warnBoundsReadFailureOnce(geoColumn, rowIndex, error);
+    return null;
+  }
+}
 
 /**
  * Bounds cache — avoids repeated O(n) geometry scans + GeoJSON parsing
@@ -150,7 +188,7 @@ function calculateBoundsFromGeometryData(
   const step = Math.max(1, Math.floor(jsTable.numRows / maxSamples));
 
   if (jsTable.numRows > 0) {
-    const firstGeom = geomVector.get(0);
+    const firstGeom = safeReadGeometryValue(geomVector, geoColumn, 0);
     logger.debug('First geometry value in column', LogCategory.MAP, {
       geoColumn,
       valueType: typeof firstGeom,
@@ -165,7 +203,7 @@ function calculateBoundsFromGeometryData(
   }
 
   for (let i = 0; i < jsTable.numRows; i += step) {
-    const geom = geomVector.get(i);
+    const geom = safeReadGeometryValue(geomVector, geoColumn, i);
 
     const parsed = parseGeoJsonGeometry(geom);
     if (parsed) {
@@ -230,6 +268,15 @@ export function calculateBoundsFromGeoArrow(
   if (cached !== undefined) return cached;
 
   try {
+    if (jsTable.numRows === 0) {
+      logger.debug(
+        'Skipping bounds calculation for empty Arrow table',
+        LogCategory.MAP
+      );
+      boundsCache.set(jsTable, null);
+      return null;
+    }
+
     logger.debug('Starting bounds calculation', LogCategory.MAP, {
       numRows: jsTable.numRows,
       numCols: jsTable.schema.fields.length,

@@ -20,7 +20,11 @@ export function clickOutside(
         }
       }
 
-      node.dispatchEvent(new CustomEvent(CUSTOM_EVENT.OUTSIDE_CLICK));
+      node.dispatchEvent(
+        new CustomEvent(CUSTOM_EVENT.OUTSIDE_CLICK, {
+          detail: { originalEvent: event }
+        })
+      );
     }
   }
 

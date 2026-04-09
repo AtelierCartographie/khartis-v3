@@ -15,6 +15,7 @@
   let activeTabIndex = $state(0);
   let isCodeView = $state(false);
   let crsCode = $state('');
+  let catalogueQuery = $state('');
 
   const items = PROJECTIONS.map((p) => ({
     id: p.id,
@@ -72,6 +73,19 @@
 
     projectionActions.setSelected(selectedProjectionId);
   }
+
+  function shouldFilterProjectionItem(
+    item: { text?: string; projectionId?: string },
+    value: string
+  ): boolean {
+    if (!value) return true;
+
+    const query = value.trim().toLowerCase();
+    return (
+      item.text?.toLowerCase().includes(query) === true ||
+      item.projectionId?.toLowerCase().includes(query) === true
+    );
+  }
 </script>
 
 <div id="khartis-projection-other-tool">
@@ -88,8 +102,10 @@
       <div class="catalog-search">
         <ComboBox
           items={items}
+          bind:value={catalogueQuery}
           size="sm"
           placeholder={otherSearchPlaceholder}
+          shouldFilterItem={shouldFilterProjectionItem}
           on:select={handleCatalogueSelect}
         />
       </div>

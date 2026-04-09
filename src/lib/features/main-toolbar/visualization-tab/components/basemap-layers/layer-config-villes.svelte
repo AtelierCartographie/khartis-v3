@@ -42,7 +42,7 @@
   let {
     category = BasemapCityCategory.CAPITALS,
     symbol = BasemapCitySymbol.POINT,
-    color = '#161616',
+    color = '#525252',
     size = 8,
     opacity = 100,
     onchange

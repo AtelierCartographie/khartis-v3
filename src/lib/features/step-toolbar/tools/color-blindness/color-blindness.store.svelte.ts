@@ -13,22 +13,26 @@ const { actions, getState } = createToolStore<
     toggleEnabled: () => void;
     setSimulationType: (type: ColorBlindnessType) => void;
   }
->(DEFAULT_STATE, (s) => ({
-  toggleEnabled: () => {
-    const nextEnabled = !s.enabled;
-    s.enabled = nextEnabled;
+>(
+  DEFAULT_STATE,
+  (s) => ({
+    toggleEnabled: () => {
+      const nextEnabled = !s.enabled;
+      s.enabled = nextEnabled;
 
-    if (!nextEnabled) {
-      s.simulationType = ColorBlindnessType.NONE;
-    } else if (s.simulationType === ColorBlindnessType.NONE) {
-      s.simulationType = ColorBlindnessType.DEUTERANOPIA;
+      if (!nextEnabled) {
+        s.simulationType = ColorBlindnessType.NONE;
+      } else if (s.simulationType === ColorBlindnessType.NONE) {
+        s.simulationType = ColorBlindnessType.DEUTERANOPIA;
+      }
+    },
+    setSimulationType: (type: ColorBlindnessType) => {
+      s.simulationType = type;
+      s.enabled = type !== ColorBlindnessType.NONE;
     }
-  },
-  setSimulationType: (type: ColorBlindnessType) => {
-    s.simulationType = type;
-    s.enabled = type !== ColorBlindnessType.NONE;
-  }
-}));
+  }),
+  { key: 'colorBlindness' }
+);
 
 export const colorBlindnessActions = actions;
 export const getColorBlindnessState = getState;

@@ -1,6 +1,8 @@
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import type { DuckDBDataset } from '$lib/features/duckdb';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
+import type { BBox } from '../types';
+import { shouldUseIdentityProjectionForDatasetCrs } from './dataset-crs';
 
 type OrthographicDatasetRef =
   | Pick<DatasetResult, 'geometry'>
@@ -18,6 +20,23 @@ interface ResolveOrthographicReferenceTableOptions {
   basemapTable?: ArrowTable | null;
   /** When set, a reference basemap is explicitly selected (overlay) */
   referenceBasemapId?: string | null;
+}
+
+interface ResolveOrthographicReferenceBboxOptions {
+  datasetBounds: BBox | null;
+  datasetProjectedBbox?: BBox | null;
+  shouldUseBasemapReference: boolean;
+  basemapProjectedBbox?: BBox | null;
+  basemapMainlandBbox?: BBox | null;
+}
+
+type OrthographicBounds = [[number, number], [number, number]];
+
+function toOrthographicBounds(bbox: BBox): OrthographicBounds {
+  return [
+    [bbox[0], bbox[1]],
+    [bbox[2], bbox[3]]
+  ];
 }
 
 export function shouldUseBasemapReferenceInOrthographicView(
@@ -51,4 +70,39 @@ export function resolveOrthographicReferenceTable({
   }
 
   return datasetTable;
+}
+
+export function resolveOrthographicReferenceBbox({
+  datasetBounds,
+  datasetProjectedBbox = null,
+  shouldUseBasemapReference,
+  basemapProjectedBbox = null,
+  basemapMainlandBbox = null
+}: ResolveOrthographicReferenceBboxOptions): BBox | null {
+  if (!shouldUseBasemapReference) {
+    return datasetProjectedBbox ?? datasetBounds;
+  }
+
+  return (
+    basemapProjectedBbox ??
+    basemapMainlandBbox ??
+    datasetProjectedBbox ??
+    datasetBounds
+  );
+}
+
+export function resolveOrthographicDatasetBounds(
+  dataset: OrthographicDatasetRef,
+  tableBounds: OrthographicBounds | null
+): OrthographicBounds | null {
+  const datasetBounds = dataset?.geometry?.bounds ?? null;
+  const datasetOrthographicBounds = datasetBounds
+    ? toOrthographicBounds(datasetBounds)
+    : null;
+
+  if (shouldUseIdentityProjectionForDatasetCrs(dataset?.geometry?.crs)) {
+    return datasetOrthographicBounds;
+  }
+
+  return tableBounds ?? datasetOrthographicBounds;
 }

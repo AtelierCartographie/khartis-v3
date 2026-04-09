@@ -1,4 +1,8 @@
 import { SearchSource } from '../constants';
+import {
+  SavePriority,
+  persistenceRegistry
+} from '$lib/features/project-management/core/persistence-registry';
 
 export enum DataToolType {
   None = 'none',
@@ -7,7 +11,7 @@ export enum DataToolType {
   Calculator = 'calculator'
 }
 
-interface DataToolsState {
+export interface DataToolsState {
   activeTool: DataToolType;
   searchQuery: string;
   searchSource: SearchSource | string;
@@ -29,36 +33,63 @@ const state = $state<DataToolsState>({
   calculatorError: null
 });
 
+function notifyPersistence(
+  priority: keyof typeof SavePriority = 'DEBOUNCED'
+): void {
+  persistenceRegistry.notifyChange('dataTools', SavePriority[priority]);
+}
+
+function restoreFromSerialized(data: unknown): void {
+  const restored = data as Partial<DataToolsState> | undefined;
+
+  state.activeTool = restored?.activeTool ?? DataToolType.None;
+  state.searchQuery = restored?.searchQuery ?? '';
+  state.searchSource = restored?.searchSource ?? SearchSource.ALL;
+  state.replaceValue = restored?.replaceValue ?? '';
+  state.calculatorName = restored?.calculatorName ?? '';
+  state.calculatorFormula = restored?.calculatorFormula ?? '';
+  state.calculatorTestResult = null;
+  state.calculatorError = null;
+}
+
 function openTool(tool: DataToolType) {
   state.activeTool = tool;
+  notifyPersistence('IMMEDIATE');
 }
 
 function closeTool() {
   state.activeTool = DataToolType.None;
+  notifyPersistence('IMMEDIATE');
 }
 
 function toggleTool(tool: DataToolType) {
   state.activeTool = state.activeTool === tool ? DataToolType.None : tool;
+  notifyPersistence('IMMEDIATE');
 }
 
 function setSearchQuery(query: string) {
   state.searchQuery = query;
+  notifyPersistence('IMMEDIATE');
 }
 
 function setSearchSource(source: SearchSource | string) {
   state.searchSource = source;
+  notifyPersistence('IMMEDIATE');
 }
 
 function setReplaceValue(value: string) {
   state.replaceValue = value;
+  notifyPersistence('IMMEDIATE');
 }
 
 function setCalculatorName(name: string) {
   state.calculatorName = name;
+  notifyPersistence('IMMEDIATE');
 }
 
 function setCalculatorFormula(formula: string) {
   state.calculatorFormula = formula;
+  notifyPersistence('IMMEDIATE');
 }
 
 function setCalculatorTestResult(result: unknown) {
@@ -76,18 +107,18 @@ function resetCalculator() {
   state.calculatorFormula = '';
   state.calculatorTestResult = null;
   state.calculatorError = null;
+  notifyPersistence('IMMEDIATE');
 }
 
 function resetSearch() {
   state.searchQuery = '';
   state.searchSource = SearchSource.ALL;
   state.replaceValue = '';
+  notifyPersistence('IMMEDIATE');
 }
 
 function reset() {
-  state.activeTool = DataToolType.None;
-  resetSearch();
-  resetCalculator();
+  restoreFromSerialized(undefined);
 }
 
 export const dataToolsStore = {
@@ -132,3 +163,18 @@ export const dataToolsStore = {
   resetSearch,
   reset
 };
+
+persistenceRegistry.register({
+  key: 'dataTools',
+  serialize: () => ({
+    activeTool: state.activeTool,
+    searchQuery: state.searchQuery,
+    searchSource: state.searchSource,
+    replaceValue: state.replaceValue,
+    calculatorName: state.calculatorName,
+    calculatorFormula: state.calculatorFormula
+  }),
+  deserialize: (data: unknown) => restoreFromSerialized(data),
+  reset,
+  priority: 'debounced'
+});

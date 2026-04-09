@@ -225,7 +225,10 @@ describe('validateGPSColumns', () => {
 });
 
 describe('detectGPSColumns', () => {
-  function createAnalysisResult(name: string): AnalysisResult {
+  function createAnalysisResult(
+    name: string,
+    overrides: Partial<AnalysisResult> = {}
+  ): AnalysisResult {
     return {
       name,
       type_simple: DuckDBSimplifiedType.NUMERIC,
@@ -244,7 +247,8 @@ describe('detectGPSColumns', () => {
       geo_type: null,
       geo_confidence: null,
       numeric_type: null,
-      decimal_info: null
+      decimal_info: null,
+      ...overrides
     };
   }
 
@@ -290,6 +294,53 @@ describe('detectGPSColumns', () => {
     expect(result?.lon).toBe('x_coord');
   });
 
+  it('detects custom GPS column names from geo detection metadata', () => {
+    const columns: AnalysisResult[] = [
+      createAnalysisResult('Latitude_WGS84'),
+      createAnalysisResult('Longitude_WGS84'),
+      createAnalysisResult('site_name')
+    ];
+
+    const result = detectGPSColumns(columns, {
+      hasGeoColumns: true,
+      geoColumns: [
+        {
+          index: 0,
+          columnName: 'Latitude_WGS84',
+          type: 'latitude',
+          confidence: 0.99
+        },
+        {
+          index: 1,
+          columnName: 'Longitude_WGS84',
+          type: 'longitude',
+          confidence: 0.98
+        }
+      ],
+      warnings: []
+    });
+
+    expect(result).toEqual({
+      lat: 'Latitude_WGS84',
+      lon: 'Longitude_WGS84'
+    });
+  });
+
+  it('detects flexible tokenized GPS column names without exact legacy patterns', () => {
+    const columns: AnalysisResult[] = [
+      createAnalysisResult('Latitude_WGS84'),
+      createAnalysisResult('Longitude_WGS84'),
+      createAnalysisResult('name')
+    ];
+
+    const result = detectGPSColumns(columns);
+
+    expect(result).toEqual({
+      lat: 'Latitude_WGS84',
+      lon: 'Longitude_WGS84'
+    });
+  });
+
   it('returns null when no GPS columns are found', () => {
     const columns: AnalysisResult[] = [
       createAnalysisResult('country'),
@@ -326,6 +377,26 @@ describe('detectGPSColumns', () => {
     expect(result).not.toBeNull();
     expect(result?.lat).toBe('LAT');
     expect(result?.lon).toBe('LON');
+  });
+
+  it('detects GPS columns from semantic analysis markers', () => {
+    const columns: AnalysisResult[] = [
+      createAnalysisResult('coord_y', {
+        semioType: 'geolat',
+        semioScore: 0.96
+      }),
+      createAnalysisResult('coord_x', {
+        semioType: 'geolon',
+        semioScore: 0.95
+      })
+    ];
+
+    const result = detectGPSColumns(columns);
+
+    expect(result).toEqual({
+      lat: 'coord_y',
+      lon: 'coord_x'
+    });
   });
 });
 
@@ -410,8 +481,31 @@ describe('getGPSBounds', () => {
     } as DuckDBDataset;
   }
 
-  it('returns null when dataset is not in GPS mode', async () => {
-    const dataset = createDataset({ gpsMode: false });
+  it('returns computed bounds when GPS columns are detectable before GPS mode is finalized', async () => {
+    const dataset = createDataset({
+      gpsMode: false,
+      gpsColumns: undefined,
+      columns: [
+        { name: 'Lat', type_simple: 'numeric' },
+        { name: 'Long', type_simple: 'numeric' }
+      ] as never
+    });
+    const Duck = { query: vi.fn() };
+
+    await getGPSBounds(dataset, Duck);
+    expect(Duck.query).toHaveBeenCalledTimes(1);
+    expect(Duck.query).toHaveBeenCalledWith(
+      expect.stringContaining('TRY_CAST("Long" AS DOUBLE)'),
+      { format: 'array' }
+    );
+  });
+
+  it('returns null when dataset has no GPS mode and no detectable GPS columns', async () => {
+    const dataset = createDataset({
+      gpsMode: false,
+      gpsColumns: undefined,
+      columns: [{ name: 'City', type_simple: 'string' }] as never
+    });
     const Duck = { query: vi.fn() };
 
     const bounds = await getGPSBounds(dataset, Duck);

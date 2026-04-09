@@ -70,6 +70,9 @@ export interface DeckMapProps {
   forcedVisualizationIds?: string[];
   onMoveSync?: (state: FacetSyncViewState) => void;
   syncViewState?: FacetSyncViewState | null;
+  showLegendOverlay?: boolean;
+  showGeoIndicationsOverlay?: boolean;
+  showAnnotationOverlay?: boolean;
 }
 
 export interface YearFilterInfo {
@@ -88,6 +91,7 @@ export interface LayerContext {
   strokeWidth: number;
   strokeOpacity: number;
   statistics: { min: number; max: number };
+  secondaryStatistics?: { min: number; max: number };
   categoryColorMap: Map<string, RGBColor> | null;
   highlightedRowIds?: Set<number>;
   /** Scalar version counter for highlight changes (avoids Set ref in updateTriggers) */
@@ -97,6 +101,10 @@ export interface LayerContext {
   beforeId?: string;
   /** Pre-computed geometry info — avoids redundant extractGeometryInfo() calls */
   geometryInfo?: GeometryInfo;
+  /** DuckDB-derived point geometry used for symbols/text on non-point features */
+  representativePointTable?: ArrowTable;
+  /** Geometry info for the representative point table */
+  representativePointGeometryInfo?: GeometryInfo;
   /** GPU-side year filter via DataFilterExtension — avoids data prop changes on year switch */
   yearFilter?: YearFilterInfo;
   /** Custom CRS projection (from proj4d3) for thematic layer binary parsing */

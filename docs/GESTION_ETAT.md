@@ -115,6 +115,13 @@ Config visualisations. Types : `choropleth`, `proportional`, `categorical`, `biv
 
 Zoom page, pan, etape active. `globalActions` est un export separe contenant les mutations coordonnees (ex: `setNavigationState`, `setToolbarState`).
 
+Les choix de navigation et de zoom sont persistes dans le snapshot projet via `uiSettings.globalUi` :
+
+- `selectedStep`, `selectedTool`, `toolbarState`
+- `projectionFilter`, `projectionViewMode`
+- `selectedSourceFileId`
+- `pageZoomLevel`, `pagePanOffset`
+
 ### projectsStore
 
 Liste des projets, projet actif. Localise dans `projects.store.svelte.ts`.
@@ -126,6 +133,8 @@ Consentement utilisateur (RGPD). Utilise un getter `hasConsented` qui recalcule 
 ### zoomModeStore
 
 Mode zoom (map vs page). Utilise un getter `isMapMode` qui recalcule (pas de `$derived`).
+
+Le mode est persiste dans le projet via `uiSettings.zoomMode` et non plus seulement en memoire de session.
 
 ## Snapshot projet
 
@@ -152,6 +161,31 @@ interface KhartisProject {
 ```
 
 Les fichiers sources (dont `parsedData`, `statistics`, `content`) sont embarques dans le projet.
+
+### Couches persistees via le registre
+
+Le serializer ne lit pas les stores un par un. Chaque store s'enregistre dans `persistenceRegistry`, puis le projet est remappe vers quatre blocs stables :
+
+- `basemapSettings` : couches, style, labels, groupes, projection carte, vue carte
+- `visualizationSettings` : visualisations, selection active
+- `layoutSettings` : format, annotations, legende, geo-indications, projection
+- `uiSettings` : etat UI durable cross-feature
+
+`uiSettings` couvre actuellement :
+
+- `globalUi`
+- `zoomMode`
+- `dataTab` (resume statistique, tri courant, etat geolocalisation/jointure/enrichissement)
+- `dataWorkflow`
+- `dataTools` (outil ouvert, recherche/remplacement, calculatrice)
+- `datasetsView` (datasets visibles, colonnes masquees, simplification appliquee)
+- `tableFilters`
+- `colorBlindness`
+- `facets`
+- `search`
+- `simplification`
+
+Regle pratique : on persiste l'etat UI qui doit survivre a un rechargement de projet, mais on exclut les etats purement transitoires comme les resultats de recherche, les selections temporaires d'annotation, ou un calcul en cours.
 
 ## Auto-sauvegarde
 

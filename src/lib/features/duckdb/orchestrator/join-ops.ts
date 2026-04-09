@@ -1,5 +1,4 @@
 import { JoinStatus } from '$lib/features/commons/constants/ui.constants';
-import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import {
   escapeIdentifier,
@@ -31,8 +30,17 @@ export interface DuckDBClientForJoin {
   ): Promise<unknown>;
 }
 
+interface InformationSchemaColumn {
+  column_name: string;
+  data_type: string;
+}
+
 export function getBasemapAttributesId(basemap: BasemapMetadata): string {
   return basemap.file.replace(/\.(parquet|geojson)$/i, '');
+}
+
+function isGeometryColumnName(columnName: string): boolean {
+  return /^(geom|geometry|wkb_geometry|the_geom)$/i.test(columnName);
 }
 
 // ---------------------------------------------------------------------------
@@ -134,6 +142,7 @@ async function ensureSimilarityCached(
         jaro_winkler_similarity(normalize_text_join(CAST(c.original_name AS VARCHAR)), ba.normalized, 0.85) AS score,
         ba.id AS match_id,
         ba.raw AS match_raw,
+        ba.variant AS match_variant,
         ba.basemap AS match_basemap,
         ba.basemap_count AS match_basemap_count
       FROM candidates c, basemap_attributes ba
@@ -146,6 +155,7 @@ async function ensureSimilarityCached(
         CASE WHEN score = 1 THEN 'exact' ELSE 'partial' END AS typo_match,
         match_id,
         match_raw,
+        match_variant,
         match_basemap,
         match_basemap_count
       FROM jw_pairs
@@ -156,6 +166,7 @@ async function ensureSimilarityCached(
       c.source_dup_count,
       m.match_id,
       m.match_raw,
+      m.match_variant,
       m.match_score,
       m.typo_match,
       m.match_basemap,
@@ -360,7 +371,7 @@ async function ensureBasemapAttributesLoaded(
   )) as Array<{ table_name: string }>;
 
   if (!tableCheck || tableCheck.length === 0) {
-    await basemapService.initialize();
+    await basemapService.ensureAttributesLoaded();
 
     const recheck = (await Duck.query(
       `SELECT table_name FROM information_schema.tables WHERE table_name = 'basemap_attributes'`,
@@ -645,7 +656,17 @@ async function applyCachedJoinAssociation(
     WITH ranked_join AS (
       SELECT
         original_name AS geoname,
-        match_id AS id,
+        CASE
+          WHEN EXISTS (
+            SELECT 1
+            FROM basemap_attributes ba
+            WHERE ba.basemap = match_basemap
+              AND ba.variant = match_id
+            LIMIT 1
+          )
+            THEN match_raw
+          ELSE match_id
+        END AS id,
         match_score AS score,
         typo_match
       FROM "${escapedCacheTable}"
@@ -686,7 +707,7 @@ export async function finalizeJoin(
   }
 
   // GPS mode with a catalog/custom basemap: no textual join needed
-  if (!geoColumn && detectGPSColumns(dataset.columns)) {
+  if (!geoColumn && detectGPSColumns(dataset.columns, dataset.geoDetection)) {
     return finalizeGPSJoin(dataset, basemap);
   }
 
@@ -761,7 +782,7 @@ function finalizeGPSJoin(
     }
   );
 
-  const gpsColumns = detectGPSColumns(dataset.columns);
+  const gpsColumns = detectGPSColumns(dataset.columns, dataset.geoDetection);
   if (!gpsColumns) {
     throw new Error('GPS columns (latitude/longitude) not found in dataset');
   }
@@ -801,17 +822,35 @@ export async function getJoinedArrowTable(
   const escapedDataset = escapeIdentifier(datasetTableName);
   const escapedGeometry = escapeIdentifier(geometryTable);
 
-  const geomColumns = (await Duck.query(
-    `SELECT column_name FROM information_schema.columns
-     WHERE table_name = '${escapeSqlString(geometryTable)}'
-     AND column_name NOT IN ('${INTERNAL_COLUMN.GEOM}', '${INTERNAL_COLUMN.GEOMETRY}', '${INTERNAL_COLUMN.WKB_GEOMETRY}', '${INTERNAL_COLUMN.THE_GEOM}')
-     AND data_type IN ('VARCHAR', 'TEXT')`,
+  const geometryTableColumns = (await Duck.query(
+    `SELECT column_name, data_type FROM information_schema.columns
+     WHERE table_name = '${escapeSqlString(geometryTable)}'`,
     { format: 'array' }
-  )) as Array<{ column_name: string }>;
+  )) as InformationSchemaColumn[];
 
-  const colList = geomColumns
+  const geometryColumn = geometryTableColumns.find((column) =>
+    isGeometryColumnName(column.column_name)
+  );
+
+  if (!geometryColumn) {
+    throw new Error(
+      `No geometry column found in basemap geometry table "${geometryTable}".`
+    );
+  }
+
+  const attrColumns = geometryTableColumns.filter((column) => {
+    if (isGeometryColumnName(column.column_name)) {
+      return false;
+    }
+
+    return ['VARCHAR', 'TEXT'].includes(column.data_type.toUpperCase());
+  });
+
+  const colList = attrColumns
     .map((c) => `"${escapeIdentifier(c.column_name)}"`)
     .join(', ');
+
+  const geometrySelectExpression = 'gu._geom_value';
 
   await Duck.query(`
     CREATE OR REPLACE VIEW "${joinedView}" AS
@@ -820,14 +859,14 @@ export async function getJoinedArrowTable(
       ON ${colList}
       INTO NAME _attr_col VALUE _attr_val
     )
-    SELECT d.*, gu.geom AS geometry
+    SELECT d.*, ${geometrySelectExpression} AS geometry
     FROM "${escapedDataset}" d
     INNER JOIN (
-      SELECT DISTINCT _attr_val, geom
+      SELECT DISTINCT _attr_val, "${escapeIdentifier(geometryColumn.column_name)}" AS _geom_value
       FROM geom_unpivot
     ) gu
     ON CAST(d.basemap_id AS VARCHAR) = CAST(gu._attr_val AS VARCHAR)
-    WHERE gu.geom IS NOT NULL
+    WHERE gu._geom_value IS NOT NULL
   `);
 
   let arrowTable = await getArrowTableDirect(joinedView);
