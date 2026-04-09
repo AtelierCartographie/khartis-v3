@@ -34,8 +34,8 @@ importers:
         specifier: ^9.2.11
         version: 9.2.11(@deck.gl/core@9.2.11)(@luma.gl/constants@9.2.6)(@luma.gl/core@9.2.6)(@math.gl/web-mercator@4.1.0)
       '@duckdb/duckdb-wasm':
-        specifier: 1.33.1-dev41.0
-        version: 1.33.1-dev41.0
+        specifier: 1.33.1-dev44.0
+        version: 1.33.1-dev44.0
       '@inlang/paraglide-js':
         specifier: ^2.15.1
         version: 2.15.2
@@ -907,8 +907,8 @@ packages:
       '@luma.gl/core': ~9.2.6
       '@math.gl/web-mercator': ^4.1.0
 
-  '@duckdb/duckdb-wasm@1.33.1-dev41.0':
-    resolution: {integrity: sha512-W4TjOUhCNaXckwYEHGALFh3T4fBMytE2IJT0gVT6gGQINbK74gqV2/mKmTs/cbJ8DuxyRLVx13pjd+ZALudNgA==}
+  '@duckdb/duckdb-wasm@1.33.1-dev44.0':
+    resolution: {integrity: sha512-3A2OsQEqW0POrLVx4V1+8YlFaPS6HuCkbpEexhrDgET54XhGYwwOvfotveiRI7YpE4ZpUna8YdhriItxl8zF5A==}
 
   '@duckdb/node-api@1.4.4-r.1':
     resolution: {integrity: sha512-oqaH9DXTJNwyLkd2FgJwmSnWVqjB5irbESeTeNVMBnM03iRaNY545BhfBDumu1TnOV2koIdG1mNsmjgq/ZTIkA==}
@@ -6571,7 +6571,7 @@ snapshots:
       '@luma.gl/core': 9.2.6
       '@math.gl/web-mercator': 4.1.0
 
-  '@duckdb/duckdb-wasm@1.33.1-dev41.0':
+  '@duckdb/duckdb-wasm@1.33.1-dev44.0':
     dependencies:
       apache-arrow: 17.0.0
       qs: 6.15.0

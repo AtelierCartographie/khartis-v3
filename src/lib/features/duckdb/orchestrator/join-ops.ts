@@ -43,13 +43,6 @@ function isGeometryColumnName(columnName: string): boolean {
   return /^(geom|geometry|wkb_geometry|the_geom)$/i.test(columnName);
 }
 
-function isDuckGeometryType(dataType: string): boolean {
-  const normalizedType = dataType.toUpperCase();
-  return (
-    normalizedType === 'GEOMETRY' || normalizedType.startsWith('GEOMETRY(')
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Similarity cache — run get_similarity once against ALL basemap_attributes,
 // then derive per-basemap JoinQuality from the cached raw matches.
@@ -857,9 +850,7 @@ export async function getJoinedArrowTable(
     .map((c) => `"${escapeIdentifier(c.column_name)}"`)
     .join(', ');
 
-  const geometrySelectExpression = isDuckGeometryType(geometryColumn.data_type)
-    ? 'ST_AsWKB(gu._geom_value)'
-    : 'gu._geom_value';
+  const geometrySelectExpression = 'gu._geom_value';
 
   await Duck.query(`
     CREATE OR REPLACE VIEW "${joinedView}" AS
