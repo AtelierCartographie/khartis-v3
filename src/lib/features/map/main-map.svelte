@@ -32,6 +32,7 @@
   import { osmBasemapStore } from './stores/osm-basemap.store.svelte';
   import { facetsStore } from '../step-toolbar/tools/facets/facets.store.svelte';
   import FacetsGrid from '../step-toolbar/tools/facets/facets-grid.svelte';
+  import { loadDatasetsSequentially } from './utils/load-datasets-sequentially';
 
   let containerRef: HTMLDivElement;
   let thematicMapRef = $state<HTMLDivElement>(undefined!);
@@ -399,11 +400,9 @@
         }
       );
 
-      const loadPromises = currentEnabledDatasets.map((dataset) =>
+      void loadDatasetsSequentially(currentEnabledDatasets, (dataset) =>
         loadDatasetForDisplay(dataset, thisGeneration)
-      );
-
-      Promise.all(loadPromises).catch((error) => {
+      ).catch((error) => {
         logger.error(
           'Failed to reload display datasets',
           LogCategory.MAP,
@@ -551,10 +550,8 @@
 
     // Load remaining datasets progressively in the background
     if (remainingDatasets.length > 0) {
-      Promise.all(
-        remainingDatasets.map((dataset) =>
-          loadDatasetForDisplay(dataset, initGeneration)
-        )
+      void loadDatasetsSequentially(remainingDatasets, (dataset) =>
+        loadDatasetForDisplay(dataset, initGeneration)
       )
         .then(() => {
           logger.success('All datasets loaded', LogCategory.MAP, {
