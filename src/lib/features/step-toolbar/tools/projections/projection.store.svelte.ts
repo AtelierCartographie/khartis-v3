@@ -28,6 +28,7 @@ const DEFAULT_PROJECTION = 'mercator';
 const DEFAULT_STATE: ProjectionState = {
   selected: DEFAULT_PROJECTION,
   overrideActive: false,
+  overrideSource: undefined,
   viewMode: ViewMode.LIST,
   longitude: 0,
   latitude: 0,
@@ -171,13 +172,12 @@ const { actions, getState } = createToolStore<
     const setSelectedInternal = (
       projectionId: string,
       applyToMap: boolean,
-      markOverride = true
+      overrideSource: ProjectionState['overrideSource'] = 'manual'
     ) => {
       s.selected = projectionId;
       s.customCode = undefined;
-      if (markOverride) {
-        s.overrideActive = true;
-      }
+      s.overrideActive = overrideSource !== undefined;
+      s.overrideSource = overrideSource;
       if (applyToMap) {
         mapProjectionStore.setProjection(toMapProjectionType(projectionId));
       }
@@ -191,9 +191,8 @@ const { actions, getState } = createToolStore<
       setSelected,
       setCustomCode: (code: string | null) => {
         s.customCode = code?.trim() || undefined;
-        if (s.customCode) {
-          s.overrideActive = true;
-        }
+        s.overrideActive = Boolean(s.customCode);
+        s.overrideSource = s.customCode ? 'manual' : undefined;
       },
       setViewMode: (mode: ViewMode) => {
         s.viewMode = mode;
@@ -243,12 +242,12 @@ const { actions, getState } = createToolStore<
           // Auto-apply the best suggestion: national first, then generic
           const best = result.national[0] ?? result.generic[0];
           if (best) {
-            applyProjectionSuggestion(best);
+            applyProjectionSuggestion(best, 'auto');
           }
         })();
       },
       applySuggestion: (suggestion: ProjectionSuggestion) => {
-        applyProjectionSuggestion(suggestion);
+        applyProjectionSuggestion(suggestion, 'manual');
       },
       applyProjectionToDataset: (
         datasetId: string,
@@ -326,7 +325,10 @@ const { actions, getState } = createToolStore<
       }
     };
 
-    function applyProjectionSuggestion(suggestion: ProjectionSuggestion) {
+    function applyProjectionSuggestion(
+      suggestion: ProjectionSuggestion,
+      overrideSource: ProjectionState['overrideSource']
+    ) {
       // For proj4-based suggestions, use customCode path
       if (suggestion.proj4String) {
         const projection = buildProjectionFromSuggestion(suggestion);
@@ -334,6 +336,7 @@ const { actions, getState } = createToolStore<
           s.customCode = suggestion.proj4String;
           s.selected = 'mercator'; // proj4 projections render in orthographic/mercator view
           s.overrideActive = true;
+          s.overrideSource = overrideSource;
           mapProjectionStore.setProjection(MERCATOR_PROJECTION_TYPE);
           logger.info(
             'Applied projection suggestion via proj4',
@@ -353,7 +356,7 @@ const { actions, getState } = createToolStore<
           suggestion.d3Config.projection
         );
         if (internalId) {
-          setSelectedInternal(internalId, true, true);
+          setSelectedInternal(internalId, true, overrideSource);
           logger.info(
             'Applied projection suggestion via d3 mapping',
             LogCategory.MAP,

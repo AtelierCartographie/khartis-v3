@@ -8,6 +8,7 @@ export function buildProjectionRenderKey(state: ProjectionState): string {
   return [
     state.selected,
     state.customCode ?? '',
-    state.overrideActive ? 'override' : 'default'
+    state.overrideActive ? 'override' : 'default',
+    state.overrideSource ?? 'none'
   ].join('|');
 }
