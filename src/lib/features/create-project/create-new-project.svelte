@@ -89,12 +89,23 @@
   async function handleLoadOnlineFile() {
     createProjectActions.setNewProjectError();
 
-    if (onlineUrlValue.trim() && urlValidation && urlValidation.isValid) {
-      createProjectActions.setOnlineFileUrl(onlineUrlValue);
-      await createProjectActions.loadOnlineFile();
-      if (!createProjectState.newProject.error) {
-        onlineUrlValue = '';
-      }
+    const trimmedUrl = onlineUrlValue.trim();
+    if (!trimmedUrl) {
+      return;
+    }
+
+    const currentValidation =
+      urlValidation ?? CreateProjectValidationService.validateURL(trimmedUrl);
+    urlValidation = currentValidation;
+
+    if (!currentValidation.isValid) {
+      return;
+    }
+
+    createProjectActions.setOnlineFileUrl(trimmedUrl);
+    await createProjectActions.loadOnlineFile();
+    if (!createProjectState.newProject.error) {
+      onlineUrlValue = '';
     }
   }
 
