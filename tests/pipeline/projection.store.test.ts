@@ -143,6 +143,84 @@ describe('projection store suggestions', () => {
     expect(getGPSBounds).toHaveBeenCalledWith('duck-gps-dataset');
     expect(getProjectionState().selected).toBe('natural-earth');
     expect(getProjectionState().overrideActive).toBe(true);
+    expect(getProjectionState().overrideSource).toBe('auto');
     expect(setProjection).toHaveBeenCalledWith('globe');
+  });
+
+  it('marks explicit suggestion application as a manual override', async () => {
+    vi.doMock('$lib/features/commons/store/datasets.store.svelte', () => ({
+      datasetsStore: {
+        selectedDataset: null,
+        getDatasetsByType: vi.fn(() => []),
+        enabledDatasets: [],
+        datasets: []
+      }
+    }));
+
+    vi.doMock('$lib/features/commons/store/global.svelte', () => ({
+      globalActions: {
+        setProjectionViewMode: vi.fn()
+      }
+    }));
+
+    vi.doMock('$lib/features/commons/utils/projection.utils', () => ({
+      fitProjectionToGeoJSON: vi.fn(),
+      getProjectionById: vi.fn(() => ({
+        id: 'mercator',
+        projection: () => ({})
+      })),
+      projectGeoJSON: vi.fn()
+    }));
+
+    vi.doMock('$lib/features/commons/store/map-instance.store.svelte', () => ({
+      mapInstanceStore: {
+        map: null
+      }
+    }));
+
+    const setProjection = vi.fn();
+    vi.doMock('$lib/features/map/stores/map-projection.store.svelte', () => ({
+      mapProjectionStore: {
+        setProjection
+      }
+    }));
+
+    vi.doMock(
+      '$lib/features/step-toolbar/tools/projections/projection-suggest.service',
+      () => ({
+        suggestProjectionsForBbox: vi.fn(),
+        buildProjectionFromSuggestion: vi.fn(() => null)
+      })
+    );
+
+    vi.doMock('$lib/features/commons/utils/logger', () => ({
+      LogCategory: { MAP: 'MAP' },
+      logger: {
+        info: vi.fn(),
+        warn: vi.fn(),
+        error: vi.fn()
+      }
+    }));
+
+    vi.doMock('$lib/features/duckdb/orchestrator/orchestrator.svelte', () => ({
+      duckDBOrchestrator: {
+        getDatasetBySourceFile: vi.fn(),
+        getGPSBounds: vi.fn()
+      }
+    }));
+
+    const { projectionActions, getProjectionState } =
+      await import('$lib/features/step-toolbar/tools/projections/projection.store.svelte');
+
+    projectionActions.applySuggestion({
+      id: 'geoMercator',
+      label: 'Mercator',
+      d3Config: { projection: 'geoMercator' }
+    });
+
+    expect(getProjectionState().selected).toBe('mercator');
+    expect(getProjectionState().overrideActive).toBe(true);
+    expect(getProjectionState().overrideSource).toBe('manual');
+    expect(setProjection).toHaveBeenCalledWith('mercator');
   });
 });

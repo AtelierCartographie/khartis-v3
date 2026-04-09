@@ -71,6 +71,42 @@ const projectedBboxCache = new WeakMap<
   Map<string, [number, number, number, number] | null>
 >();
 
+function sampleProjectedBbox(
+  projection: ProjectionLike,
+  bbox: [number, number, number, number]
+): [number, number, number, number] | null {
+  const [west, south, east, north] = bbox;
+  const steps = 20;
+  const xs: number[] = [];
+  const ys: number[] = [];
+
+  const tryProject = (lon: number, lat: number) => {
+    const proj = projection as unknown as (
+      c: [number, number]
+    ) => [number, number] | null;
+    const result = proj([lon, lat]);
+    if (result && isFinite(result[0]) && isFinite(result[1])) {
+      xs.push(result[0]);
+      ys.push(result[1]);
+    }
+  };
+
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const lon = west + t * (east - west);
+    const lat = south + t * (north - south);
+    tryProject(lon, south);
+    tryProject(lon, north);
+    tryProject(west, lat);
+    tryProject(east, lat);
+  }
+  tryProject((west + east) / 2, (south + north) / 2);
+
+  return xs.length === 0
+    ? null
+    : [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+}
+
 function normalizeGeomColumnName(table: ArrowTable): ArrowTable {
   const cached = normalizedTableCache.get(table);
   if (cached) return cached;
@@ -332,38 +368,7 @@ export function computeProjectedBboxForBasemap(
     height,
     projectionPresets
   );
-
-  const [west, south, east, north] = wgs84Bbox;
-  const steps = 20;
-  const xs: number[] = [];
-  const ys: number[] = [];
-
-  const tryProject = (lon: number, lat: number) => {
-    const proj = projection as unknown as (
-      c: [number, number]
-    ) => [number, number] | null;
-    const result = proj([lon, lat]);
-    if (result && isFinite(result[0]) && isFinite(result[1])) {
-      xs.push(result[0]);
-      ys.push(result[1]);
-    }
-  };
-
-  for (let i = 0; i <= steps; i++) {
-    const t = i / steps;
-    const lon = west + t * (east - west);
-    const lat = south + t * (north - south);
-    tryProject(lon, south);
-    tryProject(lon, north);
-    tryProject(west, lat);
-    tryProject(east, lat);
-  }
-  tryProject((west + east) / 2, (south + north) / 2);
-
-  const result: [number, number, number, number] | null =
-    xs.length === 0
-      ? null
-      : [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+  const result = sampleProjectedBbox(projection, wgs84Bbox);
 
   if (!metadataCache) {
     metadataCache = new Map();
@@ -372,6 +377,13 @@ export function computeProjectedBboxForBasemap(
   metadataCache.set(cacheKey, result);
 
   return result;
+}
+
+export function computeProjectedBboxForProjection(
+  projection: ProjectionLike,
+  bbox: [number, number, number, number]
+): [number, number, number, number] | null {
+  return sampleProjectedBbox(projection, bbox);
 }
 
 /**

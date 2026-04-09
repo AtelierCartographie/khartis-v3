@@ -7,7 +7,17 @@ import type { ProjectionLike } from 'geoarrow-deck-stream';
  */
 export function resolveProjectionForRender(
   defaultProjection: ProjectionLike | undefined,
-  userOverride: ProjectionLike | undefined
+  userOverride: ProjectionLike | undefined,
+  overrideSource?: 'auto' | 'manual',
+  allowManualOverride = true
 ): ProjectionLike | undefined {
-  return defaultProjection ?? userOverride;
+  if (allowManualOverride && overrideSource === 'manual' && userOverride) {
+    return userOverride;
+  }
+
+  if (defaultProjection) {
+    return defaultProjection;
+  }
+
+  return allowManualOverride ? userOverride : undefined;
 }

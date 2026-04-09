@@ -22,7 +22,7 @@ import { buildProjectionForBasemap } from '../utils/geoarrow-stream-bridge';
 import { GeometryType } from '../constants';
 import { PrimitiveFilterType } from '$lib/features/commons/store/visualization.store.svelte';
 import type { PrimitiveFilter } from '$lib/features/commons/store/visualization.store.svelte';
-import type { DeckDataRow, LayerContext } from '../types';
+import type { BBox, DeckDataRow, LayerContext } from '../types';
 import type { DeckInstance } from './use-map-init.svelte';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import {
@@ -38,7 +38,10 @@ import type { DataTableFilter } from '$lib/features/duckdb/types';
 import { getProjectionState } from '$lib/features/step-toolbar/tools/projections/projection.store.svelte';
 import { proj4d3 } from '../utils/proj4d3';
 import type { ProjectionLike } from 'geoarrow-deck-stream';
-import { getProjectionById } from '$lib/features/commons/utils/projection.utils';
+import {
+  fitProjectionToBbox,
+  getProjectionById
+} from '$lib/features/commons/utils/projection.utils';
 import type { BasemapMetadata } from '../types/basemap.types';
 import { shouldUseIdentityProjectionForDatasetCrs } from '../utils/dataset-crs';
 import { resolveProjectionForRender } from '../utils/projection-priority';
@@ -63,6 +66,7 @@ export interface UseMapLayersProps {
   getProjectionMetadataForDataset?: (
     datasetId: string
   ) => BasemapMetadata | null;
+  getProjectionFitBbox?: () => BBox | null;
   getShouldRenderDatasetFallbacks?: () => boolean;
   getTableFilters?: (datasetId: string) => DataTableFilter[] | undefined;
   onBasemapLayersLoaded?: () => void;
@@ -85,6 +89,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     getActiveVisualizations,
     buildLayerContextForViz,
     getProjectionMetadataForDataset,
+    getProjectionFitBbox,
     getShouldRenderDatasetFallbacks,
     getTableFilters,
     onBasemapLayersLoaded
@@ -179,7 +184,8 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
   }
 
   function getProjectionOverride(
-    isOrthographicMode: boolean
+    isOrthographicMode: boolean,
+    fitBbox: BBox | null
   ): ProjectionLike | undefined {
     if (!isOrthographicMode) {
       return undefined;
@@ -190,9 +196,18 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       return undefined;
     }
 
-    const overrideKey = projState.customCode
-      ? `custom:${projState.customCode}`
-      : `preset:${projState.selected}`;
+    if (!fitBbox) {
+      return undefined;
+    }
+
+    const overrideKey = [
+      projState.customCode
+        ? `custom:${projState.customCode}`
+        : `preset:${projState.selected}`,
+      `bbox:${fitBbox.join(',')}`,
+      `center:${(projState.center ?? [projState.longitude, projState.latitude]).join(',')}`,
+      `rotation:${projState.rotation}`
+    ].join('|');
 
     if (overrideKey === cachedProjectionOverrideKey) {
       return cachedProjectionOverrideRef;
@@ -215,6 +230,22 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       projectionOverride = projectionInfo?.projection();
     }
 
+    if (projectionOverride) {
+      const center = projState.center ?? [
+        projState.longitude,
+        projState.latitude
+      ];
+
+      if ('center' in projectionOverride) {
+        projectionOverride.center(center);
+      }
+      if ('rotate' in projectionOverride) {
+        projectionOverride.rotate([projState.rotation, 0, 0]);
+      }
+
+      fitProjectionToBbox(projectionOverride, fitBbox, 960, 600);
+    }
+
     // Downstream GeoArrow/projection caches key by ProjectionLike reference.
     // Recreating the same override projection on every layer refresh defeats
     // those caches and forces needless reprojection work.
@@ -224,14 +255,17 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     return projectionOverride;
   }
 
+  function getDatasetGeometryCrs(datasetId: string): string | null | undefined {
+    return datasetsStore.datasets.find((dataset) => dataset.id === datasetId)
+      ?.geometry?.crs;
+  }
+
   function getDatasetDefaultProjection(
     datasetId: string,
     metadata: BasemapMetadata | null | undefined,
     isOrthographicMode: boolean
   ): ProjectionLike | undefined {
-    const datasetGeometryCrs = datasetsStore.datasets.find(
-      (dataset) => dataset.id === datasetId
-    )?.geometry?.crs;
+    const datasetGeometryCrs = getDatasetGeometryCrs(datasetId);
 
     if (shouldUseIdentityProjectionForDatasetCrs(datasetGeometryCrs)) {
       return undefined;
@@ -318,12 +352,18 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         currentMetadata,
         isOrthographicMode
       );
-      const projectionOverride = getProjectionOverride(isOrthographicMode);
-      // Keep catalog basemap projection authoritative when it exists.
-      // Projection overrides are only a fallback for identity/custom basemaps.
+      const projectionState = getProjectionState();
+      const projectionFitBbox = getProjectionFitBbox?.() ?? null;
+      const projectionOverride = getProjectionOverride(
+        isOrthographicMode,
+        projectionFitBbox
+      );
+      // Catalog basemap metadata remains the default. An explicit user choice
+      // in the Projection tool must still override it immediately.
       const activeBasemapProjection = resolveProjectionForRender(
         basemapProjection,
-        projectionOverride
+        projectionOverride,
+        projectionState.overrideSource
       );
 
       // In MapLibre interleaved mode, find the first symbol layer to render data layers below text
@@ -421,6 +461,9 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           const ctx = buildLayerContextForViz(viz);
           const datasetProjectionMetadata =
             getProjectionMetadataForDataset?.(datasetId) ?? currentMetadata;
+          const datasetGeometryCrs = getDatasetGeometryCrs(datasetId);
+          const allowProjectionOverride =
+            !shouldUseIdentityProjectionForDatasetCrs(datasetGeometryCrs);
           const datasetDefaultProjection = getDatasetDefaultProjection(
             datasetId,
             datasetProjectionMetadata,
@@ -431,7 +474,9 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           ctx.beforeId = beforeId;
           ctx.customProjection = resolveProjectionForRender(
             datasetDefaultProjection,
-            projectionOverride
+            projectionOverride,
+            projectionState.overrideSource,
+            allowProjectionOverride
           );
 
           if (geojson) {
@@ -507,6 +552,9 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           const fallbackCtx = buildDatasetFallbackContext(datasetId);
           const datasetProjectionMetadata =
             getProjectionMetadataForDataset?.(datasetId) ?? currentMetadata;
+          const datasetGeometryCrs = getDatasetGeometryCrs(datasetId);
+          const allowProjectionOverride =
+            !shouldUseIdentityProjectionForDatasetCrs(datasetGeometryCrs);
           const datasetDefaultProjection = getDatasetDefaultProjection(
             datasetId,
             datasetProjectionMetadata,
@@ -517,7 +565,9 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           fallbackCtx.beforeId = beforeId;
           fallbackCtx.customProjection = resolveProjectionForRender(
             datasetDefaultProjection,
-            projectionOverride
+            projectionOverride,
+            projectionState.overrideSource,
+            allowProjectionOverride
           );
 
           if (geojson) {

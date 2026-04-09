@@ -128,20 +128,37 @@ describe('resolveProjectionForRender', () => {
     );
   });
 
-  it('keeps the basemap metadata projection authoritative when both are present', () => {
+  it('keeps the basemap metadata projection authoritative for auto suggestions', () => {
     const metadataProjection = { id: 'world-default' };
     const userOverride = { id: 'aitoff' };
 
-    expect(resolveProjectionForRender(metadataProjection, userOverride)).toBe(
-      metadataProjection
-    );
+    expect(
+      resolveProjectionForRender(metadataProjection, userOverride, 'auto')
+    ).toBe(metadataProjection);
+  });
+
+  it('lets an explicit user override take precedence over the basemap metadata', () => {
+    const metadataProjection = { id: 'world-default' };
+    const userOverride = { id: 'aitoff' };
+
+    expect(
+      resolveProjectionForRender(metadataProjection, userOverride, 'manual')
+    ).toBe(userOverride);
   });
 
   it('falls back to the user override when the basemap has no projection metadata', () => {
     const userOverride = { id: 'aitoff' };
 
-    expect(resolveProjectionForRender(undefined, userOverride)).toBe(
+    expect(resolveProjectionForRender(undefined, userOverride, 'auto')).toBe(
       userOverride
     );
+  });
+
+  it('keeps projected datasets in pass-through mode even after a manual override', () => {
+    const userOverride = { id: 'mercator' };
+
+    expect(
+      resolveProjectionForRender(undefined, userOverride, 'manual', false)
+    ).toBeUndefined();
   });
 });
