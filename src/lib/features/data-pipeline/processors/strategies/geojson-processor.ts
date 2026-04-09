@@ -86,10 +86,9 @@ async function processWithArrow(
     ALTER TABLE "${ctx.tableName}" ADD COLUMN __id INTEGER DEFAULT nextval('id_${safeSeq}');
   `);
 
-  const [columns, rowCount, arrowMeta] = await Promise.all([
+  const [columns, rowCount] = await Promise.all([
     ctx.Duck.analyse(ctx.tableName),
-    ctx.callbacks.getRowCount(ctx.tableName),
-    ctx.callbacks.createArrowTableWithMetadata(ctx.tableName)
+    ctx.callbacks.getRowCount(ctx.tableName)
   ]);
 
   logger.success('GeoJSON processed via Arrow', LogCategory.DUCKDB, {
@@ -105,9 +104,7 @@ async function processWithArrow(
     name: file.name,
     columns,
     rowCount,
-    metadata: { processedAt: new Date(), fileType: file.fileType },
-    arrowTableWithMetadata: arrowMeta.arrowTableWithMetadata,
-    geoArrowMetadata: arrowMeta.geoArrowMetadata ?? undefined
+    metadata: { processedAt: new Date(), fileType: file.fileType }
   };
 }
 
@@ -120,10 +117,9 @@ async function processWithLegacy(
   await ctx.Duck.register_files([duckFile]);
   await ctx.Duck.read_geofile(duckFile, { tablename: ctx.tableName });
 
-  const [columns, rowCount, arrowMeta] = await Promise.all([
+  const [columns, rowCount] = await Promise.all([
     ctx.Duck.analyse(ctx.tableName),
-    ctx.callbacks.getRowCount(ctx.tableName),
-    ctx.callbacks.createArrowTableWithMetadata(ctx.tableName)
+    ctx.callbacks.getRowCount(ctx.tableName)
   ]);
 
   logger.success('GeoJSON processed via legacy', LogCategory.DUCKDB, {
@@ -140,9 +136,7 @@ async function processWithLegacy(
     columns,
     rowCount,
     metadata: { processedAt: new Date(), fileType: file.fileType },
-    geoDetection: file.deepAnalysis?.geoDetection,
-    arrowTableWithMetadata: arrowMeta.arrowTableWithMetadata,
-    geoArrowMetadata: arrowMeta.geoArrowMetadata ?? undefined
+    geoDetection: file.deepAnalysis?.geoDetection
   };
 }
 

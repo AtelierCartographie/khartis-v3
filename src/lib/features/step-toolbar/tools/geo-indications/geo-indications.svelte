@@ -218,9 +218,14 @@
                 <Select
                   id="scale-font-select"
                   labelText={m.legend_font()}
-                  bind:selected={localScaleFontFamily}
-                  on:change={() =>
-                    store.setScaleFontFamily(localScaleFontFamily)}
+                  selected={localScaleFontFamily}
+                  on:change={(event) => {
+                    const nextFontFamily = (
+                      event.currentTarget as HTMLSelectElement
+                    ).value;
+                    localScaleFontFamily = nextFontFamily;
+                    store.setScaleFontFamily(nextFontFamily);
+                  }}
                   size="sm"
                 >
                   {#each AVAILABLE_FONTS as f (f)}
@@ -232,8 +237,18 @@
                 <Select
                   id="scale-font-size"
                   labelText={m.legend_font_size()}
-                  bind:selected={localScaleFontSize}
-                  on:change={() => store.setScaleFontSize(localScaleFontSize)}
+                  selected={String(localScaleFontSize)}
+                  on:change={(event) => {
+                    const nextFontSize = Number(
+                      (event.currentTarget as HTMLSelectElement).value
+                    );
+                    if (!Number.isFinite(nextFontSize)) {
+                      return;
+                    }
+
+                    localScaleFontSize = nextFontSize;
+                    store.setScaleFontSize(nextFontSize);
+                  }}
                   size="sm"
                 >
                   {#each LEGEND_FONT_SIZES as s (s)}

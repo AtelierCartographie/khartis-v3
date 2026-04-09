@@ -4,12 +4,14 @@ import type {
 } from '$lib/features/data-pipeline';
 import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
 import {
+  DEFAULT_COLORS,
   FillMode,
   MissingDataShape,
   ProportionalType,
   ShapeType,
   StrokeMode,
-  SymbolMode
+  SymbolMode,
+  VISUALIZATION_DEFAULTS
 } from '$lib/features/main-toolbar/constants';
 import { deepClone } from '../utils/clone.utils';
 import {
@@ -80,6 +82,7 @@ export interface ClassificationConfig {
   counts?: number[];
   colors?: string[];
   paletteId?: string;
+  inverted?: boolean;
   labels?: string[];
   breakpointValue?: number | null;
   patternId?: string;
@@ -135,6 +138,9 @@ export interface VisualizationConfig {
   type: VisualizationType;
   datasetId: string;
   enabled: boolean;
+  facet?: {
+    baseVisualizationId: string;
+  };
   modes?: VisualizationModes;
   primitiveFilters?: PrimitiveFilter[];
   primitiveOrder?: PrimitiveFilter[];
@@ -160,6 +166,7 @@ export interface VisualizationConfig {
     textHalo?: boolean;
     textHaloColor?: string;
     textHaloWidth?: number;
+    textCollisionDetection?: boolean;
     textDxpMasking?: boolean;
     labelColor?: string | string[];
     labelOpacity?: number;
@@ -238,6 +245,7 @@ export interface VisualizationStore {
     id: string,
     updates: Partial<VisualizationConfig>
   ) => void;
+  applyVisualizationPreset: (id: string, type: VisualizationType) => void;
   duplicateVisualization: (
     id: string,
     targetDatasetId?: string
@@ -271,7 +279,7 @@ const COLUMN_TYPE_STRING = 'string';
 
 const DEFAULT_SYMBOL_SIZE = 12;
 const DEFAULT_SYMBOL_MIN_SIZE = 5;
-const DEFAULT_SYMBOL_MAX_SIZE = 50;
+const DEFAULT_SYMBOL_MAX_SIZE = VISUALIZATION_DEFAULTS.symbolMaxSize;
 const DEFAULT_SYMBOL_OPACITY = 0.8;
 const DEFAULT_LABEL_OPACITY = 0;
 const DEFAULT_TEXT_OPACITY = 0;
@@ -307,8 +315,12 @@ function getDefaultStyle(
   type: VisualizationType
 ): VisualizationConfig['style'] {
   const textOverlayDefaults: VisualizationConfig['style'] = {
+    labelColor: DEFAULT_COLORS.label,
     labelOpacity: DEFAULT_LABEL_OPACITY,
-    textOpacity: DEFAULT_TEXT_OPACITY
+    labelCollisionDetection: true,
+    textColor: DEFAULT_COLORS.text,
+    textOpacity: DEFAULT_TEXT_OPACITY,
+    textCollisionDetection: true
   };
 
   switch (type) {
@@ -452,12 +464,38 @@ function getDefaultModes(type: VisualizationType): VisualizationModes {
   }
 }
 
-function getDefaultSymbols(type: VisualizationType): VisualizationSymbols {
+function getDefaultSymbols(
+  type: VisualizationType,
+  dataset: ProcessedDataset | DatasetResult
+): VisualizationSymbols {
+  const geometryType =
+    typeof dataset.geometry === 'string'
+      ? dataset.geometry
+      : dataset.geometry?.type;
+  const isPolygonGeometry =
+    geometryType?.toLowerCase().includes('polygon') ?? false;
+  const rowCount = 'rowCount' in dataset ? (dataset.rowCount ?? 0) : 0;
+  const densityAdjustedMaxSize =
+    isPolygonGeometry &&
+    (type === VisualizationType.PROPORTIONAL ||
+      type === VisualizationType.BIVARIATE)
+      ? Math.max(
+          6,
+          Math.min(
+            VISUALIZATION_DEFAULTS.symbolMaxSize,
+            Math.round(140 / Math.sqrt(Math.max(rowCount, 1)))
+          )
+        )
+      : DEFAULT_SYMBOL_MAX_SIZE;
+  const minSize = isPolygonGeometry
+    ? Math.max(1, Math.min(4, Math.round(densityAdjustedMaxSize / 4)))
+    : DEFAULT_SYMBOL_MIN_SIZE;
+
   return {
     type: ShapeType.POINT,
     size: DEFAULT_SYMBOL_SIZE,
-    minSize: DEFAULT_SYMBOL_MIN_SIZE,
-    maxSize: DEFAULT_SYMBOL_MAX_SIZE,
+    minSize,
+    maxSize: densityAdjustedMaxSize,
     sizeScale:
       type === VisualizationType.PROPORTIONAL
         ? ScaleType.SQRT
@@ -467,6 +505,7 @@ function getDefaultSymbols(type: VisualizationType): VisualizationSymbols {
 }
 
 function getDefaultPrimitiveFilters(
+  type: VisualizationType,
   dataset: ProcessedDataset | DatasetResult
 ): PrimitiveFilter[] {
   const geometryType =
@@ -476,6 +515,13 @@ function getDefaultPrimitiveFilters(
   const normalizedGeometryType = geometryType?.toLowerCase() ?? '';
 
   if (normalizedGeometryType.includes('polygon')) {
+    if (
+      type === VisualizationType.PROPORTIONAL ||
+      type === VisualizationType.BIVARIATE
+    ) {
+      return [PrimitiveFilterType.POINT, PrimitiveFilterType.LINE];
+    }
+
     return [PrimitiveFilterType.POLYGON, PrimitiveFilterType.LINE];
   }
 
@@ -488,6 +534,32 @@ function getDefaultPrimitiveFilters(
   }
 
   return [...ALL_PRIMITIVE_FILTERS];
+}
+
+function buildVisualizationPreset(
+  type: VisualizationType,
+  dataset: ProcessedDataset | DatasetResult
+): Pick<
+  VisualizationConfig,
+  | 'type'
+  | 'modes'
+  | 'primitiveFilters'
+  | 'style'
+  | 'mapping'
+  | 'classification'
+  | 'symbols'
+  | 'missingData'
+> {
+  return {
+    type,
+    modes: getDefaultModes(type),
+    primitiveFilters: getDefaultPrimitiveFilters(type, dataset),
+    style: getDefaultStyle(type),
+    mapping: getDefaultMapping(type, dataset),
+    classification: getDefaultClassification(type),
+    symbols: getDefaultSymbols(type, dataset),
+    missingData: getDefaultMissingData()
+  };
 }
 
 function getDefaultMissingData(): MissingDataConfig {
@@ -506,6 +578,14 @@ function createVisualizationStore(): VisualizationStore {
     activeVisualizationIds: new Set<string>(),
     version: 0
   });
+
+  function updateActiveVisualizationIds(
+    updater: (ids: Set<string>) => Set<string>
+  ): void {
+    state.activeVisualizationIds = updater(
+      new Set(state.activeVisualizationIds)
+    );
+  }
 
   function getVisualizationById(id: string): VisualizationConfig | undefined {
     return findById(state.visualizations, id);
@@ -552,21 +632,14 @@ function createVisualizationStore(): VisualizationStore {
           DEFAULT_VISUALIZATION_NAME,
           state.visualizations.map((item) => item.name)
         ),
-      type,
       datasetId,
       enabled: true,
-      modes: getDefaultModes(type),
-      primitiveFilters: getDefaultPrimitiveFilters(dataset),
-      style: getDefaultStyle(type),
-      mapping: getDefaultMapping(type, dataset),
-      classification: getDefaultClassification(type),
-      symbols: getDefaultSymbols(type),
-      missingData: getDefaultMissingData()
+      ...buildVisualizationPreset(type, dataset)
     };
 
     state.visualizations.push(visualization);
     state.selectedVisualizationId = visualization.id;
-    state.activeVisualizationIds.add(visualization.id);
+    updateActiveVisualizationIds((ids) => ids.add(visualization.id));
     incrementVersion(state);
 
     return visualization;
@@ -658,6 +731,23 @@ function createVisualizationStore(): VisualizationStore {
     applyVisualizationUpdate(id, () => updates);
   }
 
+  function applyVisualizationPreset(id: string, type: VisualizationType): void {
+    applyVisualizationUpdate(id, (visualization) => {
+      const dataset = findById(datasetsStore.datasets, visualization.datasetId);
+      if (!dataset) {
+        return null;
+      }
+
+      const preset = buildVisualizationPreset(type, dataset);
+
+      return {
+        ...preset,
+        primitiveOrder: undefined,
+        dataFilters: undefined
+      };
+    });
+  }
+
   function duplicateVisualization(
     id: string,
     targetDatasetId?: string
@@ -681,7 +771,7 @@ function createVisualizationStore(): VisualizationStore {
 
     state.visualizations.push(duplicatedVisualization);
     state.selectedVisualizationId = duplicatedVisualization.id;
-    state.activeVisualizationIds.add(duplicatedVisualization.id);
+    updateActiveVisualizationIds((ids) => ids.add(duplicatedVisualization.id));
     incrementVersion(state);
 
     return duplicatedVisualization;
@@ -692,7 +782,10 @@ function createVisualizationStore(): VisualizationStore {
       (visualization) => visualization.id !== id
     );
 
-    state.activeVisualizationIds.delete(id);
+    updateActiveVisualizationIds((ids) => {
+      ids.delete(id);
+      return ids;
+    });
 
     if (state.selectedVisualizationId === id) {
       state.selectedVisualizationId = remainingVisualizations[0]?.id;
@@ -709,7 +802,7 @@ function createVisualizationStore(): VisualizationStore {
 
     configs.forEach((config) => {
       state.visualizations.push(config);
-      state.activeVisualizationIds.add(config.id);
+      updateActiveVisualizationIds((ids) => ids.add(config.id));
     });
 
     incrementVersion(state);
@@ -725,8 +818,11 @@ function createVisualizationStore(): VisualizationStore {
       (visualization) => !idsSet.has(visualization.id)
     );
 
-    ids.forEach((idToRemove) => {
-      state.activeVisualizationIds.delete(idToRemove);
+    updateActiveVisualizationIds((activeIds) => {
+      ids.forEach((idToRemove) => {
+        activeIds.delete(idToRemove);
+      });
+      return activeIds;
     });
 
     if (
@@ -771,11 +867,14 @@ function createVisualizationStore(): VisualizationStore {
   }
 
   function toggleVisualization(id: string): void {
-    if (state.activeVisualizationIds.has(id)) {
-      state.activeVisualizationIds.delete(id);
-    } else {
-      state.activeVisualizationIds.add(id);
-    }
+    updateActiveVisualizationIds((ids) => {
+      if (ids.has(id)) {
+        ids.delete(id);
+      } else {
+        ids.add(id);
+      }
+      return ids;
+    });
     incrementVersion(state);
   }
 
@@ -793,10 +892,13 @@ function createVisualizationStore(): VisualizationStore {
         return null;
       }
 
+      const inverted = !(visualization.classification.inverted ?? false);
+
       return {
         classification: {
           ...visualization.classification,
-          colors: [...visualization.classification.colors].reverse()
+          colors: [...visualization.classification.colors].reverse(),
+          inverted
         }
       };
     });
@@ -864,7 +966,10 @@ function createVisualizationStore(): VisualizationStore {
   function clear(): void {
     state.visualizations = [];
     state.selectedVisualizationId = undefined;
-    state.activeVisualizationIds.clear();
+    updateActiveVisualizationIds((ids) => {
+      ids.clear();
+      return ids;
+    });
     incrementVersion(state);
   }
 
@@ -872,8 +977,9 @@ function createVisualizationStore(): VisualizationStore {
     settings: SerializedVisualizationSettings
   ): void {
     // Migrate old polygon vizzes: add LINE to primitiveFilters if only POLYGON was set
-    state.visualizations = (settings.visualizations || []).map(
-      (viz: VisualizationConfig) => {
+    const restoredVisualizations = (settings.visualizations || [])
+      .filter((viz: VisualizationConfig) => !viz.facet)
+      .map((viz: VisualizationConfig) => {
         if (
           viz.primitiveFilters &&
           viz.primitiveFilters.length === 1 &&
@@ -888,11 +994,20 @@ function createVisualizationStore(): VisualizationStore {
           };
         }
         return viz;
-      }
-    );
-    state.selectedVisualizationId = settings.selectedVisualizationId;
+      });
+
+    state.visualizations = restoredVisualizations;
+
+    const restoredIds = new Set(restoredVisualizations.map((viz) => viz.id));
+    state.selectedVisualizationId = restoredIds.has(
+      settings.selectedVisualizationId ?? ''
+    )
+      ? settings.selectedVisualizationId
+      : restoredVisualizations[0]?.id;
     state.activeVisualizationIds = new Set(
-      settings.activeVisualizationIds || []
+      (settings.activeVisualizationIds || []).filter((id) =>
+        restoredIds.has(id)
+      )
     );
     incrementVersion(state);
   }
@@ -923,6 +1038,7 @@ function createVisualizationStore(): VisualizationStore {
     updateMissingData,
     updateClassification,
     updateVisualization,
+    applyVisualizationPreset,
     duplicateVisualization,
     removeVisualization,
     createBulkVisualizations,

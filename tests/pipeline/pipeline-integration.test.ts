@@ -127,10 +127,22 @@ const CSV_VALID: CsvTestCase[] = [
     minCols: 3
   },
   {
+    id: 'seveso-custom-gps',
+    relativePath: 'csv/sites-seveso-idf-custom-gps-columns.csv',
+    minRows: 5,
+    minCols: 5
+  },
+  {
     id: 'fuzzy-countries',
     relativePath: 'csv/fuzzy-countries.csv',
     minRows: 4,
     minCols: 2
+  },
+  {
+    id: 'france-regions-simplification-check',
+    relativePath: 'csv/france-regions-simplification-check.csv',
+    minRows: 18,
+    minCols: 3
   },
   {
     id: 'world-bank',
@@ -155,6 +167,24 @@ const CSV_VALID: CsvTestCase[] = [
     relativePath: 'csv/test-csv-options-thousands.csv',
     minRows: 1,
     minCols: 2
+  },
+  {
+    id: 'tabular-gps-gcpnt-columns',
+    relativePath: 'csv/tabular-gps-gcpnt-columns.csv',
+    minRows: 3,
+    minCols: 5
+  },
+  {
+    id: 'tiny-geo-enrich',
+    relativePath: 'csv/tiny-geo-3features-enrich.csv',
+    minRows: 3,
+    minCols: 2
+  },
+  {
+    id: 'visualization-toolbox-cases-csv',
+    relativePath: 'csv/visualization-toolbox-cases.csv',
+    minRows: 4,
+    minCols: 6
   }
 ];
 
@@ -225,10 +255,22 @@ const GEO_FILES: GeoTestCase[] = [
     expectedGeometryTypes: ['MULTIPOLYGON']
   },
   {
+    id: 'geojson-multipoint-representative-points',
+    relativePath: 'geojson/multipoint-representative-points.geojson',
+    format: 'geojson',
+    expectedGeometryTypes: ['MULTIPOINT']
+  },
+  {
     id: 'geojson-tiny-3features',
     relativePath: 'geojson/tiny-geo-3features.geojson',
     format: 'geojson',
     expectedGeometryTypes: ['POLYGON']
+  },
+  {
+    id: 'geojson-visualization-toolbox-cases',
+    relativePath: 'geojson/visualization-toolbox-cases.geojson',
+    format: 'geojson',
+    expectedGeometryTypes: ['POINT']
   },
   {
     id: 'gpkg-compagnies-herault',

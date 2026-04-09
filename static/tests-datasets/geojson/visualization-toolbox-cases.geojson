@@ -1,0 +1,150 @@
+{
+  "type": "FeatureCollection",
+  "name": "visualization-toolbox-cases",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "place_name": "Paris",
+        "category": "public",
+        "segment": "capital",
+        "capacity_total": 1200,
+        "population_total": 2187526,
+        "year": 2021
+      },
+      "geometry": { "type": "Point", "coordinates": [2.3522, 48.8566] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "place_name": "Lyon",
+        "category": "private",
+        "segment": "metro",
+        "capacity_total": 850,
+        "population_total": 522250,
+        "year": 2021
+      },
+      "geometry": { "type": "Point", "coordinates": [4.8357, 45.764] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "place_name": "Marseille",
+        "category": "public",
+        "segment": "port",
+        "capacity_total": null,
+        "population_total": 873076,
+        "year": 2022
+      },
+      "geometry": { "type": "Point", "coordinates": [5.3698, 43.2965] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "place_name": "Lille",
+        "category": "private",
+        "segment": "metro",
+        "capacity_total": 460,
+        "population_total": 236710,
+        "year": 2022
+      },
+      "geometry": { "type": "Point", "coordinates": [3.0573, 50.6292] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "place_name": "Brussels",
+        "category": "public",
+        "segment": "capital",
+        "capacity_total": 980,
+        "population_total": 185103,
+        "year": 2023
+      },
+      "geometry": { "type": "Point", "coordinates": [4.3517, 50.8503] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "place_name": "Luxembourg",
+        "category": "private",
+        "segment": "capital",
+        "capacity_total": 610,
+        "population_total": 132780,
+        "year": 2023
+      },
+      "geometry": { "type": "Point", "coordinates": [6.1296, 49.6116] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "place_name": "Madrid",
+        "category": "public",
+        "segment": "capital",
+        "capacity_total": 1500,
+        "population_total": 3223334,
+        "year": 2024
+      },
+      "geometry": { "type": "Point", "coordinates": [-3.7038, 40.4168] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "place_name": "Barcelona",
+        "category": "private",
+        "segment": "port",
+        "capacity_total": 1100,
+        "population_total": 1664182,
+        "year": 2024
+      },
+      "geometry": { "type": "Point", "coordinates": [2.1734, 41.3851] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "place_name": "Berlin",
+        "category": "public",
+        "segment": "capital",
+        "capacity_total": 1400,
+        "population_total": 3644826,
+        "year": 2021
+      },
+      "geometry": { "type": "Point", "coordinates": [13.405, 52.52] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "place_name": "Hamburg",
+        "category": "private",
+        "segment": "port",
+        "capacity_total": 930,
+        "population_total": 1841179,
+        "year": 2022
+      },
+      "geometry": { "type": "Point", "coordinates": [9.9937, 53.5511] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "place_name": "Milan",
+        "category": "public",
+        "segment": "metro",
+        "capacity_total": null,
+        "population_total": 1371498,
+        "year": 2023
+      },
+      "geometry": { "type": "Point", "coordinates": [9.19, 45.4642] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "place_name": "Turin",
+        "category": "private",
+        "segment": "metro",
+        "capacity_total": 540,
+        "population_total": 846926,
+        "year": 2024
+      },
+      "geometry": { "type": "Point", "coordinates": [7.6869, 45.0703] }
+    }
+  ]
+}

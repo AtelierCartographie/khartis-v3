@@ -43,7 +43,8 @@ function worldToData(target: number[]): [number, number, number] {
   const [cx, cy] = get_bbox_center(bbox);
   const scale = get_max_scale(projectionStore.canvasSize, bbox);
   if (scale === 0) return t;
-  return [t[0] / scale + cx, t[1] / scale + cy, 0];
+  const yDirection = projectionStore.isProjectedCoordinates ? -1 : 1;
+  return [t[0] / scale + cx, (t[1] * yDirection) / scale + cy, 0];
 }
 
 /**
@@ -56,7 +57,8 @@ function dataToWorld(target: number[]): [number, number, number] {
   if (!bbox) return t;
   const [cx, cy] = get_bbox_center(bbox);
   const scale = get_max_scale(projectionStore.canvasSize, bbox);
-  return [scale * (t[0] - cx), scale * (t[1] - cy), 0];
+  const yDirection = projectionStore.isProjectedCoordinates ? -1 : 1;
+  return [scale * (t[0] - cx), yDirection * scale * (t[1] - cy), 0];
 }
 
 interface PendingViewState {
@@ -64,6 +66,8 @@ interface PendingViewState {
   /** Target stored in data (geographic) coordinates, not world coordinates. */
   target: [number, number, number];
 }
+
+type SerializedViewState = PendingViewState;
 
 function createMapInstanceStore() {
   const state = $state<{
@@ -85,6 +89,29 @@ function createMapInstanceStore() {
   });
 
   let pendingRestore: PendingViewState | null = null;
+  let lastSerializedViewState: SerializedViewState | null = null;
+
+  function buildSerializedViewState(): SerializedViewState | null {
+    const worldTarget = normalizeTarget(state.deckViewState.target);
+    const bbox = projectionStore.referenceBbox;
+
+    if (!bbox) {
+      return lastSerializedViewState;
+    }
+
+    const scale = get_max_scale(projectionStore.canvasSize, bbox);
+    if (scale === 0) {
+      return lastSerializedViewState;
+    }
+
+    const serialized = {
+      zoom: state.deckViewState.zoom,
+      target: worldToData(worldTarget)
+    };
+
+    lastSerializedViewState = serialized;
+    return serialized;
+  }
 
   function setMapInstance(map: MapLibreMap | null) {
     state.map = map;
@@ -291,6 +318,8 @@ function createMapInstanceStore() {
 
     applyDeckViewState();
     updateZoomFromMap();
+    buildSerializedViewState();
+    persistenceRegistry.notifyChange('mapViewState');
   }
 
   function restoreFromSerialized(data: {
@@ -317,6 +346,7 @@ function createMapInstanceStore() {
       : [0, 0, 0];
 
     pendingRestore = { zoom, target };
+    lastSerializedViewState = pendingRestore;
   }
 
   function reset() {
@@ -331,6 +361,7 @@ function createMapInstanceStore() {
     // reset() is called during map teardown (view switch, destroy)
     // but pendingRestore must survive until fitToOrthographicBounds()
     // consumes it on the next initialization.
+    lastSerializedViewState = null;
   }
 
   return {
@@ -375,6 +406,7 @@ function createMapInstanceStore() {
     setBaseZoomLevel,
     updateZoomFromMap,
     updateDeckViewState,
+    buildSerializedViewState,
     zoomIn,
     zoomOut,
     setZoom,
@@ -389,11 +421,11 @@ export const mapInstanceStore = createMapInstanceStore();
 
 persistenceRegistry.register({
   key: 'mapViewState',
-  serialize: () => {
-    const worldTarget = normalizeTarget(mapInstanceStore.deckViewState.target);
-    const dataTarget = worldToData(worldTarget);
-    return { zoom: mapInstanceStore.deckViewState.zoom, target: dataTarget };
-  },
+  serialize: () =>
+    mapInstanceStore.buildSerializedViewState() ?? {
+      zoom: mapInstanceStore.deckViewState.zoom,
+      target: [0, 0, 0]
+    },
   deserialize: (data: unknown) =>
     mapInstanceStore.restoreFromSerialized(
       data as { zoom?: number; target?: [number, number, number] }

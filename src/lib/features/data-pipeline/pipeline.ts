@@ -119,6 +119,7 @@ const Pipeline = {
           applyGeoDetection(dataset, uploadedFile.deepAnalysis?.geoDetection);
         }
       } else {
+        result.id = uploadedFile.datasetId ?? uploadedFile.id;
         result.sourceFileId = uploadedFile.id;
         result.name = uploadedFile.name;
         applyGeoDetection(result, uploadedFile.deepAnalysis?.geoDetection);

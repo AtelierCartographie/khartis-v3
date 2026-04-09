@@ -14,6 +14,8 @@
     enabled?: boolean;
     showPattern?: boolean;
     pattern?: BasemapDottedPattern;
+    disabled?: boolean;
+    disabledReason?: string;
     onenabledchange?: (enabled: boolean) => void;
     onpatternchange?: (pattern: BasemapDottedPattern) => void;
   }
@@ -41,6 +43,8 @@
     enabled = false,
     showPattern = false,
     pattern = BasemapDottedPattern.DOTS,
+    disabled = false,
+    disabledReason,
     onenabledchange,
     onpatternchange
   }: Props = $props();
@@ -59,6 +63,7 @@
     <span class="dotted-label">{label}</span>
     <Switch
       toggled={enabled}
+      disabled={disabled}
       labelText={label}
       hideLabel
       labelA={m.option_non()}
@@ -74,9 +79,14 @@
         size="sm"
         selectedId={pattern}
         items={getPatternOptions()}
+        disabled={disabled}
         on:select={handlePatternChange}
       />
     </div>
+  {/if}
+
+  {#if disabled && disabledReason}
+    <p class="disabled-reason">{disabledReason}</p>
   {/if}
 </div>
 
@@ -101,5 +111,12 @@
 
   .pattern-selector {
     margin-top: var(--cds-spacing-02);
+  }
+
+  .disabled-reason {
+    font-size: 0.6875rem;
+    line-height: 1rem;
+    color: var(--cds-text-secondary);
+    margin: 0;
   }
 </style>

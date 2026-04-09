@@ -1,4 +1,5 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { resolveGPSCoordinateColumns } from '$lib/features/commons/utils/geo-detector.utils';
 import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import * as m from '$lib/paraglide/messages';
 import type { Table } from 'apache-arrow/Arrow';
@@ -157,21 +158,11 @@ export async function validateGPSColumns(
   }
 }
 
-export function detectGPSColumns(columns: AnalysisResult[]): GPSColumns | null {
-  const latColumn = columns.find((col) =>
-    /^(lat|latitude|y_coord|y|lat_dd|latitude_dd|geo_lat)$/i.test(col.name)
-  );
-  const lonColumn = columns.find((col) =>
-    /^(lon|long|longitude|x_coord|x|lon_dd|longitude_dd|lng|geo_lon)$/i.test(
-      col.name
-    )
-  );
-
-  if (latColumn && lonColumn) {
-    return { lat: latColumn.name, lon: lonColumn.name };
-  }
-
-  return null;
+export function detectGPSColumns(
+  columns: AnalysisResult[],
+  geoDetection?: DuckDBDataset['geoDetection']
+): GPSColumns | null {
+  return resolveGPSCoordinateColumns(columns, geoDetection);
 }
 
 export async function getGPSArrowTable(
@@ -244,11 +235,11 @@ export async function getGPSBounds(
 ): Promise<GPSBounds | null> {
   const start = performance.now();
 
-  if (!dataset.gpsMode) return null;
-
   // In tabular-gps mode (no join), gpsColumns may not be set yet —
-  // fall back to auto-detecting GPS columns by name from the dataset schema.
-  const gpsColumns = dataset.gpsColumns ?? detectGPSColumns(dataset.columns);
+  // fall back to the dataset geo detection and then to column-name heuristics.
+  const gpsColumns =
+    dataset.gpsColumns ??
+    detectGPSColumns(dataset.columns, dataset.geoDetection);
   if (!gpsColumns) {
     return null;
   }

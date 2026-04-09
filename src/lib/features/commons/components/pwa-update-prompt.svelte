@@ -39,33 +39,36 @@
   }
 </script>
 
-{#if $needRefresh}
+{#if $needRefresh || $offlineReady}
   <div class="pwa-notification-container">
-    <InlineNotification
-      kind="info"
-      subtitle={m.pwa_update_subtitle()}
-      hideCloseButton={false}
-      lowContrast={false}
-      on:close={closeUpdateNotification}
-    >
-      <NotificationActionButton kind="ghost" on:click={handleUpdate}>
-        {m.pwa_update_title()}
-      </NotificationActionButton>
-    </InlineNotification>
-  </div>
-{/if}
+    {#if $needRefresh}
+      <InlineNotification
+        kind="info"
+        title={m.pwa_update_title()}
+        subtitle={m.pwa_update_subtitle()}
+        hideCloseButton={false}
+        lowContrast={false}
+        on:close={closeUpdateNotification}
+      >
+        <svelte:fragment slot="actions">
+          <NotificationActionButton kind="ghost" on:click={handleUpdate}>
+            {m.pwa_update_action()}
+          </NotificationActionButton>
+        </svelte:fragment>
+      </InlineNotification>
+    {/if}
 
-{#if $offlineReady}
-  <div class="pwa-notification-container">
-    <InlineNotification
-      kind="success"
-      title={m.pwa_offline_ready_title()}
-      subtitle={m.pwa_offline_ready_subtitle()}
-      hideCloseButton={false}
-      lowContrast={false}
-      timeout={OFFLINE_READY_TIMEOUT}
-      on:close={closeOfflineNotification}
-    />
+    {#if $offlineReady}
+      <InlineNotification
+        kind="success"
+        title={m.pwa_offline_ready_title()}
+        subtitle={m.pwa_offline_ready_subtitle()}
+        hideCloseButton={false}
+        lowContrast={false}
+        timeout={OFFLINE_READY_TIMEOUT}
+        on:close={closeOfflineNotification}
+      />
+    {/if}
   </div>
 {/if}
 
@@ -75,19 +78,21 @@
     bottom: 1rem;
     right: 1rem;
     z-index: var(--z-overlay);
-    max-width: 400px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    width: min(26rem, calc(100vw - 2rem));
   }
 
   :global(.pwa-notification-container .bx--inline-notification) {
-    flex-wrap: wrap;
-    align-items: flex-start;
+    max-inline-size: 100%;
   }
 
-  :global(.pwa-notification-container .bx--inline-notification__details) {
-    flex: 1 1 100%;
-  }
-
-  :global(.pwa-notification-container .bx--inline-notification__action-button) {
-    margin-inline-start: 2.5rem;
+  @media (max-width: 640px) {
+    .pwa-notification-container {
+      left: 1rem;
+      right: 1rem;
+      width: auto;
+    }
   }
 </style>

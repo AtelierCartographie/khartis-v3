@@ -151,9 +151,9 @@ export const FileValidator = {
     } catch (error) {
       logger.error('Async validation failed', LogCategory.FILE, error);
       result.errors.push(m.validation_content_check_failed());
-      result.isValid = false;
     }
 
+    result.isValid = result.errors.length === 0;
     return result;
   },
 
@@ -438,7 +438,10 @@ export const FileValidator = {
     buffer: ArrayBuffer,
     result: DetailedValidationResult
   ): Promise<void> {
-    const text = new TextDecoder('utf-8').decode(buffer);
+    const text =
+      file.size <= buffer.byteLength
+        ? new TextDecoder('utf-8').decode(buffer)
+        : await file.text();
 
     try {
       const trimmed = text.trim();
@@ -546,6 +549,11 @@ export const FileValidator = {
   },
 
   async readFileHeader(file: File, bytes: number = 512): Promise<ArrayBuffer> {
+    if (typeof FileReader === 'undefined') {
+      const blob = file.slice(0, Math.min(bytes, file.size));
+      return blob.arrayBuffer();
+    }
+
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       const blob = file.slice(0, Math.min(bytes, file.size));

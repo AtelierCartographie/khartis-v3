@@ -61,7 +61,7 @@ L'aperçu des données propose plusieurs outils :
 
 Deux méthodes pour localiser vos données sur la carte :
 
-- **Coordonnées GPS** : si vos données contiennent des colonnes latitude et longitude, Khartis les détecte et positionne les entités automatiquement.
+- **Coordonnées GPS** : si vos données contiennent des colonnes reconnues comme latitude et longitude, Khartis les détecte et positionne les entités automatiquement, même si les noms ne sont pas strictement `latitude` / `longitude`.
 - **Entités administratives** : Khartis identifie les noms ou codes de territoires (pays, régions, départements...) et les associe au fond de carte correspondant.
 
 ### Jointure à un fond de carte

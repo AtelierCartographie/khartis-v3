@@ -1,6 +1,7 @@
 import type { ProcessedDataset } from '$lib/features/data-pipeline';
 import { Duck, initDuckDB } from '$lib/features/duckdb';
 import * as m from '$lib/paraglide/messages';
+import { bigIntReplacer } from './clone.utils';
 import { escapeIdentifier, escapeSqlString } from './sanitize.utils';
 import { generateFilename } from './string.utils';
 import { MIME, GEOJSON_TYPE } from '../constants';
@@ -150,12 +151,12 @@ export function exportToGeoJson(data: unknown): Blob {
     throw new Error(m.error_invalid_data_format_geojson());
   }
 
-  const jsonString = JSON.stringify(geojson, null, 2);
+  const jsonString = JSON.stringify(geojson, bigIntReplacer, 2);
   return new Blob([jsonString], { type: MIME.GEOJSON });
 }
 
 export function exportToJson(data: unknown): Blob {
-  const jsonString = JSON.stringify(data, null, 2);
+  const jsonString = JSON.stringify(data, bigIntReplacer, 2);
   return new Blob([jsonString], { type: MIME.JSON });
 }
 

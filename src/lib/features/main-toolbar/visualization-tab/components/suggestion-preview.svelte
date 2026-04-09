@@ -128,28 +128,14 @@
     </svg>
   {:else if vizType === VisualizationType.CATEGORICAL}
     {#if primaryGeom === 'point'}
-      <!-- Categorical points: different colored symbols -->
+      <!-- Categorical points: same symbol, different category colors -->
       <svg viewBox="0 0 100 80" fill="none" xmlns="http://www.w3.org/2000/svg">
         <circle cx="25" cy="22" r="6" fill="var(--preview-accent)" />
-        <rect
-          x="60"
-          y="16"
-          width="11"
-          height="11"
-          rx="1"
-          fill="var(--preview-cat2)"
-        />
-        <polygon points="50,55 44,67 56,67" fill="var(--preview-cat3)" />
+        <circle cx="65" cy="22" r="6" fill="var(--preview-cat2)" />
+        <circle cx="50" cy="55" r="6" fill="var(--preview-cat3)" />
         <circle cx="78" cy="50" r="6" fill="var(--preview-accent)" />
-        <rect
-          x="15"
-          y="50"
-          width="11"
-          height="11"
-          rx="1"
-          fill="var(--preview-cat2)"
-        />
-        <polygon points="80,22 74,34 86,34" fill="var(--preview-cat3)" />
+        <circle cx="20" cy="56" r="6" fill="var(--preview-cat2)" />
+        <circle cx="80" cy="24" r="6" fill="var(--preview-cat3)" />
       </svg>
     {:else}
       <!-- Categorical polygons: distinct colors -->

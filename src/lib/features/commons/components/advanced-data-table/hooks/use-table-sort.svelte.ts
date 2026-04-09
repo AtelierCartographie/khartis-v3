@@ -1,4 +1,6 @@
 export interface UseTableSortProps {
+  initialSortColumn?: string | null;
+  initialSortOrder?: 'ASC' | 'DESC' | null;
   onSortChange?: (column: string | null, order: 'ASC' | 'DESC' | null) => void;
 }
 
@@ -10,8 +12,10 @@ export interface UseTableSortReturn {
 }
 
 export function useTableSort(props?: UseTableSortProps): UseTableSortReturn {
-  let sortColumn = $state<string | null>(null);
-  let sortOrder = $state<'ASC' | 'DESC' | null>(null);
+  let sortColumn = $state<string | null>(props?.initialSortColumn ?? null);
+  let sortOrder = $state<'ASC' | 'DESC' | null>(
+    props?.initialSortOrder ?? null
+  );
 
   function sortTable(column: string, order: 'ASC' | 'DESC'): void {
     sortColumn = column;

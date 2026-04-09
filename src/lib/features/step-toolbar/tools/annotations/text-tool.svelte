@@ -185,9 +185,13 @@
             <Select
               id="annotation-font-select"
               labelText={m.legend_font()}
-              bind:selected={localFont}
-              on:change={() =>
-                annotationsActions.applyStyle({ font: localFont })}
+              selected={localFont}
+              on:change={(event) => {
+                const nextFont = (event.currentTarget as HTMLSelectElement)
+                  .value;
+                localFont = nextFont;
+                annotationsActions.applyStyle({ font: nextFont });
+              }}
               size="sm"
             >
               {#each AVAILABLE_FONTS as f (f)}
@@ -199,9 +203,18 @@
             <Select
               id="annotation-font-size"
               labelText={m.legend_font_size()}
-              bind:selected={localFontSize}
-              on:change={() =>
-                annotationsActions.applyStyle({ fontSize: localFontSize })}
+              selected={String(localFontSize)}
+              on:change={(event) => {
+                const nextFontSize = Number(
+                  (event.currentTarget as HTMLSelectElement).value
+                );
+                if (!Number.isFinite(nextFontSize)) {
+                  return;
+                }
+
+                localFontSize = nextFontSize;
+                annotationsActions.applyStyle({ fontSize: nextFontSize });
+              }}
               size="sm"
             >
               {#each LEGEND_FONT_SIZES as s (s)}
