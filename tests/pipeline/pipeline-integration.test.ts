@@ -255,6 +255,12 @@ const GEO_FILES: GeoTestCase[] = [
     expectedGeometryTypes: ['MULTIPOLYGON']
   },
   {
+    id: 'geojson-multipoint-representative-points',
+    relativePath: 'geojson/multipoint-representative-points.geojson',
+    format: 'geojson',
+    expectedGeometryTypes: ['MULTIPOINT']
+  },
+  {
     id: 'geojson-tiny-3features',
     relativePath: 'geojson/tiny-geo-3features.geojson',
     format: 'geojson',
