@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { tableFromArrays, tableToIPC } from 'apache-arrow';
 import {
   fetchArrowRepresentativePointTable,
-  fetchArrowTableWithGeometry
+  fetchArrowTableWithGeometry,
+  getRepresentativePointArrowTable
 } from '$lib/features/duckdb/orchestrator/arrow-ops';
+import { extractGeometryInfo } from '$lib/features/map/io/geometry-parser';
 import { GeometryType } from '$lib/features/map/constants/map.constants';
 
 function createArrowIpcBuffer(): Uint8Array {
@@ -123,5 +125,28 @@ describe('fetchArrowRepresentativePointTable', () => {
 
     expect(executedSql).toContain('ST_PointOnSurface("geometry")');
     expect(executedSql).not.toContain('ST_MaximumInscribedCircle(');
+  });
+
+  it('marks representative point tables as point geometries for layer rendering', async () => {
+    const queryMock = vi.fn().mockResolvedValue(createArrowIpcBuffer());
+
+    const table = await getRepresentativePointArrowTable(
+      'example_table',
+      GeometryType.MULTIPOLYGON,
+      {
+        describe_table: vi.fn().mockResolvedValue({
+          name: ['id', 'geometry'],
+          type: ['INTEGER', "GEOMETRY('EPSG:4326')"]
+        }),
+        query: queryMock
+      } as never
+    );
+
+    const geometryInfo = extractGeometryInfo(table);
+    const geoMetadata = JSON.parse(table.schema.metadata?.get('geo') ?? '{}');
+
+    expect(queryMock).toHaveBeenCalledTimes(1);
+    expect(geometryInfo?.type).toBe(GeometryType.POINT);
+    expect(geoMetadata.columns?.geometry?.geometry_types).toEqual(['POINT']);
   });
 });
