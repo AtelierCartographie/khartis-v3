@@ -235,6 +235,10 @@
     top: -13.5vh !important;
   }
 
+  :global(#khartis-tool-popover .bx--popover--right-top) {
+    z-index: -1 !important;
+  }
+
   :global(#khartis-colorblindness-notification .bx--popover-contents) {
     width: var(--cb-notif-width) !important;
     max-width: var(--cb-notif-width) !important;
