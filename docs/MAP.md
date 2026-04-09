@@ -129,6 +129,8 @@ Pourquoi c'est critique : `projSolidPolygonCache` etc. utilisent `ProjectionLike
 
 Le GeoParquet principal d'un fond de carte est charge immediatement, mais les couches annexes metadata-driven (limites, graticules, lignes geographiques) sont chargees a la demande selon les couches visibles. Les centroides metadata ne sont toujours pas precharges comme couches visibles autonomes, mais les symboles et textes des couches thematiques s'appuient desormais sur une table de points representatifs derivee par DuckDB.
 
+Le planisphere par defaut n'est pas charge en etat vierge. Il sert seulement de fallback quand le projet contient deja des donnees source, ou lorsqu'un fond de reference explicite doit etre affiche ou restaure.
+
 ---
 
 ## Pipeline GeoArrow → Deck.gl
@@ -279,6 +281,12 @@ désactivées quand le fond de carte actif ne fournit pas les données
 géométriques nécessaires. Cela évite un faux positif UX où un clic changeait
 des réglages sans aucun effet visuel sur la carte.
 
+Quand le fond actif expose des couches metadata génériques `polygon`, `line`
+ou `point` (fonds importés ou enrichis), elles alimentent respectivement les
+contrôles `Lacs`, `Rivières` et `Villes`. Ces groupes suivent désormais aussi
+l'ordre UI du panneau `Calques` à l'intérieur de leur domaine de rendu
+(`background` ou `foreground`).
+
 Les toggles `Pointillés` des sections `Frontières/limites`, `Équateur` et
 `Méridiens/parallèles` sont aussi désactivés quand le fond actif est piloté par
 des couches metadata (`limit`, `graticule`, `geographic-lines`). Sur ces
@@ -329,6 +337,7 @@ IDs stables — changer un ID force un re-upload GPU complet au lieu d'un prop d
 - `MapboxOverlay({ interleaved: true })`
 - Basemap gère la projection (web mercator/globe)
 - `mapProjectionStore` toggle Mercator ↔ Globe
+- Les styles tuilés `France` verrouillent la projection sur `mercator` : l'option `Globe 3D` n'est affichée que pour `Monde`, et tout état persistant `globe` est normalisé automatiquement au retour sur `France`.
 
 ---
 

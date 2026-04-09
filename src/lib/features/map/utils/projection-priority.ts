@@ -11,13 +11,13 @@ export function resolveProjectionForRender(
   overrideSource?: 'auto' | 'manual',
   allowManualOverride = true
 ): ProjectionLike | undefined {
-  if (allowManualOverride && overrideSource === 'manual' && userOverride) {
-    return userOverride;
+  if (overrideSource === 'manual' && userOverride) {
+    return allowManualOverride ? userOverride : defaultProjection;
   }
 
   if (defaultProjection) {
     return defaultProjection;
   }
 
-  return allowManualOverride ? userOverride : undefined;
+  return userOverride;
 }

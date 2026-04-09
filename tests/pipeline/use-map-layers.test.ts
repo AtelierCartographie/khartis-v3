@@ -66,25 +66,25 @@ describe('getVisualizationRenderOrder', () => {
 });
 
 describe('getThematicLayerRenderOrder', () => {
-  it('keeps text overlays below geometry layers', () => {
+  it('preserves the authored order so an upper text visualization can render above lower geometry', () => {
     const layers = [
       createLayerStub('polygon-layer-viz-bottom'),
-      createLayerStub('text-layer-viz-top'),
+      createLayerStub('label-layer-viz-bottom'),
       createLayerStub('point-layer-viz-top'),
-      createLayerStub('label-layer-viz-bottom')
+      createLayerStub('text-layer-viz-top')
     ];
 
     const renderOrder = getThematicLayerRenderOrder(layers);
 
     expect(renderOrder.map((layer) => layer.id)).toEqual([
-      'text-layer-viz-top',
-      'label-layer-viz-bottom',
       'polygon-layer-viz-bottom',
-      'point-layer-viz-top'
+      'label-layer-viz-bottom',
+      'point-layer-viz-top',
+      'text-layer-viz-top'
     ]);
   });
 
-  it('preserves relative order inside text and geometry groups', () => {
+  it('does not mutate the original thematic order', () => {
     const layers = [
       createLayerStub('text-layer-viz-a'),
       createLayerStub('polygon-layer-viz-a'),
@@ -96,15 +96,16 @@ describe('getThematicLayerRenderOrder', () => {
 
     expect(renderOrder.map((layer) => layer.id)).toEqual([
       'text-layer-viz-a',
-      'label-layer-viz-b',
       'polygon-layer-viz-a',
+      'label-layer-viz-b',
       'line-layer-viz-b'
     ]);
+    expect(renderOrder).not.toBe(layers);
   });
 });
 
 describe('getMapLayerRenderOrder', () => {
-  it('keeps basemap background below text and geometry while preserving basemap foreground above data', () => {
+  it('keeps basemap background below thematic layers and basemap foreground above them without rewriting thematic stacking', () => {
     const renderOrder = getMapLayerRenderOrder({
       basemapBackgroundLayers: [
         createLayerStub('basemap-mers'),
@@ -121,8 +122,8 @@ describe('getMapLayerRenderOrder', () => {
     expect(renderOrder.map((layer) => layer.id)).toEqual([
       'basemap-mers',
       'basemap-terre',
-      'text-layer-viz-a',
       'polygon-layer-viz-a',
+      'text-layer-viz-a',
       'point-layer-viz-b',
       'basemap-frontieres'
     ]);
@@ -162,6 +163,14 @@ describe('resolveProjectionForRender', () => {
     expect(resolveProjectionForRender(undefined, userOverride, 'auto')).toBe(
       userOverride
     );
+  });
+
+  it('keeps auto projection suggestions available when no basemap projection exists', () => {
+    const userOverride = createProjectionStub('laea-europe');
+
+    expect(
+      resolveProjectionForRender(undefined, userOverride, 'auto', false)
+    ).toBe(userOverride);
   });
 
   it('keeps projected datasets in pass-through mode even after a manual override', () => {

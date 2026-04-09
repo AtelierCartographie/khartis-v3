@@ -5,7 +5,7 @@
   import { tick } from 'svelte';
   import LayersList from './layers-list.svelte';
   import { layersActions, layersState } from './layers.store.svelte';
-  import type { Layer } from './layers.types.js';
+  import type { Layer, LayerReorderScope } from './layers.types.js';
   import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
   import { basemapLayersStore } from '$lib/features/map/stores/basemap-layers.store.svelte';
   import {
@@ -37,12 +37,27 @@
   );
 
   const parentLayers = $derived(layers.filter((layer) => !layer.isSubLayer));
+  const basemapForegroundParentLayers = $derived(
+    parentLayers.filter((layer) => layer.basemapRenderGroup === 'foreground')
+  );
+  const visualizationParentLayers = $derived(
+    parentLayers.filter((layer) => layer.type === 'visualization')
+  );
+  const basemapBackgroundParentLayers = $derived(
+    parentLayers.filter((layer) => layer.basemapRenderGroup === 'background')
+  );
 
   const childLayersByParent = $derived.by(() => {
     const children: Record<string, Layer[]> = {};
 
     for (const layer of layers) {
-      if (!layer.isSubLayer || !layer.parentId) continue;
+      if (
+        !layer.isSubLayer ||
+        !layer.parentId ||
+        layer.type !== 'visualization'
+      ) {
+        continue;
+      }
 
       if (!children[layer.parentId]) {
         children[layer.parentId] = [];
@@ -155,11 +170,11 @@
   }
 
   function handleReorderLayers(
-    type: 'visualization' | 'geographic',
+    scope: LayerReorderScope,
     fromIndex: number,
     toIndex: number
   ): void {
-    store.reorderLayers(type, fromIndex, toIndex);
+    store.reorderLayers(scope, fromIndex, toIndex);
   }
 
   function handleReorderSubLayers(
@@ -174,17 +189,99 @@
 <div class="layers-tool">
   <p class="description">{m.layers_description()}</p>
 
-  <LayersList
-    parentLayers={parentLayers}
-    childLayersByParent={childLayersByParent}
-    onToggleVisibility={handleToggleVisibility}
-    onOpenSettings={handleOpenSettings}
-    onReorderLayers={handleReorderLayers}
-    onReorderSubLayers={handleReorderSubLayers}
-    onRenameLayer={handleRenameLayer}
-    onDuplicateLayer={handleDuplicateLayer}
-    onDeleteLayer={handleDeleteLayer}
-  />
+  {#if basemapForegroundParentLayers.length > 0}
+    <section
+      class="layer-section"
+      aria-label={m.layers_section_foreground_title()}
+    >
+      <div class="section-header">
+        <div class="section-heading">
+          <h4 class="section-title">{m.layers_section_foreground_title()}</h4>
+          <span class="section-badge section-badge--global">
+            {m.layers_section_badge_global()}
+          </span>
+        </div>
+        <p class="section-help">{m.layers_section_foreground_description()}</p>
+      </div>
+
+      <LayersList
+        parentLayers={basemapForegroundParentLayers}
+        childLayersByParent={{}}
+        reorderScope="geographic-foreground"
+        onToggleVisibility={handleToggleVisibility}
+        onOpenSettings={handleOpenSettings}
+        onReorderLayers={handleReorderLayers}
+        onReorderSubLayers={handleReorderSubLayers}
+        onRenameLayer={handleRenameLayer}
+        onDuplicateLayer={handleDuplicateLayer}
+        onDeleteLayer={handleDeleteLayer}
+      />
+    </section>
+  {/if}
+
+  {#if visualizationParentLayers.length > 0}
+    <section
+      class="layer-section"
+      aria-label={m.layers_section_visualizations_title()}
+    >
+      <div class="section-header">
+        <div class="section-heading">
+          <h4 class="section-title">
+            {m.layers_section_visualizations_title()}
+          </h4>
+          <span class="section-badge section-badge--reorderable">
+            {m.layers_section_badge_reorderable()}
+          </span>
+        </div>
+        <p class="section-help">
+          {m.layers_section_visualizations_description()}
+        </p>
+      </div>
+
+      <LayersList
+        parentLayers={visualizationParentLayers}
+        childLayersByParent={childLayersByParent}
+        reorderScope="visualization"
+        onToggleVisibility={handleToggleVisibility}
+        onOpenSettings={handleOpenSettings}
+        onReorderLayers={handleReorderLayers}
+        onReorderSubLayers={handleReorderSubLayers}
+        onRenameLayer={handleRenameLayer}
+        onDuplicateLayer={handleDuplicateLayer}
+        onDeleteLayer={handleDeleteLayer}
+      />
+    </section>
+  {/if}
+
+  {#if basemapBackgroundParentLayers.length > 0}
+    <section
+      class="layer-section"
+      aria-label={m.layers_section_background_title()}
+    >
+      <div class="section-header">
+        <div class="section-heading">
+          <h4 class="section-title">{m.layers_section_background_title()}</h4>
+          <span class="section-badge section-badge--global">
+            {m.layers_section_badge_global()}
+          </span>
+        </div>
+        <p class="section-help">{m.layers_section_background_description()}</p>
+      </div>
+
+      <LayersList
+        parentLayers={basemapBackgroundParentLayers}
+        childLayersByParent={{}}
+        reorderScope="geographic-background"
+        onToggleVisibility={handleToggleVisibility}
+        onOpenSettings={handleOpenSettings}
+        onReorderLayers={handleReorderLayers}
+        onReorderSubLayers={handleReorderSubLayers}
+        onRenameLayer={handleRenameLayer}
+        onDuplicateLayer={handleDuplicateLayer}
+        onDeleteLayer={handleDeleteLayer}
+      />
+    </section>
+  {/if}
 </div>
 
 <Modal
@@ -225,6 +322,73 @@
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-05);
+  }
+
+  .layer-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-04);
+  }
+
+  .layer-section + .layer-section {
+    padding-top: var(--cds-spacing-05);
+    border-top: 1px solid var(--cds-border-subtle);
+  }
+
+  .section-header {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-02);
+  }
+
+  .section-heading {
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-03);
+    flex-wrap: wrap;
+  }
+
+  .section-title {
+    margin: 0;
+    font-size: 14px;
+    line-height: 18px;
+    letter-spacing: 0.16px;
+    font-weight: 600;
+    color: var(--cds-text-primary);
+  }
+
+  .section-help {
+    margin: 0;
+    font-size: 12px;
+    line-height: 16px;
+    letter-spacing: 0.32px;
+    color: var(--cds-text-secondary);
+  }
+
+  .section-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 20px;
+    padding: 0 8px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    font-size: 11px;
+    line-height: 1;
+    letter-spacing: 0.32px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .section-badge--global {
+    background: var(--cds-button-primary);
+    color: var(--cds-text-on-color);
+  }
+
+  .section-badge--reorderable {
+    background: var(--cds-layer-hover);
+    border-color: var(--cds-border-subtle);
+    color: var(--cds-text-secondary);
   }
 
   .description {

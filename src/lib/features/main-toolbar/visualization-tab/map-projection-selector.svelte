@@ -4,12 +4,46 @@
   import { InfoPopover } from './components/shared';
   import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
+  import { getBasemapZone } from '$lib/features/map/constants/basemap-styles';
   import { mapProjectionStore } from '$lib/features/map/stores/map-projection.store.svelte';
+  import { resolveTiledStyleContext } from './tiled-basemap-selection';
+  import {
+    isGlobeProjectionAvailable,
+    resolveProjectionForBasemapZone
+  } from './map-projection-availability';
 
   const isGlobe = $derived(mapProjectionStore.isGlobe);
   const requiresMapLibre = $derived(basemapStyleStore.requiresMapLibre);
+  const currentStyleContext = $derived(
+    resolveTiledStyleContext(
+      basemapStyleStore.selectedStyle,
+      basemapStyleStore.preferredTiledStyle
+    )
+  );
+  const selectedZone = $derived(getBasemapZone(currentStyleContext));
+  const globeAvailable = $derived(isGlobeProjectionAvailable(selectedZone));
+
+  $effect(() => {
+    const nextProjection = resolveProjectionForBasemapZone(
+      mapProjectionStore.projection,
+      selectedZone
+    );
+
+    if (nextProjection === mapProjectionStore.projection) {
+      return;
+    }
+
+    mapProjectionStore.setProjection(nextProjection);
+    if (projectStore.currentProject) {
+      void projectStore.saveCurrentProject();
+    }
+  });
 
   async function handleToggle(isGlobe: boolean): Promise<void> {
+    if (!globeAvailable && isGlobe) {
+      return;
+    }
+
     mapProjectionStore.setProjection(isGlobe ? 'globe' : 'mercator');
     if (projectStore.currentProject) {
       await projectStore.saveCurrentProject();
@@ -17,7 +51,7 @@
   }
 </script>
 
-{#if requiresMapLibre}
+{#if requiresMapLibre && globeAvailable}
   <div class="projection-selector">
     <span class="field-label">
       {m.map_projection_label()}

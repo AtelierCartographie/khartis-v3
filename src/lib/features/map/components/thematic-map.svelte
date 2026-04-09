@@ -6,6 +6,11 @@
   import { onMount, untrack } from 'svelte';
   import { fade } from 'svelte/transition';
   import { basemapStyleStore } from '../../commons/store/basemap-style.store.svelte';
+  import {
+    BasemapStyle,
+    getBasemapViewportPreset,
+    getBasemapZone
+  } from '../constants/basemap-styles';
   import { hslToHex } from '../../commons/utils/color-utils';
   import { LogCategory, logger } from '../../commons/utils/logger';
   import { mapInstanceStore } from '../../commons/store/map-instance.store.svelte';
@@ -53,7 +58,6 @@
   import { buildProjectionRenderKey } from '../../step-toolbar/tools/projections/projection-render-key';
   import {
     fitProjectionToBbox,
-    getProjectedBboxForBbox,
     getProjectionById
   } from '$lib/features/commons/utils/projection.utils';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
@@ -70,10 +74,13 @@
     shouldUseBasemapReferenceInOrthographicView
   } from '../utils/orthographic-reference';
   import {
-    getMainlandBboxForBasemap,
-    computeProjectedBboxForBasemap
+    buildProjectionForBasemap,
+    computeProjectedBboxForProjection,
+    getMainlandBboxForBasemap
   } from '../utils/geoarrow-stream-bridge';
   import { proj4d3 } from '../utils/proj4d3';
+  import { resolveProjectionForRender } from '../utils/projection-priority';
+  import type { ProjectionLike } from 'geoarrow-deck-stream';
   import AnnotationOverlay from './annotation-overlay.svelte';
   import GeoIndicationsOverlay from './geo-indications-overlay.svelte';
   import LegendOverlay from './legend-overlay.svelte';
@@ -163,9 +170,11 @@
   let previousDatasetCount = 0;
   let pendingViewReset = false;
   let pendingOrthographicFit = $state(false);
+  let pendingMapLibreViewportPreset = $state<LngLatBoundsLike | null>(null);
   let projectEmptyResetTimeoutId: ReturnType<typeof setTimeout> | null = null;
   let lastDatasetCountSnapshot = -1;
   let lastLayoutSnapshot: string | null = null;
+  let lastSelectedBasemapZone = getBasemapZone(basemapStyleStore.selectedStyle);
 
   let referenceBasemapRequestId = 0;
   let pendingWorldBasemapRequestId: number | null = null;
@@ -307,7 +316,11 @@
       if (hasData) {
         scheduleLayerUpdate();
       } else {
-        startMaxWaitTimeout();
+        if (shouldLoadDefaultWorldBasemapPreview()) {
+          startMaxWaitTimeout();
+        } else {
+          triggerOnReady();
+        }
         if (mapBounds.shouldRestorePosition) {
           setTimeout(() => mapPosition.restorePosition(), 100);
         }
@@ -455,6 +468,10 @@
       scheduleLayerUpdate('useMapLayers:representativePointTablesLoaded')
   });
 
+  function shouldLoadDefaultWorldBasemapPreview(): boolean {
+    return true;
+  }
+
   function updateCanvasSize() {
     if (mapContainer) {
       projectionStore.updateCanvasSize({
@@ -466,6 +483,111 @@
 
   function fitOrthographicViewport(): void {
     if (mapInit.viewMode !== ViewMode.ORTHOGRAPHIC) {
+      return;
+    }
+
+    if (mapInit.isMapLoaded) {
+      mapInstanceStore.fitToOrthographicBounds();
+    } else {
+      pendingOrthographicFit = true;
+    }
+  }
+
+  function refreshOrthographicReferenceForFirstTable(
+    basemapMeta: ReturnType<typeof getProjectionMetadataForDataset>,
+    basemapTableOverride: ArrowTable | null = null
+  ): boolean {
+    if (!firstTable) {
+      return false;
+    }
+
+    const refBasemapId = basemapStyleStore.referenceBasemapId;
+    const dataset = getRenderedDataset(firstDatasetId);
+    const duckDataset = getRenderedDuckDBDataset(firstDatasetId);
+    const shouldUseBasemapReference =
+      shouldUseBasemapReferenceInOrthographicView(
+        dataset,
+        duckDataset,
+        refBasemapId
+      );
+    const referenceTable = resolveOrthographicReferenceTable({
+      dataset,
+      duckDataset,
+      datasetTable: firstTable,
+      basemapTable: basemapTableOverride ?? worldBaseTable,
+      referenceBasemapId: refBasemapId
+    });
+    const bounds = referenceTable
+      ? shouldUseBasemapReference
+        ? toOrthographicBounds(calculateBoundsFromGeoArrow(referenceTable))
+        : resolveOrthographicDatasetBounds(
+            dataset,
+            toOrthographicBounds(calculateBoundsFromGeoArrow(referenceTable))
+          )
+      : null;
+
+    if (!bounds) {
+      return false;
+    }
+
+    const referenceState = resolveOrthographicReferenceState(
+      dataset,
+      bounds,
+      basemapMeta,
+      shouldUseBasemapReference
+    );
+
+    if (!referenceState.bbox) {
+      return false;
+    }
+
+    projectionStore.setReferenceBbox(
+      referenceState.bbox,
+      undefined,
+      referenceState.isProjected
+    );
+
+    return true;
+  }
+
+  function syncOrthographicReferenceWithBasemap(
+    basemapMeta: typeof basemapService.currentMetadata,
+    basemapTable: ArrowTable | null
+  ): void {
+    if (
+      mapInit.viewMode !== ViewMode.ORTHOGRAPHIC ||
+      !basemapMeta ||
+      !basemapTable
+    ) {
+      return;
+    }
+
+    let didSetReference = false;
+
+    if (shouldPreferDatasetReferenceBounds()) {
+      didSetReference = refreshOrthographicReferenceForFirstTable(
+        basemapMeta,
+        basemapTable
+      );
+    }
+
+    if (!didSetReference) {
+      const referenceState = resolveOrthographicBasemapReferenceState(
+        basemapMeta,
+        basemapTable
+      );
+
+      if (referenceState.bbox) {
+        projectionStore.setReferenceBbox(
+          referenceState.bbox,
+          undefined,
+          referenceState.isProjected
+        );
+        didSetReference = true;
+      }
+    }
+
+    if (!didSetReference) {
       return;
     }
 
@@ -490,11 +612,13 @@
     );
   }
 
-  function getManualProjectionOverride() {
+  function getProjectionOverrideForRender(
+    requiredSource?: 'auto' | 'manual'
+  ): ProjectionLike | undefined {
     const projectionState = getProjectionState();
     if (
       !projectionState.overrideActive ||
-      projectionState.overrideSource !== 'manual'
+      (requiredSource && projectionState.overrideSource !== requiredSource)
     ) {
       return undefined;
     }
@@ -544,13 +668,46 @@
     return projection;
   }
 
-  function projectBboxForManualProjection(bbox: BBox | null): BBox | null {
-    const manualProjection = getManualProjectionOverride();
-    if (!manualProjection || !bbox) {
+  function getOrthographicRenderProjection(
+    basemapMeta: ReturnType<typeof getProjectionMetadataForDataset>,
+    allowManualOverride = true
+  ): ProjectionLike | undefined {
+    const projectionState = getProjectionState();
+    const defaultProjection =
+      basemapMeta &&
+      !basemapMeta.isCustom &&
+      basemapMeta.proj_to?.type !== 'identity'
+        ? buildProjectionForBasemap(
+            basemapMeta,
+            960,
+            600,
+            basemapService.projectionPresets
+          )
+        : undefined;
+    const overrideProjection = getProjectionOverrideForRender();
+
+    return resolveProjectionForRender(
+      defaultProjection,
+      overrideProjection,
+      projectionState.overrideSource,
+      allowManualOverride
+    );
+  }
+
+  function projectBboxForRenderProjection(
+    bbox: BBox | null,
+    basemapMeta: ReturnType<typeof getProjectionMetadataForDataset>,
+    allowManualOverride = true
+  ): BBox | null {
+    const renderProjection = getOrthographicRenderProjection(
+      basemapMeta,
+      allowManualOverride
+    );
+    if (!renderProjection || !bbox) {
       return null;
     }
 
-    return getProjectedBboxForBbox(manualProjection, bbox);
+    return computeProjectedBboxForProjection(renderProjection, bbox);
   }
 
   function resolveOrthographicReferenceState(
@@ -569,36 +726,16 @@
       ? getMainlandBboxForBasemap(basemapMeta, basemapService.projectionPresets)
       : null;
     const basemapReferenceBbox = mainlandBbox ?? basemapMeta?.bbox ?? null;
-    const manualProjectedBasemapBbox =
-      projectBboxForManualProjection(basemapReferenceBbox);
-    const basemapProjectedBbox =
-      manualProjectedBasemapBbox ??
-      (basemapMeta
-        ? computeProjectedBboxForBasemap(
-            basemapMeta,
-            basemapService.projectionPresets,
-            960,
-            600,
-            mainlandBbox ?? undefined
-          )
-        : null);
+    const basemapProjectedBbox = projectBboxForRenderProjection(
+      basemapReferenceBbox,
+      basemapMeta
+    );
 
     const [[minX, minY], [maxX, maxY]] = bounds;
     const datasetBbox: BBox = [minX, minY, maxX, maxY];
-    const manualProjectedDatasetBbox = shouldUseIdentityReferenceBounds
+    const datasetProjectedBbox = shouldUseIdentityReferenceBounds
       ? null
-      : projectBboxForManualProjection(datasetBbox);
-    const datasetProjectedBbox =
-      manualProjectedDatasetBbox ??
-      (basemapMeta && !shouldUseIdentityReferenceBounds
-        ? computeProjectedBboxForBasemap(
-            basemapMeta,
-            basemapService.projectionPresets,
-            960,
-            600,
-            datasetBbox
-          )
-        : null);
+      : projectBboxForRenderProjection(datasetBbox, basemapMeta, false);
 
     const referenceBbox = resolveOrthographicReferenceBbox({
       datasetBounds: datasetBbox,
@@ -671,18 +808,9 @@
       basemapService.projectionPresets
     );
     const basemapReferenceBbox = mainlandBbox ?? basemapMeta.bbox ?? null;
-    const manualProjectedBbox =
-      projectBboxForManualProjection(basemapReferenceBbox);
-    if (manualProjectedBbox) {
-      return { bbox: manualProjectedBbox, isProjected: true };
-    }
-
-    const projectedBbox = computeProjectedBboxForBasemap(
-      basemapMeta,
-      basemapService.projectionPresets,
-      960,
-      600,
-      mainlandBbox ?? undefined
+    const projectedBbox = projectBboxForRenderProjection(
+      basemapReferenceBbox,
+      basemapMeta
     );
     if (projectedBbox) {
       return { bbox: projectedBbox, isProjected: true };
@@ -813,6 +941,20 @@
     }
   }
 
+  function applyPendingMapLibreViewportPreset(): void {
+    if (
+      !pendingMapLibreViewportPreset ||
+      mapInit.viewMode !== ViewMode.MAPLIBRE ||
+      !mapInit.map
+    ) {
+      return;
+    }
+
+    const bounds = pendingMapLibreViewportPreset;
+    pendingMapLibreViewportPreset = null;
+    mapBounds.fitToBounds(bounds, true);
+  }
+
   function fitMapLibreViewportAfterViewModeSwitch(): void {
     if (mapInit.viewMode !== ViewMode.MAPLIBRE || !mapInit.map) {
       return;
@@ -845,6 +987,14 @@
       }
     }
 
+    const styleViewportPreset = getBasemapViewportPreset(
+      basemapStyleStore.selectedStyle
+    );
+    if (styleViewportPreset) {
+      mapBounds.fitToBounds(styleViewportPreset.bounds);
+      return;
+    }
+
     if (currentWorldBaseTable) {
       const bounds = calculateBoundsFromGeoArrow(currentWorldBaseTable);
       if (bounds) {
@@ -868,6 +1018,7 @@
       mapBasemap.syncGroupVisibility();
       // setStyle() resets the MapLibre projection to mercator — re-apply the stored projection
       mapBasemap.syncProjection();
+      applyPendingMapLibreViewportPreset();
       waitingForStyleIdle = false;
       if (pendingLayerUpdate) {
         pendingLayerUpdate = false;
@@ -1032,42 +1183,15 @@
             duckDataset,
             refBasemapId
           );
-        const referenceTable = resolveOrthographicReferenceTable({
-          dataset,
-          duckDataset,
-          datasetTable: firstTable,
-          basemapTable: worldBaseTable,
-          referenceBasemapId: refBasemapId
-        });
-        const bounds = referenceTable
-          ? shouldUseBasemapReference
-            ? toOrthographicBounds(calculateBoundsFromGeoArrow(referenceTable))
-            : resolveOrthographicDatasetBounds(
-                dataset,
-                toOrthographicBounds(
-                  calculateBoundsFromGeoArrow(referenceTable)
-                )
-              )
-          : null;
 
-        if (bounds) {
+        if (
+          untrack(() =>
+            refreshOrthographicReferenceForFirstTable(
+              getProjectionMetadataForDataset(firstDatasetId)
+            )
+          )
+        ) {
           untrack(() => {
-            const currentBasemapMeta =
-              getProjectionMetadataForDataset(firstDatasetId);
-            const referenceState = resolveOrthographicReferenceState(
-              dataset,
-              bounds,
-              currentBasemapMeta,
-              shouldUseBasemapReference
-            );
-
-            if (referenceState.bbox) {
-              projectionStore.setReferenceBbox(
-                referenceState.bbox,
-                undefined,
-                referenceState.isProjected
-              );
-            }
             scheduleLayerUpdate('effect:firstTable-bounds');
             fitOrthographicViewport();
           });
@@ -1205,7 +1329,6 @@
         basemapLayersStore.resetToDefaults();
         worldBaseTable = null;
         scheduleLayerUpdate('effect:projectEmpty');
-        loadWorldBasemap();
       }, PROJECT_EMPTY_RESET_DEBOUNCE_MS);
     }
   });
@@ -1216,6 +1339,15 @@
     if (!hasData && canUpdate) {
       untrack(() => {
         scheduleLayerUpdate('effect:noData');
+        if (!shouldLoadDefaultWorldBasemapPreview()) {
+          if (worldBaseTable) {
+            worldBaseTable = null;
+            scheduleLayerUpdate('effect:noData:clearWorldBasemap');
+          }
+          triggerOnReady();
+          return;
+        }
+
         // Retry basemap loading if it failed or hasn't completed yet
         if (!worldBaseTable) {
           loadWorldBasemap();
@@ -1238,9 +1370,16 @@
           if (pendingViewReset && worldBaseTable) {
             pendingViewReset = false;
             if (mapInit.viewMode === ViewMode.MAPLIBRE && mapInit.map) {
-              const bounds = calculateBoundsFromGeoArrow(worldBaseTable);
-              if (bounds) {
-                mapBounds.fitToBounds(bounds, true);
+              const preset = getBasemapViewportPreset(
+                basemapStyleStore.selectedStyle
+              );
+              if (preset) {
+                mapBounds.fitToBounds(preset.bounds, true);
+              } else {
+                const bounds = calculateBoundsFromGeoArrow(worldBaseTable);
+                if (bounds) {
+                  mapBounds.fitToBounds(bounds, true);
+                }
               }
             }
             // Orthographic: projectionStore.referenceBbox is already set by
@@ -1262,6 +1401,27 @@
   });
 
   $effect(() => {
+    const selectedStyle = basemapStyleStore.selectedStyle;
+    const nextZone = getBasemapZone(selectedStyle);
+    const previousZone = lastSelectedBasemapZone;
+    lastSelectedBasemapZone = nextZone;
+
+    if (
+      selectedStyle === BasemapStyle.BLANK_WHITE ||
+      !previousZone ||
+      !nextZone ||
+      previousZone === nextZone
+    ) {
+      return;
+    }
+
+    const preset = getBasemapViewportPreset(selectedStyle);
+    if (preset) {
+      pendingMapLibreViewportPreset = preset.bounds;
+    }
+  });
+
+  $effect(() => {
     void basemapStyleStore.showLabels;
     untrack(() => mapBasemap.syncLabelsVisibility());
   });
@@ -1269,6 +1429,33 @@
   $effect(() => {
     void basemapStyleStore.groupVisibilityVersion;
     untrack(() => mapBasemap.syncGroupVisibility());
+  });
+
+  $effect(() => {
+    void basemapStyleStore.viewportRequestVersion;
+
+    const requestedStyle = basemapStyleStore.requestedViewportStyle;
+    const preset = requestedStyle
+      ? getBasemapViewportPreset(requestedStyle)
+      : null;
+
+    if (!preset) {
+      return;
+    }
+
+    pendingMapLibreViewportPreset = preset.bounds;
+
+    untrack(() => {
+      if (
+        mapInit.isMapLoaded &&
+        mapInit.viewMode === ViewMode.MAPLIBRE &&
+        !isSwitchingViewMode &&
+        !mapBasemap.isStyleLoading &&
+        mapInit.map?.isStyleLoaded()
+      ) {
+        applyPendingMapLibreViewportPreset();
+      }
+    });
   });
 
   $effect(() => {
@@ -1434,6 +1621,10 @@
           if (refRequestId !== referenceBasemapRequestId) {
             return; // Stale request
           }
+          if (!shouldLoadDefaultWorldBasemapPreview()) {
+            worldBaseTable = null;
+            return;
+          }
           if (refLoaded) {
             const resolvedBasemap =
               basemapService.getResolvedVariantData(
@@ -1486,6 +1677,10 @@
               { refId: pendingRefId }
             );
             const fallback = await basemapService.loadDefaultBasemap();
+            if (!shouldLoadDefaultWorldBasemapPreview()) {
+              worldBaseTable = null;
+              return;
+            }
             if (fallback) {
               const resolvedBasemap =
                 basemapService.getResolvedVariantData(
@@ -1493,6 +1688,10 @@
                   fallback.activeSimplificationLevel ?? undefined
                 ) ?? fallback;
               worldBaseTable = resolvedBasemap.geometryTable;
+              syncOrthographicReferenceWithBasemap(
+                resolvedBasemap.metadata,
+                resolvedBasemap.geometryTable
+              );
               const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
               if (canUpdate) {
                 scheduleLayerUpdate('loadWorldBasemap:refFailed');
@@ -1514,6 +1713,10 @@
       if (requestId !== referenceBasemapRequestId) {
         return;
       }
+      if (!shouldLoadDefaultWorldBasemapPreview()) {
+        worldBaseTable = null;
+        return;
+      }
 
       if (loaded) {
         const resolvedBasemap =
@@ -1521,27 +1724,11 @@
             loaded.metadata.file,
             loaded.activeSimplificationLevel ?? undefined
           ) ?? loaded;
-        // Set up orthographic projection from world basemap bounds
-        if (
-          mapInit.viewMode === ViewMode.ORTHOGRAPHIC &&
-          !shouldPreferDatasetReferenceBounds()
-        ) {
-          const referenceState = resolveOrthographicBasemapReferenceState(
+        if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
+          syncOrthographicReferenceWithBasemap(
             resolvedBasemap.metadata,
             resolvedBasemap.geometryTable
           );
-          if (referenceState.bbox) {
-            projectionStore.setReferenceBbox(
-              referenceState.bbox,
-              undefined,
-              referenceState.isProjected
-            );
-          }
-          if (mapInit.isMapLoaded) {
-            mapInstanceStore.fitToOrthographicBounds();
-          } else {
-            pendingOrthographicFit = true;
-          }
         }
 
         // No reference basemap — use world basemap directly
@@ -1604,7 +1791,9 @@
       isLoadingReferenceBasemap = true;
     }
 
-    loadWorldBasemap();
+    if (shouldLoadDefaultWorldBasemapPreview()) {
+      loadWorldBasemap();
+    }
 
     const resizeObserver = new ResizeObserver(() => {
       updateCanvasSize();

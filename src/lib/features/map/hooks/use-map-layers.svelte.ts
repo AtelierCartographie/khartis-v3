@@ -393,6 +393,15 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         case 'frontieres':
           requestedTypes.add(BasemapLayerType.LIMIT);
           break;
+        case 'lacs':
+          requestedTypes.add(BasemapLayerType.POLYGON);
+          break;
+        case 'rivieres':
+          requestedTypes.add(BasemapLayerType.LINE);
+          break;
+        case 'villes':
+          requestedTypes.add(BasemapLayerType.POINT);
+          break;
         case 'meridiens':
           requestedTypes.add(BasemapLayerType.GRATICULE);
           break;
@@ -517,14 +526,15 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             }
 
             for (const layer of currentMetadata.layers) {
-              if (!layer.file) continue;
-              const table = basemapService.currentLayers.get(layer.file);
+              const table = layer.file
+                ? basemapService.currentLayers.get(layer.file)
+                : worldBaseTable;
               if (!table) continue;
               metadataLayers.push({
                 table,
                 style: layer.style ?? null,
                 type: layer.type,
-                file: layer.file
+                file: layer.file ?? currentMetadata.file
               });
             }
           }

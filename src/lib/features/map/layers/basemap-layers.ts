@@ -40,6 +40,7 @@ import { arrowTableToGeoJSON, extractGeometryInfo } from '../io';
 import {
   basemapLayersStore,
   BASEMAP_LAYER_ID,
+  getBasemapRenderGroup,
   type TerreLayerConfig,
   type MersLayerConfig,
   type ReliefLayerConfig,
@@ -1084,6 +1085,49 @@ export function createVillesLayer(
   });
 }
 
+type MetadataGeometry =
+  | Polygon
+  | MultiPolygon
+  | LineString
+  | MultiLineString
+  | Point;
+
+function collectMetadataGeoJsonByGeometry<T extends MetadataGeometry>(
+  entries: MetadataLayerEntry[],
+  geometryTypes: ReadonlySet<string>
+): FeatureCollection<T> | null {
+  const features: Feature<T>[] = [];
+
+  for (const entry of entries) {
+    const geometryInfo = extractGeometryInfo(entry.table);
+    if (!geometryInfo) continue;
+
+    const geojson = getCachedBasemapGeoJSON(
+      entry.table,
+      geometryInfo.geoColumn
+    );
+    if (!geojson) continue;
+
+    for (const feature of geojson.features) {
+      const geometryType = feature.geometry?.type;
+      if (!geometryType || !geometryTypes.has(geometryType)) {
+        continue;
+      }
+
+      features.push(feature as Feature<T>);
+    }
+  }
+
+  if (features.length === 0) {
+    return null;
+  }
+
+  return {
+    type: GEOJSON_TYPE.FEATURE_COLLECTION,
+    features
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Metadata-driven layer types (from basemap metadata + style-presets.json)
 // ---------------------------------------------------------------------------
@@ -1440,8 +1484,8 @@ export function createBasemapLayers(
   ctx: BasemapLayerContext,
   additionalData?: BasemapAdditionalData
 ): BasemapLayerGroups {
-  const background: Layer<DeckDataRow>[] = [];
-  const foreground: Layer<DeckDataRow>[] = [];
+  const backgroundGroups: Layer<DeckDataRow>[][] = [];
+  const foregroundGroups: Layer<DeckDataRow>[][] = [];
 
   const metaLayers = additionalData?.metadataLayers ?? [];
   const availableMetadataLayerTypes = new Set(
@@ -1454,6 +1498,9 @@ export function createBasemapLayers(
 
   const landEntries = metaByType(BasemapLayerType.LAND);
   const limitEntries = metaByType(BasemapLayerType.LIMIT);
+  const polygonEntries = metaByType(BasemapLayerType.POLYGON);
+  const lineEntries = metaByType(BasemapLayerType.LINE);
+  const pointEntries = metaByType(BasemapLayerType.POINT);
   const graticuleEntries = metaByType(BasemapLayerType.GRATICULE);
   const geoLinesEntries = metaByType(BasemapLayerType.GEOGRAPHIC_LINES);
   const hasMetadataLimits =
@@ -1473,11 +1520,16 @@ export function createBasemapLayers(
     if (!config.visible) continue;
 
     try {
+      const targetGroups =
+        getBasemapRenderGroup(config.id) === 'background'
+          ? backgroundGroups
+          : foregroundGroups;
+
       switch (config.id) {
         // --- Background layers (below data) ---
         case BASEMAP_LAYER_ID.MERS: {
           const layer = createMersLayer(config as MersLayerConfig, ctx);
-          if (layer) background.push(layer);
+          if (layer) targetGroups.push([layer]);
           break;
         }
 
@@ -1492,7 +1544,9 @@ export function createBasemapLayers(
                 suppressStroke: hasMetadataLimits && isFrontieresVisible
               }
             );
-            background.push(...terreLayers);
+            if (terreLayers.length > 0) {
+              targetGroups.push(terreLayers);
+            }
           } else if (landEntries.length > 0) {
             // Fallback: metadata land layers when no main geometry table
             const landLayers = createMetadataLandLayers(
@@ -1500,13 +1554,28 @@ export function createBasemapLayers(
               stylePresets,
               ctx
             );
-            background.push(...landLayers);
+            if (landLayers.length > 0) {
+              targetGroups.push(landLayers);
+            }
           }
           break;
         }
 
-        case BASEMAP_LAYER_ID.LACS:
+        case BASEMAP_LAYER_ID.LACS: {
+          const lakesData = collectMetadataGeoJsonByGeometry<
+            Polygon | MultiPolygon
+          >(
+            polygonEntries,
+            new Set([GEOJSON_TYPE.POLYGON, GEOJSON_TYPE.MULTI_POLYGON])
+          );
+          const layer = lakesData
+            ? createLacsLayer(lakesData, config as LacsLayerConfig, ctx)
+            : null;
+          if (layer) {
+            targetGroups.push([layer]);
+          }
           break;
+        }
 
         case BASEMAP_LAYER_ID.RELIEF:
           if (worldBaseTable) {
@@ -1515,7 +1584,9 @@ export function createBasemapLayers(
               config as ReliefLayerConfig,
               ctx
             );
-            background.push(...reliefLayers);
+            if (reliefLayers.length > 0) {
+              targetGroups.push(reliefLayers);
+            }
           }
           break;
 
@@ -1528,20 +1599,39 @@ export function createBasemapLayers(
               ctx,
               config as FrontieresLayerConfig
             );
-            foreground.push(...limitLayers);
+            if (limitLayers.length > 0) {
+              targetGroups.push(limitLayers);
+            }
           } else if (worldBaseTable) {
             const layer = createFrontieresLayer(
               additionalData?.frontieresTable ?? worldBaseTable,
               config as FrontieresLayerConfig,
               ctx
             );
-            if (layer) foreground.push(layer);
+            if (layer) targetGroups.push([layer]);
           }
           break;
         }
 
-        case BASEMAP_LAYER_ID.RIVIERES:
+        case BASEMAP_LAYER_ID.RIVIERES: {
+          const riversData = collectMetadataGeoJsonByGeometry<
+            LineString | MultiLineString
+          >(
+            lineEntries,
+            new Set([GEOJSON_TYPE.LINE_STRING, GEOJSON_TYPE.MULTI_LINE_STRING])
+          );
+          const layer = riversData
+            ? createRivieresLayer(
+                riversData,
+                config as RivieresLayerConfig,
+                ctx
+              )
+            : null;
+          if (layer) {
+            targetGroups.push([layer]);
+          }
           break;
+        }
 
         case BASEMAP_LAYER_ID.EQUATEUR: {
           // Use metadata geographic-lines when available (richer than hardcoded equator)
@@ -1551,13 +1641,15 @@ export function createBasemapLayers(
               ctx,
               config as EquateurLayerConfig
             );
-            foreground.push(...geoLineLayers);
+            if (geoLineLayers.length > 0) {
+              targetGroups.push(geoLineLayers);
+            }
           } else {
             const layer = createEquateurLayer(
               config as EquateurLayerConfig,
               ctx
             );
-            if (layer) foreground.push(layer);
+            if (layer) targetGroups.push([layer]);
           }
           break;
         }
@@ -1570,19 +1662,32 @@ export function createBasemapLayers(
               ctx,
               config as MeridiensLayerConfig
             );
-            foreground.push(...graticuleLayers);
+            if (graticuleLayers.length > 0) {
+              targetGroups.push(graticuleLayers);
+            }
           } else {
             const layer = createMeridiensLayer(
               config as MeridiensLayerConfig,
               ctx
             );
-            if (layer) foreground.push(layer);
+            if (layer) targetGroups.push([layer]);
           }
           break;
         }
 
-        case BASEMAP_LAYER_ID.VILLES:
+        case BASEMAP_LAYER_ID.VILLES: {
+          const citiesData = collectMetadataGeoJsonByGeometry<Point>(
+            pointEntries,
+            new Set([GEOJSON_TYPE.POINT])
+          );
+          const layer = citiesData
+            ? createVillesLayer(citiesData, config as VillesLayerConfig, ctx)
+            : null;
+          if (layer) {
+            targetGroups.push([layer]);
+          }
           break;
+        }
       }
     } catch (error) {
       logger.error(
@@ -1596,5 +1701,8 @@ export function createBasemapLayers(
     }
   }
 
-  return { background, foreground };
+  return {
+    background: [...backgroundGroups].reverse().flat(),
+    foreground: [...foregroundGroups].reverse().flat()
+  };
 }

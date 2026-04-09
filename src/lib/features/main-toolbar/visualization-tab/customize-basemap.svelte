@@ -12,10 +12,8 @@
   import LayerConfigVilles from './components/basemap-layers/layer-config-villes.svelte';
   import BasemapStyleSelector from './basemap-style-selector.svelte';
   import MapProjectionSelector from './map-projection-selector.svelte';
-  import {
-    basemapStyleStore,
-    DEFAULT_TILED_BASEMAP_STYLE
-  } from '$lib/features/commons/store/basemap-style.store.svelte';
+  import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
+  import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
   import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
   import { BasemapStyle } from '$lib/features/map/constants/basemap-styles';
   import {
@@ -25,6 +23,7 @@
   } from '$lib/features/map/stores/basemap-layers.store.svelte';
   import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
+  import { resolveTiledStyleFromToggle } from './tiled-basemap-selection';
 
   // Single $derived: one array iteration instead of 9 separate .find() calls
   const layerConfigs = $derived(
@@ -108,11 +107,28 @@
   }
 
   function handleTiledBasemapToggle(checked: boolean) {
-    if (checked) {
-      basemapStyleStore.setStyle(DEFAULT_TILED_BASEMAP_STYLE);
-    } else {
-      basemapStyleStore.setStyle(BasemapStyle.BLANK_WHITE);
+    const nextStyle = resolveTiledStyleFromToggle(
+      checked,
+      basemapStyleStore.selectedStyle,
+      basemapStyleStore.preferredTiledStyle
+    );
+
+    if (!checked) {
+      mapInstanceStore.clearPersistedViewState();
     }
+
+    if (osmBasemapStore.isActive) {
+      osmBasemapStore.clear();
+    }
+
+    if (nextStyle === basemapStyleStore.selectedStyle) {
+      if (checked) {
+        basemapStyleStore.requestViewportReset(nextStyle);
+      }
+      return;
+    }
+
+    basemapStyleStore.setStyle(nextStyle);
   }
 
   function handleLayerChange<T extends BasemapLayerId>(
@@ -303,6 +319,7 @@
 
     <ExpandableSection
       title={m.basemap_tiled_label()}
+      defaultOpen={isTiledBasemapEnabled}
       showToggle={true}
       toggleChecked={isTiledBasemapEnabled}
       onToggleChange={handleTiledBasemapToggle}
