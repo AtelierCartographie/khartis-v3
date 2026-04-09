@@ -10,6 +10,7 @@
     InlineLoading
   } from 'carbon-components-svelte';
   import { ChevronLeft, ChevronRight } from 'carbon-icons-svelte';
+  import { onMount } from 'svelte';
   import { dataToolsStore } from '../data-tools.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
@@ -274,10 +275,13 @@
     clearSearchResults();
   }
 
-  $effect(() => {
+  onMount(() => {
     handleClear();
+
     return () => {
-      if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+      if (searchDebounceTimer) {
+        clearTimeout(searchDebounceTimer);
+      }
     };
   });
 
