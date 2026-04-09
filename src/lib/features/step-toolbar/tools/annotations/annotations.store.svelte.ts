@@ -93,6 +93,26 @@ const PREDEFINED_STYLES: Record<string, Partial<AnnotationStyle>> = {
   caption: { fontSize: 10, bold: false, italic: true }
 };
 
+function getPredefinedStyleForItem(item: Annotation): string | null {
+  if (item.type !== AnnotationKind.TEXT) {
+    return null;
+  }
+
+  switch (item.role) {
+    case ANNOTATION_ROLE.TITLE:
+      return ANNOTATION_ROLE.TITLE;
+    case ANNOTATION_ROLE.SUBTITLE:
+      return ANNOTATION_ROLE.SUBTITLE;
+    case ANNOTATION_ROLE.SOURCE:
+    case ANNOTATION_ROLE.BASEMAP_SOURCE:
+    case ANNOTATION_ROLE.SIGNATURE:
+    case ANNOTATION_ROLE.CREDIT:
+      return 'caption';
+    default:
+      return null;
+  }
+}
+
 type PageLayout = {
   width: number;
   height: number;
@@ -121,8 +141,9 @@ const BOTTOM_RIGHT_STACK_ORDER: PageElementRole[] = [
 ];
 const BOTTOM_RIGHT_SAFE_OFFSET = PAGE_GRID_SIZE_PX;
 const BOTTOM_RIGHT_STACK_STEP = PAGE_GRID_SIZE_PX * 2;
+const NON_PAGE_ANNOTATION_LEFT_OFFSET = PAGE_GRID_SIZE_PX * 2;
+const NON_PAGE_IMAGE_LEFT_OFFSET = PAGE_GRID_SIZE_PX * 6;
 const NON_PAGE_ANNOTATION_TOP_OFFSET = PAGE_GRID_SIZE_PX * 2;
-const NON_PAGE_ANNOTATION_RIGHT_OFFSET = PAGE_GRID_SIZE_PX * 2;
 const NON_PAGE_ANNOTATION_ROW_STEP = PAGE_GRID_SIZE_PX * 4;
 const NON_PAGE_ANNOTATION_COLUMN_STEP = PAGE_GRID_SIZE_PX * 10;
 
@@ -393,12 +414,12 @@ function getNonPageAnnotationSpawnPosition(
   );
   const column = Math.floor(existingAnnotationsCount / maxRows);
   const row = existingAnnotationsCount % maxRows;
+  const leftOffset =
+    type === AnnotationKind.IMAGE
+      ? NON_PAGE_IMAGE_LEFT_OFFSET
+      : NON_PAGE_ANNOTATION_LEFT_OFFSET;
 
-  const x =
-    mapLayout.width -
-    NON_PAGE_ANNOTATION_RIGHT_OFFSET -
-    bounds.width -
-    column * NON_PAGE_ANNOTATION_COLUMN_STEP;
+  const x = leftOffset + column * NON_PAGE_ANNOTATION_COLUMN_STEP;
   const y = NON_PAGE_ANNOTATION_TOP_OFFSET + row * NON_PAGE_ANNOTATION_ROW_STEP;
 
   return clampAnnotationPosition({ x, y }, type, style, layout);
@@ -603,6 +624,10 @@ const { actions, getState } = createToolStore<
         const item = s.items.find((i) => i.id === id);
         if (item) {
           s.activeType = item.type;
+          const predefinedStyle = getPredefinedStyleForItem(item);
+          if (predefinedStyle) {
+            s.predefinedStyle = predefinedStyle;
+          }
           if (item.style) {
             s.defaultStyle = { ...s.defaultStyle, ...item.style };
           }

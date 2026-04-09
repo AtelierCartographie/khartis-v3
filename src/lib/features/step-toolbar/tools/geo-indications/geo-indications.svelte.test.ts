@@ -47,4 +47,23 @@ describe('geo-indications tool', () => {
     expect(geoIndicationsState.scale.enabled).toBe(true);
     expect(await screen.findByText(m.geo_style())).toBeInTheDocument();
   });
+
+  it('keeps the scale font-size select synchronized with stored state', async () => {
+    geoIndicationsActions.setState({
+      scale: {
+        ...geoIndicationsState.scale,
+        enabled: true,
+        fontSize: 16
+      }
+    });
+
+    render(GeoIndications);
+
+    const fontSizeSelect = screen.getAllByRole('combobox').at(-1) as
+      | HTMLSelectElement
+      | undefined;
+
+    expect(fontSizeSelect).toBeDefined();
+    expect(fontSizeSelect?.value).toBe('16');
+  });
 });

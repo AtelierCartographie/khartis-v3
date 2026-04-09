@@ -178,6 +178,7 @@
     `${geoIndicationsState.scale.fontFamily}, sans-serif`
   );
   const scaleFontSize = $derived(geoIndicationsState.scale.fontSize);
+  const orientationFontFamily = $derived(scaleFontFamily);
 
   const orientationColor = $derived(
     hslToHex(
@@ -976,7 +977,7 @@
             font-size="12"
             font-weight="bold"
             fill={orientationColor}
-            font-family="Arial, sans-serif"
+            font-family={orientationFontFamily}
           >
             N
           </text>
@@ -1011,7 +1012,7 @@
             font-size="10"
             font-weight="bold"
             fill={orientationColor}
-            font-family="Arial, sans-serif"
+            font-family={orientationFontFamily}
           >
             N
           </text>

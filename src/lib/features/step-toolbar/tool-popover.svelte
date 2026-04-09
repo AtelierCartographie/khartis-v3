@@ -3,6 +3,7 @@
   import type { ProjectionViewMode } from '$lib/features/commons/types/global';
   import { clickOutside } from '$lib/features/commons/utils/click-outside';
   import { Popover } from 'carbon-components-svelte';
+  import { tick } from 'svelte';
   import type { Snippet } from 'svelte';
   import {
     DOM_IDS,
@@ -34,6 +35,33 @@
   } = $props();
 
   const widthCss = $derived(viewMode === 'grid' ? gridWidth : `${listWidth}px`);
+  let popoverRoot: HTMLDivElement | null = null;
+  let computedTopOffset = $state(0);
+
+  function syncCenteredOffset(): void {
+    if (!open || align !== 'right-top') {
+      computedTopOffset = 0;
+      return;
+    }
+
+    const toolbar = document.getElementById(DOM_IDS.STEP_TOOLBAR);
+    const popover = popoverRoot?.querySelector('.bx--popover');
+
+    if (
+      !(toolbar instanceof HTMLElement) ||
+      !(popover instanceof HTMLElement)
+    ) {
+      computedTopOffset = 0;
+      return;
+    }
+
+    const toolbarRect = toolbar.getBoundingClientRect();
+    const popoverRect = popover.getBoundingClientRect();
+
+    computedTopOffset = Math.round(
+      (toolbarRect.height - popoverRect.height) / 2
+    );
+  }
 
   function handleOutsideClick(event: CustomEvent) {
     // Keep the tool open while the user is drawing on the map
@@ -65,10 +93,55 @@
     window.addEventListener('keydown', handleKeydown);
     return () => window.removeEventListener('keydown', handleKeydown);
   });
+
+  $effect(() => {
+    void open;
+    void widthCss;
+
+    if (!open) {
+      computedTopOffset = 0;
+      return;
+    }
+
+    let cancelled = false;
+    let resizeObserver: ResizeObserver | null = null;
+    const handleWindowResize = () => syncCenteredOffset();
+
+    void tick().then(() => {
+      if (cancelled) return;
+
+      syncCenteredOffset();
+
+      resizeObserver = new ResizeObserver(() => syncCenteredOffset());
+
+      const toolbar = document.getElementById(DOM_IDS.STEP_TOOLBAR);
+      const popover = popoverRoot?.querySelector('.bx--popover');
+      const contents = popoverRoot?.querySelector('.bx--popover-contents');
+
+      if (toolbar instanceof HTMLElement) {
+        resizeObserver.observe(toolbar);
+      }
+      if (popover instanceof HTMLElement) {
+        resizeObserver.observe(popover);
+      }
+      if (contents instanceof HTMLElement) {
+        resizeObserver.observe(contents);
+      }
+
+      window.addEventListener('resize', handleWindowResize);
+    });
+
+    return () => {
+      cancelled = true;
+      resizeObserver?.disconnect();
+      window.removeEventListener('resize', handleWindowResize);
+    };
+  });
 </script>
 
 <div
   id={DOM_IDS.TOOL_POPOVER}
+  bind:this={popoverRoot}
   use:clickOutside={{
     enabled: open,
     excludeSelectors: [
@@ -84,7 +157,7 @@
     align={align}
     light={light}
     class={CSS_CLASSES.TOOL_POPOVER}
-    style={`--tool-popover-width:${widthCss};--popover-max-height:${POPOVER_DIMENSIONS.MAX_HEIGHT};--dropdown-max-height:${POPOVER_DIMENSIONS.DROPDOWN_MAX_HEIGHT};`}
+    style={`--tool-popover-width:${widthCss};--tool-popover-top-offset:${computedTopOffset}px;--popover-max-height:${POPOVER_DIMENSIONS.MAX_HEIGHT};--dropdown-max-height:${POPOVER_DIMENSIONS.DROPDOWN_MAX_HEIGHT};`}
   >
     <div class={CSS_CLASSES.POPOVER_SCROLL}>
       {@render (content as Snippet | undefined)?.()}
@@ -93,6 +166,10 @@
 </div>
 
 <style>
+  :global(#khartis-tool-popover .bx--popover--right-top) {
+    top: var(--tool-popover-top-offset) !important;
+  }
+
   :global(#khartis-tool-popover .bx--popover-contents) {
     width: var(--tool-popover-width) !important;
     max-width: var(--tool-popover-width) !important;
@@ -110,6 +187,6 @@
 
   :global(#khartis-tool-popover .bx--list-box__menu) {
     max-height: var(--dropdown-max-height);
-    z-index: var(--z-toolbar);
+    z-index: var(--z-popover);
   }
 </style>
