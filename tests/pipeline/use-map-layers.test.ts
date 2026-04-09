@@ -7,6 +7,7 @@ import {
 } from '$lib/features/map/utils/layer-order.utils';
 import { resolveProjectionForRender } from '$lib/features/map/utils/projection-priority';
 import type { VisualizationConfig } from '$lib/features/commons/store/visualization.store.svelte';
+import type { ProjectionLike } from 'geoarrow-deck-stream';
 
 function createVisualizationStub(
   id: string,
@@ -20,6 +21,15 @@ function createVisualizationStub(
 
 function createLayerStub(id: string): Layer {
   return { id } as Layer;
+}
+
+type ProjectionStub = ProjectionLike & { id: string };
+
+function createProjectionStub(id: string): ProjectionStub {
+  return Object.assign((coordinates: [number, number]) => coordinates, {
+    id,
+    stream: <T>(sink: T) => sink
+  });
 }
 
 describe('getVisualizationRenderOrder', () => {
@@ -121,7 +131,7 @@ describe('getMapLayerRenderOrder', () => {
 
 describe('resolveProjectionForRender', () => {
   it('keeps the basemap metadata projection as the default fallback', () => {
-    const metadataProjection = { id: 'france-default' };
+    const metadataProjection = createProjectionStub('france-default');
 
     expect(resolveProjectionForRender(metadataProjection, undefined)).toBe(
       metadataProjection
@@ -129,8 +139,8 @@ describe('resolveProjectionForRender', () => {
   });
 
   it('keeps the basemap metadata projection authoritative for auto suggestions', () => {
-    const metadataProjection = { id: 'world-default' };
-    const userOverride = { id: 'aitoff' };
+    const metadataProjection = createProjectionStub('world-default');
+    const userOverride = createProjectionStub('aitoff');
 
     expect(
       resolveProjectionForRender(metadataProjection, userOverride, 'auto')
@@ -138,8 +148,8 @@ describe('resolveProjectionForRender', () => {
   });
 
   it('lets an explicit user override take precedence over the basemap metadata', () => {
-    const metadataProjection = { id: 'world-default' };
-    const userOverride = { id: 'aitoff' };
+    const metadataProjection = createProjectionStub('world-default');
+    const userOverride = createProjectionStub('aitoff');
 
     expect(
       resolveProjectionForRender(metadataProjection, userOverride, 'manual')
@@ -147,7 +157,7 @@ describe('resolveProjectionForRender', () => {
   });
 
   it('falls back to the user override when the basemap has no projection metadata', () => {
-    const userOverride = { id: 'aitoff' };
+    const userOverride = createProjectionStub('aitoff');
 
     expect(resolveProjectionForRender(undefined, userOverride, 'auto')).toBe(
       userOverride
@@ -155,7 +165,7 @@ describe('resolveProjectionForRender', () => {
   });
 
   it('keeps projected datasets in pass-through mode even after a manual override', () => {
-    const userOverride = { id: 'mercator' };
+    const userOverride = createProjectionStub('mercator');
 
     expect(
       resolveProjectionForRender(undefined, userOverride, 'manual', false)

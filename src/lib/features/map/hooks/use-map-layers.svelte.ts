@@ -1,6 +1,7 @@
 import type { Layer } from '@deck.gl/core';
 import type { MapboxOverlay } from '@deck.gl/mapbox';
 import type { Map as MapLibreMap } from 'maplibre-gl';
+import type { GeoProjection } from 'd3-geo';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { FeatureCollection } from 'geojson';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
@@ -172,7 +173,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
   >();
   const representativePointLoadFailures = new WeakSet<ArrowTable>();
   let cachedProjectionOverrideKey: string | null = null;
-  let cachedProjectionOverrideRef: ProjectionLike | undefined;
+  let cachedProjectionOverrideRef: GeoProjection | undefined;
 
   function getProjectionFromMetadata(
     metadata: BasemapMetadata | null | undefined,
@@ -227,7 +228,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       return cachedProjectionOverrideRef;
     }
 
-    let projectionOverride: ProjectionLike | undefined;
+    let projectionOverride: GeoProjection | undefined;
 
     if (projState.customCode) {
       try {

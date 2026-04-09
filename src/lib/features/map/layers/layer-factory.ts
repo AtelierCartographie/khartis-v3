@@ -284,7 +284,7 @@ function getRepresentativePointSource(
 }
 
 function requiresRepresentativePointSource(
-  geometryType: GeometryType | undefined
+  geometryType: GeometryInfo['type'] | GeometryType | undefined
 ): boolean {
   return (
     geometryType === GeometryType.POLYGON ||

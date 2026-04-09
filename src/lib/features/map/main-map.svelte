@@ -505,8 +505,7 @@
     if (!containerRef) return;
     formatActions.fitToContainer(
       containerRef.offsetWidth,
-      containerRef.offsetHeight,
-      globalState.isMobileView ? 'height' : 'auto'
+      containerRef.offsetHeight
     );
   }
 

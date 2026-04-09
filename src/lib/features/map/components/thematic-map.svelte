@@ -2,6 +2,7 @@
   import 'maplibre-gl/dist/maplibre-gl.css';
   import type { Table as ArrowTable } from 'apache-arrow/Arrow';
   import { SkeletonPlaceholder } from 'carbon-components-svelte';
+  import type { LngLatBoundsLike } from 'maplibre-gl';
   import { onMount, untrack } from 'svelte';
   import { fade } from 'svelte/transition';
   import { basemapStyleStore } from '../../commons/store/basemap-style.store.svelte';
@@ -615,6 +616,48 @@
     };
   }
 
+  function toOrthographicBounds(
+    bounds: LngLatBoundsLike | null
+  ): [[number, number], [number, number]] | null {
+    if (!bounds) {
+      return null;
+    }
+
+    if (
+      Array.isArray(bounds) &&
+      bounds.length === 2 &&
+      Array.isArray(bounds[0]) &&
+      Array.isArray(bounds[1])
+    ) {
+      return [
+        [bounds[0][0], bounds[0][1]],
+        [bounds[1][0], bounds[1][1]]
+      ];
+    }
+
+    if (Array.isArray(bounds) && bounds.length === 4) {
+      return [
+        [bounds[0], bounds[1]],
+        [bounds[2], bounds[3]]
+      ];
+    }
+
+    if (
+      typeof bounds === 'object' &&
+      bounds !== null &&
+      'toArray' in bounds &&
+      typeof bounds.toArray === 'function'
+    ) {
+      const arrayBounds = bounds.toArray();
+      return [
+        [arrayBounds[0][0], arrayBounds[0][1]],
+        [arrayBounds[1][0], arrayBounds[1][1]]
+      ];
+    }
+
+    return null;
+  }
+
   function resolveOrthographicBasemapReferenceState(
     basemapMeta: typeof basemapService.currentMetadata,
     basemapTable: ArrowTable | null
@@ -652,8 +695,9 @@
     const bounds = basemapTable
       ? calculateBoundsFromGeoArrow(basemapTable)
       : null;
-    if (bounds) {
-      const [[minX, minY], [maxX, maxY]] = bounds;
+    const orthographicBounds = toOrthographicBounds(bounds);
+    if (orthographicBounds) {
+      const [[minX, minY], [maxX, maxY]] = orthographicBounds;
       return {
         bbox: [minX, minY, maxX, maxY],
         isProjected: false
@@ -692,10 +736,10 @@
       });
       const bounds = referenceTable
         ? shouldUseBasemapReference
-          ? calculateBoundsFromGeoArrow(referenceTable)
+          ? toOrthographicBounds(calculateBoundsFromGeoArrow(referenceTable))
           : resolveOrthographicDatasetBounds(
               dataset,
-              calculateBoundsFromGeoArrow(referenceTable)
+              toOrthographicBounds(calculateBoundsFromGeoArrow(referenceTable))
             )
         : null;
 
@@ -997,10 +1041,12 @@
         });
         const bounds = referenceTable
           ? shouldUseBasemapReference
-            ? calculateBoundsFromGeoArrow(referenceTable)
+            ? toOrthographicBounds(calculateBoundsFromGeoArrow(referenceTable))
             : resolveOrthographicDatasetBounds(
                 dataset,
-                calculateBoundsFromGeoArrow(referenceTable)
+                toOrthographicBounds(
+                  calculateBoundsFromGeoArrow(referenceTable)
+                )
               )
           : null;
 
