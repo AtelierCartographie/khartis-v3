@@ -449,7 +449,9 @@
       globalState.selectedStep === ToolbarStep.Data,
     getTableFilters: getTableFiltersForDataset,
     onBasemapLayersLoaded: () =>
-      scheduleLayerUpdate('useMapLayers:basemapLayersLoaded')
+      scheduleLayerUpdate('useMapLayers:basemapLayersLoaded'),
+    onRepresentativePointTablesLoaded: () =>
+      scheduleLayerUpdate('useMapLayers:representativePointTablesLoaded')
   });
 
   function updateCanvasSize() {
