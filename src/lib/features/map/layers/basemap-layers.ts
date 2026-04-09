@@ -1596,8 +1596,5 @@ export function createBasemapLayers(
     }
   }
 
-  // Centroid data from metadata is available for label placement but NOT
-  // rendered as visible dots — labels use computed polygon centroids instead.
-
   return { background, foreground };
 }

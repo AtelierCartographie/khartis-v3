@@ -88,11 +88,7 @@ import {
   createScatterplotLayerProps,
   createPolygonFillColorAttribute
 } from 'geoarrow-deck-stream';
-import type {
-  BinaryPointData,
-  BinaryPolygonData,
-  ProjectionLike
-} from 'geoarrow-deck-stream';
+import type { BinaryPointData, ProjectionLike } from 'geoarrow-deck-stream';
 import {
   parsePaths,
   parseSolidPolygons,
@@ -106,8 +102,6 @@ import {
   pointRadiusAttr,
   rowAccessor,
   filterValueAttr,
-  polygonCentroids,
-  pathCentroids,
   pointPositions,
   projectGeoJSON
 } from '../utils/geoarrow-stream-bridge';
@@ -261,19 +255,44 @@ function createPointIconData(data: {
   return output;
 }
 
-function createBinaryPointData(
-  positions: Float64Array | Float32Array,
-  featureIds: Uint32Array
-): BinaryPointData {
+function getRepresentativePointSource(
+  ctx: LayerContext
+): { table: ArrowTable; geometryInfo: GeometryInfo } | null {
+  const representativePointTable = ctx.representativePointTable;
+  if (!representativePointTable) {
+    return null;
+  }
+
+  const geometryInfo =
+    ctx.representativePointGeometryInfo ??
+    extractGeometryInfo(representativePointTable);
+  if (!geometryInfo) {
+    return null;
+  }
+
+  if (
+    geometryInfo.type !== GeometryType.POINT &&
+    geometryInfo.type !== GeometryType.MULTIPOINT
+  ) {
+    return null;
+  }
+
   return {
-    length: featureIds.length,
-    positions:
-      positions instanceof Float32Array
-        ? positions
-        : new Float32Array(positions),
-    featureIds,
-    size: 2
+    table: representativePointTable,
+    geometryInfo
   };
+}
+
+function requiresRepresentativePointSource(
+  geometryType: GeometryType | undefined
+): boolean {
+  return (
+    geometryType === GeometryType.POLYGON ||
+    geometryType === GeometryType.MULTIPOLYGON ||
+    geometryType === GeometryType.LINESTRING ||
+    geometryType === GeometryType.MULTILINESTRING ||
+    geometryType === GeometryType.MULTIPOINT
+  );
 }
 
 function usesDoubleProportionalSymbols(
@@ -613,11 +632,9 @@ function createDoubleProportionalPointLayers(
   ];
 }
 
-function createPolygonCentroidSymbolLayers(
-  polyData: BinaryPolygonData,
+function createRepresentativePointSymbolLayers(
   jsTable: ArrowTable,
-  ctx: LayerContext,
-  layerId: string
+  ctx: LayerContext
 ): Layer<DeckDataRow>[] {
   const {
     viz,
@@ -642,17 +659,23 @@ function createPolygonCentroidSymbolLayers(
     return [];
   }
 
-  const pointData = createBinaryPointData(
-    polygonCentroids(polyData),
-    polyData.featureIds
+  const representativePointSource = getRepresentativePointSource(ctx);
+  if (!representativePointSource) {
+    return [];
+  }
+
+  const pointData = resolvePointParser(ctx.customProjection)(
+    representativePointSource.table
   );
+
+  const pointLayerId = createThematicLayerId(DeckLayerId.POINT_LAYER, ctx);
 
   if (usesDoubleProportionalSymbols(viz)) {
     return createDoubleProportionalPointLayers(
       pointData,
       jsTable,
       ctx,
-      layerId
+      pointLayerId
     );
   }
 
@@ -794,7 +817,7 @@ function createPolygonCentroidSymbolLayers(
 
     return [
       new IconLayer({
-        id: `${layerId}-centroid-icons`,
+        id: `${pointLayerId}-centroid-icons`,
         data: iconData,
         getPosition: (datum) => datum.position,
         getIcon: (datum) => {
@@ -894,7 +917,7 @@ function createPolygonCentroidSymbolLayers(
 
   return [
     new ScatterplotLayer({
-      id: `${layerId}-centroids`,
+      id: `${pointLayerId}-centroids`,
       ...(scatterProps as unknown as Record<string, unknown>),
       stroked: true,
       opacity: 1,
@@ -1496,8 +1519,8 @@ function createTextLayerData(
 }
 
 /**
- * Create TextLayerDatum[] from binary geometry data + Arrow column values.
- * Avoids the full ArrowTable → GeoJSON conversion for native GeoArrow data.
+ * Create TextLayerDatum[] from binary point geometry data + Arrow column values.
+ * Used both for raw POINT tables and DuckDB-derived representative point tables.
  */
 function createTextLayerDataFromBinary(
   table: ArrowTable,
@@ -1521,37 +1544,13 @@ function createTextLayerDataFromBinary(
   }
 
   const geoType = geoInfo.type;
-  let centroids: Float64Array;
-  let featureIds: Uint32Array;
-
-  const parsePolygons = resolvePolygonParser(customProjection);
-  const parseLines = resolvePathParser(customProjection);
-  const parsePoints = resolvePointParser(customProjection);
-
-  if (
-    geoType === GeometryType.POLYGON ||
-    geoType === GeometryType.MULTIPOLYGON
-  ) {
-    const polyData = parsePolygons(table);
-    centroids = polygonCentroids(polyData);
-    featureIds = polyData.featureIds;
-  } else if (
-    geoType === GeometryType.LINESTRING ||
-    geoType === GeometryType.MULTILINESTRING
-  ) {
-    const lineData = parseLines(table);
-    centroids = pathCentroids(lineData);
-    featureIds = lineData.featureIds;
-  } else if (
-    geoType === GeometryType.POINT ||
-    geoType === GeometryType.MULTIPOINT
-  ) {
-    const ptData = parsePoints(table);
-    centroids = pointPositions(ptData);
-    featureIds = ptData.featureIds;
-  } else {
+  if (geoType !== GeometryType.POINT && geoType !== GeometryType.MULTIPOINT) {
     return [];
   }
+
+  const pointData = resolvePointParser(customProjection)(table);
+  const centroids = pointPositions(pointData);
+  const featureIds = pointData.featureIds;
 
   const primaryVector = table.getChild(primaryColumn);
   if (!primaryVector) return [];
@@ -1627,36 +1626,51 @@ function createTextOverlayLayers(
     return [];
   }
 
-  // Opt 3: For native GeoArrow data, compute centroids from binary data directly.
-  // This avoids a full ArrowTable → GeoJSON conversion just to get label positions.
   const isNativeGeoArrow =
     geometryInfo.isNativeGeoArrow ||
     (geometryInfo.encoding && geometryInfo.encoding.startsWith('geoarrow.'));
   let textLayerData: TextLayerDatum[] | null = null;
   let textLayerDataWithSecondary: TextLayerDatum[] | null = null;
+  const representativePointSource = getRepresentativePointSource(ctx);
+  const textPointSource =
+    representativePointSource ??
+    (geometryInfo.type === GeometryType.POINT
+      ? {
+          table: jsTable,
+          geometryInfo
+        }
+      : null);
 
-  if (isNativeGeoArrow) {
+  if (textPointSource) {
     try {
       textLayerData = createTextLayerDataFromBinary(
-        jsTable,
-        geometryInfo,
+        textPointSource.table,
+        textPointSource.geometryInfo,
         viz.mapping.labelColumn,
         undefined,
         ctx.customProjection
       );
       if (viz.mapping.secondaryLabelColumn) {
         textLayerDataWithSecondary = createTextLayerDataFromBinary(
-          jsTable,
-          geometryInfo,
+          textPointSource.table,
+          textPointSource.geometryInfo,
           viz.mapping.labelColumn,
           viz.mapping.secondaryLabelColumn,
           ctx.customProjection
         );
       }
     } catch {
-      // Fall through to GeoJSON path
       textLayerData = null;
+      textLayerDataWithSecondary = null;
     }
+  }
+
+  if (
+    !textLayerData &&
+    isNativeGeoArrow &&
+    requiresRepresentativePointSource(geometryInfo.type)
+  ) {
+    return [];
   }
 
   // Fallback: GeoJSON conversion (for WKB/GeoJSON-encoded data, or if binary failed)
@@ -2078,6 +2092,10 @@ export function createPointLayers(
     arrowExtension &&
     (arrowExtension === ArrowExtension.GEOARROW_POINT ||
       arrowExtension === ArrowExtension.GEOARROW_MULTIPOINT);
+
+  if (geometryInfo.type === GeometryType.MULTIPOINT) {
+    return createRepresentativePointSymbolLayers(jsTable, ctx);
+  }
 
   const shouldUseGeoJsonPointLayer =
     pointShape !== ShapeType.POINT ||
@@ -2681,6 +2699,15 @@ export function createLineLayers(
   const layerId = lineDashed
     ? `${lineLayerBaseId}-dashed`
     : `${lineLayerBaseId}-solid`;
+  const primitiveFilters = viz?.primitiveFilters ?? ALL_PRIMITIVE_FILTERS;
+  const primitiveOrder = ctx.primitiveOrder ?? [
+    PrimitiveFilterType.POINT,
+    PrimitiveFilterType.LINE
+  ];
+  const getOrderIndex = (primitive: PrimitiveFilter): number => {
+    const index = primitiveOrder.indexOf(primitive);
+    return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+  };
 
   const isNativeGeoArrowLine =
     arrowExtension &&
@@ -2792,54 +2819,74 @@ export function createLineLayers(
       ? buildYearFilterProps(lineData, pathBinaryData, jsTable, ctx.yearFilter)
       : null;
 
+    const lineLayer = new PathLayer({
+      id: layerId,
+      ...(pathProps as unknown as Record<string, unknown>),
+      ...(!colorBinaryAttr && {
+        getColor: withOpacity(resolvedLineColor, normalizedLineOpacity)
+      }),
+      extensions: lineDashed ? [DASH_EXTENSION] : [],
+      getDashArray: lineDashArray,
+      dashJustified: true,
+      widthUnits: 'pixels',
+      ...(!widthBinaryAttr && { getWidth: resolvedLineWidth }),
+      widthMinPixels: 1,
+      pickable: true,
+      autoHighlight: true,
+      highlightColor: HOVER_HIGHLIGHT_COLOR,
+      ...(modelMatrix && { modelMatrix }),
+      ...(beforeId && { beforeId }),
+      ...lineYearFilterProps,
+      updateTriggers: {
+        getColor: [
+          useChoropleth,
+          useCategoricalColor,
+          viz?.mapping.valueColumn,
+          viz?.mapping.categoryColumn,
+          viz?.classification?.breaks,
+          viz?.classification?.colors,
+          categoryColorMap,
+          viz?.classification?.labels,
+          resolvedLineColor,
+          normalizedLineOpacity,
+          hlVersion
+        ],
+        getDashArray: [lineDashed],
+        getWidth: [
+          usesVariableLineWidth,
+          viz?.mapping.sizeColumn,
+          viz?.mapping.valueColumn,
+          minValue,
+          maxValue,
+          viz?.classification?.breaks,
+          maxLineWidth,
+          resolvedSizeScale,
+          resolvedLineWidth
+        ]
+      }
+    });
+
+    const pointLayers = createRepresentativePointSymbolLayers(jsTable, ctx);
+
     return [
-      new PathLayer({
-        id: layerId,
-        ...(pathProps as unknown as Record<string, unknown>),
-        ...(!colorBinaryAttr && {
-          getColor: withOpacity(resolvedLineColor, normalizedLineOpacity)
-        }),
-        extensions: lineDashed ? [DASH_EXTENSION] : [],
-        getDashArray: lineDashArray,
-        dashJustified: true,
-        widthUnits: 'pixels',
-        ...(!widthBinaryAttr && { getWidth: resolvedLineWidth }),
-        widthMinPixels: 1,
-        pickable: true,
-        autoHighlight: true,
-        highlightColor: HOVER_HIGHLIGHT_COLOR,
-        ...(modelMatrix && { modelMatrix }),
-        ...(beforeId && { beforeId }),
-        ...lineYearFilterProps,
-        updateTriggers: {
-          getColor: [
-            useChoropleth,
-            useCategoricalColor,
-            viz?.mapping.valueColumn,
-            viz?.mapping.categoryColumn,
-            viz?.classification?.breaks,
-            viz?.classification?.colors,
-            categoryColorMap,
-            viz?.classification?.labels,
-            resolvedLineColor,
-            normalizedLineOpacity,
-            hlVersion
-          ],
-          getDashArray: [lineDashed],
-          getWidth: [
-            usesVariableLineWidth,
-            viz?.mapping.sizeColumn,
-            viz?.mapping.valueColumn,
-            minValue,
-            maxValue,
-            viz?.classification?.breaks,
-            maxLineWidth,
-            resolvedSizeScale,
-            resolvedLineWidth
+      ...(primitiveFilters.includes(PrimitiveFilterType.LINE)
+        ? [
+            {
+              primitive: PrimitiveFilterType.LINE as PrimitiveFilter,
+              layer: lineLayer
+            }
           ]
-        }
-      })
-    ];
+        : []),
+      ...pointLayers.map((layer) => ({
+        primitive: PrimitiveFilterType.POINT as PrimitiveFilter,
+        layer
+      }))
+    ]
+      .sort(
+        (left, right) =>
+          getOrderIndex(right.primitive) - getOrderIndex(left.primitive)
+      )
+      .map((entry) => entry.layer);
   }
 
   if (!isWkbEncoded && !isGeoJsonEncoded) {
@@ -2952,53 +2999,73 @@ export function createLineLayers(
     ctx.yearFilter
   );
 
+  const lineLayer = new GeoJsonLayer({
+    id: layerId,
+    data: filteredLineGeojsonData,
+    stroked: true,
+    filled: false,
+    getLineColor: geoJsonLineColor,
+    extensions: lineDashed ? [DASH_EXTENSION] : [],
+    getDashArray: lineDashArray,
+    dashJustified: true,
+    lineWidthUnits: 'pixels',
+    getLineWidth: geoJsonLineWidth,
+    lineWidthMinPixels: 1,
+    pickable: true,
+    autoHighlight: true,
+    highlightColor: HOVER_HIGHLIGHT_COLOR,
+    ...(modelMatrix && { modelMatrix }),
+    ...(beforeId && { beforeId }),
+    updateTriggers: {
+      getLineColor: [
+        useChoropleth,
+        useCategoricalColor,
+        viz?.mapping.valueColumn,
+        viz?.mapping.categoryColumn,
+        viz?.classification?.breaks,
+        viz?.classification?.colors,
+        categoryColorMap,
+        viz?.classification?.labels,
+        resolvedLineColor,
+        normalizedLineOpacity,
+        hlVersion
+      ],
+      getDashArray: [lineDashed],
+      getLineWidth: [
+        usesVariableLineWidth,
+        viz?.mapping.sizeColumn,
+        viz?.mapping.valueColumn,
+        minValue,
+        maxValue,
+        viz?.classification?.breaks,
+        maxLineWidth,
+        resolvedSizeScale,
+        resolvedLineWidth
+      ]
+    }
+  });
+
+  const pointLayers = createRepresentativePointSymbolLayers(jsTable, ctx);
+
   return [
-    new GeoJsonLayer({
-      id: layerId,
-      data: filteredLineGeojsonData,
-      stroked: true,
-      filled: false,
-      getLineColor: geoJsonLineColor,
-      extensions: lineDashed ? [DASH_EXTENSION] : [],
-      getDashArray: lineDashArray,
-      dashJustified: true,
-      lineWidthUnits: 'pixels',
-      getLineWidth: geoJsonLineWidth,
-      lineWidthMinPixels: 1,
-      pickable: true,
-      autoHighlight: true,
-      highlightColor: HOVER_HIGHLIGHT_COLOR,
-      ...(modelMatrix && { modelMatrix }),
-      ...(beforeId && { beforeId }),
-      updateTriggers: {
-        getLineColor: [
-          useChoropleth,
-          useCategoricalColor,
-          viz?.mapping.valueColumn,
-          viz?.mapping.categoryColumn,
-          viz?.classification?.breaks,
-          viz?.classification?.colors,
-          categoryColorMap,
-          viz?.classification?.labels,
-          resolvedLineColor,
-          normalizedLineOpacity,
-          hlVersion
-        ],
-        getDashArray: [lineDashed],
-        getLineWidth: [
-          usesVariableLineWidth,
-          viz?.mapping.sizeColumn,
-          viz?.mapping.valueColumn,
-          minValue,
-          maxValue,
-          viz?.classification?.breaks,
-          maxLineWidth,
-          resolvedSizeScale,
-          resolvedLineWidth
+    ...(primitiveFilters.includes(PrimitiveFilterType.LINE)
+      ? [
+          {
+            primitive: PrimitiveFilterType.LINE as PrimitiveFilter,
+            layer: lineLayer
+          }
         ]
-      }
-    })
-  ];
+      : []),
+    ...pointLayers.map((layer) => ({
+      primitive: PrimitiveFilterType.POINT as PrimitiveFilter,
+      layer
+    }))
+  ]
+    .sort(
+      (left, right) =>
+        getOrderIndex(right.primitive) - getOrderIndex(left.primitive)
+    )
+    .map((entry) => entry.layer);
 }
 
 export function createPolygonLayers(
@@ -3241,12 +3308,7 @@ export function createPolygonLayers(
         });
       }
 
-      const pointLayers = createPolygonCentroidSymbolLayers(
-        polyData,
-        jsTable,
-        ctx,
-        layerId
-      );
+      const pointLayers = createRepresentativePointSymbolLayers(jsTable, ctx);
 
       // Determine layer order and stroke visibility from context
       const DEFAULT_PRIMITIVE_ORDER: PrimitiveFilter[] = [
@@ -3595,8 +3657,12 @@ export function createDeckLayers(
   const isPolygonGeometry =
     resolvedGeometryType === GeometryType.POLYGON ||
     resolvedGeometryType === GeometryType.MULTIPOLYGON;
+  const isLineGeometry =
+    resolvedGeometryType === GeometryType.LINESTRING ||
+    resolvedGeometryType === GeometryType.MULTILINESTRING;
   const isPrimitiveFilteredOut =
     !isPolygonGeometry &&
+    !isLineGeometry &&
     primitive &&
     ctx.viz?.primitiveFilters &&
     !ctx.viz.primitiveFilters.includes(primitive);

@@ -101,6 +101,10 @@ export interface LayerContext {
   beforeId?: string;
   /** Pre-computed geometry info — avoids redundant extractGeometryInfo() calls */
   geometryInfo?: GeometryInfo;
+  /** DuckDB-derived point geometry used for symbols/text on non-point features */
+  representativePointTable?: ArrowTable;
+  /** Geometry info for the representative point table */
+  representativePointGeometryInfo?: GeometryInfo;
   /** GPU-side year filter via DataFilterExtension — avoids data prop changes on year switch */
   yearFilter?: YearFilterInfo;
   /** Custom CRS projection (from proj4d3) for thematic layer binary parsing */

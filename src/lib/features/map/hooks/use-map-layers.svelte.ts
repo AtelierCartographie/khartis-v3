@@ -4,6 +4,7 @@ import type { Map as MapLibreMap } from 'maplibre-gl';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { FeatureCollection } from 'geojson';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { Duck } from '$lib/features/duckdb';
 import type { VisualizationConfig } from '$lib/features/commons/store/visualization.store.svelte';
 import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
 import { mapProjectionStore } from '../stores/map-projection.store.svelte';
@@ -45,6 +46,7 @@ import {
 import type { BasemapMetadata } from '../types/basemap.types';
 import { shouldUseIdentityProjectionForDatasetCrs } from '../utils/dataset-crs';
 import { resolveProjectionForRender } from '../utils/projection-priority';
+import { getRepresentativePointArrowTable } from '$lib/features/duckdb/orchestrator/arrow-ops';
 
 const GEOMETRY_TO_PRIMITIVE: Partial<Record<GeometryType, PrimitiveFilter>> = {
   [GeometryType.POINT]: PrimitiveFilterType.POINT,
@@ -70,6 +72,7 @@ export interface UseMapLayersProps {
   getShouldRenderDatasetFallbacks?: () => boolean;
   getTableFilters?: (datasetId: string) => DataTableFilter[] | undefined;
   onBasemapLayersLoaded?: () => void;
+  onRepresentativePointTablesLoaded?: () => void;
 }
 
 export interface UseMapLayersReturn {
@@ -92,7 +95,8 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     getProjectionFitBbox,
     getShouldRenderDatasetFallbacks,
     getTableFilters,
-    onBasemapLayersLoaded
+    onBasemapLayersLoaded,
+    onRepresentativePointTablesLoaded
   } = props;
 
   const DATA_PREVIEW_FILL_COLOR: [number, number, number] = [96, 96, 96];
@@ -157,6 +161,16 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     NonNullable<BasemapMetadata>,
     ProjectionLike
   >();
+  const representativePointTableCache = new WeakMap<ArrowTable, ArrowTable>();
+  const representativePointGeometryInfoCache = new WeakMap<
+    ArrowTable,
+    NonNullable<ReturnType<typeof extractGeometryInfo>>
+  >();
+  const representativePointLoadPromises = new WeakMap<
+    ArrowTable,
+    Promise<void>
+  >();
+  const representativePointLoadFailures = new WeakSet<ArrowTable>();
   let cachedProjectionOverrideKey: string | null = null;
   let cachedProjectionOverrideRef: ProjectionLike | undefined;
 
@@ -258,6 +272,95 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
   function getDatasetGeometryCrs(datasetId: string): string | null | undefined {
     return datasetsStore.datasets.find((dataset) => dataset.id === datasetId)
       ?.geometry?.crs;
+  }
+
+  function getDatasetTableName(datasetId: string): string | null {
+    return (
+      datasetsStore.datasets.find((dataset) => dataset.id === datasetId)
+        ?.tableName ?? null
+    );
+  }
+
+  function supportsRepresentativePointTable(
+    geometryType: string | undefined
+  ): boolean {
+    return (
+      geometryType === GeometryType.POLYGON ||
+      geometryType === GeometryType.MULTIPOLYGON ||
+      geometryType === GeometryType.LINESTRING ||
+      geometryType === GeometryType.MULTILINESTRING ||
+      geometryType === GeometryType.MULTIPOINT
+    );
+  }
+
+  function getCachedRepresentativeGeometryInfo(
+    table: ArrowTable
+  ): ReturnType<typeof extractGeometryInfo> | null {
+    const cached = representativePointGeometryInfoCache.get(table);
+    if (cached) {
+      return cached;
+    }
+
+    const geometryInfo = extractGeometryInfo(table);
+    if (geometryInfo) {
+      representativePointGeometryInfoCache.set(table, geometryInfo);
+    }
+    return geometryInfo;
+  }
+
+  function getRepresentativePointTable(
+    datasetId: string,
+    sourceTable: ArrowTable,
+    geometryInfo: NonNullable<LayerContext['geometryInfo']>
+  ): ArrowTable | null {
+    if (!supportsRepresentativePointTable(geometryInfo.type)) {
+      return null;
+    }
+
+    const cachedTable = representativePointTableCache.get(sourceTable);
+    if (cachedTable) {
+      return cachedTable;
+    }
+
+    if (
+      representativePointLoadPromises.has(sourceTable) ||
+      representativePointLoadFailures.has(sourceTable)
+    ) {
+      return null;
+    }
+
+    const tableName = getDatasetTableName(datasetId);
+    if (!tableName) {
+      return null;
+    }
+
+    const loadPromise = getRepresentativePointArrowTable(
+      tableName,
+      geometryInfo.type,
+      Duck
+    )
+      .then((representativePointTable) => {
+        representativePointTableCache.set(
+          sourceTable,
+          representativePointTable
+        );
+        getCachedRepresentativeGeometryInfo(representativePointTable);
+        onRepresentativePointTablesLoaded?.();
+      })
+      .catch((error) => {
+        representativePointLoadFailures.add(sourceTable);
+        logger.warn(
+          'Deferred representative point table loading failed',
+          LogCategory.MAP,
+          { datasetId, tableName, geometryType: geometryInfo.type, error }
+        );
+      })
+      .finally(() => {
+        representativePointLoadPromises.delete(sourceTable);
+      });
+
+    representativePointLoadPromises.set(sourceTable, loadPromise);
+    return null;
   }
 
   function getDatasetDefaultProjection(
@@ -514,6 +617,37 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             const filteredTable = viz.yearFilter
               ? filterArrowTableByYear(tableFiltered, viz.yearFilter)
               : tableFiltered;
+            const representativePointBaseTable = geoInfo
+              ? getRepresentativePointTable(datasetId, table, geoInfo)
+              : null;
+
+            if (representativePointBaseTable) {
+              const representativeVizFiltered = filterArrowTableByDataFilters(
+                representativePointBaseTable,
+                viz.dataFilters,
+                tablePrimitiveType
+              );
+              const representativeTableFiltered =
+                filterArrowTableByTableFilters(
+                  representativeVizFiltered,
+                  tableFilters
+                );
+              const filteredRepresentativePointTable = viz.yearFilter
+                ? filterArrowTableByYear(
+                    representativeTableFiltered,
+                    viz.yearFilter
+                  )
+                : representativeTableFiltered;
+              ctx.representativePointTable = filteredRepresentativePointTable;
+              ctx.representativePointGeometryInfo =
+                getCachedRepresentativeGeometryInfo(
+                  filteredRepresentativePointTable
+                ) ?? undefined;
+            } else {
+              ctx.representativePointTable = undefined;
+              ctx.representativePointGeometryInfo = undefined;
+            }
+
             const arrowLayers = createDeckLayers(filteredTable, ctx);
             layers.push(...arrowLayers);
             if (arrowLayers.length > 0) {
