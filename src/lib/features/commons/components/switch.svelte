@@ -23,6 +23,31 @@
     onchange
   }: Props = $props();
 
+  function stopBubbleEvents(node: HTMLElement) {
+    const events = [
+      'click',
+      'mousedown',
+      'mouseup',
+      'pointerdown',
+      'pointerup',
+      'keydown',
+      'keyup'
+    ] as const;
+    const handler = (event: Event) => event.stopPropagation();
+
+    events.forEach((eventName) => {
+      node.addEventListener(eventName, handler, { capture: true });
+    });
+
+    return {
+      destroy() {
+        events.forEach((eventName) => {
+          node.removeEventListener(eventName, handler, { capture: true });
+        });
+      }
+    };
+  }
+
   function handleChange(event: Event): void {
     const next = (event.currentTarget as HTMLInputElement).checked;
     toggled = next;
@@ -34,6 +59,7 @@
   class="kh-switch-native"
   class:disabled={disabled}
   class:sm={size === 'sm'}
+  use:stopBubbleEvents
 >
   {#if !hideLabel && labelText}
     <span class="kh-switch-label">{labelText}</span>
