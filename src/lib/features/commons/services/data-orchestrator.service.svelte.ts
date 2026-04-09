@@ -493,7 +493,10 @@ function createDataOrchestratorService() {
 
   async function onFileAdded(
     file: UploadedFile,
-    autoEnable = true
+    autoEnable = true,
+    options?: {
+      suggestProjection?: boolean;
+    }
   ): Promise<void> {
     const snapshot = importRollbackService.createSnapshot(file);
 
@@ -514,7 +517,10 @@ function createDataOrchestratorService() {
       await processFileInDuckDB(file, dataset);
       processedFileIds.add(file.id);
 
-      if (dataset.geometry || dataset.geoDetection) {
+      if (
+        options?.suggestProjection !== false &&
+        (dataset.geometry || dataset.geoDetection)
+      ) {
         projectionActions.suggestProjectionForCurrentData();
       }
 
@@ -774,6 +780,13 @@ function createDataOrchestratorService() {
     unprocessedFiles.forEach((file) => processingFiles.add(file.id));
     duckDBOrchestrator.beginBatch();
 
+    const currentProject = projectStore.currentProject;
+    const serializedData = currentProject?.data as
+      | SerializedProjectData
+      | undefined;
+    const shouldSuggestProjection =
+      !serializedData?.layoutSettings?.projection?.overrideActive;
+
     try {
       const concurrency = determineProjectConcurrency();
 
@@ -821,7 +834,9 @@ function createDataOrchestratorService() {
         const autoEnable = file.id === selectedSourceFileId;
 
         try {
-          await onFileAdded(file, autoEnable);
+          await onFileAdded(file, autoEnable, {
+            suggestProjection: shouldSuggestProjection
+          });
 
           if (
             file.columnTransformations &&

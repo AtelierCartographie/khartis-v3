@@ -72,6 +72,12 @@ const projectionResetMock = vi.hoisted(() =>
     operationLog.push('projectionReset');
   })
 );
+const projectionSetStateMock = vi.hoisted(() =>
+  vi.fn(() => {
+    operationLog.push('projectionSetState');
+  })
+);
+const suggestProjectionForCurrentDataMock = vi.hoisted(() => vi.fn());
 const legendSyncMock = vi.hoisted(() =>
   vi.fn(() => {
     operationLog.push('legendSync');
@@ -151,7 +157,8 @@ vi.mock(
   () => ({
     projectionActions: {
       reset: projectionResetMock,
-      suggestProjectionForCurrentData: vi.fn()
+      setState: projectionSetStateMock,
+      suggestProjectionForCurrentData: suggestProjectionForCurrentDataMock
     }
   })
 );
@@ -300,5 +307,61 @@ describe('dataOrchestratorService.onProjectChanged', () => {
     expect(applyViewStateIndex).toBeLessThan(applyFiltersIndex);
     expect(legendSyncIndex).toBeGreaterThan(restoreIndexes[1]);
     expect(legendSyncIndex).toBeGreaterThan(applyFiltersIndex);
+  });
+
+  it('does not auto-suggest a projection while restoring a persisted override', async () => {
+    addFileMock.mockResolvedValueOnce({
+      id: 'dataset-1',
+      sourceFileId: 'file-1',
+      name: 'demo',
+      columns: [],
+      metadata: {},
+      geometry: {
+        bounds: [-180, -90, 180, 90],
+        crs: 'EPSG:4326'
+      }
+    });
+
+    currentProjectState.value = {
+      data: {
+        sourceFiles: [
+          {
+            id: 'file-1',
+            name: 'demo.geojson',
+            fileType: 'geojson',
+            originalFile: new File(['demo'], 'demo.geojson', {
+              type: 'application/geo+json'
+            })
+          }
+        ],
+        layoutSettings: {
+          projection: {
+            selected: 'mercator',
+            overrideActive: true,
+            overrideSource: 'manual',
+            viewMode: 'list',
+            longitude: 0,
+            latitude: 0,
+            rotation: 0,
+            autoFit: true,
+            simplifiedPreview: true
+          }
+        }
+      }
+    };
+
+    const { dataOrchestratorService } =
+      await import('$lib/features/commons/services/data-orchestrator.service.svelte');
+
+    await dataOrchestratorService.onProjectChanged();
+
+    expect(suggestProjectionForCurrentDataMock).not.toHaveBeenCalled();
+    expect(projectionSetStateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selected: 'mercator',
+        overrideActive: true,
+        overrideSource: 'manual'
+      })
+    );
   });
 });
