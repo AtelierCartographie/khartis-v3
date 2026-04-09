@@ -203,7 +203,7 @@
       dataset.id
     );
     selectedSuggestion = undefined;
-    suggestionsExpanded = false;
+    suggestionsExpanded = filteredSuggestions.length > 0 || suggestionsExpanded;
     onCreateVisualization?.();
   }
 
