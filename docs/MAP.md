@@ -127,7 +127,7 @@ Pourquoi c'est critique : `projSolidPolygonCache` etc. utilisent `ProjectionLike
 
 ## Chargement paresseux des fonds
 
-Le GeoParquet principal d'un fond de carte est charge immediatement, mais les couches annexes metadata-driven (limites, graticules, lignes geographiques) sont chargees a la demande selon les couches visibles. Les centroides metadata ne sont pas precharges, car le rendu courant des labels utilise les centroides calcules depuis la geometrie binaire.
+Le GeoParquet principal d'un fond de carte est charge immediatement, mais les couches annexes metadata-driven (limites, graticules, lignes geographiques) sont chargees a la demande selon les couches visibles. Les centroides metadata ne sont toujours pas precharges comme couches visibles autonomes, mais les symboles et textes des couches thematiques s'appuient desormais sur une table de points representatifs derivee par DuckDB.
 
 ---
 
@@ -187,7 +187,9 @@ Fonctions utilitaires dans `geoarrow-stream-bridge.ts` :
 - `pointColorAttr(data, colorLookup)` — RGBA8 par point
 - `pointRadiusAttr(data, radiusLookup)` — rayon par point
 - `filterValueAttr(data, table, column)` — Float32Array pour `DataFilterExtension`
-- `polygonCentroids(data)` / `pathCentroids(data)` / `pointPositions(data)` — centroïdes pour `TextLayer`
+- `pointPositions(data)` — extraction directe des coordonnees pour les couches de points
+
+Les `Textes` et `Symboles` sur polygones, lignes et `MultiPoint` passent maintenant par les tables DuckDB de points representatifs. Les anciens fallback JS `polygonCentroids()` / `pathCentroids()` ont ete retires du rendu thematique.
 
 ---
 

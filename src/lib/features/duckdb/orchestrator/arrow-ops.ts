@@ -5,7 +5,10 @@ import {
 } from '$lib/features/commons/constants/geometry.constants';
 import type { GeoArrowMetadata } from '$lib/features/commons/types/geoarrow.types';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { ArrowExtension } from '$lib/features/map/constants/map.constants';
+import {
+  ArrowExtension,
+  GeometryType
+} from '$lib/features/map/constants/map.constants';
 import { Field, Schema, Table, Type, tableFromIPC } from 'apache-arrow/Arrow';
 // Plain Map — metadata is non-reactive data processing (no need for SvelteMap proxy)
 import { DUCK_CONST, GEO_CONSTANTS } from '../constants';
@@ -127,6 +130,70 @@ export interface GeomColumnInfo {
   column_type: string;
 }
 
+async function executeArrowIpcQuery(
+  Duck: DuckDBClientForArrow,
+  query: string,
+  tableName: string
+): Promise<Table> {
+  // Use streaming when available — reduces peak WASM memory for large tables.
+  // Fallback to regular query() if streaming returns 0 rows (race condition
+  // in DuckDB WASM's useUnsafe API under concurrent query load).
+  let ipcBuffer: Uint8Array;
+
+  if (Duck.queryStreaming) {
+    ipcBuffer = await Duck.queryStreaming(query);
+    const streamTable = tableFromIPC(ipcBuffer);
+    if (streamTable.numRows > 0) {
+      const firstBatchEmpty =
+        streamTable.batches.length > 0 && streamTable.batches[0].numRows === 0;
+      if (!firstBatchEmpty) {
+        return streamTable;
+      }
+      logger.debug(
+        'queryStreaming first batch is empty (schema header), retrying with regular query',
+        LogCategory.DUCKDB,
+        { tableName }
+      );
+    } else {
+      logger.debug(
+        'queryStreaming returned 0 rows, retrying with regular query',
+        LogCategory.DUCKDB,
+        { tableName, ipcBufferBytes: ipcBuffer.byteLength }
+      );
+    }
+  }
+
+  const buffer = (await Duck.query(query, {
+    format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
+  })) as ArrayBuffer | Uint8Array;
+  ipcBuffer = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+
+  return tableFromIPC(ipcBuffer);
+}
+
+function getRepresentativePointExpression(
+  geometryColumnName: string,
+  geometryType: string
+): string | null {
+  const escapedGeometryColumn = `"${geometryColumnName}"`;
+
+  switch (geometryType) {
+    case GeometryType.POLYGON:
+    case GeometryType.MULTIPOLYGON:
+      return `COALESCE(
+        ST_MaximumInscribedCircle(${escapedGeometryColumn}).center,
+        ST_PointOnSurface(${escapedGeometryColumn})
+      )`;
+    case GeometryType.LINESTRING:
+    case GeometryType.MULTILINESTRING:
+    case GeometryType.POINT:
+    case GeometryType.MULTIPOINT:
+      return `ST_PointOnSurface(${escapedGeometryColumn})`;
+    default:
+      return null;
+  }
+}
+
 export async function fetchArrowTableWithGeometry(
   tableName: string,
   Duck: DuckDBClientForArrow,
@@ -157,55 +224,9 @@ export async function fetchArrowTableWithGeometry(
     query += ` WHERE ${whereClause}`;
   }
 
-  // Use streaming when available — reduces peak WASM memory for large tables.
-  // Fallback to regular query() if streaming returns 0 rows (race condition
-  // in DuckDB WASM's useUnsafe API under concurrent query load).
-  let ipcBuffer: Uint8Array;
-
-  if (Duck.queryStreaming) {
-    ipcBuffer = await Duck.queryStreaming(query);
-    const streamTable = tableFromIPC(ipcBuffer);
-    if (streamTable.numRows > 0 || whereClause) {
-      // Guard: DuckDB streaming may emit a 0-row schema header as the first batch.
-      // geoarrow-deck-stream only reads data[0] — an empty first batch causes
-      // children[0] to be undefined. Fall back to regular query which returns a
-      // single contiguous batch.
-      const firstBatchEmpty =
-        streamTable.batches.length > 0 && streamTable.batches[0].numRows === 0;
-      if (!firstBatchEmpty) {
-        return {
-          table: streamTable,
-          geomColumn:
-            normalizedTargetCrs && geomColumn
-              ? {
-                  ...geomColumn,
-                  column_type: `${GEOMETRY_COLUMN_TYPE}('${normalizedTargetCrs}')`
-                }
-              : geomColumn
-        };
-      }
-      logger.debug(
-        'queryStreaming first batch is empty (schema header), retrying with regular query',
-        LogCategory.DUCKDB,
-        { tableName }
-      );
-    } else {
-      // Streaming returned schema-only (0 rows) — retry with regular query
-      logger.debug(
-        'queryStreaming returned 0 rows, retrying with regular query',
-        LogCategory.DUCKDB,
-        { tableName, ipcBufferBytes: ipcBuffer.byteLength }
-      );
-    }
-  }
-
-  const buffer = (await Duck.query(query, {
-    format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
-  })) as ArrayBuffer | Uint8Array;
-  ipcBuffer = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
-
+  const baseTable = await executeArrowIpcQuery(Duck, query, tableName);
   return {
-    table: tableFromIPC(ipcBuffer),
+    table: baseTable,
     geomColumn:
       normalizedTargetCrs && geomColumn
         ? {
@@ -213,6 +234,64 @@ export async function fetchArrowTableWithGeometry(
             column_type: `${GEOMETRY_COLUMN_TYPE}('${normalizedTargetCrs}')`
           }
         : geomColumn
+  };
+}
+
+export async function fetchArrowRepresentativePointTable(
+  tableName: string,
+  geometryType: string,
+  Duck: DuckDBClientForArrow,
+  whereClause?: string | null
+): Promise<{ table: Table; geomColumn: GeomColumnInfo | undefined }> {
+  const tableInfo = await Duck.describe_table(tableName);
+  const columns = tableInfo.name.map((name: string, index: number) => ({
+    column_name: name,
+    column_type: tableInfo.type[index]
+  }));
+
+  const geomColumn = columns.find((c: { column_type: string }) =>
+    isGeometryColumnType(c.column_type)
+  );
+
+  if (!geomColumn) {
+    const query = whereClause
+      ? `SELECT * FROM "${tableName}" WHERE ${whereClause}`
+      : `SELECT * FROM "${tableName}"`;
+    return {
+      table: await executeArrowIpcQuery(Duck, query, tableName),
+      geomColumn: undefined
+    };
+  }
+
+  const pointExpression = getRepresentativePointExpression(
+    geomColumn.column_name,
+    geometryType
+  );
+
+  if (!pointExpression) {
+    return fetchArrowTableWithGeometry(tableName, Duck, whereClause);
+  }
+
+  let query = `SELECT * REPLACE (
+    CASE
+      WHEN "${geomColumn.column_name}" IS NULL THEN NULL
+      ELSE ${pointExpression}
+    END AS "${geomColumn.column_name}"
+  ) FROM "${tableName}"`;
+
+  if (whereClause) {
+    query += ` WHERE ${whereClause}`;
+  }
+
+  const geometryCrs = extractGeometryColumnCrs(geomColumn.column_type);
+  return {
+    table: await executeArrowIpcQuery(Duck, query, tableName),
+    geomColumn: {
+      ...geomColumn,
+      column_type: geometryCrs
+        ? `${GEOMETRY_COLUMN_TYPE}('${geometryCrs}')`
+        : GEOMETRY_COLUMN_TYPE
+    }
   };
 }
 
@@ -539,6 +618,29 @@ export async function getArrowTableReprojected(
     null,
     targetCrs
   );
+
+  return addGeoArrowMetadataFromDuckDB(
+    baseTable,
+    tableName,
+    Duck,
+    undefined,
+    geomColumn
+  );
+}
+
+export async function getRepresentativePointArrowTable(
+  tableName: string,
+  geometryType: string,
+  Duck: DuckDBClientForArrow,
+  whereClause?: string | null
+): Promise<Table> {
+  const { table: baseTable, geomColumn } =
+    await fetchArrowRepresentativePointTable(
+      tableName,
+      geometryType,
+      Duck,
+      whereClause
+    );
 
   return addGeoArrowMetadataFromDuckDB(
     baseTable,
