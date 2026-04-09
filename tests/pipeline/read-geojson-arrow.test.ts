@@ -129,4 +129,20 @@ describe('addGeoArrowMetadata', () => {
       '"geometry_type":"Polygon"'
     );
   });
+
+  it('keeps binary geometry columns on geoarrow.wkb even with GeoParquet encoding hints', () => {
+    const table = new Table(
+      new Schema([new Field('geometry', new Binary(), true)]),
+      []
+    );
+
+    const normalizedTable = addGeoArrowMetadata(table, 'multipolygon');
+
+    expect(getGeometryExtension(normalizedTable)).toBe(
+      ArrowExtension.GEOARROW_WKB
+    );
+    expect(getGeometryExtensionMetadata(normalizedTable)).toContain(
+      '"geometry_type":"Polygon"'
+    );
+  });
 });

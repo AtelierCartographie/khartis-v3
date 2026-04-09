@@ -136,6 +136,10 @@ export function addGeoArrowMetadata(
   }
 
   const geoColumnName = geomColumn.name;
+  const isBinaryGeometryField =
+    geomColumn.type.typeId === Type.Binary ||
+    geomColumn.type.typeId === Type.FixedSizeBinary ||
+    geomColumn.type.typeId === Type.LargeBinary;
 
   // Check if the field already has extension metadata from DuckDB.
   const existingExtension = geomColumn.metadata?.get(
@@ -163,6 +167,11 @@ export function addGeoArrowMetadata(
     geometryTypes = getGeometryTypesForEncoding(
       arrowExtension.replace('geoarrow.', '')
     );
+  } else if (isBinaryGeometryField) {
+    arrowExtension = getBinaryFallbackExtension(geomColumn);
+    geometryTypes = geoParquetEncoding
+      ? getGeometryTypesForEncoding(geoParquetEncoding)
+      : [GEOJSON_TYPE.POLYGON, GEOJSON_TYPE.MULTI_POLYGON];
   } else if (geoParquetEncoding) {
     const mapped =
       GEOPARQUET_ENCODING_TO_ARROW[geoParquetEncoding.toLowerCase()];
@@ -361,8 +370,8 @@ async function readParquetGeoInfo(
 /**
  * Read a GeoParquet file via DuckDB and return an Arrow table with GeoArrow metadata.
  *
- * With DuckDB WASM >= 1.33, read_parquet() returns geometry as geoarrow.wkb natively.
- * geoarrow-deck-stream auto-detects and decodes WKB transparently.
+ * With DuckDB WASM >= 1.33.1-dev44.0 and CRS warmup, read_parquet() can export
+ * GeoParquet geometry through Arrow IPC without disabling automatic conversion.
  */
 export async function readGeoParquetViaDuckDB(
   arrayBuffer: ArrayBuffer,
@@ -409,7 +418,7 @@ export async function readGeoParquetViaDuckDB(
     try {
       const result = await Duck.query(
         `SELECT * EXCLUDE ("${escapedGeomCol}"),
-                ST_AsWKB(ST_Transform("${escapedGeomCol}"::GEOMETRY, '${escapedSourceCrs}', 'EPSG:4326', true)) as "${escapedGeomCol}"
+                ST_Transform("${escapedGeomCol}"::GEOMETRY, '${escapedSourceCrs}', 'EPSG:4326', true) as "${escapedGeomCol}"
          FROM read_parquet('${escapedFileId}')`,
         { format: 'arrow-ipc' }
       );
@@ -428,7 +437,7 @@ export async function readGeoParquetViaDuckDB(
     try {
       const result = await Duck.query(
         `SELECT * EXCLUDE ("${escapedGeomCol}"),
-                ST_AsWKB(ST_Transform("${escapedGeomCol}", '${escapedSourceCrs}', 'EPSG:4326', true)) as "${escapedGeomCol}"
+                ST_Transform("${escapedGeomCol}", '${escapedSourceCrs}', 'EPSG:4326', true) as "${escapedGeomCol}"
          FROM ST_Read('${escapedFileId}')`,
         { format: 'arrow-ipc' }
       );
@@ -470,9 +479,7 @@ export async function readGeoParquetViaDuckDB(
     }
   }
 
-  // Default path: read raw parquet (WGS84).
-  // With enable_geoparquet_conversion=false (workaround for duckdb/duckdb-wasm#2199),
-  // geometry stays as native GeoArrow structs which geoarrow-deck-stream handles.
+  // Default path: read raw parquet (WGS84) and keep DuckDB's native Arrow export.
   // Rename geom column to "geometry" for geoarrow-deck-stream compatibility.
   const geomColName = geoInfo.primaryColumn;
   const needsRename =
