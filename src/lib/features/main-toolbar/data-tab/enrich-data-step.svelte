@@ -1,6 +1,9 @@
 <script lang="ts">
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
-  import { dataTabActions } from '$lib/features/commons/store/data-tab.store.svelte';
+  import {
+    dataTabActions,
+    dataTabState
+  } from '$lib/features/commons/store/data-tab.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import * as m from '$lib/paraglide/messages';
   import { InlineNotification } from 'carbon-components-svelte';
@@ -20,27 +23,13 @@
     useEnrichmentJoin
   } from './enrich-data';
 
+  import { dataTabStore } from './data-tab.store.svelte';
+
   const selectedDataset = $derived(datasetsStore.selectedDataset);
 
-  let joinTabularEnabled = $state(false);
-
-  import { dataTabStore } from './data-tab.store.svelte';
-  import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
-  import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
-
-  let overlayBasemapEnabled = $state(
-    osmBasemapStore.isActive || basemapStyleStore.referenceBasemapId !== null
+  const joinTabularEnabled = $derived(
+    dataTabState.enrichData.joinTabularEnabled
   );
-
-  // Sync toggle ON when a basemap becomes active externally (e.g., restored from project)
-  $effect(() => {
-    if (
-      osmBasemapStore.isActive ||
-      basemapStyleStore.referenceBasemapId !== null
-    ) {
-      overlayBasemapEnabled = true;
-    }
-  });
 
   let enrichLinkedVariableId = $state<number | undefined>(undefined);
   let geoFileColumnId = $state<number | undefined>(undefined);
@@ -49,6 +38,7 @@
 
   const fileHook = useEnrichmentFile();
   const basemapHook = useEnrichmentBasemap();
+  const overlayBasemapEnabled = $derived(basemapHook.hasActiveSelection);
 
   const enrichGeoDetection = $derived(fileHook.enrichmentDataset?.geoDetection);
 
@@ -73,7 +63,7 @@
     getEnrichDataFieldItems: () => enrichDataFieldItems,
     getGeoFileColumns: () => geoFileColumns,
     onJoinFinalized: () => {
-      joinTabularEnabled = false;
+      dataTabActions.setEnrichDataState({ joinTabularEnabled: false });
       fileHook.handleRemoveFile();
       enrichLinkedVariableId = undefined;
       geoFileColumnId = undefined;
@@ -87,10 +77,7 @@
       previousDatasetId = currentId;
       enrichLinkedVariableId = undefined;
       geoFileColumnId = undefined;
-      joinTabularEnabled = false;
-      overlayBasemapEnabled =
-        osmBasemapStore.isActive ||
-        basemapStyleStore.referenceBasemapId !== null;
+      dataTabActions.setEnrichDataState({ joinTabularEnabled: false });
       fileHook.handleRemoveFile();
       joinHook.resetJoinState();
     }
@@ -178,9 +165,10 @@
       title={m.enrich_join_tabular_title()}
       description={m.enrich_join_tabular_description()}
       showToggle={true}
+      open={joinTabularEnabled}
       toggleChecked={joinTabularEnabled}
       onToggleChange={(checked) => {
-        joinTabularEnabled = checked;
+        dataTabActions.setEnrichDataState({ joinTabularEnabled: checked });
       }}
     >
       <div class="section-content">
@@ -234,13 +222,14 @@
       title={m.enrich_overlay_basemap_title()}
       description={m.enrich_overlay_basemap_description()}
       showToggle={true}
+      open={overlayBasemapEnabled}
       toggleChecked={overlayBasemapEnabled}
       onToggleChange={(checked) => {
-        overlayBasemapEnabled = checked;
         if (!checked) {
-          osmBasemapStore.clear();
-          basemapStyleStore.setReferenceBasemap(null);
+          basemapHook.clearSelectedBasemap();
+          return;
         }
+        basemapHook.activatePreferredBasemap();
       }}
     >
       <EnrichmentBasemapSelector

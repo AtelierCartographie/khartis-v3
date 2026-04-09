@@ -47,6 +47,7 @@
     getDatasetIdentity,
     shouldResetJoinState
   } from './services/dataset-identity';
+  import { resolveNextBasemapSelectionId } from './services/basemap-selection';
   import { resolveDatasetIdForOrchestrator } from './services/dataset-resolution';
   import { hasBlockingJoinIssues } from './services/join-validation';
 
@@ -116,6 +117,7 @@
   let previousJoinContext: string | null = null;
   let previousLinkedVariableName: string | null = null;
   let loadingSuggestions = false;
+  let hasDismissedSuggestedBasemap = $state(false);
   const DATASET_READY_RETRY_DELAY_MS = 200;
   const DATASET_READY_MAX_RETRIES = 15;
 
@@ -310,6 +312,19 @@
   }
 
   async function handleSelectBasemap(basemap: BasemapMetadata) {
+    const nextBasemapId = resolveNextBasemapSelectionId(
+      basemapSelected || undefined,
+      basemap.file
+    );
+
+    if (!nextBasemapId) {
+      clearSelectedBasemap();
+      hasDismissedSuggestedBasemap = true;
+      return;
+    }
+
+    hasDismissedSuggestedBasemap = false;
+
     if (currentJoinAbortController) {
       currentJoinAbortController.abort();
     }
@@ -354,6 +369,38 @@
     } else {
       await computeAndAutoFinalizeJoin(basemap, abortSignal);
     }
+  }
+
+  function clearSelectedBasemap(): void {
+    if (currentJoinAbortController) {
+      currentJoinAbortController.abort();
+      currentJoinAbortController = null;
+    }
+
+    const resolvedDatasetId = datasetIdForOrchestrator;
+    const duckDataset = resolvedDatasetId
+      ? (duckDBOrchestrator.getDatasetBySourceFile(resolvedDatasetId) ??
+        duckDBOrchestrator.getDataset(resolvedDatasetId))
+      : null;
+
+    if (duckDataset) {
+      duckDBOrchestrator.updateDatasetJoinInfo(duckDataset.id, {
+        joinedBasemap: undefined,
+        geoColumn: undefined,
+        gpsMode: false,
+        gpsColumns: undefined
+      });
+    }
+
+    osmBasemapStore.clear();
+    dataTabActions.clearJoinStats();
+    basemapAttributeValues = [];
+    dataTabActions.selectBasemap('');
+    basemapStyleStore.setReferenceBasemap(null);
+    dataTabStore.resetStepCompletion(basemapStepIndex);
+    projectStore.updateProjectData({ basemap: undefined });
+    previousJoinContext = null;
+    previousLinkedVariableName = null;
   }
 
   function handleFileDrop(event: DragEvent) {
@@ -1055,6 +1102,7 @@
     void basemapSelected;
 
     if (
+      !hasDismissedSuggestedBasemap &&
       basemapSuggestions.length > 0 &&
       !osmBasemapStore.isActive &&
       !selectedDataset?.geometry &&
@@ -1188,6 +1236,7 @@
       importError = null;
       previousJoinContext = null;
       previousLinkedVariableName = null;
+      hasDismissedSuggestedBasemap = false;
     }
 
     if (currentDatasetIdentity !== null || !hasDatasets) {
