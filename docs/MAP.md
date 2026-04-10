@@ -131,6 +131,14 @@ Le GeoParquet principal d'un fond de carte est charge immediatement, mais les co
 
 Le planisphere par defaut n'est pas charge en etat vierge. Il sert seulement de fallback quand le projet contient deja des donnees source, ou lorsqu'un fond de reference explicite doit etre affiche ou restaure.
 
+## Interactions tooltip
+
+Le CDC demande une infobulle fixe au-dessus de la visionneuse, disponible au survol et au toucher. Le clic ou le toucher sur une entite epingle donc uniquement le tooltip pour le rendre exploitable sur tactile; un clic hors entite le ferme. Aucune selection visuelle persistante n'est appliquee sur la carte.
+
+Le chemin `GeoJSON` brut continue d'injecter un `__id` stable par feature quand la source n'en fournit pas, afin de conserver un picking coherent pour le tooltip sur tous les jeux de donnees.
+
+La mise en lumiere persistante sur la carte reste reservee a l'outil `Recherche`, conformement au CDC `DATA-05d` et `VIZ-TOOLS-a`. Elle suit uniquement le resultat courant parcouru dans l'outil, pas les clics generiques sur la carte.
+
 ---
 
 ## Pipeline GeoArrow → Deck.gl
@@ -227,37 +235,21 @@ Le sélecteur d'années côté UI doit, lui, récupérer les valeurs distinctes 
 
 ---
 
-## Highlight sur la carte
-
-**Highlight row** : `mapHighlightStore` ( `Set<number>` d'IDs de ligne). L'ID de ligne DuckDB est 1-based (`nextval`), `info.index` Deck.gl est 0-based.
-
-```typescript
-// O(1) lookup via Set — pas de tableau
-if (highlightedRowIds.has(featureId - 1)) { ... }
-
-// highlightVersion scalar dans updateTriggers (évite recréation d'accesseur)
-updateTriggers: { getFillColor: [..., hlVersion] }
-```
-
-**Highlight accessor** (`layer-helpers.ts`) :
-
-- `withRowHighlight(color, opacity, dimFactor, Set<rowId>)` — constante
-- `withRowHighlightAccessor(fn, opacity, dimFactor, Set<rowId>)` — fonction
-
-Dimming factor = `0.3` (30% d'opacité sur les non-highlightés).
-
----
-
 ## Picking & Tooltip
 
 ```typescript
 // hoverHandler → mapTooltipStore.showAtHover(x, y, entries, layerId, rowIndex)
-// clickHandler → pins tooltip + mapHighlightStore.setHighlightedRows([rowId])
-// click vide → unpin + clearHighlights
-// click même objet → toggle off
+// clickHandler → pins tooltip at the fixed viewer position
+// click vide → unpin
+// click même objet → conserve l'epinglage
+// autres attributs → accordéon affiché replié, ouvrable une fois epinglé
 ```
 
 Extraction tooltip : `extractTooltipEntries()` lit depuis Arrow (`table.get(rowIndex)`) ou GeoJSON (`feature.properties`).
+Pour les polygones et lignes binaires issus de `geoarrow-deck-stream`, le mapping pick → ligne source s'appuie d'abord sur `featureIds`, y compris quand `PickingInfo.index` reste inferieur a `table.numRows`. Cela evite les tooltips faux sur les geometries multipart ou eclatees, ou `startIndices` ne correspond pas a une simple relation 1 objet Deck.gl = 1 ligne DuckDB.
+Les factories de couches binaires recopient donc explicitement `featureIds` dans `layer.props.data` en plus de `khartisSourceTable`, afin que le service de tooltip retrouve toujours la bonne ligne source au runtime.
+L'infobulle est affichée à emplacement fixe au-dessus de la visionneuse quand l'espace le permet. Si l'écran est trop contraint, elle se replie dans la partie haute de la visionneuse plutôt que de suivre le curseur.
+Un léger délai de hover évite le flicker pendant les mouvements rapides du pointeur. Les layers Deck.gl restent pickables, mais le surlignage GPU natif n'est pas utilise dans le parcours CDC.
 
 ---
 
@@ -287,11 +279,11 @@ contrôles `Lacs`, `Rivières` et `Villes`. Ces groupes suivent désormais aussi
 l'ordre UI du panneau `Calques` à l'intérieur de leur domaine de rendu
 (`background` ou `foreground`).
 
-Les toggles `Pointillés` des sections `Frontières/limites`, `Équateur` et
-`Méridiens/parallèles` sont aussi désactivés quand le fond actif est piloté par
-des couches metadata (`limit`, `graticule`, `geographic-lines`). Sur ces
-sources, le rendu en tirets n'était pas fiable visuellement ; Khartis préfère
-désormais l'indiquer clairement plutôt que de laisser un contrôle mensonger.
+Les couches metadata lineaires (`limit`, `graticule`, `geographic-lines`)
+restent pilotables par les controles `Pointillés`. Quand la source est en
+GeoArrow natif, Khartis conserve le rendu binaire `PathLayer` afin que les
+tirets restent fiables visuellement. Les sources WKB/GeoJSON utilisent
+toujours le fallback `GeoJsonLayer`.
 
 Chaque factory dispatch :
 

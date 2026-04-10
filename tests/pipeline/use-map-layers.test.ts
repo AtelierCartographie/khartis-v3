@@ -1,5 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { Layer } from '@deck.gl/core';
+import type { FeatureCollection } from 'geojson';
+import { createGeoJsonLayers } from '$lib/features/map/layers/layer-factory';
 import {
   getMapLayerRenderOrder,
   getThematicLayerRenderOrder,
@@ -7,7 +9,28 @@ import {
 } from '$lib/features/map/utils/layer-order.utils';
 import { resolveProjectionForRender } from '$lib/features/map/utils/projection-priority';
 import type { VisualizationConfig } from '$lib/features/commons/store/visualization.store.svelte';
+import type { LayerContext } from '$lib/features/map/types';
 import type { ProjectionLike } from 'geoarrow-deck-stream';
+
+vi.mock('$lib/features/commons/store/visualization.store.svelte', () => ({
+  ALL_PRIMITIVE_FILTERS: ['point', 'line', 'polygon'],
+  PrimitiveFilterType: {
+    POINT: 'point',
+    LINE: 'line',
+    POLYGON: 'polygon'
+  },
+  ScaleType: {
+    LINEAR: 'linear',
+    SQRT: 'sqrt',
+    LOG: 'log'
+  },
+  VisualizationType: {
+    CHOROPLETH: 'choropleth',
+    PROPORTIONAL: 'proportional',
+    CATEGORICAL: 'categorical',
+    BIVARIATE: 'bivariate'
+  }
+}));
 
 function createVisualizationStub(
   id: string,
@@ -23,6 +46,23 @@ function createLayerStub(id: string): Layer {
   return { id } as Layer;
 }
 
+function createLayerContextStub(
+  overrides: Partial<LayerContext> = {}
+): LayerContext {
+  return {
+    viz: null,
+    datasetId: 'ds_test',
+    fillColor: [120, 120, 120],
+    strokeColor: [255, 255, 255],
+    fillOpacity: 1,
+    strokeWidth: 1,
+    strokeOpacity: 1,
+    statistics: { min: 0, max: 100 },
+    categoryColorMap: null,
+    ...overrides
+  };
+}
+
 type ProjectionStub = ProjectionLike & { id: string };
 
 function createProjectionStub(id: string): ProjectionStub {
@@ -30,6 +70,46 @@ function createProjectionStub(id: string): ProjectionStub {
     id,
     stream: <T>(sink: T) => sink
   });
+}
+
+function createPolygonGeoJsonFixture(): FeatureCollection {
+  return {
+    type: 'FeatureCollection',
+    features: [
+      {
+        type: 'Feature',
+        properties: { name: 'Alpha' },
+        geometry: {
+          type: 'Polygon',
+          coordinates: [
+            [
+              [0, 0],
+              [1, 0],
+              [1, 1],
+              [0, 1],
+              [0, 0]
+            ]
+          ]
+        }
+      },
+      {
+        type: 'Feature',
+        properties: { name: 'Beta' },
+        geometry: {
+          type: 'Polygon',
+          coordinates: [
+            [
+              [2, 0],
+              [3, 0],
+              [3, 1],
+              [2, 1],
+              [2, 0]
+            ]
+          ]
+        }
+      }
+    ]
+  };
 }
 
 describe('getVisualizationRenderOrder', () => {
@@ -179,5 +259,48 @@ describe('resolveProjectionForRender', () => {
     expect(
       resolveProjectionForRender(undefined, userOverride, 'manual', false)
     ).toBeUndefined();
+  });
+});
+
+describe('createGeoJsonLayers', () => {
+  it('keeps the default raw polygon GeoJSON path limited to a single base layer', () => {
+    const layers = createGeoJsonLayers(
+      createPolygonGeoJsonFixture(),
+      createLayerContextStub()
+    );
+
+    expect(layers).toHaveLength(1);
+
+    const baseLayer = layers[0]!;
+    const baseData = baseLayer.props.data as FeatureCollection;
+
+    expect(
+      baseData.features.map((feature) => feature.properties?.__id)
+    ).toEqual([1, 2]);
+    expect(baseLayer.props.getFillColor).toEqual([120, 120, 120, 255]);
+    expect(baseLayer.props.autoHighlight).toBe(false);
+    expect(baseLayer.props.highlightedObjectIndex).toBe(-1);
+  });
+
+  it('adds a persistent overlay when highlighted rows are provided', () => {
+    const layers = createGeoJsonLayers(
+      createPolygonGeoJsonFixture(),
+      createLayerContextStub({
+        highlightedRowIds: new Set([2]),
+        highlightVersion: 1
+      })
+    );
+
+    expect(layers).toHaveLength(2);
+
+    const baseLayer = layers[0]!;
+    const overlayLayer = layers[1]!;
+    const overlayData = overlayLayer.props.data as FeatureCollection;
+
+    expect(baseLayer.props.autoHighlight).toBe(false);
+    expect(baseLayer.props.highlightedObjectIndex).toBe(-1);
+    expect(overlayLayer.id).toContain('selection-overlay');
+    expect(overlayData.features).toHaveLength(1);
+    expect(overlayData.features[0]?.properties?.__id).toBe(2);
   });
 });

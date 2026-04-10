@@ -34,7 +34,6 @@
   import FacetsGrid from '../step-toolbar/tools/facets/facets-grid.svelte';
   import { loadDatasetsSequentially } from './utils/load-datasets-sequentially';
 
-  let containerRef: HTMLDivElement;
   let thematicMapRef = $state<HTMLDivElement>(undefined!);
 
   let isInitializing = $state(true);
@@ -44,10 +43,8 @@
   let errorMessage = $state<string | null>(null);
   let toolbarTransitionTimeoutId: ReturnType<typeof setTimeout> | null = null;
   let transitionEndCleanup: (() => void) | null = null;
-  let containerResizeObserver: ResizeObserver | null = null;
 
   const TOOLBAR_TRANSITION_SAFETY_MS = 400;
-  const CONTAINER_RESIZE_DEBOUNCE_MS = 100;
   let displayTables = $state.raw<SvelteMap<string, ArrowTable>>(
     new SvelteMap<string, ArrowTable>()
   );
@@ -451,7 +448,6 @@
       toolbarTransitionTimeoutId = null;
     }
     globalState.isToolbarTransitioning = false;
-    handleContainerResize();
   }
 
   $effect(() => {
@@ -488,36 +484,6 @@
       }
     });
   });
-
-  $effect(() => {
-    void formatState.model;
-    const mode = formatState.mode;
-
-    untrack(() => {
-      if (!containerRef || mode !== FormatMode.PRESET) return;
-      handleContainerResize();
-    });
-  });
-
-  let containerResizeTimeoutId: ReturnType<typeof setTimeout> | null = null;
-
-  function handleContainerResize() {
-    if (!containerRef) return;
-    formatActions.fitToContainer(
-      containerRef.offsetWidth,
-      containerRef.offsetHeight
-    );
-  }
-
-  function handleContainerResizeDebounced() {
-    if (containerResizeTimeoutId) {
-      clearTimeout(containerResizeTimeoutId);
-    }
-    containerResizeTimeoutId = setTimeout(() => {
-      containerResizeTimeoutId = null;
-      handleContainerResize();
-    }, CONTAINER_RESIZE_DEBOUNCE_MS);
-  }
 
   async function initializeMap() {
     const start = performance.now();
@@ -570,13 +536,6 @@
   }
 
   onMount(() => {
-    handleContainerResize();
-
-    containerResizeObserver = new ResizeObserver(() => {
-      handleContainerResizeDebounced();
-    });
-    containerResizeObserver.observe(containerRef);
-
     initializeMap();
 
     return () => {
@@ -587,10 +546,6 @@
         clearTimeout(skeletonTimeoutId);
       }
       cleanupTransitionListener();
-      if (containerResizeTimeoutId) {
-        clearTimeout(containerResizeTimeoutId);
-      }
-      containerResizeObserver?.disconnect();
       handleResizeUp();
     };
   });
@@ -695,11 +650,7 @@
   }
 </script>
 
-<div
-  class="main-map-container"
-  class:resizable={showResizeHandles}
-  bind:this={containerRef}
->
+<div class="main-map-container" class:resizable={showResizeHandles}>
   <!-- Skeleton loader - overlay above map, hidden via CSS when ready -->
   <div
     class="skeleton-loader"

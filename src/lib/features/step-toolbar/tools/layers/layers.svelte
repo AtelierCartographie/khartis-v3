@@ -6,8 +6,10 @@
   import LayersList from './layers-list.svelte';
   import { layersActions, layersState } from './layers.store.svelte';
   import type { Layer, LayerReorderScope } from './layers.types.js';
+  import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
   import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
   import { basemapLayersStore } from '$lib/features/map/stores/basemap-layers.store.svelte';
+  import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
   import {
     globalActions,
     globalState
@@ -37,14 +39,25 @@
   );
 
   const parentLayers = $derived(layers.filter((layer) => !layer.isSubLayer));
+  const hasActiveTiledBasemap = $derived(
+    basemapStyleStore.requiresMapLibre || osmBasemapStore.isActive
+  );
   const basemapForegroundParentLayers = $derived(
-    parentLayers.filter((layer) => layer.basemapRenderGroup === 'foreground')
+    hasActiveTiledBasemap
+      ? []
+      : parentLayers.filter(
+          (layer) => layer.basemapRenderGroup === 'foreground'
+        )
   );
   const visualizationParentLayers = $derived(
     parentLayers.filter((layer) => layer.type === 'visualization')
   );
   const basemapBackgroundParentLayers = $derived(
-    parentLayers.filter((layer) => layer.basemapRenderGroup === 'background')
+    hasActiveTiledBasemap
+      ? []
+      : parentLayers.filter(
+          (layer) => layer.basemapRenderGroup === 'background'
+        )
   );
 
   const childLayersByParent = $derived.by(() => {
@@ -188,6 +201,9 @@
 
 <div class="layers-tool">
   <p class="description">{m.layers_description()}</p>
+  {#if hasActiveTiledBasemap}
+    <p class="description description--tiled">{m.basemap_tiled_info()}</p>
+  {/if}
 
   {#if basemapForegroundParentLayers.length > 0}
     <section
@@ -397,5 +413,9 @@
     letter-spacing: 0.32px;
     color: var(--cds-text-helper);
     margin: 0;
+  }
+
+  .description--tiled {
+    color: var(--cds-text-secondary);
   }
 </style>

@@ -230,20 +230,24 @@ const TOOLTIP_EXCLUDED_COLUMNS = new Set([
 
 async function showTooltipForResult(
   rowId: number,
-  tableName: string
+  searchContext: SearchContext
 ): Promise<void> {
   try {
     const rows = (await Duck.query(
-      `SELECT * EXCLUDE (geom, geometry) FROM "${tableName}" WHERE ${INTERNAL_COLUMN.ID} = ${rowId} LIMIT 1`,
+      `SELECT * FROM "${searchContext.tableName}" WHERE ${INTERNAL_COLUMN.ID} = ${rowId} LIMIT 1`,
       { format: 'array' }
     )) as Array<Record<string, unknown>>;
 
     const row = rows?.[0];
     if (!row) return;
 
-    const entries: TooltipEntry[] = Object.entries(row)
-      .filter(([key]) => !TOOLTIP_EXCLUDED_COLUMNS.has(key))
-      .map(([key, val]) => ({ key, value: formatValue(val) }));
+    const entries: TooltipEntry[] = searchContext.dataset.columns
+      .map((column) => column.name)
+      .filter((columnName) => !TOOLTIP_EXCLUDED_COLUMNS.has(columnName))
+      .map((columnName) => ({
+        key: columnName,
+        value: formatValue(row[columnName])
+      }));
 
     mapTooltipStore.pinAt(160, 200, entries, null, rowId - 1);
   } catch (error) {
@@ -252,7 +256,7 @@ async function showTooltipForResult(
       LogCategory.UI,
       {
         rowId,
-        tableName,
+        tableName: searchContext.tableName,
         error
       }
     );
@@ -265,25 +269,20 @@ function clearMapHighlights(): void {
 
 function setHighlightsFromResults(
   results: SearchState['results'],
-  focusIndex: number,
-  focusCurrentOnly: boolean
+  focusIndex: number
 ): void {
   if (!results.length) {
     clearMapHighlights();
     return;
   }
 
-  if (focusCurrentOnly) {
-    const focused = results[focusIndex];
-    if (focused) {
-      mapHighlightStore.setHighlightedRows([focused.rowId]);
-      return;
-    }
+  const focused = results[focusIndex];
+  if (!focused) {
+    clearMapHighlights();
+    return;
   }
 
-  mapTooltipStore.unpin();
-  const uniqueRows = [...new Set(results.map((result) => result.rowId))];
-  mapHighlightStore.setHighlightedRows(uniqueRows);
+  mapHighlightStore.setHighlightedRows([focused.rowId]);
 }
 
 const { state, actions } = createToolStore<SearchState, SearchActions>(
@@ -388,12 +387,12 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
       if (index < 0 || index >= s.results.length) return;
 
       s.currentResultIndex = index;
-      setHighlightsFromResults(s.results, s.currentResultIndex, true);
+      setHighlightsFromResults(s.results, s.currentResultIndex);
 
-      const tableName = getSearchTableName();
+      const searchContext = getSearchContext();
       const focused = s.results[index];
-      if (tableName && focused) {
-        void showTooltipForResult(focused.rowId, tableName);
+      if (searchContext && focused) {
+        void showTooltipForResult(focused.rowId, searchContext);
       }
     };
 

@@ -13,6 +13,8 @@ import {
   parseSolidPolygons,
   parsePathsWithProjection,
   parseSolidPolygonsWithProjection,
+  pathColorAttr,
+  pathWidthAttr,
   projectGeoJSON as _projectGeoJSON
 } from '../utils/geoarrow-stream-bridge';
 import type { ProjectionLike } from 'geoarrow-deck-stream';
@@ -157,9 +159,31 @@ function isLineGeometry(geometryInfo: GeometryInfo): boolean {
   return geometryInfo.type.includes('LINE');
 }
 
+function canRenderViaGeoJsonFallback(geometryInfo: GeometryInfo): boolean {
+  return (
+    geometryInfo.isNativeGeoArrow ||
+    geometryInfo.isWkbEncoded ||
+    geometryInfo.isGeoJsonEncoded
+  );
+}
+
 function toRgbColor(hex: string): RGBColor {
   const [r, g, b] = hexToRgb(hex);
   return [r, g, b];
+}
+
+function createStyledBasemapPathLayerProps(
+  lineData: ReturnType<typeof parsePaths>,
+  color: [number, number, number, number],
+  width: number
+): ReturnType<typeof createPathLayerProps> {
+  const pathProps = createPathLayerProps(lineData);
+  const pathBinaryData = pathProps.data as {
+    attributes: Record<string, unknown>;
+  };
+  pathBinaryData.attributes.getColor = pathColorAttr(lineData, () => color);
+  pathBinaryData.attributes.getWidth = pathWidthAttr(lineData, () => width);
+  return pathProps;
 }
 
 export function createTerreLayers(
@@ -445,18 +469,24 @@ export function createFrontieresLayer(
 
   if (
     isLineGeometry(geometryInfo) &&
-    (isGeoArrowLineEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow) &&
-    !config.dotted
+    (isGeoArrowLineEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow)
   ) {
     const lineData = ctx.projection
       ? parsePathsWithProjection(frontieresTable, ctx.projection)
       : parsePaths(frontieresTable);
     return new PathLayer({
       id: layerId,
-      ...createPathLayerProps(lineData),
-      getColor: withOpacity(strokeColor, effectiveOpacity),
+      ...createStyledBasemapPathLayerProps(
+        lineData,
+        withOpacity(strokeColor, effectiveOpacity) as [
+          number,
+          number,
+          number,
+          number
+        ],
+        effectiveThickness
+      ),
       widthUnits: 'pixels',
-      getWidth: effectiveThickness,
       widthMinPixels: 0,
       extensions: config.dotted ? [DASH_EXTENSION] : [],
       getDashArray: dashArray,
@@ -470,7 +500,7 @@ export function createFrontieresLayer(
 
   if (
     isLineGeometry(geometryInfo) &&
-    (geometryInfo.isWkbEncoded || geometryInfo.isGeoJsonEncoded)
+    canRenderViaGeoJsonFallback(geometryInfo)
   ) {
     const geojson = getCachedBasemapGeoJSON(
       frontieresTable,
@@ -499,19 +529,25 @@ export function createFrontieresLayer(
   }
 
   if (
-    (isGeoArrowPolygonEncoding(geometryInfo) ||
-      geometryInfo.isNativeGeoArrow) &&
-    !config.dotted
+    isGeoArrowPolygonEncoding(geometryInfo) ||
+    geometryInfo.isNativeGeoArrow
   ) {
     const outlineData = ctx.projection
       ? parsePathsWithProjection(frontieresTable, ctx.projection)
       : parsePaths(frontieresTable);
     return new PathLayer({
       id: layerId,
-      ...createPathLayerProps(outlineData),
-      getColor: withOpacity(strokeColor, effectiveOpacity),
+      ...createStyledBasemapPathLayerProps(
+        outlineData,
+        withOpacity(strokeColor, effectiveOpacity) as [
+          number,
+          number,
+          number,
+          number
+        ],
+        effectiveThickness
+      ),
       widthUnits: 'pixels',
-      getWidth: effectiveThickness,
       widthMinPixels: 0,
       widthMaxPixels: 0.5,
       extensions: config.dotted ? [DASH_EXTENSION] : [],
@@ -524,7 +560,7 @@ export function createFrontieresLayer(
     });
   }
 
-  if (geometryInfo.isWkbEncoded || geometryInfo.isGeoJsonEncoded) {
+  if (canRenderViaGeoJsonFallback(geometryInfo)) {
     const geojson = getCachedBasemapGeoJSON(
       frontieresTable,
       geometryInfo.geoColumn
@@ -1184,7 +1220,7 @@ function createMetadataLandLayers(
           ...baseProps
         })
       );
-    } else if (geometryInfo.isWkbEncoded || geometryInfo.isGeoJsonEncoded) {
+    } else if (canRenderViaGeoJsonFallback(geometryInfo)) {
       const geojson = getCachedBasemapGeoJSON(
         entry.table,
         geometryInfo.geoColumn
@@ -1238,8 +1274,7 @@ function createMetadataLimitLayers(
 
     if (
       isLineGeometry(geometryInfo) &&
-      (isGeoArrowLineEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow) &&
-      !config.dotted
+      (isGeoArrowLineEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow)
     ) {
       const lineData = ctx.projection
         ? parsePathsWithProjection(entry.table, ctx.projection)
@@ -1247,10 +1282,17 @@ function createMetadataLimitLayers(
       layers.push(
         new PathLayer({
           id: layerId,
-          ...createPathLayerProps(lineData),
-          getColor: withOpacity(strokeColor, effectiveOpacity),
+          ...createStyledBasemapPathLayerProps(
+            lineData,
+            withOpacity(strokeColor, effectiveOpacity) as [
+              number,
+              number,
+              number,
+              number
+            ],
+            effectiveThickness
+          ),
           widthUnits: 'pixels',
-          getWidth: effectiveThickness,
           widthMinPixels: 0,
           extensions: config.dotted ? [DASH_EXTENSION] : [],
           getDashArray: dashArray,
@@ -1259,9 +1301,8 @@ function createMetadataLimitLayers(
         })
       );
     } else if (
-      (isGeoArrowPolygonEncoding(geometryInfo) ||
-        geometryInfo.isNativeGeoArrow) &&
-      !config.dotted
+      isGeoArrowPolygonEncoding(geometryInfo) ||
+      geometryInfo.isNativeGeoArrow
     ) {
       const outlineData = ctx.projection
         ? parsePathsWithProjection(entry.table, ctx.projection)
@@ -1269,10 +1310,17 @@ function createMetadataLimitLayers(
       layers.push(
         new PathLayer({
           id: layerId,
-          ...createPathLayerProps(outlineData),
-          getColor: withOpacity(strokeColor, effectiveOpacity),
+          ...createStyledBasemapPathLayerProps(
+            outlineData,
+            withOpacity(strokeColor, effectiveOpacity) as [
+              number,
+              number,
+              number,
+              number
+            ],
+            effectiveThickness
+          ),
           widthUnits: 'pixels',
-          getWidth: effectiveThickness,
           widthMinPixels: 0,
           extensions: config.dotted ? [DASH_EXTENSION] : [],
           getDashArray: dashArray,
@@ -1280,7 +1328,7 @@ function createMetadataLimitLayers(
           ...baseProps
         })
       );
-    } else if (geometryInfo.isWkbEncoded || geometryInfo.isGeoJsonEncoded) {
+    } else if (canRenderViaGeoJsonFallback(geometryInfo)) {
       const geojson = getCachedBasemapGeoJSON(
         entry.table,
         geometryInfo.geoColumn
@@ -1336,8 +1384,7 @@ function createMetadataGraticuleLayers(
 
     if (
       isLineGeometry(geometryInfo) &&
-      (isGeoArrowLineEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow) &&
-      !config.dotted
+      (isGeoArrowLineEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow)
     ) {
       const lineData = ctx.projection
         ? parsePathsWithProjection(entry.table, ctx.projection)
@@ -1345,10 +1392,17 @@ function createMetadataGraticuleLayers(
       layers.push(
         new PathLayer({
           id: layerId,
-          ...createPathLayerProps(lineData),
-          getColor: withOpacity(strokeColor, opacity),
+          ...createStyledBasemapPathLayerProps(
+            lineData,
+            withOpacity(strokeColor, opacity) as [
+              number,
+              number,
+              number,
+              number
+            ],
+            config.thickness
+          ),
           widthUnits: 'pixels',
-          getWidth: config.thickness,
           widthMinPixels: 0,
           extensions: config.dotted ? [DASH_EXTENSION] : [],
           getDashArray: dashArray,
@@ -1356,7 +1410,7 @@ function createMetadataGraticuleLayers(
           ...baseProps
         })
       );
-    } else if (geometryInfo.isWkbEncoded || geometryInfo.isGeoJsonEncoded) {
+    } else if (canRenderViaGeoJsonFallback(geometryInfo)) {
       const geojson = getCachedBasemapGeoJSON(
         entry.table,
         geometryInfo.geoColumn
@@ -1412,8 +1466,7 @@ function createMetadataGeoLinesLayers(
 
     if (
       isLineGeometry(geometryInfo) &&
-      (isGeoArrowLineEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow) &&
-      !config.dotted
+      (isGeoArrowLineEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow)
     ) {
       const lineData = ctx.projection
         ? parsePathsWithProjection(entry.table, ctx.projection)
@@ -1421,10 +1474,17 @@ function createMetadataGeoLinesLayers(
       layers.push(
         new PathLayer({
           id: layerId,
-          ...createPathLayerProps(lineData),
-          getColor: withOpacity(strokeColor, opacity),
+          ...createStyledBasemapPathLayerProps(
+            lineData,
+            withOpacity(strokeColor, opacity) as [
+              number,
+              number,
+              number,
+              number
+            ],
+            config.thickness
+          ),
           widthUnits: 'pixels',
-          getWidth: config.thickness,
           widthMinPixels: 1,
           extensions: config.dotted ? [DASH_EXTENSION] : [],
           getDashArray: dashArray,
@@ -1432,7 +1492,7 @@ function createMetadataGeoLinesLayers(
           ...baseProps
         })
       );
-    } else if (geometryInfo.isWkbEncoded || geometryInfo.isGeoJsonEncoded) {
+    } else if (canRenderViaGeoJsonFallback(geometryInfo)) {
       const geojson = getCachedBasemapGeoJSON(
         entry.table,
         geometryInfo.geoColumn

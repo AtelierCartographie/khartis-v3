@@ -75,8 +75,9 @@ function sampleProjectedBbox(
   projection: ProjectionLike,
   bbox: [number, number, number, number]
 ): [number, number, number, number] | null {
-  const polygon = {
+  const polygon: GeoJSON.Feature<GeoJSON.Polygon> = {
     type: 'Feature',
+    properties: {},
     geometry: {
       type: 'Polygon',
       coordinates: [
@@ -89,7 +90,7 @@ function sampleProjectedBbox(
         ]
       ]
     }
-  } as const;
+  };
 
   try {
     const [[minX, minY], [maxX, maxY]] = geoPath(

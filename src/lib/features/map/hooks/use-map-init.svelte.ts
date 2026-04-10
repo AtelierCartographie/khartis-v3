@@ -318,6 +318,8 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
       onZoom();
       return viewState as unknown as OrthographicMainViewState;
     };
+    const hoverHandler = createHoverHandler(getActiveVisualizations);
+    const clickHandler = createClickHandler(getActiveVisualizations);
 
     const orthographicDeck = createDeckWithDeferredResizeObserver(
       () =>
@@ -339,8 +341,8 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
           height: '100%',
           controller: { scrollZoom: false, doubleClickZoom: false },
           layers: [],
-          onHover: createHoverHandler(getActiveVisualizations),
-          onClick: createClickHandler(getActiveVisualizations),
+          onHover: hoverHandler,
+          onClick: clickHandler,
           onViewStateChange: handleViewStateChange as DeckProps<
             [OrthographicView]
           >['onViewStateChange'],
@@ -415,11 +417,14 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
     map.on('load', () => {
       if (!map) return;
 
+      const hoverHandler = createHoverHandler(getActiveVisualizations);
+      const clickHandler = createClickHandler(getActiveVisualizations);
+
       deckOverlay = new MapboxOverlay({
         interleaved: true,
         layers: [],
-        onHover: createHoverHandler(getActiveVisualizations),
-        onClick: createClickHandler(getActiveVisualizations)
+        onHover: hoverHandler,
+        onClick: clickHandler
       } as DeckProps);
 
       map.addControl(deckOverlay as maplibregl.IControl);

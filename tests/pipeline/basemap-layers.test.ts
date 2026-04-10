@@ -4,6 +4,19 @@ import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 const mocks = vi.hoisted(() => ({
   geometryInfoByTable: new Map<object, Record<string, unknown>>(),
   geojsonByTable: new Map<object, Record<string, unknown>>(),
+  binaryPathData: {
+    attributes: {
+      getPath: {
+        value: new Float32Array([0, 0, 1, 1]),
+        size: 2
+      }
+    },
+    featureIds: new Uint32Array([0]),
+    length: 1,
+    positions: new Float32Array([0, 0, 1, 1]),
+    size: 2,
+    startIndices: new Uint32Array([0])
+  },
   loggerWarnMock: vi.fn(),
   loggerErrorMock: vi.fn(),
   loggerInfoMock: vi.fn(),
@@ -71,6 +84,44 @@ vi.mock('$lib/features/map/io', () => ({
   )
 }));
 
+vi.mock('$lib/features/map/utils/geoarrow-stream-bridge', () => ({
+  parsePaths: vi.fn(() => mocks.binaryPathData),
+  parseSolidPolygons: vi.fn(),
+  parsePathsWithProjection: vi.fn(() => mocks.binaryPathData),
+  parseSolidPolygonsWithProjection: vi.fn(),
+  pathColorAttr: vi.fn(
+    (
+      _data: unknown,
+      colorLookup: (featureId: number) => [number, number, number, number]
+    ) => ({
+      value: new Uint8Array(colorLookup(0)),
+      size: 4,
+      normalized: true
+    })
+  ),
+  pathWidthAttr: vi.fn(
+    (_data: unknown, widthLookup: (featureId: number) => number) => ({
+      value: new Float32Array([widthLookup(0)]),
+      size: 1
+    })
+  ),
+  projectGeoJSON: vi.fn()
+}));
+
+vi.mock('geoarrow-deck-stream', () => ({
+  createPathLayerProps: vi.fn(() => ({
+    data: {
+      ...mocks.binaryPathData,
+      attributes: { ...mocks.binaryPathData.attributes }
+    }
+  })),
+  createSolidPolygonLayerProps: vi.fn(() => ({
+    data: {
+      attributes: {}
+    }
+  }))
+}));
+
 import { basemapLayersStore } from '$lib/features/map/stores/basemap-layers.store.svelte';
 import { createBasemapLayers } from '$lib/features/map/layers/basemap-layers';
 
@@ -85,6 +136,23 @@ function configureGeoJsonTable(
     isGeoJsonEncoded: true,
     isWkbEncoded: false,
     isNativeGeoArrow: false
+  });
+  mocks.geojsonByTable.set(table, geojson);
+}
+
+function configureNativeGeoArrowTable(
+  table: object,
+  type: string,
+  encoding: string,
+  geojson: Record<string, unknown>
+): void {
+  mocks.geometryInfoByTable.set(table, {
+    type,
+    encoding,
+    geoColumn: 'geom',
+    isGeoJsonEncoded: false,
+    isWkbEncoded: false,
+    isNativeGeoArrow: true
   });
   mocks.geojsonByTable.set(table, geojson);
 }
@@ -352,5 +420,56 @@ describe('createBasemapLayers', () => {
       'basemap-rivieres-basemap-default',
       'basemap-villes-basemap-default'
     ]);
+  });
+
+  it('renders dotted meridiens from native GeoArrow graticules through the binary PathLayer path', () => {
+    const graticuleTable = {};
+
+    configureNativeGeoArrowTable(
+      graticuleTable,
+      'MULTILINESTRING',
+      'geoarrow.multilinestring',
+      {
+        type: 'FeatureCollection',
+        features: [
+          {
+            type: 'Feature',
+            properties: {},
+            geometry: {
+              type: 'MultiLineString',
+              coordinates: [
+                [
+                  [0, -10],
+                  [0, 10]
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    );
+
+    basemapLayersStore.setLayerVisibility('meridiens', true);
+
+    const { foreground } = createBasemapLayers(
+      null,
+      { projectionSuffix: 'default' },
+      {
+        metadataLayers: [
+          {
+            table: graticuleTable as never,
+            type: BasemapLayerType.GRATICULE,
+            style: null,
+            file: 'custom-graticule'
+          }
+        ],
+        availableMetadataLayerTypes: [BasemapLayerType.GRATICULE]
+      }
+    );
+
+    expect(foreground.map((layer) => layer.id)).toEqual([
+      'basemap-meta-graticule-basemap-default-0'
+    ]);
+    expect(foreground[0]?.constructor.name).toBe('PathLayer');
   });
 });

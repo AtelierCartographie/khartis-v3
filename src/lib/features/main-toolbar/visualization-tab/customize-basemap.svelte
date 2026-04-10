@@ -15,7 +15,6 @@
   import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
   import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
   import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
-  import { BasemapStyle } from '$lib/features/map/constants/basemap-styles';
   import {
     basemapLayersStore,
     type BasemapLayerConfig,
@@ -39,8 +38,7 @@
   }
 
   const isTiledBasemapEnabled = $derived(
-    basemapStyleStore.selectedStyle !== BasemapStyle.BLANK_WHITE ||
-      osmBasemapStore.isActive
+    basemapStyleStore.requiresMapLibre || osmBasemapStore.isActive
   );
   const availableMetadataLayerTypes = $derived.by(
     () =>

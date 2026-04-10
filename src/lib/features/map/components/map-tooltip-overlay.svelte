@@ -10,8 +10,7 @@
   import Close from 'carbon-icons-svelte/lib/Close.svelte';
 
   const PRIMARY_ENTRIES_COUNT = 5;
-  const TOOLTIP_OFFSET_X = 12;
-  const TOOLTIP_OFFSET_Y = 12;
+  const TOOLTIP_VIEWER_GAP = 12;
   const VIEWPORT_PADDING = 8;
 
   let tooltipElement = $state<HTMLDivElement | null>(null);
@@ -25,10 +24,30 @@
     tooltipState.entries.slice(PRIMARY_ENTRIES_COUNT)
   );
   const hasSecondaryEntries = $derived(secondaryEntries.length > 0);
+  const canToggleAccordion = $derived(tooltipState.pinned);
 
-  function getActiveViewportRect(): { left: number; top: number } | null {
+  function getTooltipViewerRect(): {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  } | null {
     if (typeof document === 'undefined') {
       return null;
+    }
+
+    const pageContainer = document.querySelector('.page-container');
+    if (pageContainer instanceof HTMLElement) {
+      const { left, top, width, height } =
+        pageContainer.getBoundingClientRect();
+      return { left, top, width, height };
+    }
+
+    const thematicMapWrapper = document.querySelector('.thematic-map-wrapper');
+    if (thematicMapWrapper instanceof HTMLElement) {
+      const { left, top, width, height } =
+        thematicMapWrapper.getBoundingClientRect();
+      return { left, top, width, height };
     }
 
     const mapCanvas = mapInstanceStore.map?.getCanvas() ?? null;
@@ -39,8 +58,9 @@
       return null;
     }
 
-    const { left, top } = viewportElement.getBoundingClientRect();
-    return { left, top };
+    const { left, top, width, height } =
+      viewportElement.getBoundingClientRect();
+    return { left, top, width, height };
   }
 
   // Reset accordion when tooltip hides or entries change
@@ -54,19 +74,19 @@
       return { left: 0, top: 0 };
     }
 
-    // Deck.gl PickingInfo.x/y are relative to the active map viewport, not the
-    // browser window. Convert them to viewport coordinates for the global overlay.
+    // The tooltip is rendered outside Deck.gl and kept at a fixed position above
+    // the viewer to match the product CDC.
     void globalState.zoom.pageZoomLevel;
     void globalState.zoom.pagePanOffset.x;
     void globalState.zoom.pagePanOffset.y;
+    void mapInstanceStore.map;
     void mapInstanceStore.deckInstance;
 
     const rect = tooltipElement?.getBoundingClientRect();
-    const viewportRect = getActiveViewportRect();
+    const viewerRect = getTooltipViewerRect();
 
     return resolveTooltipViewportPosition({
-      anchor: { x: tooltipState.x, y: tooltipState.y },
-      viewportOrigin: viewportRect,
+      viewerRect,
       tooltipSize: {
         width: rect?.width ?? 0,
         height: rect?.height ?? 0
@@ -75,9 +95,8 @@
         width: typeof window !== 'undefined' ? window.innerWidth : 0,
         height: typeof window !== 'undefined' ? window.innerHeight : 0
       },
-      offsetX: TOOLTIP_OFFSET_X,
-      offsetY: TOOLTIP_OFFSET_Y,
-      padding: VIEWPORT_PADDING
+      padding: VIEWPORT_PADDING,
+      gap: TOOLTIP_VIEWER_GAP
     });
   });
 
@@ -134,13 +153,14 @@
       {/each}
     </div>
 
-    {#if hasSecondaryEntries && tooltipState.pinned}
+    {#if hasSecondaryEntries}
       <div class="tooltip-accordion" class:open={accordionOpen}>
         <button
           class="accordion-toggle"
+          disabled={!canToggleAccordion}
           onclick={toggleAccordion}
           onkeydown={handleAccordionKeyDown}
-          aria-expanded={accordionOpen}
+          aria-expanded={canToggleAccordion ? accordionOpen : false}
         >
           <span class="accordion-chevron">
             <ChevronRight size={16} />
@@ -150,7 +170,7 @@
           </span>
         </button>
 
-        {#if accordionOpen}
+        {#if canToggleAccordion && accordionOpen}
           <div class="accordion-content">
             {#each secondaryEntries as entry (entry.key)}
               <div class="tooltip-row">
@@ -177,10 +197,13 @@
     font-family: 'IBM Plex Sans', sans-serif;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
     border: 1px solid #8d8d8d;
-    max-width: 320px;
+    max-width: min(320px, calc(100vw - 16px));
+    max-height: min(20rem, calc(100dvh - 16px));
+    overflow: auto;
     pointer-events: none;
     user-select: none;
     line-height: 1.4;
+    overscroll-behavior: contain;
   }
 
   .map-tooltip.pinned {
@@ -267,6 +290,11 @@
 
   .accordion-toggle:hover {
     color: #161616;
+  }
+
+  .accordion-toggle:disabled {
+    cursor: default;
+    color: #8d8d8d;
   }
 
   .accordion-chevron {

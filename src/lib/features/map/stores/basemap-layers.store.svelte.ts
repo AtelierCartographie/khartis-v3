@@ -175,11 +175,11 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
     id: 'meridiens',
     visible: false,
     remarquables: BasemapRemarquables.ALL,
-    color: '#e0e0e0',
+    color: '#8d8d8d',
     dotted: true,
     dottedPattern: BasemapDottedPattern.DOTS,
-    thickness: 0.5,
-    opacity: 50
+    thickness: 1,
+    opacity: 80
   },
   {
     id: 'frontieres',

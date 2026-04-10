@@ -11,6 +11,7 @@ import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte
 import { mapProjectionStore } from '../stores/map-projection.store.svelte';
 import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
 import { projectionStore } from '../stores/projection.store.svelte';
+import { mapHighlightStore } from '../stores/map-highlight.store.svelte';
 import { basemapService } from '../services/basemap.service.svelte';
 import { basemapLayersStore } from '../stores/basemap-layers.store.svelte';
 import {
@@ -116,7 +117,11 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       strokeWidth: DATA_PREVIEW_STROKE_WIDTH,
       strokeOpacity: DATA_PREVIEW_STROKE_OPACITY,
       statistics: { min: 0, max: 100 },
-      categoryColorMap: null
+      categoryColorMap: null,
+      highlightedRowIds: mapHighlightStore.hasHighlights
+        ? mapHighlightStore.highlightedRowIds
+        : undefined,
+      highlightVersion: mapHighlightStore.version
     };
   }
 

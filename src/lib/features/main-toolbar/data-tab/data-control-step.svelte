@@ -506,19 +506,15 @@
     }
   });
 
-  // Debounce map highlight updates to avoid expensive deck.gl layer rebuilds during search
-  let mapHighlightTimer: ReturnType<typeof setTimeout> | undefined;
   $effect(() => {
-    const rowIds = searchHighlight.highlightedRowIds;
-    clearTimeout(mapHighlightTimer);
-    mapHighlightTimer = setTimeout(() => {
-      if (rowIds.length > 0) {
-        mapHighlightStore.setHighlightedRows(rowIds);
-      } else {
-        mapHighlightStore.clearHighlights();
-      }
-    }, UI_CONSTANTS.MAP_HIGHLIGHT_DEBOUNCE_MS);
-    return () => clearTimeout(mapHighlightTimer);
+    const currentRowId = searchHighlight.currentCell?.rowId ?? null;
+
+    if (currentRowId === null) {
+      mapHighlightStore.clearHighlights();
+      return;
+    }
+
+    mapHighlightStore.setHighlightedRows([currentRowId]);
   });
 
   $effect(() => {
