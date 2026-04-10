@@ -312,4 +312,35 @@ describe('vizSuggester', () => {
     expect(suggestions[0]?.score).toBe(highestScore);
     expect(suggestions[0]?.id).toBe('symbols_proportional');
   });
+
+  it('orders two-column line suggestions to match the expected visual channels', () => {
+    const suggestions = vizSuggester.suggestVisualizations(
+      [
+        makeColumn('li_type', 'string', {
+          count: 24,
+          uniques: 2,
+          nulls: 0
+        }),
+        makeColumn('volume', 'number', {
+          count: 24,
+          uniques: 24,
+          nulls: 0,
+          min: 100,
+          max: 2400,
+          share_integers: 1,
+          share_floats: 0,
+          share_rank_interval: 0.6,
+          extent_magnitude: 2.3
+        })
+      ],
+      'LineString',
+      { maxSuggestions: 8 }
+    );
+
+    const mixedSuggestion = suggestions.find(
+      (suggestion) => suggestion.id === 'lines_proportional_colorful_QL'
+    );
+
+    expect(mixedSuggestion?.columns).toEqual(['volume', 'li_type']);
+  });
 });
