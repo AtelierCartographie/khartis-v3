@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as m from '$lib/paraglide/messages';
 import SearchTool from './search.svelte';
@@ -35,7 +35,9 @@ vi.mock('$lib/features/commons/store/datasets.store.svelte', () => ({
       return {
         columns: [
           { name: 'city', type: 'text' },
-          { name: 'region', type: 'text' }
+          { name: 'region', type: 'text' },
+          { name: '__id', type: 'integer' },
+          { name: 'geometry', type: 'geometry' }
         ]
       };
     },
@@ -82,6 +84,23 @@ describe('visualization search tool', () => {
     expect(screen.getByText('Sevilla')).toBeInTheDocument();
     expect(
       screen.queryByRole('textbox', { name: m.search_replace_with() })
+    ).not.toBeInTheDocument();
+  });
+
+  it('does not expose internal id or geometry columns in the source dropdown', async () => {
+    render(SearchTool);
+
+    await fireEvent.click(
+      screen.getByRole('button', { name: /toutes les variables/i })
+    );
+
+    expect(screen.getByRole('option', { name: 'city' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'region' })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('option', { name: '__id' })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('option', { name: 'geometry' })
     ).not.toBeInTheDocument();
   });
 });

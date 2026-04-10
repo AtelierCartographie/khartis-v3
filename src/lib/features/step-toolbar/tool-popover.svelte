@@ -11,6 +11,7 @@
     POPOVER_DIMENSIONS
   } from './step-toolbar.constants';
   import { getAnnotationsState } from './tools/annotations/annotations.store.svelte';
+  import { shouldBlockToolClose } from './tools/tool-close-guard';
 
   const {
     open = false,
@@ -64,8 +65,14 @@
   }
 
   function handleOutsideClick(event: CustomEvent) {
-    // Keep the tool open while the user is drawing on the map
-    if (getAnnotationsState().isDrawingMode) return;
+    if (
+      shouldBlockToolClose(
+        globalState.selectedTool,
+        getAnnotationsState().isDrawingMode
+      )
+    ) {
+      return;
+    }
 
     // Drag-and-drop interactions can end with a synthetic click target
     // outside the popover while the dragged clone still exists.
@@ -84,8 +91,14 @@
 
     const handleKeydown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        // Let annotation-overlay handle Escape during drawing mode
-        if (getAnnotationsState().isDrawingMode) return;
+        if (
+          shouldBlockToolClose(
+            globalState.selectedTool,
+            getAnnotationsState().isDrawingMode
+          )
+        ) {
+          return;
+        }
         globalState.selectedTool = undefined;
       }
     };

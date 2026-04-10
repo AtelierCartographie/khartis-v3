@@ -2,6 +2,7 @@
   import {
     DistanceUnit,
     InsetMapType,
+    LegendPosition,
     OrientationIndicatorStyle,
     ScaleForm
   } from '$lib/features/commons/constants/ui.constants';
@@ -27,12 +28,18 @@
   import { basemapLayersStore } from '../stores/basemap-layers.store.svelte';
   import { activateStylingToolFromMap } from '../utils/styling-tool-activation.utils';
   import { resolveStaticAssetUrl } from '$lib/features/commons/utils/static-asset-url';
+  import { getLegendState } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
   import * as m from '$lib/paraglide/messages';
   import { GEOJSON_TYPE } from '$lib/features/commons/constants';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { duckDBOrchestrator } from '$lib/features/duckdb';
   import { readGeoParquetViaDuckDB } from '../utils/read-geojson-arrow';
   import { arrowTableToGeoJSON, extractGeometryInfo } from '../io';
+  import {
+    getDefaultInsetStyle,
+    getDefaultOrientationStyle,
+    getDefaultScaleStyle
+  } from '../utils/geo-indications-default-placement';
 
   let { interactive = true }: { interactive?: boolean } = $props();
 
@@ -52,7 +59,6 @@
     '/basemaps/geometry/monde-countries-2024-low.parquet';
   const INSET_PLANISPHERE_RATIO = 0.62;
   const INSET_MAP_PADDING = 4;
-  const INSET_MAP_MAX_RATIO = 0.34;
   const INSET_MAP_WORLD_SPAN_EPSILON = 359.5;
   const INSET_ZOOM_BASE = 0.6;
   const INSET_ZOOM_FACTOR = 1.2;
@@ -61,9 +67,16 @@
   const INSET_WORLD_WINDOW_INSET = 1.5;
   const INSET_LAND_STROKE_MIN = 0.35;
   const INSET_LAND_STROKE_MAX = 0.8;
-  const OVERLAY_EDGE_OFFSET = 16;
-  const OVERLAY_STACK_GAP = 12;
-  const ORIENTATION_PANEL_VERTICAL_PADDING = 12;
+  const SCALE_TARGET_WIDTH_PX = 140;
+  const SCALE_MAX_WIDTH_PX = 420;
+  const ORIENTATION_MIN_SIZE_PX = 14;
+  const ORIENTATION_MAX_SIZE_PX = 84;
+  const INSET_GLOBE_MIN_SIZE_PX = 56;
+  const INSET_GLOBE_MAX_SIZE_PX = 170;
+  const INSET_PLANISPHERE_MIN_WIDTH_PX = 72;
+  const INSET_PLANISPHERE_MAX_WIDTH_PX = 240;
+  const INSET_PLANISPHERE_MIN_HEIGHT_PX = 48;
+  const INSET_PLANISPHERE_MAX_HEIGHT_PX = 170;
 
   type WorldFeatureCollection = FeatureCollection<
     Polygon | MultiPolygon,
@@ -187,6 +200,7 @@
       geoIndicationsState.orientation.color.lightness
     )
   );
+  const legendState = $derived(getLegendState());
 
   function toFiniteNumber(value: unknown, fallback: number): number {
     if (typeof value === 'number' && Number.isFinite(value)) {
@@ -222,25 +236,6 @@
       normalized < 1.5 ? 1 : normalized < 3 ? 2 : normalized < 7 ? 5 : 10;
 
     return step * magnitude;
-  }
-
-  function getMapCanvasWidthPx(): number {
-    const canvas = mapInstanceStore.getMapCanvas();
-    return canvas ? canvas.clientWidth : 0;
-  }
-
-  function getMapCanvasHeightPx(): number {
-    const canvas = mapInstanceStore.getMapCanvas();
-    return canvas ? canvas.clientHeight : 0;
-  }
-
-  function getMapCanvasMinSizePx(): number {
-    const canvas = mapInstanceStore.getMapCanvas();
-    if (!canvas) {
-      return 0;
-    }
-
-    return Math.min(canvas.clientWidth, canvas.clientHeight);
   }
 
   function computeScaleWidthFromMap(distanceMeters: number): number | null {
@@ -315,13 +310,10 @@
   }
 
   function getSuggestedScaleDistance(unit: DistanceUnit): number {
-    const mapWidth = getMapCanvasWidthPx();
-    const targetWidthPx = clamp(mapWidth * 0.2 || 140, 90, 220);
-
     const metersPerPixel =
       getProjectedMetersPerPixelAtCenter() ?? getFallbackMetersPerPixel();
     const rawDistance = fromDistanceMeters(
-      targetWidthPx * metersPerPixel,
+      SCALE_TARGET_WIDTH_PX * metersPerPixel,
       unit
     );
     const niceDistance = toNiceDistance(rawDistance);
@@ -520,18 +512,15 @@
       effectiveScaleDistance,
       geoIndicationsState.scale.units
     );
-    const mapWidth = getMapCanvasWidthPx();
-    const maxWidth = mapWidth > 0 ? mapWidth * 0.55 : 420;
-
     const projectedWidth = computeScaleWidthFromMap(distanceMeters);
     if (projectedWidth !== null) {
-      return clamp(projectedWidth, 8, maxWidth);
+      return clamp(projectedWidth, 8, SCALE_MAX_WIDTH_PX);
     }
 
     const metersPerPixel = getFallbackMetersPerPixel();
     const fallbackWidth = distanceMeters / metersPerPixel;
 
-    return clamp(fallbackWidth, 8, maxWidth);
+    return clamp(fallbackWidth, 8, SCALE_MAX_WIDTH_PX);
   });
 
   const scaleLabel = $derived.by(() => {
@@ -549,48 +538,39 @@
   const scaleLabelX = $derived(scaleBarWidth / 2 + SCALE_PADDING);
 
   const orientationSize = $derived.by(() => {
-    const _revision = mapViewRevision;
-    void _revision;
-
     const rawSize = toFiniteNumber(geoIndicationsState.orientation.size, 10);
     const sizeInPx = rawSize * MM_TO_PAGE_PX;
-    const mapMinSize = getMapCanvasMinSizePx();
-    const maxSize = Math.max(
-      14,
-      Math.min(mapMinSize > 0 ? mapMinSize * 0.14 : 84, 84)
+    return Math.round(
+      clamp(sizeInPx, ORIENTATION_MIN_SIZE_PX, ORIENTATION_MAX_SIZE_PX)
     );
-
-    return Math.round(clamp(sizeInPx, 14, maxSize));
   });
 
   const insetDimensions = $derived.by(() => {
-    const _revision = mapViewRevision;
-    void _revision;
-
     const requestedSize = toFiniteNumber(
       geoIndicationsState.insetMap.size,
       160
     );
-    const mapWidth = getMapCanvasWidthPx();
-    const mapHeight = getMapCanvasHeightPx();
-    const maxWidth = Math.max(
-      72,
-      mapWidth > 0 ? mapWidth * INSET_MAP_MAX_RATIO : 240
-    );
-    const maxHeight = Math.max(
-      48,
-      mapHeight > 0 ? mapHeight * INSET_MAP_MAX_RATIO : 170
-    );
 
     if (geoIndicationsState.insetMap.type === InsetMapType.GLOBE) {
-      const maxSize = Math.max(56, Math.min(maxWidth, maxHeight));
-      const size = clamp(requestedSize, 56, maxSize);
+      const size = clamp(
+        requestedSize,
+        INSET_GLOBE_MIN_SIZE_PX,
+        INSET_GLOBE_MAX_SIZE_PX
+      );
       return { width: Math.round(size), height: Math.round(size) };
     }
 
-    const width = clamp(requestedSize, 72, maxWidth);
+    const width = clamp(
+      requestedSize,
+      INSET_PLANISPHERE_MIN_WIDTH_PX,
+      INSET_PLANISPHERE_MAX_WIDTH_PX
+    );
     const proposedHeight = width * INSET_PLANISPHERE_RATIO;
-    const height = clamp(proposedHeight, 48, maxHeight);
+    const height = clamp(
+      proposedHeight,
+      INSET_PLANISPHERE_MIN_HEIGHT_PX,
+      INSET_PLANISPHERE_MAX_HEIGHT_PX
+    );
 
     return {
       width: Math.round(width),
@@ -642,21 +622,34 @@
 
   const insetPanelBackgroundColor = $derived(insetWindowColor);
   const insetPanelBorderColor = $derived(insetWindowColor);
-  const defaultInsetTop = $derived.by(() => {
-    if (!geoIndicationsState.orientation.enabled) {
-      return OVERLAY_EDGE_OFFSET;
+  const hasVisibleLegend = $derived(
+    legendState.visible && legendState.items.some((item) => item.visible)
+  );
+  const placementContext = $derived.by(() => ({
+    legendVisible: hasVisibleLegend,
+    legendPosition: legendState.position ?? LegendPosition.TOP_RIGHT,
+    legendDragged: legendState.dragPosition !== null,
+    scaleEnabled: geoIndicationsState.scale.enabled,
+    scaleDragged: geoIndicationsState.scale.dragPosition !== null
+  }));
+  const scaleStyle = $derived.by(() => {
+    if (geoIndicationsState.scale.dragPosition) {
+      return `left: ${geoIndicationsState.scale.dragPosition.x}px; top: ${geoIndicationsState.scale.dragPosition.y}px; bottom: auto; right: auto;`;
     }
 
-    return (
-      OVERLAY_EDGE_OFFSET +
-      orientationSize +
-      ORIENTATION_PANEL_VERTICAL_PADDING +
-      OVERLAY_STACK_GAP
-    );
+    return getDefaultScaleStyle(placementContext);
+  });
+  const orientationStyle = $derived.by(() => {
+    if (geoIndicationsState.orientation.dragPosition) {
+      return `left: ${geoIndicationsState.orientation.dragPosition.x}px; top: ${geoIndicationsState.orientation.dragPosition.y}px; bottom: auto; right: auto;`;
+    }
+
+    return getDefaultOrientationStyle(placementContext);
   });
 
   const insetPanelStyle = $derived.by(() => {
     const styles = [
+      getDefaultInsetStyle(placementContext),
       `background-color: ${insetPanelBackgroundColor}`,
       `border: 1px solid ${insetPanelBorderColor}`
     ];
@@ -667,12 +660,6 @@
         `top: ${geoIndicationsState.insetMap.dragPosition.y}px`,
         'bottom: auto',
         'right: auto'
-      );
-    } else {
-      styles.push(
-        `top: ${defaultInsetTop}px`,
-        `right: ${OVERLAY_EDGE_OFFSET}px`,
-        'bottom: auto'
       );
     }
 
@@ -880,9 +867,7 @@
       class="scale-bar"
       class:draggable={isGeoIndicationsActive}
       class:dragging={currentDrag === 'scale'}
-      style={geoIndicationsState.scale.dragPosition
-        ? `left: ${geoIndicationsState.scale.dragPosition.x}px; top: ${geoIndicationsState.scale.dragPosition.y}px; bottom: auto; right: auto;`
-        : ''}
+      style={scaleStyle}
       role="button"
       tabindex="0"
       aria-label={m.tool_geo_indications()}
@@ -947,9 +932,7 @@
       class="north-arrow"
       class:draggable={isGeoIndicationsActive}
       class:dragging={currentDrag === 'orientation'}
-      style={geoIndicationsState.orientation.dragPosition
-        ? `left: ${geoIndicationsState.orientation.dragPosition.x}px; top: ${geoIndicationsState.orientation.dragPosition.y}px; bottom: auto; right: auto;`
-        : ''}
+      style={orientationStyle}
       role="button"
       tabindex="0"
       aria-label={m.tool_geo_indications()}

@@ -28,7 +28,7 @@ import type {
   ParserOptions,
   ProjectionLike
 } from 'geoarrow-deck-stream';
-import type { GeoProjection } from 'd3-geo';
+import { geoPath, type GeoProjection } from 'd3-geo';
 // d3-geo-projection has no bundled type declarations — import via namespace cast
 import * as _d3GeoProjection from 'd3-geo-projection';
 
@@ -75,6 +75,39 @@ function sampleProjectedBbox(
   projection: ProjectionLike,
   bbox: [number, number, number, number]
 ): [number, number, number, number] | null {
+  const polygon = {
+    type: 'Feature',
+    geometry: {
+      type: 'Polygon',
+      coordinates: [
+        [
+          [bbox[0], bbox[1]],
+          [bbox[2], bbox[1]],
+          [bbox[2], bbox[3]],
+          [bbox[0], bbox[3]],
+          [bbox[0], bbox[1]]
+        ]
+      ]
+    }
+  } as const;
+
+  try {
+    const [[minX, minY], [maxX, maxY]] = geoPath(
+      projection as unknown as GeoProjection
+    ).bounds(polygon);
+
+    if (
+      [minX, minY, maxX, maxY].every((value) => Number.isFinite(value)) &&
+      maxX >= minX &&
+      maxY >= minY
+    ) {
+      return [minX, minY, maxX, maxY];
+    }
+  } catch {
+    // Fallback to manual edge sampling for projection-like objects that do not
+    // expose the full d3-geo path interface.
+  }
+
   const [west, south, east, north] = bbox;
   const steps = 20;
   const xs: number[] = [];

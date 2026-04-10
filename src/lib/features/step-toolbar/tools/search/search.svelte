@@ -1,5 +1,6 @@
 <script lang="ts">
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
+  import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
   import { m } from '$lib/paraglide/messages';
@@ -34,7 +35,9 @@
     if (!dataset?.columns) return [allItem];
 
     const columnItems = dataset.columns
-      .filter((col) => col.type !== 'geometry')
+      .filter(
+        (col) => col.type !== 'geometry' && col.name !== INTERNAL_COLUMN.ID
+      )
       .map((col) => ({ id: col.name, text: col.name }));
 
     return [allItem, ...columnItems];
