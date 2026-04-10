@@ -1,6 +1,7 @@
 import { projectStore } from '$lib/features/commons/store/project.store.svelte';
 import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
 import { logger, LogCategory } from '$lib/features/commons/utils/logger';
+import { getFormatState } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
 import { m } from '$lib/paraglide/messages.js';
 import {
   type MapExportFormat,
@@ -11,7 +12,7 @@ import {
   MAP_FORMAT,
   DATA_FORMAT,
   EXPORT_RESOLUTION,
-  RESOLUTION_DIMENSIONS
+  getExportDimensionsForPage
 } from '../types';
 import {
   exportProject,
@@ -95,7 +96,16 @@ export function useExportModal(): UseExportModalReturn {
           break;
 
         case ExportTab.MAP: {
-          const dims = RESOLUTION_DIMENSIONS[resolution];
+          const currentFormat = getFormatState();
+          const targetResolution =
+            mapFormat === MAP_FORMAT.SVG
+              ? EXPORT_RESOLUTION.HD_1080P
+              : resolution;
+          const dims = getExportDimensionsForPage(
+            currentFormat.width,
+            currentFormat.height,
+            targetResolution
+          );
           if (mapFormat === MAP_FORMAT.SVG) {
             await exportMapAsSvg(fileName, dims.width, dims.height);
           } else {

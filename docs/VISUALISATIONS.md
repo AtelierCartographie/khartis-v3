@@ -253,13 +253,13 @@ Personnalisation réduite : couleur de fond, contour (couleur, épaisseur, point
 
 ## Export [DL-01 à DL-03]
 
-| Format        | Contenu                               |
-| ------------- | ------------------------------------- |
-| JPG bitmap    | 1080p / 2K / 4K — carte complète      |
-| SVG vectoriel | Calques organisés par éléments et viz |
-| CSV           | Données tabulaires (géo exclue)       |
-| GeoJSON       | Données + géométrie                   |
-| .kh projet    | Fichier réimportable pour reprise     |
+| Format        | Contenu                                                         |
+| ------------- | --------------------------------------------------------------- |
+| JPG bitmap    | Full HD / 2K / 4K — carte complète, avec ratio de page conservé |
+| SVG vectoriel | Calques organisés par éléments et viz                           |
+| CSV           | Données tabulaires (géo exclue)                                 |
+| GeoJSON       | Données + géométrie                                             |
+| .kh projet    | Fichier réimportable pour reprise                               |
 
 ---
 
