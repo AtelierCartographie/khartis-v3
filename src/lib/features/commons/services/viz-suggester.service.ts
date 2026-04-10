@@ -651,15 +651,15 @@ function getSuggestionPreference(suggestion: VizSuggestion): number {
 }
 
 function compareSuggestionPriority(a: VizSuggestion, b: VizSuggestion): number {
+  const scoreDelta = (b.score ?? 0) - (a.score ?? 0);
+  if (scoreDelta !== 0) {
+    return scoreDelta;
+  }
+
   const preferenceDelta =
     getSuggestionPreference(b) - getSuggestionPreference(a);
   if (preferenceDelta !== 0) {
     return preferenceDelta;
-  }
-
-  const scoreDelta = (b.score ?? 0) - (a.score ?? 0);
-  if (scoreDelta !== 0) {
-    return scoreDelta;
   }
 
   return a.nbColumns - b.nbColumns;

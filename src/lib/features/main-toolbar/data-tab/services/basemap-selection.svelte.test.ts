@@ -14,6 +14,14 @@ describe('resolveNextBasemapSelectionId', () => {
     ).toBeUndefined();
   });
 
+  it('keeps the same basemap when toggle-off is explicitly disabled', () => {
+    expect(
+      resolveNextBasemapSelectionId('europe-nuts1-2024', 'europe-nuts1-2024', {
+        allowToggleOff: false
+      })
+    ).toBe('europe-nuts1-2024');
+  });
+
   it('returns undefined when no basemap id is requested', () => {
     expect(
       resolveNextBasemapSelectionId('europe-nuts1-2024', '')

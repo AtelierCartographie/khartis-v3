@@ -65,9 +65,29 @@ import {
 } from '$lib/features/main-toolbar/constants';
 import {
   applySuggestionToVisualization,
+  isVisualizationMatchingSuggestion,
+  isVisualizationBlank,
   resolveNextSuggestionSelection,
   resolveBlankVisualizationType
 } from '$lib/features/main-toolbar/visualization-tab/suggestion.utils';
+
+function asBlankTypeDataset(
+  value: unknown
+): Parameters<typeof resolveBlankVisualizationType>[0] {
+  return value as Parameters<typeof resolveBlankVisualizationType>[0];
+}
+
+function asBlankDataset(
+  value: unknown
+): Parameters<typeof isVisualizationBlank>[1] {
+  return value as Parameters<typeof isVisualizationBlank>[1];
+}
+
+function asSuggestionDataset(
+  value: unknown
+): Parameters<typeof isVisualizationMatchingSuggestion>[1] {
+  return value as Parameters<typeof isVisualizationMatchingSuggestion>[1];
+}
 
 describe('visualizationStore suggestion presets', () => {
   beforeEach(() => {
@@ -121,10 +141,146 @@ describe('visualizationStore suggestion presets', () => {
 
   it('creates ex nihilo polygon visualizations from a blank choropleth preset', () => {
     expect(
-      resolveBlankVisualizationType(
-        mocks.datasets[0] as Parameters<typeof resolveBlankVisualizationType>[0]
-      )
+      resolveBlankVisualizationType(asBlankTypeDataset(mocks.datasets[0]))
     ).toBe(VisualizationType.CHOROPLETH);
+  });
+
+  it('detects a blank visualization before any suggestion is applied', () => {
+    const visualization = visualizationStore.createVisualization(
+      VisualizationType.CHOROPLETH,
+      'dataset-id'
+    );
+
+    expect(
+      isVisualizationBlank(visualization, asBlankDataset(mocks.datasets[0]))
+    ).toBe(true);
+  });
+
+  it('treats a default point visualization as matching the top proportional suggestion', () => {
+    const pointDataset = {
+      id: 'dataset-point',
+      name: 'multipoint-representative-points.geojson',
+      sourceFileId: 'source-point-id',
+      tableName: 'point_table',
+      rowCount: 2,
+      geometry: { type: 'MultiPoint' },
+      columns: [
+        { name: 'name', type: 'string' },
+        { name: 'value', type: 'number' },
+        { name: 'geometry', type: 'geometry' }
+      ],
+      metadata: {
+        processedAt: new Date('2026-04-10T00:00:00.000Z'),
+        transformations: []
+      }
+    };
+    mocks.datasets = [pointDataset];
+
+    const visualization = visualizationStore.createVisualization(
+      VisualizationType.PROPORTIONAL,
+      'dataset-point'
+    );
+
+    expect(
+      isVisualizationBlank(visualization, asBlankDataset(pointDataset))
+    ).toBe(true);
+    expect(
+      isVisualizationMatchingSuggestion(
+        visualization,
+        asSuggestionDataset(pointDataset),
+        {
+          id: 'symbols_proportional',
+          label: 'Symboles proportionnels',
+          nbColumns: 1,
+          semioTypes: ['QTA'],
+          geometries: ['point', 'polygon'],
+          columns: ['value']
+        }
+      )
+    ).toBe(true);
+  });
+
+  it('treats an applied line suggestion as matching the active visualization', () => {
+    const lineDataset = {
+      id: 'dataset-line',
+      name: 'lignes-du-reseau-star-de-rennes-metropole.geojson',
+      sourceFileId: 'source-line-id',
+      tableName: 'line_table',
+      rowCount: 321,
+      geometry: { type: 'MultiLineString' },
+      columns: [
+        { name: 'li_type', type: 'string' },
+        { name: 'id', type: 'number' },
+        { name: 'geometry', type: 'geometry' }
+      ],
+      metadata: {
+        processedAt: new Date('2026-04-10T00:00:00.000Z'),
+        transformations: []
+      }
+    };
+    mocks.datasets = [lineDataset];
+
+    const visualization = visualizationStore.createVisualization(
+      resolveBlankVisualizationType(asBlankTypeDataset(lineDataset)),
+      'dataset-line'
+    );
+    const suggestion: Parameters<typeof applySuggestionToVisualization>[1] = {
+      id: 'lines_colorful_QL',
+      label: 'Lignes colorées (qualitatif)',
+      nbColumns: 1,
+      semioTypes: ['QL'],
+      geometries: ['line'],
+      columns: ['li_type']
+    };
+
+    applySuggestionToVisualization(visualization.id, suggestion);
+
+    const updated = visualizationStore.selectedVisualization;
+    expect(updated).toBeDefined();
+
+    if (!updated) {
+      return;
+    }
+
+    expect(
+      isVisualizationMatchingSuggestion(
+        updated,
+        asSuggestionDataset(lineDataset),
+        suggestion
+      )
+    ).toBe(true);
+  });
+
+  it('treats an applied proportional text suggestion as matching the active polygon visualization', () => {
+    const visualization = visualizationStore.createVisualization(
+      VisualizationType.CHOROPLETH,
+      'dataset-id'
+    );
+    const suggestion: Parameters<typeof applySuggestionToVisualization>[1] = {
+      id: 'texts_proportional',
+      label: 'Textes proportionnels',
+      nbColumns: 2,
+      semioTypes: ['QL', 'QTA'],
+      geometries: ['polygon'],
+      columns: ['NAME_LATN', 'POP_TOT_2023']
+    };
+
+    applySuggestionToVisualization(visualization.id, suggestion);
+
+    const updated = visualizationStore.selectedVisualization;
+    expect(updated).toBeDefined();
+
+    if (!updated) {
+      return;
+    }
+
+    expect(
+      isVisualizationMatchingSuggestion(
+        updated,
+        asSuggestionDataset(mocks.datasets[0]),
+        suggestion
+      )
+    ).toBe(true);
   });
 
   it('toggles the active suggestion selection off on a second click', () => {
@@ -230,6 +386,33 @@ describe('visualizationStore suggestion presets', () => {
       valueColumn: 'POP_TOT_2023'
     });
     expect(updated?.style.fillColorB).toBe('#ff832b');
+  });
+
+  it('no longer considers the visualization blank after applying a suggestion', () => {
+    const visualization = visualizationStore.createVisualization(
+      VisualizationType.CHOROPLETH,
+      'dataset-id'
+    );
+
+    applySuggestionToVisualization(visualization.id, {
+      id: 'texts_colorful_QTR',
+      label: 'Textes colorés (quantitatif)',
+      nbColumns: 1,
+      semioTypes: ['QTR'],
+      geometries: ['polygon'],
+      columns: ['POP_TOT_2023']
+    });
+
+    const updated = visualizationStore.selectedVisualization;
+    expect(updated).toBeDefined();
+
+    if (!updated) {
+      return;
+    }
+
+    expect(
+      isVisualizationBlank(updated, asBlankDataset(mocks.datasets[0]))
+    ).toBe(false);
   });
 
   it('maps quantitative plus qualitative symbol suggestions to categorical color', () => {
@@ -350,9 +533,12 @@ describe('visualizationStore suggestion presets', () => {
       columns: ['NAME_LATN']
     });
 
-    expect(mocks.updateLegendItemMock).toHaveBeenCalledWith('legend-viz-id', {
-      subtitle: 'NAME_LATN'
-    });
+    expect(mocks.updateLegendItemMock).toHaveBeenCalledWith(
+      'legend-viz-id',
+      expect.objectContaining({
+        subtitle: 'NAME_LATN'
+      })
+    );
     expect(mocks.legendItems[0]?.subtitle).toBe('NAME_LATN');
   });
 });

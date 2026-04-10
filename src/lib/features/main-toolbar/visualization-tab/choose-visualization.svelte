@@ -34,7 +34,8 @@
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import {
     applySuggestionToVisualization,
-    resolveNextSuggestionSelection,
+    isVisualizationMatchingSuggestion,
+    isVisualizationBlank,
     resolveBlankVisualizationType,
     resolveDatasetGeometryType
   } from './suggestion.utils';
@@ -50,6 +51,9 @@
   let selectedSuggestion = $state<string | undefined>(undefined);
   let suggestionsExpanded = $state(true);
   let visibleCount = $state<number>(UI_CONSTANTS.SUGGESTIONS_PER_PAGE);
+  let autoAppliedSuggestionKey = $state<string | undefined>(undefined);
+  let manualBlankVisualizationId = $state<string | undefined>(undefined);
+  let previousSuggestionDatasetId = $state<string | undefined>(undefined);
   let renamingVizId = $state<string | undefined>(undefined);
   let renameValue = $state<string>('');
   let deletingViz = $state<{ id: string; name: string } | null>(null);
@@ -175,10 +179,15 @@
       dataset.id
     );
     const selectedViz = visualizationStore.selectedVisualization;
-    const nextSuggestionSelection = resolveNextSuggestionSelection(
-      selectedSuggestion,
-      suggestion.id
-    );
+    const isCurrentlySelected =
+      selectedSuggestion === suggestion.id ||
+      (!!selectedViz &&
+        !selectedSuggestion &&
+        existingVizs.some((v) => v.id === selectedViz.id) &&
+        isVisualizationMatchingSuggestion(selectedViz, dataset, suggestion));
+    const nextSuggestionSelection = isCurrentlySelected
+      ? undefined
+      : suggestion.id;
     selectedSuggestion = nextSuggestionSelection;
 
     if (selectedViz && existingVizs.some((v) => v.id === selectedViz.id)) {
@@ -198,10 +207,11 @@
     const dataset = selectedDataset;
     if (!dataset) return;
 
-    visualizationStore.createVisualization(
+    const visualization = visualizationStore.createVisualization(
       resolveBlankVisualizationType(dataset),
       dataset.id
     );
+    manualBlankVisualizationId = visualization.id;
     selectedSuggestion = undefined;
     suggestionsExpanded = filteredSuggestions.length > 0 || suggestionsExpanded;
     onCreateVisualization?.();
@@ -210,6 +220,54 @@
   const datasetVisualizations = $derived.by(() => {
     if (!selectedDataset) return [];
     return visualizationStore.getVisualizationsByDataset(selectedDataset.id);
+  });
+
+  const targetVisualization = $derived.by(() => {
+    const currentSelection = visualizationStore.selectedVisualization;
+    if (
+      currentSelection &&
+      datasetVisualizations.some((viz) => viz.id === currentSelection.id)
+    ) {
+      return currentSelection;
+    }
+
+    return datasetVisualizations[0];
+  });
+
+  const autoSuggestionContextKey = $derived.by(() => {
+    const dataset = selectedDataset;
+    const targetViz = targetVisualization;
+
+    if (!dataset || !targetViz || filteredSuggestions.length === 0) {
+      return undefined;
+    }
+
+    if (manualBlankVisualizationId === targetViz.id) {
+      return undefined;
+    }
+
+    if (datasetVisualizations.length !== 1) {
+      return undefined;
+    }
+
+    if (!isVisualizationBlank(targetViz, dataset)) {
+      return undefined;
+    }
+
+    const suggestionSignature = filteredSuggestions
+      .map((suggestion) =>
+        [
+          suggestion.id,
+          suggestion.score,
+          suggestion.nbColumns,
+          (suggestion.columns ?? []).join(','),
+          suggestion.geometries.join(','),
+          suggestion.semioTypes.join(',')
+        ].join(':')
+      )
+      .join('|');
+
+    return `${dataset.id}::${targetViz.id}::${suggestionSignature}`;
   });
 
   function handleSelectViz(id: string) {
@@ -278,6 +336,28 @@
   });
 
   $effect(() => {
+    const dataset = selectedDataset;
+
+    if (!dataset) {
+      previousSuggestionDatasetId = undefined;
+      manualBlankVisualizationId = undefined;
+      autoAppliedSuggestionKey = undefined;
+      return;
+    }
+
+    if (previousSuggestionDatasetId === dataset.id) {
+      return;
+    }
+
+    previousSuggestionDatasetId = dataset.id;
+    selectedSuggestion = undefined;
+    visibleCount = UI_CONSTANTS.SUGGESTIONS_PER_PAGE;
+    suggestionsExpanded = true;
+    manualBlankVisualizationId = undefined;
+    autoAppliedSuggestionKey = undefined;
+  });
+
+  $effect(() => {
     const suggestionsList = filteredSuggestions;
     if (!suggestionsList.length) {
       selectedSuggestion = undefined;
@@ -293,6 +373,36 @@
     if (!hasSelectedSuggestion) {
       selectedSuggestion = undefined;
     }
+  });
+
+  $effect(() => {
+    const targetViz = targetVisualization;
+
+    if (!targetViz) {
+      return;
+    }
+
+    if (visualizationStore.selectedVisualization?.id !== targetViz.id) {
+      visualizationStore.selectVisualization(targetViz.id);
+    }
+  });
+
+  $effect(() => {
+    const autoContextKey = autoSuggestionContextKey;
+    const topSuggestion = filteredSuggestions[0];
+    const targetViz = targetVisualization;
+
+    if (!autoContextKey || !topSuggestion || !targetViz) {
+      return;
+    }
+
+    if (autoAppliedSuggestionKey === autoContextKey) {
+      return;
+    }
+
+    autoAppliedSuggestionKey = autoContextKey;
+    selectedSuggestion = topSuggestion.id;
+    applySuggestionToVisualization(targetViz.id, topSuggestion);
   });
 </script>
 
@@ -401,7 +511,16 @@
           aria-label={m.section_suggestions()}
         >
           {#each visibleSuggestions as suggestion (suggestion.id)}
-            {@const isSelected = selectedSuggestion === suggestion.id}
+            {@const isSelected =
+              selectedSuggestion === suggestion.id ||
+              (!selectedSuggestion &&
+                !!targetVisualization &&
+                !!selectedDataset &&
+                isVisualizationMatchingSuggestion(
+                  targetVisualization,
+                  selectedDataset,
+                  suggestion
+                ))}
             <button
               type="button"
               class="suggestion-card"

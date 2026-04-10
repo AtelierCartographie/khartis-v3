@@ -201,6 +201,18 @@ export interface VisualizationConfig {
   dataFilters?: VizDataFilter[];
 }
 
+export type VisualizationPreset = Pick<
+  VisualizationConfig,
+  | 'type'
+  | 'modes'
+  | 'primitiveFilters'
+  | 'style'
+  | 'mapping'
+  | 'classification'
+  | 'symbols'
+  | 'missingData'
+>;
+
 interface VisualizationState {
   visualizations: VisualizationConfig[];
   selectedVisualizationId?: string;
@@ -539,17 +551,7 @@ function getDefaultPrimitiveFilters(
 function buildVisualizationPreset(
   type: VisualizationType,
   dataset: ProcessedDataset | DatasetResult
-): Pick<
-  VisualizationConfig,
-  | 'type'
-  | 'modes'
-  | 'primitiveFilters'
-  | 'style'
-  | 'mapping'
-  | 'classification'
-  | 'symbols'
-  | 'missingData'
-> {
+): VisualizationPreset {
   return {
     type,
     modes: getDefaultModes(type),
@@ -560,6 +562,13 @@ function buildVisualizationPreset(
     symbols: getDefaultSymbols(type, dataset),
     missingData: getDefaultMissingData()
   };
+}
+
+export function resolveVisualizationPreset(
+  type: VisualizationType,
+  dataset: ProcessedDataset | DatasetResult
+): VisualizationPreset {
+  return buildVisualizationPreset(type, dataset);
 }
 
 function getDefaultMissingData(): MissingDataConfig {

@@ -90,6 +90,7 @@
   const basemapStepIndex = $derived(dataTabStore.basemapStepIndex);
   const basemapSelected = $derived(dataTabState.basemapJoin.selectedBasemap);
   const selectedDataset = $derived(datasetsStore.selectedDataset);
+  const duckDBDatasetsVersion = $derived(duckDBOrchestrator.datasetsVersion);
   const datasetIdForOrchestrator = $derived.by(() =>
     resolveDatasetIdForOrchestrator(selectedDataset)
   );
@@ -164,7 +165,7 @@
 
     if (!firstSuggestion) return;
 
-    await handleSelectBasemap(firstSuggestion);
+    await handleSelectBasemap(firstSuggestion, { allowToggleOff: false });
   }
 
   function isDatasetNotFoundError(error: unknown): boolean {
@@ -311,10 +312,14 @@
     }
   }
 
-  async function handleSelectBasemap(basemap: BasemapMetadata) {
+  async function handleSelectBasemap(
+    basemap: BasemapMetadata,
+    options: { allowToggleOff?: boolean } = {}
+  ) {
     const nextBasemapId = resolveNextBasemapSelectionId(
       basemapSelected || undefined,
-      basemap.file
+      basemap.file,
+      options
     );
 
     if (!nextBasemapId) {
@@ -1091,6 +1096,7 @@
   });
 
   $effect(() => {
+    void duckDBDatasetsVersion;
     void dataTabState.geolocation.linkedVariableName;
     if (selectedDataset) {
       void loadSuggestions();
