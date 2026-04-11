@@ -9,6 +9,7 @@
   import { resolveTiledStyleContext } from './tiled-basemap-selection';
   import {
     isGlobeProjectionAvailable,
+    resolveGlobeProjectionDisableReason,
     resolveProjectionForBasemapZone
   } from './map-projection-availability';
 
@@ -21,12 +22,34 @@
     )
   );
   const selectedZone = $derived(getBasemapZone(currentStyleContext));
-  const globeAvailable = $derived(isGlobeProjectionAvailable(selectedZone));
+  const globeDisableReason = $derived(
+    resolveGlobeProjectionDisableReason(
+      selectedZone,
+      basemapStyleStore.referenceBasemapId
+    )
+  );
+  const globeAvailable = $derived(
+    isGlobeProjectionAvailable(
+      selectedZone,
+      basemapStyleStore.referenceBasemapId
+    )
+  );
+  const globeDisabledMessage = $derived.by(() => {
+    switch (globeDisableReason) {
+      case 'custom-reference-basemap':
+        return m.map_projection_disabled_custom_basemap();
+      case 'france-zone':
+        return m.map_projection_disabled_france();
+      default:
+        return '';
+    }
+  });
 
   $effect(() => {
     const nextProjection = resolveProjectionForBasemapZone(
       mapProjectionStore.projection,
-      selectedZone
+      selectedZone,
+      basemapStyleStore.referenceBasemapId
     );
 
     if (nextProjection === mapProjectionStore.projection) {
@@ -51,7 +74,7 @@
   }
 </script>
 
-{#if requiresMapLibre && globeAvailable}
+{#if requiresMapLibre}
   <div class="projection-selector">
     <span class="field-label">
       {m.map_projection_label()}
@@ -61,11 +84,15 @@
       labelA={m.map_projection_mercator()}
       labelB={m.map_projection_globe()}
       toggled={isGlobe}
+      disabled={!globeAvailable}
       labelText={m.map_projection_label()}
       hideLabel
       showStateLabel
       onchange={handleToggle}
     />
+    {#if !globeAvailable}
+      <p class="helper-text">{globeDisabledMessage}</p>
+    {/if}
   </div>
 {/if}
 
@@ -85,5 +112,12 @@
     letter-spacing: var(--cds-label-01-letter-spacing, 0.32px);
     color: var(--cds-text-secondary);
     margin-bottom: var(--cds-spacing-02);
+  }
+
+  .helper-text {
+    margin: var(--cds-spacing-02) 0 0;
+    font-size: 0.75rem;
+    line-height: 1rem;
+    color: var(--cds-text-secondary);
   }
 </style>

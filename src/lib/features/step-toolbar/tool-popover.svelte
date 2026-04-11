@@ -3,6 +3,7 @@
   import type { ProjectionViewMode } from '$lib/features/commons/types/global';
   import { clickOutside } from '$lib/features/commons/utils/click-outside';
   import { Popover } from 'carbon-components-svelte';
+  import { DRAGGED_ELEMENT_ID } from 'svelte-dnd-action';
   import { tick } from 'svelte';
   import type { Snippet } from 'svelte';
   import {
@@ -36,6 +37,8 @@
   } = $props();
 
   const widthCss = $derived(viewMode === 'grid' ? gridWidth : `${listWidth}px`);
+  const RECENT_DND_INTERACTION_ATTRIBUTE = 'data-khartis-recent-dnd-at';
+  const RECENT_DND_INTERACTION_GRACE_MS = 500;
   let popoverRoot: HTMLDivElement | null = null;
   let computedTopOffset = $state(0);
 
@@ -74,12 +77,29 @@
       return;
     }
 
-    // Drag-and-drop interactions can end with a synthetic click target
-    // outside the popover while the dragged clone still exists.
-    if (document.getElementById('dnd-action-dragged-el')) return;
-
     const toolbar = document.getElementById(DOM_IDS.STEP_TOOLBAR);
     const target = event.detail?.originalEvent?.target as Node;
+
+    if (document.getElementById(DRAGGED_ELEMENT_ID)) return;
+
+    const lastDndInteractionAt = Number(
+      document.body.getAttribute(RECENT_DND_INTERACTION_ATTRIBUTE) ?? '0'
+    );
+    if (
+      Number.isFinite(lastDndInteractionAt) &&
+      Date.now() - lastDndInteractionAt < RECENT_DND_INTERACTION_GRACE_MS
+    ) {
+      return;
+    }
+
+    if (
+      target instanceof Element &&
+      target.closest(
+        '.bx--modal-container, .bx--overflow-menu-options, .bx--list-box__menu'
+      )
+    ) {
+      return;
+    }
 
     if (!toolbar || !toolbar.contains(target)) {
       globalState.selectedTool = undefined;

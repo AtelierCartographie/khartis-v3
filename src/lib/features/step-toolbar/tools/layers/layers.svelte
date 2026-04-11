@@ -197,6 +197,59 @@
   ): void {
     store.reorderSubLayers(parentId, fromIndex, toIndex);
   }
+
+  function getParentLayersForScope(scope: LayerReorderScope): Layer[] {
+    switch (scope) {
+      case 'visualization':
+        return visualizationParentLayers;
+      case 'geographic-background':
+        return basemapBackgroundParentLayers;
+      case 'geographic-foreground':
+        return basemapForegroundParentLayers;
+    }
+  }
+
+  function handleMoveLayer(
+    scope: LayerReorderScope,
+    layerId: string,
+    direction: -1 | 1
+  ): void {
+    const scopedLayers = getParentLayersForScope(scope);
+    const fromIndex = scopedLayers.findIndex((layer) => layer.id === layerId);
+    const toIndex = fromIndex + direction;
+
+    if (
+      fromIndex === -1 ||
+      toIndex < 0 ||
+      toIndex >= scopedLayers.length ||
+      fromIndex === toIndex
+    ) {
+      return;
+    }
+
+    store.reorderLayers(scope, fromIndex, toIndex);
+  }
+
+  function handleMoveSubLayer(
+    parentId: string,
+    layerId: string,
+    direction: -1 | 1
+  ): void {
+    const childLayers = childLayersByParent[parentId] ?? [];
+    const fromIndex = childLayers.findIndex((layer) => layer.id === layerId);
+    const toIndex = fromIndex + direction;
+
+    if (
+      fromIndex === -1 ||
+      toIndex < 0 ||
+      toIndex >= childLayers.length ||
+      fromIndex === toIndex
+    ) {
+      return;
+    }
+
+    store.reorderSubLayers(parentId, fromIndex, toIndex);
+  }
 </script>
 
 <div class="layers-tool">
@@ -228,6 +281,8 @@
         onOpenSettings={handleOpenSettings}
         onReorderLayers={handleReorderLayers}
         onReorderSubLayers={handleReorderSubLayers}
+        onMoveLayer={handleMoveLayer}
+        onMoveSubLayer={handleMoveSubLayer}
         onRenameLayer={handleRenameLayer}
         onDuplicateLayer={handleDuplicateLayer}
         onDeleteLayer={handleDeleteLayer}
@@ -262,6 +317,8 @@
         onOpenSettings={handleOpenSettings}
         onReorderLayers={handleReorderLayers}
         onReorderSubLayers={handleReorderSubLayers}
+        onMoveLayer={handleMoveLayer}
+        onMoveSubLayer={handleMoveSubLayer}
         onRenameLayer={handleRenameLayer}
         onDuplicateLayer={handleDuplicateLayer}
         onDeleteLayer={handleDeleteLayer}
@@ -292,6 +349,8 @@
         onOpenSettings={handleOpenSettings}
         onReorderLayers={handleReorderLayers}
         onReorderSubLayers={handleReorderSubLayers}
+        onMoveLayer={handleMoveLayer}
+        onMoveSubLayer={handleMoveSubLayer}
         onRenameLayer={handleRenameLayer}
         onDuplicateLayer={handleDuplicateLayer}
         onDeleteLayer={handleDeleteLayer}

@@ -318,6 +318,8 @@ export const DEFAULT_CATEGORICAL_COLORS = [
   '#f781bf'
 ];
 
+type GeometryFamily = 'point' | 'line' | 'polygon' | 'unknown';
+
 function incrementVersion(state: VisualizationState): void {
   state.version++;
   persistenceRegistry.notifyChange('visualization');
@@ -516,10 +518,9 @@ function getDefaultSymbols(
   };
 }
 
-function getDefaultPrimitiveFilters(
-  type: VisualizationType,
+function resolveGeometryFamilyFromDataset(
   dataset: ProcessedDataset | DatasetResult
-): PrimitiveFilter[] {
+): GeometryFamily {
   const geometryType =
     typeof dataset.geometry === 'string'
       ? dataset.geometry
@@ -527,25 +528,125 @@ function getDefaultPrimitiveFilters(
   const normalizedGeometryType = geometryType?.toLowerCase() ?? '';
 
   if (normalizedGeometryType.includes('polygon')) {
-    if (
-      type === VisualizationType.PROPORTIONAL ||
-      type === VisualizationType.BIVARIATE
-    ) {
-      return [PrimitiveFilterType.POINT, PrimitiveFilterType.LINE];
-    }
-
-    return [PrimitiveFilterType.POLYGON, PrimitiveFilterType.LINE];
+    return 'polygon';
   }
 
   if (normalizedGeometryType.includes('line')) {
-    return [PrimitiveFilterType.LINE];
+    return 'line';
   }
 
   if (normalizedGeometryType.includes('point')) {
-    return [PrimitiveFilterType.POINT];
+    return 'point';
   }
 
-  return [...ALL_PRIMITIVE_FILTERS];
+  return 'unknown';
+}
+
+export function resolveAllowedPrimitiveFilters(
+  type: VisualizationType,
+  dataset: ProcessedDataset | DatasetResult
+): PrimitiveFilter[] {
+  switch (resolveGeometryFamilyFromDataset(dataset)) {
+    case 'polygon':
+      if (
+        type === VisualizationType.PROPORTIONAL ||
+        type === VisualizationType.BIVARIATE
+      ) {
+        return [PrimitiveFilterType.POINT, PrimitiveFilterType.POLYGON];
+      }
+
+      return [PrimitiveFilterType.POLYGON];
+
+    case 'line':
+      return [PrimitiveFilterType.LINE];
+
+    case 'point':
+      return [PrimitiveFilterType.POINT];
+
+    default:
+      return [...ALL_PRIMITIVE_FILTERS];
+  }
+}
+
+function sanitizePrimitiveFilters(
+  filters: PrimitiveFilter[] | undefined,
+  allowedFilters: PrimitiveFilter[]
+): PrimitiveFilter[] {
+  const sourceFilters =
+    filters && filters.length > 0 ? filters : allowedFilters;
+  const sanitized = [...new Set(sourceFilters)].filter((filter) =>
+    allowedFilters.includes(filter)
+  );
+
+  return sanitized.length > 0 ? sanitized : [...allowedFilters];
+}
+
+function sanitizePrimitiveOrder(
+  order: PrimitiveFilter[] | undefined,
+  allowedFilters: PrimitiveFilter[]
+): PrimitiveFilter[] {
+  const sourceOrder = order && order.length > 0 ? order : ALL_PRIMITIVE_FILTERS;
+  const sanitized = [
+    ...new Set([...sourceOrder, ...ALL_PRIMITIVE_FILTERS])
+  ].filter((filter) => allowedFilters.includes(filter));
+
+  return sanitized.length > 0 ? sanitized : [...allowedFilters];
+}
+
+function sanitizeDataFilters(
+  dataFilters: VizDataFilter[] | undefined,
+  allowedFilters: PrimitiveFilter[]
+): VizDataFilter[] | undefined {
+  if (!dataFilters) {
+    return undefined;
+  }
+
+  return dataFilters.filter(
+    (filter) =>
+      !filter.primitiveType || allowedFilters.includes(filter.primitiveType)
+  );
+}
+
+function normalizeVisualizationConfig(
+  visualization: VisualizationConfig,
+  dataset: ProcessedDataset | DatasetResult
+): VisualizationConfig {
+  const allowedFilters = resolveAllowedPrimitiveFilters(
+    visualization.type,
+    dataset
+  );
+
+  return {
+    ...visualization,
+    primitiveFilters: sanitizePrimitiveFilters(
+      visualization.primitiveFilters,
+      allowedFilters
+    ),
+    primitiveOrder: sanitizePrimitiveOrder(
+      visualization.primitiveOrder,
+      allowedFilters
+    ),
+    dataFilters: sanitizeDataFilters(visualization.dataFilters, allowedFilters)
+  };
+}
+
+function getNormalizedVisualization(
+  visualization: VisualizationConfig
+): VisualizationConfig {
+  const dataset = findById(datasetsStore.datasets, visualization.datasetId);
+
+  if (!dataset) {
+    return visualization;
+  }
+
+  return normalizeVisualizationConfig(visualization, dataset);
+}
+
+function getDefaultPrimitiveFilters(
+  type: VisualizationType,
+  dataset: ProcessedDataset | DatasetResult
+): PrimitiveFilter[] {
+  return resolveAllowedPrimitiveFilters(type, dataset);
 }
 
 function buildVisualizationPreset(
@@ -616,10 +717,17 @@ function createVisualizationStore(): VisualizationStore {
       return;
     }
 
-    state.visualizations = updateById(state.visualizations, id, {
+    const nextVisualization = getNormalizedVisualization({
+      ...visualization,
       ...updates,
       id
     });
+
+    state.visualizations = updateById(
+      state.visualizations,
+      id,
+      nextVisualization
+    );
     incrementVersion(state);
   }
 
@@ -633,7 +741,7 @@ function createVisualizationStore(): VisualizationStore {
       throw new Error(DATASET_NOT_FOUND_ERROR);
     }
 
-    const visualization: VisualizationConfig = {
+    const visualization = getNormalizedVisualization({
       id: crypto.randomUUID(),
       name:
         name ||
@@ -644,7 +752,7 @@ function createVisualizationStore(): VisualizationStore {
       datasetId,
       enabled: true,
       ...buildVisualizationPreset(type, dataset)
-    };
+    });
 
     state.visualizations.push(visualization);
     state.selectedVisualizationId = visualization.id;
@@ -771,12 +879,12 @@ function createVisualizationStore(): VisualizationStore {
       state.visualizations.map((item) => item.name)
     );
 
-    const duplicatedVisualization: VisualizationConfig = {
+    const duplicatedVisualization = getNormalizedVisualization({
       ...deepClone(original),
       id: crypto.randomUUID(),
       name: duplicatedName,
       ...(targetDatasetId ? { datasetId: targetDatasetId } : {})
-    };
+    });
 
     state.visualizations.push(duplicatedVisualization);
     state.selectedVisualizationId = duplicatedVisualization.id;
@@ -810,8 +918,9 @@ function createVisualizationStore(): VisualizationStore {
     }
 
     configs.forEach((config) => {
-      state.visualizations.push(config);
-      updateActiveVisualizationIds((ids) => ids.add(config.id));
+      const normalizedConfig = getNormalizedVisualization(config);
+      state.visualizations.push(normalizedConfig);
+      updateActiveVisualizationIds((ids) => ids.add(normalizedConfig.id));
     });
 
     incrementVersion(state);
@@ -985,25 +1094,9 @@ function createVisualizationStore(): VisualizationStore {
   function restoreFromSerialized(
     settings: SerializedVisualizationSettings
   ): void {
-    // Migrate old polygon vizzes: add LINE to primitiveFilters if only POLYGON was set
     const restoredVisualizations = (settings.visualizations || [])
       .filter((viz: VisualizationConfig) => !viz.facet)
-      .map((viz: VisualizationConfig) => {
-        if (
-          viz.primitiveFilters &&
-          viz.primitiveFilters.length === 1 &&
-          viz.primitiveFilters[0] === PrimitiveFilterType.POLYGON
-        ) {
-          return {
-            ...viz,
-            primitiveFilters: [
-              PrimitiveFilterType.POLYGON,
-              PrimitiveFilterType.LINE
-            ]
-          };
-        }
-        return viz;
-      });
+      .map((viz: VisualizationConfig) => getNormalizedVisualization(viz));
 
     state.visualizations = restoredVisualizations;
 

@@ -3498,10 +3498,10 @@ export function createPolygonLayers(
       const primitiveFilters =
         ctx.viz?.primitiveFilters ?? ALL_PRIMITIVE_FILTERS;
       const primitiveOrder = ctx.primitiveOrder ?? DEFAULT_PRIMITIVE_ORDER;
-      const showStroke =
-        primitiveFilters.includes(PrimitiveFilterType.LINE) &&
-        (ctx.viz?.modes?.stroke ?? StrokeMode.UNIQUE) !== StrokeMode.NONE;
       const showFill = primitiveFilters.includes(PrimitiveFilterType.POLYGON);
+      const showStroke =
+        showFill &&
+        (ctx.viz?.modes?.stroke ?? StrokeMode.UNIQUE) !== StrokeMode.NONE;
       const getOrderIndex = (primitive: PrimitiveFilter): number => {
         const index = primitiveOrder.indexOf(primitive);
         return index === -1 ? Number.MAX_SAFE_INTEGER : index;

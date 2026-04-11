@@ -19,6 +19,16 @@
       fromIndex: number,
       toIndex: number
     ) => void;
+    onMoveLayer?: (
+      scope: LayerReorderScope,
+      layerId: string,
+      direction: -1 | 1
+    ) => void;
+    onMoveSubLayer?: (
+      parentId: string,
+      layerId: string,
+      direction: -1 | 1
+    ) => void;
     onRenameLayer?: (layerId: string) => void;
     onDuplicateLayer?: (layerId: string) => void;
     onDeleteLayer?: (layerId: string) => void;
@@ -32,6 +42,8 @@
     onOpenSettings,
     onReorderLayers,
     onReorderSubLayers,
+    onMoveLayer,
+    onMoveSubLayer,
     onRenameLayer,
     onDuplicateLayer,
     onDeleteLayer,
@@ -39,6 +51,7 @@
   }: Props = $props();
 
   const FLIP_DURATION_MS = 200;
+  const RECENT_DND_INTERACTION_ATTRIBUTE = 'data-khartis-recent-dnd-at';
 
   function transformParentGhost(draggedEl: HTMLElement | undefined): void {
     if (!draggedEl) return;
@@ -82,8 +95,16 @@
     return childItems[parentId] ?? [];
   }
 
+  function markRecentDndInteraction(): void {
+    document.body.setAttribute(
+      RECENT_DND_INTERACTION_ATTRIBUTE,
+      String(Date.now())
+    );
+  }
+
   function handleParentConsider(e: Event): void {
     draggingParent = true;
+    markRecentDndInteraction();
     parentItems = (e as CustomEvent).detail.items;
   }
 
@@ -91,6 +112,7 @@
     const { items: newItems, info } = (e as CustomEvent).detail;
     parentItems = newItems;
     draggingParent = false;
+    markRecentDndInteraction();
 
     const fromIndex = parentLayers.findIndex((layer) => layer.id === info.id);
     const toIndex = (newItems as Layer[]).findIndex(
@@ -104,6 +126,7 @@
 
   function handleChildConsider(parentId: string, e: Event): void {
     draggingChildOf = parentId;
+    markRecentDndInteraction();
     childItems = {
       ...childItems,
       [parentId]: (e as CustomEvent).detail.items
@@ -114,6 +137,7 @@
     const { items: newItems, info } = (e as CustomEvent).detail;
     childItems = { ...childItems, [parentId]: newItems };
     draggingChildOf = null;
+    markRecentDndInteraction();
 
     const oldChildren = childLayersByParent[parentId] ?? [];
     const fromIndex = oldChildren.findIndex((l) => l.id === info.id);
@@ -139,7 +163,7 @@
   onconsider={handleParentConsider}
   onfinalize={handleParentFinalize}
 >
-  {#each parentItems as parentLayer (parentLayer.id)}
+  {#each parentItems as parentLayer, parentIndex (parentLayer.id)}
     <div class="layer-group">
       <LayerItem
         layer={parentLayer}
@@ -148,6 +172,10 @@
         onToggleCollapse={() => toggleCollapse(parentLayer.id)}
         onToggleVisibility={onToggleVisibility}
         onOpenSettings={onOpenSettings}
+        canMoveUp={parentIndex > 0}
+        canMoveDown={parentIndex < parentItems.length - 1}
+        onMoveUp={() => onMoveLayer?.(reorderScope, parentLayer.id, -1)}
+        onMoveDown={() => onMoveLayer?.(reorderScope, parentLayer.id, 1)}
         onRenameLayer={onRenameLayer}
         onDuplicateLayer={onDuplicateLayer}
         onDeleteLayer={onDeleteLayer}
@@ -168,11 +196,18 @@
             onconsider={(e: Event) => handleChildConsider(parentLayer.id, e)}
             onfinalize={(e: Event) => handleChildFinalize(parentLayer.id, e)}
           >
-            {#each getChildren(parentLayer.id) as childLayer (childLayer.id)}
+            {#each getChildren(parentLayer.id) as childLayer, childIndex (childLayer.id)}
               <LayerItem
                 layer={childLayer}
                 onToggleVisibility={onToggleVisibility}
                 onOpenSettings={onOpenSettings}
+                canMoveUp={childIndex > 0}
+                canMoveDown={childIndex <
+                  getChildren(parentLayer.id).length - 1}
+                onMoveUp={() =>
+                  onMoveSubLayer?.(parentLayer.id, childLayer.id, -1)}
+                onMoveDown={() =>
+                  onMoveSubLayer?.(parentLayer.id, childLayer.id, 1)}
               />
             {/each}
           </div>

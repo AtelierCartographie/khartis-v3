@@ -135,7 +135,89 @@ describe('visualizationStore suggestion presets', () => {
 
     expect(visualization.primitiveFilters).toEqual([
       PrimitiveFilterType.POINT,
-      PrimitiveFilterType.LINE
+      PrimitiveFilterType.POLYGON
+    ]);
+    expect(visualization.primitiveOrder).toEqual([
+      PrimitiveFilterType.POINT,
+      PrimitiveFilterType.POLYGON
+    ]);
+  });
+
+  it('sanitizes legacy polygon visualizations that still carry line primitives', () => {
+    visualizationStore.restoreFromSerialized({
+      visualizations: [
+        {
+          id: 'legacy-polygon',
+          name: 'Legacy polygon',
+          type: VisualizationType.CHOROPLETH,
+          datasetId: 'dataset-id',
+          enabled: true,
+          primitiveFilters: [
+            PrimitiveFilterType.POLYGON,
+            PrimitiveFilterType.LINE
+          ],
+          primitiveOrder: [
+            PrimitiveFilterType.POINT,
+            PrimitiveFilterType.LINE,
+            PrimitiveFilterType.POLYGON
+          ],
+          style: {
+            fillOpacity: 1,
+            strokeOpacity: 1
+          },
+          mapping: {
+            geometryColumn: 'geometry',
+            valueColumn: 'AREA_TOT_2024'
+          }
+        }
+      ],
+      selectedVisualizationId: 'legacy-polygon',
+      activeVisualizationIds: ['legacy-polygon']
+    });
+
+    expect(visualizationStore.selectedVisualization?.primitiveFilters).toEqual([
+      PrimitiveFilterType.POLYGON
+    ]);
+    expect(visualizationStore.selectedVisualization?.primitiveOrder).toEqual([
+      PrimitiveFilterType.POLYGON
+    ]);
+  });
+
+  it('removes disallowed primitive-specific filters when a polygon viz is updated', () => {
+    const visualization = visualizationStore.createVisualization(
+      VisualizationType.CHOROPLETH,
+      'dataset-id'
+    );
+
+    visualizationStore.updateVisualization(visualization.id, {
+      primitiveFilters: [PrimitiveFilterType.POLYGON, PrimitiveFilterType.LINE],
+      primitiveOrder: [PrimitiveFilterType.LINE, PrimitiveFilterType.POLYGON],
+      dataFilters: [
+        {
+          id: 'keep',
+          column: 'AREA_TOT_2024',
+          operator: 'gte',
+          value: '10',
+          primitiveType: PrimitiveFilterType.POLYGON
+        },
+        {
+          id: 'drop',
+          column: 'AREA_TOT_2024',
+          operator: 'gte',
+          value: '10',
+          primitiveType: PrimitiveFilterType.LINE
+        }
+      ]
+    });
+
+    expect(visualizationStore.selectedVisualization?.primitiveFilters).toEqual([
+      PrimitiveFilterType.POLYGON
+    ]);
+    expect(visualizationStore.selectedVisualization?.primitiveOrder).toEqual([
+      PrimitiveFilterType.POLYGON
+    ]);
+    expect(visualizationStore.selectedVisualization?.dataFilters).toEqual([
+      expect.objectContaining({ id: 'keep' })
     ]);
   });
 
@@ -341,7 +423,7 @@ describe('visualizationStore suggestion presets', () => {
     });
     expect(updated?.primitiveFilters).toEqual([
       PrimitiveFilterType.POINT,
-      PrimitiveFilterType.LINE
+      PrimitiveFilterType.POLYGON
     ]);
     expect(updated?.mapping).toEqual({
       geometryColumn: 'geometry',
@@ -352,7 +434,10 @@ describe('visualizationStore suggestion presets', () => {
       ClassificationMethod.QUANTILES
     );
     expect(updated?.dataFilters).toBeUndefined();
-    expect(updated?.primitiveOrder).toBeUndefined();
+    expect(updated?.primitiveOrder).toEqual([
+      PrimitiveFilterType.POINT,
+      PrimitiveFilterType.POLYGON
+    ]);
     expect(updated?.style.fillOpacity).not.toBe(0.15);
   });
 

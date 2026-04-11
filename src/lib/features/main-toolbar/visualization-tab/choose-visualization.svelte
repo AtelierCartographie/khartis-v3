@@ -336,6 +336,19 @@
   });
 
   $effect(() => {
+    const datasetId = selectedDatasetId;
+    if (!datasetId || datasetsStore.selectedDatasetId === datasetId) {
+      return;
+    }
+
+    if (!datasetsStore.datasets.some((dataset) => dataset.id === datasetId)) {
+      return;
+    }
+
+    datasetsStore.selectDataset(datasetId);
+  });
+
+  $effect(() => {
     const dataset = selectedDataset;
 
     if (!dataset) {
