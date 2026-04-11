@@ -40,4 +40,19 @@ describe('drawing tool', () => {
     expect(storedLineDrawing?.style?.drawingType).toBe(DrawingType.LINE);
     expect(currentState.defaultStyle.drawingType).toBe(DrawingType.ZONE);
   });
+
+  it('requires three points before enabling finish for zones', async () => {
+    annotationsActions.startDrawingMode(DrawingType.ZONE);
+    annotationsActions.setDrawingInProgress([
+      { x: 0, y: 0 },
+      { x: 60, y: 20 }
+    ]);
+    annotationsActions.updateDefaultStyle({ drawingType: DrawingType.ZONE });
+
+    render(DrawingTool);
+
+    expect(
+      screen.getByRole('button', { name: m.annotations_drawing_finish() })
+    ).toBeDisabled();
+  });
 });

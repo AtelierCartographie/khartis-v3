@@ -133,8 +133,8 @@
       aria-disabled={disabled}
       title={disabled && disabledReason ? disabledReason : undefined}
       disabled={disabled}
-      on:click={toggle}
-      on:keydown={(e: KeyboardEvent) =>
+      onclick={toggle}
+      onkeydown={(e: KeyboardEvent) =>
         (e.key === KEY.ENTER || e.key === KEY.SPACE) &&
         (e.preventDefault(), toggle())}
     >
@@ -145,8 +145,8 @@
           {#if icon}
             <span
               class="section-custom-icon"
-              on:click={(e: MouseEvent) => e.stopPropagation()}
-              on:keydown={(e: KeyboardEvent) => e.stopPropagation()}
+              onclick={(e: MouseEvent) => e.stopPropagation()}
+              onkeydown={(e: KeyboardEvent) => e.stopPropagation()}
               role="presentation"
             >
               {@render icon()}

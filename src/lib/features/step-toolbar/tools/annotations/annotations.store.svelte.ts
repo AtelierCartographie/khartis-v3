@@ -4,7 +4,8 @@ import {
 } from '$lib/features/commons/constants/ui.constants';
 import {
   ANNOTATION_ROLES,
-  ANNOTATION_ROLE
+  ANNOTATION_ROLE,
+  getShapeDefaultDimensions
 } from '$lib/features/commons/constants';
 import { TextAlign } from '$lib/features/commons/types/enums';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
@@ -51,6 +52,7 @@ type AnnotationsActions = {
   addAnnotation: (type: AnnotationKind, content: string) => void;
   startDrawingMode: (type: DrawingType) => void;
   addDrawingPoint: (point: { x: number; y: number }) => void;
+  setDrawingInProgress: (points: { x: number; y: number }[]) => void;
   removeLastDrawingPoint: () => void;
   finalizeDrawingMode: () => void;
   cancelDrawingMode: () => void;
@@ -314,7 +316,8 @@ function resolveMapCanvasLayout(layout: PageLayout): MapCanvasLayout {
 
 function getAnnotationBounds(
   type: AnnotationKind,
-  style: AnnotationStyle
+  style: AnnotationStyle,
+  content?: unknown
 ): { width: number; height: number } {
   if (type === AnnotationKind.IMAGE) {
     const resolvedSize = Number(
@@ -326,6 +329,14 @@ function getAnnotationBounds(
     return { width: safeSize, height: safeSize };
   }
 
+  if (type === AnnotationKind.SHAPE) {
+    const defaultDimensions = getShapeDefaultDimensions(String(content ?? ''));
+    return {
+      width: Math.max(24, style.shapeWidth ?? defaultDimensions.width),
+      height: Math.max(24, style.shapeHeight ?? defaultDimensions.height)
+    };
+  }
+
   return DEFAULT_ANNOTATION_BOUNDS[type];
 }
 
@@ -333,10 +344,11 @@ function clampAnnotationPosition(
   position: { x: number; y: number },
   type: AnnotationKind,
   style: AnnotationStyle,
-  layout: PageLayout
+  layout: PageLayout,
+  content?: unknown
 ): { x: number; y: number } {
   const mapLayout = resolveMapCanvasLayout(layout);
-  const bounds = getAnnotationBounds(type, style);
+  const bounds = getAnnotationBounds(type, style, content);
 
   const minX = 0;
   const minY = 0;
@@ -400,10 +412,11 @@ function getNonPageAnnotationSpawnPosition(
   type: AnnotationKind,
   style: AnnotationStyle,
   existingAnnotationsCount: number,
-  layout: PageLayout
+  layout: PageLayout,
+  content?: unknown
 ): { x: number; y: number } {
   const mapLayout = resolveMapCanvasLayout(layout);
-  const bounds = getAnnotationBounds(type, style);
+  const bounds = getAnnotationBounds(type, style, content);
   const availableVerticalSpace = Math.max(
     0,
     mapLayout.height - NON_PAGE_ANNOTATION_TOP_OFFSET - bounds.height
@@ -422,7 +435,7 @@ function getNonPageAnnotationSpawnPosition(
   const x = leftOffset + column * NON_PAGE_ANNOTATION_COLUMN_STEP;
   const y = NON_PAGE_ANNOTATION_TOP_OFFSET + row * NON_PAGE_ANNOTATION_ROW_STEP;
 
-  return clampAnnotationPosition({ x, y }, type, style, layout);
+  return clampAnnotationPosition({ x, y }, type, style, layout, content);
 }
 
 function getPageElementPosition(
@@ -564,6 +577,32 @@ function normalizeOpacityPercent(
   return Math.max(0, Math.min(100, percentValue));
 }
 
+function getMinimumDrawingPoints(type: DrawingType): number {
+  return type === DrawingType.ZONE ? 3 : 2;
+}
+
+function normalizeDrawingPoints(points: DrawingPoint[]): DrawingPoint[] {
+  const normalized: DrawingPoint[] = [];
+
+  for (const point of points) {
+    const previous = normalized[normalized.length - 1];
+    if (
+      previous &&
+      Math.abs(previous.x - point.x) < 1 &&
+      Math.abs(previous.y - point.y) < 1
+    ) {
+      continue;
+    }
+
+    normalized.push({
+      x: Math.round(point.x * 100) / 100,
+      y: Math.round(point.y * 100) / 100
+    });
+  }
+
+  return normalized;
+}
+
 const { actions, getState } = createToolStore<
   AnnotationsState,
   AnnotationsActions
@@ -586,23 +625,34 @@ const { actions, getState } = createToolStore<
         type === AnnotationKind.DRAWING
           ? resolveDrawingType(content, s.defaultStyle.drawingType)
           : null;
+      const shapeDimensions =
+        type === AnnotationKind.SHAPE
+          ? getShapeDefaultDimensions(String(content))
+          : null;
       const style: AnnotationStyle = {
         ...s.defaultStyle,
-        ...(drawingType ? { drawingType } : {})
+        ...(drawingType ? { drawingType } : {}),
+        ...(shapeDimensions
+          ? {
+              shapeWidth: shapeDimensions.width,
+              shapeHeight: shapeDimensions.height
+            }
+          : {})
       };
       const nonPageItemsCount = s.items.filter(
         (item) => item.role == null
       ).length;
-      const position = getNonPageAnnotationSpawnPosition(
-        type,
-        style,
-        nonPageItemsCount,
-        layout
-      );
       const normalizedContent =
         type === AnnotationKind.DRAWING && drawingType
           ? createDefaultDrawingPoints(drawingType)
           : content;
+      const position = getNonPageAnnotationSpawnPosition(
+        type,
+        style,
+        nonPageItemsCount,
+        layout,
+        normalizedContent
+      );
 
       const newAnnotation: Annotation = {
         id: `${ANNOTATION_ID_PREFIX}${Date.now()}`,
@@ -657,16 +707,18 @@ const { actions, getState } = createToolStore<
     addDrawingPoint: (point: { x: number; y: number }) => {
       s.drawingInProgress = [...s.drawingInProgress, point];
     },
+    setDrawingInProgress: (points: { x: number; y: number }[]) => {
+      s.drawingInProgress = [...points];
+    },
     removeLastDrawingPoint: () => {
       if (s.drawingInProgress.length > 0) {
         s.drawingInProgress = s.drawingInProgress.slice(0, -1);
       }
     },
     finalizeDrawingMode: () => {
-      const points = s.drawingInProgress;
-      if (points.length < 2) {
-        s.isDrawingMode = false;
-        s.drawingInProgress = [];
+      const points = normalizeDrawingPoints(s.drawingInProgress);
+      if (points.length < getMinimumDrawingPoints(s.drawingModeType)) {
+        s.drawingInProgress = points;
         return;
       }
 
@@ -686,7 +738,8 @@ const { actions, getState } = createToolStore<
         { x: minX, y: minY },
         AnnotationKind.DRAWING,
         style,
-        layout
+        layout,
+        relativePoints
       );
 
       const newAnnotation: Annotation = {
