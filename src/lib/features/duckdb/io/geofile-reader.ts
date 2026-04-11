@@ -27,6 +27,54 @@ interface GeofileMetadata {
   crs: string | null;
   geometryColumn: string;
   layerCount: number;
+  selectedLayer: string | null;
+  autoSelectedLayer: boolean;
+}
+
+interface GeofileLayerMetadata {
+  layerIndex: number;
+  layerName: string | null;
+  featureCount: number;
+  geometryType: string | null;
+  geometryColumn: string | null;
+  crs: string | null;
+}
+
+function getGeometryPriority(geometryType: string | null): number {
+  const normalized = geometryType?.toLowerCase() ?? '';
+
+  if (normalized.includes('polygon')) return 0;
+  if (normalized.includes('line')) return 1;
+  if (normalized.includes('point')) return 2;
+
+  return 3;
+}
+
+function selectPreferredGeofileLayer(
+  layers: GeofileLayerMetadata[]
+): GeofileLayerMetadata | null {
+  const spatialLayers = layers.filter(
+    (layer) => layer.layerName && layer.geometryColumn && layer.geometryType
+  );
+
+  if (spatialLayers.length === 0) {
+    return null;
+  }
+
+  return [...spatialLayers].sort((left, right) => {
+    const priorityDiff =
+      getGeometryPriority(left.geometryType) -
+      getGeometryPriority(right.geometryType);
+    if (priorityDiff !== 0) {
+      return priorityDiff;
+    }
+
+    if (left.featureCount !== right.featureCount) {
+      return right.featureCount - left.featureCount;
+    }
+
+    return left.layerIndex - right.layerIndex;
+  })[0];
 }
 
 async function ensureSpatialExtension(ctx: DuckDBContext): Promise<void> {
@@ -65,17 +113,92 @@ async function ensureSpatialExtension(ctx: DuckDBContext): Promise<void> {
 
 async function detectGeofileMetadata(
   ctx: DuckDBContext,
-  fileId: string
+  fileId: string,
+  requestedLayer?: string
 ): Promise<GeofileMetadata> {
   const defaultResult: GeofileMetadata = {
     crs: null,
     geometryColumn: INTERNAL_COLUMN.GEOM,
-    layerCount: 1
+    layerCount: 1,
+    selectedLayer: requestedLayer ?? null,
+    autoSelectedLayer: false
   };
   try {
     await ensureSpatialExtension(ctx);
 
     const escapedFileId = escapeSqlString(fileId);
+    const layers = (await executeQuery(
+      ctx.connection,
+      `SELECT
+         row_number() OVER () AS layer_index,
+         layer.name AS layer_name,
+         layer.feature_count AS feature_count,
+         layer.geometry_fields[1].crs.auth_code AS crs_code,
+         layer.geometry_fields[1].name AS geom_name,
+         layer.geometry_fields[1].type AS geom_type
+       FROM (
+         SELECT unnest(layers) AS layer
+         FROM ST_Read_Meta('${escapedFileId}')
+       )`,
+      { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
+    )) as Array<{
+      layer_index?: number | bigint;
+      layer_name?: string | null;
+      feature_count?: number | bigint | null;
+      crs_code?: number | bigint | string | null;
+      geom_name?: string | null;
+      geom_type?: string | null;
+    }>;
+
+    if (layers.length > 0) {
+      const parsedLayers = layers.map((layer) => {
+        const crsCode = layer.crs_code;
+        let crs: string | null = null;
+        if (crsCode) {
+          if (typeof crsCode === 'number') {
+            crs = `EPSG:${crsCode}`;
+          } else if (typeof crsCode === 'string') {
+            crs = crsCode.includes('EPSG') ? crsCode : `EPSG:${crsCode}`;
+          } else if (typeof crsCode === 'bigint') {
+            crs = `EPSG:${crsCode}`;
+          }
+        }
+
+        return {
+          layerIndex:
+            typeof layer.layer_index === 'bigint'
+              ? Number(layer.layer_index)
+              : Number(layer.layer_index ?? 0),
+          layerName: layer.layer_name ?? null,
+          featureCount:
+            typeof layer.feature_count === 'bigint'
+              ? Number(layer.feature_count)
+              : Number(layer.feature_count ?? 0),
+          geometryType: layer.geom_type ?? null,
+          geometryColumn: layer.geom_name ?? null,
+          crs
+        } satisfies GeofileLayerMetadata;
+      });
+      const matchingRequestedLayer =
+        requestedLayer == null
+          ? null
+          : (parsedLayers.find((layer) => layer.layerName === requestedLayer) ??
+            null);
+      const selectedLayer =
+        matchingRequestedLayer ?? selectPreferredGeofileLayer(parsedLayers);
+
+      if (selectedLayer) {
+        return {
+          crs: selectedLayer.crs,
+          geometryColumn: selectedLayer.geometryColumn ?? INTERNAL_COLUMN.GEOM,
+          layerCount: parsedLayers.length,
+          selectedLayer: selectedLayer.layerName,
+          autoSelectedLayer:
+            matchingRequestedLayer == null && parsedLayers.length > 1
+        };
+      }
+    }
+
     const result = (await executeQuery(
       ctx.connection,
       `SELECT
@@ -105,7 +228,9 @@ async function detectGeofileMetadata(
           geomName && typeof geomName === 'string'
             ? geomName
             : INTERNAL_COLUMN.GEOM,
-        layerCount
+        layerCount,
+        selectedLayer: requestedLayer ?? null,
+        autoSelectedLayer: false
       };
     }
     return defaultResult;
@@ -131,6 +256,7 @@ export async function readGeofile(
   let { tablename } = options;
   const meta = options.meta ?? false;
   const shapefile = options.shapefile ?? false;
+  const requestedLayer = options.layer;
 
   try {
     await registerFiles(ctx.db, ctx.registered_files, [geofile], { shapefile });
@@ -156,13 +282,11 @@ export async function readGeofile(
       tablename = generateUniqueTableName(geofile.name, ctx.loaded_files);
     }
 
-    const geoMeta = await detectGeofileMetadata(ctx, geofileWithId.id);
-
-    if (geoMeta.layerCount > 1) {
-      throw new DuckDBError(
-        `Multiple layers found (${geoMeta.layerCount}) in file "${geofile.name}"`
-      );
-    }
+    const geoMeta = await detectGeofileMetadata(
+      ctx,
+      geofileWithId.id,
+      requestedLayer
+    );
 
     const geomCol = geoMeta.geometryColumn;
     const preservesSourceProjection = needsReprojection(geoMeta.crs);
@@ -170,13 +294,28 @@ export async function readGeofile(
     const finalTablename = tablename;
     const escapedFinalTable = escapeIdentifier(finalTablename);
     const escapedGeoFileId = escapeSqlString(geofileWithId.id);
+    const selectedLayerClause = geoMeta.selectedLayer
+      ? `, layer = '${escapeSqlString(geoMeta.selectedLayer)}'`
+      : '';
+
+    if (geoMeta.autoSelectedLayer && geoMeta.selectedLayer) {
+      logger.info(
+        'Auto-selected spatial layer from multi-layer geofile',
+        LogCategory.DUCKDB,
+        {
+          filename: geofile.name,
+          layerCount: geoMeta.layerCount,
+          selectedLayer: geoMeta.selectedLayer
+        }
+      );
+    }
 
     await runInTransaction(
       ctx.connection,
       async () => {
         await executeQuery(
           ctx.connection,
-          `CREATE OR REPLACE TABLE "${escapedFinalTable}" AS FROM ST_Read('${escapedGeoFileId}');`,
+          `CREATE OR REPLACE TABLE "${escapedFinalTable}" AS FROM ST_Read('${escapedGeoFileId}'${selectedLayerClause});`,
           { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
         );
         await addRowId(ctx.connection, finalTablename!);

@@ -22,6 +22,7 @@ import {
   extractZip,
   getShapefileFilesFromArchive
 } from '$lib/features/data-pipeline/utils/zip-handler';
+import { convertGeoPackageToGeoJsonFile } from './geopackage-browser-fallback';
 
 export interface BasemapImportResult {
   basemap: BasemapMetadata;
@@ -90,6 +91,31 @@ export async function processBasemapImport(
 
   if (isParquet) {
     return processParquetBasemapImport(duck, file, tableName);
+  }
+
+  if (lowerFileName.endsWith('.gpkg')) {
+    try {
+      return await processGeofileBasemapImport(duck, file, tableName);
+    } catch (error) {
+      logger.warn(
+        'DuckDB GeoPackage basemap import failed, trying browser fallback',
+        LogCategory.MAP,
+        {
+          fileName: file.name,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      );
+
+      await duck.query(
+        `DROP TABLE IF EXISTS "${escapeIdentifier(tableName)}"`,
+        {
+          format: 'arrow-ipc'
+        }
+      );
+
+      const fallbackGeoJsonFile = await convertGeoPackageToGeoJsonFile(file);
+      return processGeofileBasemapImport(duck, fallbackGeoJsonFile, tableName);
+    }
   }
 
   return processGeofileBasemapImport(duck, file, tableName);

@@ -117,6 +117,7 @@ export interface ReadGeofileOptions {
   tablename?: string;
   meta?: boolean;
   shapefile?: boolean;
+  layer?: string;
 }
 
 export interface ReadLinkOptions {

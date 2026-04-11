@@ -45,6 +45,9 @@ importers:
       '@math.gl/core':
         specifier: ^4.1.0
         version: 4.1.0
+      '@sqlite.org/sqlite-wasm':
+        specifier: 3.48.0-build4
+        version: 3.48.0-build4
       '@uwdata/flechette':
         specifier: ^2.3.0
         version: 2.3.0

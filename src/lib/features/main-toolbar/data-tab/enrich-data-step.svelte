@@ -39,6 +39,7 @@
   const fileHook = useEnrichmentFile();
   const basemapHook = useEnrichmentBasemap();
   const overlayBasemapEnabled = $derived(basemapHook.hasActiveSelection);
+  let overlayBasemapExpanded = $state(false);
 
   const enrichGeoDetection = $derived(fileHook.enrichmentDataset?.geoDetection);
 
@@ -144,6 +145,12 @@
     }
   });
 
+  $effect(() => {
+    if (overlayBasemapEnabled) {
+      overlayBasemapExpanded = true;
+    }
+  });
+
   const stepTitle = $derived.by(() => {
     const stepNumber = dataTabStore.getDisplayedStepNumber('enrich');
     const title = m.enrich_step_title();
@@ -222,9 +229,10 @@
       title={m.enrich_overlay_basemap_title()}
       description={m.enrich_overlay_basemap_description()}
       showToggle={true}
-      open={overlayBasemapEnabled}
-      toggleChecked={overlayBasemapEnabled}
+      open={overlayBasemapExpanded}
+      toggleChecked={overlayBasemapExpanded}
       onToggleChange={(checked) => {
+        overlayBasemapExpanded = checked;
         if (!checked) {
           basemapHook.clearSelectedBasemap();
           return;

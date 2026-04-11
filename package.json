@@ -127,6 +127,7 @@
     "@inlang/paraglide-js": "^2.15.1",
     "@luma.gl/core": "9.2.6",
     "@math.gl/core": "^4.1.0",
+    "@sqlite.org/sqlite-wasm": "3.48.0-build4",
     "@uwdata/flechette": "^2.3.0",
     "apache-arrow": "^21.1.0",
     "carbon-components-svelte": "^0.96.3",
