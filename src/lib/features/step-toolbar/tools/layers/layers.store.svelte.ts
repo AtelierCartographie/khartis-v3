@@ -207,7 +207,7 @@ function buildLayers(): Layer[] {
 
       const parentLayer: Layer = {
         id: viz.id,
-        name: viz.name,
+        name: `${m.viz_tab_label()} (${vizOrder + 1})`,
         visible: activeVisualizationIds.has(viz.id),
         type: 'visualization',
         color: getVisualizationColor(viz),

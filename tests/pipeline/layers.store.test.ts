@@ -65,6 +65,7 @@ vi.mock('$lib/paraglide/messages', () => ({
   symbols_title: () => 'Symbols',
   lines_title: () => 'Lines',
   polygons_title: () => 'Polygons',
+  viz_tab_label: () => 'Visualization',
   basemap_layer_terre: () => 'Land',
   basemap_layer_mers: () => 'Seas',
   basemap_layer_lacs: () => 'Lakes',

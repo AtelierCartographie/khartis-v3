@@ -208,11 +208,21 @@
     const dataset = selectedDataset;
     if (!dataset) return;
 
-    const visualization = visualizationStore.createVisualization(
-      resolveBlankVisualizationType(dataset),
-      dataset.id
-    );
-    manualBlankVisualizationId = visualization.id;
+    const targetViz = targetVisualization;
+    if (targetViz) {
+      visualizationStore.applyVisualizationPreset(
+        targetViz.id,
+        resolveBlankVisualizationType(dataset)
+      );
+      manualBlankVisualizationId = targetViz.id;
+    } else {
+      const visualization = visualizationStore.createVisualization(
+        resolveBlankVisualizationType(dataset),
+        dataset.id
+      );
+      manualBlankVisualizationId = visualization.id;
+    }
+
     selectedSuggestion = undefined;
     suggestionsExpanded = filteredSuggestions.length > 0 || suggestionsExpanded;
     onCreateVisualization?.();
