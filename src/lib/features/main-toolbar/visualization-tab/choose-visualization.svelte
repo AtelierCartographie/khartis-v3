@@ -137,6 +137,7 @@
     if (!col) return 'string';
     const type = String(col.type || '').toLowerCase();
     if (isNumericType(type)) return 'numeric';
+    if (type === 'boolean') return 'boolean';
     if (type === 'date' || type === 'timestamp') return 'date';
     return 'string';
   }

@@ -1114,6 +1114,7 @@
   "column_warning_label": "Data quality warning",
   "column_menu_options": "Options for column {column}",
   "column_type_badge_label": "{column} – {type}",
+  "column_type_boolean_tooltip": "Boolean column (true / false)",
   "column_type_numeric_tooltip": "Numeric column (integers or decimals)",
   "column_type_date_tooltip": "Date or time column",
   "column_type_text_tooltip": "Text column (strings)",

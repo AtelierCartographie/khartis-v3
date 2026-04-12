@@ -1114,6 +1114,7 @@
   "column_warning_label": "Alerte qualité des données",
   "column_menu_options": "Options de la colonne {column}",
   "column_type_badge_label": "{column} – {type}",
+  "column_type_boolean_tooltip": "Colonne booléenne (vrai / faux)",
   "column_type_numeric_tooltip": "Colonne numérique (entiers ou décimaux)",
   "column_type_date_tooltip": "Colonne de date ou d'heure",
   "column_type_text_tooltip": "Colonne de texte (chaînes de caractères)",

@@ -163,6 +163,7 @@
 
     const typeSimple = analysis?.type_simple;
     if (typeSimple === 'numeric') return 'numeric';
+    if (typeSimple === 'boolean') return 'boolean';
     if (typeSimple === 'date') return 'date';
     return 'string';
   });
@@ -170,6 +171,7 @@
   const typeTooltipMessage = $derived.by(() => {
     const typeSimple = analysis?.type_simple;
     if (typeSimple === 'numeric') return m.column_type_numeric_tooltip();
+    if (typeSimple === 'boolean') return m.column_type_boolean();
     if (typeSimple === 'date') return m.column_type_date_tooltip();
     if (typeSimple === 'string') return m.column_type_text_tooltip();
     return m.column_type_text_tooltip();

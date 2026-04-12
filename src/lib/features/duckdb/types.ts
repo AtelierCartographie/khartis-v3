@@ -8,6 +8,7 @@ export { FileType };
 
 export enum DuckDBSimplifiedType {
   NUMERIC = 'numeric',
+  BOOLEAN = 'boolean',
   DATE = 'date',
   STRING = 'string',
   GEOMETRY = 'geometry',
