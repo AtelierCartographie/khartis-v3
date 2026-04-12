@@ -370,9 +370,10 @@
   }
 
   .switch-label {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: var(--cds-text-secondary);
     font-weight: 400;
+    letter-spacing: 0.32px;
   }
 
   .divider {

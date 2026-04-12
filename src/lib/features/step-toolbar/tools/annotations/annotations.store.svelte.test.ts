@@ -73,7 +73,7 @@ describe('annotations store', () => {
     );
 
     expect(annotation).toBeDefined();
-    expect(annotation?.position).toEqual({ x: 48, y: 48 });
+    expect(annotation?.position).toEqual({ x: 24, y: 24 });
   });
 
   it('spawns the first image annotation clear of the left tool panel', () => {
@@ -87,7 +87,7 @@ describe('annotations store', () => {
     );
 
     expect(annotation).toBeDefined();
-    expect(annotation?.position).toEqual({ x: 144, y: 48 });
+    expect(annotation?.position).toEqual({ x: 72, y: 24 });
   });
 
   it('keeps zone drawings in progress until at least three points exist', () => {
