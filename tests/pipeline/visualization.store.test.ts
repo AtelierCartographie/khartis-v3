@@ -626,4 +626,104 @@ describe('visualizationStore suggestion presets', () => {
     );
     expect(mocks.legendItems[0]?.subtitle).toBe('NAME_LATN');
   });
+
+  it('tracks dataset-specific column usage across mappings, year filters and data filters', () => {
+    const visualization = visualizationStore.createVisualization(
+      VisualizationType.CHOROPLETH,
+      'dataset-id'
+    );
+
+    visualizationStore.updateVisualization(visualization.id, {
+      mapping: {
+        ...visualization.mapping,
+        valueColumn: 'AREA_TOT_2024',
+        labelColumn: 'NAME_LATN'
+      }
+    });
+    visualizationStore.setYearFilter(visualization.id, {
+      column: 'AREA_TOT_2024',
+      value: 2024
+    });
+    visualizationStore.addDataFilter(visualization.id, {
+      column: 'REGION_TYPE',
+      operator: 'equals',
+      value: 'urban'
+    });
+
+    expect(
+      visualizationStore
+        .getVisualizationsUsingColumn('dataset-id', 'AREA_TOT_2024')
+        .map((entry) => entry.id)
+    ).toContain(visualization.id);
+    expect(
+      visualizationStore
+        .getVisualizationsUsingColumn('dataset-id', 'REGION_TYPE')
+        .map((entry) => entry.id)
+    ).toContain(visualization.id);
+  });
+
+  it('rewrites and invalidates dataset column references after rename and deletion', () => {
+    const visualization = visualizationStore.createVisualization(
+      VisualizationType.CHOROPLETH,
+      'dataset-id'
+    );
+
+    visualizationStore.updateVisualization(visualization.id, {
+      mapping: {
+        ...visualization.mapping,
+        valueColumn: 'AREA_TOT_2024',
+        labelColumn: 'NAME_LATN'
+      },
+      classification: {
+        method: ClassificationMethod.QUANTILES,
+        classes: 5,
+        colors: ['#1', '#2', '#3', '#4', '#5']
+      },
+      dataFilters: [
+        {
+          id: 'filter-1',
+          column: 'REGION_TYPE',
+          operator: 'equals',
+          value: 'urban'
+        }
+      ],
+      yearFilter: {
+        column: 'AREA_TOT_2024',
+        value: 2024
+      }
+    });
+
+    visualizationStore.renameDatasetColumnReferences(
+      'dataset-id',
+      'AREA_TOT_2024',
+      'AREA_TOTAL'
+    );
+
+    expect(visualizationStore.selectedVisualization?.mapping.valueColumn).toBe(
+      'AREA_TOTAL'
+    );
+    expect(visualizationStore.selectedVisualization?.yearFilter?.column).toBe(
+      'AREA_TOTAL'
+    );
+
+    visualizationStore.removeDatasetColumnReferences(
+      'dataset-id',
+      'AREA_TOTAL'
+    );
+    visualizationStore.removeDatasetColumnReferences(
+      'dataset-id',
+      'REGION_TYPE'
+    );
+
+    expect(
+      visualizationStore.selectedVisualization?.mapping.valueColumn
+    ).toBeUndefined();
+    expect(
+      visualizationStore.selectedVisualization?.classification
+    ).toBeUndefined();
+    expect(
+      visualizationStore.selectedVisualization?.yearFilter
+    ).toBeUndefined();
+    expect(visualizationStore.selectedVisualization?.dataFilters).toEqual([]);
+  });
 });

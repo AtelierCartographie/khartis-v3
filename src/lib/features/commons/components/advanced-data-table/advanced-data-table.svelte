@@ -28,7 +28,8 @@
   import {
     DOM_UPDATE_DELAY_MS,
     TABLE_ROW_HEIGHT,
-    type ColumnType
+    type ColumnType,
+    type TableMutation
   } from './types';
 
   import TableColumnHeader from './components/table-column-header.svelte';
@@ -86,6 +87,7 @@
       order: 'ASC' | 'DESC' | null
     ) => void;
     onColumnDeleted?: (columnName: string) => void;
+    onTableMutation?: (mutation: TableMutation) => Promise<void> | void;
   }
 
   let {
@@ -105,7 +107,8 @@
     initialSortOrder = null,
     onSelectionChange,
     onSortChange,
-    onColumnDeleted
+    onColumnDeleted,
+    onTableMutation
   }: Props = $props();
 
   let histogramVisible = $state(true);
@@ -253,6 +256,11 @@
   );
 
   async function handleSort(column: string, order: 'ASC' | 'DESC') {
+    if (sort.sortColumn === column && sort.sortOrder === order) {
+      sort.clearSort();
+      return;
+    }
+
     sort.sortTable(column, order);
   }
 
@@ -260,6 +268,11 @@
     isLocalUpdate = true;
     try {
       await columnOps.handleRefine(columnName, operation);
+      await onTableMutation?.({
+        type: 'refine',
+        columnName,
+        operation
+      });
       await recordProjectTransformation('refine', columnName, operation);
     } catch (e) {
       isLocalUpdate = false;
@@ -283,6 +296,11 @@
     isLocalUpdate = true;
     try {
       await columnOps.handleChangeType(columnName, newType);
+      await onTableMutation?.({
+        type: 'type_change',
+        columnName,
+        newType
+      });
       await recordProjectTransformation(
         'type_change',
         columnName,
@@ -315,10 +333,11 @@
       await renameColumn(tableName, oldName, trimmedNewName, Duck);
       await tableData.loadColumnsInfo();
       await virtualScroll.initializeRows(virtualScroll.startIndex);
-
-      if (dataset?.id) {
-        datasetsStore.renameDatasetColumn(dataset.id, oldName, trimmedNewName);
-      }
+      await onTableMutation?.({
+        type: 'rename',
+        oldName,
+        newName: trimmedNewName
+      });
 
       recordTransformation(`Colonne renommée: ${oldName} → ${trimmedNewName}`);
 
@@ -358,6 +377,10 @@
     isLocalUpdate = true;
     try {
       await columnOps.handleDelete(deletedColumn);
+      await onTableMutation?.({
+        type: 'delete',
+        columnName: deletedColumn
+      });
       await recordProjectTransformation('drop', deletedColumn);
     } catch (err) {
       logger.error('Error deleting column', LogCategory.UI, err);

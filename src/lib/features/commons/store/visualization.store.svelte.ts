@@ -270,7 +270,19 @@ export interface VisualizationStore {
   selectVisualization: (id: string) => void;
   invertPalette: (id: string) => void;
   getVisualizationsByDataset: (datasetId: string) => VisualizationConfig[];
-  getVisualizationsUsingColumn: (columnName: string) => VisualizationConfig[];
+  getVisualizationsUsingColumn: (
+    datasetId: string,
+    columnName: string
+  ) => VisualizationConfig[];
+  renameDatasetColumnReferences: (
+    datasetId: string,
+    previousName: string,
+    nextName: string
+  ) => void;
+  removeDatasetColumnReferences: (
+    datasetId: string,
+    columnName: string
+  ) => void;
   setYearFilter: (id: string, filter: YearFilter | null) => void;
   addDataFilter: (id: string, filter: Omit<VizDataFilter, 'id'>) => void;
   removeDataFilter: (id: string, filterId: string) => void;
@@ -317,6 +329,25 @@ export const DEFAULT_CATEGORICAL_COLORS = [
   '#a65628',
   '#f781bf'
 ];
+
+const VISUALIZATION_MAPPING_KEYS = [
+  'valueColumn',
+  'categoryColumn',
+  'sizeColumn',
+  'colorColumn',
+  'geometryColumn',
+  'labelColumn',
+  'secondaryLabelColumn'
+] as const;
+
+const CLASSIFICATION_DEPENDENT_MAPPING_KEYS = new Set([
+  'valueColumn',
+  'categoryColumn',
+  'sizeColumn',
+  'colorColumn'
+]);
+
+type VisualizationMappingKey = (typeof VISUALIZATION_MAPPING_KEYS)[number];
 
 type GeometryFamily = 'point' | 'line' | 'polygon' | 'unknown';
 
@@ -1031,17 +1062,159 @@ function createVisualizationStore(): VisualizationStore {
   }
 
   function getVisualizationsUsingColumn(
+    datasetId: string,
     columnName: string
   ): VisualizationConfig[] {
     return state.visualizations.filter((visualization) => {
+      if (visualization.datasetId !== datasetId) {
+        return false;
+      }
+
       const mapping = visualization.mapping;
       return (
         mapping.valueColumn === columnName ||
         mapping.categoryColumn === columnName ||
         mapping.sizeColumn === columnName ||
-        mapping.colorColumn === columnName
+        mapping.colorColumn === columnName ||
+        mapping.geometryColumn === columnName ||
+        mapping.labelColumn === columnName ||
+        mapping.secondaryLabelColumn === columnName ||
+        visualization.yearFilter?.column === columnName ||
+        (visualization.dataFilters ?? []).some(
+          (filter) => filter.column === columnName
+        )
       );
     });
+  }
+
+  function renameDatasetColumnReferences(
+    datasetId: string,
+    previousName: string,
+    nextName: string
+  ): void {
+    if (!previousName || !nextName || previousName === nextName) {
+      return;
+    }
+
+    let hasChanges = false;
+
+    state.visualizations = state.visualizations.map((visualization) => {
+      if (visualization.datasetId !== datasetId) {
+        return visualization;
+      }
+
+      let mutated = false;
+      const nextMapping = { ...visualization.mapping };
+      for (const key of VISUALIZATION_MAPPING_KEYS) {
+        if (nextMapping[key as VisualizationMappingKey] === previousName) {
+          nextMapping[key as VisualizationMappingKey] = nextName;
+          mutated = true;
+        }
+      }
+
+      const nextYearFilter =
+        visualization.yearFilter?.column === previousName
+          ? { ...visualization.yearFilter, column: nextName }
+          : visualization.yearFilter;
+      if (nextYearFilter !== visualization.yearFilter) {
+        mutated = true;
+      }
+
+      const previousDataFilters = visualization.dataFilters ?? [];
+      const nextDataFilters = previousDataFilters.map((filter) =>
+        filter.column === previousName
+          ? { ...filter, column: nextName }
+          : filter
+      );
+      if (
+        nextDataFilters.some(
+          (filter, index) => filter !== previousDataFilters[index]
+        )
+      ) {
+        mutated = true;
+      }
+
+      if (!mutated) {
+        return visualization;
+      }
+
+      hasChanges = true;
+      return getNormalizedVisualization({
+        ...visualization,
+        mapping: nextMapping,
+        yearFilter: nextYearFilter,
+        dataFilters: nextDataFilters
+      });
+    });
+
+    if (hasChanges) {
+      incrementVersion(state);
+    }
+  }
+
+  function removeDatasetColumnReferences(
+    datasetId: string,
+    columnName: string
+  ): void {
+    if (!columnName) {
+      return;
+    }
+
+    let hasChanges = false;
+
+    state.visualizations = state.visualizations.map((visualization) => {
+      if (visualization.datasetId !== datasetId) {
+        return visualization;
+      }
+
+      let mutated = false;
+      let shouldClearClassification = false;
+      const nextMapping = { ...visualization.mapping };
+      for (const key of VISUALIZATION_MAPPING_KEYS) {
+        if (nextMapping[key as VisualizationMappingKey] === columnName) {
+          nextMapping[key as VisualizationMappingKey] = undefined;
+          mutated = true;
+          if (CLASSIFICATION_DEPENDENT_MAPPING_KEYS.has(key)) {
+            shouldClearClassification = true;
+          }
+        }
+      }
+
+      const nextYearFilter =
+        visualization.yearFilter?.column === columnName
+          ? undefined
+          : visualization.yearFilter;
+      if (nextYearFilter !== visualization.yearFilter) {
+        mutated = true;
+      }
+
+      const previousDataFilters = visualization.dataFilters ?? [];
+      const nextDataFilters = previousDataFilters.filter(
+        (filter) => filter.column !== columnName
+      );
+      if (nextDataFilters.length !== previousDataFilters.length) {
+        mutated = true;
+      }
+
+      if (!mutated) {
+        return visualization;
+      }
+
+      hasChanges = true;
+      return getNormalizedVisualization({
+        ...visualization,
+        mapping: nextMapping,
+        classification: shouldClearClassification
+          ? undefined
+          : visualization.classification,
+        yearFilter: nextYearFilter,
+        dataFilters: nextDataFilters
+      });
+    });
+
+    if (hasChanges) {
+      incrementVersion(state);
+    }
   }
 
   function setYearFilter(id: string, filter: YearFilter | null): void {
@@ -1151,6 +1324,8 @@ function createVisualizationStore(): VisualizationStore {
     invertPalette,
     getVisualizationsByDataset,
     getVisualizationsUsingColumn,
+    renameDatasetColumnReferences,
+    removeDatasetColumnReferences,
     setYearFilter,
     addDataFilter,
     removeDataFilter,

@@ -265,6 +265,13 @@
         formula
       );
 
+      if (selectedDataset?.id) {
+        datasetsStore.recordTransformation(
+          selectedDataset.id,
+          `Calculated column created: ${effectiveName}`
+        );
+      }
+
       if (selectedDataset?.sourceFileId) {
         await projectStore.addColumnTransformation(
           selectedDataset.sourceFileId,
