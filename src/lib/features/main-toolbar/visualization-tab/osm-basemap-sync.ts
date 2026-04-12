@@ -1,6 +1,11 @@
 import { isOSMBasemap } from '$lib/features/map/services/osm-tile.service';
 import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
-import type { ProjectData } from '$lib/features/project-management';
+
+interface PersistedBasemapLike {
+  id: string;
+  type: string;
+  data?: unknown;
+}
 
 interface BasemapLookup {
   getBasemapById: (id: string) => BasemapMetadata | null | undefined;
@@ -35,7 +40,7 @@ function isProjectOSMBasemapData(value: unknown): value is BasemapMetadata {
 }
 
 export function syncProjectOSMBasemap(
-  basemap: ProjectData['basemap'] | undefined,
+  basemap: PersistedBasemapLike | undefined,
   basemapLookup: BasemapLookup,
   osmState: OSMBasemapState
 ): void {

@@ -14,6 +14,7 @@
   import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
   import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
 
+  import { Duck } from '$lib/features/duckdb';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { DEFAULT_OSM_STYLE } from '$lib/features/map/constants';
   import {
@@ -43,12 +44,20 @@
   import { InfoPopover } from '../visualization-tab/components/shared';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import { dataTabStore } from './data-tab.store.svelte';
+  import { shouldAutoSelectSuggestedBasemap } from './services/basemap-auto-selection';
   import {
     getDatasetIdentity,
     shouldResetJoinState
   } from './services/dataset-identity';
+  import {
+    resolveRelevantPersistedBasemap,
+    restorePersistedBasemapSelection,
+    resolveBasemapSource,
+    type PersistedProjectBasemap
+  } from './services/persisted-basemap';
   import { resolveNextBasemapSelectionId } from './services/basemap-selection';
   import { resolveDatasetIdForOrchestrator } from './services/dataset-resolution';
+  import { persistTabularSourceSnapshot } from './services/tabular-source-snapshot';
   import { hasBlockingJoinIssues } from './services/join-validation';
 
   const OSM_TAB_INDEX = 2;
@@ -104,6 +113,19 @@
 
   const allBasemaps = $derived(basemapCatalogService.catalogBasemaps);
   const allBasemapsForLookup = $derived(basemapCatalogService.basemaps);
+  const runtimePersistedBasemap = $derived.by(() =>
+    resolveRelevantPersistedBasemap({
+      selectedDataset,
+      sourceFiles: projectStore.currentProject?.data?.sourceFiles,
+      projectBasemap:
+        (projectStore.currentProject?.data?.basemap as
+          | PersistedProjectBasemap
+          | undefined) ?? undefined,
+      selectedBasemapId: basemapSelected,
+      selectedBasemapSource: dataTabState.basemapJoin.basemapSource,
+      hasMultipleDatasets: datasetsStore.datasets.length > 1
+    })
+  );
 
   let importFiles = $state<File[]>([]);
   let importUploading = $state(false);
@@ -228,6 +250,30 @@
       });
   }
 
+  async function persistTextualJoinSnapshot(
+    joinState: {
+      joinedBasemap?: string;
+      geoColumn?: string;
+      gpsMode?: boolean;
+      gpsColumns?: { lat: string; lon: string };
+    } = {}
+  ) {
+    if (!selectedDataset?.sourceFileId || !selectedDataset.tableName || !Duck) {
+      return;
+    }
+
+    const duckColumns = await Duck.analyse(selectedDataset.tableName, {
+      force: true
+    });
+
+    await persistTabularSourceSnapshot({
+      sourceFileId: selectedDataset.sourceFileId,
+      tableName: selectedDataset.tableName,
+      duckColumns,
+      joinState
+    });
+  }
+
   async function computeAndAutoFinalizeJoin(
     basemap: BasemapMetadata,
     abortSignal: AbortSignal,
@@ -282,6 +328,12 @@
             basemap,
             linkedVariableName
           );
+          await persistTextualJoinSnapshot({
+            joinedBasemap: basemap.file,
+            geoColumn: linkedVariableName,
+            gpsMode: false,
+            gpsColumns: undefined
+          });
           dataTabStore.markStepComplete(basemapStepIndex);
         } catch (finalizeError) {
           if (isDatasetNotFoundError(finalizeError)) {
@@ -340,7 +392,10 @@
     dataTabActions.clearJoinStats();
     basemapAttributeValues = [];
     dataTabStore.resetStepCompletion(basemapStepIndex);
-    dataTabActions.selectBasemap(basemap.file);
+    dataTabActions.setBasemapJoinState({
+      selectedBasemap: basemap.file,
+      basemapSource: BasemapSource.CATALOG
+    });
     basemapStyleStore.setReferenceBasemap(basemap.file);
 
     projectStore.updateProjectData({
@@ -400,7 +455,10 @@
     osmBasemapStore.clear();
     dataTabActions.clearJoinStats();
     basemapAttributeValues = [];
-    dataTabActions.selectBasemap('');
+    dataTabActions.setBasemapJoinState({
+      selectedBasemap: '',
+      basemapSource: tabIndexToBasemapSource(activeTabIndex)
+    });
     basemapStyleStore.setReferenceBasemap(null);
     dataTabStore.resetStepCompletion(basemapStepIndex);
     projectStore.updateProjectData({ basemap: undefined });
@@ -449,8 +507,12 @@
       if (abortSignal.aborted) return;
 
       basemapCatalogService.addCustomBasemap(customBasemap);
+      hasDismissedSuggestedBasemap = false;
       osmBasemapStore.clear();
-      dataTabActions.selectBasemap(customBasemap.file);
+      dataTabActions.setBasemapJoinState({
+        selectedBasemap: customBasemap.file,
+        basemapSource: BasemapSource.IMPORT
+      });
       await basemapService.registerCustomBasemap(customBasemap, geometryTable);
       basemapStyleStore.setReferenceBasemap(customBasemap.file);
       importedBasemap = customBasemap;
@@ -526,9 +588,13 @@
 
     const osmBasemap = createOSMBasemap(DEFAULT_OSM_STYLE);
 
+    hasDismissedSuggestedBasemap = false;
     basemapCatalogService.addCustomBasemap(osmBasemap);
     osmBasemapStore.setOSMBasemap(osmBasemap);
-    dataTabActions.selectBasemap(osmBasemap.file);
+    dataTabActions.setBasemapJoinState({
+      selectedBasemap: osmBasemap.file,
+      basemapSource: BasemapSource.OSM
+    });
     basemapStyleStore.setReferenceBasemap(null);
 
     projectStore.updateProjectData({
@@ -593,6 +659,12 @@
         dataTabState.geolocation.linkedVariableName,
         corrections
       );
+      await persistTextualJoinSnapshot({
+        joinedBasemap: basemapSelected || undefined,
+        geoColumn: dataTabState.geolocation.linkedVariableName,
+        gpsMode: false,
+        gpsColumns: undefined
+      });
 
       if (abortSignal.aborted) return;
 
@@ -644,6 +716,12 @@
           basemap,
           dataTabState.geolocation.linkedVariableName
         );
+        await persistTextualJoinSnapshot({
+          joinedBasemap: basemap.file,
+          geoColumn: dataTabState.geolocation.linkedVariableName,
+          gpsMode: false,
+          gpsColumns: undefined
+        });
         dataTabStore.markStepComplete(basemapStepIndex);
         logger.success(
           'Corrections applied and join finalized',
@@ -685,6 +763,12 @@
         dataTabState.geolocation.linkedVariableName,
         corrections
       );
+      await persistTextualJoinSnapshot({
+        joinedBasemap: basemapSelected || undefined,
+        geoColumn: dataTabState.geolocation.linkedVariableName,
+        gpsMode: false,
+        gpsColumns: undefined
+      });
 
       if (abortSignal.aborted) return;
 
@@ -716,6 +800,12 @@
             basemap,
             dataTabState.geolocation.linkedVariableName
           );
+          await persistTextualJoinSnapshot({
+            joinedBasemap: basemap.file,
+            geoColumn: dataTabState.geolocation.linkedVariableName,
+            gpsMode: false,
+            gpsColumns: undefined
+          });
           dataTabStore.markStepComplete(basemapStepIndex);
           logger.success(
             'Manual correction applied and join finalized',
@@ -785,6 +875,12 @@
         basemap,
         dataTabState.geolocation.linkedVariableName
       );
+      await persistTextualJoinSnapshot({
+        joinedBasemap: basemap.file,
+        geoColumn: dataTabState.geolocation.linkedVariableName,
+        gpsMode: false,
+        gpsColumns: undefined
+      });
 
       dataTabStore.markStepComplete(basemapStepIndex);
 
@@ -929,13 +1025,18 @@
       suggestionsDatasetIdentity = currentDatasetIdentity;
 
       if (
-        suggestions.length > 0 &&
-        !osmBasemapStore.isActive &&
-        !selectedDataset?.geometry &&
-        !projectStore.currentProject?.data?.basemap?.id &&
-        (isDatasetChanged ||
-          !dataTabState.basemapJoin.selectedBasemap ||
-          !hasAvailableBasemap(dataTabState.basemapJoin.selectedBasemap))
+        shouldAutoSelectSuggestedBasemap({
+          hasDismissedSuggestedBasemap,
+          suggestionCount: suggestions.length,
+          isOSMActive: osmBasemapStore.isActive,
+          hasDatasetGeometry: Boolean(selectedDataset?.geometry),
+          persistedBasemapId: runtimePersistedBasemap?.id,
+          selectedBasemapId: dataTabState.basemapJoin.selectedBasemap,
+          hasSelectedAvailableBasemap: hasAvailableBasemap(
+            dataTabState.basemapJoin.selectedBasemap
+          ),
+          shouldRetryForDatasetChange: isDatasetChanged
+        })
       ) {
         await autoSelectFirstSuggestedBasemap();
       }
@@ -962,28 +1063,12 @@
         await loadSuggestions();
         if (controller.signal.aborted) return;
 
-        const savedBasemap = projectStore.currentProject?.data?.basemap;
+        const savedBasemap = runtimePersistedBasemap;
         if (savedBasemap?.id) {
-          dataTabActions.selectBasemap(savedBasemap.id);
-          basemapStyleStore.setReferenceBasemap(
-            savedBasemap.type === 'osm' ? null : savedBasemap.id
+          await restorePersistedBasemapSelection(savedBasemap);
+          activeTabIndex = basemapSourceToTabIndex(
+            resolveBasemapSource(savedBasemap.type)
           );
-
-          if (
-            (savedBasemap.type === 'custom' || savedBasemap.type === 'osm') &&
-            savedBasemap.data
-          ) {
-            const customBasemapData =
-              savedBasemap.data as unknown as BasemapMetadata;
-            basemapCatalogService.addCustomBasemap(customBasemapData);
-            if (savedBasemap.type === 'custom') {
-              basemapService.registerCustomBasemapMetadata(customBasemapData);
-            }
-
-            if (savedBasemap.type === 'osm') {
-              osmBasemapStore.setOSMBasemap(customBasemapData);
-            }
-          }
 
           if (!selectedDataset || !datasetIdForOrchestrator) return;
 
@@ -1108,12 +1193,15 @@
     void basemapSelected;
 
     if (
-      !hasDismissedSuggestedBasemap &&
-      basemapSuggestions.length > 0 &&
-      !osmBasemapStore.isActive &&
-      !selectedDataset?.geometry &&
-      !projectStore.currentProject?.data?.basemap?.id &&
-      (!basemapSelected || !hasAvailableBasemap(basemapSelected))
+      shouldAutoSelectSuggestedBasemap({
+        hasDismissedSuggestedBasemap,
+        suggestionCount: basemapSuggestions.length,
+        isOSMActive: osmBasemapStore.isActive,
+        hasDatasetGeometry: Boolean(selectedDataset?.geometry),
+        persistedBasemapId: runtimePersistedBasemap?.id,
+        selectedBasemapId: basemapSelected,
+        hasSelectedAvailableBasemap: hasAvailableBasemap(basemapSelected)
+      })
     ) {
       void autoSelectFirstSuggestedBasemap();
     }
