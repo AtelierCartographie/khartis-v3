@@ -22,6 +22,7 @@
     type GPSValidationResult
   } from '$lib/features/duckdb';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
+  import { detectGPSColumns } from '$lib/features/duckdb/orchestrator/gps-ops';
   import {
     basemapCatalogService,
     rankBasemapsByJoinSynthesis
@@ -171,6 +172,7 @@
       (colAnalysis.semioScore ?? 0) >= GEOID_SCORE_THRESHOLD;
     if (isGeoid) return 'geo-ref';
     if (colAnalysis.type_simple === 'numeric') return 'numeric';
+    if (colAnalysis.type_simple === 'boolean') return 'boolean';
     if (colAnalysis.type_simple === 'date') return 'date';
     return 'string';
   }
@@ -194,20 +196,30 @@
   });
 
   const latitudeColumns = $derived(() => {
+    const fallbackCoordinates = detectGPSColumns(columnAnalysis, geoDetection);
+
     return dataFieldItems().filter((item) => {
       const geoCol = geoDetection?.geoColumns.find(
         (gc) => gc.columnName === item.columnName
       );
-      return geoCol?.type === 'latitude';
+      return (
+        geoCol?.type === 'latitude' ||
+        fallbackCoordinates?.lat === item.columnName
+      );
     });
   });
 
   const longitudeColumns = $derived(() => {
+    const fallbackCoordinates = detectGPSColumns(columnAnalysis, geoDetection);
+
     return dataFieldItems().filter((item) => {
       const geoCol = geoDetection?.geoColumns.find(
         (gc) => gc.columnName === item.columnName
       );
-      return geoCol?.type === 'longitude';
+      return (
+        geoCol?.type === 'longitude' ||
+        fallbackCoordinates?.lon === item.columnName
+      );
     });
   });
 
@@ -297,14 +309,15 @@
   });
 
   $effect(() => {
-    if (!geoDetection?.hasGeoColumns) {
+    const fallbackCoordinates = detectGPSColumns(columnAnalysis, geoDetection);
+    const hasLatLon = Boolean(
+      fallbackCoordinates?.lat && fallbackCoordinates?.lon
+    );
+
+    if (!geoDetection?.hasGeoColumns && !hasLatLon) {
       hasAutoGeoreferenceInitialization = false;
       return;
     }
-
-    const hasLatLon =
-      geoDetection.geoColumns.some((gc) => gc.type === 'latitude') &&
-      geoDetection.geoColumns.some((gc) => gc.type === 'longitude');
 
     if (
       !hasAutoGeoreferenceInitialization &&
@@ -321,7 +334,10 @@
 
     if (hasLatLon) {
       if (latitudeColumns().length > 0 && latitudeFieldId === undefined) {
-        const col = latitudeColumns()[0];
+        const col =
+          latitudeColumns().find(
+            (item) => item.columnName === fallbackCoordinates?.lat
+          ) ?? latitudeColumns()[0];
         latitudeFieldId = col.id;
         dataTabActions.setGeolocationState({
           latitudeColumn: col.columnName
@@ -329,7 +345,10 @@
       }
 
       if (longitudeColumns().length > 0 && longitudeFieldId === undefined) {
-        const col = longitudeColumns()[0];
+        const col =
+          longitudeColumns().find(
+            (item) => item.columnName === fallbackCoordinates?.lon
+          ) ?? longitudeColumns()[0];
         longitudeFieldId = col.id;
         dataTabActions.setGeolocationState({
           longitudeColumn: col.columnName
