@@ -1,11 +1,8 @@
-export interface TooltipAnchor {
-  x: number;
-  y: number;
-}
-
-export interface TooltipViewportOrigin {
+export interface TooltipViewerRect {
   left: number;
   top: number;
+  width: number;
+  height: number;
 }
 
 export interface TooltipSize {
@@ -19,13 +16,11 @@ export interface TooltipViewportSize {
 }
 
 export interface ResolveTooltipViewportPositionParams {
-  anchor: TooltipAnchor;
-  viewportOrigin?: TooltipViewportOrigin | null;
+  viewerRect?: TooltipViewerRect | null;
   tooltipSize: TooltipSize;
   viewportSize: TooltipViewportSize;
-  offsetX: number;
-  offsetY: number;
   padding: number;
+  gap: number;
 }
 
 export interface TooltipViewportPosition {
@@ -33,31 +28,32 @@ export interface TooltipViewportPosition {
   top: number;
 }
 
+function clamp(value: number, min: number, max: number): number {
+  if (max < min) {
+    return min;
+  }
+
+  return Math.min(Math.max(value, min), max);
+}
+
 export function resolveTooltipViewportPosition({
-  anchor,
-  viewportOrigin,
+  viewerRect,
   tooltipSize,
   viewportSize,
-  offsetX,
-  offsetY,
-  padding
+  padding,
+  gap
 }: ResolveTooltipViewportPositionParams): TooltipViewportPosition {
-  const originLeft = viewportOrigin?.left ?? 0;
-  const originTop = viewportOrigin?.top ?? 0;
+  const preferredLeft = (viewerRect?.left ?? 0) + padding;
+  const maxLeft = viewportSize.width - padding - tooltipSize.width;
+  const left = clamp(preferredLeft, padding, maxLeft);
 
-  let left = originLeft + anchor.x + offsetX;
-  let top = originTop + anchor.y + offsetY;
+  const topAboveViewer =
+    (viewerRect?.top ?? padding) - tooltipSize.height - gap;
+  const maxTop = viewportSize.height - padding - tooltipSize.height;
+  const top =
+    topAboveViewer >= padding
+      ? topAboveViewer
+      : clamp((viewerRect?.top ?? 0) + padding, padding, maxTop);
 
-  if (left + tooltipSize.width > viewportSize.width - padding) {
-    left = originLeft + anchor.x - tooltipSize.width - offsetX;
-  }
-
-  if (top + tooltipSize.height > viewportSize.height - padding) {
-    top = originTop + anchor.y - tooltipSize.height - offsetY;
-  }
-
-  return {
-    left: Math.max(padding, left),
-    top: Math.max(padding, top)
-  };
+  return { left, top };
 }

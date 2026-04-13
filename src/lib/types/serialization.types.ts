@@ -59,6 +59,7 @@ export interface SerializedBasemapSettings {
   layers: BasemapLayerConfig[];
   style: BasemapStyle;
   mapProjection: MapProjectionType;
+  lastSelectedTiledStyle?: BasemapStyle | null;
   referenceBasemapId?: string | null;
   showLabels?: boolean;
   groupVisibility?: Record<string, boolean>;

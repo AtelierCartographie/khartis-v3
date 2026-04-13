@@ -8,6 +8,7 @@
     ClassificationMethod,
     DEFAULT_CATEGORICAL_COLORS,
     PrimitiveFilterType,
+    resolveAllowedPrimitiveFilters,
     type VisualizationConfig,
     type VisualizationModes,
     type PrimitiveFilter,
@@ -26,6 +27,10 @@
     PALETTE_TYPE
   } from './components/palette-popover/palette.constants';
   import { getColorBlindnessState } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
+  import {
+    getLegendState,
+    legendActions
+  } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
   import {
     normalizeClassificationMethod,
     resolveComputedClassCount,
@@ -88,15 +93,15 @@
   }
 
   const dataFieldItems = $derived.by(() => {
-    const dataset = datasetsStore.selectedDataset;
+    const dataset = getSelectedDataset() ?? datasetsStore.selectedDataset;
     if (!dataset?.columns) return [];
     return dataset.columns
       .filter((col) => col.type !== COLUMN_TYPE_GEOMETRY)
-      .map((col, id) => ({ id, text: col.name }));
+      .map((col, id) => ({ id, text: col.name, type: col.type }));
   });
 
   const hasGeometry = $derived.by(() => {
-    const dataset = datasetsStore.selectedDataset;
+    const dataset = getSelectedDataset() ?? datasetsStore.selectedDataset;
     if (!dataset?.columns) return false;
     return (
       Boolean(dataset.geometry) ||
@@ -115,6 +120,25 @@
       ) ?? null
     );
   }
+
+  const availablePrimitiveFilters = $derived.by(() => {
+    const dataset = getSelectedDataset();
+    if (!selectedViz || !dataset) {
+      return ALL_PRIMITIVE_FILTERS;
+    }
+
+    return resolveAllowedPrimitiveFilters(selectedViz.type, dataset);
+  });
+
+  const showsSymbolsConfig = $derived(
+    availablePrimitiveFilters.includes(PrimitiveFilterType.POINT)
+  );
+  const showsPolygonsConfig = $derived(
+    availablePrimitiveFilters.includes(PrimitiveFilterType.POLYGON)
+  );
+  const showsLinesConfig = $derived(
+    availablePrimitiveFilters.includes(PrimitiveFilterType.LINE)
+  );
 
   function resolveMappingDefaults(
     nextModes: VisualizationModes,
@@ -279,9 +303,47 @@
     updates: Partial<VisualizationConfig['mapping']>
   ) {
     if (selectedViz?.id) {
+      const previousAutoSubtitle =
+        selectedViz.mapping.valueColumn ??
+        selectedViz.mapping.sizeColumn ??
+        selectedViz.mapping.categoryColumn ??
+        selectedViz.mapping.colorColumn ??
+        '';
+
       visualizationStore.updateVisualization(selectedViz.id, {
         mapping: { ...selectedViz.mapping, ...updates }
       });
+
+      const legendItem = getLegendState().items.find(
+        (item) => item.variableId === selectedViz.id
+      );
+      const updatedVisualization = visualizationStore.visualizations.find(
+        (item) => item.id === selectedViz.id
+      );
+      const nextAutoSubtitle =
+        updatedVisualization?.mapping.valueColumn ??
+        updatedVisualization?.mapping.sizeColumn ??
+        updatedVisualization?.mapping.categoryColumn ??
+        updatedVisualization?.mapping.colorColumn ??
+        '';
+      const usesAutomaticSubtitle =
+        legendItem?.subtitleMode === 'auto' ||
+        (!legendItem?.subtitleMode &&
+          (!legendItem?.subtitle ||
+            legendItem.subtitle === previousAutoSubtitle));
+
+      if (
+        legendItem &&
+        updatedVisualization &&
+        usesAutomaticSubtitle &&
+        legendItem.subtitle !== nextAutoSubtitle
+      ) {
+        legendActions.updateLegendItem(legendItem.id, {
+          subtitle: nextAutoSubtitle,
+          subtitleMode: 'auto'
+        });
+      }
+
       if (updates.valueColumn) {
         computeBreaksForVisualization('mapping:valueColumn');
       }
@@ -685,60 +747,66 @@
   </div>
 
   <div class="config-accordion">
-    <SymbolsConfig
-      dataFields={dataFieldItems}
-      visualization={selectedViz}
-      filters={getFiltersForPrimitive(PrimitiveFilterType.POINT)}
-      onStyleChange={handleStyleChange}
-      onModesChange={handleModesChange}
-      onSymbolsChange={handleSymbolsChange}
-      onMappingChange={handleMappingChange}
-      onMissingDataChange={handleMissingDataChange}
-      onClassificationChange={handleClassificationChange}
-      onInvertPalette={handleInvertPalette}
-      onToggleVisibility={(checked) =>
-        handlePrimitiveVisibilityChange(PrimitiveFilterType.POINT, checked)}
-      onAddFilter={(f) => handleAddDataFilter(f, PrimitiveFilterType.POINT)}
-      onRemoveFilter={handleRemoveDataFilter}
-      onClearFilters={() =>
-        handleClearDataFiltersForPrimitive(PrimitiveFilterType.POINT)}
-    />
+    {#if showsSymbolsConfig}
+      <SymbolsConfig
+        dataFields={dataFieldItems}
+        visualization={selectedViz}
+        filters={getFiltersForPrimitive(PrimitiveFilterType.POINT)}
+        onStyleChange={handleStyleChange}
+        onModesChange={handleModesChange}
+        onSymbolsChange={handleSymbolsChange}
+        onMappingChange={handleMappingChange}
+        onMissingDataChange={handleMissingDataChange}
+        onClassificationChange={handleClassificationChange}
+        onInvertPalette={handleInvertPalette}
+        onToggleVisibility={(checked) =>
+          handlePrimitiveVisibilityChange(PrimitiveFilterType.POINT, checked)}
+        onAddFilter={(f) => handleAddDataFilter(f, PrimitiveFilterType.POINT)}
+        onRemoveFilter={handleRemoveDataFilter}
+        onClearFilters={() =>
+          handleClearDataFiltersForPrimitive(PrimitiveFilterType.POINT)}
+      />
+    {/if}
 
-    <PolygonsConfig
-      dataFields={dataFieldItems}
-      visualization={selectedViz}
-      filters={getFiltersForPrimitive(PrimitiveFilterType.POLYGON)}
-      onStyleChange={handleStyleChange}
-      onModesChange={handleModesChange}
-      onMissingDataChange={handleMissingDataChange}
-      onClassificationChange={handleClassificationChange}
-      onMappingChange={handleMappingChange}
-      onInvertPalette={handleInvertPalette}
-      onToggleVisibility={(checked) =>
-        handlePrimitiveVisibilityChange(PrimitiveFilterType.POLYGON, checked)}
-      onAddFilter={(f) => handleAddDataFilter(f, PrimitiveFilterType.POLYGON)}
-      onRemoveFilter={handleRemoveDataFilter}
-      onClearFilters={() =>
-        handleClearDataFiltersForPrimitive(PrimitiveFilterType.POLYGON)}
-    />
+    {#if showsPolygonsConfig}
+      <PolygonsConfig
+        dataFields={dataFieldItems}
+        visualization={selectedViz}
+        filters={getFiltersForPrimitive(PrimitiveFilterType.POLYGON)}
+        onStyleChange={handleStyleChange}
+        onModesChange={handleModesChange}
+        onMissingDataChange={handleMissingDataChange}
+        onClassificationChange={handleClassificationChange}
+        onMappingChange={handleMappingChange}
+        onInvertPalette={handleInvertPalette}
+        onToggleVisibility={(checked) =>
+          handlePrimitiveVisibilityChange(PrimitiveFilterType.POLYGON, checked)}
+        onAddFilter={(f) => handleAddDataFilter(f, PrimitiveFilterType.POLYGON)}
+        onRemoveFilter={handleRemoveDataFilter}
+        onClearFilters={() =>
+          handleClearDataFiltersForPrimitive(PrimitiveFilterType.POLYGON)}
+      />
+    {/if}
 
-    <LinesConfig
-      dataFields={dataFieldItems}
-      visualization={selectedViz}
-      filters={getFiltersForPrimitive(PrimitiveFilterType.LINE)}
-      onStyleChange={handleStyleChange}
-      onModesChange={handleModesChange}
-      onMissingDataChange={handleMissingDataChange}
-      onClassificationChange={handleClassificationChange}
-      onMappingChange={handleMappingChange}
-      onInvertPalette={handleInvertPalette}
-      onToggleVisibility={(checked) =>
-        handlePrimitiveVisibilityChange(PrimitiveFilterType.LINE, checked)}
-      onAddFilter={(f) => handleAddDataFilter(f, PrimitiveFilterType.LINE)}
-      onRemoveFilter={handleRemoveDataFilter}
-      onClearFilters={() =>
-        handleClearDataFiltersForPrimitive(PrimitiveFilterType.LINE)}
-    />
+    {#if showsLinesConfig}
+      <LinesConfig
+        dataFields={dataFieldItems}
+        visualization={selectedViz}
+        filters={getFiltersForPrimitive(PrimitiveFilterType.LINE)}
+        onStyleChange={handleStyleChange}
+        onModesChange={handleModesChange}
+        onMissingDataChange={handleMissingDataChange}
+        onClassificationChange={handleClassificationChange}
+        onMappingChange={handleMappingChange}
+        onInvertPalette={handleInvertPalette}
+        onToggleVisibility={(checked) =>
+          handlePrimitiveVisibilityChange(PrimitiveFilterType.LINE, checked)}
+        onAddFilter={(f) => handleAddDataFilter(f, PrimitiveFilterType.LINE)}
+        onRemoveFilter={handleRemoveDataFilter}
+        onClearFilters={() =>
+          handleClearDataFiltersForPrimitive(PrimitiveFilterType.LINE)}
+      />
+    {/if}
 
     <LabelsConfig
       dataFields={dataFieldItems}

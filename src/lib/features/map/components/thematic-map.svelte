@@ -2,9 +2,15 @@
   import 'maplibre-gl/dist/maplibre-gl.css';
   import type { Table as ArrowTable } from 'apache-arrow/Arrow';
   import { SkeletonPlaceholder } from 'carbon-components-svelte';
+  import type { LngLatBoundsLike } from 'maplibre-gl';
   import { onMount, untrack } from 'svelte';
   import { fade } from 'svelte/transition';
   import { basemapStyleStore } from '../../commons/store/basemap-style.store.svelte';
+  import {
+    BasemapStyle,
+    getBasemapViewportPreset,
+    getBasemapZone
+  } from '../constants/basemap-styles';
   import { hslToHex } from '../../commons/utils/color-utils';
   import { LogCategory, logger } from '../../commons/utils/logger';
   import { mapInstanceStore } from '../../commons/store/map-instance.store.svelte';
@@ -52,14 +58,11 @@
   import { buildProjectionRenderKey } from '../../step-toolbar/tools/projections/projection-render-key';
   import {
     fitProjectionToBbox,
-    getProjectedBboxForBbox,
     getProjectionById
   } from '$lib/features/commons/utils/projection.utils';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { getFiltersMap } from '$lib/features/duckdb/orchestrator/state.svelte';
-  import { LegendPosition } from '$lib/features/commons/constants/ui.constants';
   import { annotationsActions } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
-  import { legendActions } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
   import { getColorBlindnessState } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
   import { getColorBlindnessMatrix } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.filter';
   import {
@@ -69,10 +72,17 @@
     shouldUseBasemapReferenceInOrthographicView
   } from '../utils/orthographic-reference';
   import {
-    getMainlandBboxForBasemap,
-    computeProjectedBboxForBasemap
+    buildProjectionForBasemap,
+    computeProjectedBboxForProjection,
+    getMainlandBboxForBasemap
   } from '../utils/geoarrow-stream-bridge';
   import { proj4d3 } from '../utils/proj4d3';
+  import { resolveProjectionForRender } from '../utils/projection-priority';
+  import {
+    getBrowserMaxRenderBufferSizePx,
+    resolveMapRenderPixelRatio
+  } from '../utils/render-pixel-ratio';
+  import type { ProjectionLike } from 'geoarrow-deck-stream';
   import AnnotationOverlay from './annotation-overlay.svelte';
   import GeoIndicationsOverlay from './geo-indications-overlay.svelte';
   import LegendOverlay from './legend-overlay.svelte';
@@ -126,6 +136,15 @@
   const pageGridStyle = $derived(
     `background-size: ${PAGE_GRID_SIZE_PX}px ${PAGE_GRID_SIZE_PX}px;`
   );
+  const maxRenderBufferSizePx = $derived(getBrowserMaxRenderBufferSizePx());
+  const renderPixelRatio = $derived.by(() =>
+    resolveMapRenderPixelRatio(
+      globalState.zoom.pageZoomLevel,
+      typeof window !== 'undefined' ? window.devicePixelRatio : 1,
+      Math.max(mapCanvasWidth, mapCanvasHeight),
+      maxRenderBufferSizePx
+    )
+  );
   const firstTable = $derived(
     tables.size > 0 ? tables.values().next().value : null
   );
@@ -142,6 +161,7 @@
 
   const MIN_SKELETON_DURATION_MS = 500;
   const MAX_WAIT_FOR_DATA_MS = 5000;
+  const PAGE_ZOOM_RENDER_SYNC_DELAY_MS = 180;
 
   let mapContainer: HTMLDivElement;
   let hasCalledOnReady = $state(false);
@@ -155,6 +175,7 @@
   let pendingLayerUpdate = $state(false);
   let waitingForStyleIdle = false;
   let layerUpdateTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  let renderPixelRatioTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
   const LAYER_UPDATE_DEBOUNCE_MS = 16;
   const PROJECT_EMPTY_RESET_DEBOUNCE_MS = 250;
@@ -162,9 +183,11 @@
   let previousDatasetCount = 0;
   let pendingViewReset = false;
   let pendingOrthographicFit = $state(false);
+  let pendingMapLibreViewportPreset = $state<LngLatBoundsLike | null>(null);
   let projectEmptyResetTimeoutId: ReturnType<typeof setTimeout> | null = null;
   let lastDatasetCountSnapshot = -1;
   let lastLayoutSnapshot: string | null = null;
+  let lastSelectedBasemapZone = getBasemapZone(basemapStyleStore.selectedStyle);
 
   let referenceBasemapRequestId = 0;
   let pendingWorldBasemapRequestId: number | null = null;
@@ -306,7 +329,11 @@
       if (hasData) {
         scheduleLayerUpdate();
       } else {
-        startMaxWaitTimeout();
+        if (shouldLoadDefaultWorldBasemapPreview()) {
+          startMaxWaitTimeout();
+        } else {
+          triggerOnReady();
+        }
         if (mapBounds.shouldRestorePosition) {
           setTimeout(() => mapPosition.restorePosition(), 100);
         }
@@ -454,6 +481,10 @@
       scheduleLayerUpdate('useMapLayers:representativePointTablesLoaded')
   });
 
+  function shouldLoadDefaultWorldBasemapPreview(): boolean {
+    return true;
+  }
+
   function updateCanvasSize() {
     if (mapContainer) {
       projectionStore.updateCanvasSize({
@@ -465,6 +496,111 @@
 
   function fitOrthographicViewport(): void {
     if (mapInit.viewMode !== ViewMode.ORTHOGRAPHIC) {
+      return;
+    }
+
+    if (mapInit.isMapLoaded) {
+      mapInstanceStore.fitToOrthographicBounds();
+    } else {
+      pendingOrthographicFit = true;
+    }
+  }
+
+  function refreshOrthographicReferenceForFirstTable(
+    basemapMeta: ReturnType<typeof getProjectionMetadataForDataset>,
+    basemapTableOverride: ArrowTable | null = null
+  ): boolean {
+    if (!firstTable) {
+      return false;
+    }
+
+    const refBasemapId = basemapStyleStore.referenceBasemapId;
+    const dataset = getRenderedDataset(firstDatasetId);
+    const duckDataset = getRenderedDuckDBDataset(firstDatasetId);
+    const shouldUseBasemapReference =
+      shouldUseBasemapReferenceInOrthographicView(
+        dataset,
+        duckDataset,
+        refBasemapId
+      );
+    const referenceTable = resolveOrthographicReferenceTable({
+      dataset,
+      duckDataset,
+      datasetTable: firstTable,
+      basemapTable: basemapTableOverride ?? worldBaseTable,
+      referenceBasemapId: refBasemapId
+    });
+    const bounds = referenceTable
+      ? shouldUseBasemapReference
+        ? toOrthographicBounds(calculateBoundsFromGeoArrow(referenceTable))
+        : resolveOrthographicDatasetBounds(
+            dataset,
+            toOrthographicBounds(calculateBoundsFromGeoArrow(referenceTable))
+          )
+      : null;
+
+    if (!bounds) {
+      return false;
+    }
+
+    const referenceState = resolveOrthographicReferenceState(
+      dataset,
+      bounds,
+      basemapMeta,
+      shouldUseBasemapReference
+    );
+
+    if (!referenceState.bbox) {
+      return false;
+    }
+
+    projectionStore.setReferenceBbox(
+      referenceState.bbox,
+      undefined,
+      referenceState.isProjected
+    );
+
+    return true;
+  }
+
+  function syncOrthographicReferenceWithBasemap(
+    basemapMeta: typeof basemapService.currentMetadata,
+    basemapTable: ArrowTable | null
+  ): void {
+    if (
+      mapInit.viewMode !== ViewMode.ORTHOGRAPHIC ||
+      !basemapMeta ||
+      !basemapTable
+    ) {
+      return;
+    }
+
+    let didSetReference = false;
+
+    if (shouldPreferDatasetReferenceBounds()) {
+      didSetReference = refreshOrthographicReferenceForFirstTable(
+        basemapMeta,
+        basemapTable
+      );
+    }
+
+    if (!didSetReference) {
+      const referenceState = resolveOrthographicBasemapReferenceState(
+        basemapMeta,
+        basemapTable
+      );
+
+      if (referenceState.bbox) {
+        projectionStore.setReferenceBbox(
+          referenceState.bbox,
+          undefined,
+          referenceState.isProjected
+        );
+        didSetReference = true;
+      }
+    }
+
+    if (!didSetReference) {
       return;
     }
 
@@ -489,11 +625,13 @@
     );
   }
 
-  function getManualProjectionOverride() {
+  function getProjectionOverrideForRender(
+    requiredSource?: 'auto' | 'manual'
+  ): ProjectionLike | undefined {
     const projectionState = getProjectionState();
     if (
       !projectionState.overrideActive ||
-      projectionState.overrideSource !== 'manual'
+      (requiredSource && projectionState.overrideSource !== requiredSource)
     ) {
       return undefined;
     }
@@ -543,13 +681,46 @@
     return projection;
   }
 
-  function projectBboxForManualProjection(bbox: BBox | null): BBox | null {
-    const manualProjection = getManualProjectionOverride();
-    if (!manualProjection || !bbox) {
+  function getOrthographicRenderProjection(
+    basemapMeta: ReturnType<typeof getProjectionMetadataForDataset>,
+    allowManualOverride = true
+  ): ProjectionLike | undefined {
+    const projectionState = getProjectionState();
+    const defaultProjection =
+      basemapMeta &&
+      !basemapMeta.isCustom &&
+      basemapMeta.proj_to?.type !== 'identity'
+        ? buildProjectionForBasemap(
+            basemapMeta,
+            960,
+            600,
+            basemapService.projectionPresets
+          )
+        : undefined;
+    const overrideProjection = getProjectionOverrideForRender();
+
+    return resolveProjectionForRender(
+      defaultProjection,
+      overrideProjection,
+      projectionState.overrideSource,
+      allowManualOverride
+    );
+  }
+
+  function projectBboxForRenderProjection(
+    bbox: BBox | null,
+    basemapMeta: ReturnType<typeof getProjectionMetadataForDataset>,
+    allowManualOverride = true
+  ): BBox | null {
+    const renderProjection = getOrthographicRenderProjection(
+      basemapMeta,
+      allowManualOverride
+    );
+    if (!renderProjection || !bbox) {
       return null;
     }
 
-    return getProjectedBboxForBbox(manualProjection, bbox);
+    return computeProjectedBboxForProjection(renderProjection, bbox);
   }
 
   function resolveOrthographicReferenceState(
@@ -568,36 +739,16 @@
       ? getMainlandBboxForBasemap(basemapMeta, basemapService.projectionPresets)
       : null;
     const basemapReferenceBbox = mainlandBbox ?? basemapMeta?.bbox ?? null;
-    const manualProjectedBasemapBbox =
-      projectBboxForManualProjection(basemapReferenceBbox);
-    const basemapProjectedBbox =
-      manualProjectedBasemapBbox ??
-      (basemapMeta
-        ? computeProjectedBboxForBasemap(
-            basemapMeta,
-            basemapService.projectionPresets,
-            960,
-            600,
-            mainlandBbox ?? undefined
-          )
-        : null);
+    const basemapProjectedBbox = projectBboxForRenderProjection(
+      basemapReferenceBbox,
+      basemapMeta
+    );
 
     const [[minX, minY], [maxX, maxY]] = bounds;
     const datasetBbox: BBox = [minX, minY, maxX, maxY];
-    const manualProjectedDatasetBbox = shouldUseIdentityReferenceBounds
+    const datasetProjectedBbox = shouldUseIdentityReferenceBounds
       ? null
-      : projectBboxForManualProjection(datasetBbox);
-    const datasetProjectedBbox =
-      manualProjectedDatasetBbox ??
-      (basemapMeta && !shouldUseIdentityReferenceBounds
-        ? computeProjectedBboxForBasemap(
-            basemapMeta,
-            basemapService.projectionPresets,
-            960,
-            600,
-            datasetBbox
-          )
-        : null);
+      : projectBboxForRenderProjection(datasetBbox, basemapMeta, false);
 
     const referenceBbox = resolveOrthographicReferenceBbox({
       datasetBounds: datasetBbox,
@@ -615,6 +766,48 @@
     };
   }
 
+  function toOrthographicBounds(
+    bounds: LngLatBoundsLike | null
+  ): [[number, number], [number, number]] | null {
+    if (!bounds) {
+      return null;
+    }
+
+    if (
+      Array.isArray(bounds) &&
+      bounds.length === 2 &&
+      Array.isArray(bounds[0]) &&
+      Array.isArray(bounds[1])
+    ) {
+      return [
+        [bounds[0][0], bounds[0][1]],
+        [bounds[1][0], bounds[1][1]]
+      ];
+    }
+
+    if (Array.isArray(bounds) && bounds.length === 4) {
+      return [
+        [bounds[0], bounds[1]],
+        [bounds[2], bounds[3]]
+      ];
+    }
+
+    if (
+      typeof bounds === 'object' &&
+      bounds !== null &&
+      'toArray' in bounds &&
+      typeof bounds.toArray === 'function'
+    ) {
+      const arrayBounds = bounds.toArray();
+      return [
+        [arrayBounds[0][0], arrayBounds[0][1]],
+        [arrayBounds[1][0], arrayBounds[1][1]]
+      ];
+    }
+
+    return null;
+  }
+
   function resolveOrthographicBasemapReferenceState(
     basemapMeta: typeof basemapService.currentMetadata,
     basemapTable: ArrowTable | null
@@ -628,18 +821,9 @@
       basemapService.projectionPresets
     );
     const basemapReferenceBbox = mainlandBbox ?? basemapMeta.bbox ?? null;
-    const manualProjectedBbox =
-      projectBboxForManualProjection(basemapReferenceBbox);
-    if (manualProjectedBbox) {
-      return { bbox: manualProjectedBbox, isProjected: true };
-    }
-
-    const projectedBbox = computeProjectedBboxForBasemap(
-      basemapMeta,
-      basemapService.projectionPresets,
-      960,
-      600,
-      mainlandBbox ?? undefined
+    const projectedBbox = projectBboxForRenderProjection(
+      basemapReferenceBbox,
+      basemapMeta
     );
     if (projectedBbox) {
       return { bbox: projectedBbox, isProjected: true };
@@ -652,8 +836,9 @@
     const bounds = basemapTable
       ? calculateBoundsFromGeoArrow(basemapTable)
       : null;
-    if (bounds) {
-      const [[minX, minY], [maxX, maxY]] = bounds;
+    const orthographicBounds = toOrthographicBounds(bounds);
+    if (orthographicBounds) {
+      const [[minX, minY], [maxX, maxY]] = orthographicBounds;
       return {
         bbox: [minX, minY, maxX, maxY],
         isProjected: false
@@ -692,10 +877,10 @@
       });
       const bounds = referenceTable
         ? shouldUseBasemapReference
-          ? calculateBoundsFromGeoArrow(referenceTable)
+          ? toOrthographicBounds(calculateBoundsFromGeoArrow(referenceTable))
           : resolveOrthographicDatasetBounds(
               dataset,
-              calculateBoundsFromGeoArrow(referenceTable)
+              toOrthographicBounds(calculateBoundsFromGeoArrow(referenceTable))
             )
         : null;
 
@@ -769,6 +954,20 @@
     }
   }
 
+  function applyPendingMapLibreViewportPreset(): void {
+    if (
+      !pendingMapLibreViewportPreset ||
+      mapInit.viewMode !== ViewMode.MAPLIBRE ||
+      !mapInit.map
+    ) {
+      return;
+    }
+
+    const bounds = pendingMapLibreViewportPreset;
+    pendingMapLibreViewportPreset = null;
+    mapBounds.fitToBounds(bounds, true);
+  }
+
   function fitMapLibreViewportAfterViewModeSwitch(): void {
     if (mapInit.viewMode !== ViewMode.MAPLIBRE || !mapInit.map) {
       return;
@@ -801,6 +1000,14 @@
       }
     }
 
+    const styleViewportPreset = getBasemapViewportPreset(
+      basemapStyleStore.selectedStyle
+    );
+    if (styleViewportPreset) {
+      mapBounds.fitToBounds(styleViewportPreset.bounds);
+      return;
+    }
+
     if (currentWorldBaseTable) {
       const bounds = calculateBoundsFromGeoArrow(currentWorldBaseTable);
       if (bounds) {
@@ -824,6 +1031,7 @@
       mapBasemap.syncGroupVisibility();
       // setStyle() resets the MapLibre projection to mercator — re-apply the stored projection
       mapBasemap.syncProjection();
+      applyPendingMapLibreViewportPreset();
       waitingForStyleIdle = false;
       if (pendingLayerUpdate) {
         pendingLayerUpdate = false;
@@ -843,6 +1051,34 @@
     onFitComplete: () => {
       triggerOnReady();
     }
+  });
+
+  $effect(() => {
+    if (renderPixelRatioTimeoutId) {
+      clearTimeout(renderPixelRatioTimeoutId);
+      renderPixelRatioTimeoutId = null;
+    }
+
+    if (
+      !mapInit.isMapLoaded ||
+      (mapInit.viewMode !== ViewMode.ORTHOGRAPHIC &&
+        mapInit.viewMode !== ViewMode.MAPLIBRE)
+    ) {
+      return;
+    }
+
+    const nextRenderPixelRatio = renderPixelRatio;
+    const currentPageZoomLevel = globalState.zoom.pageZoomLevel;
+
+    if (currentPageZoomLevel <= 100) {
+      mapInit.setRenderPixelRatio(nextRenderPixelRatio);
+      return;
+    }
+
+    renderPixelRatioTimeoutId = setTimeout(() => {
+      renderPixelRatioTimeoutId = null;
+      mapInit.setRenderPixelRatio(nextRenderPixelRatio);
+    }, PAGE_ZOOM_RENDER_SYNC_DELAY_MS);
   });
 
   $effect(() => {
@@ -866,7 +1102,6 @@
         height: fmtState.height,
         margins
       });
-      legendActions.setPosition(LegendPosition.BOTTOM_CENTER);
       if (mapInit.isMapLoaded && !isSwitchingViewMode) {
         scheduleLayerUpdate('effect:formatLayoutChange');
       }
@@ -988,40 +1223,15 @@
             duckDataset,
             refBasemapId
           );
-        const referenceTable = resolveOrthographicReferenceTable({
-          dataset,
-          duckDataset,
-          datasetTable: firstTable,
-          basemapTable: worldBaseTable,
-          referenceBasemapId: refBasemapId
-        });
-        const bounds = referenceTable
-          ? shouldUseBasemapReference
-            ? calculateBoundsFromGeoArrow(referenceTable)
-            : resolveOrthographicDatasetBounds(
-                dataset,
-                calculateBoundsFromGeoArrow(referenceTable)
-              )
-          : null;
 
-        if (bounds) {
+        if (
+          untrack(() =>
+            refreshOrthographicReferenceForFirstTable(
+              getProjectionMetadataForDataset(firstDatasetId)
+            )
+          )
+        ) {
           untrack(() => {
-            const currentBasemapMeta =
-              getProjectionMetadataForDataset(firstDatasetId);
-            const referenceState = resolveOrthographicReferenceState(
-              dataset,
-              bounds,
-              currentBasemapMeta,
-              shouldUseBasemapReference
-            );
-
-            if (referenceState.bbox) {
-              projectionStore.setReferenceBbox(
-                referenceState.bbox,
-                undefined,
-                referenceState.isProjected
-              );
-            }
             scheduleLayerUpdate('effect:firstTable-bounds');
             fitOrthographicViewport();
           });
@@ -1159,7 +1369,6 @@
         basemapLayersStore.resetToDefaults();
         worldBaseTable = null;
         scheduleLayerUpdate('effect:projectEmpty');
-        loadWorldBasemap();
       }, PROJECT_EMPTY_RESET_DEBOUNCE_MS);
     }
   });
@@ -1170,6 +1379,15 @@
     if (!hasData && canUpdate) {
       untrack(() => {
         scheduleLayerUpdate('effect:noData');
+        if (!shouldLoadDefaultWorldBasemapPreview()) {
+          if (worldBaseTable) {
+            worldBaseTable = null;
+            scheduleLayerUpdate('effect:noData:clearWorldBasemap');
+          }
+          triggerOnReady();
+          return;
+        }
+
         // Retry basemap loading if it failed or hasn't completed yet
         if (!worldBaseTable) {
           loadWorldBasemap();
@@ -1192,9 +1410,16 @@
           if (pendingViewReset && worldBaseTable) {
             pendingViewReset = false;
             if (mapInit.viewMode === ViewMode.MAPLIBRE && mapInit.map) {
-              const bounds = calculateBoundsFromGeoArrow(worldBaseTable);
-              if (bounds) {
-                mapBounds.fitToBounds(bounds, true);
+              const preset = getBasemapViewportPreset(
+                basemapStyleStore.selectedStyle
+              );
+              if (preset) {
+                mapBounds.fitToBounds(preset.bounds, true);
+              } else {
+                const bounds = calculateBoundsFromGeoArrow(worldBaseTable);
+                if (bounds) {
+                  mapBounds.fitToBounds(bounds, true);
+                }
               }
             }
             // Orthographic: projectionStore.referenceBbox is already set by
@@ -1216,6 +1441,27 @@
   });
 
   $effect(() => {
+    const selectedStyle = basemapStyleStore.selectedStyle;
+    const nextZone = getBasemapZone(selectedStyle);
+    const previousZone = lastSelectedBasemapZone;
+    lastSelectedBasemapZone = nextZone;
+
+    if (
+      selectedStyle === BasemapStyle.BLANK_WHITE ||
+      !previousZone ||
+      !nextZone ||
+      previousZone === nextZone
+    ) {
+      return;
+    }
+
+    const preset = getBasemapViewportPreset(selectedStyle);
+    if (preset) {
+      pendingMapLibreViewportPreset = preset.bounds;
+    }
+  });
+
+  $effect(() => {
     void basemapStyleStore.showLabels;
     untrack(() => mapBasemap.syncLabelsVisibility());
   });
@@ -1223,6 +1469,33 @@
   $effect(() => {
     void basemapStyleStore.groupVisibilityVersion;
     untrack(() => mapBasemap.syncGroupVisibility());
+  });
+
+  $effect(() => {
+    void basemapStyleStore.viewportRequestVersion;
+
+    const requestedStyle = basemapStyleStore.requestedViewportStyle;
+    const preset = requestedStyle
+      ? getBasemapViewportPreset(requestedStyle)
+      : null;
+
+    if (!preset) {
+      return;
+    }
+
+    pendingMapLibreViewportPreset = preset.bounds;
+
+    untrack(() => {
+      if (
+        mapInit.isMapLoaded &&
+        mapInit.viewMode === ViewMode.MAPLIBRE &&
+        !isSwitchingViewMode &&
+        !mapBasemap.isStyleLoading &&
+        mapInit.map?.isStyleLoaded()
+      ) {
+        applyPendingMapLibreViewportPreset();
+      }
+    });
   });
 
   $effect(() => {
@@ -1388,6 +1661,10 @@
           if (refRequestId !== referenceBasemapRequestId) {
             return; // Stale request
           }
+          if (!shouldLoadDefaultWorldBasemapPreview()) {
+            worldBaseTable = null;
+            return;
+          }
           if (refLoaded) {
             const resolvedBasemap =
               basemapService.getResolvedVariantData(
@@ -1440,6 +1717,10 @@
               { refId: pendingRefId }
             );
             const fallback = await basemapService.loadDefaultBasemap();
+            if (!shouldLoadDefaultWorldBasemapPreview()) {
+              worldBaseTable = null;
+              return;
+            }
             if (fallback) {
               const resolvedBasemap =
                 basemapService.getResolvedVariantData(
@@ -1447,6 +1728,10 @@
                   fallback.activeSimplificationLevel ?? undefined
                 ) ?? fallback;
               worldBaseTable = resolvedBasemap.geometryTable;
+              syncOrthographicReferenceWithBasemap(
+                resolvedBasemap.metadata,
+                resolvedBasemap.geometryTable
+              );
               const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
               if (canUpdate) {
                 scheduleLayerUpdate('loadWorldBasemap:refFailed');
@@ -1468,6 +1753,10 @@
       if (requestId !== referenceBasemapRequestId) {
         return;
       }
+      if (!shouldLoadDefaultWorldBasemapPreview()) {
+        worldBaseTable = null;
+        return;
+      }
 
       if (loaded) {
         const resolvedBasemap =
@@ -1475,27 +1764,11 @@
             loaded.metadata.file,
             loaded.activeSimplificationLevel ?? undefined
           ) ?? loaded;
-        // Set up orthographic projection from world basemap bounds
-        if (
-          mapInit.viewMode === ViewMode.ORTHOGRAPHIC &&
-          !shouldPreferDatasetReferenceBounds()
-        ) {
-          const referenceState = resolveOrthographicBasemapReferenceState(
+        if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
+          syncOrthographicReferenceWithBasemap(
             resolvedBasemap.metadata,
             resolvedBasemap.geometryTable
           );
-          if (referenceState.bbox) {
-            projectionStore.setReferenceBbox(
-              referenceState.bbox,
-              undefined,
-              referenceState.isProjected
-            );
-          }
-          if (mapInit.isMapLoaded) {
-            mapInstanceStore.fitToOrthographicBounds();
-          } else {
-            pendingOrthographicFit = true;
-          }
         }
 
         // No reference basemap — use world basemap directly
@@ -1558,7 +1831,9 @@
       isLoadingReferenceBasemap = true;
     }
 
-    loadWorldBasemap();
+    if (shouldLoadDefaultWorldBasemapPreview()) {
+      loadWorldBasemap();
+    }
 
     const resizeObserver = new ResizeObserver(() => {
       updateCanvasSize();
@@ -1592,6 +1867,9 @@
       }
       if (layerUpdateTimeoutId) {
         clearTimeout(layerUpdateTimeoutId);
+      }
+      if (renderPixelRatioTimeoutId) {
+        clearTimeout(renderPixelRatioTimeoutId);
       }
       if (projectEmptyResetTimeoutId) {
         clearTimeout(projectEmptyResetTimeoutId);
@@ -1642,10 +1920,11 @@
     {#if showGeoIndicationsOverlay}
       <GeoIndicationsOverlay interactive={isStylingMode} />
     {/if}
-    {#if showAnnotationOverlay}
-      <AnnotationOverlay interactive={isStylingMode} />
-    {/if}
   </div>
+
+  {#if showAnnotationOverlay}
+    <AnnotationOverlay interactive={isStylingMode} />
+  {/if}
 </div>
 
 <style>
@@ -1674,8 +1953,22 @@
     z-index: var(--z-map-layer);
     pointer-events: none;
     background-image:
-      linear-gradient(to right, rgba(22, 22, 22, 0.14) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(22, 22, 22, 0.14) 1px, transparent 1px);
+      radial-gradient(
+        circle at 1px 1px,
+        rgba(22, 22, 22, 0.24) 0.9px,
+        transparent 1.2px
+      ),
+      radial-gradient(
+        circle at 1px 1px,
+        rgba(22, 22, 22, 0.1) 0.8px,
+        transparent 1.1px
+      );
+    background-size:
+      12px 12px,
+      24px 24px;
+    background-position:
+      0 0,
+      6px 6px;
   }
 
   .map-canvas {

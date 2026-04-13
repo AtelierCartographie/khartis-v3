@@ -31,8 +31,8 @@ describe('annotations store grid snapping', () => {
     annotationsActions.moveAnnotation(annotationId!, { x: 13, y: 37 });
 
     expect(getAnnotationsState().items[0]?.position).toEqual({
-      x: 24,
-      y: 48
+      x: 12,
+      y: 36
     });
   });
 

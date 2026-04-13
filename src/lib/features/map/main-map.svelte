@@ -34,7 +34,6 @@
   import FacetsGrid from '../step-toolbar/tools/facets/facets-grid.svelte';
   import { loadDatasetsSequentially } from './utils/load-datasets-sequentially';
 
-  let containerRef: HTMLDivElement;
   let thematicMapRef = $state<HTMLDivElement>(undefined!);
 
   let isInitializing = $state(true);
@@ -44,10 +43,8 @@
   let errorMessage = $state<string | null>(null);
   let toolbarTransitionTimeoutId: ReturnType<typeof setTimeout> | null = null;
   let transitionEndCleanup: (() => void) | null = null;
-  let containerResizeObserver: ResizeObserver | null = null;
 
   const TOOLBAR_TRANSITION_SAFETY_MS = 400;
-  const CONTAINER_RESIZE_DEBOUNCE_MS = 100;
   let displayTables = $state.raw<SvelteMap<string, ArrowTable>>(
     new SvelteMap<string, ArrowTable>()
   );
@@ -451,7 +448,6 @@
       toolbarTransitionTimeoutId = null;
     }
     globalState.isToolbarTransitioning = false;
-    handleContainerResize();
   }
 
   $effect(() => {
@@ -488,37 +484,6 @@
       }
     });
   });
-
-  $effect(() => {
-    void formatState.model;
-    const mode = formatState.mode;
-
-    untrack(() => {
-      if (!containerRef || mode !== FormatMode.PRESET) return;
-      handleContainerResize();
-    });
-  });
-
-  let containerResizeTimeoutId: ReturnType<typeof setTimeout> | null = null;
-
-  function handleContainerResize() {
-    if (!containerRef) return;
-    formatActions.fitToContainer(
-      containerRef.offsetWidth,
-      containerRef.offsetHeight,
-      globalState.isMobileView ? 'height' : 'auto'
-    );
-  }
-
-  function handleContainerResizeDebounced() {
-    if (containerResizeTimeoutId) {
-      clearTimeout(containerResizeTimeoutId);
-    }
-    containerResizeTimeoutId = setTimeout(() => {
-      containerResizeTimeoutId = null;
-      handleContainerResize();
-    }, CONTAINER_RESIZE_DEBOUNCE_MS);
-  }
 
   async function initializeMap() {
     const start = performance.now();
@@ -571,13 +536,6 @@
   }
 
   onMount(() => {
-    handleContainerResize();
-
-    containerResizeObserver = new ResizeObserver(() => {
-      handleContainerResizeDebounced();
-    });
-    containerResizeObserver.observe(containerRef);
-
     initializeMap();
 
     return () => {
@@ -588,10 +546,6 @@
         clearTimeout(skeletonTimeoutId);
       }
       cleanupTransitionListener();
-      if (containerResizeTimeoutId) {
-        clearTimeout(containerResizeTimeoutId);
-      }
-      containerResizeObserver?.disconnect();
       handleResizeUp();
     };
   });
@@ -641,6 +595,7 @@
   const showResizeHandles = $derived(
     globalState.selectedStep === ToolbarStep.Styling && isMapReady
   );
+  let hoveredResizeEdge = $state<ResizeEdge | null>(null);
 
   let resizeState = $state<{
     edge: ResizeEdge;
@@ -691,12 +646,13 @@
 
   function handleResizeUp(): void {
     resizeState = null;
+    hoveredResizeEdge = null;
     window.removeEventListener(EVENT.POINTERMOVE, handleResizeMove);
     window.removeEventListener(EVENT.POINTERUP, handleResizeUp);
   }
 </script>
 
-<div class="main-map-container" bind:this={containerRef}>
+<div class="main-map-container" class:resizable={showResizeHandles}>
   <!-- Skeleton loader - overlay above map, hidden via CSS when ready -->
   <div
     class="skeleton-loader"
@@ -752,6 +708,7 @@
   {#if showResizeHandles}
     <div
       class="resize-handles-frame"
+      class:highlighted={hoveredResizeEdge !== null || resizeState !== null}
       style="width: {formatState.width}px; height: {formatState.height}px;"
     >
       {#each RESIZE_EDGES as edge (edge)}
@@ -761,6 +718,12 @@
           aria-orientation={edge === 'n' || edge === 's'
             ? 'horizontal'
             : 'vertical'}
+          onpointerenter={() => (hoveredResizeEdge = edge)}
+          onpointerleave={() => {
+            if (hoveredResizeEdge === edge) {
+              hoveredResizeEdge = null;
+            }
+          }}
           onpointerdown={(e: PointerEvent) => handleResizePointerDown(e, edge)}
         ></div>
       {/each}
@@ -777,6 +740,10 @@
     height: 100%;
     position: relative;
     overflow: hidden;
+  }
+
+  .main-map-container.resizable {
+    user-select: none;
   }
 
   .thematic-map-wrapper {
@@ -832,12 +799,23 @@
   .resize-handles-frame {
     position: absolute;
     pointer-events: none;
+    border: 1px dashed transparent;
+    border-radius: 2px;
+    transition:
+      border-color 120ms ease,
+      box-shadow 120ms ease;
+  }
+
+  .resize-handles-frame.highlighted {
+    border-color: rgba(15, 98, 254, 0.55);
+    box-shadow: inset 0 0 0 1px rgba(15, 98, 254, 0.15);
   }
 
   .resize-handle {
     position: absolute;
     pointer-events: auto;
     z-index: var(--z-content-raised, 2);
+    touch-action: none;
   }
 
   /* Edge handles — thin bars along each side */

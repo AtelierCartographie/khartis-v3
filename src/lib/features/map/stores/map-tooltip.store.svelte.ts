@@ -48,11 +48,6 @@ function createMapTooltipStore() {
     };
   }
 
-  function pin(): void {
-    if (!state.visible) return;
-    state = { ...state, pinned: true };
-  }
-
   function pinAt(
     x: number,
     y: number,
@@ -91,7 +86,6 @@ function createMapTooltipStore() {
       return state.pinned;
     },
     showAtHover,
-    pin,
     pinAt,
     hide,
     unpin

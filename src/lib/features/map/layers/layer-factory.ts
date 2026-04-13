@@ -36,7 +36,6 @@ import {
 import {
   ColorMode,
   DEFAULT_COLORS,
-  MissingDataShape,
   ProportionalType,
   ShapeType,
   SizeMode,
@@ -105,6 +104,8 @@ import {
   pointPositions,
   projectGeoJSON
 } from '../utils/geoarrow-stream-bridge';
+import { resolveHoverHighlightProps } from '../utils/hover-highlight-props';
+import { resolveMissingDataPointShape as resolveMissingPointShape } from '../utils/legend.utils';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 
 const HIGHLIGHT_DIMMING_FACTOR = 0.3;
@@ -112,7 +113,10 @@ const DEFAULT_TEXT_SIZE = 12;
 const DEFAULT_HALO_WIDTH = 2;
 const DEFAULT_TEXT_FONT = 'IBM Plex Sans, sans-serif';
 const DEFAULT_TEXT_FONT_SETTINGS = { sdf: true } as const;
-const HOVER_HIGHLIGHT_COLOR: [number, number, number, number] = [0, 0, 0, 80];
+const SELECTED_POLYGON_STROKE_COLOR: [number, number, number, number] = [
+  15, 98, 254, 255
+];
+const SELECTED_POLYGON_STROKE_WIDTH = 3;
 const DASH_EXTENSION = new PathStyleExtension({ dash: true });
 const DEFAULT_DASH_ARRAY: [number, number] = [3, 2];
 const DEFAULT_TEXT_MASK_PADDING: [number, number] = [3, 1];
@@ -168,6 +172,9 @@ function createPointSymbolSvg(
   switch (shape) {
     case ShapeType.SQUARE:
       markup = `<rect x="10" y="10" width="44" height="44" rx="4" ry="4" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" />`;
+      break;
+    case ShapeType.CROSS:
+      markup = `<path d="M22 8 H42 V22 H56 V42 H42 V56 H22 V42 H8 V22 H22 Z" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round" />`;
       break;
     case ShapeType.TRIANGLE:
       markup = `<path d="M32 8 L56 56 H8 Z" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round" />`;
@@ -255,6 +262,22 @@ function createPointIconData(data: {
   return output;
 }
 
+type BinaryLayerInteractionData = {
+  khartisSourceTable?: ArrowTable;
+  featureIds?: Uint32Array;
+};
+
+function attachBinaryPickingMetadata(
+  target: BinaryLayerInteractionData,
+  sourceTable: ArrowTable,
+  sourceData: { readonly featureIds?: Uint32Array }
+): void {
+  target.khartisSourceTable = sourceTable;
+  if (sourceData.featureIds instanceof Uint32Array) {
+    target.featureIds = sourceData.featureIds;
+  }
+}
+
 function getRepresentativePointSource(
   ctx: LayerContext
 ): { table: ArrowTable; geometryInfo: GeometryInfo } | null {
@@ -284,7 +307,7 @@ function getRepresentativePointSource(
 }
 
 function requiresRepresentativePointSource(
-  geometryType: GeometryType | undefined
+  geometryType: GeometryInfo['type'] | GeometryType | undefined
 ): boolean {
   return (
     geometryType === GeometryType.POLYGON ||
@@ -451,8 +474,9 @@ function createDoubleProportionalPointLayers(
     const scatterBinaryData = scatterProps.data as {
       attributes: Record<string, unknown>;
       khartisSourceTable?: ArrowTable;
+      featureIds?: Uint32Array;
     };
-    scatterBinaryData.khartisSourceTable = jsTable;
+    attachBinaryPickingMetadata(scatterBinaryData, jsTable, pointData);
     scatterBinaryData.attributes.getFillColor = pointColorAttr(
       pointData,
       fillByFeatureId
@@ -485,8 +509,7 @@ function createDoubleProportionalPointLayers(
       lineWidthUnits: 'pixels',
       lineWidthScale: strokeWidth / 3,
       pickable,
-      autoHighlight: pickable,
-      highlightColor: HOVER_HIGHLIGHT_COLOR,
+      ...resolveHoverHighlightProps(pickable),
       ...(modelMatrix && { modelMatrix }),
       ...(beforeId && { beforeId }),
       ...yearFilterProps,
@@ -558,8 +581,7 @@ function createDoubleProportionalPointLayers(
         alphaCutoff: 0,
         billboard: true,
         pickable,
-        autoHighlight: pickable,
-        highlightColor: HOVER_HIGHLIGHT_COLOR,
+        ...resolveHoverHighlightProps(pickable),
         ...(modelMatrix && { modelMatrix }),
         ...(beforeId && { beforeId }),
         updateTriggers: {
@@ -840,8 +862,7 @@ function createRepresentativePointSymbolLayers(
         alphaCutoff: 0,
         billboard: true,
         pickable: true,
-        autoHighlight: true,
-        highlightColor: HOVER_HIGHLIGHT_COLOR,
+        ...resolveHoverHighlightProps(),
         ...(modelMatrix && { modelMatrix }),
         ...(beforeId && { beforeId }),
         updateTriggers: {
@@ -891,8 +912,9 @@ function createRepresentativePointSymbolLayers(
   const scatterBinaryData = scatterProps.data as {
     attributes: Record<string, unknown>;
     khartisSourceTable?: ArrowTable;
+    featureIds?: Uint32Array;
   };
-  scatterBinaryData.khartisSourceTable = jsTable;
+  attachBinaryPickingMetadata(scatterBinaryData, jsTable, pointData);
   scatterBinaryData.attributes.getFillColor = pointColorAttr(
     pointData,
     fillColorByFeatureId
@@ -926,8 +948,7 @@ function createRepresentativePointSymbolLayers(
       lineWidthUnits: 'pixels',
       lineWidthScale: strokeWidth / 3,
       pickable: true,
-      autoHighlight: true,
-      highlightColor: HOVER_HIGHLIGHT_COLOR,
+      ...resolveHoverHighlightProps(),
       ...(modelMatrix && { modelMatrix }),
       ...(beforeId && { beforeId }),
       ...yearFilterProps,
@@ -1019,20 +1040,6 @@ function resolvePointMissingColumn(
   return null;
 }
 
-function resolveMissingPointShape(
-  shape: MissingDataShape | undefined
-): ShapeType {
-  switch (shape) {
-    case MissingDataShape.SQUARE:
-      return ShapeType.SQUARE;
-    case MissingDataShape.CROSS:
-      return ShapeType.TRIANGLE;
-    case MissingDataShape.CIRCLE:
-    default:
-      return ShapeType.POINT;
-  }
-}
-
 function resolveHighlightedOpacityForRow(
   row: DeckDataRow,
   baseOpacity: number,
@@ -1046,6 +1053,181 @@ function resolveHighlightedOpacityForRow(
   return highlightedRowIds.has(Number(rowId))
     ? baseOpacity
     : baseOpacity * HIGHLIGHT_DIMMING_FACTOR;
+}
+
+function resolveGeoJsonFeatureRowId(
+  feature: { properties?: Record<string, unknown> | null },
+  fallbackIndex: number
+): number {
+  const rawId = feature.properties?.[INTERNAL_COLUMN.ID];
+  if (typeof rawId === 'number' && Number.isFinite(rawId)) {
+    return rawId;
+  }
+
+  const coercedId = Number(rawId);
+  return Number.isFinite(coercedId) ? coercedId : fallbackIndex + 1;
+}
+
+function ensureGeoJsonFeatureIds<T extends Geometry>(
+  geojson: FeatureCollection<T>
+): FeatureCollection<T> {
+  let didChange = false;
+
+  const features = geojson.features.map((feature, index) => {
+    const rowId = resolveGeoJsonFeatureRowId(feature, index);
+    if (feature.properties?.[INTERNAL_COLUMN.ID] === rowId) {
+      return feature;
+    }
+
+    didChange = true;
+    return {
+      ...feature,
+      properties: {
+        ...(feature.properties ?? {}),
+        [INTERNAL_COLUMN.ID]: rowId
+      }
+    };
+  });
+
+  return didChange ? { ...geojson, features } : geojson;
+}
+
+function isPolygonGeometryType(
+  geometryType: GeometryInfo['type'] | Geometry['type'] | undefined
+): boolean {
+  const normalizedGeometryType = geometryType?.toUpperCase();
+  return (
+    normalizedGeometryType === GeometryType.POLYGON ||
+    normalizedGeometryType === GeometryType.MULTIPOLYGON
+  );
+}
+
+function createHighlightedPolygonOverlay(
+  layerId: string,
+  jsTable: ArrowTable,
+  geoColumn: string,
+  highlightedRowIds: Set<number> | undefined,
+  highlightVersion: number,
+  ctx: Pick<
+    LayerContext,
+    'customProjection' | 'yearFilter' | 'modelMatrix' | 'beforeId'
+  >
+): Layer<DeckDataRow> | null {
+  if (!highlightedRowIds || highlightedRowIds.size === 0) {
+    return null;
+  }
+
+  try {
+    const rawGeoJson = getCachedGeoJSON(jsTable, geoColumn);
+    if (!rawGeoJson) {
+      return null;
+    }
+
+    const highlightedGeoJson: FeatureCollection = {
+      ...rawGeoJson,
+      features: rawGeoJson.features.filter((feature) => {
+        const rowId = feature.properties?.[INTERNAL_COLUMN.ID];
+        return typeof rowId === 'number' && highlightedRowIds.has(rowId);
+      })
+    };
+
+    if (highlightedGeoJson.features.length === 0) {
+      return null;
+    }
+
+    const projectedGeoJson = ctx.customProjection
+      ? projectGeoJSON(highlightedGeoJson, ctx.customProjection)
+      : highlightedGeoJson;
+    const filteredGeoJson = filterGeoJsonByYear(
+      projectedGeoJson,
+      ctx.yearFilter
+    );
+
+    if (filteredGeoJson.features.length === 0) {
+      return null;
+    }
+
+    return new GeoJsonLayer({
+      id: `${layerId}-selection-overlay`,
+      data: filteredGeoJson,
+      filled: false,
+      stroked: true,
+      lineWidthUnits: 'pixels',
+      getLineColor: SELECTED_POLYGON_STROKE_COLOR,
+      getLineWidth: SELECTED_POLYGON_STROKE_WIDTH,
+      lineWidthMinPixels: SELECTED_POLYGON_STROKE_WIDTH,
+      pickable: false,
+      parameters: {
+        depthCompare: 'always' as const,
+        stencilCompare: 'always' as const
+      },
+      ...(ctx.modelMatrix && { modelMatrix: ctx.modelMatrix }),
+      ...(ctx.beforeId && { beforeId: ctx.beforeId }),
+      updateTriggers: {
+        getLineColor: [highlightVersion],
+        getLineWidth: [highlightVersion]
+      },
+      dataComparator: (newData, oldData) => newData === oldData
+    });
+  } catch (error) {
+    logger.warn(
+      'Failed to build highlighted polygon overlay',
+      LogCategory.MAP,
+      {
+        geoColumn,
+        error: error instanceof Error ? error.message : String(error)
+      }
+    );
+    return null;
+  }
+}
+
+function createHighlightedGeoJsonOverlay<T extends Geometry>(
+  layerId: string,
+  geojson: FeatureCollection<T>,
+  highlightedRowIds: Set<number> | undefined,
+  highlightVersion: number,
+  ctx: Pick<LayerContext, 'modelMatrix' | 'beforeId'>
+): Layer<DeckDataRow> | null {
+  if (!highlightedRowIds || highlightedRowIds.size === 0) {
+    return null;
+  }
+
+  const highlightedGeoJson: FeatureCollection<T> = {
+    ...geojson,
+    features: geojson.features.filter(
+      (feature, index) =>
+        isPolygonGeometryType(feature.geometry?.type) &&
+        highlightedRowIds.has(resolveGeoJsonFeatureRowId(feature, index))
+    )
+  };
+
+  if (highlightedGeoJson.features.length === 0) {
+    return null;
+  }
+
+  return new GeoJsonLayer({
+    id: `${layerId}-selection-overlay`,
+    data: highlightedGeoJson,
+    filled: false,
+    stroked: true,
+    lineWidthUnits: 'pixels',
+    getLineColor: SELECTED_POLYGON_STROKE_COLOR,
+    getLineWidth: SELECTED_POLYGON_STROKE_WIDTH,
+    lineWidthMinPixels: SELECTED_POLYGON_STROKE_WIDTH,
+    pickable: false,
+    parameters: {
+      depthCompare: 'always' as const,
+      stencilCompare: 'always' as const
+    },
+    ...(ctx.modelMatrix && { modelMatrix: ctx.modelMatrix }),
+    ...(ctx.beforeId && { beforeId: ctx.beforeId }),
+    updateTriggers: {
+      getLineColor: [highlightVersion],
+      getLineWidth: [highlightVersion]
+    },
+    dataComparator: (newData, oldData) => newData === oldData
+  });
 }
 
 function toMutableRgba(color: Color): [number, number, number, number] {
@@ -2268,8 +2450,7 @@ export function createPointLayers(
           iconBillboard: true,
           iconAlphaCutoff: 0,
           pickable: true,
-          autoHighlight: true,
-          highlightColor: HOVER_HIGHLIGHT_COLOR,
+          ...resolveHoverHighlightProps(),
           ...(modelMatrix && { modelMatrix }),
           ...(beforeId && { beforeId }),
           updateTriggers: {
@@ -2359,8 +2540,7 @@ export function createPointLayers(
         getLineWidth: strokeWidth / 3,
         opacity: hasHighlights ? 1 : rawFillOpacity,
         pickable: true,
-        autoHighlight: true,
-        highlightColor: HOVER_HIGHLIGHT_COLOR,
+        ...resolveHoverHighlightProps(),
         ...(modelMatrix && { modelMatrix }),
         ...(beforeId && { beforeId }),
         updateTriggers: {
@@ -2547,8 +2727,9 @@ export function createPointLayers(
   const scatterBinaryData = scatterProps.data as {
     attributes: Record<string, unknown>;
     khartisSourceTable?: ArrowTable;
+    featureIds?: Uint32Array;
   };
-  scatterBinaryData.khartisSourceTable = jsTable;
+  attachBinaryPickingMetadata(scatterBinaryData, jsTable, pointData);
   if (fillColorBinAttr) {
     scatterBinaryData.attributes.getFillColor = fillColorBinAttr;
   }
@@ -2587,8 +2768,7 @@ export function createPointLayers(
       lineWidthUnits: 'pixels',
       lineWidthScale: strokeWidth / 3,
       pickable: true,
-      autoHighlight: true,
-      highlightColor: HOVER_HIGHLIGHT_COLOR,
+      ...resolveHoverHighlightProps(),
       ...(modelMatrix && { modelMatrix }),
       ...(beforeId && { beforeId }),
       ...yearFilterProps,
@@ -2805,8 +2985,9 @@ export function createLineLayers(
     const pathBinaryData = pathProps.data as {
       attributes: Record<string, unknown>;
       khartisSourceTable?: ArrowTable;
+      featureIds?: Uint32Array;
     };
-    pathBinaryData.khartisSourceTable = jsTable;
+    attachBinaryPickingMetadata(pathBinaryData, jsTable, lineData);
     if (colorBinaryAttr) {
       pathBinaryData.attributes.getColor = colorBinaryAttr;
     }
@@ -2832,8 +3013,7 @@ export function createLineLayers(
       ...(!widthBinaryAttr && { getWidth: resolvedLineWidth }),
       widthMinPixels: 1,
       pickable: true,
-      autoHighlight: true,
-      highlightColor: HOVER_HIGHLIGHT_COLOR,
+      ...resolveHoverHighlightProps(),
       ...(modelMatrix && { modelMatrix }),
       ...(beforeId && { beforeId }),
       ...lineYearFilterProps,
@@ -3012,8 +3192,7 @@ export function createLineLayers(
     getLineWidth: geoJsonLineWidth,
     lineWidthMinPixels: 1,
     pickable: true,
-    autoHighlight: true,
-    highlightColor: HOVER_HIGHLIGHT_COLOR,
+    ...resolveHoverHighlightProps(),
     ...(modelMatrix && { modelMatrix }),
     ...(beforeId && { beforeId }),
     updateTriggers: {
@@ -3189,8 +3368,9 @@ export function createPolygonLayers(
       const solidBinaryData = solidProps.data as {
         attributes: Record<string, unknown>;
         khartisSourceTable?: ArrowTable;
+        featureIds?: Uint32Array;
       };
-      solidBinaryData.khartisSourceTable = jsTable;
+      attachBinaryPickingMetadata(solidBinaryData, jsTable, polyData);
       if (fillColorBinaryAttr) {
         solidBinaryData.attributes.getFillColor = fillColorBinaryAttr;
       }
@@ -3219,8 +3399,7 @@ export function createPolygonLayers(
         }),
         opacity: hasPolyHighlights ? 1 : rawPolyFillOpacity,
         pickable: true,
-        autoHighlight: true,
-        highlightColor: HOVER_HIGHLIGHT_COLOR,
+        ...resolveHoverHighlightProps(),
         parameters: {
           depthCompare: 'always' as const,
           stencilCompare: 'always' as const
@@ -3319,10 +3498,10 @@ export function createPolygonLayers(
       const primitiveFilters =
         ctx.viz?.primitiveFilters ?? ALL_PRIMITIVE_FILTERS;
       const primitiveOrder = ctx.primitiveOrder ?? DEFAULT_PRIMITIVE_ORDER;
-      const showStroke =
-        primitiveFilters.includes(PrimitiveFilterType.LINE) &&
-        (ctx.viz?.modes?.stroke ?? StrokeMode.UNIQUE) !== StrokeMode.NONE;
       const showFill = primitiveFilters.includes(PrimitiveFilterType.POLYGON);
+      const showStroke =
+        showFill &&
+        (ctx.viz?.modes?.stroke ?? StrokeMode.UNIQUE) !== StrokeMode.NONE;
       const getOrderIndex = (primitive: PrimitiveFilter): number => {
         const index = primitiveOrder.indexOf(primitive);
         return index === -1 ? Number.MAX_SAFE_INTEGER : index;
@@ -3380,6 +3559,18 @@ export function createPolygonLayers(
             })
           );
         }
+      }
+
+      const selectionOverlay = createHighlightedPolygonOverlay(
+        layerId,
+        jsTable,
+        geoColumn,
+        polyHighlightedRowIds,
+        hlVersion,
+        ctx
+      );
+      if (selectionOverlay) {
+        layers.push(selectionOverlay);
       }
 
       return layers;
@@ -3504,8 +3695,7 @@ export function createPolygonLayers(
       lineWidthUnits: 'pixels',
       lineWidthScale: strokeWidth / 4,
       pickable: true,
-      autoHighlight: true,
-      highlightColor: HOVER_HIGHLIGHT_COLOR,
+      ...resolveHoverHighlightProps(),
       parameters: {
         depthCompare: 'always' as const,
         stencilCompare: 'always' as const
@@ -3561,6 +3751,18 @@ export function createPolygonLayers(
     );
   }
 
+  const selectionOverlay = createHighlightedPolygonOverlay(
+    layerId,
+    jsTable,
+    geoColumn,
+    polyHighlightedRowIds,
+    hlVersion,
+    ctx
+  );
+  if (selectionOverlay) {
+    geoJsonLayers.push(selectionOverlay);
+  }
+
   return geoJsonLayers;
 }
 
@@ -3574,31 +3776,58 @@ export function createGeoJsonLayers(
     fillOpacity,
     strokeWidth,
     strokeOpacity,
+    highlightedRowIds,
     modelMatrix,
     beforeId
   } = ctx;
 
   const layerId = createThematicLayerId(DeckLayerId.GEOJSON_LAYER, ctx);
+  const hasHighlights = highlightedRowIds && highlightedRowIds.size > 0;
+  const hlVersion = ctx.highlightVersion ?? 0;
 
   // When a basemap projection is active, pre-project GeoJSON coordinates
-  const data = ctx.customProjection
+  const projectedData = ctx.customProjection
     ? projectGeoJSON(geojson, ctx.customProjection)
     : geojson;
+  const data = ensureGeoJsonFeatureIds(projectedData);
   const filteredData = filterGeoJsonByYear(data, ctx.yearFilter);
+  const baseFillColor: [number, number, number, number] = [
+    fillColor[0],
+    fillColor[1],
+    fillColor[2],
+    Math.round(fillOpacity * 255)
+  ];
+  const geoJsonFillColor =
+    hasHighlights && highlightedRowIds
+      ? withGeoJsonRowHighlight(
+          baseFillColor,
+          fillOpacity,
+          HIGHLIGHT_DIMMING_FACTOR,
+          highlightedRowIds
+        )
+      : baseFillColor;
+  const geoJsonLineColor =
+    hasHighlights && highlightedRowIds
+      ? withGeoJsonRowHighlight(
+          strokeColor,
+          strokeOpacity,
+          HIGHLIGHT_DIMMING_FACTOR,
+          highlightedRowIds
+        )
+      : withOpacity(strokeColor, strokeOpacity);
 
-  return [
+  const layers: Layer<DeckDataRow>[] = [
     new GeoJsonLayer({
       id: layerId,
       data: filteredData,
       filled: true,
       stroked: true,
-      getFillColor: [...fillColor, Math.round(fillOpacity * 255)],
-      getLineColor: withOpacity(strokeColor, strokeOpacity),
+      getFillColor: geoJsonFillColor,
+      getLineColor: geoJsonLineColor,
       getLineWidth: strokeWidth,
       lineWidthMinPixels: Math.max(1, strokeWidth),
       pickable: true,
-      autoHighlight: true,
-      highlightColor: HOVER_HIGHLIGHT_COLOR,
+      ...resolveHoverHighlightProps(),
       parameters: {
         depthCompare: 'always' as const,
         stencilCompare: 'always' as const
@@ -3606,12 +3835,26 @@ export function createGeoJsonLayers(
       ...(modelMatrix && { modelMatrix }),
       ...(beforeId && { beforeId }),
       updateTriggers: {
-        getFillColor: [fillColor, fillOpacity],
-        getLineColor: [strokeColor, strokeOpacity],
+        getFillColor: [fillColor, fillOpacity, hlVersion],
+        getLineColor: [strokeColor, strokeOpacity, hlVersion],
         getLineWidth: [strokeWidth]
-      }
+      },
+      dataComparator: (newData, oldData) => newData === oldData
     })
   ];
+
+  const selectionOverlay = createHighlightedGeoJsonOverlay(
+    layerId,
+    filteredData,
+    highlightedRowIds,
+    hlVersion,
+    ctx
+  );
+  if (selectionOverlay) {
+    layers.push(selectionOverlay);
+  }
+
+  return layers;
 }
 
 export function createDeckLayers(

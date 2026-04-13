@@ -120,8 +120,11 @@
 
   function handleDrawingTypeChange(event: CustomEvent<string | number>) {
     const type = String(event.detail) as DrawingType;
+    if (selectedDrawing) {
+      annotationsActions.selectAnnotation(null);
+    }
     drawingType = type;
-    annotationsActions.applyStyle({
+    annotationsActions.updateDefaultStyle({
       drawingType: type
     });
   }
@@ -133,6 +136,15 @@
   function handleSmoothnessChange(e: CustomEvent<number>) {
     annotationsActions.applyStyle({ smoothness: e.detail });
   }
+
+  const activeDrawingType = $derived(
+    annotationsState.isDrawingMode
+      ? annotationsState.drawingModeType
+      : drawingType
+  );
+  const minimumPointsToFinish = $derived(
+    activeDrawingType === DrawingType.ZONE ? 3 : 2
+  );
 
   function toOpacityPercent(value: number | undefined): number {
     if (value === undefined) {
@@ -170,7 +182,8 @@
           <div class="drawing-mode-actions">
             <Button
               kind="primary"
-              disabled={annotationsState.drawingInProgress.length < 2}
+              disabled={annotationsState.drawingInProgress.length <
+                minimumPointsToFinish}
               onclick={() => annotationsActions.finalizeDrawingMode()}
             >
               {m.annotations_drawing_finish()}
@@ -240,15 +253,15 @@
         <div class="toggle-row">
           <span class="toggle-label">{m.dashed()}</span>
           <Switch
-            toggled={effectiveStyle.strokeStyle === 'dotted'}
+            toggled={effectiveStyle.strokeStyle === 'dashed'}
             labelText={m.dashed()}
             hideLabel
             labelA={m.no()}
             labelB={m.yes()}
             showStateLabel
             onchange={(checked) => {
-              const nextStyle: 'dotted' | 'solid' = checked
-                ? 'dotted'
+              const nextStyle: 'dashed' | 'solid' = checked
+                ? 'dashed'
                 : 'solid';
               annotationsActions.applyStyle({
                 strokeStyle: nextStyle

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { GPSBounds } from '$lib/features/duckdb';
+import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import type { BasemapMetadata } from '../types/basemap.types';
 import {
   rankBasemapsByGPSBbox,
@@ -121,7 +122,7 @@ describe('rankBasemapsByGPSBbox', () => {
           date: '2025',
           bbox: [-61.81, -21.39, 55.83, 51.09],
           simplification_level: 'high',
-          layers: [{ type: 'land' }]
+          layers: [{ type: BasemapLayerType.LAND }]
         }),
         createBasemap({
           file: 'france-departement-2025-high',
@@ -130,7 +131,10 @@ describe('rankBasemapsByGPSBbox', () => {
           date: '2025',
           bbox: [-61.81, -21.39, 55.83, 51.09],
           simplification_level: 'high',
-          layers: [{ type: 'land' }, { type: 'limit' }]
+          layers: [
+            { type: BasemapLayerType.LAND },
+            { type: BasemapLayerType.LIMIT }
+          ]
         }),
         createBasemap({
           file: 'france-canton-2025-high',
@@ -139,7 +143,11 @@ describe('rankBasemapsByGPSBbox', () => {
           date: '2025',
           bbox: [-61.81, -21.39, 55.83, 51.09],
           simplification_level: 'high',
-          layers: [{ type: 'land' }, { type: 'limit' }, { type: 'centroid' }]
+          layers: [
+            { type: BasemapLayerType.LAND },
+            { type: BasemapLayerType.LIMIT },
+            { type: BasemapLayerType.CENTROID }
+          ]
         }),
         createBasemap({
           file: 'france-commune-2025-high',
@@ -149,10 +157,10 @@ describe('rankBasemapsByGPSBbox', () => {
           bbox: [-61.81, -21.39, 55.83, 51.09],
           simplification_level: 'high',
           layers: [
-            { type: 'land' },
-            { type: 'limit' },
-            { type: 'centroid' },
-            { type: 'graticule' }
+            { type: BasemapLayerType.LAND },
+            { type: BasemapLayerType.LIMIT },
+            { type: BasemapLayerType.CENTROID },
+            { type: BasemapLayerType.GRATICULE }
           ]
         })
       ],

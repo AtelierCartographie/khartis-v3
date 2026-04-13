@@ -39,13 +39,14 @@ function buildFilterCacheKey(
     operator: string;
     value?: string | number;
     secondaryValue?: string | number;
+    limit?: string | number;
     primitiveType?: string;
   }>
 ): string {
   return filters
     .map(
       (f) =>
-        `${f.column}:${f.operator}:${f.value ?? ''}:${f.secondaryValue ?? ''}:${f.primitiveType ?? ''}`
+        `${f.column}:${f.operator}:${f.value ?? ''}:${f.secondaryValue ?? ''}:${f.limit ?? ''}:${f.primitiveType ?? ''}`
     )
     .sort()
     .join('|');
@@ -180,6 +181,38 @@ export function filterArrowTableByYear(
 
 type FilterOperator = VizFilterOperator | string;
 
+function toComparableNumber(value: unknown): number | null {
+  if (value instanceof Date) {
+    const timestamp = value.getTime();
+    return Number.isFinite(timestamp) ? timestamp : null;
+  }
+
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (typeof value === 'bigint') {
+    return Number(value);
+  }
+
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  const normalized = String(value).trim();
+  if (!normalized) {
+    return null;
+  }
+
+  const numericValue = Number(normalized);
+  if (Number.isFinite(numericValue)) {
+    return numericValue;
+  }
+
+  const timestamp = Date.parse(normalized);
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
 function matchesOperator(
   cellValue: unknown,
   operator: FilterOperator,
@@ -215,15 +248,10 @@ function matchesOperator(
     return String(cellValue) !== (filterValue ?? '');
   }
 
-  const numCell =
-    typeof cellValue === 'number'
-      ? cellValue
-      : typeof cellValue === 'bigint'
-        ? Number(cellValue)
-        : parseFloat(String(cellValue));
-  const numFilter = parseFloat(filterValue ?? '');
+  const numCell = toComparableNumber(cellValue);
+  const numFilter = toComparableNumber(filterValue);
 
-  if (isNaN(numCell) || isNaN(numFilter)) {
+  if (numCell === null || numFilter === null) {
     return false;
   }
 
@@ -233,13 +261,55 @@ function matchesOperator(
     case 'lte':
       return numCell <= numFilter;
     case 'between': {
-      const numSecondary = parseFloat(secondaryValue ?? '');
-      if (isNaN(numSecondary)) return false;
+      const numSecondary = toComparableNumber(secondaryValue);
+      if (numSecondary === null) return false;
       return numCell >= numFilter && numCell <= numSecondary;
     }
     default:
       return true;
   }
+}
+
+function getTopFilterMatchSet(
+  table: ArrowTable,
+  columnIndex: number,
+  limitValue: number | undefined,
+  direction: 'ASC' | 'DESC'
+): Set<number> {
+  if (!Number.isFinite(limitValue) || !limitValue || limitValue <= 0) {
+    return new Set();
+  }
+
+  const columnVector = table.getChildAt(columnIndex);
+  if (!columnVector) {
+    return new Set();
+  }
+
+  const rankedRows: Array<{ index: number; value: number }> = [];
+
+  for (let rowIndex = 0; rowIndex < table.numRows; rowIndex++) {
+    const comparableValue = toComparableNumber(columnVector.get(rowIndex));
+    if (comparableValue === null) {
+      continue;
+    }
+
+    rankedRows.push({ index: rowIndex, value: comparableValue });
+  }
+
+  rankedRows.sort((left, right) => {
+    const delta =
+      direction === 'ASC' ? left.value - right.value : right.value - left.value;
+
+    if (delta !== 0) {
+      return delta;
+    }
+
+    return left.index - right.index;
+  });
+
+  return new Set(
+    rankedRows.slice(0, Math.floor(limitValue)).map((entry) => entry.index)
+  );
 }
 
 export function filterArrowTableByDataFilters(
@@ -292,10 +362,41 @@ export function filterArrowTableByDataFilters(
   );
   if (validFilters.length === 0) return table;
 
+  const topFilterMatches = new Map<string, Set<number>>();
+  for (const filter of validFilters) {
+    if (filter.operator !== 'top_asc' && filter.operator !== 'top_desc') {
+      continue;
+    }
+
+    const column = columnVectors.get(filter.column);
+    if (!column) {
+      continue;
+    }
+
+    topFilterMatches.set(
+      filter.id,
+      getTopFilterMatchSet(
+        table,
+        column.index,
+        filter.limit ?? toComparableNumber(filter.value) ?? undefined,
+        filter.operator === 'top_asc' ? 'ASC' : 'DESC'
+      )
+    );
+  }
+
   const matchingIndices: number[] = [];
   for (let i = 0; i < table.numRows; i++) {
     let matches = true;
     for (const filter of validFilters) {
+      if (filter.operator === 'top_asc' || filter.operator === 'top_desc') {
+        const matchingRows = topFilterMatches.get(filter.id);
+        if (!matchingRows?.has(i)) {
+          matches = false;
+          break;
+        }
+        continue;
+      }
+
       const col = columnVectors.get(filter.column)!;
       const cellValue = col.vector!.get(i);
       if (
@@ -331,7 +432,9 @@ export function filterArrowTableByDataFilters(
 
   if (matchingIndices.length === 0) {
     logger.warn('Data filters returned no matching rows', LogCategory.MAP, {
-      filters: validFilters.map((f) => `${f.column} ${f.operator} ${f.value}`)
+      filters: validFilters.map((f) =>
+        `${f.column} ${f.operator} ${f.limit ?? f.value ?? ''} ${f.secondaryValue ?? ''}`.trim()
+      )
     });
   }
 

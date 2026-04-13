@@ -1174,25 +1174,35 @@ function createDataOrchestratorService() {
     // Restore the geo column selection in the data tab UI so users don't
     // lose their manual choice (e.g. "entity" for fuzzy-countries) on reload.
     if (currentProject?.data?.sourceFiles) {
-      const primaryFile = currentProject.data.sourceFiles.find(
-        (f) => f.geoColumn || f.joinedBasemap || f.gpsMode
-      );
-      const primaryDuckDataset = primaryFile
-        ? duckDBOrchestrator.getDatasetBySourceFile(primaryFile.id)
+      const selectedSourceFileId =
+        datasetsStore.selectedDataset?.sourceFileId ??
+        globalState.selectedDataButtonId;
+      const restoredFile =
+        currentProject.data.sourceFiles.find(
+          (file) =>
+            file.id === selectedSourceFileId &&
+            (file.geoColumn || file.joinedBasemap || file.gpsMode)
+        ) ??
+        currentProject.data.sourceFiles.find(
+          (file) => file.geoColumn || file.joinedBasemap || file.gpsMode
+        );
+      const restoredDuckDataset = restoredFile
+        ? duckDBOrchestrator.getDatasetBySourceFile(restoredFile.id)
         : null;
-      const restoredPrimaryJoinState = primaryFile
+      const restoredPrimaryJoinState = restoredFile
         ? resolvePersistedJoinState({
-            file: primaryFile,
-            duckDataset: primaryDuckDataset,
+            file: restoredFile,
+            duckDataset: restoredDuckDataset,
             selectedBasemapId: currentProject.data.basemap?.id,
-            linkedGeoColumn: primaryFile.geoColumn,
-            selectedGpsColumns: primaryFile.gpsColumns,
+            linkedGeoColumn: restoredFile.geoColumn,
+            selectedGpsColumns: restoredFile.gpsColumns,
             isSelectedSourceFile: true
           })
         : null;
       logger.debug('Geo column restore check', LogCategory.DATA, {
         hasSourceFiles: true,
-        primaryFileName: primaryFile?.name,
+        restoredFileName: restoredFile?.name,
+        selectedSourceFileId,
         geoColumn: restoredPrimaryJoinState?.geoColumn,
         joinedBasemap: restoredPrimaryJoinState?.joinedBasemap,
         gpsMode: restoredPrimaryJoinState?.gpsMode,

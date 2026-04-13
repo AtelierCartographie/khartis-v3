@@ -384,7 +384,6 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: transform 0.2s ease-in-out;
     overflow: visible;
     padding: var(--cds-spacing-03) var(--cds-spacing-05);
   }

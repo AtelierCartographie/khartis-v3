@@ -161,12 +161,14 @@ Recherche d'entité ou valeur. Highlight sur la carte. Parcours des résultats. 
 
 ### Calques [VIZ-TOOLS-b]
 
-Chaque viz génère un calque avec sous-calques par primitive. Fond de carte = calques séparés.
+Chaque viz génère un calque avec sous-calques par primitive. Le fond de carte reste global et n'est plus dupliqué sous chaque visualisation.
 
 Actions : affichage/masquage, renommer, dupliquer, supprimer, déplacer. Sous-calques : mêmes options.
 
-L'ordre de la liste est l'ordre visuel attendu : l'élément le plus haut dans `Calques` doit se rendre au-dessus des éléments placés en dessous.
-Les primitives de texte (`labels`, `texts`) restent sous les géométries thématiques pour éviter qu'un empilement de visualisations fasse repasser du texte au-dessus des formes, tout en restant au-dessus des aplats de fond de carte. Les collisions entre `labels` et `texts` d'un même jeu de données sont calculées ensemble pour limiter les recouvrements entre visualisations superposées.
+Le panneau `Calques` expose explicitement 3 sections : `Fond de carte au-dessus`, `Visualisations`, `Fond de carte en dessous`.
+L'ordre de la liste est l'ordre visuel attendu à l'intérieur de chaque section : l'élément le plus haut dans une section se rend au-dessus des éléments placés en dessous dans cette même section.
+Les couches de fond sont séparées selon les groupes réellement respectés par le moteur : `foreground` du fond de carte en haut, visualisations au milieu, `background` du fond de carte en bas. Le drag-and-drop ne mélange pas ces groupes et l'interface doit l'expliquer clairement.
+Les primitives de texte (`labels`, `texts`) conservent l'ordre produit par chaque visualisation : à l'intérieur d'une même visualisation elles restent au-dessus de ses géométries, et entre visualisations elles suivent strictement l'ordre affiché dans `Calques`. Les collisions entre `labels` et `texts` d'un même jeu de données sont calculées ensemble pour limiter les recouvrements entre visualisations superposées.
 
 Collection : calques regroupés par facette.
 
@@ -245,19 +247,19 @@ Personnalisation réduite : couleur de fond, contour (couleur, épaisseur, point
 
 ### OpenStreetMap [VIZ-07c]
 
-6 styles MapLibre (France/Monde × couleurs/grayscale/satellite). Calques toggleables : routes, étiquettes.
+6 styles MapLibre (France/Monde × couleurs/grayscale/satellite), sélectionnables via un rail horizontal de cartes. La bascule affiche `Monde` à gauche, `France` à droite, avec `Monde` sélectionné par défaut. Le changement France/Monde recadre la vue sur l'emprise correspondante. La désactivation du mode tuilé recentre la vue sur le fond de référence ou les données courantes. Calques toggleables : routes, étiquettes.
 
 ---
 
 ## Export [DL-01 à DL-03]
 
-| Format        | Contenu                               |
-| ------------- | ------------------------------------- |
-| JPG bitmap    | 1080p / 2K / 4K — carte complète      |
-| SVG vectoriel | Calques organisés par éléments et viz |
-| CSV           | Données tabulaires (géo exclue)       |
-| GeoJSON       | Données + géométrie                   |
-| .kh projet    | Fichier réimportable pour reprise     |
+| Format        | Contenu                                                         |
+| ------------- | --------------------------------------------------------------- |
+| JPG bitmap    | Full HD / 2K / 4K — carte complète, avec ratio de page conservé |
+| SVG vectoriel | Calques organisés par éléments et viz                           |
+| CSV           | Données tabulaires (géo exclue)                                 |
+| GeoJSON       | Données + géométrie                                             |
+| .kh projet    | Fichier réimportable pour reprise                               |
 
 ---
 

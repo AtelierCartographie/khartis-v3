@@ -1,7 +1,12 @@
 import type { Component } from 'svelte';
 import type { PrimitiveFilter } from '$lib/features/commons/store/visualization.store.svelte';
+import type { BasemapRenderGroup } from '$lib/features/map/stores/basemap-layers.store.svelte';
 
 export type LayerType = 'visualization' | 'geographic';
+export type LayerReorderScope =
+  | 'visualization'
+  | 'geographic-background'
+  | 'geographic-foreground';
 
 export interface Layer {
   readonly id: string;
@@ -16,6 +21,7 @@ export interface Layer {
   isSubLayer?: boolean;
   primitive?: PrimitiveFilter;
   basemapLayerId?: string;
+  basemapRenderGroup?: BasemapRenderGroup;
 }
 
 export interface LayersState {

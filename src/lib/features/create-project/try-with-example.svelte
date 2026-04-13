@@ -10,12 +10,10 @@
     getExamplesByCategory,
     loadExampleData
   } from '$lib/features/commons/mocks/examples.data';
-  import { createProjectActions } from '$lib/features/commons/store/create-project.store.svelte';
-  import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
   import {
-    DataSourceType as DataSource,
-    FileType as FType
-  } from '$lib/features/commons/store/create-project.types';
+    createProjectActions,
+    createProjectState
+  } from '$lib/features/commons/store/create-project.store.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { logger, LogCategory } from '$lib/features/commons/utils/logger';
   import { m } from '$lib/paraglide/messages';
@@ -44,6 +42,22 @@
   const filteredExamples = $derived(getExamplesByCategory(selectedCategory));
 
   const DEFAULT_DATA_FILENAME = 'example-data.csv';
+
+  function getExampleMimeType(dataUrl?: string): string {
+    if (!dataUrl) {
+      return 'text/csv';
+    }
+
+    if (dataUrl.endsWith('.geojson') || dataUrl.endsWith('.json')) {
+      return 'application/geo+json';
+    }
+
+    if (dataUrl.endsWith('.tsv')) {
+      return 'text/tab-separated-values';
+    }
+
+    return 'text/csv';
+  }
 
   const CATEGORY_LABELS: Record<string, () => string> = {
     try_example_all: m.try_example_all,
@@ -79,36 +93,40 @@
       }
 
       const data = await loadExampleData(example);
+      const previousFileIds = new Set(
+        createProjectState.newProject.uploadedFiles.map((file) => file.id)
+      );
 
       const fileName = example.dataUrl
         ? example.dataUrl.split('/').pop()
         : DEFAULT_DATA_FILENAME;
-      const fileType = example.dataUrl?.endsWith('.json')
-        ? 'application/json'
-        : 'text/csv';
-
       const fileContent =
         typeof data === 'string' ? data : JSON.stringify(data);
       const file = new File([fileContent], fileName || DEFAULT_DATA_FILENAME, {
-        type: fileType
+        type: getExampleMimeType(example.dataUrl)
       });
 
-      const uploadedFile: UploadedFile = {
-        id: crypto.randomUUID(),
-        name: file.name,
-        size: file.size,
-        type: file.type,
-        fileType: file.type.includes('json') ? FType.GEOJSON : FType.CSV,
-        content: fileContent,
-        originalFile: file,
-        status: FileStatus.COMPLETE,
-        sourceType: DataSource.FILE_UPLOAD
-      };
-
       await createProjectActions.processFiles([file]);
+      const processedExampleFile = Array.from(
+        createProjectState.newProject.uploadedFiles
+      )
+        .reverse()
+        .find(
+          (uploadedFile) =>
+            !previousFileIds.has(uploadedFile.id) &&
+            uploadedFile.name === file.name &&
+            uploadedFile.status === FileStatus.COMPLETE
+        );
+
+      if (!processedExampleFile) {
+        throw new Error(
+          createProjectState.newProject.error ?? m.error_example_load_failed()
+        );
+      }
+
       createProjectActions.setProjectName(example.title);
 
-      await projectStore.createProject(example.title, [uploadedFile]);
+      await projectStore.createProject(example.title, [processedExampleFile]);
 
       await navigateAfterAction();
     } catch (err) {
