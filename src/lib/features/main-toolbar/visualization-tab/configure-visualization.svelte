@@ -97,7 +97,7 @@
     if (!dataset?.columns) return [];
     return dataset.columns
       .filter((col) => col.type !== COLUMN_TYPE_GEOMETRY)
-      .map((col, id) => ({ id, text: col.name }));
+      .map((col, id) => ({ id, text: col.name, type: col.type }));
   });
 
   const hasGeometry = $derived.by(() => {

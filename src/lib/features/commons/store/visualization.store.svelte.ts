@@ -119,9 +119,14 @@ export interface YearFilter {
 export type VizFilterOperator =
   | 'gte'
   | 'lte'
+  | 'contains'
   | 'equals'
   | 'not_equals'
-  | 'between';
+  | 'between'
+  | 'top_asc'
+  | 'top_desc'
+  | 'empty'
+  | 'not_empty';
 
 export interface VizDataFilter {
   id: string;
@@ -129,6 +134,7 @@ export interface VizDataFilter {
   operator: VizFilterOperator;
   value: string;
   secondaryValue?: string;
+  limit?: number;
   primitiveType?: PrimitiveFilter;
 }
 
