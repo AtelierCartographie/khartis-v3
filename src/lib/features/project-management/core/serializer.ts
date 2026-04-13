@@ -3,15 +3,18 @@ import { dataTabState } from '$lib/features/commons/store/data-tab.store.svelte'
 import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
 import { deepCloneForStorage } from '$lib/features/commons/utils/clone-for-storage.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { resolvePersistedJoinState } from '$lib/features/commons/utils/persisted-join-state.utils';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import { Duck } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
+import type { BasemapStyle } from '$lib/features/map/constants/basemap-styles';
 import { basemapCatalogService } from '$lib/features/map/services';
 import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
 import type {
   SerializedBasemapAttribute,
   SerializedProject,
   SerializedProjectData,
+  SerializedUiSettings,
   SerializedUploadedFile
 } from '$lib/types/serialization.types';
 import type { KhartisProject } from '../types';
@@ -140,15 +143,42 @@ function mapRegistryToSerializedFormat(
   stores: Record<string, unknown>
 ): Pick<
   SerializedProjectData,
-  'basemapSettings' | 'visualizationSettings' | 'layoutSettings'
+  'basemapSettings' | 'visualizationSettings' | 'layoutSettings' | 'uiSettings'
 > {
+  const uiSettingsKeys = [
+    'globalUi',
+    'zoomMode',
+    'dataTab',
+    'dataWorkflow',
+    'dataTools',
+    'datasetsView',
+    'tableFilters',
+    'colorBlindness',
+    'facets',
+    'search',
+    'simplification'
+  ] as const;
+
+  const uiSettings = Object.fromEntries(
+    uiSettingsKeys.flatMap((key) =>
+      stores[key] !== undefined ? [[key, stores[key]]] : []
+    )
+  ) as SerializedUiSettings;
+
   return {
     basemapSettings: {
       layers: stores.basemapLayers,
       style: (stores.basemapStyle as { style?: unknown })?.style,
+      lastSelectedTiledStyle: (
+        stores.basemapStyle as { lastSelectedTiledStyle?: BasemapStyle | null }
+      )?.lastSelectedTiledStyle,
       referenceBasemapId: (
         stores.basemapStyle as { referenceBasemapId?: string | null }
       )?.referenceBasemapId,
+      showLabels: (stores.basemapStyle as { showLabels?: boolean })?.showLabels,
+      groupVisibility: (
+        stores.basemapStyle as { groupVisibility?: Record<string, boolean> }
+      )?.groupVisibility,
       mapProjection: stores.mapProjection,
       mapViewState: stores.mapViewState
     } as SerializedProjectData['basemapSettings'],
@@ -160,7 +190,8 @@ function mapRegistryToSerializedFormat(
       legend: stores.legend,
       geoIndications: stores.geoIndications,
       projection: stores.projection
-    } as SerializedProjectData['layoutSettings']
+    } as SerializedProjectData['layoutSettings'],
+    uiSettings: Object.keys(uiSettings).length > 0 ? uiSettings : undefined
   };
 }
 
@@ -177,7 +208,10 @@ function mapSerializedFormatToRegistry(
     stores.basemapLayers = data.basemapSettings.layers;
     stores.basemapStyle = {
       style: data.basemapSettings.style,
-      referenceBasemapId: data.basemapSettings.referenceBasemapId
+      lastSelectedTiledStyle: data.basemapSettings.lastSelectedTiledStyle,
+      referenceBasemapId: data.basemapSettings.referenceBasemapId,
+      showLabels: data.basemapSettings.showLabels,
+      groupVisibility: data.basemapSettings.groupVisibility
     };
     stores.mapProjection = data.basemapSettings.mapProjection;
     if (data.basemapSettings.mapViewState) {
@@ -198,6 +232,10 @@ function mapSerializedFormatToRegistry(
     if (ls.projection) stores.projection = ls.projection;
   }
 
+  if (data.uiSettings) {
+    Object.assign(stores, data.uiSettings);
+  }
+
   return stores;
 }
 
@@ -214,41 +252,34 @@ export async function serializeProjectData(
   // --- File serialization (data-layer, kept as-is) ---
 
   if (dataObj.sourceFiles && Array.isArray(dataObj.sourceFiles)) {
+    const selectedSourceFileId = datasetsStore.selectedDataset?.sourceFileId;
+    const selectedBasemapId = dataTabState.basemapJoin.selectedBasemap;
+    const selectedGpsColumns =
+      dataTabState.geolocation.latitudeColumn &&
+      dataTabState.geolocation.longitudeColumn
+        ? {
+            lat: dataTabState.geolocation.latitudeColumn,
+            lon: dataTabState.geolocation.longitudeColumn
+          }
+        : undefined;
+
     serialized.sourceFiles = dataObj.sourceFiles.map((file: UploadedFile) => {
       const serializedFile = serializeUploadedFile(file, {
         preserveBinary: options?.preserveBinary
       });
 
       const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(file.id);
-      if (duckDBDataset) {
-        if (duckDBDataset.joinedBasemap) {
-          serializedFile.joinedBasemap = duckDBDataset.joinedBasemap;
-        }
-        if (duckDBDataset.geoColumn) {
-          serializedFile.geoColumn = duckDBDataset.geoColumn;
-        }
-        if (duckDBDataset.gpsMode) {
-          serializedFile.gpsMode = duckDBDataset.gpsMode;
-        }
-        if (duckDBDataset.gpsColumns) {
-          serializedFile.gpsColumns = duckDBDataset.gpsColumns;
-        }
-      }
-
-      // Fallback: persist geo column & basemap from UI state when DuckDB
-      // dataset doesn't have them yet (user selected but hasn't clicked Visualiser)
-      if (
-        !serializedFile.geoColumn &&
-        dataTabState.geolocation.linkedVariableName
-      ) {
-        serializedFile.geoColumn = dataTabState.geolocation.linkedVariableName;
-      }
-      if (
-        !serializedFile.joinedBasemap &&
-        dataTabState.basemapJoin.selectedBasemap
-      ) {
-        serializedFile.joinedBasemap = dataTabState.basemapJoin.selectedBasemap;
-      }
+      Object.assign(
+        serializedFile,
+        resolvePersistedJoinState({
+          file,
+          duckDataset: duckDBDataset,
+          selectedBasemapId,
+          linkedGeoColumn: dataTabState.geolocation.linkedVariableName,
+          selectedGpsColumns,
+          isSelectedSourceFile: file.id === selectedSourceFileId
+        })
+      );
 
       const storeDataset = datasetsStore.datasets.find(
         (d) => d.sourceFileId === file.id
@@ -401,8 +432,10 @@ export async function deserializeProjectData(
 
   // --- Store state: restore via persistence registry ---
 
+  persistenceRegistry.resetAll();
   const storeData = mapSerializedFormatToRegistry(data);
   persistenceRegistry.deserializeAll(storeData);
+  persistenceRegistry.markClean();
 
   return deserialized;
 }

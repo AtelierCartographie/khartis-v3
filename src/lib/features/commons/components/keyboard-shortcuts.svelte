@@ -70,7 +70,10 @@
       if (!step) return;
 
       globalActions.setNavigationState(step);
-      if (globalState.toolbarState === ToolbarState.Collapsed) {
+      if (
+        step !== ToolbarStep.Styling &&
+        globalState.toolbarState === ToolbarState.Collapsed
+      ) {
         globalActions.setToolbarState(ToolbarState.Full);
       }
     }

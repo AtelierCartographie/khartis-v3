@@ -1,102 +1,27 @@
 <script lang="ts">
+  import { dataTabState } from '$lib/features/commons/store/data-tab.store.svelte';
+  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { SvelteSet } from 'svelte/reactivity';
-  import {
-    visualizationStore,
-    VisualizationType
-  } from '$lib/features/commons/store/visualization.store.svelte';
-  import {
-    vizSuggester,
-    type GeometryType,
-    type VizSuggestion
-  } from '$lib/features/commons/services/viz-suggester.service';
+  import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-  import type { ColumnAnalysis } from '$lib/features/data-pipeline';
+  import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
+  import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
   import ChooseVisualization from './choose-visualization.svelte';
   import ConfigureVisualization from './configure-visualization.svelte';
   import CustomizeBasemap from './customize-basemap.svelte';
+  import { syncProjectOSMBasemap } from './osm-basemap-sync';
   import ToolbarTabLayout from '../components/toolbar-tab-layout.svelte';
+  import { resolveBlankVisualizationType } from './suggestion.utils';
   import {
-    applySuggestionMapping,
-    mapSuggestionToType,
-    resolveDatasetGeometryType
-  } from './suggestion.utils';
+    resolveRelevantPersistedBasemap,
+    type PersistedProjectBasemap
+  } from '../data-tab/services/persisted-basemap';
 
   let configureSection: HTMLElement | undefined = $state();
   /** Datasets for which we already auto-created (or found existing) visualizations.
    *  Prevents re-creation after the user explicitly deletes the last viz. */
   const initializedDatasetIds = new SvelteSet<string>();
-
-  function buildColumnAnalysis(dataset: {
-    columns: Array<{
-      name: string;
-      type: string;
-      stats?: {
-        count?: number;
-        nulls?: number;
-        uniques?: number;
-        min?: unknown;
-        max?: unknown;
-        mean?: number;
-        share_integers?: number;
-        share_floats?: number;
-        share_rank_interval?: number;
-        extent_magnitude?: number;
-      };
-    }>;
-  }): ColumnAnalysis[] {
-    return dataset.columns.map((col) => ({
-      name: col.name,
-      type: col.type,
-      stats: {
-        count: col.stats?.count ?? 0,
-        nulls: col.stats?.nulls ?? 0,
-        uniques: col.stats?.uniques ?? 0,
-        min: col.stats?.min,
-        max: col.stats?.max,
-        mean: col.stats?.mean,
-        share_integers: col.stats?.share_integers,
-        share_floats: col.stats?.share_floats,
-        share_rank_interval: col.stats?.share_rank_interval,
-        extent_magnitude: col.stats?.extent_magnitude
-      }
-    }));
-  }
-
-  function resolveBestSuggestion(dataset: {
-    columns: Array<{
-      name: string;
-      type: string;
-      stats?: {
-        count?: number;
-        nulls?: number;
-        uniques?: number;
-        min?: unknown;
-        max?: unknown;
-        mean?: number;
-      };
-    }>;
-    geometry?: { type?: string | null };
-    sourceFileId?: string;
-    joinedBasemap?: string;
-    gpsMode?: boolean;
-    geoDetection?: {
-      geoColumns?: Array<{ type?: string }>;
-    };
-  }): VizSuggestion | undefined {
-    const geometryType = resolveDatasetGeometryType(dataset);
-    if (!geometryType) return undefined;
-
-    const suggestions = vizSuggester.suggestVisualizations(
-      buildColumnAnalysis(dataset),
-      geometryType as GeometryType,
-      { maxSuggestions: 1 }
-    );
-
-    return suggestions[0];
-  }
-
-  // applySuggestionMapping is now shared from suggestion.utils.ts
 
   function handleCreateVisualization() {
     if (configureSection) {
@@ -121,27 +46,35 @@
     if (initializedDatasetIds.has(dataset.id)) return;
     initializedDatasetIds.add(dataset.id);
 
-    const bestSuggestion = resolveBestSuggestion(dataset);
-    const defaultType = bestSuggestion
-      ? mapSuggestionToType(bestSuggestion.id)
-      : dataset.geometry?.type?.toLowerCase().includes('point')
-        ? VisualizationType.PROPORTIONAL
-        : VisualizationType.CHOROPLETH;
-    const viz = visualizationStore.createVisualization(defaultType, dataset.id);
-
-    if (bestSuggestion) {
-      applySuggestionMapping(viz.id, defaultType, bestSuggestion);
-    }
+    const defaultType = resolveBlankVisualizationType(dataset);
+    visualizationStore.createVisualization(defaultType, dataset.id);
 
     logger.debug(
-      '[visualization-tab] auto-created visualization from step entry',
+      '[visualization-tab] auto-created blank visualization from step entry',
       LogCategory.UI,
       {
         datasetId: dataset.id,
-        defaultType,
-        suggestionId: bestSuggestion?.id,
-        suggestionColumns: bestSuggestion?.columns
+        defaultType
       }
+    );
+  });
+
+  $effect(() => {
+    const currentBasemap = resolveRelevantPersistedBasemap({
+      selectedDataset: datasetsStore.selectedDataset,
+      sourceFiles: projectStore.currentProject?.data?.sourceFiles,
+      projectBasemap:
+        (projectStore.currentProject?.data?.basemap as
+          | PersistedProjectBasemap
+          | undefined) ?? undefined,
+      selectedBasemapId: dataTabState.basemapJoin.selectedBasemap,
+      selectedBasemapSource: dataTabState.basemapJoin.basemapSource,
+      hasMultipleDatasets: datasetsStore.datasets.length > 1
+    });
+    syncProjectOSMBasemap(
+      currentBasemap,
+      basemapCatalogService,
+      osmBasemapStore
     );
   });
 </script>

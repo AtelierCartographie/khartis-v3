@@ -76,10 +76,10 @@ jobs:
         run: pnpm check
 
       - name: Run pipeline tests
-        run: NODE_OPTIONS='--max-old-space-size=4096' pnpm exec vitest run --project server tests/pipeline
+        run: pnpm test:pipeline
 
       - name: Run DuckDB tests
-        run: NODE_OPTIONS='--max-old-space-size=4096' pnpm exec vitest run --project server tests/duckdb
+        run: pnpm test:duckdb
 
       - name: Build application
         run: pnpm build

@@ -28,13 +28,20 @@
     suggestions &&
       (suggestions.national.length > 0 || suggestions.generic.length > 0)
   );
+  const hasCustomProjection = $derived(
+    Boolean(projectionState.customCode?.trim())
+  );
 
   const selectedCardId = $derived.by(() => {
+    if (hasCustomProjection) {
+      return null;
+    }
+
     const selectedProjection = projectionState.selected;
     const matchingCard = projections.find(
       (projection) => projection.projectionId === selectedProjection
     );
-    return matchingCard?.id ?? projections[0].id;
+    return matchingCard?.id ?? null;
   });
 
   const filterOptions: ReadonlyArray<{

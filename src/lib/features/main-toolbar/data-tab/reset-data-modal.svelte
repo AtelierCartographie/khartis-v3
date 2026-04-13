@@ -28,6 +28,10 @@
   );
 
   async function handleReset() {
+    if (isResetting) {
+      return;
+    }
+
     isResetting = true;
     try {
       const success = await datasetsStore.resetDataset(datasetId);
@@ -60,6 +64,7 @@
   primaryButtonDisabled={isResetting || !hasModifications || !dataset}
   secondaryButtonText={m.cancel()}
   danger
+  on:click:button--primary={handleReset}
   on:click:button--secondary={() => (open = false)}
   on:submit={handleReset}
   size="sm"

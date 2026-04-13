@@ -10,6 +10,9 @@ import { getFiltersMap } from './state.svelte';
 
 export interface DuckDBClientForTableData {
   query(sql: string, options?: { format?: string }): Promise<unknown>;
+  describe_table(
+    tableName: string
+  ): Promise<{ name: string[]; type: string[] }>;
   describeColumns(tableName: string): Promise<AnalysisResult[]>;
   analyse(
     tableName: string,
@@ -41,6 +44,27 @@ function normalizeRowId(value: unknown): number | null {
   return null;
 }
 
+async function buildSelectClauseWithoutGeometry(
+  tableName: string,
+  Duck: DuckDBClientForTableData
+): Promise<string> {
+  try {
+    const tableInfo = await Duck.describe_table(tableName);
+    const geomCols = tableInfo.name.flatMap((name, index) => {
+      const type = String(tableInfo.type[index] ?? '').toUpperCase();
+      return type.startsWith(GEOMETRY_COLUMN_TYPE) ? [`"${name}"`] : [];
+    });
+
+    if (geomCols.length > 0) {
+      return `* EXCLUDE (${geomCols.join(', ')})`;
+    }
+  } catch {
+    /* fallback to SELECT * */
+  }
+
+  return '*';
+}
+
 export async function getTableData(
   tableName: string,
   Duck: DuckDBClientForTableData,
@@ -48,27 +72,10 @@ export async function getTableData(
 ): Promise<ArrowTableLike> {
   try {
     const filters = getFiltersMap();
-
-    let selectClause = '*';
-    try {
-      const columns = await Duck.describeColumns(tableName);
-      const geomCols = columns
-        .filter(
-          (c) =>
-            String(c.type || '')
-              .toUpperCase()
-              .startsWith(GEOMETRY_COLUMN_TYPE) ||
-            String(c.type_simple || '')
-              .toUpperCase()
-              .startsWith(GEOMETRY_COLUMN_TYPE)
-        )
-        .map((c) => `"${c.name}"`);
-      if (geomCols.length > 0) {
-        selectClause = `* EXCLUDE (${geomCols.join(', ')})`;
-      }
-    } catch {
-      /* fallback to SELECT * */
-    }
+    const selectClause = await buildSelectClauseWithoutGeometry(
+      tableName,
+      Duck
+    );
 
     const escapedTableName = escapeIdentifier(tableName);
     let query = `SELECT ${selectClause} FROM "${escapedTableName}"`;
@@ -233,8 +240,17 @@ export async function getExcludedRowIds(
   // when deleting "excluded" rows from a filter.
   const query = `SELECT __id FROM "${escapedTable}" WHERE COALESCE(NOT (${whereClause}), TRUE)`;
   const result = (await Duck.query(query)) as ArrowTableLike;
+  const rowIds: number[] = [];
 
-  return result.toArray().map((row) => row.__id as number);
+  for (let index = 0; index < result.numRows; index += 1) {
+    const row = result.get(index) as Record<string, unknown>;
+    const rowId = normalizeRowId(row.__id);
+    if (rowId !== null) {
+      rowIds.push(rowId);
+    }
+  }
+
+  return rowIds;
 }
 
 export async function analyzeTable(

@@ -4,12 +4,14 @@ import type {
 } from '$lib/features/data-pipeline';
 import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
 import {
+  DEFAULT_COLORS,
   FillMode,
   MissingDataShape,
   ProportionalType,
   ShapeType,
   StrokeMode,
-  SymbolMode
+  SymbolMode,
+  VISUALIZATION_DEFAULTS
 } from '$lib/features/main-toolbar/constants';
 import { deepClone } from '../utils/clone.utils';
 import {
@@ -80,6 +82,7 @@ export interface ClassificationConfig {
   counts?: number[];
   colors?: string[];
   paletteId?: string;
+  inverted?: boolean;
   labels?: string[];
   breakpointValue?: number | null;
   patternId?: string;
@@ -116,9 +119,14 @@ export interface YearFilter {
 export type VizFilterOperator =
   | 'gte'
   | 'lte'
+  | 'contains'
   | 'equals'
   | 'not_equals'
-  | 'between';
+  | 'between'
+  | 'top_asc'
+  | 'top_desc'
+  | 'empty'
+  | 'not_empty';
 
 export interface VizDataFilter {
   id: string;
@@ -126,6 +134,7 @@ export interface VizDataFilter {
   operator: VizFilterOperator;
   value: string;
   secondaryValue?: string;
+  limit?: number;
   primitiveType?: PrimitiveFilter;
 }
 
@@ -135,6 +144,9 @@ export interface VisualizationConfig {
   type: VisualizationType;
   datasetId: string;
   enabled: boolean;
+  facet?: {
+    baseVisualizationId: string;
+  };
   modes?: VisualizationModes;
   primitiveFilters?: PrimitiveFilter[];
   primitiveOrder?: PrimitiveFilter[];
@@ -160,6 +172,7 @@ export interface VisualizationConfig {
     textHalo?: boolean;
     textHaloColor?: string;
     textHaloWidth?: number;
+    textCollisionDetection?: boolean;
     textDxpMasking?: boolean;
     labelColor?: string | string[];
     labelOpacity?: number;
@@ -193,6 +206,18 @@ export interface VisualizationConfig {
   yearFilter?: YearFilter;
   dataFilters?: VizDataFilter[];
 }
+
+export type VisualizationPreset = Pick<
+  VisualizationConfig,
+  | 'type'
+  | 'modes'
+  | 'primitiveFilters'
+  | 'style'
+  | 'mapping'
+  | 'classification'
+  | 'symbols'
+  | 'missingData'
+>;
 
 interface VisualizationState {
   visualizations: VisualizationConfig[];
@@ -238,6 +263,7 @@ export interface VisualizationStore {
     id: string,
     updates: Partial<VisualizationConfig>
   ) => void;
+  applyVisualizationPreset: (id: string, type: VisualizationType) => void;
   duplicateVisualization: (
     id: string,
     targetDatasetId?: string
@@ -250,7 +276,19 @@ export interface VisualizationStore {
   selectVisualization: (id: string) => void;
   invertPalette: (id: string) => void;
   getVisualizationsByDataset: (datasetId: string) => VisualizationConfig[];
-  getVisualizationsUsingColumn: (columnName: string) => VisualizationConfig[];
+  getVisualizationsUsingColumn: (
+    datasetId: string,
+    columnName: string
+  ) => VisualizationConfig[];
+  renameDatasetColumnReferences: (
+    datasetId: string,
+    previousName: string,
+    nextName: string
+  ) => void;
+  removeDatasetColumnReferences: (
+    datasetId: string,
+    columnName: string
+  ) => void;
   setYearFilter: (id: string, filter: YearFilter | null) => void;
   addDataFilter: (id: string, filter: Omit<VizDataFilter, 'id'>) => void;
   removeDataFilter: (id: string, filterId: string) => void;
@@ -271,7 +309,7 @@ const COLUMN_TYPE_STRING = 'string';
 
 const DEFAULT_SYMBOL_SIZE = 12;
 const DEFAULT_SYMBOL_MIN_SIZE = 5;
-const DEFAULT_SYMBOL_MAX_SIZE = 50;
+const DEFAULT_SYMBOL_MAX_SIZE = VISUALIZATION_DEFAULTS.symbolMaxSize;
 const DEFAULT_SYMBOL_OPACITY = 0.8;
 const DEFAULT_LABEL_OPACITY = 0;
 const DEFAULT_TEXT_OPACITY = 0;
@@ -298,6 +336,27 @@ export const DEFAULT_CATEGORICAL_COLORS = [
   '#f781bf'
 ];
 
+const VISUALIZATION_MAPPING_KEYS = [
+  'valueColumn',
+  'categoryColumn',
+  'sizeColumn',
+  'colorColumn',
+  'geometryColumn',
+  'labelColumn',
+  'secondaryLabelColumn'
+] as const;
+
+const CLASSIFICATION_DEPENDENT_MAPPING_KEYS = new Set([
+  'valueColumn',
+  'categoryColumn',
+  'sizeColumn',
+  'colorColumn'
+]);
+
+type VisualizationMappingKey = (typeof VISUALIZATION_MAPPING_KEYS)[number];
+
+type GeometryFamily = 'point' | 'line' | 'polygon' | 'unknown';
+
 function incrementVersion(state: VisualizationState): void {
   state.version++;
   persistenceRegistry.notifyChange('visualization');
@@ -307,8 +366,12 @@ function getDefaultStyle(
   type: VisualizationType
 ): VisualizationConfig['style'] {
   const textOverlayDefaults: VisualizationConfig['style'] = {
+    labelColor: DEFAULT_COLORS.label,
     labelOpacity: DEFAULT_LABEL_OPACITY,
-    textOpacity: DEFAULT_TEXT_OPACITY
+    labelCollisionDetection: true,
+    textColor: DEFAULT_COLORS.text,
+    textOpacity: DEFAULT_TEXT_OPACITY,
+    textCollisionDetection: true
   };
 
   switch (type) {
@@ -452,12 +515,38 @@ function getDefaultModes(type: VisualizationType): VisualizationModes {
   }
 }
 
-function getDefaultSymbols(type: VisualizationType): VisualizationSymbols {
+function getDefaultSymbols(
+  type: VisualizationType,
+  dataset: ProcessedDataset | DatasetResult
+): VisualizationSymbols {
+  const geometryType =
+    typeof dataset.geometry === 'string'
+      ? dataset.geometry
+      : dataset.geometry?.type;
+  const isPolygonGeometry =
+    geometryType?.toLowerCase().includes('polygon') ?? false;
+  const rowCount = 'rowCount' in dataset ? (dataset.rowCount ?? 0) : 0;
+  const densityAdjustedMaxSize =
+    isPolygonGeometry &&
+    (type === VisualizationType.PROPORTIONAL ||
+      type === VisualizationType.BIVARIATE)
+      ? Math.max(
+          6,
+          Math.min(
+            VISUALIZATION_DEFAULTS.symbolMaxSize,
+            Math.round(140 / Math.sqrt(Math.max(rowCount, 1)))
+          )
+        )
+      : DEFAULT_SYMBOL_MAX_SIZE;
+  const minSize = isPolygonGeometry
+    ? Math.max(1, Math.min(4, Math.round(densityAdjustedMaxSize / 4)))
+    : DEFAULT_SYMBOL_MIN_SIZE;
+
   return {
     type: ShapeType.POINT,
     size: DEFAULT_SYMBOL_SIZE,
-    minSize: DEFAULT_SYMBOL_MIN_SIZE,
-    maxSize: DEFAULT_SYMBOL_MAX_SIZE,
+    minSize,
+    maxSize: densityAdjustedMaxSize,
     sizeScale:
       type === VisualizationType.PROPORTIONAL
         ? ScaleType.SQRT
@@ -466,9 +555,9 @@ function getDefaultSymbols(type: VisualizationType): VisualizationSymbols {
   };
 }
 
-function getDefaultPrimitiveFilters(
+function resolveGeometryFamilyFromDataset(
   dataset: ProcessedDataset | DatasetResult
-): PrimitiveFilter[] {
+): GeometryFamily {
   const geometryType =
     typeof dataset.geometry === 'string'
       ? dataset.geometry
@@ -476,18 +565,148 @@ function getDefaultPrimitiveFilters(
   const normalizedGeometryType = geometryType?.toLowerCase() ?? '';
 
   if (normalizedGeometryType.includes('polygon')) {
-    return [PrimitiveFilterType.POLYGON, PrimitiveFilterType.LINE];
+    return 'polygon';
   }
 
   if (normalizedGeometryType.includes('line')) {
-    return [PrimitiveFilterType.LINE];
+    return 'line';
   }
 
   if (normalizedGeometryType.includes('point')) {
-    return [PrimitiveFilterType.POINT];
+    return 'point';
   }
 
-  return [...ALL_PRIMITIVE_FILTERS];
+  return 'unknown';
+}
+
+export function resolveAllowedPrimitiveFilters(
+  type: VisualizationType,
+  dataset: ProcessedDataset | DatasetResult
+): PrimitiveFilter[] {
+  switch (resolveGeometryFamilyFromDataset(dataset)) {
+    case 'polygon':
+      if (
+        type === VisualizationType.PROPORTIONAL ||
+        type === VisualizationType.BIVARIATE
+      ) {
+        return [PrimitiveFilterType.POINT, PrimitiveFilterType.POLYGON];
+      }
+
+      return [PrimitiveFilterType.POLYGON];
+
+    case 'line':
+      return [PrimitiveFilterType.LINE];
+
+    case 'point':
+      return [PrimitiveFilterType.POINT];
+
+    default:
+      return [...ALL_PRIMITIVE_FILTERS];
+  }
+}
+
+function sanitizePrimitiveFilters(
+  filters: PrimitiveFilter[] | undefined,
+  allowedFilters: PrimitiveFilter[]
+): PrimitiveFilter[] {
+  const sourceFilters =
+    filters && filters.length > 0 ? filters : allowedFilters;
+  const sanitized = [...new Set(sourceFilters)].filter((filter) =>
+    allowedFilters.includes(filter)
+  );
+
+  return sanitized.length > 0 ? sanitized : [...allowedFilters];
+}
+
+function sanitizePrimitiveOrder(
+  order: PrimitiveFilter[] | undefined,
+  allowedFilters: PrimitiveFilter[]
+): PrimitiveFilter[] {
+  const sourceOrder = order && order.length > 0 ? order : ALL_PRIMITIVE_FILTERS;
+  const sanitized = [
+    ...new Set([...sourceOrder, ...ALL_PRIMITIVE_FILTERS])
+  ].filter((filter) => allowedFilters.includes(filter));
+
+  return sanitized.length > 0 ? sanitized : [...allowedFilters];
+}
+
+function sanitizeDataFilters(
+  dataFilters: VizDataFilter[] | undefined,
+  allowedFilters: PrimitiveFilter[]
+): VizDataFilter[] | undefined {
+  if (!dataFilters) {
+    return undefined;
+  }
+
+  return dataFilters.filter(
+    (filter) =>
+      !filter.primitiveType || allowedFilters.includes(filter.primitiveType)
+  );
+}
+
+function normalizeVisualizationConfig(
+  visualization: VisualizationConfig,
+  dataset: ProcessedDataset | DatasetResult
+): VisualizationConfig {
+  const allowedFilters = resolveAllowedPrimitiveFilters(
+    visualization.type,
+    dataset
+  );
+
+  return {
+    ...visualization,
+    primitiveFilters: sanitizePrimitiveFilters(
+      visualization.primitiveFilters,
+      allowedFilters
+    ),
+    primitiveOrder: sanitizePrimitiveOrder(
+      visualization.primitiveOrder,
+      allowedFilters
+    ),
+    dataFilters: sanitizeDataFilters(visualization.dataFilters, allowedFilters)
+  };
+}
+
+function getNormalizedVisualization(
+  visualization: VisualizationConfig
+): VisualizationConfig {
+  const dataset = findById(datasetsStore.datasets, visualization.datasetId);
+
+  if (!dataset) {
+    return visualization;
+  }
+
+  return normalizeVisualizationConfig(visualization, dataset);
+}
+
+function getDefaultPrimitiveFilters(
+  type: VisualizationType,
+  dataset: ProcessedDataset | DatasetResult
+): PrimitiveFilter[] {
+  return resolveAllowedPrimitiveFilters(type, dataset);
+}
+
+function buildVisualizationPreset(
+  type: VisualizationType,
+  dataset: ProcessedDataset | DatasetResult
+): VisualizationPreset {
+  return {
+    type,
+    modes: getDefaultModes(type),
+    primitiveFilters: getDefaultPrimitiveFilters(type, dataset),
+    style: getDefaultStyle(type),
+    mapping: getDefaultMapping(type, dataset),
+    classification: getDefaultClassification(type),
+    symbols: getDefaultSymbols(type, dataset),
+    missingData: getDefaultMissingData()
+  };
+}
+
+export function resolveVisualizationPreset(
+  type: VisualizationType,
+  dataset: ProcessedDataset | DatasetResult
+): VisualizationPreset {
+  return buildVisualizationPreset(type, dataset);
 }
 
 function getDefaultMissingData(): MissingDataConfig {
@@ -506,6 +725,14 @@ function createVisualizationStore(): VisualizationStore {
     activeVisualizationIds: new Set<string>(),
     version: 0
   });
+
+  function updateActiveVisualizationIds(
+    updater: (ids: Set<string>) => Set<string>
+  ): void {
+    state.activeVisualizationIds = updater(
+      new Set(state.activeVisualizationIds)
+    );
+  }
 
   function getVisualizationById(id: string): VisualizationConfig | undefined {
     return findById(state.visualizations, id);
@@ -527,10 +754,17 @@ function createVisualizationStore(): VisualizationStore {
       return;
     }
 
-    state.visualizations = updateById(state.visualizations, id, {
+    const nextVisualization = getNormalizedVisualization({
+      ...visualization,
       ...updates,
       id
     });
+
+    state.visualizations = updateById(
+      state.visualizations,
+      id,
+      nextVisualization
+    );
     incrementVersion(state);
   }
 
@@ -544,7 +778,7 @@ function createVisualizationStore(): VisualizationStore {
       throw new Error(DATASET_NOT_FOUND_ERROR);
     }
 
-    const visualization: VisualizationConfig = {
+    const visualization = getNormalizedVisualization({
       id: crypto.randomUUID(),
       name:
         name ||
@@ -552,21 +786,14 @@ function createVisualizationStore(): VisualizationStore {
           DEFAULT_VISUALIZATION_NAME,
           state.visualizations.map((item) => item.name)
         ),
-      type,
       datasetId,
       enabled: true,
-      modes: getDefaultModes(type),
-      primitiveFilters: getDefaultPrimitiveFilters(dataset),
-      style: getDefaultStyle(type),
-      mapping: getDefaultMapping(type, dataset),
-      classification: getDefaultClassification(type),
-      symbols: getDefaultSymbols(type),
-      missingData: getDefaultMissingData()
-    };
+      ...buildVisualizationPreset(type, dataset)
+    });
 
     state.visualizations.push(visualization);
     state.selectedVisualizationId = visualization.id;
-    state.activeVisualizationIds.add(visualization.id);
+    updateActiveVisualizationIds((ids) => ids.add(visualization.id));
     incrementVersion(state);
 
     return visualization;
@@ -658,6 +885,23 @@ function createVisualizationStore(): VisualizationStore {
     applyVisualizationUpdate(id, () => updates);
   }
 
+  function applyVisualizationPreset(id: string, type: VisualizationType): void {
+    applyVisualizationUpdate(id, (visualization) => {
+      const dataset = findById(datasetsStore.datasets, visualization.datasetId);
+      if (!dataset) {
+        return null;
+      }
+
+      const preset = buildVisualizationPreset(type, dataset);
+
+      return {
+        ...preset,
+        primitiveOrder: undefined,
+        dataFilters: undefined
+      };
+    });
+  }
+
   function duplicateVisualization(
     id: string,
     targetDatasetId?: string
@@ -672,16 +916,16 @@ function createVisualizationStore(): VisualizationStore {
       state.visualizations.map((item) => item.name)
     );
 
-    const duplicatedVisualization: VisualizationConfig = {
+    const duplicatedVisualization = getNormalizedVisualization({
       ...deepClone(original),
       id: crypto.randomUUID(),
       name: duplicatedName,
       ...(targetDatasetId ? { datasetId: targetDatasetId } : {})
-    };
+    });
 
     state.visualizations.push(duplicatedVisualization);
     state.selectedVisualizationId = duplicatedVisualization.id;
-    state.activeVisualizationIds.add(duplicatedVisualization.id);
+    updateActiveVisualizationIds((ids) => ids.add(duplicatedVisualization.id));
     incrementVersion(state);
 
     return duplicatedVisualization;
@@ -692,7 +936,10 @@ function createVisualizationStore(): VisualizationStore {
       (visualization) => visualization.id !== id
     );
 
-    state.activeVisualizationIds.delete(id);
+    updateActiveVisualizationIds((ids) => {
+      ids.delete(id);
+      return ids;
+    });
 
     if (state.selectedVisualizationId === id) {
       state.selectedVisualizationId = remainingVisualizations[0]?.id;
@@ -708,8 +955,9 @@ function createVisualizationStore(): VisualizationStore {
     }
 
     configs.forEach((config) => {
-      state.visualizations.push(config);
-      state.activeVisualizationIds.add(config.id);
+      const normalizedConfig = getNormalizedVisualization(config);
+      state.visualizations.push(normalizedConfig);
+      updateActiveVisualizationIds((ids) => ids.add(normalizedConfig.id));
     });
 
     incrementVersion(state);
@@ -725,8 +973,11 @@ function createVisualizationStore(): VisualizationStore {
       (visualization) => !idsSet.has(visualization.id)
     );
 
-    ids.forEach((idToRemove) => {
-      state.activeVisualizationIds.delete(idToRemove);
+    updateActiveVisualizationIds((activeIds) => {
+      ids.forEach((idToRemove) => {
+        activeIds.delete(idToRemove);
+      });
+      return activeIds;
     });
 
     if (
@@ -771,11 +1022,14 @@ function createVisualizationStore(): VisualizationStore {
   }
 
   function toggleVisualization(id: string): void {
-    if (state.activeVisualizationIds.has(id)) {
-      state.activeVisualizationIds.delete(id);
-    } else {
-      state.activeVisualizationIds.add(id);
-    }
+    updateActiveVisualizationIds((ids) => {
+      if (ids.has(id)) {
+        ids.delete(id);
+      } else {
+        ids.add(id);
+      }
+      return ids;
+    });
     incrementVersion(state);
   }
 
@@ -793,10 +1047,13 @@ function createVisualizationStore(): VisualizationStore {
         return null;
       }
 
+      const inverted = !(visualization.classification.inverted ?? false);
+
       return {
         classification: {
           ...visualization.classification,
-          colors: [...visualization.classification.colors].reverse()
+          colors: [...visualization.classification.colors].reverse(),
+          inverted
         }
       };
     });
@@ -811,17 +1068,159 @@ function createVisualizationStore(): VisualizationStore {
   }
 
   function getVisualizationsUsingColumn(
+    datasetId: string,
     columnName: string
   ): VisualizationConfig[] {
     return state.visualizations.filter((visualization) => {
+      if (visualization.datasetId !== datasetId) {
+        return false;
+      }
+
       const mapping = visualization.mapping;
       return (
         mapping.valueColumn === columnName ||
         mapping.categoryColumn === columnName ||
         mapping.sizeColumn === columnName ||
-        mapping.colorColumn === columnName
+        mapping.colorColumn === columnName ||
+        mapping.geometryColumn === columnName ||
+        mapping.labelColumn === columnName ||
+        mapping.secondaryLabelColumn === columnName ||
+        visualization.yearFilter?.column === columnName ||
+        (visualization.dataFilters ?? []).some(
+          (filter) => filter.column === columnName
+        )
       );
     });
+  }
+
+  function renameDatasetColumnReferences(
+    datasetId: string,
+    previousName: string,
+    nextName: string
+  ): void {
+    if (!previousName || !nextName || previousName === nextName) {
+      return;
+    }
+
+    let hasChanges = false;
+
+    state.visualizations = state.visualizations.map((visualization) => {
+      if (visualization.datasetId !== datasetId) {
+        return visualization;
+      }
+
+      let mutated = false;
+      const nextMapping = { ...visualization.mapping };
+      for (const key of VISUALIZATION_MAPPING_KEYS) {
+        if (nextMapping[key as VisualizationMappingKey] === previousName) {
+          nextMapping[key as VisualizationMappingKey] = nextName;
+          mutated = true;
+        }
+      }
+
+      const nextYearFilter =
+        visualization.yearFilter?.column === previousName
+          ? { ...visualization.yearFilter, column: nextName }
+          : visualization.yearFilter;
+      if (nextYearFilter !== visualization.yearFilter) {
+        mutated = true;
+      }
+
+      const previousDataFilters = visualization.dataFilters ?? [];
+      const nextDataFilters = previousDataFilters.map((filter) =>
+        filter.column === previousName
+          ? { ...filter, column: nextName }
+          : filter
+      );
+      if (
+        nextDataFilters.some(
+          (filter, index) => filter !== previousDataFilters[index]
+        )
+      ) {
+        mutated = true;
+      }
+
+      if (!mutated) {
+        return visualization;
+      }
+
+      hasChanges = true;
+      return getNormalizedVisualization({
+        ...visualization,
+        mapping: nextMapping,
+        yearFilter: nextYearFilter,
+        dataFilters: nextDataFilters
+      });
+    });
+
+    if (hasChanges) {
+      incrementVersion(state);
+    }
+  }
+
+  function removeDatasetColumnReferences(
+    datasetId: string,
+    columnName: string
+  ): void {
+    if (!columnName) {
+      return;
+    }
+
+    let hasChanges = false;
+
+    state.visualizations = state.visualizations.map((visualization) => {
+      if (visualization.datasetId !== datasetId) {
+        return visualization;
+      }
+
+      let mutated = false;
+      let shouldClearClassification = false;
+      const nextMapping = { ...visualization.mapping };
+      for (const key of VISUALIZATION_MAPPING_KEYS) {
+        if (nextMapping[key as VisualizationMappingKey] === columnName) {
+          nextMapping[key as VisualizationMappingKey] = undefined;
+          mutated = true;
+          if (CLASSIFICATION_DEPENDENT_MAPPING_KEYS.has(key)) {
+            shouldClearClassification = true;
+          }
+        }
+      }
+
+      const nextYearFilter =
+        visualization.yearFilter?.column === columnName
+          ? undefined
+          : visualization.yearFilter;
+      if (nextYearFilter !== visualization.yearFilter) {
+        mutated = true;
+      }
+
+      const previousDataFilters = visualization.dataFilters ?? [];
+      const nextDataFilters = previousDataFilters.filter(
+        (filter) => filter.column !== columnName
+      );
+      if (nextDataFilters.length !== previousDataFilters.length) {
+        mutated = true;
+      }
+
+      if (!mutated) {
+        return visualization;
+      }
+
+      hasChanges = true;
+      return getNormalizedVisualization({
+        ...visualization,
+        mapping: nextMapping,
+        classification: shouldClearClassification
+          ? undefined
+          : visualization.classification,
+        yearFilter: nextYearFilter,
+        dataFilters: nextDataFilters
+      });
+    });
+
+    if (hasChanges) {
+      incrementVersion(state);
+    }
   }
 
   function setYearFilter(id: string, filter: YearFilter | null): void {
@@ -864,35 +1263,32 @@ function createVisualizationStore(): VisualizationStore {
   function clear(): void {
     state.visualizations = [];
     state.selectedVisualizationId = undefined;
-    state.activeVisualizationIds.clear();
+    updateActiveVisualizationIds((ids) => {
+      ids.clear();
+      return ids;
+    });
     incrementVersion(state);
   }
 
   function restoreFromSerialized(
     settings: SerializedVisualizationSettings
   ): void {
-    // Migrate old polygon vizzes: add LINE to primitiveFilters if only POLYGON was set
-    state.visualizations = (settings.visualizations || []).map(
-      (viz: VisualizationConfig) => {
-        if (
-          viz.primitiveFilters &&
-          viz.primitiveFilters.length === 1 &&
-          viz.primitiveFilters[0] === PrimitiveFilterType.POLYGON
-        ) {
-          return {
-            ...viz,
-            primitiveFilters: [
-              PrimitiveFilterType.POLYGON,
-              PrimitiveFilterType.LINE
-            ]
-          };
-        }
-        return viz;
-      }
-    );
-    state.selectedVisualizationId = settings.selectedVisualizationId;
+    const restoredVisualizations = (settings.visualizations || [])
+      .filter((viz: VisualizationConfig) => !viz.facet)
+      .map((viz: VisualizationConfig) => getNormalizedVisualization(viz));
+
+    state.visualizations = restoredVisualizations;
+
+    const restoredIds = new Set(restoredVisualizations.map((viz) => viz.id));
+    state.selectedVisualizationId = restoredIds.has(
+      settings.selectedVisualizationId ?? ''
+    )
+      ? settings.selectedVisualizationId
+      : restoredVisualizations[0]?.id;
     state.activeVisualizationIds = new Set(
-      settings.activeVisualizationIds || []
+      (settings.activeVisualizationIds || []).filter((id) =>
+        restoredIds.has(id)
+      )
     );
     incrementVersion(state);
   }
@@ -923,6 +1319,7 @@ function createVisualizationStore(): VisualizationStore {
     updateMissingData,
     updateClassification,
     updateVisualization,
+    applyVisualizationPreset,
     duplicateVisualization,
     removeVisualization,
     createBulkVisualizations,
@@ -933,6 +1330,8 @@ function createVisualizationStore(): VisualizationStore {
     invertPalette,
     getVisualizationsByDataset,
     getVisualizationsUsingColumn,
+    renameDatasetColumnReferences,
+    removeDatasetColumnReferences,
     setYearFilter,
     addDataFilter,
     removeDataFilter,

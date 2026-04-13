@@ -11,6 +11,8 @@
   import { ArrowRight, Launch } from 'carbon-icons-svelte';
   import { dataToolsStore } from '../data-tools.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
+  import { COLUMN_TRANSFORMATION_TYPES } from '$lib/features/commons/store/create-project.types';
 
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
@@ -19,13 +21,14 @@
     COLUMN_TYPE_GEOMETRY
   } from '$lib/features/commons/constants/data.constants';
   import * as m from '$lib/paraglide/messages';
+  import { refreshDatasetMetadata } from '../services/dataset-metadata';
   import AutocompleteTextarea, {
     type Suggestion
   } from '$lib/features/commons/components/autocomplete-textarea.svelte';
 
   interface Props {
     tableName?: string;
-    onColumnCreated?: () => void;
+    onColumnCreated?: () => Promise<void> | void;
   }
 
   let { tableName, onColumnCreated }: Props = $props();
@@ -263,13 +266,38 @@
         formula
       );
 
+      if (selectedDataset?.id) {
+        datasetsStore.recordTransformation(
+          selectedDataset.id,
+          `Calculated column created: ${effectiveName}`
+        );
+      }
+
+      if (selectedDataset?.sourceFileId) {
+        await projectStore.addColumnTransformation(
+          selectedDataset.sourceFileId,
+          {
+            type: COLUMN_TRANSFORMATION_TYPES.CALCULATE,
+            column: effectiveName,
+            newValue: formula,
+            timestamp: new Date().toISOString()
+          }
+        );
+      }
+
+      if (selectedDataset?.id) {
+        await refreshDatasetMetadata(selectedDataset.id, tableName, {
+          force: true
+        });
+      }
+
       variableCounter++;
       variableName = '';
       formula = '';
       testResult = null;
       successMessage = m.calc_success();
       dataToolsStore.resetCalculator();
-      onColumnCreated?.();
+      await onColumnCreated?.();
     } catch (err) {
       errorMessage = m.error_calc_generic();
       dataToolsStore.setCalculatorError(

@@ -8,17 +8,32 @@ import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte
 import { projectStore } from '$lib/features/commons/store/project.store.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
+import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { DEFAULT_OSM_STYLE } from '$lib/features/map/constants';
-import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
+import {
+  basemapCatalogService,
+  rankBasemapsByJoinSynthesis
+} from '$lib/features/map/services/basemap-catalog.service.svelte';
 import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
 import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
-import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
+import type {
+  BasemapMetadata,
+  BasemapSuggestion
+} from '$lib/features/map/types/basemap.types';
 import {
   createOSMBasemap,
   loadBasemapFromUrl,
   processBasemapImport
 } from '$lib/features/map/utils/basemap-import.utils';
 import * as m from '$lib/paraglide/messages';
+import { shouldAutoSelectSuggestedBasemap } from '../../services/basemap-auto-selection';
+import {
+  resolveRelevantPersistedBasemap,
+  restorePersistedBasemapSelection,
+  resolveBasemapSource,
+  type PersistedProjectBasemap
+} from '../../services/persisted-basemap';
+import { resolveNextBasemapSelectionId } from '../../services/basemap-selection';
 
 export interface BasemapSuggestionItem {
   basemap: BasemapMetadata;
@@ -28,6 +43,7 @@ export interface BasemapSuggestionItem {
 export interface UseEnrichmentBasemapReturn {
   readonly basemapTabIndex: number;
   readonly selectedBasemapId: string | undefined;
+  readonly hasActiveSelection: boolean;
   readonly basemapImportError: string | null;
   readonly basemapImportUploading: boolean;
   readonly importedCustomBasemap: BasemapMetadata | null;
@@ -38,36 +54,115 @@ export interface UseEnrichmentBasemapReturn {
   handleBasemapImportFile: (file: File) => Promise<void>;
   handleBasemapUrlLoad: (url: string) => Promise<void>;
   handleSelectOSM: () => void;
+  activatePreferredBasemap: () => void;
+  clearSelectedBasemap: () => void;
   clearBasemapImportError: () => void;
 }
 
 export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
-  let basemapTabIndex = $state(0);
   let selectedBasemapId = $state<string | undefined>(undefined);
   let basemapImportError = $state<string | null>(null);
   let basemapImportUploading = $state(false);
   let importedCustomBasemap = $state<BasemapMetadata | null>(null);
   let suggestedBasemaps = $state<BasemapSuggestionItem[]>([]);
+  let hasDismissedSuggestedBasemap = $state(false);
+  let lastSelectedBasemapId = $state<string | undefined>(undefined);
+  let lastSelectedBasemapSource = $state<BasemapSource | undefined>(undefined);
+  let previousDatasetId = $state<string | undefined>(undefined);
+
+  const basemapTabIndex = $derived(dataTabState.enrichData.basemapTabIndex);
+  const runtimePersistedBasemap = $derived.by(() =>
+    resolveRelevantPersistedBasemap({
+      selectedDataset: datasetsStore.selectedDataset,
+      sourceFiles: projectStore.currentProject?.data?.sourceFiles,
+      projectBasemap:
+        (projectStore.currentProject?.data?.basemap as
+          | PersistedProjectBasemap
+          | undefined) ?? undefined,
+      selectedBasemapId: selectedBasemapId,
+      selectedBasemapSource: dataTabState.basemapJoin.basemapSource,
+      hasMultipleDatasets: datasetsStore.datasets.length > 1
+    })
+  );
 
   const basemaps = $derived(basemapCatalogService.catalogBasemaps);
+  const hasActiveSelection = $derived(
+    selectedBasemapId !== undefined ||
+      osmBasemapStore.isActive ||
+      basemapStyleStore.referenceBasemapId !== null
+  );
+
+  function clearSelectedBasemap(): void {
+    selectedBasemapId = undefined;
+    osmBasemapStore.clear();
+    dataTabActions.setBasemapJoinState({
+      selectedBasemap: '',
+      basemapSource: lastSelectedBasemapSource ?? BasemapSource.CATALOG
+    });
+    basemapStyleStore.setReferenceBasemap(null);
+    projectStore.updateProjectData({ basemap: undefined });
+  }
+
+  function activatePreferredBasemap(): void {
+    if (hasActiveSelection) {
+      return;
+    }
+
+    if (
+      lastSelectedBasemapSource === BasemapSource.OSM &&
+      lastSelectedBasemapId
+    ) {
+      handleSelectOSM();
+      return;
+    }
+
+    if (lastSelectedBasemapId) {
+      const preferredBasemap = basemapCatalogService.getBasemapById(
+        lastSelectedBasemapId
+      );
+
+      if (preferredBasemap) {
+        handleSelectBasemap(preferredBasemap.file);
+        return;
+      }
+    }
+
+    if (suggestedBasemaps.length > 0) {
+      handleSelectBasemap(suggestedBasemaps[0].basemap.file);
+    }
+  }
 
   function setBasemapTabIndex(index: number): void {
-    basemapTabIndex = index;
+    dataTabActions.setEnrichDataState({ basemapTabIndex: index });
   }
 
   function handleSelectBasemap(basemapId: string): void {
-    selectedBasemapId = basemapId;
+    const nextBasemapId = resolveNextBasemapSelectionId(
+      selectedBasemapId,
+      basemapId
+    );
+
+    if (!nextBasemapId) {
+      hasDismissedSuggestedBasemap = true;
+      clearSelectedBasemap();
+      return;
+    }
+
+    hasDismissedSuggestedBasemap = false;
+    selectedBasemapId = nextBasemapId;
+    lastSelectedBasemapId = nextBasemapId;
+    lastSelectedBasemapSource = BasemapSource.CATALOG;
     osmBasemapStore.clear();
     dataTabActions.setBasemapJoinState({
-      selectedBasemap: basemapId,
+      selectedBasemap: nextBasemapId,
       basemapSource: BasemapSource.CATALOG
     });
 
-    basemapStyleStore.setReferenceBasemap(basemapId);
+    basemapStyleStore.setReferenceBasemap(nextBasemapId);
 
     projectStore.updateProjectData({
       basemap: {
-        id: basemapId,
+        id: nextBasemapId,
         type: 'catalog'
       }
     });
@@ -83,11 +178,16 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
 
       basemapCatalogService.addCustomBasemap(customBasemap);
       osmBasemapStore.clear();
-      dataTabActions.selectBasemap(customBasemap.file);
+      dataTabActions.setBasemapJoinState({
+        selectedBasemap: customBasemap.file,
+        basemapSource: BasemapSource.IMPORT
+      });
       await basemapService.registerCustomBasemap(customBasemap, geometryTable);
       basemapStyleStore.setReferenceBasemap(customBasemap.file);
       importedCustomBasemap = customBasemap;
       selectedBasemapId = customBasemap.file;
+      lastSelectedBasemapId = customBasemap.file;
+      lastSelectedBasemapSource = BasemapSource.IMPORT;
 
       projectStore.updateProjectData({
         basemap: {
@@ -128,6 +228,7 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
   function handleSelectOSM(): void {
     const osmBasemap = createOSMBasemap(DEFAULT_OSM_STYLE);
 
+    hasDismissedSuggestedBasemap = false;
     osmBasemapStore.setOSMBasemap(osmBasemap);
     basemapStyleStore.setReferenceBasemap(null);
     dataTabActions.setBasemapJoinState({
@@ -135,6 +236,8 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
       basemapSource: BasemapSource.OSM
     });
     selectedBasemapId = osmBasemap.file;
+    lastSelectedBasemapId = osmBasemap.file;
+    lastSelectedBasemapSource = BasemapSource.OSM;
 
     projectStore.updateProjectData({
       basemap: {
@@ -150,6 +253,46 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
   function clearBasemapImportError(): void {
     basemapImportError = null;
   }
+
+  $effect(() => {
+    const datasetId = datasetsStore.selectedDataset?.id;
+    if (datasetId !== previousDatasetId) {
+      previousDatasetId = datasetId;
+      hasDismissedSuggestedBasemap = false;
+    }
+  });
+
+  $effect(() => {
+    const projectBasemap = runtimePersistedBasemap;
+    const basemapCount = basemapCatalogService.basemaps.length;
+
+    void basemapCount;
+
+    if (projectBasemap?.id) {
+      void restorePersistedBasemapSelection(projectBasemap).then(() => {
+        selectedBasemapId = projectBasemap.id;
+        lastSelectedBasemapId = projectBasemap.id;
+        lastSelectedBasemapSource = resolveBasemapSource(projectBasemap.type);
+      });
+      return;
+    }
+
+    selectedBasemapId = basemapStyleStore.referenceBasemapId ?? undefined;
+    if (selectedBasemapId) {
+      lastSelectedBasemapId = selectedBasemapId;
+      lastSelectedBasemapSource = BasemapSource.CATALOG;
+      return;
+    }
+
+    if (osmBasemapStore.activeOSMBasemap) {
+      selectedBasemapId = osmBasemapStore.activeOSMBasemap.file;
+      lastSelectedBasemapId = selectedBasemapId;
+      lastSelectedBasemapSource = BasemapSource.OSM;
+      return;
+    }
+
+    selectedBasemapId = undefined;
+  });
 
   $effect(() => {
     const datasetId = datasetsStore.selectedDataset?.id;
@@ -176,11 +319,38 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
       }
 
       const processedDataset = normalizeToProcessedDataset(selectedDataset);
-      const suggestions = basemapCatalogService.getSuggestions(
-        processedDataset,
-        3,
-        dataTabState.geolocation.linkedVariableName
-      );
+      const geoColumnName = dataTabState.geolocation.linkedVariableName;
+      const datasetId =
+        selectedDataset.id ?? selectedDataset.sourceFileId ?? null;
+      let suggestions: BasemapSuggestion[] = [];
+
+      if (datasetId && geoColumnName) {
+        try {
+          const synthesis = await duckDBOrchestrator.computeJoinSynthesis(
+            datasetId,
+            geoColumnName
+          );
+          suggestions = rankBasemapsByJoinSynthesis(
+            basemapCatalogService.basemaps,
+            synthesis,
+            3
+          );
+        } catch (error) {
+          logger.warn(
+            'Enrichment basemap suggestions fell back to heuristics',
+            LogCategory.MAP,
+            error
+          );
+        }
+      }
+
+      if (suggestions.length === 0) {
+        suggestions = basemapCatalogService.getSuggestions(
+          processedDataset,
+          3,
+          geoColumnName
+        );
+      }
 
       if (cancelled) return;
 
@@ -192,7 +362,20 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
 
       suggestedBasemaps = mappedSuggestions;
 
-      if (!selectedBasemapId && mappedSuggestions.length > 0) {
+      if (
+        shouldAutoSelectSuggestedBasemap({
+          hasDismissedSuggestedBasemap,
+          suggestionCount: mappedSuggestions.length,
+          isOSMActive: osmBasemapStore.isActive,
+          hasDatasetGeometry: Boolean(selectedDataset.geometry),
+          persistedBasemapId: runtimePersistedBasemap?.id,
+          selectedBasemapId,
+          hasSelectedAvailableBasemap: Boolean(
+            selectedBasemapId &&
+            basemapCatalogService.getBasemapById(selectedBasemapId)
+          )
+        })
+      ) {
         handleSelectBasemap(mappedSuggestions[0].basemap.file);
       }
     }
@@ -219,6 +402,9 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
     get selectedBasemapId() {
       return selectedBasemapId;
     },
+    get hasActiveSelection() {
+      return hasActiveSelection;
+    },
     get basemapImportError() {
       return basemapImportError;
     },
@@ -239,6 +425,8 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
     handleBasemapImportFile,
     handleBasemapUrlLoad,
     handleSelectOSM,
+    activatePreferredBasemap,
+    clearSelectedBasemap,
     clearBasemapImportError
   };
 }

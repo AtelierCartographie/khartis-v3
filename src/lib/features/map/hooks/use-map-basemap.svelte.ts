@@ -38,8 +38,26 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
 
   const currentStyleKey = getStyleKey(basemapStyleStore.selectedStyleUrl);
   let lastAppliedStyleKey: string | null = currentStyleKey;
+  let lastAppliedOSMRasterKey: string | null = null;
   let isStyleLoading = $state(false);
   let styleLoadHandler: (() => void) | null = null;
+
+  function getOSMRasterKey(): string | null {
+    const osmBasemap = osmBasemapStore.activeOSMBasemap;
+    const tileConfig = osmBasemapStore.tileConfig;
+
+    if (!osmBasemap || !tileConfig) {
+      return null;
+    }
+
+    return [
+      osmBasemap.file,
+      tileConfig.urlTemplate,
+      tileConfig.minZoom,
+      tileConfig.maxZoom,
+      tileConfig.tileSize
+    ].join('::');
+  }
 
   function syncBasemapStyle(): void {
     const map = getMap();
@@ -122,13 +140,28 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
     const osmBasemap = osmBasemapStore.activeOSMBasemap;
     const tileConfig = osmBasemapStore.tileConfig;
     const osmLayerId = `${OSMSourceId.RASTER}-layer`;
+    const nextRasterKey = getOSMRasterKey();
+    const hasRasterSource = Boolean(map.getSource(OSMSourceId.RASTER));
+    const hasRasterLayer = Boolean(map.getLayer(osmLayerId));
 
-    try {
-      if (map.getLayer(osmLayerId)) map.removeLayer(osmLayerId);
-      if (map.getSource(OSMSourceId.RASTER))
-        map.removeSource(OSMSourceId.RASTER);
-    } catch {
-      // Ignore cleanup errors
+    if (!nextRasterKey) {
+      try {
+        if (hasRasterLayer) map.removeLayer(osmLayerId);
+        if (hasRasterSource) map.removeSource(OSMSourceId.RASTER);
+      } catch {
+        // Ignore cleanup errors
+      }
+
+      lastAppliedOSMRasterKey = null;
+      return;
+    }
+
+    if (
+      nextRasterKey === lastAppliedOSMRasterKey &&
+      hasRasterSource &&
+      hasRasterLayer
+    ) {
+      return;
     }
 
     if (osmBasemap && tileConfig) {
@@ -136,6 +169,8 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
       const rasterLayer = createOSMRasterLayer(OSMSourceId.RASTER);
 
       try {
+        if (hasRasterLayer) map.removeLayer(osmLayerId);
+        if (hasRasterSource) map.removeSource(OSMSourceId.RASTER);
         if (!map.getSource(OSMSourceId.RASTER)) {
           map.addSource(OSMSourceId.RASTER, rasterSource);
         }
@@ -146,6 +181,7 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
         logger.warn('Failed to add OSM raster layer', LogCategory.MAP, error);
       }
 
+      lastAppliedOSMRasterKey = nextRasterKey;
       logger.debug('OSM raster basemap applied', LogCategory.MAP, {
         basemap: osmBasemap.file,
         title: osmBasemap.title_fr
@@ -236,6 +272,7 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
     }
     isStyleLoading = false;
     lastAppliedStyleKey = null;
+    lastAppliedOSMRasterKey = null;
     logger.debug('Basemap hook cleanup completed', LogCategory.MAP);
   }
 

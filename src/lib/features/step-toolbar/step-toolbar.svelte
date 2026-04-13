@@ -231,8 +231,12 @@
     padding: var(--cds-spacing-03) var(--cds-spacing-02);
   }
 
-  :global(#khartis-step-toolbar .bx--popover--right-top) {
-    top: -13.5vh !important;
+  :global(#khartis-tool-popover .bx--popover) {
+    z-index: var(--z-popover);
+  }
+
+  :global(#khartis-colorblindness-notification .bx--popover--right-top) {
+    top: 0 !important;
   }
 
   :global(#khartis-colorblindness-notification .bx--popover-contents) {

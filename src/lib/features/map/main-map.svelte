@@ -11,6 +11,8 @@
   import { SvelteMap } from 'svelte/reactivity';
   import { fade } from 'svelte/transition';
   import { datasetsStore } from '../commons/store/datasets.store.svelte';
+  import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
+  import { isWgs84LikeCrs } from './utils/dataset-crs';
   import { globalState } from '../commons/store/global.svelte';
   import { ToolbarStep } from '../commons/types/global';
   import { LogCategory, logger } from '../commons/utils/logger';
@@ -30,8 +32,8 @@
   import { osmBasemapStore } from './stores/osm-basemap.store.svelte';
   import { facetsStore } from '../step-toolbar/tools/facets/facets.store.svelte';
   import FacetsGrid from '../step-toolbar/tools/facets/facets-grid.svelte';
+  import { loadDatasetsSequentially } from './utils/load-datasets-sequentially';
 
-  let containerRef: HTMLDivElement;
   let thematicMapRef = $state<HTMLDivElement>(undefined!);
 
   let isInitializing = $state(true);
@@ -41,10 +43,8 @@
   let errorMessage = $state<string | null>(null);
   let toolbarTransitionTimeoutId: ReturnType<typeof setTimeout> | null = null;
   let transitionEndCleanup: (() => void) | null = null;
-  let containerResizeObserver: ResizeObserver | null = null;
 
   const TOOLBAR_TRANSITION_SAFETY_MS = 400;
-  const CONTAINER_RESIZE_DEBOUNCE_MS = 100;
   let displayTables = $state.raw<SvelteMap<string, ArrowTable>>(
     new SvelteMap<string, ArrowTable>()
   );
@@ -56,6 +56,9 @@
   const enabledDatasets = $derived(datasetsStore.enabledDatasets);
   const duckDBDatasetsVersion = $derived(duckDBOrchestrator.datasetsVersion);
   const activeOSMBasemap = $derived(osmBasemapStore.activeOSMBasemap);
+  const usesTiledBasemap = $derived(
+    Boolean(activeOSMBasemap) || basemapStyleStore.requiresMapLibre
+  );
   const facetsEnabled = $derived(facetsStore.enabled);
   const facetsLayout = $derived(facetsStore.layout);
   const facetVisualizations = $derived(facetsStore.facetVisualizations);
@@ -122,23 +125,42 @@
         const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(
           dataset.sourceFileId
         );
+        const tableName = duckDBDataset?.tableName ?? dataset.tableName;
 
-        if (!duckDBDataset) {
+        if (!tableName) {
           return null;
         }
 
-        if (duckDBDataset.tableName) {
-          const arrowTable = duckDBDataset.arrowTableWithMetadata
-            ? duckDBDataset.arrowTableWithMetadata
-            : await duckDBOrchestrator.getArrowTableDirect(
-                duckDBDataset.tableName
-              );
+        if (!duckDBDataset) {
+          logger.debug(
+            'DuckDB dataset registry not ready yet, loading map table directly',
+            LogCategory.MAP,
+            {
+              datasetId: dataset.id,
+              tableName
+            }
+          );
+        }
+
+        if (tableName) {
+          const shouldReprojectForTiledBasemap =
+            usesTiledBasemap &&
+            Boolean(dataset.geometry?.crs) &&
+            !isWgs84LikeCrs(dataset.geometry?.crs);
+          const arrowTable = shouldReprojectForTiledBasemap
+            ? await duckDBOrchestrator.getArrowTableReprojectedToWGS84(
+                tableName
+              )
+            : duckDBDataset?.arrowTableWithMetadata
+              ? duckDBDataset.arrowTableWithMetadata
+              : await duckDBOrchestrator.getArrowTableDirect(tableName);
 
           if (arrowTable) {
             logger.success('Arrow table ready for Deck.gl', LogCategory.MAP, {
-              tableName: duckDBDataset.tableName,
+              tableName,
               rows: arrowTable.numRows,
-              cached: Boolean(duckDBDataset.arrowTableWithMetadata),
+              cached: Boolean(duckDBDataset?.arrowTableWithMetadata),
+              reprojectedForTiledBasemap: shouldReprojectForTiledBasemap,
               durationMs: (performance.now() - start).toFixed(2)
             });
             return arrowTable;
@@ -375,11 +397,9 @@
         }
       );
 
-      const loadPromises = currentEnabledDatasets.map((dataset) =>
+      void loadDatasetsSequentially(currentEnabledDatasets, (dataset) =>
         loadDatasetForDisplay(dataset, thisGeneration)
-      );
-
-      Promise.all(loadPromises).catch((error) => {
+      ).catch((error) => {
         logger.error(
           'Failed to reload display datasets',
           LogCategory.MAP,
@@ -428,7 +448,6 @@
       toolbarTransitionTimeoutId = null;
     }
     globalState.isToolbarTransitioning = false;
-    handleContainerResize();
   }
 
   $effect(() => {
@@ -466,36 +485,6 @@
     });
   });
 
-  $effect(() => {
-    void formatState.model;
-    const mode = formatState.mode;
-
-    untrack(() => {
-      if (!containerRef || mode !== FormatMode.PRESET) return;
-      handleContainerResize();
-    });
-  });
-
-  let containerResizeTimeoutId: ReturnType<typeof setTimeout> | null = null;
-
-  function handleContainerResize() {
-    if (!containerRef) return;
-    formatActions.fitToContainer(
-      containerRef.offsetWidth,
-      containerRef.offsetHeight
-    );
-  }
-
-  function handleContainerResizeDebounced() {
-    if (containerResizeTimeoutId) {
-      clearTimeout(containerResizeTimeoutId);
-    }
-    containerResizeTimeoutId = setTimeout(() => {
-      containerResizeTimeoutId = null;
-      handleContainerResize();
-    }, CONTAINER_RESIZE_DEBOUNCE_MS);
-  }
-
   async function initializeMap() {
     const start = performance.now();
     logger.info('Initializing main map view', LogCategory.MAP, {
@@ -526,10 +515,8 @@
 
     // Load remaining datasets progressively in the background
     if (remainingDatasets.length > 0) {
-      Promise.all(
-        remainingDatasets.map((dataset) =>
-          loadDatasetForDisplay(dataset, initGeneration)
-        )
+      void loadDatasetsSequentially(remainingDatasets, (dataset) =>
+        loadDatasetForDisplay(dataset, initGeneration)
       )
         .then(() => {
           logger.success('All datasets loaded', LogCategory.MAP, {
@@ -549,13 +536,6 @@
   }
 
   onMount(() => {
-    handleContainerResize();
-
-    containerResizeObserver = new ResizeObserver(() => {
-      handleContainerResizeDebounced();
-    });
-    containerResizeObserver.observe(containerRef);
-
     initializeMap();
 
     return () => {
@@ -566,10 +546,6 @@
         clearTimeout(skeletonTimeoutId);
       }
       cleanupTransitionListener();
-      if (containerResizeTimeoutId) {
-        clearTimeout(containerResizeTimeoutId);
-      }
-      containerResizeObserver?.disconnect();
       handleResizeUp();
     };
   });
@@ -619,6 +595,7 @@
   const showResizeHandles = $derived(
     globalState.selectedStep === ToolbarStep.Styling && isMapReady
   );
+  let hoveredResizeEdge = $state<ResizeEdge | null>(null);
 
   let resizeState = $state<{
     edge: ResizeEdge;
@@ -669,12 +646,13 @@
 
   function handleResizeUp(): void {
     resizeState = null;
+    hoveredResizeEdge = null;
     window.removeEventListener(EVENT.POINTERMOVE, handleResizeMove);
     window.removeEventListener(EVENT.POINTERUP, handleResizeUp);
   }
 </script>
 
-<div class="main-map-container" bind:this={containerRef}>
+<div class="main-map-container" class:resizable={showResizeHandles}>
   <!-- Skeleton loader - overlay above map, hidden via CSS when ready -->
   <div
     class="skeleton-loader"
@@ -730,6 +708,7 @@
   {#if showResizeHandles}
     <div
       class="resize-handles-frame"
+      class:highlighted={hoveredResizeEdge !== null || resizeState !== null}
       style="width: {formatState.width}px; height: {formatState.height}px;"
     >
       {#each RESIZE_EDGES as edge (edge)}
@@ -739,6 +718,12 @@
           aria-orientation={edge === 'n' || edge === 's'
             ? 'horizontal'
             : 'vertical'}
+          onpointerenter={() => (hoveredResizeEdge = edge)}
+          onpointerleave={() => {
+            if (hoveredResizeEdge === edge) {
+              hoveredResizeEdge = null;
+            }
+          }}
           onpointerdown={(e: PointerEvent) => handleResizePointerDown(e, edge)}
         ></div>
       {/each}
@@ -755,6 +740,10 @@
     height: 100%;
     position: relative;
     overflow: hidden;
+  }
+
+  .main-map-container.resizable {
+    user-select: none;
   }
 
   .thematic-map-wrapper {
@@ -810,12 +799,23 @@
   .resize-handles-frame {
     position: absolute;
     pointer-events: none;
+    border: 1px dashed transparent;
+    border-radius: 2px;
+    transition:
+      border-color 120ms ease,
+      box-shadow 120ms ease;
+  }
+
+  .resize-handles-frame.highlighted {
+    border-color: rgba(15, 98, 254, 0.55);
+    box-shadow: inset 0 0 0 1px rgba(15, 98, 254, 0.15);
   }
 
   .resize-handle {
     position: absolute;
     pointer-events: auto;
     z-index: var(--z-content-raised, 2);
+    touch-action: none;
   }
 
   /* Edge handles — thin bars along each side */
@@ -889,5 +889,17 @@
     background: var(--cds-interactive-01, #0f62fe);
     opacity: 0.4;
     border-radius: 1px;
+  }
+
+  @media (max-width: 1023px) {
+    .main-map-container {
+      width: max-content;
+      min-width: 100%;
+      height: max-content;
+      min-height: 100%;
+      justify-content: flex-start;
+      align-items: flex-start;
+      overflow: visible;
+    }
   }
 </style>

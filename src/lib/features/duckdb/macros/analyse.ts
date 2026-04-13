@@ -20,7 +20,7 @@ const get_simplified_type_macro = `CREATE OR REPLACE MACRO get_simplified_type(t
 			WHEN t IN ('DOUBLE', 'REAL', 'FLOAT') THEN 'numeric'
 			WHEN t ILIKE 'decimal%' THEN 'numeric'
 			WHEN t IN ('INTEGER', 'SMALLINT', 'TINYINT', 'USMALLINT', 'UINTEGER', 'UTINYINT') THEN 'numeric'
-			WHEN t = 'BOOLEAN' THEN 'string'
+			WHEN t = 'BOOLEAN' THEN 'boolean'
 			WHEN t IN ('DATE', 'TIMESTAMP', 'TIMESTAMP WITH TIME ZONE') THEN 'date'
 			WHEN t IN ('VARCHAR', 'UUID', 'BLOB', 'BITSTRING', 'TIME', 'INTERVAL') THEN 'string'
 			WHEN t = 'GEOMETRY' THEN 'geometry'

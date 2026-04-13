@@ -295,3 +295,10 @@ export function generateColorsForBreaks(
     webglToHex
   );
 }
+
+export function applyPaletteInversion(
+  colors: string[],
+  inverted = false
+): string[] {
+  return inverted ? [...colors].reverse() : colors;
+}

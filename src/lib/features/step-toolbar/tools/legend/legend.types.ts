@@ -8,7 +8,9 @@ export interface LegendItem {
   name: string;
   visible: boolean;
   title: string;
+  titleMode?: 'auto' | 'custom';
   subtitle: string;
+  subtitleMode?: 'auto' | 'custom';
   note: string;
   variableId?: string;
 }

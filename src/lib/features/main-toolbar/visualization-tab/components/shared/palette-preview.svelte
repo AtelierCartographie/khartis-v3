@@ -14,6 +14,7 @@
     label?: string;
     colors: string[];
     selectedPaletteId?: string;
+    inverted?: boolean;
     paletteType?: PaletteType;
     colorBlindFilter?: boolean;
     showInvertButton?: boolean;
@@ -27,6 +28,7 @@
     label,
     colors,
     selectedPaletteId = 'blues',
+    inverted = false,
     paletteType = $bindable<PaletteType>('sequential'),
     colorBlindFilter = $bindable(false),
     showInvertButton = true,
@@ -50,7 +52,13 @@
     const input = event.target as HTMLInputElement;
     const newColors = [...colors];
     newColors[index] = input.value;
-    onClassificationChange?.({ colors: newColors });
+    onClassificationChange?.({
+      colors: newColors,
+      paletteId: '__custom__',
+      inverted: false,
+      patternId: undefined,
+      patternParams: undefined
+    });
   }
 
   function handleClick() {
@@ -68,7 +76,9 @@
     onClassificationChange?.({
       colors: newColors,
       paletteId: palette.id,
-      patternId: palette.patternId ?? undefined
+      inverted: false,
+      patternId: palette.patternId ?? undefined,
+      patternParams: undefined
     });
     dropdownOpen = false;
   }
@@ -85,24 +95,19 @@
   function handlePopoverValidate(
     palette: Palette | undefined,
     newColors: string[],
-    _inverted: boolean,
+    nextInverted: boolean,
     patternParams?: PatternParams
   ) {
     if (palette) {
       onselect?.(palette);
     }
     const changes: Parameters<NonNullable<typeof onClassificationChange>>[0] = {
-      colors: newColors
+      colors: newColors,
+      inverted: nextInverted,
+      paletteId: palette?.id ?? '__custom__',
+      patternId: palette?.patternId ?? undefined,
+      patternParams: palette?.patternId ? patternParams : undefined
     };
-    if (palette) {
-      changes.paletteId = palette.id;
-    }
-    if (palette?.patternId) {
-      changes.patternId = palette.patternId;
-      if (patternParams) {
-        changes.patternParams = patternParams;
-      }
-    }
     onClassificationChange?.(changes);
     popoverOpen = false;
   }
@@ -175,6 +180,7 @@
   bind:open={popoverOpen}
   triggerElement={triggerRef}
   currentColors={colors}
+  currentInverted={inverted}
   selectedPaletteId={selectedPaletteId}
   bind:paletteType={paletteType}
   bind:colorBlindFilter={colorBlindFilter}

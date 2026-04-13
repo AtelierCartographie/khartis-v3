@@ -95,7 +95,7 @@ Le manifest declare `display: 'standalone'`, `orientation: 'portrait'`, avec 4 i
 
 ## Mise a jour
 
-Le service worker verifie les mises a jour toutes les heures. Quand une nouvelle version est detectee, une notification inline propose la mise a jour. Les projets IndexedDB sont preserves.
+Le service worker verifie les mises a jour toutes les heures. Quand une nouvelle version est detectee, une notification Carbon flottante propose la mise a jour avec l'emplacement d'action prevu par le composant (`actions`). Les projets IndexedDB sont preserves.
 
 ```ts
 const { needRefresh, updateServiceWorker } = useRegisterSW({

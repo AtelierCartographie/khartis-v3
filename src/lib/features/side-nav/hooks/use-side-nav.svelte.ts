@@ -4,6 +4,7 @@ import { globalState } from '$lib/features/commons/store/global.svelte';
 import { projectStore } from '$lib/features/commons/store/project.store.svelte';
 import { projectsStore } from '$lib/features/commons/store/projects.store.svelte';
 import { getLocale, setLocale, type Locale } from '$lib/paraglide/runtime.js';
+import { annotationsActions } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
 
 const SIDENAV_CONTAINER_ID = 'khartis-side-nav';
 const HAMBURGER_SELECTOR = '.bx--header__menu-trigger';
@@ -109,11 +110,12 @@ export function useSideNav(): UseSideNavReturn {
     closeModal();
   }
 
-  function handleLanguageChange(event: Event) {
+  async function handleLanguageChange(event: Event) {
     const target = event.target as HTMLSelectElement;
     const newLocale = target.value as Locale;
-    setLocale(newLocale);
+    await setLocale(newLocale, { reload: false });
     currentLocale = newLocale;
+    annotationsActions.refreshPageElementPlaceholders();
   }
 
   return {

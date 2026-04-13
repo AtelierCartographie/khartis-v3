@@ -8,10 +8,11 @@ Khartis est un outil de cartographie thematique open source developpe par Scienc
 
 ### Pour les utilisateurs
 
-| Document                                  | Description                                               |
-| ----------------------------------------- | --------------------------------------------------------- |
-| [Guide utilisateur](GUIDE_UTILISATEUR.md) | Prise en main des 3 etapes, import, visualisation, export |
-| [Glossaire](GLOSSAIRE.md)                 | Definitions des termes cartographiques et techniques      |
+| Document                                        | Description                                               |
+| ----------------------------------------------- | --------------------------------------------------------- |
+| [Guide utilisateur](GUIDE_UTILISATEUR.md)       | Prise en main des 3 etapes, import, visualisation, export |
+| [Cheat sheet exemples](CHEAT_SHEET_EXEMPLES.md) | 5 exemples d'import par URL pour prendre Khartis en main  |
+| [Glossaire](GLOSSAIRE.md)                       | Definitions des termes cartographiques et techniques      |
 
 ### Pour les developpeurs
 
@@ -38,11 +39,14 @@ Khartis est un outil de cartographie thematique open source developpe par Scienc
 
 ```bash
 corepack enable pnpm
+cp .env.sample .env
 pnpm install
 pnpm dev
 ```
 
 Ouvrir [http://localhost:5176/](http://localhost:5176/).
+
+Le fichier `.env` doit etre cree avant de lancer l'application. Le sample committe (`.env.sample`) ne contient que des valeurs non confidentielles. Par defaut il garde le `BASE_PATH` PPRD pour les tests avec prefixe de deploiement ; mettez `BASE_PATH=` dans `.env` si vous voulez servir l'application a la racine en local.
 
 ---
 

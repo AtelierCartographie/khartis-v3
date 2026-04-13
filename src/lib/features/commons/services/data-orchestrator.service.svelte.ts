@@ -1,12 +1,18 @@
 import type { DatasetResult } from '$lib/features/data-pipeline';
-import { createFileFromUpload } from '$lib/features/data-pipeline';
+import {
+  createFileFromUpload,
+  dataPipeline,
+  isZipDatasetResult
+} from '$lib/features/data-pipeline';
 import { Duck, RefineOperation } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import {
   isGeoJSONFeatureCollection,
-  type GeoJSONFeatureCollection
+  type GeoJSONFeatureCollection,
+  type JsonValue
 } from '$lib/types/data';
 import type { SerializedProjectData } from '$lib/types/serialization.types';
+import { persistenceRegistry } from '$lib/features/project-management';
 import { layersActions } from '../../step-toolbar/tools/layers/layers.store.svelte';
 import { legendActions } from '../../step-toolbar/tools/legend/legend.store.svelte';
 import { projectionActions } from '../../step-toolbar/tools/projections/projection.store.svelte';
@@ -34,9 +40,12 @@ import {
   showError,
   showWarning
 } from '../utils/notification.utils.svelte';
+import { sanitizePreparedGeoJSON } from '../utils/persisted-geojson.utils';
+import { resolvePersistedJoinState } from '../utils/persisted-join-state.utils';
 import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
 import { importRollbackService } from './import-rollback.service';
 import {
+  applyPaletteInversion,
   calculateBreaks,
   generateColorsForBreaks
 } from './classification.service';
@@ -58,6 +67,48 @@ function createDataOrchestratorService() {
   let geometryDatasetsVersion = $state(0);
   const processedFileIds = new Set<string>();
   const processingFiles = new Set<string>();
+
+  function toJsonValue(value: unknown): JsonValue {
+    if (
+      value === null ||
+      value === undefined ||
+      typeof value === 'string' ||
+      typeof value === 'number' ||
+      typeof value === 'boolean'
+    ) {
+      return value ?? null;
+    }
+
+    if (value instanceof Date) {
+      return value.toISOString();
+    }
+
+    if (Array.isArray(value)) {
+      return value.map((item) => toJsonValue(item));
+    }
+
+    if (typeof value === 'object') {
+      return Object.fromEntries(
+        Object.entries(value).map(([key, item]) => [key, toJsonValue(item)])
+      );
+    }
+
+    return String(value);
+  }
+
+  function toParsedTabularData(
+    rows: DatasetResult['data']
+  ): UploadedFile['parsedData'] | undefined {
+    if (!rows) {
+      return undefined;
+    }
+
+    return rows.map((row) =>
+      Object.fromEntries(
+        Object.entries(row).map(([key, value]) => [key, toJsonValue(value)])
+      )
+    );
+  }
 
   async function cleanupDuckDBResources(tableName: string): Promise<void> {
     try {
@@ -133,6 +184,20 @@ function createDataOrchestratorService() {
     }
   }
 
+  function createGeoJsonSnapshotForDuckDB(file: UploadedFile): UploadedFile {
+    const normalizedName = file.name.replace(/\.[^.]+$/u, '.geojson');
+    const preparedGeoJSON = sanitizePreparedGeoJSON(file.preparedGeoJSON);
+
+    return {
+      ...file,
+      name: normalizedName,
+      type: 'application/geo+json',
+      fileType: FileType.GEOJSON,
+      content: preparedGeoJSON,
+      originalFile: undefined
+    };
+  }
+
   async function prepareFileForDuckDB(
     file: UploadedFile,
     dataset: DatasetResult | undefined
@@ -150,6 +215,10 @@ function createDataOrchestratorService() {
     if (!requiresGeoProcessing) return null;
     if (dataset?.metadata?.geoDuckTableReady && dataset.tableName) return null;
     if (dataset?.tableName) return null;
+
+    if (file.preparedGeoJSON) {
+      return createGeoJsonSnapshotForDuckDB(file);
+    }
 
     if (file.fileType === FileType.KML || file.fileType === FileType.KMZ) {
       return convertKMLForDuckDB(file);
@@ -197,7 +266,8 @@ function createDataOrchestratorService() {
         dataset.sourceFileId || file.id,
         file.name,
         {
-          geoDetection: dataset.geoDetection
+          geoDetection: dataset.geoDetection,
+          preferredDatasetId: dataset.id
         }
       );
 
@@ -216,6 +286,57 @@ function createDataOrchestratorService() {
         error
       );
       throw error;
+    }
+  }
+
+  async function restoreJoinState(
+    duckDatasetId: string,
+    file: UploadedFile
+  ): Promise<void> {
+    const duckDataset = duckDBOrchestrator.getDataset(duckDatasetId);
+    const restoredJoinState = resolvePersistedJoinState({
+      file,
+      duckDataset,
+      selectedBasemapId: projectStore.currentProject?.data?.basemap?.id,
+      linkedGeoColumn: file.geoColumn,
+      selectedGpsColumns: file.gpsColumns,
+      isSelectedSourceFile: true
+    });
+
+    if (!restoredJoinState.joinedBasemap && !restoredJoinState.gpsMode) {
+      return;
+    }
+
+    duckDBOrchestrator.updateDatasetJoinInfo(duckDatasetId, restoredJoinState);
+
+    if (
+      !restoredJoinState.joinedBasemap ||
+      !restoredJoinState.geoColumn ||
+      restoredJoinState.gpsMode
+    ) {
+      return;
+    }
+
+    await basemapCatalogService.loadCatalog();
+    const basemap = basemapCatalogService.getBasemapById(
+      restoredJoinState.joinedBasemap
+    );
+    if (!basemap) {
+      return;
+    }
+
+    try {
+      await duckDBOrchestrator.finalizeJoin(
+        duckDatasetId,
+        basemap,
+        restoredJoinState.geoColumn
+      );
+    } catch (joinError) {
+      logger.warn('Failed to restore join on project load', LogCategory.DATA, {
+        datasetId: duckDatasetId,
+        joinedBasemap: restoredJoinState.joinedBasemap,
+        error: joinError
+      });
     }
   }
 
@@ -268,43 +389,13 @@ function createDataOrchestratorService() {
           dataset.sourceFileId || file.id,
           file.name,
           {
-            geoDetection: dataset.geoDetection
+            geoDetection: dataset.geoDetection,
+            preferredDatasetId: dataset.id
           }
         );
 
-        if (registered !== null && (file.joinedBasemap || file.gpsMode)) {
-          duckDBOrchestrator.updateDatasetJoinInfo(registered.id, {
-            joinedBasemap: file.joinedBasemap,
-            geoColumn: file.geoColumn,
-            gpsMode: file.gpsMode,
-            gpsColumns: file.gpsColumns
-          });
-
-          if (file.joinedBasemap && file.geoColumn) {
-            await basemapCatalogService.loadCatalog();
-            const basemap = basemapCatalogService.getBasemapById(
-              file.joinedBasemap
-            );
-            if (basemap) {
-              try {
-                await duckDBOrchestrator.finalizeJoin(
-                  registered.id,
-                  basemap,
-                  file.geoColumn
-                );
-              } catch (joinError) {
-                logger.warn(
-                  'Failed to restore join on project load',
-                  LogCategory.DATA,
-                  {
-                    datasetId: registered.id,
-                    joinedBasemap: file.joinedBasemap,
-                    error: joinError
-                  }
-                );
-              }
-            }
-          }
+        if (registered !== null) {
+          await restoreJoinState(registered.id, file);
         }
 
         if (registered === null) {
@@ -330,10 +421,12 @@ function createDataOrchestratorService() {
             file,
             strippedDataset
           );
+          let restoredDuckDatasetId: string | null = null;
           if (fileForDuckDB) {
             const duckResult =
               await duckDBOrchestrator.processFile(fileForDuckDB);
             if (duckResult && dataset) {
+              restoredDuckDatasetId = duckResult.id;
               datasetsStore.updateDatasetTableName(
                 dataset.id,
                 duckResult.tableName
@@ -348,8 +441,42 @@ function createDataOrchestratorService() {
 
               geometryDatasetsVersion++;
             }
+          } else if (file.content || file.originalFile) {
+            const restoredSourceFile =
+              file.originalFile ?? (await createFileFromUpload(file));
+            const processedResult = await dataPipeline.processUploadedFile(
+              file,
+              restoredSourceFile
+            );
+            const rebuiltDataset = isZipDatasetResult(processedResult)
+              ? processedResult.datasets[0]
+              : processedResult;
+            const duckRestoreFile: UploadedFile = {
+              ...file,
+              originalFile: restoredSourceFile,
+              parsedData: toParsedTabularData(rebuiltDataset.data)
+            };
+
+            const duckResult =
+              await duckDBOrchestrator.processFile(duckRestoreFile);
+            if (duckResult && dataset) {
+              restoredDuckDatasetId = duckResult.id;
+              datasetsStore.updateDatasetTableName(
+                dataset.id,
+                duckResult.tableName
+              );
+            }
           } else if (file.parsedData && Array.isArray(file.parsedData)) {
             await recreateTableFromParsedData(file, dataset.tableName, dataset);
+            restoredDuckDatasetId =
+              duckDBOrchestrator
+                .getAllDatasets()
+                .find((item) => item.sourceFileId === dataset.sourceFileId)
+                ?.id ?? null;
+          }
+
+          if (restoredDuckDatasetId) {
+            await restoreJoinState(restoredDuckDatasetId, file);
           }
         }
       } catch (registerError) {
@@ -366,7 +493,10 @@ function createDataOrchestratorService() {
 
   async function onFileAdded(
     file: UploadedFile,
-    autoEnable = true
+    autoEnable = true,
+    options?: {
+      suggestProjection?: boolean;
+    }
   ): Promise<void> {
     const snapshot = importRollbackService.createSnapshot(file);
 
@@ -387,7 +517,10 @@ function createDataOrchestratorService() {
       await processFileInDuckDB(file, dataset);
       processedFileIds.add(file.id);
 
-      if (dataset.geometry) {
+      if (
+        options?.suggestProjection !== false &&
+        (dataset.geometry || dataset.geoDetection)
+      ) {
         projectionActions.suggestProjectionForCurrentData();
       }
 
@@ -550,6 +683,17 @@ function createDataOrchestratorService() {
             }
             break;
 
+          case COLUMN_TRANSFORMATION_TYPES.CALCULATE:
+            if (transformation.newValue) {
+              await duckDBOrchestrator.addCalculatedColumn(
+                dataset.tableName,
+                currentColumnName,
+                transformation.newValue,
+                batch
+              );
+            }
+            break;
+
           case COLUMN_TRANSFORMATION_TYPES.REPLACE:
             if (
               transformation.searchValue !== undefined &&
@@ -636,6 +780,13 @@ function createDataOrchestratorService() {
     unprocessedFiles.forEach((file) => processingFiles.add(file.id));
     duckDBOrchestrator.beginBatch();
 
+    const currentProject = projectStore.currentProject;
+    const serializedData = currentProject?.data as
+      | SerializedProjectData
+      | undefined;
+    const shouldSuggestProjection =
+      !serializedData?.layoutSettings?.projection?.overrideActive;
+
     try {
       const concurrency = determineProjectConcurrency();
 
@@ -668,7 +819,7 @@ function createDataOrchestratorService() {
           }
         }
 
-        if (!file.originalFile) {
+        if (!file.originalFile && file.content) {
           try {
             file.originalFile = await createFileFromUpload(file);
           } catch (err) {
@@ -683,7 +834,9 @@ function createDataOrchestratorService() {
         const autoEnable = file.id === selectedSourceFileId;
 
         try {
-          await onFileAdded(file, autoEnable);
+          await onFileAdded(file, autoEnable, {
+            suggestProjection: shouldSuggestProjection
+          });
 
           if (
             file.columnTransformations &&
@@ -849,6 +1002,10 @@ function createDataOrchestratorService() {
                   'sequential',
                   contrast
                 );
+          colors = applyPaletteInversion(
+            colors,
+            viz.classification?.inverted ?? false
+          );
         }
 
         visualizationStore.updateClassification(viz.id, {
@@ -890,12 +1047,14 @@ function createDataOrchestratorService() {
     // No breaks at all
     if (!breaks || breaks.length < 2) return true;
 
-    // Breaks/colors mismatch: for N colors we expect N-1 or N+1 breaks
-    // A large mismatch (e.g. 32 breaks for 5 colors) means the
-    // serialized data is corrupted — recompute.
+    // Breaks/colors mismatch: for N colors we support either:
+    // - N-1 internal thresholds (current classification flow)
+    // - N lower bounds (legacy serialized projects)
+    // Anything else likely means corrupted serialized state — recompute.
     if (colors && colors.length > 0) {
-      const expectedBreaks = colors.length - 1;
-      if (Math.abs(breaks.length - expectedBreaks) > 2) {
+      const isInternalThresholdShape = breaks.length === colors.length - 1;
+      const isLegacyLowerBoundShape = breaks.length === colors.length;
+      if (!isInternalThresholdShape && !isLegacyLowerBoundShape) {
         logger.warn(
           'Breaks/colors mismatch detected, will recompute',
           LogCategory.DATA,
@@ -903,7 +1062,7 @@ function createDataOrchestratorService() {
             vizId: viz.id,
             breaksLength: breaks.length,
             colorsLength: colors.length,
-            expectedBreaks
+            expectedBreaks: [colors.length - 1, colors.length]
           }
         );
         return true;
@@ -964,15 +1123,16 @@ function createDataOrchestratorService() {
 
     layersActions.syncWithVisualizations();
     legendActions.syncWithVisualizations();
+    persistenceRegistry.markClean();
   }
 
   async function onProjectChanged(): Promise<void> {
     await duckDBOrchestrator.waitForInitialization();
+    await duckDBOrchestrator.clear();
 
     visualizationStore.clear();
     datasetsStore.clear();
     layersActions.reset();
-    projectionActions.reset();
 
     processedFileIds.clear();
 
@@ -980,6 +1140,9 @@ function createDataOrchestratorService() {
     const vizSettings = (
       currentProject?.data as SerializedProjectData | undefined
     )?.visualizationSettings;
+    const projectionSettings = (
+      currentProject?.data as SerializedProjectData | undefined
+    )?.layoutSettings?.projection;
 
     // Preload persisted visualizations before datasets are restored so the
     // project reload path does not briefly recreate default visualizations.
@@ -1000,22 +1163,67 @@ function createDataOrchestratorService() {
 
     migrateOrphanedVizDatasetIds();
     await recomputeMissingBreaks();
+    if (projectionSettings) {
+      projectionActions.setState(projectionSettings);
+    }
+
+    globalActions.ensureTabSelected();
+    datasetsStore.applyPersistedViewState();
+    duckDBOrchestrator.applyPersistedTableFilters();
 
     // Restore the geo column selection in the data tab UI so users don't
     // lose their manual choice (e.g. "entity" for fuzzy-countries) on reload.
     if (currentProject?.data?.sourceFiles) {
-      const primaryFile = currentProject.data.sourceFiles.find(
-        (f) => f.geoColumn
-      );
+      const selectedSourceFileId =
+        datasetsStore.selectedDataset?.sourceFileId ??
+        globalState.selectedDataButtonId;
+      const restoredFile =
+        currentProject.data.sourceFiles.find(
+          (file) =>
+            file.id === selectedSourceFileId &&
+            (file.geoColumn || file.joinedBasemap || file.gpsMode)
+        ) ??
+        currentProject.data.sourceFiles.find(
+          (file) => file.geoColumn || file.joinedBasemap || file.gpsMode
+        );
+      const restoredDuckDataset = restoredFile
+        ? duckDBOrchestrator.getDatasetBySourceFile(restoredFile.id)
+        : null;
+      const restoredPrimaryJoinState = restoredFile
+        ? resolvePersistedJoinState({
+            file: restoredFile,
+            duckDataset: restoredDuckDataset,
+            selectedBasemapId: currentProject.data.basemap?.id,
+            linkedGeoColumn: restoredFile.geoColumn,
+            selectedGpsColumns: restoredFile.gpsColumns,
+            isSelectedSourceFile: true
+          })
+        : null;
       logger.debug('Geo column restore check', LogCategory.DATA, {
         hasSourceFiles: true,
-        primaryFileName: primaryFile?.name,
-        geoColumn: primaryFile?.geoColumn,
-        joinedBasemap: primaryFile?.joinedBasemap
+        restoredFileName: restoredFile?.name,
+        selectedSourceFileId,
+        geoColumn: restoredPrimaryJoinState?.geoColumn,
+        joinedBasemap: restoredPrimaryJoinState?.joinedBasemap,
+        gpsMode: restoredPrimaryJoinState?.gpsMode,
+        gpsColumns: restoredPrimaryJoinState?.gpsColumns
       });
-      if (primaryFile?.geoColumn) {
-        const geoCol = primaryFile.geoColumn;
-        const basemap = primaryFile.joinedBasemap;
+      if (restoredPrimaryJoinState?.joinedBasemap) {
+        dataTabActions.selectBasemap(restoredPrimaryJoinState.joinedBasemap);
+      }
+      if (
+        restoredPrimaryJoinState?.gpsMode &&
+        restoredPrimaryJoinState.gpsColumns
+      ) {
+        dataTabActions.setGeolocationState({
+          linkedVariable: null,
+          linkedVariableName: '',
+          latitudeColumn: restoredPrimaryJoinState.gpsColumns.lat,
+          longitudeColumn: restoredPrimaryJoinState.gpsColumns.lon,
+          autoDetected: false
+        });
+      } else if (restoredPrimaryJoinState?.geoColumn) {
+        const geoCol = restoredPrimaryJoinState.geoColumn;
         // Defer restoration until dataset is fully loaded. The component's
         // $effect resets linkedVariable when the dataset ID changes, so we
         // must wait for that reset to happen first, then override.
@@ -1040,9 +1248,6 @@ function createDataOrchestratorService() {
               colIndex
             });
           }
-          if (basemap) {
-            dataTabActions.selectBasemap(basemap);
-          }
         };
         // Wait 2s for all Svelte $effects to settle after dataset loading
         setTimeout(restoreGeoColumn, 2000);
@@ -1051,7 +1256,7 @@ function createDataOrchestratorService() {
 
     layersActions.syncWithVisualizations();
     legendActions.syncWithVisualizations();
-    globalActions.ensureTabSelected();
+    persistenceRegistry.markClean();
 
     projectAlreadyRestored = true;
   }
