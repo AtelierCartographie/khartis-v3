@@ -623,6 +623,7 @@
       kind="ghost"
       size="small"
       iconDescription={isVizStep ? m.add_viz_tooltip() : m.add_data_tooltip()}
+      portalTooltip
       icon={Add}
       on:click={isVizStep ? handleAddVizTab : openAddDataModal}
       aria-label={isVizStep ? m.add_viz_tooltip() : m.add_data_tooltip()}
