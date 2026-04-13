@@ -139,6 +139,7 @@
   let currentJoinAbortController: AbortController | null = null;
   let previousJoinContext: string | null = null;
   let previousLinkedVariableName: string | null = null;
+  let previousFilterKey: string | null = null;
   let loadingSuggestions = false;
   let hasDismissedSuggestedBasemap = $state(false);
   const DATASET_READY_RETRY_DELAY_MS = 200;
@@ -196,6 +197,22 @@
 
   function isOSMBasemapId(basemapId: string): boolean {
     return basemapId.startsWith('osm_');
+  }
+
+  function getCurrentFilterKey(tableName: string | undefined): string {
+    if (!tableName) return '[]';
+
+    return JSON.stringify(
+      duckDBOrchestrator
+        .getFilters(tableName)
+        .map(({ column, operator, value, secondaryValue, limit }) => ({
+          column,
+          operator,
+          value,
+          secondaryValue,
+          limit
+        }))
+    );
   }
 
   async function waitForDatasetAvailability(
@@ -1208,13 +1225,16 @@
   });
 
   $effect(() => {
+    void duckDBDatasetsVersion;
     const linkedVariableName = dataTabState.geolocation.linkedVariableName;
     const selectedBasemapId = basemapSelected;
     const resolvedDatasetId = datasetIdForOrchestrator;
+    const filterKey = getCurrentFilterKey(selectedDataset?.tableName);
 
     if (!selectedDataset || !selectedBasemapId || !resolvedDatasetId) {
       previousJoinContext = null;
       previousLinkedVariableName = null;
+      previousFilterKey = null;
       return;
     }
 
@@ -1222,6 +1242,7 @@
       dataTabActions.clearJoinStats();
       previousJoinContext = `${resolvedDatasetId}::${selectedBasemapId}`;
       previousLinkedVariableName = linkedVariableName || null;
+      previousFilterKey = filterKey;
       return;
     }
 
@@ -1229,18 +1250,26 @@
     if (previousJoinContext !== joinContext) {
       previousJoinContext = joinContext;
       previousLinkedVariableName = linkedVariableName || null;
+      previousFilterKey = filterKey;
       return;
     }
 
-    if (
-      !linkedVariableName ||
-      linkedVariableName === previousLinkedVariableName
-    ) {
+    const filtersChanged = filterKey !== previousFilterKey;
+
+    if (!linkedVariableName) {
       previousLinkedVariableName = linkedVariableName || null;
+      previousFilterKey = filterKey;
+      return;
+    }
+
+    if (linkedVariableName === previousLinkedVariableName && !filtersChanged) {
+      previousLinkedVariableName = linkedVariableName || null;
+      previousFilterKey = filterKey;
       return;
     }
 
     previousLinkedVariableName = linkedVariableName;
+    previousFilterKey = filterKey;
 
     const basemap = allBasemapsForLookup.find(
       (b) => b.file === selectedBasemapId
@@ -1248,10 +1277,12 @@
     if (!basemap) return;
 
     logger.info(
-      'Recomputing join after linked variable change',
+      'Recomputing join after data-tab state change',
       LogCategory.MAP,
       {
         basemap: selectedBasemapId,
+        filterKey,
+        filtersChanged,
         linkedVariableName
       }
     );
