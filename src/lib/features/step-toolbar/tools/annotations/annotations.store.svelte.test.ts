@@ -65,15 +65,16 @@ describe('annotations store', () => {
     expect(getAnnotationsState().predefinedStyle).toBe(ANNOTATION_ROLE.TITLE);
   });
 
-  it('spawns the first free text annotation away from the legend area', () => {
+  it('spawns the first free text annotation in a neutral page zone', () => {
     annotationsActions.addAnnotation(AnnotationKind.TEXT, 'Free text');
 
     const annotation = getAnnotationsState().items.find(
-      (item) => item.role == null && item.type === AnnotationKind.TEXT
+      (item) =>
+        item.role === ANNOTATION_ROLE.NOTE && item.type === AnnotationKind.TEXT
     );
 
     expect(annotation).toBeDefined();
-    expect(annotation?.position).toEqual({ x: 24, y: 24 });
+    expect(annotation?.position).toEqual({ x: 624, y: 0 });
   });
 
   it('spawns the first image annotation clear of the left tool panel', () => {

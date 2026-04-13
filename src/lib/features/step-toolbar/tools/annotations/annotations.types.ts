@@ -2,16 +2,10 @@ import {
   AnnotationKind,
   DrawingType
 } from '$lib/features/commons/constants/ui.constants';
-import {
-  ANNOTATION_ROLE,
-  type AnnotationRoleValue
-} from '$lib/features/commons/constants';
+import { type AnnotationRoleValue } from '$lib/features/commons/constants';
 import { TextAlign } from '$lib/features/commons/types/enums';
 
-export type PageElementRole = Exclude<
-  AnnotationRoleValue,
-  typeof ANNOTATION_ROLE.NOTE
->;
+export type PageElementRole = AnnotationRoleValue;
 
 export interface Annotation {
   id: string;

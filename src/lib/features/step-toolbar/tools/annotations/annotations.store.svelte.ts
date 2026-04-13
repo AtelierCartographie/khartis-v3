@@ -110,6 +110,8 @@ function getPredefinedStyleForItem(item: Annotation): string | null {
     case ANNOTATION_ROLE.SIGNATURE:
     case ANNOTATION_ROLE.CREDIT:
       return 'caption';
+    case ANNOTATION_ROLE.NOTE:
+      return ANNOTATION_ROLE.NOTE;
     default:
       return null;
   }
@@ -132,7 +134,8 @@ const PAGE_ELEMENT_WIDTHS: Record<PageElementRole, number> = {
   [ANNOTATION_ROLE.SOURCE]: 220,
   [ANNOTATION_ROLE.BASEMAP_SOURCE]: 220,
   [ANNOTATION_ROLE.SIGNATURE]: 220,
-  [ANNOTATION_ROLE.CREDIT]: 220
+  [ANNOTATION_ROLE.CREDIT]: 220,
+  [ANNOTATION_ROLE.NOTE]: 220
 };
 
 const BOTTOM_RIGHT_STACK_ORDER: PageElementRole[] = [
@@ -143,6 +146,8 @@ const BOTTOM_RIGHT_STACK_ORDER: PageElementRole[] = [
 ];
 const BOTTOM_RIGHT_SAFE_OFFSET = PAGE_GRID_SIZE_PX;
 const BOTTOM_RIGHT_STACK_STEP = PAGE_GRID_SIZE_PX * 2;
+const PAGE_NOTE_SAFE_OFFSET = 4;
+const PAGE_NOTE_HEIGHT = 28;
 const NON_PAGE_ANNOTATION_LEFT_OFFSET = PAGE_GRID_SIZE_PX * 2;
 const NON_PAGE_IMAGE_LEFT_OFFSET = PAGE_GRID_SIZE_PX * 6;
 const NON_PAGE_ANNOTATION_TOP_OFFSET = PAGE_GRID_SIZE_PX * 2;
@@ -254,13 +259,25 @@ function clampPageElementPosition(
 ): { x: number; y: number } {
   const { width, height, margins } = layout;
   const roleWidth = PAGE_ELEMENT_WIDTHS[role];
-  const minX = margins.left;
-  const maxX = Math.max(minX, width - margins.right - roleWidth);
-  const minY =
-    role === ANNOTATION_ROLE.TITLE || role === ANNOTATION_ROLE.SUBTITLE
+  const isFreePageNote = role === ANNOTATION_ROLE.NOTE;
+  const minX = isFreePageNote ? PAGE_NOTE_SAFE_OFFSET : margins.left;
+  const maxX = Math.max(
+    minX,
+    isFreePageNote
+      ? width - roleWidth - PAGE_NOTE_SAFE_OFFSET
+      : width - margins.right - roleWidth
+  );
+  const minY = isFreePageNote
+    ? PAGE_NOTE_SAFE_OFFSET
+    : role === ANNOTATION_ROLE.TITLE || role === ANNOTATION_ROLE.SUBTITLE
       ? 12
       : margins.top + 12;
-  const maxY = Math.max(minY, height - margins.bottom - 4);
+  const maxY = Math.max(
+    minY,
+    isFreePageNote
+      ? height - PAGE_NOTE_HEIGHT - PAGE_NOTE_SAFE_OFFSET
+      : height - margins.bottom - 4
+  );
 
   if (!isGridEnabled()) {
     return {
@@ -438,6 +455,40 @@ function getNonPageAnnotationSpawnPosition(
   return clampAnnotationPosition({ x, y }, type, style, layout, content);
 }
 
+function getPageNoteSpawnPosition(
+  existingNotesCount: number,
+  layout: PageLayout
+): { x: number; y: number } {
+  const noteWidth = PAGE_ELEMENT_WIDTHS[ANNOTATION_ROLE.NOTE];
+  const minX = PAGE_NOTE_SAFE_OFFSET;
+  const maxX = Math.max(minX, layout.width - noteWidth - PAGE_NOTE_SAFE_OFFSET);
+  const topY = PAGE_NOTE_SAFE_OFFSET;
+  const bottomY = Math.max(
+    topY,
+    layout.height - PAGE_NOTE_HEIGHT - PAGE_NOTE_SAFE_OFFSET
+  );
+  const slots = [
+    {
+      x: clamp(layout.width - noteWidth - PAGE_NOTE_SAFE_OFFSET, minX, maxX),
+      y: topY
+    },
+    {
+      x: clamp((layout.width - noteWidth) / 2, minX, maxX),
+      y: topY
+    },
+    {
+      x: clamp(layout.margins.left + 4, minX, maxX),
+      y: bottomY
+    },
+    {
+      x: clamp((layout.width - noteWidth) / 2, minX, maxX),
+      y: bottomY
+    }
+  ];
+
+  return snapPositionToGrid(slots[existingNotesCount % slots.length]);
+}
+
 function getPageElementPosition(
   role: PageElementRole,
   layout: PageLayout
@@ -481,8 +532,7 @@ function isEmptyContent(content: unknown): boolean {
 function isPageElementRole(role: unknown): role is PageElementRole {
   return (
     typeof role === 'string' &&
-    ANNOTATION_ROLES.includes(role as (typeof ANNOTATION_ROLES)[number]) &&
-    role !== ANNOTATION_ROLE.NOTE
+    ANNOTATION_ROLES.includes(role as (typeof ANNOTATION_ROLES)[number])
   );
 }
 
@@ -504,6 +554,8 @@ function getPageElementDefaultContent(
       return withPlaceholders ? m.annotations_placeholder_note() : '';
     case ANNOTATION_ROLE.CREDIT:
       return m.map_export_signature();
+    case ANNOTATION_ROLE.NOTE:
+      return withPlaceholders ? m.annotations_placeholder_note() : '';
     default:
       return '';
   }
@@ -538,6 +590,8 @@ function getPageElementDefaultContentForLocale(
       return withPlaceholders ? bundle.annotations_placeholder_note() : '';
     case ANNOTATION_ROLE.CREDIT:
       return bundle.map_export_signature();
+    case ANNOTATION_ROLE.NOTE:
+      return withPlaceholders ? bundle.annotations_placeholder_note() : '';
     default:
       return '';
   }
@@ -642,17 +696,25 @@ const { actions, getState } = createToolStore<
       const nonPageItemsCount = s.items.filter(
         (item) => item.role == null
       ).length;
+      const pageNoteCount = s.items.filter(
+        (item) =>
+          item.type === AnnotationKind.TEXT &&
+          item.role === ANNOTATION_ROLE.NOTE
+      ).length;
       const normalizedContent =
         type === AnnotationKind.DRAWING && drawingType
           ? createDefaultDrawingPoints(drawingType)
           : content;
-      const position = getNonPageAnnotationSpawnPosition(
-        type,
-        style,
-        nonPageItemsCount,
-        layout,
-        normalizedContent
-      );
+      const isFreePageNote = type === AnnotationKind.TEXT;
+      const position = isFreePageNote
+        ? getPageNoteSpawnPosition(pageNoteCount, layout)
+        : getNonPageAnnotationSpawnPosition(
+            type,
+            style,
+            nonPageItemsCount,
+            layout,
+            normalizedContent
+          );
 
       const newAnnotation: Annotation = {
         id: `${ANNOTATION_ID_PREFIX}${Date.now()}`,
@@ -660,7 +722,8 @@ const { actions, getState } = createToolStore<
         content: normalizedContent,
         position,
         positionMode: 'manual',
-        style
+        style,
+        ...(isFreePageNote ? { role: ANNOTATION_ROLE.NOTE } : {})
       };
       s.items = [...s.items, newAnnotation];
       s.selectedId = newAnnotation.id;
