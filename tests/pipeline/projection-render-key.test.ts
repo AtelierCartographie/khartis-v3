@@ -61,7 +61,9 @@ describe('buildProjectionRenderKey', () => {
         generic: [
           {
             id: 'geoNaturalEarth1',
-            label: 'Natural Earth',
+            name: 'Natural Earth',
+            type: 'generic',
+            proj4String: null,
             d3Config: { projection: 'geoNaturalEarth1' }
           }
         ]

@@ -184,6 +184,7 @@ function notifyTableFiltersPersistence(
   priority: keyof typeof SavePriority = 'DEBOUNCED'
 ): void {
   persistenceRegistry.notifyChange('tableFilters', SavePriority[priority]);
+  state.bumpDatasetsVersion();
 }
 
 function serializePersistedTableFilters(): SerializedTableFiltersState {

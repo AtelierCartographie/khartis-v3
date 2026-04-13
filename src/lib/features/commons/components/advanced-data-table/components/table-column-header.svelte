@@ -5,11 +5,7 @@
   import * as m from '$lib/paraglide/messages';
   import CaretDown from 'carbon-icons-svelte/lib/CaretDown.svelte';
   import CaretUp from 'carbon-icons-svelte/lib/CaretUp.svelte';
-  import ChartMultitype from 'carbon-icons-svelte/lib/ChartMultitype.svelte';
-  import Edit from 'carbon-icons-svelte/lib/Edit.svelte';
   import OverflowMenuVertical from 'carbon-icons-svelte/lib/OverflowMenuVertical.svelte';
-  import TrashCan from 'carbon-icons-svelte/lib/TrashCan.svelte';
-  import ViewOff from 'carbon-icons-svelte/lib/ViewOff.svelte';
   import WarningAlt from 'carbon-icons-svelte/lib/WarningAlt.svelte';
   import { GEOID_SCORE_THRESHOLD } from '../column-type-styles';
   import type { ColumnInfo, ColumnType } from '../types';
@@ -51,12 +47,28 @@
   const typeOptions: { value: ColumnType; label: string }[] = [
     { value: 'text', label: m.column_type_text() },
     { value: 'number', label: m.column_type_number() },
-    { value: 'date', label: m.column_type_date() },
-    { value: 'boolean', label: m.column_type_boolean() }
+    { value: 'date', label: m.column_type_date() }
   ];
 
-  let showTypeSubmenu = $state(false);
-  let submenuTriggerRef = $state<HTMLElement | null>(null);
+  const refineOptions: { value: RefineOperation; label: string }[] = [
+    {
+      value: RefineOperation.UPPERCASE,
+      label: m.column_refine_uppercase()
+    },
+    {
+      value: RefineOperation.LOWERCASE,
+      label: m.column_refine_lowercase()
+    },
+    { value: RefineOperation.TRIM, label: m.column_refine_trim() },
+    {
+      value: RefineOperation.TRIM_ALL,
+      label: m.column_refine_trim_all()
+    }
+  ];
+
+  let activeSubmenu = $state<'type' | 'refine' | null>(null);
+  let typeSubmenuTriggerRef = $state<HTMLElement | null>(null);
+  let refineSubmenuTriggerRef = $state<HTMLElement | null>(null);
   let submenuPosition = $state({ top: 0, left: 0 });
 
   interface NumericBin {
@@ -163,6 +175,7 @@
 
     const typeSimple = analysis?.type_simple;
     if (typeSimple === 'numeric') return 'numeric';
+    if (typeSimple === 'boolean') return 'boolean';
     if (typeSimple === 'date') return 'date';
     return 'string';
   });
@@ -170,6 +183,7 @@
   const typeTooltipMessage = $derived.by(() => {
     const typeSimple = analysis?.type_simple;
     if (typeSimple === 'numeric') return m.column_type_numeric_tooltip();
+    if (typeSimple === 'boolean') return m.column_type_boolean();
     if (typeSimple === 'date') return m.column_type_date_tooltip();
     if (typeSimple === 'string') return m.column_type_text_tooltip();
     return m.column_type_text_tooltip();
@@ -231,6 +245,19 @@
 
   function closeMenu() {
     menuOpen = false;
+    activeSubmenu = null;
+  }
+
+  function openSubmenu(
+    submenu: 'type' | 'refine',
+    trigger: HTMLElement | null
+  ) {
+    if (trigger) {
+      const rect = trigger.getBoundingClientRect();
+      submenuPosition = { top: rect.top, left: rect.right };
+    }
+
+    activeSubmenu = submenu;
   }
 
   function handleClickOutside(event: MouseEvent) {
@@ -375,91 +402,46 @@
                 role="menu"
               >
                 {#if onChangeType}
-                  <div
-                    class="menu-item menu-item-with-icon submenu-trigger"
-                    role="menuitem"
-                    tabindex="0"
-                    bind:this={submenuTriggerRef}
-                    onmouseenter={() => {
-                      if (submenuTriggerRef) {
-                        const rect = submenuTriggerRef.getBoundingClientRect();
-                        submenuPosition = { top: rect.top, left: rect.right };
-                      }
-                      showTypeSubmenu = true;
-                    }}
-                    onmouseleave={() => (showTypeSubmenu = false)}
-                    onfocus={() => {
-                      if (submenuTriggerRef) {
-                        const rect = submenuTriggerRef.getBoundingClientRect();
-                        submenuPosition = { top: rect.top, left: rect.right };
-                      }
-                      showTypeSubmenu = true;
-                    }}
-                    onblur={() => (showTypeSubmenu = false)}
+                  <button
+                    class="menu-item submenu-trigger"
+                    bind:this={typeSubmenuTriggerRef}
+                    onmouseenter={() =>
+                      openSubmenu('type', typeSubmenuTriggerRef)}
+                    onfocus={() => openSubmenu('type', typeSubmenuTriggerRef)}
                   >
-                    <ChartMultitype size={16} />
                     {m.column_type_change()}
                     <span class="submenu-arrow">&#9654;</span>
-                  </div>
+                  </button>
                 {/if}
 
-                <span class="menu-label">{m.column_refine_label()}</span>
                 <button
-                  class="menu-item"
-                  onclick={() =>
-                    handleMenuAction(() =>
-                      onRefine(column.name, RefineOperation.UPPERCASE)
-                    )}
+                  class="menu-item submenu-trigger"
+                  bind:this={refineSubmenuTriggerRef}
+                  onmouseenter={() =>
+                    openSubmenu('refine', refineSubmenuTriggerRef)}
+                  onfocus={() => openSubmenu('refine', refineSubmenuTriggerRef)}
                 >
-                  {m.column_refine_uppercase()}
-                </button>
-                <button
-                  class="menu-item"
-                  onclick={() =>
-                    handleMenuAction(() =>
-                      onRefine(column.name, RefineOperation.LOWERCASE)
-                    )}
-                >
-                  {m.column_refine_lowercase()}
-                </button>
-                <button
-                  class="menu-item"
-                  onclick={() =>
-                    handleMenuAction(() =>
-                      onRefine(column.name, RefineOperation.TRIM)
-                    )}
-                >
-                  {m.column_refine_trim()}
-                </button>
-                <button
-                  class="menu-item"
-                  onclick={() =>
-                    handleMenuAction(() =>
-                      onRefine(column.name, RefineOperation.TRIM_ALL)
-                    )}
-                >
-                  {m.column_refine_trim_all()}
+                  {m.column_refine_label()}
+                  <span class="submenu-arrow">&#9654;</span>
                 </button>
 
                 <div class="menu-divider"></div>
 
                 {#if onRename}
                   <button
-                    class="menu-item menu-item-with-icon"
+                    class="menu-item"
                     onclick={() =>
                       handleMenuAction(() => onRename(column.name))}
                   >
-                    <Edit size={16} />
                     {m.column_rename_action()}
                   </button>
                 {/if}
 
                 {#if onHide}
                   <button
-                    class="menu-item menu-item-with-icon"
+                    class="menu-item"
                     onclick={() => handleMenuAction(() => onHide(column.name))}
                   >
-                    <ViewOff size={16} />
                     {isHidden ? m.column_show() : m.column_hide()}
                   </button>
                 {/if}
@@ -468,25 +450,24 @@
 
                 {#if onDelete}
                   <button
-                    class="menu-item menu-item-with-icon menu-item-danger"
+                    class="menu-item menu-item-danger"
                     onclick={() =>
                       handleMenuAction(() => onDelete(column.name))}
                   >
-                    <TrashCan size={16} />
                     {m.column_delete_action()}
                   </button>
                 {/if}
               </div>
             </Portal>
           {/if}
-          {#if showTypeSubmenu && onChangeType}
+          {#if activeSubmenu === 'type' && onChangeType}
             <Portal>
               <!-- svelte-ignore a11y_no_static_element_interactions -->
               <div
                 class="dropdown-menu submenu-portal"
                 style="top: {submenuPosition.top}px; left: {submenuPosition.left}px;"
-                onmouseenter={() => (showTypeSubmenu = true)}
-                onmouseleave={() => (showTypeSubmenu = false)}
+                onmouseenter={() => (activeSubmenu = 'type')}
+                onmouseleave={() => (activeSubmenu = null)}
               >
                 {#each typeOptions as option (option.value)}
                   <button
@@ -494,6 +475,29 @@
                     onclick={() =>
                       handleMenuAction(() =>
                         onChangeType(column.name, option.value)
+                      )}
+                  >
+                    {option.label}
+                  </button>
+                {/each}
+              </div>
+            </Portal>
+          {/if}
+          {#if activeSubmenu === 'refine'}
+            <Portal>
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
+              <div
+                class="dropdown-menu submenu-portal"
+                style="top: {submenuPosition.top}px; left: {submenuPosition.left}px;"
+                onmouseenter={() => (activeSubmenu = 'refine')}
+                onmouseleave={() => (activeSubmenu = null)}
+              >
+                {#each refineOptions as option (option.value)}
+                  <button
+                    class="menu-item"
+                    onclick={() =>
+                      handleMenuAction(() =>
+                        onRefine(column.name, option.value)
                       )}
                   >
                     {option.label}
@@ -542,10 +546,7 @@
                   </div>
                 {/if}
                 {#if histogramData.duplicates > 0}
-                  <div class="hist-warning-line">
-                    <span class="hist-warning-icon"
-                      ><WarningAlt size={14} /></span
-                    >
+                  <div class="hist-warning-line hist-warning-line-plain">
                     <span
                       >{m.column_warning_duplicates({
                         count: histogramData.duplicates.toLocaleString()
@@ -684,6 +685,12 @@
     display: flex;
     align-items: center;
     gap: 4px;
+    min-width: 0;
+  }
+
+  .col-title-row :global(.variable-badge) {
+    min-width: 0;
+    flex: 1 1 auto;
   }
 
   .col-actions {
@@ -829,8 +836,16 @@
   }
 
   .sort-btn.active {
-    color: #0f62fe;
+    color: #ffffff;
+    background-color: #0f62fe;
+    border-radius: 999px;
+    box-shadow: inset 0 0 0 1px rgba(15, 98, 254, 0.85);
     opacity: 1;
+  }
+
+  .sort-btn.active:hover {
+    color: #ffffff;
+    background-color: #0353e9;
   }
 
   .summary-plot-wrapper {
@@ -1014,6 +1029,10 @@
     letter-spacing: 0.32px;
     white-space: nowrap;
     overflow: hidden;
+  }
+
+  .hist-warning-line-plain {
+    gap: 0;
   }
 
   .hist-warning-icon {

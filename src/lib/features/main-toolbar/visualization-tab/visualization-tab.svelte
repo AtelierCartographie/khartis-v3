@@ -1,13 +1,22 @@
 <script lang="ts">
+  import { dataTabState } from '$lib/features/commons/store/data-tab.store.svelte';
+  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { SvelteSet } from 'svelte/reactivity';
   import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+  import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
+  import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
   import ChooseVisualization from './choose-visualization.svelte';
   import ConfigureVisualization from './configure-visualization.svelte';
   import CustomizeBasemap from './customize-basemap.svelte';
+  import { syncProjectOSMBasemap } from './osm-basemap-sync';
   import ToolbarTabLayout from '../components/toolbar-tab-layout.svelte';
   import { resolveBlankVisualizationType } from './suggestion.utils';
+  import {
+    resolveRelevantPersistedBasemap,
+    type PersistedProjectBasemap
+  } from '../data-tab/services/persisted-basemap';
 
   let configureSection: HTMLElement | undefined = $state();
   /** Datasets for which we already auto-created (or found existing) visualizations.
@@ -47,6 +56,25 @@
         datasetId: dataset.id,
         defaultType
       }
+    );
+  });
+
+  $effect(() => {
+    const currentBasemap = resolveRelevantPersistedBasemap({
+      selectedDataset: datasetsStore.selectedDataset,
+      sourceFiles: projectStore.currentProject?.data?.sourceFiles,
+      projectBasemap:
+        (projectStore.currentProject?.data?.basemap as
+          | PersistedProjectBasemap
+          | undefined) ?? undefined,
+      selectedBasemapId: dataTabState.basemapJoin.selectedBasemap,
+      selectedBasemapSource: dataTabState.basemapJoin.basemapSource,
+      hasMultipleDatasets: datasetsStore.datasets.length > 1
+    });
+    syncProjectOSMBasemap(
+      currentBasemap,
+      basemapCatalogService,
+      osmBasemapStore
     );
   });
 </script>

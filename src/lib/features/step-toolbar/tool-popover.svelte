@@ -3,6 +3,8 @@
   import type { ProjectionViewMode } from '$lib/features/commons/types/global';
   import { clickOutside } from '$lib/features/commons/utils/click-outside';
   import { Popover } from 'carbon-components-svelte';
+  import { DRAGGED_ELEMENT_ID } from 'svelte-dnd-action';
+  import { tick } from 'svelte';
   import type { Snippet } from 'svelte';
   import {
     DOM_IDS,
@@ -10,6 +12,7 @@
     POPOVER_DIMENSIONS
   } from './step-toolbar.constants';
   import { getAnnotationsState } from './tools/annotations/annotations.store.svelte';
+  import { shouldBlockToolClose } from './tools/tool-close-guard';
 
   const {
     open = false,
@@ -34,17 +37,69 @@
   } = $props();
 
   const widthCss = $derived(viewMode === 'grid' ? gridWidth : `${listWidth}px`);
+  const RECENT_DND_INTERACTION_ATTRIBUTE = 'data-khartis-recent-dnd-at';
+  const RECENT_DND_INTERACTION_GRACE_MS = 500;
+  let popoverRoot: HTMLDivElement | null = null;
+  let computedTopOffset = $state(0);
+
+  function syncCenteredOffset(): void {
+    if (!open || align !== 'right-top') {
+      computedTopOffset = 0;
+      return;
+    }
+
+    const toolbar = document.getElementById(DOM_IDS.STEP_TOOLBAR);
+    const popover = popoverRoot?.querySelector('.bx--popover');
+
+    if (
+      !(toolbar instanceof HTMLElement) ||
+      !(popover instanceof HTMLElement)
+    ) {
+      computedTopOffset = 0;
+      return;
+    }
+
+    const toolbarRect = toolbar.getBoundingClientRect();
+    const popoverRect = popover.getBoundingClientRect();
+
+    computedTopOffset = Math.round(
+      (toolbarRect.height - popoverRect.height) / 2
+    );
+  }
 
   function handleOutsideClick(event: CustomEvent) {
-    // Keep the tool open while the user is drawing on the map
-    if (getAnnotationsState().isDrawingMode) return;
-
-    // Drag-and-drop interactions can end with a synthetic click target
-    // outside the popover while the dragged clone still exists.
-    if (document.getElementById('dnd-action-dragged-el')) return;
+    if (
+      shouldBlockToolClose(
+        globalState.selectedTool,
+        getAnnotationsState().isDrawingMode
+      )
+    ) {
+      return;
+    }
 
     const toolbar = document.getElementById(DOM_IDS.STEP_TOOLBAR);
     const target = event.detail?.originalEvent?.target as Node;
+
+    if (document.getElementById(DRAGGED_ELEMENT_ID)) return;
+
+    const lastDndInteractionAt = Number(
+      document.body.getAttribute(RECENT_DND_INTERACTION_ATTRIBUTE) ?? '0'
+    );
+    if (
+      Number.isFinite(lastDndInteractionAt) &&
+      Date.now() - lastDndInteractionAt < RECENT_DND_INTERACTION_GRACE_MS
+    ) {
+      return;
+    }
+
+    if (
+      target instanceof Element &&
+      target.closest(
+        '.bx--modal-container, .bx--overflow-menu-options, .bx--list-box__menu'
+      )
+    ) {
+      return;
+    }
 
     if (!toolbar || !toolbar.contains(target)) {
       globalState.selectedTool = undefined;
@@ -56,8 +111,14 @@
 
     const handleKeydown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        // Let annotation-overlay handle Escape during drawing mode
-        if (getAnnotationsState().isDrawingMode) return;
+        if (
+          shouldBlockToolClose(
+            globalState.selectedTool,
+            getAnnotationsState().isDrawingMode
+          )
+        ) {
+          return;
+        }
         globalState.selectedTool = undefined;
       }
     };
@@ -65,10 +126,55 @@
     window.addEventListener('keydown', handleKeydown);
     return () => window.removeEventListener('keydown', handleKeydown);
   });
+
+  $effect(() => {
+    void open;
+    void widthCss;
+
+    if (!open) {
+      computedTopOffset = 0;
+      return;
+    }
+
+    let cancelled = false;
+    let resizeObserver: ResizeObserver | null = null;
+    const handleWindowResize = () => syncCenteredOffset();
+
+    void tick().then(() => {
+      if (cancelled) return;
+
+      syncCenteredOffset();
+
+      resizeObserver = new ResizeObserver(() => syncCenteredOffset());
+
+      const toolbar = document.getElementById(DOM_IDS.STEP_TOOLBAR);
+      const popover = popoverRoot?.querySelector('.bx--popover');
+      const contents = popoverRoot?.querySelector('.bx--popover-contents');
+
+      if (toolbar instanceof HTMLElement) {
+        resizeObserver.observe(toolbar);
+      }
+      if (popover instanceof HTMLElement) {
+        resizeObserver.observe(popover);
+      }
+      if (contents instanceof HTMLElement) {
+        resizeObserver.observe(contents);
+      }
+
+      window.addEventListener('resize', handleWindowResize);
+    });
+
+    return () => {
+      cancelled = true;
+      resizeObserver?.disconnect();
+      window.removeEventListener('resize', handleWindowResize);
+    };
+  });
 </script>
 
 <div
   id={DOM_IDS.TOOL_POPOVER}
+  bind:this={popoverRoot}
   use:clickOutside={{
     enabled: open,
     excludeSelectors: [
@@ -84,7 +190,7 @@
     align={align}
     light={light}
     class={CSS_CLASSES.TOOL_POPOVER}
-    style={`--tool-popover-width:${widthCss};--popover-max-height:${POPOVER_DIMENSIONS.MAX_HEIGHT};--dropdown-max-height:${POPOVER_DIMENSIONS.DROPDOWN_MAX_HEIGHT};`}
+    style={`--tool-popover-width:${widthCss};--tool-popover-top-offset:${computedTopOffset}px;--popover-max-height:${POPOVER_DIMENSIONS.MAX_HEIGHT};--dropdown-max-height:${POPOVER_DIMENSIONS.DROPDOWN_MAX_HEIGHT};`}
   >
     <div class={CSS_CLASSES.POPOVER_SCROLL}>
       {@render (content as Snippet | undefined)?.()}
@@ -93,6 +199,10 @@
 </div>
 
 <style>
+  :global(#khartis-tool-popover .bx--popover--right-top) {
+    top: var(--tool-popover-top-offset) !important;
+  }
+
   :global(#khartis-tool-popover .bx--popover-contents) {
     width: var(--tool-popover-width) !important;
     max-width: var(--tool-popover-width) !important;
@@ -110,6 +220,6 @@
 
   :global(#khartis-tool-popover .bx--list-box__menu) {
     max-height: var(--dropdown-max-height);
-    z-index: var(--z-toolbar);
+    z-index: var(--z-popover);
   }
 </style>

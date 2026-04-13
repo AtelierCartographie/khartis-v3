@@ -13,8 +13,6 @@
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import { ToolbarState } from '$lib/features/commons/types/global';
   import { GeoColumnDetector } from '$lib/features/commons/utils/geo-detector.utils';
-  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-  import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
   import {
     Duck,
     validateGPSColumns,
@@ -22,11 +20,7 @@
     type GPSValidationResult
   } from '$lib/features/duckdb';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
-  import {
-    basemapCatalogService,
-    rankBasemapsByJoinSynthesis
-  } from '$lib/features/map/services/basemap-catalog.service.svelte';
-  import type { BasemapSuggestion } from '$lib/features/map/types/basemap.types';
+  import { detectGPSColumns } from '$lib/features/duckdb/orchestrator/gps-ops';
   import * as m from '$lib/paraglide/messages';
   import { ComboBox, InlineNotification, Link } from 'carbon-components-svelte';
   import ChartTSne from 'carbon-icons-svelte/lib/ChartTSne.svelte';
@@ -39,9 +33,6 @@
   const isCompact = $derived(globalState.toolbarState === ToolbarState.Compact);
   const selectedDataset = $derived(datasetsStore.selectedDataset);
   const duckDBDatasetsVersion = $derived(duckDBOrchestrator.datasetsVersion);
-  const processedDataset = $derived.by(() =>
-    selectedDataset ? normalizeToProcessedDataset(selectedDataset) : null
-  );
   const geoDetection = $derived(selectedDataset?.geoDetection);
 
   let columnAnalysis = $state<AnalysisResult[]>([]);
@@ -171,6 +162,7 @@
       (colAnalysis.semioScore ?? 0) >= GEOID_SCORE_THRESHOLD;
     if (isGeoid) return 'geo-ref';
     if (colAnalysis.type_simple === 'numeric') return 'numeric';
+    if (colAnalysis.type_simple === 'boolean') return 'boolean';
     if (colAnalysis.type_simple === 'date') return 'date';
     return 'string';
   }
@@ -194,20 +186,30 @@
   });
 
   const latitudeColumns = $derived(() => {
+    const fallbackCoordinates = detectGPSColumns(columnAnalysis, geoDetection);
+
     return dataFieldItems().filter((item) => {
       const geoCol = geoDetection?.geoColumns.find(
         (gc) => gc.columnName === item.columnName
       );
-      return geoCol?.type === 'latitude';
+      return (
+        geoCol?.type === 'latitude' ||
+        fallbackCoordinates?.lat === item.columnName
+      );
     });
   });
 
   const longitudeColumns = $derived(() => {
+    const fallbackCoordinates = detectGPSColumns(columnAnalysis, geoDetection);
+
     return dataFieldItems().filter((item) => {
       const geoCol = geoDetection?.geoColumns.find(
         (gc) => gc.columnName === item.columnName
       );
-      return geoCol?.type === 'longitude';
+      return (
+        geoCol?.type === 'longitude' ||
+        fallbackCoordinates?.lon === item.columnName
+      );
     });
   });
 
@@ -297,14 +299,15 @@
   });
 
   $effect(() => {
-    if (!geoDetection?.hasGeoColumns) {
+    const fallbackCoordinates = detectGPSColumns(columnAnalysis, geoDetection);
+    const hasLatLon = Boolean(
+      fallbackCoordinates?.lat && fallbackCoordinates?.lon
+    );
+
+    if (!geoDetection?.hasGeoColumns && !hasLatLon) {
       hasAutoGeoreferenceInitialization = false;
       return;
     }
-
-    const hasLatLon =
-      geoDetection.geoColumns.some((gc) => gc.type === 'latitude') &&
-      geoDetection.geoColumns.some((gc) => gc.type === 'longitude');
 
     if (
       !hasAutoGeoreferenceInitialization &&
@@ -321,7 +324,10 @@
 
     if (hasLatLon) {
       if (latitudeColumns().length > 0 && latitudeFieldId === undefined) {
-        const col = latitudeColumns()[0];
+        const col =
+          latitudeColumns().find(
+            (item) => item.columnName === fallbackCoordinates?.lat
+          ) ?? latitudeColumns()[0];
         latitudeFieldId = col.id;
         dataTabActions.setGeolocationState({
           latitudeColumn: col.columnName
@@ -329,7 +335,10 @@
       }
 
       if (longitudeColumns().length > 0 && longitudeFieldId === undefined) {
-        const col = longitudeColumns()[0];
+        const col =
+          longitudeColumns().find(
+            (item) => item.columnName === fallbackCoordinates?.lon
+          ) ?? longitudeColumns()[0];
         longitudeFieldId = col.id;
         dataTabActions.setGeolocationState({
           longitudeColumn: col.columnName
@@ -383,57 +392,6 @@
     dataTabStore.resetStepCompletion(2);
   });
 
-  async function autoSelectBasemap() {
-    if (processedDataset && !dataTabState.basemapJoin.selectedBasemap) {
-      if (!basemapCatalogService.isLoaded) {
-        await basemapCatalogService.loadCatalog();
-      }
-
-      const geoColumnName =
-        dataTabState.geolocation.linkedVariableName ??
-        processedDataset.analysis.suggestedGeoColumn;
-      const datasetId =
-        selectedDataset?.id ?? selectedDataset?.sourceFileId ?? null;
-      let suggestions: BasemapSuggestion[] = [];
-
-      if (datasetId && geoColumnName) {
-        try {
-          const synthesis = await duckDBOrchestrator.computeJoinSynthesis(
-            datasetId,
-            geoColumnName
-          );
-          suggestions = rankBasemapsByJoinSynthesis(
-            basemapCatalogService.basemaps,
-            synthesis,
-            1
-          );
-        } catch (error) {
-          if (error instanceof Error && error.message === 'Dataset not found') {
-            suggestions = [];
-          } else {
-            logger.warn(
-              'Auto basemap selection fell back to heuristics',
-              LogCategory.MAP,
-              error
-            );
-          }
-        }
-      }
-
-      if (suggestions.length === 0) {
-        suggestions = basemapCatalogService.getSuggestions(
-          processedDataset,
-          1,
-          geoColumnName
-        );
-      }
-
-      if (suggestions.length > 0 && suggestions[0].matchScore >= 40) {
-        dataTabActions.selectBasemap(suggestions[0].file);
-      }
-    }
-  }
-
   $effect(() => {
     const linkedVar = dataTabState.geolocation.linkedVariable;
     const linkedName = dataTabState.geolocation.linkedVariableName;
@@ -451,7 +409,6 @@
           linkedVariable: suggested.id,
           linkedVariableName: suggested.columnName
         });
-        autoSelectBasemap();
       }
     }
 
@@ -467,7 +424,6 @@
         linkedVariable: geoid.id,
         linkedVariableName: geoid.columnName
       });
-      autoSelectBasemap();
     }
   });
 

@@ -80,7 +80,8 @@ import {
   getCatalogBasemapsForDisplay,
   rankBasemapsByGPSBbox,
   rankBasemapsByGeoColumn,
-  rankBasemapsByJoinSynthesis
+  rankBasemapsByJoinSynthesis,
+  shouldPreferTextBasemapRefinementForGPS
 } from '$lib/features/map/services/basemap-catalog.service.svelte';
 import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
 import {
@@ -129,6 +130,14 @@ interface GeoColumnAudit {
   type: string;
   heuristicSuggestions: string[];
   oracleSuggestions: string[];
+  heuristicSuggestionDetails: Array<{
+    file: string;
+    matchScore: number;
+  }>;
+  oracleSuggestionDetails: Array<{
+    file: string;
+    matchScore: number;
+  }>;
   oracleBestShareCandidate: number;
   oracleMethod: 'exact' | 'fuzzy' | 'none';
 }
@@ -148,6 +157,14 @@ interface DatasetAuditEntry {
   bestGeoColumn?: string;
   currentSuggestions: string[];
   oracleSuggestions: string[];
+  currentSuggestionDetails?: Array<{
+    file: string;
+    matchScore: number;
+  }>;
+  oracleSuggestionDetails?: Array<{
+    file: string;
+    matchScore: number;
+  }>;
   notes: string[];
   issues: string[];
   gpsValidation?: {
@@ -498,22 +515,6 @@ async function computeExactJoinSynthesis(
   }));
 }
 
-async function countDistinctCandidates(
-  db: TestDuckDB,
-  tableName: string,
-  geoColumn: string
-): Promise<number> {
-  const escapedGeoColumn = geoColumn.replace(/"/g, '""');
-  const rows = await query(
-    db,
-    `SELECT COUNT(DISTINCT normalize_text_join(CAST("${escapedGeoColumn}" AS VARCHAR))) AS cnt
-     FROM "${tableName}"
-     WHERE "${escapedGeoColumn}" IS NOT NULL
-       AND trim(CAST("${escapedGeoColumn}" AS VARCHAR)) != ''`
-  );
-  return Number(rows[0]?.cnt ?? 0);
-}
-
 async function computeOracleSynthesis(
   db: TestDuckDB,
   duckClient: DuckDBClientForJoin,
@@ -525,23 +526,30 @@ async function computeOracleSynthesis(
     dataset.tableName,
     geoColumn
   );
-  const bestExact = exactRows[0]?.shareCandidate ?? 0;
-  const distinctCandidates = await countDistinctCandidates(
-    db,
-    dataset.tableName,
-    geoColumn
+  const synthesizedRows = await computeJoinSynthesis(
+    dataset,
+    geoColumn,
+    duckClient
   );
-
-  if (bestExact > 0 || distinctCandidates > 500) {
+  if (synthesizedRows.length === 0) {
     return exactRows;
   }
 
-  const fuzzyRows = await computeJoinSynthesis(dataset, geoColumn, duckClient);
-  return fuzzyRows.map((row) => ({
+  const topExact = exactRows[0];
+  const topSynthesized = synthesizedRows[0];
+  const method: OracleSynthesisRow['method'] =
+    topExact &&
+    topSynthesized &&
+    topExact.basemap === topSynthesized.basemap &&
+    Math.abs(topExact.shareCandidate - topSynthesized.shareCandidate) < 1e-6
+      ? 'exact'
+      : 'fuzzy';
+
+  return synthesizedRows.map((row) => ({
     basemap: row.basemap,
     shareBasemap: row.shareBasemap,
     shareCandidate: row.shareCandidate,
-    method: 'fuzzy'
+    method
   }));
 }
 
@@ -618,6 +626,11 @@ async function auditTabularFixture(
 
     if (gpsBounds) {
       const suggestions = rankBasemapsByGPSBbox(catalogBasemaps, gpsBounds, 3);
+      let currentSuggestionDetails = suggestions.map((suggestion) => ({
+        file: suggestion.file,
+        matchScore: Number(suggestion.matchScore.toFixed(2))
+      }));
+      let oracleSuggestionDetails = [...currentSuggestionDetails];
       currentSuggestions.push(
         ...suggestions.map((suggestion) => suggestion.file)
       );
@@ -656,12 +669,24 @@ async function auditTabularFixture(
           synthesisRanked.length > 0
             ? synthesisRanked.map((item) => item.file)
             : topBasemapIds(oracle);
+        const oracleRankedDetails =
+          synthesisRanked.length > 0
+            ? synthesisRanked.map((item) => ({
+                file: item.file,
+                matchScore: Number(item.matchScore.toFixed(2))
+              }))
+            : [];
 
         const columnAudit: GeoColumnAudit = {
           columnName: column.columnName,
           type: column.type,
           heuristicSuggestions: current.map((item) => item.file),
           oracleSuggestions: oracleRankedIds,
+          heuristicSuggestionDetails: current.map((item) => ({
+            file: item.file,
+            matchScore: Number(item.matchScore.toFixed(2))
+          })),
+          oracleSuggestionDetails: oracleRankedDetails,
           oracleBestShareCandidate: Number(
             (oracle[0]?.shareCandidate ?? 0).toFixed(2)
           ),
@@ -680,7 +705,10 @@ async function auditTabularFixture(
 
       if (
         bestTextColumn &&
-        bestTextColumn.oracleBestShareCandidate >= 80 &&
+        shouldPreferTextBasemapRefinementForGPS(
+          suggestions,
+          bestTextColumn.oracleBestShareCandidate
+        ) &&
         bestTextColumn.oracleSuggestions.length > 0
       ) {
         currentSuggestions.splice(
@@ -688,11 +716,13 @@ async function auditTabularFixture(
           currentSuggestions.length,
           ...bestTextColumn.oracleSuggestions
         );
+        currentSuggestionDetails = [...bestTextColumn.oracleSuggestionDetails];
         oracleSuggestions.splice(
           0,
           oracleSuggestions.length,
           ...bestTextColumn.oracleSuggestions
         );
+        oracleSuggestionDetails = [...bestTextColumn.oracleSuggestionDetails];
       }
 
       if (gpsValidation.warning) {
@@ -708,6 +738,8 @@ async function auditTabularFixture(
         selectedGeoColumn,
         currentSuggestions,
         oracleSuggestions,
+        currentSuggestionDetails,
+        oracleSuggestionDetails,
         notes,
         issues,
         gpsValidation: {
@@ -732,6 +764,8 @@ async function auditTabularFixture(
       selectedGeoColumn,
       currentSuggestions,
       oracleSuggestions,
+      currentSuggestionDetails: [],
+      oracleSuggestionDetails: [],
       notes,
       issues,
       gpsValidation: {
@@ -789,12 +823,24 @@ async function auditTabularFixture(
       synthesisRanked.length > 0
         ? synthesisRanked.map((item) => item.file)
         : topBasemapIds(oracle);
+    const oracleRankedDetails =
+      synthesisRanked.length > 0
+        ? synthesisRanked.map((item) => ({
+            file: item.file,
+            matchScore: Number(item.matchScore.toFixed(2))
+          }))
+        : [];
 
     const columnAudit: GeoColumnAudit = {
       columnName: column.columnName,
       type: column.type,
       heuristicSuggestions: current.map((item) => item.file),
       oracleSuggestions: oracleRankedIds,
+      heuristicSuggestionDetails: current.map((item) => ({
+        file: item.file,
+        matchScore: Number(item.matchScore.toFixed(2))
+      })),
+      oracleSuggestionDetails: oracleRankedDetails,
       oracleBestShareCandidate: Number(
         (oracle[0]?.shareCandidate ?? 0).toFixed(2)
       ),
@@ -826,6 +872,8 @@ async function auditTabularFixture(
       selectedGeoColumn,
       currentSuggestions,
       oracleSuggestions,
+      currentSuggestionDetails: [],
+      oracleSuggestionDetails: [],
       notes,
       issues,
       candidateColumns
@@ -877,6 +925,10 @@ async function auditTabularFixture(
     bestGeoColumn: bestColumn?.columnName,
     currentSuggestions,
     oracleSuggestions,
+    currentSuggestionDetails: [
+      ...selectedColumnAudit.heuristicSuggestionDetails
+    ],
+    oracleSuggestionDetails: [...selectedColumnAudit.oracleSuggestionDetails],
     notes,
     issues,
     candidateColumns

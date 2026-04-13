@@ -218,7 +218,7 @@
               size="sm"
             >
               {#each LEGEND_FONT_SIZES as s (s)}
-                <SelectItem value={s} text={String(s)} />
+                <SelectItem value={String(s)} text={String(s)} />
               {/each}
             </Select>
           </div>

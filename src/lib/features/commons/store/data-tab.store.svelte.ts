@@ -41,7 +41,9 @@ const DEFAULT_STATE: DataTabState = {
     enrichmentDatasetId: undefined,
     enrichmentColumn: undefined,
     targetColumn: undefined,
-    isEnrichmentActive: false
+    isEnrichmentActive: false,
+    joinTabularEnabled: false,
+    basemapTabIndex: 0
   },
   notifications: {
     variableTypes: false,

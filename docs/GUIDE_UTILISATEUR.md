@@ -173,10 +173,10 @@ Choisir le format de la carte (A4, A3, carré, ou dimensions personnalisées), s
 
 ### Export de la carte
 
-| Format | Usage                                                                             |
-| ------ | --------------------------------------------------------------------------------- |
-| SVG    | Image vectorielle, retouchable dans un logiciel de dessin (Inkscape, Illustrator) |
-| JPG    | Image bitmap avec choix de résolution (1080p, 2K, 4K)                             |
+| Format | Usage                                                                                               |
+| ------ | --------------------------------------------------------------------------------------------------- |
+| SVG    | Image vectorielle, retouchable dans un logiciel de dessin (Inkscape, Illustrator)                   |
+| JPG    | Image bitmap avec choix de résolution (Full HD, 2K, 4K), en conservant le ratio de la page courante |
 
 ### Export des données
 

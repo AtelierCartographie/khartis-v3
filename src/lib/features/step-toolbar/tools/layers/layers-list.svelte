@@ -2,7 +2,7 @@
   import { dragHandleZone } from 'svelte-dnd-action';
   import { untrack } from 'svelte';
   import LayerItem from './layer-item.svelte';
-  import type { Layer } from './layers.types.js';
+  import type { Layer, LayerReorderScope } from './layers.types.js';
 
   interface Props {
     parentLayers: Layer[];
@@ -10,7 +10,7 @@
     onToggleVisibility: (layerId: string) => void;
     onOpenSettings: (layerId: string) => void;
     onReorderLayers: (
-      type: 'visualization' | 'geographic',
+      scope: LayerReorderScope,
       fromIndex: number,
       toIndex: number
     ) => void;
@@ -19,9 +19,20 @@
       fromIndex: number,
       toIndex: number
     ) => void;
+    onMoveLayer?: (
+      scope: LayerReorderScope,
+      layerId: string,
+      direction: -1 | 1
+    ) => void;
+    onMoveSubLayer?: (
+      parentId: string,
+      layerId: string,
+      direction: -1 | 1
+    ) => void;
     onRenameLayer?: (layerId: string) => void;
     onDuplicateLayer?: (layerId: string) => void;
     onDeleteLayer?: (layerId: string) => void;
+    reorderScope: LayerReorderScope;
   }
 
   const {
@@ -31,13 +42,16 @@
     onOpenSettings,
     onReorderLayers,
     onReorderSubLayers,
+    onMoveLayer,
+    onMoveSubLayer,
     onRenameLayer,
     onDuplicateLayer,
-    onDeleteLayer
+    onDeleteLayer,
+    reorderScope
   }: Props = $props();
 
   const FLIP_DURATION_MS = 200;
-  const PARENT_DND_TYPE = 'parent-layers';
+  const RECENT_DND_INTERACTION_ATTRIBUTE = 'data-khartis-recent-dnd-at';
 
   function transformParentGhost(draggedEl: HTMLElement | undefined): void {
     if (!draggedEl) return;
@@ -81,8 +95,16 @@
     return childItems[parentId] ?? [];
   }
 
+  function markRecentDndInteraction(): void {
+    document.body.setAttribute(
+      RECENT_DND_INTERACTION_ATTRIBUTE,
+      String(Date.now())
+    );
+  }
+
   function handleParentConsider(e: Event): void {
     draggingParent = true;
+    markRecentDndInteraction();
     parentItems = (e as CustomEvent).detail.items;
   }
 
@@ -90,29 +112,21 @@
     const { items: newItems, info } = (e as CustomEvent).detail;
     parentItems = newItems;
     draggingParent = false;
+    markRecentDndInteraction();
 
-    const movedLayer = parentLayers.find((layer) => layer.id === info.id);
-    if (!movedLayer) {
-      return;
-    }
-
-    const sourceItems = parentLayers.filter(
-      (layer) => layer.type === movedLayer.type
+    const fromIndex = parentLayers.findIndex((layer) => layer.id === info.id);
+    const toIndex = (newItems as Layer[]).findIndex(
+      (layer) => layer.id === info.id
     );
-    const targetItems = (newItems as Layer[]).filter(
-      (layer) => layer.type === movedLayer.type
-    );
-
-    const fromIndex = sourceItems.findIndex((layer) => layer.id === info.id);
-    const toIndex = targetItems.findIndex((layer) => layer.id === info.id);
 
     if (fromIndex !== -1 && toIndex !== -1 && fromIndex !== toIndex) {
-      onReorderLayers(movedLayer.type, fromIndex, toIndex);
+      onReorderLayers(reorderScope, fromIndex, toIndex);
     }
   }
 
   function handleChildConsider(parentId: string, e: Event): void {
     draggingChildOf = parentId;
+    markRecentDndInteraction();
     childItems = {
       ...childItems,
       [parentId]: (e as CustomEvent).detail.items
@@ -123,6 +137,7 @@
     const { items: newItems, info } = (e as CustomEvent).detail;
     childItems = { ...childItems, [parentId]: newItems };
     draggingChildOf = null;
+    markRecentDndInteraction();
 
     const oldChildren = childLayersByParent[parentId] ?? [];
     const fromIndex = oldChildren.findIndex((l) => l.id === info.id);
@@ -140,7 +155,7 @@
   use:dragHandleZone={{
     items: parentItems,
     flipDurationMs: FLIP_DURATION_MS,
-    type: PARENT_DND_TYPE,
+    type: `parent-layers-${reorderScope}`,
     dropTargetStyle: {},
     transformDraggedElement: transformParentGhost,
     useCursorForDetection: true
@@ -148,7 +163,7 @@
   onconsider={handleParentConsider}
   onfinalize={handleParentFinalize}
 >
-  {#each parentItems as parentLayer (parentLayer.id)}
+  {#each parentItems as parentLayer, parentIndex (parentLayer.id)}
     <div class="layer-group">
       <LayerItem
         layer={parentLayer}
@@ -157,6 +172,10 @@
         onToggleCollapse={() => toggleCollapse(parentLayer.id)}
         onToggleVisibility={onToggleVisibility}
         onOpenSettings={onOpenSettings}
+        canMoveUp={parentIndex > 0}
+        canMoveDown={parentIndex < parentItems.length - 1}
+        onMoveUp={() => onMoveLayer?.(reorderScope, parentLayer.id, -1)}
+        onMoveDown={() => onMoveLayer?.(reorderScope, parentLayer.id, 1)}
         onRenameLayer={onRenameLayer}
         onDuplicateLayer={onDuplicateLayer}
         onDeleteLayer={onDeleteLayer}
@@ -177,11 +196,18 @@
             onconsider={(e: Event) => handleChildConsider(parentLayer.id, e)}
             onfinalize={(e: Event) => handleChildFinalize(parentLayer.id, e)}
           >
-            {#each getChildren(parentLayer.id) as childLayer (childLayer.id)}
+            {#each getChildren(parentLayer.id) as childLayer, childIndex (childLayer.id)}
               <LayerItem
                 layer={childLayer}
                 onToggleVisibility={onToggleVisibility}
                 onOpenSettings={onOpenSettings}
+                canMoveUp={childIndex > 0}
+                canMoveDown={childIndex <
+                  getChildren(parentLayer.id).length - 1}
+                onMoveUp={() =>
+                  onMoveSubLayer?.(parentLayer.id, childLayer.id, -1)}
+                onMoveDown={() =>
+                  onMoveSubLayer?.(parentLayer.id, childLayer.id, 1)}
               />
             {/each}
           </div>

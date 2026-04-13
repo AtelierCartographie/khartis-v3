@@ -22,6 +22,7 @@ import {
   extractZip,
   getShapefileFilesFromArchive
 } from '$lib/features/data-pipeline/utils/zip-handler';
+import { convertGeoPackageToGeoJsonFile } from './geopackage-browser-fallback';
 
 export interface BasemapImportResult {
   basemap: BasemapMetadata;
@@ -50,6 +51,10 @@ interface GeoParquetMeta {
 const RAW_TABLE_SUFFIX = '__raw';
 const INNERLINES_TABLE_SUFFIX = '__innerlines';
 const CENTROIDS_TABLE_SUFFIX = '__centroids';
+
+export function getBasemapRawTableName(tableName: string): string {
+  return `${tableName}${RAW_TABLE_SUFFIX}`;
+}
 
 export function getBasemapInnerlinesTableName(tableName: string): string {
   return `${tableName}${INNERLINES_TABLE_SUFFIX}`;
@@ -90,6 +95,31 @@ export async function processBasemapImport(
 
   if (isParquet) {
     return processParquetBasemapImport(duck, file, tableName);
+  }
+
+  if (lowerFileName.endsWith('.gpkg')) {
+    try {
+      return await processGeofileBasemapImport(duck, file, tableName);
+    } catch (error) {
+      logger.warn(
+        'DuckDB GeoPackage basemap import failed, trying browser fallback',
+        LogCategory.MAP,
+        {
+          fileName: file.name,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      );
+
+      await duck.query(
+        `DROP TABLE IF EXISTS "${escapeIdentifier(tableName)}"`,
+        {
+          format: 'arrow-ipc'
+        }
+      );
+
+      const fallbackGeoJsonFile = await convertGeoPackageToGeoJsonFile(file);
+      return processGeofileBasemapImport(duck, fallbackGeoJsonFile, tableName);
+    }
   }
 
   return processGeofileBasemapImport(duck, file, tableName);
@@ -378,13 +408,20 @@ function getRepresentativePointExpression(
   const escapedGeometryColumn = `"${escapeIdentifier(geometryColumn)}"`;
 
   if (isPolygonBasemapLayerType(layerType)) {
-    return `COALESCE(
-      ST_MaximumInscribedCircle(${escapedGeometryColumn}).center,
-      ST_PointOnSurface(${escapedGeometryColumn})
-    )`;
+    return `CASE
+      WHEN ST_IsEmpty(${escapedGeometryColumn}) THEN NULL
+      WHEN NOT ST_IsValid(${escapedGeometryColumn}) THEN ST_PointOnSurface(${escapedGeometryColumn})
+      ELSE COALESCE(
+        ST_MaximumInscribedCircle(${escapedGeometryColumn}).center,
+        ST_PointOnSurface(${escapedGeometryColumn})
+      )
+    END`;
   }
 
-  return `ST_PointOnSurface(${escapedGeometryColumn})`;
+  return `CASE
+    WHEN ST_IsEmpty(${escapedGeometryColumn}) THEN NULL
+    ELSE ST_PointOnSurface(${escapedGeometryColumn})
+  END`;
 }
 
 async function prepareRepresentativePointTable(
@@ -413,16 +450,114 @@ async function prepareRepresentativePointTable(
   `);
 }
 
+function buildNormalizedGeometrySelect(
+  sourceTableName: string,
+  geometryColumn: string,
+  geometryExpression: string
+): string {
+  const escapedSourceTable = escapeIdentifier(sourceTableName);
+  const escapedGeometryColumn = escapeIdentifier(geometryColumn);
+  const escapedDefaultGeom = escapeIdentifier(INTERNAL_COLUMN.GEOM);
+  const defaultGeomExpression = `"${escapedDefaultGeom}"`;
+
+  if (geometryColumn === INTERNAL_COLUMN.GEOM) {
+    if (geometryExpression === defaultGeomExpression) {
+      return `SELECT * FROM "${escapedSourceTable}"`;
+    }
+
+    return `SELECT * REPLACE (${geometryExpression} AS "${escapedDefaultGeom}") FROM "${escapedSourceTable}"`;
+  }
+
+  return `SELECT * EXCLUDE ("${escapedGeometryColumn}"), ${geometryExpression} AS "${escapedDefaultGeom}" FROM "${escapedSourceTable}"`;
+}
+
+async function createEmptyInnerlinesTable(
+  duck: typeof Duck,
+  tableName: string
+): Promise<void> {
+  await duck.query(`
+    CREATE OR REPLACE TABLE "${escapeIdentifier(tableName)}" AS
+    SELECT NULL::GEOMETRY AS "${escapeIdentifier(INTERNAL_COLUMN.GEOM)}"
+    WHERE FALSE
+  `);
+}
+
+async function rebuildPolygonDerivedTables(
+  duck: typeof Duck,
+  tableName: string
+): Promise<void> {
+  const innerlinesTableName = getBasemapInnerlinesTableName(tableName);
+
+  try {
+    await duck.query(`
+      CREATE OR REPLACE TABLE "${escapeIdentifier(innerlinesTableName)}" AS
+      FROM extract_innerlines('${escapeSqlString(tableName)}')
+    `);
+  } catch (error) {
+    logger.warn(
+      'Failed to extract innerlines for custom basemap, using empty layer',
+      LogCategory.MAP,
+      {
+        tableName,
+        error: error instanceof Error ? error.message : String(error)
+      }
+    );
+    await createEmptyInnerlinesTable(duck, innerlinesTableName);
+  }
+
+  await prepareRepresentativePointTable(
+    duck,
+    tableName,
+    INTERNAL_COLUMN.GEOM,
+    BasemapLayerType.POLYGON
+  );
+}
+
+async function rebuildLineDerivedTables(
+  duck: typeof Duck,
+  tableName: string
+): Promise<void> {
+  await prepareRepresentativePointTable(
+    duck,
+    tableName,
+    INTERNAL_COLUMN.GEOM,
+    BasemapLayerType.LINE
+  );
+}
+
+export async function refreshImportedBasemapHelperTables(
+  duck: typeof Duck,
+  tableName: string,
+  layerType: BasemapLayerType
+): Promise<void> {
+  if (isPolygonBasemapLayerType(layerType)) {
+    await rebuildPolygonDerivedTables(duck, tableName);
+    return;
+  }
+
+  if (isLineBasemapLayerType(layerType)) {
+    await rebuildLineDerivedTables(duck, tableName);
+    return;
+  }
+
+  if (isPointBasemapLayerType(layerType)) {
+    await prepareRepresentativePointTable(
+      duck,
+      tableName,
+      INTERNAL_COLUMN.GEOM,
+      BasemapLayerType.POINT
+    );
+  }
+}
+
 async function preparePolygonBasemapTables(
   duck: typeof Duck,
   tableName: string,
   geometryColumn: string
 ): Promise<void> {
-  const rawTableName = `${tableName}${RAW_TABLE_SUFFIX}`;
-  const innerlinesTableName = getBasemapInnerlinesTableName(tableName);
+  const rawTableName = getBasemapRawTableName(tableName);
   const escapedTable = escapeIdentifier(tableName);
   const escapedRawTable = escapeIdentifier(rawTableName);
-  const escapedInnerlinesTable = escapeIdentifier(innerlinesTableName);
 
   await duck.query(
     `CREATE OR REPLACE TABLE "${escapedRawTable}" AS SELECT * FROM "${escapedTable}"`
@@ -433,21 +568,28 @@ async function preparePolygonBasemapTables(
       CREATE OR REPLACE TABLE "${escapedTable}" AS
       FROM simplify_and_clean('${escapeSqlString(rawTableName)}', '${escapeSqlString(geometryColumn)}', 0.0)
     `);
+  } catch (error) {
+    logger.warn(
+      'Basemap polygon cleanup failed, falling back to direct geometry copy',
+      LogCategory.MAP,
+      {
+        tableName,
+        geometryColumn,
+        error: error instanceof Error ? error.message : String(error)
+      }
+    );
 
     await duck.query(`
-      CREATE OR REPLACE TABLE "${escapedInnerlinesTable}" AS
-      FROM extract_innerlines('${escapeSqlString(tableName)}')
+      CREATE OR REPLACE TABLE "${escapedTable}" AS
+      ${buildNormalizedGeometrySelect(
+        rawTableName,
+        geometryColumn,
+        `"${escapeIdentifier(geometryColumn)}"`
+      )}
     `);
-
-    await prepareRepresentativePointTable(
-      duck,
-      tableName,
-      INTERNAL_COLUMN.GEOM,
-      BasemapLayerType.POLYGON
-    );
-  } finally {
-    await duck.query(`DROP TABLE IF EXISTS "${escapedRawTable}"`);
   }
+
+  await rebuildPolygonDerivedTables(duck, tableName);
 }
 
 async function prepareLineBasemapTables(
@@ -455,7 +597,7 @@ async function prepareLineBasemapTables(
   tableName: string,
   geometryColumn: string
 ): Promise<void> {
-  const rawTableName = `${tableName}${RAW_TABLE_SUFFIX}`;
+  const rawTableName = getBasemapRawTableName(tableName);
   const escapedTable = escapeIdentifier(tableName);
   const escapedRawTable = escapeIdentifier(rawTableName);
 
@@ -468,16 +610,28 @@ async function prepareLineBasemapTables(
       CREATE OR REPLACE TABLE "${escapedTable}" AS
       FROM simplify_and_clean_linestring('${escapeSqlString(rawTableName)}', '${escapeSqlString(geometryColumn)}', 0.0)
     `);
-
-    await prepareRepresentativePointTable(
-      duck,
-      tableName,
-      INTERNAL_COLUMN.GEOM,
-      BasemapLayerType.LINE
+  } catch (error) {
+    logger.warn(
+      'Basemap line cleanup failed, falling back to direct geometry copy',
+      LogCategory.MAP,
+      {
+        tableName,
+        geometryColumn,
+        error: error instanceof Error ? error.message : String(error)
+      }
     );
-  } finally {
-    await duck.query(`DROP TABLE IF EXISTS "${escapedRawTable}"`);
+
+    await duck.query(`
+      CREATE OR REPLACE TABLE "${escapedTable}" AS
+      ${buildNormalizedGeometrySelect(
+        rawTableName,
+        geometryColumn,
+        `"${escapeIdentifier(geometryColumn)}"`
+      )}
+    `);
   }
+
+  await rebuildLineDerivedTables(duck, tableName);
 }
 
 async function preparePointBasemapTables(

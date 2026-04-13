@@ -1,4 +1,4 @@
-type CryptoApi = Pick<Crypto, 'getRandomValues'> &
+export type CryptoApi = Pick<Crypto, 'getRandomValues'> &
   Partial<Pick<Crypto, 'randomUUID'>>;
 
 function padHex(byte: number): string {
@@ -47,7 +47,7 @@ export function generateId(
     return cryptoApi.randomUUID();
   }
 
-  if (cryptoApi?.getRandomValues) {
+  if (cryptoApi) {
     return createUuidFromCrypto(cryptoApi);
   }
 

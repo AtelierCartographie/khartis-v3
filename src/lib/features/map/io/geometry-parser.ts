@@ -179,12 +179,20 @@ export function parseGeoArrowNative(coords: unknown[]): Geometry | null {
   return null;
 }
 
-export function parseWkbToGeoJson(wkb: Uint8Array): Geometry | null {
+interface ParseWkbOptions {
+  validateCoordinates?: boolean;
+}
+
+export function parseWkbToGeoJson(
+  wkb: Uint8Array,
+  options: ParseWkbOptions = {}
+): Geometry | null {
   if (wkb.length < 5) return null;
 
   const littleEndian = wkb[0] === 1;
   const view = new DataView(wkb.buffer, wkb.byteOffset, wkb.byteLength);
   const geomType = view.getUint32(1, littleEndian);
+  const shouldValidateCoordinates = options.validateCoordinates ?? true;
 
   let offset = 5;
 
@@ -226,7 +234,10 @@ export function parseWkbToGeoJson(wkb: Uint8Array): Geometry | null {
     switch (geomType) {
       case WKBGeometryTypeCode.POINT: {
         const point = readPoint();
-        if (!isValidCoordinate(point[0], point[1])) {
+        if (
+          shouldValidateCoordinates &&
+          !isValidCoordinate(point[0], point[1])
+        ) {
           return null;
         }
         return { type: GEOJSON_TYPE.POINT, coordinates: point };

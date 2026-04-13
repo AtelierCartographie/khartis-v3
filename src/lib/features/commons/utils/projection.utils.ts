@@ -267,7 +267,7 @@ function createProjectionFitTarget(bbox: [number, number, number, number]) {
   return isWorldBbox
     ? { type: 'Sphere' as const }
     : {
-        type: GEOJSON_TYPE.FEATURE as const,
+        type: GEOJSON_TYPE.FEATURE,
         geometry: {
           type: 'Polygon' as const,
           coordinates: [

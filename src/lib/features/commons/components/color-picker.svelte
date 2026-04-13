@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { resolveColorPickerDropdownPosition } from '$lib/features/commons/utils/color-picker-position';
   import { hexToHsl, hslToHex } from '$lib/features/commons/utils/color-utils';
   import { clickOutside } from '$lib/features/commons/utils/click-outside';
   import { m } from '$lib/paraglide/messages';
@@ -30,7 +31,7 @@
   let colorOpen = $state(false);
   let triggerEl = $state<HTMLButtonElement | null>(null);
   let dropdownEl = $state<HTMLDivElement | null>(null);
-  let dropdownPosition = $state({ top: 0, left: 0, width: 0 });
+  let dropdownPosition = $state({ top: 0, left: 0, width: 0, maxHeight: 0 });
   let openUpward = $state(false);
   let initialColor: ColorPayload | null = null;
 
@@ -116,29 +117,27 @@
     onPreview(nextColor);
   }
 
-  function updateDropdownPosition() {
-    if (!triggerEl) return;
-    const rect = triggerEl.getBoundingClientRect();
-    const dropdownHeight = dropdownEl?.offsetHeight || 400;
-    const viewportHeight = window.innerHeight;
-    const spaceBelow = viewportHeight - rect.bottom;
-    const spaceAbove = rect.top;
-
-    if (spaceBelow < dropdownHeight && spaceAbove > spaceBelow) {
-      openUpward = true;
-      dropdownPosition = {
-        top: rect.top - dropdownHeight,
-        left: rect.left,
-        width: 370
-      };
-    } else {
-      openUpward = false;
-      dropdownPosition = {
-        top: rect.bottom,
-        left: rect.left,
-        width: 370
-      };
+  function updateDropdownPosition(): void {
+    if (!triggerEl) {
+      return;
     }
+
+    const nextPosition = resolveColorPickerDropdownPosition({
+      triggerRect: triggerEl.getBoundingClientRect(),
+      dropdownHeight: dropdownEl?.offsetHeight ?? 400,
+      viewport: {
+        width: window.innerWidth,
+        height: window.innerHeight
+      }
+    });
+
+    openUpward = nextPosition.openUpward;
+    dropdownPosition = {
+      top: nextPosition.top,
+      left: nextPosition.left,
+      width: nextPosition.width,
+      maxHeight: nextPosition.maxHeight
+    };
   }
 
   $effect(() => {
@@ -217,7 +216,7 @@
       id="khartis-color-picker-dropdown"
       class="color-dropdown"
       class:open-upward={openUpward}
-      style="top: {dropdownPosition.top}px; left: {dropdownPosition.left}px; width: {dropdownPosition.width}px;"
+      style="top: {dropdownPosition.top}px; left: {dropdownPosition.left}px; width: {dropdownPosition.width}px; max-height: {dropdownPosition.maxHeight}px;"
       bind:this={dropdownEl}
       use:portal
     >
@@ -451,6 +450,11 @@
     background: var(--cds-field-01);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     border: 1px solid var(--cds-ui-04);
+    box-sizing: border-box;
+    max-width: calc(100vw - 2 * var(--cds-spacing-05));
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
 
   .color-dropdown.open-upward {

@@ -891,6 +891,46 @@ function createBasemapService() {
     });
   }
 
+  async function refreshCustomBasemap(
+    basemapId: string
+  ): Promise<ArrowTable | null> {
+    const loadedBasemap = basemapCache.get(basemapId);
+    if (!loadedBasemap?.metadata.isCustom) {
+      return null;
+    }
+
+    const geometryTable = await loadCustomBasemapGeometry(
+      loadedBasemap.metadata
+    );
+    const layerTables = new Map<string, ArrowTable>();
+
+    for (const layer of getLoadableMetadataLayers(loadedBasemap.metadata)) {
+      const layerFile = layer.file;
+      if (!layerFile || !(await doesDuckTableExist(layerFile))) {
+        continue;
+      }
+
+      layerTables.set(layerFile, await loadGeometryFromDuckTable(layerFile));
+    }
+
+    loadedBasemap.geometryTable = geometryTable;
+    loadedBasemap.layerTables = layerTables;
+    loadedBasemap.activeSimplificationLevel = null;
+    loadedBasemap.simplifiedVariants?.clear();
+
+    if (currentBasemap?.metadata.file === basemapId) {
+      currentBasemap = loadedBasemap;
+      updateProjectionFromTable(geometryTable);
+    }
+
+    logger.debug('Custom basemap refreshed from DuckDB', LogCategory.MAP, {
+      basemapId,
+      layerCount: layerTables.size
+    });
+
+    return geometryTable;
+  }
+
   function getResolvedLayerTables(
     loadedBasemap: LoadedBasemap | null
   ): Map<string, ArrowTable> {
@@ -1240,6 +1280,7 @@ function createBasemapService() {
       return stylePresetsData;
     },
     loadVariant,
+    refreshCustomBasemap,
     clearSimplificationCache,
     reset,
     clearCache

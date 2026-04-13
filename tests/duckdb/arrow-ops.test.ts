@@ -78,6 +78,7 @@ describe('fetchArrowRepresentativePointTable', () => {
 
     const executedSql = String(queryMock.mock.calls[0]?.[0]);
 
+    expect(executedSql).toContain('ST_IsEmpty("geometry")');
     expect(executedSql).toContain(
       'ST_MaximumInscribedCircle("geometry").center'
     );
@@ -102,6 +103,7 @@ describe('fetchArrowRepresentativePointTable', () => {
 
     const executedSql = String(queryMock.mock.calls[0]?.[0]);
 
+    expect(executedSql).toContain('ST_IsEmpty("geometry")');
     expect(executedSql).toContain('ST_PointOnSurface("geometry")');
     expect(executedSql).not.toContain('ST_MaximumInscribedCircle(');
   });
@@ -123,6 +125,7 @@ describe('fetchArrowRepresentativePointTable', () => {
 
     const executedSql = String(queryMock.mock.calls[0]?.[0]);
 
+    expect(executedSql).toContain('ST_IsEmpty("geometry")');
     expect(executedSql).toContain('ST_PointOnSurface("geometry")');
     expect(executedSql).not.toContain('ST_MaximumInscribedCircle(');
   });

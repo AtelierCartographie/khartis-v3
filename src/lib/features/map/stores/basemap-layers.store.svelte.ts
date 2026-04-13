@@ -9,11 +9,13 @@ import {
 } from '$lib/features/main-toolbar/constants';
 import {
   BASEMAP_LAYER_ID,
-  type BasemapLayerId
+  getBasemapRenderGroup,
+  type BasemapLayerId,
+  type BasemapRenderGroup
 } from '$lib/features/commons/constants/basemap.constants';
 
-export { BasemapDottedPattern, BASEMAP_LAYER_ID };
-export type { BasemapLayerId };
+export { BasemapDottedPattern, BASEMAP_LAYER_ID, getBasemapRenderGroup };
+export type { BasemapLayerId, BasemapRenderGroup };
 
 interface BasemapLayerBase {
   id: BasemapLayerId;
@@ -111,24 +113,6 @@ export type BasemapLayerConfig =
 
 const DEFAULT_LAYERS: BasemapLayerConfig[] = [
   {
-    id: 'mers',
-    visible: true,
-    color: '#e0e0e0',
-    opacity: 100
-  },
-  {
-    id: 'terre',
-    visible: true,
-    fillColor: '#ffffff',
-    fillShadow: false,
-    fillOpacity: 100,
-    strokeColor: '#a8a8a8',
-    strokeDotted: false,
-    strokeDottedPattern: BasemapDottedPattern.DOTS,
-    strokeThickness: 0.5,
-    strokeOpacity: 40
-  },
-  {
     id: 'lacs',
     visible: false,
     color: '#a6c8ff',
@@ -152,6 +136,33 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
     opacity: 50
   },
   {
+    id: 'terre',
+    visible: true,
+    fillColor: '#ffffff',
+    fillShadow: false,
+    fillOpacity: 100,
+    strokeColor: '#a8a8a8',
+    strokeDotted: false,
+    strokeDottedPattern: BasemapDottedPattern.DOTS,
+    strokeThickness: 0.5,
+    strokeOpacity: 40
+  },
+  {
+    id: 'mers',
+    visible: true,
+    color: '#e0e0e0',
+    opacity: 100
+  },
+  {
+    id: 'villes',
+    visible: false,
+    category: BasemapCityCategory.CAPITALS,
+    symbol: BasemapCitySymbol.POINT,
+    color: '#525252',
+    size: 8,
+    opacity: 100
+  },
+  {
     id: 'equateur',
     visible: false,
     color: '#8d8d8d',
@@ -164,11 +175,11 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
     id: 'meridiens',
     visible: false,
     remarquables: BasemapRemarquables.ALL,
-    color: '#e0e0e0',
+    color: '#8d8d8d',
     dotted: true,
     dottedPattern: BasemapDottedPattern.DOTS,
-    thickness: 0.5,
-    opacity: 50
+    thickness: 1,
+    opacity: 80
   },
   {
     id: 'frontieres',
@@ -177,15 +188,6 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
     dotted: false,
     dottedPattern: BasemapDottedPattern.DOTS,
     thickness: 1,
-    opacity: 100
-  },
-  {
-    id: 'villes',
-    visible: false,
-    category: BasemapCityCategory.CAPITALS,
-    symbol: BasemapCitySymbol.POINT,
-    color: '#525252',
-    size: 8,
     opacity: 100
   }
 ];
@@ -314,6 +316,53 @@ function createBasemapLayersStore() {
     incrementVersion();
   }
 
+  function setLayerRenderGroupOrder(
+    renderGroup: BasemapRenderGroup,
+    orderedIds: BasemapLayerId[]
+  ): void {
+    if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+      return;
+    }
+
+    const currentGroupLayers = state.layers.filter(
+      (layer) => getBasemapRenderGroup(layer.id) === renderGroup
+    );
+
+    if (currentGroupLayers.length === 0) {
+      return;
+    }
+
+    const layerMap = new Map(
+      currentGroupLayers.map((layer) => [layer.id, layer] as const)
+    );
+    const orderedGroupLayers: BasemapLayerConfig[] = [];
+    const seen = new Set<BasemapLayerId>();
+
+    for (const id of orderedIds) {
+      const layer = layerMap.get(id);
+      if (!layer || seen.has(id)) continue;
+      orderedGroupLayers.push(layer);
+      seen.add(id);
+    }
+
+    for (const layer of currentGroupLayers) {
+      if (seen.has(layer.id)) continue;
+      orderedGroupLayers.push(layer);
+    }
+
+    let nextGroupIndex = 0;
+    state.layers = state.layers.map((layer) => {
+      if (getBasemapRenderGroup(layer.id) !== renderGroup) {
+        return layer;
+      }
+
+      const replacement = orderedGroupLayers[nextGroupIndex];
+      nextGroupIndex += 1;
+      return replacement;
+    });
+    incrementVersion();
+  }
+
   function resetToDefaults(): void {
     state.layers = cloneDefaults();
     incrementVersion();
@@ -354,6 +403,7 @@ function createBasemapLayersStore() {
     setLayerVisibility,
     updateLayer,
     setLayerOrder,
+    setLayerRenderGroupOrder,
     resetToDefaults,
     resetLayer,
     restoreFromSerialized

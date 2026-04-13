@@ -1,6 +1,7 @@
 import type {
   DatasetResult,
   EnrichedColumn,
+  GeometryInfo,
   ZipDatasetResult
 } from '$lib/features/data-pipeline';
 import {
@@ -112,7 +113,9 @@ function buildRowsFromPreparedGeoJSON(
   }));
 }
 
-function buildGeometryInfoFromPreparedGeoJSON(file: UploadedFile) {
+function buildGeometryInfoFromPreparedGeoJSON(
+  file: UploadedFile
+): GeometryInfo | undefined {
   const preparedGeoJSON = getPreparedGeoJSON(file);
   if (!preparedGeoJSON || preparedGeoJSON.features.length === 0) {
     return undefined;
@@ -156,12 +159,33 @@ function buildGeometryInfoFromPreparedGeoJSON(file: UploadedFile) {
   ];
 
   return {
-    type: firstGeometry?.type ?? 'Polygon',
+    type:
+      typeof firstGeometry?.type === 'string' ? firstGeometry.type : 'Polygon',
     columnName: 'geom',
     bounds,
     centroid: computeCentroid(bounds),
     featureCount: preparedGeoJSON.features.length
   };
+}
+
+function normalizeDatasetFormat(
+  fileType: FileType
+): NonNullable<DatasetResult['format']> {
+  switch (fileType) {
+    case FileType.CSV:
+    case FileType.GEOJSON:
+    case FileType.SHAPEFILE:
+    case FileType.GEOPACKAGE:
+    case FileType.GEOPARQUET:
+    case FileType.KML:
+    case FileType.KMZ:
+    case FileType.GPX:
+      return fileType;
+    case FileType.TSV:
+      return FileType.CSV;
+    default:
+      return FileType.UNKNOWN;
+  }
 }
 
 function createRestorableGeoSnapshot(file: UploadedFile): UploadedFile | null {
@@ -294,7 +318,7 @@ export function createDatasetFromPreprocessedFile(
           maxLat: geometryInfo.bounds[3]
         }
       : undefined,
-    format: file.fileType,
+    format: normalizeDatasetFormat(file.fileType),
     createdAt: new Date()
   };
 }
