@@ -7,6 +7,7 @@ import { resolvePersistedJoinState } from '$lib/features/commons/utils/persisted
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import { Duck } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
+import type { BasemapStyle } from '$lib/features/map/constants/basemap-styles';
 import { basemapCatalogService } from '$lib/features/map/services';
 import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
 import type {
@@ -168,6 +169,9 @@ function mapRegistryToSerializedFormat(
     basemapSettings: {
       layers: stores.basemapLayers,
       style: (stores.basemapStyle as { style?: unknown })?.style,
+      lastSelectedTiledStyle: (
+        stores.basemapStyle as { lastSelectedTiledStyle?: BasemapStyle | null }
+      )?.lastSelectedTiledStyle,
       referenceBasemapId: (
         stores.basemapStyle as { referenceBasemapId?: string | null }
       )?.referenceBasemapId,
@@ -204,6 +208,7 @@ function mapSerializedFormatToRegistry(
     stores.basemapLayers = data.basemapSettings.layers;
     stores.basemapStyle = {
       style: data.basemapSettings.style,
+      lastSelectedTiledStyle: data.basemapSettings.lastSelectedTiledStyle,
       referenceBasemapId: data.basemapSettings.referenceBasemapId,
       showLabels: data.basemapSettings.showLabels,
       groupVisibility: data.basemapSettings.groupVisibility

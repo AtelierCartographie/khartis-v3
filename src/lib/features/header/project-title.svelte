@@ -73,6 +73,8 @@
       tooltipPosition="bottom"
       tooltipAlignment="end"
       iconDescription={m.save_tooltip()}
+      portalTooltip
+      showDisabledTooltip
       kind="ghost"
       icon={Save}
       disabled={!canSave}

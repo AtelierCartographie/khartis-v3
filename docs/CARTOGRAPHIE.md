@@ -241,12 +241,16 @@ Stockées dans `annotations.store.svelte.ts` — synchronisées avec la config d
 
 Génération automatique dès création de visualisation. Types de contenus :
 
-| Type viz      | Contenu légende                           |
-| ------------- | ----------------------------------------- |
-| Choroplèthe   | Rampe de couleurs (classes + seuils)      |
-| Catégoriel    | Swatches discrètes (catégories)           |
-| Proportionnel | Échelle de tailles (valeur min/max)       |
-| Motif         | Swatches avec motif hatch (accessibilité) |
+| Type viz / mode     | Contenu légende                                                                 |
+| ------------------- | ------------------------------------------------------------------------------- |
+| Choroplèthe         | Rampe de couleurs (classes + seuils)                                            |
+| Catégoriel          | Swatches discrètes, avec primitive cohérente avec la visualisation              |
+| Proportionnel       | Échelle de tailles (min, intermédiaire, max)                                    |
+| Symboles en classes | Échelle discrète de tailles par classe                                          |
+| Lignes en couleur   | Swatches linéaires (classes ou catégories)                                      |
+| Lignes en épaisseur | Échelle d’épaisseurs (proportionnelle ou par classes)                           |
+| Motif               | Swatches avec motif hatch (accessibilité)                                       |
+| Données manquantes  | Entrée dédiée reflétant la représentation choisie (surface, rond, carré, croix) |
 
 Légendes synchronisées avec `visualizationStore` via `syncWithVisualizations()`. Items déplaçables (4 coins), personnalisables (police, taille, couleur texte, fond, opacité).
 

@@ -1,6 +1,7 @@
 import type { Layer } from '@deck.gl/core';
 import type { MapboxOverlay } from '@deck.gl/mapbox';
 import type { Map as MapLibreMap } from 'maplibre-gl';
+import type { GeoProjection } from 'd3-geo';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { FeatureCollection } from 'geojson';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
@@ -10,6 +11,7 @@ import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte
 import { mapProjectionStore } from '../stores/map-projection.store.svelte';
 import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
 import { projectionStore } from '../stores/projection.store.svelte';
+import { mapHighlightStore } from '../stores/map-highlight.store.svelte';
 import { basemapService } from '../services/basemap.service.svelte';
 import { basemapLayersStore } from '../stores/basemap-layers.store.svelte';
 import {
@@ -115,7 +117,11 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       strokeWidth: DATA_PREVIEW_STROKE_WIDTH,
       strokeOpacity: DATA_PREVIEW_STROKE_OPACITY,
       statistics: { min: 0, max: 100 },
-      categoryColorMap: null
+      categoryColorMap: null,
+      highlightedRowIds: mapHighlightStore.hasHighlights
+        ? mapHighlightStore.highlightedRowIds
+        : undefined,
+      highlightVersion: mapHighlightStore.version
     };
   }
 
@@ -172,7 +178,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
   >();
   const representativePointLoadFailures = new WeakSet<ArrowTable>();
   let cachedProjectionOverrideKey: string | null = null;
-  let cachedProjectionOverrideRef: ProjectionLike | undefined;
+  let cachedProjectionOverrideRef: GeoProjection | undefined;
 
   function getProjectionFromMetadata(
     metadata: BasemapMetadata | null | undefined,
@@ -227,7 +233,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       return cachedProjectionOverrideRef;
     }
 
-    let projectionOverride: ProjectionLike | undefined;
+    let projectionOverride: GeoProjection | undefined;
 
     if (projState.customCode) {
       try {
@@ -392,6 +398,15 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         case 'frontieres':
           requestedTypes.add(BasemapLayerType.LIMIT);
           break;
+        case 'lacs':
+          requestedTypes.add(BasemapLayerType.POLYGON);
+          break;
+        case 'rivieres':
+          requestedTypes.add(BasemapLayerType.LINE);
+          break;
+        case 'villes':
+          requestedTypes.add(BasemapLayerType.POINT);
+          break;
         case 'meridiens':
           requestedTypes.add(BasemapLayerType.GRATICULE);
           break;
@@ -516,14 +531,15 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             }
 
             for (const layer of currentMetadata.layers) {
-              if (!layer.file) continue;
-              const table = basemapService.currentLayers.get(layer.file);
+              const table = layer.file
+                ? basemapService.currentLayers.get(layer.file)
+                : worldBaseTable;
               if (!table) continue;
               metadataLayers.push({
                 table,
                 style: layer.style ?? null,
                 type: layer.type,
-                file: layer.file
+                file: layer.file ?? currentMetadata.file
               });
             }
           }

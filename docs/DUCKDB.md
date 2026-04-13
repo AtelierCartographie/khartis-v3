@@ -60,6 +60,8 @@ await initDuckDB();
 
 L'init est **idempotente et dédoublonnée** : les appels concurrents avant la première résolution réutilisent la même Promise. Après un échec, le promise est réinitialisée pour permettre un retry.
 
+En pratique côté navigateur, Khartis sert maintenant le document principal avec COOP/COEP pour obtenir un environnement réellement `crossOriginIsolated`, mais le cœur DuckDB WASM reste sur les bundles `mvp` ou `eh`. Cela garde le chemin d'extensions `spatial` compatible tout en laissant les imports géographiques lourds s'appuyer sur un document navigateur isolé quand des workers sont nécessaires.
+
 ---
 
 ## Duck — API publique
@@ -425,6 +427,18 @@ Dans le rendu thematique, ces tables `CENTROID` sont maintenant le chemin nomina
 ### GeoParquet
 
 Si la géométrie est dans une colonne non-`geom` (ex: `geometry`), le pipeline normalise vers `geom` avant simplification.
+
+### Fallback navigateur pour GeoPackage
+
+Dans le navigateur, si `ST_Read()` échoue sur un fond de carte `.gpkg`, Khartis bascule sur un fallback client-only :
+
+- lecture SQLite Wasm du GeoPackage
+- sélection automatique de la couche spatiale par défaut avec la même heuristique que les autres imports multi-couches
+- extraction de la géométrie GeoPackage binaire vers WKB
+- reprojection éventuelle vers `EPSG:4326`
+- conversion en GeoJSON temporaire, puis reprise du pipeline normal de fond de carte
+
+Ce fallback est limité au parcours d'import de fond de carte GeoPackage et ne change pas le chemin DuckDB nominal des autres formats.
 
 ---
 

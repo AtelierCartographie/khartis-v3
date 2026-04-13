@@ -23,6 +23,7 @@
     onShowHiddenColumns?: () => void;
     onToggleSummaryPlots?: () => void;
     deleteDisabled?: boolean;
+    deleteActive?: boolean;
     resetDisabled?: boolean;
     selectionCount?: number;
     showCsvOptions?: boolean;
@@ -38,6 +39,7 @@
     onShowHiddenColumns,
     onToggleSummaryPlots,
     deleteDisabled = true,
+    deleteActive = false,
     resetDisabled = false,
     selectionCount = 0,
     showCsvOptions = false,
@@ -46,7 +48,7 @@
   }: Props = $props();
 
   const hasSelection = $derived(selectionCount > 0);
-  const effectiveDeleteDisabled = $derived(deleteDisabled && !hasSelection);
+  const effectiveDeleteDisabled = $derived(deleteDisabled);
 
   const isSearchActive = $derived(
     dataToolsStore.activeTool === DataToolType.Search
@@ -104,6 +106,7 @@
       iconDescription={m.data_tool_trash()}
       tooltipPosition="bottom"
       disabled={effectiveDeleteDisabled}
+      class={deleteActive ? 'active' : ''}
       on:click={() => onDelete?.()}
     />
     {#if hasSelection}

@@ -128,3 +128,7 @@ tmp/
 *.sln
 *.sw?
 .history/
+
+# plan-gen outputs
+*-TRACKING-TESTS.md
+.agent-plans/

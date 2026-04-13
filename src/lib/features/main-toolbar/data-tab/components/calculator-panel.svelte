@@ -21,13 +21,14 @@
     COLUMN_TYPE_GEOMETRY
   } from '$lib/features/commons/constants/data.constants';
   import * as m from '$lib/paraglide/messages';
+  import { refreshDatasetMetadata } from '../services/dataset-metadata';
   import AutocompleteTextarea, {
     type Suggestion
   } from '$lib/features/commons/components/autocomplete-textarea.svelte';
 
   interface Props {
     tableName?: string;
-    onColumnCreated?: () => void;
+    onColumnCreated?: () => Promise<void> | void;
   }
 
   let { tableName, onColumnCreated }: Props = $props();
@@ -265,6 +266,13 @@
         formula
       );
 
+      if (selectedDataset?.id) {
+        datasetsStore.recordTransformation(
+          selectedDataset.id,
+          `Calculated column created: ${effectiveName}`
+        );
+      }
+
       if (selectedDataset?.sourceFileId) {
         await projectStore.addColumnTransformation(
           selectedDataset.sourceFileId,
@@ -277,13 +285,19 @@
         );
       }
 
+      if (selectedDataset?.id) {
+        await refreshDatasetMetadata(selectedDataset.id, tableName, {
+          force: true
+        });
+      }
+
       variableCounter++;
       variableName = '';
       formula = '';
       testResult = null;
       successMessage = m.calc_success();
       dataToolsStore.resetCalculator();
-      onColumnCreated?.();
+      await onColumnCreated?.();
     } catch (err) {
       errorMessage = m.error_calc_generic();
       dataToolsStore.setCalculatorError(

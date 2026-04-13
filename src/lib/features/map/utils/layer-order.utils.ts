@@ -1,6 +1,5 @@
 import type { VisualizationConfig } from '$lib/features/commons/store/visualization.store.svelte';
 import type { Layer } from '@deck.gl/core';
-import { DeckLayerId } from '$lib/features/map/constants/map.constants';
 
 export function getVisualizationRenderOrder(
   visualizations: readonly VisualizationConfig[]
@@ -12,34 +11,13 @@ export function getVisualizationRenderOrder(
   return [...visualizations].reverse();
 }
 
-function hasDeckLayerPrefix(layerId: string, prefix: DeckLayerId): boolean {
-  return layerId === prefix || layerId.startsWith(`${prefix}-`);
-}
-
-function isTextOverlayLayer(layer: Layer): boolean {
-  return (
-    typeof layer.id === 'string' &&
-    (hasDeckLayerPrefix(layer.id, DeckLayerId.LABEL_LAYER) ||
-      hasDeckLayerPrefix(layer.id, DeckLayerId.TEXT_LAYER))
-  );
-}
-
 export function getThematicLayerRenderOrder(layers: readonly Layer[]): Layer[] {
-  const textLayers: Layer[] = [];
-  const geometryLayers: Layer[] = [];
-
-  for (const layer of layers) {
-    if (isTextOverlayLayer(layer)) {
-      textLayers.push(layer);
-    } else {
-      geometryLayers.push(layer);
-    }
-  }
-
-  // Deck.gl renders later entries above earlier ones. Keeping text overlays
-  // first guarantees they stay below symbols, lines and polygons, even when
-  // several visualizations are stacked together.
-  return [...textLayers, ...geometryLayers];
+  // `createDeckLayers()` already builds each visualization in the intended
+  // order (geometry first, text overlays above that geometry), and
+  // `getVisualizationRenderOrder()` already reverses parent visualizations so
+  // the top item in `Calques` is rendered last. Re-grouping texts globally
+  // breaks that contract by forcing labels/texts under lower visualizations.
+  return [...layers];
 }
 
 export function getMapLayerRenderOrder({

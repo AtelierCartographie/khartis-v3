@@ -12,12 +12,9 @@ describe('geo-indications tool', () => {
     geoIndicationsActions.reset();
   });
 
-  it('renders visibility and section toggles', () => {
+  it('renders section toggles', () => {
     render(GeoIndications);
 
-    expect(
-      screen.getByRole('switch', { name: m.tool_geo_indications() })
-    ).toBeInTheDocument();
     expect(
       screen.getByRole('switch', { name: m.geo_scale() })
     ).toBeInTheDocument();
@@ -29,22 +26,35 @@ describe('geo-indications tool', () => {
     ).toBeInTheDocument();
   });
 
-  it('updates geo indications state when toggles are changed', async () => {
+  it('updates geo indications state when section toggles are changed', async () => {
     render(GeoIndications);
 
-    const toolSwitch = screen.getByRole('switch', {
-      name: m.tool_geo_indications()
-    });
     const scaleSwitch = screen.getByRole('switch', { name: m.geo_scale() });
 
-    expect(geoIndicationsState.visible).toBe(true);
     expect(geoIndicationsState.scale.enabled).toBe(false);
 
-    await fireEvent.click(toolSwitch);
     await fireEvent.click(scaleSwitch);
 
-    expect(geoIndicationsState.visible).toBe(false);
     expect(geoIndicationsState.scale.enabled).toBe(true);
     expect(await screen.findByText(m.geo_style())).toBeInTheDocument();
+  });
+
+  it('keeps the scale font-size select synchronized with stored state', async () => {
+    geoIndicationsActions.setState({
+      scale: {
+        ...geoIndicationsState.scale,
+        enabled: true,
+        fontSize: 16
+      }
+    });
+
+    render(GeoIndications);
+
+    const fontSizeSelect = screen.getAllByRole('combobox').at(-1) as
+      | HTMLSelectElement
+      | undefined;
+
+    expect(fontSizeSelect).toBeDefined();
+    expect(fontSizeSelect?.value).toBe('16');
   });
 });

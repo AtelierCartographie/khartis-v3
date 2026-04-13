@@ -3,9 +3,9 @@ import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants'
 import type { VisualizationConfig } from '$lib/features/commons/store/visualization.store.svelte';
 import type { PickingInfo } from '@deck.gl/core';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
+import { MAP_TIMING } from '../constants/timing.constants';
 import type { TooltipEntry } from '../types';
 import { mapTooltipStore } from '../stores/map-tooltip.store.svelte';
-import { mapHighlightStore } from '../stores/map-highlight.store.svelte';
 
 export function formatTooltipValue(value: unknown): string {
   return formatValue(value);
@@ -87,6 +87,104 @@ function resolveSourceTable(info: PickingInfo): ArrowTable | null {
   return null;
 }
 
+function resolveBinaryRowIndex(
+  info: PickingInfo,
+  sourceTable: ArrowTable
+): number | null {
+  const layerData = info.layer?.props?.data;
+  if (typeof layerData !== 'object' || layerData === null) {
+    return null;
+  }
+
+  const pickIndex = info.index;
+  if (pickIndex === undefined || pickIndex < 0) {
+    return null;
+  }
+
+  const rawFeatureIds = Reflect.get(layerData, 'featureIds');
+  if (
+    typeof rawFeatureIds === 'object' &&
+    rawFeatureIds !== null &&
+    'length' in rawFeatureIds
+  ) {
+    const featureIds = rawFeatureIds as ArrayLike<unknown>;
+    const directFeatureId = Number(featureIds[pickIndex]);
+    if (
+      Number.isInteger(directFeatureId) &&
+      directFeatureId >= 0 &&
+      directFeatureId < sourceTable.numRows
+    ) {
+      return directFeatureId;
+    }
+  }
+
+  const rawStartIndices = Reflect.get(layerData, 'startIndices');
+  if (
+    typeof rawStartIndices !== 'object' ||
+    rawStartIndices === null ||
+    !('length' in rawStartIndices)
+  ) {
+    return null;
+  }
+
+  const startIndices = rawStartIndices as ArrayLike<unknown>;
+  const objectCount = startIndices.length - 1;
+  const rowCount = Math.min(sourceTable.numRows, objectCount);
+
+  for (let objectIndex = 0; objectIndex < objectCount; objectIndex += 1) {
+    const startIndex = Number(startIndices[objectIndex]);
+    const nextStartIndex = Number(startIndices[objectIndex + 1]);
+
+    if (!Number.isFinite(startIndex) || !Number.isFinite(nextStartIndex)) {
+      continue;
+    }
+
+    if (pickIndex >= startIndex && pickIndex < nextStartIndex) {
+      if (
+        typeof rawFeatureIds === 'object' &&
+        rawFeatureIds !== null &&
+        'length' in rawFeatureIds
+      ) {
+        const featureIds = rawFeatureIds as ArrayLike<unknown>;
+        const mappedFeatureId = Number(featureIds[objectIndex]);
+        if (
+          Number.isInteger(mappedFeatureId) &&
+          mappedFeatureId >= 0 &&
+          mappedFeatureId < sourceTable.numRows
+        ) {
+          return mappedFeatureId;
+        }
+      }
+
+      return objectIndex < rowCount ? objectIndex : null;
+    }
+  }
+
+  return null;
+}
+
+function resolvePickedRowIndex(info: PickingInfo): number | null {
+  if (info.index === undefined || info.index < 0) {
+    return null;
+  }
+
+  const sourceTable = resolveSourceTable(info);
+  if (!sourceTable) {
+    return info.index;
+  }
+
+  const binaryRowIndex = resolveBinaryRowIndex(info, sourceTable);
+  if (binaryRowIndex !== null) {
+    return binaryRowIndex;
+  }
+
+  if (info.index < sourceTable.numRows) {
+    return info.index;
+  }
+
+  return null;
+}
+
 function extractDatasetIdFromLayerId(layerId: string): string | null {
   const parts = layerId.split('-');
   for (let i = 1; i < parts.length; i++) {
@@ -143,7 +241,10 @@ export function extractTooltipEntries(
     return [];
   }
 
-  const rowIndex = info.index;
+  const rowIndex = resolvePickedRowIndex(info);
+  if (rowIndex === null) {
+    return [];
+  }
   let entries: TooltipEntry[] = [];
 
   const isGeoJsonFeature =
@@ -174,39 +275,57 @@ export function extractTooltipEntries(
   return entries;
 }
 
-/**
- * Extract the DuckDB `__id` from a picked object so the highlight store
- * matches what `withRowHighlight` / `withGeoJsonRowHighlight` check.
- * Deck.gl's `info.index` is 0-based but `__id` is 1-based (nextval).
- */
-function extractRowId(info: PickingInfo): number | null {
-  if (info.index === undefined || info.index < 0) return null;
-  const rowIndex = info.index;
+interface PendingHoverTooltipPayload {
+  x: number;
+  y: number;
+  entries: TooltipEntry[];
+  layerId: string | null;
+  rowIndex: number;
+}
 
-  const obj = info.object as Record<string, unknown> | null;
-  if (obj) {
-    // GeoJSON feature path
-    if ('properties' in obj) {
-      const props = obj.properties as Record<string, unknown> | undefined;
-      const id = props?.[INTERNAL_COLUMN.ID];
-      if (typeof id === 'number') return id;
-    }
+let hoverTooltipTimer: ReturnType<typeof globalThis.setTimeout> | null = null;
+let pendingHoverTooltip: PendingHoverTooltipPayload | null = null;
 
-    // Arrow row path
-    const id = obj[INTERNAL_COLUMN.ID];
-    if (typeof id === 'number') return id;
+function clearPendingHoverTooltip(): void {
+  if (hoverTooltipTimer !== null) {
+    globalThis.clearTimeout(hoverTooltipTimer);
+    hoverTooltipTimer = null;
   }
 
-  const sourceTable = resolveSourceTable(info);
-  if (sourceTable) {
-    const idColumn = sourceTable.getChild(INTERNAL_COLUMN.ID);
-    const tableId = idColumn?.get(rowIndex);
-    if (typeof tableId === 'number') {
-      return tableId;
-    }
+  pendingHoverTooltip = null;
+}
+
+function scheduleHoverTooltip(payload: PendingHoverTooltipPayload): void {
+  const isSamePendingTarget =
+    pendingHoverTooltip?.layerId === payload.layerId &&
+    pendingHoverTooltip?.rowIndex === payload.rowIndex;
+
+  pendingHoverTooltip = payload;
+
+  if (isSamePendingTarget && hoverTooltipTimer !== null) {
+    return;
   }
 
-  return null;
+  clearPendingHoverTooltip();
+  pendingHoverTooltip = payload;
+
+  hoverTooltipTimer = globalThis.setTimeout(() => {
+    hoverTooltipTimer = null;
+    const nextPayload = pendingHoverTooltip;
+    pendingHoverTooltip = null;
+
+    if (!nextPayload) {
+      return;
+    }
+
+    mapTooltipStore.showAtHover(
+      nextPayload.x,
+      nextPayload.y,
+      nextPayload.entries,
+      nextPayload.layerId,
+      nextPayload.rowIndex
+    );
+  }, MAP_TIMING.TOOLTIP_DELAY_MS);
 }
 
 /**
@@ -216,46 +335,56 @@ export function createHoverHandler(
   getVisualizations?: () => VisualizationConfig[]
 ): (info: PickingInfo) => void {
   return (info: PickingInfo) => {
+    if (mapTooltipStore.pinned) {
+      clearPendingHoverTooltip();
+      return;
+    }
+
     const entries = extractTooltipEntries(info, getVisualizations?.());
     if (entries.length === 0) {
+      clearPendingHoverTooltip();
       mapTooltipStore.hide();
       return;
     }
 
     const x = info.x ?? 0;
     const y = info.y ?? 0;
-    mapTooltipStore.showAtHover(
+    const layerId = info.layer?.id ?? null;
+    const rowIndex = resolvePickedRowIndex(info) ?? -1;
+    const isSameVisibleTarget =
+      mapTooltipStore.visible &&
+      !mapTooltipStore.pinned &&
+      mapTooltipStore.state.layerId === layerId &&
+      mapTooltipStore.state.rowIndex === rowIndex;
+
+    if (isSameVisibleTarget) {
+      clearPendingHoverTooltip();
+      mapTooltipStore.showAtHover(x, y, entries, layerId, rowIndex);
+      return;
+    }
+
+    scheduleHoverTooltip({
       x,
       y,
       entries,
-      info.layer?.id ?? null,
-      info.index ?? -1
-    );
+      layerId,
+      rowIndex
+    });
   };
 }
 
 /**
- * Creates an onClick handler that pins/unpins the tooltip.
+ * Creates an onClick handler that pins the tooltip until clicking away.
  */
 export function createClickHandler(
   getVisualizations?: () => VisualizationConfig[]
 ): (info: PickingInfo) => void {
   return (info: PickingInfo) => {
+    clearPendingHoverTooltip();
+
     // Click on empty space: unpin
     if (!info.picked || info.index === undefined || info.index === -1) {
       mapTooltipStore.unpin();
-      mapHighlightStore.clearHighlights();
-      return;
-    }
-
-    // If already pinned on the same object, unpin
-    if (
-      mapTooltipStore.pinned &&
-      mapTooltipStore.state.layerId === (info.layer?.id ?? null) &&
-      mapTooltipStore.state.rowIndex === info.index
-    ) {
-      mapTooltipStore.unpin();
-      mapHighlightStore.clearHighlights();
       return;
     }
 
@@ -268,17 +397,7 @@ export function createClickHandler(
 
     const x = info.x ?? 0;
     const y = info.y ?? 0;
-    mapTooltipStore.pinAt(
-      x,
-      y,
-      entries,
-      info.layer?.id ?? null,
-      info.index ?? -1
-    );
-
-    const rowId = extractRowId(info);
-    if (rowId !== null) {
-      mapHighlightStore.setHighlightedRows([rowId]);
-    }
+    const rowIndex = resolvePickedRowIndex(info) ?? -1;
+    mapTooltipStore.pinAt(x, y, entries, info.layer?.id ?? null, rowIndex);
   };
 }

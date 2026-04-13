@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { DatasetResult } from '$lib/features/data-pipeline';
 
 const operationLog = vi.hoisted((): string[] => []);
 const currentProjectState = vi.hoisted(() => ({
@@ -46,14 +47,20 @@ const applyPersistedViewStateMock = vi.hoisted(() =>
   })
 );
 const addFileMock = vi.hoisted(() =>
-  vi.fn(async () => {
+  vi.fn(async (): Promise<DatasetResult> => {
     operationLog.push('addFile');
     return {
       id: 'dataset-1',
       sourceFileId: 'file-1',
       name: 'demo',
       columns: [],
-      metadata: {}
+      tableName: 'dataset_1',
+      rowCount: 0,
+      metadata: {
+        processedAt: new Date(),
+        fileType: 'geojson',
+        parserUsed: 'test'
+      }
     };
   })
 );
@@ -315,9 +322,17 @@ describe('dataOrchestratorService.onProjectChanged', () => {
       sourceFileId: 'file-1',
       name: 'demo',
       columns: [],
-      metadata: {},
+      tableName: 'dataset_1',
+      rowCount: 0,
+      metadata: {
+        processedAt: new Date(),
+        fileType: 'geojson',
+        parserUsed: 'test'
+      },
       geometry: {
+        type: 'Polygon',
         bounds: [-180, -90, 180, 90],
+        centroid: [0, 0],
         crs: 'EPSG:4326'
       }
     });

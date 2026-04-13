@@ -1,8 +1,10 @@
 <script lang="ts">
   import AdvancedDataTable from '$lib/features/commons/components/advanced-data-table/advanced-data-table.svelte';
+  import type { TableMutation } from '$lib/features/commons/components/advanced-data-table/types';
   import { FileType } from '$lib/features/commons/store/create-project.types';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
+  import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
   import {
     dataTabActions,
     dataTabState
@@ -16,8 +18,7 @@
     showSuccess,
     showWarning
   } from '$lib/features/commons/utils/notification.utils.svelte';
-  import { type DuckAnalyticsColumn } from '$lib/features/data-pipeline';
-  import { enrichColumns } from '$lib/features/data-pipeline/operations/analysis';
+  import { normalizeFormattedNumericColumns } from '$lib/features/data-pipeline/operations/tabular-numeric-normalization';
   import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
   import { Duck } from '$lib/features/duckdb';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
@@ -45,6 +46,7 @@
   import { dataToolsStore, DataToolType } from './data-tools.store.svelte';
   import DeleteRowsModal from './delete-rows-modal.svelte';
   import ResetDataModal from './reset-data-modal.svelte';
+  import { refreshDatasetMetadata } from './services/dataset-metadata';
   import { resolveSelectedDuckTableName } from './services/dataset-resolution';
   import { UI_CONSTANTS } from '../constants';
 
@@ -88,11 +90,13 @@
   let warningsNotificationDismissed = $state(false);
   let variableTypesNotificationDismissed = $state(false);
   let isModalOpen = $state(false);
+  let isDeleteMode = $state(false);
   let selectedRowIds = $state<number[]>([]);
 
   $effect(() => {
     void selectedDataset?.id;
     selectedRowIds = [];
+    isDeleteMode = false;
     dataTabActions.selectRows([]);
     warningsNotificationDismissed = false;
     variableTypesNotificationDismissed = false;
@@ -152,20 +156,29 @@
     forceRefreshKey++;
   }
 
-  async function handleCalculatedColumnCreated() {
-    refreshTable();
-
-    if (!selectedDataset || !currentDuckTable || !Duck) return;
+  async function syncDatasetMetadataFromDuck(
+    options: { force?: boolean } = {}
+  ) {
+    if (!selectedDataset?.id || !currentDuckTable) {
+      return null;
+    }
 
     try {
-      const duckColumns = (await Duck.analyse(currentDuckTable, {
-        force: true
-      })) as DuckAnalyticsColumn[];
-      const newColumns = enrichColumns(duckColumns);
-      datasetsStore.updateDataset(selectedDataset.id, { columns: newColumns });
+      return await refreshDatasetMetadata(
+        selectedDataset.id,
+        currentDuckTable,
+        {
+          force: options.force
+        }
+      );
     } catch {
-      // Keep UI responsive even if metadata refresh fails; table data is already updated in DuckDB.
+      return null;
     }
+  }
+
+  async function handleCalculatedColumnCreated() {
+    refreshTable();
+    await syncDatasetMetadataFromDuck({ force: true });
   }
 
   function handleOpenReset() {
@@ -186,7 +199,53 @@
     refreshTable();
   }
 
-  function handleColumnDeleted(columnName: string) {
+  function clearSortForColumn(columnName: string) {
+    if (dataTabState.dataControl.sortColumn !== columnName) {
+      return;
+    }
+
+    dataTabActions.setDataControlState({
+      sortColumn: null,
+      sortOrder: null
+    });
+  }
+
+  function renameReferencedColumns(previousName: string, nextName: string) {
+    if (dataTabState.dataControl.sortColumn === previousName) {
+      dataTabActions.setDataControlState({
+        sortColumn: nextName
+      });
+    }
+
+    const geolocationUpdates: Partial<GeolocationState> = {};
+    if (dataTabState.geolocation.linkedVariableName === previousName) {
+      geolocationUpdates.linkedVariableName = nextName;
+    }
+    if (dataTabState.geolocation.latitudeColumn === previousName) {
+      geolocationUpdates.latitudeColumn = nextName;
+    }
+    if (dataTabState.geolocation.longitudeColumn === previousName) {
+      geolocationUpdates.longitudeColumn = nextName;
+    }
+    if (Object.keys(geolocationUpdates).length > 0) {
+      dataTabActions.setGeolocationState(geolocationUpdates);
+    }
+
+    const enrichUpdates: Partial<EnrichDataState> = {};
+    if (dataTabState.enrichData.targetColumn === previousName) {
+      enrichUpdates.targetColumn = nextName;
+    }
+    if (dataTabState.enrichData.enrichmentColumn === previousName) {
+      enrichUpdates.enrichmentColumn = nextName;
+    }
+    if (Object.keys(enrichUpdates).length > 0) {
+      dataTabActions.setEnrichDataState(enrichUpdates);
+    }
+  }
+
+  function clearDeletedColumnReferences(columnName: string) {
+    clearSortForColumn(columnName);
+
     const geolocationUpdates: Partial<GeolocationState> = {};
     let geolocationChanged = false;
 
@@ -231,6 +290,34 @@
     }
   }
 
+  async function handleTableMutation(mutation: TableMutation) {
+    if (!selectedDataset?.id) {
+      return;
+    }
+
+    switch (mutation.type) {
+      case 'rename':
+        renameReferencedColumns(mutation.oldName, mutation.newName);
+        visualizationStore.renameDatasetColumnReferences(
+          selectedDataset.id,
+          mutation.oldName,
+          mutation.newName
+        );
+        break;
+      case 'delete':
+        clearDeletedColumnReferences(mutation.columnName);
+        visualizationStore.removeDatasetColumnReferences(
+          selectedDataset.id,
+          mutation.columnName
+        );
+        break;
+      default:
+        break;
+    }
+
+    await syncDatasetMetadataFromDuck({ force: true });
+  }
+
   async function handleApplyCsvOptions(options: CsvOptions): Promise<void> {
     const hasTransformations =
       selectedDataset?.metadata?.transformations?.length ?? 0;
@@ -272,18 +359,15 @@
         delimiter: options.delimiter
       });
 
-      const duckColumns = (await Duck.analyse(currentDuckTable, {
-        force: true
-      })) as DuckAnalyticsColumn[];
-      const newColumns = enrichColumns(duckColumns);
-      const newRowCount = await Duck.get_row_count(currentDuckTable);
+      await normalizeFormattedNumericColumns(currentDuckTable, Duck);
+
+      const snapshot = await syncDatasetMetadataFromDuck({ force: true });
+      const newRowCount = snapshot?.rowCount ?? 0;
 
       if (newRowCount === 0) {
         showWarning(m.csv_warning_empty_after_reimport(), '');
       }
 
-      datasetsStore.updateDataset(selectedDataset.id, { columns: newColumns });
-      datasetsStore.updateDatasetRowCount(selectedDataset.id, newRowCount);
       datasetsStore.updateDatasetCsvOptions(selectedDataset.id, {
         header: options.header,
         decimalSeparator: options.decimalSeparator,
@@ -411,10 +495,20 @@
     });
   }
 
-  function handleOpenDeleteModal() {
+  function handleDeleteAction() {
+    if (!isDeleteMode) {
+      isDeleteMode = true;
+      return;
+    }
+
     if (selectedRowIds.length > 0) {
       deleteModalOpen = true;
+      return;
     }
+
+    isDeleteMode = false;
+    selectedRowIds = [];
+    dataTabActions.selectRows([]);
   }
 
   async function handleDeleteRows() {
@@ -427,13 +521,15 @@
     try {
       await duckDBOrchestrator.dropRows(currentDuckTable, rowIdsToDelete);
 
-      const newRowCount = Duck ? await Duck.get_row_count(currentDuckTable) : 0;
+      const snapshot = await syncDatasetMetadataFromDuck({ force: true });
+      const newRowCount =
+        snapshot?.rowCount ??
+        (Duck ? await Duck.get_row_count(currentDuckTable) : 0);
 
       datasetsStore.recordTransformation(
         selectedDataset.id,
         `Deleted ${count} rows (new total: ${newRowCount})`
       );
-      datasetsStore.updateDatasetRowCount(selectedDataset.id, newRowCount);
 
       await projectStore.addDeletedRows(
         selectedDataset.sourceFileId,
@@ -441,6 +537,8 @@
       );
 
       selectedRowIds = [];
+      isDeleteMode = false;
+      dataTabActions.selectRows([]);
       refreshTable();
       showSuccess(
         m.rows_deleted_success_title(),
@@ -467,15 +565,15 @@
         await duckDBOrchestrator.deleteFilteredRows(currentDuckTable);
 
       if (count > 0) {
-        const newRowCount = Duck
-          ? await Duck.get_row_count(currentDuckTable)
-          : 0;
+        const snapshot = await syncDatasetMetadataFromDuck({ force: true });
+        const newRowCount =
+          snapshot?.rowCount ??
+          (Duck ? await Duck.get_row_count(currentDuckTable) : 0);
 
         datasetsStore.recordTransformation(
           selectedDataset.id,
           `Deleted ${count} filtered rows (new total: ${newRowCount})`
         );
-        datasetsStore.updateDatasetRowCount(selectedDataset.id, newRowCount);
         await projectStore.addDeletedRows(selectedDataset.sourceFileId, rowIds);
 
         refreshTable();
@@ -492,6 +590,11 @@
     }
   }
 
+  async function handleResetSuccess() {
+    refreshTable();
+    await syncDatasetMetadataFromDuck({ force: true });
+  }
+
   const isToolOpen = $derived(dataToolsStore.isOpen);
   const activeTool = $derived(dataToolsStore.activeTool);
   const DATA_TABLE_SKELETON_HEADER_KEY = 'skeleton';
@@ -506,19 +609,15 @@
     }
   });
 
-  // Debounce map highlight updates to avoid expensive deck.gl layer rebuilds during search
-  let mapHighlightTimer: ReturnType<typeof setTimeout> | undefined;
   $effect(() => {
-    const rowIds = searchHighlight.highlightedRowIds;
-    clearTimeout(mapHighlightTimer);
-    mapHighlightTimer = setTimeout(() => {
-      if (rowIds.length > 0) {
-        mapHighlightStore.setHighlightedRows(rowIds);
-      } else {
-        mapHighlightStore.clearHighlights();
-      }
-    }, UI_CONSTANTS.MAP_HIGHLIGHT_DEBOUNCE_MS);
-    return () => clearTimeout(mapHighlightTimer);
+    const currentRowId = searchHighlight.currentCell?.rowId ?? null;
+
+    if (currentRowId === null) {
+      mapHighlightStore.clearHighlights();
+      return;
+    }
+
+    mapHighlightStore.setHighlightedRows([currentRowId]);
   });
 
   $effect(() => {
@@ -571,7 +670,7 @@
       <ResetDataModal
         bind:open={resetModalOpen}
         datasetId={selectedDataset.id}
-        onSuccess={refreshTable}
+        onSuccess={handleResetSuccess}
       />
     {/if}
 
@@ -617,7 +716,7 @@
     {/if}
 
     <DataToolsBar
-      onDelete={handleOpenDeleteModal}
+      onDelete={handleDeleteAction}
       onReset={handleOpenReset}
       onExpand={() => (isModalOpen = true)}
       onCsvOptions={handleOpenCsvOptions}
@@ -627,6 +726,8 @@
         })}
       onShowHiddenColumns={handleShowHiddenColumns}
       selectionCount={selectedRowIds.length}
+      deleteActive={isDeleteMode}
+      deleteDisabled={false}
       resetDisabled={!hasDataModifications}
       showCsvOptions={isCsvFile &&
         !!(sourceFile?.originalFile || sourceFile?.content)}
@@ -649,10 +750,10 @@
           activeJoinColumn={dataTabState.geolocation.linkedVariableName ||
             undefined}
           isExpanded={false}
-          isSelectable={true}
+          isSelectable={isDeleteMode}
           initialSortColumn={tableSortColumn}
           initialSortOrder={tableSortOrder}
-          onColumnDeleted={handleColumnDeleted}
+          onTableMutation={handleTableMutation}
           onSelectionChange={handleSelectionChange}
           onSortChange={handleSortChange}
         />
@@ -709,8 +810,8 @@
     cellHighlights={searchHighlight.cellHighlights}
     currentCell={searchHighlight.currentCell}
     highlightedRowIds={searchHighlight.highlightedRowIds}
-    isSelectable={true}
-    onColumnDeleted={handleColumnDeleted}
+    isSelectable={isDeleteMode}
+    onTableMutation={handleTableMutation}
     onSelectionChange={handleSelectionChange}
     onSortChange={handleSortChange}
     onClose={() => (isModalOpen = false)}

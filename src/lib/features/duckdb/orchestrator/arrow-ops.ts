@@ -184,15 +184,22 @@ function getRepresentativePointExpression(
   switch (geometryType) {
     case GeometryType.POLYGON:
     case GeometryType.MULTIPOLYGON:
-      return `COALESCE(
-        ST_MaximumInscribedCircle(${escapedGeometryColumn}).center,
-        ST_PointOnSurface(${escapedGeometryColumn})
-      )`;
+      return `CASE
+        WHEN ST_IsEmpty(${escapedGeometryColumn}) THEN NULL
+        WHEN NOT ST_IsValid(${escapedGeometryColumn}) THEN ST_PointOnSurface(${escapedGeometryColumn})
+        ELSE COALESCE(
+          ST_MaximumInscribedCircle(${escapedGeometryColumn}).center,
+          ST_PointOnSurface(${escapedGeometryColumn})
+        )
+      END`;
     case GeometryType.LINESTRING:
     case GeometryType.MULTILINESTRING:
     case GeometryType.POINT:
     case GeometryType.MULTIPOINT:
-      return `ST_PointOnSurface(${escapedGeometryColumn})`;
+      return `CASE
+        WHEN ST_IsEmpty(${escapedGeometryColumn}) THEN NULL
+        ELSE ST_PointOnSurface(${escapedGeometryColumn})
+      END`;
     default:
       return null;
   }

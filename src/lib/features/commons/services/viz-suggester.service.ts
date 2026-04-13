@@ -529,12 +529,35 @@ function searchVizByType(
             viz.semioTypes[0] === dataset[1].semioType))
     ).map((viz) => ({
       ...viz,
-      columns: [dataset[0].name, dataset[1].name],
+      columns: orderSuggestionColumns(dataset, viz.semioTypes).map(
+        (column) => column.name
+      ),
       score: computeSuggestionScore(dataset)
     })) as VizSuggestion[];
   }
 
   return [];
+}
+
+function orderSuggestionColumns(
+  columns: EnrichedColumn[],
+  semioTypes: readonly SemioType[]
+): EnrichedColumn[] {
+  if (columns.length !== 2 || semioTypes.length !== 2) {
+    return columns;
+  }
+
+  const [first, second] = columns;
+
+  if (first.semioType === semioTypes[0] && second.semioType === semioTypes[1]) {
+    return columns;
+  }
+
+  if (second.semioType === semioTypes[0] && first.semioType === semioTypes[1]) {
+    return [second, first];
+  }
+
+  return columns;
 }
 
 function generateSuggestions(
@@ -651,15 +674,15 @@ function getSuggestionPreference(suggestion: VizSuggestion): number {
 }
 
 function compareSuggestionPriority(a: VizSuggestion, b: VizSuggestion): number {
+  const scoreDelta = (b.score ?? 0) - (a.score ?? 0);
+  if (scoreDelta !== 0) {
+    return scoreDelta;
+  }
+
   const preferenceDelta =
     getSuggestionPreference(b) - getSuggestionPreference(a);
   if (preferenceDelta !== 0) {
     return preferenceDelta;
-  }
-
-  const scoreDelta = (b.score ?? 0) - (a.score ?? 0);
-  if (scoreDelta !== 0) {
-    return scoreDelta;
   }
 
   return a.nbColumns - b.nbColumns;

@@ -214,7 +214,9 @@ describe('projection store suggestions', () => {
 
     projectionActions.applySuggestion({
       id: 'geoMercator',
-      label: 'Mercator',
+      name: 'Mercator',
+      type: 'generic',
+      proj4String: null,
       d3Config: { projection: 'geoMercator' }
     });
 

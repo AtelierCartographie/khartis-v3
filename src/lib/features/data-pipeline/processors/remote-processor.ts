@@ -5,6 +5,8 @@ import * as m from '$lib/paraglide/messages';
 import { isGeospatialFile } from '../constants';
 import { detectFileFormat, generateTableName } from '../core/format-detector';
 import { buildDatasetFromDuckTable } from '../operations/analysis';
+import { normalizeFormattedNumericColumns } from '../operations/tabular-numeric-normalization';
+import { applyTabularGeoDetection } from './tabular-geo-detection';
 import type {
   DatasetResult,
   PipelineContext,
@@ -34,17 +36,26 @@ export async function processRemoteFile(
   }
 
   const tableName = providedTableName ?? generateTableName(filename);
+  const format = detectFileFormat(filename);
   await Duck.read_link(url, {
     tablename: tableName,
     decimal_separator: decimalSeparator
   });
 
+  if (!isGeospatialFile(filename) && format === 'csv') {
+    await normalizeFormattedNumericColumns(tableName, Duck);
+  }
+
   const dataset = await buildDatasetFromDuckTable(ctx, {
     file: { name: filename, size: 0, type: MIME.BINARY },
     tableName,
     isGeoFile: isGeospatialFile(filename),
-    format: detectFileFormat(filename)
+    format
   });
+
+  if (!dataset.geometry) {
+    await applyTabularGeoDetection(dataset);
+  }
 
   dataset.sourceFileId = url;
   dataset.name = filename;

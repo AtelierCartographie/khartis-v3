@@ -20,6 +20,11 @@ import {
   simplifyGeometryTable,
   calculateToleranceFromRate
 } from '$lib/features/duckdb/operations/simplification';
+import {
+  getBasemapRawTableName,
+  refreshImportedBasemapHelperTables
+} from '$lib/features/map/utils/basemap-import.utils';
+import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
 const DEFAULT_STATE: SimplificationState = {
@@ -57,20 +62,48 @@ const { actions, getState } = createToolStore<
 
       const metadata = currentBasemap.metadata;
       const basemapTableName = metadata.file;
+      const rawBasemapTableName = getBasemapRawTableName(basemapTableName);
+      const rawTableExists = (await Duck.query(
+        `SELECT table_name FROM information_schema.tables WHERE table_name = '${escapeSqlString(rawBasemapTableName)}'`,
+        { format: 'array' }
+      )) as Array<{ table_name: string }>;
 
       const tolerance = calculateToleranceFromRate(s.rate, metadata.bbox);
 
       logger.debug(
         'Starting imported basemap simplification',
         LogCategory.DUCKDB,
-        { basemapId: basemapTableName, rate: s.rate, tolerance }
+        {
+          basemapId: basemapTableName,
+          rate: s.rate,
+          tolerance,
+          inputTableName: rawTableExists[0]?.table_name ?? basemapTableName
+        }
       );
 
       const metrics = await simplifyGeometryTable(
         Duck,
         basemapTableName,
-        tolerance
+        tolerance,
+        {
+          inputTableName: rawTableExists[0]?.table_name ?? basemapTableName,
+          targetTableName: basemapTableName
+        }
       );
+
+      const primaryLayerType =
+        metadata.layers.find((layer) => !layer.file)?.type ??
+        metadata.layers[0]?.type;
+
+      if (primaryLayerType) {
+        await refreshImportedBasemapHelperTables(
+          Duck,
+          basemapTableName,
+          primaryLayerType
+        );
+      }
+
+      await basemapService.refreshCustomBasemap(basemapTableName);
 
       logger.debug(
         'Imported basemap simplification completed',
