@@ -36,3 +36,67 @@ export type ShapeTypeValue = (typeof SHAPE_TYPE)[keyof typeof SHAPE_TYPE];
 export const SHAPE_TYPES = Object.values(
   SHAPE_TYPE
 ) as readonly ShapeTypeValue[];
+
+type ShapeSpec = {
+  width: number;
+  height: number;
+  lockAspectRatio: boolean;
+};
+
+const DEFAULT_SHAPE_SPEC: ShapeSpec = {
+  width: 80,
+  height: 80,
+  lockAspectRatio: false
+};
+
+export const SHAPE_SPECS: Record<ShapeTypeValue, ShapeSpec> = {
+  [SHAPE_TYPE.CIRCLE]: {
+    width: 80,
+    height: 80,
+    lockAspectRatio: true
+  },
+  [SHAPE_TYPE.LINE]: {
+    width: 120,
+    height: 24,
+    lockAspectRatio: true
+  },
+  [SHAPE_TYPE.RECTANGLE]: {
+    width: 96,
+    height: 72,
+    lockAspectRatio: false
+  },
+  [SHAPE_TYPE.TRIANGLE]: {
+    width: 80,
+    height: 80,
+    lockAspectRatio: true
+  },
+  [SHAPE_TYPE.ARROW]: {
+    width: 120,
+    height: 60,
+    lockAspectRatio: true
+  },
+  [SHAPE_TYPE.STAR]: {
+    width: 80,
+    height: 80,
+    lockAspectRatio: true
+  }
+};
+
+export function getShapeDefaultDimensions(shapeType: string): {
+  width: number;
+  height: number;
+} {
+  const spec = SHAPE_SPECS[shapeType as ShapeTypeValue] ?? DEFAULT_SHAPE_SPEC;
+
+  return {
+    width: spec.width,
+    height: spec.height
+  };
+}
+
+export function isShapeAspectRatioLocked(shapeType: string): boolean {
+  return (
+    SHAPE_SPECS[shapeType as ShapeTypeValue]?.lockAspectRatio ??
+    DEFAULT_SHAPE_SPEC.lockAspectRatio
+  );
+}

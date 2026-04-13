@@ -48,7 +48,7 @@ export default defineConfig(({ mode }) => {
         '@deck.gl/layers',
         'apache-arrow'
       ],
-      exclude: ['parquet-wasm']
+      exclude: ['parquet-wasm', '@sqlite.org/sqlite-wasm']
     },
     plugins: [
       process.env.ANALYZE === 'true' &&

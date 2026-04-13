@@ -692,9 +692,14 @@ describe('duckDBOrchestrator', () => {
     });
     expect(added).toHaveLength(1);
     expect(added[0].id).toBe('f-1');
+    expect(mocks.stateData.datasetsVersion).toBe(1);
 
     const removed = await duckDBOrchestrator.removeFilter('world_data', 'f-1');
     expect(removed).toEqual([]);
+    expect(mocks.stateData.datasetsVersion).toBe(2);
+
+    duckDBOrchestrator.clearFilters('world_data');
+    expect(mocks.stateData.datasetsVersion).toBe(3);
   });
 
   it('builds direct Arrow reads with year-filter helper', async () => {

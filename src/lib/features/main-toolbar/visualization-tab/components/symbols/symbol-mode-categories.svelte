@@ -132,6 +132,7 @@
   label={m.color_palette()}
   colors={currentPalette}
   selectedPaletteId={visualization?.classification?.paletteId}
+  inverted={visualization?.classification?.inverted ?? false}
   oninvert={onInvertPalette}
   onClassificationChange={onClassificationChange}
 />

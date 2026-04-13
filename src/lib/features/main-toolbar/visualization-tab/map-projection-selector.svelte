@@ -4,12 +4,69 @@
   import { InfoPopover } from './components/shared';
   import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
+  import { getBasemapZone } from '$lib/features/map/constants/basemap-styles';
   import { mapProjectionStore } from '$lib/features/map/stores/map-projection.store.svelte';
+  import { resolveTiledStyleContext } from './tiled-basemap-selection';
+  import {
+    isGlobeProjectionAvailable,
+    resolveGlobeProjectionDisableReason,
+    resolveProjectionForBasemapZone
+  } from './map-projection-availability';
 
   const isGlobe = $derived(mapProjectionStore.isGlobe);
   const requiresMapLibre = $derived(basemapStyleStore.requiresMapLibre);
+  const currentStyleContext = $derived(
+    resolveTiledStyleContext(
+      basemapStyleStore.selectedStyle,
+      basemapStyleStore.preferredTiledStyle
+    )
+  );
+  const selectedZone = $derived(getBasemapZone(currentStyleContext));
+  const globeDisableReason = $derived(
+    resolveGlobeProjectionDisableReason(
+      selectedZone,
+      basemapStyleStore.referenceBasemapId
+    )
+  );
+  const globeAvailable = $derived(
+    isGlobeProjectionAvailable(
+      selectedZone,
+      basemapStyleStore.referenceBasemapId
+    )
+  );
+  const globeDisabledMessage = $derived.by(() => {
+    switch (globeDisableReason) {
+      case 'custom-reference-basemap':
+        return m.map_projection_disabled_custom_basemap();
+      case 'france-zone':
+        return m.map_projection_disabled_france();
+      default:
+        return '';
+    }
+  });
+
+  $effect(() => {
+    const nextProjection = resolveProjectionForBasemapZone(
+      mapProjectionStore.projection,
+      selectedZone,
+      basemapStyleStore.referenceBasemapId
+    );
+
+    if (nextProjection === mapProjectionStore.projection) {
+      return;
+    }
+
+    mapProjectionStore.setProjection(nextProjection);
+    if (projectStore.currentProject) {
+      void projectStore.saveCurrentProject();
+    }
+  });
 
   async function handleToggle(isGlobe: boolean): Promise<void> {
+    if (!globeAvailable && isGlobe) {
+      return;
+    }
+
     mapProjectionStore.setProjection(isGlobe ? 'globe' : 'mercator');
     if (projectStore.currentProject) {
       await projectStore.saveCurrentProject();
@@ -27,11 +84,15 @@
       labelA={m.map_projection_mercator()}
       labelB={m.map_projection_globe()}
       toggled={isGlobe}
+      disabled={!globeAvailable}
       labelText={m.map_projection_label()}
       hideLabel
       showStateLabel
       onchange={handleToggle}
     />
+    {#if !globeAvailable}
+      <p class="helper-text">{globeDisabledMessage}</p>
+    {/if}
   </div>
 {/if}
 
@@ -51,5 +112,12 @@
     letter-spacing: var(--cds-label-01-letter-spacing, 0.32px);
     color: var(--cds-text-secondary);
     margin-bottom: var(--cds-spacing-02);
+  }
+
+  .helper-text {
+    margin: var(--cds-spacing-02) 0 0;
+    font-size: 0.75rem;
+    line-height: 1rem;
+    color: var(--cds-text-secondary);
   }
 </style>

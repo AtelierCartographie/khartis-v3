@@ -102,6 +102,9 @@ function createProjectionStore() {
     get referenceBbox(): BBox | null {
       return state.referenceBbox;
     },
+    get isProjectedCoordinates(): boolean {
+      return state.isProjectedCoordinates;
+    },
     get modelMatrix(): Matrix4 | null {
       return state.modelMatrix;
     },

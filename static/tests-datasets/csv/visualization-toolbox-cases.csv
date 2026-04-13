@@ -1,0 +1,13 @@
+lat,long,place_name,category,segment,capacity_total,population_total,year
+48.8566,2.3522,Paris,public,capital,1200,2187526,2021
+45.7640,4.8357,Lyon,private,metro,850,522250,2021
+43.2965,5.3698,Marseille,public,port,,873076,2022
+50.6292,3.0573,Lille,private,metro,460,236710,2022
+50.8503,4.3517,Brussels,public,capital,980,185103,2023
+49.6116,6.1296,Luxembourg,private,capital,610,132780,2023
+40.4168,-3.7038,Madrid,public,capital,1500,3223334,2024
+41.3851,2.1734,Barcelona,private,port,1100,1664182,2024
+52.5200,13.4050,Berlin,public,capital,1400,3644826,2021
+53.5511,9.9937,Hamburg,private,port,930,1841179,2022
+45.4642,9.1900,Milan,public,metro,,1371498,2023
+45.0703,7.6869,Turin,private,metro,540,846926,2024

@@ -1,16 +1,26 @@
 import { MIME } from '$lib/features/commons/constants';
-import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
-import { GeoColumnDetector } from '$lib/features/commons/utils/geo-detector.utils';
+import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
+import {
+  createUploadedFile,
+  DataSourceType,
+  FileType
+} from '$lib/features/commons/utils/file-import.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import { Duck } from '$lib/features/duckdb';
+import { createArrowTableWithMetadata } from '$lib/features/duckdb/orchestrator/arrow-ops';
 import * as m from '$lib/paraglide/messages';
 import { isGeospatialFile } from '../constants';
 import { detectFileFormat, generateTableName } from '../core/format-detector';
+import { extractGeoArrowMetadata } from '../io/geoarrow-metadata';
 import { buildDatasetFromDuckTable } from '../operations/analysis';
+import { normalizeFormattedNumericColumns } from '../operations/tabular-numeric-normalization';
+import { getProcessor } from './processor-registry';
+import { registerAllProcessors } from './register-processors';
+import { applyTabularGeoDetection } from './tabular-geo-detection';
 import type {
   CsvImportOptions,
   DatasetResult,
+  FileFormat,
   FileInfo,
   PipelineContext,
   RawDataset,
@@ -27,48 +37,72 @@ export interface ProcessFileOptions {
   rawDataset?: RawDataset;
   companionFiles?: File[];
 }
+const RAW_FILE_PROCESSOR_TYPES = new Set<FileType>([FileType.GPX]);
 
-const GEO_DETECTION_SAMPLE_LIMIT = 200;
+function createProcessorFilePayload(
+  file: File,
+  fileInfo: FileInfo,
+  companionFiles?: File[]
+): UploadedFile {
+  const uploadedFile = createUploadedFile(file, DataSourceType.FILE_UPLOAD);
 
-function applyGeoDetection(
-  dataset: DatasetResult,
-  geoDetection?: GeoDetectionResult
-): void {
-  if (!geoDetection) return;
+  uploadedFile.name = fileInfo.name;
+  uploadedFile.originalFile = file;
 
-  dataset.geoDetection = geoDetection;
-  dataset.analysis = {
-    columns: dataset.analysis?.columns ?? dataset.columns,
-    hasGeoData:
-      geoDetection.hasGeoColumns ?? dataset.analysis?.hasGeoData ?? false,
-    geoColumns: geoDetection.geoColumns,
-    rowCount: dataset.rowCount,
-    warnings: [...(dataset.analysis?.warnings ?? []), ...geoDetection.warnings]
-  };
+  if (companionFiles?.length) {
+    uploadedFile.relatedFileObjects = companionFiles;
+    uploadedFile.relatedFiles = companionFiles.map(
+      (companion) => companion.name
+    );
+  }
+
+  return uploadedFile;
 }
 
-async function detectGeoColumnsFromTable(
-  tableName: string,
-  columns: string[]
-): Promise<GeoDetectionResult | undefined> {
-  if (columns.length === 0) return undefined;
+async function tryProcessWithRegisteredProcessor(
+  ctx: PipelineContext,
+  fileInfo: FileInfo,
+  uploadedFile: UploadedFile,
+  options: {
+    tableName: string;
+    format: FileFormat;
+    isGeoFile: boolean;
+  }
+): Promise<DatasetResult | null> {
+  if (
+    !options.isGeoFile ||
+    !RAW_FILE_PROCESSOR_TYPES.has(uploadedFile.fileType)
+  ) {
+    return null;
+  }
 
-  const escapedTable = escapeIdentifier(tableName);
-  const escapedColumns = columns
-    .map((column) => `"${escapeIdentifier(column)}"`)
-    .join(', ');
+  registerAllProcessors();
 
-  const sampleRows = (await Duck.query(
-    `SELECT ${escapedColumns} FROM "${escapedTable}" LIMIT ${GEO_DETECTION_SAMPLE_LIMIT}`,
-    { format: 'array' }
-  )) as Array<Record<string, unknown>>;
+  const processor = getProcessor(uploadedFile);
+  if (!processor) {
+    return null;
+  }
 
-  if (!sampleRows.length) return undefined;
+  const processorDataset = await processor.process(
+    {
+      Duck,
+      callbacks: {
+        getRowCount: (tableName: string) => Duck.get_row_count(tableName),
+        createArrowTableWithMetadata: (tableName: string) =>
+          createArrowTableWithMetadata(tableName, Duck, (table) =>
+            extractGeoArrowMetadata(table)
+          )
+      },
+      tableName: options.tableName
+    },
+    uploadedFile
+  );
 
-  const matrix = sampleRows.map((row) => columns.map((column) => row[column]));
-
-  return GeoColumnDetector.detectGeoColumns(columns, matrix, {
-    sampleSize: Math.min(GEO_DETECTION_SAMPLE_LIMIT, matrix.length)
+  return buildDatasetFromDuckTable(ctx, {
+    file: fileInfo,
+    tableName: processorDataset.tableName,
+    isGeoFile: options.isGeoFile,
+    format: options.format
   });
 }
 
@@ -97,25 +131,50 @@ export async function processFileInternal(
     throw new Error(m.pipeline_error_shp_standalone());
   }
 
-  await registerFilesForDuckDB(file, isShapefile, options.companionFiles);
-
   let detectedCsvOptions: CsvImportOptions | undefined;
+  const uploadedFile = createProcessorFilePayload(
+    file,
+    fileInfo,
+    options.companionFiles
+  );
 
-  if (isGeoFile) {
+  const processorDataset = await tryProcessWithRegisteredProcessor(
+    ctx,
+    fileInfo,
+    uploadedFile,
+    {
+      tableName,
+      format,
+      isGeoFile
+    }
+  );
+
+  let dataset: DatasetResult;
+
+  if (processorDataset) {
+    dataset = processorDataset;
+  } else if (isGeoFile) {
+    await registerFilesForDuckDB(file, isShapefile, options.companionFiles);
     await Duck.read_geofile(file, {
       tablename: tableName,
       shapefile: isShapefile
     });
+    dataset = await buildDatasetFromDuckTable(ctx, {
+      file: fileInfo,
+      tableName,
+      isGeoFile,
+      format
+    });
   } else {
+    await registerFilesForDuckDB(file, isShapefile, options.companionFiles);
     detectedCsvOptions = await readTabularFile(file, tableName, fileInfo.name);
+    dataset = await buildDatasetFromDuckTable(ctx, {
+      file: fileInfo,
+      tableName,
+      isGeoFile,
+      format
+    });
   }
-
-  const dataset = await buildDatasetFromDuckTable(ctx, {
-    file: fileInfo,
-    tableName,
-    isGeoFile,
-    format
-  });
 
   if (detectedCsvOptions) {
     dataset.metadata.csvOptions = detectedCsvOptions;
@@ -129,31 +188,7 @@ export async function processFileInternal(
   }
 
   if (!isGeoFile) {
-    try {
-      // Pre-filter columns to likely geo candidates — avoids querying all 100+ columns
-      // when only a few could be lat/lon/code/name. Geo detector checks column names
-      // against patterns (lat, lon, coord, iso, code, country, city, name, etc.)
-      const GEO_NAME_HINT =
-        /lat|lon|lng|coord|geo|point|location|wkt|iso|code|country|region|dept|commune|province|state|city|name|admin|id/i;
-      const geoColumns = dataset.columns
-        .filter((c) => GEO_NAME_HINT.test(c.name) || c.type === 'text')
-        .map((c) => c.name);
-      // If no likely candidates, still try all columns (fallback for unusual naming)
-      const columnsToCheck =
-        geoColumns.length > 0 ? geoColumns : dataset.columns.map((c) => c.name);
-
-      const geoDetection = await detectGeoColumnsFromTable(
-        dataset.tableName,
-        columnsToCheck
-      );
-      applyGeoDetection(dataset, geoDetection);
-    } catch (error) {
-      logger.warn(
-        'Failed to compute geo detection for tabular dataset',
-        LogCategory.DATA,
-        { tableName: dataset.tableName, error }
-      );
-    }
+    await applyTabularGeoDetection(dataset);
   }
 
   logger.success('DuckDB dataset built', LogCategory.DATA, {
@@ -246,6 +281,8 @@ async function readTabularFile(
     delimiter: detection.delimiter,
     thousands_separator: detection.thousandsSeparator
   });
+
+  await normalizeFormattedNumericColumns(tableName, Duck);
 
   return {
     header: headerDetection.hasHeader,

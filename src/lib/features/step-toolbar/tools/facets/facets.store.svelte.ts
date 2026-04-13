@@ -1,6 +1,7 @@
 import type { VisualizationConfig } from '$lib/features/commons/store/visualization.store.svelte';
 import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
 import { generateFacetVisualizations } from '$lib/features/commons/utils/facet-generator';
 
 export const SCALE_MODE = {
@@ -42,6 +43,31 @@ function createFacetsStore() {
   const state = $state<FacetsState>({ ...DEFAULT_STATE });
   let isRegenerating = false;
 
+  function notifyPersistence(): void {
+    persistenceRegistry.notifyChange('facets');
+  }
+
+  function restoreFromSerialized(data: unknown): void {
+    const restored = data as Partial<FacetsState> | undefined;
+    const nextState = structuredClone(DEFAULT_STATE);
+
+    if (restored) {
+      Object.assign(nextState, restored);
+    }
+
+    nextState.variables = [...(restored?.variables ?? DEFAULT_STATE.variables)];
+    nextState.generatedVisualizationIds = [
+      ...(restored?.generatedVisualizationIds ??
+        DEFAULT_STATE.generatedVisualizationIds)
+    ];
+    nextState.layout = {
+      ...DEFAULT_STATE.layout,
+      ...(restored?.layout ?? {})
+    };
+
+    Object.assign(state, nextState);
+  }
+
   function getFacetVisualizations(): VisualizationConfig[] {
     if (!state.enabled) {
       return [];
@@ -81,6 +107,7 @@ function createFacetsStore() {
       state.baseVisualizationId = baseVizId;
       state.variables = [...variables];
       state.generatedVisualizationIds = facetConfigs.map((c) => c.id);
+      notifyPersistence();
 
       logger.debug('Facets enabled', LogCategory.STORE, {
         facetsCount: facetConfigs.length
@@ -103,12 +130,14 @@ function createFacetsStore() {
     state.baseVisualizationId = null;
     state.variables = [];
     state.generatedVisualizationIds = [];
+    notifyPersistence();
 
     logger.debug('Facets disabled', LogCategory.STORE);
   }
 
   function setVariables(variables: string[]): void {
     state.variables = [...variables];
+    notifyPersistence();
   }
 
   async function reorderVariables(
@@ -143,6 +172,7 @@ function createFacetsStore() {
           state.generatedVisualizationIds = newConfigs.map(
             (config) => config.id
           );
+          notifyPersistence();
 
           logger.debug(
             'Variables reordered and facets regenerated',
@@ -157,14 +187,17 @@ function createFacetsStore() {
 
   function setColumns(columns: number): void {
     state.layout.columns = columns;
+    notifyPersistence();
   }
 
   function setGap(gap: number): void {
     state.layout.gap = gap;
+    notifyPersistence();
   }
 
   function toggleSyncPanZoom(): void {
     state.syncPanZoom = !state.syncPanZoom;
+    notifyPersistence();
   }
 
   async function toggleScaleMode(): Promise<void> {
@@ -198,6 +231,7 @@ function createFacetsStore() {
           state.generatedVisualizationIds = newConfigs.map(
             (config) => config.id
           );
+          notifyPersistence();
 
           logger.debug(
             'Scale mode toggled and facets regenerated',
@@ -242,8 +276,25 @@ function createFacetsStore() {
     setColumns,
     setGap,
     toggleScaleMode,
-    toggleSyncPanZoom
+    toggleSyncPanZoom,
+    restoreFromSerialized
   };
 }
 
 export const facetsStore = createFacetsStore();
+
+persistenceRegistry.register({
+  key: 'facets',
+  serialize: () => ({
+    enabled: facetsStore.enabled,
+    baseVisualizationId: facetsStore.baseVisualizationId,
+    variables: [...facetsStore.variables],
+    layout: { ...facetsStore.layout },
+    scaleMode: facetsStore.scaleMode,
+    syncPanZoom: facetsStore.syncPanZoom,
+    generatedVisualizationIds: [...facetsStore.generatedVisualizationIds]
+  }),
+  deserialize: (data: unknown) => facetsStore.restoreFromSerialized(data),
+  reset: () => facetsStore.restoreFromSerialized(undefined),
+  priority: 'debounced'
+});

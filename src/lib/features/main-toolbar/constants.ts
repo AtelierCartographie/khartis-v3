@@ -36,7 +36,8 @@ export enum StrokeMode {
 export enum ShapeType {
   POINT = 'point',
   SQUARE = 'square',
-  TRIANGLE = 'triangle'
+  TRIANGLE = 'triangle',
+  CROSS = 'cross'
 }
 
 export enum MissingDataShape {
@@ -101,8 +102,8 @@ export const DEFAULT_COLORS = {
   fill: '#4589ff',
   stroke: '#1e3a5f',
   line: '#1e3a5f',
-  text: '#161616',
-  label: '#161616',
+  text: '#000000',
+  label: '#000000',
   halo: '#ffffff',
   missingData: '#c6c6c6',
   white: '#ffffff',

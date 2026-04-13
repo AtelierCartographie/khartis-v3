@@ -15,6 +15,8 @@
     tooltipPosition?: CarbonTooltipDirection;
     tooltipAlignment?: CarbonTooltipAlignment;
     hideTooltip?: boolean;
+    portalTooltip?: boolean;
+    showDisabledTooltip?: boolean;
     disabled?: boolean;
     icon?: unknown;
   }
@@ -25,6 +27,8 @@
     tooltipPosition = 'bottom',
     tooltipAlignment = 'center',
     hideTooltip = false,
+    portalTooltip = false,
+    showDisabledTooltip = false,
     disabled = false,
     icon = undefined,
     ...restProps
@@ -41,9 +45,9 @@
     typeof window !== 'undefined' &&
       Boolean(iconDescription) &&
       Boolean(icon) &&
-      !children &&
       !hideTooltip &&
-      !disabled
+      (portalTooltip || !children) &&
+      (!disabled || showDisabledTooltip)
   );
 
   async function updateTooltipPosition() {

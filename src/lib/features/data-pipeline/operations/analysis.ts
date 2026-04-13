@@ -12,6 +12,12 @@ import { fromDuckDBType } from '../types';
 import { extractGeometryInfo } from './geometry';
 import { computeQualityWarnings } from './quality';
 
+export interface DatasetTableSnapshot {
+  duckColumns: DuckAnalyticsColumn[];
+  enrichedColumns: EnrichedColumn[];
+  rowCount: number;
+}
+
 export function enrichColumns(
   columns: DuckAnalyticsColumn[]
 ): EnrichedColumn[] {
@@ -48,6 +54,44 @@ export function enrichColumns(
   }));
 }
 
+export function buildStatisticsSnapshot(
+  columns: DuckAnalyticsColumn[]
+): Record<string, unknown> {
+  return Object.fromEntries(
+    columns.map((column) => [
+      column.name,
+      {
+        type: column.type_simple || 'text',
+        count: column.count ?? 0,
+        nullCount: column.nulls ?? 0,
+        unique: column.uniques ?? 0,
+        min: column.min,
+        max: column.max,
+        mean:
+          column.mean != null && column.mean !== ''
+            ? Number(column.mean)
+            : undefined
+      }
+    ])
+  );
+}
+
+export async function readDatasetTableSnapshot(
+  tableName: string,
+  options: { force?: boolean } = {}
+): Promise<DatasetTableSnapshot> {
+  const [duckColumns, rowCount] = await Promise.all([
+    Duck.analyse(tableName, options) as Promise<DuckAnalyticsColumn[]>,
+    Duck.get_row_count(tableName)
+  ]);
+
+  return {
+    duckColumns,
+    enrichedColumns: enrichColumns(duckColumns),
+    rowCount
+  };
+}
+
 export async function buildDatasetFromDuckTable(
   _ctx: PipelineContext,
   params: {
@@ -59,12 +103,11 @@ export async function buildDatasetFromDuckTable(
 ): Promise<DatasetResult> {
   const { file, tableName, isGeoFile, format } = params;
 
-  const [duckdbColumns, rowCount, geometryInfo] = await Promise.all([
-    Duck.analyse(tableName) as Promise<DuckAnalyticsColumn[]>,
-    Duck.get_row_count(tableName),
+  const [snapshot, geometryInfo] = await Promise.all([
+    readDatasetTableSnapshot(tableName),
     extractGeometryInfo(tableName)
   ]);
-  const enrichedColumns = enrichColumns(duckdbColumns);
+  const { enrichedColumns, rowCount } = snapshot;
 
   const dataset = buildDatasetResult({
     file,

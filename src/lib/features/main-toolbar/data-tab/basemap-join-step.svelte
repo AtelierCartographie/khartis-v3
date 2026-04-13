@@ -8,14 +8,20 @@
   import { globalActions } from '$lib/features/commons/store/global.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { ToolbarStep } from '$lib/features/commons/types/global';
+  import { BasemapSource } from '$lib/features/commons/constants/ui.constants';
   import { hasGPSCoordinateColumns } from '$lib/features/commons/utils/geo-detector.utils';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
   import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
 
+  import { Duck } from '$lib/features/duckdb';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { DEFAULT_OSM_STYLE } from '$lib/features/map/constants';
-  import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
+  import {
+    basemapCatalogService,
+    rankBasemapsByJoinSynthesis,
+    shouldPreferTextBasemapRefinementForGPS
+  } from '$lib/features/map/services/basemap-catalog.service.svelte';
   import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
   import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
@@ -38,16 +44,51 @@
   import { InfoPopover } from '../visualization-tab/components/shared';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import { dataTabStore } from './data-tab.store.svelte';
+  import { shouldAutoSelectSuggestedBasemap } from './services/basemap-auto-selection';
   import {
     getDatasetIdentity,
     shouldResetJoinState
   } from './services/dataset-identity';
+  import {
+    resolveRelevantPersistedBasemap,
+    restorePersistedBasemapSelection,
+    resolveBasemapSource,
+    type PersistedProjectBasemap
+  } from './services/persisted-basemap';
+  import { resolveNextBasemapSelectionId } from './services/basemap-selection';
   import { resolveDatasetIdForOrchestrator } from './services/dataset-resolution';
+  import { persistTabularSourceSnapshot } from './services/tabular-source-snapshot';
   import { hasBlockingJoinIssues } from './services/join-validation';
 
   const OSM_TAB_INDEX = 2;
+  const IMPORT_TAB_INDEX = 1;
 
-  let activeTabIndex = $state(0);
+  function basemapSourceToTabIndex(source: BasemapSource): number {
+    switch (source) {
+      case BasemapSource.IMPORT:
+        return IMPORT_TAB_INDEX;
+      case BasemapSource.OSM:
+        return OSM_TAB_INDEX;
+      case BasemapSource.CATALOG:
+      default:
+        return 0;
+    }
+  }
+
+  function tabIndexToBasemapSource(index: number): BasemapSource {
+    switch (index) {
+      case IMPORT_TAB_INDEX:
+        return BasemapSource.IMPORT;
+      case OSM_TAB_INDEX:
+        return BasemapSource.OSM;
+      default:
+        return BasemapSource.CATALOG;
+    }
+  }
+
+  let activeTabIndex = $state(
+    basemapSourceToTabIndex(dataTabState.basemapJoin.basemapSource)
+  );
 
   const tabItems = [
     { icon: List, label: m.basemap_catalog(), iconSize: 16 },
@@ -58,6 +99,7 @@
   const basemapStepIndex = $derived(dataTabStore.basemapStepIndex);
   const basemapSelected = $derived(dataTabState.basemapJoin.selectedBasemap);
   const selectedDataset = $derived(datasetsStore.selectedDataset);
+  const duckDBDatasetsVersion = $derived(duckDBOrchestrator.datasetsVersion);
   const datasetIdForOrchestrator = $derived.by(() =>
     resolveDatasetIdForOrchestrator(selectedDataset)
   );
@@ -71,6 +113,19 @@
 
   const allBasemaps = $derived(basemapCatalogService.catalogBasemaps);
   const allBasemapsForLookup = $derived(basemapCatalogService.basemaps);
+  const runtimePersistedBasemap = $derived.by(() =>
+    resolveRelevantPersistedBasemap({
+      selectedDataset,
+      sourceFiles: projectStore.currentProject?.data?.sourceFiles,
+      projectBasemap:
+        (projectStore.currentProject?.data?.basemap as
+          | PersistedProjectBasemap
+          | undefined) ?? undefined,
+      selectedBasemapId: basemapSelected,
+      selectedBasemapSource: dataTabState.basemapJoin.basemapSource,
+      hasMultipleDatasets: datasetsStore.datasets.length > 1
+    })
+  );
 
   let importFiles = $state<File[]>([]);
   let importUploading = $state(false);
@@ -84,19 +139,21 @@
   let currentJoinAbortController: AbortController | null = null;
   let previousJoinContext: string | null = null;
   let previousLinkedVariableName: string | null = null;
+  let previousFilterKey: string | null = null;
   let loadingSuggestions = false;
+  let hasDismissedSuggestedBasemap = $state(false);
   const DATASET_READY_RETRY_DELAY_MS = 200;
   const DATASET_READY_MAX_RETRIES = 15;
 
-  const hasGPSCoordinates = $derived(() => {
+  const hasGPSCoordinates = $derived.by(() => {
     if (!selectedDataset) return false;
     const columns = selectedDataset.columns || [];
-    return hasGPSCoordinateColumns(columns);
+    return hasGPSCoordinateColumns(columns, selectedDataset.geoDetection);
   });
 
-  const isGPSModeActive = $derived(hasGPSCoordinates());
+  const isGPSModeActive = $derived(hasGPSCoordinates);
 
-  const suggestedBasemaps = $derived(() => {
+  const suggestedBasemaps = $derived.by(() => {
     return basemapSuggestions
       .map((s: BasemapSuggestion) => ({
         basemap: allBasemapsForLookup.find(
@@ -108,6 +165,13 @@
       basemap: BasemapMetadata;
       score: number;
     }[];
+  });
+
+  const stepTitle = $derived.by(() => {
+    const stepNumber = dataTabStore.getDisplayedStepNumber('basemap');
+    const title = m.basemap_step_title();
+
+    return stepNumber === null ? title : `${stepNumber}. ${title}`;
   });
 
   function hasAvailableBasemap(basemapId: string): boolean {
@@ -124,7 +188,7 @@
 
     if (!firstSuggestion) return;
 
-    await handleSelectBasemap(firstSuggestion);
+    await handleSelectBasemap(firstSuggestion, { allowToggleOff: false });
   }
 
   function isDatasetNotFoundError(error: unknown): boolean {
@@ -133,6 +197,22 @@
 
   function isOSMBasemapId(basemapId: string): boolean {
     return basemapId.startsWith('osm_');
+  }
+
+  function getCurrentFilterKey(tableName: string | undefined): string {
+    if (!tableName) return '[]';
+
+    return JSON.stringify(
+      duckDBOrchestrator
+        .getFilters(tableName)
+        .map(({ column, operator, value, secondaryValue, limit }) => ({
+          column,
+          operator,
+          value,
+          secondaryValue,
+          limit
+        }))
+    );
   }
 
   async function waitForDatasetAvailability(
@@ -187,6 +267,30 @@
       });
   }
 
+  async function persistTextualJoinSnapshot(
+    joinState: {
+      joinedBasemap?: string;
+      geoColumn?: string;
+      gpsMode?: boolean;
+      gpsColumns?: { lat: string; lon: string };
+    } = {}
+  ) {
+    if (!selectedDataset?.sourceFileId || !selectedDataset.tableName || !Duck) {
+      return;
+    }
+
+    const duckColumns = await Duck.analyse(selectedDataset.tableName, {
+      force: true
+    });
+
+    await persistTabularSourceSnapshot({
+      sourceFileId: selectedDataset.sourceFileId,
+      tableName: selectedDataset.tableName,
+      duckColumns,
+      joinState
+    });
+  }
+
   async function computeAndAutoFinalizeJoin(
     basemap: BasemapMetadata,
     abortSignal: AbortSignal,
@@ -194,7 +298,7 @@
   ): Promise<void> {
     const resolvedDatasetId = datasetIdForOrchestrator;
     if (!selectedDataset || !resolvedDatasetId || !linkedVariableName) return;
-    if (isOSMBasemapId(basemap.file) || hasGPSCoordinates()) return;
+    if (isOSMBasemapId(basemap.file) || hasGPSCoordinates) return;
 
     joinLoading = true;
     try {
@@ -241,6 +345,12 @@
             basemap,
             linkedVariableName
           );
+          await persistTextualJoinSnapshot({
+            joinedBasemap: basemap.file,
+            geoColumn: linkedVariableName,
+            gpsMode: false,
+            gpsColumns: undefined
+          });
           dataTabStore.markStepComplete(basemapStepIndex);
         } catch (finalizeError) {
           if (isDatasetNotFoundError(finalizeError)) {
@@ -271,7 +381,24 @@
     }
   }
 
-  async function handleSelectBasemap(basemap: BasemapMetadata) {
+  async function handleSelectBasemap(
+    basemap: BasemapMetadata,
+    options: { allowToggleOff?: boolean } = {}
+  ) {
+    const nextBasemapId = resolveNextBasemapSelectionId(
+      basemapSelected || undefined,
+      basemap.file,
+      options
+    );
+
+    if (!nextBasemapId) {
+      clearSelectedBasemap();
+      hasDismissedSuggestedBasemap = true;
+      return;
+    }
+
+    hasDismissedSuggestedBasemap = false;
+
     if (currentJoinAbortController) {
       currentJoinAbortController.abort();
     }
@@ -282,7 +409,10 @@
     dataTabActions.clearJoinStats();
     basemapAttributeValues = [];
     dataTabStore.resetStepCompletion(basemapStepIndex);
-    dataTabActions.selectBasemap(basemap.file);
+    dataTabActions.setBasemapJoinState({
+      selectedBasemap: basemap.file,
+      basemapSource: BasemapSource.CATALOG
+    });
     basemapStyleStore.setReferenceBasemap(basemap.file);
 
     projectStore.updateProjectData({
@@ -293,7 +423,7 @@
       }
     });
 
-    if (hasGPSCoordinates() && datasetIdForOrchestrator) {
+    if (hasGPSCoordinates && datasetIdForOrchestrator) {
       try {
         await duckDBOrchestrator.finalizeJoin(
           datasetIdForOrchestrator,
@@ -316,6 +446,41 @@
     } else {
       await computeAndAutoFinalizeJoin(basemap, abortSignal);
     }
+  }
+
+  function clearSelectedBasemap(): void {
+    if (currentJoinAbortController) {
+      currentJoinAbortController.abort();
+      currentJoinAbortController = null;
+    }
+
+    const resolvedDatasetId = datasetIdForOrchestrator;
+    const duckDataset = resolvedDatasetId
+      ? (duckDBOrchestrator.getDatasetBySourceFile(resolvedDatasetId) ??
+        duckDBOrchestrator.getDataset(resolvedDatasetId))
+      : null;
+
+    if (duckDataset) {
+      duckDBOrchestrator.updateDatasetJoinInfo(duckDataset.id, {
+        joinedBasemap: undefined,
+        geoColumn: undefined,
+        gpsMode: false,
+        gpsColumns: undefined
+      });
+    }
+
+    osmBasemapStore.clear();
+    dataTabActions.clearJoinStats();
+    basemapAttributeValues = [];
+    dataTabActions.setBasemapJoinState({
+      selectedBasemap: '',
+      basemapSource: tabIndexToBasemapSource(activeTabIndex)
+    });
+    basemapStyleStore.setReferenceBasemap(null);
+    dataTabStore.resetStepCompletion(basemapStepIndex);
+    projectStore.updateProjectData({ basemap: undefined });
+    previousJoinContext = null;
+    previousLinkedVariableName = null;
   }
 
   function handleFileDrop(event: DragEvent) {
@@ -359,8 +524,12 @@
       if (abortSignal.aborted) return;
 
       basemapCatalogService.addCustomBasemap(customBasemap);
+      hasDismissedSuggestedBasemap = false;
       osmBasemapStore.clear();
-      dataTabActions.selectBasemap(customBasemap.file);
+      dataTabActions.setBasemapJoinState({
+        selectedBasemap: customBasemap.file,
+        basemapSource: BasemapSource.IMPORT
+      });
       await basemapService.registerCustomBasemap(customBasemap, geometryTable);
       basemapStyleStore.setReferenceBasemap(customBasemap.file);
       importedBasemap = customBasemap;
@@ -373,7 +542,7 @@
         }
       });
 
-      if (hasGPSCoordinates() && datasetIdForOrchestrator) {
+      if (hasGPSCoordinates && datasetIdForOrchestrator) {
         await duckDBOrchestrator.finalizeJoin(
           datasetIdForOrchestrator,
           customBasemap,
@@ -417,7 +586,7 @@
   }
 
   async function handleSelectOSM() {
-    if (!hasGPSCoordinates()) {
+    if (!hasGPSCoordinates) {
       return;
     }
 
@@ -436,9 +605,13 @@
 
     const osmBasemap = createOSMBasemap(DEFAULT_OSM_STYLE);
 
+    hasDismissedSuggestedBasemap = false;
     basemapCatalogService.addCustomBasemap(osmBasemap);
     osmBasemapStore.setOSMBasemap(osmBasemap);
-    dataTabActions.selectBasemap(osmBasemap.file);
+    dataTabActions.setBasemapJoinState({
+      selectedBasemap: osmBasemap.file,
+      basemapSource: BasemapSource.OSM
+    });
     basemapStyleStore.setReferenceBasemap(null);
 
     projectStore.updateProjectData({
@@ -503,6 +676,12 @@
         dataTabState.geolocation.linkedVariableName,
         corrections
       );
+      await persistTextualJoinSnapshot({
+        joinedBasemap: basemapSelected || undefined,
+        geoColumn: dataTabState.geolocation.linkedVariableName,
+        gpsMode: false,
+        gpsColumns: undefined
+      });
 
       if (abortSignal.aborted) return;
 
@@ -554,6 +733,12 @@
           basemap,
           dataTabState.geolocation.linkedVariableName
         );
+        await persistTextualJoinSnapshot({
+          joinedBasemap: basemap.file,
+          geoColumn: dataTabState.geolocation.linkedVariableName,
+          gpsMode: false,
+          gpsColumns: undefined
+        });
         dataTabStore.markStepComplete(basemapStepIndex);
         logger.success(
           'Corrections applied and join finalized',
@@ -595,6 +780,12 @@
         dataTabState.geolocation.linkedVariableName,
         corrections
       );
+      await persistTextualJoinSnapshot({
+        joinedBasemap: basemapSelected || undefined,
+        geoColumn: dataTabState.geolocation.linkedVariableName,
+        gpsMode: false,
+        gpsColumns: undefined
+      });
 
       if (abortSignal.aborted) return;
 
@@ -626,6 +817,12 @@
             basemap,
             dataTabState.geolocation.linkedVariableName
           );
+          await persistTextualJoinSnapshot({
+            joinedBasemap: basemap.file,
+            geoColumn: dataTabState.geolocation.linkedVariableName,
+            gpsMode: false,
+            gpsColumns: undefined
+          });
           dataTabStore.markStepComplete(basemapStepIndex);
           logger.success(
             'Manual correction applied and join finalized',
@@ -695,6 +892,12 @@
         basemap,
         dataTabState.geolocation.linkedVariableName
       );
+      await persistTextualJoinSnapshot({
+        joinedBasemap: basemap.file,
+        geoColumn: dataTabState.geolocation.linkedVariableName,
+        gpsMode: false,
+        gpsColumns: undefined
+      });
 
       dataTabStore.markStepComplete(basemapStepIndex);
 
@@ -712,9 +915,27 @@
     if (loadingSuggestions) return;
     loadingSuggestions = true;
 
+    const requestedDatasetIdentity = getDatasetIdentity(selectedDataset);
+    const resolvedDatasetId = datasetIdForOrchestrator;
+
     try {
       if (!basemapCatalogService.isLoaded) {
         await basemapCatalogService.loadCatalog();
+      }
+
+      if (resolvedDatasetId) {
+        const datasetReady = await waitForDatasetAvailability(
+          resolvedDatasetId,
+          new AbortController().signal
+        );
+        if (!datasetReady) {
+          basemapSuggestions = [];
+          return;
+        }
+      }
+
+      if (getDatasetIdentity(selectedDataset) !== requestedDatasetIdentity) {
+        return;
       }
 
       const processedDataset = normalizeToProcessedDataset(selectedDataset);
@@ -722,46 +943,94 @@
       let suggestions: BasemapSuggestion[] = [];
 
       // GPS mode: use bbox comparison for suggestions
-      if (hasGPSCoordinates() && datasetIdForOrchestrator) {
-        const gpsBounds = await duckDBOrchestrator.getGPSBounds(
-          datasetIdForOrchestrator
-        );
+      if (hasGPSCoordinates && resolvedDatasetId) {
+        let gpsSuggestions: BasemapSuggestion[] = [];
+        const gpsBounds =
+          await duckDBOrchestrator.getGPSBounds(resolvedDatasetId);
         if (gpsBounds) {
-          suggestions =
+          gpsSuggestions =
             basemapCatalogService.getSuggestionsByGPSBbox(gpsBounds);
         }
-      } else {
-        suggestions = await basemapCatalogService.getSuggestions(
-          processedDataset,
-          3,
-          geoColumn
-        );
+        suggestions = gpsSuggestions;
 
-        // Re-rank suggestions using actual join quality when possible
-        if (geoColumn && datasetIdForOrchestrator) {
+        const textGeoColumns =
+          processedDataset.geoDetection?.geoColumns?.filter(
+            (column) =>
+              column.type !== 'latitude' && column.type !== 'longitude'
+          ) ?? [];
+        let bestTextSuggestions: BasemapSuggestion[] = [];
+        let bestTextScore = 0;
+
+        for (const column of textGeoColumns) {
           try {
             const synthesis = await duckDBOrchestrator.computeJoinSynthesis(
-              datasetIdForOrchestrator,
+              resolvedDatasetId,
+              column.columnName
+            );
+            const ranked = rankBasemapsByJoinSynthesis(
+              basemapCatalogService.basemaps,
+              synthesis,
+              3
+            );
+            const topScore = ranked[0]?.matchScore ?? 0;
+
+            if (topScore > bestTextScore) {
+              bestTextScore = topScore;
+              bestTextSuggestions = ranked;
+            }
+          } catch (error) {
+            if (isDatasetNotFoundError(error)) {
+              continue;
+            }
+
+            logger.debug(
+              'Text-based GPS refinement unavailable for basemap suggestions',
+              LogCategory.MAP,
+              error
+            );
+          }
+        }
+
+        if (
+          shouldPreferTextBasemapRefinementForGPS(
+            gpsSuggestions,
+            bestTextScore
+          ) &&
+          bestTextSuggestions.length > 0
+        ) {
+          suggestions = bestTextSuggestions;
+        }
+      } else {
+        if (geoColumn && resolvedDatasetId) {
+          try {
+            const synthesis = await duckDBOrchestrator.computeJoinSynthesis(
+              resolvedDatasetId,
               geoColumn
             );
-            if (synthesis.length > 0) {
-              const scoreMap = new Map(
-                synthesis.map((s) => [s.basemap, s.shareCandidate])
-              );
-              suggestions = suggestions
-                .map((s) => ({
-                  ...s,
-                  matchScore: scoreMap.get(s.file) ?? s.matchScore
-                }))
-                .sort((a, b) => b.matchScore - a.matchScore);
-            }
+            suggestions = rankBasemapsByJoinSynthesis(
+              basemapCatalogService.basemaps,
+              synthesis,
+              3
+            );
           } catch (err) {
+            if (isDatasetNotFoundError(err)) {
+              return;
+            }
+
             logger.warn(
-              'Join synthesis unavailable, using heuristic ranking',
+              'Join synthesis unavailable, falling back to heuristic ranking',
               LogCategory.MAP,
               err
             );
           }
+        }
+
+        if (suggestions.length === 0) {
+          suggestions = basemapCatalogService.getSuggestions(
+            processedDataset,
+            3,
+            geoColumn
+          );
         }
       }
 
@@ -773,13 +1042,18 @@
       suggestionsDatasetIdentity = currentDatasetIdentity;
 
       if (
-        suggestions.length > 0 &&
-        !osmBasemapStore.isActive &&
-        !selectedDataset?.geometry &&
-        !projectStore.currentProject?.data?.basemap?.id &&
-        (isDatasetChanged ||
-          !dataTabState.basemapJoin.selectedBasemap ||
-          !hasAvailableBasemap(dataTabState.basemapJoin.selectedBasemap))
+        shouldAutoSelectSuggestedBasemap({
+          hasDismissedSuggestedBasemap,
+          suggestionCount: suggestions.length,
+          isOSMActive: osmBasemapStore.isActive,
+          hasDatasetGeometry: Boolean(selectedDataset?.geometry),
+          persistedBasemapId: runtimePersistedBasemap?.id,
+          selectedBasemapId: dataTabState.basemapJoin.selectedBasemap,
+          hasSelectedAvailableBasemap: hasAvailableBasemap(
+            dataTabState.basemapJoin.selectedBasemap
+          ),
+          shouldRetryForDatasetChange: isDatasetChanged
+        })
       ) {
         await autoSelectFirstSuggestedBasemap();
       }
@@ -806,28 +1080,12 @@
         await loadSuggestions();
         if (controller.signal.aborted) return;
 
-        const savedBasemap = projectStore.currentProject?.data?.basemap;
+        const savedBasemap = runtimePersistedBasemap;
         if (savedBasemap?.id) {
-          dataTabActions.selectBasemap(savedBasemap.id);
-          basemapStyleStore.setReferenceBasemap(
-            savedBasemap.type === 'osm' ? null : savedBasemap.id
+          await restorePersistedBasemapSelection(savedBasemap);
+          activeTabIndex = basemapSourceToTabIndex(
+            resolveBasemapSource(savedBasemap.type)
           );
-
-          if (
-            (savedBasemap.type === 'custom' || savedBasemap.type === 'osm') &&
-            savedBasemap.data
-          ) {
-            const customBasemapData =
-              savedBasemap.data as unknown as BasemapMetadata;
-            basemapCatalogService.addCustomBasemap(customBasemapData);
-            if (savedBasemap.type === 'custom') {
-              basemapService.registerCustomBasemapMetadata(customBasemapData);
-            }
-
-            if (savedBasemap.type === 'osm') {
-              osmBasemapStore.setOSMBasemap(customBasemapData);
-            }
-          }
 
           if (!selectedDataset || !datasetIdForOrchestrator) return;
 
@@ -839,7 +1097,7 @@
           if (
             savedBasemap.type === 'osm' ||
             isOSMBasemapId(basemap.file) ||
-            hasGPSCoordinates()
+            hasGPSCoordinates
           ) {
             const datasetReady = await waitForDatasetAvailability(
               datasetIdForOrchestrator,
@@ -940,6 +1198,7 @@
   });
 
   $effect(() => {
+    void duckDBDatasetsVersion;
     void dataTabState.geolocation.linkedVariableName;
     if (selectedDataset) {
       void loadSuggestions();
@@ -951,31 +1210,39 @@
     void basemapSelected;
 
     if (
-      basemapSuggestions.length > 0 &&
-      !osmBasemapStore.isActive &&
-      !selectedDataset?.geometry &&
-      !projectStore.currentProject?.data?.basemap?.id &&
-      (!basemapSelected || !hasAvailableBasemap(basemapSelected))
+      shouldAutoSelectSuggestedBasemap({
+        hasDismissedSuggestedBasemap,
+        suggestionCount: basemapSuggestions.length,
+        isOSMActive: osmBasemapStore.isActive,
+        hasDatasetGeometry: Boolean(selectedDataset?.geometry),
+        persistedBasemapId: runtimePersistedBasemap?.id,
+        selectedBasemapId: basemapSelected,
+        hasSelectedAvailableBasemap: hasAvailableBasemap(basemapSelected)
+      })
     ) {
       void autoSelectFirstSuggestedBasemap();
     }
   });
 
   $effect(() => {
+    void duckDBDatasetsVersion;
     const linkedVariableName = dataTabState.geolocation.linkedVariableName;
     const selectedBasemapId = basemapSelected;
     const resolvedDatasetId = datasetIdForOrchestrator;
+    const filterKey = getCurrentFilterKey(selectedDataset?.tableName);
 
     if (!selectedDataset || !selectedBasemapId || !resolvedDatasetId) {
       previousJoinContext = null;
       previousLinkedVariableName = null;
+      previousFilterKey = null;
       return;
     }
 
-    if (isOSMBasemapId(selectedBasemapId) || hasGPSCoordinates()) {
+    if (isOSMBasemapId(selectedBasemapId) || hasGPSCoordinates) {
       dataTabActions.clearJoinStats();
       previousJoinContext = `${resolvedDatasetId}::${selectedBasemapId}`;
       previousLinkedVariableName = linkedVariableName || null;
+      previousFilterKey = filterKey;
       return;
     }
 
@@ -983,18 +1250,26 @@
     if (previousJoinContext !== joinContext) {
       previousJoinContext = joinContext;
       previousLinkedVariableName = linkedVariableName || null;
+      previousFilterKey = filterKey;
       return;
     }
 
-    if (
-      !linkedVariableName ||
-      linkedVariableName === previousLinkedVariableName
-    ) {
+    const filtersChanged = filterKey !== previousFilterKey;
+
+    if (!linkedVariableName) {
       previousLinkedVariableName = linkedVariableName || null;
+      previousFilterKey = filterKey;
+      return;
+    }
+
+    if (linkedVariableName === previousLinkedVariableName && !filtersChanged) {
+      previousLinkedVariableName = linkedVariableName || null;
+      previousFilterKey = filterKey;
       return;
     }
 
     previousLinkedVariableName = linkedVariableName;
+    previousFilterKey = filterKey;
 
     const basemap = allBasemapsForLookup.find(
       (b) => b.file === selectedBasemapId
@@ -1002,10 +1277,12 @@
     if (!basemap) return;
 
     logger.info(
-      'Recomputing join after linked variable change',
+      'Recomputing join after data-tab state change',
       LogCategory.MAP,
       {
         basemap: selectedBasemapId,
+        filterKey,
+        filtersChanged,
         linkedVariableName
       }
     );
@@ -1041,6 +1318,15 @@
 
   let previousDatasetIdentity: string | null = null;
   $effect(() => {
+    const persistedTabIndex = basemapSourceToTabIndex(
+      dataTabState.basemapJoin.basemapSource
+    );
+    if (persistedTabIndex !== activeTabIndex) {
+      activeTabIndex = persistedTabIndex;
+    }
+  });
+
+  $effect(() => {
     const currentDatasetIdentity = getDatasetIdentity(selectedDataset);
     const hasDatasets = datasetsStore.datasets.length > 0;
 
@@ -1075,6 +1361,7 @@
       importError = null;
       previousJoinContext = null;
       previousLinkedVariableName = null;
+      hasDismissedSuggestedBasemap = false;
     }
 
     if (currentDatasetIdentity !== null || !hasDatasets) {
@@ -1084,7 +1371,7 @@
 </script>
 
 <section id="basemap-join-step">
-  <MainToolBarHeader title={m.basemap_step_title()} icon={Earth} />
+  <MainToolBarHeader title={stepTitle} icon={Earth} />
 
   <p class="kh-help">
     {m.basemap_step_description()}
@@ -1095,13 +1382,16 @@
     <ToggleTabs
       activeIndex={activeTabIndex}
       items={tabItems}
-      onChange={(index) => (activeTabIndex = index)}
+      onChange={(index) => {
+        activeTabIndex = index;
+        dataTabActions.setBasemapSource(tabIndexToBasemapSource(index));
+      }}
     />
   </div>
 
   {#if activeTabIndex === 0}
     <BasemapCatalogTab
-      suggestedBasemaps={suggestedBasemaps()}
+      suggestedBasemaps={suggestedBasemaps}
       allBasemaps={allBasemaps}
       basemapSelected={basemapSelected}
       onSelectBasemap={handleSelectBasemap}
@@ -1118,7 +1408,7 @@
     />
   {:else if activeTabIndex === OSM_TAB_INDEX}
     <BasemapOsmTab
-      hasGPSCoordinates={hasGPSCoordinates()}
+      hasGPSCoordinates={hasGPSCoordinates}
       onSelectOSM={handleSelectOSM}
       onGoToVisualize={handleGoToVisualize}
     />

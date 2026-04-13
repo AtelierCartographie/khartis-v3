@@ -10,7 +10,7 @@ import type { FormatState } from './format.types';
 const HUE_MAX = 359;
 const PERCENTAGE_MAX = 100;
 
-export const PAGE_GRID_SIZE_PX = 24;
+export const PAGE_GRID_SIZE_PX = 12;
 
 export const DEFAULT_PAGE_COLOR: FormatState['color'] = {
   hue: 0,
@@ -65,9 +65,6 @@ const DEFAULT_STATE: FormatState = {
   gridEnabled: true
 };
 
-const CONTAINER_PADDING = 0;
-const MIN_MAP_SIZE = 200;
-
 type FormatActions = {
   setMode: (mode: FormatMode) => void;
   setModel: (model: PageModel) => void;
@@ -84,7 +81,6 @@ type FormatActions = {
     right: number;
   }) => void;
   toggleGrid: () => void;
-  fitToContainer: (containerWidth: number, containerHeight: number) => void;
 };
 
 const { state, actions, getState } = createToolStore<
@@ -116,33 +112,6 @@ const { state, actions, getState } = createToolStore<
     },
     toggleGrid: () => {
       s.gridEnabled = !s.gridEnabled;
-    },
-    fitToContainer: (containerWidth: number, containerHeight: number) => {
-      const preset = PAGE_PRESETS[s.model];
-      if (!preset) return;
-
-      const aspectRatio = preset.width / preset.height;
-      const availableWidth = Math.max(0, containerWidth - CONTAINER_PADDING);
-      const availableHeight = Math.max(0, containerHeight - CONTAINER_PADDING);
-
-      if (availableWidth <= 0 || availableHeight <= 0) return;
-
-      let newWidth: number;
-      let newHeight: number;
-
-      if (availableWidth / availableHeight > aspectRatio) {
-        newHeight = availableHeight;
-        newWidth = newHeight * aspectRatio;
-      } else {
-        newWidth = availableWidth;
-        newHeight = newWidth / aspectRatio;
-      }
-
-      newWidth = Math.max(MIN_MAP_SIZE, Math.min(newWidth, availableWidth));
-      newHeight = Math.max(MIN_MAP_SIZE, Math.min(newHeight, availableHeight));
-
-      s.width = Math.round(newWidth);
-      s.height = Math.round(newHeight);
     }
   }),
   { key: 'format' }

@@ -120,7 +120,8 @@ describe('geojsonProcessor', () => {
       'tbl_geo'
     );
     expect(c.Duck.query).toHaveBeenCalledTimes(2);
-    expect(result.arrowTableWithMetadata).toEqual({ rows: 3 });
+    expect(c.callbacks.createArrowTableWithMetadata).not.toHaveBeenCalled();
+    expect(result.arrowTableWithMetadata).toBeUndefined();
   });
 
   it('falls back from Arrow validation failure to legacy pipeline', async () => {

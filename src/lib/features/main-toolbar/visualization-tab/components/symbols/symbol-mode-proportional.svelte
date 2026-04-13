@@ -107,6 +107,15 @@
       }
 
       if (visualization.mapping.valueColumn) {
+        const fieldBIndex = dataFields.findIndex(
+          (field) => field.text === visualization.mapping.valueColumn
+        );
+        if (fieldBIndex >= 0) {
+          selectedFieldBId = dataFields[fieldBIndex].id;
+        }
+      }
+
+      if (visualization.mapping.valueColumn) {
         const valueFieldIndex = dataFields.findIndex(
           (field) => field.text === visualization.mapping.valueColumn
         );
@@ -195,6 +204,10 @@
 
   function handleFieldBSelect(fieldId: number) {
     selectedFieldBId = fieldId;
+    const field = dataFields.find((item) => item.id === fieldId);
+    if (field) {
+      onMappingChange?.({ valueColumn: field.text });
+    }
   }
 
   function handleFillColorBChange(value: string) {
@@ -500,6 +513,7 @@
     label={m.color_palette()}
     colors={currentPalette}
     selectedPaletteId={visualization?.classification?.paletteId}
+    inverted={visualization?.classification?.inverted ?? false}
     oninvert={onInvertPalette}
     onClassificationChange={onClassificationChange}
   />
@@ -540,6 +554,7 @@
     label={m.color_palette()}
     colors={currentQualPalette}
     selectedPaletteId={visualization?.classification?.paletteId}
+    inverted={visualization?.classification?.inverted ?? false}
     oninvert={onInvertPalette}
     onClassificationChange={onClassificationChange}
   />
@@ -567,6 +582,7 @@
   visualization={visualization}
   dataFields={dataFields}
   infoText={m.stroke_section_info()}
+  showDashed={false}
   discretizationLabel={discretizationLabel}
   onStyleChange={onStyleChange}
   onModesChange={onModesChange}

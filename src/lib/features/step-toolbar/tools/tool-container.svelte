@@ -9,6 +9,8 @@
   import { Close } from 'carbon-icons-svelte';
   import type { Snippet } from 'svelte';
   import { selectTool } from '../tools-list/tool-list.utils.svelte';
+  import { getAnnotationsState } from './annotations/annotations.store.svelte';
+  import { shouldBlockToolClose } from './tool-close-guard';
   import Annotations from './annotations/annotations.svelte';
   import ColorBlindness from './color-blindness/color-blindness.svelte';
   import Facets from './facets/facets.svelte';
@@ -57,6 +59,19 @@
   let title = $derived<string>(
     titles[globalState.selectedTool as StylingTools & VisualizationTools] || ''
   );
+
+  function handleClose(): void {
+    if (
+      shouldBlockToolClose(
+        globalState.selectedTool,
+        getAnnotationsState().isDrawingMode
+      )
+    ) {
+      return;
+    }
+
+    selectTool(undefined);
+  }
 </script>
 
 <aside class="tool-container">
@@ -68,7 +83,7 @@
       size="small"
       iconDescription={m.close()}
       icon={Close}
-      onclick={() => selectTool(undefined)}
+      onclick={handleClose}
     />
   </header>
 
