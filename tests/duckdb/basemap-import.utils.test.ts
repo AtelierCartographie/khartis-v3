@@ -112,7 +112,6 @@ describe('processBasemapImport', () => {
       .mockResolvedValueOnce(undefined)
       .mockResolvedValueOnce(undefined)
       .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce(undefined)
       .mockResolvedValueOnce([{ minX: -1, minY: -2, maxX: 3, maxY: 4 }]);
     mocks.analyseMock.mockResolvedValueOnce([{ name: 'geom', count: 2 }]);
 
@@ -162,10 +161,70 @@ describe('processBasemapImport', () => {
     expect(result.geometryTable).toBe(arrowTable);
   });
 
+  it('falls back to a direct geometry copy when polygon cleanup fails on invalid topology', async () => {
+    mocks.queryMock.mockImplementation(async (sql: string) => {
+      if (sql.includes('SELECT DISTINCT ST_GeometryType')) {
+        return [{ geom_type: 'POLYGON' }];
+      }
+      if (
+        sql.includes(
+          'CREATE OR REPLACE TABLE "custom_basemap_1700000000000__raw"'
+        )
+      ) {
+        return undefined;
+      }
+      if (
+        sql.includes(
+          "FROM simplify_and_clean('custom_basemap_1700000000000__raw', 'geom', 0.0)"
+        )
+      ) {
+        throw new Error('TopologyException: side location conflict');
+      }
+      if (sql.includes('SELECT * FROM "custom_basemap_1700000000000__raw"')) {
+        return undefined;
+      }
+      if (
+        sql.includes("FROM extract_innerlines('custom_basemap_1700000000000')")
+      ) {
+        return undefined;
+      }
+      if (sql.includes('ST_PointOnSurface')) {
+        return undefined;
+      }
+      if (sql.includes('ST_XMin(ST_Extent')) {
+        return [{ minX: -1, minY: -2, maxX: 3, maxY: 4 }];
+      }
+      return undefined;
+    });
+    mocks.analyseMock.mockResolvedValueOnce([{ name: 'geom', count: 2 }]);
+
+    const result = await processBasemapImport(
+      new File(['{}'], 'invalid-regions.geojson', {
+        type: 'application/geo+json'
+      })
+    );
+
+    const issuedSql = mocks.queryMock.mock.calls.map(([sql]) => String(sql));
+    expect(
+      issuedSql.some((sql) =>
+        sql.includes('SELECT * FROM "custom_basemap_1700000000000__raw"')
+      )
+    ).toBe(true);
+    expect(mocks.loggerWarnMock).toHaveBeenCalledWith(
+      'Basemap polygon cleanup failed, falling back to direct geometry copy',
+      'MAP',
+      expect.objectContaining({
+        tableName: 'custom_basemap_1700000000000',
+        geometryColumn: 'geom'
+      })
+    );
+    expect(result.basemap.title_fr).toBe('invalid-regions');
+    expect(result.geometryTable).toBe(arrowTable);
+  });
+
   it('prepares imported line geofiles with a dedicated cleanup pipeline and representative points', async () => {
     mocks.queryMock
       .mockResolvedValueOnce([{ geom_type: 'LINESTRING' }])
-      .mockResolvedValueOnce(undefined)
       .mockResolvedValueOnce(undefined)
       .mockResolvedValueOnce(undefined)
       .mockResolvedValueOnce(undefined)
@@ -310,7 +369,6 @@ describe('processBasemapImport', () => {
           })
         }
       ])
-      .mockResolvedValueOnce(undefined)
       .mockResolvedValueOnce(undefined)
       .mockResolvedValueOnce(undefined)
       .mockResolvedValueOnce(undefined)
