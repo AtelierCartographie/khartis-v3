@@ -16,8 +16,8 @@
     },
     "maputnik:renderer": "mlgljs"
   },
-  "center": [2.5, 47],
-  "zoom": 5,
+  "center": [0, 20],
+  "zoom": 1.25,
   "projection": {
     "type": "globe"
   },

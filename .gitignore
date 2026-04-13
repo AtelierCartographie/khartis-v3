@@ -3,6 +3,7 @@
 # Diagnostic reports
 report.*.json
 *AGENTS.md
+.codex/
 *PROMPT.md
 # Output
 .output
@@ -31,12 +32,13 @@ node_modules
 .env
 .env.*
 !.env.example
+!.env.sample
 !.env.test
 .env.local
-.codex
 .env.development.local
 .env.production.local
 .env.test.local
+scripts/
 
 # OS
 .DS_Store
@@ -105,6 +107,17 @@ step-toolbar-viz-tests.md
 tmp/
 *.tmp
 
+# Audit artifacts
+/habillage-*.png
+/habillage-*.txt
+/viz-*.png
+/viz-*.txt
+/visualizations-lines-full.png
+/lines-import-timeout-state.png
+/lines-visualizations-console-warnings.txt
+/skills-lock.json
+/.agents/
+
 # Editors/IDEs
 .vscode/
 .zed/
@@ -115,3 +128,7 @@ tmp/
 *.sln
 *.sw?
 .history/
+
+# plan-gen outputs
+*-TRACKING-TESTS.md
+.agent-plans/

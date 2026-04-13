@@ -60,6 +60,21 @@ describe('analysis operations', () => {
     expect(result[0].stats.stdDev).toBe(1.2);
   });
 
+  it('maps simplified boolean types to ColumnType.BOOLEAN', () => {
+    const result = enrichColumns([
+      {
+        name: 'published',
+        type_simple: 'boolean',
+        count: '3',
+        nulls: '0',
+        uniques: '2'
+      }
+    ]);
+
+    expect(result[0].type).toBe(ColumnType.BOOLEAN);
+    expect(result[0].stats.type).toBe(ColumnType.BOOLEAN);
+  });
+
   it('builds dataset from DuckDB analysis and appends quality warnings', async () => {
     duckMock.analyse.mockResolvedValue([
       {
@@ -89,7 +104,7 @@ describe('analysis operations', () => {
       }
     );
 
-    expect(duckMock.analyse).toHaveBeenCalledWith('tbl');
+    expect(duckMock.analyse).toHaveBeenCalledWith('tbl', {});
     expect(duckMock.get_row_count).toHaveBeenCalledWith('tbl');
     expect(geometryMock.extractGeometryInfo).toHaveBeenCalledWith('tbl');
 

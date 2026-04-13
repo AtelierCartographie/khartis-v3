@@ -12,13 +12,12 @@
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import {
     PrimitiveFilterType,
-    visualizationStore,
-    VisualizationType
+    visualizationStore
   } from '$lib/features/commons/store/visualization.store.svelte';
   import { isNumericType } from '$lib/features/commons/utils/format.utils';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import * as m from '$lib/paraglide/messages';
-  import { ComboBox, Link, Modal, RadioButton } from 'carbon-components-svelte';
+  import { ComboBox, Link, Modal } from 'carbon-components-svelte';
   import {
     Edit,
     Launch,
@@ -34,8 +33,10 @@
   import { InfoPopover } from './components/shared';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import {
-    applySuggestionMapping,
-    mapSuggestionToType,
+    applySuggestionToVisualization,
+    isVisualizationMatchingSuggestion,
+    isVisualizationBlank,
+    resolveBlankVisualizationType,
     resolveDatasetGeometryType
   } from './suggestion.utils';
   import { UI_CONSTANTS } from '../constants';
@@ -50,6 +51,9 @@
   let selectedSuggestion = $state<string | undefined>(undefined);
   let suggestionsExpanded = $state(true);
   let visibleCount = $state<number>(UI_CONSTANTS.SUGGESTIONS_PER_PAGE);
+  let autoAppliedSuggestionKey = $state<string | undefined>(undefined);
+  let manualBlankVisualizationId = $state<string | undefined>(undefined);
+  let previousSuggestionDatasetId = $state<string | undefined>(undefined);
   let renamingVizId = $state<string | undefined>(undefined);
   let renameValue = $state<string>('');
   let deletingViz = $state<{ id: string; name: string } | null>(null);
@@ -133,6 +137,7 @@
     if (!col) return 'string';
     const type = String(col.type || '').toLowerCase();
     if (isNumericType(type)) return 'numeric';
+    if (type === 'boolean') return 'boolean';
     if (type === 'date' || type === 'timestamp') return 'date';
     return 'string';
   }
@@ -168,9 +173,6 @@
   }
 
   function handleSelectSuggestion(suggestion: VizSuggestion) {
-    selectedSuggestion = suggestion.id;
-
-    // Apply suggestion to the currently selected visualization
     const dataset = selectedDataset;
     if (!dataset) return;
 
@@ -178,11 +180,27 @@
       dataset.id
     );
     const selectedViz = visualizationStore.selectedVisualization;
+    const isCurrentlySelected =
+      selectedSuggestion === suggestion.id ||
+      (!!selectedViz &&
+        !selectedSuggestion &&
+        existingVizs.some((v) => v.id === selectedViz.id) &&
+        isVisualizationMatchingSuggestion(selectedViz, dataset, suggestion));
+    const nextSuggestionSelection = isCurrentlySelected
+      ? undefined
+      : suggestion.id;
+    selectedSuggestion = nextSuggestionSelection;
 
     if (selectedViz && existingVizs.some((v) => v.id === selectedViz.id)) {
-      const vizType = mapSuggestionToType(suggestion.id);
-      visualizationStore.updateVisualization(selectedViz.id, { type: vizType });
-      applySuggestionMapping(selectedViz.id, vizType, suggestion);
+      if (!nextSuggestionSelection) {
+        visualizationStore.applyVisualizationPreset(
+          selectedViz.id,
+          resolveBlankVisualizationType(dataset)
+        );
+        return;
+      }
+
+      applySuggestionToVisualization(selectedViz.id, suggestion);
     }
   }
 
@@ -190,30 +208,23 @@
     const dataset = selectedDataset;
     if (!dataset) return;
 
-    const currentSuggestion = selectedSuggestion
-      ? filteredSuggestions.find((s) => s.id === selectedSuggestion)
-      : undefined;
-
-    const vizType = currentSuggestion
-      ? mapSuggestionToType(currentSuggestion.id)
-      : resolveDatasetGeometryType(
-            dataset as {
-              geometry?: { type?: string | null };
-              sourceFileId?: string;
-            }
-          )
-            ?.toLowerCase()
-            .includes('point')
-        ? VisualizationType.PROPORTIONAL
-        : VisualizationType.CHOROPLETH;
-
-    const viz = visualizationStore.createVisualization(vizType, dataset.id);
-
-    if (currentSuggestion) {
-      applySuggestionMapping(viz.id, vizType, currentSuggestion);
+    const targetViz = targetVisualization;
+    if (targetViz) {
+      visualizationStore.applyVisualizationPreset(
+        targetViz.id,
+        resolveBlankVisualizationType(dataset)
+      );
+      manualBlankVisualizationId = targetViz.id;
+    } else {
+      const visualization = visualizationStore.createVisualization(
+        resolveBlankVisualizationType(dataset),
+        dataset.id
+      );
+      manualBlankVisualizationId = visualization.id;
     }
 
-    suggestionsExpanded = false;
+    selectedSuggestion = undefined;
+    suggestionsExpanded = filteredSuggestions.length > 0 || suggestionsExpanded;
     onCreateVisualization?.();
   }
 
@@ -222,7 +233,56 @@
     return visualizationStore.getVisualizationsByDataset(selectedDataset.id);
   });
 
+  const targetVisualization = $derived.by(() => {
+    const currentSelection = visualizationStore.selectedVisualization;
+    if (
+      currentSelection &&
+      datasetVisualizations.some((viz) => viz.id === currentSelection.id)
+    ) {
+      return currentSelection;
+    }
+
+    return datasetVisualizations[0];
+  });
+
+  const autoSuggestionContextKey = $derived.by(() => {
+    const dataset = selectedDataset;
+    const targetViz = targetVisualization;
+
+    if (!dataset || !targetViz || filteredSuggestions.length === 0) {
+      return undefined;
+    }
+
+    if (manualBlankVisualizationId === targetViz.id) {
+      return undefined;
+    }
+
+    if (datasetVisualizations.length !== 1) {
+      return undefined;
+    }
+
+    if (!isVisualizationBlank(targetViz, dataset)) {
+      return undefined;
+    }
+
+    const suggestionSignature = filteredSuggestions
+      .map((suggestion) =>
+        [
+          suggestion.id,
+          suggestion.score,
+          suggestion.nbColumns,
+          (suggestion.columns ?? []).join(','),
+          suggestion.geometries.join(','),
+          suggestion.semioTypes.join(',')
+        ].join(':')
+      )
+      .join('|');
+
+    return `${dataset.id}::${targetViz.id}::${suggestionSignature}`;
+  });
+
   function handleSelectViz(id: string) {
+    selectedSuggestion = undefined;
     visualizationStore.selectVisualization(id);
   }
 
@@ -281,8 +341,44 @@
     const exists = datasets.some((ds) => ds.id === selectedDatasetId);
     if (!exists) {
       selectedDatasetId = datasetsStore.selectedDatasetId ?? datasets[0].id;
+      selectedSuggestion = undefined;
       visibleCount = UI_CONSTANTS.SUGGESTIONS_PER_PAGE;
     }
+  });
+
+  $effect(() => {
+    const datasetId = selectedDatasetId;
+    if (!datasetId || datasetsStore.selectedDatasetId === datasetId) {
+      return;
+    }
+
+    if (!datasetsStore.datasets.some((dataset) => dataset.id === datasetId)) {
+      return;
+    }
+
+    datasetsStore.selectDataset(datasetId);
+  });
+
+  $effect(() => {
+    const dataset = selectedDataset;
+
+    if (!dataset) {
+      previousSuggestionDatasetId = undefined;
+      manualBlankVisualizationId = undefined;
+      autoAppliedSuggestionKey = undefined;
+      return;
+    }
+
+    if (previousSuggestionDatasetId === dataset.id) {
+      return;
+    }
+
+    previousSuggestionDatasetId = dataset.id;
+    selectedSuggestion = undefined;
+    visibleCount = UI_CONSTANTS.SUGGESTIONS_PER_PAGE;
+    suggestionsExpanded = true;
+    manualBlankVisualizationId = undefined;
+    autoAppliedSuggestionKey = undefined;
   });
 
   $effect(() => {
@@ -299,8 +395,38 @@
       : false;
 
     if (!hasSelectedSuggestion) {
-      selectedSuggestion = suggestionsList[0].id;
+      selectedSuggestion = undefined;
     }
+  });
+
+  $effect(() => {
+    const targetViz = targetVisualization;
+
+    if (!targetViz) {
+      return;
+    }
+
+    if (visualizationStore.selectedVisualization?.id !== targetViz.id) {
+      visualizationStore.selectVisualization(targetViz.id);
+    }
+  });
+
+  $effect(() => {
+    const autoContextKey = autoSuggestionContextKey;
+    const topSuggestion = filteredSuggestions[0];
+    const targetViz = targetVisualization;
+
+    if (!autoContextKey || !topSuggestion || !targetViz) {
+      return;
+    }
+
+    if (autoAppliedSuggestionKey === autoContextKey) {
+      return;
+    }
+
+    autoAppliedSuggestionKey = autoContextKey;
+    selectedSuggestion = topSuggestion.id;
+    applySuggestionToVisualization(targetViz.id, topSuggestion);
   });
 </script>
 
@@ -403,15 +529,29 @@
           {m.use_suggestion_description()}
         </p>
 
-        <div class="suggestions-group" role="list">
+        <div
+          class="suggestions-group"
+          role="radiogroup"
+          aria-label={m.section_suggestions()}
+        >
           {#each visibleSuggestions as suggestion (suggestion.id)}
-            {@const isSelected = selectedSuggestion === suggestion.id}
+            {@const isSelected =
+              selectedSuggestion === suggestion.id ||
+              (!selectedSuggestion &&
+                !!targetVisualization &&
+                !!selectedDataset &&
+                isVisualizationMatchingSuggestion(
+                  targetVisualization,
+                  selectedDataset,
+                  suggestion
+                ))}
             <button
               type="button"
               class="suggestion-card"
               class:selected={isSelected}
               onclick={() => handleSelectSuggestion(suggestion)}
-              aria-pressed={isSelected}
+              role="radio"
+              aria-checked={isSelected}
             >
               <div class="card-preview">
                 <SuggestionPreview
@@ -434,8 +574,12 @@
               <div class="card-content">
                 <div class="card-header">
                   <p class="card-title">{suggestion.label}</p>
-                  <span class="radio-indicator">
-                    <RadioButton checked={isSelected} />
+                  <span class="radio-indicator" aria-hidden="true">
+                    <span class="radio-indicator-ring">
+                      {#if isSelected}
+                        <span class="radio-indicator-dot"></span>
+                      {/if}
+                    </span>
                   </span>
                 </div>
 
@@ -648,6 +792,7 @@
 
   .suggestion-card {
     display: flex;
+    align-items: stretch;
     border: 1px solid
       var(--khartis-additions-border-tile-01-suggestions, #82cfff);
     cursor: pointer;
@@ -656,13 +801,23 @@
     padding: 0;
     min-height: 120px;
     background: transparent;
+    box-sizing: border-box;
+    outline: none;
 
     &:hover {
-      border-color: var(--khartis-additions-interactive-suggestions, #0072c3);
+      border-color: var(
+        --khartis-additions-border-tile-01-suggestions,
+        #82cfff
+      );
     }
 
     &.selected {
-      border: 2px solid var(--khartis-additions-focus-suggestions, #0072c3);
+      border: 3px solid var(--tag-border, #1192e8);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--cds-focus, #0f62fe);
+      outline-offset: 2px;
     }
   }
 
@@ -671,12 +826,15 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    min-width: 120px;
+    flex: 1 1 50%;
+    width: 50%;
+    min-width: 0;
     padding: var(--cds-spacing-04);
     background: var(--khartis-additions-layer-02-suggestions, #ffffff);
     border-right: 1px solid
       var(--khartis-additions-border-tile-01-suggestions, #82cfff);
     color: var(--khartis-additions-interactive-suggestions, #0072c3);
+    box-sizing: border-box;
   }
 
   .preview-primitives {
@@ -696,15 +854,17 @@
   }
 
   .card-content {
-    flex: 1;
-    padding: var(--cds-spacing-04) var(--cds-spacing-04) var(--cds-spacing-04)
-      var(--cds-spacing-05);
+    flex: 1 1 50%;
+    width: 50%;
+    min-width: 0;
+    padding: var(--cds-spacing-04);
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-03);
     background: var(--khartis-additions-layer-01-suggestions, #e5f6ff);
     color: var(--khartis-additions-text-primary-suggestions, #003a6d);
     transition: background 0.15s ease;
+    box-sizing: border-box;
   }
 
   .card-header {
@@ -714,7 +874,30 @@
   }
 
   .radio-indicator {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     pointer-events: none;
+  }
+
+  .radio-indicator-ring {
+    width: 1.25rem;
+    height: 1.25rem;
+    border: 2px solid var(--tag-border, #1192e8);
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    background: var(--khartis-additions-layer-02-suggestions, #ffffff);
+  }
+
+  .radio-indicator-dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 999px;
+    background: var(--tag-border, #1192e8);
+    display: block;
   }
 
   .card-title {

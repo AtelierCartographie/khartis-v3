@@ -61,7 +61,7 @@ L'aperçu des données propose plusieurs outils :
 
 Deux méthodes pour localiser vos données sur la carte :
 
-- **Coordonnées GPS** : si vos données contiennent des colonnes latitude et longitude, Khartis les détecte et positionne les entités automatiquement.
+- **Coordonnées GPS** : si vos données contiennent des colonnes reconnues comme latitude et longitude, Khartis les détecte et positionne les entités automatiquement, même si les noms ne sont pas strictement `latitude` / `longitude`.
 - **Entités administratives** : Khartis identifie les noms ou codes de territoires (pays, régions, départements...) et les associe au fond de carte correspondant.
 
 ### Jointure à un fond de carte
@@ -173,10 +173,10 @@ Choisir le format de la carte (A4, A3, carré, ou dimensions personnalisées), s
 
 ### Export de la carte
 
-| Format | Usage                                                                             |
-| ------ | --------------------------------------------------------------------------------- |
-| SVG    | Image vectorielle, retouchable dans un logiciel de dessin (Inkscape, Illustrator) |
-| JPG    | Image bitmap avec choix de résolution (1080p, 2K, 4K)                             |
+| Format | Usage                                                                                               |
+| ------ | --------------------------------------------------------------------------------------------------- |
+| SVG    | Image vectorielle, retouchable dans un logiciel de dessin (Inkscape, Illustrator)                   |
+| JPG    | Image bitmap avec choix de résolution (Full HD, 2K, 4K), en conservant le ratio de la page courante |
 
 ### Export des données
 

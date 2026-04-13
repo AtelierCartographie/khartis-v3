@@ -60,6 +60,8 @@ await initDuckDB();
 
 L'init est **idempotente et dédoublonnée** : les appels concurrents avant la première résolution réutilisent la même Promise. Après un échec, le promise est réinitialisée pour permettre un retry.
 
+En pratique côté navigateur, Khartis sert maintenant le document principal avec COOP/COEP pour obtenir un environnement réellement `crossOriginIsolated`, mais le cœur DuckDB WASM reste sur les bundles `mvp` ou `eh`. Cela garde le chemin d'extensions `spatial` compatible tout en laissant les imports géographiques lourds s'appuyer sur un document navigateur isolé quand des workers sont nécessaires.
+
 ---
 
 ## Duck — API publique
@@ -312,6 +314,7 @@ await duckDBOrchestrator.getFullAnalysis(tableName);
 ## GPS Mode
 
 Un dataset est en **GPS mode** quand il possède `gpsMode: true` et `gpsColumns: { lat, lon }`.
+Lorsqu'un fond OSM est choisi pour un CSV GPS, ces informations sont aussi persistées sur le `sourceFile` afin qu'un refresh recharge directement les points sans repasser par l'etape de jointure.
 
 ### Validation (`validateGPSColumns`)
 
@@ -329,15 +332,18 @@ Détecte :
 ### Détection automatique (`detectGPSColumns`)
 
 ```typescript
-detectGPSColumns(columns: AnalysisResult[])
+detectGPSColumns(columns: AnalysisResult[], geoDetection?)
 // → { lat: string, lon: string } | null
 ```
 
-Patterns détectés (insensible à la casse) :
+La résolution des colonnes GPS s'appuie d'abord sur la détection géographique du dataset (`geoDetection`, `geo_type`, `semioType`), puis sur les noms de colonnes.
+
+Exemples pris en charge :
 
 - `lat`/`lon`, `latitude`/`longitude`
 - `y_coord`/`x_coord`
-- `lat_gps`/`lon_gps`, etc.
+- variantes détectées comme `Latitude_WGS84` / `Longitude_WGS84`
+- autres noms personnalisés déjà reconnus comme latitude/longitude par l'analyse
 
 ### Création de la vue GPS
 
@@ -393,11 +399,46 @@ Résultat : 3 couches dans le basemap :
 
 ### Pipeline lignes
 
-Pour `LINESTRING`/`POINT` : aucune simplification ni extraction de centroids (skip pipeline polygones).
+Pour `LINESTRING` / `MULTILINESTRING` :
+
+- clone de la table source
+- `simplify_and_clean_linestring(..., 0.0)` pour normaliser la géométrie sans simplification visuelle
+- `ST_PointOnSurface()` pour produire une table de points représentatifs
+
+Résultat : 2 couches dans le basemap :
+
+- `LINE` — géométries nettoyées
+- `CENTROID` — points représentatifs (pour symboles / labels)
+
+### Pipeline points
+
+Pour `POINT` / `MULTIPOINT` :
+
+- pas de simplification
+- `ST_PointOnSurface()` pour produire une table de points représentatifs stable par entité
+
+Résultat : 2 couches dans le basemap :
+
+- `POINT` — géométries source
+- `CENTROID` — point représentatif par entité
+
+Dans le rendu thematique, ces tables `CENTROID` sont maintenant le chemin nominal pour `Textes` et `Symboles` sur polygones, lignes et `MultiPoint`.
 
 ### GeoParquet
 
 Si la géométrie est dans une colonne non-`geom` (ex: `geometry`), le pipeline normalise vers `geom` avant simplification.
+
+### Fallback navigateur pour GeoPackage
+
+Dans le navigateur, si `ST_Read()` échoue sur un fond de carte `.gpkg`, Khartis bascule sur un fallback client-only :
+
+- lecture SQLite Wasm du GeoPackage
+- sélection automatique de la couche spatiale par défaut avec la même heuristique que les autres imports multi-couches
+- extraction de la géométrie GeoPackage binaire vers WKB
+- reprojection éventuelle vers `EPSG:4326`
+- conversion en GeoJSON temporaire, puis reprise du pipeline normal de fond de carte
+
+Ce fallback est limité au parcours d'import de fond de carte GeoPackage et ne change pas le chemin DuckDB nominal des autres formats.
 
 ---
 

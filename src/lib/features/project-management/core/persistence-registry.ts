@@ -140,6 +140,12 @@ class PersistenceRegistryImpl {
     });
   }
 
+  /** Clear pending dirty state without saving. Useful after restore flows. */
+  markClean(): void {
+    this.cancelDebounce();
+    this.dirty = false;
+  }
+
   private scheduleDebounce(): void {
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
     this.debounceTimer = setTimeout(() => {

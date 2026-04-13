@@ -122,4 +122,115 @@ describe('duckdb dataset registration', () => {
       })
     );
   });
+
+  it('preserves persisted join metadata when re-registering a source file', async () => {
+    updateDatasets((datasets) => {
+      datasets.set('current', {
+        id: 'current',
+        sourceFileId: 'sf1',
+        tableName: 'table_old',
+        joinedBasemap: 'monde-countries-2024-medium',
+        geoColumn: 'code'
+      } as DuckDBDataset);
+    });
+
+    const duck = {
+      query: vi.fn().mockResolvedValue([{ table_name: 'table_registered' }]),
+      analyse: vi.fn().mockResolvedValue([{ name: 'value' }])
+    };
+    const callbacks = {
+      getRowCount: vi.fn().mockResolvedValue(42),
+      createArrowTableWithMetadata: vi.fn(),
+      prefetchArrowMetadata: vi.fn().mockResolvedValue(undefined)
+    };
+
+    const dataset = await registerExistingTable(
+      'table_registered',
+      'sf1',
+      'example.csv',
+      duck,
+      callbacks
+    );
+
+    expect(dataset).toEqual(
+      expect.objectContaining({
+        id: 'current',
+        tableName: 'table_registered',
+        joinedBasemap: 'monde-countries-2024-medium',
+        geoColumn: 'code'
+      })
+    );
+  });
+
+  it('does not block table registration on Arrow metadata prefetch', async () => {
+    let resolvePrefetch: (() => void) | undefined;
+    const pendingPrefetch = new Promise<void>((resolve) => {
+      resolvePrefetch = resolve;
+    });
+
+    const duck = {
+      query: vi.fn().mockResolvedValue([{ table_name: 'table_registered' }]),
+      analyse: vi.fn().mockResolvedValue([{ name: 'value' }])
+    };
+    const callbacks = {
+      getRowCount: vi.fn().mockResolvedValue(42),
+      createArrowTableWithMetadata: vi.fn(),
+      prefetchArrowMetadata: vi.fn().mockReturnValue(pendingPrefetch)
+    };
+
+    let resolved = false;
+    const registrationPromise = registerExistingTable(
+      'table_registered',
+      'sf1',
+      'example.csv',
+      duck,
+      callbacks
+    ).then((dataset) => {
+      resolved = true;
+      return dataset;
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(resolved).toBe(true);
+    resolvePrefetch?.();
+    await expect(registrationPromise).resolves.toEqual(
+      expect.objectContaining({
+        tableName: 'table_registered',
+        sourceFileId: 'sf1'
+      })
+    );
+  });
+
+  it('reuses the preferred stable dataset id when no DuckDB entry exists yet', async () => {
+    const duck = {
+      query: vi.fn().mockResolvedValue([{ table_name: 'table_registered' }]),
+      analyse: vi.fn().mockResolvedValue([{ name: 'value' }])
+    };
+    const callbacks = {
+      getRowCount: vi.fn().mockResolvedValue(42),
+      createArrowTableWithMetadata: vi.fn(),
+      prefetchArrowMetadata: vi.fn().mockResolvedValue(undefined)
+    };
+
+    const dataset = await registerExistingTable(
+      'table_registered',
+      'sf1',
+      'example.csv',
+      duck,
+      callbacks,
+      {
+        preferredDatasetId: 'stable-dataset-id'
+      }
+    );
+
+    expect(dataset?.id).toBe('stable-dataset-id');
+    expect(getDatasetBySourceFile('sf1')).toEqual(
+      expect.objectContaining({
+        id: 'stable-dataset-id',
+        sourceFileId: 'sf1',
+        tableName: 'table_registered'
+      })
+    );
+  });
 });

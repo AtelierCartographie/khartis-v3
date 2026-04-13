@@ -13,6 +13,28 @@ export interface SimplificationMetrics {
 export interface SimplificationOptions {
   geometryColumn?: string;
   createView?: boolean;
+  inputTableName?: string;
+  targetTableName?: string;
+}
+
+function buildFallbackSimplificationSelect(
+  inputTableName: string,
+  geometryColumn: string,
+  tolerance: number
+): string {
+  const escapedInputTable = escapeIdentifier(inputTableName);
+  const escapedGeometryColumn = escapeIdentifier(geometryColumn);
+  const escapedGeom = escapeIdentifier('geom');
+  const simplifiedExpression = `CASE
+    WHEN "${escapedGeometryColumn}" IS NULL THEN NULL
+    ELSE ST_Simplify("${escapedGeometryColumn}", ${tolerance})
+  END`;
+
+  if (geometryColumn === 'geom') {
+    return `SELECT * REPLACE (${simplifiedExpression} AS "${escapedGeom}") FROM "${escapedInputTable}"`;
+  }
+
+  return `SELECT * EXCLUDE ("${escapedGeometryColumn}"), ${simplifiedExpression} AS "${escapedGeom}" FROM "${escapedInputTable}"`;
 }
 
 async function countVertices(
@@ -46,10 +68,11 @@ export async function simplifyGeometryTable(
   const start = performance.now();
   const geometryColumn = options.geometryColumn ?? 'geom';
   const createView = options.createView ?? false;
+  const inputTableName = options.inputTableName ?? sourceTable;
 
   const originalVertices = await countVertices(
     Duck,
-    sourceTable,
+    inputTableName,
     geometryColumn
   );
 
@@ -57,23 +80,52 @@ export async function simplifyGeometryTable(
     throw new Error(`Invalid simplification tolerance: ${tolerance}`);
   }
 
-  const escapedSource = escapeIdentifier(sourceTable);
+  const escapedInput = escapeIdentifier(inputTableName);
   const targetTable = createView
     ? `vw_${sourceTable}_simplified`
     : `${sourceTable}_simplified`;
-  const escapedTarget = escapeIdentifier(targetTable);
+  const resolvedTargetTable = options.targetTableName ?? targetTable;
+  const escapedTarget = escapeIdentifier(resolvedTargetTable);
 
   const createStatement = createView
     ? 'CREATE OR REPLACE VIEW'
     : 'CREATE OR REPLACE TABLE';
 
-  await Duck.query(`
-    ${createStatement} "${escapedTarget}" AS
-    FROM simplify_and_clean('${escapedSource}', '${geometryColumn}', ${tolerance})
-  `);
+  try {
+    await Duck.query(`
+      ${createStatement} "${escapedTarget}" AS
+      FROM simplify_and_clean('${escapedInput}', '${geometryColumn}', ${tolerance})
+    `);
+  } catch (error) {
+    logger.warn(
+      'Topology-preserving simplification failed, falling back to feature simplification',
+      LogCategory.DUCKDB,
+      {
+        sourceTable,
+        inputTableName,
+        targetTable: resolvedTargetTable,
+        geometryColumn,
+        tolerance,
+        error
+      }
+    );
+
+    await Duck.query(`
+      ${createStatement} "${escapedTarget}" AS
+      ${buildFallbackSimplificationSelect(
+        inputTableName,
+        geometryColumn,
+        tolerance
+      )}
+    `);
+  }
 
   // The simplify_and_clean macro always normalizes the geometry column to 'geom'
-  const simplifiedVertices = await countVertices(Duck, targetTable, 'geom');
+  const simplifiedVertices = await countVertices(
+    Duck,
+    resolvedTargetTable,
+    'geom'
+  );
 
   // Recompute innerlines from the simplified geometry so borders stay in sync
   const innerlinesTable = `${sourceTable}__innerlines`;
@@ -88,7 +140,7 @@ export async function simplifyGeometryTable(
       LogCategory.DUCKDB,
       {
         innerlinesTable,
-        sourceTable: targetTable
+        sourceTable: resolvedTargetTable
       }
     );
   } catch (error) {
@@ -109,7 +161,7 @@ export async function simplifyGeometryTable(
   const duration = performance.now() - start;
 
   logger.debug('Geometry simplification completed', LogCategory.DUCKDB, {
-    targetTable,
+    targetTable: resolvedTargetTable,
     originalVertices,
     simplifiedVertices,
     reductionPercentage: `${reductionPercentage}%`,

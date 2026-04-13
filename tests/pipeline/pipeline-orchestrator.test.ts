@@ -204,10 +204,29 @@ describe('dataPipeline orchestrator', () => {
 
     expect('datasets' in result).toBe(false);
     if (!('datasets' in result)) {
+      expect(result.id).toBe('up1');
       expect(result.sourceFileId).toBe('up1');
       expect(result.name).toBe('roads.shp');
       expect(result.geoDetection?.hasGeoColumns).toBe(true);
       expect(result.analysis?.warnings).toContain('geo warning');
+    }
+  });
+
+  it('preserves stable datasetId when reprocessing an uploaded file with original file', async () => {
+    const { dataPipeline } = await loadPipelineModule();
+
+    const result = await dataPipeline.processUploadedFile(
+      {
+        ...uploaded(),
+        datasetId: 'stable-dataset-id'
+      },
+      new File(['a,b\n1,2'], 'uploaded.csv', { type: 'text/csv' })
+    );
+
+    expect('datasets' in result).toBe(false);
+    if (!('datasets' in result)) {
+      expect(result.id).toBe('stable-dataset-id');
+      expect(result.sourceFileId).toBe('up1');
     }
   });
 

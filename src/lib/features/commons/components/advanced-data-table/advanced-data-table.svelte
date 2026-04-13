@@ -1,6 +1,7 @@
 <script lang="ts">
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
+  import SimpleCheckbox from '$lib/features/commons/components/simple-checkbox.svelte';
   import type { ProcessedDataset } from '$lib/features/data-pipeline';
   import { Duck, RefineOperation } from '$lib/features/duckdb';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
@@ -28,7 +29,8 @@
   import {
     DOM_UPDATE_DELAY_MS,
     TABLE_ROW_HEIGHT,
-    type ColumnType
+    type ColumnType,
+    type TableMutation
   } from './types';
 
   import TableColumnHeader from './components/table-column-header.svelte';
@@ -78,8 +80,15 @@
     isReadOnly?: boolean;
     datasetVersion?: number;
     activeJoinColumn?: string;
+    initialSortColumn?: string | null;
+    initialSortOrder?: 'ASC' | 'DESC' | null;
     onSelectionChange?: (selectedIds: number[], count: number) => void;
+    onSortChange?: (
+      column: string | null,
+      order: 'ASC' | 'DESC' | null
+    ) => void;
     onColumnDeleted?: (columnName: string) => void;
+    onTableMutation?: (mutation: TableMutation) => Promise<void> | void;
   }
 
   let {
@@ -95,8 +104,12 @@
     isReadOnly = false,
     datasetVersion,
     activeJoinColumn,
+    initialSortColumn = null,
+    initialSortOrder = null,
     onSelectionChange,
-    onColumnDeleted
+    onSortChange,
+    onColumnDeleted,
+    onTableMutation
   }: Props = $props();
 
   let histogramVisible = $state(true);
@@ -151,11 +164,14 @@
   }
 
   const sort = useTableSort({
-    onSortChange: async () => {
+    initialSortColumn: untrack(() => initialSortColumn),
+    initialSortOrder: untrack(() => initialSortOrder),
+    onSortChange: async (column, order) => {
       await virtualScroll.initializeRows(0);
       if (tableContainer) {
         tableContainer.scrollTop = 0;
       }
+      onSortChange?.(column, order);
     }
   });
 
@@ -230,6 +246,7 @@
       filters.numRows === 0 &&
       filters.filterStats.total > 0
   );
+  const isSelectionMode = $derived(isSelectable && isEditMode);
 
   // Defensive guard: during rapid dataset/table switches, transient invalid
   // column entries can appear and break keyed reconciliation in Svelte.
@@ -241,6 +258,11 @@
   );
 
   async function handleSort(column: string, order: 'ASC' | 'DESC') {
+    if (sort.sortColumn === column && sort.sortOrder === order) {
+      sort.clearSort();
+      return;
+    }
+
     sort.sortTable(column, order);
   }
 
@@ -248,6 +270,11 @@
     isLocalUpdate = true;
     try {
       await columnOps.handleRefine(columnName, operation);
+      await onTableMutation?.({
+        type: 'refine',
+        columnName,
+        operation
+      });
       await recordProjectTransformation('refine', columnName, operation);
     } catch (e) {
       isLocalUpdate = false;
@@ -271,6 +298,11 @@
     isLocalUpdate = true;
     try {
       await columnOps.handleChangeType(columnName, newType);
+      await onTableMutation?.({
+        type: 'type_change',
+        columnName,
+        newType
+      });
       await recordProjectTransformation(
         'type_change',
         columnName,
@@ -303,10 +335,11 @@
       await renameColumn(tableName, oldName, trimmedNewName, Duck);
       await tableData.loadColumnsInfo();
       await virtualScroll.initializeRows(virtualScroll.startIndex);
-
-      if (dataset?.id) {
-        datasetsStore.renameDatasetColumn(dataset.id, oldName, trimmedNewName);
-      }
+      await onTableMutation?.({
+        type: 'rename',
+        oldName,
+        newName: trimmedNewName
+      });
 
       recordTransformation(`Colonne renommée: ${oldName} → ${trimmedNewName}`);
 
@@ -346,6 +379,10 @@
     isLocalUpdate = true;
     try {
       await columnOps.handleDelete(deletedColumn);
+      await onTableMutation?.({
+        type: 'delete',
+        columnName: deletedColumn
+      });
       await recordProjectTransformation('drop', deletedColumn);
     } catch (err) {
       logger.error('Error deleting column', LogCategory.UI, err);
@@ -380,6 +417,28 @@
   }
 
   const highlightedRowIdSet = $derived(new Set(highlightedRowIds));
+  const selectableRowIds = $derived.by(() => {
+    const ids: number[] = [];
+
+    for (const [index, row] of tableData.tableData.entries()) {
+      const fallbackRowId = (virtualScroll.rows[index] ?? index) + 1;
+      const resolvedRowId = normalizeRowId(
+        (row.__id as number | bigint | string | undefined) ?? fallbackRowId
+      );
+
+      if (resolvedRowId !== null) {
+        ids.push(resolvedRowId);
+      }
+    }
+
+    return ids;
+  });
+  const areVisibleRowsSelected = $derived(
+    rowSelection.areAllSelected(selectableRowIds)
+  );
+  const hasVisibleSelection = $derived(
+    selectableRowIds.some((rowId) => rowSelection.isRowSelected(rowId))
+  );
 
   const geoidColumns = $derived.by(() => {
     const set = new SvelteSet<string>();
@@ -406,6 +465,10 @@
     if (currentCell?.rowId === rowId) return 'current';
     if (highlightedRowIdSet.has(rowId)) return 'partial';
     return null;
+  }
+
+  function handleToggleVisibleRowsSelection() {
+    rowSelection.toggleAllRows(selectableRowIds);
   }
 
   onMount(() => {
@@ -633,37 +696,46 @@
         <table>
           <thead>
             <tr class:histograms-open={effectiveShowSummaryPlots}>
-              {#if isSelectable && isEditMode}
-                <th class="selection-header-spacer" scope="col"></th>
-              {/if}
               <th
                 class="row-index-header"
                 class:histograms-open={effectiveShowSummaryPlots}
+                class:selection-mode={isSelectionMode}
                 scope="col"
               >
-                <div class="row-index-header-content">
-                  <div class="histogram-toggle-area">
-                    <button
-                      class="histogram-toggle"
-                      onclick={toggleHistograms}
-                      title={m.data_toggle_summary_plots()}
-                    >
-                      {#if histogramVisible}
-                        <ChevronUp size={16} />
-                      {:else}
-                        <ChevronDown size={16} />
-                      {/if}
-                    </button>
+                {#if isSelectionMode}
+                  <div class="selection-header-content">
+                    <SimpleCheckbox
+                      checked={areVisibleRowsSelected}
+                      indeterminate={hasVisibleSelection &&
+                        !areVisibleRowsSelected}
+                      onchange={handleToggleVisibleRowsSelection}
+                    />
                   </div>
-                  {#if effectiveShowSummaryPlots}
-                    <div class="row-index-stats">
-                      <span class="row-index-count"
-                        >{filters.filterStats.total}</span
+                {:else}
+                  <div class="row-index-header-content">
+                    <div class="histogram-toggle-area">
+                      <button
+                        class="histogram-toggle"
+                        onclick={toggleHistograms}
+                        title={m.data_toggle_summary_plots()}
                       >
-                      <span class="row-index-label">{m.rows()}</span>
+                        {#if histogramVisible}
+                          <ChevronUp size={16} />
+                        {:else}
+                          <ChevronDown size={16} />
+                        {/if}
+                      </button>
                     </div>
-                  {/if}
-                </div>
+                    {#if effectiveShowSummaryPlots}
+                      <div class="row-index-stats">
+                        <span class="row-index-count"
+                          >{filters.filterStats.total}</span
+                        >
+                        <span class="row-index-label">{m.rows()}</span>
+                      </div>
+                    {/if}
+                  </div>
+                {/if}
               </th>
               {#each safeVisibleColumns as column, columnIndex (`${column.name}-${columnIndex}`)}
                 <TableColumnHeader
@@ -696,9 +768,9 @@
                 highlightType={getRowHighlightType(rowIndex, row)}
                 getCellHighlight={(colName) =>
                   getCellHighlightType(rowId, colName)}
-                isSelectable={isSelectable && isEditMode}
+                isSelectable={isSelectionMode}
                 isSelected={rowSelection.isRowSelected(rowId)}
-                showRowNumbers={true}
+                showRowNumbers={!isSelectionMode}
                 geoidColumns={geoidColumns}
                 onToggleSelection={rowSelection.toggleRowSelection}
               />
@@ -848,27 +920,6 @@
     background-color: var(--cds-ui-03, #e0e0e0);
   }
 
-  thead .selection-header-spacer {
-    width: 32px;
-    min-width: 32px;
-    max-width: 32px;
-    padding: 0;
-    border-bottom: 1px solid var(--cds-border-subtle-01, #c6c6c6);
-    background-color: var(--cds-ui-03, #e0e0e0);
-    position: sticky;
-    left: 0;
-    z-index: var(--z-base);
-    overflow: visible;
-  }
-
-  tr.histograms-open .selection-header-spacer {
-    background: linear-gradient(
-      to bottom,
-      var(--cds-ui-03, #e0e0e0) calc(100% - 63px),
-      var(--cds-ui-01, #f4f4f4) calc(100% - 63px)
-    );
-  }
-
   thead .row-index-header {
     width: 52px;
     min-width: 52px;
@@ -881,11 +932,25 @@
     position: relative;
   }
 
+  thead .row-index-header.selection-mode {
+    width: 32px;
+    min-width: 32px;
+    max-width: 32px;
+  }
+
   .row-index-header-content {
     display: flex;
     flex-direction: column;
     position: absolute;
     inset: 0;
+  }
+
+  .selection-header-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    min-height: 32px;
   }
 
   .histogram-toggle-area {

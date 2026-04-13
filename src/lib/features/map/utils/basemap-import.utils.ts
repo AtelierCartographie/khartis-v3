@@ -22,6 +22,7 @@ import {
   extractZip,
   getShapefileFilesFromArchive
 } from '$lib/features/data-pipeline/utils/zip-handler';
+import { convertGeoPackageToGeoJsonFile } from './geopackage-browser-fallback';
 
 export interface BasemapImportResult {
   basemap: BasemapMetadata;
@@ -50,6 +51,10 @@ interface GeoParquetMeta {
 const RAW_TABLE_SUFFIX = '__raw';
 const INNERLINES_TABLE_SUFFIX = '__innerlines';
 const CENTROIDS_TABLE_SUFFIX = '__centroids';
+
+export function getBasemapRawTableName(tableName: string): string {
+  return `${tableName}${RAW_TABLE_SUFFIX}`;
+}
 
 export function getBasemapInnerlinesTableName(tableName: string): string {
   return `${tableName}${INNERLINES_TABLE_SUFFIX}`;
@@ -90,6 +95,31 @@ export async function processBasemapImport(
 
   if (isParquet) {
     return processParquetBasemapImport(duck, file, tableName);
+  }
+
+  if (lowerFileName.endsWith('.gpkg')) {
+    try {
+      return await processGeofileBasemapImport(duck, file, tableName);
+    } catch (error) {
+      logger.warn(
+        'DuckDB GeoPackage basemap import failed, trying browser fallback',
+        LogCategory.MAP,
+        {
+          fileName: file.name,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      );
+
+      await duck.query(
+        `DROP TABLE IF EXISTS "${escapeIdentifier(tableName)}"`,
+        {
+          format: 'arrow-ipc'
+        }
+      );
+
+      const fallbackGeoJsonFile = await convertGeoPackageToGeoJsonFile(file);
+      return processGeofileBasemapImport(duck, fallbackGeoJsonFile, tableName);
+    }
   }
 
   return processGeofileBasemapImport(duck, file, tableName);
@@ -150,6 +180,11 @@ async function processGeofileBasemapImport(
   if (isPolygonBasemapLayerType(layerType)) {
     await preparePolygonBasemapTables(duck, tableName, geometryColumn);
     geometryColumn = INTERNAL_COLUMN.GEOM;
+  } else if (isLineBasemapLayerType(layerType)) {
+    await prepareLineBasemapTables(duck, tableName, geometryColumn);
+    geometryColumn = INTERNAL_COLUMN.GEOM;
+  } else if (isPointBasemapLayerType(layerType)) {
+    await preparePointBasemapTables(duck, tableName, geometryColumn);
   }
 
   const analysis = await duck.analyse(tableName);
@@ -212,6 +247,12 @@ async function processParquetBasemapImport(
     await preparePolygonBasemapTables(duck, tableName, geomColName);
     geomColName = INTERNAL_COLUMN.GEOM;
     layerType = BasemapLayerType.POLYGON;
+  } else if (isLineBasemapLayerType(layerType)) {
+    await prepareLineBasemapTables(duck, tableName, geomColName);
+    geomColName = INTERNAL_COLUMN.GEOM;
+    layerType = BasemapLayerType.LINE;
+  } else if (isPointBasemapLayerType(layerType)) {
+    await preparePointBasemapTables(duck, tableName, geomColName);
   }
 
   const bounds = await queryBasemapBounds(duck, tableName, geomColName);
@@ -287,6 +328,22 @@ function isPolygonBasemapLayerType(layerType: BasemapLayerType): boolean {
   return layerType === BasemapLayerType.POLYGON;
 }
 
+function isLineBasemapLayerType(layerType: BasemapLayerType): boolean {
+  return layerType === BasemapLayerType.LINE;
+}
+
+function isPointBasemapLayerType(layerType: BasemapLayerType): boolean {
+  return layerType === BasemapLayerType.POINT;
+}
+
+function shouldCreateCentroidLayer(layerType: BasemapLayerType): boolean {
+  return (
+    isPolygonBasemapLayerType(layerType) ||
+    isLineBasemapLayerType(layerType) ||
+    isPointBasemapLayerType(layerType)
+  );
+}
+
 function buildBasemapLayers(
   tableName: string,
   _geometryColumn: string,
@@ -302,26 +359,27 @@ function buildBasemapLayers(
     }
   ];
 
-  if (!isPolygonBasemapLayerType(layerType)) {
-    return layers;
-  }
-
-  layers.push(
-    {
+  if (isPolygonBasemapLayerType(layerType)) {
+    layers.push({
       title_fr: 'Limites',
       title_en: 'Limits',
       type: BasemapLayerType.LIMIT,
       file: getBasemapInnerlinesTableName(tableName),
       style: null
-    },
-    {
-      title_fr: 'Centroïdes',
-      title_en: 'Centroids',
-      type: BasemapLayerType.CENTROID,
-      file: getBasemapCentroidsTableName(tableName),
-      style: null
-    }
-  );
+    });
+  }
+
+  if (!shouldCreateCentroidLayer(layerType)) {
+    return layers;
+  }
+
+  layers.push({
+    title_fr: 'Centroïdes',
+    title_en: 'Centroids',
+    type: BasemapLayerType.CENTROID,
+    file: getBasemapCentroidsTableName(tableName),
+    style: null
+  });
 
   return layers;
 }
@@ -343,18 +401,163 @@ async function createArrowTableFromDuckTable(
   );
 }
 
+function getRepresentativePointExpression(
+  geometryColumn: string,
+  layerType: BasemapLayerType
+): string {
+  const escapedGeometryColumn = `"${escapeIdentifier(geometryColumn)}"`;
+
+  if (isPolygonBasemapLayerType(layerType)) {
+    return `CASE
+      WHEN ST_IsEmpty(${escapedGeometryColumn}) THEN NULL
+      WHEN NOT ST_IsValid(${escapedGeometryColumn}) THEN ST_PointOnSurface(${escapedGeometryColumn})
+      ELSE COALESCE(
+        ST_MaximumInscribedCircle(${escapedGeometryColumn}).center,
+        ST_PointOnSurface(${escapedGeometryColumn})
+      )
+    END`;
+  }
+
+  return `CASE
+    WHEN ST_IsEmpty(${escapedGeometryColumn}) THEN NULL
+    ELSE ST_PointOnSurface(${escapedGeometryColumn})
+  END`;
+}
+
+async function prepareRepresentativePointTable(
+  duck: typeof Duck,
+  tableName: string,
+  geometryColumn: string,
+  layerType: BasemapLayerType
+): Promise<void> {
+  const centroidsTableName = getBasemapCentroidsTableName(tableName);
+  const escapedTable = escapeIdentifier(tableName);
+  const escapedCentroidsTable = escapeIdentifier(centroidsTableName);
+  const representativePointExpression = getRepresentativePointExpression(
+    geometryColumn,
+    layerType
+  );
+
+  await duck.query(`
+    CREATE OR REPLACE TABLE "${escapedCentroidsTable}" AS
+    SELECT * REPLACE (
+      CASE
+        WHEN "${escapeIdentifier(geometryColumn)}" IS NULL THEN NULL
+        ELSE ${representativePointExpression}
+      END AS "${escapeIdentifier(geometryColumn)}"
+    )
+    FROM "${escapedTable}"
+  `);
+}
+
+function buildNormalizedGeometrySelect(
+  sourceTableName: string,
+  geometryColumn: string,
+  geometryExpression: string
+): string {
+  const escapedSourceTable = escapeIdentifier(sourceTableName);
+  const escapedGeometryColumn = escapeIdentifier(geometryColumn);
+  const escapedDefaultGeom = escapeIdentifier(INTERNAL_COLUMN.GEOM);
+  const defaultGeomExpression = `"${escapedDefaultGeom}"`;
+
+  if (geometryColumn === INTERNAL_COLUMN.GEOM) {
+    if (geometryExpression === defaultGeomExpression) {
+      return `SELECT * FROM "${escapedSourceTable}"`;
+    }
+
+    return `SELECT * REPLACE (${geometryExpression} AS "${escapedDefaultGeom}") FROM "${escapedSourceTable}"`;
+  }
+
+  return `SELECT * EXCLUDE ("${escapedGeometryColumn}"), ${geometryExpression} AS "${escapedDefaultGeom}" FROM "${escapedSourceTable}"`;
+}
+
+async function createEmptyInnerlinesTable(
+  duck: typeof Duck,
+  tableName: string
+): Promise<void> {
+  await duck.query(`
+    CREATE OR REPLACE TABLE "${escapeIdentifier(tableName)}" AS
+    SELECT NULL::GEOMETRY AS "${escapeIdentifier(INTERNAL_COLUMN.GEOM)}"
+    WHERE FALSE
+  `);
+}
+
+async function rebuildPolygonDerivedTables(
+  duck: typeof Duck,
+  tableName: string
+): Promise<void> {
+  const innerlinesTableName = getBasemapInnerlinesTableName(tableName);
+
+  try {
+    await duck.query(`
+      CREATE OR REPLACE TABLE "${escapeIdentifier(innerlinesTableName)}" AS
+      FROM extract_innerlines('${escapeSqlString(tableName)}')
+    `);
+  } catch (error) {
+    logger.warn(
+      'Failed to extract innerlines for custom basemap, using empty layer',
+      LogCategory.MAP,
+      {
+        tableName,
+        error: error instanceof Error ? error.message : String(error)
+      }
+    );
+    await createEmptyInnerlinesTable(duck, innerlinesTableName);
+  }
+
+  await prepareRepresentativePointTable(
+    duck,
+    tableName,
+    INTERNAL_COLUMN.GEOM,
+    BasemapLayerType.POLYGON
+  );
+}
+
+async function rebuildLineDerivedTables(
+  duck: typeof Duck,
+  tableName: string
+): Promise<void> {
+  await prepareRepresentativePointTable(
+    duck,
+    tableName,
+    INTERNAL_COLUMN.GEOM,
+    BasemapLayerType.LINE
+  );
+}
+
+export async function refreshImportedBasemapHelperTables(
+  duck: typeof Duck,
+  tableName: string,
+  layerType: BasemapLayerType
+): Promise<void> {
+  if (isPolygonBasemapLayerType(layerType)) {
+    await rebuildPolygonDerivedTables(duck, tableName);
+    return;
+  }
+
+  if (isLineBasemapLayerType(layerType)) {
+    await rebuildLineDerivedTables(duck, tableName);
+    return;
+  }
+
+  if (isPointBasemapLayerType(layerType)) {
+    await prepareRepresentativePointTable(
+      duck,
+      tableName,
+      INTERNAL_COLUMN.GEOM,
+      BasemapLayerType.POINT
+    );
+  }
+}
+
 async function preparePolygonBasemapTables(
   duck: typeof Duck,
   tableName: string,
   geometryColumn: string
 ): Promise<void> {
-  const rawTableName = `${tableName}${RAW_TABLE_SUFFIX}`;
-  const innerlinesTableName = getBasemapInnerlinesTableName(tableName);
-  const centroidsTableName = getBasemapCentroidsTableName(tableName);
+  const rawTableName = getBasemapRawTableName(tableName);
   const escapedTable = escapeIdentifier(tableName);
   const escapedRawTable = escapeIdentifier(rawTableName);
-  const escapedInnerlinesTable = escapeIdentifier(innerlinesTableName);
-  const escapedCentroidsTable = escapeIdentifier(centroidsTableName);
 
   await duck.query(
     `CREATE OR REPLACE TABLE "${escapedRawTable}" AS SELECT * FROM "${escapedTable}"`
@@ -365,23 +568,83 @@ async function preparePolygonBasemapTables(
       CREATE OR REPLACE TABLE "${escapedTable}" AS
       FROM simplify_and_clean('${escapeSqlString(rawTableName)}', '${escapeSqlString(geometryColumn)}', 0.0)
     `);
+  } catch (error) {
+    logger.warn(
+      'Basemap polygon cleanup failed, falling back to direct geometry copy',
+      LogCategory.MAP,
+      {
+        tableName,
+        geometryColumn,
+        error: error instanceof Error ? error.message : String(error)
+      }
+    );
 
     await duck.query(`
-      CREATE OR REPLACE TABLE "${escapedInnerlinesTable}" AS
-      FROM extract_innerlines('${escapeSqlString(tableName)}')
+      CREATE OR REPLACE TABLE "${escapedTable}" AS
+      ${buildNormalizedGeometrySelect(
+        rawTableName,
+        geometryColumn,
+        `"${escapeIdentifier(geometryColumn)}"`
+      )}
     `);
-
-    await duck.query(`
-      CREATE OR REPLACE TABLE "${escapedCentroidsTable}" AS
-      SELECT * REPLACE (
-        ST_MaximumInscribedCircle("${INTERNAL_COLUMN.GEOM}").center AS "${INTERNAL_COLUMN.GEOM}"
-      )
-      FROM "${escapedTable}"
-      WHERE "${INTERNAL_COLUMN.GEOM}" IS NOT NULL
-    `);
-  } finally {
-    await duck.query(`DROP TABLE IF EXISTS "${escapedRawTable}"`);
   }
+
+  await rebuildPolygonDerivedTables(duck, tableName);
+}
+
+async function prepareLineBasemapTables(
+  duck: typeof Duck,
+  tableName: string,
+  geometryColumn: string
+): Promise<void> {
+  const rawTableName = getBasemapRawTableName(tableName);
+  const escapedTable = escapeIdentifier(tableName);
+  const escapedRawTable = escapeIdentifier(rawTableName);
+
+  await duck.query(
+    `CREATE OR REPLACE TABLE "${escapedRawTable}" AS SELECT * FROM "${escapedTable}"`
+  );
+
+  try {
+    await duck.query(`
+      CREATE OR REPLACE TABLE "${escapedTable}" AS
+      FROM simplify_and_clean_linestring('${escapeSqlString(rawTableName)}', '${escapeSqlString(geometryColumn)}', 0.0)
+    `);
+  } catch (error) {
+    logger.warn(
+      'Basemap line cleanup failed, falling back to direct geometry copy',
+      LogCategory.MAP,
+      {
+        tableName,
+        geometryColumn,
+        error: error instanceof Error ? error.message : String(error)
+      }
+    );
+
+    await duck.query(`
+      CREATE OR REPLACE TABLE "${escapedTable}" AS
+      ${buildNormalizedGeometrySelect(
+        rawTableName,
+        geometryColumn,
+        `"${escapeIdentifier(geometryColumn)}"`
+      )}
+    `);
+  }
+
+  await rebuildLineDerivedTables(duck, tableName);
+}
+
+async function preparePointBasemapTables(
+  duck: typeof Duck,
+  tableName: string,
+  geometryColumn: string
+): Promise<void> {
+  await prepareRepresentativePointTable(
+    duck,
+    tableName,
+    geometryColumn,
+    BasemapLayerType.POINT
+  );
 }
 
 export async function loadBasemapFromUrl(url: string): Promise<File> {

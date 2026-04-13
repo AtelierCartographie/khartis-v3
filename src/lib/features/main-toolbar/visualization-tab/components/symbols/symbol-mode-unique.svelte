@@ -278,6 +278,7 @@
     label={m.color_palette()}
     colors={sequentialPalette}
     selectedPaletteId={visualization?.classification?.paletteId}
+    inverted={visualization?.classification?.inverted ?? false}
     oninvert={onInvertPalette}
     onClassificationChange={onClassificationChange}
   />
@@ -317,6 +318,7 @@
   <PalettePreview
     label={m.color_palette()}
     colors={qualitativePalette}
+    inverted={visualization?.classification?.inverted ?? false}
     oninvert={onInvertPalette}
     onClassificationChange={onClassificationChange}
   />
@@ -344,6 +346,7 @@
   visualization={visualization}
   dataFields={dataFields}
   infoText={m.stroke_section_info()}
+  showDashed={false}
   discretizationLabel={discretizationLabel}
   onStyleChange={onStyleChange}
   onModesChange={onModesChange}

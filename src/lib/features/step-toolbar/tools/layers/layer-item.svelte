@@ -2,7 +2,10 @@
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import * as m from '$lib/paraglide/messages';
   import { OverflowMenu, OverflowMenuItem } from 'carbon-components-svelte';
+  import { dragHandle } from 'svelte-dnd-action';
   import {
+    ArrowDown,
+    ArrowUp,
     ChevronDown,
     ChevronUp,
     Draggable,
@@ -19,6 +22,10 @@
     onToggleCollapse?: () => void;
     onToggleVisibility: (layerId: string) => void;
     onOpenSettings: (layerId: string) => void;
+    canMoveUp?: boolean;
+    canMoveDown?: boolean;
+    onMoveUp?: () => void;
+    onMoveDown?: () => void;
     onRenameLayer?: (layerId: string) => void;
     onDuplicateLayer?: (layerId: string) => void;
     onDeleteLayer?: (layerId: string) => void;
@@ -31,6 +38,10 @@
     onToggleCollapse,
     onToggleVisibility,
     onOpenSettings,
+    canMoveUp = false,
+    canMoveDown = false,
+    onMoveUp,
+    onMoveDown,
     onRenameLayer,
     onDuplicateLayer,
     onDeleteLayer
@@ -40,7 +51,11 @@
 {#if layer.isSubLayer}
   <div class="sublayer-card">
     <div class="color-bar" style:background-color={layer.color}></div>
-    <div class="drag-handle">
+    <div
+      class="drag-handle"
+      use:dragHandle
+      aria-label={`${m.layers_reorder()} ${layer.name}`}
+    >
       <Draggable size={16} />
     </div>
     <div class="sublayer-content">
@@ -52,6 +67,22 @@
       <span class="sublayer-name">{layer.name}</span>
     </div>
     <div class="sublayer-actions">
+      <IconButton
+        kind="ghost"
+        size="small"
+        icon={ArrowUp}
+        iconDescription={m.layers_move_up()}
+        disabled={!canMoveUp}
+        onclick={() => onMoveUp?.()}
+      />
+      <IconButton
+        kind="ghost"
+        size="small"
+        icon={ArrowDown}
+        iconDescription={m.layers_move_down()}
+        disabled={!canMoveDown}
+        onclick={() => onMoveDown?.()}
+      />
       <IconButton
         kind="ghost"
         size="small"
@@ -70,7 +101,11 @@
   </div>
 {:else}
   <div class="layer-card">
-    <div class="drag-handle">
+    <div
+      class="drag-handle"
+      use:dragHandle
+      aria-label={`${m.layers_reorder()} ${layer.name}`}
+    >
       <Draggable size={16} />
     </div>
     {#if hasChildren}
@@ -84,6 +119,22 @@
     {/if}
     <span class="layer-title">{layer.name}</span>
     <div class="layer-actions">
+      <IconButton
+        kind="ghost"
+        size="small"
+        icon={ArrowUp}
+        iconDescription={m.layers_move_up()}
+        disabled={!canMoveUp}
+        onclick={() => onMoveUp?.()}
+      />
+      <IconButton
+        kind="ghost"
+        size="small"
+        icon={ArrowDown}
+        iconDescription={m.layers_move_down()}
+        disabled={!canMoveDown}
+        onclick={() => onMoveDown?.()}
+      />
       <IconButton
         kind="ghost"
         size="small"

@@ -1,13 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { duckMock, buildDatasetFromDuckTableMock, processZipFileMock } =
-  vi.hoisted(() => ({
-    duckMock: {
-      read_link: vi.fn()
-    },
-    buildDatasetFromDuckTableMock: vi.fn(),
-    processZipFileMock: vi.fn()
-  }));
+const {
+  duckMock,
+  buildDatasetFromDuckTableMock,
+  processZipFileMock,
+  applyTabularGeoDetectionMock,
+  normalizeFormattedNumericColumnsMock
+} = vi.hoisted(() => ({
+  duckMock: {
+    read_link: vi.fn()
+  },
+  buildDatasetFromDuckTableMock: vi.fn(),
+  processZipFileMock: vi.fn(),
+  applyTabularGeoDetectionMock: vi.fn((dataset) => dataset),
+  normalizeFormattedNumericColumnsMock: vi.fn()
+}));
 
 vi.mock('$lib/features/duckdb', () => ({
   Duck: duckMock
@@ -17,8 +24,19 @@ vi.mock('$lib/features/data-pipeline/operations/analysis', () => ({
   buildDatasetFromDuckTable: buildDatasetFromDuckTableMock
 }));
 
+vi.mock(
+  '$lib/features/data-pipeline/operations/tabular-numeric-normalization',
+  () => ({
+    normalizeFormattedNumericColumns: normalizeFormattedNumericColumnsMock
+  })
+);
+
 vi.mock('$lib/features/data-pipeline/processors/zip-processor', () => ({
   processZipFile: processZipFileMock
+}));
+
+vi.mock('$lib/features/data-pipeline/processors/tabular-geo-detection', () => ({
+  applyTabularGeoDetection: applyTabularGeoDetectionMock
 }));
 
 import {
@@ -30,6 +48,7 @@ const ctx = { initialized: true };
 
 beforeEach(() => {
   vi.clearAllMocks();
+  normalizeFormattedNumericColumnsMock.mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -70,7 +89,12 @@ describe('remote-processor', () => {
         decimal_separator: ','
       }
     );
+    expect(normalizeFormattedNumericColumnsMock).toHaveBeenCalledWith(
+      'my_tbl',
+      duckMock
+    );
     expect(buildDatasetFromDuckTableMock).toHaveBeenCalled();
+    expect(applyTabularGeoDetectionMock).toHaveBeenCalledTimes(1);
     expect((result as { name: string }).name).toBe('data.csv');
     expect((result as { sourceFileId: string }).sourceFileId).toBe(
       'https://example.com/path/data.csv'
@@ -102,6 +126,7 @@ describe('remote-processor', () => {
 
     const result = await processRemoteFile(ctx, 'folder/input.tsv');
 
+    expect(normalizeFormattedNumericColumnsMock).toHaveBeenCalled();
     expect((result as { name: string }).name).toBe('input.tsv');
   });
 

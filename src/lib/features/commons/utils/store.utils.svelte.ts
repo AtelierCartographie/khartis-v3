@@ -59,10 +59,12 @@ export function createToolStore<T extends object, A extends object = object>(
     ? wrapActionsWithNotify(rawCustom, notifyPersistence)
     : rawCustom;
 
-  const getState = () =>
+  const serializeState = () =>
     persistence?.serializeFilter
       ? (persistence.serializeFilter(state) as T)
       : state;
+
+  const getState = () => state;
 
   const result: ToolStoreResult<T, A> = {
     state,
@@ -74,7 +76,7 @@ export function createToolStore<T extends object, A extends object = object>(
   if (persistence) {
     persistenceRegistry.register({
       key: persistence.key,
-      serialize: () => getState(),
+      serialize: () => serializeState(),
       deserialize: (data: unknown) => baseActions.setState(data as Partial<T>),
       reset: () => baseActions.reset(),
       priority: persistence.priority ?? SavePriority.DEBOUNCED

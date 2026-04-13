@@ -10,6 +10,9 @@ export interface DataControlState {
   searchQuery: string;
   filterActive: boolean;
   tableView: TableViewType;
+  showSummaryPlots: boolean;
+  sortColumn: string | null;
+  sortOrder: 'ASC' | 'DESC' | null;
 }
 
 export interface GeolocationState {
@@ -40,6 +43,8 @@ export interface EnrichDataState {
   enrichmentColumn?: string;
   targetColumn?: string;
   isEnrichmentActive: boolean;
+  joinTabularEnabled: boolean;
+  basemapTabIndex: number;
 }
 
 export interface DataTabState {

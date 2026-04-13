@@ -1,4 +1,5 @@
 import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
 import { hasGPSCoordinateColumns } from '$lib/features/commons/utils/geo-detector.utils';
 
 export type DataTabStep =
@@ -9,7 +10,7 @@ export type DataTabStep =
   | 'enrich';
 export type WorkflowMode = 'tabular' | 'tabular-gps' | 'geographic' | 'auto';
 
-interface DataTabState {
+export interface DataTabWorkflowState {
   activeStepIndex: number;
   canNavigateToStep: [boolean, boolean, boolean];
   hasCompletedStep: [boolean, boolean, boolean];
@@ -18,14 +19,20 @@ interface DataTabState {
   primaryBasemapId: string | undefined;
 }
 
-const state = $state<DataTabState>({
+const DEFAULT_STATE: DataTabWorkflowState = {
   activeStepIndex: 0,
   canNavigateToStep: [true, false, false],
   hasCompletedStep: [false, false, false],
   workflowMode: 'auto',
   primaryDatasetId: undefined,
   primaryBasemapId: undefined
-});
+};
+
+const state = $state<DataTabWorkflowState>(structuredClone(DEFAULT_STATE));
+
+function notifyPersistence(): void {
+  persistenceRegistry.notifyChange('dataWorkflow');
+}
 
 function getStepNames(mode: WorkflowMode): DataTabStep[] {
   if (mode === 'geographic') {
@@ -37,13 +44,22 @@ function getStepNames(mode: WorkflowMode): DataTabStep[] {
   return ['control', 'geolocate', 'join'];
 }
 
+function usesTwoStepNavigation(mode: WorkflowMode): boolean {
+  return mode === 'geographic';
+}
+
 function getEffectiveWorkflowMode(): WorkflowMode {
   const selectedDataset = datasetsStore.selectedDataset;
   if (!selectedDataset) return 'auto';
   if (selectedDataset.geometry) {
     return 'geographic';
   }
-  if (hasGPSCoordinateColumns(selectedDataset.columns)) {
+  if (
+    hasGPSCoordinateColumns(
+      selectedDataset.columns,
+      selectedDataset.geoDetection
+    )
+  ) {
     return 'tabular-gps';
   }
   return 'tabular';
@@ -58,11 +74,20 @@ function isTabularGPSMode(): boolean {
 }
 
 function isTwoStepMode(): boolean {
-  return isGeographicMode();
+  return usesTwoStepNavigation(getEffectiveWorkflowMode());
 }
 
 function getStepCount(): number {
   return isTwoStepMode() ? 2 : 3;
+}
+
+function getDisplayedStepNumber(step: DataTabStep): number | null {
+  const currentMode = getEffectiveWorkflowMode();
+  const normalizedStep =
+    step === 'basemap' && currentMode !== 'tabular-gps' ? 'join' : step;
+  const stepIndex = getStepNames(currentMode).indexOf(normalizedStep);
+
+  return stepIndex === -1 ? null : stepIndex + 1;
 }
 
 function setActiveStep(index: number) {
@@ -74,6 +99,7 @@ function setActiveStep(index: number) {
     return;
   }
   state.activeStepIndex = index;
+  notifyPersistence();
 }
 
 function markStepComplete(index: number) {
@@ -88,6 +114,8 @@ function markStepComplete(index: number) {
   if (index < maxIndex) {
     state.canNavigateToStep[index + 1] = true;
   }
+
+  notifyPersistence();
 }
 
 function resetStepCompletion(index: number) {
@@ -98,6 +126,7 @@ function resetStepCompletion(index: number) {
   const next = [...state.hasCompletedStep] as [boolean, boolean, boolean];
   next[index] = false;
   state.hasCompletedStep = next;
+  notifyPersistence();
 }
 
 function updateNavigationPermissions() {
@@ -105,19 +134,35 @@ function updateNavigationPermissions() {
 
   if (isTwoStepMode()) {
     state.canNavigateToStep[1] = state.hasCompletedStep[0];
+    state.canNavigateToStep[2] = false;
   } else {
     state.canNavigateToStep[1] = state.hasCompletedStep[0];
     state.canNavigateToStep[2] = state.hasCompletedStep[1];
   }
+
+  notifyPersistence();
+}
+
+function restoreFromSerialized(data: unknown): void {
+  const restored = data as Partial<DataTabWorkflowState> | undefined;
+  const nextState = structuredClone(DEFAULT_STATE);
+
+  if (restored) {
+    Object.assign(nextState, restored);
+  }
+
+  nextState.canNavigateToStep = restored?.canNavigateToStep
+    ? ([...restored.canNavigateToStep] as [boolean, boolean, boolean])
+    : [...DEFAULT_STATE.canNavigateToStep];
+  nextState.hasCompletedStep = restored?.hasCompletedStep
+    ? ([...restored.hasCompletedStep] as [boolean, boolean, boolean])
+    : [...DEFAULT_STATE.hasCompletedStep];
+
+  Object.assign(state, nextState);
 }
 
 function reset() {
-  state.activeStepIndex = 0;
-  state.canNavigateToStep = [true, false, false];
-  state.hasCompletedStep = [false, false, false];
-  state.workflowMode = 'auto';
-  state.primaryDatasetId = undefined;
-  state.primaryBasemapId = undefined;
+  restoreFromSerialized(undefined);
 }
 
 export const dataTabStore = {
@@ -156,6 +201,9 @@ export const dataTabStore = {
     const mode = getEffectiveWorkflowMode();
     return getStepNames(mode);
   },
+  getDisplayedStepNumber(step: DataTabStep): number | null {
+    return getDisplayedStepNumber(step);
+  },
   /** The step index where the basemap-join step lives (last step for tabular workflows) */
   get basemapStepIndex(): number {
     if (isGeographicMode()) return -1;
@@ -181,3 +229,26 @@ export const dataTabStore = {
   updateNavigationPermissions,
   reset
 };
+
+persistenceRegistry.register({
+  key: 'dataWorkflow',
+  serialize: () => ({
+    activeStepIndex: state.activeStepIndex,
+    canNavigateToStep: [...state.canNavigateToStep] as [
+      boolean,
+      boolean,
+      boolean
+    ],
+    hasCompletedStep: [...state.hasCompletedStep] as [
+      boolean,
+      boolean,
+      boolean
+    ],
+    workflowMode: state.workflowMode,
+    primaryDatasetId: state.primaryDatasetId,
+    primaryBasemapId: state.primaryBasemapId
+  }),
+  deserialize: (data: unknown) => restoreFromSerialized(data),
+  reset,
+  priority: 'debounced'
+});

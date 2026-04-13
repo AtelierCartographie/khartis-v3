@@ -51,6 +51,10 @@ Si ratio européen > standard ET > 30% des valeurs → format européen. Sinon s
 
 Les séparateurs de milliers détectés sont passés à `read_csv()` (`thousands_separator`).
 
+### 2.b Post-normalisation numérique tabulaire
+
+Après l'import CSV, le pipeline rescane les colonnes restées en texte. Si une colonne contient uniquement des valeurs numériques formatées et qu'au moins une valeur utilise des séparateurs (`2,148,000`, `789,50`, `18.5`), Khartis la promeut automatiquement en `BIGINT` ou `DOUBLE` via une conversion DuckDB sans perte. Cette étape est volontairement conservatrice: la colonne n'est convertie que si toutes les valeurs non vides sont convertibles.
+
 ### 3. Header CSV
 
 `detectCsvHeader()` compare la première et deuxième ligne :

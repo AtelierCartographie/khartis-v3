@@ -18,6 +18,9 @@ const STANDARD_DECIMAL_PATTERN = /^-?\d{1,3}(?:,?\d{3})*\.\d+$/;
 const EUROPEAN_THOUSANDS_DOT_PATTERN = /^-?\d{1,3}(?:\.\d{3})+,\d+$/;
 const EUROPEAN_THOUSANDS_SPACE_PATTERN = /^-?\d{1,3}(?: \d{3})+,\d+$/;
 const STANDARD_THOUSANDS_COMMA_PATTERN = /^-?\d{1,3}(?:,\d{3})+\.\d+$/;
+const INTEGER_THOUSANDS_DOT_PATTERN = /^-?\d{1,3}(?:\.\d{3})+$/;
+const INTEGER_THOUSANDS_SPACE_PATTERN = /^-?\d{1,3}(?: \d{3})+$/;
+const INTEGER_THOUSANDS_COMMA_PATTERN = /^-?\d{1,3}(?:,\d{3})+$/;
 const QUOTED_VALUE_PATTERN = /^["'](.*)["']$/;
 
 /**
@@ -52,6 +55,9 @@ export async function detectDecimalSeparator(
     let europeanThousandsDotMatches = 0;
     let europeanThousandsSpaceMatches = 0;
     let standardThousandsCommaMatches = 0;
+    let integerThousandsDotMatches = 0;
+    let integerThousandsSpaceMatches = 0;
+    let integerThousandsCommaMatches = 0;
 
     for (let i = 1; i < lines.length; i++) {
       const values = parseCSVLine(lines[i], delimiter);
@@ -73,11 +79,44 @@ export async function detectDecimalSeparator(
           if (STANDARD_THOUSANDS_COMMA_PATTERN.test(trimmed)) {
             standardThousandsCommaMatches++;
           }
+        } else if (INTEGER_THOUSANDS_DOT_PATTERN.test(trimmed)) {
+          integerThousandsDotMatches++;
+        } else if (INTEGER_THOUSANDS_SPACE_PATTERN.test(trimmed)) {
+          integerThousandsSpaceMatches++;
+        } else if (INTEGER_THOUSANDS_COMMA_PATTERN.test(trimmed)) {
+          integerThousandsCommaMatches++;
         }
       }
     }
 
     if (totalNumericValues === 0) {
+      const integerThousandsMatches =
+        integerThousandsDotMatches +
+        integerThousandsSpaceMatches +
+        integerThousandsCommaMatches;
+
+      if (integerThousandsMatches > 0) {
+        const integerThousandsCandidates: Array<{
+          separator: ',' | '.' | ' ';
+          count: number;
+        }> = [
+          { separator: '.', count: integerThousandsDotMatches },
+          { separator: ' ', count: integerThousandsSpaceMatches },
+          { separator: ',', count: integerThousandsCommaMatches }
+        ];
+        const dominantThousands = integerThousandsCandidates.sort(
+          (left, right) => right.count - left.count
+        )[0];
+
+        return {
+          separator: '.',
+          confidence: dominantThousands.count / integerThousandsMatches,
+          sampleSize: lines.length - 1,
+          delimiter,
+          thousandsSeparator: dominantThousands.separator
+        };
+      }
+
       return {
         separator: '.',
         confidence: 1,

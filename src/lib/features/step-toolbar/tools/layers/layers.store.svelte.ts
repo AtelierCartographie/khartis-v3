@@ -9,12 +9,14 @@ import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte'
 import {
   basemapLayersStore,
   BASEMAP_LAYER_ID,
+  getBasemapRenderGroup,
   type BasemapLayerConfig,
-  type BasemapLayerId
+  type BasemapLayerId,
+  type BasemapRenderGroup
 } from '$lib/features/map/stores/basemap-layers.store.svelte';
 import * as m from '$lib/paraglide/messages';
 import { BASEMAP_SUBLAYER_COLOR, VIZ_SUBLAYER_COLOR } from './layers.constants';
-import type { Layer, LayersState } from './layers.types';
+import type { Layer, LayerReorderScope, LayersState } from './layers.types';
 
 const DEFAULT_STATE: LayersState = {
   layers: []
@@ -32,7 +34,7 @@ type LayersActions = {
   removeLayer: (id: string) => void;
   toggleLayerVisibility: (id: string) => void;
   reorderLayers: (
-    type: 'visualization' | 'geographic',
+    scope: LayerReorderScope,
     fromIndex: number,
     toIndex: number
   ) => void;
@@ -79,13 +81,6 @@ function buildVisualizationSubLayerId(
   primitive: PrimitiveFilter
 ): string {
   return `${visualizationId}${VISUALIZATION_SUBLAYER_SEPARATOR}${primitive}`;
-}
-
-function buildBasemapSubLayerId(
-  visualizationId: string,
-  basemapLayerId: BasemapLayerId
-): string {
-  return `${visualizationId}${VISUALIZATION_SUBLAYER_SEPARATOR}basemap${VISUALIZATION_SUBLAYER_SEPARATOR}${basemapLayerId}`;
 }
 
 function getVisualizationPrimitiveName(primitive: PrimitiveFilter): string {
@@ -166,6 +161,10 @@ function isVisualizationParentLayer(layer: Layer): boolean {
   return isVisualizationLayer(layer) && !layer.isSubLayer;
 }
 
+function isGeographicParentLayer(layer: Layer): boolean {
+  return layer.type === 'geographic' && !layer.isSubLayer;
+}
+
 function getBasemapLayerOpacity(layer: BasemapLayerConfig): number {
   if (layer.id === 'terre') {
     return layer.fillOpacity;
@@ -177,12 +176,10 @@ function getBasemapLayerOpacity(layer: BasemapLayerConfig): number {
 }
 
 function buildLayers(): Layer[] {
-  const activeVisualizationIds = new Set(
-    visualizationStore.activeVisualizations.map((v) => v.id)
-  );
+  const basemapParentLayers = basemapLayersStore.layers.map((layer, order) => {
+    const renderGroup = getBasemapRenderGroup(layer.id);
 
-  if (visualizationStore.visualizations.length === 0) {
-    return basemapLayersStore.layers.map((layer, order) => ({
+    return {
       id: layer.id,
       name: getBasemapLayerName(layer.id),
       visible: layer.visible,
@@ -190,60 +187,60 @@ function buildLayers(): Layer[] {
       color: BASEMAP_SUBLAYER_COLOR,
       opacity: getBasemapLayerOpacity(layer),
       order,
-      basemapLayerId: layer.id
-    }));
-  }
-
-  return visualizationStore.visualizations.flatMap((viz, vizOrder): Layer[] => {
-    const primitiveFilters = viz.primitiveFilters ?? ALL_PRIMITIVE_FILTERS;
-
-    const parentLayer: Layer = {
-      id: viz.id,
-      name: viz.name,
-      visible: activeVisualizationIds.has(viz.id),
-      type: 'visualization',
-      color: getVisualizationColor(viz),
-      opacity: Math.round((viz.style.fillOpacity ?? 1) * 100),
-      order: vizOrder
+      basemapLayerId: layer.id,
+      basemapRenderGroup: renderGroup
     };
-
-    const vizPrimitiveOrder =
-      viz.primitiveOrder ?? VISUALIZATION_SUBLAYER_ORDER;
-    const vizSubLayers = vizPrimitiveOrder.map(
-      (primitive, i): Layer => ({
-        id: buildVisualizationSubLayerId(viz.id, primitive),
-        parentId: viz.id,
-        isSubLayer: true,
-        primitive,
-        name: getVisualizationPrimitiveName(primitive),
-        visible: primitiveFilters.includes(primitive),
-        type: 'visualization',
-        color: VIZ_SUBLAYER_COLOR,
-        opacity: getVisualizationPrimitiveOpacity(viz, primitive),
-        order: vizOrder * 100 + i
-      })
-    );
-
-    const basemapSubLayers = basemapLayersStore.layers.map(
-      (layer, i): Layer => ({
-        id: buildBasemapSubLayerId(viz.id, layer.id),
-        parentId: viz.id,
-        isSubLayer: true,
-        name: getBasemapLayerName(layer.id),
-        visible: layer.visible,
-        type: 'geographic',
-        color: BASEMAP_SUBLAYER_COLOR,
-        opacity:
-          'opacity' in layer && typeof layer.opacity === 'number'
-            ? layer.opacity
-            : 100,
-        order: vizOrder * 100 + vizSubLayers.length + i,
-        basemapLayerId: layer.id
-      })
-    );
-
-    return [parentLayer, ...vizSubLayers, ...basemapSubLayers];
   });
+  const basemapForegroundLayers = basemapParentLayers.filter(
+    (layer) => layer.basemapRenderGroup === 'foreground'
+  );
+  const basemapBackgroundLayers = basemapParentLayers.filter(
+    (layer) => layer.basemapRenderGroup === 'background'
+  );
+  const activeVisualizationIds = new Set(
+    visualizationStore.activeVisualizations.map((v) => v.id)
+  );
+
+  const visualizationLayers = visualizationStore.visualizations.flatMap(
+    (viz, vizOrder): Layer[] => {
+      const primitiveFilters = viz.primitiveFilters ?? ALL_PRIMITIVE_FILTERS;
+
+      const parentLayer: Layer = {
+        id: viz.id,
+        name: `${m.viz_tab_label()} (${vizOrder + 1})`,
+        visible: activeVisualizationIds.has(viz.id),
+        type: 'visualization',
+        color: getVisualizationColor(viz),
+        opacity: Math.round((viz.style.fillOpacity ?? 1) * 100),
+        order: vizOrder
+      };
+
+      const vizPrimitiveOrder =
+        viz.primitiveOrder ?? VISUALIZATION_SUBLAYER_ORDER;
+      const vizSubLayers = vizPrimitiveOrder.map(
+        (primitive, i): Layer => ({
+          id: buildVisualizationSubLayerId(viz.id, primitive),
+          parentId: viz.id,
+          isSubLayer: true,
+          primitive,
+          name: getVisualizationPrimitiveName(primitive),
+          visible: primitiveFilters.includes(primitive),
+          type: 'visualization',
+          color: VIZ_SUBLAYER_COLOR,
+          opacity: getVisualizationPrimitiveOpacity(viz, primitive),
+          order: vizOrder * 100 + i
+        })
+      );
+
+      return [parentLayer, ...vizSubLayers];
+    }
+  );
+
+  return [
+    ...basemapForegroundLayers,
+    ...visualizationLayers,
+    ...basemapBackgroundLayers
+  ];
 }
 
 const { state, actions } = createToolStore<LayersState, LayersActions>(
@@ -322,26 +319,38 @@ const { state, actions } = createToolStore<LayersState, LayersActions>(
         syncFromSources();
       },
       reorderLayers: (
-        type: 'visualization' | 'geographic',
+        scope: LayerReorderScope,
         fromIndex: number,
         toIndex: number
       ) => {
-        const typedLayers = s.layers
-          .filter((layer) =>
-            type === 'visualization'
-              ? isVisualizationParentLayer(layer)
-              : layer.type === type
-          )
-          .sort((a, b) => a.order - b.order);
+        const typedLayers = s.layers.filter((layer) => {
+          switch (scope) {
+            case 'visualization':
+              return isVisualizationParentLayer(layer);
+            case 'geographic-background':
+              return (
+                isGeographicParentLayer(layer) &&
+                layer.basemapRenderGroup === 'background'
+              );
+            case 'geographic-foreground':
+              return (
+                isGeographicParentLayer(layer) &&
+                layer.basemapRenderGroup === 'foreground'
+              );
+          }
+        });
 
         const reordered = reorderIds(typedLayers, fromIndex, toIndex);
 
-        if (type === 'visualization') {
+        if (scope === 'visualization') {
           visualizationStore.setVisualizationOrder(
             reordered.map((layer) => layer.id)
           );
         } else {
-          basemapLayersStore.setLayerOrder(
+          const renderGroup: BasemapRenderGroup =
+            scope === 'geographic-background' ? 'background' : 'foreground';
+          basemapLayersStore.setLayerRenderGroupOrder(
+            renderGroup,
             reordered.map(
               (layer) => (layer.basemapLayerId ?? layer.id) as BasemapLayerId
             )
@@ -367,14 +376,6 @@ const { state, actions } = createToolStore<LayersState, LayersActions>(
 
         if (vizPrimitives.length > 0) {
           visualizationStore.setPrimitiveFilterOrder(parentId, vizPrimitives);
-        }
-
-        const basemapIds = reordered
-          .filter((layer) => layer.basemapLayerId)
-          .map((layer) => layer.basemapLayerId as BasemapLayerId);
-
-        if (basemapIds.length > 0) {
-          basemapLayersStore.setLayerOrder(basemapIds);
         }
 
         syncFromSources();

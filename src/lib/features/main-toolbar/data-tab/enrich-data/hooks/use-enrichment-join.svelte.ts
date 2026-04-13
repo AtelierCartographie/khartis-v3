@@ -1,15 +1,19 @@
 import { JoinStatus } from '$lib/features/commons/constants/ui.constants';
 import { dataTabActions } from '$lib/features/commons/store/data-tab.store.svelte';
 import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+import { projectStore } from '$lib/features/commons/store/project.store.svelte';
 import {
   escapeIdentifier,
   escapeSqlString
 } from '$lib/features/commons/utils/sanitize.utils';
+import { sanitizePreparedGeoJSON } from '$lib/features/commons/utils/persisted-geojson.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { ColumnType, type DatasetResult } from '$lib/features/data-pipeline';
 import { Duck } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { SvelteMap } from 'svelte/reactivity';
+import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
+import type { JsonValue } from '$lib/types/data';
 import type { JoinStats } from '../../components';
 import { computeDatasetJoinStats } from '../../services/join-stats.service';
 import { canFinalizeJoin } from '../../services/join-validation';
@@ -57,6 +61,174 @@ export function useEnrichmentJoin(
   function getGeoTableName(): string | null {
     if (!selectedDataset) return null;
     return selectedDataset.tableName || null;
+  }
+
+  function buildStatisticsSnapshot(
+    columns: Awaited<ReturnType<typeof Duck.analyse>>
+  ): UploadedFile['statistics'] {
+    return Object.fromEntries(
+      columns.map((column) => [
+        column.name,
+        {
+          type: column.type_simple || 'text',
+          count: column.count ?? 0,
+          nullCount: column.nulls ?? 0,
+          unique: column.uniques ?? 0,
+          min: column.min,
+          max: column.max,
+          mean: typeof column.mean === 'number' ? column.mean : undefined
+        }
+      ])
+    );
+  }
+
+  function toSnapshotValue(value: unknown): JsonValue {
+    if (
+      value === null ||
+      value === undefined ||
+      typeof value === 'string' ||
+      typeof value === 'number' ||
+      typeof value === 'boolean'
+    ) {
+      return value ?? null;
+    }
+
+    if (typeof value === 'bigint') {
+      return Number.isSafeInteger(Number(value))
+        ? Number(value)
+        : String(value);
+    }
+
+    if (value instanceof Date) {
+      return value.toISOString();
+    }
+
+    if (Array.isArray(value)) {
+      return value.map((item) => toSnapshotValue(item));
+    }
+
+    if (typeof value === 'object') {
+      return Object.fromEntries(
+        Object.entries(value).map(([key, item]) => [key, toSnapshotValue(item)])
+      );
+    }
+
+    return String(value);
+  }
+
+  function toSnapshotRow(
+    row: Record<string, unknown>,
+    columnNames: string[]
+  ): Record<string, JsonValue> {
+    return Object.fromEntries(
+      columnNames.map((columnName) => [
+        columnName,
+        toSnapshotValue(row[columnName])
+      ])
+    );
+  }
+
+  async function buildTabularSnapshot(
+    tableName: string,
+    columnNames: string[]
+  ): Promise<Record<string, JsonValue>[]> {
+    if (columnNames.length === 0) {
+      return [];
+    }
+
+    const escapedTableName = escapeIdentifier(tableName);
+    const selectColumns = columnNames
+      .map((name) => `"${escapeIdentifier(name)}"`)
+      .join(', ');
+
+    const rows = (await Duck.query(
+      `SELECT ${selectColumns}
+       FROM "${escapedTableName}"`,
+      { format: 'array' }
+    )) as Record<string, unknown>[];
+
+    return rows.map((row) => toSnapshotRow(row, columnNames));
+  }
+
+  async function buildPreparedGeoJsonSnapshot(
+    tableName: string,
+    geometryColumnName: string,
+    propertyColumnNames: string[]
+  ): Promise<string> {
+    const escapedTableName = escapeIdentifier(tableName);
+    const escapedGeometryColumn = escapeIdentifier(geometryColumnName);
+    const propertySelect =
+      propertyColumnNames.length > 0
+        ? `${propertyColumnNames
+            .map((name) => `"${escapeIdentifier(name)}"`)
+            .join(', ')},`
+        : '';
+
+    const rows = (await Duck.query(
+      `SELECT ${propertySelect}
+              ST_AsGeoJSON("${escapedGeometryColumn}"::GEOMETRY) AS __khartis_geometry_json
+       FROM "${escapedTableName}"`,
+      { format: 'array' }
+    )) as Array<Record<string, unknown>>;
+
+    const serialized = JSON.stringify({
+      type: 'FeatureCollection',
+      features: rows.map((row) => {
+        const geometryJson = row.__khartis_geometry_json;
+        const properties = toSnapshotRow(row, propertyColumnNames);
+
+        return {
+          type: 'Feature',
+          geometry:
+            typeof geometryJson === 'string' ? JSON.parse(geometryJson) : null,
+          properties
+        };
+      })
+    });
+
+    return sanitizePreparedGeoJSON(serialized) ?? serialized;
+  }
+
+  async function persistEnrichedSourceSnapshot(
+    tableName: string,
+    columns: Awaited<ReturnType<typeof Duck.analyse>>
+  ): Promise<void> {
+    if (!selectedDataset?.sourceFileId) {
+      return;
+    }
+
+    const currentProject = projectStore.currentProject;
+    const sourceFile = currentProject?.data?.sourceFiles?.find(
+      (file) => file.id === selectedDataset.sourceFileId
+    );
+
+    if (!sourceFile) {
+      return;
+    }
+
+    const geometryColumnName =
+      columns.find((column) => column.type_simple === 'geometry')?.name ??
+      selectedDataset.geometry?.columnName;
+    const propertyColumnNames = columns
+      .filter((column) => column.name !== geometryColumnName)
+      .map((column) => column.name);
+
+    sourceFile.duckdbTableName = tableName;
+    sourceFile.statistics = buildStatisticsSnapshot(columns);
+    sourceFile.parsedData = await buildTabularSnapshot(
+      tableName,
+      propertyColumnNames
+    );
+
+    if (geometryColumnName) {
+      sourceFile.preparedGeoJSON = await buildPreparedGeoJsonSnapshot(
+        tableName,
+        geometryColumnName,
+        propertyColumnNames
+      );
+    }
+
+    await projectStore.saveCurrentProject();
   }
 
   async function computeEnrichmentJoinStats(): Promise<void> {
@@ -390,6 +562,7 @@ export function useEnrichmentJoin(
         }))
       });
       datasetsStore.updateDatasetRowCount(selectedDataset.id, newRowCount);
+      await persistEnrichedSourceSnapshot(enrichedTableName, newColumns);
 
       // Update the existing orchestrator dataset entry with the new enriched table name
       // (avoids creating a duplicate entry with the same sourceFileId)

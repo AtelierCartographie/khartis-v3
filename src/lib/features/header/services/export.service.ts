@@ -17,6 +17,7 @@ import { DATA_FORMAT, type DataExportFormat } from '../types';
 import { Duck } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
+import { parseGeoJsonGeometry } from '$lib/features/map/io/geometry-parser';
 import type { ProcessedDataset } from '$lib/features/data-pipeline/types';
 import {
   COLUMN_TYPE_GEOMETRY,
@@ -60,10 +61,14 @@ export async function exportProject(fileName: string): Promise<void> {
   logger.debug('Project exported', LogCategory.EXPORT, { fileName });
 }
 
-export async function exportMapAsSvg(fileName: string): Promise<void> {
+export async function exportMapAsSvg(
+  fileName: string,
+  width: number = 1920,
+  height: number = 1080
+): Promise<void> {
   validateMapExportPrerequisites();
 
-  const blob = await exportMapToSvg();
+  const blob = await exportMapToSvg({ width, height });
   const filename = generateExportFilename(fileName, 'svg');
 
   downloadFile(blob, filename);
@@ -133,8 +138,14 @@ function getDataFormatConfig(format: DataExportFormat): {
 
 async function fetchJoinedDatasetWithGeometry(
   dataset: ProcessedDataset,
-  joinedBasemapId: string
+  joinedBasemapId: string,
+  sourceTableName?: string
 ): Promise<ProcessedDataset> {
+  const datasetTableName = sourceTableName ?? dataset.duckdbTableName;
+  if (!datasetTableName) {
+    throw new Error('Missing DuckDB source table for joined export');
+  }
+
   const geometryTable =
     await basemapService.loadGeometryIntoDuckDB(joinedBasemapId);
 
@@ -149,9 +160,9 @@ async function fetchJoinedDatasetWithGeometry(
   const colList = geomColumns
     .map((c) => `"${escapeIdentifier(c.column_name)}"`)
     .join(', ');
-  const escapedDataset = escapeIdentifier(dataset.duckdbTableName!);
+  const escapedDataset = escapeIdentifier(datasetTableName);
   const escapedGeometry = escapeIdentifier(geometryTable);
-  const viewName = `export_joined_${dataset.duckdbTableName!.replace(/[^a-zA-Z0-9_]/g, '_')}`;
+  const viewName = `export_joined_${datasetTableName.replace(/[^a-zA-Z0-9_]/g, '_')}`;
 
   await Duck.query(`
     CREATE OR REPLACE TEMP VIEW "${viewName}" AS
@@ -160,7 +171,7 @@ async function fetchJoinedDatasetWithGeometry(
       ON ${colList}
       INTO NAME _attr_col VALUE _attr_val
     )
-    SELECT d.*, ST_AsGeoJSON(gu.geom) AS geom
+    SELECT d.*, gu.geom AS geom
     FROM "${escapedDataset}" d
     INNER JOIN (
       SELECT DISTINCT _attr_val, geom
@@ -186,12 +197,11 @@ async function fetchJoinedDatasetWithGeometry(
       newRow[colName] = row[colName];
     }
     const geomValue = newRow[INTERNAL_COLUMN.GEOM];
-    if (typeof geomValue === 'string') {
-      try {
-        newRow[INTERNAL_COLUMN.GEOM] = JSON.parse(geomValue);
-      } catch {
-        newRow[INTERNAL_COLUMN.GEOM] = null;
-      }
+    const parsedGeometry = parseGeoJsonGeometry(geomValue);
+    if (parsedGeometry) {
+      newRow[INTERNAL_COLUMN.GEOM] = parsedGeometry;
+    } else if (geomValue != null) {
+      newRow[INTERNAL_COLUMN.GEOM] = null;
     }
     return newRow;
   });
@@ -230,7 +240,8 @@ async function fetchDatasetsWithGeometry(
           try {
             const joinedDataset = await fetchJoinedDatasetWithGeometry(
               dataset,
-              duckDataset.joinedBasemap
+              duckDataset.joinedBasemap,
+              duckDataset.tableName
             );
             results.push(joinedDataset);
           } catch (error) {
@@ -262,8 +273,7 @@ async function fetchDatasetsWithGeometry(
     }
 
     try {
-      const query = `SELECT * REPLACE (ST_AsGeoJSON("${geomColumn.name}") AS "${geomColumn.name}")
-         FROM "${dataset.duckdbTableName}"`;
+      const query = `SELECT * FROM "${dataset.duckdbTableName}"`;
 
       const rows = (await Duck.query(query, { format: 'array' })) as Record<
         string,
@@ -277,12 +287,11 @@ async function fetchDatasetsWithGeometry(
           newRow[colName] = row[colName];
         }
         const geomValue = newRow[geomColumn.name];
-        if (typeof geomValue === 'string') {
-          try {
-            newRow[geomColumn.name] = JSON.parse(geomValue);
-          } catch {
-            newRow[geomColumn.name] = null;
-          }
+        const parsedGeometry = parseGeoJsonGeometry(geomValue);
+        if (parsedGeometry) {
+          newRow[geomColumn.name] = parsedGeometry;
+        } else if (geomValue != null) {
+          newRow[geomColumn.name] = null;
         }
         return newRow;
       });

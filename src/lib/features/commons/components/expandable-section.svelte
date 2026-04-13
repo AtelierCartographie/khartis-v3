@@ -100,6 +100,8 @@
   }
 
   function handleToggleChange(toggled: boolean): void {
+    expanded = toggled;
+    onToggle?.(expanded);
     onToggleChange?.(toggled);
   }
 </script>

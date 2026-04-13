@@ -1,5 +1,6 @@
 import { estimateProjectStorageSize } from '$lib/features/commons/utils/size-estimation.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import type { SerializedProject } from '$lib/types/serialization.types';
 import { PROJECT_CONST } from '../constants';
 import type { KhartisProject, SavedProjectMetadata } from '../types';
 import { ProjectStorageKey } from '../types';
@@ -9,6 +10,21 @@ import { migrateIfNeeded } from './schema-migration';
 
 let db: IDBDatabase | null = null;
 let localforageMigrated = false;
+
+function isSerializedProject(value: unknown): value is SerializedProject {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  const manifest = candidate.manifest;
+
+  return (
+    typeof candidate.id === 'string' &&
+    Boolean(manifest) &&
+    typeof manifest === 'object'
+  );
+}
 
 export async function openDatabase(): Promise<IDBDatabase> {
   if (db) return db;
@@ -136,6 +152,26 @@ export async function saveProject(project: KhartisProject): Promise<void> {
 }
 
 export async function loadProject(id: string): Promise<KhartisProject | null> {
+  const serializedProject = await loadSerializedProject(id);
+  if (!serializedProject) {
+    return null;
+  }
+
+  try {
+    const project = await deserialize(serializedProject);
+    return project;
+  } catch (error) {
+    logger.error('Failed to deserialize project', LogCategory.PERSISTENCE, {
+      id,
+      error
+    });
+    return null;
+  }
+}
+
+export async function loadSerializedProject(
+  id: string
+): Promise<SerializedProject | null> {
   const database = await ensureDb();
 
   return new Promise((resolve, reject) => {
@@ -156,15 +192,16 @@ export async function loadProject(id: string): Promise<KhartisProject | null> {
         const migrated = migrateIfNeeded(
           request.result as Record<string, unknown>
         );
-        const project = await deserialize(
-          migrated as unknown as Parameters<typeof deserialize>[0]
-        );
-        resolve(project);
+        resolve(isSerializedProject(migrated) ? migrated : null);
       } catch (error) {
-        logger.error('Failed to deserialize project', LogCategory.PERSISTENCE, {
-          id,
-          error
-        });
+        logger.error(
+          'Failed to prepare serialized project from persistence',
+          LogCategory.PERSISTENCE,
+          {
+            id,
+            error
+          }
+        );
         resolve(null);
       }
     };
@@ -173,6 +210,14 @@ export async function loadProject(id: string): Promise<KhartisProject | null> {
   });
 }
 
+export const projectRepository = {
+  initialize: openDatabase,
+  save: saveProject,
+  load: loadProject,
+  loadSerialized: loadSerializedProject,
+  remove: removeProject,
+  listMetadata
+};
 export async function removeProject(id: string): Promise<void> {
   const database = await ensureDb();
 
@@ -249,11 +294,3 @@ async function removeFromMetadata(id: string): Promise<void> {
 function calculateProjectSize(project: KhartisProject): number {
   return estimateProjectStorageSize(project);
 }
-
-export const projectRepository = {
-  initialize: openDatabase,
-  save: saveProject,
-  load: loadProject,
-  remove: removeProject,
-  listMetadata
-};

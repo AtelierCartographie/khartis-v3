@@ -154,9 +154,9 @@
     annotationsActions.applyStyle({ rotation: e.detail });
   }
 
-  function toggleDotted(on: boolean) {
+  function toggleDashed(on: boolean) {
     annotationsActions.applyStyle({
-      strokeStyle: on ? 'dotted' : 'solid'
+      strokeStyle: on ? 'dashed' : 'solid'
     });
   }
 
@@ -256,13 +256,13 @@
         <div class="toggle-row">
           <span class="toggle-label">{m.dashed()}</span>
           <Switch
-            toggled={effectiveStyle.strokeStyle === 'dotted'}
+            toggled={effectiveStyle.strokeStyle === 'dashed'}
             labelText={m.dashed()}
             hideLabel
             labelA={m.no()}
             labelB={m.yes()}
             showStateLabel
-            onchange={toggleDotted}
+            onchange={toggleDashed}
           />
         </div>
       </div>

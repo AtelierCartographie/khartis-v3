@@ -22,14 +22,14 @@
   }
 
   let {
-    fillColor = '#f5e6d3',
+    fillColor = '#ffffff',
     fillShadow = false,
     fillOpacity = 100,
-    strokeColor = '#8d8d8d',
+    strokeColor = '#a8a8a8',
     strokeDotted = false,
     strokeDottedPattern = BasemapDottedPattern.DOTS,
-    strokeThickness = 1,
-    strokeOpacity = 100,
+    strokeThickness = 0.5,
+    strokeOpacity = 40,
     onchange
   }: Props = $props();
 
