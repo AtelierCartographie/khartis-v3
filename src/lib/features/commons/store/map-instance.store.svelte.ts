@@ -349,6 +349,18 @@ function createMapInstanceStore() {
     lastSerializedViewState = pendingRestore;
   }
 
+  function clearPersistedViewState(): void {
+    pendingRestore = null;
+    lastSerializedViewState = null;
+    state.deckViewState = { ...DEFAULT_DECK_VIEW_STATE };
+
+    if (state.deckInstance && state.isMapLoaded && !state.map) {
+      applyDeckViewState();
+    }
+
+    updateZoomFromMap();
+  }
+
   function reset() {
     state.map = null;
     state.deckOverlay = null;
@@ -413,6 +425,7 @@ function createMapInstanceStore() {
     resetZoom,
     fitToOrthographicBounds,
     restoreFromSerialized,
+    clearPersistedViewState,
     reset
   };
 }
@@ -430,8 +443,6 @@ persistenceRegistry.register({
     mapInstanceStore.restoreFromSerialized(
       data as { zoom?: number; target?: [number, number, number] }
     ),
-  reset: () => {
-    /* handled by mapInstanceStore.reset() */
-  },
+  reset: () => mapInstanceStore.clearPersistedViewState(),
   priority: 'debounced'
 });

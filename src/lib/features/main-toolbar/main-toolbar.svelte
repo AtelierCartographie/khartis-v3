@@ -30,6 +30,10 @@
     globalActions.setToolbarState(state);
   }
 
+  const hasToolbarPanel = $derived(
+    globalState.selectedStep !== ToolbarStep.Styling
+  );
+
   const DATA_STEP_SECTION_IDS: Record<string, string[]> = {
     geo: ['data-control-step', 'enrich-data-step'],
     'tabular-gps': [
@@ -57,6 +61,27 @@
         toolbarContent.scrollTop = 0;
       }
     }
+  }
+
+  function handleToolbarToggle(): void {
+    if (!hasToolbarPanel) {
+      return;
+    }
+
+    if (globalState.selectedStep === ToolbarStep.Visualizations) {
+      setToolbar(
+        globalState.toolbarState === ToolbarState.Collapsed
+          ? ToolbarState.Compact
+          : ToolbarState.Collapsed
+      );
+      return;
+    }
+
+    setToolbar(
+      globalState.toolbarState === ToolbarState.Full
+        ? ToolbarState.Compact
+        : ToolbarState.Full
+    );
   }
 
   $effect(() => {
@@ -102,32 +127,17 @@
   })}
 >
   <header class="flex sticky z-1000 border-b main-toolbar-header">
-    <IconButton
-      kind="ghost"
-      iconDescription={globalState.toolbarState === ToolbarState.Full
-        ? m.toolbar_compact()
-        : m.toolbar_expand()}
-      icon={OpenPanelFilledRight}
-      on:click={() => {
-        const isVizStep =
-          globalState.selectedStep === ToolbarStep.Visualizations;
-        if (isVizStep) {
-          setToolbar(
-            globalState.toolbarState === ToolbarState.Collapsed
-              ? ToolbarState.Compact
-              : ToolbarState.Collapsed
-          );
-        } else {
-          setToolbar(
-            globalState.toolbarState === ToolbarState.Full
-              ? ToolbarState.Compact
-              : ToolbarState.Full
-          );
-        }
-      }}
-    />
-
-    <ToolbarTabs />
+    {#if hasToolbarPanel}
+      <IconButton
+        kind="ghost"
+        iconDescription={globalState.toolbarState === ToolbarState.Full
+          ? m.toolbar_compact()
+          : m.toolbar_expand()}
+        icon={OpenPanelFilledRight}
+        on:click={handleToolbarToggle}
+      />
+      <ToolbarTabs />
+    {/if}
   </header>
 
   <article

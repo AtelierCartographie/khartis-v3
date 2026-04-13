@@ -269,4 +269,78 @@ describe('vizSuggester', () => {
     ).toBe(true);
     expect(suggestions[0]?.columns).toContain('valeur_test');
   });
+
+  it('orders polygon suggestions by descending score before family preference', () => {
+    const suggestions = vizSuggester.suggestVisualizations(
+      [
+        makeColumn('country_name', 'string', {
+          count: 81,
+          uniques: 81,
+          nulls: 0
+        }),
+        makeColumn('absolute_value', 'number', {
+          count: 81,
+          uniques: 81,
+          nulls: 0,
+          min: 1,
+          max: 9000,
+          share_integers: 1,
+          share_floats: 0,
+          share_rank_interval: 0.52,
+          extent_magnitude: 4
+        }),
+        makeColumn('relative_value', 'number', {
+          count: 81,
+          uniques: 81,
+          nulls: 0,
+          min: 0.01,
+          max: 21.33,
+          share_integers: 0,
+          share_floats: 1,
+          share_rank_interval: 0,
+          extent_magnitude: 1.4
+        })
+      ],
+      'Polygon',
+      { maxSuggestions: 6 }
+    );
+
+    const highestScore = Math.max(
+      ...suggestions.map((suggestion) => suggestion.score ?? 0)
+    );
+
+    expect(suggestions[0]?.score).toBe(highestScore);
+    expect(suggestions[0]?.id).toBe('symbols_proportional');
+  });
+
+  it('orders two-column line suggestions to match the expected visual channels', () => {
+    const suggestions = vizSuggester.suggestVisualizations(
+      [
+        makeColumn('li_type', 'string', {
+          count: 24,
+          uniques: 2,
+          nulls: 0
+        }),
+        makeColumn('volume', 'number', {
+          count: 24,
+          uniques: 24,
+          nulls: 0,
+          min: 100,
+          max: 2400,
+          share_integers: 1,
+          share_floats: 0,
+          share_rank_interval: 0.6,
+          extent_magnitude: 2.3
+        })
+      ],
+      'LineString',
+      { maxSuggestions: 8 }
+    );
+
+    const mixedSuggestion = suggestions.find(
+      (suggestion) => suggestion.id === 'lines_proportional_colorful_QL'
+    );
+
+    expect(mixedSuggestion?.columns).toEqual(['volume', 'li_type']);
+  });
 });

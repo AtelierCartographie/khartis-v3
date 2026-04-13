@@ -4,6 +4,8 @@
   import { OverflowMenu, OverflowMenuItem } from 'carbon-components-svelte';
   import { dragHandle } from 'svelte-dnd-action';
   import {
+    ArrowDown,
+    ArrowUp,
     ChevronDown,
     ChevronUp,
     Draggable,
@@ -20,6 +22,10 @@
     onToggleCollapse?: () => void;
     onToggleVisibility: (layerId: string) => void;
     onOpenSettings: (layerId: string) => void;
+    canMoveUp?: boolean;
+    canMoveDown?: boolean;
+    onMoveUp?: () => void;
+    onMoveDown?: () => void;
     onRenameLayer?: (layerId: string) => void;
     onDuplicateLayer?: (layerId: string) => void;
     onDeleteLayer?: (layerId: string) => void;
@@ -32,6 +38,10 @@
     onToggleCollapse,
     onToggleVisibility,
     onOpenSettings,
+    canMoveUp = false,
+    canMoveDown = false,
+    onMoveUp,
+    onMoveDown,
     onRenameLayer,
     onDuplicateLayer,
     onDeleteLayer
@@ -57,6 +67,22 @@
       <span class="sublayer-name">{layer.name}</span>
     </div>
     <div class="sublayer-actions">
+      <IconButton
+        kind="ghost"
+        size="small"
+        icon={ArrowUp}
+        iconDescription={m.layers_move_up()}
+        disabled={!canMoveUp}
+        onclick={() => onMoveUp?.()}
+      />
+      <IconButton
+        kind="ghost"
+        size="small"
+        icon={ArrowDown}
+        iconDescription={m.layers_move_down()}
+        disabled={!canMoveDown}
+        onclick={() => onMoveDown?.()}
+      />
       <IconButton
         kind="ghost"
         size="small"
@@ -93,6 +119,22 @@
     {/if}
     <span class="layer-title">{layer.name}</span>
     <div class="layer-actions">
+      <IconButton
+        kind="ghost"
+        size="small"
+        icon={ArrowUp}
+        iconDescription={m.layers_move_up()}
+        disabled={!canMoveUp}
+        onclick={() => onMoveUp?.()}
+      />
+      <IconButton
+        kind="ghost"
+        size="small"
+        icon={ArrowDown}
+        iconDescription={m.layers_move_down()}
+        disabled={!canMoveDown}
+        onclick={() => onMoveDown?.()}
+      />
       <IconButton
         kind="ghost"
         size="small"

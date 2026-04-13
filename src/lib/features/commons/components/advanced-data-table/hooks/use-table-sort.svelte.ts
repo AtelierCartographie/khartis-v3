@@ -8,6 +8,7 @@ export interface UseTableSortReturn {
   sortColumn: string | null;
   sortOrder: 'ASC' | 'DESC' | null;
   sortTable: (column: string, order: 'ASC' | 'DESC') => void;
+  clearSort: () => void;
   toggleSort: (column: string) => void;
 }
 
@@ -21,6 +22,12 @@ export function useTableSort(props?: UseTableSortProps): UseTableSortReturn {
     sortColumn = column;
     sortOrder = order;
     props?.onSortChange?.(column, order);
+  }
+
+  function clearSort(): void {
+    sortColumn = null;
+    sortOrder = null;
+    props?.onSortChange?.(null, null);
   }
 
   function toggleSort(column: string): void {
@@ -49,6 +56,7 @@ export function useTableSort(props?: UseTableSortProps): UseTableSortReturn {
       return sortOrder;
     },
     sortTable,
+    clearSort,
     toggleSort
   };
 }

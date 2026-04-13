@@ -1,14 +1,11 @@
 import { MIME } from '$lib/features/commons/constants';
 import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
-import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
 import {
   createUploadedFile,
   DataSourceType,
   FileType
 } from '$lib/features/commons/utils/file-import.utils';
-import { GeoColumnDetector } from '$lib/features/commons/utils/geo-detector.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import { Duck } from '$lib/features/duckdb';
 import { createArrowTableWithMetadata } from '$lib/features/duckdb/orchestrator/arrow-ops';
 import * as m from '$lib/paraglide/messages';
@@ -16,8 +13,10 @@ import { isGeospatialFile } from '../constants';
 import { detectFileFormat, generateTableName } from '../core/format-detector';
 import { extractGeoArrowMetadata } from '../io/geoarrow-metadata';
 import { buildDatasetFromDuckTable } from '../operations/analysis';
+import { normalizeFormattedNumericColumns } from '../operations/tabular-numeric-normalization';
 import { getProcessor } from './processor-registry';
 import { registerAllProcessors } from './register-processors';
+import { applyTabularGeoDetection } from './tabular-geo-detection';
 import type {
   CsvImportOptions,
   DatasetResult,
@@ -38,51 +37,7 @@ export interface ProcessFileOptions {
   rawDataset?: RawDataset;
   companionFiles?: File[];
 }
-
-const GEO_DETECTION_SAMPLE_LIMIT = 200;
 const RAW_FILE_PROCESSOR_TYPES = new Set<FileType>([FileType.GPX]);
-
-function applyGeoDetection(
-  dataset: DatasetResult,
-  geoDetection?: GeoDetectionResult
-): void {
-  if (!geoDetection) return;
-
-  dataset.geoDetection = geoDetection;
-  dataset.analysis = {
-    columns: dataset.analysis?.columns ?? dataset.columns,
-    hasGeoData:
-      geoDetection.hasGeoColumns ?? dataset.analysis?.hasGeoData ?? false,
-    geoColumns: geoDetection.geoColumns,
-    rowCount: dataset.rowCount,
-    warnings: [...(dataset.analysis?.warnings ?? []), ...geoDetection.warnings]
-  };
-}
-
-async function detectGeoColumnsFromTable(
-  tableName: string,
-  columns: string[]
-): Promise<GeoDetectionResult | undefined> {
-  if (columns.length === 0) return undefined;
-
-  const escapedTable = escapeIdentifier(tableName);
-  const escapedColumns = columns
-    .map((column) => `"${escapeIdentifier(column)}"`)
-    .join(', ');
-
-  const sampleRows = (await Duck.query(
-    `SELECT ${escapedColumns} FROM "${escapedTable}" LIMIT ${GEO_DETECTION_SAMPLE_LIMIT}`,
-    { format: 'array' }
-  )) as Array<Record<string, unknown>>;
-
-  if (!sampleRows.length) return undefined;
-
-  const matrix = sampleRows.map((row) => columns.map((column) => row[column]));
-
-  return GeoColumnDetector.detectGeoColumns(columns, matrix, {
-    sampleSize: Math.min(GEO_DETECTION_SAMPLE_LIMIT, matrix.length)
-  });
-}
 
 function createProcessorFilePayload(
   file: File,
@@ -233,31 +188,7 @@ export async function processFileInternal(
   }
 
   if (!isGeoFile) {
-    try {
-      // Pre-filter columns to likely geo candidates — avoids querying all 100+ columns
-      // when only a few could be lat/lon/code/name. Geo detector checks column names
-      // against patterns (lat, lon, coord, iso, code, country, city, name, etc.)
-      const GEO_NAME_HINT =
-        /lat|lon|lng|coord|geo|point|location|wkt|iso|code|country|region|dept|commune|province|state|city|name|admin|id/i;
-      const geoColumns = dataset.columns
-        .filter((c) => GEO_NAME_HINT.test(c.name) || c.type === 'text')
-        .map((c) => c.name);
-      // If no likely candidates, still try all columns (fallback for unusual naming)
-      const columnsToCheck =
-        geoColumns.length > 0 ? geoColumns : dataset.columns.map((c) => c.name);
-
-      const geoDetection = await detectGeoColumnsFromTable(
-        dataset.tableName,
-        columnsToCheck
-      );
-      applyGeoDetection(dataset, geoDetection);
-    } catch (error) {
-      logger.warn(
-        'Failed to compute geo detection for tabular dataset',
-        LogCategory.DATA,
-        { tableName: dataset.tableName, error }
-      );
-    }
+    await applyTabularGeoDetection(dataset);
   }
 
   logger.success('DuckDB dataset built', LogCategory.DATA, {
@@ -350,6 +281,8 @@ async function readTabularFile(
     delimiter: detection.delimiter,
     thousands_separator: detection.thousandsSeparator
   });
+
+  await normalizeFormattedNumericColumns(tableName, Duck);
 
   return {
     header: headerDetection.hasHeader,

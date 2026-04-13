@@ -146,7 +146,15 @@ export function useColumnOperations(
   function getAffectedVisualizations(
     columnName: string
   ): VisualizationConfig[] {
-    return visualizationStore.getVisualizationsUsingColumn(columnName);
+    const datasetId = getValue(props.datasetId);
+    if (!datasetId) {
+      return [];
+    }
+
+    return visualizationStore.getVisualizationsUsingColumn(
+      datasetId,
+      columnName
+    );
   }
 
   return {

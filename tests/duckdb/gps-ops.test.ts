@@ -341,6 +341,23 @@ describe('detectGPSColumns', () => {
     });
   });
 
+  it('detects gcpnt_* coordinate columns from header heuristics alone', () => {
+    const columns: AnalysisResult[] = [
+      createAnalysisResult('gcpnt_lat'),
+      createAnalysisResult('gcpnt_lon'),
+      createAnalysisResult('site_name', {
+        type_simple: DuckDBSimplifiedType.STRING
+      })
+    ];
+
+    const result = detectGPSColumns(columns);
+
+    expect(result).toEqual({
+      lat: 'gcpnt_lat',
+      lon: 'gcpnt_lon'
+    });
+  });
+
   it('returns null when no GPS columns are found', () => {
     const columns: AnalysisResult[] = [
       createAnalysisResult('country'),

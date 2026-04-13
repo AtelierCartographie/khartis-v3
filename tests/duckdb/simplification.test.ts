@@ -4,7 +4,8 @@ import { simplification_macros } from '$lib/features/duckdb/macros/simplificatio
 const mocks = vi.hoisted(() => ({
   queryMock: vi.fn(),
   loggerInfoMock: vi.fn(),
-  loggerSuccessMock: vi.fn()
+  loggerSuccessMock: vi.fn(),
+  loggerWarnMock: vi.fn()
 }));
 
 vi.mock('$lib/features/commons/utils/logger', () => ({
@@ -15,7 +16,7 @@ vi.mock('$lib/features/commons/utils/logger', () => ({
     info: mocks.loggerInfoMock,
     success: mocks.loggerSuccessMock,
     debug: vi.fn(),
-    warn: vi.fn(),
+    warn: mocks.loggerWarnMock,
     error: vi.fn()
   }
 }));
@@ -132,6 +133,50 @@ describe('simplification operations', () => {
       expect.stringContaining(
         "FROM simplify_and_clean('roads', 'geometry', 0.5)"
       )
+    );
+  });
+
+  it('falls back to feature simplification when topology-preserving simplification fails', async () => {
+    mocks.queryMock
+      .mockResolvedValueOnce([{ total_vertices: 100 }])
+      .mockRejectedValueOnce(
+        new Error('TopologyException: side location conflict')
+      )
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce([{ total_vertices: 80 }])
+      .mockResolvedValueOnce(undefined);
+    const Duck = createDuck();
+
+    const metrics = await simplifyGeometryTable(Duck, 'communes', 0.2, {
+      inputTableName: 'communes__raw',
+      targetTableName: 'communes'
+    });
+
+    expect(metrics.originalVertices).toBe(100);
+    expect(metrics.simplifiedVertices).toBe(80);
+    expect(metrics.reductionPercentage).toBe(20);
+    expect(mocks.queryMock).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining(
+        "FROM simplify_and_clean('communes__raw', 'geom', 0.2)"
+      )
+    );
+    expect(mocks.queryMock).toHaveBeenNthCalledWith(
+      3,
+      expect.stringContaining('CREATE OR REPLACE TABLE "communes"')
+    );
+    expect(mocks.queryMock).toHaveBeenNthCalledWith(
+      3,
+      expect.stringContaining('ST_Simplify("geom", 0.2)')
+    );
+    expect(mocks.loggerWarnMock).toHaveBeenCalledWith(
+      'Topology-preserving simplification failed, falling back to feature simplification',
+      'DUCKDB',
+      expect.objectContaining({
+        sourceTable: 'communes',
+        inputTableName: 'communes__raw',
+        targetTable: 'communes'
+      })
     );
   });
 });

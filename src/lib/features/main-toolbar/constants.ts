@@ -36,7 +36,8 @@ export enum StrokeMode {
 export enum ShapeType {
   POINT = 'point',
   SQUARE = 'square',
-  TRIANGLE = 'triangle'
+  TRIANGLE = 'triangle',
+  CROSS = 'cross'
 }
 
 export enum MissingDataShape {

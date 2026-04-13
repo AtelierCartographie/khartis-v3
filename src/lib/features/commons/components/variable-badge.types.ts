@@ -3,6 +3,7 @@ export type VariableBadgeType =
   | 'geo'
   | 'geo-ref'
   | 'numeric'
+  | 'boolean'
   | 'string'
   | 'date';
 
@@ -40,6 +41,11 @@ export const VARIABLE_BADGE_STYLES: Record<
     color: '#6929c4',
     bgColor: '#e8daff',
     borderColor: '#be95ff'
+  },
+  boolean: {
+    color: '#004144',
+    bgColor: '#a7f0ba',
+    borderColor: '#42be65'
   },
   string: {
     color: '#9f1853',

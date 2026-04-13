@@ -144,10 +144,10 @@ describe('orthographic reference selection', () => {
         crs: 'EPSG:4326'
       }
     };
-    const tableBounds = [
+    const tableBounds: [[number, number], [number, number]] = [
       [3.02, 43.36],
       [3.94, 43.89]
-    ] as const;
+    ];
 
     expect(resolveOrthographicDatasetBounds(dataset, tableBounds)).toEqual(
       tableBounds

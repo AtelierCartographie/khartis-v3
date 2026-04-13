@@ -258,6 +258,10 @@ function createGlobalStore() {
   }
 
   function setToolbarState(nextState: ToolbarState): void {
+    if (state.selectedStep === ToolbarStep.Styling) {
+      return;
+    }
+
     state.toolbarState = nextState;
     syncToolbarStateToStorage(nextState);
     notifyPersistence();

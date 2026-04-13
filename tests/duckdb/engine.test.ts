@@ -171,4 +171,23 @@ describe('duckdb engine', () => {
       executedSql.some((sql) => sql.includes('duckdb_coordinate_systems()'))
     ).toBe(true);
   });
+
+  it('keeps browser initialization on the documented non-pthread bundles with a single worker thread', async () => {
+    selectBundleMock.mockResolvedValue({
+      mainModule: 'eh-module-url',
+      mainWorker: 'eh-worker-url',
+      pthreadWorker: null
+    });
+
+    const engine = await import('$lib/features/duckdb/core/engine');
+
+    await engine.initEngine();
+
+    expect(engine.getContext().threadsSupported).toBe(false);
+    expect(openMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        maximumThreads: 1
+      })
+    );
+  });
 });

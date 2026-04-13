@@ -3,11 +3,8 @@ import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { resolveStaticAssetUrl } from '$lib/features/commons/utils/static-asset-url';
 import type { DuckDBBundles } from '@duckdb/duckdb-wasm';
 import * as duckdb from '@duckdb/duckdb-wasm';
-import coi_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-coi.worker.js?url';
-import coi_pthread_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-coi.pthread.worker.js?url';
 import eh_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url';
 import mvp_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url';
-import duckdb_wasm_coi from '@duckdb/duckdb-wasm/dist/duckdb-coi.wasm?url';
 import duckdb_wasm_eh from '@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url';
 import duckdb_wasm from '@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url';
 import { DUCK_CONST, EXTENSIONS } from '../constants';
@@ -91,17 +88,6 @@ async function configureRuntimeSettings(): Promise<void> {
     `PRAGMA temp_directory='/tmp/duckdb';`,
     `PRAGMA max_temp_directory_size='5GB';`
   ];
-
-  if (threadsSupported) {
-    const desiredThreads =
-      typeof navigator !== 'undefined' && navigator.hardwareConcurrency
-        ? Math.max(1, Math.min(navigator.hardwareConcurrency, 8))
-        : 4;
-    pragmas.unshift(`PRAGMA threads=${desiredThreads};`);
-    logger.debug('Configuring DuckDB threads', LogCategory.DUCKDB, {
-      desiredThreads
-    });
-  }
 
   await executeQuery(connection, pragmas.join('\n'), {
     format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
@@ -228,26 +214,32 @@ export async function initEngine(): Promise<void> {
   initPromise = (async () => {
     try {
       const bundleStart = performance.now();
-      const MANUAL_BUNDLES: DuckDBBundles = {
+      const manualBundles: DuckDBBundles = {
         mvp: { mainModule: duckdb_wasm, mainWorker: mvp_worker },
-        eh: { mainModule: duckdb_wasm_eh, mainWorker: eh_worker },
-        coi: {
-          mainModule: duckdb_wasm_coi,
-          mainWorker: coi_worker,
-          pthreadWorker: coi_pthread_worker
-        }
+        eh: { mainModule: duckdb_wasm_eh, mainWorker: eh_worker }
       };
-      const bundle = await duckdb.selectBundle(MANUAL_BUNDLES);
-      bundleVariant = bundle.pthreadWorker
-        ? 'eh'
-        : bundle.mainModule === duckdb_wasm_eh ||
-            bundle.mainWorker === eh_worker
-          ? 'eh'
-          : 'mvp';
-      threadsSupported = Boolean(bundle.pthreadWorker);
+      const bundle = await duckdb.selectBundle(manualBundles);
+      if (
+        bundle.mainModule === duckdb_wasm_eh ||
+        bundle.mainWorker === eh_worker
+      ) {
+        bundleVariant = 'eh';
+      } else {
+        bundleVariant = 'mvp';
+      }
+
+      // Keep the documented browser bundles for the DuckDB core itself. The
+      // page now runs in a cross-origin-isolated document so browser worker
+      // paths used by spatial readers can initialize, but the core stays on
+      // the extension-compatible eh/mvp bundles.
+      threadsSupported = false;
       logger.debug('DuckDB bundle selected', LogCategory.DUCKDB, {
         bundleVariant,
         threadsSupported,
+        crossOriginIsolated:
+          typeof crossOriginIsolated !== 'undefined'
+            ? crossOriginIsolated
+            : false,
         durationMs: (performance.now() - bundleStart).toFixed(2)
       });
 
@@ -259,6 +251,7 @@ export async function initEngine(): Promise<void> {
       await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
 
       await db.open({
+        maximumThreads: 1,
         filesystem: { allowFullHTTPReads: true, reliableHeadRequests: true },
         query: { castBigIntToDouble: false }
       });

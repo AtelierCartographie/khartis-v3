@@ -5,10 +5,36 @@ import {
   installRandomUUIDPolyfill
 } from '$lib/features/commons/utils/uuid.utils';
 
+type CryptoApi = NonNullable<Parameters<typeof generateId>[0]>;
+
+function createGetRandomValuesMock(
+  fill: (bytes: Uint8Array) => void
+): CryptoApi['getRandomValues'] & ReturnType<typeof vi.fn> {
+  const spy = vi.fn((array: ArrayBufferView) => {
+    const bytes = new Uint8Array(
+      array.buffer,
+      array.byteOffset,
+      array.byteLength
+    );
+    fill(bytes);
+  });
+
+  const getRandomValues: CryptoApi['getRandomValues'] = <
+    T extends ArrayBufferView
+  >(
+    array: T
+  ): T => {
+    spy(array);
+    return array;
+  };
+
+  return Object.assign(getRandomValues, spy);
+}
+
 describe('uuid.utils', () => {
   it('uses native randomUUID when available', () => {
-    const cryptoApi = {
-      getRandomValues: vi.fn(),
+    const cryptoApi: CryptoApi = {
+      getRandomValues: createGetRandomValuesMock(() => {}),
       randomUUID: vi.fn().mockReturnValue('native-id')
     };
 
@@ -18,13 +44,12 @@ describe('uuid.utils', () => {
   });
 
   it('builds an RFC4122 v4 id from getRandomValues when randomUUID is unavailable', () => {
-    const cryptoApi = {
-      getRandomValues: vi.fn((bytes: Uint8Array) => {
+    const cryptoApi: CryptoApi = {
+      getRandomValues: createGetRandomValuesMock((bytes) => {
         bytes.set([
           0x10, 0x32, 0x54, 0x76, 0x98, 0xba, 0xdc, 0xfe, 0x11, 0x22, 0x33,
           0x44, 0x55, 0x66, 0x77, 0x88
         ]);
-        return bytes;
       })
     };
 
@@ -35,10 +60,9 @@ describe('uuid.utils', () => {
   });
 
   it('installs a randomUUID polyfill on crypto-like objects', () => {
-    const cryptoApi = {
-      getRandomValues: vi.fn((bytes: Uint8Array) => {
+    const cryptoApi: CryptoApi = {
+      getRandomValues: createGetRandomValuesMock((bytes) => {
         bytes.fill(0xaa);
-        return bytes;
       })
     };
 

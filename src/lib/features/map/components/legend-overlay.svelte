@@ -1,29 +1,47 @@
 <script module lang="ts">
   import { motif } from '@ateliercartographie/motif.js';
   import { PATTERN_TYPE_MAP } from '../layers/pattern-texture';
+  import type { PatternParams } from '$lib/features/commons/store/visualization.store.svelte';
 
   // eslint-disable-next-line svelte/prefer-svelte-reactivity -- module-level cache, no reactivity needed
   const patternTileCache = new Map<string, string>();
 
-  function getPatternTileUrl(patternId: string): string | null {
-    if (patternTileCache.has(patternId))
-      return patternTileCache.get(patternId)!;
+  function getPatternTileUrl(
+    patternId: string,
+    patternColor = '#000000',
+    backgroundColor = '#ffffff',
+    patternParams?: PatternParams
+  ): string | null {
+    const cacheKey = JSON.stringify({
+      patternId,
+      patternColor,
+      backgroundColor,
+      angle: patternParams?.angle,
+      size: patternParams?.size,
+      scale: patternParams?.scale
+    });
+    if (patternTileCache.has(cacheKey)) return patternTileCache.get(cacheKey)!;
     const config = PATTERN_TYPE_MAP[patternId as keyof typeof PATTERN_TYPE_MAP];
     if (!config) return null;
+    const scale = Math.max(4, patternParams?.scale ?? 8);
+    const size = Math.max(1, patternParams?.size ?? 4);
     const tile = motif({
       type: config.type,
-      angle: config.angle,
-      fill: '#000000',
-      background: 'transparent',
+      angle: patternParams?.angle ?? config.angle,
+      fill: patternColor,
+      background: backgroundColor,
+      size: Math.round((size / scale) * 100),
+      scale: scale / 10,
       patchSize: true
     }).tile();
     const url = tile.toDataURL();
-    patternTileCache.set(patternId, url);
+    patternTileCache.set(cacheKey, url);
     return url;
   }
 </script>
 
 <script lang="ts">
+  import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import {
     StylingTools,
@@ -34,38 +52,255 @@
     visualizationStore,
     type VisualizationConfig
   } from '$lib/features/commons/store/visualization.store.svelte';
-  import { hslToHex } from '$lib/features/commons/utils/color-utils';
+  import { hexToRgb, hslToHex } from '$lib/features/commons/utils/color-utils';
   import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
   import {
     getLegendState,
     legendActions
   } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
-  import { FillMode } from '$lib/features/main-toolbar/constants';
+  import { ShapeType } from '$lib/features/main-toolbar/constants';
   import * as m from '$lib/paraglide/messages';
   import { SvelteMap } from 'svelte/reactivity';
   import { onDestroy } from 'svelte';
   import { activateStylingToolFromMap } from '../utils/styling-tool-activation.utils';
-  function hasColorScale(viz: VisualizationConfig | undefined): boolean {
-    if (
-      !viz?.classification?.colors?.length ||
-      !viz?.classification?.breaks?.length
-    ) {
-      return false;
+  import {
+    getLineWidthLegendScale,
+    getPointSizeLegendScale,
+    hasCategoricalColorLegend,
+    hasClassedColorLegend,
+    resolveLegendColorSwatchPrimitive,
+    resolveMissingDataLegendPrimitive,
+    resolveMissingDataPointShape,
+    type LineWidthLegendScale,
+    type PointSizeLegendScale
+  } from '../utils/legend.utils';
+
+  function getPatternOverlayColor(fillColor: string | undefined): string {
+    if (!fillColor?.startsWith('#') || fillColor.length !== 7) {
+      return '#000000';
     }
-    return viz.modes?.fill === FillMode.CLASSES;
+
+    const [r, g, b] = hexToRgb(fillColor);
+    const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+
+    return luminance < 0.45 ? '#ffffff' : '#000000';
   }
 
-  function hasCategoricalScale(viz: VisualizationConfig | undefined): boolean {
-    if (!viz?.classification?.colors?.length) return false;
-    return viz.modes?.fill === FillMode.CATEGORIES;
+  function getPatternSwatchStyle(
+    patternId: string | undefined,
+    fillColor: string,
+    patternParams: NonNullable<
+      VisualizationConfig['classification']
+    >['patternParams']
+  ): string {
+    if (!patternId) {
+      return `background-color: ${fillColor};`;
+    }
+
+    const patternTileUrl = getPatternTileUrl(
+      patternId,
+      getPatternOverlayColor(fillColor),
+      fillColor,
+      patternParams
+    );
+
+    if (!patternTileUrl) {
+      return `background-color: ${fillColor};`;
+    }
+
+    return `background-color: ${fillColor}; background-image: url(${patternTileUrl}); background-repeat: repeat; background-position: center;`;
   }
 
   function getCategoryLabels(viz: VisualizationConfig | undefined): string[] {
     return viz?.classification?.labels ?? [];
   }
 
+  function normalizeLegendValue(
+    value: number,
+    minValue: number,
+    maxValue: number,
+    minDisplay: number,
+    maxDisplay: number
+  ): number {
+    if (maxValue <= minValue) {
+      return (minDisplay + maxDisplay) / 2;
+    }
+
+    return (
+      minDisplay +
+      ((value - minValue) / (maxValue - minValue)) * (maxDisplay - minDisplay)
+    );
+  }
+
+  function getPointLegendDisplaySize(
+    scale: PointSizeLegendScale,
+    size: number
+  ): number {
+    const sizes = scale.steps.map((step) => step.size);
+    const minSize = Math.min(...sizes);
+    const maxSize = Math.max(...sizes);
+
+    return normalizeLegendValue(size, minSize, maxSize, 5, 22);
+  }
+
+  function getLineLegendDisplayWidth(
+    scale: LineWidthLegendScale,
+    width: number
+  ): number {
+    const widths = scale.steps.map((step) => step.size);
+    const minWidth = Math.min(...widths);
+    const maxWidth = Math.max(...widths);
+
+    return normalizeLegendValue(width, minWidth, maxWidth, 2, 10);
+  }
+
+  function getPointSymbolStyle(shape: ShapeType, size: number): string {
+    const diameter = Math.max(10, Math.round(size * 2));
+    const styles = [
+      `width: ${diameter}px`,
+      `height: ${diameter}px`,
+      'display: inline-block',
+      'box-sizing: border-box'
+    ];
+
+    return styles.join('; ');
+  }
+
+  function getPointLegendSymbolStyle(
+    scale: PointSizeLegendScale,
+    size: number
+  ): string {
+    const styles = [
+      getPointSymbolStyle(scale.shape, getPointLegendDisplaySize(scale, size)),
+      `background-color: ${scale.fillColor}`,
+      `opacity: ${scale.fillOpacity}`,
+      'box-sizing: border-box'
+    ];
+
+    if (scale.shape === ShapeType.POINT) {
+      styles.push('border-radius: 999px');
+      styles.push(`border: 1px solid ${scale.strokeColor}`);
+    } else if (scale.shape === ShapeType.CROSS) {
+      styles.push(
+        'clip-path: polygon(35% 0, 65% 0, 65% 35%, 100% 35%, 100% 65%, 65% 65%, 65% 100%, 35% 100%, 35% 65%, 0 65%, 0 35%, 35% 35%)'
+      );
+    } else if (scale.shape === ShapeType.TRIANGLE) {
+      styles.push('clip-path: polygon(50% 0, 0 100%, 100% 100%)');
+    } else {
+      styles.push('border-radius: 2px');
+      styles.push(`border: 1px solid ${scale.strokeColor}`);
+    }
+
+    return styles.join('; ');
+  }
+
+  function getPointColorSwatchStyle(
+    shape: ShapeType,
+    color: string,
+    size = 8
+  ): string {
+    const styles = [
+      getPointSymbolStyle(shape, size),
+      `background-color: ${color}`,
+      'opacity: 1'
+    ];
+
+    if (shape === ShapeType.POINT) {
+      styles.push('border-radius: 999px');
+      styles.push('border: 1px solid rgba(0, 0, 0, 0.15)');
+    } else if (shape === ShapeType.CROSS) {
+      styles.push(
+        'clip-path: polygon(35% 0, 65% 0, 65% 35%, 100% 35%, 100% 65%, 65% 65%, 65% 100%, 35% 100%, 35% 65%, 0 65%, 0 35%, 35% 35%)'
+      );
+    } else if (shape === ShapeType.TRIANGLE) {
+      styles.push('clip-path: polygon(50% 0, 0 100%, 100% 100%)');
+    } else {
+      styles.push('border-radius: 2px');
+      styles.push('border: 1px solid rgba(0, 0, 0, 0.15)');
+    }
+
+    return styles.join('; ');
+  }
+
+  function getLineSwatchStyle(
+    color: string,
+    width: number,
+    opacity: number,
+    dashed = false
+  ): string {
+    const resolvedWidth = Math.max(2, Math.round(width));
+    const styles = [
+      `width: 28px`,
+      `height: ${resolvedWidth}px`,
+      `background-color: ${color}`,
+      `opacity: ${opacity}`,
+      'display: inline-block',
+      'border-radius: 999px',
+      'box-sizing: border-box'
+    ];
+
+    if (dashed) {
+      styles.push(
+        'background-image: repeating-linear-gradient(90deg, transparent 0 4px, rgba(255, 255, 255, 0.95) 4px 7px)'
+      );
+    }
+
+    return styles.join('; ');
+  }
+
+  function getMissingDataAreaSwatchStyle(
+    viz: VisualizationConfig,
+    color: string
+  ): string {
+    if (viz.missingData?.pattern) {
+      return getPatternSwatchStyle('cross', color, undefined);
+    }
+
+    return `background-color: ${color};`;
+  }
+
+  function getColumnStatistics(
+    viz: VisualizationConfig | undefined,
+    columnName: string | undefined
+  ) {
+    if (!viz?.datasetId || !columnName) {
+      return null;
+    }
+
+    return datasetsStore.getColumnStatistics(viz.datasetId, columnName);
+  }
+
+  function getLegendStepLabel(
+    step:
+      | NonNullable<PointSizeLegendScale['steps']>[number]
+      | NonNullable<LineWidthLegendScale['steps']>[number],
+    breaks: number[] | undefined,
+    colorCount = 0
+  ): string {
+    if (step.kind === 'continuous') {
+      return formatBreakValue(step.value);
+    }
+
+    return breaks ? getColorScaleLabel(breaks, colorCount, step.index) : '';
+  }
+
+  function getLegendClassCount(viz: VisualizationConfig | undefined): number {
+    if (!viz?.classification) {
+      return 0;
+    }
+
+    return (
+      viz.classification.numClasses ??
+      viz.classification.labels?.length ??
+      viz.classification.colors?.length ??
+      (viz.classification.breaks?.length
+        ? viz.classification.breaks.length + 1
+        : 0)
+    );
+  }
+
   function formatBreakValue(value: number): string {
-    if (Number.isInteger(value)) return String(value);
+    if (Number.isInteger(value)) return value.toLocaleString();
     if (Math.abs(value) >= 1000) return Math.round(value).toLocaleString();
     return value.toFixed(1);
   }
@@ -157,11 +392,8 @@
       globalState.selectedTool === StylingTools.Legend
   );
 
-  const positionClass = $derived.by(() => {
-    if (legendState.dragPosition) {
-      return '';
-    }
-    switch (legendState.position) {
+  function getPositionClass(position: LegendPosition): string {
+    switch (position) {
       case LegendPosition.TOP_LEFT:
         return 'top-left';
       case LegendPosition.TOP_RIGHT:
@@ -175,6 +407,13 @@
       default:
         return 'top-right';
     }
+  }
+
+  const positionClass = $derived.by(() => {
+    if (legendState.dragPosition) {
+      return '';
+    }
+    return getPositionClass(legendState.position);
   });
 
   const containerStyle = $derived.by(() => {
@@ -308,6 +547,11 @@
     >
       {#each visibleItems as item (item.id)}
         {@const viz = vizByItemId.get(item.id)}
+        {@const colorLegendPrimitive = resolveLegendColorSwatchPrimitive(viz)}
+        {@const sizeStats = getColumnStatistics(viz, viz?.mapping.sizeColumn)}
+        {@const pointSizeScale = getPointSizeLegendScale(viz, sizeStats)}
+        {@const lineWidthScale = getLineWidthLegendScale(viz, sizeStats)}
+        {@const classCount = getLegendClassCount(viz)}
         <div class="legend-item">
           {#if item.title}
             <h4 class="legend-title">{item.title}</h4>
@@ -315,68 +559,161 @@
           {#if item.subtitle}
             <p class="legend-subtitle">{item.subtitle}</p>
           {/if}
-          {#if hasColorScale(viz)}
-            {@const colors = viz!.classification!.colors!}
-            {@const breaks = viz!.classification!.breaks!}
-            {@const patternTileUrl = viz!.classification?.patternId
-              ? getPatternTileUrl(viz!.classification.patternId)
-              : null}
+          {#if viz && hasClassedColorLegend(viz)}
+            {@const colors = viz.classification?.colors ?? []}
+            {@const breaks = viz.classification?.breaks ?? []}
+            {@const hasPatternScale =
+              colorLegendPrimitive === 'area' &&
+              Boolean(viz.classification?.patternId)}
             <div class="legend-color-scale">
               {#each colors as color, i (i)}
                 <div class="legend-scale-row">
-                  <span
-                    class="legend-color-swatch"
-                    style="background-color: {color};"
-                  >
-                    {#if patternTileUrl}
-                      <span
-                        class="legend-pattern-overlay"
-                        style="background-image: url({patternTileUrl});"
-                      ></span>
-                    {/if}
-                  </span>
+                  {#if colorLegendPrimitive === 'point'}
+                    <span
+                      class="legend-point-swatch"
+                      style={getPointColorSwatchStyle(
+                        viz.symbols?.type ?? ShapeType.POINT,
+                        color
+                      )}
+                    ></span>
+                  {:else if colorLegendPrimitive === 'line'}
+                    <span
+                      class="legend-line-swatch"
+                      style={getLineSwatchStyle(
+                        color,
+                        Math.max(3, Math.min(6, viz.style.lineWidth ?? 4)),
+                        viz.style.lineOpacity ?? 1,
+                        viz.style.lineDashed ?? false
+                      )}
+                    ></span>
+                  {:else}
+                    <span
+                      class="legend-color-swatch"
+                      class:patterned={hasPatternScale}
+                      style={getPatternSwatchStyle(
+                        viz.classification?.patternId,
+                        color,
+                        viz.classification?.patternParams
+                      )}
+                    >
+                    </span>
+                  {/if}
                   <span class="legend-scale-label">
                     {getColorScaleLabel(breaks, colors.length, i)}
                   </span>
                 </div>
               {/each}
-              {#if viz?.missingData?.show}
-                <div class="legend-scale-row">
-                  <span
-                    class="legend-color-swatch"
-                    style="background-color: {viz.missingData.color};"
-                  ></span>
-                  <span class="legend-scale-label">{m.missing_data_text()}</span
-                  >
-                </div>
-              {/if}
             </div>
           {/if}
-          {#if hasCategoricalScale(viz)}
-            {@const colors = viz!.classification!.colors!}
+          {#if viz && hasCategoricalColorLegend(viz)}
+            {@const colors = viz.classification?.colors ?? []}
             {@const catLabels = getCategoryLabels(viz)}
             {@const displayCount =
               catLabels.length > 0 ? catLabels.length : colors.length}
             <div class="legend-color-scale">
               {#each colors.slice(0, displayCount) as color, i (i)}
                 <div class="legend-scale-row">
-                  <span
-                    class="legend-color-swatch"
-                    style="background-color: {color};"
-                  ></span>
+                  {#if colorLegendPrimitive === 'point'}
+                    <span
+                      class="legend-point-swatch"
+                      style={getPointColorSwatchStyle(
+                        viz.symbols?.type ?? ShapeType.POINT,
+                        color
+                      )}
+                    ></span>
+                  {:else if colorLegendPrimitive === 'line'}
+                    <span
+                      class="legend-line-swatch"
+                      style={getLineSwatchStyle(
+                        color,
+                        Math.max(3, Math.min(6, viz.style.lineWidth ?? 4)),
+                        viz.style.lineOpacity ?? 1,
+                        viz.style.lineDashed ?? false
+                      )}
+                    ></span>
+                  {:else}
+                    <span
+                      class="legend-color-swatch"
+                      style="background-color: {color};"
+                    ></span>
+                  {/if}
                   <span class="legend-scale-label">{catLabels[i] ?? ''}</span>
                 </div>
               {/each}
-              {#if viz?.missingData?.show}
-                <div class="legend-scale-row">
+            </div>
+          {/if}
+          {#if pointSizeScale}
+            <div class="legend-proportional-scale">
+              {#each pointSizeScale.steps as step, index (index)}
+                <div class="legend-proportional-scale-row">
+                  <span
+                    class="legend-proportional-symbol"
+                    style={getPointLegendSymbolStyle(pointSizeScale, step.size)}
+                  ></span>
+                  <span class="legend-scale-label">
+                    {getLegendStepLabel(
+                      step,
+                      viz?.classification?.breaks,
+                      classCount
+                    )}
+                  </span>
+                </div>
+              {/each}
+            </div>
+          {/if}
+          {#if lineWidthScale}
+            <div class="legend-proportional-scale">
+              {#each lineWidthScale.steps as step, index (index)}
+                <div class="legend-proportional-scale-row">
+                  <span
+                    class="legend-line-swatch"
+                    style={getLineSwatchStyle(
+                      lineWidthScale.color,
+                      getLineLegendDisplayWidth(lineWidthScale, step.size),
+                      lineWidthScale.opacity,
+                      lineWidthScale.dashed
+                    )}
+                  ></span>
+                  <span class="legend-scale-label">
+                    {getLegendStepLabel(
+                      step,
+                      viz?.classification?.breaks,
+                      classCount
+                    )}
+                  </span>
+                </div>
+              {/each}
+            </div>
+          {/if}
+          {#if viz?.missingData?.show}
+            {@const missingDataPrimitive =
+              resolveMissingDataLegendPrimitive(viz)}
+            {@const missingDataShape = resolveMissingDataPointShape(
+              viz?.missingData?.shape
+            )}
+            <div class="legend-color-scale">
+              <div class="legend-scale-row">
+                {#if missingDataPrimitive === 'point'}
+                  <span
+                    class="legend-point-swatch"
+                    style={getPointColorSwatchStyle(
+                      missingDataShape,
+                      viz.missingData.color,
+                      Math.max(6, Math.min(10, viz.missingData.size ?? 6))
+                    )}
+                  ></span>
+                {:else}
                   <span
                     class="legend-color-swatch"
-                    style="background-color: {viz.missingData.color};"
+                    class:patterned={Boolean(viz.missingData.pattern)}
+                    style={getMissingDataAreaSwatchStyle(
+                      viz,
+                      viz.missingData.color
+                    )}
                   ></span>
-                  <span class="legend-scale-label">{m.missing_data_text()}</span
-                  >
-                </div>
-              {/if}
+                {/if}
+                <span class="legend-scale-label">{m.missing_data_text()}</span>
+              </div>
             </div>
           {/if}
           {#if item.note}
@@ -511,16 +848,39 @@
     border: 1px solid rgba(0, 0, 0, 0.15);
   }
 
-  .legend-pattern-overlay {
-    position: absolute;
-    inset: 0;
-    background-repeat: repeat;
-    opacity: 0.6;
+  .legend-color-swatch.patterned {
+    width: 20px;
+    min-width: 20px;
+  }
+
+  .legend-point-swatch,
+  .legend-line-swatch {
+    display: inline-block;
+    flex-shrink: 0;
   }
 
   .legend-scale-label {
     font-size: 0.8em;
     line-height: 1.2;
     white-space: nowrap;
+  }
+
+  .legend-proportional-scale {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin: 0.5rem 0;
+  }
+
+  .legend-proportional-scale-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.625rem;
+    min-height: 1.5rem;
+  }
+
+  .legend-proportional-symbol {
+    display: inline-block;
+    flex-shrink: 0;
   }
 </style>

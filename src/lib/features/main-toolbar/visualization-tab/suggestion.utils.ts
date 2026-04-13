@@ -1,9 +1,15 @@
 import type {
+  DatasetResult,
+  ProcessedDataset
+} from '$lib/features/data-pipeline';
+import type {
   GeometryType,
   VizSuggestion
 } from '$lib/features/commons/services/viz-suggester.service';
 import {
+  type VisualizationPreset,
   type VisualizationConfig,
+  resolveVisualizationPreset,
   visualizationStore,
   VisualizationType
 } from '$lib/features/commons/store/visualization.store.svelte';
@@ -173,6 +179,54 @@ export function resolveBlankVisualizationType(
   return VisualizationType.CHOROPLETH;
 }
 
+function areVisualizationPresetValuesEqual(
+  currentValue: VisualizationPreset[keyof VisualizationPreset],
+  expectedValue: VisualizationPreset[keyof VisualizationPreset]
+): boolean {
+  return (
+    JSON.stringify(currentValue ?? null) ===
+    JSON.stringify(expectedValue ?? null)
+  );
+}
+
+export function isVisualizationUsingPreset(
+  visualization: VisualizationConfig,
+  preset: VisualizationPreset
+): boolean {
+  return (
+    visualization.type === preset.type &&
+    areVisualizationPresetValuesEqual(visualization.modes, preset.modes) &&
+    areVisualizationPresetValuesEqual(
+      visualization.primitiveFilters,
+      preset.primitiveFilters
+    ) &&
+    areVisualizationPresetValuesEqual(visualization.style, preset.style) &&
+    areVisualizationPresetValuesEqual(visualization.mapping, preset.mapping) &&
+    areVisualizationPresetValuesEqual(
+      visualization.classification,
+      preset.classification
+    ) &&
+    areVisualizationPresetValuesEqual(visualization.symbols, preset.symbols) &&
+    areVisualizationPresetValuesEqual(
+      visualization.missingData,
+      preset.missingData
+    )
+  );
+}
+
+export function isVisualizationBlank(
+  visualization: VisualizationConfig,
+  dataset: DatasetGeometrySource
+): boolean {
+  const blankType = resolveBlankVisualizationType(dataset);
+  const blankPreset = resolveVisualizationPreset(
+    blankType,
+    dataset as Parameters<typeof resolveVisualizationPreset>[1]
+  );
+
+  return isVisualizationUsingPreset(visualization, blankPreset);
+}
+
 export function resolveNextSuggestionSelection(
   currentSuggestionId: string | undefined,
   nextSuggestionId: string
@@ -187,12 +241,27 @@ export function applySuggestionMapping(
   vizType: VisualizationType,
   suggestion: VizSuggestion
 ): void {
+  const viz = visualizationStore.visualizations.find((v) => v.id === vizId);
+  if (!viz) return;
+
+  visualizationStore.updateVisualization(vizId, {
+    mapping: {
+      ...viz.mapping,
+      ...buildSuggestionMappingUpdate(vizType, suggestion)
+    }
+  });
+}
+
+function buildSuggestionMappingUpdate(
+  vizType: VisualizationType,
+  suggestion: VizSuggestion
+): Partial<VisualizationConfig['mapping']> {
   if (!suggestion.columns || suggestion.columns.length === 0) {
-    return;
+    return {};
   }
 
   const column = suggestion.columns[0];
-  const mappingUpdate: Record<string, string> = {};
+  const mappingUpdate: Partial<VisualizationConfig['mapping']> = {};
 
   switch (vizType) {
     case VisualizationType.CHOROPLETH:
@@ -212,12 +281,7 @@ export function applySuggestionMapping(
       break;
   }
 
-  const viz = visualizationStore.visualizations.find((v) => v.id === vizId);
-  if (!viz) return;
-
-  visualizationStore.updateVisualization(vizId, {
-    mapping: { ...viz.mapping, ...mappingUpdate }
-  });
+  return mappingUpdate;
 }
 
 function getLegendSubtitleForVisualization(
@@ -257,7 +321,8 @@ function syncLegendSubtitleAfterSuggestion(
   }
 
   legendActions.updateLegendItem(legendItem.id, {
-    subtitle: nextAutoSubtitle
+    subtitle: nextAutoSubtitle,
+    subtitleMode: 'auto'
   });
 }
 
@@ -429,6 +494,91 @@ function buildSuggestionUpdate(
       ...styleUpdate
     }
   };
+}
+
+export function isVisualizationMatchingSuggestion(
+  visualization: VisualizationConfig,
+  dataset: ProcessedDataset | DatasetResult,
+  suggestion: VizSuggestion
+): boolean {
+  const vizType = mapSuggestionToType(suggestion.id);
+  const preset = resolveVisualizationPreset(vizType, dataset);
+  const expectedVisualization: VisualizationConfig = {
+    ...visualization,
+    ...preset,
+    mapping: { ...preset.mapping },
+    style: { ...preset.style },
+    modes: preset.modes ? { ...preset.modes } : undefined,
+    classification: preset.classification
+      ? { ...preset.classification }
+      : undefined,
+    symbols: preset.symbols ? { ...preset.symbols } : undefined,
+    missingData: preset.missingData ? { ...preset.missingData } : undefined
+  };
+
+  const suggestionUpdate = buildSuggestionUpdate(
+    expectedVisualization,
+    suggestion,
+    vizType
+  );
+
+  if (suggestionUpdate) {
+    expectedVisualization.mapping = suggestionUpdate.mapping
+      ? {
+          ...expectedVisualization.mapping,
+          ...suggestionUpdate.mapping
+        }
+      : expectedVisualization.mapping;
+    expectedVisualization.modes = suggestionUpdate.modes
+      ? {
+          ...expectedVisualization.modes,
+          ...suggestionUpdate.modes
+        }
+      : expectedVisualization.modes;
+    expectedVisualization.style = suggestionUpdate.style
+      ? {
+          ...expectedVisualization.style,
+          ...suggestionUpdate.style
+        }
+      : expectedVisualization.style;
+  } else {
+    expectedVisualization.mapping = {
+      ...expectedVisualization.mapping,
+      ...buildSuggestionMappingUpdate(vizType, suggestion)
+    };
+  }
+
+  return (
+    expectedVisualization.type === visualization.type &&
+    areVisualizationPresetValuesEqual(
+      expectedVisualization.modes,
+      visualization.modes
+    ) &&
+    areVisualizationPresetValuesEqual(
+      expectedVisualization.primitiveFilters,
+      visualization.primitiveFilters
+    ) &&
+    areVisualizationPresetValuesEqual(
+      expectedVisualization.style,
+      visualization.style
+    ) &&
+    areVisualizationPresetValuesEqual(
+      expectedVisualization.mapping,
+      visualization.mapping
+    ) &&
+    areVisualizationPresetValuesEqual(
+      expectedVisualization.classification,
+      visualization.classification
+    ) &&
+    areVisualizationPresetValuesEqual(
+      expectedVisualization.symbols,
+      visualization.symbols
+    ) &&
+    areVisualizationPresetValuesEqual(
+      expectedVisualization.missingData,
+      visualization.missingData
+    )
+  );
 }
 
 export function applySuggestionToVisualization(

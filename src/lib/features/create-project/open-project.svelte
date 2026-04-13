@@ -17,7 +17,7 @@
     OverflowMenuItem,
     SkeletonPlaceholder
   } from 'carbon-components-svelte';
-  import { Calendar, Copy, Link, TrashCan } from 'carbon-icons-svelte';
+  import { Calendar, Link } from 'carbon-icons-svelte';
   import { onMount } from 'svelte';
   import { useProjectNavigation } from './hooks';
   import { CreateProjectValidationService } from './services/validation.service';
@@ -237,16 +237,12 @@
                       text={m.open_project_duplicate()}
                       disabled={isDuplicating}
                       on:click={() => handleDuplicateProject(project.id)}
-                    >
-                      <Copy size={16} />
-                    </OverflowMenuItem>
+                    />
                     <OverflowMenuItem
                       danger
                       text={m.open_project_delete()}
                       on:click={() => confirmDeleteProject(project.id)}
-                    >
-                      <TrashCan size={16} />
-                    </OverflowMenuItem>
+                    />
                   </OverflowMenu>
                 </div>
               </div>

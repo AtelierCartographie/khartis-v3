@@ -9,6 +9,7 @@ const {
   detectDecimalSeparatorMock,
   detectGeoColumnsMock,
   getProcessorMock,
+  normalizeFormattedNumericColumnsMock,
   registerAllProcessorsMock
 } = vi.hoisted(() => ({
   duckMock: {
@@ -22,6 +23,7 @@ const {
   detectDecimalSeparatorMock: vi.fn(),
   detectGeoColumnsMock: vi.fn(),
   getProcessorMock: vi.fn(),
+  normalizeFormattedNumericColumnsMock: vi.fn(),
   registerAllProcessorsMock: vi.fn()
 }));
 
@@ -32,6 +34,13 @@ vi.mock('$lib/features/duckdb', () => ({
 vi.mock('$lib/features/data-pipeline/operations/analysis', () => ({
   buildDatasetFromDuckTable: buildDatasetFromDuckTableMock
 }));
+
+vi.mock(
+  '$lib/features/data-pipeline/operations/tabular-numeric-normalization',
+  () => ({
+    normalizeFormattedNumericColumns: normalizeFormattedNumericColumnsMock
+  })
+);
 
 vi.mock('$lib/features/data-pipeline/processors/processor-registry', () => ({
   getProcessor: getProcessorMock
@@ -131,6 +140,7 @@ describe('file-processor', () => {
     duckMock.read_geofile.mockResolvedValue(undefined);
     duckMock.read_tabular.mockResolvedValue(undefined);
     duckMock.query.mockResolvedValue([]);
+    normalizeFormattedNumericColumnsMock.mockResolvedValue([]);
     getProcessorMock.mockReturnValue(null);
     detectGeoColumnsMock.mockReturnValue({
       hasGeoColumns: false,
@@ -196,6 +206,10 @@ describe('file-processor', () => {
         delimiter: ';',
         thousands_separator: '.'
       })
+    );
+    expect(normalizeFormattedNumericColumnsMock).toHaveBeenCalledWith(
+      expect.stringMatching(/^data_/),
+      duckMock
     );
 
     expect(result.metadata.csvOptions).toEqual({

@@ -16,6 +16,8 @@ import type {
   LegendStyle
 } from './legend.types';
 
+type LegendTextMode = NonNullable<LegendItem['titleMode']>;
+
 const DEFAULT_STATE: LegendState = {
   items: [],
   position: LegendPosition.TOP_RIGHT,
@@ -81,10 +83,39 @@ function createLegendItemFromVisualization(
     name: visualization.name,
     visible: true,
     title: visualization.name,
+    titleMode: 'auto',
     subtitle: getLegendSubtitle(visualization),
+    subtitleMode: 'auto',
     note: '',
     variableId: visualization.id
   };
+}
+
+function resolveTitleMode(existing: LegendItem): LegendTextMode {
+  if (existing.titleMode) {
+    return existing.titleMode;
+  }
+
+  return !existing.title || existing.title === existing.name
+    ? 'auto'
+    : 'custom';
+}
+
+function resolveSubtitleMode(
+  existing: LegendItem,
+  visualization: VisualizationConfig
+): LegendTextMode {
+  if (existing.subtitleMode) {
+    return existing.subtitleMode;
+  }
+
+  const mappingValues = Object.values(visualization.mapping).filter(
+    (value): value is string => Boolean(value)
+  );
+
+  return !existing.subtitle || mappingValues.includes(existing.subtitle)
+    ? 'auto'
+    : 'custom';
 }
 
 function syncLegendItemsWithVisualizations(
@@ -107,18 +138,16 @@ function syncLegendItemsWithVisualizations(
     usedItemIds.add(existing.id);
 
     const defaultSubtitle = getLegendSubtitle(visualization);
-    const hasDefaultTitle = !existing.title || existing.title === existing.name;
+    const titleMode = resolveTitleMode(existing);
+    const subtitleMode = resolveSubtitleMode(existing, visualization);
 
-    // Always sync subtitle to current mapped column unless user set a custom one.
-    // A subtitle is considered "auto" if it equals any mapping column value of the viz.
-    const mappingValues = Object.values(visualization.mapping).filter(Boolean);
-    const isAutoSubtitle =
-      !existing.subtitle || mappingValues.includes(existing.subtitle as string);
     return {
       ...existing,
       name: visualization.name,
-      title: hasDefaultTitle ? visualization.name : existing.title,
-      subtitle: isAutoSubtitle ? defaultSubtitle : existing.subtitle,
+      title: titleMode === 'auto' ? visualization.name : existing.title,
+      titleMode,
+      subtitle: subtitleMode === 'auto' ? defaultSubtitle : existing.subtitle,
+      subtitleMode,
       variableId: visualization.id
     };
   });
@@ -143,7 +172,9 @@ function areLegendItemsEqual(a: LegendItem[], b: LegendItem[]): boolean {
       current.name !== next.name ||
       current.visible !== next.visible ||
       current.title !== next.title ||
+      current.titleMode !== next.titleMode ||
       current.subtitle !== next.subtitle ||
+      current.subtitleMode !== next.subtitleMode ||
       current.note !== next.note ||
       current.variableId !== next.variableId
     ) {

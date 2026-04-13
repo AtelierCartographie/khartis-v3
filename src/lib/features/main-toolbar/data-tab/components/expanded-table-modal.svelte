@@ -2,6 +2,7 @@
   import AdvancedDataTable, {
     type CellHighlight
   } from '$lib/features/commons/components/advanced-data-table/advanced-data-table.svelte';
+  import type { TableMutation } from '$lib/features/commons/components/advanced-data-table/types';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import type { ProcessedDataset } from '$lib/features/data-pipeline';
   import * as m from '$lib/paraglide/messages';
@@ -26,6 +27,7 @@
       order: 'ASC' | 'DESC' | null
     ) => void;
     onColumnDeleted?: (columnName: string) => void;
+    onTableMutation?: (mutation: TableMutation) => Promise<void> | void;
     onClose: () => void;
   }
 
@@ -44,6 +46,7 @@
     onSelectionChange,
     onSortChange,
     onColumnDeleted,
+    onTableMutation,
     onClose
   }: Props = $props();
 
@@ -183,6 +186,7 @@
           isExpanded={true}
           isSelectable={isSelectable}
           onColumnDeleted={onColumnDeleted}
+          onTableMutation={onTableMutation}
           onSelectionChange={onSelectionChange}
           onSortChange={onSortChange}
         />

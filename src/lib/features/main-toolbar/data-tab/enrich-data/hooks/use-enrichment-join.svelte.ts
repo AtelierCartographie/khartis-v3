@@ -13,6 +13,7 @@ import { Duck } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { SvelteMap } from 'svelte/reactivity';
 import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
+import type { JsonValue } from '$lib/types/data';
 import type { JoinStats } from '../../components';
 import { computeDatasetJoinStats } from '../../services/join-stats.service';
 import { canFinalizeJoin } from '../../services/join-validation';
@@ -81,7 +82,7 @@ export function useEnrichmentJoin(
     );
   }
 
-  function toSnapshotValue(value: unknown): unknown {
+  function toSnapshotValue(value: unknown): JsonValue {
     if (
       value === null ||
       value === undefined ||
@@ -118,7 +119,7 @@ export function useEnrichmentJoin(
   function toSnapshotRow(
     row: Record<string, unknown>,
     columnNames: string[]
-  ): Record<string, unknown> {
+  ): Record<string, JsonValue> {
     return Object.fromEntries(
       columnNames.map((columnName) => [
         columnName,
@@ -130,7 +131,7 @@ export function useEnrichmentJoin(
   async function buildTabularSnapshot(
     tableName: string,
     columnNames: string[]
-  ): Promise<Record<string, unknown>[]> {
+  ): Promise<Record<string, JsonValue>[]> {
     if (columnNames.length === 0) {
       return [];
     }
@@ -170,24 +171,22 @@ export function useEnrichmentJoin(
       { format: 'array' }
     )) as Array<Record<string, unknown>>;
 
-    return sanitizePreparedGeoJSON(
-      JSON.stringify({
-        type: 'FeatureCollection',
-        features: rows.map((row) => {
-          const geometryJson = row.__khartis_geometry_json;
-          const properties = toSnapshotRow(row, propertyColumnNames);
+    const serialized = JSON.stringify({
+      type: 'FeatureCollection',
+      features: rows.map((row) => {
+        const geometryJson = row.__khartis_geometry_json;
+        const properties = toSnapshotRow(row, propertyColumnNames);
 
-          return {
-            type: 'Feature',
-            geometry:
-              typeof geometryJson === 'string'
-                ? JSON.parse(geometryJson)
-                : null,
-            properties
-          };
-        })
+        return {
+          type: 'Feature',
+          geometry:
+            typeof geometryJson === 'string' ? JSON.parse(geometryJson) : null,
+          properties
+        };
       })
-    );
+    });
+
+    return sanitizePreparedGeoJSON(serialized) ?? serialized;
   }
 
   async function persistEnrichedSourceSnapshot(

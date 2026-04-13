@@ -2,6 +2,24 @@ import { paraglideMiddleware } from '$lib/paraglide/server';
 import type { Handle } from '@sveltejs/kit';
 import { sequence } from '@sveltejs/kit/hooks';
 
+function withCrossOriginIsolationHeaders(response: Response): Response {
+  const headers = new Headers(response.headers);
+  headers.set('Cross-Origin-Opener-Policy', 'same-origin');
+  headers.set('Cross-Origin-Embedder-Policy', 'require-corp');
+
+  try {
+    response.headers.set('Cross-Origin-Opener-Policy', 'same-origin');
+    response.headers.set('Cross-Origin-Embedder-Policy', 'require-corp');
+    return response;
+  } catch {
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers
+    });
+  }
+}
+
 const handleDevTools: Handle = ({ event, resolve }) => {
   if (event.url.pathname.startsWith('/.well-known/')) {
     return new Response('Not Found', { status: 404 });
@@ -14,9 +32,15 @@ const handleParaglide: Handle = ({ event, resolve }) =>
   paraglideMiddleware(event.request, ({ request, locale }) => {
     event.request = request;
 
-    return resolve(event, {
+    const response = resolve(event, {
       transformPageChunk: ({ html }) => html.replace('%paraglide.lang%', locale)
     });
+
+    if (response instanceof Promise) {
+      return response.then(withCrossOriginIsolationHeaders);
+    }
+
+    return withCrossOriginIsolationHeaders(response);
   });
 
 export const handle: Handle = sequence(handleDevTools, handleParaglide);

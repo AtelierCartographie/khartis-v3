@@ -204,7 +204,7 @@ export const STYLE_CONFIGS: StyleConfig[] = [
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 /** Zones disponibles */
-export const ZONES: { id: ZoneId }[] = [{ id: 'france' }, { id: 'monde' }];
+export const ZONES: { id: ZoneId }[] = [{ id: 'monde' }, { id: 'france' }];
 
 /** Styles disponibles pour une zone */
 export function getStylesForZone(zone: ZoneId): StyleConfig[] {

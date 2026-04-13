@@ -43,6 +43,8 @@ export interface EnrichDataState {
   enrichmentColumn?: string;
   targetColumn?: string;
   isEnrichmentActive: boolean;
+  joinTabularEnabled: boolean;
+  basemapTabIndex: number;
 }
 
 export interface DataTabState {

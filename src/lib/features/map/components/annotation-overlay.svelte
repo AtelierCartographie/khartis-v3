@@ -1,6 +1,10 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
-  import { SHAPE_TYPE } from '$lib/features/commons/constants';
+  import {
+    getShapeDefaultDimensions,
+    isShapeAspectRatioLocked,
+    SHAPE_TYPE
+  } from '$lib/features/commons/constants';
   import {
     globalState,
     globalActions
@@ -16,52 +20,32 @@
     annotationsActions,
     getAnnotationsState
   } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
+  import { getFormatState } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
   import { activateStylingToolFromMap } from '../utils/styling-tool-activation.utils';
   import {
     computeDrawingBounds,
     smoothDrawingPath
   } from '../utils/annotation-drawing.utils';
-  import type { Annotation } from '$lib/features/step-toolbar/tools/annotations/annotations.types';
+  import type {
+    Annotation,
+    AnnotationStyle
+  } from '$lib/features/step-toolbar/tools/annotations/annotations.types';
   import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
 
   let { interactive = true }: { interactive?: boolean } = $props();
 
-  const DEFAULT_SHAPE_SIZE = 80;
+  const DRAWING_POINT_STEP_PX = 6;
+  const DRAWING_CLOSE_THRESHOLD_PX = 18;
+  const MIN_SHAPE_SIZE = 24;
+  const SHAPE_VIEWBOX_PADDING = 8;
 
-  // Per-shape default sizes: arrows and lines are wide not square
-  const SHAPE_DEFAULT_SIZES: Partial<
-    Record<string, { width: number; height: number }>
-  > = {
-    [SHAPE_TYPE.ARROW]: { width: 120, height: 60 },
-    [SHAPE_TYPE.LINE]: { width: 120, height: 30 }
-  };
-
-  // Per-shape tight viewBoxes so the shape fills its container
-  const SHAPE_VIEW_BOXES: Partial<Record<string, string>> = {
-    [SHAPE_TYPE.ARROW]: '-5 1 50 38', // tight around arrow bounding box + stroke overflow
-    [SHAPE_TYPE.LINE]: '-5 15 50 14' // tight around horizontal line at y=20
-  };
-  const DEFAULT_VIEW_BOX = '-5 -5 50 50';
-
-  function getShapeDefaultSize(shapeType: string): {
-    width: number;
-    height: number;
-  } {
-    return (
-      SHAPE_DEFAULT_SIZES[shapeType] ?? {
-        width: DEFAULT_SHAPE_SIZE,
-        height: DEFAULT_SHAPE_SIZE
-      }
-    );
-  }
-
-  function getShapeViewBox(shapeType: string): string {
-    return SHAPE_VIEW_BOXES[shapeType] ?? DEFAULT_VIEW_BOX;
-  }
+  type AnnotationInteractionScope = 'map' | 'page';
 
   let overlayElement = $state<HTMLDivElement | null>(null);
+  let mapLayerElement = $state<HTMLDivElement | null>(null);
   let dragState = $state<{
     id: string;
+    scope: AnnotationInteractionScope;
     offsetX: number;
     offsetY: number;
     width: number;
@@ -84,11 +68,45 @@
     startRotation: number;
     startAngle: number;
   } | null>(null);
-  let hoverPoint = $state<{ x: number; y: number } | null>(null);
+  let drawingPointerId = $state<number | null>(null);
+  let drawingCloseToStart = $state(false);
 
   const annotationsState = $derived(getAnnotationsState());
+  const formatState = $derived(getFormatState());
+  const pageMargins = $derived(formatState.margins);
+  const mapLayerStyle = $derived.by(() => {
+    const width = Math.max(
+      1,
+      formatState.width - pageMargins.left - pageMargins.right
+    );
+    const height = Math.max(
+      1,
+      formatState.height - pageMargins.top - pageMargins.bottom
+    );
+
+    return [
+      `left: ${pageMargins.left}px`,
+      `top: ${pageMargins.top}px`,
+      `width: ${width}px`,
+      `height: ${height}px`
+    ].join('; ');
+  });
   const isDrawingMode = $derived(annotationsState.isDrawingMode);
   const drawingPoints = $derived(annotationsState.drawingInProgress);
+  const currentDrawingStyle = $derived(
+    getVectorStyle(annotationsState.defaultStyle)
+  );
+  const drawingPreviewPoints = $derived.by(() => {
+    if (
+      annotationsState.drawingModeType !== DrawingType.ZONE ||
+      !drawingCloseToStart ||
+      drawingPoints.length < 3
+    ) {
+      return drawingPoints;
+    }
+
+    return [...drawingPoints.slice(0, -1), drawingPoints[0]];
+  });
   const isAnnotationEditing = $derived(
     globalState.selectedTool === StylingTools.Annotations
   );
@@ -117,6 +135,107 @@
     return Math.min(max, Math.max(min, value));
   }
 
+  function getShapeDefaultSize(shapeType: string): {
+    width: number;
+    height: number;
+  } {
+    return getShapeDefaultDimensions(shapeType);
+  }
+
+  function getShapeViewBox(shapeType: string): string {
+    const { width, height } = getShapeDefaultSize(shapeType);
+
+    return `${-SHAPE_VIEWBOX_PADDING} ${-SHAPE_VIEWBOX_PADDING} ${width + SHAPE_VIEWBOX_PADDING * 2} ${height + SHAPE_VIEWBOX_PADDING * 2}`;
+  }
+
+  function getDrawingPointThreshold(): number {
+    const scale = globalState.zoom.pageZoomLevel / 100;
+    return DRAWING_POINT_STEP_PX / Math.max(scale, 0.1);
+  }
+
+  function getDrawingCloseThreshold(): number {
+    const scale = globalState.zoom.pageZoomLevel / 100;
+    return DRAWING_CLOSE_THRESHOLD_PX / Math.max(scale, 0.1);
+  }
+
+  function getDistance(
+    a: { x: number; y: number },
+    b: { x: number; y: number }
+  ): number {
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  }
+
+  function getMinimumDrawingPoints(type: DrawingType): number {
+    return type === DrawingType.ZONE ? 3 : 2;
+  }
+
+  function appendDrawingSample(
+    points: { x: number; y: number }[],
+    point: { x: number; y: number }
+  ): { x: number; y: number }[] {
+    if (points.length === 0) {
+      return [point];
+    }
+
+    const previousPoint = points[points.length - 1];
+    if (getDistance(previousPoint, point) < getDrawingPointThreshold()) {
+      return points;
+    }
+
+    return [...points, point];
+  }
+
+  function isNearDrawingStart(point: { x: number; y: number }): boolean {
+    if (
+      annotationsState.drawingModeType !== DrawingType.ZONE ||
+      drawingPoints.length < 3
+    ) {
+      return false;
+    }
+
+    return getDistance(drawingPoints[0], point) <= getDrawingCloseThreshold();
+  }
+
+  function isNearDrawingStartForPoints(
+    points: { x: number; y: number }[],
+    point: { x: number; y: number }
+  ): boolean {
+    if (
+      annotationsState.drawingModeType !== DrawingType.ZONE ||
+      points.length < 3
+    ) {
+      return false;
+    }
+
+    return getDistance(points[0], point) <= getDrawingCloseThreshold();
+  }
+
+  function isPageElement(item: Annotation): boolean {
+    return item.role != null;
+  }
+
+  function getInteractionLayer(
+    scope: AnnotationInteractionScope
+  ): HTMLDivElement | null {
+    return scope === 'page' ? overlayElement : mapLayerElement;
+  }
+
+  function getRenderedPosition(item: Annotation): { x: number; y: number } {
+    if (isPageElement(item)) {
+      return item.position;
+    }
+
+    return {
+      x: item.position.x + pageMargins.left,
+      y: item.position.y + pageMargins.top
+    };
+  }
+
+  function getAnnotationPositionStyle(item: Annotation): string {
+    const { x, y } = getRenderedPosition(item);
+    return `left: ${x}px; top: ${y}px;`;
+  }
+
   function stopDragging(): void {
     window.removeEventListener('pointermove', handlePointerMove);
     window.removeEventListener('pointerup', handlePointerUp);
@@ -140,12 +259,17 @@
   }
 
   function handlePointerMove(event: PointerEvent): void {
-    if (!dragState || !overlayElement) {
+    if (!dragState) {
+      return;
+    }
+
+    const layer = getInteractionLayer(dragState.scope);
+    if (!layer) {
       return;
     }
 
     const scale = globalState.zoom.pageZoomLevel / 100;
-    const rect = overlayElement.getBoundingClientRect();
+    const rect = layer.getBoundingClientRect();
     const maxX = Math.max(0, rect.width / scale - dragState.width);
     const maxY = Math.max(0, rect.height / scale - dragState.height);
 
@@ -166,7 +290,9 @@
       return;
     }
 
-    if (!overlayElement) {
+    const scope = isPageElement(item) ? 'page' : 'map';
+    const layer = getInteractionLayer(scope);
+    if (!layer) {
       return;
     }
 
@@ -176,7 +302,7 @@
     annotationsActions.selectAnnotation(item.id);
 
     const scale = globalState.zoom.pageZoomLevel / 100;
-    const rect = overlayElement.getBoundingClientRect();
+    const rect = layer.getBoundingClientRect();
     const currentTarget = event.currentTarget;
     const targetRect =
       currentTarget instanceof HTMLElement
@@ -184,6 +310,7 @@
         : null;
     dragState = {
       id: item.id,
+      scope,
       offsetX: (event.clientX - rect.left) / scale - item.position.x,
       offsetY: (event.clientY - rect.top) / scale - item.position.y,
       width: targetRect ? targetRect.width / scale : 0,
@@ -268,6 +395,147 @@
     stopResizing();
   }
 
+  function resolveResizedShapeBounds(
+    item: Annotation,
+    handle: string,
+    dx: number,
+    dy: number,
+    startBounds: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    }
+  ): { x: number; y: number; width: number; height: number } {
+    const shapeType = String(item.content ?? '');
+    const preserveAspectRatio = isShapeAspectRatioLocked(shapeType);
+    const startRight = startBounds.x + startBounds.width;
+    const startBottom = startBounds.y + startBounds.height;
+    const startCenterX = startBounds.x + startBounds.width / 2;
+    const startCenterY = startBounds.y + startBounds.height / 2;
+
+    let nextX = startBounds.x;
+    let nextY = startBounds.y;
+    let nextWidth = startBounds.width;
+    let nextHeight = startBounds.height;
+
+    switch (handle) {
+      case 'nw':
+        nextWidth = Math.max(MIN_SHAPE_SIZE, startBounds.width - dx);
+        nextHeight = Math.max(MIN_SHAPE_SIZE, startBounds.height - dy);
+        nextX = startRight - nextWidth;
+        nextY = startBottom - nextHeight;
+        break;
+      case 'n':
+        nextHeight = Math.max(MIN_SHAPE_SIZE, startBounds.height - dy);
+        nextY = startBottom - nextHeight;
+        break;
+      case 'ne':
+        nextWidth = Math.max(MIN_SHAPE_SIZE, startBounds.width + dx);
+        nextHeight = Math.max(MIN_SHAPE_SIZE, startBounds.height - dy);
+        nextY = startBottom - nextHeight;
+        break;
+      case 'e':
+        nextWidth = Math.max(MIN_SHAPE_SIZE, startBounds.width + dx);
+        break;
+      case 'se':
+        nextWidth = Math.max(MIN_SHAPE_SIZE, startBounds.width + dx);
+        nextHeight = Math.max(MIN_SHAPE_SIZE, startBounds.height + dy);
+        break;
+      case 's':
+        nextHeight = Math.max(MIN_SHAPE_SIZE, startBounds.height + dy);
+        break;
+      case 'sw':
+        nextWidth = Math.max(MIN_SHAPE_SIZE, startBounds.width - dx);
+        nextHeight = Math.max(MIN_SHAPE_SIZE, startBounds.height + dy);
+        nextX = startRight - nextWidth;
+        break;
+      case 'w':
+        nextWidth = Math.max(MIN_SHAPE_SIZE, startBounds.width - dx);
+        nextX = startRight - nextWidth;
+        break;
+    }
+
+    if (!preserveAspectRatio) {
+      return {
+        x: nextX,
+        y: nextY,
+        width: nextWidth,
+        height: nextHeight
+      };
+    }
+
+    const aspectRatio = startBounds.width / Math.max(startBounds.height, 1);
+    const horizontalHandle = handle === 'e' || handle === 'w';
+    const verticalHandle = handle === 'n' || handle === 's';
+    const widthRatio = nextWidth / startBounds.width;
+    const heightRatio = nextHeight / startBounds.height;
+    const scale = Math.max(
+      MIN_SHAPE_SIZE / Math.max(startBounds.width, startBounds.height),
+      horizontalHandle
+        ? widthRatio
+        : verticalHandle
+          ? heightRatio
+          : Math.max(widthRatio, heightRatio)
+    );
+
+    nextWidth = Math.max(MIN_SHAPE_SIZE, startBounds.width * scale);
+    nextHeight = Math.max(
+      MIN_SHAPE_SIZE,
+      nextWidth / Math.max(aspectRatio, 0.01)
+    );
+
+    if (verticalHandle) {
+      nextWidth = Math.max(
+        MIN_SHAPE_SIZE,
+        startBounds.height * scale * aspectRatio
+      );
+      nextHeight = Math.max(MIN_SHAPE_SIZE, startBounds.height * scale);
+    }
+
+    switch (handle) {
+      case 'e':
+        nextX = startBounds.x;
+        nextY = startCenterY - nextHeight / 2;
+        break;
+      case 'w':
+        nextX = startRight - nextWidth;
+        nextY = startCenterY - nextHeight / 2;
+        break;
+      case 'n':
+        nextX = startCenterX - nextWidth / 2;
+        nextY = startBottom - nextHeight;
+        break;
+      case 's':
+        nextX = startCenterX - nextWidth / 2;
+        nextY = startBounds.y;
+        break;
+      case 'nw':
+        nextX = startRight - nextWidth;
+        nextY = startBottom - nextHeight;
+        break;
+      case 'ne':
+        nextX = startBounds.x;
+        nextY = startBottom - nextHeight;
+        break;
+      case 'se':
+        nextX = startBounds.x;
+        nextY = startBounds.y;
+        break;
+      case 'sw':
+        nextX = startRight - nextWidth;
+        nextY = startBounds.y;
+        break;
+    }
+
+    return {
+      x: nextX,
+      y: nextY,
+      width: nextWidth,
+      height: nextHeight
+    };
+  }
+
   function handleResizePointerMove(event: PointerEvent): void {
     if (!resizeState) return;
 
@@ -275,58 +543,28 @@
     const dx = (event.clientX - resizeState.startPointerX) / scale;
     const dy = (event.clientY - resizeState.startPointerY) / scale;
 
-    const MIN_SIZE = 20;
-    let newX = resizeState.startAnnotationX;
-    let newY = resizeState.startAnnotationY;
-    let newW = resizeState.startW;
-    let newH = resizeState.startH;
-
-    switch (resizeState.handle) {
-      case 'nw':
-        newW = Math.max(MIN_SIZE, resizeState.startW - dx);
-        newH = Math.max(MIN_SIZE, resizeState.startH - dy);
-        newX = resizeState.startAnnotationX + (resizeState.startW - newW);
-        newY = resizeState.startAnnotationY + (resizeState.startH - newH);
-        break;
-      case 'n':
-        newH = Math.max(MIN_SIZE, resizeState.startH - dy);
-        newY = resizeState.startAnnotationY + (resizeState.startH - newH);
-        break;
-      case 'ne':
-        newW = Math.max(MIN_SIZE, resizeState.startW + dx);
-        newH = Math.max(MIN_SIZE, resizeState.startH - dy);
-        newY = resizeState.startAnnotationY + (resizeState.startH - newH);
-        break;
-      case 'e':
-        newW = Math.max(MIN_SIZE, resizeState.startW + dx);
-        break;
-      case 'se':
-        newW = Math.max(MIN_SIZE, resizeState.startW + dx);
-        newH = Math.max(MIN_SIZE, resizeState.startH + dy);
-        break;
-      case 's':
-        newH = Math.max(MIN_SIZE, resizeState.startH + dy);
-        break;
-      case 'sw':
-        newW = Math.max(MIN_SIZE, resizeState.startW - dx);
-        newH = Math.max(MIN_SIZE, resizeState.startH + dy);
-        newX = resizeState.startAnnotationX + (resizeState.startW - newW);
-        break;
-      case 'w':
-        newW = Math.max(MIN_SIZE, resizeState.startW - dx);
-        newX = resizeState.startAnnotationX + (resizeState.startW - newW);
-        break;
-    }
-
     const item = annotationsState.items.find((i) => i.id === resizeState!.id);
     if (!item) return;
 
+    const resizedBounds = resolveResizedShapeBounds(
+      item,
+      resizeState.handle,
+      dx,
+      dy,
+      {
+        x: resizeState.startAnnotationX,
+        y: resizeState.startAnnotationY,
+        width: resizeState.startW,
+        height: resizeState.startH
+      }
+    );
+
     annotationsActions.updateAnnotation(resizeState.id, {
-      position: { x: newX, y: newY },
+      position: { x: resizedBounds.x, y: resizedBounds.y },
       style: {
         ...(item.style ?? {}),
-        shapeWidth: Math.round(newW),
-        shapeHeight: Math.round(newH)
+        shapeWidth: Math.round(resizedBounds.width),
+        shapeHeight: Math.round(resizedBounds.height)
       }
     });
   }
@@ -338,10 +576,10 @@
     event.preventDefault();
     event.stopPropagation();
 
-    if (!overlayElement) return;
+    if (!mapLayerElement) return;
 
     const scale = globalState.zoom.pageZoomLevel / 100;
-    const rect = overlayElement.getBoundingClientRect();
+    const rect = mapLayerElement.getBoundingClientRect();
     const shapeType = String(item.content ?? '');
     const defaultSize = getShapeDefaultSize(shapeType);
     const shapeW = item.style?.shapeWidth ?? defaultSize.width;
@@ -393,40 +631,137 @@
     });
   }
 
-  function getOverlayPoint(event: MouseEvent): { x: number; y: number } | null {
-    if (!overlayElement) return null;
+  function getOverlayPoint(
+    event:
+      | Pick<MouseEvent, 'clientX' | 'clientY'>
+      | Pick<PointerEvent, 'clientX' | 'clientY'>
+  ): { x: number; y: number } | null {
+    if (!mapLayerElement) return null;
     const scale = globalState.zoom.pageZoomLevel / 100;
-    const rect = overlayElement.getBoundingClientRect();
+    const rect = mapLayerElement.getBoundingClientRect();
     return {
       x: (event.clientX - rect.left) / scale,
       y: (event.clientY - rect.top) / scale
     };
   }
 
-  // Distinguish single click from first click of double-click:
-  // ondblclick fires after two onclick events — on dblclick we undo the
-  // duplicate point added by the second onclick and finalize.
-  function handleDrawingClick(event: MouseEvent): void {
-    event.stopPropagation();
+  function resetDrawingPointerState(): void {
+    drawingPointerId = null;
+    drawingCloseToStart = false;
+  }
+
+  function getReleasedDrawingPoints(
+    point: { x: number; y: number } | null
+  ): { x: number; y: number }[] {
+    if (!point) {
+      return drawingPoints;
+    }
+
+    return appendDrawingSample(drawingPoints, point);
+  }
+
+  function getZoneAutoClosedPoints(
+    points: { x: number; y: number }[]
+  ): { x: number; y: number }[] {
+    let endIndex = points.length;
+
+    while (
+      endIndex > 1 &&
+      isNearDrawingStartForPoints(points, points[endIndex - 1])
+    ) {
+      endIndex -= 1;
+    }
+
+    return points.slice(0, endIndex);
+  }
+
+  function handleDrawingPointerDown(event: PointerEvent): void {
+    if (!isDrawingMode) {
+      return;
+    }
+
     const point = getOverlayPoint(event);
-    if (point) annotationsActions.addDrawingPoint(point);
-  }
+    if (!point) {
+      return;
+    }
 
-  function handleDrawingDblClick(event: MouseEvent): void {
+    event.preventDefault();
     event.stopPropagation();
-    // The second onclick already added a duplicate at this position — remove it.
-    annotationsActions.removeLastDrawingPoint();
-    annotationsActions.finalizeDrawingMode();
-    hoverPoint = null;
+
+    const nextPoints = appendDrawingSample(drawingPoints, point);
+    annotationsActions.setDrawingInProgress(nextPoints);
+    drawingCloseToStart = isNearDrawingStart(point);
+    drawingPointerId = event.pointerId;
+
+    if (event.currentTarget instanceof HTMLElement) {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
   }
 
-  function handleDrawingMouseMove(event: MouseEvent): void {
-    hoverPoint = getOverlayPoint(event);
+  function handleDrawingPointerMove(event: PointerEvent): void {
+    if (drawingPointerId !== event.pointerId) {
+      return;
+    }
+
+    const point = getOverlayPoint(event);
+    if (!point) {
+      return;
+    }
+
+    event.preventDefault();
+
+    const nextPoints = appendDrawingSample(drawingPoints, point);
+    if (nextPoints !== drawingPoints) {
+      annotationsActions.setDrawingInProgress(nextPoints);
+    }
+
+    drawingCloseToStart = isNearDrawingStart(point);
+  }
+
+  function handleDrawingPointerUp(event: PointerEvent): void {
+    if (drawingPointerId !== event.pointerId) {
+      return;
+    }
+
+    const point = getOverlayPoint(event);
+    const nextPoints = getReleasedDrawingPoints(point);
+    const minimumPointCount = getMinimumDrawingPoints(
+      annotationsState.drawingModeType
+    );
+    const shouldAutoCloseZone =
+      annotationsState.drawingModeType === DrawingType.ZONE &&
+      !!point &&
+      isNearDrawingStart(point);
+    const zoneAutoClosedPoints = shouldAutoCloseZone
+      ? getZoneAutoClosedPoints(nextPoints)
+      : nextPoints;
+    const finalPointCount = zoneAutoClosedPoints.length;
+
+    if (event.currentTarget instanceof HTMLElement) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    if (annotationsState.drawingModeType === DrawingType.LINE) {
+      annotationsActions.setDrawingInProgress(nextPoints);
+      if (finalPointCount >= minimumPointCount) {
+        annotationsActions.finalizeDrawingMode();
+      }
+      resetDrawingPointerState();
+      return;
+    }
+
+    annotationsActions.setDrawingInProgress(zoneAutoClosedPoints);
+
+    if (shouldAutoCloseZone && finalPointCount >= minimumPointCount) {
+      annotationsActions.finalizeDrawingMode();
+    }
+
+    resetDrawingPointerState();
   }
 
   $effect(() => {
     if (!isDrawingMode) {
-      hoverPoint = null;
+      resetDrawingPointerState();
       return;
     }
 
@@ -517,25 +852,25 @@
     return styles.join('; ');
   }
 
-  function getShapeStyle(item: Annotation): {
+  function getVectorStyle(style: AnnotationStyle | undefined): {
     fill: string;
     stroke: string;
     strokeWidth: number;
     strokeDasharray?: string;
     opacity: number;
   } {
-    const style = item.style ?? {};
+    const resolvedStyle = style ?? {};
     return {
-      fill: getColorValue(style.fillColor, 'none'),
-      stroke: getColorValue(style.strokeColor, '#000000'),
-      strokeWidth: style.strokeWidth ?? 2,
+      fill: getColorValue(resolvedStyle.fillColor, 'none'),
+      stroke: getColorValue(resolvedStyle.strokeColor, '#000000'),
+      strokeWidth: resolvedStyle.strokeWidth ?? 2,
       strokeDasharray:
-        style.strokeStyle === 'dashed'
+        resolvedStyle.strokeStyle === 'dashed'
           ? '5,5'
-          : style.strokeStyle === 'dotted'
+          : resolvedStyle.strokeStyle === 'dotted'
             ? '2,2'
             : undefined,
-      opacity: toOpacityUnit(style.opacity)
+      opacity: toOpacityUnit(resolvedStyle.opacity)
     };
   }
 
@@ -543,61 +878,65 @@
     item: Annotation,
     shapeType: string
   ): { type: string; path?: string; cx?: number; cy?: number; r?: number } {
-    const size = 40;
+    const { width, height } = getShapeDefaultSize(shapeType);
+    const centerX = width / 2;
+    const centerY = height / 2;
 
     switch (shapeType) {
       case SHAPE_TYPE.ARROW: {
         const curvature = item.style?.curvature ?? 50;
-        const cy = size / 2;
-        const shaftEnd = size * 0.65;
-        const headTop = cy - size * 0.28;
-        const headBottom = cy + size * 0.28;
-        const curveOffset = ((curvature - 50) / 50) * size * 0.35;
-        const controlY = cy - curveOffset;
-
-        // Two sub-paths: open shaft line + closed arrowhead polygon.
-        // fill applies only to the closed arrowhead; the shaft is stroke-only.
+        const shaftEnd = width * 0.7;
+        const headTop = centerY - height * 0.28;
+        const headBottom = centerY + height * 0.28;
+        const curveOffset = ((curvature - 50) / 50) * height * 0.35;
+        const controlY = centerY - curveOffset;
         const shaft =
           Math.abs(curvature - 50) < 2
-            ? `M 0,${cy} L ${shaftEnd},${cy}`
-            : `M 0,${cy} Q ${shaftEnd / 2},${controlY} ${shaftEnd},${cy}`;
-        const head = `M ${shaftEnd},${headTop} L ${size},${cy} L ${shaftEnd},${headBottom} Z`;
+            ? `M 0,${centerY} L ${shaftEnd},${centerY}`
+            : `M 0,${centerY} Q ${width * 0.35},${controlY} ${shaftEnd},${centerY}`;
+        const head = `M ${shaftEnd},${headTop} L ${width},${centerY} L ${shaftEnd},${headBottom} Z`;
 
         return { type: SHAPE_TYPE.ARROW, path: `${shaft} ${head}` };
       }
       case SHAPE_TYPE.LINE:
         return {
           type: 'path',
-          path: `M 0,${size / 2} L ${size},${size / 2}`
+          path: `M 0,${centerY} L ${width},${centerY}`
         };
       case SHAPE_TYPE.RECTANGLE:
         return {
           type: 'path',
-          path: `M 0,0 L ${size},0 L ${size},${size} L 0,${size} Z`
+          path: `M 0,0 L ${width},0 L ${width},${height} L 0,${height} Z`
         };
       case SHAPE_TYPE.CIRCLE:
         return {
           type: SHAPE_TYPE.CIRCLE,
-          cx: size / 2,
-          cy: size / 2,
-          r: size / 2
+          cx: centerX,
+          cy: centerY,
+          r: Math.min(width, height) / 2
         };
       case SHAPE_TYPE.TRIANGLE:
         return {
           type: 'path',
-          path: `M ${size / 2},0 L ${size},${size} L 0,${size} Z`
+          path: `M ${centerX},0 L ${width},${height} L 0,${height} Z`
         };
       case SHAPE_TYPE.STAR:
         return {
           type: 'path',
-          path: createStarPath(size / 2, size / 2, 5, size / 2, size / 4)
+          path: createStarPath(
+            centerX,
+            centerY,
+            5,
+            Math.min(width, height) / 2,
+            Math.min(width, height) / 4
+          )
         };
       default:
         return {
           type: SHAPE_TYPE.CIRCLE,
-          cx: size / 2,
-          cy: size / 2,
-          r: size / 2
+          cx: centerX,
+          cy: centerY,
+          r: Math.min(width, height) / 2
         };
     }
   }
@@ -629,56 +968,81 @@
   class:non-interactive={!interactive}
   bind:this={overlayElement}
 >
-  {#if isDrawingMode}
-    <div
-      class="drawing-capture"
-      role="presentation"
-      onclick={handleDrawingClick}
-      ondblclick={handleDrawingDblClick}
-      onmousemove={handleDrawingMouseMove}
-      onmouseleave={() => (hoverPoint = null)}
-    >
-      {#if drawingPoints.length > 0}
-        <svg class="drawing-preview" width="100%" height="100%">
-          {#if drawingPoints.length >= 2}
-            <polyline
-              points={drawingPoints.map((p) => `${p.x},${p.y}`).join(' ')}
-              fill={annotationsState.drawingModeType === DrawingType.ZONE
-                ? 'rgba(0,114,195,0.08)'
-                : 'none'}
-              stroke="var(--cds-interactive-01, #0072c3)"
-              stroke-width="2"
-              stroke-dasharray="5,3"
-              stroke-linejoin="round"
-            />
-          {/if}
-          {#if hoverPoint && drawingPoints.length >= 1}
-            {@const last = drawingPoints[drawingPoints.length - 1]}
-            <line
-              x1={last.x}
-              y1={last.y}
-              x2={hoverPoint.x}
-              y2={hoverPoint.y}
-              stroke="var(--cds-interactive-01, #0072c3)"
-              stroke-width="1"
-              stroke-dasharray="3,3"
-              opacity="0.6"
-            />
-          {/if}
-          {#each drawingPoints as point, i (i)}
-            <circle
-              cx={point.x}
-              cy={point.y}
-              r={i === 0 ? 5 : 3}
-              fill={i === 0 ? 'var(--cds-interactive-01, #0072c3)' : 'white'}
-              stroke="var(--cds-interactive-01, #0072c3)"
-              stroke-width="2"
-            />
-          {/each}
-        </svg>
-      {/if}
-    </div>
-  {/if}
+  <div
+    class="annotation-map-layer"
+    bind:this={mapLayerElement}
+    style={mapLayerStyle}
+  >
+    {#if isDrawingMode}
+      {@const previewSmoothness = annotationsState.defaultStyle.smoothness ?? 0}
+      {@const previewIsClosed =
+        annotationsState.drawingModeType === DrawingType.ZONE}
+      {@const previewBounds = computeDrawingBounds(
+        drawingPreviewPoints,
+        currentDrawingStyle.strokeWidth,
+        previewSmoothness,
+        previewIsClosed
+      )}
+      <div
+        class="drawing-capture"
+        role="presentation"
+        onpointerdown={handleDrawingPointerDown}
+        onpointermove={handleDrawingPointerMove}
+        onpointerup={handleDrawingPointerUp}
+        onpointercancel={handleDrawingPointerUp}
+      >
+        {#if drawingPoints.length > 0}
+          <svg
+            class="drawing-preview"
+            width={previewBounds.width}
+            height={previewBounds.height}
+            viewBox={previewBounds.viewBox}
+          >
+            {#if drawingPreviewPoints.length >= 2}
+              <path
+                d={smoothDrawingPath(
+                  drawingPreviewPoints,
+                  previewSmoothness,
+                  previewIsClosed
+                )}
+                fill={previewIsClosed ? currentDrawingStyle.fill : 'none'}
+                stroke={currentDrawingStyle.stroke}
+                stroke-width={currentDrawingStyle.strokeWidth}
+                stroke-dasharray={currentDrawingStyle.strokeDasharray}
+                stroke-linejoin="round"
+                stroke-linecap="round"
+                opacity={currentDrawingStyle.opacity}
+              />
+            {/if}
+            {#each drawingPoints as point, i (i)}
+              <circle
+                cx={point.x}
+                cy={point.y}
+                r={i === 0 ? 5 : 3}
+                fill={i === 0 ? currentDrawingStyle.stroke : 'white'}
+                stroke={currentDrawingStyle.stroke}
+                stroke-width="2"
+              />
+            {/each}
+            {#if previewIsClosed && drawingPoints.length >= 3}
+              {@const startPoint = drawingPoints[0]}
+              <circle
+                class:drawing-close-target-active={drawingCloseToStart}
+                cx={startPoint.x}
+                cy={startPoint.y}
+                r={drawingCloseToStart ? 10 : 7}
+                fill="none"
+                stroke={currentDrawingStyle.stroke}
+                stroke-width="2"
+                stroke-dasharray="4,3"
+                opacity="0.7"
+              />
+            {/if}
+          </svg>
+        {/if}
+      </div>
+    {/if}
+  </div>
 
   {#each visibleItems as item (item.id)}
     <div
@@ -688,7 +1052,8 @@
         selectedId === item.id &&
         item.type !== AnnotationKind.SHAPE}
       class:dragging={dragState?.id === item.id}
-      style="left: {item.position.x}px; top: {item.position.y}px;"
+      data-annotation-role={item.role}
+      style={getAnnotationPositionStyle(item)}
       role="button"
       tabindex="0"
       aria-disabled="false"
@@ -712,57 +1077,58 @@
       {:else if item.type === AnnotationKind.SHAPE}
         {@const shapeType = String(item.content ?? SHAPE_TYPE.CIRCLE)}
         {@const shapeData = renderShape(item, shapeType)}
-        {@const shapeStyle = getShapeStyle(item)}
+        {@const shapeStyle = getVectorStyle(item.style)}
         {@const defaultSize = getShapeDefaultSize(shapeType)}
         {@const shapeW = item.style?.shapeWidth ?? defaultSize.width}
         {@const shapeH = item.style?.shapeHeight ?? defaultSize.height}
         {@const rotation = item.style?.rotation ?? 0}
         {@const isShapeSelected = isAnnotationEditing && selectedId === item.id}
         <div
-          class="shape-container"
+          class="shape-frame"
           class:shape-selected={isShapeSelected}
-          style="width: {shapeW}px; height: {shapeH}px; transform: rotate({rotation}deg);"
+          style="width: {shapeW}px; height: {shapeH}px;"
         >
-          <svg
-            width={shapeW}
-            height={shapeH}
-            viewBox={getShapeViewBox(shapeType)}
-            class="annotation-shape"
-            style="opacity: {shapeStyle.opacity};"
-          >
-            {#if shapeData.type === SHAPE_TYPE.CIRCLE}
-              <circle
-                cx={shapeData.cx}
-                cy={shapeData.cy}
-                r={shapeData.r}
-                fill={shapeStyle.fill}
-                stroke={shapeStyle.stroke}
-                stroke-width={shapeStyle.strokeWidth}
-                stroke-dasharray={shapeStyle.strokeDasharray}
-              />
-            {:else if shapeData.type === SHAPE_TYPE.ARROW}
-              <!-- Arrow: fill the closed arrowhead polygon with the stroke color -->
-              <path
-                d={shapeData.path}
-                fill={shapeStyle.stroke}
-                stroke={shapeStyle.stroke}
-                stroke-width={shapeStyle.strokeWidth}
-                stroke-dasharray={shapeStyle.strokeDasharray}
-                stroke-linejoin="round"
-                stroke-linecap="round"
-              />
-            {:else}
-              <path
-                d={shapeData.path}
-                fill={shapeStyle.fill}
-                stroke={shapeStyle.stroke}
-                stroke-width={shapeStyle.strokeWidth}
-                stroke-dasharray={shapeStyle.strokeDasharray}
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            {/if}
-          </svg>
+          <div class="shape-content" style="transform: rotate({rotation}deg);">
+            <svg
+              width={shapeW}
+              height={shapeH}
+              viewBox={getShapeViewBox(shapeType)}
+              class="annotation-shape"
+              style="opacity: {shapeStyle.opacity};"
+            >
+              {#if shapeData.type === SHAPE_TYPE.CIRCLE}
+                <circle
+                  cx={shapeData.cx}
+                  cy={shapeData.cy}
+                  r={shapeData.r}
+                  fill={shapeStyle.fill}
+                  stroke={shapeStyle.stroke}
+                  stroke-width={shapeStyle.strokeWidth}
+                  stroke-dasharray={shapeStyle.strokeDasharray}
+                />
+              {:else if shapeData.type === SHAPE_TYPE.ARROW}
+                <path
+                  d={shapeData.path}
+                  fill={shapeStyle.stroke}
+                  stroke={shapeStyle.stroke}
+                  stroke-width={shapeStyle.strokeWidth}
+                  stroke-dasharray={shapeStyle.strokeDasharray}
+                  stroke-linejoin="round"
+                  stroke-linecap="round"
+                />
+              {:else}
+                <path
+                  d={shapeData.path}
+                  fill={shapeStyle.fill}
+                  stroke={shapeStyle.stroke}
+                  stroke-width={shapeStyle.strokeWidth}
+                  stroke-dasharray={shapeStyle.strokeDasharray}
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              {/if}
+            </svg>
+          </div>
           {#if isShapeSelected}
             <div class="shape-handles" role="presentation">
               <div
@@ -823,14 +1189,16 @@
           {/if}
         </div>
       {:else if item.type === AnnotationKind.DRAWING}
-        {@const drawingStyle = getShapeStyle(item)}
+        {@const drawingStyle = getVectorStyle(item.style)}
         {@const points = Array.isArray(item.content) ? item.content : []}
         {#if points.length > 0}
           {@const isClosed = item.style?.drawingType === DrawingType.ZONE}
           {@const smoothness = item.style?.smoothness ?? 0}
           {@const drawingBounds = computeDrawingBounds(
             points,
-            drawingStyle.strokeWidth
+            drawingStyle.strokeWidth,
+            smoothness,
+            isClosed
           )}
           <svg
             width={drawingBounds.width}
@@ -878,6 +1246,11 @@
     z-index: var(--z-content-raised);
   }
 
+  .annotation-map-layer {
+    position: absolute;
+    pointer-events: none;
+  }
+
   .drawing-capture {
     position: absolute;
     top: 0;
@@ -886,6 +1259,7 @@
     height: 100%;
     cursor: crosshair;
     pointer-events: auto;
+    touch-action: none;
     z-index: 5;
   }
 
@@ -893,8 +1267,6 @@
     position: absolute;
     top: 0;
     left: 0;
-    width: 100%;
-    height: 100%;
     overflow: visible;
     pointer-events: none;
   }
@@ -917,11 +1289,11 @@
     cursor: move;
   }
 
-  .annotation-item:hover:not(:has(.shape-container)) {
+  .annotation-item:hover:not(:has(.shape-frame)) {
     outline: 1px dashed #726e6e;
   }
 
-  .annotation-item:hover .shape-container {
+  .annotation-item:hover .shape-frame {
     outline: 1px dashed #726e6e;
   }
 
@@ -956,13 +1328,18 @@
     object-fit: contain;
   }
 
-  .shape-container {
+  .shape-frame {
     position: relative;
-    transform-origin: center;
   }
 
-  .shape-container.shape-selected {
+  .shape-frame.shape-selected {
     outline: 1px dashed var(--cds-interactive-01, #0072c3);
+  }
+
+  .shape-content {
+    position: absolute;
+    inset: 0;
+    transform-origin: center;
   }
 
   .shape-handles {
@@ -984,6 +1361,10 @@
     pointer-events: auto;
     transform: translate(-50%, -50%);
     z-index: 1;
+  }
+
+  .drawing-close-target-active {
+    filter: drop-shadow(0 0 4px rgba(0, 114, 195, 0.45));
   }
 
   .resize-nw {

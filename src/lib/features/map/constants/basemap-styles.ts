@@ -12,9 +12,18 @@ export enum BasemapStyle {
   MONDE_SATELLITE = 'monde-satellite'
 }
 
-export const DEFAULT_TILED_BASEMAP_STYLE = BasemapStyle.FRANCE_NIVEAUX_DE_GRIS;
+export const DEFAULT_TILED_BASEMAP_STYLE = BasemapStyle.MONDE_NIVEAUX_DE_GRIS;
 
 type BasemapStyleResult = string | maplibregl.StyleSpecification;
+export type BasemapZone = 'france' | 'monde';
+export type BasemapViewportBounds = [[number, number], [number, number]];
+
+export interface BasemapViewportPreset {
+  zone: BasemapZone;
+  center: [number, number];
+  zoom: number;
+  bounds: BasemapViewportBounds;
+}
 
 const BLANK_WHITE_STYLE: maplibregl.StyleSpecification = {
   version: 8,
@@ -43,6 +52,39 @@ const BASEMAP_STYLE_PATHS: Record<BasemapStyle, string | null> = {
   [BasemapStyle.MONDE_SATELLITE]: '/basemaps/styles/monde-satellite.json'
 };
 
+const FRANCE_VIEWPORT_PRESET: BasemapViewportPreset = {
+  zone: 'france',
+  center: [2.5, 46.7],
+  zoom: 4.8,
+  bounds: [
+    [-5.8, 41.0],
+    [10.2, 51.8]
+  ]
+};
+
+const WORLD_VIEWPORT_PRESET: BasemapViewportPreset = {
+  zone: 'monde',
+  center: [0, 20],
+  zoom: 1.25,
+  bounds: [
+    [-170, -55],
+    [170, 80]
+  ]
+};
+
+const BASEMAP_VIEWPORT_PRESETS: Record<
+  BasemapStyle,
+  BasemapViewportPreset | null
+> = {
+  [BasemapStyle.BLANK_WHITE]: null,
+  [BasemapStyle.FRANCE_COULEURS]: FRANCE_VIEWPORT_PRESET,
+  [BasemapStyle.FRANCE_NIVEAUX_DE_GRIS]: FRANCE_VIEWPORT_PRESET,
+  [BasemapStyle.FRANCE_SATELLITE]: FRANCE_VIEWPORT_PRESET,
+  [BasemapStyle.MONDE_COULEURS]: WORLD_VIEWPORT_PRESET,
+  [BasemapStyle.MONDE_NIVEAUX_DE_GRIS]: WORLD_VIEWPORT_PRESET,
+  [BasemapStyle.MONDE_SATELLITE]: WORLD_VIEWPORT_PRESET
+};
+
 export function getBasemapStyle(style: BasemapStyle): BasemapStyleResult {
   if (style === BasemapStyle.BLANK_WHITE) {
     return BLANK_WHITE_STYLE;
@@ -51,6 +93,16 @@ export function getBasemapStyle(style: BasemapStyle): BasemapStyleResult {
   const path = BASEMAP_STYLE_PATHS[style];
 
   return path ? resolveStaticAssetUrl(path) : BLANK_WHITE_STYLE;
+}
+
+export function getBasemapViewportPreset(
+  style: BasemapStyle
+): BasemapViewportPreset | null {
+  return BASEMAP_VIEWPORT_PRESETS[style];
+}
+
+export function getBasemapZone(style: BasemapStyle): BasemapZone | null {
+  return getBasemapViewportPreset(style)?.zone ?? null;
 }
 
 export const DEFAULT_BASEMAP_STYLE = BasemapStyle.BLANK_WHITE;
