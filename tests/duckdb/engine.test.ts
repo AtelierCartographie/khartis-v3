@@ -124,4 +124,70 @@ describe('duckdb engine', () => {
       { format: 'arrow-ipc' }
     );
   });
+
+  it('warms coordinate systems without disabling GeoParquet conversion eagerly', async () => {
+    selectBundleMock.mockResolvedValue({
+      mainModule: 'eh-module-url',
+      mainWorker: 'eh-worker-url',
+      pthreadWorker: null
+    });
+
+    const engine = await import('$lib/features/duckdb/core/engine');
+
+    await engine.initEngine();
+
+    const executedSql = queryMock.mock.calls.map((call) => String(call[1]));
+
+    expect(
+      executedSql.some((sql) =>
+        sql.includes('SET enable_geoparquet_conversion = false;')
+      )
+    ).toBe(false);
+    expect(
+      executedSql.some((sql) => sql.includes('duckdb_coordinate_systems()'))
+    ).toBe(true);
+  });
+
+  it('fails initialization if CRS warmup fails', async () => {
+    selectBundleMock.mockResolvedValue({
+      mainModule: 'eh-module-url',
+      mainWorker: 'eh-worker-url',
+      pthreadWorker: null
+    });
+    queryMock.mockImplementation(async (_connection, sql: string) => {
+      if (sql.includes('duckdb_coordinate_systems()')) {
+        throw new Error('CRS warmup failed');
+      }
+      return undefined;
+    });
+
+    const engine = await import('$lib/features/duckdb/core/engine');
+
+    await expect(engine.initEngine()).rejects.toThrow('CRS warmup failed');
+
+    const executedSql = queryMock.mock.calls.map((call) => String(call[1]));
+
+    expect(
+      executedSql.some((sql) => sql.includes('duckdb_coordinate_systems()'))
+    ).toBe(true);
+  });
+
+  it('keeps browser initialization on the documented non-pthread bundles with a single worker thread', async () => {
+    selectBundleMock.mockResolvedValue({
+      mainModule: 'eh-module-url',
+      mainWorker: 'eh-worker-url',
+      pthreadWorker: null
+    });
+
+    const engine = await import('$lib/features/duckdb/core/engine');
+
+    await engine.initEngine();
+
+    expect(engine.getContext().threadsSupported).toBe(false);
+    expect(openMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        maximumThreads: 1
+      })
+    );
+  });
 });

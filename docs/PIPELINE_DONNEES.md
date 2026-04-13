@@ -189,3 +189,4 @@ Pour ajouter un nouveau format de fichier au pipeline :
 7. Ajouter des fichiers de test dans `tests-datasets/<format>/`
 
 Types (`DatasetResult`, `EnrichedColumn`, `ColumnType`) definis dans `src/lib/features/data-pipeline/types.ts`.
+Pour les géofichiers multi-couches comme certains GeoPackage, Khartis sélectionne automatiquement une couche spatiale par défaut. L'heuristique privilégie les polygones, puis les lignes, puis les points, et retient au sein de cette famille la couche la plus riche en entités.

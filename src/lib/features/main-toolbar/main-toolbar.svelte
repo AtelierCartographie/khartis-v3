@@ -30,9 +30,17 @@
     globalActions.setToolbarState(state);
   }
 
+  const hasToolbarPanel = $derived(
+    globalState.selectedStep !== ToolbarStep.Styling
+  );
+
   const DATA_STEP_SECTION_IDS: Record<string, string[]> = {
     geo: ['data-control-step', 'enrich-data-step'],
-    'tabular-gps': ['data-control-step', 'basemap-join-step'],
+    'tabular-gps': [
+      'data-control-step',
+      'geolocation-step',
+      'basemap-join-step'
+    ],
     tabular: ['data-control-step', 'geolocation-step', 'basemap-join-step']
   };
 
@@ -53,6 +61,27 @@
         toolbarContent.scrollTop = 0;
       }
     }
+  }
+
+  function handleToolbarToggle(): void {
+    if (!hasToolbarPanel) {
+      return;
+    }
+
+    if (globalState.selectedStep === ToolbarStep.Visualizations) {
+      setToolbar(
+        globalState.toolbarState === ToolbarState.Collapsed
+          ? ToolbarState.Compact
+          : ToolbarState.Collapsed
+      );
+      return;
+    }
+
+    setToolbar(
+      globalState.toolbarState === ToolbarState.Full
+        ? ToolbarState.Compact
+        : ToolbarState.Full
+    );
   }
 
   $effect(() => {
@@ -98,32 +127,17 @@
   })}
 >
   <header class="flex sticky z-1000 border-b main-toolbar-header">
-    <IconButton
-      kind="ghost"
-      iconDescription={globalState.toolbarState === ToolbarState.Full
-        ? m.toolbar_compact()
-        : m.toolbar_expand()}
-      icon={OpenPanelFilledRight}
-      on:click={() => {
-        const isVizStep =
-          globalState.selectedStep === ToolbarStep.Visualizations;
-        if (isVizStep) {
-          setToolbar(
-            globalState.toolbarState === ToolbarState.Collapsed
-              ? ToolbarState.Compact
-              : ToolbarState.Collapsed
-          );
-        } else {
-          setToolbar(
-            globalState.toolbarState === ToolbarState.Full
-              ? ToolbarState.Compact
-              : ToolbarState.Full
-          );
-        }
-      }}
-    />
-
-    <ToolbarTabs />
+    {#if hasToolbarPanel}
+      <IconButton
+        kind="ghost"
+        iconDescription={globalState.toolbarState === ToolbarState.Full
+          ? m.toolbar_compact()
+          : m.toolbar_expand()}
+        icon={OpenPanelFilledRight}
+        on:click={handleToolbarToggle}
+      />
+      <ToolbarTabs />
+    {/if}
   </header>
 
   <article
@@ -143,7 +157,6 @@
   {#if globalState.selectedStep === ToolbarStep.Data}
     {@const activeStepIndex = dataTabStore.activeStepIndex}
     {@const isGeographicMode = dataTabStore.isGeographicMode}
-    {@const isTabularGPSMode = dataTabStore.isTabularGPSMode}
     {@const canVisualizeNow = dataTabStore.isReadyForVisualization}
 
     <footer
@@ -177,15 +190,6 @@
               ? m.enrich_status_done()
               : m.enrich_status_pending()}
           />
-        {:else if isTabularGPSMode}
-          <ProgressStep
-            complete={dataTabStore.hasCompletedStep[1]}
-            disabled={!dataTabStore.canNavigateToStep[1]}
-            label={m.data_tab_join()}
-            description={dataTabStore.hasCompletedStep[1]
-              ? m.join_status_done()
-              : m.join_status_pending()}
-          />
         {:else}
           <ProgressStep
             complete={dataTabStore.hasCompletedStep[1]}
@@ -214,7 +218,7 @@
             tooltipPosition="top"
             tooltipAlignment="end"
             iconDescription={!canVisualizeNow
-              ? isGeographicMode || isTabularGPSMode
+              ? isGeographicMode
                 ? m.data_step_status_clean()
                 : m.join_status_pending()
               : m.go_to_visualization()}

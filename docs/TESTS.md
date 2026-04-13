@@ -6,6 +6,7 @@
 
 | Couche            | Outil                     | Environnement                   | Commande             | CI  |
 | ----------------- | ------------------------- | ------------------------------- | -------------------- | --- |
+| Tests serveur CI  | Vitest + @duckdb/node-api | node                            | `pnpm test`          | oui |
 | Tests unitaires   | Vitest                    | jsdom (client) / node (serveur) | `pnpm test:unit`     | --  |
 | Tests de pipeline | Vitest + @duckdb/node-api | node                            | `pnpm test:pipeline` | oui |
 | Tests DuckDB      | Vitest + @duckdb/node-api | node                            | `pnpm test:duckdb`   | oui |
@@ -19,13 +20,13 @@
 
 Le job `Quality Checks` tourne sur chaque pull request vers `staging` ou `main`. Il valide :
 
-| Etape          | Commande                          | Ce qui est verifie                                |
-| -------------- | --------------------------------- | ------------------------------------------------- |
-| Lint           | `pnpm lint`                       | Prettier + ESLint                                 |
-| Type check     | `pnpm check`                      | TypeScript strict + types Svelte                  |
-| Pipeline tests | `vitest run --project server ...` | Ingestion DuckDB de tous les formats de donnees   |
-| DuckDB tests   | `vitest run --project server ...` | Operations SQL, jointures, cache                  |
-| Build          | `pnpm build`                      | Build de production SvelteKit (adaptateur static) |
+| Etape          | Commande             | Ce qui est verifie                                |
+| -------------- | -------------------- | ------------------------------------------------- |
+| Lint           | `pnpm lint`          | Prettier + ESLint                                 |
+| Type check     | `pnpm check`         | TypeScript strict + types Svelte                  |
+| Pipeline tests | `pnpm test:pipeline` | Ingestion DuckDB de tous les formats de donnees   |
+| DuckDB tests   | `pnpm test:duckdb`   | Operations SQL, jointures, cache                  |
+| Build          | `pnpm build`         | Build de production SvelteKit (adaptateur static) |
 
 Le build produit un dossier `build/` contenant le site statique pret a deployer.
 
@@ -38,13 +39,16 @@ Khartis est deploye manuellement sur un serveur FTP. Le processus avant chaque d
 ```bash
 # 1. Verifier que la CI passe (Quality Checks vert sur GitHub)
 
-# 2. Lancer les tests E2E en local pour valider l'UX
+# 2. Rejouer localement la suite serveur si besoin
+pnpm test
+
+# 3. Lancer les tests E2E en local pour valider l'UX
 pnpm test:e2e
 
-# 3. Builder
+# 4. Builder
 pnpm build
 
-# 4. Deployer le contenu de build/ sur le FTP
+# 5. Deployer le contenu de build/ sur le FTP
 ```
 
 Si un test E2E echoue, corriger avant de deployer. Si tous passent, deployer `build/` via le client FTP habituel.

@@ -41,11 +41,13 @@ Chaque colonne est classée selon son **type sémiotique** (semioType) à partir
 
 **Choroplèthe** : polygones colorés selon une variable de ratio (densité, taux, pourcentage). Classification en classes → palette séquentielle ou divergente.
 
-**Proportionnel** : symboles dont la taille est proportionnelle à une valeur absolue (QTA : population, surface). Échelle linéaire, sqrt ou log.
+**Proportionnel** : symboles dont la taille est proportionnelle à une valeur absolue (QTA : population, surface). Échelle linéaire, sqrt ou log. Sur données polygonales, les symboles sont rendus sur les centroïdes des entités, avec les contours disponibles comme contexte sans réactiver un aplat polygonal par défaut. Le calcul de taille s’appuie sur les statistiques complètes de colonne et reste borné entre `minSize` et `maxSize` pour éviter les symboles hors gabarit.
 
-**Catégoriel** : couleurs différentes par catégorie (QL : pays, régions). Palette qualitative. Pas de classement ordre.
+**Catégoriel** : couleurs différentes par catégorie (QL : pays, régions). Palette qualitative. Pas de classement ordre. Les couleurs doivent être résolues à partir des labels complets de classification ou de la table Arrow complète, jamais depuis le simple preview `dataset.data`, pour éviter des catégories manquantes ou des couleurs incohérentes après import URL, restauration de projet ou changement de filtre.
 
-**Bivarié** : combinaison taille + couleur pour deux variables. Ex : taille = population, couleur = taux d'urbanisation.
+**Bivarié** : combinaison taille + couleur pour deux variables. Ex : taille = population, couleur = taux d'urbanisation. Le preset de suggestion `symbols_proportional_double` est un cas particulier : il réutilise le pipeline bivarié, mais bascule en mode `proportionalType = DOUBLE` pour rendre deux séries de symboles proportionnels superposées à partir de `sizeColumn` et `valueColumn`.
+
+Par défaut, les primitives de texte (`labels`, `texts`) démarrent avec une couleur noire. Une couleur thématique n'est appliquée que si l'utilisateur active explicitement un mode couleur piloté par les données.
 
 ---
 
@@ -121,6 +123,9 @@ Couleur via `@ateliercartographie/ok-palette` en **espace Oklch** (perceptuellem
 4. Retourner les 3 meilleures par score calculé (`avgScore / 6.5 * 100`)
 
 **Mapping** : `visualization-tab/suggestion.utils.ts::mapSuggestionToType()` fait la correspondance suggestion ID → `VisualizationType`.
+La sélection d'une suggestion réapplique le preset complet du type cible (modes, primitives, style, mapping, classification) avant d'affecter les colonnes proposées, puis applique des overrides spécifiques au pattern (`QTA+QL` → couleur catégorielle, `QTA+QTR` → couleur en classes, `QTA+QTA` → double proportionnel).
+Les suggestions `texts_*` réutilisent le type `BIVARIATE`, mais elles reconfigurent explicitement le rendu texte: `labelColumn` pour le contenu, `categoryColumn` ou `valueColumn` ou `sizeColumn` pour la variable secondaire, opacité texte activée, couches symboles rendues invisibles, et `texts_proportional` active `modes.size = proportional` afin que la taille des textes suive la variable quantitative.
+Les identifiants techniques de type SIG (`OGC_FID`, `FID`, `OBJECTID`, `GID`, `rowid`, etc.) doivent être classés comme identifiants et exclus du ranking final pour éviter de suggérer des cartes proportionnelles sur des clés auto-générées.
 
 ---
 
@@ -171,7 +176,7 @@ flowchart LR
 
 **JAMAIS via DuckDB**.
 
-Métadonnées dans `all-basemaps-metadata.json`. Attributs (noms de régions) dans `all-basemaps-attributes.parquet` (chargé via DuckDB pour les jointures). Couches d'habillage : terre, mers, lacs, relief, frontières, rivières, villes, équateur, méridiens.
+Métadonnées dans `all-basemaps-metadata.json`. Attributs (noms de régions) dans `all-basemaps-attributes.parquet` (chargé via DuckDB uniquement au moment d'une jointure). Les couches annexes de basemap (limites, graticules, lignes geographiques) sont chargées a la demande selon les couches visibles.
 
 ### Carte Facile
 
@@ -236,12 +241,16 @@ Stockées dans `annotations.store.svelte.ts` — synchronisées avec la config d
 
 Génération automatique dès création de visualisation. Types de contenus :
 
-| Type viz      | Contenu légende                           |
-| ------------- | ----------------------------------------- |
-| Choroplèthe   | Rampe de couleurs (classes + seuils)      |
-| Catégoriel    | Swatches discrètes (catégories)           |
-| Proportionnel | Échelle de tailles (valeur min/max)       |
-| Motif         | Swatches avec motif hatch (accessibilité) |
+| Type viz / mode     | Contenu légende                                                                 |
+| ------------------- | ------------------------------------------------------------------------------- |
+| Choroplèthe         | Rampe de couleurs (classes + seuils)                                            |
+| Catégoriel          | Swatches discrètes, avec primitive cohérente avec la visualisation              |
+| Proportionnel       | Échelle de tailles (min, intermédiaire, max)                                    |
+| Symboles en classes | Échelle discrète de tailles par classe                                          |
+| Lignes en couleur   | Swatches linéaires (classes ou catégories)                                      |
+| Lignes en épaisseur | Échelle d’épaisseurs (proportionnelle ou par classes)                           |
+| Motif               | Swatches avec motif hatch (accessibilité)                                       |
+| Données manquantes  | Entrée dédiée reflétant la représentation choisie (surface, rond, carré, croix) |
 
 Légendes synchronisées avec `visualizationStore` via `syncWithVisualizations()`. Items déplaçables (4 coins), personnalisables (police, taille, couleur texte, fond, opacité).
 

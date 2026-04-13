@@ -28,7 +28,7 @@ import type {
   ParserOptions,
   ProjectionLike
 } from 'geoarrow-deck-stream';
-import type { GeoProjection } from 'd3-geo';
+import { geoPath, type GeoProjection } from 'd3-geo';
 // d3-geo-projection has no bundled type declarations — import via namespace cast
 import * as _d3GeoProjection from 'd3-geo-projection';
 
@@ -66,6 +66,80 @@ function resolveSimpleProjection(proj4String: string): GeoProjection {
 
 const EXPECTED_GEOM_COL = 'geometry';
 const normalizedTableCache = new WeakMap<ArrowTable, ArrowTable>();
+const projectedBboxCache = new WeakMap<
+  BasemapMetadata,
+  Map<string, [number, number, number, number] | null>
+>();
+
+function sampleProjectedBbox(
+  projection: ProjectionLike,
+  bbox: [number, number, number, number]
+): [number, number, number, number] | null {
+  const polygon: GeoJSON.Feature<GeoJSON.Polygon> = {
+    type: 'Feature',
+    properties: {},
+    geometry: {
+      type: 'Polygon',
+      coordinates: [
+        [
+          [bbox[0], bbox[1]],
+          [bbox[2], bbox[1]],
+          [bbox[2], bbox[3]],
+          [bbox[0], bbox[3]],
+          [bbox[0], bbox[1]]
+        ]
+      ]
+    }
+  };
+
+  try {
+    const [[minX, minY], [maxX, maxY]] = geoPath(
+      projection as unknown as GeoProjection
+    ).bounds(polygon);
+
+    if (
+      [minX, minY, maxX, maxY].every((value) => Number.isFinite(value)) &&
+      maxX >= minX &&
+      maxY >= minY
+    ) {
+      return [minX, minY, maxX, maxY];
+    }
+  } catch {
+    // Fallback to manual edge sampling for projection-like objects that do not
+    // expose the full d3-geo path interface.
+  }
+
+  const [west, south, east, north] = bbox;
+  const steps = 20;
+  const xs: number[] = [];
+  const ys: number[] = [];
+
+  const tryProject = (lon: number, lat: number) => {
+    const proj = projection as unknown as (
+      c: [number, number]
+    ) => [number, number] | null;
+    const result = proj([lon, lat]);
+    if (result && isFinite(result[0]) && isFinite(result[1])) {
+      xs.push(result[0]);
+      ys.push(result[1]);
+    }
+  };
+
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const lon = west + t * (east - west);
+    const lat = south + t * (north - south);
+    tryProject(lon, south);
+    tryProject(lon, north);
+    tryProject(west, lat);
+    tryProject(east, lat);
+  }
+  tryProject((west + east) / 2, (south + north) / 2);
+
+  return xs.length === 0
+    ? null
+    : [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+}
 
 function normalizeGeomColumnName(table: ArrowTable): ArrowTable {
   const cached = normalizedTableCache.get(table);
@@ -316,43 +390,34 @@ export function computeProjectedBboxForBasemap(
   const wgs84Bbox = overrideBbox ?? metadata.bbox;
   if (!wgs84Bbox) return null;
 
+  const cacheKey = `${width}x${height}:${wgs84Bbox.join(',')}`;
+  let metadataCache = projectedBboxCache.get(metadata);
+  if (metadataCache?.has(cacheKey)) {
+    return metadataCache.get(cacheKey) ?? null;
+  }
+
   const projection = buildProjectionForBasemap(
     metadata,
     width,
     height,
     projectionPresets
   );
+  const result = sampleProjectedBbox(projection, wgs84Bbox);
 
-  const [west, south, east, north] = wgs84Bbox;
-  const steps = 20;
-  const xs: number[] = [];
-  const ys: number[] = [];
-
-  const tryProject = (lon: number, lat: number) => {
-    const proj = projection as unknown as (
-      c: [number, number]
-    ) => [number, number] | null;
-    const result = proj([lon, lat]);
-    if (result && isFinite(result[0]) && isFinite(result[1])) {
-      xs.push(result[0]);
-      ys.push(result[1]);
-    }
-  };
-
-  for (let i = 0; i <= steps; i++) {
-    const t = i / steps;
-    const lon = west + t * (east - west);
-    const lat = south + t * (north - south);
-    tryProject(lon, south);
-    tryProject(lon, north);
-    tryProject(west, lat);
-    tryProject(east, lat);
+  if (!metadataCache) {
+    metadataCache = new Map();
+    projectedBboxCache.set(metadata, metadataCache);
   }
-  tryProject((west + east) / 2, (south + north) / 2);
+  metadataCache.set(cacheKey, result);
 
-  if (xs.length === 0) return null;
+  return result;
+}
 
-  return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+export function computeProjectedBboxForProjection(
+  projection: ProjectionLike,
+  bbox: [number, number, number, number]
+): [number, number, number, number] | null {
+  return sampleProjectedBbox(projection, bbox);
 }
 
 /**
@@ -482,6 +547,69 @@ export function pointRadiusAttr(
   return { value: radii, size: 1 };
 }
 
+/**
+ * Per-vertex color attribute for PathLayer binary data.
+ *
+ * Deck.gl's PathLayer expects binary attributes such as getColor/getWidth
+ * to follow the same vertex layout as getPath, not one value per path.
+ */
+export function pathColorAttr(
+  data: BinaryPathData,
+  colorLookup: (featureId: number) => [number, number, number, number]
+): DeckBinaryAttribute {
+  const vertexCount = data.positions.length / data.size;
+  const colors = new Uint8Array(vertexCount * 4);
+
+  for (let i = 0; i < data.length; i++) {
+    const color = colorLookup(data.featureIds[i]);
+    const vertexStart = data.startIndices[i];
+    const vertexEnd =
+      i + 1 < data.startIndices.length ? data.startIndices[i + 1] : vertexCount;
+
+    for (
+      let vertexIndex = vertexStart;
+      vertexIndex < vertexEnd;
+      vertexIndex++
+    ) {
+      const offset = vertexIndex * 4;
+      colors[offset] = color[0];
+      colors[offset + 1] = color[1];
+      colors[offset + 2] = color[2];
+      colors[offset + 3] = color[3];
+    }
+  }
+
+  return { value: colors, size: 4, normalized: true };
+}
+
+/**
+ * Per-vertex width attribute for PathLayer binary data.
+ */
+export function pathWidthAttr(
+  data: BinaryPathData,
+  widthLookup: (featureId: number) => number
+): DeckBinaryAttribute {
+  const vertexCount = data.positions.length / data.size;
+  const widths = new Float32Array(vertexCount);
+
+  for (let i = 0; i < data.length; i++) {
+    const width = widthLookup(data.featureIds[i]);
+    const vertexStart = data.startIndices[i];
+    const vertexEnd =
+      i + 1 < data.startIndices.length ? data.startIndices[i + 1] : vertexCount;
+
+    for (
+      let vertexIndex = vertexStart;
+      vertexIndex < vertexEnd;
+      vertexIndex++
+    ) {
+      widths[vertexIndex] = width;
+    }
+  }
+
+  return { value: widths, size: 1 };
+}
+
 // ---------------------------------------------------------------------------
 // Row accessor adapters (bridges DeckDataRow accessors to featureId lookups)
 // ---------------------------------------------------------------------------
@@ -550,55 +678,8 @@ export function filterValueAttr(
 }
 
 // ---------------------------------------------------------------------------
-// Binary centroid extraction (avoids GeoJSON conversion for label placement)
+// Binary point extraction
 // ---------------------------------------------------------------------------
-
-/**
- * Extract centroid positions from binary polygon data.
- * Computes bounding-box centroid per polygon from the vertex array directly.
- */
-export function polygonCentroids(data: BinaryPolygonData): Float64Array {
-  const centroids = new Float64Array(data.length * 2);
-  const positions = data.positions;
-  const polyIndices = data.polygonIndices;
-
-  for (let i = 0; i < data.length; i++) {
-    const start = polyIndices[i] * 2;
-    const end =
-      (i + 1 < data.length ? polyIndices[i + 1] : positions.length / 2) * 2;
-    // Use mean of coordinates instead of bbox centroid to handle antimeridian-crossing polygons
-    let sumX = 0,
-      sumY = 0,
-      count = 0;
-    for (let j = start; j < end; j += 2) {
-      sumX += positions[j];
-      sumY += positions[j + 1];
-      count++;
-    }
-    centroids[i * 2] = count > 0 ? sumX / count : 0;
-    centroids[i * 2 + 1] = count > 0 ? sumY / count : 0;
-  }
-  return centroids;
-}
-
-/**
- * Extract centroid positions from binary path data (line midpoints).
- */
-export function pathCentroids(data: BinaryPathData): Float64Array {
-  const centroids = new Float64Array(data.length * 2);
-  const positions = data.positions;
-  const startIndices = data.startIndices;
-
-  for (let i = 0; i < data.length; i++) {
-    const start = startIndices[i] * 2;
-    const end =
-      (i + 1 < data.length ? startIndices[i + 1] : positions.length / 2) * 2;
-    const midIdx = start + Math.floor((end - start) / 4) * 2;
-    centroids[i * 2] = positions[midIdx] ?? 0;
-    centroids[i * 2 + 1] = positions[midIdx + 1] ?? 0;
-  }
-  return centroids;
-}
 
 /**
  * Extract positions from binary point data.

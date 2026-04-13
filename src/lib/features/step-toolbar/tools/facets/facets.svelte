@@ -1,17 +1,28 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
+  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import {
     Button,
     MultiSelect,
     Slider,
     Toggle
   } from 'carbon-components-svelte';
-  import { Draggable, Launch, SettingsAdjust } from 'carbon-icons-svelte';
+  import {
+    ArrowDown,
+    ArrowUp,
+    Draggable,
+    Launch,
+    SettingsAdjust
+  } from 'carbon-icons-svelte';
   import { dndzone } from 'svelte-dnd-action';
   import { facetsStore, SCALE_MODE } from './facets.store.svelte';
   import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
-  import { createProjectActions } from '$lib/features/commons/store/create-project.store.svelte';
+  import {
+    globalActions,
+    globalState
+  } from '$lib/features/commons/store/global.svelte';
+  import { ToolbarStep } from '$lib/features/commons/types/global';
   import { COLUMN_TYPE_GEOMETRY } from '$lib/features/commons/constants/data.constants';
 
   const selectedViz = $derived(visualizationStore.selectedVisualization);
@@ -54,6 +65,7 @@
 
   const FLIP_DURATION_MS = 200;
   const DND_TYPE = 'facet-variables';
+  const RECENT_DND_INTERACTION_ATTRIBUTE = 'data-khartis-recent-dnd-at';
 
   let dndVariables = $state<DndVariable[]>([]);
   let dragging = false;
@@ -66,6 +78,7 @@
 
   function handleConsider(e: Event): void {
     dragging = true;
+    markRecentDndInteraction();
     dndVariables = (e as CustomEvent).detail.items;
   }
 
@@ -73,6 +86,7 @@
     const newItems: DndVariable[] = (e as CustomEvent).detail.items;
     dndVariables = newItems;
     dragging = false;
+    markRecentDndInteraction();
 
     const oldIds = variables;
     const newIds = newItems.map((item) => item.id);
@@ -86,6 +100,23 @@
     }
   }
 
+  function markRecentDndInteraction(): void {
+    document.body.setAttribute(
+      RECENT_DND_INTERACTION_ATTRIBUTE,
+      String(Date.now())
+    );
+  }
+
+  function handleMoveVariable(index: number, direction: -1 | 1): void {
+    const nextIndex = index + direction;
+
+    if (nextIndex < 0 || nextIndex >= dndVariables.length) {
+      return;
+    }
+
+    void facetsStore.reorderVariables(index, nextIndex);
+  }
+
   const FACETS_HELP_URL =
     'https://cartographie.sciencespo.fr/khartis/help/facets';
 
@@ -94,7 +125,14 @@
   }
 
   function handleConfigureVisualization() {
-    createProjectActions.selectTab(2);
+    globalState.selectedTool = undefined;
+    globalActions.setNavigationState(ToolbarStep.Visualizations);
+
+    setTimeout(() => {
+      document
+        .querySelector('#choose-visualization')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
   }
 
   function handleExit() {
@@ -224,6 +262,24 @@
                     readonly
                   />
                   <span class="variable-tag">{item.name}</span>
+                  <div class="variable-actions">
+                    <IconButton
+                      kind="ghost"
+                      size="small"
+                      icon={ArrowUp}
+                      iconDescription={m.facets_move_up()}
+                      disabled={i === 0}
+                      onclick={() => handleMoveVariable(i, -1)}
+                    />
+                    <IconButton
+                      kind="ghost"
+                      size="small"
+                      icon={ArrowDown}
+                      iconDescription={m.facets_move_down()}
+                      disabled={i === dndVariables.length - 1}
+                      onclick={() => handleMoveVariable(i, 1)}
+                    />
+                  </div>
                 </div>
               {/each}
             </div>
@@ -498,6 +554,7 @@
   .variable-tag {
     display: inline-flex;
     align-items: center;
+    flex: 1;
     height: 18px;
     padding: 2px 8px;
     background-color: var(--cds-tag-background-purple, #e8daff);
@@ -511,5 +568,12 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     max-width: 200px;
+  }
+
+  .variable-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
   }
 </style>

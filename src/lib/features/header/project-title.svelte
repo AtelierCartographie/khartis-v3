@@ -73,6 +73,8 @@
       tooltipPosition="bottom"
       tooltipAlignment="end"
       iconDescription={m.save_tooltip()}
+      portalTooltip
+      showDisabledTooltip
       kind="ghost"
       icon={Save}
       disabled={!canSave}
@@ -89,6 +91,8 @@
     left: 50%;
     transform: translateX(-50%);
     width: 250px;
+    max-width: calc(100vw - 280px);
+    min-width: 140px;
   }
 
   .project-title-save {
@@ -105,5 +109,31 @@
   #khartis-project-title :global(input) {
     text-align: center;
     font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  @media (max-width: 1023px) {
+    .project-title {
+      width: 180px;
+      max-width: calc(100vw - 176px);
+    }
+
+    .project-title-save {
+      display: none;
+    }
+  }
+
+  @media (max-width: 639px) {
+    .project-title {
+      width: 136px;
+      max-width: calc(100vw - 152px);
+    }
+
+    #khartis-project-title :global(input) {
+      font-size: 0.75rem;
+      padding-inline: var(--cds-spacing-02);
+    }
   }
 </style>

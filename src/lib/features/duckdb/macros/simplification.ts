@@ -1,7 +1,7 @@
 /**
  * DuckDB macros for topology-aware geometry simplification.
  *
- * Five macros:
+ * Eight macros:
  * 1. `snap_topology_normalized` – aligns vertices on a dynamic grid to clean
  *    micro gaps/overlaps before simplification.
  * 2. `simplify_topology_normalized` – coverage-based simplification preserving topology,
@@ -9,6 +9,9 @@
  * 3. `prune_triangles` – removes small triangle artefacts produced by aggressive simplification.
  * 4. `extract_innerlines` – derives shared internal borders from polygon coverage.
  * 5. `simplify_and_clean` – convenience wrapper that chains snapping, simplification and cleanup.
+ * 6. `snap_linestring_normalized` – aligns line vertices on a dynamic grid.
+ * 7. `simplify_linestring_normalized` – simplifies line strings with a normalized factor.
+ * 8. `simplify_and_clean_linestring` – convenience wrapper for line snapping + simplification.
  *
  * @see https://github.com/AtelierCartographie/khartis-v3/issues/53
  */
@@ -162,9 +165,78 @@ const simplify_and_clean_macro = `CREATE OR REPLACE MACRO simplify_and_clean(
     JOIN pruned p ON t._gid = p._gid
 );`;
 
+const snap_linestring_normalized_macro = `CREATE OR REPLACE MACRO snap_linestring_normalized(
+    input_table,
+    precision_factor := 0.00001
+) AS TABLE (
+    WITH
+    source_data AS (
+        FROM query_table(input_table)
+        SELECT _gid, geom
+        WHERE geom IS NOT NULL
+    ),
+    calc_grid AS (
+        FROM source_data
+        SELECT NULLIF(COALESCE(AVG(ST_Length(geom)), 0.0) * precision_factor, 0.0) AS dynamic_grid_size
+    )
+    SELECT
+        s._gid,
+        COALESCE(ST_ReducePrecision(s.geom, c.dynamic_grid_size), s.geom) AS geom
+    FROM source_data s, calc_grid c
+);`;
+
+const simplify_linestring_normalized_macro = `CREATE OR REPLACE MACRO simplify_linestring_normalized(
+    input_table,
+    normalized_factor,
+    max_scale_ref := 0.05
+) AS TABLE (
+    WITH
+    source_data AS (
+        FROM query_table(input_table)
+        SELECT _gid, geom
+        WHERE geom IS NOT NULL
+    ),
+    calc_metric AS (
+        FROM source_data
+        SELECT COALESCE(AVG(ST_Length(geom)), 0.0) * normalized_factor * max_scale_ref AS computed_tolerance
+    )
+    SELECT
+        s._gid,
+        ST_Simplify(s.geom, c.computed_tolerance) AS geom
+    FROM source_data s, calc_metric c
+);`;
+
+const simplify_and_clean_linestring_macro = `CREATE OR REPLACE MACRO simplify_and_clean_linestring(
+    input_table,
+    geom_col,
+    simplify_factor
+) AS TABLE (
+    WITH
+    prep_layer AS (
+        FROM query_table(input_table)
+        SELECT
+            row_number() OVER () as _gid,
+            * RENAME ("geom_col" as geom)
+    ),
+    snapped AS (
+        FROM snap_linestring_normalized(prep_layer)
+    ),
+    simplified AS (
+        FROM simplify_linestring_normalized(snapped, simplify_factor)
+    )
+    SELECT
+        t.* EXCLUDE (_gid, geom),
+        s.geom
+    FROM prep_layer t
+    JOIN simplified s ON t._gid = s._gid
+);`;
+
 export const simplification_macros =
   snap_topology_normalized_macro +
   simplify_topology_normalized_macro +
   prune_triangles_macro +
   extract_innerlines_macro +
-  simplify_and_clean_macro;
+  simplify_and_clean_macro +
+  snap_linestring_normalized_macro +
+  simplify_linestring_normalized_macro +
+  simplify_and_clean_linestring_macro;

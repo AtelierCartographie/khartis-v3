@@ -27,8 +27,6 @@
 
   const store = geoIndicationsActions;
   const geoState = $derived(geoIndicationsState);
-  const geoIndicationsVisible = $derived(geoState.visible);
-
   let localScaleFontFamily = $state<string>(AVAILABLE_FONTS[0]);
   let localScaleFontSize = $state<number>(LEGEND_FONT_SIZES[0]);
 
@@ -85,12 +83,6 @@
     lightness: number;
   };
 
-  function handleVisibilityChange(visible: boolean): void {
-    if (visible !== geoState.visible) {
-      store.setVisibility(visible);
-    }
-  }
-
   function handleScaleFormChange(event: Event): void {
     const form = (event.currentTarget as HTMLSelectElement).value as ScaleForm;
     if (form !== geoState.scale.form) {
@@ -135,20 +127,7 @@
 <div id="khartis-geo-indications-tool">
   <Grid padding noGutter fullWidth>
     <Row>
-      <Column>
-        <div class="switch-row">
-          <span class="switch-label">{m.tool_geo_indications()}</span>
-          <Switch
-            toggled={geoIndicationsVisible}
-            labelText={m.tool_geo_indications()}
-            hideLabel
-            labelA={m.layers_hide()}
-            labelB={m.layers_show()}
-            showStateLabel
-            onchange={handleVisibilityChange}
-          />
-        </div>
-      </Column>
+      <Column></Column>
     </Row>
   </Grid>
 
@@ -218,9 +197,14 @@
                 <Select
                   id="scale-font-select"
                   labelText={m.legend_font()}
-                  bind:selected={localScaleFontFamily}
-                  on:change={() =>
-                    store.setScaleFontFamily(localScaleFontFamily)}
+                  selected={localScaleFontFamily}
+                  on:change={(event) => {
+                    const nextFontFamily = (
+                      event.currentTarget as HTMLSelectElement
+                    ).value;
+                    localScaleFontFamily = nextFontFamily;
+                    store.setScaleFontFamily(nextFontFamily);
+                  }}
                   size="sm"
                 >
                   {#each AVAILABLE_FONTS as f (f)}
@@ -232,12 +216,22 @@
                 <Select
                   id="scale-font-size"
                   labelText={m.legend_font_size()}
-                  bind:selected={localScaleFontSize}
-                  on:change={() => store.setScaleFontSize(localScaleFontSize)}
+                  selected={String(localScaleFontSize)}
+                  on:change={(event) => {
+                    const nextFontSize = Number(
+                      (event.currentTarget as HTMLSelectElement).value
+                    );
+                    if (!Number.isFinite(nextFontSize)) {
+                      return;
+                    }
+
+                    localScaleFontSize = nextFontSize;
+                    store.setScaleFontSize(nextFontSize);
+                  }}
                   size="sm"
                 >
                   {#each LEGEND_FONT_SIZES as s (s)}
-                    <SelectItem value={s} text={String(s)} />
+                    <SelectItem value={String(s)} text={String(s)} />
                   {/each}
                 </Select>
               </div>
@@ -368,7 +362,7 @@
             <Slider
               labelText={m.geo_inset_map_size()}
               min={20}
-              max={800}
+              max={1600}
               step={1}
               value={geoState.insetMap.size}
               on:change={(e) =>
@@ -513,20 +507,6 @@
     .expandable-stack
     :global(.section-container + .section-container) {
     border-top: 0;
-  }
-
-  .switch-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: var(--cds-spacing-04);
-    padding: var(--cds-spacing-02) 0;
-  }
-
-  .switch-label {
-    font-size: 0.875rem;
-    color: var(--cds-text-secondary);
-    font-weight: 400;
   }
 
   .text-style-row {

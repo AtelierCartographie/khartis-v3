@@ -30,6 +30,38 @@ const GEOMETRY_TYPE_TO_GEOJSON: Partial<Record<string, GeometryInfo['type']>> =
     [GEOMETRY_WKT_TYPES.MULTI_POLYGON]: GEOJSON_TYPE.MULTI_POLYGON
   };
 
+function normalizeCrsName(crs: string | null | undefined): string | undefined {
+  if (!crs) return undefined;
+
+  const trimmed = crs.trim();
+  if (!trimmed) return undefined;
+
+  if (/^epsg:\d+$/i.test(trimmed)) {
+    return trimmed.toUpperCase();
+  }
+
+  if (/^\d+$/.test(trimmed)) {
+    return `EPSG:${trimmed}`;
+  }
+
+  if (/^wgs\s*84$/i.test(trimmed)) {
+    return GEO_CONSTANTS.WGS84_CRS;
+  }
+
+  return trimmed;
+}
+
+function extractGeometryColumnCrs(
+  columnType: string | null | undefined
+): string | undefined {
+  if (!columnType) {
+    return undefined;
+  }
+
+  const match = columnType.match(/^GEOMETRY\('([^']+)'\)$/i);
+  return normalizeCrsName(match?.[1]);
+}
+
 export async function extractGeometryInfo(
   tableName: string,
   knownColumns?: Array<{ name: string; type: string }>
@@ -60,6 +92,7 @@ export async function extractGeometryInfo(
 
     const escapedGeomCol = escapeIdentifier(geometryColumn.name);
     const escapedTable = escapeIdentifier(tableName);
+    const geometryCrs = extractGeometryColumnCrs(geometryColumn.type);
 
     const consolidatedQuery = `
 			WITH bbox AS (
@@ -117,7 +150,7 @@ export async function extractGeometryInfo(
       columnName: geometryColumn.name,
       bounds,
       centroid: computeCentroid(bounds),
-      crs: GEO_CONSTANTS.WGS84_CRS,
+      crs: geometryCrs ?? GEO_CONSTANTS.WGS84_CRS,
       featureCount: undefined
     };
   } catch (error) {

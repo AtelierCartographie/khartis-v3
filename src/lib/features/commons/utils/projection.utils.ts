@@ -227,3 +227,59 @@ export function fitProjectionToGeoJSON(
 
   return projection;
 }
+
+export function fitProjectionToBbox(
+  projection: GeoProjection,
+  bbox: [number, number, number, number],
+  width: number,
+  height: number,
+  padding = 20
+): GeoProjection {
+  const fitTarget = createProjectionFitTarget(bbox);
+
+  projection.fitExtent(
+    [
+      [padding, padding],
+      [width - padding, height - padding]
+    ],
+    fitTarget
+  );
+
+  return projection;
+}
+
+export function getProjectedBboxForBbox(
+  projection: GeoProjection,
+  bbox: [number, number, number, number]
+): [number, number, number, number] {
+  const fitTarget = createProjectionFitTarget(bbox);
+  const path = d3geo.geoPath(projection);
+  const [[minX, minY], [maxX, maxY]] = path.bounds(fitTarget);
+
+  return [minX, minY, maxX, maxY];
+}
+
+function createProjectionFitTarget(bbox: [number, number, number, number]) {
+  const [west, south, east, north] = bbox;
+  const isWorldBbox =
+    west <= -179.5 && south <= -89.5 && east >= 179.5 && north >= 89.5;
+
+  return isWorldBbox
+    ? { type: 'Sphere' as const }
+    : {
+        type: GEOJSON_TYPE.FEATURE,
+        geometry: {
+          type: 'Polygon' as const,
+          coordinates: [
+            [
+              [west, south],
+              [east, south],
+              [east, north],
+              [west, north],
+              [west, south]
+            ]
+          ]
+        },
+        properties: {}
+      };
+}

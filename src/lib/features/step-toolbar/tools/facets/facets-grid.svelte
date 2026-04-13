@@ -67,6 +67,9 @@
         forcedVisualizationIds={[viz.id]}
         onMoveSync={syncPanZoom ? (s) => handleMoveSync(idx, s) : undefined}
         syncViewState={getSyncViewState(idx)}
+        showLegendOverlay={false}
+        showGeoIndicationsOverlay={false}
+        showAnnotationOverlay={false}
       />
     </div>
   {/each}

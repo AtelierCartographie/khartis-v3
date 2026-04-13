@@ -53,13 +53,16 @@
     );
   }
 
+  const DEFAULT_DRAWING_STROKE_COLOR = '#000000';
+  const DEFAULT_DRAWING_FILL_COLOR = '#ffffff';
+
   let drawingType = $state<DrawingType>(DrawingType.LINE);
-  let strokeColor = $state('#ffffff');
+  let strokeColor = $state(DEFAULT_DRAWING_STROKE_COLOR);
   let hue = $state(0);
   let saturation = $state(0);
-  let lightness = $state(100);
+  let lightness = $state(0);
 
-  let fillColor = $state('#ffffff');
+  let fillColor = $state(DEFAULT_DRAWING_FILL_COLOR);
   let fillHue = $state(0);
   let fillSaturation = $state(0);
   let fillLightness = $state(100);
@@ -79,7 +82,12 @@
         hue = c.hue ?? 0;
         saturation = c.saturation ?? 0;
         lightness = c.lightness ?? 0;
-        const cv = createColorValue('#ffffff', hue, saturation, lightness);
+        const cv = createColorValue(
+          DEFAULT_DRAWING_STROKE_COLOR,
+          hue,
+          saturation,
+          lightness
+        );
         strokeColor = cv.hex;
       }
     }
@@ -96,7 +104,7 @@
         fillSaturation = c.saturation ?? 0;
         fillLightness = c.lightness ?? 100;
         const cv = createColorValue(
-          '#ffffff',
+          DEFAULT_DRAWING_FILL_COLOR,
           fillHue,
           fillSaturation,
           fillLightness
@@ -112,8 +120,11 @@
 
   function handleDrawingTypeChange(event: CustomEvent<string | number>) {
     const type = String(event.detail) as DrawingType;
+    if (selectedDrawing) {
+      annotationsActions.selectAnnotation(null);
+    }
     drawingType = type;
-    annotationsActions.applyStyle({
+    annotationsActions.updateDefaultStyle({
       drawingType: type
     });
   }
@@ -125,6 +136,15 @@
   function handleSmoothnessChange(e: CustomEvent<number>) {
     annotationsActions.applyStyle({ smoothness: e.detail });
   }
+
+  const activeDrawingType = $derived(
+    annotationsState.isDrawingMode
+      ? annotationsState.drawingModeType
+      : drawingType
+  );
+  const minimumPointsToFinish = $derived(
+    activeDrawingType === DrawingType.ZONE ? 3 : 2
+  );
 
   function toOpacityPercent(value: number | undefined): number {
     if (value === undefined) {
@@ -162,7 +182,8 @@
           <div class="drawing-mode-actions">
             <Button
               kind="primary"
-              disabled={annotationsState.drawingInProgress.length < 2}
+              disabled={annotationsState.drawingInProgress.length <
+                minimumPointsToFinish}
               onclick={() => annotationsActions.finalizeDrawingMode()}
             >
               {m.annotations_drawing_finish()}
@@ -232,15 +253,15 @@
         <div class="toggle-row">
           <span class="toggle-label">{m.dashed()}</span>
           <Switch
-            toggled={effectiveStyle.strokeStyle === 'dotted'}
+            toggled={effectiveStyle.strokeStyle === 'dashed'}
             labelText={m.dashed()}
             hideLabel
             labelA={m.no()}
             labelB={m.yes()}
             showStateLabel
             onchange={(checked) => {
-              const nextStyle: 'dotted' | 'solid' = checked
-                ? 'dotted'
+              const nextStyle: 'dashed' | 'solid' = checked
+                ? 'dashed'
                 : 'solid';
               annotationsActions.applyStyle({
                 strokeStyle: nextStyle

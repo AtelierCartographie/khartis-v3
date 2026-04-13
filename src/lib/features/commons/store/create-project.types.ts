@@ -40,6 +40,7 @@ export type ColumnTransformationType =
   | 'drop'
   | 'type_change'
   | 'refine'
+  | 'calculate'
   | 'replace';
 
 export const COLUMN_TRANSFORMATION_TYPES = {
@@ -47,6 +48,7 @@ export const COLUMN_TRANSFORMATION_TYPES = {
   DROP: 'drop',
   TYPE_CHANGE: 'type_change',
   REFINE: 'refine',
+  CALCULATE: 'calculate',
   REPLACE: 'replace'
 } as const;
 

@@ -3,44 +3,50 @@ import { describe, expect, it } from 'vitest';
 import { resolveTooltipViewportPosition } from '$lib/features/map/utils/tooltip-position';
 
 describe('resolveTooltipViewportPosition', () => {
-  it('adds the map viewport origin to deck-local coordinates', () => {
+  it('positions the tooltip above the viewer when there is enough room', () => {
     expect(
       resolveTooltipViewportPosition({
-        anchor: { x: 120, y: 180 },
-        viewportOrigin: { left: 240, top: 100 },
+        viewerRect: { left: 240, top: 260, width: 800, height: 500 },
         tooltipSize: { width: 180, height: 90 },
         viewportSize: { width: 1440, height: 900 },
-        offsetX: 12,
-        offsetY: 12,
-        padding: 8
+        padding: 8,
+        gap: 12
       })
-    ).toEqual({ left: 372, top: 292 });
+    ).toEqual({ left: 248, top: 158 });
   });
 
-  it('flips around the pointer when the tooltip would overflow the window', () => {
+  it('falls back inside the viewer when there is not enough room above it', () => {
     expect(
       resolveTooltipViewportPosition({
-        anchor: { x: 220, y: 180 },
-        viewportOrigin: { left: 900, top: 620 },
-        tooltipSize: { width: 280, height: 160 },
+        viewerRect: { left: 240, top: 72, width: 800, height: 500 },
+        tooltipSize: { width: 180, height: 90 },
+        viewportSize: { width: 1440, height: 900 },
+        padding: 8,
+        gap: 12
+      })
+    ).toEqual({ left: 248, top: 80 });
+  });
+
+  it('clamps the tooltip horizontally when the viewer starts too far right', () => {
+    expect(
+      resolveTooltipViewportPosition({
+        viewerRect: { left: 1130, top: 260, width: 320, height: 500 },
+        tooltipSize: { width: 220, height: 90 },
         viewportSize: { width: 1280, height: 900 },
-        offsetX: 12,
-        offsetY: 12,
-        padding: 8
+        padding: 8,
+        gap: 12
       })
-    ).toEqual({ left: 828, top: 628 });
+    ).toEqual({ left: 1052, top: 158 });
   });
 
-  it('clamps to viewport padding when even the flipped position is outside', () => {
+  it('keeps the tooltip inside viewport padding even without a viewer rect', () => {
     expect(
       resolveTooltipViewportPosition({
-        anchor: { x: 4, y: 6 },
-        viewportOrigin: { left: 10, top: 12 },
+        viewerRect: null,
         tooltipSize: { width: 120, height: 100 },
         viewportSize: { width: 100, height: 90 },
-        offsetX: 12,
-        offsetY: 12,
-        padding: 8
+        padding: 8,
+        gap: 12
       })
     ).toEqual({ left: 8, top: 8 });
   });

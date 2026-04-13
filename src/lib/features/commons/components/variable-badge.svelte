@@ -65,6 +65,8 @@
     </span>
   {:else if type === 'numeric'}
     <span class="badge-icon-text">123</span>
+  {:else if type === 'boolean'}
+    <span class="badge-icon-text">T/F</span>
   {:else if type === 'string'}
     <span class="badge-icon-text">ABC</span>
   {/if}
