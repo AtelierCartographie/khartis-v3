@@ -78,6 +78,10 @@
   } from '../utils/geoarrow-stream-bridge';
   import { proj4d3 } from '../utils/proj4d3';
   import { resolveProjectionForRender } from '../utils/projection-priority';
+  import {
+    getBrowserMaxRenderBufferSizePx,
+    resolveMapRenderPixelRatio
+  } from '../utils/render-pixel-ratio';
   import type { ProjectionLike } from 'geoarrow-deck-stream';
   import AnnotationOverlay from './annotation-overlay.svelte';
   import GeoIndicationsOverlay from './geo-indications-overlay.svelte';
@@ -132,6 +136,15 @@
   const pageGridStyle = $derived(
     `background-size: ${PAGE_GRID_SIZE_PX}px ${PAGE_GRID_SIZE_PX}px;`
   );
+  const maxRenderBufferSizePx = $derived(getBrowserMaxRenderBufferSizePx());
+  const renderPixelRatio = $derived.by(() =>
+    resolveMapRenderPixelRatio(
+      globalState.zoom.pageZoomLevel,
+      typeof window !== 'undefined' ? window.devicePixelRatio : 1,
+      Math.max(mapCanvasWidth, mapCanvasHeight),
+      maxRenderBufferSizePx
+    )
+  );
   const firstTable = $derived(
     tables.size > 0 ? tables.values().next().value : null
   );
@@ -148,6 +161,7 @@
 
   const MIN_SKELETON_DURATION_MS = 500;
   const MAX_WAIT_FOR_DATA_MS = 5000;
+  const PAGE_ZOOM_RENDER_SYNC_DELAY_MS = 180;
 
   let mapContainer: HTMLDivElement;
   let hasCalledOnReady = $state(false);
@@ -161,6 +175,7 @@
   let pendingLayerUpdate = $state(false);
   let waitingForStyleIdle = false;
   let layerUpdateTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  let renderPixelRatioTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
   const LAYER_UPDATE_DEBOUNCE_MS = 16;
   const PROJECT_EMPTY_RESET_DEBOUNCE_MS = 250;
@@ -1039,6 +1054,34 @@
   });
 
   $effect(() => {
+    if (renderPixelRatioTimeoutId) {
+      clearTimeout(renderPixelRatioTimeoutId);
+      renderPixelRatioTimeoutId = null;
+    }
+
+    if (
+      !mapInit.isMapLoaded ||
+      (mapInit.viewMode !== ViewMode.ORTHOGRAPHIC &&
+        mapInit.viewMode !== ViewMode.MAPLIBRE)
+    ) {
+      return;
+    }
+
+    const nextRenderPixelRatio = renderPixelRatio;
+    const currentPageZoomLevel = globalState.zoom.pageZoomLevel;
+
+    if (currentPageZoomLevel <= 100) {
+      mapInit.setRenderPixelRatio(nextRenderPixelRatio);
+      return;
+    }
+
+    renderPixelRatioTimeoutId = setTimeout(() => {
+      renderPixelRatioTimeoutId = null;
+      mapInit.setRenderPixelRatio(nextRenderPixelRatio);
+    }, PAGE_ZOOM_RENDER_SYNC_DELAY_MS);
+  });
+
+  $effect(() => {
     const margins = pageMargins;
     const layoutSnapshot = `${fmtState.width}x${fmtState.height}-${margins.top}-${margins.right}-${margins.bottom}-${margins.left}`;
 
@@ -1825,6 +1868,9 @@
       if (layerUpdateTimeoutId) {
         clearTimeout(layerUpdateTimeoutId);
       }
+      if (renderPixelRatioTimeoutId) {
+        clearTimeout(renderPixelRatioTimeoutId);
+      }
       if (projectEmptyResetTimeoutId) {
         clearTimeout(projectEmptyResetTimeoutId);
       }
@@ -1907,8 +1953,22 @@
     z-index: var(--z-map-layer);
     pointer-events: none;
     background-image:
-      linear-gradient(to right, rgba(22, 22, 22, 0.14) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(22, 22, 22, 0.14) 1px, transparent 1px);
+      radial-gradient(
+        circle at 1px 1px,
+        rgba(22, 22, 22, 0.24) 0.9px,
+        transparent 1.2px
+      ),
+      radial-gradient(
+        circle at 1px 1px,
+        rgba(22, 22, 22, 0.1) 0.8px,
+        transparent 1.1px
+      );
+    background-size:
+      12px 12px,
+      24px 24px;
+    background-position:
+      0 0,
+      6px 6px;
   }
 
   .map-canvas {

@@ -20,6 +20,7 @@ import { createHoverHandler, createClickHandler } from '../interactions';
 import { projectionStore } from '../stores/projection.store.svelte';
 import { mapProjectionStore } from '../stores/map-projection.store.svelte';
 import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
+import { getBrowserMaxRenderBufferSizePx } from '../utils/render-pixel-ratio';
 import type {
   DeckOrthographicViewStateMap,
   OrthographicMainViewState
@@ -61,6 +62,7 @@ export interface UseMapInitReturn {
   destroy: () => void;
   switchToMapLibreMode: () => void;
   switchToOrthographicMode: () => void;
+  setRenderPixelRatio: (pixelRatio: number) => void;
   readonly map: maplibregl.Map | null;
   readonly deckOverlay: MapboxOverlay | null;
   readonly deckInstance: DeckInstance | null;
@@ -79,6 +81,14 @@ const ORTHOGRAPHIC_VIEW = new OrthographicView({
   id: DECK_VIEW_ID,
   flipY: false
 });
+const DEFAULT_RENDER_PIXEL_RATIO = 1;
+
+function getInitialRenderPixelRatio(): number {
+  return typeof window !== 'undefined'
+    ? window.devicePixelRatio || DEFAULT_RENDER_PIXEL_RATIO
+    : DEFAULT_RENDER_PIXEL_RATIO;
+}
+
 let hasPatchedLumaCanvasContext = false;
 let hasWebGL2Support: boolean | null = null;
 
@@ -209,6 +219,8 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
   let deckInstance = $state<DeckInstance | null>(null);
   let orthographicFallbackCanvas = $state<HTMLCanvasElement | null>(null);
   let isMapLoaded = $state(false);
+  let renderPixelRatio = $state(getInitialRenderPixelRatio());
+  const maxRenderBufferSizePx = getBrowserMaxRenderBufferSizePx();
   const shouldUseMapLibre =
     osmBasemapStore.isActive || basemapStyleStore.requiresMapLibre;
   const initialViewMode: ViewMode = shouldUseMapLibre
@@ -260,6 +272,44 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
     if (orthographicFallbackCanvas) {
       orthographicFallbackCanvas.remove();
       orthographicFallbackCanvas = null;
+    }
+  }
+
+  function normalizeRenderPixelRatio(pixelRatio: number): number {
+    return Number.isFinite(pixelRatio) && pixelRatio > 0
+      ? pixelRatio
+      : DEFAULT_RENDER_PIXEL_RATIO;
+  }
+
+  function setRenderPixelRatio(pixelRatio: number): void {
+    const nextPixelRatio = normalizeRenderPixelRatio(pixelRatio);
+
+    if (Math.abs(renderPixelRatio - nextPixelRatio) < 0.001) {
+      return;
+    }
+
+    renderPixelRatio = nextPixelRatio;
+
+    if (currentViewMode === ViewMode.ORTHOGRAPHIC && deckInstance) {
+      deckInstance.setProps({ useDevicePixels: nextPixelRatio });
+      deckInstance.redraw('pageZoomPixelRatio');
+
+      requestAnimationFrame(() => {
+        if (deckInstance) {
+          deckInstance.redraw('pageZoomPixelRatioFrame');
+        }
+      });
+
+      return;
+    }
+
+    if (currentViewMode === ViewMode.MAPLIBRE && map) {
+      map.setPixelRatio(nextPixelRatio);
+      map.triggerRepaint();
+
+      requestAnimationFrame(() => {
+        map?.triggerRepaint();
+      });
     }
   }
 
@@ -328,6 +378,7 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
           deviceProps: {
             type: DECK_DEVICE_TYPE
           },
+          useDevicePixels: renderPixelRatio,
           views: [ORTHOGRAPHIC_VIEW],
           initialViewState: {
             main: {
@@ -410,6 +461,8 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
       dragRotate: false,
       doubleClickZoom: true,
       touchZoomRotate: true,
+      pixelRatio: renderPixelRatio,
+      maxCanvasSize: [maxRenderBufferSizePx, maxRenderBufferSizePx],
       canvasContextAttributes: { preserveDrawingBuffer: true },
       cancelPendingTileRequestsWhileZooming: true
     });
@@ -563,6 +616,7 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
     destroy,
     switchToMapLibreMode,
     switchToOrthographicMode,
+    setRenderPixelRatio,
     get map() {
       return map;
     },
