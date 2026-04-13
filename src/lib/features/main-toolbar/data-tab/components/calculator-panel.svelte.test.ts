@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => {
     dataToolsState,
     addCalculatedColumnMock: vi.fn(),
     addColumnTransformationMock: vi.fn(),
+    refreshDatasetMetadataMock: vi.fn(),
     recordTransformationMock: vi.fn(),
     resetCalculatorMock: vi.fn(() => {
       dataToolsState.calculatorName = '';
@@ -115,6 +116,11 @@ vi.mock('$lib/features/commons/store/project.store.svelte', () => ({
   }
 }));
 
+vi.mock('../services/dataset-metadata', () => ({
+  refreshDatasetMetadata: (...args: unknown[]) =>
+    mocks.refreshDatasetMetadataMock(...args)
+}));
+
 vi.mock('$lib/features/duckdb/orchestrator/orchestrator.svelte', () => ({
   duckDBOrchestrator: {
     addCalculatedColumn: (...args: unknown[]) =>
@@ -134,6 +140,7 @@ describe('calculator-panel', () => {
     mocks.dataToolsState.calculatorError = null;
     mocks.addCalculatedColumnMock.mockResolvedValue(undefined);
     mocks.addColumnTransformationMock.mockResolvedValue(undefined);
+    mocks.refreshDatasetMetadataMock.mockResolvedValue(undefined);
   });
 
   it('records a dataset transformation after creating a calculated column', async () => {
@@ -169,6 +176,11 @@ describe('calculator-panel', () => {
       'Calculated column created: helper_ratio'
     );
     expect(mocks.addColumnTransformationMock).toHaveBeenCalledTimes(1);
+    expect(mocks.refreshDatasetMetadataMock).toHaveBeenCalledWith(
+      'dataset-1',
+      'fossil_fuel_subsidies',
+      { force: true }
+    );
     expect(onColumnCreated).toHaveBeenCalledTimes(1);
     expect(mocks.resetCalculatorMock).toHaveBeenCalledTimes(1);
   });
