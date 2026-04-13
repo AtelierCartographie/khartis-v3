@@ -9,7 +9,9 @@ import {
   LEGEND_FONT_SIZES
 } from '$lib/features/step-toolbar/tools/legend/legend.constants';
 import { hexToHsl } from '$lib/features/commons/utils/color-utils';
+import { resolveLayoutSizingTokens } from '$lib/features/commons/utils/layout-sizing.utils';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
+import { getFormatState } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
 import type {
   ColorState,
   DragPosition,
@@ -273,7 +275,18 @@ const { state, actions } = createToolStore<
       s.visible = visible;
     },
     toggleScale: () => {
-      s.scale.enabled = !s.scale.enabled;
+      const wasEnabled = s.scale.enabled;
+      s.scale.enabled = !wasEnabled;
+
+      if (!wasEnabled && s.scale.fontSize === DEFAULT_STATE.scale.fontSize) {
+        const fmt = getFormatState();
+        const tokens = resolveLayoutSizingTokens({
+          width: fmt.width,
+          height: fmt.height,
+          model: fmt.model
+        });
+        s.scale.fontSize = tokens.geoIndications.scaleFontSize;
+      }
     },
     setScaleDistance: (distance: number) => {
       s.scale.distance = clampNumber(
@@ -284,10 +297,35 @@ const { state, actions } = createToolStore<
       );
     },
     toggleOrientation: () => {
-      s.orientation.enabled = !s.orientation.enabled;
+      const wasEnabled = s.orientation.enabled;
+      s.orientation.enabled = !wasEnabled;
+
+      if (
+        !wasEnabled &&
+        s.orientation.size === DEFAULT_STATE.orientation.size
+      ) {
+        const fmt = getFormatState();
+        const tokens = resolveLayoutSizingTokens({
+          width: fmt.width,
+          height: fmt.height,
+          model: fmt.model
+        });
+        s.orientation.size = tokens.geoIndications.orientationSizeMm;
+      }
     },
     toggleInsetMap: () => {
-      s.insetMap.enabled = !s.insetMap.enabled;
+      const wasEnabled = s.insetMap.enabled;
+      s.insetMap.enabled = !wasEnabled;
+
+      if (!wasEnabled && s.insetMap.size === DEFAULT_STATE.insetMap.size) {
+        const fmt = getFormatState();
+        const tokens = resolveLayoutSizingTokens({
+          width: fmt.width,
+          height: fmt.height,
+          model: fmt.model
+        });
+        s.insetMap.size = tokens.geoIndications.insetSize;
+      }
     },
     toggleScaleExpanded: () => {
       s.scale.expanded = !s.scale.expanded;
