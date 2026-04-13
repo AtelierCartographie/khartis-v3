@@ -595,6 +595,7 @@
   const showResizeHandles = $derived(
     globalState.selectedStep === ToolbarStep.Styling && isMapReady
   );
+  let hoveredResizeEdge = $state<ResizeEdge | null>(null);
 
   let resizeState = $state<{
     edge: ResizeEdge;
@@ -645,6 +646,7 @@
 
   function handleResizeUp(): void {
     resizeState = null;
+    hoveredResizeEdge = null;
     window.removeEventListener(EVENT.POINTERMOVE, handleResizeMove);
     window.removeEventListener(EVENT.POINTERUP, handleResizeUp);
   }
@@ -706,6 +708,7 @@
   {#if showResizeHandles}
     <div
       class="resize-handles-frame"
+      class:highlighted={hoveredResizeEdge !== null || resizeState !== null}
       style="width: {formatState.width}px; height: {formatState.height}px;"
     >
       {#each RESIZE_EDGES as edge (edge)}
@@ -715,6 +718,12 @@
           aria-orientation={edge === 'n' || edge === 's'
             ? 'horizontal'
             : 'vertical'}
+          onpointerenter={() => (hoveredResizeEdge = edge)}
+          onpointerleave={() => {
+            if (hoveredResizeEdge === edge) {
+              hoveredResizeEdge = null;
+            }
+          }}
           onpointerdown={(e: PointerEvent) => handleResizePointerDown(e, edge)}
         ></div>
       {/each}
@@ -790,6 +799,16 @@
   .resize-handles-frame {
     position: absolute;
     pointer-events: none;
+    border: 1px dashed transparent;
+    border-radius: 2px;
+    transition:
+      border-color 120ms ease,
+      box-shadow 120ms ease;
+  }
+
+  .resize-handles-frame.highlighted {
+    border-color: rgba(15, 98, 254, 0.55);
+    box-shadow: inset 0 0 0 1px rgba(15, 98, 254, 0.15);
   }
 
   .resize-handle {
