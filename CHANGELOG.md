@@ -1,3 +1,14 @@
+# [1.0.0-staging.6](https://github.com/AtelierCartographie/khartis-v3/compare/v1.0.0-staging.5...v1.0.0-staging.6) (2026-04-13)
+
+### Bug Fixes
+
+- **ci:** exclure les tests d'audit de la CI et brancher le sizing responsive ([#90](https://github.com/AtelierCartographie/khartis-v3/issues/90)) ([a44f618](https://github.com/AtelierCartographie/khartis-v3/commit/a44f6186140a97c6411d35b55bc8dd16e096939c))
+- **ui:** correctifs UI, filtres viz, simplification basemap et annotations ([#88](https://github.com/AtelierCartographie/khartis-v3/issues/88)) ([456254a](https://github.com/AtelierCartographie/khartis-v3/commit/456254adada51863cbfb2600c67772505b26d33f))
+
+### Features
+
+- version initiale complète de Khartis v3 ([#72](https://github.com/AtelierCartographie/khartis-v3/issues/72)) ([b47e564](https://github.com/AtelierCartographie/khartis-v3/commit/b47e5641a51f42394c7a6049951ea9caf3380ba8))
+
 # 1.0.0 (2026-03-11)
 
 ### Bug Fixes
