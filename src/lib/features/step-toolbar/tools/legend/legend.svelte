@@ -401,4 +401,32 @@
     flex-shrink: 0;
     padding-bottom: 1px;
   }
+
+  .text-style-color :global(#khartis-color-picker .color-trigger) {
+    width: 3.5rem;
+    min-width: 3.5rem;
+    justify-content: space-between;
+    gap: var(--cds-spacing-02);
+    margin-top: var(--cds-spacing-03);
+    padding: 0 var(--cds-spacing-03);
+    border: 1px solid var(--cds-border-strong, #8d8d8d);
+    border-radius: 999px;
+    background: var(--cds-ui-01, #ffffff);
+    box-shadow: inset 0 0 0 1px var(--cds-border-subtle, #e0e0e0);
+  }
+
+  .text-style-color :global(#khartis-color-picker .swatch) {
+    width: 1rem;
+    height: 1rem;
+    margin-right: 0;
+    border-radius: 999px;
+    border-color: var(--cds-border-strong, #8d8d8d);
+  }
+
+  .text-style-color :global(#khartis-color-picker .chevron) {
+    position: static;
+    display: flex;
+    align-items: center;
+    color: var(--cds-icon-secondary, #525252);
+  }
 </style>
