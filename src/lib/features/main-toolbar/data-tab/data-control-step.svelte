@@ -90,11 +90,13 @@
   let warningsNotificationDismissed = $state(false);
   let variableTypesNotificationDismissed = $state(false);
   let isModalOpen = $state(false);
+  let isDeleteMode = $state(false);
   let selectedRowIds = $state<number[]>([]);
 
   $effect(() => {
     void selectedDataset?.id;
     selectedRowIds = [];
+    isDeleteMode = false;
     dataTabActions.selectRows([]);
     warningsNotificationDismissed = false;
     variableTypesNotificationDismissed = false;
@@ -493,10 +495,20 @@
     });
   }
 
-  function handleOpenDeleteModal() {
+  function handleDeleteAction() {
+    if (!isDeleteMode) {
+      isDeleteMode = true;
+      return;
+    }
+
     if (selectedRowIds.length > 0) {
       deleteModalOpen = true;
+      return;
     }
+
+    isDeleteMode = false;
+    selectedRowIds = [];
+    dataTabActions.selectRows([]);
   }
 
   async function handleDeleteRows() {
@@ -525,6 +537,8 @@
       );
 
       selectedRowIds = [];
+      isDeleteMode = false;
+      dataTabActions.selectRows([]);
       refreshTable();
       showSuccess(
         m.rows_deleted_success_title(),
@@ -702,7 +716,7 @@
     {/if}
 
     <DataToolsBar
-      onDelete={handleOpenDeleteModal}
+      onDelete={handleDeleteAction}
       onReset={handleOpenReset}
       onExpand={() => (isModalOpen = true)}
       onCsvOptions={handleOpenCsvOptions}
@@ -712,6 +726,8 @@
         })}
       onShowHiddenColumns={handleShowHiddenColumns}
       selectionCount={selectedRowIds.length}
+      deleteActive={isDeleteMode}
+      deleteDisabled={false}
       resetDisabled={!hasDataModifications}
       showCsvOptions={isCsvFile &&
         !!(sourceFile?.originalFile || sourceFile?.content)}
@@ -734,7 +750,7 @@
           activeJoinColumn={dataTabState.geolocation.linkedVariableName ||
             undefined}
           isExpanded={false}
-          isSelectable={true}
+          isSelectable={isDeleteMode}
           initialSortColumn={tableSortColumn}
           initialSortOrder={tableSortOrder}
           onTableMutation={handleTableMutation}
@@ -794,7 +810,7 @@
     cellHighlights={searchHighlight.cellHighlights}
     currentCell={searchHighlight.currentCell}
     highlightedRowIds={searchHighlight.highlightedRowIds}
-    isSelectable={true}
+    isSelectable={isDeleteMode}
     onTableMutation={handleTableMutation}
     onSelectionChange={handleSelectionChange}
     onSortChange={handleSortChange}
