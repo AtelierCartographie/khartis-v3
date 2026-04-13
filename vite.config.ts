@@ -301,7 +301,7 @@ export default defineConfig(({ mode }) => {
               'tests/pipeline/**/*.{test,spec}.{js,ts}',
               'tests/duckdb/**/*.{test,spec}.{js,ts}'
             ],
-            exclude: ['tests/e2e/**'],
+            exclude: ['tests/e2e/**', 'tests/**/tmp-*.{test,spec}.{js,ts}'],
             pool: 'threads',
             fileParallelism: false
           }
