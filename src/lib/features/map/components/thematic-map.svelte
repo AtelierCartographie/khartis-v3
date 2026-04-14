@@ -573,11 +573,8 @@
           keyboard: true
         };
 
-    const nextViewState = { ...mapInstanceStore.deckViewState };
     (deck as unknown as { setProps: (props: unknown) => void }).setProps({
-      controller,
-      viewState: { main: nextViewState },
-      initialViewState: { main: nextViewState }
+      controller
     });
   }
 
