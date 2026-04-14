@@ -33,6 +33,14 @@
   import { facetsStore } from '../step-toolbar/tools/facets/facets.store.svelte';
   import FacetsGrid from '../step-toolbar/tools/facets/facets-grid.svelte';
   import { loadDatasetsSequentially } from './utils/load-datasets-sequentially';
+  import {
+    visualizationStore,
+    type VisualizationConfig
+  } from '../commons/store/visualization.store.svelte';
+  import { SymbolMode } from '../main-toolbar/constants';
+  import { basemapService } from './services/basemap.service.svelte';
+  import type { SplitRenderingTable } from './types';
+  import { INTERNAL_COLUMN } from '../commons/constants/data.constants';
 
   let thematicMapRef = $state<HTMLDivElement>(undefined!);
 
@@ -50,6 +58,9 @@
   );
   let displayGeoJSONs = $state.raw<SvelteMap<string, FeatureCollection>>(
     new SvelteMap<string, FeatureCollection>()
+  );
+  let displaySplitData = $state.raw<SvelteMap<string, SplitRenderingTable>>(
+    new SvelteMap<string, SplitRenderingTable>()
   );
   let displayDataVersion = $state(0);
 
@@ -78,17 +89,62 @@
   function setDisplayArrowTable(datasetId: string, table: ArrowTable): void {
     const previousTable = displayTables.get(datasetId);
     const hadGeoJSON = displayGeoJSONs.has(datasetId);
+    const hadSplit = displaySplitData.has(datasetId);
 
     displayTables.set(datasetId, table);
     displayGeoJSONs.delete(datasetId);
+    displaySplitData.delete(datasetId);
 
-    if (previousTable !== table || hadGeoJSON) {
+    if (previousTable !== table || hadGeoJSON || hadSplit) {
+      displayTables = new SvelteMap(displayTables);
+      if (hadGeoJSON) {
+        displayGeoJSONs = new SvelteMap(displayGeoJSONs);
+      }
+      if (hadSplit) {
+        displaySplitData = new SvelteMap(displaySplitData);
+      }
+      bumpDisplayDataVersion();
+    }
+  }
+
+  function setDisplaySplitTable(
+    datasetId: string,
+    split: SplitRenderingTable
+  ): void {
+    const previousSplit = displaySplitData.get(datasetId);
+    const hadGeoJSON = displayGeoJSONs.has(datasetId);
+
+    displaySplitData.set(datasetId, split);
+    // The geometry Arrow remains the canonical "table" so existing readers
+    // (thematic-map, picking, etc.) continue to read the same shape.
+    displayTables.set(datasetId, split.geometry);
+    displayGeoJSONs.delete(datasetId);
+
+    if (
+      previousSplit?.geometry !== split.geometry ||
+      previousSplit?.dataset !== split.dataset ||
+      previousSplit?.featureIdColumn !== split.featureIdColumn ||
+      hadGeoJSON
+    ) {
+      displaySplitData = new SvelteMap(displaySplitData);
       displayTables = new SvelteMap(displayTables);
       if (hadGeoJSON) {
         displayGeoJSONs = new SvelteMap(displayGeoJSONs);
       }
       bumpDisplayDataVersion();
     }
+  }
+
+  function detectFeatureIdColumn(geometry: ArrowTable): string {
+    const fields = geometry.schema.fields ?? [];
+    if (fields.some((f) => f.name === INTERNAL_COLUMN.FEATURE_ID)) {
+      return INTERNAL_COLUMN.FEATURE_ID;
+    }
+    if (fields.some((f) => f.name.toLowerCase() === 'id')) {
+      const match = fields.find((f) => f.name.toLowerCase() === 'id');
+      return match?.name ?? 'id';
+    }
+    return INTERNAL_COLUMN.FEATURE_ID;
   }
 
   function setDisplayGeoJSON(
@@ -143,6 +199,31 @@
         }
 
         if (tableName) {
+          const densityViz = findActiveDensityViz(dataset.id);
+          if (densityViz) {
+            const densityTable =
+              await duckDBOrchestrator.generateDotDensityArrowFromGeoTable(
+                tableName,
+                densityViz.density!.valueColumn!,
+                densityViz.density!.ratio!,
+                densityViz.density!.seed !== undefined
+                  ? { seed: densityViz.density!.seed }
+                  : undefined
+              );
+            if (densityTable) {
+              logger.success(
+                'Density points ready for Deck.gl',
+                LogCategory.MAP,
+                {
+                  tableName,
+                  rows: densityTable.numRows,
+                  durationMs: (performance.now() - start).toFixed(2)
+                }
+              );
+              return densityTable;
+            }
+          }
+
           const shouldReprojectForTiledBasemap =
             usesTiledBasemap &&
             Boolean(dataset.geometry?.crs) &&
@@ -192,16 +273,38 @@
   function removeDatasetFromDisplay(datasetId: string): void {
     const removedTable = displayTables.delete(datasetId);
     const removedGeoJSON = displayGeoJSONs.delete(datasetId);
+    const removedSplit = displaySplitData.delete(datasetId);
 
-    if (removedTable || removedGeoJSON) {
+    if (removedTable || removedGeoJSON || removedSplit) {
       if (removedTable) {
         displayTables = new SvelteMap(displayTables);
       }
       if (removedGeoJSON) {
         displayGeoJSONs = new SvelteMap(displayGeoJSONs);
       }
+      if (removedSplit) {
+        displaySplitData = new SvelteMap(displaySplitData);
+      }
       bumpDisplayDataVersion();
     }
+  }
+
+  function findActiveDensityViz(datasetId: string): VisualizationConfig | null {
+    const matches: VisualizationConfig[] = [];
+    for (const viz of visualizationStore.visualizations) {
+      if (viz.datasetId !== datasetId) continue;
+      if (viz.modes?.symbol !== SymbolMode.DENSITY) continue;
+      if (!viz.density?.valueColumn || !viz.density?.ratio) continue;
+      matches.push(viz);
+    }
+    if (matches.length > 1) {
+      logger.warn(
+        'Multiple density visualizations on the same dataset — rendering only the first one',
+        LogCategory.MAP,
+        { datasetId, count: matches.length }
+      );
+    }
+    return matches[0] ?? null;
   }
 
   async function loadJoinedBasemap(
@@ -220,6 +323,74 @@
     });
 
     try {
+      const densityViz = findActiveDensityViz(datasetId);
+      if (densityViz) {
+        const joinedTable =
+          await duckDBOrchestrator.generateDotDensityArrowFromJoin(
+            joinedBasemap,
+            tableName,
+            densityViz.density!.valueColumn!,
+            densityViz.density!.ratio!,
+            densityViz.density!.seed !== undefined
+              ? { seed: densityViz.density!.seed }
+              : undefined
+          );
+
+        if (isStaleLoad(generation)) return;
+        if (!datasetsStore.isDatasetEnabled(datasetId)) return;
+
+        if (joinedTable) {
+          setDisplayArrowTable(datasetId, joinedTable);
+          logger.success(
+            'Density basemap ready for rendering',
+            LogCategory.MAP,
+            {
+              datasetId,
+              rows: joinedTable.numRows,
+              durationMs: (performance.now() - start).toFixed(2)
+            }
+          );
+        } else {
+          removeDatasetFromDisplay(datasetId);
+        }
+        return;
+      }
+
+      // Issue #87 split rendering: keep the basemap geometry Arrow ref-stable
+      // (re-uses parseSolidPolygons WeakMap cache) and pair it with the dataset
+      // attributes Arrow for lookup-based accessors.
+      const [geometryArrow, datasetArrow] = await Promise.all([
+        basemapService.getBasemapGeometryArrow(joinedBasemap),
+        duckDBOrchestrator.getArrowTableDirect(tableName)
+      ]);
+
+      if (isStaleLoad(generation)) return;
+      if (!datasetsStore.isDatasetEnabled(datasetId)) return;
+
+      if (geometryArrow && datasetArrow) {
+        const featureIdColumn = detectFeatureIdColumn(geometryArrow);
+        setDisplaySplitTable(datasetId, {
+          geometry: geometryArrow,
+          dataset: datasetArrow,
+          featureIdColumn
+        });
+        logger.success(
+          'Split joined basemap ready for rendering',
+          LogCategory.MAP,
+          {
+            datasetId,
+            geomRows: geometryArrow.numRows,
+            datasetRows: datasetArrow.numRows,
+            featureIdColumn,
+            durationMs: (performance.now() - start).toFixed(2)
+          }
+        );
+        return;
+      }
+
+      // Fallback: legacy joined-arrow path (export still uses
+      // `getJoinedArrowTable`; here we keep it as a defensive net when the
+      // split inputs are unavailable).
       const joinedTable = await duckDBOrchestrator.getJoinedArrowTable(
         tableName,
         joinedBasemap
@@ -354,6 +525,8 @@
 
   $effect(() => {
     const version = duckDBDatasetsVersion;
+    // Subscribe to visualization changes so density re-generates on config edits.
+    void visualizationStore.version;
     const currentEnabledDatasets = enabledDatasets;
 
     if (isInitializing) {
@@ -686,6 +859,7 @@
         <FacetsGrid
           visualizations={facetVisualizations}
           tables={displayTables}
+          splitData={displaySplitData}
           geoJSONs={displayGeoJSONs}
           layout={facetsLayout}
           syncPanZoom={facetsSyncPanZoom}
@@ -695,6 +869,7 @@
       {:else}
         <ThematicMap
           tables={displayTables}
+          splitData={displaySplitData}
           geoJSONs={displayGeoJSONs}
           dataVersion={displayDataVersion}
           width={formatState.width}
@@ -739,7 +914,7 @@
     width: 100%;
     height: 100%;
     position: relative;
-    overflow: hidden;
+    overflow: visible;
   }
 
   .main-map-container.resizable {
@@ -889,17 +1064,5 @@
     background: var(--cds-interactive-01, #0f62fe);
     opacity: 0.4;
     border-radius: 1px;
-  }
-
-  @media (max-width: 1023px) {
-    .main-map-container {
-      width: max-content;
-      min-width: 100%;
-      height: max-content;
-      min-height: 100%;
-      justify-content: flex-start;
-      align-items: flex-start;
-      overflow: visible;
-    }
   }
 </style>

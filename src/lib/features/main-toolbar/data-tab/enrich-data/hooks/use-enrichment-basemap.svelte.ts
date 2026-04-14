@@ -28,6 +28,7 @@ import {
 import * as m from '$lib/paraglide/messages';
 import { shouldAutoSelectSuggestedBasemap } from '../../services/basemap-auto-selection';
 import {
+  PERSISTED_BASEMAP_TYPE,
   resolveRelevantPersistedBasemap,
   restorePersistedBasemapSelection,
   resolveBasemapSource,
@@ -163,7 +164,7 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
     projectStore.updateProjectData({
       basemap: {
         id: nextBasemapId,
-        type: 'catalog'
+        type: PERSISTED_BASEMAP_TYPE.CATALOG
       }
     });
   }
@@ -192,7 +193,7 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
       projectStore.updateProjectData({
         basemap: {
           id: customBasemap.file,
-          type: 'custom',
+          type: PERSISTED_BASEMAP_TYPE.CUSTOM,
           data: { ...customBasemap }
         }
       });
@@ -242,7 +243,7 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
     projectStore.updateProjectData({
       basemap: {
         id: osmBasemap.file,
-        type: 'osm',
+        type: PERSISTED_BASEMAP_TYPE.OSM,
         data: { ...osmBasemap }
       }
     });

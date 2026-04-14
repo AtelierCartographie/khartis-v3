@@ -39,14 +39,16 @@ describe('map view state persistence', () => {
 
     mapInstanceStore.fitToOrthographicBounds();
 
-    expect(setProps).toHaveBeenCalledWith({
-      initialViewState: {
-        main: expect.objectContaining({
-          target: [0, 0, 0],
-          zoom: 0
-        })
-      }
-    });
+    expect(setProps).toHaveBeenCalledWith(
+      expect.objectContaining({
+        initialViewState: {
+          main: expect.objectContaining({
+            target: [0, 0, 0],
+            zoom: 0
+          })
+        }
+      })
+    );
     expect(notifyChange).toHaveBeenCalledWith('mapViewState');
     expect(registeredEntry.serialize()).toEqual({
       zoom: 0,
@@ -139,14 +141,16 @@ describe('map view state persistence', () => {
     mapInstanceStore.fitToOrthographicBounds();
 
     expect(mapInstanceStore.hasPendingRestore).toBe(false);
-    expect(setProps).toHaveBeenLastCalledWith({
-      initialViewState: {
-        main: expect.objectContaining({
-          target: [0, 0, 0],
-          zoom: 0
-        })
-      }
-    });
+    expect(setProps).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        initialViewState: {
+          main: expect.objectContaining({
+            target: [0, 0, 0],
+            zoom: 0
+          })
+        }
+      })
+    );
   });
 
   it('drops the saved orthographic restore before a forced refit', async () => {
@@ -188,13 +192,64 @@ describe('map view state persistence', () => {
     mapInstanceStore.fitToOrthographicBounds();
 
     expect(mapInstanceStore.hasPendingRestore).toBe(false);
-    expect(setProps).toHaveBeenLastCalledWith({
-      initialViewState: {
-        main: expect.objectContaining({
-          target: [0, 0, 0],
-          zoom: 0
-        })
-      }
-    });
+    expect(setProps).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        initialViewState: {
+          main: expect.objectContaining({
+            target: [0, 0, 0],
+            zoom: 0
+          })
+        }
+      })
+    );
+  });
+
+  it('tracks viewport fit mode transitions between auto-fit and manual camera changes', async () => {
+    const notifyChange = vi.fn();
+    const register = vi.fn();
+
+    vi.doMock(
+      '$lib/features/project-management/core/persistence-registry',
+      () => ({
+        persistenceRegistry: {
+          register,
+          notifyChange
+        }
+      })
+    );
+
+    const { mapInstanceStore } =
+      await import('$lib/features/commons/store/map-instance.store.svelte');
+    const { projectionStore } =
+      await import('$lib/features/map/stores/projection.store.svelte');
+
+    mapInstanceStore.setDeckInstance({
+      setProps: vi.fn()
+    } as unknown as Parameters<typeof mapInstanceStore.setDeckInstance>[0]);
+    mapInstanceStore.setMapLoaded(true);
+
+    projectionStore.updateCanvasSize({ width: 960, height: 600 });
+    projectionStore.setReferenceBbox([704320, 6276820, 783140, 6359140]);
+
+    mapInstanceStore.fitToOrthographicBounds('dataset');
+
+    expect(mapInstanceStore.viewportFitMode).toBe('auto');
+    expect(mapInstanceStore.viewportFitReason).toBe('dataset');
+
+    mapInstanceStore.updateDeckViewState(
+      {
+        target: [120, 80, 0],
+        zoom: 0.5
+      },
+      true
+    );
+
+    expect(mapInstanceStore.viewportFitMode).toBe('manual');
+    expect(mapInstanceStore.viewportFitReason).toBeNull();
+
+    mapInstanceStore.fitToOrthographicBounds('projection');
+
+    expect(mapInstanceStore.viewportFitMode).toBe('auto');
+    expect(mapInstanceStore.viewportFitReason).toBe('projection');
   });
 });

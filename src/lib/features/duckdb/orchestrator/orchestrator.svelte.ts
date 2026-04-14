@@ -43,10 +43,10 @@ import * as arrowOps from './arrow-ops';
 import * as columnOps from './column-ops';
 import * as conversionOps from './conversion-ops';
 import * as datasetOps from './dataset-ops';
+import * as densityOps from './density-ops';
 import { buildFilterWhereClause, createFilterRecord } from './filter-ops';
 import * as gpsOps from './gps-ops';
 import * as joinOps from './join-ops';
-import * as searchOps from './search-ops';
 import * as state from './state.svelte';
 import * as tableDataOps from './table-data-ops';
 
@@ -149,6 +149,24 @@ async function prefetchArrowMetadata(dataset: DuckDBDataset): Promise<void> {
   return prefetchPromise;
 }
 
+const joinedArrowCache: Map<string, Table> = new Map();
+
+function joinedArrowCacheKey(
+  datasetTableName: string,
+  basemapId: string
+): string {
+  return `${datasetTableName}::${basemapId}`;
+}
+
+function invalidateJoinedArrowCacheForTable(tableName: string): void {
+  const prefix = `${tableName}::`;
+  for (const key of joinedArrowCache.keys()) {
+    if (key.startsWith(prefix)) {
+      joinedArrowCache.delete(key);
+    }
+  }
+}
+
 function invalidateDatasetCache(tableName: string): void {
   const dataset = state.getDatasetByTable(tableName);
   if (dataset) {
@@ -158,6 +176,7 @@ function invalidateDatasetCache(tableName: string): void {
   if (Duck) {
     Duck.invalidateTableCache(tableName);
   }
+  invalidateJoinedArrowCacheForTable(tableName);
 }
 
 async function createArrowTableWithMetadata(tableName: string): Promise<{
@@ -403,7 +422,7 @@ export const duckDBOrchestrator = {
 
     await joinOps.applyJoinCorrections(dataset, geoColumn, corrections, Duck);
 
-    Duck.invalidateTableCache(dataset.tableName);
+    invalidateDatasetCache(dataset.tableName);
     const columns = await Duck.analyse(dataset.tableName);
     datasetOps.updateDatasetColumns(dataset.id, columns);
   },
@@ -430,7 +449,7 @@ export const duckDBOrchestrator = {
       );
 
       datasetOps.updateDatasetJoinInfo(dataset.id, result);
-      Duck.invalidateTableCache(dataset.tableName);
+      invalidateDatasetCache(dataset.tableName);
       state.bumpDatasetsVersion();
     } catch (error) {
       logger.error('Failed to finalize join', LogCategory.DATA, {
@@ -442,6 +461,83 @@ export const duckDBOrchestrator = {
     }
   },
 
+  async computeDensityLevels(
+    tableName: string,
+    columnName: string,
+    maxPoints: number = 100000
+  ) {
+    await ensureInitialized();
+    return densityOps.computeDensityLevels(tableName, columnName, maxPoints);
+  },
+
+  async computeDensityLevelsFromJoin(
+    basemapId: string,
+    datasetTableName: string,
+    dataColumn: string,
+    maxPoints: number = 100000
+  ) {
+    await ensureInitialized();
+    const geometryTableName =
+      await basemapService.loadGeometryIntoDuckDB(basemapId);
+    return densityOps.computeDensityLevelsFromJoin(
+      geometryTableName,
+      datasetTableName,
+      dataColumn,
+      maxPoints
+    );
+  },
+
+  async generateDotDensityArrow(
+    tableName: string,
+    geomColumn: string,
+    dataColumn: string,
+    ratio: number,
+    options?: { seed?: number }
+  ): Promise<Table> {
+    await ensureInitialized();
+    return densityOps.generateDotDensityArrow(
+      tableName,
+      geomColumn,
+      dataColumn,
+      ratio,
+      options
+    );
+  },
+
+  async generateDotDensityArrowFromJoin(
+    basemapId: string,
+    datasetTableName: string,
+    dataColumn: string,
+    ratio: number,
+    options?: { seed?: number }
+  ): Promise<Table> {
+    await ensureInitialized();
+    const geometryTableName =
+      await basemapService.loadGeometryIntoDuckDB(basemapId);
+    return densityOps.generateDotDensityFromJoin(
+      geometryTableName,
+      datasetTableName,
+      dataColumn,
+      ratio,
+      options
+    );
+  },
+
+  async generateDotDensityArrowFromGeoTable(
+    tableName: string,
+    dataColumn: string,
+    ratio: number,
+    options?: { seed?: number }
+  ): Promise<Table> {
+    await ensureInitialized();
+    return densityOps.generateDotDensityFromGeoTable(
+      tableName,
+      dataColumn,
+      ratio,
+      options
+    );
+  },
+
   async getJoinedArrowTable(
     datasetTableName: string,
     basemapId: string
@@ -449,13 +545,21 @@ export const duckDBOrchestrator = {
     await ensureInitialized();
     if (!Duck) throw new DuckDBError('DuckDB not initialized');
 
-    return joinOps.getJoinedArrowTable(
+    const cacheKey = joinedArrowCacheKey(datasetTableName, basemapId);
+    const cached = joinedArrowCache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const fresh = await joinOps.getJoinedArrowTable(
       datasetTableName,
       basemapId,
       Duck,
       (bid) => basemapService.loadGeometryIntoDuckDB(bid),
       (tn) => duckDBOrchestrator.getArrowTableDirect(tn)
     );
+    joinedArrowCache.set(cacheKey, fresh);
+    return fresh;
   },
 
   async getGPSArrowTable(datasetId: string): Promise<{
@@ -845,6 +949,8 @@ export const duckDBOrchestrator = {
   getDataset: state.getDatasetById,
   getDatasetByTable: state.getDatasetByTable,
   getDatasetBySourceFile: state.getDatasetBySourceFile,
+  getDatasetById: state.getDatasetById,
+  findDatasetByIdOrSourceFile: state.findDatasetByIdOrSourceFile,
   getAllDatasets: state.getAllDatasets,
   getCurrentTable: state.getCurrentTableName,
   setCurrentTable: state.setCurrentTableName,
@@ -908,7 +1014,8 @@ export const duckDBOrchestrator = {
     options: { threshold?: number; column?: string } = {}
   ): Promise<SearchStats> {
     await ensureInitialized();
-    return searchOps.searchInTable(tableName, query, Duck, options);
+    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+    return Duck.searchInTable(tableName, query, options);
   }
 };
 

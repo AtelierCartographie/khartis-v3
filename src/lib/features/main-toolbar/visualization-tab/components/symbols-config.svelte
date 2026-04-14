@@ -6,7 +6,8 @@
     Category,
     ChartBubble,
     CircleFilled,
-    Tag
+    Tag,
+    ChartScatter
   } from 'carbon-icons-svelte';
   import { SymbolMode } from '../../constants';
   import {
@@ -25,7 +26,8 @@
   import {
     SymbolModeUnique,
     SymbolModeProportional,
-    SymbolModeCategories
+    SymbolModeCategories,
+    SymbolModeDensity
   } from './symbols';
 
   interface Props {
@@ -88,7 +90,8 @@
     { icon: CircleFilled, label: m.symbol_mode_unique(), iconSize: 16 },
     { icon: ChartBubble, label: m.symbol_mode_proportional(), iconSize: 16 },
     { icon: Category, label: m.symbol_mode_classes(), iconSize: 16 },
-    { icon: Tag, label: m.symbol_mode_categories(), iconSize: 16 }
+    { icon: Tag, label: m.symbol_mode_categories(), iconSize: 16 },
+    { icon: ChartScatter, label: m.symbol_mode_density(), iconSize: 16 }
   ];
 
   function handleSymbolModeChange(index: number) {
@@ -96,7 +99,8 @@
       SymbolMode.UNIQUE,
       SymbolMode.PROPORTIONAL,
       SymbolMode.CLASSES,
-      SymbolMode.CATEGORIES
+      SymbolMode.CATEGORIES,
+      SymbolMode.DENSITY
     ];
     symbolMode = modes[index] || SymbolMode.UNIQUE;
     onModesChange?.({ symbol: symbolMode });
@@ -117,7 +121,8 @@
       SymbolMode.UNIQUE,
       SymbolMode.PROPORTIONAL,
       SymbolMode.CLASSES,
-      SymbolMode.CATEGORIES
+      SymbolMode.CATEGORIES,
+      SymbolMode.DENSITY
     ].indexOf(symbolMode)
   );
 </script>
@@ -186,6 +191,12 @@
         onClassificationChange={onClassificationChange}
         onInvertPalette={onInvertPalette}
         onOpenDiscretization={handleOpenDiscretization}
+      />
+    {:else if symbolMode === SymbolMode.DENSITY}
+      <SymbolModeDensity
+        dataFields={dataFields}
+        visualization={visualization}
+        onMappingChange={onMappingChange}
       />
     {/if}
 

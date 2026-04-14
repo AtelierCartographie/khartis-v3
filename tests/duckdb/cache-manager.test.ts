@@ -85,7 +85,7 @@ describe('markTableMutated', () => {
 
   it('appelle le callback enregistré avec le nom de la table', () => {
     const callback = vi.fn();
-    registerTableMutationCallback(callback);
+    const unsubscribe = registerTableMutationCallback(callback);
 
     const ctx = makeCtx();
     markTableMutated(ctx, 'watched_table');
@@ -93,14 +93,32 @@ describe('markTableMutated', () => {
     expect(callback).toHaveBeenCalledOnce();
     expect(callback).toHaveBeenCalledWith('watched_table');
 
-    // cleanup
-    registerTableMutationCallback(null as never);
+    unsubscribe();
   });
 
   it("ne lance pas d'erreur quand aucun callback n'est enregistré", () => {
-    registerTableMutationCallback(null as never);
     const ctx = makeCtx();
     expect(() => markTableMutated(ctx, 'tbl')).not.toThrow();
+  });
+
+  it('supporte plusieurs callbacks et permet de désabonner indépendamment', () => {
+    const cb1 = vi.fn();
+    const cb2 = vi.fn();
+    const unsub1 = registerTableMutationCallback(cb1);
+    const unsub2 = registerTableMutationCallback(cb2);
+
+    const ctx = makeCtx();
+    markTableMutated(ctx, 'tbl');
+
+    expect(cb1).toHaveBeenCalledWith('tbl');
+    expect(cb2).toHaveBeenCalledWith('tbl');
+
+    unsub1();
+    markTableMutated(ctx, 'tbl2');
+    expect(cb1).toHaveBeenCalledTimes(1);
+    expect(cb2).toHaveBeenCalledTimes(2);
+
+    unsub2();
   });
 });
 

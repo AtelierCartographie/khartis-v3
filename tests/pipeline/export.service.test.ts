@@ -149,7 +149,10 @@ describe('export.service geometry exports', () => {
       'basemap_geom_monde_countries_2024_medium'
     );
     mocks.duckQuery
-      .mockResolvedValueOnce([{ column_name: 'id' }])
+      .mockResolvedValueOnce([
+        { column_name: 'id', data_type: 'VARCHAR' },
+        { column_name: 'geom', data_type: 'GEOMETRY' }
+      ])
       .mockResolvedValueOnce(undefined)
       .mockResolvedValueOnce([
         {
@@ -173,10 +176,13 @@ describe('export.service geometry exports', () => {
     );
     expect(mocks.duckQuery).toHaveBeenCalledTimes(3);
     expect(mocks.duckQuery.mock.calls[1]?.[0]).toContain(
-      'SELECT d.*, gu.geom AS geom'
+      'SELECT d.*, g.geom AS geom'
     );
     expect(mocks.duckQuery.mock.calls[1]?.[0]).toContain(
       'FROM "joined_source_table" d'
+    );
+    expect(mocks.duckQuery.mock.calls[1]?.[0]).toContain(
+      'INNER JOIN "basemap_geom_monde_countries_2024_medium" g'
     );
     expect(mocks.exportProcessedDatasets).toHaveBeenCalledWith(
       [

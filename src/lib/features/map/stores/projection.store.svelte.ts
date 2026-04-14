@@ -10,18 +10,21 @@ interface ProjectionState {
   referenceBbox: BBox | null;
   referenceGeoMetadata: string | null;
   canvasSize: CanvasSize;
+  fitPaddingPx: number;
   modelMatrix: Matrix4 | null;
   /** True when referenceBbox is in d3-geo projected coordinates (Y-down) */
   isProjectedCoordinates: boolean;
 }
 
 const DEFAULT_CANVAS_SIZE: CanvasSize = { width: 800, height: 600 };
+const DEFAULT_FIT_PADDING_PX = 40;
 
 function createProjectionStore() {
   const state = $state<ProjectionState>({
     referenceBbox: null,
     referenceGeoMetadata: null,
     canvasSize: DEFAULT_CANVAS_SIZE,
+    fitPaddingPx: DEFAULT_FIT_PADDING_PX,
     modelMatrix: null,
     isProjectedCoordinates: false
   });
@@ -31,11 +34,17 @@ function createProjectionStore() {
       referenceBbox,
       referenceGeoMetadata,
       canvasSize,
+      fitPaddingPx,
       isProjectedCoordinates
     } = state;
 
     if (referenceGeoMetadata) {
-      state.modelMatrix = get_model_matrix(referenceGeoMetadata, canvasSize);
+      state.modelMatrix = get_model_matrix(
+        referenceGeoMetadata,
+        canvasSize,
+        undefined,
+        fitPaddingPx
+      );
       return;
     }
 
@@ -43,7 +52,8 @@ function createProjectionStore() {
       state.modelMatrix = get_model_matrix_from_bbox(
         referenceBbox,
         canvasSize,
-        isProjectedCoordinates
+        isProjectedCoordinates,
+        fitPaddingPx
       );
       return;
     }
@@ -83,10 +93,25 @@ function createProjectionStore() {
     }
   }
 
+  function setFitPadding(fitPaddingPx: number): void {
+    const nextFitPaddingPx =
+      Number.isFinite(fitPaddingPx) && fitPaddingPx >= 0
+        ? Math.round(fitPaddingPx)
+        : DEFAULT_FIT_PADDING_PX;
+
+    if (nextFitPaddingPx === state.fitPaddingPx) {
+      return;
+    }
+
+    state.fitPaddingPx = nextFitPaddingPx;
+    recalculateModelMatrix();
+  }
+
   function clear(): void {
     state.referenceBbox = null;
     state.referenceGeoMetadata = null;
     state.modelMatrix = null;
+    state.fitPaddingPx = DEFAULT_FIT_PADDING_PX;
     state.isProjectedCoordinates = false;
   }
 
@@ -95,6 +120,7 @@ function createProjectionStore() {
     state.referenceGeoMetadata = null;
     state.canvasSize = DEFAULT_CANVAS_SIZE;
     state.modelMatrix = null;
+    state.fitPaddingPx = DEFAULT_FIT_PADDING_PX;
     state.isProjectedCoordinates = false;
   }
 
@@ -111,12 +137,16 @@ function createProjectionStore() {
     get canvasSize(): CanvasSize {
       return state.canvasSize;
     },
+    get fitPaddingPx(): number {
+      return state.fitPaddingPx;
+    },
     get hasProjection(): boolean {
       return state.modelMatrix !== null;
     },
     setReferenceBboxFromMetadata,
     setReferenceBbox,
     updateCanvasSize,
+    setFitPadding,
     clear,
     reset
   };

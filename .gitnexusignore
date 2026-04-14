@@ -1,0 +1,26 @@
+# GitNexus-specific exclusions (in addition to .gitignore)
+# Purpose: keep the knowledge graph focused on traceable source code.
+
+# --- Paraglide i18n generated files (up to 26k lines each, zero source logic) ---
+src/lib/paraglide/messages/
+src/lib/paraglide/messages.js
+src/lib/paraglide/registry.js
+src/lib/paraglide/runtime.js
+src/lib/paraglide/server.js
+
+# --- Suspected duplicate/orphan Paraglide tree (investigate separately) ---
+src/paraglide/
+
+# --- Coverage / artifacts not covered by .gitignore ---
+coverage/
+test-screenshots/
+tmp/
+
+# --- Belt-and-suspenders (redundant with .gitignore, made explicit) ---
+.svelte-kit/
+build/
+dev-dist/
+test-results/
+node_modules/
+.turbo/
+dist/

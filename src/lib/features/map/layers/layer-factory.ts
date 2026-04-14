@@ -1,7 +1,6 @@
 import type { Color, Layer } from '@deck.gl/core';
 import {
   GeoJsonLayer,
-  IconLayer,
   TextLayer,
   SolidPolygonLayer,
   PathLayer,
@@ -36,13 +35,17 @@ import {
 import {
   ColorMode,
   DEFAULT_COLORS,
+  DENSITY_DEFAULTS,
+  isLinearShape,
   ProportionalType,
+  SHAPE_ORDINAL,
   ShapeType,
   SizeMode,
   SymbolMode,
   ThicknessMode,
   StrokeMode
 } from '$lib/features/main-toolbar/constants';
+import { MultiShapeLayer } from './multi-shape-layer';
 import type {
   DeckDataRow,
   GeometryInfo,
@@ -100,6 +103,7 @@ import {
   pointColorAttr,
   pointRadiusAttr,
   rowAccessor,
+  splitRowAccessor,
   filterValueAttr,
   pointPositions,
   projectGeoJSON
@@ -107,6 +111,30 @@ import {
 import { resolveHoverHighlightProps } from '../utils/hover-highlight-props';
 import { resolveMissingDataPointShape as resolveMissingPointShape } from '../utils/legend.utils';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
+
+/**
+ * Split-rendering aware row accessor (issue #87). When `ctx.splitDatasetTable`
+ * is set, the `jsTable` is the basemap geometry Arrow and the dataset
+ * attributes live in a separate Arrow keyed by `basemap_id`; rows are resolved
+ * via `splitRowAccessor`. Otherwise the legacy single-table accessor is used.
+ */
+function ctxRowAccessor<T>(
+  ctx: LayerContext,
+  jsTable: ArrowTable,
+  accessor: (row: Record<string, unknown>) => T
+): (featureId: number) => T {
+  const { splitDatasetTable, splitFeatureIdColumn } = ctx;
+  if (splitDatasetTable && splitFeatureIdColumn) {
+    return splitRowAccessor(
+      jsTable,
+      splitDatasetTable,
+      splitFeatureIdColumn,
+      'basemap_id',
+      (row) => accessor((row ?? {}) as Record<string, unknown>)
+    );
+  }
+  return rowAccessor(jsTable, accessor);
+}
 
 const HIGHLIGHT_DIMMING_FACTOR = 0.3;
 const DEFAULT_TEXT_SIZE = 12;
@@ -127,11 +155,6 @@ const LABEL_COLLISION_PRIORITY = 100;
 const TEXT_COLLISION_PRIORITY = 0;
 const TEXT_COLLISION_GROUP_SUFFIX = 'text-overlays';
 const pointSymbolIconCache = new Map<string, string>();
-
-interface PointIconDatum {
-  position: [number, number];
-  featureId: number;
-}
 
 type DoubleProportionalVisualization = VisualizationConfig & {
   modes: NonNullable<VisualizationConfig['modes']> & {
@@ -173,13 +196,28 @@ function createPointSymbolSvg(
     case ShapeType.SQUARE:
       markup = `<rect x="10" y="10" width="44" height="44" rx="4" ry="4" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" />`;
       break;
+    case ShapeType.BAR:
+      markup = `<rect x="26" y="4" width="12" height="56" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round" />`;
+      break;
+    case ShapeType.SPIKE:
+      markup = `<path d="M32 4 L42 60 H22 Z" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round" />`;
+      break;
     case ShapeType.CROSS:
       markup = `<path d="M22 8 H42 V22 H56 V42 H42 V56 H22 V42 H8 V22 H22 Z" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round" />`;
+      break;
+    case ShapeType.DIAMOND:
+      markup = `<path d="M32 6 L58 32 L32 58 L6 32 Z" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round" />`;
       break;
     case ShapeType.TRIANGLE:
       markup = `<path d="M32 8 L56 56 H8 Z" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round" />`;
       break;
-    case ShapeType.POINT:
+    case ShapeType.STAR:
+      markup = `<path d="M32 6 L39.4 24.6 L58.7 24.6 L43.1 36.1 L48.4 55.1 L32 44 L15.6 55.1 L20.9 36.1 L5.3 24.6 L24.6 24.6 Z" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round" />`;
+      break;
+    case ShapeType.RECTANGLE:
+      markup = `<rect x="4" y="24" width="56" height="16" rx="2" ry="2" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" />`;
+      break;
+    case ShapeType.CIRCLE:
     default:
       markup = `<circle cx="32" cy="32" r="22" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" />`;
       break;
@@ -239,43 +277,71 @@ function resolveGeoJsonLayerColor(
   return withOpacity(Array.from(candidate), fallbackOpacity);
 }
 
-function createPointIconData(data: {
-  readonly length: number;
-  readonly featureIds: Uint32Array;
-  readonly positions: Float64Array | Float32Array;
-}): PointIconDatum[] {
-  const flatPositions = pointPositions(
-    data as Parameters<typeof pointPositions>[0]
-  );
-  const output: PointIconDatum[] = new Array(data.length);
-
-  for (let index = 0; index < data.length; index += 1) {
-    output[index] = {
-      position: [
-        flatPositions[index * 2] ?? 0,
-        flatPositions[index * 2 + 1] ?? 0
-      ],
-      featureId: data.featureIds[index] ?? index
-    };
-  }
-
-  return output;
-}
-
 type BinaryLayerInteractionData = {
   khartisSourceTable?: ArrowTable;
+  khartisSplitDatasetTable?: ArrowTable;
+  /** geometry-row index → dataset-row index (Int32Array, -1 = no match). */
+  khartisSplitDatasetRowByGeomRow?: Int32Array;
   featureIds?: Uint32Array;
 };
 
 function attachBinaryPickingMetadata(
   target: BinaryLayerInteractionData,
   sourceTable: ArrowTable,
-  sourceData: { readonly featureIds?: Uint32Array }
+  sourceData: { readonly featureIds?: Uint32Array },
+  ctx?: LayerContext
 ): void {
-  target.khartisSourceTable = sourceTable;
+  if (ctx?.splitDatasetTable && ctx.splitFeatureIdColumn) {
+    target.khartisSourceTable = ctx.splitDatasetTable;
+    target.khartisSplitDatasetTable = ctx.splitDatasetTable;
+    target.khartisSplitDatasetRowByGeomRow = buildSplitDatasetRowMapping(
+      sourceTable,
+      ctx.splitDatasetTable,
+      ctx.splitFeatureIdColumn,
+      'basemap_id'
+    );
+  } else {
+    target.khartisSourceTable = sourceTable;
+  }
   if (sourceData.featureIds instanceof Uint32Array) {
     target.featureIds = sourceData.featureIds;
   }
+}
+
+/**
+ * Builds an Int32Array `[geometryRowIndex] → datasetRowIndex` for split
+ * rendering tooltip resolution. -1 means no matching dataset row.
+ */
+function buildSplitDatasetRowMapping(
+  geometry: ArrowTable,
+  dataset: ArrowTable,
+  featureIdColumn: string,
+  basemapIdColumn: string
+): Int32Array {
+  const datasetIdVector = dataset.getChild(basemapIdColumn);
+  const geomIdVector = geometry.getChild(featureIdColumn);
+  const out = new Int32Array(geometry.numRows);
+  out.fill(-1);
+  if (!datasetIdVector || !geomIdVector) return out;
+
+  const datasetRowByKey = new Map<string, number>();
+  const datasetRowCount = dataset.numRows;
+  for (let datasetRow = 0; datasetRow < datasetRowCount; datasetRow += 1) {
+    const id = datasetIdVector.get(datasetRow);
+    if (id === null || id === undefined) continue;
+    datasetRowByKey.set(String(id), datasetRow);
+  }
+
+  const geomRowCount = geometry.numRows;
+  for (let geomRow = 0; geomRow < geomRowCount; geomRow += 1) {
+    const featureId = geomIdVector.get(geomRow);
+    if (featureId === null || featureId === undefined) continue;
+    const datasetRow = datasetRowByKey.get(String(featureId));
+    if (datasetRow !== undefined) {
+      out[geomRow] = datasetRow;
+    }
+  }
+  return out;
 }
 
 function getRepresentativePointSource(
@@ -356,7 +422,7 @@ function createDoubleProportionalPointLayers(
   }
 
   const secondaryFillColor = hexToRgb(viz.style.fillColorB ?? '#ff832b');
-  const pointShape = viz.symbols.type ?? ShapeType.POINT;
+  const pointShape = viz.symbols.type ?? ShapeType.CIRCLE;
   const minPointRadius = Math.max(1, viz.symbols.minSize ?? 1);
   const maxPointRadius = Math.max(
     minPointRadius,
@@ -462,6 +528,11 @@ function createDoubleProportionalPointLayers(
     createRadiusAccessor(viz.mapping.valueColumn, secondaryRadiusAccessor)
   );
 
+  const shapeOrdinal =
+    SHAPE_ORDINAL[pointShape] ?? SHAPE_ORDINAL[ShapeType.CIRCLE];
+  const missingShapeOrdinal =
+    SHAPE_ORDINAL[missingPointShape] ?? SHAPE_ORDINAL[ShapeType.CIRCLE];
+
   const createScatterLayer = (
     suffix: string,
     fillByFeatureId: (featureId: number) => [number, number, number, number],
@@ -476,7 +547,7 @@ function createDoubleProportionalPointLayers(
       khartisSourceTable?: ArrowTable;
       featureIds?: Uint32Array;
     };
-    attachBinaryPickingMetadata(scatterBinaryData, jsTable, pointData);
+    attachBinaryPickingMetadata(scatterBinaryData, jsTable, pointData, ctx);
     scatterBinaryData.attributes.getFillColor = pointColorAttr(
       pointData,
       fillByFeatureId
@@ -489,6 +560,13 @@ function createDoubleProportionalPointLayers(
       pointData,
       radiusByFeatureId
     );
+    scatterBinaryData.attributes.getShape = buildShapeAttribute(
+      scatterBinaryData.featureIds,
+      jsTable,
+      triggerColumn,
+      shapeOrdinal,
+      missingShapeOrdinal
+    );
 
     const yearFilterProps = ctx.yearFilter
       ? buildYearFilterProps(
@@ -499,7 +577,7 @@ function createDoubleProportionalPointLayers(
         )
       : null;
 
-    return new ScatterplotLayer({
+    return new MultiShapeLayer({
       id: `${layerId}-${suffix}`,
       ...(scatterProps as unknown as Record<string, unknown>),
       stroked: true,
@@ -542,97 +620,13 @@ function createDoubleProportionalPointLayers(
           viz.missingData?.show,
           viz.missingData?.size
         ],
+        getShape: [shapeOrdinal, missingShapeOrdinal, triggerColumn],
         ...(ctx.yearFilter && {
           getFilterValue: [ctx.yearFilter.column, ctx.yearFilter.value]
         })
       }
     }) as ThematicLayer;
   };
-
-  if (pointShape !== ShapeType.POINT) {
-    const iconData = createPointIconData(pointData);
-    const createIconLayer = (
-      suffix: string,
-      fillByFeatureId: (featureId: number) => [number, number, number, number],
-      lineByFeatureId: (featureId: number) => [number, number, number, number],
-      radiusByFeatureId: (featureId: number) => number,
-      triggerColumn: string,
-      pickable: boolean
-    ) =>
-      new IconLayer({
-        id: `${layerId}-${suffix}`,
-        data: iconData,
-        getPosition: (datum) => datum.position,
-        getIcon: (datum) => {
-          const row = jsTable.get(datum.featureId) as DeckDataRow;
-          const isMissing = isMissingThematicValue(row[triggerColumn]);
-
-          return createPointSymbolIcon(
-            isMissing ? missingPointShape : pointShape,
-            fillByFeatureId(datum.featureId),
-            lineByFeatureId(datum.featureId),
-            strokeWidth / 3
-          );
-        },
-        getSize: (datum) => Math.max(1, radiusByFeatureId(datum.featureId) * 2),
-        sizeUnits: 'pixels',
-        sizeScale: 1,
-        sizeMinPixels: 1,
-        alphaCutoff: 0,
-        billboard: true,
-        pickable,
-        ...resolveHoverHighlightProps(pickable),
-        ...(modelMatrix && { modelMatrix }),
-        ...(beforeId && { beforeId }),
-        updateTriggers: {
-          getIcon: [
-            pointShape,
-            triggerColumn,
-            fillColor,
-            viz.style.fillColorB,
-            strokeColor,
-            rawFillOpacity,
-            rawStrokeOpacity,
-            strokeWidth,
-            viz.missingData?.show,
-            viz.missingData?.color,
-            viz.missingData?.shape,
-            hlVersion
-          ],
-          getSize: [
-            triggerColumn,
-            statistics.min,
-            statistics.max,
-            secondaryStats.min,
-            secondaryStats.max,
-            viz.symbols?.minSize,
-            viz.symbols?.maxSize,
-            viz.symbols?.sizeScale,
-            viz.missingData?.show,
-            viz.missingData?.size
-          ]
-        }
-      }) as ThematicLayer;
-
-    return [
-      createIconLayer(
-        'double-primary',
-        primaryFillByFeatureId,
-        primaryLineByFeatureId,
-        primaryRadiusByFeatureId,
-        viz.mapping.sizeColumn,
-        true
-      ),
-      createIconLayer(
-        'double-secondary',
-        secondaryFillByFeatureId,
-        secondaryLineByFeatureId,
-        secondaryRadiusByFeatureId,
-        viz.mapping.valueColumn,
-        false
-      )
-    ];
-  }
 
   return [
     createScatterLayer(
@@ -652,6 +646,30 @@ function createDoubleProportionalPointLayers(
       viz.mapping.valueColumn
     )
   ];
+}
+
+function buildShapeAttribute(
+  featureIds: Uint32Array | undefined,
+  jsTable: ArrowTable,
+  missingColumn: string | undefined,
+  shapeOrdinal: number,
+  missingShapeOrdinal: number
+): { value: Float32Array; size: number } {
+  if (!featureIds) {
+    return { value: new Float32Array([shapeOrdinal]), size: 1 };
+  }
+  const out = new Float32Array(featureIds.length);
+  for (let i = 0; i < featureIds.length; i += 1) {
+    if (missingColumn) {
+      const row = jsTable.get(featureIds[i]) as DeckDataRow | null;
+      if (row && isMissingThematicValue(row[missingColumn])) {
+        out[i] = missingShapeOrdinal;
+        continue;
+      }
+    }
+    out[i] = shapeOrdinal;
+  }
+  return { value: out, size: 1 };
 }
 
 function createRepresentativePointSymbolLayers(
@@ -722,7 +740,7 @@ function createRepresentativePointSymbolLayers(
   const missingPointColor = hexToRgb(
     viz.missingData?.color ?? DEFAULT_COLORS.missingData
   );
-  const pointShape = viz.symbols?.type ?? ShapeType.POINT;
+  const pointShape = viz.symbols?.type ?? ShapeType.CIRCLE;
   const uniquePointRadius = Math.max(1, (viz.symbols?.size ?? 10) / 2);
   const minPointRadius = Math.max(1, viz.symbols?.minSize ?? 1);
   const maxPointRadius = Math.max(
@@ -752,6 +770,9 @@ function createRepresentativePointSymbolLayers(
           effectiveCategoryColorMap
         )
       : null;
+  const linearShapeOverrideScale = isLinearShape(pointShape)
+    ? ScaleType.LINEAR
+    : viz.symbols?.sizeScale;
   const baseRadiusAccessor = useClassedSymbols
     ? createClassedSizeAccessor(
         viz.mapping.valueColumn!,
@@ -767,7 +788,7 @@ function createRepresentativePointSymbolLayers(
           maxValue,
           minPointRadius,
           maxPointRadius,
-          viz.symbols!.sizeScale
+          linearShapeOverrideScale ?? viz.symbols!.sizeScale
         )
       : null;
 
@@ -830,83 +851,17 @@ function createRepresentativePointSymbolLayers(
     return uniquePointRadius;
   };
 
-  const fillColorByFeatureId = rowAccessor(jsTable, resolveFillColorForRow);
-  const lineColorByFeatureId = rowAccessor(jsTable, resolveLineColorForRow);
-  const radiusByFeatureId = rowAccessor(jsTable, resolveRadiusForRow);
-
-  if (pointShape !== ShapeType.POINT) {
-    const iconData = createPointIconData(pointData);
-
-    return [
-      new IconLayer({
-        id: `${pointLayerId}-centroid-icons`,
-        data: iconData,
-        getPosition: (datum) => datum.position,
-        getIcon: (datum) => {
-          const row = jsTable.get(datum.featureId) as DeckDataRow;
-          const isMissing =
-            pointMissingColumn &&
-            isMissingThematicValue(row[pointMissingColumn]);
-
-          return createPointSymbolIcon(
-            isMissing ? missingPointShape : pointShape,
-            fillColorByFeatureId(datum.featureId),
-            lineColorByFeatureId(datum.featureId),
-            strokeWidth / 3
-          );
-        },
-        getSize: (datum) => Math.max(1, radiusByFeatureId(datum.featureId) * 2),
-        sizeUnits: 'pixels',
-        sizeScale: 1,
-        sizeMinPixels: 1,
-        alphaCutoff: 0,
-        billboard: true,
-        pickable: true,
-        ...resolveHoverHighlightProps(),
-        ...(modelMatrix && { modelMatrix }),
-        ...(beforeId && { beforeId }),
-        updateTriggers: {
-          getIcon: [
-            pointShape,
-            useChoropleth,
-            viz.mapping.valueColumn,
-            viz.classification?.breaks,
-            viz.classification?.colors,
-            useCategoricalColor,
-            viz.mapping.categoryColumn,
-            categoryColorMap,
-            fillColor,
-            strokeColor,
-            rawFillOpacity,
-            rawStrokeOpacity,
-            strokeWidth,
-            pointMissingColumn,
-            viz.missingData?.show,
-            viz.missingData?.color,
-            viz.missingData?.size,
-            viz.missingData?.shape,
-            hlVersion
-          ],
-          getSize: [
-            useProportionalSymbols,
-            useClassedSymbols,
-            viz.mapping.sizeColumn,
-            viz.mapping.valueColumn,
-            minValue,
-            maxValue,
-            viz.classification?.breaks,
-            viz.symbols?.size,
-            viz.symbols?.minSize,
-            viz.symbols?.maxSize,
-            viz.symbols?.sizeScale,
-            pointMissingColumn,
-            viz.missingData?.show,
-            viz.missingData?.size
-          ]
-        }
-      })
-    ];
-  }
+  const fillColorByFeatureId = ctxRowAccessor(
+    ctx,
+    jsTable,
+    resolveFillColorForRow
+  );
+  const lineColorByFeatureId = ctxRowAccessor(
+    ctx,
+    jsTable,
+    resolveLineColorForRow
+  );
+  const radiusByFeatureId = ctxRowAccessor(ctx, jsTable, resolveRadiusForRow);
 
   const scatterProps = createScatterplotLayerProps(pointData);
   const scatterBinaryData = scatterProps.data as {
@@ -914,7 +869,7 @@ function createRepresentativePointSymbolLayers(
     khartisSourceTable?: ArrowTable;
     featureIds?: Uint32Array;
   };
-  attachBinaryPickingMetadata(scatterBinaryData, jsTable, pointData);
+  attachBinaryPickingMetadata(scatterBinaryData, jsTable, pointData, ctx);
   scatterBinaryData.attributes.getFillColor = pointColorAttr(
     pointData,
     fillColorByFeatureId
@@ -937,8 +892,33 @@ function createRepresentativePointSymbolLayers(
       )
     : null;
 
+  const shapeOrdinal =
+    SHAPE_ORDINAL[pointShape] ?? SHAPE_ORDINAL[ShapeType.CIRCLE];
+  const missingShapeOrdinal =
+    SHAPE_ORDINAL[missingPointShape] ?? SHAPE_ORDINAL[ShapeType.CIRCLE];
+  const shapeByFeatureId = ctxRowAccessor(ctx, jsTable, (row) => {
+    if (pointMissingColumn && isMissingThematicValue(row[pointMissingColumn])) {
+      return missingShapeOrdinal;
+    }
+    return shapeOrdinal;
+  });
+  scatterBinaryData.attributes.getShape = {
+    value: (() => {
+      const featureIds = scatterBinaryData.featureIds;
+      if (!featureIds) {
+        return new Float32Array([shapeOrdinal]);
+      }
+      const out = new Float32Array(featureIds.length);
+      for (let i = 0; i < featureIds.length; i += 1) {
+        out[i] = shapeByFeatureId(featureIds[i]);
+      }
+      return out;
+    })(),
+    size: 1
+  };
+
   return [
-    new ScatterplotLayer({
+    new MultiShapeLayer({
       id: `${pointLayerId}-centroids`,
       ...(scatterProps as unknown as Record<string, unknown>),
       stroked: true,
@@ -990,6 +970,7 @@ function createRepresentativePointSymbolLayers(
           viz.missingData?.show,
           viz.missingData?.size
         ],
+        getShape: [shapeOrdinal, missingShapeOrdinal, pointMissingColumn],
         ...(ctx.yearFilter && {
           getFilterValue: [ctx.yearFilter.column, ctx.yearFilter.value]
         })
@@ -2210,6 +2191,68 @@ function createTextOverlayLayers(
   return layers;
 }
 
+function createDotDensityLayers(
+  jsTable: ArrowTable,
+  ctx: LayerContext,
+  layerId: string
+): Layer<DeckDataRow>[] {
+  const { viz, modelMatrix, beforeId } = ctx;
+  if (!viz?.density) return [];
+
+  const dotSize = Math.max(
+    0.1,
+    viz.density.dotSize ?? DENSITY_DEFAULTS.dotSize
+  );
+  const fillColorHex = viz.density.color ?? DENSITY_DEFAULTS.color;
+  const alpha = Math.round(255 * normalizeOpacity(viz.style.fillOpacity, 1));
+  const rgb = hexToRgb(fillColorHex);
+  const fillColor: [number, number, number, number] = [
+    rgb[0],
+    rgb[1],
+    rgb[2],
+    alpha
+  ];
+
+  let pointData: BinaryPointData | null = null;
+  try {
+    pointData = ctx.customProjection
+      ? parsePointDataWithProjection(jsTable, ctx.customProjection)
+      : parsePointData(jsTable);
+  } catch (error) {
+    logger.error(
+      'Failed to parse density points from Arrow table',
+      LogCategory.MAP,
+      error
+    );
+    return [];
+  }
+  if (!pointData) return [];
+
+  const densityLayer = new ScatterplotLayer({
+    id: `${layerId}-density`,
+    ...(createScatterplotLayerProps(pointData) as unknown as Record<
+      string,
+      unknown
+    >),
+    stroked: false,
+    filled: true,
+    opacity: 1,
+    getFillColor: fillColor,
+    getRadius: dotSize,
+    radiusUnits: 'pixels',
+    radiusMinPixels: 1,
+    pickable: false,
+    ...(modelMatrix && { modelMatrix }),
+    ...(beforeId && { beforeId }),
+    updateTriggers: {
+      getFillColor: [fillColorHex, alpha],
+      getRadius: [dotSize]
+    }
+  });
+
+  return [densityLayer as unknown as Layer<DeckDataRow>];
+}
+
 export function createPointLayers(
   jsTable: ArrowTable,
   geometryInfo: GeometryInfo,
@@ -2257,7 +2300,7 @@ export function createPointLayers(
   );
 
   const layerId = createThematicLayerId(DeckLayerId.POINT_LAYER, ctx);
-  const pointShape = viz?.symbols?.type ?? ShapeType.POINT;
+  const pointShape = viz?.symbols?.type ?? ShapeType.CIRCLE;
   const uniquePointRadius = Math.max(1, (viz?.symbols?.size ?? 10) / 2);
   const minPointRadius = Math.max(1, viz?.symbols?.minSize ?? 1);
   const maxPointRadius = Math.max(
@@ -2275,12 +2318,16 @@ export function createPointLayers(
     (arrowExtension === ArrowExtension.GEOARROW_POINT ||
       arrowExtension === ArrowExtension.GEOARROW_MULTIPOINT);
 
+  if (viz?.modes?.symbol === SymbolMode.DENSITY && viz.density) {
+    return createDotDensityLayers(jsTable, ctx, layerId);
+  }
+
   if (geometryInfo.type === GeometryType.MULTIPOINT) {
     return createRepresentativePointSymbolLayers(jsTable, ctx);
   }
 
   const shouldUseGeoJsonPointLayer =
-    pointShape !== ShapeType.POINT ||
+    pointShape !== ShapeType.CIRCLE ||
     (!isNativeGeoArrowPoint &&
       !isNativeGeoArrow &&
       (isWkbEncoded || isGeoJsonEncoded));
@@ -2404,7 +2451,7 @@ export function createPointLayers(
         ? isMissingThematicValue(feature.properties?.[pointMissingColumn])
         : false;
 
-    if (pointShape !== ShapeType.POINT) {
+    if (pointShape !== ShapeType.CIRCLE) {
       return [
         new GeoJsonLayer({
           id: layerId,
@@ -2647,7 +2694,7 @@ export function createPointLayers(
 
   // Binary attributes — must be in data.attributes for ScatterplotLayer binary data
   const fillColorBinAttr = fillColorAccessor
-    ? pointColorAttr(pointData, rowAccessor(jsTable, fillColorAccessor))
+    ? pointColorAttr(pointData, ctxRowAccessor(ctx, jsTable, fillColorAccessor))
     : null;
 
   // Build line color
@@ -2676,7 +2723,7 @@ export function createPointLayers(
       : null;
 
   const lineColorBinAttr = lineColorAccessor
-    ? pointColorAttr(pointData, rowAccessor(jsTable, lineColorAccessor))
+    ? pointColorAttr(pointData, ctxRowAccessor(ctx, jsTable, lineColorAccessor))
     : null;
 
   // Build radius: static or per-feature attribute
@@ -2719,7 +2766,7 @@ export function createPointLayers(
       : null;
 
   const radiusBinAttr = radiusAccessor
-    ? pointRadiusAttr(pointData, rowAccessor(jsTable, radiusAccessor))
+    ? pointRadiusAttr(pointData, ctxRowAccessor(ctx, jsTable, radiusAccessor))
     : null;
 
   // Inject binary attributes into data.attributes for ScatterplotLayer
@@ -2729,7 +2776,7 @@ export function createPointLayers(
     khartisSourceTable?: ArrowTable;
     featureIds?: Uint32Array;
   };
-  attachBinaryPickingMetadata(scatterBinaryData, jsTable, pointData);
+  attachBinaryPickingMetadata(scatterBinaryData, jsTable, pointData, ctx);
   if (fillColorBinAttr) {
     scatterBinaryData.attributes.getFillColor = fillColorBinAttr;
   }
@@ -2952,7 +2999,7 @@ export function createLineLayers(
 
     // Binary color attribute — must be in data.attributes for PathLayer binary data
     const colorBinaryAttr = lineColorFn
-      ? pathColorAttr(lineData, rowAccessor(jsTable, lineColorFn))
+      ? pathColorAttr(lineData, ctxRowAccessor(ctx, jsTable, lineColorFn))
       : null;
 
     // Build width: proportional or static
@@ -2977,7 +3024,7 @@ export function createLineLayers(
           : null;
 
     const widthBinaryAttr = widthFn
-      ? pathWidthAttr(lineData, rowAccessor(jsTable, widthFn))
+      ? pathWidthAttr(lineData, ctxRowAccessor(ctx, jsTable, widthFn))
       : null;
 
     // Inject binary attributes into data.attributes for PathLayer
@@ -2987,7 +3034,7 @@ export function createLineLayers(
       khartisSourceTable?: ArrowTable;
       featureIds?: Uint32Array;
     };
-    attachBinaryPickingMetadata(pathBinaryData, jsTable, lineData);
+    attachBinaryPickingMetadata(pathBinaryData, jsTable, lineData, ctx);
     if (colorBinaryAttr) {
       pathBinaryData.attributes.getColor = colorBinaryAttr;
     }
@@ -3343,7 +3390,7 @@ export function createPolygonLayers(
       const fillColorBinaryAttr = fillColorFn
         ? createPolygonFillColorAttribute(
             polyData,
-            rowAccessor(jsTable, fillColorFn)
+            ctxRowAccessor(ctx, jsTable, fillColorFn)
           )
         : null;
 
@@ -3358,7 +3405,10 @@ export function createPolygonLayers(
         : null;
 
       const strokeColorBinaryAttr = strokeColorFn
-        ? pathColorAttr(outlineData, rowAccessor(jsTable, strokeColorFn))
+        ? pathColorAttr(
+            outlineData,
+            ctxRowAccessor(ctx, jsTable, strokeColorFn)
+          )
         : null;
 
       const layers: Layer<DeckDataRow>[] = [];
@@ -3370,7 +3420,7 @@ export function createPolygonLayers(
         khartisSourceTable?: ArrowTable;
         featureIds?: Uint32Array;
       };
-      attachBinaryPickingMetadata(solidBinaryData, jsTable, polyData);
+      attachBinaryPickingMetadata(solidBinaryData, jsTable, polyData, ctx);
       if (fillColorBinaryAttr) {
         solidBinaryData.attributes.getFillColor = fillColorBinaryAttr;
       }
