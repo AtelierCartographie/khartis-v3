@@ -149,37 +149,69 @@ async function fetchJoinedDatasetWithGeometry(
   const geometryTable =
     await basemapService.loadGeometryIntoDuckDB(joinedBasemapId);
 
-  const geomColumns = (await Duck.query(
-    `SELECT column_name FROM information_schema.columns
-     WHERE table_name = '${escapeSqlString(geometryTable)}'
-     AND column_name NOT IN ('${INTERNAL_COLUMN.GEOM}', '${INTERNAL_COLUMN.GEOMETRY}', '${INTERNAL_COLUMN.WKB_GEOMETRY}', '${INTERNAL_COLUMN.THE_GEOM}')
-     AND data_type IN ('VARCHAR', 'TEXT')`,
+  const geomColumnsFull = (await Duck.query(
+    `SELECT column_name, data_type FROM information_schema.columns
+     WHERE table_name = '${escapeSqlString(geometryTable)}'`,
     { format: 'array' }
-  )) as Array<{ column_name: string }>;
+  )) as Array<{ column_name: string; data_type: string }>;
 
-  const colList = geomColumns
-    .map((c) => `"${escapeIdentifier(c.column_name)}"`)
-    .join(', ');
+  const hasFeatureIdColumn = geomColumnsFull.some(
+    (c) => c.column_name === INTERNAL_COLUMN.FEATURE_ID
+  );
+  const hasNativeIdColumn = geomColumnsFull.some(
+    (c) => c.column_name.toLowerCase() === 'id'
+  );
   const escapedDataset = escapeIdentifier(datasetTableName);
   const escapedGeometry = escapeIdentifier(geometryTable);
   const viewName = `export_joined_${datasetTableName.replace(/[^a-zA-Z0-9_]/g, '_')}`;
 
-  await Duck.query(`
-    CREATE OR REPLACE TEMP VIEW "${viewName}" AS
-    WITH geom_unpivot AS (
-      UNPIVOT "${escapedGeometry}"
-      ON ${colList}
-      INTO NAME _attr_col VALUE _attr_val
-    )
-    SELECT d.*, gu.geom AS geom
-    FROM "${escapedDataset}" d
-    INNER JOIN (
-      SELECT DISTINCT _attr_val, geom
-      FROM geom_unpivot
-    ) gu
-    ON CAST(d.basemap_id AS VARCHAR) = CAST(gu._attr_val AS VARCHAR)
-    WHERE gu.geom IS NOT NULL
-  `);
+  if (hasFeatureIdColumn || hasNativeIdColumn) {
+    const joinColumn = hasFeatureIdColumn ? INTERNAL_COLUMN.FEATURE_ID : 'id';
+    const escapedJoinCol = escapeIdentifier(joinColumn);
+    await Duck.query(`
+      CREATE OR REPLACE TEMP VIEW "${viewName}" AS
+      SELECT d.*, g.geom AS geom
+      FROM "${escapedDataset}" d
+      INNER JOIN "${escapedGeometry}" g
+        ON CAST(d.basemap_id AS VARCHAR) = CAST(g."${escapedJoinCol}" AS VARCHAR)
+      WHERE g.geom IS NOT NULL
+    `);
+  } else {
+    const textColumns = geomColumnsFull.filter((c) => {
+      const name = c.column_name;
+      const type = c.data_type.toUpperCase();
+      if (
+        name === INTERNAL_COLUMN.GEOM ||
+        name === INTERNAL_COLUMN.GEOMETRY ||
+        name === INTERNAL_COLUMN.WKB_GEOMETRY ||
+        name === INTERNAL_COLUMN.THE_GEOM
+      ) {
+        return false;
+      }
+      return type === 'VARCHAR' || type === 'TEXT';
+    });
+
+    const colList = textColumns
+      .map((c) => `"${escapeIdentifier(c.column_name)}"`)
+      .join(', ');
+
+    await Duck.query(`
+      CREATE OR REPLACE TEMP VIEW "${viewName}" AS
+      WITH geom_unpivot AS (
+        UNPIVOT "${escapedGeometry}"
+        ON ${colList}
+        INTO NAME _attr_col VALUE _attr_val
+      )
+      SELECT d.*, gu.geom AS geom
+      FROM "${escapedDataset}" d
+      INNER JOIN (
+        SELECT DISTINCT _attr_val, geom
+        FROM geom_unpivot
+      ) gu
+      ON CAST(d.basemap_id AS VARCHAR) = CAST(gu._attr_val AS VARCHAR)
+      WHERE gu.geom IS NOT NULL
+    `);
+  }
 
   const rows = (await Duck.query(`SELECT * FROM "${viewName}"`, {
     format: 'array'

@@ -3,10 +3,6 @@
   import CompactNumberInput from '$lib/features/commons/components/compact-number-input.svelte';
   import InfoPopover from './info-popover.svelte';
 
-  import { onDestroy } from 'svelte';
-
-  const SLIDER_DEBOUNCE_MS = 50;
-
   interface Props {
     label?: string;
     infoText?: string;
@@ -31,22 +27,11 @@
     onchange
   }: Props = $props();
 
-  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-
   function handleChange(newValue: number | null) {
     if (newValue === null) return;
     value = newValue;
-    // Debounce the parent callback to avoid cascade of layer rebuilds during drag
-    if (debounceTimer) clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => {
-      onchange?.(newValue);
-      debounceTimer = null;
-    }, SLIDER_DEBOUNCE_MS);
+    onchange?.(newValue);
   }
-
-  onDestroy(() => {
-    if (debounceTimer) clearTimeout(debounceTimer);
-  });
 </script>
 
 <div class="slider-with-input-wrapper">

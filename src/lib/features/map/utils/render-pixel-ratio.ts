@@ -58,17 +58,17 @@ export function getBrowserMaxRenderBufferSizePx(): number {
 }
 
 export function resolveMapRenderPixelRatio(
-  pageZoomLevel: number,
   devicePixelRatio: number,
+  pageZoomScale = 1,
   maxViewportDimensionPx = 0,
   maxRenderBufferSizePx = DEFAULT_MAX_RENDER_BUFFER_SIZE_PX
 ): number {
-  const normalizedPageZoomLevel =
-    Number.isFinite(pageZoomLevel) && pageZoomLevel > 0 ? pageZoomLevel : 100;
   const normalizedDevicePixelRatio =
     Number.isFinite(devicePixelRatio) && devicePixelRatio > 0
       ? devicePixelRatio
       : DEFAULT_RENDER_PIXEL_RATIO;
+  const normalizedPageZoomScale =
+    Number.isFinite(pageZoomScale) && pageZoomScale > 0 ? pageZoomScale : 1;
   const normalizedViewportDimension =
     Number.isFinite(maxViewportDimensionPx) && maxViewportDimensionPx > 0
       ? maxViewportDimensionPx
@@ -77,7 +77,7 @@ export function resolveMapRenderPixelRatio(
     Number.isFinite(maxRenderBufferSizePx) && maxRenderBufferSizePx > 0
       ? maxRenderBufferSizePx
       : DEFAULT_MAX_RENDER_BUFFER_SIZE_PX;
-  const zoomScale = Math.max(1, normalizedPageZoomLevel / 100);
+  const compensationScale = Math.max(1, normalizedPageZoomScale);
   const maxPixelRatioFromViewport =
     normalizedViewportDimension > 0
       ? normalizedMaxRenderBufferSize / normalizedViewportDimension
@@ -88,7 +88,7 @@ export function resolveMapRenderPixelRatio(
     Math.min(
       MAX_MAP_RENDER_PIXEL_RATIO,
       maxPixelRatioFromViewport,
-      normalizedDevicePixelRatio * zoomScale
+      normalizedDevicePixelRatio * compensationScale
     )
   );
 }

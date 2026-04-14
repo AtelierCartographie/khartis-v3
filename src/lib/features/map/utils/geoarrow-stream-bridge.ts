@@ -625,6 +625,49 @@ export function rowAccessor<T>(
 }
 
 /**
+ * Split rendering accessor (issue #87) — given the basemap geometry Arrow
+ * (data source for Deck.gl) and the dataset attribute Arrow joined on
+ * `basemap_id`, returns an accessor that resolves a vertex's `featureId`
+ * (geometry-row index) → stable feature id (`__feature_id__` / `id`) → dataset
+ * row, then forwards to the supplied accessor. The dataset row map is built
+ * once per call and indexed by stringified `basemap_id` to absorb int vs
+ * varchar key drift.
+ */
+export function splitRowAccessor<T>(
+  geometry: ArrowTable,
+  dataset: ArrowTable,
+  featureIdColumn: string,
+  basemapIdColumnInDataset: string,
+  accessor: (row: Record<string, unknown> | null) => T
+): (featureId: number) => T {
+  const geometryFeatureIdVector = geometry.getChild(featureIdColumn);
+  const datasetByFeatureId = new Map<string, Record<string, unknown>>();
+  const datasetBasemapIdVector = dataset.getChild(basemapIdColumnInDataset);
+  if (datasetBasemapIdVector) {
+    const datasetRowCount = dataset.numRows;
+    for (let rowIndex = 0; rowIndex < datasetRowCount; rowIndex += 1) {
+      const rawId = datasetBasemapIdVector.get(rowIndex);
+      if (rawId === null || rawId === undefined) continue;
+      const key = String(rawId);
+      const row = dataset.get(rowIndex);
+      if (row) {
+        datasetByFeatureId.set(key, row as unknown as Record<string, unknown>);
+      }
+    }
+  }
+
+  return (featureId: number): T => {
+    const rawFeatureId = geometryFeatureIdVector?.get(featureId);
+    const key =
+      rawFeatureId !== null && rawFeatureId !== undefined
+        ? String(rawFeatureId)
+        : '';
+    const row = datasetByFeatureId.get(key) ?? null;
+    return accessor(row);
+  };
+}
+
+/**
  * Optimized accessor for single-column lookups.
  * Avoids creating a full row proxy — reads directly from the column vector.
  */

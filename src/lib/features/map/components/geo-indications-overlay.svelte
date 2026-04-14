@@ -867,6 +867,7 @@
       class="scale-bar"
       class:draggable={isGeoIndicationsActive}
       class:dragging={currentDrag === 'scale'}
+      data-workspace-pan-ignore="true"
       style={scaleStyle}
       role="button"
       tabindex="0"
@@ -932,6 +933,7 @@
       class="north-arrow"
       class:draggable={isGeoIndicationsActive}
       class:dragging={currentDrag === 'orientation'}
+      data-workspace-pan-ignore="true"
       style={orientationStyle}
       role="button"
       tabindex="0"
@@ -1010,6 +1012,7 @@
       class="inset-map-panel"
       class:draggable={isGeoIndicationsActive}
       class:dragging={currentDrag === 'inset'}
+      data-workspace-pan-ignore="true"
       style={insetPanelStyle}
       role="button"
       tabindex="0"

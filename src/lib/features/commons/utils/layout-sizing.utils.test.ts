@@ -32,6 +32,7 @@ describe('layout sizing utils', () => {
     expect(tokens.profile).toBe('print-large');
     expect(tokens.annotations.titleFontSize).toBe(28);
     expect(tokens.geoIndications.insetSize).toBe(200);
+    expect(tokens.mapViewport.fitPaddingPx).toBe(56);
   });
 
   it('uses the screen-large profile for screen presets', () => {
@@ -44,6 +45,7 @@ describe('layout sizing utils', () => {
     expect(tokens.profile).toBe('screen-large');
     expect(tokens.legend.maxWidth).toBe(400);
     expect(tokens.geoIndications.scaleTargetWidth).toBe(190);
+    expect(tokens.mapViewport.fitPaddingPx).toBe(72);
   });
 
   it('keeps narrow custom formats on print-standard', () => {

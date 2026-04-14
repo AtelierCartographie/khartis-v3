@@ -260,31 +260,15 @@ const { state, actions } = createToolStore<LayersState, LayersActions>(
         const layer = findLayer(id);
         if (!layer) return;
 
-        if (layer.type === 'visualization') {
-          if (layer.isSubLayer) {
-            return;
-          }
-
+        if (layer.type === 'visualization' && !layer.isSubLayer) {
           const visualization = visualizationStore.visualizations.find(
             (v) => v.id === id
           );
           if (!visualization) return;
 
-          const nextStyle = { ...visualization.style };
-
-          if (updates.color) {
-            nextStyle.fillColor = updates.color;
+          if (updates.name !== undefined) {
+            visualizationStore.updateVisualization(id, { name: updates.name });
           }
-
-          if (typeof updates.opacity === 'number') {
-            nextStyle.fillOpacity =
-              Math.max(0, Math.min(100, updates.opacity)) / 100;
-          }
-
-          visualizationStore.updateVisualization(id, {
-            name: updates.name ?? visualization.name,
-            style: nextStyle
-          });
         }
 
         syncFromSources();

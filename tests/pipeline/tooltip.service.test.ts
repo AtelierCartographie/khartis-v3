@@ -15,6 +15,8 @@ type ArrowRowMock = {
   directive_ippc: string;
   nom_de_linstallation: string;
   basemap_id?: string;
+  basemap_label?: string;
+  __feature_id__?: number;
 };
 
 function createArrowTableMock(
@@ -61,6 +63,42 @@ describe('extractTooltipEntries', () => {
     vi.useFakeTimers();
     vi.clearAllTimers();
     mapTooltipStore.unpin();
+  });
+
+  it('hides basemap_label and __feature_id__ from tooltip entries', () => {
+    const sourceTable = createArrowTableMock([
+      {
+        __id: 0,
+        directive_ippc: 'Value',
+        nom_de_linstallation: 'Site',
+        basemap_id: 'FR',
+        basemap_label: 'France',
+        __feature_id__: 7
+      }
+    ]);
+    const info = {
+      picked: true,
+      index: 0,
+      object: null,
+      layer: {
+        id: 'point-layer-ds_dataset_1-mercator',
+        props: {
+          data: {
+            attributes: {},
+            khartisSourceTable: sourceTable
+          }
+        }
+      }
+    } as PickingInfo;
+
+    const entries = extractTooltipEntries(info);
+    const keys = entries.map((entry) => entry.key);
+
+    expect(keys).toContain('directive_ippc');
+    expect(keys).toContain('nom_de_linstallation');
+    expect(keys).not.toContain('basemap_id');
+    expect(keys).not.toContain('basemap_label');
+    expect(keys).not.toContain('__feature_id__');
   });
 
   it('reads entries from the attached Arrow table for binary pick layers', () => {

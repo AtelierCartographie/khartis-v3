@@ -26,7 +26,8 @@ const mocks = vi.hoisted(() => {
   const DuckMock = {
     query: vi.fn(),
     analyse: vi.fn(),
-    invalidateTableCache: vi.fn()
+    invalidateTableCache: vi.fn(),
+    searchInTable: vi.fn()
   };
 
   return {
@@ -237,10 +238,6 @@ vi.mock('$lib/features/duckdb/orchestrator/join-ops', () => ({
   joinDataWithBasemap: mocks.joinDataWithBasemapMock
 }));
 
-vi.mock('$lib/features/duckdb/orchestrator/search-ops', () => ({
-  searchInTable: mocks.searchInTableMock
-}));
-
 vi.mock('$lib/features/duckdb/orchestrator/table-data-ops', () => ({
   getTableData: mocks.getTableDataMock,
   getRowCount: mocks.getRowCountMock,
@@ -442,7 +439,7 @@ describe('duckDBOrchestrator', () => {
       id: 'processed'
     });
     mocks.joinDataWithBasemapMock.mockResolvedValueOnce('joined_table');
-    mocks.searchInTableMock.mockResolvedValueOnce({ totalRows: 2 });
+    mocks.DuckMock.searchInTable.mockResolvedValueOnce({ totalRows: 2 });
     mocks.processFileMock.mockResolvedValueOnce({ id: 'processed-file' });
 
     const { duckDBOrchestrator } = await loadOrchestrator();
