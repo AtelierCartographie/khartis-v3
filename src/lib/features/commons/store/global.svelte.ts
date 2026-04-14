@@ -14,9 +14,21 @@ import { projectStore } from './project.store.svelte';
 
 const SELECTED_TAB_STORAGE_KEY = 'khartis_selected_tab';
 const PAGE_ZOOM_STORAGE_KEY = 'khartis_page_zoom_level';
+const PAGE_ZOOM_SCHEMA_VERSION_KEY = 'khartis_page_zoom_schema_version';
+const PAGE_ZOOM_SCHEMA_VERSION = '2';
 const TOOLBAR_STATE_STORAGE_KEY = 'khartis_toolbar_state';
 const SELECTED_STEP_STORAGE_KEY = 'khartis_selected_step';
 const MOBILE_BREAKPOINT_VALUE = 1024;
+
+function migratePageZoomStorage(): void {
+  if (typeof window === 'undefined') return;
+  const currentVersion = localStorage.getItem(PAGE_ZOOM_SCHEMA_VERSION_KEY);
+  if (currentVersion === PAGE_ZOOM_SCHEMA_VERSION) return;
+  localStorage.removeItem(PAGE_ZOOM_STORAGE_KEY);
+  localStorage.setItem(PAGE_ZOOM_SCHEMA_VERSION_KEY, PAGE_ZOOM_SCHEMA_VERSION);
+}
+
+migratePageZoomStorage();
 
 const VALID_TOOLBAR_STATES = new Set<string>([
   ToolbarState.Full,

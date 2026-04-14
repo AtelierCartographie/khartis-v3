@@ -21,15 +21,16 @@ export interface ResolveWorkspaceViewportBoundsParams {
   pageZoomScale: number;
 }
 
-const WORKSPACE_BLEED_RATIO = 0.15;
-const MIN_WORKSPACE_BLEED_PX = 48;
-const MAX_WORKSPACE_BLEED_PX = 96;
+const WORKSPACE_BLEED_RATIO = 0.2;
+const MIN_WORKSPACE_BLEED_PX = 96;
+const MAX_WORKSPACE_BLEED_PX = 220;
+const FREE_DRAG_RANGE_RATIO = 0.4;
 
 export const DEFAULT_WORKSPACE_VIEWPORT_BOUNDS: WorkspaceViewportBounds = {
   bleedX: MIN_WORKSPACE_BLEED_PX,
   bleedY: MIN_WORKSPACE_BLEED_PX,
-  maxOffsetX: 0,
-  maxOffsetY: 0,
+  maxOffsetX: MIN_WORKSPACE_BLEED_PX,
+  maxOffsetY: MIN_WORKSPACE_BLEED_PX,
   overflowX: false,
   overflowY: false,
   hasOverflow: false
@@ -96,11 +97,16 @@ export function resolveWorkspaceViewportBounds({
   const overflowX = scaledPageWidth > viewportWidth;
   const overflowY = scaledPageHeight > viewportHeight;
 
+  const overflowOffsetX = Math.max(0, (scaledPageWidth - viewportWidth) / 2);
+  const overflowOffsetY = Math.max(0, (scaledPageHeight - viewportHeight) / 2);
+  const freeRangeX = viewportWidth * FREE_DRAG_RANGE_RATIO;
+  const freeRangeY = viewportHeight * FREE_DRAG_RANGE_RATIO;
+
   return {
     bleedX,
     bleedY,
-    maxOffsetX: Math.max(0, (scaledPageWidth - viewportWidth) / 2 + bleedX),
-    maxOffsetY: Math.max(0, (scaledPageHeight - viewportHeight) / 2 + bleedY),
+    maxOffsetX: Math.max(freeRangeX, overflowOffsetX + bleedX),
+    maxOffsetY: Math.max(freeRangeY, overflowOffsetY + bleedY),
     overflowX,
     overflowY,
     hasOverflow: overflowX || overflowY
@@ -115,6 +121,54 @@ export function clampWorkspacePanOffset(
     x: clamp(offset.x, -bounds.maxOffsetX, bounds.maxOffsetX),
     y: clamp(offset.y, -bounds.maxOffsetY, bounds.maxOffsetY)
   };
+}
+
+const FIT_PADDING_PX = 30;
+const MIN_FIT_ZOOM_PERCENT = 20;
+const MAX_FIT_ZOOM_PERCENT = 500;
+
+export interface ResolveFitZoomParams {
+  viewportWidth: number;
+  viewportHeight: number;
+  pageWidth: number;
+  pageHeight: number;
+  paddingPx?: number;
+}
+
+export function resolveFitToWorkspaceZoom({
+  viewportWidth,
+  viewportHeight,
+  pageWidth,
+  pageHeight,
+  paddingPx = FIT_PADDING_PX
+}: ResolveFitZoomParams): number {
+  if (
+    viewportWidth <= 0 ||
+    viewportHeight <= 0 ||
+    pageWidth <= 0 ||
+    pageHeight <= 0
+  ) {
+    return 100;
+  }
+
+  const availableWidth = Math.max(1, viewportWidth - paddingPx * 2);
+  const availableHeight = Math.max(1, viewportHeight - paddingPx * 2);
+
+  const ratio = Math.min(
+    availableWidth / pageWidth,
+    availableHeight / pageHeight
+  );
+
+  const percent = Math.round(ratio * 100);
+
+  return clamp(percent, MIN_FIT_ZOOM_PERCENT, MAX_FIT_ZOOM_PERCENT);
+}
+
+export const WORKSPACE_FIT_EVENT = 'khartis:workspace-fit';
+
+export function dispatchWorkspaceFit(): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(WORKSPACE_FIT_EVENT));
 }
 
 export function isWorkspacePanTarget(target: EventTarget | null): boolean {
