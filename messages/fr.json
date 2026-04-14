@@ -1133,6 +1133,7 @@
   "zoom_value_input_label": "Niveau de zoom",
   "zoom_in": "Zoom avant",
   "zoom_out": "Zoom arrière",
+  "zoom_tab_double_click_hint": "Double-cliquer pour ajuster à l'écran (Cmd/Ctrl + 0)",
   "toolbar_expand": "Agrandir",
   "toolbar_collapse": "Réduire",
   "toolbar_compact": "Réduire",
