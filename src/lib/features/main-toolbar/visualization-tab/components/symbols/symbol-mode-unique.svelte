@@ -5,9 +5,13 @@
     SquareOutline,
     CircleFilled,
     SquareFill,
+    Close,
     CaretUp,
     Category,
-    Tag
+    Tag,
+    StarFilled,
+    DiamondFill,
+    Checkbox
   } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
   import {
@@ -19,8 +23,10 @@
     FillMode,
     ShapeType,
     SLIDER_LIMITS,
+    SymbolMode,
     VISUALIZATION_DEFAULTS,
-    DEFAULT_COLORS
+    DEFAULT_COLORS,
+    availableShapesForSymbolMode
   } from '../../../constants';
   import {
     ColorSelector,
@@ -52,7 +58,7 @@
 
   let fillMode = $state<FillMode>(FillMode.UNIQUE);
   let symbolSize = $state<number>(VISUALIZATION_DEFAULTS.symbolSize);
-  let shapeType = $state<ShapeType>(ShapeType.POINT);
+  let shapeType = $state<ShapeType>(ShapeType.CIRCLE);
   let fillColor = $state<string>(DEFAULT_COLORS.fill);
   let fillOpacity = $state<number>(VISUALIZATION_DEFAULTS.fillOpacity);
   let showMissingData = $state<boolean>(true);
@@ -95,7 +101,7 @@
     if (visualization?.symbols) {
       symbolSize =
         visualization.symbols.size ?? VISUALIZATION_DEFAULTS.symbolSize;
-      shapeType = visualization.symbols.type ?? ShapeType.POINT;
+      shapeType = visualization.symbols.type ?? ShapeType.CIRCLE;
     }
     if (visualization?.missingData) {
       showMissingData = visualization.missingData.show ?? true;
@@ -198,18 +204,35 @@
     }
   }
 
-  const shapeItems = [
-    { icon: CircleFilled, label: m.point(), iconSize: 16 },
-    { icon: SquareFill, label: m.square(), iconSize: 16 },
-    { icon: CaretUp, label: m.triangle(), iconSize: 16 }
-  ];
+  const shapeDescriptors: Record<
+    ShapeType,
+    { icon: typeof CircleFilled; label: () => string }
+  > = {
+    [ShapeType.CIRCLE]: { icon: CircleFilled, label: m.shape_circle },
+    [ShapeType.SQUARE]: { icon: SquareFill, label: m.shape_square },
+    [ShapeType.BAR]: { icon: SquareFill, label: m.shape_bar },
+    [ShapeType.SPIKE]: { icon: CaretUp, label: m.shape_spike },
+    [ShapeType.CROSS]: { icon: Close, label: m.shape_cross },
+    [ShapeType.DIAMOND]: { icon: DiamondFill, label: m.shape_diamond },
+    [ShapeType.TRIANGLE]: { icon: CaretUp, label: m.shape_triangle },
+    [ShapeType.STAR]: { icon: StarFilled, label: m.shape_star },
+    [ShapeType.RECTANGLE]: { icon: Checkbox, label: m.shape_rectangle }
+  };
 
-  const shapeTypes = [ShapeType.POINT, ShapeType.SQUARE, ShapeType.TRIANGLE];
+  const shapeTypes = availableShapesForSymbolMode(SymbolMode.UNIQUE);
+
+  const shapeItems = $derived(
+    shapeTypes.map((type) => ({
+      icon: shapeDescriptors[type].icon,
+      label: shapeDescriptors[type].label(),
+      iconSize: 16
+    }))
+  );
 
   const shapeIndex = $derived(shapeTypes.indexOf(shapeType));
 
   function handleShapeTabChange(index: number) {
-    handleShapeTypeChange(shapeTypes[index] || ShapeType.POINT);
+    handleShapeTypeChange(shapeTypes[index] || ShapeType.CIRCLE);
   }
 </script>
 

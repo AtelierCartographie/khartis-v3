@@ -4,6 +4,7 @@ import {
   escapeSqlString
 } from '$lib/features/commons/utils/sanitize.utils';
 import { GEOMETRY_COLUMN_TYPE } from '$lib/features/commons/constants';
+import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import type { AnalysisResult, ArrowTableLike, FilterStats } from '../types';
 import { buildFilterWhereClause } from './filter-ops';
 import { getFiltersMap } from './state.svelte';
@@ -165,15 +166,16 @@ export async function getRowPosition(
       const sortCol = `"${escapeIdentifier(options.orderBy)}"`;
       const isAsc = options.order === 'ASC';
 
+      const idCol = INTERNAL_COLUMN.ID;
       const query = `
         WITH target AS (
-          SELECT ${sortCol} as sort_val FROM "${escapedTable}" WHERE __id = ${normalizedRowId}
+          SELECT ${sortCol} as sort_val FROM "${escapedTable}" WHERE ${idCol} = ${normalizedRowId}
         )
         SELECT COUNT(*) as position
         FROM "${escapedTable}", target
         WHERE (
           ${sortCol} ${isAsc ? '<' : '>'} target.sort_val
-          OR (${sortCol} = target.sort_val AND __id ${isAsc ? '<' : '>'} ${normalizedRowId})
+          OR (${sortCol} = target.sort_val AND ${idCol} ${isAsc ? '<' : '>'} ${normalizedRowId})
         )
         ${filterCondition}
       `;
@@ -187,7 +189,7 @@ export async function getRowPosition(
       const query = `
         SELECT COUNT(*) as position
         FROM "${escapedTable}"
-        WHERE __id < ${normalizedRowId}
+        WHERE ${INTERNAL_COLUMN.ID} < ${normalizedRowId}
         ${filterCondition}
       `;
 
@@ -238,13 +240,15 @@ export async function getExcludedRowIds(
   // Treat NULL predicate results as excluded rows too.
   // Example: rows with NULL values on filtered columns should be removable
   // when deleting "excluded" rows from a filter.
-  const query = `SELECT __id FROM "${escapedTable}" WHERE COALESCE(NOT (${whereClause}), TRUE)`;
+  const query = `SELECT ${INTERNAL_COLUMN.ID} FROM "${escapedTable}" WHERE COALESCE(NOT (${whereClause}), TRUE)`;
   const result = (await Duck.query(query)) as ArrowTableLike;
   const rowIds: number[] = [];
 
   for (let index = 0; index < result.numRows; index += 1) {
     const row = result.get(index) as Record<string, unknown>;
-    const rowId = normalizeRowId(row.__id);
+    const rowId = normalizeRowId(
+      (row as Record<string, unknown>)[INTERNAL_COLUMN.ID]
+    );
     if (rowId !== null) {
       rowIds.push(rowId);
     }

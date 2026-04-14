@@ -35,16 +35,13 @@
     annotationsActions,
     getAnnotationsState
   } from './annotations.store.svelte';
+  import { useSelectedAnnotationByType } from './_shared/use-selected-annotation.svelte';
 
   const annotationsState = $derived(getAnnotationsState());
   const defaultStyle = $derived(annotationsState.defaultStyle);
 
-  const selectedText = $derived.by(() => {
-    const selId = annotationsState.selectedId;
-    if (!selId) return null;
-    const item = annotationsState.items.find((i) => i.id === selId);
-    return item && item.type === AnnotationKind.TEXT ? item : null;
-  });
+  const selectedAnnotation = useSelectedAnnotationByType(AnnotationKind.TEXT);
+  const selectedText = $derived(selectedAnnotation.selected);
 
   const effectiveStyle = $derived(selectedText?.style ?? defaultStyle);
 

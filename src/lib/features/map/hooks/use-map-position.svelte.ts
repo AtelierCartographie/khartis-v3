@@ -11,7 +11,7 @@ export interface UseMapPositionProps {
 
 export interface UseMapPositionReturn {
   savePosition: () => void;
-  restorePosition: () => void;
+  restorePosition: () => boolean;
   getSavedPosition: () => MapPosition | null;
 }
 
@@ -75,22 +75,25 @@ export function useMapPosition(
     return null;
   }
 
-  function restorePosition(): void {
+  function restorePosition(): boolean {
     const map = getMap();
-    if (!map || !getIsMapLoaded() || typeof window === 'undefined') return;
+    if (!map || !getIsMapLoaded() || typeof window === 'undefined')
+      return false;
 
     const position = getSavedPosition();
-    if (!position) return;
+    if (!position) return false;
 
     try {
       map.setCenter([position.center.lng, position.center.lat]);
       map.setZoom(position.zoom);
 
       onPositionRestored?.(position);
+      return true;
     } catch (error) {
       logger.warn('Failed to restore saved map position', LogCategory.MAP, {
         error
       });
+      return false;
     }
   }
 

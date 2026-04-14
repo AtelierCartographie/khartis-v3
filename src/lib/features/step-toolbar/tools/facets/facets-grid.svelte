@@ -4,11 +4,15 @@
   import type { FeatureCollection } from 'geojson';
   import ThematicMap from '$lib/features/map/components/thematic-map.svelte';
   import type { FacetsLayout } from './facets.store.svelte';
-  import type { FacetSyncViewState } from '$lib/features/map/types';
+  import type {
+    FacetSyncViewState,
+    SplitRenderingTable
+  } from '$lib/features/map/types';
 
   let {
     visualizations,
     tables,
+    splitData,
     geoJSONs,
     layout,
     syncPanZoom = false,
@@ -17,6 +21,7 @@
   }: {
     visualizations: VisualizationConfig[];
     tables: Map<string, ArrowTable>;
+    splitData?: Map<string, SplitRenderingTable>;
     geoJSONs: Map<string, FeatureCollection>;
     layout: FacetsLayout;
     syncPanZoom?: boolean;
@@ -61,6 +66,7 @@
       <h4 class="facet-title">{viz.name}</h4>
       <ThematicMap
         tables={tables}
+        splitData={splitData}
         geoJSONs={geoJSONs}
         width={facetWidth}
         height={facetHeight}

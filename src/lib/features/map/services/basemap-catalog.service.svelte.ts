@@ -1,6 +1,7 @@
 import type { ProcessedDataset } from '$lib/features/data-pipeline';
 import type { GeoColumnInfo } from '$lib/features/data-pipeline/types';
 import type { GPSBounds } from '$lib/features/duckdb';
+import { GEO_COLUMN_TYPE } from '../../commons/constants/data.constants';
 import { LogCategory, logger } from '../../commons/utils/logger';
 import { resolveStaticAssetUrl } from '../../commons/utils/static-asset-url';
 import {
@@ -312,9 +313,9 @@ export function calculateGeoColumnBasemapMatchScore(
   const searchText = getSearchableText(basemap);
 
   const isCountryType =
-    geoColumnType === 'country_name' ||
-    geoColumnType === 'iso2' ||
-    geoColumnType === 'iso3';
+    geoColumnType === GEO_COLUMN_TYPE.COUNTRY_NAME ||
+    geoColumnType === GEO_COLUMN_TYPE.ISO2 ||
+    geoColumnType === GEO_COLUMN_TYPE.ISO3;
 
   const isWorldBasemap =
     basemap.file.includes('monde') ||
@@ -345,7 +346,7 @@ export function calculateGeoColumnBasemapMatchScore(
     reasons.push('Department match');
   }
 
-  if (geoColumnType === 'nuts' && searchText.includes('nuts')) {
+  if (geoColumnType === GEO_COLUMN_TYPE.NUTS && searchText.includes('nuts')) {
     score += 60;
     reasons.push('NUTS type match');
   }

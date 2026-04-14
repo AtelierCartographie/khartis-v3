@@ -8,9 +8,18 @@ import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
 
 const OSM_BASEMAP_PREFIX = 'osm_';
 
+export const PERSISTED_BASEMAP_TYPE = {
+  CATALOG: 'catalog',
+  CUSTOM: 'custom',
+  OSM: 'osm'
+} as const;
+
+export type PersistedBasemapType =
+  (typeof PERSISTED_BASEMAP_TYPE)[keyof typeof PERSISTED_BASEMAP_TYPE];
+
 export interface PersistedProjectBasemap {
   id: string;
-  type: 'catalog' | 'custom' | 'osm';
+  type: PersistedBasemapType;
   data?: unknown;
 }
 
@@ -49,11 +58,11 @@ export function resolveBasemapSource(
   type: PersistedProjectBasemap['type']
 ): BasemapSource {
   switch (type) {
-    case 'custom':
+    case PERSISTED_BASEMAP_TYPE.CUSTOM:
       return BasemapSource.IMPORT;
-    case 'osm':
+    case PERSISTED_BASEMAP_TYPE.OSM:
       return BasemapSource.OSM;
-    case 'catalog':
+    case PERSISTED_BASEMAP_TYPE.CATALOG:
     default:
       return BasemapSource.CATALOG;
   }
@@ -73,15 +82,15 @@ function resolvePersistedBasemapType(
   }
 
   if (basemapSource === BasemapSource.OSM || isOSMBasemapId(basemapId)) {
-    return 'osm';
+    return PERSISTED_BASEMAP_TYPE.OSM;
   }
 
   const existingBasemap = basemapCatalogService.getBasemapById(basemapId);
   if (basemapSource === BasemapSource.IMPORT || existingBasemap?.isCustom) {
-    return 'custom';
+    return PERSISTED_BASEMAP_TYPE.CUSTOM;
   }
 
-  return 'catalog';
+  return PERSISTED_BASEMAP_TYPE.CATALOG;
 }
 
 function resolvePersistedBasemapData(
@@ -93,7 +102,7 @@ function resolvePersistedBasemapData(
     return projectBasemap.data;
   }
 
-  if (basemapType === 'catalog') {
+  if (basemapType === PERSISTED_BASEMAP_TYPE.CATALOG) {
     return undefined;
   }
 
@@ -171,11 +180,12 @@ export async function restorePersistedBasemapSelection(
     basemapSource
   });
   basemapStyleStore.setReferenceBasemap(
-    savedBasemap.type === 'osm' ? null : savedBasemap.id
+    savedBasemap.type === PERSISTED_BASEMAP_TYPE.OSM ? null : savedBasemap.id
   );
 
   if (
-    (savedBasemap.type === 'custom' || savedBasemap.type === 'osm') &&
+    (savedBasemap.type === PERSISTED_BASEMAP_TYPE.CUSTOM ||
+      savedBasemap.type === PERSISTED_BASEMAP_TYPE.OSM) &&
     isPersistedBasemapMetadata(savedBasemap.data)
   ) {
     const basemapData = savedBasemap.data;
@@ -184,7 +194,7 @@ export async function restorePersistedBasemapSelection(
       basemapCatalogService.addCustomBasemap(basemapData);
     }
 
-    if (savedBasemap.type === 'custom') {
+    if (savedBasemap.type === PERSISTED_BASEMAP_TYPE.CUSTOM) {
       basemapService.registerCustomBasemapMetadata(basemapData);
       osmBasemapStore.clear();
       return;
@@ -194,7 +204,7 @@ export async function restorePersistedBasemapSelection(
     return;
   }
 
-  if (savedBasemap.type !== 'osm') {
+  if (savedBasemap.type !== PERSISTED_BASEMAP_TYPE.OSM) {
     osmBasemapStore.clear();
   }
 }
