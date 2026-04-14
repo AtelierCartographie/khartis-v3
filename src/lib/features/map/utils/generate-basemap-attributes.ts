@@ -1,3 +1,4 @@
+import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import {
@@ -29,10 +30,12 @@ export async function generateCustomBasemapAttributes(
 
     const safeTableName = escapeIdentifier(tableName);
     const safeBasemapId = escapeSqlString(basemapId);
+    const safeFeatureId = escapeIdentifier(INTERNAL_COLUMN.FEATURE_ID);
 
     const columns = await duck.analyse(tableName);
 
     const candidateColumns = columns.filter((col) => {
+      if (col.name === INTERNAL_COLUMN.FEATURE_ID) return false;
       const name = col.name.toLowerCase();
       return (
         /^(name|nom|libelle|label)$/i.test(name) ||
@@ -43,7 +46,11 @@ export async function generateCustomBasemapAttributes(
     });
 
     if (candidateColumns.length === 0) {
-      const textColumn = columns.find((col) => col.type_simple === 'string');
+      const textColumn = columns.find(
+        (col) =>
+          col.type_simple === 'string' &&
+          col.name !== INTERNAL_COLUMN.FEATURE_ID
+      );
       if (textColumn) {
         candidateColumns.push(textColumn);
       }
@@ -75,7 +82,7 @@ export async function generateCustomBasemapAttributes(
       return `
         SELECT DISTINCT
           "${safeColName}" as raw,
-          "${safeColName}" as id,
+          CAST("${safeFeatureId}" AS VARCHAR) as id,
           '${safeVariantName}' as variant,
           regexp_replace(
             regexp_replace(

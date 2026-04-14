@@ -390,7 +390,10 @@ async function createArrowTableFromDuckTable(
 ): Promise<ArrowTable> {
   const { table: rawTable, geomColumn } = await fetchArrowTableWithGeometry(
     tableName,
-    duck
+    duck,
+    null,
+    null,
+    [INTERNAL_COLUMN.FEATURE_ID]
   );
   return addGeoArrowMetadataFromDuckDB(
     rawTable,
@@ -589,6 +592,7 @@ async function preparePolygonBasemapTables(
     `);
   }
 
+  await ensureFeatureIdColumn(duck, tableName);
   await rebuildPolygonDerivedTables(duck, tableName);
 }
 
@@ -631,6 +635,7 @@ async function prepareLineBasemapTables(
     `);
   }
 
+  await ensureFeatureIdColumn(duck, tableName);
   await rebuildLineDerivedTables(duck, tableName);
 }
 
@@ -645,6 +650,31 @@ async function preparePointBasemapTables(
     geometryColumn,
     BasemapLayerType.POINT
   );
+  await ensureFeatureIdColumn(duck, tableName);
+}
+
+/**
+ * Injects the stable `__feature_id__` column on a custom basemap table.
+ *
+ * The id is assigned via `ROW_NUMBER()` so that each feature owns an identifier
+ * decoupled from the user-chosen join column. Downstream pipelines (join, render,
+ * tooltip) use it to locate a feature without depending on the attribute used for
+ * the join match. See issue #87.
+ */
+async function ensureFeatureIdColumn(
+  duck: typeof Duck,
+  tableName: string
+): Promise<void> {
+  const escapedTable = escapeIdentifier(tableName);
+  const escapedFeatureId = escapeIdentifier(INTERNAL_COLUMN.FEATURE_ID);
+
+  await duck.query(`
+    CREATE OR REPLACE TABLE "${escapedTable}" AS
+    SELECT
+      (ROW_NUMBER() OVER () - 1)::BIGINT AS "${escapedFeatureId}",
+      *
+    FROM "${escapedTable}"
+  `);
 }
 
 export async function loadBasemapFromUrl(url: string): Promise<File> {

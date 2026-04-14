@@ -263,7 +263,7 @@ describe('join-ops integration with test datasets', () => {
 
     const rows = await query(
       db,
-      `SELECT country, basemap_id, typo_match
+      `SELECT country, basemap_id, basemap_label, typo_match
        FROM finalize_source_cases
        ORDER BY country`
     );
@@ -275,13 +275,28 @@ describe('join-ops integration with test datasets', () => {
       gpsColumns: undefined
     });
     expect(rows).toEqual([
-      { country: 'Angola', basemap_id: 'AGO', typo_match: 'exact' },
-      { country: 'Armenia', basemap_id: 'ARM', typo_match: 'partial' },
-      { country: 'Australia', basemap_id: null, typo_match: null }
+      {
+        country: 'Angola',
+        basemap_id: 'AGO',
+        basemap_label: 'Angola',
+        typo_match: 'exact'
+      },
+      {
+        country: 'Armenia',
+        basemap_id: 'ARM',
+        basemap_label: 'Armenie',
+        typo_match: 'partial'
+      },
+      {
+        country: 'Australia',
+        basemap_id: null,
+        basemap_label: null,
+        typo_match: null
+      }
     ]);
   });
 
-  it('falls back to the matched raw value when basemap attribute ids contain variant labels', async () => {
+  it('preserves stable match_id as basemap_id and exposes raw value as basemap_label', async () => {
     await db.connection.run('DROP TABLE IF EXISTS finalize_broken_id_cases');
     await db.connection.run(`
       CREATE TABLE finalize_broken_id_cases AS
@@ -317,14 +332,24 @@ describe('join-ops integration with test datasets', () => {
 
     const rows = await query(
       db,
-      `SELECT country, basemap_id, typo_match
+      `SELECT country, basemap_id, basemap_label, typo_match
        FROM finalize_broken_id_cases
        ORDER BY country`
     );
 
     expect(rows).toEqual([
-      { country: 'France', basemap_id: 'France', typo_match: 'exact' },
-      { country: 'Germany', basemap_id: 'Germany', typo_match: 'exact' }
+      {
+        country: 'France',
+        basemap_id: 'iso3_code',
+        basemap_label: 'France',
+        typo_match: 'exact'
+      },
+      {
+        country: 'Germany',
+        basemap_id: 'iso3_code',
+        basemap_label: 'Germany',
+        typo_match: 'exact'
+      }
     ]);
   });
 

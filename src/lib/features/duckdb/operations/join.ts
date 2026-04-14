@@ -202,7 +202,7 @@ export async function applyJoinAssociation(
   const escapedJoinResultsName = escapeIdentifier(join_results_name);
   const escapedBasemap = escapeSqlString(basemap);
 
-  const columnsToExclude = ['basemap_id', 'typo_match'];
+  const columnsToExclude = ['basemap_id', 'basemap_label', 'typo_match'];
   const existingColumns = (await executeQuery(
     ctx.connection,
     `SELECT column_name FROM information_schema.columns
@@ -232,6 +232,7 @@ export async function applyJoinAssociation(
       SELECT
         t.* ${excludeClause},
         j.id as basemap_id,
+        j.raw as basemap_label,
         j.typo_match
       FROM "${escapedTable}" as t
       LEFT JOIN ranked_join as j

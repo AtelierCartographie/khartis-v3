@@ -390,7 +390,7 @@ async function getJoinColumnExcludeClause(
   tableName: string,
   Duck: DuckDBClientForJoin
 ): Promise<string> {
-  const columnsToExclude = ['basemap_id', 'typo_match'];
+  const columnsToExclude = ['basemap_id', 'basemap_label', 'typo_match'];
   const existingColumns = (await Duck.query(
     `SELECT column_name FROM information_schema.columns
      WHERE table_name = '${escapeSqlString(tableName)}'
@@ -656,17 +656,8 @@ async function applyCachedJoinAssociation(
     WITH ranked_join AS (
       SELECT
         original_name AS geoname,
-        CASE
-          WHEN EXISTS (
-            SELECT 1
-            FROM basemap_attributes ba
-            WHERE ba.basemap = match_basemap
-              AND ba.variant = match_id
-            LIMIT 1
-          )
-            THEN match_raw
-          ELSE match_id
-        END AS id,
+        match_id AS id,
+        match_raw AS label,
         match_score AS score,
         typo_match
       FROM "${escapedCacheTable}"
@@ -681,6 +672,7 @@ async function applyCachedJoinAssociation(
     SELECT
       t.* ${excludeClause},
       j.id AS basemap_id,
+      j.label AS basemap_label,
       j.typo_match
     FROM "${escapedDatasetTable}" t
     LEFT JOIN ranked_join j
@@ -838,36 +830,59 @@ export async function getJoinedArrowTable(
     );
   }
 
-  const attrColumns = geometryTableColumns.filter((column) => {
-    if (isGeometryColumnName(column.column_name)) {
-      return false;
+  const featureIdColumn = geometryTableColumns.find(
+    (column) => column.column_name === '__feature_id__'
+  );
+  const nativeIdColumn = geometryTableColumns.find(
+    (column) =>
+      column.column_name.toLowerCase() === 'id' &&
+      !isGeometryColumnName(column.column_name)
+  );
+  const escapedGeomCol = escapeIdentifier(geometryColumn.column_name);
+
+  if (featureIdColumn || nativeIdColumn) {
+    const joinColumn = featureIdColumn ?? nativeIdColumn;
+    if (!joinColumn) {
+      throw new Error('Unreachable: join column presence already verified');
     }
+    const escapedJoinCol = escapeIdentifier(joinColumn.column_name);
+    await Duck.query(`
+      CREATE OR REPLACE VIEW "${joinedView}" AS
+      SELECT d.*, g."${escapedGeomCol}" AS geometry
+      FROM "${escapedDataset}" d
+      INNER JOIN "${escapedGeometry}" g
+        ON CAST(d.basemap_id AS VARCHAR) = CAST(g."${escapedJoinCol}" AS VARCHAR)
+      WHERE g."${escapedGeomCol}" IS NOT NULL
+    `);
+  } else {
+    const attrColumns = geometryTableColumns.filter((column) => {
+      if (isGeometryColumnName(column.column_name)) {
+        return false;
+      }
+      return ['VARCHAR', 'TEXT'].includes(column.data_type.toUpperCase());
+    });
 
-    return ['VARCHAR', 'TEXT'].includes(column.data_type.toUpperCase());
-  });
+    const colList = attrColumns
+      .map((c) => `"${escapeIdentifier(c.column_name)}"`)
+      .join(', ');
 
-  const colList = attrColumns
-    .map((c) => `"${escapeIdentifier(c.column_name)}"`)
-    .join(', ');
-
-  const geometrySelectExpression = 'gu._geom_value';
-
-  await Duck.query(`
-    CREATE OR REPLACE VIEW "${joinedView}" AS
-    WITH geom_unpivot AS (
-      UNPIVOT "${escapedGeometry}"
-      ON ${colList}
-      INTO NAME _attr_col VALUE _attr_val
-    )
-    SELECT d.*, ${geometrySelectExpression} AS geometry
-    FROM "${escapedDataset}" d
-    INNER JOIN (
-      SELECT DISTINCT _attr_val, "${escapeIdentifier(geometryColumn.column_name)}" AS _geom_value
-      FROM geom_unpivot
-    ) gu
-    ON CAST(d.basemap_id AS VARCHAR) = CAST(gu._attr_val AS VARCHAR)
-    WHERE gu._geom_value IS NOT NULL
-  `);
+    await Duck.query(`
+      CREATE OR REPLACE VIEW "${joinedView}" AS
+      WITH geom_unpivot AS (
+        UNPIVOT "${escapedGeometry}"
+        ON ${colList}
+        INTO NAME _attr_col VALUE _attr_val
+      )
+      SELECT d.*, gu._geom_value AS geometry
+      FROM "${escapedDataset}" d
+      INNER JOIN (
+        SELECT DISTINCT _attr_val, "${escapedGeomCol}" AS _geom_value
+        FROM geom_unpivot
+      ) gu
+      ON CAST(d.basemap_id AS VARCHAR) = CAST(gu._attr_val AS VARCHAR)
+      WHERE gu._geom_value IS NOT NULL
+    `);
+  }
 
   let arrowTable = await getArrowTableDirect(joinedView);
 

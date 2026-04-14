@@ -68,7 +68,7 @@
   let fillClassFieldId = $state<number>(0);
   let fillCategoryFieldId = $state<number>(0);
   let symbolMaxSize = $state<number>(VISUALIZATION_DEFAULTS.symbolMaxSize);
-  let shapeType = $state<ShapeType>(ShapeType.POINT);
+  let shapeType = $state<ShapeType>(ShapeType.CIRCLE);
   let sizeScale = $state<ScaleType>(ScaleType.SQRT);
   let showMissingData = $state<boolean>(true);
   let missingDataShape = $state<MissingDataShape>(MissingDataShape.CIRCLE);
@@ -137,7 +137,7 @@
     if (visualization?.symbols) {
       symbolMaxSize =
         visualization.symbols.maxSize ?? VISUALIZATION_DEFAULTS.symbolMaxSize;
-      shapeType = visualization.symbols.type ?? ShapeType.POINT;
+      shapeType = visualization.symbols.type ?? ShapeType.CIRCLE;
       sizeScale = visualization.symbols.sizeScale ?? ScaleType.SQRT;
     }
     if (visualization?.missingData) {
@@ -432,9 +432,10 @@
     size="sm"
     on:change={handleShapeSelectChange}
   >
-    <SelectItem value={ShapeType.POINT} text={m.point()} />
-    <SelectItem value={ShapeType.SQUARE} text={m.square()} />
-    <SelectItem value={ShapeType.TRIANGLE} text={m.triangle()} />
+    <SelectItem value={ShapeType.CIRCLE} text={m.shape_circle()} />
+    <SelectItem value={ShapeType.SQUARE} text={m.shape_square()} />
+    <SelectItem value={ShapeType.BAR} text={m.shape_bar()} />
+    <SelectItem value={ShapeType.SPIKE} text={m.shape_spike()} />
   </Select>
 </div>
 

@@ -60,8 +60,24 @@ export interface FacetSyncViewState {
   zoom: number;
 }
 
+/**
+ * Split rendering payload — pairs the basemap geometry Arrow (ref-stable across
+ * datasets joined to the same basemap, fed to Deck via parseSolidPolygons) with
+ * the dataset attributes Arrow that supplies values for the lookup accessors.
+ *
+ * `featureIdColumn` indicates the column in the geometry Arrow that resolves to
+ * the dataset's `basemap_id` (`__feature_id__` for custom basemaps, `id` for
+ * catalog ones). See issue #87.
+ */
+export interface SplitRenderingTable {
+  geometry: ArrowTable;
+  dataset: ArrowTable;
+  featureIdColumn: string;
+}
+
 export interface DeckMapProps {
   tables: Map<string, ArrowTable>;
+  splitData?: Map<string, SplitRenderingTable>;
   geoJSONs: Map<string, FeatureCollection>;
   dataVersion?: number;
   width: number;
@@ -111,6 +127,10 @@ export interface LayerContext {
   customProjection?: ProjectionLike;
   /** Primitive sublayer render order (from viz store) */
   primitiveOrder?: import('$lib/features/commons/store/visualization.store.svelte').PrimitiveFilter[];
+  /** Split rendering: dataset attributes Arrow paired with the basemap geometry. */
+  splitDatasetTable?: ArrowTable;
+  /** Split rendering: column in the geometry Arrow holding the stable feature id. */
+  splitFeatureIdColumn?: string;
 }
 
 export type BBox = [number, number, number, number];

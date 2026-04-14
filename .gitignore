@@ -132,3 +132,4 @@ tmp/
 # plan-gen outputs
 *-TRACKING-TESTS.md
 .agent-plans/
+.gitnexus

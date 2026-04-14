@@ -342,10 +342,12 @@
   }
 
   function centerPageOnClick(event: MouseEvent): void {
-    const mainContent = overlayElement?.closest('.main-content');
-    if (!mainContent) return;
+    const viewportElement =
+      overlayElement?.closest('.workspace-viewport') ??
+      overlayElement?.closest('.main-content');
+    if (!viewportElement) return;
 
-    const rect = mainContent.getBoundingClientRect();
+    const rect = viewportElement.getBoundingClientRect();
     const contentCenterX = rect.left + rect.width / 2;
     const contentCenterY = rect.top + rect.height / 2;
 
@@ -986,6 +988,7 @@
       <div
         class="drawing-capture"
         role="presentation"
+        data-workspace-pan-ignore="true"
         onpointerdown={handleDrawingPointerDown}
         onpointermove={handleDrawingPointerMove}
         onpointerup={handleDrawingPointerUp}
@@ -1053,6 +1056,7 @@
         item.type !== AnnotationKind.SHAPE}
       class:dragging={dragState?.id === item.id}
       data-annotation-role={item.role}
+      data-workspace-pan-ignore="true"
       style={getAnnotationPositionStyle(item)}
       role="button"
       tabindex="0"

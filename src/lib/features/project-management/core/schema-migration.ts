@@ -16,11 +16,52 @@ export interface SchemaMigration {
   migrate: (data: Record<string, unknown>) => Record<string, unknown>;
 }
 
+/**
+ * Recursively remap legacy `type: 'point'` values on `symbols` blocks to the
+ * new `'circle'` canonical value after the `ShapeType.POINT` → `ShapeType.CIRCLE`
+ * rename in issue #92.
+ */
+function remapLegacyPointShape(
+  data: Record<string, unknown>
+): Record<string, unknown> {
+  const walk = (node: unknown): unknown => {
+    if (Array.isArray(node)) {
+      return node.map((item) => walk(item));
+    }
+    if (node && typeof node === 'object') {
+      const clone: Record<string, unknown> = {
+        ...(node as Record<string, unknown>)
+      };
+      const symbols = clone.symbols;
+      if (
+        symbols &&
+        typeof symbols === 'object' &&
+        !Array.isArray(symbols) &&
+        (symbols as Record<string, unknown>).type === 'point'
+      ) {
+        clone.symbols = {
+          ...(symbols as Record<string, unknown>),
+          type: 'circle'
+        };
+      }
+      for (const key of Object.keys(clone)) {
+        if (key === 'symbols') continue;
+        clone[key] = walk(clone[key]);
+      }
+      return clone;
+    }
+    return node;
+  };
+
+  return walk(data) as Record<string, unknown>;
+}
+
 /** Ordered list of migrations. Each runs sequentially when needed. */
 const migrations: SchemaMigration[] = [
-  // Migrations will be added here as the schema evolves.
-  // Example:
-  // { from: '3.0.0', to: '3.1.0', migrate: v3_0_to_v3_1 }
+  // Chain both 3.0.0 and 3.1.0 through the point→circle remap; the function is
+  // idempotent so re-running it on an already-migrated project is a no-op.
+  { from: '3.0.0', to: '3.1.0', migrate: remapLegacyPointShape },
+  { from: '3.1.0', to: '3.2.0', migrate: remapLegacyPointShape }
 ];
 
 /**

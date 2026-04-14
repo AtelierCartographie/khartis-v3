@@ -11,8 +11,37 @@ export enum SymbolMode {
   UNIQUE = 'unique',
   PROPORTIONAL = 'proportional',
   CLASSES = 'classes',
-  CATEGORIES = 'categories'
+  CATEGORIES = 'categories',
+  DENSITY = 'density'
 }
+
+export type DensityLevelName = 'more' | 'standard' | 'less';
+
+export const DENSITY_LEVEL = {
+  MORE: 'more',
+  STANDARD: 'standard',
+  LESS: 'less'
+} as const satisfies Record<string, DensityLevelName>;
+
+export interface DensityLevelOption {
+  level: DensityLevelName;
+  ratio: number;
+}
+
+export interface DensityConfig {
+  valueColumn?: string;
+  level?: DensityLevelName;
+  ratio?: number;
+  dotSize?: number;
+  color?: string;
+  seed?: number;
+}
+
+export const DENSITY_DEFAULTS = {
+  level: DENSITY_LEVEL.STANDARD,
+  dotSize: 1,
+  color: '#1e3a5f'
+} as const;
 
 export enum ProportionalType {
   SINGLE = 'uniques',
@@ -34,10 +63,74 @@ export enum StrokeMode {
 }
 
 export enum ShapeType {
-  POINT = 'point',
+  CIRCLE = 'circle',
   SQUARE = 'square',
+  BAR = 'bar',
+  SPIKE = 'spike',
+  CROSS = 'cross',
+  DIAMOND = 'diamond',
   TRIANGLE = 'triangle',
-  CROSS = 'cross'
+  STAR = 'star',
+  RECTANGLE = 'rectangle'
+}
+
+/**
+ * Numeric ordinal used by the GLSL shader `instanceShapes` attribute.
+ * Kept aligned with the MultiShapeLayer SDF dispatcher.
+ */
+export const SHAPE_ORDINAL: Record<ShapeType, number> = {
+  [ShapeType.CIRCLE]: 0,
+  [ShapeType.SQUARE]: 1,
+  [ShapeType.BAR]: 2,
+  [ShapeType.SPIKE]: 3,
+  [ShapeType.CROSS]: 4,
+  [ShapeType.DIAMOND]: 5,
+  [ShapeType.TRIANGLE]: 6,
+  [ShapeType.STAR]: 7,
+  [ShapeType.RECTANGLE]: 8
+};
+
+/**
+ * Shapes that scale on height only (1D), not area (2D).
+ */
+export const LINEAR_SHAPES: readonly ShapeType[] = [
+  ShapeType.BAR,
+  ShapeType.SPIKE
+];
+
+export function isLinearShape(shape: ShapeType): boolean {
+  return LINEAR_SHAPES.includes(shape);
+}
+
+/**
+ * Availability matrix per symbol mode — see issue #92.
+ */
+export function availableShapesForSymbolMode(mode: SymbolMode): ShapeType[] {
+  switch (mode) {
+    case SymbolMode.UNIQUE:
+    case SymbolMode.CATEGORIES:
+      return [
+        ShapeType.CIRCLE,
+        ShapeType.SQUARE,
+        ShapeType.CROSS,
+        ShapeType.DIAMOND,
+        ShapeType.TRIANGLE,
+        ShapeType.STAR,
+        ShapeType.RECTANGLE
+      ];
+    case SymbolMode.PROPORTIONAL:
+    case SymbolMode.CLASSES:
+      return [
+        ShapeType.CIRCLE,
+        ShapeType.SQUARE,
+        ShapeType.BAR,
+        ShapeType.SPIKE
+      ];
+    case SymbolMode.DENSITY:
+      return [ShapeType.CIRCLE];
+    default:
+      return [ShapeType.CIRCLE];
+  }
 }
 
 export enum MissingDataShape {

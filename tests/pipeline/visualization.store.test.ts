@@ -59,6 +59,7 @@ import {
   DEFAULT_COLORS,
   FillMode,
   ProportionalType,
+  ShapeType,
   SizeMode,
   StrokeMode,
   SymbolMode
@@ -69,7 +70,7 @@ import {
   isVisualizationBlank,
   resolveNextSuggestionSelection,
   resolveBlankVisualizationType
-} from '$lib/features/main-toolbar/visualization-tab/suggestion.utils';
+} from '$lib/features/main-toolbar/visualization-tab/suggestion.service';
 
 function asBlankTypeDataset(
   value: unknown
@@ -725,5 +726,82 @@ describe('visualizationStore suggestion presets', () => {
       visualizationStore.selectedVisualization?.yearFilter
     ).toBeUndefined();
     expect(visualizationStore.selectedVisualization?.dataFilters).toEqual([]);
+  });
+
+  it('resets the symbol shape to the first allowed value when the symbol mode no longer supports it', () => {
+    const visualization = visualizationStore.createVisualization(
+      VisualizationType.PROPORTIONAL,
+      'dataset-id'
+    );
+
+    visualizationStore.updateModes(visualization.id, {
+      symbol: SymbolMode.CATEGORIES
+    });
+    visualizationStore.updateSymbols(visualization.id, {
+      type: ShapeType.DIAMOND
+    });
+
+    expect(visualizationStore.selectedVisualization?.symbols?.type).toBe(
+      ShapeType.DIAMOND
+    );
+
+    visualizationStore.updateModes(visualization.id, {
+      symbol: SymbolMode.DENSITY
+    });
+
+    expect(visualizationStore.selectedVisualization?.symbols?.type).toBe(
+      ShapeType.CIRCLE
+    );
+  });
+
+  it('keeps the shape untouched when the new mode still allows it', () => {
+    const visualization = visualizationStore.createVisualization(
+      VisualizationType.PROPORTIONAL,
+      'dataset-id'
+    );
+
+    visualizationStore.updateModes(visualization.id, {
+      symbol: SymbolMode.PROPORTIONAL
+    });
+    visualizationStore.updateSymbols(visualization.id, {
+      type: ShapeType.BAR
+    });
+    visualizationStore.updateModes(visualization.id, {
+      symbol: SymbolMode.CLASSES
+    });
+
+    expect(visualizationStore.selectedVisualization?.symbols?.type).toBe(
+      ShapeType.BAR
+    );
+  });
+
+  it('never returns a coordinate column as the default proportional size column', () => {
+    mocks.datasets = [
+      {
+        id: 'gps-dataset',
+        name: 'sites.csv',
+        sourceFileId: 'source-file-id',
+        tableName: 'sites_table',
+        rowCount: 10,
+        columns: [
+          { name: 'lat', type: 'number' },
+          { name: 'long', type: 'number' },
+          { name: 'POP_TOT_2023', type: 'number' }
+        ],
+        metadata: {
+          processedAt: new Date('2026-04-04T00:00:00.000Z'),
+          transformations: []
+        }
+      }
+    ];
+
+    const visualization = visualizationStore.createVisualization(
+      VisualizationType.PROPORTIONAL,
+      'gps-dataset'
+    );
+
+    expect(visualization.mapping.sizeColumn).toBe('POP_TOT_2023');
+    expect(visualization.mapping.sizeColumn).not.toBe('lat');
+    expect(visualization.mapping.sizeColumn).not.toBe('long');
   });
 });
