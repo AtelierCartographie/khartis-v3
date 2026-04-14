@@ -91,7 +91,7 @@ function createVisualization(
       labels: ['A', 'B', 'C', 'D']
     },
     symbols: {
-      type: ShapeType.POINT,
+      type: ShapeType.CIRCLE,
       minSize: 2,
       maxSize: 12,
       sizeScale: ScaleType.SQRT
