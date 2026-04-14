@@ -66,6 +66,7 @@
   import {
     getLineWidthLegendScale,
     getPointSizeLegendScale,
+    getDensityLegendScale,
     hasCategoricalColorLegend,
     hasClassedColorLegend,
     resolveLegendColorSwatchPrimitive,
@@ -166,6 +167,32 @@
     return styles.join('; ');
   }
 
+  function getShapeClipStyles(shape: ShapeType, strokeColor: string): string {
+    const border = `border: 1px solid ${strokeColor}`;
+    switch (shape) {
+      case ShapeType.CIRCLE:
+        return `border-radius: 999px; ${border}`;
+      case ShapeType.SQUARE:
+        return `border-radius: 2px; ${border}`;
+      case ShapeType.BAR:
+        return 'clip-path: polygon(42% 0, 58% 0, 58% 100%, 42% 100%)';
+      case ShapeType.SPIKE:
+        return 'clip-path: polygon(50% 0, 65% 100%, 35% 100%)';
+      case ShapeType.CROSS:
+        return 'clip-path: polygon(35% 0, 65% 0, 65% 35%, 100% 35%, 100% 65%, 65% 65%, 65% 100%, 35% 100%, 35% 65%, 0 65%, 0 35%, 35% 35%)';
+      case ShapeType.DIAMOND:
+        return 'clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%)';
+      case ShapeType.TRIANGLE:
+        return 'clip-path: polygon(50% 0, 0 100%, 100% 100%)';
+      case ShapeType.STAR:
+        return 'clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%)';
+      case ShapeType.RECTANGLE:
+        return `border-radius: 2px; clip-path: inset(35% 5% 35% 5% round 2px); ${border}`;
+      default:
+        return `border-radius: 2px; ${border}`;
+    }
+  }
+
   function getPointLegendSymbolStyle(
     scale: PointSizeLegendScale,
     size: number
@@ -177,20 +204,7 @@
       'box-sizing: border-box'
     ];
 
-    if (scale.shape === ShapeType.POINT) {
-      styles.push('border-radius: 999px');
-      styles.push(`border: 1px solid ${scale.strokeColor}`);
-    } else if (scale.shape === ShapeType.CROSS) {
-      styles.push(
-        'clip-path: polygon(35% 0, 65% 0, 65% 35%, 100% 35%, 100% 65%, 65% 65%, 65% 100%, 35% 100%, 35% 65%, 0 65%, 0 35%, 35% 35%)'
-      );
-    } else if (scale.shape === ShapeType.TRIANGLE) {
-      styles.push('clip-path: polygon(50% 0, 0 100%, 100% 100%)');
-    } else {
-      styles.push('border-radius: 2px');
-      styles.push(`border: 1px solid ${scale.strokeColor}`);
-    }
-
+    styles.push(getShapeClipStyles(scale.shape, scale.strokeColor));
     return styles.join('; ');
   }
 
@@ -205,20 +219,7 @@
       'opacity: 1'
     ];
 
-    if (shape === ShapeType.POINT) {
-      styles.push('border-radius: 999px');
-      styles.push('border: 1px solid rgba(0, 0, 0, 0.15)');
-    } else if (shape === ShapeType.CROSS) {
-      styles.push(
-        'clip-path: polygon(35% 0, 65% 0, 65% 35%, 100% 35%, 100% 65%, 65% 65%, 65% 100%, 35% 100%, 35% 65%, 0 65%, 0 35%, 35% 35%)'
-      );
-    } else if (shape === ShapeType.TRIANGLE) {
-      styles.push('clip-path: polygon(50% 0, 0 100%, 100% 100%)');
-    } else {
-      styles.push('border-radius: 2px');
-      styles.push('border: 1px solid rgba(0, 0, 0, 0.15)');
-    }
-
+    styles.push(getShapeClipStyles(shape, 'rgba(0, 0, 0, 0.15)'));
     return styles.join('; ');
   }
 
@@ -551,6 +552,7 @@
         {@const colorLegendPrimitive = resolveLegendColorSwatchPrimitive(viz)}
         {@const sizeStats = getColumnStatistics(viz, viz?.mapping.sizeColumn)}
         {@const pointSizeScale = getPointSizeLegendScale(viz, sizeStats)}
+        {@const densityScale = getDensityLegendScale(viz)}
         {@const lineWidthScale = getLineWidthLegendScale(viz, sizeStats)}
         {@const classCount = getLegendClassCount(viz)}
         <div class="legend-item">
@@ -559,6 +561,17 @@
           {/if}
           {#if item.subtitle}
             <p class="legend-subtitle">{item.subtitle}</p>
+          {/if}
+          {#if densityScale}
+            <div class="legend-density-row">
+              <span
+                class="legend-density-dot"
+                style={`background-color: ${densityScale.fillColor}; width: ${Math.max(4, Math.round(densityScale.dotSize * 4))}px; height: ${Math.max(4, Math.round(densityScale.dotSize * 4))}px;`}
+              ></span>
+              <span class="legend-scale-label">
+                {m.density_ratio_label({ ratio: String(densityScale.ratio) })}
+              </span>
+            </div>
           {/if}
           {#if viz && hasClassedColorLegend(viz)}
             {@const colors = viz.classification?.colors ?? []}
@@ -573,7 +586,7 @@
                     <span
                       class="legend-point-swatch"
                       style={getPointColorSwatchStyle(
-                        viz.symbols?.type ?? ShapeType.POINT,
+                        viz.symbols?.type ?? ShapeType.CIRCLE,
                         color
                       )}
                     ></span>
@@ -618,7 +631,7 @@
                     <span
                       class="legend-point-swatch"
                       style={getPointColorSwatchStyle(
-                        viz.symbols?.type ?? ShapeType.POINT,
+                        viz.symbols?.type ?? ShapeType.CIRCLE,
                         color
                       )}
                     ></span>
