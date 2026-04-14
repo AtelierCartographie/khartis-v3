@@ -1,3 +1,9 @@
+# [1.0.0-staging.8](https://github.com/AtelierCartographie/khartis-v3/compare/v1.0.0-staging.7...v1.0.0-staging.8) (2026-04-14)
+
+### Bug Fixes
+
+- **ci:** exclure les tests d'audit et brancher le sizing responsive ([#91](https://github.com/AtelierCartographie/khartis-v3/issues/91)) ([e4fda6f](https://github.com/AtelierCartographie/khartis-v3/commit/e4fda6f9010cdce3539f443718897f068f63be46)), closes [#90](https://github.com/AtelierCartographie/khartis-v3/issues/90)
+
 # [1.0.0-staging.7](https://github.com/AtelierCartographie/khartis-v3/compare/v1.0.0-staging.6...v1.0.0-staging.7) (2026-04-14)
 
 ### Features
