@@ -14,9 +14,21 @@ import { projectStore } from './project.store.svelte';
 
 const SELECTED_TAB_STORAGE_KEY = 'khartis_selected_tab';
 const PAGE_ZOOM_STORAGE_KEY = 'khartis_page_zoom_level';
+const PAGE_ZOOM_SCHEMA_VERSION_KEY = 'khartis_page_zoom_schema_version';
+const PAGE_ZOOM_SCHEMA_VERSION = '2';
 const TOOLBAR_STATE_STORAGE_KEY = 'khartis_toolbar_state';
 const SELECTED_STEP_STORAGE_KEY = 'khartis_selected_step';
 const MOBILE_BREAKPOINT_VALUE = 1024;
+
+function migratePageZoomStorage(): void {
+  if (typeof window === 'undefined') return;
+  const currentVersion = localStorage.getItem(PAGE_ZOOM_SCHEMA_VERSION_KEY);
+  if (currentVersion === PAGE_ZOOM_SCHEMA_VERSION) return;
+  localStorage.removeItem(PAGE_ZOOM_STORAGE_KEY);
+  localStorage.setItem(PAGE_ZOOM_SCHEMA_VERSION_KEY, PAGE_ZOOM_SCHEMA_VERSION);
+}
+
+migratePageZoomStorage();
 
 const VALID_TOOLBAR_STATES = new Set<string>([
   ToolbarState.Full,
@@ -72,7 +84,8 @@ function createGlobalStore() {
       minPageZoom: 10,
       maxPageZoom: 500,
       pageZoomStep: 10,
-      pagePanOffset: { x: 0, y: 0 }
+      pagePanOffset: { x: 0, y: 0 },
+      pageZoomScale: 1
     },
     isMobileView:
       typeof window !== 'undefined'
@@ -342,6 +355,14 @@ function createGlobalStore() {
     notifyPersistence();
   }
 
+  function setPagePanOffset(offset: { x: number; y: number }): void {
+    state.zoom.pagePanOffset = {
+      x: offset.x,
+      y: offset.y
+    };
+    notifyPersistence();
+  }
+
   function resetPagePan(): void {
     state.zoom.pagePanOffset = { x: 0, y: 0 };
     notifyPersistence();
@@ -358,6 +379,12 @@ function createGlobalStore() {
     );
     syncPageZoomToStorage(state.zoom.pageZoomLevel);
     notifyPersistence();
+  }
+
+  function setPageZoomScale(scale: number): void {
+    const nextScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
+    if (Math.abs(state.zoom.pageZoomScale - nextScale) < 1e-4) return;
+    state.zoom.pageZoomScale = nextScale;
   }
 
   if (typeof window !== 'undefined' && selectedDataButtonState.id) {
@@ -532,7 +559,9 @@ function createGlobalStore() {
     zoomOutPage,
     resetPageZoom,
     setPageZoom,
+    setPageZoomScale,
     panPageBy,
+    setPagePanOffset,
     resetPagePan,
     setToolbarTransitioning,
     resetNavigationState,
@@ -553,7 +582,9 @@ export const globalActions = {
   zoomOutPage: globalState.zoomOutPage,
   resetPageZoom: globalState.resetPageZoom,
   setPageZoom: globalState.setPageZoom,
+  setPageZoomScale: globalState.setPageZoomScale,
   panPageBy: globalState.panPageBy,
+  setPagePanOffset: globalState.setPagePanOffset,
   resetPagePan: globalState.resetPagePan,
   setMobileView: globalState.setMobileView,
   openMobileToolbar: globalState.openMobileToolbar,

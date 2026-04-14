@@ -5,17 +5,20 @@ export function invalidateTableCache(ctx: DuckDBContext, table: string): void {
   ctx.rowCountCache.delete(table);
 }
 
-let onTableMutatedCallback: ((table: string) => void) | null = null;
+const tableMutationListeners = new Set<(table: string) => void>();
 
 export function registerTableMutationCallback(
   callback: (table: string) => void
-): void {
-  onTableMutatedCallback = callback;
+): () => void {
+  tableMutationListeners.add(callback);
+  return () => tableMutationListeners.delete(callback);
 }
 
 export function markTableMutated(ctx: DuckDBContext, table: string): void {
   invalidateTableCache(ctx, table);
-  onTableMutatedCallback?.(table);
+  for (const listener of tableMutationListeners) {
+    listener(table);
+  }
 }
 
 export function getTableMetadata(

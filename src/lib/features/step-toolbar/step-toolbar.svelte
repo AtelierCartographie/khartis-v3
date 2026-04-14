@@ -100,56 +100,58 @@
   data-outline
   aria-label={m.toolbar_nav_aria()}
 >
-  <header class={CSS_CLASSES.STEP_HEADER}>
-    <span class={CSS_CLASSES.STEP_TITLE}>{m.step_toolbar_steps()}</span>
-  </header>
+  <div class={CSS_CLASSES.SCROLL_VIEWPORT}>
+    <header class={CSS_CLASSES.STEP_HEADER}>
+      <span class={CSS_CLASSES.STEP_TITLE}>{m.step_toolbar_steps()}</span>
+    </header>
 
-  <div
-    class={CSS_CLASSES.STEP_CONTAINER}
-    role="group"
-    aria-label={m.toolbar_step_selection_aria()}
-  >
-    <button
-      data-testid={TEST_IDS.STEP_DATA}
-      class={clsx(CSS_CLASSES.NAV_ITEM, {
-        [CSS_CLASSES.SELECTED]: isStepSelected(ToolbarStep.Data)
-      })}
-      onclick={() => selectStep(ToolbarStep.Data)}
-      aria-pressed={isStepSelected(ToolbarStep.Data)}
-      aria-label={m.step_data_aria()}
+    <div
+      class={CSS_CLASSES.STEP_CONTAINER}
+      role="group"
+      aria-label={m.toolbar_step_selection_aria()}
     >
-      <DataBase size={32} />
-      <span>{stepLabels[ToolbarStep.Data]}</span>
-    </button>
+      <button
+        data-testid={TEST_IDS.STEP_DATA}
+        class={clsx(CSS_CLASSES.NAV_ITEM, {
+          [CSS_CLASSES.SELECTED]: isStepSelected(ToolbarStep.Data)
+        })}
+        onclick={() => selectStep(ToolbarStep.Data)}
+        aria-pressed={isStepSelected(ToolbarStep.Data)}
+        aria-label={m.step_data_aria()}
+      >
+        <DataBase size={32} />
+        <span>{stepLabels[ToolbarStep.Data]}</span>
+      </button>
 
-    <button
-      data-testid={TEST_IDS.STEP_VISUALIZATIONS}
-      class={clsx(CSS_CLASSES.NAV_ITEM, {
-        [CSS_CLASSES.SELECTED]: isStepSelected(ToolbarStep.Visualizations)
-      })}
-      onclick={() => selectStep(ToolbarStep.Visualizations)}
-      aria-pressed={isStepSelected(ToolbarStep.Visualizations)}
-      aria-label={m.step_visualizations_aria()}
-    >
-      <ColorPalette size={32} />
-      <span>{stepLabels[ToolbarStep.Visualizations]}</span>
-    </button>
+      <button
+        data-testid={TEST_IDS.STEP_VISUALIZATIONS}
+        class={clsx(CSS_CLASSES.NAV_ITEM, {
+          [CSS_CLASSES.SELECTED]: isStepSelected(ToolbarStep.Visualizations)
+        })}
+        onclick={() => selectStep(ToolbarStep.Visualizations)}
+        aria-pressed={isStepSelected(ToolbarStep.Visualizations)}
+        aria-label={m.step_visualizations_aria()}
+      >
+        <ColorPalette size={32} />
+        <span>{stepLabels[ToolbarStep.Visualizations]}</span>
+      </button>
 
-    <button
-      data-testid={TEST_IDS.STEP_STYLING}
-      class={clsx(CSS_CLASSES.NAV_ITEM, {
-        [CSS_CLASSES.SELECTED]: isStepSelected(ToolbarStep.Styling)
-      })}
-      onclick={() => selectStep(ToolbarStep.Styling)}
-      aria-pressed={isStepSelected(ToolbarStep.Styling)}
-      aria-label={m.step_styling_aria()}
-    >
-      <RulerAlt size={32} />
-      <span>{stepLabels[ToolbarStep.Styling]}</span>
-    </button>
+      <button
+        data-testid={TEST_IDS.STEP_STYLING}
+        class={clsx(CSS_CLASSES.NAV_ITEM, {
+          [CSS_CLASSES.SELECTED]: isStepSelected(ToolbarStep.Styling)
+        })}
+        onclick={() => selectStep(ToolbarStep.Styling)}
+        aria-pressed={isStepSelected(ToolbarStep.Styling)}
+        aria-label={m.step_styling_aria()}
+      >
+        <RulerAlt size={32} />
+        <span>{stepLabels[ToolbarStep.Styling]}</span>
+      </button>
+    </div>
+
+    {@render selectedList?.()}
   </div>
-
-  {@render selectedList?.()}
 
   <ToolPopover
     light
@@ -179,9 +181,38 @@
 
 <style>
   :global(#khartis-step-toolbar) {
-    position: relative;
+    position: absolute;
+    top: 50%;
+    left: 0;
+    transform: translateY(-50%);
+    max-height: calc(100% - var(--cds-spacing-05) * 2);
     z-index: var(--z-toolbar);
-    align-self: center;
+    scrollbar-width: none;
+    background: rgba(255, 255, 255, 0.78);
+    backdrop-filter: blur(10px) saturate(1.2);
+    -webkit-backdrop-filter: blur(10px) saturate(1.2);
+    border-right: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+    box-shadow: 4px 0 12px rgba(0, 0, 0, 0.04);
+  }
+
+  .scroll-viewport {
+    width: 100%;
+    max-height: inherit;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: none;
+  }
+
+  .scroll-viewport::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+  }
+
+  @supports not (backdrop-filter: blur(1px)) {
+    :global(#khartis-step-toolbar) {
+      background: var(--cds-background);
+    }
   }
 
   header span {
