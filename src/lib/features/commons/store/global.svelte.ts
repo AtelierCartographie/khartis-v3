@@ -342,6 +342,14 @@ function createGlobalStore() {
     notifyPersistence();
   }
 
+  function setPagePanOffset(offset: { x: number; y: number }): void {
+    state.zoom.pagePanOffset = {
+      x: offset.x,
+      y: offset.y
+    };
+    notifyPersistence();
+  }
+
   function resetPagePan(): void {
     state.zoom.pagePanOffset = { x: 0, y: 0 };
     notifyPersistence();
@@ -533,6 +541,7 @@ function createGlobalStore() {
     resetPageZoom,
     setPageZoom,
     panPageBy,
+    setPagePanOffset,
     resetPagePan,
     setToolbarTransitioning,
     resetNavigationState,
@@ -554,6 +563,7 @@ export const globalActions = {
   resetPageZoom: globalState.resetPageZoom,
   setPageZoom: globalState.setPageZoom,
   panPageBy: globalState.panPageBy,
+  setPagePanOffset: globalState.setPagePanOffset,
   resetPagePan: globalState.resetPagePan,
   setMobileView: globalState.setMobileView,
   openMobileToolbar: globalState.openMobileToolbar,

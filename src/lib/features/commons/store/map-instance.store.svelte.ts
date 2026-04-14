@@ -9,6 +9,13 @@ import {
 } from '$lib/features/map/core/projscreen';
 
 type DeckInstance = Deck<View | View[] | null>;
+export type ViewportFitMode = 'auto' | 'manual';
+export type ViewportFitReason =
+  | 'dataset'
+  | 'basemap'
+  | 'projection'
+  | 'reset'
+  | 'restore';
 
 interface DeckViewState {
   target: [number, number, number];
@@ -41,7 +48,11 @@ function worldToData(target: number[]): [number, number, number] {
   const bbox = projectionStore.referenceBbox;
   if (!bbox) return t;
   const [cx, cy] = get_bbox_center(bbox);
-  const scale = get_max_scale(projectionStore.canvasSize, bbox);
+  const scale = get_max_scale(
+    projectionStore.canvasSize,
+    bbox,
+    projectionStore.fitPaddingPx
+  );
   if (scale === 0) return t;
   const yDirection = projectionStore.isProjectedCoordinates ? -1 : 1;
   return [t[0] / scale + cx, (t[1] * yDirection) / scale + cy, 0];
@@ -56,7 +67,11 @@ function dataToWorld(target: number[]): [number, number, number] {
   const bbox = projectionStore.referenceBbox;
   if (!bbox) return t;
   const [cx, cy] = get_bbox_center(bbox);
-  const scale = get_max_scale(projectionStore.canvasSize, bbox);
+  const scale = get_max_scale(
+    projectionStore.canvasSize,
+    bbox,
+    projectionStore.fitPaddingPx
+  );
   const yDirection = projectionStore.isProjectedCoordinates ? -1 : 1;
   return [scale * (t[0] - cx), yDirection * scale * (t[1] - cy), 0];
 }
@@ -78,6 +93,8 @@ function createMapInstanceStore() {
     zoomLevel: number;
     baseZoomLevel: number;
     deckViewState: DeckViewState;
+    viewportFitMode: ViewportFitMode;
+    viewportFitReason: ViewportFitReason | null;
   }>({
     map: null,
     deckOverlay: null,
@@ -85,7 +102,9 @@ function createMapInstanceStore() {
     isMapLoaded: false,
     zoomLevel: 100,
     baseZoomLevel: 1.5,
-    deckViewState: { ...DEFAULT_DECK_VIEW_STATE }
+    deckViewState: { ...DEFAULT_DECK_VIEW_STATE },
+    viewportFitMode: 'auto',
+    viewportFitReason: null
   });
 
   let pendingRestore: PendingViewState | null = null;
@@ -99,7 +118,11 @@ function createMapInstanceStore() {
       return lastSerializedViewState;
     }
 
-    const scale = get_max_scale(projectionStore.canvasSize, bbox);
+    const scale = get_max_scale(
+      projectionStore.canvasSize,
+      bbox,
+      projectionStore.fitPaddingPx
+    );
     if (scale === 0) {
       return lastSerializedViewState;
     }
@@ -157,6 +180,16 @@ function createMapInstanceStore() {
     state.baseZoomLevel = zoom;
   }
 
+  function markViewportAutoFit(reason: ViewportFitReason): void {
+    state.viewportFitMode = 'auto';
+    state.viewportFitReason = reason;
+  }
+
+  function markViewportManual(): void {
+    state.viewportFitMode = 'manual';
+    state.viewportFitReason = null;
+  }
+
   function updateZoomFromMap() {
     if (state.map) {
       const mapZoom = state.map.getZoom();
@@ -183,6 +216,7 @@ function createMapInstanceStore() {
     };
     updateZoomFromMap();
     if (fromUserInteraction) {
+      markViewportManual();
       pendingRestore = null;
       persistenceRegistry.notifyChange('mapViewState');
     }
@@ -206,12 +240,14 @@ function createMapInstanceStore() {
 
   function zoomIn() {
     if (state.map) {
+      markViewportManual();
       const currentZoom = state.map.getZoom();
       state.map.setZoom(currentZoom + MAPLIBRE_ZOOM_STEP);
       return;
     }
 
     if (state.deckInstance) {
+      markViewportManual();
       pendingRestore = null;
       const newZoom = Math.min(
         state.deckViewState.zoom + DECK_ZOOM_STEP,
@@ -229,12 +265,14 @@ function createMapInstanceStore() {
 
   function zoomOut() {
     if (state.map) {
+      markViewportManual();
       const currentZoom = state.map.getZoom();
       state.map.setZoom(currentZoom - MAPLIBRE_ZOOM_STEP);
       return;
     }
 
     if (state.deckInstance) {
+      markViewportManual();
       pendingRestore = null;
       const newZoom = Math.max(
         state.deckViewState.zoom - DECK_ZOOM_STEP,
@@ -252,11 +290,13 @@ function createMapInstanceStore() {
 
   function setZoom(zoom: number) {
     if (state.map) {
+      markViewportManual();
       state.map.setZoom(zoom);
       return;
     }
 
     if (state.deckInstance) {
+      markViewportManual();
       pendingRestore = null;
       const clampedZoom = Math.max(
         state.deckViewState.minZoom,
@@ -274,11 +314,13 @@ function createMapInstanceStore() {
 
   function resetZoom() {
     if (state.map) {
+      markViewportManual();
       state.map.setZoom(state.baseZoomLevel);
       return;
     }
 
     if (state.deckInstance) {
+      markViewportManual();
       pendingRestore = null;
       state.deckViewState = {
         ...state.deckViewState,
@@ -299,7 +341,9 @@ function createMapInstanceStore() {
    * last one wins.  It is only cleared when the user explicitly changes
    * the zoom via the toolbar.
    */
-  function fitToOrthographicBounds(): void {
+  function fitToOrthographicBounds(
+    reason: ViewportFitReason | null = null
+  ): void {
     if (!state.deckInstance || !state.isMapLoaded) return;
 
     if (pendingRestore) {
@@ -308,12 +352,16 @@ function createMapInstanceStore() {
         target: dataToWorld(pendingRestore.target),
         zoom: pendingRestore.zoom
       };
+      markViewportManual();
     } else {
       state.deckViewState = {
         ...state.deckViewState,
         target: [0, 0, 0],
         zoom: 0
       };
+      if (reason) {
+        markViewportAutoFit(reason);
+      }
     }
 
     applyDeckViewState();
@@ -353,6 +401,8 @@ function createMapInstanceStore() {
     pendingRestore = null;
     lastSerializedViewState = null;
     state.deckViewState = { ...DEFAULT_DECK_VIEW_STATE };
+    state.viewportFitMode = 'auto';
+    state.viewportFitReason = null;
 
     if (state.deckInstance && state.isMapLoaded && !state.map) {
       applyDeckViewState();
@@ -369,6 +419,8 @@ function createMapInstanceStore() {
     state.zoomLevel = 100;
     state.baseZoomLevel = 1.5;
     state.deckViewState = { ...DEFAULT_DECK_VIEW_STATE };
+    state.viewportFitMode = 'auto';
+    state.viewportFitReason = null;
     // Note: pendingRestore is intentionally NOT cleared here.
     // reset() is called during map teardown (view switch, destroy)
     // but pendingRestore must survive until fitToOrthographicBounds()
@@ -407,6 +459,15 @@ function createMapInstanceStore() {
     get deckViewState() {
       return state.deckViewState;
     },
+    get isViewportAutoFitManaged() {
+      return state.viewportFitMode === 'auto';
+    },
+    get viewportFitMode() {
+      return state.viewportFitMode;
+    },
+    get viewportFitReason() {
+      return state.viewportFitReason;
+    },
     setMapInstance,
     setDeckOverlay,
     setDeckInstance,
@@ -417,6 +478,8 @@ function createMapInstanceStore() {
     getMapCenter,
     setBaseZoomLevel,
     updateZoomFromMap,
+    markViewportAutoFit,
+    markViewportManual,
     updateDeckViewState,
     buildSerializedViewState,
     zoomIn,

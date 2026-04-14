@@ -165,7 +165,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
 
   const basemapProjectionCache = new WeakMap<
     NonNullable<BasemapMetadata>,
-    ProjectionLike
+    Map<string, ProjectionLike>
   >();
   const representativePointTableCache = new WeakMap<ArrowTable, ArrowTable>();
   const representativePointGeometryInfoCache = new WeakMap<
@@ -180,6 +180,13 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
   let cachedProjectionOverrideKey: string | null = null;
   let cachedProjectionOverrideRef: GeoProjection | undefined;
 
+  function getProjectionViewportSize(): { width: number; height: number } {
+    return {
+      width: Math.max(1, projectionStore.canvasSize.width),
+      height: Math.max(1, projectionStore.canvasSize.height)
+    };
+  }
+
   function getProjectionFromMetadata(
     metadata: BasemapMetadata | null | undefined,
     isOrthographicMode: boolean
@@ -188,18 +195,25 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       return undefined;
     }
 
-    const cached = basemapProjectionCache.get(metadata);
+    const viewportSize = getProjectionViewportSize();
+    const cacheKey = `${viewportSize.width}x${viewportSize.height}`;
+    const cached = basemapProjectionCache.get(metadata)?.get(cacheKey);
     if (cached) {
       return cached;
     }
 
     const projection = buildProjectionForBasemap(
       metadata,
-      960,
-      600,
+      viewportSize.width,
+      viewportSize.height,
       basemapService.projectionPresets
     );
-    basemapProjectionCache.set(metadata, projection);
+    let entryCache = basemapProjectionCache.get(metadata);
+    if (!entryCache) {
+      entryCache = new Map();
+      basemapProjectionCache.set(metadata, entryCache);
+    }
+    entryCache.set(cacheKey, projection);
     return projection;
   }
 
@@ -212,6 +226,8 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     }
 
     const projState = getProjectionState();
+    const viewportSize = getProjectionViewportSize();
+    const fitPaddingPx = projectionStore.fitPaddingPx;
     if (!projState.overrideActive) {
       return undefined;
     }
@@ -225,6 +241,8 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         ? `custom:${projState.customCode}`
         : `preset:${projState.selected}`,
       `bbox:${fitBbox.join(',')}`,
+      `viewport:${viewportSize.width}x${viewportSize.height}`,
+      `padding:${fitPaddingPx}`,
       `center:${(projState.center ?? [projState.longitude, projState.latitude]).join(',')}`,
       `rotation:${projState.rotation}`
     ].join('|');
@@ -263,7 +281,13 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         projectionOverride.rotate([projState.rotation, 0, 0]);
       }
 
-      fitProjectionToBbox(projectionOverride, fitBbox, 960, 600);
+      fitProjectionToBbox(
+        projectionOverride,
+        fitBbox,
+        viewportSize.width,
+        viewportSize.height,
+        fitPaddingPx
+      );
     }
 
     // Downstream GeoArrow/projection caches key by ProjectionLike reference.

@@ -537,6 +537,7 @@
       class="legend-container {positionClass}"
       class:draggable={isLegendActive}
       class:dragging={isDragging}
+      data-workspace-pan-ignore="true"
       style={containerStyle}
       role="button"
       tabindex="0"

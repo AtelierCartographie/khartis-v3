@@ -739,7 +739,7 @@
     width: 100%;
     height: 100%;
     position: relative;
-    overflow: hidden;
+    overflow: visible;
   }
 
   .main-map-container.resizable {
@@ -889,17 +889,5 @@
     background: var(--cds-interactive-01, #0f62fe);
     opacity: 0.4;
     border-radius: 1px;
-  }
-
-  @media (max-width: 1023px) {
-    .main-map-container {
-      width: max-content;
-      min-width: 100%;
-      height: max-content;
-      min-height: 100%;
-      justify-content: flex-start;
-      align-items: flex-start;
-      overflow: visible;
-    }
   }
 </style>

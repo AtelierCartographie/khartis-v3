@@ -41,6 +41,13 @@
   } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
   import { ColorBlindnessType } from '$lib/features/commons/constants/ui.constants';
   import { zoomModeStore } from '$lib/features/commons/store/zoom-mode.store.svelte';
+  import {
+    DEFAULT_WORKSPACE_VIEWPORT_BOUNDS,
+    clampWorkspacePanOffset,
+    isWorkspacePanTarget,
+    resolveWorkspaceViewportBounds,
+    type WorkspaceViewportBounds
+  } from '$lib/features/commons/utils/workspace-viewport.utils';
   import StepToolbar from '$lib/features/step-toolbar/step-toolbar.svelte';
   import { Button, Tag, Theme } from 'carbon-components-svelte';
   import { WarningAltFilled } from 'carbon-icons-svelte';
@@ -97,6 +104,16 @@
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    pageResizeObserver = new ResizeObserver(() => {
+      updateWorkspaceViewportState();
+    });
+    workspaceResizeObserver = new ResizeObserver(() => {
+      updateWorkspaceViewportState();
+    });
+    pageMutationObserver = new MutationObserver(() => {
+      refreshObservedPageElement(pageResizeObserver);
+    });
 
     const initApp = async () => {
       // Start DuckDB in background — don't block UI on it (LCP optimization)
@@ -179,6 +196,52 @@
       }
       ariaObserver.disconnect();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      workspaceResizeObserver?.disconnect();
+      pageResizeObserver?.disconnect();
+      pageMutationObserver?.disconnect();
+      workspaceResizeObserver = null;
+      pageResizeObserver = null;
+      pageMutationObserver = null;
+    };
+  });
+
+  $effect(() => {
+    void pageZoomScale;
+    void zoomModeStore.mode;
+
+    requestAnimationFrame(() => {
+      updateWorkspaceViewportState();
+    });
+  });
+
+  $effect(() => {
+    const workspaceViewport = workspaceViewportElement;
+
+    if (
+      !workspaceViewport ||
+      !pageResizeObserver ||
+      !workspaceResizeObserver ||
+      !pageMutationObserver
+    ) {
+      return;
+    }
+
+    workspaceResizeObserver.disconnect();
+    pageMutationObserver.disconnect();
+    workspaceResizeObserver.observe(workspaceViewport);
+    pageMutationObserver.observe(workspaceViewport, {
+      childList: true,
+      subtree: true
+    });
+    refreshObservedPageElement(pageResizeObserver);
+
+    return () => {
+      workspaceResizeObserver?.disconnect();
+      pageMutationObserver?.disconnect();
+      if (observedPageElement && pageResizeObserver) {
+        pageResizeObserver.unobserve(observedPageElement);
+      }
+      observedPageElement = null;
     };
   });
 
@@ -190,6 +253,7 @@
   const isColorBlindnessActive = $derived(
     colorBlindnessState.simulationType !== ColorBlindnessType.NONE
   );
+  const isPageMode = $derived(zoomModeStore.isPageMode);
 
   function handleDeactivateColorBlindness() {
     colorBlindnessActions.setSimulationType(ColorBlindnessType.NONE);
@@ -197,35 +261,133 @@
 
   const pageZoomScale = $derived(globalState.zoom.pageZoomLevel / 100);
   const pagePan = $derived(globalState.zoom.pagePanOffset);
-  const pageTransformStyle = $derived(
-    pagePan.x === 0 && pagePan.y === 0
-      ? `transform: scale(${pageZoomScale}); transform-origin: center center;`
-      : `transform: translate(${pagePan.x}px, ${pagePan.y}px) scale(${pageZoomScale}); transform-origin: center center;`
+  const workspaceCameraStyle = $derived(
+    `transform: translate(${pagePan.x}px, ${pagePan.y}px);`
+  );
+  const pageScaleStyle = $derived(
+    `transform: scale(${pageZoomScale}); transform-origin: center center;`
   );
 
+  const LEFT_BUTTON = 0;
   const MIDDLE_BUTTON = 1;
-  let pageDragState = $state<{ lastX: number; lastY: number } | null>(null);
+  let workspaceViewportElement = $state<HTMLElement | null>(null);
+  let observedPageElement: HTMLElement | null = null;
+  let workspaceViewportBounds = $state<WorkspaceViewportBounds>(
+    DEFAULT_WORKSPACE_VIEWPORT_BOUNDS
+  );
+  let isWorkspacePanDraggable = $state(false);
+  let workspaceDragState = $state<{ lastX: number; lastY: number } | null>(
+    null
+  );
+  let pageResizeObserver: ResizeObserver | null = null;
+  let workspaceResizeObserver: ResizeObserver | null = null;
+  let pageMutationObserver: MutationObserver | null = null;
+
+  function getPageContainerElement(): HTMLElement | null {
+    const pageElement =
+      workspaceViewportElement?.querySelector('.page-container');
+    return pageElement instanceof HTMLElement ? pageElement : null;
+  }
+
+  function updateWorkspaceViewportState(): void {
+    const pageElement = getPageContainerElement();
+    const viewportElement = workspaceViewportElement;
+
+    if (!pageElement || !viewportElement) {
+      workspaceViewportBounds = DEFAULT_WORKSPACE_VIEWPORT_BOUNDS;
+      isWorkspacePanDraggable = false;
+      return;
+    }
+
+    const nextBounds = resolveWorkspaceViewportBounds({
+      viewportWidth: viewportElement.clientWidth,
+      viewportHeight: viewportElement.clientHeight,
+      pageWidth: pageElement.offsetWidth,
+      pageHeight: pageElement.offsetHeight,
+      pageZoomScale
+    });
+
+    workspaceViewportBounds = nextBounds;
+    isWorkspacePanDraggable = isPageMode && nextBounds.hasOverflow;
+
+    const clampedOffset = clampWorkspacePanOffset(pagePan, nextBounds);
+    if (clampedOffset.x !== pagePan.x || clampedOffset.y !== pagePan.y) {
+      globalActions.setPagePanOffset(clampedOffset);
+    }
+  }
+
+  function refreshObservedPageElement(
+    pageResizeObserver: ResizeObserver | null = null
+  ): void {
+    const nextPageElement = getPageContainerElement();
+
+    if (nextPageElement === observedPageElement) {
+      updateWorkspaceViewportState();
+      return;
+    }
+
+    if (observedPageElement && pageResizeObserver) {
+      pageResizeObserver.unobserve(observedPageElement);
+    }
+
+    observedPageElement = nextPageElement;
+
+    if (observedPageElement && pageResizeObserver) {
+      pageResizeObserver.observe(observedPageElement);
+    }
+
+    updateWorkspaceViewportState();
+  }
+
+  function shouldStartWorkspacePan(event: PointerEvent): boolean {
+    const isTouchPointer = event.pointerType === 'touch';
+    const isMousePanButton =
+      event.button === LEFT_BUTTON || event.button === MIDDLE_BUTTON;
+
+    if (!isPageMode || !isWorkspacePanDraggable) {
+      return false;
+    }
+
+    if (!isTouchPointer && !isMousePanButton) {
+      return false;
+    }
+
+    return isWorkspacePanTarget(event.target);
+  }
 
   function handleMainContentPointerDown(event: PointerEvent): void {
-    if (event.button !== MIDDLE_BUTTON) return;
+    if (!shouldStartWorkspacePan(event)) {
+      return;
+    }
+
     event.preventDefault();
-    pageDragState = { lastX: event.clientX, lastY: event.clientY };
-    window.addEventListener(EVENT.POINTERMOVE, handlePagePanMove);
-    window.addEventListener(EVENT.POINTERUP, handlePagePanUp);
+    workspaceDragState = { lastX: event.clientX, lastY: event.clientY };
+    window.addEventListener(EVENT.POINTERMOVE, handleWorkspacePanMove);
+    window.addEventListener(EVENT.POINTERUP, handleWorkspacePanUp);
   }
 
-  function handlePagePanMove(event: PointerEvent): void {
-    if (!pageDragState) return;
-    const dx = event.clientX - pageDragState.lastX;
-    const dy = event.clientY - pageDragState.lastY;
-    pageDragState = { lastX: event.clientX, lastY: event.clientY };
-    globalActions.panPageBy(dx, dy);
+  function handleWorkspacePanMove(event: PointerEvent): void {
+    if (!workspaceDragState) return;
+
+    const dx = event.clientX - workspaceDragState.lastX;
+    const dy = event.clientY - workspaceDragState.lastY;
+
+    workspaceDragState = { lastX: event.clientX, lastY: event.clientY };
+    globalActions.setPagePanOffset(
+      clampWorkspacePanOffset(
+        {
+          x: pagePan.x + dx,
+          y: pagePan.y + dy
+        },
+        workspaceViewportBounds
+      )
+    );
   }
 
-  function handlePagePanUp(): void {
-    pageDragState = null;
-    window.removeEventListener(EVENT.POINTERMOVE, handlePagePanMove);
-    window.removeEventListener(EVENT.POINTERUP, handlePagePanUp);
+  function handleWorkspacePanUp(): void {
+    workspaceDragState = null;
+    window.removeEventListener(EVENT.POINTERMOVE, handleWorkspacePanMove);
+    window.removeEventListener(EVENT.POINTERUP, handleWorkspacePanUp);
   }
 
   $effect(() => {
@@ -299,11 +461,18 @@
 
     <article
       class="main-content"
-      class:page-panning={pageDragState !== null}
+      class:workspace-panning={workspaceDragState !== null}
+      class:workspace-overflow-draggable={isWorkspacePanDraggable}
       onpointerdown={handleMainContentPointerDown}
     >
-      <div class="page-content-wrapper" style={pageTransformStyle}>
-        {@render children()}
+      <div bind:this={workspaceViewportElement} class="workspace-viewport">
+        <div class="workspace-camera" style={workspaceCameraStyle}>
+          <div class="page-scale-layer" style={pageScaleStyle}>
+            <div class="page-content-wrapper">
+              {@render children()}
+            </div>
+          </div>
+        </div>
       </div>
 
       <ZoomToolbar />
@@ -377,22 +546,59 @@
     justify-content: center;
   }
 
-  .page-content-wrapper {
+  .workspace-viewport {
+    position: relative;
     flex: 1;
     min-width: 0;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .workspace-camera,
+  .page-scale-layer,
+  .page-content-wrapper {
+    width: 100%;
     height: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
     overflow: visible;
+  }
+
+  .workspace-camera,
+  .page-scale-layer {
+    will-change: transform;
+  }
+
+  .page-content-wrapper {
+    min-width: 0;
     padding: var(--cds-spacing-03) var(--cds-spacing-05);
   }
 
-  .page-panning .page-content-wrapper {
+  .workspace-panning .workspace-camera {
     transition: none;
   }
 
-  .page-panning {
+  .workspace-panning {
+    cursor: grabbing;
+  }
+
+  .main-content.workspace-overflow-draggable :global(.main-map-container),
+  .main-content.workspace-overflow-draggable :global(.map-stage),
+  .main-content.workspace-overflow-draggable :global(.map-canvas),
+  .main-content.workspace-overflow-draggable :global(.map-canvas canvas),
+  .main-content.workspace-overflow-draggable :global(.page-grid),
+  .main-content.workspace-overflow-draggable :global(.page-container) {
+    cursor: grab;
+    touch-action: none;
+  }
+
+  .workspace-panning :global(.main-map-container),
+  .workspace-panning :global(.map-stage),
+  .workspace-panning :global(.map-canvas),
+  .workspace-panning :global(.map-canvas canvas),
+  .workspace-panning :global(.page-grid),
+  .workspace-panning :global(.page-container) {
     cursor: grabbing;
   }
 
