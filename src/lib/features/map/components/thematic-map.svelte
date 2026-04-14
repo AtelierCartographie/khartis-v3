@@ -95,6 +95,7 @@
 
   let {
     tables,
+    splitData,
     geoJSONs,
     dataVersion = 0,
     width,
@@ -155,8 +156,8 @@
   const maxRenderBufferSizePx = $derived(getBrowserMaxRenderBufferSizePx());
   const renderPixelRatio = $derived.by(() =>
     resolveMapRenderPixelRatio(
-      globalState.zoom.pageZoomLevel,
       typeof window !== 'undefined' ? window.devicePixelRatio : 1,
+      globalState.zoom.pageZoomScale,
       Math.max(mapCanvasWidth, mapCanvasHeight),
       maxRenderBufferSizePx
     )
@@ -177,7 +178,6 @@
 
   const MIN_SKELETON_DURATION_MS = 500;
   const MAX_WAIT_FOR_DATA_MS = 5000;
-  const PAGE_ZOOM_RENDER_SYNC_DELAY_MS = 180;
 
   let mapContainer: HTMLDivElement;
   let hasCalledOnReady = $state(false);
@@ -273,7 +273,7 @@
       }
 
       mapLoadingStore.setUpdatingLayers(true);
-      mapLayers.updateLayers(tables, geoJSONs);
+      mapLayers.updateLayers(tables, geoJSONs, splitData);
       requestAnimationFrame(() => {
         mapLoadingStore.setUpdatingLayers(false);
       });
@@ -561,22 +561,27 @@
       return;
     }
 
-    deck.setProps({
-      controller: zoomModeStore.isPageMode
-        ? {
-            dragPan: false,
-            scrollZoom: false,
-            doubleClickZoom: false,
-            touchZoom: false,
-            keyboard: false
-          }
-        : {
-            dragPan: true,
-            scrollZoom: false,
-            doubleClickZoom: false,
-            touchZoom: true,
-            keyboard: true
-          }
+    const controller = zoomModeStore.isPageMode
+      ? {
+          dragPan: false,
+          scrollZoom: false,
+          doubleClickZoom: false,
+          touchZoom: false,
+          keyboard: false
+        }
+      : {
+          dragPan: true,
+          scrollZoom: false,
+          doubleClickZoom: false,
+          touchZoom: true,
+          keyboard: true
+        };
+
+    const nextViewState = { ...mapInstanceStore.deckViewState };
+    (deck as unknown as { setProps: (props: unknown) => void }).setProps({
+      controller,
+      viewState: { main: nextViewState },
+      initialViewState: { main: nextViewState }
     });
   }
 
@@ -1223,18 +1228,7 @@
       return;
     }
 
-    const nextRenderPixelRatio = renderPixelRatio;
-    const currentPageZoomLevel = globalState.zoom.pageZoomLevel;
-
-    if (currentPageZoomLevel <= 100) {
-      mapInit.setRenderPixelRatio(nextRenderPixelRatio);
-      return;
-    }
-
-    renderPixelRatioTimeoutId = setTimeout(() => {
-      renderPixelRatioTimeoutId = null;
-      mapInit.setRenderPixelRatio(nextRenderPixelRatio);
-    }, PAGE_ZOOM_RENDER_SYNC_DELAY_MS);
+    mapInit.setRenderPixelRatio(renderPixelRatio);
   });
 
   $effect(() => {
@@ -1437,10 +1431,16 @@
     }
   });
 
+  let lastFittedDatasetId = $state<string | undefined>(undefined);
+
   $effect(() => {
     // Note: isStyleLoading check is handled inside scheduleLayerUpdate() to avoid reactive dependency
     const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
     if (firstTable && canUpdate) {
+      const shouldFit = firstDatasetId !== lastFittedDatasetId;
+      if (shouldFit) {
+        lastFittedDatasetId = firstDatasetId;
+      }
       const refBasemapId = basemapStyleStore.referenceBasemapId;
       if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
         const dataset = getRenderedDataset(firstDatasetId);
@@ -1461,12 +1461,12 @@
         ) {
           untrack(() => {
             scheduleLayerUpdate('effect:firstTable-bounds');
-            fitOrthographicViewport('dataset');
+            if (shouldFit) fitOrthographicViewport('dataset');
           });
           triggerOnReady();
         } else if (shouldUseBasemapReference && projectionStore.referenceBbox) {
           untrack(() => {
-            fitOrthographicViewport('basemap');
+            if (shouldFit) fitOrthographicViewport('basemap');
           });
           triggerOnReady();
         } else if (!shouldUseBasemapReference) {
@@ -1475,12 +1475,12 @@
             untrack(() => {
               projectionStore.setReferenceBboxFromMetadata(geoMetadata);
               scheduleLayerUpdate('effect:firstTable-metadata');
-              fitOrthographicViewport('dataset');
+              if (shouldFit) fitOrthographicViewport('dataset');
             });
             triggerOnReady();
           }
         }
-      } else if (mapInit.map) {
+      } else if (mapInit.map && shouldFit) {
         if (refBasemapId && worldBaseTable) {
           const bBounds = calculateBoundsFromGeoArrow(worldBaseTable);
           if (bBounds) {
@@ -2117,7 +2117,7 @@
         mapInit.map?.resize();
       }
 
-      if (canUpdate && !globalState.isToolbarTransitioning) {
+      if (canUpdate) {
         if (resizeTimeoutId) {
           clearTimeout(resizeTimeoutId);
         }

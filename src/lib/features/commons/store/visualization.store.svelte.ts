@@ -5,13 +5,15 @@ import type {
 import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
 import {
   DEFAULT_COLORS,
+  type DensityConfig,
   FillMode,
   MissingDataShape,
   ProportionalType,
   ShapeType,
   StrokeMode,
   SymbolMode,
-  VISUALIZATION_DEFAULTS
+  VISUALIZATION_DEFAULTS,
+  availableShapesForSymbolMode
 } from '$lib/features/main-toolbar/constants';
 import { deepClone } from '../utils/clone.utils';
 import { generateUniqueNameWithCounter } from '../utils/naming.utils';
@@ -24,6 +26,7 @@ import {
   DEFAULT_STROKE_WIDTH
 } from '../constants/colors.constants';
 import { COLUMN_TYPE_GEOMETRY } from '../constants/data.constants';
+import { isLikelyCoordinateColumn } from '../utils/geo-detector.utils';
 
 export enum VisualizationType {
   CHOROPLETH = 'choropleth',
@@ -200,6 +203,7 @@ export interface VisualizationConfig {
     opacity?: number;
   };
   missingData?: MissingDataConfig;
+  density?: DensityConfig;
   yearFilter?: YearFilter;
   dataFilters?: VizDataFilter[];
 }
@@ -417,7 +421,9 @@ function getDefaultMapping(
   dataset: ProcessedDataset | DatasetResult
 ): VisualizationConfig['mapping'] {
   const numericColumns = dataset.columns.filter(
-    (column) => column.type === COLUMN_TYPE_NUMBER
+    (column) =>
+      column.type === COLUMN_TYPE_NUMBER &&
+      !isLikelyCoordinateColumn(column.name)
   );
   const stringColumns = dataset.columns.filter(
     (column) => column.type === COLUMN_TYPE_STRING
@@ -540,7 +546,7 @@ function getDefaultSymbols(
     : DEFAULT_SYMBOL_MIN_SIZE;
 
   return {
-    type: ShapeType.POINT,
+    type: ShapeType.CIRCLE,
     size: DEFAULT_SYMBOL_SIZE,
     minSize,
     maxSize: densityAdjustedMaxSize,
@@ -650,8 +656,20 @@ function normalizeVisualizationConfig(
     dataset
   );
 
+  const symbolMode = visualization.modes?.symbol ?? SymbolMode.UNIQUE;
+  const allowedShapes = availableShapesForSymbolMode(symbolMode);
+  const currentShape = visualization.symbols?.type;
+  const normalizedShape =
+    currentShape && allowedShapes.includes(currentShape)
+      ? currentShape
+      : (allowedShapes[0] ?? ShapeType.CIRCLE);
+  const normalizedSymbols = visualization.symbols
+    ? { ...visualization.symbols, type: normalizedShape }
+    : visualization.symbols;
+
   return {
     ...visualization,
+    symbols: normalizedSymbols,
     primitiveFilters: sanitizePrimitiveFilters(
       visualization.primitiveFilters,
       allowedFilters
