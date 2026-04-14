@@ -10,6 +10,7 @@
   } from '../../commons/store/global.svelte';
   import { mapInstanceStore } from '../../commons/store/map-instance.store.svelte';
   import { zoomModeStore } from '../../commons/store/zoom-mode.store.svelte';
+  import { dispatchWorkspaceFit } from '../../commons/utils/workspace-viewport.utils';
 
   const activeTabIndex = $derived(zoomModeStore.isMapMode ? 0 : 1);
 
@@ -47,6 +48,25 @@
     } else {
       globalActions.zoomOutPage();
     }
+  }
+
+  function fitActiveMode(): void {
+    if (activeTabIndex === 0) {
+      mapInstanceStore.clearPersistedViewState();
+      mapInstanceStore.fitToOrthographicBounds('reset');
+    } else {
+      dispatchWorkspaceFit();
+    }
+  }
+
+  function handleTabDoubleClick(index: number): void {
+    if (index !== activeTabIndex) return;
+    fitActiveMode();
+  }
+
+  function tabTitle(index: number, isActive: boolean): string | undefined {
+    if (!isActive) return undefined;
+    return m.zoom_tab_double_click_hint();
   }
 
   const currentZoomValue = $derived(
@@ -112,6 +132,8 @@
     items={zoomItems}
     activeIndex={activeTabIndex}
     onChange={handleZoomModeChange}
+    onDoubleClick={handleTabDoubleClick}
+    tabTitle={tabTitle}
     className="zoom-mode-tabs"
     activeClass="active"
     fullWidthClass="full-width"

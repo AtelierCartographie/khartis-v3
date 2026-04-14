@@ -219,16 +219,20 @@ function createMapInstanceStore() {
       markViewportManual();
       pendingRestore = null;
       persistenceRegistry.notifyChange('mapViewState');
+      applyDeckViewState();
     }
   }
 
   function applyDeckViewState(): void {
-    if (!state.deckInstance) {
+    const deck = state.deckInstance;
+    if (!deck) {
       return;
     }
+    const nextViewState = { ...state.deckViewState };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (state.deckInstance as any).setProps({
-      initialViewState: { main: state.deckViewState }
+    (deck as any).setProps({
+      viewState: { main: nextViewState },
+      initialViewState: { main: nextViewState }
     });
   }
 

@@ -39,14 +39,16 @@ describe('map view state persistence', () => {
 
     mapInstanceStore.fitToOrthographicBounds();
 
-    expect(setProps).toHaveBeenCalledWith({
-      initialViewState: {
-        main: expect.objectContaining({
-          target: [0, 0, 0],
-          zoom: 0
-        })
-      }
-    });
+    expect(setProps).toHaveBeenCalledWith(
+      expect.objectContaining({
+        initialViewState: {
+          main: expect.objectContaining({
+            target: [0, 0, 0],
+            zoom: 0
+          })
+        }
+      })
+    );
     expect(notifyChange).toHaveBeenCalledWith('mapViewState');
     expect(registeredEntry.serialize()).toEqual({
       zoom: 0,
@@ -139,14 +141,16 @@ describe('map view state persistence', () => {
     mapInstanceStore.fitToOrthographicBounds();
 
     expect(mapInstanceStore.hasPendingRestore).toBe(false);
-    expect(setProps).toHaveBeenLastCalledWith({
-      initialViewState: {
-        main: expect.objectContaining({
-          target: [0, 0, 0],
-          zoom: 0
-        })
-      }
-    });
+    expect(setProps).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        initialViewState: {
+          main: expect.objectContaining({
+            target: [0, 0, 0],
+            zoom: 0
+          })
+        }
+      })
+    );
   });
 
   it('drops the saved orthographic restore before a forced refit', async () => {
@@ -188,14 +192,16 @@ describe('map view state persistence', () => {
     mapInstanceStore.fitToOrthographicBounds();
 
     expect(mapInstanceStore.hasPendingRestore).toBe(false);
-    expect(setProps).toHaveBeenLastCalledWith({
-      initialViewState: {
-        main: expect.objectContaining({
-          target: [0, 0, 0],
-          zoom: 0
-        })
-      }
-    });
+    expect(setProps).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        initialViewState: {
+          main: expect.objectContaining({
+            target: [0, 0, 0],
+            zoom: 0
+          })
+        }
+      })
+    );
   });
 
   it('tracks viewport fit mode transitions between auto-fit and manual camera changes', async () => {
