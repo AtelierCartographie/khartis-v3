@@ -179,9 +179,32 @@
 
 <style>
   :global(#khartis-step-toolbar) {
-    position: relative;
+    position: absolute;
+    top: 50%;
+    left: 0;
+    transform: translateY(-50%);
+    max-height: calc(100% - var(--cds-spacing-05) * 2);
     z-index: var(--z-toolbar);
-    align-self: center;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: none;
+    background: rgba(255, 255, 255, 0.78);
+    backdrop-filter: blur(10px) saturate(1.2);
+    -webkit-backdrop-filter: blur(10px) saturate(1.2);
+    border-right: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+    box-shadow: 4px 0 12px rgba(0, 0, 0, 0.04);
+  }
+
+  :global(#khartis-step-toolbar::-webkit-scrollbar) {
+    width: 0;
+    height: 0;
+    display: none;
+  }
+
+  @supports not (backdrop-filter: blur(1px)) {
+    :global(#khartis-step-toolbar) {
+      background: var(--cds-background);
+    }
   }
 
   header span {
