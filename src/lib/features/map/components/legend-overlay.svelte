@@ -756,7 +756,7 @@
     padding: 8px 12px;
     border-radius: 3px;
     box-shadow: 0 1px 6px rgba(0, 0, 0, 0.14);
-    max-width: 220px;
+    max-width: 160px;
     overflow-wrap: anywhere;
     pointer-events: auto;
     cursor: pointer;

@@ -64,7 +64,7 @@ const TOKENS_BY_PROFILE = {
     },
     legend: {
       fontSize: 12,
-      maxWidth: 280,
+      maxWidth: 160,
       paddingInline: 16,
       paddingBlock: 12,
       swatchSize: 16,
@@ -91,12 +91,12 @@ const TOKENS_BY_PROFILE = {
     },
     geoIndications: {
       scaleFontSize: 12,
-      scaleTargetWidth: 140,
+      scaleTargetWidth: 80,
       scalePanelPaddingInline: 6,
       scalePanelPaddingBlock: 4,
       panelPadding: 6,
       orientationSizeMm: 10,
-      insetSize: 160
+      insetSize: 100
     }
   },
   'print-large': {
@@ -105,7 +105,7 @@ const TOKENS_BY_PROFILE = {
     },
     legend: {
       fontSize: 14,
-      maxWidth: 340,
+      maxWidth: 200,
       paddingInline: 18,
       paddingBlock: 14,
       swatchSize: 18,
@@ -132,12 +132,12 @@ const TOKENS_BY_PROFILE = {
     },
     geoIndications: {
       scaleFontSize: 14,
-      scaleTargetWidth: 170,
+      scaleTargetWidth: 100,
       scalePanelPaddingInline: 8,
       scalePanelPaddingBlock: 6,
       panelPadding: 8,
       orientationSizeMm: 12,
-      insetSize: 200
+      insetSize: 130
     }
   },
   'screen-large': {
@@ -146,7 +146,7 @@ const TOKENS_BY_PROFILE = {
     },
     legend: {
       fontSize: 16,
-      maxWidth: 400,
+      maxWidth: 260,
       paddingInline: 20,
       paddingBlock: 16,
       swatchSize: 20,
@@ -173,12 +173,12 @@ const TOKENS_BY_PROFILE = {
     },
     geoIndications: {
       scaleFontSize: 16,
-      scaleTargetWidth: 190,
+      scaleTargetWidth: 120,
       scalePanelPaddingInline: 10,
       scalePanelPaddingBlock: 8,
       panelPadding: 10,
       orientationSizeMm: 12,
-      insetSize: 220
+      insetSize: 160
     }
   }
 } satisfies Record<LayoutSizingProfile, Omit<LayoutSizingTokens, 'profile'>>;
