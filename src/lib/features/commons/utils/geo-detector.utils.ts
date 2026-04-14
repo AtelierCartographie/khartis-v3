@@ -251,6 +251,9 @@ export const GPS_COLUMN_PATTERNS = {
   longitude: COLUMN_NAME_PATTERNS.longitude
 } as const;
 
+const LATITUDE_TOKENS = ['lat', 'latitude', 'geolat'] as const;
+const LONGITUDE_TOKENS = ['lon', 'long', 'longitude', 'lng', 'geolon'] as const;
+
 type GPSResolvableColumn = {
   name: string;
   geo_type?: unknown;
@@ -361,12 +364,14 @@ function getSemanticSampleMatch(
 }
 
 function matchesLatitudeTokens(tokens: string[]): boolean {
-  return tokens.some((token) => ['lat', 'latitude', 'geolat'].includes(token));
+  return tokens.some((token) =>
+    (LATITUDE_TOKENS as readonly string[]).includes(token)
+  );
 }
 
 function matchesLongitudeTokens(tokens: string[]): boolean {
   return tokens.some((token) =>
-    ['lon', 'long', 'longitude', 'lng', 'geolon'].includes(token)
+    (LONGITUDE_TOKENS as readonly string[]).includes(token)
   );
 }
 

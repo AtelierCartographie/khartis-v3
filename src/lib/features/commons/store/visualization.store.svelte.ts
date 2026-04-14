@@ -14,10 +14,7 @@ import {
   VISUALIZATION_DEFAULTS
 } from '$lib/features/main-toolbar/constants';
 import { deepClone } from '../utils/clone.utils';
-import {
-  generateDuplicateName,
-  generateUniqueNameWithCounter
-} from '../utils/naming.utils';
+import { generateUniqueNameWithCounter } from '../utils/naming.utils';
 import { datasetsStore } from './datasets.store.svelte';
 import { findById, updateById } from '../utils/array-helpers';
 import {
@@ -911,7 +908,7 @@ function createVisualizationStore(): VisualizationStore {
       return null;
     }
 
-    const duplicatedName = generateDuplicateName(
+    const duplicatedName = generateUniqueNameWithCounter(
       original.name,
       state.visualizations.map((item) => item.name)
     );
