@@ -1136,12 +1136,12 @@
 
   .scale-bar {
     position: absolute;
-    bottom: 16px;
-    left: 16px;
+    bottom: 12px;
+    left: 12px;
     background: rgba(255, 255, 255, 0.85);
-    padding: 4px 6px;
-    border-radius: 4px;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+    padding: 3px 5px;
+    border-radius: 3px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
     pointer-events: auto;
     cursor: pointer;
     touch-action: none;
@@ -1157,12 +1157,12 @@
 
   .north-arrow {
     position: absolute;
-    top: 16px;
-    right: 16px;
+    top: 12px;
+    right: 12px;
     background: rgba(255, 255, 255, 0.85);
-    padding: 6px;
-    border-radius: 4px;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+    padding: 4px;
+    border-radius: 3px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
     pointer-events: auto;
     cursor: pointer;
     touch-action: none;
@@ -1171,12 +1171,12 @@
 
   .inset-map-panel {
     position: absolute;
-    bottom: 16px;
-    right: 16px;
+    bottom: 12px;
+    right: 12px;
     background: rgba(255, 255, 255, 0.85);
-    padding: 6px;
-    border-radius: 4px;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+    padding: 4px;
+    border-radius: 3px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
     pointer-events: auto;
     cursor: pointer;
     touch-action: none;

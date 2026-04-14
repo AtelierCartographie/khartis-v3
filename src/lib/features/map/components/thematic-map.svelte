@@ -56,8 +56,7 @@
   } from '../types';
   import {
     DEFAULT_PAGE_COLOR,
-    getFormatState,
-    PAGE_GRID_SIZE_PX
+    getFormatState
   } from '../../step-toolbar/tools/format/format.store.svelte';
   import { getSimplificationState } from '../../step-toolbar/tools/simplification/simplification.store.svelte';
   import { getProjectionState } from '../../step-toolbar/tools/projections/projection.store.svelte';
@@ -150,9 +149,6 @@
     // layers, otherwise out-of-projection areas look like editable ocean.
     return `background-color: ${pageBackgroundColor};`;
   });
-  const pageGridStyle = $derived(
-    `background-size: ${PAGE_GRID_SIZE_PX}px ${PAGE_GRID_SIZE_PX}px;`
-  );
   const maxRenderBufferSizePx = $derived(getBrowserMaxRenderBufferSizePx());
   const renderPixelRatio = $derived.by(() =>
     resolveMapRenderPixelRatio(
@@ -2178,7 +2174,7 @@
     ></div>
 
     {#if showPageGrid}
-      <div class="page-grid" style={pageGridStyle}></div>
+      <div class="page-grid"></div>
     {/if}
 
     {#if isSwitchingViewMode}
@@ -2227,22 +2223,14 @@
     z-index: var(--z-map-layer);
     pointer-events: none;
     background-image:
-      radial-gradient(
-        circle at 1px 1px,
-        rgba(22, 22, 22, 0.24) 0.9px,
-        transparent 1.2px
-      ),
-      radial-gradient(
-        circle at 1px 1px,
-        rgba(22, 22, 22, 0.1) 0.8px,
-        transparent 1.1px
-      );
+      radial-gradient(circle, rgba(22, 22, 22, 0.35) 0.6px, transparent 0.6px),
+      radial-gradient(circle, rgba(22, 22, 22, 0.15) 0.5px, transparent 0.5px);
     background-size:
-      12px 12px,
-      24px 24px;
+      20px 20px,
+      10px 10px;
     background-position:
       0 0,
-      6px 6px;
+      5px 5px;
   }
 
   .map-canvas {
