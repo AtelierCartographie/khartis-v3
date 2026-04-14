@@ -63,7 +63,7 @@ const TOKENS_BY_PROFILE = {
       fitPaddingPx: 40
     },
     legend: {
-      fontSize: 12,
+      fontSize: 10,
       maxWidth: 160,
       paddingInline: 16,
       paddingBlock: 12,
@@ -71,10 +71,10 @@ const TOKENS_BY_PROFILE = {
       patternedSwatchSize: 20
     },
     annotations: {
-      noteFontSize: 12,
-      titleFontSize: 24,
-      subtitleFontSize: 18,
-      captionFontSize: 10,
+      noteFontSize: 10,
+      titleFontSize: 18,
+      subtitleFontSize: 14,
+      captionFontSize: 8,
       textMaxWidth: 300,
       textPaddingInline: 12,
       textPaddingBlock: 8,
@@ -90,7 +90,7 @@ const TOKENS_BY_PROFILE = {
       shapeScale: 1
     },
     geoIndications: {
-      scaleFontSize: 12,
+      scaleFontSize: 9,
       scaleTargetWidth: 80,
       scalePanelPaddingInline: 6,
       scalePanelPaddingBlock: 4,
@@ -104,7 +104,7 @@ const TOKENS_BY_PROFILE = {
       fitPaddingPx: 56
     },
     legend: {
-      fontSize: 14,
+      fontSize: 11,
       maxWidth: 200,
       paddingInline: 18,
       paddingBlock: 14,
@@ -112,10 +112,10 @@ const TOKENS_BY_PROFILE = {
       patternedSwatchSize: 22
     },
     annotations: {
-      noteFontSize: 14,
-      titleFontSize: 28,
-      subtitleFontSize: 20,
-      captionFontSize: 11,
+      noteFontSize: 11,
+      titleFontSize: 20,
+      subtitleFontSize: 16,
+      captionFontSize: 9,
       textMaxWidth: 360,
       textPaddingInline: 14,
       textPaddingBlock: 10,
@@ -131,7 +131,7 @@ const TOKENS_BY_PROFILE = {
       shapeScale: 1.15
     },
     geoIndications: {
-      scaleFontSize: 14,
+      scaleFontSize: 10,
       scaleTargetWidth: 100,
       scalePanelPaddingInline: 8,
       scalePanelPaddingBlock: 6,
@@ -145,7 +145,7 @@ const TOKENS_BY_PROFILE = {
       fitPaddingPx: 72
     },
     legend: {
-      fontSize: 16,
+      fontSize: 12,
       maxWidth: 260,
       paddingInline: 20,
       paddingBlock: 16,
@@ -153,10 +153,10 @@ const TOKENS_BY_PROFILE = {
       patternedSwatchSize: 24
     },
     annotations: {
-      noteFontSize: 16,
-      titleFontSize: 32,
-      subtitleFontSize: 24,
-      captionFontSize: 12,
+      noteFontSize: 12,
+      titleFontSize: 24,
+      subtitleFontSize: 18,
+      captionFontSize: 10,
       textMaxWidth: 420,
       textPaddingInline: 16,
       textPaddingBlock: 12,
@@ -172,7 +172,7 @@ const TOKENS_BY_PROFILE = {
       shapeScale: 1.25
     },
     geoIndications: {
-      scaleFontSize: 16,
+      scaleFontSize: 11,
       scaleTargetWidth: 120,
       scalePanelPaddingInline: 10,
       scalePanelPaddingBlock: 8,

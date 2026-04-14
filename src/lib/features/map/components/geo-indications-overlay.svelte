@@ -959,7 +959,7 @@
             x="20"
             y="47"
             text-anchor="middle"
-            font-size="12"
+            font-size="9"
             font-weight="bold"
             fill={orientationColor}
             font-family={orientationFontFamily}
@@ -994,7 +994,7 @@
             x="20"
             y="47"
             text-anchor="middle"
-            font-size="10"
+            font-size="8"
             font-weight="bold"
             fill={orientationColor}
             font-family={orientationFontFamily}

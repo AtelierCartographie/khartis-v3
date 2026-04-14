@@ -37,7 +37,7 @@ const DEFAULT_STATE: AnnotationsState = {
   drawingInProgress: [],
   defaultStyle: {
     font: 'Cabin',
-    fontSize: 12,
+    fontSize: 10,
     bold: false,
     italic: false,
     underlined: false,
@@ -89,10 +89,10 @@ type AnnotationsActions = {
 };
 
 const PREDEFINED_STYLES: Record<string, Partial<AnnotationStyle>> = {
-  note: { fontSize: 12, bold: false, italic: false },
-  title: { fontSize: 24, bold: true, italic: false },
-  subtitle: { fontSize: 18, bold: false, italic: false },
-  caption: { fontSize: 10, bold: false, italic: true }
+  note: { fontSize: 10, bold: false, italic: false },
+  title: { fontSize: 18, bold: true, italic: false },
+  subtitle: { fontSize: 14, bold: false, italic: false },
+  caption: { fontSize: 8, bold: false, italic: true }
 };
 
 function getPredefinedStyleForItem(item: Annotation): string | null {
