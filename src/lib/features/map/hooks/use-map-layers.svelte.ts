@@ -25,7 +25,12 @@ import { buildProjectionForBasemap } from '../utils/geoarrow-stream-bridge';
 import { GeometryType } from '../constants';
 import { PrimitiveFilterType } from '$lib/features/commons/store/visualization.store.svelte';
 import type { PrimitiveFilter } from '$lib/features/commons/store/visualization.store.svelte';
-import type { BBox, DeckDataRow, LayerContext } from '../types';
+import type {
+  BBox,
+  DeckDataRow,
+  LayerContext,
+  SplitRenderingTable
+} from '../types';
 import type { DeckInstance } from './use-map-init.svelte';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import {
@@ -80,7 +85,8 @@ export interface UseMapLayersProps {
 export interface UseMapLayersReturn {
   updateLayers: (
     tables: Map<string, ArrowTable>,
-    geoJSONs: Map<string, FeatureCollection>
+    geoJSONs: Map<string, FeatureCollection>,
+    splitData?: Map<string, SplitRenderingTable>
   ) => void;
 }
 
@@ -445,7 +451,8 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
 
   function updateLayers(
     tables: Map<string, ArrowTable>,
-    geoJSONs: Map<string, FeatureCollection>
+    geoJSONs: Map<string, FeatureCollection>,
+    splitData?: Map<string, SplitRenderingTable>
   ): void {
     const deckOverlay = getDeckOverlay();
     const deckInstance = getDeckInstance();
@@ -598,10 +605,15 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       for (const viz of visualizationsToRender) {
         try {
           const datasetId = viz.datasetId;
-          const table = tables.get(datasetId);
+          const split = splitData?.get(datasetId);
+          const table = split?.geometry ?? tables.get(datasetId);
           const geojson = geoJSONs.get(datasetId);
 
           const ctx = buildLayerContextForViz(viz);
+          if (split) {
+            ctx.splitDatasetTable = split.dataset;
+            ctx.splitFeatureIdColumn = split.featureIdColumn;
+          }
           const datasetProjectionMetadata =
             getProjectionMetadataForDataset?.(datasetId) ?? currentMetadata;
           const datasetGeometryCrs = getDatasetGeometryCrs(datasetId);

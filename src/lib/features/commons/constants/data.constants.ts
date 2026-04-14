@@ -8,6 +8,8 @@
  * Reserved column names used internally by Khartis.
  *
  * - ID: Internal row identifier added by DuckDB reader
+ * - FEATURE_ID: Stable per-feature identifier injected on custom basemap tables,
+ *   decoupled from the user-chosen join column (cf. issue #87).
  * - GEOM: Default geometry column name (output from ST_Read, ST_Transform, etc.)
  * - GEOMETRY: Alternative geometry column name (used by some GDAL drivers)
  * - WKB_GEOMETRY: WKB geometry column name (standard GDAL output)
@@ -15,6 +17,7 @@
  */
 export const INTERNAL_COLUMN = {
   ID: '__id',
+  FEATURE_ID: '__feature_id__',
   GEOM: 'geom',
   GEOMETRY: 'geometry',
   WKB_GEOMETRY: 'wkb_geometry',
@@ -49,7 +52,8 @@ export const GEO_COLUMN_NAMES = [
 export const EXCLUDED_COLUMNS = [
   INTERNAL_COLUMN.GEOM,
   INTERNAL_COLUMN.GEOMETRY,
-  INTERNAL_COLUMN.ID
+  INTERNAL_COLUMN.ID,
+  INTERNAL_COLUMN.FEATURE_ID
 ] as const;
 
 /**
