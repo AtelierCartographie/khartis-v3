@@ -11,24 +11,32 @@
     activeIndex?: number;
     items?: ToggleItem[];
     onChange?: (index: number) => void;
+    onDoubleClick?: (index: number) => void;
     className?: string;
     activeClass?: string;
     fullWidthClass?: string;
     hideInactiveLabel?: boolean;
+    tabTitle?: (index: number, isActive: boolean) => string | undefined;
   }
 
   let {
     activeIndex = 0,
     items = [],
     onChange = () => {},
+    onDoubleClick,
     className = '',
     activeClass = 'active',
     fullWidthClass = 'full-width',
-    hideInactiveLabel = true
+    hideInactiveLabel = true,
+    tabTitle
   }: Props = $props();
 
   function handleClick(index: number): void {
     onChange(index);
+  }
+
+  function handleDoubleClick(index: number): void {
+    onDoubleClick?.(index);
   }
 </script>
 
@@ -43,7 +51,9 @@
         : ''} {index === items.length - 1 && activeIndex === index
         ? 'expand-left'
         : ''}"
+      title={tabTitle?.(index, activeIndex === index)}
       onclick={() => handleClick(index)}
+      ondblclick={() => handleDoubleClick(index)}
     >
       {#if item.icon}
         {@const Icon = item.icon}

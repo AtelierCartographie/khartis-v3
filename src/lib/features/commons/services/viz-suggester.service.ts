@@ -15,7 +15,15 @@ export type GeometryType =
   | 'MultiPoint'
   | 'MultiLineString'
   | 'MultiPolygon';
-export type SimplifiedGeometryType = 'point' | 'line' | 'polygon';
+
+export const SIMPLIFIED_GEOMETRY_TYPE = {
+  POINT: 'point',
+  LINE: 'line',
+  POLYGON: 'polygon'
+} as const;
+
+export type SimplifiedGeometryType =
+  (typeof SIMPLIFIED_GEOMETRY_TYPE)[keyof typeof SIMPLIFIED_GEOMETRY_TYPE];
 export type { SemioType };
 
 export interface VizSuggestion {
@@ -413,7 +421,7 @@ function generateTextSuggestions(
   columns: EnrichedColumn[],
   geometryType: SimplifiedGeometryType
 ): VizSuggestion[] {
-  if (geometryType === 'line') {
+  if (geometryType === SIMPLIFIED_GEOMETRY_TYPE.LINE) {
     return [];
   }
 
@@ -421,7 +429,10 @@ function generateTextSuggestions(
     ...columns.map((column) => getTotalCount(column)),
     0
   );
-  if (geometryType === 'point' && totalFeatures > MAX_TEXT_POINT_FEATURES) {
+  if (
+    geometryType === SIMPLIFIED_GEOMETRY_TYPE.POINT &&
+    totalFeatures > MAX_TEXT_POINT_FEATURES
+  ) {
     return [];
   }
 
@@ -616,7 +627,7 @@ function getImplementationSignature(
 ): string {
   const columnsKey = suggestion.columns?.join('|') ?? '';
 
-  if (geometryType === 'point') {
+  if (geometryType === SIMPLIFIED_GEOMETRY_TYPE.POINT) {
     if (
       suggestion.id === 'symbols_differents' ||
       suggestion.id === 'symbols_uniques_colorful_QL' ||
@@ -627,7 +638,7 @@ function getImplementationSignature(
     }
   }
 
-  if (geometryType === 'polygon') {
+  if (geometryType === SIMPLIFIED_GEOMETRY_TYPE.POLYGON) {
     if (
       suggestion.id === 'polygons_colorful_QL' ||
       suggestion.id === 'symbols_differents' ||

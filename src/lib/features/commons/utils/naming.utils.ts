@@ -29,10 +29,3 @@ export function generateUniqueNameWithCounter(
   const nextNumber = Math.max(...existingNumbers) + 1;
   return `${cleanBaseName} (${nextNumber})`;
 }
-
-export function generateDuplicateName(
-  originalName: string,
-  existingNames: string[]
-): string {
-  return generateUniqueNameWithCounter(originalName, existingNames);
-}

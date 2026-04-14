@@ -1,20 +1,14 @@
 import * as m from '$lib/paraglide/messages';
+import {
+  GEO_COLUMN_TYPE,
+  type GeoColumnTypeValue
+} from '../constants/data.constants';
 import { GEO_DETECTION } from '../constants/detection.constants';
 
 export interface GeoColumnResult {
   index: number;
   columnName: string;
-  type:
-    | 'latitude'
-    | 'longitude'
-    | 'country_name'
-    | 'iso2'
-    | 'iso3'
-    | 'nuts'
-    | 'region'
-    | 'city'
-    | 'coordinates'
-    | 'unknown';
+  type: GeoColumnTypeValue;
   confidence: number;
   sampleValues?: string[];
   matchedPatterns?: string[];
@@ -251,6 +245,23 @@ export const GPS_COLUMN_PATTERNS = {
   longitude: COLUMN_NAME_PATTERNS.longitude
 } as const;
 
+export const LATITUDE_TOKENS = ['lat', 'latitude', 'geolat'] as const;
+export const LONGITUDE_TOKENS = [
+  'lon',
+  'long',
+  'longitude',
+  'lng',
+  'geolon'
+] as const;
+
+export function isLikelyCoordinateColumn(name: string): boolean {
+  const normalized = name.trim().toLowerCase();
+  return (
+    LATITUDE_TOKENS.includes(normalized as (typeof LATITUDE_TOKENS)[number]) ||
+    LONGITUDE_TOKENS.includes(normalized as (typeof LONGITUDE_TOKENS)[number])
+  );
+}
+
 type GPSResolvableColumn = {
   name: string;
   geo_type?: unknown;
@@ -349,11 +360,11 @@ function getSemanticSampleMatch(
   values: string[]
 ): number {
   switch (type) {
-    case 'country_name':
+    case GEO_COLUMN_TYPE.COUNTRY_NAME:
       return GeoColumnDetector.matchAgainstSamples(values, COUNTRY_SAMPLES);
-    case 'region':
+    case GEO_COLUMN_TYPE.REGION:
       return GeoColumnDetector.matchAgainstSamples(values, REGION_SAMPLES);
-    case 'city':
+    case GEO_COLUMN_TYPE.CITY:
       return GeoColumnDetector.matchAgainstSamples(values, CITY_SAMPLES);
     default:
       return 0;
@@ -361,12 +372,14 @@ function getSemanticSampleMatch(
 }
 
 function matchesLatitudeTokens(tokens: string[]): boolean {
-  return tokens.some((token) => ['lat', 'latitude', 'geolat'].includes(token));
+  return tokens.some((token) =>
+    (LATITUDE_TOKENS as readonly string[]).includes(token)
+  );
 }
 
 function matchesLongitudeTokens(tokens: string[]): boolean {
   return tokens.some((token) =>
-    ['lon', 'long', 'longitude', 'lng', 'geolon'].includes(token)
+    (LONGITUDE_TOKENS as readonly string[]).includes(token)
   );
 }
 
@@ -379,7 +392,9 @@ function resolveByDetectionMetadata(
   }
 
   const availableColumnNames = new Set(columns.map((column) => column.name));
-  const pickColumnName = (type: 'latitude' | 'longitude'): string | undefined =>
+  const pickColumnName = (
+    type: typeof GEO_COLUMN_TYPE.LATITUDE | typeof GEO_COLUMN_TYPE.LONGITUDE
+  ): string | undefined =>
     geoDetection.geoColumns
       .filter(
         (column) =>
@@ -389,8 +404,8 @@ function resolveByDetectionMetadata(
       )
       .sort((left, right) => right.confidence - left.confidence)[0]?.columnName;
 
-  const lat = pickColumnName('latitude');
-  const lon = pickColumnName('longitude');
+  const lat = pickColumnName(GEO_COLUMN_TYPE.LATITUDE);
+  const lon = pickColumnName(GEO_COLUMN_TYPE.LONGITUDE);
 
   if (!lat || !lon || lat === lon) {
     return null;
@@ -414,7 +429,8 @@ function resolveByColumnMetadata(
   const lat =
     pickColumnName(
       (column) =>
-        column.geo_type === 'latitude' || column.semioType === 'geolat'
+        column.geo_type === GEO_COLUMN_TYPE.LATITUDE ||
+        column.semioType === 'geolat'
     ) ??
     columns.find((column) => GPS_COLUMN_PATTERNS.latitude.test(column.name))
       ?.name ??
@@ -425,7 +441,8 @@ function resolveByColumnMetadata(
   const lon =
     pickColumnName(
       (column) =>
-        column.geo_type === 'longitude' || column.semioType === 'geolon'
+        column.geo_type === GEO_COLUMN_TYPE.LONGITUDE ||
+        column.semioType === 'geolon'
     ) ??
     columns.find((column) => GPS_COLUMN_PATTERNS.longitude.test(column.name))
       ?.name ??
@@ -499,8 +516,8 @@ export const GeoColumnDetector = {
       }
     }
 
-    const latColumn = results.find((r) => r.type === 'latitude');
-    const lonColumn = results.find((r) => r.type === 'longitude');
+    const latColumn = results.find((r) => r.type === GEO_COLUMN_TYPE.LATITUDE);
+    const lonColumn = results.find((r) => r.type === GEO_COLUMN_TYPE.LONGITUDE);
     if (latColumn && !lonColumn) {
       warnings.push('Latitude column detected without corresponding longitude');
     } else if (!latColumn && lonColumn) {
@@ -589,19 +606,19 @@ export const GeoColumnDetector = {
       reason: string;
     }> = [
       {
-        type: 'latitude',
+        type: GEO_COLUMN_TYPE.LATITUDE,
         matches: matchesLatitudeTokens(tokens),
         confidence: GEO_DETECTION.EXCEPTIONAL,
         reason: 'Header tokens: latitude'
       },
       {
-        type: 'longitude',
+        type: GEO_COLUMN_TYPE.LONGITUDE,
         matches: matchesLongitudeTokens(tokens),
         confidence: GEO_DETECTION.EXCEPTIONAL,
         reason: 'Header tokens: longitude'
       },
       {
-        type: 'iso2',
+        type: GEO_COLUMN_TYPE.ISO2,
         matches: hasHeaderKeyword(
           tokens,
           collapsedHeader,
@@ -611,7 +628,7 @@ export const GeoColumnDetector = {
         reason: 'Header keywords: ISO2'
       },
       {
-        type: 'iso3',
+        type: GEO_COLUMN_TYPE.ISO3,
         matches: hasHeaderKeyword(
           tokens,
           collapsedHeader,
@@ -621,7 +638,7 @@ export const GeoColumnDetector = {
         reason: 'Header keywords: ISO3'
       },
       {
-        type: 'nuts',
+        type: GEO_COLUMN_TYPE.NUTS,
         matches: hasHeaderKeyword(
           tokens,
           collapsedHeader,
@@ -631,7 +648,7 @@ export const GeoColumnDetector = {
         reason: 'Header keywords: NUTS'
       },
       {
-        type: 'country_name',
+        type: GEO_COLUMN_TYPE.COUNTRY_NAME,
         matches: hasHeaderKeyword(
           tokens,
           collapsedHeader,
@@ -641,7 +658,7 @@ export const GeoColumnDetector = {
         reason: 'Header keywords: country'
       },
       {
-        type: 'country_name',
+        type: GEO_COLUMN_TYPE.COUNTRY_NAME,
         matches: hasHeaderKeyword(
           tokens,
           collapsedHeader,
@@ -651,7 +668,7 @@ export const GeoColumnDetector = {
         reason: 'Header keywords: entity'
       },
       {
-        type: 'region',
+        type: GEO_COLUMN_TYPE.REGION,
         matches: hasHeaderKeyword(
           tokens,
           collapsedHeader,
@@ -661,7 +678,7 @@ export const GeoColumnDetector = {
         reason: 'Header keywords: region'
       },
       {
-        type: 'city',
+        type: GEO_COLUMN_TYPE.CITY,
         matches: hasHeaderKeyword(
           tokens,
           collapsedHeader,
@@ -671,7 +688,7 @@ export const GeoColumnDetector = {
         reason: 'Header keywords: city'
       },
       {
-        type: 'coordinates',
+        type: GEO_COLUMN_TYPE.COORDINATES,
         matches: hasHeaderKeyword(
           tokens,
           collapsedHeader,
@@ -703,14 +720,15 @@ export const GeoColumnDetector = {
       }
 
       if (
-        (matcher.type === 'country_name' || matcher.type === 'city') &&
+        (matcher.type === GEO_COLUMN_TYPE.COUNTRY_NAME ||
+          matcher.type === GEO_COLUMN_TYPE.CITY) &&
         numericLikeShare > 0.8
       ) {
         continue;
       }
 
       if (
-        matcher.type === 'region' &&
+        matcher.type === GEO_COLUMN_TYPE.REGION &&
         numericLikeShare > 0.8 &&
         !collapsedHeader.includes('code')
       ) {
@@ -766,7 +784,7 @@ export const GeoColumnDetector = {
       hasSufficientDistinctCodeValues(stringValues)
     ) {
       return {
-        type: 'iso2',
+        type: GEO_COLUMN_TYPE.ISO2,
         confidence: iso2Match,
         matchedPatterns: ['Value pattern: ISO2']
       };
@@ -780,7 +798,7 @@ export const GeoColumnDetector = {
       hasSufficientDistinctCodeValues(stringValues)
     ) {
       return {
-        type: 'iso3',
+        type: GEO_COLUMN_TYPE.ISO3,
         confidence: iso3Match,
         matchedPatterns: ['Value pattern: ISO3']
       };
@@ -791,7 +809,7 @@ export const GeoColumnDetector = {
       stringValues.length;
     if (nutsMatch > GEO_DETECTION.MATCH_THRESHOLD) {
       return {
-        type: 'nuts',
+        type: GEO_COLUMN_TYPE.NUTS,
         confidence: nutsMatch,
         matchedPatterns: ['Value pattern: NUTS code']
       };
@@ -803,7 +821,7 @@ export const GeoColumnDetector = {
     );
     if (nutsSampleMatch > GEO_DETECTION.LOW_MATCH_THRESHOLD) {
       return {
-        type: 'nuts',
+        type: GEO_COLUMN_TYPE.NUTS,
         confidence: Math.min(
           nutsSampleMatch * GEO_DETECTION.MULTIPLIER_STRONG,
           GEO_DETECTION.NEAR_CERTAIN
@@ -818,7 +836,7 @@ export const GeoColumnDetector = {
     );
     if (countryMatch > GEO_DETECTION.MEDIUM_MATCH_THRESHOLD) {
       return {
-        type: 'country_name',
+        type: GEO_COLUMN_TYPE.COUNTRY_NAME,
         confidence: Math.min(
           countryMatch * GEO_DETECTION.MULTIPLIER_STRONG,
           GEO_DETECTION.EXCEPTIONAL
@@ -833,7 +851,7 @@ export const GeoColumnDetector = {
     );
     if (regionMatch > GEO_DETECTION.MEDIUM_MATCH_THRESHOLD) {
       return {
-        type: 'region',
+        type: GEO_COLUMN_TYPE.REGION,
         confidence: Math.min(
           regionMatch * GEO_DETECTION.MULTIPLIER_STRONG,
           GEO_DETECTION.VERY_HIGH_CONFIDENCE
@@ -848,7 +866,7 @@ export const GeoColumnDetector = {
     );
     if (cityMatch > GEO_DETECTION.MEDIUM_MATCH_THRESHOLD) {
       return {
-        type: 'city',
+        type: GEO_COLUMN_TYPE.CITY,
         confidence: Math.min(
           cityMatch * GEO_DETECTION.MULTIPLIER_STRONG,
           GEO_DETECTION.VERY_HIGH_CONFIDENCE
@@ -908,15 +926,15 @@ export const GeoColumnDetector = {
   ): GeoColumnResult | undefined {
     if (columns.length === 0) return undefined;
 
-    const priorityOrder: GeoColumnResult['type'][] = [
-      'iso3',
-      'iso2',
-      'nuts',
-      'country_name',
-      'region',
-      'city',
-      'coordinates',
-      'latitude'
+    const priorityOrder: GeoColumnTypeValue[] = [
+      GEO_COLUMN_TYPE.ISO3,
+      GEO_COLUMN_TYPE.ISO2,
+      GEO_COLUMN_TYPE.NUTS,
+      GEO_COLUMN_TYPE.COUNTRY_NAME,
+      GEO_COLUMN_TYPE.REGION,
+      GEO_COLUMN_TYPE.CITY,
+      GEO_COLUMN_TYPE.COORDINATES,
+      GEO_COLUMN_TYPE.LATITUDE
     ];
 
     for (const type of priorityOrder) {

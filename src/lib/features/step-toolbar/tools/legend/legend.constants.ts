@@ -1,18 +1,16 @@
+import {
+  AVAILABLE_FONTS,
+  FONT_SIZES
+} from '$lib/features/step-toolbar/constants/fonts.constants';
+
+export { AVAILABLE_FONTS };
+export const LEGEND_FONT_SIZES = FONT_SIZES;
+
 export const LEGEND_DEFAULTS = {
   FONT_FAMILY: 'Cabin' as const,
   FONT_SIZE: 12 as number,
   OPACITY: 100 as number
 };
-
-export const LEGEND_FONT_SIZES = [10, 11, 12, 14, 16, 18, 20, 24] as const;
-
-export const AVAILABLE_FONTS = [
-  'Cabin',
-  'IBM Plex Sans',
-  'Inter',
-  'Lato',
-  'Open Sans'
-] as const;
 
 export const LEGEND_ID_PREFIXES = {
   VIZ: 'legend-viz-',
