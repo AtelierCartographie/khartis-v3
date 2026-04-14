@@ -4,7 +4,10 @@
   import VariableBadge from '$lib/features/commons/components/variable-badge.svelte';
   import type { VariableBadgeType } from '$lib/features/commons/components/variable-badge.types';
   import { GeoreferenceType } from '$lib/features/commons/constants/ui.constants';
-  import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
+  import {
+    GEO_COLUMN_TYPE,
+    INTERNAL_COLUMN
+  } from '$lib/features/commons/constants/data.constants';
   import {
     dataTabActions,
     dataTabState
@@ -193,7 +196,7 @@
         (gc) => gc.columnName === item.columnName
       );
       return (
-        geoCol?.type === 'latitude' ||
+        geoCol?.type === GEO_COLUMN_TYPE.LATITUDE ||
         fallbackCoordinates?.lat === item.columnName
       );
     });
@@ -207,7 +210,7 @@
         (gc) => gc.columnName === item.columnName
       );
       return (
-        geoCol?.type === 'longitude' ||
+        geoCol?.type === GEO_COLUMN_TYPE.LONGITUDE ||
         fallbackCoordinates?.lon === item.columnName
       );
     });

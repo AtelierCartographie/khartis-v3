@@ -1,5 +1,6 @@
 import { isOSMBasemap } from '$lib/features/map/services/osm-tile.service';
 import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
+import { PERSISTED_BASEMAP_TYPE } from '../data-tab/services/persisted-basemap';
 
 interface PersistedBasemapLike {
   id: string;
@@ -44,7 +45,7 @@ export function syncProjectOSMBasemap(
   basemapLookup: BasemapLookup,
   osmState: OSMBasemapState
 ): void {
-  if (basemap?.type !== 'osm') {
+  if (basemap?.type !== PERSISTED_BASEMAP_TYPE.OSM) {
     if (osmState.activeOSMBasemap) {
       osmState.clear();
     }

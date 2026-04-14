@@ -61,3 +61,23 @@ export const EXCLUDED_COLUMNS = [
  * Used across type_simple fields in analysis results and column metadata.
  */
 export const COLUMN_TYPE_GEOMETRY = 'geometry' as const;
+
+/**
+ * Geo column type discriminators used by `GeoColumnResult.type`.
+ * Persisted indirectly through dataset analysis — values must stay stable.
+ */
+export const GEO_COLUMN_TYPE = {
+  LATITUDE: 'latitude',
+  LONGITUDE: 'longitude',
+  COUNTRY_NAME: 'country_name',
+  ISO2: 'iso2',
+  ISO3: 'iso3',
+  NUTS: 'nuts',
+  REGION: 'region',
+  CITY: 'city',
+  COORDINATES: 'coordinates',
+  UNKNOWN: 'unknown'
+} as const;
+
+export type GeoColumnTypeValue =
+  (typeof GEO_COLUMN_TYPE)[keyof typeof GEO_COLUMN_TYPE];
