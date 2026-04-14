@@ -46,7 +46,6 @@ import * as datasetOps from './dataset-ops';
 import { buildFilterWhereClause, createFilterRecord } from './filter-ops';
 import * as gpsOps from './gps-ops';
 import * as joinOps from './join-ops';
-import * as searchOps from './search-ops';
 import * as state from './state.svelte';
 import * as tableDataOps from './table-data-ops';
 
@@ -908,7 +907,8 @@ export const duckDBOrchestrator = {
     options: { threshold?: number; column?: string } = {}
   ): Promise<SearchStats> {
     await ensureInitialized();
-    return searchOps.searchInTable(tableName, query, Duck, options);
+    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+    return Duck.searchInTable(tableName, query, options);
   }
 };
 

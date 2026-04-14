@@ -1,5 +1,3 @@
-import { MIME } from '$lib/features/commons/constants';
-
 export const PIPELINE_CONST = {
   EXTENSIONS: {
     TABULAR: ['.csv', '.tsv', '.txt'] as const,
@@ -65,12 +63,6 @@ export const PIPELINE_CONST = {
     DEFAULT: 'UTF-8'
   }
 } as const;
-
-/**
- * @deprecated Use MIME from '$lib/features/commons/constants' instead.
- * Re-exported for backwards compatibility during migration.
- */
-export { MIME };
 
 export function isGeospatialFile(name: string): boolean {
   const lower = name.toLowerCase();
