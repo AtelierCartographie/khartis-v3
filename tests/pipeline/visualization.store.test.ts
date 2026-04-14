@@ -69,7 +69,7 @@ import {
   isVisualizationBlank,
   resolveNextSuggestionSelection,
   resolveBlankVisualizationType
-} from '$lib/features/main-toolbar/visualization-tab/suggestion.utils';
+} from '$lib/features/main-toolbar/visualization-tab/suggestion.service';
 
 function asBlankTypeDataset(
   value: unknown

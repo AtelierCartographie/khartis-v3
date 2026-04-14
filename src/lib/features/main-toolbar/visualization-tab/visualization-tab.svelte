@@ -12,7 +12,7 @@
   import CustomizeBasemap from './customize-basemap.svelte';
   import { syncProjectOSMBasemap } from './osm-basemap-sync';
   import ToolbarTabLayout from '../components/toolbar-tab-layout.svelte';
-  import { resolveBlankVisualizationType } from './suggestion.utils';
+  import { resolveBlankVisualizationType } from './suggestion.service';
   import {
     resolveRelevantPersistedBasemap,
     type PersistedProjectBasemap
