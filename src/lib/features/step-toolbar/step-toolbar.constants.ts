@@ -9,6 +9,7 @@ export const DOM_IDS = {
 export const CSS_CLASSES = {
   NAV_ITEM: 'nav-item',
   SELECTED: 'selected',
+  SCROLL_VIEWPORT: 'scroll-viewport',
   STEP_HEADER: 'step-header',
   STEP_TITLE: 'step-title',
   STEP_CONTAINER: 'step-container',

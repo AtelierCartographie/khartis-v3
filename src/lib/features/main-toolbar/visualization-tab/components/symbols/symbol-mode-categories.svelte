@@ -1,12 +1,25 @@
 <script lang="ts">
   import { Dropdown } from 'carbon-components-svelte';
+  import {
+    CaretUp,
+    Checkbox,
+    CircleFilled,
+    Close,
+    DiamondFill,
+    SquareFill,
+    StarFilled
+  } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
   import { DEFAULT_QUALITATIVE_PREVIEW } from '../palette-popover/palette.constants';
+  import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import {
     MissingDataShape,
+    ShapeType,
     SLIDER_LIMITS,
+    SymbolMode,
     VISUALIZATION_DEFAULTS,
-    DEFAULT_COLORS
+    DEFAULT_COLORS,
+    availableShapesForSymbolMode
   } from '../../../constants';
   import {
     DiscretizationRow,
@@ -36,10 +49,48 @@
   let selectedFieldId = $state<number>(0);
   let categoryCount = $state<number>(4);
   let symbolOpacity = $state<number>(VISUALIZATION_DEFAULTS.symbolOpacity);
+  let shapeType = $state<ShapeType>(ShapeType.CIRCLE);
   let showMissingData = $state<boolean>(true);
   let missingDataShape = $state<MissingDataShape>(MissingDataShape.CIRCLE);
   let missingDataSize = $state<number>(2);
   let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
+
+  const availableShapes = availableShapesForSymbolMode(SymbolMode.CATEGORIES);
+  const shapeIconByType: Record<ShapeType, typeof CircleFilled> = {
+    [ShapeType.CIRCLE]: CircleFilled,
+    [ShapeType.SQUARE]: SquareFill,
+    [ShapeType.CROSS]: Close,
+    [ShapeType.DIAMOND]: DiamondFill,
+    [ShapeType.TRIANGLE]: CaretUp,
+    [ShapeType.STAR]: StarFilled,
+    [ShapeType.RECTANGLE]: Checkbox,
+    [ShapeType.BAR]: CircleFilled,
+    [ShapeType.SPIKE]: CircleFilled
+  };
+  const shapeLabelByType: Record<ShapeType, () => string> = {
+    [ShapeType.CIRCLE]: m.shape_circle,
+    [ShapeType.SQUARE]: m.shape_square,
+    [ShapeType.CROSS]: m.shape_cross,
+    [ShapeType.DIAMOND]: m.shape_diamond,
+    [ShapeType.TRIANGLE]: m.shape_triangle,
+    [ShapeType.STAR]: m.shape_star,
+    [ShapeType.RECTANGLE]: m.shape_rectangle,
+    [ShapeType.BAR]: m.shape_bar,
+    [ShapeType.SPIKE]: m.shape_spike
+  };
+  const shapeItems = availableShapes.map((shape) => ({
+    icon: shapeIconByType[shape],
+    label: shapeLabelByType[shape](),
+    iconSize: 16
+  }));
+
+  const shapeIndex = $derived(availableShapes.indexOf(shapeType));
+
+  function handleShapeTabChange(index: number) {
+    const next = availableShapes[index] ?? ShapeType.CIRCLE;
+    shapeType = next;
+    onSymbolsChange?.({ type: next });
+  }
 
   $effect(() => {
     if (visualization?.mapping.categoryColumn && dataFields.length > 0) {
@@ -56,6 +107,10 @@
         visualization.symbols.opacity !== undefined
           ? Math.round(visualization.symbols.opacity * 100)
           : VISUALIZATION_DEFAULTS.symbolOpacity;
+      const persistedShape = visualization.symbols.type ?? ShapeType.CIRCLE;
+      shapeType = availableShapes.includes(persistedShape)
+        ? persistedShape
+        : ShapeType.CIRCLE;
     }
     if (visualization?.missingData) {
       showMissingData = visualization.missingData.show ?? true;
@@ -120,6 +175,19 @@
     selectedId={selectedFieldId}
     on:select={(e) => handleFieldSelect(e.detail.selectedId)}
     type="default"
+  />
+</div>
+
+<div class="field-group">
+  <span class="field-label">
+    {m.viz_symbols_representation()}
+    <InfoPopover text={m.shape_info()} />
+  </span>
+  <ToggleTabs
+    items={shapeItems}
+    activeIndex={shapeIndex}
+    onChange={handleShapeTabChange}
+    hideInactiveLabel={true}
   />
 </div>
 

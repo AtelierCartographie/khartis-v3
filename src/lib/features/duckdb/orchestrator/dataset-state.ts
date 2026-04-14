@@ -80,20 +80,7 @@ export function mapGeoColumnResult(
 export function mapGeoColumnType(
   type: GeoColumnResult['type']
 ): GeoColumnInfo['type'] {
-  const GEO_TYPE_MAP: Record<GeoColumnResult['type'], GeoColumnInfo['type']> = {
-    latitude: 'latitude',
-    longitude: 'longitude',
-    country_name: 'country_name',
-    iso2: 'iso2',
-    iso3: 'iso3',
-    nuts: 'nuts',
-    region: 'region',
-    city: 'city',
-    coordinates: 'coordinates',
-    unknown: 'unknown'
-  };
-
-  return GEO_TYPE_MAP[type] ?? 'unknown';
+  return type;
 }
 
 export function mapDuckDBType(

@@ -8,6 +8,7 @@ import {
 import {
   ColorMode,
   DEFAULT_COLORS,
+  DENSITY_DEFAULTS,
   FillMode,
   MissingDataShape,
   ShapeType,
@@ -40,6 +41,13 @@ export type PointSizeLegendScale = {
   strokeColor: string;
   fillOpacity: number;
   shape: ShapeType;
+};
+
+export type DensityLegendScale = {
+  kind: 'density';
+  ratio: number;
+  dotSize: number;
+  fillColor: string;
 };
 
 export type LineWidthLegendScale = {
@@ -258,7 +266,7 @@ export function resolveMissingDataPointShape(
       return ShapeType.CROSS;
     case MissingDataShape.CIRCLE:
     default:
-      return ShapeType.POINT;
+      return ShapeType.CIRCLE;
   }
 }
 
@@ -320,6 +328,22 @@ export function hasCategoricalColorLegend(
   );
 }
 
+export function getDensityLegendScale(
+  viz: VisualizationConfig | undefined
+): DensityLegendScale | null {
+  if (viz?.modes?.symbol !== SymbolMode.DENSITY) return null;
+  const density = viz.density;
+  if (!density?.ratio) return null;
+  const dotSize = Math.max(0.1, density.dotSize ?? DENSITY_DEFAULTS.dotSize);
+  const fillColor = resolveStyleColor(density.color, DENSITY_DEFAULTS.color);
+  return {
+    kind: 'density',
+    ratio: density.ratio,
+    dotSize,
+    fillColor
+  };
+}
+
 export function getPointSizeLegendScale(
   viz: VisualizationConfig | undefined,
   statistics?: ColumnStatisticsLike
@@ -358,7 +382,7 @@ export function getPointSizeLegendScale(
         DEFAULT_COLORS.stroke
       ),
       fillOpacity,
-      shape: viz.symbols.type ?? ShapeType.POINT
+      shape: viz.symbols.type ?? ShapeType.CIRCLE
     };
   }
 
@@ -381,7 +405,7 @@ export function getPointSizeLegendScale(
         DEFAULT_COLORS.stroke
       ),
       fillOpacity,
-      shape: viz.symbols.type ?? ShapeType.POINT
+      shape: viz.symbols.type ?? ShapeType.CIRCLE
     };
   }
 

@@ -99,6 +99,9 @@ vi.mock('$lib/features/duckdb/macros/search', () => ({
 vi.mock('$lib/features/duckdb/macros/simplification', () => ({
   simplification_macros: 'SIMPLIFICATION;'
 }));
+vi.mock('$lib/features/duckdb/macros/density', () => ({
+  density_macros: 'DENSITY;'
+}));
 
 async function loadDuckModule() {
   vi.resetModules();
@@ -276,7 +279,7 @@ describe('initDuckDB', () => {
 
     expect(mocks.initEngineMock).toHaveBeenCalledTimes(1);
     expect(mocks.loadMacrosMock).toHaveBeenCalledWith(
-      'BREAKS;ANALYSE;JOIN;SEARCH;SIMPLIFICATION;'
+      'BREAKS;ANALYSE;JOIN;SEARCH;SIMPLIFICATION;DENSITY;'
     );
   });
 

@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { SimplifiedGeometryType } from '$lib/features/commons/services/viz-suggester.service';
   import { VisualizationType } from '$lib/features/commons/store/visualization.store.svelte';
-  import { mapSuggestionToType } from '../suggestion.utils';
+  import { mapSuggestionToType } from '../suggestion.service';
 
   interface Props {
     suggestionId: string;

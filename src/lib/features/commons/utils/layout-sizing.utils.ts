@@ -16,6 +16,9 @@ export interface LayoutSizingContext {
 
 export interface LayoutSizingTokens {
   profile: LayoutSizingProfile;
+  mapViewport: {
+    fitPaddingPx: number;
+  };
   legend: {
     fontSize: number;
     maxWidth: number;
@@ -56,6 +59,9 @@ export interface LayoutSizingTokens {
 
 const TOKENS_BY_PROFILE = {
   'print-standard': {
+    mapViewport: {
+      fitPaddingPx: 40
+    },
     legend: {
       fontSize: 12,
       maxWidth: 280,
@@ -94,6 +100,9 @@ const TOKENS_BY_PROFILE = {
     }
   },
   'print-large': {
+    mapViewport: {
+      fitPaddingPx: 56
+    },
     legend: {
       fontSize: 14,
       maxWidth: 340,
@@ -132,6 +141,9 @@ const TOKENS_BY_PROFILE = {
     }
   },
   'screen-large': {
+    mapViewport: {
+      fitPaddingPx: 72
+    },
     legend: {
       fontSize: 16,
       maxWidth: 400,

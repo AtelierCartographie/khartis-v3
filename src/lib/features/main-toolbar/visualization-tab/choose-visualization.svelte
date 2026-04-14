@@ -38,7 +38,7 @@
     isVisualizationBlank,
     resolveBlankVisualizationType,
     resolveDatasetGeometryType
-  } from './suggestion.utils';
+  } from './suggestion.service';
   import { UI_CONSTANTS } from '../constants';
 
   interface Props {

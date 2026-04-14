@@ -13,7 +13,10 @@
   } from '../constants/basemap-styles';
   import { hslToHex } from '../../commons/utils/color-utils';
   import { LogCategory, logger } from '../../commons/utils/logger';
-  import { mapInstanceStore } from '../../commons/store/map-instance.store.svelte';
+  import {
+    mapInstanceStore,
+    type ViewportFitReason
+  } from '../../commons/store/map-instance.store.svelte';
   import { datasetsStore } from '../../commons/store/datasets.store.svelte';
   import { projectStore } from '../../commons/store/project.store.svelte';
   import { visualizationStore } from '../../commons/store/visualization.store.svelte';
@@ -42,7 +45,10 @@
   import { mapProjectionStore } from '../stores/map-projection.store.svelte';
   import { mapLoadingStore } from '../stores/map-loading.store.svelte';
   import { globalState } from '$lib/features/commons/store/global.svelte';
+  import { zoomModeStore } from '$lib/features/commons/store/zoom-mode.store.svelte';
+  import { FormatMode } from '$lib/features/commons/constants/ui.constants';
   import { ToolbarStep } from '$lib/features/commons/types/global';
+  import { resolveLayoutSizingTokens } from '$lib/features/commons/utils/layout-sizing.utils';
   import type {
     BBox,
     DeckMapProps,
@@ -89,6 +95,7 @@
 
   let {
     tables,
+    splitData,
     geoJSONs,
     dataVersion = 0,
     width,
@@ -113,6 +120,16 @@
     hslToHex(formatColor.hue, formatColor.saturation, formatColor.lightness)
   );
   const pageMargins = $derived(fmtState.margins);
+  const layoutSizingTokens = $derived(
+    resolveLayoutSizingTokens({
+      width: fmtState.width,
+      height: fmtState.height,
+      model: fmtState.mode === FormatMode.PRESET ? fmtState.model : 'custom'
+    })
+  );
+  const mapViewportFitPaddingPx = $derived(
+    layoutSizingTokens.mapViewport.fitPaddingPx
+  );
   const showPageGrid = $derived(
     fmtState.gridEnabled && globalState.selectedStep === ToolbarStep.Styling
   );
@@ -139,8 +156,8 @@
   const maxRenderBufferSizePx = $derived(getBrowserMaxRenderBufferSizePx());
   const renderPixelRatio = $derived.by(() =>
     resolveMapRenderPixelRatio(
-      globalState.zoom.pageZoomLevel,
       typeof window !== 'undefined' ? window.devicePixelRatio : 1,
+      globalState.zoom.pageZoomScale,
       Math.max(mapCanvasWidth, mapCanvasHeight),
       maxRenderBufferSizePx
     )
@@ -161,7 +178,6 @@
 
   const MIN_SKELETON_DURATION_MS = 500;
   const MAX_WAIT_FOR_DATA_MS = 5000;
-  const PAGE_ZOOM_RENDER_SYNC_DELAY_MS = 180;
 
   let mapContainer: HTMLDivElement;
   let hasCalledOnReady = $state(false);
@@ -183,7 +199,11 @@
   let previousDatasetCount = 0;
   let pendingViewReset = false;
   let pendingOrthographicFit = $state(false);
+  let pendingOrthographicFitReason = $state<ViewportFitReason>('dataset');
   let pendingMapLibreViewportPreset = $state<LngLatBoundsLike | null>(null);
+  let pendingViewportAutoRefitReason = $state<ViewportFitReason | null>(null);
+  let lastMapViewportSnapshot: string | null = null;
+  let pendingMapLibreManualInteraction = false;
   let projectEmptyResetTimeoutId: ReturnType<typeof setTimeout> | null = null;
   let lastDatasetCountSnapshot = -1;
   let lastLayoutSnapshot: string | null = null;
@@ -253,7 +273,7 @@
       }
 
       mapLoadingStore.setUpdatingLayers(true);
-      mapLayers.updateLayers(tables, geoJSONs);
+      mapLayers.updateLayers(tables, geoJSONs, splitData);
       requestAnimationFrame(() => {
         mapLoadingStore.setUpdatingLayers(false);
       });
@@ -335,7 +355,11 @@
           triggerOnReady();
         }
         if (mapBounds.shouldRestorePosition) {
-          setTimeout(() => mapPosition.restorePosition(), 100);
+          setTimeout(() => {
+            if (mapPosition.restorePosition()) {
+              mapInstanceStore.markViewportManual();
+            }
+          }, 100);
         }
       }
     },
@@ -359,6 +383,7 @@
     },
     getActiveVisualizations: () => mapState.activeVisualizations,
     onOrthographicViewStateChanged: (target, zoom) => {
+      mapInstanceStore.markViewportManual();
       onMoveSync?.({ type: 'orthographic', target, zoom });
     }
   });
@@ -494,15 +519,88 @@
     }
   }
 
-  function fitOrthographicViewport(): void {
+  function getProjectionViewportSize(): { width: number; height: number } {
+    return {
+      width: Math.max(1, mapCanvasWidth),
+      height: Math.max(1, mapCanvasHeight)
+    };
+  }
+
+  function applyMapLibreInteractionMode(): void {
+    const map = mapInit.map;
+
+    if (!map) {
+      return;
+    }
+
+    if (zoomModeStore.isPageMode) {
+      map.dragPan.disable();
+      map.scrollZoom.disable();
+      map.doubleClickZoom.disable();
+      map.boxZoom.disable();
+      map.keyboard.disable();
+      map.touchZoomRotate.disable();
+      map.dragRotate.disable();
+      return;
+    }
+
+    map.dragPan.enable();
+    map.scrollZoom.enable();
+    map.doubleClickZoom.enable();
+    map.boxZoom.enable();
+    map.keyboard.enable();
+    map.touchZoomRotate.enable();
+    map.touchZoomRotate.disableRotation();
+    map.dragRotate.disable();
+  }
+
+  function applyOrthographicInteractionMode(): void {
+    const deck = mapInit.deckInstance;
+
+    if (!deck) {
+      return;
+    }
+
+    const controller = zoomModeStore.isPageMode
+      ? {
+          dragPan: false,
+          scrollZoom: false,
+          doubleClickZoom: false,
+          touchZoom: false,
+          keyboard: false
+        }
+      : {
+          dragPan: true,
+          scrollZoom: false,
+          doubleClickZoom: false,
+          touchZoom: true,
+          keyboard: true
+        };
+
+    const nextViewState = { ...mapInstanceStore.deckViewState };
+    (deck as unknown as { setProps: (props: unknown) => void }).setProps({
+      controller,
+      viewState: { main: nextViewState },
+      initialViewState: { main: nextViewState }
+    });
+  }
+
+  function getCurrentViewportAutoFitReason(): ViewportFitReason {
+    return mapInstanceStore.viewportFitReason ?? 'dataset';
+  }
+
+  function fitOrthographicViewport(
+    reason: ViewportFitReason = 'dataset'
+  ): void {
     if (mapInit.viewMode !== ViewMode.ORTHOGRAPHIC) {
       return;
     }
 
     if (mapInit.isMapLoaded) {
-      mapInstanceStore.fitToOrthographicBounds();
+      mapInstanceStore.fitToOrthographicBounds(reason);
     } else {
       pendingOrthographicFit = true;
+      pendingOrthographicFitReason = reason;
     }
   }
 
@@ -605,9 +703,10 @@
     }
 
     if (mapInit.isMapLoaded) {
-      mapInstanceStore.fitToOrthographicBounds();
+      mapInstanceStore.fitToOrthographicBounds('basemap');
     } else {
       pendingOrthographicFit = true;
+      pendingOrthographicFitReason = 'basemap';
     }
   }
 
@@ -629,6 +728,8 @@
     requiredSource?: 'auto' | 'manual'
   ): ProjectionLike | undefined {
     const projectionState = getProjectionState();
+    const viewportSize = getProjectionViewportSize();
+    const fitPaddingPx = mapViewportFitPaddingPx;
     if (
       !projectionState.overrideActive ||
       (requiredSource && projectionState.overrideSource !== requiredSource)
@@ -650,7 +751,13 @@
         ];
         projection.center(center);
         projection.rotate([projectionState.rotation, 0, 0]);
-        fitProjectionToBbox(projection, fitBbox, 960, 600);
+        fitProjectionToBbox(
+          projection,
+          fitBbox,
+          viewportSize.width,
+          viewportSize.height,
+          fitPaddingPx
+        );
         return projection;
       } catch (error) {
         logger.error(
@@ -676,7 +783,13 @@
     ];
     projection.center(center);
     projection.rotate([projectionState.rotation, 0, 0]);
-    fitProjectionToBbox(projection, fitBbox, 960, 600);
+    fitProjectionToBbox(
+      projection,
+      fitBbox,
+      viewportSize.width,
+      viewportSize.height,
+      fitPaddingPx
+    );
 
     return projection;
   }
@@ -686,14 +799,15 @@
     allowManualOverride = true
   ): ProjectionLike | undefined {
     const projectionState = getProjectionState();
+    const viewportSize = getProjectionViewportSize();
     const defaultProjection =
       basemapMeta &&
       !basemapMeta.isCustom &&
       basemapMeta.proj_to?.type !== 'identity'
         ? buildProjectionForBasemap(
             basemapMeta,
-            960,
-            600,
+            viewportSize.width,
+            viewportSize.height,
             basemapService.projectionPresets
           )
         : undefined;
@@ -851,7 +965,9 @@
     };
   }
 
-  function syncOrthographicViewportAfterViewModeSwitch(): void {
+  function syncOrthographicViewportAfterViewModeSwitch(
+    reasonOverride?: ViewportFitReason
+  ): void {
     if (mapInit.viewMode !== ViewMode.ORTHOGRAPHIC) {
       return;
     }
@@ -902,19 +1018,21 @@
           );
         }
 
-        fitOrthographicViewport();
+        fitOrthographicViewport(
+          reasonOverride ?? (shouldUseBasemapReference ? 'basemap' : 'dataset')
+        );
         return;
       }
 
       if (shouldUseBasemapReference && projectionStore.referenceBbox) {
-        fitOrthographicViewport();
+        fitOrthographicViewport(reasonOverride ?? 'basemap');
         return;
       }
 
       const geoMetadata = firstTable.schema.metadata?.get('geo');
       if (geoMetadata) {
         projectionStore.setReferenceBboxFromMetadata(geoMetadata);
-        fitOrthographicViewport();
+        fitOrthographicViewport(reasonOverride ?? 'dataset');
         return;
       }
     }
@@ -931,7 +1049,9 @@
           [number, number]
         ];
         projectionStore.setReferenceBbox([minX, minY, maxX, maxY]);
-        fitOrthographicViewport();
+        fitOrthographicViewport(
+          reasonOverride ?? (useBasemapBounds ? 'basemap' : 'dataset')
+        );
         return;
       }
     }
@@ -948,7 +1068,7 @@
           undefined,
           referenceState.isProjected
         );
-        fitOrthographicViewport();
+        fitOrthographicViewport(reasonOverride ?? 'basemap');
         return;
       }
     }
@@ -965,10 +1085,15 @@
 
     const bounds = pendingMapLibreViewportPreset;
     pendingMapLibreViewportPreset = null;
-    mapBounds.fitToBounds(bounds, true);
+    mapBounds.fitToBounds(bounds, {
+      animate: true,
+      reason: 'basemap'
+    });
   }
 
-  function fitMapLibreViewportAfterViewModeSwitch(): void {
+  function fitMapLibreViewportAfterViewModeSwitch(
+    reason: ViewportFitReason = 'dataset'
+  ): void {
     if (mapInit.viewMode !== ViewMode.MAPLIBRE || !mapInit.map) {
       return;
     }
@@ -979,7 +1104,7 @@
     if (refBasemapId && currentWorldBaseTable) {
       const bounds = calculateBoundsFromGeoArrow(currentWorldBaseTable);
       if (bounds) {
-        mapBounds.fitToBounds(bounds);
+        mapBounds.fitToBounds(bounds, { reason });
         return;
       }
     }
@@ -987,7 +1112,7 @@
     if (firstTable) {
       const bounds = calculateBoundsFromGeoArrow(firstTable);
       if (bounds) {
-        mapBounds.fitToBounds(bounds);
+        mapBounds.fitToBounds(bounds, { reason });
         return;
       }
     }
@@ -995,7 +1120,7 @@
     if (firstGeoJSON) {
       const bounds = calculateBoundsFromGeoJSON(firstGeoJSON);
       if (bounds) {
-        mapBounds.fitToBounds(bounds);
+        mapBounds.fitToBounds(bounds, { reason });
         return;
       }
     }
@@ -1004,14 +1129,14 @@
       basemapStyleStore.selectedStyle
     );
     if (styleViewportPreset) {
-      mapBounds.fitToBounds(styleViewportPreset.bounds);
+      mapBounds.fitToBounds(styleViewportPreset.bounds, { reason });
       return;
     }
 
     if (currentWorldBaseTable) {
       const bounds = calculateBoundsFromGeoArrow(currentWorldBaseTable);
       if (bounds) {
-        mapBounds.fitToBounds(bounds);
+        mapBounds.fitToBounds(bounds, { reason });
       }
     }
   }
@@ -1044,6 +1169,7 @@
     getMap: () => mapInit.map,
     getIsMapLoaded: () => mapInit.isMapLoaded,
     getDatasetId: () => firstDatasetId,
+    getFitPaddingPx: () => mapViewportFitPaddingPx,
     onBoundsUpdated: (zoom) => {
       mapInstanceStore.setBaseZoomLevel(zoom);
     },
@@ -1051,6 +1177,41 @@
     onFitComplete: () => {
       triggerOnReady();
     }
+  });
+
+  $effect(() => {
+    const map = mapInit.map;
+    if (!map) {
+      return;
+    }
+
+    const markInteractionPending = () => {
+      pendingMapLibreManualInteraction = true;
+    };
+    const markManualIfNeeded = () => {
+      if (!pendingMapLibreManualInteraction) {
+        return;
+      }
+      pendingMapLibreManualInteraction = false;
+      mapInstanceStore.markViewportManual();
+    };
+
+    map.on('dragstart', markInteractionPending);
+    map.on('wheel', markInteractionPending);
+    map.on('dblclick', markInteractionPending);
+    map.on('touchstart', markInteractionPending);
+    map.on('moveend', markManualIfNeeded);
+    map.on('zoomend', markManualIfNeeded);
+
+    return () => {
+      pendingMapLibreManualInteraction = false;
+      map.off('dragstart', markInteractionPending);
+      map.off('wheel', markInteractionPending);
+      map.off('dblclick', markInteractionPending);
+      map.off('touchstart', markInteractionPending);
+      map.off('moveend', markManualIfNeeded);
+      map.off('zoomend', markManualIfNeeded);
+    };
   });
 
   $effect(() => {
@@ -1067,18 +1228,7 @@
       return;
     }
 
-    const nextRenderPixelRatio = renderPixelRatio;
-    const currentPageZoomLevel = globalState.zoom.pageZoomLevel;
-
-    if (currentPageZoomLevel <= 100) {
-      mapInit.setRenderPixelRatio(nextRenderPixelRatio);
-      return;
-    }
-
-    renderPixelRatioTimeoutId = setTimeout(() => {
-      renderPixelRatioTimeoutId = null;
-      mapInit.setRenderPixelRatio(nextRenderPixelRatio);
-    }, PAGE_ZOOM_RENDER_SYNC_DELAY_MS);
+    mapInit.setRenderPixelRatio(renderPixelRatio);
   });
 
   $effect(() => {
@@ -1097,6 +1247,15 @@
     lastLayoutSnapshot = layoutSnapshot;
 
     untrack(() => {
+      if (
+        mapInit.isMapLoaded &&
+        !isSwitchingViewMode &&
+        mapInstanceStore.isViewportAutoFitManaged &&
+        !mapInstanceStore.hasPendingRestore
+      ) {
+        pendingViewportAutoRefitReason = getCurrentViewportAutoFitReason();
+      }
+
       annotationsActions.redistributePageElements({
         width: fmtState.width,
         height: fmtState.height,
@@ -1111,8 +1270,16 @@
   $effect(() => {
     void mapCanvasWidth;
     void mapCanvasHeight;
+    void mapViewportFitPaddingPx;
+
+    const viewportSnapshot = `${mapCanvasWidth}x${mapCanvasHeight}-${mapViewportFitPaddingPx}`;
+    const hasViewportChanged =
+      lastMapViewportSnapshot !== null &&
+      viewportSnapshot !== lastMapViewportSnapshot;
+    lastMapViewportSnapshot = viewportSnapshot;
 
     untrack(() => {
+      projectionStore.setFitPadding(mapViewportFitPaddingPx);
       updateCanvasSize();
       if (mapInit.isMapLoaded && !isSwitchingViewMode) {
         if (mapInit.viewMode === ViewMode.MAPLIBRE) {
@@ -1125,6 +1292,59 @@
           // the world-coordinate target with the updated model matrix scale.
           mapInstanceStore.fitToOrthographicBounds();
         }
+
+        if (
+          hasViewportChanged &&
+          mapInstanceStore.isViewportAutoFitManaged &&
+          !mapInstanceStore.hasPendingRestore
+        ) {
+          pendingViewportAutoRefitReason = getCurrentViewportAutoFitReason();
+        }
+      }
+    });
+  });
+
+  $effect(() => {
+    void zoomModeStore.mode;
+    void mapInit.viewMode;
+    void mapInit.map;
+    void mapInit.deckInstance;
+
+    untrack(() => {
+      if (mapInit.viewMode === ViewMode.MAPLIBRE) {
+        applyMapLibreInteractionMode();
+        return;
+      }
+
+      if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
+        applyOrthographicInteractionMode();
+      }
+    });
+  });
+
+  $effect(() => {
+    const reason = pendingViewportAutoRefitReason;
+    if (
+      !reason ||
+      !mapInit.isMapLoaded ||
+      isSwitchingViewMode ||
+      mapInstanceStore.hasPendingRestore
+    ) {
+      return;
+    }
+
+    pendingViewportAutoRefitReason = null;
+
+    untrack(() => {
+      if (mapInit.viewMode === ViewMode.MAPLIBRE) {
+        requestAnimationFrame(() => {
+          fitMapLibreViewportAfterViewModeSwitch(reason);
+        });
+        return;
+      }
+
+      if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
+        fitOrthographicViewport(reason);
       }
     });
   });
@@ -1173,7 +1393,7 @@
         if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
           syncOrthographicViewportAfterViewModeSwitch();
         } else if (mapInit.viewMode === ViewMode.MAPLIBRE) {
-          fitMapLibreViewportAfterViewModeSwitch();
+          fitMapLibreViewportAfterViewModeSwitch('basemap');
         }
       });
       isSwitchingViewMode = false;
@@ -1191,7 +1411,9 @@
       mapInit.viewMode === ViewMode.ORTHOGRAPHIC
     ) {
       pendingOrthographicFit = false;
-      untrack(() => mapInstanceStore.fitToOrthographicBounds());
+      untrack(() =>
+        mapInstanceStore.fitToOrthographicBounds(pendingOrthographicFitReason)
+      );
     }
   });
 
@@ -1209,10 +1431,16 @@
     }
   });
 
+  let lastFittedDatasetId = $state<string | undefined>(undefined);
+
   $effect(() => {
     // Note: isStyleLoading check is handled inside scheduleLayerUpdate() to avoid reactive dependency
     const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
     if (firstTable && canUpdate) {
+      const shouldFit = firstDatasetId !== lastFittedDatasetId;
+      if (shouldFit) {
+        lastFittedDatasetId = firstDatasetId;
+      }
       const refBasemapId = basemapStyleStore.referenceBasemapId;
       if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
         const dataset = getRenderedDataset(firstDatasetId);
@@ -1233,12 +1461,12 @@
         ) {
           untrack(() => {
             scheduleLayerUpdate('effect:firstTable-bounds');
-            fitOrthographicViewport();
+            if (shouldFit) fitOrthographicViewport('dataset');
           });
           triggerOnReady();
         } else if (shouldUseBasemapReference && projectionStore.referenceBbox) {
           untrack(() => {
-            fitOrthographicViewport();
+            if (shouldFit) fitOrthographicViewport('basemap');
           });
           triggerOnReady();
         } else if (!shouldUseBasemapReference) {
@@ -1247,19 +1475,28 @@
             untrack(() => {
               projectionStore.setReferenceBboxFromMetadata(geoMetadata);
               scheduleLayerUpdate('effect:firstTable-metadata');
-              fitOrthographicViewport();
+              if (shouldFit) fitOrthographicViewport('dataset');
             });
             triggerOnReady();
           }
         }
-      } else if (mapInit.map) {
+      } else if (mapInit.map && shouldFit) {
         if (refBasemapId && worldBaseTable) {
           const bBounds = calculateBoundsFromGeoArrow(worldBaseTable);
           if (bBounds) {
-            untrack(() => mapBounds.fitToBounds(bBounds, true));
+            untrack(() =>
+              mapBounds.fitToBounds(bBounds, {
+                animate: true,
+                reason: 'basemap'
+              })
+            );
           }
         } else {
-          untrack(() => mapBounds.fitToArrowBounds(firstTable, firstDatasetId));
+          untrack(() =>
+            mapBounds.fitToArrowBounds(firstTable, firstDatasetId, {
+              reason: 'dataset'
+            })
+          );
         }
       }
     }
@@ -1278,10 +1515,19 @@
         if (useBasemapBoundsForGeo) {
           const bBounds = calculateBoundsFromGeoArrow(worldBaseTable!);
           if (bBounds) {
-            untrack(() => mapBounds.fitToBounds(bBounds, true));
+            untrack(() =>
+              mapBounds.fitToBounds(bBounds, {
+                animate: true,
+                reason: 'basemap'
+              })
+            );
           }
         } else {
-          untrack(() => mapBounds.fitToGeoJSONBounds(firstGeoJSON));
+          untrack(() =>
+            mapBounds.fitToGeoJSONBounds(firstGeoJSON, {
+              reason: 'dataset'
+            })
+          );
         }
       } else if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
         untrack(() => {
@@ -1298,7 +1544,9 @@
             ];
             projectionStore.setReferenceBbox([minX, minY, maxX, maxY]);
             scheduleLayerUpdate('effect:firstGeoJSON');
-            fitOrthographicViewport();
+            fitOrthographicViewport(
+              useBasemapBoundsForGeo ? 'basemap' : 'dataset'
+            );
           }
         });
         triggerOnReady();
@@ -1414,13 +1662,21 @@
                 basemapStyleStore.selectedStyle
               );
               if (preset) {
-                mapBounds.fitToBounds(preset.bounds, true);
+                mapBounds.fitToBounds(preset.bounds, {
+                  animate: true,
+                  reason: 'reset'
+                });
               } else {
                 const bounds = calculateBoundsFromGeoArrow(worldBaseTable);
                 if (bounds) {
-                  mapBounds.fitToBounds(bounds, true);
+                  mapBounds.fitToBounds(bounds, {
+                    animate: true,
+                    reason: 'reset'
+                  });
                 }
               }
+            } else if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
+              fitOrthographicViewport('reset');
             }
             // Orthographic: projectionStore.referenceBbox is already set by
             // basemapService.updateProjectionFromTable() since we cleared it above
@@ -1500,7 +1756,17 @@
 
   $effect(() => {
     void mapProjectionStore.projection;
-    untrack(() => mapBasemap.syncProjection());
+    untrack(() => {
+      mapBasemap.syncProjection();
+
+      if (
+        mapInit.isMapLoaded &&
+        mapInit.viewMode === ViewMode.MAPLIBRE &&
+        !isSwitchingViewMode
+      ) {
+        fitMapLibreViewportAfterViewModeSwitch('projection');
+      }
+    });
   });
 
   const filtersVersion = $derived(
@@ -1542,7 +1808,7 @@
       mapInit.viewMode === ViewMode.ORTHOGRAPHIC &&
       !isSwitchingViewMode
     ) {
-      untrack(() => syncOrthographicViewportAfterViewModeSwitch());
+      untrack(() => syncOrthographicViewportAfterViewModeSwitch('projection'));
     }
   });
 
@@ -1599,7 +1865,10 @@
                   ];
                 }
                 if (bounds) {
-                  mapBounds.fitToBounds(bounds, true);
+                  mapBounds.fitToBounds(bounds, {
+                    animate: true,
+                    reason: 'basemap'
+                  });
                 }
               } else if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
                 const referenceState = resolveOrthographicBasemapReferenceState(
@@ -1614,9 +1883,10 @@
                   );
                 }
                 if (mapInit.isMapLoaded) {
-                  mapInstanceStore.fitToOrthographicBounds();
+                  mapInstanceStore.fitToOrthographicBounds('basemap');
                 } else {
                   pendingOrthographicFit = true;
+                  pendingOrthographicFitReason = 'basemap';
                 }
               }
             }
@@ -1688,7 +1958,10 @@
                   ];
                 }
                 if (refBounds) {
-                  mapBounds.fitToBounds(refBounds, true);
+                  mapBounds.fitToBounds(refBounds, {
+                    animate: true,
+                    reason: 'basemap'
+                  });
                 }
               } else if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
                 const referenceState = resolveOrthographicBasemapReferenceState(
@@ -1703,9 +1976,10 @@
                   );
                 }
                 if (mapInit.isMapLoaded) {
-                  mapInstanceStore.fitToOrthographicBounds();
+                  mapInstanceStore.fitToOrthographicBounds('basemap');
                 } else {
                   pendingOrthographicFit = true;
+                  pendingOrthographicFitReason = 'basemap';
                 }
               }
             }
@@ -1843,7 +2117,7 @@
         mapInit.map?.resize();
       }
 
-      if (canUpdate && !globalState.isToolbarTransitioning) {
+      if (canUpdate) {
         if (resizeTimeoutId) {
           clearTimeout(resizeTimeoutId);
         }

@@ -3,7 +3,10 @@ import {
   type GeoColumnResult,
   type GeoDetectionResult
 } from '$lib/features/commons/utils/geo-detector.utils';
-import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
+import {
+  GEO_COLUMN_TYPE,
+  INTERNAL_COLUMN
+} from '$lib/features/commons/constants/data.constants';
 import type { DatasetResult } from '$lib/features/data-pipeline';
 
 export interface EnrichDataFieldItem {
@@ -83,13 +86,21 @@ export function hasOnlyCoordinates(
   const geoColumns = geoDetection.geoColumns || [];
   if (geoColumns.length === 0) return false;
 
-  const entityTypes = ['country_name', 'iso2', 'iso3', 'region', 'city'];
+  const entityTypes: ReadonlyArray<GeoColumnResult['type']> = [
+    GEO_COLUMN_TYPE.COUNTRY_NAME,
+    GEO_COLUMN_TYPE.ISO2,
+    GEO_COLUMN_TYPE.ISO3,
+    GEO_COLUMN_TYPE.REGION,
+    GEO_COLUMN_TYPE.CITY
+  ];
   const hasEntityColumn = geoColumns.some((gc: GeoColumnResult) =>
     entityTypes.includes(gc.type)
   );
 
   const hasCoordinates = geoColumns.some(
-    (gc: GeoColumnResult) => gc.type === 'latitude' || gc.type === 'longitude'
+    (gc: GeoColumnResult) =>
+      gc.type === GEO_COLUMN_TYPE.LATITUDE ||
+      gc.type === GEO_COLUMN_TYPE.LONGITUDE
   );
 
   return hasCoordinates && !hasEntityColumn;

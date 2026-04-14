@@ -1,0 +1,361 @@
+import type { Table as ArrowTable } from 'apache-arrow/Arrow';
+import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
+import {
+  escapeIdentifier,
+  escapeSqlString
+} from '$lib/features/commons/utils/sanitize.utils';
+import {
+  DENSITY_LEVEL,
+  type DensityLevelOption
+} from '$lib/features/main-toolbar/constants';
+import { Duck } from '../duck';
+import { registerTableMutationCallback } from '../cache/cache-manager';
+import {
+  addGeoArrowMetadataFromDuckDB,
+  fetchArrowTableWithGeometry
+} from './arrow-ops';
+
+const GEOMETRY_COLUMN = 'geometry';
+const DENSITY_CACHE_MAX_ENTRIES = 12;
+const densityCache = new Map<string, ArrowTable>();
+const densityCacheTableIndex = new Map<string, Set<string>>();
+
+interface GeometryColumnInfo {
+  column_name: string;
+  data_type: string;
+}
+
+function buildDensityCacheKey(
+  tableName: string,
+  dataColumn: string,
+  ratio: number,
+  seed: number | undefined
+): string {
+  const safeRatio = Math.max(1, Math.floor(ratio));
+  const safeSeed =
+    typeof seed === 'number' && Number.isFinite(seed) ? seed : 'nodet';
+  return `${tableName}::${dataColumn}::${safeRatio}::${safeSeed}`;
+}
+
+function indexDensityCacheEntry(tableName: string, key: string): void {
+  let bucket = densityCacheTableIndex.get(tableName);
+  if (!bucket) {
+    bucket = new Set();
+    densityCacheTableIndex.set(tableName, bucket);
+  }
+  bucket.add(key);
+}
+
+function evictOldestDensityEntry(): void {
+  const oldestKey = densityCache.keys().next().value;
+  if (!oldestKey) return;
+  densityCache.delete(oldestKey);
+  for (const [tableName, bucket] of densityCacheTableIndex) {
+    if (bucket.delete(oldestKey) && bucket.size === 0) {
+      densityCacheTableIndex.delete(tableName);
+    }
+  }
+}
+
+function setDensityCacheEntry(
+  tableName: string,
+  key: string,
+  arrow: ArrowTable
+): void {
+  if (densityCache.has(key)) {
+    densityCache.delete(key);
+  } else if (densityCache.size >= DENSITY_CACHE_MAX_ENTRIES) {
+    evictOldestDensityEntry();
+  }
+  densityCache.set(key, arrow);
+  indexDensityCacheEntry(tableName, key);
+}
+
+function invalidateDensityCacheForTable(tableName: string): void {
+  const bucket = densityCacheTableIndex.get(tableName);
+  if (!bucket) return;
+  for (const key of bucket) {
+    densityCache.delete(key);
+  }
+  densityCacheTableIndex.delete(tableName);
+}
+
+export function clearDensityCache(): void {
+  densityCache.clear();
+  densityCacheTableIndex.clear();
+}
+
+registerTableMutationCallback((table: string) => {
+  invalidateDensityCacheForTable(table);
+});
+
+/**
+ * Computes the 3 density ratios (more / standard / less) for a numeric column.
+ * Relies on the `get_density_levels` SQL macro registered at engine init.
+ */
+export async function computeDensityLevels(
+  tableName: string,
+  columnName: string,
+  maxPoints: number = 100000
+): Promise<DensityLevelOption[]> {
+  const safeTable = escapeSqlString(tableName);
+  const safeColumn = escapeIdentifier(columnName);
+  const rows = (await Duck.query(
+    `FROM get_density_levels('${safeTable}', "${safeColumn}", max_points := ${maxPoints})
+     SELECT level, ratio`,
+    { format: 'array', useProxy: false }
+  )) as Array<{ level: string; ratio: number }>;
+
+  return rows
+    .filter(
+      (r): r is { level: DensityLevelOption['level']; ratio: number } =>
+        r.level === DENSITY_LEVEL.MORE ||
+        r.level === DENSITY_LEVEL.STANDARD ||
+        r.level === DENSITY_LEVEL.LESS
+    )
+    .map((r) => ({ level: r.level, ratio: Number(r.ratio) }));
+}
+
+/**
+ * Generates dot-density points for a polygon table and exports them as an Arrow
+ * table with geometry encoded as `geoarrow.wkb` (DuckDB ≥ 1.33). Consumable
+ * directly by `geoarrow-deck-stream`'s `parsePoints()`.
+ */
+export async function generateDotDensityArrow(
+  tableName: string,
+  geomColumn: string,
+  dataColumn: string,
+  ratio: number,
+  options: { seed?: number } = {}
+): Promise<ArrowTable> {
+  const safeTable = escapeSqlString(tableName);
+  const safeGeom = escapeIdentifier(geomColumn);
+  const safeData = escapeIdentifier(dataColumn);
+
+  if (typeof options.seed === 'number') {
+    const seed = Number(options.seed);
+    if (Number.isFinite(seed)) {
+      await Duck.query(`SELECT setseed(${seed})`, { useProxy: false });
+    }
+  }
+
+  const tempName = `dd_out_${tableName.replace(/[^a-zA-Z0-9_]/g, '_')}_${Date.now()}`;
+
+  await Duck.query(
+    `CREATE OR REPLACE TEMP TABLE "${tempName}" AS
+     FROM generate_dot_density('${safeTable}', "${safeGeom}", "${safeData}", ${Math.floor(ratio)})
+     SELECT geometry AS ${GEOMETRY_COLUMN}`,
+    { useProxy: false }
+  );
+
+  try {
+    const { table, geomColumn } = await fetchArrowTableWithGeometry(
+      tempName,
+      Duck
+    );
+    return await addGeoArrowMetadataFromDuckDB(
+      table,
+      tempName,
+      Duck,
+      undefined,
+      geomColumn
+    );
+  } finally {
+    await Duck.query(`DROP TABLE IF EXISTS "${tempName}"`, { useProxy: false });
+  }
+}
+
+/**
+ * Builds a `(geom, data_value)` view by joining the basemap geometry table with
+ * the dataset on `basemap_id`, then runs `generate_dot_density` on that view.
+ *
+ * Catalog basemaps expose an `id` column ; custom basemaps expose
+ * `__feature_id__` (both indexed by `applyCachedJoinAssociation.basemap_id`).
+ * Returns an Arrow Table whose `geometry` column is encoded as `geoarrow.wkb`.
+ */
+export async function generateDotDensityFromJoin(
+  geometryTableName: string,
+  datasetTableName: string,
+  dataColumn: string,
+  ratio: number,
+  options: { seed?: number } = {}
+): Promise<ArrowTable> {
+  const geomCols = (await Duck.query(
+    `SELECT column_name, data_type FROM information_schema.columns
+     WHERE table_name = '${escapeSqlString(geometryTableName)}'`,
+    { format: 'array', useProxy: false }
+  )) as GeometryColumnInfo[];
+
+  const hasFeatureIdCol = geomCols.some(
+    (c) => c.column_name === INTERNAL_COLUMN.FEATURE_ID
+  );
+  const hasNativeIdCol = geomCols.some(
+    (c) => c.column_name.toLowerCase() === 'id'
+  );
+  const joinColumn = hasFeatureIdCol
+    ? INTERNAL_COLUMN.FEATURE_ID
+    : hasNativeIdCol
+      ? 'id'
+      : null;
+  if (!joinColumn) {
+    throw new Error(
+      `Basemap geometry table "${geometryTableName}" has no __feature_id__ or id column for density join`
+    );
+  }
+
+  const geometryColumn = geomCols.find((c) => {
+    const name = c.column_name.toLowerCase();
+    return (
+      name === INTERNAL_COLUMN.GEOM ||
+      name === INTERNAL_COLUMN.GEOMETRY ||
+      name === INTERNAL_COLUMN.WKB_GEOMETRY ||
+      name === INTERNAL_COLUMN.THE_GEOM
+    );
+  });
+  if (!geometryColumn) {
+    throw new Error(
+      `Basemap geometry table "${geometryTableName}" has no geometry column`
+    );
+  }
+
+  const cacheTableId = `${datasetTableName}+${geometryTableName}`;
+  const cacheKey = buildDensityCacheKey(
+    cacheTableId,
+    dataColumn,
+    ratio,
+    options.seed
+  );
+  const cached = densityCache.get(cacheKey);
+  if (cached) return cached;
+
+  const viewName = `density_src_${datasetTableName.replace(/[^a-zA-Z0-9_]/g, '_')}`;
+  const escapedDataset = escapeIdentifier(datasetTableName);
+  const escapedGeometry = escapeIdentifier(geometryTableName);
+  const escapedJoinCol = escapeIdentifier(joinColumn);
+  const escapedGeomCol = escapeIdentifier(geometryColumn.column_name);
+  const escapedDataCol = escapeIdentifier(dataColumn);
+
+  await Duck.query(`
+    CREATE OR REPLACE TEMP VIEW "${viewName}" AS
+    SELECT g."${escapedGeomCol}" AS geom, d."${escapedDataCol}" AS value
+    FROM "${escapedDataset}" d
+    INNER JOIN "${escapedGeometry}" g
+      ON CAST(d.basemap_id AS VARCHAR) = CAST(g."${escapedJoinCol}" AS VARCHAR)
+    WHERE g."${escapedGeomCol}" IS NOT NULL
+      AND d."${escapedDataCol}" IS NOT NULL
+  `);
+
+  try {
+    const arrow = await generateDotDensityArrow(
+      viewName,
+      'geom',
+      'value',
+      ratio,
+      options
+    );
+    setDensityCacheEntry(cacheTableId, cacheKey, arrow);
+    return arrow;
+  } finally {
+    await Duck.query(`DROP VIEW IF EXISTS "${viewName}"`, { useProxy: false });
+  }
+}
+
+/**
+ * Variant of `computeDensityLevels` that first builds the same join view used
+ * for point generation, ensuring the ratio is based on the visible dataset rows.
+ */
+export async function computeDensityLevelsFromJoin(
+  geometryTableName: string,
+  datasetTableName: string,
+  dataColumn: string,
+  maxPoints: number = 100000
+): Promise<DensityLevelOption[]> {
+  const geomCols = (await Duck.query(
+    `SELECT column_name, data_type FROM information_schema.columns
+     WHERE table_name = '${escapeSqlString(geometryTableName)}'`,
+    { format: 'array', useProxy: false }
+  )) as GeometryColumnInfo[];
+
+  const hasFeatureIdCol = geomCols.some(
+    (c) => c.column_name === INTERNAL_COLUMN.FEATURE_ID
+  );
+  const hasNativeIdCol = geomCols.some(
+    (c) => c.column_name.toLowerCase() === 'id'
+  );
+  const joinColumn = hasFeatureIdCol
+    ? INTERNAL_COLUMN.FEATURE_ID
+    : hasNativeIdCol
+      ? 'id'
+      : null;
+  if (!joinColumn) {
+    return computeDensityLevels(datasetTableName, dataColumn, maxPoints);
+  }
+
+  const viewName = `density_levels_${datasetTableName.replace(/[^a-zA-Z0-9_]/g, '_')}`;
+  const escapedDataset = escapeIdentifier(datasetTableName);
+  const escapedGeometry = escapeIdentifier(geometryTableName);
+  const escapedJoinCol = escapeIdentifier(joinColumn);
+  const escapedDataCol = escapeIdentifier(dataColumn);
+
+  await Duck.query(`
+    CREATE OR REPLACE TEMP VIEW "${viewName}" AS
+    SELECT d."${escapedDataCol}" AS value
+    FROM "${escapedDataset}" d
+    INNER JOIN "${escapedGeometry}" g
+      ON CAST(d.basemap_id AS VARCHAR) = CAST(g."${escapedJoinCol}" AS VARCHAR)
+    WHERE d."${escapedDataCol}" IS NOT NULL
+  `);
+
+  try {
+    return await computeDensityLevels(viewName, 'value', maxPoints);
+  } finally {
+    await Duck.query(`DROP VIEW IF EXISTS "${viewName}"`, { useProxy: false });
+  }
+}
+
+export async function generateDotDensityFromGeoTable(
+  tableName: string,
+  dataColumn: string,
+  ratio: number,
+  options: { seed?: number } = {}
+): Promise<ArrowTable> {
+  const cacheKey = buildDensityCacheKey(
+    tableName,
+    dataColumn,
+    ratio,
+    options.seed
+  );
+  const cached = densityCache.get(cacheKey);
+  if (cached) return cached;
+
+  const cols = (await Duck.query(
+    `SELECT column_name, data_type FROM information_schema.columns
+     WHERE table_name = '${escapeSqlString(tableName)}'`,
+    { format: 'array', useProxy: false }
+  )) as GeometryColumnInfo[];
+
+  const geometryColumn = cols.find((c) => {
+    const name = c.column_name.toLowerCase();
+    return (
+      name === INTERNAL_COLUMN.GEOM ||
+      name === INTERNAL_COLUMN.GEOMETRY ||
+      name === INTERNAL_COLUMN.WKB_GEOMETRY ||
+      name === INTERNAL_COLUMN.THE_GEOM
+    );
+  });
+  if (!geometryColumn) {
+    throw new Error(
+      `Table "${tableName}" has no geometry column for density generation`
+    );
+  }
+
+  const arrow = await generateDotDensityArrow(
+    tableName,
+    geometryColumn.column_name,
+    dataColumn,
+    ratio,
+    options
+  );
+  setDensityCacheEntry(tableName, cacheKey, arrow);
+  return arrow;
+}

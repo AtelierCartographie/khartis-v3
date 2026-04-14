@@ -9,6 +9,7 @@
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import type { SavedProjectMetadata } from '$lib/features/project-management';
   import { m } from '$lib/paraglide/messages';
+  import { appendToBody } from '$lib/features/commons/utils/append-to-body';
   import {
     FileUploaderDropContainer,
     InlineNotification,
@@ -279,20 +280,25 @@
     </div>
   </div>
 
-  <Modal
-    danger
-    bind:open={showDeleteConfirm}
-    modalHeading={m.open_project_delete_confirm_title()}
-    primaryButtonText={m.open_project_delete_confirm_button()}
-    secondaryButtonText={m.open_project_cancel()}
-    on:click:button--primary={handleDeleteProject}
-    on:click:button--secondary={cancelDelete}
-    size="sm"
-  >
-    <p>
-      {m.open_project_delete_confirm_message()}
-    </p>
-  </Modal>
+  {#if showDeleteConfirm}
+    <div use:appendToBody>
+      <Modal
+        danger
+        bind:open={showDeleteConfirm}
+        modalHeading={m.open_project_delete_confirm_title()}
+        primaryButtonText={m.open_project_delete_confirm_button()}
+        secondaryButtonText={m.open_project_cancel()}
+        on:click:button--primary={handleDeleteProject}
+        on:click:button--secondary={cancelDelete}
+        on:close={cancelDelete}
+        size="sm"
+      >
+        <p>
+          {m.open_project_delete_confirm_message()}
+        </p>
+      </Modal>
+    </div>
+  {/if}
 </section>
 
 <style>

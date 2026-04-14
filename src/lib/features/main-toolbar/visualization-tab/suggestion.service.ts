@@ -13,6 +13,7 @@ import {
   visualizationStore,
   VisualizationType
 } from '$lib/features/commons/store/visualization.store.svelte';
+import { GEO_COLUMN_TYPE } from '$lib/features/commons/constants/data.constants';
 import {
   ColorMode,
   FillMode,
@@ -62,10 +63,10 @@ export function resolveDatasetGeometryType(
   // Check geoDetection for auto-detected GPS columns (before join finalization)
   if (dataset.geoDetection?.geoColumns) {
     const hasLat = dataset.geoDetection.geoColumns.some(
-      (c) => c.type === 'latitude'
+      (c) => c.type === GEO_COLUMN_TYPE.LATITUDE
     );
     const hasLon = dataset.geoDetection.geoColumns.some(
-      (c) => c.type === 'longitude'
+      (c) => c.type === GEO_COLUMN_TYPE.LONGITUDE
     );
     if (hasLat && hasLon) {
       return 'Point';

@@ -21,6 +21,15 @@ export interface DuckDBClient {
   drop_rows(tableName: string, rowIds: number[]): Promise<void>;
 }
 
+async function maybeAnalyse(
+  tableName: string,
+  Duck: DuckDBClient,
+  options?: { skipAnalysis?: boolean }
+): Promise<void> {
+  if (options?.skipAnalysis) return;
+  await Duck.analyse(tableName, { force: true });
+}
+
 export async function renameColumn(
   tableName: string,
   oldName: string,
@@ -36,9 +45,7 @@ export async function renameColumn(
     `ALTER TABLE "${escapedTable}" RENAME COLUMN "${escapedOld}" TO "${escapedNew}"`
   );
 
-  if (!options?.skipAnalysis) {
-    await Duck.analyse(tableName, { force: true });
-  }
+  await maybeAnalyse(tableName, Duck, options);
 }
 
 export async function changeColumnType(
@@ -107,9 +114,7 @@ export async function changeColumnType(
     `ALTER TABLE "${escapedTable}" ALTER COLUMN "${escapedCol}" SET DATA TYPE ${normalizedType}`
   );
 
-  if (!options?.skipAnalysis) {
-    await Duck.analyse(tableName, { force: true });
-  }
+  await maybeAnalyse(tableName, Duck, options);
 }
 
 export async function dropColumn(
@@ -123,9 +128,7 @@ export async function dropColumn(
 
   await Duck.query(`ALTER TABLE "${escapedTable}" DROP COLUMN "${escapedCol}"`);
 
-  if (!options?.skipAnalysis) {
-    await Duck.analyse(tableName, { force: true });
-  }
+  await maybeAnalyse(tableName, Duck, options);
 }
 
 export async function dropRows(
@@ -139,9 +142,7 @@ export async function dropRows(
   const start = performance.now();
 
   await Duck.drop_rows(tableName, rowIds);
-  if (!options?.skipAnalysis) {
-    await Duck.analyse(tableName, { force: true });
-  }
+  await maybeAnalyse(tableName, Duck, options);
 
   logger.info('Dropped rows from DuckDB table', LogCategory.DUCKDB, {
     tableName,
@@ -184,9 +185,7 @@ export async function refineColumn(
 
   await Duck.query(operations[operation]);
 
-  if (!options?.skipAnalysis) {
-    await Duck.analyse(tableName, { force: true });
-  }
+  await maybeAnalyse(tableName, Duck, options);
 
   logger.info('Refined DuckDB column', LogCategory.DUCKDB, {
     tableName,

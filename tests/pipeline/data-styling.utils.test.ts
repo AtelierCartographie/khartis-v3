@@ -76,7 +76,7 @@ function createVisualizationConfig(
       sizeColumn: 'size'
     },
     symbols: {
-      type: ShapeType.POINT,
+      type: ShapeType.CIRCLE,
       minSize: 4,
       maxSize: 20,
       sizeScale: ScaleType.LINEAR
