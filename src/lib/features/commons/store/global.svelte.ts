@@ -84,7 +84,8 @@ function createGlobalStore() {
       minPageZoom: 10,
       maxPageZoom: 500,
       pageZoomStep: 10,
-      pagePanOffset: { x: 0, y: 0 }
+      pagePanOffset: { x: 0, y: 0 },
+      pageZoomScale: 1
     },
     isMobileView:
       typeof window !== 'undefined'
@@ -380,6 +381,12 @@ function createGlobalStore() {
     notifyPersistence();
   }
 
+  function setPageZoomScale(scale: number): void {
+    const nextScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
+    if (Math.abs(state.zoom.pageZoomScale - nextScale) < 1e-4) return;
+    state.zoom.pageZoomScale = nextScale;
+  }
+
   if (typeof window !== 'undefined' && selectedDataButtonState.id) {
     const initialSelectedDataButtonId = selectedDataButtonState.id;
     queueMicrotask(() => {
@@ -552,6 +559,7 @@ function createGlobalStore() {
     zoomOutPage,
     resetPageZoom,
     setPageZoom,
+    setPageZoomScale,
     panPageBy,
     setPagePanOffset,
     resetPagePan,
@@ -574,6 +582,7 @@ export const globalActions = {
   zoomOutPage: globalState.zoomOutPage,
   resetPageZoom: globalState.resetPageZoom,
   setPageZoom: globalState.setPageZoom,
+  setPageZoomScale: globalState.setPageZoomScale,
   panPageBy: globalState.panPageBy,
   setPagePanOffset: globalState.setPagePanOffset,
   resetPagePan: globalState.resetPagePan,

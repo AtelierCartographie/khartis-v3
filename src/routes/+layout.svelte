@@ -242,6 +242,10 @@
   });
 
   $effect(() => {
+    globalActions.setPageZoomScale(pageZoomScale);
+  });
+
+  $effect(() => {
     const workspaceViewport = workspaceViewportElement;
 
     if (
@@ -316,6 +320,7 @@
       workspaceHeight - WORKSPACE_FIT_PADDING_PX * 2
     );
     return Math.min(
+      1,
       effectiveWidth / pageIntrinsicWidth,
       effectiveHeight / pageIntrinsicHeight
     );
@@ -329,9 +334,7 @@
   const workspaceCameraStyle = $derived(
     `transform: translate(${pagePan.x + workspaceCenteringOffsetX}px, ${pagePan.y}px);`
   );
-  const pageScaleStyle = $derived(
-    `transform: scale(${pageZoomScale}); transform-origin: center center;`
-  );
+  const pageScaleStyle = $derived(`zoom: ${pageZoomScale};`);
   let workspaceViewportBounds = $state<WorkspaceViewportBounds>(
     DEFAULT_WORKSPACE_VIEWPORT_BOUNDS
   );
@@ -723,8 +726,7 @@
     overflow: visible;
   }
 
-  .workspace-camera,
-  .page-scale-layer {
+  .workspace-camera {
     will-change: transform;
   }
 
