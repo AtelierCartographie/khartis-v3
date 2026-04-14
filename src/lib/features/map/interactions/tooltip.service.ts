@@ -11,13 +11,18 @@ export function formatTooltipValue(value: unknown): string {
   return formatValue(value);
 }
 
-const JOIN_INTERNAL_COLUMNS = ['basemap_id', 'typo_match'] as const;
+const JOIN_INTERNAL_COLUMNS = [
+  'basemap_id',
+  'basemap_label',
+  'typo_match'
+] as const;
 
 function isReservedColumn(columnName: string): boolean {
   return (
     columnName === INTERNAL_COLUMN.GEOM ||
     columnName === INTERNAL_COLUMN.GEOMETRY ||
     columnName === INTERNAL_COLUMN.ID ||
+    columnName === INTERNAL_COLUMN.FEATURE_ID ||
     (JOIN_INTERNAL_COLUMNS as readonly string[]).includes(columnName)
   );
 }
@@ -87,6 +92,32 @@ function resolveSourceTable(info: PickingInfo): ArrowTable | null {
   return null;
 }
 
+function resolveSplitDatasetRow(
+  layerData: object,
+  geometryRow: number,
+  sourceTable: ArrowTable
+): number | null {
+  const splitMap = Reflect.get(layerData, 'khartisSplitDatasetRowByGeomRow');
+  if (
+    !splitMap ||
+    typeof splitMap !== 'object' ||
+    !('length' in splitMap) ||
+    geometryRow < 0 ||
+    geometryRow >= (splitMap as ArrayLike<number>).length
+  ) {
+    return null;
+  }
+  const datasetRow = Number((splitMap as ArrayLike<number>)[geometryRow]);
+  if (
+    !Number.isInteger(datasetRow) ||
+    datasetRow < 0 ||
+    datasetRow >= sourceTable.numRows
+  ) {
+    return null;
+  }
+  return datasetRow;
+}
+
 function resolveBinaryRowIndex(
   info: PickingInfo,
   sourceTable: ArrowTable
@@ -101,6 +132,9 @@ function resolveBinaryRowIndex(
     return null;
   }
 
+  const hasSplitMap =
+    Reflect.get(layerData, 'khartisSplitDatasetRowByGeomRow') !== undefined;
+
   const rawFeatureIds = Reflect.get(layerData, 'featureIds');
   if (
     typeof rawFeatureIds === 'object' &&
@@ -109,12 +143,17 @@ function resolveBinaryRowIndex(
   ) {
     const featureIds = rawFeatureIds as ArrayLike<unknown>;
     const directFeatureId = Number(featureIds[pickIndex]);
-    if (
-      Number.isInteger(directFeatureId) &&
-      directFeatureId >= 0 &&
-      directFeatureId < sourceTable.numRows
-    ) {
-      return directFeatureId;
+    if (Number.isInteger(directFeatureId) && directFeatureId >= 0) {
+      if (hasSplitMap) {
+        const datasetRow = resolveSplitDatasetRow(
+          layerData,
+          directFeatureId,
+          sourceTable
+        );
+        if (datasetRow !== null) return datasetRow;
+      } else if (directFeatureId < sourceTable.numRows) {
+        return directFeatureId;
+      }
     }
   }
 
@@ -147,12 +186,17 @@ function resolveBinaryRowIndex(
       ) {
         const featureIds = rawFeatureIds as ArrayLike<unknown>;
         const mappedFeatureId = Number(featureIds[objectIndex]);
-        if (
-          Number.isInteger(mappedFeatureId) &&
-          mappedFeatureId >= 0 &&
-          mappedFeatureId < sourceTable.numRows
-        ) {
-          return mappedFeatureId;
+        if (Number.isInteger(mappedFeatureId) && mappedFeatureId >= 0) {
+          if (hasSplitMap) {
+            const datasetRow = resolveSplitDatasetRow(
+              layerData,
+              mappedFeatureId,
+              sourceTable
+            );
+            if (datasetRow !== null) return datasetRow;
+          } else if (mappedFeatureId < sourceTable.numRows) {
+            return mappedFeatureId;
+          }
         }
       }
 

@@ -17,6 +17,7 @@ import { describeTable, dropRows, getRowCount } from './operations/table-ops';
 
 import { analyse as analyseMacros } from './macros/analyse';
 import { breaks as breaksMacros } from './macros/breaks';
+import { density_macros } from './macros/density';
 import { join_macros } from './macros/join';
 import { search_macros } from './macros/search';
 import { simplification_macros } from './macros/simplification';
@@ -230,7 +231,8 @@ export async function initDuckDB(): Promise<void> {
         analyseMacros +
         join_macros +
         search_macros +
-        simplification_macros;
+        simplification_macros +
+        density_macros;
       await loadMacros(allMacros);
     } catch (error) {
       duckInitPromise = null;

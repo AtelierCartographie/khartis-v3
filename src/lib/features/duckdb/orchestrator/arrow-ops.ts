@@ -209,7 +209,8 @@ export async function fetchArrowTableWithGeometry(
   tableName: string,
   Duck: DuckDBClientForArrow,
   whereClause?: string | null,
-  targetCrs?: string | null
+  targetCrs?: string | null,
+  projectColumns?: readonly string[] | null
 ): Promise<{ table: Table; geomColumn: GeomColumnInfo | undefined }> {
   const tableInfo = await Duck.describe_table(tableName);
   const columns = tableInfo.name.map((name: string, index: number) => ({
@@ -222,13 +223,32 @@ export async function fetchArrowTableWithGeometry(
   );
 
   const normalizedTargetCrs = normalizeCrsName(targetCrs);
+  const projectedColumnNames = projectColumns
+    ? projectColumns.filter((name) =>
+        columns.some((c) => c.column_name === name)
+      )
+    : null;
 
-  let query = `SELECT * FROM "${tableName}"`;
-  if (geomColumn && normalizedTargetCrs) {
-    const geometryExpression = `ST_Transform("${geomColumn.column_name}", '${escapeSqlLiteral(
-      normalizedTargetCrs
-    )}')`;
-    query = `SELECT * EXCLUDE ("${geomColumn.column_name}"), ${geometryExpression} AS "${geomColumn.column_name}" FROM "${tableName}"`;
+  const geometryProjection =
+    geomColumn && normalizedTargetCrs
+      ? `ST_Transform("${geomColumn.column_name}", '${escapeSqlLiteral(
+          normalizedTargetCrs
+        )}') AS "${geomColumn.column_name}"`
+      : geomColumn
+        ? `"${geomColumn.column_name}"`
+        : null;
+
+  let query: string;
+  if (projectedColumnNames && projectedColumnNames.length > 0) {
+    const columnExpressions = projectedColumnNames.map((name) => `"${name}"`);
+    if (geometryProjection) {
+      columnExpressions.push(geometryProjection);
+    }
+    query = `SELECT ${columnExpressions.join(', ')} FROM "${tableName}"`;
+  } else if (geomColumn && normalizedTargetCrs) {
+    query = `SELECT * EXCLUDE ("${geomColumn.column_name}"), ${geometryProjection} FROM "${tableName}"`;
+  } else {
+    query = `SELECT * FROM "${tableName}"`;
   }
 
   if (whereClause) {

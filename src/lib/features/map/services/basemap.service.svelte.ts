@@ -20,6 +20,7 @@ import {
   addGeoArrowMetadataFromDuckDB,
   fetchArrowTableWithGeometry
 } from '../../duckdb/orchestrator/arrow-ops';
+import { INTERNAL_COLUMN } from '../../commons/constants/data.constants';
 
 const BASEMAP_METADATA_PATH = '/basemaps/all-basemaps-metadata.json';
 const BASEMAP_ATTRIBUTES_PATH = '/basemaps/all-basemaps-attributes.parquet';
@@ -587,7 +588,8 @@ function createBasemapService() {
   }
 
   async function loadGeometryFromDuckTable(
-    tableName: string
+    tableName: string,
+    projectColumns?: readonly string[] | null
   ): Promise<ArrowTable> {
     if (!Duck) {
       throw new Error('DuckDB not initialized');
@@ -595,7 +597,10 @@ function createBasemapService() {
 
     const { table: rawTable, geomColumn } = await fetchArrowTableWithGeometry(
       tableName,
-      Duck
+      Duck,
+      null,
+      null,
+      projectColumns
     );
     return addGeoArrowMetadataFromDuckDB(
       rawTable,
@@ -624,7 +629,7 @@ function createBasemapService() {
     const shouldReadFromDuck =
       metadata.isCustom && (await doesDuckTableExist(layerFile));
     return shouldReadFromDuck
-      ? loadGeometryFromDuckTable(layerFile)
+      ? loadGeometryFromDuckTable(layerFile, [INTERNAL_COLUMN.FEATURE_ID])
       : loadGeometryFromParquet(layerFile);
   }
 
@@ -720,7 +725,9 @@ function createBasemapService() {
       throw new Error(`Custom basemap table not found: ${customTableName}`);
     }
 
-    return loadGeometryFromDuckTable(customTableName);
+    return loadGeometryFromDuckTable(customTableName, [
+      INTERNAL_COLUMN.FEATURE_ID
+    ]);
   }
 
   async function loadGeometryIntoDuckDB(basemapId: string): Promise<string> {
@@ -957,6 +964,35 @@ function createBasemapService() {
       basemapCache.get(basemapId) ?? null,
       level
     );
+  }
+
+  /**
+   * Returns the cached basemap geometry Arrow table (the one used by the
+   * pre-tessellated basemap layer). If the basemap has not been loaded yet,
+   * loads it from parquet/DuckDB. Issue #87 split rendering relies on this
+   * stable Arrow ref so `parseSolidPolygons` hits its WeakMap cache instead of
+   * re-running earcut for every joined dataset.
+   */
+  async function getBasemapGeometryArrow(
+    basemapId: string
+  ): Promise<ArrowTable | null> {
+    if (!isInitialized) {
+      await initialize();
+    }
+    const resolvedBasemapId = getPreferredBasemapFile(
+      availableBasemaps,
+      basemapId
+    );
+    const cached = basemapCache.get(resolvedBasemapId);
+    if (cached) {
+      const variant = getResolvedBasemapVariant(cached);
+      const geometryTable = variant?.geometryTable ?? cached.geometryTable;
+      if (geometryTable) return geometryTable;
+    }
+    const loaded = await loadBasemapInternal(basemapId);
+    if (!loaded) return null;
+    const variant = getResolvedBasemapVariant(loaded);
+    return variant?.geometryTable ?? loaded.geometryTable ?? null;
   }
 
   async function loadVariant(
@@ -1249,6 +1285,7 @@ function createBasemapService() {
   return {
     initialize,
     loadGeometryIntoDuckDB,
+    getBasemapGeometryArrow,
     loadBasemap,
     loadDefaultBasemap,
     registerCustomBasemapMetadata,

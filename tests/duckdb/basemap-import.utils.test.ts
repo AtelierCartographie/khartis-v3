@@ -108,10 +108,11 @@ describe('processBasemapImport', () => {
   it('prepares imported polygon geofiles with snapping, innerlines and centroids', async () => {
     mocks.queryMock
       .mockResolvedValueOnce([{ geom_type: 'POLYGON' }])
-      .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined) // CREATE __raw
+      .mockResolvedValueOnce(undefined) // simplify_and_clean
+      .mockResolvedValueOnce(undefined) // ensureFeatureIdColumn
+      .mockResolvedValueOnce(undefined) // extract_innerlines
+      .mockResolvedValueOnce(undefined) // centroids
       .mockResolvedValueOnce([{ minX: -1, minY: -2, maxX: 3, maxY: 4 }]);
     mocks.analyseMock.mockResolvedValueOnce([{ name: 'geom', count: 2 }]);
 
@@ -127,6 +128,12 @@ describe('processBasemapImport', () => {
       expect.stringContaining(
         "FROM simplify_and_clean('custom_basemap_1700000000000__raw', 'geom', 0.0)"
       )
+    );
+    expect(mocks.queryMock).toHaveBeenCalledWith(
+      expect.stringContaining('ROW_NUMBER() OVER ()')
+    );
+    expect(mocks.queryMock).toHaveBeenCalledWith(
+      expect.stringContaining('"__feature_id__"')
     );
     expect(mocks.queryMock).toHaveBeenCalledWith(
       expect.stringContaining(
@@ -225,9 +232,10 @@ describe('processBasemapImport', () => {
   it('prepares imported line geofiles with a dedicated cleanup pipeline and representative points', async () => {
     mocks.queryMock
       .mockResolvedValueOnce([{ geom_type: 'LINESTRING' }])
-      .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined) // CREATE __raw
+      .mockResolvedValueOnce(undefined) // simplify_and_clean_linestring
+      .mockResolvedValueOnce(undefined) // ensureFeatureIdColumn
+      .mockResolvedValueOnce(undefined) // centroids (representative points)
       .mockResolvedValueOnce([{ minX: 0, minY: 0, maxX: 1, maxY: 1 }]);
     mocks.analyseMock.mockResolvedValueOnce([{ name: 'geom', count: 5 }]);
 
@@ -269,7 +277,8 @@ describe('processBasemapImport', () => {
   it('prepares imported multipoint geofiles with representative points only', async () => {
     mocks.queryMock
       .mockResolvedValueOnce([{ geom_type: 'MULTIPOINT' }])
-      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined) // centroids (representative points)
+      .mockResolvedValueOnce(undefined) // ensureFeatureIdColumn
       .mockResolvedValueOnce([{ minX: 2, minY: 3, maxX: 4, maxY: 5 }]);
     mocks.analyseMock.mockResolvedValueOnce([{ name: 'geom', count: 6 }]);
 
@@ -356,7 +365,7 @@ describe('processBasemapImport', () => {
 
   it('normalizes polygon geoparquet imports to the geom column before deriving helper layers', async () => {
     mocks.queryMock
-      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined) // CREATE TABLE from parquet
       .mockResolvedValueOnce([
         {
           value: JSON.stringify({
@@ -369,10 +378,11 @@ describe('processBasemapImport', () => {
           })
         }
       ])
-      .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined) // CREATE __raw
+      .mockResolvedValueOnce(undefined) // simplify_and_clean
+      .mockResolvedValueOnce(undefined) // ensureFeatureIdColumn
+      .mockResolvedValueOnce(undefined) // extract_innerlines
+      .mockResolvedValueOnce(undefined) // centroids
       .mockResolvedValueOnce([{ minX: -5, minY: -6, maxX: 7, maxY: 8 }]);
     mocks.analyseMock.mockResolvedValueOnce([{ name: 'geom', count: 4 }]);
 

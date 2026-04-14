@@ -8,7 +8,9 @@
   import { globalActions } from '$lib/features/commons/store/global.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { ToolbarStep } from '$lib/features/commons/types/global';
+  import { GEO_COLUMN_TYPE } from '$lib/features/commons/constants/data.constants';
   import { BasemapSource } from '$lib/features/commons/constants/ui.constants';
+  import { PERSISTED_BASEMAP_TYPE } from './services/persisted-basemap';
   import { hasGPSCoordinateColumns } from '$lib/features/commons/utils/geo-detector.utils';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
@@ -418,7 +420,9 @@
     projectStore.updateProjectData({
       basemap: {
         id: basemap.file,
-        type: basemap.isCustom ? 'custom' : 'catalog',
+        type: basemap.isCustom
+          ? PERSISTED_BASEMAP_TYPE.CUSTOM
+          : PERSISTED_BASEMAP_TYPE.CATALOG,
         data: basemap.isCustom ? { ...basemap } : undefined
       }
     });
@@ -537,7 +541,7 @@
       projectStore.updateProjectData({
         basemap: {
           id: customBasemap.file,
-          type: 'custom',
+          type: PERSISTED_BASEMAP_TYPE.CUSTOM,
           data: { ...customBasemap }
         }
       });
@@ -617,7 +621,7 @@
     projectStore.updateProjectData({
       basemap: {
         id: osmBasemap.file,
-        type: 'osm',
+        type: PERSISTED_BASEMAP_TYPE.OSM,
         data: { ...osmBasemap }
       }
     });
@@ -956,7 +960,8 @@
         const textGeoColumns =
           processedDataset.geoDetection?.geoColumns?.filter(
             (column) =>
-              column.type !== 'latitude' && column.type !== 'longitude'
+              column.type !== GEO_COLUMN_TYPE.LATITUDE &&
+              column.type !== GEO_COLUMN_TYPE.LONGITUDE
           ) ?? [];
         let bestTextSuggestions: BasemapSuggestion[] = [];
         let bestTextScore = 0;

@@ -91,11 +91,17 @@
   let renameInputRef = $state<HTMLInputElement | null>(null);
 
   $effect(() => {
-    if (renameModalOpen) {
-      tick().then(() => {
-        setTimeout(() => renameInputRef?.select(), 100);
-      });
-    }
+    if (!renameModalOpen) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    tick().then(() => {
+      timer = setTimeout(() => {
+        renameInputRef?.select();
+        timer = null;
+      }, 100);
+    });
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
   });
 
   let deleteModalOpen = $state(false);
