@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { PageModel } from '$lib/features/commons/constants/ui.constants';
+import { hexToHsl } from '$lib/features/commons/utils/color-utils';
 import { formatActions } from '../format/format.store.svelte';
 import {
   geoIndicationsActions,
@@ -10,6 +11,17 @@ describe('geo indications store responsive defaults', () => {
   beforeEach(() => {
     formatActions.reset();
     geoIndicationsActions.reset();
+  });
+
+  it('starts the inset map from coherent basemap colors', () => {
+    expect(geoIndicationsState.insetMap.useBasemapColors).toBe(true);
+    expect(geoIndicationsState.insetMap.windowColor).toEqual(
+      hexToHsl('#ffffff')
+    );
+    expect(geoIndicationsState.insetMap.continentColor).toEqual(
+      hexToHsl('#d9d9d9')
+    );
+    expect(geoIndicationsState.insetMap.seaColor).toEqual(hexToHsl('#d0e2ff'));
   });
 
   it('promotes default sizes to the A3 profile on first enable', () => {
