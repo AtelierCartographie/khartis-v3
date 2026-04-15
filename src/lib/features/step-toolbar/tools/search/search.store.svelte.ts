@@ -10,6 +10,7 @@ import { formatValue } from '$lib/features/commons/utils/format.utils';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
 import { Duck } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
+import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
 import { mapHighlightStore } from '$lib/features/map/stores/map-highlight.store.svelte';
 import { mapTooltipStore } from '$lib/features/map/stores/map-tooltip.store.svelte';
 import type { TooltipEntry } from '$lib/features/map/types';
@@ -26,7 +27,8 @@ const DEFAULT_STATE: SearchState = {
   isSearching: false,
   caseSensitive: false,
   wholeWord: false,
-  useRegex: false
+  useRegex: false,
+  replaceValue: ''
 };
 
 type SearchActions = {
@@ -40,6 +42,8 @@ type SearchActions = {
   toggleUseRegex: () => void;
   toggleWholeWord: () => void;
   clearSearch: () => void;
+  setReplaceValue: (value: string) => void;
+  replaceCurrentResult: () => Promise<void>;
 };
 
 function resolveSearchDataset(): DatasetResult | undefined {
@@ -65,6 +69,7 @@ function resolveSearchDataset(): DatasetResult | undefined {
 type SearchContext = {
   dataset: DatasetResult;
   tableName: string;
+  geoColumn?: string;
 };
 
 type SearchResultItem = SearchState['results'][number];
@@ -83,9 +88,15 @@ function getSearchContext(): SearchContext | null {
     return null;
   }
 
+  const geoColumn =
+    duckDataset.geoColumn ??
+    dataset.geometry?.columnName ??
+    dataset.columns.find((col) => col.type === 'geometry')?.name;
+
   return {
     dataset,
-    tableName: duckDataset.tableName
+    tableName: duckDataset.tableName,
+    geoColumn
   };
 }
 
@@ -263,6 +274,35 @@ async function showTooltipForResult(
   }
 }
 
+async function centerMapOnRow(
+  rowId: number,
+  searchContext: SearchContext
+): Promise<void> {
+  if (!searchContext.geoColumn) return;
+
+  const escapedTable = escapeIdentifier(searchContext.tableName);
+  const escapedCol = escapeIdentifier(searchContext.geoColumn);
+
+  try {
+    const rows = (await Duck.query(
+      `SELECT ST_X(ST_Centroid("${escapedCol}")) AS lon, ST_Y(ST_Centroid("${escapedCol}")) AS lat FROM "${escapedTable}" WHERE ${INTERNAL_COLUMN.ID} = ${rowId} LIMIT 1`,
+      { format: 'array', useProxy: false }
+    )) as Array<{ lon: number | null; lat: number | null }>;
+
+    const row = rows?.[0];
+    if (!row || row.lon == null || row.lat == null) return;
+    if (!Number.isFinite(row.lon) || !Number.isFinite(row.lat)) return;
+
+    mapInstanceStore.centerOnDataPoint(row.lon, row.lat);
+  } catch (error) {
+    logger.debug('Failed to center map on search result', LogCategory.UI, {
+      rowId,
+      tableName: searchContext.tableName,
+      error
+    });
+  }
+}
+
 function clearMapHighlights(): void {
   mapHighlightStore.clearHighlights();
 }
@@ -393,6 +433,7 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
       const focused = s.results[index];
       if (searchContext && focused) {
         void showTooltipForResult(focused.rowId, searchContext);
+        void centerMapOnRow(focused.rowId, searchContext);
       }
     };
 
@@ -464,6 +505,44 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
         s.isSearching = false;
         clearMapHighlights();
         mapTooltipStore.unpin();
+      },
+      setReplaceValue: (value: string) => {
+        s.replaceValue = value;
+      },
+      replaceCurrentResult: async (): Promise<void> => {
+        const focused = s.results[s.currentResultIndex];
+        const searchContext = getSearchContext();
+        if (!focused || !searchContext || !s.replaceValue.trim()) return;
+
+        const escapedTable = escapeIdentifier(searchContext.tableName);
+        const escapedCol = escapeIdentifier(focused.columnName);
+        const escapedNewVal = escapeSqlString(s.replaceValue);
+
+        try {
+          await Duck.query(
+            `UPDATE "${escapedTable}" SET "${escapedCol}" = '${escapedNewVal}' WHERE ${INTERNAL_COLUMN.ID} = ${focused.rowId}`,
+            { format: 'array' }
+          );
+          Duck.invalidateTableCache(searchContext.tableName);
+          duckDBOrchestrator.bumpDatasetsVersion();
+
+          const prevIndex = s.currentResultIndex;
+          s.results = s.results.filter((_, i) => i !== prevIndex);
+
+          if (s.results.length > 0) {
+            navigateTo(Math.min(prevIndex, s.results.length - 1));
+          } else {
+            s.currentResultIndex = -1;
+            clearMapHighlights();
+            mapTooltipStore.unpin();
+          }
+        } catch (error) {
+          logger.error('Replace failed', LogCategory.UI, {
+            rowId: focused.rowId,
+            column: focused.columnName,
+            error
+          });
+        }
       }
     };
   },
