@@ -79,7 +79,7 @@ export default defineConfig(({ mode }) => {
       VitePWA({
         registerType: 'prompt',
         devOptions: {
-          enabled: true,
+          enabled: false,
           type: 'module'
         },
         workbox: {
@@ -301,8 +301,9 @@ export default defineConfig(({ mode }) => {
               'tests/pipeline/**/*.{test,spec}.{js,ts}',
               'tests/duckdb/**/*.{test,spec}.{js,ts}'
             ],
-            exclude: ['tests/e2e/**', 'tests/**/tmp-*.{test,spec}.{js,ts}'],
-            pool: 'threads',
+            exclude: ['tests/**/tmp-*.{test,spec}.{js,ts}'],
+            setupFiles: ['./vitest-setup-server.ts'],
+            pool: 'forks',
             fileParallelism: false
           }
         }
