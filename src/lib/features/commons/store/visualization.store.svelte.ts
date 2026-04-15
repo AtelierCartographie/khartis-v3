@@ -107,6 +107,18 @@ export type PrimitiveFilter =
   | PrimitiveFilterType.POLYGON
   | PrimitiveFilterType.TEXT;
 
+export type VisualizationOriginMode =
+  | 'auto-suggestion'
+  | 'manual-suggestion'
+  | 'manual-blank'
+  | 'custom'
+  | 'legacy';
+
+export interface VisualizationOrigin {
+  mode: VisualizationOriginMode;
+  suggestionKey?: string;
+}
+
 export const ALL_PRIMITIVE_FILTERS: PrimitiveFilter[] = [
   PrimitiveFilterType.POINT,
   PrimitiveFilterType.LINE,
@@ -146,6 +158,7 @@ export interface VisualizationConfig {
   type: VisualizationType;
   datasetId: string;
   enabled: boolean;
+  origin?: VisualizationOrigin;
   facet?: {
     baseVisualizationId: string;
   };
@@ -227,6 +240,12 @@ interface VisualizationState {
   selectedVisualizationId?: string;
   activeVisualizationIds: Set<string>;
   version: number;
+}
+
+export function getVisualizationOriginMode(
+  visualization?: Pick<VisualizationConfig, 'origin'> | null
+): VisualizationOriginMode {
+  return visualization?.origin?.mode ?? 'legacy';
 }
 
 interface SerializedVisualizationSettings {
@@ -590,6 +609,25 @@ function resolveGeometryFamilyFromDataset(
 }
 
 export function resolveAllowedPrimitiveFilters(
+  _type: VisualizationType,
+  dataset: ProcessedDataset | DatasetResult
+): PrimitiveFilter[] {
+  switch (resolveGeometryFamilyFromDataset(dataset)) {
+    case 'polygon':
+      return [PrimitiveFilterType.POINT, PrimitiveFilterType.POLYGON];
+
+    case 'line':
+      return [PrimitiveFilterType.LINE];
+
+    case 'point':
+      return [PrimitiveFilterType.POINT];
+
+    default:
+      return [...ALL_PRIMITIVE_FILTERS];
+  }
+}
+
+function resolveDefaultPrimitiveFilters(
   type: VisualizationType,
   dataset: ProcessedDataset | DatasetResult
 ): PrimitiveFilter[] {
@@ -617,15 +655,19 @@ export function resolveAllowedPrimitiveFilters(
 
 function sanitizePrimitiveFilters(
   filters: PrimitiveFilter[] | undefined,
-  allowedFilters: PrimitiveFilter[]
+  allowedFilters: PrimitiveFilter[],
+  defaultFilters: PrimitiveFilter[]
 ): PrimitiveFilter[] {
-  const sourceFilters =
-    filters && filters.length > 0 ? filters : allowedFilters;
+  if (filters === undefined) {
+    return [...defaultFilters];
+  }
+
+  const sourceFilters = filters;
   const sanitized = [...new Set(sourceFilters)].filter((filter) =>
     allowedFilters.includes(filter)
   );
 
-  return sanitized.length > 0 ? sanitized : [...allowedFilters];
+  return sanitized;
 }
 
 function sanitizePrimitiveOrder(
@@ -656,11 +698,43 @@ function sanitizeDataFilters(
   );
 }
 
+function normalizeLegacyLabelStyle(
+  visualization: VisualizationConfig
+): VisualizationConfig['style'] {
+  const style = { ...visualization.style };
+  const labelOpacity = style.labelOpacity ?? 0;
+  const textOpacity = style.textOpacity ?? 0;
+  const hasLegacyLabelLayer =
+    labelOpacity > 0 && Boolean(visualization.mapping.labelColumn);
+  const hasActiveTextLayer = textOpacity > 0;
+
+  if (hasLegacyLabelLayer && !hasActiveTextLayer) {
+    style.textOpacity = labelOpacity;
+    style.textColor = style.labelColor ?? style.textColor;
+    style.textSize = style.labelSize ?? style.textSize;
+    style.textAlign = style.labelAlign ?? style.textAlign;
+    style.textHalo = style.labelHalo ?? style.textHalo;
+    style.textHaloColor = style.labelHaloColor ?? style.textHaloColor;
+    style.textHaloWidth = style.labelHaloWidth ?? style.textHaloWidth;
+    style.textCollisionDetection =
+      style.labelCollisionDetection ?? style.textCollisionDetection;
+    style.textDxpMasking = style.labelDxpMasking ?? style.textDxpMasking;
+  }
+
+  style.labelOpacity = 0;
+
+  return style;
+}
+
 function normalizeVisualizationConfig(
   visualization: VisualizationConfig,
   dataset: ProcessedDataset | DatasetResult
 ): VisualizationConfig {
   const allowedFilters = resolveAllowedPrimitiveFilters(
+    visualization.type,
+    dataset
+  );
+  const defaultFilters = resolveDefaultPrimitiveFilters(
     visualization.type,
     dataset
   );
@@ -678,10 +752,12 @@ function normalizeVisualizationConfig(
 
   return {
     ...visualization,
+    style: normalizeLegacyLabelStyle(visualization),
     symbols: normalizedSymbols,
     primitiveFilters: sanitizePrimitiveFilters(
       visualization.primitiveFilters,
-      allowedFilters
+      allowedFilters,
+      defaultFilters
     ),
     primitiveOrder: sanitizePrimitiveOrder(
       visualization.primitiveOrder,
@@ -707,7 +783,50 @@ function getDefaultPrimitiveFilters(
   type: VisualizationType,
   dataset: ProcessedDataset | DatasetResult
 ): PrimitiveFilter[] {
-  return resolveAllowedPrimitiveFilters(type, dataset);
+  return resolveDefaultPrimitiveFilters(type, dataset);
+}
+
+const ORIGIN_TRACKED_UPDATE_KEYS = [
+  'modes',
+  'primitiveFilters',
+  'style',
+  'mapping',
+  'classification',
+  'symbols',
+  'missingData',
+  'yearFilter',
+  'dataFilters'
+] as const;
+
+function touchesVisualizationSemantics(
+  updates: Partial<VisualizationConfig>
+): boolean {
+  return ORIGIN_TRACKED_UPDATE_KEYS.some((key) =>
+    Object.prototype.hasOwnProperty.call(updates, key)
+  );
+}
+
+function resolveNextVisualizationOrigin(
+  visualization: VisualizationConfig,
+  updates: Partial<VisualizationConfig>
+): VisualizationConfig['origin'] {
+  if (Object.prototype.hasOwnProperty.call(updates, 'origin')) {
+    return updates.origin;
+  }
+
+  const currentMode = getVisualizationOriginMode(visualization);
+  if (
+    currentMode !== 'auto-suggestion' &&
+    currentMode !== 'manual-suggestion'
+  ) {
+    return visualization.origin;
+  }
+
+  if (!touchesVisualizationSemantics(updates)) {
+    return visualization.origin;
+  }
+
+  return { mode: 'custom' };
 }
 
 function buildVisualizationPreset(
@@ -778,9 +897,12 @@ function createVisualizationStore(): VisualizationStore {
       return;
     }
 
+    const nextOrigin = resolveNextVisualizationOrigin(visualization, updates);
+
     const nextVisualization = getNormalizedVisualization({
       ...visualization,
       ...updates,
+      origin: nextOrigin,
       id
     });
 
@@ -836,10 +958,6 @@ function createVisualizationStore(): VisualizationStore {
       const nextFilters = currentFilters.includes(primitive)
         ? currentFilters.filter((item) => item !== primitive)
         : [...currentFilters, primitive];
-
-      if (nextFilters.length === 0) {
-        return {};
-      }
 
       return {
         primitiveFilters: nextFilters
