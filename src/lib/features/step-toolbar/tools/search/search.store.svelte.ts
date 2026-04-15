@@ -10,10 +10,10 @@ import { formatValue } from '$lib/features/commons/utils/format.utils';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
 import { Duck } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
-import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
 import { mapHighlightStore } from '$lib/features/map/stores/map-highlight.store.svelte';
 import { mapTooltipStore } from '$lib/features/map/stores/map-tooltip.store.svelte';
 import type { TooltipEntry } from '$lib/features/map/types';
+import { centerMapOnTableRow } from '$lib/features/map/utils/center-on-table-row.utils';
 import type { SearchState } from './search.types';
 
 const MIN_SEARCH_LENGTH = 2;
@@ -69,7 +69,12 @@ function resolveSearchDataset(): DatasetResult | undefined {
 type SearchContext = {
   dataset: DatasetResult;
   tableName: string;
-  geoColumn?: string;
+  sourceFileId?: string;
+  joinedBasemap?: string;
+  gpsColumns?: {
+    lat: string;
+    lon: string;
+  };
 };
 
 type SearchResultItem = SearchState['results'][number];
@@ -88,15 +93,12 @@ function getSearchContext(): SearchContext | null {
     return null;
   }
 
-  const geoColumn =
-    duckDataset.geoColumn ??
-    dataset.geometry?.columnName ??
-    dataset.columns.find((col) => col.type === 'geometry')?.name;
-
   return {
     dataset,
     tableName: duckDataset.tableName,
-    geoColumn
+    sourceFileId: dataset.sourceFileId,
+    joinedBasemap: duckDataset.joinedBasemap,
+    gpsColumns: duckDataset.gpsColumns
   };
 }
 
@@ -278,29 +280,13 @@ async function centerMapOnRow(
   rowId: number,
   searchContext: SearchContext
 ): Promise<void> {
-  if (!searchContext.geoColumn) return;
-
-  const escapedTable = escapeIdentifier(searchContext.tableName);
-  const escapedCol = escapeIdentifier(searchContext.geoColumn);
-
-  try {
-    const rows = (await Duck.query(
-      `SELECT ST_X(ST_Centroid("${escapedCol}")) AS lon, ST_Y(ST_Centroid("${escapedCol}")) AS lat FROM "${escapedTable}" WHERE ${INTERNAL_COLUMN.ID} = ${rowId} LIMIT 1`,
-      { format: 'array', useProxy: false }
-    )) as Array<{ lon: number | null; lat: number | null }>;
-
-    const row = rows?.[0];
-    if (!row || row.lon == null || row.lat == null) return;
-    if (!Number.isFinite(row.lon) || !Number.isFinite(row.lat)) return;
-
-    mapInstanceStore.centerOnDataPoint(row.lon, row.lat);
-  } catch (error) {
-    logger.debug('Failed to center map on search result', LogCategory.UI, {
-      rowId,
-      tableName: searchContext.tableName,
-      error
-    });
-  }
+  await centerMapOnTableRow({
+    tableName: searchContext.tableName,
+    rowId,
+    sourceFileId: searchContext.sourceFileId,
+    joinedBasemap: searchContext.joinedBasemap,
+    gpsColumns: searchContext.gpsColumns
+  });
 }
 
 function clearMapHighlights(): void {

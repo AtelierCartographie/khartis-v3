@@ -4,11 +4,11 @@ const mocks = vi.hoisted(() => ({
   duckQuery: vi.fn(),
   searchInTable: vi.fn(),
   getDatasetBySourceFile: vi.fn(),
+  centerMapOnTableRow: vi.fn(),
   pinAt: vi.fn(),
   unpin: vi.fn(),
   setHighlightedRows: vi.fn(),
   clearHighlights: vi.fn(),
-  centerOnDataPoint: vi.fn(),
   bumpDatasetsVersion: vi.fn(),
   invalidateTableCache: vi.fn(),
   dataset: {
@@ -61,9 +61,14 @@ vi.mock('$lib/features/duckdb/orchestrator/orchestrator.svelte', () => ({
   }
 }));
 
-vi.mock('$lib/features/commons/store/map-instance.store.svelte', () => ({
-  mapInstanceStore: {
-    centerOnDataPoint: mocks.centerOnDataPoint
+vi.mock('$lib/features/map/utils/center-on-table-row.utils', () => ({
+  centerMapOnTableRow: mocks.centerMapOnTableRow
+}));
+
+vi.mock('$lib/features/map/services/basemap.service.svelte', () => ({
+  basemapService: {
+    initialize: vi.fn(),
+    loadGeometryIntoDuckDB: vi.fn()
   }
 }));
 
@@ -91,7 +96,7 @@ describe('search store tooltip integration', () => {
     mocks.unpin.mockReset();
     mocks.setHighlightedRows.mockReset();
     mocks.clearHighlights.mockReset();
-    mocks.centerOnDataPoint.mockReset();
+    mocks.centerMapOnTableRow.mockReset();
     mocks.bumpDatasetsVersion.mockReset();
     mocks.invalidateTableCache.mockReset();
 
@@ -164,55 +169,43 @@ describe('search store tooltip integration', () => {
     );
   });
 
-  it('should center the map on the geometry centroid when navigating to a result', async () => {
+  it('delegates centering to the row-centering helper when navigating to a result', async () => {
     const { searchActions } = await import('./search.store.svelte');
 
     searchActions.clearSearch();
-    mocks.duckQuery
-      .mockResolvedValueOnce([]) // tooltip query (rowId not found — fine for this test)
-      .mockResolvedValueOnce([{ lon: 10.5, lat: 52.3 }]); // centroid query
 
     searchActions.setSearchValue('Braunschweig');
     await searchActions.performSearch();
 
-    expect(mocks.centerOnDataPoint).toHaveBeenCalledWith(10.5, 52.3);
+    expect(mocks.centerMapOnTableRow).toHaveBeenCalledWith({
+      tableName: 'nuts2_table',
+      rowId: 55,
+      sourceFileId: 'source-1',
+      joinedBasemap: undefined,
+      gpsColumns: undefined
+    });
   });
 
-  it('should not center the map when the centroid query returns no data', async () => {
-    const { searchActions } = await import('./search.store.svelte');
-
-    searchActions.clearSearch();
-    mocks.duckQuery
-      .mockResolvedValueOnce([]) // tooltip query
-      .mockResolvedValueOnce([]); // centroid query returns empty
-
-    searchActions.setSearchValue('Braunschweig');
-    await searchActions.performSearch();
-
-    expect(mocks.centerOnDataPoint).not.toHaveBeenCalled();
-  });
-
-  it('should center the map using geoColumn from duckDataset when dataset has no geometry column in columns (joined CSV)', async () => {
+  it('passes joined basemap metadata through to the centering helper for joined CSV data', async () => {
     mocks.getDatasetBySourceFile.mockReturnValue({
       tableName: 'nuts2_table',
-      geoColumn: 'geometry'
+      joinedBasemap: 'europe-nuts2'
     });
 
     const { searchActions } = await import('./search.store.svelte');
 
     searchActions.clearSearch();
-    mocks.duckQuery
-      .mockResolvedValueOnce([]) // tooltip query
-      .mockResolvedValueOnce([{ lon: 14.2, lat: 48.2 }]); // centroid query
 
     searchActions.setSearchValue('Braunschweig');
     await searchActions.performSearch();
 
-    expect(mocks.duckQuery).toHaveBeenCalledWith(
-      expect.stringContaining('ST_Centroid("geometry")'),
-      expect.objectContaining({ format: 'array' })
-    );
-    expect(mocks.centerOnDataPoint).toHaveBeenCalledWith(14.2, 48.2);
+    expect(mocks.centerMapOnTableRow).toHaveBeenCalledWith({
+      tableName: 'nuts2_table',
+      rowId: 55,
+      sourceFileId: 'source-1',
+      joinedBasemap: 'europe-nuts2',
+      gpsColumns: undefined
+    });
   });
 });
 
@@ -226,7 +219,7 @@ describe('search store replace integration', () => {
     mocks.unpin.mockReset();
     mocks.setHighlightedRows.mockReset();
     mocks.clearHighlights.mockReset();
-    mocks.centerOnDataPoint.mockReset();
+    mocks.centerMapOnTableRow.mockReset();
     mocks.bumpDatasetsVersion.mockReset();
     mocks.invalidateTableCache.mockReset();
 
