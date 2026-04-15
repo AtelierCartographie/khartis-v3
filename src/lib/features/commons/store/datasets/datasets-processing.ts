@@ -15,7 +15,6 @@ import { FileType } from '../create-project.types';
 import type { DatasetsState, DatasetsInternals } from './datasets-state.svelte';
 import { startProcessing, endProcessing } from './datasets-state.svelte';
 import { LogCategory, logger } from '../../utils/logger';
-import { DuplicateFileError } from '../../errors/pipeline.errors';
 import * as m from '$lib/paraglide/messages';
 import { showWarning } from '../../utils/notification.utils.svelte';
 import { sanitizePreparedGeoJSON } from '../../utils/persisted-geojson.utils';
@@ -540,6 +539,8 @@ export async function addFile(
       );
 
       if (existingDataset) {
+        const wasEnabled = state.enabledDatasetIds.has(existingDataset.id);
+
         state.datasets = state.datasets.map((d) =>
           d.sourceFileId === dataset.sourceFileId ? dataset : d
         );
@@ -547,11 +548,18 @@ export async function addFile(
           state.selectedDatasetId = dataset.id;
         }
 
+        state.enabledDatasetIds.delete(existingDataset.id);
+        if (wasEnabled || autoEnable) {
+          state.enabledDatasetIds.add(dataset.id);
+        }
+
         if (!addedDataset) addedDataset = dataset;
-        throw new DuplicateFileError(
-          `Le fichier "${file.name}" existe déjà et a été remplacé`,
-          file.name,
+        logger.debug(
+          'Replaced existing dataset for source file',
+          LogCategory.STORE,
           {
+            fileName: file.name,
+            sourceFileId: dataset.sourceFileId,
             existingDatasetId: existingDataset.id,
             newDatasetId: dataset.id
           }
