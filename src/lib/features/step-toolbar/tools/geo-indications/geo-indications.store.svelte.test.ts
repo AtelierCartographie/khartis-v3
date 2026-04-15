@@ -19,9 +19,9 @@ describe('geo indications store responsive defaults', () => {
     geoIndicationsActions.toggleOrientation();
     geoIndicationsActions.toggleInsetMap();
 
-    expect(geoIndicationsState.scale.fontSize).toBe(14);
+    expect(geoIndicationsState.scale.fontSize).toBe(10);
     expect(geoIndicationsState.orientation.size).toBe(12);
-    expect(geoIndicationsState.insetMap.size).toBe(200);
+    expect(geoIndicationsState.insetMap.size).toBe(130);
   });
 
   it('keeps custom geo-indication sizes when they were already changed', () => {

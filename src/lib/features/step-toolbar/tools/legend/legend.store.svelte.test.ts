@@ -22,7 +22,7 @@ describe('legend store responsive defaults', () => {
 
     legendActions.syncWithVisualizations();
 
-    expect(getLegendState().style.fontSize).toBe(14);
+    expect(getLegendState().style.fontSize).toBe(11);
   });
 
   it('does not overwrite a customized legend font size after the tool was opened', () => {
