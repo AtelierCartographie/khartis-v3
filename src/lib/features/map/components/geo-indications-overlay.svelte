@@ -10,6 +10,7 @@
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
+  import { PRINT_STANDARD_TOKENS } from '$lib/features/commons/utils/layout-sizing.utils';
   import { EVENT, KEY } from '$lib/features/commons/constants/dom.constants';
   import {
     geoIndicationsActions,
@@ -959,7 +960,7 @@
             x="20"
             y="47"
             text-anchor="middle"
-            font-size="9"
+            font-size={PRINT_STANDARD_TOKENS.geoIndications.scaleFontSize}
             font-weight="bold"
             fill={orientationColor}
             font-family={orientationFontFamily}
@@ -994,7 +995,7 @@
             x="20"
             y="47"
             text-anchor="middle"
-            font-size="8"
+            font-size={PRINT_STANDARD_TOKENS.annotations.captionFontSize}
             font-weight="bold"
             fill={orientationColor}
             font-family={orientationFontFamily}

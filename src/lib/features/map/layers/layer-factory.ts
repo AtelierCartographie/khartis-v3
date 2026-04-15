@@ -16,6 +16,7 @@ import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { FeatureCollection, Geometry } from 'geojson';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
+import { PRINT_STANDARD_TOKENS } from '$lib/features/commons/utils/layout-sizing.utils';
 import * as m from '$lib/paraglide/messages';
 import {
   ArrowExtension,
@@ -137,7 +138,7 @@ function ctxRowAccessor<T>(
 }
 
 const HIGHLIGHT_DIMMING_FACTOR = 0.3;
-const DEFAULT_TEXT_SIZE = 12;
+const DEFAULT_TEXT_SIZE = PRINT_STANDARD_TOKENS.annotations.noteFontSize;
 const DEFAULT_HALO_WIDTH = 2;
 const DEFAULT_TEXT_FONT = 'IBM Plex Sans, sans-serif';
 const DEFAULT_TEXT_FONT_SETTINGS = { sdf: true } as const;
@@ -1392,13 +1393,21 @@ function createTextCollisionProps(
   priority: number
 ): Pick<
   TextLayerWithCollisionProps,
-  'extensions' | 'collisionEnabled' | 'collisionGroup' | 'getCollisionPriority'
+  | 'extensions'
+  | 'collisionEnabled'
+  | 'collisionGroup'
+  | 'getCollisionPriority'
+  | 'collisionTestProps'
 > {
   return {
     extensions: [COLLISION_FILTER_EXTENSION],
     collisionEnabled: enabled,
     collisionGroup: resolveTextCollisionGroup(ctx),
-    getCollisionPriority: () => priority
+    getCollisionPriority: () => priority,
+    collisionTestProps: {
+      getTextAnchor: 'middle',
+      getAlignmentBaseline: 'center'
+    }
   };
 }
 
@@ -1427,6 +1436,9 @@ type TextLayerWithCollisionProps = ConstructorParameters<
   collisionEnabled?: boolean;
   collisionGroup?: string;
   getCollisionPriority?: (datum: TextLayerDatum) => number;
+  collisionTestProps?: Partial<
+    ConstructorParameters<typeof TextLayer<TextLayerDatum>>[0]
+  >;
 };
 
 function normalizeOpacity(opacity: number | undefined, fallback = 1): number {
