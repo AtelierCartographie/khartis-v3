@@ -46,6 +46,7 @@
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
+  import { filterArrowTableByDataFilters } from '$lib/features/map/utils/arrow-filter.utils';
   import { Duck } from '$lib/features/duckdb';
   import { COLUMN_TYPE_GEOMETRY } from '$lib/features/commons/constants/data.constants';
   import { SettingsAdjust } from 'carbon-icons-svelte';
@@ -56,10 +57,80 @@
   import SymbolsConfig from './components/symbols-config.svelte';
   import TextsConfig from './components/texts-config.svelte';
   import YearFilter from './components/year-filter.svelte';
+  import { VizFilterPanel } from './components/shared';
 
   let selectedViz = $derived(visualizationStore.selectedVisualization);
   let lastComputedKey = '';
   let computeRequestCounter = 0;
+
+  let activeFilterPanel = $state<PrimitiveFilter | null>(null);
+  let filterStats = $state<{ total: number; filtered: number }>({
+    total: 0,
+    filtered: 0
+  });
+  let filterStatsLoadSeq = 0;
+
+  function toggleFilterPanel(primitive: PrimitiveFilter) {
+    activeFilterPanel = activeFilterPanel === primitive ? null : primitive;
+  }
+
+  function closeFilterPanel() {
+    activeFilterPanel = null;
+  }
+
+  $effect(() => {
+    const primitive = activeFilterPanel;
+    const viz = selectedViz;
+    void visualizationStore.version;
+    const dataset = getSelectedDataset();
+    if (!primitive || !viz || !dataset) {
+      filterStats = { total: 0, filtered: 0 };
+      return;
+    }
+
+    const total = dataset.rowCount ?? 0;
+    const filters =
+      viz.dataFilters?.filter((f) => f.primitiveType === primitive) ?? [];
+    if (filters.length === 0 || !dataset.tableName) {
+      filterStats = { total, filtered: total };
+      return;
+    }
+
+    const mySeq = ++filterStatsLoadSeq;
+    duckDBOrchestrator
+      .getArrowTableDirect(dataset.tableName)
+      .then((table) => {
+        if (mySeq !== filterStatsLoadSeq) return;
+        const filteredTable = filterArrowTableByDataFilters(
+          table,
+          filters,
+          primitive
+        );
+        filterStats = {
+          total: table.numRows,
+          filtered: filteredTable.numRows
+        };
+      })
+      .catch(() => {
+        if (mySeq !== filterStatsLoadSeq) return;
+        filterStats = { total, filtered: total };
+      });
+  });
+
+  function getPrimitiveLabel(primitive: PrimitiveFilter): string {
+    switch (primitive) {
+      case PrimitiveFilterType.POINT:
+        return m.symbols_title();
+      case PrimitiveFilterType.POLYGON:
+        return m.polygons_title();
+      case PrimitiveFilterType.LINE:
+        return m.lines_title();
+      case PrimitiveFilterType.TEXT:
+        return m.texts_title();
+      default:
+        return '';
+    }
+  }
 
   function usesCategoricalClassification(
     visualization: VisualizationConfig | undefined
@@ -427,12 +498,12 @@
     }
   }
 
-  function handleClearDataFiltersForPrimitive(primitiveType: PrimitiveFilter) {
+  function handleUpdateDataFilter(
+    filterId: string,
+    updates: Partial<Omit<VizDataFilter, 'id'>>
+  ) {
     if (selectedViz?.id) {
-      visualizationStore.clearDataFiltersForPrimitive(
-        selectedViz.id,
-        primitiveType
-      );
+      visualizationStore.updateDataFilter(selectedViz.id, filterId, updates);
     }
   }
 
@@ -761,10 +832,8 @@
         onInvertPalette={handleInvertPalette}
         onToggleVisibility={(checked) =>
           handlePrimitiveVisibilityChange(PrimitiveFilterType.POINT, checked)}
-        onAddFilter={(f) => handleAddDataFilter(f, PrimitiveFilterType.POINT)}
-        onRemoveFilter={handleRemoveDataFilter}
-        onClearFilters={() =>
-          handleClearDataFiltersForPrimitive(PrimitiveFilterType.POINT)}
+        filterPanelOpen={activeFilterPanel === PrimitiveFilterType.POINT}
+        onToggleFilterPanel={() => toggleFilterPanel(PrimitiveFilterType.POINT)}
       />
     {/if}
 
@@ -781,10 +850,9 @@
         onInvertPalette={handleInvertPalette}
         onToggleVisibility={(checked) =>
           handlePrimitiveVisibilityChange(PrimitiveFilterType.POLYGON, checked)}
-        onAddFilter={(f) => handleAddDataFilter(f, PrimitiveFilterType.POLYGON)}
-        onRemoveFilter={handleRemoveDataFilter}
-        onClearFilters={() =>
-          handleClearDataFiltersForPrimitive(PrimitiveFilterType.POLYGON)}
+        filterPanelOpen={activeFilterPanel === PrimitiveFilterType.POLYGON}
+        onToggleFilterPanel={() =>
+          toggleFilterPanel(PrimitiveFilterType.POLYGON)}
       />
     {/if}
 
@@ -801,10 +869,8 @@
         onInvertPalette={handleInvertPalette}
         onToggleVisibility={(checked) =>
           handlePrimitiveVisibilityChange(PrimitiveFilterType.LINE, checked)}
-        onAddFilter={(f) => handleAddDataFilter(f, PrimitiveFilterType.LINE)}
-        onRemoveFilter={handleRemoveDataFilter}
-        onClearFilters={() =>
-          handleClearDataFiltersForPrimitive(PrimitiveFilterType.LINE)}
+        filterPanelOpen={activeFilterPanel === PrimitiveFilterType.LINE}
+        onToggleFilterPanel={() => toggleFilterPanel(PrimitiveFilterType.LINE)}
       />
     {/if}
 
@@ -824,6 +890,7 @@
       dataFields={dataFieldItems}
       visualization={selectedViz}
       disabled={!hasGeometry}
+      filters={getFiltersForPrimitive(PrimitiveFilterType.TEXT)}
       onStyleChange={handleStyleChange}
       onModesChange={handleModesChange}
       onMissingDataChange={handleMissingDataChange}
@@ -831,6 +898,8 @@
       onMappingChange={handleMappingChange}
       onInvertPalette={handleInvertPalette}
       onToggleVisibility={handleTextVisibilityChange}
+      filterPanelOpen={activeFilterPanel === PrimitiveFilterType.TEXT}
+      onToggleFilterPanel={() => toggleFilterPanel(PrimitiveFilterType.TEXT)}
     />
   </div>
 
@@ -840,6 +909,23 @@
     </div>
   {/if}
 </section>
+
+{#if activeFilterPanel !== null}
+  <VizFilterPanel
+    title={getPrimitiveLabel(activeFilterPanel)}
+    dataFields={dataFieldItems}
+    filters={getFiltersForPrimitive(activeFilterPanel)}
+    stats={filterStats}
+    onAddFilter={(f) => {
+      if (activeFilterPanel !== null) {
+        handleAddDataFilter(f, activeFilterPanel);
+      }
+    }}
+    onUpdateFilter={handleUpdateDataFilter}
+    onRemoveFilter={handleRemoveDataFilter}
+    onClose={closeFilterPanel}
+  />
+{/if}
 
 <style lang="scss">
   #configure-visualization {

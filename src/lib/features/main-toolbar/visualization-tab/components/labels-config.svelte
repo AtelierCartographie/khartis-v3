@@ -415,7 +415,8 @@
         <Select
           labelText={m.font_size()}
           selected={String(size)}
-          on:change={(e) => handleSizeChange(Number((e as CustomEvent).detail))}
+          on:change={(e) =>
+            handleSizeChange(Number((e.target as HTMLSelectElement).value))}
         >
           <SelectItem value="8" text="8 px" />
           <SelectItem value="10" text="10 px" />

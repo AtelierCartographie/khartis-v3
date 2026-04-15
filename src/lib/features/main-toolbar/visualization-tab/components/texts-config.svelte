@@ -11,12 +11,14 @@
     PalettePreview,
     SectionHeading,
     SliderWithInput,
-    ToggleWithLabel
+    ToggleWithLabel,
+    VizFilterButton
   } from './shared';
   import type {
     MissingDataConfig,
     VisualizationConfig,
-    VisualizationModes
+    VisualizationModes,
+    VizDataFilter
   } from '$lib/features/commons/store/visualization.store.svelte';
   import * as m from '$lib/paraglide/messages';
   import {
@@ -61,6 +63,9 @@
     ) => void;
     onInvertPalette?: () => void;
     onToggleVisibility?: (checked: boolean) => void;
+    filters?: VizDataFilter[];
+    filterPanelOpen?: boolean;
+    onToggleFilterPanel?: () => void;
   }
 
   let {
@@ -73,7 +78,10 @@
     onClassificationChange,
     onMappingChange,
     onInvertPalette,
-    onToggleVisibility
+    onToggleVisibility,
+    filters = [],
+    filterPanelOpen = false,
+    onToggleFilterPanel = () => {}
   }: Props = $props();
 
   const NONE_FIELD_ID = -1;
@@ -375,6 +383,11 @@
 >
   {#snippet icon()}
     <InfoPopover text={m.texts_section_info()} />
+    <VizFilterButton
+      active={filterPanelOpen || filters.length > 0}
+      count={filters.length}
+      onToggle={onToggleFilterPanel}
+    />
   {/snippet}
 
   <div class="texts-config">
@@ -495,7 +508,7 @@
             labelText={m.font_size()}
             selected={String(size)}
             on:change={(e) =>
-              handleSizeChange(Number((e as CustomEvent).detail))}
+              handleSizeChange(Number((e.target as HTMLSelectElement).value))}
           >
             <SelectItem value="8" text="8 px" />
             <SelectItem value="10" text="10 px" />
@@ -601,7 +614,7 @@
             labelText={m.font_size()}
             selected={String(size)}
             on:change={(e) =>
-              handleSizeChange(Number((e as CustomEvent).detail))}
+              handleSizeChange(Number((e.target as HTMLSelectElement).value))}
           >
             <SelectItem value="8" text="8 px" />
             <SelectItem value="10" text="10 px" />

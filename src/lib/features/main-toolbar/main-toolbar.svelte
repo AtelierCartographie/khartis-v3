@@ -168,10 +168,7 @@
       <ProgressIndicator
         currentIndex={activeStepIndex}
         spaceEqually
-        on:click={(e) => {
-          const detail = e.detail;
-          if (detail !== undefined) handleBreadcrumbStep(detail);
-        }}
+        on:change={(e) => handleBreadcrumbStep(e.detail)}
       >
         <ProgressStep
           complete={dataTabStore.hasCompletedStep[0]}

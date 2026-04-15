@@ -10,7 +10,7 @@
     SectionHeading,
     SliderWithInput,
     ToggleWithLabel,
-    VizFilterSection
+    VizFilterButton
   } from './shared';
   import type {
     MissingDataConfig,
@@ -56,9 +56,8 @@
     onInvertPalette?: () => void;
     onToggleVisibility?: (checked: boolean) => void;
     filters?: VizDataFilter[];
-    onAddFilter?: (filter: Omit<VizDataFilter, 'id'>) => void;
-    onRemoveFilter?: (filterId: string) => void;
-    onClearFilters?: () => void;
+    filterPanelOpen?: boolean;
+    onToggleFilterPanel?: () => void;
   }
 
   let {
@@ -72,9 +71,8 @@
     onInvertPalette,
     onToggleVisibility,
     filters = [],
-    onAddFilter = () => {},
-    onRemoveFilter = () => {},
-    onClearFilters = () => {}
+    filterPanelOpen = false,
+    onToggleFilterPanel = () => {}
   }: Props = $props();
 
   let discretizationModalOpen = $state(false);
@@ -332,6 +330,11 @@
 >
   {#snippet icon()}
     <InfoPopover text={m.lines_section_info()} />
+    <VizFilterButton
+      active={filterPanelOpen || filters.length > 0}
+      count={filters.length}
+      onToggle={onToggleFilterPanel}
+    />
   {/snippet}
 
   <div class="lines-config">
@@ -484,14 +487,6 @@
       shape={missingDataShape}
       onshapechange={handleMissingDataShapeChange}
       showShapeSelector={true}
-    />
-
-    <VizFilterSection
-      dataFields={dataFields}
-      filters={filters}
-      onAddFilter={onAddFilter}
-      onRemoveFilter={onRemoveFilter}
-      onClearFilters={onClearFilters}
     />
   </div>
 </ExpandableSection>

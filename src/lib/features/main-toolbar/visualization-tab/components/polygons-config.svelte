@@ -33,7 +33,7 @@
     SectionHeading,
     SliderWithInput,
     StrokeSection,
-    VizFilterSection
+    VizFilterButton
   } from './shared';
   import type { VizDataFilter } from '$lib/features/commons/store/visualization.store.svelte';
   import DiscretizationModal from './discretization-modal.svelte';
@@ -56,9 +56,8 @@
     onInvertPalette?: () => void;
     onToggleVisibility?: (checked: boolean) => void;
     filters?: VizDataFilter[];
-    onAddFilter?: (filter: Omit<VizDataFilter, 'id'>) => void;
-    onRemoveFilter?: (filterId: string) => void;
-    onClearFilters?: () => void;
+    filterPanelOpen?: boolean;
+    onToggleFilterPanel?: () => void;
   }
 
   let {
@@ -72,9 +71,8 @@
     onInvertPalette,
     onToggleVisibility,
     filters = [],
-    onAddFilter = () => {},
-    onRemoveFilter = () => {},
-    onClearFilters = () => {}
+    filterPanelOpen = false,
+    onToggleFilterPanel = () => {}
   }: Props = $props();
 
   let discretizationModalOpen = $state(false);
@@ -257,6 +255,11 @@
 >
   {#snippet icon()}
     <InfoPopover text={m.polygons_section_info()} />
+    <VizFilterButton
+      active={filterPanelOpen || filters.length > 0}
+      count={filters.length}
+      onToggle={onToggleFilterPanel}
+    />
   {/snippet}
 
   <div class="polygons-config">
@@ -359,14 +362,6 @@
       onInvertPalette={onInvertPalette}
       onOpenDiscretization={handleOpenDiscretization}
       onClassificationChange={handleClassificationChange}
-    />
-
-    <VizFilterSection
-      dataFields={dataFields}
-      filters={filters}
-      onAddFilter={onAddFilter}
-      onRemoveFilter={onRemoveFilter}
-      onClearFilters={onClearFilters}
     />
   </div>
 </ExpandableSection>

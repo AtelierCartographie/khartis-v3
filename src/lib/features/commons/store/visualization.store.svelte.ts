@@ -55,7 +55,8 @@ export enum ScaleType {
 export enum PrimitiveFilterType {
   POINT = 'point',
   LINE = 'line',
-  POLYGON = 'polygon'
+  POLYGON = 'polygon',
+  TEXT = 'text'
 }
 
 export interface VisualizationModes {
@@ -103,7 +104,8 @@ export interface MissingDataConfig {
 export type PrimitiveFilter =
   | PrimitiveFilterType.POINT
   | PrimitiveFilterType.LINE
-  | PrimitiveFilterType.POLYGON;
+  | PrimitiveFilterType.POLYGON
+  | PrimitiveFilterType.TEXT;
 
 export const ALL_PRIMITIVE_FILTERS: PrimitiveFilter[] = [
   PrimitiveFilterType.POINT,
@@ -293,6 +295,11 @@ export interface VisualizationStore {
   setYearFilter: (id: string, filter: YearFilter | null) => void;
   addDataFilter: (id: string, filter: Omit<VizDataFilter, 'id'>) => void;
   removeDataFilter: (id: string, filterId: string) => void;
+  updateDataFilter: (
+    id: string,
+    filterId: string,
+    updates: Partial<Omit<VizDataFilter, 'id'>>
+  ) => void;
   clearDataFilters: (id: string) => void;
   clearDataFiltersForPrimitive: (
     id: string,
@@ -643,7 +650,9 @@ function sanitizeDataFilters(
 
   return dataFilters.filter(
     (filter) =>
-      !filter.primitiveType || allowedFilters.includes(filter.primitiveType)
+      !filter.primitiveType ||
+      filter.primitiveType === PrimitiveFilterType.TEXT ||
+      allowedFilters.includes(filter.primitiveType)
   );
 }
 
@@ -1260,6 +1269,21 @@ function createVisualizationStore(): VisualizationStore {
     });
   }
 
+  function updateDataFilter(
+    id: string,
+    filterId: string,
+    updates: Partial<Omit<VizDataFilter, 'id'>>
+  ): void {
+    applyVisualizationUpdate(id, (viz) => {
+      const existing = viz.dataFilters ?? [];
+      return {
+        dataFilters: existing.map((f) =>
+          f.id === filterId ? { ...f, ...updates } : f
+        )
+      };
+    });
+  }
+
   function clearDataFilters(id: string): void {
     applyVisualizationUpdate(id, () => ({ dataFilters: [] }));
   }
@@ -1350,6 +1374,7 @@ function createVisualizationStore(): VisualizationStore {
     setYearFilter,
     addDataFilter,
     removeDataFilter,
+    updateDataFilter,
     clearDataFilters,
     clearDataFiltersForPrimitive,
     clear,
