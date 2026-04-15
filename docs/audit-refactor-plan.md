@@ -562,10 +562,10 @@ Seul un extrait est reproduit ci-dessous (modèle pour les 55 tâches). La table
 - [ ] **T-002** · Supprimer alias `generateDuplicateName()` — _adapter imports_. **Validation** : `pnpm check`.
 - [ ] **T-003** · Supprimer `orchestrator/search-ops.ts` proxy — _reporter les appelants vers `operations/search.ts`_. **Validation** : `pnpm test:duckdb` + `pnpm test:unit`.
 - [ ] **T-004** · Unifier `clone.utils` ↔ `clone-for-storage.utils` — **Validation** : snapshot persistence (`pnpm test:unit` + scénario export/import `.kh`).
-- [ ] **T-005** · Supprimer / isoler fallbacks GeoJSON dans `layer-factory.ts` — **Validation** : `pnpm test:e2e` (local) + dataset Arrow + dataset legacy WKB. **Rollback** : revert branche dédiée.
+- [ ] **T-005** · Supprimer / isoler fallbacks GeoJSON dans `layer-factory.ts` — **Validation** : smoke manuel navigateur + dataset Arrow + dataset legacy WKB. **Rollback** : revert branche dédiée.
 - [ ] **T-006** · Retirer `MIME @deprecated` — **Validation** : `pnpm check`.
 - [ ] **T-007** · Purger `environment.utils.ts` — **Validation** : `pnpm check`.
-- [ ] **T-008** · Extraire accessors `buildColorAccessor / buildSizeAccessor / buildHighlightAccessor` — **Validation** : `pnpm test:e2e` (viz types × géométries). **Rollback critique**.
+- [ ] **T-008** · Extraire accessors `buildColorAccessor / buildSizeAccessor / buildHighlightAccessor` — **Validation** : smoke manuel navigateur (viz types × géométries). **Rollback critique**.
 - [ ] **T-009** · Réutiliser les accessors dans `createDoubleProportionalPointLayers`. **Dépend de** T-008.
 - [ ] **T-010** · Factoriser `withAnalysis` helper — **Validation** : `pnpm test:duckdb` + `pnpm test:unit`.
 - [ ] **T-011** · Consolider CRS helpers — **Validation** : `pnpm test:duckdb` + projection tests.
@@ -660,7 +660,7 @@ GitNexus construit un graphe d'édition à partir du TypeScript et indexe les ap
 
 | #   | Risque                                                                   | Tâches exposées            | Mitigation                                                                                                                                |
 | --- | ------------------------------------------------------------------------ | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| R1  | Régression de rendu Deck.gl après split `layer-factory.ts`               | T-008, T-009, T-040        | `pnpm test:e2e` (local) sur chaque type de viz ; dataset-fixture dédié ; PR séparée par famille de layers                                 |
+| R1  | Régression de rendu Deck.gl après split `layer-factory.ts`               | T-008, T-009, T-040        | Smoke manuel navigateur sur chaque type de viz ; dataset-fixture dédié ; PR séparée par famille de layers                                 |
 | R2  | Corruption `.kh` si `clone-for-storage` unifié différemment              | T-004, T-021, T-054        | Ajouter un test "load old project" à partir d'un fichier versionné dans `tests-datasets/` ; versionner la schema migration avant le split |
 | R3  | Inversion d'archi `data-orchestrator` → casse le flux restore            | T-024, T-037               | Split incrémental : d'abord événements sortants, puis retrait des imports `main-toolbar`/`step-toolbar`, puis reprise de la restauration  |
 | R4  | `create-project/services/file-processor.service.ts` supprimé trop tôt    | T-012, T-052               | Feature-flag temporaire ; garder les tests de pipeline verts à chaque étape                                                               |

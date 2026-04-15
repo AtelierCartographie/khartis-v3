@@ -200,7 +200,7 @@ Chaque fichier CSV/geo dans un ZIP multi-dataset est traité individuellement vi
 
 ---
 
-## Serialization Safety (`tests/pipeline/serialization-safety.test.ts`)
+## Serialization Safety (`tests/pipeline/project-serialization.test.ts`, `tests/pipeline/storage-clone.test.ts`)
 
 Les fichiers uploadés sont sérialisés pour persistence (IndexedDB). Règles de sécurité :
 
@@ -231,35 +231,3 @@ PIPELINE_CONST.LIMITS.TYPE_THRESHOLD    = 0.8
 PIPELINE_CONST.QUALITY.HIGH_NULL_RATIO_THRESHOLD  = 0.5
 PIPELINE_CONST.QUALITY.LOW_CARDINALITY_THRESHOLD   = 0.01
 ```
-
----
-
-## Tests (`tests/pipeline/`)
-
-| Fichier                                 | API réelle ?   | Ce qui est testé                                              |
-| --------------------------------------- | -------------- | ------------------------------------------------------------- |
-| `pipeline-integration.test.ts`          | Oui (Node API) | Ingestion réelle de tous les formats dans `tests-datasets/`   |
-| `pipeline-orchestrator.test.ts`         | Non (mocks)    | Init once, zip routing, remote processing, failures           |
-| `file-processor.test.ts`                | Non (mocks)    | CSV options detection, companion files, parquet path          |
-| `format-detector.test.ts`               | Non (mocks)    | Extension priority, case-insensitive, multi-dot               |
-| `validators.test.ts`                    | Non (mocks)    | Extension, empty file, size limits                            |
-| `csv-header-detector.test.ts`           | Non (mocks)    | Header-only low confidence, mixed types = header, all-numeric |
-| `decimal-detector.test.ts`              | Non (mocks)    | European format, mixed decimals, thousands separator          |
-| `zip-handler.test.ts`                   | Non (mocks)    | isZipFile, macOS filtering, shapefile detection, limits       |
-| `geometry.test.ts`                      | Non (mocks)    | No geometry, bounds query, null bounds fallback               |
-| `quality.test.ts`                       | Non (mocks)    | Small dataset, null ratio, low cardinality                    |
-| `classification.service.test.ts`        | Non (mocks)    | Quantile macro, std_dev → nested_means                        |
-| `processor-utils.test.ts`               | Non (mocks)    | isTabularData, convertToCSV, getFileForDuckDB                 |
-| `serialization-safety.test.ts`          | Non (mocks)    | BigInt round-trip, binary preserve, size estimation           |
-| `csv-processor.strategy.test.ts`        | Non (mocks)    | Arrow ingestion path, fallback on failure                     |
-| `geojson-processor.strategy.test.ts`    | Non (mocks)    | ST_Read path, fallback, Arrow opt-in                          |
-| `geoparquet-processor.strategy.test.ts` | Non (mocks)    | read_parquet, \_\_id sequence                                 |
-| `shapefile-processor.strategy.test.ts`  | Non (mocks)    | ParseError sans companions, processing avec companions        |
-| `geopackage-processor.strategy.test.ts` | Non (mocks)    | read_geofile, createArrowTableWithMetadata                    |
-| `gpx-processor.strategy.test.ts`        | Non (mocks)    | GPX format support                                            |
-| `register-processors.test.ts`           | Non (mocks)    | 6 processors registered at priority 10                        |
-| `zip-processor.test.ts`                 | Non (mocks)    | Shapefile archive, multi-dataset, no-supported-files          |
-| `remote-processor.test.ts`              | Non (mocks)    | read_link, standalone shp rejection, zip routing              |
-| `analysis.test.ts`                      | Non (mocks)    | enrichColumns, buildDatasetFromDuckTable                      |
-
-**Règle** : les tests d'intégration (`pipeline-integration.test.ts`) utilisent `@duckdb/node-api` avec des fichiers réels. Les tests unitaires mockent `Duck` via `vi.mock`.
