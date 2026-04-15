@@ -1,10 +1,12 @@
 <script lang="ts">
+  import { dev } from '$app/environment';
   import { m } from '$lib/paraglide/messages';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import {
     InlineNotification,
     NotificationActionButton
   } from 'carbon-components-svelte';
+  import { onMount } from 'svelte';
   import { useRegisterSW } from 'virtual:pwa-register/svelte';
 
   const OFFLINE_READY_TIMEOUT = 5000;
@@ -37,6 +39,37 @@
   function closeOfflineNotification() {
     offlineReady.set(false);
   }
+
+  onMount(() => {
+    if (!dev || typeof navigator === 'undefined') {
+      return;
+    }
+
+    void (async () => {
+      try {
+        if ('serviceWorker' in navigator) {
+          const registrations =
+            await navigator.serviceWorker.getRegistrations();
+          await Promise.all(
+            registrations.map((registration) => registration.unregister())
+          );
+        }
+
+        if ('caches' in window) {
+          const cacheKeys = await window.caches.keys();
+          await Promise.all(
+            cacheKeys.map((cacheKey) => caches.delete(cacheKey))
+          );
+        }
+      } catch (error) {
+        logger.debug(
+          'Skipping dev service worker cleanup',
+          LogCategory.SYSTEM,
+          error
+        );
+      }
+    })();
+  });
 </script>
 
 {#if $needRefresh || $offlineReady}
