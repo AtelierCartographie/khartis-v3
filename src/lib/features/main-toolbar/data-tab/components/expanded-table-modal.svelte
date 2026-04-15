@@ -2,11 +2,12 @@
   import AdvancedDataTable, {
     type CellHighlight
   } from '$lib/features/commons/components/advanced-data-table/advanced-data-table.svelte';
+  import Portal from '$lib/features/commons/components/advanced-data-table/components/portal.svelte';
   import type { TableMutation } from '$lib/features/commons/components/advanced-data-table/types';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import type { ProcessedDataset } from '$lib/features/data-pipeline';
   import * as m from '$lib/paraglide/messages';
-  import { Modal } from 'carbon-components-svelte';
+  import { Minimize } from 'carbon-icons-svelte';
   import { KEY } from '$lib/features/commons/constants/dom.constants';
 
   interface Props {
@@ -110,12 +111,13 @@
     editedName = '';
   }
 
-  function handleKeydown(event: KeyboardEvent) {
+  function handleTitleKeydown(event: KeyboardEvent) {
     if (event.key === KEY.ENTER) {
       event.preventDefault();
       saveRename();
     } else if (event.key === KEY.ESCAPE) {
       event.preventDefault();
+      event.stopPropagation();
       cancelEditing();
     }
   }
@@ -134,120 +136,129 @@
       inputRef.select();
     }
   });
+
+  $effect(() => {
+    if (!open) return;
+
+    function onDocKeydown(e: KeyboardEvent) {
+      if (e.key === KEY.ESCAPE && !isEditing) {
+        e.preventDefault();
+        onClose();
+      }
+    }
+
+    document.addEventListener('keydown', onDocKeydown);
+    return () => document.removeEventListener('keydown', onDocKeydown);
+  });
 </script>
 
-<div id="khartis-expanded-table-modal">
-  <Modal
-    bind:open={open}
-    passiveModal
-    modalHeading=""
-    size="lg"
-    on:close={onClose}
-  >
-    <div class="custom-header" slot="heading">
-      {#if isEditing}
-        <input
-          type="text"
-          class="title-input"
-          style="width: {inputWidth}px"
-          bind:value={editedName}
-          bind:this={inputRef}
-          onkeydown={handleKeydown}
-          onblur={handleBlur}
-        />
-        {#if fileInfo.extension}
-          <span class="extension">.{fileInfo.extension}</span>
-        {/if}
-      {:else}
+{#if open}
+  <Portal>
+    <div
+      class="fullscreen-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label={displayName}
+    >
+      <header class="overlay-header">
+        <div class="header-title">
+          {#if isEditing}
+            <input
+              type="text"
+              class="title-input"
+              style="width: {inputWidth}px"
+              bind:value={editedName}
+              bind:this={inputRef}
+              onkeydown={handleTitleKeydown}
+              onblur={handleBlur}
+            />
+            {#if fileInfo.extension}
+              <span class="extension">.{fileInfo.extension}</span>
+            {/if}
+          {:else}
+            <button
+              type="button"
+              class="title-button"
+              bind:this={titleButtonRef}
+              onclick={startEditing}
+              title={m.dataset_click_rename()}
+            >
+              {displayName}
+            </button>
+          {/if}
+        </div>
         <button
           type="button"
-          class="title-button"
-          bind:this={titleButtonRef}
-          onclick={startEditing}
-          title={m.dataset_click_rename()}
+          class="collapse-btn"
+          onclick={onClose}
+          title={m.data_tool_collapse_icon()}
         >
-          {displayName}
+          <Minimize size={16} />
+          {m.data_tool_collapse_label()}
         </button>
-      {/if}
+      </header>
+      <div class="table-container">
+        {#key tableRenderKey}
+          <AdvancedDataTable
+            dataset={dataset}
+            tableName={tableName}
+            datasetVersion={datasetVersion}
+            showSummaryPlots={showSummaryPlots}
+            initialSortColumn={initialSortColumn}
+            initialSortOrder={initialSortOrder}
+            cellHighlights={cellHighlights}
+            currentCell={currentCell}
+            highlightedRowIds={highlightedRowIds}
+            isExpanded={true}
+            isSelectable={isSelectable}
+            onColumnDeleted={onColumnDeleted}
+            onTableMutation={onTableMutation}
+            onSelectionChange={onSelectionChange}
+            onSortChange={onSortChange}
+          />
+        {/key}
+      </div>
     </div>
-
-    <div class="modal-table-container">
-      {#key tableRenderKey}
-        <AdvancedDataTable
-          dataset={dataset}
-          tableName={tableName}
-          datasetVersion={datasetVersion}
-          showSummaryPlots={showSummaryPlots}
-          initialSortColumn={initialSortColumn}
-          initialSortOrder={initialSortOrder}
-          cellHighlights={cellHighlights}
-          currentCell={currentCell}
-          highlightedRowIds={highlightedRowIds}
-          isExpanded={true}
-          isSelectable={isSelectable}
-          onColumnDeleted={onColumnDeleted}
-          onTableMutation={onTableMutation}
-          onSelectionChange={onSelectionChange}
-          onSortChange={onSortChange}
-        />
-      {/key}
-    </div>
-  </Modal>
-</div>
+  </Portal>
+{/if}
 
 <style>
-  .modal-table-container {
-    height: 100%;
-    overflow: hidden;
+  .fullscreen-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-overlay);
+    background-color: var(--cds-ui-01);
     display: flex;
     flex-direction: column;
-    padding: 0 var(--cds-spacing-05) var(--cds-spacing-05);
   }
 
-  .modal-table-container :global(.advanced-data-table) {
-    flex: 1;
-    min-height: 0;
-  }
-
-  #khartis-expanded-table-modal :global(.bx--modal) {
-    background-color: var(--cds-ui-01);
-  }
-
-  #khartis-expanded-table-modal :global(.bx--modal-container--lg) {
-    max-width: 90vw !important;
-    width: 90vw !important;
-    max-height: 85vh !important;
-    height: 85vh !important;
-    background-color: var(--cds-ui-01);
-  }
-
-  #khartis-expanded-table-modal :global(.bx--modal-content) {
-    padding: 0 !important;
-    overflow: hidden;
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    background-color: var(--cds-ui-01);
-  }
-
-  #khartis-expanded-table-modal :global(.bx--modal-header) {
-    margin-bottom: 0;
-    flex-shrink: 0;
-    padding: var(--cds-spacing-05);
-    padding-bottom: var(--cds-spacing-03);
-    background-color: var(--cds-ui-01);
-  }
-
-  #khartis-expanded-table-modal :global(.bx--modal-container) {
-    display: flex;
-    flex-direction: column;
-    background-color: var(--cds-ui-01);
-  }
-
-  .custom-header {
+  .overlay-header {
     display: flex;
     align-items: center;
-    gap: 0;
+    justify-content: space-between;
+    padding: var(--cds-spacing-04) var(--cds-spacing-05);
+    border-bottom: 1px solid var(--cds-ui-03);
+    flex-shrink: 0;
+    background-color: var(--cds-ui-01);
+  }
+
+  .header-title {
+    display: flex;
+    align-items: center;
+  }
+
+  .table-container {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+  }
+
+  .table-container :global(.advanced-data-table) {
+    flex: 1;
+    min-height: 0;
   }
 
   .title-button {
@@ -283,5 +294,31 @@
     font-size: 1.25rem;
     font-weight: 400;
     color: var(--cds-text-02);
+  }
+
+  .collapse-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--cds-spacing-02);
+    padding: 0 var(--cds-spacing-04) 0 var(--cds-spacing-03);
+    height: 2rem;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    color: var(--cds-text-01);
+    font-size: 0.875rem;
+    font-family: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color 0.11s ease;
+  }
+
+  .collapse-btn:hover {
+    background-color: var(--cds-hover-ui);
+  }
+
+  .collapse-btn:focus-visible {
+    outline: 2px solid var(--cds-focus);
+    outline-offset: -2px;
   }
 </style>

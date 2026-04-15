@@ -1,6 +1,6 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
-  import { Button, InlineNotification } from 'carbon-components-svelte';
+  import { Button, InlineNotification, Link } from 'carbon-components-svelte';
 
   interface Props {
     isActive?: boolean;
@@ -15,6 +15,11 @@
     onSelectOSM,
     onGoToVisualize
   }: Props = $props();
+
+  function handleLinkClick(event: Event): void {
+    event.preventDefault();
+    onGoToVisualize?.();
+  }
 </script>
 
 <div class="osm-selector">
@@ -40,9 +45,9 @@
     {#if onGoToVisualize}
       <p class="osm-note">
         {m.osm_customization_note()}
-        <button type="button" class="link-text" onclick={onGoToVisualize}>
+        <Link inline href="#" on:click={handleLinkClick}>
           {m.step_visualize()}
-        </button>.
+        </Link>.
       </p>
     {:else}
       <p class="osm-note">{m.osm_customization_note()}</p>
@@ -56,9 +61,9 @@
     {#if onGoToVisualize}
       <p class="osm-note">
         {m.osm_customization_note()}
-        <button type="button" class="link-text" onclick={onGoToVisualize}>
+        <Link inline href="#" on:click={handleLinkClick}>
           {m.step_visualize()}
-        </button>.
+        </Link>.
       </p>
     {:else}
       <p class="osm-note">{m.osm_customization_note()}</p>
@@ -92,19 +97,5 @@
     font-size: 0.8125rem;
     color: var(--cds-text-02);
     margin: var(--cds-spacing-04) 0;
-  }
-
-  .link-text {
-    background: none;
-    border: none;
-    padding: 0;
-    color: var(--cds-link-primary);
-    text-decoration: underline;
-    cursor: pointer;
-    font-size: inherit;
-  }
-
-  .link-text:hover {
-    color: var(--cds-link-primary-hover);
   }
 </style>

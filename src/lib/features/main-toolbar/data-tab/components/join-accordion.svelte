@@ -308,11 +308,11 @@
   }
 
   .category-row {
-    border-bottom: 1px solid #e0e0e0;
+    border-bottom: 1px solid var(--cds-border-subtle-00, #e0e0e0);
   }
 
   .category-row:first-child {
-    border-top: 1px solid #e0e0e0;
+    border-top: 1px solid var(--cds-border-subtle-00, #e0e0e0);
   }
 
   .category-row-header {
@@ -330,7 +330,7 @@
   }
 
   .category-row-header:hover {
-    background-color: #f4f4f4;
+    background-color: var(--cds-layer-hover-01, #f4f4f4);
   }
 
   .category-icon {
@@ -455,8 +455,8 @@
     line-height: 1.25rem;
     color: #161616;
     padding: 10px 16px;
-    background-color: #f4f4f4;
-    border-bottom: 1px solid #e0e0e0;
+    background-color: var(--cds-layer-hover-01, #f4f4f4);
+    border-bottom: 1px solid var(--cds-border-subtle-00, #e0e0e0);
   }
 
   .entity-item:last-child {

@@ -1450,7 +1450,7 @@
   }
 
   .kh-help {
-    color: #6f6f6f;
+    color: var(--cds-text-secondary);
     margin-bottom: 12px;
     font-size: 14px;
     line-height: 18px;
@@ -1465,12 +1465,12 @@
   }
 
   .basemap-tabs-wrapper :global(.toggle-tab.active) {
-    background-color: #cac5c4;
+    background-color: var(--cds-border-subtle-01);
   }
 
   .join-separator {
     border: none;
-    border-top: 1px solid #e0e0e0;
+    border-top: 1px solid var(--cds-border-subtle-00, #e0e0e0);
     margin: 0;
   }
 </style>

@@ -41,11 +41,11 @@
 
 <style>
   .format-mode-tabs-container :global(.format-mode-tabs) {
-    border-color: #cac5c4;
+    border-color: var(--cds-border-subtle-01);
     border-radius: 4px;
   }
 
   .format-mode-tabs-container :global(.format-mode-tabs .toggle-tab.active) {
-    background-color: #cac5c4;
+    background-color: var(--cds-border-subtle-01);
   }
 </style>
