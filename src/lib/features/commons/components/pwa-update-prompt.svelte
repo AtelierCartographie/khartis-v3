@@ -6,15 +6,21 @@
     InlineNotification,
     NotificationActionButton
   } from 'carbon-components-svelte';
-  import { onMount } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import { useRegisterSW } from 'virtual:pwa-register/svelte';
 
   const OFFLINE_READY_TIMEOUT = 5000;
+  let isUpdating = $state(false);
+  let registrationUpdateInterval: ReturnType<typeof setInterval> | null = null;
 
   const { needRefresh, offlineReady, updateServiceWorker } = useRegisterSW({
     onRegistered(registration) {
       if (registration) {
-        setInterval(
+        if (registrationUpdateInterval) {
+          clearInterval(registrationUpdateInterval);
+        }
+
+        registrationUpdateInterval = setInterval(
           () => {
             registration.update();
           },
@@ -28,8 +34,13 @@
   });
 
   async function handleUpdate() {
-    await updateServiceWorker(true);
-    window.location.reload();
+    isUpdating = true;
+
+    try {
+      await updateServiceWorker(true);
+    } finally {
+      isUpdating = false;
+    }
   }
 
   function closeUpdateNotification() {
@@ -39,6 +50,13 @@
   function closeOfflineNotification() {
     offlineReady.set(false);
   }
+
+  onDestroy(() => {
+    if (registrationUpdateInterval) {
+      clearInterval(registrationUpdateInterval);
+      registrationUpdateInterval = null;
+    }
+  });
 
   onMount(() => {
     if (!dev || typeof navigator === 'undefined') {
@@ -84,7 +102,11 @@
         on:close={closeUpdateNotification}
       >
         <svelte:fragment slot="actions">
-          <NotificationActionButton kind="ghost" on:click={handleUpdate}>
+          <NotificationActionButton
+            kind="ghost"
+            disabled={isUpdating}
+            on:click={handleUpdate}
+          >
             {m.pwa_update_action()}
           </NotificationActionButton>
         </svelte:fragment>
