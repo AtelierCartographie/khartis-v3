@@ -316,6 +316,23 @@ function createMapInstanceStore() {
     }
   }
 
+  function centerOnDataPoint(dataLon: number, dataLat: number): void {
+    if (state.map) {
+      state.map.jumpTo({ center: [dataLon, dataLat] });
+      return;
+    }
+    if (!state.deckInstance || !state.isMapLoaded) return;
+    state.deckViewState = {
+      ...state.deckViewState,
+      target: dataToWorld([dataLon, dataLat, 0])
+    };
+    markViewportManual();
+    pendingRestore = null;
+    applyDeckViewState();
+    updateZoomFromMap();
+    persistenceRegistry.notifyChange('mapViewState');
+  }
+
   function resetZoom() {
     if (state.map) {
       markViewportManual();
@@ -490,6 +507,7 @@ function createMapInstanceStore() {
     zoomOut,
     setZoom,
     resetZoom,
+    centerOnDataPoint,
     fitToOrthographicBounds,
     restoreFromSerialized,
     clearPersistedViewState,
