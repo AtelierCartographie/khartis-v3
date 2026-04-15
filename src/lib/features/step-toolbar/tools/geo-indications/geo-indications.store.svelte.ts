@@ -9,7 +9,10 @@ import {
   LEGEND_FONT_SIZES
 } from '$lib/features/step-toolbar/tools/legend/legend.constants';
 import { hexToHsl } from '$lib/features/commons/utils/color-utils';
-import { resolveLayoutSizingTokens } from '$lib/features/commons/utils/layout-sizing.utils';
+import {
+  PRINT_STANDARD_TOKENS,
+  resolveLayoutSizingTokens
+} from '$lib/features/commons/utils/layout-sizing.utils';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
 import { getFormatState } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
 import type {
@@ -27,7 +30,7 @@ const DEFAULT_STATE: GeoIndicationsState = {
     units: DistanceUnit.KILOMETERS,
     color: { hue: 0, saturation: 0, lightness: 0 },
     fontFamily: AVAILABLE_FONTS[0],
-    fontSize: LEGEND_FONT_SIZES[2],
+    fontSize: PRINT_STANDARD_TOKENS.geoIndications.scaleFontSize,
     expanded: true,
     dragPosition: null
   },

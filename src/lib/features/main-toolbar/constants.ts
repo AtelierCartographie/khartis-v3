@@ -1,3 +1,5 @@
+import { PRINT_STANDARD_TOKENS } from '$lib/features/commons/utils/layout-sizing.utils';
+
 export enum SearchSource {
   ALL = 'all'
 }
@@ -166,15 +168,15 @@ export const VISUALIZATION_DEFAULTS = {
   strokeWidth: 1,
   strokeOpacity: 100,
   fillOpacity: 100,
-  textSize: 12,
+  textSize: PRINT_STANDARD_TOKENS.annotations.noteFontSize,
   textOpacity: 100,
-  labelSize: 12,
+  labelSize: PRINT_STANDARD_TOKENS.legend.fontSize,
   labelOpacity: 100,
   lineWidth: 1,
   lineMaxWidth: 10,
   lineOpacity: 100,
   haloWidth: 2
-} as const;
+} satisfies Record<string, number>;
 
 export const SLIDER_LIMITS = {
   opacity: { min: 0, max: 100 },

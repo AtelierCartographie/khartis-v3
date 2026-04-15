@@ -183,6 +183,8 @@ const TOKENS_BY_PROFILE = {
   }
 } satisfies Record<LayoutSizingProfile, Omit<LayoutSizingTokens, 'profile'>>;
 
+export const PRINT_STANDARD_TOKENS = TOKENS_BY_PROFILE['print-standard'];
+
 function isScreenPageModel(model?: string | null): boolean {
   return (
     model === PageModel.SCREEN_LANDSCAPE || model === PageModel.SCREEN_PORTRAIT
