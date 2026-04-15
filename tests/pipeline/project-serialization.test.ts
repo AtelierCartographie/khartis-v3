@@ -124,6 +124,66 @@ describe('migrateIfNeeded — remapLegacyPointShape', () => {
   });
 });
 
+// ─── Roundtrip: serialize → migrate → parse ───────────────────────────────
+//
+// Guards against regressions on the .kh persistence pipeline: a legacy project
+// saved in 3.0.0 must round-trip through JSON and come out with the current
+// schema version plus migrated payload.
+
+describe('migrateIfNeeded — .kh roundtrip', () => {
+  it('preserves migrated payload across JSON stringify/parse for a 3.0.0 project', () => {
+    const legacyProject = {
+      manifest: { version: '3.0.0', name: 'Legacy', extra: 'keep-me' },
+      visualizationSettings: [
+        { symbols: { type: 'point', size: 12 } },
+        { symbols: { type: 'square', size: 10 } }
+      ],
+      layoutSettings: { pageFormat: 'a4' },
+      uiSettings: { zoomMode: 'map' }
+    };
+
+    const json = JSON.stringify(legacyProject);
+    const parsed = JSON.parse(json) as Record<string, unknown>;
+    const migrated = migrateIfNeeded(parsed);
+
+    const rehydrated = JSON.parse(JSON.stringify(migrated)) as {
+      manifest: { version: string; extra: string; name: string };
+      visualizationSettings: { symbols: { type: string; size: number } }[];
+      layoutSettings: { pageFormat: string };
+      uiSettings: { zoomMode: string };
+    };
+
+    expect(rehydrated.manifest.version).not.toBe('3.0.0');
+    expect(rehydrated.manifest.extra).toBe('keep-me');
+    expect(rehydrated.manifest.name).toBe('Legacy');
+    expect(rehydrated.visualizationSettings[0].symbols.type).toBe('circle');
+    expect(rehydrated.visualizationSettings[1].symbols.type).toBe('square');
+    expect(rehydrated.layoutSettings.pageFormat).toBe('a4');
+    expect(rehydrated.uiSettings.zoomMode).toBe('map');
+  });
+
+  it('accepts a current-version project without mutation on roundtrip', () => {
+    const currentProject = {
+      manifest: { version: '3.2.0', name: 'Current' },
+      visualizationSettings: [{ symbols: { type: 'circle', size: 14 } }]
+    };
+
+    const json = JSON.stringify(currentProject);
+    const migrated = migrateIfNeeded(
+      JSON.parse(json) as Record<string, unknown>
+    );
+
+    const rehydrated = JSON.parse(JSON.stringify(migrated)) as {
+      manifest: { version: string; name: string };
+      visualizationSettings: { symbols: { type: string; size: number } }[];
+    };
+
+    expect(rehydrated.manifest.name).toBe('Current');
+    expect(rehydrated.visualizationSettings[0].symbols.type).toBe('circle');
+    expect(rehydrated.visualizationSettings[0].symbols.size).toBe(14);
+  });
+});
+
 // ─── serializeUploadedFile / deserializeUploadedFile ──────────────────────
 
 function minimalFile(overrides: Record<string, unknown> = {}) {
