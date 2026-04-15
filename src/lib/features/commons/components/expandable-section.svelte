@@ -21,6 +21,7 @@
     onToggleChange?: (checked: boolean) => void;
     onToggle?: (expanded: boolean) => void;
     titleClass?: string;
+    actionsEnd?: boolean;
   }
 
   const {
@@ -38,7 +39,8 @@
     disabledReason,
     onToggleChange,
     onToggle,
-    titleClass = ''
+    titleClass = '',
+    actionsEnd = false
   }: Props = $props();
 
   let expanded = $state<boolean>(
@@ -139,7 +141,7 @@
         (e.preventDefault(), toggle())}
     >
       <div class="section-title-group">
-        <span class="section-title {titleClass}">
+        <span class="section-title {titleClass}" class:actions-end={actionsEnd}>
           {title}{count !== undefined ? ` (${count})` : ''}
 
           {#if icon}
@@ -249,6 +251,11 @@
     display: flex;
     align-items: center;
     margin-left: var(--cds-spacing-02);
+  }
+
+  .section-title.actions-end .section-custom-icon {
+    margin-left: auto;
+    gap: var(--cds-spacing-03);
   }
 
   .section-chevron {

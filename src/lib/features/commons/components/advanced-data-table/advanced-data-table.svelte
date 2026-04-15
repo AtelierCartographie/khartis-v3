@@ -128,7 +128,7 @@
 
   const rowHeight = TABLE_ROW_HEIGHT;
   const viewportHeightRatioNormal = 0.4;
-  const viewportHeightRatioExpanded = 0.85;
+  const viewportHeightRatioExpanded = 1.0;
   const viewportHeightRatio = $derived(
     isExpanded ? viewportHeightRatioExpanded : viewportHeightRatioNormal
   );

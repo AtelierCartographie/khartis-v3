@@ -1,4 +1,9 @@
 import { PRINT_STANDARD_TOKENS } from '$lib/features/commons/utils/layout-sizing.utils';
+import {
+  DEFAULT_VISUALIZATION_COLOR,
+  DEFAULT_VISUALIZATION_NEUTRAL_COLOR,
+  DEFAULT_VISUALIZATION_SECONDARY_COLOR
+} from '$lib/features/commons/constants/colors.constants';
 
 export enum SearchSource {
   ALL = 'all'
@@ -42,7 +47,7 @@ export interface DensityConfig {
 export const DENSITY_DEFAULTS = {
   level: DENSITY_LEVEL.STANDARD,
   dotSize: 1,
-  color: '#1e3a5f'
+  color: DEFAULT_VISUALIZATION_COLOR
 } as const;
 
 export enum ProportionalType {
@@ -194,7 +199,8 @@ export const SLIDER_LIMITS = {
 } as const;
 
 export const DEFAULT_COLORS = {
-  fill: '#4589ff',
+  fill: DEFAULT_VISUALIZATION_COLOR,
+  secondary: DEFAULT_VISUALIZATION_SECONDARY_COLOR,
   stroke: '#1e3a5f',
   line: '#1e3a5f',
   text: '#000000',
@@ -203,7 +209,7 @@ export const DEFAULT_COLORS = {
   missingData: '#c6c6c6',
   white: '#ffffff',
   black: '#000000',
-  gray: '#8d8d8d'
+  gray: DEFAULT_VISUALIZATION_NEUTRAL_COLOR
 } as const;
 
 export enum BasemapRemarquables {
@@ -271,7 +277,7 @@ export const BASEMAP_LAYER_CONFIG = {
 export const UI_CONSTANTS = {
   SUGGESTIONS_PER_PAGE: 3,
   MAX_SUGGESTIONS: 12,
-  SEARCH_DEBOUNCE_MS: 500,
+  SEARCH_DEBOUNCE_MS: 300,
   MIN_SEARCH_LENGTH: 3,
   MAP_HIGHLIGHT_DEBOUNCE_MS: 800,
   DATA_TABLE_SKELETON_COLUMNS: 5,
