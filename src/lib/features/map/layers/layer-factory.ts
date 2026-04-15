@@ -150,7 +150,8 @@ const SELECTED_POLYGON_STROKE_WIDTH = 3;
 const DASH_EXTENSION = new PathStyleExtension({ dash: true });
 const DEFAULT_DASH_ARRAY: [number, number] = [3, 2];
 const DEFAULT_TEXT_MASK_PADDING: [number, number] = [3, 1];
-const TEXT_COLLISION_BACKGROUND_PADDING: [number, number] = [2, 2];
+const TEXT_COLLISION_SAFE_PADDING: [number, number] = [4, 4];
+const TRANSPARENT_BACKGROUND_COLOR: Color = [0, 0, 0, 0];
 const POINT_SYMBOL_ICON_VIEWBOX_SIZE = 64;
 const DEFAULT_LABEL_COLOR = hexToRgb(DEFAULT_COLORS.label);
 const DEFAULT_TEXT_COLOR = hexToRgb(DEFAULT_COLORS.text);
@@ -1405,12 +1406,7 @@ function createTextCollisionProps(
     extensions: [COLLISION_FILTER_EXTENSION],
     collisionEnabled: enabled,
     collisionGroup: resolveTextCollisionGroup(ctx),
-    getCollisionPriority: priority,
-    collisionTestProps: {
-      background: true,
-      getBackgroundColor: [0, 0, 0, 255],
-      backgroundPadding: TEXT_COLLISION_BACKGROUND_PADDING
-    }
+    getCollisionPriority: priority
   };
 }
 
@@ -2036,13 +2032,17 @@ function createTextOverlayLayers(
         outlineWidth: viz.style.labelHalo
           ? (viz.style.labelHaloWidth ?? DEFAULT_HALO_WIDTH)
           : 0,
-        background: viz.style.labelDxpMasking ?? false,
-        getBackgroundColor: withOpacity(
-          resolveStyleColor(viz.style.labelHaloColor, [255, 255, 255]),
-          1
-        ),
+        background: true,
+        getBackgroundColor: viz.style.labelDxpMasking
+          ? withOpacity(
+              resolveStyleColor(viz.style.labelHaloColor, [255, 255, 255]),
+              1
+            )
+          : TRANSPARENT_BACKGROUND_COLOR,
         getBorderWidth: 0,
-        backgroundPadding: DEFAULT_TEXT_MASK_PADDING,
+        backgroundPadding: viz.style.labelDxpMasking
+          ? DEFAULT_TEXT_MASK_PADDING
+          : TEXT_COLLISION_SAFE_PADDING,
         backgroundBorderRadius: 2,
         ...createTextCollisionProps(
           ctx,
@@ -2149,13 +2149,17 @@ function createTextOverlayLayers(
           outlineWidth: viz.style.textHalo
             ? (viz.style.textHaloWidth ?? DEFAULT_HALO_WIDTH)
             : 0,
-          background: viz.style.textDxpMasking ?? false,
-          getBackgroundColor: withOpacity(
-            resolveStyleColor(viz.style.textHaloColor, [255, 255, 255]),
-            1
-          ),
+          background: true,
+          getBackgroundColor: viz.style.textDxpMasking
+            ? withOpacity(
+                resolveStyleColor(viz.style.textHaloColor, [255, 255, 255]),
+                1
+              )
+            : TRANSPARENT_BACKGROUND_COLOR,
           getBorderWidth: 0,
-          backgroundPadding: DEFAULT_TEXT_MASK_PADDING,
+          backgroundPadding: viz.style.textDxpMasking
+            ? DEFAULT_TEXT_MASK_PADDING
+            : TEXT_COLLISION_SAFE_PADDING,
           backgroundBorderRadius: 2,
           ...createTextCollisionProps(
             ctx,
