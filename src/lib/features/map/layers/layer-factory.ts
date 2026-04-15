@@ -42,6 +42,7 @@ import {
   SHAPE_ORDINAL,
   ShapeType,
   SizeMode,
+  SLIDER_LIMITS,
   SymbolMode,
   ThicknessMode,
   StrokeMode
@@ -149,6 +150,7 @@ const SELECTED_POLYGON_STROKE_WIDTH = 3;
 const DASH_EXTENSION = new PathStyleExtension({ dash: true });
 const DEFAULT_DASH_ARRAY: [number, number] = [3, 2];
 const DEFAULT_TEXT_MASK_PADDING: [number, number] = [3, 1];
+const TEXT_COLLISION_BACKGROUND_PADDING: [number, number] = [2, 2];
 const POINT_SYMBOL_ICON_VIEWBOX_SIZE = 64;
 const DEFAULT_LABEL_COLOR = hexToRgb(DEFAULT_COLORS.label);
 const DEFAULT_TEXT_COLOR = hexToRgb(DEFAULT_COLORS.text);
@@ -1403,10 +1405,11 @@ function createTextCollisionProps(
     extensions: [COLLISION_FILTER_EXTENSION],
     collisionEnabled: enabled,
     collisionGroup: resolveTextCollisionGroup(ctx),
-    getCollisionPriority: () => priority,
+    getCollisionPriority: priority,
     collisionTestProps: {
-      getTextAnchor: 'middle',
-      getAlignmentBaseline: 'center'
+      background: true,
+      getBackgroundColor: [0, 0, 0, 255],
+      backgroundPadding: TEXT_COLLISION_BACKGROUND_PADDING
     }
   };
 }
@@ -1435,7 +1438,7 @@ type TextLayerWithCollisionProps = ConstructorParameters<
 >[0] & {
   collisionEnabled?: boolean;
   collisionGroup?: string;
-  getCollisionPriority?: (datum: TextLayerDatum) => number;
+  getCollisionPriority?: number | ((datum: TextLayerDatum) => number);
   collisionTestProps?: Partial<
     ConstructorParameters<typeof TextLayer<TextLayerDatum>>[0]
   >;
@@ -1511,9 +1514,10 @@ function resolveVariableTextSizeBounds(baseSize: number): {
   minSize: number;
   maxSize: number;
 } {
-  const clampedBaseSize = Math.min(Math.max(baseSize, 8), 32);
-  const minSize = Math.max(8, Math.round(clampedBaseSize * 0.75));
-  const maxSize = Math.min(32, Math.round(clampedBaseSize * 1.75));
+  const { min, max } = SLIDER_LIMITS.textSize;
+  const clampedBaseSize = Math.min(Math.max(baseSize, min), max);
+  const minSize = Math.max(min, Math.round(clampedBaseSize * 0.75));
+  const maxSize = Math.min(max, Math.round(clampedBaseSize * 1.75));
 
   return {
     minSize: Math.min(minSize, maxSize),
