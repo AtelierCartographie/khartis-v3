@@ -425,6 +425,7 @@ function createDoubleProportionalPointLayers(
     return [];
   }
 
+  const pointFillOpacity = viz.symbols.opacity ?? rawFillOpacity;
   const secondaryFillColor = hexToRgb(viz.style.fillColorB ?? '#ff832b');
   const pointShape = viz.symbols.type ?? ShapeType.CIRCLE;
   const minPointRadius = Math.max(1, viz.symbols.minSize ?? 1);
@@ -475,7 +476,7 @@ function createDoubleProportionalPointLayers(
     (row: DeckDataRow): [number, number, number, number] => {
       const rowOpacity = resolveHighlightedOpacityForRow(
         row,
-        rawFillOpacity,
+        pointFillOpacity,
         highlightedRowIds
       );
 
@@ -598,7 +599,7 @@ function createDoubleProportionalPointLayers(
       updateTriggers: {
         getFillColor: [
           triggerColumn,
-          rawFillOpacity,
+          pointFillOpacity,
           fillColor,
           viz.style.fillColorB,
           viz.missingData?.show,
@@ -733,6 +734,7 @@ function createRepresentativePointSymbolLayers(
   const useCategoricalColor = shouldApplyCategorical(viz);
   const useChoropleth = shouldApplyChoropleth(viz);
   const { min: minValue, max: maxValue } = statistics;
+  const pointFillOpacity = viz.symbols?.opacity ?? rawFillOpacity;
   const pointMissingColumn = resolvePointMissingColumn(
     viz,
     useProportionalSymbols,
@@ -801,7 +803,7 @@ function createRepresentativePointSymbolLayers(
   ): [number, number, number, number] => {
     const rowOpacity = resolveHighlightedOpacityForRow(
       row,
-      rawFillOpacity,
+      pointFillOpacity,
       highlightedRowIds
     );
 
@@ -946,6 +948,7 @@ function createRepresentativePointSymbolLayers(
           viz.mapping.categoryColumn,
           categoryColorMap,
           fillColor,
+          pointFillOpacity,
           pointMissingColumn,
           viz.missingData?.show,
           viz.missingData?.color,

@@ -20,6 +20,10 @@ import { createHoverHandler, createClickHandler } from '../interactions';
 import { projectionStore } from '../stores/projection.store.svelte';
 import { mapProjectionStore } from '../stores/map-projection.store.svelte';
 import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
+import {
+  DEFAULT_MAP_BASE_ZOOM,
+  resolveMapZoomBounds
+} from '../utils/map-zoom.utils';
 import { getBrowserMaxRenderBufferSizePx } from '../utils/render-pixel-ratio';
 import type {
   DeckOrthographicViewStateMap,
@@ -70,11 +74,12 @@ export interface UseMapInitReturn {
   readonly viewMode: ViewMode;
 }
 
+const DEFAULT_MAP_ZOOM_BOUNDS = resolveMapZoomBounds(DEFAULT_MAP_BASE_ZOOM);
 const DEFAULT_CONFIG: MapInitConfig = {
   center: [0, 20],
-  zoom: 1.5,
-  minZoom: 0.5,
-  maxZoom: 20
+  zoom: DEFAULT_MAP_BASE_ZOOM,
+  minZoom: DEFAULT_MAP_ZOOM_BOUNDS.minZoom,
+  maxZoom: DEFAULT_MAP_ZOOM_BOUNDS.maxZoom
 };
 
 const ORTHOGRAPHIC_VIEW = new OrthographicView({

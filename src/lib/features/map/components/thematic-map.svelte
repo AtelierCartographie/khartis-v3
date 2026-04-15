@@ -87,6 +87,11 @@
     getBrowserMaxRenderBufferSizePx,
     resolveMapRenderPixelRatio
   } from '../utils/render-pixel-ratio';
+  import {
+    type OrthographicInteractiveDeck,
+    syncMapLibreInteractionMode,
+    syncOrthographicInteractionMode
+  } from '../utils/map-interaction-mode.utils';
   import type { ProjectionLike } from 'geoarrow-deck-stream';
   import AnnotationOverlay from './annotation-overlay.svelte';
   import GeoIndicationsOverlay from './geo-indications-overlay.svelte';
@@ -105,7 +110,8 @@
     syncViewState,
     showLegendOverlay = true,
     showGeoIndicationsOverlay = true,
-    showAnnotationOverlay = true
+    showAnnotationOverlay = true,
+    isFacetCell = false
   }: DeckMapProps = $props();
 
   const hasData = $derived(tables.size > 0 || geoJSONs.size > 0);
@@ -528,26 +534,7 @@
     if (!map) {
       return;
     }
-
-    if (zoomModeStore.isPageMode) {
-      map.dragPan.disable();
-      map.scrollZoom.disable();
-      map.doubleClickZoom.disable();
-      map.boxZoom.disable();
-      map.keyboard.disable();
-      map.touchZoomRotate.disable();
-      map.dragRotate.disable();
-      return;
-    }
-
-    map.dragPan.enable();
-    map.scrollZoom.enable();
-    map.doubleClickZoom.enable();
-    map.boxZoom.enable();
-    map.keyboard.enable();
-    map.touchZoomRotate.enable();
-    map.touchZoomRotate.disableRotation();
-    map.dragRotate.disable();
+    syncMapLibreInteractionMode(map, zoomModeStore.isPageMode);
   }
 
   function applyOrthographicInteractionMode(): void {
@@ -556,26 +543,10 @@
     if (!deck) {
       return;
     }
-
-    const controller = zoomModeStore.isPageMode
-      ? {
-          dragPan: false,
-          scrollZoom: false,
-          doubleClickZoom: false,
-          touchZoom: false,
-          keyboard: false
-        }
-      : {
-          dragPan: true,
-          scrollZoom: false,
-          doubleClickZoom: false,
-          touchZoom: true,
-          keyboard: true
-        };
-
-    (deck as unknown as { setProps: (props: unknown) => void }).setProps({
-      controller
-    });
+    syncOrthographicInteractionMode(
+      deck as unknown as OrthographicInteractiveDeck,
+      zoomModeStore.isPageMode
+    );
   }
 
   function getCurrentViewportAutoFitReason(): ViewportFitReason {
@@ -2157,10 +2128,10 @@
   </defs>
 </svg>
 
-<div class="page-container" style={pageStyle}>
+{#if isFacetCell}
   <div
-    class="map-stage"
-    style="width: {mapCanvasWidth}px; height: {mapCanvasHeight}px;{colorBlindnessMatrix
+    class="map-stage facet-cell-stage"
+    style="width: {width}px; height: {height}px;{colorBlindnessMatrix
       ? ' filter: url(#color-blindness-filter);'
       : ''}"
   >
@@ -2170,29 +2141,50 @@
       style={mapCanvasStyle}
     ></div>
 
-    {#if showPageGrid}
-      <div class="page-grid"></div>
-    {/if}
-
     {#if isSwitchingViewMode}
       <div class="view-mode-loader" transition:fade={{ duration: 200 }}>
         <SkeletonPlaceholder style="width: 100%; height: 100%;" />
       </div>
     {/if}
+  </div>
+{:else}
+  <div class="page-container" style={pageStyle}>
+    <div
+      class="map-stage"
+      style="width: {mapCanvasWidth}px; height: {mapCanvasHeight}px;{colorBlindnessMatrix
+        ? ' filter: url(#color-blindness-filter);'
+        : ''}"
+    >
+      <div
+        bind:this={mapContainer}
+        class="map-canvas"
+        style={mapCanvasStyle}
+      ></div>
 
-    {#if showLegendOverlay}
-      <LegendOverlay />
-    {/if}
+      {#if showPageGrid}
+        <div class="page-grid"></div>
+      {/if}
 
-    {#if showGeoIndicationsOverlay}
-      <GeoIndicationsOverlay interactive={isStylingMode} />
+      {#if isSwitchingViewMode}
+        <div class="view-mode-loader" transition:fade={{ duration: 200 }}>
+          <SkeletonPlaceholder style="width: 100%; height: 100%;" />
+        </div>
+      {/if}
+
+      {#if showLegendOverlay}
+        <LegendOverlay />
+      {/if}
+
+      {#if showGeoIndicationsOverlay}
+        <GeoIndicationsOverlay interactive={isStylingMode} />
+      {/if}
+    </div>
+
+    {#if showAnnotationOverlay}
+      <AnnotationOverlay interactive={isStylingMode} />
     {/if}
   </div>
-
-  {#if showAnnotationOverlay}
-    <AnnotationOverlay interactive={isStylingMode} />
-  {/if}
-</div>
+{/if}
 
 <style>
   .color-blindness-svg-defs {

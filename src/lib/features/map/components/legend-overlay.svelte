@@ -387,7 +387,9 @@
   const textHex = $derived(
     hslToHex(textColor.hue, textColor.saturation, textColor.lightness)
   );
-  const isInDataStep = $derived(globalState.selectedStep === ToolbarStep.Data);
+  const isLegendStepVisible = $derived(
+    globalState.selectedStep === ToolbarStep.Styling
+  );
   const isLegendActive = $derived(
     globalState.selectedStep === ToolbarStep.Styling &&
       globalState.selectedTool === StylingTools.Legend
@@ -531,7 +533,7 @@
   });
 </script>
 
-{#if legendState.visible && visibleItems.length > 0 && !isInDataStep}
+{#if legendState.visible && visibleItems.length > 0 && isLegendStepVisible}
   <div class="legend-overlay" bind:this={overlayElement}>
     <div
       bind:this={legendElement}
@@ -775,7 +777,7 @@
   .legend-container.dragging {
     cursor: grabbing;
     user-select: none;
-    background-color: #f4f4f4 !important;
+    background-color: var(--cds-layer-hover-01, #f4f4f4) !important;
   }
 
   .legend-container.top-left {
