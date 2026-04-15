@@ -46,7 +46,8 @@
     visualization?.classification?.colors ?? DEFAULT_QUALITATIVE_PREVIEW
   );
 
-  let selectedFieldId = $state<number>(0);
+  const NONE_FIELD_ID = -1;
+  let selectedFieldId = $state<number>(NONE_FIELD_ID);
   let categoryCount = $state<number>(4);
   let symbolOpacity = $state<number>(VISUALIZATION_DEFAULTS.symbolOpacity);
   let shapeType = $state<ShapeType>(ShapeType.CIRCLE);
@@ -54,6 +55,8 @@
   let missingDataShape = $state<MissingDataShape>(MissingDataShape.CIRCLE);
   let missingDataSize = $state<number>(2);
   let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
+  const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
+  const selectableDataFields = $derived([noneOption, ...dataFields]);
 
   const availableShapes = availableShapesForSymbolMode(SymbolMode.CATEGORIES);
   const shapeIconByType: Record<ShapeType, typeof CircleFilled> = {
@@ -97,9 +100,10 @@
       const fieldIndex = dataFields.findIndex(
         (field) => field.text === visualization.mapping.categoryColumn
       );
-      if (fieldIndex >= 0) {
-        selectedFieldId = dataFields[fieldIndex].id;
-      }
+      selectedFieldId =
+        fieldIndex >= 0 ? dataFields[fieldIndex].id : NONE_FIELD_ID;
+    } else {
+      selectedFieldId = NONE_FIELD_ID;
     }
 
     if (visualization?.symbols) {
@@ -151,6 +155,11 @@
 
   function handleFieldSelect(fieldId: number) {
     selectedFieldId = fieldId;
+    if (fieldId === NONE_FIELD_ID) {
+      onMappingChange?.({ categoryColumn: undefined });
+      return;
+    }
+
     const field = dataFields.find((f) => f.id === fieldId);
     if (field) {
       onMappingChange?.({ categoryColumn: field.text });
@@ -171,7 +180,7 @@
     <InfoPopover text={m.category_variable_info()} />
   </span>
   <Dropdown
-    items={dataFields}
+    items={selectableDataFields}
     selectedId={selectedFieldId}
     on:select={(e) => handleFieldSelect(e.detail.selectedId)}
     type="default"

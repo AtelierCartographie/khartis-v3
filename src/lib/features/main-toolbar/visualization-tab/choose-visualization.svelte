@@ -11,6 +11,7 @@
   } from '$lib/features/commons/services/viz-suggester.service';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import {
+    getVisualizationOriginMode,
     PrimitiveFilterType,
     visualizationStore
   } from '$lib/features/commons/store/visualization.store.svelte';
@@ -33,12 +34,19 @@
   import { InfoPopover } from './components/shared';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import {
+    applyBlankVisualizationPreset,
     applySuggestionToVisualization,
     isVisualizationMatchingSuggestion,
     isVisualizationBlank,
     resolveBlankVisualizationType,
     resolveDatasetGeometryType
   } from './suggestion.service';
+  import {
+    getSuggestionSignature,
+    getVisualizationSuggestionFingerprint,
+    resolveSuggestionCardAction,
+    shouldAutoApplySuggestion
+  } from './suggestion-selection';
   import { UI_CONSTANTS } from '../constants';
 
   interface Props {
@@ -48,12 +56,12 @@
   const { onCreateVisualization }: Props = $props();
 
   let selectedDatasetId = $state<string>(datasetsStore.selectedDatasetId ?? '');
-  let selectedSuggestion = $state<string | undefined>(undefined);
   let suggestionsExpanded = $state(true);
   let visibleCount = $state<number>(UI_CONSTANTS.SUGGESTIONS_PER_PAGE);
   let autoAppliedSuggestionKey = $state<string | undefined>(undefined);
-  let manualBlankVisualizationId = $state<string | undefined>(undefined);
   let previousSuggestionDatasetId = $state<string | undefined>(undefined);
+  let selectedSuggestionKey = $state<string | undefined>(undefined);
+  let selectedSuggestionFingerprint = $state<string | undefined>(undefined);
   let renamingVizId = $state<string | undefined>(undefined);
   let renameValue = $state<string>('');
   let deletingViz = $state<{ id: string; name: string } | null>(null);
@@ -119,7 +127,7 @@
       null;
 
     return vizSuggester.suggestVisualizations(columnAnalysis, geometryType, {
-      maxSuggestions: UI_CONSTANTS.MAX_SUGGESTIONS
+      maxSuggestions: UI_CONSTANTS.SUGGESTIONS_PER_PAGE
     });
   });
 
@@ -174,34 +182,40 @@
 
   function handleSelectSuggestion(suggestion: VizSuggestion) {
     const dataset = selectedDataset;
-    if (!dataset) return;
+    const targetViz = targetVisualization;
+    if (!dataset || !targetViz) return;
 
-    const existingVizs = visualizationStore.getVisualizationsByDataset(
-      dataset.id
+    const action = resolveSuggestionCardAction(
+      appliedSuggestionKey,
+      suggestion
     );
-    const selectedViz = visualizationStore.selectedVisualization;
-    const isCurrentlySelected =
-      selectedSuggestion === suggestion.id ||
-      (!!selectedViz &&
-        !selectedSuggestion &&
-        existingVizs.some((v) => v.id === selectedViz.id) &&
-        isVisualizationMatchingSuggestion(selectedViz, dataset, suggestion));
-    const nextSuggestionSelection = isCurrentlySelected
-      ? undefined
-      : suggestion.id;
-    selectedSuggestion = nextSuggestionSelection;
 
-    if (selectedViz && existingVizs.some((v) => v.id === selectedViz.id)) {
-      if (!nextSuggestionSelection) {
-        visualizationStore.applyVisualizationPreset(
-          selectedViz.id,
-          resolveBlankVisualizationType(dataset)
-        );
-        return;
-      }
-
-      applySuggestionToVisualization(selectedViz.id, suggestion);
+    if (action === 'clear') {
+      applyBlankVisualizationPreset(targetViz.id, dataset, {
+        mode: 'manual-blank'
+      });
+      selectedSuggestionKey = undefined;
+      selectedSuggestionFingerprint = undefined;
+      return;
     }
+
+    const suggestionKey = getSuggestionSignature(suggestion);
+    applySuggestionToVisualization(targetViz.id, suggestion, {
+      origin: { mode: 'manual-suggestion', suggestionKey }
+    });
+
+    const updatedVisualization = visualizationStore.visualizations.find(
+      (item) => item.id === targetViz.id
+    );
+    if (!updatedVisualization) {
+      selectedSuggestionKey = undefined;
+      selectedSuggestionFingerprint = undefined;
+      return;
+    }
+
+    selectedSuggestionKey = suggestionKey;
+    selectedSuggestionFingerprint =
+      getVisualizationSuggestionFingerprint(updatedVisualization);
   }
 
   function handleCreateVisualization() {
@@ -210,20 +224,21 @@
 
     const targetViz = targetVisualization;
     if (targetViz) {
-      visualizationStore.applyVisualizationPreset(
-        targetViz.id,
-        resolveBlankVisualizationType(dataset)
-      );
-      manualBlankVisualizationId = targetViz.id;
+      applyBlankVisualizationPreset(targetViz.id, dataset, {
+        mode: 'manual-blank'
+      });
     } else {
       const visualization = visualizationStore.createVisualization(
         resolveBlankVisualizationType(dataset),
         dataset.id
       );
-      manualBlankVisualizationId = visualization.id;
+      applyBlankVisualizationPreset(visualization.id, dataset, {
+        mode: 'manual-blank'
+      });
     }
 
-    selectedSuggestion = undefined;
+    selectedSuggestionKey = undefined;
+    selectedSuggestionFingerprint = undefined;
     suggestionsExpanded = filteredSuggestions.length > 0 || suggestionsExpanded;
     onCreateVisualization?.();
   }
@@ -245,44 +260,56 @@
     return datasetVisualizations[0];
   });
 
-  const autoSuggestionContextKey = $derived.by(() => {
+  const matchedSuggestionKey = $derived.by(() => {
     const dataset = selectedDataset;
     const targetViz = targetVisualization;
 
-    if (!dataset || !targetViz || filteredSuggestions.length === 0) {
+    if (!dataset || !targetViz) {
       return undefined;
     }
 
-    if (manualBlankVisualizationId === targetViz.id) {
+    const appliedSuggestion = filteredSuggestions.find((suggestion) =>
+      isVisualizationMatchingSuggestion(targetViz, dataset, suggestion)
+    );
+
+    return appliedSuggestion
+      ? getSuggestionSignature(appliedSuggestion)
+      : undefined;
+  });
+
+  const appliedSuggestionKey = $derived(
+    selectedSuggestionKey ?? matchedSuggestionKey
+  );
+
+  const targetVisualizationOriginMode = $derived(
+    getVisualizationOriginMode(targetVisualization)
+  );
+
+  const autoSuggestionContextKey = $derived.by(() => {
+    const targetViz = targetVisualization;
+
+    if (!targetViz || filteredSuggestions.length === 0) {
       return undefined;
     }
 
-    if (datasetVisualizations.length !== 1) {
+    if (
+      !shouldAutoApplySuggestion({
+        suggestionCount: filteredSuggestions.length,
+        visualizationCount: datasetVisualizations.length,
+        targetVisualizationOriginMode
+      })
+    ) {
       return undefined;
     }
 
-    if (!isVisualizationBlank(targetViz, dataset)) {
-      return undefined;
-    }
+    const suggestionSignature = getSuggestionSignature(filteredSuggestions[0]);
 
-    const suggestionSignature = filteredSuggestions
-      .map((suggestion) =>
-        [
-          suggestion.id,
-          suggestion.score,
-          suggestion.nbColumns,
-          (suggestion.columns ?? []).join(','),
-          suggestion.geometries.join(','),
-          suggestion.semioTypes.join(',')
-        ].join(':')
-      )
-      .join('|');
-
-    return `${dataset.id}::${targetViz.id}::${suggestionSignature}`;
+    return `${targetViz.datasetId}::${targetViz.id}::${suggestionSignature}`;
   });
 
   function handleSelectViz(id: string) {
-    selectedSuggestion = undefined;
+    selectedSuggestionKey = undefined;
+    selectedSuggestionFingerprint = undefined;
     visualizationStore.selectVisualization(id);
   }
 
@@ -341,8 +368,9 @@
     const exists = datasets.some((ds) => ds.id === selectedDatasetId);
     if (!exists) {
       selectedDatasetId = datasetsStore.selectedDatasetId ?? datasets[0].id;
-      selectedSuggestion = undefined;
       visibleCount = UI_CONSTANTS.SUGGESTIONS_PER_PAGE;
+      selectedSuggestionKey = undefined;
+      selectedSuggestionFingerprint = undefined;
     }
   });
 
@@ -364,7 +392,6 @@
 
     if (!dataset) {
       previousSuggestionDatasetId = undefined;
-      manualBlankVisualizationId = undefined;
       autoAppliedSuggestionKey = undefined;
       return;
     }
@@ -374,28 +401,36 @@
     }
 
     previousSuggestionDatasetId = dataset.id;
-    selectedSuggestion = undefined;
     visibleCount = UI_CONSTANTS.SUGGESTIONS_PER_PAGE;
     suggestionsExpanded = true;
-    manualBlankVisualizationId = undefined;
     autoAppliedSuggestionKey = undefined;
+    selectedSuggestionKey = undefined;
+    selectedSuggestionFingerprint = undefined;
   });
 
   $effect(() => {
-    const suggestionsList = filteredSuggestions;
-    if (!suggestionsList.length) {
-      selectedSuggestion = undefined;
+    const targetViz = targetVisualization;
+
+    if (
+      !selectedSuggestionKey ||
+      !selectedSuggestionFingerprint ||
+      !targetViz
+    ) {
       return;
     }
 
-    const hasSelectedSuggestion = selectedSuggestion
-      ? suggestionsList.some(
-          (suggestion) => suggestion.id === selectedSuggestion
-        )
-      : false;
+    const suggestionStillExists = filteredSuggestions.some(
+      (suggestion) =>
+        getSuggestionSignature(suggestion) === selectedSuggestionKey
+    );
+    const currentFingerprint = getVisualizationSuggestionFingerprint(targetViz);
 
-    if (!hasSelectedSuggestion) {
-      selectedSuggestion = undefined;
+    if (
+      !suggestionStillExists ||
+      currentFingerprint !== selectedSuggestionFingerprint
+    ) {
+      selectedSuggestionKey = undefined;
+      selectedSuggestionFingerprint = undefined;
     }
   });
 
@@ -412,21 +447,54 @@
   });
 
   $effect(() => {
+    const dataset = selectedDataset;
     const autoContextKey = autoSuggestionContextKey;
     const topSuggestion = filteredSuggestions[0];
     const targetViz = targetVisualization;
 
-    if (!autoContextKey || !topSuggestion || !targetViz) {
+    if (!dataset || !targetViz) {
       return;
     }
 
-    if (autoAppliedSuggestionKey === autoContextKey) {
+    if (!topSuggestion) {
+      if (
+        targetVisualizationOriginMode === 'auto-suggestion' &&
+        !isVisualizationBlank(targetViz, dataset)
+      ) {
+        applyBlankVisualizationPreset(targetViz.id, dataset, {
+          mode: 'auto-suggestion'
+        });
+        autoAppliedSuggestionKey = `${dataset.id}::${targetViz.id}::blank`;
+        selectedSuggestionKey = undefined;
+        selectedSuggestionFingerprint = undefined;
+      }
+      return;
+    }
+
+    if (!autoContextKey) {
+      return;
+    }
+
+    if (
+      autoAppliedSuggestionKey === autoContextKey &&
+      isVisualizationMatchingSuggestion(targetViz, dataset, topSuggestion)
+    ) {
       return;
     }
 
     autoAppliedSuggestionKey = autoContextKey;
-    selectedSuggestion = topSuggestion.id;
-    applySuggestionToVisualization(targetViz.id, topSuggestion);
+    const suggestionKey = getSuggestionSignature(topSuggestion);
+    applySuggestionToVisualization(targetViz.id, topSuggestion, {
+      origin: { mode: 'auto-suggestion', suggestionKey }
+    });
+    selectedSuggestionKey = suggestionKey;
+
+    const updatedVisualization = visualizationStore.visualizations.find(
+      (item) => item.id === targetViz.id
+    );
+    selectedSuggestionFingerprint = updatedVisualization
+      ? getVisualizationSuggestionFingerprint(updatedVisualization)
+      : undefined;
   });
 </script>
 
@@ -534,17 +602,9 @@
           role="radiogroup"
           aria-label={m.section_suggestions()}
         >
-          {#each visibleSuggestions as suggestion (suggestion.id)}
+          {#each visibleSuggestions as suggestion (getSuggestionSignature(suggestion))}
             {@const isSelected =
-              selectedSuggestion === suggestion.id ||
-              (!selectedSuggestion &&
-                !!targetVisualization &&
-                !!selectedDataset &&
-                isVisualizationMatchingSuggestion(
-                  targetVisualization,
-                  selectedDataset,
-                  suggestion
-                ))}
+              appliedSuggestionKey === getSuggestionSignature(suggestion)}
             <button
               type="button"
               class="suggestion-card"

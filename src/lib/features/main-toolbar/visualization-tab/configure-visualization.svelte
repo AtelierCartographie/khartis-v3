@@ -38,10 +38,13 @@
   } from './components/discretization.utils';
   import {
     ColorMode,
+    DEFAULT_COLORS,
     FillMode,
+    ProportionalType,
     StrokeMode,
     SymbolMode,
-    ThicknessMode
+    ThicknessMode,
+    VISUALIZATION_DEFAULTS
   } from '../constants';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
@@ -51,12 +54,10 @@
   import { COLUMN_TYPE_GEOMETRY } from '$lib/features/commons/constants/data.constants';
   import { SettingsAdjust } from 'carbon-icons-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
-  import LabelsConfig from './components/labels-config.svelte';
   import LinesConfig from './components/lines-config.svelte';
   import PolygonsConfig from './components/polygons-config.svelte';
   import SymbolsConfig from './components/symbols-config.svelte';
   import TextsConfig from './components/texts-config.svelte';
-  import YearFilter from './components/year-filter.svelte';
   import { VizFilterPanel } from './components/shared';
 
   let selectedViz = $derived(visualizationStore.selectedVisualization);
@@ -212,58 +213,10 @@
   );
 
   function resolveMappingDefaults(
-    nextModes: VisualizationModes,
+    _nextModes: VisualizationModes,
     currentMapping: VisualizationConfig['mapping']
   ): VisualizationConfig['mapping'] {
-    if (!selectedViz) {
-      return currentMapping;
-    }
-
-    const dataset = getSelectedDataset();
-    const columns = dataset?.columns ?? [];
-    const firstNumericColumn = columns.find(
-      (column) => column.type === 'number'
-    )?.name;
-    const firstStringColumn = columns.find(
-      (column) =>
-        column.type !== 'number' &&
-        column.type !== 'date' &&
-        column.type !== 'boolean' &&
-        column.type !== COLUMN_TYPE_GEOMETRY
-    )?.name;
-
-    const nextMapping = { ...currentMapping };
-    const nextViz = {
-      ...selectedViz,
-      modes: nextModes,
-      mapping: nextMapping
-    } as VisualizationConfig;
-
-    if (
-      nextModes.symbol === SymbolMode.PROPORTIONAL &&
-      !nextMapping.sizeColumn &&
-      firstNumericColumn
-    ) {
-      nextMapping.sizeColumn = firstNumericColumn;
-    }
-
-    if (
-      usesBreakClassification(nextViz) &&
-      !nextMapping.valueColumn &&
-      firstNumericColumn
-    ) {
-      nextMapping.valueColumn = firstNumericColumn;
-    }
-
-    if (
-      usesCategoricalClassification(nextViz) &&
-      !nextMapping.categoryColumn &&
-      firstStringColumn
-    ) {
-      nextMapping.categoryColumn = firstStringColumn;
-    }
-
-    return nextMapping;
+    return { ...currentMapping };
   }
 
   function handleInvertPalette() {
@@ -309,6 +262,7 @@
       visualizationStore.updateModes(selectedViz.id, updates);
 
       if (
+        nextMapping.valueColumn &&
         usesBreakClassification(nextViz) &&
         (!selectedViz.classification?.method ||
           !selectedViz.classification?.numClasses)
@@ -321,7 +275,10 @@
         computeBreaksForVisualization('modesChange:classes');
       }
 
-      if (usesCategoricalClassification(nextViz)) {
+      if (
+        nextViz.mapping.categoryColumn &&
+        usesCategoricalClassification(nextViz)
+      ) {
         const vizId = selectedViz.id;
         visualizationStore.updateClassification(vizId, {
           colors: [...DEFAULT_CATEGORICAL_COLORS],
@@ -457,27 +414,78 @@
       return;
     }
 
-    visualizationStore.togglePrimitiveFilter(selectedViz.id, primitive);
-  }
-
-  function handleLabelVisibilityChange(visible: boolean) {
-    if (!selectedViz?.id) {
+    if (!visible) {
+      visualizationStore.togglePrimitiveFilter(selectedViz.id, primitive);
       return;
     }
 
-    const currentOpacity = selectedViz.style.labelOpacity;
-    const nextOpacity =
-      visible && (!currentOpacity || currentOpacity <= 0)
-        ? 1
-        : visible
-          ? currentOpacity
-          : 0;
-    visualizationStore.updateVisualization(selectedViz.id, {
-      style: {
-        ...selectedViz.style,
-        labelOpacity: nextOpacity
-      }
-    });
+    const nextFilters = [...new Set([...activeFilters, primitive])];
+
+    if (primitive === PrimitiveFilterType.POINT) {
+      visualizationStore.updateVisualization(selectedViz.id, {
+        primitiveFilters: nextFilters,
+        modes: {
+          ...selectedViz.modes,
+          symbol: SymbolMode.UNIQUE,
+          fill: FillMode.UNIQUE,
+          proportionalType: ProportionalType.SINGLE
+        },
+        style: {
+          ...selectedViz.style,
+          fillColor:
+            (selectedViz.style.fillColor as string) ?? DEFAULT_COLORS.fill,
+          strokeColor: DEFAULT_COLORS.gray,
+          fillOpacity: nextFilters.includes(PrimitiveFilterType.POLYGON)
+            ? 0
+            : (selectedViz.style.fillOpacity ??
+              VISUALIZATION_DEFAULTS.fillOpacity / 100)
+        },
+        symbols: selectedViz.symbols
+          ? {
+              ...selectedViz.symbols,
+              opacity:
+                selectedViz.symbols.opacity ??
+                VISUALIZATION_DEFAULTS.symbolOpacity / 100
+            }
+          : selectedViz.symbols
+      });
+      return;
+    }
+
+    if (primitive === PrimitiveFilterType.POLYGON) {
+      visualizationStore.updateVisualization(selectedViz.id, {
+        primitiveFilters: nextFilters,
+        modes: {
+          ...selectedViz.modes,
+          fill: FillMode.NONE
+        },
+        style: {
+          ...selectedViz.style,
+          fillOpacity: 0,
+          strokeColor: DEFAULT_COLORS.gray
+        }
+      });
+      return;
+    }
+
+    if (primitive === PrimitiveFilterType.LINE) {
+      visualizationStore.updateVisualization(selectedViz.id, {
+        primitiveFilters: nextFilters,
+        modes: {
+          ...selectedViz.modes,
+          fill: FillMode.NONE,
+          color: ColorMode.UNIQUE,
+          thickness: ThicknessMode.UNIQUE
+        },
+        style: {
+          ...selectedViz.style,
+          lineColor: DEFAULT_COLORS.gray,
+          lineOpacity:
+            selectedViz.style.lineOpacity ??
+            VISUALIZATION_DEFAULTS.lineOpacity / 100
+        }
+      });
+    }
   }
 
   function handleAddDataFilter(
@@ -530,7 +538,8 @@
     visualizationStore.updateVisualization(selectedViz.id, {
       style: {
         ...selectedViz.style,
-        textOpacity: nextOpacity
+        textOpacity: nextOpacity,
+        labelOpacity: 0
       }
     });
   }
@@ -874,18 +883,6 @@
       />
     {/if}
 
-    <LabelsConfig
-      dataFields={dataFieldItems}
-      visualization={selectedViz}
-      disabled={!hasGeometry}
-      onStyleChange={handleStyleChange}
-      onModesChange={handleModesChange}
-      onClassificationChange={handleClassificationChange}
-      onMappingChange={handleMappingChange}
-      onInvertPalette={handleInvertPalette}
-      onToggleVisibility={handleLabelVisibilityChange}
-    />
-
     <TextsConfig
       dataFields={dataFieldItems}
       visualization={selectedViz}
@@ -902,12 +899,6 @@
       onToggleFilterPanel={() => toggleFilterPanel(PrimitiveFilterType.TEXT)}
     />
   </div>
-
-  {#if selectedViz}
-    <div class="filter-area">
-      <YearFilter visualization={selectedViz} />
-    </div>
-  {/if}
 </section>
 
 {#if activeFilterPanel !== null}
@@ -950,9 +941,5 @@
     display: flex;
     flex-direction: column;
     border-bottom: 1px solid var(--cds-border-subtle-01, #c6c6c6);
-  }
-
-  .filter-area {
-    padding: 0 16px 16px 16px;
   }
 </style>

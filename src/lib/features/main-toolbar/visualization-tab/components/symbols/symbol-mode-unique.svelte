@@ -2,7 +2,6 @@
   import { Dropdown } from 'carbon-components-svelte';
   import {
     MisuseOutline,
-    SquareOutline,
     CircleFilled,
     SquareFill,
     Close,
@@ -64,27 +63,34 @@
   let showMissingData = $state<boolean>(true);
   let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
   let fillPattern = $state<boolean>(false);
-  let selectedClassFieldId = $state<number>(0);
-  let selectedCategoryFieldId = $state<number>(0);
+  const NONE_FIELD_ID = -1;
+  let selectedClassFieldId = $state<number>(NONE_FIELD_ID);
+  let selectedCategoryFieldId = $state<number>(NONE_FIELD_ID);
   let categoryCount = $state<number>(4);
+  const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
+  const selectableDataFields = $derived([noneOption, ...dataFields]);
 
   $effect(() => {
     if (visualization?.mapping.valueColumn && dataFields.length > 0) {
       const valueFieldIndex = dataFields.findIndex(
         (field) => field.text === visualization.mapping.valueColumn
       );
-      if (valueFieldIndex >= 0) {
-        selectedClassFieldId = dataFields[valueFieldIndex].id;
-      }
+      selectedClassFieldId =
+        valueFieldIndex >= 0 ? dataFields[valueFieldIndex].id : NONE_FIELD_ID;
+    } else {
+      selectedClassFieldId = NONE_FIELD_ID;
     }
 
     if (visualization?.mapping.categoryColumn && dataFields.length > 0) {
       const categoryFieldIndex = dataFields.findIndex(
         (field) => field.text === visualization.mapping.categoryColumn
       );
-      if (categoryFieldIndex >= 0) {
-        selectedCategoryFieldId = dataFields[categoryFieldIndex].id;
-      }
+      selectedCategoryFieldId =
+        categoryFieldIndex >= 0
+          ? dataFields[categoryFieldIndex].id
+          : NONE_FIELD_ID;
+    } else {
+      selectedCategoryFieldId = NONE_FIELD_ID;
     }
 
     if (visualization?.modes) {
@@ -93,15 +99,17 @@
     if (visualization?.style) {
       fillColor =
         (visualization.style.fillColor as string) ?? DEFAULT_COLORS.fill;
-      fillOpacity =
-        visualization.style.fillOpacity !== undefined
-          ? Math.round(visualization.style.fillOpacity * 100)
-          : VISUALIZATION_DEFAULTS.fillOpacity;
     }
     if (visualization?.symbols) {
       symbolSize =
         visualization.symbols.size ?? VISUALIZATION_DEFAULTS.symbolSize;
       shapeType = visualization.symbols.type ?? ShapeType.CIRCLE;
+      fillOpacity =
+        visualization.symbols.opacity !== undefined
+          ? Math.round(visualization.symbols.opacity * 100)
+          : VISUALIZATION_DEFAULTS.symbolOpacity;
+    } else {
+      fillOpacity = VISUALIZATION_DEFAULTS.symbolOpacity;
     }
     if (visualization?.missingData) {
       showMissingData = visualization.missingData.show ?? true;
@@ -119,7 +127,7 @@
 
   const fillModeItems = [
     { icon: MisuseOutline, label: m.fill_mode_none(), iconSize: 16 },
-    { icon: SquareOutline, label: m.fill_mode_unique(), iconSize: 16 },
+    { icon: SquareFill, label: m.fill_mode_unique(), iconSize: 16 },
     { icon: Category, label: m.fill_mode_classes(), iconSize: 16 },
     { icon: Tag, label: m.fill_mode_categories(), iconSize: 16 }
   ];
@@ -170,7 +178,7 @@
 
   function handleFillOpacityChange(value: number) {
     fillOpacity = value;
-    onStyleChange?.({ fillOpacity: value / 100 });
+    onSymbolsChange?.({ opacity: value / 100 });
   }
 
   function handleMissingDataShowChange(value: boolean) {
@@ -190,6 +198,11 @@
 
   function handleClassFieldSelect(fieldId: number) {
     selectedClassFieldId = fieldId;
+    if (fieldId === NONE_FIELD_ID) {
+      onMappingChange?.({ valueColumn: undefined });
+      return;
+    }
+
     const field = dataFields.find((item) => item.id === fieldId);
     if (field) {
       onMappingChange?.({ valueColumn: field.text });
@@ -198,6 +211,11 @@
 
   function handleCategoryFieldSelect(fieldId: number) {
     selectedCategoryFieldId = fieldId;
+    if (fieldId === NONE_FIELD_ID) {
+      onMappingChange?.({ categoryColumn: undefined });
+      return;
+    }
+
     const field = dataFields.find((item) => item.id === fieldId);
     if (field) {
       onMappingChange?.({ categoryColumn: field.text });
@@ -286,7 +304,7 @@
   <div class="field-group">
     <Dropdown
       titleText={m.color_according()}
-      items={dataFields}
+      items={selectableDataFields}
       selectedId={selectedClassFieldId}
       on:select={(e) => handleClassFieldSelect(e.detail.selectedId)}
       type="default"
@@ -327,7 +345,7 @@
   <div class="field-group">
     <Dropdown
       titleText={m.color_according()}
-      items={dataFields}
+      items={selectableDataFields}
       selectedId={selectedCategoryFieldId}
       on:select={(e) => handleCategoryFieldSelect(e.detail.selectedId)}
       type="default"
@@ -373,6 +391,7 @@
   discretizationLabel={discretizationLabel}
   onStyleChange={onStyleChange}
   onModesChange={onModesChange}
+  onMappingChange={onMappingChange}
   onInvertPalette={onInvertPalette}
   onOpenDiscretization={onOpenDiscretization}
   onClassificationChange={onClassificationChange}

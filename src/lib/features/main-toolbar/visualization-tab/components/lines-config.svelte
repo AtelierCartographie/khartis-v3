@@ -76,41 +76,52 @@
   }: Props = $props();
 
   let discretizationModalOpen = $state(false);
-  let selectedValueFieldId = $state<number>(0);
-  let selectedSizeFieldId = $state<number>(0);
-  let selectedCategoryFieldId = $state<number>(0);
+  const NONE_FIELD_ID = -1;
+  let selectedValueFieldId = $state<number>(NONE_FIELD_ID);
+  let selectedSizeFieldId = $state<number>(NONE_FIELD_ID);
+  let selectedCategoryFieldId = $state<number>(NONE_FIELD_ID);
+  const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
+  const selectableDataFields = $derived([noneOption, ...dataFields]);
 
   $effect(() => {
     if (visualization?.mapping.valueColumn && dataFields.length > 0) {
       const fieldIndex = dataFields.findIndex(
         (f) => f.text === visualization.mapping.valueColumn
       );
-      if (fieldIndex >= 0) {
-        selectedValueFieldId = dataFields[fieldIndex].id;
-      }
+      selectedValueFieldId =
+        fieldIndex >= 0 ? dataFields[fieldIndex].id : NONE_FIELD_ID;
+    } else {
+      selectedValueFieldId = NONE_FIELD_ID;
     }
 
     if (visualization?.mapping.sizeColumn && dataFields.length > 0) {
       const sizeIndex = dataFields.findIndex(
         (f) => f.text === visualization.mapping.sizeColumn
       );
-      if (sizeIndex >= 0) {
-        selectedSizeFieldId = dataFields[sizeIndex].id;
-      }
+      selectedSizeFieldId =
+        sizeIndex >= 0 ? dataFields[sizeIndex].id : NONE_FIELD_ID;
+    } else {
+      selectedSizeFieldId = NONE_FIELD_ID;
     }
 
     if (visualization?.mapping.categoryColumn && dataFields.length > 0) {
       const categoryIndex = dataFields.findIndex(
         (f) => f.text === visualization.mapping.categoryColumn
       );
-      if (categoryIndex >= 0) {
-        selectedCategoryFieldId = dataFields[categoryIndex].id;
-      }
+      selectedCategoryFieldId =
+        categoryIndex >= 0 ? dataFields[categoryIndex].id : NONE_FIELD_ID;
+    } else {
+      selectedCategoryFieldId = NONE_FIELD_ID;
     }
   });
 
   function handleValueFieldSelect(fieldId: number) {
     selectedValueFieldId = fieldId;
+    if (fieldId === NONE_FIELD_ID) {
+      onMappingChange?.({ valueColumn: undefined });
+      return;
+    }
+
     const field = dataFields.find((item) => item.id === fieldId);
     if (field && onMappingChange) {
       onMappingChange({ valueColumn: field.text });
@@ -119,6 +130,11 @@
 
   function handleSizeFieldSelect(fieldId: number) {
     selectedSizeFieldId = fieldId;
+    if (fieldId === NONE_FIELD_ID) {
+      onMappingChange?.({ sizeColumn: undefined });
+      return;
+    }
+
     const field = dataFields.find((item) => item.id === fieldId);
     if (field && onMappingChange) {
       onMappingChange({ sizeColumn: field.text });
@@ -127,6 +143,11 @@
 
   function handleCategoryFieldSelect(fieldId: number) {
     selectedCategoryFieldId = fieldId;
+    if (fieldId === NONE_FIELD_ID) {
+      onMappingChange?.({ categoryColumn: undefined });
+      return;
+    }
+
     const field = dataFields.find((item) => item.id === fieldId);
     if (field && onMappingChange) {
       onMappingChange({ categoryColumn: field.text });
@@ -325,6 +346,7 @@
   title={m.lines_title()}
   defaultOpen={false}
   showToggle
+  actionsEnd
   toggleChecked={enabled}
   onToggleChange={handleToggleChange}
 >
@@ -355,13 +377,15 @@
         min={SLIDER_LIMITS.lineWidth.min}
         max={SLIDER_LIMITS.lineWidth.max}
         value={thickness}
+        showMinMax
+        inputWidth="128px"
         onchange={handleThicknessChange}
       />
     {:else if thicknessMode === ThicknessMode.PROPORTIONAL}
       <div class="field-group">
         <Dropdown
           titleText={m.thickness_according()}
-          items={dataFields}
+          items={selectableDataFields}
           selectedId={selectedSizeFieldId}
           on:select={(e) => handleSizeFieldSelect(e.detail.selectedId)}
           type="default"
@@ -372,13 +396,15 @@
         min={1}
         max={SLIDER_LIMITS.lineMaxWidth.max}
         value={maxThickness}
+        showMinMax
+        inputWidth="128px"
         onchange={handleMaxThicknessChange}
       />
     {:else if thicknessMode === ThicknessMode.CLASSES}
       <div class="field-group">
         <Dropdown
           titleText={m.thickness_according()}
-          items={dataFields}
+          items={selectableDataFields}
           selectedId={selectedValueFieldId}
           on:select={(e) => handleValueFieldSelect(e.detail.selectedId)}
           type="default"
@@ -394,6 +420,8 @@
         min={1}
         max={SLIDER_LIMITS.lineMaxWidth.max}
         value={maxThickness}
+        showMinMax
+        inputWidth="128px"
         onchange={handleMaxThicknessChange}
       />
     {/if}
@@ -419,7 +447,7 @@
       <div class="field-group">
         <Dropdown
           titleText={m.color_according()}
-          items={dataFields}
+          items={selectableDataFields}
           selectedId={selectedValueFieldId}
           on:select={(e) => handleValueFieldSelect(e.detail.selectedId)}
           type="default"
@@ -442,7 +470,7 @@
       <div class="field-group">
         <Dropdown
           titleText={m.color_according()}
-          items={dataFields}
+          items={selectableDataFields}
           selectedId={selectedCategoryFieldId}
           on:select={(e) => handleCategoryFieldSelect(e.detail.selectedId)}
           type="default"
@@ -463,18 +491,20 @@
       />
     {/if}
 
-    <ToggleWithLabel
-      label={m.dashed()}
-      toggled={dashed}
-      ontoggle={handleDashedChange}
-    />
-
     <SliderWithInput
       label={m.opacity()}
       min={SLIDER_LIMITS.lineOpacity.min}
       max={SLIDER_LIMITS.lineOpacity.max}
       value={opacity}
+      showMinMax
+      inputWidth="128px"
       onchange={handleOpacityChange}
+    />
+
+    <ToggleWithLabel
+      label={m.dashed()}
+      toggled={dashed}
+      ontoggle={handleDashedChange}
     />
 
     <MissingDataSection
@@ -501,8 +531,8 @@
   .lines-config {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-04);
-    padding: var(--cds-spacing-03);
+    gap: var(--cds-spacing-05);
+    padding: var(--cds-spacing-04) var(--cds-spacing-03) var(--cds-spacing-05);
   }
 
   .field-group {

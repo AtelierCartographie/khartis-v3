@@ -76,31 +76,41 @@
   }: Props = $props();
 
   let discretizationModalOpen = $state(false);
-  let selectedFieldId = $state<number>(0);
-  let selectedCategoryFieldId = $state<number>(0);
+  const NONE_FIELD_ID = -1;
+  let selectedFieldId = $state<number>(NONE_FIELD_ID);
+  let selectedCategoryFieldId = $state<number>(NONE_FIELD_ID);
+  const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
+  const selectableDataFields = $derived([noneOption, ...dataFields]);
 
   $effect(() => {
     if (visualization?.mapping.valueColumn && dataFields.length > 0) {
       const fieldIndex = dataFields.findIndex(
         (f) => f.text === visualization.mapping.valueColumn
       );
-      if (fieldIndex >= 0) {
-        selectedFieldId = dataFields[fieldIndex].id;
-      }
+      selectedFieldId =
+        fieldIndex >= 0 ? dataFields[fieldIndex].id : NONE_FIELD_ID;
+    } else {
+      selectedFieldId = NONE_FIELD_ID;
     }
 
     if (visualization?.mapping.categoryColumn && dataFields.length > 0) {
       const fieldIndex = dataFields.findIndex(
         (f) => f.text === visualization.mapping.categoryColumn
       );
-      if (fieldIndex >= 0) {
-        selectedCategoryFieldId = dataFields[fieldIndex].id;
-      }
+      selectedCategoryFieldId =
+        fieldIndex >= 0 ? dataFields[fieldIndex].id : NONE_FIELD_ID;
+    } else {
+      selectedCategoryFieldId = NONE_FIELD_ID;
     }
   });
 
   function handleValueFieldSelect(fieldId: number) {
     selectedFieldId = fieldId;
+    if (fieldId === NONE_FIELD_ID) {
+      onMappingChange?.({ valueColumn: undefined });
+      return;
+    }
+
     const field = dataFields.find((item) => item.id === fieldId);
     if (field && onMappingChange) {
       onMappingChange({ valueColumn: field.text });
@@ -109,6 +119,11 @@
 
   function handleCategoryFieldSelect(fieldId: number) {
     selectedCategoryFieldId = fieldId;
+    if (fieldId === NONE_FIELD_ID) {
+      onMappingChange?.({ categoryColumn: undefined });
+      return;
+    }
+
     const field = dataFields.find((item) => item.id === fieldId);
     if (field && onMappingChange) {
       onMappingChange({ categoryColumn: field.text });
@@ -145,7 +160,10 @@
         (visualization.style.fillColor as string) ?? DEFAULT_COLORS.fill;
     }
     if (visualization?.modes) {
-      fillMode = visualization.modes.fill ?? FillMode.UNIQUE;
+      fillMode =
+        (visualization.style.fillOpacity ?? 1) <= 0
+          ? FillMode.NONE
+          : (visualization.modes.fill ?? FillMode.UNIQUE);
     }
     if (visualization?.missingData) {
       showMissingData = visualization.missingData.show ?? true;
@@ -171,6 +189,16 @@
     ];
     fillMode = modes[index] || FillMode.NONE;
     onModesChange?.({ fill: fillMode });
+    if (fillMode === FillMode.NONE) {
+      onStyleChange?.({ fillOpacity: 0 });
+      return;
+    }
+
+    if ((visualization?.style.fillOpacity ?? 1) <= 0) {
+      onStyleChange?.({
+        fillOpacity: VISUALIZATION_DEFAULTS.fillOpacity / 100
+      });
+    }
   }
 
   function handleFillColorChange(value: string) {
@@ -250,6 +278,7 @@
   title={m.polygons_title()}
   defaultOpen={false}
   showToggle
+  actionsEnd
   toggleChecked={enabled}
   onToggleChange={handleToggleChange}
 >
@@ -284,7 +313,7 @@
       <div class="field-group">
         <Dropdown
           titleText={m.color_according()}
-          items={dataFields}
+          items={selectableDataFields}
           selectedId={selectedFieldId}
           on:select={(e) => handleValueFieldSelect(e.detail.selectedId)}
           type="default"
@@ -307,7 +336,7 @@
       <div class="field-group">
         <Dropdown
           titleText={m.color_according()}
-          items={dataFields}
+          items={selectableDataFields}
           selectedId={selectedCategoryFieldId}
           on:select={(e) => handleCategoryFieldSelect(e.detail.selectedId)}
           type="default"
@@ -359,6 +388,7 @@
       discretizationLabel={discretizationLabel}
       onStyleChange={onStyleChange}
       onModesChange={onModesChange}
+      onMappingChange={onMappingChange}
       onInvertPalette={onInvertPalette}
       onOpenDiscretization={handleOpenDiscretization}
       onClassificationChange={handleClassificationChange}

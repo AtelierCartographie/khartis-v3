@@ -129,6 +129,7 @@
   title={m.symbols_title()}
   defaultOpen={false}
   showToggle
+  actionsEnd
   toggleChecked={enabled}
   onToggleChange={handleToggleChange}
 >

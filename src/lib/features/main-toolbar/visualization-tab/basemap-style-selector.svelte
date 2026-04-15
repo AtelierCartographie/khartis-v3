@@ -431,7 +431,7 @@
     font-size: 0.6875rem;
     font-weight: 600;
     letter-spacing: 0.16px;
-    color: #161616;
+    color: var(--cds-text-primary, #161616);
     background: rgba(255, 255, 255, 0.82);
     backdrop-filter: blur(4px);
     border-radius: 999px;
