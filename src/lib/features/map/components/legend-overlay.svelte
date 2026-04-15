@@ -814,6 +814,7 @@
 
   .legend-title {
     margin: 0 0 3px 0;
+    font-size: 1em;
     font-weight: 600;
     color: inherit;
     line-height: 1.3;
