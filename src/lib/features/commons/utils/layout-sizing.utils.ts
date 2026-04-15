@@ -71,9 +71,9 @@ const TOKENS_BY_PROFILE = {
       patternedSwatchSize: 20
     },
     annotations: {
-      noteFontSize: 10,
-      titleFontSize: 18,
-      subtitleFontSize: 14,
+      noteFontSize: 9,
+      titleFontSize: 14,
+      subtitleFontSize: 11,
       captionFontSize: 8,
       textMaxWidth: 300,
       textPaddingInline: 12,
@@ -112,9 +112,9 @@ const TOKENS_BY_PROFILE = {
       patternedSwatchSize: 22
     },
     annotations: {
-      noteFontSize: 11,
-      titleFontSize: 20,
-      subtitleFontSize: 16,
+      noteFontSize: 10,
+      titleFontSize: 16,
+      subtitleFontSize: 13,
       captionFontSize: 9,
       textMaxWidth: 360,
       textPaddingInline: 14,
@@ -153,9 +153,9 @@ const TOKENS_BY_PROFILE = {
       patternedSwatchSize: 24
     },
     annotations: {
-      noteFontSize: 12,
-      titleFontSize: 24,
-      subtitleFontSize: 18,
+      noteFontSize: 11,
+      titleFontSize: 20,
+      subtitleFontSize: 14,
       captionFontSize: 10,
       textMaxWidth: 420,
       textPaddingInline: 16,

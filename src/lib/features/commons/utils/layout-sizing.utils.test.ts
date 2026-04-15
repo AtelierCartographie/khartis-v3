@@ -30,7 +30,7 @@ describe('layout sizing utils', () => {
     });
 
     expect(tokens.profile).toBe('print-large');
-    expect(tokens.annotations.titleFontSize).toBe(20);
+    expect(tokens.annotations.titleFontSize).toBe(16);
     expect(tokens.geoIndications.insetSize).toBe(130);
     expect(tokens.mapViewport.fitPaddingPx).toBe(56);
   });
