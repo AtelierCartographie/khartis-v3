@@ -81,6 +81,22 @@ export enum ShapeType {
   RECTANGLE = 'rectangle'
 }
 
+export enum CategoryShapeMode {
+  UNIQUE = 'unique',
+  DIFFERENT = 'different',
+  ORDERED = 'ordered'
+}
+
+export const CATEGORY_SHAPE_CYCLE: readonly ShapeType[] = [
+  ShapeType.CIRCLE,
+  ShapeType.SQUARE,
+  ShapeType.TRIANGLE,
+  ShapeType.DIAMOND,
+  ShapeType.CROSS,
+  ShapeType.STAR,
+  ShapeType.RECTANGLE
+];
+
 /**
  * Numeric ordinal used by the GLSL shader `instanceShapes` attribute.
  * Kept aligned with the MultiShapeLayer SDF dispatcher.
@@ -150,7 +166,6 @@ export enum ThicknessMode {
   NONE = 'none',
   UNIQUE = 'unique',
   PROPORTIONAL = 'proportional',
-  GRADUATED = 'graduated',
   CLASSES = 'classes'
 }
 
@@ -190,7 +205,7 @@ export const SLIDER_LIMITS = {
   lineMaxWidth: { min: 1, max: 50 },
   lineOpacity: { min: 0, max: 100 },
   symbolSize: { min: 1, max: 100 },
-  symbolMaxSize: { min: 1, max: 200 },
+  symbolMaxSize: { min: 1, max: 100 },
   textSize: { min: 8, max: 32 },
   textOpacity: { min: 0, max: 100 },
   labelOpacity: { min: 0, max: 100 },

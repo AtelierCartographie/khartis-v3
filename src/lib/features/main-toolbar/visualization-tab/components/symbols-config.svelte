@@ -21,7 +21,12 @@
     ClassificationConfig
   } from '$lib/features/commons/store/visualization.store.svelte';
   import DiscretizationModal from './discretization-modal.svelte';
-  import { SectionHeading, InfoPopover, VizFilterButton } from './shared';
+  import {
+    SectionHeading,
+    InfoPopover,
+    VizFilterButton,
+    VizFilterSection
+  } from './shared';
   import type { VizDataFilter } from '$lib/features/commons/store/visualization.store.svelte';
   import {
     SymbolModeUnique,
@@ -31,8 +36,9 @@
   } from './symbols';
 
   interface Props {
-    dataFields?: Array<{ id: number; text: string }>;
+    dataFields?: Array<{ id: number; text: string; type?: string }>;
     visualization?: VisualizationConfig;
+    disabled?: boolean;
     onStyleChange?: (updates: Partial<VisualizationConfig['style']>) => void;
     onModesChange?: (updates: Partial<VisualizationModes>) => void;
     onSymbolsChange?: (
@@ -46,13 +52,15 @@
     onInvertPalette?: () => void;
     onToggleVisibility?: (checked: boolean) => void;
     filters?: VizDataFilter[];
-    filterPanelOpen?: boolean;
-    onToggleFilterPanel?: () => void;
+    onAddFilter?: (filter: Omit<VizDataFilter, 'id'>) => void;
+    onRemoveFilter?: (filterId: string) => void;
+    onClearFilters?: () => void;
   }
 
   let {
     dataFields = [],
     visualization,
+    disabled = false,
     onStyleChange,
     onModesChange,
     onSymbolsChange,
@@ -62,11 +70,13 @@
     onInvertPalette,
     onToggleVisibility,
     filters = [],
-    filterPanelOpen = false,
-    onToggleFilterPanel = () => {}
+    onAddFilter,
+    onRemoveFilter,
+    onClearFilters
   }: Props = $props();
 
   let discretizationModalOpen = $state(false);
+  let filterSectionVisible = $state(false);
   let symbolMode = $state<SymbolMode>(SymbolMode.UNIQUE);
   const enabled = $derived.by(() => {
     const primitiveFilters =
@@ -131,19 +141,26 @@
   showToggle
   actionsEnd
   toggleChecked={enabled}
+  disabled={disabled}
   onToggleChange={handleToggleChange}
 >
   {#snippet icon()}
     <InfoPopover text={m.symbols_section_info()} />
     <VizFilterButton
-      active={filterPanelOpen || filters.length > 0}
+      active={filterSectionVisible || filters.length > 0}
       count={filters.length}
-      onToggle={onToggleFilterPanel}
+      onToggle={() => {
+        filterSectionVisible = !filterSectionVisible;
+      }}
     />
   {/snippet}
 
   <div class="symbols-config">
-    <SectionHeading title={m.size_and_shape()} />
+    <SectionHeading
+      title={symbolMode === SymbolMode.CATEGORIES
+        ? m.size_shape_and_color()
+        : m.size_and_shape()}
+    />
 
     <div class="field-group">
       <span class="field-label">
@@ -201,6 +218,16 @@
         dataFields={dataFields}
         visualization={visualization}
         onMappingChange={onMappingChange}
+      />
+    {/if}
+
+    {#if filterSectionVisible || filters.length > 0}
+      <VizFilterSection
+        dataFields={dataFields}
+        filters={filters}
+        onAddFilter={onAddFilter ?? (() => {})}
+        onRemoveFilter={onRemoveFilter ?? (() => {})}
+        onClearFilters={onClearFilters ?? (() => {})}
       />
     {/if}
   </div>

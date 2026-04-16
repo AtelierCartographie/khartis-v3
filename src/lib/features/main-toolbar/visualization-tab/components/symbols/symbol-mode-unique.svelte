@@ -38,6 +38,7 @@
     StrokeSection
   } from '../shared';
   import type { SymbolModeProps } from './types';
+  import { resolveDiscretizationLabel } from '../discretization.utils';
 
   let {
     dataFields = [],
@@ -141,14 +142,9 @@
     ].indexOf(fillMode)
   );
 
-  const discretizationLabel = $derived.by(() => {
-    if (!visualization?.classification) return m.discretization_method_jenks();
-    const numClasses =
-      visualization.classification.numClasses ??
-      visualization.classification.classes ??
-      5;
-    return `${m.discretization_method_quantile()}, ${numClasses} ${m.discretization_num_classes().toLowerCase()}`;
-  });
+  const discretizationLabel = $derived(
+    resolveDiscretizationLabel(visualization?.classification)
+  );
 
   function handleFillModeChange(index: number) {
     const modes = [
@@ -239,18 +235,16 @@
 
   const shapeTypes = availableShapesForSymbolMode(SymbolMode.UNIQUE);
 
-  const shapeItems = $derived(
+  const shapeDropdownItems = $derived(
     shapeTypes.map((type) => ({
-      icon: shapeDescriptors[type].icon,
-      label: shapeDescriptors[type].label(),
-      iconSize: 16
+      id: type,
+      text: shapeDescriptors[type].label()
     }))
   );
 
-  const shapeIndex = $derived(shapeTypes.indexOf(shapeType));
-
-  function handleShapeTabChange(index: number) {
-    handleShapeTypeChange(shapeTypes[index] || ShapeType.CIRCLE);
+  function handleShapeDropdownSelect(value: string | number) {
+    const next = shapeTypes.find((type) => type === value) ?? ShapeType.CIRCLE;
+    handleShapeTypeChange(next);
   }
 </script>
 
@@ -265,14 +259,14 @@
 
 <div class="field-group">
   <span class="field-label">
-    {m.viz_symbols_representation()}
+    {m.shape()}
     <InfoPopover text={m.shape_info()} />
   </span>
-  <ToggleTabs
-    items={shapeItems}
-    activeIndex={shapeIndex}
-    onChange={handleShapeTabChange}
-    hideInactiveLabel={true}
+  <Dropdown
+    items={shapeDropdownItems}
+    selectedId={shapeType}
+    on:select={(e) => handleShapeDropdownSelect(e.detail.selectedId)}
+    type="default"
   />
 </div>
 

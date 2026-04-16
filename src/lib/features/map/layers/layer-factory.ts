@@ -34,6 +34,8 @@ import {
   VisualizationType
 } from '$lib/features/commons/store/visualization.store.svelte';
 import {
+  CATEGORY_SHAPE_CYCLE,
+  CategoryShapeMode,
   ColorMode,
   DEFAULT_COLORS,
   DENSITY_DEFAULTS,
@@ -902,9 +904,58 @@ function createRepresentativePointSymbolLayers(
     SHAPE_ORDINAL[pointShape] ?? SHAPE_ORDINAL[ShapeType.CIRCLE];
   const missingShapeOrdinal =
     SHAPE_ORDINAL[missingPointShape] ?? SHAPE_ORDINAL[ShapeType.CIRCLE];
+
+  const categoryShapeMode =
+    viz.modes?.categoryShape ?? CategoryShapeMode.UNIQUE;
+  const useCategoryShape =
+    viz.modes?.symbol === SymbolMode.CATEGORIES &&
+    categoryShapeMode !== CategoryShapeMode.UNIQUE &&
+    !!viz.mapping.categoryColumn;
+  const categoryShapeVector =
+    useCategoryShape && viz.mapping.categoryColumn
+      ? jsTable.getChild(viz.mapping.categoryColumn)
+      : null;
+  const categoryShapeMap = (() => {
+    if (!useCategoryShape || !categoryShapeVector) return null;
+    const labels = viz.classification?.labels;
+    const orderedCategories =
+      labels && labels.length > 0
+        ? labels
+        : (() => {
+            const seen = new Set<string>();
+            const out: string[] = [];
+            for (let i = 0; i < jsTable.numRows; i += 1) {
+              const raw = categoryShapeVector.get(i);
+              if (raw === null || raw === undefined) continue;
+              const key = String(raw);
+              if (!seen.has(key)) {
+                seen.add(key);
+                out.push(key);
+              }
+            }
+            return out;
+          })();
+    const map = new Map<string, number>();
+    for (let i = 0; i < orderedCategories.length; i += 1) {
+      const shape =
+        CATEGORY_SHAPE_CYCLE[i % CATEGORY_SHAPE_CYCLE.length] ??
+        ShapeType.CIRCLE;
+      map.set(orderedCategories[i], SHAPE_ORDINAL[shape]);
+    }
+    return map;
+  })();
+
   const shapeByFeatureId = ctxRowAccessor(ctx, jsTable, (row) => {
     if (pointMissingColumn && isMissingThematicValue(row[pointMissingColumn])) {
       return missingShapeOrdinal;
+    }
+    if (useCategoryShape && categoryShapeMap && viz.mapping.categoryColumn) {
+      const raw = row[viz.mapping.categoryColumn];
+      if (raw !== null && raw !== undefined) {
+        const key = String(raw);
+        const mapped = categoryShapeMap.get(key);
+        if (mapped !== undefined) return mapped;
+      }
     }
     return shapeOrdinal;
   });
@@ -977,7 +1028,15 @@ function createRepresentativePointSymbolLayers(
           viz.missingData?.show,
           viz.missingData?.size
         ],
-        getShape: [shapeOrdinal, missingShapeOrdinal, pointMissingColumn],
+        getShape: [
+          shapeOrdinal,
+          missingShapeOrdinal,
+          pointMissingColumn,
+          categoryShapeMode,
+          useCategoryShape,
+          viz.mapping.categoryColumn,
+          viz.classification?.labels
+        ],
         ...(ctx.yearFilter && {
           getFilterValue: [ctx.yearFilter.column, ctx.yearFilter.value]
         })
@@ -3528,7 +3587,7 @@ export function createPolygonLayers(
           dashJustified: true,
           widthUnits: 'pixels',
           getWidth: strokeWidth / 4,
-          widthMinPixels: 1,
+          widthMinPixels: 0.5,
           pickable: false,
           ...(modelMatrix && { modelMatrix }),
           ...(beforeId && { beforeId }),
@@ -3548,7 +3607,7 @@ export function createPolygonLayers(
           }),
           widthUnits: 'pixels',
           getWidth: strokeWidth / 4,
-          widthMinPixels: 1,
+          widthMinPixels: 0.5,
           pickable: false,
           ...(modelMatrix && { modelMatrix }),
           ...(beforeId && { beforeId }),
@@ -3767,6 +3826,7 @@ export function createPolygonLayers(
       opacity: hasPolyHighlights ? 1 : rawPolyFillOpacity,
       lineWidthUnits: 'pixels',
       lineWidthScale: strokeWidth / 4,
+      lineWidthMinPixels: 0.5,
       pickable: true,
       ...resolveHoverHighlightProps(),
       parameters: {
