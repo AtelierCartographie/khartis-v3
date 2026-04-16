@@ -1,7 +1,6 @@
 import { Duck } from '$lib/features/duckdb';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import { type Table as ArrowTable } from 'apache-arrow/Arrow';
-// SvelteMap removed — basemap cache is non-reactive data processing
 import { LogCategory, logger } from '../../commons/utils/logger';
 import { resolveStaticAssetUrl } from '../../commons/utils/static-asset-url';
 import {

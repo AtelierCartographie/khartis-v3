@@ -25,6 +25,10 @@
   import SectionHeading from './section-heading.svelte';
   import SliderWithInput from './slider-with-input.svelte';
   import ToggleWithLabel from './toggle-with-label.svelte';
+  import {
+    DEFAULT_SEQUENTIAL_PREVIEW,
+    DEFAULT_QUALITATIVE_PREVIEW
+  } from '../palette-popover/palette.constants';
 
   interface Props {
     visualization?: VisualizationConfig;
@@ -37,46 +41,44 @@
     categoryCount?: number;
     onStyleChange?: (updates: Partial<VisualizationConfig['style']>) => void;
     onModesChange?: (updates: Partial<VisualizationModes>) => void;
+    onMappingChange?: (
+      updates: Partial<VisualizationConfig['mapping']>
+    ) => void;
     onInvertPalette?: () => void;
     onOpenDiscretization?: () => void;
     onClassificationChange?: (updates: Partial<ClassificationConfig>) => void;
+    showSliderBounds?: boolean;
+    sliderInputWidth?: string;
   }
-
-  const DEFAULT_SEQUENTIAL_PALETTE = [
-    '#c8ddf0',
-    '#78a9cf',
-    '#2171b5',
-    '#084594'
-  ];
-  const DEFAULT_QUALITATIVE_PALETTE = [
-    '#009d9a',
-    '#f1c21b',
-    '#ff832b',
-    '#a56eff'
-  ];
 
   let {
     visualization,
     dataFields = [],
     infoText,
     showDashed = true,
-    classesPalette = DEFAULT_SEQUENTIAL_PALETTE,
-    categoriesPalette = DEFAULT_QUALITATIVE_PALETTE,
+    classesPalette = DEFAULT_SEQUENTIAL_PREVIEW,
+    categoriesPalette = DEFAULT_QUALITATIVE_PREVIEW,
     discretizationLabel,
     categoryCount = 4,
     onStyleChange,
     onModesChange,
+    onMappingChange,
     onInvertPalette,
     onOpenDiscretization,
-    onClassificationChange
+    onClassificationChange,
+    showSliderBounds = true,
+    sliderInputWidth = '128px'
   }: Props = $props();
 
+  const NONE_FIELD_ID = -1;
   let strokeMode = $state<StrokeMode>(StrokeMode.NONE);
   let strokeWidth = $state<number>(VISUALIZATION_DEFAULTS.strokeWidth);
   let strokeColor = $state<string>(DEFAULT_COLORS.stroke);
   let strokeOpacity = $state<number>(VISUALIZATION_DEFAULTS.strokeOpacity);
   let strokeDashed = $state<boolean>(false);
-  let colorFieldId = $state<number>(0);
+  let colorFieldId = $state<number>(NONE_FIELD_ID);
+  const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
+  const selectableDataFields = $derived([noneOption, ...dataFields]);
 
   $effect(() => {
     if (visualization?.modes) {
@@ -91,6 +93,21 @@
           ? Math.round(visualization.style.strokeOpacity * 100)
           : VISUALIZATION_DEFAULTS.strokeOpacity;
       strokeDashed = visualization.style.strokeDashed ?? false;
+    }
+    const mappedFieldName =
+      strokeMode === StrokeMode.CATEGORIES
+        ? visualization?.mapping.categoryColumn
+        : strokeMode === StrokeMode.CLASSES
+          ? visualization?.mapping.valueColumn
+          : undefined;
+    if (mappedFieldName && dataFields.length > 0) {
+      const fieldIndex = dataFields.findIndex(
+        (field) => field.text === mappedFieldName
+      );
+      colorFieldId =
+        fieldIndex >= 0 ? dataFields[fieldIndex].id : NONE_FIELD_ID;
+    } else {
+      colorFieldId = NONE_FIELD_ID;
     }
   });
 
@@ -134,6 +151,35 @@
     strokeDashed = value;
     onStyleChange?.({ strokeDashed: value });
   }
+
+  function handleColorFieldSelect(fieldId: number) {
+    colorFieldId = fieldId;
+    if (!onMappingChange) {
+      return;
+    }
+
+    if (strokeMode === StrokeMode.CLASSES) {
+      if (fieldId === NONE_FIELD_ID) {
+        onMappingChange({ valueColumn: undefined });
+        return;
+      }
+      const field = dataFields.find((item) => item.id === fieldId);
+      if (field) {
+        onMappingChange({ valueColumn: field.text });
+      }
+    }
+
+    if (strokeMode === StrokeMode.CATEGORIES) {
+      if (fieldId === NONE_FIELD_ID) {
+        onMappingChange({ categoryColumn: undefined });
+        return;
+      }
+      const field = dataFields.find((item) => item.id === fieldId);
+      if (field) {
+        onMappingChange({ categoryColumn: field.text });
+      }
+    }
+  }
 </script>
 
 <SectionHeading title={m.stroke()} infoText={infoText} />
@@ -153,6 +199,8 @@
     bind:value={strokeWidth}
     min={1}
     max={SLIDER_LIMITS.strokeWidth.max}
+    showMinMax={showSliderBounds}
+    inputWidth={sliderInputWidth}
     onchange={handleStrokeWidthChange}
   />
 
@@ -166,8 +214,9 @@
     <div class="field-group">
       <Dropdown
         titleText={m.color_according()}
-        items={dataFields}
-        bind:selectedId={colorFieldId}
+        items={selectableDataFields}
+        selectedId={colorFieldId}
+        on:select={(e) => handleColorFieldSelect(e.detail.selectedId)}
         type="default"
       />
     </div>
@@ -188,8 +237,9 @@
     <div class="field-group">
       <Dropdown
         titleText={m.color_according()}
-        items={dataFields}
-        bind:selectedId={colorFieldId}
+        items={selectableDataFields}
+        selectedId={colorFieldId}
+        on:select={(e) => handleColorFieldSelect(e.detail.selectedId)}
         type="default"
       />
     </div>
@@ -221,6 +271,8 @@
     bind:value={strokeOpacity}
     min={SLIDER_LIMITS.opacity.min}
     max={SLIDER_LIMITS.opacity.max}
+    showMinMax={showSliderBounds}
+    inputWidth={sliderInputWidth}
     onchange={handleStrokeOpacityChange}
   />
 {/if}

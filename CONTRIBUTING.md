@@ -39,7 +39,7 @@ Use descriptive prefixes for your branches:
 - `docs/` - Documentation updates (e.g., `docs/api-reference`, `docs/setup-guide`)
 - `refactor/` - Code refactoring (e.g., `refactor/store-architecture`, `refactor/css-utilities`)
 - `perf/` - Performance improvements (e.g., `perf/duckdb-queries`, `perf/deck-gl-rendering`)
-- `test/` - Test additions/improvements (e.g., `test/e2e-coverage`, `test/unit-stores`)
+- `test/` - Test additions/improvements (e.g., `test/pipeline-coverage`, `test/unit-stores`)
 - `chore/` - Maintenance tasks (e.g., `chore/update-dependencies`, `chore/ci-improvements`)
 
 ### Pull requests
@@ -98,7 +98,7 @@ fix(format): correct A4 landscape margins
 docs: update setup instructions in README
 perf(db): optimize DuckDB query performance
 refactor(store): migrate to Svelte 5 runes pattern
-test(e2e): add projection tool test coverage
+test(pipeline): add projection tool test coverage
 ```
 
 ### Breaking changes
@@ -246,33 +246,32 @@ try {
 
 ### Test types
 
-- **Unit Tests**: Vitest with jsdom + node workspace
-- **E2E Tests**: Playwright (automatically runs `pnpm dev` on port 5176)
-- **Manual Testing**: Cross-browser compatibility, accessibility
+- **Unit Tests (client)**: Vitest with jsdom — Svelte components, stores, hooks
+- **Pipeline Tests (server)**: Vitest node — data pipeline, services, format processors
+- **DuckDB Tests (server)**: Vitest node with `@duckdb/node-api` — SQL macros, operations
+- **Manual Testing**: Cross-browser compatibility, accessibility, UX workflows
 
 ### Running tests
 
 ```bash
-pnpm test:unit     # Unit tests (Vitest, jsdom + node)
-pnpm test          # Full server-side CI suite (pipeline + DuckDB)
+pnpm test:unit     # Client tests (Vitest, jsdom)
+pnpm test:all      # Full suite (unit + pipeline + DuckDB)
 pnpm test:pipeline # Pipeline integration tests only
 pnpm test:duckdb   # DuckDB server-side tests only
-pnpm test:e2e      # E2E tests (Playwright, port 5176)
 pnpm build         # Ensure production build works
 ```
 
 ### Writing tests
 
 - **Unit Tests**: Test store logic, utility functions, component behavior
-- **E2E Tests**: Test user workflows, tool interactions, data processing
+- **Pipeline Tests**: Test data processing, format detection, transformations
 - **Coverage**: Add tests for new features and bug fixes
-- **Accessibility**: Include keyboard navigation and screen reader tests
+- **Accessibility**: Include keyboard navigation and screen reader coverage where relevant
 
 ### Test requirements
 
 - New features **must** include tests
 - Bug fixes **should** include regression tests
-- E2E tests for major user workflows
 - Test both success and error scenarios
 
 ## 8) Internationalization
@@ -300,7 +299,7 @@ pnpm build         # Ensure production build works
 - `preview`: preview the production build
 - `check` / `check:watch`: Svelte type checks
 - `lint` / `format`: linting and formatting
-- `test:unit` / `test:e2e` / `test`: run tests
+- `test:unit` / `test:pipeline` / `test:duckdb` / `test:all`: run tests
 - `generate-pwa-assets`: build PWA icons
 - `machine-translate`: generate/update i18n translations
 

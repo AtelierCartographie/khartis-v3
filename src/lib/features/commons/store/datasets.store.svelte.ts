@@ -7,6 +7,7 @@ import {
   persistenceRegistry
 } from '$lib/features/project-management/core/persistence-registry';
 import type { SerializedDatasetsViewState } from '$lib/types/serialization.types';
+import { LogCategory, logger } from '../utils/logger';
 import type { UploadedFile } from './create-project.types';
 import { deserializeDatasetsViewState } from './datasets-view-state';
 import {
@@ -69,6 +70,20 @@ function createDatasetsStore() {
   }
 
   function serializeViewState(): SerializedDatasetsViewState {
+    if (datasetsState.datasets.length === 0 && pendingPersistedViewState) {
+      return {
+        enabledSourceFileIds: [
+          ...(pendingPersistedViewState.enabledSourceFileIds ?? [])
+        ],
+        hiddenColumnsBySourceFileId: {
+          ...(pendingPersistedViewState.hiddenColumnsBySourceFileId ?? {})
+        },
+        simplificationBySourceFileId: {
+          ...(pendingPersistedViewState.simplificationBySourceFileId ?? {})
+        }
+      };
+    }
+
     const enabledSourceFileIds = datasetsState.datasets.flatMap((dataset) =>
       dataset.sourceFileId && datasetsState.enabledDatasetIds.has(dataset.id)
         ? [dataset.sourceFileId]
@@ -143,6 +158,28 @@ function createDatasetsStore() {
       });
     }
 
+    if (
+      datasetsState.enabledDatasetIds.size === 0 &&
+      datasetsState.datasets.length === 1
+    ) {
+      const fallbackDataset =
+        datasetsState.datasets.find(
+          (dataset) => dataset.id === datasetsState.selectedDatasetId
+        ) ?? datasetsState.datasets[0];
+
+      if (fallbackDataset) {
+        enableDatasetFn(datasetsState, fallbackDataset.id);
+        logger.warn(
+          'Persisted datasets view restored with no visible dataset, re-enabling the only dataset',
+          LogCategory.STORE,
+          {
+            datasetId: fallbackDataset.id,
+            sourceFileId: fallbackDataset.sourceFileId
+          }
+        );
+      }
+    }
+
     pendingPersistedViewState = serializeViewState();
   }
 
@@ -174,25 +211,14 @@ function createDatasetsStore() {
   }
 
   async function processFiles(files: UploadedFile[]): Promise<void> {
-    return processFilesFn(
-      datasetsState,
-      datasetsInternals,
-      files,
-      visualizationStoreOps
-    );
+    return processFilesFn(datasetsState, datasetsInternals, files);
   }
 
   async function addFile(
     file: UploadedFile,
     autoEnable = true
   ): Promise<DatasetResult | null> {
-    return addFileFn(
-      datasetsState,
-      datasetsInternals,
-      file,
-      visualizationStoreOps,
-      autoEnable
-    );
+    return addFileFn(datasetsState, datasetsInternals, file, autoEnable);
   }
 
   function selectDataset(datasetId: string): void {

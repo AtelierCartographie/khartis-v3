@@ -442,28 +442,6 @@ Ce fallback est limité au parcours d'import de fond de carte GeoPackage et ne c
 
 ---
 
-## Tests DuckDB (`tests/duckdb/`)
-
-| Fichier                        | Type        | API réelle ?   | Ce qui est testé                                                |
-| ------------------------------ | ----------- | -------------- | --------------------------------------------------------------- |
-| `engine.test.ts`               | Unit        | Non (mocks)    | Init WASM, bundle eh/mvp, extension repo                        |
-| `duck.test.ts`                 | Unit        | Non (mocks)    | Façade, init dédoublonné, macros, cache invalidation            |
-| `orchestrator.svelte.test.ts`  | Unit        | Non (mocks)    | Toutes les ops de l'orchestrateur                               |
-| `dataset-ops.test.ts`          | Integration | Oui (Node API) | Jointures : stats, corrections, finalizeJoin (nouveau pipeline) |
-| `join.test.ts`                 | Unit        | Non (mocks)    | Jointures SQL legacy (joinById, applyJoinAssociation)           |
-| `column-ops.test.ts`           | Unit        | Non (mocks)    | Sécurité SQL, mutations colonnes                                |
-| `breaks.test.ts`               | Unit        | Non (mocks)    | Structure macros classification                                 |
-| `gps-ops.test.ts`              | Integration | Oui (Node API) | Validation GPS, bounds                                          |
-| `simplification.test.ts`       | Unit        | Non (mocks)    | Tolérance, vertex reduction                                     |
-| `cache-manager.test.ts`        | Unit        | Non (mocks)    | Cache invalidation, callbacks                                   |
-| `basemap-import.utils.test.ts` | Unit        | Non (mocks)    | Import polygon/ligne/geoparquet                                 |
-
-**Règle** : les tests d'intégration (`dataset-ops`, `gps-ops`) utilisent `@duckdb/node-api` avec des données réelles dans `tests-datasets/`. Les tests unitaires mockent complètement DuckDB via `vi.mock`.
-
-**Pourquoi `vi.fn()` plutôt que des mocks manuels ?** Chaque module exposé par `duckdb/` est mocké individuellement avec `vi.mock` pour que le test reste isolé même si l'implémentation interne change.
-
----
-
 ## Pièges courants
 
 1. **Utiliser `Duck` au lieu de `duckDBOrchestrator`** — `Duck` est bas niveau ; `duckDBOrchestrator` gère l'état, le cache et la coordination.

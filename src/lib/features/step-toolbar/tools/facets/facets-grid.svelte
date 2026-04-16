@@ -17,7 +17,8 @@
     layout,
     syncPanZoom = false,
     containerWidth = 1200,
-    containerHeight: _containerHeight = 800
+    containerHeight: _containerHeight = 800,
+    onReady
   }: {
     visualizations: VisualizationConfig[];
     tables: Map<string, ArrowTable>;
@@ -27,6 +28,7 @@
     syncPanZoom?: boolean;
     containerWidth?: number;
     containerHeight?: number;
+    onReady?: () => void;
   } = $props();
 
   const facetWidth = $derived(
@@ -71,11 +73,13 @@
         width={facetWidth}
         height={facetHeight}
         forcedVisualizationIds={[viz.id]}
+        onReady={idx === 0 ? onReady : undefined}
         onMoveSync={syncPanZoom ? (s) => handleMoveSync(idx, s) : undefined}
         syncViewState={getSyncViewState(idx)}
         showLegendOverlay={false}
         showGeoIndicationsOverlay={false}
         showAnnotationOverlay={false}
+        isFacetCell={true}
       />
     </div>
   {/each}

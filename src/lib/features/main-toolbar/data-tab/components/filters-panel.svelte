@@ -167,6 +167,7 @@
     try {
       const updated = await duckDBOrchestrator.addFilter(tableName, {
         column: newFilter.column,
+        columnType: selectedColumnType,
         operator: newFilter.operator,
         value: newFilter.value,
         secondaryValue: newFilter.secondaryValue,

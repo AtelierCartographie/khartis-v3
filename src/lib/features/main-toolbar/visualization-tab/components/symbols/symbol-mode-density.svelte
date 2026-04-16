@@ -29,13 +29,16 @@
     onMappingChange
   }: SymbolModeProps = $props();
 
-  let selectedColumnId = $state<number>(0);
+  const NONE_FIELD_ID = -1;
+  let selectedColumnId = $state<number>(NONE_FIELD_ID);
   let selectedLevel = $state<DensityLevelName>(DENSITY_DEFAULTS.level);
   let dotSize = $state<number>(DENSITY_DEFAULTS.dotSize);
   let fillColor = $state<string>(DENSITY_DEFAULTS.color);
   let levelOptions = $state<DensityLevelOption[]>([]);
   let loadingLevels = $state<boolean>(false);
   let lastRequestedColumn = $state<string | null>(null);
+  const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
+  const selectableDataFields = $derived([noneOption, ...dataFields]);
 
   const DOT_SIZE_MIN = 0.1;
   const DOT_SIZE_MAX = 4;
@@ -87,9 +90,7 @@
       const idx = dataFields.findIndex(
         (field) => field.text === persistedColumn
       );
-      if (idx >= 0) {
-        selectedColumnId = dataFields[idx].id;
-      }
+      selectedColumnId = idx >= 0 ? dataFields[idx].id : NONE_FIELD_ID;
       if (
         visualization?.id &&
         !visualization.density?.valueColumn &&
@@ -102,6 +103,8 @@
           }
         });
       }
+    } else {
+      selectedColumnId = NONE_FIELD_ID;
     }
   });
 
@@ -180,6 +183,20 @@
 
   function handleColumnSelect(fieldId: number) {
     selectedColumnId = fieldId;
+    if (fieldId === NONE_FIELD_ID) {
+      onMappingChange?.({ valueColumn: undefined });
+      if (visualization?.id) {
+        visualizationStore.updateVisualization(visualization.id, {
+          density: {
+            ...(visualization.density ?? {}),
+            valueColumn: undefined,
+            ratio: undefined
+          }
+        });
+      }
+      return;
+    }
+
     const field = dataFields.find((item) => item.id === fieldId);
     if (!field) return;
 
@@ -255,7 +272,7 @@
   <Dropdown
     titleText={m.density_data_column()}
     hideLabel
-    items={dataFields}
+    items={selectableDataFields}
     selectedId={selectedColumnId}
     on:select={(e) => handleColumnSelect(e.detail.selectedId)}
     type="default"

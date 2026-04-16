@@ -2,7 +2,13 @@ import type { Deck, View } from '@deck.gl/core';
 import type { MapboxOverlay } from '@deck.gl/mapbox';
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
-import { projectionStore } from '$lib/features/map/stores/projection.store.svelte';
+import {
+  clampMapZoomLevel,
+  DEFAULT_MAP_BASE_ZOOM,
+  nudgeMapZoomLevel,
+  resolveMapZoomBounds,
+  resolveMapZoomPercent
+} from '$lib/features/map/utils/map-zoom.utils';
 import {
   get_bbox_center,
   get_max_scale
@@ -32,47 +38,55 @@ const DEFAULT_DECK_VIEW_STATE: DeckViewState = {
 };
 
 const DECK_ZOOM_STEP = 0.1375;
-const MAPLIBRE_ZOOM_STEP = 0.275;
 
-/** Ensure target always has exactly 3 numeric elements. */
+export interface ProjectionContext {
+  referenceBbox: [number, number, number, number] | null;
+  canvasSize: { width: number; height: number };
+  fitPaddingPx: number;
+  isProjectedCoordinates: boolean;
+}
+
+let projectionContextGetter: () => ProjectionContext = () => ({
+  referenceBbox: null,
+  canvasSize: { width: 0, height: 0 },
+  fitPaddingPx: 0,
+  isProjectedCoordinates: false
+});
+
+export function injectProjectionContext(getter: () => ProjectionContext): void {
+  projectionContextGetter = getter;
+}
+
 function normalizeTarget(t: number[]): [number, number, number] {
   return [t[0] ?? 0, t[1] ?? 0, t[2] ?? 0];
 }
 
-/**
- * Convert a world-coordinate target to data coordinates using
- * the inverse of the model matrix: `data = world / scale + center`.
- */
 function worldToData(target: number[]): [number, number, number] {
   const t = normalizeTarget(target);
-  const bbox = projectionStore.referenceBbox;
-  if (!bbox) return t;
-  const [cx, cy] = get_bbox_center(bbox);
+  const ctx = projectionContextGetter();
+  if (!ctx.referenceBbox) return t;
+  const [cx, cy] = get_bbox_center(ctx.referenceBbox);
   const scale = get_max_scale(
-    projectionStore.canvasSize,
-    bbox,
-    projectionStore.fitPaddingPx
+    ctx.canvasSize,
+    ctx.referenceBbox,
+    ctx.fitPaddingPx
   );
   if (scale === 0) return t;
-  const yDirection = projectionStore.isProjectedCoordinates ? -1 : 1;
+  const yDirection = ctx.isProjectedCoordinates ? -1 : 1;
   return [t[0] / scale + cx, (t[1] * yDirection) / scale + cy, 0];
 }
 
-/**
- * Convert a data-coordinate target to world coordinates using
- * the model matrix: `world = scale * (data - center)`.
- */
 function dataToWorld(target: number[]): [number, number, number] {
   const t = normalizeTarget(target);
-  const bbox = projectionStore.referenceBbox;
-  if (!bbox) return t;
-  const [cx, cy] = get_bbox_center(bbox);
+  const ctx = projectionContextGetter();
+  if (!ctx.referenceBbox) return t;
+  const [cx, cy] = get_bbox_center(ctx.referenceBbox);
   const scale = get_max_scale(
-    projectionStore.canvasSize,
-    bbox,
-    projectionStore.fitPaddingPx
+    ctx.canvasSize,
+    ctx.referenceBbox,
+    ctx.fitPaddingPx
   );
-  const yDirection = projectionStore.isProjectedCoordinates ? -1 : 1;
+  const yDirection = ctx.isProjectedCoordinates ? -1 : 1;
   return [scale * (t[0] - cx), yDirection * scale * (t[1] - cy), 0];
 }
 
@@ -101,7 +115,7 @@ function createMapInstanceStore() {
     deckInstance: null,
     isMapLoaded: false,
     zoomLevel: 100,
-    baseZoomLevel: 1.5,
+    baseZoomLevel: DEFAULT_MAP_BASE_ZOOM,
     deckViewState: { ...DEFAULT_DECK_VIEW_STATE },
     viewportFitMode: 'auto',
     viewportFitReason: null
@@ -112,16 +126,16 @@ function createMapInstanceStore() {
 
   function buildSerializedViewState(): SerializedViewState | null {
     const worldTarget = normalizeTarget(state.deckViewState.target);
-    const bbox = projectionStore.referenceBbox;
+    const ctx = projectionContextGetter();
 
-    if (!bbox) {
+    if (!ctx.referenceBbox) {
       return lastSerializedViewState;
     }
 
     const scale = get_max_scale(
-      projectionStore.canvasSize,
-      bbox,
-      projectionStore.fitPaddingPx
+      ctx.canvasSize,
+      ctx.referenceBbox,
+      ctx.fitPaddingPx
     );
     if (scale === 0) {
       return lastSerializedViewState;
@@ -136,8 +150,27 @@ function createMapInstanceStore() {
     return serialized;
   }
 
+  function applyMapZoomBounds(): void {
+    if (!state.map) {
+      return;
+    }
+
+    const { minZoom, maxZoom } = resolveMapZoomBounds(state.baseZoomLevel);
+    state.map.setMinZoom(minZoom);
+    state.map.setMaxZoom(maxZoom);
+
+    const currentZoom = state.map.getZoom();
+    const clampedZoom = clampMapZoomLevel(state.baseZoomLevel, currentZoom);
+
+    if (Math.abs(currentZoom - clampedZoom) > 1e-6) {
+      state.map.setZoom(clampedZoom);
+    }
+  }
+
   function setMapInstance(map: MapLibreMap | null) {
     state.map = map;
+    applyMapZoomBounds();
+    updateZoomFromMap();
   }
 
   function setDeckOverlay(overlay: MapboxOverlay | null) {
@@ -177,7 +210,9 @@ function createMapInstanceStore() {
   }
 
   function setBaseZoomLevel(zoom: number) {
-    state.baseZoomLevel = zoom;
+    state.baseZoomLevel = Number.isFinite(zoom) ? zoom : DEFAULT_MAP_BASE_ZOOM;
+    applyMapZoomBounds();
+    updateZoomFromMap();
   }
 
   function markViewportAutoFit(reason: ViewportFitReason): void {
@@ -192,10 +227,9 @@ function createMapInstanceStore() {
 
   function updateZoomFromMap() {
     if (state.map) {
-      const mapZoom = state.map.getZoom();
-      const baseZoom = state.baseZoomLevel;
-      const percent = 100 * Math.pow(2, (mapZoom - baseZoom) / 2);
-      state.zoomLevel = Math.round(percent);
+      state.zoomLevel = Math.round(
+        resolveMapZoomPercent(state.baseZoomLevel, state.map.getZoom())
+      );
       return;
     }
 
@@ -229,8 +263,11 @@ function createMapInstanceStore() {
       return;
     }
     const nextViewState = { ...state.deckViewState };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (deck as any).setProps({
+    const setProps = deck.setProps.bind(deck) as (props: {
+      viewState?: Record<string, DeckViewState>;
+      initialViewState?: Record<string, DeckViewState>;
+    }) => void;
+    setProps({
       viewState: { main: nextViewState },
       initialViewState: { main: nextViewState }
     });
@@ -245,8 +282,9 @@ function createMapInstanceStore() {
   function zoomIn() {
     if (state.map) {
       markViewportManual();
-      const currentZoom = state.map.getZoom();
-      state.map.setZoom(currentZoom + MAPLIBRE_ZOOM_STEP);
+      state.map.setZoom(
+        nudgeMapZoomLevel(state.baseZoomLevel, state.map.getZoom(), 1)
+      );
       return;
     }
 
@@ -270,8 +308,9 @@ function createMapInstanceStore() {
   function zoomOut() {
     if (state.map) {
       markViewportManual();
-      const currentZoom = state.map.getZoom();
-      state.map.setZoom(currentZoom - MAPLIBRE_ZOOM_STEP);
+      state.map.setZoom(
+        nudgeMapZoomLevel(state.baseZoomLevel, state.map.getZoom(), -1)
+      );
       return;
     }
 
@@ -295,7 +334,7 @@ function createMapInstanceStore() {
   function setZoom(zoom: number) {
     if (state.map) {
       markViewportManual();
-      state.map.setZoom(zoom);
+      state.map.setZoom(clampMapZoomLevel(state.baseZoomLevel, zoom));
       return;
     }
 
@@ -314,6 +353,26 @@ function createMapInstanceStore() {
       updateZoomFromMap();
       consumePendingRestore();
     }
+  }
+
+  function centerOnDataPoint(dataLon: number, dataLat: number): void {
+    if (state.map) {
+      markViewportManual();
+      pendingRestore = null;
+      state.map.jumpTo({ center: [dataLon, dataLat] });
+      persistenceRegistry.notifyChange('mapViewState');
+      return;
+    }
+    if (!state.deckInstance || !state.isMapLoaded) return;
+    state.deckViewState = {
+      ...state.deckViewState,
+      target: dataToWorld([dataLon, dataLat, 0])
+    };
+    markViewportManual();
+    pendingRestore = null;
+    applyDeckViewState();
+    updateZoomFromMap();
+    persistenceRegistry.notifyChange('mapViewState');
   }
 
   function resetZoom() {
@@ -421,7 +480,7 @@ function createMapInstanceStore() {
     state.deckInstance = null;
     state.isMapLoaded = false;
     state.zoomLevel = 100;
-    state.baseZoomLevel = 1.5;
+    state.baseZoomLevel = DEFAULT_MAP_BASE_ZOOM;
     state.deckViewState = { ...DEFAULT_DECK_VIEW_STATE };
     state.viewportFitMode = 'auto';
     state.viewportFitReason = null;
@@ -490,6 +549,7 @@ function createMapInstanceStore() {
     zoomOut,
     setZoom,
     resetZoom,
+    centerOnDataPoint,
     fitToOrthographicBounds,
     restoreFromSerialized,
     clearPersistedViewState,

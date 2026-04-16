@@ -33,6 +33,26 @@ describe('getExportDimensionsForPage', () => {
       height: 3840
     });
   });
+
+  it('clamps NaN dimensions to 1×1 output', () => {
+    const result = getExportDimensionsForPage(
+      NaN,
+      NaN,
+      EXPORT_RESOLUTION.HD_1080P
+    );
+    expect(result.width).toBe(1920);
+    expect(result.height).toBe(1920);
+  });
+
+  it('clamps Infinity dimensions to minimum output', () => {
+    const result = getExportDimensionsForPage(
+      Infinity,
+      Infinity,
+      EXPORT_RESOLUTION.QHD_2K
+    );
+    expect(result.width).toBeGreaterThanOrEqual(1);
+    expect(result.height).toBeGreaterThanOrEqual(1);
+  });
 });
 
 describe('formatExportDimensions', () => {

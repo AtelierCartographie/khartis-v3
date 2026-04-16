@@ -2,13 +2,14 @@ import {
   AVAILABLE_FONTS,
   FONT_SIZES
 } from '$lib/features/step-toolbar/constants/fonts.constants';
+import { PRINT_STANDARD_TOKENS } from '$lib/features/commons/utils/layout-sizing.utils';
 
 export { AVAILABLE_FONTS };
 export const LEGEND_FONT_SIZES = FONT_SIZES;
 
 export const LEGEND_DEFAULTS = {
   FONT_FAMILY: 'Cabin' as const,
-  FONT_SIZE: 12 as number,
+  FONT_SIZE: PRINT_STANDARD_TOKENS.legend.fontSize,
   OPACITY: 100 as number
 };
 

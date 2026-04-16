@@ -287,10 +287,6 @@ export interface ProcessedDataset {
   };
 }
 
-export interface PipelineContext {
-  initialized: boolean;
-}
-
 export interface UploadedFilePayload {
   id: string;
   name: string;

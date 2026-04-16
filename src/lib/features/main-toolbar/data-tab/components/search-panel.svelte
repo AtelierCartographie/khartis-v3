@@ -10,7 +10,7 @@
     InlineLoading
   } from 'carbon-components-svelte';
   import { ChevronLeft, ChevronRight } from 'carbon-icons-svelte';
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { dataToolsStore } from '../data-tools.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
@@ -63,6 +63,7 @@
   let isSearchInProgress = $state(false);
   let pendingSearchQuery = $state<string | null>(null);
   let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  let searchInputRef = $state<HTMLInputElement | null>(null);
 
   const cellHighlights = $derived(
     searchStats.results.map((r) => ({
@@ -85,15 +86,12 @@
     const persistedSource = dataToolsStore.searchSource;
     const persistedReplaceValue = dataToolsStore.replaceValue;
 
-    if (searchQuery !== persistedQuery) {
-      searchQuery = persistedQuery;
-    }
-    if (searchSource !== persistedSource) {
-      searchSource = persistedSource;
-    }
-    if (replaceValue !== persistedReplaceValue) {
-      replaceValue = persistedReplaceValue;
-    }
+    untrack(() => {
+      if (searchQuery !== persistedQuery) searchQuery = persistedQuery;
+      if (searchSource !== persistedSource) searchSource = persistedSource;
+      if (replaceValue !== persistedReplaceValue)
+        replaceValue = persistedReplaceValue;
+    });
   });
 
   function notifySearchResults() {
@@ -275,8 +273,26 @@
     clearSearchResults();
   }
 
+  function handleSearchKeydown(event: KeyboardEvent) {
+    if (event.key !== 'Enter') return;
+    if (!hasResults) return;
+    event.preventDefault();
+    if (event.shiftKey) {
+      handlePrevResult();
+    } else {
+      handleNextResult();
+    }
+  }
+
   onMount(() => {
-    handleClear();
+    searchInputRef?.focus();
+
+    if (
+      tableName &&
+      searchQuery.trim().length >= UI_CONSTANTS.MIN_SEARCH_LENGTH
+    ) {
+      void executeSearch();
+    }
 
     return () => {
       if (searchDebounceTimer) {
@@ -327,8 +343,10 @@
         size="sm"
         placeholder={m.search_placeholder()}
         bind:value={searchQuery}
+        bind:ref={searchInputRef}
         on:input={handleSearchInput}
         on:clear={handleClear}
+        on:keydown={handleSearchKeydown}
       />
     </div>
 

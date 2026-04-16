@@ -245,7 +245,6 @@
   async function handleCalculate() {
     if (isCalculating) return;
 
-    // Use default variable name if not provided
     const effectiveName =
       variableName.trim() ||
       m.calc_default_variable_name({ count: variableCounter });

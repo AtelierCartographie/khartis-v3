@@ -60,7 +60,6 @@ export async function deleteDataset(
 
   removeDataset(state, datasetId);
 
-  // Clean up enrichment state tied to the deleted dataset
   dataTabActions.setEnrichDataState({
     enrichmentDatasetId: undefined,
     enrichmentColumn: undefined,

@@ -485,10 +485,8 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
         typeof import('$lib/features/data-pipeline').dataPipeline.processFile
       >
     >,
-    fileContent: ArrayBuffer,
     duck: typeof Duck
   ): Promise<void> {
-    void fileContent;
     const result = zipResult as {
       datasets: DatasetResult[];
       sourceZipName: string;
@@ -596,7 +594,7 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
     const result = await dataPipeline.processFile(file);
 
     if (isZipDatasetResult(result)) {
-      await processMultipleDatasets(uploadedFile, result, fileContent, Duck);
+      await processMultipleDatasets(uploadedFile, result, Duck);
       return;
     }
 

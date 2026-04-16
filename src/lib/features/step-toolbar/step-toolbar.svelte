@@ -191,8 +191,9 @@
     background: rgba(255, 255, 255, 0.78);
     backdrop-filter: blur(10px) saturate(1.2);
     -webkit-backdrop-filter: blur(10px) saturate(1.2);
-    border-right: 1px solid var(--cds-border-subtle-01, #e0e0e0);
-    box-shadow: 4px 0 12px rgba(0, 0, 0, 0.04);
+    box-shadow:
+      0 4px 16px rgba(0, 0, 0, 0.1),
+      0 1px 4px rgba(0, 0, 0, 0.06);
   }
 
   .scroll-viewport {
@@ -223,7 +224,6 @@
 
   nav {
     position: relative;
-    border: 1px solid var(--cds-ui-01);
     background: var(--cds-background);
   }
 
@@ -250,8 +250,8 @@
   }
 
   .nav-item.selected {
-    background-color: #cac5c4;
-    border-left: 3px solid #cac5c4;
+    background-color: var(--cds-border-subtle-01);
+    border-left: 3px solid var(--cds-border-subtle-01);
   }
 
   .nav-item span {

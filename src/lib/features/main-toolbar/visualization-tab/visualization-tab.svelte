@@ -12,7 +12,10 @@
   import CustomizeBasemap from './customize-basemap.svelte';
   import { syncProjectOSMBasemap } from './osm-basemap-sync';
   import ToolbarTabLayout from '../components/toolbar-tab-layout.svelte';
-  import { resolveBlankVisualizationType } from './suggestion.service';
+  import {
+    applyBlankVisualizationPreset,
+    resolveBlankVisualizationType
+  } from './suggestion.service';
   import {
     resolveRelevantPersistedBasemap,
     type PersistedProjectBasemap
@@ -47,7 +50,13 @@
     initializedDatasetIds.add(dataset.id);
 
     const defaultType = resolveBlankVisualizationType(dataset);
-    visualizationStore.createVisualization(defaultType, dataset.id);
+    const visualization = visualizationStore.createVisualization(
+      defaultType,
+      dataset.id
+    );
+    applyBlankVisualizationPreset(visualization.id, dataset, {
+      mode: 'auto-suggestion'
+    });
 
     logger.debug(
       '[visualization-tab] auto-created blank visualization from step entry',

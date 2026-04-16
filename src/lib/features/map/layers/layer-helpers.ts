@@ -218,10 +218,6 @@ export function dottedPatternToDashArray(
   }
 }
 
-/**
- * Wraps a static color with per-row highlight dimming for GeoArrow layers.
- * Highlighted rows keep full opacity; non-highlighted rows are dimmed.
- */
 export function withRowHighlight(
   color: RGBColor | Color,
   opacity: number,
@@ -242,10 +238,6 @@ export function withRowHighlight(
   };
 }
 
-/**
- * Wraps a per-row color accessor with highlight dimming for GeoArrow layers.
- * Highlighted rows keep full opacity; non-highlighted rows are dimmed.
- */
 export function withRowHighlightAccessor(
   accessor: (row: DeckDataRow) => [number, number, number, number],
   opacity: number,
@@ -264,10 +256,6 @@ export function withRowHighlightAccessor(
   };
 }
 
-/**
- * Wraps a static color with per-feature highlight dimming for GeoJSON layers.
- * Highlighted features keep full opacity; non-highlighted features are dimmed.
- */
 export function withGeoJsonRowHighlight(
   color: RGBColor | Color,
   opacity: number,
@@ -292,10 +280,6 @@ export function withGeoJsonRowHighlight(
   };
 }
 
-/**
- * Wraps a per-feature color accessor with highlight dimming for GeoJSON layers.
- * Highlighted features keep full opacity; non-highlighted features are dimmed.
- */
 export function withGeoJsonRowHighlightAccessor(
   accessor: (feature: {
     properties?: Record<string, unknown>;

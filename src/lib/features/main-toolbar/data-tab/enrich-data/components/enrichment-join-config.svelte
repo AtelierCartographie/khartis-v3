@@ -4,7 +4,11 @@
   import { dataTabActions } from '$lib/features/commons/store/data-tab.store.svelte';
   import type { DatasetResult } from '$lib/features/data-pipeline';
   import * as m from '$lib/paraglide/messages';
-  import { ComboBox, InlineNotification } from 'carbon-components-svelte';
+  import {
+    Button,
+    ComboBox,
+    InlineNotification
+  } from 'carbon-components-svelte';
   import { Close, MagicWand } from 'carbon-icons-svelte';
   import { JoinAccordion, type JoinStats } from '../../components';
   import SectionHeaderWithIcon from '../../components/section-header-with-icon.svelte';
@@ -92,9 +96,15 @@
       <span class="file-name"
         >{enrichmentFile?.name || m.dataset_pasted_name()}</span
       >
-      <button class="file-remove" onclick={onRemoveFile}>
-        <Close size={16} />
-      </button>
+      <Button
+        class="file-remove"
+        kind="ghost"
+        size="small"
+        iconDescription={m.remove_file_action()}
+        icon={Close}
+        tooltipPosition="left"
+        on:click={onRemoveFile}
+      />
     </div>
   </div>
 
@@ -276,18 +286,6 @@
   .file-name {
     font-size: 0.875rem;
     color: var(--cds-text-01);
-  }
-
-  .file-remove {
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: var(--cds-icon-01);
-    padding: var(--cds-spacing-01);
-  }
-
-  .file-remove:hover {
-    color: var(--cds-support-error);
   }
 
   .table-preview {
