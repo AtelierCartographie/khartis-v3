@@ -22,7 +22,6 @@ import type {
   DatasetResult,
   FileFormat,
   FileInfo,
-  PipelineContext,
   RawDataset,
   UploadedFilePayload
 } from '../types';
@@ -60,7 +59,6 @@ function createProcessorFilePayload(
 }
 
 async function tryProcessWithRegisteredProcessor(
-  ctx: PipelineContext,
   fileInfo: FileInfo,
   uploadedFile: UploadedFile,
   options: {
@@ -98,7 +96,7 @@ async function tryProcessWithRegisteredProcessor(
     uploadedFile
   );
 
-  return buildDatasetFromDuckTable(ctx, {
+  return buildDatasetFromDuckTable({
     file: fileInfo,
     tableName: processorDataset.tableName,
     isGeoFile: options.isGeoFile,
@@ -107,7 +105,6 @@ async function tryProcessWithRegisteredProcessor(
 }
 
 export async function processFileInternal(
-  ctx: PipelineContext,
   file: File,
   options: ProcessFileOptions = {}
 ): Promise<DatasetResult> {
@@ -139,7 +136,6 @@ export async function processFileInternal(
   );
 
   const processorDataset = await tryProcessWithRegisteredProcessor(
-    ctx,
     fileInfo,
     uploadedFile,
     {
@@ -159,7 +155,7 @@ export async function processFileInternal(
       tablename: tableName,
       shapefile: isShapefile
     });
-    dataset = await buildDatasetFromDuckTable(ctx, {
+    dataset = await buildDatasetFromDuckTable({
       file: fileInfo,
       tableName,
       isGeoFile,
@@ -168,7 +164,7 @@ export async function processFileInternal(
   } else {
     await registerFilesForDuckDB(file, isShapefile, options.companionFiles);
     detectedCsvOptions = await readTabularFile(file, tableName, fileInfo.name);
-    dataset = await buildDatasetFromDuckTable(ctx, {
+    dataset = await buildDatasetFromDuckTable({
       file: fileInfo,
       tableName,
       isGeoFile,

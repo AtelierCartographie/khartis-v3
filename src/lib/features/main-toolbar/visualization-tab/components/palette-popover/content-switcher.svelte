@@ -30,7 +30,7 @@
   .content-switcher {
     display: flex;
     align-items: stretch;
-    border: 1px solid #cac5c4;
+    border: 1px solid var(--cds-border-subtle-01);
     border-radius: 4px;
     overflow: hidden;
   }
@@ -58,7 +58,7 @@
     }
 
     &.active {
-      background: #cac5c4;
+      background: var(--cds-border-subtle-01);
       color: var(--cds-text-primary);
     }
   }
@@ -66,6 +66,6 @@
   .switcher-divider {
     width: 1px;
     align-self: stretch;
-    background: #cac5c4;
+    background: var(--cds-border-subtle-01);
   }
 </style>

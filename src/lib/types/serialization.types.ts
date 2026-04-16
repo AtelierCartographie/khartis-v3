@@ -67,6 +67,7 @@ export interface SerializedBasemapSettings {
     zoom: number;
     target: [number, number, number];
   };
+  osmBasemap?: string | null;
 }
 
 export interface SerializedVisualizationSettings {

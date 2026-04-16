@@ -18,7 +18,8 @@ const PAGE_ZOOM_SCHEMA_VERSION_KEY = 'khartis_page_zoom_schema_version';
 const PAGE_ZOOM_SCHEMA_VERSION = '2';
 const TOOLBAR_STATE_STORAGE_KEY = 'khartis_toolbar_state';
 const SELECTED_STEP_STORAGE_KEY = 'khartis_selected_step';
-const MOBILE_BREAKPOINT_VALUE = 1024;
+
+export const MOBILE_BREAKPOINT = 1024;
 
 function migratePageZoomStorage(): void {
   if (typeof window === 'undefined') return;
@@ -89,7 +90,7 @@ function createGlobalStore() {
     },
     isMobileView:
       typeof window !== 'undefined'
-        ? window.innerWidth < MOBILE_BREAKPOINT_VALUE
+        ? window.innerWidth < MOBILE_BREAKPOINT
         : false,
     isMobileToolbarOpen: false,
     isToolbarTransitioning: false
@@ -593,8 +594,6 @@ export const globalActions = {
   setToolbarTransitioning: globalState.setToolbarTransitioning,
   resetNavigationState: globalState.resetNavigationState
 };
-
-export const MOBILE_BREAKPOINT = 1024;
 
 persistenceRegistry.register({
   key: 'globalUi',

@@ -663,7 +663,7 @@
   }
 
   .kh-help {
-    color: #6f6f6f;
+    color: var(--cds-text-secondary);
     margin-bottom: 12px;
     font-size: 14px;
     line-height: 18px;
@@ -683,7 +683,7 @@
     gap: 4px;
     margin-bottom: 4px;
     font-size: 12px;
-    color: #6f6f6f;
+    color: var(--cds-text-secondary);
     font-weight: 500;
   }
 
@@ -765,6 +765,6 @@
   }
 
   :global(.geo-tabs .toggle-tab.active) {
-    background-color: #cac5c4;
+    background-color: var(--cds-border-subtle-01);
   }
 </style>

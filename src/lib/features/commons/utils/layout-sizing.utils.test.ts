@@ -30,8 +30,8 @@ describe('layout sizing utils', () => {
     });
 
     expect(tokens.profile).toBe('print-large');
-    expect(tokens.annotations.titleFontSize).toBe(28);
-    expect(tokens.geoIndications.insetSize).toBe(200);
+    expect(tokens.annotations.titleFontSize).toBe(16);
+    expect(tokens.geoIndications.insetSize).toBe(130);
     expect(tokens.mapViewport.fitPaddingPx).toBe(56);
   });
 
@@ -43,8 +43,8 @@ describe('layout sizing utils', () => {
     });
 
     expect(tokens.profile).toBe('screen-large');
-    expect(tokens.legend.maxWidth).toBe(400);
-    expect(tokens.geoIndications.scaleTargetWidth).toBe(190);
+    expect(tokens.legend.maxWidth).toBe(260);
+    expect(tokens.geoIndications.scaleTargetWidth).toBe(120);
     expect(tokens.mapViewport.fitPaddingPx).toBe(72);
   });
 

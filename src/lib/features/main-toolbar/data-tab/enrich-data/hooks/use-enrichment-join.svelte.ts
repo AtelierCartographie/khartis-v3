@@ -377,6 +377,7 @@ export function useEnrichmentJoin(
           { format: 'array' }
         );
         await Duck.query(`DROP TABLE "${tempTable}"`);
+        Duck.invalidateTableCache(enrichmentDataset.tableName);
       }
 
       const stats = await computeDatasetJoinStats({
@@ -587,9 +588,7 @@ export function useEnrichmentJoin(
       // Drop the old table to free memory (both first-time and subsequent enrichments)
       if (oldTableName !== enrichedTableName) {
         try {
-          await Duck.query(
-            `DROP TABLE IF EXISTS "${escapeIdentifier(oldTableName)}"`
-          );
+          await Duck.dropTable(oldTableName);
           logger.debug('Dropped old table after enrichment', LogCategory.DATA, {
             oldTableName
           });

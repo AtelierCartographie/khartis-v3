@@ -387,7 +387,9 @@
   const textHex = $derived(
     hslToHex(textColor.hue, textColor.saturation, textColor.lightness)
   );
-  const isInDataStep = $derived(globalState.selectedStep === ToolbarStep.Data);
+  const isLegendStepVisible = $derived(
+    globalState.selectedStep === ToolbarStep.Styling
+  );
   const isLegendActive = $derived(
     globalState.selectedStep === ToolbarStep.Styling &&
       globalState.selectedTool === StylingTools.Legend
@@ -531,7 +533,7 @@
   });
 </script>
 
-{#if legendState.visible && visibleItems.length > 0 && !isInDataStep}
+{#if legendState.visible && visibleItems.length > 0 && isLegendStepVisible}
   <div class="legend-overlay" bind:this={overlayElement}>
     <div
       bind:this={legendElement}
@@ -753,10 +755,10 @@
   .legend-container {
     position: absolute;
     background: rgba(255, 255, 255, 0.95);
-    padding: 12px 16px;
-    border-radius: 4px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-    max-width: 280px;
+    padding: 8px 12px;
+    border-radius: 3px;
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.14);
+    max-width: 160px;
     overflow-wrap: anywhere;
     pointer-events: auto;
     cursor: pointer;
@@ -775,37 +777,37 @@
   .legend-container.dragging {
     cursor: grabbing;
     user-select: none;
-    background-color: #f4f4f4 !important;
+    background-color: var(--cds-layer-hover-01, #f4f4f4) !important;
   }
 
   .legend-container.top-left {
-    top: 16px;
-    left: 16px;
+    top: 12px;
+    left: 12px;
   }
 
   .legend-container.top-right {
-    top: 16px;
-    right: 16px;
+    top: 12px;
+    right: 12px;
   }
 
   .legend-container.bottom-left {
-    bottom: 16px;
-    left: 16px;
+    bottom: 12px;
+    left: 12px;
   }
 
   .legend-container.bottom-right {
-    bottom: 16px;
-    right: 16px;
+    bottom: 12px;
+    right: 12px;
   }
 
   .legend-container.bottom-center {
-    bottom: 16px;
+    bottom: 12px;
     left: 50%;
     transform: translateX(-50%);
   }
 
   .legend-item {
-    margin-bottom: 12px;
+    margin-bottom: 8px;
   }
 
   .legend-item:last-child {
@@ -813,7 +815,8 @@
   }
 
   .legend-title {
-    margin: 0 0 4px 0;
+    margin: 0 0 3px 0;
+    font-size: 1em;
     font-weight: 600;
     color: inherit;
     line-height: 1.3;
@@ -843,28 +846,28 @@
   .legend-color-scale {
     display: flex;
     flex-direction: column;
-    gap: 2px;
-    margin: 6px 0;
+    gap: 1px;
+    margin: 4px 0;
   }
 
   .legend-scale-row {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 5px;
   }
 
   .legend-color-swatch {
     position: relative;
     display: inline-block;
-    width: 16px;
-    height: 16px;
-    min-width: 16px;
+    width: 1.1em;
+    height: 1.1em;
+    min-width: 1.1em;
     border: 1px solid rgba(0, 0, 0, 0.15);
   }
 
   .legend-color-swatch.patterned {
-    width: 20px;
-    min-width: 20px;
+    width: 1.4em;
+    min-width: 1.4em;
   }
 
   .legend-point-swatch,

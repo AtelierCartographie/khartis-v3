@@ -10,6 +10,7 @@
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
+  import { PRINT_STANDARD_TOKENS } from '$lib/features/commons/utils/layout-sizing.utils';
   import { EVENT, KEY } from '$lib/features/commons/constants/dom.constants';
   import {
     geoIndicationsActions,
@@ -48,7 +49,7 @@
   const KM_TO_MILES = 0.621371;
   const MILE_TO_METERS = 1609.344;
   const MM_TO_PAGE_PX = 72 / 25.4;
-  const SCALE_PADDING = 10;
+  const SCALE_PADDING = 6;
   const SCALE_SEGMENT_COUNT = 4;
   const SCALE_SEGMENTS = Array.from(
     { length: SCALE_SEGMENT_COUNT },
@@ -67,8 +68,8 @@
   const INSET_WORLD_WINDOW_INSET = 1.5;
   const INSET_LAND_STROKE_MIN = 0.35;
   const INSET_LAND_STROKE_MAX = 0.8;
-  const SCALE_TARGET_WIDTH_PX = 140;
-  const SCALE_MAX_WIDTH_PX = 420;
+  const SCALE_TARGET_WIDTH_PX = 80;
+  const SCALE_MAX_WIDTH_PX = 120;
   const ORIENTATION_MIN_SIZE_PX = 14;
   const ORIENTATION_MAX_SIZE_PX = 84;
   const INSET_GLOBE_MIN_SIZE_PX = 56;
@@ -878,13 +879,13 @@
     >
       <svg
         width={scaleSvgWidth}
-        height="34"
+        height="26"
         aria-label={m.geo_scale_bar_aria()}
       >
         {#if geoIndicationsState.scale.form === ScaleForm.BOX}
           <text
             x={scaleLabelX}
-            y="10"
+            y="9"
             text-anchor="middle"
             fill={scaleColor}
             font-size={scaleFontSize}
@@ -895,9 +896,9 @@
           {#each SCALE_SEGMENTS as segment (segment)}
             <rect
               x={SCALE_PADDING + segment * scaleSegmentWidth}
-              y="14"
+              y="13"
               width={scaleSegmentWidth}
-              height="10"
+              height="8"
               fill={segment % 2 === 0 ? scaleColor : 'transparent'}
               stroke={scaleColor}
               stroke-width="1.5"
@@ -906,15 +907,15 @@
         {:else}
           <line
             x1={SCALE_PADDING}
-            y1="22"
+            y1="20"
             x2={scaleBarWidth + SCALE_PADDING}
-            y2="22"
+            y2="20"
             stroke={scaleColor}
             stroke-width="2"
           />
           <text
             x={scaleLabelX}
-            y="11"
+            y="10"
             text-anchor="middle"
             fill={scaleColor}
             font-size={scaleFontSize}
@@ -959,7 +960,7 @@
             x="20"
             y="47"
             text-anchor="middle"
-            font-size="12"
+            font-size={PRINT_STANDARD_TOKENS.geoIndications.scaleFontSize}
             font-weight="bold"
             fill={orientationColor}
             font-family={orientationFontFamily}
@@ -994,7 +995,7 @@
             x="20"
             y="47"
             text-anchor="middle"
-            font-size="10"
+            font-size={PRINT_STANDARD_TOKENS.annotations.captionFontSize}
             font-weight="bold"
             fill={orientationColor}
             font-family={orientationFontFamily}
@@ -1136,12 +1137,12 @@
 
   .scale-bar {
     position: absolute;
-    bottom: 16px;
-    left: 16px;
+    bottom: 12px;
+    left: 12px;
     background: rgba(255, 255, 255, 0.85);
-    padding: 4px 6px;
-    border-radius: 4px;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+    padding: 3px 5px;
+    border-radius: 3px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
     pointer-events: auto;
     cursor: pointer;
     touch-action: none;
@@ -1157,12 +1158,12 @@
 
   .north-arrow {
     position: absolute;
-    top: 16px;
-    right: 16px;
+    top: 12px;
+    right: 12px;
     background: rgba(255, 255, 255, 0.85);
-    padding: 6px;
-    border-radius: 4px;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+    padding: 4px;
+    border-radius: 3px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
     pointer-events: auto;
     cursor: pointer;
     touch-action: none;
@@ -1171,12 +1172,12 @@
 
   .inset-map-panel {
     position: absolute;
-    bottom: 16px;
-    right: 16px;
+    bottom: 12px;
+    right: 12px;
     background: rgba(255, 255, 255, 0.85);
-    padding: 6px;
-    border-radius: 4px;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+    padding: 4px;
+    border-radius: 3px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
     pointer-events: auto;
     cursor: pointer;
     touch-action: none;

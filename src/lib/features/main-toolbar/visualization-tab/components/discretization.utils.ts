@@ -1,4 +1,9 @@
-import type { ClassificationMethod } from '$lib/features/commons/store/visualization.store.svelte';
+import type {
+  ClassificationConfig,
+  ClassificationMethod
+} from '$lib/features/commons/store/visualization.store.svelte';
+import { ClassificationMethod as CM } from '$lib/features/commons/store/visualization.store.svelte';
+import * as m from '$lib/paraglide/messages.js';
 
 export const DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX = 12;
 export const NESTED_MEANS_CLASS_COUNTS = [2, 4, 8, 16] as const;
@@ -75,4 +80,27 @@ export function resolveHeadTailClassCountMax(
   }
 
   return DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX;
+}
+
+const METHOD_LABELS: Record<ClassificationMethod, () => string> = {
+  [CM.JENKS]: m.discretization_method_jenks,
+  [CM.QUANTILES]: m.discretization_method_quantile,
+  [CM.EQUAL_INTERVAL]: m.discretization_method_equal_interval,
+  [CM.STANDARD_DEVIATION]: m.discretization_method_nested_means,
+  [CM.MANUAL]: m.discretization_method_manual,
+  [CM.Q6]: m.discretization_method_q6,
+  [CM.NESTED_MEANS]: m.discretization_method_nested_means,
+  [CM.HEAD_TAIL]: m.discretization_method_head_tail
+};
+
+export function resolveDiscretizationLabel(
+  classification: ClassificationConfig | undefined
+): string {
+  if (!classification) return m.discretization_method_jenks();
+
+  const method = classification.method ?? CM.QUANTILES;
+  const numClasses = classification.numClasses ?? classification.classes ?? 5;
+  const methodLabel = METHOD_LABELS[method]?.() ?? String(method);
+
+  return `${methodLabel}, ${numClasses} ${m.discretization_num_classes().toLowerCase()}`;
 }

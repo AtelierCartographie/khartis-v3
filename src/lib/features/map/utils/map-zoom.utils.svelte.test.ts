@@ -1,0 +1,44 @@
+import { describe, expect, it } from 'vitest';
+import {
+  DEFAULT_MAP_BASE_ZOOM,
+  MAX_MAP_ZOOM_PERCENT,
+  MIN_MAP_ZOOM_PERCENT,
+  clampMapZoomPercent,
+  resolveMapZoomBounds,
+  resolveMapZoomLevel,
+  resolveMapZoomPercent
+} from './map-zoom.utils';
+
+describe('map zoom utils', () => {
+  it('maps 100% to the base zoom level', () => {
+    expect(resolveMapZoomLevel(DEFAULT_MAP_BASE_ZOOM, 100)).toBe(
+      DEFAULT_MAP_BASE_ZOOM
+    );
+  });
+
+  it('maps 500% to the expected MapLibre zoom delta', () => {
+    expect(resolveMapZoomLevel(DEFAULT_MAP_BASE_ZOOM, 500)).toBeCloseTo(
+      DEFAULT_MAP_BASE_ZOOM + 2 * Math.log2(5),
+      10
+    );
+  });
+
+  it('round-trips percent values through zoom conversion', () => {
+    const zoomLevel = resolveMapZoomLevel(4.8, 275);
+
+    expect(resolveMapZoomPercent(4.8, zoomLevel)).toBeCloseTo(275, 10);
+  });
+
+  it('derives relative min/max zoom bounds from the base zoom', () => {
+    const bounds = resolveMapZoomBounds(4.8);
+
+    expect(bounds.minZoom).toBeCloseTo(resolveMapZoomLevel(4.8, 10), 10);
+    expect(bounds.maxZoom).toBeCloseTo(resolveMapZoomLevel(4.8, 500), 10);
+  });
+
+  it('clamps non-finite or out-of-range percents to the supported UI range', () => {
+    expect(clampMapZoomPercent(Number.NaN)).toBe(100);
+    expect(clampMapZoomPercent(-1)).toBe(MIN_MAP_ZOOM_PERCENT);
+    expect(clampMapZoomPercent(999)).toBe(MAX_MAP_ZOOM_PERCENT);
+  });
+});

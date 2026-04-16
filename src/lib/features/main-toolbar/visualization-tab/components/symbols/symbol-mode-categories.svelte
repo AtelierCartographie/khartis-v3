@@ -1,23 +1,17 @@
 <script lang="ts">
-  import { Dropdown } from 'carbon-components-svelte';
   import {
-    CaretUp,
-    Checkbox,
-    CircleFilled,
-    Close,
-    DiamondFill,
-    SquareFill,
-    StarFilled
-  } from 'carbon-icons-svelte';
+    Dropdown,
+    RadioButton,
+    RadioButtonGroup
+  } from 'carbon-components-svelte';
   import * as m from '$lib/paraglide/messages';
   import { DEFAULT_QUALITATIVE_PREVIEW } from '../palette-popover/palette.constants';
-  import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import {
+    CategoryShapeMode,
     MissingDataShape,
     ShapeType,
     SLIDER_LIMITS,
     SymbolMode,
-    VISUALIZATION_DEFAULTS,
     DEFAULT_COLORS,
     availableShapesForSymbolMode
   } from '../../../constants';
@@ -26,7 +20,6 @@
     InfoPopover,
     MissingDataSection,
     PalettePreview,
-    SectionHeading,
     SliderWithInput
   } from '../shared';
   import type { SymbolModeProps } from './types';
@@ -36,6 +29,7 @@
     visualization,
     onMappingChange,
     onSymbolsChange,
+    onModesChange,
     onMissingDataChange,
     onClassificationChange,
     onInvertPalette,
@@ -46,27 +40,21 @@
     visualization?.classification?.colors ?? DEFAULT_QUALITATIVE_PREVIEW
   );
 
-  let selectedFieldId = $state<number>(0);
+  const NONE_FIELD_ID = -1;
+  let selectedFieldId = $state<number>(NONE_FIELD_ID);
   let categoryCount = $state<number>(4);
-  let symbolOpacity = $state<number>(VISUALIZATION_DEFAULTS.symbolOpacity);
+  let symbolOpacity = $state<number>(100);
   let shapeType = $state<ShapeType>(ShapeType.CIRCLE);
+  let categoryShapeMode = $state<CategoryShapeMode>(CategoryShapeMode.UNIQUE);
   let showMissingData = $state<boolean>(true);
   let missingDataShape = $state<MissingDataShape>(MissingDataShape.CIRCLE);
   let missingDataSize = $state<number>(2);
   let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
+  const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
+  const selectableDataFields = $derived([noneOption, ...dataFields]);
 
   const availableShapes = availableShapesForSymbolMode(SymbolMode.CATEGORIES);
-  const shapeIconByType: Record<ShapeType, typeof CircleFilled> = {
-    [ShapeType.CIRCLE]: CircleFilled,
-    [ShapeType.SQUARE]: SquareFill,
-    [ShapeType.CROSS]: Close,
-    [ShapeType.DIAMOND]: DiamondFill,
-    [ShapeType.TRIANGLE]: CaretUp,
-    [ShapeType.STAR]: StarFilled,
-    [ShapeType.RECTANGLE]: Checkbox,
-    [ShapeType.BAR]: CircleFilled,
-    [ShapeType.SPIKE]: CircleFilled
-  };
+
   const shapeLabelByType: Record<ShapeType, () => string> = {
     [ShapeType.CIRCLE]: m.shape_circle,
     [ShapeType.SQUARE]: m.shape_square,
@@ -78,18 +66,24 @@
     [ShapeType.BAR]: m.shape_bar,
     [ShapeType.SPIKE]: m.shape_spike
   };
-  const shapeItems = availableShapes.map((shape) => ({
-    icon: shapeIconByType[shape],
-    label: shapeLabelByType[shape](),
-    iconSize: 16
-  }));
 
-  const shapeIndex = $derived(availableShapes.indexOf(shapeType));
+  const shapeDropdownItems = $derived(
+    availableShapes.map((type) => ({
+      id: type,
+      text: shapeLabelByType[type]()
+    }))
+  );
 
-  function handleShapeTabChange(index: number) {
-    const next = availableShapes[index] ?? ShapeType.CIRCLE;
+  function handleShapeDropdownSelect(value: string | number) {
+    const next =
+      availableShapes.find((type) => type === value) ?? ShapeType.CIRCLE;
     shapeType = next;
     onSymbolsChange?.({ type: next });
+  }
+
+  function handleCategoryShapeModeChange(next: CategoryShapeMode) {
+    categoryShapeMode = next;
+    onModesChange?.({ categoryShape: next });
   }
 
   $effect(() => {
@@ -97,20 +91,26 @@
       const fieldIndex = dataFields.findIndex(
         (field) => field.text === visualization.mapping.categoryColumn
       );
-      if (fieldIndex >= 0) {
-        selectedFieldId = dataFields[fieldIndex].id;
-      }
+      selectedFieldId =
+        fieldIndex >= 0 ? dataFields[fieldIndex].id : NONE_FIELD_ID;
+    } else {
+      selectedFieldId = NONE_FIELD_ID;
     }
 
     if (visualization?.symbols) {
       symbolOpacity =
         visualization.symbols.opacity !== undefined
           ? Math.round(visualization.symbols.opacity * 100)
-          : VISUALIZATION_DEFAULTS.symbolOpacity;
+          : 100;
       const persistedShape = visualization.symbols.type ?? ShapeType.CIRCLE;
       shapeType = availableShapes.includes(persistedShape)
         ? persistedShape
         : ShapeType.CIRCLE;
+    } else {
+      symbolOpacity = 100;
+    }
+    if (visualization?.modes?.categoryShape) {
+      categoryShapeMode = visualization.modes.categoryShape;
     }
     if (visualization?.missingData) {
       showMissingData = visualization.missingData.show ?? true;
@@ -151,6 +151,11 @@
 
   function handleFieldSelect(fieldId: number) {
     selectedFieldId = fieldId;
+    if (fieldId === NONE_FIELD_ID) {
+      onMappingChange?.({ categoryColumn: undefined });
+      return;
+    }
+
     const field = dataFields.find((f) => f.id === fieldId);
     if (field) {
       onMappingChange?.({ categoryColumn: field.text });
@@ -163,15 +168,13 @@
   }
 </script>
 
-<SectionHeading title={m.size_and_color()} />
-
 <div class="field-group">
   <span class="field-label">
-    {m.viz_symbols_select_criteria()}
+    {m.size_according()}
     <InfoPopover text={m.category_variable_info()} />
   </span>
   <Dropdown
-    items={dataFields}
+    items={selectableDataFields}
     selectedId={selectedFieldId}
     on:select={(e) => handleFieldSelect(e.detail.selectedId)}
     type="default"
@@ -180,16 +183,46 @@
 
 <div class="field-group">
   <span class="field-label">
-    {m.viz_symbols_representation()}
-    <InfoPopover text={m.shape_info()} />
+    {m.category_shape_mode_label()}
+    <InfoPopover text={m.category_shape_mode_info()} />
   </span>
-  <ToggleTabs
-    items={shapeItems}
-    activeIndex={shapeIndex}
-    onChange={handleShapeTabChange}
-    hideInactiveLabel={true}
-  />
+  <RadioButtonGroup
+    selected={categoryShapeMode}
+    on:change={(e) =>
+      handleCategoryShapeModeChange(e.detail as CategoryShapeMode)}
+  >
+    <RadioButton
+      id="cat-shape-unique"
+      value={CategoryShapeMode.UNIQUE}
+      labelText={m.category_shape_mode_unique()}
+    />
+    <RadioButton
+      id="cat-shape-different"
+      value={CategoryShapeMode.DIFFERENT}
+      labelText={m.category_shape_mode_different()}
+    />
+    <RadioButton
+      id="cat-shape-ordered"
+      value={CategoryShapeMode.ORDERED}
+      labelText={m.category_shape_mode_ordered()}
+    />
+  </RadioButtonGroup>
 </div>
+
+{#if categoryShapeMode === CategoryShapeMode.UNIQUE}
+  <div class="field-group">
+    <span class="field-label">
+      {m.shape()}
+      <InfoPopover text={m.shape_info()} />
+    </span>
+    <Dropdown
+      items={shapeDropdownItems}
+      selectedId={shapeType}
+      on:select={(e) => handleShapeDropdownSelect(e.detail.selectedId)}
+      type="default"
+    />
+  </div>
+{/if}
 
 <DiscretizationRow
   label={m.category_aspect()}
@@ -237,5 +270,9 @@
     font-size: 0.75rem;
     color: var(--cds-text-02);
     font-weight: 400;
+  }
+
+  :global(.field-group .bx--radio-button-group) {
+    flex-direction: row;
   }
 </style>

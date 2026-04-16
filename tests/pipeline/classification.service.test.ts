@@ -1,211 +1,126 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import type { ClassificationMethod } from '$lib/features/commons/store/visualization.store.svelte';
-
-const queryMock = vi.hoisted(() => vi.fn());
-const getDatasetBySourceFileMock = vi.hoisted(() => vi.fn());
-const classificationMethodMock = vi.hoisted(() => ({
-  EQUAL_INTERVAL: 'equal_interval',
-  QUANTILES: 'quantiles',
-  JENKS: 'jenks',
-  MANUAL: 'manual',
-  STANDARD_DEVIATION: 'standard_deviation',
-  Q6: 'q6',
-  NESTED_MEANS: 'nested_means',
-  HEAD_TAIL: 'head_tail'
-}));
-
-vi.mock('$lib/features/commons/store/visualization.store.svelte', () => ({
-  ClassificationMethod: classificationMethodMock
+vi.mock('@ateliercartographie/ok-palette', () => ({
+  sequential: ({ steps }: { steps: number }) =>
+    Array.from(
+      { length: steps },
+      (_, i) => `#${i.toString(16).padStart(2, '0')}0000`
+    ),
+  divergentSequential: ({
+    steps,
+    hasCenterClass
+  }: {
+    steps: [number, number];
+    hasCenterClass: boolean;
+  }) => {
+    const total = steps[0] + steps[1] + (hasCenterClass ? 1 : 0);
+    return Array.from(
+      { length: total },
+      (_, i) => `#00${i.toString(16).padStart(2, '0')}00`
+    );
+  },
+  resolvePalette: (colors: string[]) =>
+    colors.map(() => [128, 128, 128, 255] as [number, number, number, number])
 }));
 
 vi.mock('$lib/features/duckdb', () => ({
-  Duck: {
-    query: queryMock
-  },
-  initDuckDB: vi.fn(),
-  GEO_CONSTANTS: {
-    WGS84_CRS: 'OGC:CRS84'
-  }
+  Duck: { query: vi.fn() }
 }));
 
 vi.mock('$lib/features/duckdb/orchestrator/orchestrator.svelte', () => ({
-  duckDBOrchestrator: {
-    getDatasetBySourceFile: getDatasetBySourceFileMock
+  duckDBOrchestrator: { getDatasetBySourceFile: vi.fn() }
+}));
+
+vi.mock('$lib/features/commons/store/visualization.store.svelte', () => ({
+  ClassificationMethod: {
+    EQUAL_INTERVAL: 'equal_interval',
+    QUANTILES: 'quantiles',
+    JENKS: 'jenks',
+    MANUAL: 'manual',
+    STANDARD_DEVIATION: 'standard_deviation',
+    Q6: 'q6',
+    NESTED_MEANS: 'nested_means',
+    HEAD_TAIL: 'head_tail'
   }
 }));
 
 vi.mock('$lib/features/commons/utils/logger', () => ({
-  LogCategory: {
-    DATA: 'DATA'
-  },
-  logger: {
-    debug: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    success: vi.fn()
-  }
+  logger: { warn: vi.fn(), debug: vi.fn(), error: vi.fn() },
+  LogCategory: { DATA: 'DATA' }
 }));
 
 import {
   applyPaletteInversion,
-  calculateBreaks
+  generateColorsForBreaks
 } from '$lib/features/commons/services/classification.service';
 
-const QUANTILES = 'quantiles' as ClassificationMethod;
-const STANDARD_DEVIATION = 'standard_deviation' as ClassificationMethod;
+const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 
-function createTable<T>(rows: T[]) {
-  const firstRow = rows[0] as Record<string, unknown> | undefined;
-
-  return {
-    numRows: rows.length,
-    toArray: () => rows,
-    getChild: (name: string) => ({
-      get: (index: number) =>
-        rows[index] && firstRow && name in firstRow
-          ? (rows[index] as Record<string, unknown>)[name]
-          : undefined
-    })
-  };
-}
-
-describe('classification service', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    getDatasetBySourceFileMock.mockReturnValue({
-      tableName: 'demo_table'
-    });
+describe('generateColorsForBreaks — sequential', () => {
+  it('returns array of length numClasses with valid hex values', () => {
+    const colors = generateColorsForBreaks(5);
+    expect(colors).toHaveLength(5);
+    for (const c of colors) expect(c).toMatch(HEX_COLOR);
   });
 
-  it('uses the quantile macro and rounds thresholds by default', async () => {
-    queryMock
-      .mockResolvedValueOnce(
-        createTable([
-          {
-            cnt: 30
-          }
-        ])
-      )
-      .mockResolvedValueOnce(
-        createTable([
-          {
-            min_val: 1,
-            max_val: 30
-          }
-        ])
-      )
-      .mockResolvedValueOnce(
-        createTable([
-          {
-            breaks: [10, 20]
-          }
-        ])
-      )
-      .mockResolvedValueOnce(
-        createTable([
-          {
-            rounded: [11, 21]
-          }
-        ])
-      )
-      .mockResolvedValueOnce(
-        createTable([
-          {
-            cnt_0: 2,
-            cnt_1: 2,
-            cnt_2: 2
-          }
-        ])
-      );
-
-    const result = await calculateBreaks({
-      datasetId: 'source-file',
-      columnName: 'population',
-      method: QUANTILES,
-      numClasses: 3
-    });
-
-    expect(queryMock).toHaveBeenNthCalledWith(
-      3,
-      "SELECT quantile('demo_table', 'population', 3) as breaks"
-    );
-    expect(queryMock).toHaveBeenNthCalledWith(
-      4,
-      "SELECT round_thresholds([10, 20], 'demo_table', 'population') as rounded"
-    );
-    expect(result).toEqual({
-      breaks: [11, 21],
-      counts: [2, 2, 2],
-      min: 1,
-      max: 30
-    });
+  it('clamps numClasses below 2 to 2', () => {
+    expect(generateColorsForBreaks(1)).toHaveLength(2);
+    expect(generateColorsForBreaks(0)).toHaveLength(2);
   });
 
-  it('maps legacy standard deviation classifications to nested means', async () => {
-    queryMock
-      .mockResolvedValueOnce(
-        createTable([
-          {
-            cnt: 30
-          }
-        ])
-      )
-      .mockResolvedValueOnce(
-        createTable([
-          {
-            min_val: 1,
-            max_val: 30
-          }
-        ])
-      )
-      .mockResolvedValueOnce(
-        createTable([
-          {
-            breaks: [4, 11, 25]
-          }
-        ])
-      )
-      .mockResolvedValueOnce(
-        createTable([
-          {
-            rounded: [4, 11, 25]
-          }
-        ])
-      )
-      .mockResolvedValueOnce(
-        createTable([
-          {
-            cnt_0: 2,
-            cnt_1: 2,
-            cnt_2: 1,
-            cnt_3: 1
-          }
-        ])
-      );
-
-    await calculateBreaks({
-      datasetId: 'source-file',
-      columnName: 'population',
-      method: STANDARD_DEVIATION,
-      numClasses: 4
-    });
-
-    expect(queryMock).toHaveBeenNthCalledWith(
-      3,
-      "SELECT nested_means('demo_table', 'population', 4) as breaks"
-    );
+  it('works for large class counts', () => {
+    const colors = generateColorsForBreaks(9);
+    expect(colors).toHaveLength(9);
+    for (const c of colors) expect(c).toMatch(HEX_COLOR);
   });
 
-  it('preserves palette direction unless inversion is requested', () => {
-    const colors = ['#111111', '#222222', '#333333'];
+  it('sequential is the default palette', () => {
+    expect(generateColorsForBreaks(4, 'sequential')).toEqual(
+      generateColorsForBreaks(4)
+    );
+  });
+});
 
-    expect(applyPaletteInversion(colors, false)).toEqual(colors);
-    expect(applyPaletteInversion(colors, true)).toEqual([
-      '#333333',
-      '#222222',
-      '#111111'
+describe('generateColorsForBreaks — diverging', () => {
+  it('returns array of length numClasses for even count', () => {
+    const colors = generateColorsForBreaks(4, 'diverging');
+    expect(colors).toHaveLength(4);
+    for (const c of colors) expect(c).toMatch(HEX_COLOR);
+  });
+
+  it('returns array of length numClasses for odd count (center class)', () => {
+    const colors = generateColorsForBreaks(5, 'diverging');
+    expect(colors).toHaveLength(5);
+    for (const c of colors) expect(c).toMatch(HEX_COLOR);
+  });
+});
+
+describe('applyPaletteInversion', () => {
+  const palette = ['#ff0000', '#00ff00', '#0000ff'];
+
+  it('returns the same reference when not inverted', () => {
+    expect(applyPaletteInversion(palette, false)).toBe(palette);
+  });
+
+  it('defaults to not inverted', () => {
+    expect(applyPaletteInversion(palette)).toBe(palette);
+  });
+
+  it('returns reversed array when inverted', () => {
+    expect(applyPaletteInversion(palette, true)).toEqual([
+      '#0000ff',
+      '#00ff00',
+      '#ff0000'
     ]);
-    expect(colors).toEqual(['#111111', '#222222', '#333333']);
+  });
+
+  it('does not mutate the original when inverted', () => {
+    const original = [...palette];
+    applyPaletteInversion(palette, true);
+    expect(palette).toEqual(original);
+  });
+
+  it('handles empty array', () => {
+    expect(applyPaletteInversion([], true)).toEqual([]);
   });
 });

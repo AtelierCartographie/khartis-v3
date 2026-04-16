@@ -2,7 +2,6 @@ import { dataTabActions } from '$lib/features/commons/store/data-tab.store.svelt
 import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
 import { FileValidator } from '$lib/features/commons/utils/file-validator.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import { dataPipeline, isZipDatasetResult } from '$lib/features/data-pipeline';
 import { Duck } from '$lib/features/duckdb';
@@ -84,9 +83,7 @@ export function useEnrichmentFile(): UseEnrichmentFileReturn {
     }
 
     try {
-      await Duck.query(
-        `DROP TABLE IF EXISTS "${escapeIdentifier(dataset.tableName)}"`
-      );
+      await Duck.dropTable(dataset.tableName);
     } catch (error) {
       logger.warn(
         'Failed to cleanup enrichment temporary table',

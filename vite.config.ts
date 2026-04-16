@@ -77,9 +77,14 @@ export default defineConfig(({ mode }) => {
         outdir: './src/lib/paraglide'
       }),
       VitePWA({
+        includeAssets: [
+          'favicon.ico',
+          'apple-touch-icon-180x180.png',
+          'maskable-icon-512x512.png'
+        ],
         registerType: 'prompt',
         devOptions: {
-          enabled: true,
+          enabled: false,
           type: 'module'
         },
         workbox: {
@@ -232,16 +237,47 @@ export default defineConfig(({ mode }) => {
           ]
         },
         manifest: {
+          id: basePath ? `${basePath}/` : '/',
           name: 'Khartis',
           short_name: 'KH',
           display: 'standalone',
+          display_override: [
+            'window-controls-overlay',
+            'standalone',
+            'browser'
+          ],
           theme_color: '#ffffff',
           background_color: '#ffffff',
           start_url: `${basePath}/?standalone=true`,
           scope: `${basePath}/`,
+          lang: 'fr',
           orientation: 'portrait',
+          categories: ['productivity', 'education', 'graphics'],
           description:
             'Khartis est un outil simple de créations de cartes thématiques. Projections paramétrables - géoréférencement automatique. Un projet open source de Sciences Po - Atelier de cartographie',
+          screenshots: [
+            {
+              src: `${basePath}/screenshots/welcome.png`,
+              sizes: '1280x720',
+              type: 'image/png',
+              form_factor: 'wide',
+              label: 'Accueil et démarrage de Khartis'
+            },
+            {
+              src: `${basePath}/screenshots/visualization.png`,
+              sizes: '1280x720',
+              type: 'image/png',
+              form_factor: 'wide',
+              label: 'Configuration des visualisations'
+            },
+            {
+              src: `${basePath}/screenshots/styling.png`,
+              sizes: '1280x720',
+              type: 'image/png',
+              form_factor: 'wide',
+              label: 'Personnalisation de la carte'
+            }
+          ],
           icons: [
             {
               src: `${basePath}/pwa-64x64.png`,
@@ -301,8 +337,9 @@ export default defineConfig(({ mode }) => {
               'tests/pipeline/**/*.{test,spec}.{js,ts}',
               'tests/duckdb/**/*.{test,spec}.{js,ts}'
             ],
-            exclude: ['tests/e2e/**', 'tests/**/tmp-*.{test,spec}.{js,ts}'],
-            pool: 'threads',
+            exclude: ['tests/**/tmp-*.{test,spec}.{js,ts}'],
+            setupFiles: ['./vitest-setup-server.ts'],
+            pool: 'forks',
             fileParallelism: false
           }
         }

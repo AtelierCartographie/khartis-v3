@@ -188,15 +188,15 @@
 <style>
   .map-tooltip {
     position: fixed;
-    z-index: var(--z-notification);
+    z-index: var(--z-map-overlay);
     background: rgba(255, 255, 255, 0.96);
-    color: #161616;
+    color: var(--cds-text-primary, #161616);
     padding: 8px 12px;
     border-radius: 4px;
     font-size: 12px;
     font-family: 'IBM Plex Sans', sans-serif;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-    border: 1px solid #8d8d8d;
+    border: 1px solid var(--cds-border-strong, #8d8d8d);
     max-width: min(320px, calc(100vw - 16px));
     max-height: min(20rem, calc(100dvh - 16px));
     overflow: auto;
@@ -209,7 +209,7 @@
   .map-tooltip.pinned {
     pointer-events: auto;
     user-select: text;
-    border-color: #0f62fe;
+    border-color: var(--cds-focus, #0f62fe);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
   }
 

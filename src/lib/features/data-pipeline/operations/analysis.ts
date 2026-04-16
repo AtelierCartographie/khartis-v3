@@ -5,8 +5,7 @@ import type {
   EnrichedColumn,
   FileFormat,
   FileInfo,
-  GeometryInfo,
-  PipelineContext
+  GeometryInfo
 } from '../types';
 import { fromDuckDBType } from '../types';
 import { extractGeometryInfo } from './geometry';
@@ -92,15 +91,12 @@ export async function readDatasetTableSnapshot(
   };
 }
 
-export async function buildDatasetFromDuckTable(
-  _ctx: PipelineContext,
-  params: {
-    file: FileInfo;
-    tableName: string;
-    isGeoFile: boolean;
-    format: FileFormat;
-  }
-): Promise<DatasetResult> {
+export async function buildDatasetFromDuckTable(params: {
+  file: FileInfo;
+  tableName: string;
+  isGeoFile: boolean;
+  format: FileFormat;
+}): Promise<DatasetResult> {
   const { file, tableName, isGeoFile, format } = params;
 
   const [snapshot, geometryInfo] = await Promise.all([
@@ -162,10 +158,8 @@ function buildDatasetResult(params: {
       processedAt: new Date(),
       fileType: format,
       parserUsed: 'DuckDB',
-      processingDuration: undefined,
       transformations: []
     },
-    data: [],
     format,
     analysis: {
       columns: enrichedColumns,

@@ -13,7 +13,7 @@ import {
  * DuckDB >= 1.33 may return geometry column types like `GEOMETRY('EPSG:4326')`
  * instead of plain `GEOMETRY`. This helper matches both forms.
  */
-function isGeometryColumnType(columnType: string): boolean {
+export function isGeometryColumnType(columnType: string): boolean {
   return (
     columnType === GEOMETRY_COLUMN_TYPE ||
     columnType.startsWith(GEOMETRY_COLUMN_TYPE + '(')
@@ -30,7 +30,9 @@ const GEOMETRY_TYPE_TO_GEOJSON: Partial<Record<string, GeometryInfo['type']>> =
     [GEOMETRY_WKT_TYPES.MULTI_POLYGON]: GEOJSON_TYPE.MULTI_POLYGON
   };
 
-function normalizeCrsName(crs: string | null | undefined): string | undefined {
+export function normalizeCrsName(
+  crs: string | null | undefined
+): string | undefined {
   if (!crs) return undefined;
 
   const trimmed = crs.trim();
@@ -51,7 +53,7 @@ function normalizeCrsName(crs: string | null | undefined): string | undefined {
   return trimmed;
 }
 
-function extractGeometryColumnCrs(
+export function extractGeometryColumnCrs(
   columnType: string | null | undefined
 ): string | undefined {
   if (!columnType) {

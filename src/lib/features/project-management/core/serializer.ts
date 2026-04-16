@@ -180,7 +180,8 @@ function mapRegistryToSerializedFormat(
         stores.basemapStyle as { groupVisibility?: Record<string, boolean> }
       )?.groupVisibility,
       mapProjection: stores.mapProjection,
-      mapViewState: stores.mapViewState
+      mapViewState: stores.mapViewState,
+      osmBasemap: stores.osmBasemap
     } as SerializedProjectData['basemapSettings'],
     visualizationSettings:
       stores.visualization as SerializedProjectData['visualizationSettings'],
@@ -217,6 +218,9 @@ function mapSerializedFormatToRegistry(
     if (data.basemapSettings.mapViewState) {
       stores.mapViewState = data.basemapSettings.mapViewState;
     }
+    if (data.basemapSettings.osmBasemap !== undefined) {
+      stores.osmBasemap = data.basemapSettings.osmBasemap;
+    }
   }
 
   if (data.visualizationSettings) {
@@ -248,8 +252,6 @@ export async function serializeProjectData(
 
   const serialized = { ...data } as SerializedProjectData;
   const dataObj = data as Record<string, unknown>;
-
-  // --- File serialization (data-layer, kept as-is) ---
 
   if (dataObj.sourceFiles && Array.isArray(dataObj.sourceFiles)) {
     const selectedSourceFileId = datasetsStore.selectedDataset?.sourceFileId;
@@ -292,8 +294,6 @@ export async function serializeProjectData(
     });
   }
 
-  // --- Custom basemap DuckDB serialization (data-layer, kept as-is) ---
-
   const customBasemaps = basemapCatalogService.basemaps.filter(
     (b: BasemapMetadata) => b.isCustom
   );
@@ -328,8 +328,6 @@ export async function serializeProjectData(
     }
   }
 
-  // --- Store state: read from persistence registry ---
-
   const storeData = persistenceRegistry.serializeAll();
   Object.assign(serialized, mapRegistryToSerializedFormat(storeData));
 
@@ -343,15 +341,11 @@ export async function deserializeProjectData(
 
   const deserialized = { ...data };
 
-  // --- File deserialization (data-layer, kept as-is) ---
-
   if (data.sourceFiles && Array.isArray(data.sourceFiles)) {
     deserialized.sourceFiles = data.sourceFiles.map(
       (file: SerializedUploadedFile) => deserializeUploadedFile(file)
     ) as SerializedUploadedFile[];
   }
-
-  // --- Custom basemap DuckDB restoration (data-layer, kept as-is) ---
 
   if (
     data.customBasemaps &&
@@ -429,8 +423,6 @@ export async function deserializeProjectData(
       );
     }
   }
-
-  // --- Store state: restore via persistence registry ---
 
   persistenceRegistry.resetAll();
   const storeData = mapSerializedFormatToRegistry(data);

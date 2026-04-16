@@ -9,3 +9,5 @@ export { default as MissingDataSection } from './missing-data-section.svelte';
 export { default as InfoPopover } from './info-popover.svelte';
 export { default as StrokeSection } from './stroke-section.svelte';
 export { default as VizFilterSection } from './viz-filter-section.svelte';
+export { default as VizFilterButton } from './viz-filter-button.svelte';
+export { default as VizFilterPanel } from './viz-filter-panel.svelte';

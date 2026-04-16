@@ -1,7 +1,7 @@
 <script lang="ts">
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
   import * as m from '$lib/paraglide/messages';
-  import { Button, InlineNotification } from 'carbon-components-svelte';
+  import { Button, InlineNotification, Link } from 'carbon-components-svelte';
 
   interface Props {
     hasGPSCoordinates: boolean;
@@ -10,6 +10,11 @@
   }
 
   let { hasGPSCoordinates, onSelectOSM, onGoToVisualize }: Props = $props();
+
+  function handleLinkClick(event: Event): void {
+    event.preventDefault();
+    onGoToVisualize();
+  }
 </script>
 
 <div class="tab-content">
@@ -41,9 +46,9 @@
 
   <p class="osm-note">
     {m.osm_customization_note()}
-    <button type="button" class="link-text" onclick={onGoToVisualize}
-      >{m.step_visualize()}</button
-    >.
+    <Link inline href="#" on:click={handleLinkClick}>
+      {m.step_visualize()}
+    </Link>.
   </p>
 </div>
 
@@ -66,19 +71,5 @@
     font-size: 0.875rem;
     line-height: 1.375rem;
     margin: 0;
-  }
-
-  .link-text {
-    background: none;
-    border: none;
-    padding: 0;
-    font: inherit;
-    color: var(--cds-text-01);
-    text-decoration: underline;
-    cursor: pointer;
-  }
-
-  .link-text:hover {
-    color: var(--cds-link-primary-hover);
   }
 </style>

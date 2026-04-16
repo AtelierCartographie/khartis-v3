@@ -1,13 +1,5 @@
 import { FUZZY_SEARCH } from '$lib/features/commons/constants/detection.constants';
 
-// ToDo:
-// - verify handling of missing values in each method = should not be taken into account
-// - verify handling of time series
-// - verify handling of negative values
-// - how to handle series with both signs (positive and negative)?
-//   - detect dual sign
-//   - apply the method independently on each sign
-
 /**
  * SQL macro for calculating quantiles.
  *
@@ -28,7 +20,6 @@ const quantile_macro = `CREATE OR REPLACE MACRO quantile(tabname, colname, nb :=
   SELECT quantile_disc(value, list_transform(range(1, nb), c -> c::DOUBLE / nb))
 );`;
 
-// nb is not used, just to harmonize with the other macros
 const q6_macro = `CREATE OR REPLACE MACRO q6(tabname, colname, nb := 6) AS (
     WITH values AS (
       FROM query_table(tabname::VARCHAR)
