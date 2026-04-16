@@ -112,8 +112,13 @@
 
   async function handleRemoveFile(fileId: string) {
     deletingFileIds.add(fileId);
-    await createProjectActions.removeUploadedFile(fileId);
-    deletingFileIds.delete(fileId);
+    try {
+      await createProjectActions.removeUploadedFile(fileId);
+      lastProcessedFiles = new SvelteSet();
+      internalResetKey++;
+    } finally {
+      deletingFileIds.delete(fileId);
+    }
   }
 
   async function handleClearAllFiles() {

@@ -195,23 +195,33 @@ Chaque fichier CSV/geo dans un ZIP multi-dataset est traité individuellement vi
 
 1. **Extension** : Doit être dans `PIPELINE_CONST.EXTENSIONS.ALL` (`.csv`, `.tsv`, `.parquet`, `.geojson`, `.shp`, `.gpkg`, `.kml`, `.kmz`, `.gpx`, `.zip`, etc.)
 2. **Taille nulle** : `file.size === 0` → rejected
-3. **Taille max** : `> 100 Mo` → rejected
-4. **Avertissement taille** : `> 50 Mo` → warning (n'arrête pas le traitement)
+3. **Taille max par format** :
+   - `150 Mo` pour CSV / TSV / GeoJSON / JSON / KML / KMZ / GPX
+   - `200 Mo` pour GeoPackage / GeoParquet / Arrow / Shapefile
+   - `100 Mo` pour ZIP generique
+4. **Avertissement taille** : `80 %` de la limite par format → warning (n'arrête pas le traitement)
 
 ---
 
-## Serialization Safety (`tests/pipeline/project-serialization.test.ts`, `tests/pipeline/storage-clone.test.ts`)
+## Persistence and Replay (`tests/pipeline/project-serialization.test.ts`, `tests/pipeline/project-archive.test.ts`, `tests/pipeline/storage-clone.test.ts`)
 
-Les fichiers uploadés sont sérialisés pour persistence (IndexedDB). Règles de sécurité :
+Le pipeline ne persiste plus les gros octets dans `project.json`. Strategie :
+
+- le projet persiste des **metadonnees** (`assetRef`, preview, stats, analyse, transformations)
+- les fichiers source vivent dans IndexedDB comme **assets chunkes**
+- a la reouverture, `createFileFromUpload()` reconstruit un `File` depuis `assetRef`
+- `addFile()` rejoue alors le pipeline DuckDB au lieu d'exposer une table stale
+
+Règles de sécurité restantes :
 
 | Type                         | Conversion                                                                                       |
 | ---------------------------- | ------------------------------------------------------------------------------------------------ |
 | `BigInt`                     | → `Number` via `deepCloneForStorage()` (perte de précision au-delà de `Number.MAX_SAFE_INTEGER`) |
 | `Uint8Array` / `ArrayBuffer` | Round-trip préservé (slices avec `byteOffset` + `byteLength`)                                    |
 | `Map` / `Set`                | Sérialisés en objets `Array.from()`                                                              |
-| Binary data (`ArrayBuffer`)  | `preserveBinary: true` via `rawDatasetUtils`                                                     |
+| Binary data (`ArrayBuffer`)  | Sortis du JSON projet ; stockés dans `project_asset_chunks`                                      |
 
-Tailles estimées ajoutées aux métadonnées pour éviter la sérialisation de très gros fichiers.
+Tailles estimees ajoutees aux metadonnees pour eviter la serialisation de tres gros fichiers. Le format `.kh` exporte ensuite `manifest.json`, `project.json` et `assets/...` dans une archive unique.
 
 ---
 
@@ -224,8 +234,8 @@ Tailles estimées ajoutées aux métadonnées pour éviter la sérialisation de 
 ## Constants (`constants.ts`)
 
 ```typescript
-PIPELINE_CONST.LIMITS.MAX_FILE_SIZE    = 100 MB
-PIPELINE_CONST.LIMITS.WARNING_FILE_SIZE = 50 MB
+PIPELINE_CONST.LIMITS.MAX_FILE_SIZE    = 200 MB
+PIPELINE_CONST.LIMITS.WARNING_FILE_SIZE = 120 MB
 PIPELINE_CONST.LIMITS.SAMPLE_ROWS       = 100
 PIPELINE_CONST.LIMITS.TYPE_THRESHOLD    = 0.8
 PIPELINE_CONST.QUALITY.HIGH_NULL_RATIO_THRESHOLD  = 0.5

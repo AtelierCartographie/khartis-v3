@@ -58,14 +58,14 @@ flowchart LR
 
 ## Couches de stockage
 
-| Couche              | Role                         | Duree de vie      | Implementation                      |
-| ------------------- | ---------------------------- | ----------------- | ----------------------------------- |
-| **Composant local** | Etat UI ephemere             | Montage composant | `$state` dans le `.svelte`          |
-| **Store feature**   | Modele domaine               | Session           | `$state` dans le store `.svelte.ts` |
-| **Store global**    | Coordination cross-feature   | Session           | Singleton (`projectStore`, etc.)    |
-| **IndexedDB**       | Projets et datasets durables | Persistant        | localforage (metadonnees)           |
+| Couche              | Role                           | Duree de vie      | Implementation                                                                                                |
+| ------------------- | ------------------------------ | ----------------- | ------------------------------------------------------------------------------------------------------------- |
+| **Composant local** | Etat UI ephemere               | Montage composant | `$state` dans le `.svelte`                                                                                    |
+| **Store feature**   | Modele domaine                 | Session           | `$state` dans le store `.svelte.ts`                                                                           |
+| **Store global**    | Coordination cross-feature     | Session           | Singleton (`projectStore`, etc.)                                                                              |
+| **IndexedDB**       | Projets, metadonnees et assets | Persistant        | Object stores dedies (`projects`, `metadata`, `project_assets`, `project_asset_chunks`, `project_asset_refs`) |
 
-**Flux** : Composant --> Store feature --> Store global --> IndexedDB (debounce 5 s sur mutations, auto-save intervalle 30 s)
+**Flux** : Composant --> Store feature --> Store global --> IndexedDB (debounce 5 s sur les metadonnees projet, persistence immediate des assets binaires)
 
 Voir [Gestion de l'etat](GESTION_ETAT.md) pour le detail complet.
 
@@ -75,9 +75,10 @@ Voir [Gestion de l'etat](GESTION_ETAT.md) pour le detail complet.
 
 | Defi                 | Solution                                                               |
 | -------------------- | ---------------------------------------------------------------------- |
-| Import volumineux    | Parsing natif DuckDB (`read_csv`, `ST_Read`, `read_parquet`)           |
+| Import volumineux    | Parsing natif DuckDB + stockage source chunked IndexedDB (8 Mo)        |
 | Calculs lourds       | DuckDB WASM dans le navigateur                                         |
 | Geometries complexes | Simplification pre-calculee + LOD dynamique                            |
+| Reouverture projet   | Replay DuckDB a partir des assets source, pas de snapshot lourd        |
 | Rendu interactif     | GeoArrow binaire + [Deck.gl](https://context7.com/visgl/deck.gl) WebGL |
 
 **Cibles** :
@@ -104,7 +105,7 @@ Voir [Gestion de l'etat](GESTION_ETAT.md) pour le detail complet.
 
 ## Securite et vie privee
 
-Aucune surface d'attaque serveur : toutes les donnees restent dans le navigateur. Les noms de fichier, cellules CSV et saisies utilisateur sont assainis. Quotas : 50 Mo/fichier, 100 Mo/projet, 50 projets max.
+Aucune surface d'attaque serveur : toutes les donnees restent dans le navigateur. Les noms de fichier, cellules CSV et saisies utilisateur sont assainis. Quotas produit par format : 150 Mo pour les formats texte geo/tabulaire, 200 Mo pour GeoPackage / GeoParquet / Arrow, 100 Mo pour ZIP generique, 50 projets max.
 
 ---
 

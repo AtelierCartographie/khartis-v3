@@ -14,6 +14,7 @@ import { cleanupDuckDBResources } from '$lib/features/commons/utils/duckdb-clean
 import { toJsonValue } from '$lib/features/commons/utils/json.utils';
 import type { SerializedProjectData } from '$lib/types/serialization.types';
 import { persistenceRegistry } from '$lib/features/project-management';
+import { createCompanionFilesFromAssetRefs } from '$lib/features/project-management/core/asset-store';
 import { layersActions } from '../../step-toolbar/tools/layers/layers.store.svelte';
 import { legendActions } from '../../step-toolbar/tools/legend/legend.store.svelte';
 import { projectionActions } from '../../step-toolbar/tools/projections/projection.store.svelte';
@@ -750,6 +751,20 @@ function createDataOrchestratorService() {
           file.fileType === FileType.SHAPEFILE &&
           (!file.relatedFileObjects || file.relatedFileObjects.length === 0)
         ) {
+          if (file.companionAssetRefs?.length) {
+            try {
+              file.relatedFileObjects = await createCompanionFilesFromAssetRefs(
+                file.companionAssetRefs
+              );
+            } catch (err) {
+              logger.warn(
+                `Failed to restore companion assets for ${file.name}`,
+                LogCategory.DATA,
+                { error: err }
+              );
+            }
+          }
+
           if (file.relatedFilesData) {
             const companionFiles: File[] = [];
             for (const [name, buffer] of Object.entries(

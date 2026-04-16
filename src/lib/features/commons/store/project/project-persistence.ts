@@ -90,10 +90,10 @@ function mergePersistedSourceFile(
 
   return {
     ...currentFile,
-    content: currentFile.content ?? persistedFile.content,
+    assetRef: currentFile.assetRef ?? persistedFile.assetRef,
+    companionAssetRefs:
+      currentFile.companionAssetRefs ?? persistedFile.companionAssetRefs,
     deepAnalysis: currentFile.deepAnalysis ?? persistedFile.deepAnalysis,
-    relatedFilesData:
-      currentFile.relatedFilesData ?? persistedFile.relatedFilesData,
     sourceArchive: currentFile.sourceArchive ?? persistedFile.sourceArchive,
     datasetId: currentFile.datasetId ?? persistedFile.datasetId,
     duckdbTableName:
@@ -103,9 +103,7 @@ function mergePersistedSourceFile(
       : persistedFile.statistics,
     parsedData: hasStoredParsedRows(currentFile)
       ? currentFile.parsedData
-      : persistedFile.parsedData,
-    preparedGeoJSON:
-      currentFile.preparedGeoJSON ?? persistedFile.preparedGeoJSON
+      : persistedFile.parsedData
   };
 }
 

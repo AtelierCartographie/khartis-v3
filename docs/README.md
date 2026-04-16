@@ -65,7 +65,7 @@ Le fichier `.env` doit etre cree avant de lancer l'application. Le sample commit
 | proj4                      | Projections exotiques, fallback reprojection EPSG:2154/27572 |
 | parquet-wasm               | Lecture GeoParquet cote client                               |
 | Paraglide JS               | Internationalisation compile-time (FR/EN)                    |
-| IndexedDB / localforage    | Persistance locale des projets                               |
+| IndexedDB                  | Persistance locale des projets et des assets source          |
 | Vitest                     | Tests unitaires et d'integration (pipeline + DuckDB natif)   |
 
 ---

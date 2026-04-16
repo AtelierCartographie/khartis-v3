@@ -346,7 +346,7 @@ src/
 | `header/`             | Barre de navigation superieure (export, sauvegarde)                                                                                            |
 | `main-toolbar/`       | Sidebar gauche : onglets Donnees, Visualisations, Style                                                                                        |
 | `map/`                | Carte Deck.gl + MapLibre : hooks, layer factories, projections                                                                                 |
-| `project-management/` | Persistance `.kh`, serialisation, IndexedDB                                                                                                    |
+| `project-management/` | Persistance `.kh`, serialisation metadata-only, asset store IndexedDB, import/export                                                           |
 | `side-nav.svelte`     | Menu lateral (langue, projets recents) -- fichier unique, pas une feature directory                                                            |
 | `step-toolbar/`       | Panneau droit : 10 outils (search, layers, projections, legend, annotations, color-blindness, facets, format, geo-indications, simplification) |
 

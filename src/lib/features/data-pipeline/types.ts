@@ -1,4 +1,5 @@
 import type { DataAnalysisResult } from '$lib/features/commons/utils/deep-validator.utils';
+import type { AssetRef } from '$lib/features/commons/store/create-project.types';
 import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
 
 export type {
@@ -300,6 +301,8 @@ export interface UploadedFilePayload {
   preparedGeoJSON?: string;
   relatedFileObjects?: File[];
   relatedFilesData?: Record<string, ArrayBuffer | number[]>;
+  assetRef?: AssetRef;
+  companionAssetRefs?: AssetRef[];
 }
 
 export interface DuckAnalyticsColumn {

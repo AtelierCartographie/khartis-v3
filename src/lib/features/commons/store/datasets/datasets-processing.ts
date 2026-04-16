@@ -483,6 +483,12 @@ export async function addFile(
 
   try {
     const result = await internals.processingSemaphore.run(async () => {
+      const hasRestorableBinarySource = Boolean(
+        file.content ||
+        file.originalFile ||
+        file.assetRef ||
+        file.companionAssetRefs?.length
+      );
       const restorableGeoSnapshot = createRestorableGeoSnapshot(file);
       if (restorableGeoSnapshot) {
         logger.debug(
@@ -492,7 +498,7 @@ export async function addFile(
         return dataPipeline.processUploadedFile(restorableGeoSnapshot);
       }
 
-      if (file.duckdbTableName) {
+      if (file.duckdbTableName && !hasRestorableBinarySource) {
         logger.debug(
           `Using pre-processed data for: ${file.name} (table: ${file.duckdbTableName})`,
           LogCategory.STORE
@@ -500,12 +506,7 @@ export async function addFile(
         return createDatasetFromPreprocessedFile(file);
       }
 
-      if (
-        !file.content &&
-        !file.originalFile &&
-        file.parsedData &&
-        file.statistics
-      ) {
+      if (!hasRestorableBinarySource && file.parsedData && file.statistics) {
         logger.warn(
           `File ${file.name} has parsed data but no DuckDB table - creating from parsed data`,
           LogCategory.STORE
@@ -513,7 +514,7 @@ export async function addFile(
         return createDatasetFromPreprocessedFile(file);
       }
 
-      if (!file.content && !file.originalFile) {
+      if (!hasRestorableBinarySource) {
         throw new Error(`File ${file.name} has no content or originalFile`);
       }
 

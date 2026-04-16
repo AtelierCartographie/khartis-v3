@@ -12,7 +12,10 @@ import {
   type ProcessingCallbacks
 } from '../../create-project/services/file-processor.service';
 import { CreateProjectValidationService } from '../../create-project/services/validation.service';
-import { STORAGE_LIMITS } from '../configs/validation.config';
+import {
+  getMaxFileSizeForType,
+  STORAGE_LIMITS
+} from '../configs/validation.config';
 import {
   createUploadedFile,
   extractDataFromPaste,
@@ -391,11 +394,13 @@ export const createProjectActions = {
     sourceType: DataSourceType = DataSourceType.FILE_UPLOAD
   ): Promise<void> {
     const totalSize = files.reduce((sum, f) => sum + f.size, 0);
-    if (totalSize > STORAGE_LIMITS.maxFileSize) {
+    const maxShapefileSize = getMaxFileSizeForType(FileType.SHAPEFILE);
+
+    if (totalSize > maxShapefileSize) {
       this.setNewProjectError(
         m.error_shapefile_too_large_message({
           size: formatFileSize(totalSize),
-          max: formatFileSize(STORAGE_LIMITS.maxFileSize)
+          max: formatFileSize(maxShapefileSize)
         })
       );
       return;
@@ -516,6 +521,7 @@ export const createProjectActions = {
         fileToRemove.relatedFilesData = undefined;
       }
       createProjectState.newProject.uploadedFiles.splice(index, 1);
+      this.recomputeGlobalValidationErrors();
     }
   },
 
@@ -745,6 +751,30 @@ export const createProjectActions = {
   clearUploadState(): void {
     createProjectState.newProject.uploadedFiles = [];
     createProjectState.newProject.validationErrors = [];
+  },
+
+  recomputeGlobalValidationErrors(): void {
+    const uploadedFiles = createProjectState.newProject.uploadedFiles;
+    const totalSize = uploadedFiles.reduce((sum, file) => sum + file.size, 0);
+    const validationErrors: string[] = [];
+
+    if (uploadedFiles.length > STORAGE_LIMITS.maxFileCount) {
+      validationErrors.push(
+        m.validation_file_count_exceeded({
+          max: String(STORAGE_LIMITS.maxFileCount)
+        })
+      );
+    }
+
+    if (totalSize > STORAGE_LIMITS.maxTotalFileSize) {
+      validationErrors.push(
+        m.validation_total_size_exceeded({
+          size: String(STORAGE_LIMITS.maxTotalFileSize / (1024 * 1024))
+        })
+      );
+    }
+
+    createProjectState.newProject.validationErrors = validationErrors;
   },
 
   getFilesByStatus(status: UploadedFile['status']): UploadedFile[] {

@@ -8,14 +8,14 @@
 
 ## Les 4 couches d'etat
 
-| Couche                      | Role                               | Duree de vie      | Stockage                              |
-| --------------------------- | ---------------------------------- | ----------------- | ------------------------------------- |
-| **Composant local**         | Etat UI ephemere (inputs, modales) | Montage composant | `$state` dans le `.svelte`            |
-| **Store feature**           | Modele domaine + actions           | Session           | `$state` dans le store `.svelte.ts`   |
-| **Store global**            | Coordination cross-feature         | Session           | Singleton `ProjectStore`              |
-| **IndexedDB / localforage** | Projets et datasets durables       | Persistant        | IndexedDB + localforage (metadonnees) |
+| Couche              | Role                               | Duree de vie      | Stockage                                                                                             |
+| ------------------- | ---------------------------------- | ----------------- | ---------------------------------------------------------------------------------------------------- |
+| **Composant local** | Etat UI ephemere (inputs, modales) | Montage composant | `$state` dans le `.svelte`                                                                           |
+| **Store feature**   | Modele domaine + actions           | Session           | `$state` dans le store `.svelte.ts`                                                                  |
+| **Store global**    | Coordination cross-feature         | Session           | Singleton `ProjectStore`                                                                             |
+| **IndexedDB**       | Projets, metadonnees et assets     | Persistant        | Object stores `projects`, `metadata`, `project_assets`, `project_asset_chunks`, `project_asset_refs` |
 
-**Flux** : Composant --> Store feature --> Store global --> IndexedDB (debounce 5 s sur mutations, auto-save intervalle 30 s)
+**Flux** : Composant --> Store feature --> Store global --> IndexedDB (debounce 5 s sur les metadonnees projet, persistence immediate des nouveaux assets binaires)
 
 ## Pattern de store Svelte 5 Runes
 
@@ -148,7 +148,7 @@ interface KhartisProject {
     name: string;
     author?: string;
     description?: string;
-    format: 'kh' | 'khartis';
+    format: 'kh';
   };
   data: {
     sourceFiles: UploadedFile[];
@@ -160,7 +160,25 @@ interface KhartisProject {
 }
 ```
 
-Les fichiers sources (dont `parsedData`, `statistics`, `content`) sont embarques dans le projet.
+Le document projet persiste surtout des **metadonnees legeres** :
+
+- `datasetId`
+- `assetRef` / `companionAssetRefs`
+- preview (`parsedData`) limite
+- `statistics`, `deepAnalysis`
+- transformations, suppressions de lignes, infos de jointure/geolocalisation
+
+Les octets source ne sont plus embarques dans le JSON projet. Ils sont stockes a part dans IndexedDB, par chunks de `8 Mo`, puis rejoues dans DuckDB a la reouverture.
+
+### Asset store binaire
+
+| Object store           | Contenu                                        |
+| ---------------------- | ---------------------------------------------- |
+| `projects`             | Snapshot projet metadata-only                  |
+| `metadata`             | Liste des projets + dernier projet ouvert      |
+| `project_assets`       | Metadonnees d'assets (`assetId`, taille, MIME) |
+| `project_asset_chunks` | Chunks binaires des fichiers source            |
+| `project_asset_refs`   | References `projectId -> assetId`              |
 
 ### Couches persistees via le registre
 
@@ -193,7 +211,7 @@ Regle pratique : on persiste l'etat UI qui doit survivre a un rechargement de pr
 flowchart LR
     MUT["Mutation d'etat"] --> FLAG["Flag dirty"]
     --> TIMER["Demarrage/reset timer<br/>(debounce 5 s)"]
-    --> JSON["Timer expire<br/>→ Serialisation JSON"]
+    --> JSON["Timer expire<br/>→ Serialisation metadata-only"]
     --> VAL["Validation taille"]
     --> IDB["IndexedDB"]
 
@@ -201,15 +219,16 @@ flowchart LR
     style IDB fill:#e8f5e9
 ```
 
-**Sauvegarde immediate** (bypass debounce) : creation de projet, fin d'import, ajout/suppression de fichier, export explicite.
+**Sauvegarde immediate** (bypass debounce) : creation de projet, fin d'import, ajout/suppression de fichier, export explicite. Les assets binaires, eux, sont persists au moment de l'import et ne sont pas reecrits a chaque auto-save.
 
 ### Limites de stockage
 
-| Limite             | Valeur | Comportement         |
-| ------------------ | ------ | -------------------- |
-| Taille max fichier | 50 Mo  | Erreur de validation |
-| Taille max projet  | 100 Mo | Avertissement a 80 % |
-| Nombre max projets | 50     | Avertissement a 80 % |
+| Limite produit                  | Valeur | Comportement         |
+| ------------------------------- | ------ | -------------------- |
+| CSV / TSV / GeoJSON / KML / GPX | 150 Mo | Erreur de validation |
+| GeoPackage / GeoParquet / Arrow | 200 Mo | Erreur de validation |
+| ZIP generique                   | 100 Mo | Erreur de validation |
+| Nombre max projets              | 50     | Avertissement a 80 % |
 
 ## Undo / Redo
 
@@ -229,15 +248,17 @@ flowchart LR
 
 ## Format d'archive (.kh)
 
-- **Export** : JSON compresse gzip (`CompressionStream`), fallback sur JSON brut
-- **Import** : tente la decompression gzip d'abord, fallback JSON brut, valide le manifest
+- **Export** : archive `.kh` autoportante avec `manifest.json`, `project.json` et `assets/<assetId>/...`
+- **Import** : restaure d'abord les assets IndexedDB, puis le projet metadata-only, puis rejoue les tables DuckDB
+- **Compatibilite** : pas de support legacy pre-release ; le format cible est directement l'archive `.kh` multi-entrees
 
-## Metadonnees (localforage)
+## Metadonnees et references
 
-| Cle        | Type                     | Role                                       |
-| ---------- | ------------------------ | ------------------------------------------ |
-| `CURRENT`  | `string`                 | Dernier projet ouvert                      |
-| `METADATA` | `SavedProjectMetadata[]` | Liste des projets (id, nom, taille, dates) |
+| Cle / store          | Type                     | Role                                        |
+| -------------------- | ------------------------ | ------------------------------------------- |
+| `CURRENT`            | `string`                 | Dernier projet ouvert                       |
+| `metadata`           | `SavedProjectMetadata[]` | Liste des projets (id, nom, taille, dates)  |
+| `project_asset_refs` | `projectId -> assetId`   | Cycle de vie des assets et GC des orphelins |
 
 ## Pattern pour ajouter un store feature
 

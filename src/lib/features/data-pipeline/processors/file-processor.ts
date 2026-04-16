@@ -8,6 +8,10 @@ import {
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { Duck } from '$lib/features/duckdb';
 import { createArrowTableWithMetadata } from '$lib/features/duckdb/orchestrator/arrow-ops';
+import {
+  createCompanionFilesFromAssetRefs,
+  createFileFromAssetRef
+} from '$lib/features/project-management/core/asset-store';
 import * as m from '$lib/paraglide/messages';
 import { isGeospatialFile } from '../constants';
 import { detectFileFormat, generateTableName } from '../core/format-detector';
@@ -304,6 +308,10 @@ export async function createFileFromUploadContent(
 export async function createFileFromUpload(
   uploadedFile: UploadedFilePayload
 ): Promise<File> {
+  if (uploadedFile.assetRef) {
+    return createFileFromAssetRef(uploadedFile.assetRef);
+  }
+
   if (!uploadedFile.content) {
     logger.error('Uploaded file is missing inline content', LogCategory.DATA, {
       fileId: uploadedFile.id,
@@ -320,7 +328,11 @@ export async function createFileFromUpload(
 
 export function createCompanionFilesFromUpload(
   uploadedFile: UploadedFilePayload
-): File[] | undefined {
+): File[] | undefined | Promise<File[] | undefined> {
+  if (uploadedFile.companionAssetRefs?.length) {
+    return createCompanionFilesFromAssetRefs(uploadedFile.companionAssetRefs);
+  }
+
   if (!uploadedFile.relatedFilesData) {
     return undefined;
   }

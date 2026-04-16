@@ -95,7 +95,11 @@ function makeDataset(id: string, sourceFileId = `source-${id}`) {
   };
 }
 
-function makeUploadedFile(id: string, name = `${id}.geojson`) {
+function makeUploadedFile(
+  id: string,
+  name = `${id}.geojson`,
+  overrides: Record<string, unknown> = {}
+) {
   return {
     id,
     name,
@@ -105,7 +109,8 @@ function makeUploadedFile(id: string, name = `${id}.geojson`) {
     status: FileStatus.COMPLETE,
     uploadProgress: 100,
     sourceType: DataSourceType.FILE_UPLOAD,
-    content: '{"type":"FeatureCollection","features":[]}'
+    content: '{"type":"FeatureCollection","features":[]}',
+    ...overrides
   };
 }
 
@@ -176,5 +181,41 @@ describe('datasetsStore persisted view state', () => {
       'dataset-2'
     ]);
     expect(datasetsStore.selectedDatasetId).toBe('dataset-2');
+  });
+
+  it('replays the pipeline from asset refs instead of exposing a stale preprocessed table', async () => {
+    mocks.processUploadedFileMock.mockResolvedValueOnce(
+      makeDataset('dataset-asset', 'source-asset')
+    );
+
+    await datasetsStore.addFile(
+      makeUploadedFile('source-asset', 'data.csv', {
+        content: undefined,
+        type: 'text/csv',
+        fileType: FileType.CSV,
+        duckdbTableName: 'legacy_data_csv_123',
+        parsedData: [{ country: 'France' }],
+        statistics: {
+          country: {
+            type: 'text',
+            count: 1
+          }
+        },
+        assetRef: {
+          assetId: 'asset-1',
+          originalName: 'data.csv',
+          mimeType: 'text/csv',
+          size: 16,
+          kind: 'primary'
+        }
+      }),
+      true
+    );
+
+    expect(mocks.processUploadedFileMock).toHaveBeenCalledTimes(1);
+    expect(datasetsStore.datasets.map((dataset) => dataset.id)).toEqual([
+      'dataset-asset'
+    ]);
+    expect(datasetsStore.datasets[0]?.tableName).toBe('table_dataset-asset');
   });
 });

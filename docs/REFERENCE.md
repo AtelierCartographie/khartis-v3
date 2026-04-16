@@ -180,17 +180,17 @@ Geres dans `keyboard-shortcuts.svelte`. Prefix `Ctrl+K` (K pour Khartis) + lettr
 
 ## Validation
 
-| Fonction                                   | Usage                                       |
-| ------------------------------------------ | ------------------------------------------- |
-| `ProjectValidator.validateProjectName`     | Max 255 car., pas de caracteres speciaux    |
-| `ProjectValidator.validateFileSize`        | Verif. taille avant import (max 50 Mo)      |
-| `ProjectValidator.validateProjectSize`     | Verif. taille avant sauvegarde (max 100 Mo) |
-| `ProjectValidator.validateStorageCapacity` | Quota de stockage (max 50 projets)          |
-| `DataValidator.validateCSVData`            | Validation donnees CSV apres parsing        |
-| `DataValidator.validateGeoData`            | Validation GeoJSON apres parsing            |
-| `sanitizeProjectName`                      | Nettoyage nom de projet                     |
-| `sanitizeTextInput`                        | Nettoyage saisie utilisateur                |
-| `escapeSqlString`                          | Echappement chaines pour DuckDB             |
+| Fonction                                   | Usage                                                                 |
+| ------------------------------------------ | --------------------------------------------------------------------- |
+| `ProjectValidator.validateProjectName`     | Max 255 car., pas de caracteres speciaux                              |
+| `ProjectValidator.validateFileSize`        | Verif. taille avant import (100 a 200 Mo selon le format)             |
+| `ProjectValidator.validateProjectSize`     | Verif. taille avant sauvegarde du snapshot metadata-only (max 150 Mo) |
+| `ProjectValidator.validateStorageCapacity` | Quota de stockage (max 50 projets)                                    |
+| `DataValidator.validateCSVData`            | Validation donnees CSV apres parsing                                  |
+| `DataValidator.validateGeoData`            | Validation GeoJSON apres parsing                                      |
+| `sanitizeProjectName`                      | Nettoyage nom de projet                                               |
+| `sanitizeTextInput`                        | Nettoyage saisie utilisateur                                          |
+| `escapeSqlString`                          | Echappement chaines pour DuckDB                                       |
 
 Localisation : `src/lib/features/commons/utils/validation.utils.ts` et `sanitize.utils.ts`.
 
@@ -198,13 +198,13 @@ Localisation : `src/lib/features/commons/utils/validation.utils.ts` et `sanitize
 
 ## Limites de stockage
 
-| Limite                  | Valeur | Seuil d'alerte |
-| ----------------------- | ------ | -------------- |
-| Taille max. par fichier | 50 Mo  | 25 Mo          |
-| Taille max. par projet  | 100 Mo | 80 Mo          |
-| Nombre max. de projets  | 50     | 40             |
+| Limite                  | Valeur                          | Seuil d'alerte    |
+| ----------------------- | ------------------------------- | ----------------- |
+| Taille max. par fichier | 100 a 200 Mo selon le format    | 80 % de la limite |
+| Taille max. par projet  | 150 Mo (snapshot metadata-only) | 80 % de la limite |
+| Nombre max. de projets  | 50                              | 40                |
 
-Stockage via IndexedDB (localforage). Donnees ne quittent jamais le navigateur.
+Stockage via IndexedDB (object stores `projects`, `metadata`, `project_assets`, `project_asset_chunks`, `project_asset_refs`). Donnees ne quittent jamais le navigateur.
 
 ---
 

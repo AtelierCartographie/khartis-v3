@@ -60,6 +60,16 @@ export interface ColumnTransformation {
   timestamp: string;
 }
 
+export type AssetKind = 'primary' | 'companion';
+
+export interface AssetRef {
+  assetId: string;
+  originalName: string;
+  mimeType: string;
+  size: number;
+  kind: AssetKind;
+}
+
 export interface UploadedFile {
   id: string;
   name: string;
@@ -81,6 +91,8 @@ export interface UploadedFile {
   sourceType: DataSourceType;
   relatedFiles?: string[];
   relatedFilesData?: Record<string, ArrayBuffer>;
+  assetRef?: AssetRef;
+  companionAssetRefs?: AssetRef[];
   uploadProgress?: number;
   statistics?: Record<string, unknown>;
   duplicates?: {

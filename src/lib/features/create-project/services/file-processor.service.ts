@@ -509,17 +509,20 @@ function createZipProcessor(callbacks: ProcessingCallbacks): FileProcessor {
         rowCount
       );
 
-      let fullData: Array<Record<string, unknown>> = [];
+      let previewData: Array<Record<string, unknown>> = [];
       try {
-        fullData = (await duck.query(`SELECT * FROM "${tableName}"`, {
-          format: 'array'
-        })) as Array<Record<string, unknown>>;
+        previewData = (await duck.query(
+          `SELECT * FROM "${tableName}" LIMIT 100`,
+          {
+            format: 'array'
+          }
+        )) as Array<Record<string, unknown>>;
       } catch {
         // Ignore errors - fallback to empty data
       }
 
-      const tabularData = convertRowsToTabular(fullData);
-      const sampleForAnalysis = fullData.slice(0, 100);
+      const tabularData = convertRowsToTabular(previewData);
+      const sampleForAnalysis = previewData;
       const dataMatrix = createDataMatrix(sampleForAnalysis, headers);
 
       const deepAnalysis = await DeepDataValidator.analyzeDataContent(
