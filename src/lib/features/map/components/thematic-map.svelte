@@ -351,11 +351,7 @@
       if (hasData) {
         scheduleLayerUpdate();
       } else {
-        if (shouldLoadDefaultWorldBasemapPreview()) {
-          startMaxWaitTimeout();
-        } else {
-          triggerOnReady();
-        }
+        startMaxWaitTimeout();
         if (mapBounds.shouldRestorePosition) {
           setTimeout(() => {
             if (mapPosition.restorePosition()) {
@@ -507,10 +503,6 @@
     onRepresentativePointTablesLoaded: () =>
       scheduleLayerUpdate('useMapLayers:representativePointTablesLoaded')
   });
-
-  function shouldLoadDefaultWorldBasemapPreview(): boolean {
-    return true;
-  }
 
   function updateCanvasSize() {
     if (mapContainer) {
@@ -1109,7 +1101,6 @@
     getMap: () => mapInit.map,
     getIsMapLoaded: () => mapInit.isMapLoaded,
     onProjectionChanged: () => {
-      // Note: isStyleLoading check is handled inside scheduleLayerUpdate()
       if (!isSwitchingViewMode) {
         scheduleLayerUpdate('onProjectionChanged');
       }
@@ -1317,7 +1308,6 @@
     void osmBasemapStore.tileConfig;
 
     const hasDeckContext = mapInit.deckOverlay || mapInit.deckInstance;
-    // Note: isStyleLoading check is handled inside scheduleLayerUpdate() to avoid reactive dependency
     const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
 
     if (hasDeckContext && canUpdate) {
@@ -1398,7 +1388,6 @@
   let lastFittedDatasetId = $state<string | undefined>(undefined);
 
   $effect(() => {
-    // Note: isStyleLoading check is handled inside scheduleLayerUpdate() to avoid reactive dependency
     const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
     if (firstTable && canUpdate) {
       const shouldFit = firstDatasetId !== lastFittedDatasetId;
@@ -1467,7 +1456,6 @@
   });
 
   $effect(() => {
-    // Note: isStyleLoading check is handled inside scheduleLayerUpdate() to avoid reactive dependency
     const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
     if (firstGeoJSON && canUpdate) {
       // When a reference basemap is selected, fit to basemap bounds
@@ -1586,19 +1574,10 @@
   });
 
   $effect(() => {
-    // Note: isStyleLoading check is handled inside scheduleLayerUpdate() to avoid reactive dependency
     const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
     if (!hasData && canUpdate) {
       untrack(() => {
         scheduleLayerUpdate('effect:noData');
-        if (!shouldLoadDefaultWorldBasemapPreview()) {
-          if (worldBaseTable) {
-            worldBaseTable = null;
-            scheduleLayerUpdate('effect:noData:clearWorldBasemap');
-          }
-          triggerOnReady();
-          return;
-        }
 
         // Retry basemap loading if it failed or hasn't completed yet
         if (!worldBaseTable) {
@@ -1609,7 +1588,6 @@
   });
 
   $effect(() => {
-    // Note: isStyleLoading check is handled inside scheduleLayerUpdate() to avoid reactive dependency
     const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
     if (worldBaseTable && canUpdate) {
       untrack(() => {
@@ -1757,7 +1735,6 @@
   $effect(() => {
     void layerUpdateTrigger;
 
-    // Note: isStyleLoading check is handled inside scheduleLayerUpdate() to avoid reactive dependency
     const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
     if (canUpdate) {
       untrack(() => scheduleLayerUpdate('effect:layerUpdateTrigger'));
@@ -1895,10 +1872,6 @@
           if (refRequestId !== referenceBasemapRequestId) {
             return; // Stale request
           }
-          if (!shouldLoadDefaultWorldBasemapPreview()) {
-            worldBaseTable = null;
-            return;
-          }
           if (refLoaded) {
             const resolvedBasemap =
               basemapService.getResolvedVariantData(
@@ -1955,10 +1928,6 @@
               { refId: pendingRefId }
             );
             const fallback = await basemapService.loadDefaultBasemap();
-            if (!shouldLoadDefaultWorldBasemapPreview()) {
-              worldBaseTable = null;
-              return;
-            }
             if (fallback) {
               const resolvedBasemap =
                 basemapService.getResolvedVariantData(
@@ -1991,11 +1960,6 @@
       if (requestId !== referenceBasemapRequestId) {
         return;
       }
-      if (!shouldLoadDefaultWorldBasemapPreview()) {
-        worldBaseTable = null;
-        return;
-      }
-
       if (loaded) {
         const resolvedBasemap =
           basemapService.getResolvedVariantData(
@@ -2069,9 +2033,7 @@
       isLoadingReferenceBasemap = true;
     }
 
-    if (shouldLoadDefaultWorldBasemapPreview()) {
-      loadWorldBasemap();
-    }
+    loadWorldBasemap();
 
     const resizeObserver = new ResizeObserver(() => {
       updateCanvasSize();

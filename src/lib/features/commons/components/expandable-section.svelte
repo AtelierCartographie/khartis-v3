@@ -187,6 +187,15 @@
     background: transparent;
   }
 
+  :global(
+    .section-container:has(> .section-header.expanded) + .section-container
+  ),
+  :global(
+    .section-container:has(> .section-header.expanded) + * + .section-container
+  ) {
+    border-top: none;
+  }
+
   .section-header {
     display: flex;
     align-items: center;
@@ -271,7 +280,6 @@
 
   .section-body {
     background-color: var(--cds-layer-01);
-    border-top: 1px solid var(--cds-border-subtle-01);
     padding: 8px 16px 16px 16px;
   }
 

@@ -71,7 +71,6 @@
     }
   });
 
-  // Reset enrichment state when the selected dataset changes
   $effect(() => {
     const currentId = selectedDataset?.id;
     if (currentId !== previousDatasetId) {

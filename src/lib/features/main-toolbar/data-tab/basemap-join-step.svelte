@@ -689,8 +689,6 @@
 
       if (abortSignal.aborted) return;
 
-      dataTabActions.applyCorrections();
-
       const basemap = allBasemapsForLookup.find(
         (b) => b.file === basemapSelected
       );
@@ -1304,7 +1302,6 @@
     void computeAndAutoFinalizeJoin(basemap, abortSignal, linkedVariableName);
   });
 
-  // Restore step completion after project reload when GPS join was already finalized
   $effect(() => {
     if (dataTabStore.hasCompletedStep[basemapStepIndex]) return;
     const id = datasetIdForOrchestrator;

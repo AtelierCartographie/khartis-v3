@@ -59,7 +59,6 @@ export interface AnalysisResult {
 
 export type AnalysisResults = AnalysisResult[];
 
-// Use QueryFormatEnum values instead of string literals
 export type QueryFormat = `${QueryFormatEnum}`;
 
 export interface QueryOptions {
@@ -182,7 +181,6 @@ export enum RefineOperation {
   TRIM_ALL = 'trim_all'
 }
 
-// Use FilterOperatorEnum values instead of string literals
 export type FilterOperator = `${FilterOperatorEnum}`;
 
 export interface DataTableFilterInput {

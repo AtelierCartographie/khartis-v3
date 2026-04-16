@@ -18,7 +18,6 @@
     resolveTiledStyleContext
   } from './tiled-basemap-selection';
 
-  // Derive zone and style variant from the currently selected style
   const currentStyleContext = $derived(
     resolveTiledStyleContext(
       basemapStyleStore.selectedStyle,
@@ -78,7 +77,6 @@
   }
 
   function handleZoneChange(zone: ZoneId): void {
-    // Keep the same style variant when switching zones
     const stylesInNewZone = getStylesForZone(zone);
     const sameVariant = stylesInNewZone.find(
       (s) => s.style === selectedVariant

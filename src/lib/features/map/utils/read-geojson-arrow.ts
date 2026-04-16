@@ -141,13 +141,10 @@ export function addGeoArrowMetadata(
     geomColumn.type.typeId === Type.FixedSizeBinary ||
     geomColumn.type.typeId === Type.LargeBinary;
 
-  // Check if the field already has extension metadata from DuckDB.
   const existingExtension = geomColumn.metadata?.get(
     GeoArrowMetadataKey.EXTENSION_NAME
   );
 
-  // Resolve encoding: use existing metadata, map from geoParquetEncoding,
-  // or detect native GeoArrow struct type from the Arrow schema.
   let arrowExtension: string;
   let geometryTypes: string[];
   const detectedNativeExtension = detectNativeGeoArrowFromType(geomColumn);
@@ -398,12 +395,8 @@ export async function readGeoParquetViaDuckDB(
     fileWithId.id || `${parquetFile.lastModified}-${parquetFile.name}`;
   const escapedFileId = escapeSqlString(fileId);
 
-  // Read GeoParquet metadata (encoding + CRS info)
   const geoInfo = await readParquetGeoInfo(escapedFileId);
 
-  // If the parquet uses a projected (non-WGS84) CRS, reproject geometry to WGS84.
-  // With DuckDB >= 1.33, geometry from read_parquet() is geoarrow.wkb which can be
-  // cast to GEOMETRY for ST_Transform.
   if (geoInfo.isProjectedCRS && geoInfo.sourceCrs) {
     const geomCol = geoInfo.primaryColumn;
     const escapedGeomCol = escapeIdentifier(geomCol);
@@ -414,7 +407,6 @@ export async function readGeoParquetViaDuckDB(
       { sourceCrs: geoInfo.sourceCrs, geomCol }
     );
 
-    // Try DuckDB reprojection via ST_Transform
     try {
       const result = await Duck.query(
         `SELECT * EXCLUDE ("${escapedGeomCol}"),
@@ -433,7 +425,6 @@ export async function readGeoParquetViaDuckDB(
       );
     }
 
-    // Fallback: ST_Read path
     try {
       const result = await Duck.query(
         `SELECT * EXCLUDE ("${escapedGeomCol}"),
@@ -479,8 +470,6 @@ export async function readGeoParquetViaDuckDB(
     }
   }
 
-  // Default path: read raw parquet (WGS84) and keep DuckDB's native Arrow export.
-  // Rename geom column to "geometry" for geoarrow-deck-stream compatibility.
   const geomColName = geoInfo.primaryColumn;
   const needsRename =
     geomColName !== 'geometry' && geomColName !== 'wkb_geometry';
@@ -597,7 +586,6 @@ async function reprojectParquetWithProj4(
 ): Promise<ArrowTable> {
   const escapedGeomCol = escapeIdentifier(geomCol);
 
-  // Read geometry as GeoJSON strings (DuckDB can convert geoarrow.wkb → GEOMETRY → GeoJSON)
   const rawResult = await Duck.query(
     `SELECT * EXCLUDE ("${escapedGeomCol}"),
             ST_AsGeoJSON("${escapedGeomCol}"::GEOMETRY) AS "${escapedGeomCol}"
@@ -608,7 +596,6 @@ async function reprojectParquetWithProj4(
   const geomVector = rawTable.getChild(geomCol);
   if (!geomVector) throw new Error(`Geometry column '${geomCol}' not found`);
 
-  // Reproject each GeoJSON geometry
   const geojsonStrings: string[] = [];
   for (let i = 0; i < rawTable.numRows; i++) {
     const gjStr = geomVector.get(i) as string;
@@ -621,7 +608,6 @@ async function reprojectParquetWithProj4(
     geojsonStrings.push(JSON.stringify(geojson));
   }
 
-  // Rebuild via DuckDB temp table with VARCHAR geometry
   const tempTable = `__reproj_${sanitizedName}_${Date.now()}`;
   const escapedTempTable = escapeIdentifier(tempTable);
 
@@ -674,7 +660,6 @@ async function reprojectParquetWithProj4(
 function reprojectGeoJSONCoords(coords: unknown, sourceCrs: string): void {
   if (!Array.isArray(coords)) return;
 
-  // Check if this is a coordinate pair [x, y]
   if (
     coords.length >= 2 &&
     typeof coords[0] === 'number' &&
@@ -692,7 +677,6 @@ function reprojectGeoJSONCoords(coords: unknown, sourceCrs: string): void {
     return;
   }
 
-  // Otherwise recurse into nested arrays
   for (const child of coords) {
     reprojectGeoJSONCoords(child, sourceCrs);
   }

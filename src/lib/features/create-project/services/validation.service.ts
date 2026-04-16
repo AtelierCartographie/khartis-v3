@@ -5,9 +5,7 @@ import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type { ValidationResult } from '$lib/features/data-pipeline/types';
 import * as m from '$lib/paraglide/messages';
 
-export type { ValidationResult } from '$lib/features/data-pipeline/types';
-
-export interface MultiFileValidationResult {
+interface MultiFileValidationResult {
   isValid: boolean;
   globalErrors: string[];
   results: Map<string, ValidationResult>;
