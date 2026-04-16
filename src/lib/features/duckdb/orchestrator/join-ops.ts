@@ -113,48 +113,86 @@ async function ensureSimilarityCached(
   const escapedGeoCol = escapeIdentifier(geoColumn);
   const escapedCacheTable = escapeIdentifier(cacheTableName);
 
-  // Build the cache: cross-join candidates × basemap_attributes, compute
-  // jaro_winkler inline and filter score > 0 early (score_cutoff=0.85 returns
-  // 0 for pairs below threshold, so score > 0 ≡ typo_match != 'toofar').
-  // This avoids the LATERAL+get_similarity pattern which forces full
-  // materialization of N_candidates × N_attrs rows (OOM with large basemaps).
+  // Build the similarity cache in two phases:
+  // Phase 1: exact match via equi-join on pre-normalized text (hash join, O(n+m))
+  //          — handles the vast majority of matches for code-based datasets (INSEE, ISO…).
+  // Phase 2: fuzzy Jaro-Winkler (score_cutoff=0.85) only on residual unmatched candidates
+  //          — the candidate set is typically tiny after phase 1, keeping the cross-join fast.
+  // Normalization is pre-computed once in the candidates CTE (like the get_similarity macro)
+  // to avoid redundant computation inside the join/cross-join.
   await Duck.query(`
     CREATE OR REPLACE TEMP TABLE "${escapedCacheTable}" AS
-    WITH source_data AS (
+    WITH source_raw AS (
       SELECT
         CAST("${escapedGeoCol}" AS VARCHAR) as original_name,
-        COUNT(*) OVER (PARTITION BY normalize_text_join(CAST("${escapedGeoCol}" AS VARCHAR))) as source_dup_count
+        normalize_text_join(CAST("${escapedGeoCol}" AS VARCHAR)) as normalized_name
       FROM "${escapeIdentifier(dataset.tableName)}"
       WHERE "${escapedGeoCol}" IS NOT NULL${normalizedFilter ? ` AND (${normalizedFilter})` : ''}
     ),
-    candidates AS (
-      SELECT DISTINCT original_name, source_dup_count FROM source_data
+    source_data AS (
+      SELECT
+        original_name,
+        normalized_name,
+        COUNT(*) OVER (PARTITION BY normalized_name) as source_dup_count
+      FROM source_raw
     ),
-    jw_pairs AS (
+    candidates AS (
+      SELECT DISTINCT original_name, source_dup_count, normalized_name
+      FROM source_data
+    ),
+    -- Phase 1: exact match via equi-join (hash join)
+    exact_matches AS (
       SELECT
         c.original_name,
         c.source_dup_count,
-        jaro_winkler_similarity(normalize_text_join(CAST(c.original_name AS VARCHAR)), ba.normalized, 0.85) AS score,
+        1.0 AS match_score,
+        'exact' AS typo_match,
         ba.id AS match_id,
         ba.raw AS match_raw,
         ba.variant AS match_variant,
         ba.basemap AS match_basemap,
         ba.basemap_count AS match_basemap_count
-      FROM candidates c, basemap_attributes ba
+      FROM candidates c
+      JOIN basemap_attributes ba ON c.normalized_name = ba.normalized
     ),
-    matches AS (
+    -- Phase 2: fuzzy Jaro-Winkler only for candidates without any exact match
+    unmatched AS (
+      SELECT c.*
+      FROM candidates c
+      WHERE NOT EXISTS (
+        SELECT 1 FROM exact_matches e WHERE e.original_name = c.original_name
+      )
+    ),
+    fuzzy_raw AS (
+      SELECT
+        u.original_name,
+        u.source_dup_count,
+        jaro_winkler_similarity(u.normalized_name, ba.normalized, 0.85) AS match_score,
+        ba.id AS match_id,
+        ba.raw AS match_raw,
+        ba.variant AS match_variant,
+        ba.basemap AS match_basemap,
+        ba.basemap_count AS match_basemap_count
+      FROM unmatched u, basemap_attributes ba
+    ),
+    fuzzy_matches AS (
       SELECT
         original_name,
         source_dup_count,
-        score AS match_score,
-        CASE WHEN score = 1 THEN 'exact' ELSE 'partial' END AS typo_match,
+        match_score,
+        'partial' AS typo_match,
         match_id,
         match_raw,
         match_variant,
         match_basemap,
         match_basemap_count
-      FROM jw_pairs
-      WHERE score > 0
+      FROM fuzzy_raw
+      WHERE match_score > 0
+    ),
+    all_matches AS (
+      SELECT * FROM exact_matches
+      UNION ALL
+      SELECT * FROM fuzzy_matches
     )
     SELECT
       c.original_name,
@@ -167,7 +205,7 @@ async function ensureSimilarityCached(
       m.match_basemap,
       m.match_basemap_count
     FROM candidates c
-    LEFT JOIN matches m ON c.original_name = m.original_name
+    LEFT JOIN all_matches m ON c.original_name = m.original_name
   `);
 
   activeSimilarityCache = {
@@ -206,6 +244,27 @@ async function deriveJoinQualityFromCache(
         AND match_id IS NOT NULL
         AND typo_match != 'toofar'
     ),
+    -- IDs already claimed by an unambiguous exact match (1 candidate has score=1
+    -- and maps to exactly 1 basemap id). These are "taken" and must not appear
+    -- as suggestions for partial/ambiguous rows.
+    exact_claimed_ids AS (
+      SELECT match_id
+      FROM basemap_matches
+      WHERE typo_match = 'exact'
+      GROUP BY original_name, match_id
+      HAVING COUNT(DISTINCT match_id) = 1
+    ),
+    -- For non-exact rows, exclude candidates whose id is already claimed
+    filtered_matches AS (
+      SELECT bm.*
+      FROM basemap_matches bm
+      WHERE bm.typo_match = 'exact'
+      UNION ALL
+      SELECT bm.*
+      FROM basemap_matches bm
+      WHERE bm.typo_match != 'exact'
+        AND bm.match_id NOT IN (SELECT match_id FROM exact_claimed_ids)
+    ),
     best_matches AS (
       SELECT
         original_name,
@@ -214,7 +273,7 @@ async function deriveJoinQualityFromCache(
         count(*) as match_count,
         count(DISTINCT match_id) as distinct_id_count,
         count(DISTINCT CASE WHEN typo_match = 'exact' THEN match_id END) as distinct_exact_id_count
-      FROM basemap_matches
+      FROM filtered_matches
       GROUP BY original_name
     ),
     all_candidates AS (
@@ -648,7 +707,7 @@ async function applyCachedJoinAssociation(
 
   await Duck.query(`
     CREATE OR REPLACE TABLE "${escapedDatasetTable}" AS
-    WITH ranked_join AS (
+    WITH all_basemap_matches AS (
       SELECT
         original_name AS geoname,
         match_id AS id,
@@ -659,9 +718,29 @@ async function applyCachedJoinAssociation(
       WHERE match_basemap = '${escapedBasemapId}'
         AND match_id IS NOT NULL
         AND typo_match != 'toofar'
+    ),
+    -- IDs claimed by unambiguous exact matches (one candidate → one basemap id)
+    exact_claimed_ids AS (
+      SELECT id
+      FROM all_basemap_matches
+      WHERE typo_match = 'exact'
+      GROUP BY geoname, id
+      HAVING COUNT(DISTINCT id) = 1
+    ),
+    -- Keep all exact rows; for partial rows, drop those whose id is already claimed
+    eligible_matches AS (
+      SELECT * FROM all_basemap_matches WHERE typo_match = 'exact'
+      UNION ALL
+      SELECT * FROM all_basemap_matches
+      WHERE typo_match != 'exact'
+        AND id NOT IN (SELECT id FROM exact_claimed_ids)
+    ),
+    ranked_join AS (
+      SELECT *
+      FROM eligible_matches
       QUALIFY ROW_NUMBER() OVER (
-        PARTITION BY original_name
-        ORDER BY match_score DESC, match_id
+        PARTITION BY geoname
+        ORDER BY score DESC, id
       ) = 1
     )
     SELECT

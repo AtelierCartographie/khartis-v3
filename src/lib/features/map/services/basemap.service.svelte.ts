@@ -3,10 +3,7 @@ import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import { type Table as ArrowTable } from 'apache-arrow/Arrow';
 import { LogCategory, logger } from '../../commons/utils/logger';
 import { resolveStaticAssetUrl } from '../../commons/utils/static-asset-url';
-import {
-  escapeIdentifier,
-  escapeSqlString
-} from '../../commons/utils/sanitize.utils';
+import { escapeSqlString } from '../../commons/utils/sanitize.utils';
 import { projectionStore } from '../stores/projection.store.svelte';
 import type {
   BasemapMetadata,
@@ -23,16 +20,10 @@ import { INTERNAL_COLUMN } from '../../commons/constants/data.constants';
 
 const BASEMAP_METADATA_PATH = '/basemaps/all-basemaps-metadata.json';
 const BASEMAP_ATTRIBUTES_PATH = '/basemaps/all-basemaps-attributes.parquet';
-const WORLD_COUNTRIES_EXAMPLE_PATH = '/examples/data/world-countries.geojson';
 const PROJECTION_PRESETS_PATH = '/basemaps/projection-presets.json';
 const STYLE_PRESETS_PATH = '/basemaps/style-presets.json';
 const GEOMETRY_BASE_PATH = '/basemaps/geometry';
 const DEFAULT_BASEMAP_ID = 'monde-countries-2024-medium';
-const WORLD_COUNTRY_BASEMAP_IDS = [
-  'monde-countries-2024-high',
-  'monde-countries-2024-medium',
-  'monde-countries-2024-low'
-] as const;
 const SIMPLIFICATION_LEVEL_ORDER = [
   SimplificationLevel.Low,
   SimplificationLevel.Medium,
@@ -50,58 +41,6 @@ const FRANCE_ADMINISTRATIVE_BASEMAP_PREFIXES = [
   'france-region-'
 ] as const;
 const SIMPLIFICATION_LEVEL_SUFFIX_REGEX = /-(low|medium|high)$/;
-
-interface WorldCountriesGeoJSON {
-  features?: Array<{
-    id?: string;
-    properties?: {
-      name?: string;
-    };
-  }>;
-}
-
-interface WorldCountryNameIdPair {
-  id: string;
-  normalized: string;
-  raw: string;
-}
-
-function normalizeWorldCountryName(value: string): string {
-  return value
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim();
-}
-
-export function extractWorldCountryNameIdPairs(
-  geoJSON: WorldCountriesGeoJSON
-): WorldCountryNameIdPair[] {
-  return (geoJSON.features ?? []).flatMap((feature) => {
-    if (
-      typeof feature.id !== 'string' ||
-      typeof feature.properties?.name !== 'string'
-    ) {
-      return [];
-    }
-
-    const raw = feature.properties.name.trim();
-    const id = feature.id.trim();
-    if (!raw || !id) {
-      return [];
-    }
-
-    return [
-      {
-        id,
-        normalized: normalizeWorldCountryName(raw),
-        raw
-      }
-    ];
-  });
-}
 
 function getGeometryParquetUrl(filename: string): string {
   return resolveStaticAssetUrl(`${GEOMETRY_BASE_PATH}/${filename}.parquet`);
@@ -394,65 +333,6 @@ function createBasemapService() {
     }
   }
 
-  async function repairWorldCountryAttributeIds(): Promise<void> {
-    if (!Duck) {
-      return;
-    }
-
-    const response = await fetch(
-      resolveStaticAssetUrl(WORLD_COUNTRIES_EXAMPLE_PATH)
-    );
-    if (!response.ok) {
-      logger.warn(
-        'Failed to fetch world country repair source',
-        LogCategory.MAP,
-        { status: response.status, statusText: response.statusText }
-      );
-      return;
-    }
-
-    const pairs = extractWorldCountryNameIdPairs(
-      (await response.json()) as WorldCountriesGeoJSON
-    );
-    if (pairs.length === 0) {
-      logger.warn('World country repair source is empty', LogCategory.MAP);
-      return;
-    }
-
-    const tempTableName = `world_country_repairs_${crypto.randomUUID().replace(/-/g, '_')}`;
-    const escapedTempTableName = escapeIdentifier(tempTableName);
-    const valuesSql = pairs
-      .map(
-        ({ raw, id, normalized }) =>
-          `('${escapeSqlString(raw)}', '${escapeSqlString(id)}', '${escapeSqlString(normalized)}')`
-      )
-      .join(', ');
-    const basemapIdsSql = WORLD_COUNTRY_BASEMAP_IDS.map(
-      (basemapId) => `'${escapeSqlString(basemapId)}'`
-    ).join(', ');
-
-    await Duck.query(`
-      CREATE TEMP TABLE "${escapedTempTableName}" (
-        raw VARCHAR,
-        id VARCHAR,
-        normalized VARCHAR
-      )
-    `);
-    await Duck.query(`
-      INSERT INTO "${escapedTempTableName}" (raw, id, normalized)
-      VALUES ${valuesSql}
-    `);
-    await Duck.query(`
-      UPDATE basemap_attributes AS ba
-      SET id = repairs.id
-      FROM "${escapedTempTableName}" AS repairs
-      WHERE ba.basemap IN (${basemapIdsSql})
-        AND ba.normalized = repairs.normalized
-        AND ba.id != repairs.id
-    `);
-    await Duck.query(`DROP TABLE "${escapedTempTableName}"`);
-  }
-
   async function loadAttributesIntoDuckDB(): Promise<void> {
     if (!Duck || attributesLoaded) return;
 
@@ -496,11 +376,6 @@ function createBasemapService() {
       if (!result) {
         throw new Error('Failed to create basemap_attributes table');
       }
-
-      await Duck.query(
-        `UPDATE basemap_attributes SET id = raw WHERE variant = id`
-      );
-      await repairWorldCountryAttributeIds();
 
       attributesLoaded = true;
     } catch (error) {
