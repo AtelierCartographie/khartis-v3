@@ -1,4 +1,5 @@
 import { formatValue } from '$lib/features/commons/utils/format.utils';
+import { projectHtmlLikeText } from '$lib/features/commons/utils/html-like-text.utils';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import type { VisualizationConfig } from '$lib/features/commons/store/visualization.store.svelte';
 import type { PickingInfo } from '@deck.gl/core';
@@ -8,6 +9,10 @@ import type { TooltipEntry } from '../types';
 import { mapTooltipStore } from '../stores/map-tooltip.store.svelte';
 
 export function formatTooltipValue(value: unknown): string {
+  if (typeof value === 'string') {
+    return formatValue(projectHtmlLikeText(value));
+  }
+
   return formatValue(value);
 }
 

@@ -93,8 +93,6 @@
     }
   });
 
-  let lastUiSnapshot = '';
-
   $effect(() => {
     const project = projectStore.currentProject;
 
@@ -103,20 +101,6 @@
     mainToolbarState.canNavigateToVisualization = hasFiles;
     mainToolbarState.hasValidData = hasFiles;
     mainToolbarState.currentProjectName = project?.manifest.name || '';
-  });
-
-  $effect(() => {
-    const selectedStep = globalState.selectedStep;
-    const toolbarState = globalState.toolbarState;
-    const hasDataTabContent = selectedStep === ToolbarStep.Data;
-    const hasVisualizationTabContent =
-      selectedStep === ToolbarStep.Visualizations;
-    const snapshot = `${selectedStep}|${toolbarState}|${hasDataTabContent}|${hasVisualizationTabContent}`;
-
-    if (snapshot === lastUiSnapshot) {
-      return;
-    }
-    lastUiSnapshot = snapshot;
   });
 </script>
 
@@ -168,10 +152,7 @@
       <ProgressIndicator
         currentIndex={activeStepIndex}
         spaceEqually
-        on:click={(e) => {
-          const detail = e.detail;
-          if (detail !== undefined) handleBreadcrumbStep(detail);
-        }}
+        on:change={(e) => handleBreadcrumbStep(e.detail)}
       >
         <ProgressStep
           complete={dataTabStore.hasCompletedStep[0]}
@@ -293,6 +274,7 @@
   }
 
   .toolbar-content {
+    position: relative;
     flex: 1;
     min-height: 0;
     overflow-y: auto;

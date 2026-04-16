@@ -2,10 +2,9 @@
   import {
     Dropdown,
     RadioButton,
-    RadioButtonGroup,
-    Select,
-    SelectItem
+    RadioButtonGroup
   } from 'carbon-components-svelte';
+  import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import * as m from '$lib/paraglide/messages';
   import {
     DEFAULT_SEQUENTIAL_PREVIEW,
@@ -19,9 +18,9 @@
     SymbolMode,
     VISUALIZATION_DEFAULTS,
     DEFAULT_COLORS,
-    FillMode
+    FillMode,
+    availableShapesForSymbolMode
   } from '../../../constants';
-  import { ScaleType } from '$lib/features/commons/store/visualization.store.svelte';
   import {
     DiscretizationRow,
     InfoPopover,
@@ -32,16 +31,21 @@
     PalettePreview,
     StrokeSection
   } from '../shared';
-  import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import type { SymbolModeProps } from './types';
   import {
-    SquareOutline,
+    CaretUp,
+    CircleFilled,
+    SquareFill,
     MisuseOutline,
     Category,
     Tag
   } from 'carbon-icons-svelte';
   import DiscretizationModal from '../discretization-modal.svelte';
   import type { ClassificationConfig } from '$lib/features/commons/store/visualization.store.svelte';
+  import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
+  import { resolveDiscretizationLabel } from '../discretization.utils';
+  import { facetsStore } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
+  import FacetsVariablePicker from './facets-variable-picker.svelte';
 
   interface Props extends SymbolModeProps {
     symbolMode: SymbolMode.PROPORTIONAL | SymbolMode.CLASSES;
@@ -63,25 +67,28 @@
 
   let discretizationModalOpen = $state(false);
   let proportionalType = $state<ProportionalType>(ProportionalType.SINGLE);
-  let selectedFieldId = $state<number>(0);
-  let selectedFieldBId = $state<number>(0);
-  let fillClassFieldId = $state<number>(0);
-  let fillCategoryFieldId = $state<number>(0);
+  const NONE_FIELD_ID = -1;
+  let selectedFieldId = $state<number>(NONE_FIELD_ID);
+  let selectedFieldBId = $state<number>(NONE_FIELD_ID);
+  let fillClassFieldId = $state<number>(NONE_FIELD_ID);
+  let fillCategoryFieldId = $state<number>(NONE_FIELD_ID);
   let symbolMaxSize = $state<number>(VISUALIZATION_DEFAULTS.symbolMaxSize);
   let shapeType = $state<ShapeType>(ShapeType.CIRCLE);
-  let sizeScale = $state<ScaleType>(ScaleType.SQRT);
   let showMissingData = $state<boolean>(true);
   let missingDataShape = $state<MissingDataShape>(MissingDataShape.CIRCLE);
   let missingDataSize = $state<number>(2);
   let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
 
-  // Fill mode states
   let categoryCount = $state<number>(4);
   let fillMode = $state<FillMode>(FillMode.UNIQUE);
   let fillColor = $state<string>(DEFAULT_COLORS.fill);
-  let fillColorB = $state<string>('#ff832b');
+  let fillColorB = $state<string>(DEFAULT_COLORS.secondary);
   let fillOpacity = $state<number>(VISUALIZATION_DEFAULTS.fillOpacity);
   let fillPattern = $state<boolean>(false);
+  const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
+  const selectableDataFields = $derived([noneOption, ...dataFields]);
+  let isSyncingFromVisualization = $state(true);
+  let syncToken = 0;
 
   const currentPalette = $derived(
     visualization?.classification?.colors ?? DEFAULT_SEQUENTIAL_PREVIEW
@@ -91,6 +98,9 @@
   );
 
   $effect(() => {
+    const currentSyncToken = ++syncToken;
+    isSyncingFromVisualization = true;
+
     if (dataFields.length > 0 && visualization?.mapping) {
       const mappedFieldName =
         symbolMode === SymbolMode.PROPORTIONAL
@@ -101,36 +111,42 @@
         const fieldIndex = dataFields.findIndex(
           (field) => field.text === mappedFieldName
         );
-        if (fieldIndex >= 0) {
-          selectedFieldId = dataFields[fieldIndex].id;
-        }
+        selectedFieldId =
+          fieldIndex >= 0 ? dataFields[fieldIndex].id : NONE_FIELD_ID;
+      } else {
+        selectedFieldId = NONE_FIELD_ID;
       }
 
       if (visualization.mapping.valueColumn) {
         const fieldBIndex = dataFields.findIndex(
           (field) => field.text === visualization.mapping.valueColumn
         );
-        if (fieldBIndex >= 0) {
-          selectedFieldBId = dataFields[fieldBIndex].id;
-        }
+        selectedFieldBId =
+          fieldBIndex >= 0 ? dataFields[fieldBIndex].id : NONE_FIELD_ID;
+      } else {
+        selectedFieldBId = NONE_FIELD_ID;
       }
 
       if (visualization.mapping.valueColumn) {
         const valueFieldIndex = dataFields.findIndex(
           (field) => field.text === visualization.mapping.valueColumn
         );
-        if (valueFieldIndex >= 0) {
-          fillClassFieldId = dataFields[valueFieldIndex].id;
-        }
+        fillClassFieldId =
+          valueFieldIndex >= 0 ? dataFields[valueFieldIndex].id : NONE_FIELD_ID;
+      } else {
+        fillClassFieldId = NONE_FIELD_ID;
       }
 
       if (visualization.mapping.categoryColumn) {
         const categoryFieldIndex = dataFields.findIndex(
           (field) => field.text === visualization.mapping.categoryColumn
         );
-        if (categoryFieldIndex >= 0) {
-          fillCategoryFieldId = dataFields[categoryFieldIndex].id;
-        }
+        fillCategoryFieldId =
+          categoryFieldIndex >= 0
+            ? dataFields[categoryFieldIndex].id
+            : NONE_FIELD_ID;
+      } else {
+        fillCategoryFieldId = NONE_FIELD_ID;
       }
     }
 
@@ -138,7 +154,12 @@
       symbolMaxSize =
         visualization.symbols.maxSize ?? VISUALIZATION_DEFAULTS.symbolMaxSize;
       shapeType = visualization.symbols.type ?? ShapeType.CIRCLE;
-      sizeScale = visualization.symbols.sizeScale ?? ScaleType.SQRT;
+      fillOpacity =
+        visualization.symbols.opacity !== undefined
+          ? Math.round(visualization.symbols.opacity * 100)
+          : VISUALIZATION_DEFAULTS.symbolOpacity;
+    } else {
+      fillOpacity = VISUALIZATION_DEFAULTS.symbolOpacity;
     }
     if (visualization?.missingData) {
       showMissingData = visualization.missingData.show ?? true;
@@ -157,11 +178,7 @@
     if (visualization?.style) {
       fillColor =
         (visualization.style.fillColor as string) ?? DEFAULT_COLORS.fill;
-      fillColorB = visualization.style.fillColorB ?? '#ff832b';
-      fillOpacity =
-        visualization.style.fillOpacity !== undefined
-          ? Math.round(visualization.style.fillOpacity * 100)
-          : VISUALIZATION_DEFAULTS.fillOpacity;
+      fillColorB = visualization.style.fillColorB ?? DEFAULT_COLORS.secondary;
     }
     if (visualization?.classification) {
       categoryCount =
@@ -170,20 +187,21 @@
         visualization.classification.classes ??
         4;
     }
+
+    queueMicrotask(() => {
+      if (syncToken === currentSyncToken) {
+        isSyncingFromVisualization = false;
+      }
+    });
   });
 
-  const discretizationLabel = $derived.by(() => {
-    if (!visualization?.classification) return m.discretization_method_jenks();
-    const numClasses =
-      visualization.classification.numClasses ??
-      visualization.classification.classes ??
-      5;
-    return `${m.discretization_method_quantile()}, ${numClasses} ${m.discretization_num_classes().toLowerCase()}`;
-  });
+  const discretizationLabel = $derived(
+    resolveDiscretizationLabel(visualization?.classification)
+  );
 
   const fillModeItems = [
     { icon: MisuseOutline, label: m.fill_mode_none(), iconSize: 16 },
-    { icon: SquareOutline, label: m.fill_mode_unique(), iconSize: 16 },
+    { icon: SquareFill, label: m.fill_mode_unique(), iconSize: 16 },
     { icon: Category, label: m.fill_mode_classes(), iconSize: 16 },
     { icon: Tag, label: m.fill_mode_categories(), iconSize: 16 }
   ];
@@ -198,12 +216,23 @@
   );
 
   function handleProportionalTypeChange(type: ProportionalType) {
+    if (isSyncingFromVisualization) {
+      return;
+    }
     proportionalType = type;
     onModesChange?.({ proportionalType: type });
   }
 
   function handleFieldBSelect(fieldId: number) {
+    if (isSyncingFromVisualization) {
+      return;
+    }
     selectedFieldBId = fieldId;
+    if (fieldId === NONE_FIELD_ID) {
+      onMappingChange?.({ valueColumn: undefined });
+      return;
+    }
+
     const field = dataFields.find((item) => item.id === fieldId);
     if (field) {
       onMappingChange?.({ valueColumn: field.text });
@@ -211,41 +240,94 @@
   }
 
   function handleFillColorBChange(value: string) {
+    if (isSyncingFromVisualization) {
+      return;
+    }
     fillColorB = value;
     onStyleChange?.({ fillColorB: value });
   }
 
+  const shapeDescriptors: Record<
+    ShapeType,
+    { icon: typeof CircleFilled; label: () => string }
+  > = {
+    [ShapeType.CIRCLE]: { icon: CircleFilled, label: m.shape_circle },
+    [ShapeType.SQUARE]: { icon: SquareFill, label: m.shape_square },
+    [ShapeType.BAR]: { icon: SquareFill, label: m.shape_bar },
+    [ShapeType.SPIKE]: { icon: CaretUp, label: m.shape_spike },
+    [ShapeType.CROSS]: { icon: CircleFilled, label: m.shape_cross },
+    [ShapeType.DIAMOND]: { icon: CircleFilled, label: m.shape_diamond },
+    [ShapeType.TRIANGLE]: { icon: CaretUp, label: m.shape_triangle },
+    [ShapeType.STAR]: { icon: CircleFilled, label: m.shape_star },
+    [ShapeType.RECTANGLE]: { icon: SquareFill, label: m.shape_rectangle }
+  };
+
+  const shapeTypes = $derived(availableShapesForSymbolMode(symbolMode));
+
+  const shapeDropdownItems = $derived(
+    shapeTypes.map((type) => ({
+      id: type,
+      text: shapeDescriptors[type].label()
+    }))
+  );
+
   function handleShapeTypeChange(value: ShapeType) {
+    if (isSyncingFromVisualization) {
+      return;
+    }
     shapeType = value;
     onSymbolsChange?.({ type: value });
   }
 
+  function handleShapeDropdownSelect(value: string | number) {
+    const next = shapeTypes.find((type) => type === value) ?? ShapeType.CIRCLE;
+    handleShapeTypeChange(next);
+  }
+
   function handleMissingDataShowChange(show: boolean) {
+    if (isSyncingFromVisualization) {
+      return;
+    }
     showMissingData = show;
     onMissingDataChange?.({ show });
   }
 
   function handleMissingDataShapeChange(shape: MissingDataShape) {
+    if (isSyncingFromVisualization) {
+      return;
+    }
     missingDataShape = shape;
     onMissingDataChange?.({ shape });
   }
 
   function handleMissingDataSizeChange(size: number) {
+    if (isSyncingFromVisualization) {
+      return;
+    }
     missingDataSize = size;
     onMissingDataChange?.({ size });
   }
 
   function handleMissingDataColorChange(color: string) {
+    if (isSyncingFromVisualization) {
+      return;
+    }
     missingDataColor = color;
     onMissingDataChange?.({ color });
   }
 
   function handleFillPatternChange(value: boolean) {
+    if (isSyncingFromVisualization) {
+      return;
+    }
     fillPattern = value;
     onMissingDataChange?.({ pattern: value });
   }
 
   function handleFillModeChange(index: number) {
+    if (isSyncingFromVisualization) {
+      return;
+    }
     const modes = [
       FillMode.NONE,
       FillMode.UNIQUE,
@@ -257,22 +339,43 @@
   }
 
   function handleFillColorChange(value: string) {
+    if (isSyncingFromVisualization) {
+      return;
+    }
     fillColor = value;
     onStyleChange?.({ fillColor: value });
   }
 
   function handleFillOpacityChange(value: number) {
+    if (isSyncingFromVisualization) {
+      return;
+    }
     fillOpacity = value;
-    onStyleChange?.({ fillOpacity: value / 100 });
+    onSymbolsChange?.({ opacity: value / 100 });
   }
 
   function handleSymbolMaxSizeChange(value: number) {
+    if (isSyncingFromVisualization) {
+      return;
+    }
     symbolMaxSize = value;
     onSymbolsChange?.({ maxSize: value });
   }
 
   function handleFieldSelect(fieldId: number) {
+    if (isSyncingFromVisualization) {
+      return;
+    }
     selectedFieldId = fieldId;
+    if (fieldId === NONE_FIELD_ID) {
+      if (symbolMode === SymbolMode.PROPORTIONAL) {
+        onMappingChange?.({ sizeColumn: undefined });
+      } else {
+        onMappingChange?.({ valueColumn: undefined });
+      }
+      return;
+    }
+
     const field = dataFields.find((f) => f.id === fieldId);
     if (field) {
       if (symbolMode === SymbolMode.PROPORTIONAL) {
@@ -286,11 +389,22 @@
   function handleClassificationChange(
     classification: Partial<ClassificationConfig>
   ) {
+    if (isSyncingFromVisualization) {
+      return;
+    }
     onClassificationChange?.(classification);
   }
 
   function handleFillClassFieldSelect(fieldId: number) {
+    if (isSyncingFromVisualization) {
+      return;
+    }
     fillClassFieldId = fieldId;
+    if (fieldId === NONE_FIELD_ID) {
+      onMappingChange?.({ valueColumn: undefined });
+      return;
+    }
+
     const field = dataFields.find((item) => item.id === fieldId);
     if (field) {
       onMappingChange?.({ valueColumn: field.text });
@@ -298,22 +412,81 @@
   }
 
   function handleFillCategoryFieldSelect(fieldId: number) {
+    if (isSyncingFromVisualization) {
+      return;
+    }
     fillCategoryFieldId = fieldId;
+    if (fieldId === NONE_FIELD_ID) {
+      onMappingChange?.({ categoryColumn: undefined });
+      return;
+    }
+
     const field = dataFields.find((item) => item.id === fieldId);
     if (field) {
       onMappingChange?.({ categoryColumn: field.text });
     }
   }
 
-  function handleShapeSelectChange(e: Event) {
-    const target = e.target as HTMLSelectElement;
-    handleShapeTypeChange(target.value as ShapeType);
+  const selectedVizId = $derived(visualizationStore.selectedVisualization?.id);
+
+  const isFacetsActiveForViz = $derived(
+    facetsStore.enabled &&
+      selectedVizId !== undefined &&
+      facetsStore.baseVisualizationId === selectedVizId
+  );
+
+  const facetsSelectedFieldIds = $derived.by(() => {
+    if (!isFacetsActiveForViz) {
+      return [] as number[];
+    }
+    return facetsStore.variables
+      .map((name) => dataFields.find((f) => f.text === name)?.id)
+      .filter((id): id is number => typeof id === 'number');
+  });
+
+  const sizeColumnName = $derived(
+    dataFields.find((f) => f.id === selectedFieldId)?.text ?? ''
+  );
+
+  const valueColumnName = $derived(
+    dataFields.find((f) => f.id === fillClassFieldId)?.text ?? ''
+  );
+
+  async function handleFacetsVariablesChange(
+    baseVariableName: string,
+    fieldIds: number[]
+  ) {
+    if (!selectedVizId) return;
+    const variableNames = fieldIds
+      .map((id) => dataFields.find((f) => f.id === id)?.text)
+      .filter((name): name is string => Boolean(name));
+
+    const merged = variableNames.includes(baseVariableName)
+      ? variableNames
+      : [baseVariableName, ...variableNames];
+
+    await facetsStore.updateVariables(selectedVizId, merged);
   }
 
-  function handleScaleTypeChange(e: Event) {
-    const target = e.target as HTMLSelectElement;
-    sizeScale = target.value as ScaleType;
-    onSymbolsChange?.({ sizeScale });
+  async function handleFacetsToggle(
+    baseVariableName: string,
+    enabled: boolean
+  ) {
+    if (!selectedVizId) return;
+    if (enabled) {
+      const seed = baseVariableName ? [baseVariableName] : [];
+      const numericColumns = dataFields.filter(
+        (f) => f.text !== baseVariableName
+      );
+      const second = numericColumns[0]?.text;
+      const candidates = second ? [...seed, second] : seed;
+      if (candidates.length < 2) {
+        return;
+      }
+      await facetsStore.updateVariables(selectedVizId, candidates);
+    } else {
+      facetsStore.disable();
+    }
   }
 </script>
 
@@ -348,12 +521,27 @@
         : m.size_according()}
       <InfoPopover text={m.size_according_info()} />
     </span>
-    <Dropdown
-      items={dataFields}
-      selectedId={selectedFieldId}
-      on:select={(e) => handleFieldSelect(e.detail.selectedId)}
-      type="default"
-    />
+    {#if proportionalType === ProportionalType.DOUBLE}
+      <Dropdown
+        items={selectableDataFields}
+        selectedId={selectedFieldId}
+        on:select={(e) => handleFieldSelect(e.detail.selectedId)}
+        type="default"
+      />
+    {:else}
+      <FacetsVariablePicker
+        dataFields={dataFields}
+        singleSelectItems={selectableDataFields}
+        selectedFieldId={selectedFieldId}
+        selectedFieldIds={facetsSelectedFieldIds}
+        isCollectionEnabled={isFacetsActiveForViz}
+        onSelect={handleFieldSelect}
+        onCollectionChange={(ids) =>
+          handleFacetsVariablesChange(sizeColumnName, ids)}
+        onToggleCollection={(enabled) =>
+          handleFacetsToggle(sizeColumnName, enabled)}
+      />
+    {/if}
   </div>
 
   {#if proportionalType === ProportionalType.DOUBLE}
@@ -362,7 +550,7 @@
         {m.symbol_variable_b()}
       </span>
       <Dropdown
-        items={dataFields}
+        items={selectableDataFields}
         selectedId={selectedFieldBId}
         on:select={(e) => handleFieldBSelect(e.detail.selectedId)}
         type="default"
@@ -371,73 +559,51 @@
   {/if}
 {/if}
 
-<SliderWithInput
-  label={m.max_size()}
-  infoText={m.max_size_info()}
-  bind:value={symbolMaxSize}
-  min={SLIDER_LIMITS.symbolMaxSize.min}
-  max={SLIDER_LIMITS.symbolMaxSize.max}
-  onchange={handleSymbolMaxSizeChange}
-/>
-
-{#if symbolMode === SymbolMode.PROPORTIONAL}
-  <div class="field-group">
-    <span class="field-label">
-      {m.scale_type()}
-      <InfoPopover text={m.scale_type_info()} />
-    </span>
-    <Select
-      id="scale-type"
-      hideLabel
-      selected={sizeScale}
-      size="sm"
-      on:change={handleScaleTypeChange}
-    >
-      <SelectItem value={ScaleType.LINEAR} text={m.scale_linear()} />
-      <SelectItem value={ScaleType.SQRT} text={m.scale_sqrt()} />
-      <SelectItem value={ScaleType.LOG} text={m.scale_log()} />
-    </Select>
-  </div>
-{/if}
-
 {#if symbolMode === SymbolMode.CLASSES}
   <div class="field-group">
     <span class="field-label">
       {m.size_according()}
       <InfoPopover text={m.size_according_info()} />
     </span>
-    <Dropdown
-      items={dataFields}
-      selectedId={selectedFieldId}
-      on:select={(e) => handleFieldSelect(e.detail.selectedId)}
-      type="default"
+    <FacetsVariablePicker
+      dataFields={dataFields}
+      singleSelectItems={selectableDataFields}
+      selectedFieldId={selectedFieldId}
+      selectedFieldIds={facetsSelectedFieldIds}
+      isCollectionEnabled={isFacetsActiveForViz}
+      onSelect={handleFieldSelect}
+      onCollectionChange={(ids) =>
+        handleFacetsVariablesChange(valueColumnName, ids)}
+      onToggleCollection={(enabled) =>
+        handleFacetsToggle(valueColumnName, enabled)}
     />
   </div>
+  <SliderWithInput
+    label={m.max_size()}
+    infoText={m.max_size_info()}
+    bind:value={symbolMaxSize}
+    min={SLIDER_LIMITS.symbolMaxSize.min}
+    max={SLIDER_LIMITS.symbolMaxSize.max}
+    onchange={handleSymbolMaxSizeChange}
+  />
   <DiscretizationRow
     label={m.discretization()}
     value={discretizationLabel}
     onsettings={onOpenDiscretization}
   />
+  <div class="field-group">
+    <span class="field-label">
+      {m.shape()}
+      <InfoPopover text={m.shape_info()} />
+    </span>
+    <Dropdown
+      items={shapeDropdownItems}
+      selectedId={shapeType}
+      on:select={(e) => handleShapeDropdownSelect(e.detail.selectedId)}
+      type="default"
+    />
+  </div>
 {/if}
-
-<div class="field-group">
-  <span class="field-label">
-    {m.shape()}
-    <InfoPopover text={m.shape_info()} />
-  </span>
-  <Select
-    id="shape-type"
-    hideLabel
-    selected={shapeType}
-    size="sm"
-    on:change={handleShapeSelectChange}
-  >
-    <SelectItem value={ShapeType.CIRCLE} text={m.shape_circle()} />
-    <SelectItem value={ShapeType.SQUARE} text={m.shape_square()} />
-    <SelectItem value={ShapeType.BAR} text={m.shape_bar()} />
-    <SelectItem value={ShapeType.SPIKE} text={m.shape_spike()} />
-  </Select>
-</div>
 
 <MissingDataSection
   bind:show={showMissingData}
@@ -499,7 +665,7 @@
   <div class="field-group">
     <Dropdown
       titleText={m.color_according()}
-      items={dataFields}
+      items={selectableDataFields}
       selectedId={fillClassFieldId}
       on:select={(e) => handleFillClassFieldSelect(e.detail.selectedId)}
       type="default"
@@ -540,7 +706,7 @@
   <div class="field-group">
     <Dropdown
       titleText={m.color_according()}
-      items={dataFields}
+      items={selectableDataFields}
       selectedId={fillCategoryFieldId}
       on:select={(e) => handleFillCategoryFieldSelect(e.detail.selectedId)}
       type="default"
@@ -587,6 +753,7 @@
   discretizationLabel={discretizationLabel}
   onStyleChange={onStyleChange}
   onModesChange={onModesChange}
+  onMappingChange={onMappingChange}
   onInvertPalette={onInvertPalette}
   onOpenDiscretization={() => (discretizationModalOpen = true)}
 />

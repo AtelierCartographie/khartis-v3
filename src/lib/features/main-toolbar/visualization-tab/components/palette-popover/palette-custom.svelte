@@ -41,7 +41,6 @@
   let endColor = $state('#08519c');
   let contrastMode = $state<'low' | 'normal' | 'high'>('normal');
 
-  // Pattern state
   let selectedPatternId = $state<string | null>(null);
   let patternSize = $state(4);
   let patternScale = $state(8);

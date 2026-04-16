@@ -233,18 +233,17 @@ Convention de cles : `snake_case` semantique par feature (`tool_legend_title`, `
 
 ## Commandes
 
-| Commande                     | Description                               |
-| ---------------------------- | ----------------------------------------- |
-| `pnpm dev`                   | Serveur de dev (port 5176)                |
-| `pnpm build`                 | Build production (static adapter)         |
-| `pnpm check`                 | Verification TypeScript + Svelte          |
-| `pnpm lint`                  | Prettier + ESLint                         |
-| `pnpm test`                  | Suite serveur CI (pipeline + DuckDB)      |
-| `pnpm test:unit`             | Tests Vitest (client jsdom + server node) |
-| `pnpm test:unit -- src/path` | Tests specifiques                         |
-| `pnpm test:e2e`              | Tests Playwright E2E (local uniquement)   |
-| `pnpm test:pipeline`         | Tests d'integration DuckDB (server-side)  |
-| `pnpm test:duckdb`           | Tests DuckDB (server-side)                |
+| Commande                     | Description                                 |
+| ---------------------------- | ------------------------------------------- |
+| `pnpm dev`                   | Serveur de dev (port 5176)                  |
+| `pnpm build`                 | Build production (static adapter)           |
+| `pnpm check`                 | Verification TypeScript + Svelte            |
+| `pnpm lint`                  | Prettier + ESLint                           |
+| `pnpm test:unit`             | Tests Vitest client (jsdom)                 |
+| `pnpm test:unit -- src/path` | Tests specifiques                           |
+| `pnpm test:pipeline`         | Tests serveur (pipeline, Node)              |
+| `pnpm test:duckdb`           | Tests serveur DuckDB (`@duckdb/node-api`)   |
+| `pnpm test:all`              | Suite complete (client + pipeline + duckdb) |
 
 ---
 

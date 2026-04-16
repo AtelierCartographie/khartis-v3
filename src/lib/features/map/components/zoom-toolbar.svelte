@@ -11,6 +11,12 @@
   import { mapInstanceStore } from '../../commons/store/map-instance.store.svelte';
   import { zoomModeStore } from '../../commons/store/zoom-mode.store.svelte';
   import { dispatchWorkspaceFit } from '../../commons/utils/workspace-viewport.utils';
+  import {
+    MAP_ZOOM_INPUT_STEP,
+    MAX_MAP_ZOOM_PERCENT,
+    MIN_MAP_ZOOM_PERCENT,
+    resolveMapZoomLevel
+  } from '../utils/map-zoom.utils';
 
   const activeTabIndex = $derived(zoomModeStore.isMapMode ? 0 : 1);
 
@@ -26,9 +32,6 @@
       iconSize: 20
     }
   ]);
-
-  const ZOOM_MIN = 10;
-  const ZOOM_MAX = 500;
 
   function handleZoomModeChange(index: number): void {
     zoomModeStore.setMode(index === 0 ? 'map' : 'page');
@@ -77,11 +80,14 @@
   let zoomInputValue = $derived(String(currentZoomValue));
 
   function handleZoomValueChange(value: number): void {
-    const clamped = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, value));
+    const clamped = Math.max(
+      MIN_MAP_ZOOM_PERCENT,
+      Math.min(MAX_MAP_ZOOM_PERCENT, value)
+    );
     if (activeTabIndex === 0) {
-      const mapZoom =
-        mapInstanceStore.baseZoomLevel + 2 * Math.log2(clamped / 100);
-      mapInstanceStore.setZoom(mapZoom);
+      mapInstanceStore.setZoom(
+        resolveMapZoomLevel(mapInstanceStore.baseZoomLevel, clamped)
+      );
     } else {
       globalActions.setPageZoom(clamped);
     }
@@ -99,7 +105,10 @@
       return;
     }
 
-    const clamped = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, nextValue));
+    const clamped = Math.max(
+      MIN_MAP_ZOOM_PERCENT,
+      Math.min(MAX_MAP_ZOOM_PERCENT, nextValue)
+    );
     zoomInputValue = String(clamped);
     handleZoomValueChange(clamped);
   }
@@ -148,9 +157,9 @@
         type="number"
         inputmode="numeric"
         aria-label={m.zoom_value_input_label()}
-        min={10}
-        max={500}
-        step={10}
+        min={MIN_MAP_ZOOM_PERCENT}
+        max={MAX_MAP_ZOOM_PERCENT}
+        step={MAP_ZOOM_INPUT_STEP}
         value={zoomInputValue}
         oninput={handleZoomInput}
         onblur={handleZoomInputBlur}

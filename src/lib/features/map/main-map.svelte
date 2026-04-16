@@ -31,7 +31,7 @@
   import ThematicMap from './components/thematic-map.svelte';
   import { osmBasemapStore } from './stores/osm-basemap.store.svelte';
   import { facetsStore } from '../step-toolbar/tools/facets/facets.store.svelte';
-  import FacetsGrid from '../step-toolbar/tools/facets/facets-grid.svelte';
+  import FacetsPage from '../step-toolbar/tools/facets/facets-page.svelte';
   import { loadDatasetsSequentially } from './utils/load-datasets-sequentially';
   import {
     visualizationStore,
@@ -856,15 +856,16 @@
       bind:this={thematicMapRef}
     >
       {#if facetsEnabled && facetVisualizations.length > 0}
-        <FacetsGrid
+        <FacetsPage
           visualizations={facetVisualizations}
           tables={displayTables}
           splitData={displaySplitData}
           geoJSONs={displayGeoJSONs}
           layout={facetsLayout}
           syncPanZoom={facetsSyncPanZoom}
-          containerWidth={formatState.width}
-          containerHeight={formatState.height}
+          width={formatState.width}
+          height={formatState.height}
+          onReady={handleMapReady}
         />
       {:else}
         <ThematicMap

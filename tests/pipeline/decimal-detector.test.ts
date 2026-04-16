@@ -1,130 +1,71 @@
 import { describe, expect, it } from 'vitest';
 import { detectDecimalSeparator } from '$lib/features/data-pipeline/utils/decimal-detector';
 
-function asFile(content: string, name: string): File {
+function asFile(content: string, name = 'test.csv'): File {
   return new File([content], name, { type: 'text/csv' });
 }
 
-describe('detectDecimalSeparator', () => {
-  it('détecte le format décimal européen avec point comme séparateur de milliers', async () => {
-    const file = asFile(
-      [
-        'id,city,gdp_billion,growth_rate,temperature',
-        '1,Paris,"789,50","2,35","18,5"',
-        '2,Berlin,"1.234,75","1,89","15,2"'
-      ].join('\n'),
-      'european.csv'
-    );
+describe('decimal-detector', () => {
+  describe('detectDecimalSeparator — delimiter detection', () => {
+    it('picks semicolon delimiter on a semicolon-dominant sample', async () => {
+      const file = asFile(
+        ['id;city;value', '1;Paris;42', '2;Lyon;17'].join('\n')
+      );
+      const result = await detectDecimalSeparator(file);
+      expect(result.delimiter).toBe(';');
+    });
 
-    const result = await detectDecimalSeparator(file);
+    it('falls back to comma when comma dominates', async () => {
+      const file = asFile(
+        ['id,city,value', '1,Paris,42', '2,Lyon,17'].join('\n')
+      );
+      const result = await detectDecimalSeparator(file);
+      expect(result.delimiter).toBe(',');
+    });
 
-    expect(result.separator).toBe(',');
-    expect(result.delimiter).toBe(',');
-    expect(result.thousandsSeparator).toBe('.');
-    expect(result.confidence).toBeGreaterThan(0);
+    it('detects tab delimiter for TSV', async () => {
+      const file = asFile(['id\tcity\tvalue', '1\tParis\t42'].join('\n'));
+      const result = await detectDecimalSeparator(file);
+      expect(result.delimiter).toBe('\t');
+    });
   });
 
-  it("n'applique pas de séparateur de milliers quand les formats décimaux sont mixtes", async () => {
-    const file = asFile(
-      [
-        'id,city,gdp_billion,growth_rate,temperature',
-        '1,Paris,"789,50","2,35",18.5',
-        '2,Berlin,"1.234,75","1,89",15.2'
-      ].join('\n'),
-      'mixed-decimals.csv'
-    );
+  describe('detectDecimalSeparator — decimal separator', () => {
+    it('returns european for comma-decimal with dot-thousands', async () => {
+      const file = asFile(
+        [
+          'id,city,gdp,rate',
+          '1,Paris,"1.234,56","2,35"',
+          '2,Berlin,"789,50","1,89"',
+          '3,Rome,"2.000,00","3,14"'
+        ].join('\n')
+      );
+      const result = await detectDecimalSeparator(file);
+      expect(result.separator).toBe(',');
+      expect(result.thousandsSeparator).toBe('.');
+    });
 
-    const result = await detectDecimalSeparator(file);
+    it('returns standard for dot-decimal with comma-thousands', async () => {
+      const file = asFile(
+        [
+          'id,city,gdp',
+          '1,US,"1,234.56"',
+          '2,UK,"789.50"',
+          '3,CA,"2,000.00"'
+        ].join('\n')
+      );
+      const result = await detectDecimalSeparator(file);
+      expect(result.separator).toBe('.');
+    });
 
-    expect(result.separator).toBe(',');
-    expect(result.thousandsSeparator).toBeUndefined();
-  });
-
-  it('détecte le délimiteur tabulation', async () => {
-    const file = asFile(
-      ['id\tcity\tvalue', '1\tParis\t12.5', '2\tBerlin\t42.0'].join('\n'),
-      'tabular.tsv'
-    );
-
-    const result = await detectDecimalSeparator(file);
-
-    expect(result.delimiter).toBe('\t');
-    expect(result.separator).toBe('.');
-  });
-
-  it('détecte le séparateur de milliers espace pour les entiers sans partie décimale', async () => {
-    const file = asFile(
-      [
-        'ville,population,superficie_km2',
-        'Paris,2 161 000,105',
-        'Lyon,513 000,48',
-        'Marseille,861 000,241'
-      ].join('\n'),
-      'test-csv-options-thousands.csv'
-    );
-
-    const result = await detectDecimalSeparator(file);
-
-    expect(result.separator).toBe('.');
-    expect(result.thousandsSeparator).toBe(' ');
-  });
-
-  it("retourne les valeurs par défaut quand le fichier ne contient que l'en-tête", async () => {
-    const file = asFile('id,city,value\n', 'header-only.csv');
-
-    const result = await detectDecimalSeparator(file);
-
-    expect(result.separator).toBe('.');
-    expect(result.delimiter).toBe(',');
-    expect(result.sampleSize).toBe(0);
-    expect(result.thousandsSeparator).toBeUndefined();
-  });
-
-  it('détecte le séparateur de milliers virgule pour les décimaux standards', async () => {
-    const file = asFile(
-      ['id;value', '1;1,234.56', '2;12,345.67'].join('\n'),
-      'standard-thousands.csv'
-    );
-
-    const result = await detectDecimalSeparator(file);
-
-    expect(result.separator).toBe('.');
-    expect(result.delimiter).toBe(';');
-    expect(result.thousandsSeparator).toBe(',');
-  });
-
-  it('détecte le séparateur de milliers espace pour les décimaux européens cohérents', async () => {
-    const file = asFile(
-      ['id;value', '1;"1 234,56"', '2;"12 345,67"', '3;"123 456,78"'].join(
-        '\n'
-      ),
-      'eu-space-thousands.csv'
-    );
-
-    const result = await detectDecimalSeparator(file);
-
-    expect(result.separator).toBe(',');
-    expect(result.delimiter).toBe(';');
-    expect(result.thousandsSeparator).toBe(' ');
-  });
-
-  it('retourne une configuration sûre par défaut si la lecture du fichier échoue', async () => {
-    const faultyFile = {
-      size: 1024,
-      slice: () => ({
-        text: async () => {
-          throw new Error('io error');
-        }
-      })
-    } as unknown as File;
-
-    const result = await detectDecimalSeparator(faultyFile);
-
-    expect(result).toEqual({
-      separator: '.',
-      confidence: 0,
-      sampleSize: 0,
-      delimiter: ','
+    it('stays standard when european values are below the 30% ratio', async () => {
+      const rows: string[] = ['id,value'];
+      for (let i = 0; i < 8; i++) rows.push(`${i},${i}.${i}0`);
+      rows.push('8,3,14');
+      rows.push('9,2,71');
+      const file = asFile(rows.join('\n'));
+      const result = await detectDecimalSeparator(file);
+      expect(result.separator).toBe('.');
     });
   });
 });

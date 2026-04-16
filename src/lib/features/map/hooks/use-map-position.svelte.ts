@@ -87,7 +87,10 @@ export function useMapPosition(
       map.setCenter([position.center.lng, position.center.lat]);
       map.setZoom(position.zoom);
 
-      onPositionRestored?.(position);
+      onPositionRestored?.({
+        center: position.center,
+        zoom: map.getZoom()
+      });
       return true;
     } catch (error) {
       logger.warn('Failed to restore saved map position', LogCategory.MAP, {

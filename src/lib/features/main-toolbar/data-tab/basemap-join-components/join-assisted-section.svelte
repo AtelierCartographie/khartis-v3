@@ -430,7 +430,7 @@
   .section-header-icon {
     display: flex;
     align-items: center;
-    color: #525252;
+    color: var(--cds-text-secondary, #525252);
   }
 
   .section-title {
@@ -447,11 +447,11 @@
   }
 
   .category-row {
-    border-bottom: 1px solid #e0e0e0;
+    border-bottom: 1px solid var(--cds-border-subtle-00, #e0e0e0);
   }
 
   .category-row:first-child {
-    border-top: 1px solid #e0e0e0;
+    border-top: 1px solid var(--cds-border-subtle-00, #e0e0e0);
   }
 
   .category-row-header {
@@ -591,7 +591,7 @@
     align-items: center;
     gap: 10px;
     padding: 8px 16px;
-    border-top: 1px solid #e0e0e0;
+    border-top: 1px solid var(--cds-border-subtle-00, #e0e0e0);
     min-height: 48px;
   }
 
@@ -650,7 +650,7 @@
     color: #161616;
     padding: 10px 16px;
     background-color: #f4f4f4;
-    border-bottom: 1px solid #e0e0e0;
+    border-bottom: 1px solid var(--cds-border-subtle-00, #e0e0e0);
   }
 
   .entity-item:last-child {

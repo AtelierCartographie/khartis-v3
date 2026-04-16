@@ -274,17 +274,15 @@ Le `.env` local doit etre en place avant de lancer le serveur. Le sample committ
 
 ## Commandes essentielles
 
-| Commande             | Description                                                |
-| -------------------- | ---------------------------------------------------------- |
-| `pnpm dev`           | Serveur de developpement (port 5176)                       |
-| `pnpm build`         | Build de production (adaptateur statique SvelteKit)        |
-| `pnpm check`         | Verification TypeScript + Svelte                           |
-| `pnpm lint`          | Prettier + ESLint                                          |
-| `pnpm test`          | Suite serveur CI (pipeline + DuckDB)                       |
-| `pnpm test:unit`     | Tests unitaires Vitest                                     |
-| `pnpm test:e2e`      | Tests end-to-end Playwright (local uniquement)             |
-| `pnpm test:pipeline` | Tests d'integration DuckDB (ingestion de tous les formats) |
-| `pnpm test:duckdb`   | Tests DuckDB server-side                                   |
+| Commande                      | Description                                         |
+| ----------------------------- | --------------------------------------------------- |
+| `pnpm dev`                    | Serveur de developpement (port 5176)                |
+| `pnpm build`                  | Build de production (adaptateur statique SvelteKit) |
+| `pnpm check`                  | Verification TypeScript + Svelte                    |
+| `pnpm lint`                   | Prettier + ESLint                                   |
+| `vitest run --project client` | Tests unitaires (composants, stores, utils)         |
+
+> `pnpm test:unit` demarre le mode watch — utiliser `vitest run --project client` pour un passage unique en CI ou en agent. Ajouter `--reporter=agent` pour minimiser l'output.
 
 ## CI / CD
 
@@ -294,8 +292,6 @@ Le `.env` local doit etre en place avant de lancer le serveur. Le sample committ
 - Tests pipeline + DuckDB (server-side, fiables en CI)
 - Build de production
 
-Les tests E2E ne tournent **pas** en CI -- voir la section Deploiement.
-
 ## Deploiement
 
 Khartis est deploye manuellement sur un serveur FTP. Processus avant chaque deploiement :
@@ -303,8 +299,7 @@ Khartis est deploye manuellement sur un serveur FTP. Processus avant chaque depl
 ```bash
 # 1. S'assurer que la CI est verte (Quality Checks sur GitHub)
 
-# 2. Valider l'UX dans un vrai navigateur
-pnpm test:e2e
+# 2. Valider l'UX manuellement dans un navigateur (import, viz, export)
 
 # 3. Builder
 pnpm build
@@ -451,8 +446,7 @@ export const featureStore = createFeatureStore();
 4. Creer la strategie dans `data-pipeline/processors/strategies/`
 5. Exporter depuis `processors/strategies/index.ts`
 6. Enregistrer dans `processors/register-processors.ts`
-7. Ajouter des fichiers de test dans `tests-datasets/<format>/`
-8. Ajouter les cas de test dans `pipeline-integration.test.ts`
+7. Ajouter les tests unitaires co-localises dans `src/lib/features/data-pipeline/`
 
 ## URLs de developpement
 
@@ -469,6 +463,31 @@ Fichier -> validateFile() -> DuckDB (read_csv / ST_Read)
   -> geoarrow-deck-stream (d3-geo) -> Couches Deck.gl -> GPU
 ```
 
+## Tests
+
+Deux projets Vitest cohabitent, isoles dans `vite.config.ts` :
+
+| Projet   | Environnement | Emplacement                             | Script               |
+| -------- | ------------- | --------------------------------------- | -------------------- |
+| `client` | jsdom         | `src/**/*.svelte.test.ts` (co-localise) | `pnpm test:unit`     |
+| `server` | node          | `tests/pipeline/**`                     | `pnpm test:pipeline` |
+| `server` | node          | `tests/duckdb/**`                       | `pnpm test:duckdb`   |
+
+`pnpm test:all` enchaine les trois.
+
+| Convention         | Quand l'utiliser                                      |
+| ------------------ | ----------------------------------------------------- |
+| `*.svelte.test.ts` | Composants Svelte, stores runes (client, jsdom)       |
+| `*.test.ts`        | Services purs, utilitaires, macros SQL (server, node) |
+
+**Mocks serveur** : le fichier `vitest-setup-server.ts` mock globalement `@duckdb/duckdb-wasm` et `$lib/features/duckdb` pour empecher le chargement du worker WASM en Node (fuite memoire). Les tests qui ont besoin d'un vrai DuckDB utilisent `@duckdb/node-api` via `tests/pipeline/duckdb-node-helper`.
+
+**Mocks client** : `vitest-setup-client.ts` mock `$lib/features/duckdb` et expose un stub pour `matchMedia`. Utiliser `vi.hoisted()` pour les mocks qui doivent exister avant import.
+
+**Isolation** : projet `server` utilise `pool: 'forks'` + `fileParallelism: false` — chaque fichier tourne dans un sous-processus Node court qui meurt en fin de fichier.
+
+---
+
 ## Ressources complementaires
 
 | Besoin                 | Document                                   |
@@ -481,4 +500,3 @@ Fichier -> validateFile() -> DuckDB (read_csv / ST_Read)
 | Cartographie           | [CARTOGRAPHIE.md](CARTOGRAPHIE.md)         |
 | Gestion d'etat         | [GESTION_ETAT.md](GESTION_ETAT.md)         |
 | Reference des types    | [REFERENCE.md](REFERENCE.md)               |
-| Strategie de tests     | [TESTS.md](TESTS.md)                       |

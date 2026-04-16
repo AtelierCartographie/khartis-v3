@@ -4,6 +4,7 @@
     formatValueByType,
     isNumericType
   } from '$lib/features/commons/utils/format.utils';
+  import { projectHtmlLikeValue } from '$lib/features/commons/utils/html-like-text.utils';
   import * as m from '$lib/paraglide/messages';
   import type { HighlightType } from '../advanced-data-table.svelte';
   import type { ColumnInfo, TableRow } from '../types';
@@ -63,6 +64,7 @@
     {@const value = row[col.name]}
     {@const isNumeric = isNumericType(col.type)}
     {@const isNull = value === null || value === undefined}
+    {@const displayValue = projectHtmlLikeValue(value)}
     {@const cellHighlight = getCellHighlight?.(col.name)}
     {@const isGeoid = geoidColumns.has(col.name)}
     <td
@@ -77,7 +79,7 @@
       {#if isNull}
         <span class="null-value" title={m.cell_null_value_tooltip()}>—</span>
       {:else}
-        {formatValueByType(value, col.type)}
+        {formatValueByType(displayValue, col.type)}
       {/if}
     </td>
   {/each}
