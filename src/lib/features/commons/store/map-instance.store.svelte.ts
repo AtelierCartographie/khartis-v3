@@ -2,7 +2,6 @@ import type { Deck, View } from '@deck.gl/core';
 import type { MapboxOverlay } from '@deck.gl/mapbox';
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
-import { projectionStore } from '$lib/features/map/stores/projection.store.svelte';
 import {
   clampMapZoomLevel,
   DEFAULT_MAP_BASE_ZOOM,
@@ -40,45 +39,54 @@ const DEFAULT_DECK_VIEW_STATE: DeckViewState = {
 
 const DECK_ZOOM_STEP = 0.1375;
 
-/** Ensure target always has exactly 3 numeric elements. */
+export interface ProjectionContext {
+  referenceBbox: [number, number, number, number] | null;
+  canvasSize: { width: number; height: number };
+  fitPaddingPx: number;
+  isProjectedCoordinates: boolean;
+}
+
+let projectionContextGetter: () => ProjectionContext = () => ({
+  referenceBbox: null,
+  canvasSize: { width: 0, height: 0 },
+  fitPaddingPx: 0,
+  isProjectedCoordinates: false
+});
+
+export function injectProjectionContext(getter: () => ProjectionContext): void {
+  projectionContextGetter = getter;
+}
+
 function normalizeTarget(t: number[]): [number, number, number] {
   return [t[0] ?? 0, t[1] ?? 0, t[2] ?? 0];
 }
 
-/**
- * Convert a world-coordinate target to data coordinates using
- * the inverse of the model matrix: `data = world / scale + center`.
- */
 function worldToData(target: number[]): [number, number, number] {
   const t = normalizeTarget(target);
-  const bbox = projectionStore.referenceBbox;
-  if (!bbox) return t;
-  const [cx, cy] = get_bbox_center(bbox);
+  const ctx = projectionContextGetter();
+  if (!ctx.referenceBbox) return t;
+  const [cx, cy] = get_bbox_center(ctx.referenceBbox);
   const scale = get_max_scale(
-    projectionStore.canvasSize,
-    bbox,
-    projectionStore.fitPaddingPx
+    ctx.canvasSize,
+    ctx.referenceBbox,
+    ctx.fitPaddingPx
   );
   if (scale === 0) return t;
-  const yDirection = projectionStore.isProjectedCoordinates ? -1 : 1;
+  const yDirection = ctx.isProjectedCoordinates ? -1 : 1;
   return [t[0] / scale + cx, (t[1] * yDirection) / scale + cy, 0];
 }
 
-/**
- * Convert a data-coordinate target to world coordinates using
- * the model matrix: `world = scale * (data - center)`.
- */
 function dataToWorld(target: number[]): [number, number, number] {
   const t = normalizeTarget(target);
-  const bbox = projectionStore.referenceBbox;
-  if (!bbox) return t;
-  const [cx, cy] = get_bbox_center(bbox);
+  const ctx = projectionContextGetter();
+  if (!ctx.referenceBbox) return t;
+  const [cx, cy] = get_bbox_center(ctx.referenceBbox);
   const scale = get_max_scale(
-    projectionStore.canvasSize,
-    bbox,
-    projectionStore.fitPaddingPx
+    ctx.canvasSize,
+    ctx.referenceBbox,
+    ctx.fitPaddingPx
   );
-  const yDirection = projectionStore.isProjectedCoordinates ? -1 : 1;
+  const yDirection = ctx.isProjectedCoordinates ? -1 : 1;
   return [scale * (t[0] - cx), yDirection * scale * (t[1] - cy), 0];
 }
 
@@ -118,16 +126,16 @@ function createMapInstanceStore() {
 
   function buildSerializedViewState(): SerializedViewState | null {
     const worldTarget = normalizeTarget(state.deckViewState.target);
-    const bbox = projectionStore.referenceBbox;
+    const ctx = projectionContextGetter();
 
-    if (!bbox) {
+    if (!ctx.referenceBbox) {
       return lastSerializedViewState;
     }
 
     const scale = get_max_scale(
-      projectionStore.canvasSize,
-      bbox,
-      projectionStore.fitPaddingPx
+      ctx.canvasSize,
+      ctx.referenceBbox,
+      ctx.fitPaddingPx
     );
     if (scale === 0) {
       return lastSerializedViewState;

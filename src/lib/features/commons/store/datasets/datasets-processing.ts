@@ -379,10 +379,8 @@ function notifySkippedFiles(
 export async function processFiles(
   state: DatasetsState,
   internals: DatasetsInternals,
-  files: UploadedFile[],
-  vizOps?: VisualizationStoreOperations | null
+  files: UploadedFile[]
 ): Promise<void> {
-  void vizOps;
   startProcessing();
   state.error = undefined;
 
@@ -475,10 +473,8 @@ export async function addFile(
   state: DatasetsState,
   internals: DatasetsInternals,
   file: UploadedFile,
-  vizOps?: VisualizationStoreOperations | null,
   autoEnable = true
 ): Promise<DatasetResult | null> {
-  void vizOps;
   const startTime = performance.now();
 
   startProcessing();

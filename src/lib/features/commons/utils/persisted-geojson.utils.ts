@@ -3,6 +3,7 @@ import {
   type GeoJSONFeatureCollection,
   type JsonValue
 } from '$lib/types/data';
+import { toJsonValue } from './json.utils';
 
 const PERSISTED_GEOJSON_EXCLUDED_PROPERTIES = new Set(['OGC_FID']);
 
@@ -18,33 +19,6 @@ function sanitizeFeatureProperties(
       .filter(([key]) => !PERSISTED_GEOJSON_EXCLUDED_PROPERTIES.has(key))
       .map(([key, value]) => [key, toJsonValue(value)])
   );
-}
-
-function toJsonValue(value: unknown): JsonValue {
-  if (
-    value === null ||
-    typeof value === 'string' ||
-    typeof value === 'number' ||
-    typeof value === 'boolean'
-  ) {
-    return value;
-  }
-
-  if (value === undefined) {
-    return null;
-  }
-
-  if (Array.isArray(value)) {
-    return value.map((item) => toJsonValue(item));
-  }
-
-  if (typeof value === 'object') {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [key, toJsonValue(item)])
-    );
-  }
-
-  return String(value);
 }
 
 export function sanitizePreparedGeoJSON(

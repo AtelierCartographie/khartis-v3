@@ -211,25 +211,14 @@ function createDatasetsStore() {
   }
 
   async function processFiles(files: UploadedFile[]): Promise<void> {
-    return processFilesFn(
-      datasetsState,
-      datasetsInternals,
-      files,
-      visualizationStoreOps
-    );
+    return processFilesFn(datasetsState, datasetsInternals, files);
   }
 
   async function addFile(
     file: UploadedFile,
     autoEnable = true
   ): Promise<DatasetResult | null> {
-    return addFileFn(
-      datasetsState,
-      datasetsInternals,
-      file,
-      visualizationStoreOps,
-      autoEnable
-    );
+    return addFileFn(datasetsState, datasetsInternals, file, autoEnable);
   }
 
   function selectDataset(datasetId: string): void {

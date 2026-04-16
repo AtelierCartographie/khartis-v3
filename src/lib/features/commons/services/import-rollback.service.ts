@@ -1,9 +1,9 @@
-import { Duck } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import type { UploadedFile } from '../store/create-project.types';
 import { datasetsStore } from '../store/datasets.store.svelte';
 import { projectStore } from '../store/project.store.svelte';
 import { visualizationStore } from '../store/visualization.store.svelte';
+import { cleanupDuckDBResources } from '../utils/duckdb-cleanup.utils';
 import { LogCategory, logger } from '../utils/logger';
 
 interface ImportSnapshot {
@@ -108,18 +108,6 @@ function createImportRollbackService() {
         cleanupResults,
         error: rollbackError
       });
-    }
-  }
-
-  async function cleanupDuckDBResources(tableName: string): Promise<void> {
-    try {
-      Duck?.cleanupTableResources(tableName);
-    } catch (error) {
-      logger.warn(
-        'Failed to cleanup DuckDB state during rollback',
-        LogCategory.DUCKDB,
-        error
-      );
     }
   }
 
