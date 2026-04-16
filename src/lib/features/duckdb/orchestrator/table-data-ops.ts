@@ -5,6 +5,7 @@ import {
 } from '$lib/features/commons/utils/sanitize.utils';
 import { GEOMETRY_COLUMN_TYPE } from '$lib/features/commons/constants';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
+import { buildOrderClause } from '../html-like-text';
 import type { AnalysisResult, ArrowTableLike, FilterStats } from '../types';
 import { buildFilterWhereClause } from './filter-ops';
 import { getFiltersMap } from './state.svelte';
@@ -25,6 +26,7 @@ export interface GetTableDataOptions {
   offset?: number;
   limit?: number;
   orderBy?: string | null;
+  orderByType?: string | null;
   order?: 'ASC' | 'DESC' | null;
 }
 
@@ -86,8 +88,11 @@ export async function getTableData(
     }
 
     if (options?.orderBy && options?.order) {
-      const escapedOrderBy = escapeIdentifier(options.orderBy);
-      query += ` ORDER BY "${escapedOrderBy}" ${options.order === 'DESC' ? 'DESC' : 'ASC'}`;
+      query += ` ORDER BY ${buildOrderClause(
+        options.orderBy,
+        options.orderByType,
+        options.order
+      )}`;
     }
 
     if (options?.limit) {
@@ -143,6 +148,7 @@ export async function getRowPosition(
   Duck: DuckDBClientForTableData,
   options?: {
     orderBy?: string | null;
+    orderByType?: string | null;
     order?: 'ASC' | 'DESC' | null;
   }
 ): Promise<number> {
@@ -163,26 +169,32 @@ export async function getRowPosition(
     const escapedTable = escapeIdentifier(tableName);
 
     if (options?.orderBy && options?.order) {
-      const sortCol = `"${escapeIdentifier(options.orderBy)}"`;
-      const isAsc = options.order === 'ASC';
-
-      const idCol = INTERNAL_COLUMN.ID;
+      const orderClause = buildOrderClause(
+        options.orderBy,
+        options.orderByType,
+        options.order
+      );
       const query = `
-        WITH target AS (
-          SELECT ${sortCol} as sort_val FROM "${escapedTable}" WHERE ${idCol} = ${normalizedRowId}
+        WITH filtered_rows AS (
+          SELECT *
+          FROM "${escapedTable}"
+          ${whereClause ? `WHERE ${whereClause}` : ''}
+        ),
+        ordered_rows AS (
+          SELECT
+            ${INTERNAL_COLUMN.ID},
+            ROW_NUMBER() OVER (ORDER BY ${orderClause}) - 1 AS position
+          FROM filtered_rows
         )
-        SELECT COUNT(*) as position
-        FROM "${escapedTable}", target
-        WHERE (
-          ${sortCol} ${isAsc ? '<' : '>'} target.sort_val
-          OR (${sortCol} = target.sort_val AND ${idCol} ${isAsc ? '<' : '>'} ${normalizedRowId})
-        )
-        ${filterCondition}
+        SELECT position
+        FROM ordered_rows
+        WHERE ${INTERNAL_COLUMN.ID} = ${normalizedRowId}
+        LIMIT 1
       `;
 
       const result = (await Duck.query(query)) as ArrowTableLike;
       if (result.numRows > 0) {
-        const row = result.get(0);
+        const row = result.get(0) as Record<string, unknown>;
         return Number(row.position);
       }
     } else {

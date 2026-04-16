@@ -610,7 +610,11 @@ export const duckDBOrchestrator = {
   async getRowPosition(
     tableName: string,
     rowId: number,
-    options?: { orderBy?: string | null; order?: 'ASC' | 'DESC' | null }
+    options?: {
+      orderBy?: string | null;
+      orderByType?: string | null;
+      order?: 'ASC' | 'DESC' | null;
+    }
   ): Promise<number> {
     await ensureInitialized();
     if (!Duck) throw new DuckDBError('DuckDB not initialized');

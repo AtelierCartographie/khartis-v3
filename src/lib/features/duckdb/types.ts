@@ -185,6 +185,7 @@ export type FilterOperator = `${FilterOperatorEnum}`;
 
 export interface DataTableFilterInput {
   column: string;
+  columnType?: string | null;
   operator: FilterOperator;
   value?: string | number;
   secondaryValue?: string | number;
