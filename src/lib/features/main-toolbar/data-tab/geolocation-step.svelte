@@ -122,16 +122,44 @@
     return undefined;
   });
 
+  const bestIdentifierFallback = $derived(() => {
+    if (columnAnalysis.length === 0) return undefined;
+
+    const items = dataFieldItems();
+    const candidates = columnAnalysis
+      .filter(
+        (col) =>
+          col.name !== INTERNAL_COLUMN.GEOMETRY &&
+          col.name !== INTERNAL_COLUMN.ID
+      )
+      .map((col) => {
+        const shareUniques = (col.share_uniques as number) ?? 0;
+        const shareNulls = (col.share_nulls as number) ?? 0;
+        const isString = col.type_simple === 'string';
+        const hasIdKeyword =
+          col.id_words !== undefined
+            ? Boolean(col.id_words)
+            : /\b(id|fid|gid|code|iso|pk)\b/i.test(col.name ?? '');
+        const score =
+          shareUniques * 0.6 +
+          (1 - shareNulls) * 0.2 +
+          (isString ? 0.1 : 0) +
+          (hasIdKeyword ? 0.1 : 0);
+        return { name: col.name, score };
+      })
+      .sort((a, b) => b.score - a.score);
+
+    if (candidates.length === 0) return undefined;
+    return items.find((item) => item.columnName === candidates[0].name);
+  });
+
   const suggestedColumn = $derived(() => {
     const geoid = bestGeoidColumn();
     if (geoid) return geoid;
 
-    const suggested = geoDetection?.suggestedPrimaryGeoColumn;
-    if (!suggested) return undefined;
+    if (columnAnalysisLoaded) return bestIdentifierFallback();
 
-    return dataFieldItems().find(
-      (item) => item.columnName === suggested.columnName
-    );
+    return undefined;
   });
 
   const hasCategorizedOrNonUnique = $derived.by(() => {
