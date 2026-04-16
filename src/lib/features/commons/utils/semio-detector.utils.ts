@@ -79,9 +79,11 @@ interface QLOIndicators {
 
 function scoreGeoId(indicators: GeoIdIndicators): SemioScore {
   let score = 0;
-  if (indicators.shareUniques >= 0.9) score += indicators.isNumeric ? 0.5 : 1;
-  if (indicators.shareNulls <= 0.1) score += indicators.isNumeric ? 0.5 : 1.5;
-  if (indicators.idWords && indicators.shareUniques >= 0.5) score += 4;
+  if (indicators.shareUniques >= 0.9) score += indicators.isNumeric ? 1.5 : 2;
+  else if (indicators.shareUniques >= 0.7)
+    score += indicators.isNumeric ? 0.5 : 1;
+  if (indicators.shareNulls <= 0.1) score += indicators.isNumeric ? 0.5 : 1;
+  if (indicators.idWords && indicators.shareUniques >= 0.65) score += 3;
   if (indicators.isNumeric && indicators.shareRankInterval >= 0.8) score += 2;
   if (indicators.isNumeric && indicators.shareRankInterval >= 0.95)
     score += 0.5;
