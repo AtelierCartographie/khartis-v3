@@ -106,13 +106,13 @@ export function buildFilterSQL(
 
     case FilterOperatorEnum.EQUALS:
       assertFilterValue(filter.value, filter.operator);
-      return usesTextProjection && !isNumericValue
+      return usesTextProjection
         ? `${textRef} = ${textValue}`
         : `${columnRef} = ${value}`;
 
     case FilterOperatorEnum.NOT_EQUALS:
       assertFilterValue(filter.value, filter.operator);
-      return usesTextProjection && !isNumericValue
+      return usesTextProjection
         ? `${textRef} <> ${textValue}`
         : `${columnRef} <> ${value}`;
 
