@@ -1,3 +1,10 @@
+import { PRINT_STANDARD_TOKENS } from '$lib/features/commons/utils/layout-sizing.utils';
+import {
+  DEFAULT_VISUALIZATION_COLOR,
+  DEFAULT_VISUALIZATION_NEUTRAL_COLOR,
+  DEFAULT_VISUALIZATION_SECONDARY_COLOR
+} from '$lib/features/commons/constants/colors.constants';
+
 export enum SearchSource {
   ALL = 'all'
 }
@@ -40,7 +47,7 @@ export interface DensityConfig {
 export const DENSITY_DEFAULTS = {
   level: DENSITY_LEVEL.STANDARD,
   dotSize: 1,
-  color: '#1e3a5f'
+  color: DEFAULT_VISUALIZATION_COLOR
 } as const;
 
 export enum ProportionalType {
@@ -73,6 +80,22 @@ export enum ShapeType {
   STAR = 'star',
   RECTANGLE = 'rectangle'
 }
+
+export enum CategoryShapeMode {
+  UNIQUE = 'unique',
+  DIFFERENT = 'different',
+  ORDERED = 'ordered'
+}
+
+export const CATEGORY_SHAPE_CYCLE: readonly ShapeType[] = [
+  ShapeType.CIRCLE,
+  ShapeType.SQUARE,
+  ShapeType.TRIANGLE,
+  ShapeType.DIAMOND,
+  ShapeType.CROSS,
+  ShapeType.STAR,
+  ShapeType.RECTANGLE
+];
 
 /**
  * Numeric ordinal used by the GLSL shader `instanceShapes` attribute.
@@ -143,7 +166,6 @@ export enum ThicknessMode {
   NONE = 'none',
   UNIQUE = 'unique',
   PROPORTIONAL = 'proportional',
-  GRADUATED = 'graduated',
   CLASSES = 'classes'
 }
 
@@ -166,15 +188,15 @@ export const VISUALIZATION_DEFAULTS = {
   strokeWidth: 1,
   strokeOpacity: 100,
   fillOpacity: 100,
-  textSize: 12,
+  textSize: PRINT_STANDARD_TOKENS.annotations.noteFontSize,
   textOpacity: 100,
-  labelSize: 12,
+  labelSize: PRINT_STANDARD_TOKENS.legend.fontSize,
   labelOpacity: 100,
   lineWidth: 1,
   lineMaxWidth: 10,
   lineOpacity: 100,
   haloWidth: 2
-} as const;
+} satisfies Record<string, number>;
 
 export const SLIDER_LIMITS = {
   opacity: { min: 0, max: 100 },
@@ -183,7 +205,7 @@ export const SLIDER_LIMITS = {
   lineMaxWidth: { min: 1, max: 50 },
   lineOpacity: { min: 0, max: 100 },
   symbolSize: { min: 1, max: 100 },
-  symbolMaxSize: { min: 1, max: 200 },
+  symbolMaxSize: { min: 1, max: 100 },
   textSize: { min: 8, max: 32 },
   textOpacity: { min: 0, max: 100 },
   labelOpacity: { min: 0, max: 100 },
@@ -192,7 +214,8 @@ export const SLIDER_LIMITS = {
 } as const;
 
 export const DEFAULT_COLORS = {
-  fill: '#4589ff',
+  fill: DEFAULT_VISUALIZATION_COLOR,
+  secondary: DEFAULT_VISUALIZATION_SECONDARY_COLOR,
   stroke: '#1e3a5f',
   line: '#1e3a5f',
   text: '#000000',
@@ -201,7 +224,7 @@ export const DEFAULT_COLORS = {
   missingData: '#c6c6c6',
   white: '#ffffff',
   black: '#000000',
-  gray: '#8d8d8d'
+  gray: DEFAULT_VISUALIZATION_NEUTRAL_COLOR
 } as const;
 
 export enum BasemapRemarquables {
@@ -269,7 +292,7 @@ export const BASEMAP_LAYER_CONFIG = {
 export const UI_CONSTANTS = {
   SUGGESTIONS_PER_PAGE: 3,
   MAX_SUGGESTIONS: 12,
-  SEARCH_DEBOUNCE_MS: 500,
+  SEARCH_DEBOUNCE_MS: 300,
   MIN_SEARCH_LENGTH: 3,
   MAP_HIGHLIGHT_DEBOUNCE_MS: 800,
   DATA_TABLE_SKELETON_COLUMNS: 5,

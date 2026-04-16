@@ -7,19 +7,28 @@ import type {
   VizSuggestion
 } from '$lib/features/commons/services/viz-suggester.service';
 import {
+  getVisualizationOriginMode,
+  PrimitiveFilterType,
   type VisualizationPreset,
   type VisualizationConfig,
+  type VisualizationOrigin,
+  type VisualizationRestoreSnapshot,
+  type VisualizationRestoreState,
   resolveVisualizationPreset,
   visualizationStore,
   VisualizationType
 } from '$lib/features/commons/store/visualization.store.svelte';
+import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
 import { GEO_COLUMN_TYPE } from '$lib/features/commons/constants/data.constants';
 import {
+  DEFAULT_COLORS,
   ColorMode,
   FillMode,
   ProportionalType,
   SizeMode,
-  StrokeMode
+  StrokeMode,
+  SymbolMode,
+  ThicknessMode
 } from '$lib/features/main-toolbar/constants';
 import {
   getLegendState,
@@ -28,15 +37,215 @@ import {
 
 import { projectStore } from '$lib/features/commons/store/project.store.svelte';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
+import { deepClone } from '$lib/features/commons/utils/clone.utils';
 
 interface DatasetGeometrySource {
   id?: string;
-  geometry?: { type?: string | null };
+  geometry?: { type?: string | null } | string;
   sourceFileId?: string;
   joinedBasemap?: string;
   gpsMode?: boolean;
   geoDetection?: {
     geoColumns?: Array<{ type?: string }>;
+  };
+}
+
+type SuggestionPrimitive =
+  | PrimitiveFilterType.POINT
+  | PrimitiveFilterType.LINE
+  | PrimitiveFilterType.POLYGON
+  | 'text'
+  | 'label';
+
+type DatasetPrimitive =
+  | PrimitiveFilterType.POINT
+  | PrimitiveFilterType.LINE
+  | PrimitiveFilterType.POLYGON
+  | null;
+
+interface SuggestionBehavior {
+  visualizationType: VisualizationType;
+  primaryPrimitives: SuggestionPrimitive[];
+  supportPrimitives: SuggestionPrimitive[];
+  forcedOffPrimitives: SuggestionPrimitive[];
+  primitiveFilters: VisualizationConfig['primitiveFilters'];
+  mapping: VisualizationConfig['mapping'];
+  modes?: Partial<VisualizationConfig['modes']>;
+  style?: Partial<VisualizationConfig['style']>;
+  classification?: VisualizationConfig['classification'];
+  symbols?: VisualizationConfig['symbols'];
+  missingData?: VisualizationConfig['missingData'];
+}
+
+const SUGGESTION_VISUALIZATION_TYPES = {
+  symbols_uniques: VisualizationType.PROPORTIONAL,
+  polygons_uniques: VisualizationType.CHOROPLETH,
+  lines_uniques: VisualizationType.CHOROPLETH,
+  choropleth: VisualizationType.CHOROPLETH,
+  symbols_uniques_colorful_QTR: VisualizationType.CHOROPLETH,
+  lines_colorful_QTR: VisualizationType.CHOROPLETH,
+  symbols_proportional: VisualizationType.PROPORTIONAL,
+  lines_proportional: VisualizationType.PROPORTIONAL,
+  polygons_colorful_QL: VisualizationType.CATEGORICAL,
+  symbols_differents: VisualizationType.CATEGORICAL,
+  symbols_uniques_colorful_QL: VisualizationType.CATEGORICAL,
+  lines_colorful_QL: VisualizationType.CATEGORICAL,
+  polygons_colorful_QLO: VisualizationType.CATEGORICAL,
+  symbols_differents_QLO: VisualizationType.CATEGORICAL,
+  symbols_uniques_colorful_QLO: VisualizationType.CATEGORICAL,
+  lines_colorful_QLO: VisualizationType.CATEGORICAL,
+  symbols_proportional_colorful_QL: VisualizationType.BIVARIATE,
+  symbols_proportional_colorful_QTR: VisualizationType.BIVARIATE,
+  symbols_proportional_double: VisualizationType.BIVARIATE,
+  lines_proportional_colorful_QL: VisualizationType.BIVARIATE,
+  lines_proportional_colorful_QTR: VisualizationType.BIVARIATE,
+  texts_colorful_QL: VisualizationType.BIVARIATE,
+  texts_colorful_QTR: VisualizationType.BIVARIATE,
+  texts_proportional: VisualizationType.BIVARIATE
+} as const satisfies Record<string, VisualizationType>;
+
+export const SUGGESTION_BEHAVIOR_IDS = Object.keys(
+  SUGGESTION_VISUALIZATION_TYPES
+);
+
+const SYMBOL_UNIQUE_SUGGESTION_IDS = new Set([
+  'symbols_uniques',
+  'symbols_uniques_colorful_QTR',
+  'symbols_uniques_colorful_QL',
+  'symbols_uniques_colorful_QLO'
+]);
+
+const SYMBOL_CATEGORY_SHAPE_IDS = new Set([
+  'symbols_differents',
+  'symbols_differents_QLO'
+]);
+
+const SYMBOL_PROPORTIONAL_SUGGESTION_IDS = new Set([
+  'symbols_proportional',
+  'symbols_proportional_colorful_QL',
+  'symbols_proportional_colorful_QTR',
+  'symbols_proportional_double'
+]);
+
+const LINE_SUGGESTION_IDS = new Set([
+  'lines_uniques',
+  'lines_colorful_QL',
+  'lines_colorful_QTR',
+  'lines_proportional',
+  'lines_proportional_colorful_QL',
+  'lines_proportional_colorful_QTR',
+  'lines_colorful_QLO'
+]);
+
+const POLYGON_SUGGESTION_IDS = new Set([
+  'polygons_uniques',
+  'polygons_colorful_QL',
+  'choropleth',
+  'polygons_colorful_QLO'
+]);
+
+const TEXT_SUGGESTION_IDS = new Set([
+  'texts_colorful_QL',
+  'texts_colorful_QTR',
+  'texts_proportional'
+]);
+
+const CATEGORY_SUGGESTION_IDS = new Set([
+  'polygons_colorful_QL',
+  'polygons_colorful_QLO',
+  'symbols_differents',
+  'symbols_uniques_colorful_QL',
+  'symbols_differents_QLO',
+  'symbols_uniques_colorful_QLO',
+  'lines_colorful_QL',
+  'lines_colorful_QLO',
+  'symbols_proportional_colorful_QL',
+  'lines_proportional_colorful_QL',
+  'texts_colorful_QL'
+]);
+
+const CLASS_SUGGESTION_IDS = new Set([
+  'choropleth',
+  'symbols_uniques_colorful_QTR',
+  'lines_colorful_QTR',
+  'symbols_proportional_colorful_QTR',
+  'lines_proportional_colorful_QTR',
+  'texts_colorful_QTR'
+]);
+
+function resolveDatasetPrimitive(
+  dataset?: DatasetGeometrySource | null
+): DatasetPrimitive {
+  const geometryType = resolveDatasetGeometryType(dataset);
+
+  if (!geometryType) {
+    return null;
+  }
+
+  const normalized = geometryType.toLowerCase();
+  if (normalized.includes('polygon')) {
+    return PrimitiveFilterType.POLYGON;
+  }
+
+  if (normalized.includes('line')) {
+    return PrimitiveFilterType.LINE;
+  }
+
+  if (normalized.includes('point')) {
+    return PrimitiveFilterType.POINT;
+  }
+
+  return null;
+}
+
+function buildClearedMapping(
+  geometryColumn: string | undefined,
+  updates: Partial<VisualizationConfig['mapping']> = {}
+): VisualizationConfig['mapping'] {
+  return {
+    geometryColumn,
+    valueColumn: undefined,
+    categoryColumn: undefined,
+    sizeColumn: undefined,
+    colorColumn: undefined,
+    labelColumn: undefined,
+    secondaryLabelColumn: undefined,
+    ...updates
+  };
+}
+
+function buildDisabledMissingData(
+  baseMissingData: VisualizationConfig['missingData']
+): VisualizationConfig['missingData'] {
+  if (!baseMissingData) {
+    return undefined;
+  }
+
+  return {
+    ...baseMissingData,
+    show: false,
+    enabled: false,
+    pattern: false
+  };
+}
+
+function buildSupportPolygonStyle(): Partial<VisualizationConfig['style']> {
+  return {
+    fillOpacity: 0,
+    strokeColor: DEFAULT_COLORS.gray,
+    strokeOpacity: 1
+  };
+}
+
+function buildTextStyle(
+  extra: Partial<VisualizationConfig['style']> = {}
+): Partial<VisualizationConfig['style']> {
+  return {
+    textOpacity: 1,
+    labelOpacity: 0,
+    strokeColor: DEFAULT_COLORS.gray,
+    strokeOpacity: 1,
+    ...extra
   };
 }
 
@@ -47,7 +256,10 @@ export function resolveDatasetGeometryType(
     return null;
   }
 
-  const rawGeometry = dataset.geometry?.type;
+  const rawGeometry =
+    typeof dataset.geometry === 'string'
+      ? dataset.geometry
+      : dataset.geometry?.type;
   if (typeof rawGeometry === 'string' && rawGeometry.length > 0) {
     return rawGeometry as GeometryType;
   }
@@ -125,47 +337,340 @@ export function resolveDatasetGeometryType(
 }
 
 export function mapSuggestionToType(suggestionId: string): VisualizationType {
-  const mapping: Record<string, VisualizationType> = {
-    // 0-column suggestions (basic geometries)
-    symbols_uniques: VisualizationType.PROPORTIONAL,
-    polygons_uniques: VisualizationType.CHOROPLETH,
-    lines_uniques: VisualizationType.CHOROPLETH,
+  return (
+    SUGGESTION_VISUALIZATION_TYPES[
+      suggestionId as keyof typeof SUGGESTION_VISUALIZATION_TYPES
+    ] ?? VisualizationType.CHOROPLETH
+  );
+}
 
-    // QTR (quantitative ratio) -> CHOROPLETH
-    choropleth: VisualizationType.CHOROPLETH,
-    symbols_uniques_colorful_QTR: VisualizationType.CHOROPLETH,
-    lines_colorful_QTR: VisualizationType.CHOROPLETH,
+export function resolveSuggestionBehavior(
+  suggestion: VizSuggestion,
+  dataset: Parameters<typeof resolveVisualizationPreset>[1],
+  visualization?: VisualizationConfig
+): SuggestionBehavior {
+  const visualizationType = mapSuggestionToType(suggestion.id);
+  const preset = resolveVisualizationPreset(visualizationType, dataset);
+  const categoricalPreset = resolveVisualizationPreset(
+    VisualizationType.CATEGORICAL,
+    dataset
+  );
+  const choroplethPreset = resolveVisualizationPreset(
+    VisualizationType.CHOROPLETH,
+    dataset
+  );
+  const datasetPrimitive = resolveDatasetPrimitive(dataset);
+  const isPolygonDataset = datasetPrimitive === PrimitiveFilterType.POLYGON;
+  const primaryColumn = suggestion.columns?.[0];
+  const secondaryColumn = suggestion.columns?.[1];
+  const symbolPrimitiveFilters = isPolygonDataset
+    ? [PrimitiveFilterType.POINT, PrimitiveFilterType.POLYGON]
+    : [PrimitiveFilterType.POINT];
+  const textPrimitiveFilters = isPolygonDataset
+    ? [PrimitiveFilterType.POLYGON]
+    : [];
 
-    // QTA (quantitative absolute) -> PROPORTIONAL
-    symbols_proportional: VisualizationType.PROPORTIONAL,
-    lines_proportional: VisualizationType.PROPORTIONAL,
+  const baseMapping = buildClearedMapping(preset.mapping.geometryColumn);
+  const baseSymbols = preset.symbols
+    ? {
+        ...preset.symbols,
+        opacity:
+          visualization?.symbols?.opacity ??
+          preset.symbols.opacity ??
+          preset.symbols.opacity
+      }
+    : preset.symbols;
 
-    // QL (qualitative) -> CATEGORICAL
-    polygons_colorful_QL: VisualizationType.CATEGORICAL,
-    symbols_differents: VisualizationType.CATEGORICAL,
-    symbols_uniques_colorful_QL: VisualizationType.CATEGORICAL,
-    lines_colorful_QL: VisualizationType.CATEGORICAL,
+  if (TEXT_SUGGESTION_IDS.has(suggestion.id)) {
+    if (suggestion.id === 'texts_colorful_QL') {
+      return {
+        visualizationType,
+        primaryPrimitives: ['text'],
+        supportPrimitives: isPolygonDataset
+          ? [PrimitiveFilterType.POLYGON]
+          : [],
+        forcedOffPrimitives: [
+          PrimitiveFilterType.POINT,
+          PrimitiveFilterType.LINE,
+          'label'
+        ],
+        primitiveFilters: textPrimitiveFilters,
+        mapping: buildClearedMapping(preset.mapping.geometryColumn, {
+          labelColumn: primaryColumn,
+          categoryColumn: secondaryColumn
+        }),
+        modes: {
+          ...preset.modes,
+          color: ColorMode.CATEGORIES,
+          size: SizeMode.FIXED,
+          symbol: SymbolMode.UNIQUE
+        },
+        style: {
+          ...buildTextStyle(isPolygonDataset ? buildSupportPolygonStyle() : {})
+        },
+        classification: categoricalPreset.classification,
+        symbols: baseSymbols,
+        missingData: buildDisabledMissingData(preset.missingData)
+      };
+    }
 
-    // QLO (qualitative ordered) -> CATEGORICAL
-    polygons_colorful_QLO: VisualizationType.CATEGORICAL,
-    symbols_differents_QLO: VisualizationType.CATEGORICAL,
-    symbols_uniques_colorful_QLO: VisualizationType.CATEGORICAL,
-    lines_colorful_QLO: VisualizationType.CATEGORICAL,
+    if (suggestion.id === 'texts_colorful_QTR') {
+      return {
+        visualizationType,
+        primaryPrimitives: ['text'],
+        supportPrimitives: isPolygonDataset
+          ? [PrimitiveFilterType.POLYGON]
+          : [],
+        forcedOffPrimitives: [
+          PrimitiveFilterType.POINT,
+          PrimitiveFilterType.LINE,
+          'label'
+        ],
+        primitiveFilters: textPrimitiveFilters,
+        mapping: buildClearedMapping(preset.mapping.geometryColumn, {
+          labelColumn: primaryColumn,
+          valueColumn: secondaryColumn
+        }),
+        modes: {
+          ...preset.modes,
+          color: ColorMode.CLASSES,
+          size: SizeMode.FIXED,
+          symbol: SymbolMode.UNIQUE
+        },
+        style: {
+          ...buildTextStyle(isPolygonDataset ? buildSupportPolygonStyle() : {})
+        },
+        classification: choroplethPreset.classification,
+        symbols: baseSymbols,
+        missingData: buildDisabledMissingData(preset.missingData)
+      };
+    }
 
-    // 2-column combinations -> BIVARIATE
-    symbols_proportional_colorful_QL: VisualizationType.BIVARIATE,
-    symbols_proportional_colorful_QTR: VisualizationType.BIVARIATE,
-    symbols_proportional_double: VisualizationType.BIVARIATE,
-    lines_proportional_colorful_QL: VisualizationType.BIVARIATE,
-    lines_proportional_colorful_QTR: VisualizationType.BIVARIATE,
+    return {
+      visualizationType,
+      primaryPrimitives: ['text'],
+      supportPrimitives: isPolygonDataset ? [PrimitiveFilterType.POLYGON] : [],
+      forcedOffPrimitives: [
+        PrimitiveFilterType.POINT,
+        PrimitiveFilterType.LINE,
+        'label'
+      ],
+      primitiveFilters: textPrimitiveFilters,
+      mapping: buildClearedMapping(preset.mapping.geometryColumn, {
+        labelColumn: primaryColumn,
+        sizeColumn: secondaryColumn
+      }),
+      modes: {
+        ...preset.modes,
+        color: ColorMode.UNIQUE,
+        size: SizeMode.PROPORTIONAL,
+        symbol: SymbolMode.UNIQUE
+      },
+      style: {
+        ...buildTextStyle(isPolygonDataset ? buildSupportPolygonStyle() : {})
+      },
+      classification: undefined,
+      symbols: baseSymbols,
+      missingData: buildDisabledMissingData(preset.missingData)
+    };
+  }
 
-    // Text combinations -> BIVARIATE
-    texts_colorful_QL: VisualizationType.BIVARIATE,
-    texts_colorful_QTR: VisualizationType.BIVARIATE,
-    texts_proportional: VisualizationType.BIVARIATE
+  if (POLYGON_SUGGESTION_IDS.has(suggestion.id)) {
+    if (suggestion.id === 'choropleth') {
+      return {
+        visualizationType,
+        primaryPrimitives: [PrimitiveFilterType.POLYGON],
+        supportPrimitives: [],
+        forcedOffPrimitives: [
+          PrimitiveFilterType.POINT,
+          PrimitiveFilterType.LINE,
+          'text',
+          'label'
+        ],
+        primitiveFilters: [PrimitiveFilterType.POLYGON],
+        mapping: buildClearedMapping(preset.mapping.geometryColumn, {
+          valueColumn: primaryColumn
+        }),
+        modes: {
+          ...preset.modes,
+          fill: FillMode.CLASSES
+        },
+        style: {},
+        classification: choroplethPreset.classification,
+        symbols: baseSymbols,
+        missingData: preset.missingData
+      };
+    }
+
+    if (CATEGORY_SUGGESTION_IDS.has(suggestion.id)) {
+      return {
+        visualizationType,
+        primaryPrimitives: [PrimitiveFilterType.POLYGON],
+        supportPrimitives: [],
+        forcedOffPrimitives: [
+          PrimitiveFilterType.POINT,
+          PrimitiveFilterType.LINE,
+          'text',
+          'label'
+        ],
+        primitiveFilters: [PrimitiveFilterType.POLYGON],
+        mapping: buildClearedMapping(preset.mapping.geometryColumn, {
+          categoryColumn: primaryColumn
+        }),
+        modes: {
+          ...preset.modes,
+          fill: FillMode.CATEGORIES
+        },
+        style: {},
+        classification: categoricalPreset.classification,
+        symbols: baseSymbols,
+        missingData: preset.missingData
+      };
+    }
+
+    return {
+      visualizationType,
+      primaryPrimitives: [PrimitiveFilterType.POLYGON],
+      supportPrimitives: [],
+      forcedOffPrimitives: [
+        PrimitiveFilterType.POINT,
+        PrimitiveFilterType.LINE,
+        'text',
+        'label'
+      ],
+      primitiveFilters: [PrimitiveFilterType.POLYGON],
+      mapping: baseMapping,
+      modes: {
+        ...preset.modes,
+        fill: FillMode.UNIQUE
+      },
+      style: {},
+      classification: undefined,
+      symbols: baseSymbols,
+      missingData: preset.missingData
+    };
+  }
+
+  if (LINE_SUGGESTION_IDS.has(suggestion.id)) {
+    const isCategoricalLine = CATEGORY_SUGGESTION_IDS.has(suggestion.id);
+    const isClassedLine = CLASS_SUGGESTION_IDS.has(suggestion.id);
+    const isProportionalLine = [
+      'lines_proportional',
+      'lines_proportional_colorful_QL',
+      'lines_proportional_colorful_QTR'
+    ].includes(suggestion.id);
+
+    return {
+      visualizationType,
+      primaryPrimitives: [PrimitiveFilterType.LINE],
+      supportPrimitives: [],
+      forcedOffPrimitives: [
+        PrimitiveFilterType.POINT,
+        PrimitiveFilterType.POLYGON,
+        'text',
+        'label'
+      ],
+      primitiveFilters: [PrimitiveFilterType.LINE],
+      mapping: buildClearedMapping(preset.mapping.geometryColumn, {
+        valueColumn: isClassedLine
+          ? primaryColumn
+          : suggestion.id === 'lines_proportional_colorful_QTR'
+            ? secondaryColumn
+            : undefined,
+        categoryColumn: isCategoricalLine
+          ? isProportionalLine
+            ? secondaryColumn
+            : primaryColumn
+          : undefined,
+        sizeColumn: isProportionalLine ? primaryColumn : undefined
+      }),
+      modes: {
+        ...preset.modes,
+        fill: FillMode.NONE,
+        color: isCategoricalLine
+          ? ColorMode.CATEGORIES
+          : isClassedLine
+            ? ColorMode.CLASSES
+            : ColorMode.UNIQUE,
+        thickness: isProportionalLine
+          ? ThicknessMode.PROPORTIONAL
+          : ThicknessMode.UNIQUE
+      },
+      style: {},
+      classification: isCategoricalLine
+        ? categoricalPreset.classification
+        : isClassedLine
+          ? choroplethPreset.classification
+          : undefined,
+      symbols: baseSymbols,
+      missingData: preset.missingData
+    };
+  }
+
+  const isCategoricalSymbol = CATEGORY_SUGGESTION_IDS.has(suggestion.id);
+  const isClassedSymbol = CLASS_SUGGESTION_IDS.has(suggestion.id);
+  const isProportionalSymbol = SYMBOL_PROPORTIONAL_SUGGESTION_IDS.has(
+    suggestion.id
+  );
+
+  return {
+    visualizationType,
+    primaryPrimitives: [PrimitiveFilterType.POINT],
+    supportPrimitives: isPolygonDataset ? [PrimitiveFilterType.POLYGON] : [],
+    forcedOffPrimitives: [PrimitiveFilterType.LINE, 'text', 'label'],
+    primitiveFilters: symbolPrimitiveFilters,
+    mapping: buildClearedMapping(preset.mapping.geometryColumn, {
+      valueColumn: isClassedSymbol
+        ? primaryColumn
+        : suggestion.id === 'symbols_proportional_colorful_QTR' ||
+            suggestion.id === 'symbols_proportional_double'
+          ? secondaryColumn
+          : undefined,
+      categoryColumn: isCategoricalSymbol
+        ? isProportionalSymbol
+          ? secondaryColumn
+          : primaryColumn
+        : undefined,
+      sizeColumn: isProportionalSymbol ? primaryColumn : undefined
+    }),
+    modes: {
+      ...preset.modes,
+      symbol: SYMBOL_CATEGORY_SHAPE_IDS.has(suggestion.id)
+        ? SymbolMode.CATEGORIES
+        : SYMBOL_UNIQUE_SUGGESTION_IDS.has(suggestion.id)
+          ? SymbolMode.UNIQUE
+          : SymbolMode.PROPORTIONAL,
+      fill: isCategoricalSymbol
+        ? FillMode.CATEGORIES
+        : isClassedSymbol
+          ? FillMode.CLASSES
+          : FillMode.UNIQUE,
+      stroke:
+        suggestion.id === 'symbols_proportional_double'
+          ? StrokeMode.UNIQUE
+          : preset.modes?.stroke,
+      proportionalType:
+        suggestion.id === 'symbols_proportional_double'
+          ? ProportionalType.DOUBLE
+          : ProportionalType.SINGLE
+    },
+    style: {
+      ...(isPolygonDataset ? buildSupportPolygonStyle() : {}),
+      ...(suggestion.id === 'symbols_proportional_double'
+        ? {
+            fillColorB:
+              visualization?.style.fillColorB ?? DEFAULT_COLORS.secondary
+          }
+        : {})
+    },
+    classification: isCategoricalSymbol
+      ? categoricalPreset.classification
+      : isClassedSymbol
+        ? choroplethPreset.classification
+        : undefined,
+    symbols: baseSymbols,
+    missingData: preset.missingData
   };
-
-  return mapping[suggestionId] ?? VisualizationType.CHOROPLETH;
 }
 
 export function resolveBlankVisualizationType(
@@ -180,14 +685,215 @@ export function resolveBlankVisualizationType(
   return VisualizationType.CHOROPLETH;
 }
 
-function areVisualizationPresetValuesEqual(
-  currentValue: VisualizationPreset[keyof VisualizationPreset],
-  expectedValue: VisualizationPreset[keyof VisualizationPreset]
-): boolean {
-  return (
-    JSON.stringify(currentValue ?? null) ===
-    JSON.stringify(expectedValue ?? null)
+export function resolveBlankVisualizationPreset(
+  dataset: Parameters<typeof resolveVisualizationPreset>[1]
+): VisualizationPreset {
+  const blankType = resolveBlankVisualizationType(dataset);
+  const preset = resolveVisualizationPreset(blankType, dataset);
+  const modes = {
+    ...preset.modes
+  };
+  const style = {
+    ...preset.style,
+    lineColor: DEFAULT_COLORS.gray,
+    textHalo: false,
+    textCollisionDetection: false,
+    textDxpMasking: false,
+    labelHalo: false,
+    labelCollisionDetection: false,
+    labelDxpMasking: false
+  };
+
+  if (blankType === VisualizationType.CHOROPLETH) {
+    modes.fill = FillMode.NONE;
+    style.strokeColor = DEFAULT_COLORS.gray;
+  }
+
+  if (blankType === VisualizationType.PROPORTIONAL) {
+    modes.symbol = SymbolMode.UNIQUE;
+    modes.proportionalType = ProportionalType.SINGLE;
+    style.fillColor = DEFAULT_COLORS.gray;
+    style.strokeColor = DEFAULT_COLORS.gray;
+  }
+
+  return {
+    ...preset,
+    modes,
+    style,
+    mapping: {
+      geometryColumn: preset.mapping.geometryColumn
+    },
+    classification: undefined,
+    missingData: preset.missingData
+      ? {
+          ...preset.missingData,
+          show: false,
+          enabled: false,
+          pattern: false
+        }
+      : undefined
+  };
+}
+
+export function applyBlankVisualizationPreset(
+  vizId: string,
+  dataset: Parameters<typeof resolveBlankVisualizationPreset>[0],
+  origin?: VisualizationOrigin
+): void {
+  visualizationStore.updateVisualization(vizId, {
+    ...resolveBlankVisualizationPreset(dataset),
+    origin,
+    primitiveOrder: undefined,
+    dataFilters: undefined
+  });
+}
+
+function createVisualizationRestoreSnapshot(
+  visualization: VisualizationConfig
+): VisualizationRestoreSnapshot {
+  return {
+    type: visualization.type,
+    modes: deepClone(visualization.modes),
+    primitiveFilters: deepClone(visualization.primitiveFilters),
+    primitiveOrder: deepClone(visualization.primitiveOrder),
+    style: deepClone(visualization.style),
+    mapping: deepClone(visualization.mapping),
+    classification: deepClone(visualization.classification),
+    symbols: deepClone(visualization.symbols),
+    missingData: deepClone(visualization.missingData),
+    density: deepClone(visualization.density),
+    yearFilter: deepClone(visualization.yearFilter),
+    dataFilters: deepClone(visualization.dataFilters)
+  };
+}
+
+function createVisualizationRestoreState(
+  visualization: VisualizationConfig
+): VisualizationRestoreState {
+  return {
+    origin: {
+      mode: getVisualizationOriginMode(visualization),
+      ...(visualization.origin?.suggestionKey
+        ? { suggestionKey: visualization.origin.suggestionKey }
+        : {})
+    },
+    visualization: createVisualizationRestoreSnapshot(visualization)
+  };
+}
+
+export function buildSuggestionOrigin(
+  visualization: VisualizationConfig,
+  origin: VisualizationOrigin
+): VisualizationOrigin {
+  const currentMode = getVisualizationOriginMode(visualization);
+  const existingRestoreState =
+    (currentMode === 'auto-suggestion' ||
+      currentMode === 'manual-suggestion') &&
+    visualization.origin?.restoreState
+      ? deepClone(visualization.origin.restoreState)
+      : undefined;
+
+  return {
+    ...origin,
+    restoreState:
+      existingRestoreState ?? createVisualizationRestoreState(visualization)
+  };
+}
+
+export function restoreVisualizationFromSuggestion(vizId: string): boolean {
+  const visualization = visualizationStore.visualizations.find(
+    (item) => item.id === vizId
   );
+  const restoreState = visualization?.origin?.restoreState;
+
+  if (!visualization || !restoreState) {
+    return false;
+  }
+
+  const restoredVisualization = {
+    ...visualization,
+    ...deepClone(restoreState.visualization),
+    origin: undefined
+  } as VisualizationConfig;
+  const restoreOriginMode = restoreState.origin.mode;
+  const dataset = datasetsStore.datasets.find(
+    (item) => item.id === visualization.datasetId
+  );
+
+  let nextOrigin: VisualizationOrigin | undefined;
+  if (
+    restoreOriginMode === 'auto-suggestion' ||
+    restoreOriginMode === 'manual-suggestion'
+  ) {
+    nextOrigin =
+      dataset && isVisualizationBlank(restoredVisualization, dataset)
+        ? { mode: 'manual-blank' }
+        : { mode: 'custom' };
+  } else if (restoreOriginMode === 'legacy') {
+    nextOrigin = undefined;
+  } else {
+    nextOrigin = deepClone(restoreState.origin);
+  }
+
+  visualizationStore.updateVisualization(vizId, {
+    ...deepClone(restoreState.visualization),
+    origin: nextOrigin
+  });
+
+  return true;
+}
+
+function areVisualizationPresetValuesEqual(
+  currentValue: unknown,
+  expectedValue: unknown
+): boolean {
+  const normalizeValue = (value: unknown): unknown => {
+    if (value === undefined || value === null) {
+      return null;
+    }
+
+    if (Array.isArray(value)) {
+      return value.map((item) => normalizeValue(item));
+    }
+
+    if (typeof value !== 'object') {
+      return value;
+    }
+
+    return Object.keys(value as Record<string, unknown>)
+      .sort()
+      .reduce<Record<string, unknown>>((acc, key) => {
+        const rawValue = (value as Record<string, unknown>)[key];
+        if (rawValue !== undefined) {
+          acc[key] = normalizeValue(rawValue);
+        }
+        return acc;
+      }, {});
+  };
+
+  return (
+    JSON.stringify(normalizeValue(currentValue)) ===
+    JSON.stringify(normalizeValue(expectedValue))
+  );
+}
+
+function normalizeClassificationForPresetComparison(
+  classification:
+    | VisualizationConfig['classification']
+    | VisualizationPreset['classification']
+): Record<string, unknown> | null {
+  if (!classification) {
+    return null;
+  }
+
+  return {
+    method: classification.method,
+    paletteId: classification.paletteId,
+    inverted: classification.inverted,
+    breakpointValue: classification.breakpointValue,
+    patternId: classification.patternId,
+    patternParams: classification.patternParams
+  };
 }
 
 export function isVisualizationUsingPreset(
@@ -204,8 +910,8 @@ export function isVisualizationUsingPreset(
     areVisualizationPresetValuesEqual(visualization.style, preset.style) &&
     areVisualizationPresetValuesEqual(visualization.mapping, preset.mapping) &&
     areVisualizationPresetValuesEqual(
-      visualization.classification,
-      preset.classification
+      normalizeClassificationForPresetComparison(visualization.classification),
+      normalizeClassificationForPresetComparison(preset.classification)
     ) &&
     areVisualizationPresetValuesEqual(visualization.symbols, preset.symbols) &&
     areVisualizationPresetValuesEqual(
@@ -219,9 +925,7 @@ export function isVisualizationBlank(
   visualization: VisualizationConfig,
   dataset: DatasetGeometrySource
 ): boolean {
-  const blankType = resolveBlankVisualizationType(dataset);
-  const blankPreset = resolveVisualizationPreset(
-    blankType,
+  const blankPreset = resolveBlankVisualizationPreset(
     dataset as Parameters<typeof resolveVisualizationPreset>[1]
   );
 
@@ -235,54 +939,6 @@ export function resolveNextSuggestionSelection(
   return currentSuggestionId === nextSuggestionId
     ? undefined
     : nextSuggestionId;
-}
-
-export function applySuggestionMapping(
-  vizId: string,
-  vizType: VisualizationType,
-  suggestion: VizSuggestion
-): void {
-  const viz = visualizationStore.visualizations.find((v) => v.id === vizId);
-  if (!viz) return;
-
-  visualizationStore.updateVisualization(vizId, {
-    mapping: {
-      ...viz.mapping,
-      ...buildSuggestionMappingUpdate(vizType, suggestion)
-    }
-  });
-}
-
-function buildSuggestionMappingUpdate(
-  vizType: VisualizationType,
-  suggestion: VizSuggestion
-): Partial<VisualizationConfig['mapping']> {
-  if (!suggestion.columns || suggestion.columns.length === 0) {
-    return {};
-  }
-
-  const column = suggestion.columns[0];
-  const mappingUpdate: Partial<VisualizationConfig['mapping']> = {};
-
-  switch (vizType) {
-    case VisualizationType.CHOROPLETH:
-      mappingUpdate.valueColumn = column;
-      break;
-    case VisualizationType.PROPORTIONAL:
-      mappingUpdate.sizeColumn = column;
-      break;
-    case VisualizationType.CATEGORICAL:
-      mappingUpdate.categoryColumn = column;
-      break;
-    case VisualizationType.BIVARIATE:
-      mappingUpdate.sizeColumn = column;
-      if (suggestion.columns.length > 1) {
-        mappingUpdate.valueColumn = suggestion.columns[1];
-      }
-      break;
-  }
-
-  return mappingUpdate;
 }
 
 function getLegendSubtitleForVisualization(
@@ -329,171 +985,33 @@ function syncLegendSubtitleAfterSuggestion(
 
 function buildSuggestionUpdate(
   visualization: VisualizationConfig,
-  suggestion: VizSuggestion,
-  vizType: VisualizationType
-): Partial<VisualizationConfig> | null {
-  const columns = suggestion.columns ?? [];
-  const primaryColumn = columns[0];
-  const secondaryColumn = columns[1];
-
-  if (!primaryColumn && columns.length === 0) {
-    return null;
-  }
-
-  const mappingUpdate: Partial<VisualizationConfig['mapping']> = {};
-  const modesUpdate: Partial<VisualizationConfig['modes']> = {};
-  const styleUpdate: Partial<VisualizationConfig['style']> = {};
-
-  switch (suggestion.id) {
-    case 'choropleth':
-    case 'symbols_uniques_colorful_QTR':
-    case 'lines_colorful_QTR':
-      if (primaryColumn) {
-        mappingUpdate.valueColumn = primaryColumn;
-      }
-      mappingUpdate.sizeColumn = undefined;
-      mappingUpdate.categoryColumn = undefined;
-      break;
-
-    case 'symbols_proportional':
-    case 'lines_proportional':
-      if (primaryColumn) {
-        mappingUpdate.sizeColumn = primaryColumn;
-      }
-      mappingUpdate.valueColumn = undefined;
-      mappingUpdate.categoryColumn = undefined;
-      break;
-
-    case 'polygons_colorful_QL':
-    case 'polygons_colorful_QLO':
-    case 'symbols_differents':
-    case 'symbols_uniques_colorful_QL':
-    case 'symbols_differents_QLO':
-    case 'symbols_uniques_colorful_QLO':
-    case 'lines_colorful_QL':
-    case 'lines_colorful_QLO':
-      if (primaryColumn) {
-        mappingUpdate.categoryColumn = primaryColumn;
-      }
-      mappingUpdate.sizeColumn = undefined;
-      mappingUpdate.valueColumn = undefined;
-      break;
-
-    case 'symbols_proportional_colorful_QL':
-    case 'lines_proportional_colorful_QL':
-      if (primaryColumn) {
-        mappingUpdate.sizeColumn = primaryColumn;
-      }
-      if (secondaryColumn) {
-        mappingUpdate.categoryColumn = secondaryColumn;
-      }
-      mappingUpdate.valueColumn = undefined;
-      modesUpdate.fill = FillMode.CATEGORIES;
-      modesUpdate.proportionalType = ProportionalType.SINGLE;
-      break;
-
-    case 'symbols_proportional_colorful_QTR':
-    case 'lines_proportional_colorful_QTR':
-      if (primaryColumn) {
-        mappingUpdate.sizeColumn = primaryColumn;
-      }
-      if (secondaryColumn) {
-        mappingUpdate.valueColumn = secondaryColumn;
-      }
-      mappingUpdate.categoryColumn = undefined;
-      modesUpdate.fill = FillMode.CLASSES;
-      modesUpdate.proportionalType = ProportionalType.SINGLE;
-      break;
-
-    case 'symbols_proportional_double':
-      if (primaryColumn) {
-        mappingUpdate.sizeColumn = primaryColumn;
-      }
-      if (secondaryColumn) {
-        mappingUpdate.valueColumn = secondaryColumn;
-      }
-      mappingUpdate.categoryColumn = undefined;
-      modesUpdate.fill = FillMode.UNIQUE;
-      modesUpdate.stroke = StrokeMode.UNIQUE;
-      modesUpdate.proportionalType = ProportionalType.DOUBLE;
-      styleUpdate.fillColorB = visualization.style.fillColorB ?? '#ff832b';
-      break;
-
-    case 'texts_colorful_QL':
-      if (primaryColumn) {
-        mappingUpdate.labelColumn = primaryColumn;
-      }
-      if (secondaryColumn) {
-        mappingUpdate.categoryColumn = secondaryColumn;
-      }
-      mappingUpdate.secondaryLabelColumn = undefined;
-      mappingUpdate.sizeColumn = undefined;
-      mappingUpdate.valueColumn = undefined;
-      modesUpdate.fill = FillMode.CATEGORIES;
-      modesUpdate.color = ColorMode.CATEGORIES;
-      modesUpdate.size = SizeMode.FIXED;
-      styleUpdate.textOpacity = 1;
-      styleUpdate.labelOpacity = 0;
-      styleUpdate.fillOpacity = 0;
-      styleUpdate.strokeOpacity = 0;
-      break;
-
-    case 'texts_colorful_QTR':
-      if (primaryColumn) {
-        mappingUpdate.labelColumn = primaryColumn;
-      }
-      if (secondaryColumn) {
-        mappingUpdate.valueColumn = secondaryColumn;
-      }
-      mappingUpdate.secondaryLabelColumn = undefined;
-      mappingUpdate.sizeColumn = undefined;
-      mappingUpdate.categoryColumn = undefined;
-      modesUpdate.fill = FillMode.CLASSES;
-      modesUpdate.color = ColorMode.CLASSES;
-      modesUpdate.size = SizeMode.FIXED;
-      styleUpdate.textOpacity = 1;
-      styleUpdate.labelOpacity = 0;
-      styleUpdate.fillOpacity = 0;
-      styleUpdate.strokeOpacity = 0;
-      break;
-
-    case 'texts_proportional':
-      if (primaryColumn) {
-        mappingUpdate.labelColumn = primaryColumn;
-      }
-      if (secondaryColumn) {
-        mappingUpdate.sizeColumn = secondaryColumn;
-      }
-      mappingUpdate.secondaryLabelColumn = undefined;
-      mappingUpdate.valueColumn = undefined;
-      mappingUpdate.categoryColumn = undefined;
-      modesUpdate.fill = FillMode.UNIQUE;
-      modesUpdate.color = ColorMode.UNIQUE;
-      modesUpdate.size = SizeMode.PROPORTIONAL;
-      styleUpdate.textOpacity = 1;
-      styleUpdate.labelOpacity = 0;
-      styleUpdate.fillOpacity = 0;
-      styleUpdate.strokeOpacity = 0;
-      break;
-
-    default:
-      applySuggestionMapping(visualization.id, vizType, suggestion);
-      return null;
-  }
+  dataset: Parameters<typeof resolveVisualizationPreset>[1],
+  suggestion: VizSuggestion
+): Partial<VisualizationConfig> {
+  const behavior = resolveSuggestionBehavior(
+    suggestion,
+    dataset,
+    visualization
+  );
 
   return {
-    mapping: {
-      ...visualization.mapping,
-      ...mappingUpdate
-    },
-    modes: {
-      ...visualization.modes,
-      ...modesUpdate
-    },
-    style: {
-      ...visualization.style,
-      ...styleUpdate
-    }
+    mapping: behavior.mapping,
+    modes: behavior.modes
+      ? {
+          ...visualization.modes,
+          ...behavior.modes
+        }
+      : visualization.modes,
+    style: behavior.style
+      ? {
+          ...visualization.style,
+          ...behavior.style
+        }
+      : visualization.style,
+    primitiveFilters: behavior.primitiveFilters,
+    classification: behavior.classification,
+    symbols: behavior.symbols,
+    missingData: behavior.missingData
   };
 }
 
@@ -502,8 +1020,15 @@ export function isVisualizationMatchingSuggestion(
   dataset: ProcessedDataset | DatasetResult,
   suggestion: VizSuggestion
 ): boolean {
-  const vizType = mapSuggestionToType(suggestion.id);
-  const preset = resolveVisualizationPreset(vizType, dataset);
+  const behavior = resolveSuggestionBehavior(
+    suggestion,
+    dataset,
+    visualization
+  );
+  const preset = resolveVisualizationPreset(
+    behavior.visualizationType,
+    dataset
+  );
   const expectedVisualization: VisualizationConfig = {
     ...visualization,
     ...preset,
@@ -519,38 +1044,44 @@ export function isVisualizationMatchingSuggestion(
 
   const suggestionUpdate = buildSuggestionUpdate(
     expectedVisualization,
-    suggestion,
-    vizType
+    dataset,
+    suggestion
   );
 
-  if (suggestionUpdate) {
-    expectedVisualization.mapping = suggestionUpdate.mapping
-      ? {
-          ...expectedVisualization.mapping,
-          ...suggestionUpdate.mapping
-        }
-      : expectedVisualization.mapping;
-    expectedVisualization.modes = suggestionUpdate.modes
-      ? {
-          ...expectedVisualization.modes,
-          ...suggestionUpdate.modes
-        }
-      : expectedVisualization.modes;
-    expectedVisualization.style = suggestionUpdate.style
-      ? {
-          ...expectedVisualization.style,
-          ...suggestionUpdate.style
-        }
-      : expectedVisualization.style;
-  } else {
-    expectedVisualization.mapping = {
-      ...expectedVisualization.mapping,
-      ...buildSuggestionMappingUpdate(vizType, suggestion)
-    };
+  expectedVisualization.mapping = suggestionUpdate.mapping
+    ? {
+        ...expectedVisualization.mapping,
+        ...suggestionUpdate.mapping
+      }
+    : expectedVisualization.mapping;
+  expectedVisualization.modes = suggestionUpdate.modes
+    ? {
+        ...expectedVisualization.modes,
+        ...suggestionUpdate.modes
+      }
+    : expectedVisualization.modes;
+  expectedVisualization.style = suggestionUpdate.style
+    ? {
+        ...expectedVisualization.style,
+        ...suggestionUpdate.style
+      }
+    : expectedVisualization.style;
+  expectedVisualization.primitiveFilters =
+    suggestionUpdate.primitiveFilters ?? expectedVisualization.primitiveFilters;
+  if (
+    Object.prototype.hasOwnProperty.call(suggestionUpdate, 'classification')
+  ) {
+    expectedVisualization.classification = suggestionUpdate.classification;
+  }
+  if (Object.prototype.hasOwnProperty.call(suggestionUpdate, 'symbols')) {
+    expectedVisualization.symbols = suggestionUpdate.symbols;
+  }
+  if (Object.prototype.hasOwnProperty.call(suggestionUpdate, 'missingData')) {
+    expectedVisualization.missingData = suggestionUpdate.missingData;
   }
 
   return (
-    expectedVisualization.type === visualization.type &&
+    behavior.visualizationType === visualization.type &&
     areVisualizationPresetValuesEqual(
       expectedVisualization.modes,
       visualization.modes
@@ -560,31 +1091,22 @@ export function isVisualizationMatchingSuggestion(
       visualization.primitiveFilters
     ) &&
     areVisualizationPresetValuesEqual(
-      expectedVisualization.style,
-      visualization.style
-    ) &&
-    areVisualizationPresetValuesEqual(
       expectedVisualization.mapping,
       visualization.mapping
     ) &&
     areVisualizationPresetValuesEqual(
-      expectedVisualization.classification,
-      visualization.classification
-    ) &&
-    areVisualizationPresetValuesEqual(
-      expectedVisualization.symbols,
-      visualization.symbols
-    ) &&
-    areVisualizationPresetValuesEqual(
-      expectedVisualization.missingData,
-      visualization.missingData
+      normalizeClassificationForPresetComparison(
+        expectedVisualization.classification
+      ),
+      normalizeClassificationForPresetComparison(visualization.classification)
     )
   );
 }
 
 export function applySuggestionToVisualization(
   vizId: string,
-  suggestion: VizSuggestion
+  suggestion: VizSuggestion,
+  options: { origin?: VisualizationOrigin } = {}
 ): VisualizationType | null {
   const currentVisualization = visualizationStore.visualizations.find(
     (item) => item.id === vizId
@@ -592,27 +1114,50 @@ export function applySuggestionToVisualization(
   const previousAutoSubtitle = currentVisualization
     ? getLegendSubtitleForVisualization(currentVisualization)
     : '';
-  const vizType = mapSuggestionToType(suggestion.id);
-  visualizationStore.applyVisualizationPreset(vizId, vizType);
-
-  const visualization = visualizationStore.visualizations.find(
-    (item) => item.id === vizId
-  );
-  if (!visualization) {
+  if (!currentVisualization) {
     return null;
   }
 
-  const suggestionUpdate = buildSuggestionUpdate(
-    visualization,
+  const dataset = datasetsStore.datasets.find(
+    (item) => item.id === currentVisualization.datasetId
+  );
+  if (!dataset) {
+    return null;
+  }
+
+  const behavior = resolveSuggestionBehavior(
     suggestion,
-    vizType
+    dataset,
+    currentVisualization
+  );
+  const preset = resolveVisualizationPreset(
+    behavior.visualizationType,
+    dataset
+  );
+  const suggestionUpdate = buildSuggestionUpdate(
+    {
+      ...currentVisualization,
+      ...preset,
+      mapping: { ...preset.mapping },
+      style: { ...preset.style },
+      modes: preset.modes ? { ...preset.modes } : undefined,
+      classification: preset.classification
+        ? { ...preset.classification }
+        : undefined,
+      symbols: preset.symbols ? { ...preset.symbols } : undefined,
+      missingData: preset.missingData ? { ...preset.missingData } : undefined
+    },
+    dataset,
+    suggestion
   );
 
-  if (suggestionUpdate) {
-    visualizationStore.updateVisualization(vizId, suggestionUpdate);
-  } else {
-    applySuggestionMapping(vizId, vizType, suggestion);
-  }
+  visualizationStore.updateVisualization(vizId, {
+    ...preset,
+    ...suggestionUpdate,
+    origin: options.origin,
+    primitiveOrder: undefined,
+    dataFilters: undefined
+  });
 
   const updatedVisualization = visualizationStore.visualizations.find(
     (item) => item.id === vizId
@@ -625,5 +1170,5 @@ export function applySuggestionToVisualization(
     );
   }
 
-  return vizType;
+  return behavior.visualizationType;
 }

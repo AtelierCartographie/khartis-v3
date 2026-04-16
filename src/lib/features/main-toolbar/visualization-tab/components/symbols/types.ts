@@ -5,7 +5,7 @@ import type {
   VisualizationModes
 } from '$lib/features/commons/store/visualization.store.svelte';
 export interface SymbolModeProps {
-  dataFields: Array<{ id: number; text: string }>;
+  dataFields: Array<{ id: number; text: string; type?: string }>;
   visualization?: VisualizationConfig;
   onStyleChange?: (updates: Partial<VisualizationConfig['style']>) => void;
   onModesChange?: (updates: Partial<VisualizationModes>) => void;

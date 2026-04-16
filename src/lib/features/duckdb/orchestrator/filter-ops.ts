@@ -1,10 +1,12 @@
 import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
+import { isTextLikeColumnType } from '$lib/features/commons/utils/html-like-text.utils';
 import {
   escapeIdentifier,
   escapeSqlString
 } from '$lib/features/commons/utils/sanitize.utils';
 import * as m from '$lib/paraglide/messages';
+import { buildStripHtmlTextSqlExpression } from '../html-like-text';
 import type {
   DataTableFilter,
   DataTableFilterInput,
@@ -47,13 +49,28 @@ function isNumericLiteral(formatted: string): boolean {
   return formatted !== 'NULL' && !formatted.startsWith("'");
 }
 
+function formatTextFilterValue(value: string | number | undefined): string {
+  if (value === undefined || value === null) {
+    return 'NULL';
+  }
+
+  const trimmed = String(value).trim();
+  if (trimmed === '') {
+    return `''`;
+  }
+
+  return `'${escapeSqlString(trimmed)}'`;
+}
+
 export function buildFilterSQL(
   tableName: string,
   filter: DataTableFilterInput
 ): string {
   const columnRef = `"${escapeIdentifier(filter.column)}"`;
+  const textRef = buildStripHtmlTextSqlExpression(columnRef);
   const value = formatFilterValue(filter.value);
   const secondValue = formatFilterValue(filter.secondaryValue);
+  const textValue = formatTextFilterValue(filter.value);
 
   const buildTopFilter = (direction: 'ASC' | 'DESC'): string => {
     const limit = Number(filter.limit ?? filter.value);
@@ -66,6 +83,7 @@ export function buildFilterSQL(
   const isNumericValue = isNumericLiteral(value);
   const isNumericSecond = isNumericLiteral(secondValue);
   const numericRef = `TRY_CAST(${columnRef} AS DOUBLE)`;
+  const usesTextProjection = isTextLikeColumnType(filter.columnType);
 
   switch (filter.operator) {
     case FilterOperatorEnum.GTE:
@@ -82,15 +100,21 @@ export function buildFilterSQL(
 
     case FilterOperatorEnum.CONTAINS:
       assertFilterValue(filter.value, filter.operator);
-      return `${columnRef}::TEXT ILIKE '%' || ${value} || '%'`;
+      return usesTextProjection
+        ? `${textRef} ILIKE '%' || ${textValue} || '%'`
+        : `${columnRef}::TEXT ILIKE '%' || ${textValue} || '%'`;
 
     case FilterOperatorEnum.EQUALS:
       assertFilterValue(filter.value, filter.operator);
-      return `${columnRef} = ${value}`;
+      return usesTextProjection && !isNumericValue
+        ? `${textRef} = ${textValue}`
+        : `${columnRef} = ${value}`;
 
     case FilterOperatorEnum.NOT_EQUALS:
       assertFilterValue(filter.value, filter.operator);
-      return `${columnRef} <> ${value}`;
+      return usesTextProjection && !isNumericValue
+        ? `${textRef} <> ${textValue}`
+        : `${columnRef} <> ${value}`;
 
     case FilterOperatorEnum.BETWEEN: {
       if (filter.value === undefined || filter.secondaryValue === undefined) {
@@ -117,10 +141,14 @@ export function buildFilterSQL(
       return buildTopFilter('DESC');
 
     case FilterOperatorEnum.EMPTY:
-      return `(${columnRef} IS NULL OR TRIM(${columnRef}::TEXT) = '')`;
+      return usesTextProjection
+        ? `(${columnRef} IS NULL OR ${textRef} = '')`
+        : `(${columnRef} IS NULL OR TRIM(${columnRef}::TEXT) = '')`;
 
     case FilterOperatorEnum.NOT_EMPTY:
-      return `(${columnRef} IS NOT NULL AND TRIM(${columnRef}::TEXT) <> '')`;
+      return usesTextProjection
+        ? `(${columnRef} IS NOT NULL AND ${textRef} <> '')`
+        : `(${columnRef} IS NOT NULL AND TRIM(${columnRef}::TEXT) <> '')`;
 
     default:
       throw new DuckDBError(

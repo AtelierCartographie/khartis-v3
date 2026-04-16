@@ -15,7 +15,6 @@ import {
 } from './processors';
 import type {
   DatasetResult,
-  PipelineContext,
   UploadedFilePayload,
   ValidationResult,
   ZipDatasetResult
@@ -25,11 +24,6 @@ import { isZipFile } from './utils/zip-handler';
 export { createFileFromUpload };
 
 let initialized = false;
-
-function getContext(): PipelineContext {
-  if (!initialized) throw new Error('Pipeline not initialized');
-  return { initialized };
-}
 
 function applyGeoDetection(
   dataset: DatasetResult,
@@ -78,9 +72,9 @@ const Pipeline = {
       });
     }
     if (isZipFile(file)) {
-      return processZipFile(getContext(), file);
+      return processZipFile(file);
     }
-    return processFileInternal(getContext(), file);
+    return processFileInternal(file);
   },
 
   async processUploadedFile(
@@ -88,26 +82,25 @@ const Pipeline = {
     originalFile?: File
   ): Promise<DatasetResult | ZipDatasetResult> {
     await this.initialize();
-    const ctx = getContext();
     const start = performance.now();
     try {
       let result: DatasetResult | ZipDatasetResult;
 
       if (originalFile && isZipFile(originalFile)) {
-        result = await processZipFile(ctx, originalFile);
+        result = await processZipFile(originalFile);
       } else if (originalFile) {
         const companionFiles = uploadedFile.relatedFileObjects?.filter(
           (f: File) => f.name.toLowerCase() !== originalFile.name.toLowerCase()
         );
-        result = await processFileInternal(ctx, originalFile, {
+        result = await processFileInternal(originalFile, {
           companionFiles
         });
       } else {
         const fallback = await createFileFromUpload(uploadedFile);
         if (isZipFile(fallback)) {
-          result = await processZipFile(ctx, fallback);
+          result = await processZipFile(fallback);
         } else {
-          result = await processFileInternal(ctx, fallback, {
+          result = await processFileInternal(fallback, {
             companionFiles: createCompanionFilesFromUpload(uploadedFile)
           });
         }
@@ -143,14 +136,14 @@ const Pipeline = {
     options: { tableName?: string; decimalSeparator?: string } = {}
   ): Promise<DatasetResult | ZipDatasetResult> {
     await this.initialize();
-    return processRemoteFile(getContext(), url, options);
+    return processRemoteFile(url, options);
   },
 
   async processRemoteZipFile(
     url: string
   ): Promise<DatasetResult | ZipDatasetResult> {
     await this.initialize();
-    return processRemoteZipFile(getContext(), url);
+    return processRemoteZipFile(url);
   },
 
   async processPastedData(
@@ -199,7 +192,7 @@ const Pipeline = {
 
   async processZipFile(file: File): Promise<DatasetResult | ZipDatasetResult> {
     await this.initialize();
-    return processZipFile(getContext(), file);
+    return processZipFile(file);
   },
 
   async destroy(): Promise<void> {

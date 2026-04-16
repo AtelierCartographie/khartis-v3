@@ -67,14 +67,16 @@ const migrations: SchemaMigration[] = [
 /**
  * Run all applicable migrations on a serialized project.
  * Returns the migrated data with the current schema version stamped.
+ * The version is stamped on the returned (possibly cloned) manifest, not the
+ * input, because migrations deep-clone their payload.
  */
 export function migrateIfNeeded(
   data: Record<string, unknown>
 ): Record<string, unknown> {
-  const manifest = data.manifest as
+  const inputManifest = data.manifest as
     | { version?: string; [k: string]: unknown }
     | undefined;
-  let currentVersion = manifest?.version ?? '3.0.0';
+  let currentVersion = inputManifest?.version ?? '3.0.0';
   let migrated = data;
 
   for (const migration of migrations) {
@@ -97,8 +99,11 @@ export function migrateIfNeeded(
     }
   }
 
-  if (manifest) {
-    manifest.version = PROJECT_CONST.APP_VERSION;
+  const outputManifest = migrated.manifest as
+    | { version?: string; [k: string]: unknown }
+    | undefined;
+  if (outputManifest) {
+    outputManifest.version = PROJECT_CONST.APP_VERSION;
   }
 
   return migrated;

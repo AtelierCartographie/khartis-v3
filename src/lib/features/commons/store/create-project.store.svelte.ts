@@ -146,7 +146,6 @@ export const createProjectActions = {
 
       await this.processShapefileGroup(baseName, allFiles, sourceType);
     } else {
-      // Update the incomplete file with new files and recalculate missing
       incompleteFile.relatedFileObjects = allFiles;
       incompleteFile.relatedFiles = allFiles.map((f) => f.name);
       incompleteFile.missingShapefileComponents = stillMissing;
@@ -410,7 +409,6 @@ export const createProjectActions = {
     );
 
     if (missingExtensions.length > 0) {
-      // Create INCOMPLETE file - show all present files and what's missing
       const incompleteFile: UploadedFile = {
         id: crypto.randomUUID(),
         name: baseName,
@@ -864,7 +862,7 @@ const MIME_EXTENSION_MAP: Record<string, string> = {
   [MIME.PARQUET]: '.parquet',
   [MIME.KML]: '.kml',
   [MIME.KMZ]: '.kmz',
-  [MIME.SHAPEFILE]: '.shp',
+  [MIME.SHAPEFILE_SHP]: '.shp',
   [MIME.ZIP]: '.zip',
   'application/x-zip-compressed': '.zip'
 };

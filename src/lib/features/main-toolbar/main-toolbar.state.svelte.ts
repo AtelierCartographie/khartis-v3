@@ -5,16 +5,12 @@ import { ToolbarStep } from '$lib/features/commons/types/global';
 export interface MainToolbarState {
   canNavigateToVisualization: boolean;
   hasValidData: boolean;
-  isDataProcessed: boolean;
-  isProjectSaved: boolean;
   currentProjectName: string;
 }
 
 const DEFAULT_STATE: MainToolbarState = {
   canNavigateToVisualization: false,
   hasValidData: false,
-  isDataProcessed: false,
-  isProjectSaved: false,
   currentProjectName: ''
 };
 

@@ -18,7 +18,6 @@
     resolveTiledStyleContext
   } from './tiled-basemap-selection';
 
-  // Derive zone and style variant from the currently selected style
   const currentStyleContext = $derived(
     resolveTiledStyleContext(
       basemapStyleStore.selectedStyle,
@@ -78,7 +77,6 @@
   }
 
   function handleZoneChange(zone: ZoneId): void {
-    // Keep the same style variant when switching zones
     const stylesInNewZone = getStylesForZone(zone);
     const sameVariant = stylesInNewZone.find(
       (s) => s.style === selectedVariant
@@ -431,7 +429,7 @@
     font-size: 0.6875rem;
     font-weight: 600;
     letter-spacing: 0.16px;
-    color: #161616;
+    color: var(--cds-text-primary, #161616);
     background: rgba(255, 255, 255, 0.82);
     backdrop-filter: blur(4px);
     border-radius: 999px;

@@ -56,9 +56,9 @@ function mapMethodToMacro(
   }
 }
 
-/** Memoization cache for breaks results — avoids redundant DuckDB queries on style-only changes */
 const breaksCache = new Map<string, BreaksResult>();
 const BREAKS_CACHE_MAX = 50;
+let breaksCacheVersion = 0;
 
 export async function calculateBreaks(
   options: ClassificationOptions
@@ -76,7 +76,12 @@ export async function calculateBreaks(
 
   const tableName = duckDBDataset.tableName;
 
-  // Check memoization cache
+  const currentVersion = duckDBOrchestrator.datasetsVersion;
+  if (currentVersion !== breaksCacheVersion && breaksCacheVersion > 0) {
+    breaksCache.clear();
+  }
+  breaksCacheVersion = currentVersion;
+
   const cacheKey = `${tableName}:${columnName}:${method}:${numClasses}`;
   const cached = breaksCache.get(cacheKey);
   if (cached) {
@@ -238,7 +243,6 @@ export async function calculateBreaks(
 
     const result: BreaksResult = { breaks, counts, min, max };
 
-    // Store in cache (evict oldest if over limit)
     if (breaksCache.size >= BREAKS_CACHE_MAX) {
       const firstKey = breaksCache.keys().next().value;
       if (firstKey) breaksCache.delete(firstKey);

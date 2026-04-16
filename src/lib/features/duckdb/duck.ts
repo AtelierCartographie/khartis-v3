@@ -191,6 +191,21 @@ export const Duck = {
     markTableMutated(ctx, table);
   },
 
+  /**
+   * Drop a table and invalidate its cache atomically.
+   * Use this instead of a raw `DROP TABLE` query when removing a tracked
+   * table so that describe/rowCount caches never reference a dead table.
+   * Safe for both real datasets and temporary tables.
+   */
+  async dropTable(table: string): Promise<void> {
+    const ctx = getContext();
+    await executeQuery(
+      ctx.connection,
+      `DROP TABLE IF EXISTS "${table.replace(/"/g, '""')}"`
+    );
+    markTableMutated(ctx, table);
+  },
+
   get_table_metadata(table: string): TableMetadata {
     const ctx = getContext();
     return getTableMetadata(ctx, table);
@@ -210,6 +225,8 @@ export const Duck = {
     }
 
     ctx.table_metadata.delete(tableName);
+    ctx.describeCache.delete(tableName);
+    ctx.rowCountCache.delete(tableName);
   }
 };
 

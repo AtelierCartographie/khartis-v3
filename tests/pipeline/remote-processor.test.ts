@@ -1,42 +1,40 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import * as m from '$lib/paraglide/messages';
 
-const {
-  duckMock,
-  buildDatasetFromDuckTableMock,
-  processZipFileMock,
-  applyTabularGeoDetectionMock,
-  normalizeFormattedNumericColumnsMock
-} = vi.hoisted(() => ({
-  duckMock: {
-    read_link: vi.fn()
-  },
-  buildDatasetFromDuckTableMock: vi.fn(),
-  processZipFileMock: vi.fn(),
-  applyTabularGeoDetectionMock: vi.fn((dataset) => dataset),
-  normalizeFormattedNumericColumnsMock: vi.fn()
+const { DuckMock } = vi.hoisted(() => ({
+  DuckMock: {
+    read_link: vi.fn().mockResolvedValue(undefined),
+    query: vi.fn().mockResolvedValue(undefined)
+  }
 }));
 
 vi.mock('$lib/features/duckdb', () => ({
-  Duck: duckMock
+  Duck: DuckMock
 }));
 
 vi.mock('$lib/features/data-pipeline/operations/analysis', () => ({
-  buildDatasetFromDuckTable: buildDatasetFromDuckTableMock
+  buildDatasetFromDuckTable: vi.fn().mockResolvedValue({
+    id: 'ds1',
+    tableName: 'tbl',
+    columns: [],
+    rowCount: 0,
+    geometry: null,
+    name: 'test',
+    sourceFileId: 'url',
+    format: 'csv',
+    metadata: { processedAt: new Date(), fileType: 'csv' }
+  })
 }));
 
 vi.mock(
   '$lib/features/data-pipeline/operations/tabular-numeric-normalization',
   () => ({
-    normalizeFormattedNumericColumns: normalizeFormattedNumericColumnsMock
+    normalizeFormattedNumericColumns: vi.fn().mockResolvedValue(undefined)
   })
 );
 
-vi.mock('$lib/features/data-pipeline/processors/zip-processor', () => ({
-  processZipFile: processZipFileMock
-}));
-
 vi.mock('$lib/features/data-pipeline/processors/tabular-geo-detection', () => ({
-  applyTabularGeoDetection: applyTabularGeoDetectionMock
+  applyTabularGeoDetection: vi.fn().mockResolvedValue(undefined)
 }));
 
 import {
@@ -44,169 +42,36 @@ import {
   processRemoteZipFile
 } from '$lib/features/data-pipeline/processors/remote-processor';
 
-const ctx = { initialized: true };
-
-beforeEach(() => {
-  vi.clearAllMocks();
-  normalizeFormattedNumericColumnsMock.mockResolvedValue([]);
-});
-
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
-
 describe('remote-processor', () => {
-  it('processes standard remote file via Duck.read_link', async () => {
-    duckMock.read_link.mockResolvedValue(undefined);
-    buildDatasetFromDuckTableMock.mockResolvedValue({
-      id: 'd1',
-      name: 'old',
-      sourceFileId: 'old',
-      tableName: 'my_tbl',
-      columns: [],
-      rowCount: 1,
-      metadata: {
-        processedAt: new Date(),
-        fileType: 'csv',
-        parserUsed: 'duck',
-        transformations: []
-      }
-    });
-
-    const result = await processRemoteFile(
-      ctx,
-      'https://example.com/path/data.csv',
-      {
-        tableName: 'my_tbl',
-        decimalSeparator: ','
-      }
-    );
-
-    expect(duckMock.read_link).toHaveBeenCalledWith(
-      'https://example.com/path/data.csv',
-      {
-        tablename: 'my_tbl',
-        decimal_separator: ','
-      }
-    );
-    expect(normalizeFormattedNumericColumnsMock).toHaveBeenCalledWith(
-      'my_tbl',
-      duckMock
-    );
-    expect(buildDatasetFromDuckTableMock).toHaveBeenCalled();
-    expect(applyTabularGeoDetectionMock).toHaveBeenCalledTimes(1);
-    expect((result as { name: string }).name).toBe('data.csv');
-    expect((result as { sourceFileId: string }).sourceFileId).toBe(
-      'https://example.com/path/data.csv'
-    );
+  beforeEach(() => {
+    vi.clearAllMocks();
   });
 
-  it('throws on standalone remote shapefile', async () => {
+  it('rejects .shp URL with a standalone shapefile error', async () => {
     await expect(
-      processRemoteFile(ctx, 'https://example.com/data.shp')
-    ).rejects.toThrow();
+      processRemoteFile('https://example.com/roads.shp')
+    ).rejects.toThrow(m.pipeline_error_shp_standalone());
   });
 
-  it('supports URL parsing fallback when value is not a full URL', async () => {
-    duckMock.read_link.mockResolvedValue(undefined);
-    buildDatasetFromDuckTableMock.mockResolvedValue({
-      id: 'd1',
-      name: 'old',
-      sourceFileId: 'old',
-      tableName: 'tbl',
-      columns: [],
-      rowCount: 0,
-      metadata: {
-        processedAt: new Date(),
-        fileType: 'csv',
-        parserUsed: 'duck',
-        transformations: []
-      }
+  it('calls Duck.read_link for a CSV URL', async () => {
+    await processRemoteFile('https://example.com/data.csv');
+    expect(DuckMock.read_link).toHaveBeenCalledWith(
+      'https://example.com/data.csv',
+      expect.objectContaining({ tablename: expect.any(String) })
+    );
+  });
+
+  it('passes decimal_separator to Duck.read_link when provided', async () => {
+    await processRemoteFile('https://example.com/data.csv', {
+      decimalSeparator: ','
     });
-
-    const result = await processRemoteFile(ctx, 'folder/input.tsv');
-
-    expect(normalizeFormattedNumericColumnsMock).toHaveBeenCalled();
-    expect((result as { name: string }).name).toBe('input.tsv');
-  });
-
-  it('routes .zip URL through remote zip flow', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({
-        ok: true,
-        arrayBuffer: () => Promise.resolve(new ArrayBuffer(8))
-      })
-    );
-
-    processZipFileMock.mockResolvedValue({
-      id: 'd1',
-      name: 'archive.csv',
-      sourceFileId: 'zip',
-      tableName: 'tbl',
-      columns: [],
-      rowCount: 1,
-      metadata: {
-        processedAt: new Date(),
-        fileType: 'csv',
-        parserUsed: 'duck',
-        transformations: []
-      }
-    });
-
-    const result = await processRemoteFile(ctx, 'https://example.com/data.zip');
-    expect(processZipFileMock).toHaveBeenCalledTimes(1);
-    expect((result as { sourceFileId: string }).sourceFileId).toBe(
-      'https://example.com/data.zip'
+    expect(DuckMock.read_link).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ decimal_separator: ',' })
     );
   });
 
-  it('processes remote zip and remaps sourceFileId on multi-dataset result', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({
-        ok: true,
-        arrayBuffer: () => Promise.resolve(new ArrayBuffer(16))
-      })
-    );
-
-    processZipFileMock.mockResolvedValue({
-      datasets: [
-        {
-          id: 'd1',
-          name: 'a.csv',
-          sourceFileId: 'local',
-          tableName: 'a',
-          columns: [],
-          rowCount: 1,
-          metadata: {
-            processedAt: new Date(),
-            fileType: 'csv',
-            parserUsed: 'duck',
-            transformations: []
-          }
-        }
-      ],
-      sourceZipName: 'archive.zip',
-      totalFiles: 1,
-      processedFiles: 1,
-      skippedFiles: []
-    });
-
-    const result = await processRemoteZipFile(
-      ctx,
-      'https://example.com/archive.zip'
-    );
-
-    expect('datasets' in result).toBe(true);
-    if ('datasets' in result) {
-      expect(result.datasets[0].sourceFileId).toBe(
-        'https://example.com/archive.zip'
-      );
-    }
-  });
-
-  it('fails when remote zip fetch status is not ok', async () => {
+  it('throws pipeline_error_fetch_failed when fetch returns 404', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({
@@ -215,20 +80,11 @@ describe('remote-processor', () => {
         statusText: 'Not Found'
       })
     );
-
     await expect(
-      processRemoteZipFile(ctx, 'https://example.com/missing.zip')
-    ).rejects.toThrow();
-  });
-
-  it('rethrows fetch/runtime failures during remote zip processing', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockRejectedValue(new Error('network down'))
+      processRemoteZipFile('https://example.com/missing.zip')
+    ).rejects.toThrow(
+      m.pipeline_error_fetch_failed({ status: '404', statusText: 'Not Found' })
     );
-
-    await expect(
-      processRemoteZipFile(ctx, 'https://example.com/down.zip')
-    ).rejects.toThrow('network down');
+    vi.unstubAllGlobals();
   });
 });

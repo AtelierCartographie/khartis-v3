@@ -341,7 +341,7 @@
     grid-template-rows: repeat(2, auto);
     grid-auto-columns: var(--basemap-card-width);
     gap: var(--cds-spacing-03);
-    align-items: start;
+    align-items: stretch;
     width: max-content;
     padding-bottom: var(--cds-spacing-03);
   }

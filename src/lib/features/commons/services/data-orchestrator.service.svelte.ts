@@ -8,9 +8,10 @@ import { Duck, RefineOperation } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import {
   isGeoJSONFeatureCollection,
-  type GeoJSONFeatureCollection,
-  type JsonValue
+  type GeoJSONFeatureCollection
 } from '$lib/types/data';
+import { cleanupDuckDBResources } from '$lib/features/commons/utils/duckdb-cleanup.utils';
+import { toJsonValue } from '$lib/features/commons/utils/json.utils';
 import type { SerializedProjectData } from '$lib/types/serialization.types';
 import { persistenceRegistry } from '$lib/features/project-management';
 import { layersActions } from '../../step-toolbar/tools/layers/layers.store.svelte';
@@ -68,34 +69,6 @@ function createDataOrchestratorService() {
   const processedFileIds = new Set<string>();
   const processingFiles = new Set<string>();
 
-  function toJsonValue(value: unknown): JsonValue {
-    if (
-      value === null ||
-      value === undefined ||
-      typeof value === 'string' ||
-      typeof value === 'number' ||
-      typeof value === 'boolean'
-    ) {
-      return value ?? null;
-    }
-
-    if (value instanceof Date) {
-      return value.toISOString();
-    }
-
-    if (Array.isArray(value)) {
-      return value.map((item) => toJsonValue(item));
-    }
-
-    if (typeof value === 'object') {
-      return Object.fromEntries(
-        Object.entries(value).map(([key, item]) => [key, toJsonValue(item)])
-      );
-    }
-
-    return String(value);
-  }
-
   function toParsedTabularData(
     rows: DatasetResult['data']
   ): UploadedFile['parsedData'] | undefined {
@@ -108,18 +81,6 @@ function createDataOrchestratorService() {
         Object.entries(row).map(([key, value]) => [key, toJsonValue(value)])
       )
     );
-  }
-
-  async function cleanupDuckDBResources(tableName: string): Promise<void> {
-    try {
-      Duck?.cleanupTableResources(tableName);
-    } catch (error) {
-      logger.warn(
-        'Failed to cleanup DuckDB resources',
-        LogCategory.DUCKDB,
-        error
-      );
-    }
   }
 
   function cleanupOrphanedDatasets(): void {
@@ -748,10 +709,6 @@ function createDataOrchestratorService() {
     }
   }
 
-  function determineProjectConcurrency(): number {
-    return 1;
-  }
-
   async function processProjectFiles(files: UploadedFile[]): Promise<void> {
     const unprocessedFiles = files.filter(
       (file) => !processedFileIds.has(file.id) && !processingFiles.has(file.id)
@@ -788,9 +745,7 @@ function createDataOrchestratorService() {
       !serializedData?.layoutSettings?.projection?.overrideActive;
 
     try {
-      const concurrency = determineProjectConcurrency();
-
-      await processWithLimit(unprocessedFiles, concurrency, async (file) => {
+      await processWithLimit(unprocessedFiles, 1, async (file) => {
         if (
           file.fileType === FileType.SHAPEFILE &&
           (!file.relatedFileObjects || file.relatedFileObjects.length === 0)

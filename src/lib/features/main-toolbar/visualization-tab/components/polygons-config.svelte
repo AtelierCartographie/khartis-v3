@@ -33,19 +33,19 @@
     SectionHeading,
     SliderWithInput,
     StrokeSection,
+    VizFilterButton,
     VizFilterSection
   } from './shared';
   import type { VizDataFilter } from '$lib/features/commons/store/visualization.store.svelte';
   import DiscretizationModal from './discretization-modal.svelte';
-  import {
-    ClassificationMethod,
-    type ClassificationConfig
-  } from '$lib/features/commons/store/visualization.store.svelte';
+  import type { ClassificationConfig } from '$lib/features/commons/store/visualization.store.svelte';
   import { Dropdown } from 'carbon-components-svelte';
+  import { resolveDiscretizationLabel } from './discretization.utils';
 
   interface Props {
-    dataFields?: Array<{ id: number; text: string }>;
+    dataFields?: Array<{ id: number; text: string; type?: string }>;
     visualization?: VisualizationConfig;
+    disabled?: boolean;
     onStyleChange?: (updates: Partial<VisualizationConfig['style']>) => void;
     onModesChange?: (updates: Partial<VisualizationModes>) => void;
     onMissingDataChange?: (updates: Partial<MissingDataConfig>) => void;
@@ -64,6 +64,7 @@
   let {
     dataFields = [],
     visualization,
+    disabled = false,
     onStyleChange,
     onModesChange,
     onMissingDataChange,
@@ -72,37 +73,48 @@
     onInvertPalette,
     onToggleVisibility,
     filters = [],
-    onAddFilter = () => {},
-    onRemoveFilter = () => {},
-    onClearFilters = () => {}
+    onAddFilter,
+    onRemoveFilter,
+    onClearFilters
   }: Props = $props();
 
   let discretizationModalOpen = $state(false);
-  let selectedFieldId = $state<number>(0);
-  let selectedCategoryFieldId = $state<number>(0);
+  let filterSectionVisible = $state(false);
+  const NONE_FIELD_ID = -1;
+  let selectedFieldId = $state<number>(NONE_FIELD_ID);
+  let selectedCategoryFieldId = $state<number>(NONE_FIELD_ID);
+  const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
+  const selectableDataFields = $derived([noneOption, ...dataFields]);
 
   $effect(() => {
     if (visualization?.mapping.valueColumn && dataFields.length > 0) {
       const fieldIndex = dataFields.findIndex(
         (f) => f.text === visualization.mapping.valueColumn
       );
-      if (fieldIndex >= 0) {
-        selectedFieldId = dataFields[fieldIndex].id;
-      }
+      selectedFieldId =
+        fieldIndex >= 0 ? dataFields[fieldIndex].id : NONE_FIELD_ID;
+    } else {
+      selectedFieldId = NONE_FIELD_ID;
     }
 
     if (visualization?.mapping.categoryColumn && dataFields.length > 0) {
       const fieldIndex = dataFields.findIndex(
         (f) => f.text === visualization.mapping.categoryColumn
       );
-      if (fieldIndex >= 0) {
-        selectedCategoryFieldId = dataFields[fieldIndex].id;
-      }
+      selectedCategoryFieldId =
+        fieldIndex >= 0 ? dataFields[fieldIndex].id : NONE_FIELD_ID;
+    } else {
+      selectedCategoryFieldId = NONE_FIELD_ID;
     }
   });
 
   function handleValueFieldSelect(fieldId: number) {
     selectedFieldId = fieldId;
+    if (fieldId === NONE_FIELD_ID) {
+      onMappingChange?.({ valueColumn: undefined });
+      return;
+    }
+
     const field = dataFields.find((item) => item.id === fieldId);
     if (field && onMappingChange) {
       onMappingChange({ valueColumn: field.text });
@@ -111,6 +123,11 @@
 
   function handleCategoryFieldSelect(fieldId: number) {
     selectedCategoryFieldId = fieldId;
+    if (fieldId === NONE_FIELD_ID) {
+      onMappingChange?.({ categoryColumn: undefined });
+      return;
+    }
+
     const field = dataFields.find((item) => item.id === fieldId);
     if (field && onMappingChange) {
       onMappingChange({ categoryColumn: field.text });
@@ -147,7 +164,10 @@
         (visualization.style.fillColor as string) ?? DEFAULT_COLORS.fill;
     }
     if (visualization?.modes) {
-      fillMode = visualization.modes.fill ?? FillMode.UNIQUE;
+      fillMode =
+        (visualization.style.fillOpacity ?? 1) <= 0
+          ? FillMode.NONE
+          : (visualization.modes.fill ?? FillMode.UNIQUE);
     }
     if (visualization?.missingData) {
       showMissingData = visualization.missingData.show ?? true;
@@ -173,6 +193,16 @@
     ];
     fillMode = modes[index] || FillMode.NONE;
     onModesChange?.({ fill: fillMode });
+    if (fillMode === FillMode.NONE) {
+      onStyleChange?.({ fillOpacity: 0 });
+      return;
+    }
+
+    if ((visualization?.style.fillOpacity ?? 1) <= 0) {
+      onStyleChange?.({
+        fillOpacity: VISUALIZATION_DEFAULTS.fillOpacity / 100
+      });
+    }
   }
 
   function handleFillColorChange(value: string) {
@@ -223,40 +253,29 @@
     onClassificationChange?.(classification);
   }
 
-  const discretizationLabel = $derived.by(() => {
-    if (!visualization?.classification) return m.discretization_method_jenks();
-    const methodLabels: Record<ClassificationMethod, () => string> = {
-      [ClassificationMethod.JENKS]: m.discretization_method_jenks,
-      [ClassificationMethod.QUANTILES]: m.discretization_method_quantile,
-      [ClassificationMethod.EQUAL_INTERVAL]:
-        m.discretization_method_equal_interval,
-      [ClassificationMethod.STANDARD_DEVIATION]:
-        m.discretization_method_nested_means,
-      [ClassificationMethod.MANUAL]: m.discretization_method_manual,
-      [ClassificationMethod.Q6]: m.discretization_method_q6,
-      [ClassificationMethod.NESTED_MEANS]: m.discretization_method_nested_means,
-      [ClassificationMethod.HEAD_TAIL]: m.discretization_method_head_tail
-    };
-    const method =
-      visualization.classification.method ?? ClassificationMethod.QUANTILES;
-    const numClasses =
-      visualization.classification.numClasses ??
-      visualization.classification.classes ??
-      5;
-    const methodLabel = methodLabels[method]?.() ?? String(method);
-    return `${methodLabel}, ${numClasses} ${m.discretization_num_classes().toLowerCase()}`;
-  });
+  const discretizationLabel = $derived(
+    resolveDiscretizationLabel(visualization?.classification)
+  );
 </script>
 
 <ExpandableSection
   title={m.polygons_title()}
   defaultOpen={false}
   showToggle
+  actionsEnd
   toggleChecked={enabled}
+  disabled={disabled}
   onToggleChange={handleToggleChange}
 >
   {#snippet icon()}
     <InfoPopover text={m.polygons_section_info()} />
+    <VizFilterButton
+      active={filterSectionVisible || filters.length > 0}
+      count={filters.length}
+      onToggle={() => {
+        filterSectionVisible = !filterSectionVisible;
+      }}
+    />
   {/snippet}
 
   <div class="polygons-config">
@@ -281,7 +300,7 @@
       <div class="field-group">
         <Dropdown
           titleText={m.color_according()}
-          items={dataFields}
+          items={selectableDataFields}
           selectedId={selectedFieldId}
           on:select={(e) => handleValueFieldSelect(e.detail.selectedId)}
           type="default"
@@ -304,7 +323,7 @@
       <div class="field-group">
         <Dropdown
           titleText={m.color_according()}
-          items={dataFields}
+          items={selectableDataFields}
           selectedId={selectedCategoryFieldId}
           on:select={(e) => handleCategoryFieldSelect(e.detail.selectedId)}
           type="default"
@@ -356,18 +375,21 @@
       discretizationLabel={discretizationLabel}
       onStyleChange={onStyleChange}
       onModesChange={onModesChange}
+      onMappingChange={onMappingChange}
       onInvertPalette={onInvertPalette}
       onOpenDiscretization={handleOpenDiscretization}
       onClassificationChange={handleClassificationChange}
     />
 
-    <VizFilterSection
-      dataFields={dataFields}
-      filters={filters}
-      onAddFilter={onAddFilter}
-      onRemoveFilter={onRemoveFilter}
-      onClearFilters={onClearFilters}
-    />
+    {#if filterSectionVisible || filters.length > 0}
+      <VizFilterSection
+        dataFields={dataFields}
+        filters={filters}
+        onAddFilter={onAddFilter ?? (() => {})}
+        onRemoveFilter={onRemoveFilter ?? (() => {})}
+        onClearFilters={onClearFilters ?? (() => {})}
+      />
+    {/if}
   </div>
 </ExpandableSection>
 

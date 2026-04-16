@@ -10,6 +10,10 @@ import {
 import { TextAlign } from '$lib/features/commons/types/enums';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
 import {
+  PRINT_STANDARD_TOKENS,
+  resolveLayoutSizingTokens
+} from '$lib/features/commons/utils/layout-sizing.utils';
+import {
   getFormatState,
   PAGE_GRID_SIZE_PX
 } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
@@ -37,7 +41,7 @@ const DEFAULT_STATE: AnnotationsState = {
   drawingInProgress: [],
   defaultStyle: {
     font: 'Cabin',
-    fontSize: 12,
+    fontSize: PRINT_STANDARD_TOKENS.annotations.noteFontSize,
     bold: false,
     italic: false,
     underlined: false,
@@ -89,10 +93,26 @@ type AnnotationsActions = {
 };
 
 const PREDEFINED_STYLES: Record<string, Partial<AnnotationStyle>> = {
-  note: { fontSize: 12, bold: false, italic: false },
-  title: { fontSize: 24, bold: true, italic: false },
-  subtitle: { fontSize: 18, bold: false, italic: false },
-  caption: { fontSize: 10, bold: false, italic: true }
+  note: {
+    fontSize: PRINT_STANDARD_TOKENS.annotations.noteFontSize,
+    bold: false,
+    italic: false
+  },
+  title: {
+    fontSize: PRINT_STANDARD_TOKENS.annotations.titleFontSize,
+    bold: true,
+    italic: false
+  },
+  subtitle: {
+    fontSize: PRINT_STANDARD_TOKENS.annotations.subtitleFontSize,
+    bold: false,
+    italic: false
+  },
+  caption: {
+    fontSize: PRINT_STANDARD_TOKENS.annotations.captionFontSize,
+    bold: false,
+    italic: true
+  }
 };
 
 function getPredefinedStyleForItem(item: Annotation): string | null {
@@ -976,30 +996,58 @@ const { actions, getState } = createToolStore<
         return;
       }
 
+      const fmt = getFormatState();
+      const tokens = resolveLayoutSizingTokens({
+        width: fmt.width,
+        height: fmt.height,
+        model: fmt.model
+      });
+
       const pageElements: {
         role: PageElementRole;
         style: Partial<AnnotationStyle>;
       }[] = [
-        { role: ANNOTATION_ROLE.TITLE, style: { ...PREDEFINED_STYLES.title } },
+        {
+          role: ANNOTATION_ROLE.TITLE,
+          style: {
+            ...PREDEFINED_STYLES.title,
+            fontSize: tokens.annotations.titleFontSize
+          }
+        },
         {
           role: ANNOTATION_ROLE.SUBTITLE,
-          style: { ...PREDEFINED_STYLES.subtitle }
+          style: {
+            ...PREDEFINED_STYLES.subtitle,
+            fontSize: tokens.annotations.subtitleFontSize
+          }
         },
         {
           role: ANNOTATION_ROLE.SOURCE,
-          style: { ...PREDEFINED_STYLES.caption }
+          style: {
+            ...PREDEFINED_STYLES.caption,
+            fontSize: tokens.annotations.captionFontSize
+          }
         },
         {
           role: ANNOTATION_ROLE.BASEMAP_SOURCE,
-          style: { ...PREDEFINED_STYLES.caption }
+          style: {
+            ...PREDEFINED_STYLES.caption,
+            fontSize: tokens.annotations.captionFontSize
+          }
         },
         {
           role: ANNOTATION_ROLE.SIGNATURE,
-          style: { ...PREDEFINED_STYLES.caption }
+          style: {
+            ...PREDEFINED_STYLES.caption,
+            fontSize: tokens.annotations.captionFontSize
+          }
         },
         {
           role: ANNOTATION_ROLE.CREDIT,
-          style: { ...PREDEFINED_STYLES.caption }
+          style: {
+            ...PREDEFINED_STYLES.caption,
+            fontSize: tokens.annotations.captionFontSize
+          }
         }
       ];
 
