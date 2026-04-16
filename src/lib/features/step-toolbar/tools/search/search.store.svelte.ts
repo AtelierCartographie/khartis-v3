@@ -7,8 +7,10 @@ import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants'
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { formatValue } from '$lib/features/commons/utils/format.utils';
+import { projectHtmlLikeText } from '$lib/features/commons/utils/html-like-text.utils';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
 import { Duck } from '$lib/features/duckdb';
+import { buildStripHtmlTextSqlExpression } from '$lib/features/duckdb/html-like-text';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { mapHighlightStore } from '$lib/features/map/stores/map-highlight.store.svelte';
 import { mapTooltipStore } from '$lib/features/map/stores/map-tooltip.store.svelte';
@@ -196,16 +198,19 @@ async function performRegexSearch(
     .map((columnName) => {
       const escapedColumnName = escapeIdentifier(columnName);
       const escapedColumnLabel = escapeSqlString(columnName);
+      const projectedColumnValue = buildStripHtmlTextSqlExpression(
+        `"${escapedColumnName}"`
+      );
       return `
         SELECT
           "${INTERNAL_COLUMN.ID}" AS row_id,
           '${escapedColumnLabel}' AS column_name,
-          CAST("${escapedColumnName}" AS VARCHAR) AS column_value,
+          ${projectedColumnValue} AS column_value,
           1.0 AS score
         FROM "${escapedTableName}"
         WHERE "${escapedColumnName}" IS NOT NULL
           AND regexp_matches(
-            CAST("${escapedColumnName}" AS VARCHAR),
+            ${projectedColumnValue},
             '${escapedPattern}',
             '${regexFlags}'
           )
@@ -259,7 +264,11 @@ async function showTooltipForResult(
       .filter((columnName) => !TOOLTIP_EXCLUDED_COLUMNS.has(columnName))
       .map((columnName) => ({
         key: columnName,
-        value: formatValue(row[columnName])
+        value: formatValue(
+          typeof row[columnName] === 'string'
+            ? projectHtmlLikeText(row[columnName])
+            : row[columnName]
+        )
       }));
 
     mapTooltipStore.pinAt(160, 200, entries, null, rowId - 1);
@@ -375,6 +384,19 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
         }
 
         s.results = stats.results
+          .map((result) => {
+            const projectedValue =
+              typeof result.value === 'string'
+                ? projectHtmlLikeText(result.value)
+                : String(result.value ?? '');
+
+            return {
+              rowId: result.rowId,
+              columnName: result.columnName,
+              value: projectedValue,
+              score: result.score
+            };
+          })
           .filter((result) => matcher(result.value))
           .map((result) => ({
             rowId: result.rowId,
