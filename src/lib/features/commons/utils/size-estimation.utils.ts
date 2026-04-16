@@ -1,6 +1,4 @@
-function bigIntReplacer(_key: string, value: unknown): unknown {
-  return typeof value === 'bigint' ? Number(value) : value;
-}
+import { bigIntReplacer } from './clone.utils';
 
 function stripBinaryFields(project: unknown): unknown {
   if (!project || typeof project !== 'object') return project;

@@ -52,11 +52,11 @@ Khartis is a web application to create professional thematic maps without prior 
 
 ## Tech stack
 
-- SvelteKit 5 (Runes), TypeScript, Vite
+- SvelteKit (Svelte 5 Runes), TypeScript, Vite
 - Carbon Design System (Svelte) for UI components
 - Deck.gl 9 + WebGL for GPU-accelerated rendering; D3 for projections
 - DuckDB WASM + Spatial for all in-browser data processing
-- Playwright + Vitest for tests; ESLint + Prettier for lint/format
+- Vitest for tests; ESLint + Prettier for lint/format
 
 ## Quick Start
 
@@ -83,18 +83,18 @@ pnpm build && pnpm preview
 
 ## Commands
 
-| Command              | Description                         |
-| -------------------- | ----------------------------------- |
-| `pnpm dev`           | Development server on :5176         |
-| `pnpm build`         | Production build                    |
-| `pnpm check`         | TypeScript + Svelte type check      |
-| `pnpm lint`          | ESLint + Prettier check             |
-| `pnpm test`          | Server-side CI test suite           |
-| `pnpm format`        | Auto-format code                    |
-| `pnpm test:unit`     | Vitest unit tests                   |
-| `pnpm test:e2e`      | Playwright E2E tests                |
-| `pnpm test:pipeline` | Pipeline + DuckDB integration tests |
-| `pnpm test:duckdb`   | DuckDB server-side tests            |
+| Command                       | Description                                |
+| ----------------------------- | ------------------------------------------ |
+| `pnpm dev`                    | Development server on :5176                |
+| `pnpm build`                  | Production build                           |
+| `pnpm check`                  | TypeScript + Svelte type check             |
+| `pnpm lint`                   | ESLint + Prettier check                    |
+| `pnpm format`                 | Auto-format code                           |
+| `vitest run --project client` | Unit tests (components, stores, utils)     |
+| `pnpm test:pipeline`          | Server-side pipeline tests (DuckDB-backed) |
+| `pnpm test:duckdb`            | DuckDB integration tests                   |
+
+> `pnpm test:unit` starts watch mode — use `vitest run --project client` for a single CI pass.
 
 **i18n**: Inlang Paraglide (English, French) — all user-facing strings via `m.key()` syntax.
 
@@ -114,8 +114,8 @@ Recent versions of Chrome, Firefox, Edge, and Safari on desktop.
 See [CONTRIBUTING.md](CONTRIBUTING.md). Before submitting a PR:
 
 - Follow [Conventional Commits](https://www.conventionalcommits.org/) — `feat:`, `fix:`, `refactor:`, `test:`, `chore:`
-- Run `pnpm lint && pnpm check && pnpm test` locally
-- Run `pnpm test:unit` for client, store, or utility changes, and `pnpm test:e2e` for workflow or rendering changes
+- Run `pnpm lint && pnpm check` locally before submitting
+- Run `vitest run --project client` for component, store, or utility changes; `pnpm test:pipeline` / `pnpm test:duckdb` for data or DuckDB changes
 - Add/update i18n keys when adding user-facing text (no hardcoded strings)
 - Keep accessibility in mind (keyboard navigation, contrast)
 

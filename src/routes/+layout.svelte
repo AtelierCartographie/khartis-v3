@@ -23,6 +23,7 @@
   import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
 
   initializeStores();
+  import '$lib/features/commons/store/locale.store.svelte';
   import { setLocale, locales, cookieName } from '$lib/paraglide/runtime.js';
   import Header from '$lib/features/header/header.svelte';
   import MainToolbar from '$lib/features/main-toolbar/main-toolbar.svelte';

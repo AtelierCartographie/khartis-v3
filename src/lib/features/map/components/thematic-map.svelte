@@ -56,8 +56,7 @@
   } from '../types';
   import {
     DEFAULT_PAGE_COLOR,
-    getFormatState,
-    PAGE_GRID_SIZE_PX
+    getFormatState
   } from '../../step-toolbar/tools/format/format.store.svelte';
   import { getSimplificationState } from '../../step-toolbar/tools/simplification/simplification.store.svelte';
   import { getProjectionState } from '../../step-toolbar/tools/projections/projection.store.svelte';
@@ -88,6 +87,11 @@
     getBrowserMaxRenderBufferSizePx,
     resolveMapRenderPixelRatio
   } from '../utils/render-pixel-ratio';
+  import {
+    type OrthographicInteractiveDeck,
+    syncMapLibreInteractionMode,
+    syncOrthographicInteractionMode
+  } from '../utils/map-interaction-mode.utils';
   import type { ProjectionLike } from 'geoarrow-deck-stream';
   import AnnotationOverlay from './annotation-overlay.svelte';
   import GeoIndicationsOverlay from './geo-indications-overlay.svelte';
@@ -106,7 +110,8 @@
     syncViewState,
     showLegendOverlay = true,
     showGeoIndicationsOverlay = true,
-    showAnnotationOverlay = true
+    showAnnotationOverlay = true,
+    isFacetCell = false
   }: DeckMapProps = $props();
 
   const hasData = $derived(tables.size > 0 || geoJSONs.size > 0);
@@ -150,9 +155,6 @@
     // layers, otherwise out-of-projection areas look like editable ocean.
     return `background-color: ${pageBackgroundColor};`;
   });
-  const pageGridStyle = $derived(
-    `background-size: ${PAGE_GRID_SIZE_PX}px ${PAGE_GRID_SIZE_PX}px;`
-  );
   const maxRenderBufferSizePx = $derived(getBrowserMaxRenderBufferSizePx());
   const renderPixelRatio = $derived.by(() =>
     resolveMapRenderPixelRatio(
@@ -349,11 +351,7 @@
       if (hasData) {
         scheduleLayerUpdate();
       } else {
-        if (shouldLoadDefaultWorldBasemapPreview()) {
-          startMaxWaitTimeout();
-        } else {
-          triggerOnReady();
-        }
+        startMaxWaitTimeout();
         if (mapBounds.shouldRestorePosition) {
           setTimeout(() => {
             if (mapPosition.restorePosition()) {
@@ -506,10 +504,6 @@
       scheduleLayerUpdate('useMapLayers:representativePointTablesLoaded')
   });
 
-  function shouldLoadDefaultWorldBasemapPreview(): boolean {
-    return true;
-  }
-
   function updateCanvasSize() {
     if (mapContainer) {
       projectionStore.updateCanvasSize({
@@ -532,26 +526,7 @@
     if (!map) {
       return;
     }
-
-    if (zoomModeStore.isPageMode) {
-      map.dragPan.disable();
-      map.scrollZoom.disable();
-      map.doubleClickZoom.disable();
-      map.boxZoom.disable();
-      map.keyboard.disable();
-      map.touchZoomRotate.disable();
-      map.dragRotate.disable();
-      return;
-    }
-
-    map.dragPan.enable();
-    map.scrollZoom.enable();
-    map.doubleClickZoom.enable();
-    map.boxZoom.enable();
-    map.keyboard.enable();
-    map.touchZoomRotate.enable();
-    map.touchZoomRotate.disableRotation();
-    map.dragRotate.disable();
+    syncMapLibreInteractionMode(map, zoomModeStore.isPageMode);
   }
 
   function applyOrthographicInteractionMode(): void {
@@ -560,29 +535,10 @@
     if (!deck) {
       return;
     }
-
-    const controller = zoomModeStore.isPageMode
-      ? {
-          dragPan: false,
-          scrollZoom: false,
-          doubleClickZoom: false,
-          touchZoom: false,
-          keyboard: false
-        }
-      : {
-          dragPan: true,
-          scrollZoom: false,
-          doubleClickZoom: false,
-          touchZoom: true,
-          keyboard: true
-        };
-
-    const nextViewState = { ...mapInstanceStore.deckViewState };
-    (deck as unknown as { setProps: (props: unknown) => void }).setProps({
-      controller,
-      viewState: { main: nextViewState },
-      initialViewState: { main: nextViewState }
-    });
+    syncOrthographicInteractionMode(
+      deck as unknown as OrthographicInteractiveDeck,
+      zoomModeStore.isPageMode
+    );
   }
 
   function getCurrentViewportAutoFitReason(): ViewportFitReason {
@@ -1145,7 +1101,6 @@
     getMap: () => mapInit.map,
     getIsMapLoaded: () => mapInit.isMapLoaded,
     onProjectionChanged: () => {
-      // Note: isStyleLoading check is handled inside scheduleLayerUpdate()
       if (!isSwitchingViewMode) {
         scheduleLayerUpdate('onProjectionChanged');
       }
@@ -1353,7 +1308,6 @@
     void osmBasemapStore.tileConfig;
 
     const hasDeckContext = mapInit.deckOverlay || mapInit.deckInstance;
-    // Note: isStyleLoading check is handled inside scheduleLayerUpdate() to avoid reactive dependency
     const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
 
     if (hasDeckContext && canUpdate) {
@@ -1434,7 +1388,6 @@
   let lastFittedDatasetId = $state<string | undefined>(undefined);
 
   $effect(() => {
-    // Note: isStyleLoading check is handled inside scheduleLayerUpdate() to avoid reactive dependency
     const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
     if (firstTable && canUpdate) {
       const shouldFit = firstDatasetId !== lastFittedDatasetId;
@@ -1503,7 +1456,6 @@
   });
 
   $effect(() => {
-    // Note: isStyleLoading check is handled inside scheduleLayerUpdate() to avoid reactive dependency
     const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
     if (firstGeoJSON && canUpdate) {
       // When a reference basemap is selected, fit to basemap bounds
@@ -1622,19 +1574,10 @@
   });
 
   $effect(() => {
-    // Note: isStyleLoading check is handled inside scheduleLayerUpdate() to avoid reactive dependency
     const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
     if (!hasData && canUpdate) {
       untrack(() => {
         scheduleLayerUpdate('effect:noData');
-        if (!shouldLoadDefaultWorldBasemapPreview()) {
-          if (worldBaseTable) {
-            worldBaseTable = null;
-            scheduleLayerUpdate('effect:noData:clearWorldBasemap');
-          }
-          triggerOnReady();
-          return;
-        }
 
         // Retry basemap loading if it failed or hasn't completed yet
         if (!worldBaseTable) {
@@ -1645,7 +1588,6 @@
   });
 
   $effect(() => {
-    // Note: isStyleLoading check is handled inside scheduleLayerUpdate() to avoid reactive dependency
     const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
     if (worldBaseTable && canUpdate) {
       untrack(() => {
@@ -1793,7 +1735,6 @@
   $effect(() => {
     void layerUpdateTrigger;
 
-    // Note: isStyleLoading check is handled inside scheduleLayerUpdate() to avoid reactive dependency
     const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
     if (canUpdate) {
       untrack(() => scheduleLayerUpdate('effect:layerUpdateTrigger'));
@@ -1931,10 +1872,6 @@
           if (refRequestId !== referenceBasemapRequestId) {
             return; // Stale request
           }
-          if (!shouldLoadDefaultWorldBasemapPreview()) {
-            worldBaseTable = null;
-            return;
-          }
           if (refLoaded) {
             const resolvedBasemap =
               basemapService.getResolvedVariantData(
@@ -1991,10 +1928,6 @@
               { refId: pendingRefId }
             );
             const fallback = await basemapService.loadDefaultBasemap();
-            if (!shouldLoadDefaultWorldBasemapPreview()) {
-              worldBaseTable = null;
-              return;
-            }
             if (fallback) {
               const resolvedBasemap =
                 basemapService.getResolvedVariantData(
@@ -2027,11 +1960,6 @@
       if (requestId !== referenceBasemapRequestId) {
         return;
       }
-      if (!shouldLoadDefaultWorldBasemapPreview()) {
-        worldBaseTable = null;
-        return;
-      }
-
       if (loaded) {
         const resolvedBasemap =
           basemapService.getResolvedVariantData(
@@ -2105,9 +2033,7 @@
       isLoadingReferenceBasemap = true;
     }
 
-    if (shouldLoadDefaultWorldBasemapPreview()) {
-      loadWorldBasemap();
-    }
+    loadWorldBasemap();
 
     const resizeObserver = new ResizeObserver(() => {
       updateCanvasSize();
@@ -2164,10 +2090,10 @@
   </defs>
 </svg>
 
-<div class="page-container" style={pageStyle}>
+{#if isFacetCell}
   <div
-    class="map-stage"
-    style="width: {mapCanvasWidth}px; height: {mapCanvasHeight}px;{colorBlindnessMatrix
+    class="map-stage facet-cell-stage"
+    style="width: {width}px; height: {height}px;{colorBlindnessMatrix
       ? ' filter: url(#color-blindness-filter);'
       : ''}"
   >
@@ -2177,29 +2103,50 @@
       style={mapCanvasStyle}
     ></div>
 
-    {#if showPageGrid}
-      <div class="page-grid" style={pageGridStyle}></div>
-    {/if}
-
     {#if isSwitchingViewMode}
       <div class="view-mode-loader" transition:fade={{ duration: 200 }}>
         <SkeletonPlaceholder style="width: 100%; height: 100%;" />
       </div>
     {/if}
+  </div>
+{:else}
+  <div class="page-container" style={pageStyle}>
+    <div
+      class="map-stage"
+      style="width: {mapCanvasWidth}px; height: {mapCanvasHeight}px;{colorBlindnessMatrix
+        ? ' filter: url(#color-blindness-filter);'
+        : ''}"
+    >
+      <div
+        bind:this={mapContainer}
+        class="map-canvas"
+        style={mapCanvasStyle}
+      ></div>
 
-    {#if showLegendOverlay}
-      <LegendOverlay />
-    {/if}
+      {#if showPageGrid}
+        <div class="page-grid"></div>
+      {/if}
 
-    {#if showGeoIndicationsOverlay}
-      <GeoIndicationsOverlay interactive={isStylingMode} />
+      {#if isSwitchingViewMode}
+        <div class="view-mode-loader" transition:fade={{ duration: 200 }}>
+          <SkeletonPlaceholder style="width: 100%; height: 100%;" />
+        </div>
+      {/if}
+
+      {#if showLegendOverlay}
+        <LegendOverlay />
+      {/if}
+
+      {#if showGeoIndicationsOverlay}
+        <GeoIndicationsOverlay interactive={isStylingMode} />
+      {/if}
+    </div>
+
+    {#if showAnnotationOverlay}
+      <AnnotationOverlay interactive={isStylingMode} />
     {/if}
   </div>
-
-  {#if showAnnotationOverlay}
-    <AnnotationOverlay interactive={isStylingMode} />
-  {/if}
-</div>
+{/if}
 
 <style>
   .color-blindness-svg-defs {
@@ -2227,22 +2174,14 @@
     z-index: var(--z-map-layer);
     pointer-events: none;
     background-image:
-      radial-gradient(
-        circle at 1px 1px,
-        rgba(22, 22, 22, 0.24) 0.9px,
-        transparent 1.2px
-      ),
-      radial-gradient(
-        circle at 1px 1px,
-        rgba(22, 22, 22, 0.1) 0.8px,
-        transparent 1.1px
-      );
+      radial-gradient(circle, rgba(22, 22, 22, 0.35) 0.6px, transparent 0.6px),
+      radial-gradient(circle, rgba(22, 22, 22, 0.15) 0.5px, transparent 0.5px);
     background-size:
-      12px 12px,
-      24px 24px;
+      20px 20px,
+      10px 10px;
     background-position:
       0 0,
-      6px 6px;
+      5px 5px;
   }
 
   .map-canvas {

@@ -4,7 +4,7 @@ import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import { Duck } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
-import type { JsonValue } from '$lib/types/data';
+import { toJsonValue } from '$lib/features/commons/utils/json.utils';
 import type { UploadedFile } from '../create-project.types';
 import { DataSourceType, FileType } from '../create-project.types';
 import { FileStatus } from '../../constants/ui.constants';
@@ -61,34 +61,6 @@ function cloneRelatedFilesData(
       buffer.slice(0)
     ])
   );
-}
-
-function toJsonValue(value: unknown): JsonValue {
-  if (
-    value === null ||
-    value === undefined ||
-    typeof value === 'string' ||
-    typeof value === 'number' ||
-    typeof value === 'boolean'
-  ) {
-    return value ?? null;
-  }
-
-  if (value instanceof Date) {
-    return value.toISOString();
-  }
-
-  if (Array.isArray(value)) {
-    return value.map((item) => toJsonValue(item));
-  }
-
-  if (typeof value === 'object') {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [key, toJsonValue(item)])
-    );
-  }
-
-  return String(value);
 }
 
 function cloneDatasetParsedData(

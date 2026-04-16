@@ -12,7 +12,6 @@ export const MIME = {
   GEOJSON: 'application/geo+json',
   PARQUET: 'application/parquet',
   GEOPARQUET: 'application/x-geoparquet',
-  SHAPEFILE: 'application/x-shapefile',
   SHAPEFILE_SHP: 'application/x-shapefile',
   SHAPEFILE_DBF: 'application/x-dbf',
   SHAPEFILE_PRJ: 'text/plain',

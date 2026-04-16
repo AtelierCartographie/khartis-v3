@@ -29,7 +29,6 @@ export type {
   GeoColumnInfo,
   GeometryInfo,
   InferredColumn,
-  PipelineContext,
   ProcessedDataset,
   RawColumn,
   RawDataset,

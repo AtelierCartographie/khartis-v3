@@ -1,6 +1,7 @@
 import { decompressData } from '$lib/features/commons/utils/compression.utils';
 import type { SerializedProject } from '$lib/types/serialization.types';
 import { saveProject } from '../core/persistence';
+import { migrateIfNeeded } from '../core/schema-migration';
 import { deserialize } from '../core/serializer';
 import type { KhartisProject } from '../types';
 
@@ -12,11 +13,15 @@ export async function importProject(file: File): Promise<KhartisProject> {
     throw new Error('Invalid project file structure');
   }
 
+  const migrated = migrateIfNeeded(
+    projectData as unknown as Record<string, unknown>
+  ) as unknown as SerializedProject;
+
   const project = await deserialize({
-    ...projectData,
-    id: projectData.id || crypto.randomUUID(),
+    ...migrated,
+    id: migrated.id || crypto.randomUUID(),
     manifest: {
-      ...projectData.manifest,
+      ...migrated.manifest,
       updatedAt: new Date().toISOString()
     }
   });

@@ -11,6 +11,7 @@
     AVAILABLE_FONTS,
     LEGEND_FONT_SIZES
   } from '$lib/features/step-toolbar/tools/legend/legend.constants';
+  import { PRINT_STANDARD_TOKENS } from '$lib/features/commons/utils/layout-sizing.utils';
   import * as m from '$lib/paraglide/messages';
   import {
     Column,
@@ -92,7 +93,9 @@
   }
 
   const effectiveFont = $derived(effectiveStyle.font ?? 'Cabin');
-  const effectiveFontSize = $derived(effectiveStyle.fontSize ?? 12);
+  const effectiveFontSize = $derived(
+    effectiveStyle.fontSize ?? PRINT_STANDARD_TOKENS.annotations.noteFontSize
+  );
   const effectiveTextColor = $derived.by(() => {
     const c = effectiveStyle.color;
     if (!c) return { hex: '#000000', hue: 0, saturation: 0, lightness: 0 };

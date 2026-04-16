@@ -255,16 +255,8 @@ export async function listMetadata(): Promise<SavedProjectMetadata[]> {
   );
 }
 
-async function getMetadataList(): Promise<SavedProjectMetadata[]> {
-  return (
-    (await loadFromStorage<SavedProjectMetadata[]>(
-      ProjectStorageKey.METADATA
-    )) ?? []
-  );
-}
-
 async function updateMetadata(project: KhartisProject): Promise<void> {
-  const metadata = await getMetadataList();
+  const metadata = await listMetadata();
   const index = metadata.findIndex((entry) => entry.id === project.id);
 
   const entry: SavedProjectMetadata = {
@@ -286,7 +278,7 @@ async function updateMetadata(project: KhartisProject): Promise<void> {
 }
 
 async function removeFromMetadata(id: string): Promise<void> {
-  const metadata = await getMetadataList();
+  const metadata = await listMetadata();
   const filtered = metadata.filter((entry) => entry.id !== id);
   await saveToStorage(ProjectStorageKey.METADATA, filtered);
 }

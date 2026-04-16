@@ -13,6 +13,7 @@ import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrat
 import { mapHighlightStore } from '$lib/features/map/stores/map-highlight.store.svelte';
 import { mapTooltipStore } from '$lib/features/map/stores/map-tooltip.store.svelte';
 import type { TooltipEntry } from '$lib/features/map/types';
+import { centerMapOnTableRow } from '$lib/features/map/utils/center-on-table-row.utils';
 import type { SearchState } from './search.types';
 
 const MIN_SEARCH_LENGTH = 2;
@@ -26,7 +27,8 @@ const DEFAULT_STATE: SearchState = {
   isSearching: false,
   caseSensitive: false,
   wholeWord: false,
-  useRegex: false
+  useRegex: false,
+  replaceValue: ''
 };
 
 type SearchActions = {
@@ -40,6 +42,8 @@ type SearchActions = {
   toggleUseRegex: () => void;
   toggleWholeWord: () => void;
   clearSearch: () => void;
+  setReplaceValue: (value: string) => void;
+  replaceCurrentResult: () => Promise<void>;
 };
 
 function resolveSearchDataset(): DatasetResult | undefined {
@@ -65,6 +69,12 @@ function resolveSearchDataset(): DatasetResult | undefined {
 type SearchContext = {
   dataset: DatasetResult;
   tableName: string;
+  sourceFileId?: string;
+  joinedBasemap?: string;
+  gpsColumns?: {
+    lat: string;
+    lon: string;
+  };
 };
 
 type SearchResultItem = SearchState['results'][number];
@@ -85,7 +95,10 @@ function getSearchContext(): SearchContext | null {
 
   return {
     dataset,
-    tableName: duckDataset.tableName
+    tableName: duckDataset.tableName,
+    sourceFileId: dataset.sourceFileId,
+    joinedBasemap: duckDataset.joinedBasemap,
+    gpsColumns: duckDataset.gpsColumns
   };
 }
 
@@ -263,6 +276,19 @@ async function showTooltipForResult(
   }
 }
 
+async function centerMapOnRow(
+  rowId: number,
+  searchContext: SearchContext
+): Promise<void> {
+  await centerMapOnTableRow({
+    tableName: searchContext.tableName,
+    rowId,
+    sourceFileId: searchContext.sourceFileId,
+    joinedBasemap: searchContext.joinedBasemap,
+    gpsColumns: searchContext.gpsColumns
+  });
+}
+
 function clearMapHighlights(): void {
   mapHighlightStore.clearHighlights();
 }
@@ -393,6 +419,7 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
       const focused = s.results[index];
       if (searchContext && focused) {
         void showTooltipForResult(focused.rowId, searchContext);
+        void centerMapOnRow(focused.rowId, searchContext);
       }
     };
 
@@ -464,6 +491,44 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
         s.isSearching = false;
         clearMapHighlights();
         mapTooltipStore.unpin();
+      },
+      setReplaceValue: (value: string) => {
+        s.replaceValue = value;
+      },
+      replaceCurrentResult: async (): Promise<void> => {
+        const focused = s.results[s.currentResultIndex];
+        const searchContext = getSearchContext();
+        if (!focused || !searchContext || !s.replaceValue.trim()) return;
+
+        const escapedTable = escapeIdentifier(searchContext.tableName);
+        const escapedCol = escapeIdentifier(focused.columnName);
+        const escapedNewVal = escapeSqlString(s.replaceValue);
+
+        try {
+          await Duck.query(
+            `UPDATE "${escapedTable}" SET "${escapedCol}" = '${escapedNewVal}' WHERE ${INTERNAL_COLUMN.ID} = ${focused.rowId}`,
+            { format: 'array' }
+          );
+          Duck.invalidateTableCache(searchContext.tableName);
+          duckDBOrchestrator.bumpDatasetsVersion();
+
+          const prevIndex = s.currentResultIndex;
+          s.results = s.results.filter((_, i) => i !== prevIndex);
+
+          if (s.results.length > 0) {
+            navigateTo(Math.min(prevIndex, s.results.length - 1));
+          } else {
+            s.currentResultIndex = -1;
+            clearMapHighlights();
+            mapTooltipStore.unpin();
+          }
+        } catch (error) {
+          logger.error('Replace failed', LogCategory.UI, {
+            rowId: focused.rowId,
+            column: focused.columnName,
+            error
+          });
+        }
       }
     };
   },

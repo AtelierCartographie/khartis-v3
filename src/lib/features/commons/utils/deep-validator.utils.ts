@@ -461,21 +461,33 @@ export const DeepDataValidator = {
 
     if (rowCount > PERFORMANCE_THRESHOLDS.maxRows) {
       warnings.push(
-        `Dataset exceeds ${PERFORMANCE_THRESHOLDS.maxRows.toLocaleString()} row limit: ${rowCount.toLocaleString()} rows detected. Processing will be limited to the first ${PERFORMANCE_THRESHOLDS.maxRows.toLocaleString()} rows.`
+        m.data_quality_perf_row_limit_exceeded({
+          maxRows: PERFORMANCE_THRESHOLDS.maxRows.toLocaleString(),
+          rowCount: rowCount.toLocaleString()
+        })
       );
     } else if (rowCount > PERFORMANCE_THRESHOLDS.warningRows) {
       warnings.push(
-        `Large dataset: ${rowCount.toLocaleString()} rows (warning threshold: ${PERFORMANCE_THRESHOLDS.warningRows.toLocaleString()}). Processing may take some time.`
+        m.data_quality_perf_large_dataset({
+          rowCount: rowCount.toLocaleString(),
+          warningRows: PERFORMANCE_THRESHOLDS.warningRows.toLocaleString()
+        })
       );
     }
 
     if (columnCount > PERFORMANCE_THRESHOLDS.maxColumns) {
       warnings.push(
-        `Dataset exceeds ${PERFORMANCE_THRESHOLDS.maxColumns} column limit: ${columnCount} columns detected. Maximum supported: ${PERFORMANCE_THRESHOLDS.maxColumns}.`
+        m.data_quality_perf_column_limit_exceeded({
+          maxColumns: String(PERFORMANCE_THRESHOLDS.maxColumns),
+          columnCount: String(columnCount)
+        })
       );
     } else if (columnCount > PERFORMANCE_THRESHOLDS.warningColumns) {
       warnings.push(
-        `Many columns: ${columnCount} (warning threshold: ${PERFORMANCE_THRESHOLDS.warningColumns}). Consider selecting only necessary columns.`
+        m.data_quality_perf_many_columns({
+          columnCount: String(columnCount),
+          warningColumns: String(PERFORMANCE_THRESHOLDS.warningColumns)
+        })
       );
     }
 
@@ -483,7 +495,9 @@ export const DeepDataValidator = {
     const maxFileSizeMB = PERFORMANCE_THRESHOLDS.maxFileSize / (1024 * 1024);
     if (estimatedSize > PERFORMANCE_THRESHOLDS.maxFileSize) {
       warnings.push(
-        `Estimated data size exceeds ${maxFileSizeMB}MB limit. Consider splitting your data.`
+        m.data_quality_perf_file_size_exceeded({
+          maxFileSizeMB: String(maxFileSizeMB)
+        })
       );
     }
 
@@ -499,34 +513,34 @@ export const DeepDataValidator = {
     const suggestions: string[] = [];
 
     if (!geoDetection.hasGeoColumns) {
-      suggestions.push(
-        'No geographic column detected. Make sure you have a column with place names, ISO codes, or coordinates.'
-      );
+      suggestions.push(m.data_quality_suggest_no_geo_column());
     } else if (geoDetection.suggestedPrimaryGeoColumn) {
       const geoCol = geoDetection.suggestedPrimaryGeoColumn;
       suggestions.push(
-        `Suggested primary geographic column: "${geoCol.columnName}" (${geoCol.type}, confidence: ${(geoCol.confidence * 100).toFixed(0)}%)`
+        m.data_quality_suggest_primary_geo_column({
+          columnName: geoCol.columnName,
+          type: geoCol.type,
+          confidence: (geoCol.confidence * 100).toFixed(0)
+        })
       );
     }
 
     const numericColumns = columns.filter((c) => c.type === 'numeric');
     if (numericColumns.length === 0) {
-      suggestions.push(
-        'No numeric column detected. Quantitative visualizations require numeric data.'
-      );
+      suggestions.push(m.data_quality_suggest_no_numeric_column());
     }
 
     const highNullColumns = columns.filter((c) => c.nullPercentage > 30);
     if (highNullColumns.length > 0) {
       suggestions.push(
-        `${highNullColumns.length} column(s) with many missing values. Consider excluding or completing them.`
+        m.data_quality_suggest_missing_values({
+          count: String(highNullColumns.length)
+        })
       );
     }
 
     if (performanceWarnings.length > 0) {
-      suggestions.push(
-        'Potential performance issues detected. Consider filtering or sampling your data.'
-      );
+      suggestions.push(m.data_quality_suggest_performance_issues());
     }
 
     const severeIssues = qualityIssues.filter((i) => i.severity === 'error');

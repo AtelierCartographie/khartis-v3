@@ -54,4 +54,20 @@
     padding-top: 0;
     padding-bottom: 0;
   }
+
+  #khartis-tools-list-container :global(.tool-button-wrapper) {
+    position: relative;
+    display: inline-block;
+  }
+
+  #khartis-tools-list-container :global(.notification-badge) {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 8px;
+    height: 8px;
+    background-color: var(--cds-support-error, #da1e28);
+    border-radius: 50%;
+    pointer-events: none;
+  }
 </style>

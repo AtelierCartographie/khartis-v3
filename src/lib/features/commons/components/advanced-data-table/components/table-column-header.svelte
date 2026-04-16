@@ -836,16 +836,16 @@
   }
 
   .sort-btn.active {
-    color: #ffffff;
-    background-color: #0f62fe;
+    color: var(--cds-text-inverse, #ffffff);
+    background-color: var(--cds-interactive-01, #0f62fe);
     border-radius: 999px;
     box-shadow: inset 0 0 0 1px rgba(15, 98, 254, 0.85);
     opacity: 1;
   }
 
   .sort-btn.active:hover {
-    color: #ffffff;
-    background-color: #0353e9;
+    color: var(--cds-text-inverse, #ffffff);
+    background-color: var(--cds-hover-primary, #0353e9);
   }
 
   .summary-plot-wrapper {

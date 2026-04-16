@@ -83,19 +83,14 @@ CLAUDE.md
 !.yarn/releases
 !.yarn/sdks
 
-# Playwright
-playwright-report/
-blob-report/
-.playwright
-.playwright-mcp
-*-TESTS.md
-.playwright-cli
-
 # Turbo
 .turbo
 
 # Vitest
 .vitest
+
+# Local tracking artifacts
+*-TESTS.md
 
 # Inlang cache
 project.inlang/cache/

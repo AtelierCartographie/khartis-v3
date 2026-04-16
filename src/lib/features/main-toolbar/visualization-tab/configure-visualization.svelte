@@ -38,10 +38,13 @@
   } from './components/discretization.utils';
   import {
     ColorMode,
+    DEFAULT_COLORS,
     FillMode,
+    ProportionalType,
     StrokeMode,
     SymbolMode,
-    ThicknessMode
+    ThicknessMode,
+    VISUALIZATION_DEFAULTS
   } from '../constants';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
@@ -50,12 +53,10 @@
   import { COLUMN_TYPE_GEOMETRY } from '$lib/features/commons/constants/data.constants';
   import { SettingsAdjust } from 'carbon-icons-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
-  import LabelsConfig from './components/labels-config.svelte';
   import LinesConfig from './components/lines-config.svelte';
   import PolygonsConfig from './components/polygons-config.svelte';
   import SymbolsConfig from './components/symbols-config.svelte';
   import TextsConfig from './components/texts-config.svelte';
-  import YearFilter from './components/year-filter.svelte';
 
   let selectedViz = $derived(visualizationStore.selectedVisualization);
   let lastComputedKey = '';
@@ -140,59 +141,37 @@
     availablePrimitiveFilters.includes(PrimitiveFilterType.LINE)
   );
 
-  function resolveMappingDefaults(
-    nextModes: VisualizationModes,
-    currentMapping: VisualizationConfig['mapping']
-  ): VisualizationConfig['mapping'] {
-    if (!selectedViz) {
-      return currentMapping;
-    }
-
-    const dataset = getSelectedDataset();
-    const columns = dataset?.columns ?? [];
-    const firstNumericColumn = columns.find(
-      (column) => column.type === 'number'
-    )?.name;
-    const firstStringColumn = columns.find(
-      (column) =>
-        column.type !== 'number' &&
-        column.type !== 'date' &&
-        column.type !== 'boolean' &&
-        column.type !== COLUMN_TYPE_GEOMETRY
-    )?.name;
-
-    const nextMapping = { ...currentMapping };
-    const nextViz = {
-      ...selectedViz,
-      modes: nextModes,
-      mapping: nextMapping
-    } as VisualizationConfig;
-
-    if (
-      nextModes.symbol === SymbolMode.PROPORTIONAL &&
-      !nextMapping.sizeColumn &&
-      firstNumericColumn
-    ) {
-      nextMapping.sizeColumn = firstNumericColumn;
-    }
-
-    if (
-      usesBreakClassification(nextViz) &&
-      !nextMapping.valueColumn &&
-      firstNumericColumn
-    ) {
-      nextMapping.valueColumn = firstNumericColumn;
-    }
-
-    if (
-      usesCategoricalClassification(nextViz) &&
-      !nextMapping.categoryColumn &&
-      firstStringColumn
-    ) {
-      nextMapping.categoryColumn = firstStringColumn;
-    }
-
-    return nextMapping;
+  function fetchCategoryLabels(
+    vizId: string,
+    column: string,
+    tableName: string,
+    useUntrack = false
+  ): void {
+    Duck.query(
+      `SELECT DISTINCT "${column}" FROM "${tableName}" WHERE "${column}" IS NOT NULL ORDER BY "${column}"`,
+      { format: 'array' }
+    )
+      .then((rows) => {
+        const labels = (rows as Array<Record<string, unknown>>).map((row) =>
+          String(row[column])
+        );
+        if (labels.length > 0) {
+          if (useUntrack) {
+            untrack(() =>
+              visualizationStore.updateClassification(vizId, { labels })
+            );
+          } else {
+            visualizationStore.updateClassification(vizId, { labels });
+          }
+        }
+      })
+      .catch((e) =>
+        logger.warn(
+          'Failed to fetch category labels',
+          LogCategory.VISUALIZATION,
+          e
+        )
+      );
   }
 
   function handleInvertPalette() {
@@ -215,29 +194,15 @@
         ...selectedViz.modes,
         ...updates
       } as VisualizationModes;
-      const nextMapping = resolveMappingDefaults(
-        nextModes,
-        selectedViz.mapping
-      );
       const nextViz = {
         ...selectedViz,
-        modes: nextModes,
-        mapping: nextMapping
+        modes: nextModes
       } as VisualizationConfig;
-
-      if (
-        nextMapping.sizeColumn !== selectedViz.mapping.sizeColumn ||
-        nextMapping.valueColumn !== selectedViz.mapping.valueColumn ||
-        nextMapping.categoryColumn !== selectedViz.mapping.categoryColumn
-      ) {
-        visualizationStore.updateVisualization(selectedViz.id, {
-          mapping: nextMapping
-        });
-      }
 
       visualizationStore.updateModes(selectedViz.id, updates);
 
       if (
+        selectedViz.mapping.valueColumn &&
         usesBreakClassification(nextViz) &&
         (!selectedViz.classification?.method ||
           !selectedViz.classification?.numClasses)
@@ -250,30 +215,20 @@
         computeBreaksForVisualization('modesChange:classes');
       }
 
-      if (usesCategoricalClassification(nextViz)) {
+      if (
+        nextViz.mapping.categoryColumn &&
+        usesCategoricalClassification(nextViz)
+      ) {
         const vizId = selectedViz.id;
         visualizationStore.updateClassification(vizId, {
           colors: [...DEFAULT_CATEGORICAL_COLORS],
           inverted: false,
           labels: []
         });
-        // Async: fetch actual unique values from DuckDB for label ordering
         const categoryColumn = nextViz.mapping.categoryColumn;
         const dataset = getSelectedDataset();
         if (categoryColumn && dataset?.tableName) {
-          Duck.query(
-            `SELECT DISTINCT "${categoryColumn}" FROM "${dataset.tableName}" WHERE "${categoryColumn}" IS NOT NULL ORDER BY "${categoryColumn}"`,
-            { format: 'array' }
-          )
-            .then((rows) => {
-              const labels = (rows as Array<Record<string, unknown>>).map(
-                (row) => String(row[categoryColumn])
-              );
-              if (labels.length > 0) {
-                visualizationStore.updateClassification(vizId, { labels });
-              }
-            })
-            .catch(() => {});
+          fetchCategoryLabels(vizId, categoryColumn, dataset.tableName);
         }
       }
     }
@@ -348,25 +303,15 @@
         computeBreaksForVisualization('mapping:valueColumn');
       }
       if (updates.categoryColumn) {
-        const vizId = selectedViz.id;
         const dataset = datasetsStore.datasets.find(
           (d) => d.id === selectedViz.datasetId
         );
         if (dataset?.tableName) {
-          const col = updates.categoryColumn;
-          Duck.query(
-            `SELECT DISTINCT "${col}" FROM "${dataset.tableName}" WHERE "${col}" IS NOT NULL ORDER BY "${col}"`,
-            { format: 'array' }
-          )
-            .then((rows) => {
-              const labels = (rows as Array<Record<string, unknown>>).map(
-                (row) => String(row[col])
-              );
-              if (labels.length > 0) {
-                visualizationStore.updateClassification(vizId, { labels });
-              }
-            })
-            .catch(() => {});
+          fetchCategoryLabels(
+            selectedViz.id,
+            updates.categoryColumn,
+            dataset.tableName
+          );
         }
       }
     }
@@ -386,27 +331,78 @@
       return;
     }
 
-    visualizationStore.togglePrimitiveFilter(selectedViz.id, primitive);
-  }
-
-  function handleLabelVisibilityChange(visible: boolean) {
-    if (!selectedViz?.id) {
+    if (!visible) {
+      visualizationStore.togglePrimitiveFilter(selectedViz.id, primitive);
       return;
     }
 
-    const currentOpacity = selectedViz.style.labelOpacity;
-    const nextOpacity =
-      visible && (!currentOpacity || currentOpacity <= 0)
-        ? 1
-        : visible
-          ? currentOpacity
-          : 0;
-    visualizationStore.updateVisualization(selectedViz.id, {
-      style: {
-        ...selectedViz.style,
-        labelOpacity: nextOpacity
-      }
-    });
+    const nextFilters = [...new Set([...activeFilters, primitive])];
+
+    if (primitive === PrimitiveFilterType.POINT) {
+      visualizationStore.updateVisualization(selectedViz.id, {
+        primitiveFilters: nextFilters,
+        modes: {
+          ...selectedViz.modes,
+          symbol: SymbolMode.UNIQUE,
+          fill: FillMode.UNIQUE,
+          proportionalType: ProportionalType.SINGLE
+        },
+        style: {
+          ...selectedViz.style,
+          fillColor:
+            (selectedViz.style.fillColor as string) ?? DEFAULT_COLORS.fill,
+          strokeColor: DEFAULT_COLORS.gray,
+          fillOpacity: nextFilters.includes(PrimitiveFilterType.POLYGON)
+            ? 0
+            : (selectedViz.style.fillOpacity ??
+              VISUALIZATION_DEFAULTS.fillOpacity / 100)
+        },
+        symbols: selectedViz.symbols
+          ? {
+              ...selectedViz.symbols,
+              opacity:
+                selectedViz.symbols.opacity ??
+                VISUALIZATION_DEFAULTS.symbolOpacity / 100
+            }
+          : selectedViz.symbols
+      });
+      return;
+    }
+
+    if (primitive === PrimitiveFilterType.POLYGON) {
+      visualizationStore.updateVisualization(selectedViz.id, {
+        primitiveFilters: nextFilters,
+        modes: {
+          ...selectedViz.modes,
+          fill: FillMode.NONE
+        },
+        style: {
+          ...selectedViz.style,
+          fillOpacity: 0,
+          strokeColor: DEFAULT_COLORS.gray
+        }
+      });
+      return;
+    }
+
+    if (primitive === PrimitiveFilterType.LINE) {
+      visualizationStore.updateVisualization(selectedViz.id, {
+        primitiveFilters: nextFilters,
+        modes: {
+          ...selectedViz.modes,
+          fill: FillMode.NONE,
+          color: ColorMode.UNIQUE,
+          thickness: ThicknessMode.UNIQUE
+        },
+        style: {
+          ...selectedViz.style,
+          lineColor: DEFAULT_COLORS.gray,
+          lineOpacity:
+            selectedViz.style.lineOpacity ??
+            VISUALIZATION_DEFAULTS.lineOpacity / 100
+        }
+      });
+    }
   }
 
   function handleAddDataFilter(
@@ -427,12 +423,9 @@
     }
   }
 
-  function handleClearDataFiltersForPrimitive(primitiveType: PrimitiveFilter) {
-    if (selectedViz?.id) {
-      visualizationStore.clearDataFiltersForPrimitive(
-        selectedViz.id,
-        primitiveType
-      );
+  function handleClearFilters(primitive: PrimitiveFilter): void {
+    for (const filter of getFiltersForPrimitive(primitive)) {
+      handleRemoveDataFilter(filter.id);
     }
   }
 
@@ -459,7 +452,8 @@
     visualizationStore.updateVisualization(selectedViz.id, {
       style: {
         ...selectedViz.style,
-        textOpacity: nextOpacity
+        textOpacity: nextOpacity,
+        labelOpacity: 0
       }
     });
   }
@@ -632,7 +626,6 @@
   });
 
   $effect(() => {
-    // Recompute breaks when method or numClasses changes
     const method = selectedViz?.classification?.method;
     const numClasses = selectedViz?.classification?.numClasses;
     const valueColumn = selectedViz?.mapping.valueColumn;
@@ -652,25 +645,9 @@
     const isCategorical = usesCategoricalClassification(viz);
     const hasLabels = (viz?.classification?.labels?.length ?? 0) > 0;
     if (!isCategorical || !col || hasLabels) return;
-    const vizId = viz!.id;
     const dataset = datasetsStore.datasets.find((d) => d.id === viz!.datasetId);
     if (!dataset?.tableName) return;
-    const tableName = dataset.tableName;
-    Duck.query(
-      `SELECT DISTINCT "${col}" FROM "${tableName}" WHERE "${col}" IS NOT NULL ORDER BY "${col}"`,
-      { format: 'array' }
-    )
-      .then((rows) => {
-        const labels = (rows as Array<Record<string, unknown>>).map((row) =>
-          String(row[col])
-        );
-        if (labels.length > 0) {
-          untrack(() =>
-            visualizationStore.updateClassification(vizId, { labels })
-          );
-        }
-      })
-      .catch(() => {});
+    fetchCategoryLabels(viz!.id, col, dataset.tableName, true);
   });
 
   $effect(() => {
@@ -747,83 +724,66 @@
   </div>
 
   <div class="config-accordion">
-    {#if showsSymbolsConfig}
-      <SymbolsConfig
-        dataFields={dataFieldItems}
-        visualization={selectedViz}
-        filters={getFiltersForPrimitive(PrimitiveFilterType.POINT)}
-        onStyleChange={handleStyleChange}
-        onModesChange={handleModesChange}
-        onSymbolsChange={handleSymbolsChange}
-        onMappingChange={handleMappingChange}
-        onMissingDataChange={handleMissingDataChange}
-        onClassificationChange={handleClassificationChange}
-        onInvertPalette={handleInvertPalette}
-        onToggleVisibility={(checked) =>
-          handlePrimitiveVisibilityChange(PrimitiveFilterType.POINT, checked)}
-        onAddFilter={(f) => handleAddDataFilter(f, PrimitiveFilterType.POINT)}
-        onRemoveFilter={handleRemoveDataFilter}
-        onClearFilters={() =>
-          handleClearDataFiltersForPrimitive(PrimitiveFilterType.POINT)}
-      />
-    {/if}
-
-    {#if showsPolygonsConfig}
-      <PolygonsConfig
-        dataFields={dataFieldItems}
-        visualization={selectedViz}
-        filters={getFiltersForPrimitive(PrimitiveFilterType.POLYGON)}
-        onStyleChange={handleStyleChange}
-        onModesChange={handleModesChange}
-        onMissingDataChange={handleMissingDataChange}
-        onClassificationChange={handleClassificationChange}
-        onMappingChange={handleMappingChange}
-        onInvertPalette={handleInvertPalette}
-        onToggleVisibility={(checked) =>
-          handlePrimitiveVisibilityChange(PrimitiveFilterType.POLYGON, checked)}
-        onAddFilter={(f) => handleAddDataFilter(f, PrimitiveFilterType.POLYGON)}
-        onRemoveFilter={handleRemoveDataFilter}
-        onClearFilters={() =>
-          handleClearDataFiltersForPrimitive(PrimitiveFilterType.POLYGON)}
-      />
-    {/if}
-
-    {#if showsLinesConfig}
-      <LinesConfig
-        dataFields={dataFieldItems}
-        visualization={selectedViz}
-        filters={getFiltersForPrimitive(PrimitiveFilterType.LINE)}
-        onStyleChange={handleStyleChange}
-        onModesChange={handleModesChange}
-        onMissingDataChange={handleMissingDataChange}
-        onClassificationChange={handleClassificationChange}
-        onMappingChange={handleMappingChange}
-        onInvertPalette={handleInvertPalette}
-        onToggleVisibility={(checked) =>
-          handlePrimitiveVisibilityChange(PrimitiveFilterType.LINE, checked)}
-        onAddFilter={(f) => handleAddDataFilter(f, PrimitiveFilterType.LINE)}
-        onRemoveFilter={handleRemoveDataFilter}
-        onClearFilters={() =>
-          handleClearDataFiltersForPrimitive(PrimitiveFilterType.LINE)}
-      />
-    {/if}
-
-    <LabelsConfig
+    <SymbolsConfig
       dataFields={dataFieldItems}
       visualization={selectedViz}
-      disabled={!hasGeometry}
+      disabled={!showsSymbolsConfig}
+      filters={getFiltersForPrimitive(PrimitiveFilterType.POINT)}
       onStyleChange={handleStyleChange}
       onModesChange={handleModesChange}
+      onSymbolsChange={handleSymbolsChange}
+      onMappingChange={handleMappingChange}
+      onMissingDataChange={handleMissingDataChange}
+      onClassificationChange={handleClassificationChange}
+      onInvertPalette={handleInvertPalette}
+      onToggleVisibility={(checked) =>
+        handlePrimitiveVisibilityChange(PrimitiveFilterType.POINT, checked)}
+      onAddFilter={(f) => handleAddDataFilter(f, PrimitiveFilterType.POINT)}
+      onRemoveFilter={handleRemoveDataFilter}
+      onClearFilters={() => handleClearFilters(PrimitiveFilterType.POINT)}
+    />
+
+    <PolygonsConfig
+      dataFields={dataFieldItems}
+      visualization={selectedViz}
+      disabled={!showsPolygonsConfig}
+      filters={getFiltersForPrimitive(PrimitiveFilterType.POLYGON)}
+      onStyleChange={handleStyleChange}
+      onModesChange={handleModesChange}
+      onMissingDataChange={handleMissingDataChange}
       onClassificationChange={handleClassificationChange}
       onMappingChange={handleMappingChange}
       onInvertPalette={handleInvertPalette}
-      onToggleVisibility={handleLabelVisibilityChange}
+      onToggleVisibility={(checked) =>
+        handlePrimitiveVisibilityChange(PrimitiveFilterType.POLYGON, checked)}
+      onAddFilter={(f) => handleAddDataFilter(f, PrimitiveFilterType.POLYGON)}
+      onRemoveFilter={handleRemoveDataFilter}
+      onClearFilters={() => handleClearFilters(PrimitiveFilterType.POLYGON)}
+    />
+
+    <LinesConfig
+      dataFields={dataFieldItems}
+      visualization={selectedViz}
+      disabled={!showsLinesConfig}
+      filters={getFiltersForPrimitive(PrimitiveFilterType.LINE)}
+      onStyleChange={handleStyleChange}
+      onModesChange={handleModesChange}
+      onMissingDataChange={handleMissingDataChange}
+      onClassificationChange={handleClassificationChange}
+      onMappingChange={handleMappingChange}
+      onInvertPalette={handleInvertPalette}
+      onToggleVisibility={(checked) =>
+        handlePrimitiveVisibilityChange(PrimitiveFilterType.LINE, checked)}
+      onAddFilter={(f) => handleAddDataFilter(f, PrimitiveFilterType.LINE)}
+      onRemoveFilter={handleRemoveDataFilter}
+      onClearFilters={() => handleClearFilters(PrimitiveFilterType.LINE)}
     />
 
     <TextsConfig
       dataFields={dataFieldItems}
       visualization={selectedViz}
       disabled={!hasGeometry}
+      filters={getFiltersForPrimitive(PrimitiveFilterType.TEXT)}
       onStyleChange={handleStyleChange}
       onModesChange={handleModesChange}
       onMissingDataChange={handleMissingDataChange}
@@ -831,14 +791,11 @@
       onMappingChange={handleMappingChange}
       onInvertPalette={handleInvertPalette}
       onToggleVisibility={handleTextVisibilityChange}
+      onAddFilter={(f) => handleAddDataFilter(f, PrimitiveFilterType.TEXT)}
+      onRemoveFilter={handleRemoveDataFilter}
+      onClearFilters={() => handleClearFilters(PrimitiveFilterType.TEXT)}
     />
   </div>
-
-  {#if selectedViz}
-    <div class="filter-area">
-      <YearFilter visualization={selectedViz} />
-    </div>
-  {/if}
 </section>
 
 <style lang="scss">
@@ -864,9 +821,5 @@
     display: flex;
     flex-direction: column;
     border-bottom: 1px solid var(--cds-border-subtle-01, #c6c6c6);
-  }
-
-  .filter-area {
-    padding: 0 16px 16px 16px;
   }
 </style>
