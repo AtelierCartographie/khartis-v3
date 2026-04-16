@@ -4,7 +4,7 @@
   import { Button, ComboBox, TextArea } from 'carbon-components-svelte';
   import { Code, List } from 'carbon-icons-svelte';
   import { createEventDispatcher } from 'svelte';
-  import { PROJECTIONS } from './data';
+  import { PROJECTIONS as PROJECTION_CATALOG } from '$lib/features/commons/utils/projection.utils';
   import { projectionActions } from './projection.store.svelte';
 
   const dispatch = createEventDispatcher<{
@@ -17,10 +17,10 @@
   let crsCode = $state('');
   let catalogueQuery = $state('');
 
-  const items = PROJECTIONS.map((p) => ({
+  const items = PROJECTION_CATALOG.map((p) => ({
     id: p.id,
-    projectionId: p.projectionId,
-    text: p.title
+    projectionId: p.id,
+    text: p.name
   }));
   const catalogueLabel = m.projection_catalog_label();
   const viewCodeLabel = m.projection_view_code();

@@ -138,9 +138,7 @@ function toMapProjectionType(projectionId: string): 'mercator' | 'globe' {
     'equirectangular',
     'albers',
     'lambert-conformal',
-    'rect-1',
-    'rect-2',
-    'rect-3'
+    'gall-peters'
   ]);
 
   return mercatorLike.has(projectionId) ? MERCATOR_PROJECTION_TYPE : 'globe';
@@ -301,9 +299,15 @@ function mapD3FactoryToInternalId(factoryName: string): string | null {
     geoRobinson: 'robinson',
     geoStereographic: 'stereographic',
     geoAzimuthalEqualArea: 'azimuthal-equal-area',
-    geoEqualEarth: 'natural-earth',
+    geoEqualEarth: 'equal-earth',
     geoMollweide: 'mollweide',
-    geoAitoff: 'aitoff'
+    geoAitoff: 'aitoff',
+    geoWinkel3: 'winkel-tripel',
+    geoCylindricalEqualArea: 'gall-peters',
+    geoBonne: 'bonne',
+    geoArmadillo: 'armadillo',
+    geoBertin1953: 'bertin-1953',
+    geoInterruptedMollweide: 'interrupted-mollweide'
   };
   return mapping[factoryName] ?? null;
 }

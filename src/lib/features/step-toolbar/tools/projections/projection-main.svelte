@@ -147,7 +147,7 @@
               {m.projection_suggestions_generic()}
             </div>
             <div class="projection-cards">
-              {#each suggestions.generic.slice(0, 5) as s (s.id)}
+              {#each suggestions.generic.slice(0, 3) as s (s.id)}
                 <ProjectionCard
                   title={s.name}
                   subtitle={s.equalArea

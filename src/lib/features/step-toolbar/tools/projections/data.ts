@@ -1,3 +1,5 @@
+import { m } from '$lib/paraglide/messages';
+
 export type ProjectionItem = {
   id: string;
   projectionId: string;
@@ -15,98 +17,108 @@ export type ProjectionItem = {
 export const PROJECTIONS: ProjectionItem[] = [
   {
     id: 'rect-1',
-    projectionId: 'equirectangular',
-    title: 'Gall Peters',
-    subtitle: 'Surfaces',
+    projectionId: 'gall-peters',
+    title: m.projection_name_gall_peters(),
+    subtitle: m.card_subtitle_surfaces(),
     tag: 'Rectangulaire',
-    ratio: '16:9',
-    previewLabel: 'Projection preview',
+    ratio: '2:1',
+    previewLabel: m.projection_preview_label(),
     variant: 'default',
-    equalArea: true
+    equalArea: true,
+    description: m.projection_desc_gall_peters()
   },
   {
     id: 'rect-2',
     projectionId: 'mercator',
-    title: 'Mercator',
-    subtitle: 'Surfaces',
+    title: m.projection_name_mercator(),
+    subtitle: m.card_subtitle_surfaces(),
     tag: 'Rectangulaire',
-    ratio: '16:9',
-    previewLabel: 'Projection preview',
-    variant: 'default'
+    ratio: '1:1',
+    previewLabel: m.projection_preview_label(),
+    variant: 'default',
+    description: m.projection_desc_mercator()
   },
   {
     id: 'rect-3',
-    projectionId: 'albers',
-    title: 'Bonne',
-    subtitle: 'Surfaces',
+    projectionId: 'bonne',
+    title: m.projection_name_bonne(),
+    subtitle: m.card_subtitle_surfaces(),
     tag: 'Rectangulaire',
     ratio: '16:9',
-    previewLabel: 'Projection preview',
+    previewLabel: m.projection_preview_label(),
     variant: 'default',
-    equalArea: true
+    equalArea: true,
+    description: m.projection_desc_bonne()
   },
   {
     id: 'arr-1',
-    projectionId: 'natural-earth',
-    title: 'Equal Earth',
-    subtitle: 'Surfaces',
+    projectionId: 'equal-earth',
+    title: m.projection_name_equal_earth(),
+    subtitle: m.card_subtitle_surfaces(),
     tag: 'Arrondie',
-    ratio: '16:9',
-    previewLabel: 'Projection preview',
+    ratio: '2:1',
+    previewLabel: m.projection_preview_label(),
     variant: 'default',
-    equalArea: true
+    equalArea: true,
+    description: m.projection_desc_equal_earth()
   },
   {
     id: 'arr-2',
-    projectionId: 'orthographic',
-    title: 'Armadillo',
-    subtitle: 'Surfaces',
+    projectionId: 'armadillo',
+    title: m.projection_name_armadillo(),
+    subtitle: m.card_subtitle_surfaces(),
     tag: 'Arrondie',
     ratio: '16:9',
-    previewLabel: 'Projection preview',
-    variant: 'default'
+    previewLabel: m.projection_preview_label(),
+    variant: 'default',
+    description: m.projection_desc_armadillo()
   },
   {
     id: 'arr-3',
-    projectionId: 'robinson',
-    title: 'Atlantis',
-    subtitle: 'Surfaces',
+    projectionId: 'atlantis',
+    title: m.projection_name_atlantis(),
+    subtitle: m.card_subtitle_surfaces(),
     tag: 'Arrondie',
-    ratio: '16:9',
-    previewLabel: 'Projection preview',
-    variant: 'default'
+    ratio: '2:1',
+    previewLabel: m.projection_preview_label(),
+    variant: 'default',
+    equalArea: true,
+    description: m.projection_desc_atlantis()
   },
   {
     id: 'disc-1',
-    projectionId: 'winkel-tripel',
-    title: 'Air Ocean',
-    subtitle: 'Surfaces',
+    projectionId: 'bertin-1953',
+    title: m.projection_name_bertin_1953(),
+    subtitle: m.card_subtitle_surfaces(),
     tag: 'Discontinue',
     ratio: '16:9',
-    previewLabel: 'Projection preview',
-    variant: 'default'
+    previewLabel: m.projection_preview_label(),
+    variant: 'default',
+    description: m.projection_desc_bertin_1953()
   },
   {
     id: 'disc-2',
-    projectionId: 'mollweide',
-    title: 'Butterfly',
-    subtitle: 'Surfaces',
+    projectionId: 'interrupted-mollweide',
+    title: m.projection_name_interrupted_mollweide(),
+    subtitle: m.card_subtitle_surfaces(),
     tag: 'Discontinue',
-    ratio: '16:9',
-    previewLabel: 'Projection preview',
+    ratio: '2:1',
+    previewLabel: m.projection_preview_label(),
     variant: 'default',
-    equalArea: true
+    equalArea: true,
+    description: m.projection_desc_interrupted_mollweide()
   },
   {
     id: 'disc-3',
     projectionId: 'mollweide',
-    title: 'Mollweide interrompue',
-    subtitle: 'Surfaces',
+    title: m.projection_name_mollweide(),
+    subtitle: m.card_subtitle_surfaces(),
     tag: 'Discontinue',
-    ratio: '16:9',
-    previewLabel: 'Projection preview',
+    ratio: '2:1',
+    previewLabel: m.projection_preview_label(),
     variant: 'default',
-    equalArea: true
+    equalArea: true,
+    description: m.projection_desc_mollweide()
   }
 ];
 
