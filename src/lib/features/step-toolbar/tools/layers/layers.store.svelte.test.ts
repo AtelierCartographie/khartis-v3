@@ -42,6 +42,14 @@ vi.mock('$lib/features/commons/store/visualization.store.svelte', () => {
   };
 });
 
+vi.mock('$lib/features/step-toolbar/tools/facets/facets.store.svelte', () => ({
+  facetsStore: {
+    enabled: false,
+    baseVisualizationId: null,
+    generatedVisualizationIds: []
+  }
+}));
+
 vi.mock('$lib/features/map/stores/basemap-layers.store.svelte', () => ({
   BASEMAP_LAYER_ID: {
     TERRE: 'terre'
