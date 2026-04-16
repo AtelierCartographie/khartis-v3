@@ -52,6 +52,7 @@ import {
 } from '$lib/features/commons/utils/projection.utils';
 import type { BasemapMetadata } from '../types/basemap.types';
 import { shouldUseIdentityProjectionForDatasetCrs } from '../utils/dataset-crs';
+import { fitBasemapRenderProjection } from '../utils/fit-basemap-render-projection.utils';
 import { resolveProjectionForRender } from '../utils/projection-priority';
 import { getRepresentativePointArrowTable } from '$lib/features/duckdb/orchestrator/arrow-ops';
 
@@ -195,25 +196,38 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
 
   function getProjectionFromMetadata(
     metadata: BasemapMetadata | null | undefined,
-    isOrthographicMode: boolean
+    isOrthographicMode: boolean,
+    fitBbox: BBox | null,
+    fitPaddingPx: number
   ): ProjectionLike | undefined {
     if (!isOrthographicMode || !metadata || metadata.isCustom) {
       return undefined;
     }
 
     const viewportSize = getProjectionViewportSize();
-    const cacheKey = `${viewportSize.width}x${viewportSize.height}`;
+    const cacheKey = [
+      `${viewportSize.width}x${viewportSize.height}`,
+      `padding:${fitPaddingPx}`,
+      `bbox:${fitBbox?.join(',') ?? 'none'}`
+    ].join('|');
     const cached = basemapProjectionCache.get(metadata)?.get(cacheKey);
     if (cached) {
       return cached;
     }
 
-    const projection = buildProjectionForBasemap(
+    const projection = fitBasemapRenderProjection({
+      projection: buildProjectionForBasemap(
+        metadata,
+        viewportSize.width,
+        viewportSize.height,
+        basemapService.projectionPresets
+      ),
       metadata,
-      viewportSize.width,
-      viewportSize.height,
-      basemapService.projectionPresets
-    );
+      fitBbox,
+      width: viewportSize.width,
+      height: viewportSize.height,
+      padding: fitPaddingPx
+    });
     let entryCache = basemapProjectionCache.get(metadata);
     if (!entryCache) {
       entryCache = new Map();
@@ -402,15 +416,29 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
   function getDatasetDefaultProjection(
     datasetId: string,
     metadata: BasemapMetadata | null | undefined,
-    isOrthographicMode: boolean
+    isOrthographicMode: boolean,
+    fitBbox: BBox | null,
+    fitPaddingPx: number
   ): ProjectionLike | undefined {
     const datasetGeometryCrs = getDatasetGeometryCrs(datasetId);
 
-    if (shouldUseIdentityProjectionForDatasetCrs(datasetGeometryCrs)) {
+    // Orthographic mode fits the camera against projectionStore.referenceBbox.
+    // WGS84 datasets still need the same render projection as the basemap when
+    // that reference bbox is already projected, otherwise the geometry collapses
+    // into a tiny patch against a world-scale frame.
+    if (
+      !isOrthographicMode &&
+      shouldUseIdentityProjectionForDatasetCrs(datasetGeometryCrs)
+    ) {
       return undefined;
     }
 
-    return getProjectionFromMetadata(metadata, isOrthographicMode);
+    return getProjectionFromMetadata(
+      metadata,
+      isOrthographicMode,
+      fitBbox,
+      fitPaddingPx
+    );
   }
 
   function getRequestedMetadataLayerTypes(
@@ -486,6 +514,8 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       const projectionSuffix = deckOverlay
         ? mapProjectionStore.projection
         : undefined;
+      const projectionFitBbox = getProjectionFitBbox?.() ?? null;
+      const fitPaddingPx = projectionStore.fitPaddingPx;
 
       // Build basemap projection from metadata (composite/simple/identity).
       // Only applies in orthographic mode — in MapLibre mode, the map handles
@@ -499,10 +529,11 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       const currentMetadata = basemapService.currentMetadata;
       const basemapProjection = getProjectionFromMetadata(
         currentMetadata,
-        isOrthographicMode
+        isOrthographicMode,
+        projectionFitBbox,
+        fitPaddingPx
       );
       const projectionState = getProjectionState();
-      const projectionFitBbox = getProjectionFitBbox?.() ?? null;
       const projectionOverride = getProjectionOverride(
         isOrthographicMode,
         projectionFitBbox
@@ -541,7 +572,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           };
 
           const metadataLayers: MetadataLayerEntry[] = [];
-          if (currentMetadata && !currentMetadata.isCustom) {
+          if (currentMetadata && !currentMetadata.isCustom && worldBaseTable) {
             const requestedLayerTypes =
               getRequestedMetadataLayerTypes(worldBaseTable);
             if (requestedLayerTypes.length > 0) {
@@ -622,7 +653,9 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           const datasetDefaultProjection = getDatasetDefaultProjection(
             datasetId,
             datasetProjectionMetadata,
-            isOrthographicMode
+            isOrthographicMode,
+            projectionFitBbox,
+            fitPaddingPx
           );
           ctx.modelMatrix = matrixToApply;
           ctx.projectionSuffix = projectionSuffix;
@@ -744,7 +777,9 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           const datasetDefaultProjection = getDatasetDefaultProjection(
             datasetId,
             datasetProjectionMetadata,
-            isOrthographicMode
+            isOrthographicMode,
+            projectionFitBbox,
+            fitPaddingPx
           );
           fallbackCtx.modelMatrix = matrixToApply;
           fallbackCtx.projectionSuffix = projectionSuffix;

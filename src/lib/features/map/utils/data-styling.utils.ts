@@ -3,7 +3,7 @@ import {
   VisualizationType,
   ScaleType
 } from '../../commons/store/visualization.store.svelte';
-import { FillMode, SymbolMode } from '../../main-toolbar/constants';
+import { ColorMode, FillMode, SymbolMode } from '../../main-toolbar/constants';
 import { hexToRgb } from '../../commons/utils/color-utils';
 
 export function getColorForValue(
@@ -222,5 +222,26 @@ export function shouldApplyCategorical(viz: VisualizationConfig): boolean {
     !!viz.mapping.categoryColumn &&
     !!viz.classification?.colors &&
     viz.classification.colors.length > 0
+  );
+}
+
+export function shouldApplyLineCategorical(viz: VisualizationConfig): boolean {
+  return (
+    (viz.modes?.color === ColorMode.CATEGORIES ||
+      viz.modes?.fill === FillMode.CATEGORIES) &&
+    !!viz.mapping.categoryColumn &&
+    !!viz.classification?.colors &&
+    viz.classification.colors.length > 0
+  );
+}
+
+export function shouldApplyLineChoropleth(viz: VisualizationConfig): boolean {
+  return (
+    (viz.modes?.color === ColorMode.CLASSES ||
+      viz.modes?.fill === FillMode.CLASSES) &&
+    !!viz.mapping.valueColumn &&
+    !!viz.classification?.breaks &&
+    !!viz.classification?.colors &&
+    viz.classification.breaks.length >= 2
   );
 }

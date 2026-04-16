@@ -81,6 +81,7 @@
     computeProjectedBboxForProjection,
     getMainlandBboxForBasemap
   } from '../utils/geoarrow-stream-bridge';
+  import { fitBasemapRenderProjection } from '../utils/fit-basemap-render-projection.utils';
   import { proj4d3 } from '../utils/proj4d3';
   import { resolveProjectionForRender } from '../utils/projection-priority';
   import {
@@ -176,6 +177,11 @@
 
   const colorBlindnessMatrix = $derived(
     getColorBlindnessMatrix(getColorBlindnessState().simulationType)
+  );
+  const visibleVisualizations = $derived.by(() =>
+    globalState.selectedStep === ToolbarStep.Data
+      ? []
+      : mapState.activeVisualizations
   );
 
   const MIN_SKELETON_DURATION_MS = 500;
@@ -379,7 +385,7 @@
       }
       isApplyingMapLibreSync = false;
     },
-    getActiveVisualizations: () => mapState.activeVisualizations,
+    getActiveVisualizations: () => visibleVisualizations,
     onOrthographicViewStateChanged: (target, zoom) => {
       mapInstanceStore.markViewportManual();
       onMoveSync?.({ type: 'orthographic', target, zoom });
@@ -449,15 +455,27 @@
           basemapService.projectionPresets
         )
       : null;
+    const datasetTableBounds = firstTable
+      ? toOrthographicBounds(calculateBoundsFromGeoArrow(firstTable))
+      : null;
 
     if (!firstDatasetId) {
       return mainlandBbox ?? currentBasemapMeta?.bbox ?? null;
     }
 
     const dataset = getRenderedDataset(firstDatasetId);
-    if (shouldUseIdentityProjectionForDatasetCrs(dataset?.geometry?.crs)) {
-      return null;
-    }
+    const resolvedDatasetBounds = resolveOrthographicDatasetBounds(
+      dataset,
+      datasetTableBounds
+    );
+    const resolvedDatasetBbox: BBox | null = resolvedDatasetBounds
+      ? [
+          resolvedDatasetBounds[0][0],
+          resolvedDatasetBounds[0][1],
+          resolvedDatasetBounds[1][0],
+          resolvedDatasetBounds[1][1]
+        ]
+      : null;
 
     const duckDataset = getRenderedDuckDBDataset(firstDatasetId);
     const shouldUseBasemapReference =
@@ -469,18 +487,12 @@
 
     if (shouldUseBasemapReference) {
       return (
-        mainlandBbox ??
-        currentBasemapMeta?.bbox ??
-        dataset?.geometry?.bounds ??
-        null
+        mainlandBbox ?? currentBasemapMeta?.bbox ?? resolvedDatasetBbox ?? null
       );
     }
 
     return (
-      dataset?.geometry?.bounds ??
-      mainlandBbox ??
-      currentBasemapMeta?.bbox ??
-      null
+      resolvedDatasetBbox ?? mainlandBbox ?? currentBasemapMeta?.bbox ?? null
     );
   }
 
@@ -490,7 +502,7 @@
     getMap: () => mapInit.map,
     getIsMapLoaded: () => mapInit.isMapLoaded,
     getWorldBaseTable: () => worldBaseTable,
-    getActiveVisualizations: () => mapState.activeVisualizations,
+    getActiveVisualizations: () => visibleVisualizations,
     buildLayerContextForViz: (viz) => mapState.buildLayerContextForViz(viz),
     getProjectionMetadataForDataset: (datasetId) =>
       getProjectionMetadataForDataset(datasetId),
@@ -756,16 +768,24 @@
   ): ProjectionLike | undefined {
     const projectionState = getProjectionState();
     const viewportSize = getProjectionViewportSize();
+    const fitBbox = getProjectionFitBbox();
     const defaultProjection =
       basemapMeta &&
       !basemapMeta.isCustom &&
       basemapMeta.proj_to?.type !== 'identity'
-        ? buildProjectionForBasemap(
-            basemapMeta,
-            viewportSize.width,
-            viewportSize.height,
-            basemapService.projectionPresets
-          )
+        ? fitBasemapRenderProjection({
+            projection: buildProjectionForBasemap(
+              basemapMeta,
+              viewportSize.width,
+              viewportSize.height,
+              basemapService.projectionPresets
+            ),
+            metadata: basemapMeta,
+            fitBbox,
+            width: viewportSize.width,
+            height: viewportSize.height,
+            padding: mapViewportFitPaddingPx
+          })
         : undefined;
     const overrideProjection = getProjectionOverrideForRender();
 
@@ -1458,37 +1478,15 @@
   $effect(() => {
     const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
     if (firstGeoJSON && canUpdate) {
-      // When a reference basemap is selected, fit to basemap bounds
-      // so administrative boundaries are visible even with polygon data
-      const geoRefBasemapId = basemapStyleStore.referenceBasemapId;
-      const useBasemapBoundsForGeo = Boolean(geoRefBasemapId) && worldBaseTable;
-
       if (mapInit.viewMode === ViewMode.MAPLIBRE && mapInit.map) {
-        if (useBasemapBoundsForGeo) {
-          const bBounds = calculateBoundsFromGeoArrow(worldBaseTable!);
-          if (bBounds) {
-            untrack(() =>
-              mapBounds.fitToBounds(bBounds, {
-                animate: true,
-                reason: 'basemap'
-              })
-            );
-          }
-        } else {
-          untrack(() =>
-            mapBounds.fitToGeoJSONBounds(firstGeoJSON, {
-              reason: 'dataset'
-            })
-          );
-        }
+        untrack(() =>
+          mapBounds.fitToGeoJSONBounds(firstGeoJSON, {
+            reason: 'dataset'
+          })
+        );
       } else if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
         untrack(() => {
-          let bounds: ReturnType<typeof calculateBoundsFromGeoJSON>;
-          if (useBasemapBoundsForGeo) {
-            bounds = calculateBoundsFromGeoArrow(worldBaseTable!);
-          } else {
-            bounds = calculateBoundsFromGeoJSON(firstGeoJSON);
-          }
+          const bounds = calculateBoundsFromGeoJSON(firstGeoJSON);
           if (bounds) {
             const [[minX, minY], [maxX, maxY]] = bounds as [
               [number, number],
@@ -1496,9 +1494,7 @@
             ];
             projectionStore.setReferenceBbox([minX, minY, maxX, maxY]);
             scheduleLayerUpdate('effect:firstGeoJSON');
-            fitOrthographicViewport(
-              useBasemapBoundsForGeo ? 'basemap' : 'dataset'
-            );
+            fitOrthographicViewport('dataset');
           }
         });
         triggerOnReady();
@@ -1584,6 +1580,16 @@
           loadWorldBasemap();
         }
       });
+    }
+  });
+
+  $effect(() => {
+    const dataPresent = hasData;
+    const refId = basemapStyleStore.referenceBasemapId;
+
+    if (dataPresent && !refId && worldBaseTable) {
+      worldBaseTable = null;
+      untrack(() => scheduleLayerUpdate('effect:clearDefaultBasemapForData'));
     }
   });
 
@@ -1729,7 +1735,8 @@
     dataVersion,
     dataSize: `${tables.size}-${geoJSONs.size}`,
     filtersVersion,
-    projectionVersion: projectionRenderTrigger
+    projectionVersion: projectionRenderTrigger,
+    selectedStep: globalState.selectedStep
   });
 
   $effect(() => {
@@ -1792,7 +1799,6 @@
             if (!isSwitchingViewMode) {
               scheduleLayerUpdate('effect:referenceBasemapChanged');
 
-              // Fit map view to new basemap bounds
               if (mapInit.viewMode === ViewMode.MAPLIBRE && mapInit.map) {
                 let bounds = calculateBoundsFromGeoArrow(
                   resolvedBasemap.geometryTable
@@ -1845,8 +1851,11 @@
             triggerOnReady();
           }
         }
-      } else {
+      } else if (!hasData) {
         await loadWorldBasemap(requestId);
+      } else {
+        worldBaseTable = null;
+        scheduleLayerUpdate('effect:referenceBasemapCleared');
       }
     });
   });
@@ -1960,6 +1969,7 @@
       if (requestId !== referenceBasemapRequestId) {
         return;
       }
+
       if (loaded) {
         const resolvedBasemap =
           basemapService.getResolvedVariantData(
@@ -1973,8 +1983,9 @@
           );
         }
 
-        // No reference basemap — use world basemap directly
-        worldBaseTable = resolvedBasemap.geometryTable;
+        if (!hasData) {
+          worldBaseTable = resolvedBasemap.geometryTable;
+        }
         const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
         if (canUpdate) {
           scheduleLayerUpdate('loadWorldBasemap');

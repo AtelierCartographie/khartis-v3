@@ -64,6 +64,8 @@ import {
   hasCompleteCategoricalColorMap,
   getColorForValue,
   getSizeForValue,
+  shouldApplyLineCategorical,
+  shouldApplyLineChoropleth,
   shouldApplyCategorical,
   shouldApplyChoropleth,
   shouldApplyProportionalSymbols
@@ -2987,8 +2989,8 @@ export function createLineLayers(
     isWkbEncoded,
     isGeoJsonEncoded
   } = geometryInfo;
-  const useChoropleth = viz && shouldApplyChoropleth(viz);
-  const useCategoricalColor = viz && shouldApplyCategorical(viz);
+  const useChoropleth = viz && shouldApplyLineChoropleth(viz);
+  const useCategoricalColor = viz && shouldApplyLineCategorical(viz);
   const useProportionalWidth =
     !!viz?.mapping.sizeColumn &&
     (viz?.modes?.thickness !== undefined

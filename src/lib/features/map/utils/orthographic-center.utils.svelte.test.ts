@@ -1,9 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => {
-  const projectionFn = vi.fn(
-    ([lon, lat]: [number, number]) =>
-      [lon + 1000, lat + 2000] as [number, number]
+  const projectionFn = Object.assign(
+    vi.fn(
+      ([lon, lat]: [number, number]) =>
+        [lon + 1000, lat + 2000] as [number, number]
+    ),
+    {
+      fitExtent: vi.fn()
+    }
   );
 
   return {
@@ -145,6 +150,13 @@ describe('resolveCenterCoordinates', () => {
 
     expect(mocks.initializeBasemap).toHaveBeenCalled();
     expect(mocks.buildProjectionForBasemap).toHaveBeenCalled();
+    expect(mocks.fitProjectionToBbox).toHaveBeenCalledWith(
+      mocks.projectionFn,
+      [-10, 35, 30, 60],
+      800,
+      600,
+      40
+    );
     expect(center).toEqual({
       x: 1002.35,
       y: 2048.86

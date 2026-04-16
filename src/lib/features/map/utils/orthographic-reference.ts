@@ -2,7 +2,6 @@ import type { DatasetResult } from '$lib/features/data-pipeline';
 import type { DuckDBDataset } from '$lib/features/duckdb';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { BBox } from '../types';
-import { shouldUseIdentityProjectionForDatasetCrs } from './dataset-crs';
 
 type OrthographicDatasetRef =
   | Pick<DatasetResult, 'geometry'>
@@ -99,10 +98,5 @@ export function resolveOrthographicDatasetBounds(
   const datasetOrthographicBounds = datasetBounds
     ? toOrthographicBounds(datasetBounds)
     : null;
-
-  if (shouldUseIdentityProjectionForDatasetCrs(dataset?.geometry?.crs)) {
-    return datasetOrthographicBounds;
-  }
-
   return tableBounds ?? datasetOrthographicBounds;
 }

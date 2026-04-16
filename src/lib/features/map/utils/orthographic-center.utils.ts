@@ -21,6 +21,7 @@ import {
   buildProjectionForBasemap,
   getMainlandBboxForBasemap
 } from './geoarrow-stream-bridge';
+import { fitBasemapRenderProjection } from './fit-basemap-render-projection.utils';
 import { shouldUseBasemapReferenceInOrthographicView } from './orthographic-reference';
 import { proj4d3 } from './proj4d3';
 import { resolveProjectionForRender } from './projection-priority';
@@ -162,12 +163,19 @@ async function resolveOrthographicProjection(
     basemapMeta &&
     !basemapMeta.isCustom &&
     basemapMeta.proj_to?.type !== 'identity'
-      ? buildProjectionForBasemap(
-          basemapMeta,
-          Math.max(1, projectionStore.canvasSize.width),
-          Math.max(1, projectionStore.canvasSize.height),
-          basemapService.projectionPresets
-        )
+      ? fitBasemapRenderProjection({
+          projection: buildProjectionForBasemap(
+            basemapMeta,
+            Math.max(1, projectionStore.canvasSize.width),
+            Math.max(1, projectionStore.canvasSize.height),
+            basemapService.projectionPresets
+          ),
+          metadata: basemapMeta,
+          fitBbox,
+          width: Math.max(1, projectionStore.canvasSize.width),
+          height: Math.max(1, projectionStore.canvasSize.height),
+          padding: projectionStore.fitPaddingPx
+        })
       : undefined;
   const overrideProjection = resolveProjectionOverride(fitBbox);
 
