@@ -33,19 +33,19 @@
     SectionHeading,
     SliderWithInput,
     StrokeSection,
-    VizFilterButton
+    VizFilterButton,
+    VizFilterSection
   } from './shared';
   import type { VizDataFilter } from '$lib/features/commons/store/visualization.store.svelte';
   import DiscretizationModal from './discretization-modal.svelte';
-  import {
-    ClassificationMethod,
-    type ClassificationConfig
-  } from '$lib/features/commons/store/visualization.store.svelte';
+  import type { ClassificationConfig } from '$lib/features/commons/store/visualization.store.svelte';
   import { Dropdown } from 'carbon-components-svelte';
+  import { resolveDiscretizationLabel } from './discretization.utils';
 
   interface Props {
-    dataFields?: Array<{ id: number; text: string }>;
+    dataFields?: Array<{ id: number; text: string; type?: string }>;
     visualization?: VisualizationConfig;
+    disabled?: boolean;
     onStyleChange?: (updates: Partial<VisualizationConfig['style']>) => void;
     onModesChange?: (updates: Partial<VisualizationModes>) => void;
     onMissingDataChange?: (updates: Partial<MissingDataConfig>) => void;
@@ -56,13 +56,15 @@
     onInvertPalette?: () => void;
     onToggleVisibility?: (checked: boolean) => void;
     filters?: VizDataFilter[];
-    filterPanelOpen?: boolean;
-    onToggleFilterPanel?: () => void;
+    onAddFilter?: (filter: Omit<VizDataFilter, 'id'>) => void;
+    onRemoveFilter?: (filterId: string) => void;
+    onClearFilters?: () => void;
   }
 
   let {
     dataFields = [],
     visualization,
+    disabled = false,
     onStyleChange,
     onModesChange,
     onMissingDataChange,
@@ -71,11 +73,13 @@
     onInvertPalette,
     onToggleVisibility,
     filters = [],
-    filterPanelOpen = false,
-    onToggleFilterPanel = () => {}
+    onAddFilter,
+    onRemoveFilter,
+    onClearFilters
   }: Props = $props();
 
   let discretizationModalOpen = $state(false);
+  let filterSectionVisible = $state(false);
   const NONE_FIELD_ID = -1;
   let selectedFieldId = $state<number>(NONE_FIELD_ID);
   let selectedCategoryFieldId = $state<number>(NONE_FIELD_ID);
@@ -249,29 +253,9 @@
     onClassificationChange?.(classification);
   }
 
-  const discretizationLabel = $derived.by(() => {
-    if (!visualization?.classification) return m.discretization_method_jenks();
-    const methodLabels: Record<ClassificationMethod, () => string> = {
-      [ClassificationMethod.JENKS]: m.discretization_method_jenks,
-      [ClassificationMethod.QUANTILES]: m.discretization_method_quantile,
-      [ClassificationMethod.EQUAL_INTERVAL]:
-        m.discretization_method_equal_interval,
-      [ClassificationMethod.STANDARD_DEVIATION]:
-        m.discretization_method_nested_means,
-      [ClassificationMethod.MANUAL]: m.discretization_method_manual,
-      [ClassificationMethod.Q6]: m.discretization_method_q6,
-      [ClassificationMethod.NESTED_MEANS]: m.discretization_method_nested_means,
-      [ClassificationMethod.HEAD_TAIL]: m.discretization_method_head_tail
-    };
-    const method =
-      visualization.classification.method ?? ClassificationMethod.QUANTILES;
-    const numClasses =
-      visualization.classification.numClasses ??
-      visualization.classification.classes ??
-      5;
-    const methodLabel = methodLabels[method]?.() ?? String(method);
-    return `${methodLabel}, ${numClasses} ${m.discretization_num_classes().toLowerCase()}`;
-  });
+  const discretizationLabel = $derived(
+    resolveDiscretizationLabel(visualization?.classification)
+  );
 </script>
 
 <ExpandableSection
@@ -280,14 +264,17 @@
   showToggle
   actionsEnd
   toggleChecked={enabled}
+  disabled={disabled}
   onToggleChange={handleToggleChange}
 >
   {#snippet icon()}
     <InfoPopover text={m.polygons_section_info()} />
     <VizFilterButton
-      active={filterPanelOpen || filters.length > 0}
+      active={filterSectionVisible || filters.length > 0}
       count={filters.length}
-      onToggle={onToggleFilterPanel}
+      onToggle={() => {
+        filterSectionVisible = !filterSectionVisible;
+      }}
     />
   {/snippet}
 
@@ -393,6 +380,16 @@
       onOpenDiscretization={handleOpenDiscretization}
       onClassificationChange={handleClassificationChange}
     />
+
+    {#if filterSectionVisible || filters.length > 0}
+      <VizFilterSection
+        dataFields={dataFields}
+        filters={filters}
+        onAddFilter={onAddFilter ?? (() => {})}
+        onRemoveFilter={onRemoveFilter ?? (() => {})}
+        onClearFilters={onClearFilters ?? (() => {})}
+      />
+    {/if}
   </div>
 </ExpandableSection>
 

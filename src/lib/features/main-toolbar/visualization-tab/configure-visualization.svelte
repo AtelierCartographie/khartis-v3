@@ -49,7 +49,6 @@
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
-  import { filterArrowTableByDataFilters } from '$lib/features/map/utils/arrow-filter.utils';
   import { Duck } from '$lib/features/duckdb';
   import { COLUMN_TYPE_GEOMETRY } from '$lib/features/commons/constants/data.constants';
   import { SettingsAdjust } from 'carbon-icons-svelte';
@@ -58,80 +57,10 @@
   import PolygonsConfig from './components/polygons-config.svelte';
   import SymbolsConfig from './components/symbols-config.svelte';
   import TextsConfig from './components/texts-config.svelte';
-  import { VizFilterPanel } from './components/shared';
 
   let selectedViz = $derived(visualizationStore.selectedVisualization);
   let lastComputedKey = '';
   let computeRequestCounter = 0;
-
-  let activeFilterPanel = $state<PrimitiveFilter | null>(null);
-  let filterStats = $state<{ total: number; filtered: number }>({
-    total: 0,
-    filtered: 0
-  });
-  let filterStatsLoadSeq = 0;
-
-  function toggleFilterPanel(primitive: PrimitiveFilter) {
-    activeFilterPanel = activeFilterPanel === primitive ? null : primitive;
-  }
-
-  function closeFilterPanel() {
-    activeFilterPanel = null;
-  }
-
-  $effect(() => {
-    const primitive = activeFilterPanel;
-    const viz = selectedViz;
-    void visualizationStore.version;
-    const dataset = getSelectedDataset();
-    if (!primitive || !viz || !dataset) {
-      filterStats = { total: 0, filtered: 0 };
-      return;
-    }
-
-    const total = dataset.rowCount ?? 0;
-    const filters =
-      viz.dataFilters?.filter((f) => f.primitiveType === primitive) ?? [];
-    if (filters.length === 0 || !dataset.tableName) {
-      filterStats = { total, filtered: total };
-      return;
-    }
-
-    const mySeq = ++filterStatsLoadSeq;
-    duckDBOrchestrator
-      .getArrowTableDirect(dataset.tableName)
-      .then((table) => {
-        if (mySeq !== filterStatsLoadSeq) return;
-        const filteredTable = filterArrowTableByDataFilters(
-          table,
-          filters,
-          primitive
-        );
-        filterStats = {
-          total: table.numRows,
-          filtered: filteredTable.numRows
-        };
-      })
-      .catch(() => {
-        if (mySeq !== filterStatsLoadSeq) return;
-        filterStats = { total, filtered: total };
-      });
-  });
-
-  function getPrimitiveLabel(primitive: PrimitiveFilter): string {
-    switch (primitive) {
-      case PrimitiveFilterType.POINT:
-        return m.symbols_title();
-      case PrimitiveFilterType.POLYGON:
-        return m.polygons_title();
-      case PrimitiveFilterType.LINE:
-        return m.lines_title();
-      case PrimitiveFilterType.TEXT:
-        return m.texts_title();
-      default:
-        return '';
-    }
-  }
 
   function usesCategoricalClassification(
     visualization: VisualizationConfig | undefined
@@ -212,11 +141,37 @@
     availablePrimitiveFilters.includes(PrimitiveFilterType.LINE)
   );
 
-  function resolveMappingDefaults(
-    _nextModes: VisualizationModes,
-    currentMapping: VisualizationConfig['mapping']
-  ): VisualizationConfig['mapping'] {
-    return { ...currentMapping };
+  function fetchCategoryLabels(
+    vizId: string,
+    column: string,
+    tableName: string,
+    useUntrack = false
+  ): void {
+    Duck.query(
+      `SELECT DISTINCT "${column}" FROM "${tableName}" WHERE "${column}" IS NOT NULL ORDER BY "${column}"`,
+      { format: 'array' }
+    )
+      .then((rows) => {
+        const labels = (rows as Array<Record<string, unknown>>).map((row) =>
+          String(row[column])
+        );
+        if (labels.length > 0) {
+          if (useUntrack) {
+            untrack(() =>
+              visualizationStore.updateClassification(vizId, { labels })
+            );
+          } else {
+            visualizationStore.updateClassification(vizId, { labels });
+          }
+        }
+      })
+      .catch((e) =>
+        logger.warn(
+          'Failed to fetch category labels',
+          LogCategory.VISUALIZATION,
+          e
+        )
+      );
   }
 
   function handleInvertPalette() {
@@ -239,30 +194,15 @@
         ...selectedViz.modes,
         ...updates
       } as VisualizationModes;
-      const nextMapping = resolveMappingDefaults(
-        nextModes,
-        selectedViz.mapping
-      );
       const nextViz = {
         ...selectedViz,
-        modes: nextModes,
-        mapping: nextMapping
+        modes: nextModes
       } as VisualizationConfig;
-
-      if (
-        nextMapping.sizeColumn !== selectedViz.mapping.sizeColumn ||
-        nextMapping.valueColumn !== selectedViz.mapping.valueColumn ||
-        nextMapping.categoryColumn !== selectedViz.mapping.categoryColumn
-      ) {
-        visualizationStore.updateVisualization(selectedViz.id, {
-          mapping: nextMapping
-        });
-      }
 
       visualizationStore.updateModes(selectedViz.id, updates);
 
       if (
-        nextMapping.valueColumn &&
+        selectedViz.mapping.valueColumn &&
         usesBreakClassification(nextViz) &&
         (!selectedViz.classification?.method ||
           !selectedViz.classification?.numClasses)
@@ -285,23 +225,10 @@
           inverted: false,
           labels: []
         });
-        // Async: fetch actual unique values from DuckDB for label ordering
         const categoryColumn = nextViz.mapping.categoryColumn;
         const dataset = getSelectedDataset();
         if (categoryColumn && dataset?.tableName) {
-          Duck.query(
-            `SELECT DISTINCT "${categoryColumn}" FROM "${dataset.tableName}" WHERE "${categoryColumn}" IS NOT NULL ORDER BY "${categoryColumn}"`,
-            { format: 'array' }
-          )
-            .then((rows) => {
-              const labels = (rows as Array<Record<string, unknown>>).map(
-                (row) => String(row[categoryColumn])
-              );
-              if (labels.length > 0) {
-                visualizationStore.updateClassification(vizId, { labels });
-              }
-            })
-            .catch(() => {});
+          fetchCategoryLabels(vizId, categoryColumn, dataset.tableName);
         }
       }
     }
@@ -376,25 +303,15 @@
         computeBreaksForVisualization('mapping:valueColumn');
       }
       if (updates.categoryColumn) {
-        const vizId = selectedViz.id;
         const dataset = datasetsStore.datasets.find(
           (d) => d.id === selectedViz.datasetId
         );
         if (dataset?.tableName) {
-          const col = updates.categoryColumn;
-          Duck.query(
-            `SELECT DISTINCT "${col}" FROM "${dataset.tableName}" WHERE "${col}" IS NOT NULL ORDER BY "${col}"`,
-            { format: 'array' }
-          )
-            .then((rows) => {
-              const labels = (rows as Array<Record<string, unknown>>).map(
-                (row) => String(row[col])
-              );
-              if (labels.length > 0) {
-                visualizationStore.updateClassification(vizId, { labels });
-              }
-            })
-            .catch(() => {});
+          fetchCategoryLabels(
+            selectedViz.id,
+            updates.categoryColumn,
+            dataset.tableName
+          );
         }
       }
     }
@@ -506,12 +423,9 @@
     }
   }
 
-  function handleUpdateDataFilter(
-    filterId: string,
-    updates: Partial<Omit<VizDataFilter, 'id'>>
-  ) {
-    if (selectedViz?.id) {
-      visualizationStore.updateDataFilter(selectedViz.id, filterId, updates);
+  function handleClearFilters(primitive: PrimitiveFilter): void {
+    for (const filter of getFiltersForPrimitive(primitive)) {
+      handleRemoveDataFilter(filter.id);
     }
   }
 
@@ -712,7 +626,6 @@
   });
 
   $effect(() => {
-    // Recompute breaks when method or numClasses changes
     const method = selectedViz?.classification?.method;
     const numClasses = selectedViz?.classification?.numClasses;
     const valueColumn = selectedViz?.mapping.valueColumn;
@@ -732,25 +645,9 @@
     const isCategorical = usesCategoricalClassification(viz);
     const hasLabels = (viz?.classification?.labels?.length ?? 0) > 0;
     if (!isCategorical || !col || hasLabels) return;
-    const vizId = viz!.id;
     const dataset = datasetsStore.datasets.find((d) => d.id === viz!.datasetId);
     if (!dataset?.tableName) return;
-    const tableName = dataset.tableName;
-    Duck.query(
-      `SELECT DISTINCT "${col}" FROM "${tableName}" WHERE "${col}" IS NOT NULL ORDER BY "${col}"`,
-      { format: 'array' }
-    )
-      .then((rows) => {
-        const labels = (rows as Array<Record<string, unknown>>).map((row) =>
-          String(row[col])
-        );
-        if (labels.length > 0) {
-          untrack(() =>
-            visualizationStore.updateClassification(vizId, { labels })
-          );
-        }
-      })
-      .catch(() => {});
+    fetchCategoryLabels(viz!.id, col, dataset.tableName, true);
   });
 
   $effect(() => {
@@ -827,61 +724,60 @@
   </div>
 
   <div class="config-accordion">
-    {#if showsSymbolsConfig}
-      <SymbolsConfig
-        dataFields={dataFieldItems}
-        visualization={selectedViz}
-        filters={getFiltersForPrimitive(PrimitiveFilterType.POINT)}
-        onStyleChange={handleStyleChange}
-        onModesChange={handleModesChange}
-        onSymbolsChange={handleSymbolsChange}
-        onMappingChange={handleMappingChange}
-        onMissingDataChange={handleMissingDataChange}
-        onClassificationChange={handleClassificationChange}
-        onInvertPalette={handleInvertPalette}
-        onToggleVisibility={(checked) =>
-          handlePrimitiveVisibilityChange(PrimitiveFilterType.POINT, checked)}
-        filterPanelOpen={activeFilterPanel === PrimitiveFilterType.POINT}
-        onToggleFilterPanel={() => toggleFilterPanel(PrimitiveFilterType.POINT)}
-      />
-    {/if}
+    <SymbolsConfig
+      dataFields={dataFieldItems}
+      visualization={selectedViz}
+      disabled={!showsSymbolsConfig}
+      filters={getFiltersForPrimitive(PrimitiveFilterType.POINT)}
+      onStyleChange={handleStyleChange}
+      onModesChange={handleModesChange}
+      onSymbolsChange={handleSymbolsChange}
+      onMappingChange={handleMappingChange}
+      onMissingDataChange={handleMissingDataChange}
+      onClassificationChange={handleClassificationChange}
+      onInvertPalette={handleInvertPalette}
+      onToggleVisibility={(checked) =>
+        handlePrimitiveVisibilityChange(PrimitiveFilterType.POINT, checked)}
+      onAddFilter={(f) => handleAddDataFilter(f, PrimitiveFilterType.POINT)}
+      onRemoveFilter={handleRemoveDataFilter}
+      onClearFilters={() => handleClearFilters(PrimitiveFilterType.POINT)}
+    />
 
-    {#if showsPolygonsConfig}
-      <PolygonsConfig
-        dataFields={dataFieldItems}
-        visualization={selectedViz}
-        filters={getFiltersForPrimitive(PrimitiveFilterType.POLYGON)}
-        onStyleChange={handleStyleChange}
-        onModesChange={handleModesChange}
-        onMissingDataChange={handleMissingDataChange}
-        onClassificationChange={handleClassificationChange}
-        onMappingChange={handleMappingChange}
-        onInvertPalette={handleInvertPalette}
-        onToggleVisibility={(checked) =>
-          handlePrimitiveVisibilityChange(PrimitiveFilterType.POLYGON, checked)}
-        filterPanelOpen={activeFilterPanel === PrimitiveFilterType.POLYGON}
-        onToggleFilterPanel={() =>
-          toggleFilterPanel(PrimitiveFilterType.POLYGON)}
-      />
-    {/if}
+    <PolygonsConfig
+      dataFields={dataFieldItems}
+      visualization={selectedViz}
+      disabled={!showsPolygonsConfig}
+      filters={getFiltersForPrimitive(PrimitiveFilterType.POLYGON)}
+      onStyleChange={handleStyleChange}
+      onModesChange={handleModesChange}
+      onMissingDataChange={handleMissingDataChange}
+      onClassificationChange={handleClassificationChange}
+      onMappingChange={handleMappingChange}
+      onInvertPalette={handleInvertPalette}
+      onToggleVisibility={(checked) =>
+        handlePrimitiveVisibilityChange(PrimitiveFilterType.POLYGON, checked)}
+      onAddFilter={(f) => handleAddDataFilter(f, PrimitiveFilterType.POLYGON)}
+      onRemoveFilter={handleRemoveDataFilter}
+      onClearFilters={() => handleClearFilters(PrimitiveFilterType.POLYGON)}
+    />
 
-    {#if showsLinesConfig}
-      <LinesConfig
-        dataFields={dataFieldItems}
-        visualization={selectedViz}
-        filters={getFiltersForPrimitive(PrimitiveFilterType.LINE)}
-        onStyleChange={handleStyleChange}
-        onModesChange={handleModesChange}
-        onMissingDataChange={handleMissingDataChange}
-        onClassificationChange={handleClassificationChange}
-        onMappingChange={handleMappingChange}
-        onInvertPalette={handleInvertPalette}
-        onToggleVisibility={(checked) =>
-          handlePrimitiveVisibilityChange(PrimitiveFilterType.LINE, checked)}
-        filterPanelOpen={activeFilterPanel === PrimitiveFilterType.LINE}
-        onToggleFilterPanel={() => toggleFilterPanel(PrimitiveFilterType.LINE)}
-      />
-    {/if}
+    <LinesConfig
+      dataFields={dataFieldItems}
+      visualization={selectedViz}
+      disabled={!showsLinesConfig}
+      filters={getFiltersForPrimitive(PrimitiveFilterType.LINE)}
+      onStyleChange={handleStyleChange}
+      onModesChange={handleModesChange}
+      onMissingDataChange={handleMissingDataChange}
+      onClassificationChange={handleClassificationChange}
+      onMappingChange={handleMappingChange}
+      onInvertPalette={handleInvertPalette}
+      onToggleVisibility={(checked) =>
+        handlePrimitiveVisibilityChange(PrimitiveFilterType.LINE, checked)}
+      onAddFilter={(f) => handleAddDataFilter(f, PrimitiveFilterType.LINE)}
+      onRemoveFilter={handleRemoveDataFilter}
+      onClearFilters={() => handleClearFilters(PrimitiveFilterType.LINE)}
+    />
 
     <TextsConfig
       dataFields={dataFieldItems}
@@ -895,28 +791,12 @@
       onMappingChange={handleMappingChange}
       onInvertPalette={handleInvertPalette}
       onToggleVisibility={handleTextVisibilityChange}
-      filterPanelOpen={activeFilterPanel === PrimitiveFilterType.TEXT}
-      onToggleFilterPanel={() => toggleFilterPanel(PrimitiveFilterType.TEXT)}
+      onAddFilter={(f) => handleAddDataFilter(f, PrimitiveFilterType.TEXT)}
+      onRemoveFilter={handleRemoveDataFilter}
+      onClearFilters={() => handleClearFilters(PrimitiveFilterType.TEXT)}
     />
   </div>
 </section>
-
-{#if activeFilterPanel !== null}
-  <VizFilterPanel
-    title={getPrimitiveLabel(activeFilterPanel)}
-    dataFields={dataFieldItems}
-    filters={getFiltersForPrimitive(activeFilterPanel)}
-    stats={filterStats}
-    onAddFilter={(f) => {
-      if (activeFilterPanel !== null) {
-        handleAddDataFilter(f, activeFilterPanel);
-      }
-    }}
-    onUpdateFilter={handleUpdateDataFilter}
-    onRemoveFilter={handleRemoveDataFilter}
-    onClose={closeFilterPanel}
-  />
-{/if}
 
 <style lang="scss">
   #configure-visualization {

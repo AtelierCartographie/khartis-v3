@@ -56,7 +56,10 @@
       savedProjects = await projectStore.listProjects();
     } catch (err) {
       logger.error('Failed to load projects', LogCategory.PROJECT, err);
-      error = err instanceof Error ? err.message : 'Failed to load projects';
+      error =
+        err instanceof Error
+          ? err.message
+          : m.open_project_error_load_projects();
     } finally {
       isLoading = false;
     }
@@ -75,7 +78,10 @@
       await navigateAfterAction();
     } catch (err) {
       logger.error('Failed to load project', LogCategory.PROJECT, err);
-      error = err instanceof Error ? err.message : 'Failed to load project';
+      error =
+        err instanceof Error
+          ? err.message
+          : m.open_project_error_load_project();
       selectedProjectId = null;
     }
   }
@@ -107,7 +113,10 @@
       await navigateAfterAction();
     } catch (err) {
       logger.error('Failed to import project', LogCategory.PROJECT, err);
-      error = err instanceof Error ? err.message : 'Failed to import project';
+      error =
+        err instanceof Error
+          ? err.message
+          : m.open_project_error_import_project();
     } finally {
       isImporting = false;
     }
@@ -124,7 +133,9 @@
     } catch (err) {
       logger.error('Failed to duplicate project', LogCategory.PROJECT, err);
       error =
-        err instanceof Error ? err.message : 'Failed to duplicate project';
+        err instanceof Error
+          ? err.message
+          : m.open_project_error_duplicate_project();
     } finally {
       isDuplicating = false;
     }
@@ -153,7 +164,10 @@
       await loadProjects();
     } catch (err) {
       logger.error('Failed to delete project', LogCategory.PROJECT, err);
-      error = err instanceof Error ? err.message : 'Failed to delete project';
+      error =
+        err instanceof Error
+          ? err.message
+          : m.open_project_error_delete_project();
     }
   }
 

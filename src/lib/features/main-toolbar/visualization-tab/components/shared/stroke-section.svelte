@@ -25,6 +25,10 @@
   import SectionHeading from './section-heading.svelte';
   import SliderWithInput from './slider-with-input.svelte';
   import ToggleWithLabel from './toggle-with-label.svelte';
+  import {
+    DEFAULT_SEQUENTIAL_PREVIEW,
+    DEFAULT_QUALITATIVE_PREVIEW
+  } from '../palette-popover/palette.constants';
 
   interface Props {
     visualization?: VisualizationConfig;
@@ -47,26 +51,13 @@
     sliderInputWidth?: string;
   }
 
-  const DEFAULT_SEQUENTIAL_PALETTE = [
-    '#c8ddf0',
-    '#78a9cf',
-    '#2171b5',
-    '#084594'
-  ];
-  const DEFAULT_QUALITATIVE_PALETTE = [
-    '#009d9a',
-    '#f1c21b',
-    '#ff832b',
-    '#a56eff'
-  ];
-
   let {
     visualization,
     dataFields = [],
     infoText,
     showDashed = true,
-    classesPalette = DEFAULT_SEQUENTIAL_PALETTE,
-    categoriesPalette = DEFAULT_QUALITATIVE_PALETTE,
+    classesPalette = DEFAULT_SEQUENTIAL_PREVIEW,
+    categoriesPalette = DEFAULT_QUALITATIVE_PREVIEW,
     discretizationLabel,
     categoryCount = 4,
     onStyleChange,

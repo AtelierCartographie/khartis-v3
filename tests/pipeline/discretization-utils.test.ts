@@ -1,6 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('$lib/features/commons/store/visualization.store.svelte', () => ({}));
+vi.mock('$lib/features/commons/store/visualization.store.svelte', () => ({
+  ClassificationMethod: {
+    EQUAL_INTERVAL: 'equal_interval',
+    QUANTILES: 'quantiles',
+    JENKS: 'jenks',
+    MANUAL: 'manual',
+    STANDARD_DEVIATION: 'standard_deviation',
+    Q6: 'q6',
+    NESTED_MEANS: 'nested_means',
+    HEAD_TAIL: 'head_tail'
+  }
+}));
 
 import {
   DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX,
