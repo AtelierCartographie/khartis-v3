@@ -353,6 +353,13 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
         );
       }
 
+      if (suggestions.length === 0 && selectedDataset.bounds) {
+        suggestions = basemapCatalogService.getSuggestionsByGPSBbox(
+          selectedDataset.bounds,
+          3
+        );
+      }
+
       if (cancelled) return;
 
       const mappedSuggestions = suggestions.map((suggestion) => ({

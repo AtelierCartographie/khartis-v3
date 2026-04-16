@@ -46,7 +46,7 @@
   import { InfoPopover } from '../visualization-tab/components/shared';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import { dataTabStore } from './data-tab.store.svelte';
-  import { shouldAutoSelectSuggestedBasemap } from './services/basemap-auto-selection';
+  import { resolveSuggestedBasemapAutoSelectionTarget } from './services/basemap-auto-selection';
   import {
     getDatasetIdentity,
     shouldResetJoinState
@@ -128,6 +128,34 @@
       hasMultipleDatasets: datasetsStore.datasets.length > 1
     })
   );
+  const hasPersistedSelectedSourceFileJoin = $derived.by(() => {
+    const sourceFileId = selectedDataset?.sourceFileId;
+    if (!sourceFileId) {
+      return false;
+    }
+
+    const sourceFile = projectStore.currentProject?.data?.sourceFiles?.find(
+      (file) => file.id === sourceFileId
+    );
+
+    return Boolean(sourceFile?.joinedBasemap || sourceFile?.gpsMode);
+  });
+  const hasInvalidPersistedGPSCatalogJoin = $derived.by(() => {
+    const sourceFileId = selectedDataset?.sourceFileId;
+    if (!sourceFileId) {
+      return false;
+    }
+
+    const sourceFile = projectStore.currentProject?.data?.sourceFiles?.find(
+      (file) => file.id === sourceFileId
+    );
+
+    return Boolean(
+      sourceFile?.gpsMode &&
+      sourceFile.joinedBasemap &&
+      !isOSMBasemapId(sourceFile.joinedBasemap)
+    );
+  });
 
   let importFiles = $state<File[]>([]);
   let importUploading = $state(false);
@@ -152,6 +180,10 @@
     const columns = selectedDataset.columns || [];
     return hasGPSCoordinateColumns(columns, selectedDataset.geoDetection);
   });
+  const shouldAutoPreferOSMForGPS = $derived(
+    hasGPSCoordinates &&
+      (!hasPersistedSelectedSourceFileJoin || hasInvalidPersistedGPSCatalogJoin)
+  );
 
   const isGPSModeActive = $derived(hasGPSCoordinates);
 
@@ -269,14 +301,40 @@
       });
   }
 
-  async function persistTextualJoinSnapshot(
-    joinState: {
-      joinedBasemap?: string;
-      geoColumn?: string;
-      gpsMode?: boolean;
-      gpsColumns?: { lat: string; lon: string };
-    } = {}
-  ) {
+  type PersistedJoinSnapshot = {
+    joinedBasemap?: string;
+    geoColumn?: string;
+    gpsMode?: boolean;
+    gpsColumns?: { lat: string; lon: string };
+  };
+
+  function getCurrentDuckDataset() {
+    const resolvedDatasetId = datasetIdForOrchestrator;
+
+    if (!resolvedDatasetId) {
+      return null;
+    }
+
+    return (
+      duckDBOrchestrator.getDatasetBySourceFile(resolvedDatasetId) ??
+      duckDBOrchestrator.getDataset(resolvedDatasetId)
+    );
+  }
+
+  function resolveGPSJoinSnapshot(
+    fallbackBasemapId: string
+  ): PersistedJoinSnapshot {
+    const duckDataset = getCurrentDuckDataset();
+
+    return {
+      joinedBasemap: duckDataset?.joinedBasemap ?? fallbackBasemapId,
+      geoColumn: undefined,
+      gpsMode: true,
+      gpsColumns: duckDataset?.gpsColumns
+    };
+  }
+
+  async function persistJoinSnapshot(joinState: PersistedJoinSnapshot = {}) {
     if (!selectedDataset?.sourceFileId || !selectedDataset.tableName || !Duck) {
       return;
     }
@@ -347,7 +405,7 @@
             basemap,
             linkedVariableName
           );
-          await persistTextualJoinSnapshot({
+          await persistJoinSnapshot({
             joinedBasemap: basemap.file,
             geoColumn: linkedVariableName,
             gpsMode: false,
@@ -434,6 +492,7 @@
           basemap,
           ''
         );
+        await persistJoinSnapshot(resolveGPSJoinSnapshot(basemap.file));
         dataTabStore.markStepComplete(basemapStepIndex);
         logger.debug(
           'Basemap selected with GPS mode — join skipped',
@@ -552,6 +611,7 @@
           customBasemap,
           ''
         );
+        await persistJoinSnapshot(resolveGPSJoinSnapshot(customBasemap.file));
         dataTabStore.markStepComplete(basemapStepIndex);
         logger.success(
           'Custom basemap imported with GPS mode — join skipped',
@@ -637,6 +697,7 @@
         osmBasemap,
         ''
       );
+      await persistJoinSnapshot(resolveGPSJoinSnapshot(osmBasemap.file));
       dataTabStore.markStepComplete(basemapStepIndex);
       logger.success('OSM basemap activated with GPS mode', LogCategory.MAP);
     } catch (error) {
@@ -680,7 +741,7 @@
         dataTabState.geolocation.linkedVariableName,
         corrections
       );
-      await persistTextualJoinSnapshot({
+      await persistJoinSnapshot({
         joinedBasemap: basemapSelected || undefined,
         geoColumn: dataTabState.geolocation.linkedVariableName,
         gpsMode: false,
@@ -735,7 +796,7 @@
           basemap,
           dataTabState.geolocation.linkedVariableName
         );
-        await persistTextualJoinSnapshot({
+        await persistJoinSnapshot({
           joinedBasemap: basemap.file,
           geoColumn: dataTabState.geolocation.linkedVariableName,
           gpsMode: false,
@@ -782,7 +843,7 @@
         dataTabState.geolocation.linkedVariableName,
         corrections
       );
-      await persistTextualJoinSnapshot({
+      await persistJoinSnapshot({
         joinedBasemap: basemapSelected || undefined,
         geoColumn: dataTabState.geolocation.linkedVariableName,
         gpsMode: false,
@@ -819,7 +880,7 @@
             basemap,
             dataTabState.geolocation.linkedVariableName
           );
-          await persistTextualJoinSnapshot({
+          await persistJoinSnapshot({
             joinedBasemap: basemap.file,
             geoColumn: dataTabState.geolocation.linkedVariableName,
             gpsMode: false,
@@ -894,7 +955,7 @@
         basemap,
         dataTabState.geolocation.linkedVariableName
       );
-      await persistTextualJoinSnapshot({
+      await persistJoinSnapshot({
         joinedBasemap: basemap.file,
         geoColumn: dataTabState.geolocation.linkedVariableName,
         gpsMode: false,
@@ -1044,20 +1105,23 @@
         suggestionsDatasetIdentity !== currentDatasetIdentity;
       suggestionsDatasetIdentity = currentDatasetIdentity;
 
-      if (
-        shouldAutoSelectSuggestedBasemap({
-          hasDismissedSuggestedBasemap,
-          suggestionCount: suggestions.length,
-          isOSMActive: osmBasemapStore.isActive,
-          hasDatasetGeometry: Boolean(selectedDataset?.geometry),
-          persistedBasemapId: runtimePersistedBasemap?.id,
-          selectedBasemapId: dataTabState.basemapJoin.selectedBasemap,
-          hasSelectedAvailableBasemap: hasAvailableBasemap(
-            dataTabState.basemapJoin.selectedBasemap
-          ),
-          shouldRetryForDatasetChange: isDatasetChanged
-        })
-      ) {
+      const autoSelectionTarget = resolveSuggestedBasemapAutoSelectionTarget({
+        hasDismissedSuggestedBasemap,
+        suggestionCount: suggestions.length,
+        isOSMActive: osmBasemapStore.isActive,
+        hasDatasetGeometry: Boolean(selectedDataset?.geometry),
+        persistedBasemapId: runtimePersistedBasemap?.id,
+        selectedBasemapId: dataTabState.basemapJoin.selectedBasemap,
+        hasSelectedAvailableBasemap: hasAvailableBasemap(
+          dataTabState.basemapJoin.selectedBasemap
+        ),
+        shouldRetryForDatasetChange: isDatasetChanged,
+        preferOSM: shouldAutoPreferOSMForGPS
+      });
+
+      if (autoSelectionTarget === 'osm') {
+        await handleSelectOSM();
+      } else if (autoSelectionTarget === 'suggested') {
         await autoSelectFirstSuggestedBasemap();
       }
     } catch (error) {
@@ -1083,6 +1147,11 @@
         await loadSuggestions();
         if (controller.signal.aborted) return;
 
+        if (shouldAutoPreferOSMForGPS) {
+          await handleSelectOSM();
+          return;
+        }
+
         const savedBasemap = runtimePersistedBasemap;
         if (savedBasemap?.id) {
           await restorePersistedBasemapSelection(savedBasemap);
@@ -1097,11 +1166,12 @@
           );
           if (!basemap) return;
 
-          if (
-            savedBasemap.type === 'osm' ||
-            isOSMBasemapId(basemap.file) ||
-            hasGPSCoordinates
-          ) {
+          const shouldRestoreOSMGPSJoin =
+            hasGPSCoordinates &&
+            (savedBasemap.type === PERSISTED_BASEMAP_TYPE.OSM ||
+              isOSMBasemapId(basemap.file));
+
+          if (shouldRestoreOSMGPSJoin) {
             const datasetReady = await waitForDatasetAvailability(
               datasetIdForOrchestrator,
               controller.signal
@@ -1115,6 +1185,7 @@
                 basemap,
                 ''
               );
+              await persistJoinSnapshot(resolveGPSJoinSnapshot(basemap.file));
               if (controller.signal.aborted) return;
 
               dataTabActions.clearJoinStats();
@@ -1132,6 +1203,11 @@
             } finally {
               joinLoading = false;
             }
+            return;
+          }
+
+          if (shouldAutoPreferOSMForGPS) {
+            await handleSelectOSM();
             return;
           }
 
@@ -1212,17 +1288,20 @@
     void basemapSuggestions.length;
     void basemapSelected;
 
-    if (
-      shouldAutoSelectSuggestedBasemap({
-        hasDismissedSuggestedBasemap,
-        suggestionCount: basemapSuggestions.length,
-        isOSMActive: osmBasemapStore.isActive,
-        hasDatasetGeometry: Boolean(selectedDataset?.geometry),
-        persistedBasemapId: runtimePersistedBasemap?.id,
-        selectedBasemapId: basemapSelected,
-        hasSelectedAvailableBasemap: hasAvailableBasemap(basemapSelected)
-      })
-    ) {
+    const autoSelectionTarget = resolveSuggestedBasemapAutoSelectionTarget({
+      hasDismissedSuggestedBasemap,
+      suggestionCount: basemapSuggestions.length,
+      isOSMActive: osmBasemapStore.isActive,
+      hasDatasetGeometry: Boolean(selectedDataset?.geometry),
+      persistedBasemapId: runtimePersistedBasemap?.id,
+      selectedBasemapId: basemapSelected,
+      hasSelectedAvailableBasemap: hasAvailableBasemap(basemapSelected),
+      preferOSM: shouldAutoPreferOSMForGPS
+    });
+
+    if (autoSelectionTarget === 'osm') {
+      void handleSelectOSM();
+    } else if (autoSelectionTarget === 'suggested') {
       void autoSelectFirstSuggestedBasemap();
     }
   });

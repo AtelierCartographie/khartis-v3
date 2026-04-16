@@ -1,5 +1,6 @@
 import type { DataAnalysisResult } from '$lib/features/commons/utils/deep-validator.utils';
 import type { AssetRef } from '$lib/features/commons/store/create-project.types';
+import type { GeoColumnTypeValue } from '$lib/features/commons/constants/data.constants';
 import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
 
 export type {
@@ -155,6 +156,8 @@ export function validationFailure(
 export interface ColumnAnalysis {
   name?: string;
   type?: ColumnType | string;
+  geo_type?: GeoColumnTypeValue;
+  geo_confidence?: number;
   stats?: Partial<ColumnStats> & {
     totalCount?: number;
     uniqueCount?: number;
