@@ -42,8 +42,6 @@ import {
   processRemoteZipFile
 } from '$lib/features/data-pipeline/processors/remote-processor';
 
-const ctx = { projectId: 'p1' } as never;
-
 describe('remote-processor', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -51,12 +49,12 @@ describe('remote-processor', () => {
 
   it('rejects .shp URL with a standalone shapefile error', async () => {
     await expect(
-      processRemoteFile(ctx, 'https://example.com/roads.shp')
+      processRemoteFile('https://example.com/roads.shp')
     ).rejects.toThrow(m.pipeline_error_shp_standalone());
   });
 
   it('calls Duck.read_link for a CSV URL', async () => {
-    await processRemoteFile(ctx, 'https://example.com/data.csv');
+    await processRemoteFile('https://example.com/data.csv');
     expect(DuckMock.read_link).toHaveBeenCalledWith(
       'https://example.com/data.csv',
       expect.objectContaining({ tablename: expect.any(String) })
@@ -64,7 +62,7 @@ describe('remote-processor', () => {
   });
 
   it('passes decimal_separator to Duck.read_link when provided', async () => {
-    await processRemoteFile(ctx, 'https://example.com/data.csv', {
+    await processRemoteFile('https://example.com/data.csv', {
       decimalSeparator: ','
     });
     expect(DuckMock.read_link).toHaveBeenCalledWith(
@@ -83,7 +81,7 @@ describe('remote-processor', () => {
       })
     );
     await expect(
-      processRemoteZipFile(ctx, 'https://example.com/missing.zip')
+      processRemoteZipFile('https://example.com/missing.zip')
     ).rejects.toThrow(
       m.pipeline_error_fetch_failed({ status: '404', statusText: 'Not Found' })
     );
