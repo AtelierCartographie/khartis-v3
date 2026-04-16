@@ -423,6 +423,15 @@
     }
   }
 
+  function handleUpdateDataFilter(
+    filterId: string,
+    updates: Partial<Omit<VizDataFilter, 'id'>>
+  ) {
+    if (selectedViz?.id) {
+      visualizationStore.updateDataFilter(selectedViz.id, filterId, updates);
+    }
+  }
+
   function handleClearFilters(primitive: PrimitiveFilter): void {
     for (const filter of getFiltersForPrimitive(primitive)) {
       handleRemoveDataFilter(filter.id);
@@ -739,6 +748,7 @@
       onToggleVisibility={(checked) =>
         handlePrimitiveVisibilityChange(PrimitiveFilterType.POINT, checked)}
       onAddFilter={(f) => handleAddDataFilter(f, PrimitiveFilterType.POINT)}
+      onUpdateFilter={handleUpdateDataFilter}
       onRemoveFilter={handleRemoveDataFilter}
       onClearFilters={() => handleClearFilters(PrimitiveFilterType.POINT)}
     />
@@ -757,6 +767,7 @@
       onToggleVisibility={(checked) =>
         handlePrimitiveVisibilityChange(PrimitiveFilterType.POLYGON, checked)}
       onAddFilter={(f) => handleAddDataFilter(f, PrimitiveFilterType.POLYGON)}
+      onUpdateFilter={handleUpdateDataFilter}
       onRemoveFilter={handleRemoveDataFilter}
       onClearFilters={() => handleClearFilters(PrimitiveFilterType.POLYGON)}
     />
@@ -775,6 +786,7 @@
       onToggleVisibility={(checked) =>
         handlePrimitiveVisibilityChange(PrimitiveFilterType.LINE, checked)}
       onAddFilter={(f) => handleAddDataFilter(f, PrimitiveFilterType.LINE)}
+      onUpdateFilter={handleUpdateDataFilter}
       onRemoveFilter={handleRemoveDataFilter}
       onClearFilters={() => handleClearFilters(PrimitiveFilterType.LINE)}
     />
@@ -792,6 +804,7 @@
       onInvertPalette={handleInvertPalette}
       onToggleVisibility={handleTextVisibilityChange}
       onAddFilter={(f) => handleAddDataFilter(f, PrimitiveFilterType.TEXT)}
+      onUpdateFilter={handleUpdateDataFilter}
       onRemoveFilter={handleRemoveDataFilter}
       onClearFilters={() => handleClearFilters(PrimitiveFilterType.TEXT)}
     />

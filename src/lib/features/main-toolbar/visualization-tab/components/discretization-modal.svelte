@@ -120,6 +120,21 @@
     }
   });
 
+  let panelRef = $state<HTMLDivElement | null>(null);
+
+  $effect(() => {
+    if (!panelRef) return;
+    const scrollContainer = panelRef.closest(
+      '.toolbar-content'
+    ) as HTMLElement | null;
+    if (!scrollContainer) return;
+    scrollContainer.scrollTop = 0;
+    scrollContainer.style.overflow = 'hidden';
+    return () => {
+      scrollContainer.style.overflow = '';
+    };
+  });
+
   $effect(() => {
     const shouldComputeOnOpen =
       open &&
@@ -273,7 +288,7 @@
 </script>
 
 {#if open}
-  <div class="discretization-inline-panel">
+  <div class="discretization-inline-panel" bind:this={panelRef}>
     <header class="panel-header">
       <h3>{m.discretization()}</h3>
       <IconButton

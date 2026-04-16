@@ -70,6 +70,13 @@
     sliderInputWidth = '128px'
   }: Props = $props();
 
+  const resolvedClassesPalette = $derived(
+    visualization?.classification?.colors ?? classesPalette
+  );
+  const resolvedCategoriesPalette = $derived(
+    visualization?.classification?.colors ?? categoriesPalette
+  );
+
   const NONE_FIELD_ID = -1;
   let strokeMode = $state<StrokeMode>(StrokeMode.NONE);
   let strokeWidth = $state<number>(VISUALIZATION_DEFAULTS.strokeWidth);
@@ -227,7 +234,7 @@
     />
     <PalettePreview
       label={m.color_palette()}
-      colors={classesPalette}
+      colors={resolvedClassesPalette}
       selectedPaletteId={visualization?.classification?.paletteId}
       inverted={visualization?.classification?.inverted ?? false}
       oninvert={onInvertPalette}
@@ -250,7 +257,7 @@
     />
     <PalettePreview
       label={m.color_palette()}
-      colors={categoriesPalette}
+      colors={resolvedCategoriesPalette}
       selectedPaletteId={visualization?.classification?.paletteId}
       inverted={visualization?.classification?.inverted ?? false}
       oninvert={onInvertPalette}

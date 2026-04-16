@@ -7,6 +7,7 @@
   } from './discretization.utils';
   import {
     Button,
+    Link,
     Select,
     SelectItem,
     Slider,
@@ -86,7 +87,10 @@
 
   const breakpointSliderValue = $derived(breakpointValue ?? 50);
   const dataMin = $derived(breaks[0]?.min ?? 0);
-  const dataMax = $derived(breaks[breaks.length - 1]?.max ?? 100);
+  const dataMax = $derived.by(() => {
+    const max = breaks[breaks.length - 1]?.max ?? 100;
+    return max > dataMin ? max : dataMin + 1;
+  });
 
   function handleMethodChange(e: Event) {
     validationErrors = [];
@@ -304,15 +308,16 @@
 
   <div class="section description-section">
     <p class="method-description">{getMethodDescription(method)}</p>
-    <a
-      class="learn-more-link"
-      href="https://observablehq.com/@d3/classification-methods"
-      target="_blank"
-      rel="noopener noreferrer"
-    >
-      {m.discretization_learn_more()}
+    <div class="learn-more">
+      <Link
+        href="https://observablehq.com/@d3/classification-methods"
+        target="_blank"
+        size="sm"
+      >
+        {m.discretization_learn_more()}
+      </Link>
       <Launch size={16} />
-    </a>
+    </div>
   </div>
 
   {#if editingBreakIndex !== null || method === 'manual'}
@@ -542,17 +547,11 @@
     margin: 0 0 var(--cds-spacing-04);
   }
 
-  .learn-more-link {
+  .learn-more {
     display: inline-flex;
     align-items: center;
     gap: var(--cds-spacing-02);
-    font-size: 0.875rem;
     color: var(--cds-link-primary);
-    text-decoration: none;
-
-    &:hover {
-      text-decoration: underline;
-    }
   }
 
   .breaks-section {

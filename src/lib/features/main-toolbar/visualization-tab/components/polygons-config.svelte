@@ -34,13 +34,15 @@
     SliderWithInput,
     StrokeSection,
     VizFilterButton,
-    VizFilterSection
+    VizFilterPanel
   } from './shared';
   import type { VizDataFilter } from '$lib/features/commons/store/visualization.store.svelte';
   import DiscretizationModal from './discretization-modal.svelte';
   import type { ClassificationConfig } from '$lib/features/commons/store/visualization.store.svelte';
-  import { Dropdown } from 'carbon-components-svelte';
   import { resolveDiscretizationLabel } from './discretization.utils';
+  import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
+  import { facetsStore } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
+  import FacetsVariablePicker from './symbols/facets-variable-picker.svelte';
 
   interface Props {
     dataFields?: Array<{ id: number; text: string; type?: string }>;
@@ -57,6 +59,10 @@
     onToggleVisibility?: (checked: boolean) => void;
     filters?: VizDataFilter[];
     onAddFilter?: (filter: Omit<VizDataFilter, 'id'>) => void;
+    onUpdateFilter?: (
+      filterId: string,
+      updates: Partial<Omit<VizDataFilter, 'id'>>
+    ) => void;
     onRemoveFilter?: (filterId: string) => void;
     onClearFilters?: () => void;
   }
@@ -74,8 +80,8 @@
     onToggleVisibility,
     filters = [],
     onAddFilter,
-    onRemoveFilter,
-    onClearFilters
+    onUpdateFilter,
+    onRemoveFilter
   }: Props = $props();
 
   let discretizationModalOpen = $state(false);
@@ -256,6 +262,62 @@
   const discretizationLabel = $derived(
     resolveDiscretizationLabel(visualization?.classification)
   );
+
+  const selectedVizId = $derived(visualizationStore.selectedVisualization?.id);
+
+  const isFacetsActiveForViz = $derived(
+    facetsStore.enabled &&
+      selectedVizId !== undefined &&
+      facetsStore.baseVisualizationId === selectedVizId
+  );
+
+  const facetsSelectedFieldIds = $derived.by(() => {
+    if (!isFacetsActiveForViz) return [] as number[];
+    return facetsStore.variables
+      .map((name) => dataFields.find((f) => f.text === name)?.id)
+      .filter((id): id is number => typeof id === 'number');
+  });
+
+  const valueColumnName = $derived(
+    dataFields.find((f) => f.id === selectedFieldId)?.text ?? ''
+  );
+
+  const categoryColumnName = $derived(
+    dataFields.find((f) => f.id === selectedCategoryFieldId)?.text ?? ''
+  );
+
+  async function handleFacetsVariablesChange(
+    baseVariableName: string,
+    fieldIds: number[]
+  ) {
+    if (!selectedVizId) return;
+    const variableNames = fieldIds
+      .map((id) => dataFields.find((f) => f.id === id)?.text)
+      .filter((name): name is string => Boolean(name));
+    const merged = variableNames.includes(baseVariableName)
+      ? variableNames
+      : [baseVariableName, ...variableNames];
+    await facetsStore.updateVariables(selectedVizId, merged);
+  }
+
+  async function handleFacetsToggle(
+    baseVariableName: string,
+    enabled: boolean
+  ) {
+    if (!selectedVizId) return;
+    if (enabled) {
+      const seed = baseVariableName ? [baseVariableName] : [];
+      const otherColumns = dataFields.filter(
+        (f) => f.text !== baseVariableName
+      );
+      const second = otherColumns[0]?.text;
+      const candidates = second ? [...seed, second] : seed;
+      if (candidates.length < 2) return;
+      await facetsStore.updateVariables(selectedVizId, candidates);
+    } else {
+      facetsStore.disable();
+    }
+  }
 </script>
 
 <ExpandableSection
@@ -298,12 +360,17 @@
       />
     {:else if fillMode === FillMode.CLASSES}
       <div class="field-group">
-        <Dropdown
+        <FacetsVariablePicker
           titleText={m.color_according()}
-          items={selectableDataFields}
-          selectedId={selectedFieldId}
-          on:select={(e) => handleValueFieldSelect(e.detail.selectedId)}
-          type="default"
+          dataFields={dataFields}
+          singleSelectItems={selectableDataFields}
+          selectedFieldId={selectedFieldId}
+          selectedFieldIds={facetsSelectedFieldIds}
+          isCollectionEnabled={isFacetsActiveForViz}
+          onSelect={handleValueFieldSelect}
+          onCollectionChange={(ids) =>
+            handleFacetsVariablesChange(valueColumnName, ids)}
+          onToggleCollection={(en) => handleFacetsToggle(valueColumnName, en)}
         />
       </div>
       <DiscretizationRow
@@ -321,12 +388,18 @@
       />
     {:else if fillMode === FillMode.CATEGORIES}
       <div class="field-group">
-        <Dropdown
+        <FacetsVariablePicker
           titleText={m.color_according()}
-          items={selectableDataFields}
-          selectedId={selectedCategoryFieldId}
-          on:select={(e) => handleCategoryFieldSelect(e.detail.selectedId)}
-          type="default"
+          dataFields={dataFields}
+          singleSelectItems={selectableDataFields}
+          selectedFieldId={selectedCategoryFieldId}
+          selectedFieldIds={facetsSelectedFieldIds}
+          isCollectionEnabled={isFacetsActiveForViz}
+          onSelect={handleCategoryFieldSelect}
+          onCollectionChange={(ids) =>
+            handleFacetsVariablesChange(categoryColumnName, ids)}
+          onToggleCollection={(en) =>
+            handleFacetsToggle(categoryColumnName, en)}
         />
       </div>
       <DiscretizationRow
@@ -380,18 +453,22 @@
       onOpenDiscretization={handleOpenDiscretization}
       onClassificationChange={handleClassificationChange}
     />
-
-    {#if filterSectionVisible || filters.length > 0}
-      <VizFilterSection
-        dataFields={dataFields}
-        filters={filters}
-        onAddFilter={onAddFilter ?? (() => {})}
-        onRemoveFilter={onRemoveFilter ?? (() => {})}
-        onClearFilters={onClearFilters ?? (() => {})}
-      />
-    {/if}
   </div>
 </ExpandableSection>
+
+{#if filterSectionVisible}
+  <VizFilterPanel
+    title={m.polygons_title()}
+    dataFields={dataFields}
+    filters={filters}
+    onAddFilter={onAddFilter ?? (() => {})}
+    onUpdateFilter={onUpdateFilter}
+    onRemoveFilter={onRemoveFilter ?? (() => {})}
+    onClose={() => {
+      filterSectionVisible = false;
+    }}
+  />
+{/if}
 
 <DiscretizationModal
   bind:open={discretizationModalOpen}

@@ -25,7 +25,7 @@
     SectionHeading,
     InfoPopover,
     VizFilterButton,
-    VizFilterSection
+    VizFilterPanel
   } from './shared';
   import type { VizDataFilter } from '$lib/features/commons/store/visualization.store.svelte';
   import {
@@ -53,6 +53,10 @@
     onToggleVisibility?: (checked: boolean) => void;
     filters?: VizDataFilter[];
     onAddFilter?: (filter: Omit<VizDataFilter, 'id'>) => void;
+    onUpdateFilter?: (
+      filterId: string,
+      updates: Partial<Omit<VizDataFilter, 'id'>>
+    ) => void;
     onRemoveFilter?: (filterId: string) => void;
     onClearFilters?: () => void;
   }
@@ -71,8 +75,8 @@
     onToggleVisibility,
     filters = [],
     onAddFilter,
-    onRemoveFilter,
-    onClearFilters
+    onUpdateFilter,
+    onRemoveFilter
   }: Props = $props();
 
   let discretizationModalOpen = $state(false);
@@ -220,18 +224,22 @@
         onMappingChange={onMappingChange}
       />
     {/if}
-
-    {#if filterSectionVisible || filters.length > 0}
-      <VizFilterSection
-        dataFields={dataFields}
-        filters={filters}
-        onAddFilter={onAddFilter ?? (() => {})}
-        onRemoveFilter={onRemoveFilter ?? (() => {})}
-        onClearFilters={onClearFilters ?? (() => {})}
-      />
-    {/if}
   </div>
 </ExpandableSection>
+
+{#if filterSectionVisible}
+  <VizFilterPanel
+    title={m.symbols_title()}
+    dataFields={dataFields}
+    filters={filters}
+    onAddFilter={onAddFilter ?? (() => {})}
+    onUpdateFilter={onUpdateFilter}
+    onRemoveFilter={onRemoveFilter ?? (() => {})}
+    onClose={() => {
+      filterSectionVisible = false;
+    }}
+  />
+{/if}
 
 <DiscretizationModal
   bind:open={discretizationModalOpen}

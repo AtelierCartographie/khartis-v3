@@ -12,7 +12,7 @@
     StrokeSection,
     ToggleWithLabel,
     VizFilterButton,
-    VizFilterSection
+    VizFilterPanel
   } from './shared';
   import type {
     MissingDataConfig,
@@ -69,6 +69,10 @@
     onToggleVisibility?: (checked: boolean) => void;
     filters?: VizDataFilter[];
     onAddFilter?: (filter: Omit<VizDataFilter, 'id'>) => void;
+    onUpdateFilter?: (
+      filterId: string,
+      updates: Partial<Omit<VizDataFilter, 'id'>>
+    ) => void;
     onRemoveFilter?: (filterId: string) => void;
     onClearFilters?: () => void;
   }
@@ -86,8 +90,8 @@
     onToggleVisibility,
     filters = [],
     onAddFilter,
-    onRemoveFilter,
-    onClearFilters
+    onUpdateFilter,
+    onRemoveFilter
   }: Props = $props();
 
   const NONE_FIELD_ID = -1;
@@ -132,7 +136,9 @@
   const currentPalette = $derived(
     visualization?.classification?.colors ?? DEFAULT_SEQUENTIAL_PREVIEW
   );
-  const qualitativePalette = DEFAULT_QUALITATIVE_PREVIEW;
+  const categoriesPalette = $derived(
+    visualization?.classification?.colors ?? DEFAULT_QUALITATIVE_PREVIEW
+  );
 
   $effect(() => {
     if (visualization?.mapping.labelColumn && dataFields.length > 0) {
@@ -594,7 +600,8 @@
               />
               <PalettePreview
                 label={m.color_palette()}
-                colors={qualitativePalette}
+                colors={categoriesPalette}
+                selectedPaletteId={visualization?.classification?.paletteId}
                 inverted={visualization?.classification?.inverted ?? false}
                 oninvert={onInvertPalette}
                 onClassificationChange={handleClassificationChange}
@@ -864,7 +871,8 @@
         />
         <PalettePreview
           label={m.color_palette()}
-          colors={qualitativePalette}
+          colors={categoriesPalette}
+          selectedPaletteId={visualization?.classification?.paletteId}
           inverted={visualization?.classification?.inverted ?? false}
           oninvert={onInvertPalette}
           onClassificationChange={handleClassificationChange}
@@ -888,7 +896,7 @@
         dataFields={dataFields}
         discretizationLabel={discretizationLabel}
         classesPalette={currentPalette}
-        categoriesPalette={qualitativePalette}
+        categoriesPalette={categoriesPalette}
         showDashed={false}
         onStyleChange={onStyleChange}
         onModesChange={onModesChange}
@@ -897,18 +905,22 @@
         onOpenDiscretization={handleOpenDiscretization}
         onClassificationChange={handleClassificationChange}
       />
-
-      {#if filterSectionVisible || filters.length > 0}
-        <VizFilterSection
-          dataFields={dataFields}
-          filters={filters}
-          onAddFilter={onAddFilter ?? (() => {})}
-          onRemoveFilter={onRemoveFilter ?? (() => {})}
-          onClearFilters={onClearFilters ?? (() => {})}
-        />
-      {/if}
     </div>
   </ExpandableSection>
+
+  {#if filterSectionVisible}
+    <VizFilterPanel
+      title={m.texts_title()}
+      dataFields={dataFields}
+      filters={filters}
+      onAddFilter={onAddFilter ?? (() => {})}
+      onUpdateFilter={onUpdateFilter}
+      onRemoveFilter={onRemoveFilter ?? (() => {})}
+      onClose={() => {
+        filterSectionVisible = false;
+      }}
+    />
+  {/if}
 
   <DiscretizationModal
     bind:open={discretizationModalOpen}

@@ -23,6 +23,9 @@
     SliderWithInput
   } from '../shared';
   import type { SymbolModeProps } from './types';
+  import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
+  import { facetsStore } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
+  import FacetsVariablePicker from './facets-variable-picker.svelte';
 
   let {
     dataFields = [],
@@ -166,6 +169,52 @@
     symbolOpacity = value;
     onSymbolsChange?.({ opacity: value / 100 });
   }
+
+  const selectedVizId = $derived(visualizationStore.selectedVisualization?.id);
+
+  const isFacetsActiveForViz = $derived(
+    facetsStore.enabled &&
+      selectedVizId !== undefined &&
+      facetsStore.baseVisualizationId === selectedVizId
+  );
+
+  const facetsSelectedFieldIds = $derived.by(() => {
+    if (!isFacetsActiveForViz) return [] as number[];
+    return facetsStore.variables
+      .map((name) => dataFields.find((f) => f.text === name)?.id)
+      .filter((id): id is number => typeof id === 'number');
+  });
+
+  const categoryColumnName = $derived(
+    dataFields.find((f) => f.id === selectedFieldId)?.text ?? ''
+  );
+
+  async function handleFacetsVariablesChange(fieldIds: number[]) {
+    if (!selectedVizId) return;
+    const variableNames = fieldIds
+      .map((id) => dataFields.find((f) => f.id === id)?.text)
+      .filter((name): name is string => Boolean(name));
+    const merged = variableNames.includes(categoryColumnName)
+      ? variableNames
+      : [categoryColumnName, ...variableNames];
+    await facetsStore.updateVariables(selectedVizId, merged);
+  }
+
+  async function handleFacetsToggle(enabled: boolean) {
+    if (!selectedVizId) return;
+    if (enabled) {
+      const seed = categoryColumnName ? [categoryColumnName] : [];
+      const otherColumns = dataFields.filter(
+        (f) => f.text !== categoryColumnName
+      );
+      const second = otherColumns[0]?.text;
+      const candidates = second ? [...seed, second] : seed;
+      if (candidates.length < 2) return;
+      await facetsStore.updateVariables(selectedVizId, candidates);
+    } else {
+      facetsStore.disable();
+    }
+  }
 </script>
 
 <div class="field-group">
@@ -173,11 +222,15 @@
     {m.size_according()}
     <InfoPopover text={m.category_variable_info()} />
   </span>
-  <Dropdown
-    items={selectableDataFields}
-    selectedId={selectedFieldId}
-    on:select={(e) => handleFieldSelect(e.detail.selectedId)}
-    type="default"
+  <FacetsVariablePicker
+    dataFields={dataFields}
+    singleSelectItems={selectableDataFields}
+    selectedFieldId={selectedFieldId}
+    selectedFieldIds={facetsSelectedFieldIds}
+    isCollectionEnabled={isFacetsActiveForViz}
+    onSelect={handleFieldSelect}
+    onCollectionChange={handleFacetsVariablesChange}
+    onToggleCollection={handleFacetsToggle}
   />
 </div>
 

@@ -93,23 +93,39 @@
 
     const dataset = selectedDataset;
     if (!dataset?.columns) return [];
+    const geoColumnsByName = new Map(
+      (dataset.geoDetection?.geoColumns ?? []).map((column) => [
+        column.columnName,
+        column
+      ])
+    );
 
-    const columnAnalysis = dataset.columns.map((col) => ({
-      name: col.name,
-      type: col.type,
-      stats: {
-        count: col.stats?.count ?? 0,
-        nulls: col.stats?.nulls ?? 0,
-        uniques: col.stats?.uniques ?? 0,
-        min: col.stats?.min,
-        max: col.stats?.max,
-        mean: col.stats?.mean,
-        share_integers: col.stats?.share_integers,
-        share_floats: col.stats?.share_floats,
-        share_rank_interval: col.stats?.share_rank_interval,
-        extent_magnitude: col.stats?.extent_magnitude
-      }
-    }));
+    const columnAnalysis = dataset.columns.map((col) => {
+      const geoColumn = geoColumnsByName.get(col.name);
+
+      return {
+        ...(geoColumn
+          ? {
+              geo_type: geoColumn.type,
+              geo_confidence: geoColumn.confidence
+            }
+          : {}),
+        name: col.name,
+        type: col.type,
+        stats: {
+          count: col.stats?.count ?? 0,
+          nulls: col.stats?.nulls ?? 0,
+          uniques: col.stats?.uniques ?? 0,
+          min: col.stats?.min,
+          max: col.stats?.max,
+          mean: col.stats?.mean,
+          share_integers: col.stats?.share_integers,
+          share_floats: col.stats?.share_floats,
+          share_rank_interval: col.stats?.share_rank_interval,
+          extent_magnitude: col.stats?.extent_magnitude
+        }
+      };
+    });
 
     const geometryType =
       resolveDatasetGeometryType(
