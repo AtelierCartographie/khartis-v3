@@ -180,7 +180,5 @@ export function calculateToleranceFromRate(
   rate: number,
   _bounds?: [number, number, number, number]
 ): number {
-  // The `simplify_and_clean` macro uses a normalized factor (0.0 – 1.0).
-  // Convert user percentage (0 – 100) to normalized factor.
   return Math.max(0, Math.min(1, rate / 100));
 }

@@ -89,6 +89,7 @@ export interface DeckMapProps {
   showLegendOverlay?: boolean;
   showGeoIndicationsOverlay?: boolean;
   showAnnotationOverlay?: boolean;
+  isFacetCell?: boolean;
 }
 
 export interface YearFilterInfo {

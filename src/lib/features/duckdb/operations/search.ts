@@ -7,6 +7,7 @@ import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants'
 import { registerTableMutationCallback } from '../cache/cache-manager';
 import { DUCK_CONST } from '../constants';
 import { executeQuery } from '../core/query';
+import { buildStripHtmlTextSqlExpression } from '../html-like-text';
 import type { CellSearchResult, DuckDBContext, SearchStats } from '../types';
 
 const MAX_ROWS_FOR_SEARCH = 10000;
@@ -85,12 +86,13 @@ function buildExactSearchSQL(
 
   const unionParts = columnsToSearch.map((col) => {
     const escapedCol = escapeIdentifier(col);
+    const textValueExpr = buildStripHtmlTextSqlExpression(`"${escapedCol}"`);
     return `SELECT __id, '${escapeSqlString(col)}' AS column_name, column_value,
       CASE WHEN norm_value = '${escapedTerm}' THEN 1.0 ELSE 0.99 END AS score
     FROM (
-      SELECT __id, "${escapedCol}" AS column_value, normalize_text("${escapedCol}") AS norm_value
+      SELECT __id, ${textValueExpr} AS column_value, normalize_text("${escapedCol}") AS norm_value
       FROM "${escapeIdentifier(tableName)}"
-      WHERE "${escapedCol}" IS NOT NULL AND length(trim("${escapedCol}")) > 0
+      WHERE "${escapedCol}" IS NOT NULL AND length(trim(${textValueExpr})) > 0
     ) sub
     WHERE norm_value = '${escapedTerm}' OR contains(norm_value, '${escapedTerm}')`;
   });
@@ -118,12 +120,13 @@ function buildFuzzySearchSQL(
 
   const unionParts = columnsToSearch.map((col) => {
     const escapedCol = escapeIdentifier(col);
+    const textValueExpr = buildStripHtmlTextSqlExpression(`"${escapedCol}"`);
     return `SELECT __id, '${escapeSqlString(col)}' AS column_name, column_value,
       jaro_winkler_similarity(norm_value, '${escapedTerm}') AS score
     FROM (
-      SELECT __id, "${escapedCol}" AS column_value, normalize_text("${escapedCol}") AS norm_value
+      SELECT __id, ${textValueExpr} AS column_value, normalize_text("${escapedCol}") AS norm_value
       FROM "${escapeIdentifier(tableName)}"
-      WHERE "${escapedCol}" IS NOT NULL AND length(trim("${escapedCol}")) > 0
+      WHERE "${escapedCol}" IS NOT NULL AND length(trim(${textValueExpr})) > 0
     ) sub
     WHERE length(norm_value) BETWEEN length('${escapedTerm}') * 0.5 AND length('${escapedTerm}') * 2
       AND NOT (norm_value = '${escapedTerm}' OR contains(norm_value, '${escapedTerm}'))

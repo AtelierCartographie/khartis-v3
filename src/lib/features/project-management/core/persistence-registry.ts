@@ -1,14 +1,3 @@
-/**
- * Persistence Registry — self-registration pattern for store persistence.
- *
- * Each store registers its own serialize/deserialize/reset callbacks.
- * The serializer calls the registry generically instead of importing every store.
- *
- * Change notifications support two priorities:
- * - IMMEDIATE: saves right away (file add/remove, project rename)
- * - DEBOUNCED: resets a 5s timer (palette, slider, styling changes)
- */
-
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
 export const SavePriority = {
@@ -37,17 +26,14 @@ class PersistenceRegistryImpl {
 
   private dirty = false;
 
-  /** Whether changes exist that haven't been persisted yet */
   get isDirty(): boolean {
     return this.dirty;
   }
 
-  /** Wire the registry to the project store's save function */
   setSaveCallback(cb: () => Promise<void>): void {
     this.saveCallback = cb;
   }
 
-  /** Register a store for persistence. Called at module load time (singletons). */
   register<T>(entry: PersistenceEntry<T>): void {
     if (this.entries.has(entry.key)) {
       logger.warn(
@@ -58,14 +44,12 @@ class PersistenceRegistryImpl {
     this.entries.set(entry.key, entry as PersistenceEntry);
   }
 
-  /** Unregister a store (rarely needed — for testing). */
   unregister(key: string): void {
     this.entries.delete(key);
   }
 
-  /** Notify that a store changed. Triggers save based on priority. */
   notifyChange(
-    key: string,
+    _key: string,
     priority: SavePriorityType = SavePriority.DEBOUNCED
   ): void {
     this.dirty = true;
@@ -78,7 +62,6 @@ class PersistenceRegistryImpl {
     }
   }
 
-  /** Serialize all registered stores into a plain object. */
   serializeAll(): Record<string, unknown> {
     const result: Record<string, unknown> = {};
     for (const [key, entry] of this.entries) {
@@ -95,7 +78,6 @@ class PersistenceRegistryImpl {
     return result;
   }
 
-  /** Deserialize all registered stores from a plain object. */
   deserializeAll(data: Record<string, unknown>): void {
     for (const [key, entry] of this.entries) {
       if (!(key in data)) continue;
@@ -111,7 +93,6 @@ class PersistenceRegistryImpl {
     }
   }
 
-  /** Reset all registered stores to their defaults. */
   resetAll(): void {
     for (const [, entry] of this.entries) {
       try {
@@ -126,12 +107,10 @@ class PersistenceRegistryImpl {
     }
   }
 
-  /** List of registered store keys (for debugging). */
   get registeredKeys(): string[] {
     return [...this.entries.keys()];
   }
 
-  /** Force immediate save (bypasses debounce). */
   flush(): void {
     if (!this.dirty) return;
     this.dirty = false;
@@ -140,7 +119,6 @@ class PersistenceRegistryImpl {
     });
   }
 
-  /** Clear pending dirty state without saving. Useful after restore flows. */
   markClean(): void {
     this.cancelDebounce();
     this.dirty = false;

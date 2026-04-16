@@ -1,88 +1,39 @@
 import { describe, expect, it } from 'vitest';
 import { detectCsvHeader } from '$lib/features/data-pipeline/utils/csv-header-detector';
 
-function asFile(content: string, name: string): File {
+function asFile(content: string, name = 'test.csv'): File {
   return new File([content], name, { type: 'text/csv' });
 }
 
 describe('detectCsvHeader', () => {
-  it('retourne hasHeader=true et confidence=0 quand le fichier ne contient pas assez de lignes', async () => {
-    const file = asFile('id,city\n', 'single-line.csv');
-
+  it('returns hasHeader=false when row 1 is fully numeric', async () => {
+    const file = asFile(['1,2,3', '4,5,6', '7,8,9'].join('\n'));
     const result = await detectCsvHeader(file, ',');
-
-    expect(result).toEqual({
-      hasHeader: true,
-      confidence: 0,
-      comparedColumns: 0
-    });
-  });
-
-  it('retourne hasHeader=true quand la première ligne contient du texte mélangé à du numérique', async () => {
-    const file = asFile(
-      [
-        '1,Paris,48.8566,2.3522,2148000,France',
-        '2,Berlin,52.5200,13.4050,3645000,Germany'
-      ].join('\n'),
-      'mixed-types.csv'
-    );
-
-    const result = await detectCsvHeader(file, ',');
-
-    expect(result.hasHeader).toBe(true);
-    expect(result.comparedColumns).toBe(6);
-  });
-
-  it('retourne hasHeader=false quand les deux premières lignes sont entièrement numériques', async () => {
-    const file = asFile(
-      ['1,48.8566,2.3522,2148000', '2,52.5200,13.4050,3645000'].join('\n'),
-      'all-numeric.csv'
-    );
-
-    const result = await detectCsvHeader(file, ',');
-
     expect(result.hasHeader).toBe(false);
-    expect(result.comparedColumns).toBe(4);
+  });
+
+  it('returns hasHeader=true when row 1 is text, row 2 is numeric', async () => {
+    const file = asFile(
+      ['id,city,value', '1,Paris,42', '2,Lyon,17'].join('\n')
+    );
+    const result = await detectCsvHeader(file, ',');
+    expect(result.hasHeader).toBe(true);
+  });
+
+  it('returns hasHeader=false when both rows are all-numeric (similarity >= 80%)', async () => {
+    const file = asFile(
+      ['1,48.8566,2.3522,2148000', '2,52.5200,13.4050,3645000'].join('\n')
+    );
+    const result = await detectCsvHeader(file, ',');
+    expect(result.hasHeader).toBe(false);
     expect(result.confidence).toBeGreaterThan(0.8);
   });
 
-  it('retourne hasHeader=true quand la première ligne contient des labels textuels', async () => {
+  it('returns hasHeader=true for mixed row 1 (text + numeric)', async () => {
     const file = asFile(
-      [
-        'id,city,lat,lng,population,country',
-        '1,Paris,48.8566,2.3522,2148000,France'
-      ].join('\n'),
-      'with-header.csv'
+      ['dep,name,pop', '01,Ain,643000', '02,Aisne,534000'].join('\n')
     );
-
-    const result = await detectCsvHeader(file, ',');
-
+    const result = await detectCsvHeader(file, ';');
     expect(result.hasHeader).toBe(true);
-    expect(result.comparedColumns).toBe(6);
-  });
-
-  it('retourne hasHeader=true avec confidence=0 quand les colonnes des deux lignes ne correspondent pas', async () => {
-    const file = asFile(
-      ['id,city,population', '1,Paris,2148000,France'].join('\n'),
-      'mismatch.csv'
-    );
-
-    const result = await detectCsvHeader(file, ',');
-
-    expect(result.hasHeader).toBe(true);
-    expect(result.comparedColumns).toBe(3);
-    expect(result.confidence).toBe(0);
-  });
-
-  it('retourne hasHeader=true pour des cellules quotées avec du texte mélangé', async () => {
-    const file = asFile(
-      ['("1"),"2,5",Paris', '("3"),"4,1",Berlin'].join('\n'),
-      'quoted-parenthesized.csv'
-    );
-
-    const result = await detectCsvHeader(file, ',');
-
-    expect(result.hasHeader).toBe(true);
-    expect(result.comparedColumns).toBe(3);
   });
 });

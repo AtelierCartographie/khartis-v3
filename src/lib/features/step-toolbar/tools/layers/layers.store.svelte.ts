@@ -47,24 +47,42 @@ type LayersActions = {
   syncWithVisualizations: () => void;
 };
 
-function getVisualizationColor(viz: VisualizationConfig): string {
+function getClassificationColor(viz: VisualizationConfig): string | null {
+  if (!Array.isArray(viz.classification?.colors)) {
+    return null;
+  }
+
+  return (
+    viz.classification.colors.find(
+      (color): color is string => typeof color === 'string' && color.length > 0
+    ) ?? null
+  );
+}
+
+export function getVisualizationColor(viz: VisualizationConfig): string {
   const fillColor = getStyleColor(viz.style.fillColor);
   if (fillColor) return fillColor;
+
+  const lineColor = getStyleColor(viz.style.lineColor);
+  if (lineColor) return lineColor;
+
+  const classificationColor = getClassificationColor(viz);
+  if (classificationColor) return classificationColor;
+
+  const textColor = getStyleColor(viz.style.textColor);
+  if (textColor) return textColor;
+
+  const labelColor = getStyleColor(viz.style.labelColor);
+  if (labelColor) return labelColor;
 
   if (typeof viz.style.strokeColor === 'string' && viz.style.strokeColor) {
     return viz.style.strokeColor;
   }
 
-  const lineColor = getStyleColor(viz.style.lineColor);
-  if (lineColor) return lineColor;
-
-  const textColor = getStyleColor(viz.style.textColor);
-  if (textColor) return textColor;
-
   return VIZ_SUBLAYER_COLOR;
 }
 
-function getStyleColor(color?: string | string[]): string | null {
+export function getStyleColor(color?: string | string[]): string | null {
   if (typeof color === 'string' && color) {
     return color;
   }
@@ -74,6 +92,61 @@ function getStyleColor(color?: string | string[]): string | null {
   }
 
   return null;
+}
+
+export function getVisualizationPrimitiveColor(
+  viz: VisualizationConfig,
+  primitive: PrimitiveFilter
+): string {
+  const classificationColor = getClassificationColor(viz);
+
+  switch (primitive) {
+    case PrimitiveFilterType.LINE:
+      return (
+        getStyleColor(viz.style.lineColor) ??
+        classificationColor ??
+        (typeof viz.style.strokeColor === 'string' && viz.style.strokeColor
+          ? viz.style.strokeColor
+          : getVisualizationColor(viz))
+      );
+    case PrimitiveFilterType.POLYGON:
+      if ((viz.style.fillOpacity ?? 1) <= 0) {
+        return (
+          (typeof viz.style.strokeColor === 'string' &&
+            viz.style.strokeColor) ||
+          getVisualizationColor(viz)
+        );
+      }
+
+      return (
+        getStyleColor(viz.style.fillColor) ??
+        classificationColor ??
+        (typeof viz.style.strokeColor === 'string' && viz.style.strokeColor
+          ? viz.style.strokeColor
+          : getVisualizationColor(viz))
+      );
+    case PrimitiveFilterType.POINT:
+    default:
+      return (
+        getStyleColor(viz.style.fillColor) ??
+        classificationColor ??
+        (typeof viz.style.strokeColor === 'string' && viz.style.strokeColor
+          ? viz.style.strokeColor
+          : getVisualizationColor(viz))
+      );
+  }
+}
+
+export function getBasemapLayerColor(layer: BasemapLayerConfig): string {
+  if (layer.id === BASEMAP_LAYER_ID.TERRE) {
+    return layer.strokeColor || layer.fillColor || BASEMAP_SUBLAYER_COLOR;
+  }
+
+  if ('color' in layer && typeof layer.color === 'string' && layer.color) {
+    return layer.color;
+  }
+
+  return BASEMAP_SUBLAYER_COLOR;
 }
 
 function buildVisualizationSubLayerId(
@@ -102,7 +175,9 @@ function getVisualizationPrimitiveOpacity(
 ): number {
   switch (primitive) {
     case PrimitiveFilterType.POINT:
-      return Math.round((viz.style.fillOpacity ?? 1) * 100);
+      return Math.round(
+        (viz.symbols?.opacity ?? viz.style.fillOpacity ?? 1) * 100
+      );
     case PrimitiveFilterType.LINE:
       return Math.round((viz.style.lineOpacity ?? 1) * 100);
     case PrimitiveFilterType.POLYGON:
@@ -184,7 +259,7 @@ function buildLayers(): Layer[] {
       name: getBasemapLayerName(layer.id),
       visible: layer.visible,
       type: 'geographic' as const,
-      color: BASEMAP_SUBLAYER_COLOR,
+      color: getBasemapLayerColor(layer),
       opacity: getBasemapLayerOpacity(layer),
       order,
       basemapLayerId: layer.id,
@@ -215,8 +290,9 @@ function buildLayers(): Layer[] {
         order: vizOrder
       };
 
-      const vizPrimitiveOrder =
-        viz.primitiveOrder ?? VISUALIZATION_SUBLAYER_ORDER;
+      const vizPrimitiveOrder = (
+        viz.primitiveOrder ?? VISUALIZATION_SUBLAYER_ORDER
+      ).filter((primitive) => primitiveFilters.includes(primitive));
       const vizSubLayers = vizPrimitiveOrder.map(
         (primitive, i): Layer => ({
           id: buildVisualizationSubLayerId(viz.id, primitive),
@@ -224,9 +300,9 @@ function buildLayers(): Layer[] {
           isSubLayer: true,
           primitive,
           name: getVisualizationPrimitiveName(primitive),
-          visible: primitiveFilters.includes(primitive),
+          visible: true,
           type: 'visualization',
-          color: VIZ_SUBLAYER_COLOR,
+          color: getVisualizationPrimitiveColor(viz, primitive),
           opacity: getVisualizationPrimitiveOpacity(viz, primitive),
           order: vizOrder * 100 + i
         })

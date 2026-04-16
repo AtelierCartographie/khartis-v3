@@ -1,10 +1,6 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import * as m from '$lib/paraglide/messages';
-import type {
-  DatasetResult,
-  PipelineContext,
-  ZipDatasetResult
-} from '../types';
+import type { DatasetResult, ZipDatasetResult } from '../types';
 import {
   createFileFromExtracted,
   extractZip,
@@ -16,7 +12,6 @@ import {
 import { processFileInternal } from './file-processor';
 
 export async function processZipFile(
-  ctx: PipelineContext,
   file: File
 ): Promise<DatasetResult | ZipDatasetResult> {
   const start = performance.now();
@@ -25,10 +20,10 @@ export async function processZipFile(
     const extraction = await extractZip(file);
 
     if (extraction.isShapefileArchive && extraction.shapefileBaseName) {
-      return processShapefileArchive(ctx, file, extraction, start);
+      return processShapefileArchive(file, extraction, start);
     }
 
-    return processGenericZip(ctx, file, extraction, start);
+    return processGenericZip(file, extraction, start);
   } catch (error) {
     logger.error('Failed to process ZIP archive', LogCategory.DATA, {
       fileName: file.name,
@@ -39,7 +34,6 @@ export async function processZipFile(
 }
 
 async function processShapefileArchive(
-  ctx: PipelineContext,
   file: File,
   extraction: Awaited<ReturnType<typeof extractZip>>,
   start: number
@@ -61,7 +55,7 @@ async function processShapefileArchive(
     .filter((f) => !f.name.toLowerCase().endsWith('.shp'))
     .map((f) => createFileFromExtracted(f));
 
-  const dataset = await processFileInternal(ctx, shpFile, {
+  const dataset = await processFileInternal(shpFile, {
     originalName: `${extraction.shapefileBaseName}.shp`,
     companionFiles
   });
@@ -84,11 +78,10 @@ async function processShapefileArchive(
     return dataset;
   }
 
-  return processAdditionalFiles(ctx, file, dataset, otherFiles, start);
+  return processAdditionalFiles(file, dataset, otherFiles, start);
 }
 
 async function processAdditionalFiles(
-  ctx: PipelineContext,
   file: File,
   shapefileDataset: DatasetResult,
   otherFiles: Awaited<ReturnType<typeof extractZip>>['files'],
@@ -100,7 +93,7 @@ async function processAdditionalFiles(
   for (const extractedFileInfo of otherFiles) {
     try {
       const extractedFile = createFileFromExtracted(extractedFileInfo);
-      const additionalDataset = await processFileInternal(ctx, extractedFile, {
+      const additionalDataset = await processFileInternal(extractedFile, {
         originalName: extractedFileInfo.name
       });
 
@@ -136,7 +129,6 @@ async function processAdditionalFiles(
 }
 
 async function processGenericZip(
-  ctx: PipelineContext,
   file: File,
   extraction: Awaited<ReturnType<typeof extractZip>>,
   start: number
@@ -148,21 +140,20 @@ async function processGenericZip(
   }
 
   if (supportedFiles.length === 1) {
-    return processSingleFileFromZip(ctx, file, supportedFiles[0], start);
+    return processSingleFileFromZip(file, supportedFiles[0], start);
   }
 
-  return processMultipleFilesFromZip(ctx, file, supportedFiles, start);
+  return processMultipleFilesFromZip(file, supportedFiles, start);
 }
 
 async function processSingleFileFromZip(
-  ctx: PipelineContext,
   zipFile: File,
   extractedFileInfo: ExtractedFile,
   start: number
 ): Promise<DatasetResult> {
   const extractedFile = createFileFromExtracted(extractedFileInfo);
 
-  const dataset = await processFileInternal(ctx, extractedFile, {
+  const dataset = await processFileInternal(extractedFile, {
     originalName: extractedFileInfo.name
   });
 
@@ -179,7 +170,6 @@ async function processSingleFileFromZip(
 }
 
 async function processMultipleFilesFromZip(
-  ctx: PipelineContext,
   zipFile: File,
   supportedFiles: ExtractedFile[],
   start: number
@@ -199,7 +189,7 @@ async function processMultipleFilesFromZip(
   for (const extractedFileInfo of supportedFiles) {
     try {
       const extractedFile = createFileFromExtracted(extractedFileInfo);
-      const dataset = await processFileInternal(ctx, extractedFile, {
+      const dataset = await processFileInternal(extractedFile, {
         originalName: extractedFileInfo.name
       });
 

@@ -7,15 +7,10 @@ import { detectFileFormat, generateTableName } from '../core/format-detector';
 import { buildDatasetFromDuckTable } from '../operations/analysis';
 import { normalizeFormattedNumericColumns } from '../operations/tabular-numeric-normalization';
 import { applyTabularGeoDetection } from './tabular-geo-detection';
-import type {
-  DatasetResult,
-  PipelineContext,
-  ZipDatasetResult
-} from '../types';
+import type { DatasetResult, ZipDatasetResult } from '../types';
 import { processZipFile } from './zip-processor';
 
 export async function processRemoteFile(
-  ctx: PipelineContext,
   url: string,
   options: { tableName?: string; decimalSeparator?: string } = {}
 ): Promise<DatasetResult | ZipDatasetResult> {
@@ -28,7 +23,7 @@ export async function processRemoteFile(
   }
 
   if (filename.toLowerCase().endsWith('.zip')) {
-    return processRemoteZipFile(ctx, url);
+    return processRemoteZipFile(url);
   }
 
   if (filename.toLowerCase().endsWith('.shp')) {
@@ -46,7 +41,7 @@ export async function processRemoteFile(
     await normalizeFormattedNumericColumns(tableName, Duck);
   }
 
-  const dataset = await buildDatasetFromDuckTable(ctx, {
+  const dataset = await buildDatasetFromDuckTable({
     file: { name: filename, size: 0, type: MIME.BINARY },
     tableName,
     isGeoFile: isGeospatialFile(filename),
@@ -63,7 +58,6 @@ export async function processRemoteFile(
 }
 
 export async function processRemoteZipFile(
-  ctx: PipelineContext,
   url: string
 ): Promise<DatasetResult | ZipDatasetResult> {
   const start = performance.now();
@@ -82,7 +76,7 @@ export async function processRemoteZipFile(
     const arrayBuffer = await response.arrayBuffer();
     const filename = url.split('/').pop() || 'remote.zip';
     const file = new File([arrayBuffer], filename, { type: MIME.ZIP });
-    const result = await processZipFile(ctx, file);
+    const result = await processZipFile(file);
 
     if ('datasets' in result) {
       for (const dataset of result.datasets) {

@@ -31,10 +31,8 @@
   import clsx from 'clsx';
   import { SvelteSet } from 'svelte/reactivity';
   import ProjectName from './project-name.svelte';
-  import {
-    CreateProjectValidationService,
-    type ValidationResult
-  } from './services/validation.service';
+  import { CreateProjectValidationService } from './services/validation.service';
+  import type { ValidationResult } from '$lib/features/data-pipeline/types';
 
   interface Props {
     onClose?: () => void;
@@ -452,28 +450,26 @@
                   </Button>
                 </div>
 
-                {#if true}
-                  {@const requiredExts = ['.shp', '.shx', '.dbf']}
-                  {@const optionalExts = ['.prj', '.cpg']}
-                  {@const presentExts =
-                    file.relatedFiles?.map((f) =>
-                      f.substring(f.lastIndexOf('.')).toLowerCase()
-                    ) || []}
-                  <div class="shapefile-components">
-                    {#each requiredExts as ext (ext)}
-                      {@const isPresent = presentExts.includes(ext)}
-                      <Tag size="sm" type={isPresent ? 'teal' : 'gray'}
-                        >{ext}{isPresent ? ' ✓' : ''}</Tag
-                      >
-                    {/each}
-                    {#each optionalExts as ext (ext)}
-                      {@const isPresent = presentExts.includes(ext)}
-                      <Tag size="sm" type={isPresent ? 'teal' : 'gray'}
-                        >{ext}{isPresent ? ' ✓' : ''}</Tag
-                      >
-                    {/each}
-                  </div>
-                {/if}
+                {@const requiredExts = ['.shp', '.shx', '.dbf']}
+                {@const optionalExts = ['.prj', '.cpg']}
+                {@const presentExts =
+                  file.relatedFiles?.map((f) =>
+                    f.substring(f.lastIndexOf('.')).toLowerCase()
+                  ) || []}
+                <div class="shapefile-components">
+                  {#each requiredExts as ext (ext)}
+                    {@const isPresent = presentExts.includes(ext)}
+                    <Tag size="sm" type={isPresent ? 'teal' : 'gray'}
+                      >{ext}{isPresent ? ' ✓' : ''}</Tag
+                    >
+                  {/each}
+                  {#each optionalExts as ext (ext)}
+                    {@const isPresent = presentExts.includes(ext)}
+                    <Tag size="sm" type={isPresent ? 'teal' : 'gray'}
+                      >{ext}{isPresent ? ' ✓' : ''}</Tag
+                    >
+                  {/each}
+                </div>
               </Tile>
             </div>
           {:else if file.status === FileStatus.COMPLETE}

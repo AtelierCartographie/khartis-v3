@@ -1,21 +1,18 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
   import CompactNumberInput from '$lib/features/commons/components/compact-number-input.svelte';
-  import Switch from '$lib/features/commons/components/switch.svelte';
   import {
     DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX,
     NESTED_MEANS_CLASS_COUNTS
   } from './discretization.utils';
   import {
     Button,
-    Column,
-    Grid,
-    Row,
     Select,
     SelectItem,
+    Slider,
     TextInput
   } from 'carbon-components-svelte';
-  import { Information, Edit } from 'carbon-icons-svelte';
+  import { CaretRight, Edit, Information, Launch } from 'carbon-icons-svelte';
 
   type ClassificationMethod =
     | 'jenks'
@@ -65,10 +62,9 @@
     onbreakschange
   }: Props = $props();
 
-  let useDivergent = $state(breakpointValue !== null);
   let editingBreakIndex = $state<number | null>(null);
 
-  function getMethodDescription(method: ClassificationMethod): string {
+  function getMethodDescription(m_: ClassificationMethod): string {
     const descriptions: Record<ClassificationMethod, () => string> = {
       jenks: m.discretization_desc_jenks,
       quantile: m.discretization_desc_quantile,
@@ -78,16 +74,19 @@
       'nested-means': m.discretization_desc_nested_means,
       'head-tail': m.discretization_desc_head_tail
     };
-    return descriptions[method]();
+    return descriptions[m_]();
   }
 
-  const maxHistogramHeight = $derived.by(() => {
-    const maxCount = Math.max(...breaks.map((b) => b.count));
-    return maxCount;
+  const maxHistogramCount = $derived.by(() => {
+    return Math.max(...breaks.map((b) => b.count), 1);
   });
 
   const isClassCountLocked = $derived(method === 'q6');
   const isNestedMeans = $derived(method === 'nested-means');
+
+  const breakpointSliderValue = $derived(breakpointValue ?? 50);
+  const dataMin = $derived(breaks[0]?.min ?? 0);
+  const dataMax = $derived(breaks[breaks.length - 1]?.max ?? 100);
 
   function handleMethodChange(e: Event) {
     validationErrors = [];
@@ -116,12 +115,6 @@
     const value = Number(target.value);
     numClasses = value;
     onclasseschange?.(value);
-  }
-
-  function handleDivergentToggle(checked: boolean): void {
-    useDivergent = checked;
-    breakpointValue = checked ? 50 : null;
-    onbreakpointchange?.(breakpointValue);
   }
 
   function startEditingBreak(index: number) {
@@ -171,211 +164,239 @@
 
 <div class="discretization-panel">
   <div class="section">
-    <Grid padding noGutter>
-      <Row>
-        <Column sm={4} md={4} lg={8}>
-          <Select
-            id="classification-method"
-            labelText={m.discretization()}
-            value={method}
-            on:change={handleMethodChange}
-          >
-            <SelectItem value="jenks" text={m.discretization_method_jenks()} />
-            <SelectItem
-              value="quantile"
-              text={m.discretization_method_quantile()}
-            />
-            <SelectItem value="q6" text={m.discretization_method_q6()} />
-            <SelectItem
-              value="equal-interval"
-              text={m.discretization_method_equal_interval()}
-            />
-            <SelectItem
-              value="nested-means"
-              text={m.discretization_method_nested_means()}
-            />
-            <SelectItem
-              value="head-tail"
-              text={m.discretization_method_head_tail()}
-            />
-            <SelectItem
-              value="manual"
-              text={m.discretization_method_manual()}
-            />
-          </Select>
-        </Column>
-        <Column sm={4} md={4} lg={8}>
-          <div class="labeled-input">
-            <p class="input-label">{m.discretization_num_classes()}</p>
-            {#if isNestedMeans}
-              <Select
-                id="nested-means-classes"
-                labelText=""
-                hideLabel
-                value={String(numClasses)}
-                on:change={handleNestedMeansChange}
-              >
-                {#each NESTED_MEANS_CLASS_COUNTS as val (val)}
-                  <SelectItem value={String(val)} text={String(val)} />
-                {/each}
-              </Select>
-            {:else}
-              <CompactNumberInput
-                bind:value={numClasses}
-                min={2}
-                max={classCountMax}
-                disabled={isClassCountLocked}
-                onchange={handleClassesChange}
-                width="100%"
-              />
-            {/if}
-          </div>
-        </Column>
-      </Row>
-    </Grid>
-  </div>
-
-  <div class="section info-section">
-    <div class="method-info">
-      <Information size={20} />
-      <span class="method-description">{getMethodDescription(method)}</span>
-    </div>
-  </div>
-
-  <div class="section divergent-section">
-    <div class="divergent-toggle-row">
-      <span class="input-label">{m.discretization_divergent_palette()}</span>
-      <Switch
-        toggled={useDivergent}
-        labelText={m.discretization_divergent_palette()}
-        hideLabel
-        labelA={m.no()}
-        labelB={m.yes()}
-        showStateLabel
-        onchange={handleDivergentToggle}
+    <Select
+      id="classification-method"
+      labelText={m.discretization_method_label()}
+      value={method}
+      on:change={handleMethodChange}
+    >
+      <SelectItem value="jenks" text={m.discretization_method_jenks()} />
+      <SelectItem value="quantile" text={m.discretization_method_quantile()} />
+      <SelectItem value="q6" text={m.discretization_method_q6()} />
+      <SelectItem
+        value="equal-interval"
+        text={m.discretization_method_equal_interval()}
       />
-    </div>
+      <SelectItem
+        value="nested-means"
+        text={m.discretization_method_nested_means()}
+      />
+      <SelectItem
+        value="head-tail"
+        text={m.discretization_method_head_tail()}
+      />
+      <SelectItem value="manual" text={m.discretization_method_manual()} />
+    </Select>
+  </div>
 
-    {#if useDivergent}
-      <div class="breakpoint-input">
-        <div class="labeled-input">
-          <p class="input-label">{m.discretization_breakpoint_value()}</p>
-          <CompactNumberInput
-            value={breakpointValue ?? 0}
-            onchange={(v) => {
-              breakpointValue = v ?? null;
-              onbreakpointchange?.(v ?? null);
-            }}
-            width="100%"
-          />
+  <div class="section">
+    <div class="labeled-input">
+      <p class="input-label">{m.discretization_num_classes()}</p>
+      {#if isNestedMeans}
+        <Select
+          id="nested-means-classes"
+          labelText=""
+          hideLabel
+          value={String(numClasses)}
+          on:change={handleNestedMeansChange}
+        >
+          {#each NESTED_MEANS_CLASS_COUNTS as val (val)}
+            <SelectItem value={String(val)} text={String(val)} />
+          {/each}
+        </Select>
+      {:else}
+        <CompactNumberInput
+          bind:value={numClasses}
+          min={2}
+          max={classCountMax}
+          disabled={isClassCountLocked}
+          onchange={handleClassesChange}
+          width="100%"
+        />
+      {/if}
+    </div>
+  </div>
+
+  <div class="section breakpoint-section">
+    <div class="breakpoint-row">
+      <div class="breakpoint-input-col">
+        <p class="input-label">{m.discretization_breakpoint_value()}</p>
+        <TextInput
+          id="breakpoint-value"
+          size="sm"
+          hideLabel
+          labelText={m.discretization_breakpoint_value()}
+          placeholder={m.discretization_none_placeholder()}
+          value={breakpointValue !== null ? String(breakpointValue) : ''}
+          on:input={(e) => {
+            const target = e.target as HTMLInputElement;
+            const parsed = parseFloat(target.value);
+            breakpointValue = isNaN(parsed) ? null : parsed;
+            onbreakpointchange?.(breakpointValue);
+          }}
+        />
+      </div>
+      <div class="breakpoint-slider-col">
+        <p class="input-label">{m.discretization_position()}</p>
+        <Slider
+          min={dataMin}
+          max={dataMax}
+          value={breakpointSliderValue}
+          hideTextInput
+          on:change={(e) => {
+            breakpointValue = e.detail;
+            onbreakpointchange?.(e.detail);
+          }}
+        />
+        <div class="palette-strip">
+          {#each breaks as breakItem (breakItem.color)}
+            <div
+              class="palette-swatch"
+              style="background-color: {breakItem.color}"
+            ></div>
+          {/each}
         </div>
       </div>
-    {/if}
+    </div>
   </div>
 
   {#if showHistogram}
     <div class="section histogram-section">
-      <p class="label">{m.discretization_histogram()}</p>
-      <div class="histogram-container">
-        <div class="histogram">
-          {#each breaks as breakItem, index (index)}
-            {@const heightPercent =
-              (breakItem.count / maxHistogramHeight) * 100}
-            <div class="histogram-bar-container">
+      <p class="label">{m.discretization_value_distribution()}</p>
+      <div class="histogram-rows">
+        {#each breaks as breakItem, index (index)}
+          {@const widthPercent = (breakItem.count / maxHistogramCount) * 100}
+          <div class="histogram-row">
+            <span class="histogram-label">
+              {#if index === 0}Min.{/if}
+            </span>
+            <span class="histogram-value">
+              {breakItem.min}
+            </span>
+            <Button
+              kind="ghost"
+              size="small"
+              iconDescription={m.discretization_edit_bounds()}
+              icon={CaretRight}
+              on:click={() => startEditingBreak(index)}
+              class="histogram-arrow-btn"
+            />
+            <div class="histogram-bar-wrapper">
               <div
                 class="histogram-bar"
-                style="--height: {heightPercent}%; --color: {breakItem.color}"
+                style="width: {widthPercent}%; background-color: {breakItem.color}"
                 title="{breakItem.min} - {breakItem.max}: {breakItem.count} {m.discretization_values()}"
               ></div>
-              <span class="bar-count">{breakItem.count}</span>
             </div>
-          {/each}
-        </div>
-        <div class="histogram-axis">
-          {#each breaks as breakItem, index (index)}
-            <span class="axis-label">{breakItem.min}</span>
-          {/each}
-          <span class="axis-label">{breaks[breaks.length - 1]?.max}</span>
+          </div>
+        {/each}
+        <div class="histogram-row histogram-row-max">
+          <span class="histogram-label">Max.</span>
+          <span class="histogram-value">
+            {breaks[breaks.length - 1]?.max}
+          </span>
+          <div class="histogram-arrow-placeholder"></div>
+          <div class="histogram-bar-wrapper"></div>
         </div>
       </div>
     </div>
   {/if}
 
-  <div class="section breaks-section">
-    <p class="label">
-      {m.discretization_class_bounds()}
-      {#if method !== 'manual'}
-        <span class="label-hint">{m.discretization_click_to_edit()}</span>
-      {/if}
-    </p>
-    <div class="breaks-list">
-      {#each breaks as breakItem, index (index)}
-        <div class="break-row" class:editing={editingBreakIndex === index}>
-          <div class="break-color" style="--color: {breakItem.color}"></div>
+  <div class="section description-section">
+    <p class="method-description">{getMethodDescription(method)}</p>
+    <a
+      class="learn-more-link"
+      href="https://observablehq.com/@d3/classification-methods"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      {m.discretization_learn_more()}
+      <Launch size={16} />
+    </a>
+  </div>
 
-          {#if editingBreakIndex === index || method === 'manual'}
-            <div class="break-inputs">
-              <TextInput
-                id="break-min-{index}"
-                size="sm"
-                hideLabel
-                labelText={m.filters_value_min()}
-                value={String(breakItem.min)}
-                on:input={(e) => {
-                  const target = e.target as HTMLInputElement;
-                  updateBreakValue(index, 'min', parseFloat(target.value) || 0);
-                }}
-                on:blur={finishEditingBreak}
-              />
-              <span class="break-separator">—</span>
-              <TextInput
-                id="break-max-{index}"
-                size="sm"
-                hideLabel
-                labelText={m.filters_value_max()}
-                value={String(breakItem.max)}
-                on:input={(e) => {
-                  const target = e.target as HTMLInputElement;
-                  updateBreakValue(index, 'max', parseFloat(target.value) || 0);
-                }}
-                on:blur={finishEditingBreak}
-              />
-            </div>
-          {:else}
-            <Button
-              kind="ghost"
-              class="break-values"
-              on:click={() => startEditingBreak(index)}
-              aria-label={m.discretization_edit_bounds()}
-            >
-              <span>{breakItem.min}</span>
-              <span class="break-separator">—</span>
-              <span>{breakItem.max}</span>
-              <Edit size={16} class="edit-icon" />
-            </Button>
-          {/if}
+  {#if editingBreakIndex !== null || method === 'manual'}
+    <div class="section breaks-section">
+      <p class="label">
+        {m.discretization_class_bounds()}
+      </p>
+      <div class="breaks-list">
+        {#each breaks as breakItem, index (index)}
+          <div class="break-row" class:editing={editingBreakIndex === index}>
+            <div class="break-color" style="--color: {breakItem.color}"></div>
 
-          <span class="break-count">{breakItem.count}</span>
-        </div>
-      {/each}
-    </div>
+            {#if editingBreakIndex === index || method === 'manual'}
+              <div class="break-inputs">
+                <TextInput
+                  id="break-min-{index}"
+                  size="sm"
+                  hideLabel
+                  labelText={m.filters_value_min()}
+                  value={String(breakItem.min)}
+                  on:input={(e) => {
+                    const target = e.target as HTMLInputElement;
+                    updateBreakValue(
+                      index,
+                      'min',
+                      parseFloat(target.value) || 0
+                    );
+                  }}
+                  on:blur={finishEditingBreak}
+                />
+                <span class="break-separator">—</span>
+                <TextInput
+                  id="break-max-{index}"
+                  size="sm"
+                  hideLabel
+                  labelText={m.filters_value_max()}
+                  value={String(breakItem.max)}
+                  on:input={(e) => {
+                    const target = e.target as HTMLInputElement;
+                    updateBreakValue(
+                      index,
+                      'max',
+                      parseFloat(target.value) || 0
+                    );
+                  }}
+                  on:blur={finishEditingBreak}
+                />
+              </div>
+            {:else}
+              <Button
+                kind="ghost"
+                class="break-values"
+                on:click={() => startEditingBreak(index)}
+                aria-label={m.discretization_edit_bounds()}
+              >
+                <span>{breakItem.min}</span>
+                <span class="break-separator">—</span>
+                <span>{breakItem.max}</span>
+                <Edit size={16} class="edit-icon" />
+              </Button>
+            {/if}
 
-    {#if validationErrors.length > 0}
-      <div class="validation-errors">
-        {#each validationErrors as error (error)}
-          <div class="validation-error">
-            <Information size={16} />
-            <span>{error}</span>
+            <span class="break-count">{breakItem.count}</span>
           </div>
         {/each}
       </div>
-    {/if}
-  </div>
+
+      {#if validationErrors.length > 0}
+        <div class="validation-errors">
+          {#each validationErrors as error (error)}
+            <div class="validation-error">
+              <Information size={16} />
+              <span>{error}</span>
+            </div>
+          {/each}
+        </div>
+      {/if}
+    </div>
+  {/if}
 </div>
 
 <style lang="scss">
   .discretization-panel {
-    padding: var(--cds-spacing-03);
+    padding: var(--cds-spacing-05);
   }
 
   .section {
@@ -406,107 +427,137 @@
     gap: var(--cds-spacing-02);
   }
 
-  .label-hint {
-    font-weight: 400;
-    text-transform: none;
-    font-size: 0.75rem;
-    color: var(--cds-text-helper);
+  .breakpoint-section {
+    border-bottom: 1px solid var(--cds-border-subtle);
+    padding-bottom: var(--cds-spacing-05);
   }
 
-  .info-section {
-    padding: var(--cds-spacing-03) 0;
-  }
-
-  .method-info {
+  .breakpoint-row {
     display: flex;
-    align-items: flex-start;
-    gap: var(--cds-spacing-03);
-    padding: var(--cds-spacing-03);
-    background-color: var(--cds-layer);
-    border-left: 3px solid var(--cds-support-info);
-    border-radius: 0 4px 4px 0;
+    gap: var(--cds-spacing-05);
+  }
+
+  .breakpoint-input-col {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-02);
+    flex: 0 0 40%;
+  }
+
+  .breakpoint-slider-col {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-02);
+    flex: 1;
+    min-width: 0;
+  }
+
+  .palette-strip {
+    display: flex;
+    gap: 2px;
+  }
+
+  .palette-swatch {
+    flex: 1;
+    height: 20px;
+    border-radius: 2px;
+  }
+
+  .histogram-section {
+    padding-top: var(--cds-spacing-03);
+  }
+
+  .histogram-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .histogram-row {
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-02);
+    min-height: 28px;
+    border-bottom: 1px solid var(--cds-border-subtle-00, rgba(0, 0, 0, 0.05));
+  }
+
+  .histogram-row-max {
+    border-bottom: none;
+  }
+
+  .histogram-label {
+    width: 28px;
+    font-size: 0.75rem;
+    color: var(--cds-text-02);
+    flex-shrink: 0;
+  }
+
+  .histogram-value {
+    width: 48px;
+    font-size: 0.875rem;
+    color: var(--cds-text-primary);
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  :global(.histogram-arrow-btn) {
+    min-height: 0 !important;
+    padding: 0 !important;
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    color: var(--cds-text-02);
+  }
+
+  .histogram-arrow-placeholder {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+  }
+
+  .histogram-bar-wrapper {
+    flex: 1;
+    min-width: 0;
+    height: 24px;
+    display: flex;
+    align-items: center;
+  }
+
+  .histogram-bar {
+    height: 100%;
+    min-width: 4px;
+    border-radius: 2px;
+    transition: width 0.3s ease;
+  }
+
+  .description-section {
+    padding-top: var(--cds-spacing-03);
   }
 
   .method-description {
     font-size: 0.875rem;
+    font-style: italic;
     color: var(--cds-text-secondary);
-    line-height: 1.4;
+    line-height: 1.5;
+    margin: 0 0 var(--cds-spacing-04);
   }
 
-  .divergent-section {
-    padding: var(--cds-spacing-03) 0;
-    border-top: 1px solid var(--cds-border-subtle);
-    border-bottom: 1px solid var(--cds-border-subtle);
-  }
-
-  .divergent-toggle-row {
-    display: flex;
+  .learn-more-link {
+    display: inline-flex;
     align-items: center;
-    justify-content: space-between;
-    gap: var(--cds-spacing-03);
-  }
+    gap: var(--cds-spacing-02);
+    font-size: 0.875rem;
+    color: var(--cds-link-primary);
+    text-decoration: none;
 
-  .breakpoint-input {
-    margin-top: var(--cds-spacing-04);
-  }
-
-  .histogram-section {
-    padding-top: var(--cds-spacing-04);
-  }
-
-  .histogram-container {
-    background-color: var(--cds-layer);
-    border: 1px solid var(--cds-border-subtle);
-    border-radius: 4px;
-    padding: var(--cds-spacing-04);
-  }
-
-  .histogram {
-    display: flex;
-    align-items: flex-end;
-    height: 100px;
-    gap: 2px;
-    margin-bottom: var(--cds-spacing-02);
-  }
-
-  .histogram-bar-container {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    height: 100%;
-    justify-content: flex-end;
-  }
-
-  .histogram-bar {
-    width: 100%;
-    height: var(--height);
-    background-color: var(--color);
-    border-radius: 2px 2px 0 0;
-    min-height: 4px;
-    transition: height 0.3s ease;
-  }
-
-  .bar-count {
-    font-size: 0.625rem;
-    color: var(--cds-text-02);
-    margin-top: 2px;
-  }
-
-  .histogram-axis {
-    display: flex;
-    justify-content: space-between;
-    border-top: 1px solid var(--cds-border-subtle);
-    padding-top: var(--cds-spacing-02);
-  }
-
-  .axis-label {
-    font-size: 0.625rem;
-    color: var(--cds-text-02);
+    &:hover {
+      text-decoration: underline;
+    }
   }
 
   .breaks-section {
     padding-top: var(--cds-spacing-04);
+    border-top: 1px solid var(--cds-border-subtle);
   }
 
   .breaks-list {

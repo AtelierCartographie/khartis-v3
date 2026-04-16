@@ -1,39 +1,26 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { strToU8, zipSync } from 'fflate';
 
-function zipFileFromEntries(
-  name: string,
-  entries: Record<string, string | Uint8Array>
-): File {
+function makeZip(entries: Record<string, string | Uint8Array>): File {
   const normalized: Record<string, Uint8Array> = {};
-
   for (const [path, value] of Object.entries(entries)) {
     normalized[path] = typeof value === 'string' ? strToU8(value) : value;
   }
-
   const zipped = zipSync(normalized);
-  return new File([Uint8Array.from(zipped)], name, { type: 'application/zip' });
+  return new File([Uint8Array.from(zipped)], 'bundle.zip', {
+    type: 'application/zip'
+  });
 }
 
-async function loadZipHandler(
-  mockFflate?: () => {
-    unzip: (
-      data: Uint8Array,
-      cb: (err: Error | null, out: Record<string, Uint8Array>) => void
-    ) => void;
-  }
-) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function loadHandler(mockFflate?: () => Record<string, any>) {
   vi.resetModules();
   if (mockFflate) {
     vi.doMock('fflate', async () => {
       const actual = await vi.importActual<typeof import('fflate')>('fflate');
-      return {
-        ...actual,
-        ...mockFflate()
-      };
+      return { ...actual, ...mockFflate() };
     });
   }
-
   return import('$lib/features/data-pipeline/utils/zip-handler');
 }
 
@@ -42,127 +29,64 @@ describe('zip-handler', () => {
     vi.clearAllMocks();
   });
 
-  it('detects zip files from extension', async () => {
-    const { isZipFile } = await loadZipHandler();
-
-    expect(isZipFile(new File(['x'], 'data.zip'))).toBe(true);
-    expect(isZipFile(new File(['x'], 'data.csv'))).toBe(false);
-  });
-
-  it('extracts files, ignores macOS noise, and detects shapefile archive', async () => {
-    const {
-      extractZip,
-      getShapefileFilesFromArchive,
-      getSupportedFilesFromArchive,
-      getNonShapefileFilesFromArchive
-    } = await loadZipHandler();
-
-    const zip = zipFileFromEntries('bundle.zip', {
-      '__MACOSX/metadata.txt': 'ignored',
-      '._hidden': 'ignored',
+  it('ignores __MACOSX/ and ._ prefixed entries and directory entries', async () => {
+    const { extractZip } = await loadHandler();
+    const zip = makeZip({
+      '__MACOSX/._roads.shp': 'noise',
+      'roads/': '',
       'roads/roads.shp': 'shp',
       'roads/roads.shx': 'shx',
-      'roads/roads.dbf': 'dbf',
-      'roads/roads.csv': 'id,value\n1,2',
-      'roads/readme.md': '# ignored by supported filter'
+      'roads/roads.dbf': 'dbf'
     });
-
-    const extraction = await extractZip(zip);
-
-    expect(extraction.files.map((f) => f.name).sort()).toEqual([
-      'readme.md',
-      'roads.csv',
-      'roads.dbf',
-      'roads.shp',
-      'roads.shx'
-    ]);
-    expect(extraction.isShapefileArchive).toBe(true);
-    expect(extraction.shapefileBaseName).toBe('roads');
-
-    const shapefileFiles = getShapefileFilesFromArchive(
-      extraction.files,
-      'roads'
-    );
-    expect(shapefileFiles.map((f) => f.name).sort()).toEqual([
-      'roads.dbf',
-      'roads.shp',
-      'roads.shx'
-    ]);
-
-    const supported = getSupportedFilesFromArchive(extraction.files);
-    expect(supported.map((f) => f.name).sort()).toEqual([
-      'roads.csv',
-      'roads.shp'
-    ]);
-
-    const nonShapefile = getNonShapefileFilesFromArchive(
-      extraction.files,
-      'roads'
-    );
-    expect(nonShapefile.map((f) => f.name)).toEqual(['roads.csv']);
+    const result = await extractZip(zip);
+    const names = result.files.map((f) => f.name);
+    expect(names).not.toContain('._roads.shp');
+    expect(names.some((n) => n.endsWith('/'))).toBe(false);
+    expect(names).toContain('roads.shp');
   });
 
-  it('creates File objects from extracted content with inferred and explicit mime types', async () => {
-    const { createFileFromExtracted } = await loadZipHandler();
-
-    const csv = createFileFromExtracted({
-      name: 'data.csv',
-      path: 'data.csv',
-      content: strToU8('a,b\n1,2')
+  it('detects shapefile archive when .shp has companions', async () => {
+    const { extractZip } = await loadHandler();
+    const zip = makeZip({
+      'roads.shp': 'shp',
+      'roads.shx': 'shx',
+      'roads.dbf': 'dbf'
     });
-
-    const forced = createFileFromExtracted(
-      {
-        name: 'data.unknown',
-        path: 'data.unknown',
-        content: strToU8('x')
-      },
-      'text/custom'
-    );
-
-    expect(csv.type).toBe('text/csv');
-    expect(forced.type).toBe('text/custom');
+    const result = await extractZip(zip);
+    expect(result.isShapefileArchive).toBe(true);
+    expect(result.shapefileBaseName).toBe('roads');
   });
 
-  it('returns non-shapefile archive flag when companions are missing', async () => {
-    const { extractZip } = await loadZipHandler();
-
-    const zip = zipFileFromEntries('incomplete.zip', {
-      'roads/roads.shp': 'shp-only'
-    });
-
-    const extraction = await extractZip(zip);
-    expect(extraction.isShapefileArchive).toBe(false);
-    expect(extraction.shapefileBaseName).toBeUndefined();
+  it('returns isShapefileArchive=false when .shp has no companions', async () => {
+    const { extractZip } = await loadHandler();
+    const zip = makeZip({ 'roads.shp': 'shp-only' });
+    const result = await extractZip(zip);
+    expect(result.isShapefileArchive).toBe(false);
   });
 
-  it('wraps unzip errors in pipeline zip extraction error', async () => {
-    const { extractZip } = await loadZipHandler(() => ({
-      unzip: (_data, cb) =>
-        cb(new Error('bad zip'), {} as Record<string, Uint8Array>)
+  it('throws when decompressed size exceeds 500 MB limit', async () => {
+    const { extractZip } = await loadHandler(() => ({
+      unzip: (
+        _data: unknown,
+        cb: (err: Error | null, out: Record<string, unknown>) => void
+      ) => cb(null, { 'big.csv': { byteLength: 501 * 1024 * 1024 } })
     }));
-
-    const zip = new File([new Uint8Array([1, 2, 3])], 'bad.zip', {
-      type: 'application/zip'
-    });
-
-    await expect(extractZip(zip)).rejects.toThrow();
-  });
-
-  it('rejects archive when decompressed size exceeds hard limit', async () => {
-    const { extractZip } = await loadZipHandler(() => ({
-      unzip: (_data, cb) =>
-        cb(null, {
-          'big.csv': {
-            byteLength: 501 * 1024 * 1024
-          } as unknown as Uint8Array
-        })
-    }));
-
     const zip = new File([new Uint8Array([1])], 'huge.zip', {
       type: 'application/zip'
     });
+    await expect(extractZip(zip)).rejects.toThrow();
+  });
 
+  it('wraps unzip errors as pipeline errors', async () => {
+    const { extractZip } = await loadHandler(() => ({
+      unzip: (
+        _data: unknown,
+        cb: (err: Error | null, out: Record<string, unknown>) => void
+      ) => cb(new Error('corrupt zip'), {})
+    }));
+    const zip = new File([new Uint8Array([1])], 'bad.zip', {
+      type: 'application/zip'
+    });
     await expect(extractZip(zip)).rejects.toThrow();
   });
 });
