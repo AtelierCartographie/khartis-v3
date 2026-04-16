@@ -1,9 +1,9 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
-  import { Button } from 'carbon-components-svelte';
+  import { Button, Link } from 'carbon-components-svelte';
   import { Launch, SettingsAdjust } from 'carbon-icons-svelte';
   import Switch from '$lib/features/commons/components/switch.svelte';
-  import { facetsStore, SCALE_MODE } from './facets.store.svelte';
+  import { facetsStore, MAX_FACETS, SCALE_MODE } from './facets.store.svelte';
   import {
     visualizationStore,
     PrimitiveFilterType,
@@ -30,7 +30,7 @@
   const CONFIGURE_SECTION_ID = 'configure-visualization';
   const FACETS_COLUMNS_MIN = 1;
   const FACETS_COLUMNS_MAX = 6;
-  const FACETS_PERFORMANCE_THRESHOLD = 9;
+  const FACETS_PERFORMANCE_THRESHOLD = Math.min(9, MAX_FACETS);
 
   const enabled = $derived(facetsStore.enabled);
   const layout = $derived(facetsStore.layout);
@@ -219,10 +219,6 @@
     }, 100);
   }
 
-  function handleLearnMore() {
-    window.open(FACETS_HELP_URL, '_blank');
-  }
-
   function handleExit() {
     facetsStore.disable();
     selectedMapIndex = 0;
@@ -239,7 +235,7 @@
 
 <div id="khartis-facets-tool">
   {#if enabled && facetVisualizations.length > 0}
-    <div class="facets-content">
+    <div class="facets-content facets-content--active">
       <section class="section">
         <header class="section-heading">
           <span class="section-title">{m.facets_display_section()}</span>
@@ -249,7 +245,7 @@
         <SliderWithInput
           label={m.facets_columns_label()}
           value={columnsValue}
-          min={0}
+          min={FACETS_COLUMNS_MIN}
           max={FACETS_COLUMNS_MAX}
           step={1}
           onchange={handleColumnsChange}
@@ -352,10 +348,9 @@
         </section>
       {/each}
 
-      <button class="link-btn" type="button" onclick={handleLearnMore}>
-        <span>{m.facets_learn_more()}</span>
-        <Launch size={16} />
-      </button>
+      <Link href={FACETS_HELP_URL} target="_blank" size="sm" icon={Launch}>
+        {m.facets_learn_more()}
+      </Link>
 
       <Button kind="danger-tertiary" style="width: 100%;" onclick={handleExit}>
         {m.facets_exit_mode()}
@@ -366,10 +361,9 @@
       <p class="helper-text">{m.facets_collection_description()}</p>
       <p class="helper-text">{m.facets_create_instruction()}</p>
 
-      <button class="link-btn" type="button" onclick={handleLearnMore}>
-        <span>{m.facets_learn_more()}</span>
-        <Launch size={16} />
-      </button>
+      <Link href={FACETS_HELP_URL} target="_blank" size="sm" icon={Launch}>
+        {m.facets_learn_more()}
+      </Link>
 
       <Button
         kind="secondary"
@@ -388,6 +382,10 @@
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-05, 16px);
+  }
+
+  .facets-content--active {
+    gap: var(--cds-spacing-07, 32px);
   }
 
   .section {
@@ -455,24 +453,6 @@
   .toggle-row :global(.kh-switch-label) {
     font-size: 0.75rem;
     color: var(--cds-text-secondary, #525252);
-  }
-
-  .link-btn {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    background: none;
-    border: none;
-    padding: 0;
-    cursor: pointer;
-    font-size: 0.75rem;
-    color: var(--cds-link-primary, #726e6e);
-    line-height: 1rem;
-    letter-spacing: 0.32px;
-  }
-
-  .link-btn:hover {
-    text-decoration: underline;
   }
 
   .maps-grid {

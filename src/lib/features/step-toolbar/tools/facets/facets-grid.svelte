@@ -17,7 +17,8 @@
     layout,
     syncPanZoom = false,
     containerWidth = 1200,
-    containerHeight: _containerHeight = 800,
+    containerHeight = 800,
+    pageAspectRatio = 0.75,
     onReady
   }: {
     visualizations: VisualizationConfig[];
@@ -28,6 +29,7 @@
     syncPanZoom?: boolean;
     containerWidth?: number;
     containerHeight?: number;
+    pageAspectRatio?: number;
     onReady?: () => void;
   } = $props();
 
@@ -37,7 +39,16 @@
     )
   );
 
-  const facetHeight = $derived(Math.floor(facetWidth * 0.75));
+  const rows = $derived(Math.ceil(visualizations.length / layout.columns));
+  const availableHeightPerRow = $derived(
+    rows > 0
+      ? Math.floor((containerHeight - (rows - 1) * layout.gap) / rows) - 28
+      : 200
+  );
+
+  const facetHeight = $derived(
+    Math.min(Math.floor(facetWidth * pageAspectRatio), availableHeightPerRow)
+  );
 
   const gridColumns = $derived(`repeat(${layout.columns}, 1fr)`);
   const gap = $derived(`${layout.gap}px`);

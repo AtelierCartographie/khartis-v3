@@ -9,6 +9,9 @@ export const SCALE_MODE = {
   INDEPENDENT: 'independent'
 } as const;
 
+export const MAX_FACETS_COLUMNS = 6;
+export const MAX_FACETS = 16;
+
 export type ScaleMode = (typeof SCALE_MODE)[keyof typeof SCALE_MODE];
 
 export interface FacetsLayout {
@@ -48,28 +51,83 @@ function createFacetsStore() {
   }
 
   function restoreFromSerialized(data: unknown): void {
-    const restored = data as Partial<FacetsState> | undefined;
     const nextState = structuredClone(DEFAULT_STATE);
 
-    if (restored) {
-      Object.assign(nextState, restored);
-    }
+    if (data != null && typeof data === 'object') {
+      const restored = data as Record<string, unknown>;
 
-    nextState.variables = [...(restored?.variables ?? DEFAULT_STATE.variables)];
-    nextState.generatedVisualizationIds = [
-      ...(restored?.generatedVisualizationIds ??
-        DEFAULT_STATE.generatedVisualizationIds)
-    ];
-    nextState.layout = {
-      ...DEFAULT_STATE.layout,
-      ...(restored?.layout ?? {})
-    };
+      nextState.enabled =
+        typeof restored.enabled === 'boolean'
+          ? restored.enabled
+          : DEFAULT_STATE.enabled;
+
+      nextState.baseVisualizationId =
+        typeof restored.baseVisualizationId === 'string'
+          ? restored.baseVisualizationId
+          : DEFAULT_STATE.baseVisualizationId;
+
+      nextState.variables = Array.isArray(restored.variables)
+        ? (restored.variables as unknown[]).filter(
+            (v): v is string => typeof v === 'string'
+          )
+        : [...DEFAULT_STATE.variables];
+
+      nextState.generatedVisualizationIds = Array.isArray(
+        restored.generatedVisualizationIds
+      )
+        ? (restored.generatedVisualizationIds as unknown[]).filter(
+            (v): v is string => typeof v === 'string'
+          )
+        : [...DEFAULT_STATE.generatedVisualizationIds];
+
+      nextState.scaleMode =
+        restored.scaleMode === SCALE_MODE.SHARED ||
+        restored.scaleMode === SCALE_MODE.INDEPENDENT
+          ? (restored.scaleMode as ScaleMode)
+          : DEFAULT_STATE.scaleMode;
+
+      nextState.syncPanZoom =
+        typeof restored.syncPanZoom === 'boolean'
+          ? restored.syncPanZoom
+          : DEFAULT_STATE.syncPanZoom;
+
+      const restoredLayout =
+        restored.layout != null && typeof restored.layout === 'object'
+          ? (restored.layout as Record<string, unknown>)
+          : null;
+
+      nextState.layout = {
+        columns: Math.max(
+          1,
+          Math.min(
+            MAX_FACETS_COLUMNS,
+            typeof restoredLayout?.columns === 'number'
+              ? restoredLayout.columns
+              : DEFAULT_STATE.layout.columns
+          )
+        ),
+        gap:
+          typeof restoredLayout?.gap === 'number' && restoredLayout.gap >= 0
+            ? restoredLayout.gap
+            : DEFAULT_STATE.layout.gap
+      };
+    }
 
     Object.assign(state, nextState);
   }
 
   function getFacetVisualizations(): VisualizationConfig[] {
     if (!state.enabled) {
+      return [];
+    }
+
+    if (
+      state.baseVisualizationId &&
+      !visualizationStore.visualizations.some(
+        (v) => v.id === state.baseVisualizationId
+      )
+    ) {
+      disable();
       return [];
     }
 
@@ -82,6 +140,8 @@ function createFacetsStore() {
     if (variables.length < 2) {
       return;
     }
+
+    const capped = variables.slice(0, MAX_FACETS);
 
     const baseViz = visualizationStore.visualizations.find(
       (v) => v.id === baseVizId
@@ -97,7 +157,7 @@ function createFacetsStore() {
     try {
       const facetConfigs = await generateFacetVisualizations(
         baseViz,
-        variables,
+        capped,
         state.scaleMode
       );
 
@@ -105,7 +165,7 @@ function createFacetsStore() {
 
       state.enabled = true;
       state.baseVisualizationId = baseVizId;
-      state.variables = [...variables];
+      state.variables = [...capped];
       state.generatedVisualizationIds = facetConfigs.map((c) => c.id);
       notifyPersistence();
 
@@ -163,18 +223,20 @@ function createFacetsStore() {
       return;
     }
 
+    const capped = variables.slice(0, MAX_FACETS);
+
     isRegenerating = true;
     try {
       const newConfigs = await generateFacetVisualizations(
         baseViz,
-        variables,
+        capped,
         state.scaleMode
       );
       visualizationStore.removeBulkVisualizations(
         state.generatedVisualizationIds
       );
       visualizationStore.createBulkVisualizations(newConfigs);
-      state.variables = [...variables];
+      state.variables = [...capped];
       state.generatedVisualizationIds = newConfigs.map((config) => config.id);
       notifyPersistence();
       logger.debug(

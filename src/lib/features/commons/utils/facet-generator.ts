@@ -1,5 +1,6 @@
 import type { VisualizationConfig } from '../store/visualization.store.svelte';
 import { datasetsStore } from '../store/datasets.store.svelte';
+import { deepClone } from './clone.utils';
 import { LogCategory, logger } from './logger';
 import {
   SCALE_MODE,
@@ -90,15 +91,17 @@ export async function generateFacetVisualizations(
   for (const variable of variables) {
     const facetId = crypto.randomUUID();
 
+    const cloned = deepClone(baseViz);
+
     const facetConfig: VisualizationConfig = {
-      ...baseViz,
+      ...cloned,
       id: facetId,
       name: variable,
       facet: {
         baseVisualizationId: baseViz.id
       },
       mapping: {
-        ...baseViz.mapping,
+        ...cloned.mapping,
         valueColumn: variable
       },
       classification: buildFacetClassification(baseViz, variable, scaleMode)
