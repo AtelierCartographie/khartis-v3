@@ -7,7 +7,6 @@
  * Migrations run in loadProject() before deserialize(), and in importProject() after parsing.
  */
 
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { PROJECT_CONST } from '../constants';
 
 export interface SchemaMigration {
@@ -84,17 +83,13 @@ export function migrateIfNeeded(
       try {
         migrated = migration.migrate(migrated);
         currentVersion = migration.to;
-        logger.info(
-          `Project schema migrated ${migration.from} → ${migration.to}`,
-          LogCategory.PERSISTENCE
-        );
       } catch (error) {
-        logger.error(
+        throw new Error(
           `Schema migration ${migration.from} → ${migration.to} failed`,
-          LogCategory.PERSISTENCE,
-          error
+          {
+            cause: error
+          }
         );
-        break;
       }
     }
   }

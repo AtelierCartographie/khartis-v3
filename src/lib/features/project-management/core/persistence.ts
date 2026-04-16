@@ -140,6 +140,8 @@ async function ensureDb(): Promise<IDBDatabase> {
 
 export async function saveProject(project: KhartisProject): Promise<void> {
   const database = await ensureDb();
+  project.manifest.version = PROJECT_CONST.APP_VERSION;
+
   if (project.data?.sourceFiles?.length) {
     project.data.sourceFiles = await Promise.all(
       project.data.sourceFiles.map((file) => ensureUploadedFileAssets(file))
