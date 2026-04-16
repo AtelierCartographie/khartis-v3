@@ -1,5 +1,6 @@
 import * as m from '$lib/paraglide/messages';
 import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
+import { PRINT_STANDARD_TOKENS } from '$lib/features/commons/utils/layout-sizing.utils';
 import {
   toCanvas as htmlToImageCanvas,
   toSvg as htmlToImageSvg
@@ -77,7 +78,7 @@ function mutateDomForExport(pageContainer: HTMLElement): () => void {
   const sig = document.createElement('div');
   sig.style.cssText =
     'position:absolute;bottom:10px;left:10px;font-family:Arial,sans-serif;' +
-    'font-size:12px;color:rgba(102,102,102,0.7);pointer-events:none;z-index:9999;';
+    `font-size:${PRINT_STANDARD_TOKENS.annotations.captionFontSize}px;color:rgba(102,102,102,0.7);pointer-events:none;z-index:9999;`;
   sig.textContent = m.map_export_signature();
   pageContainer.appendChild(sig);
 

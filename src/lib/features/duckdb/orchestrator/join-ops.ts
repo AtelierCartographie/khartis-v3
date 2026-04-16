@@ -43,11 +43,6 @@ function isGeometryColumnName(columnName: string): boolean {
   return /^(geom|geometry|wkb_geometry|the_geom)$/i.test(columnName);
 }
 
-// ---------------------------------------------------------------------------
-// Similarity cache — run get_similarity once against ALL basemap_attributes,
-// then derive per-basemap JoinQuality from the cached raw matches.
-// ---------------------------------------------------------------------------
-
 const SIMILARITY_CACHE_PREFIX = '__similarity_cache__';
 
 interface SimilarityCacheEntry {

@@ -4,10 +4,6 @@ import type { OSMTileConfig } from '../services/osm-tile.service';
 import { getOSMTileConfig, isOSMBasemap } from '../services/osm-tile.service';
 import type { BasemapMetadata } from '../types/basemap.types';
 
-/**
- * Store for managing OSM basemap state
- * Tracks when an OSM raster basemap is active
- */
 function createOSMBasemapStore() {
   const state = $state<{
     activeOSMBasemap: BasemapMetadata | null;

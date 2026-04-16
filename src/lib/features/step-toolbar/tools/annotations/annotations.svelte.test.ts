@@ -7,9 +7,11 @@ import {
   annotationsActions,
   getAnnotationsState
 } from './annotations.store.svelte';
+import { formatActions } from '../format/format.store.svelte';
 
 describe('annotations tool', () => {
   beforeEach(() => {
+    formatActions.reset();
     annotationsActions.reset();
   });
 
@@ -49,6 +51,6 @@ describe('annotations tool', () => {
     const selects = screen.getAllByRole('combobox') as HTMLSelectElement[];
 
     expect(selects[0]?.value).toBe(ANNOTATION_ROLE.TITLE);
-    expect(selects.at(-1)?.value).toBe('24');
+    expect(selects.at(-1)?.value).toBe('14');
   });
 });

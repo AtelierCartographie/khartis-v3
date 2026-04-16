@@ -354,7 +354,10 @@ export function getPointSizeLegendScale(
 
   const minSize = Math.max(1, viz.symbols.minSize ?? 1);
   const maxSize = Math.max(minSize, viz.symbols.maxSize ?? minSize);
-  const fillOpacity = Math.max(0.2, normalizeOpacity(viz.style.fillOpacity, 1));
+  const fillOpacity = Math.max(
+    0.2,
+    normalizeOpacity(viz.symbols?.opacity ?? viz.style.fillOpacity, 1)
+  );
 
   if (
     viz.modes?.symbol === SymbolMode.PROPORTIONAL &&

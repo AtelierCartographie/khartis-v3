@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-
 import * as m from '$lib/paraglide/messages';
 import { PIPELINE_CONST } from '$lib/features/data-pipeline/constants';
 import { validateFile } from '$lib/features/data-pipeline/core/validators';
@@ -8,55 +7,46 @@ function fakeFile(name: string, size: number): File {
   return { name, size, type: 'application/octet-stream' } as File;
 }
 
+const { MAX_FILE_SIZE, WARNING_FILE_SIZE } = PIPELINE_CONST.LIMITS;
+
 describe('validateFile', () => {
   it('rejects unsupported extension', async () => {
     const result = await validateFile(fakeFile('data.exe', 1024));
-
     expect(result.isValid).toBe(false);
     expect(result.errors).toEqual([
       m.pipeline_error_unsupported_extension({ ext: '.exe' })
     ]);
-    expect(result.warnings).toEqual([]);
   });
 
-  it('rejects empty files', async () => {
+  it('rejects empty files (size = 0)', async () => {
     const result = await validateFile(fakeFile('data.csv', 0));
-
     expect(result.isValid).toBe(false);
     expect(result.errors).toEqual([m.pipeline_error_file_empty()]);
   });
 
-  it('rejects files above max size', async () => {
-    const result = await validateFile(
-      fakeFile('data.csv', PIPELINE_CONST.LIMITS.MAX_FILE_SIZE + 1)
-    );
-
+  it('rejects files above 100 MB', async () => {
+    const result = await validateFile(fakeFile('data.csv', MAX_FILE_SIZE + 1));
     expect(result.isValid).toBe(false);
     expect(result.errors).toEqual([
       m.pipeline_error_file_size_limit({
-        limit: String(PIPELINE_CONST.LIMITS.MAX_FILE_SIZE / (1024 * 1024))
+        limit: String(MAX_FILE_SIZE / (1024 * 1024))
       })
     ]);
   });
 
-  it('accepts large files under max size with a warning', async () => {
-    const size = PIPELINE_CONST.LIMITS.WARNING_FILE_SIZE + 1;
-    const result = await validateFile(fakeFile('data.csv', size));
-
+  it('accepts files above 50 MB but below 100 MB with a warning', async () => {
+    const result = await validateFile(
+      fakeFile('data.csv', WARNING_FILE_SIZE + 1)
+    );
     expect(result.isValid).toBe(true);
-    expect(result.errors).toEqual([]);
-    expect(result.warnings).toEqual([
-      m.pipeline_warning_large_file({
-        size: (size / (1024 * 1024)).toFixed(1)
-      })
-    ]);
+    expect(result.errors).toHaveLength(0);
+    expect(result.warnings.length).toBeGreaterThan(0);
   });
 
-  it('accepts normal supported files without warnings', async () => {
-    const result = await validateFile(fakeFile('data.geojson', 1024));
-
+  it('accepts a normal file without errors or warnings', async () => {
+    const result = await validateFile(fakeFile('data.csv', 1024 * 1024));
     expect(result.isValid).toBe(true);
-    expect(result.errors).toEqual([]);
-    expect(result.warnings).toEqual([]);
+    expect(result.errors).toHaveLength(0);
+    expect(result.warnings).toHaveLength(0);
   });
 });

@@ -128,7 +128,7 @@
 
   const rowHeight = TABLE_ROW_HEIGHT;
   const viewportHeightRatioNormal = 0.4;
-  const viewportHeightRatioExpanded = 0.85;
+  const viewportHeightRatioExpanded = 1.0;
   const viewportHeightRatio = $derived(
     isExpanded ? viewportHeightRatioExpanded : viewportHeightRatioNormal
   );
@@ -514,6 +514,7 @@
     rowId: number;
     columnName: string;
     sortColumn: string | null;
+    sortColumnType: string | null;
     sortOrder: 'ASC' | 'DESC' | null;
   }): Promise<void> {
     if (!tableContainer) return;
@@ -528,6 +529,7 @@
       normalizedRowId,
       {
         orderBy: options.sortColumn,
+        orderByType: options.sortColumnType,
         order: options.sortOrder
       }
     );
@@ -567,6 +569,12 @@
       const rowId = currentCell.rowId;
       const columnName = currentCell.columnName;
       const currentSortColumn = sort.sortColumn;
+      const currentSortColumnType =
+        currentSortColumn !== null
+          ? (tableData.columns.find(
+              (column) => column.name === currentSortColumn
+            )?.type ?? null)
+          : null;
       const currentSortOrder = sort.sortOrder;
       const currentTableName = tableName;
 
@@ -578,6 +586,7 @@
             rowId,
             columnName,
             sortColumn: currentSortColumn,
+            sortColumnType: currentSortColumnType,
             sortOrder: currentSortOrder
           }).catch((error) => {
             logger.error(

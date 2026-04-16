@@ -2,7 +2,7 @@
 
 > Principes fondamentaux et flux de donnees de Khartis v3.
 
-**Voir aussi** : [Gestion de l'etat](./GESTION_ETAT.md) | [Pipeline](./PIPELINE.md) | [DuckDB](./DUCKDB.md) | [Map](./MAP.md) | [Cartographie](./CARTOGRAPHIE.md) | [Tests](./TESTS.md)
+**Voir aussi** : [Gestion de l'etat](./GESTION_ETAT.md) | [Pipeline](./PIPELINE.md) | [DuckDB](./DUCKDB.md) | [Map](./MAP.md) | [Cartographie](./CARTOGRAPHIE.md)
 
 ---
 
@@ -137,4 +137,4 @@ Aucune surface d'attaque serveur : toutes les donnees restent dans le navigateur
 
 ---
 
-**Voir aussi :** [GESTION_ETAT.md](./GESTION_ETAT.md) — [PIPELINE.md](./PIPELINE.md) — [DUCKDB.md](./DUCKDB.md) — [MAP.md](./MAP.md) — [CARTOGRAPHIE.md](./CARTOGRAPHIE.md) — [TESTS.md](./TESTS.md) — [GUIDE_DEVELOPPEUR.md](./GUIDE_DEVELOPPEUR.md)
+**Voir aussi :** [GESTION_ETAT.md](./GESTION_ETAT.md) — [PIPELINE.md](./PIPELINE.md) — [DUCKDB.md](./DUCKDB.md) — [MAP.md](./MAP.md) — [CARTOGRAPHIE.md](./CARTOGRAPHIE.md) — [GUIDE_DEVELOPPEUR.md](./GUIDE_DEVELOPPEUR.md)

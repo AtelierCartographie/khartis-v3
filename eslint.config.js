@@ -71,7 +71,41 @@ export default ts.config(
     },
     rules: {
       'svelte/no-navigation-without-resolve': 'off',
-      'svelte/no-unnecessary-state-wrap': 'off'
+      'svelte/no-unnecessary-state-wrap': 'off',
+      'svelte/no-restricted-html-elements': [
+        'error',
+        {
+          elements: ['button', 'input', 'select'],
+          message:
+            'Native <button>/<input>/<select> elements are forbidden. Use Carbon Components Svelte (Button, TextInput, NumberInput, Select, ComboBox, Link, Slider) instead. Primitives in commons/components/ that wrap native elements have a targeted override.'
+        }
+      ]
+    }
+  },
+  {
+    files: [
+      'src/lib/features/commons/components/**/*.svelte',
+      'src/lib/features/main-toolbar/components/toolbar-tabs.svelte',
+      'src/lib/features/main-toolbar/mobile-toolbar.svelte',
+      'src/lib/features/main-toolbar/data-tab/components/basemap-import-dropzone.svelte',
+      'src/lib/features/main-toolbar/data-tab/components/expanded-table-modal.svelte',
+      'src/lib/features/main-toolbar/data-tab/components/join-accordion.svelte',
+      'src/lib/features/main-toolbar/data-tab/components/section-header-with-icon.svelte',
+      'src/lib/features/main-toolbar/data-tab/basemap-join-components/basemap-import-tab.svelte',
+      'src/lib/features/main-toolbar/data-tab/basemap-join-components/join-assisted-section.svelte',
+      'src/lib/features/main-toolbar/visualization-tab/basemap-style-selector.svelte',
+      'src/lib/features/main-toolbar/visualization-tab/choose-visualization.svelte',
+      'src/lib/features/main-toolbar/visualization-tab/components/palette-popover/**/*.svelte',
+      'src/lib/features/main-toolbar/visualization-tab/components/shared/**/*.svelte',
+      'src/lib/features/map/components/map-tooltip-overlay.svelte',
+      'src/lib/features/map/components/zoom-toolbar.svelte',
+      'src/lib/features/step-toolbar/step-toolbar.svelte',
+      'src/lib/features/step-toolbar/tools/facets/facets.svelte',
+      'src/lib/features/step-toolbar/tools/projections/projection-main.svelte',
+      'src/lib/features/main-toolbar/visualization-tab/components/symbols/facets-variable-picker.svelte'
+    ],
+    rules: {
+      'svelte/no-restricted-html-elements': 'off'
     }
   },
   {

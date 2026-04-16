@@ -86,7 +86,7 @@
     background: transparent;
     color: var(--cds-text-secondary);
     fill: currentColor;
-    border: 1px solid #cac5c4;
+    border: 1px solid var(--cds-border-subtle-01);
     border-right: none;
     font-family: 'IBM Plex Sans', sans-serif;
     font-size: 0.875rem;
@@ -100,7 +100,7 @@
   }
 
   .toggle-tab:last-child {
-    border-right: 1px solid #cac5c4;
+    border-right: 1px solid var(--cds-border-subtle-01);
     border-radius: 0 4px 4px 0;
   }
 
@@ -121,8 +121,8 @@
 
   .toggle-tab.active {
     color: var(--cds-text-primary);
-    background-color: #cac5c4;
-    border-color: #cac5c4;
+    background-color: var(--cds-border-subtle-01);
+    border-color: var(--cds-border-subtle-01);
     z-index: var(--z-base);
   }
 

@@ -33,7 +33,7 @@ export const shapefileProcessor: FileProcessor = {
       tableName: ctx.tableName
     });
 
-    const shpFile = getFileForDuckDB(file, MIME.SHAPEFILE);
+    const shpFile = getFileForDuckDB(file, MIME.SHAPEFILE_SHP);
 
     const companionFiles =
       file.relatedFileObjects?.filter(

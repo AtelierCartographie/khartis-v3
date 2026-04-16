@@ -12,8 +12,6 @@ export interface ProjectManifest {
 
 export interface ProjectData {
   sourceFiles: UploadedFile[];
-  processedData?: Record<string, unknown>;
-  joinedData?: Record<string, unknown>;
   basemap?: {
     type: string;
     id: string;

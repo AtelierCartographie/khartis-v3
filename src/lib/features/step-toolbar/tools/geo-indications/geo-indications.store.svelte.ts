@@ -9,7 +9,10 @@ import {
   LEGEND_FONT_SIZES
 } from '$lib/features/step-toolbar/tools/legend/legend.constants';
 import { hexToHsl } from '$lib/features/commons/utils/color-utils';
-import { resolveLayoutSizingTokens } from '$lib/features/commons/utils/layout-sizing.utils';
+import {
+  PRINT_STANDARD_TOKENS,
+  resolveLayoutSizingTokens
+} from '$lib/features/commons/utils/layout-sizing.utils';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
 import { getFormatState } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
 import type {
@@ -17,6 +20,10 @@ import type {
   DragPosition,
   GeoIndicationsState
 } from './geo-indications.types';
+
+const DEFAULT_INSET_WINDOW_COLOR = hexToHsl('#ffffff');
+const DEFAULT_INSET_CONTINENT_COLOR = hexToHsl('#d9d9d9');
+const DEFAULT_INSET_SEA_COLOR = hexToHsl('#d0e2ff');
 
 const DEFAULT_STATE: GeoIndicationsState = {
   visible: true,
@@ -27,7 +34,7 @@ const DEFAULT_STATE: GeoIndicationsState = {
     units: DistanceUnit.KILOMETERS,
     color: { hue: 0, saturation: 0, lightness: 0 },
     fontFamily: AVAILABLE_FONTS[0],
-    fontSize: LEGEND_FONT_SIZES[2],
+    fontSize: PRINT_STANDARD_TOKENS.geoIndications.scaleFontSize,
     expanded: true,
     dragPosition: null
   },
@@ -42,10 +49,10 @@ const DEFAULT_STATE: GeoIndicationsState = {
     enabled: false,
     type: InsetMapType.GLOBE,
     size: 160,
-    windowColor: { hue: 0, saturation: 0, lightness: 100 },
-    continentColor: { hue: 120, saturation: 20, lightness: 80 },
-    seaColor: { hue: 210, saturation: 50, lightness: 85 },
-    useBasemapColors: false,
+    windowColor: DEFAULT_INSET_WINDOW_COLOR,
+    continentColor: DEFAULT_INSET_CONTINENT_COLOR,
+    seaColor: DEFAULT_INSET_SEA_COLOR,
+    useBasemapColors: true,
     zoom: 50,
     centerLongitude: 0,
     centerLatitude: 0,

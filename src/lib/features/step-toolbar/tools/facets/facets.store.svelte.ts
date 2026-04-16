@@ -140,6 +140,84 @@ function createFacetsStore() {
     notifyPersistence();
   }
 
+  async function updateVariables(
+    baseVizId: string,
+    variables: string[]
+  ): Promise<void> {
+    if (variables.length < 2) {
+      if (state.enabled) {
+        disable();
+      }
+      return;
+    }
+
+    if (!state.enabled || state.baseVisualizationId !== baseVizId) {
+      await enable(baseVizId, variables);
+      return;
+    }
+
+    const baseViz = visualizationStore.visualizations.find(
+      (v) => v.id === baseVizId
+    );
+    if (!baseViz) {
+      return;
+    }
+
+    isRegenerating = true;
+    try {
+      const newConfigs = await generateFacetVisualizations(
+        baseViz,
+        variables,
+        state.scaleMode
+      );
+      visualizationStore.removeBulkVisualizations(
+        state.generatedVisualizationIds
+      );
+      visualizationStore.createBulkVisualizations(newConfigs);
+      state.variables = [...variables];
+      state.generatedVisualizationIds = newConfigs.map((config) => config.id);
+      notifyPersistence();
+      logger.debug(
+        'Variables updated and facets regenerated',
+        LogCategory.STORE
+      );
+    } catch (error) {
+      logger.error(
+        'Failed to update facet variables',
+        LogCategory.STORE,
+        error
+      );
+    } finally {
+      isRegenerating = false;
+    }
+  }
+
+  function setVariableForSlot(
+    mapIndex: number,
+    slotKey: string,
+    variableName: string
+  ): boolean {
+    if (!state.enabled) {
+      return false;
+    }
+
+    const vizId = state.generatedVisualizationIds[mapIndex];
+    if (!vizId) {
+      return false;
+    }
+
+    const viz = visualizationStore.visualizations.find((v) => v.id === vizId);
+    if (!viz) {
+      return false;
+    }
+
+    visualizationStore.updateVisualization(vizId, {
+      mapping: { ...viz.mapping, [slotKey]: variableName }
+    });
+    notifyPersistence();
+    return true;
+  }
+
   async function reorderVariables(
     fromIndex: number,
     toIndex: number
@@ -272,6 +350,8 @@ function createFacetsStore() {
     enable,
     disable,
     setVariables,
+    updateVariables,
+    setVariableForSlot,
     reorderVariables,
     setColumns,
     setGap,

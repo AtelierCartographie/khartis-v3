@@ -1,22 +1,14 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
-  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
-  import {
-    Button,
-    MultiSelect,
-    Slider,
-    Toggle
-  } from 'carbon-components-svelte';
-  import {
-    ArrowDown,
-    ArrowUp,
-    Draggable,
-    Launch,
-    SettingsAdjust
-  } from 'carbon-icons-svelte';
-  import { dndzone } from 'svelte-dnd-action';
+  import { Button } from 'carbon-components-svelte';
+  import { Launch, SettingsAdjust } from 'carbon-icons-svelte';
+  import Switch from '$lib/features/commons/components/switch.svelte';
   import { facetsStore, SCALE_MODE } from './facets.store.svelte';
-  import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
+  import {
+    visualizationStore,
+    PrimitiveFilterType,
+    type VisualizationConfig
+  } from '$lib/features/commons/store/visualization.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import {
     globalActions,
@@ -24,8 +16,22 @@
   } from '$lib/features/commons/store/global.svelte';
   import { ToolbarStep } from '$lib/features/commons/types/global';
   import { COLUMN_TYPE_GEOMETRY } from '$lib/features/commons/constants/data.constants';
+  import {
+    FillMode,
+    SymbolMode,
+    ColorMode,
+    StrokeMode,
+    ThicknessMode
+  } from '$lib/features/main-toolbar/constants';
+  import SliderWithInput from '$lib/features/main-toolbar/visualization-tab/components/shared/slider-with-input.svelte';
 
-  const selectedViz = $derived(visualizationStore.selectedVisualization);
+  const FACETS_HELP_URL =
+    'https://cartographie.sciencespo.fr/khartis/help/facets';
+  const CONFIGURE_SECTION_ID = 'configure-visualization';
+  const FACETS_COLUMNS_MIN = 1;
+  const FACETS_COLUMNS_MAX = 6;
+  const FACETS_PERFORMANCE_THRESHOLD = 9;
+
   const enabled = $derived(facetsStore.enabled);
   const layout = $derived(facetsStore.layout);
   const variables = $derived(facetsStore.variables);
@@ -34,94 +40,172 @@
   const scaleMode = $derived(facetsStore.scaleMode);
 
   let selectedMapIndex = $state(0);
+
   const safeMapIndex = $derived(
     Math.min(selectedMapIndex, Math.max(0, facetVisualizations.length - 1))
   );
+
+  const mapCount = $derived(facetVisualizations.length);
   const columnsValue = $derived(layout.columns);
 
-  const dataFieldItems = $derived.by(() => {
-    const dataset = datasetsStore.selectedDataset;
+  const mapRows = $derived.by(() => {
+    const rows: number[][] = [];
+    const cols = Math.max(1, layout.columns);
+    for (let i = 1; i <= mapCount; i += cols) {
+      const row: number[] = [];
+      for (let j = 0; j < cols && i + j <= mapCount; j += 1) {
+        row.push(i + j);
+      }
+      rows.push(row);
+    }
+    return rows;
+  });
+
+  const baseVisualization = $derived.by(() => {
+    const baseId = facetsStore.baseVisualizationId;
+    if (!baseId) return undefined;
+    return visualizationStore.visualizations.find((v) => v.id === baseId);
+  });
+
+  interface FacetSlot {
+    key: keyof NonNullable<VisualizationConfig['mapping']>;
+    label: string;
+  }
+
+  interface FacetSection {
+    id: string;
+    title: string;
+    slots: FacetSlot[];
+  }
+
+  function resolveSymbolSlots(viz: VisualizationConfig): FacetSlot[] {
+    const slots: FacetSlot[] = [];
+    const symbolMode = viz.modes?.symbol;
+
+    if (symbolMode === SymbolMode.PROPORTIONAL) {
+      slots.push({ key: 'sizeColumn', label: m.facets_slot_size_shape() });
+    } else if (symbolMode === SymbolMode.CLASSES) {
+      slots.push({ key: 'valueColumn', label: m.facets_slot_size_shape() });
+    } else if (symbolMode === SymbolMode.CATEGORIES) {
+      slots.push({ key: 'categoryColumn', label: m.facets_slot_size_shape() });
+    }
+
+    const fillMode = viz.modes?.fill;
+    if (fillMode === FillMode.CLASSES) {
+      const alreadyHas = slots.some((s) => s.key === 'valueColumn');
+      if (!alreadyHas) {
+        slots.push({ key: 'valueColumn', label: m.facets_slot_fill() });
+      }
+    } else if (fillMode === FillMode.CATEGORIES) {
+      const alreadyHas = slots.some((s) => s.key === 'categoryColumn');
+      if (!alreadyHas) {
+        slots.push({ key: 'categoryColumn', label: m.facets_slot_fill() });
+      }
+    }
+
+    return slots;
+  }
+
+  function resolvePolygonSlots(viz: VisualizationConfig): FacetSlot[] {
+    const slots: FacetSlot[] = [];
+    if (viz.modes?.fill === FillMode.CLASSES) {
+      slots.push({ key: 'valueColumn', label: m.facets_slot_fill() });
+    } else if (viz.modes?.fill === FillMode.CATEGORIES) {
+      slots.push({ key: 'categoryColumn', label: m.facets_slot_fill() });
+    }
+    if (viz.modes?.color === ColorMode.CLASSES) {
+      if (!slots.some((s) => s.key === 'valueColumn')) {
+        slots.push({ key: 'valueColumn', label: m.facets_slot_color() });
+      }
+    }
+    if (viz.modes?.stroke === StrokeMode.CLASSES) {
+      if (!slots.some((s) => s.key === 'valueColumn')) {
+        slots.push({ key: 'valueColumn', label: m.facets_slot_stroke() });
+      }
+    }
+    return slots;
+  }
+
+  function resolveLineSlots(viz: VisualizationConfig): FacetSlot[] {
+    const slots: FacetSlot[] = [];
+    if (viz.modes?.thickness === ThicknessMode.CLASSES) {
+      slots.push({ key: 'valueColumn', label: m.facets_slot_size_shape() });
+    }
+    return slots;
+  }
+
+  const sections = $derived.by((): FacetSection[] => {
+    const viz = baseVisualization;
+    if (!viz) return [];
+
+    const result: FacetSection[] = [];
+    const primitives = viz.primitiveFilters ?? [
+      PrimitiveFilterType.POINT,
+      PrimitiveFilterType.POLYGON,
+      PrimitiveFilterType.LINE,
+      PrimitiveFilterType.TEXT
+    ];
+
+    if (primitives.includes(PrimitiveFilterType.POINT)) {
+      const slots = resolveSymbolSlots(viz);
+      if (slots.length > 0) {
+        result.push({
+          id: 'symbols',
+          title: m.facets_section_symbols(),
+          slots
+        });
+      }
+    }
+
+    if (primitives.includes(PrimitiveFilterType.POLYGON)) {
+      const slots = resolvePolygonSlots(viz);
+      if (slots.length > 0) {
+        result.push({
+          id: 'polygons',
+          title: m.facets_section_polygons(),
+          slots
+        });
+      }
+    }
+
+    if (primitives.includes(PrimitiveFilterType.LINE)) {
+      const slots = resolveLineSlots(viz);
+      if (slots.length > 0) {
+        result.push({
+          id: 'lines',
+          title: m.facets_section_lines(),
+          slots
+        });
+      }
+    }
+
+    return result;
+  });
+
+  const numericDataFields = $derived.by(() => {
+    const baseDatasetId = baseVisualization?.datasetId;
+    if (!baseDatasetId) return [] as string[];
+    const dataset = datasetsStore.datasets.find((d) => d.id === baseDatasetId);
     if (!dataset?.columns) return [];
     return dataset.columns
       .filter((col) => col.type !== COLUMN_TYPE_GEOMETRY)
-      .map((col) => ({ id: col.name, text: col.name }));
+      .map((col) => col.name);
   });
 
-  let selectedVariableIds = $state<string[]>([]);
-
-  const canEnable = $derived(
-    selectedViz !== undefined && selectedVariableIds.length >= 2
-  );
-
-  async function handleEnableFacets() {
-    if (!selectedViz?.id || selectedVariableIds.length < 2) return;
-    await facetsStore.enable(selectedViz.id, selectedVariableIds);
+  function getSlotVariable(
+    mapIndex: number,
+    slotKey: FacetSlot['key']
+  ): string | undefined {
+    const viz = facetVisualizations[mapIndex];
+    if (!viz) return undefined;
+    return viz.mapping[slotKey];
   }
 
-  interface DndVariable {
-    id: string;
-    name: string;
-  }
-
-  const FLIP_DURATION_MS = 200;
-  const DND_TYPE = 'facet-variables';
-  const RECENT_DND_INTERACTION_ATTRIBUTE = 'data-khartis-recent-dnd-at';
-
-  let dndVariables = $state<DndVariable[]>([]);
-  let dragging = false;
-
-  $effect(() => {
-    if (!dragging) {
-      dndVariables = variables.map((v) => ({ id: v, name: v }));
-    }
-  });
-
-  function handleConsider(e: Event): void {
-    dragging = true;
-    markRecentDndInteraction();
-    dndVariables = (e as CustomEvent).detail.items;
-  }
-
-  function handleFinalize(e: Event): void {
-    const newItems: DndVariable[] = (e as CustomEvent).detail.items;
-    dndVariables = newItems;
-    dragging = false;
-    markRecentDndInteraction();
-
-    const oldIds = variables;
-    const newIds = newItems.map((item) => item.id);
-
-    for (let i = 0; i < newIds.length; i++) {
-      if (oldIds[i] !== newIds[i]) {
-        const fromIndex = oldIds.indexOf(newIds[i]);
-        facetsStore.reorderVariables(fromIndex, i);
-        break;
-      }
-    }
-  }
-
-  function markRecentDndInteraction(): void {
-    document.body.setAttribute(
-      RECENT_DND_INTERACTION_ATTRIBUTE,
-      String(Date.now())
-    );
-  }
-
-  function handleMoveVariable(index: number, direction: -1 | 1): void {
-    const nextIndex = index + direction;
-
-    if (nextIndex < 0 || nextIndex >= dndVariables.length) {
-      return;
-    }
-
-    void facetsStore.reorderVariables(index, nextIndex);
-  }
-
-  const FACETS_HELP_URL =
-    'https://cartographie.sciencespo.fr/khartis/help/facets';
-
-  function handleLearnMore() {
-    window.open(FACETS_HELP_URL, '_blank');
+  function handleSlotVariableChange(
+    slotKey: FacetSlot['key'],
+    variable: string
+  ) {
+    facetsStore.setVariableForSlot(safeMapIndex, slotKey, variable);
   }
 
   function handleConfigureVisualization() {
@@ -130,9 +214,13 @@
 
     setTimeout(() => {
       document
-        .querySelector('#choose-visualization')
+        .querySelector(`#${CONFIGURE_SECTION_ID}`)
         ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 100);
+  }
+
+  function handleLearnMore() {
+    window.open(FACETS_HELP_URL, '_blank');
   }
 
   function handleExit() {
@@ -141,264 +229,165 @@
   }
 
   function handleColumnsChange(value: number) {
-    facetsStore.setColumns(Math.max(1, Math.min(6, value)) as number);
+    const clamped = Math.max(
+      FACETS_COLUMNS_MIN,
+      Math.min(FACETS_COLUMNS_MAX, value)
+    );
+    facetsStore.setColumns(clamped);
   }
-
-  const mapCount = $derived(facetVisualizations.length);
-  const mapPositions = $derived(
-    Array.from({ length: mapCount }, (_, i) => i + 1)
-  );
-
-  const mapRows = $derived.by(() => {
-    const rows: number[][] = [];
-    const cols = layout.columns;
-    for (let i = 0; i < mapPositions.length; i += cols) {
-      rows.push(mapPositions.slice(i, i + cols));
-    }
-    return rows;
-  });
 </script>
 
 <div id="khartis-facets-tool">
-  {#if enabled}
-    <!-- Active state -->
+  {#if enabled && facetVisualizations.length > 0}
     <div class="facets-content">
-      <!-- Affichage section -->
-      <div class="section">
-        <div class="section-heading">
+      <section class="section">
+        <header class="section-heading">
           <span class="section-title">{m.facets_display_section()}</span>
-          <div class="section-divider"></div>
-        </div>
+          <span class="section-divider" aria-hidden="true"></span>
+        </header>
         <p class="helper-text">{m.facets_display_helper()}</p>
-        <div class="slider-wrapper">
-          <Slider
-            min={1}
-            max={6}
-            step={1}
-            labelText={m.facets_columns_label()}
-            value={columnsValue}
-            on:change={(e) => handleColumnsChange(e.detail)}
-            minLabel=""
-            maxLabel=""
+        <SliderWithInput
+          label={m.facets_columns_label()}
+          value={columnsValue}
+          min={0}
+          max={FACETS_COLUMNS_MAX}
+          step={1}
+          onchange={handleColumnsChange}
+        />
+        <div class="toggle-row">
+          <Switch
+            size="sm"
+            labelText={m.facets_shared_scale_label()}
+            toggled={scaleMode === SCALE_MODE.SHARED}
+            onchange={() => facetsStore.toggleScaleMode()}
           />
         </div>
-        <div class="toggle-wrapper">
-          <Toggle
+        <div class="toggle-row">
+          <Switch
             size="sm"
             labelText={m.facets_sync_pan_zoom()}
-            hideLabel={false}
             toggled={syncPanZoom}
-            on:toggle={() => facetsStore.toggleSyncPanZoom()}
+            onchange={() => facetsStore.toggleSyncPanZoom()}
           />
         </div>
-        <div class="toggle-wrapper">
-          <Toggle
-            size="sm"
-            labelText={m.facets_shared_scale()}
-            hideLabel={false}
-            toggled={scaleMode === SCALE_MODE.SHARED}
-            on:toggle={() => facetsStore.toggleScaleMode()}
-          />
-        </div>
-        {#if mapCount > 9}
+        {#if mapCount > FACETS_PERFORMANCE_THRESHOLD}
           <p class="warning-text">{m.facets_performance_warning()}</p>
         {/if}
-      </div>
+      </section>
 
-      <!-- Distribution section -->
       {#if mapCount > 0}
-        <div class="section">
-          <div class="section-heading">
+        <section class="section">
+          <header class="section-heading">
             <span class="section-title">{m.facets_distribution_section()}</span>
-            <div class="section-divider"></div>
-          </div>
+            <span class="section-divider" aria-hidden="true"></span>
+          </header>
           <p class="helper-text">{m.facets_distribution_helper()}</p>
-
-          <!-- Cartes ContentSwitcher (2-column grid) -->
-          <div class="maps-switcher">
-            <p class="maps-label">{m.facets_maps_label()}</p>
-            <div class="maps-grid">
-              {#each mapRows as row, rowIdx (rowIdx)}
-                <div class="maps-row">
-                  {#each row as pos (pos)}
-                    <button
-                      class="map-btn"
-                      class:selected={safeMapIndex === pos - 1}
-                      onclick={() => (selectedMapIndex = pos - 1)}
-                    >
-                      {pos}
-                    </button>
-                  {/each}
-                </div>
-              {/each}
-            </div>
+          <p class="sub-label">{m.facets_maps_label()}</p>
+          <div
+            class="maps-grid"
+            role="radiogroup"
+            aria-label={m.facets_maps_label()}
+          >
+            {#each mapRows as row, rowIdx (rowIdx)}
+              <div class="maps-row">
+                {#each row as pos (pos)}
+                  <button
+                    type="button"
+                    class="map-btn"
+                    class:selected={safeMapIndex === pos - 1}
+                    onclick={() => (selectedMapIndex = pos - 1)}
+                    aria-pressed={safeMapIndex === pos - 1}
+                  >
+                    {pos}
+                  </button>
+                {/each}
+              </div>
+            {/each}
           </div>
-
-          <!-- Variables order (drag-drop) -->
-          <div class="variables-section">
-            <p class="variables-label">{m.facets_variables_label()}</p>
-            <div
-              class="variables-dnd-list"
-              use:dndzone={{
-                items: dndVariables,
-                flipDurationMs: FLIP_DURATION_MS,
-                type: DND_TYPE,
-                dropTargetStyle: {}
-              }}
-              onconsider={handleConsider}
-              onfinalize={handleFinalize}
-            >
-              {#each dndVariables as item, i (item.id)}
-                <div class="variable-row">
-                  <div class="drag-handle">
-                    <Draggable size={16} />
-                  </div>
-                  <input
-                    type="radio"
-                    class="bx--radio-button__input"
-                    name="variable-order"
-                    value={item.name}
-                    checked={i === safeMapIndex}
-                    readonly
-                  />
-                  <span class="variable-tag">{item.name}</span>
-                  <div class="variable-actions">
-                    <IconButton
-                      kind="ghost"
-                      size="small"
-                      icon={ArrowUp}
-                      iconDescription={m.facets_move_up()}
-                      disabled={i === 0}
-                      onclick={() => handleMoveVariable(i, -1)}
-                    />
-                    <IconButton
-                      kind="ghost"
-                      size="small"
-                      icon={ArrowDown}
-                      iconDescription={m.facets_move_down()}
-                      disabled={i === dndVariables.length - 1}
-                      onclick={() => handleMoveVariable(i, 1)}
-                    />
-                  </div>
-                </div>
-              {/each}
-            </div>
-          </div>
-        </div>
+        </section>
       {/if}
 
-      <!-- Link -->
-      <button class="link-btn" onclick={handleLearnMore}>
+      {#each sections as section (section.id)}
+        <section class="section">
+          <header class="section-heading plain">
+            <span class="section-title">{section.title}</span>
+          </header>
+          {#each section.slots as slot, slotIdx (section.id + slot.key + slotIdx)}
+            <div class="slot-card">
+              <header class="slot-heading">
+                <span class="slot-title">{slot.label}</span>
+                <span class="section-divider" aria-hidden="true"></span>
+              </header>
+              <p class="sub-label">{m.facets_variables_label()}</p>
+              <ul
+                class="variable-list"
+                role="radiogroup"
+                aria-label={slot.label}
+              >
+                {#each variables as variable (section.id + slot.key + slotIdx + variable)}
+                  <li class="variable-item">
+                    <label class="variable-label">
+                      <input
+                        type="radio"
+                        name={`facet-slot-${section.id}-${slot.key}-${slotIdx}`}
+                        class="variable-radio"
+                        value={variable}
+                        checked={getSlotVariable(safeMapIndex, slot.key) ===
+                          variable}
+                        onchange={() =>
+                          handleSlotVariableChange(slot.key, variable)}
+                      />
+                      <span class="variable-tag">
+                        <span class="variable-tag-text">{variable}</span>
+                        {#if numericDataFields.includes(variable)}
+                          <span class="variable-tag-badge">123</span>
+                        {/if}
+                      </span>
+                    </label>
+                  </li>
+                {/each}
+              </ul>
+            </div>
+          {/each}
+        </section>
+      {/each}
+
+      <button class="link-btn" type="button" onclick={handleLearnMore}>
         <span>{m.facets_learn_more()}</span>
         <Launch size={16} />
       </button>
 
-      <!-- Exit button -->
       <Button kind="danger-tertiary" style="width: 100%;" onclick={handleExit}>
         {m.facets_exit_mode()}
       </Button>
     </div>
   {:else}
-    <!-- Inactive state -->
     <div class="facets-content">
       <p class="helper-text">{m.facets_collection_description()}</p>
+      <p class="helper-text">{m.facets_create_instruction()}</p>
 
-      {#if selectedViz}
-        <div class="field-group">
-          <MultiSelect
-            labelText={m.facets_select_variables()}
-            label={m.facets_variables_placeholder()}
-            items={dataFieldItems}
-            selectedIds={selectedVariableIds}
-            on:select={(e) => {
-              selectedVariableIds = e.detail.selectedIds;
-            }}
-          />
-        </div>
-        {#if selectedVariableIds.length > 0 && selectedVariableIds.length < 2}
-          <p class="warning-text">{m.facets_min_variables_warning()}</p>
-        {/if}
-        <Button
-          kind="primary"
-          style="width: 100%;"
-          disabled={!canEnable}
-          onclick={handleEnableFacets}
-        >
-          {m.facets_generate()}
-        </Button>
-      {:else}
-        <p class="helper-text">{m.facets_select_viz_first()}</p>
-        <div class="configure-btn-wrapper">
-          <Button
-            kind="secondary"
-            icon={SettingsAdjust}
-            style="width: 100%;"
-            onclick={handleConfigureVisualization}
-          >
-            {m.facets_configure_visualization()}
-          </Button>
-        </div>
-      {/if}
-
-      <button class="link-btn" onclick={handleLearnMore}>
+      <button class="link-btn" type="button" onclick={handleLearnMore}>
         <span>{m.facets_learn_more()}</span>
         <Launch size={16} />
       </button>
+
+      <Button
+        kind="secondary"
+        icon={SettingsAdjust}
+        style="width: 100%;"
+        onclick={handleConfigureVisualization}
+      >
+        {m.facets_configure_visualization()}
+      </Button>
     </div>
   {/if}
 </div>
 
-<style>
+<style lang="scss">
   .facets-content {
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-05, 16px);
-  }
-
-  .helper-text {
-    font-size: 0.75rem;
-    color: var(--cds-text-helper, #6f6f6f);
-    line-height: 1rem;
-    letter-spacing: 0.32px;
-    margin: 0;
-    white-space: pre-wrap;
-  }
-
-  .link-btn {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    background: none;
-    border: none;
-    padding: 0;
-    cursor: pointer;
-    font-size: 0.75rem;
-    color: var(--cds-link-primary, #726e6e);
-    line-height: 1rem;
-    letter-spacing: 0.32px;
-  }
-
-  .link-btn:hover {
-    text-decoration: underline;
-  }
-
-  .configure-btn-wrapper {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-  }
-
-  .field-group {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-02, 4px);
-  }
-
-  .warning-text {
-    font-size: 0.75rem;
-    color: var(--cds-support-warning, #f1c21b);
-    line-height: 1rem;
-    margin: 0;
   }
 
   .section {
@@ -412,6 +401,10 @@
     align-items: center;
     gap: var(--cds-spacing-03, 8px);
     height: 24px;
+  }
+
+  .section-heading.plain .section-title {
+    font-size: 1rem;
   }
 
   .section-title {
@@ -430,33 +423,56 @@
     background-color: var(--cds-border-subtle-01, #c6c6c6);
   }
 
-  .slider-wrapper :global(.bx--slider-container) {
-    width: 100%;
-  }
-
-  .toggle-wrapper {
-    display: flex;
-    align-items: center;
-  }
-
-  .toggle-wrapper :global(.bx--toggle-input__label) {
+  .helper-text {
     font-size: 0.75rem;
-    color: var(--cds-text-secondary, #525252);
+    color: var(--cds-text-helper, #6f6f6f);
+    line-height: 1rem;
+    letter-spacing: 0.32px;
+    margin: 0;
+    white-space: pre-wrap;
   }
 
-  /* Maps ContentSwitcher */
-  .maps-switcher {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-03, 8px);
-  }
-
-  .maps-label {
+  .sub-label {
     font-size: 0.75rem;
     color: var(--cds-text-secondary, #525252);
     line-height: 1rem;
     letter-spacing: 0.32px;
     margin: 0;
+  }
+
+  .warning-text {
+    font-size: 0.75rem;
+    color: var(--cds-support-warning, #f1c21b);
+    line-height: 1rem;
+    margin: 0;
+  }
+
+  .toggle-row {
+    display: flex;
+    align-items: center;
+  }
+
+  .toggle-row :global(.kh-switch-label) {
+    font-size: 0.75rem;
+    color: var(--cds-text-secondary, #525252);
+  }
+
+  .link-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font-size: 0.75rem;
+    color: var(--cds-link-primary, #726e6e);
+    line-height: 1rem;
+    letter-spacing: 0.32px;
+  }
+
+  .link-btn:hover {
+    text-decoration: underline;
   }
 
   .maps-grid {
@@ -495,66 +511,66 @@
     color: var(--cds-text-primary, #161616);
   }
 
-  /* Variables drag-drop section */
-  .variables-section {
+  .slot-card {
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-03, 8px);
+    padding: var(--cds-spacing-04, 12px);
+    background-color: var(--cds-layer-01, #f4f4f4);
+    border-radius: 4px;
   }
 
-  .variables-label {
-    font-size: 0.75rem;
-    color: var(--cds-text-secondary, #525252);
-    line-height: 1rem;
-    letter-spacing: 0.32px;
+  .slot-heading {
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-03, 8px);
+    height: 24px;
+  }
+
+  .slot-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--cds-text-primary, #161616);
+    line-height: 18px;
+    letter-spacing: 0.16px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .variable-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-02, 4px);
+    list-style: none;
+    padding: 0;
     margin: 0;
   }
 
-  .variables-dnd-list {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-03, 8px);
-    outline: none;
+  .variable-item {
+    margin: 0;
   }
 
-  .variable-row {
+  .variable-label {
     display: flex;
     align-items: center;
     gap: var(--cds-spacing-03, 8px);
-    background-color: var(--cds-layer-01, #f4f4f4);
-    padding: var(--cds-spacing-02, 4px) var(--cds-spacing-03, 8px);
-    border-radius: 4px;
-    cursor: grab;
+    cursor: pointer;
   }
 
-  .variable-row:active {
-    cursor: grabbing;
-  }
-
-  .drag-handle {
-    display: flex;
-    align-items: center;
-    color: var(--cds-icon-secondary, #525252);
-    flex-shrink: 0;
-  }
-
-  .variable-row input[type='radio'] {
-    width: 20px;
-    height: 20px;
-    flex-shrink: 0;
-    cursor: default;
+  .variable-radio {
+    width: 16px;
+    height: 16px;
     accent-color: var(--cds-icon-primary, #161616);
+    flex-shrink: 0;
+    cursor: pointer;
   }
 
-  .variables-dnd-list :global([aria-grabbed='true']) {
-    opacity: 0.4;
-  }
-
-  /* Purple variable tag */
   .variable-tag {
     display: inline-flex;
     align-items: center;
+    gap: var(--cds-spacing-02, 4px);
     flex: 1;
+    min-width: 0;
     height: 18px;
     padding: 2px 8px;
     background-color: var(--cds-tag-background-purple, #e8daff);
@@ -565,15 +581,21 @@
     line-height: 1rem;
     letter-spacing: 0.32px;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    max-width: 200px;
   }
 
-  .variable-actions {
-    display: flex;
-    align-items: center;
-    gap: 2px;
+  .variable-tag-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .variable-tag-badge {
+    font-size: 0.625rem;
+    font-weight: 500;
+    letter-spacing: 0.32px;
+    padding: 0 4px;
+    border: 1px solid currentColor;
+    border-radius: 2px;
     flex-shrink: 0;
   }
 </style>
