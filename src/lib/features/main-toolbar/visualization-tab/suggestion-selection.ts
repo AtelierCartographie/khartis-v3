@@ -1,8 +1,5 @@
 import type { VizSuggestion } from '$lib/features/commons/services/viz-suggester.service';
-import type {
-  VisualizationConfig,
-  VisualizationOriginMode
-} from '$lib/features/commons/store/visualization.store.svelte';
+import type { VisualizationOriginMode } from '$lib/features/commons/store/visualization.store.svelte';
 
 type SuggestionSignatureSource = Pick<
   VizSuggestion,
@@ -15,21 +12,10 @@ interface AutoApplySuggestionOptions {
   targetVisualizationOriginMode: VisualizationOriginMode;
 }
 
-function normalizeClassificationForSuggestionFingerprint(
-  classification: VisualizationConfig['classification']
-) {
-  if (!classification) {
-    return null;
-  }
-
-  return {
-    method: classification.method,
-    paletteId: classification.paletteId ?? null,
-    inverted: classification.inverted ?? null,
-    breakpointValue: classification.breakpointValue ?? null,
-    patternId: classification.patternId ?? null,
-    patternParams: classification.patternParams ?? null
-  };
+interface ResolveDisplayedSuggestionKeyOptions {
+  selectedSuggestionKey?: string;
+  persistedSuggestionKey?: string;
+  matchedSuggestionKey?: string;
 }
 
 export function getSuggestionSignature(
@@ -65,29 +51,12 @@ export function shouldAutoApplySuggestion({
   );
 }
 
-export function getVisualizationSuggestionFingerprint(
-  visualization: Pick<
-    VisualizationConfig,
-    | 'type'
-    | 'modes'
-    | 'primitiveFilters'
-    | 'style'
-    | 'mapping'
-    | 'classification'
-    | 'symbols'
-    | 'missingData'
-  >
-): string {
-  return JSON.stringify({
-    type: visualization.type,
-    modes: visualization.modes ?? null,
-    primitiveFilters: visualization.primitiveFilters ?? null,
-    style: visualization.style ?? null,
-    mapping: visualization.mapping ?? null,
-    classification: normalizeClassificationForSuggestionFingerprint(
-      visualization.classification
-    ),
-    symbols: visualization.symbols ?? null,
-    missingData: visualization.missingData ?? null
-  });
+export function resolveDisplayedSuggestionKey({
+  selectedSuggestionKey,
+  persistedSuggestionKey,
+  matchedSuggestionKey
+}: ResolveDisplayedSuggestionKeyOptions): string | undefined {
+  return (
+    selectedSuggestionKey ?? persistedSuggestionKey ?? matchedSuggestionKey
+  );
 }

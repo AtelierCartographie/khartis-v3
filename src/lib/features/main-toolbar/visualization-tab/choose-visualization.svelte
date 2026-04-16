@@ -36,14 +36,16 @@
   import {
     applyBlankVisualizationPreset,
     applySuggestionToVisualization,
+    buildSuggestionOrigin,
     isVisualizationMatchingSuggestion,
     isVisualizationBlank,
+    restoreVisualizationFromSuggestion,
     resolveBlankVisualizationType,
     resolveDatasetGeometryType
   } from './suggestion.service';
   import {
     getSuggestionSignature,
-    getVisualizationSuggestionFingerprint,
+    resolveDisplayedSuggestionKey,
     resolveSuggestionCardAction,
     shouldAutoApplySuggestion
   } from './suggestion-selection';
@@ -61,7 +63,6 @@
   let autoAppliedSuggestionKey = $state<string | undefined>(undefined);
   let previousSuggestionDatasetId = $state<string | undefined>(undefined);
   let selectedSuggestionKey = $state<string | undefined>(undefined);
-  let selectedSuggestionFingerprint = $state<string | undefined>(undefined);
   let renamingVizId = $state<string | undefined>(undefined);
   let renameValue = $state<string>('');
   let deletingViz = $state<{ id: string; name: string } | null>(null);
@@ -131,14 +132,8 @@
     });
   });
 
-  const filteredSuggestions = $derived(suggestions);
-
-  const visibleSuggestions = $derived(
-    filteredSuggestions.slice(0, visibleCount)
-  );
-  const hasMoreSuggestions = $derived(
-    visibleCount < filteredSuggestions.length
-  );
+  const visibleSuggestions = $derived(suggestions.slice(0, visibleCount));
+  const hasMoreSuggestions = $derived(visibleCount < suggestions.length);
 
   function getColumnBadgeType(columnName: string): VariableBadgeType {
     const col = datasetColumns.find((c) => c.name === columnName);
@@ -176,13 +171,27 @@
   function handleShowMore() {
     visibleCount = Math.min(
       visibleCount + UI_CONSTANTS.SUGGESTIONS_PER_PAGE,
-      filteredSuggestions.length
+      suggestions.length
     );
+  }
+
+  function getCurrentTargetVisualization() {
+    const dataset = selectedDataset;
+    if (!dataset) {
+      return undefined;
+    }
+
+    const currentSelection = visualizationStore.selectedVisualization;
+    if (currentSelection?.datasetId === dataset.id) {
+      return currentSelection;
+    }
+
+    return visualizationStore.getVisualizationsByDataset(dataset.id)[0];
   }
 
   function handleSelectSuggestion(suggestion: VizSuggestion) {
     const dataset = selectedDataset;
-    const targetViz = targetVisualization;
+    const targetViz = getCurrentTargetVisualization();
     if (!dataset || !targetViz) return;
 
     const action = resolveSuggestionCardAction(
@@ -191,17 +200,21 @@
     );
 
     if (action === 'clear') {
-      applyBlankVisualizationPreset(targetViz.id, dataset, {
-        mode: 'manual-blank'
-      });
+      if (!restoreVisualizationFromSuggestion(targetViz.id)) {
+        applyBlankVisualizationPreset(targetViz.id, dataset, {
+          mode: 'manual-blank'
+        });
+      }
       selectedSuggestionKey = undefined;
-      selectedSuggestionFingerprint = undefined;
       return;
     }
 
     const suggestionKey = getSuggestionSignature(suggestion);
     applySuggestionToVisualization(targetViz.id, suggestion, {
-      origin: { mode: 'manual-suggestion', suggestionKey }
+      origin: buildSuggestionOrigin(targetViz, {
+        mode: 'manual-suggestion',
+        suggestionKey
+      })
     });
 
     const updatedVisualization = visualizationStore.visualizations.find(
@@ -209,20 +222,17 @@
     );
     if (!updatedVisualization) {
       selectedSuggestionKey = undefined;
-      selectedSuggestionFingerprint = undefined;
       return;
     }
 
     selectedSuggestionKey = suggestionKey;
-    selectedSuggestionFingerprint =
-      getVisualizationSuggestionFingerprint(updatedVisualization);
   }
 
   function handleCreateVisualization() {
     const dataset = selectedDataset;
     if (!dataset) return;
 
-    const targetViz = targetVisualization;
+    const targetViz = getCurrentTargetVisualization();
     if (targetViz) {
       applyBlankVisualizationPreset(targetViz.id, dataset, {
         mode: 'manual-blank'
@@ -238,17 +248,20 @@
     }
 
     selectedSuggestionKey = undefined;
-    selectedSuggestionFingerprint = undefined;
-    suggestionsExpanded = filteredSuggestions.length > 0 || suggestionsExpanded;
+    suggestionsExpanded = suggestions.length > 0 || suggestionsExpanded;
     onCreateVisualization?.();
   }
 
   const datasetVisualizations = $derived.by(() => {
+    void visualizationStore.version;
+
     if (!selectedDataset) return [];
     return visualizationStore.getVisualizationsByDataset(selectedDataset.id);
   });
 
   const targetVisualization = $derived.by(() => {
+    void visualizationStore.version;
+
     const currentSelection = visualizationStore.selectedVisualization;
     if (
       currentSelection &&
@@ -268,7 +281,7 @@
       return undefined;
     }
 
-    const appliedSuggestion = filteredSuggestions.find((suggestion) =>
+    const appliedSuggestion = suggestions.find((suggestion) =>
       isVisualizationMatchingSuggestion(targetViz, dataset, suggestion)
     );
 
@@ -277,8 +290,35 @@
       : undefined;
   });
 
+  const persistedSuggestionKey = $derived.by(() => {
+    const targetViz = targetVisualization;
+
+    if (!targetViz?.origin?.suggestionKey) {
+      return undefined;
+    }
+
+    const originMode = getVisualizationOriginMode(targetViz);
+    if (
+      originMode !== 'auto-suggestion' &&
+      originMode !== 'manual-suggestion'
+    ) {
+      return undefined;
+    }
+
+    const originSuggestionKey = targetViz.origin.suggestionKey;
+    const suggestionStillExists = suggestions.some(
+      (suggestion) => getSuggestionSignature(suggestion) === originSuggestionKey
+    );
+
+    return suggestionStillExists ? originSuggestionKey : undefined;
+  });
+
   const appliedSuggestionKey = $derived(
-    selectedSuggestionKey ?? matchedSuggestionKey
+    resolveDisplayedSuggestionKey({
+      selectedSuggestionKey,
+      persistedSuggestionKey,
+      matchedSuggestionKey
+    })
   );
 
   const targetVisualizationOriginMode = $derived(
@@ -288,13 +328,13 @@
   const autoSuggestionContextKey = $derived.by(() => {
     const targetViz = targetVisualization;
 
-    if (!targetViz || filteredSuggestions.length === 0) {
+    if (!targetViz || suggestions.length === 0) {
       return undefined;
     }
 
     if (
       !shouldAutoApplySuggestion({
-        suggestionCount: filteredSuggestions.length,
+        suggestionCount: suggestions.length,
         visualizationCount: datasetVisualizations.length,
         targetVisualizationOriginMode
       })
@@ -302,14 +342,13 @@
       return undefined;
     }
 
-    const suggestionSignature = getSuggestionSignature(filteredSuggestions[0]);
+    const suggestionSignature = getSuggestionSignature(suggestions[0]);
 
     return `${targetViz.datasetId}::${targetViz.id}::${suggestionSignature}`;
   });
 
   function handleSelectViz(id: string) {
     selectedSuggestionKey = undefined;
-    selectedSuggestionFingerprint = undefined;
     visualizationStore.selectVisualization(id);
   }
 
@@ -356,10 +395,6 @@
     }
   }
 
-  export function collapseSuggestions() {
-    suggestionsExpanded = false;
-  }
-
   $effect(() => {
     const datasets = datasetsStore.datasets;
     if (!datasets.length) {
@@ -370,7 +405,6 @@
       selectedDatasetId = datasetsStore.selectedDatasetId ?? datasets[0].id;
       visibleCount = UI_CONSTANTS.SUGGESTIONS_PER_PAGE;
       selectedSuggestionKey = undefined;
-      selectedSuggestionFingerprint = undefined;
     }
   });
 
@@ -405,32 +439,32 @@
     suggestionsExpanded = true;
     autoAppliedSuggestionKey = undefined;
     selectedSuggestionKey = undefined;
-    selectedSuggestionFingerprint = undefined;
   });
 
   $effect(() => {
     const targetViz = targetVisualization;
 
-    if (
-      !selectedSuggestionKey ||
-      !selectedSuggestionFingerprint ||
-      !targetViz
-    ) {
+    if (!selectedSuggestionKey || !targetViz) {
       return;
     }
 
-    const suggestionStillExists = filteredSuggestions.some(
+    const suggestionStillExists = suggestions.some(
       (suggestion) =>
         getSuggestionSignature(suggestion) === selectedSuggestionKey
     );
-    const currentFingerprint = getVisualizationSuggestionFingerprint(targetViz);
+    const originMode = getVisualizationOriginMode(targetViz);
+    const keepsSelectionByOrigin =
+      (originMode === 'auto-suggestion' ||
+        originMode === 'manual-suggestion') &&
+      targetViz.origin?.suggestionKey === selectedSuggestionKey;
+    const keepsSelectionByMatch =
+      matchedSuggestionKey === selectedSuggestionKey;
 
     if (
       !suggestionStillExists ||
-      currentFingerprint !== selectedSuggestionFingerprint
+      (!keepsSelectionByOrigin && !keepsSelectionByMatch)
     ) {
       selectedSuggestionKey = undefined;
-      selectedSuggestionFingerprint = undefined;
     }
   });
 
@@ -449,7 +483,7 @@
   $effect(() => {
     const dataset = selectedDataset;
     const autoContextKey = autoSuggestionContextKey;
-    const topSuggestion = filteredSuggestions[0];
+    const topSuggestion = suggestions[0];
     const targetViz = targetVisualization;
 
     if (!dataset || !targetViz) {
@@ -466,7 +500,6 @@
         });
         autoAppliedSuggestionKey = `${dataset.id}::${targetViz.id}::blank`;
         selectedSuggestionKey = undefined;
-        selectedSuggestionFingerprint = undefined;
       }
       return;
     }
@@ -485,16 +518,12 @@
     autoAppliedSuggestionKey = autoContextKey;
     const suggestionKey = getSuggestionSignature(topSuggestion);
     applySuggestionToVisualization(targetViz.id, topSuggestion, {
-      origin: { mode: 'auto-suggestion', suggestionKey }
+      origin: buildSuggestionOrigin(targetViz, {
+        mode: 'auto-suggestion',
+        suggestionKey
+      })
     });
     selectedSuggestionKey = suggestionKey;
-
-    const updatedVisualization = visualizationStore.visualizations.find(
-      (item) => item.id === targetViz.id
-    );
-    selectedSuggestionFingerprint = updatedVisualization
-      ? getVisualizationSuggestionFingerprint(updatedVisualization)
-      : undefined;
   });
 </script>
 

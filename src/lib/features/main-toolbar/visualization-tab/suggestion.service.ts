@@ -7,10 +7,13 @@ import type {
   VizSuggestion
 } from '$lib/features/commons/services/viz-suggester.service';
 import {
+  getVisualizationOriginMode,
   PrimitiveFilterType,
   type VisualizationPreset,
   type VisualizationConfig,
   type VisualizationOrigin,
+  type VisualizationRestoreSnapshot,
+  type VisualizationRestoreState,
   resolveVisualizationPreset,
   visualizationStore,
   VisualizationType
@@ -34,6 +37,7 @@ import {
 
 import { projectStore } from '$lib/features/commons/store/project.store.svelte';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
+import { deepClone } from '$lib/features/commons/utils/clone.utils';
 
 interface DatasetGeometrySource {
   id?: string;
@@ -744,6 +748,101 @@ export function applyBlankVisualizationPreset(
   });
 }
 
+function createVisualizationRestoreSnapshot(
+  visualization: VisualizationConfig
+): VisualizationRestoreSnapshot {
+  return {
+    type: visualization.type,
+    modes: deepClone(visualization.modes),
+    primitiveFilters: deepClone(visualization.primitiveFilters),
+    primitiveOrder: deepClone(visualization.primitiveOrder),
+    style: deepClone(visualization.style),
+    mapping: deepClone(visualization.mapping),
+    classification: deepClone(visualization.classification),
+    symbols: deepClone(visualization.symbols),
+    missingData: deepClone(visualization.missingData),
+    density: deepClone(visualization.density),
+    yearFilter: deepClone(visualization.yearFilter),
+    dataFilters: deepClone(visualization.dataFilters)
+  };
+}
+
+function createVisualizationRestoreState(
+  visualization: VisualizationConfig
+): VisualizationRestoreState {
+  return {
+    origin: {
+      mode: getVisualizationOriginMode(visualization),
+      ...(visualization.origin?.suggestionKey
+        ? { suggestionKey: visualization.origin.suggestionKey }
+        : {})
+    },
+    visualization: createVisualizationRestoreSnapshot(visualization)
+  };
+}
+
+export function buildSuggestionOrigin(
+  visualization: VisualizationConfig,
+  origin: VisualizationOrigin
+): VisualizationOrigin {
+  const currentMode = getVisualizationOriginMode(visualization);
+  const existingRestoreState =
+    (currentMode === 'auto-suggestion' ||
+      currentMode === 'manual-suggestion') &&
+    visualization.origin?.restoreState
+      ? deepClone(visualization.origin.restoreState)
+      : undefined;
+
+  return {
+    ...origin,
+    restoreState:
+      existingRestoreState ?? createVisualizationRestoreState(visualization)
+  };
+}
+
+export function restoreVisualizationFromSuggestion(vizId: string): boolean {
+  const visualization = visualizationStore.visualizations.find(
+    (item) => item.id === vizId
+  );
+  const restoreState = visualization?.origin?.restoreState;
+
+  if (!visualization || !restoreState) {
+    return false;
+  }
+
+  const restoredVisualization = {
+    ...visualization,
+    ...deepClone(restoreState.visualization),
+    origin: undefined
+  } as VisualizationConfig;
+  const restoreOriginMode = restoreState.origin.mode;
+  const dataset = datasetsStore.datasets.find(
+    (item) => item.id === visualization.datasetId
+  );
+
+  let nextOrigin: VisualizationOrigin | undefined;
+  if (
+    restoreOriginMode === 'auto-suggestion' ||
+    restoreOriginMode === 'manual-suggestion'
+  ) {
+    nextOrigin =
+      dataset && isVisualizationBlank(restoredVisualization, dataset)
+        ? { mode: 'manual-blank' }
+        : { mode: 'custom' };
+  } else if (restoreOriginMode === 'legacy') {
+    nextOrigin = undefined;
+  } else {
+    nextOrigin = deepClone(restoreState.origin);
+  }
+
+  visualizationStore.updateVisualization(vizId, {
+    ...deepClone(restoreState.visualization),
+    origin: nextOrigin
+  });
+
+  return true;
+}
+
 function areVisualizationPresetValuesEqual(
   currentValue: unknown,
   expectedValue: unknown
@@ -992,10 +1091,6 @@ export function isVisualizationMatchingSuggestion(
       visualization.primitiveFilters
     ) &&
     areVisualizationPresetValuesEqual(
-      expectedVisualization.style,
-      visualization.style
-    ) &&
-    areVisualizationPresetValuesEqual(
       expectedVisualization.mapping,
       visualization.mapping
     ) &&
@@ -1004,14 +1099,6 @@ export function isVisualizationMatchingSuggestion(
         expectedVisualization.classification
       ),
       normalizeClassificationForPresetComparison(visualization.classification)
-    ) &&
-    areVisualizationPresetValuesEqual(
-      expectedVisualization.symbols,
-      visualization.symbols
-    ) &&
-    areVisualizationPresetValuesEqual(
-      expectedVisualization.missingData,
-      visualization.missingData
     )
   );
 }

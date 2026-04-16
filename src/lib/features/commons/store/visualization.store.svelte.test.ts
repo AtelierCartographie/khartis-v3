@@ -20,6 +20,7 @@ vi.mock('./datasets.store.svelte', () => ({
 }));
 
 import {
+  ClassificationMethod,
   PrimitiveFilterType,
   VisualizationType,
   visualizationStore,
@@ -158,5 +159,103 @@ describe('visualizationStore legacy label normalization', () => {
     expect(visualization?.style.textColor).toBe('#ff5500');
     expect(visualization?.style.textSize).toBe(9);
     expect(visualization?.style.labelOpacity).toBe(0);
+  });
+});
+
+describe('visualizationStore suggestion origin tracking', () => {
+  afterEach(() => {
+    visualizationStore.clear();
+    datasetsStore.clear();
+    persistenceRegistry.markClean();
+  });
+
+  it('keeps suggestion origin for derived classification updates', () => {
+    datasetsStore.addProcessedDataset(buildDataset());
+
+    const visualization = visualizationStore.createVisualization(
+      VisualizationType.CATEGORICAL,
+      'dataset-1'
+    );
+
+    visualizationStore.updateVisualization(visualization.id, {
+      origin: {
+        mode: 'auto-suggestion',
+        suggestionKey: 'symbols_proportional::1::population::polygon::QTA'
+      }
+    });
+
+    visualizationStore.updateClassification(visualization.id, {
+      breaks: [10, 20, 30],
+      counts: [4, 5, 6],
+      colors: ['#1192e8', '#78a9cf', '#c8ddf0'],
+      labels: ['A', 'B', 'C']
+    });
+
+    const updatedVisualization = visualizationStore.selectedVisualization;
+
+    expect(updatedVisualization?.origin).toEqual({
+      mode: 'auto-suggestion',
+      suggestionKey: 'symbols_proportional::1::population::polygon::QTA'
+    });
+  });
+
+  it('switches to custom for semantic classification changes', () => {
+    datasetsStore.addProcessedDataset(buildDataset());
+
+    const visualization = visualizationStore.createVisualization(
+      VisualizationType.CATEGORICAL,
+      'dataset-1'
+    );
+
+    visualizationStore.updateVisualization(visualization.id, {
+      origin: {
+        mode: 'manual-suggestion',
+        suggestionKey: 'choropleth::1::population::polygon::QTR',
+        restoreState: {
+          origin: { mode: 'manual-blank' },
+          visualization: {
+            type: visualization.type,
+            modes: visualization.modes,
+            primitiveFilters: visualization.primitiveFilters,
+            primitiveOrder: visualization.primitiveOrder,
+            style: visualization.style,
+            mapping: visualization.mapping,
+            classification: visualization.classification,
+            symbols: visualization.symbols,
+            missingData: visualization.missingData,
+            density: visualization.density,
+            yearFilter: visualization.yearFilter,
+            dataFilters: visualization.dataFilters
+          }
+        }
+      }
+    });
+
+    visualizationStore.updateClassification(visualization.id, {
+      method: ClassificationMethod.MANUAL
+    });
+
+    const updatedVisualization = visualizationStore.selectedVisualization;
+
+    expect(updatedVisualization?.origin).toEqual({
+      mode: 'custom',
+      restoreState: {
+        origin: { mode: 'manual-blank' },
+        visualization: {
+          type: visualization.type,
+          modes: visualization.modes,
+          primitiveFilters: visualization.primitiveFilters,
+          primitiveOrder: visualization.primitiveOrder,
+          style: visualization.style,
+          mapping: visualization.mapping,
+          classification: visualization.classification,
+          symbols: visualization.symbols,
+          missingData: visualization.missingData,
+          density: visualization.density,
+          yearFilter: visualization.yearFilter,
+          dataFilters: visualization.dataFilters
+        }
+      }
+    });
   });
 });

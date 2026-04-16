@@ -66,10 +66,12 @@ import {
 import {
   applyBlankVisualizationPreset,
   applySuggestionToVisualization,
+  buildSuggestionOrigin,
   mapSuggestionToType,
   SUGGESTION_BEHAVIOR_IDS,
   isVisualizationBlank,
-  isVisualizationMatchingSuggestion
+  isVisualizationMatchingSuggestion,
+  restoreVisualizationFromSuggestion
 } from './suggestion.service';
 
 type SuggestionTestDataset = Parameters<
@@ -432,6 +434,43 @@ describe('suggestion.service', () => {
     ).toBe(true);
   });
 
+  it('keeps matching a proportional symbol suggestion after style tuning drift', () => {
+    const dataset = createPolygonDataset();
+    mocks.datasets = [dataset];
+    mocks.selectedDatasetId = dataset.id;
+
+    const visualization = visualizationStore.createVisualization(
+      VisualizationType.PROPORTIONAL,
+      dataset.id
+    );
+    const suggestion = createSuggestionById('symbols_proportional', 'polygon');
+
+    applySuggestionToVisualization(visualization.id, suggestion);
+    visualizationStore.updateVisualization(visualization.id, {
+      origin: { mode: 'custom' },
+      symbols: {
+        ...visualizationStore.visualizations.find(
+          (item) => item.id === visualization.id
+        )!.symbols!,
+        maxSize: 8,
+        opacity: 1
+      }
+    });
+
+    const updatedVisualization = visualizationStore.visualizations.find(
+      (item) => item.id === visualization.id
+    );
+
+    expect(updatedVisualization).toBeDefined();
+    expect(
+      isVisualizationMatchingSuggestion(
+        updatedVisualization!,
+        dataset,
+        suggestion
+      )
+    ).toBe(true);
+  });
+
   it('keeps choropleth suggestions polygon-only', () => {
     const dataset = createPolygonDataset();
     mocks.datasets = [dataset];
@@ -455,6 +494,280 @@ describe('suggestion.service', () => {
     expect(updatedVisualization?.mapping.valueColumn).toBe('population_total');
     expect(updatedVisualization?.style.textOpacity).toBe(0);
     expect(updatedVisualization?.style.labelOpacity).toBe(0);
+  });
+
+  it('restores the previous manual visualization when a suggestion is deselected', () => {
+    const dataset = createPolygonDataset();
+    mocks.datasets = [dataset];
+    mocks.selectedDatasetId = dataset.id;
+
+    const visualization = visualizationStore.createVisualization(
+      VisualizationType.CHOROPLETH,
+      dataset.id
+    );
+
+    visualizationStore.updateVisualization(visualization.id, {
+      origin: { mode: 'custom' },
+      primitiveFilters: [PrimitiveFilterType.POLYGON],
+      modes: {
+        ...visualization.modes,
+        fill: FillMode.UNIQUE
+      },
+      style: {
+        ...visualization.style,
+        fillColor: '#ff5500',
+        fillOpacity: 0.42,
+        strokeWidth: 2
+      },
+      mapping: {
+        ...visualization.mapping,
+        valueColumn: undefined
+      },
+      classification: undefined
+    });
+
+    const manualVisualization = visualizationStore.visualizations.find(
+      (item) => item.id === visualization.id
+    )!;
+
+    const suggestion = createSuggestionById('symbols_proportional', 'polygon');
+
+    applySuggestionToVisualization(visualization.id, suggestion, {
+      origin: buildSuggestionOrigin(manualVisualization, {
+        mode: 'manual-suggestion',
+        suggestionKey: 'symbols_proportional::1::population_total::polygon::QTA'
+      })
+    });
+
+    expect(restoreVisualizationFromSuggestion(visualization.id)).toBe(true);
+
+    const restoredVisualization = visualizationStore.visualizations.find(
+      (item) => item.id === visualization.id
+    );
+
+    expect(restoredVisualization?.origin).toEqual({ mode: 'custom' });
+    expect(restoredVisualization?.primitiveFilters).toEqual([
+      PrimitiveFilterType.POLYGON
+    ]);
+    expect(restoredVisualization?.modes?.fill).toBe(FillMode.UNIQUE);
+    expect(restoredVisualization?.mapping.valueColumn).toBeUndefined();
+    expect(restoredVisualization?.style.fillColor).toBe('#ff5500');
+    expect(restoredVisualization?.style.fillOpacity).toBe(0.42);
+    expect(restoredVisualization?.style.strokeWidth).toBe(2);
+    expect(restoredVisualization?.classification).toBeUndefined();
+  });
+
+  it('restores the manual visualization even after the suggestion has drifted to custom', () => {
+    const dataset = createPolygonDataset();
+    mocks.datasets = [dataset];
+    mocks.selectedDatasetId = dataset.id;
+
+    const visualization = visualizationStore.createVisualization(
+      VisualizationType.CHOROPLETH,
+      dataset.id
+    );
+
+    visualizationStore.updateVisualization(visualization.id, {
+      origin: { mode: 'manual-blank' },
+      style: {
+        ...visualization.style,
+        textOpacity: 1
+      }
+    });
+
+    const manualVisualization = visualizationStore.visualizations.find(
+      (item) => item.id === visualization.id
+    )!;
+
+    const suggestion = createSuggestionById('symbols_proportional', 'polygon');
+
+    applySuggestionToVisualization(visualization.id, suggestion, {
+      origin: buildSuggestionOrigin(manualVisualization, {
+        mode: 'manual-suggestion',
+        suggestionKey: 'symbols_proportional::1::population_total::polygon::QTA'
+      })
+    });
+
+    visualizationStore.updateVisualization(visualization.id, {
+      style: {
+        ...visualizationStore.visualizations.find(
+          (item) => item.id === visualization.id
+        )!.style,
+        strokeWidth: 3
+      }
+    });
+
+    const driftedVisualization = visualizationStore.visualizations.find(
+      (item) => item.id === visualization.id
+    );
+
+    expect(driftedVisualization?.origin?.mode).toBe('custom');
+    expect(driftedVisualization?.origin?.restoreState).toBeDefined();
+    expect(restoreVisualizationFromSuggestion(visualization.id)).toBe(true);
+
+    const restoredVisualization = visualizationStore.visualizations.find(
+      (item) => item.id === visualization.id
+    );
+
+    expect(restoredVisualization?.origin).toEqual({ mode: 'manual-blank' });
+    expect(restoredVisualization?.style.textOpacity).toBe(1);
+    expect(restoredVisualization?.style.strokeWidth).toBe(
+      manualVisualization.style.strokeWidth
+    );
+  });
+
+  it('restores the blank state when a suggestion is deselected from an empty visualization', () => {
+    const dataset = createPolygonDataset();
+    mocks.datasets = [dataset];
+    mocks.selectedDatasetId = dataset.id;
+
+    const visualization = visualizationStore.createVisualization(
+      VisualizationType.CHOROPLETH,
+      dataset.id
+    );
+
+    applyBlankVisualizationPreset(visualization.id, dataset, {
+      mode: 'manual-blank'
+    });
+
+    const blankVisualization = visualizationStore.visualizations.find(
+      (item) => item.id === visualization.id
+    )!;
+
+    const suggestion = createSuggestionById('symbols_proportional', 'polygon');
+
+    applySuggestionToVisualization(visualization.id, suggestion, {
+      origin: buildSuggestionOrigin(blankVisualization, {
+        mode: 'manual-suggestion',
+        suggestionKey: 'symbols_proportional::1::population_total::polygon::QTA'
+      })
+    });
+
+    expect(restoreVisualizationFromSuggestion(visualization.id)).toBe(true);
+
+    const restoredVisualization = visualizationStore.visualizations.find(
+      (item) => item.id === visualization.id
+    );
+
+    expect(restoredVisualization).toBeDefined();
+    expect(isVisualizationBlank(restoredVisualization!, dataset)).toBe(true);
+    expect(restoredVisualization?.origin).toEqual({ mode: 'manual-blank' });
+  });
+
+  it('restores manual text visibility after deselecting a suggestion', () => {
+    const dataset = createPolygonDataset();
+    mocks.datasets = [dataset];
+    mocks.selectedDatasetId = dataset.id;
+
+    const visualization = visualizationStore.createVisualization(
+      VisualizationType.CHOROPLETH,
+      dataset.id
+    );
+
+    applyBlankVisualizationPreset(visualization.id, dataset, {
+      mode: 'manual-blank'
+    });
+
+    visualizationStore.updateVisualization(visualization.id, {
+      style: {
+        ...visualizationStore.visualizations.find(
+          (item) => item.id === visualization.id
+        )!.style,
+        textOpacity: 1
+      }
+    });
+
+    const manualVisualization = visualizationStore.visualizations.find(
+      (item) => item.id === visualization.id
+    )!;
+
+    const suggestion = createSuggestionById('symbols_proportional', 'polygon');
+
+    applySuggestionToVisualization(visualization.id, suggestion, {
+      origin: buildSuggestionOrigin(manualVisualization, {
+        mode: 'manual-suggestion',
+        suggestionKey: 'symbols_proportional::1::population_total::polygon::QTA'
+      })
+    });
+
+    expect(restoreVisualizationFromSuggestion(visualization.id)).toBe(true);
+
+    const restoredVisualization = visualizationStore.visualizations.find(
+      (item) => item.id === visualization.id
+    );
+
+    expect(restoredVisualization?.origin).toEqual({ mode: 'manual-blank' });
+    expect(restoredVisualization?.style.textOpacity).toBe(1);
+  });
+
+  it('restores the latest manual polygon fill after clearing an auto-applied suggestion', () => {
+    const dataset = createPolygonDataset();
+    mocks.datasets = [dataset];
+    mocks.selectedDatasetId = dataset.id;
+
+    const visualization = visualizationStore.createVisualization(
+      VisualizationType.CHOROPLETH,
+      dataset.id
+    );
+    const suggestion = createSuggestionById('symbols_proportional', 'polygon');
+
+    applyBlankVisualizationPreset(visualization.id, dataset, {
+      mode: 'auto-suggestion'
+    });
+
+    const autoBlankVisualization = visualizationStore.visualizations.find(
+      (item) => item.id === visualization.id
+    )!;
+
+    applySuggestionToVisualization(visualization.id, suggestion, {
+      origin: buildSuggestionOrigin(autoBlankVisualization, {
+        mode: 'auto-suggestion',
+        suggestionKey: 'symbols_proportional::1::population_total::polygon::QTA'
+      })
+    });
+
+    expect(restoreVisualizationFromSuggestion(visualization.id)).toBe(true);
+
+    const blankVisualization = visualizationStore.visualizations.find(
+      (item) => item.id === visualization.id
+    )!;
+
+    expect(blankVisualization.origin).toEqual({ mode: 'manual-blank' });
+    expect(isVisualizationBlank(blankVisualization, dataset)).toBe(true);
+
+    visualizationStore.updateVisualization(visualization.id, {
+      modes: {
+        ...blankVisualization.modes,
+        fill: FillMode.UNIQUE
+      },
+      style: {
+        ...blankVisualization.style,
+        fillColor: '#ff5500',
+        fillOpacity: 0.42
+      }
+    });
+
+    const manualVisualization = visualizationStore.visualizations.find(
+      (item) => item.id === visualization.id
+    )!;
+
+    applySuggestionToVisualization(visualization.id, suggestion, {
+      origin: buildSuggestionOrigin(manualVisualization, {
+        mode: 'manual-suggestion',
+        suggestionKey: 'symbols_proportional::1::population_total::polygon::QTA'
+      })
+    });
+
+    expect(restoreVisualizationFromSuggestion(visualization.id)).toBe(true);
+
+    const restoredVisualization = visualizationStore.visualizations.find(
+      (item) => item.id === visualization.id
+    );
+
+    expect(restoredVisualization?.origin).toEqual({ mode: 'manual-blank' });
+    expect(restoredVisualization?.modes?.fill).toBe(FillMode.UNIQUE);
+    expect(restoredVisualization?.style.fillColor).toBe('#ff5500');
+    expect(restoredVisualization?.style.fillOpacity).toBe(0.42);
   });
 
   it('matches every registered suggestion immediately after application', () => {

@@ -27,6 +27,7 @@ import {
 } from '../constants/colors.constants';
 import { COLUMN_TYPE_GEOMETRY } from '../constants/data.constants';
 import { isLikelyCoordinateColumn } from '../utils/geo-detector.utils';
+import * as m from '$lib/paraglide/messages';
 
 export enum VisualizationType {
   CHOROPLETH = 'choropleth',
@@ -67,6 +68,7 @@ export interface VisualizationModes {
   color?: import('$lib/features/main-toolbar/constants').ColorMode;
   size?: import('$lib/features/main-toolbar/constants').SizeMode;
   proportionalType?: ProportionalType;
+  categoryShape?: import('$lib/features/main-toolbar/constants').CategoryShapeMode;
 }
 
 export interface PatternParams {
@@ -114,9 +116,33 @@ export type VisualizationOriginMode =
   | 'custom'
   | 'legacy';
 
+export interface VisualizationRestoreSnapshot {
+  type: VisualizationType;
+  modes?: VisualizationModes;
+  primitiveFilters?: PrimitiveFilter[];
+  primitiveOrder?: PrimitiveFilter[];
+  style: VisualizationConfig['style'];
+  mapping: VisualizationConfig['mapping'];
+  classification?: ClassificationConfig;
+  symbols?: VisualizationConfig['symbols'];
+  missingData?: MissingDataConfig;
+  density?: DensityConfig;
+  yearFilter?: YearFilter;
+  dataFilters?: VizDataFilter[];
+}
+
+export interface VisualizationRestoreState {
+  origin: {
+    mode: VisualizationOriginMode;
+    suggestionKey?: string;
+  };
+  visualization: VisualizationRestoreSnapshot;
+}
+
 export interface VisualizationOrigin {
   mode: VisualizationOriginMode;
   suggestionKey?: string;
+  restoreState?: VisualizationRestoreState;
 }
 
 export const ALL_PRIMITIVE_FILTERS: PrimitiveFilter[] = [
@@ -328,16 +354,16 @@ export interface VisualizationStore {
   restoreFromSerialized: (settings: SerializedVisualizationSettings) => void;
 }
 
-const DEFAULT_VISUALIZATION_NAME = 'Visualisation';
-const DATASET_NOT_FOUND_ERROR = 'Dataset not found';
+const getDefaultVisualizationName = () => m.default_visualization_name();
+const getDatasetNotFoundError = () => m.dataset_not_found_error();
 
 const COLUMN_TYPE_NUMBER = 'number';
 const COLUMN_TYPE_STRING = 'string';
 
-const DEFAULT_SYMBOL_SIZE = 12;
+const DEFAULT_SYMBOL_SIZE = VISUALIZATION_DEFAULTS.symbolSize;
 const DEFAULT_SYMBOL_MIN_SIZE = 5;
 const DEFAULT_SYMBOL_MAX_SIZE = VISUALIZATION_DEFAULTS.symbolMaxSize;
-const DEFAULT_SYMBOL_OPACITY = 0.8;
+const DEFAULT_SYMBOL_OPACITY = VISUALIZATION_DEFAULTS.symbolOpacity / 100;
 const DEFAULT_LABEL_OPACITY = 0;
 const DEFAULT_TEXT_OPACITY = 0;
 
@@ -798,12 +824,57 @@ const ORIGIN_TRACKED_UPDATE_KEYS = [
   'dataFilters'
 ] as const;
 
+const DERIVED_CLASSIFICATION_UPDATE_KEYS = new Set<keyof ClassificationConfig>([
+  'breaks',
+  'counts',
+  'colors',
+  'labels'
+]);
+
+function isDerivedClassificationUpdate(
+  currentClassification: VisualizationConfig['classification'],
+  classification: Partial<ClassificationConfig> | undefined
+): boolean {
+  if (!classification) {
+    return false;
+  }
+
+  const updateKeys = (
+    Object.keys(classification) as Array<keyof ClassificationConfig>
+  ).filter((key) => {
+    const currentValue = currentClassification?.[key];
+    const nextValue = classification[key];
+
+    return JSON.stringify(currentValue ?? null) !== JSON.stringify(nextValue);
+  });
+
+  return (
+    updateKeys.length > 0 &&
+    updateKeys.every((key) => DERIVED_CLASSIFICATION_UPDATE_KEYS.has(key))
+  );
+}
+
 function touchesVisualizationSemantics(
+  visualization: VisualizationConfig,
   updates: Partial<VisualizationConfig>
 ): boolean {
-  return ORIGIN_TRACKED_UPDATE_KEYS.some((key) =>
-    Object.prototype.hasOwnProperty.call(updates, key)
-  );
+  return ORIGIN_TRACKED_UPDATE_KEYS.some((key) => {
+    if (!Object.prototype.hasOwnProperty.call(updates, key)) {
+      return false;
+    }
+
+    if (
+      key === 'classification' &&
+      isDerivedClassificationUpdate(
+        visualization.classification,
+        updates.classification
+      )
+    ) {
+      return false;
+    }
+
+    return true;
+  });
 }
 
 function resolveNextVisualizationOrigin(
@@ -822,11 +893,16 @@ function resolveNextVisualizationOrigin(
     return visualization.origin;
   }
 
-  if (!touchesVisualizationSemantics(updates)) {
+  if (!touchesVisualizationSemantics(visualization, updates)) {
     return visualization.origin;
   }
 
-  return { mode: 'custom' };
+  return {
+    mode: 'custom',
+    ...(visualization.origin?.restoreState
+      ? { restoreState: deepClone(visualization.origin.restoreState) }
+      : {})
+  };
 }
 
 function buildVisualizationPreset(
@@ -921,7 +997,7 @@ function createVisualizationStore(): VisualizationStore {
   ): VisualizationConfig {
     const dataset = findById(datasetsStore.datasets, datasetId);
     if (!dataset) {
-      throw new Error(DATASET_NOT_FOUND_ERROR);
+      throw new Error(getDatasetNotFoundError());
     }
 
     const visualization = getNormalizedVisualization({
@@ -929,7 +1005,7 @@ function createVisualizationStore(): VisualizationStore {
       name:
         name ||
         generateUniqueNameWithCounter(
-          DEFAULT_VISUALIZATION_NAME,
+          getDefaultVisualizationName(),
           state.visualizations.map((item) => item.name)
         ),
       datasetId,

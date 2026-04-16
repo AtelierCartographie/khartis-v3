@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { VizSuggestion } from '$lib/features/commons/services/viz-suggester.service';
 import {
   getSuggestionSignature,
-  getVisualizationSuggestionFingerprint,
+  resolveDisplayedSuggestionKey,
   resolveSuggestionCardAction,
   shouldAutoApplySuggestion
 } from './suggestion-selection';
@@ -96,40 +96,31 @@ describe('shouldAutoApplySuggestion', () => {
   });
 });
 
-describe('getVisualizationSuggestionFingerprint', () => {
-  it('changes when the applied visualization diverges from the suggestion state', () => {
-    const baseFingerprint = getVisualizationSuggestionFingerprint({
-      type: 'categorical',
-      modes: { fill: 'categories' },
-      primitiveFilters: ['point'],
-      style: { fillOpacity: 0.8 },
-      mapping: { categoryColumn: 'category' },
-      classification: undefined,
-      symbols: { type: 'circle' },
-      missingData: {
-        show: true,
-        shape: 'circle',
-        size: 2,
-        color: '#000000'
-      }
-    } as Parameters<typeof getVisualizationSuggestionFingerprint>[0]);
+describe('resolveDisplayedSuggestionKey', () => {
+  it('prefers the in-memory selected suggestion key', () => {
+    expect(
+      resolveDisplayedSuggestionKey({
+        selectedSuggestionKey: 'selected',
+        persistedSuggestionKey: 'persisted',
+        matchedSuggestionKey: 'matched'
+      })
+    ).toBe('selected');
+  });
 
-    const updatedFingerprint = getVisualizationSuggestionFingerprint({
-      type: 'categorical',
-      modes: { fill: 'categories' },
-      primitiveFilters: ['point'],
-      style: { fillOpacity: 0.8 },
-      mapping: { categoryColumn: 'segment' },
-      classification: undefined,
-      symbols: { type: 'circle' },
-      missingData: {
-        show: true,
-        shape: 'circle',
-        size: 2,
-        color: '#000000'
-      }
-    } as Parameters<typeof getVisualizationSuggestionFingerprint>[0]);
+  it('falls back to the persisted origin suggestion key', () => {
+    expect(
+      resolveDisplayedSuggestionKey({
+        persistedSuggestionKey: 'persisted',
+        matchedSuggestionKey: 'matched'
+      })
+    ).toBe('persisted');
+  });
 
-    expect(updatedFingerprint).not.toBe(baseFingerprint);
+  it('falls back to the matched suggestion when nothing else is set', () => {
+    expect(
+      resolveDisplayedSuggestionKey({
+        matchedSuggestionKey: 'matched'
+      })
+    ).toBe('matched');
   });
 });
