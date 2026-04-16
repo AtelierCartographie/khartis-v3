@@ -27,6 +27,7 @@ import {
 } from '../constants/colors.constants';
 import { COLUMN_TYPE_GEOMETRY } from '../constants/data.constants';
 import { isLikelyCoordinateColumn } from '../utils/geo-detector.utils';
+import * as m from '$lib/paraglide/messages';
 
 export enum VisualizationType {
   CHOROPLETH = 'choropleth',
@@ -55,7 +56,8 @@ export enum ScaleType {
 export enum PrimitiveFilterType {
   POINT = 'point',
   LINE = 'line',
-  POLYGON = 'polygon'
+  POLYGON = 'polygon',
+  TEXT = 'text'
 }
 
 export interface VisualizationModes {
@@ -66,6 +68,7 @@ export interface VisualizationModes {
   color?: import('$lib/features/main-toolbar/constants').ColorMode;
   size?: import('$lib/features/main-toolbar/constants').SizeMode;
   proportionalType?: ProportionalType;
+  categoryShape?: import('$lib/features/main-toolbar/constants').CategoryShapeMode;
 }
 
 export interface PatternParams {
@@ -103,7 +106,44 @@ export interface MissingDataConfig {
 export type PrimitiveFilter =
   | PrimitiveFilterType.POINT
   | PrimitiveFilterType.LINE
-  | PrimitiveFilterType.POLYGON;
+  | PrimitiveFilterType.POLYGON
+  | PrimitiveFilterType.TEXT;
+
+export type VisualizationOriginMode =
+  | 'auto-suggestion'
+  | 'manual-suggestion'
+  | 'manual-blank'
+  | 'custom'
+  | 'legacy';
+
+export interface VisualizationRestoreSnapshot {
+  type: VisualizationType;
+  modes?: VisualizationModes;
+  primitiveFilters?: PrimitiveFilter[];
+  primitiveOrder?: PrimitiveFilter[];
+  style: VisualizationConfig['style'];
+  mapping: VisualizationConfig['mapping'];
+  classification?: ClassificationConfig;
+  symbols?: VisualizationConfig['symbols'];
+  missingData?: MissingDataConfig;
+  density?: DensityConfig;
+  yearFilter?: YearFilter;
+  dataFilters?: VizDataFilter[];
+}
+
+export interface VisualizationRestoreState {
+  origin: {
+    mode: VisualizationOriginMode;
+    suggestionKey?: string;
+  };
+  visualization: VisualizationRestoreSnapshot;
+}
+
+export interface VisualizationOrigin {
+  mode: VisualizationOriginMode;
+  suggestionKey?: string;
+  restoreState?: VisualizationRestoreState;
+}
 
 export const ALL_PRIMITIVE_FILTERS: PrimitiveFilter[] = [
   PrimitiveFilterType.POINT,
@@ -144,6 +184,7 @@ export interface VisualizationConfig {
   type: VisualizationType;
   datasetId: string;
   enabled: boolean;
+  origin?: VisualizationOrigin;
   facet?: {
     baseVisualizationId: string;
   };
@@ -227,6 +268,12 @@ interface VisualizationState {
   version: number;
 }
 
+export function getVisualizationOriginMode(
+  visualization?: Pick<VisualizationConfig, 'origin'> | null
+): VisualizationOriginMode {
+  return visualization?.origin?.mode ?? 'legacy';
+}
+
 interface SerializedVisualizationSettings {
   visualizations: VisualizationConfig[];
   selectedVisualizationId?: string;
@@ -293,6 +340,11 @@ export interface VisualizationStore {
   setYearFilter: (id: string, filter: YearFilter | null) => void;
   addDataFilter: (id: string, filter: Omit<VizDataFilter, 'id'>) => void;
   removeDataFilter: (id: string, filterId: string) => void;
+  updateDataFilter: (
+    id: string,
+    filterId: string,
+    updates: Partial<Omit<VizDataFilter, 'id'>>
+  ) => void;
   clearDataFilters: (id: string) => void;
   clearDataFiltersForPrimitive: (
     id: string,
@@ -302,16 +354,16 @@ export interface VisualizationStore {
   restoreFromSerialized: (settings: SerializedVisualizationSettings) => void;
 }
 
-const DEFAULT_VISUALIZATION_NAME = 'Visualisation';
-const DATASET_NOT_FOUND_ERROR = 'Dataset not found';
+const getDefaultVisualizationName = () => m.default_visualization_name();
+const getDatasetNotFoundError = () => m.dataset_not_found_error();
 
 const COLUMN_TYPE_NUMBER = 'number';
 const COLUMN_TYPE_STRING = 'string';
 
-const DEFAULT_SYMBOL_SIZE = 12;
+const DEFAULT_SYMBOL_SIZE = VISUALIZATION_DEFAULTS.symbolSize;
 const DEFAULT_SYMBOL_MIN_SIZE = 5;
 const DEFAULT_SYMBOL_MAX_SIZE = VISUALIZATION_DEFAULTS.symbolMaxSize;
-const DEFAULT_SYMBOL_OPACITY = 0.8;
+const DEFAULT_SYMBOL_OPACITY = VISUALIZATION_DEFAULTS.symbolOpacity / 100;
 const DEFAULT_LABEL_OPACITY = 0;
 const DEFAULT_TEXT_OPACITY = 0;
 
@@ -583,6 +635,25 @@ function resolveGeometryFamilyFromDataset(
 }
 
 export function resolveAllowedPrimitiveFilters(
+  _type: VisualizationType,
+  dataset: ProcessedDataset | DatasetResult
+): PrimitiveFilter[] {
+  switch (resolveGeometryFamilyFromDataset(dataset)) {
+    case 'polygon':
+      return [PrimitiveFilterType.POINT, PrimitiveFilterType.POLYGON];
+
+    case 'line':
+      return [PrimitiveFilterType.LINE];
+
+    case 'point':
+      return [PrimitiveFilterType.POINT];
+
+    default:
+      return [...ALL_PRIMITIVE_FILTERS];
+  }
+}
+
+function resolveDefaultPrimitiveFilters(
   type: VisualizationType,
   dataset: ProcessedDataset | DatasetResult
 ): PrimitiveFilter[] {
@@ -610,15 +681,19 @@ export function resolveAllowedPrimitiveFilters(
 
 function sanitizePrimitiveFilters(
   filters: PrimitiveFilter[] | undefined,
-  allowedFilters: PrimitiveFilter[]
+  allowedFilters: PrimitiveFilter[],
+  defaultFilters: PrimitiveFilter[]
 ): PrimitiveFilter[] {
-  const sourceFilters =
-    filters && filters.length > 0 ? filters : allowedFilters;
+  if (filters === undefined) {
+    return [...defaultFilters];
+  }
+
+  const sourceFilters = filters;
   const sanitized = [...new Set(sourceFilters)].filter((filter) =>
     allowedFilters.includes(filter)
   );
 
-  return sanitized.length > 0 ? sanitized : [...allowedFilters];
+  return sanitized;
 }
 
 function sanitizePrimitiveOrder(
@@ -643,8 +718,38 @@ function sanitizeDataFilters(
 
   return dataFilters.filter(
     (filter) =>
-      !filter.primitiveType || allowedFilters.includes(filter.primitiveType)
+      !filter.primitiveType ||
+      filter.primitiveType === PrimitiveFilterType.TEXT ||
+      allowedFilters.includes(filter.primitiveType)
   );
+}
+
+function normalizeLegacyLabelStyle(
+  visualization: VisualizationConfig
+): VisualizationConfig['style'] {
+  const style = { ...visualization.style };
+  const labelOpacity = style.labelOpacity ?? 0;
+  const textOpacity = style.textOpacity ?? 0;
+  const hasLegacyLabelLayer =
+    labelOpacity > 0 && Boolean(visualization.mapping.labelColumn);
+  const hasActiveTextLayer = textOpacity > 0;
+
+  if (hasLegacyLabelLayer && !hasActiveTextLayer) {
+    style.textOpacity = labelOpacity;
+    style.textColor = style.labelColor ?? style.textColor;
+    style.textSize = style.labelSize ?? style.textSize;
+    style.textAlign = style.labelAlign ?? style.textAlign;
+    style.textHalo = style.labelHalo ?? style.textHalo;
+    style.textHaloColor = style.labelHaloColor ?? style.textHaloColor;
+    style.textHaloWidth = style.labelHaloWidth ?? style.textHaloWidth;
+    style.textCollisionDetection =
+      style.labelCollisionDetection ?? style.textCollisionDetection;
+    style.textDxpMasking = style.labelDxpMasking ?? style.textDxpMasking;
+  }
+
+  style.labelOpacity = 0;
+
+  return style;
 }
 
 function normalizeVisualizationConfig(
@@ -652,6 +757,10 @@ function normalizeVisualizationConfig(
   dataset: ProcessedDataset | DatasetResult
 ): VisualizationConfig {
   const allowedFilters = resolveAllowedPrimitiveFilters(
+    visualization.type,
+    dataset
+  );
+  const defaultFilters = resolveDefaultPrimitiveFilters(
     visualization.type,
     dataset
   );
@@ -669,10 +778,12 @@ function normalizeVisualizationConfig(
 
   return {
     ...visualization,
+    style: normalizeLegacyLabelStyle(visualization),
     symbols: normalizedSymbols,
     primitiveFilters: sanitizePrimitiveFilters(
       visualization.primitiveFilters,
-      allowedFilters
+      allowedFilters,
+      defaultFilters
     ),
     primitiveOrder: sanitizePrimitiveOrder(
       visualization.primitiveOrder,
@@ -698,7 +809,100 @@ function getDefaultPrimitiveFilters(
   type: VisualizationType,
   dataset: ProcessedDataset | DatasetResult
 ): PrimitiveFilter[] {
-  return resolveAllowedPrimitiveFilters(type, dataset);
+  return resolveDefaultPrimitiveFilters(type, dataset);
+}
+
+const ORIGIN_TRACKED_UPDATE_KEYS = [
+  'modes',
+  'primitiveFilters',
+  'style',
+  'mapping',
+  'classification',
+  'symbols',
+  'missingData',
+  'yearFilter',
+  'dataFilters'
+] as const;
+
+const DERIVED_CLASSIFICATION_UPDATE_KEYS = new Set<keyof ClassificationConfig>([
+  'breaks',
+  'counts',
+  'colors',
+  'labels'
+]);
+
+function isDerivedClassificationUpdate(
+  currentClassification: VisualizationConfig['classification'],
+  classification: Partial<ClassificationConfig> | undefined
+): boolean {
+  if (!classification) {
+    return false;
+  }
+
+  const updateKeys = (
+    Object.keys(classification) as Array<keyof ClassificationConfig>
+  ).filter((key) => {
+    const currentValue = currentClassification?.[key];
+    const nextValue = classification[key];
+
+    return JSON.stringify(currentValue ?? null) !== JSON.stringify(nextValue);
+  });
+
+  return (
+    updateKeys.length > 0 &&
+    updateKeys.every((key) => DERIVED_CLASSIFICATION_UPDATE_KEYS.has(key))
+  );
+}
+
+function touchesVisualizationSemantics(
+  visualization: VisualizationConfig,
+  updates: Partial<VisualizationConfig>
+): boolean {
+  return ORIGIN_TRACKED_UPDATE_KEYS.some((key) => {
+    if (!Object.prototype.hasOwnProperty.call(updates, key)) {
+      return false;
+    }
+
+    if (
+      key === 'classification' &&
+      isDerivedClassificationUpdate(
+        visualization.classification,
+        updates.classification
+      )
+    ) {
+      return false;
+    }
+
+    return true;
+  });
+}
+
+function resolveNextVisualizationOrigin(
+  visualization: VisualizationConfig,
+  updates: Partial<VisualizationConfig>
+): VisualizationConfig['origin'] {
+  if (Object.prototype.hasOwnProperty.call(updates, 'origin')) {
+    return updates.origin;
+  }
+
+  const currentMode = getVisualizationOriginMode(visualization);
+  if (
+    currentMode !== 'auto-suggestion' &&
+    currentMode !== 'manual-suggestion'
+  ) {
+    return visualization.origin;
+  }
+
+  if (!touchesVisualizationSemantics(visualization, updates)) {
+    return visualization.origin;
+  }
+
+  return {
+    mode: 'custom',
+    ...(visualization.origin?.restoreState
+      ? { restoreState: deepClone(visualization.origin.restoreState) }
+      : {})
+  };
 }
 
 function buildVisualizationPreset(
@@ -769,9 +973,12 @@ function createVisualizationStore(): VisualizationStore {
       return;
     }
 
+    const nextOrigin = resolveNextVisualizationOrigin(visualization, updates);
+
     const nextVisualization = getNormalizedVisualization({
       ...visualization,
       ...updates,
+      origin: nextOrigin,
       id
     });
 
@@ -790,7 +997,7 @@ function createVisualizationStore(): VisualizationStore {
   ): VisualizationConfig {
     const dataset = findById(datasetsStore.datasets, datasetId);
     if (!dataset) {
-      throw new Error(DATASET_NOT_FOUND_ERROR);
+      throw new Error(getDatasetNotFoundError());
     }
 
     const visualization = getNormalizedVisualization({
@@ -798,7 +1005,7 @@ function createVisualizationStore(): VisualizationStore {
       name:
         name ||
         generateUniqueNameWithCounter(
-          DEFAULT_VISUALIZATION_NAME,
+          getDefaultVisualizationName(),
           state.visualizations.map((item) => item.name)
         ),
       datasetId,
@@ -827,10 +1034,6 @@ function createVisualizationStore(): VisualizationStore {
       const nextFilters = currentFilters.includes(primitive)
         ? currentFilters.filter((item) => item !== primitive)
         : [...currentFilters, primitive];
-
-      if (nextFilters.length === 0) {
-        return {};
-      }
 
       return {
         primitiveFilters: nextFilters
@@ -1260,6 +1463,21 @@ function createVisualizationStore(): VisualizationStore {
     });
   }
 
+  function updateDataFilter(
+    id: string,
+    filterId: string,
+    updates: Partial<Omit<VizDataFilter, 'id'>>
+  ): void {
+    applyVisualizationUpdate(id, (viz) => {
+      const existing = viz.dataFilters ?? [];
+      return {
+        dataFilters: existing.map((f) =>
+          f.id === filterId ? { ...f, ...updates } : f
+        )
+      };
+    });
+  }
+
   function clearDataFilters(id: string): void {
     applyVisualizationUpdate(id, () => ({ dataFilters: [] }));
   }
@@ -1350,6 +1568,7 @@ function createVisualizationStore(): VisualizationStore {
     setYearFilter,
     addDataFilter,
     removeDataFilter,
+    updateDataFilter,
     clearDataFilters,
     clearDataFiltersForPrimitive,
     clear,

@@ -1,18 +1,26 @@
 <script lang="ts">
+  import { dev } from '$app/environment';
   import { m } from '$lib/paraglide/messages';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import {
     InlineNotification,
     NotificationActionButton
   } from 'carbon-components-svelte';
+  import { onDestroy, onMount } from 'svelte';
   import { useRegisterSW } from 'virtual:pwa-register/svelte';
 
   const OFFLINE_READY_TIMEOUT = 5000;
+  let isUpdating = $state(false);
+  let registrationUpdateInterval: ReturnType<typeof setInterval> | null = null;
 
   const { needRefresh, offlineReady, updateServiceWorker } = useRegisterSW({
     onRegistered(registration) {
       if (registration) {
-        setInterval(
+        if (registrationUpdateInterval) {
+          clearInterval(registrationUpdateInterval);
+        }
+
+        registrationUpdateInterval = setInterval(
           () => {
             registration.update();
           },
@@ -26,8 +34,13 @@
   });
 
   async function handleUpdate() {
-    await updateServiceWorker(true);
-    window.location.reload();
+    isUpdating = true;
+
+    try {
+      await updateServiceWorker(true);
+    } finally {
+      isUpdating = false;
+    }
   }
 
   function closeUpdateNotification() {
@@ -37,6 +50,44 @@
   function closeOfflineNotification() {
     offlineReady.set(false);
   }
+
+  onDestroy(() => {
+    if (registrationUpdateInterval) {
+      clearInterval(registrationUpdateInterval);
+      registrationUpdateInterval = null;
+    }
+  });
+
+  onMount(() => {
+    if (!dev || typeof navigator === 'undefined') {
+      return;
+    }
+
+    void (async () => {
+      try {
+        if ('serviceWorker' in navigator) {
+          const registrations =
+            await navigator.serviceWorker.getRegistrations();
+          await Promise.all(
+            registrations.map((registration) => registration.unregister())
+          );
+        }
+
+        if ('caches' in window) {
+          const cacheKeys = await window.caches.keys();
+          await Promise.all(
+            cacheKeys.map((cacheKey) => caches.delete(cacheKey))
+          );
+        }
+      } catch (error) {
+        logger.debug(
+          'Skipping dev service worker cleanup',
+          LogCategory.SYSTEM,
+          error
+        );
+      }
+    })();
+  });
 </script>
 
 {#if $needRefresh || $offlineReady}
@@ -51,7 +102,11 @@
         on:close={closeUpdateNotification}
       >
         <svelte:fragment slot="actions">
-          <NotificationActionButton kind="ghost" on:click={handleUpdate}>
+          <NotificationActionButton
+            kind="ghost"
+            disabled={isUpdating}
+            on:click={handleUpdate}
+          >
             {m.pwa_update_action()}
           </NotificationActionButton>
         </svelte:fragment>

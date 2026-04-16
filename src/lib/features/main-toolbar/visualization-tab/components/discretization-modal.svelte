@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { Modal } from 'carbon-components-svelte';
+  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
+  import { Close } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
   import DiscretizationPanel from './discretization-panel.svelte';
   import {
@@ -133,8 +134,6 @@
     }
 
     untrack(async () => {
-      // Let the Carbon modal mount and settle its focus trap before kicking off
-      // classification work that updates parent state.
       await tick();
       await computeBreaks();
     });
@@ -273,24 +272,65 @@
   }
 </script>
 
-<Modal
-  bind:open={open}
-  modalHeading={m.discretization()}
-  passiveModal
-  size="sm"
-  on:close={handleClose}
->
-  <DiscretizationPanel
-    bind:method={currentMethod}
-    bind:numClasses={currentNumClasses}
-    bind:breaks={currentBreaks}
-    bind:breakpointValue={currentBreakpoint}
-    classCountMax={currentMethod === 'head-tail'
-      ? headTailClassCountMax
-      : DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX}
-    onmethodchange={handleMethodChange}
-    onclasseschange={handleClassesChange}
-    onbreakpointchange={handleBreakpointChange}
-    onbreakschange={handleBreaksChange}
-  />
-</Modal>
+{#if open}
+  <div class="discretization-inline-panel">
+    <header class="panel-header">
+      <h3>{m.discretization()}</h3>
+      <IconButton
+        kind="ghost"
+        size="small"
+        icon={Close}
+        iconDescription={m.close()}
+        on:click={handleClose}
+      />
+    </header>
+    <div class="panel-body">
+      <DiscretizationPanel
+        bind:method={currentMethod}
+        bind:numClasses={currentNumClasses}
+        bind:breaks={currentBreaks}
+        bind:breakpointValue={currentBreakpoint}
+        classCountMax={currentMethod === 'head-tail'
+          ? headTailClassCountMax
+          : DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX}
+        onmethodchange={handleMethodChange}
+        onclasseschange={handleClassesChange}
+        onbreakpointchange={handleBreakpointChange}
+        onbreakschange={handleBreaksChange}
+      />
+    </div>
+  </div>
+{/if}
+
+<style lang="scss">
+  .discretization-inline-panel {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    background: var(--cds-layer);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--cds-spacing-04) var(--cds-spacing-05);
+    border-bottom: 1px solid var(--cds-border-subtle);
+    flex-shrink: 0;
+
+    h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin: 0;
+      color: var(--cds-text-primary);
+    }
+  }
+
+  .panel-body {
+    flex: 1;
+    overflow-y: auto;
+  }
+</style>

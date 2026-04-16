@@ -211,12 +211,12 @@ export async function replaceInColumn(
   const escapedReplaceValue = escapeSqlString(replaceValue);
 
   const normResult = (await Duck.query(
-    `SELECT normalize_text('${escapedSearchValue}') as norm`,
+    `SELECT normalize_raw_text('${escapedSearchValue}') as norm`,
     { format: 'array' }
   )) as Array<{ norm: string }>;
   const normalizedSearch = normResult?.[0]?.norm ?? '';
 
-  const exactMatchCondition = `normalize_text("${escapedCol}"::VARCHAR) = '${escapeSqlString(normalizedSearch)}'`;
+  const exactMatchCondition = `normalize_raw_text("${escapedCol}"::VARCHAR) = '${escapeSqlString(normalizedSearch)}'`;
 
   const countResult = (await Duck.query(
     `SELECT COUNT(*) as count FROM "${escapedTable}" WHERE ${exactMatchCondition}`

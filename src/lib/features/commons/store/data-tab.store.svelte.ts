@@ -214,10 +214,6 @@ export const dataTabActions = {
     notifyPersistence('IMMEDIATE');
   },
 
-  applyCorrections(): void {
-    // Corrections applied — join mappings are consumed by applyJoinCorrections
-  },
-
   reset(): void {
     restoreFromSerialized(undefined);
   }

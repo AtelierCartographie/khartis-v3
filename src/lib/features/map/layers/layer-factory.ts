@@ -16,6 +16,7 @@ import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { FeatureCollection, Geometry } from 'geojson';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
+import { PRINT_STANDARD_TOKENS } from '$lib/features/commons/utils/layout-sizing.utils';
 import * as m from '$lib/paraglide/messages';
 import {
   ArrowExtension,
@@ -33,6 +34,8 @@ import {
   VisualizationType
 } from '$lib/features/commons/store/visualization.store.svelte';
 import {
+  CATEGORY_SHAPE_CYCLE,
+  CategoryShapeMode,
   ColorMode,
   DEFAULT_COLORS,
   DENSITY_DEFAULTS,
@@ -41,6 +44,7 @@ import {
   SHAPE_ORDINAL,
   ShapeType,
   SizeMode,
+  SLIDER_LIMITS,
   SymbolMode,
   ThicknessMode,
   StrokeMode
@@ -137,7 +141,7 @@ function ctxRowAccessor<T>(
 }
 
 const HIGHLIGHT_DIMMING_FACTOR = 0.3;
-const DEFAULT_TEXT_SIZE = 12;
+const DEFAULT_TEXT_SIZE = PRINT_STANDARD_TOKENS.annotations.noteFontSize;
 const DEFAULT_HALO_WIDTH = 2;
 const DEFAULT_TEXT_FONT = 'IBM Plex Sans, sans-serif';
 const DEFAULT_TEXT_FONT_SETTINGS = { sdf: true } as const;
@@ -148,6 +152,8 @@ const SELECTED_POLYGON_STROKE_WIDTH = 3;
 const DASH_EXTENSION = new PathStyleExtension({ dash: true });
 const DEFAULT_DASH_ARRAY: [number, number] = [3, 2];
 const DEFAULT_TEXT_MASK_PADDING: [number, number] = [3, 1];
+const TEXT_COLLISION_SAFE_PADDING: [number, number] = [4, 4];
+const TRANSPARENT_BACKGROUND_COLOR: Color = [0, 0, 0, 0];
 const POINT_SYMBOL_ICON_VIEWBOX_SIZE = 64;
 const DEFAULT_LABEL_COLOR = hexToRgb(DEFAULT_COLORS.label);
 const DEFAULT_TEXT_COLOR = hexToRgb(DEFAULT_COLORS.text);
@@ -421,6 +427,7 @@ function createDoubleProportionalPointLayers(
     return [];
   }
 
+  const pointFillOpacity = viz.symbols.opacity ?? rawFillOpacity;
   const secondaryFillColor = hexToRgb(viz.style.fillColorB ?? '#ff832b');
   const pointShape = viz.symbols.type ?? ShapeType.CIRCLE;
   const minPointRadius = Math.max(1, viz.symbols.minSize ?? 1);
@@ -471,7 +478,7 @@ function createDoubleProportionalPointLayers(
     (row: DeckDataRow): [number, number, number, number] => {
       const rowOpacity = resolveHighlightedOpacityForRow(
         row,
-        rawFillOpacity,
+        pointFillOpacity,
         highlightedRowIds
       );
 
@@ -594,7 +601,7 @@ function createDoubleProportionalPointLayers(
       updateTriggers: {
         getFillColor: [
           triggerColumn,
-          rawFillOpacity,
+          pointFillOpacity,
           fillColor,
           viz.style.fillColorB,
           viz.missingData?.show,
@@ -729,6 +736,7 @@ function createRepresentativePointSymbolLayers(
   const useCategoricalColor = shouldApplyCategorical(viz);
   const useChoropleth = shouldApplyChoropleth(viz);
   const { min: minValue, max: maxValue } = statistics;
+  const pointFillOpacity = viz.symbols?.opacity ?? rawFillOpacity;
   const pointMissingColumn = resolvePointMissingColumn(
     viz,
     useProportionalSymbols,
@@ -797,7 +805,7 @@ function createRepresentativePointSymbolLayers(
   ): [number, number, number, number] => {
     const rowOpacity = resolveHighlightedOpacityForRow(
       row,
-      rawFillOpacity,
+      pointFillOpacity,
       highlightedRowIds
     );
 
@@ -896,9 +904,58 @@ function createRepresentativePointSymbolLayers(
     SHAPE_ORDINAL[pointShape] ?? SHAPE_ORDINAL[ShapeType.CIRCLE];
   const missingShapeOrdinal =
     SHAPE_ORDINAL[missingPointShape] ?? SHAPE_ORDINAL[ShapeType.CIRCLE];
+
+  const categoryShapeMode =
+    viz.modes?.categoryShape ?? CategoryShapeMode.UNIQUE;
+  const useCategoryShape =
+    viz.modes?.symbol === SymbolMode.CATEGORIES &&
+    categoryShapeMode !== CategoryShapeMode.UNIQUE &&
+    !!viz.mapping.categoryColumn;
+  const categoryShapeVector =
+    useCategoryShape && viz.mapping.categoryColumn
+      ? jsTable.getChild(viz.mapping.categoryColumn)
+      : null;
+  const categoryShapeMap = (() => {
+    if (!useCategoryShape || !categoryShapeVector) return null;
+    const labels = viz.classification?.labels;
+    const orderedCategories =
+      labels && labels.length > 0
+        ? labels
+        : (() => {
+            const seen = new Set<string>();
+            const out: string[] = [];
+            for (let i = 0; i < jsTable.numRows; i += 1) {
+              const raw = categoryShapeVector.get(i);
+              if (raw === null || raw === undefined) continue;
+              const key = String(raw);
+              if (!seen.has(key)) {
+                seen.add(key);
+                out.push(key);
+              }
+            }
+            return out;
+          })();
+    const map = new Map<string, number>();
+    for (let i = 0; i < orderedCategories.length; i += 1) {
+      const shape =
+        CATEGORY_SHAPE_CYCLE[i % CATEGORY_SHAPE_CYCLE.length] ??
+        ShapeType.CIRCLE;
+      map.set(orderedCategories[i], SHAPE_ORDINAL[shape]);
+    }
+    return map;
+  })();
+
   const shapeByFeatureId = ctxRowAccessor(ctx, jsTable, (row) => {
     if (pointMissingColumn && isMissingThematicValue(row[pointMissingColumn])) {
       return missingShapeOrdinal;
+    }
+    if (useCategoryShape && categoryShapeMap && viz.mapping.categoryColumn) {
+      const raw = row[viz.mapping.categoryColumn];
+      if (raw !== null && raw !== undefined) {
+        const key = String(raw);
+        const mapped = categoryShapeMap.get(key);
+        if (mapped !== undefined) return mapped;
+      }
     }
     return shapeOrdinal;
   });
@@ -942,6 +999,7 @@ function createRepresentativePointSymbolLayers(
           viz.mapping.categoryColumn,
           categoryColorMap,
           fillColor,
+          pointFillOpacity,
           pointMissingColumn,
           viz.missingData?.show,
           viz.missingData?.color,
@@ -970,7 +1028,15 @@ function createRepresentativePointSymbolLayers(
           viz.missingData?.show,
           viz.missingData?.size
         ],
-        getShape: [shapeOrdinal, missingShapeOrdinal, pointMissingColumn],
+        getShape: [
+          shapeOrdinal,
+          missingShapeOrdinal,
+          pointMissingColumn,
+          categoryShapeMode,
+          useCategoryShape,
+          viz.mapping.categoryColumn,
+          viz.classification?.labels
+        ],
         ...(ctx.yearFilter && {
           getFilterValue: [ctx.yearFilter.column, ctx.yearFilter.value]
         })
@@ -1392,13 +1458,17 @@ function createTextCollisionProps(
   priority: number
 ): Pick<
   TextLayerWithCollisionProps,
-  'extensions' | 'collisionEnabled' | 'collisionGroup' | 'getCollisionPriority'
+  | 'extensions'
+  | 'collisionEnabled'
+  | 'collisionGroup'
+  | 'getCollisionPriority'
+  | 'collisionTestProps'
 > {
   return {
     extensions: [COLLISION_FILTER_EXTENSION],
     collisionEnabled: enabled,
     collisionGroup: resolveTextCollisionGroup(ctx),
-    getCollisionPriority: () => priority
+    getCollisionPriority: priority
   };
 }
 
@@ -1426,7 +1496,10 @@ type TextLayerWithCollisionProps = ConstructorParameters<
 >[0] & {
   collisionEnabled?: boolean;
   collisionGroup?: string;
-  getCollisionPriority?: (datum: TextLayerDatum) => number;
+  getCollisionPriority?: number | ((datum: TextLayerDatum) => number);
+  collisionTestProps?: Partial<
+    ConstructorParameters<typeof TextLayer<TextLayerDatum>>[0]
+  >;
 };
 
 function normalizeOpacity(opacity: number | undefined, fallback = 1): number {
@@ -1499,9 +1572,10 @@ function resolveVariableTextSizeBounds(baseSize: number): {
   minSize: number;
   maxSize: number;
 } {
-  const clampedBaseSize = Math.min(Math.max(baseSize, 8), 32);
-  const minSize = Math.max(8, Math.round(clampedBaseSize * 0.75));
-  const maxSize = Math.min(32, Math.round(clampedBaseSize * 1.75));
+  const { min, max } = SLIDER_LIMITS.textSize;
+  const clampedBaseSize = Math.min(Math.max(baseSize, min), max);
+  const minSize = Math.max(min, Math.round(clampedBaseSize * 0.75));
+  const maxSize = Math.min(max, Math.round(clampedBaseSize * 1.75));
 
   return {
     minSize: Math.min(minSize, maxSize),
@@ -2020,13 +2094,17 @@ function createTextOverlayLayers(
         outlineWidth: viz.style.labelHalo
           ? (viz.style.labelHaloWidth ?? DEFAULT_HALO_WIDTH)
           : 0,
-        background: viz.style.labelDxpMasking ?? false,
-        getBackgroundColor: withOpacity(
-          resolveStyleColor(viz.style.labelHaloColor, [255, 255, 255]),
-          1
-        ),
+        background: true,
+        getBackgroundColor: viz.style.labelDxpMasking
+          ? withOpacity(
+              resolveStyleColor(viz.style.labelHaloColor, [255, 255, 255]),
+              1
+            )
+          : TRANSPARENT_BACKGROUND_COLOR,
         getBorderWidth: 0,
-        backgroundPadding: DEFAULT_TEXT_MASK_PADDING,
+        backgroundPadding: viz.style.labelDxpMasking
+          ? DEFAULT_TEXT_MASK_PADDING
+          : TEXT_COLLISION_SAFE_PADDING,
         backgroundBorderRadius: 2,
         ...createTextCollisionProps(
           ctx,
@@ -2133,13 +2211,17 @@ function createTextOverlayLayers(
           outlineWidth: viz.style.textHalo
             ? (viz.style.textHaloWidth ?? DEFAULT_HALO_WIDTH)
             : 0,
-          background: viz.style.textDxpMasking ?? false,
-          getBackgroundColor: withOpacity(
-            resolveStyleColor(viz.style.textHaloColor, [255, 255, 255]),
-            1
-          ),
+          background: true,
+          getBackgroundColor: viz.style.textDxpMasking
+            ? withOpacity(
+                resolveStyleColor(viz.style.textHaloColor, [255, 255, 255]),
+                1
+              )
+            : TRANSPARENT_BACKGROUND_COLOR,
           getBorderWidth: 0,
-          backgroundPadding: DEFAULT_TEXT_MASK_PADDING,
+          backgroundPadding: viz.style.textDxpMasking
+            ? DEFAULT_TEXT_MASK_PADDING
+            : TEXT_COLLISION_SAFE_PADDING,
           backgroundBorderRadius: 2,
           ...createTextCollisionProps(
             ctx,
@@ -3505,7 +3587,7 @@ export function createPolygonLayers(
           dashJustified: true,
           widthUnits: 'pixels',
           getWidth: strokeWidth / 4,
-          widthMinPixels: 1,
+          widthMinPixels: 0.5,
           pickable: false,
           ...(modelMatrix && { modelMatrix }),
           ...(beforeId && { beforeId }),
@@ -3525,7 +3607,7 @@ export function createPolygonLayers(
           }),
           widthUnits: 'pixels',
           getWidth: strokeWidth / 4,
-          widthMinPixels: 1,
+          widthMinPixels: 0.5,
           pickable: false,
           ...(modelMatrix && { modelMatrix }),
           ...(beforeId && { beforeId }),
@@ -3744,6 +3826,7 @@ export function createPolygonLayers(
       opacity: hasPolyHighlights ? 1 : rawPolyFillOpacity,
       lineWidthUnits: 'pixels',
       lineWidthScale: strokeWidth / 4,
+      lineWidthMinPixels: 0.5,
       pickable: true,
       ...resolveHoverHighlightProps(),
       parameters: {

@@ -10,6 +10,7 @@
     SectionHeading,
     SliderWithInput,
     ToggleWithLabel,
+    VizFilterButton,
     VizFilterSection
   } from './shared';
   import type {
@@ -38,14 +39,13 @@
   } from '../../constants';
   import { Dropdown } from 'carbon-components-svelte';
   import DiscretizationModal from './discretization-modal.svelte';
-  import {
-    ClassificationMethod,
-    type ClassificationConfig
-  } from '$lib/features/commons/store/visualization.store.svelte';
+  import type { ClassificationConfig } from '$lib/features/commons/store/visualization.store.svelte';
+  import { resolveDiscretizationLabel } from './discretization.utils';
 
   interface Props {
-    dataFields?: Array<{ id: number; text: string }>;
+    dataFields?: Array<{ id: number; text: string; type?: string }>;
     visualization?: VisualizationConfig;
+    disabled?: boolean;
     onStyleChange?: (updates: Partial<VisualizationConfig['style']>) => void;
     onModesChange?: (updates: Partial<VisualizationModes>) => void;
     onMissingDataChange?: (updates: Partial<MissingDataConfig>) => void;
@@ -64,6 +64,7 @@
   let {
     dataFields = [],
     visualization,
+    disabled = false,
     onStyleChange,
     onModesChange,
     onMissingDataChange,
@@ -72,47 +73,59 @@
     onInvertPalette,
     onToggleVisibility,
     filters = [],
-    onAddFilter = () => {},
-    onRemoveFilter = () => {},
-    onClearFilters = () => {}
+    onAddFilter,
+    onRemoveFilter,
+    onClearFilters
   }: Props = $props();
 
   let discretizationModalOpen = $state(false);
-  let selectedValueFieldId = $state<number>(0);
-  let selectedSizeFieldId = $state<number>(0);
-  let selectedCategoryFieldId = $state<number>(0);
+  let filterSectionVisible = $state(false);
+  const NONE_FIELD_ID = -1;
+  let selectedValueFieldId = $state<number>(NONE_FIELD_ID);
+  let selectedSizeFieldId = $state<number>(NONE_FIELD_ID);
+  let selectedCategoryFieldId = $state<number>(NONE_FIELD_ID);
+  const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
+  const selectableDataFields = $derived([noneOption, ...dataFields]);
 
   $effect(() => {
     if (visualization?.mapping.valueColumn && dataFields.length > 0) {
       const fieldIndex = dataFields.findIndex(
         (f) => f.text === visualization.mapping.valueColumn
       );
-      if (fieldIndex >= 0) {
-        selectedValueFieldId = dataFields[fieldIndex].id;
-      }
+      selectedValueFieldId =
+        fieldIndex >= 0 ? dataFields[fieldIndex].id : NONE_FIELD_ID;
+    } else {
+      selectedValueFieldId = NONE_FIELD_ID;
     }
 
     if (visualization?.mapping.sizeColumn && dataFields.length > 0) {
       const sizeIndex = dataFields.findIndex(
         (f) => f.text === visualization.mapping.sizeColumn
       );
-      if (sizeIndex >= 0) {
-        selectedSizeFieldId = dataFields[sizeIndex].id;
-      }
+      selectedSizeFieldId =
+        sizeIndex >= 0 ? dataFields[sizeIndex].id : NONE_FIELD_ID;
+    } else {
+      selectedSizeFieldId = NONE_FIELD_ID;
     }
 
     if (visualization?.mapping.categoryColumn && dataFields.length > 0) {
       const categoryIndex = dataFields.findIndex(
         (f) => f.text === visualization.mapping.categoryColumn
       );
-      if (categoryIndex >= 0) {
-        selectedCategoryFieldId = dataFields[categoryIndex].id;
-      }
+      selectedCategoryFieldId =
+        categoryIndex >= 0 ? dataFields[categoryIndex].id : NONE_FIELD_ID;
+    } else {
+      selectedCategoryFieldId = NONE_FIELD_ID;
     }
   });
 
   function handleValueFieldSelect(fieldId: number) {
     selectedValueFieldId = fieldId;
+    if (fieldId === NONE_FIELD_ID) {
+      onMappingChange?.({ valueColumn: undefined });
+      return;
+    }
+
     const field = dataFields.find((item) => item.id === fieldId);
     if (field && onMappingChange) {
       onMappingChange({ valueColumn: field.text });
@@ -121,6 +134,11 @@
 
   function handleSizeFieldSelect(fieldId: number) {
     selectedSizeFieldId = fieldId;
+    if (fieldId === NONE_FIELD_ID) {
+      onMappingChange?.({ sizeColumn: undefined });
+      return;
+    }
+
     const field = dataFields.find((item) => item.id === fieldId);
     if (field && onMappingChange) {
       onMappingChange({ sizeColumn: field.text });
@@ -129,6 +147,11 @@
 
   function handleCategoryFieldSelect(fieldId: number) {
     selectedCategoryFieldId = fieldId;
+    if (fieldId === NONE_FIELD_ID) {
+      onMappingChange?.({ categoryColumn: undefined });
+      return;
+    }
+
     const field = dataFields.find((item) => item.id === fieldId);
     if (field && onMappingChange) {
       onMappingChange({ categoryColumn: field.text });
@@ -156,7 +179,6 @@
   let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
   let missingDataOpacity = $state<number>(VISUALIZATION_DEFAULTS.lineOpacity);
   let missingDataShape = $state<MissingDataShape>(MissingDataShape.CIRCLE);
-  let _missingDataLabel = $state<string>('');
 
   $effect(() => {
     if (visualization?.style) {
@@ -188,7 +210,6 @@
           : VISUALIZATION_DEFAULTS.lineOpacity;
       missingDataShape =
         visualization.missingData.shape ?? MissingDataShape.CIRCLE;
-      _missingDataLabel = visualization.missingData.label ?? '';
     }
   });
 
@@ -269,11 +290,6 @@
     onMissingDataChange?.({ shape: shape as MissingDataShape });
   }
 
-  function _handleMissingDataLabelChange(label: string) {
-    _missingDataLabel = label;
-    onMissingDataChange?.({ label });
-  }
-
   const thicknessModeIndex = $derived(
     [
       ThicknessMode.UNIQUE,
@@ -298,40 +314,29 @@
     onClassificationChange?.(classification);
   }
 
-  const discretizationLabel = $derived.by(() => {
-    if (!visualization?.classification) return m.discretization_method_jenks();
-    const methodLabels: Record<ClassificationMethod, () => string> = {
-      [ClassificationMethod.JENKS]: m.discretization_method_jenks,
-      [ClassificationMethod.QUANTILES]: m.discretization_method_quantile,
-      [ClassificationMethod.EQUAL_INTERVAL]:
-        m.discretization_method_equal_interval,
-      [ClassificationMethod.STANDARD_DEVIATION]:
-        m.discretization_method_nested_means,
-      [ClassificationMethod.MANUAL]: m.discretization_method_manual,
-      [ClassificationMethod.Q6]: m.discretization_method_q6,
-      [ClassificationMethod.NESTED_MEANS]: m.discretization_method_nested_means,
-      [ClassificationMethod.HEAD_TAIL]: m.discretization_method_head_tail
-    };
-    const method =
-      visualization.classification.method ?? ClassificationMethod.QUANTILES;
-    const numClasses =
-      visualization.classification.numClasses ??
-      visualization.classification.classes ??
-      5;
-    const methodLabel = methodLabels[method]?.() ?? String(method);
-    return `${methodLabel}, ${numClasses} ${m.discretization_num_classes().toLowerCase()}`;
-  });
+  const discretizationLabel = $derived(
+    resolveDiscretizationLabel(visualization?.classification)
+  );
 </script>
 
 <ExpandableSection
   title={m.lines_title()}
   defaultOpen={false}
   showToggle
+  actionsEnd
   toggleChecked={enabled}
+  disabled={disabled}
   onToggleChange={handleToggleChange}
 >
   {#snippet icon()}
     <InfoPopover text={m.lines_section_info()} />
+    <VizFilterButton
+      active={filterSectionVisible || filters.length > 0}
+      count={filters.length}
+      onToggle={() => {
+        filterSectionVisible = !filterSectionVisible;
+      }}
+    />
   {/snippet}
 
   <div class="lines-config">
@@ -352,13 +357,15 @@
         min={SLIDER_LIMITS.lineWidth.min}
         max={SLIDER_LIMITS.lineWidth.max}
         value={thickness}
+        showMinMax
+        inputWidth="128px"
         onchange={handleThicknessChange}
       />
     {:else if thicknessMode === ThicknessMode.PROPORTIONAL}
       <div class="field-group">
         <Dropdown
           titleText={m.thickness_according()}
-          items={dataFields}
+          items={selectableDataFields}
           selectedId={selectedSizeFieldId}
           on:select={(e) => handleSizeFieldSelect(e.detail.selectedId)}
           type="default"
@@ -369,13 +376,15 @@
         min={1}
         max={SLIDER_LIMITS.lineMaxWidth.max}
         value={maxThickness}
+        showMinMax
+        inputWidth="128px"
         onchange={handleMaxThicknessChange}
       />
     {:else if thicknessMode === ThicknessMode.CLASSES}
       <div class="field-group">
         <Dropdown
           titleText={m.thickness_according()}
-          items={dataFields}
+          items={selectableDataFields}
           selectedId={selectedValueFieldId}
           on:select={(e) => handleValueFieldSelect(e.detail.selectedId)}
           type="default"
@@ -391,6 +400,8 @@
         min={1}
         max={SLIDER_LIMITS.lineMaxWidth.max}
         value={maxThickness}
+        showMinMax
+        inputWidth="128px"
         onchange={handleMaxThicknessChange}
       />
     {/if}
@@ -416,7 +427,7 @@
       <div class="field-group">
         <Dropdown
           titleText={m.color_according()}
-          items={dataFields}
+          items={selectableDataFields}
           selectedId={selectedValueFieldId}
           on:select={(e) => handleValueFieldSelect(e.detail.selectedId)}
           type="default"
@@ -439,7 +450,7 @@
       <div class="field-group">
         <Dropdown
           titleText={m.color_according()}
-          items={dataFields}
+          items={selectableDataFields}
           selectedId={selectedCategoryFieldId}
           on:select={(e) => handleCategoryFieldSelect(e.detail.selectedId)}
           type="default"
@@ -460,18 +471,20 @@
       />
     {/if}
 
-    <ToggleWithLabel
-      label={m.dashed()}
-      toggled={dashed}
-      ontoggle={handleDashedChange}
-    />
-
     <SliderWithInput
       label={m.opacity()}
       min={SLIDER_LIMITS.lineOpacity.min}
       max={SLIDER_LIMITS.lineOpacity.max}
       value={opacity}
+      showMinMax
+      inputWidth="128px"
       onchange={handleOpacityChange}
+    />
+
+    <ToggleWithLabel
+      label={m.dashed()}
+      toggled={dashed}
+      ontoggle={handleDashedChange}
     />
 
     <MissingDataSection
@@ -486,13 +499,15 @@
       showShapeSelector={true}
     />
 
-    <VizFilterSection
-      dataFields={dataFields}
-      filters={filters}
-      onAddFilter={onAddFilter}
-      onRemoveFilter={onRemoveFilter}
-      onClearFilters={onClearFilters}
-    />
+    {#if filterSectionVisible || filters.length > 0}
+      <VizFilterSection
+        dataFields={dataFields}
+        filters={filters}
+        onAddFilter={onAddFilter ?? (() => {})}
+        onRemoveFilter={onRemoveFilter ?? (() => {})}
+        onClearFilters={onClearFilters ?? (() => {})}
+      />
+    {/if}
   </div>
 </ExpandableSection>
 
@@ -506,8 +521,8 @@
   .lines-config {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-04);
-    padding: var(--cds-spacing-03);
+    gap: var(--cds-spacing-05);
+    padding: var(--cds-spacing-04) var(--cds-spacing-03) var(--cds-spacing-05);
   }
 
   .field-group {

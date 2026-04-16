@@ -21,6 +21,7 @@
     onToggleChange?: (checked: boolean) => void;
     onToggle?: (expanded: boolean) => void;
     titleClass?: string;
+    actionsEnd?: boolean;
   }
 
   const {
@@ -38,7 +39,8 @@
     disabledReason,
     onToggleChange,
     onToggle,
-    titleClass = ''
+    titleClass = '',
+    actionsEnd = false
   }: Props = $props();
 
   let expanded = $state<boolean>(
@@ -139,7 +141,7 @@
         (e.preventDefault(), toggle())}
     >
       <div class="section-title-group">
-        <span class="section-title {titleClass}">
+        <span class="section-title {titleClass}" class:actions-end={actionsEnd}>
           {title}{count !== undefined ? ` (${count})` : ''}
 
           {#if icon}
@@ -183,6 +185,15 @@
   .section-container {
     border-top: 1px solid var(--cds-border-subtle-00, #e0e0e0);
     background: transparent;
+  }
+
+  :global(
+    .section-container:has(> .section-header.expanded) + .section-container
+  ),
+  :global(
+    .section-container:has(> .section-header.expanded) + * + .section-container
+  ) {
+    border-top: none;
   }
 
   .section-header {
@@ -251,6 +262,11 @@
     margin-left: var(--cds-spacing-02);
   }
 
+  .section-title.actions-end .section-custom-icon {
+    margin-left: auto;
+    gap: var(--cds-spacing-03);
+  }
+
   .section-chevron {
     display: flex;
     align-items: center;
@@ -264,7 +280,6 @@
 
   .section-body {
     background-color: var(--cds-layer-01);
-    border-top: 1px solid var(--cds-border-subtle-01);
     padding: 8px 16px 16px 16px;
   }
 

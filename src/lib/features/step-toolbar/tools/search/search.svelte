@@ -1,11 +1,17 @@
 <script lang="ts">
+  import Button from '$lib/features/commons/components/carbon/button.svelte';
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
   import { m } from '$lib/paraglide/messages';
-  import { Checkbox, Dropdown, Search } from 'carbon-components-svelte';
-  import { ChevronLeft, ChevronRight } from 'carbon-icons-svelte';
+  import {
+    Checkbox,
+    Dropdown,
+    Search,
+    TextInput
+  } from 'carbon-components-svelte';
+  import { ChevronLeft, ChevronRight, Restart } from 'carbon-icons-svelte';
   import { onDestroy } from 'svelte';
   import { searchState, searchActions } from './search.store.svelte';
 
@@ -14,6 +20,11 @@
   function handleSearchInput(e: Event) {
     const target = e.target as HTMLInputElement;
     searchActions.setSearchValue(target.value);
+  }
+
+  function handleReplaceInput(e: Event) {
+    const target = e.target as HTMLInputElement;
+    searchActions.setReplaceValue(target.value);
   }
 
   function navigateResults(direction: 'prev' | 'next') {
@@ -47,10 +58,20 @@
   const currentResultIndex = $derived(searchState.currentResultIndex);
   const hasResults = $derived(results.length > 0);
   const showResults = $derived(searchState.searchValue.trim().length >= 2);
-  const noResults = $derived(showResults && !hasResults);
-  const currentResult = $derived(
-    currentResultIndex >= 0 ? results[currentResultIndex] : null
+  const noResults = $derived(
+    showResults && !hasResults && !searchState.isSearching
   );
+  const canReplace = $derived(
+    currentResultIndex >= 0 && searchState.replaceValue.trim().length > 0
+  );
+
+  let resultsListEl = $state<HTMLUListElement | null>(null);
+
+  $effect(() => {
+    if (!resultsListEl || currentResultIndex < 0) return;
+    const items = resultsListEl.querySelectorAll('li');
+    items[currentResultIndex]?.scrollIntoView({ block: 'nearest' });
+  });
 
   onDestroy(() => {
     searchActions.clearSearch();
@@ -95,17 +116,21 @@
 
   {#if showResults}
     <div class="results-navigation">
-      {#if noResults}
+      {#if searchState.isSearching}
+        <span class="results-text results-text--disabled"
+          >{m.search_loading()}</span
+        >
+      {:else if noResults}
         <span class="results-text results-text--disabled"
           >{m.search_no_results()}</span
         >
       {:else}
-        <span class="results-text"
-          >{m.search_results_count({
+        <span class="results-text">
+          {m.search_results_count({
             current: currentResultIndex + 1,
             total: results.length
-          })}</span
-        >
+          })}
+        </span>
       {/if}
 
       <div class="results-buttons">
@@ -114,7 +139,7 @@
           size="small"
           iconDescription={m.search_previous()}
           icon={ChevronLeft}
-          disabled={noResults}
+          disabled={noResults || searchState.isSearching}
           onclick={() => navigateResults('prev')}
         />
         <IconButton
@@ -122,21 +147,68 @@
           size="small"
           iconDescription={m.search_next()}
           icon={ChevronRight}
-          disabled={noResults}
+          disabled={noResults || searchState.isSearching}
           onclick={() => navigateResults('next')}
         />
       </div>
     </div>
-    {#if currentResult}
-      <div class="current-result" aria-live="polite">
-        <p class="current-result__column">{currentResult.columnName}</p>
-        <p class="current-result__value">{currentResult.value}</p>
-      </div>
+
+    {#if hasResults}
+      <ul
+        bind:this={resultsListEl}
+        class="results-list"
+        role="listbox"
+        aria-label={m.search_results_count({
+          current: currentResultIndex + 1,
+          total: results.length
+        })}
+      >
+        {#each results as result, i (result.rowId + '-' + result.columnName)}
+          <li
+            class="results-list__item"
+            class:results-list__item--selected={i === currentResultIndex}
+            role="option"
+            aria-selected={i === currentResultIndex}
+            tabindex="0"
+            onclick={() => searchActions.goToResult(i)}
+            onkeydown={(e: KeyboardEvent) =>
+              e.key === 'Enter' && searchActions.goToResult(i)}
+          >
+            <span class="results-list__column">{result.columnName}</span>
+            <span class="results-list__value">
+              {result.value || m.search_no_value()}
+            </span>
+          </li>
+        {/each}
+      </ul>
     {/if}
   {/if}
+
+  <div class="replace-section">
+    <TextInput
+      size="sm"
+      labelText={m.search_replace_by()}
+      placeholder={m.search_replace_placeholder()}
+      value={searchState.replaceValue}
+      on:input={handleReplaceInput}
+    />
+    <div class="replace-action">
+      <p class="helper-text">{m.search_replace_exact_only()}</p>
+      <Button
+        kind="secondary"
+        size="sm"
+        icon={Restart}
+        iconDescription={m.search_replace_button()}
+        disabled={!canReplace}
+        on:click={() => void searchActions.replaceCurrentResult()}
+      >
+        {m.search_replace_button()}
+      </Button>
+    </div>
+  </div>
 </div>
 
-<style>
+<style lang="scss">
   #khartis-search-tool {
     display: flex;
     flex-direction: column;
@@ -151,6 +223,12 @@
     letter-spacing: 0.32px;
     color: var(--cds-text-helper, #6f6f6f);
     margin: 0;
+  }
+
+  .search-options {
+    display: flex;
+    gap: var(--cds-spacing-05);
+    flex-wrap: wrap;
   }
 
   .results-navigation {
@@ -182,33 +260,68 @@
     align-items: center;
   }
 
-  .current-result {
+  .results-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-height: 12rem;
+    overflow-y: auto;
+    border: 1px solid var(--cds-border-subtle-01);
+  }
+
+  .results-list__item {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-02);
-    padding: var(--cds-spacing-03);
-    border: 1px solid var(--cds-border-subtle-01);
+    gap: var(--cds-spacing-01);
+    padding: var(--cds-spacing-03) var(--cds-spacing-05);
+    cursor: pointer;
     background: var(--cds-layer-01, #f4f4f4);
+
+    &:hover {
+      background: var(--cds-layer-hover-01, #e8e8e8);
+    }
+
+    &--selected {
+      background: var(--cds-layer-selected-01, #e0e0e0);
+
+      &:hover {
+        background: var(--cds-layer-selected-hover-01, #d1d1d1);
+      }
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--cds-focus, #0f62fe);
+      outline-offset: -2px;
+    }
   }
 
-  .search-options {
-    display: flex;
-    gap: var(--cds-spacing-05);
-    flex-wrap: wrap;
-  }
-
-  .current-result__column {
-    margin: 0;
+  .results-list__column {
+    font-family: 'IBM Plex Sans', sans-serif;
     font-size: 0.75rem;
     line-height: 1rem;
     color: var(--cds-text-secondary, #525252);
   }
 
-  .current-result__value {
-    margin: 0;
+  .results-list__value {
+    font-family: 'IBM Plex Sans', sans-serif;
     font-size: 0.875rem;
     line-height: 1.25rem;
     color: var(--cds-text-primary, #161616);
     word-break: break-word;
+  }
+
+  .replace-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-03);
+    padding-top: var(--cds-spacing-03);
+    border-top: 1px solid var(--cds-border-subtle-01);
+  }
+
+  .replace-action {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--cds-spacing-03);
   }
 </style>

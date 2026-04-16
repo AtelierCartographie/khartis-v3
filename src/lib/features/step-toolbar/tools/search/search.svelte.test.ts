@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as m from '$lib/paraglide/messages';
 import SearchTool from './search.svelte';
 
@@ -15,7 +15,8 @@ const mocks = vi.hoisted(() => ({
     isSearching: false,
     caseSensitive: false,
     wholeWord: false,
-    useRegex: false
+    useRegex: false,
+    replaceValue: ''
   },
   searchActions: {
     setSearchValue: vi.fn(),
@@ -25,7 +26,8 @@ const mocks = vi.hoisted(() => ({
     toggleCaseSensitive: vi.fn(),
     toggleWholeWord: vi.fn(),
     toggleUseRegex: vi.fn(),
-    clearSearch: vi.fn()
+    clearSearch: vi.fn(),
+    setReplaceValue: vi.fn()
   }
 }));
 
@@ -63,6 +65,10 @@ vi.mock('./search.store.svelte', () => ({
   searchActions: mocks.searchActions
 }));
 
+beforeAll(() => {
+  Element.prototype.scrollIntoView = vi.fn();
+});
+
 describe('visualization search tool', () => {
   beforeEach(() => {
     mocks.searchActions.clearSearch.mockClear();
@@ -74,7 +80,7 @@ describe('visualization search tool', () => {
     mocks.searchState.currentResultIndex = 1;
   });
 
-  it('shows the current result details without replace controls', () => {
+  it('shows the current result details and the replace input', () => {
     render(SearchTool);
 
     expect(
@@ -83,8 +89,8 @@ describe('visualization search tool', () => {
     expect(screen.getByText('region')).toBeInTheDocument();
     expect(screen.getByText('Sevilla')).toBeInTheDocument();
     expect(
-      screen.queryByRole('textbox', { name: m.search_replace_with() })
-    ).not.toBeInTheDocument();
+      screen.getByRole('textbox', { name: m.search_replace_with() })
+    ).toBeInTheDocument();
   });
 
   it('does not expose internal id or geometry columns in the source dropdown', async () => {

@@ -12,4 +12,5 @@ export interface SearchState {
   caseSensitive: boolean;
   wholeWord: boolean;
   useRegex: boolean;
+  replaceValue: string;
 }

@@ -112,6 +112,6 @@
   }
 
   :global(.basemap-tabs .toggle-tab.active) {
-    background-color: #cac5c4;
+    background-color: var(--cds-border-subtle-01);
   }
 </style>

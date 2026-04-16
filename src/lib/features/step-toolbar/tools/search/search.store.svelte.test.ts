@@ -4,10 +4,13 @@ const mocks = vi.hoisted(() => ({
   duckQuery: vi.fn(),
   searchInTable: vi.fn(),
   getDatasetBySourceFile: vi.fn(),
+  centerMapOnTableRow: vi.fn(),
   pinAt: vi.fn(),
   unpin: vi.fn(),
   setHighlightedRows: vi.fn(),
   clearHighlights: vi.fn(),
+  bumpDatasetsVersion: vi.fn(),
+  invalidateTableCache: vi.fn(),
   dataset: {
     id: 'dataset-1',
     sourceFileId: 'source-1',
@@ -45,14 +48,27 @@ vi.mock('$lib/features/commons/store/visualization.store.svelte', () => ({
 
 vi.mock('$lib/features/duckdb', () => ({
   Duck: {
-    query: mocks.duckQuery
+    query: mocks.duckQuery,
+    invalidateTableCache: mocks.invalidateTableCache
   }
 }));
 
 vi.mock('$lib/features/duckdb/orchestrator/orchestrator.svelte', () => ({
   duckDBOrchestrator: {
     getDatasetBySourceFile: mocks.getDatasetBySourceFile,
-    searchInTable: mocks.searchInTable
+    searchInTable: mocks.searchInTable,
+    bumpDatasetsVersion: mocks.bumpDatasetsVersion
+  }
+}));
+
+vi.mock('$lib/features/map/utils/center-on-table-row.utils', () => ({
+  centerMapOnTableRow: mocks.centerMapOnTableRow
+}));
+
+vi.mock('$lib/features/map/services/basemap.service.svelte', () => ({
+  basemapService: {
+    initialize: vi.fn(),
+    loadGeometryIntoDuckDB: vi.fn()
   }
 }));
 
@@ -80,6 +96,9 @@ describe('search store tooltip integration', () => {
     mocks.unpin.mockReset();
     mocks.setHighlightedRows.mockReset();
     mocks.clearHighlights.mockReset();
+    mocks.centerMapOnTableRow.mockReset();
+    mocks.bumpDatasetsVersion.mockReset();
+    mocks.invalidateTableCache.mockReset();
 
     mocks.getDatasetBySourceFile.mockReturnValue({
       tableName: 'nuts2_table'
@@ -147,6 +166,109 @@ describe('search store tooltip integration', () => {
         expect.objectContaining({ key: '__id' }),
         expect.objectContaining({ key: 'geom' })
       ])
+    );
+  });
+
+  it('delegates centering to the row-centering helper when navigating to a result', async () => {
+    const { searchActions } = await import('./search.store.svelte');
+
+    searchActions.clearSearch();
+
+    searchActions.setSearchValue('Braunschweig');
+    await searchActions.performSearch();
+
+    expect(mocks.centerMapOnTableRow).toHaveBeenCalledWith({
+      tableName: 'nuts2_table',
+      rowId: 55,
+      sourceFileId: 'source-1',
+      joinedBasemap: undefined,
+      gpsColumns: undefined
+    });
+  });
+
+  it('passes joined basemap metadata through to the centering helper for joined CSV data', async () => {
+    mocks.getDatasetBySourceFile.mockReturnValue({
+      tableName: 'nuts2_table',
+      joinedBasemap: 'europe-nuts2'
+    });
+
+    const { searchActions } = await import('./search.store.svelte');
+
+    searchActions.clearSearch();
+
+    searchActions.setSearchValue('Braunschweig');
+    await searchActions.performSearch();
+
+    expect(mocks.centerMapOnTableRow).toHaveBeenCalledWith({
+      tableName: 'nuts2_table',
+      rowId: 55,
+      sourceFileId: 'source-1',
+      joinedBasemap: 'europe-nuts2',
+      gpsColumns: undefined
+    });
+  });
+});
+
+describe('search store replace integration', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    mocks.duckQuery.mockReset();
+    mocks.searchInTable.mockReset();
+    mocks.getDatasetBySourceFile.mockReset();
+    mocks.pinAt.mockReset();
+    mocks.unpin.mockReset();
+    mocks.setHighlightedRows.mockReset();
+    mocks.clearHighlights.mockReset();
+    mocks.centerMapOnTableRow.mockReset();
+    mocks.bumpDatasetsVersion.mockReset();
+    mocks.invalidateTableCache.mockReset();
+
+    mocks.getDatasetBySourceFile.mockReturnValue({ tableName: 'nuts2_table' });
+    mocks.searchInTable.mockResolvedValue({
+      exactCount: 1,
+      containsCount: 0,
+      fuzzyCount: 0,
+      totalCount: 1,
+      results: [
+        { rowId: 55, columnName: 'NAME_LATN', value: 'Braunschweig', score: 1 }
+      ]
+    });
+    mocks.duckQuery.mockResolvedValue([]);
+  });
+
+  it('should UPDATE the cell and invalidate the cache when replacing a result', async () => {
+    const { searchActions } = await import('./search.store.svelte');
+
+    searchActions.clearSearch();
+    searchActions.setSearchValue('Braunschweig');
+    await searchActions.performSearch();
+
+    searchActions.setReplaceValue('Braunschweig-Wolfsburg');
+    await searchActions.replaceCurrentResult();
+
+    expect(mocks.duckQuery).toHaveBeenCalledWith(
+      expect.stringContaining(
+        'UPDATE "nuts2_table" SET "NAME_LATN" = \'Braunschweig-Wolfsburg\' WHERE __id = 55'
+      ),
+      { format: 'array' }
+    );
+    expect(mocks.invalidateTableCache).toHaveBeenCalledWith('nuts2_table');
+    expect(mocks.bumpDatasetsVersion).toHaveBeenCalled();
+  });
+
+  it('should not replace when replace value is empty', async () => {
+    const { searchActions } = await import('./search.store.svelte');
+
+    searchActions.clearSearch();
+    searchActions.setSearchValue('Braunschweig');
+    await searchActions.performSearch();
+
+    searchActions.setReplaceValue('');
+    await searchActions.replaceCurrentResult();
+
+    expect(mocks.duckQuery).not.toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE'),
+      expect.anything()
     );
   });
 });

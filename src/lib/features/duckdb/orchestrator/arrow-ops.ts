@@ -3,6 +3,11 @@ import {
   GEOMETRY_WKT_TYPES,
   hasGeometryType
 } from '$lib/features/commons/constants/geometry.constants';
+import {
+  isGeometryColumnType,
+  normalizeCrsName,
+  extractGeometryColumnCrs
+} from '$lib/features/data-pipeline/operations/geometry';
 import type { GeoArrowMetadata } from '$lib/features/commons/types/geoarrow.types';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import {
@@ -13,51 +18,8 @@ import { Field, Schema, Table, Type, tableFromIPC } from 'apache-arrow/Arrow';
 // Plain Map — metadata is non-reactive data processing (no need for SvelteMap proxy)
 import { DUCK_CONST, GEO_CONSTANTS } from '../constants';
 
-/**
- * DuckDB >= 1.33 may return geometry column types like `GEOMETRY('EPSG:4326')`
- * instead of plain `GEOMETRY`. This helper matches both forms.
- */
-function isGeometryColumnType(columnType: string): boolean {
-  return (
-    columnType === GEOMETRY_COLUMN_TYPE ||
-    columnType.startsWith(GEOMETRY_COLUMN_TYPE + '(')
-  );
-}
-
 function escapeSqlLiteral(value: string): string {
   return value.replace(/'/g, "''");
-}
-
-function normalizeCrsName(crs: string | null | undefined): string | null {
-  if (!crs) return null;
-
-  const trimmed = crs.trim();
-  if (!trimmed) return null;
-
-  if (/^epsg:\d+$/i.test(trimmed)) {
-    return trimmed.toUpperCase();
-  }
-
-  if (/^\d+$/.test(trimmed)) {
-    return `EPSG:${trimmed}`;
-  }
-
-  if (/^wgs\s*84$/i.test(trimmed)) {
-    return GEO_CONSTANTS.WGS84_CRS;
-  }
-
-  return trimmed;
-}
-
-function extractGeometryColumnCrs(
-  columnType: string | null | undefined
-): string | null {
-  if (!columnType) {
-    return null;
-  }
-
-  const match = columnType.match(/^GEOMETRY\('([^']+)'\)$/i);
-  return normalizeCrsName(match?.[1]);
 }
 
 function getGeoArrowCrsName(
@@ -73,7 +35,7 @@ function getGeoArrowCrsName(
     return `${crs.id.authority}:${crs.id.code}`;
   }
 
-  return normalizeCrsName(crs.name);
+  return normalizeCrsName(crs.name) ?? null;
 }
 
 function buildGeoArrowCrs(
@@ -382,7 +344,7 @@ export async function addGeoArrowMetadataFromDuckDB(
         return table;
       }
 
-      geometryCrs = extractGeometryColumnCrs(geomColumn.column_type);
+      geometryCrs = extractGeometryColumnCrs(geomColumn.column_type) ?? null;
 
       if (overrides?.geometryType) {
         geometryType = overrides.geometryType;
