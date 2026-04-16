@@ -1,3 +1,9 @@
+# [1.0.0-staging.10](https://github.com/AtelierCartographie/khartis-v3/compare/v1.0.0-staging.9...v1.0.0-staging.10) (2026-04-16)
+
+### Bug Fixes
+
+- **semio:** improve geoid column detection scoring ([2475e2a](https://github.com/AtelierCartographie/khartis-v3/commit/2475e2a22b38e53d291504402ae25974f50faf1c))
+
 # [1.0.0-staging.9](https://github.com/AtelierCartographie/khartis-v3/compare/v1.0.0-staging.8...v1.0.0-staging.9) (2026-04-16)
 
 ### Features
