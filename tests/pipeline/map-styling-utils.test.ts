@@ -16,6 +16,8 @@ import {
   getClassedSizeForValue,
   getCategoricalColorMap,
   hasCompleteCategoricalColorMap,
+  shouldApplyLineCategorical,
+  shouldApplyLineChoropleth,
   shouldApplyChoropleth,
   shouldApplyProportionalSymbols,
   shouldApplyCategorical
@@ -24,7 +26,11 @@ import {
   getVisualizationRenderOrder,
   getMapLayerRenderOrder
 } from '$lib/features/map/utils/layer-order.utils';
-import { FillMode, SymbolMode } from '$lib/features/main-toolbar/constants';
+import {
+  ColorMode,
+  FillMode,
+  SymbolMode
+} from '$lib/features/main-toolbar/constants';
 import { ScaleType } from '$lib/features/commons/store/visualization.store.svelte';
 
 // ─── getColorForValue ──────────────────────────────────────────────────────
@@ -257,6 +263,83 @@ describe('shouldApplyCategorical', () => {
       classification: { ...base.classification, colors: [] }
     };
     expect(shouldApplyCategorical(empty as never)).toBe(false);
+  });
+});
+
+describe('shouldApplyLineCategorical', () => {
+  const base = {
+    modes: { fill: FillMode.NONE, color: ColorMode.CATEGORIES },
+    mapping: { categoryColumn: 'type' },
+    classification: { colors: ['#f00', '#0f0'], method: 'manual', classes: 2 },
+    type: 'categorical' as never,
+    id: 'v1',
+    name: 'V',
+    datasetId: 'd1',
+    enabled: true,
+    style: {}
+  };
+
+  it('returns true when line color mode is CATEGORIES', () => {
+    expect(shouldApplyLineCategorical(base as never)).toBe(true);
+  });
+
+  it('returns true for legacy fill-based categorical lines', () => {
+    expect(
+      shouldApplyLineCategorical({
+        ...base,
+        modes: { fill: FillMode.CATEGORIES, color: ColorMode.UNIQUE }
+      } as never)
+    ).toBe(true);
+  });
+
+  it('returns false when line color mode is not categorical', () => {
+    expect(
+      shouldApplyLineCategorical({
+        ...base,
+        modes: { fill: FillMode.NONE, color: ColorMode.UNIQUE }
+      } as never)
+    ).toBe(false);
+  });
+});
+
+describe('shouldApplyLineChoropleth', () => {
+  const base = {
+    modes: { fill: FillMode.NONE, color: ColorMode.CLASSES },
+    mapping: { valueColumn: 'pop' },
+    classification: {
+      breaks: [0, 10, 20],
+      colors: ['#f00', '#0f0', '#00f'],
+      method: 'quantiles',
+      classes: 3
+    },
+    type: 'choropleth' as never,
+    id: 'v1',
+    name: 'V',
+    datasetId: 'd1',
+    enabled: true,
+    style: {}
+  };
+
+  it('returns true when line color mode is CLASSES', () => {
+    expect(shouldApplyLineChoropleth(base as never)).toBe(true);
+  });
+
+  it('returns true for legacy fill-based classed lines', () => {
+    expect(
+      shouldApplyLineChoropleth({
+        ...base,
+        modes: { fill: FillMode.CLASSES, color: ColorMode.UNIQUE }
+      } as never)
+    ).toBe(true);
+  });
+
+  it('returns false when line color mode is not classed', () => {
+    expect(
+      shouldApplyLineChoropleth({
+        ...base,
+        modes: { fill: FillMode.NONE, color: ColorMode.UNIQUE }
+      } as never)
+    ).toBe(false);
   });
 });
 
