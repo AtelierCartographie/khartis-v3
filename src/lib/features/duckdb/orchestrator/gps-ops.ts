@@ -92,7 +92,27 @@ export async function validateGPSColumns(
       (stats.lat_max > 90 || stats.lat_min < -90);
     const lonLooksLikeLat = stats.lon_min >= -90 && stats.lon_max <= 90;
 
-    const possibleInversion = latLooksLikeLon && lonLooksLikeLat;
+    const latAbsMax = Math.max(
+      Math.abs(stats.lat_min),
+      Math.abs(stats.lat_max)
+    );
+    const lonAbsMin = Math.min(
+      Math.abs(stats.lon_min),
+      Math.abs(stats.lon_max)
+    );
+    const lonAbsMax = Math.max(
+      Math.abs(stats.lon_min),
+      Math.abs(stats.lon_max)
+    );
+    const magnitudeSwap =
+      latInRange &&
+      lonInRange &&
+      latAbsMax < 15 &&
+      lonAbsMin > 40 &&
+      lonAbsMax < 90;
+
+    const possibleInversion =
+      (latLooksLikeLon && lonLooksLikeLat) || magnitudeSwap;
 
     let warning: string | undefined;
 
