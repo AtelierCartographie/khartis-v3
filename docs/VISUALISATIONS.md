@@ -135,7 +135,7 @@ Découpage de données continues en classes. 8 méthodes :
 | `q6`                 | 6 quantiles prédéfinis (5e, 27.5e, 50e, 72.5e, 95e) |
 | `nested_means`       | Moyennes emboîtées récursives                       |
 | `head_tail`          | Head/tail breaks (distributions lourdes)            |
-| `standard_deviation` | Écart-type (→ nested_means en fallback)             |
+| `standard_deviation` | Écart-type (classes centrées sur la moyenne)        |
 | `manual`             | Bornes saisies manuellement                         |
 
 Options : méthode + nombre de classes. **Valeur de rupture** : active la palette divergente, positionnable.

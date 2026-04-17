@@ -66,11 +66,11 @@ Implémentée via **macros SQL DuckDB** (appelées une fois à l'init, jamais re
 | `NESTED_MEANS`       | `nested_means()` | Moyennes emboîtées récursivement — distributions asymétriques                      |
 | `HEAD_TAIL`          | `headtail2()`    | Head/Tail breaks — distributions à forte queue (power-law, exponentielles)         |
 | `MANUAL`             | (aucune)         | Bornes saisies manuellement — contrôle total                                       |
-| `STANDARD_DEVIATION` | `nested_means`   | Écart-type — en interne, utilise `nested_means` comme fallback                     |
+| `STANDARD_DEVIATION` | calcul local     | Écart-type — seuils centrés sur la moyenne via `STDDEV_SAMP()`                     |
 
 **Pipeline** : `calculateBreaks()` → récupère min/max via DuckDB → appelle la macro → `round_thresholds()` (arrondi lisible) → COUNT par classe via un seul `CASE WHEN` → `BreaksResult { breaks[], counts[], min, max }`.
 
-**Note** : `standard_deviation` dans l'enum pointe vers `nested_means` (fallback). La méthode n'a pas de macro dédiée.
+**Note** : `standard_deviation` n'utilise pas de macro DuckDB dédiée. Les seuils sont calculés localement à partir de `AVG()` et `STDDEV_SAMP()`, puis arrondis via `round_thresholds()`.
 
 **Mémorisation** : `breaksCache` (Map, 50 entrées max) — évite les requêtes redondantes sur simple changement de style.
 
