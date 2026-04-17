@@ -220,7 +220,7 @@
           max={10}
           step={1}
           stepMultiplier={1}
-          on:change={handleThicknessChange}
+          on:input={handleThicknessChange}
           minLabel=""
           maxLabel=""
         />
@@ -238,7 +238,7 @@
           max={100}
           step={1}
           stepMultiplier={5}
-          on:change={handleSmoothnessChange}
+          on:input={handleSmoothnessChange}
           minLabel=""
           maxLabel=""
         />
@@ -347,8 +347,7 @@
           max={100}
           step={5}
           stepMultiplier={5}
-          on:change={(e) =>
-            annotationsActions.applyStyle({ opacity: e.detail })}
+          on:input={(e) => annotationsActions.applyStyle({ opacity: e.detail })}
           minLabel=""
           maxLabel=""
         />
