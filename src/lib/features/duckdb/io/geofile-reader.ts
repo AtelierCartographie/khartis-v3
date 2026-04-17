@@ -31,6 +31,60 @@ interface GeofileMetadata {
   autoSelectedLayer: boolean;
 }
 
+function isThreadPoolError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const message = error.message.toLowerCase();
+  return (
+    message.includes('thread constructor failed') ||
+    message.includes('resource temporarily unavailable') ||
+    message.includes('pthread_create')
+  );
+}
+
+async function runGeofileReadWithThreadFallback(
+  ctx: DuckDBContext,
+  escapedFinalTable: string,
+  escapedGeoFileId: string,
+  selectedLayerClause: string,
+  finalTablename: string
+): Promise<void> {
+  const readQuery = `CREATE OR REPLACE TABLE "${escapedFinalTable}" AS FROM ST_Read('${escapedGeoFileId}'${selectedLayerClause});`;
+  const runRead = async () => {
+    await runInTransaction(
+      ctx.connection,
+      async () => {
+        await executeQuery(ctx.connection, readQuery, {
+          format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
+        });
+        await addRowId(ctx.connection, finalTablename);
+      },
+      'read_geofile'
+    );
+  };
+  try {
+    await runRead();
+  } catch (error) {
+    if (!isThreadPoolError(error)) throw error;
+    logger.warn(
+      'Geofile read hit thread pool exhaustion — retrying with serialized execution',
+      LogCategory.DUCKDB,
+      { filename: finalTablename }
+    );
+    // Reduce DuckDB threads to 1 to avoid pthread_create exhaustion for large
+    // multi-layer GPKG files, then retry the read. Restore threads afterwards.
+    await executeQuery(ctx.connection, 'PRAGMA threads=1', {
+      format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
+    }).catch(() => undefined);
+    try {
+      await runRead();
+    } finally {
+      await executeQuery(ctx.connection, 'PRAGMA threads=4', {
+        format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
+      }).catch(() => undefined);
+    }
+  }
+}
+
 interface GeofileLayerMetadata {
   layerIndex: number;
   layerName: string | null;
@@ -310,17 +364,12 @@ export async function readGeofile(
       );
     }
 
-    await runInTransaction(
-      ctx.connection,
-      async () => {
-        await executeQuery(
-          ctx.connection,
-          `CREATE OR REPLACE TABLE "${escapedFinalTable}" AS FROM ST_Read('${escapedGeoFileId}'${selectedLayerClause});`,
-          { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
-        );
-        await addRowId(ctx.connection, finalTablename!);
-      },
-      'read_geofile'
+    await runGeofileReadWithThreadFallback(
+      ctx,
+      escapedFinalTable,
+      escapedGeoFileId,
+      selectedLayerClause,
+      finalTablename!
     );
 
     if (!tablename) {
