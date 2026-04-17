@@ -17,6 +17,7 @@
     projectionActions
   } from './projection.store.svelte';
   import type { ProjectionSuggestion } from './projection-suggest.service';
+  import { getNationalProjectionBadge } from './national-region-label';
 
   const description = m.projection_description();
 
@@ -130,7 +131,10 @@
                 <ProjectionCard
                   title={s.name}
                   subtitle={s.epsg ? `EPSG:${s.epsg}` : ''}
-                  tag={m.projection_tag_national()}
+                  tag={getNationalProjectionBadge(
+                    s,
+                    m.projection_tag_national()
+                  )}
                   selected={projectionState.customCode === s.proj4String}
                   variant="blue"
                   equalArea={s.equalArea}
