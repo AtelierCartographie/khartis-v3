@@ -119,6 +119,7 @@
 
   function handleDrawingTypeChange(event: CustomEvent<string | number>) {
     const type = String(event.detail) as DrawingType;
+    if (type === drawingType) return;
     if (selectedDrawing) {
       annotationsActions.selectAnnotation(null);
     }

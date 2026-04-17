@@ -2,7 +2,6 @@
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import {
-    ColorSelector,
     DiscretizationRow,
     InfoPopover,
     MissingDataSection,
@@ -13,6 +12,7 @@
     VizFilterButton,
     VizFilterPanel
   } from './shared';
+  import SingleColorPreview from './palette-popover/single-color-preview.svelte';
   import type {
     MissingDataConfig,
     VisualizationConfig,
@@ -26,7 +26,8 @@
   import * as m from '$lib/paraglide/messages';
   import {
     DEFAULT_SEQUENTIAL_PREVIEW,
-    DEFAULT_QUALITATIVE_PREVIEW
+    DEFAULT_QUALITATIVE_PREVIEW,
+    PALETTE_TYPE
   } from './palette-popover/palette.constants';
   import { Category, Minimize, Subtract, Tag } from 'carbon-icons-svelte';
   import {
@@ -86,6 +87,9 @@
 
   let discretizationModalOpen = $state(false);
   let filterSectionVisible = $state(false);
+  let thicknessPickerOpen = $state(false);
+  let colorPickerOpen = $state(false);
+  let categoryPickerOpen = $state(false);
   const NONE_FIELD_ID = -1;
   let selectedValueFieldId = $state<number>(NONE_FIELD_ID);
   let selectedSizeFieldId = $state<number>(NONE_FIELD_ID);
@@ -365,26 +369,32 @@
     const variableNames = fieldIds
       .map((id) => dataFields.find((f) => f.id === id)?.text)
       .filter((name): name is string => Boolean(name));
-    const merged = variableNames.includes(baseVariableName)
-      ? variableNames
-      : [baseVariableName, ...variableNames];
+    const hasBase = Boolean(baseVariableName);
+    const merged =
+      hasBase && !variableNames.includes(baseVariableName)
+        ? [baseVariableName, ...variableNames]
+        : variableNames;
     await facetsStore.updateVariables(selectedVizId, merged);
   }
 
   async function handleFacetsToggle(baseVariableName: string, en: boolean) {
     if (!selectedVizId) return;
-    if (en) {
-      const seed = baseVariableName ? [baseVariableName] : [];
-      const otherColumns = dataFields.filter(
-        (f) => f.text !== baseVariableName
-      );
-      const second = otherColumns[0]?.text;
-      const candidates = second ? [...seed, second] : seed;
-      if (candidates.length < 2) return;
-      await facetsStore.updateVariables(selectedVizId, candidates);
-    } else {
+    if (!en) {
       facetsStore.disable();
+      return;
     }
+
+    const available = dataFields
+      .map((f) => f.text)
+      .filter((name): name is string => Boolean(name));
+    const seed = baseVariableName ? [baseVariableName] : [];
+    const candidates = seed.slice();
+    for (const name of available) {
+      if (candidates.length >= 2) break;
+      if (!candidates.includes(name)) candidates.push(name);
+    }
+    if (candidates.length < 2) return;
+    await facetsStore.updateVariables(selectedVizId, candidates);
   }
 </script>
 
@@ -433,6 +443,7 @@
     {:else if thicknessMode === ThicknessMode.PROPORTIONAL}
       <div class="field-group">
         <FacetsVariablePicker
+          bind:open={thicknessPickerOpen}
           titleText={m.thickness_according()}
           dataFields={dataFields}
           singleSelectItems={selectableDataFields}
@@ -457,6 +468,7 @@
     {:else if thicknessMode === ThicknessMode.CLASSES}
       <div class="field-group">
         <FacetsVariablePicker
+          bind:open={thicknessPickerOpen}
           titleText={m.thickness_according()}
           dataFields={dataFields}
           singleSelectItems={selectableDataFields}
@@ -497,14 +509,15 @@
     </div>
 
     {#if colorMode === ColorMode.UNIQUE}
-      <ColorSelector
+      <SingleColorPreview
         label={m.color()}
-        value={color}
+        color={color}
         onchange={handleColorChange}
       />
     {:else if colorMode === ColorMode.CLASSES}
       <div class="field-group">
         <FacetsVariablePicker
+          bind:open={colorPickerOpen}
           titleText={m.color_according()}
           dataFields={dataFields}
           singleSelectItems={selectableDataFields}
@@ -527,12 +540,14 @@
         colors={currentPalette}
         selectedPaletteId={visualization?.classification?.paletteId}
         inverted={visualization?.classification?.inverted ?? false}
+        paletteType={PALETTE_TYPE.SEQUENTIAL}
         oninvert={onInvertPalette}
         onClassificationChange={handleClassificationChange}
       />
     {:else if colorMode === ColorMode.CATEGORIES}
       <div class="field-group">
         <FacetsVariablePicker
+          bind:open={categoryPickerOpen}
           titleText={m.color_according()}
           dataFields={dataFields}
           singleSelectItems={selectableDataFields}
@@ -556,6 +571,9 @@
         colors={categoriesPalette}
         selectedPaletteId={visualization?.classification?.paletteId}
         inverted={visualization?.classification?.inverted ?? false}
+        paletteType={PALETTE_TYPE.QUALITATIVE}
+        categoriesMode={true}
+        categoryLabels={visualization?.classification?.labels ?? []}
         oninvert={onInvertPalette}
         onClassificationChange={handleClassificationChange}
       />

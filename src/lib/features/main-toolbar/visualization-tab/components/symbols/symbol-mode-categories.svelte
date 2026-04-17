@@ -5,7 +5,10 @@
     RadioButtonGroup
   } from 'carbon-components-svelte';
   import * as m from '$lib/paraglide/messages';
-  import { DEFAULT_QUALITATIVE_PREVIEW } from '../palette-popover/palette.constants';
+  import {
+    DEFAULT_QUALITATIVE_PREVIEW,
+    PALETTE_TYPE
+  } from '../palette-popover/palette.constants';
   import {
     CategoryShapeMode,
     MissingDataShape,
@@ -45,6 +48,7 @@
 
   const NONE_FIELD_ID = -1;
   let selectedFieldId = $state<number>(NONE_FIELD_ID);
+  let categoryPickerOpen = $state(false);
   let categoryCount = $state<number>(4);
   let symbolOpacity = $state<number>(100);
   let shapeType = $state<ShapeType>(ShapeType.CIRCLE);
@@ -85,6 +89,7 @@
   }
 
   function handleCategoryShapeModeChange(next: CategoryShapeMode) {
+    if (next === categoryShapeMode) return;
     categoryShapeMode = next;
     onModesChange?.({ categoryShape: next });
   }
@@ -194,26 +199,32 @@
     const variableNames = fieldIds
       .map((id) => dataFields.find((f) => f.id === id)?.text)
       .filter((name): name is string => Boolean(name));
-    const merged = variableNames.includes(categoryColumnName)
-      ? variableNames
-      : [categoryColumnName, ...variableNames];
+    const hasBase = Boolean(categoryColumnName);
+    const merged =
+      hasBase && !variableNames.includes(categoryColumnName)
+        ? [categoryColumnName, ...variableNames]
+        : variableNames;
     await facetsStore.updateVariables(selectedVizId, merged);
   }
 
   async function handleFacetsToggle(enabled: boolean) {
     if (!selectedVizId) return;
-    if (enabled) {
-      const seed = categoryColumnName ? [categoryColumnName] : [];
-      const otherColumns = dataFields.filter(
-        (f) => f.text !== categoryColumnName
-      );
-      const second = otherColumns[0]?.text;
-      const candidates = second ? [...seed, second] : seed;
-      if (candidates.length < 2) return;
-      await facetsStore.updateVariables(selectedVizId, candidates);
-    } else {
+    if (!enabled) {
       facetsStore.disable();
+      return;
     }
+
+    const available = dataFields
+      .map((f) => f.text)
+      .filter((name): name is string => Boolean(name));
+    const seed = categoryColumnName ? [categoryColumnName] : [];
+    const candidates = seed.slice();
+    for (const name of available) {
+      if (candidates.length >= 2) break;
+      if (!candidates.includes(name)) candidates.push(name);
+    }
+    if (candidates.length < 2) return;
+    await facetsStore.updateVariables(selectedVizId, candidates);
   }
 </script>
 
@@ -223,6 +234,7 @@
     <InfoPopover text={m.category_variable_info()} />
   </span>
   <FacetsVariablePicker
+    bind:open={categoryPickerOpen}
     dataFields={dataFields}
     singleSelectItems={selectableDataFields}
     selectedFieldId={selectedFieldId}
@@ -287,6 +299,9 @@
   colors={currentPalette}
   selectedPaletteId={visualization?.classification?.paletteId}
   inverted={visualization?.classification?.inverted ?? false}
+  paletteType={PALETTE_TYPE.QUALITATIVE}
+  categoriesMode={true}
+  categoryLabels={visualization?.classification?.labels ?? []}
   oninvert={onInvertPalette}
   onClassificationChange={onClassificationChange}
 />

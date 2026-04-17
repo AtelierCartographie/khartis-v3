@@ -174,6 +174,26 @@
     );
   }
 
+  function resolveDivergingPreviewColors(classCount: number): string[] {
+    const contrast = getColorBlindnessState().enabled
+      ? ('high' as const)
+      : undefined;
+    const userPalette = visualization?.classification?.paletteId
+      ? findPaletteById(visualization.classification.paletteId)
+      : undefined;
+
+    return applyPaletteInversion(
+      userPalette
+        ? generatePaletteColors(userPalette, classCount, contrast)
+        : generateColorsForBreaks(classCount, 'diverging', contrast),
+      visualization?.classification?.inverted ?? false
+    );
+  }
+
+  const divergingPreview = $derived(
+    resolveDivergingPreviewColors(currentNumClasses)
+  );
+
   function toClassBreaks(
     min: number,
     max: number,
@@ -441,6 +461,7 @@
           bind:numClasses={currentNumClasses}
           bind:breaks={currentBreaks}
           bind:breakpointValue={currentBreakpoint}
+          divergingPreviewColors={divergingPreview}
           classCountMax={currentMethod === 'head-tail'
             ? headTailClassCountMax
             : DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX}
@@ -460,7 +481,7 @@
     right: 0;
     top: 50%;
     transform: translateY(-50%);
-    width: 300px;
+    width: 320px;
     min-height: 320px;
     max-height: calc(100dvh - 120px);
     z-index: var(--z-dropdown);

@@ -6,14 +6,12 @@
     NESTED_MEANS_CLASS_COUNTS
   } from './discretization.utils';
   import {
-    Button,
-    Link,
     Select,
     SelectItem,
     Slider,
     TextInput
   } from 'carbon-components-svelte';
-  import { CaretRight, Edit, Information, Launch } from 'carbon-icons-svelte';
+  import { CaretRight, Information, Launch } from 'carbon-icons-svelte';
 
   type ClassificationMethod =
     | 'jenks'
@@ -38,6 +36,7 @@
     classCountMax?: number;
     breaks?: ClassBreak[];
     breakpointValue?: number | null;
+    divergingPreviewColors?: string[];
     showHistogram?: boolean;
     onmethodchange?: (method: ClassificationMethod) => void;
     onclasseschange?: (num: number) => void;
@@ -57,6 +56,7 @@
       { min: 80, max: 100, count: 29, color: '#08519c' }
     ]),
     breakpointValue = $bindable<number | null>(null),
+    divergingPreviewColors = [],
     showHistogram = true,
     onmethodchange,
     onclasseschange,
@@ -64,7 +64,10 @@
     onbreakschange
   }: Props = $props();
 
-  let editingBreakIndex = $state<number | null>(null);
+  const paletteStripColors = $derived.by(() => {
+    if (divergingPreviewColors.length > 0) return divergingPreviewColors;
+    return breaks.map((b) => b.color);
+  });
 
   function getMethodDescription(m_: ClassificationMethod): string {
     const descriptions: Record<ClassificationMethod, () => string> = {
@@ -100,6 +103,8 @@
     return dataMin + (dataMax - dataMin) / 2;
   });
 
+  let validationErrors = $state<string[]>([]);
+
   function handleMethodChange(e: Event) {
     validationErrors = [];
     const target = e.currentTarget as HTMLSelectElement;
@@ -129,21 +134,9 @@
     onclasseschange?.(value);
   }
 
-  function startEditingBreak(index: number) {
-    editingBreakIndex = index;
+  function canEditBreakRow(index: number): boolean {
+    return method === 'manual' && index > 0;
   }
-
-  function finishEditingBreak() {
-    editingBreakIndex = null;
-    const nextBreaks = breaks.map((breakItem) => ({ ...breakItem }));
-    breaks = nextBreaks;
-    validationErrors = validateBreaks(nextBreaks);
-    if (validationErrors.length === 0) {
-      onbreakschange?.(nextBreaks);
-    }
-  }
-
-  let validationErrors = $state<string[]>([]);
 
   function validateBreaks(breaksToValidate: ClassBreak[]): string[] {
     const errors: string[] = [];
@@ -166,35 +159,24 @@
     return errors;
   }
 
-  function updateBreakValue(
-    index: number,
-    field: 'min' | 'max',
-    value: number
-  ) {
-    if (!Number.isFinite(value)) {
+  function updateBreakValue(index: number, value: number) {
+    if (!Number.isFinite(value) || index <= 0) {
       return;
     }
 
     const nextBreaks = breaks.map((breakItem) => ({ ...breakItem }));
-
-    if (field === 'min') {
-      if (index === 0) {
-        return;
-      }
-
-      nextBreaks[index].min = value;
-      nextBreaks[index - 1].max = value;
-    } else {
-      if (index === nextBreaks.length - 1) {
-        return;
-      }
-
-      nextBreaks[index].max = value;
-      nextBreaks[index + 1].min = value;
-    }
-
+    nextBreaks[index].min = value;
+    nextBreaks[index - 1].max = value;
     breaks = nextBreaks;
     validationErrors = validateBreaks(nextBreaks);
+  }
+
+  function handleBreakBlur() {
+    const nextBreaks = breaks.map((breakItem) => ({ ...breakItem }));
+    validationErrors = validateBreaks(nextBreaks);
+    if (validationErrors.length === 0) {
+      onbreakschange?.(nextBreaks);
+    }
   }
 </script>
 
@@ -282,17 +264,16 @@
           max={dataMax}
           value={breakpointSliderValue}
           hideTextInput
+          minLabel=""
+          maxLabel=""
           on:input={(e) => {
             breakpointValue = e.detail;
             onbreakpointchange?.(e.detail);
           }}
         />
         <div class="palette-strip">
-          {#each breaks as breakItem (breakItem.color)}
-            <div
-              class="palette-swatch"
-              style="background-color: {breakItem.color}"
-            ></div>
+          {#each paletteStripColors as color, index (`${index}-${color}`)}
+            <div class="palette-swatch" style="background-color: {color}"></div>
           {/each}
         </div>
       </div>
@@ -301,25 +282,34 @@
 
   {#if showHistogram}
     <div class="section histogram-section">
-      <p class="label">{m.discretization_value_distribution()}</p>
+      <p class="section-label">{m.discretization_value_distribution()}</p>
       <div class="histogram-rows">
         {#each breaks as breakItem, index (index)}
           {@const widthPercent = (breakItem.count / maxHistogramCount) * 100}
           <div class="histogram-row">
-            <span class="histogram-label">
+            <div class="histogram-label">
               {#if index === 0}Min.{/if}
-            </span>
-            <span class="histogram-value">
-              {breakItem.min}
-            </span>
-            <Button
-              kind="ghost"
-              size="small"
-              iconDescription={m.discretization_edit_bounds()}
-              icon={CaretRight}
-              on:click={() => startEditingBreak(index)}
-              class="histogram-arrow-btn"
-            />
+            </div>
+            <div class="histogram-input-wrapper">
+              <TextInput
+                id="break-value-{index}"
+                size="sm"
+                hideLabel
+                labelText={m.filters_value_min()}
+                disabled={!canEditBreakRow(index)}
+                value={String(breakItem.min)}
+                on:input={(e) => {
+                  const value = Number(e.detail);
+                  if (Number.isFinite(value)) {
+                    updateBreakValue(index, value);
+                  }
+                }}
+                on:blur={handleBreakBlur}
+              />
+            </div>
+            <div class="histogram-caret">
+              <CaretRight size={16} />
+            </div>
             <div class="histogram-bar-wrapper">
               <div
                 class="histogram-bar"
@@ -329,97 +319,23 @@
             </div>
           </div>
         {/each}
-        <div class="histogram-row histogram-row-max">
-          <span class="histogram-label">Max.</span>
-          <span class="histogram-value">
-            {breaks[breaks.length - 1]?.max}
-          </span>
-          <div class="histogram-arrow-placeholder"></div>
+        <div class="histogram-row">
+          <div class="histogram-label">Max.</div>
+          <div class="histogram-input-wrapper">
+            <TextInput
+              id="break-value-{breaks.length}"
+              size="sm"
+              hideLabel
+              labelText={m.filters_value_max()}
+              disabled
+              value={String(breaks[breaks.length - 1]?.max ?? '')}
+            />
+          </div>
+          <div class="histogram-caret">
+            <CaretRight size={16} />
+          </div>
           <div class="histogram-bar-wrapper"></div>
         </div>
-      </div>
-    </div>
-  {/if}
-
-  <div class="section description-section">
-    <p class="method-description">{getMethodDescription(method)}</p>
-    <div class="learn-more">
-      <Link
-        href="https://observablehq.com/@d3/classification-methods"
-        target="_blank"
-        size="sm"
-      >
-        {m.discretization_learn_more()}
-      </Link>
-      <Launch size={16} />
-    </div>
-  </div>
-
-  {#if editingBreakIndex !== null || method === 'manual'}
-    <div class="section breaks-section">
-      <p class="label">
-        {m.discretization_class_bounds()}
-      </p>
-      <div class="breaks-list">
-        {#each breaks as breakItem, index (index)}
-          <div class="break-row" class:editing={editingBreakIndex === index}>
-            <div class="break-color" style="--color: {breakItem.color}"></div>
-
-            {#if editingBreakIndex === index || method === 'manual'}
-              <div class="break-inputs">
-                <TextInput
-                  id="break-min-{index}"
-                  size="sm"
-                  hideLabel
-                  labelText={m.filters_value_min()}
-                  disabled={index === 0}
-                  value={String(breakItem.min)}
-                  on:input={(e) => {
-                    const value = Number(e.detail);
-                    updateBreakValue(
-                      index,
-                      'min',
-                      Number.isFinite(value) ? value : 0
-                    );
-                  }}
-                  on:blur={finishEditingBreak}
-                />
-                <span class="break-separator">—</span>
-                <TextInput
-                  id="break-max-{index}"
-                  size="sm"
-                  hideLabel
-                  labelText={m.filters_value_max()}
-                  disabled={index === breaks.length - 1}
-                  value={String(breakItem.max)}
-                  on:input={(e) => {
-                    const value = Number(e.detail);
-                    updateBreakValue(
-                      index,
-                      'max',
-                      Number.isFinite(value) ? value : 0
-                    );
-                  }}
-                  on:blur={finishEditingBreak}
-                />
-              </div>
-            {:else}
-              <Button
-                kind="ghost"
-                class="break-values"
-                on:click={() => startEditingBreak(index)}
-                aria-label={m.discretization_edit_bounds()}
-              >
-                <span>{breakItem.min}</span>
-                <span class="break-separator">—</span>
-                <span>{breakItem.max}</span>
-                <Edit size={16} class="edit-icon" />
-              </Button>
-            {/if}
-
-            <span class="break-count">{breakItem.count}</span>
-          </div>
-        {/each}
       </div>
 
       {#if validationErrors.length > 0}
@@ -434,6 +350,19 @@
       {/if}
     </div>
   {/if}
+
+  <div class="section description-section">
+    <p class="method-description">{getMethodDescription(method)}</p>
+    <a
+      class="learn-more"
+      href="https://observablehq.com/@d3/classification-methods"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      <span>{m.discretization_learn_more()}</span>
+      <Launch size={16} />
+    </a>
+  </div>
 </div>
 
 <style lang="scss">
@@ -453,25 +382,19 @@
 
   .input-label {
     font-size: 0.75rem;
-    color: var(--cds-text-02);
+    line-height: 1rem;
+    letter-spacing: 0.32px;
+    color: var(--cds-text-secondary, #525252);
     font-weight: 400;
   }
 
-  .label {
+  .section-label {
     font-size: 0.75rem;
-    font-weight: 600;
-    color: var(--cds-text-02);
-    margin-bottom: var(--cds-spacing-03);
-    text-transform: uppercase;
+    line-height: 1rem;
     letter-spacing: 0.32px;
-    display: flex;
-    align-items: center;
-    gap: var(--cds-spacing-02);
-  }
-
-  .breakpoint-section {
-    border-bottom: 1px solid var(--cds-border-subtle);
-    padding-bottom: var(--cds-spacing-05);
+    color: var(--cds-text-secondary, #525252);
+    font-weight: 400;
+    margin-bottom: var(--cds-spacing-03);
   }
 
   .breakpoint-row {
@@ -494,6 +417,10 @@
     min-width: 0;
   }
 
+  .breakpoint-slider-col :global(.bx--slider__range-label) {
+    display: none;
+  }
+
   .palette-strip {
     display: flex;
     gap: 2px;
@@ -502,183 +429,109 @@
   .palette-swatch {
     flex: 1;
     height: 20px;
-    border-radius: 2px;
-  }
-
-  .histogram-section {
-    padding-top: var(--cds-spacing-03);
   }
 
   .histogram-rows {
     display: flex;
     flex-direction: column;
-    gap: 2px;
   }
 
   .histogram-row {
     display: flex;
     align-items: center;
     gap: var(--cds-spacing-02);
-    min-height: 28px;
-    border-bottom: 1px solid var(--cds-border-subtle-00, rgba(0, 0, 0, 0.05));
-  }
-
-  .histogram-row-max {
-    border-bottom: none;
+    min-height: 32px;
   }
 
   .histogram-label {
-    width: 28px;
+    width: 27px;
     font-size: 0.75rem;
-    color: var(--cds-text-02);
+    line-height: 1rem;
+    letter-spacing: 0.32px;
+    color: var(--cds-text-secondary, #525252);
     flex-shrink: 0;
   }
 
-  .histogram-value {
-    width: 48px;
-    font-size: 0.875rem;
-    color: var(--cds-text-primary);
+  .histogram-input-wrapper {
+    flex: 1;
+    min-width: 64px;
+  }
+
+  .histogram-input-wrapper :global(.bx--form-item) {
+    flex: none;
+  }
+
+  .histogram-input-wrapper :global(.bx--text-input) {
+    background-color: transparent;
+    border-bottom: 1px solid var(--cds-border-subtle, #e0e0e0);
     text-align: right;
-    flex-shrink: 0;
+    color: var(--cds-text-secondary, #525252);
   }
 
-  :global(.histogram-arrow-btn) {
-    min-height: 0 !important;
-    padding: 0 !important;
-    width: 20px;
-    height: 20px;
-    flex-shrink: 0;
-    color: var(--cds-text-02);
+  .histogram-input-wrapper :global(.bx--text-input:disabled) {
+    background-color: transparent;
+    border-bottom: 1px solid var(--cds-border-subtle, #e0e0e0);
+    color: var(--cds-text-secondary, #525252);
+    -webkit-text-fill-color: var(--cds-text-secondary, #525252);
   }
 
-  .histogram-arrow-placeholder {
-    width: 20px;
-    height: 20px;
+  .histogram-caret {
+    width: 16px;
+    height: 16px;
     flex-shrink: 0;
+    color: var(--cds-icon-primary, #161616);
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .histogram-bar-wrapper {
-    flex: 1;
-    min-width: 0;
+    width: 128px;
     height: 24px;
+    flex-shrink: 0;
     display: flex;
     align-items: center;
   }
 
   .histogram-bar {
     height: 100%;
-    min-width: 4px;
-    border-radius: 2px;
-    transition: width 0.3s ease;
+    min-width: 2px;
   }
 
   .description-section {
     padding-top: var(--cds-spacing-03);
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-03);
   }
 
   .method-description {
-    font-size: 0.875rem;
-    font-style: italic;
-    color: var(--cds-text-secondary);
-    line-height: 1.5;
-    margin: 0 0 var(--cds-spacing-04);
+    font-size: 0.75rem;
+    line-height: 1rem;
+    letter-spacing: 0.32px;
+    color: var(--cds-text-helper, #6f6f6f);
+    margin: 0;
   }
 
   .learn-more {
     display: inline-flex;
     align-items: center;
-    gap: var(--cds-spacing-02);
-    color: var(--cds-link-primary);
-  }
-
-  .breaks-section {
-    padding-top: var(--cds-spacing-04);
-    border-top: 1px solid var(--cds-border-subtle);
-  }
-
-  .breaks-list {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-02);
-  }
-
-  .break-row {
-    display: flex;
-    align-items: center;
     gap: var(--cds-spacing-03);
-    padding: var(--cds-spacing-02);
-    background-color: var(--cds-layer);
-    border: 1px solid var(--cds-border-subtle);
-    border-radius: 4px;
-    transition: background-color 0.15s ease;
+    color: var(--cds-text-helper, #6f6f6f);
+    font-size: 0.75rem;
+    line-height: 1rem;
+    letter-spacing: 0.32px;
+    text-decoration: none;
+    align-self: flex-start;
 
     &:hover {
-      background-color: var(--cds-layer-hover);
+      text-decoration: underline;
     }
 
-    &.editing {
-      border-color: var(--cds-interactive);
+    &:focus-visible {
+      outline: 2px solid var(--cds-focus);
+      outline-offset: 2px;
     }
-  }
-
-  .break-color {
-    width: 16px;
-    height: 16px;
-    border-radius: 3px;
-    background-color: var(--color);
-    border: 1px solid var(--cds-border-subtle);
-    flex-shrink: 0;
-  }
-
-  :global(.break-values) {
-    display: flex;
-    align-items: center;
-    gap: var(--cds-spacing-02);
-    flex: 1;
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    padding: var(--cds-spacing-02);
-    border-radius: 4px;
-    font-size: 0.875rem;
-    color: var(--cds-text-primary);
-    transition: background-color 0.15s ease;
-  }
-
-  :global(.break-values:hover) {
-    background-color: var(--cds-layer-hover);
-  }
-
-  :global(.break-values:hover .edit-icon) {
-    opacity: 1;
-  }
-
-  :global(.break-values .edit-icon) {
-    opacity: 0;
-    color: var(--cds-text-02);
-    transition: opacity 0.15s ease;
-  }
-
-  .break-inputs {
-    display: flex;
-    align-items: center;
-    gap: var(--cds-spacing-02);
-    flex: 1;
-
-    :global(.bx--text-input) {
-      width: 60px;
-    }
-  }
-
-  .break-separator {
-    color: var(--cds-text-02);
-  }
-
-  .break-count {
-    font-size: 0.75rem;
-    color: var(--cds-text-02);
-    min-width: 40px;
-    text-align: right;
   }
 
   .validation-errors {

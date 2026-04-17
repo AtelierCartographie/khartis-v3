@@ -17,6 +17,63 @@ vi.mock('$lib/features/commons/store/visualization.store.svelte', () => {
   const ClassificationMethod = {
     QUANTILES: 'quantiles'
   } as const;
+  const FillMode = {
+    NONE: 'none',
+    UNIQUE: 'unique',
+    CLASSES: 'classes',
+    CATEGORIES: 'categories'
+  } as const;
+
+  const getEnabledPrimitiveFilters = (
+    visualization: VisualizationConfig
+  ): string[] =>
+    (visualization.primitiveFilters as string[] | undefined) ?? [
+      PrimitiveFilterType.POINT,
+      PrimitiveFilterType.LINE,
+      PrimitiveFilterType.POLYGON
+    ];
+
+  const getPolygonPrimitive = (visualization: VisualizationConfig) => ({
+    enabled: getEnabledPrimitiveFilters(visualization).includes(
+      PrimitiveFilterType.POLYGON
+    ),
+    fillMode:
+      visualization.style.fillOpacity === 0 ? FillMode.NONE : FillMode.UNIQUE,
+    fillColor: visualization.style.fillColor,
+    fillOpacity: visualization.style.fillOpacity ?? 1,
+    strokeColor: visualization.style.strokeColor
+  });
+
+  const getSymbolPrimitive = (visualization: VisualizationConfig) => ({
+    enabled: getEnabledPrimitiveFilters(visualization).includes(
+      PrimitiveFilterType.POINT
+    ),
+    fillColor:
+      visualization.style.symbolFillColor ?? visualization.style.fillColor,
+    opacity:
+      visualization.symbols?.opacity ?? visualization.style.fillOpacity ?? 1,
+    strokeColor: visualization.style.strokeColor
+  });
+
+  const getLinePrimitive = (visualization: VisualizationConfig) => ({
+    enabled: getEnabledPrimitiveFilters(visualization).includes(
+      PrimitiveFilterType.LINE
+    ),
+    color: visualization.style.lineColor,
+    opacity: visualization.style.lineOpacity ?? 1
+  });
+
+  const getTextPrimitive = () => ({
+    enabled: false,
+    color: undefined,
+    opacity: 0,
+    secondaryLabels: {
+      color: undefined
+    }
+  });
+
+  const getPrimitiveClassification = (visualization: VisualizationConfig) =>
+    visualization.classification;
 
   return {
     ALL_PRIMITIVE_FILTERS: [
@@ -28,6 +85,12 @@ vi.mock('$lib/features/commons/store/visualization.store.svelte', () => {
     ScaleType,
     VisualizationType,
     ClassificationMethod,
+    getEnabledPrimitiveFilters,
+    getLinePrimitive,
+    getPolygonPrimitive,
+    getPrimitiveClassification,
+    getSymbolPrimitive,
+    getTextPrimitive,
     visualizationStore: {
       activeVisualizations: [],
       visualizations: [],

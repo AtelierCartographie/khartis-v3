@@ -76,7 +76,8 @@ describe('DiscretizationModal', () => {
     ]);
   });
 
-  it('keeps adjacent manual bounds synchronized while editing', async () => {
+  it('should update both adjacent bounds when editing a shared break value in manual mode', async () => {
+    const onbreakschange = vi.fn();
     const { container } = render(DiscretizationPanel, {
       method: 'manual',
       numClasses: 3,
@@ -84,22 +85,27 @@ describe('DiscretizationModal', () => {
         { min: 0, max: 10, count: 1, color: '#111111' },
         { min: 10, max: 20, count: 1, color: '#222222' },
         { min: 20, max: 30, count: 1, color: '#333333' }
-      ]
+      ],
+      onbreakschange
     });
 
-    const maxInput = container.querySelector(
-      '#break-max-0'
-    ) as HTMLInputElement;
-    const adjacentMinInput = container.querySelector(
-      '#break-min-1'
+    const sharedBoundInput = container.querySelector(
+      '#break-value-1'
     ) as HTMLInputElement;
 
-    await fireEvent.input(maxInput, {
+    expect(sharedBoundInput).not.toBeNull();
+    expect(sharedBoundInput.value).toBe('10');
+
+    await fireEvent.input(sharedBoundInput, {
       target: { value: '12' }
     });
+    await fireEvent.blur(sharedBoundInput);
 
-    expect(maxInput.value).toBe('12');
-    expect(adjacentMinInput.value).toBe('12');
+    expect(onbreakschange).toHaveBeenCalled();
+    const lastCall =
+      onbreakschange.mock.calls[onbreakschange.mock.calls.length - 1][0];
+    expect(lastCall[0].max).toBe(12);
+    expect(lastCall[1].min).toBe(12);
   });
 
   it('allows clearing the breakpoint value', async () => {

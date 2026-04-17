@@ -213,6 +213,7 @@
   }
 
   function handleLevelChange(level: DensityLevelName) {
+    if (level === selectedLevel) return;
     selectedLevel = level;
     const option = dedupedLevelOptions.find((o) => o.level === level);
     if (option && visualization?.id) {

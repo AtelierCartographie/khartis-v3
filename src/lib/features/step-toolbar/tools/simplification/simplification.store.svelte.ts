@@ -16,6 +16,7 @@ import {
 } from '$lib/features/map/services/basemap.service.svelte';
 import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
 import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
+import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
 import {
   simplifyGeometryTable,
   calculateToleranceFromRate
@@ -284,7 +285,7 @@ const { actions, getState } = createToolStore<
       datasetId?: string;
     }): Promise<SimplificationResult> => {
       if (s.source === SimplificationSource.Basemap) {
-        if (osmBasemapStore.isActive) {
+        if (osmBasemapStore.isActive || basemapStyleStore.requiresMapLibre) {
           return {
             type: SimplificationTarget.BASEMAP,
             level: s.level,

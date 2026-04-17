@@ -8,7 +8,8 @@
   import * as m from '$lib/paraglide/messages';
   import {
     DEFAULT_SEQUENTIAL_PREVIEW,
-    DEFAULT_QUALITATIVE_PREVIEW
+    DEFAULT_QUALITATIVE_PREVIEW,
+    PALETTE_TYPE
   } from '../palette-popover/palette.constants';
   import {
     MissingDataShape,
@@ -27,10 +28,10 @@
     MissingDataSection,
     SectionHeading,
     SliderWithInput,
-    ColorSelector,
     PalettePreview,
     StrokeSection
   } from '../shared';
+  import SingleColorPreview from '../palette-popover/single-color-preview.svelte';
   import type { SymbolModeProps } from './types';
   import {
     CaretUp,
@@ -66,6 +67,8 @@
   }: Props = $props();
 
   let discretizationModalOpen = $state(false);
+  let sizePickerOpen = $state(false);
+  let classesPickerOpen = $state(false);
   let proportionalType = $state<ProportionalType>(ProportionalType.SINGLE);
   const NONE_FIELD_ID = -1;
   let selectedFieldId = $state<number>(NONE_FIELD_ID);
@@ -177,7 +180,7 @@
     }
     if (visualization?.style) {
       fillColor =
-        (visualization.style.fillColor as string) ?? DEFAULT_COLORS.fill;
+        (visualization.style.symbolFillColor as string) ?? DEFAULT_COLORS.fill;
       fillColorB = visualization.style.fillColorB ?? DEFAULT_COLORS.secondary;
     }
     if (visualization?.classification) {
@@ -221,6 +224,9 @@
 
   function handleProportionalTypeChange(type: ProportionalType) {
     if (isSyncingFromVisualization) {
+      return;
+    }
+    if (type === proportionalType) {
       return;
     }
     proportionalType = type;
@@ -347,7 +353,7 @@
       return;
     }
     fillColor = value;
-    onStyleChange?.({ fillColor: value });
+    onStyleChange?.({ symbolFillColor: value });
   }
 
   function handleFillOpacityChange(value: number) {
@@ -465,9 +471,11 @@
       .map((id) => dataFields.find((f) => f.id === id)?.text)
       .filter((name): name is string => Boolean(name));
 
-    const merged = variableNames.includes(baseVariableName)
-      ? variableNames
-      : [baseVariableName, ...variableNames];
+    const hasBase = Boolean(baseVariableName);
+    const merged =
+      hasBase && !variableNames.includes(baseVariableName)
+        ? [baseVariableName, ...variableNames]
+        : variableNames;
 
     await facetsStore.updateVariables(selectedVizId, merged);
   }
@@ -477,20 +485,22 @@
     enabled: boolean
   ) {
     if (!selectedVizId) return;
-    if (enabled) {
-      const seed = baseVariableName ? [baseVariableName] : [];
-      const numericColumns = dataFields.filter(
-        (f) => f.text !== baseVariableName
-      );
-      const second = numericColumns[0]?.text;
-      const candidates = second ? [...seed, second] : seed;
-      if (candidates.length < 2) {
-        return;
-      }
-      await facetsStore.updateVariables(selectedVizId, candidates);
-    } else {
+    if (!enabled) {
       facetsStore.disable();
+      return;
     }
+
+    const available = dataFields
+      .map((f) => f.text)
+      .filter((name): name is string => Boolean(name));
+    const seed = baseVariableName ? [baseVariableName] : [];
+    const candidates = seed.slice();
+    for (const name of available) {
+      if (candidates.length >= 2) break;
+      if (!candidates.includes(name)) candidates.push(name);
+    }
+    if (candidates.length < 2) return;
+    await facetsStore.updateVariables(selectedVizId, candidates);
   }
 </script>
 
@@ -534,6 +544,7 @@
       />
     {:else}
       <FacetsVariablePicker
+        bind:open={sizePickerOpen}
         dataFields={dataFields}
         singleSelectItems={selectableDataFields}
         selectedFieldId={selectedFieldId}
@@ -570,6 +581,7 @@
       <InfoPopover text={m.size_according_info()} />
     </span>
     <FacetsVariablePicker
+      bind:open={classesPickerOpen}
       dataFields={dataFields}
       singleSelectItems={selectableDataFields}
       selectedFieldId={selectedFieldId}
@@ -637,24 +649,24 @@
   {#if proportionalType === ProportionalType.DOUBLE}
     <div class="double-color-row">
       <div class="double-color-item double-color-a">
-        <ColorSelector
+        <SingleColorPreview
           label={m.symbol_color_a()}
-          value={fillColor}
+          color={fillColor}
           onchange={handleFillColorChange}
         />
       </div>
       <div class="double-color-item double-color-b">
-        <ColorSelector
+        <SingleColorPreview
           label={m.symbol_color_b()}
-          value={fillColorB}
+          color={fillColorB}
           onchange={handleFillColorBChange}
         />
       </div>
     </div>
   {:else}
-    <ColorSelector
+    <SingleColorPreview
       label={m.color()}
-      value={fillColor}
+      color={fillColor}
       onchange={handleFillColorChange}
     />
   {/if}
@@ -685,6 +697,7 @@
     colors={currentPalette}
     selectedPaletteId={visualization?.classification?.paletteId}
     inverted={visualization?.classification?.inverted ?? false}
+    paletteType={PALETTE_TYPE.SEQUENTIAL}
     oninvert={onInvertPalette}
     onClassificationChange={onClassificationChange}
   />
@@ -726,6 +739,9 @@
     colors={currentQualPalette}
     selectedPaletteId={visualization?.classification?.paletteId}
     inverted={visualization?.classification?.inverted ?? false}
+    paletteType={PALETTE_TYPE.QUALITATIVE}
+    categoriesMode={true}
+    categoryLabels={visualization?.classification?.labels ?? []}
     oninvert={onInvertPalette}
     onClassificationChange={onClassificationChange}
   />

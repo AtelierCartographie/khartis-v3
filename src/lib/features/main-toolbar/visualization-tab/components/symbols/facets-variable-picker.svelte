@@ -25,6 +25,7 @@
     isCollectionEnabled: boolean;
     canEnableCollection?: boolean;
     titleText?: string;
+    open?: boolean;
     onSelect: (fieldId: number) => void;
     onCollectionChange: (fieldIds: number[]) => void;
     onToggleCollection: (enabled: boolean) => void;
@@ -38,14 +39,13 @@
     isCollectionEnabled,
     canEnableCollection = true,
     titleText,
+    open = $bindable(false),
     onSelect,
     onCollectionChange,
     onToggleCollection
   }: Props = $props();
 
   const NONE_ID = -1;
-
-  let open = $state(false);
 
   const isNumeric = (field: DataField) => field.type === 'number';
 

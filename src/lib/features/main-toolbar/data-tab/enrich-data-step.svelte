@@ -39,7 +39,11 @@
   const fileHook = useEnrichmentFile();
   const basemapHook = useEnrichmentBasemap();
   const overlayBasemapEnabled = $derived(basemapHook.hasActiveSelection);
+  const overlayBasemapSuggestionCount = $derived(
+    basemapHook.suggestedBasemaps.length
+  );
   let overlayBasemapExpanded = $state(false);
+  let overlayBasemapDismissed = $state(false);
 
   const enrichGeoDetection = $derived(fileHook.enrichmentDataset?.geoDetection);
 
@@ -80,6 +84,7 @@
       dataTabActions.setEnrichDataState({ joinTabularEnabled: false });
       fileHook.handleRemoveFile();
       joinHook.resetJoinState();
+      overlayBasemapDismissed = false;
     }
   });
 
@@ -145,7 +150,8 @@
   });
 
   $effect(() => {
-    if (overlayBasemapEnabled) {
+    if (overlayBasemapDismissed) return;
+    if (overlayBasemapEnabled || overlayBasemapSuggestionCount > 0) {
       overlayBasemapExpanded = true;
     }
   });
@@ -233,9 +239,11 @@
       onToggleChange={(checked) => {
         overlayBasemapExpanded = checked;
         if (!checked) {
+          overlayBasemapDismissed = true;
           basemapHook.clearSelectedBasemap();
           return;
         }
+        overlayBasemapDismissed = false;
         basemapHook.activatePreferredBasemap();
       }}
     >

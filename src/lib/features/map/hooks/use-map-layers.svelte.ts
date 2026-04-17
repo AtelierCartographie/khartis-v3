@@ -119,6 +119,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       viz: null,
       datasetId,
       fillColor: DATA_PREVIEW_FILL_COLOR,
+      symbolFillColor: DATA_PREVIEW_FILL_COLOR,
       strokeColor: DATA_PREVIEW_STROKE_COLOR,
       fillOpacity: DATA_PREVIEW_FILL_OPACITY,
       strokeWidth: DATA_PREVIEW_STROKE_WIDTH,

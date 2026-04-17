@@ -113,8 +113,13 @@
     </div>
 
     <div class="footer">
-      <Button class="reset" disabled={!isDirty} icon={Renew} on:click={resetAll}
-        >{m.projection_settings_reset()}</Button
+      <Button
+        class="reset"
+        kind="tertiary"
+        size="small"
+        disabled={!isDirty}
+        icon={Renew}
+        on:click={resetAll}>{m.projection_settings_reset()}</Button
       >
     </div>
   </div>

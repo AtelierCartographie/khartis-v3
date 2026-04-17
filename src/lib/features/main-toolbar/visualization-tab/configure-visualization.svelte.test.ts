@@ -17,4 +17,11 @@ describe('ConfigureVisualization', () => {
     expect(source).toContain('disabled={!showsPolygonsConfig}');
     expect(source).toContain('disabled={!showsLinesConfig}');
   });
+
+  it('keeps computed-break cache outside the reactive graph', () => {
+    expect(source).toContain('const lastComputedKey = untrack(() =>');
+    expect(source).toContain(
+      'untrack(() => lastComputedKeyByPrimitive.set(primitive, computeKey));'
+    );
+  });
 });

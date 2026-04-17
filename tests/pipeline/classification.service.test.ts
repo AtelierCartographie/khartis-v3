@@ -234,3 +234,345 @@ describe('calculateBreakCounts', () => {
     expect(mockedDuckQuery.mock.calls[1]?.[0]).not.toContain('150');
   });
 });
+
+describe('calculateBreaks — macro methods', () => {
+  let tableCounter = 0;
+
+  function uniqueTable(): string {
+    tableCounter += 1;
+    return `vals_macro_${tableCounter}_${Date.now()}`;
+  }
+
+  function makeStatsTable() {
+    return makeTable({
+      distinct_count: 20,
+      min_val: 0,
+      max_val: 100,
+      mean_val: 50,
+      stddev_val: 15
+    });
+  }
+
+  function makeBreaksTable(breaks: unknown) {
+    return makeTable({ breaks });
+  }
+
+  function makeCountsTable() {
+    return makeTable({
+      cnt_0: 4,
+      cnt_1: 6,
+      cnt_2: 5,
+      cnt_3: 3,
+      cnt_4: 2
+    });
+  }
+
+  function arrangeMacroFlow(
+    rawBreaks: unknown,
+    rounded?: unknown
+  ): { tableName: string } {
+    const tableName = uniqueTable();
+    mockedGetDatasetBySourceFile.mockReturnValue({ tableName } as never);
+    mockedDuckQuery
+      .mockResolvedValueOnce(makeStatsTable() as never)
+      .mockResolvedValueOnce(makeBreaksTable(rawBreaks) as never)
+      .mockResolvedValueOnce(
+        makeTable({ rounded: rounded ?? rawBreaks }) as never
+      )
+      .mockResolvedValueOnce(makeCountsTable() as never);
+    return { tableName };
+  }
+
+  it.each([
+    ['quantiles', 'quantile('],
+    ['equal_interval', 'equi_width('],
+    ['jenks', 'kmeans('],
+    ['q6', 'q6('],
+    ['nested_means', 'nested_means('],
+    ['head_tail', 'headtail2(']
+  ])(
+    'should invoke the %s macro (%s) and parse a plain-array result',
+    async (method, macroFragment) => {
+      arrangeMacroFlow([20, 40, 60, 80]);
+
+      const result = await calculateBreaks({
+        datasetId: 'src',
+        columnName: 'value',
+        method: method as never,
+        numClasses: 5
+      });
+
+      expect(result?.breaks).toEqual([20, 40, 60, 80]);
+      expect(result?.counts).toEqual([4, 6, 5, 3, 2]);
+      const macroQuery = mockedDuckQuery.mock.calls[1]?.[0] as string;
+      expect(macroQuery).toContain(macroFragment);
+    }
+  );
+
+  it('should parse results when the macro returns a TypedArray (iterable but not Array)', async () => {
+    const typedArrayBreaks = Float64Array.of(20, 40, 60, 80);
+    expect(Array.isArray(typedArrayBreaks)).toBe(false);
+    expect(typeof typedArrayBreaks[Symbol.iterator]).toBe('function');
+
+    arrangeMacroFlow(typedArrayBreaks, typedArrayBreaks);
+
+    const result = await calculateBreaks({
+      datasetId: 'src',
+      columnName: 'value',
+      method: 'quantiles' as never,
+      numClasses: 5
+    });
+
+    expect(result?.breaks).toEqual([20, 40, 60, 80]);
+  });
+
+  it('should parse results when the macro returns a generic iterable (Arrow Vector-like)', async () => {
+    const vectorLike: Iterable<number> = {
+      *[Symbol.iterator]() {
+        yield 20;
+        yield 40;
+        yield 60;
+        yield 80;
+      }
+    };
+    expect(Array.isArray(vectorLike)).toBe(false);
+
+    arrangeMacroFlow(vectorLike, [20, 40, 60, 80]);
+
+    const result = await calculateBreaks({
+      datasetId: 'src',
+      columnName: 'value',
+      method: 'jenks' as never,
+      numClasses: 5
+    });
+
+    expect(result?.breaks).toEqual([20, 40, 60, 80]);
+  });
+
+  it('should fall back to equal-interval breaks when the macro returns null', async () => {
+    arrangeMacroFlow(null, null);
+
+    const result = await calculateBreaks({
+      datasetId: 'src',
+      columnName: 'value',
+      method: 'quantiles' as never,
+      numClasses: 5
+    });
+
+    expect(result?.breaks).toEqual([20, 40, 60, 80]);
+    expect(result?.min).toBe(0);
+    expect(result?.max).toBe(100);
+  });
+
+  it('should fall back to equal-interval breaks when the macro throws', async () => {
+    mockedGetDatasetBySourceFile.mockReturnValue({
+      tableName: uniqueTable()
+    } as never);
+    mockedDuckQuery
+      .mockResolvedValueOnce(makeStatsTable() as never)
+      .mockRejectedValueOnce(new Error('macro failure') as never)
+      .mockResolvedValueOnce(makeTable({ rounded: [20, 40, 60, 80] }) as never)
+      .mockResolvedValueOnce(makeCountsTable() as never);
+
+    const result = await calculateBreaks({
+      datasetId: 'src',
+      columnName: 'value',
+      method: 'jenks' as never,
+      numClasses: 5
+    });
+
+    expect(result?.breaks).toEqual([20, 40, 60, 80]);
+  });
+
+  it('should filter out macro values outside the [min, max] range', async () => {
+    arrangeMacroFlow([-50, 20, 60, 500]);
+
+    const result = await calculateBreaks({
+      datasetId: 'src',
+      columnName: 'value',
+      method: 'quantiles' as never,
+      numClasses: 5
+    });
+
+    expect(result?.breaks).toEqual([20, 60]);
+  });
+
+  it('should use rounded breaks from round_thresholds when it returns a TypedArray', async () => {
+    arrangeMacroFlow(
+      Float64Array.of(23.7, 47.2, 61.9, 84.1),
+      Float64Array.of(25, 50, 60, 85)
+    );
+
+    const result = await calculateBreaks({
+      datasetId: 'src',
+      columnName: 'value',
+      method: 'quantiles' as never,
+      numClasses: 5
+    });
+
+    expect(result?.breaks).toEqual([25, 50, 60, 85]);
+    const roundQuery = mockedDuckQuery.mock.calls[2]?.[0] as string;
+    expect(roundQuery).toContain('round_thresholds(');
+  });
+
+  it('should not invoke any macro query for manual method (falls back to equal-interval inside calculateBreaks)', async () => {
+    mockedGetDatasetBySourceFile.mockReturnValue({
+      tableName: uniqueTable()
+    } as never);
+    mockedDuckQuery
+      .mockResolvedValueOnce(makeStatsTable() as never)
+      .mockResolvedValueOnce(makeCountsTable() as never);
+
+    const result = await calculateBreaks({
+      datasetId: 'src',
+      columnName: 'value',
+      method: 'manual' as never,
+      numClasses: 5
+    });
+
+    expect(result?.breaks).toEqual([20, 40, 60, 80]);
+    const queries = mockedDuckQuery.mock.calls.map((c) => c[0] as string);
+    expect(queries.every((q) => !q.includes('quantile('))).toBe(true);
+    expect(queries.every((q) => !q.includes('kmeans('))).toBe(true);
+    expect(queries.every((q) => !q.includes('round_thresholds('))).toBe(true);
+  });
+});
+
+describe('calculateBreaks — Flechette edge cases', () => {
+  let edgeCounter = 0;
+
+  function uniqueTable(): string {
+    edgeCounter += 1;
+    return `vals_edge_${edgeCounter}_${Date.now()}`;
+  }
+
+  function makeStatsTable() {
+    return makeTable({
+      distinct_count: 20,
+      min_val: 0,
+      max_val: 100,
+      mean_val: 50,
+      stddev_val: 15
+    });
+  }
+
+  function makeCountsTable() {
+    return makeTable({
+      cnt_0: 4,
+      cnt_1: 6,
+      cnt_2: 5,
+      cnt_3: 3,
+      cnt_4: 2
+    });
+  }
+
+  function arrangeMacroFlow(rawBreaks: unknown, rounded?: unknown) {
+    mockedGetDatasetBySourceFile.mockReturnValue({
+      tableName: uniqueTable()
+    } as never);
+    mockedDuckQuery
+      .mockResolvedValueOnce(makeStatsTable() as never)
+      .mockResolvedValueOnce(makeTable({ breaks: rawBreaks }) as never)
+      .mockResolvedValueOnce(
+        makeTable({ rounded: rounded ?? rawBreaks }) as never
+      )
+      .mockResolvedValueOnce(makeCountsTable() as never);
+  }
+
+  it('should fall back to equal-interval when the macro returns an empty list (DirectBatch subarray of length 0)', async () => {
+    arrangeMacroFlow(new Float64Array(0), new Float64Array(0));
+
+    const result = await calculateBreaks({
+      datasetId: 'src',
+      columnName: 'value',
+      method: 'quantiles' as never,
+      numClasses: 5
+    });
+
+    expect(result?.breaks).toEqual([20, 40, 60, 80]);
+  });
+
+  it('should filter null entries when the macro returns an Array with nulls (Flechette fallback slice with null bitmap)', async () => {
+    arrangeMacroFlow([null, 20, null, 60, null]);
+
+    const result = await calculateBreaks({
+      datasetId: 'src',
+      columnName: 'value',
+      method: 'quantiles' as never,
+      numClasses: 5
+    });
+
+    expect(result?.breaks).toEqual([20, 60]);
+  });
+
+  it('should parse a Float32Array subarray (DirectBatch for single-precision list)', async () => {
+    const f32 = Float32Array.of(20, 40, 60, 80).subarray(0, 4);
+    expect(f32).toBeInstanceOf(Float32Array);
+    expect(Array.isArray(f32)).toBe(false);
+    arrangeMacroFlow(f32, f32);
+
+    const result = await calculateBreaks({
+      datasetId: 'src',
+      columnName: 'value',
+      method: 'jenks' as never,
+      numClasses: 5
+    });
+
+    expect(result?.breaks).toEqual([20, 40, 60, 80]);
+  });
+
+  it('should parse an Int32Array subarray (DirectBatch for integer-typed list)', async () => {
+    arrangeMacroFlow(
+      Int32Array.of(20, 40, 60, 80),
+      Int32Array.of(20, 40, 60, 80)
+    );
+
+    const result = await calculateBreaks({
+      datasetId: 'src',
+      columnName: 'value',
+      method: 'equal_interval' as never,
+      numClasses: 5
+    });
+
+    expect(result?.breaks).toEqual([20, 40, 60, 80]);
+  });
+
+  it('should treat undefined get(0) the same as null (out-of-range row)', async () => {
+    arrangeMacroFlow(undefined, undefined);
+
+    const result = await calculateBreaks({
+      datasetId: 'src',
+      columnName: 'value',
+      method: 'quantiles' as never,
+      numClasses: 5
+    });
+
+    expect(result?.breaks).toEqual([20, 40, 60, 80]);
+  });
+
+  it('should ignore unsupported scalar return (e.g. macro misconfigured to return a number)', async () => {
+    arrangeMacroFlow(42, 42);
+
+    const result = await calculateBreaks({
+      datasetId: 'src',
+      columnName: 'value',
+      method: 'jenks' as never,
+      numClasses: 5
+    });
+
+    expect(result?.breaks).toEqual([20, 40, 60, 80]);
+  });
+
+  it('should coerce BigInt entries produced by Int64Batch-like lists', async () => {
+    arrangeMacroFlow([20n, 40n, 60n, 80n], [20n, 40n, 60n, 80n]);
+
+    const result = await calculateBreaks({
+      datasetId: 'src',
+      columnName: 'value',
+      method: 'quantiles' as never,
+      numClasses: 5
+    });
+
+    expect(result?.breaks).toEqual([20, 40, 60, 80]);
+  });
+});

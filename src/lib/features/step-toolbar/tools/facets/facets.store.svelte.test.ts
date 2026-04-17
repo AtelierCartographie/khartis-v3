@@ -354,7 +354,7 @@ describe('facetsStore', () => {
         layout: { columns: 999, gap: 16 }
       });
 
-      expect(facetsStore.layout.columns).toBe(6);
+      expect(facetsStore.layout.columns).toBe(4);
     });
 
     it('should reject invalid scaleMode and use default', () => {

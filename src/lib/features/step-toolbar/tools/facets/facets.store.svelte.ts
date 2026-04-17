@@ -9,8 +9,19 @@ export const SCALE_MODE = {
   INDEPENDENT: 'independent'
 } as const;
 
-export const MAX_FACETS_COLUMNS = 6;
+export const MAX_FACETS_COLUMNS = 4;
 export const MAX_FACETS = 16;
+
+export function computeBestColumns(
+  mapCount: number,
+  maxCols: number = MAX_FACETS_COLUMNS
+): number {
+  if (mapCount <= 1) return 1;
+  if (mapCount === 2) return 2;
+  if (mapCount === 3) return 3;
+  if (mapCount === 4) return 2;
+  return Math.min(maxCols, Math.ceil(Math.sqrt(mapCount)));
+}
 
 export type ScaleMode = (typeof SCALE_MODE)[keyof typeof SCALE_MODE];
 
@@ -137,11 +148,14 @@ function createFacetsStore() {
   }
 
   async function enable(baseVizId: string, variables: string[]): Promise<void> {
-    if (variables.length < 2) {
+    const sanitized = variables.filter(
+      (v): v is string => typeof v === 'string' && v.length > 0
+    );
+    if (sanitized.length < 2) {
       return;
     }
 
-    const capped = variables.slice(0, MAX_FACETS);
+    const capped = sanitized.slice(0, MAX_FACETS);
 
     const baseViz = visualizationStore.visualizations.find(
       (v) => v.id === baseVizId
@@ -167,6 +181,7 @@ function createFacetsStore() {
       state.baseVisualizationId = baseVizId;
       state.variables = [...capped];
       state.generatedVisualizationIds = facetConfigs.map((c) => c.id);
+      state.layout.columns = computeBestColumns(capped.length);
       notifyPersistence();
 
       logger.debug('Facets enabled', LogCategory.STORE, {
@@ -200,11 +215,33 @@ function createFacetsStore() {
     notifyPersistence();
   }
 
+  function capturePreviousGeneratedName(): string | undefined {
+    const previousSelectedId = visualizationStore.selectedVisualization?.id;
+    if (!previousSelectedId) return undefined;
+    if (!state.generatedVisualizationIds.includes(previousSelectedId))
+      return undefined;
+    return visualizationStore.visualizations.find(
+      (v) => v.id === previousSelectedId
+    )?.name;
+  }
+
+  function restoreSelectionByName(
+    newConfigs: VisualizationConfig[],
+    previousName: string | undefined
+  ): void {
+    if (!previousName) return;
+    const match = newConfigs.find((c) => c.name === previousName);
+    if (match) visualizationStore.selectVisualization(match.id);
+  }
+
   async function updateVariables(
     baseVizId: string,
     variables: string[]
   ): Promise<void> {
-    if (variables.length < 2) {
+    const sanitized = variables.filter(
+      (v): v is string => typeof v === 'string' && v.length > 0
+    );
+    if (sanitized.length < 2) {
       if (state.enabled) {
         disable();
       }
@@ -212,7 +249,7 @@ function createFacetsStore() {
     }
 
     if (!state.enabled || state.baseVisualizationId !== baseVizId) {
-      await enable(baseVizId, variables);
+      await enable(baseVizId, sanitized);
       return;
     }
 
@@ -223,10 +260,12 @@ function createFacetsStore() {
       return;
     }
 
-    const capped = variables.slice(0, MAX_FACETS);
+    const capped = sanitized.slice(0, MAX_FACETS);
 
     isRegenerating = true;
     try {
+      const previousName = capturePreviousGeneratedName();
+
       const newConfigs = await generateFacetVisualizations(
         baseViz,
         capped,
@@ -238,6 +277,9 @@ function createFacetsStore() {
       visualizationStore.createBulkVisualizations(newConfigs);
       state.variables = [...capped];
       state.generatedVisualizationIds = newConfigs.map((config) => config.id);
+      state.layout.columns = computeBestColumns(capped.length);
+      restoreSelectionByName(newConfigs, previousName);
+
       notifyPersistence();
       logger.debug(
         'Variables updated and facets regenerated',
@@ -299,6 +341,8 @@ function createFacetsStore() {
       if (baseViz) {
         isRegenerating = true;
         try {
+          const previousName = capturePreviousGeneratedName();
+
           const newConfigs = await generateFacetVisualizations(
             baseViz,
             state.variables,
@@ -312,6 +356,7 @@ function createFacetsStore() {
           state.generatedVisualizationIds = newConfigs.map(
             (config) => config.id
           );
+          restoreSelectionByName(newConfigs, previousName);
           notifyPersistence();
 
           logger.debug(
@@ -358,6 +403,8 @@ function createFacetsStore() {
       if (baseViz) {
         isRegenerating = true;
         try {
+          const previousName = capturePreviousGeneratedName();
+
           const newConfigs = await generateFacetVisualizations(
             baseViz,
             state.variables,
@@ -371,6 +418,7 @@ function createFacetsStore() {
           state.generatedVisualizationIds = newConfigs.map(
             (config) => config.id
           );
+          restoreSelectionByName(newConfigs, previousName);
           notifyPersistence();
 
           logger.debug(

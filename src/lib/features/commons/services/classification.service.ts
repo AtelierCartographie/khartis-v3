@@ -158,6 +158,19 @@ function sanitizeBreaks(breaks: number[], min: number, max: number): number[] {
     );
 }
 
+function toIterableValues(raw: unknown): number[] | null {
+  if (raw == null) return null;
+  const isArrayLike =
+    Array.isArray(raw) ||
+    typeof (raw as { [Symbol.iterator]?: unknown })[Symbol.iterator] ===
+      'function';
+  if (!isArrayLike) return null;
+  return Array.from(raw as Iterable<unknown>)
+    .filter((value) => value !== null && value !== undefined)
+    .map((value) => Number(value))
+    .filter((value) => !Number.isNaN(value));
+}
+
 function getEqualIntervalBreaks(
   min: number,
   max: number,
@@ -208,15 +221,12 @@ async function roundBreaks(
     const roundQuery = `SELECT round_thresholds(${breaksListLiteral}, '${escapeSqlString(context.tableName)}', '${escapeSqlString(context.columnName)}') as rounded`;
     const roundResult = (await Duck.query(roundQuery)) as Table;
     const rawRounded = roundResult.getChild?.('rounded')?.get(0);
-    if (rawRounded && Array.isArray(rawRounded)) {
-      return sanitizeBreaks(
-        rawRounded
-          .filter((value: unknown) => value !== null && value !== undefined)
-          .map((value: unknown) => Number(value))
-          .filter((value: number) => !isNaN(value)),
-        min,
-        max
-      );
+    const rounded = toIterableValues(rawRounded);
+    if (rounded && rounded.length > 0) {
+      const sanitized = sanitizeBreaks(rounded, min, max);
+      if (sanitized.length > 0) {
+        return sanitized;
+      }
     }
   } catch (roundError) {
     logger.warn(
@@ -337,18 +347,10 @@ export async function calculateBreaks(
         try {
           const result = (await Duck.query(query)) as Table;
           const rawBreaks = result.getChild?.('breaks')?.get(0);
+          const extracted = toIterableValues(rawBreaks);
 
-          if (rawBreaks && Array.isArray(rawBreaks)) {
-            breaks = sanitizeBreaks(
-              rawBreaks
-                .filter(
-                  (value: unknown) => value !== null && value !== undefined
-                )
-                .map((value: unknown) => Number(value))
-                .filter((value: number) => !isNaN(value)),
-              stats.min,
-              stats.max
-            );
+          if (extracted) {
+            breaks = sanitizeBreaks(extracted, stats.min, stats.max);
           }
         } catch (macroError) {
           logger.warn(

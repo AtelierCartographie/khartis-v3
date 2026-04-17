@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { Subtract, Add } from 'carbon-icons-svelte';
+
   interface Props {
     value: number;
     min?: number;
@@ -7,6 +9,9 @@
     width?: string;
     disabled?: boolean;
     id?: string;
+    showSteppers?: boolean;
+    ariaDecrement?: string;
+    ariaIncrement?: string;
     onchange?: (value: number) => void;
   }
 
@@ -15,34 +20,78 @@
     min = 0,
     max = 100,
     step = 1,
-    width = '64px',
+    width = '100%',
     disabled = false,
     id,
+    showSteppers = true,
+    ariaDecrement = 'Decrement',
+    ariaIncrement = 'Increment',
     onchange
   }: Props = $props();
 
-  function handleInput(e: Event) {
-    const target = e.target as HTMLInputElement;
-    let newValue = parseFloat(target.value);
+  let inputEl = $state<HTMLInputElement | null>(null);
 
-    if (isNaN(newValue)) return;
+  const atMin = $derived(value <= min);
+  const atMax = $derived(value >= max);
 
-    if (newValue < min) newValue = min;
-    if (newValue > max) newValue = max;
-
-    value = newValue;
-    onchange?.(newValue);
+  function clamp(next: number): number {
+    if (next < min) return min;
+    if (next > max) return max;
+    return next;
   }
 
-  function handleBlur(e: Event) {
+  function commit(next: number) {
+    const clamped = clamp(next);
+    if (clamped === value) {
+      if (inputEl) inputEl.value = String(clamped);
+      return;
+    }
+    value = clamped;
+    onchange?.(clamped);
+  }
+
+  function handleInput(e: Event) {
     const target = e.target as HTMLInputElement;
-    target.value = String(value);
+    const parsed = parseFloat(target.value);
+    if (!Number.isFinite(parsed)) return;
+    commit(parsed);
+  }
+
+  function handleBlur() {
+    if (inputEl) inputEl.value = String(value);
+  }
+
+  function decrement() {
+    if (disabled || atMin) return;
+    commit(value - step);
+  }
+
+  function increment() {
+    if (disabled || atMax) return;
+    commit(value + step);
+  }
+
+  function handleKeydown(e: KeyboardEvent) {
+    if (disabled) return;
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      increment();
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      decrement();
+    }
   }
 </script>
 
-<div class="compact-number-input" style="--input-width: {width}">
+<div
+  class="compact-number-input"
+  class:disabled={disabled}
+  style:--compact-number-input-width={width}
+>
   <input
+    bind:this={inputEl}
     type="number"
+    inputmode="numeric"
     id={id}
     min={min}
     max={max}
@@ -51,46 +100,128 @@
     disabled={disabled}
     oninput={handleInput}
     onblur={handleBlur}
+    onkeydown={handleKeydown}
   />
+  {#if showSteppers}
+    <div class="steppers">
+      <button
+        type="button"
+        class="stepper"
+        aria-label={ariaDecrement}
+        disabled={disabled || atMin}
+        onclick={decrement}
+      >
+        <Subtract size={16} />
+      </button>
+      <span class="stepper-divider" aria-hidden="true"></span>
+      <button
+        type="button"
+        class="stepper"
+        aria-label={ariaIncrement}
+        disabled={disabled || atMax}
+        onclick={increment}
+      >
+        <Add size={16} />
+      </button>
+    </div>
+  {/if}
 </div>
 
 <style lang="scss">
   .compact-number-input {
-    width: var(--input-width);
-    min-width: var(--input-width);
-    max-width: var(--input-width);
-    flex-shrink: 0;
+    width: var(--compact-number-input-width, 100%);
+    min-width: 64px;
+    height: 32px;
+    display: flex;
+    align-items: stretch;
+    background-color: var(--cds-field-01, #f4f4f4);
+    border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d);
+    box-sizing: border-box;
+    position: relative;
+    transition: border-bottom-color 0.1s ease;
 
-    input {
-      width: 100%;
-      height: 32px;
-      padding: 0 var(--cds-spacing-03);
-      border: none;
-      border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d);
-      background-color: var(--cds-field-01, #f4f4f4);
-      color: var(--cds-text-primary, #161616);
-      font-size: 0.875rem;
-      text-align: center;
-      outline: none;
-      box-sizing: border-box;
+    &:focus-within:not(.disabled) {
+      border-bottom-color: var(--cds-focus, #0f62fe);
+      box-shadow: inset 0 -1px 0 0 var(--cds-focus, #0f62fe);
+    }
 
-      appearance: textfield;
-      -moz-appearance: textfield;
+    &.disabled {
+      border-bottom-color: transparent;
 
-      &::-webkit-outer-spin-button,
-      &::-webkit-inner-spin-button {
-        -webkit-appearance: none;
-        margin: 0;
-      }
-
-      &:focus {
-        border-bottom: 2px solid var(--cds-focus, #0f62fe);
-      }
-
-      &:disabled {
+      input {
         color: var(--cds-text-disabled, #c6c6c6);
         cursor: not-allowed;
       }
     }
+  }
+
+  input {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 100%;
+    padding: 0 var(--cds-spacing-05, 16px);
+    border: none;
+    background: transparent;
+    color: var(--cds-text-primary, #161616);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.875rem;
+    line-height: 1.125rem;
+    letter-spacing: 0.16px;
+    outline: none;
+    box-sizing: border-box;
+    text-align: left;
+
+    appearance: textfield;
+    -moz-appearance: textfield;
+
+    &::-webkit-outer-spin-button,
+    &::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+  }
+
+  .steppers {
+    display: flex;
+    align-items: stretch;
+    flex-shrink: 0;
+  }
+
+  .stepper {
+    width: 32px;
+    height: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--cds-icon-primary, #161616);
+    cursor: pointer;
+    transition: background-color 0.1s ease;
+
+    &:hover:not(:disabled) {
+      background-color: var(--cds-layer-hover-01, #e8e8e8);
+    }
+
+    &:active:not(:disabled) {
+      background-color: var(--cds-layer-active-01, #c6c6c6);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--cds-focus, #0f62fe);
+      outline-offset: -2px;
+    }
+
+    &:disabled {
+      color: var(--cds-icon-disabled, #c6c6c6);
+      cursor: not-allowed;
+    }
+  }
+
+  .stepper-divider {
+    width: 1px;
+    background-color: var(--cds-border-subtle-01, #c6c6c6);
+    flex-shrink: 0;
   }
 </style>

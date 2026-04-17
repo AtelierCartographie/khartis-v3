@@ -67,6 +67,115 @@ export interface Palette {
 
 export type SuggestionPreset = 'monochrome' | 'bicolor' | 'sepia';
 
+export type QualitativePreset = 'vif' | 'pastel' | 'sepia';
+
+/** Exact hex values from Figma node 893:153398 — "Color - Unique" Vif preset */
+export const VIF_MIXTE_COLORS = [
+  '#f287ac',
+  '#00ad92',
+  '#c39800',
+  '#90a8ff',
+  '#da5e04'
+] as const;
+
+export const VIF_CHAUD_COLORS = [
+  '#bb98ff',
+  '#dd5642',
+  '#db6fb5',
+  '#e2a333',
+  '#b75dce'
+] as const;
+
+export const VIF_FROID_COLORS = [
+  '#aabf4c',
+  '#00a5cc',
+  '#2dbd86',
+  '#77b1ff',
+  '#51a738'
+] as const;
+
+/** Pastel preset — desaturated lighter variants derived from Vif seeds via ok-palette */
+export const PASTEL_MIXTE_COLORS = [
+  '#fbd0dd',
+  '#a9e8dd',
+  '#ecd79e',
+  '#cdd6ff',
+  '#f6c7a8'
+] as const;
+
+export const PASTEL_CHAUD_COLORS = [
+  '#dfcefe',
+  '#f3bfb2',
+  '#f3c6e1',
+  '#f3dab1',
+  '#e7c3f0'
+] as const;
+
+export const PASTEL_FROID_COLORS = [
+  '#dde5b0',
+  '#a9dfed',
+  '#bfe7d4',
+  '#c8def9',
+  '#c5e2b9'
+] as const;
+
+/** Sépia preset — warm desaturated earth tones */
+export const SEPIA_MIXTE_COLORS = [
+  '#b08c7a',
+  '#9f8a6a',
+  '#bf9c55',
+  '#a79279',
+  '#b58268'
+] as const;
+
+export const SEPIA_CHAUD_COLORS = [
+  '#9e8d81',
+  '#c7856e',
+  '#b08575',
+  '#c29a6d',
+  '#a38273'
+] as const;
+
+export const SEPIA_FROID_COLORS = [
+  '#a89874',
+  '#87918c',
+  '#94957e',
+  '#8a8e7c',
+  '#9c9478'
+] as const;
+
+export interface QualitativeColorGroups {
+  mixte: string[];
+  chaud: string[];
+  froid: string[];
+}
+
+/** Colorblind-safe subset indices (per theme row) derived from Figma Daltonisme filter */
+const COLORBLIND_SAFE_INDICES: Record<
+  QualitativePreset,
+  {
+    mixte: number[];
+    chaud: number[];
+    froid: number[];
+  }
+> = {
+  vif: {
+    mixte: [0, 1, 2, 3],
+    chaud: [0, 1, 3],
+    froid: [1, 3]
+  },
+  pastel: {
+    mixte: [0, 1, 2, 3],
+    chaud: [0, 1, 3],
+    froid: [1, 3]
+  },
+  sepia: {
+    mixte: [0, 1, 2, 3, 4],
+    chaud: [0, 1, 2, 3, 4],
+    froid: [0, 1, 2, 3, 4]
+  }
+};
+
 /** Monochrome palettes — single seed color, ok-palette generates the light→dark ramp */
 export const monochromePalettes: Palette[] = [
   {
@@ -551,4 +660,90 @@ export function findPaletteById(id: string): Palette | undefined {
     ...getPatternPalettes()
   ];
   return all.find((p) => p.id === id);
+}
+
+function filterByIndices<T>(source: readonly T[], indices: number[]): T[] {
+  return indices.map((i) => source[i]).filter((v): v is T => v !== undefined);
+}
+
+export function getQualitativeColorGroups(
+  preset: QualitativePreset,
+  colorBlindFilter: boolean
+): QualitativeColorGroups {
+  const mixte =
+    preset === 'vif'
+      ? [...VIF_MIXTE_COLORS]
+      : preset === 'pastel'
+        ? [...PASTEL_MIXTE_COLORS]
+        : [...SEPIA_MIXTE_COLORS];
+  const chaud =
+    preset === 'vif'
+      ? [...VIF_CHAUD_COLORS]
+      : preset === 'pastel'
+        ? [...PASTEL_CHAUD_COLORS]
+        : [...SEPIA_CHAUD_COLORS];
+  const froid =
+    preset === 'vif'
+      ? [...VIF_FROID_COLORS]
+      : preset === 'pastel'
+        ? [...PASTEL_FROID_COLORS]
+        : [...SEPIA_FROID_COLORS];
+
+  if (!colorBlindFilter) {
+    return { mixte, chaud, froid };
+  }
+
+  const safe = COLORBLIND_SAFE_INDICES[preset];
+  return {
+    mixte: filterByIndices(mixte, safe.mixte),
+    chaud: filterByIndices(chaud, safe.chaud),
+    froid: filterByIndices(froid, safe.froid)
+  };
+}
+
+/** Alias for generateIntensityShades — 7 shades of a single color for the Intensité row */
+export function generateIntensityShadesForColor(seedHex: string): string[] {
+  return generateIntensityShades(seedHex);
+}
+
+/** Generate N categorical colors aligned with a seed color's hue within a preset's ranges */
+export function generateCategoricalColorsFromSeed(
+  seedHex: string,
+  count: number,
+  preset: QualitativePreset = 'vif'
+): string[] {
+  if (count <= 0) return [];
+  if (count === 1) return [seedHex];
+  const presetOption =
+    preset === 'vif'
+      ? presets.vif
+      : preset === 'pastel'
+        ? presets.pastel
+        : presets.sepia;
+  const seedHue = extractHueFromHex(seedHex);
+  const cssColors = categorical(count, {
+    ...presetOption,
+    hueOffset: seedHue
+  });
+  return (resolvePalette(cssColors, { format: 'webgl' }) as WebGLColor[]).map(
+    webglToHex
+  );
+}
+
+function extractHueFromHex(hex: string): number {
+  const clean = hex.replace(/^#/, '');
+  const r = parseInt(clean.slice(0, 2), 16) / 255;
+  const g = parseInt(clean.slice(2, 4), 16) / 255;
+  const b = parseInt(clean.slice(4, 6), 16) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const d = max - min;
+  if (d === 0) return 0;
+  let h: number;
+  if (max === r) h = ((g - b) / d) % 6;
+  else if (max === g) h = (b - r) / d + 2;
+  else h = (r - g) / d + 4;
+  h = h * 60;
+  if (h < 0) h += 360;
+  return Math.round(h);
 }

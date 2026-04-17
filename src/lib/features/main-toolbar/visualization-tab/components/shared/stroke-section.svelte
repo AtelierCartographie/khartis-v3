@@ -27,7 +27,8 @@
   import ToggleWithLabel from './toggle-with-label.svelte';
   import {
     DEFAULT_SEQUENTIAL_PREVIEW,
-    DEFAULT_QUALITATIVE_PREVIEW
+    DEFAULT_QUALITATIVE_PREVIEW,
+    PALETTE_TYPE
   } from '../palette-popover/palette.constants';
 
   interface Props {
@@ -37,6 +38,7 @@
     showDashed?: boolean;
     classesPalette?: string[];
     categoriesPalette?: string[];
+    categoryLabels?: string[];
     discretizationLabel?: string;
     categoryCount?: number;
     onStyleChange?: (updates: Partial<VisualizationConfig['style']>) => void;
@@ -58,6 +60,7 @@
     showDashed = true,
     classesPalette = DEFAULT_SEQUENTIAL_PREVIEW,
     categoriesPalette = DEFAULT_QUALITATIVE_PREVIEW,
+    categoryLabels = [],
     discretizationLabel,
     categoryCount = 4,
     onStyleChange,
@@ -237,6 +240,7 @@
       colors={resolvedClassesPalette}
       selectedPaletteId={visualization?.classification?.paletteId}
       inverted={visualization?.classification?.inverted ?? false}
+      paletteType={PALETTE_TYPE.SEQUENTIAL}
       oninvert={onInvertPalette}
       onClassificationChange={onClassificationChange}
     />
@@ -260,6 +264,11 @@
       colors={resolvedCategoriesPalette}
       selectedPaletteId={visualization?.classification?.paletteId}
       inverted={visualization?.classification?.inverted ?? false}
+      paletteType={PALETTE_TYPE.QUALITATIVE}
+      categoriesMode={true}
+      categoryLabels={categoryLabels.length > 0
+        ? categoryLabels
+        : (visualization?.classification?.labels ?? [])}
       oninvert={onInvertPalette}
       onClassificationChange={onClassificationChange}
     />

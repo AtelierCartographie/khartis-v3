@@ -15,7 +15,8 @@
   import * as m from '$lib/paraglide/messages';
   import {
     DEFAULT_SEQUENTIAL_PREVIEW,
-    DEFAULT_QUALITATIVE_PREVIEW
+    DEFAULT_QUALITATIVE_PREVIEW,
+    PALETTE_TYPE
   } from '../palette-popover/palette.constants';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import {
@@ -28,7 +29,6 @@
     availableShapesForSymbolMode
   } from '../../../constants';
   import {
-    ColorSelector,
     DiscretizationRow,
     InfoPopover,
     PalettePreview,
@@ -37,6 +37,7 @@
     MissingDataSection,
     StrokeSection
   } from '../shared';
+  import SingleColorPreview from '../palette-popover/single-color-preview.svelte';
   import type { SymbolModeProps } from './types';
   import { resolveDiscretizationLabel } from '../discretization.utils';
 
@@ -99,7 +100,7 @@
     }
     if (visualization?.style) {
       fillColor =
-        (visualization.style.fillColor as string) ?? DEFAULT_COLORS.fill;
+        (visualization.style.symbolFillColor as string) ?? DEFAULT_COLORS.fill;
     }
     if (visualization?.symbols) {
       symbolSize =
@@ -173,7 +174,7 @@
 
   function handleFillColorChange(value: string) {
     fillColor = value;
-    onStyleChange?.({ fillColor: value });
+    onStyleChange?.({ symbolFillColor: value });
   }
 
   function handleFillOpacityChange(value: number) {
@@ -286,9 +287,9 @@
 </div>
 
 {#if fillMode === FillMode.UNIQUE}
-  <ColorSelector
+  <SingleColorPreview
     label={m.color()}
-    value={fillColor}
+    color={fillColor}
     onchange={handleFillColorChange}
   />
   <SliderWithInput
@@ -318,6 +319,7 @@
     colors={sequentialPalette}
     selectedPaletteId={visualization?.classification?.paletteId}
     inverted={visualization?.classification?.inverted ?? false}
+    paletteType={PALETTE_TYPE.SEQUENTIAL}
     oninvert={onInvertPalette}
     onClassificationChange={onClassificationChange}
   />
@@ -358,6 +360,9 @@
     label={m.color_palette()}
     colors={qualitativePalette}
     inverted={visualization?.classification?.inverted ?? false}
+    paletteType={PALETTE_TYPE.QUALITATIVE}
+    categoriesMode={true}
+    categoryLabels={visualization?.classification?.labels ?? []}
     oninvert={onInvertPalette}
     onClassificationChange={onClassificationChange}
   />

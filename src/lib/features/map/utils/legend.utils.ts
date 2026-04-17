@@ -1,4 +1,11 @@
 import {
+  getEnabledPrimitiveFilters,
+  getLinePrimitive,
+  getPolygonPrimitive,
+  getPrimitiveCategoryColumn,
+  getPrimitiveClassification,
+  getPrimitiveValueColumn,
+  getSymbolPrimitive,
   PrimitiveFilterType,
   ScaleType,
   VisualizationType,
@@ -89,6 +96,13 @@ function resolveStyleColor(
   return typeof color === 'string' ? color : fallback;
 }
 
+function resolveSymbolFillColor(viz: VisualizationConfig): string {
+  return resolveStyleColor(
+    getSymbolPrimitive(viz)?.fillColor,
+    DEFAULT_COLORS.fill
+  );
+}
+
 function normalizeOpacity(value: number | undefined, fallback: number): number {
   const resolved = value ?? fallback;
   const normalized = resolved > 1 ? resolved / 100 : resolved;
@@ -122,13 +136,21 @@ function resolveClassificationClassCount(
 }
 
 function hasLineLegendModes(viz: VisualizationConfig | undefined): boolean {
-  return viz?.modes?.color !== undefined || viz?.modes?.thickness !== undefined;
+  const line = getLinePrimitive(viz);
+  return Boolean(
+    line?.enabled &&
+    (line.colorMode !== ColorMode.UNIQUE ||
+      line.thicknessMode !== ThicknessMode.UNIQUE)
+  );
 }
 
 function shouldUsePointSwatches(viz: VisualizationConfig | undefined): boolean {
   if (!viz || hasLineLegendModes(viz)) {
     return false;
   }
+
+  const symbol = getSymbolPrimitive(viz);
+  const enabledFilters = getEnabledPrimitiveFilters(viz);
 
   if (
     viz.type === VisualizationType.PROPORTIONAL ||
@@ -137,11 +159,8 @@ function shouldUsePointSwatches(viz: VisualizationConfig | undefined): boolean {
     return true;
   }
 
-  const primitiveFilters = viz.primitiveFilters ?? [];
-  const hasPointPrimitive = primitiveFilters.includes(
-    PrimitiveFilterType.POINT
-  );
-  const hasPolygonPrimitive = primitiveFilters.includes(
+  const hasPointPrimitive = enabledFilters.includes(PrimitiveFilterType.POINT);
+  const hasPolygonPrimitive = enabledFilters.includes(
     PrimitiveFilterType.POLYGON
   );
 
@@ -150,9 +169,9 @@ function shouldUsePointSwatches(viz: VisualizationConfig | undefined): boolean {
   }
 
   return (
-    viz.modes?.symbol === SymbolMode.PROPORTIONAL ||
-    viz.modes?.symbol === SymbolMode.CLASSES ||
-    viz.modes?.symbol === SymbolMode.CATEGORIES
+    symbol?.mode === SymbolMode.PROPORTIONAL ||
+    symbol?.mode === SymbolMode.CLASSES ||
+    symbol?.mode === SymbolMode.CATEGORIES
   );
 }
 
@@ -293,45 +312,63 @@ export function resolveMissingDataLegendPrimitive(
 export function hasClassedColorLegend(
   viz: VisualizationConfig | undefined
 ): boolean {
+  const line = getLinePrimitive(viz);
+  const polygon = getPolygonPrimitive(viz);
+  const lineClassification =
+    viz && getPrimitiveClassification(viz, PrimitiveFilterType.LINE);
+  const polygonClassification =
+    viz && getPrimitiveClassification(viz, PrimitiveFilterType.POLYGON);
+
   if (
-    viz?.modes?.color === ColorMode.CLASSES &&
-    !!viz.mapping.valueColumn &&
-    !!viz.classification?.colors?.length &&
-    !!viz.classification?.breaks?.length
+    line?.enabled &&
+    line.colorMode === ColorMode.CLASSES &&
+    !!getPrimitiveValueColumn(viz, PrimitiveFilterType.LINE) &&
+    !!lineClassification?.colors?.length &&
+    !!lineClassification?.breaks?.length
   ) {
     return true;
   }
 
-  return (
-    viz?.modes?.fill === FillMode.CLASSES &&
-    !!viz.mapping.valueColumn &&
-    !!viz.classification?.colors?.length &&
-    !!viz.classification?.breaks?.length
+  return Boolean(
+    polygon?.enabled &&
+    polygon.fillMode === FillMode.CLASSES &&
+    !!getPrimitiveValueColumn(viz, PrimitiveFilterType.POLYGON) &&
+    !!polygonClassification?.colors?.length &&
+    !!polygonClassification?.breaks?.length
   );
 }
 
 export function hasCategoricalColorLegend(
   viz: VisualizationConfig | undefined
 ): boolean {
+  const line = getLinePrimitive(viz);
+  const polygon = getPolygonPrimitive(viz);
+  const lineClassification =
+    viz && getPrimitiveClassification(viz, PrimitiveFilterType.LINE);
+  const polygonClassification =
+    viz && getPrimitiveClassification(viz, PrimitiveFilterType.POLYGON);
+
   if (
-    viz?.modes?.color === ColorMode.CATEGORIES &&
-    !!viz.mapping.categoryColumn &&
-    !!viz.classification?.colors?.length
+    line?.enabled &&
+    line.colorMode === ColorMode.CATEGORIES &&
+    !!getPrimitiveCategoryColumn(viz, PrimitiveFilterType.LINE) &&
+    !!lineClassification?.colors?.length
   ) {
     return true;
   }
 
-  return (
-    viz?.modes?.fill === FillMode.CATEGORIES &&
-    !!viz.mapping.categoryColumn &&
-    !!viz.classification?.colors?.length
+  return Boolean(
+    polygon?.enabled &&
+    polygon.fillMode === FillMode.CATEGORIES &&
+    !!getPrimitiveCategoryColumn(viz, PrimitiveFilterType.POLYGON) &&
+    !!polygonClassification?.colors?.length
   );
 }
 
 export function getDensityLegendScale(
   viz: VisualizationConfig | undefined
 ): DensityLegendScale | null {
-  if (viz?.modes?.symbol !== SymbolMode.DENSITY) return null;
+  if (!viz || getSymbolPrimitive(viz)?.mode !== SymbolMode.DENSITY) return null;
   const density = viz.density;
   if (!density?.ratio) return null;
   const dotSize = Math.max(0.1, density.dotSize ?? DENSITY_DEFAULTS.dotSize);
@@ -348,21 +385,19 @@ export function getPointSizeLegendScale(
   viz: VisualizationConfig | undefined,
   statistics?: ColumnStatisticsLike
 ): PointSizeLegendScale | null {
-  if (!viz?.symbols) {
+  const symbol = getSymbolPrimitive(viz);
+  const classification =
+    viz && getPrimitiveClassification(viz, PrimitiveFilterType.POINT);
+
+  if (!viz || !symbol?.enabled) {
     return null;
   }
 
-  const minSize = Math.max(1, viz.symbols.minSize ?? 1);
-  const maxSize = Math.max(minSize, viz.symbols.maxSize ?? minSize);
-  const fillOpacity = Math.max(
-    0.2,
-    normalizeOpacity(viz.symbols?.opacity ?? viz.style.fillOpacity, 1)
-  );
+  const minSize = Math.max(1, symbol.minSize ?? 1);
+  const maxSize = Math.max(minSize, symbol.maxSize ?? minSize);
+  const fillOpacity = Math.max(0.2, normalizeOpacity(symbol.opacity, 1));
 
-  if (
-    viz.modes?.symbol === SymbolMode.PROPORTIONAL &&
-    !!viz.mapping.sizeColumn
-  ) {
+  if (symbol.mode === SymbolMode.PROPORTIONAL && !!symbol.sizeColumn) {
     const minValue = toFiniteNumber(getStatisticsValue(statistics, 'min'));
     const maxValue = toFiniteNumber(getStatisticsValue(statistics, 'max'));
 
@@ -377,24 +412,21 @@ export function getPointSizeLegendScale(
         maxValue,
         minSize,
         maxSize,
-        viz.symbols.sizeScale ?? ScaleType.LINEAR
+        symbol.sizeScale ?? ScaleType.LINEAR
       ),
-      fillColor: resolveStyleColor(viz.style.fillColor, DEFAULT_COLORS.fill),
-      strokeColor: resolveStyleColor(
-        viz.style.strokeColor,
-        DEFAULT_COLORS.stroke
-      ),
+      fillColor: resolveSymbolFillColor(viz),
+      strokeColor: resolveStyleColor(symbol.strokeColor, DEFAULT_COLORS.stroke),
       fillOpacity,
-      shape: viz.symbols.type ?? ShapeType.CIRCLE
+      shape: symbol.shape ?? ShapeType.CIRCLE
     };
   }
 
   if (
-    viz.modes?.symbol === SymbolMode.CLASSES &&
-    !!viz.mapping.valueColumn &&
-    !!viz.classification?.breaks?.length
+    symbol.mode === SymbolMode.CLASSES &&
+    !!symbol.valueColumn &&
+    !!classification?.breaks?.length
   ) {
-    const classCount = resolveClassificationClassCount(viz.classification);
+    const classCount = resolveClassificationClassCount(classification);
     if (classCount === 0) {
       return null;
     }
@@ -402,13 +434,10 @@ export function getPointSizeLegendScale(
     return {
       kind: 'classes',
       steps: buildClassedLegendSteps(classCount, minSize, maxSize),
-      fillColor: resolveStyleColor(viz.style.fillColor, DEFAULT_COLORS.fill),
-      strokeColor: resolveStyleColor(
-        viz.style.strokeColor,
-        DEFAULT_COLORS.stroke
-      ),
+      fillColor: resolveSymbolFillColor(viz),
+      strokeColor: resolveStyleColor(symbol.strokeColor, DEFAULT_COLORS.stroke),
       fillOpacity,
-      shape: viz.symbols.type ?? ShapeType.CIRCLE
+      shape: symbol.shape ?? ShapeType.CIRCLE
     };
   }
 
@@ -419,17 +448,18 @@ export function getLineWidthLegendScale(
   viz: VisualizationConfig | undefined,
   statistics?: ColumnStatisticsLike
 ): LineWidthLegendScale | null {
-  if (!viz) {
+  const line = getLinePrimitive(viz);
+  const classification =
+    viz && getPrimitiveClassification(viz, PrimitiveFilterType.LINE);
+
+  if (!line?.enabled) {
     return null;
   }
 
-  const maxLineWidth = Math.max(1, viz.style.lineMaxWidth ?? 1);
-  const opacity = Math.max(0.2, normalizeOpacity(viz.style.lineOpacity, 1));
+  const maxLineWidth = Math.max(1, line.maxWidth ?? 1);
+  const opacity = Math.max(0.2, normalizeOpacity(line.opacity, 1));
 
-  if (
-    viz.modes?.thickness === ThicknessMode.PROPORTIONAL &&
-    !!viz.mapping.sizeColumn
-  ) {
+  if (line.thicknessMode === ThicknessMode.PROPORTIONAL && !!line.sizeColumn) {
     const minValue = toFiniteNumber(getStatisticsValue(statistics, 'min'));
     const maxValue = toFiniteNumber(getStatisticsValue(statistics, 'max'));
 
@@ -444,20 +474,20 @@ export function getLineWidthLegendScale(
         maxValue,
         1,
         maxLineWidth,
-        viz.symbols?.sizeScale ?? ScaleType.LINEAR
+        ScaleType.LINEAR
       ),
-      color: resolveStyleColor(viz.style.lineColor, DEFAULT_COLORS.line),
+      color: resolveStyleColor(line.color, DEFAULT_COLORS.line),
       opacity,
-      dashed: viz.style.lineDashed ?? false
+      dashed: line.dashed ?? false
     };
   }
 
   if (
-    viz.modes?.thickness === ThicknessMode.CLASSES &&
-    !!viz.mapping.valueColumn &&
-    !!viz.classification?.breaks?.length
+    line.thicknessMode === ThicknessMode.CLASSES &&
+    !!line.valueColumn &&
+    !!classification?.breaks?.length
   ) {
-    const classCount = resolveClassificationClassCount(viz.classification);
+    const classCount = resolveClassificationClassCount(classification);
     if (classCount === 0) {
       return null;
     }
@@ -465,9 +495,9 @@ export function getLineWidthLegendScale(
     return {
       kind: 'classes',
       steps: buildClassedLegendSteps(classCount, 1, maxLineWidth),
-      color: resolveStyleColor(viz.style.lineColor, DEFAULT_COLORS.line),
+      color: resolveStyleColor(line.color, DEFAULT_COLORS.line),
       opacity,
-      dashed: viz.style.lineDashed ?? false
+      dashed: line.dashed ?? false
     };
   }
 

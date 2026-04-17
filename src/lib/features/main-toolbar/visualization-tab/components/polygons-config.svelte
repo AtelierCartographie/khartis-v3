@@ -11,7 +11,11 @@
     PrimitiveFilterType
   } from '$lib/features/commons/store/visualization.store.svelte';
   import * as m from '$lib/paraglide/messages';
-  import { DEFAULT_SEQUENTIAL_PREVIEW } from './palette-popover/palette.constants';
+  import {
+    DEFAULT_SEQUENTIAL_PREVIEW,
+    PALETTE_TYPE
+  } from './palette-popover/palette.constants';
+  import SingleColorPreview from './palette-popover/single-color-preview.svelte';
   import {
     Category,
     MisuseOutline,
@@ -25,7 +29,6 @@
     VISUALIZATION_DEFAULTS
   } from '../../constants';
   import {
-    ColorSelector,
     DiscretizationRow,
     InfoPopover,
     MissingDataSection,
@@ -86,6 +89,8 @@
 
   let discretizationModalOpen = $state(false);
   let filterSectionVisible = $state(false);
+  let valuePickerOpen = $state(false);
+  let categoryPickerOpen = $state(false);
   const NONE_FIELD_ID = -1;
   let selectedFieldId = $state<number>(NONE_FIELD_ID);
   let selectedCategoryFieldId = $state<number>(NONE_FIELD_ID);
@@ -209,8 +214,20 @@
 
   function handleFillColorChange(value: string) {
     fillColor = value;
-    onStyleChange?.({ fillColor: value });
+    const updates: Partial<VisualizationConfig['style']> = { fillColor: value };
+    if ((visualization?.style.fillOpacity ?? 1) <= 0) {
+      updates.fillOpacity = VISUALIZATION_DEFAULTS.fillOpacity / 100;
+      fillOpacity = VISUALIZATION_DEFAULTS.fillOpacity;
+    }
+    onStyleChange?.(updates);
   }
+
+  const effectiveFillMode = $derived.by(() => {
+    const storedMode = fillMode;
+    const opacity = visualization?.style.fillOpacity ?? 1;
+    if (opacity <= 0) return FillMode.NONE;
+    return storedMode;
+  });
 
   const fillModeIndex = $derived(
     [
@@ -218,7 +235,7 @@
       FillMode.UNIQUE,
       FillMode.CLASSES,
       FillMode.CATEGORIES
-    ].indexOf(fillMode)
+    ].indexOf(effectiveFillMode)
   );
 
   function handleFillOpacityChange(value: number) {
@@ -294,9 +311,11 @@
     const variableNames = fieldIds
       .map((id) => dataFields.find((f) => f.id === id)?.text)
       .filter((name): name is string => Boolean(name));
-    const merged = variableNames.includes(baseVariableName)
-      ? variableNames
-      : [baseVariableName, ...variableNames];
+    const hasBase = Boolean(baseVariableName);
+    const merged =
+      hasBase && !variableNames.includes(baseVariableName)
+        ? [baseVariableName, ...variableNames]
+        : variableNames;
     await facetsStore.updateVariables(selectedVizId, merged);
   }
 
@@ -305,18 +324,22 @@
     enabled: boolean
   ) {
     if (!selectedVizId) return;
-    if (enabled) {
-      const seed = baseVariableName ? [baseVariableName] : [];
-      const otherColumns = dataFields.filter(
-        (f) => f.text !== baseVariableName
-      );
-      const second = otherColumns[0]?.text;
-      const candidates = second ? [...seed, second] : seed;
-      if (candidates.length < 2) return;
-      await facetsStore.updateVariables(selectedVizId, candidates);
-    } else {
+    if (!enabled) {
       facetsStore.disable();
+      return;
     }
+
+    const available = dataFields
+      .map((f) => f.text)
+      .filter((name): name is string => Boolean(name));
+    const seed = baseVariableName ? [baseVariableName] : [];
+    const candidates = seed.slice();
+    for (const name of available) {
+      if (candidates.length >= 2) break;
+      if (!candidates.includes(name)) candidates.push(name);
+    }
+    if (candidates.length < 2) return;
+    await facetsStore.updateVariables(selectedVizId, candidates);
   }
 </script>
 
@@ -352,15 +375,16 @@
       />
     </div>
 
-    {#if fillMode === FillMode.UNIQUE}
-      <ColorSelector
+    {#if effectiveFillMode === FillMode.UNIQUE}
+      <SingleColorPreview
         label={m.color()}
-        value={fillColor}
+        color={fillColor}
         onchange={handleFillColorChange}
       />
-    {:else if fillMode === FillMode.CLASSES}
+    {:else if effectiveFillMode === FillMode.CLASSES}
       <div class="field-group">
         <FacetsVariablePicker
+          bind:open={valuePickerOpen}
           titleText={m.color_according()}
           dataFields={dataFields}
           singleSelectItems={selectableDataFields}
@@ -383,12 +407,14 @@
         colors={currentPalette}
         selectedPaletteId={visualization?.classification?.paletteId}
         inverted={visualization?.classification?.inverted ?? false}
+        paletteType={PALETTE_TYPE.SEQUENTIAL}
         oninvert={onInvertPalette}
         onClassificationChange={handleClassificationChange}
       />
-    {:else if fillMode === FillMode.CATEGORIES}
+    {:else if effectiveFillMode === FillMode.CATEGORIES}
       <div class="field-group">
         <FacetsVariablePicker
+          bind:open={categoryPickerOpen}
           titleText={m.color_according()}
           dataFields={dataFields}
           singleSelectItems={selectableDataFields}
@@ -412,12 +438,15 @@
         colors={currentPalette}
         selectedPaletteId={visualization?.classification?.paletteId}
         inverted={visualization?.classification?.inverted ?? false}
+        paletteType={PALETTE_TYPE.QUALITATIVE}
+        categoriesMode={true}
+        categoryLabels={visualization?.classification?.labels ?? []}
         oninvert={onInvertPalette}
         onClassificationChange={handleClassificationChange}
       />
     {/if}
 
-    {#if fillMode !== FillMode.NONE}
+    {#if effectiveFillMode !== FillMode.NONE}
       <SliderWithInput
         label={m.opacity()}
         min={SLIDER_LIMITS.opacity.min}
@@ -427,7 +456,7 @@
       />
     {/if}
 
-    {#if fillMode === FillMode.CLASSES || fillMode === FillMode.CATEGORIES}
+    {#if effectiveFillMode === FillMode.CLASSES || effectiveFillMode === FillMode.CATEGORIES}
       <MissingDataSection
         bind:show={showMissingData}
         color={missingDataColor}

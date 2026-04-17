@@ -97,7 +97,10 @@ function wrapActionsWithNotify<A extends object>(
       wrapped[key] = (...args: unknown[]) => {
         const result = (value as (...a: unknown[]) => unknown)(...args);
         if (result instanceof Promise) {
-          result.then(() => notify());
+          result.then(
+            () => notify(),
+            () => notify()
+          );
         } else {
           notify();
         }

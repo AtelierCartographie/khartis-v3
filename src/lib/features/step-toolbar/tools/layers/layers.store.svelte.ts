@@ -1,11 +1,17 @@
 import {
-  ALL_PRIMITIVE_FILTERS,
+  getEnabledPrimitiveFilters,
+  getLinePrimitive,
+  getPolygonPrimitive,
+  getPrimitiveClassification,
+  getSymbolPrimitive,
+  getTextPrimitive,
   PrimitiveFilterType,
   type PrimitiveFilter,
   visualizationStore,
   type VisualizationConfig
 } from '$lib/features/commons/store/visualization.store.svelte';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
+import { FillMode } from '$lib/features/main-toolbar/constants';
 import {
   basemapLayersStore,
   BASEMAP_LAYER_ID,
@@ -48,36 +54,65 @@ type LayersActions = {
   syncWithVisualizations: () => void;
 };
 
-function getClassificationColor(viz: VisualizationConfig): string | null {
-  if (!Array.isArray(viz.classification?.colors)) {
+function getClassificationColor(
+  classification: { colors?: string[] } | undefined
+): string | null {
+  if (!Array.isArray(classification?.colors)) {
     return null;
   }
 
   return (
-    viz.classification.colors.find(
+    classification.colors.find(
       (color): color is string => typeof color === 'string' && color.length > 0
     ) ?? null
   );
 }
 
 export function getVisualizationColor(viz: VisualizationConfig): string {
-  const fillColor = getStyleColor(viz.style.fillColor);
-  if (fillColor) return fillColor;
+  const polygon = getPolygonPrimitive(viz);
+  const symbol = getSymbolPrimitive(viz);
+  const line = getLinePrimitive(viz);
+  const text = getTextPrimitive(viz);
 
-  const lineColor = getStyleColor(viz.style.lineColor);
-  if (lineColor) return lineColor;
+  const polygonColor =
+    getStyleColor(polygon?.fillColor) ??
+    getClassificationColor(
+      getPrimitiveClassification(viz, PrimitiveFilterType.POLYGON)
+    );
+  if (polygon?.enabled && polygon.fillMode !== FillMode.NONE && polygonColor) {
+    return polygonColor;
+  }
 
-  const classificationColor = getClassificationColor(viz);
-  if (classificationColor) return classificationColor;
+  const symbolColor =
+    getStyleColor(symbol?.fillColor) ??
+    getClassificationColor(
+      getPrimitiveClassification(viz, PrimitiveFilterType.POINT)
+    );
+  if (symbol?.enabled && symbolColor) {
+    return symbolColor;
+  }
 
-  const textColor = getStyleColor(viz.style.textColor);
-  if (textColor) return textColor;
+  const lineColor =
+    getStyleColor(line?.color) ??
+    getClassificationColor(
+      getPrimitiveClassification(viz, PrimitiveFilterType.LINE)
+    );
+  if (line?.enabled && lineColor) {
+    return lineColor;
+  }
 
-  const labelColor = getStyleColor(viz.style.labelColor);
-  if (labelColor) return labelColor;
+  const textColor =
+    getStyleColor(text?.color) ??
+    getStyleColor(text?.secondaryLabels.color) ??
+    getClassificationColor(
+      getPrimitiveClassification(viz, PrimitiveFilterType.TEXT)
+    );
+  if (text?.enabled && textColor) {
+    return textColor;
+  }
 
-  if (typeof viz.style.strokeColor === 'string' && viz.style.strokeColor) {
-    return viz.style.strokeColor;
+  if (typeof polygon?.strokeColor === 'string' && polygon.strokeColor) {
+    return polygon.strokeColor;
   }
 
   return VIZ_SUBLAYER_COLOR;
@@ -99,42 +134,58 @@ export function getVisualizationPrimitiveColor(
   viz: VisualizationConfig,
   primitive: PrimitiveFilter
 ): string {
-  const classificationColor = getClassificationColor(viz);
-
   switch (primitive) {
-    case PrimitiveFilterType.LINE:
-      return (
-        getStyleColor(viz.style.lineColor) ??
-        classificationColor ??
-        (typeof viz.style.strokeColor === 'string' && viz.style.strokeColor
-          ? viz.style.strokeColor
-          : getVisualizationColor(viz))
+    case PrimitiveFilterType.LINE: {
+      const line = getLinePrimitive(viz);
+      const classificationColor = getClassificationColor(
+        getPrimitiveClassification(viz, PrimitiveFilterType.LINE)
       );
-    case PrimitiveFilterType.POLYGON:
-      if ((viz.style.fillOpacity ?? 1) <= 0) {
+      return (
+        getStyleColor(line?.color) ??
+        classificationColor ??
+        getVisualizationColor(viz)
+      );
+    }
+    case PrimitiveFilterType.POLYGON: {
+      const polygon = getPolygonPrimitive(viz);
+      const classificationColor = getClassificationColor(
+        getPrimitiveClassification(viz, PrimitiveFilterType.POLYGON)
+      );
+      if (
+        polygon?.fillMode === FillMode.NONE ||
+        (polygon?.fillOpacity ?? 1) <= 0
+      ) {
         return (
-          (typeof viz.style.strokeColor === 'string' &&
-            viz.style.strokeColor) ||
+          (typeof polygon?.strokeColor === 'string'
+            ? polygon.strokeColor
+            : null) ??
+          classificationColor ??
           getVisualizationColor(viz)
         );
       }
 
       return (
-        getStyleColor(viz.style.fillColor) ??
+        getStyleColor(polygon?.fillColor) ??
         classificationColor ??
-        (typeof viz.style.strokeColor === 'string' && viz.style.strokeColor
-          ? viz.style.strokeColor
-          : getVisualizationColor(viz))
+        (typeof polygon?.strokeColor === 'string'
+          ? polygon.strokeColor
+          : null) ??
+        getVisualizationColor(viz)
       );
+    }
     case PrimitiveFilterType.POINT:
-    default:
-      return (
-        getStyleColor(viz.style.fillColor) ??
-        classificationColor ??
-        (typeof viz.style.strokeColor === 'string' && viz.style.strokeColor
-          ? viz.style.strokeColor
-          : getVisualizationColor(viz))
+    default: {
+      const symbol = getSymbolPrimitive(viz);
+      const classificationColor = getClassificationColor(
+        getPrimitiveClassification(viz, PrimitiveFilterType.POINT)
       );
+      return (
+        getStyleColor(symbol?.fillColor) ??
+        classificationColor ??
+        (typeof symbol?.strokeColor === 'string' ? symbol.strokeColor : null) ??
+        getVisualizationColor(viz)
+      );
+    }
   }
 }
 
@@ -183,16 +234,38 @@ function getVisualizationPrimitiveOpacity(
 ): number {
   switch (primitive) {
     case PrimitiveFilterType.POINT:
-      return Math.round(
-        (viz.symbols?.opacity ?? viz.style.fillOpacity ?? 1) * 100
-      );
+      return Math.round((getSymbolPrimitive(viz)?.opacity ?? 1) * 100);
     case PrimitiveFilterType.LINE:
-      return Math.round((viz.style.lineOpacity ?? 1) * 100);
+      return Math.round((getLinePrimitive(viz)?.opacity ?? 1) * 100);
     case PrimitiveFilterType.POLYGON:
-      return Math.round((viz.style.fillOpacity ?? 1) * 100);
+      return Math.round((getPolygonPrimitive(viz)?.fillOpacity ?? 1) * 100);
     default:
       return 100;
   }
+}
+
+function getVisualizationOpacity(viz: VisualizationConfig): number {
+  const polygon = getPolygonPrimitive(viz);
+  if (polygon?.enabled && polygon.fillMode !== FillMode.NONE) {
+    return Math.round((polygon.fillOpacity ?? 1) * 100);
+  }
+
+  const symbol = getSymbolPrimitive(viz);
+  if (symbol?.enabled) {
+    return Math.round((symbol.opacity ?? 1) * 100);
+  }
+
+  const line = getLinePrimitive(viz);
+  if (line?.enabled) {
+    return Math.round((line.opacity ?? 1) * 100);
+  }
+
+  const text = getTextPrimitive(viz);
+  if (text?.enabled) {
+    return Math.round((text.opacity ?? 1) * 100);
+  }
+
+  return 100;
 }
 
 function getBasemapLayerName(layerId: BasemapLayerId): string {
@@ -271,7 +344,7 @@ function buildLayers(): Layer[] {
   let facetIndex = 0;
 
   return displayVisualizations.flatMap((viz, vizOrder): Layer[] => {
-    const primitiveFilters = viz.primitiveFilters ?? ALL_PRIMITIVE_FILTERS;
+    const primitiveFilters = getEnabledPrimitiveFilters(viz);
     const isFacetViz = facetsEnabled && facetVizIds.has(viz.id);
 
     let layerName: string;
@@ -288,7 +361,7 @@ function buildLayers(): Layer[] {
       visible: isFacetViz || activeVisualizationIds.has(viz.id),
       type: 'visualization',
       color: getVisualizationColor(viz),
-      opacity: Math.round((viz.style.fillOpacity ?? 1) * 100),
+      opacity: getVisualizationOpacity(viz),
       order: vizOrder
     };
 
