@@ -248,10 +248,10 @@ async function deriveJoinQualityFromCache(
     -- and maps to exactly 1 basemap id). These are "taken" and must not appear
     -- as suggestions for partial/ambiguous rows.
     exact_claimed_ids AS (
-      SELECT match_id
+      SELECT MIN(match_id) AS match_id
       FROM basemap_matches
       WHERE typo_match = 'exact'
-      GROUP BY original_name, match_id
+      GROUP BY original_name
       HAVING COUNT(DISTINCT match_id) = 1
     ),
     -- For non-exact rows, exclude candidates whose id is already claimed
@@ -721,10 +721,10 @@ async function applyCachedJoinAssociation(
     ),
     -- IDs claimed by unambiguous exact matches (one candidate → one basemap id)
     exact_claimed_ids AS (
-      SELECT id
+      SELECT MIN(id) AS id
       FROM all_basemap_matches
       WHERE typo_match = 'exact'
-      GROUP BY geoname, id
+      GROUP BY geoname
       HAVING COUNT(DISTINCT id) = 1
     ),
     -- Keep all exact rows; for partial rows, drop those whose id is already claimed
