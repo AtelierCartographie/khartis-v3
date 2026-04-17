@@ -33,6 +33,7 @@ import { datasetsStore } from '../store/datasets.store.svelte';
 import { globalActions, globalState } from '../store/global.svelte';
 import { projectStore } from '../store/project.store.svelte';
 import {
+  ClassificationMethod,
   visualizationStore,
   type VisualizationConfig
 } from '../store/visualization.store.svelte';
@@ -932,6 +933,9 @@ function createDataOrchestratorService() {
       const numClasses =
         viz.classification!.numClasses ?? viz.classification!.classes ?? 5;
       const normalizedMethod = normalizeClassificationMethod(method);
+      if (normalizedMethod === ClassificationMethod.MANUAL) {
+        continue;
+      }
       const requestedClassCount = resolveRequestedClassCount(
         normalizedMethod,
         numClasses
@@ -957,6 +961,10 @@ function createDataOrchestratorService() {
         if (existingColors && existingColors.length === actualNumClasses) {
           colors = existingColors;
         } else {
+          const paletteType =
+            viz.classification?.breakpointValue != null
+              ? 'diverging'
+              : 'sequential';
           const contrast = getColorBlindnessState().enabled
             ? ('high' as const)
             : undefined;
@@ -969,7 +977,7 @@ function createDataOrchestratorService() {
               ? generatePaletteColors(userPalette, actualNumClasses, contrast)
               : generateColorsForBreaks(
                   actualNumClasses,
-                  'sequential',
+                  paletteType,
                   contrast
                 );
           colors = applyPaletteInversion(
@@ -1006,7 +1014,8 @@ function createDataOrchestratorService() {
     if (
       viz.modes?.fill !== FillMode.CLASSES ||
       !viz.mapping.valueColumn ||
-      !viz.classification?.method
+      !viz.classification?.method ||
+      viz.classification.method === ClassificationMethod.MANUAL
     ) {
       return false;
     }

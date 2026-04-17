@@ -170,10 +170,7 @@
         (visualization.style.fillColor as string) ?? DEFAULT_COLORS.fill;
     }
     if (visualization?.modes) {
-      fillMode =
-        (visualization.style.fillOpacity ?? 1) <= 0
-          ? FillMode.NONE
-          : (visualization.modes.fill ?? FillMode.UNIQUE);
+      fillMode = visualization.modes.fill ?? FillMode.UNIQUE;
     }
     if (visualization?.missingData) {
       showMissingData = visualization.missingData.show ?? true;
@@ -197,18 +194,17 @@
       FillMode.CLASSES,
       FillMode.CATEGORIES
     ];
-    fillMode = modes[index] || FillMode.NONE;
-    onModesChange?.({ fill: fillMode });
-    if (fillMode === FillMode.NONE) {
-      onStyleChange?.({ fillOpacity: 0 });
-      return;
-    }
+    const nextFillMode = modes[index] || FillMode.NONE;
+    fillMode = nextFillMode;
 
-    if ((visualization?.style.fillOpacity ?? 1) <= 0) {
+    if (nextFillMode === FillMode.NONE) {
+      onStyleChange?.({ fillOpacity: 0 });
+    } else if ((visualization?.style.fillOpacity ?? 1) <= 0) {
       onStyleChange?.({
         fillOpacity: VISUALIZATION_DEFAULTS.fillOpacity / 100
       });
     }
+    onModesChange?.({ fill: nextFillMode });
   }
 
   function handleFillColorChange(value: string) {
@@ -259,8 +255,12 @@
     onClassificationChange?.(classification);
   }
 
-  const discretizationLabel = $derived(
-    resolveDiscretizationLabel(visualization?.classification)
+  const discretizationLabel = $derived.by(() =>
+    resolveDiscretizationLabel(
+      visualization?.classification
+        ? { ...visualization.classification }
+        : undefined
+    )
   );
 
   const selectedVizId = $derived(visualizationStore.selectedVisualization?.id);

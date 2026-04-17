@@ -11,9 +11,7 @@ export const NESTED_MEANS_CLASS_COUNTS = [2, 4, 8, 16] as const;
 export function normalizeClassificationMethod(
   method: ClassificationMethod
 ): ClassificationMethod {
-  return (
-    method === 'standard_deviation' ? 'nested_means' : method
-  ) as ClassificationMethod;
+  return method;
 }
 
 export function resolveNestedMeansClassCount(
@@ -58,7 +56,8 @@ export function resolveComputedClassCount(
   );
 
   if (
-    normalizedMethod === 'head_tail' &&
+    (normalizedMethod === 'head_tail' ||
+      normalizedMethod === 'standard_deviation') &&
     Number.isFinite(actualClassCount) &&
     actualClassCount >= 2
   ) {
@@ -86,7 +85,7 @@ const METHOD_LABELS: Record<ClassificationMethod, () => string> = {
   [CM.JENKS]: m.discretization_method_jenks,
   [CM.QUANTILES]: m.discretization_method_quantile,
   [CM.EQUAL_INTERVAL]: m.discretization_method_equal_interval,
-  [CM.STANDARD_DEVIATION]: m.discretization_method_nested_means,
+  [CM.STANDARD_DEVIATION]: m.discretization_method_stddev,
   [CM.MANUAL]: m.discretization_method_manual,
   [CM.Q6]: m.discretization_method_q6,
   [CM.NESTED_MEANS]: m.discretization_method_nested_means,
@@ -96,7 +95,9 @@ const METHOD_LABELS: Record<ClassificationMethod, () => string> = {
 export function resolveDiscretizationLabel(
   classification: ClassificationConfig | undefined
 ): string {
-  if (!classification) return m.discretization_method_jenks();
+  if (!classification) {
+    return `${m.discretization_method_quantile()}, 5 ${m.discretization_num_classes().toLowerCase()}`;
+  }
 
   const method = classification.method ?? CM.QUANTILES;
   const numClasses = classification.numClasses ?? classification.classes ?? 5;

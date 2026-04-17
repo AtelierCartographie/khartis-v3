@@ -482,6 +482,10 @@
       return;
     }
 
+    if (method === ClassificationMethod.MANUAL) {
+      return;
+    }
+
     const normalizedMethod = normalizeClassificationMethod(method);
     const requestedClassCount = resolveRequestedClassCount(
       normalizedMethod,
@@ -545,6 +549,10 @@
         if (existingColors && existingColors.length === actualNumClasses) {
           colors = existingColors;
         } else {
+          const paletteType =
+            selectedViz.classification?.breakpointValue != null
+              ? 'diverging'
+              : 'sequential';
           // Regenerate from user's palette when available (skip pattern palettes — they
           // define a texture overlay, not a color scale), otherwise default blue
           const userPalette = selectedViz.classification?.paletteId
@@ -556,7 +564,7 @@
               ? generatePaletteColors(userPalette, actualNumClasses, contrast)
               : generateColorsForBreaks(
                   actualNumClasses,
-                  'sequential',
+                  paletteType,
                   contrast
                 );
           colors = applyPaletteInversion(
@@ -663,6 +671,10 @@
     const cbEnabled = getColorBlindnessState().enabled;
     const paletteId = selectedViz?.classification?.paletteId;
     const inverted = selectedViz?.classification?.inverted ?? false;
+    const paletteType =
+      selectedViz?.classification?.breakpointValue != null
+        ? 'diverging'
+        : 'sequential';
     const isCategorical = usesCategoricalClassification(selectedViz);
     const numColors = isCategorical
       ? Math.max(selectedViz?.classification?.labels?.length ?? 0, 0)
@@ -702,7 +714,7 @@
           if (!palette) return;
           colors = generatePaletteColors(palette, numColors, contrast);
         } else {
-          colors = generateColorsForBreaks(numColors, 'sequential', contrast);
+          colors = generateColorsForBreaks(numColors, paletteType, contrast);
         }
       }
       colors = applyPaletteInversion(colors, inverted);

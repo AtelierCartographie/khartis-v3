@@ -31,9 +31,37 @@ export interface ClassificationOptions {
   numClasses: number;
 }
 
+export interface BreakCountOptions {
+  datasetId: string;
+  columnName: string;
+  breaks: number[];
+}
+
+interface QueryContext {
+  tableName: string;
+  columnName: string;
+  escapedTable: string;
+  escapedColumn: string;
+}
+
+interface ColumnStats {
+  distinctCount: number;
+  min: number;
+  max: number;
+  mean: number;
+  stddev: number;
+}
+
 function mapMethodToMacro(
   method: ClassificationMethod
-): 'quantile' | 'equi_width' | 'kmeans' | 'nested_means' | 'q6' | 'headtail2' {
+):
+  | 'quantile'
+  | 'equi_width'
+  | 'kmeans'
+  | 'nested_means'
+  | 'q6'
+  | 'headtail2'
+  | null {
   switch (method) {
     case ClassificationMethod.QUANTILES:
       return 'quantile';
@@ -41,8 +69,6 @@ function mapMethodToMacro(
       return 'equi_width';
     case ClassificationMethod.JENKS:
       return 'kmeans';
-    case ClassificationMethod.STANDARD_DEVIATION:
-      return 'nested_means';
     case ClassificationMethod.Q6:
       return 'q6';
     case ClassificationMethod.NESTED_MEANS:
@@ -50,10 +76,184 @@ function mapMethodToMacro(
     case ClassificationMethod.HEAD_TAIL:
       return 'headtail2';
     case ClassificationMethod.MANUAL:
-      return 'quantile';
+    case ClassificationMethod.STANDARD_DEVIATION:
+      return null;
     default:
       return 'quantile';
   }
+}
+
+function getQueryContext(
+  datasetId: string,
+  columnName: string
+): QueryContext | null {
+  const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(datasetId);
+  if (!duckDBDataset?.tableName) {
+    logger.warn('No DuckDB table found for dataset', LogCategory.DATA, {
+      datasetId
+    });
+    return null;
+  }
+
+  const tableName = duckDBDataset.tableName;
+
+  return {
+    tableName,
+    columnName,
+    escapedTable: escapeIdentifier(tableName),
+    escapedColumn: escapeIdentifier(columnName)
+  };
+}
+
+async function queryColumnStats(
+  context: QueryContext
+): Promise<ColumnStats | null> {
+  const result = (await Duck.query(`
+      SELECT
+        COUNT(DISTINCT "${context.escapedColumn}") as distinct_count,
+        MIN("${context.escapedColumn}") as min_val,
+        MAX("${context.escapedColumn}") as max_val,
+        AVG("${context.escapedColumn}") as mean_val,
+        STDDEV_SAMP("${context.escapedColumn}") as stddev_val
+      FROM "${context.escapedTable}"
+      WHERE "${context.escapedColumn}" IS NOT NULL
+    `)) as Table;
+
+  if (result.numRows === 0) {
+    return null;
+  }
+
+  const distinctCount = Number(
+    result.getChild?.('distinct_count')?.get(0) ?? 0
+  );
+  const min = Number(result.getChild?.('min_val')?.get(0));
+  const max = Number(result.getChild?.('max_val')?.get(0));
+  const mean = Number(result.getChild?.('mean_val')?.get(0));
+  const stddev = Number(result.getChild?.('stddev_val')?.get(0));
+
+  if (
+    !Number.isFinite(distinctCount) ||
+    !Number.isFinite(min) ||
+    !Number.isFinite(max) ||
+    !Number.isFinite(mean)
+  ) {
+    return null;
+  }
+
+  return {
+    distinctCount,
+    min,
+    max,
+    mean,
+    stddev: Number.isFinite(stddev) ? stddev : 0
+  };
+}
+
+function sanitizeBreaks(breaks: number[], min: number, max: number): number[] {
+  return breaks
+    .filter((value) => Number.isFinite(value) && value > min && value < max)
+    .sort((a, b) => a - b)
+    .filter(
+      (value, index, values) => index === 0 || value !== values[index - 1]
+    );
+}
+
+function getEqualIntervalBreaks(
+  min: number,
+  max: number,
+  numClasses: number
+): number[] {
+  const step = (max - min) / numClasses;
+  const breaks: number[] = [];
+
+  for (let i = 1; i < numClasses; i++) {
+    breaks.push(min + step * i);
+  }
+
+  return sanitizeBreaks(breaks, min, max);
+}
+
+function getStandardDeviationBreaks(
+  mean: number,
+  stddev: number,
+  numClasses: number,
+  min: number,
+  max: number
+): number[] {
+  if (!Number.isFinite(stddev) || stddev <= 0) {
+    return [];
+  }
+
+  const midpoint = (numClasses - 2) / 2;
+  const breaks = Array.from(
+    { length: Math.max(numClasses - 1, 0) },
+    (_, index) => mean + (index - midpoint) * stddev
+  );
+
+  return sanitizeBreaks(breaks, min, max);
+}
+
+async function roundBreaks(
+  context: QueryContext,
+  breaks: number[],
+  min: number,
+  max: number
+): Promise<number[]> {
+  if (breaks.length === 0) {
+    return breaks;
+  }
+
+  try {
+    const breaksListLiteral = `[${breaks.join(', ')}]`;
+    const roundQuery = `SELECT round_thresholds(${breaksListLiteral}, '${escapeSqlString(context.tableName)}', '${escapeSqlString(context.columnName)}') as rounded`;
+    const roundResult = (await Duck.query(roundQuery)) as Table;
+    const rawRounded = roundResult.getChild?.('rounded')?.get(0);
+    if (rawRounded && Array.isArray(rawRounded)) {
+      return sanitizeBreaks(
+        rawRounded
+          .filter((value: unknown) => value !== null && value !== undefined)
+          .map((value: unknown) => Number(value))
+          .filter((value: number) => !isNaN(value)),
+        min,
+        max
+      );
+    }
+  } catch (roundError) {
+    logger.warn(
+      'round_thresholds failed, using unrounded breaks',
+      LogCategory.DATA,
+      {
+        roundError
+      }
+    );
+  }
+
+  return breaks;
+}
+
+async function queryBreakCounts(
+  context: QueryContext,
+  allBreaks: number[]
+): Promise<number[]> {
+  const counts: number[] = [];
+  const caseParts = allBreaks.slice(0, -1).map((_, index) => {
+    const lower = allBreaks[index];
+    const upper = allBreaks[index + 1];
+    const upperOp = index === allBreaks.length - 2 ? '<=' : '<';
+    return `COUNT(*) FILTER (WHERE "${context.escapedColumn}" >= ${lower} AND "${context.escapedColumn}" ${upperOp} ${upper}) as cnt_${index}`;
+  });
+
+  const countsQuery = `SELECT ${caseParts.join(', ')} FROM "${context.escapedTable}" WHERE "${context.escapedColumn}" IS NOT NULL`;
+  const countsResult = (await Duck.query(countsQuery)) as Table;
+
+  if (countsResult.numRows > 0) {
+    for (let index = 0; index < allBreaks.length - 1; index++) {
+      const count = countsResult.getChild?.(`cnt_${index}`)?.get(0);
+      counts.push(Number(count ?? 0));
+    }
+  }
+
+  return counts;
 }
 
 const breaksCache = new Map<string, BreaksResult>();
@@ -66,15 +266,10 @@ export async function calculateBreaks(
   const { datasetId, columnName, method } = options;
   let { numClasses } = options;
 
-  const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(datasetId);
-  if (!duckDBDataset?.tableName) {
-    logger.warn('No DuckDB table found for dataset', LogCategory.DATA, {
-      datasetId
-    });
+  const context = getQueryContext(datasetId, columnName);
+  if (!context) {
     return null;
   }
-
-  const tableName = duckDBDataset.tableName;
 
   const currentVersion = duckDBOrchestrator.datasetsVersion;
   if (currentVersion !== breaksCacheVersion && breaksCacheVersion > 0) {
@@ -82,166 +277,119 @@ export async function calculateBreaks(
   }
   breaksCacheVersion = currentVersion;
 
-  const cacheKey = `${tableName}:${columnName}:${method}:${numClasses}`;
+  const cacheKey = `${context.tableName}:${columnName}:${method}:${numClasses}`;
   const cached = breaksCache.get(cacheKey);
   if (cached) {
     return cached;
   }
-  const escapedTable = escapeIdentifier(tableName);
-  const escapedCol = escapeIdentifier(columnName);
 
   try {
-    // Clamp numClasses to distinct non-null values to avoid breaks errors on small datasets
-    const distinctResult = (await Duck.query(`
-      SELECT COUNT(DISTINCT "${escapedCol}") as cnt
-      FROM "${escapedTable}"
-      WHERE "${escapedCol}" IS NOT NULL
-    `)) as Table;
-    const distinctCountRaw = distinctResult.getChild?.('cnt')?.get(0);
-    if (distinctCountRaw != null) {
-      const distinctCount = Number(distinctCountRaw);
-      if (distinctCount <= 1) {
-        return null;
-      }
-      // DuckDB macros need more data points than classes; clamp conservatively
-      if (numClasses >= distinctCount) {
-        numClasses = Math.max(2, distinctCount - 1);
-      }
-    }
-
-    const minMaxResult = (await Duck.query(`
-      SELECT
-        MIN("${escapedCol}") as min_val,
-        MAX("${escapedCol}") as max_val
-      FROM "${escapedTable}"
-      WHERE "${escapedCol}" IS NOT NULL
-    `)) as Table;
-
-    if (minMaxResult.numRows === 0) {
+    const stats = await queryColumnStats(context);
+    if (!stats) {
       logger.warn('No valid data for classification', LogCategory.DATA, {
-        tableName,
+        tableName: context.tableName,
         columnName
       });
       return null;
     }
 
-    const rawMin = minMaxResult.getChild?.('min_val')?.get(0);
-    const rawMax = minMaxResult.getChild?.('max_val')?.get(0);
-    const min = rawMin != null ? Number(rawMin) : null;
-    const max = rawMax != null ? Number(rawMax) : null;
+    if (stats.distinctCount <= 1) {
+      return null;
+    }
 
-    if (
-      min === max ||
-      min === null ||
-      max === null ||
-      isNaN(min) ||
-      isNaN(max)
-    ) {
+    if (numClasses >= stats.distinctCount) {
+      numClasses = Math.max(2, stats.distinctCount - 1);
+    }
+
+    if (stats.min === stats.max) {
       logger.warn(
         'Insufficient data range for classification',
         LogCategory.DATA,
         {
-          min,
-          max
+          min: stats.min,
+          max: stats.max
         }
       );
       return {
-        breaks: [min ?? 0],
+        breaks: [stats.min],
         counts: [0],
-        min: min ?? 0,
-        max: max ?? 0
+        min: stats.min,
+        max: stats.max
       };
     }
 
-    const macroName = mapMethodToMacro(method);
     let breaks: number[] = [];
 
-    const query = `SELECT ${macroName}('${escapeSqlString(tableName)}', '${escapeSqlString(columnName)}', ${numClasses}) as breaks`;
-
-    try {
-      const result = (await Duck.query(query)) as Table;
-      const rawBreaks = result.getChild?.('breaks')?.get(0);
-
-      if (rawBreaks && Array.isArray(rawBreaks)) {
-        breaks = rawBreaks
-          .filter((b: unknown) => b !== null && b !== undefined)
-          .map((b: unknown) => Number(b))
-          .filter((b: number) => !isNaN(b));
-      }
-    } catch (macroError) {
-      logger.warn(
-        'DuckDB macro failed, falling back to equal interval',
-        LogCategory.DATA,
-        { macroName, numClasses, error: macroError }
+    if (method === ClassificationMethod.STANDARD_DEVIATION) {
+      breaks = getStandardDeviationBreaks(
+        stats.mean,
+        stats.stddev,
+        numClasses,
+        stats.min,
+        stats.max
       );
+    } else {
+      const macroName = mapMethodToMacro(method);
+
+      if (macroName) {
+        const query = `SELECT ${macroName}('${escapeSqlString(context.tableName)}', '${escapeSqlString(columnName)}', ${numClasses}) as breaks`;
+
+        try {
+          const result = (await Duck.query(query)) as Table;
+          const rawBreaks = result.getChild?.('breaks')?.get(0);
+
+          if (rawBreaks && Array.isArray(rawBreaks)) {
+            breaks = sanitizeBreaks(
+              rawBreaks
+                .filter(
+                  (value: unknown) => value !== null && value !== undefined
+                )
+                .map((value: unknown) => Number(value))
+                .filter((value: number) => !isNaN(value)),
+              stats.min,
+              stats.max
+            );
+          }
+        } catch (macroError) {
+          logger.warn(
+            'DuckDB macro failed, falling back to equal interval',
+            LogCategory.DATA,
+            { macroName, numClasses, error: macroError }
+          );
+        }
+      }
     }
 
     if (breaks.length === 0) {
       logger.warn(
         'No breaks calculated, using equal interval fallback',
-        LogCategory.DATA
+        LogCategory.DATA,
+        { method, numClasses }
       );
-      breaks = [];
-      const step = (max - min) / numClasses;
-      for (let i = 1; i < numClasses; i++) {
-        breaks.push(min + step * i);
-      }
+      breaks = getEqualIntervalBreaks(stats.min, stats.max, numClasses);
     }
 
     if (breaks.length > 0 && method !== ClassificationMethod.MANUAL) {
-      try {
-        const breaksListLiteral = `[${breaks.join(', ')}]`;
-        const roundQuery = `SELECT round_thresholds(${breaksListLiteral}, '${escapeSqlString(tableName)}', '${escapeSqlString(columnName)}') as rounded`;
-        const roundResult = (await Duck.query(roundQuery)) as Table;
-        const rawRounded = roundResult.getChild?.('rounded')?.get(0);
-        if (rawRounded && Array.isArray(rawRounded)) {
-          const rounded = rawRounded
-            .filter((b: unknown) => b !== null && b !== undefined)
-            .map((b: unknown) => Number(b))
-            .filter((b: number) => !isNaN(b));
-          if (rounded.length === breaks.length) {
-            breaks = rounded;
-          }
-        }
-      } catch (roundError) {
-        logger.warn(
-          'round_thresholds failed, using unrounded breaks',
-          LogCategory.DATA,
-          { roundError }
-        );
-      }
+      breaks = await roundBreaks(context, breaks, stats.min, stats.max);
     }
 
-    const allBreaks = [min, ...breaks, max];
-    const counts: number[] = [];
-
-    // Single query with CASE WHEN to count all classes at once (avoids N+1 pattern)
-    const caseParts = allBreaks.slice(0, -1).map((_, i) => {
-      const lower = allBreaks[i];
-      const upper = allBreaks[i + 1];
-      const upperOp = i === allBreaks.length - 2 ? '<=' : '<';
-      return `COUNT(*) FILTER (WHERE "${escapedCol}" >= ${lower} AND "${escapedCol}" ${upperOp} ${upper}) as cnt_${i}`;
-    });
-
-    const countsQuery = `SELECT ${caseParts.join(', ')} FROM "${escapedTable}" WHERE "${escapedCol}" IS NOT NULL`;
-    const countsResult = (await Duck.query(countsQuery)) as Table;
-
-    if (countsResult.numRows > 0) {
-      for (let i = 0; i < allBreaks.length - 1; i++) {
-        const cnt = countsResult.getChild?.(`cnt_${i}`)?.get(0);
-        counts.push(Number(cnt ?? 0));
-      }
-    }
+    const allBreaks = [stats.min, ...breaks, stats.max];
+    const counts = await queryBreakCounts(context, allBreaks);
 
     logger.debug('Breaks calculated successfully', LogCategory.DATA, {
       method,
       numClasses,
       breaks: breaks.length,
-      min,
-      max
+      min: stats.min,
+      max: stats.max
     });
 
-    const result: BreaksResult = { breaks, counts, min, max };
+    const result: BreaksResult = {
+      breaks,
+      counts,
+      min: stats.min,
+      max: stats.max
+    };
 
     if (breaksCache.size >= BREAKS_CACHE_MAX) {
       const firstKey = breaksCache.keys().next().value;
@@ -253,10 +401,48 @@ export async function calculateBreaks(
   } catch (error) {
     logger.error('Failed to calculate breaks', LogCategory.DATA, {
       datasetId,
-      tableName,
+      tableName: context.tableName,
       columnName,
       method,
       numClasses,
+      error
+    });
+    return null;
+  }
+}
+
+export async function calculateBreakCounts(
+  options: BreakCountOptions
+): Promise<BreaksResult | null> {
+  const context = getQueryContext(options.datasetId, options.columnName);
+  if (!context) {
+    return null;
+  }
+
+  try {
+    const stats = await queryColumnStats(context);
+    if (!stats || stats.distinctCount <= 1) {
+      return null;
+    }
+
+    const breaks = sanitizeBreaks(options.breaks, stats.min, stats.max);
+    const counts = await queryBreakCounts(context, [
+      stats.min,
+      ...breaks,
+      stats.max
+    ]);
+
+    return {
+      breaks,
+      counts,
+      min: stats.min,
+      max: stats.max
+    };
+  } catch (error) {
+    logger.error('Failed to calculate manual break counts', LogCategory.DATA, {
+      datasetId: options.datasetId,
+      tableName: context.tableName,
+      columnName: options.columnName,
       error
     });
     return null;

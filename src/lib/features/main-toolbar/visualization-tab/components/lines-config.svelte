@@ -322,8 +322,12 @@
     onClassificationChange?.(classification);
   }
 
-  const discretizationLabel = $derived(
-    resolveDiscretizationLabel(visualization?.classification)
+  const discretizationLabel = $derived.by(() =>
+    resolveDiscretizationLabel(
+      visualization?.classification
+        ? { ...visualization.classification }
+        : undefined
+    )
   );
 
   const selectedVizId = $derived(visualizationStore.selectedVisualization?.id);

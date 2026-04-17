@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@ateliercartographie/ok-palette', () => ({
   sequential: ({ steps }: { steps: number }) =>
@@ -51,10 +51,31 @@ vi.mock('$lib/features/commons/utils/logger', () => ({
 
 import {
   applyPaletteInversion,
+  calculateBreakCounts,
+  calculateBreaks,
   generateColorsForBreaks
 } from '$lib/features/commons/services/classification.service';
+import { Duck } from '$lib/features/duckdb';
+import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
+const mockedDuckQuery = vi.mocked(Duck.query);
+const mockedGetDatasetBySourceFile = vi.mocked(
+  duckDBOrchestrator.getDatasetBySourceFile
+);
+
+function makeTable(row: Record<string, unknown>) {
+  return {
+    numRows: 1,
+    getChild: (name: string) => ({
+      get: () => row[name]
+    })
+  };
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 describe('generateColorsForBreaks — sequential', () => {
   it('returns array of length numClasses with valid hex values', () => {
@@ -122,5 +143,94 @@ describe('applyPaletteInversion', () => {
 
   it('handles empty array', () => {
     expect(applyPaletteInversion([], true)).toEqual([]);
+  });
+});
+
+describe('calculateBreaks', () => {
+  it('computes standard deviation breaks without falling back to nested means', async () => {
+    mockedGetDatasetBySourceFile.mockReturnValue({
+      tableName: 'vals_stddev_test'
+    } as never);
+    mockedDuckQuery
+      .mockResolvedValueOnce(
+        makeTable({
+          distinct_count: 9,
+          min_val: 0,
+          max_val: 100,
+          mean_val: 50,
+          stddev_val: 10
+        }) as never
+      )
+      .mockResolvedValueOnce(
+        makeTable({
+          rounded: [35, 45, 55, 65]
+        }) as never
+      )
+      .mockResolvedValueOnce(
+        makeTable({
+          cnt_0: 1,
+          cnt_1: 2,
+          cnt_2: 3,
+          cnt_3: 2,
+          cnt_4: 1
+        }) as never
+      );
+
+    const result = await calculateBreaks({
+      datasetId: 'source-stddev',
+      columnName: 'value',
+      method: 'standard_deviation' as never,
+      numClasses: 5
+    });
+
+    expect(result).toEqual({
+      breaks: [35, 45, 55, 65],
+      counts: [1, 2, 3, 2, 1],
+      min: 0,
+      max: 100
+    });
+    expect(mockedDuckQuery.mock.calls[0]?.[0]).toContain('STDDEV_SAMP');
+    expect(mockedDuckQuery.mock.calls[1]?.[0]).toContain('round_thresholds');
+  });
+});
+
+describe('calculateBreakCounts', () => {
+  it('sanitizes manual breaks and recomputes counts against the dataset range', async () => {
+    mockedGetDatasetBySourceFile.mockReturnValue({
+      tableName: 'vals_manual_test'
+    } as never);
+    mockedDuckQuery
+      .mockResolvedValueOnce(
+        makeTable({
+          distinct_count: 9,
+          min_val: 0,
+          max_val: 100,
+          mean_val: 50,
+          stddev_val: 10
+        }) as never
+      )
+      .mockResolvedValueOnce(
+        makeTable({
+          cnt_0: 4,
+          cnt_1: 3,
+          cnt_2: 2
+        }) as never
+      );
+
+    const result = await calculateBreakCounts({
+      datasetId: 'source-manual',
+      columnName: 'value',
+      breaks: [-10, 25, 25, 75, 150]
+    });
+
+    expect(result).toEqual({
+      breaks: [25, 75],
+      counts: [4, 3, 2],
+      min: 0,
+      max: 100
+    });
+    expect(mockedDuckQuery.mock.calls[1]?.[0]).toContain('cnt_0');
+    expect(mockedDuckQuery.mock.calls[1]?.[0]).not.toContain('-10');
+    expect(mockedDuckQuery.mock.calls[1]?.[0]).not.toContain('150');
   });
 });

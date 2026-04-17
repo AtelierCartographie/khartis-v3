@@ -19,6 +19,7 @@
     | 'jenks'
     | 'quantile'
     | 'equal-interval'
+    | 'standard-deviation'
     | 'manual'
     | 'q6'
     | 'nested-means'
@@ -70,6 +71,7 @@
       jenks: m.discretization_desc_jenks,
       quantile: m.discretization_desc_quantile,
       'equal-interval': m.discretization_desc_equal_interval,
+      'standard-deviation': m.discretization_desc_stddev,
       manual: m.discretization_desc_manual,
       q6: m.discretization_desc_q6,
       'nested-means': m.discretization_desc_nested_means,
@@ -85,16 +87,22 @@
   const isClassCountLocked = $derived(method === 'q6');
   const isNestedMeans = $derived(method === 'nested-means');
 
-  const breakpointSliderValue = $derived(breakpointValue ?? 50);
   const dataMin = $derived(breaks[0]?.min ?? 0);
   const dataMax = $derived.by(() => {
     const max = breaks[breaks.length - 1]?.max ?? 100;
     return max > dataMin ? max : dataMin + 1;
   });
+  const breakpointSliderValue = $derived.by(() => {
+    if (breakpointValue !== null) {
+      return breakpointValue;
+    }
+
+    return dataMin + (dataMax - dataMin) / 2;
+  });
 
   function handleMethodChange(e: Event) {
     validationErrors = [];
-    const target = e.target as HTMLSelectElement;
+    const target = e.currentTarget as HTMLSelectElement;
     const newMethod = target.value as ClassificationMethod;
     method = newMethod;
     if (newMethod === 'q6') {
@@ -115,7 +123,7 @@
   }
 
   function handleNestedMeansChange(e: Event) {
-    const target = e.target as HTMLSelectElement;
+    const target = e.currentTarget as HTMLSelectElement;
     const value = Number(target.value);
     numClasses = value;
     onclasseschange?.(value);
@@ -127,9 +135,11 @@
 
   function finishEditingBreak() {
     editingBreakIndex = null;
-    validationErrors = validateBreaks(breaks);
+    const nextBreaks = breaks.map((breakItem) => ({ ...breakItem }));
+    breaks = nextBreaks;
+    validationErrors = validateBreaks(nextBreaks);
     if (validationErrors.length === 0) {
-      onbreakschange?.(breaks);
+      onbreakschange?.(nextBreaks);
     }
   }
 
@@ -161,8 +171,30 @@
     field: 'min' | 'max',
     value: number
   ) {
-    breaks[index][field] = value;
-    validationErrors = validateBreaks(breaks);
+    if (!Number.isFinite(value)) {
+      return;
+    }
+
+    const nextBreaks = breaks.map((breakItem) => ({ ...breakItem }));
+
+    if (field === 'min') {
+      if (index === 0) {
+        return;
+      }
+
+      nextBreaks[index].min = value;
+      nextBreaks[index - 1].max = value;
+    } else {
+      if (index === nextBreaks.length - 1) {
+        return;
+      }
+
+      nextBreaks[index].max = value;
+      nextBreaks[index + 1].min = value;
+    }
+
+    breaks = nextBreaks;
+    validationErrors = validateBreaks(nextBreaks);
   }
 </script>
 
@@ -171,16 +203,20 @@
     <Select
       id="classification-method"
       labelText={m.discretization_method_label()}
-      value={method}
+      selected={method}
       on:change={handleMethodChange}
     >
       <SelectItem value="jenks" text={m.discretization_method_jenks()} />
       <SelectItem value="quantile" text={m.discretization_method_quantile()} />
-      <SelectItem value="q6" text={m.discretization_method_q6()} />
       <SelectItem
         value="equal-interval"
         text={m.discretization_method_equal_interval()}
       />
+      <SelectItem
+        value="standard-deviation"
+        text={m.discretization_method_stddev()}
+      />
+      <SelectItem value="q6" text={m.discretization_method_q6()} />
       <SelectItem
         value="nested-means"
         text={m.discretization_method_nested_means()}
@@ -201,7 +237,7 @@
           id="nested-means-classes"
           labelText=""
           hideLabel
-          value={String(numClasses)}
+          selected={String(numClasses)}
           on:change={handleNestedMeansChange}
         >
           {#each NESTED_MEANS_CLASS_COUNTS as val (val)}
@@ -233,8 +269,7 @@
           placeholder={m.discretization_none_placeholder()}
           value={breakpointValue !== null ? String(breakpointValue) : ''}
           on:input={(e) => {
-            const target = e.target as HTMLInputElement;
-            const parsed = parseFloat(target.value);
+            const parsed = parseFloat(String(e.detail ?? ''));
             breakpointValue = isNaN(parsed) ? null : parsed;
             onbreakpointchange?.(breakpointValue);
           }}
@@ -247,7 +282,7 @@
           max={dataMax}
           value={breakpointSliderValue}
           hideTextInput
-          on:change={(e) => {
+          on:input={(e) => {
             breakpointValue = e.detail;
             onbreakpointchange?.(e.detail);
           }}
@@ -337,13 +372,14 @@
                   size="sm"
                   hideLabel
                   labelText={m.filters_value_min()}
+                  disabled={index === 0}
                   value={String(breakItem.min)}
                   on:input={(e) => {
-                    const target = e.target as HTMLInputElement;
+                    const value = Number(e.detail);
                     updateBreakValue(
                       index,
                       'min',
-                      parseFloat(target.value) || 0
+                      Number.isFinite(value) ? value : 0
                     );
                   }}
                   on:blur={finishEditingBreak}
@@ -354,13 +390,14 @@
                   size="sm"
                   hideLabel
                   labelText={m.filters_value_max()}
+                  disabled={index === breaks.length - 1}
                   value={String(breakItem.max)}
                   on:input={(e) => {
-                    const target = e.target as HTMLInputElement;
+                    const value = Number(e.detail);
                     updateBreakValue(
                       index,
                       'max',
-                      parseFloat(target.value) || 0
+                      Number.isFinite(value) ? value : 0
                     );
                   }}
                   on:blur={finishEditingBreak}
