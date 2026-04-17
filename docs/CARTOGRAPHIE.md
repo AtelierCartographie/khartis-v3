@@ -2,7 +2,7 @@
 
 > Concepts cartographiques appliqués dans Khartis v3. Lire ARCHITECTURE.md et MAP.md d'abord pour le pipeline technique.
 
-**Voir aussi** : [ARCHITECTURE](./ARCHITECTURE.md) — [MAP](./MAP.md) — [PIPELINE](./PIPELINE.md) — [DUCKDB](./DUCKDB.md) — [GUIDE_DEVELOPPEUR](./GUIDE_DEVELOPPEUR.md)
+**Voir aussi** : [ARCHITECTURE](./ARCHITECTURE.md) — [MAP](./MAP.md) — [PIPELINE_DONNEES](./PIPELINE_DONNEES.md) — [DUCKDB](./DUCKDB.md) — [GUIDE_DEVELOPPEUR](./GUIDE_DEVELOPPEUR.md)
 
 ---
 
@@ -73,6 +73,37 @@ Implémentée via **macros SQL DuckDB** (appelées une fois à l'init, jamais re
 **Note** : `standard_deviation` n'utilise pas de macro DuckDB dédiée. Les seuils sont calculés localement à partir de `AVG()` et `STDDEV_SAMP()`, puis arrondis via `round_thresholds()`.
 
 **Mémorisation** : `breaksCache` (Map, 50 entrées max) — évite les requêtes redondantes sur simple changement de style.
+
+### Extraction des valeurs d'une colonne `LIST<…>` Flechette
+
+Le runtime DuckDB-WASM retourne les résultats via [`@uwdata/flechette`](https://github.com/uwdata/flechette) (équivalent léger d'Apache Arrow JS). Les macros de classification retournent toutes une colonne `LIST<DOUBLE>` ou `LIST<INT>`. L'extraction traverse cette chaîne :
+
+```
+Table.getChild('breaks')    → Column         (Flechette)
+Column.get(0) === Column.at(0)
+   → ListBatch.value(0)     (for Type.List)
+   → children[0].slice(offsets[0], offsets[1])
+```
+
+Ce dernier `slice()` dépend du type de la batch enfant :
+
+| Batch enfant               | Type DuckDB source     | `slice()` retourne                  | `Array.isArray()` |
+| -------------------------- | ---------------------- | ----------------------------------- | ----------------- |
+| `DirectBatch` (sans null)  | `INT32`, `DOUBLE`, …   | `TypedArray.subarray()` (zero-copy) | **`false`**       |
+| Batch avec nulls           | idem + validity bitmap | `Array` avec valeurs et `null`      | `true`            |
+| `Utf8Batch`, `DateBatch`…  | `VARCHAR`, `DATE`, …   | `Array` transformé                  | `true`            |
+| Liste vide (offsets égaux) | —                      | TypedArray ou Array de longueur 0   | selon batch       |
+| Ligne hors plage           | —                      | `undefined`                         | `false`           |
+
+**Règle** : ne **jamais** tester `Array.isArray(rawList)` seul. Passer par le helper interne `toIterableValues(raw)` qui reconnaît `Array`, `TypedArray` et tout itérable via `Symbol.iterator`, coerce avec `Number()`, puis filtre `NaN`/`null`. Le helper retourne `null` si la valeur n'est pas itérable (scalaire, undefined) et un tableau éventuellement vide sinon.
+
+**Pièges déjà rencontrés dans cette zone** :
+
+1. **Fallback silencieux equal-interval** pour toute méthode macro (quantile, jenks, equi_width, q6, nested_means, headtail2) si le check `Array.isArray` rejette une `Float64Array` subarray.
+2. **Arrondis ignorés** par `round_thresholds` si son résultat passe le même check naïf — la carte affiche les breaks bruts non arrondis.
+3. **Breaks effacés** si `round_thresholds` retourne un tableau vide : il faut garder les breaks originaux plutôt que renvoyer `[]`.
+
+Ces trois pièges sont couverts par `tests/pipeline/classification.service.test.ts` (suites `macro methods` et `Flechette edge cases` — Array plain, TypedArray, Iterable générique, Array avec nulls, liste vide, scalaire, `undefined`, BigInt).
 
 ---
 
@@ -176,7 +207,7 @@ flowchart LR
 
 **JAMAIS via DuckDB**.
 
-Métadonnées dans `all-basemaps-metadata.json`. Attributs (noms de régions) dans `all-basemaps-attributes.parquet` (chargé via DuckDB uniquement au moment d'une jointure). Les couches annexes de basemap (limites, graticules, lignes geographiques) sont chargées a la demande selon les couches visibles.
+Métadonnées dans `all-basemaps-metadata.json`. Attributs (noms de régions) dans `all-basemaps-attributes.parquet` (chargé via DuckDB uniquement au moment d'une jointure). Les couches annexes de basemap (limites, graticules, lignes géographiques) sont chargées à la demande selon les couches visibles.
 
 ### Carte Facile
 
@@ -324,4 +355,4 @@ flowchart TB
 
 ---
 
-**Voir aussi :** [ARCHITECTURE.md](./ARCHITECTURE.md) — [MAP.md](./MAP.md) — [PIPELINE.md](./PIPELINE.md) — [DUCKDB.md](./DUCKDB.md) — [GUIDE_DEVELOPPEUR.md](./GUIDE_DEVELOPPEUR.md)
+**Voir aussi :** [ARCHITECTURE.md](./ARCHITECTURE.md) — [MAP.md](./MAP.md) — [PIPELINE_DONNEES.md](./PIPELINE_DONNEES.md) — [DUCKDB.md](./DUCKDB.md) — [GUIDE_DEVELOPPEUR.md](./GUIDE_DEVELOPPEUR.md)

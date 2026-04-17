@@ -2,7 +2,7 @@
 
 > Parcours utilisateur, outils de viz et habillage. Lire ARCHITECTURE.md, MAP.md et CARTOGRAPHIE.md d'abord.
 
-**Voir aussi** : [ARCHITECTURE](./ARCHITECTURE.md) — [CARTOGRAPHIE](./CARTOGRAPHIE.md) — [MAP](./MAP.md) — [PIPELINE](./PIPELINE.md) — [DUCKDB](./DUCKDB.md)
+**Voir aussi** : [ARCHITECTURE](./ARCHITECTURE.md) — [CARTOGRAPHIE](./CARTOGRAPHIE.md) — [MAP](./MAP.md) — [PIPELINE_DONNEES](./PIPELINE_DONNEES.md) — [DUCKDB](./DUCKDB.md)
 
 ---
 
@@ -290,4 +290,4 @@ Fichier → validateFile() → DuckDB → DatasetResult
 
 ---
 
-**Voir aussi :** [ARCHITECTURE.md](./ARCHITECTURE.md) — [CARTOGRAPHIE.md](./CARTOGRAPHIE.md) — [MAP.md](./MAP.md) — [PIPELINE.md](./PIPELINE.md) — [DUCKDB.md](./DUCKDB.md) — [GUIDE_DEVELOPPEUR.md](./GUIDE_DEVELOPPEUR.md)
+**Voir aussi :** [ARCHITECTURE.md](./ARCHITECTURE.md) — [CARTOGRAPHIE.md](./CARTOGRAPHIE.md) — [MAP.md](./MAP.md) — [PIPELINE_DONNEES.md](./PIPELINE_DONNEES.md) — [DUCKDB.md](./DUCKDB.md) — [GUIDE_DEVELOPPEUR.md](./GUIDE_DEVELOPPEUR.md)
