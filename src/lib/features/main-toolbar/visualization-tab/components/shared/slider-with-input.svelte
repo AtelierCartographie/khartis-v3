@@ -23,7 +23,7 @@
     max = 100,
     step = 1,
     showMinMax = false,
-    inputWidth = '64px',
+    inputWidth = '128px',
     onchange
   }: Props = $props();
 
@@ -66,6 +66,8 @@
       max={max}
       step={step}
       width={inputWidth}
+      height="40px"
+      valueMinWidth="3.5rem"
       onchange={handleChange}
     />
   </div>
@@ -92,10 +94,6 @@
     display: flex;
     align-items: center;
     gap: var(--cds-spacing-03);
-
-    :global(.compact-number-input input) {
-      height: 40px;
-    }
   }
 
   .slider-bound {
@@ -106,7 +104,8 @@
   }
 
   .slider-container {
-    flex: 1;
+    flex: 1 1 auto;
+    min-width: 0;
 
     :global(.bx--slider-container) {
       min-width: 100px;

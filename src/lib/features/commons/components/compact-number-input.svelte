@@ -7,6 +7,8 @@
     max?: number;
     step?: number;
     width?: string;
+    height?: string;
+    valueMinWidth?: string;
     disabled?: boolean;
     id?: string;
     showSteppers?: boolean;
@@ -21,6 +23,8 @@
     max = 100,
     step = 1,
     width = '100%',
+    height = '32px',
+    valueMinWidth = '3rem',
     disabled = false,
     id,
     showSteppers = true,
@@ -86,7 +90,10 @@
 <div
   class="compact-number-input"
   class:disabled={disabled}
+  class:has-steppers={showSteppers}
   style:--compact-number-input-width={width}
+  style:--compact-number-input-height={height}
+  style:--compact-number-input-value-min-width={valueMinWidth}
 >
   <input
     bind:this={inputEl}
@@ -129,16 +136,26 @@
 
 <style lang="scss">
   .compact-number-input {
+    --compact-number-input-stepper-width: 32px;
+
     width: var(--compact-number-input-width, 100%);
     min-width: 64px;
-    height: 32px;
+    height: var(--compact-number-input-height, 32px);
     display: flex;
     align-items: stretch;
     background-color: var(--cds-field-01, #f4f4f4);
     border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d);
     box-sizing: border-box;
     position: relative;
+    overflow: hidden;
     transition: border-bottom-color 0.1s ease;
+
+    &.has-steppers {
+      min-width: calc(
+        var(--compact-number-input-value-min-width, 3rem) +
+          (2 * var(--compact-number-input-stepper-width)) + 1px
+      );
+    }
 
     &:focus-within:not(.disabled) {
       border-bottom-color: var(--cds-focus, #0f62fe);
@@ -159,7 +176,7 @@
     flex: 1 1 auto;
     min-width: 0;
     height: 100%;
-    padding: 0 var(--cds-spacing-05, 16px);
+    padding: 0 var(--cds-spacing-04, 12px);
     border: none;
     background: transparent;
     color: var(--cds-text-primary, #161616);
@@ -188,7 +205,7 @@
   }
 
   .stepper {
-    width: 32px;
+    width: var(--compact-number-input-stepper-width);
     height: 100%;
     display: inline-flex;
     align-items: center;
