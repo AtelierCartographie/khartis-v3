@@ -13,6 +13,7 @@
     applyPaletteInversion,
     calculateBreakCounts,
     calculateBreaks,
+    computeDivergingSplit,
     generateColorsForBreaks
   } from '$lib/features/commons/services/classification.service';
   import {
@@ -157,7 +158,10 @@
         : DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX;
   }
 
-  function resolvePaletteColors(classCount: number): string[] {
+  function resolvePaletteColors(
+    classCount: number,
+    breakValues: readonly number[]
+  ): string[] {
     const paletteType = currentBreakpoint !== null ? 'diverging' : 'sequential';
     const contrast = getColorBlindnessState().enabled
       ? ('high' as const)
@@ -165,11 +169,20 @@
     const userPalette = visualization?.classification?.paletteId
       ? findPaletteById(visualization.classification.paletteId)
       : undefined;
+    const divergingSplit =
+      paletteType === 'diverging'
+        ? computeDivergingSplit(classCount, breakValues, currentBreakpoint)
+        : undefined;
 
     return applyPaletteInversion(
       userPalette
         ? generatePaletteColors(userPalette, classCount, contrast)
-        : generateColorsForBreaks(classCount, paletteType, contrast),
+        : generateColorsForBreaks(
+            classCount,
+            paletteType,
+            contrast,
+            divergingSplit
+          ),
       visualization?.classification?.inverted ?? false
     );
   }
@@ -234,7 +247,7 @@
       requestedClassCount,
       actualClassCount
     );
-    const colors = resolvePaletteColors(resolvedClassCount);
+    const colors = resolvePaletteColors(resolvedClassCount, result.breaks);
 
     currentNumClasses = resolvedClassCount;
     currentBreaks = toClassBreaks(

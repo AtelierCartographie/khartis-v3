@@ -34,6 +34,7 @@
   import {
     applyPaletteInversion,
     calculateBreaks,
+    computeDivergingSplit,
     generateColorsForBreaks
   } from '$lib/features/commons/services/classification.service';
   import {
@@ -1233,6 +1234,106 @@
     invertPrimitivePalette(PrimitiveFilterType.TEXT);
   }
 
+  function updateTextBackground(
+    updater: (
+      background: TextPrimitiveConfig['background']
+    ) => Partial<TextPrimitiveConfig['background']>
+  ) {
+    const text = getTextPrimitive(selectedViz);
+    if (!text) {
+      return;
+    }
+
+    handleTextChange({
+      background: {
+        ...text.background,
+        ...updater(text.background)
+      }
+    });
+  }
+
+  function handleTextBackgroundStyleChange(
+    updates: Partial<VisualizationConfig['style']>
+  ) {
+    updateTextBackground((background) => ({
+      ...(Object.prototype.hasOwnProperty.call(updates, 'fillColor')
+        ? { fillColor: updates.fillColor }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'fillOpacity')
+        ? { fillOpacity: updates.fillOpacity ?? background.fillOpacity }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'strokeColor')
+        ? { strokeColor: updates.strokeColor }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'strokeWidth')
+        ? { strokeWidth: updates.strokeWidth ?? background.strokeWidth }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'strokeOpacity')
+        ? { strokeOpacity: updates.strokeOpacity ?? background.strokeOpacity }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'strokeDashed')
+        ? { strokeDashed: updates.strokeDashed ?? background.strokeDashed }
+        : {})
+    }));
+  }
+
+  function handleTextBackgroundModesChange(
+    updates: Partial<VisualizationModes>
+  ) {
+    updateTextBackground((background) => ({
+      ...(Object.prototype.hasOwnProperty.call(updates, 'fill')
+        ? { fillMode: updates.fill ?? background.fillMode }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'stroke')
+        ? { strokeMode: updates.stroke ?? background.strokeMode }
+        : {})
+    }));
+  }
+
+  function handleTextBackgroundClassificationChange(
+    updates: Partial<ClassificationConfig>
+  ) {
+    updateTextBackground((background) => ({
+      classification: {
+        ...(background.classification ?? {
+          method: ClassificationMethod.JENKS,
+          classes: 5
+        }),
+        ...updates
+      } as ClassificationConfig
+    }));
+  }
+
+  function handleTextBackgroundMappingChange(
+    updates: Partial<VisualizationConfig['mapping']>
+  ) {
+    updateTextBackground(() => ({
+      ...(Object.prototype.hasOwnProperty.call(updates, 'valueColumn')
+        ? { valueColumn: updates.valueColumn }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'categoryColumn')
+        ? { categoryColumn: updates.categoryColumn }
+        : {})
+    }));
+  }
+
+  function handleTextBackgroundPaletteInvert() {
+    const text = getTextPrimitive(selectedViz);
+    const classification = text?.background.classification;
+    const colors = classification?.colors;
+    if (!classification || !colors?.length) {
+      return;
+    }
+
+    updateTextBackground(() => ({
+      classification: {
+        ...classification,
+        colors: [...colors].reverse(),
+        inverted: !(classification.inverted ?? false)
+      } as ClassificationConfig
+    }));
+  }
+
   function handleTextVisibilityChange(visible: boolean) {
     const text = getTextPrimitive(selectedViz);
     if (!text) {
@@ -1457,10 +1558,23 @@
           ? findPaletteById(classification.paletteId)
           : undefined;
         const isPatternPalette = userPalette?.type === PALETTE_TYPE.PATTERN;
+        const divergingSplit =
+          paletteType === 'diverging'
+            ? computeDivergingSplit(
+                actualNumClasses,
+                result.breaks,
+                classification?.breakpointValue ?? null
+              )
+            : undefined;
         colors =
           userPalette && !isPatternPalette
             ? generatePaletteColors(userPalette, actualNumClasses, contrast)
-            : generateColorsForBreaks(actualNumClasses, paletteType, contrast);
+            : generateColorsForBreaks(
+                actualNumClasses,
+                paletteType,
+                contrast,
+                divergingSplit
+              );
         colors = applyPaletteInversion(
           colors,
           classification?.inverted ?? false
@@ -1677,6 +1791,43 @@
     };
   }
 
+  function buildTextBackgroundPanelVisualization(
+    visualization: VisualizationConfig | undefined
+  ): VisualizationConfig | undefined {
+    const text = getTextPrimitive(visualization);
+    if (!visualization || !text) {
+      return undefined;
+    }
+
+    const background = text.background;
+    return {
+      ...visualization,
+      primitiveFilters: getEnabledPrimitiveFilters(visualization),
+      modes: {
+        ...visualization.modes,
+        fill: background.fillMode,
+        stroke: background.strokeMode
+      },
+      style: {
+        ...visualization.style,
+        fillColor: background.fillColor,
+        fillOpacity:
+          background.fillMode === FillMode.NONE ? 0 : background.fillOpacity,
+        strokeColor: background.strokeColor,
+        strokeWidth: background.strokeWidth,
+        strokeOpacity: background.strokeOpacity,
+        strokeDashed: background.strokeDashed
+      },
+      mapping: {
+        ...visualization.mapping,
+        valueColumn: background.valueColumn,
+        categoryColumn: background.categoryColumn
+      },
+      classification: background.classification,
+      missingData: undefined
+    };
+  }
+
   const symbolVisualization = $derived.by(() =>
     buildSymbolPanelVisualization(selectedViz)
   );
@@ -1690,9 +1841,7 @@
     buildTextPanelVisualization(selectedViz)
   );
   const textBackgroundVisualization = $derived.by(() =>
-    showsPolygonsConfig
-      ? buildPolygonPanelVisualization(selectedViz)
-      : undefined
+    buildTextBackgroundPanelVisualization(selectedViz)
   );
 
   const primitiveClassificationTargets = $derived.by(() =>
@@ -1705,6 +1854,181 @@
       usesCategories: usesCategoricalClassification(selectedViz, primitive)
     }))
   );
+
+  const textBackgroundTarget = $derived.by(() => {
+    const text = getTextPrimitive(selectedViz);
+    if (!text) return null;
+    const bg = text.background;
+    return {
+      fillMode: bg.fillMode,
+      valueColumn: bg.valueColumn,
+      categoryColumn: bg.categoryColumn,
+      classification: bg.classification,
+      usesBreaks: bg.fillMode === FillMode.CLASSES,
+      usesCategories: bg.fillMode === FillMode.CATEGORIES
+    };
+  });
+
+  const primitiveColorParamsKey = $derived.by(() => {
+    const cbEnabled = getColorBlindnessState().enabled;
+    return [
+      String(cbEnabled),
+      ...primitiveClassificationTargets.map((target) => {
+        const numColors = target.usesCategories
+          ? Math.max(target.classification?.labels?.length ?? 0, 0)
+          : (target.classification?.classes ?? 0);
+        const breakpointValue = target.classification?.breakpointValue;
+        const paletteType =
+          breakpointValue != null ? 'diverging' : 'sequential';
+        const breakpointKey =
+          paletteType === 'diverging' && Number.isFinite(breakpointValue)
+            ? String(breakpointValue)
+            : '';
+        const breaksKey =
+          paletteType === 'diverging'
+            ? (target.classification?.breaks ?? []).join(',')
+            : '';
+        return [
+          target.primitive,
+          target.classification?.paletteId ?? '',
+          String(target.classification?.inverted ?? false),
+          String(numColors),
+          paletteType,
+          breakpointKey,
+          breaksKey,
+          String(target.usesCategories)
+        ].join(':');
+      })
+    ].join('|');
+  });
+
+  let lastTextBackgroundBreaksKey = '';
+  let inFlightTextBackgroundBreaksKey = '';
+
+  async function computeTextBackgroundBreaks(trigger = 'unknown') {
+    const target = textBackgroundTarget;
+    if (!target || !selectedViz?.datasetId) return;
+    const valueColumn = target.valueColumn;
+    if (!valueColumn) return;
+    const method = target.classification?.method;
+    if (!method || method === ClassificationMethod.MANUAL) return;
+
+    const normalizedMethod = normalizeClassificationMethod(method);
+    const numClasses = target.classification?.numClasses ?? 5;
+    const requestedClassCount = resolveRequestedClassCount(
+      normalizedMethod,
+      numClasses
+    );
+    const breaksKey = `${selectedViz.id}-${selectedViz.datasetId}-textBackground-${valueColumn}-${normalizedMethod}-${requestedClassCount}`;
+    const hasExistingBreaks = Boolean(target.classification?.breaks?.length);
+
+    if (breaksKey === inFlightTextBackgroundBreaksKey) return;
+    if (hasExistingBreaks && breaksKey === lastTextBackgroundBreaksKey) return;
+
+    const dataset = datasetsStore.datasets.find(
+      (datasetItem) => datasetItem.id === selectedViz?.datasetId
+    );
+    if (!dataset?.sourceFileId) return;
+
+    untrack(() => {
+      inFlightTextBackgroundBreaksKey = breaksKey;
+    });
+
+    try {
+      const result = await calculateBreaks({
+        datasetId: dataset.sourceFileId,
+        columnName: valueColumn,
+        method: normalizedMethod,
+        numClasses: requestedClassCount
+      });
+
+      if (!result || !selectedViz?.id) {
+        inFlightTextBackgroundBreaksKey = '';
+        return;
+      }
+
+      const actualNumClasses = resolveComputedClassCount(
+        normalizedMethod,
+        requestedClassCount,
+        result.counts.length
+      );
+      const existingColors = target.classification?.colors;
+      const contrast = getColorBlindnessState().enabled
+        ? ('high' as const)
+        : undefined;
+      let colors: string[];
+
+      if (existingColors && existingColors.length === actualNumClasses) {
+        colors = existingColors;
+      } else {
+        const paletteType =
+          target.classification?.breakpointValue != null
+            ? 'diverging'
+            : 'sequential';
+        const userPalette = target.classification?.paletteId
+          ? findPaletteById(target.classification.paletteId)
+          : undefined;
+        const isPatternPalette = userPalette?.type === PALETTE_TYPE.PATTERN;
+        colors =
+          userPalette && !isPatternPalette
+            ? generatePaletteColors(userPalette, actualNumClasses, contrast)
+            : generateColorsForBreaks(actualNumClasses, paletteType, contrast);
+        colors = applyPaletteInversion(
+          colors,
+          target.classification?.inverted ?? false
+        );
+      }
+
+      const classificationUpdate: Partial<ClassificationConfig> = {
+        breaks: result.breaks,
+        counts: result.counts,
+        colors
+      };
+
+      if (
+        normalizedMethod !== method ||
+        actualNumClasses !== numClasses ||
+        target.classification?.classes !== actualNumClasses
+      ) {
+        classificationUpdate.method = normalizedMethod;
+        classificationUpdate.classes = actualNumClasses;
+        classificationUpdate.numClasses = actualNumClasses;
+      }
+
+      handleTextBackgroundClassificationChange(classificationUpdate);
+      lastTextBackgroundBreaksKey = breaksKey;
+      inFlightTextBackgroundBreaksKey = '';
+    } catch (error) {
+      logger.error(
+        '[configure-visualization] text background breaks computation crashed',
+        LogCategory.UI,
+        { trigger, error }
+      );
+      inFlightTextBackgroundBreaksKey = '';
+    }
+  }
+
+  async function fetchTextBackgroundCategoryLabels(
+    column: string,
+    tableName: string
+  ) {
+    try {
+      const rows = (await Duck.query(
+        `SELECT DISTINCT "${column}" FROM "${tableName}" WHERE "${column}" IS NOT NULL ORDER BY "${column}"`,
+        { format: 'array' }
+      )) as Array<Record<string, unknown>>;
+      const labels = rows.map((row) => String(row[column]));
+      if (labels.length > 0) {
+        untrack(() => handleTextBackgroundClassificationChange({ labels }));
+      }
+    } catch (error) {
+      logger.warn(
+        'Failed to fetch text background category labels',
+        LogCategory.VISUALIZATION,
+        error
+      );
+    }
+  }
 
   $effect(() => {
     const duckVersion = duckDBOrchestrator.datasetsVersion;
@@ -1723,6 +2047,16 @@
         );
       }
     }
+
+    const textBg = textBackgroundTarget;
+    if (
+      textBg?.usesBreaks &&
+      textBg.valueColumn &&
+      textBg.classification?.method &&
+      !textBg.classification.breaks?.length
+    ) {
+      computeTextBackgroundBreaks('$effect:missingBreaks');
+    }
   });
 
   $effect(() => {
@@ -1738,6 +2072,16 @@
           '$effect:classificationParamsChanged'
         );
       }
+    }
+
+    const textBg = textBackgroundTarget;
+    if (
+      textBg?.usesBreaks &&
+      textBg.classification?.method &&
+      textBg.classification?.numClasses &&
+      textBg.valueColumn
+    ) {
+      computeTextBackgroundBreaks('$effect:classificationParamsChanged');
     }
   });
 
@@ -1767,16 +2111,26 @@
         true
       );
     }
+
+    const textBg = textBackgroundTarget;
+    const hasBgLabels = (textBg?.classification?.labels?.length ?? 0) > 0;
+    if (textBg?.usesCategories && textBg.categoryColumn && !hasBgLabels) {
+      fetchTextBackgroundCategoryLabels(
+        textBg.categoryColumn,
+        dataset.tableName
+      );
+    }
   });
 
   $effect(() => {
-    const cbEnabled = getColorBlindnessState().enabled;
-    const visualization = selectedViz;
+    void primitiveColorParamsKey;
 
     untrack(() => {
-      if (!visualization?.id) {
+      if (!selectedViz?.id) {
         return;
       }
+
+      const cbEnabled = getColorBlindnessState().enabled;
 
       for (const target of primitiveClassificationTargets) {
         const classification = target.classification;
@@ -1833,7 +2187,20 @@
             }
             colors = generatePaletteColors(palette, numColors, contrast);
           } else {
-            colors = generateColorsForBreaks(numColors, paletteType, contrast);
+            const divergingSplit =
+              paletteType === 'diverging'
+                ? computeDivergingSplit(
+                    numColors,
+                    classification.breaks ?? [],
+                    classification.breakpointValue ?? null
+                  )
+                : undefined;
+            colors = generateColorsForBreaks(
+              numColors,
+              paletteType,
+              contrast,
+              divergingSplit
+            );
           }
         }
 
@@ -1941,11 +2308,11 @@
       onMappingChange={handleTextMappingChange}
       onInvertPalette={handleTextPaletteInvert}
       onSecondaryLabelsChange={handleTextSecondaryLabelsChange}
-      onBackgroundStyleChange={handlePolygonStyleChange}
-      onBackgroundModesChange={handlePolygonModesChange}
-      onBackgroundClassificationChange={handlePolygonClassificationChange}
-      onBackgroundMappingChange={handlePolygonMappingChange}
-      onBackgroundInvertPalette={handlePolygonPaletteInvert}
+      onBackgroundStyleChange={handleTextBackgroundStyleChange}
+      onBackgroundModesChange={handleTextBackgroundModesChange}
+      onBackgroundClassificationChange={handleTextBackgroundClassificationChange}
+      onBackgroundMappingChange={handleTextBackgroundMappingChange}
+      onBackgroundInvertPalette={handleTextBackgroundPaletteInvert}
       onToggleVisibility={handleTextVisibilityChange}
       onAddFilter={(filter) =>
         handleAddDataFilter(filter, PrimitiveFilterType.TEXT)}

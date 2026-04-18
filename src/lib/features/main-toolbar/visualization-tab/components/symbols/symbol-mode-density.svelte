@@ -15,12 +15,8 @@
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-  import {
-    ColorSelector,
-    InfoPopover,
-    SectionHeading,
-    SliderWithInput
-  } from '../shared';
+  import { InfoPopover, SectionHeading, SliderWithInput } from '../shared';
+  import SingleColorPreview from '../palette-popover/single-color-preview.svelte';
   import type { SymbolModeProps } from './types';
 
   let {
@@ -320,9 +316,9 @@
   onchange={handleDotSizeChange}
 />
 
-<ColorSelector
+<SingleColorPreview
   label={m.color()}
-  value={fillColor}
+  color={fillColor}
   onchange={handleFillColorChange}
 />
 

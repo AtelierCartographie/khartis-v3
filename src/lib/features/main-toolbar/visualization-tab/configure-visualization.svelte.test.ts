@@ -35,4 +35,51 @@ describe('ConfigureVisualization', () => {
       'untrack(() => inFlightBreaksKeyByPrimitive.set(primitive, breaksKey));'
     );
   });
+
+  it('wires text background handlers independently from polygon handlers', () => {
+    const textsConfigBlock = source.match(/<TextsConfig[\s\S]*?\/>/);
+    expect(textsConfigBlock).not.toBeNull();
+    const block = textsConfigBlock![0];
+
+    expect(block).toContain(
+      'onBackgroundStyleChange={handleTextBackgroundStyleChange}'
+    );
+    expect(block).toContain(
+      'onBackgroundModesChange={handleTextBackgroundModesChange}'
+    );
+    expect(block).toContain(
+      'onBackgroundClassificationChange={handleTextBackgroundClassificationChange}'
+    );
+    expect(block).toContain(
+      'onBackgroundMappingChange={handleTextBackgroundMappingChange}'
+    );
+    expect(block).toContain(
+      'onBackgroundInvertPalette={handleTextBackgroundPaletteInvert}'
+    );
+
+    expect(block).not.toContain(
+      'onBackgroundStyleChange={handlePolygonStyleChange}'
+    );
+    expect(block).not.toContain(
+      'onBackgroundModesChange={handlePolygonModesChange}'
+    );
+  });
+
+  it('derives text background panel from text.background sub-config, not polygon', () => {
+    expect(source).toContain('buildTextBackgroundPanelVisualization');
+    expect(source).toContain(
+      'const textBackgroundVisualization = $derived.by(() =>'
+    );
+    expect(source).toContain(
+      'buildTextBackgroundPanelVisualization(selectedViz)'
+    );
+    expect(source).not.toMatch(
+      /textBackgroundVisualization\s*=\s*\$derived[\s\S]*buildPolygonPanelVisualization/
+    );
+  });
+
+  it('writes text background updates through the text primitive, not polygon', () => {
+    expect(source).toContain('function updateTextBackground');
+    expect(source).toContain('handleTextChange({');
+  });
 });

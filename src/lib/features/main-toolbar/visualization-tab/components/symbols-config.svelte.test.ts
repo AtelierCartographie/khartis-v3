@@ -21,6 +21,10 @@ describe('SymbolsConfig container', () => {
     expect(source).toContain('SymbolMode.DENSITY');
   });
 
+  it('derives the active symbol mode from the canonical primitive config', () => {
+    expect(source).toContain('getSymbolPrimitive(visualization)?.mode');
+  });
+
   it('switches the section title to "Taille, forme et couleur" in CATEGORIES mode', () => {
     expect(source).toContain('symbolMode === SymbolMode.CATEGORIES');
     expect(source).toContain('m.size_shape_and_color()');

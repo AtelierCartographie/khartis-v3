@@ -12,6 +12,7 @@
   import { SymbolMode } from '../../constants';
   import {
     ALL_PRIMITIVE_FILTERS,
+    getSymbolPrimitive,
     PrimitiveFilterType
   } from '$lib/features/commons/store/visualization.store.svelte';
   import type {
@@ -93,8 +94,8 @@
   }
 
   $effect(() => {
-    if (visualization?.modes) {
-      symbolMode = visualization.modes.symbol ?? SymbolMode.UNIQUE;
+    if (visualization) {
+      symbolMode = getSymbolPrimitive(visualization)?.mode ?? SymbolMode.UNIQUE;
     }
   });
 
