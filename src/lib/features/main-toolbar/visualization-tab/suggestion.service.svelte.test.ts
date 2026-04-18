@@ -391,6 +391,7 @@ describe('suggestion.service', () => {
     expect(updatedVisualization?.primitiveFilters).toEqual([]);
     expect(updatedVisualization?.style.textOpacity).toBe(1);
     expect(updatedVisualization?.text?.enabled).toBe(true);
+    expect(updatedVisualization?.text?.opacity).toBe(1);
     expect(updatedVisualization?.text?.secondaryLabels.enabled).toBe(false);
     expect(updatedVisualization?.text?.secondaryLabels.labelColumn).toBe(
       'population_total'
@@ -427,7 +428,7 @@ describe('suggestion.service', () => {
     ]);
     expect(updatedVisualization?.modes?.symbol).toBe(SymbolMode.PROPORTIONAL);
     expect(updatedVisualization?.polygon?.enabled).toBe(false);
-    expect(updatedVisualization?.symbols?.opacity).toBe(0.8);
+    expect(updatedVisualization?.symbols?.opacity).toBe(1);
     expect(
       isVisualizationMatchingSuggestion(
         updatedVisualization!,

@@ -271,6 +271,7 @@ function buildTextPrimitiveConfig(
   } = {}
 ): Partial<TextPrimitiveConfig> {
   const text = getTextPrimitive(visualization) ?? preset.text;
+  const defaultTextOpacity = VISUALIZATION_DEFAULTS.textOpacity / 100;
   const baseSecondaryLabels = {
     enabled: false,
     labelColumn: text?.secondaryLabels.labelColumn,
@@ -291,7 +292,10 @@ function buildTextPrimitiveConfig(
     colorMode: text?.colorMode ?? ColorMode.UNIQUE,
     sizeMode: text?.sizeMode ?? SizeMode.FIXED,
     color: text?.color ?? DEFAULT_COLORS.text,
-    opacity: text?.opacity ?? 1,
+    opacity:
+      text?.opacity !== undefined && text.opacity > 0
+        ? text.opacity
+        : defaultTextOpacity,
     size: text?.size ?? VISUALIZATION_DEFAULTS.textSize,
     bold: text?.bold ?? false,
     italic: text?.italic ?? false,
