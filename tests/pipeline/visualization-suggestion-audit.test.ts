@@ -422,12 +422,13 @@ async function getGeometryInfo(
     LIMIT 1
   `);
   const [extentRow] = await queryRows<GeometryQueryRow>(`
+    WITH agg AS (SELECT ST_Extent_Agg("${escapedGeomCol}") AS extent FROM "${escapedTable}")
     SELECT
-      ST_XMin(ST_Extent("${escapedGeomCol}")) AS minX,
-      ST_YMin(ST_Extent("${escapedGeomCol}")) AS minY,
-      ST_XMax(ST_Extent("${escapedGeomCol}")) AS maxX,
-      ST_YMax(ST_Extent("${escapedGeomCol}")) AS maxY
-    FROM "${escapedTable}"
+      ST_XMin(extent) AS minX,
+      ST_YMin(extent) AS minY,
+      ST_XMax(extent) AS maxX,
+      ST_YMax(extent) AS maxY
+    FROM agg
   `);
   const geometryType = mapGeometryType(
     typeof typeRow?.geom_type === 'string' ? typeRow.geom_type : null

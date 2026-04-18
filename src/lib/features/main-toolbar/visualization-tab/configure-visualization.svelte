@@ -63,7 +63,10 @@
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { Duck } from '$lib/features/duckdb';
-  import { COLUMN_TYPE_GEOMETRY } from '$lib/features/commons/constants/data.constants';
+  import {
+    COLUMN_TYPE_GEOMETRY,
+    GEO_COLUMN_TYPE
+  } from '$lib/features/commons/constants/data.constants';
   import { SettingsAdjust } from 'carbon-icons-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import LinesConfig from './components/lines-config.svelte';
@@ -86,7 +89,11 @@
   type ClassifiablePrimitive = (typeof CLASSIFIABLE_PRIMITIVES)[number];
 
   let selectedViz = $derived(visualizationStore.selectedVisualization);
-  const lastComputedKeyByPrimitive = new SvelteMap<
+  const lastCompletedBreaksKeyByPrimitive = new SvelteMap<
+    ClassifiablePrimitive,
+    string
+  >();
+  const inFlightBreaksKeyByPrimitive = new SvelteMap<
     ClassifiablePrimitive,
     string
   >();
@@ -114,11 +121,34 @@
 
   const hasGeometry = $derived.by(() => {
     const dataset = getSelectedDataset() ?? datasetsStore.selectedDataset;
-    if (!dataset?.columns) return false;
-    return (
-      Boolean(dataset.geometry) ||
-      dataset.columns.some((col) => col.type === COLUMN_TYPE_GEOMETRY)
+    if (!dataset) {
+      return false;
+    }
+
+    const duckDataset = dataset.sourceFileId
+      ? duckDBOrchestrator.getDatasetBySourceFile(dataset.sourceFileId)
+      : null;
+
+    if (
+      dataset.geometry ||
+      dataset.joinedBasemap ||
+      dataset.geoColumn ||
+      duckDataset?.joinedBasemap ||
+      duckDataset?.gpsMode ||
+      dataset.columns?.some((col) => col.type === COLUMN_TYPE_GEOMETRY)
+    ) {
+      return true;
+    }
+
+    const detectedGeoColumns = dataset.geoDetection?.geoColumns ?? [];
+    const hasLatitude = detectedGeoColumns.some(
+      (column) => column.type === GEO_COLUMN_TYPE.LATITUDE
     );
+    const hasLongitude = detectedGeoColumns.some(
+      (column) => column.type === GEO_COLUMN_TYPE.LONGITUDE
+    );
+
+    return hasLatitude && hasLongitude;
   });
 
   const availablePrimitiveFilters = $derived.by(() => {
@@ -426,7 +456,7 @@
     if (usesBreakClassification(visualization, primitive)) {
       if (!classification?.method || !classification?.numClasses) {
         updatePrimitiveClassificationState(primitive, {
-          method: ClassificationMethod.QUANTILES,
+          method: ClassificationMethod.JENKS,
           classes: 5,
           numClasses: 5
         });
@@ -1313,7 +1343,7 @@
   async function computeBreaksForPrimitive(
     primitive: ClassifiablePrimitive,
     trigger = 'unknown',
-    retryKey = ''
+    _retryKey = ''
   ) {
     const valueColumn = getPrimitiveValueColumn(selectedViz, primitive);
     const classification = getPrimitiveClassification(selectedViz, primitive);
@@ -1334,15 +1364,31 @@
       normalizedMethod,
       numClasses
     );
-    const computeKey = `${selectedViz.id}-${primitive}-${valueColumn}-${normalizedMethod}-${requestedClassCount}-${retryKey}`;
-    const lastComputedKey = untrack(() =>
-      lastComputedKeyByPrimitive.get(primitive)
+    const breaksKey = `${selectedViz.id}-${selectedViz.datasetId}-${primitive}-${valueColumn}-${normalizedMethod}-${requestedClassCount}`;
+    const hasExistingBreaks = Boolean(classification?.breaks?.length);
+    const lastCompletedKey = untrack(() =>
+      lastCompletedBreaksKeyByPrimitive.get(primitive)
     );
-    if (computeKey === lastComputedKey) {
+    const inFlightKey = untrack(() =>
+      inFlightBreaksKeyByPrimitive.get(primitive)
+    );
+
+    if (breaksKey === inFlightKey) {
       return;
     }
 
-    untrack(() => lastComputedKeyByPrimitive.set(primitive, computeKey));
+    if (hasExistingBreaks && breaksKey === lastCompletedKey) {
+      return;
+    }
+
+    const clearInFlightBreaksKey = () =>
+      untrack(() => {
+        if (inFlightBreaksKeyByPrimitive.get(primitive) === breaksKey) {
+          inFlightBreaksKeyByPrimitive.delete(primitive);
+        }
+      });
+
+    untrack(() => inFlightBreaksKeyByPrimitive.set(primitive, breaksKey));
     computeRequestCounter += 1;
     const requestId = computeRequestCounter;
 
@@ -1360,19 +1406,9 @@
           datasetId: selectedViz.datasetId
         }
       );
+      clearInFlightBreaksKey();
       return;
     }
-
-    logger.debug('[configure-visualization] computing breaks', LogCategory.UI, {
-      trigger,
-      requestId,
-      primitive,
-      selectedVisualizationId: selectedViz.id,
-      sourceFileId: dataset.sourceFileId,
-      valueColumn,
-      method: normalizedMethod,
-      numClasses: requestedClassCount
-    });
 
     try {
       const result = await calculateBreaks({
@@ -1383,6 +1419,7 @@
       });
 
       if (requestId !== computeRequestCounter || !selectedViz?.id) {
+        clearInFlightBreaksKey();
         return;
       }
 
@@ -1396,6 +1433,7 @@
             selectedVisualizationId: selectedViz.id
           }
         );
+        clearInFlightBreaksKey();
         return;
       }
 
@@ -1446,16 +1484,10 @@
       }
 
       updatePrimitiveClassificationState(primitive, classificationUpdate);
-      logger.debug(
-        '[configure-visualization] breaks computed and applied',
-        LogCategory.UI,
-        {
-          requestId,
-          primitive,
-          selectedVisualizationId: selectedViz.id,
-          breaksCount: result.breaks.length
-        }
+      untrack(() =>
+        lastCompletedBreaksKeyByPrimitive.set(primitive, breaksKey)
       );
+      clearInFlightBreaksKey();
     } catch (error) {
       logger.error(
         '[configure-visualization] breaks computation crashed',
@@ -1467,6 +1499,7 @@
           error
         }
       );
+      clearInFlightBreaksKey();
     }
   }
 

@@ -18,10 +18,21 @@ describe('ConfigureVisualization', () => {
     expect(source).toContain('disabled={!showsLinesConfig}');
   });
 
+  it('treats joined basemaps as renderable geometry for text tools', () => {
+    expect(source).toContain('dataset.joinedBasemap');
+    expect(source).toContain('dataset.geoColumn');
+    expect(source).toContain('duckDBOrchestrator.getDatasetBySourceFile');
+    expect(source).toContain('duckDataset?.joinedBasemap');
+    expect(source).toContain('duckDataset?.gpsMode');
+    expect(source).toContain('column.type === GEO_COLUMN_TYPE.LATITUDE');
+    expect(source).toContain('column.type === GEO_COLUMN_TYPE.LONGITUDE');
+  });
+
   it('keeps computed-break cache outside the reactive graph', () => {
-    expect(source).toContain('const lastComputedKey = untrack(() =>');
+    expect(source).toContain('const lastCompletedKey = untrack(() =>');
+    expect(source).toContain('const inFlightKey = untrack(() =>');
     expect(source).toContain(
-      'untrack(() => lastComputedKeyByPrimitive.set(primitive, computeKey));'
+      'untrack(() => inFlightBreaksKeyByPrimitive.set(primitive, breaksKey));'
     );
   });
 });
