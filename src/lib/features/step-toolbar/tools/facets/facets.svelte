@@ -8,6 +8,7 @@
   } from 'carbon-icons-svelte';
   import { facetsStore } from './facets.store.svelte';
   import {
+    getSymbolPrimitive,
     visualizationStore,
     PrimitiveFilterType,
     type VisualizationConfig
@@ -80,7 +81,7 @@
 
   function resolveSymbolSlots(viz: VisualizationConfig): FacetSlot[] {
     const slots: FacetSlot[] = [];
-    const symbolMode = viz.modes?.symbol;
+    const symbolMode = getSymbolPrimitive(viz)?.mode ?? SymbolMode.UNIQUE;
 
     if (symbolMode === SymbolMode.PROPORTIONAL) {
       slots.push({ key: 'sizeColumn', label: m.facets_slot_size_shape() });

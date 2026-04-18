@@ -1,6 +1,7 @@
 import { ViewMode } from '$lib/features/commons/constants/ui.constants';
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
 import { globalActions } from '$lib/features/commons/store/global.svelte';
 import {
   getProjectionById,
@@ -8,7 +9,9 @@ import {
 } from '$lib/features/commons/utils/projection.utils';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
 import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
+import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
 import { mapProjectionStore } from '$lib/features/map/stores/map-projection.store.svelte';
+import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
 import type { ProjectionState } from './projections.types';
 import {
   suggestProjectionsForBbox,
@@ -18,6 +21,13 @@ import {
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { canUseBoundsForProjectionSuggestion } from '$lib/features/map/utils/dataset-crs';
+import {
+  resolveProjectionAvailabilityContext,
+  resolveProjectionSuggestionBoundsFromBasemap,
+  supportsCustomProjectionCode,
+  supportsProjectionSuggestions
+} from '$lib/features/map/utils/projection-availability';
+import { usesMercatorMapProjection } from '$lib/features/map/utils/user-projection.utils';
 
 const DEFAULT_PROJECTION = 'mercator';
 
@@ -99,6 +109,17 @@ function getSuggestionCandidates(): DatasetResult[] {
   return candidates;
 }
 
+function getProjectionAvailabilityContext() {
+  return resolveProjectionAvailabilityContext({
+    requiresMapLibre: basemapStyleStore.requiresMapLibre,
+    hasOSMBasemap: osmBasemapStore.isActive,
+    currentStyle: basemapStyleStore.selectedStyle,
+    preferredStyle: basemapStyleStore.preferredTiledStyle,
+    referenceBasemapId: basemapStyleStore.referenceBasemapId,
+    osmBasemapBbox: osmBasemapStore.activeOSMBasemap?.bbox ?? null
+  });
+}
+
 async function resolveSuggestionBounds(): Promise<
   [number, number, number, number] | null
 > {
@@ -129,19 +150,21 @@ async function resolveSuggestionBounds(): Promise<
     }
   }
 
-  return null;
+  return resolveProjectionSuggestionBoundsFromBasemap({
+    currentStyle: basemapStyleStore.selectedStyle,
+    preferredStyle: basemapStyleStore.preferredTiledStyle,
+    referenceBasemapBbox: basemapStyleStore.referenceBasemapId
+      ? (basemapService.currentMetadata?.bbox ?? null)
+      : null,
+    currentBasemapBbox: basemapService.currentMetadata?.bbox ?? null,
+    osmBasemapBbox: osmBasemapStore.activeOSMBasemap?.bbox ?? null
+  });
 }
 
 function toMapProjectionType(projectionId: string): 'mercator' | 'globe' {
-  const mercatorLike = new Set([
-    MERCATOR_PROJECTION_TYPE,
-    'equirectangular',
-    'albers',
-    'lambert-conformal',
-    'gall-peters'
-  ]);
-
-  return mercatorLike.has(projectionId) ? MERCATOR_PROJECTION_TYPE : 'globe';
+  return usesMercatorMapProjection(projectionId)
+    ? MERCATOR_PROJECTION_TYPE
+    : 'globe';
 }
 
 const { actions, getState } = createToolStore<
@@ -171,6 +194,10 @@ const { actions, getState } = createToolStore<
     return {
       setSelected,
       setCustomCode: (code: string | null) => {
+        if (!supportsCustomProjectionCode(getProjectionAvailabilityContext())) {
+          return;
+        }
+
         s.customCode = code?.trim() || undefined;
         s.overrideActive = Boolean(s.customCode);
         s.overrideSource = s.customCode ? 'manual' : undefined;
@@ -205,6 +232,13 @@ const { actions, getState } = createToolStore<
       },
       suggestProjectionForCurrentData: () => {
         void (async () => {
+          if (
+            !supportsProjectionSuggestions(getProjectionAvailabilityContext())
+          ) {
+            s.suggestions = undefined;
+            return;
+          }
+
           const bounds = await resolveSuggestionBounds();
           if (!bounds) return;
 
@@ -220,7 +254,11 @@ const { actions, getState } = createToolStore<
             bbox: bounds
           });
 
-          // Auto-apply the best suggestion: national first, then generic
+          // CDC [VIZ-TOOLS-c]: "Projection attribuée par défaut, modifiable".
+          // National projections trump generic ones because "Nationale" gathers
+          // officially endorsed CRSes per zone (Lambert-93 for France, etc.).
+          // Ties inside each list have already been broken by the upstream
+          // suggester, so picking the first item is the canonical default.
           const best = result.national[0] ?? result.generic[0];
           if (best) {
             applyProjectionSuggestion(best, 'auto');
@@ -228,6 +266,12 @@ const { actions, getState } = createToolStore<
         })();
       },
       applySuggestion: (suggestion: ProjectionSuggestion) => {
+        if (
+          !supportsProjectionSuggestions(getProjectionAvailabilityContext())
+        ) {
+          return;
+        }
+
         applyProjectionSuggestion(suggestion, 'manual');
       },
       getCurrentProjectionInfo: (): ProjectionInfo | undefined => {
