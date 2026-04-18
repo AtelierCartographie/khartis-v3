@@ -252,6 +252,7 @@
   "density_dot_size": "Taille du point",
   "density_data_column": "Colonne de données",
   "density_level_hint": "Choisissez la finesse de représentation des points",
+  "density_loading": "Calcul de la densité…",
   "viz_symbols_representation": "Représentation",
   "viz_symbols_size_value": "Taille valeur",
   "viz_symbols_select_criteria": "Sélectionner le critère",

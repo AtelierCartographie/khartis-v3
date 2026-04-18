@@ -39,6 +39,7 @@
     type VisualizationConfig
   } from '../commons/store/visualization.store.svelte';
   import { FillMode } from '../main-toolbar/constants';
+  import { densityLoadingStore } from './stores/density-loading.store.svelte';
   import { basemapService } from './services/basemap.service.svelte';
   import type { SplitRenderingTable } from './types';
   import { INTERNAL_COLUMN } from '../commons/constants/data.constants';
@@ -68,6 +69,19 @@
   const enabledDatasets = $derived(datasetsStore.enabledDatasets);
   const duckDBDatasetsVersion = $derived(duckDBOrchestrator.datasetsVersion);
   const activeOSMBasemap = $derived(osmBasemapStore.activeOSMBasemap);
+  // Anti-flicker: only reveal the density loader after 300 ms of real work,
+  // so cached / fast (<300 ms) renders don't flash a spinner on screen.
+  let showDensityLoader = $state(false);
+  $effect(() => {
+    if (!densityLoadingStore.isLoading) {
+      showDensityLoader = false;
+      return;
+    }
+    const timer = setTimeout(() => {
+      showDensityLoader = densityLoadingStore.isLoading;
+    }, 300);
+    return () => clearTimeout(timer);
+  });
   const usesTiledBasemap = $derived(
     Boolean(activeOSMBasemap) || basemapStyleStore.requiresMapLibre
   );
@@ -230,26 +244,31 @@
         if (tableName) {
           const densityViz = findActiveDensityViz(dataset.id);
           if (densityViz) {
-            const densityTable =
-              await duckDBOrchestrator.generateDotDensityArrowFromGeoTable(
-                tableName,
-                densityViz.density!.valueColumn!,
-                densityViz.density!.ratio!,
-                densityViz.density!.seed !== undefined
-                  ? { seed: densityViz.density!.seed }
-                  : undefined
-              );
-            if (densityTable) {
-              logger.success(
-                'Density points ready for Deck.gl',
-                LogCategory.MAP,
-                {
+            densityLoadingStore.begin();
+            try {
+              const densityTable =
+                await duckDBOrchestrator.generateDotDensityArrowFromGeoTable(
                   tableName,
-                  rows: densityTable.numRows,
-                  durationMs: (performance.now() - start).toFixed(2)
-                }
-              );
-              return densityTable;
+                  densityViz.density!.valueColumn!,
+                  densityViz.density!.ratio!,
+                  densityViz.density!.seed !== undefined
+                    ? { seed: densityViz.density!.seed }
+                    : undefined
+                );
+              if (densityTable) {
+                logger.success(
+                  'Density points ready for Deck.gl',
+                  LogCategory.MAP,
+                  {
+                    tableName,
+                    rows: densityTable.numRows,
+                    durationMs: (performance.now() - start).toFixed(2)
+                  }
+                );
+                return densityTable;
+              }
+            } finally {
+              densityLoadingStore.end();
             }
           }
 
@@ -360,16 +379,22 @@
     try {
       const densityViz = findActiveDensityViz(datasetId);
       if (densityViz) {
-        const joinedTable =
-          await duckDBOrchestrator.generateDotDensityArrowFromJoin(
-            joinedBasemap,
-            tableName,
-            densityViz.density!.valueColumn!,
-            densityViz.density!.ratio!,
-            densityViz.density!.seed !== undefined
-              ? { seed: densityViz.density!.seed }
-              : undefined
-          );
+        densityLoadingStore.begin();
+        let joinedTable: ArrowTable | undefined;
+        try {
+          joinedTable =
+            await duckDBOrchestrator.generateDotDensityArrowFromJoin(
+              joinedBasemap,
+              tableName,
+              densityViz.density!.valueColumn!,
+              densityViz.density!.ratio!,
+              densityViz.density!.seed !== undefined
+                ? { seed: densityViz.density!.seed }
+                : undefined
+            );
+        } finally {
+          densityLoadingStore.end();
+        }
 
         if (isStaleLoad(generation)) return;
         if (!datasetsStore.isDatasetEnabled(datasetId)) return;
@@ -957,6 +982,17 @@
           onReady={handleMapReady}
         />
       {/if}
+      {#if showDensityLoader}
+        <div
+          class="density-loader"
+          role="status"
+          aria-live="polite"
+          transition:fade={{ duration: 150 }}
+        >
+          <span class="density-loader-spinner" aria-hidden="true"></span>
+          <span class="density-loader-text">{m.density_loading()}</span>
+        </div>
+      {/if}
     </div>
   {/if}
 
@@ -987,6 +1023,40 @@
 </div>
 
 <style>
+  .density-loader {
+    position: absolute;
+    top: var(--cds-spacing-04);
+    right: var(--cds-spacing-04);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--cds-spacing-03);
+    padding: var(--cds-spacing-02) var(--cds-spacing-04);
+    background: var(--cds-layer-01, rgba(255, 255, 255, 0.95));
+    border: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+    border-radius: 999px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+    font-size: 0.75rem;
+    color: var(--cds-text-secondary, #525252);
+    pointer-events: none;
+    z-index: 3;
+  }
+
+  .density-loader-spinner {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 1.5px solid var(--cds-border-subtle-02, #c6c6c6);
+    border-top-color: var(--cds-interactive-01, #0f62fe);
+    border-radius: 50%;
+    animation: density-loader-spin 0.75s linear infinite;
+  }
+
+  @keyframes density-loader-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
   .main-map-container {
     display: flex;
     align-items: center;

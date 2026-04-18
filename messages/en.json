@@ -252,6 +252,7 @@
   "density_dot_size": "Dot size",
   "density_data_column": "Data column",
   "density_level_hint": "Choose how finely dots represent the data",
+  "density_loading": "Computing density…",
   "viz_symbols_representation": "Representation",
   "viz_symbols_size_value": "Size value",
   "viz_symbols_select_criteria": "Select criteria",

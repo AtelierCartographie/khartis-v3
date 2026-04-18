@@ -243,15 +243,71 @@ export function parseSolidPolygons(table: ArrowTable): BinaryPolygonData {
   return result;
 }
 
+/**
+ * Fast WKB Point decoder for multi-batch Arrow tables (e.g. dot-density output).
+ *
+ * The `geoarrow-deck-stream` library's `parsePoints` only reads the first
+ * RecordBatch via `getFirstDataChunk`, so tables with N batches drop
+ * (N-1) / N of their rows. Instead of calling the library 58 times and
+ * concatenating (which re-allocates + re-runs WKB → native conversion per
+ * batch), we decode WKB Points directly: each point is a fixed 21 bytes
+ * (1 endian + 4 type + 8 X + 8 Y), so we iterate all batches in one pass
+ * and write straight into pre-allocated Float32/Uint32 output buffers.
+ */
+function decodeWkbPointsAllBatches(table: ArrowTable): BinaryPointData | null {
+  const geomVector =
+    table.getChild('geometry') ?? table.getChild('wkb_geometry');
+  if (!geomVector) return null;
+
+  const totalLength = table.numRows;
+  const positions = new Float32Array(totalLength * 2);
+  const featureIds = new Uint32Array(totalLength);
+  let outIdx = 0;
+
+  for (let b = 0; b < geomVector.data.length; b++) {
+    const data = geomVector.data[b];
+    const offsets = data.valueOffsets as Int32Array;
+    const values = data.values as Uint8Array;
+    const batchLen = data.length;
+
+    for (let i = 0; i < batchLen; i++) {
+      const start = offsets[i];
+      const end = offsets[i + 1];
+      // WKB Point = 21 bytes. Guard against malformed / non-Point WKB by
+      // bailing out and letting the caller fall back to the library.
+      if (end - start !== 21) return null;
+      const base = values.byteOffset + start;
+      const view = new DataView(values.buffer, base, 21);
+      const le = view.getUint8(0) === 1;
+      // bytes 1-4 = type; 1 = Point (we only handle the Point case here)
+      const type = view.getUint32(1, le);
+      if (type !== 1) return null;
+      positions[outIdx * 2] = view.getFloat64(5, le);
+      positions[outIdx * 2 + 1] = view.getFloat64(13, le);
+      featureIds[outIdx] = outIdx;
+      outIdx++;
+    }
+  }
+
+  return { length: outIdx, positions, featureIds, size: 2 };
+}
+
 function parsePointsAllBatches(
   table: ArrowTable,
   options: ParserOptions
 ): BinaryPointData {
   const normalized = normalizeGeomColumnName(table);
-  // Library's parsePoints only reads the first RecordBatch (getFirstDataChunk);
-  // iterate batches explicitly and concat the resulting BinaryPointData so
-  // large multi-batch tables (e.g. density output with 58 batches of 2048)
-  // render all points instead of just the first 2048.
+  // Fast path: identity projection + WKB Points (density output) can skip the
+  // library entirely and decode straight to binary buffers in one pass.
+  const isIdentityProjection =
+    !options.projection || options.projection === IDENTITY_OPTIONS.projection;
+  if (isIdentityProjection && normalized.batches.length > 0) {
+    const direct = decodeWkbPointsAllBatches(normalized);
+    if (direct) return direct;
+  }
+
+  // Library's parsePoints only reads the first RecordBatch; for multi-batch
+  // tables we parse each batch as a single-batch table and concat the result.
   if (normalized.batches.length <= 1) {
     return parsePoints(normalized, options);
   }
