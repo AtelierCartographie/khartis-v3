@@ -76,6 +76,9 @@
 
     // The tooltip is rendered outside Deck.gl and kept at a fixed position above
     // the viewer to match the product CDC.
+    void tooltipState.pinned;
+    void tooltipState.entries.length;
+    void accordionOpen;
     void globalState.zoom.pageZoomLevel;
     void globalState.zoom.pagePanOffset.x;
     void globalState.zoom.pagePanOffset.y;
@@ -189,65 +192,74 @@
   .map-tooltip {
     position: fixed;
     z-index: var(--z-map-overlay);
-    background: rgba(255, 255, 255, 0.96);
+    background: var(--cds-layer-01, #ffffff);
     color: var(--cds-text-primary, #161616);
-    padding: 8px 12px;
-    border-radius: 4px;
+    padding: 20px 24px;
+    border-radius: 0;
     font-size: 12px;
     font-family: 'IBM Plex Sans', sans-serif;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-    border: 1px solid var(--cds-border-strong, #8d8d8d);
+    box-shadow:
+      0 18px 40px rgba(22, 22, 22, 0.08),
+      0 6px 16px rgba(22, 22, 22, 0.06);
+    border: none;
     max-width: min(320px, calc(100vw - 16px));
     max-height: min(20rem, calc(100dvh - 16px));
     overflow: auto;
     pointer-events: none;
     user-select: none;
-    line-height: 1.4;
+    line-height: 1.35;
     overscroll-behavior: contain;
   }
 
   .map-tooltip.pinned {
     pointer-events: auto;
     user-select: text;
-    border-color: var(--cds-focus, #0f62fe);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    box-shadow:
+      0 22px 48px rgba(22, 22, 22, 0.1),
+      0 8px 20px rgba(22, 22, 22, 0.08);
   }
 
   .tooltip-header {
     display: flex;
     justify-content: flex-end;
-    margin: -4px -4px 4px 0;
+    margin-bottom: 10px;
   }
 
   .tooltip-close {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 20px;
-    height: 20px;
+    width: 24px;
+    height: 24px;
     padding: 0;
     border: none;
-    border-radius: 2px;
+    border-radius: 0;
     background: transparent;
     color: #525252;
     cursor: pointer;
   }
 
   .tooltip-close:hover {
-    background: #e0e0e0;
+    background: rgba(22, 22, 22, 0.06);
     color: #161616;
+  }
+
+  .tooltip-close:focus-visible {
+    outline: 2px solid var(--cds-focus, #0f62fe);
+    outline-offset: 2px;
   }
 
   .tooltip-entries {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 8px;
   }
 
   .tooltip-row {
-    display: flex;
-    justify-content: space-between;
-    gap: 16px;
+    display: grid;
+    grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+    align-items: start;
+    column-gap: 20px;
   }
 
   .tooltip-key {
@@ -260,30 +272,32 @@
   }
 
   .tooltip-value {
-    font-weight: 500;
+    font-weight: 600;
     text-align: right;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 160px;
     flex-shrink: 0;
+    justify-self: end;
   }
 
   .tooltip-accordion {
-    margin-top: 6px;
+    margin-top: 14px;
     border-top: 1px solid #e0e0e0;
-    padding-top: 4px;
+    padding-top: 10px;
   }
 
   .accordion-toggle {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
     background: none;
     border: none;
     cursor: pointer;
     color: #525252;
-    font-size: 11px;
+    font-size: inherit;
+    line-height: inherit;
     padding: 2px 0;
     font-family: 'IBM Plex Sans', sans-serif;
   }
@@ -295,6 +309,11 @@
   .accordion-toggle:disabled {
     cursor: default;
     color: #8d8d8d;
+  }
+
+  .accordion-toggle:focus-visible {
+    outline: 2px solid var(--cds-focus, #0f62fe);
+    outline-offset: 2px;
   }
 
   .accordion-chevron {
@@ -310,8 +329,8 @@
   .accordion-content {
     display: flex;
     flex-direction: column;
-    gap: 3px;
-    margin-top: 4px;
-    padding-left: 4px;
+    gap: 8px;
+    margin-top: 10px;
+    padding-left: 0;
   }
 </style>

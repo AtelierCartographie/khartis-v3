@@ -234,23 +234,15 @@ function resolvePickedRowIndex(info: PickingInfo): number | null {
   return null;
 }
 
-function extractDatasetIdFromLayerId(layerId: string): string | null {
-  const parts = layerId.split('-');
-  for (let i = 1; i < parts.length; i++) {
-    if (parts[i].startsWith('ds_')) {
-      return parts[i];
-    }
-  }
-  return parts.length >= 2 ? parts[1] : null;
-}
-
 function getVizColumnNames(
   visualizations: VisualizationConfig[],
-  datasetId: string
+  layerId: string
 ): Set<string> {
   const columns = new Set<string>();
   for (const viz of visualizations) {
-    if (viz.datasetId !== datasetId) continue;
+    if (!layerId.includes(viz.id) && !layerId.includes(viz.datasetId)) {
+      continue;
+    }
     const m = viz.mapping;
     if (m.valueColumn) columns.add(m.valueColumn);
     if (m.categoryColumn) columns.add(m.categoryColumn);
@@ -314,11 +306,8 @@ export function extractTooltipEntries(
   if (entries.length === 0) return [];
 
   if (visualizations && visualizations.length > 0 && info.layer?.id) {
-    const datasetId = extractDatasetIdFromLayerId(info.layer.id);
-    if (datasetId) {
-      const vizColumns = getVizColumnNames(visualizations, datasetId);
-      entries = sortEntriesByVizPriority(entries, vizColumns);
-    }
+    const vizColumns = getVizColumnNames(visualizations, info.layer.id);
+    entries = sortEntriesByVizPriority(entries, vizColumns);
   }
 
   return entries;
