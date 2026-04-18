@@ -178,6 +178,20 @@ export interface TextSecondaryLabelsConfig {
   dxpMasking: boolean;
 }
 
+export interface TextBackgroundConfig {
+  fillMode: FillMode;
+  fillColor?: string | string[];
+  fillOpacity: number;
+  strokeMode: StrokeMode;
+  strokeColor?: string;
+  strokeWidth: number;
+  strokeOpacity: number;
+  strokeDashed: boolean;
+  valueColumn?: string;
+  categoryColumn?: string;
+  classification?: ClassificationConfig;
+}
+
 export interface TextPrimitiveConfig {
   enabled: boolean;
   labelColumn?: string;
@@ -199,6 +213,7 @@ export interface TextPrimitiveConfig {
   classification?: ClassificationConfig;
   missingData?: MissingDataConfig;
   secondaryLabels: TextSecondaryLabelsConfig;
+  background: TextBackgroundConfig;
 }
 
 export type PrimitiveFilter =
@@ -612,6 +627,25 @@ function buildLinePrimitiveConfig(
   };
 }
 
+function buildTextBackgroundConfig(
+  existing: TextBackgroundConfig | undefined
+): TextBackgroundConfig {
+  const defaultFillOpacity = VISUALIZATION_DEFAULTS.fillOpacity / 100;
+  return {
+    fillMode: existing?.fillMode ?? FillMode.NONE,
+    fillColor: existing?.fillColor,
+    fillOpacity: existing?.fillOpacity ?? defaultFillOpacity,
+    strokeMode: existing?.strokeMode ?? StrokeMode.NONE,
+    strokeColor: existing?.strokeColor,
+    strokeWidth: existing?.strokeWidth ?? VISUALIZATION_DEFAULTS.strokeWidth,
+    strokeOpacity: existing?.strokeOpacity ?? 1,
+    strokeDashed: existing?.strokeDashed ?? false,
+    valueColumn: existing?.valueColumn,
+    categoryColumn: existing?.categoryColumn,
+    classification: existing?.classification
+  };
+}
+
 function buildTextPrimitiveConfig(
   visualization: VisualizationConfig
 ): TextPrimitiveConfig {
@@ -669,7 +703,8 @@ function buildTextPrimitiveConfig(
       visualization.textClassification ??
       visualization.classification,
     missingData: existing?.missingData ?? visualization.missingData,
-    secondaryLabels: buildSecondaryLabelsConfig(visualization)
+    secondaryLabels: buildSecondaryLabelsConfig(visualization),
+    background: buildTextBackgroundConfig(existing?.background)
   };
 }
 
@@ -1147,6 +1182,58 @@ function getDefaultModes(type: VisualizationType): VisualizationModes {
   }
 }
 
+/**
+ * Density-aware default size envelope for proportional/bivariate symbols on
+ * polygon datasets.
+ *
+ * Trade-off: for sparse layouts (e.g. 96 French départements) we want big
+ * symbols so the hierarchy is readable; for dense layouts (e.g. 35k French
+ * communes) we want small symbols to avoid overlap. The base formula
+ * `140 / sqrt(rowCount)` does that, but it ignores the spatial extent — for a
+ * 332-feature pan-European dataset (NUTS 2) it returns maxSize=8 px, which is
+ * below the cartographic legibility floor (Bertin ~5 px diameter) and crushes
+ * the lower-end symbols to 2-3 px (per CDC [CTX-03] non-specialist users must
+ * still see the hierarchy).
+ *
+ * Two-tier floor:
+ *  - <500 features (regional/admin scale)  → minimum 10 px  (legibility wins)
+ *  - ≥500 features (commune/IRIS scale)    → minimum 6 px   (avoid overlap)
+ *
+ * Cap stays at VISUALIZATION_DEFAULTS.symbolMaxSize (24 px).
+ */
+export const SPARSE_POLYGON_THRESHOLD = 500;
+export const SPARSE_SYMBOL_FLOOR_PX = 10;
+export const DENSE_SYMBOL_FLOOR_PX = 6;
+const SYMBOL_DENSITY_COEFFICIENT = 140;
+
+/**
+ * Returns the per-dataset density-adjusted maxSize for proportional symbols on
+ * polygons. Pure function so it can be unit-tested in isolation.
+ *
+ *   maxSize = clamp( floor, 24, round(140 / √N) )
+ *
+ * Floor is 10 px for N < 500 (regional scale), 6 px for N ≥ 500 (commune scale).
+ */
+export function resolveProportionalSymbolMaxSize(rowCount: number): number {
+  const safeRowCount = Math.max(rowCount, 1);
+  const floor =
+    safeRowCount < SPARSE_POLYGON_THRESHOLD
+      ? SPARSE_SYMBOL_FLOOR_PX
+      : DENSE_SYMBOL_FLOOR_PX;
+  return Math.max(
+    floor,
+    Math.min(
+      VISUALIZATION_DEFAULTS.symbolMaxSize,
+      Math.round(SYMBOL_DENSITY_COEFFICIENT / Math.sqrt(safeRowCount))
+    )
+  );
+}
+
+/** Companion of resolveProportionalSymbolMaxSize: maxSize / 4 capped at [1, 4]. */
+export function resolveProportionalSymbolMinSize(maxSize: number): number {
+  return Math.max(1, Math.min(4, Math.round(maxSize / 4)));
+}
+
 function getDefaultSymbols(
   type: VisualizationType,
   dataset: ProcessedDataset | DatasetResult
@@ -1162,16 +1249,10 @@ function getDefaultSymbols(
     isPolygonGeometry &&
     (type === VisualizationType.PROPORTIONAL ||
       type === VisualizationType.BIVARIATE)
-      ? Math.max(
-          6,
-          Math.min(
-            VISUALIZATION_DEFAULTS.symbolMaxSize,
-            Math.round(140 / Math.sqrt(Math.max(rowCount, 1)))
-          )
-        )
+      ? resolveProportionalSymbolMaxSize(rowCount)
       : DEFAULT_SYMBOL_MAX_SIZE;
   const minSize = isPolygonGeometry
-    ? Math.max(1, Math.min(4, Math.round(densityAdjustedMaxSize / 4)))
+    ? resolveProportionalSymbolMinSize(densityAdjustedMaxSize)
     : DEFAULT_SYMBOL_MIN_SIZE;
 
   return {
