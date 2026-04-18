@@ -87,7 +87,6 @@
   let fillColor = $state<string>(DEFAULT_COLORS.fill);
   let fillColorB = $state<string>(DEFAULT_COLORS.secondary);
   let fillOpacity = $state<number>(VISUALIZATION_DEFAULTS.fillOpacity);
-  let fillPattern = $state<boolean>(false);
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
   const selectableDataFields = $derived([noneOption, ...dataFields]);
   let isSyncingFromVisualization = $state(true);
@@ -324,14 +323,6 @@
     }
     missingDataColor = color;
     onMissingDataChange?.({ color });
-  }
-
-  function handleFillPatternChange(value: boolean) {
-    if (isSyncingFromVisualization) {
-      return;
-    }
-    fillPattern = value;
-    onMissingDataChange?.({ pattern: value });
   }
 
   function handleFillModeChange(index: number) {
@@ -713,11 +704,8 @@
     color={missingDataColor}
     showShapeSelector={false}
     showSizeSlider={false}
-    showPattern={true}
-    pattern={fillPattern}
     onshowchange={handleMissingDataShowChange}
     oncolorchange={handleMissingDataColorChange}
-    onpatternchange={handleFillPatternChange}
   />
 {:else if fillMode === FillMode.CATEGORIES}
   <div class="field-group">
@@ -757,11 +745,8 @@
     color={missingDataColor}
     showShapeSelector={false}
     showSizeSlider={false}
-    showPattern={true}
-    pattern={fillPattern}
     onshowchange={handleMissingDataShowChange}
     oncolorchange={handleMissingDataColorChange}
-    onpatternchange={handleFillPatternChange}
   />
 {/if}
 

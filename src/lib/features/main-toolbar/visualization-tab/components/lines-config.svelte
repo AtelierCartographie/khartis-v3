@@ -189,7 +189,6 @@
   let dashed = $state<boolean>(false);
   let showMissingData = $state<boolean>(true);
   let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
-  let missingDataOpacity = $state<number>(VISUALIZATION_DEFAULTS.lineOpacity);
   let missingDataShape = $state<MissingDataShape>(MissingDataShape.CIRCLE);
 
   $effect(() => {
@@ -290,11 +289,6 @@
   function handleMissingDataColorChange(value: string) {
     missingDataColor = value;
     onMissingDataChange?.({ color: value });
-  }
-
-  function handleMissingDataOpacityChange(value: number) {
-    missingDataOpacity = value;
-    onMissingDataChange?.({ opacity: value / 100 });
   }
 
   function handleMissingDataShapeChange(shape: string) {
@@ -600,8 +594,6 @@
       onshowchange={handleMissingDataToggle}
       color={missingDataColor}
       oncolorchange={handleMissingDataColorChange}
-      opacity={missingDataOpacity}
-      onopacitychange={handleMissingDataOpacityChange}
       shape={missingDataShape}
       onshapechange={handleMissingDataShapeChange}
       showShapeSelector={true}

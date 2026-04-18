@@ -90,6 +90,28 @@ function dataToWorld(target: number[]): [number, number, number] {
   return [scale * (t[0] - cx), yDirection * scale * (t[1] - cy), 0];
 }
 
+function isPlausibleSerializedTarget(
+  target: [number, number, number],
+  bbox: [number, number, number, number]
+): boolean {
+  const [x, y] = normalizeTarget(target);
+  const [minX, minY, maxX, maxY] = bbox;
+  const width = Math.max(1, maxX - minX);
+  const height = Math.max(1, maxY - minY);
+  const zeroIsWithinBbox = 0 >= minX && 0 <= maxX && 0 >= minY && 0 <= maxY;
+
+  if (x === 0 && y === 0 && !zeroIsWithinBbox) {
+    return false;
+  }
+
+  return (
+    x >= minX - width &&
+    x <= maxX + width &&
+    y >= minY - height &&
+    y <= maxY + height
+  );
+}
+
 interface PendingViewState {
   zoom: number;
   /** Target stored in data (geographic) coordinates, not world coordinates. */
@@ -409,14 +431,40 @@ function createMapInstanceStore() {
   ): void {
     if (!state.deckInstance || !state.isMapLoaded) return;
 
+    let restoredViewApplied = false;
+
     if (pendingRestore) {
-      state.deckViewState = {
-        ...state.deckViewState,
-        target: dataToWorld(pendingRestore.target),
-        zoom: pendingRestore.zoom
-      };
-      markViewportManual();
-    } else {
+      const ctx = projectionContextGetter();
+      if (!ctx.referenceBbox) {
+        return;
+      }
+
+      if (
+        !isPlausibleSerializedTarget(pendingRestore.target, ctx.referenceBbox)
+      ) {
+        pendingRestore = null;
+        lastSerializedViewState = null;
+      } else {
+        const scale = get_max_scale(
+          ctx.canvasSize,
+          ctx.referenceBbox,
+          ctx.fitPaddingPx
+        );
+        if (scale === 0) {
+          return;
+        }
+
+        state.deckViewState = {
+          ...state.deckViewState,
+          target: dataToWorld(pendingRestore.target),
+          zoom: pendingRestore.zoom
+        };
+        markViewportManual();
+        restoredViewApplied = true;
+      }
+    }
+
+    if (!restoredViewApplied) {
       state.deckViewState = {
         ...state.deckViewState,
         target: [0, 0, 0],
@@ -561,11 +609,7 @@ export const mapInstanceStore = createMapInstanceStore();
 
 persistenceRegistry.register({
   key: 'mapViewState',
-  serialize: () =>
-    mapInstanceStore.buildSerializedViewState() ?? {
-      zoom: mapInstanceStore.deckViewState.zoom,
-      target: [0, 0, 0]
-    },
+  serialize: () => mapInstanceStore.buildSerializedViewState(),
   deserialize: (data: unknown) =>
     mapInstanceStore.restoreFromSerialized(
       data as { zoom?: number; target?: [number, number, number] }

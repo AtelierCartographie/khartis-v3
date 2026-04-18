@@ -130,7 +130,7 @@
   let collisionDetection = $state<boolean>(true);
   let dxpMasking = $state<boolean>(false);
 
-  let secondaryColor = $state<string>(DEFAULT_COLORS.label);
+  let secondaryColor = $state<string>(DEFAULT_COLORS.text);
   let secondaryOpacity = $state<number>(VISUALIZATION_DEFAULTS.labelOpacity);
   let secondarySize = $state<number>(VISUALIZATION_DEFAULTS.labelSize);
   let secondaryAlignment = $state<'left' | 'center' | 'right'>('left');
@@ -251,7 +251,7 @@
       dxpMasking = visualization.style.textDxpMasking ?? false;
 
       secondaryColor =
-        (visualization.style.labelColor as string) ?? DEFAULT_COLORS.label;
+        (visualization.style.labelColor as string) ?? DEFAULT_COLORS.text;
       secondaryOpacity = parseOpacityToSlider(
         visualization.style.labelOpacity,
         VISUALIZATION_DEFAULTS.labelOpacity

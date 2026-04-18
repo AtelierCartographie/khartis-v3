@@ -37,11 +37,9 @@ describe('ZoomToolbar debug panel', () => {
     expect(source).toContain('m.deck_debug_metric_fps()');
     expect(source).toContain('m.deck_debug_metric_cpu()');
     expect(source).toContain('m.deck_debug_metric_gpu()');
-    expect(source).toContain('m.deck_debug_metric_layers()');
-    expect(source).toContain('{#if metric.insight}');
-    expect(source).toContain('class="zoom-debug-label">{metric.label}</span>');
     expect(source).toContain('<Tooltip');
-    expect(source).toContain('triggerText={metric.label}');
+    expect(source).toContain('triggerText={`${metric.label} ${metric.value}`}');
+    expect(source).toContain('iconDescription={metric.label}');
     expect(source).toContain('class="zoom-debug-tooltip-card"');
     expect(source).toContain('class="zoom-debug-tooltip-value">{metric.value}');
     expect(source).toContain(
@@ -51,9 +49,16 @@ describe('ZoomToolbar debug panel', () => {
     expect(source).toContain('getCpuInsight(');
     expect(source).toContain('getGpuInsight(');
     expect(source).not.toContain('getLayersInsight()');
+    expect(source).not.toContain('m.deck_debug_metric_layers()');
     expect(source).not.toContain('VRAM');
     expect(source).not.toContain('PICK');
     expect(source).not.toContain('DPR');
     expect(source).not.toContain('TGT');
+  });
+
+  it('opens tooltips from the whole badge instead of only the text label', () => {
+    expect(source).toContain('justify-content: center;');
+    expect(source).toContain('font-variant-numeric: tabular-nums;');
+    expect(source).toContain('triggerText={`${metric.label} ${metric.value}`}');
   });
 });

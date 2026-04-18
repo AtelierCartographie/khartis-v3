@@ -139,7 +139,7 @@
     <Row>
       <Column>
         <Slider
-          labelText={m.geo_inset_map_centering_longitude()}
+          labelText={m.geo_inset_map_center_longitude()}
           min={-180}
           max={180}
           step={1}
@@ -159,7 +159,7 @@
     <Row>
       <Column>
         <Slider
-          labelText={m.geo_inset_map_centering_latitude()}
+          labelText={m.geo_inset_map_center_latitude()}
           min={-90}
           max={90}
           step={1}

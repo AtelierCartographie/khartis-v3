@@ -1031,7 +1031,7 @@ function getDefaultStyle(
   type: VisualizationType
 ): VisualizationConfig['style'] {
   const textOverlayDefaults: VisualizationConfig['style'] = {
-    labelColor: DEFAULT_COLORS.label,
+    labelColor: DEFAULT_COLORS.text,
     labelOpacity: DEFAULT_LABEL_OPACITY,
     labelCollisionDetection: true,
     textColor: DEFAULT_COLORS.text,

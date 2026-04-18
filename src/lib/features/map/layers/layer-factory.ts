@@ -149,23 +149,28 @@ function ctxRowAccessor<T>(
 }
 
 const HIGHLIGHT_DIMMING_FACTOR = 0.3;
-const DEFAULT_TEXT_SIZE = PRINT_STANDARD_TOKENS.annotations.noteFontSize;
-const DEFAULT_HALO_WIDTH = 2;
-const DEFAULT_TEXT_FONT = 'IBM Plex Sans, sans-serif';
-const DEFAULT_TEXT_FONT_SETTINGS = { sdf: true } as const;
+
+export const DEFAULT_TEXT_SIZE = PRINT_STANDARD_TOKENS.annotations.noteFontSize;
+export const DEFAULT_HALO_WIDTH = 2;
+export const DEFAULT_TEXT_FONT = 'IBM Plex Sans, sans-serif';
+export const DEFAULT_TEXT_FONT_SETTINGS = { sdf: true } as const;
 const SELECTED_POLYGON_STROKE_COLOR: [number, number, number, number] = [
   15, 98, 254, 255
 ];
 const SELECTED_POLYGON_STROKE_WIDTH = 3;
 const DASH_EXTENSION = new PathStyleExtension({ dash: true });
 const DEFAULT_DASH_ARRAY: [number, number] = [3, 2];
-const DEFAULT_TEXT_MASK_PADDING: [number, number] = [3, 1];
-const TEXT_COLLISION_SAFE_PADDING: [number, number] = [4, 4];
+
+export const DEFAULT_TEXT_MASK_PADDING: [number, number] = [3, 1];
+export const TEXT_COLLISION_SAFE_PADDING: [number, number] = [4, 4];
+export const TEXT_COLLISION_PRIORITY = 1;
 const TEXT_BACKGROUND_PADDING: [number, number] = [6, 4];
-const TRANSPARENT_BACKGROUND_COLOR: Color = [0, 0, 0, 0];
+
+export const TRANSPARENT_BACKGROUND_COLOR: Color = [0, 0, 0, 0];
 const POINT_SYMBOL_ICON_VIEWBOX_SIZE = 64;
-const DEFAULT_LABEL_COLOR = hexToRgb(DEFAULT_COLORS.label);
-const DEFAULT_TEXT_COLOR = hexToRgb(DEFAULT_COLORS.text);
+const DEFAULT_LABEL_COLOR = hexToRgb(DEFAULT_COLORS.text);
+
+export const DEFAULT_TEXT_COLOR = hexToRgb(DEFAULT_COLORS.text);
 const pointSymbolIconCache = new Map<string, string>();
 
 function colorToCss(color: Color): string {
@@ -174,7 +179,7 @@ function colorToCss(color: Color): string {
   return `rgba(${r}, ${g}, ${b}, ${normalizedAlpha})`;
 }
 
-function resolveDeckTextFontWeight(
+export function resolveDeckTextFontWeight(
   weight: string | number,
   italic = false
 ): string | number {
@@ -369,7 +374,7 @@ export function resolveSplitMappingFeatureIdColumn(
   return idField?.name;
 }
 
-function getRepresentativePointSource(
+export function getRepresentativePointSource(
   ctx: LayerContext
 ): { table: ArrowTable; geometryInfo: GeometryInfo } | null {
   const representativePointTable = ctx.representativePointTable;
@@ -1390,7 +1395,7 @@ const THEMATIC_OVERLAY_PARAMETERS = {
   depthCompare: 'always' as const
 } as const;
 
-function getCachedGeoJSON(
+export function getCachedGeoJSON(
   table: ArrowTable,
   geoColumn: string
 ): FeatureCollection | null {
@@ -1519,17 +1524,18 @@ function resolveThematicScopeId(ctx: LayerContext): string {
   return ctx.viz?.id ?? ctx.datasetId ?? 'default';
 }
 
-function createTextCollisionProps(): Pick<
-  TextLayerWithCollisionProps,
-  'extensions' | 'collisionEnabled'
-> {
+export function createTextCollisionProps(
+  _ctx?: LayerContext,
+  _enabled?: boolean,
+  _priority?: number
+): Pick<TextLayerWithCollisionProps, 'extensions' | 'collisionEnabled'> {
   return {
     extensions: [],
     collisionEnabled: false
   };
 }
 
-function createThematicLayerId(
+export function createThematicLayerId(
   layerType: DeckLayerId,
   ctx: LayerContext
 ): string {
@@ -1540,7 +1546,7 @@ function createThematicLayerId(
   );
 }
 
-interface TextLayerDatum {
+export interface TextLayerDatum {
   position: [number, number];
   primaryText: string | null;
   secondaryText: string | null;
@@ -1559,13 +1565,16 @@ type TextLayerWithCollisionProps = ConstructorParameters<
   >;
 };
 
-function normalizeOpacity(opacity: number | undefined, fallback = 1): number {
+export function normalizeOpacity(
+  opacity: number | undefined,
+  fallback = 1
+): number {
   if (typeof opacity !== 'number') return fallback;
   const normalized = opacity > 1 ? opacity / 100 : opacity;
   return Math.min(Math.max(normalized, 0), 1);
 }
 
-function resolveEffectiveCategoryColorMap(
+export function resolveEffectiveCategoryColorMap(
   jsTable: ArrowTable,
   viz: LayerContext['viz'],
   categoryColorMap: Map<string, RGBColor> | null | undefined,
@@ -1617,7 +1626,7 @@ function resolveEffectiveCategoryColorMap(
   return getCategoricalColorMap(categoryList, classificationColors);
 }
 
-function resolveTextAnchor(
+export function resolveTextAnchor(
   align: 'left' | 'center' | 'right' | undefined
 ): 'start' | 'middle' | 'end' {
   switch (align) {
@@ -1649,7 +1658,7 @@ function resolveAccessorValue<T>(
   return isTextDatumAccessor(accessor) ? accessor(datum) : accessor;
 }
 
-function resolveVariableTextSizeBounds(baseSize: number): {
+export function resolveVariableTextSizeBounds(baseSize: number): {
   minSize: number;
   maxSize: number;
 } {
@@ -1664,7 +1673,7 @@ function resolveVariableTextSizeBounds(baseSize: number): {
   };
 }
 
-function resolveStyleColor(
+export function resolveStyleColor(
   styleColor: string | string[] | undefined,
   fallback: RGBColor
 ): RGBColor {
@@ -1677,7 +1686,7 @@ function resolveStyleColor(
   return fallback;
 }
 
-function toTextValue(value: unknown): string | null {
+export function toTextValue(value: unknown): string | null {
   if (value === null || value === undefined) return null;
   const text = String(value).trim();
   return text.length > 0 ? text : null;
@@ -1706,12 +1715,12 @@ function parseYearTextValue(value: unknown): number | null {
   return null;
 }
 
-function resolveMissingTextLabel(label: string | undefined): string {
+export function resolveMissingTextLabel(label: string | undefined): string {
   const normalizedLabel = label?.trim();
   return normalizedLabel && normalizedLabel.length > 0 ? normalizedLabel : '•';
 }
 
-function resolveTextDatumText(
+export function resolveTextDatumText(
   datum: TextLayerDatum,
   missingTextLabel: string
 ): string {
@@ -1724,7 +1733,7 @@ function resolveTextDatumText(
     : datum.primaryText;
 }
 
-function filterTextLayerDataByYear(
+export function filterTextLayerDataByYear(
   textData: TextLayerDatum[],
   table: ArrowTable,
   yearFilter: YearFilterInfo | undefined
@@ -1804,7 +1813,7 @@ function getGeometryAnchor(
   return [(minX + maxX) / 2, (minY + maxY) / 2];
 }
 
-function createTextLayerData(
+export function createTextLayerData(
   geojson: FeatureCollection,
   primaryColumn: string,
   secondaryColumn?: string
@@ -1840,7 +1849,7 @@ function createTextLayerData(
  * Create TextLayerDatum[] from binary point geometry data + Arrow column values.
  * Used both for raw POINT tables and DuckDB-derived representative point tables.
  */
-function createTextLayerDataFromBinary(
+export function createTextLayerDataFromBinary(
   table: ArrowTable,
   geoInfo: GeometryInfo,
   primaryColumn: string,

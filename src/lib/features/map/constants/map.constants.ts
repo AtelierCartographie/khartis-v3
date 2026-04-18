@@ -48,6 +48,7 @@ export enum DeckLayerId {
   LINE_LAYER = 'line-layer',
   POLYGON_LAYER = 'polygon-layer',
   TEXT_LAYER = 'text-layer',
+  LABEL_LAYER = 'label-layer',
   GEOJSON_LAYER = 'geojson-layer',
   WORLD_BASE_LAYER = 'world-base-layer',
   BASEMAP_TERRE = 'basemap-terre',

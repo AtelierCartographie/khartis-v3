@@ -64,7 +64,6 @@
   let fillOpacity = $state<number>(VISUALIZATION_DEFAULTS.fillOpacity);
   let showMissingData = $state<boolean>(true);
   let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
-  let fillPattern = $state<boolean>(false);
   const NONE_FIELD_ID = -1;
   let selectedClassFieldId = $state<number>(NONE_FIELD_ID);
   let selectedCategoryFieldId = $state<number>(NONE_FIELD_ID);
@@ -190,11 +189,6 @@
   function handleMissingDataColorChange(value: string) {
     missingDataColor = value;
     onMissingDataChange?.({ color: value });
-  }
-
-  function handleFillPatternChange(value: boolean) {
-    fillPattern = value;
-    onMissingDataChange?.({ pattern: value });
   }
 
   function handleClassFieldSelect(fieldId: number) {
@@ -335,11 +329,8 @@
     color={missingDataColor}
     showShapeSelector={false}
     showSizeSlider={false}
-    showPattern={true}
-    pattern={fillPattern}
     onshowchange={handleMissingDataShowChange}
     oncolorchange={handleMissingDataColorChange}
-    onpatternchange={handleFillPatternChange}
   />
 {:else if fillMode === FillMode.CATEGORIES}
   <div class="field-group">
@@ -378,11 +369,8 @@
     color={missingDataColor}
     showShapeSelector={false}
     showSizeSlider={false}
-    showPattern={true}
-    pattern={fillPattern}
     onshowchange={handleMissingDataShowChange}
     oncolorchange={handleMissingDataColorChange}
-    onpatternchange={handleFillPatternChange}
   />
 {/if}
 

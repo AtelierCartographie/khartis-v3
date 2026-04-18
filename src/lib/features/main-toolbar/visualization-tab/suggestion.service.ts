@@ -275,7 +275,7 @@ function buildTextPrimitiveConfig(
   const baseSecondaryLabels = {
     enabled: false,
     labelColumn: text?.secondaryLabels.labelColumn,
-    color: text?.secondaryLabels.color ?? DEFAULT_COLORS.label,
+    color: text?.secondaryLabels.color ?? DEFAULT_COLORS.text,
     opacity: text?.secondaryLabels.opacity ?? 1,
     size: text?.secondaryLabels.size ?? VISUALIZATION_DEFAULTS.labelSize,
     align: text?.secondaryLabels.align ?? 'left',

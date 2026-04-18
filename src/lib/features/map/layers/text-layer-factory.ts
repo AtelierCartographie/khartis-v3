@@ -253,8 +253,10 @@ export function createTextOverlayLayers(
   const textSizeAccessor = createTextSizeAccessor(textBaseSize);
 
   if (shouldRenderTextLayer) {
+    const textSource = textLayerDataWithSecondary ?? textLayerData;
+    if (!textSource) return layers;
     const textData = filterTextLayerDataByYear(
-      (textLayerDataWithSecondary ?? textLayerData).filter(
+      textSource.filter(
         (datum) => !datum.isMissingData || (viz.missingData?.show ?? true)
       ),
       jsTable,

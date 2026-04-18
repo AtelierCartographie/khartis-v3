@@ -166,14 +166,6 @@
     return formatted === '--' ? formatted : `${formatted} ms`;
   }
 
-  function formatDebugLayers(): string {
-    if (!deckDebugMetrics) {
-      return '--';
-    }
-
-    return `${deckDebugMetrics.drawLayersCount}/${deckDebugMetrics.layersCount}`;
-  }
-
   function isFiniteDebugMetric(
     value: number | null | undefined
   ): value is number {
@@ -258,11 +250,6 @@
       label: m.deck_debug_metric_gpu(),
       value: formatDebugMilliseconds(deckDebugMetrics?.gpuTimePerFrame),
       insight: getGpuInsight(deckDebugMetrics?.gpuTimePerFrame)
-    },
-    {
-      key: 'layers',
-      label: m.deck_debug_metric_layers(),
-      value: formatDebugLayers()
     }
   ]);
 </script>
@@ -337,23 +324,18 @@
         <div class="zoom-debug-metrics">
           {#each debugMetricsList as metric (metric.key)}
             <div class="zoom-debug-metric">
-              {#if metric.insight}
-                <Tooltip
-                  direction={debugTooltipDirection}
-                  align={debugTooltipAlign}
-                  triggerText={metric.label}
-                  iconDescription={metric.label}
-                >
-                  <div class="zoom-debug-tooltip-card">
-                    <p class="zoom-debug-tooltip-eyebrow">{metric.label}</p>
-                    <p class="zoom-debug-tooltip-value">{metric.value}</p>
-                    <p class="zoom-debug-tooltip-text">{metric.insight}</p>
-                  </div>
-                </Tooltip>
-              {:else}
-                <span class="zoom-debug-label">{metric.label}</span>
-              {/if}
-              <span class="zoom-debug-value">{metric.value}</span>
+              <Tooltip
+                direction={debugTooltipDirection}
+                align={debugTooltipAlign}
+                triggerText={`${metric.label} ${metric.value}`}
+                iconDescription={metric.label}
+              >
+                <div class="zoom-debug-tooltip-card">
+                  <p class="zoom-debug-tooltip-eyebrow">{metric.label}</p>
+                  <p class="zoom-debug-tooltip-value">{metric.value}</p>
+                  <p class="zoom-debug-tooltip-text">{metric.insight}</p>
+                </div>
+              </Tooltip>
             </div>
           {/each}
         </div>
@@ -451,9 +433,13 @@
   }
 
   .zoom-debug-metric {
+    min-width: 0;
+  }
+
+  .zoom-debug-metric :global(.khartis-carbon-rich-tooltip-trigger) {
     display: inline-flex;
     align-items: center;
-    gap: 0.32rem;
+    justify-content: center;
     min-width: 0;
     padding: 0.28rem 0.5rem;
     border-radius: 999px;
@@ -462,27 +448,14 @@
       var(--cds-layer-hover, #e8e8e8) 72%,
       transparent
     );
-  }
-
-  .zoom-debug-metric :global(.khartis-carbon-rich-tooltip-trigger) {
-    gap: 0;
-    padding: 0;
     color: inherit;
     text-decoration: none;
-  }
-
-  .zoom-debug-metric :global(.khartis-carbon-rich-tooltip-trigger span) {
-    display: inline-flex;
-    align-items: center;
-  }
-
-  .zoom-debug-label,
-  .zoom-debug-metric :global(.khartis-carbon-rich-tooltip-trigger span) {
     font-size: 0.625rem;
     font-weight: 600;
     line-height: 1;
     letter-spacing: 0.12em;
     text-transform: uppercase;
+    font-variant-numeric: tabular-nums;
   }
 
   .zoom-debug-metric :global(.khartis-carbon-rich-tooltip-trigger:hover),
@@ -494,13 +467,8 @@
     display: none;
   }
 
-  .zoom-debug-value {
+  .zoom-debug-metric :global(.khartis-carbon-rich-tooltip-trigger span) {
     min-width: 0;
-    font-family:
-      ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
-      'Courier New', monospace;
-    font-size: 0.74rem;
-    line-height: 1.1;
     white-space: nowrap;
   }
 
@@ -711,17 +679,15 @@
     }
 
     .zoom-debug-mode,
-    .zoom-debug-label,
-    .zoom-debug-metric :global(.khartis-carbon-rich-tooltip-trigger span) {
+    .zoom-debug-metric :global(.khartis-carbon-rich-tooltip-trigger) {
       font-size: 0.56rem;
     }
 
-    .zoom-debug-value {
-      font-size: 0.68rem;
+    .zoom-debug-metric {
+      min-width: 0;
     }
 
-    .zoom-debug-metric {
-      gap: 0.18rem;
+    .zoom-debug-metric :global(.khartis-carbon-rich-tooltip-trigger) {
       padding: 0.24rem 0.34rem;
     }
 
