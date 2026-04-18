@@ -1054,6 +1054,17 @@ function createDataOrchestratorService() {
   /** Set to true once onProjectChanged() completes. If initialize() runs after,
    *  it skips the migration + breaks work that onProjectChanged already did. */
   let projectAlreadyRestored = false;
+  let pendingGeoColumnRestoreTimeout: ReturnType<typeof setTimeout> | null =
+    null;
+  let activeGeoColumnRestoreToken = 0;
+
+  function cancelPendingGeoColumnRestore(): void {
+    activeGeoColumnRestoreToken += 1;
+    if (pendingGeoColumnRestoreTimeout !== null) {
+      clearTimeout(pendingGeoColumnRestoreTimeout);
+      pendingGeoColumnRestoreTimeout = null;
+    }
+  }
 
   async function initialize(): Promise<void> {
     await projectStore.waitForInit();
@@ -1107,13 +1118,17 @@ function createDataOrchestratorService() {
 
   async function onProjectChanged(): Promise<void> {
     await duckDBOrchestrator.waitForInitialization();
-    await duckDBOrchestrator.clear();
+    cancelPendingGeoColumnRestore();
 
     visualizationStore.clear();
     datasetsStore.clear();
     layersActions.reset();
-
     processedFileIds.clear();
+
+    // Remove runtime datasets before dropping DuckDB tables so reactive UI
+    // components stop reading the soon-to-be-deleted tables during project
+    // switches.
+    await duckDBOrchestrator.clear();
 
     const currentProject = projectStore.currentProject;
     const vizSettings = (
@@ -1203,16 +1218,36 @@ function createDataOrchestratorService() {
         });
       } else if (restoredPrimaryJoinState?.geoColumn) {
         const geoCol = restoredPrimaryJoinState.geoColumn;
+        const currentProjectId = currentProject.id;
+        const restoredSourceFileId = restoredFile?.id;
+        cancelPendingGeoColumnRestore();
+        const restoreToken = activeGeoColumnRestoreToken;
+
         // Defer restoration until dataset is fully loaded. The component's
         // $effect resets linkedVariable when the dataset ID changes, so we
         // must wait for that reset to happen first, then override.
         const restoreGeoColumn = () => {
-          const dataset = datasetsStore.selectedDataset;
-          if (!dataset?.columns?.length) {
-            // Dataset not ready yet, retry
-            setTimeout(restoreGeoColumn, 200);
+          if (
+            restoreToken !== activeGeoColumnRestoreToken ||
+            projectStore.currentProject?.id !== currentProjectId
+          ) {
+            pendingGeoColumnRestoreTimeout = null;
             return;
           }
+
+          const dataset = datasetsStore.selectedDataset;
+          if (
+            !dataset?.columns?.length ||
+            (restoredSourceFileId &&
+              dataset.sourceFileId !== restoredSourceFileId)
+          ) {
+            // Dataset not ready yet, retry
+            pendingGeoColumnRestoreTimeout = setTimeout(restoreGeoColumn, 200);
+            return;
+          }
+
+          pendingGeoColumnRestoreTimeout = null;
+
           const colIndex = dataset.columns
             .filter((c) => c.name !== '__geom' && c.name !== '__id')
             .findIndex((c) => c.name === geoCol);
@@ -1229,7 +1264,7 @@ function createDataOrchestratorService() {
           }
         };
         // Wait 2s for all Svelte $effects to settle after dataset loading
-        setTimeout(restoreGeoColumn, 2000);
+        pendingGeoColumnRestoreTimeout = setTimeout(restoreGeoColumn, 2000);
       }
     }
 
