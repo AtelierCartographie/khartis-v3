@@ -10,7 +10,6 @@
     SectionHeading,
     SliderWithInput,
     StrokeSection,
-    ToggleWithLabel,
     VizFilterButton,
     VizFilterPanel
   } from './shared';
@@ -25,36 +24,25 @@
   } from '$lib/features/commons/store/visualization.store.svelte';
   import * as m from '$lib/paraglide/messages';
   import {
-    DEFAULT_SEQUENTIAL_PREVIEW,
     DEFAULT_QUALITATIVE_PREVIEW,
+    DEFAULT_SEQUENTIAL_PREVIEW,
     PALETTE_TYPE
   } from './palette-popover/palette.constants';
   import {
     Category,
     MisuseOutline,
     SquareFill,
-    Tag,
-    TextBold,
-    TextItalic,
-    TextAlignLeft,
-    TextAlignCenter,
-    TextAlignRight
+    Tag
   } from 'carbon-icons-svelte';
   import {
-    ColorMode,
     DEFAULT_COLORS,
     FillMode,
     SLIDER_LIMITS,
     VISUALIZATION_DEFAULTS
   } from '../../constants';
-  import {
-    Button,
-    Dropdown,
-    Select,
-    SelectItem,
-    TextInput
-  } from 'carbon-components-svelte';
+  import { Button, Dropdown, TextInput } from 'carbon-components-svelte';
   import DiscretizationModal from './discretization-modal.svelte';
+  import TextStylePopover from './text-style-popover.svelte';
   import { resolveDiscretizationLabel } from './discretization.utils';
 
   interface Props {
@@ -101,11 +89,8 @@
     backgroundVisualization,
     disabled = false,
     onStyleChange,
-    onModesChange,
     onMissingDataChange,
-    onClassificationChange,
     onMappingChange,
-    onInvertPalette,
     onToggleVisibility,
     onSecondaryLabelsChange,
     onBackgroundStyleChange,
@@ -120,7 +105,6 @@
   }: Props = $props();
 
   const NONE_FIELD_ID = -1;
-  const FONT_SIZES = ['8', '10', '12', '14', '16', '18', '20', '24'];
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
   const selectableDataFields = $derived([noneOption, ...dataFields]);
   const secondaryFieldItems = $derived([noneOption, ...dataFields]);
@@ -130,13 +114,10 @@
   let filterSectionVisible = $state(false);
 
   let selectedLabelFieldId = $state<number>(NONE_FIELD_ID);
-  let selectedTextValueFieldId = $state<number>(NONE_FIELD_ID);
-  let selectedTextCategoryFieldId = $state<number>(NONE_FIELD_ID);
   let selectedBackgroundValueFieldId = $state<number>(NONE_FIELD_ID);
   let selectedBackgroundCategoryFieldId = $state<number>(NONE_FIELD_ID);
   let secondaryFieldId = $state<number>(NONE_FIELD_ID);
 
-  let colorMode = $state<ColorMode>(ColorMode.UNIQUE);
   let textColor = $state<string>(DEFAULT_COLORS.text);
   let textOpacity = $state<number>(VISUALIZATION_DEFAULTS.textOpacity);
   let bold = $state<boolean>(false);
@@ -149,8 +130,8 @@
   let collisionDetection = $state<boolean>(true);
   let dxpMasking = $state<boolean>(false);
 
-  let secondaryEnabled = $state<boolean>(false);
   let secondaryColor = $state<string>(DEFAULT_COLORS.label);
+  let secondaryOpacity = $state<number>(VISUALIZATION_DEFAULTS.labelOpacity);
   let secondarySize = $state<number>(VISUALIZATION_DEFAULTS.labelSize);
   let secondaryAlignment = $state<'left' | 'center' | 'right'>('left');
   let secondaryHalo = $state<boolean>(false);
@@ -167,17 +148,17 @@
   let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
   let missingDataLabel = $state<string>(m.missing_data_text());
 
-  let showPrimaryFormat = $state(false);
-  let showSecondaryFormat = $state(false);
+  type StyleSection = 'primary' | 'secondary';
+  type FormatTriggerRef = HTMLButtonElement | HTMLAnchorElement | null;
+  let showStylePopover = $state(false);
+  let activeStyleSection = $state<StyleSection>('primary');
+  let stylePopoverTrigger = $state<HTMLElement | undefined>();
+  let primaryTriggerRef = $state<FormatTriggerRef>(null);
+  let secondaryTriggerRef = $state<FormatTriggerRef>(null);
 
   const enabled = $derived((visualization?.style.textOpacity ?? 0) > 0);
+  const hasPrimaryField = $derived(selectedLabelFieldId !== NONE_FIELD_ID);
   const hasSecondaryField = $derived(secondaryFieldId !== NONE_FIELD_ID);
-  const currentPalette = $derived(
-    visualization?.classification?.colors ?? DEFAULT_SEQUENTIAL_PREVIEW
-  );
-  const categoriesPalette = $derived(
-    visualization?.classification?.colors ?? DEFAULT_QUALITATIVE_PREVIEW
-  );
   const backgroundCurrentPalette = $derived(
     backgroundVisualization?.classification?.colors ??
       DEFAULT_SEQUENTIAL_PREVIEW
@@ -193,34 +174,12 @@
       : visualization
   );
 
-  const colorModeItems = [
-    { icon: MisuseOutline, label: m.color_mode_none(), iconSize: 16 },
-    { icon: SquareFill, label: m.color_mode_unique(), iconSize: 16 },
-    { icon: Category, label: m.color_mode_classes(), iconSize: 16 },
-    { icon: Tag, label: m.color_mode_categories(), iconSize: 16 }
-  ];
-
   const fillModeItems = [
     { icon: MisuseOutline, label: m.fill_mode_none(), iconSize: 16 },
     { icon: SquareFill, label: m.fill_mode_unique(), iconSize: 16 },
     { icon: Category, label: m.fill_mode_classes(), iconSize: 16 },
     { icon: Tag, label: m.fill_mode_categories(), iconSize: 16 }
   ];
-
-  const alignmentItems = [
-    { icon: TextAlignLeft, label: m.alignment_left(), iconSize: 16 },
-    { icon: TextAlignCenter, label: m.alignment_center(), iconSize: 16 },
-    { icon: TextAlignRight, label: m.alignment_right(), iconSize: 16 }
-  ];
-
-  const colorModeIndex = $derived(
-    [
-      ColorMode.NONE,
-      ColorMode.UNIQUE,
-      ColorMode.CLASSES,
-      ColorMode.CATEGORIES
-    ].indexOf(colorMode)
-  );
 
   const fillModeIndex = $derived(
     [
@@ -229,22 +188,6 @@
       FillMode.CLASSES,
       FillMode.CATEGORIES
     ].indexOf(fillMode)
-  );
-
-  const alignmentIndex = $derived(
-    ['left', 'center', 'right'].indexOf(alignment)
-  );
-
-  const secondaryAlignmentIndex = $derived(
-    ['left', 'center', 'right'].indexOf(secondaryAlignment)
-  );
-
-  const discretizationLabel = $derived.by(() =>
-    resolveDiscretizationLabel(
-      visualization?.classification
-        ? { ...visualization.classification }
-        : undefined
-    )
   );
 
   const backgroundDiscretizationLabel = $derived.by(() =>
@@ -277,12 +220,6 @@
 
   $effect(() => {
     selectedLabelFieldId = resolveFieldId(visualization?.mapping.labelColumn);
-    selectedTextValueFieldId = resolveFieldId(
-      visualization?.mapping.valueColumn
-    );
-    selectedTextCategoryFieldId = resolveFieldId(
-      visualization?.mapping.categoryColumn
-    );
     secondaryFieldId = resolveFieldId(
       visualization?.mapping.secondaryLabelColumn
     );
@@ -310,11 +247,15 @@
       haloColor = visualization.style.textHaloColor ?? DEFAULT_COLORS.halo;
       haloWidth =
         visualization.style.textHaloWidth ?? VISUALIZATION_DEFAULTS.haloWidth;
-      collisionDetection = visualization.style.textCollisionDetection ?? false;
+      collisionDetection = visualization.style.textCollisionDetection ?? true;
       dxpMasking = visualization.style.textDxpMasking ?? false;
 
       secondaryColor =
         (visualization.style.labelColor as string) ?? DEFAULT_COLORS.label;
+      secondaryOpacity = parseOpacityToSlider(
+        visualization.style.labelOpacity,
+        VISUALIZATION_DEFAULTS.labelOpacity
+      );
       secondarySize =
         visualization.style.labelSize ?? VISUALIZATION_DEFAULTS.labelSize;
       secondaryAlignment = visualization.style.labelAlign ?? 'left';
@@ -328,14 +269,6 @@
       secondaryDxpMasking = visualization.style.labelDxpMasking ?? false;
     }
 
-    if (visualization?.modes) {
-      colorMode =
-        visualization.modes.color ??
-        (selectedLabelFieldId === NONE_FIELD_ID
-          ? ColorMode.NONE
-          : ColorMode.UNIQUE);
-    }
-
     if (visualization?.missingData) {
       showMissingData = visualization.missingData.show ?? true;
       missingDataColor =
@@ -343,11 +276,6 @@
       missingDataLabel =
         visualization.missingData.label ?? m.missing_data_text();
     }
-
-    secondaryEnabled = Boolean(
-      visualization?.mapping.secondaryLabelColumn &&
-      (visualization.style.labelOpacity ?? 0) > 0
-    );
   });
 
   $effect(() => {
@@ -380,7 +308,7 @@
         secondaryLabelColumn: undefined
       });
       onSecondaryLabelsChange?.({ enabled: false, labelColumn: undefined });
-      showSecondaryFormat = false;
+      showStylePopover = false;
       return;
     }
 
@@ -390,48 +318,36 @@
     }
   }
 
-  function handleTextValueFieldSelect(fieldId: number) {
-    selectedTextValueFieldId = fieldId;
-
-    if (fieldId === NONE_FIELD_ID) {
-      onMappingChange?.({ valueColumn: undefined });
-      return;
-    }
-
-    const field = dataFields.find((item) => item.id === fieldId);
-    if (field) {
-      onMappingChange?.({ valueColumn: field.text });
-    }
-  }
-
-  function handleTextCategoryFieldSelect(fieldId: number) {
-    selectedTextCategoryFieldId = fieldId;
-
-    if (fieldId === NONE_FIELD_ID) {
-      onMappingChange?.({ categoryColumn: undefined });
-      return;
-    }
-
-    const field = dataFields.find((item) => item.id === fieldId);
-    if (field) {
-      onMappingChange?.({ categoryColumn: field.text });
-    }
-  }
-
   function handleSecondaryFieldSelect(fieldId: number) {
     secondaryFieldId = fieldId;
 
     if (fieldId === NONE_FIELD_ID) {
       onMappingChange?.({ secondaryLabelColumn: undefined });
       onSecondaryLabelsChange?.({ enabled: false, labelColumn: undefined });
-      showSecondaryFormat = false;
+      showStylePopover = false;
       return;
     }
 
     const field = secondaryFieldItems.find((item) => item.id === fieldId);
-    if (field) {
-      onMappingChange?.({ secondaryLabelColumn: field.text });
+    if (!field) {
+      return;
     }
+
+    onMappingChange?.({ secondaryLabelColumn: field.text });
+
+    const updates: Partial<TextSecondaryLabelsConfig> = {
+      enabled: true,
+      labelColumn: field.text
+    };
+
+    if (
+      (visualization?.style.labelOpacity ?? 0) <= 0 ||
+      visualization?.style.labelOpacity === undefined
+    ) {
+      updates.opacity = VISUALIZATION_DEFAULTS.labelOpacity / 100;
+    }
+
+    onSecondaryLabelsChange?.(updates);
   }
 
   function handleBackgroundValueFieldSelect(fieldId: number) {
@@ -462,17 +378,6 @@
     }
   }
 
-  function handleColorModeChange(index: number) {
-    const nextModes = [
-      ColorMode.NONE,
-      ColorMode.UNIQUE,
-      ColorMode.CLASSES,
-      ColorMode.CATEGORIES
-    ];
-    colorMode = nextModes[index] || ColorMode.UNIQUE;
-    onModesChange?.({ color: colorMode });
-  }
-
   function handleTextColorChange(value: string) {
     textColor = value;
     onStyleChange?.({ textColor: value });
@@ -498,14 +403,9 @@
     onStyleChange?.({ textSize: value });
   }
 
-  function handleAlignmentChange(index: number) {
-    const alignments: Array<'left' | 'center' | 'right'> = [
-      'left',
-      'center',
-      'right'
-    ];
-    alignment = alignments[index] || 'left';
-    onStyleChange?.({ textAlign: alignment });
+  function handleAlignmentChange(value: 'left' | 'center' | 'right') {
+    alignment = value;
+    onStyleChange?.({ textAlign: value });
   }
 
   function handleHaloToggle(value: boolean) {
@@ -533,41 +433,14 @@
     onStyleChange?.({ textDxpMasking: value });
   }
 
-  function handleSecondaryLabelsToggle(value: boolean) {
-    secondaryEnabled = value;
-    if (!value) {
-      showSecondaryFormat = false;
-      onSecondaryLabelsChange?.({ enabled: false });
-      return;
-    }
-
-    const updates: Partial<TextSecondaryLabelsConfig> = {
-      enabled: true
-    };
-
-    if (
-      (visualization?.style.labelOpacity ?? 0) <= 0 ||
-      visualization?.style.labelOpacity === undefined
-    ) {
-      updates.opacity = VISUALIZATION_DEFAULTS.labelOpacity / 100;
-    }
-
-    if (
-      !visualization?.mapping.secondaryLabelColumn &&
-      visualization?.mapping.valueColumn
-    ) {
-      updates.labelColumn = visualization.mapping.valueColumn;
-      onMappingChange?.({
-        secondaryLabelColumn: visualization.mapping.valueColumn
-      });
-    }
-
-    onSecondaryLabelsChange?.(updates);
-  }
-
   function handleSecondaryColorChange(value: string) {
     secondaryColor = value;
     onSecondaryLabelsChange?.({ color: value });
+  }
+
+  function handleSecondaryOpacityChange(value: number) {
+    secondaryOpacity = value;
+    onSecondaryLabelsChange?.({ opacity: value / 100 });
   }
 
   function handleSecondarySizeChange(value: number) {
@@ -575,14 +448,9 @@
     onSecondaryLabelsChange?.({ size: value });
   }
 
-  function handleSecondaryAlignmentChange(index: number) {
-    const alignments: Array<'left' | 'center' | 'right'> = [
-      'left',
-      'center',
-      'right'
-    ];
-    secondaryAlignment = alignments[index] || 'left';
-    onSecondaryLabelsChange?.({ align: secondaryAlignment });
+  function handleSecondaryAlignmentChange(value: 'left' | 'center' | 'right') {
+    secondaryAlignment = value;
+    onSecondaryLabelsChange?.({ align: value });
   }
 
   function handleSecondaryHaloToggle(value: boolean) {
@@ -665,11 +533,6 @@
     onMissingDataChange?.({ label: value });
   }
 
-  function openTextDiscretization() {
-    discretizationTarget = 'text';
-    discretizationModalOpen = true;
-  }
-
   function openBackgroundDiscretization() {
     discretizationTarget = 'background';
     discretizationModalOpen = true;
@@ -680,24 +543,31 @@
   ) {
     if (discretizationTarget === 'background') {
       onBackgroundClassificationChange?.(classification);
-      return;
     }
+  }
 
-    onClassificationChange?.(classification);
+  function toggleStylePopover(
+    section: StyleSection,
+    triggerRef: FormatTriggerRef
+  ) {
+    const isSameSectionOpen =
+      showStylePopover && activeStyleSection === section;
+
+    activeStyleSection = section;
+    stylePopoverTrigger = triggerRef ?? undefined;
+    showStylePopover = !isSameSectionOpen;
   }
 
   function togglePrimaryFormat() {
-    showPrimaryFormat = !showPrimaryFormat;
-    showSecondaryFormat = false;
+    toggleStylePopover('primary', primaryTriggerRef);
   }
 
   function toggleSecondaryFormat() {
-    if (!secondaryEnabled) {
+    if (!hasPrimaryField || !hasSecondaryField) {
       return;
     }
 
-    showSecondaryFormat = !showSecondaryFormat;
-    showPrimaryFormat = false;
+    toggleStylePopover('secondary', secondaryTriggerRef);
   }
 </script>
 
@@ -730,7 +600,7 @@
         <div class="field-row">
           <div class="field-row-dropdown field-picker">
             <Dropdown
-              titleText={m.text_according()}
+              labelText={m.text_according()}
               items={selectableDataFields}
               selectedId={selectedLabelFieldId}
               on:select={(event) =>
@@ -740,9 +610,10 @@
           </div>
 
           <Button
-            class={`format-trigger ${showPrimaryFormat ? 'format-trigger--active' : ''}`}
+            bind:ref={primaryTriggerRef}
+            class={`format-trigger ${showStylePopover && activeStyleSection === 'primary' ? 'format-trigger--active' : ''}`}
             kind="ghost"
-            aria-pressed={showPrimaryFormat}
+            aria-pressed={showStylePopover && activeStyleSection === 'primary'}
             iconDescription={m.text_format_button()}
             onclick={togglePrimaryFormat}
           >
@@ -750,275 +621,32 @@
           </Button>
         </div>
 
-        {#if showPrimaryFormat}
-          <div class="format-panel">
-            <SectionHeading title={m.appearance()} />
-
-            <div class="field-group">
-              <ToggleTabs
-                items={colorModeItems}
-                activeIndex={colorModeIndex}
-                onChange={handleColorModeChange}
-                hideInactiveLabel={true}
-              />
-            </div>
-
-            {#if colorMode === ColorMode.UNIQUE}
-              <SingleColorPreview
-                label={m.color()}
-                color={textColor}
-                onchange={handleTextColorChange}
-              />
-            {:else if colorMode === ColorMode.CLASSES}
-              <div class="field-group">
-                <Dropdown
-                  titleText={m.color_according()}
-                  items={selectableDataFields}
-                  selectedId={selectedTextValueFieldId}
-                  on:select={(event) =>
-                    handleTextValueFieldSelect(event.detail.selectedId)}
-                  type="default"
-                />
-              </div>
-              <DiscretizationRow
-                label={m.discretization()}
-                value={discretizationLabel}
-                onsettings={openTextDiscretization}
-              />
-              <PalettePreview
-                label={m.color_palette()}
-                colors={currentPalette}
-                selectedPaletteId={visualization?.classification?.paletteId}
-                inverted={visualization?.classification?.inverted ?? false}
-                paletteType={PALETTE_TYPE.SEQUENTIAL}
-                oninvert={onInvertPalette}
-                onClassificationChange={onClassificationChange}
-              />
-            {:else if colorMode === ColorMode.CATEGORIES}
-              <div class="field-group">
-                <Dropdown
-                  titleText={m.color_according()}
-                  items={selectableDataFields}
-                  selectedId={selectedTextCategoryFieldId}
-                  on:select={(event) =>
-                    handleTextCategoryFieldSelect(event.detail.selectedId)}
-                  type="default"
-                />
-              </div>
-              <DiscretizationRow
-                label={m.category_aspect()}
-                value={m.categories_count({
-                  count: visualization?.classification?.labels?.length ?? 0
-                })}
-                onsettings={openTextDiscretization}
-              />
-              <PalettePreview
-                label={m.color_palette()}
-                colors={categoriesPalette}
-                selectedPaletteId={visualization?.classification?.paletteId}
-                inverted={visualization?.classification?.inverted ?? false}
-                paletteType={PALETTE_TYPE.QUALITATIVE}
-                categoriesMode={true}
-                categoryLabels={visualization?.classification?.labels ?? []}
-                oninvert={onInvertPalette}
-                onClassificationChange={onClassificationChange}
-              />
-            {/if}
-
-            <SliderWithInput
-              label={m.opacity()}
-              min={SLIDER_LIMITS.textOpacity.min}
-              max={SLIDER_LIMITS.textOpacity.max}
-              value={textOpacity}
-              showMinMax
-              inputWidth="96px"
-              onchange={handleTextOpacityChange}
-            />
-
-            <SectionHeading title={m.text_style()} />
-
-            <div class="text-style-row">
-              <ToggleTabs
-                items={[{ icon: TextBold, label: '', iconSize: 16 }]}
-                activeIndex={bold ? 0 : -1}
-                onChange={() => handleBoldChange(!bold)}
-                hideInactiveLabel={true}
-              />
-              <ToggleTabs
-                items={[{ icon: TextItalic, label: '', iconSize: 16 }]}
-                activeIndex={italic ? 0 : -1}
-                onChange={() => handleItalicChange(!italic)}
-                hideInactiveLabel={true}
-              />
-            </div>
-
-            <div class="field-group">
-              <Select
-                labelText={m.font_size()}
-                selected={String(size)}
-                on:change={(event) =>
-                  handleSizeChange(
-                    Number((event.target as HTMLSelectElement).value)
-                  )}
-              >
-                {#each FONT_SIZES as fontSize (fontSize)}
-                  <SelectItem value={fontSize} text={`${fontSize} px`} />
-                {/each}
-              </Select>
-            </div>
-
-            <div class="field-group">
-              <span class="field-label">{m.alignment()}</span>
-              <ToggleTabs
-                items={alignmentItems}
-                activeIndex={alignmentIndex}
-                onChange={handleAlignmentChange}
-                hideInactiveLabel={true}
-              />
-            </div>
-
-            <ToggleWithLabel
-              label={m.halo()}
-              toggled={halo}
-              ontoggle={handleHaloToggle}
-            />
-
-            {#if halo}
-              <ColorSelector
-                label={m.halo_color()}
-                value={haloColor}
-                onchange={handleHaloColorChange}
-              />
-              <SliderWithInput
-                label={m.halo_width()}
-                min={SLIDER_LIMITS.haloWidth.min}
-                max={SLIDER_LIMITS.haloWidth.max}
-                value={haloWidth}
-                onchange={handleHaloWidthChange}
-              />
-            {/if}
-
-            <ToggleWithLabel
-              label={m.collision_detection()}
-              infoText={m.collision_detection_info()}
-              toggled={collisionDetection}
-              ontoggle={handleCollisionDetectionChange}
-            />
-
-            <ToggleWithLabel
-              label={m.dxp_masking()}
-              infoText={m.dxp_masking_info()}
-              toggled={dxpMasking}
-              ontoggle={handleDxpMaskingChange}
+        <div class="field-row">
+          <div class="field-row-dropdown field-picker">
+            <Dropdown
+              labelText={m.secondary_text()}
+              items={secondaryFieldItems}
+              selectedId={secondaryFieldId}
+              disabled={!hasPrimaryField}
+              on:select={(event) =>
+                handleSecondaryFieldSelect(event.detail.selectedId)}
+              type="default"
             />
           </div>
-        {/if}
 
-        <div class="field-toggle">
-          <ToggleWithLabel
-            label={m.show_secondary_values()}
-            toggled={secondaryEnabled}
-            ontoggle={handleSecondaryLabelsToggle}
-          />
+          <Button
+            bind:ref={secondaryTriggerRef}
+            class={`format-trigger ${showStylePopover && activeStyleSection === 'secondary' ? 'format-trigger--active' : ''}`}
+            kind="ghost"
+            aria-pressed={showStylePopover &&
+              activeStyleSection === 'secondary'}
+            iconDescription={m.text_format_button()}
+            disabled={!hasPrimaryField || !hasSecondaryField}
+            onclick={toggleSecondaryFormat}
+          >
+            Aa
+          </Button>
         </div>
-
-        {#if secondaryEnabled}
-          <div class="field-row">
-            <div class="field-row-dropdown field-picker">
-              <Dropdown
-                titleText={m.secondary_text()}
-                items={secondaryFieldItems}
-                selectedId={secondaryFieldId}
-                on:select={(event) =>
-                  handleSecondaryFieldSelect(event.detail.selectedId)}
-                type="default"
-              />
-            </div>
-
-            <Button
-              class={`format-trigger ${showSecondaryFormat ? 'format-trigger--active' : ''}`}
-              kind="ghost"
-              aria-pressed={showSecondaryFormat}
-              iconDescription={m.text_format_button()}
-              disabled={!hasSecondaryField}
-              onclick={toggleSecondaryFormat}
-            >
-              Aa
-            </Button>
-          </div>
-
-          {#if showSecondaryFormat && hasSecondaryField}
-            <div class="format-panel">
-              <SectionHeading title={m.appearance()} />
-
-              <ColorSelector
-                label={m.color()}
-                value={secondaryColor}
-                onchange={handleSecondaryColorChange}
-              />
-
-              <div class="field-group">
-                <Select
-                  labelText={m.font_size()}
-                  selected={String(secondarySize)}
-                  on:change={(event) =>
-                    handleSecondarySizeChange(
-                      Number((event.target as HTMLSelectElement).value)
-                    )}
-                >
-                  {#each FONT_SIZES as fontSize (fontSize)}
-                    <SelectItem value={fontSize} text={`${fontSize} px`} />
-                  {/each}
-                </Select>
-              </div>
-
-              <div class="field-group">
-                <span class="field-label">{m.alignment()}</span>
-                <ToggleTabs
-                  items={alignmentItems}
-                  activeIndex={secondaryAlignmentIndex}
-                  onChange={handleSecondaryAlignmentChange}
-                  hideInactiveLabel={true}
-                />
-              </div>
-
-              <ToggleWithLabel
-                label={m.halo()}
-                toggled={secondaryHalo}
-                ontoggle={handleSecondaryHaloToggle}
-              />
-
-              {#if secondaryHalo}
-                <ColorSelector
-                  label={m.halo_color()}
-                  value={secondaryHaloColor}
-                  onchange={handleSecondaryHaloColorChange}
-                />
-                <SliderWithInput
-                  label={m.halo_width()}
-                  min={SLIDER_LIMITS.haloWidth.min}
-                  max={SLIDER_LIMITS.haloWidth.max}
-                  value={secondaryHaloWidth}
-                  onchange={handleSecondaryHaloWidthChange}
-                />
-              {/if}
-
-              <ToggleWithLabel
-                label={m.collision_detection()}
-                infoText={m.collision_detection_info()}
-                toggled={secondaryCollisionDetection}
-                ontoggle={handleSecondaryCollisionChange}
-              />
-
-              <ToggleWithLabel
-                label={m.dxp_masking()}
-                infoText={m.dxp_masking_info()}
-                toggled={secondaryDxpMasking}
-                ontoggle={handleSecondaryDxpMaskingChange}
-              />
-            </div>
-          {/if}
-        {/if}
       </div>
 
       <div class="missing-data-block">
@@ -1194,6 +822,58 @@
     visualization={activeDiscretizationVisualization}
     onchange={handleDiscretizationChange}
   />
+
+  <TextStylePopover
+    bind:open={showStylePopover}
+    triggerElement={stylePopoverTrigger}
+    visibleSection={activeStyleSection}
+    primary={{
+      color: textColor,
+      opacity: textOpacity,
+      bold,
+      italic,
+      size,
+      align: alignment,
+      halo,
+      haloColor,
+      haloWidth,
+      collisionDetection,
+      dxpMasking,
+      onColorChange: handleTextColorChange,
+      onOpacityChange: handleTextOpacityChange,
+      onBoldChange: handleBoldChange,
+      onItalicChange: handleItalicChange,
+      onSizeChange: handleSizeChange,
+      onAlignmentChange: handleAlignmentChange,
+      onHaloChange: handleHaloToggle,
+      onHaloColorChange: handleHaloColorChange,
+      onHaloWidthChange: handleHaloWidthChange,
+      onCollisionDetectionChange: handleCollisionDetectionChange,
+      onDxpMaskingChange: handleDxpMaskingChange
+    }}
+    secondary={hasSecondaryField
+      ? {
+          color: secondaryColor,
+          opacity: secondaryOpacity,
+          size: secondarySize,
+          align: secondaryAlignment,
+          halo: secondaryHalo,
+          haloColor: secondaryHaloColor,
+          haloWidth: secondaryHaloWidth,
+          collisionDetection: secondaryCollisionDetection,
+          dxpMasking: secondaryDxpMasking,
+          onColorChange: handleSecondaryColorChange,
+          onOpacityChange: handleSecondaryOpacityChange,
+          onSizeChange: handleSecondarySizeChange,
+          onAlignmentChange: handleSecondaryAlignmentChange,
+          onHaloChange: handleSecondaryHaloToggle,
+          onHaloColorChange: handleSecondaryHaloColorChange,
+          onHaloWidthChange: handleSecondaryHaloWidthChange,
+          onCollisionDetectionChange: handleSecondaryCollisionChange,
+          onDxpMaskingChange: handleSecondaryDxpMaskingChange
+        }
+      : undefined}
+  />
 </div>
 
 <style lang="scss">
@@ -1237,50 +917,38 @@
     font-weight: 400;
   }
 
-  .field-toggle {
-    margin-top: var(--cds-spacing-02);
-  }
-
-  :global(.format-trigger) {
-    width: 64px;
-    height: 64px;
-    border: 1px solid var(--cds-border-subtle-01, #c6c6c6);
-    background: var(--cds-layer-01, #ffffff);
-    color: var(--cds-text-secondary, #6f6f6f);
-    font-size: 1.25rem;
-    line-height: 1;
+  :global(.format-trigger.bx--btn) {
+    width: 40px !important;
+    height: 40px !important;
+    min-height: 40px !important;
+    max-height: 40px !important;
+    padding: 0 !important;
+    border: 1px solid var(--cds-border-subtle-01, #c6c6c6) !important;
+    background: var(--cds-layer-01, #ffffff) !important;
+    color: var(--cds-text-secondary, #6f6f6f) !important;
+    font-size: 0.875rem !important;
+    font-weight: 600 !important;
+    line-height: 1 !important;
     cursor: pointer;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
     transition:
       border-color 0.15s ease,
       color 0.15s ease,
       background-color 0.15s ease;
   }
 
-  :global(.format-trigger:hover:not(:disabled)),
-  :global(.format-trigger.format-trigger--active) {
-    border-color: var(--cds-border-interactive, #0f62fe);
-    color: var(--cds-text-primary, #161616);
-    background: var(--cds-layer-hover-01, #e8e8e8);
+  :global(.format-trigger.bx--btn:hover:not(:disabled)),
+  :global(.format-trigger.format-trigger--active.bx--btn) {
+    border-color: var(--cds-text-primary, #161616) !important;
+    color: var(--cds-text-primary, #161616) !important;
+    background: var(--cds-layer-hover-01, #e8e8e8) !important;
   }
 
   :global(.format-trigger:disabled) {
     opacity: 0.4;
     cursor: not-allowed;
-  }
-
-  .format-panel {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-04);
-    padding: var(--cds-spacing-04);
-    border: 1px solid var(--cds-border-subtle-01, #c6c6c6);
-    background: var(--cds-layer-01, #ffffff);
-  }
-
-  .text-style-row {
-    display: flex;
-    gap: var(--cds-spacing-03);
-    align-items: center;
   }
 
   .missing-data-block {
@@ -1339,15 +1007,6 @@
   }
 
   @media (max-width: 560px) {
-    .field-row {
-      grid-template-columns: 1fr;
-    }
-
-    :global(.format-trigger) {
-      width: 100%;
-      height: 48px;
-    }
-
     .missing-data-fields {
       grid-template-columns: 1fr;
     }
