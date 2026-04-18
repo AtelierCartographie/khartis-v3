@@ -239,29 +239,27 @@ const { actions, getState } = createToolStore<
       suggestion: ProjectionSuggestion,
       overrideSource: ProjectionState['overrideSource']
     ) {
-      // For proj4-based suggestions, use customCode path
-      if (suggestion.proj4String) {
-        const projection = buildProjectionFromSuggestion(suggestion);
-        if (projection) {
-          s.customCode = suggestion.proj4String;
-          s.selected = 'mercator'; // proj4 projections render in orthographic/mercator view
-          s.overrideActive = true;
-          s.overrideSource = overrideSource;
-          mapProjectionStore.setProjection(MERCATOR_PROJECTION_TYPE);
-          logger.info(
-            'Applied projection suggestion via proj4',
-            LogCategory.MAP,
-            {
-              id: suggestion.id,
-              epsg: suggestion.epsg
-            }
-          );
-          return;
-        }
+      const builtProjection = buildProjectionFromSuggestion(suggestion);
+
+      if (builtProjection?.source === 'proj4' && suggestion.proj4String) {
+        s.customCode = suggestion.proj4String;
+        s.selected = 'mercator'; // proj4 projections render in orthographic/mercator view
+        s.overrideActive = true;
+        s.overrideSource = overrideSource;
+        mapProjectionStore.setProjection(MERCATOR_PROJECTION_TYPE);
+        logger.info(
+          'Applied projection suggestion via proj4',
+          LogCategory.MAP,
+          {
+            id: suggestion.id,
+            epsg: suggestion.epsg
+          }
+        );
+        return;
       }
 
-      // For d3-only suggestions, try to map to an existing internal projection
-      if (suggestion.d3Config) {
+      // Suggestions that fell back to d3 must stay on the preset-projection path.
+      if (builtProjection?.source === 'd3' && suggestion.d3Config) {
         const internalId = mapD3FactoryToInternalId(
           suggestion.d3Config.projection
         );

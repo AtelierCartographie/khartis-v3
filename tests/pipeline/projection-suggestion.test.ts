@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { suggestProjectionsForBbox } from '$lib/features/step-toolbar/tools/projections/projection-suggest.service';
+import {
+  buildProjectionFromSuggestion,
+  suggestProjectionsForBbox,
+  type ProjectionSuggestion
+} from '$lib/features/step-toolbar/tools/projections/projection-suggest.service';
 
 describe('[S04] suggestProjectionsForBbox — world extent', () => {
   it('returns generic world-appropriate projections for the full globe', () => {
@@ -112,5 +116,25 @@ describe('[S04] suggestProjectionsForBbox — Europe vs France disambiguation', 
     // are proposed instead.
     expect(result?.national ?? []).toEqual([]);
     expect(result?.generic.length).toBeGreaterThan(0);
+  });
+});
+
+describe('[S06] buildProjectionFromSuggestion — proj4 fallback contract', () => {
+  it('reports d3 when proj4 fails but d3 fallback succeeds', () => {
+    const suggestion: ProjectionSuggestion = {
+      id: 'transverse_cylindrical_equal_area',
+      name: 'Transverse Cylindrical Equal Area',
+      type: 'generic',
+      proj4String:
+        '+proj=tcea +lon_0=48.69 +ellps=WGS84 +datum=WGS84 +units=m +no_defs',
+      d3Config: {
+        projection: 'geoCylindricalEqualArea'
+      }
+    };
+
+    const result = buildProjectionFromSuggestion(suggestion);
+
+    expect(result).not.toBeNull();
+    expect(result?.source).toBe('d3');
   });
 });

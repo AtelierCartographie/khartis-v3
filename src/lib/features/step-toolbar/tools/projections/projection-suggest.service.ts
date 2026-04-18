@@ -25,6 +25,11 @@ export interface ProjectionSuggestion {
   shape?: string;
 }
 
+export interface BuiltProjectionSuggestion {
+  projection: GeoProjection;
+  source: 'proj4' | 'd3';
+}
+
 const D3_FACTORY_MAP: Record<string, (() => GeoProjection) | undefined> = {
   geoMercator: d3geo.geoMercator,
   geoEquirectangular: d3geo.geoEquirectangular,
@@ -127,11 +132,14 @@ export function suggestProjectionsForBbox(
 
 export function buildProjectionFromSuggestion(
   suggestion: ProjectionSuggestion
-): GeoProjection | null {
+): BuiltProjectionSuggestion | null {
   // Prefer proj4 string when available (more precise for national projections)
   if (suggestion.proj4String) {
     try {
-      return proj4d3(suggestion.proj4String);
+      return {
+        projection: proj4d3(suggestion.proj4String),
+        source: 'proj4'
+      };
     } catch (err) {
       logger.warn(
         'Failed to build projection from proj4 string, falling back to d3',
@@ -143,7 +151,13 @@ export function buildProjectionFromSuggestion(
 
   // Fallback to d3 config
   if (suggestion.d3Config) {
-    return buildD3Projection(suggestion.d3Config);
+    const projection = buildD3Projection(suggestion.d3Config);
+    if (projection) {
+      return {
+        projection,
+        source: 'd3'
+      };
+    }
   }
 
   return null;
