@@ -170,7 +170,6 @@
       missingDataSize = visualization.missingData.size ?? 2;
       missingDataColor =
         visualization.missingData.color ?? DEFAULT_COLORS.missingData;
-      fillPattern = visualization.missingData.pattern ?? false;
     }
     if (visualization?.modes) {
       fillMode = visualization.modes.fill ?? FillMode.UNIQUE;

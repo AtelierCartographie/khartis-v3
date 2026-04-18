@@ -116,7 +116,6 @@
       showMissingData = visualization.missingData.show ?? true;
       missingDataColor =
         visualization.missingData.color ?? DEFAULT_COLORS.missingData;
-      fillPattern = visualization.missingData.pattern ?? false;
     }
     if (visualization?.classification) {
       categoryCount =

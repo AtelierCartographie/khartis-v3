@@ -215,10 +215,6 @@
       showMissingData = visualization.missingData.show ?? true;
       missingDataColor =
         visualization.missingData.color ?? DEFAULT_COLORS.missingData;
-      missingDataOpacity =
-        visualization.missingData.opacity !== undefined
-          ? Math.round(visualization.missingData.opacity * 100)
-          : VISUALIZATION_DEFAULTS.lineOpacity;
       missingDataShape =
         visualization.missingData.shape ?? MissingDataShape.CIRCLE;
     }
