@@ -47,7 +47,6 @@ export enum DeckLayerId {
   POINT_LAYER = 'point-layer',
   LINE_LAYER = 'line-layer',
   POLYGON_LAYER = 'polygon-layer',
-  LABEL_LAYER = 'label-layer',
   TEXT_LAYER = 'text-layer',
   GEOJSON_LAYER = 'geojson-layer',
   WORLD_BASE_LAYER = 'world-base-layer',

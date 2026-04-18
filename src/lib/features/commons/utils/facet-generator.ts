@@ -5,6 +5,26 @@ import {
   SCALE_MODE,
   type ScaleMode
 } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
+import {
+  SymbolMode,
+  ThicknessMode
+} from '$lib/features/main-toolbar/constants';
+
+function resolveFacetMapping(
+  baseViz: VisualizationConfig,
+  variable: string
+): VisualizationConfig['mapping'] {
+  const isProportionalSymbol =
+    baseViz.modes?.symbol === SymbolMode.PROPORTIONAL;
+  const isProportionalThickness =
+    baseViz.modes?.thickness === ThicknessMode.PROPORTIONAL;
+
+  if (isProportionalSymbol || isProportionalThickness) {
+    return { ...baseViz.mapping, sizeColumn: variable };
+  }
+
+  return { ...baseViz.mapping, valueColumn: variable };
+}
 
 function buildEqualIntervalBreaks(
   min: number,
@@ -97,10 +117,7 @@ export async function generateFacetVisualizations(
       facet: {
         baseVisualizationId: baseViz.id
       },
-      mapping: {
-        ...baseViz.mapping,
-        valueColumn: variable
-      },
+      mapping: resolveFacetMapping(baseViz, variable),
       classification: buildFacetClassification(baseViz, variable, scaleMode)
     };
 

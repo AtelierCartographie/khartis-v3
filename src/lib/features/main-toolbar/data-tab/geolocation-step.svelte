@@ -551,12 +551,14 @@
           <ComboBox
             items={dataFieldItems()}
             selectedId={geoFieldId()}
-            on:select={(e) =>
+            on:select={(e) => {
+              if (!e.detail.selectedItem) return;
               dataTabActions.setGeolocationState({
                 linkedVariable: e.detail.selectedId,
                 linkedVariableName:
                   (e.detail.selectedItem as GeoComboBoxItem)?.columnName || ''
-              })}
+              });
+            }}
             placeholder={m.geo_select_variable()}
           />
           {#if dataTabState.geolocation.linkedVariableName}
@@ -582,6 +584,7 @@
               : dataFieldItems()}
             selectedId={longitudeFieldId}
             on:select={(e) => {
+              if (!e.detail.selectedItem) return;
               longitudeFieldId = e.detail.selectedId;
               dataTabActions.setGeolocationState({
                 longitudeColumn: (e.detail.selectedItem as GeoComboBoxItem)
@@ -614,6 +617,7 @@
               : dataFieldItems()}
             selectedId={latitudeFieldId}
             on:select={(e) => {
+              if (!e.detail.selectedItem) return;
               latitudeFieldId = e.detail.selectedId;
               dataTabActions.setGeolocationState({
                 latitudeColumn: (e.detail.selectedItem as GeoComboBoxItem)

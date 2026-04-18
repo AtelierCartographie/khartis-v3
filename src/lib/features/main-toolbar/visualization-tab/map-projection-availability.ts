@@ -48,7 +48,10 @@ export function resolveProjectionForBasemapZone(
   zone: BasemapZone | null,
   referenceBasemapId?: string | null
 ): MapProjectionTypeValue {
-  return isGlobeProjectionDisabled(zone, referenceBasemapId)
+  if (!isGlobeProjectionDisabled(zone, referenceBasemapId)) {
+    return projection;
+  }
+  return projection === MAP_PROJECTION_TYPE.GLOBE
     ? MAP_PROJECTION_TYPE.MERCATOR
     : projection;
 }

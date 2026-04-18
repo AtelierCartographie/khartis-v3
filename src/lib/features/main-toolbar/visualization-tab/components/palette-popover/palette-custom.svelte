@@ -139,7 +139,9 @@
   }
 
   function handleContrastChange(value: string) {
-    contrastMode = value as 'low' | 'normal' | 'high';
+    const next = value as 'low' | 'normal' | 'high';
+    if (next === contrastMode) return;
+    contrastMode = next;
     onContrastChange?.(resolvedContrast);
 
     // Re-emit current colors with new contrast

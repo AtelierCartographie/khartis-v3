@@ -82,6 +82,7 @@
   }
 
   function handleCategoryShapeModeChange(next: CategoryShapeMode) {
+    if (next === categoryShapeMode) return;
     categoryShapeMode = next;
     onModesChange?.({ categoryShape: next });
   }

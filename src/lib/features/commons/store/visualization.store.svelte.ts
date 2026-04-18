@@ -98,8 +98,6 @@ export interface MissingDataConfig {
   shape: MissingDataShape;
   size: number;
   color: string;
-  opacity?: number;
-  pattern?: boolean;
   label?: string;
 }
 
@@ -215,21 +213,15 @@ export interface VisualizationConfig {
     textHaloWidth?: number;
     textCollisionDetection?: boolean;
     textDxpMasking?: boolean;
-    labelColor?: string | string[];
-    labelOpacity?: number;
-    labelSize?: number;
-    labelAlign?: 'left' | 'center' | 'right';
-    labelHalo?: boolean;
-    labelHaloColor?: string;
-    labelHaloWidth?: number;
-    labelCollisionDetection?: boolean;
-    labelDxpMasking?: boolean;
   };
   mapping: {
     valueColumn?: string;
     categoryColumn?: string;
     sizeColumn?: string;
     colorColumn?: string;
+    strokeValueColumn?: string;
+    strokeCategoryColumn?: string;
+    strokeSizeColumn?: string;
     geometryColumn?: string;
     labelColumn?: string;
     secondaryLabelColumn?: string;
@@ -364,7 +356,6 @@ const DEFAULT_SYMBOL_SIZE = VISUALIZATION_DEFAULTS.symbolSize;
 const DEFAULT_SYMBOL_MIN_SIZE = 5;
 const DEFAULT_SYMBOL_MAX_SIZE = VISUALIZATION_DEFAULTS.symbolMaxSize;
 const DEFAULT_SYMBOL_OPACITY = VISUALIZATION_DEFAULTS.symbolOpacity / 100;
-const DEFAULT_LABEL_OPACITY = 0;
 const DEFAULT_TEXT_OPACITY = 0;
 
 const DEFAULT_MISSING_DATA_COLOR = '#c6c6c6';
@@ -419,9 +410,6 @@ function getDefaultStyle(
   type: VisualizationType
 ): VisualizationConfig['style'] {
   const textOverlayDefaults: VisualizationConfig['style'] = {
-    labelColor: DEFAULT_COLORS.label,
-    labelOpacity: DEFAULT_LABEL_OPACITY,
-    labelCollisionDetection: true,
     textColor: DEFAULT_COLORS.text,
     textOpacity: DEFAULT_TEXT_OPACITY,
     textCollisionDetection: true
@@ -724,34 +712,6 @@ function sanitizeDataFilters(
   );
 }
 
-function normalizeLegacyLabelStyle(
-  visualization: VisualizationConfig
-): VisualizationConfig['style'] {
-  const style = { ...visualization.style };
-  const labelOpacity = style.labelOpacity ?? 0;
-  const textOpacity = style.textOpacity ?? 0;
-  const hasLegacyLabelLayer =
-    labelOpacity > 0 && Boolean(visualization.mapping.labelColumn);
-  const hasActiveTextLayer = textOpacity > 0;
-
-  if (hasLegacyLabelLayer && !hasActiveTextLayer) {
-    style.textOpacity = labelOpacity;
-    style.textColor = style.labelColor ?? style.textColor;
-    style.textSize = style.labelSize ?? style.textSize;
-    style.textAlign = style.labelAlign ?? style.textAlign;
-    style.textHalo = style.labelHalo ?? style.textHalo;
-    style.textHaloColor = style.labelHaloColor ?? style.textHaloColor;
-    style.textHaloWidth = style.labelHaloWidth ?? style.textHaloWidth;
-    style.textCollisionDetection =
-      style.labelCollisionDetection ?? style.textCollisionDetection;
-    style.textDxpMasking = style.labelDxpMasking ?? style.textDxpMasking;
-  }
-
-  style.labelOpacity = 0;
-
-  return style;
-}
-
 function normalizeVisualizationConfig(
   visualization: VisualizationConfig,
   dataset: ProcessedDataset | DatasetResult
@@ -778,7 +738,6 @@ function normalizeVisualizationConfig(
 
   return {
     ...visualization,
-    style: normalizeLegacyLabelStyle(visualization),
     symbols: normalizedSymbols,
     primitiveFilters: sanitizePrimitiveFilters(
       visualization.primitiveFilters,
@@ -812,71 +771,6 @@ function getDefaultPrimitiveFilters(
   return resolveDefaultPrimitiveFilters(type, dataset);
 }
 
-const ORIGIN_TRACKED_UPDATE_KEYS = [
-  'modes',
-  'primitiveFilters',
-  'style',
-  'mapping',
-  'classification',
-  'symbols',
-  'missingData',
-  'yearFilter',
-  'dataFilters'
-] as const;
-
-const DERIVED_CLASSIFICATION_UPDATE_KEYS = new Set<keyof ClassificationConfig>([
-  'breaks',
-  'counts',
-  'colors',
-  'labels'
-]);
-
-function isDerivedClassificationUpdate(
-  currentClassification: VisualizationConfig['classification'],
-  classification: Partial<ClassificationConfig> | undefined
-): boolean {
-  if (!classification) {
-    return false;
-  }
-
-  const updateKeys = (
-    Object.keys(classification) as Array<keyof ClassificationConfig>
-  ).filter((key) => {
-    const currentValue = currentClassification?.[key];
-    const nextValue = classification[key];
-
-    return JSON.stringify(currentValue ?? null) !== JSON.stringify(nextValue);
-  });
-
-  return (
-    updateKeys.length > 0 &&
-    updateKeys.every((key) => DERIVED_CLASSIFICATION_UPDATE_KEYS.has(key))
-  );
-}
-
-function touchesVisualizationSemantics(
-  visualization: VisualizationConfig,
-  updates: Partial<VisualizationConfig>
-): boolean {
-  return ORIGIN_TRACKED_UPDATE_KEYS.some((key) => {
-    if (!Object.prototype.hasOwnProperty.call(updates, key)) {
-      return false;
-    }
-
-    if (
-      key === 'classification' &&
-      isDerivedClassificationUpdate(
-        visualization.classification,
-        updates.classification
-      )
-    ) {
-      return false;
-    }
-
-    return true;
-  });
-}
-
 function resolveNextVisualizationOrigin(
   visualization: VisualizationConfig,
   updates: Partial<VisualizationConfig>
@@ -884,25 +778,11 @@ function resolveNextVisualizationOrigin(
   if (Object.prototype.hasOwnProperty.call(updates, 'origin')) {
     return updates.origin;
   }
-
-  const currentMode = getVisualizationOriginMode(visualization);
-  if (
-    currentMode !== 'auto-suggestion' &&
-    currentMode !== 'manual-suggestion'
-  ) {
-    return visualization.origin;
-  }
-
-  if (!touchesVisualizationSemantics(visualization, updates)) {
-    return visualization.origin;
-  }
-
-  return {
-    mode: 'custom',
-    ...(visualization.origin?.restoreState
-      ? { restoreState: deepClone(visualization.origin.restoreState) }
-      : {})
-  };
+  // Manual parameter changes preserve the suggestion origin — the badge stays
+  // lit until the user explicitly deselects via the suggestion card. Origin is
+  // only cleared through `restoreVisualizationFromSuggestion` or by passing a
+  // new `origin` in the updates payload.
+  return visualization.origin;
 }
 
 function buildVisualizationPreset(
@@ -933,8 +813,7 @@ function getDefaultMissingData(): MissingDataConfig {
     show: true,
     shape: MissingDataShape.CIRCLE,
     size: 2,
-    color: DEFAULT_MISSING_DATA_COLOR,
-    pattern: false
+    color: DEFAULT_MISSING_DATA_COLOR
   };
 }
 

@@ -18,24 +18,17 @@
   } from '$lib/features/commons/store/visualization.store.svelte';
   import {
     applyPaletteInversion,
-    calculateBreaks,
     generateColorsForBreaks
   } from '$lib/features/commons/services/classification.service';
   import {
     findPaletteById,
-    generatePaletteColors,
-    PALETTE_TYPE
+    generatePaletteColors
   } from './components/palette-popover/palette.constants';
   import { getColorBlindnessState } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
   import {
     getLegendState,
     legendActions
   } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
-  import {
-    normalizeClassificationMethod,
-    resolveComputedClassCount,
-    resolveRequestedClassCount
-  } from './components/discretization.utils';
   import {
     ColorMode,
     DEFAULT_COLORS,
@@ -57,10 +50,12 @@
   import PolygonsConfig from './components/polygons-config.svelte';
   import SymbolsConfig from './components/symbols-config.svelte';
   import TextsConfig from './components/texts-config.svelte';
+  import { useComputeBreaks } from './use-compute-breaks.svelte';
 
   let selectedViz = $derived(visualizationStore.selectedVisualization);
-  let lastComputedKey = '';
-  let computeRequestCounter = 0;
+  const { compute: computeBreaksForVisualization } = useComputeBreaks(
+    () => selectedViz
+  );
 
   function usesCategoricalClassification(
     visualization: VisualizationConfig | undefined
@@ -456,155 +451,6 @@
         labelOpacity: 0
       }
     });
-  }
-
-  async function computeBreaksForVisualization(
-    trigger = 'unknown',
-    retryKey = ''
-  ) {
-    if (!selectedViz?.datasetId || !selectedViz?.mapping.valueColumn) {
-      return;
-    }
-
-    const method = selectedViz.classification?.method;
-    const numClasses = selectedViz.classification?.numClasses ?? 5;
-
-    if (!method) {
-      return;
-    }
-
-    const normalizedMethod = normalizeClassificationMethod(method);
-    const requestedClassCount = resolveRequestedClassCount(
-      normalizedMethod,
-      numClasses
-    );
-    const computeKey = `${selectedViz.id}-${selectedViz.mapping.valueColumn}-${normalizedMethod}-${requestedClassCount}-${retryKey}`;
-    if (computeKey === lastComputedKey) {
-      return;
-    }
-    lastComputedKey = computeKey;
-    computeRequestCounter += 1;
-    const requestId = computeRequestCounter;
-
-    const dataset = datasetsStore.datasets.find(
-      (d) => d.id === selectedViz.datasetId
-    );
-    if (!dataset?.sourceFileId) {
-      logger.warn(
-        '[configure-visualization] skipped breaks computation (missing sourceFileId)',
-        LogCategory.UI,
-        {
-          trigger,
-          requestId,
-          datasetId: selectedViz.datasetId
-        }
-      );
-      return;
-    }
-
-    logger.debug('[configure-visualization] computing breaks', LogCategory.UI, {
-      trigger,
-      requestId,
-      selectedVisualizationId: selectedViz.id,
-      sourceFileId: dataset.sourceFileId,
-      valueColumn: selectedViz.mapping.valueColumn,
-      method: normalizedMethod,
-      numClasses: requestedClassCount
-    });
-
-    try {
-      const result = await calculateBreaks({
-        datasetId: dataset.sourceFileId,
-        columnName: selectedViz.mapping.valueColumn,
-        method: normalizedMethod,
-        numClasses: requestedClassCount
-      });
-
-      if (requestId !== computeRequestCounter) return;
-
-      if (result && selectedViz?.id) {
-        const actualNumClasses = resolveComputedClassCount(
-          normalizedMethod,
-          requestedClassCount,
-          result.counts.length
-        );
-        const existingColors = selectedViz.classification?.colors;
-        const contrast = getColorBlindnessState().enabled
-          ? ('high' as const)
-          : undefined;
-        let colors: string[];
-        if (existingColors && existingColors.length === actualNumClasses) {
-          colors = existingColors;
-        } else {
-          // Regenerate from user's palette when available (skip pattern palettes — they
-          // define a texture overlay, not a color scale), otherwise default blue
-          const userPalette = selectedViz.classification?.paletteId
-            ? findPaletteById(selectedViz.classification.paletteId)
-            : undefined;
-          const isPatternPalette = userPalette?.type === PALETTE_TYPE.PATTERN;
-          colors =
-            userPalette && !isPatternPalette
-              ? generatePaletteColors(userPalette, actualNumClasses, contrast)
-              : generateColorsForBreaks(
-                  actualNumClasses,
-                  'sequential',
-                  contrast
-                );
-          colors = applyPaletteInversion(
-            colors,
-            selectedViz.classification?.inverted ?? false
-          );
-        }
-        const classificationUpdate: Parameters<
-          typeof visualizationStore.updateClassification
-        >[1] = {
-          breaks: result.breaks,
-          counts: result.counts,
-          colors
-        };
-        if (
-          normalizedMethod !== method ||
-          actualNumClasses !== numClasses ||
-          selectedViz.classification?.classes !== actualNumClasses
-        ) {
-          classificationUpdate.method = normalizedMethod;
-          classificationUpdate.classes = actualNumClasses;
-          classificationUpdate.numClasses = actualNumClasses;
-        }
-        visualizationStore.updateClassification(
-          selectedViz.id,
-          classificationUpdate
-        );
-        logger.debug(
-          '[configure-visualization] breaks computed and applied',
-          LogCategory.UI,
-          {
-            requestId,
-            selectedVisualizationId: selectedViz.id,
-            breaksCount: result.breaks.length
-          }
-        );
-      } else {
-        logger.warn(
-          '[configure-visualization] breaks computation returned empty result, will retry',
-          LogCategory.UI,
-          {
-            requestId,
-            selectedVisualizationId: selectedViz?.id
-          }
-        );
-      }
-    } catch (error) {
-      logger.error(
-        '[configure-visualization] breaks computation crashed',
-        LogCategory.UI,
-        {
-          requestId,
-          trigger,
-          error
-        }
-      );
-    }
   }
 
   $effect(() => {

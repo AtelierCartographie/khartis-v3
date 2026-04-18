@@ -29,8 +29,6 @@ const DEFAULT_STATE: ProjectionState = {
   longitude: 0,
   latitude: 0,
   rotation: 0,
-  scale: 1,
-  autoFit: true,
   simplifiedPreview: true
 };
 
@@ -40,7 +38,6 @@ type ProjectionActions = {
   setViewMode: (mode: ViewMode) => void;
   setCenter: (longitude: number, latitude: number) => void;
   setRotation: (rotation: number) => void;
-  setScale: (scale: number) => void;
   setSimplifiedPreview: (value: boolean) => void;
   suggestProjectionForCurrentData: () => void;
   applySuggestion: (suggestion: ProjectionSuggestion) => void;
@@ -198,9 +195,6 @@ const { actions, getState } = createToolStore<
         if (map) {
           map.setBearing(rotation);
         }
-      },
-      setScale: (scale: number) => {
-        s.scale = Math.max(0.1, Math.min(10, scale));
       },
       setSimplifiedPreview: (value: boolean) => {
         s.simplifiedPreview = value;

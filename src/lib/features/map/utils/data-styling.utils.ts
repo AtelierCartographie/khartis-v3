@@ -195,11 +195,17 @@ export function hasCompleteCategoricalColorMap(
 export function shouldApplyChoropleth(viz: VisualizationConfig): boolean {
   return (
     viz.modes?.fill === FillMode.CLASSES &&
-    !!viz.mapping.valueColumn &&
+    !!(viz.mapping.colorColumn ?? viz.mapping.valueColumn) &&
     !!viz.classification?.breaks &&
     !!viz.classification?.colors &&
     viz.classification.breaks.length >= 2
   );
+}
+
+export function resolveChoroplethColorColumn(
+  viz: VisualizationConfig
+): string | undefined {
+  return viz.mapping.colorColumn ?? viz.mapping.valueColumn;
 }
 
 export function shouldApplyProportionalSymbols(

@@ -721,7 +721,6 @@
                 {:else}
                   <span
                     class="legend-color-swatch"
-                    class:patterned={Boolean(viz.missingData.pattern)}
                     style={getMissingDataAreaSwatchStyle(
                       viz,
                       viz.missingData.color

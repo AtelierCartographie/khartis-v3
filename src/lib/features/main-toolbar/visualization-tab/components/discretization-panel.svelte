@@ -243,7 +243,7 @@
           max={dataMax}
           value={breakpointSliderValue}
           hideTextInput
-          on:change={(e) => {
+          on:input={(e) => {
             breakpointValue = e.detail;
             onbreakpointchange?.(e.detail);
           }}

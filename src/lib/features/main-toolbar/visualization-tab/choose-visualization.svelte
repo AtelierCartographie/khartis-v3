@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import Button from '$lib/features/commons/components/carbon/button.svelte';
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
@@ -175,23 +176,9 @@
     );
   }
 
-  function getCurrentTargetVisualization() {
-    const dataset = selectedDataset;
-    if (!dataset) {
-      return undefined;
-    }
-
-    const currentSelection = visualizationStore.selectedVisualization;
-    if (currentSelection?.datasetId === dataset.id) {
-      return currentSelection;
-    }
-
-    return visualizationStore.getVisualizationsByDataset(dataset.id)[0];
-  }
-
   function handleSelectSuggestion(suggestion: VizSuggestion) {
     const dataset = selectedDataset;
-    const targetViz = getCurrentTargetVisualization();
+    const targetViz = targetVisualization;
     if (!dataset || !targetViz) return;
 
     const action = resolveSuggestionCardAction(
@@ -232,7 +219,7 @@
     const dataset = selectedDataset;
     if (!dataset) return;
 
-    const targetViz = getCurrentTargetVisualization();
+    const targetViz = targetVisualization;
     if (targetViz) {
       applyBlankVisualizationPreset(targetViz.id, dataset, {
         mode: 'manual-blank'
@@ -410,15 +397,15 @@
 
   $effect(() => {
     const datasetId = selectedDatasetId;
-    if (!datasetId || datasetsStore.selectedDatasetId === datasetId) {
-      return;
-    }
+    if (!datasetId) return;
 
-    if (!datasetsStore.datasets.some((dataset) => dataset.id === datasetId)) {
-      return;
-    }
-
-    datasetsStore.selectDataset(datasetId);
+    untrack(() => {
+      if (datasetsStore.selectedDatasetId === datasetId) return;
+      if (!datasetsStore.datasets.some((dataset) => dataset.id === datasetId)) {
+        return;
+      }
+      datasetsStore.selectDataset(datasetId);
+    });
   });
 
   $effect(() => {

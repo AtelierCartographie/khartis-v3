@@ -324,7 +324,6 @@ describe('suggestion.service', () => {
     expect(updatedVisualization?.style.strokeColor).toBe(DEFAULT_COLORS.gray);
     expect(updatedVisualization?.style.lineColor).toBe(DEFAULT_COLORS.gray);
     expect(updatedVisualization?.missingData?.show).toBe(false);
-    expect(updatedVisualization?.style.labelHalo).toBe(false);
     expect(updatedVisualization?.style.textCollisionDetection).toBe(false);
     expect(isVisualizationBlank(updatedVisualization!, dataset)).toBe(true);
   });
@@ -391,7 +390,6 @@ describe('suggestion.service', () => {
     ]);
     expect(updatedVisualization?.style.fillOpacity).toBe(0);
     expect(updatedVisualization?.style.textOpacity).toBe(1);
-    expect(updatedVisualization?.style.labelOpacity).toBe(0);
     expect(
       isVisualizationMatchingSuggestion(
         updatedVisualization!,
@@ -493,7 +491,6 @@ describe('suggestion.service', () => {
     ]);
     expect(updatedVisualization?.mapping.valueColumn).toBe('population_total');
     expect(updatedVisualization?.style.textOpacity).toBe(0);
-    expect(updatedVisualization?.style.labelOpacity).toBe(0);
   });
 
   it('restores the previous manual visualization when a suggestion is deselected', () => {
@@ -557,7 +554,7 @@ describe('suggestion.service', () => {
     expect(restoredVisualization?.classification).toBeUndefined();
   });
 
-  it('restores the manual visualization even after the suggestion has drifted to custom', () => {
+  it('restores the manual visualization after manual tweaks under an active suggestion', () => {
     const dataset = createPolygonDataset();
     mocks.datasets = [dataset];
     mocks.selectedDatasetId = dataset.id;
@@ -597,12 +594,12 @@ describe('suggestion.service', () => {
       }
     });
 
-    const driftedVisualization = visualizationStore.visualizations.find(
+    const tweakedVisualization = visualizationStore.visualizations.find(
       (item) => item.id === visualization.id
     );
 
-    expect(driftedVisualization?.origin?.mode).toBe('custom');
-    expect(driftedVisualization?.origin?.restoreState).toBeDefined();
+    expect(tweakedVisualization?.origin?.mode).toBe('manual-suggestion');
+    expect(tweakedVisualization?.origin?.restoreState).toBeDefined();
     expect(restoreVisualizationFromSuggestion(visualization.id)).toBe(true);
 
     const restoredVisualization = visualizationStore.visualizations.find(

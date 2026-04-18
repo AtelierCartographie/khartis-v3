@@ -218,6 +218,7 @@
         dataFields={dataFields}
         visualization={visualization}
         onMappingChange={onMappingChange}
+        onStyleChange={onStyleChange}
       />
     {/if}
 

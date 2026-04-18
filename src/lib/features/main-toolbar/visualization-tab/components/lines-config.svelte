@@ -32,7 +32,6 @@
   import {
     ColorMode,
     DEFAULT_COLORS,
-    MissingDataShape,
     ThicknessMode,
     SLIDER_LIMITS,
     VISUALIZATION_DEFAULTS
@@ -177,8 +176,6 @@
   let dashed = $state<boolean>(false);
   let showMissingData = $state<boolean>(true);
   let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
-  let missingDataOpacity = $state<number>(VISUALIZATION_DEFAULTS.lineOpacity);
-  let missingDataShape = $state<MissingDataShape>(MissingDataShape.CIRCLE);
 
   $effect(() => {
     if (visualization?.style) {
@@ -204,12 +201,6 @@
       showMissingData = visualization.missingData.show ?? true;
       missingDataColor =
         visualization.missingData.color ?? DEFAULT_COLORS.missingData;
-      missingDataOpacity =
-        visualization.missingData.opacity !== undefined
-          ? Math.round(visualization.missingData.opacity * 100)
-          : VISUALIZATION_DEFAULTS.lineOpacity;
-      missingDataShape =
-        visualization.missingData.shape ?? MissingDataShape.CIRCLE;
     }
   });
 
@@ -278,16 +269,6 @@
   function handleMissingDataColorChange(value: string) {
     missingDataColor = value;
     onMissingDataChange?.({ color: value });
-  }
-
-  function handleMissingDataOpacityChange(value: number) {
-    missingDataOpacity = value;
-    onMissingDataChange?.({ opacity: value / 100 });
-  }
-
-  function handleMissingDataShapeChange(shape: string) {
-    missingDataShape = shape as MissingDataShape;
-    onMissingDataChange?.({ shape: shape as MissingDataShape });
   }
 
   const thicknessModeIndex = $derived(
@@ -492,11 +473,8 @@
       onshowchange={handleMissingDataToggle}
       color={missingDataColor}
       oncolorchange={handleMissingDataColorChange}
-      opacity={missingDataOpacity}
-      onopacitychange={handleMissingDataOpacityChange}
-      shape={missingDataShape}
-      onshapechange={handleMissingDataShapeChange}
-      showShapeSelector={true}
+      showShapeSelector={false}
+      showSizeSlider={false}
     />
 
     {#if filterSectionVisible || filters.length > 0}

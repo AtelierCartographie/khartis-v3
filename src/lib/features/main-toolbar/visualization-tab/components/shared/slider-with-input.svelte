@@ -54,7 +54,7 @@
         step={step}
         value={value}
         hideTextInput
-        on:change={(e) => handleChange(e.detail)}
+        on:input={(e) => handleChange(e.detail)}
       />
     </div>
     {#if showMinMax}

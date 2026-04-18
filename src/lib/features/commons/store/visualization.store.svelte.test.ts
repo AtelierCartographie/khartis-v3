@@ -21,10 +21,8 @@ vi.mock('./datasets.store.svelte', () => ({
 
 import {
   ClassificationMethod,
-  PrimitiveFilterType,
   VisualizationType,
-  visualizationStore,
-  type VisualizationConfig
+  visualizationStore
 } from './visualization.store.svelte';
 import { datasetsStore } from './datasets.store.svelte';
 import {
@@ -76,92 +74,6 @@ function buildDataset(): DatasetResult {
   };
 }
 
-function buildLegacyLabelVisualization(
-  styleOverrides: Partial<VisualizationConfig['style']> = {}
-): VisualizationConfig {
-  return {
-    id: 'viz-1',
-    name: 'Legacy labels',
-    datasetId: 'dataset-1',
-    enabled: true,
-    type: VisualizationType.CATEGORICAL,
-    primitiveFilters: [PrimitiveFilterType.LINE],
-    primitiveOrder: [PrimitiveFilterType.LINE, PrimitiveFilterType.TEXT],
-    modes: {},
-    style: {
-      labelOpacity: 0.72,
-      labelColor: '#1357aa',
-      labelSize: 14,
-      labelAlign: 'left',
-      labelHalo: true,
-      labelHaloColor: '#ffffff',
-      labelHaloWidth: 3,
-      labelCollisionDetection: false,
-      labelDxpMasking: true,
-      textOpacity: 0,
-      ...styleOverrides
-    },
-    mapping: {
-      geometryColumn: 'geom',
-      labelColumn: 'name'
-    }
-  };
-}
-
-describe('visualizationStore legacy label normalization', () => {
-  afterEach(() => {
-    visualizationStore.clear();
-    datasetsStore.clear();
-    persistenceRegistry.markClean();
-  });
-
-  it('migrates legacy label styling into texts and hides the legacy label layer', () => {
-    datasetsStore.addProcessedDataset(buildDataset());
-
-    visualizationStore.restoreFromSerialized({
-      visualizations: [buildLegacyLabelVisualization()],
-      selectedVisualizationId: 'viz-1',
-      activeVisualizationIds: ['viz-1']
-    });
-
-    const visualization = visualizationStore.selectedVisualization;
-    expect(visualization).toBeDefined();
-    expect(visualization?.style.textOpacity).toBe(0.72);
-    expect(visualization?.style.textColor).toBe('#1357aa');
-    expect(visualization?.style.textSize).toBe(14);
-    expect(visualization?.style.textAlign).toBe('left');
-    expect(visualization?.style.textHalo).toBe(true);
-    expect(visualization?.style.textHaloColor).toBe('#ffffff');
-    expect(visualization?.style.textHaloWidth).toBe(3);
-    expect(visualization?.style.textCollisionDetection).toBe(false);
-    expect(visualization?.style.textDxpMasking).toBe(true);
-    expect(visualization?.style.labelOpacity).toBe(0);
-  });
-
-  it('does not override an existing text configuration when hiding legacy labels', () => {
-    datasetsStore.addProcessedDataset(buildDataset());
-
-    visualizationStore.restoreFromSerialized({
-      visualizations: [
-        buildLegacyLabelVisualization({
-          textOpacity: 0.41,
-          textColor: '#ff5500',
-          textSize: 9
-        })
-      ],
-      selectedVisualizationId: 'viz-1',
-      activeVisualizationIds: ['viz-1']
-    });
-
-    const visualization = visualizationStore.selectedVisualization;
-    expect(visualization).toBeDefined();
-    expect(visualization?.style.textOpacity).toBe(0.41);
-    expect(visualization?.style.textColor).toBe('#ff5500');
-    expect(visualization?.style.textSize).toBe(9);
-    expect(visualization?.style.labelOpacity).toBe(0);
-  });
-});
-
 describe('visualizationStore suggestion origin tracking', () => {
   afterEach(() => {
     visualizationStore.clear();
@@ -199,7 +111,7 @@ describe('visualizationStore suggestion origin tracking', () => {
     });
   });
 
-  it('switches to custom for semantic classification changes', () => {
+  it('preserves suggestion origin through semantic classification changes', () => {
     datasetsStore.addProcessedDataset(buildDataset());
 
     const visualization = visualizationStore.createVisualization(
@@ -207,38 +119,9 @@ describe('visualizationStore suggestion origin tracking', () => {
       'dataset-1'
     );
 
-    visualizationStore.updateVisualization(visualization.id, {
-      origin: {
-        mode: 'manual-suggestion',
-        suggestionKey: 'choropleth::1::population::polygon::QTR',
-        restoreState: {
-          origin: { mode: 'manual-blank' },
-          visualization: {
-            type: visualization.type,
-            modes: visualization.modes,
-            primitiveFilters: visualization.primitiveFilters,
-            primitiveOrder: visualization.primitiveOrder,
-            style: visualization.style,
-            mapping: visualization.mapping,
-            classification: visualization.classification,
-            symbols: visualization.symbols,
-            missingData: visualization.missingData,
-            density: visualization.density,
-            yearFilter: visualization.yearFilter,
-            dataFilters: visualization.dataFilters
-          }
-        }
-      }
-    });
-
-    visualizationStore.updateClassification(visualization.id, {
-      method: ClassificationMethod.MANUAL
-    });
-
-    const updatedVisualization = visualizationStore.selectedVisualization;
-
-    expect(updatedVisualization?.origin).toEqual({
-      mode: 'custom',
+    const suggestionOrigin = {
+      mode: 'manual-suggestion',
+      suggestionKey: 'choropleth::1::population::polygon::QTR',
       restoreState: {
         origin: { mode: 'manual-blank' },
         visualization: {
@@ -256,6 +139,18 @@ describe('visualizationStore suggestion origin tracking', () => {
           dataFilters: visualization.dataFilters
         }
       }
+    } as const;
+
+    visualizationStore.updateVisualization(visualization.id, {
+      origin: suggestionOrigin
     });
+
+    visualizationStore.updateClassification(visualization.id, {
+      method: ClassificationMethod.MANUAL
+    });
+
+    const updatedVisualization = visualizationStore.selectedVisualization;
+
+    expect(updatedVisualization?.origin).toEqual(suggestionOrigin);
   });
 });

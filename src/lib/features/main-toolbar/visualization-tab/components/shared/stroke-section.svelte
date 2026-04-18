@@ -96,9 +96,9 @@
     }
     const mappedFieldName =
       strokeMode === StrokeMode.CATEGORIES
-        ? visualization?.mapping.categoryColumn
+        ? visualization?.mapping.strokeCategoryColumn
         : strokeMode === StrokeMode.CLASSES
-          ? visualization?.mapping.valueColumn
+          ? visualization?.mapping.strokeValueColumn
           : undefined;
     if (mappedFieldName && dataFields.length > 0) {
       const fieldIndex = dataFields.findIndex(
@@ -160,23 +160,23 @@
 
     if (strokeMode === StrokeMode.CLASSES) {
       if (fieldId === NONE_FIELD_ID) {
-        onMappingChange({ valueColumn: undefined });
+        onMappingChange({ strokeValueColumn: undefined });
         return;
       }
       const field = dataFields.find((item) => item.id === fieldId);
       if (field) {
-        onMappingChange({ valueColumn: field.text });
+        onMappingChange({ strokeValueColumn: field.text });
       }
     }
 
     if (strokeMode === StrokeMode.CATEGORIES) {
       if (fieldId === NONE_FIELD_ID) {
-        onMappingChange({ categoryColumn: undefined });
+        onMappingChange({ strokeCategoryColumn: undefined });
         return;
       }
       const field = dataFields.find((item) => item.id === fieldId);
       if (field) {
-        onMappingChange({ categoryColumn: field.text });
+        onMappingChange({ strokeCategoryColumn: field.text });
       }
     }
   }

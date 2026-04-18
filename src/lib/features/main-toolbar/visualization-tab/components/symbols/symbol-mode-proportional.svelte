@@ -42,7 +42,10 @@
   } from 'carbon-icons-svelte';
   import DiscretizationModal from '../discretization-modal.svelte';
   import type { ClassificationConfig } from '$lib/features/commons/store/visualization.store.svelte';
-  import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
+  import {
+    ScaleType,
+    visualizationStore
+  } from '$lib/features/commons/store/visualization.store.svelte';
   import { resolveDiscretizationLabel } from '../discretization.utils';
   import { facetsStore } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
   import FacetsVariablePicker from './facets-variable-picker.svelte';
@@ -73,6 +76,8 @@
   let fillClassFieldId = $state<number>(NONE_FIELD_ID);
   let fillCategoryFieldId = $state<number>(NONE_FIELD_ID);
   let symbolMaxSize = $state<number>(VISUALIZATION_DEFAULTS.symbolMaxSize);
+  let symbolMinSize = $state<number>(1);
+  let sizeScale = $state<ScaleType>(ScaleType.SQRT);
   let shapeType = $state<ShapeType>(ShapeType.CIRCLE);
   let showMissingData = $state<boolean>(true);
   let missingDataShape = $state<MissingDataShape>(MissingDataShape.CIRCLE);
@@ -84,7 +89,6 @@
   let fillColor = $state<string>(DEFAULT_COLORS.fill);
   let fillColorB = $state<string>(DEFAULT_COLORS.secondary);
   let fillOpacity = $state<number>(VISUALIZATION_DEFAULTS.fillOpacity);
-  let fillPattern = $state<boolean>(false);
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
   const selectableDataFields = $derived([noneOption, ...dataFields]);
   let isSyncingFromVisualization = $state(true);
@@ -127,9 +131,11 @@
         selectedFieldBId = NONE_FIELD_ID;
       }
 
-      if (visualization.mapping.valueColumn) {
+      const fillColorColumnName =
+        visualization.mapping.colorColumn ?? visualization.mapping.valueColumn;
+      if (fillColorColumnName) {
         const valueFieldIndex = dataFields.findIndex(
-          (field) => field.text === visualization.mapping.valueColumn
+          (field) => field.text === fillColorColumnName
         );
         fillClassFieldId =
           valueFieldIndex >= 0 ? dataFields[valueFieldIndex].id : NONE_FIELD_ID;
@@ -153,6 +159,8 @@
     if (visualization?.symbols) {
       symbolMaxSize =
         visualization.symbols.maxSize ?? VISUALIZATION_DEFAULTS.symbolMaxSize;
+      symbolMinSize = visualization.symbols.minSize ?? 1;
+      sizeScale = visualization.symbols.sizeScale ?? ScaleType.SQRT;
       shapeType = visualization.symbols.type ?? ShapeType.CIRCLE;
       fillOpacity =
         visualization.symbols.opacity !== undefined
@@ -168,7 +176,6 @@
       missingDataSize = visualization.missingData.size ?? 2;
       missingDataColor =
         visualization.missingData.color ?? DEFAULT_COLORS.missingData;
-      fillPattern = visualization.missingData.pattern ?? false;
     }
     if (visualization?.modes) {
       fillMode = visualization.modes.fill ?? FillMode.UNIQUE;
@@ -316,14 +323,6 @@
     onMissingDataChange?.({ color });
   }
 
-  function handleFillPatternChange(value: boolean) {
-    if (isSyncingFromVisualization) {
-      return;
-    }
-    fillPattern = value;
-    onMissingDataChange?.({ pattern: value });
-  }
-
   function handleFillModeChange(index: number) {
     if (isSyncingFromVisualization) {
       return;
@@ -360,6 +359,20 @@
     }
     symbolMaxSize = value;
     onSymbolsChange?.({ maxSize: value });
+  }
+
+  function handleSymbolMinSizeChange(value: number) {
+    if (isSyncingFromVisualization) return;
+    symbolMinSize = value;
+    onSymbolsChange?.({ minSize: value });
+  }
+
+  function handleSizeScaleChange(value: string | number) {
+    if (isSyncingFromVisualization) return;
+    const next = value as ScaleType;
+    if (next === sizeScale) return;
+    sizeScale = next;
+    onSymbolsChange?.({ sizeScale: next });
   }
 
   function handleFieldSelect(fieldId: number) {
@@ -401,13 +414,13 @@
     }
     fillClassFieldId = fieldId;
     if (fieldId === NONE_FIELD_ID) {
-      onMappingChange?.({ valueColumn: undefined });
+      onMappingChange?.({ colorColumn: undefined });
       return;
     }
 
     const field = dataFields.find((item) => item.id === fieldId);
     if (field) {
-      onMappingChange?.({ valueColumn: field.text });
+      onMappingChange?.({ colorColumn: field.text });
     }
   }
 
@@ -535,6 +548,7 @@
         selectedFieldId={selectedFieldId}
         selectedFieldIds={facetsSelectedFieldIds}
         isCollectionEnabled={isFacetsActiveForViz}
+        lockedFieldId={selectedFieldId}
         onSelect={handleFieldSelect}
         onCollectionChange={(ids) =>
           handleFacetsVariablesChange(sizeColumnName, ids)}
@@ -571,6 +585,7 @@
       selectedFieldId={selectedFieldId}
       selectedFieldIds={facetsSelectedFieldIds}
       isCollectionEnabled={isFacetsActiveForViz}
+      lockedFieldId={selectedFieldId}
       onSelect={handleFieldSelect}
       onCollectionChange={(ids) =>
         handleFacetsVariablesChange(valueColumnName, ids)}
@@ -586,6 +601,26 @@
     max={SLIDER_LIMITS.symbolMaxSize.max}
     onchange={handleSymbolMaxSizeChange}
   />
+  <SliderWithInput
+    label={m.min_size()}
+    bind:value={symbolMinSize}
+    min={0}
+    max={symbolMaxSize}
+    onchange={handleSymbolMinSizeChange}
+  />
+  <div class="field-group">
+    <span class="field-label">{m.size_scale()}</span>
+    <Dropdown
+      items={[
+        { id: ScaleType.SQRT, text: m.size_scale_sqrt() },
+        { id: ScaleType.LINEAR, text: m.size_scale_linear() },
+        { id: ScaleType.LOG, text: m.size_scale_log() }
+      ]}
+      selectedId={sizeScale}
+      on:select={(e) => handleSizeScaleChange(e.detail.selectedId)}
+      type="default"
+    />
+  </div>
   <DiscretizationRow
     label={m.discretization()}
     value={discretizationLabel}
@@ -696,11 +731,8 @@
     color={missingDataColor}
     showShapeSelector={false}
     showSizeSlider={false}
-    showPattern={true}
-    pattern={fillPattern}
     onshowchange={handleMissingDataShowChange}
     oncolorchange={handleMissingDataColorChange}
-    onpatternchange={handleFillPatternChange}
   />
 {:else if fillMode === FillMode.CATEGORIES}
   <div class="field-group">
@@ -737,11 +769,8 @@
     color={missingDataColor}
     showShapeSelector={false}
     showSizeSlider={false}
-    showPattern={true}
-    pattern={fillPattern}
     onshowchange={handleMissingDataShowChange}
     oncolorchange={handleMissingDataColorChange}
-    onpatternchange={handleFillPatternChange}
   />
 {/if}
 

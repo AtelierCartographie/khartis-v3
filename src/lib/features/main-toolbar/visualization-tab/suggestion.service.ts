@@ -327,7 +327,10 @@ export function resolveDatasetGeometryType(
       ) {
         return 'Polygon';
       }
-      if (vizType === VisualizationType.PROPORTIONAL) {
+      if (
+        vizType === VisualizationType.PROPORTIONAL ||
+        vizType === VisualizationType.BIVARIATE
+      ) {
         return 'Point';
       }
     }

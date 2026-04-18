@@ -21,6 +21,7 @@
     selectedFieldId: number;
     selectedFieldIds?: number[];
     isCollectionEnabled: boolean;
+    lockedFieldId?: number;
     canEnableCollection?: boolean;
     titleText?: string;
     onSelect: (fieldId: number) => void;
@@ -34,6 +35,7 @@
     selectedFieldId,
     selectedFieldIds = [],
     isCollectionEnabled,
+    lockedFieldId,
     canEnableCollection = true,
     titleText,
     onSelect,
@@ -44,27 +46,48 @@
   const NONE_ID = -1;
 
   let open = $state(false);
+  // eslint-disable-next-line svelte/prefer-writable-derived -- optimistic update: local state overrides prop for immediate UI feedback during async store updates
+  let inCollectionMode = $state(isCollectionEnabled);
+  // eslint-disable-next-line svelte/prefer-writable-derived -- optimistic update: local selection can diverge from prop while async store catches up
+  let localSelectedIds = $state([...selectedFieldIds]);
+
+  $effect(() => {
+    inCollectionMode = isCollectionEnabled;
+  });
+
+  $effect(() => {
+    localSelectedIds = [...selectedFieldIds];
+  });
 
   const isNumeric = (field: DataField) => field.type === 'number';
+
+  const isLocked = (fieldId: number): boolean =>
+    lockedFieldId !== undefined &&
+    lockedFieldId !== NONE_ID &&
+    fieldId === lockedFieldId;
 
   const selectedField = $derived(
     singleSelectItems.find((f) => f.id === selectedFieldId) ?? null
   );
 
   const triggerLabel = $derived.by(() => {
-    if (!isCollectionEnabled) return null;
-    const count = selectedFieldIds.length;
+    if (!inCollectionMode) return null;
+    const count = localSelectedIds.length;
     if (count === 0) return null;
     if (count === 1) {
-      return dataFields.find((f) => f.id === selectedFieldIds[0]) ?? null;
+      return dataFields.find((f) => f.id === localSelectedIds[0]) ?? null;
     }
     return null;
   });
 
   const collectionCount = $derived(
-    isCollectionEnabled && selectedFieldIds.length > 1
-      ? selectedFieldIds.length
+    inCollectionMode && localSelectedIds.length > 1
+      ? localSelectedIds.length
       : 0
+  );
+
+  const needsMoreVariables = $derived(
+    inCollectionMode && localSelectedIds.length < 2
   );
 
   function handleTriggerClick() {
@@ -76,16 +99,23 @@
   }
 
   function isSelected(fieldId: number): boolean {
-    if (isCollectionEnabled) return selectedFieldIds.includes(fieldId);
+    if (inCollectionMode) return localSelectedIds.includes(fieldId);
     return selectedFieldId === fieldId;
   }
 
   function handleItemClick(fieldId: number) {
-    if (isCollectionEnabled) {
-      const next = selectedFieldIds.includes(fieldId)
-        ? selectedFieldIds.filter((id) => id !== fieldId)
-        : [...selectedFieldIds, fieldId];
-      onCollectionChange(next);
+    if (inCollectionMode) {
+      if (isLocked(fieldId)) return;
+
+      const next = localSelectedIds.includes(fieldId)
+        ? localSelectedIds.filter((id) => id !== fieldId)
+        : [...localSelectedIds, fieldId];
+
+      localSelectedIds = next;
+
+      if (next.length >= 2) {
+        onCollectionChange(next);
+      }
     } else {
       onSelect(fieldId);
       open = false;
@@ -93,6 +123,7 @@
   }
 
   function handleToggle(checked: boolean) {
+    inCollectionMode = checked;
     onToggleCollection(checked);
   }
 </script>
@@ -113,9 +144,9 @@
     onclick={handleTriggerClick}
   >
     <div class="trigger-value">
-      {#if isCollectionEnabled && collectionCount > 1}
+      {#if inCollectionMode && collectionCount > 1}
         <span class="collection-count">{collectionCount} variables</span>
-      {:else if isCollectionEnabled && triggerLabel}
+      {:else if inCollectionMode && triggerLabel}
         <span
           class="variable-tag"
           class:numeric={isNumeric(triggerLabel)}
@@ -153,15 +184,27 @@
   {#if open}
     <div class="dropdown-list" role="listbox">
       <div class="list-items">
-        {#each singleSelectItems as field (field.id)}
+        {#each inCollectionMode ? dataFields : singleSelectItems as field (field.id)}
           <button
             type="button"
             role="option"
             aria-selected={isSelected(field.id)}
             class="list-item"
             class:selected={isSelected(field.id)}
+            class:locked={inCollectionMode && isLocked(field.id)}
             onclick={() => handleItemClick(field.id)}
           >
+            {#if inCollectionMode}
+              <span
+                class="item-checkbox"
+                class:checked={isSelected(field.id)}
+                class:locked={isLocked(field.id)}
+              >
+                {#if isSelected(field.id)}
+                  <Checkmark size={16} />
+                {/if}
+              </span>
+            {/if}
             {#if field.id === NONE_ID}
               <span class="item-plain">{field.text}</span>
             {:else}
@@ -178,18 +221,22 @@
                 {/if}
               </span>
             {/if}
-            {#if isSelected(field.id)}
+            {#if !inCollectionMode && isSelected(field.id)}
               <span class="checkmark"><Checkmark size={16} /></span>
             {/if}
           </button>
         {/each}
       </div>
 
+      {#if needsMoreVariables}
+        <div class="collection-hint">{m.facets_min_variables_warning()}</div>
+      {/if}
+
       <div class="dropdown-footer" class:disabled={!canEnableCollection}>
         <Switch
           size="sm"
           labelText={m.facets_toggle_create_collection()}
-          toggled={isCollectionEnabled}
+          toggled={inCollectionMode}
           disabled={!canEnableCollection}
           onchange={handleToggle}
         />
@@ -331,16 +378,46 @@
       background: var(--cds-layer-selected-01, #e0e0e0);
     }
 
+    &.locked {
+      cursor: default;
+
+      &:hover {
+        background: var(--cds-layer-selected-01, #e0e0e0);
+      }
+    }
+
     .variable-tag {
       flex: 1;
       min-width: 0;
     }
   }
 
+  .collection-hint {
+    padding: var(--cds-spacing-02) var(--cds-spacing-05);
+    font-size: 0.75rem;
+    color: var(--cds-text-error, #da1e28);
+    background: var(--cds-layer-01, #f4f4f4);
+    border-bottom: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+  }
+
   .item-plain {
     flex: 1;
     font-size: 0.875rem;
     color: var(--cds-text-primary, #161616);
+  }
+
+  .item-checkbox {
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--cds-icon-primary, #161616);
+
+    &.locked {
+      color: var(--cds-text-disabled, #c6c6c6);
+    }
   }
 
   .checkmark {

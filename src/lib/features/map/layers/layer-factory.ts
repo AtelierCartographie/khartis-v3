@@ -36,20 +36,19 @@ import {
 import {
   CATEGORY_SHAPE_CYCLE,
   CategoryShapeMode,
-  ColorMode,
   DEFAULT_COLORS,
-  DENSITY_DEFAULTS,
   isLinearShape,
   ProportionalType,
   SHAPE_ORDINAL,
   ShapeType,
-  SizeMode,
   SLIDER_LIMITS,
   SymbolMode,
   ThicknessMode,
   StrokeMode
 } from '$lib/features/main-toolbar/constants';
 import { MultiShapeLayer } from './multi-shape-layer';
+import { createTextOverlayLayers } from './text-layer-factory';
+import { createDotDensityLayers } from './density-layer-factory';
 import type {
   DeckDataRow,
   GeometryInfo,
@@ -62,8 +61,6 @@ import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import {
   getCategoricalColorMap,
   hasCompleteCategoricalColorMap,
-  getColorForValue,
-  getSizeForValue,
   shouldApplyCategorical,
   shouldApplyChoropleth,
   shouldApplyProportionalSymbols
@@ -77,6 +74,7 @@ import {
   createGeoJsonChoroplethColorAccessor,
   createGeoJsonProportionalSizeAccessor,
   createProportionalSizeAccessor,
+  resolveMissingDataRenderProps,
   withGeoJsonRowHighlight,
   withGeoJsonRowHighlightAccessor,
   withOpacity,
@@ -141,24 +139,25 @@ function ctxRowAccessor<T>(
 }
 
 const HIGHLIGHT_DIMMING_FACTOR = 0.3;
-const DEFAULT_TEXT_SIZE = PRINT_STANDARD_TOKENS.annotations.noteFontSize;
-const DEFAULT_HALO_WIDTH = 2;
-const DEFAULT_TEXT_FONT = 'IBM Plex Sans, sans-serif';
-const DEFAULT_TEXT_FONT_SETTINGS = { sdf: true } as const;
+
+export const DEFAULT_TEXT_SIZE = PRINT_STANDARD_TOKENS.annotations.noteFontSize;
+export const DEFAULT_HALO_WIDTH = 2;
+export const DEFAULT_TEXT_FONT = 'IBM Plex Sans, sans-serif';
+export const DEFAULT_TEXT_FONT_SETTINGS = { sdf: true } as const;
 const SELECTED_POLYGON_STROKE_COLOR: [number, number, number, number] = [
   15, 98, 254, 255
 ];
 const SELECTED_POLYGON_STROKE_WIDTH = 3;
 const DASH_EXTENSION = new PathStyleExtension({ dash: true });
 const DEFAULT_DASH_ARRAY: [number, number] = [3, 2];
-const DEFAULT_TEXT_MASK_PADDING: [number, number] = [3, 1];
-const TEXT_COLLISION_SAFE_PADDING: [number, number] = [4, 4];
-const TRANSPARENT_BACKGROUND_COLOR: Color = [0, 0, 0, 0];
+
+export const DEFAULT_TEXT_MASK_PADDING: [number, number] = [3, 1];
+export const TEXT_COLLISION_SAFE_PADDING: [number, number] = [4, 4];
+export const TRANSPARENT_BACKGROUND_COLOR: Color = [0, 0, 0, 0];
 const POINT_SYMBOL_ICON_VIEWBOX_SIZE = 64;
-const DEFAULT_LABEL_COLOR = hexToRgb(DEFAULT_COLORS.label);
-const DEFAULT_TEXT_COLOR = hexToRgb(DEFAULT_COLORS.text);
-const LABEL_COLLISION_PRIORITY = 100;
-const TEXT_COLLISION_PRIORITY = 0;
+
+export const DEFAULT_TEXT_COLOR = hexToRgb(DEFAULT_COLORS.text);
+export const TEXT_COLLISION_PRIORITY = 0;
 const TEXT_COLLISION_GROUP_SUFFIX = 'text-overlays';
 const pointSymbolIconCache = new Map<string, string>();
 
@@ -180,7 +179,7 @@ function colorToCss(color: Color): string {
   return `rgba(${r}, ${g}, ${b}, ${normalizedAlpha})`;
 }
 
-function resolveDeckTextFontWeight(
+export function resolveDeckTextFontWeight(
   weight: string | number,
   italic = false
 ): string | number {
@@ -350,7 +349,7 @@ function buildSplitDatasetRowMapping(
   return out;
 }
 
-function getRepresentativePointSource(
+export function getRepresentativePointSource(
   ctx: LayerContext
 ): { table: ArrowTable; geometryInfo: GeometryInfo } | null {
   const representativePointTable = ctx.representativePointTable;
@@ -376,18 +375,6 @@ function getRepresentativePointSource(
     table: representativePointTable,
     geometryInfo
   };
-}
-
-function requiresRepresentativePointSource(
-  geometryType: GeometryInfo['type'] | GeometryType | undefined
-): boolean {
-  return (
-    geometryType === GeometryType.POLYGON ||
-    geometryType === GeometryType.MULTIPOLYGON ||
-    geometryType === GeometryType.LINESTRING ||
-    geometryType === GeometryType.MULTILINESTRING ||
-    geometryType === GeometryType.MULTIPOINT
-  );
 }
 
 function usesDoubleProportionalSymbols(
@@ -768,7 +755,7 @@ function createRepresentativePointSymbolLayers(
   );
   const baseFillAccessor = useChoropleth
     ? createChoroplethColorAccessor(
-        viz.mapping.valueColumn!,
+        (viz.mapping.colorColumn ?? viz.mapping.valueColumn)!,
         viz.classification!.breaks!,
         viz.classification!.colors!
       )
@@ -1315,12 +1302,12 @@ const geoJsonConversionCache = new WeakMap<
  * Two-level keying: table → (ProjectionLike | null) → "geoType:col:col2" → result.
  * The projection reference is stable per basemap (memoized in use-map-layers.svelte.ts).
  */
-const textLabelCache = new WeakMap<
+export const textLabelCache = new WeakMap<
   ArrowTable,
   Map<ProjectionLike | null, Map<string, TextLayerDatum[]>>
 >();
 
-function getCachedGeoJSON(
+export function getCachedGeoJSON(
   table: ArrowTable,
   geoColumn: string
 ): FeatureCollection | null {
@@ -1452,7 +1439,7 @@ function resolveTextCollisionGroup(ctx: LayerContext): string {
   return `${datasetScope}-${TEXT_COLLISION_GROUP_SUFFIX}`;
 }
 
-function createTextCollisionProps(
+export function createTextCollisionProps(
   ctx: LayerContext,
   enabled: boolean,
   priority: number
@@ -1472,7 +1459,7 @@ function createTextCollisionProps(
   };
 }
 
-function createThematicLayerId(
+export function createThematicLayerId(
   layerType: DeckLayerId,
   ctx: LayerContext
 ): string {
@@ -1483,7 +1470,7 @@ function createThematicLayerId(
   );
 }
 
-interface TextLayerDatum {
+export interface TextLayerDatum {
   position: [number, number];
   primaryText: string | null;
   secondaryText: string | null;
@@ -1491,7 +1478,7 @@ interface TextLayerDatum {
   rowIndex: number;
 }
 
-type TextLayerWithCollisionProps = ConstructorParameters<
+export type TextLayerWithCollisionProps = ConstructorParameters<
   typeof TextLayer<TextLayerDatum>
 >[0] & {
   collisionEnabled?: boolean;
@@ -1502,13 +1489,16 @@ type TextLayerWithCollisionProps = ConstructorParameters<
   >;
 };
 
-function normalizeOpacity(opacity: number | undefined, fallback = 1): number {
+export function normalizeOpacity(
+  opacity: number | undefined,
+  fallback = 1
+): number {
   if (typeof opacity !== 'number') return fallback;
   const normalized = opacity > 1 ? opacity / 100 : opacity;
   return Math.min(Math.max(normalized, 0), 1);
 }
 
-function resolveEffectiveCategoryColorMap(
+export function resolveEffectiveCategoryColorMap(
   jsTable: ArrowTable,
   viz: LayerContext['viz'],
   categoryColorMap: Map<string, RGBColor> | null | undefined,
@@ -1555,7 +1545,7 @@ function resolveEffectiveCategoryColorMap(
   return getCategoricalColorMap(categoryList, viz.classification.colors);
 }
 
-function resolveTextAnchor(
+export function resolveTextAnchor(
   align: 'left' | 'center' | 'right' | undefined
 ): 'start' | 'middle' | 'end' {
   switch (align) {
@@ -1568,7 +1558,7 @@ function resolveTextAnchor(
   }
 }
 
-function resolveVariableTextSizeBounds(baseSize: number): {
+export function resolveVariableTextSizeBounds(baseSize: number): {
   minSize: number;
   maxSize: number;
 } {
@@ -1583,7 +1573,7 @@ function resolveVariableTextSizeBounds(baseSize: number): {
   };
 }
 
-function resolveStyleColor(
+export function resolveStyleColor(
   styleColor: string | string[] | undefined,
   fallback: RGBColor
 ): RGBColor {
@@ -1596,7 +1586,7 @@ function resolveStyleColor(
   return fallback;
 }
 
-function toTextValue(value: unknown): string | null {
+export function toTextValue(value: unknown): string | null {
   if (value === null || value === undefined) return null;
   const text = String(value).trim();
   return text.length > 0 ? text : null;
@@ -1625,12 +1615,12 @@ function parseYearTextValue(value: unknown): number | null {
   return null;
 }
 
-function resolveMissingTextLabel(label: string | undefined): string {
+export function resolveMissingTextLabel(label: string | undefined): string {
   const normalizedLabel = label?.trim();
   return normalizedLabel && normalizedLabel.length > 0 ? normalizedLabel : '•';
 }
 
-function resolveTextDatumText(
+export function resolveTextDatumText(
   datum: TextLayerDatum,
   missingTextLabel: string
 ): string {
@@ -1643,7 +1633,7 @@ function resolveTextDatumText(
     : datum.primaryText;
 }
 
-function filterTextLayerDataByYear(
+export function filterTextLayerDataByYear(
   textData: TextLayerDatum[],
   table: ArrowTable,
   yearFilter: YearFilterInfo | undefined
@@ -1723,7 +1713,7 @@ function getGeometryAnchor(
   return [(minX + maxX) / 2, (minY + maxY) / 2];
 }
 
-function createTextLayerData(
+export function createTextLayerData(
   geojson: FeatureCollection,
   primaryColumn: string,
   secondaryColumn?: string
@@ -1759,7 +1749,7 @@ function createTextLayerData(
  * Create TextLayerDatum[] from binary point geometry data + Arrow column values.
  * Used both for raw POINT tables and DuckDB-derived representative point tables.
  */
-function createTextLayerDataFromBinary(
+export function createTextLayerDataFromBinary(
   table: ArrowTable,
   geoInfo: GeometryInfo,
   primaryColumn: string,
@@ -1839,500 +1829,6 @@ function createTextLayerDataFromBinary(
   pMap.set(labelCacheKey, output);
 
   return output;
-}
-
-function createTextOverlayLayers(
-  jsTable: ArrowTable,
-  geometryInfo: GeometryInfo,
-  ctx: LayerContext
-): ThematicLayer[] {
-  const viz = ctx.viz;
-  if (!viz?.mapping.labelColumn) {
-    return [];
-  }
-
-  const labelOpacity = normalizeOpacity(viz.style.labelOpacity, 1);
-  const textOpacity = normalizeOpacity(viz.style.textOpacity, 1);
-  const colorMode = viz.modes?.color ?? ColorMode.UNIQUE;
-  const sizeMode = viz.modes?.size ?? SizeMode.FIXED;
-  const shouldRenderLabelLayer =
-    labelOpacity > 0 && colorMode !== ColorMode.NONE;
-  const shouldRenderTextLayer = textOpacity > 0 && colorMode !== ColorMode.NONE;
-
-  if (!shouldRenderLabelLayer && !shouldRenderTextLayer) {
-    return [];
-  }
-
-  const isNativeGeoArrow =
-    geometryInfo.isNativeGeoArrow ||
-    (geometryInfo.encoding && geometryInfo.encoding.startsWith('geoarrow.'));
-  let textLayerData: TextLayerDatum[] | null = null;
-  let textLayerDataWithSecondary: TextLayerDatum[] | null = null;
-  const representativePointSource = getRepresentativePointSource(ctx);
-  const textPointSource =
-    representativePointSource ??
-    (geometryInfo.type === GeometryType.POINT
-      ? {
-          table: jsTable,
-          geometryInfo
-        }
-      : null);
-
-  if (textPointSource) {
-    try {
-      textLayerData = createTextLayerDataFromBinary(
-        textPointSource.table,
-        textPointSource.geometryInfo,
-        viz.mapping.labelColumn,
-        undefined,
-        ctx.customProjection
-      );
-      if (viz.mapping.secondaryLabelColumn) {
-        textLayerDataWithSecondary = createTextLayerDataFromBinary(
-          textPointSource.table,
-          textPointSource.geometryInfo,
-          viz.mapping.labelColumn,
-          viz.mapping.secondaryLabelColumn,
-          ctx.customProjection
-        );
-      }
-    } catch {
-      textLayerData = null;
-      textLayerDataWithSecondary = null;
-    }
-  }
-
-  if (
-    !textLayerData &&
-    isNativeGeoArrow &&
-    requiresRepresentativePointSource(geometryInfo.type)
-  ) {
-    return [];
-  }
-
-  // Fallback: GeoJSON conversion (for WKB/GeoJSON-encoded data, or if binary failed)
-  if (!textLayerData) {
-    let geojsonData: FeatureCollection | null;
-    try {
-      geojsonData = getCachedGeoJSON(jsTable, geometryInfo.geoColumn);
-    } catch (error) {
-      logger.warn(
-        'Failed to convert geometry for text overlays, skipping labels/texts',
-        LogCategory.MAP,
-        {
-          datasetId: ctx.datasetId,
-          error: error instanceof Error ? error.message : String(error)
-        }
-      );
-      return [];
-    }
-    if (!geojsonData) return [];
-    textLayerData = createTextLayerData(geojsonData, viz.mapping.labelColumn);
-    if (viz.mapping.secondaryLabelColumn) {
-      textLayerDataWithSecondary = createTextLayerData(
-        geojsonData,
-        viz.mapping.labelColumn,
-        viz.mapping.secondaryLabelColumn
-      );
-    }
-  }
-
-  const layers: ThematicLayer[] = [];
-  const labelColor = resolveStyleColor(
-    viz.style.labelColor,
-    DEFAULT_LABEL_COLOR
-  );
-  const textColor = resolveStyleColor(viz.style.textColor, DEFAULT_TEXT_COLOR);
-  const missingTextColor = resolveStyleColor(
-    viz.missingData?.color,
-    hexToRgb(DEFAULT_COLORS.missingData)
-  );
-  const missingTextLabel = resolveMissingTextLabel(viz.missingData?.label);
-  const labelBaseSize = viz.style.labelSize ?? DEFAULT_TEXT_SIZE;
-  const textBaseSize = viz.style.textSize ?? DEFAULT_TEXT_SIZE;
-  const variableTextSizeColumn = viz.mapping.sizeColumn;
-  const variableTextSizeVector = variableTextSizeColumn
-    ? jsTable.getChild(variableTextSizeColumn)
-    : null;
-  const canApplyVariableTextSize =
-    sizeMode === SizeMode.PROPORTIONAL &&
-    !!variableTextSizeColumn &&
-    !!variableTextSizeVector;
-  const { minSize: minLabelSize, maxSize: maxLabelSize } =
-    resolveVariableTextSizeBounds(labelBaseSize);
-  const { minSize: minTextSize, maxSize: maxTextSize } =
-    resolveVariableTextSizeBounds(textBaseSize);
-  const labelValueVector = jsTable.getChild(viz.mapping.labelColumn);
-  const categoryVector = viz.mapping.categoryColumn
-    ? jsTable.getChild(viz.mapping.categoryColumn)
-    : null;
-  const effectiveCategoryColorMap = resolveEffectiveCategoryColorMap(
-    jsTable,
-    viz,
-    ctx.categoryColorMap,
-    viz.mapping.categoryColumn
-  );
-
-  const createChoroplethTextColorAccessor = (
-    vector: ReturnType<ArrowTable['getChild']>,
-    breaks: number[] | undefined,
-    colors: string[] | undefined,
-    fallback: RGBColor,
-    opacity: number
-  ) => {
-    if (!vector || !breaks?.length || !colors?.length) {
-      return withOpacity(fallback, opacity);
-    }
-
-    return (datum: TextLayerDatum): Color => {
-      const rawValue = vector.get(datum.rowIndex);
-      const numericValue =
-        typeof rawValue === 'number' ? rawValue : Number(rawValue);
-      if (!Number.isFinite(numericValue)) {
-        return withOpacity(fallback, opacity);
-      }
-
-      const rgb = getColorForValue(numericValue, breaks, colors);
-      return withOpacity(rgb, opacity);
-    };
-  };
-
-  const createCategoricalTextColorAccessor = (
-    vector: ReturnType<ArrowTable['getChild']>,
-    fallback: RGBColor,
-    opacity: number
-  ) => {
-    if (!vector || !effectiveCategoryColorMap?.size) {
-      return withOpacity(fallback, opacity);
-    }
-
-    return (datum: TextLayerDatum): Color => {
-      const category = toTextValue(vector.get(datum.rowIndex));
-      const rgb = category
-        ? (effectiveCategoryColorMap.get(category) ?? fallback)
-        : fallback;
-      return withOpacity(rgb, opacity);
-    };
-  };
-
-  const createTextSizeAccessor = (defaultSize: number) => {
-    if (!canApplyVariableTextSize || !variableTextSizeVector) {
-      return defaultSize;
-    }
-
-    const { minSize, maxSize } =
-      defaultSize === labelBaseSize
-        ? { minSize: minLabelSize, maxSize: maxLabelSize }
-        : { minSize: minTextSize, maxSize: maxTextSize };
-
-    return (datum: TextLayerDatum): number => {
-      const rawValue = variableTextSizeVector.get(datum.rowIndex);
-      const numericValue =
-        typeof rawValue === 'number' ? rawValue : Number(rawValue);
-
-      if (!Number.isFinite(numericValue)) {
-        return defaultSize;
-      }
-
-      return getSizeForValue(
-        numericValue,
-        ctx.statistics.min,
-        ctx.statistics.max,
-        minSize,
-        maxSize,
-        ScaleType.SQRT
-      );
-    };
-  };
-
-  const labelSizeAccessor = createTextSizeAccessor(labelBaseSize);
-  const textSizeAccessor = createTextSizeAccessor(textBaseSize);
-
-  if (shouldRenderLabelLayer) {
-    const labelData = filterTextLayerDataByYear(
-      textLayerData.filter((datum) => !datum.isMissingData),
-      jsTable,
-      ctx.yearFilter
-    );
-    if (labelData.length > 0) {
-      const labelLayerId = createThematicLayerId(DeckLayerId.LABEL_LAYER, ctx);
-      const labelColorAccessor =
-        colorMode === ColorMode.CLASSES
-          ? createChoroplethTextColorAccessor(
-              labelValueVector,
-              viz.classification?.breaks,
-              viz.classification?.colors,
-              labelColor,
-              labelOpacity
-            )
-          : colorMode === ColorMode.CATEGORIES
-            ? createCategoricalTextColorAccessor(
-                categoryVector,
-                labelColor,
-                labelOpacity
-              )
-            : withOpacity(labelColor, labelOpacity);
-
-      const labelLayerProps: TextLayerWithCollisionProps = {
-        id: labelLayerId,
-        data: labelData,
-        getPosition: (d) => d.position,
-        getText: (d) => resolveTextDatumText(d, missingTextLabel),
-        getColor: labelColorAccessor,
-        getSize: labelSizeAccessor,
-        sizeUnits: 'pixels',
-        getTextAnchor: resolveTextAnchor(viz.style.labelAlign),
-        getAlignmentBaseline: 'center',
-        fontFamily: DEFAULT_TEXT_FONT,
-        fontWeight: resolveDeckTextFontWeight('400'),
-        characterSet: 'auto',
-        fontSettings: DEFAULT_TEXT_FONT_SETTINGS,
-        outlineColor: withOpacity(
-          resolveStyleColor(viz.style.labelHaloColor, [255, 255, 255]),
-          1
-        ),
-        outlineWidth: viz.style.labelHalo
-          ? (viz.style.labelHaloWidth ?? DEFAULT_HALO_WIDTH)
-          : 0,
-        background: true,
-        getBackgroundColor: viz.style.labelDxpMasking
-          ? withOpacity(
-              resolveStyleColor(viz.style.labelHaloColor, [255, 255, 255]),
-              1
-            )
-          : TRANSPARENT_BACKGROUND_COLOR,
-        getBorderWidth: 0,
-        backgroundPadding: viz.style.labelDxpMasking
-          ? DEFAULT_TEXT_MASK_PADDING
-          : TEXT_COLLISION_SAFE_PADDING,
-        backgroundBorderRadius: 2,
-        ...createTextCollisionProps(
-          ctx,
-          viz.style.labelCollisionDetection ?? true,
-          LABEL_COLLISION_PRIORITY
-        ),
-        billboard: true,
-        pickable: false,
-        ...(ctx.modelMatrix && { modelMatrix: ctx.modelMatrix }),
-        ...(ctx.beforeId && { beforeId: ctx.beforeId }),
-        updateTriggers: {
-          getText: [viz.mapping.labelColumn],
-          getColor: [
-            colorMode,
-            viz.mapping.labelColumn,
-            viz.mapping.categoryColumn,
-            viz.classification?.breaks,
-            viz.classification?.colors,
-            viz.classification?.labels,
-            viz.style.labelColor,
-            labelOpacity
-          ],
-          getSize: [
-            viz.style.labelSize,
-            sizeMode,
-            variableTextSizeColumn,
-            ctx.statistics.min,
-            ctx.statistics.max
-          ],
-          getTextAnchor: [viz.style.labelAlign],
-          outlineColor: [viz.style.labelHaloColor],
-          outlineWidth: [viz.style.labelHalo, viz.style.labelHaloWidth],
-          getBackgroundColor: [
-            viz.style.labelDxpMasking,
-            viz.style.labelHaloColor
-          ]
-        }
-      };
-
-      layers.push(
-        new TextLayer<TextLayerDatum>(labelLayerProps) as ThematicLayer
-      );
-    }
-  }
-
-  if (shouldRenderTextLayer) {
-    const textData = filterTextLayerDataByYear(
-      (textLayerDataWithSecondary ?? textLayerData).filter(
-        (datum) => !datum.isMissingData || (viz.missingData?.show ?? true)
-      ),
-      jsTable,
-      ctx.yearFilter
-    );
-    if (textData.length > 0) {
-      const textLayerId = createThematicLayerId(DeckLayerId.TEXT_LAYER, ctx);
-      const baseTextColorAccessor =
-        colorMode === ColorMode.CLASSES
-          ? createChoroplethTextColorAccessor(
-              labelValueVector,
-              viz.classification?.breaks,
-              viz.classification?.colors,
-              textColor,
-              textOpacity
-            )
-          : colorMode === ColorMode.CATEGORIES
-            ? createCategoricalTextColorAccessor(
-                categoryVector,
-                textColor,
-                textOpacity
-              )
-            : withOpacity(textColor, textOpacity);
-      const textColorAccessor = (datum: TextLayerDatum): Color => {
-        if (datum.isMissingData) {
-          return withOpacity(missingTextColor, textOpacity);
-        }
-
-        return typeof baseTextColorAccessor === 'function'
-          ? baseTextColorAccessor(datum)
-          : baseTextColorAccessor;
-      };
-
-      layers.push(
-        new TextLayer<TextLayerDatum>({
-          id: textLayerId,
-          data: textData,
-          getPosition: (d) => d.position,
-          getText: (d) => resolveTextDatumText(d, missingTextLabel),
-          getColor: textColorAccessor,
-          getSize: textSizeAccessor,
-          sizeUnits: 'pixels',
-          getTextAnchor: resolveTextAnchor(viz.style.textAlign),
-          getAlignmentBaseline: 'center',
-          fontFamily: DEFAULT_TEXT_FONT,
-          fontWeight: resolveDeckTextFontWeight(
-            viz.style.textBold ? '700' : '400',
-            viz.style.textItalic
-          ),
-          characterSet: 'auto',
-          fontSettings: DEFAULT_TEXT_FONT_SETTINGS,
-          outlineColor: withOpacity(
-            resolveStyleColor(viz.style.textHaloColor, [255, 255, 255]),
-            1
-          ),
-          outlineWidth: viz.style.textHalo
-            ? (viz.style.textHaloWidth ?? DEFAULT_HALO_WIDTH)
-            : 0,
-          background: true,
-          getBackgroundColor: viz.style.textDxpMasking
-            ? withOpacity(
-                resolveStyleColor(viz.style.textHaloColor, [255, 255, 255]),
-                1
-              )
-            : TRANSPARENT_BACKGROUND_COLOR,
-          getBorderWidth: 0,
-          backgroundPadding: viz.style.textDxpMasking
-            ? DEFAULT_TEXT_MASK_PADDING
-            : TEXT_COLLISION_SAFE_PADDING,
-          backgroundBorderRadius: 2,
-          ...createTextCollisionProps(
-            ctx,
-            viz.style.textCollisionDetection ?? true,
-            TEXT_COLLISION_PRIORITY
-          ),
-          billboard: true,
-          pickable: false,
-          ...(ctx.modelMatrix && { modelMatrix: ctx.modelMatrix }),
-          ...(ctx.beforeId && { beforeId: ctx.beforeId }),
-          updateTriggers: {
-            getText: [
-              viz.mapping.labelColumn,
-              viz.mapping.secondaryLabelColumn,
-              viz.missingData?.show,
-              viz.missingData?.label
-            ],
-            getColor: [
-              colorMode,
-              viz.mapping.labelColumn,
-              viz.mapping.categoryColumn,
-              viz.classification?.breaks,
-              viz.classification?.colors,
-              viz.classification?.labels,
-              viz.style.textColor,
-              textOpacity,
-              viz.missingData?.color
-            ],
-            getSize: [
-              viz.style.textSize,
-              sizeMode,
-              variableTextSizeColumn,
-              ctx.statistics.min,
-              ctx.statistics.max
-            ],
-            getTextAnchor: [viz.style.textAlign],
-            outlineColor: [viz.style.textHaloColor],
-            outlineWidth: [viz.style.textHalo, viz.style.textHaloWidth],
-            getBackgroundColor: [
-              viz.style.textDxpMasking,
-              viz.style.textHaloColor
-            ]
-          }
-        }) as ThematicLayer
-      );
-    }
-  }
-
-  return layers;
-}
-
-function createDotDensityLayers(
-  jsTable: ArrowTable,
-  ctx: LayerContext,
-  layerId: string
-): Layer<DeckDataRow>[] {
-  const { viz, modelMatrix, beforeId } = ctx;
-  if (!viz?.density) return [];
-
-  const dotSize = Math.max(
-    0.1,
-    viz.density.dotSize ?? DENSITY_DEFAULTS.dotSize
-  );
-  const fillColorHex = viz.density.color ?? DENSITY_DEFAULTS.color;
-  const alpha = Math.round(255 * normalizeOpacity(viz.style.fillOpacity, 1));
-  const rgb = hexToRgb(fillColorHex);
-  const fillColor: [number, number, number, number] = [
-    rgb[0],
-    rgb[1],
-    rgb[2],
-    alpha
-  ];
-
-  let pointData: BinaryPointData | null = null;
-  try {
-    pointData = ctx.customProjection
-      ? parsePointDataWithProjection(jsTable, ctx.customProjection)
-      : parsePointData(jsTable);
-  } catch (error) {
-    logger.error(
-      'Failed to parse density points from Arrow table',
-      LogCategory.MAP,
-      error
-    );
-    return [];
-  }
-  if (!pointData) return [];
-
-  const densityLayer = new ScatterplotLayer({
-    id: `${layerId}-density`,
-    ...(createScatterplotLayerProps(pointData) as unknown as Record<
-      string,
-      unknown
-    >),
-    stroked: false,
-    filled: true,
-    opacity: 1,
-    getFillColor: fillColor,
-    getRadius: dotSize,
-    radiusUnits: 'pixels',
-    radiusMinPixels: 1,
-    pickable: false,
-    ...(modelMatrix && { modelMatrix }),
-    ...(beforeId && { beforeId }),
-    updateTriggers: {
-      getFillColor: [fillColorHex, alpha],
-      getRadius: [dotSize]
-    }
-  });
-
-  return [densityLayer as unknown as Layer<DeckDataRow>];
 }
 
 export function createPointLayers(
@@ -2465,7 +1961,7 @@ export function createPointLayers(
     const baseFillColor =
       useChoropleth && viz
         ? createGeoJsonChoroplethColorAccessor(
-            viz.mapping.valueColumn!,
+            (viz.mapping.colorColumn ?? viz.mapping.valueColumn)!,
             viz.classification!.breaks!,
             viz.classification!.colors!,
             fillColor
@@ -2734,7 +2230,7 @@ export function createPointLayers(
   const baseFillAccessor =
     useChoropleth && viz
       ? createChoroplethColorAccessor(
-          viz.mapping.valueColumn!,
+          (viz.mapping.colorColumn ?? viz.mapping.valueColumn)!,
           viz.classification!.breaks!,
           viz.classification!.colors!
         )
@@ -2976,6 +2472,8 @@ export function createLineLayers(
   const resolvedLineWidth = viz?.style.lineWidth ?? strokeWidth;
   const lineDashed = viz?.style.lineDashed ?? false;
   const lineDashArray = lineDashed ? DEFAULT_DASH_ARRAY : [0, 0];
+  const { color: missingLineColor, show: showMissingLines } =
+    resolveMissingDataRenderProps(viz, hexToRgb(DEFAULT_COLORS.missingData));
 
   const hasLineHighlights =
     lineHighlightedRowIds && lineHighlightedRowIds.size > 0;
@@ -3036,9 +2534,11 @@ export function createLineLayers(
     const choroplethAccessor =
       useChoropleth && viz
         ? createChoroplethColorAccessor(
-            viz.mapping.valueColumn!,
+            (viz.mapping.colorColumn ?? viz.mapping.valueColumn)!,
             viz.classification!.breaks!,
-            viz.classification!.colors!
+            viz.classification!.colors!,
+            missingLineColor,
+            showMissingLines
           )
         : null;
 
@@ -3046,7 +2546,9 @@ export function createLineLayers(
       useCategoricalColor && viz
         ? createCategoricalColorAccessor(
             viz.mapping.categoryColumn!,
-            effectiveCategoryColorMap
+            effectiveCategoryColorMap,
+            missingLineColor,
+            showMissingLines
           )
         : null;
 
@@ -3245,10 +2747,12 @@ export function createLineLayers(
       ? (feature: { properties?: Record<string, unknown> }) =>
           withOpacity(
             createGeoJsonChoroplethColorAccessor(
-              viz.mapping.valueColumn!,
+              (viz.mapping.colorColumn ?? viz.mapping.valueColumn)!,
               viz.classification!.breaks!,
               viz.classification!.colors!,
-              resolvedLineColor
+              resolvedLineColor,
+              missingLineColor,
+              showMissingLines
             )(feature),
             normalizedLineOpacity
           ) as [number, number, number, number]
@@ -3258,7 +2762,9 @@ export function createLineLayers(
               createGeoJsonCategoricalColorAccessor(
                 viz.mapping.categoryColumn!,
                 effectiveCategoryColorMap,
-                resolvedLineColor
+                resolvedLineColor,
+                missingLineColor,
+                showMissingLines
               )(feature),
               normalizedLineOpacity
             ) as [number, number, number, number]
@@ -3410,6 +2916,8 @@ export function createPolygonLayers(
   const strokeDashArray = strokeDashed ? DEFAULT_DASH_ARRAY : [0, 0];
   const layerId = createThematicLayerId(DeckLayerId.POLYGON_LAYER, ctx);
   const patternProps = buildPatternProps(ctx);
+  const { color: missingPolygonColor, show: showMissingPolygons } =
+    resolveMissingDataRenderProps(viz, hexToRgb(DEFAULT_COLORS.missingData));
 
   if (!isNativeGeoArrow && !isGeoJsonEncoded && !isWkbEncoded) {
     return [];
@@ -3435,9 +2943,11 @@ export function createPolygonLayers(
       const choroplethAccessor =
         useChoropleth && viz
           ? createChoroplethColorAccessor(
-              viz.mapping.valueColumn!,
+              (viz.mapping.colorColumn ?? viz.mapping.valueColumn)!,
               viz.classification!.breaks!,
-              viz.classification!.colors!
+              viz.classification!.colors!,
+              missingPolygonColor,
+              showMissingPolygons
             )
           : null;
 
@@ -3445,7 +2955,9 @@ export function createPolygonLayers(
         useCategoricalColor && viz
           ? createCategoricalColorAccessor(
               viz.mapping.categoryColumn!,
-              effectiveCategoryColorMap
+              effectiveCategoryColorMap,
+              missingPolygonColor,
+              showMissingPolygons
             )
           : null;
 
@@ -3550,6 +3062,8 @@ export function createPolygonLayers(
             categoryColorMap,
             viz?.classification?.labels,
             fillColor,
+            viz?.missingData?.color,
+            viz?.missingData?.show,
             hlVersion
           ]
         }
@@ -3761,16 +3275,20 @@ export function createPolygonLayers(
   const baseGeoJsonFillColor =
     useChoropleth && viz
       ? createGeoJsonChoroplethColorAccessor(
-          viz.mapping.valueColumn!,
+          (viz.mapping.colorColumn ?? viz.mapping.valueColumn)!,
           viz.classification!.breaks!,
           viz.classification!.colors!,
-          fillColor
+          fillColor,
+          missingPolygonColor,
+          showMissingPolygons
         )
       : useCategoricalColor && viz
         ? createGeoJsonCategoricalColorAccessor(
             viz.mapping.categoryColumn!,
             effectiveCategoryColorMap,
-            fillColor
+            fillColor,
+            missingPolygonColor,
+            showMissingPolygons
           )
         : null;
 

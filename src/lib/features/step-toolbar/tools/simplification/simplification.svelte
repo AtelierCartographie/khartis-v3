@@ -260,7 +260,7 @@
             max={100}
             step={1}
             value={simplState.rate}
-            on:change={(e) => {
+            on:input={(e) => {
               store.setRate((e as CustomEvent).detail ?? 50);
               scheduleSimplificationApply('rate-change', 250);
             }}
@@ -279,7 +279,9 @@
           selected={resolvedBasemapLevel}
           on:change={(e) => {
             if (isBasemapSourceBlocked) return;
-            store.setLevel((e as CustomEvent).detail as SimplificationLevel);
+            const next = (e as CustomEvent).detail as SimplificationLevel;
+            if (next === resolvedBasemapLevel) return;
+            store.setLevel(next);
             scheduleSimplificationApply('level-change');
           }}
         >
@@ -323,7 +325,7 @@
           max={100}
           step={1}
           value={simplState.rate}
-          on:change={(e) => {
+          on:input={(e) => {
             store.setRate((e as CustomEvent).detail ?? 50);
             scheduleSimplificationApply('rate-change', 250);
           }}
