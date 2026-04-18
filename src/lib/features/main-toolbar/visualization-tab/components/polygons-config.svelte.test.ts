@@ -80,4 +80,10 @@ describe('PolygonsConfig — palette wiring', () => {
       'categoryLabels={visualization?.classification?.labels ?? []}'
     );
   });
+
+  it('exposes FillMode.DENSITY in the fill mode items (issue #93)', () => {
+    expect(source).toContain('FillMode.DENSITY');
+    expect(source).toContain('<PolygonModeDensity');
+    expect(source).toContain("from './polygons'");
+  });
 });

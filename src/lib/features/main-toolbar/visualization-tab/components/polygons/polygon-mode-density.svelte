@@ -15,16 +15,31 @@
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-  import { InfoPopover, SectionHeading, SliderWithInput } from '../shared';
+  import { InfoPopover, SliderWithInput } from '../shared';
   import SingleColorPreview from '../palette-popover/single-color-preview.svelte';
-  import type { SymbolModeProps } from './types';
+  import type {
+    MissingDataConfig,
+    VisualizationConfig,
+    VisualizationModes
+  } from '$lib/features/commons/store/visualization.store.svelte';
+
+  interface Props {
+    dataFields: Array<{ id: number; text: string; type?: string }>;
+    visualization?: VisualizationConfig;
+    onMappingChange?: (
+      updates: Partial<VisualizationConfig['mapping']>
+    ) => void;
+    onStyleChange?: (updates: Partial<VisualizationConfig['style']>) => void;
+    onModesChange?: (updates: Partial<VisualizationModes>) => void;
+    onMissingDataChange?: (updates: Partial<MissingDataConfig>) => void;
+  }
 
   let {
     dataFields = [],
     visualization,
     onMappingChange,
     onStyleChange
-  }: SymbolModeProps = $props();
+  }: Props = $props();
 
   const NONE_FIELD_ID = -1;
   let selectedColumnId = $state<number>(NONE_FIELD_ID);
@@ -120,7 +135,10 @@
       return;
     }
 
-    const signature = `${datasetId}::${column}`;
+    // Include ratio presence in the cache key — when ratio is reset (e.g.
+    // after a column change), we must re-compute even for the same column.
+    const hasRatio = Boolean(visualization?.density?.ratio);
+    const signature = `${datasetId}::${column}::${hasRatio ? 'r' : 'no-r'}`;
     if (signature === lastRequestedColumn) return;
     lastRequestedColumn = signature;
     loadingLevels = true;
@@ -271,8 +289,6 @@
   }
 </script>
 
-<SectionHeading title={m.symbol_mode_density()} />
-
 <div class="field-group">
   <span class="field-label">
     {m.density_data_column()}
@@ -362,7 +378,7 @@
     gap: var(--cds-spacing-04);
   }
 
-  :global(.symbols-config .density-levels .bx--radio-button-group) {
+  :global(.polygons-config .density-levels .bx--radio-button-group) {
     flex-direction: column;
     gap: var(--cds-spacing-02);
     align-items: flex-start;

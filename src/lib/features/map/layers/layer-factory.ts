@@ -2828,7 +2828,15 @@ export function createPointLayers(
   const pointStrokeOpacity = pointConfig?.strokeOpacity ?? rawStrokeOpacity;
   const pointFillOpacity = pointConfig?.opacity ?? rawFillOpacity;
 
-  if (viz && !pointConfig?.enabled) {
+  // Density mode renders POINT geometries driven by the POLYGON primitive,
+  // even when the Symboles toggle is OFF — short-circuit the point-primitive
+  // early-exit in that case (issue #93).
+  const densityActive =
+    viz &&
+    getPolygonPrimitive(viz)?.fillMode === FillMode.DENSITY &&
+    Boolean(viz.density);
+
+  if (viz && !pointConfig?.enabled && !densityActive) {
     return [];
   }
 
@@ -2881,7 +2889,7 @@ export function createPointLayers(
     (arrowExtension === ArrowExtension.GEOARROW_POINT ||
       arrowExtension === ArrowExtension.GEOARROW_MULTIPOINT);
 
-  if (pointConfig?.mode === SymbolMode.DENSITY && viz?.density) {
+  if (densityActive) {
     return createDotDensityLayers(jsTable, ctx, layerId);
   }
 
@@ -4592,12 +4600,19 @@ export function createDeckLayers(
   const isLineGeometry =
     resolvedGeometryType === GeometryType.LINESTRING ||
     resolvedGeometryType === GeometryType.MULTILINESTRING;
+  // Density mode generates POINT geometries but is driven by the POLYGON
+  // primitive (issue #93). Gate visibility on POLYGON filter in that case.
+  const isDensityMode =
+    ctx.viz && getPolygonPrimitive(ctx.viz)?.fillMode === FillMode.DENSITY;
+  const effectivePrimitive = isDensityMode
+    ? PrimitiveFilterType.POLYGON
+    : primitive;
   const isPrimitiveFilteredOut =
     !isPolygonGeometry &&
     !isLineGeometry &&
-    primitive &&
+    effectivePrimitive &&
     ctx.viz?.primitiveFilters &&
-    !ctx.viz.primitiveFilters.includes(primitive);
+    !ctx.viz.primitiveFilters.includes(effectivePrimitive);
 
   let thematicLayers: Layer<DeckDataRow>[] = [];
   switch (resolvedGeometryType) {

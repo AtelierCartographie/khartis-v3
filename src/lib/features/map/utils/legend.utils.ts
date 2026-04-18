@@ -368,7 +368,8 @@ export function hasCategoricalColorLegend(
 export function getDensityLegendScale(
   viz: VisualizationConfig | undefined
 ): DensityLegendScale | null {
-  if (!viz || getSymbolPrimitive(viz)?.mode !== SymbolMode.DENSITY) return null;
+  if (!viz || getPolygonPrimitive(viz)?.fillMode !== FillMode.DENSITY)
+    return null;
   const density = viz.density;
   if (!density?.ratio) return null;
   const dotSize = Math.max(0.1, density.dotSize ?? DENSITY_DEFAULTS.dotSize);

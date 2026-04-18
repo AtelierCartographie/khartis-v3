@@ -34,11 +34,11 @@
   import FacetsPage from '../step-toolbar/tools/facets/facets-page.svelte';
   import { loadDatasetsSequentially } from './utils/load-datasets-sequentially';
   import {
-    getSymbolPrimitive,
+    getPolygonPrimitive,
     visualizationStore,
     type VisualizationConfig
   } from '../commons/store/visualization.store.svelte';
-  import { SymbolMode } from '../main-toolbar/constants';
+  import { FillMode } from '../main-toolbar/constants';
   import { basemapService } from './services/basemap.service.svelte';
   import type { SplitRenderingTable } from './types';
   import { INTERNAL_COLUMN } from '../commons/constants/data.constants';
@@ -328,7 +328,7 @@
     const matches: VisualizationConfig[] = [];
     for (const viz of visualizationStore.visualizations) {
       if (viz.datasetId !== datasetId) continue;
-      if (getSymbolPrimitive(viz)?.mode !== SymbolMode.DENSITY) continue;
+      if (getPolygonPrimitive(viz)?.fillMode !== FillMode.DENSITY) continue;
       if (!viz.density?.valueColumn || !viz.density?.ratio) continue;
       matches.push(viz);
     }

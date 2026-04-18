@@ -18,8 +18,7 @@ export enum SymbolMode {
   UNIQUE = 'unique',
   PROPORTIONAL = 'proportional',
   CLASSES = 'classes',
-  CATEGORIES = 'categories',
-  DENSITY = 'density'
+  CATEGORIES = 'categories'
 }
 
 export type DensityLevelName = 'more' | 'standard' | 'less';
@@ -58,6 +57,7 @@ export enum ProportionalType {
 export enum FillMode {
   NONE = 'none',
   UNIQUE = 'unique',
+  DENSITY = 'density',
   CLASSES = 'classes',
   CATEGORIES = 'categories'
 }
@@ -149,8 +149,6 @@ export function availableShapesForSymbolMode(mode: SymbolMode): ShapeType[] {
         ShapeType.BAR,
         ShapeType.SPIKE
       ];
-    case SymbolMode.DENSITY:
-      return [ShapeType.CIRCLE];
     default:
       return [ShapeType.CIRCLE];
   }

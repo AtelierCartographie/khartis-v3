@@ -18,6 +18,7 @@
   import SingleColorPreview from './palette-popover/single-color-preview.svelte';
   import {
     Category,
+    ChartScatter,
     MisuseOutline,
     SquareFill,
     Tag
@@ -46,6 +47,7 @@
   import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
   import { facetsStore } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
   import FacetsVariablePicker from './symbols/facets-variable-picker.svelte';
+  import { PolygonModeDensity } from './polygons';
 
   interface Props {
     dataFields?: Array<{ id: number; text: string; type?: string }>;
@@ -189,18 +191,21 @@
   const fillModeItems = [
     { icon: MisuseOutline, label: m.fill_mode_none(), iconSize: 16 },
     { icon: SquareFill, label: m.fill_mode_unique(), iconSize: 16 },
+    { icon: ChartScatter, label: m.symbol_mode_density(), iconSize: 16 },
     { icon: Category, label: m.fill_mode_classes(), iconSize: 16 },
     { icon: Tag, label: m.fill_mode_categories(), iconSize: 16 }
   ];
 
+  const FILL_MODE_ORDER: FillMode[] = [
+    FillMode.NONE,
+    FillMode.UNIQUE,
+    FillMode.DENSITY,
+    FillMode.CLASSES,
+    FillMode.CATEGORIES
+  ];
+
   function handleFillModeChange(index: number) {
-    const modes = [
-      FillMode.NONE,
-      FillMode.UNIQUE,
-      FillMode.CLASSES,
-      FillMode.CATEGORIES
-    ];
-    const nextFillMode = modes[index] || FillMode.NONE;
+    const nextFillMode = FILL_MODE_ORDER[index] || FillMode.NONE;
     fillMode = nextFillMode;
 
     if (nextFillMode === FillMode.NONE) {
@@ -230,14 +235,7 @@
     return storedMode;
   });
 
-  const fillModeIndex = $derived(
-    [
-      FillMode.NONE,
-      FillMode.UNIQUE,
-      FillMode.CLASSES,
-      FillMode.CATEGORIES
-    ].indexOf(effectiveFillMode)
-  );
+  const fillModeIndex = $derived(FILL_MODE_ORDER.indexOf(effectiveFillMode));
 
   function handleFillOpacityChange(value: number) {
     fillOpacity = value;
@@ -377,6 +375,13 @@
         color={fillColor}
         onchange={handleFillColorChange}
       />
+    {:else if effectiveFillMode === FillMode.DENSITY}
+      <PolygonModeDensity
+        dataFields={dataFields}
+        visualization={visualization}
+        onMappingChange={onMappingChange}
+        onStyleChange={onStyleChange}
+      />
     {:else if effectiveFillMode === FillMode.CLASSES}
       <div class="field-group">
         <FacetsVariablePicker
@@ -442,7 +447,7 @@
       />
     {/if}
 
-    {#if effectiveFillMode !== FillMode.NONE}
+    {#if effectiveFillMode !== FillMode.NONE && effectiveFillMode !== FillMode.DENSITY}
       <SliderWithInput
         label={m.opacity()}
         min={SLIDER_LIMITS.opacity.min}
@@ -463,18 +468,20 @@
       />
     {/if}
 
-    <StrokeSection
-      visualization={visualization}
-      dataFields={dataFields}
-      classesPalette={currentPalette}
-      discretizationLabel={discretizationLabel}
-      onStyleChange={onStyleChange}
-      onModesChange={onModesChange}
-      onMappingChange={onMappingChange}
-      onInvertPalette={onInvertPalette}
-      onOpenDiscretization={handleOpenDiscretization}
-      onClassificationChange={handleClassificationChange}
-    />
+    {#if effectiveFillMode !== FillMode.DENSITY}
+      <StrokeSection
+        visualization={visualization}
+        dataFields={dataFields}
+        classesPalette={currentPalette}
+        discretizationLabel={discretizationLabel}
+        onStyleChange={onStyleChange}
+        onModesChange={onModesChange}
+        onMappingChange={onMappingChange}
+        onInvertPalette={onInvertPalette}
+        onOpenDiscretization={handleOpenDiscretization}
+        onClassificationChange={handleClassificationChange}
+      />
+    {/if}
   </div>
 </ExpandableSection>
 

@@ -8,8 +8,9 @@ const source = readFileSync(
 );
 
 describe('MainMap density mode loading', () => {
-  it('detects density visualizations from the canonical symbol primitive mode', () => {
-    expect(source).toContain('getSymbolPrimitive(viz)?.mode');
-    expect(source).not.toContain('viz.modes?.symbol !== SymbolMode.DENSITY');
+  it('detects density visualizations from the polygon fill mode (issue #93)', () => {
+    expect(source).toContain('getPolygonPrimitive(viz)?.fillMode');
+    expect(source).toContain('FillMode.DENSITY');
+    expect(source).not.toContain('SymbolMode.DENSITY');
   });
 });
