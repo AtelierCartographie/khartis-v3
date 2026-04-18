@@ -187,9 +187,7 @@ export async function processFileInternal(
     );
   }
 
-  if (!isGeoFile) {
-    await applyTabularGeoDetection(dataset);
-  }
+  await applyTabularGeoDetection(dataset);
 
   logger.success('DuckDB dataset built', LogCategory.DATA, {
     tableName,
