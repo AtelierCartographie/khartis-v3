@@ -20,6 +20,10 @@ import type {
   FileWithId,
   ReadGeofileOptions
 } from '../types';
+import {
+  applyProj4Reprojection,
+  tryDuckDBReprojection
+} from './geofile-reprojection';
 import { generateUniqueTableName, registerFiles } from './file-registry';
 import { addRowId } from './reader-utils';
 
@@ -64,7 +68,6 @@ async function runGeofileReadWithThreadFallback(
         format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
       });
       tableCreated = true;
-      await addRowId(ctx.connection, finalTablename);
     } catch (error) {
       if (tableCreated) {
         await executeQuery(
@@ -424,6 +427,28 @@ export async function readGeofile(
 
     if (!tablename) {
       throw new DuckDBError('Unable to determine target table name');
+    }
+
+    if (!usedGeoPackageBrowserFallback) {
+      if (preservesSourceProjection && geoMeta.crs) {
+        const duckdbSuccess = await tryDuckDBReprojection(
+          ctx,
+          finalTablename,
+          geofileWithId.id,
+          geomCol,
+          geoMeta.crs
+        );
+        if (!duckdbSuccess) {
+          await applyProj4Reprojection(
+            ctx,
+            finalTablename,
+            geofileWithId.id,
+            geomCol,
+            geoMeta.crs
+          );
+        }
+      }
+      await addRowId(ctx.connection, finalTablename);
     }
 
     ctx.loaded_files.set(tablename, geofile.name);
