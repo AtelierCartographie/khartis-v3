@@ -78,6 +78,6 @@
   .switcher-divider {
     width: 1px;
     align-self: stretch;
-    background: #cac5c4;
+    background: var(--cds-border-subtle-01);
   }
 </style>

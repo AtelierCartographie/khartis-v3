@@ -383,6 +383,10 @@
     height: 24px;
   }
 
+  .section-heading.plain .section-title {
+    font-size: 1rem;
+  }
+
   .section-title {
     font-size: 0.875rem;
     font-weight: 600;
@@ -468,6 +472,9 @@
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-03, 8px);
+    padding: var(--cds-spacing-04, 12px);
+    background-color: var(--cds-layer-01, #f4f4f4);
+    border-radius: 4px;
   }
 
   .subsection-title {
@@ -549,6 +556,7 @@
   .variable-tag {
     display: inline-flex;
     align-items: center;
+    gap: var(--cds-spacing-02, 4px);
     flex: 1;
     min-width: 0;
     min-height: 18px;

@@ -157,7 +157,6 @@
   let fillOpacity = $state<number>(VISUALIZATION_DEFAULTS.fillOpacity);
   let showMissingData = $state<boolean>(true);
   let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
-  let fillPattern = $state<boolean>(false);
   const enabled = $derived.by(() => {
     const primitiveFilters =
       visualization?.primitiveFilters ?? ALL_PRIMITIVE_FILTERS;
@@ -175,13 +174,15 @@
         (visualization.style.fillColor as string) ?? DEFAULT_COLORS.fill;
     }
     if (visualization?.modes) {
-      fillMode = visualization.modes.fill ?? FillMode.UNIQUE;
+      fillMode =
+        (visualization.style.fillOpacity ?? 1) <= 0
+          ? FillMode.NONE
+          : (visualization.modes.fill ?? FillMode.UNIQUE);
     }
     if (visualization?.missingData) {
       showMissingData = visualization.missingData.show ?? true;
       missingDataColor =
         visualization.missingData.color ?? DEFAULT_COLORS.missingData;
-      fillPattern = visualization.missingData.pattern ?? false;
     }
   });
 
@@ -255,11 +256,6 @@
   function handleMissingDataColorChange(value: string) {
     missingDataColor = value;
     onMissingDataChange?.({ color: value });
-  }
-
-  function handleFillPatternChange(value: boolean) {
-    fillPattern = value;
-    onMissingDataChange?.({ pattern: value });
   }
 
   function handleOpenDiscretization() {
@@ -462,11 +458,8 @@
         color={missingDataColor}
         showShapeSelector={false}
         showSizeSlider={false}
-        showPattern={true}
-        pattern={fillPattern}
         onshowchange={handleMissingDataShowChange}
         oncolorchange={handleMissingDataColorChange}
-        onpatternchange={handleFillPatternChange}
       />
     {/if}
 

@@ -247,7 +247,7 @@
       haloColor = visualization.style.textHaloColor ?? DEFAULT_COLORS.halo;
       haloWidth =
         visualization.style.textHaloWidth ?? VISUALIZATION_DEFAULTS.haloWidth;
-      collisionDetection = visualization.style.textCollisionDetection ?? true;
+      collisionDetection = visualization.style.textCollisionDetection ?? false;
       dxpMasking = visualization.style.textDxpMasking ?? false;
 
       secondaryColor =
@@ -1007,6 +1007,76 @@
   }
 
   @media (max-width: 560px) {
+    .missing-data-fields {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .missing-data-block {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-04);
+    padding-top: var(--cds-spacing-04);
+    border-top: 1px solid var(--cds-border-subtle-01, #c6c6c6);
+  }
+
+  .missing-data-heading {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--cds-spacing-03);
+  }
+
+  .missing-data-title {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--cds-text-primary, #161616);
+  }
+
+  .missing-data-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--cds-spacing-03);
+  }
+
+  .missing-data-toggle-state {
+    font-size: 0.875rem;
+    color: var(--cds-text-primary, #161616);
+    font-weight: 500;
+  }
+
+  .missing-data-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--cds-spacing-04);
+  }
+
+  :global(.text-input-field .bx--text-input) {
+    height: 40px;
+  }
+
+  :global(.text-input-field .bx--text-input__field-wrapper) {
+    background: var(--cds-field-01, #f4f4f4);
+  }
+
+  :global(.texts-panel-shell .field-picker .bx--label) {
+    margin-bottom: 0.5rem;
+  }
+
+  :global(.texts-panel-shell .field-picker .bx--list-box__field) {
+    min-height: 40px;
+    background: var(--cds-field-01, #f4f4f4);
+  }
+
+  @media (max-width: 560px) {
+    .field-row {
+      grid-template-columns: 1fr;
+    }
+
+    :global(.format-trigger) {
+      width: 100%;
+      height: 48px;
+    }
+
     .missing-data-fields {
       grid-template-columns: 1fr;
     }

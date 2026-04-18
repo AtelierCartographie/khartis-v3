@@ -276,6 +276,12 @@ export function shouldApplyChoropleth(
   );
 }
 
+export function resolveChoroplethColorColumn(
+  viz: VisualizationConfig
+): string | undefined {
+  return viz.mapping.colorColumn ?? viz.mapping.valueColumn;
+}
+
 export function shouldApplyProportionalSymbols(
   viz: VisualizationConfig
 ): boolean {

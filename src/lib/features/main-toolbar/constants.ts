@@ -219,7 +219,6 @@ export const DEFAULT_COLORS = {
   stroke: '#1e3a5f',
   line: '#1e3a5f',
   text: '#000000',
-  label: '#000000',
   halo: '#ffffff',
   missingData: '#c6c6c6',
   white: '#ffffff',

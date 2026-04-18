@@ -797,6 +797,7 @@ function suggestVisualizations(
     .filter((col) => getUniqueCount(col) > 1);
 
   const textEligibleColumns = enrichedColumns
+    .filter((col) => col.semioType !== SEMIO_TYPES.GEOID)
     .filter((col) => col.semioType !== SEMIO_TYPES.GEOLAT)
     .filter((col) => col.semioType !== SEMIO_TYPES.GEOLON)
     .filter((col) => getUniqueCount(col) > 1);

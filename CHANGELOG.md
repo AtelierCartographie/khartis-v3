@@ -1,3 +1,16 @@
+# [1.0.0-staging.10](https://github.com/AtelierCartographie/khartis-v3/compare/v1.0.0-staging.9...v1.0.0-staging.10) (2026-04-16)
+
+### Bug Fixes
+
+- **semio:** improve geoid column detection scoring ([2475e2a](https://github.com/AtelierCartographie/khartis-v3/commit/2475e2a22b38e53d291504402ae25974f50faf1c))
+
+# [1.0.0-staging.9](https://github.com/AtelierCartographie/khartis-v3/compare/v1.0.0-staging.8...v1.0.0-staging.9) (2026-04-16)
+
+### Features
+
+- v3.2 — density mode, MultiShapeLayer, split rendering and zoom ([#95](https://github.com/AtelierCartographie/khartis-v3/issues/95)) ([5545046](https://github.com/AtelierCartographie/khartis-v3/commit/5545046e7511c8a06e2d1726789c00740963a04b)), closes [#90](https://github.com/AtelierCartographie/khartis-v3/issues/90) [#94](https://github.com/AtelierCartographie/khartis-v3/issues/94) [#92](https://github.com/AtelierCartographie/khartis-v3/issues/92) [#92](https://github.com/AtelierCartographie/khartis-v3/issues/92) [#93](https://github.com/AtelierCartographie/khartis-v3/issues/93) [AtelierCartographie/khartis-v3#93](https://github.com/AtelierCartographie/khartis-v3/issues/93) [#87](https://github.com/AtelierCartographie/khartis-v3/issues/87) [#87](https://github.com/AtelierCartographie/khartis-v3/issues/87)
+- **w16:** category shape mode, suggestion origin tracking, PWA, facets, search, and UI polish ([#98](https://github.com/AtelierCartographie/khartis-v3/issues/98)) ([e24bccb](https://github.com/AtelierCartographie/khartis-v3/commit/e24bccba9a37a9c853b214b35be3be1c95daf760)), closes [#92](https://github.com/AtelierCartographie/khartis-v3/issues/92) [#92](https://github.com/AtelierCartographie/khartis-v3/issues/92) [#93](https://github.com/AtelierCartographie/khartis-v3/issues/93) [AtelierCartographie/khartis-v3#93](https://github.com/AtelierCartographie/khartis-v3/issues/93) [#87](https://github.com/AtelierCartographie/khartis-v3/issues/87) [#87](https://github.com/AtelierCartographie/khartis-v3/issues/87)
+
 # [1.0.0-staging.8](https://github.com/AtelierCartographie/khartis-v3/compare/v1.0.0-staging.7...v1.0.0-staging.8) (2026-04-14)
 
 ### Bug Fixes

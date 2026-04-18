@@ -22,7 +22,8 @@
   let {
     dataFields = [],
     visualization,
-    onMappingChange
+    onMappingChange,
+    onStyleChange
   }: SymbolModeProps = $props();
 
   const NONE_FIELD_ID = -1;
@@ -30,6 +31,7 @@
   let selectedLevel = $state<DensityLevelName>(DENSITY_DEFAULTS.level);
   let dotSize = $state<number>(DENSITY_DEFAULTS.dotSize);
   let fillColor = $state<string>(DENSITY_DEFAULTS.color);
+  let fillOpacity = $state<number>(100);
   let levelOptions = $state<DensityLevelOption[]>([]);
   let loadingLevels = $state<boolean>(false);
   let lastRequestedColumn = $state<string | null>(null);
@@ -78,6 +80,11 @@
     } else {
       fillColor = DENSITY_DEFAULTS.color;
     }
+    const persistedOpacity = visualization?.style.fillOpacity;
+    fillOpacity =
+      typeof persistedOpacity === 'number'
+        ? Math.round(Math.max(0, Math.min(1, persistedOpacity)) * 100)
+        : 100;
     const persistedColumn =
       visualization?.density?.valueColumn ??
       visualization?.mapping.valueColumn ??
@@ -247,6 +254,11 @@
     }
   }
 
+  function handleFillOpacityChange(value: number) {
+    fillOpacity = value;
+    onStyleChange?.({ fillOpacity: value / 100 });
+  }
+
   function levelLabelFor(level: DensityLevelName): string {
     switch (level) {
       case DENSITY_LEVEL.MORE:
@@ -320,6 +332,14 @@
   label={m.color()}
   color={fillColor}
   onchange={handleFillColorChange}
+/>
+
+<SliderWithInput
+  label={m.opacity()}
+  bind:value={fillOpacity}
+  min={0}
+  max={100}
+  onchange={handleFillOpacityChange}
 />
 
 <style lang="scss">

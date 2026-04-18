@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import Button from '$lib/features/commons/components/carbon/button.svelte';
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
@@ -426,15 +427,15 @@
 
   $effect(() => {
     const datasetId = selectedDatasetId;
-    if (!datasetId || datasetsStore.selectedDatasetId === datasetId) {
-      return;
-    }
+    if (!datasetId) return;
 
-    if (!datasetsStore.datasets.some((dataset) => dataset.id === datasetId)) {
-      return;
-    }
-
-    datasetsStore.selectDataset(datasetId);
+    untrack(() => {
+      if (datasetsStore.selectedDatasetId === datasetId) return;
+      if (!datasetsStore.datasets.some((dataset) => dataset.id === datasetId)) {
+        return;
+      }
+      datasetsStore.selectDataset(datasetId);
+    });
   });
 
   $effect(() => {
