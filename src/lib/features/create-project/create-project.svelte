@@ -11,10 +11,10 @@
     ModalHeader
   } from 'carbon-components-svelte';
   import {
-    FileStorage,
-    Information,
-    ShapeExclude,
-    Upload
+    Categories,
+    CopyFile,
+    FetchUpload,
+    Information
   } from 'carbon-icons-svelte';
   import CreateNewProject from './create-new-project.svelte';
   import OpenProject from './open-project.svelte';
@@ -125,7 +125,7 @@
               data-testid="tab-create-new"
             >
               {#snippet icon()}
-                <Upload size={20} />
+                <FetchUpload size={24} />
               {/snippet}
             </ProjectTab>
           </div>
@@ -133,7 +133,6 @@
           <div class="tab-wrapper" bind:this={tabRefs[1]}>
             <ProjectTab
               selected={createProjectState.selectedTab === 2}
-              selectable={false}
               onclick={() => selectTile(2)}
               onkeydown={(e) => handleTabKeydown(e, 2)}
               tabIndex={createProjectState.selectedTab === 2 ? 0 : -1}
@@ -141,7 +140,7 @@
               data-testid="tab-open-project"
             >
               {#snippet icon()}
-                <FileStorage size={20} />
+                <CopyFile size={24} />
               {/snippet}
             </ProjectTab>
           </div>
@@ -149,7 +148,6 @@
           <div class="tab-wrapper" bind:this={tabRefs[2]}>
             <ProjectTab
               selected={createProjectState.selectedTab === 3}
-              selectable={false}
               onclick={() => selectTile(3)}
               onkeydown={(e) => handleTabKeydown(e, 3)}
               tabIndex={createProjectState.selectedTab === 3 ? 0 : -1}
@@ -157,7 +155,7 @@
               data-testid="tab-try-example"
             >
               {#snippet icon()}
-                <ShapeExclude size={20} />
+                <Categories size={24} />
               {/snippet}
             </ProjectTab>
           </div>
@@ -266,6 +264,11 @@
 
   #khartis-create-project :global(.bx--tile) {
     flex: 1;
+  }
+
+  #khartis-create-project :global(.tab-title) {
+    font-size: var(--cds-body-short-01-font-size, 0.875rem);
+    line-height: var(--cds-body-short-01-line-height, 1.28572);
   }
 
   @media (max-width: 1024px) {
