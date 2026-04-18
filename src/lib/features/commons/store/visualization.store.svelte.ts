@@ -421,6 +421,10 @@ function resolveLegacyPrimitiveEnabled(
     visualization.primitiveFilters ?? ALL_PRIMITIVE_FILTERS;
 
   if (primitive === PrimitiveFilterType.TEXT) {
+    if (visualization.text?.enabled !== undefined) {
+      return visualization.text.enabled;
+    }
+
     return (
       primitiveFilters.includes(primitive) ||
       (visualization.style.textOpacity ?? 0) > 0
@@ -612,18 +616,29 @@ function buildTextPrimitiveConfig(
   visualization: VisualizationConfig
 ): TextPrimitiveConfig {
   const existing = visualization.text;
+  const enabled = resolveLegacyPrimitiveEnabled(
+    visualization,
+    PrimitiveFilterType.TEXT
+  );
+  const fallbackOpacity = VISUALIZATION_DEFAULTS.textOpacity / 100;
+  const styleTextOpacity = visualization.style.textOpacity;
+  const normalizedOpacity =
+    existing?.opacity !== undefined
+      ? existing.opacity > 0
+        ? existing.opacity
+        : enabled && (styleTextOpacity ?? 0) > 0
+          ? (styleTextOpacity ?? existing.opacity)
+          : existing.opacity
+      : (styleTextOpacity ?? (enabled ? fallbackOpacity : 0));
 
   return {
-    enabled: resolveLegacyPrimitiveEnabled(
-      visualization,
-      PrimitiveFilterType.TEXT
-    ),
+    enabled,
     labelColumn: existing?.labelColumn ?? visualization.mapping.labelColumn,
     colorMode:
       existing?.colorMode ?? visualization.modes?.color ?? ColorMode.UNIQUE,
     sizeMode: existing?.sizeMode ?? visualization.modes?.size ?? SizeMode.FIXED,
     color: existing?.color ?? visualization.style.textColor,
-    opacity: existing?.opacity ?? visualization.style.textOpacity ?? 0,
+    opacity: normalizedOpacity,
     size:
       existing?.size ??
       visualization.style.textSize ??
@@ -1080,7 +1095,7 @@ function getDefaultClassification(
     type === VisualizationType.BIVARIATE
   ) {
     return {
-      method: ClassificationMethod.QUANTILES,
+      method: ClassificationMethod.JENKS,
       classes: DEFAULT_QUANTILES_CLASS_COUNT,
       colors: [...DEFAULT_CHOROPLETH_COLORS]
     };
@@ -1856,7 +1871,7 @@ function createVisualizationStore(): VisualizationStore {
   ): void {
     applyVisualizationUpdate(id, (visualization) => {
       const existing = visualization.classification ?? {
-        method: ClassificationMethod.QUANTILES,
+        method: ClassificationMethod.JENKS,
         classes: DEFAULT_QUANTILES_CLASS_COUNT
       };
 
@@ -1889,7 +1904,7 @@ function createVisualizationStore(): VisualizationStore {
 
     applyVisualizationUpdate(id, (visualization) => {
       const fallback = visualization.classification ?? {
-        method: ClassificationMethod.QUANTILES,
+        method: ClassificationMethod.JENKS,
         classes: DEFAULT_QUANTILES_CLASS_COUNT
       };
       const existing =

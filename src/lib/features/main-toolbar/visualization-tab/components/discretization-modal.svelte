@@ -75,7 +75,7 @@
       [ClassificationMethod.NESTED_MEANS]: 'nested-means',
       [ClassificationMethod.HEAD_TAIL]: 'head-tail'
     };
-    return mapping[method] ?? 'quantile';
+    return mapping[method] ?? 'jenks';
   }
 
   function panelMethodToStoreMethod(method: PanelMethod): ClassificationMethod {
@@ -89,10 +89,10 @@
       'nested-means': ClassificationMethod.NESTED_MEANS,
       'head-tail': ClassificationMethod.HEAD_TAIL
     };
-    return mapping[method] ?? ClassificationMethod.QUANTILES;
+    return mapping[method] ?? ClassificationMethod.JENKS;
   }
 
-  let currentMethod = $state<PanelMethod>('quantile');
+  let currentMethod = $state<PanelMethod>('jenks');
   let currentNumClasses = $state(5);
   let currentBreaks = $state<ClassBreak[]>([]);
   let currentBreakpoint = $state<number | null>(null);
@@ -138,7 +138,7 @@
     classification: ClassificationConfig | undefined
   ) {
     const method = normalizeClassificationMethod(
-      classification?.method ?? ClassificationMethod.QUANTILES
+      classification?.method ?? ClassificationMethod.JENKS
     );
     const storedNumClasses =
       classification?.numClasses ?? classification?.classes ?? 5;

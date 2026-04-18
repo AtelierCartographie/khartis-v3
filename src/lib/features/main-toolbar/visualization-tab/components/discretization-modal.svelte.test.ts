@@ -27,7 +27,13 @@ import {
   type VisualizationConfig
 } from '$lib/features/commons/store/visualization.store.svelte';
 
-function createVisualization(): VisualizationConfig {
+function createVisualization(options?: {
+  classification?: VisualizationConfig['classification'];
+}): VisualizationConfig {
+  const hasClassificationOverride = Boolean(
+    options && 'classification' in options
+  );
+
   return {
     id: 'viz-1',
     name: 'Visualization',
@@ -36,12 +42,14 @@ function createVisualization(): VisualizationConfig {
     enabled: true,
     mapping: {},
     style: {},
-    classification: {
-      method: ClassificationMethod.QUANTILES,
-      classes: 5,
-      numClasses: 5,
-      colors: ['#f7fbff', '#c6dbef', '#6baed6', '#2171b5', '#08519c']
-    }
+    classification: hasClassificationOverride
+      ? options?.classification
+      : {
+          method: ClassificationMethod.QUANTILES,
+          classes: 5,
+          numClasses: 5,
+          colors: ['#f7fbff', '#c6dbef', '#6baed6', '#2171b5', '#08519c']
+        }
   } as VisualizationConfig;
 }
 
@@ -74,6 +82,21 @@ describe('DiscretizationModal', () => {
       'Head/Tail',
       'Manuel'
     ]);
+  });
+
+  it('defaults the discretization select to K-means when no method is configured', () => {
+    const visualization = createVisualization({ classification: undefined });
+    const { container } = render(DiscretizationModal, {
+      open: true,
+      visualization
+    });
+
+    const select = container.querySelector(
+      '#classification-method'
+    ) as HTMLSelectElement | null;
+
+    expect(select).not.toBeNull();
+    expect(select?.value).toBe('jenks');
   });
 
   it('should update both adjacent bounds when editing a shared break value in manual mode', async () => {

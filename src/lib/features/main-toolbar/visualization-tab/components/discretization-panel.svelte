@@ -45,7 +45,7 @@
   }
 
   let {
-    method = $bindable<ClassificationMethod>('quantile'),
+    method = $bindable<ClassificationMethod>('jenks'),
     numClasses = $bindable(5),
     classCountMax = DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX,
     breaks = $bindable<ClassBreak[]>([
@@ -185,7 +185,7 @@
     <Select
       id="classification-method"
       labelText={m.discretization_method_label()}
-      selected={method}
+      bind:selected={method}
       on:change={handleMethodChange}
     >
       <SelectItem value="jenks" text={m.discretization_method_jenks()} />
