@@ -748,6 +748,25 @@ function dedupeSuggestionsByImplementation(
   return [...bySignature.values()];
 }
 
+/**
+ * Generates ranked visualization suggestions for a dataset, per CDC [VIZ-02a].
+ *
+ * Pipeline (mirrors the POC's `get_viz_suggestions`
+ * https://github.com/AtelierCartographie/khartis-pipeline/blob/main/src/lib/viz_suggestions.ts):
+ *
+ *   1. detectSemioType(column)        → tag each column QTA/QTR/QL/QLO/GEOID/...
+ *   2. computeSuggestionScore(cols)   → 0..100 sémiologique pondéré (avg / 6.5)
+ *   3. filter out GEOID/GEOLAT/GEOLON for the main rank
+ *   4. for k=1..min(4, columns) try every viz from VIZ_CRITERIA whose
+ *      `semioTypes` matches the picked columns and `geometries` contains the
+ *      dataset geometry type
+ *   5. dedupe by implementation signature (e.g. two suggestions producing the
+ *      same rendering keep the higher-scored one)
+ *   6. sort by (score DESC, preference DESC, nbColumns ASC), keep top N
+ *
+ * Returns up to `maxSuggestions` (default 3) — exactly what the UI displays
+ * as cartes proposées before the user lands on the visualization tab.
+ */
 function suggestVisualizations(
   columns: ColumnAnalysis[],
   geometryType: GeometryType | null,

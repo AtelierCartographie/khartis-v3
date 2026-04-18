@@ -11,6 +11,7 @@ import {
 } from '@ateliercartographie/ok-palette';
 import type { WebGLColor, ContrastMode } from '@ateliercartographie/ok-palette';
 import type { Table } from '@uwdata/flechette';
+import { computeJenksBreaks } from './jenks';
 
 const SEQUENTIAL_COLOR_START = '#f7fbff';
 const SEQUENTIAL_COLOR_END = '#08519c';
@@ -52,29 +53,36 @@ interface ColumnStats {
   stddev: number;
 }
 
-function mapMethodToMacro(
-  method: ClassificationMethod
-):
+export type ClassificationMacro =
   | 'quantile'
   | 'equi_width'
-  | 'kmeans'
   | 'nested_means'
   | 'q6'
-  | 'headtail2'
-  | null {
+  | 'headtail2';
+
+/**
+ * Maps a CDC [VIZ-02d] ClassificationMethod to its DuckDB macro name.
+ * Returns null for methods handled in TypeScript:
+ *   - JENKS                (Fisher-Jenks via {@link computeJenksBreaks})
+ *   - STANDARD_DEVIATION   (mean ± k·σ via {@link getStandardDeviationBreaks})
+ *   - MANUAL               (user-provided breaks)
+ * Locked by tests/pipeline/classification-method-mapping.test.ts.
+ */
+export function mapMethodToMacro(
+  method: ClassificationMethod
+): ClassificationMacro | null {
   switch (method) {
     case ClassificationMethod.QUANTILES:
       return 'quantile';
     case ClassificationMethod.EQUAL_INTERVAL:
       return 'equi_width';
-    case ClassificationMethod.JENKS:
-      return 'kmeans';
     case ClassificationMethod.Q6:
       return 'q6';
     case ClassificationMethod.NESTED_MEANS:
       return 'nested_means';
     case ClassificationMethod.HEAD_TAIL:
       return 'headtail2';
+    case ClassificationMethod.JENKS:
     case ClassificationMethod.MANUAL:
     case ClassificationMethod.STANDARD_DEVIATION:
       return null;
@@ -149,7 +157,38 @@ async function queryColumnStats(
   };
 }
 
-function sanitizeBreaks(breaks: number[], min: number, max: number): number[] {
+async function queryColumnValues(context: QueryContext): Promise<number[]> {
+  const result = (await Duck.query(
+    `SELECT "${context.escapedColumn}" AS value
+     FROM "${context.escapedTable}"
+     WHERE "${context.escapedColumn}" IS NOT NULL`,
+    { format: 'arrow-table' }
+  )) as Table;
+
+  const column = result.getChild?.('value');
+  if (!column) return [];
+
+  const values: number[] = [];
+  for (let i = 0; i < result.numRows; i++) {
+    const raw = column.get(i);
+    const value = Number(raw);
+    if (Number.isFinite(value)) {
+      values.push(value);
+    }
+  }
+  return values;
+}
+
+/**
+ * Sanitises an array of break values: keeps only finite values strictly between
+ * min and max (excluded), sorts them ascending and drops consecutive duplicates.
+ * Centralised here so every classification path produces the same output shape.
+ */
+export function sanitizeBreaks(
+  breaks: number[],
+  min: number,
+  max: number
+): number[] {
   return breaks
     .filter((value) => Number.isFinite(value) && value > min && value < max)
     .sort((a, b) => a - b)
@@ -171,7 +210,12 @@ function toIterableValues(raw: unknown): number[] | null {
     .filter((value) => !Number.isNaN(value));
 }
 
-function getEqualIntervalBreaks(
+/**
+ * Equal-interval breaks: divide [min, max] into N classes of equal width.
+ * Used as the universal fallback when a macro fails or returns nothing.
+ * Returns N − 1 internal break values; sanitised to drop ties with min/max.
+ */
+export function getEqualIntervalBreaks(
   min: number,
   max: number,
   numClasses: number
@@ -186,7 +230,12 @@ function getEqualIntervalBreaks(
   return sanitizeBreaks(breaks, min, max);
 }
 
-function getStandardDeviationBreaks(
+/**
+ * Standard-deviation breaks: place break points at mean ± k·σ for k = … −1, 0, +1, …
+ * For N classes returns N − 1 breaks centred on the mean. Returns [] if σ is invalid.
+ * Always pair with sanitiseBreaks to drop breaks falling outside [min, max].
+ */
+export function getStandardDeviationBreaks(
   mean: number,
   stddev: number,
   numClasses: number,
@@ -338,6 +387,10 @@ export async function calculateBreaks(
         stats.min,
         stats.max
       );
+    } else if (method === ClassificationMethod.JENKS) {
+      const values = await queryColumnValues(context);
+      const jenksBreaks = computeJenksBreaks(values, numClasses);
+      breaks = sanitizeBreaks(jenksBreaks, stats.min, stats.max);
     } else {
       const macroName = mapMethodToMacro(method);
 
@@ -451,27 +504,108 @@ export async function calculateBreakCounts(
   }
 }
 
+export interface DivergingSplit {
+  lowerCount: number;
+  upperCount: number;
+  hasCenterClass: boolean;
+}
+
+/**
+ * Splits N classes around a breakpoint value for a diverging palette.
+ * - `lowerCount`: classes whose upper bound <= breakpoint (cold/red side).
+ * - `upperCount`: classes whose lower bound >= breakpoint (warm/blue side).
+ * - `hasCenterClass`: true when the breakpoint falls strictly inside a class
+ *   (that class becomes the neutral centre).
+ *
+ * `breaks` are the internal thresholds (N-1 values) between the N classes.
+ * When breakpoint is null, falls back to symmetric split `[half, half]`.
+ */
+export function computeDivergingSplit(
+  numClasses: number,
+  breaks: readonly number[],
+  breakpointValue: number | null | undefined
+): DivergingSplit {
+  const steps = Math.max(2, Math.floor(numClasses));
+
+  if (
+    breakpointValue == null ||
+    !Number.isFinite(breakpointValue) ||
+    breaks.length !== steps - 1
+  ) {
+    const hasCenterClass = steps % 2 === 1;
+    const half = Math.floor(steps / 2);
+    return { lowerCount: half, upperCount: half, hasCenterClass };
+  }
+
+  let lowerCount = 0;
+  let straddlesClass = false;
+  let resolvedStraddle = false;
+  for (let index = 0; index < breaks.length; index++) {
+    const upperBoundary = breaks[index];
+    if (upperBoundary <= breakpointValue) {
+      lowerCount += 1;
+      continue;
+    }
+    const lowerBoundary = index === 0 ? -Infinity : breaks[index - 1];
+    if (lowerBoundary < breakpointValue && breakpointValue < upperBoundary) {
+      straddlesClass = true;
+    }
+    resolvedStraddle = true;
+    break;
+  }
+
+  if (!resolvedStraddle) {
+    const lastLowerBoundary = breaks[breaks.length - 1];
+    if (lastLowerBoundary < breakpointValue) {
+      straddlesClass = true;
+    }
+  }
+
+  if (straddlesClass) {
+    const upperCount = steps - lowerCount - 1;
+    return {
+      lowerCount: Math.max(0, lowerCount),
+      upperCount: Math.max(0, upperCount),
+      hasCenterClass: true
+    };
+  }
+
+  const upperCount = steps - lowerCount;
+  return {
+    lowerCount: Math.max(0, lowerCount),
+    upperCount: Math.max(0, upperCount),
+    hasCenterClass: false
+  };
+}
+
 /**
  * Generates palette colors for classification breaks via ok-palette.
  * Uses Oklch perceptual color space for uniform luminosity across classes.
  * Supports any class count (no longer clamped to 3–9).
+ *
+ * For diverging palettes, pass `divergingSplit` to position the neutral centre
+ * according to a breakpoint value. Without it, the palette is symmetric.
  */
 export function generateColorsForBreaks(
   numClasses: number,
   palette: 'sequential' | 'diverging' = 'sequential',
-  contrast?: ContrastMode
+  contrast?: ContrastMode,
+  divergingSplit?: DivergingSplit
 ): string[] {
   const steps = Math.max(2, numClasses);
 
   let cssColors: string[];
   if (palette === 'diverging') {
-    const hasCenterClass = steps % 2 === 1;
-    const halfSteps = Math.floor(steps / 2);
+    const split = divergingSplit ?? {
+      lowerCount: Math.floor(steps / 2),
+      upperCount: Math.floor(steps / 2),
+      hasCenterClass: steps % 2 === 1
+    };
     cssColors = divergentSequential({
       colorA: DIVERGING_COLOR_A,
       colorB: DIVERGING_COLOR_B,
-      steps: [halfSteps, halfSteps],
-      hasCenterClass,
+      steps: [split.lowerCount, split.upperCount],
+      hasCenterClass: split.hasCenterClass,
       contrast
     });
   } else {

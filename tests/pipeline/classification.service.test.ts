@@ -114,6 +114,38 @@ describe('generateColorsForBreaks — diverging', () => {
     expect(colors).toHaveLength(5);
     for (const c of colors) expect(c).toMatch(HEX_COLOR);
   });
+
+  it('honours an asymmetric divergingSplit (lower < upper)', () => {
+    const colors = generateColorsForBreaks(5, 'diverging', undefined, {
+      lowerCount: 1,
+      upperCount: 3,
+      hasCenterClass: true
+    });
+    expect(colors).toHaveLength(5);
+  });
+
+  it('honours an asymmetric divergingSplit (lower > upper)', () => {
+    const colors = generateColorsForBreaks(5, 'diverging', undefined, {
+      lowerCount: 3,
+      upperCount: 1,
+      hasCenterClass: true
+    });
+    expect(colors).toHaveLength(5);
+  });
+
+  it('honours an asymmetric divergingSplit without a centre class', () => {
+    const colors = generateColorsForBreaks(5, 'diverging', undefined, {
+      lowerCount: 2,
+      upperCount: 3,
+      hasCenterClass: false
+    });
+    expect(colors).toHaveLength(5);
+  });
+
+  it('falls back to symmetric split when divergingSplit is omitted', () => {
+    const colors = generateColorsForBreaks(4, 'diverging');
+    expect(colors).toHaveLength(4);
+  });
 });
 
 describe('applyPaletteInversion', () => {
@@ -286,7 +318,6 @@ describe('calculateBreaks — macro methods', () => {
   it.each([
     ['quantiles', 'quantile('],
     ['equal_interval', 'equi_width('],
-    ['jenks', 'kmeans('],
     ['q6', 'q6('],
     ['nested_means', 'nested_means('],
     ['head_tail', 'headtail2(']
@@ -342,7 +373,7 @@ describe('calculateBreaks — macro methods', () => {
     const result = await calculateBreaks({
       datasetId: 'src',
       columnName: 'value',
-      method: 'jenks' as never,
+      method: 'quantiles' as never,
       numClasses: 5
     });
 
@@ -377,7 +408,7 @@ describe('calculateBreaks — macro methods', () => {
     const result = await calculateBreaks({
       datasetId: 'src',
       columnName: 'value',
-      method: 'jenks' as never,
+      method: 'quantiles' as never,
       numClasses: 5
     });
 
@@ -514,7 +545,7 @@ describe('calculateBreaks — Flechette edge cases', () => {
     const result = await calculateBreaks({
       datasetId: 'src',
       columnName: 'value',
-      method: 'jenks' as never,
+      method: 'quantiles' as never,
       numClasses: 5
     });
 
@@ -556,7 +587,7 @@ describe('calculateBreaks — Flechette edge cases', () => {
     const result = await calculateBreaks({
       datasetId: 'src',
       columnName: 'value',
-      method: 'jenks' as never,
+      method: 'quantiles' as never,
       numClasses: 5
     });
 
