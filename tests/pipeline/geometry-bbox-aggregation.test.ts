@@ -70,6 +70,37 @@ describe('extractGeometryInfo bbox aggregation', () => {
     expect(row.maxY).toBeCloseTo(71.12, 1);
   });
 
+  it('basemap-import bbox query reproduces extractGeometryInfo result (regression guard)', async () => {
+    // Reproduces the exact SQL pattern used in basemap-import.utils.ts:queryBasemapBounds.
+    // Before the fix this used scalar ST_Extent and returned only the first feature's bbox.
+    const row = await fetchSingleRow<{
+      minX: number;
+      maxX: number;
+      minY: number;
+      maxY: number;
+    }>(
+      `WITH agg AS (
+         SELECT ST_Extent_Agg(geom) AS extent FROM nuts2
+       )
+       SELECT
+         ST_XMin(extent) AS "minX",
+         ST_YMin(extent) AS "minY",
+         ST_XMax(extent) AS "maxX",
+         ST_YMax(extent) AS "maxY"
+       FROM agg`
+    );
+
+    expect(row.minX).toBeCloseTo(-63.09, 1);
+    expect(row.maxX).toBeCloseTo(55.84, 1);
+    expect(row.minY).toBeCloseTo(-21.39, 1);
+    expect(row.maxY).toBeCloseTo(71.12, 1);
+
+    // The pre-fix scalar query would return the bbox of the first feature only
+    // (Burgenland, Austria). The aggregated bbox must be at least 100x larger.
+    const aggArea = (row.maxX - row.minX) * (row.maxY - row.minY);
+    expect(aggArea).toBeGreaterThan(10000);
+  });
+
   it('ST_Extent_Agg matches MIN/MAX(ST_X*/ST_Y*) over the column', async () => {
     const aggRow = await fetchSingleRow<{
       a_minX: number;

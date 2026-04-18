@@ -1,0 +1,272 @@
+import { GeoJsonLayer } from '@deck.gl/layers';
+import type { Table as ArrowTable } from 'apache-arrow/Arrow';
+import type { Feature, FeatureCollection, Polygon } from 'geojson';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  ClassificationMethod,
+  PrimitiveFilterType,
+  VisualizationType,
+  type VisualizationConfig
+} from '$lib/features/commons/store/visualization.store.svelte';
+import { FillMode, StrokeMode } from '$lib/features/main-toolbar/constants';
+import type { GeometryInfo, LayerContext } from '../types';
+
+const { arrowTableToGeoJSONMock, projectGeoJSONMock } = vi.hoisted(() => {
+  class WorkerStub {
+    terminate() {}
+
+    postMessage() {}
+
+    addEventListener() {}
+
+    removeEventListener() {}
+  }
+
+  Object.assign(globalThis, {
+    Worker: WorkerStub
+  });
+
+  return {
+    arrowTableToGeoJSONMock: vi.fn(),
+    projectGeoJSONMock: vi.fn()
+  };
+});
+
+vi.mock('../io', async () => {
+  const actual = await vi.importActual<typeof import('../io')>('../io');
+
+  return {
+    ...actual,
+    arrowTableToGeoJSON: arrowTableToGeoJSONMock
+  };
+});
+
+vi.mock('../utils/geoarrow-stream-bridge', async () => {
+  const actual = await vi.importActual<
+    typeof import('../utils/geoarrow-stream-bridge')
+  >('../utils/geoarrow-stream-bridge');
+
+  return {
+    ...actual,
+    projectGeoJSON: projectGeoJSONMock
+  };
+});
+
+vi.mock('./pattern-texture', async () => {
+  const actual =
+    await vi.importActual<typeof import('./pattern-texture')>(
+      './pattern-texture'
+    );
+
+  return {
+    ...actual,
+    getPatternAtlas: vi.fn(() => ({
+      atlas: {} as HTMLCanvasElement,
+      mapping: {
+        diagonal: { x: 0, y: 0, width: 8, height: 8 }
+      }
+    }))
+  };
+});
+
+import {
+  createPolygonLayers,
+  resolveSplitMappingFeatureIdColumn
+} from './layer-factory';
+
+function createTableWithFields(fieldNames: string[]): ArrowTable {
+  return {
+    schema: {
+      fields: fieldNames.map((name) => ({ name }))
+    }
+  } as unknown as ArrowTable;
+}
+
+function createPolygonFeature(
+  id: string,
+  year: number
+): Feature<Polygon, { id: string; year: number }> {
+  return {
+    type: 'Feature',
+    properties: { id, year },
+    geometry: {
+      type: 'Polygon',
+      coordinates: [
+        [
+          [0, 0],
+          [1, 0],
+          [1, 1],
+          [0, 1],
+          [0, 0]
+        ]
+      ]
+    }
+  };
+}
+
+function createVisualization(fillMode: FillMode): VisualizationConfig {
+  return {
+    id: 'viz-1',
+    name: 'Pattern test',
+    type: VisualizationType.CHOROPLETH,
+    datasetId: 'dataset-1',
+    enabled: true,
+    primitiveFilters: [PrimitiveFilterType.POLYGON],
+    polygon: {
+      enabled: true,
+      fillMode,
+      fillOpacity: 1,
+      strokeMode: StrokeMode.NONE,
+      strokeWidth: 0,
+      strokeOpacity: 0,
+      strokeDashed: false,
+      classification: {
+        method: ClassificationMethod.MANUAL,
+        classes: 1,
+        patternId: 'diagonal'
+      }
+    },
+    style: {
+      fillOpacity: 1,
+      strokeOpacity: 0,
+      strokeWidth: 0
+    },
+    mapping: {}
+  };
+}
+
+function createContext(
+  viz: VisualizationConfig,
+  yearFilter?: LayerContext['yearFilter']
+): LayerContext {
+  return {
+    viz,
+    datasetId: 'dataset-1',
+    fillColor: [51, 102, 204],
+    symbolFillColor: [51, 102, 204],
+    strokeColor: [20, 20, 20],
+    fillOpacity: 1,
+    strokeWidth: 1,
+    strokeOpacity: 1,
+    statistics: { min: 0, max: 1 },
+    categoryColorMap: null,
+    yearFilter,
+    customProjection: {
+      stream: (sink) => sink
+    } as LayerContext['customProjection']
+  };
+}
+
+function createGeometryInfo(): GeometryInfo {
+  return {
+    type: 'Polygon',
+    encoding: 'geojson',
+    geoColumn: 'geometry',
+    isNativeGeoArrow: false,
+    isWkbEncoded: false,
+    isGeoJsonEncoded: true
+  };
+}
+
+function getPatternLayer(
+  layers: ReturnType<typeof createPolygonLayers>
+): GeoJsonLayer | undefined {
+  return layers.find(
+    (layer) =>
+      layer instanceof GeoJsonLayer &&
+      String(layer.props.id).includes('-pattern-')
+  ) as GeoJsonLayer | undefined;
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  projectGeoJSONMock.mockImplementation((geojson) => geojson);
+});
+
+describe('resolveSplitMappingFeatureIdColumn', () => {
+  it('prefers the split geometry feature id column when the table still exposes it', () => {
+    const table = createTableWithFields(['__feature_id__', 'label']);
+
+    expect(resolveSplitMappingFeatureIdColumn(table, '__feature_id__')).toBe(
+      '__feature_id__'
+    );
+  });
+
+  it('falls back to basemap_id for representative point tables built from joined datasets', () => {
+    const table = createTableWithFields(['basemap_id', 'label']);
+
+    expect(resolveSplitMappingFeatureIdColumn(table, '__feature_id__')).toBe(
+      'basemap_id'
+    );
+  });
+});
+
+describe('createPolygonLayers', () => {
+  it('projects and year-filters the pattern overlay in the GeoJSON fallback path', () => {
+    const sourceGeoJson: FeatureCollection<Polygon> = {
+      type: 'FeatureCollection',
+      features: [
+        createPolygonFeature('keep', 2024),
+        createPolygonFeature('drop', 2023)
+      ]
+    };
+    const projectedGeoJson: FeatureCollection<Polygon> = {
+      type: 'FeatureCollection',
+      features: [
+        createPolygonFeature('keep-projected', 2024),
+        createPolygonFeature('drop-projected', 2023)
+      ]
+    };
+
+    arrowTableToGeoJSONMock.mockReturnValue(sourceGeoJson);
+    projectGeoJSONMock.mockReturnValue(projectedGeoJson);
+
+    const layers = createPolygonLayers(
+      createTableWithFields([]),
+      createGeometryInfo(),
+      createContext(createVisualization(FillMode.UNIQUE), {
+        column: 'year',
+        value: 2024
+      })
+    );
+
+    const fillLayer = layers.find(
+      (layer) =>
+        layer instanceof GeoJsonLayer &&
+        !String(layer.props.id).includes('-pattern-')
+    ) as GeoJsonLayer | undefined;
+    const patternLayer = getPatternLayer(layers);
+
+    expect(projectGeoJSONMock).toHaveBeenCalledWith(
+      sourceGeoJson,
+      expect.objectContaining({ stream: expect.any(Function) })
+    );
+    expect(fillLayer).toBeDefined();
+    expect(patternLayer).toBeDefined();
+    expect(
+      (fillLayer?.props.data as FeatureCollection<Polygon>).features.map(
+        (feature) => feature.properties?.id
+      )
+    ).toEqual(['keep-projected']);
+    expect(
+      (patternLayer?.props.data as FeatureCollection<Polygon>).features.map(
+        (feature) => feature.properties?.id
+      )
+    ).toEqual(['keep-projected']);
+  });
+
+  it('skips the pattern overlay when polygon fill is disabled', () => {
+    arrowTableToGeoJSONMock.mockReturnValue({
+      type: 'FeatureCollection',
+      features: [createPolygonFeature('keep', 2024)]
+    } satisfies FeatureCollection<Polygon>);
+
+    const layers = createPolygonLayers(
+      createTableWithFields([]),
+      createGeometryInfo(),
+      createContext(createVisualization(FillMode.NONE))
+    );
+
+    expect(getPatternLayer(layers)).toBeUndefined();
+  });
+});

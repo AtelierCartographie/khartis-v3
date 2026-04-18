@@ -34,6 +34,7 @@
   import FacetsPage from '../step-toolbar/tools/facets/facets-page.svelte';
   import { loadDatasetsSequentially } from './utils/load-datasets-sequentially';
   import {
+    getSymbolPrimitive,
     visualizationStore,
     type VisualizationConfig
   } from '../commons/store/visualization.store.svelte';
@@ -327,7 +328,7 @@
     const matches: VisualizationConfig[] = [];
     for (const viz of visualizationStore.visualizations) {
       if (viz.datasetId !== datasetId) continue;
-      if (viz.modes?.symbol !== SymbolMode.DENSITY) continue;
+      if (getSymbolPrimitive(viz)?.mode !== SymbolMode.DENSITY) continue;
       if (!viz.density?.valueColumn || !viz.density?.ratio) continue;
       matches.push(viz);
     }

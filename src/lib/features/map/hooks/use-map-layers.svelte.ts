@@ -1,7 +1,6 @@
 import type { Layer } from '@deck.gl/core';
 import type { MapboxOverlay } from '@deck.gl/mapbox';
 import type { Map as MapLibreMap } from 'maplibre-gl';
-import type { GeoProjection } from 'd3-geo';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { FeatureCollection } from 'geojson';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
@@ -46,17 +45,13 @@ import {
 } from '../utils/layer-order.utils';
 import type { DataTableFilter } from '$lib/features/duckdb/types';
 import { getProjectionState } from '$lib/features/step-toolbar/tools/projections/projection.store.svelte';
-import { proj4d3 } from '../utils/proj4d3';
 import type { ProjectionLike } from 'geoarrow-deck-stream';
-import {
-  fitProjectionToBbox,
-  getProjectionById
-} from '$lib/features/commons/utils/projection.utils';
 import type { BasemapMetadata } from '../types/basemap.types';
 import { shouldUseIdentityProjectionForDatasetCrs } from '../utils/dataset-crs';
 import { fitBasemapRenderProjection } from '../utils/fit-basemap-render-projection.utils';
 import { shouldShowOrthographicBasemapLayers } from '../utils/orthographic-basemap-visibility';
 import { resolveProjectionForRender } from '../utils/projection-priority';
+import { resolveUserProjectionOverride } from '../utils/user-projection.utils';
 import { getRepresentativePointArrowTable } from '$lib/features/duckdb/orchestrator/arrow-ops';
 import { resolveRepresentativePointTableName } from './representative-point-table.utils';
 
@@ -190,7 +185,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
   >();
   const representativePointLoadFailures = new WeakSet<ArrowTable>();
   let cachedProjectionOverrideKey: string | null = null;
-  let cachedProjectionOverrideRef: GeoProjection | undefined;
+  let cachedProjectionOverrideRef: ProjectionLike | undefined;
 
   function getProjectionViewportSize(): { width: number; height: number } {
     return {
@@ -276,44 +271,13 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       return cachedProjectionOverrideRef;
     }
 
-    let projectionOverride: GeoProjection | undefined;
-
-    if (projState.customCode) {
-      try {
-        projectionOverride = proj4d3(projState.customCode);
-      } catch (error) {
-        logger.error(
-          'Custom CRS code failed for thematic layers, using default basemap projection',
-          LogCategory.MAP,
-          { customCode: projState.customCode, error }
-        );
-      }
-    } else {
-      const projectionInfo = getProjectionById(projState.selected);
-      projectionOverride = projectionInfo?.projection();
-    }
-
-    if (projectionOverride) {
-      const center = projState.center ?? [
-        projState.longitude,
-        projState.latitude
-      ];
-
-      if ('center' in projectionOverride) {
-        projectionOverride.center(center);
-      }
-      if ('rotate' in projectionOverride) {
-        projectionOverride.rotate([projState.rotation, 0, 0]);
-      }
-
-      fitProjectionToBbox(
-        projectionOverride,
-        fitBbox,
-        viewportSize.width,
-        viewportSize.height,
-        fitPaddingPx
-      );
-    }
+    const projectionOverride = resolveUserProjectionOverride({
+      state: projState,
+      fitBbox,
+      viewportSize,
+      padding: fitPaddingPx,
+      projectionPresets: basemapService.projectionPresets
+    });
 
     // Downstream GeoArrow/projection caches key by ProjectionLike reference.
     // Recreating the same override projection on every layer refresh defeats

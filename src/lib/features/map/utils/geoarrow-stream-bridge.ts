@@ -28,14 +28,17 @@ import type {
   ParserOptions,
   ProjectionLike
 } from 'geoarrow-deck-stream';
-import { geoPath, type GeoProjection } from 'd3-geo';
+import { type GeoProjection } from 'd3-geo';
 // d3-geo-projection has no bundled type declarations — import via namespace cast
 import * as _d3GeoProjection from 'd3-geo-projection';
 
-const { geoNaturalEarth2 } = _d3GeoProjection as unknown as Record<
-  string,
-  () => GeoProjection
->;
+const { geoNaturalEarth2, geoProject } = _d3GeoProjection as unknown as {
+  geoNaturalEarth2: () => GeoProjection;
+  geoProject: (
+    object: GeoJSON.GeoJsonObject,
+    projection: ProjectionLike
+  ) => GeoJSON.GeoJsonObject | null;
+};
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type {
   BasemapMetadata,
@@ -71,55 +74,42 @@ const projectedBboxCache = new WeakMap<
   Map<string, [number, number, number, number] | null>
 >();
 
+function createProjectionPointSampler(
+  projection: ProjectionLike
+): (coordinates: [number, number]) => [number, number] | null {
+  let projected: [number, number] | null = null;
+  const stream = projection.stream({
+    point(x: number, y: number): void {
+      if (Number.isFinite(x) && Number.isFinite(y)) {
+        projected = [x, y];
+      }
+    },
+    lineStart(): void {},
+    lineEnd(): void {},
+    polygonStart(): void {},
+    polygonEnd(): void {}
+  });
+
+  return (coordinates: [number, number]) => {
+    projected = null;
+    stream.point(coordinates[0], coordinates[1]);
+    return projected;
+  };
+}
+
 function sampleProjectedBbox(
   projection: ProjectionLike,
   bbox: [number, number, number, number]
 ): [number, number, number, number] | null {
-  const polygon: GeoJSON.Feature<GeoJSON.Polygon> = {
-    type: 'Feature',
-    properties: {},
-    geometry: {
-      type: 'Polygon',
-      coordinates: [
-        [
-          [bbox[0], bbox[1]],
-          [bbox[2], bbox[1]],
-          [bbox[2], bbox[3]],
-          [bbox[0], bbox[3]],
-          [bbox[0], bbox[1]]
-        ]
-      ]
-    }
-  };
-
-  try {
-    const [[minX, minY], [maxX, maxY]] = geoPath(
-      projection as unknown as GeoProjection
-    ).bounds(polygon);
-
-    if (
-      [minX, minY, maxX, maxY].every((value) => Number.isFinite(value)) &&
-      maxX >= minX &&
-      maxY >= minY
-    ) {
-      return [minX, minY, maxX, maxY];
-    }
-  } catch {
-    // Fallback to manual edge sampling for projection-like objects that do not
-    // expose the full d3-geo path interface.
-  }
-
   const [west, south, east, north] = bbox;
-  const steps = 20;
+  const steps = 32;
   const xs: number[] = [];
   const ys: number[] = [];
+  const projectPoint = createProjectionPointSampler(projection);
 
   const tryProject = (lon: number, lat: number) => {
-    const proj = projection as unknown as (
-      c: [number, number]
-    ) => [number, number] | null;
-    const result = proj([lon, lat]);
-    if (result && isFinite(result[0]) && isFinite(result[1])) {
+    const result = projectPoint([lon, lat]);
+    if (result && Number.isFinite(result[0]) && Number.isFinite(result[1])) {
       xs.push(result[0]);
       ys.push(result[1]);
     }
@@ -306,33 +296,14 @@ export function buildProjectionForBasemap(
   }
 
   if (projTo.type === 'composite' && projTo.preset && projectionPresets) {
-    const preset = projectionPresets[projTo.preset];
-    if (preset?.entries?.length) {
-      try {
-        return buildCompositeProjection({
-          width,
-          height,
-          entries: preset.entries.map((entry) => ({
-            id: entry.id,
-            projection: resolveSimpleProjection(entry.proj4),
-            bounds: [
-              entry.bounds[0][0],
-              entry.bounds[0][1],
-              entry.bounds[1][0],
-              entry.bounds[1][1]
-            ],
-            layout: entry.layout,
-            scaleMultiplier: entry.scaleMultiplier
-          }))
-        });
-      } catch (error) {
-        logger.warn(
-          'Failed to build composite projection, falling back to identity',
-          LogCategory.MAP,
-          { preset: projTo.preset, error }
-        );
-        return geoIdentity();
-      }
+    const projection = buildCompositeProjectionFromPresetId(
+      projTo.preset,
+      width,
+      height,
+      projectionPresets
+    );
+    if (projection) {
+      return projection;
     }
   }
 
@@ -342,6 +313,48 @@ export function buildProjectionForBasemap(
     { projTo }
   );
   return geoIdentity();
+}
+
+export function buildCompositeProjectionFromPresetId(
+  presetId: string,
+  width: number,
+  height: number,
+  projectionPresets: ProjectionPresets | null
+): ProjectionLike | null {
+  if (!projectionPresets) {
+    return null;
+  }
+
+  const preset = projectionPresets[presetId];
+  if (!preset?.entries?.length) {
+    return null;
+  }
+
+  try {
+    return buildCompositeProjection({
+      width,
+      height,
+      entries: preset.entries.map((entry) => ({
+        id: entry.id,
+        projection: resolveSimpleProjection(entry.proj4),
+        bounds: [
+          entry.bounds[0][0],
+          entry.bounds[0][1],
+          entry.bounds[1][0],
+          entry.bounds[1][1]
+        ],
+        layout: entry.layout,
+        scaleMultiplier: entry.scaleMultiplier
+      }))
+    });
+  } catch (error) {
+    logger.warn(
+      'Failed to build composite projection, falling back to identity',
+      LogCategory.MAP,
+      { preset: presetId, error }
+    );
+    return null;
+  }
 }
 
 /**
@@ -754,80 +767,41 @@ export function projectGeoJSON(
   geojson: GeoJSON.FeatureCollection,
   projection: ProjectionLike
 ): GeoJSON.FeatureCollection {
-  const proj = projection as unknown as (
-    c: [number, number]
-  ) => [number, number] | null;
-
-  function projectCoord(coord: number[]): [number, number] | null {
-    const result = proj([coord[0], coord[1]]);
-    if (result && isFinite(result[0]) && isFinite(result[1])) {
-      return [result[0], result[1]];
+  function sanitizeGeometry(
+    geometry: GeoJSON.Geometry | null
+  ): GeoJSON.Geometry | null {
+    if (!geometry) {
+      return null;
     }
-    return null;
+
+    if (geometry.type !== 'GeometryCollection') {
+      return geometry;
+    }
+
+    const geometries = geometry.geometries
+      .map((child) => sanitizeGeometry(child))
+      .filter((child): child is GeoJSON.Geometry => child !== null);
+
+    return geometries.length > 0 ? { ...geometry, geometries } : null;
   }
 
-  function projectCoords(coords: number[][]): number[][] | null {
-    const out: number[][] = [];
-    for (const c of coords) {
-      const p = projectCoord(c);
-      if (!p) return null;
-      out.push(p);
-    }
-    return out;
-  }
+  const projected = geoProject(
+    geojson,
+    projection
+  ) as GeoJSON.FeatureCollection | null;
 
-  function projectRings(rings: number[][][]): number[][][] | null {
-    const out: number[][][] = [];
-    for (const ring of rings) {
-      const r = projectCoords(ring);
-      if (!r) return null;
-      out.push(r);
-    }
-    return out;
-  }
-
-  function projectGeometry(geom: GeoJSON.Geometry): GeoJSON.Geometry | null {
-    switch (geom.type) {
-      case 'Point': {
-        const c = projectCoord(geom.coordinates);
-        return c ? { ...geom, coordinates: c } : null;
-      }
-      case 'MultiPoint': {
-        const cs = projectCoords(geom.coordinates);
-        return cs ? { ...geom, coordinates: cs } : null;
-      }
-      case 'LineString': {
-        const cs = projectCoords(geom.coordinates);
-        return cs ? { ...geom, coordinates: cs } : null;
-      }
-      case 'MultiLineString': {
-        const rs = projectRings(geom.coordinates);
-        return rs ? { ...geom, coordinates: rs } : null;
-      }
-      case 'Polygon': {
-        const rs = projectRings(geom.coordinates);
-        return rs ? { ...geom, coordinates: rs } : null;
-      }
-      case 'MultiPolygon': {
-        const projected = geom.coordinates.map(projectRings);
-        if (projected.some((r) => r === null)) return null;
-        return { ...geom, coordinates: projected as number[][][][] };
-      }
-      case 'GeometryCollection': {
-        const geoms = geom.geometries.map(projectGeometry);
-        if (geoms.some((g) => g === null)) return null;
-        return { ...geom, geometries: geoms as GeoJSON.Geometry[] };
-      }
-      default:
-        return geom;
-    }
+  if (!projected) {
+    return {
+      ...geojson,
+      features: []
+    };
   }
 
   return {
-    ...geojson,
-    features: geojson.features
+    ...projected,
+    features: projected.features
       .map((f) => {
-        const geometry = projectGeometry(f.geometry);
+        const geometry = sanitizeGeometry(f.geometry);
         return geometry ? ({ ...f, geometry } as GeoJSON.Feature) : null;
       })
       .filter((f): f is GeoJSON.Feature => f !== null)

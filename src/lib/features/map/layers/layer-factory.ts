@@ -6,11 +6,7 @@ import {
   PathLayer,
   ScatterplotLayer
 } from '@deck.gl/layers';
-import {
-  CollisionFilterExtension,
-  DataFilterExtension,
-  PathStyleExtension
-} from '@deck.gl/extensions';
+import { DataFilterExtension, PathStyleExtension } from '@deck.gl/extensions';
 import RotatableFillStyleExtension from './rotatable-fill-style-extension';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { FeatureCollection, Geometry } from 'geojson';
@@ -70,6 +66,7 @@ import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import {
   getCategoricalColorMap,
   hasCompleteCategoricalColorMap,
+  getClassedSizeForValue,
   getColorForValue,
   getSizeForValue,
   shouldApplyLineCategorical,
@@ -78,6 +75,7 @@ import {
   shouldApplyChoropleth,
   shouldApplyProportionalSymbols
 } from '../utils/data-styling.utils';
+import { resolveTextLabelPlacement } from '../utils/text-label-placement';
 import {
   createClassedSizeAccessor,
   createCategoricalColorAccessor,
@@ -99,7 +97,6 @@ import {
   PATTERN_TYPE_MAP
 } from './pattern-texture';
 import {
-  createSolidPolygonLayerProps,
   createPathLayerProps,
   createScatterplotLayerProps,
   createPolygonFillColorAttribute
@@ -125,6 +122,7 @@ import {
 import { resolveHoverHighlightProps } from '../utils/hover-highlight-props';
 import { resolveMissingDataPointShape as resolveMissingPointShape } from '../utils/legend.utils';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
+import { createCompatibleSolidPolygonLayerProps } from '../utils/solid-polygon-layer-props';
 
 /**
  * Split-rendering aware row accessor (issue #87). When `ctx.splitDatasetTable`
@@ -163,13 +161,11 @@ const DASH_EXTENSION = new PathStyleExtension({ dash: true });
 const DEFAULT_DASH_ARRAY: [number, number] = [3, 2];
 const DEFAULT_TEXT_MASK_PADDING: [number, number] = [3, 1];
 const TEXT_COLLISION_SAFE_PADDING: [number, number] = [4, 4];
+const TEXT_BACKGROUND_PADDING: [number, number] = [6, 4];
 const TRANSPARENT_BACKGROUND_COLOR: Color = [0, 0, 0, 0];
 const POINT_SYMBOL_ICON_VIEWBOX_SIZE = 64;
 const DEFAULT_LABEL_COLOR = hexToRgb(DEFAULT_COLORS.label);
 const DEFAULT_TEXT_COLOR = hexToRgb(DEFAULT_COLORS.text);
-const LABEL_COLLISION_PRIORITY = 100;
-const TEXT_COLLISION_PRIORITY = 0;
-const TEXT_COLLISION_GROUP_SUFFIX = 'text-overlays';
 const pointSymbolIconCache = new Map<string, string>();
 
 function colorToCss(color: Color): string {
@@ -1413,7 +1409,6 @@ function getCachedGeoJSON(
 
 /** Cached DataFilterExtension singleton — reused across all layers with year filtering */
 const DATA_FILTER_EXTENSION = new DataFilterExtension({ filterSize: 1 });
-const COLLISION_FILTER_EXTENSION = new CollisionFilterExtension();
 
 /**
  * Build DataFilterExtension props for a binary layer when yearFilter is active.
@@ -1524,29 +1519,13 @@ function resolveThematicScopeId(ctx: LayerContext): string {
   return ctx.viz?.id ?? ctx.datasetId ?? 'default';
 }
 
-function resolveTextCollisionGroup(ctx: LayerContext): string {
-  const datasetScope = ctx.datasetId || resolveThematicScopeId(ctx);
-  return `${datasetScope}-${TEXT_COLLISION_GROUP_SUFFIX}`;
-}
-
-function createTextCollisionProps(
-  ctx: LayerContext,
-  enabled: boolean,
-  priority: number
-): Pick<
+function createTextCollisionProps(): Pick<
   TextLayerWithCollisionProps,
-  | 'extensions'
-  | 'collisionEnabled'
-  | 'collisionGroup'
-  | 'getCollisionPriority'
-  | 'collisionTestProps'
+  'extensions' | 'collisionEnabled'
 > {
-  const collisionSupported = !ctx.modelMatrix;
   return {
-    extensions: collisionSupported ? [COLLISION_FILTER_EXTENSION] : [],
-    collisionEnabled: collisionSupported && enabled,
-    collisionGroup: resolveTextCollisionGroup(ctx),
-    getCollisionPriority: priority
+    extensions: [],
+    collisionEnabled: false
   };
 }
 
@@ -1649,6 +1628,25 @@ function resolveTextAnchor(
     default:
       return 'middle';
   }
+}
+
+function resolveVerticalPadding(
+  padding: readonly number[] | undefined
+): number {
+  return Array.isArray(padding) ? (padding[1] ?? 0) : 0;
+}
+
+function isTextDatumAccessor<T>(
+  accessor: T | ((datum: TextLayerDatum) => T)
+): accessor is (datum: TextLayerDatum) => T {
+  return typeof accessor === 'function';
+}
+
+function resolveAccessorValue<T>(
+  accessor: T | ((datum: TextLayerDatum) => T),
+  datum: TextLayerDatum
+): T {
+  return isTextDatumAccessor(accessor) ? accessor(datum) : accessor;
 }
 
 function resolveVariableTextSizeBounds(baseSize: number): {
@@ -2183,6 +2181,207 @@ function createTextOverlayLayers(
 
   const labelSizeAccessor = createTextSizeAccessor(labelBaseSize);
   const textSizeAccessor = createTextSizeAccessor(textBaseSize);
+  const pointStatistics = ctx.pointStatistics ?? ctx.statistics;
+  const pointConfig = getSymbolPrimitive(viz);
+  const pointValueColumn = pointConfig?.valueColumn;
+  const pointSizeColumn = pointConfig?.sizeColumn;
+  const pointClassification =
+    getPrimitiveClassification(viz, PrimitiveFilterType.POINT) ??
+    viz.classification;
+  const useProportionalSymbols = shouldApplyProportionalSymbols(viz);
+  const useClassedSymbols =
+    pointConfig?.mode === SymbolMode.CLASSES &&
+    !!pointValueColumn &&
+    !!pointClassification?.breaks &&
+    pointClassification.breaks.length >= 2;
+  const useCategoricalPointColor = shouldApplyCategorical(
+    viz,
+    PrimitiveFilterType.POINT
+  );
+  const usePointChoropleth = shouldApplyChoropleth(
+    viz,
+    PrimitiveFilterType.POINT
+  );
+  const pointMissingColumn = resolvePointMissingColumn(
+    viz,
+    useProportionalSymbols,
+    useClassedSymbols,
+    useCategoricalPointColor,
+    usePointChoropleth
+  );
+  const pointMissingVector = pointMissingColumn
+    ? textAttributeTable.getChild(pointMissingColumn)
+    : null;
+  const pointSizeVector =
+    useProportionalSymbols && pointSizeColumn
+      ? textAttributeTable.getChild(pointSizeColumn)
+      : null;
+  const pointValueVector =
+    useClassedSymbols && pointValueColumn
+      ? textAttributeTable.getChild(pointValueColumn)
+      : null;
+  const showMissingPoints = pointConfig?.missingData?.show ?? true;
+  const uniquePointRadius = Math.max(1, (pointConfig?.size ?? 10) / 2);
+  const minPointRadius = Math.max(1, pointConfig?.minSize ?? 1);
+  const maxPointRadius = Math.max(
+    minPointRadius,
+    pointConfig?.maxSize ?? uniquePointRadius
+  );
+  const missingPointRadius = Math.max(
+    1,
+    pointConfig?.missingData?.size ?? uniquePointRadius
+  );
+  const classCountHint =
+    pointClassification?.numClasses ?? pointClassification?.colors?.length;
+  const hasPointSymbols = Boolean(viz && pointConfig?.enabled);
+  const secondaryLabelValueVector = secondaryLabelColumn
+    ? textAttributeTable.getChild(secondaryLabelColumn)
+    : null;
+
+  const textBackgroundConfig = textConfig.background;
+  const backgroundEnabled = textBackgroundConfig.fillMode !== FillMode.NONE;
+  const backgroundValueVector = textBackgroundConfig.valueColumn
+    ? textAttributeTable.getChild(textBackgroundConfig.valueColumn)
+    : null;
+  const backgroundCategoryVector = textBackgroundConfig.categoryColumn
+    ? textAttributeTable.getChild(textBackgroundConfig.categoryColumn)
+    : null;
+  const backgroundCategoryColorMap = buildCategoryColorMapFromLabels(
+    textBackgroundConfig.classification?.labels,
+    textBackgroundConfig.classification?.colors
+  );
+  const backgroundFillFallback = resolveStyleColor(
+    textBackgroundConfig.fillColor,
+    [255, 255, 255]
+  );
+  const backgroundStrokeFallback = resolveStyleColor(
+    textBackgroundConfig.strokeColor,
+    [0, 0, 0]
+  );
+  const backgroundBaseFillAccessor = backgroundEnabled
+    ? textBackgroundConfig.fillMode === FillMode.CLASSES
+      ? createChoroplethTextColorAccessor(
+          backgroundValueVector,
+          textBackgroundConfig.classification?.breaks,
+          textBackgroundConfig.classification?.colors,
+          backgroundFillFallback,
+          textBackgroundConfig.fillOpacity
+        )
+      : textBackgroundConfig.fillMode === FillMode.CATEGORIES
+        ? createCategoricalAccessorFromMap(
+            backgroundCategoryVector,
+            backgroundCategoryColorMap,
+            backgroundFillFallback,
+            textBackgroundConfig.fillOpacity
+          )
+        : withOpacity(backgroundFillFallback, textBackgroundConfig.fillOpacity)
+    : null;
+  const backgroundStrokeActive =
+    backgroundEnabled &&
+    textBackgroundConfig.strokeMode !== StrokeMode.NONE &&
+    textBackgroundConfig.strokeWidth > 0 &&
+    textBackgroundConfig.strokeOpacity > 0;
+  const backgroundBorderWidth = backgroundStrokeActive
+    ? textBackgroundConfig.strokeWidth
+    : 0;
+  const backgroundBorderColor = backgroundStrokeActive
+    ? withOpacity(backgroundStrokeFallback, textBackgroundConfig.strokeOpacity)
+    : TRANSPARENT_BACKGROUND_COLOR;
+  const sharedBackgroundPadding = backgroundEnabled
+    ? TEXT_BACKGROUND_PADDING
+    : textConfig.dxpMasking
+      ? DEFAULT_TEXT_MASK_PADDING
+      : TEXT_COLLISION_SAFE_PADDING;
+  const resolveBackgroundColor = (datum: TextLayerDatum): Color => {
+    if (datum.isMissingData) {
+      return TRANSPARENT_BACKGROUND_COLOR;
+    }
+    return typeof backgroundBaseFillAccessor === 'function'
+      ? backgroundBaseFillAccessor(datum)
+      : (backgroundBaseFillAccessor ?? TRANSPARENT_BACKGROUND_COLOR);
+  };
+  const backgroundColorAccessor = backgroundEnabled
+    ? resolveBackgroundColor
+    : textConfig.dxpMasking
+      ? withOpacity(resolveStyleColor(textConfig.haloColor, [255, 255, 255]), 1)
+      : TRANSPARENT_BACKGROUND_COLOR;
+  const paddingY = resolveVerticalPadding(sharedBackgroundPadding);
+  const resolvePointRadiusForDatum = (datum: TextLayerDatum): number => {
+    if (!hasPointSymbols) {
+      return 0;
+    }
+
+    if (
+      pointMissingVector &&
+      isMissingThematicValue(pointMissingVector.get(datum.rowIndex))
+    ) {
+      return showMissingPoints ? missingPointRadius : 0;
+    }
+
+    if (
+      useClassedSymbols &&
+      pointValueVector &&
+      pointClassification?.breaks?.length
+    ) {
+      const rawValue = pointValueVector.get(datum.rowIndex);
+      const numericValue =
+        typeof rawValue === 'number' ? rawValue : Number(rawValue);
+      if (!Number.isFinite(numericValue)) {
+        return minPointRadius;
+      }
+
+      return getClassedSizeForValue(
+        numericValue,
+        pointClassification.breaks,
+        minPointRadius,
+        maxPointRadius,
+        classCountHint
+      );
+    }
+
+    if (useProportionalSymbols && pointSizeVector) {
+      const rawValue = pointSizeVector.get(datum.rowIndex);
+      const numericValue =
+        typeof rawValue === 'number' ? rawValue : Number(rawValue);
+      if (!Number.isFinite(numericValue)) {
+        return minPointRadius;
+      }
+
+      return getSizeForValue(
+        numericValue,
+        pointStatistics.min,
+        pointStatistics.max,
+        minPointRadius,
+        maxPointRadius,
+        pointConfig?.sizeScale ?? ScaleType.LINEAR
+      );
+    }
+
+    return uniquePointRadius;
+  };
+  const hasSecondaryLabelForDatum = (datum: TextLayerDatum): boolean =>
+    Boolean(
+      secondaryLabelValueVector &&
+      toTextValue(secondaryLabelValueVector.get(datum.rowIndex))
+    );
+  const resolvePrimaryPlacement = (datum: TextLayerDatum) =>
+    resolveTextLabelPlacement({
+      hasPointSymbol: resolvePointRadiusForDatum(datum) > 0,
+      pointRadius: resolvePointRadiusForDatum(datum),
+      hasSecondaryLabel: hasSecondaryLabelForDatum(datum),
+      primarySize: resolveAccessorValue(textSizeAccessor, datum),
+      secondarySize: resolveAccessorValue(labelSizeAccessor, datum),
+      paddingY
+    });
+  const resolveSecondaryPlacement = (datum: TextLayerDatum) =>
+    resolveTextLabelPlacement({
+      hasPointSymbol: resolvePointRadiusForDatum(datum) > 0,
+      pointRadius: resolvePointRadiusForDatum(datum),
+      hasSecondaryLabel: true,
+      primarySize: resolveAccessorValue(textSizeAccessor, datum),
+      secondarySize: resolveAccessorValue(labelSizeAccessor, datum),
+      paddingY
+    });
 
   if (shouldRenderLabelLayer && secondaryLabelLayerData) {
     const labelData = filterTextLayerDataByYear(
@@ -2201,7 +2400,10 @@ function createTextOverlayLayers(
         getSize: labelSizeAccessor,
         sizeUnits: 'pixels',
         getTextAnchor: resolveTextAnchor(secondaryLabelsConfig.align),
-        getAlignmentBaseline: 'center',
+        getAlignmentBaseline: (d) =>
+          resolveSecondaryPlacement(d).secondaryAlignmentBaseline,
+        getPixelOffset: (d) =>
+          resolveSecondaryPlacement(d).secondaryPixelOffset,
         fontFamily: DEFAULT_TEXT_FONT,
         fontWeight: resolveDeckTextFontWeight('400'),
         characterSet: 'auto',
@@ -2214,25 +2416,12 @@ function createTextOverlayLayers(
           ? (secondaryLabelsConfig.haloWidth ?? DEFAULT_HALO_WIDTH)
           : 0,
         background: true,
-        getBackgroundColor: secondaryLabelsConfig.dxpMasking
-          ? withOpacity(
-              resolveStyleColor(
-                secondaryLabelsConfig.haloColor,
-                [255, 255, 255]
-              ),
-              1
-            )
-          : TRANSPARENT_BACKGROUND_COLOR,
-        getBorderWidth: 0,
-        backgroundPadding: secondaryLabelsConfig.dxpMasking
-          ? DEFAULT_TEXT_MASK_PADDING
-          : TEXT_COLLISION_SAFE_PADDING,
+        getBackgroundColor: backgroundColorAccessor,
+        getBorderWidth: backgroundBorderWidth,
+        getBorderColor: backgroundBorderColor,
+        backgroundPadding: sharedBackgroundPadding,
         backgroundBorderRadius: 2,
-        ...createTextCollisionProps(
-          ctx,
-          secondaryLabelsConfig.collisionDetection ?? true,
-          LABEL_COLLISION_PRIORITY
-        ),
+        ...createTextCollisionProps(),
         billboard: true,
         pickable: false,
         parameters: THEMATIC_OVERLAY_PARAMETERS,
@@ -2249,14 +2438,70 @@ function createTextOverlayLayers(
             textStatistics.max
           ],
           getTextAnchor: [secondaryLabelsConfig.align],
+          getPixelOffset: [
+            pointConfig?.enabled,
+            pointConfig?.mode,
+            pointConfig?.size,
+            pointConfig?.minSize,
+            pointConfig?.maxSize,
+            pointConfig?.sizeColumn,
+            pointConfig?.valueColumn,
+            pointConfig?.sizeScale,
+            pointConfig?.categoryColumn,
+            pointMissingColumn,
+            pointStatistics.min,
+            pointStatistics.max,
+            pointConfig?.missingData?.show,
+            pointConfig?.missingData?.size,
+            textBaseSize,
+            labelBaseSize,
+            sharedBackgroundPadding,
+            secondaryLabelColumn
+          ],
+          getAlignmentBaseline: [
+            pointConfig?.enabled,
+            pointConfig?.mode,
+            pointConfig?.size,
+            pointConfig?.minSize,
+            pointConfig?.maxSize,
+            pointConfig?.sizeColumn,
+            pointConfig?.valueColumn,
+            pointConfig?.sizeScale,
+            pointConfig?.categoryColumn,
+            pointMissingColumn,
+            pointStatistics.min,
+            pointStatistics.max,
+            pointConfig?.missingData?.show,
+            pointConfig?.missingData?.size,
+            textBaseSize,
+            labelBaseSize,
+            sharedBackgroundPadding
+          ],
           outlineColor: [secondaryLabelsConfig.haloColor],
           outlineWidth: [
             secondaryLabelsConfig.halo,
             secondaryLabelsConfig.haloWidth
           ],
           getBackgroundColor: [
+            textBackgroundConfig.fillMode,
+            textBackgroundConfig.fillColor,
+            textBackgroundConfig.fillOpacity,
+            textBackgroundConfig.valueColumn,
+            textBackgroundConfig.categoryColumn,
+            textBackgroundConfig.classification?.breaks,
+            textBackgroundConfig.classification?.colors,
+            textBackgroundConfig.classification?.labels,
             secondaryLabelsConfig.dxpMasking,
             secondaryLabelsConfig.haloColor
+          ],
+          getBorderWidth: [
+            textBackgroundConfig.strokeMode,
+            textBackgroundConfig.strokeWidth
+          ],
+          getBorderColor: [
+            textBackgroundConfig.strokeMode,
+            textBackgroundConfig.strokeColor,
+            textBackgroundConfig.strokeOpacity
           ]
         }
       };
@@ -2314,7 +2559,9 @@ function createTextOverlayLayers(
           getSize: textSizeAccessor,
           sizeUnits: 'pixels',
           getTextAnchor: resolveTextAnchor(textConfig.align),
-          getAlignmentBaseline: 'center',
+          getAlignmentBaseline: (d) =>
+            resolvePrimaryPlacement(d).primaryAlignmentBaseline,
+          getPixelOffset: (d) => resolvePrimaryPlacement(d).primaryPixelOffset,
           fontFamily: DEFAULT_TEXT_FONT,
           fontWeight: resolveDeckTextFontWeight(
             textConfig.bold ? '700' : '400',
@@ -2330,22 +2577,12 @@ function createTextOverlayLayers(
             ? (textConfig.haloWidth ?? DEFAULT_HALO_WIDTH)
             : 0,
           background: true,
-          getBackgroundColor: textConfig.dxpMasking
-            ? withOpacity(
-                resolveStyleColor(textConfig.haloColor, [255, 255, 255]),
-                1
-              )
-            : TRANSPARENT_BACKGROUND_COLOR,
-          getBorderWidth: 0,
-          backgroundPadding: textConfig.dxpMasking
-            ? DEFAULT_TEXT_MASK_PADDING
-            : TEXT_COLLISION_SAFE_PADDING,
+          getBackgroundColor: backgroundColorAccessor,
+          getBorderWidth: backgroundBorderWidth,
+          getBorderColor: backgroundBorderColor,
+          backgroundPadding: sharedBackgroundPadding,
           backgroundBorderRadius: 2,
-          ...createTextCollisionProps(
-            ctx,
-            textConfig.collisionDetection ?? true,
-            TEXT_COLLISION_PRIORITY
-          ),
+          ...createTextCollisionProps(),
           billboard: true,
           pickable: false,
           parameters: THEMATIC_OVERLAY_PARAMETERS,
@@ -2376,9 +2613,69 @@ function createTextOverlayLayers(
               textStatistics.max
             ],
             getTextAnchor: [textConfig.align],
+            getPixelOffset: [
+              pointConfig?.enabled,
+              pointConfig?.mode,
+              pointConfig?.size,
+              pointConfig?.minSize,
+              pointConfig?.maxSize,
+              pointConfig?.sizeColumn,
+              pointConfig?.valueColumn,
+              pointConfig?.sizeScale,
+              pointConfig?.categoryColumn,
+              pointMissingColumn,
+              pointStatistics.min,
+              pointStatistics.max,
+              pointConfig?.missingData?.show,
+              pointConfig?.missingData?.size,
+              textBaseSize,
+              labelBaseSize,
+              sharedBackgroundPadding,
+              secondaryLabelColumn
+            ],
+            getAlignmentBaseline: [
+              pointConfig?.enabled,
+              pointConfig?.mode,
+              pointConfig?.size,
+              pointConfig?.minSize,
+              pointConfig?.maxSize,
+              pointConfig?.sizeColumn,
+              pointConfig?.valueColumn,
+              pointConfig?.sizeScale,
+              pointConfig?.categoryColumn,
+              pointMissingColumn,
+              pointStatistics.min,
+              pointStatistics.max,
+              pointConfig?.missingData?.show,
+              pointConfig?.missingData?.size,
+              textBaseSize,
+              labelBaseSize,
+              sharedBackgroundPadding,
+              secondaryLabelColumn
+            ],
             outlineColor: [textConfig.haloColor],
             outlineWidth: [textConfig.halo, textConfig.haloWidth],
-            getBackgroundColor: [textConfig.dxpMasking, textConfig.haloColor]
+            getBackgroundColor: [
+              textBackgroundConfig.fillMode,
+              textBackgroundConfig.fillColor,
+              textBackgroundConfig.fillOpacity,
+              textBackgroundConfig.valueColumn,
+              textBackgroundConfig.categoryColumn,
+              textBackgroundConfig.classification?.breaks,
+              textBackgroundConfig.classification?.colors,
+              textBackgroundConfig.classification?.labels,
+              textConfig.dxpMasking,
+              textConfig.haloColor
+            ],
+            getBorderWidth: [
+              textBackgroundConfig.strokeMode,
+              textBackgroundConfig.strokeWidth
+            ],
+            getBorderColor: [
+              textBackgroundConfig.strokeMode,
+              textBackgroundConfig.strokeColor,
+              textBackgroundConfig.strokeOpacity
+            ]
           }
         }) as ThematicLayer
       );
@@ -2386,6 +2683,41 @@ function createTextOverlayLayers(
   }
 
   return layers;
+}
+
+function buildCategoryColorMapFromLabels(
+  labels: string[] | undefined,
+  colors: string[] | undefined
+): Map<string, RGBColor> | null {
+  if (!labels?.length || !colors?.length) {
+    return null;
+  }
+
+  const map = new Map<string, RGBColor>();
+  labels.forEach((label, index) => {
+    const hex = colors[index % colors.length];
+    if (hex) {
+      map.set(label, hexToRgb(hex));
+    }
+  });
+  return map;
+}
+
+function createCategoricalAccessorFromMap(
+  vector: ReturnType<ArrowTable['getChild']>,
+  colorMap: Map<string, RGBColor> | null,
+  fallback: RGBColor,
+  opacity: number
+): ((datum: TextLayerDatum) => Color) | Color {
+  if (!vector || !colorMap || colorMap.size === 0) {
+    return withOpacity(fallback, opacity);
+  }
+
+  return (datum: TextLayerDatum): Color => {
+    const category = toTextValue(vector.get(datum.rowIndex));
+    const rgb = category ? (colorMap.get(category) ?? fallback) : fallback;
+    return withOpacity(rgb, opacity);
+  };
 }
 
 function createDotDensityLayers(
@@ -3682,7 +4014,7 @@ export function createPolygonLayers(
       const layers: Layer<DeckDataRow>[] = [];
 
       // Build SolidPolygonLayer props, injecting fill color into data.attributes when binary
-      const solidProps = createSolidPolygonLayerProps(polyData);
+      const solidProps = createCompatibleSolidPolygonLayerProps(polyData);
       const solidBinaryData = solidProps.data as {
         attributes: Record<string, unknown>;
         khartisSourceTable?: ArrowTable;
@@ -3848,15 +4180,25 @@ export function createPolygonLayers(
 
       layers.push(...orderedLayers.map((entry) => entry.layer));
 
-      // Pattern overlay: separate GeoJsonLayer on top with pattern as semi-transparent mask
-      if (patternProps) {
-        let patternGeojson;
+      // Pattern overlay must follow the same projection/filter visibility as the fill.
+      if (patternProps && showFill) {
+        let patternGeojson: FeatureCollection | null = null;
         try {
-          patternGeojson = getCachedGeoJSON(jsTable, geoColumn);
+          const rawPatternGeojson = getCachedGeoJSON(jsTable, geoColumn);
+          patternGeojson =
+            rawPatternGeojson && ctx.customProjection
+              ? projectGeoJSON(rawPatternGeojson, ctx.customProjection)
+              : rawPatternGeojson;
+          if (patternGeojson) {
+            patternGeojson = filterGeoJsonByYear(
+              patternGeojson,
+              ctx.yearFilter
+            );
+          }
         } catch {
           // Silently skip pattern overlay if GeoJSON conversion fails
         }
-        if (patternGeojson) {
+        if (patternGeojson && patternGeojson.features.length > 0) {
           layers.push(
             new GeoJsonLayer({
               id: `${layerId}-pattern-${polygonClassification?.patternId ?? 'none'}`,
@@ -4056,12 +4398,16 @@ export function createPolygonLayers(
     })
   ];
 
-  // Pattern overlay: separate layer on top with pattern as semi-transparent mask
-  if (patternProps) {
+  // Pattern overlay must respect the same filtered/projected fill footprint.
+  if (
+    patternProps &&
+    showGeoJsonFill &&
+    filteredPolygonGeojsonData.features.length > 0
+  ) {
     geoJsonLayers.push(
       new GeoJsonLayer({
         id: `${layerId}-pattern-${polygonClassification?.patternId ?? 'none'}`,
-        data: geojsonData,
+        data: filteredPolygonGeojsonData,
         getFillColor: [0, 0, 0, 255],
         stroked: false,
         opacity: 0.6,

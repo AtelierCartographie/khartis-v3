@@ -1,11 +1,6 @@
-import type { GeoProjection } from 'd3-geo';
 import type { ProjectionLike } from 'geoarrow-deck-stream';
 import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
 import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
-import {
-  fitProjectionToBbox,
-  getProjectionById
-} from '$lib/features/commons/utils/projection.utils';
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import type { DuckDBDataset } from '$lib/features/duckdb/types';
@@ -23,8 +18,8 @@ import {
 } from './geoarrow-stream-bridge';
 import { fitBasemapRenderProjection } from './fit-basemap-render-projection.utils';
 import { shouldUseBasemapReferenceInOrthographicView } from './orthographic-reference';
-import { proj4d3 } from './proj4d3';
 import { resolveProjectionForRender } from './projection-priority';
+import { resolveUserProjectionOverride } from './user-projection.utils';
 
 interface OrthographicCenterInput {
   lon: number;
@@ -113,39 +108,16 @@ function resolveProjectionFitBbox(
 function resolveProjectionOverride(
   fitBbox: BBox | null
 ): ProjectionLike | undefined {
-  const projectionState = getProjectionState();
-  if (!projectionState.overrideActive || !fitBbox) {
-    return undefined;
-  }
-
-  let projection: GeoProjection | undefined;
-
-  if (projectionState.customCode) {
-    projection = proj4d3(projectionState.customCode);
-  } else {
-    projection = getProjectionById(projectionState.selected)?.projection();
-  }
-
-  if (!projection) {
-    return undefined;
-  }
-
-  const center = projectionState.center ?? [
-    projectionState.longitude,
-    projectionState.latitude
-  ];
-
-  projection.center(center);
-  projection.rotate([projectionState.rotation, 0, 0]);
-  fitProjectionToBbox(
-    projection,
+  return resolveUserProjectionOverride({
+    state: getProjectionState(),
     fitBbox,
-    Math.max(1, projectionStore.canvasSize.width),
-    Math.max(1, projectionStore.canvasSize.height),
-    projectionStore.fitPaddingPx
-  );
-
-  return projection;
+    viewportSize: {
+      width: Math.max(1, projectionStore.canvasSize.width),
+      height: Math.max(1, projectionStore.canvasSize.height)
+    },
+    padding: projectionStore.fitPaddingPx,
+    projectionPresets: basemapService.projectionPresets
+  });
 }
 
 async function resolveOrthographicProjection(

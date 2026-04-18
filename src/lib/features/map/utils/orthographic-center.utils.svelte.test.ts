@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => {
     getProjectionState: vi.fn(),
     fitProjectionToBbox: vi.fn(),
     buildProjectionForBasemap: vi.fn(() => projectionFn),
+    buildCompositeProjectionFromPresetId: vi.fn(),
     getPreferredBasemapFile: vi.fn((_: unknown, file: string) => file),
     initializeBasemap: vi.fn()
   };
@@ -79,6 +80,8 @@ vi.mock('./dataset-crs', () => ({
 
 vi.mock('./geoarrow-stream-bridge', () => ({
   buildProjectionForBasemap: mocks.buildProjectionForBasemap,
+  buildCompositeProjectionFromPresetId:
+    mocks.buildCompositeProjectionFromPresetId,
   getMainlandBboxForBasemap: vi.fn(() => null)
 }));
 
@@ -114,6 +117,7 @@ describe('resolveCenterCoordinates', () => {
     mocks.getProjectionState.mockReset();
     mocks.fitProjectionToBbox.mockReset();
     mocks.buildProjectionForBasemap.mockClear();
+    mocks.buildCompositeProjectionFromPresetId.mockReset();
     mocks.getPreferredBasemapFile.mockClear();
     mocks.initializeBasemap.mockReset();
 

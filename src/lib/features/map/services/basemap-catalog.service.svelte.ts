@@ -130,6 +130,19 @@ export function shouldPreferTextBasemapRefinementForGPS(
   );
 }
 
+/**
+ * Geometric coverage metrics between a dataset bbox (gpsBounds) and a basemap bbox.
+ *
+ *   coverageScore = (overlapArea / dataArea) × 100
+ *
+ * Interpretation:
+ *  - 100 % → the basemap fully contains the dataset extent
+ *  - <100 % → part of the dataset falls outside the basemap
+ *
+ * NB: this metric does not discriminate between basemaps that share the same bbox
+ * (e.g. all France catalog levels). Granularity tie-breaking happens in
+ * {@link rankBasemapsByJoinSynthesis} once a textual join is available.
+ */
 export function getGPSBboxMatchMetrics(
   gpsBounds: GPSBounds,
   bbox: [number, number, number, number]
@@ -160,6 +173,21 @@ export function getGPSBboxMatchMetrics(
   };
 }
 
+/**
+ * Ranks basemaps from raw bbox overlap when no textual join is available
+ * (CDC fallback for [DATA-07a] when the dataset has no usable entity column).
+ *
+ * Sort order:
+ *  1. coverageScore DESC                 → "% of dataset extent inside basemap"
+ *  2. fullyContains + smallest basemap   → tightest crop wins (Paris in France
+ *                                          beats Paris in World)
+ *  3. year DESC                          → newer basemap on perfect ties
+ *  4. file ASC                           → deterministic alphabetical fallback
+ *
+ * Filters out basemaps with zero overlap. Granularity-aware ranking only
+ * activates when the textual path is unusable; with a textual match,
+ * {@link rankBasemapsByJoinSynthesis} provides finer discrimination.
+ */
 export function rankBasemapsByGPSBbox(
   basemaps: BasemapMetadata[],
   gpsBounds: GPSBounds,
@@ -216,6 +244,22 @@ export function rankBasemapsByGPSBbox(
     }));
 }
 
+/**
+ * Ranks catalog basemaps for a textual join synthesis ([DATA-07a]).
+ *
+ * Sort order (lexicographic):
+ *  1. shareCandidate DESC          → "% of dataset rows that found a match"
+ *  2. |shareBasemap − 1| ASC       → "granularity match" (1 = exact, >1 over-coverage,
+ *                                     <1 under-coverage). Departs the POC convention
+ *                                     `share_basemap DESC` so 332 NUTS2 features pick
+ *                                     europe-nuts2 over europe-nuts1 (over-matched
+ *                                     because every NUTS2 prefix matches a NUTS1 entity).
+ *  3. year DESC                    → newer dataset wins on perfect ties
+ *  4. file ASC                     → deterministic alphabetical tiebreaker
+ *
+ * Aggregation: when multiple millésimes of the same family appear in the synthesis,
+ * we keep the one whose granularity is closest to 1 (best match for this dataset).
+ */
 export function rankBasemapsByJoinSynthesis(
   basemaps: BasemapMetadata[],
   synthesis: JoinSynthesisLike[],
@@ -306,6 +350,19 @@ function getSearchableText(basemap: BasemapMetadata): string {
     .toLowerCase();
 }
 
+/**
+ * Heuristic scoring of a (geo column, basemap) pair based purely on names.
+ *
+ * Used as the second fallback path (after textual join via DuckDB and before
+ * raw bbox match): when the dataset has a textual column flagged as geographic
+ * but no DuckDB-side similarity match has been computed yet, this rule-based
+ * scorer gives a directionally-correct hint by matching column-name keywords
+ * (region/department/country/iso/code/france/etc.) against the basemap's
+ * searchable text and adding a recency bonus.
+ *
+ * Output is capped at 100 to behave like a percentage in the UI.
+ * Not used when a {@link rankBasemapsByJoinSynthesis} result exists.
+ */
 export function calculateGeoColumnBasemapMatchScore(
   geoColumnName: string,
   basemap: BasemapMetadata,
