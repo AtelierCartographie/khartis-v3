@@ -15,7 +15,7 @@
   } from 'carbon-components-svelte';
   import ChevronUp from 'carbon-icons-svelte/lib/ChevronUp.svelte';
   import ChevronDown from 'carbon-icons-svelte/lib/ChevronDown.svelte';
-  import { onMount, tick, untrack, type Component } from 'svelte';
+  import { onDestroy, onMount, tick, untrack, type Component } from 'svelte';
   import { SvelteMap, SvelteSet } from 'svelte/reactivity';
   import { LogCategory, logger } from '../../utils/logger';
 
@@ -606,6 +606,31 @@
   let lastColumnsRef: unknown[] | undefined = undefined;
   let lastDatasetVersion: number | undefined = undefined;
   let isLocalUpdate = false;
+  let tableReloadRequestId = 0;
+  let isDestroyed = false;
+
+  onDestroy(() => {
+    isDestroyed = true;
+    tableReloadRequestId += 1;
+  });
+
+  function isTableReloadStale(
+    requestId: number,
+    currentDatasetId: string | undefined,
+    currentTableName: string | undefined,
+    currentDatasetVersion: number | undefined
+  ): boolean {
+    if (isDestroyed) {
+      return true;
+    }
+
+    return (
+      requestId !== tableReloadRequestId ||
+      lastDatasetId !== currentDatasetId ||
+      lastTableName !== currentTableName ||
+      lastDatasetVersion !== currentDatasetVersion
+    );
+  }
 
   $effect(() => {
     const currentTableName = tableName;
@@ -638,17 +663,62 @@
     }
 
     if (currentDataset || currentTableName) {
+      const requestId = ++tableReloadRequestId;
       untrack(async () => {
         try {
           await tableData.loadColumnsInfo();
+          if (
+            isTableReloadStale(
+              requestId,
+              currentDatasetId,
+              currentTableName,
+              currentDatasetVersion
+            )
+          ) {
+            return;
+          }
+
           await filters.refreshFiltersState();
+          if (
+            isTableReloadStale(
+              requestId,
+              currentDatasetId,
+              currentTableName,
+              currentDatasetVersion
+            )
+          ) {
+            return;
+          }
+
           await virtualScroll.initializeRows(0);
+          if (
+            isTableReloadStale(
+              requestId,
+              currentDatasetId,
+              currentTableName,
+              currentDatasetVersion
+            )
+          ) {
+            return;
+          }
 
           logger.debug('$effect: table data reloaded', LogCategory.UI, {
-            rowCount: virtualScroll.rows.length,
-            tableDataLength: tableData.tableData.length
+            datasetId: currentDatasetId ?? null,
+            requestId,
+            tableName: currentTableName ?? null
           });
         } catch (err) {
+          if (
+            isTableReloadStale(
+              requestId,
+              currentDatasetId,
+              currentTableName,
+              currentDatasetVersion
+            )
+          ) {
+            return;
+          }
+
           logger.error('Error reloading table data', LogCategory.UI, err);
         }
       });
