@@ -6,6 +6,7 @@ import {
 } from '$lib/features/commons/utils/sanitize.utils';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import type { Table as ArrowTable } from 'apache-arrow';
+import { convertGeoPackageToGeoJsonFile } from '$lib/features/map/utils/geopackage-browser-fallback';
 import {
   DUCK_CONST,
   EXTENSIONS,
@@ -13,7 +14,6 @@ import {
   SQL_FUNCTIONS
 } from '../constants';
 import { executeQuery } from '../core/query';
-import { runInTransaction } from '../core/transaction';
 import type {
   DuckDBContext,
   DuckDBMetadata,
@@ -41,30 +41,48 @@ function isThreadPoolError(error: unknown): boolean {
   );
 }
 
+function isGeoPackageFile(filename: string): boolean {
+  return filename.toLowerCase().endsWith('.gpkg');
+}
+
 async function runGeofileReadWithThreadFallback(
   ctx: DuckDBContext,
   escapedFinalTable: string,
   escapedGeoFileId: string,
   selectedLayerClause: string,
-  finalTablename: string
+  finalTablename: string,
+  retryWithSerializedExecution: boolean
 ): Promise<void> {
   const readQuery = `CREATE OR REPLACE TABLE "${escapedFinalTable}" AS FROM ST_Read('${escapedGeoFileId}'${selectedLayerClause});`;
   const runRead = async () => {
-    await runInTransaction(
-      ctx.connection,
-      async () => {
-        await executeQuery(ctx.connection, readQuery, {
-          format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
-        });
-        await addRowId(ctx.connection, finalTablename);
-      },
-      'read_geofile'
-    );
+    let tableCreated = false;
+
+    try {
+      // Handle recoverable GeoPackage thread failures locally so the higher-level
+      // browser fallback can retry without emitting a shared rollback error.
+      await executeQuery(ctx.connection, readQuery, {
+        format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
+      });
+      tableCreated = true;
+      await addRowId(ctx.connection, finalTablename);
+    } catch (error) {
+      if (tableCreated) {
+        await executeQuery(
+          ctx.connection,
+          `DROP TABLE IF EXISTS "${escapedFinalTable}";`,
+          { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
+        ).catch(() => undefined);
+      }
+      throw error;
+    }
   };
   try {
     await runRead();
   } catch (error) {
     if (!isThreadPoolError(error)) throw error;
+    if (!retryWithSerializedExecution) {
+      throw error;
+    }
     logger.warn(
       'Geofile read hit thread pool exhaustion — retrying with serialized execution',
       LogCategory.DUCKDB,
@@ -311,6 +329,7 @@ export async function readGeofile(
   const meta = options.meta ?? false;
   const shapefile = options.shapefile ?? false;
   const requestedLayer = options.layer;
+  let usedGeoPackageBrowserFallback = false;
 
   try {
     await registerFiles(ctx.db, ctx.registered_files, [geofile], { shapefile });
@@ -364,13 +383,44 @@ export async function readGeofile(
       );
     }
 
-    await runGeofileReadWithThreadFallback(
-      ctx,
-      escapedFinalTable,
-      escapedGeoFileId,
-      selectedLayerClause,
-      finalTablename!
-    );
+    try {
+      await runGeofileReadWithThreadFallback(
+        ctx,
+        escapedFinalTable,
+        escapedGeoFileId,
+        selectedLayerClause,
+        finalTablename!,
+        ctx.threadsSupported
+      );
+    } catch (error) {
+      if (!isGeoPackageFile(geofile.name) || !isThreadPoolError(error)) {
+        throw error;
+      }
+
+      logger.warn(
+        'DuckDB GeoPackage ingest failed, trying browser fallback',
+        LogCategory.DUCKDB,
+        {
+          filename: geofile.name,
+          selectedLayer: geoMeta.selectedLayer,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      );
+
+      const fallbackGeoJsonFile = await convertGeoPackageToGeoJsonFile(
+        geofile,
+        {
+          preferredLayer: geoMeta.selectedLayer ?? undefined
+        }
+      );
+
+      usedGeoPackageBrowserFallback = true;
+      await readGeofile(ctx, fallbackGeoJsonFile, {
+        ...options,
+        tablename: finalTablename,
+        layer: undefined
+      });
+    }
 
     if (!tablename) {
       throw new DuckDBError('Unable to determine target table name');
@@ -383,6 +433,7 @@ export async function readGeofile(
       geometryColumn: geomCol,
       preservesSourceProjection,
       sourceCRS: geoMeta.crs,
+      browserFallback: usedGeoPackageBrowserFallback,
       durationMs: (performance.now() - start).toFixed(2)
     });
     return tablename;
