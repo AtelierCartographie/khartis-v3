@@ -13,4 +13,11 @@ describe('MainMap density mode loading', () => {
     expect(source).toContain('FillMode.DENSITY');
     expect(source).not.toContain('SymbolMode.DENSITY');
   });
+
+  it('only loads density tables from active visualizations', () => {
+    expect(source).toContain('visualizationStore.activeVisualizations');
+    expect(source).not.toContain(
+      'for (const viz of visualizationStore.visualizations)'
+    );
+  });
 });

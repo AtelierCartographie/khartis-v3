@@ -243,11 +243,53 @@ export function parseSolidPolygons(table: ArrowTable): BinaryPolygonData {
   return result;
 }
 
+function parsePointsAllBatches(
+  table: ArrowTable,
+  options: ParserOptions
+): BinaryPointData {
+  const normalized = normalizeGeomColumnName(table);
+  // Library's parsePoints only reads the first RecordBatch (getFirstDataChunk);
+  // iterate batches explicitly and concat the resulting BinaryPointData so
+  // large multi-batch tables (e.g. density output with 58 batches of 2048)
+  // render all points instead of just the first 2048.
+  if (normalized.batches.length <= 1) {
+    return parsePoints(normalized, options);
+  }
+
+  const perBatch = normalized.batches.map((batch) => {
+    const singleBatchTable = new ArrowTableImpl(normalized.schema, [batch]);
+    return parsePoints(singleBatchTable, options);
+  });
+
+  let totalLength = 0;
+  for (const r of perBatch) totalLength += r.length;
+
+  const positions = new Float32Array(totalLength * 2);
+  const featureIds = new Uint32Array(totalLength);
+  let posOffset = 0;
+  let idOffset = 0;
+  let featureIdBase = 0;
+  for (const r of perBatch) {
+    const posSlice = r.positions.subarray(0, r.length * 2);
+    positions.set(posSlice, posOffset);
+    posOffset += posSlice.length;
+
+    const idSlice = r.featureIds.subarray(0, r.length);
+    for (let i = 0; i < idSlice.length; i++) {
+      featureIds[idOffset + i] = idSlice[i] + featureIdBase;
+    }
+    idOffset += idSlice.length;
+    featureIdBase += r.length;
+  }
+
+  return { length: totalLength, positions, featureIds, size: 2 };
+}
+
 export function parsePointData(table: ArrowTable): BinaryPointData {
   let result = pointCache.get(table);
   if (!result) {
     try {
-      result = parsePoints(normalizeGeomColumnName(table), IDENTITY_OPTIONS);
+      result = parsePointsAllBatches(table, IDENTITY_OPTIONS);
     } catch (error) {
       logger.error(
         'Failed to parse points from Arrow table',
@@ -494,7 +536,7 @@ export function parsePointDataWithProjection(
     const cached = projMap.get(projection);
     if (cached) return cached;
   }
-  const result = parsePoints(normalizeGeomColumnName(table), {
+  const result = parsePointsAllBatches(table, {
     projection,
     capacityMultiplier: 1.0,
     rewind

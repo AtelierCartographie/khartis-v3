@@ -326,7 +326,7 @@
 
   function findActiveDensityViz(datasetId: string): VisualizationConfig | null {
     const matches: VisualizationConfig[] = [];
-    for (const viz of visualizationStore.visualizations) {
+    for (const viz of visualizationStore.activeVisualizations) {
       if (viz.datasetId !== datasetId) continue;
       if (getPolygonPrimitive(viz)?.fillMode !== FillMode.DENSITY) continue;
       if (!viz.density?.valueColumn || !viz.density?.ratio) continue;
