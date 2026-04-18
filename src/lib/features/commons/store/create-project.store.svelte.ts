@@ -76,6 +76,24 @@ export const createProjectState = $state<CreateProjectState>({
   ...DEFAULT_STATE
 });
 
+function hasDuplicateFileName(fileName: string): boolean {
+  const uploadingFiles = $state.snapshot(
+    createProjectState.newProject.uploadedFiles
+  );
+  const existsInSession = uploadingFiles.some(
+    (file) => file.name === fileName && file.status !== FileStatus.ERROR
+  );
+
+  if (existsInSession) {
+    return true;
+  }
+
+  const projectFiles = $state.snapshot(
+    projectStore.currentProject?.data?.sourceFiles ?? []
+  );
+  return projectFiles.some((file) => file.name === fileName);
+}
+
 export const createProjectActions = {
   selectTab(tab: ProjectTab): void {
     createProjectState.selectedTab = tab;
@@ -86,15 +104,7 @@ export const createProjectActions = {
   },
 
   isFileDuplicate(fileName: string): boolean {
-    const uploadingFiles = createProjectState.newProject.uploadedFiles;
-    const existsInSession = uploadingFiles.some(
-      (f) => f.name === fileName && f.status !== FileStatus.ERROR
-    );
-
-    if (existsInSession) return true;
-
-    const projectFiles = projectStore.currentProject?.data?.sourceFiles ?? [];
-    return projectFiles.some((f) => f.name === fileName);
+    return hasDuplicateFileName(fileName);
   },
 
   findIncompleteShapefile(baseName: string): UploadedFile | undefined {
@@ -251,7 +261,7 @@ export const createProjectActions = {
         const mainFileName =
           groupFiles.length === 1 ? groupFiles[0].name : baseName + '.shp';
 
-        if (this.isFileDuplicate(mainFileName)) {
+        if (hasDuplicateFileName(mainFileName)) {
           duplicates.push(mainFileName);
         } else {
           toProcess.set(baseName, groupFiles);
@@ -360,7 +370,7 @@ export const createProjectActions = {
     file: File,
     sourceType: DataSourceType = DataSourceType.FILE_UPLOAD
   ): Promise<void> {
-    if (this.isFileDuplicate(file.name)) {
+    if (hasDuplicateFileName(file.name)) {
       this.setNewProjectWarning(
         m.warning_files_duplicate_message({ files: file.name })
       );
@@ -495,7 +505,7 @@ export const createProjectActions = {
     let fileName = `${baseName}-${timestamp}.${extension}`;
 
     let counter = 1;
-    while (this.isFileDuplicate(fileName)) {
+    while (hasDuplicateFileName(fileName)) {
       fileName = `${baseName}-${timestamp}-${counter}.${extension}`;
       counter++;
     }
@@ -849,7 +859,11 @@ export const createProjectActions = {
     createProjectState.newProject.onlineFileUrl = '';
     createProjectState.newProject.projectName = '';
     createProjectState.newProject.isLoading = false;
+    createProjectState.newProject.isProcessingFiles = false;
+    createProjectState.newProject.processingFileCount = 0;
     createProjectState.newProject.error = undefined;
+    createProjectState.newProject.warning = undefined;
+    createProjectState.newProject.validationErrors = [];
   },
 
   resetOpenProject(): void {
