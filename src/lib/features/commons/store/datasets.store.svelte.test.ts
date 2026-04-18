@@ -14,7 +14,14 @@ const mocks = vi.hoisted(() => ({
   loggerInfoMock: vi.fn(),
   processUploadedFileMock: vi.fn(),
   dropTableMock: vi.fn(),
-  setEnrichDataStateMock: vi.fn()
+  setEnrichDataStateMock: vi.fn(),
+  currentProject: undefined as
+    | {
+        data: {
+          sourceFiles: Array<Record<string, unknown>>;
+        };
+      }
+    | undefined
 }));
 
 vi.mock('$lib/features/project-management/core/persistence-registry', () => ({
@@ -51,7 +58,9 @@ vi.mock('$lib/features/duckdb/orchestrator/orchestrator.svelte', () => ({
 
 vi.mock('$lib/features/commons/store/project.store.svelte', () => ({
   projectStore: {
-    currentProject: undefined
+    get currentProject() {
+      return mocks.currentProject;
+    }
   }
 }));
 
@@ -117,6 +126,7 @@ function makeUploadedFile(
 describe('datasetsStore persisted view state', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.currentProject = undefined;
     datasetsStore.clear();
     datasetsStore.restorePersistedViewState(undefined);
   });
@@ -217,5 +227,28 @@ describe('datasetsStore persisted view state', () => {
       'dataset-asset'
     ]);
     expect(datasetsStore.datasets[0]?.tableName).toBe('table_dataset-asset');
+  });
+
+  it('treats persisted source-file row deletions and column transformations as modifications after restore', () => {
+    datasetsStore.addProcessedDataset(makeDataset('dataset-1', 'source-a'));
+    mocks.currentProject = {
+      data: {
+        sourceFiles: [
+          makeUploadedFile('source-a', 'data.csv', {
+            columnTransformations: [
+              {
+                type: 'rename',
+                column: 'place_name',
+                newValue: 'city_name',
+                timestamp: '2026-04-18T00:00:00.000Z'
+              }
+            ],
+            deletedRowIds: [1, 3, 8]
+          })
+        ]
+      }
+    };
+
+    expect(datasetsStore.hasModifications('dataset-1')).toBe(true);
   });
 });

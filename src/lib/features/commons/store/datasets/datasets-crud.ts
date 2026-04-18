@@ -190,7 +190,25 @@ export function hasModifications(
   datasetId: string
 ): boolean {
   const dataset = findById(state.datasets, datasetId);
-  return dataset ? (dataset.metadata.transformations?.length ?? 0) > 0 : false;
+  if (!dataset) {
+    return false;
+  }
+
+  if ((dataset.metadata.transformations?.length ?? 0) > 0) {
+    return true;
+  }
+
+  const sourceFile = dataset.sourceFileId
+    ? projectStore.currentProject?.data?.sourceFiles?.find(
+        (file) => file.id === dataset.sourceFileId
+      )
+    : undefined;
+
+  return Boolean(
+    sourceFile &&
+    ((sourceFile.columnTransformations?.length ?? 0) > 0 ||
+      (sourceFile.deletedRowIds?.length ?? 0) > 0)
+  );
 }
 
 export function recordTransformation(
