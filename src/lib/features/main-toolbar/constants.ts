@@ -184,7 +184,7 @@ export enum SizeMode {
 export const VISUALIZATION_DEFAULTS = {
   symbolMaxSize: 24,
   symbolSize: 12,
-  symbolOpacity: 80,
+  symbolOpacity: 100,
   strokeWidth: 1,
   strokeOpacity: 100,
   fillOpacity: 100,

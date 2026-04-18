@@ -1,3 +1,4 @@
+import { GEO_COLUMN_TYPE } from '$lib/features/commons/constants/data.constants';
 import { BasemapSource } from '$lib/features/commons/constants/ui.constants';
 import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
 import {
@@ -7,6 +8,7 @@ import {
 import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
 import { projectStore } from '$lib/features/commons/store/project.store.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import type { DatasetResult } from '$lib/features/data-pipeline/types';
 import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { DEFAULT_OSM_STYLE } from '$lib/features/map/constants';
@@ -39,6 +41,41 @@ import { resolveNextBasemapSelectionId } from '../../services/basemap-selection'
 export interface BasemapSuggestionItem {
   basemap: BasemapMetadata;
   score: number;
+}
+
+const COORDINATE_GEO_TYPES = new Set<string>([
+  GEO_COLUMN_TYPE.LATITUDE,
+  GEO_COLUMN_TYPE.LONGITUDE,
+  GEO_COLUMN_TYPE.COORDINATES
+]);
+
+export function pickAutoLinkedGeoColumn(
+  dataset: DatasetResult
+): { columnName: string; index: number } | null {
+  const geoColumns = dataset.geoDetection?.geoColumns ?? [];
+  const candidates = geoColumns.filter(
+    (column) => !COORDINATE_GEO_TYPES.has(column.type as string)
+  );
+  if (candidates.length === 0) return null;
+
+  const suggested = dataset.geoDetection?.suggestedPrimaryGeoColumn;
+  const suggestedMatch =
+    suggested && !COORDINATE_GEO_TYPES.has(suggested.type as string)
+      ? candidates.find((column) => column.columnName === suggested.columnName)
+      : undefined;
+
+  const best =
+    suggestedMatch ??
+    candidates.reduce((winner, current) =>
+      current.confidence > winner.confidence ? current : winner
+    );
+
+  const columnIndex = dataset.columns.findIndex(
+    (column) => column.name === best.columnName
+  );
+  if (columnIndex === -1) return null;
+
+  return { columnName: best.columnName, index: columnIndex };
 }
 
 export interface UseEnrichmentBasemapReturn {
@@ -293,6 +330,22 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
     }
 
     selectedBasemapId = undefined;
+  });
+
+  $effect(() => {
+    const dataset = datasetsStore.selectedDataset;
+    if (!dataset) return;
+
+    const currentLinked = dataTabState.geolocation.linkedVariableName;
+    if (currentLinked) return;
+
+    const suggested = pickAutoLinkedGeoColumn(dataset);
+    if (!suggested) return;
+
+    dataTabActions.setGeolocationState({
+      linkedVariable: suggested.index,
+      linkedVariableName: suggested.columnName
+    });
   });
 
   $effect(() => {

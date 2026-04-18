@@ -8,13 +8,17 @@ import {
 } from '$lib/features/commons/utils/sanitize.utils';
 import { sanitizePreparedGeoJSON } from '$lib/features/commons/utils/persisted-geojson.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { ColumnType, type DatasetResult } from '$lib/features/data-pipeline';
+import type {
+  DatasetResult,
+  DuckAnalyticsColumn
+} from '$lib/features/data-pipeline';
 import { Duck } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { SvelteMap } from 'svelte/reactivity';
 import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
 import type { JsonValue } from '$lib/types/data';
 import type { JoinStats } from '../../components';
+import { refreshDatasetMetadata } from '../../services/dataset-metadata';
 import { computeDatasetJoinStats } from '../../services/join-stats.service';
 import { canFinalizeJoin } from '../../services/join-validation';
 
@@ -64,7 +68,7 @@ export function useEnrichmentJoin(
   }
 
   function buildStatisticsSnapshot(
-    columns: Awaited<ReturnType<typeof Duck.analyse>>
+    columns: DuckAnalyticsColumn[]
   ): UploadedFile['statistics'] {
     return Object.fromEntries(
       columns.map((column) => [
@@ -191,7 +195,7 @@ export function useEnrichmentJoin(
 
   async function persistEnrichedSourceSnapshot(
     tableName: string,
-    columns: Awaited<ReturnType<typeof Duck.analyse>>
+    columns: DuckAnalyticsColumn[]
   ): Promise<void> {
     if (!selectedDataset?.sourceFileId) {
       return;
@@ -526,44 +530,18 @@ export function useEnrichmentJoin(
         { format: 'array' }
       );
 
-      const rowCountResult = (await Duck.query(
-        `SELECT COUNT(*) as count FROM "${escapedEnrichedTableName}"`,
-        { format: 'array' }
-      )) as Array<{ count: number }>;
-      const newRowCount = Number(rowCountResult?.[0]?.count ?? 0);
-
-      const newColumns = await Duck.analyse(enrichedTableName);
-
-      const toColumnType = (type: string): ColumnType => {
-        if (type === 'numeric' || type === 'number') return ColumnType.NUMBER;
-        if (type === 'date') return ColumnType.DATE;
-        if (type === 'boolean') return ColumnType.BOOLEAN;
-        if (type === 'geometry') return ColumnType.GEOMETRY;
-        return ColumnType.TEXT;
-      };
-
       datasetsStore.updateDataset(selectedDataset.id, {
-        tableName: enrichedTableName,
-        columns: newColumns.map((col) => ({
-          name: col.name,
-          type: toColumnType(col.type_simple || 'text'),
-          values: [],
-          stats: {
-            name: col.name,
-            type: toColumnType(col.type_simple || 'text'),
-            count: col.count ?? 0,
-            nulls: col.nulls ?? 0,
-            uniques: col.uniques ?? 0,
-            min: col.min,
-            max: col.max,
-            mean: typeof col.mean === 'number' ? col.mean : undefined,
-            median: typeof col.median === 'number' ? col.median : undefined,
-            stdDev: typeof col.stddev === 'number' ? col.stddev : undefined
-          }
-        }))
+        tableName: enrichedTableName
       });
-      datasetsStore.updateDatasetRowCount(selectedDataset.id, newRowCount);
-      await persistEnrichedSourceSnapshot(enrichedTableName, newColumns);
+      const snapshot = await refreshDatasetMetadata(
+        selectedDataset.id,
+        enrichedTableName,
+        { force: true }
+      );
+      await persistEnrichedSourceSnapshot(
+        enrichedTableName,
+        snapshot.duckColumns
+      );
 
       // Update the existing orchestrator dataset entry with the new enriched table name
       // (avoids creating a duplicate entry with the same sourceFileId)
