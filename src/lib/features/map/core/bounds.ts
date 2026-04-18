@@ -11,6 +11,7 @@ const MIN_LAT = -90;
 const MAX_LAT = 90;
 const MIN_LNG = -180;
 const MAX_LNG = 180;
+const DEGENERATE_BOUNDS_PADDING_DEGREES = 0.01;
 const BOUNDS_READ_WARNING_LIMIT = 3;
 const boundsReadWarnings = new Map<string, number>();
 
@@ -89,6 +90,36 @@ function isValidBbox(
   }
 
   return true;
+}
+
+function expandDegenerateAxis(
+  min: number,
+  max: number,
+  minLimit: number,
+  maxLimit: number
+): [number, number] {
+  if (min < max) {
+    return [min, max];
+  }
+
+  const paddedMin = Math.max(minLimit, min - DEGENERATE_BOUNDS_PADDING_DEGREES);
+  const paddedMax = Math.min(maxLimit, max + DEGENERATE_BOUNDS_PADDING_DEGREES);
+
+  if (paddedMin < paddedMax) {
+    return [paddedMin, paddedMax];
+  }
+
+  if (min <= minLimit) {
+    return [
+      minLimit,
+      Math.min(maxLimit, minLimit + DEGENERATE_BOUNDS_PADDING_DEGREES)
+    ];
+  }
+
+  return [
+    Math.max(minLimit, maxLimit - DEGENERATE_BOUNDS_PADDING_DEGREES),
+    maxLimit
+  ];
 }
 
 function extractCoordsFromGeometry(geometry: Geometry | null): number[][] {
@@ -251,13 +282,26 @@ function calculateBoundsFromGeometryData(
     return null;
   }
 
-  if (!isValidBbox(minLng, minLat, maxLng, maxLat)) {
+  const [safeMinLng, safeMaxLng] = expandDegenerateAxis(
+    minLng,
+    maxLng,
+    MIN_LNG,
+    MAX_LNG
+  );
+  const [safeMinLat, safeMaxLat] = expandDegenerateAxis(
+    minLat,
+    maxLat,
+    MIN_LAT,
+    MAX_LAT
+  );
+
+  if (!isValidBbox(safeMinLng, safeMinLat, safeMaxLng, safeMaxLat)) {
     return null;
   }
 
   return [
-    [minLng, minLat],
-    [maxLng, maxLat]
+    [safeMinLng, safeMinLat],
+    [safeMaxLng, safeMaxLat]
   ];
 }
 
