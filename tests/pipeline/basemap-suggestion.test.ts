@@ -105,6 +105,61 @@ describe('[S02] rankBasemapsByJoinSynthesis — CSV-08 France régions', () => {
   });
 });
 
+describe('[S02] rankBasemapsByJoinSynthesis — GEO-NUTS2 granularity disambiguation', () => {
+  const EUROPE_NUTS1 = basemap({
+    file: 'europe-nuts1-2024-medium',
+    title_fr: 'Europe · par NUTS 1',
+    title_en: 'Europe by NUTS 1',
+    date: '2024',
+    bbox: [-63.13, -21.4, 55.86, 80.4],
+    simplification_level: 'medium'
+  });
+  const EUROPE_NUTS3 = basemap({
+    file: 'europe-nuts3-2024-medium',
+    title_fr: 'Europe · par NUTS 3',
+    title_en: 'Europe by NUTS 3',
+    date: '2024',
+    bbox: [-63.13, -21.4, 55.86, 80.4],
+    simplification_level: 'medium'
+  });
+
+  it('prefers the NUTS level whose granularity matches the dataset (shareBasemap closest to 1)', () => {
+    // Live shape for a NUTS 2 dataset (332 features) joined against the 3 NUTS levels.
+    // Every level matches every candidate textually, so shareCandidate is 100 % for all.
+    // The discriminator is shareBasemap: NUTS 1 over-matches (332/92 = 3.6),
+    // NUTS 3 under-matches (332/1500 = 0.22), NUTS 2 is exact (332/332 ≈ 1).
+    const synthesis = [
+      {
+        basemap: 'europe-nuts1-2024-medium',
+        shareCandidate: 100,
+        shareBasemap: 3.6
+      },
+      {
+        basemap: 'europe-nuts2-2024-medium',
+        shareCandidate: 100,
+        shareBasemap: 1.0
+      },
+      {
+        basemap: 'europe-nuts3-2024-medium',
+        shareCandidate: 100,
+        shareBasemap: 0.22
+      },
+      {
+        basemap: 'monde-countries-2024-medium',
+        shareCandidate: 100,
+        shareBasemap: 1.26
+      }
+    ];
+    const suggestions = rankBasemapsByJoinSynthesis(
+      [EUROPE_NUTS1, EUROPE_NUTS2, EUROPE_NUTS3, WORLD_BASEMAP],
+      synthesis,
+      4
+    );
+    expect(suggestions[0].file).toBe('europe-nuts2-2024-medium');
+    expect(suggestions[0].matchScore).toBe(100);
+  });
+});
+
 describe('[S02] rankBasemapsByJoinSynthesis — CSV-03 fuzzy match', () => {
   it('still returns the world basemap even when most candidates fail to match', () => {
     const synthesis = [

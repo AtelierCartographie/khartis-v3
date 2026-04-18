@@ -50,7 +50,6 @@ const FRANCE_ADMINISTRATIVE_BASEMAP_PREFIXES = [
   'france-region-'
 ] as const;
 const SIMPLIFICATION_LEVEL_SUFFIX_REGEX = /-(low|medium|high)$/;
-
 interface WorldCountriesGeoJSON {
   features?: Array<{
     id?: string;
@@ -345,6 +344,13 @@ function findBasemapMetadataByFile(
   file: string
 ): BasemapMetadata | null {
   return basemaps.find((basemap) => basemap.file === file) ?? null;
+}
+
+export function findBasemapLayerByType(
+  metadata: BasemapMetadata,
+  layerType: BasemapLayerType
+): BasemapMetadata['layers'][number] | null {
+  return metadata.layers.find((layer) => layer.type === layerType) ?? null;
 }
 
 function createLoadedBasemapVariant(
@@ -1142,6 +1148,23 @@ function createBasemapService() {
     return ensureVariantLayersLoaded(resolvedVariant, layerTypes);
   }
 
+  async function ensureBasemapLayersLoaded(
+    basemapId: string,
+    layerTypes?: readonly BasemapLayerType[]
+  ): Promise<boolean> {
+    const loadedBasemap = await loadBasemap(basemapId);
+    if (!loadedBasemap) {
+      return false;
+    }
+
+    const resolvedVariant = getResolvedBasemapVariantState(loadedBasemap);
+    if (!resolvedVariant) {
+      return false;
+    }
+
+    return ensureVariantLayersLoaded(resolvedVariant, layerTypes);
+  }
+
   async function ensureAttributesLoaded(): Promise<void> {
     if (!Duck || attributesLoaded) {
       return;
@@ -1177,6 +1200,36 @@ function createBasemapService() {
     }
 
     return getResolvedLayerTables(currentBasemap).get(layer.file) ?? null;
+  }
+
+  function getBasemapLayerTableByType(
+    basemapId: string,
+    layerType: BasemapLayerType
+  ): ArrowTable | null {
+    const resolvedBasemapId = getPreferredBasemapFile(
+      availableBasemaps,
+      basemapId
+    );
+    const loadedBasemap = basemapCache.get(resolvedBasemapId) ?? null;
+    if (!loadedBasemap) {
+      return null;
+    }
+
+    const metadata = getResolvedMetadata(loadedBasemap);
+    if (!metadata) {
+      return null;
+    }
+
+    const layer = findBasemapLayerByType(metadata, layerType);
+    if (!layer) {
+      return null;
+    }
+
+    if (!layer.file) {
+      return getResolvedGeometryTable(loadedBasemap);
+    }
+
+    return getResolvedLayerTables(loadedBasemap).get(layer.file) ?? null;
   }
 
   interface ResolvedMetadataLayer {
@@ -1306,8 +1359,10 @@ function createBasemapService() {
     },
     getResolvedVariantData,
     getLayerTableByType,
+    getBasemapLayerTableByType,
     getLayersByType,
     ensureCurrentLayersLoaded,
+    ensureBasemapLayersLoaded,
     ensureAttributesLoaded,
     get projectionPresets(): ProjectionPresets | null {
       return projectionPresetsData;

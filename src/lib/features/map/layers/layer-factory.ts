@@ -348,6 +348,31 @@ function buildSplitDatasetRowMapping(
   return out;
 }
 
+export function resolveSplitMappingFeatureIdColumn(
+  table: ArrowTable,
+  preferredFeatureIdColumn?: string
+): string | undefined {
+  const fields = table.schema.fields ?? [];
+
+  if (
+    preferredFeatureIdColumn &&
+    fields.some((field) => field.name === preferredFeatureIdColumn)
+  ) {
+    return preferredFeatureIdColumn;
+  }
+
+  if (fields.some((field) => field.name === 'basemap_id')) {
+    return 'basemap_id';
+  }
+
+  if (fields.some((field) => field.name === INTERNAL_COLUMN.FEATURE_ID)) {
+    return INTERNAL_COLUMN.FEATURE_ID;
+  }
+
+  const idField = fields.find((field) => field.name.toLowerCase() === 'id');
+  return idField?.name;
+}
+
 function getRepresentativePointSource(
   ctx: LayerContext
 ): { table: ArrowTable; geometryInfo: GeometryInfo } | null {
@@ -612,6 +637,7 @@ function createDoubleProportionalPointLayers(
       lineWidthUnits: 'pixels',
       lineWidthScale: pointStrokeWidth / 3,
       pickable,
+      parameters: THEMATIC_OVERLAY_PARAMETERS,
       ...resolveHoverHighlightProps(pickable),
       ...(modelMatrix && { modelMatrix }),
       ...(beforeId && { beforeId }),
@@ -1028,6 +1054,7 @@ function createRepresentativePointSymbolLayers(
       lineWidthUnits: 'pixels',
       lineWidthScale: pointStrokeWidth / 3,
       pickable: true,
+      parameters: THEMATIC_OVERLAY_PARAMETERS,
       ...resolveHoverHighlightProps(),
       ...(modelMatrix && { modelMatrix }),
       ...(beforeId && { beforeId }),
@@ -1363,6 +1390,10 @@ const textLabelCache = new WeakMap<
   Map<ProjectionLike | null, Map<string, TextLayerDatum[]>>
 >();
 
+const THEMATIC_OVERLAY_PARAMETERS = {
+  depthCompare: 'always' as const
+} as const;
+
 function getCachedGeoJSON(
   table: ArrowTable,
   geoColumn: string
@@ -1510,9 +1541,10 @@ function createTextCollisionProps(
   | 'getCollisionPriority'
   | 'collisionTestProps'
 > {
+  const collisionSupported = !ctx.modelMatrix;
   return {
-    extensions: [COLLISION_FILTER_EXTENSION],
-    collisionEnabled: enabled,
+    extensions: collisionSupported ? [COLLISION_FILTER_EXTENSION] : [],
+    collisionEnabled: collisionSupported && enabled,
     collisionGroup: resolveTextCollisionGroup(ctx),
     getCollisionPriority: priority
   };
@@ -1815,19 +1847,25 @@ function createTextLayerDataFromBinary(
   geoInfo: GeometryInfo,
   primaryColumn: string,
   secondaryColumn?: string,
-  customProjection?: ProjectionLike
+  customProjection?: ProjectionLike,
+  attributeTable: ArrowTable = table,
+  attributeRowByGeometryRow?: Int32Array
 ): TextLayerDatum[] {
+  const canUseCache =
+    attributeTable === table && attributeRowByGeometryRow === undefined;
   // Check text label cache — centroids + label text are stable for the same
   // table + columns + projection. Uses projection reference as key (stable
   // per basemap thanks to memoization in use-map-layers.svelte.ts).
   const projKey = customProjection ?? null;
   const labelCacheKey = `${geoInfo.type}:${primaryColumn}:${secondaryColumn ?? ''}`;
-  const tableMap = textLabelCache.get(table);
-  if (tableMap) {
-    const projMap = tableMap.get(projKey);
-    if (projMap) {
-      const cached = projMap.get(labelCacheKey);
-      if (cached) return cached;
+  if (canUseCache) {
+    const tableMap = textLabelCache.get(table);
+    if (tableMap) {
+      const projMap = tableMap.get(projKey);
+      if (projMap) {
+        const cached = projMap.get(labelCacheKey);
+        if (cached) return cached;
+      }
     }
   }
 
@@ -1840,10 +1878,10 @@ function createTextLayerDataFromBinary(
   const centroids = pointPositions(pointData);
   const featureIds = pointData.featureIds;
 
-  const primaryVector = table.getChild(primaryColumn);
+  const primaryVector = attributeTable.getChild(primaryColumn);
   if (!primaryVector) return [];
   const secondaryVector = secondaryColumn
-    ? table.getChild(secondaryColumn)
+    ? attributeTable.getChild(secondaryColumn)
     : null;
 
   const output: TextLayerDatum[] = [];
@@ -1856,7 +1894,15 @@ function createTextLayerDataFromBinary(
     if (seen.has(fid)) continue;
     seen.add(fid);
 
-    const primaryText = toTextValue(primaryVector.get(fid));
+    const rowIndex =
+      attributeRowByGeometryRow?.[fid] !== undefined
+        ? attributeRowByGeometryRow[fid]
+        : fid;
+    if (rowIndex === undefined || rowIndex < 0) {
+      continue;
+    }
+
+    const primaryText = toTextValue(primaryVector.get(rowIndex));
     const x = centroids[i * 2];
     const y = centroids[i * 2 + 1];
     if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
@@ -1864,7 +1910,7 @@ function createTextLayerDataFromBinary(
     const isMissingData = primaryText === null;
     const secondaryText =
       !isMissingData && secondaryVector
-        ? toTextValue(secondaryVector.get(fid))
+        ? toTextValue(secondaryVector.get(rowIndex))
         : null;
 
     output.push({
@@ -1872,22 +1918,24 @@ function createTextLayerDataFromBinary(
       primaryText,
       secondaryText,
       isMissingData,
-      rowIndex: fid
+      rowIndex
     });
   }
 
-  // Store in cache (table → projection → labelKey → result)
-  let tMap = textLabelCache.get(table);
-  if (!tMap) {
-    tMap = new Map();
-    textLabelCache.set(table, tMap);
+  if (canUseCache) {
+    // Store in cache (table → projection → labelKey → result)
+    let tMap = textLabelCache.get(table);
+    if (!tMap) {
+      tMap = new Map();
+      textLabelCache.set(table, tMap);
+    }
+    let pMap = tMap.get(projKey);
+    if (!pMap) {
+      pMap = new Map();
+      tMap.set(projKey, pMap);
+    }
+    pMap.set(labelCacheKey, output);
   }
-  let pMap = tMap.get(projKey);
-  if (!pMap) {
-    pMap = new Map();
-    tMap.set(projKey, pMap);
-  }
-  pMap.set(labelCacheKey, output);
 
   return output;
 }
@@ -1939,6 +1987,23 @@ function createTextOverlayLayers(
           geometryInfo
         }
       : null);
+  const textAttributeTable = ctx.splitDatasetTable ?? jsTable;
+  const textFeatureIdColumn =
+    ctx.splitDatasetTable && textPointSource
+      ? resolveSplitMappingFeatureIdColumn(
+          textPointSource.table,
+          ctx.splitFeatureIdColumn
+        )
+      : undefined;
+  const textAttributeRowByGeometryRow =
+    ctx.splitDatasetTable && textFeatureIdColumn && textPointSource
+      ? buildSplitDatasetRowMapping(
+          textPointSource.table,
+          ctx.splitDatasetTable,
+          textFeatureIdColumn,
+          'basemap_id'
+        )
+      : undefined;
 
   if (textPointSource) {
     try {
@@ -1947,7 +2012,9 @@ function createTextOverlayLayers(
         textPointSource.geometryInfo,
         textConfig.labelColumn,
         undefined,
-        ctx.customProjection
+        ctx.customProjection,
+        textAttributeTable,
+        textAttributeRowByGeometryRow
       );
       if (secondaryLabelColumn) {
         secondaryLabelLayerData = createTextLayerDataFromBinary(
@@ -1955,7 +2022,9 @@ function createTextOverlayLayers(
           textPointSource.geometryInfo,
           secondaryLabelColumn,
           undefined,
-          ctx.customProjection
+          ctx.customProjection,
+          textAttributeTable,
+          textAttributeRowByGeometryRow
         );
       }
     } catch {
@@ -2016,7 +2085,7 @@ function createTextOverlayLayers(
   const variableTextSizeColumn =
     sizeMode === SizeMode.PROPORTIONAL ? textValueColumn : undefined;
   const variableTextSizeVector = variableTextSizeColumn
-    ? jsTable.getChild(variableTextSizeColumn)
+    ? textAttributeTable.getChild(variableTextSizeColumn)
     : null;
   const canApplyVariableTextSize =
     sizeMode === SizeMode.PROPORTIONAL &&
@@ -2027,13 +2096,13 @@ function createTextOverlayLayers(
   const { minSize: minTextSize, maxSize: maxTextSize } =
     resolveVariableTextSizeBounds(textBaseSize);
   const thematicValueVector = textValueColumn
-    ? jsTable.getChild(textValueColumn)
+    ? textAttributeTable.getChild(textValueColumn)
     : null;
   const categoryVector = textCategoryColumn
-    ? jsTable.getChild(textCategoryColumn)
+    ? textAttributeTable.getChild(textCategoryColumn)
     : null;
   const effectiveCategoryColorMap = resolveEffectiveCategoryColorMap(
-    jsTable,
+    textAttributeTable,
     viz,
     ctx.textCategoryColorMap ?? ctx.categoryColorMap,
     textCategoryColumn,
@@ -2118,7 +2187,7 @@ function createTextOverlayLayers(
   if (shouldRenderLabelLayer && secondaryLabelLayerData) {
     const labelData = filterTextLayerDataByYear(
       secondaryLabelLayerData.filter((datum) => !datum.isMissingData),
-      jsTable,
+      textAttributeTable,
       ctx.yearFilter
     );
     if (labelData.length > 0) {
@@ -2166,6 +2235,7 @@ function createTextOverlayLayers(
         ),
         billboard: true,
         pickable: false,
+        parameters: THEMATIC_OVERLAY_PARAMETERS,
         ...(ctx.modelMatrix && { modelMatrix: ctx.modelMatrix }),
         ...(ctx.beforeId && { beforeId: ctx.beforeId }),
         updateTriggers: {
@@ -2203,7 +2273,7 @@ function createTextOverlayLayers(
         (datum) =>
           !datum.isMissingData || (textConfig.missingData?.show ?? true)
       ),
-      jsTable,
+      textAttributeTable,
       ctx.yearFilter
     );
     if (textData.length > 0) {
@@ -2278,6 +2348,7 @@ function createTextOverlayLayers(
           ),
           billboard: true,
           pickable: false,
+          parameters: THEMATIC_OVERLAY_PARAMETERS,
           ...(ctx.modelMatrix && { modelMatrix: ctx.modelMatrix }),
           ...(ctx.beforeId && { beforeId: ctx.beforeId }),
           updateTriggers: {
@@ -3263,7 +3334,7 @@ export function createLineLayers(
     const pointLayers = createRepresentativePointSymbolLayers(jsTable, ctx);
 
     return [
-      ...(primitiveFilters.includes(PrimitiveFilterType.LINE)
+      ...(!viz || primitiveFilters.includes(PrimitiveFilterType.LINE)
         ? [
             {
               primitive: PrimitiveFilterType.LINE as PrimitiveFilter,
@@ -3744,12 +3815,14 @@ export function createPolygonLayers(
       ];
       const primitiveFilters = getEnabledPrimitiveFilters(ctx.viz);
       const primitiveOrder = ctx.primitiveOrder ?? DEFAULT_PRIMITIVE_ORDER;
+      const polygonPrimitiveAllowed =
+        !ctx.viz || primitiveFilters.includes(PrimitiveFilterType.POLYGON);
       const showFill =
-        primitiveFilters.includes(PrimitiveFilterType.POLYGON) &&
+        polygonPrimitiveAllowed &&
         polygonConfig?.fillMode !== FillMode.NONE &&
         polygonFillOpacity > 0;
       const showStroke =
-        primitiveFilters.includes(PrimitiveFilterType.POLYGON) &&
+        polygonPrimitiveAllowed &&
         polygonConfig?.strokeMode !== StrokeMode.NONE &&
         polygonStrokeOpacity > 0 &&
         polygonStrokeWidth > 0;

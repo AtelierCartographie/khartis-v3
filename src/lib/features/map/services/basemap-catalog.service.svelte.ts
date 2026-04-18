@@ -247,11 +247,15 @@ export function rankBasemapsByJoinSynthesis(
 
     const existing = aggregated.get(displayBasemap.file);
     const shareBasemap = row.shareBasemap ?? 0;
+    const granularityDistance = Math.abs(shareBasemap - 1);
+    const existingGranularity = existing
+      ? Math.abs(existing.shareBasemap - 1)
+      : Number.POSITIVE_INFINITY;
     if (
       !existing ||
       row.shareCandidate > existing.shareCandidate ||
       (row.shareCandidate === existing.shareCandidate &&
-        shareBasemap > existing.shareBasemap)
+        granularityDistance < existingGranularity)
     ) {
       aggregated.set(displayBasemap.file, {
         basemap: displayBasemap,
@@ -268,9 +272,10 @@ export function rankBasemapsByJoinSynthesis(
         return candidateDelta;
       }
 
-      const basemapDelta = right.shareBasemap - left.shareBasemap;
-      if (Math.abs(basemapDelta) > GPS_SCORE_EPSILON) {
-        return basemapDelta;
+      const granularityDelta =
+        Math.abs(left.shareBasemap - 1) - Math.abs(right.shareBasemap - 1);
+      if (Math.abs(granularityDelta) > GPS_SCORE_EPSILON) {
+        return granularityDelta;
       }
 
       const yearDelta =
