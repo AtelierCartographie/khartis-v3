@@ -22,17 +22,17 @@ importers:
         specifier: ^0.1.4
         version: 0.1.4
       '@deck.gl/core':
-        specifier: ^9.2.11
-        version: 9.3.0
+        specifier: ^9.3.1
+        version: 9.3.1
       '@deck.gl/extensions':
-        specifier: ^9.2.11
-        version: 9.3.0(@deck.gl/core@9.3.0)(@luma.gl/core@9.3.2)(@luma.gl/engine@9.3.2(@luma.gl/core@9.3.2)(@luma.gl/shadertools@9.3.2(@luma.gl/core@9.3.2)))
+        specifier: ^9.3.1
+        version: 9.3.1(@deck.gl/core@9.3.1)(@luma.gl/core@9.3.2)(@luma.gl/engine@9.3.2(@luma.gl/core@9.3.2)(@luma.gl/shadertools@9.3.2(@luma.gl/core@9.3.2)))
       '@deck.gl/layers':
-        specifier: ^9.2.11
-        version: 9.3.0(@deck.gl/core@9.3.0)(@loaders.gl/core@4.4.1)(@luma.gl/core@9.3.2)(@luma.gl/engine@9.3.2(@luma.gl/core@9.3.2)(@luma.gl/shadertools@9.3.2(@luma.gl/core@9.3.2)))
+        specifier: ^9.3.1
+        version: 9.3.1(@deck.gl/core@9.3.1)(@loaders.gl/core@4.4.1)(@luma.gl/core@9.3.2)(@luma.gl/engine@9.3.2(@luma.gl/core@9.3.2)(@luma.gl/shadertools@9.3.2(@luma.gl/core@9.3.2)))
       '@deck.gl/mapbox':
-        specifier: ^9.2.11
-        version: 9.3.0(@deck.gl/core@9.3.0)(@luma.gl/core@9.3.2)(@math.gl/web-mercator@4.1.0)
+        specifier: ^9.3.1
+        version: 9.3.1(@deck.gl/core@9.3.1)(@luma.gl/core@9.3.2)(@math.gl/web-mercator@4.1.0)
       '@duckdb/duckdb-wasm':
         specifier: 1.33.1-dev44.0
         version: 1.33.1-dev44.0
@@ -73,8 +73,8 @@ importers:
         specifier: ^0.8.2
         version: 0.8.2
       geoarrow-deck-stream:
-        specifier: github:AtelierCartographie/geoarrow-deck-stream#1818bc856da4345420af8d77dd8fc55fa96a0450
-        version: git+https://git@github.com:AtelierCartographie/geoarrow-deck-stream.git#1818bc856da4345420af8d77dd8fc55fa96a0450(@deck.gl/core@9.3.0)(@deck.gl/layers@9.3.0(@deck.gl/core@9.3.0)(@loaders.gl/core@4.4.1)(@luma.gl/core@9.3.2)(@luma.gl/engine@9.3.2(@luma.gl/core@9.3.2)(@luma.gl/shadertools@9.3.2(@luma.gl/core@9.3.2))))(@geoarrow/geoarrow-js@0.3.3(apache-arrow@21.1.0))(apache-arrow@21.1.0)
+        specifier: github:AtelierCartographie/geoarrow-deck-stream#v1.0.2
+        version: git+https://git@github.com:AtelierCartographie/geoarrow-deck-stream.git#75493dfb51f764fe83c22e789aedd7989312de20(@deck.gl/core@9.3.1)(@deck.gl/layers@9.3.1(@deck.gl/core@9.3.1)(@loaders.gl/core@4.4.1)(@luma.gl/core@9.3.2)(@luma.gl/engine@9.3.2(@luma.gl/core@9.3.2)(@luma.gl/shadertools@9.3.2(@luma.gl/core@9.3.2))))(@geoarrow/geoarrow-js@0.3.3(apache-arrow@21.1.0))(apache-arrow@21.1.0)
       html-to-image:
         specifier: ^1.11.13
         version: 1.11.13
@@ -878,26 +878,26 @@ packages:
     resolution: {integrity: sha512-QxULHAm7cNu72w97JUNCBFODFaXpbDg+dP8b/oWFAZ2MTRppA3U00Y2L1HqaS4J6yBqxwa/Y3nMBaxVKbB/NsA==}
     engines: {node: '>=20.19.0'}
 
-  '@deck.gl/core@9.3.0':
-    resolution: {integrity: sha512-LYa9+I/isYaDD/6ASmyZUCkB/XJjWFKaWYfFTg7NVcrkB+UduHLkmxcM2DXQ3p8ek10fcSB+IWXHfaO8RHTMZg==}
+  '@deck.gl/core@9.3.1':
+    resolution: {integrity: sha512-uixmBJhaAAgjzppcJ+0Hh2R1BYvFHvCHFReXN93iQxQoNB3VCC03pGEhZ0hrW7hcVLC8ExCUrg8VRJW60wXzcA==}
 
-  '@deck.gl/extensions@9.3.0':
-    resolution: {integrity: sha512-QhOPTQOq/OhMQ4wjElP8mLW5Lt2OjOajOXpThGLgk67tqCsd9yOOmXnlRO9jVV6r2/UBZ4j64m3MLxKYCFJgSw==}
+  '@deck.gl/extensions@9.3.1':
+    resolution: {integrity: sha512-XTJgC8pnS9zuiFRhlPTQnE0WKMuJCnZ4xdXmd9TMJRH58Z0DKaKHpc3j32heFKLoRHo3G/TKlCoP/my5tgYT+Q==}
     peerDependencies:
       '@deck.gl/core': ~9.3.0
       '@luma.gl/core': ~9.3.2
       '@luma.gl/engine': ~9.3.2
 
-  '@deck.gl/layers@9.3.0':
-    resolution: {integrity: sha512-71F2zAB3zerL/q6if+RtzJGHj39wpakDR/ud56fmuAVPEAHsVrYlsjMthdLsvIPZKE1SPUhY0163/a61PYlhew==}
+  '@deck.gl/layers@9.3.1':
+    resolution: {integrity: sha512-gUT/UMrmSCYsJCyv78qjHdeZVnqDexX61WxNP3dUa7ZplXiG3NxZvjhS0PYeBLritOtCJSv3b13vR2ka+j49ZQ==}
     peerDependencies:
       '@deck.gl/core': ~9.3.0
       '@loaders.gl/core': ^4.4.1
       '@luma.gl/core': ~9.3.2
       '@luma.gl/engine': ~9.3.2
 
-  '@deck.gl/mapbox@9.3.0':
-    resolution: {integrity: sha512-Kzf2mrxsr014UY3ozwt7HJziLe4kxeGaS051h53XnzOzbIAPpuXhh0w8MuMVUdVYOdvOCAqU/eHwZU+wVS9AYQ==}
+  '@deck.gl/mapbox@9.3.1':
+    resolution: {integrity: sha512-4SgpWMeZiqiZEiz9yPdr89cVRL8HFcvXLxXUA0ExhMreUdNuK/j2OIQHPhw6vp1xCFbJEEqRelQ0pJYkhGDkYw==}
     peerDependencies:
       '@deck.gl/core': ~9.3.0
       '@luma.gl/core': ~9.3.2
@@ -3243,9 +3243,9 @@ packages:
     resolution: {integrity: sha512-3hN7NaskYvMDLQY55gnW3NQ+mesEAepTqlg+VEbj7zzqEMBVNhzcGYYeqFo/TlYz6eQiFcp1HcsCZO+nGgS8zg==}
     engines: {node: '>=6.9.0'}
 
-  geoarrow-deck-stream@git+https://git@github.com:AtelierCartographie/geoarrow-deck-stream.git#1818bc856da4345420af8d77dd8fc55fa96a0450:
-    resolution: {commit: 1818bc856da4345420af8d77dd8fc55fa96a0450, repo: git@github.com:AtelierCartographie/geoarrow-deck-stream.git, type: git}
-    version: 1.0.0
+  geoarrow-deck-stream@git+https://git@github.com:AtelierCartographie/geoarrow-deck-stream.git#75493dfb51f764fe83c22e789aedd7989312de20:
+    resolution: {commit: 75493dfb51f764fe83c22e789aedd7989312de20, repo: git@github.com:AtelierCartographie/geoarrow-deck-stream.git, type: git}
+    version: 1.0.2
     peerDependencies:
       '@deck.gl/core': '>=9.0.0'
       '@deck.gl/layers': '>=9.0.0'
@@ -6495,7 +6495,7 @@ snapshots:
 
   '@csstools/css-tokenizer@4.0.0': {}
 
-  '@deck.gl/core@9.3.0':
+  '@deck.gl/core@9.3.1':
     dependencies:
       '@loaders.gl/core': 4.4.1
       '@loaders.gl/images': 4.4.1(@loaders.gl/core@4.4.1)
@@ -6516,18 +6516,18 @@ snapshots:
     transitivePeerDependencies:
       - '@75lb/nature'
 
-  '@deck.gl/extensions@9.3.0(@deck.gl/core@9.3.0)(@luma.gl/core@9.3.2)(@luma.gl/engine@9.3.2(@luma.gl/core@9.3.2)(@luma.gl/shadertools@9.3.2(@luma.gl/core@9.3.2)))':
+  '@deck.gl/extensions@9.3.1(@deck.gl/core@9.3.1)(@luma.gl/core@9.3.2)(@luma.gl/engine@9.3.2(@luma.gl/core@9.3.2)(@luma.gl/shadertools@9.3.2(@luma.gl/core@9.3.2)))':
     dependencies:
-      '@deck.gl/core': 9.3.0
+      '@deck.gl/core': 9.3.1
       '@luma.gl/core': 9.3.2
       '@luma.gl/engine': 9.3.2(@luma.gl/core@9.3.2)(@luma.gl/shadertools@9.3.2(@luma.gl/core@9.3.2))
       '@luma.gl/shadertools': 9.3.2(@luma.gl/core@9.3.2)
       '@luma.gl/webgl': 9.3.2(@luma.gl/core@9.3.2)
       '@math.gl/core': 4.1.0
 
-  '@deck.gl/layers@9.3.0(@deck.gl/core@9.3.0)(@loaders.gl/core@4.4.1)(@luma.gl/core@9.3.2)(@luma.gl/engine@9.3.2(@luma.gl/core@9.3.2)(@luma.gl/shadertools@9.3.2(@luma.gl/core@9.3.2)))':
+  '@deck.gl/layers@9.3.1(@deck.gl/core@9.3.1)(@loaders.gl/core@4.4.1)(@luma.gl/core@9.3.2)(@luma.gl/engine@9.3.2(@luma.gl/core@9.3.2)(@luma.gl/shadertools@9.3.2(@luma.gl/core@9.3.2)))':
     dependencies:
-      '@deck.gl/core': 9.3.0
+      '@deck.gl/core': 9.3.1
       '@loaders.gl/core': 4.4.1
       '@loaders.gl/images': 4.4.1(@loaders.gl/core@4.4.1)
       '@loaders.gl/schema': 4.4.1
@@ -6542,9 +6542,9 @@ snapshots:
     transitivePeerDependencies:
       - '@75lb/nature'
 
-  '@deck.gl/mapbox@9.3.0(@deck.gl/core@9.3.0)(@luma.gl/core@9.3.2)(@math.gl/web-mercator@4.1.0)':
+  '@deck.gl/mapbox@9.3.1(@deck.gl/core@9.3.1)(@luma.gl/core@9.3.2)(@math.gl/web-mercator@4.1.0)':
     dependencies:
-      '@deck.gl/core': 9.3.0
+      '@deck.gl/core': 9.3.1
       '@luma.gl/core': 9.3.2
       '@math.gl/web-mercator': 4.1.0
 
@@ -8887,10 +8887,10 @@ snapshots:
 
   gensync@1.0.0-beta.2: {}
 
-  geoarrow-deck-stream@git+https://git@github.com:AtelierCartographie/geoarrow-deck-stream.git#1818bc856da4345420af8d77dd8fc55fa96a0450(@deck.gl/core@9.3.0)(@deck.gl/layers@9.3.0(@deck.gl/core@9.3.0)(@loaders.gl/core@4.4.1)(@luma.gl/core@9.3.2)(@luma.gl/engine@9.3.2(@luma.gl/core@9.3.2)(@luma.gl/shadertools@9.3.2(@luma.gl/core@9.3.2))))(@geoarrow/geoarrow-js@0.3.3(apache-arrow@21.1.0))(apache-arrow@21.1.0):
+  geoarrow-deck-stream@git+https://git@github.com:AtelierCartographie/geoarrow-deck-stream.git#75493dfb51f764fe83c22e789aedd7989312de20(@deck.gl/core@9.3.1)(@deck.gl/layers@9.3.1(@deck.gl/core@9.3.1)(@loaders.gl/core@4.4.1)(@luma.gl/core@9.3.2)(@luma.gl/engine@9.3.2(@luma.gl/core@9.3.2)(@luma.gl/shadertools@9.3.2(@luma.gl/core@9.3.2))))(@geoarrow/geoarrow-js@0.3.3(apache-arrow@21.1.0))(apache-arrow@21.1.0):
     dependencies:
-      '@deck.gl/core': 9.3.0
-      '@deck.gl/layers': 9.3.0(@deck.gl/core@9.3.0)(@loaders.gl/core@4.4.1)(@luma.gl/core@9.3.2)(@luma.gl/engine@9.3.2(@luma.gl/core@9.3.2)(@luma.gl/shadertools@9.3.2(@luma.gl/core@9.3.2)))
+      '@deck.gl/core': 9.3.1
+      '@deck.gl/layers': 9.3.1(@deck.gl/core@9.3.1)(@loaders.gl/core@4.4.1)(@luma.gl/core@9.3.2)(@luma.gl/engine@9.3.2(@luma.gl/core@9.3.2)(@luma.gl/shadertools@9.3.2(@luma.gl/core@9.3.2)))
       '@geoarrow/geoarrow-js': 0.3.3(apache-arrow@21.1.0)
       apache-arrow: 21.1.0
       d3-geo: 3.1.1
