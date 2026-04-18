@@ -82,6 +82,32 @@
     return loadGeneration !== generation;
   }
 
+  function isMissingDuckTableError(error: unknown): boolean {
+    return (
+      error instanceof Error &&
+      /Catalog Error:\s*Table with name .*?(does not exist|not found)/i.test(
+        error.message
+      )
+    );
+  }
+
+  function shouldIgnoreDatasetLoadError(
+    datasetId: string,
+    generation: number,
+    error: unknown,
+    tableName?: string
+  ): boolean {
+    if (isStaleLoad(generation) || !datasetsStore.isDatasetEnabled(datasetId)) {
+      return true;
+    }
+
+    if (!tableName || !isMissingDuckTableError(error)) {
+      return false;
+    }
+
+    return !duckDBOrchestrator.getDatasetByTable(tableName);
+  }
+
   function bumpDisplayDataVersion(): void {
     displayDataVersion += 1;
   }
@@ -167,9 +193,11 @@
   }
 
   async function loadGeoDatasetTable(
-    dataset: DatasetResult
+    dataset: DatasetResult,
+    generation: number
   ): Promise<ArrowTable | FeatureCollection | null> {
     const start = performance.now();
+    let tableName: string | undefined;
     logger.info('Preparing dataset for map rendering', LogCategory.MAP, {
       datasetId: dataset.id,
       fileName: dataset.name,
@@ -181,7 +209,7 @@
         const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(
           dataset.sourceFileId
         );
-        const tableName = duckDBDataset?.tableName ?? dataset.tableName;
+        tableName = duckDBDataset?.tableName ?? dataset.tableName;
 
         if (!tableName) {
           return null;
@@ -258,6 +286,12 @@
       );
       return null;
     } catch (error) {
+      if (
+        shouldIgnoreDatasetLoadError(dataset.id, generation, error, tableName)
+      ) {
+        return null;
+      }
+
       logger.error(
         'Failed to convert dataset to GeoJSON',
         LogCategory.MAP,
@@ -432,6 +466,8 @@
     generation?: number
   ): Promise<void> {
     const start = performance.now();
+    const datasetTableName =
+      duckDBOrchestrator.getDatasetById(duckDBDatasetId)?.tableName;
 
     logger.info('Loading GPS data for OSM basemap', LogCategory.MAP, {
       datasetId,
@@ -467,6 +503,46 @@
         removeDatasetFromDisplay(datasetId);
       }
     } catch (error) {
+      if (
+        (generation !== undefined &&
+          shouldIgnoreDatasetLoadError(
+            datasetId,
+            generation,
+            error,
+            datasetTableName
+          )) ||
+        (!datasetsStore.isDatasetEnabled(datasetId) &&
+          isMissingDuckTableError(error)) ||
+        (datasetTableName &&
+          isMissingDuckTableError(error) &&
+          !duckDBOrchestrator.getDatasetByTable(datasetTableName))
+      ) {
+        logger.debug(
+          'Ignoring stale GPS load failure during dataset switch',
+          LogCategory.MAP,
+          {
+            datasetId,
+            duckDBDatasetId,
+            tableName: datasetTableName
+          }
+        );
+        return;
+      }
+
+      if (isMissingDuckTableError(error)) {
+        logger.debug(
+          'Ignoring GPS load failure for missing DuckDB table',
+          LogCategory.MAP,
+          {
+            datasetId,
+            duckDBDatasetId,
+            tableName: datasetTableName
+          }
+        );
+        removeDatasetFromDisplay(datasetId);
+        return;
+      }
+
       logger.error('Failed to load GPS data', LogCategory.MAP, error);
       removeDatasetFromDisplay(datasetId);
     }
@@ -478,7 +554,7 @@
   ): Promise<void> {
     const datasetId = dataset.id;
     if (dataset.geometry) {
-      const result = await loadGeoDatasetTable(dataset);
+      const result = await loadGeoDatasetTable(dataset, generation);
 
       if (isStaleLoad(generation)) return;
 
@@ -588,6 +664,8 @@
       return;
     }
 
+    const thisGeneration = loadGeneration;
+
     for (const dataset of enabledDatasets) {
       const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(
         dataset.sourceFileId
@@ -602,7 +680,7 @@
             osmBasemap: osmBasemap.file
           }
         );
-        loadGPSData(dataset.id, duckDBDataset.id);
+        loadGPSData(dataset.id, duckDBDataset.id, thisGeneration);
       }
     }
   });

@@ -25,6 +25,11 @@ interface InformationSchemaColumn {
   data_type: string;
 }
 
+interface GeometryColumnInfo {
+  columnName: string;
+  isSpatialGeometry: boolean;
+}
+
 interface CenterLookupRow {
   basemap_id: string | number | null;
   lon: number | null;
@@ -41,10 +46,22 @@ function isGeometryColumn(column: InformationSchemaColumn): boolean {
   );
 }
 
+function isSpatialGeometryColumn(column: InformationSchemaColumn): boolean {
+  return column.data_type.toUpperCase().startsWith('GEOMETRY');
+}
+
 function findGeometryColumn(
   columns: InformationSchemaColumn[]
-): string | undefined {
-  return columns.find(isGeometryColumn)?.column_name;
+): GeometryColumnInfo | undefined {
+  const column = columns.find(isGeometryColumn);
+  if (!column) {
+    return undefined;
+  }
+
+  return {
+    columnName: column.column_name,
+    isSpatialGeometry: isSpatialGeometryColumn(column)
+  };
 }
 
 function findFeatureIdentifierColumn(
@@ -89,6 +106,62 @@ function buildRepresentativePointExpression(escapedColumn: string): string {
   END`;
 }
 
+function collectCoordinatePairs(
+  value: unknown,
+  pairs: Array<[number, number]>
+): void {
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectCoordinatePairs(item, pairs));
+    return;
+  }
+
+  if (!value || typeof value !== 'object') {
+    return;
+  }
+
+  if (
+    'x' in value &&
+    'y' in value &&
+    typeof value.x === 'number' &&
+    typeof value.y === 'number'
+  ) {
+    pairs.push([value.x, value.y]);
+    return;
+  }
+
+  Object.values(value).forEach((nestedValue) =>
+    collectCoordinatePairs(nestedValue, pairs)
+  );
+}
+
+function deriveCenterFromStructuredGeometry(
+  geometryValue: unknown
+): Pick<CenterLookupRow, 'lon' | 'lat'> | null {
+  const coordinatePairs: Array<[number, number]> = [];
+  collectCoordinatePairs(geometryValue, coordinatePairs);
+
+  if (coordinatePairs.length === 0) {
+    return null;
+  }
+
+  let minLon = Infinity;
+  let maxLon = -Infinity;
+  let minLat = Infinity;
+  let maxLat = -Infinity;
+
+  for (const [lon, lat] of coordinatePairs) {
+    minLon = Math.min(minLon, lon);
+    maxLon = Math.max(maxLon, lon);
+    minLat = Math.min(minLat, lat);
+    maxLat = Math.max(maxLat, lat);
+  }
+
+  return {
+    lon: (minLon + maxLon) / 2,
+    lat: (minLat + maxLat) / 2
+  };
+}
+
 async function getTableColumns(
   tableName: string
 ): Promise<InformationSchemaColumn[]> {
@@ -116,12 +189,49 @@ async function getDatasetRowCenterData(
   }
 
   const escapedTable = escapeIdentifier(tableName);
-  const representativePoint = geometryColumn
+  const representativePoint = geometryColumn?.isSpatialGeometry
     ? buildRepresentativePointExpression(
-        `"${escapeIdentifier(geometryColumn)}"`
+        `"${escapeIdentifier(geometryColumn.columnName)}"`
       )
     : 'NULL';
   const basemapSelect = hasBasemapId ? 'basemap_id' : 'NULL AS basemap_id';
+
+  if (!geometryColumn?.isSpatialGeometry) {
+    const escapedGeometryColumn = geometryColumn
+      ? escapeIdentifier(geometryColumn.columnName)
+      : null;
+    const rows = (await Duck.query(
+      `SELECT
+         ${basemapSelect},
+         ${
+           escapedGeometryColumn
+             ? `"${escapedGeometryColumn}" AS geometry_value`
+             : 'NULL AS geometry_value'
+         }
+       FROM "${escapedTable}"
+       WHERE ${INTERNAL_COLUMN.ID} = ${rowId}
+       LIMIT 1`,
+      { format: 'array', useProxy: false }
+    )) as Array<{
+      basemap_id: string | number | null;
+      geometry_value: unknown;
+    }>;
+
+    const row = rows?.[0];
+    if (!row) {
+      return null;
+    }
+
+    const structuredCenter = deriveCenterFromStructuredGeometry(
+      row.geometry_value
+    );
+
+    return {
+      basemap_id: row.basemap_id,
+      lon: structuredCenter?.lon ?? null,
+      lat: structuredCenter?.lat ?? null
+    };
+  }
 
   const rows = (await Duck.query(
     `WITH centered_row AS (
@@ -185,10 +295,7 @@ async function getBasemapFeatureCenter(
   }
 
   const escapedGeometryTable = escapeIdentifier(geometryTableName);
-  const escapedGeometryColumn = escapeIdentifier(geometryColumn);
-  const representativePoint = buildRepresentativePointExpression(
-    `"${escapedGeometryColumn}"`
-  );
+  const escapedGeometryColumn = escapeIdentifier(geometryColumn.columnName);
   const escapedFeatureId = escapeSqlString(String(basemapFeatureId));
   const featureIdentifierColumn = findFeatureIdentifierColumn(columns);
 
@@ -210,6 +317,33 @@ async function getBasemapFeatureCenter(
       .join(' OR ');
   }
 
+  if (!geometryColumn.isSpatialGeometry) {
+    const rows = (await Duck.query(
+      `SELECT
+         "${escapedGeometryColumn}" AS geometry_value
+       FROM "${escapedGeometryTable}"
+       WHERE ${whereClause}
+       LIMIT 1`,
+      { format: 'array', useProxy: false }
+    )) as Array<{ geometry_value: unknown }>;
+
+    const center = deriveCenterFromStructuredGeometry(
+      rows?.[0]?.geometry_value
+    );
+    if (!center) {
+      return null;
+    }
+
+    return {
+      basemap_id: null,
+      lon: center.lon,
+      lat: center.lat
+    };
+  }
+
+  const representativePoint = buildRepresentativePointExpression(
+    `"${escapedGeometryColumn}"`
+  );
   const rows = (await Duck.query(
     `WITH centered_feature AS (
        SELECT ${representativePoint} AS representative_point
