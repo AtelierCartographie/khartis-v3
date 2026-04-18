@@ -153,6 +153,12 @@
     if (overlayBasemapDismissed) return;
     if (overlayBasemapEnabled || overlayBasemapSuggestionCount > 0) {
       overlayBasemapExpanded = true;
+      // Mirror the toggle's onToggleChange path: when the section opens because
+      // suggestions are available but no basemap is active yet, auto-pick the top one
+      // so the CDC default selection rule applies even on geo datasets.
+      if (!overlayBasemapEnabled && overlayBasemapSuggestionCount > 0) {
+        basemapHook.activatePreferredBasemap();
+      }
     }
   });
 

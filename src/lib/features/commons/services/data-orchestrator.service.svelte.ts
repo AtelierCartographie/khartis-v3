@@ -50,6 +50,7 @@ import { importRollbackService } from './import-rollback.service';
 import {
   applyPaletteInversion,
   calculateBreaks,
+  computeDivergingSplit,
   generateColorsForBreaks
 } from './classification.service';
 import { FillMode } from '../../main-toolbar/constants';
@@ -972,13 +973,22 @@ function createDataOrchestratorService() {
             ? findPaletteById(viz.classification.paletteId)
             : undefined;
           const isPatternPalette = userPalette?.type === PALETTE_TYPE.PATTERN;
+          const divergingSplit =
+            paletteType === 'diverging'
+              ? computeDivergingSplit(
+                  actualNumClasses,
+                  result.breaks,
+                  viz.classification?.breakpointValue ?? null
+                )
+              : undefined;
           colors =
             userPalette && !isPatternPalette
               ? generatePaletteColors(userPalette, actualNumClasses, contrast)
               : generateColorsForBreaks(
                   actualNumClasses,
                   paletteType,
-                  contrast
+                  contrast,
+                  divergingSplit
                 );
           colors = applyPaletteInversion(
             colors,
