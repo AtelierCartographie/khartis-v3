@@ -26,6 +26,15 @@ export interface GPSValidationResult {
   warning?: string;
 }
 
+const inFlightGPSArrowLoads = new Map<
+  string,
+  Promise<{
+    table: Table;
+    latColumn: string;
+    lonColumn: string;
+  }>
+>();
+
 export async function validateGPSColumns(
   tableName: string,
   latCol: string,
@@ -201,52 +210,80 @@ export async function getGPSArrowTable(
   }
 
   const { lat, lon } = dataset.gpsColumns;
+  const requestKey = `${dataset.id}:${dataset.tableName}:${lat}:${lon}`;
+  const existingRequest = inFlightGPSArrowLoads.get(requestKey);
 
-  logger.info('Creating GPS Arrow table for rendering', LogCategory.MAP, {
-    datasetId: dataset.id,
-    tableName: dataset.tableName,
-    latColumn: lat,
-    lonColumn: lon
-  });
+  if (existingRequest) {
+    logger.debug('Reusing in-flight GPS Arrow table build', LogCategory.MAP, {
+      datasetId: dataset.id,
+      tableName: dataset.tableName,
+      latColumn: lat,
+      lonColumn: lon
+    });
+    return existingRequest;
+  }
 
-  const gpsView = `gps_${dataset.tableName.replace(/[^a-zA-Z0-9_]/g, '_')}`;
-  const escapedLon = escapeIdentifier(lon);
-  const escapedLat = escapeIdentifier(lat);
-  const escapedTableName = escapeIdentifier(dataset.tableName);
+  const request = (async () => {
+    logger.info('Creating GPS Arrow table for rendering', LogCategory.MAP, {
+      datasetId: dataset.id,
+      tableName: dataset.tableName,
+      latColumn: lat,
+      lonColumn: lon
+    });
 
-  // TRY_CAST to DOUBLE handles VARCHAR columns with leading whitespace
-  // (e.g., CSV ` 2.497` after semicolon delimiter). Without it, BETWEEN
-  // uses string comparison where " 2.49" < "-180" → 0 rows.
-  await Duck.query(`
-    CREATE OR REPLACE VIEW "${gpsView}" AS
-    SELECT
-      *,
-      ST_Point(
-        TRY_CAST("${escapedLon}" AS DOUBLE),
-        TRY_CAST("${escapedLat}" AS DOUBLE)
-      ) AS geom
-    FROM "${escapedTableName}"
-    WHERE TRY_CAST("${escapedLat}" AS DOUBLE) IS NOT NULL
-      AND TRY_CAST("${escapedLon}" AS DOUBLE) IS NOT NULL
-      AND TRY_CAST("${escapedLat}" AS DOUBLE) BETWEEN -90 AND 90
-      AND TRY_CAST("${escapedLon}" AS DOUBLE) BETWEEN -180 AND 180
-  `);
+    const gpsTable = `gps_${dataset.tableName.replace(/[^a-zA-Z0-9_]/g, '_')}_${dataset.id.replace(/[^a-zA-Z0-9_]/g, '_')}_${Math.round(performance.now()).toString(36)}`;
+    const escapedLon = escapeIdentifier(lon);
+    const escapedLat = escapeIdentifier(lat);
+    const escapedTableName = escapeIdentifier(dataset.tableName);
 
-  const arrowTable = await getArrowTableDirect(gpsView);
+    // TRY_CAST to DOUBLE handles VARCHAR columns with leading whitespace
+    // (e.g., CSV ` 2.497` after semicolon delimiter). Without it, BETWEEN
+    // uses string comparison where " 2.49" < "-180" → 0 rows.
+    await Duck.query(`
+      CREATE TEMP TABLE "${gpsTable}" AS
+      SELECT
+        *,
+        ST_Point(
+          TRY_CAST("${escapedLon}" AS DOUBLE),
+          TRY_CAST("${escapedLat}" AS DOUBLE)
+        ) AS geom
+      FROM "${escapedTableName}"
+      WHERE TRY_CAST("${escapedLat}" AS DOUBLE) IS NOT NULL
+        AND TRY_CAST("${escapedLon}" AS DOUBLE) IS NOT NULL
+        AND TRY_CAST("${escapedLat}" AS DOUBLE) BETWEEN -90 AND 90
+        AND TRY_CAST("${escapedLon}" AS DOUBLE) BETWEEN -180 AND 180
+    `);
 
-  logger.success('GPS Arrow table created', LogCategory.MAP, {
-    gpsView,
-    rows: arrowTable.numRows,
-    latColumn: lat,
-    lonColumn: lon,
-    durationMs: (performance.now() - start).toFixed(2)
-  });
+    try {
+      const arrowTable = await getArrowTableDirect(gpsTable);
 
-  return {
-    table: arrowTable,
-    latColumn: lat,
-    lonColumn: lon
-  };
+      logger.success('GPS Arrow table created', LogCategory.MAP, {
+        gpsTable,
+        rows: arrowTable.numRows,
+        latColumn: lat,
+        lonColumn: lon,
+        durationMs: (performance.now() - start).toFixed(2)
+      });
+
+      return {
+        table: arrowTable,
+        latColumn: lat,
+        lonColumn: lon
+      };
+    } finally {
+      await Duck.query(`DROP TABLE IF EXISTS "${gpsTable}"`);
+    }
+  })();
+
+  inFlightGPSArrowLoads.set(requestKey, request);
+
+  try {
+    return await request;
+  } finally {
+    if (inFlightGPSArrowLoads.get(requestKey) === request) {
+      inFlightGPSArrowLoads.delete(requestKey);
+    }
+  }
 }
 
 export async function getGPSBounds(
