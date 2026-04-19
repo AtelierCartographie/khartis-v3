@@ -198,7 +198,7 @@ type QueryDuck = {
   query(sql: string, options?: { format?: string }): Promise<unknown>;
 };
 
-const REPO_ROOT = '/Users/jb-thery/Repos/khartis-v3';
+const REPO_ROOT = resolve(dirname(new URL(import.meta.url).pathname), '../..');
 const FULL_AUDIT = process.env.KHARTIS_FULL_SUGGESTION_AUDIT === '1';
 
 const DEFAULT_AUDIT_SOURCES = [
