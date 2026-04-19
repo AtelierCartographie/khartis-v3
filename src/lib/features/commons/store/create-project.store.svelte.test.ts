@@ -192,4 +192,42 @@ describe('createProjectActions.removeUploadedFile', () => {
       'total-size:200'
     ]);
   });
+
+  it('resetAllTabs clears stale modal state across create/open/example tabs', () => {
+    createProjectState.selectedTab = 3;
+    createProjectState.newProject.uploadedFiles = [
+      makeUploadedFile('stale', 1)
+    ];
+    createProjectState.newProject.pastedData = 'hello';
+    createProjectState.newProject.onlineFileUrl = 'http://localhost/stale.csv';
+    createProjectState.newProject.projectName = 'Stale project';
+    createProjectState.newProject.isLoading = true;
+    createProjectState.newProject.isProcessingFiles = true;
+    createProjectState.newProject.processingFileCount = 2;
+    createProjectState.newProject.error = 'stale-error';
+    createProjectState.newProject.warning = 'stale-warning';
+    createProjectState.newProject.validationErrors = ['stale-validation'];
+    createProjectState.openProject.selectedProjectId = 'project-1';
+    createProjectState.openProject.error = 'open-error';
+    createProjectState.tryExample.selectedExampleId = 'example-1';
+    createProjectState.tryExample.error = 'example-error';
+
+    createProjectActions.resetAllTabs();
+
+    expect(createProjectState.selectedTab).toBe(1);
+    expect(createProjectState.newProject.uploadedFiles).toEqual([]);
+    expect(createProjectState.newProject.pastedData).toBe('');
+    expect(createProjectState.newProject.onlineFileUrl).toBe('');
+    expect(createProjectState.newProject.projectName).toBe('');
+    expect(createProjectState.newProject.isLoading).toBe(false);
+    expect(createProjectState.newProject.isProcessingFiles).toBe(false);
+    expect(createProjectState.newProject.processingFileCount).toBe(0);
+    expect(createProjectState.newProject.error).toBeUndefined();
+    expect(createProjectState.newProject.warning).toBeUndefined();
+    expect(createProjectState.newProject.validationErrors).toEqual([]);
+    expect(createProjectState.openProject.selectedProjectId).toBeUndefined();
+    expect(createProjectState.openProject.error).toBeUndefined();
+    expect(createProjectState.tryExample.selectedExampleId).toBeUndefined();
+    expect(createProjectState.tryExample.error).toBeUndefined();
+  });
 });

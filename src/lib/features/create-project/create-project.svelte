@@ -44,6 +44,16 @@
 
   const TAB_COUNT = 3;
   let tabRefs = $state<HTMLElement[]>([]);
+  let resetToken = $state(0);
+  let wasOpen = open;
+
+  $effect(() => {
+    if (open && !wasOpen) {
+      resetToken += 1;
+    }
+
+    wasOpen = open;
+  });
 
   function handleClose() {
     if (canDismiss) {
@@ -163,7 +173,11 @@
 
         <div class="tab-content" data-testid="tab-content">
           {#if createProjectState.selectedTab === 1}
-            <CreateNewProject onClose={handleClose} isModal />
+            <CreateNewProject
+              onClose={handleClose}
+              isModal
+              resetToken={resetToken}
+            />
           {:else if createProjectState.selectedTab === 2}
             <OpenProject onClose={handleClose} />
           {:else if createProjectState.selectedTab === 3}

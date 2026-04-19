@@ -54,11 +54,21 @@
 
   let lastProcessedFiles = $state<SvelteSet<string>>(new SvelteSet());
   let previousUploaderKey = 0;
+  let previousResetToken = 0;
 
   $effect(() => {
     if (uploaderKey !== previousUploaderKey) {
       lastProcessedFiles = new SvelteSet();
       previousUploaderKey = uploaderKey;
+    }
+  });
+
+  $effect(() => {
+    if (resetToken !== previousResetToken) {
+      pastedDataValue = '';
+      onlineUrlValue = '';
+      urlValidation = null;
+      previousResetToken = resetToken;
     }
   });
 

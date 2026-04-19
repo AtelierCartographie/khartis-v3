@@ -754,10 +754,6 @@ export const createProjectActions = {
     }
   },
 
-  /**
-   * Clear only the upload UI state without touching DuckDB tables or project data.
-   * Used when closing the add-data modal after successful import.
-   */
   clearUploadState(): void {
     createProjectState.newProject.uploadedFiles = [];
     createProjectState.newProject.validationErrors = [];
@@ -867,17 +863,24 @@ export const createProjectActions = {
   },
 
   resetOpenProject(): void {
-    Object.assign(createProjectState.openProject, {
+    const savedProjects = createProjectState.openProject.savedProjects;
+    createProjectState.openProject = {
       ...DEFAULT_STATE.openProject,
-      savedProjects: createProjectState.openProject.savedProjects
-    });
+      savedProjects,
+      selectedProjectId: undefined,
+      importedFile: undefined,
+      error: undefined
+    };
   },
 
   resetTryExample(): void {
-    Object.assign(createProjectState.tryExample, {
+    const examples = createProjectState.tryExample.examples;
+    createProjectState.tryExample = {
       ...DEFAULT_STATE.tryExample,
-      examples: createProjectState.tryExample.examples
-    });
+      examples,
+      selectedExampleId: undefined,
+      error: undefined
+    };
   },
 
   resetAllTabs(): void {
