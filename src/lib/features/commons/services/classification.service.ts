@@ -60,14 +60,7 @@ export type ClassificationMacro =
   | 'q6'
   | 'headtail2';
 
-/**
- * Maps a CDC [VIZ-02d] ClassificationMethod to its DuckDB macro name.
- * Returns null for methods handled in TypeScript:
- *   - JENKS                (Fisher-Jenks via {@link computeJenksBreaks})
- *   - STANDARD_DEVIATION   (mean ± k·σ via {@link getStandardDeviationBreaks})
- *   - MANUAL               (user-provided breaks)
- * Locked by tests/pipeline/classification-method-mapping.test.ts.
- */
+// Returns null for JENKS, STANDARD_DEVIATION, and MANUAL — those are computed in TypeScript, not via DuckDB macros.
 export function mapMethodToMacro(
   method: ClassificationMethod
 ): ClassificationMacro | null {
@@ -179,11 +172,6 @@ async function queryColumnValues(context: QueryContext): Promise<number[]> {
   return values;
 }
 
-/**
- * Sanitises an array of break values: keeps only finite values strictly between
- * min and max (excluded), sorts them ascending and drops consecutive duplicates.
- * Centralised here so every classification path produces the same output shape.
- */
 export function sanitizeBreaks(
   breaks: number[],
   min: number,
@@ -210,11 +198,6 @@ function toIterableValues(raw: unknown): number[] | null {
     .filter((value) => !Number.isNaN(value));
 }
 
-/**
- * Equal-interval breaks: divide [min, max] into N classes of equal width.
- * Used as the universal fallback when a macro fails or returns nothing.
- * Returns N − 1 internal break values; sanitised to drop ties with min/max.
- */
 export function getEqualIntervalBreaks(
   min: number,
   max: number,
@@ -230,11 +213,6 @@ export function getEqualIntervalBreaks(
   return sanitizeBreaks(breaks, min, max);
 }
 
-/**
- * Standard-deviation breaks: place break points at mean ± k·σ for k = … −1, 0, +1, …
- * For N classes returns N − 1 breaks centred on the mean. Returns [] if σ is invalid.
- * Always pair with sanitiseBreaks to drop breaks falling outside [min, max].
- */
 export function getStandardDeviationBreaks(
   mean: number,
   stddev: number,
@@ -431,14 +409,6 @@ export async function calculateBreaks(
     const allBreaks = [stats.min, ...breaks, stats.max];
     const counts = await queryBreakCounts(context, allBreaks);
 
-    logger.debug('Breaks calculated successfully', LogCategory.DATA, {
-      method,
-      numClasses,
-      breaks: breaks.length,
-      min: stats.min,
-      max: stats.max
-    });
-
     const result: BreaksResult = {
       breaks,
       counts,
@@ -578,14 +548,6 @@ export function computeDivergingSplit(
   };
 }
 
-/**
- * Generates palette colors for classification breaks via ok-palette.
- * Uses Oklch perceptual color space for uniform luminosity across classes.
- * Supports any class count (no longer clamped to 3–9).
- *
- * For diverging palettes, pass `divergingSplit` to position the neutral centre
- * according to a breakpoint value. Without it, the palette is symmetric.
- */
 export function generateColorsForBreaks(
   numClasses: number,
   palette: 'sequential' | 'diverging' = 'sequential',

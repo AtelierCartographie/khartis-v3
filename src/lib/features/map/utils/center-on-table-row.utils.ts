@@ -4,7 +4,7 @@ import {
   escapeIdentifier,
   escapeSqlString
 } from '$lib/features/commons/utils/sanitize.utils';
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+
 import { Duck } from '$lib/features/duckdb';
 import { basemapService } from '../services/basemap.service.svelte';
 import { resolveCenterCoordinates } from './orthographic-center.utils';
@@ -416,11 +416,6 @@ export async function centerMapOnTableRow({
     );
     await applyCenter(basemapCenter, sourceFileId);
   } catch (error) {
-    logger.debug('Failed to center map on table row', LogCategory.UI, {
-      rowId,
-      tableName,
-      joinedBasemap,
-      error
-    });
+    console.error(error);
   }
 }

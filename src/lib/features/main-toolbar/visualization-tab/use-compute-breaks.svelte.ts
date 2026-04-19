@@ -69,16 +69,6 @@ export function useComputeBreaks(
       return;
     }
 
-    logger.debug('[configure-visualization] computing breaks', LogCategory.UI, {
-      trigger,
-      requestId,
-      selectedVisualizationId: selectedViz.id,
-      sourceFileId: dataset.sourceFileId,
-      valueColumn: selectedViz.mapping.valueColumn,
-      method: normalizedMethod,
-      numClasses: requestedClassCount
-    });
-
     try {
       const result = await calculateBreaks({
         datasetId: dataset.sourceFileId,
@@ -140,15 +130,6 @@ export function useComputeBreaks(
         visualizationStore.updateClassification(
           currentViz.id,
           classificationUpdate
-        );
-        logger.debug(
-          '[configure-visualization] breaks computed and applied',
-          LogCategory.UI,
-          {
-            requestId,
-            selectedVisualizationId: currentViz.id,
-            breaksCount: result.breaks.length
-          }
         );
       } else {
         logger.warn(

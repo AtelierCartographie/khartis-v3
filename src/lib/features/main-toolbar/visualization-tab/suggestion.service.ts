@@ -335,7 +335,6 @@ export function resolveDatasetGeometryType(
     return rawGeometry as GeometryType;
   }
 
-  // Check dataset-level join info first (available on DatasetResult)
   if (dataset.gpsMode) {
     return 'Point';
   }
@@ -343,7 +342,6 @@ export function resolveDatasetGeometryType(
     return 'Polygon';
   }
 
-  // Check geoDetection for auto-detected GPS columns (before join finalization)
   if (dataset.geoDetection?.geoColumns) {
     const hasLat = dataset.geoDetection.geoColumns.some(
       (c) => c.type === GEO_COLUMN_TYPE.LATITUDE
@@ -360,7 +358,6 @@ export function resolveDatasetGeometryType(
     return null;
   }
 
-  // Fallback 1: check orchestrator state (DuckDBDataset)
   const duckDataset = duckDBOrchestrator.getDatasetBySourceFile(
     dataset.sourceFileId
   );
@@ -373,7 +370,6 @@ export function resolveDatasetGeometryType(
     }
   }
 
-  // Fallback 2: check project source files (UploadedFile persistence)
   const sourceFile = projectStore.currentProject?.data?.sourceFiles?.find(
     (f) => f.id === dataset.sourceFileId
   );
@@ -386,7 +382,6 @@ export function resolveDatasetGeometryType(
     }
   }
 
-  // Fallback 3: infer from existing visualizations on this dataset
   const datasetId = (dataset as { id?: string }).id;
   if (datasetId) {
     const vizs = visualizationStore.getVisualizationsByDataset(datasetId);

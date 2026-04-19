@@ -248,7 +248,6 @@ const { actions, getState } = createToolStore<
             bbox: bounds
           });
 
-          // CDC [VIZ-TOOLS-c]: "Projection attribuée par défaut, modifiable".
           // National projections trump generic ones because "Nationale" gathers
           // officially endorsed CRSes per zone (Lambert-93 for France, etc.).
           // Ties inside each list have already been broken by the upstream

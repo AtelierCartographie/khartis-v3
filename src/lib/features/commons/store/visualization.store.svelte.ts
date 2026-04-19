@@ -1206,14 +1206,6 @@ export const SPARSE_SYMBOL_FLOOR_PX = 10;
 export const DENSE_SYMBOL_FLOOR_PX = 6;
 const SYMBOL_DENSITY_COEFFICIENT = 140;
 
-/**
- * Returns the per-dataset density-adjusted maxSize for proportional symbols on
- * polygons. Pure function so it can be unit-tested in isolation.
- *
- *   maxSize = clamp( floor, 24, round(140 / √N) )
- *
- * Floor is 10 px for N < 500 (regional scale), 6 px for N ≥ 500 (commune scale).
- */
 export function resolveProportionalSymbolMaxSize(rowCount: number): number {
   const safeRowCount = Math.max(rowCount, 1);
   const floor =
@@ -1229,7 +1221,6 @@ export function resolveProportionalSymbolMaxSize(rowCount: number): number {
   );
 }
 
-/** Companion of resolveProportionalSymbolMaxSize: maxSize / 4 capped at [1, 4]. */
 export function resolveProportionalSymbolMinSize(maxSize: number): number {
   return Math.max(1, Math.min(4, Math.round(maxSize / 4)));
 }

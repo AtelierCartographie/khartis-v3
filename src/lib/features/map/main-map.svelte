@@ -230,17 +230,6 @@
           return null;
         }
 
-        if (!duckDBDataset) {
-          logger.debug(
-            'DuckDB dataset registry not ready yet, loading map table directly',
-            LogCategory.MAP,
-            {
-              datasetId: dataset.id,
-              tableName
-            }
-          );
-        }
-
         if (tableName) {
           const densityViz = findActiveDensityViz(dataset.id);
           if (densityViz) {
@@ -459,11 +448,6 @@
       if (isStaleLoad(generation)) return;
 
       if (!datasetsStore.isDatasetEnabled(datasetId)) {
-        logger.debug(
-          'Dataset no longer enabled, ignoring joined basemap',
-          LogCategory.MAP,
-          { datasetId }
-        );
         return;
       }
 
@@ -507,11 +491,6 @@
       if (generation !== undefined && isStaleLoad(generation)) return;
 
       if (!datasetsStore.isDatasetEnabled(datasetId)) {
-        logger.debug(
-          'Dataset no longer enabled, ignoring GPS data',
-          LogCategory.MAP,
-          { datasetId }
-        );
         return;
       }
 
@@ -543,28 +522,10 @@
           isMissingDuckTableError(error) &&
           !duckDBOrchestrator.getDatasetByTable(datasetTableName))
       ) {
-        logger.debug(
-          'Ignoring stale GPS load failure during dataset switch',
-          LogCategory.MAP,
-          {
-            datasetId,
-            duckDBDatasetId,
-            tableName: datasetTableName
-          }
-        );
         return;
       }
 
       if (isMissingDuckTableError(error)) {
-        logger.debug(
-          'Ignoring GPS load failure for missing DuckDB table',
-          LogCategory.MAP,
-          {
-            datasetId,
-            duckDBDatasetId,
-            tableName: datasetTableName
-          }
-        );
         removeDatasetFromDisplay(datasetId);
         return;
       }
@@ -626,7 +587,7 @@
   }
 
   $effect(() => {
-    const version = duckDBDatasetsVersion;
+    void duckDBDatasetsVersion;
     // Subscribe to visualization changes so density re-generates on config edits.
     void visualizationStore.version;
     const currentEnabledDatasets = enabledDatasets;
@@ -662,16 +623,6 @@
     const thisGeneration = ++loadGeneration;
 
     untrack(() => {
-      logger.debug(
-        'Reloading display data for enabled datasets',
-        LogCategory.MAP,
-        {
-          version,
-          datasetCount: currentEnabledDatasets.length,
-          generation: thisGeneration
-        }
-      );
-
       void loadDatasetsSequentially(currentEnabledDatasets, (dataset) =>
         loadDatasetForDisplay(dataset, thisGeneration)
       ).catch((error) => {
@@ -735,7 +686,6 @@
 
       globalState.isToolbarTransitioning = true;
 
-      // Clean up previous transition tracking
       cleanupTransitionListener();
       if (toolbarTransitionTimeoutId) {
         clearTimeout(toolbarTransitionTimeoutId);
@@ -747,7 +697,6 @@
         TOOLBAR_TRANSITION_SAFETY_MS
       );
 
-      // Listen for CSS transition end on the toolbar element
       const toolbar = document.getElementById('khartis-main-toolbar');
       if (toolbar) {
         const handler = (event: TransitionEvent) => {
@@ -771,7 +720,6 @@
     const initGeneration = ++loadGeneration;
     const [firstDataset, ...remainingDatasets] = enabledDatasets;
 
-    // Load the first dataset and unblock rendering immediately
     if (firstDataset) {
       await loadDatasetForDisplay(firstDataset, initGeneration);
     }
@@ -790,7 +738,6 @@
     // Force a layer update now that data + viz state are both available.
     bumpDisplayDataVersion();
 
-    // Load remaining datasets progressively in the background
     if (remainingDatasets.length > 0) {
       void loadDatasetsSequentially(remainingDatasets, (dataset) =>
         loadDatasetForDisplay(dataset, initGeneration)
@@ -855,7 +802,6 @@
     }
   });
 
-  // --- Resize handles for styling step ---
   type ResizeEdge = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
   const RESIZE_EDGES: ResizeEdge[] = [
     'n',

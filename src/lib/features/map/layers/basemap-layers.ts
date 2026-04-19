@@ -144,13 +144,11 @@ function getPreparedBasemapGeoJSON<T extends GeoJSON.Geometry>(
   return geojson ? projectFeatureCollectionIfNeeded(geojson, ctx) : null;
 }
 
-// --- Graticule cache (Opt #2) ---
 let cachedGraticuleKey: string | null = null;
 let cachedGraticuleData: FeatureCollection<
   LineString | MultiLineString
 > | null = null;
 
-// --- Cities cache (Opt #3) ---
 let cachedCitiesKey: string | null = null;
 let cachedCitiesSource: FeatureCollection<Point> | null = null;
 let cachedFilteredCities: FeatureCollection<Point> | null = null;
@@ -1235,10 +1233,6 @@ function collectMetadataGeoJsonByGeometry<T extends MetadataGeometry>(
   };
 }
 
-// ---------------------------------------------------------------------------
-// Metadata-driven layer types (from basemap metadata + style-presets.json)
-// ---------------------------------------------------------------------------
-
 export interface MetadataLayerEntry {
   table: ArrowTable;
   style: string | null;
@@ -1596,10 +1590,6 @@ function createMetadataGeoLinesLayers(
   return layers;
 }
 
-// ---------------------------------------------------------------------------
-// Main basemap layer orchestrator
-// ---------------------------------------------------------------------------
-
 export interface BasemapAdditionalData {
   frontieresTable?: ArrowTable;
   metadataLayers?: MetadataLayerEntry[];
@@ -1661,7 +1651,6 @@ export function createBasemapLayers(
           : foregroundGroups;
 
       switch (config.id) {
-        // --- Background layers (below data) ---
         case BASEMAP_LAYER_ID.MERS: {
           const layer = createMersLayer(config as MersLayerConfig, ctx);
           if (layer) targetGroups.push([layer]);
@@ -1670,7 +1659,6 @@ export function createBasemapLayers(
 
         case BASEMAP_LAYER_ID.TERRE: {
           if (worldBaseTable) {
-            // Main basemap geometry provides full land coverage
             const terreLayers = createTerreLayers(
               worldBaseTable,
               config as TerreLayerConfig,
@@ -1683,7 +1671,6 @@ export function createBasemapLayers(
               targetGroups.push(terreLayers);
             }
           } else if (landEntries.length > 0) {
-            // Fallback: metadata land layers when no main geometry table
             const landLayers = createMetadataLandLayers(
               landEntries,
               stylePresets,
@@ -1725,9 +1712,7 @@ export function createBasemapLayers(
           }
           break;
 
-        // --- Foreground layers (above data) ---
         case BASEMAP_LAYER_ID.FRONTIERES: {
-          // Use metadata limits when available (supports multiple limit levels)
           if (hasMetadataLimits) {
             const limitLayers = createMetadataLimitLayers(
               limitEntries,

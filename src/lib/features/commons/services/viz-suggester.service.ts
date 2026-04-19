@@ -2,7 +2,7 @@ import {
   COLUMN_TYPE_GEOMETRY,
   GEO_COLUMN_TYPE
 } from '$lib/features/commons/constants/data.constants';
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+
 import {
   detectSemioType,
   SEMIO_TYPES,
@@ -50,10 +50,6 @@ export interface EnrichedColumn extends ColumnAnalysis {
 
 export { SEMIO_TYPES };
 
-/**
- * Cartographic visualization criteria
- * Based on https://docs.google.com/spreadsheets/d/1F6gk998PXV4FvPNRJZ59YPnmsXJ4h6BLyRZupvrRRdw/edit#gid=0
- */
 const VIZ_CRITERIA: readonly VizSuggestion[] = [
   {
     id: 'symbols_uniques',
@@ -748,31 +744,12 @@ function dedupeSuggestionsByImplementation(
   return [...bySignature.values()];
 }
 
-/**
- * Generates ranked visualization suggestions for a dataset, per CDC [VIZ-02a].
- *
- * Pipeline (mirrors the POC's `get_viz_suggestions`
- * https://github.com/AtelierCartographie/khartis-pipeline/blob/main/src/lib/viz_suggestions.ts):
- *
- *   1. detectSemioType(column)        → tag each column QTA/QTR/QL/QLO/GEOID/...
- *   2. computeSuggestionScore(cols)   → 0..100 sémiologique pondéré (avg / 6.5)
- *   3. filter out GEOID/GEOLAT/GEOLON for the main rank
- *   4. for k=1..min(4, columns) try every viz from VIZ_CRITERIA whose
- *      `semioTypes` matches the picked columns and `geometries` contains the
- *      dataset geometry type
- *   5. dedupe by implementation signature (e.g. two suggestions producing the
- *      same rendering keep the higher-scored one)
- *   6. sort by (score DESC, preference DESC, nbColumns ASC), keep top N
- *
- * Returns up to `maxSuggestions` (default 3) — exactly what the UI displays
- * as cartes proposées before the user lands on the visualization tab.
- */
 function suggestVisualizations(
   columns: ColumnAnalysis[],
   geometryType: GeometryType | null,
-  options: { maxSuggestions?: number; debug?: boolean } = {}
+  options: { maxSuggestions?: number } = {}
 ): VizSuggestion[] {
-  const { maxSuggestions = 3, debug = false } = options;
+  const { maxSuggestions = 3 } = options;
 
   if (!geometryType) {
     return [];
@@ -801,17 +778,6 @@ function suggestVisualizations(
     .filter((col) => col.semioType !== SEMIO_TYPES.GEOLAT)
     .filter((col) => col.semioType !== SEMIO_TYPES.GEOLON)
     .filter((col) => getUniqueCount(col) > 1);
-
-  if (debug) {
-    logger.debug('Viz suggester inputs', LogCategory.VISUALIZATION, {
-      geometry: simplifiedGeomType,
-      columns: rankedColumns.map((col) => ({
-        name: col.name,
-        semioType: col.semioType,
-        score: col.score
-      }))
-    });
-  }
 
   const suggestions = [
     ...generateSuggestions(rankedColumns, simplifiedGeomType),

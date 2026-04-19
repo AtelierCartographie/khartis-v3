@@ -270,10 +270,6 @@ function sortEntriesByVizPriority(
   return [...priority, ...rest];
 }
 
-/**
- * Extract sorted tooltip entries from a Deck.gl pick event.
- * Returns an empty array when nothing is picked.
- */
 export function extractTooltipEntries(
   info: PickingInfo,
   visualizations?: VisualizationConfig[]
@@ -366,9 +362,6 @@ function scheduleHoverTooltip(payload: PendingHoverTooltipPayload): void {
   }, MAP_TIMING.TOOLTIP_DELAY_MS);
 }
 
-/**
- * Creates an onHover handler that populates the tooltip store.
- */
 export function createHoverHandler(
   getVisualizations?: () => VisualizationConfig[]
 ): (info: PickingInfo) => void {
@@ -411,22 +404,17 @@ export function createHoverHandler(
   };
 }
 
-/**
- * Creates an onClick handler that pins the tooltip until clicking away.
- */
 export function createClickHandler(
   getVisualizations?: () => VisualizationConfig[]
 ): (info: PickingInfo) => void {
   return (info: PickingInfo) => {
     clearPendingHoverTooltip();
 
-    // Click on empty space: unpin
     if (!info.picked || info.index === undefined || info.index === -1) {
       mapTooltipStore.unpin();
       return;
     }
 
-    // Pin on the clicked object
     const entries = extractTooltipEntries(info, getVisualizations?.());
     if (entries.length === 0) {
       mapTooltipStore.unpin();

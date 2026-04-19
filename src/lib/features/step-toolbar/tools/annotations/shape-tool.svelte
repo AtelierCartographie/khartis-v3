@@ -80,7 +80,6 @@
   let fillLightness = $state(100);
 
   $effect(() => {
-    // Sync dropdown when user selects an existing shape annotation on the canvas
     if (selectedShapeAnnotation) {
       const content = String(selectedShapeAnnotation.content);
       if (SHAPE_TYPES.includes(content as ShapeTypeValue)) {

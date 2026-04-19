@@ -88,7 +88,6 @@
     }
   });
 
-  // Reset join state when enrichment source changes to avoid stale stats/mappings.
   $effect(() => {
     const currentEnrichmentId = fileHook.enrichmentDataset?.id;
     if (currentEnrichmentId !== previousEnrichmentDatasetId) {

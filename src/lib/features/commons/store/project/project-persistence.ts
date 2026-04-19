@@ -24,11 +24,6 @@ import type { UploadedFile } from '../create-project.types';
 import type { ProjectStateContainer } from './project-state.svelte';
 import { addToHistory, resetHistory } from './project-history';
 
-/**
- * Sync geo column and basemap info from runtime state to source files
- * before saving. This ensures manual column selections (like "entity"
- * for fuzzy-countries) are persisted even before clicking Visualiser.
- */
 function syncGeoInfoToSourceFiles(container: ProjectStateContainer): void {
   const files = container._state.currentProject?.data?.sourceFiles;
   if (!files) return;
@@ -46,7 +41,6 @@ function syncGeoInfoToSourceFiles(container: ProjectStateContainer): void {
       : undefined;
 
   for (const file of files) {
-    // First try DuckDB dataset (set after finalizeJoin)
     const dataset = datasetsStore.datasets.find(
       (d) => d.sourceFileId === file.id
     );

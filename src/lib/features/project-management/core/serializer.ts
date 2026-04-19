@@ -70,12 +70,7 @@ function isValidBasemapMetadata(value: unknown): value is BasemapMetadata {
 async function ensureDuckDbReady(operation: string): Promise<boolean> {
   try {
     await duckDBOrchestrator.waitForInitialization();
-  } catch (error) {
-    logger.debug(
-      `DuckDB initialization failed while ${operation}`,
-      LogCategory.PROJECT,
-      error
-    );
+  } catch {
     return false;
   }
 
@@ -135,10 +130,6 @@ export async function deserialize(
   return project;
 }
 
-/**
- * Maps registry store data to the serialized format structure.
- * Maintains backward compatibility with old project files.
- */
 function mapRegistryToSerializedFormat(
   stores: Record<string, unknown>
 ): Pick<
@@ -196,10 +187,6 @@ function mapRegistryToSerializedFormat(
   };
 }
 
-/**
- * Maps the old serialized format back to flat registry keys for deserialization.
- * Handles both old projects (basemapSettings/layoutSettings) and future flat format.
- */
 function mapSerializedFormatToRegistry(
   data: SerializedProjectData
 ): Record<string, unknown> {
@@ -320,11 +307,7 @@ export async function serializeProjectData(
         };
       }
     } catch (error) {
-      logger.debug(
-        'Failed to serialize custom basemap attributes',
-        LogCategory.PROJECT,
-        error
-      );
+      console.error(error);
     }
   }
 
@@ -374,17 +357,6 @@ export async function deserializeProjectData(
             .filter((attribute) => attribute.basemap.length > 0)
         : [];
 
-      if (Array.isArray(metadata) && validMetadata.length !== metadata.length) {
-        logger.debug(
-          'Skipping invalid custom basemap metadata entries during restore',
-          LogCategory.PROJECT,
-          {
-            total: metadata.length,
-            restored: validMetadata.length
-          }
-        );
-      }
-
       await Duck.query(`
         CREATE TABLE IF NOT EXISTS custom_basemap_attributes (
           raw VARCHAR,
@@ -416,11 +388,7 @@ export async function deserializeProjectData(
         basemapCatalogService.addCustomBasemap(basemap);
       });
     } catch (error) {
-      logger.debug(
-        'Failed to restore custom basemaps',
-        LogCategory.PROJECT,
-        error
-      );
+      console.error(error);
     }
   }
 

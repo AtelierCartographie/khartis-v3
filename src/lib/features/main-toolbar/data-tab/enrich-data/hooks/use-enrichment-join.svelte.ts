@@ -563,13 +563,9 @@ export function useEnrichmentJoin(
         addedColumns: enrichmentColumns
       });
 
-      // Drop the old table to free memory (both first-time and subsequent enrichments)
       if (oldTableName !== enrichedTableName) {
         try {
           await Duck.dropTable(oldTableName);
-          logger.debug('Dropped old table after enrichment', LogCategory.DATA, {
-            oldTableName
-          });
         } catch (dropError) {
           logger.warn(
             'Failed to drop old table after enrichment',

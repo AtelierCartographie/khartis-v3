@@ -253,23 +253,8 @@ async function readTabularFile(
   // Read file head once, share between decimal and header detection (avoids double file.slice + decode)
   const cachedHead = await readFileHead(file, 20);
   const detection = await detectDecimalSeparator(file, { cachedHead });
-  if (detection.separator === ',') {
-    logger.debug('European decimal format detected', LogCategory.DATA, {
-      confidence: detection.confidence,
-      sampleSize: detection.sampleSize,
-      delimiter: detection.delimiter,
-      thousandsSeparator: detection.thousandsSeparator
-    });
-  }
   const headerDetection = await detectCsvHeader(file, detection.delimiter, {
     cachedHead
-  });
-  logger.debug('CSV header detection completed', LogCategory.DATA, {
-    hasHeader: headerDetection.hasHeader,
-    confidence: headerDetection.confidence,
-    comparedColumns: headerDetection.comparedColumns,
-    delimiter: detection.delimiter,
-    fileName
   });
 
   await Duck.read_tabular(file, {

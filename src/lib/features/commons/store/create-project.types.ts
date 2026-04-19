@@ -80,10 +80,7 @@ export interface UploadedFile {
   originalFile?: File; // Keep reference to original File object to avoid re-parsing
   relatedFileObjects?: File[]; // For shapefiles: store all companion File objects (.shx, .dbf, .prj, etc.)
   parsedData?: ParsedData;
-  /**
-   * Optional normalized GeoJSON content generated during preprocessing
-   * so downstream services (DuckDB) can reuse it without re-stringifying.
-   */
+  // Cached GeoJSON from preprocessing — avoids re-stringifying in DuckDB.
   preparedGeoJSON?: string;
   status: FileStatus;
   errorMessage?: string;

@@ -234,10 +234,6 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
           data: { ...customBasemap }
         }
       });
-
-      logger.debug('Custom basemap imported', LogCategory.MAP, {
-        title: customBasemap.title_fr
-      });
     } catch (error) {
       logger.error('Failed to import custom basemap', LogCategory.MAP, error);
       basemapImportError =
@@ -284,8 +280,6 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
         data: { ...osmBasemap }
       }
     });
-
-    logger.debug('OSM basemap selected', LogCategory.MAP);
   }
 
   function clearBasemapImportError(): void {
@@ -441,13 +435,8 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
       }
     }
 
-    void refreshSuggestions().catch((error) => {
+    void refreshSuggestions().catch(() => {
       if (cancelled) return;
-      logger.debug(
-        'Failed to refresh enrichment basemap suggestions',
-        LogCategory.MAP,
-        error
-      );
       suggestedBasemaps = [];
     });
 

@@ -45,8 +45,7 @@ export function shouldUseBasemapReferenceInOrthographicView(
 ): boolean {
   // Tabular data joined to basemap → use basemap bounds
   if (Boolean(duckDataset?.joinedBasemap) && !dataset?.geometry) return true;
-  // Reference basemap explicitly selected (overlay) → use basemap bounds
-  // so administrative boundaries are visible even with polygon data
+  // Reference basemap explicitly selected (overlay) → use basemap bounds so boundaries are visible with polygon data
   if (referenceBasemapId) return true;
   return false;
 }

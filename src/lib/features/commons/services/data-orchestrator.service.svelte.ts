@@ -234,15 +234,6 @@ function createDataOrchestratorService() {
           preferredDatasetId: dataset.id
         }
       );
-
-      logger.debug(
-        'DuckDB table recreated from parsed data',
-        LogCategory.DUCKDB,
-        {
-          tableName,
-          rowCount: (file.parsedData as unknown[]).length
-        }
-      );
     } catch (error) {
       logger.error(
         'Failed to recreate table from parsed data',
@@ -863,7 +854,6 @@ function createDataOrchestratorService() {
 
     if (orphanedVizs.length === 0) return;
 
-    // Collect unique old dataset IDs preserving insertion order
     const uniqueOldIds: string[] = [];
     const seen = new Set<string>();
     for (const v of orphanedVizs) {
@@ -873,7 +863,6 @@ function createDataOrchestratorService() {
       }
     }
 
-    // Datasets that no viz currently points to
     const matchedIds = new Set(
       vizs
         .filter((v) => knownDatasetIds.has(v.datasetId))
@@ -912,13 +901,6 @@ function createDataOrchestratorService() {
     );
   }
 
-  /**
-   * Recompute missing classification breaks for all active visualizations.
-   * Breaks are normally computed inside configure-visualization.svelte,
-   * but that component is only mounted on the Visualization tab. After a
-   * page refresh on another tab, breaks may be missing from the restored
-   * config — causing the choropleth to fall back to a flat fill color.
-   */
   async function recomputeMissingBreaks(): Promise<void> {
     const vizs = visualizationStore.activeVisualizations;
     if (!Array.isArray(vizs) || vizs.length === 0) return;
@@ -1082,10 +1064,6 @@ function createDataOrchestratorService() {
     // onProjectChanged() may have already been called during projectStore init
     // (via loadLastProject → loadProject). If so, skip duplicate restoration.
     if (projectAlreadyRestored) {
-      logger.debug(
-        'initialize() skipping — onProjectChanged already restored project',
-        LogCategory.DATA
-      );
       return;
     }
 
@@ -1203,15 +1181,6 @@ function createDataOrchestratorService() {
             isSelectedSourceFile: true
           })
         : null;
-      logger.debug('Geo column restore check', LogCategory.DATA, {
-        hasSourceFiles: true,
-        restoredFileName: restoredFile?.name,
-        selectedSourceFileId,
-        geoColumn: restoredPrimaryJoinState?.geoColumn,
-        joinedBasemap: restoredPrimaryJoinState?.joinedBasemap,
-        gpsMode: restoredPrimaryJoinState?.gpsMode,
-        gpsColumns: restoredPrimaryJoinState?.gpsColumns
-      });
       if (restoredPrimaryJoinState?.joinedBasemap) {
         dataTabActions.selectBasemap(restoredPrimaryJoinState.joinedBasemap);
       }
@@ -1266,10 +1235,6 @@ function createDataOrchestratorService() {
               linkedVariable: colIndex,
               linkedVariableName: geoCol,
               autoDetected: false
-            });
-            logger.debug('Restored geo column from project', LogCategory.DATA, {
-              geoCol,
-              colIndex
             });
           }
         };

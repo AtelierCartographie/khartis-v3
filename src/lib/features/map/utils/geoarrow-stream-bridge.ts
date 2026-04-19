@@ -60,13 +60,7 @@ function resolveSimpleProjection(proj4String: string): GeoProjection {
   return proj4d3(proj4String);
 }
 
-// ---------------------------------------------------------------------------
-// Geometry column normalization
-// geoarrow-deck-stream expects the geometry column to be named "geometry".
-// DuckDB ST_Read typically names it "geom" or "wkb_geometry".
-// This helper renames the column in the Arrow schema so the library can find it.
-// ---------------------------------------------------------------------------
-
+// geoarrow-deck-stream requires a "geometry" column; DuckDB ST_Read names it "geom"/"wkb_geometry".
 const EXPECTED_GEOM_COL = 'geometry';
 const normalizedTableCache = new WeakMap<ArrowTable, ArrowTable>();
 const projectedBboxCache = new WeakMap<
@@ -174,10 +168,6 @@ function normalizeGeomColumnName(table: ArrowTable): ArrowTable {
   normalizedTableCache.set(table, result);
   return result;
 }
-
-// ---------------------------------------------------------------------------
-// Identity parsing (lon/lat passthrough — for custom basemaps, MapLibre mode)
-// ---------------------------------------------------------------------------
 
 const IDENTITY_OPTIONS: ParserOptions = {
   projection: geoIdentity(),
@@ -358,10 +348,6 @@ export function parsePointData(table: ArrowTable): BinaryPointData {
   }
   return result;
 }
-
-// ---------------------------------------------------------------------------
-// Projection-aware parsing (for built-in basemaps with composite/simple proj)
-// ---------------------------------------------------------------------------
 
 /**
  * Build a d3-compatible projection from basemap metadata.
@@ -605,10 +591,6 @@ export function parsePointDataWithProjection(
   return result;
 }
 
-// ---------------------------------------------------------------------------
-// Point attribute factories (not provided by geoarrow-deck-stream)
-// ---------------------------------------------------------------------------
-
 /**
  * Per-point color attribute for ScatterplotLayer.
  * Each point maps 1:1 to a featureId (original Arrow row index).
@@ -721,10 +703,6 @@ export function pathWidthAttr(
   return { value: widths, size: 1 };
 }
 
-// ---------------------------------------------------------------------------
-// Row accessor adapters (bridges DeckDataRow accessors to featureId lookups)
-// ---------------------------------------------------------------------------
-
 export function rowAccessor<T>(
   table: ArrowTable,
   accessor: (row: Record<string, unknown>) => T
@@ -792,10 +770,6 @@ export function columnAccessor<T>(
   return (featureId: number): T => transform(vector.get(featureId));
 }
 
-// ---------------------------------------------------------------------------
-// DataFilterExtension: per-feature filter value attribute
-// ---------------------------------------------------------------------------
-
 /**
  * Build a Float32 binary attribute for DataFilterExtension's getFilterValue.
  * Works with any binary data type (points, paths, polygons) that has featureIds.
@@ -831,10 +805,6 @@ export function filterValueAttr(
   return { value: values, size: 1 };
 }
 
-// ---------------------------------------------------------------------------
-// Binary point extraction
-// ---------------------------------------------------------------------------
-
 /**
  * Extract positions from binary point data.
  */
@@ -846,10 +816,6 @@ export function pointPositions(data: BinaryPointData): Float64Array {
   }
   return result;
 }
-
-// ---------------------------------------------------------------------------
-// GeoJSON coordinate projection (for WKB fallback path)
-// ---------------------------------------------------------------------------
 
 /**
  * Project GeoJSON coordinates through a d3-compatible projection.

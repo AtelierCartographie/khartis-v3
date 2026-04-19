@@ -20,7 +20,6 @@ export type { PatternParams };
 export { presets };
 export type { ContrastMode, CategoricalColorOptions };
 
-/** Default 4-color sequential preview (Blues ramp) — shared across all config components */
 export const DEFAULT_SEQUENTIAL_PREVIEW = [
   '#c8ddf0',
   '#78a9cf',
@@ -28,7 +27,6 @@ export const DEFAULT_SEQUENTIAL_PREVIEW = [
   '#084594'
 ];
 
-/** Default 4-color qualitative preview — shared across all config components */
 export const DEFAULT_QUALITATIVE_PREVIEW = [
   '#009d9a',
   '#f1c21b',

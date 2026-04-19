@@ -1,12 +1,3 @@
-/**
- * Schema migration system for project persistence.
- *
- * When the serialized project format evolves (new fields, renamed fields, restructured stores),
- * old projects saved in IndexedDB or .kh files are automatically migrated to the latest schema.
- *
- * Migrations run in loadProject() before deserialize(), and in importProject() after parsing.
- */
-
 import { PROJECT_CONST } from '../constants';
 
 export interface SchemaMigration {
@@ -15,11 +6,6 @@ export interface SchemaMigration {
   migrate: (data: Record<string, unknown>) => Record<string, unknown>;
 }
 
-/**
- * Recursively remap legacy `type: 'point'` values on `symbols` blocks to the
- * new `'circle'` canonical value after the `ShapeType.POINT` → `ShapeType.CIRCLE`
- * rename in issue #92.
- */
 function remapLegacyPointShape(
   data: Record<string, unknown>
 ): Record<string, unknown> {
@@ -239,22 +225,14 @@ function backfillPrimitiveConfigs(
   return walk(data) as Record<string, unknown>;
 }
 
-/** Ordered list of migrations. Each runs sequentially when needed. */
 const migrations: SchemaMigration[] = [
-  // Chain both 3.0.0 and 3.1.0 through the point→circle remap; the function is
-  // idempotent so re-running it on an already-migrated project is a no-op.
+  // remapLegacyPointShape is idempotent — safe to apply at both 3.0.0 and 3.1.0.
   { from: '3.0.0', to: '3.1.0', migrate: remapLegacyPointShape },
   { from: '3.1.0', to: '3.2.0', migrate: remapLegacyPointShape },
   { from: '3.2.0', to: '3.3.0', migrate: backfillSymbolFillColor },
   { from: '3.3.0', to: '3.4.0', migrate: backfillPrimitiveConfigs }
 ];
 
-/**
- * Run all applicable migrations on a serialized project.
- * Returns the migrated data with the current schema version stamped.
- * The version is stamped on the returned (possibly cloned) manifest, not the
- * input, because migrations deep-clone their payload.
- */
 export function migrateIfNeeded(
   data: Record<string, unknown>
 ): Record<string, unknown> {

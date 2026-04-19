@@ -63,7 +63,6 @@
     return { left, top, width, height };
   }
 
-  // Reset accordion when tooltip hides or entries change
   $effect(() => {
     void tooltipState.entries;
     accordionOpen = false;
@@ -74,8 +73,6 @@
       return { left: 0, top: 0 };
     }
 
-    // The tooltip is rendered outside Deck.gl and kept at a fixed position above
-    // the viewer to match the product CDC.
     void tooltipState.pinned;
     void tooltipState.entries.length;
     void accordionOpen;

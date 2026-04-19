@@ -640,7 +640,6 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
     deckOverlay = null;
     isMapLoaded = false;
 
-    // Unsubscribe MapLibre event listeners to prevent memory leaks
     for (const sub of mapEventSubscriptions) {
       try {
         sub.unsubscribe();

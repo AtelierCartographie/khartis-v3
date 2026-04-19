@@ -579,10 +579,6 @@
         if (abortSignal.aborted) return;
 
         dataTabStore.markStepComplete(stepIndex);
-        logger.debug(
-          'Basemap selected with GPS mode — join skipped',
-          LogCategory.MAP
-        );
       } catch (error) {
         if (
           abortSignal.aborted ||
@@ -886,10 +882,6 @@
         );
 
         if (abortSignal.aborted) {
-          logger.debug(
-            'Corrections cancelled (basemap changed)',
-            LogCategory.MAP
-          );
           return;
         }
 
@@ -1160,7 +1152,6 @@
 
       let suggestions: BasemapSuggestion[] = [];
 
-      // GPS mode: use bbox comparison for suggestions
       if (hasGPSMode && resolvedDatasetId) {
         let gpsSuggestions: BasemapSuggestion[] = [];
         const gpsBounds =
@@ -1205,12 +1196,6 @@
             if (isDatasetNotFoundError(error)) {
               continue;
             }
-
-            logger.debug(
-              'Text-based GPS refinement unavailable for basemap suggestions',
-              LogCategory.MAP,
-              error
-            );
           }
         }
 

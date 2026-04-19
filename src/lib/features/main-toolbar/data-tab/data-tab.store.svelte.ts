@@ -213,7 +213,6 @@ export const dataTabStore = {
     if (isGeographicMode()) {
       return state.hasCompletedStep[0];
     }
-    // tabular-gps: step 1 is basemap, tabular: step 2 is join
     const lastStepIndex = getStepCount() - 1;
     return state.hasCompletedStep[lastStepIndex];
   },

@@ -44,7 +44,6 @@
   let columnAnalysisAbort: AbortController | null = null;
 
   async function loadColumnAnalysis() {
-    // Cancel any in-flight analysis
     columnAnalysisAbort?.abort();
 
     if (!selectedDataset?.tableName) {

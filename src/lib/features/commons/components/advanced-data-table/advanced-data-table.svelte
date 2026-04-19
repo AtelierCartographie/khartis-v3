@@ -701,12 +701,6 @@
           ) {
             return;
           }
-
-          logger.debug('$effect: table data reloaded', LogCategory.UI, {
-            datasetId: currentDatasetId ?? null,
-            requestId,
-            tableName: currentTableName ?? null
-          });
         } catch (err) {
           if (
             isTableReloadStale(

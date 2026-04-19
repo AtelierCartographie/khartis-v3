@@ -33,13 +33,6 @@ export async function readLink(
     tablename = generateUniqueTableName(filename, ctx.loaded_files);
   }
 
-  logger.debug('Ingesting remote file into DuckDB', LogCategory.DUCKDB, {
-    url,
-    filename,
-    inferredType: file_type,
-    tablename
-  });
-
   await ctx.db.registerFileURL(
     filename,
     url,

@@ -3,7 +3,7 @@ import type {
   UploadedFile
 } from '$lib/features/commons/store/create-project.types';
 import { combineUint8Arrays } from '$lib/features/commons/utils/array.utils';
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+
 import { PROJECT_CONST } from '../constants';
 
 interface StoredAssetMetadata {
@@ -542,12 +542,7 @@ export async function estimateStorageHeadroom(
     const remaining = quota - usage;
     const safetyMargin = Math.max(requiredBytes * 0.2, CHUNK_SIZE);
     return remaining > requiredBytes + safetyMargin;
-  } catch (error) {
-    logger.debug(
-      'Storage estimate failed, continuing without quota guard',
-      LogCategory.PERSISTENCE,
-      error
-    );
+  } catch {
     return true;
   }
 }

@@ -51,10 +51,7 @@ function safeReadGeometryValue(
   }
 }
 
-/**
- * Bounds cache — avoids repeated O(n) geometry scans + GeoJSON parsing
- * for the same Arrow table. Auto-GC when table is dereferenced.
- */
+// Avoids repeated O(n) geometry scans per Arrow table; auto-GC via WeakMap.
 const boundsCache = new WeakMap<ArrowTable, LngLatBoundsLike | null>();
 
 function isValidBbox(
@@ -201,10 +198,6 @@ function calculateBoundsFromGeometryData(
 ): LngLatBoundsLike | null {
   const geomVector = jsTable.getChild(geoColumn);
   if (!geomVector) {
-    logger.debug('Column not found in table', LogCategory.MAP, {
-      geoColumn,
-      availableColumns: jsTable.schema.fields.map((f) => f.name)
-    });
     return null;
   }
 
@@ -212,39 +205,19 @@ function calculateBoundsFromGeometryData(
   let minLat = Infinity;
   let maxLng = -Infinity;
   let maxLat = -Infinity;
-  let parsedCount = 0;
-  let coordCount = 0;
-
   const maxSamples = Math.min(jsTable.numRows, 10000);
   const step = Math.max(1, Math.floor(jsTable.numRows / maxSamples));
-
-  if (jsTable.numRows > 0) {
-    const firstGeom = safeReadGeometryValue(geomVector, geoColumn, 0);
-    logger.debug('First geometry value in column', LogCategory.MAP, {
-      geoColumn,
-      valueType: typeof firstGeom,
-      isNull: firstGeom === null,
-      isUndefined: firstGeom === undefined,
-      isArray: Array.isArray(firstGeom),
-      sample:
-        typeof firstGeom === 'string'
-          ? firstGeom.substring(0, 100)
-          : JSON.stringify(firstGeom)?.substring(0, 100)
-    });
-  }
 
   for (let i = 0; i < jsTable.numRows; i += step) {
     const geom = safeReadGeometryValue(geomVector, geoColumn, i);
 
     const parsed = parseGeoJsonGeometry(geom);
     if (parsed) {
-      parsedCount++;
       const coords = extractCoordsFromGeometry(parsed);
       for (const coord of coords) {
         if (!Array.isArray(coord) || coord.length < 2) continue;
         const [lng, lat] = coord;
         if (typeof lng === 'number' && typeof lat === 'number') {
-          coordCount++;
           if (lng < minLng) minLng = lng;
           if (lng > maxLng) maxLng = lng;
           if (lat < minLat) minLat = lat;
@@ -256,7 +229,6 @@ function calculateBoundsFromGeometryData(
 
     const coord = extractCoordFromValue(geom);
     if (coord) {
-      coordCount++;
       const [lng, lat] = coord;
       if (lng < minLng) minLng = lng;
       if (lng > maxLng) maxLng = lng;
@@ -264,14 +236,6 @@ function calculateBoundsFromGeometryData(
       if (lat > maxLat) maxLat = lat;
     }
   }
-
-  logger.debug('Bounds calculation stats', LogCategory.MAP, {
-    geoColumn,
-    totalRows: jsTable.numRows,
-    sampledRows: Math.ceil(jsTable.numRows / step),
-    parsedGeometries: parsedCount,
-    extractedCoords: coordCount
-  });
 
   if (
     !isFinite(minLng) ||
@@ -313,22 +277,9 @@ export function calculateBoundsFromGeoArrow(
 
   try {
     if (jsTable.numRows === 0) {
-      logger.debug(
-        'Skipping bounds calculation for empty Arrow table',
-        LogCategory.MAP
-      );
       boundsCache.set(jsTable, null);
       return null;
     }
-
-    logger.debug('Starting bounds calculation', LogCategory.MAP, {
-      numRows: jsTable.numRows,
-      numCols: jsTable.schema.fields.length,
-      columns: jsTable.schema.fields.map((f) => f.name),
-      hasGeoMetadata: Boolean(
-        jsTable.schema.metadata.get(GeoArrowMetadataKey.GEO)
-      )
-    });
 
     const geoMetadata = jsTable.schema.metadata.get(GeoArrowMetadataKey.GEO);
     let primaryColumn: string | null = null;
@@ -354,9 +305,6 @@ export function calculateBoundsFromGeoArrow(
             maxLat === 90;
 
           if (!isWorldBounds && isValidBbox(minLng, minLat, maxLng, maxLat)) {
-            logger.debug('Using bbox from GeoArrow metadata', LogCategory.MAP, {
-              bbox
-            });
             const result: LngLatBoundsLike = [
               [minLng, minLat],
               [maxLng, maxLat]
@@ -364,23 +312,11 @@ export function calculateBoundsFromGeoArrow(
             boundsCache.set(jsTable, result);
             return result;
           }
-
-          if (isWorldBounds) {
-            logger.debug(
-              'Skipping world bounds from metadata, will calculate from geometry',
-              LogCategory.MAP
-            );
-          }
         }
       }
     }
 
     if (primaryColumn) {
-      logger.debug(
-        'No bbox in metadata, calculating from primary column',
-        LogCategory.MAP,
-        { primaryColumn }
-      );
       const bounds = calculateBoundsFromGeometryData(jsTable, primaryColumn);
       if (bounds) {
         boundsCache.set(jsTable, bounds);
@@ -390,11 +326,6 @@ export function calculateBoundsFromGeoArrow(
 
     const geoColumn = findGeoColumn(jsTable);
     if (geoColumn && geoColumn !== primaryColumn) {
-      logger.debug(
-        'Calculating bounds from discovered geometry column',
-        LogCategory.MAP,
-        { geoColumn }
-      );
       const bounds = calculateBoundsFromGeometryData(jsTable, geoColumn);
       if (bounds) {
         boundsCache.set(jsTable, bounds);
@@ -402,16 +333,10 @@ export function calculateBoundsFromGeoArrow(
       }
     }
 
-    logger.debug('Trying all columns to find coordinates', LogCategory.MAP, {
-      fields: jsTable.schema.fields.map((f) => f.name)
-    });
     for (const field of jsTable.schema.fields) {
       if (field.name === primaryColumn || field.name === geoColumn) continue;
       const bounds = calculateBoundsFromGeometryData(jsTable, field.name);
       if (bounds) {
-        logger.debug('Found bounds in column', LogCategory.MAP, {
-          column: field.name
-        });
         boundsCache.set(jsTable, bounds);
         return bounds;
       }

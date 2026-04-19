@@ -49,11 +49,6 @@ export async function validateFile(file: File): Promise<ValidationResult> {
 
   const warnings: string[] = [];
   if (file.size > warningFileSize) {
-    logger.debug('Large file detected', LogCategory.DATA, {
-      fileName: file.name,
-      fileSize: file.size,
-      warningThreshold: warningFileSize
-    });
     warnings.push(
       m.pipeline_warning_large_file({
         size: (file.size / (1024 * 1024)).toFixed(1)

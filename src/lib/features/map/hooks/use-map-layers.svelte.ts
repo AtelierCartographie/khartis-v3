@@ -537,7 +537,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       const projectionFitBbox = getProjectionFitBbox?.() ?? null;
       const fitPaddingPx = projectionStore.fitPaddingPx;
 
-      // Build basemap projection from metadata (composite/simple/identity).
       // Only applies in orthographic mode — in MapLibre mode, the map handles
       // projection natively (WebMercator/globe) and thematic data must stay in
       // WGS84 lat/lng. Applying a d3-geo projection here would convert coordinates

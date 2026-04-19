@@ -7,7 +7,6 @@ import * as m from '$lib/paraglide/messages.js';
 
 export const DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX = 12;
 
-/** Power-of-two class counts allowed by the recursive nested-means algorithm. */
 export const NESTED_MEANS_CLASS_COUNTS = [2, 4, 8, 16] as const;
 
 export function normalizeClassificationMethod(
@@ -33,11 +32,6 @@ export function resolveNestedMeansClassCount(
   );
 }
 
-/**
- * Returns the class count that the algorithm will actually honour for a given
- * method, given a user request. q6 is fixed at 6, nested_means snaps to {2,4,8,16},
- * other methods clamp to a minimum of 2.
- */
 export function resolveRequestedClassCount(
   method: ClassificationMethod,
   requestedClassCount: number
@@ -56,11 +50,6 @@ export function resolveRequestedClassCount(
   return safeRequested;
 }
 
-/**
- * After computation some methods (head_tail, standard_deviation) produce fewer
- * classes than requested because the data distribution does not allow it.
- * Returns the effective class count so the UI can clamp the slider.
- */
 export function resolveComputedClassCount(
   method: ClassificationMethod,
   requestedClassCount: number,

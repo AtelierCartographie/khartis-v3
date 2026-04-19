@@ -16,11 +16,8 @@ export type ToolStoreResult<T extends object, A extends object = object> = {
 };
 
 export interface ToolStorePersistenceConfig<T extends object> {
-  /** Unique key in the persistence registry */
   key: string;
-  /** Save priority — DEBOUNCED (default) or IMMEDIATE */
   priority?: SavePriorityType;
-  /** Optional filter to omit session-only fields from serialization */
   serializeFilter?: (state: T) => Partial<T>;
 }
 
@@ -54,7 +51,6 @@ export function createToolStore<T extends object, A extends object = object>(
     ? customActions(state, baseActions)
     : ({} as A);
 
-  // Wrap custom actions to auto-notify persistence on each call
   const custom = notifyPersistence
     ? wrapActionsWithNotify(rawCustom, notifyPersistence)
     : rawCustom;
@@ -72,7 +68,6 @@ export function createToolStore<T extends object, A extends object = object>(
     getState
   };
 
-  // Self-register in the persistence registry
   if (persistence) {
     persistenceRegistry.register({
       key: persistence.key,
@@ -86,7 +81,6 @@ export function createToolStore<T extends object, A extends object = object>(
   return result;
 }
 
-/** Wraps each method of an actions object to call a notify callback after execution */
 function wrapActionsWithNotify<A extends object>(
   actions: A,
   notify: () => void

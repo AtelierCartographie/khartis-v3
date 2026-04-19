@@ -363,7 +363,6 @@ export async function duplicateDataset(
       }
     );
 
-    // Duplicate visualizations from the original dataset
     const originalVizs =
       visualizationStore.getVisualizationsByDataset(datasetId);
     for (const viz of originalVizs) {

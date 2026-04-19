@@ -272,16 +272,9 @@ async function showTooltipForResult(
       }));
 
     mapTooltipStore.pinAt(160, 200, entries, null, rowId - 1);
+     
   } catch (error) {
-    logger.debug(
-      'Failed to fetch tooltip data for search result',
-      LogCategory.UI,
-      {
-        rowId,
-        tableName: searchContext.tableName,
-        error
-      }
-    );
+    console.error(error);
   }
 }
 

@@ -72,13 +72,7 @@ export async function openDatabase(): Promise<IDBDatabase> {
   // One-shot migration: copy localforage keys to the new IDB metadata store
   if (!localforageMigrated) {
     localforageMigrated = true;
-    migrateFromLocalforage(database).catch((error) => {
-      logger.debug(
-        'Localforage migration skipped or failed (may already be migrated)',
-        LogCategory.PERSISTENCE,
-        error
-      );
-    });
+    migrateFromLocalforage(database).catch((error) => console.error(error));
   }
 
   return database;
@@ -118,7 +112,6 @@ async function migrateFromLocalforage(database: IDBDatabase): Promise<void> {
       tx.onerror = () => reject(tx.error);
     });
 
-    // Remove from localforage
     await lf.removeItem(key);
     migrated++;
   }

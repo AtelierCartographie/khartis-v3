@@ -164,7 +164,6 @@ export function buildProjectionFromSuggestion(
     }
   }
 
-  // Fallback to d3 config
   if (suggestion.d3Config) {
     const projection = buildD3Projection(suggestion.d3Config);
     if (projection) {

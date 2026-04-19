@@ -295,7 +295,6 @@ function createMapInstanceStore() {
     });
   }
 
-  /** Clear pending restore and save the project immediately. */
   function consumePendingRestore(): void {
     pendingRestore = null;
     persistenceRegistry.notifyChange('mapViewState', 'immediate');

@@ -1,14 +1,4 @@
-/**
- * Fisher-Jenks Natural Breaks classification.
- *
- * Implements the original 1958 Fisher / 1977 Jenks dynamic-programming algorithm
- * (O(N² · k) time, O(N · k) memory) that minimises within-class variance.
- *
- * Sampling guard (`MAX_VALUES`): for N > 1000 distinct values we run the algorithm
- * on an evenly-spaced quantile sample to keep WASM main-thread time bounded.
- * The sampling preserves break positions to within ~1 / sample-size precision.
- */
-
+// Above this count, sample input to bound O(N²·k) Jenks on WASM main thread.
 const MAX_VALUES = 1000;
 
 export function computeJenksBreaks(
