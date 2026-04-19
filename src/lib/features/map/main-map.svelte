@@ -34,10 +34,12 @@
   import FacetsPage from '../step-toolbar/tools/facets/facets-page.svelte';
   import { loadDatasetsSequentially } from './utils/load-datasets-sequentially';
   import {
+    getPolygonPrimitive,
     visualizationStore,
     type VisualizationConfig
   } from '../commons/store/visualization.store.svelte';
-  import { SymbolMode } from '../main-toolbar/constants';
+  import { FillMode } from '../main-toolbar/constants';
+  import { densityLoadingStore } from './stores/density-loading.store.svelte';
   import { basemapService } from './services/basemap.service.svelte';
   import type { SplitRenderingTable } from './types';
   import { INTERNAL_COLUMN } from '../commons/constants/data.constants';
@@ -67,6 +69,19 @@
   const enabledDatasets = $derived(datasetsStore.enabledDatasets);
   const duckDBDatasetsVersion = $derived(duckDBOrchestrator.datasetsVersion);
   const activeOSMBasemap = $derived(osmBasemapStore.activeOSMBasemap);
+  // Anti-flicker: only reveal the density loader after 300 ms of real work,
+  // so cached / fast (<300 ms) renders don't flash a spinner on screen.
+  let showDensityLoader = $state(false);
+  $effect(() => {
+    if (!densityLoadingStore.isLoading) {
+      showDensityLoader = false;
+      return;
+    }
+    const timer = setTimeout(() => {
+      showDensityLoader = densityLoadingStore.isLoading;
+    }, 300);
+    return () => clearTimeout(timer);
+  });
   const usesTiledBasemap = $derived(
     Boolean(activeOSMBasemap) || basemapStyleStore.requiresMapLibre
   );
@@ -80,6 +95,32 @@
 
   function isStaleLoad(generation: number): boolean {
     return loadGeneration !== generation;
+  }
+
+  function isMissingDuckTableError(error: unknown): boolean {
+    return (
+      error instanceof Error &&
+      /Catalog Error:\s*Table with name .*?(does not exist|not found)/i.test(
+        error.message
+      )
+    );
+  }
+
+  function shouldIgnoreDatasetLoadError(
+    datasetId: string,
+    generation: number,
+    error: unknown,
+    tableName?: string
+  ): boolean {
+    if (isStaleLoad(generation) || !datasetsStore.isDatasetEnabled(datasetId)) {
+      return true;
+    }
+
+    if (!tableName || !isMissingDuckTableError(error)) {
+      return false;
+    }
+
+    return !duckDBOrchestrator.getDatasetByTable(tableName);
   }
 
   function bumpDisplayDataVersion(): void {
@@ -167,9 +208,11 @@
   }
 
   async function loadGeoDatasetTable(
-    dataset: DatasetResult
+    dataset: DatasetResult,
+    generation: number
   ): Promise<ArrowTable | FeatureCollection | null> {
     const start = performance.now();
+    let tableName: string | undefined;
     logger.info('Preparing dataset for map rendering', LogCategory.MAP, {
       datasetId: dataset.id,
       fileName: dataset.name,
@@ -181,46 +224,40 @@
         const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(
           dataset.sourceFileId
         );
-        const tableName = duckDBDataset?.tableName ?? dataset.tableName;
+        tableName = duckDBDataset?.tableName ?? dataset.tableName;
 
         if (!tableName) {
           return null;
         }
 
-        if (!duckDBDataset) {
-          logger.debug(
-            'DuckDB dataset registry not ready yet, loading map table directly',
-            LogCategory.MAP,
-            {
-              datasetId: dataset.id,
-              tableName
-            }
-          );
-        }
-
         if (tableName) {
           const densityViz = findActiveDensityViz(dataset.id);
           if (densityViz) {
-            const densityTable =
-              await duckDBOrchestrator.generateDotDensityArrowFromGeoTable(
-                tableName,
-                densityViz.density!.valueColumn!,
-                densityViz.density!.ratio!,
-                densityViz.density!.seed !== undefined
-                  ? { seed: densityViz.density!.seed }
-                  : undefined
-              );
-            if (densityTable) {
-              logger.success(
-                'Density points ready for Deck.gl',
-                LogCategory.MAP,
-                {
+            densityLoadingStore.begin();
+            try {
+              const densityTable =
+                await duckDBOrchestrator.generateDotDensityArrowFromGeoTable(
                   tableName,
-                  rows: densityTable.numRows,
-                  durationMs: (performance.now() - start).toFixed(2)
-                }
-              );
-              return densityTable;
+                  densityViz.density!.valueColumn!,
+                  densityViz.density!.ratio!,
+                  densityViz.density!.seed !== undefined
+                    ? { seed: densityViz.density!.seed }
+                    : undefined
+                );
+              if (densityTable) {
+                logger.success(
+                  'Density points ready for Deck.gl',
+                  LogCategory.MAP,
+                  {
+                    tableName,
+                    rows: densityTable.numRows,
+                    durationMs: (performance.now() - start).toFixed(2)
+                  }
+                );
+                return densityTable;
+              }
+            } finally {
+              densityLoadingStore.end();
             }
           }
 
@@ -258,6 +295,12 @@
       );
       return null;
     } catch (error) {
+      if (
+        shouldIgnoreDatasetLoadError(dataset.id, generation, error, tableName)
+      ) {
+        return null;
+      }
+
       logger.error(
         'Failed to convert dataset to GeoJSON',
         LogCategory.MAP,
@@ -291,9 +334,9 @@
 
   function findActiveDensityViz(datasetId: string): VisualizationConfig | null {
     const matches: VisualizationConfig[] = [];
-    for (const viz of visualizationStore.visualizations) {
+    for (const viz of visualizationStore.activeVisualizations) {
       if (viz.datasetId !== datasetId) continue;
-      if (viz.modes?.symbol !== SymbolMode.DENSITY) continue;
+      if (getPolygonPrimitive(viz)?.fillMode !== FillMode.DENSITY) continue;
       if (!viz.density?.valueColumn || !viz.density?.ratio) continue;
       matches.push(viz);
     }
@@ -325,16 +368,22 @@
     try {
       const densityViz = findActiveDensityViz(datasetId);
       if (densityViz) {
-        const joinedTable =
-          await duckDBOrchestrator.generateDotDensityArrowFromJoin(
-            joinedBasemap,
-            tableName,
-            densityViz.density!.valueColumn!,
-            densityViz.density!.ratio!,
-            densityViz.density!.seed !== undefined
-              ? { seed: densityViz.density!.seed }
-              : undefined
-          );
+        densityLoadingStore.begin();
+        let joinedTable: ArrowTable | undefined;
+        try {
+          joinedTable =
+            await duckDBOrchestrator.generateDotDensityArrowFromJoin(
+              joinedBasemap,
+              tableName,
+              densityViz.density!.valueColumn!,
+              densityViz.density!.ratio!,
+              densityViz.density!.seed !== undefined
+                ? { seed: densityViz.density!.seed }
+                : undefined
+            );
+        } finally {
+          densityLoadingStore.end();
+        }
 
         if (isStaleLoad(generation)) return;
         if (!datasetsStore.isDatasetEnabled(datasetId)) return;
@@ -399,11 +448,6 @@
       if (isStaleLoad(generation)) return;
 
       if (!datasetsStore.isDatasetEnabled(datasetId)) {
-        logger.debug(
-          'Dataset no longer enabled, ignoring joined basemap',
-          LogCategory.MAP,
-          { datasetId }
-        );
         return;
       }
 
@@ -432,6 +476,8 @@
     generation?: number
   ): Promise<void> {
     const start = performance.now();
+    const datasetTableName =
+      duckDBOrchestrator.getDatasetById(duckDBDatasetId)?.tableName;
 
     logger.info('Loading GPS data for OSM basemap', LogCategory.MAP, {
       datasetId,
@@ -445,11 +491,6 @@
       if (generation !== undefined && isStaleLoad(generation)) return;
 
       if (!datasetsStore.isDatasetEnabled(datasetId)) {
-        logger.debug(
-          'Dataset no longer enabled, ignoring GPS data',
-          LogCategory.MAP,
-          { datasetId }
-        );
         return;
       }
 
@@ -467,6 +508,28 @@
         removeDatasetFromDisplay(datasetId);
       }
     } catch (error) {
+      if (
+        (generation !== undefined &&
+          shouldIgnoreDatasetLoadError(
+            datasetId,
+            generation,
+            error,
+            datasetTableName
+          )) ||
+        (!datasetsStore.isDatasetEnabled(datasetId) &&
+          isMissingDuckTableError(error)) ||
+        (datasetTableName &&
+          isMissingDuckTableError(error) &&
+          !duckDBOrchestrator.getDatasetByTable(datasetTableName))
+      ) {
+        return;
+      }
+
+      if (isMissingDuckTableError(error)) {
+        removeDatasetFromDisplay(datasetId);
+        return;
+      }
+
       logger.error('Failed to load GPS data', LogCategory.MAP, error);
       removeDatasetFromDisplay(datasetId);
     }
@@ -478,7 +541,7 @@
   ): Promise<void> {
     const datasetId = dataset.id;
     if (dataset.geometry) {
-      const result = await loadGeoDatasetTable(dataset);
+      const result = await loadGeoDatasetTable(dataset, generation);
 
       if (isStaleLoad(generation)) return;
 
@@ -524,7 +587,7 @@
   }
 
   $effect(() => {
-    const version = duckDBDatasetsVersion;
+    void duckDBDatasetsVersion;
     // Subscribe to visualization changes so density re-generates on config edits.
     void visualizationStore.version;
     const currentEnabledDatasets = enabledDatasets;
@@ -560,16 +623,6 @@
     const thisGeneration = ++loadGeneration;
 
     untrack(() => {
-      logger.debug(
-        'Reloading display data for enabled datasets',
-        LogCategory.MAP,
-        {
-          version,
-          datasetCount: currentEnabledDatasets.length,
-          generation: thisGeneration
-        }
-      );
-
       void loadDatasetsSequentially(currentEnabledDatasets, (dataset) =>
         loadDatasetForDisplay(dataset, thisGeneration)
       ).catch((error) => {
@@ -588,6 +641,8 @@
       return;
     }
 
+    const thisGeneration = loadGeneration;
+
     for (const dataset of enabledDatasets) {
       const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(
         dataset.sourceFileId
@@ -602,7 +657,7 @@
             osmBasemap: osmBasemap.file
           }
         );
-        loadGPSData(dataset.id, duckDBDataset.id);
+        loadGPSData(dataset.id, duckDBDataset.id, thisGeneration);
       }
     }
   });
@@ -631,7 +686,6 @@
 
       globalState.isToolbarTransitioning = true;
 
-      // Clean up previous transition tracking
       cleanupTransitionListener();
       if (toolbarTransitionTimeoutId) {
         clearTimeout(toolbarTransitionTimeoutId);
@@ -643,7 +697,6 @@
         TOOLBAR_TRANSITION_SAFETY_MS
       );
 
-      // Listen for CSS transition end on the toolbar element
       const toolbar = document.getElementById('khartis-main-toolbar');
       if (toolbar) {
         const handler = (event: TransitionEvent) => {
@@ -667,7 +720,6 @@
     const initGeneration = ++loadGeneration;
     const [firstDataset, ...remainingDatasets] = enabledDatasets;
 
-    // Load the first dataset and unblock rendering immediately
     if (firstDataset) {
       await loadDatasetForDisplay(firstDataset, initGeneration);
     }
@@ -686,7 +738,6 @@
     // Force a layer update now that data + viz state are both available.
     bumpDisplayDataVersion();
 
-    // Load remaining datasets progressively in the background
     if (remainingDatasets.length > 0) {
       void loadDatasetsSequentially(remainingDatasets, (dataset) =>
         loadDatasetForDisplay(dataset, initGeneration)
@@ -751,7 +802,6 @@
     }
   });
 
-  // --- Resize handles for styling step ---
   type ResizeEdge = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
   const RESIZE_EDGES: ResizeEdge[] = [
     'n',
@@ -878,6 +928,17 @@
           onReady={handleMapReady}
         />
       {/if}
+      {#if showDensityLoader}
+        <div
+          class="density-loader"
+          role="status"
+          aria-live="polite"
+          transition:fade={{ duration: 150 }}
+        >
+          <span class="density-loader-spinner" aria-hidden="true"></span>
+          <span class="density-loader-text">{m.density_loading()}</span>
+        </div>
+      {/if}
     </div>
   {/if}
 
@@ -908,6 +969,40 @@
 </div>
 
 <style>
+  .density-loader {
+    position: absolute;
+    top: var(--cds-spacing-04);
+    right: var(--cds-spacing-04);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--cds-spacing-03);
+    padding: var(--cds-spacing-02) var(--cds-spacing-04);
+    background: var(--cds-layer-01, rgba(255, 255, 255, 0.95));
+    border: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+    border-radius: 999px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+    font-size: 0.75rem;
+    color: var(--cds-text-secondary, #525252);
+    pointer-events: none;
+    z-index: 3;
+  }
+
+  .density-loader-spinner {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 1.5px solid var(--cds-border-subtle-02, #c6c6c6);
+    border-top-color: var(--cds-interactive-01, #0f62fe);
+    border-radius: 50%;
+    animation: density-loader-spin 0.75s linear infinite;
+  }
+
+  @keyframes density-loader-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
   .main-map-container {
     display: flex;
     align-items: center;

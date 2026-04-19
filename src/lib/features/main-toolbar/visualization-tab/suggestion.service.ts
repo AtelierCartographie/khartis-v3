@@ -7,8 +7,17 @@ import type {
   VizSuggestion
 } from '$lib/features/commons/services/viz-suggester.service';
 import {
+  getLinePrimitive,
+  getPolygonPrimitive,
+  getSymbolPrimitive,
+  getTextPrimitive,
   getVisualizationOriginMode,
+  type LinePrimitiveConfig,
+  type PolygonPrimitiveConfig,
+  type PrimitiveFilter,
   PrimitiveFilterType,
+  type SymbolPrimitiveConfig,
+  type TextPrimitiveConfig,
   type VisualizationPreset,
   type VisualizationConfig,
   type VisualizationOrigin,
@@ -28,7 +37,8 @@ import {
   SizeMode,
   StrokeMode,
   SymbolMode,
-  ThicknessMode
+  ThicknessMode,
+  VISUALIZATION_DEFAULTS
 } from '$lib/features/main-toolbar/constants';
 import {
   getLegendState,
@@ -75,6 +85,10 @@ interface SuggestionBehavior {
   classification?: VisualizationConfig['classification'];
   symbols?: VisualizationConfig['symbols'];
   missingData?: VisualizationConfig['missingData'];
+  polygon?: Partial<PolygonPrimitiveConfig>;
+  symbol?: Partial<SymbolPrimitiveConfig>;
+  line?: Partial<LinePrimitiveConfig>;
+  text?: Partial<TextPrimitiveConfig>;
 }
 
 const SUGGESTION_VISUALIZATION_TYPES = {
@@ -229,23 +243,80 @@ function buildDisabledMissingData(
   };
 }
 
-function buildSupportPolygonStyle(): Partial<VisualizationConfig['style']> {
+function buildSupportPolygonConfig(
+  preset: VisualizationPreset,
+  visualization?: VisualizationConfig
+): Partial<PolygonPrimitiveConfig> {
+  const polygon =
+    getPolygonPrimitive(visualization) ?? preset.polygon ?? undefined;
+
   return {
-    fillOpacity: 0,
+    enabled: false,
+    fillMode: polygon?.fillMode ?? FillMode.UNIQUE,
+    fillColor: polygon?.fillColor ?? DEFAULT_COLORS.fill,
+    fillOpacity: polygon?.fillOpacity ?? 1,
+    strokeMode: StrokeMode.UNIQUE,
     strokeColor: DEFAULT_COLORS.gray,
-    strokeOpacity: 1
+    strokeWidth: polygon?.strokeWidth ?? 1,
+    strokeOpacity: 1,
+    strokeDashed: polygon?.strokeDashed ?? false
   };
 }
 
-function buildTextStyle(
-  extra: Partial<VisualizationConfig['style']> = {}
-): Partial<VisualizationConfig['style']> {
+function buildTextPrimitiveConfig(
+  preset: VisualizationPreset,
+  visualization?: VisualizationConfig,
+  overrides: Omit<Partial<TextPrimitiveConfig>, 'secondaryLabels'> & {
+    secondaryLabels?: Partial<TextPrimitiveConfig['secondaryLabels']>;
+  } = {}
+): Partial<TextPrimitiveConfig> {
+  const text = getTextPrimitive(visualization) ?? preset.text;
+  const defaultTextOpacity = VISUALIZATION_DEFAULTS.textOpacity / 100;
+  const baseSecondaryLabels = {
+    enabled: false,
+    labelColumn: text?.secondaryLabels.labelColumn,
+    color: text?.secondaryLabels.color ?? DEFAULT_COLORS.text,
+    opacity: text?.secondaryLabels.opacity ?? 1,
+    size: text?.secondaryLabels.size ?? VISUALIZATION_DEFAULTS.labelSize,
+    align: text?.secondaryLabels.align ?? 'left',
+    halo: text?.secondaryLabels.halo ?? false,
+    haloColor: text?.secondaryLabels.haloColor ?? DEFAULT_COLORS.halo,
+    haloWidth:
+      text?.secondaryLabels.haloWidth ?? VISUALIZATION_DEFAULTS.haloWidth,
+    collisionDetection: text?.secondaryLabels.collisionDetection ?? true,
+    dxpMasking: text?.secondaryLabels.dxpMasking ?? false
+  };
+
+  const baseTextConfig: Partial<TextPrimitiveConfig> = {
+    enabled: true,
+    colorMode: text?.colorMode ?? ColorMode.UNIQUE,
+    sizeMode: text?.sizeMode ?? SizeMode.FIXED,
+    color: text?.color ?? DEFAULT_COLORS.text,
+    opacity:
+      text?.opacity !== undefined && text.opacity > 0
+        ? text.opacity
+        : defaultTextOpacity,
+    size: text?.size ?? VISUALIZATION_DEFAULTS.textSize,
+    bold: text?.bold ?? false,
+    italic: text?.italic ?? false,
+    align: text?.align ?? 'left',
+    halo: text?.halo ?? false,
+    haloColor: text?.haloColor ?? DEFAULT_COLORS.halo,
+    haloWidth: text?.haloWidth ?? VISUALIZATION_DEFAULTS.haloWidth,
+    collisionDetection: text?.collisionDetection ?? false,
+    dxpMasking: text?.dxpMasking ?? false,
+    missingData: buildDisabledMissingData(
+      text?.missingData ?? preset.missingData
+    )
+  };
+
   return {
-    textOpacity: 1,
-    labelOpacity: 0,
-    strokeColor: DEFAULT_COLORS.gray,
-    strokeOpacity: 1,
-    ...extra
+    ...baseTextConfig,
+    ...overrides,
+    secondaryLabels: {
+      ...baseSecondaryLabels,
+      ...(overrides.secondaryLabels ?? {})
+    }
   };
 }
 
@@ -264,7 +335,6 @@ export function resolveDatasetGeometryType(
     return rawGeometry as GeometryType;
   }
 
-  // Check dataset-level join info first (available on DatasetResult)
   if (dataset.gpsMode) {
     return 'Point';
   }
@@ -272,7 +342,6 @@ export function resolveDatasetGeometryType(
     return 'Polygon';
   }
 
-  // Check geoDetection for auto-detected GPS columns (before join finalization)
   if (dataset.geoDetection?.geoColumns) {
     const hasLat = dataset.geoDetection.geoColumns.some(
       (c) => c.type === GEO_COLUMN_TYPE.LATITUDE
@@ -289,7 +358,6 @@ export function resolveDatasetGeometryType(
     return null;
   }
 
-  // Fallback 1: check orchestrator state (DuckDBDataset)
   const duckDataset = duckDBOrchestrator.getDatasetBySourceFile(
     dataset.sourceFileId
   );
@@ -302,7 +370,6 @@ export function resolveDatasetGeometryType(
     }
   }
 
-  // Fallback 2: check project source files (UploadedFile persistence)
   const sourceFile = projectStore.currentProject?.data?.sourceFiles?.find(
     (f) => f.id === dataset.sourceFileId
   );
@@ -315,7 +382,6 @@ export function resolveDatasetGeometryType(
     }
   }
 
-  // Fallback 3: infer from existing visualizations on this dataset
   const datasetId = (dataset as { id?: string }).id;
   if (datasetId) {
     const vizs = visualizationStore.getVisualizationsByDataset(datasetId);
@@ -327,7 +393,10 @@ export function resolveDatasetGeometryType(
       ) {
         return 'Polygon';
       }
-      if (vizType === VisualizationType.PROPORTIONAL) {
+      if (
+        vizType === VisualizationType.PROPORTIONAL ||
+        vizType === VisualizationType.BIVARIATE
+      ) {
         return 'Point';
       }
     }
@@ -363,12 +432,8 @@ export function resolveSuggestionBehavior(
   const isPolygonDataset = datasetPrimitive === PrimitiveFilterType.POLYGON;
   const primaryColumn = suggestion.columns?.[0];
   const secondaryColumn = suggestion.columns?.[1];
-  const symbolPrimitiveFilters = isPolygonDataset
-    ? [PrimitiveFilterType.POINT, PrimitiveFilterType.POLYGON]
-    : [PrimitiveFilterType.POINT];
-  const textPrimitiveFilters = isPolygonDataset
-    ? [PrimitiveFilterType.POLYGON]
-    : [];
+  const symbolPrimitiveFilters = [PrimitiveFilterType.POINT];
+  const textPrimitiveFilters: PrimitiveFilter[] = [];
 
   const baseMapping = buildClearedMapping(preset.mapping.geometryColumn);
   const baseSymbols = preset.symbols
@@ -406,11 +471,32 @@ export function resolveSuggestionBehavior(
           symbol: SymbolMode.UNIQUE
         },
         style: {
-          ...buildTextStyle(isPolygonDataset ? buildSupportPolygonStyle() : {})
+          textOpacity: 1
         },
         classification: categoricalPreset.classification,
         symbols: baseSymbols,
-        missingData: buildDisabledMissingData(preset.missingData)
+        missingData: buildDisabledMissingData(preset.missingData),
+        text: buildTextPrimitiveConfig(preset, visualization, {
+          labelColumn: primaryColumn,
+          categoryColumn: secondaryColumn,
+          colorMode: ColorMode.CATEGORIES,
+          sizeMode: SizeMode.FIXED,
+          classification: categoricalPreset.classification,
+          missingData: buildDisabledMissingData(preset.missingData),
+          secondaryLabels: {
+            enabled: false,
+            labelColumn: undefined
+          }
+        }),
+        symbol: {
+          enabled: false
+        },
+        line: {
+          enabled: false
+        },
+        ...(isPolygonDataset
+          ? { polygon: buildSupportPolygonConfig(preset, visualization) }
+          : {})
       };
     }
 
@@ -429,7 +515,8 @@ export function resolveSuggestionBehavior(
         primitiveFilters: textPrimitiveFilters,
         mapping: buildClearedMapping(preset.mapping.geometryColumn, {
           labelColumn: primaryColumn,
-          valueColumn: secondaryColumn
+          valueColumn: secondaryColumn,
+          secondaryLabelColumn: secondaryColumn
         }),
         modes: {
           ...preset.modes,
@@ -438,11 +525,32 @@ export function resolveSuggestionBehavior(
           symbol: SymbolMode.UNIQUE
         },
         style: {
-          ...buildTextStyle(isPolygonDataset ? buildSupportPolygonStyle() : {})
+          textOpacity: 1
         },
         classification: choroplethPreset.classification,
         symbols: baseSymbols,
-        missingData: buildDisabledMissingData(preset.missingData)
+        missingData: buildDisabledMissingData(preset.missingData),
+        text: buildTextPrimitiveConfig(preset, visualization, {
+          labelColumn: primaryColumn,
+          valueColumn: secondaryColumn,
+          colorMode: ColorMode.CLASSES,
+          sizeMode: SizeMode.FIXED,
+          classification: choroplethPreset.classification,
+          missingData: buildDisabledMissingData(preset.missingData),
+          secondaryLabels: {
+            enabled: false,
+            labelColumn: secondaryColumn
+          }
+        }),
+        symbol: {
+          enabled: false
+        },
+        line: {
+          enabled: false
+        },
+        ...(isPolygonDataset
+          ? { polygon: buildSupportPolygonConfig(preset, visualization) }
+          : {})
       };
     }
 
@@ -458,7 +566,8 @@ export function resolveSuggestionBehavior(
       primitiveFilters: textPrimitiveFilters,
       mapping: buildClearedMapping(preset.mapping.geometryColumn, {
         labelColumn: primaryColumn,
-        sizeColumn: secondaryColumn
+        valueColumn: secondaryColumn,
+        secondaryLabelColumn: secondaryColumn
       }),
       modes: {
         ...preset.modes,
@@ -467,11 +576,32 @@ export function resolveSuggestionBehavior(
         symbol: SymbolMode.UNIQUE
       },
       style: {
-        ...buildTextStyle(isPolygonDataset ? buildSupportPolygonStyle() : {})
+        textOpacity: 1
       },
       classification: undefined,
       symbols: baseSymbols,
-      missingData: buildDisabledMissingData(preset.missingData)
+      missingData: buildDisabledMissingData(preset.missingData),
+      text: buildTextPrimitiveConfig(preset, visualization, {
+        labelColumn: primaryColumn,
+        valueColumn: secondaryColumn,
+        colorMode: ColorMode.UNIQUE,
+        sizeMode: SizeMode.PROPORTIONAL,
+        classification: undefined,
+        missingData: buildDisabledMissingData(preset.missingData),
+        secondaryLabels: {
+          enabled: false,
+          labelColumn: secondaryColumn
+        }
+      }),
+      symbol: {
+        enabled: false
+      },
+      line: {
+        enabled: false
+      },
+      ...(isPolygonDataset
+        ? { polygon: buildSupportPolygonConfig(preset, visualization) }
+        : {})
     };
   }
 
@@ -498,7 +628,23 @@ export function resolveSuggestionBehavior(
         style: {},
         classification: choroplethPreset.classification,
         symbols: baseSymbols,
-        missingData: preset.missingData
+        missingData: preset.missingData,
+        polygon: {
+          enabled: true,
+          fillMode: FillMode.CLASSES,
+          valueColumn: primaryColumn,
+          classification: choroplethPreset.classification,
+          missingData: preset.missingData
+        },
+        symbol: {
+          enabled: false
+        },
+        line: {
+          enabled: false
+        },
+        text: {
+          enabled: false
+        }
       };
     }
 
@@ -524,7 +670,23 @@ export function resolveSuggestionBehavior(
         style: {},
         classification: categoricalPreset.classification,
         symbols: baseSymbols,
-        missingData: preset.missingData
+        missingData: preset.missingData,
+        polygon: {
+          enabled: true,
+          fillMode: FillMode.CATEGORIES,
+          categoryColumn: primaryColumn,
+          classification: categoricalPreset.classification,
+          missingData: preset.missingData
+        },
+        symbol: {
+          enabled: false
+        },
+        line: {
+          enabled: false
+        },
+        text: {
+          enabled: false
+        }
       };
     }
 
@@ -547,7 +709,22 @@ export function resolveSuggestionBehavior(
       style: {},
       classification: undefined,
       symbols: baseSymbols,
-      missingData: preset.missingData
+      missingData: preset.missingData,
+      polygon: {
+        enabled: true,
+        fillMode: FillMode.UNIQUE,
+        classification: undefined,
+        missingData: preset.missingData
+      },
+      symbol: {
+        enabled: false
+      },
+      line: {
+        enabled: false
+      },
+      text: {
+        enabled: false
+      }
     };
   }
 
@@ -603,7 +780,44 @@ export function resolveSuggestionBehavior(
           ? choroplethPreset.classification
           : undefined,
       symbols: baseSymbols,
-      missingData: preset.missingData
+      missingData: preset.missingData,
+      line: {
+        enabled: true,
+        colorMode: isCategoricalLine
+          ? ColorMode.CATEGORIES
+          : isClassedLine
+            ? ColorMode.CLASSES
+            : ColorMode.UNIQUE,
+        thicknessMode: isProportionalLine
+          ? ThicknessMode.PROPORTIONAL
+          : ThicknessMode.UNIQUE,
+        valueColumn: isClassedLine
+          ? primaryColumn
+          : suggestion.id === 'lines_proportional_colorful_QTR'
+            ? secondaryColumn
+            : undefined,
+        categoryColumn: isCategoricalLine
+          ? isProportionalLine
+            ? secondaryColumn
+            : primaryColumn
+          : undefined,
+        sizeColumn: isProportionalLine ? primaryColumn : undefined,
+        classification: isCategoricalLine
+          ? categoricalPreset.classification
+          : isClassedLine
+            ? choroplethPreset.classification
+            : undefined,
+        missingData: preset.missingData
+      },
+      symbol: {
+        enabled: false
+      },
+      polygon: {
+        enabled: false
+      },
+      text: {
+        enabled: false
+      }
     };
   }
 
@@ -655,7 +869,8 @@ export function resolveSuggestionBehavior(
           : ProportionalType.SINGLE
     },
     style: {
-      ...(isPolygonDataset ? buildSupportPolygonStyle() : {}),
+      symbolFillColor:
+        visualization?.style.symbolFillColor ?? DEFAULT_COLORS.fill,
       ...(suggestion.id === 'symbols_proportional_double'
         ? {
             fillColorB:
@@ -669,7 +884,60 @@ export function resolveSuggestionBehavior(
         ? choroplethPreset.classification
         : undefined,
     symbols: baseSymbols,
-    missingData: preset.missingData
+    missingData: preset.missingData,
+    symbol: {
+      enabled: true,
+      mode: SYMBOL_CATEGORY_SHAPE_IDS.has(suggestion.id)
+        ? SymbolMode.CATEGORIES
+        : SYMBOL_UNIQUE_SUGGESTION_IDS.has(suggestion.id)
+          ? SymbolMode.UNIQUE
+          : SymbolMode.PROPORTIONAL,
+      fillMode: isCategoricalSymbol
+        ? FillMode.CATEGORIES
+        : isClassedSymbol
+          ? FillMode.CLASSES
+          : FillMode.UNIQUE,
+      strokeMode:
+        suggestion.id === 'symbols_proportional_double'
+          ? StrokeMode.UNIQUE
+          : preset.symbol?.strokeMode,
+      proportionalType:
+        suggestion.id === 'symbols_proportional_double'
+          ? ProportionalType.DOUBLE
+          : ProportionalType.SINGLE,
+      valueColumn: isClassedSymbol
+        ? primaryColumn
+        : suggestion.id === 'symbols_proportional_colorful_QTR' ||
+            suggestion.id === 'symbols_proportional_double'
+          ? secondaryColumn
+          : undefined,
+      categoryColumn: isCategoricalSymbol
+        ? isProportionalSymbol
+          ? secondaryColumn
+          : primaryColumn
+        : undefined,
+      sizeColumn: isProportionalSymbol ? primaryColumn : undefined,
+      fillColor: visualization?.style.symbolFillColor ?? DEFAULT_COLORS.fill,
+      fillColorB:
+        suggestion.id === 'symbols_proportional_double'
+          ? (visualization?.style.fillColorB ?? DEFAULT_COLORS.secondary)
+          : undefined,
+      classification: isCategoricalSymbol
+        ? categoricalPreset.classification
+        : isClassedSymbol
+          ? choroplethPreset.classification
+          : undefined,
+      missingData: preset.missingData
+    },
+    ...(isPolygonDataset
+      ? { polygon: buildSupportPolygonConfig(preset, visualization) }
+      : {}),
+    line: {
+      enabled: false
+    },
+    text: {
+      enabled: false
+    }
   };
 }
 
@@ -712,26 +980,92 @@ export function resolveBlankVisualizationPreset(
   if (blankType === VisualizationType.PROPORTIONAL) {
     modes.symbol = SymbolMode.UNIQUE;
     modes.proportionalType = ProportionalType.SINGLE;
-    style.fillColor = DEFAULT_COLORS.gray;
+    style.symbolFillColor = DEFAULT_COLORS.gray;
     style.strokeColor = DEFAULT_COLORS.gray;
   }
+
+  const blankMissingData = preset.missingData
+    ? {
+        ...preset.missingData,
+        show: false,
+        enabled: false,
+        pattern: false
+      }
+    : undefined;
+
+  const polygon = preset.polygon
+    ? {
+        ...preset.polygon,
+        enabled: blankType === VisualizationType.CHOROPLETH,
+        fillMode:
+          blankType === VisualizationType.CHOROPLETH
+            ? FillMode.NONE
+            : preset.polygon.fillMode,
+        strokeColor: DEFAULT_COLORS.gray,
+        missingData: blankMissingData
+      }
+    : undefined;
+
+  const symbol = preset.symbol
+    ? {
+        ...preset.symbol,
+        enabled: blankType === VisualizationType.PROPORTIONAL,
+        mode:
+          blankType === VisualizationType.PROPORTIONAL
+            ? SymbolMode.UNIQUE
+            : preset.symbol.mode,
+        proportionalType:
+          blankType === VisualizationType.PROPORTIONAL
+            ? ProportionalType.SINGLE
+            : preset.symbol.proportionalType,
+        fillColor:
+          blankType === VisualizationType.PROPORTIONAL
+            ? DEFAULT_COLORS.gray
+            : preset.symbol.fillColor,
+        strokeColor: DEFAULT_COLORS.gray,
+        missingData: blankMissingData
+      }
+    : undefined;
+
+  const line = preset.line
+    ? {
+        ...preset.line,
+        enabled: false,
+        color: DEFAULT_COLORS.gray,
+        missingData: blankMissingData
+      }
+    : undefined;
+
+  const text = preset.text
+    ? {
+        ...preset.text,
+        enabled: false,
+        classification: undefined,
+        missingData: blankMissingData,
+        secondaryLabels: {
+          ...preset.text.secondaryLabels,
+          enabled: false
+        }
+      }
+    : undefined;
 
   return {
     ...preset,
     modes,
     style,
+    polygon,
+    symbol,
+    line,
+    text,
     mapping: {
       geometryColumn: preset.mapping.geometryColumn
     },
     classification: undefined,
-    missingData: preset.missingData
-      ? {
-          ...preset.missingData,
-          show: false,
-          enabled: false,
-          pattern: false
-        }
-      : undefined
+    primitiveFilters:
+      blankType === VisualizationType.PROPORTIONAL
+        ? [PrimitiveFilterType.POINT]
+        : [PrimitiveFilterType.POLYGON],
+    missingData: blankMissingData
   };
 }
 
@@ -756,6 +1090,10 @@ function createVisualizationRestoreSnapshot(
     modes: deepClone(visualization.modes),
     primitiveFilters: deepClone(visualization.primitiveFilters),
     primitiveOrder: deepClone(visualization.primitiveOrder),
+    polygon: deepClone(visualization.polygon),
+    symbol: deepClone(visualization.symbol),
+    line: deepClone(visualization.line),
+    text: deepClone(visualization.text),
     style: deepClone(visualization.style),
     mapping: deepClone(visualization.mapping),
     classification: deepClone(visualization.classification),
@@ -896,6 +1234,59 @@ function normalizeClassificationForPresetComparison(
   };
 }
 
+function mergePrimitiveConfig<T extends object>(
+  base: T | undefined,
+  updates: Partial<T> | undefined
+): T | undefined {
+  if (!base && !updates) {
+    return undefined;
+  }
+
+  return {
+    ...(base ?? ({} as T)),
+    ...(updates ?? {})
+  } as T;
+}
+
+function mergeTextPrimitiveConfig(
+  base: TextPrimitiveConfig | undefined,
+  updates: Partial<TextPrimitiveConfig> | undefined
+): TextPrimitiveConfig | undefined {
+  if (!base && !updates) {
+    return undefined;
+  }
+
+  return {
+    ...(base ?? ({} as TextPrimitiveConfig)),
+    ...(updates ?? {}),
+    secondaryLabels: {
+      ...(base?.secondaryLabels ?? {
+        enabled: false,
+        opacity: 1,
+        size: VISUALIZATION_DEFAULTS.labelSize,
+        align: 'left',
+        halo: false,
+        haloColor: DEFAULT_COLORS.halo,
+        haloWidth: VISUALIZATION_DEFAULTS.haloWidth,
+        collisionDetection: true,
+        dxpMasking: false
+      }),
+      ...(updates?.secondaryLabels ?? {})
+    },
+    background: {
+      ...(base?.background ?? {
+        fillMode: FillMode.NONE,
+        fillOpacity: VISUALIZATION_DEFAULTS.fillOpacity / 100,
+        strokeMode: StrokeMode.NONE,
+        strokeWidth: VISUALIZATION_DEFAULTS.strokeWidth,
+        strokeOpacity: 1,
+        strokeDashed: false
+      }),
+      ...(updates?.background ?? {})
+    }
+  } as TextPrimitiveConfig;
+}
+
 export function isVisualizationUsingPreset(
   visualization: VisualizationConfig,
   preset: VisualizationPreset
@@ -909,6 +1300,10 @@ export function isVisualizationUsingPreset(
     ) &&
     areVisualizationPresetValuesEqual(visualization.style, preset.style) &&
     areVisualizationPresetValuesEqual(visualization.mapping, preset.mapping) &&
+    areVisualizationPresetValuesEqual(visualization.polygon, preset.polygon) &&
+    areVisualizationPresetValuesEqual(visualization.symbol, preset.symbol) &&
+    areVisualizationPresetValuesEqual(visualization.line, preset.line) &&
+    areVisualizationPresetValuesEqual(visualization.text, preset.text) &&
     areVisualizationPresetValuesEqual(
       normalizeClassificationForPresetComparison(visualization.classification),
       normalizeClassificationForPresetComparison(preset.classification)
@@ -1011,8 +1406,46 @@ function buildSuggestionUpdate(
     primitiveFilters: behavior.primitiveFilters,
     classification: behavior.classification,
     symbols: behavior.symbols,
-    missingData: behavior.missingData
+    missingData: behavior.missingData,
+    polygon: mergePrimitiveConfig(
+      getPolygonPrimitive(visualization),
+      behavior.polygon
+    ),
+    symbol: mergePrimitiveConfig(
+      getSymbolPrimitive(visualization),
+      behavior.symbol
+    ),
+    line: mergePrimitiveConfig(getLinePrimitive(visualization), behavior.line),
+    text: mergeTextPrimitiveConfig(
+      getTextPrimitive(visualization),
+      behavior.text
+    )
   };
+}
+
+function matchesExpectedSubset(
+  currentValue: unknown,
+  expectedValue: unknown
+): boolean {
+  if (expectedValue === undefined) {
+    return true;
+  }
+
+  if (expectedValue === null || typeof expectedValue !== 'object') {
+    return areVisualizationPresetValuesEqual(currentValue, expectedValue);
+  }
+
+  if (Array.isArray(expectedValue)) {
+    return areVisualizationPresetValuesEqual(currentValue, expectedValue);
+  }
+
+  if (!currentValue || typeof currentValue !== 'object') {
+    return false;
+  }
+
+  return Object.entries(expectedValue).every(([key, value]) =>
+    matchesExpectedSubset((currentValue as Record<string, unknown>)[key], value)
+  );
 }
 
 export function isVisualizationMatchingSuggestion(
@@ -1025,81 +1458,19 @@ export function isVisualizationMatchingSuggestion(
     dataset,
     visualization
   );
-  const preset = resolveVisualizationPreset(
-    behavior.visualizationType,
-    dataset
-  );
-  const expectedVisualization: VisualizationConfig = {
-    ...visualization,
-    ...preset,
-    mapping: { ...preset.mapping },
-    style: { ...preset.style },
-    modes: preset.modes ? { ...preset.modes } : undefined,
-    classification: preset.classification
-      ? { ...preset.classification }
-      : undefined,
-    symbols: preset.symbols ? { ...preset.symbols } : undefined,
-    missingData: preset.missingData ? { ...preset.missingData } : undefined
-  };
-
-  const suggestionUpdate = buildSuggestionUpdate(
-    expectedVisualization,
-    dataset,
-    suggestion
-  );
-
-  expectedVisualization.mapping = suggestionUpdate.mapping
-    ? {
-        ...expectedVisualization.mapping,
-        ...suggestionUpdate.mapping
-      }
-    : expectedVisualization.mapping;
-  expectedVisualization.modes = suggestionUpdate.modes
-    ? {
-        ...expectedVisualization.modes,
-        ...suggestionUpdate.modes
-      }
-    : expectedVisualization.modes;
-  expectedVisualization.style = suggestionUpdate.style
-    ? {
-        ...expectedVisualization.style,
-        ...suggestionUpdate.style
-      }
-    : expectedVisualization.style;
-  expectedVisualization.primitiveFilters =
-    suggestionUpdate.primitiveFilters ?? expectedVisualization.primitiveFilters;
-  if (
-    Object.prototype.hasOwnProperty.call(suggestionUpdate, 'classification')
-  ) {
-    expectedVisualization.classification = suggestionUpdate.classification;
-  }
-  if (Object.prototype.hasOwnProperty.call(suggestionUpdate, 'symbols')) {
-    expectedVisualization.symbols = suggestionUpdate.symbols;
-  }
-  if (Object.prototype.hasOwnProperty.call(suggestionUpdate, 'missingData')) {
-    expectedVisualization.missingData = suggestionUpdate.missingData;
-  }
 
   return (
     behavior.visualizationType === visualization.type &&
+    matchesExpectedSubset(visualization.modes, behavior.modes) &&
     areVisualizationPresetValuesEqual(
-      expectedVisualization.modes,
-      visualization.modes
+      visualization.primitiveFilters,
+      behavior.primitiveFilters
     ) &&
-    areVisualizationPresetValuesEqual(
-      expectedVisualization.primitiveFilters,
-      visualization.primitiveFilters
-    ) &&
-    areVisualizationPresetValuesEqual(
-      expectedVisualization.mapping,
-      visualization.mapping
-    ) &&
-    areVisualizationPresetValuesEqual(
-      normalizeClassificationForPresetComparison(
-        expectedVisualization.classification
-      ),
-      normalizeClassificationForPresetComparison(visualization.classification)
-    )
+    matchesExpectedSubset(visualization.mapping, behavior.mapping) &&
+    matchesExpectedSubset(visualization.polygon, behavior.polygon) &&
+    matchesExpectedSubset(visualization.symbol, behavior.symbol) &&
+    matchesExpectedSubset(visualization.line, behavior.line) &&
+    matchesExpectedSubset(visualization.text, behavior.text)
   );
 }
 
@@ -1138,6 +1509,15 @@ export function applySuggestionToVisualization(
     {
       ...currentVisualization,
       ...preset,
+      polygon: preset.polygon ? { ...preset.polygon } : undefined,
+      symbol: preset.symbol ? { ...preset.symbol } : undefined,
+      line: preset.line ? { ...preset.line } : undefined,
+      text: preset.text
+        ? {
+            ...preset.text,
+            secondaryLabels: { ...preset.text.secondaryLabels }
+          }
+        : undefined,
       mapping: { ...preset.mapping },
       style: { ...preset.style },
       modes: preset.modes ? { ...preset.modes } : undefined,

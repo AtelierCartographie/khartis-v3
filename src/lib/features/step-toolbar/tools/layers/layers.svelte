@@ -1,7 +1,12 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
-  import { Modal, TextInput } from 'carbon-components-svelte';
-  import { ColorPalette, Earth } from 'carbon-icons-svelte';
+  import { Button, Modal, TextInput } from 'carbon-components-svelte';
+  import {
+    ChevronDown,
+    ChevronUp,
+    ColorPalette,
+    Earth
+  } from 'carbon-icons-svelte';
   import { tick } from 'svelte';
   import LayersList from './layers-list.svelte';
   import { layersActions, layersState } from './layers.store.svelte';
@@ -15,6 +20,7 @@
     globalState
   } from '$lib/features/commons/store/global.svelte';
   import { ToolbarStep } from '$lib/features/commons/types/global';
+  import { facetsStore } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
 
   const store = layersActions;
   const currentState = $derived(layersState);
@@ -38,39 +44,20 @@
     }))
   );
 
-  const parentLayers = $derived(layers.filter((layer) => !layer.isSubLayer));
   const hasActiveTiledBasemap = $derived(
     basemapStyleStore.requiresMapLibre || osmBasemapStore.isActive
   );
-  const basemapForegroundParentLayers = $derived(
-    hasActiveTiledBasemap
-      ? []
-      : parentLayers.filter(
-          (layer) => layer.basemapRenderGroup === 'foreground'
-        )
-  );
-  const visualizationParentLayers = $derived(
-    parentLayers.filter((layer) => layer.type === 'visualization')
-  );
-  const basemapBackgroundParentLayers = $derived(
-    hasActiveTiledBasemap
-      ? []
-      : parentLayers.filter(
-          (layer) => layer.basemapRenderGroup === 'background'
-        )
-  );
+
+  const parentLayers = $derived(layers.filter((layer) => !layer.isSubLayer));
+
+  const isCollectionMode = $derived(facetsStore.enabled);
 
   const childLayersByParent = $derived.by(() => {
     const children: Record<string, Layer[]> = {};
 
     for (const layer of layers) {
-      if (
-        !layer.isSubLayer ||
-        !layer.parentId ||
-        layer.type !== 'visualization'
-      ) {
-        continue;
-      }
+      if (!layer.isSubLayer || !layer.parentId) continue;
+      if (layer.type === 'geographic' && hasActiveTiledBasemap) continue;
 
       if (!children[layer.parentId]) {
         children[layer.parentId] = [];
@@ -84,6 +71,17 @@
 
     return children;
   });
+
+  let collapsedCartes = $state<Record<number, boolean>>({});
+
+  function toggleCarte(index: number): void {
+    collapsedCartes[index] = !collapsedCartes[index];
+  }
+
+  function isCarteCollapsed(index: number): boolean {
+    if (index in collapsedCartes) return collapsedCartes[index];
+    return index > 0;
+  }
 
   let renameModalOpen = $state(false);
   let renameLayerId = $state<string | null>(null);
@@ -204,57 +202,24 @@
     store.reorderSubLayers(parentId, fromIndex, toIndex);
   }
 
-  function getParentLayersForScope(scope: LayerReorderScope): Layer[] {
-    switch (scope) {
-      case 'visualization':
-        return visualizationParentLayers;
-      case 'geographic-background':
-        return basemapBackgroundParentLayers;
-      case 'geographic-foreground':
-        return basemapForegroundParentLayers;
-    }
-  }
-
   function handleMoveLayer(
     scope: LayerReorderScope,
     layerId: string,
     direction: -1 | 1
   ): void {
-    const scopedLayers = getParentLayersForScope(scope);
-    const fromIndex = scopedLayers.findIndex((layer) => layer.id === layerId);
+    const fromIndex = parentLayers.findIndex((layer) => layer.id === layerId);
     const toIndex = fromIndex + direction;
 
     if (
       fromIndex === -1 ||
       toIndex < 0 ||
-      toIndex >= scopedLayers.length ||
+      toIndex >= parentLayers.length ||
       fromIndex === toIndex
     ) {
       return;
     }
 
     store.reorderLayers(scope, fromIndex, toIndex);
-  }
-
-  function handleMoveSubLayer(
-    parentId: string,
-    layerId: string,
-    direction: -1 | 1
-  ): void {
-    const childLayers = childLayersByParent[parentId] ?? [];
-    const fromIndex = childLayers.findIndex((layer) => layer.id === layerId);
-    const toIndex = fromIndex + direction;
-
-    if (
-      fromIndex === -1 ||
-      toIndex < 0 ||
-      toIndex >= childLayers.length ||
-      fromIndex === toIndex
-    ) {
-      return;
-    }
-
-    store.reorderSubLayers(parentId, fromIndex, toIndex);
   }
 </script>
 
@@ -264,104 +229,61 @@
     <p class="description description--tiled">{m.basemap_tiled_info()}</p>
   {/if}
 
-  {#if basemapForegroundParentLayers.length > 0}
-    <section
-      class="layer-section"
-      aria-label={m.layers_section_foreground_title()}
-    >
-      <div class="section-header">
-        <div class="section-heading">
-          <h4 class="section-title">{m.layers_section_foreground_title()}</h4>
-          <span class="section-badge section-badge--global">
-            {m.layers_section_badge_global()}
+  {#if isCollectionMode}
+    {#each parentLayers as parentLayer, index (parentLayer.id)}
+      <section
+        class="carte-section"
+        aria-label={`${m.layers_carte_title()} ${index + 1}`}
+      >
+        <Button
+          kind="ghost"
+          size="small"
+          class="carte-header"
+          on:click={() => toggleCarte(index)}
+          aria-expanded={!isCarteCollapsed(index)}
+        >
+          <span class="carte-title">
+            {m.layers_carte_title()}
+            {index + 1} ({parentLayer.name})
           </span>
-        </div>
-        <p class="section-help">{m.layers_section_foreground_description()}</p>
-      </div>
+          {#if isCarteCollapsed(index)}
+            <ChevronDown size={16} />
+          {:else}
+            <ChevronUp size={16} />
+          {/if}
+        </Button>
 
-      <LayersList
-        parentLayers={basemapForegroundParentLayers}
-        childLayersByParent={{}}
-        reorderScope="geographic-foreground"
-        onToggleVisibility={handleToggleVisibility}
-        onOpenSettings={handleOpenSettings}
-        onReorderLayers={handleReorderLayers}
-        onReorderSubLayers={handleReorderSubLayers}
-        onMoveLayer={handleMoveLayer}
-        onMoveSubLayer={handleMoveSubLayer}
-        onRenameLayer={handleRenameLayer}
-        onDuplicateLayer={handleDuplicateLayer}
-        onDeleteLayer={handleDeleteLayer}
-      />
-    </section>
-  {/if}
-
-  {#if visualizationParentLayers.length > 0}
-    <section
-      class="layer-section"
-      aria-label={m.layers_section_visualizations_title()}
-    >
-      <div class="section-header">
-        <div class="section-heading">
-          <h4 class="section-title">
-            {m.layers_section_visualizations_title()}
-          </h4>
-          <span class="section-badge section-badge--reorderable">
-            {m.layers_section_badge_reorderable()}
-          </span>
-        </div>
-        <p class="section-help">
-          {m.layers_section_visualizations_description()}
-        </p>
-      </div>
-
-      <LayersList
-        parentLayers={visualizationParentLayers}
-        childLayersByParent={childLayersByParent}
-        reorderScope="visualization"
-        onToggleVisibility={handleToggleVisibility}
-        onOpenSettings={handleOpenSettings}
-        onReorderLayers={handleReorderLayers}
-        onReorderSubLayers={handleReorderSubLayers}
-        onMoveLayer={handleMoveLayer}
-        onMoveSubLayer={handleMoveSubLayer}
-        onRenameLayer={handleRenameLayer}
-        onDuplicateLayer={handleDuplicateLayer}
-        onDeleteLayer={handleDeleteLayer}
-      />
-    </section>
-  {/if}
-
-  {#if basemapBackgroundParentLayers.length > 0}
-    <section
-      class="layer-section"
-      aria-label={m.layers_section_background_title()}
-    >
-      <div class="section-header">
-        <div class="section-heading">
-          <h4 class="section-title">{m.layers_section_background_title()}</h4>
-          <span class="section-badge section-badge--global">
-            {m.layers_section_badge_global()}
-          </span>
-        </div>
-        <p class="section-help">{m.layers_section_background_description()}</p>
-      </div>
-
-      <LayersList
-        parentLayers={basemapBackgroundParentLayers}
-        childLayersByParent={{}}
-        reorderScope="geographic-background"
-        onToggleVisibility={handleToggleVisibility}
-        onOpenSettings={handleOpenSettings}
-        onReorderLayers={handleReorderLayers}
-        onReorderSubLayers={handleReorderSubLayers}
-        onMoveLayer={handleMoveLayer}
-        onMoveSubLayer={handleMoveSubLayer}
-        onRenameLayer={handleRenameLayer}
-        onDuplicateLayer={handleDuplicateLayer}
-        onDeleteLayer={handleDeleteLayer}
-      />
-    </section>
+        {#if !isCarteCollapsed(index)}
+          <LayersList
+            parentLayers={[parentLayer]}
+            childLayersByParent={childLayersByParent}
+            reorderScope="visualization"
+            onToggleVisibility={handleToggleVisibility}
+            onOpenSettings={handleOpenSettings}
+            onReorderLayers={handleReorderLayers}
+            onReorderSubLayers={handleReorderSubLayers}
+            onMoveLayer={handleMoveLayer}
+            onRenameLayer={handleRenameLayer}
+            onDuplicateLayer={handleDuplicateLayer}
+            onDeleteLayer={handleDeleteLayer}
+          />
+        {/if}
+      </section>
+    {/each}
+  {:else}
+    <LayersList
+      parentLayers={parentLayers}
+      childLayersByParent={childLayersByParent}
+      reorderScope="visualization"
+      onToggleVisibility={handleToggleVisibility}
+      onOpenSettings={handleOpenSettings}
+      onReorderLayers={handleReorderLayers}
+      onReorderSubLayers={handleReorderSubLayers}
+      onMoveLayer={handleMoveLayer}
+      onRenameLayer={handleRenameLayer}
+      onDuplicateLayer={handleDuplicateLayer}
+      onDeleteLayer={handleDeleteLayer}
+    />
   {/if}
 </div>
 
@@ -405,73 +327,6 @@
     gap: var(--cds-spacing-05);
   }
 
-  .layer-section {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-04);
-  }
-
-  .layer-section + .layer-section {
-    padding-top: var(--cds-spacing-05);
-    border-top: 1px solid var(--cds-border-subtle);
-  }
-
-  .section-header {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-02);
-  }
-
-  .section-heading {
-    display: flex;
-    align-items: center;
-    gap: var(--cds-spacing-03);
-    flex-wrap: wrap;
-  }
-
-  .section-title {
-    margin: 0;
-    font-size: 14px;
-    line-height: 18px;
-    letter-spacing: 0.16px;
-    font-weight: 600;
-    color: var(--cds-text-primary);
-  }
-
-  .section-help {
-    margin: 0;
-    font-size: 12px;
-    line-height: 16px;
-    letter-spacing: 0.32px;
-    color: var(--cds-text-secondary);
-  }
-
-  .section-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 20px;
-    padding: 0 8px;
-    border-radius: 999px;
-    border: 1px solid transparent;
-    font-size: 11px;
-    line-height: 1;
-    letter-spacing: 0.32px;
-    font-weight: 600;
-    white-space: nowrap;
-  }
-
-  .section-badge--global {
-    background: var(--cds-button-primary);
-    color: var(--cds-text-on-color);
-  }
-
-  .section-badge--reorderable {
-    background: var(--cds-layer-hover);
-    border-color: var(--cds-border-subtle);
-    color: var(--cds-text-secondary);
-  }
-
   .description {
     font-size: 12px;
     line-height: 16px;
@@ -482,5 +337,36 @@
 
   .description--tiled {
     color: var(--cds-text-secondary);
+  }
+
+  .carte-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-03);
+  }
+
+  .carte-section + .carte-section {
+    padding-top: var(--cds-spacing-04);
+    border-top: 1px solid var(--cds-border-subtle);
+  }
+
+  .carte-section :global(.carte-header) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    max-width: 100%;
+    padding: var(--cds-spacing-03) var(--cds-spacing-03);
+    color: var(--cds-text-primary);
+    font-size: 14px;
+    line-height: 18px;
+    letter-spacing: 0.16px;
+    font-weight: 400;
+  }
+
+  .carte-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 </style>

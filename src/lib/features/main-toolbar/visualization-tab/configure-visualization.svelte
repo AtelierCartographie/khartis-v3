@@ -1,5 +1,6 @@
 <script lang="ts">
   import { untrack } from 'svelte';
+  import { SvelteMap } from 'svelte/reactivity';
   import * as m from '$lib/paraglide/messages';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import {
@@ -8,17 +9,32 @@
     ClassificationMethod,
     DEFAULT_CATEGORICAL_COLORS,
     PrimitiveFilterType,
+    getEnabledPrimitiveFilters,
+    getLinePrimitive,
+    getPolygonPrimitive,
+    getPrimitiveCategoryColumn,
+    getPrimitiveClassification,
+    getPrimitiveSizeColumn,
+    getPrimitiveValueColumn,
+    getSymbolPrimitive,
+    getTextPrimitive,
     resolveAllowedPrimitiveFilters,
+    type ClassificationConfig,
+    type LinePrimitiveConfig,
+    type MissingDataConfig,
+    type PolygonPrimitiveConfig,
+    type PrimitiveFilter,
+    type SymbolPrimitiveConfig,
+    type TextPrimitiveConfig,
+    type TextSecondaryLabelsConfig,
     type VisualizationConfig,
     type VisualizationModes,
-    type PrimitiveFilter,
-    type MissingDataConfig,
-    type ClassificationConfig,
     type VizDataFilter
   } from '$lib/features/commons/store/visualization.store.svelte';
   import {
     applyPaletteInversion,
     calculateBreaks,
+    computeDivergingSplit,
     generateColorsForBreaks
   } from '$lib/features/commons/services/classification.service';
   import {
@@ -40,56 +56,61 @@
     ColorMode,
     DEFAULT_COLORS,
     FillMode,
-    ProportionalType,
     StrokeMode,
     SymbolMode,
     ThicknessMode,
     VISUALIZATION_DEFAULTS
   } from '../constants';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { Duck } from '$lib/features/duckdb';
-  import { COLUMN_TYPE_GEOMETRY } from '$lib/features/commons/constants/data.constants';
+  import {
+    COLUMN_TYPE_GEOMETRY,
+    GEO_COLUMN_TYPE
+  } from '$lib/features/commons/constants/data.constants';
   import { SettingsAdjust } from 'carbon-icons-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import LinesConfig from './components/lines-config.svelte';
   import PolygonsConfig from './components/polygons-config.svelte';
   import SymbolsConfig from './components/symbols-config.svelte';
   import TextsConfig from './components/texts-config.svelte';
+  import YearFilter from './components/year-filter.svelte';
+  import { isLikelyYearColumn } from './components/year-filter.utils';
+
+  const CORE_PRIMITIVES = [
+    PrimitiveFilterType.POINT,
+    PrimitiveFilterType.LINE,
+    PrimitiveFilterType.POLYGON
+  ] as const;
+  const CLASSIFIABLE_PRIMITIVES = [
+    PrimitiveFilterType.POLYGON,
+    PrimitiveFilterType.POINT,
+    PrimitiveFilterType.LINE,
+    PrimitiveFilterType.TEXT
+  ] as const;
+
+  type ClassifiablePrimitive = (typeof CLASSIFIABLE_PRIMITIVES)[number];
 
   let selectedViz = $derived(visualizationStore.selectedVisualization);
-  let lastComputedKey = '';
+  const lastCompletedBreaksKeyByPrimitive = new SvelteMap<
+    ClassifiablePrimitive,
+    string
+  >();
+  const inFlightBreaksKeyByPrimitive = new SvelteMap<
+    ClassifiablePrimitive,
+    string
+  >();
   let computeRequestCounter = 0;
 
-  function usesCategoricalClassification(
-    visualization: VisualizationConfig | undefined
-  ): boolean {
-    if (!visualization?.modes) {
-      return false;
+  function getSelectedDataset() {
+    if (!selectedViz?.datasetId) {
+      return null;
     }
 
     return (
-      visualization.modes.fill === FillMode.CATEGORIES ||
-      visualization.modes.color === ColorMode.CATEGORIES ||
-      visualization.modes.symbol === SymbolMode.CATEGORIES ||
-      visualization.modes.stroke === StrokeMode.CATEGORIES
-    );
-  }
-
-  function usesBreakClassification(
-    visualization: VisualizationConfig | undefined
-  ): boolean {
-    if (!visualization?.modes) {
-      return false;
-    }
-
-    return (
-      visualization.modes.fill === FillMode.CLASSES ||
-      visualization.modes.color === ColorMode.CLASSES ||
-      visualization.modes.symbol === SymbolMode.CLASSES ||
-      visualization.modes.stroke === StrokeMode.CLASSES ||
-      visualization.modes.thickness === ThicknessMode.CLASSES
+      datasetsStore.datasets.find(
+        (dataset) => dataset.id === selectedViz.datasetId
+      ) ?? null
     );
   }
 
@@ -103,24 +124,46 @@
 
   const hasGeometry = $derived.by(() => {
     const dataset = getSelectedDataset() ?? datasetsStore.selectedDataset;
-    if (!dataset?.columns) return false;
-    return (
-      Boolean(dataset.geometry) ||
-      dataset.columns.some((col) => col.type === COLUMN_TYPE_GEOMETRY)
-    );
-  });
-
-  function getSelectedDataset() {
-    if (!selectedViz?.datasetId) {
-      return null;
+    if (!dataset) {
+      return false;
     }
 
-    return (
-      datasetsStore.datasets.find(
-        (dataset) => dataset.id === selectedViz.datasetId
-      ) ?? null
+    const duckDataset = dataset.sourceFileId
+      ? duckDBOrchestrator.getDatasetBySourceFile(dataset.sourceFileId)
+      : null;
+
+    if (
+      dataset.geometry ||
+      dataset.joinedBasemap ||
+      dataset.geoColumn ||
+      duckDataset?.joinedBasemap ||
+      duckDataset?.gpsMode ||
+      dataset.columns?.some((col) => col.type === COLUMN_TYPE_GEOMETRY)
+    ) {
+      return true;
+    }
+
+    const detectedGeoColumns = dataset.geoDetection?.geoColumns ?? [];
+    const hasLatitude = detectedGeoColumns.some(
+      (column) => column.type === GEO_COLUMN_TYPE.LATITUDE
     );
-  }
+    const hasLongitude = detectedGeoColumns.some(
+      (column) => column.type === GEO_COLUMN_TYPE.LONGITUDE
+    );
+
+    return hasLatitude && hasLongitude;
+  });
+
+  const hasYearDimension = $derived.by(() => {
+    const dataset = getSelectedDataset() ?? datasetsStore.selectedDataset;
+    if (!dataset?.columns) {
+      return false;
+    }
+
+    const rows = dataset.originalData?.data ?? dataset.data ?? [];
+
+    return dataset.columns.some((column) => isLikelyYearColumn(column, rows));
+  });
 
   const availablePrimitiveFilters = $derived.by(() => {
     const dataset = getSelectedDataset();
@@ -141,8 +184,108 @@
     availablePrimitiveFilters.includes(PrimitiveFilterType.LINE)
   );
 
+  function usesCategoricalClassification(
+    visualization: VisualizationConfig | undefined,
+    primitive: ClassifiablePrimitive
+  ): boolean {
+    if (!visualization) {
+      return false;
+    }
+
+    switch (primitive) {
+      case PrimitiveFilterType.POLYGON: {
+        const polygon = getPolygonPrimitive(visualization);
+        return (
+          polygon?.fillMode === FillMode.CATEGORIES ||
+          polygon?.strokeMode === StrokeMode.CATEGORIES
+        );
+      }
+
+      case PrimitiveFilterType.POINT: {
+        const symbol = getSymbolPrimitive(visualization);
+        return (
+          symbol?.mode === SymbolMode.CATEGORIES ||
+          symbol?.fillMode === FillMode.CATEGORIES ||
+          symbol?.strokeMode === StrokeMode.CATEGORIES
+        );
+      }
+
+      case PrimitiveFilterType.LINE: {
+        return (
+          getLinePrimitive(visualization)?.colorMode === ColorMode.CATEGORIES
+        );
+      }
+
+      case PrimitiveFilterType.TEXT: {
+        return (
+          getTextPrimitive(visualization)?.colorMode === ColorMode.CATEGORIES
+        );
+      }
+    }
+  }
+
+  function usesBreakClassification(
+    visualization: VisualizationConfig | undefined,
+    primitive: ClassifiablePrimitive
+  ): boolean {
+    if (!visualization) {
+      return false;
+    }
+
+    switch (primitive) {
+      case PrimitiveFilterType.POLYGON: {
+        const polygon = getPolygonPrimitive(visualization);
+        return (
+          polygon?.fillMode === FillMode.CLASSES ||
+          polygon?.strokeMode === StrokeMode.CLASSES
+        );
+      }
+
+      case PrimitiveFilterType.POINT: {
+        const symbol = getSymbolPrimitive(visualization);
+        return (
+          symbol?.mode === SymbolMode.CLASSES ||
+          symbol?.fillMode === FillMode.CLASSES ||
+          symbol?.strokeMode === StrokeMode.CLASSES
+        );
+      }
+
+      case PrimitiveFilterType.LINE: {
+        const line = getLinePrimitive(visualization);
+        return (
+          line?.colorMode === ColorMode.CLASSES ||
+          line?.thicknessMode === ThicknessMode.CLASSES
+        );
+      }
+
+      case PrimitiveFilterType.TEXT: {
+        return getTextPrimitive(visualization)?.colorMode === ColorMode.CLASSES;
+      }
+    }
+  }
+
+  function updatePrimitiveClassificationState(
+    primitive: ClassifiablePrimitive,
+    updates: Partial<ClassificationConfig>
+  ): void {
+    if (!selectedViz?.id) {
+      return;
+    }
+
+    if (primitive === PrimitiveFilterType.POLYGON) {
+      visualizationStore.updateClassification(selectedViz.id, updates);
+      return;
+    }
+
+    visualizationStore.updatePrimitiveClassification(
+      selectedViz.id,
+      primitive,
+      updates
+    );
+  }
+
   function fetchCategoryLabels(
-    vizId: string,
+    primitive: ClassifiablePrimitive,
     column: string,
     tableName: string,
     useUntrack = false
@@ -158,250 +301,1115 @@
         if (labels.length > 0) {
           if (useUntrack) {
             untrack(() =>
-              visualizationStore.updateClassification(vizId, { labels })
+              updatePrimitiveClassificationState(primitive, { labels })
             );
           } else {
-            visualizationStore.updateClassification(vizId, { labels });
+            updatePrimitiveClassificationState(primitive, { labels });
           }
         }
       })
-      .catch((e) =>
+      .catch((error) =>
         logger.warn(
           'Failed to fetch category labels',
           LogCategory.VISUALIZATION,
-          e
+          error
         )
       );
   }
 
-  function handleInvertPalette() {
-    if (selectedViz?.id) {
-      visualizationStore.invertPalette(selectedViz.id);
+  function invertPrimitivePalette(primitive: ClassifiablePrimitive): void {
+    const classification = getPrimitiveClassification(selectedViz, primitive);
+    if (!classification?.colors?.length) {
+      return;
+    }
+
+    updatePrimitiveClassificationState(primitive, {
+      colors: [...classification.colors].reverse(),
+      inverted: !(classification.inverted ?? false)
+    });
+  }
+
+  function buildNextPrimitiveFilters(
+    overrides: Partial<Record<(typeof CORE_PRIMITIVES)[number], boolean>> = {}
+  ): PrimitiveFilter[] {
+    return CORE_PRIMITIVES.filter((primitive) => {
+      const override = overrides[primitive];
+      if (override !== undefined) {
+        return override;
+      }
+
+      switch (primitive) {
+        case PrimitiveFilterType.POINT:
+          return getSymbolPrimitive(selectedViz)?.enabled ?? false;
+        case PrimitiveFilterType.LINE:
+          return getLinePrimitive(selectedViz)?.enabled ?? false;
+        case PrimitiveFilterType.POLYGON:
+          return getPolygonPrimitive(selectedViz)?.enabled ?? false;
+      }
+    });
+  }
+
+  function updateSelectedVisualization(
+    updates: Partial<VisualizationConfig>,
+    afterUpdate?: (nextVisualization: VisualizationConfig) => void
+  ): void {
+    if (!selectedViz?.id) {
+      return;
+    }
+
+    const visualizationId = selectedViz.id;
+    visualizationStore.updateVisualization(visualizationId, updates);
+
+    const nextVisualization = visualizationStore.visualizations.find(
+      (item) => item.id === visualizationId
+    );
+    if (nextVisualization && afterUpdate) {
+      afterUpdate(nextVisualization);
     }
   }
 
-  function handleStyleChange(updates: Partial<VisualizationConfig['style']>) {
-    if (selectedViz?.id) {
-      visualizationStore.updateVisualization(selectedViz.id, {
-        style: { ...selectedViz.style, ...updates }
-      });
+  function findAutoValueColumn(
+    reservedColumns: Array<string | undefined>
+  ): string | undefined {
+    const reserved = new Set(
+      reservedColumns.filter((name): name is string => Boolean(name))
+    );
+    const isIdLikeColumn = (name: string): boolean =>
+      /^(ogc_fid|fid|id|gid|objectid|oid|__id__|__feature_id__)$/i.test(
+        name.trim()
+      );
+
+    return dataFieldItems.find(
+      (item) =>
+        item.type === 'number' &&
+        !reserved.has(item.text) &&
+        !isIdLikeColumn(item.text)
+    )?.text;
+  }
+
+  function findAutoCategoryColumn(
+    reservedColumns: Array<string | undefined>
+  ): string | undefined {
+    const reserved = new Set(
+      reservedColumns.filter((name): name is string => Boolean(name))
+    );
+
+    return dataFieldItems.find(
+      (item) => item.type === 'text' && !reserved.has(item.text)
+    )?.text;
+  }
+
+  function getReservedColumnsForValue(
+    visualization: VisualizationConfig,
+    primitive: ClassifiablePrimitive
+  ): Array<string | undefined> {
+    switch (primitive) {
+      case PrimitiveFilterType.POLYGON: {
+        const polygon = getPolygonPrimitive(visualization);
+        return [polygon?.categoryColumn];
+      }
+
+      case PrimitiveFilterType.POINT: {
+        const symbol = getSymbolPrimitive(visualization);
+        return [symbol?.categoryColumn, symbol?.sizeColumn];
+      }
+
+      case PrimitiveFilterType.LINE: {
+        const line = getLinePrimitive(visualization);
+        return [line?.categoryColumn, line?.sizeColumn];
+      }
+
+      case PrimitiveFilterType.TEXT: {
+        const text = getTextPrimitive(visualization);
+        return [
+          text?.labelColumn,
+          text?.secondaryLabels.labelColumn,
+          text?.categoryColumn
+        ];
+      }
     }
   }
 
-  function handleModesChange(updates: Partial<VisualizationModes>) {
-    if (selectedViz?.id) {
-      const nextModes = {
-        ...selectedViz.modes,
-        ...updates
-      } as VisualizationModes;
-      const nextViz = {
-        ...selectedViz,
-        modes: nextModes
-      } as VisualizationConfig;
+  function getReservedColumnsForCategory(
+    visualization: VisualizationConfig,
+    primitive: ClassifiablePrimitive
+  ): Array<string | undefined> {
+    switch (primitive) {
+      case PrimitiveFilterType.POLYGON: {
+        const polygon = getPolygonPrimitive(visualization);
+        return [polygon?.valueColumn];
+      }
 
-      visualizationStore.updateModes(selectedViz.id, updates);
+      case PrimitiveFilterType.POINT: {
+        const symbol = getSymbolPrimitive(visualization);
+        return [symbol?.valueColumn, symbol?.sizeColumn];
+      }
 
-      if (
-        selectedViz.mapping.valueColumn &&
-        usesBreakClassification(nextViz) &&
-        (!selectedViz.classification?.method ||
-          !selectedViz.classification?.numClasses)
-      ) {
-        visualizationStore.updateClassification(selectedViz.id, {
-          method: ClassificationMethod.QUANTILES,
+      case PrimitiveFilterType.LINE: {
+        const line = getLinePrimitive(visualization);
+        return [line?.valueColumn, line?.sizeColumn];
+      }
+
+      case PrimitiveFilterType.TEXT: {
+        const text = getTextPrimitive(visualization);
+        return [
+          text?.labelColumn,
+          text?.secondaryLabels.labelColumn,
+          text?.valueColumn
+        ];
+      }
+    }
+  }
+
+  function ensurePrimitiveClassificationDefaults(
+    primitive: ClassifiablePrimitive,
+    visualization: VisualizationConfig
+  ): void {
+    const classification = getPrimitiveClassification(visualization, primitive);
+
+    if (usesBreakClassification(visualization, primitive)) {
+      if (!classification?.method || !classification?.numClasses) {
+        updatePrimitiveClassificationState(primitive, {
+          method: ClassificationMethod.JENKS,
           classes: 5,
           numClasses: 5
         });
-        computeBreaksForVisualization('modesChange:classes');
       }
+      return;
+    }
 
-      if (
-        nextViz.mapping.categoryColumn &&
-        usesCategoricalClassification(nextViz)
-      ) {
-        const vizId = selectedViz.id;
-        visualizationStore.updateClassification(vizId, {
-          colors: [...DEFAULT_CATEGORICAL_COLORS],
-          inverted: false,
-          labels: []
+    if (
+      usesCategoricalClassification(visualization, primitive) &&
+      (!classification?.colors?.length ||
+        classification.labels === undefined ||
+        classification.labels.length === 0)
+    ) {
+      updatePrimitiveClassificationState(primitive, {
+        colors: [...DEFAULT_CATEGORICAL_COLORS],
+        inverted: classification?.inverted ?? false,
+        labels: classification?.labels ?? []
+      });
+    }
+  }
+
+  function ensureAutoColumns(
+    primitive: ClassifiablePrimitive,
+    visualization: VisualizationConfig
+  ): void {
+    const valueColumn = getPrimitiveValueColumn(visualization, primitive);
+    const categoryColumn = getPrimitiveCategoryColumn(visualization, primitive);
+
+    if (usesBreakClassification(visualization, primitive) && !valueColumn) {
+      const autoValueColumn = findAutoValueColumn(
+        getReservedColumnsForValue(visualization, primitive)
+      );
+      if (autoValueColumn) {
+        applyPrimitiveMappingUpdate(primitive, {
+          valueColumn: autoValueColumn
         });
-        const categoryColumn = nextViz.mapping.categoryColumn;
-        const dataset = getSelectedDataset();
-        if (categoryColumn && dataset?.tableName) {
-          fetchCategoryLabels(vizId, categoryColumn, dataset.tableName);
-        }
       }
     }
+
+    if (
+      usesCategoricalClassification(visualization, primitive) &&
+      !categoryColumn
+    ) {
+      const autoCategoryColumn = findAutoCategoryColumn(
+        getReservedColumnsForCategory(visualization, primitive)
+      );
+      if (autoCategoryColumn) {
+        applyPrimitiveMappingUpdate(primitive, {
+          categoryColumn: autoCategoryColumn
+        });
+      }
+    }
+  }
+
+  function getLegendSubtitleForPrimitive(
+    visualization: VisualizationConfig,
+    primitive: ClassifiablePrimitive
+  ): string {
+    switch (primitive) {
+      case PrimitiveFilterType.POLYGON:
+        return (
+          getPrimitiveValueColumn(visualization, primitive) ??
+          getPrimitiveCategoryColumn(visualization, primitive) ??
+          ''
+        );
+
+      case PrimitiveFilterType.POINT:
+        return (
+          getPrimitiveValueColumn(visualization, primitive) ??
+          getPrimitiveSizeColumn(visualization, primitive) ??
+          getPrimitiveCategoryColumn(visualization, primitive) ??
+          ''
+        );
+
+      case PrimitiveFilterType.LINE:
+        return (
+          getPrimitiveSizeColumn(visualization, primitive) ??
+          getPrimitiveValueColumn(visualization, primitive) ??
+          getPrimitiveCategoryColumn(visualization, primitive) ??
+          ''
+        );
+
+      case PrimitiveFilterType.TEXT: {
+        const text = getTextPrimitive(visualization);
+        return (
+          text?.valueColumn ?? text?.categoryColumn ?? text?.labelColumn ?? ''
+        );
+      }
+    }
+  }
+
+  function syncLegendSubtitleAfterMappingChange(
+    primitive: ClassifiablePrimitive,
+    previousVisualization: VisualizationConfig,
+    nextVisualization: VisualizationConfig
+  ): void {
+    const previousAutoSubtitle = getLegendSubtitleForPrimitive(
+      previousVisualization,
+      primitive
+    );
+    const nextAutoSubtitle = getLegendSubtitleForPrimitive(
+      nextVisualization,
+      primitive
+    );
+    const legendItem = getLegendState().items.find(
+      (item) => item.variableId === nextVisualization.id
+    );
+    const usesAutomaticSubtitle =
+      legendItem?.subtitleMode === 'auto' ||
+      (!legendItem?.subtitleMode &&
+        (!legendItem?.subtitle ||
+          legendItem.subtitle === previousAutoSubtitle));
+
+    if (
+      legendItem &&
+      usesAutomaticSubtitle &&
+      legendItem.subtitle !== nextAutoSubtitle
+    ) {
+      legendActions.updateLegendItem(legendItem.id, {
+        subtitle: nextAutoSubtitle,
+        subtitleMode: 'auto'
+      });
+    }
+  }
+
+  function applyPrimitiveMappingUpdate(
+    primitive: ClassifiablePrimitive,
+    updates: Partial<VisualizationConfig['mapping']>
+  ): void {
+    if (!selectedViz) {
+      return;
+    }
+
+    const previousVisualization = selectedViz;
+
+    switch (primitive) {
+      case PrimitiveFilterType.POLYGON: {
+        const polygon = getPolygonPrimitive(selectedViz);
+        if (!polygon) return;
+
+        updateSelectedVisualization(
+          {
+            polygon: {
+              ...polygon,
+              ...(Object.prototype.hasOwnProperty.call(updates, 'valueColumn')
+                ? { valueColumn: updates.valueColumn }
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(
+                updates,
+                'categoryColumn'
+              )
+                ? { categoryColumn: updates.categoryColumn }
+                : {})
+            }
+          },
+          (nextVisualization) => {
+            syncLegendSubtitleAfterMappingChange(
+              primitive,
+              previousVisualization,
+              nextVisualization
+            );
+            ensurePrimitiveClassificationDefaults(primitive, nextVisualization);
+          }
+        );
+        return;
+      }
+
+      case PrimitiveFilterType.POINT: {
+        const symbol = getSymbolPrimitive(selectedViz);
+        if (!symbol) return;
+
+        updateSelectedVisualization(
+          {
+            symbol: {
+              ...symbol,
+              ...(Object.prototype.hasOwnProperty.call(updates, 'valueColumn')
+                ? { valueColumn: updates.valueColumn }
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(
+                updates,
+                'categoryColumn'
+              )
+                ? { categoryColumn: updates.categoryColumn }
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(updates, 'sizeColumn')
+                ? { sizeColumn: updates.sizeColumn }
+                : {})
+            }
+          },
+          (nextVisualization) => {
+            syncLegendSubtitleAfterMappingChange(
+              primitive,
+              previousVisualization,
+              nextVisualization
+            );
+            ensurePrimitiveClassificationDefaults(primitive, nextVisualization);
+          }
+        );
+        return;
+      }
+
+      case PrimitiveFilterType.LINE: {
+        const line = getLinePrimitive(selectedViz);
+        if (!line) return;
+
+        updateSelectedVisualization(
+          {
+            line: {
+              ...line,
+              ...(Object.prototype.hasOwnProperty.call(updates, 'valueColumn')
+                ? { valueColumn: updates.valueColumn }
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(
+                updates,
+                'categoryColumn'
+              )
+                ? { categoryColumn: updates.categoryColumn }
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(updates, 'sizeColumn')
+                ? { sizeColumn: updates.sizeColumn }
+                : {})
+            }
+          },
+          (nextVisualization) => {
+            syncLegendSubtitleAfterMappingChange(
+              primitive,
+              previousVisualization,
+              nextVisualization
+            );
+            ensurePrimitiveClassificationDefaults(primitive, nextVisualization);
+          }
+        );
+        return;
+      }
+
+      case PrimitiveFilterType.TEXT: {
+        const text = getTextPrimitive(selectedViz);
+        if (!text) return;
+
+        const secondaryLabelColumnProvided =
+          Object.prototype.hasOwnProperty.call(updates, 'secondaryLabelColumn');
+        const nextSecondaryLabelColumn = secondaryLabelColumnProvided
+          ? updates.secondaryLabelColumn
+          : text.secondaryLabels.labelColumn;
+
+        updateSelectedVisualization(
+          {
+            text: {
+              ...text,
+              ...(Object.prototype.hasOwnProperty.call(updates, 'labelColumn')
+                ? { labelColumn: updates.labelColumn }
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(updates, 'valueColumn')
+                ? { valueColumn: updates.valueColumn }
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(
+                updates,
+                'categoryColumn'
+              )
+                ? { categoryColumn: updates.categoryColumn }
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(
+                updates,
+                'labelColumn'
+              ) && updates.labelColumn === undefined
+                ? {
+                    secondaryLabels: {
+                      ...text.secondaryLabels,
+                      enabled: false,
+                      labelColumn: undefined
+                    }
+                  }
+                : secondaryLabelColumnProvided
+                  ? {
+                      secondaryLabels: {
+                        ...text.secondaryLabels,
+                        enabled:
+                          text.secondaryLabels.enabled &&
+                          Boolean(nextSecondaryLabelColumn),
+                        labelColumn: nextSecondaryLabelColumn
+                      }
+                    }
+                  : {})
+            }
+          },
+          (nextVisualization) => {
+            syncLegendSubtitleAfterMappingChange(
+              primitive,
+              previousVisualization,
+              nextVisualization
+            );
+            ensurePrimitiveClassificationDefaults(primitive, nextVisualization);
+          }
+        );
+      }
+    }
+  }
+
+  function handlePolygonChange(updates: Partial<PolygonPrimitiveConfig>) {
+    const polygon = getPolygonPrimitive(selectedViz);
+    if (!polygon) {
+      return;
+    }
+
+    updateSelectedVisualization({
+      polygon: { ...polygon, ...updates },
+      ...(Object.prototype.hasOwnProperty.call(updates, 'enabled')
+        ? {
+            primitiveFilters: buildNextPrimitiveFilters({
+              [PrimitiveFilterType.POLYGON]: updates.enabled ?? polygon.enabled
+            })
+          }
+        : {})
+    });
+  }
+
+  function handlePolygonStyleChange(
+    updates: Partial<VisualizationConfig['style']>
+  ) {
+    const polygon = getPolygonPrimitive(selectedViz);
+    if (!polygon) {
+      return;
+    }
+
+    handlePolygonChange({
+      ...(Object.prototype.hasOwnProperty.call(updates, 'fillColor')
+        ? { fillColor: updates.fillColor }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'fillOpacity')
+        ? { fillOpacity: updates.fillOpacity ?? polygon.fillOpacity }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'strokeColor')
+        ? { strokeColor: updates.strokeColor }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'strokeWidth')
+        ? { strokeWidth: updates.strokeWidth ?? polygon.strokeWidth }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'strokeOpacity')
+        ? { strokeOpacity: updates.strokeOpacity ?? polygon.strokeOpacity }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'strokeDashed')
+        ? { strokeDashed: updates.strokeDashed ?? polygon.strokeDashed }
+        : {})
+    });
+  }
+
+  function handlePolygonModesChange(updates: Partial<VisualizationModes>) {
+    const polygon = getPolygonPrimitive(selectedViz);
+    if (!polygon) {
+      return;
+    }
+
+    updateSelectedVisualization(
+      {
+        polygon: {
+          ...polygon,
+          ...(Object.prototype.hasOwnProperty.call(updates, 'fill')
+            ? { fillMode: updates.fill ?? polygon.fillMode }
+            : {}),
+          ...(Object.prototype.hasOwnProperty.call(updates, 'stroke')
+            ? { strokeMode: updates.stroke ?? polygon.strokeMode }
+            : {})
+        }
+      },
+      (nextVisualization) => {
+        ensurePrimitiveClassificationDefaults(
+          PrimitiveFilterType.POLYGON,
+          nextVisualization
+        );
+        ensureAutoColumns(PrimitiveFilterType.POLYGON, nextVisualization);
+      }
+    );
+  }
+
+  function handlePolygonMissingDataChange(updates: Partial<MissingDataConfig>) {
+    const polygon = getPolygonPrimitive(selectedViz);
+    if (!polygon?.missingData) {
+      return;
+    }
+
+    handlePolygonChange({
+      missingData: { ...polygon.missingData, ...updates }
+    });
+  }
+
+  function handlePolygonClassificationChange(
+    updates: Partial<ClassificationConfig>
+  ) {
+    updatePrimitiveClassificationState(PrimitiveFilterType.POLYGON, updates);
+  }
+
+  function handlePolygonMappingChange(
+    updates: Partial<VisualizationConfig['mapping']>
+  ) {
+    applyPrimitiveMappingUpdate(PrimitiveFilterType.POLYGON, updates);
+  }
+
+  function handlePolygonPaletteInvert() {
+    invertPrimitivePalette(PrimitiveFilterType.POLYGON);
+  }
+
+  function handleSymbolChange(updates: Partial<SymbolPrimitiveConfig>) {
+    const symbol = getSymbolPrimitive(selectedViz);
+    if (!symbol) {
+      return;
+    }
+
+    updateSelectedVisualization({
+      symbol: { ...symbol, ...updates },
+      ...(Object.prototype.hasOwnProperty.call(updates, 'enabled')
+        ? {
+            primitiveFilters: buildNextPrimitiveFilters({
+              [PrimitiveFilterType.POINT]: updates.enabled ?? symbol.enabled
+            })
+          }
+        : {})
+    });
+  }
+
+  function handleSymbolStyleChange(
+    updates: Partial<VisualizationConfig['style']>
+  ) {
+    const symbol = getSymbolPrimitive(selectedViz);
+    if (!symbol) {
+      return;
+    }
+
+    handleSymbolChange({
+      ...(Object.prototype.hasOwnProperty.call(updates, 'symbolFillColor')
+        ? { fillColor: updates.symbolFillColor }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'fillColorB')
+        ? { fillColorB: updates.fillColorB }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'strokeColor')
+        ? { strokeColor: updates.strokeColor }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'strokeWidth')
+        ? { strokeWidth: updates.strokeWidth ?? symbol.strokeWidth }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'strokeOpacity')
+        ? { strokeOpacity: updates.strokeOpacity ?? symbol.strokeOpacity }
+        : {})
+    });
+  }
+
+  function handleSymbolModesChange(updates: Partial<VisualizationModes>) {
+    const symbol = getSymbolPrimitive(selectedViz);
+    if (!symbol) {
+      return;
+    }
+
+    updateSelectedVisualization(
+      {
+        symbol: {
+          ...symbol,
+          ...(Object.prototype.hasOwnProperty.call(updates, 'symbol')
+            ? { mode: updates.symbol ?? symbol.mode }
+            : {}),
+          ...(Object.prototype.hasOwnProperty.call(updates, 'fill')
+            ? { fillMode: updates.fill ?? symbol.fillMode }
+            : {}),
+          ...(Object.prototype.hasOwnProperty.call(updates, 'stroke')
+            ? { strokeMode: updates.stroke ?? symbol.strokeMode }
+            : {}),
+          ...(Object.prototype.hasOwnProperty.call(updates, 'proportionalType')
+            ? {
+                proportionalType:
+                  updates.proportionalType ?? symbol.proportionalType
+              }
+            : {}),
+          ...(Object.prototype.hasOwnProperty.call(updates, 'categoryShape')
+            ? { categoryShape: updates.categoryShape ?? symbol.categoryShape }
+            : {})
+        }
+      },
+      (nextVisualization) => {
+        ensurePrimitiveClassificationDefaults(
+          PrimitiveFilterType.POINT,
+          nextVisualization
+        );
+        ensureAutoColumns(PrimitiveFilterType.POINT, nextVisualization);
+      }
+    );
   }
 
   function handleSymbolsChange(
-    updates: Partial<VisualizationConfig['symbols']>
+    updates: Partial<VisualizationConfig['symbols']> | undefined
   ) {
-    if (selectedViz?.id) {
-      visualizationStore.updateSymbols(selectedViz.id, updates);
+    const symbol = getSymbolPrimitive(selectedViz);
+    if (!symbol || !updates) {
+      return;
     }
+
+    handleSymbolChange({
+      ...(Object.prototype.hasOwnProperty.call(updates, 'type')
+        ? { shape: updates.type ?? symbol.shape }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'size')
+        ? { size: updates.size ?? symbol.size }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'minSize')
+        ? { minSize: updates.minSize ?? symbol.minSize }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'maxSize')
+        ? { maxSize: updates.maxSize ?? symbol.maxSize }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'sizeScale')
+        ? { sizeScale: updates.sizeScale ?? symbol.sizeScale }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'opacity')
+        ? { opacity: updates.opacity ?? symbol.opacity }
+        : {})
+    });
   }
 
-  function handleMissingDataChange(updates: Partial<MissingDataConfig>) {
-    if (selectedViz?.id) {
-      visualizationStore.updateMissingData(selectedViz.id, updates);
+  function handleSymbolMissingDataChange(updates: Partial<MissingDataConfig>) {
+    const symbol = getSymbolPrimitive(selectedViz);
+    if (!symbol?.missingData) {
+      return;
     }
+
+    handleSymbolChange({
+      missingData: { ...symbol.missingData, ...updates }
+    });
   }
 
-  function handleClassificationChange(updates: Partial<ClassificationConfig>) {
-    if (selectedViz?.id) {
-      visualizationStore.updateClassification(selectedViz.id, updates);
-    }
+  function handleSymbolClassificationChange(
+    updates: Partial<ClassificationConfig>
+  ) {
+    updatePrimitiveClassificationState(PrimitiveFilterType.POINT, updates);
   }
 
-  function handleMappingChange(
+  function handleSymbolMappingChange(
     updates: Partial<VisualizationConfig['mapping']>
   ) {
-    if (selectedViz?.id) {
-      const previousAutoSubtitle =
-        selectedViz.mapping.valueColumn ??
-        selectedViz.mapping.sizeColumn ??
-        selectedViz.mapping.categoryColumn ??
-        selectedViz.mapping.colorColumn ??
-        '';
+    applyPrimitiveMappingUpdate(PrimitiveFilterType.POINT, updates);
+  }
 
-      visualizationStore.updateVisualization(selectedViz.id, {
-        mapping: { ...selectedViz.mapping, ...updates }
-      });
+  function handleSymbolPaletteInvert() {
+    invertPrimitivePalette(PrimitiveFilterType.POINT);
+  }
 
-      const legendItem = getLegendState().items.find(
-        (item) => item.variableId === selectedViz.id
-      );
-      const updatedVisualization = visualizationStore.visualizations.find(
-        (item) => item.id === selectedViz.id
-      );
-      const nextAutoSubtitle =
-        updatedVisualization?.mapping.valueColumn ??
-        updatedVisualization?.mapping.sizeColumn ??
-        updatedVisualization?.mapping.categoryColumn ??
-        updatedVisualization?.mapping.colorColumn ??
-        '';
-      const usesAutomaticSubtitle =
-        legendItem?.subtitleMode === 'auto' ||
-        (!legendItem?.subtitleMode &&
-          (!legendItem?.subtitle ||
-            legendItem.subtitle === previousAutoSubtitle));
-
-      if (
-        legendItem &&
-        updatedVisualization &&
-        usesAutomaticSubtitle &&
-        legendItem.subtitle !== nextAutoSubtitle
-      ) {
-        legendActions.updateLegendItem(legendItem.id, {
-          subtitle: nextAutoSubtitle,
-          subtitleMode: 'auto'
-        });
-      }
-
-      if (updates.valueColumn) {
-        computeBreaksForVisualization('mapping:valueColumn');
-      }
-      if (updates.categoryColumn) {
-        const dataset = datasetsStore.datasets.find(
-          (d) => d.id === selectedViz.datasetId
-        );
-        if (dataset?.tableName) {
-          fetchCategoryLabels(
-            selectedViz.id,
-            updates.categoryColumn,
-            dataset.tableName
-          );
-        }
-      }
+  function handleLineChange(updates: Partial<LinePrimitiveConfig>) {
+    const line = getLinePrimitive(selectedViz);
+    if (!line) {
+      return;
     }
+
+    updateSelectedVisualization({
+      line: { ...line, ...updates },
+      ...(Object.prototype.hasOwnProperty.call(updates, 'enabled')
+        ? {
+            primitiveFilters: buildNextPrimitiveFilters({
+              [PrimitiveFilterType.LINE]: updates.enabled ?? line.enabled
+            })
+          }
+        : {})
+    });
+  }
+
+  function handleLineStyleChange(
+    updates: Partial<VisualizationConfig['style']>
+  ) {
+    const line = getLinePrimitive(selectedViz);
+    if (!line) {
+      return;
+    }
+
+    handleLineChange({
+      ...(Object.prototype.hasOwnProperty.call(updates, 'lineColor')
+        ? { color: updates.lineColor }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'lineOpacity')
+        ? { opacity: updates.lineOpacity ?? line.opacity }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'lineWidth')
+        ? { width: updates.lineWidth ?? line.width }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'lineMaxWidth')
+        ? { maxWidth: updates.lineMaxWidth ?? line.maxWidth }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'lineDashed')
+        ? { dashed: updates.lineDashed ?? line.dashed }
+        : {})
+    });
+  }
+
+  function handleLineModesChange(updates: Partial<VisualizationModes>) {
+    const line = getLinePrimitive(selectedViz);
+    if (!line) {
+      return;
+    }
+
+    updateSelectedVisualization(
+      {
+        line: {
+          ...line,
+          ...(Object.prototype.hasOwnProperty.call(updates, 'color')
+            ? { colorMode: updates.color ?? line.colorMode }
+            : {}),
+          ...(Object.prototype.hasOwnProperty.call(updates, 'thickness')
+            ? { thicknessMode: updates.thickness ?? line.thicknessMode }
+            : {})
+        }
+      },
+      (nextVisualization) => {
+        ensurePrimitiveClassificationDefaults(
+          PrimitiveFilterType.LINE,
+          nextVisualization
+        );
+        ensureAutoColumns(PrimitiveFilterType.LINE, nextVisualization);
+      }
+    );
+  }
+
+  function handleLineMissingDataChange(updates: Partial<MissingDataConfig>) {
+    const line = getLinePrimitive(selectedViz);
+    if (!line?.missingData) {
+      return;
+    }
+
+    handleLineChange({
+      missingData: { ...line.missingData, ...updates }
+    });
+  }
+
+  function handleLineClassificationChange(
+    updates: Partial<ClassificationConfig>
+  ) {
+    updatePrimitiveClassificationState(PrimitiveFilterType.LINE, updates);
+  }
+
+  function handleLineMappingChange(
+    updates: Partial<VisualizationConfig['mapping']>
+  ) {
+    applyPrimitiveMappingUpdate(PrimitiveFilterType.LINE, updates);
+  }
+
+  function handleLinePaletteInvert() {
+    invertPrimitivePalette(PrimitiveFilterType.LINE);
+  }
+
+  function handleTextChange(updates: Partial<TextPrimitiveConfig>) {
+    const text = getTextPrimitive(selectedViz);
+    if (!text) {
+      return;
+    }
+
+    updateSelectedVisualization({
+      text: { ...text, ...updates }
+    });
+  }
+
+  function handleTextStyleChange(
+    updates: Partial<VisualizationConfig['style']>
+  ) {
+    const text = getTextPrimitive(selectedViz);
+    if (!text) {
+      return;
+    }
+
+    handleTextChange({
+      ...(Object.prototype.hasOwnProperty.call(updates, 'textColor')
+        ? { color: updates.textColor }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'textOpacity')
+        ? { opacity: updates.textOpacity ?? text.opacity }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'textSize')
+        ? { size: updates.textSize ?? text.size }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'textBold')
+        ? { bold: updates.textBold ?? text.bold }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'textItalic')
+        ? { italic: updates.textItalic ?? text.italic }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'textAlign')
+        ? { align: updates.textAlign ?? text.align }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'textHalo')
+        ? { halo: updates.textHalo ?? text.halo }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'textHaloColor')
+        ? { haloColor: updates.textHaloColor ?? text.haloColor }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'textHaloWidth')
+        ? { haloWidth: updates.textHaloWidth ?? text.haloWidth }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(
+        updates,
+        'textCollisionDetection'
+      )
+        ? {
+            collisionDetection:
+              updates.textCollisionDetection ?? text.collisionDetection
+          }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'textDxpMasking')
+        ? { dxpMasking: updates.textDxpMasking ?? text.dxpMasking }
+        : {})
+    });
+  }
+
+  function handleTextModesChange(updates: Partial<VisualizationModes>) {
+    const text = getTextPrimitive(selectedViz);
+    if (!text) {
+      return;
+    }
+
+    updateSelectedVisualization(
+      {
+        text: {
+          ...text,
+          ...(Object.prototype.hasOwnProperty.call(updates, 'color')
+            ? { colorMode: updates.color ?? text.colorMode }
+            : {}),
+          ...(Object.prototype.hasOwnProperty.call(updates, 'size')
+            ? { sizeMode: updates.size ?? text.sizeMode }
+            : {})
+        }
+      },
+      (nextVisualization) => {
+        ensurePrimitiveClassificationDefaults(
+          PrimitiveFilterType.TEXT,
+          nextVisualization
+        );
+        ensureAutoColumns(PrimitiveFilterType.TEXT, nextVisualization);
+      }
+    );
+  }
+
+  function handleTextMissingDataChange(updates: Partial<MissingDataConfig>) {
+    const text = getTextPrimitive(selectedViz);
+    if (!text?.missingData) {
+      return;
+    }
+
+    handleTextChange({
+      missingData: { ...text.missingData, ...updates }
+    });
+  }
+
+  function handleTextClassificationChange(
+    updates: Partial<ClassificationConfig>
+  ) {
+    updatePrimitiveClassificationState(PrimitiveFilterType.TEXT, updates);
+  }
+
+  function handleTextMappingChange(
+    updates: Partial<VisualizationConfig['mapping']>
+  ) {
+    applyPrimitiveMappingUpdate(PrimitiveFilterType.TEXT, updates);
+  }
+
+  function handleTextSecondaryLabelsChange(
+    updates: Partial<TextSecondaryLabelsConfig>
+  ) {
+    const text = getTextPrimitive(selectedViz);
+    if (!text) {
+      return;
+    }
+
+    handleTextChange({
+      secondaryLabels: {
+        ...text.secondaryLabels,
+        ...updates
+      }
+    });
+  }
+
+  function handleTextPaletteInvert() {
+    invertPrimitivePalette(PrimitiveFilterType.TEXT);
+  }
+
+  function updateTextBackground(
+    updater: (
+      background: TextPrimitiveConfig['background']
+    ) => Partial<TextPrimitiveConfig['background']>
+  ) {
+    const text = getTextPrimitive(selectedViz);
+    if (!text) {
+      return;
+    }
+
+    handleTextChange({
+      background: {
+        ...text.background,
+        ...updater(text.background)
+      }
+    });
+  }
+
+  function handleTextBackgroundStyleChange(
+    updates: Partial<VisualizationConfig['style']>
+  ) {
+    updateTextBackground((background) => ({
+      ...(Object.prototype.hasOwnProperty.call(updates, 'fillColor')
+        ? { fillColor: updates.fillColor }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'fillOpacity')
+        ? { fillOpacity: updates.fillOpacity ?? background.fillOpacity }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'strokeColor')
+        ? { strokeColor: updates.strokeColor }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'strokeWidth')
+        ? { strokeWidth: updates.strokeWidth ?? background.strokeWidth }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'strokeOpacity')
+        ? { strokeOpacity: updates.strokeOpacity ?? background.strokeOpacity }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'strokeDashed')
+        ? { strokeDashed: updates.strokeDashed ?? background.strokeDashed }
+        : {})
+    }));
+  }
+
+  function handleTextBackgroundModesChange(
+    updates: Partial<VisualizationModes>
+  ) {
+    updateTextBackground((background) => ({
+      ...(Object.prototype.hasOwnProperty.call(updates, 'fill')
+        ? { fillMode: updates.fill ?? background.fillMode }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'stroke')
+        ? { strokeMode: updates.stroke ?? background.strokeMode }
+        : {})
+    }));
+  }
+
+  function handleTextBackgroundClassificationChange(
+    updates: Partial<ClassificationConfig>
+  ) {
+    updateTextBackground((background) => ({
+      classification: {
+        ...(background.classification ?? {
+          method: ClassificationMethod.JENKS,
+          classes: 5
+        }),
+        ...updates
+      } as ClassificationConfig
+    }));
+  }
+
+  function handleTextBackgroundMappingChange(
+    updates: Partial<VisualizationConfig['mapping']>
+  ) {
+    updateTextBackground(() => ({
+      ...(Object.prototype.hasOwnProperty.call(updates, 'valueColumn')
+        ? { valueColumn: updates.valueColumn }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'categoryColumn')
+        ? { categoryColumn: updates.categoryColumn }
+        : {})
+    }));
+  }
+
+  function handleTextBackgroundPaletteInvert() {
+    const text = getTextPrimitive(selectedViz);
+    const classification = text?.background.classification;
+    const colors = classification?.colors;
+    if (!classification || !colors?.length) {
+      return;
+    }
+
+    updateTextBackground(() => ({
+      classification: {
+        ...classification,
+        colors: [...colors].reverse(),
+        inverted: !(classification.inverted ?? false)
+      } as ClassificationConfig
+    }));
+  }
+
+  function handleTextVisibilityChange(visible: boolean) {
+    const text = getTextPrimitive(selectedViz);
+    if (!text) {
+      return;
+    }
+
+    handleTextChange({
+      enabled: visible,
+      opacity:
+        visible && text.opacity <= 0
+          ? VISUALIZATION_DEFAULTS.textOpacity / 100
+          : text.opacity
+    });
   }
 
   function handlePrimitiveVisibilityChange(
     primitive: PrimitiveFilter,
     visible: boolean
   ) {
-    if (!selectedViz?.id) {
-      return;
-    }
+    switch (primitive) {
+      case PrimitiveFilterType.POINT: {
+        const symbol = getSymbolPrimitive(selectedViz);
+        if (!symbol || symbol.enabled === visible) return;
+        handleSymbolChange({
+          enabled: visible,
+          opacity:
+            visible && symbol.opacity <= 0
+              ? VISUALIZATION_DEFAULTS.symbolOpacity / 100
+              : symbol.opacity,
+          fillColor: symbol.fillColor ?? DEFAULT_COLORS.fill,
+          strokeColor: symbol.strokeColor ?? DEFAULT_COLORS.gray
+        });
+        return;
+      }
 
-    const activeFilters = selectedViz.primitiveFilters ?? ALL_PRIMITIVE_FILTERS;
-    const isVisible = activeFilters.includes(primitive);
-    if (isVisible === visible) {
-      return;
-    }
+      case PrimitiveFilterType.LINE: {
+        const line = getLinePrimitive(selectedViz);
+        if (!line || line.enabled === visible) return;
+        handleLineChange({
+          enabled: visible,
+          opacity:
+            visible && line.opacity <= 0
+              ? VISUALIZATION_DEFAULTS.lineOpacity / 100
+              : line.opacity,
+          color: line.color ?? DEFAULT_COLORS.gray
+        });
+        return;
+      }
 
-    if (!visible) {
-      visualizationStore.togglePrimitiveFilter(selectedViz.id, primitive);
-      return;
-    }
-
-    const nextFilters = [...new Set([...activeFilters, primitive])];
-
-    if (primitive === PrimitiveFilterType.POINT) {
-      visualizationStore.updateVisualization(selectedViz.id, {
-        primitiveFilters: nextFilters,
-        modes: {
-          ...selectedViz.modes,
-          symbol: SymbolMode.UNIQUE,
-          fill: FillMode.UNIQUE,
-          proportionalType: ProportionalType.SINGLE
-        },
-        style: {
-          ...selectedViz.style,
-          fillColor:
-            (selectedViz.style.fillColor as string) ?? DEFAULT_COLORS.fill,
-          strokeColor: DEFAULT_COLORS.gray,
-          fillOpacity: nextFilters.includes(PrimitiveFilterType.POLYGON)
-            ? 0
-            : (selectedViz.style.fillOpacity ??
-              VISUALIZATION_DEFAULTS.fillOpacity / 100)
-        },
-        symbols: selectedViz.symbols
-          ? {
-              ...selectedViz.symbols,
-              opacity:
-                selectedViz.symbols.opacity ??
-                VISUALIZATION_DEFAULTS.symbolOpacity / 100
-            }
-          : selectedViz.symbols
-      });
-      return;
-    }
-
-    if (primitive === PrimitiveFilterType.POLYGON) {
-      visualizationStore.updateVisualization(selectedViz.id, {
-        primitiveFilters: nextFilters,
-        modes: {
-          ...selectedViz.modes,
-          fill: FillMode.NONE
-        },
-        style: {
-          ...selectedViz.style,
-          fillOpacity: 0,
-          strokeColor: DEFAULT_COLORS.gray
-        }
-      });
-      return;
-    }
-
-    if (primitive === PrimitiveFilterType.LINE) {
-      visualizationStore.updateVisualization(selectedViz.id, {
-        primitiveFilters: nextFilters,
-        modes: {
-          ...selectedViz.modes,
-          fill: FillMode.NONE,
-          color: ColorMode.UNIQUE,
-          thickness: ThicknessMode.UNIQUE
-        },
-        style: {
-          ...selectedViz.style,
-          lineColor: DEFAULT_COLORS.gray,
-          lineOpacity:
-            selectedViz.style.lineOpacity ??
-            VISUALIZATION_DEFAULTS.lineOpacity / 100
-        }
-      });
+      case PrimitiveFilterType.POLYGON: {
+        const polygon = getPolygonPrimitive(selectedViz);
+        if (!polygon || polygon.enabled === visible) return;
+        handlePolygonChange({
+          enabled: visible,
+          fillOpacity:
+            visible &&
+            polygon.fillMode !== FillMode.NONE &&
+            polygon.fillOpacity <= 0
+              ? VISUALIZATION_DEFAULTS.fillOpacity / 100
+              : polygon.fillOpacity,
+          strokeColor: polygon.strokeColor ?? DEFAULT_COLORS.gray
+        });
+      }
     }
   }
 
@@ -423,6 +1431,15 @@
     }
   }
 
+  function handleUpdateDataFilter(
+    filterId: string,
+    updates: Partial<Omit<VizDataFilter, 'id'>>
+  ) {
+    if (selectedViz?.id) {
+      visualizationStore.updateDataFilter(selectedViz.id, filterId, updates);
+    }
+  }
+
   function handleClearFilters(primitive: PrimitiveFilter): void {
     for (const filter of getFiltersForPrimitive(primitive)) {
       handleRemoveDataFilter(filter.id);
@@ -433,43 +1450,26 @@
     primitiveType: PrimitiveFilter
   ): VizDataFilter[] {
     return (selectedViz?.dataFilters ?? []).filter(
-      (f) => f.primitiveType === primitiveType
+      (filter) => filter.primitiveType === primitiveType
     );
   }
 
-  function handleTextVisibilityChange(visible: boolean) {
-    if (!selectedViz?.id) {
-      return;
-    }
-
-    const currentOpacity = selectedViz.style.textOpacity;
-    const nextOpacity =
-      visible && (!currentOpacity || currentOpacity <= 0)
-        ? 1
-        : visible
-          ? currentOpacity
-          : 0;
-    visualizationStore.updateVisualization(selectedViz.id, {
-      style: {
-        ...selectedViz.style,
-        textOpacity: nextOpacity,
-        labelOpacity: 0
-      }
-    });
-  }
-
-  async function computeBreaksForVisualization(
+  async function computeBreaksForPrimitive(
+    primitive: ClassifiablePrimitive,
     trigger = 'unknown',
-    retryKey = ''
+    _retryKey = ''
   ) {
-    if (!selectedViz?.datasetId || !selectedViz?.mapping.valueColumn) {
+    const valueColumn = getPrimitiveValueColumn(selectedViz, primitive);
+    const classification = getPrimitiveClassification(selectedViz, primitive);
+
+    if (!selectedViz?.datasetId || !valueColumn) {
       return;
     }
 
-    const method = selectedViz.classification?.method;
-    const numClasses = selectedViz.classification?.numClasses ?? 5;
+    const method = classification?.method;
+    const numClasses = classification?.numClasses ?? 5;
 
-    if (!method) {
+    if (!method || method === ClassificationMethod.MANUAL) {
       return;
     }
 
@@ -478,16 +1478,36 @@
       normalizedMethod,
       numClasses
     );
-    const computeKey = `${selectedViz.id}-${selectedViz.mapping.valueColumn}-${normalizedMethod}-${requestedClassCount}-${retryKey}`;
-    if (computeKey === lastComputedKey) {
+    const breaksKey = `${selectedViz.id}-${selectedViz.datasetId}-${primitive}-${valueColumn}-${normalizedMethod}-${requestedClassCount}`;
+    const hasExistingBreaks = Boolean(classification?.breaks?.length);
+    const lastCompletedKey = untrack(() =>
+      lastCompletedBreaksKeyByPrimitive.get(primitive)
+    );
+    const inFlightKey = untrack(() =>
+      inFlightBreaksKeyByPrimitive.get(primitive)
+    );
+
+    if (breaksKey === inFlightKey) {
       return;
     }
-    lastComputedKey = computeKey;
+
+    if (hasExistingBreaks && breaksKey === lastCompletedKey) {
+      return;
+    }
+
+    const clearInFlightBreaksKey = () =>
+      untrack(() => {
+        if (inFlightBreaksKeyByPrimitive.get(primitive) === breaksKey) {
+          inFlightBreaksKeyByPrimitive.delete(primitive);
+        }
+      });
+
+    untrack(() => inFlightBreaksKeyByPrimitive.set(primitive, breaksKey));
     computeRequestCounter += 1;
     const requestId = computeRequestCounter;
 
     const dataset = datasetsStore.datasets.find(
-      (d) => d.id === selectedViz.datasetId
+      (datasetItem) => datasetItem.id === selectedViz.datasetId
     );
     if (!dataset?.sourceFileId) {
       logger.warn(
@@ -496,216 +1516,719 @@
         {
           trigger,
           requestId,
+          primitive,
           datasetId: selectedViz.datasetId
         }
       );
+      clearInFlightBreaksKey();
       return;
     }
-
-    logger.debug('[configure-visualization] computing breaks', LogCategory.UI, {
-      trigger,
-      requestId,
-      selectedVisualizationId: selectedViz.id,
-      sourceFileId: dataset.sourceFileId,
-      valueColumn: selectedViz.mapping.valueColumn,
-      method: normalizedMethod,
-      numClasses: requestedClassCount
-    });
 
     try {
       const result = await calculateBreaks({
         datasetId: dataset.sourceFileId,
-        columnName: selectedViz.mapping.valueColumn,
+        columnName: valueColumn,
         method: normalizedMethod,
         numClasses: requestedClassCount
       });
 
-      if (requestId !== computeRequestCounter) return;
+      if (requestId !== computeRequestCounter || !selectedViz?.id) {
+        clearInFlightBreaksKey();
+        return;
+      }
 
-      if (result && selectedViz?.id) {
-        const actualNumClasses = resolveComputedClassCount(
-          normalizedMethod,
-          requestedClassCount,
-          result.counts.length
-        );
-        const existingColors = selectedViz.classification?.colors;
-        const contrast = getColorBlindnessState().enabled
-          ? ('high' as const)
-          : undefined;
-        let colors: string[];
-        if (existingColors && existingColors.length === actualNumClasses) {
-          colors = existingColors;
-        } else {
-          // Regenerate from user's palette when available (skip pattern palettes — they
-          // define a texture overlay, not a color scale), otherwise default blue
-          const userPalette = selectedViz.classification?.paletteId
-            ? findPaletteById(selectedViz.classification.paletteId)
-            : undefined;
-          const isPatternPalette = userPalette?.type === PALETTE_TYPE.PATTERN;
-          colors =
-            userPalette && !isPatternPalette
-              ? generatePaletteColors(userPalette, actualNumClasses, contrast)
-              : generateColorsForBreaks(
-                  actualNumClasses,
-                  'sequential',
-                  contrast
-                );
-          colors = applyPaletteInversion(
-            colors,
-            selectedViz.classification?.inverted ?? false
-          );
-        }
-        const classificationUpdate: Parameters<
-          typeof visualizationStore.updateClassification
-        >[1] = {
-          breaks: result.breaks,
-          counts: result.counts,
-          colors
-        };
-        if (
-          normalizedMethod !== method ||
-          actualNumClasses !== numClasses ||
-          selectedViz.classification?.classes !== actualNumClasses
-        ) {
-          classificationUpdate.method = normalizedMethod;
-          classificationUpdate.classes = actualNumClasses;
-          classificationUpdate.numClasses = actualNumClasses;
-        }
-        visualizationStore.updateClassification(
-          selectedViz.id,
-          classificationUpdate
-        );
-        logger.debug(
-          '[configure-visualization] breaks computed and applied',
-          LogCategory.UI,
-          {
-            requestId,
-            selectedVisualizationId: selectedViz.id,
-            breaksCount: result.breaks.length
-          }
-        );
-      } else {
+      if (!result) {
         logger.warn(
           '[configure-visualization] breaks computation returned empty result, will retry',
           LogCategory.UI,
           {
             requestId,
-            selectedVisualizationId: selectedViz?.id
+            primitive,
+            selectedVisualizationId: selectedViz.id
           }
         );
+        clearInFlightBreaksKey();
+        return;
       }
+
+      const actualNumClasses = resolveComputedClassCount(
+        normalizedMethod,
+        requestedClassCount,
+        result.counts.length
+      );
+      const existingColors = classification?.colors;
+      const contrast = getColorBlindnessState().enabled
+        ? ('high' as const)
+        : undefined;
+      let colors: string[];
+
+      if (existingColors && existingColors.length === actualNumClasses) {
+        colors = existingColors;
+      } else {
+        const paletteType =
+          classification?.breakpointValue != null ? 'diverging' : 'sequential';
+        const userPalette = classification?.paletteId
+          ? findPaletteById(classification.paletteId)
+          : undefined;
+        const isPatternPalette = userPalette?.type === PALETTE_TYPE.PATTERN;
+        const divergingSplit =
+          paletteType === 'diverging'
+            ? computeDivergingSplit(
+                actualNumClasses,
+                result.breaks,
+                classification?.breakpointValue ?? null
+              )
+            : undefined;
+        colors =
+          userPalette && !isPatternPalette
+            ? generatePaletteColors(userPalette, actualNumClasses, contrast)
+            : generateColorsForBreaks(
+                actualNumClasses,
+                paletteType,
+                contrast,
+                divergingSplit
+              );
+        colors = applyPaletteInversion(
+          colors,
+          classification?.inverted ?? false
+        );
+      }
+
+      const classificationUpdate: Partial<ClassificationConfig> = {
+        breaks: result.breaks,
+        counts: result.counts,
+        colors
+      };
+
+      if (
+        normalizedMethod !== method ||
+        actualNumClasses !== numClasses ||
+        classification?.classes !== actualNumClasses
+      ) {
+        classificationUpdate.method = normalizedMethod;
+        classificationUpdate.classes = actualNumClasses;
+        classificationUpdate.numClasses = actualNumClasses;
+      }
+
+      updatePrimitiveClassificationState(primitive, classificationUpdate);
+      untrack(() =>
+        lastCompletedBreaksKeyByPrimitive.set(primitive, breaksKey)
+      );
+      clearInFlightBreaksKey();
     } catch (error) {
       logger.error(
         '[configure-visualization] breaks computation crashed',
         LogCategory.UI,
         {
-          requestId,
           trigger,
+          requestId,
+          primitive,
           error
         }
+      );
+      clearInFlightBreaksKey();
+    }
+  }
+
+  function buildPolygonPanelVisualization(
+    visualization: VisualizationConfig | undefined
+  ): VisualizationConfig | undefined {
+    const polygon = getPolygonPrimitive(visualization);
+    if (!visualization || !polygon) {
+      return undefined;
+    }
+
+    return {
+      ...visualization,
+      primitiveFilters: getEnabledPrimitiveFilters(visualization),
+      modes: {
+        ...visualization.modes,
+        fill: polygon.fillMode,
+        stroke: polygon.strokeMode
+      },
+      style: {
+        ...visualization.style,
+        fillColor: polygon.fillColor,
+        fillOpacity:
+          polygon.fillMode === FillMode.NONE ? 0 : polygon.fillOpacity,
+        strokeColor: polygon.strokeColor,
+        strokeWidth: polygon.strokeWidth,
+        strokeOpacity: polygon.strokeOpacity,
+        strokeDashed: polygon.strokeDashed
+      },
+      mapping: {
+        ...visualization.mapping,
+        valueColumn: polygon.valueColumn,
+        categoryColumn: polygon.categoryColumn
+      },
+      classification: polygon.classification,
+      missingData: polygon.missingData
+    };
+  }
+
+  function buildSymbolPanelVisualization(
+    visualization: VisualizationConfig | undefined
+  ): VisualizationConfig | undefined {
+    const symbol = getSymbolPrimitive(visualization);
+    if (!visualization || !symbol) {
+      return undefined;
+    }
+
+    return {
+      ...visualization,
+      primitiveFilters: getEnabledPrimitiveFilters(visualization),
+      modes: {
+        ...visualization.modes,
+        symbol: symbol.mode,
+        fill: symbol.fillMode,
+        stroke: symbol.strokeMode,
+        proportionalType: symbol.proportionalType,
+        categoryShape: symbol.categoryShape
+      },
+      style: {
+        ...visualization.style,
+        symbolFillColor: symbol.fillColor,
+        fillColorB: symbol.fillColorB,
+        strokeColor: symbol.strokeColor,
+        strokeWidth: symbol.strokeWidth,
+        strokeOpacity: symbol.strokeOpacity
+      },
+      mapping: {
+        ...visualization.mapping,
+        valueColumn: symbol.valueColumn,
+        categoryColumn: symbol.categoryColumn,
+        sizeColumn: symbol.sizeColumn
+      },
+      classification: symbol.classification,
+      symbols: {
+        ...(visualization.symbols ?? {
+          type: symbol.shape,
+          minSize: symbol.minSize,
+          maxSize: symbol.maxSize,
+          sizeScale: symbol.sizeScale
+        }),
+        type: symbol.shape,
+        size: symbol.size,
+        minSize: symbol.minSize,
+        maxSize: symbol.maxSize,
+        sizeScale: symbol.sizeScale,
+        opacity: symbol.opacity
+      },
+      missingData: symbol.missingData
+    };
+  }
+
+  function buildLinePanelVisualization(
+    visualization: VisualizationConfig | undefined
+  ): VisualizationConfig | undefined {
+    const line = getLinePrimitive(visualization);
+    if (!visualization || !line) {
+      return undefined;
+    }
+
+    return {
+      ...visualization,
+      primitiveFilters: getEnabledPrimitiveFilters(visualization),
+      modes: {
+        ...visualization.modes,
+        color: line.colorMode,
+        thickness: line.thicknessMode
+      },
+      style: {
+        ...visualization.style,
+        lineColor: line.color,
+        lineOpacity: line.opacity,
+        lineWidth: line.width,
+        lineMaxWidth: line.maxWidth,
+        lineDashed: line.dashed
+      },
+      mapping: {
+        ...visualization.mapping,
+        valueColumn: line.valueColumn,
+        categoryColumn: line.categoryColumn,
+        sizeColumn: line.sizeColumn
+      },
+      classification: line.classification,
+      missingData: line.missingData
+    };
+  }
+
+  function buildTextPanelVisualization(
+    visualization: VisualizationConfig | undefined
+  ): VisualizationConfig | undefined {
+    const text = getTextPrimitive(visualization);
+    if (!visualization || !text) {
+      return undefined;
+    }
+
+    return {
+      ...visualization,
+      primitiveFilters: getEnabledPrimitiveFilters(visualization),
+      modes: {
+        ...visualization.modes,
+        color: text.colorMode,
+        size: text.sizeMode
+      },
+      style: {
+        ...visualization.style,
+        textColor: text.color,
+        textOpacity: text.enabled ? text.opacity : 0,
+        textSize: text.size,
+        textBold: text.bold,
+        textItalic: text.italic,
+        textAlign: text.align,
+        textHalo: text.halo,
+        textHaloColor: text.haloColor,
+        textHaloWidth: text.haloWidth,
+        textCollisionDetection: text.collisionDetection,
+        textDxpMasking: text.dxpMasking,
+        labelColor: text.secondaryLabels.color,
+        labelOpacity: text.secondaryLabels.opacity,
+        labelSize: text.secondaryLabels.size,
+        labelAlign: text.secondaryLabels.align,
+        labelHalo: text.secondaryLabels.halo,
+        labelHaloColor: text.secondaryLabels.haloColor,
+        labelHaloWidth: text.secondaryLabels.haloWidth,
+        labelCollisionDetection: text.secondaryLabels.collisionDetection,
+        labelDxpMasking: text.secondaryLabels.dxpMasking
+      },
+      mapping: {
+        ...visualization.mapping,
+        labelColumn: text.labelColumn,
+        valueColumn: text.valueColumn,
+        categoryColumn: text.categoryColumn,
+        secondaryLabelColumn: text.secondaryLabels.labelColumn
+      },
+      classification: text.classification,
+      missingData: text.missingData
+    };
+  }
+
+  function buildTextBackgroundPanelVisualization(
+    visualization: VisualizationConfig | undefined
+  ): VisualizationConfig | undefined {
+    const text = getTextPrimitive(visualization);
+    if (!visualization || !text) {
+      return undefined;
+    }
+
+    const background = text.background;
+    return {
+      ...visualization,
+      primitiveFilters: getEnabledPrimitiveFilters(visualization),
+      modes: {
+        ...visualization.modes,
+        fill: background.fillMode,
+        stroke: background.strokeMode
+      },
+      style: {
+        ...visualization.style,
+        fillColor: background.fillColor,
+        fillOpacity:
+          background.fillMode === FillMode.NONE ? 0 : background.fillOpacity,
+        strokeColor: background.strokeColor,
+        strokeWidth: background.strokeWidth,
+        strokeOpacity: background.strokeOpacity,
+        strokeDashed: background.strokeDashed
+      },
+      mapping: {
+        ...visualization.mapping,
+        valueColumn: background.valueColumn,
+        categoryColumn: background.categoryColumn
+      },
+      classification: background.classification,
+      missingData: undefined
+    };
+  }
+
+  const symbolVisualization = $derived.by(() =>
+    buildSymbolPanelVisualization(selectedViz)
+  );
+  const polygonVisualization = $derived.by(() =>
+    buildPolygonPanelVisualization(selectedViz)
+  );
+  const lineVisualization = $derived.by(() =>
+    buildLinePanelVisualization(selectedViz)
+  );
+  const textVisualization = $derived.by(() =>
+    buildTextPanelVisualization(selectedViz)
+  );
+  const textBackgroundVisualization = $derived.by(() =>
+    buildTextBackgroundPanelVisualization(selectedViz)
+  );
+
+  const primitiveClassificationTargets = $derived.by(() =>
+    CLASSIFIABLE_PRIMITIVES.map((primitive) => ({
+      primitive,
+      valueColumn: getPrimitiveValueColumn(selectedViz, primitive),
+      categoryColumn: getPrimitiveCategoryColumn(selectedViz, primitive),
+      classification: getPrimitiveClassification(selectedViz, primitive),
+      usesBreaks: usesBreakClassification(selectedViz, primitive),
+      usesCategories: usesCategoricalClassification(selectedViz, primitive)
+    }))
+  );
+
+  const textBackgroundTarget = $derived.by(() => {
+    const text = getTextPrimitive(selectedViz);
+    if (!text) return null;
+    const bg = text.background;
+    return {
+      fillMode: bg.fillMode,
+      valueColumn: bg.valueColumn,
+      categoryColumn: bg.categoryColumn,
+      classification: bg.classification,
+      usesBreaks: bg.fillMode === FillMode.CLASSES,
+      usesCategories: bg.fillMode === FillMode.CATEGORIES
+    };
+  });
+
+  const primitiveColorParamsKey = $derived.by(() => {
+    const cbEnabled = getColorBlindnessState().enabled;
+    return [
+      String(cbEnabled),
+      ...primitiveClassificationTargets.map((target) => {
+        const numColors = target.usesCategories
+          ? Math.max(target.classification?.labels?.length ?? 0, 0)
+          : (target.classification?.classes ?? 0);
+        const breakpointValue = target.classification?.breakpointValue;
+        const paletteType =
+          breakpointValue != null ? 'diverging' : 'sequential';
+        const breakpointKey =
+          paletteType === 'diverging' && Number.isFinite(breakpointValue)
+            ? String(breakpointValue)
+            : '';
+        const breaksKey =
+          paletteType === 'diverging'
+            ? (target.classification?.breaks ?? []).join(',')
+            : '';
+        return [
+          target.primitive,
+          target.classification?.paletteId ?? '',
+          String(target.classification?.inverted ?? false),
+          String(numColors),
+          paletteType,
+          breakpointKey,
+          breaksKey,
+          String(target.usesCategories)
+        ].join(':');
+      })
+    ].join('|');
+  });
+
+  let lastTextBackgroundBreaksKey = '';
+  let inFlightTextBackgroundBreaksKey = '';
+
+  async function computeTextBackgroundBreaks(trigger = 'unknown') {
+    const target = textBackgroundTarget;
+    if (!target || !selectedViz?.datasetId) return;
+    const valueColumn = target.valueColumn;
+    if (!valueColumn) return;
+    const method = target.classification?.method;
+    if (!method || method === ClassificationMethod.MANUAL) return;
+
+    const normalizedMethod = normalizeClassificationMethod(method);
+    const numClasses = target.classification?.numClasses ?? 5;
+    const requestedClassCount = resolveRequestedClassCount(
+      normalizedMethod,
+      numClasses
+    );
+    const breaksKey = `${selectedViz.id}-${selectedViz.datasetId}-textBackground-${valueColumn}-${normalizedMethod}-${requestedClassCount}`;
+    const hasExistingBreaks = Boolean(target.classification?.breaks?.length);
+
+    if (breaksKey === inFlightTextBackgroundBreaksKey) return;
+    if (hasExistingBreaks && breaksKey === lastTextBackgroundBreaksKey) return;
+
+    const dataset = datasetsStore.datasets.find(
+      (datasetItem) => datasetItem.id === selectedViz?.datasetId
+    );
+    if (!dataset?.sourceFileId) return;
+
+    untrack(() => {
+      inFlightTextBackgroundBreaksKey = breaksKey;
+    });
+
+    try {
+      const result = await calculateBreaks({
+        datasetId: dataset.sourceFileId,
+        columnName: valueColumn,
+        method: normalizedMethod,
+        numClasses: requestedClassCount
+      });
+
+      if (!result || !selectedViz?.id) {
+        inFlightTextBackgroundBreaksKey = '';
+        return;
+      }
+
+      const actualNumClasses = resolveComputedClassCount(
+        normalizedMethod,
+        requestedClassCount,
+        result.counts.length
+      );
+      const existingColors = target.classification?.colors;
+      const contrast = getColorBlindnessState().enabled
+        ? ('high' as const)
+        : undefined;
+      let colors: string[];
+
+      if (existingColors && existingColors.length === actualNumClasses) {
+        colors = existingColors;
+      } else {
+        const paletteType =
+          target.classification?.breakpointValue != null
+            ? 'diverging'
+            : 'sequential';
+        const userPalette = target.classification?.paletteId
+          ? findPaletteById(target.classification.paletteId)
+          : undefined;
+        const isPatternPalette = userPalette?.type === PALETTE_TYPE.PATTERN;
+        colors =
+          userPalette && !isPatternPalette
+            ? generatePaletteColors(userPalette, actualNumClasses, contrast)
+            : generateColorsForBreaks(actualNumClasses, paletteType, contrast);
+        colors = applyPaletteInversion(
+          colors,
+          target.classification?.inverted ?? false
+        );
+      }
+
+      const classificationUpdate: Partial<ClassificationConfig> = {
+        breaks: result.breaks,
+        counts: result.counts,
+        colors
+      };
+
+      if (
+        normalizedMethod !== method ||
+        actualNumClasses !== numClasses ||
+        target.classification?.classes !== actualNumClasses
+      ) {
+        classificationUpdate.method = normalizedMethod;
+        classificationUpdate.classes = actualNumClasses;
+        classificationUpdate.numClasses = actualNumClasses;
+      }
+
+      handleTextBackgroundClassificationChange(classificationUpdate);
+      lastTextBackgroundBreaksKey = breaksKey;
+      inFlightTextBackgroundBreaksKey = '';
+    } catch (error) {
+      logger.error(
+        '[configure-visualization] text background breaks computation crashed',
+        LogCategory.UI,
+        { trigger, error }
+      );
+      inFlightTextBackgroundBreaksKey = '';
+    }
+  }
+
+  async function fetchTextBackgroundCategoryLabels(
+    column: string,
+    tableName: string
+  ) {
+    try {
+      const rows = (await Duck.query(
+        `SELECT DISTINCT "${column}" FROM "${tableName}" WHERE "${column}" IS NOT NULL ORDER BY "${column}"`,
+        { format: 'array' }
+      )) as Array<Record<string, unknown>>;
+      const labels = rows.map((row) => String(row[column]));
+      if (labels.length > 0) {
+        untrack(() => handleTextBackgroundClassificationChange({ labels }));
+      }
+    } catch (error) {
+      logger.warn(
+        'Failed to fetch text background category labels',
+        LogCategory.VISUALIZATION,
+        error
       );
     }
   }
 
   $effect(() => {
-    // datasetsVersion is read here (tracked) and passed as retryKey so that
-    // computeKey changes when a new DuckDB table is registered, bypassing the
-    // deduplication guard without writing to lastComputedKey from async code.
     const duckVersion = duckDBOrchestrator.datasetsVersion;
+
+    for (const target of primitiveClassificationTargets) {
+      if (
+        target.usesBreaks &&
+        target.valueColumn &&
+        target.classification?.method &&
+        !target.classification.breaks?.length
+      ) {
+        computeBreaksForPrimitive(
+          target.primitive,
+          '$effect:missingBreaks',
+          String(duckVersion)
+        );
+      }
+    }
+
+    const textBg = textBackgroundTarget;
     if (
-      !usesCategoricalClassification(selectedViz) &&
-      selectedViz?.mapping.valueColumn &&
-      selectedViz?.classification?.method &&
-      !selectedViz?.classification?.breaks?.length
+      textBg?.usesBreaks &&
+      textBg.valueColumn &&
+      textBg.classification?.method &&
+      !textBg.classification.breaks?.length
     ) {
-      computeBreaksForVisualization(
-        '$effect:missingBreaks',
-        String(duckVersion)
+      computeTextBackgroundBreaks('$effect:missingBreaks');
+    }
+  });
+
+  $effect(() => {
+    for (const target of primitiveClassificationTargets) {
+      if (
+        target.usesBreaks &&
+        target.classification?.method &&
+        target.classification?.numClasses &&
+        target.valueColumn
+      ) {
+        computeBreaksForPrimitive(
+          target.primitive,
+          '$effect:classificationParamsChanged'
+        );
+      }
+    }
+
+    const textBg = textBackgroundTarget;
+    if (
+      textBg?.usesBreaks &&
+      textBg.classification?.method &&
+      textBg.classification?.numClasses &&
+      textBg.valueColumn
+    ) {
+      computeTextBackgroundBreaks('$effect:classificationParamsChanged');
+    }
+  });
+
+  $effect(() => {
+    const visualization = selectedViz;
+    if (!visualization) {
+      return;
+    }
+
+    const dataset = datasetsStore.datasets.find(
+      (datasetItem) => datasetItem.id === visualization.datasetId
+    );
+    if (!dataset?.tableName) {
+      return;
+    }
+
+    for (const target of primitiveClassificationTargets) {
+      const hasLabels = (target.classification?.labels?.length ?? 0) > 0;
+      if (!target.usesCategories || !target.categoryColumn || hasLabels) {
+        continue;
+      }
+
+      fetchCategoryLabels(
+        target.primitive,
+        target.categoryColumn,
+        dataset.tableName,
+        true
+      );
+    }
+
+    const textBg = textBackgroundTarget;
+    const hasBgLabels = (textBg?.classification?.labels?.length ?? 0) > 0;
+    if (textBg?.usesCategories && textBg.categoryColumn && !hasBgLabels) {
+      fetchTextBackgroundCategoryLabels(
+        textBg.categoryColumn,
+        dataset.tableName
       );
     }
   });
 
   $effect(() => {
-    const method = selectedViz?.classification?.method;
-    const numClasses = selectedViz?.classification?.numClasses;
-    const valueColumn = selectedViz?.mapping.valueColumn;
-    if (
-      method &&
-      numClasses &&
-      valueColumn &&
-      !usesCategoricalClassification(selectedViz)
-    ) {
-      computeBreaksForVisualization('$effect:classificationParamsChanged');
-    }
-  });
-
-  $effect(() => {
-    const viz = selectedViz;
-    const col = viz?.mapping.categoryColumn;
-    const isCategorical = usesCategoricalClassification(viz);
-    const hasLabels = (viz?.classification?.labels?.length ?? 0) > 0;
-    if (!isCategorical || !col || hasLabels) return;
-    const dataset = datasetsStore.datasets.find((d) => d.id === viz!.datasetId);
-    if (!dataset?.tableName) return;
-    fetchCategoryLabels(viz!.id, col, dataset.tableName, true);
-  });
-
-  $effect(() => {
-    const cbEnabled = getColorBlindnessState().enabled;
-    const paletteId = selectedViz?.classification?.paletteId;
-    const inverted = selectedViz?.classification?.inverted ?? false;
-    const isCategorical = usesCategoricalClassification(selectedViz);
-    const numColors = isCategorical
-      ? Math.max(selectedViz?.classification?.labels?.length ?? 0, 0)
-      : selectedViz?.classification?.classes;
+    void primitiveColorParamsKey;
 
     untrack(() => {
-      const vizId = selectedViz?.id;
-      if (!vizId) return;
-      const contrast = cbEnabled ? ('high' as const) : undefined;
-      let colors: string[];
-      if (isCategorical) {
-        const resolvedColorCount = Math.max(
-          numColors || DEFAULT_CATEGORICAL_COLORS.length,
-          1
-        );
-        if (paletteId) {
-          const palette = findPaletteById(paletteId);
-          if (!palette) return;
-          colors = generatePaletteColors(palette, resolvedColorCount, contrast);
-        } else {
-          colors = DEFAULT_CATEGORICAL_COLORS.slice(0, resolvedColorCount);
-          if (colors.length < resolvedColorCount) {
-            const repeats = Array.from(
-              { length: resolvedColorCount },
-              (_, index) =>
-                DEFAULT_CATEGORICAL_COLORS[
-                  index % DEFAULT_CATEGORICAL_COLORS.length
-                ]
-            );
-            colors = repeats;
-          }
-        }
-      } else {
-        if (!numColors) return;
-        if (paletteId) {
-          const palette = findPaletteById(paletteId);
-          if (!palette) return;
-          colors = generatePaletteColors(palette, numColors, contrast);
-        } else {
-          colors = generateColorsForBreaks(numColors, 'sequential', contrast);
-        }
-      }
-      colors = applyPaletteInversion(colors, inverted);
-      const existing = selectedViz?.classification?.colors;
-      if (
-        existing &&
-        existing.length === colors.length &&
-        existing.every((c, i) => c === colors[i])
-      ) {
+      if (!selectedViz?.id) {
         return;
       }
-      visualizationStore.updateClassification(vizId, { colors });
+
+      const cbEnabled = getColorBlindnessState().enabled;
+
+      for (const target of primitiveClassificationTargets) {
+        const classification = target.classification;
+        if (!classification) {
+          continue;
+        }
+
+        const paletteId = classification.paletteId;
+        const inverted = classification.inverted ?? false;
+        const paletteType =
+          classification.breakpointValue != null ? 'diverging' : 'sequential';
+        const numColors = target.usesCategories
+          ? Math.max(classification.labels?.length ?? 0, 0)
+          : classification.classes;
+        const contrast = cbEnabled ? ('high' as const) : undefined;
+        let colors: string[];
+
+        if (target.usesCategories) {
+          const resolvedColorCount = Math.max(
+            numColors || DEFAULT_CATEGORICAL_COLORS.length,
+            1
+          );
+          if (paletteId) {
+            const palette = findPaletteById(paletteId);
+            if (!palette) {
+              continue;
+            }
+            colors = generatePaletteColors(
+              palette,
+              resolvedColorCount,
+              contrast
+            );
+          } else {
+            colors = DEFAULT_CATEGORICAL_COLORS.slice(0, resolvedColorCount);
+            if (colors.length < resolvedColorCount) {
+              colors = Array.from(
+                { length: resolvedColorCount },
+                (_, index) =>
+                  DEFAULT_CATEGORICAL_COLORS[
+                    index % DEFAULT_CATEGORICAL_COLORS.length
+                  ]
+              );
+            }
+          }
+        } else {
+          if (!numColors) {
+            continue;
+          }
+
+          if (paletteId) {
+            const palette = findPaletteById(paletteId);
+            if (!palette) {
+              continue;
+            }
+            colors = generatePaletteColors(palette, numColors, contrast);
+          } else {
+            const divergingSplit =
+              paletteType === 'diverging'
+                ? computeDivergingSplit(
+                    numColors,
+                    classification.breaks ?? [],
+                    classification.breakpointValue ?? null
+                  )
+                : undefined;
+            colors = generateColorsForBreaks(
+              numColors,
+              paletteType,
+              contrast,
+              divergingSplit
+            );
+          }
+        }
+
+        colors = applyPaletteInversion(colors, inverted);
+        const existing = classification.colors;
+        if (
+          existing &&
+          existing.length === colors.length &&
+          existing.every((color, index) => color === colors[index])
+        ) {
+          continue;
+        }
+
+        updatePrimitiveClassificationState(target.primitive, { colors });
+      }
     });
   });
 </script>
@@ -724,74 +2247,93 @@
   </div>
 
   <div class="config-accordion">
+    {#if selectedViz && hasYearDimension}
+      <YearFilter visualization={selectedViz} />
+    {/if}
+
     <SymbolsConfig
       dataFields={dataFieldItems}
-      visualization={selectedViz}
+      visualization={symbolVisualization}
       disabled={!showsSymbolsConfig}
       filters={getFiltersForPrimitive(PrimitiveFilterType.POINT)}
-      onStyleChange={handleStyleChange}
-      onModesChange={handleModesChange}
+      onStyleChange={handleSymbolStyleChange}
+      onModesChange={handleSymbolModesChange}
       onSymbolsChange={handleSymbolsChange}
-      onMappingChange={handleMappingChange}
-      onMissingDataChange={handleMissingDataChange}
-      onClassificationChange={handleClassificationChange}
-      onInvertPalette={handleInvertPalette}
+      onMappingChange={handleSymbolMappingChange}
+      onMissingDataChange={handleSymbolMissingDataChange}
+      onClassificationChange={handleSymbolClassificationChange}
+      onInvertPalette={handleSymbolPaletteInvert}
       onToggleVisibility={(checked) =>
         handlePrimitiveVisibilityChange(PrimitiveFilterType.POINT, checked)}
-      onAddFilter={(f) => handleAddDataFilter(f, PrimitiveFilterType.POINT)}
+      onAddFilter={(filter) =>
+        handleAddDataFilter(filter, PrimitiveFilterType.POINT)}
+      onUpdateFilter={handleUpdateDataFilter}
       onRemoveFilter={handleRemoveDataFilter}
       onClearFilters={() => handleClearFilters(PrimitiveFilterType.POINT)}
     />
 
     <PolygonsConfig
       dataFields={dataFieldItems}
-      visualization={selectedViz}
+      visualization={polygonVisualization}
       disabled={!showsPolygonsConfig}
       filters={getFiltersForPrimitive(PrimitiveFilterType.POLYGON)}
-      onStyleChange={handleStyleChange}
-      onModesChange={handleModesChange}
-      onMissingDataChange={handleMissingDataChange}
-      onClassificationChange={handleClassificationChange}
-      onMappingChange={handleMappingChange}
-      onInvertPalette={handleInvertPalette}
+      onStyleChange={handlePolygonStyleChange}
+      onModesChange={handlePolygonModesChange}
+      onMissingDataChange={handlePolygonMissingDataChange}
+      onClassificationChange={handlePolygonClassificationChange}
+      onMappingChange={handlePolygonMappingChange}
+      onInvertPalette={handlePolygonPaletteInvert}
       onToggleVisibility={(checked) =>
         handlePrimitiveVisibilityChange(PrimitiveFilterType.POLYGON, checked)}
-      onAddFilter={(f) => handleAddDataFilter(f, PrimitiveFilterType.POLYGON)}
+      onAddFilter={(filter) =>
+        handleAddDataFilter(filter, PrimitiveFilterType.POLYGON)}
+      onUpdateFilter={handleUpdateDataFilter}
       onRemoveFilter={handleRemoveDataFilter}
       onClearFilters={() => handleClearFilters(PrimitiveFilterType.POLYGON)}
     />
 
     <LinesConfig
       dataFields={dataFieldItems}
-      visualization={selectedViz}
+      visualization={lineVisualization}
       disabled={!showsLinesConfig}
       filters={getFiltersForPrimitive(PrimitiveFilterType.LINE)}
-      onStyleChange={handleStyleChange}
-      onModesChange={handleModesChange}
-      onMissingDataChange={handleMissingDataChange}
-      onClassificationChange={handleClassificationChange}
-      onMappingChange={handleMappingChange}
-      onInvertPalette={handleInvertPalette}
+      onStyleChange={handleLineStyleChange}
+      onModesChange={handleLineModesChange}
+      onMissingDataChange={handleLineMissingDataChange}
+      onClassificationChange={handleLineClassificationChange}
+      onMappingChange={handleLineMappingChange}
+      onInvertPalette={handleLinePaletteInvert}
       onToggleVisibility={(checked) =>
         handlePrimitiveVisibilityChange(PrimitiveFilterType.LINE, checked)}
-      onAddFilter={(f) => handleAddDataFilter(f, PrimitiveFilterType.LINE)}
+      onAddFilter={(filter) =>
+        handleAddDataFilter(filter, PrimitiveFilterType.LINE)}
+      onUpdateFilter={handleUpdateDataFilter}
       onRemoveFilter={handleRemoveDataFilter}
       onClearFilters={() => handleClearFilters(PrimitiveFilterType.LINE)}
     />
 
     <TextsConfig
       dataFields={dataFieldItems}
-      visualization={selectedViz}
+      visualization={textVisualization}
+      backgroundVisualization={textBackgroundVisualization}
       disabled={!hasGeometry}
       filters={getFiltersForPrimitive(PrimitiveFilterType.TEXT)}
-      onStyleChange={handleStyleChange}
-      onModesChange={handleModesChange}
-      onMissingDataChange={handleMissingDataChange}
-      onClassificationChange={handleClassificationChange}
-      onMappingChange={handleMappingChange}
-      onInvertPalette={handleInvertPalette}
+      onStyleChange={handleTextStyleChange}
+      onModesChange={handleTextModesChange}
+      onMissingDataChange={handleTextMissingDataChange}
+      onClassificationChange={handleTextClassificationChange}
+      onMappingChange={handleTextMappingChange}
+      onInvertPalette={handleTextPaletteInvert}
+      onSecondaryLabelsChange={handleTextSecondaryLabelsChange}
+      onBackgroundStyleChange={handleTextBackgroundStyleChange}
+      onBackgroundModesChange={handleTextBackgroundModesChange}
+      onBackgroundClassificationChange={handleTextBackgroundClassificationChange}
+      onBackgroundMappingChange={handleTextBackgroundMappingChange}
+      onBackgroundInvertPalette={handleTextBackgroundPaletteInvert}
       onToggleVisibility={handleTextVisibilityChange}
-      onAddFilter={(f) => handleAddDataFilter(f, PrimitiveFilterType.TEXT)}
+      onAddFilter={(filter) =>
+        handleAddDataFilter(filter, PrimitiveFilterType.TEXT)}
+      onUpdateFilter={handleUpdateDataFilter}
       onRemoveFilter={handleRemoveDataFilter}
       onClearFilters={() => handleClearFilters(PrimitiveFilterType.TEXT)}
     />

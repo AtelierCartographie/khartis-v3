@@ -726,12 +726,16 @@ async function queryBasemapBounds(
   const escapedTable = escapeIdentifier(tableName);
   const escapedGeometryColumn = escapeIdentifier(geometryColumn);
   const bboxQuery = (await duck.query(
-    `SELECT
-      ST_XMin(ST_Extent("${escapedGeometryColumn}")) as minX,
-      ST_YMin(ST_Extent("${escapedGeometryColumn}")) as minY,
-      ST_XMax(ST_Extent("${escapedGeometryColumn}")) as maxX,
-      ST_YMax(ST_Extent("${escapedGeometryColumn}")) as maxY
-    FROM "${escapedTable}"`,
+    `WITH agg AS (
+      SELECT ST_Extent_Agg("${escapedGeometryColumn}") AS extent
+      FROM "${escapedTable}"
+    )
+    SELECT
+      ST_XMin(extent) as minX,
+      ST_YMin(extent) as minY,
+      ST_XMax(extent) as maxX,
+      ST_YMax(extent) as maxY
+    FROM agg`,
     { format: 'array', useProxy: false }
   )) as Array<{
     minX: number | null;

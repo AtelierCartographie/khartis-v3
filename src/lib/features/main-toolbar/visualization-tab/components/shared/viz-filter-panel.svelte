@@ -13,7 +13,6 @@
   import { Dropdown, TextInput } from 'carbon-components-svelte';
   import { Add, Close, Launch, TrashCan } from 'carbon-icons-svelte';
   import { onMount } from 'svelte';
-  import { fly } from 'svelte/transition';
 
   interface DataFieldOption {
     id: number;
@@ -25,9 +24,9 @@
     title?: string;
     dataFields: DataFieldOption[];
     filters: VizDataFilter[];
-    stats: { total: number; filtered: number };
+    stats?: { total: number; filtered: number };
     onAddFilter: (filter: Omit<VizDataFilter, 'id'>) => void;
-    onUpdateFilter: (
+    onUpdateFilter?: (
       filterId: string,
       updates: Partial<Omit<VizDataFilter, 'id'>>
     ) => void;
@@ -247,7 +246,7 @@
       updates.secondaryValue = undefined;
       updates.limit = getOperatorDef(nextOp)?.requiresLimit ? 5 : undefined;
     }
-    onUpdateFilter(filter.id, updates);
+    onUpdateFilter?.(filter.id, updates);
   }
 
   function handleOperatorChange(
@@ -273,31 +272,31 @@
       updates.limit = undefined;
       updates.secondaryValue = undefined;
     }
-    onUpdateFilter(filter.id, updates);
+    onUpdateFilter?.(filter.id, updates);
   }
 
   function handleValueChange(filter: VizDataFilter, newValue: string): void {
-    onUpdateFilter(filter.id, { value: newValue });
+    onUpdateFilter?.(filter.id, { value: newValue });
   }
 
   function handleSecondaryValueChange(
     filter: VizDataFilter,
     newValue: string
   ): void {
-    onUpdateFilter(filter.id, { secondaryValue: newValue });
+    onUpdateFilter?.(filter.id, { secondaryValue: newValue });
   }
 
   function handleLimitChange(filter: VizDataFilter, newLimit: number): void {
-    onUpdateFilter(filter.id, { limit: newLimit, value: String(newLimit) });
+    onUpdateFilter?.(filter.id, { limit: newLimit, value: String(newLimit) });
   }
 
   const percent = $derived.by(() => {
-    if (stats.total === 0) return 0;
+    if (!stats || stats.total === 0) return 0;
     return Math.round((stats.filtered / stats.total) * 1000) / 10;
   });
 
   const progressRatio = $derived.by(() => {
-    if (stats.total === 0) return 0;
+    if (!stats || stats.total === 0) return 0;
     return Math.min(1, Math.max(0, stats.filtered / stats.total));
   });
 
@@ -315,8 +314,6 @@
 <aside
   class="viz-filter-panel"
   style:right={panelRight}
-  in:fly={{ x: 20, duration: 200 }}
-  out:fly={{ x: 20, duration: 150 }}
   aria-label={title ?? m.filter_panel_title()}
 >
   <header class="panel-header">
@@ -331,7 +328,7 @@
   </header>
 
   <div class="panel-content">
-    {#if hasFilters}
+    {#if hasFilters && stats && stats.total > 0}
       <div class="stats-block">
         <span class="stats-primary">
           {m.filter_stats_filtered({
@@ -506,6 +503,7 @@
     top: 50%;
     transform: translateY(-50%);
     width: 300px;
+    min-height: 300px;
     max-height: calc(100dvh - 120px);
     overflow-y: auto;
     background: var(--cds-ui-02, #ffffff);
@@ -513,7 +511,6 @@
     z-index: var(--z-dropdown);
     display: flex;
     flex-direction: column;
-    transition: right 0.2s ease-out;
   }
 
   .panel-header {

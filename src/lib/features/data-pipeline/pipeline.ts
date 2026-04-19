@@ -100,8 +100,10 @@ const Pipeline = {
         if (isZipFile(fallback)) {
           result = await processZipFile(fallback);
         } else {
+          const companionFiles =
+            await createCompanionFilesFromUpload(uploadedFile);
           result = await processFileInternal(fallback, {
-            companionFiles: createCompanionFilesFromUpload(uploadedFile)
+            companionFiles
           });
         }
       }

@@ -17,7 +17,8 @@
     layout,
     syncPanZoom = false,
     containerWidth = 1200,
-    containerHeight: _containerHeight = 800,
+    containerHeight = 800,
+    pageAspectRatio = 0.75,
     onReady
   }: {
     visualizations: VisualizationConfig[];
@@ -28,21 +29,57 @@
     syncPanZoom?: boolean;
     containerWidth?: number;
     containerHeight?: number;
+    pageAspectRatio?: number;
     onReady?: () => void;
   } = $props();
 
-  const facetWidth = $derived(
-    Math.floor(
-      (containerWidth - (layout.columns - 1) * layout.gap) / layout.columns
-    )
+  const TITLE_HEIGHT = 28;
+  const MIN_CELL = 80;
+
+  const mapCount = $derived(visualizations.length);
+
+  const effectiveColumns = $derived(
+    Math.max(1, Math.min(layout.columns, mapCount || 1))
   );
 
-  const facetHeight = $derived(Math.floor(facetWidth * 0.75));
+  const effectiveRows = $derived(
+    mapCount > 0 ? Math.ceil(mapCount / effectiveColumns) : 1
+  );
 
-  const gridColumns = $derived(`repeat(${layout.columns}, 1fr)`);
-  const gap = $derived(`${layout.gap}px`);
+  const cellSize = $derived.by(() => {
+    if (mapCount === 0) {
+      return { width: 0, height: 0 };
+    }
 
-  // Shared view state for pan/zoom sync
+    const cols = effectiveColumns;
+    const rows = effectiveRows;
+    const availableW = containerWidth - (cols - 1) * layout.gap;
+    const availableH =
+      containerHeight - (rows - 1) * layout.gap - TITLE_HEIGHT * rows;
+
+    const widthPerCol = Math.max(MIN_CELL, Math.floor(availableW / cols));
+    const heightPerRow = Math.max(MIN_CELL, Math.floor(availableH / rows));
+
+    const constrainedByHeight = Math.floor(heightPerRow / pageAspectRatio);
+    const constrainedByWidth = Math.floor(widthPerCol * pageAspectRatio);
+
+    const width = Math.min(widthPerCol, constrainedByHeight);
+    const height = Math.min(heightPerRow, constrainedByWidth);
+
+    return { width, height };
+  });
+
+  const facetWidth = $derived(cellSize.width);
+  const facetHeight = $derived(cellSize.height);
+
+  const gridStyle = $derived(
+    [
+      `grid-template-columns: repeat(${effectiveColumns}, ${facetWidth}px)`,
+      `grid-auto-rows: ${facetHeight + TITLE_HEIGHT}px`,
+      `gap: ${layout.gap}px`
+    ].join('; ')
+  );
+
   let sharedViewState = $state<FacetSyncViewState | null>(null);
   let syncSourceIdx = $state<number>(-1);
 
@@ -58,57 +95,67 @@
   }
 </script>
 
-<div
-  class="facets-grid"
-  style:grid-template-columns={gridColumns}
-  style:gap={gap}
->
-  {#each visualizations as viz, idx (viz.id)}
-    <div class="facet-cell">
-      <h4 class="facet-title">{viz.name}</h4>
-      <ThematicMap
-        tables={tables}
-        splitData={splitData}
-        geoJSONs={geoJSONs}
-        width={facetWidth}
-        height={facetHeight}
-        forcedVisualizationIds={[viz.id]}
-        onReady={idx === 0 ? onReady : undefined}
-        onMoveSync={syncPanZoom ? (s) => handleMoveSync(idx, s) : undefined}
-        syncViewState={getSyncViewState(idx)}
-        showLegendOverlay={false}
-        showGeoIndicationsOverlay={false}
-        showAnnotationOverlay={false}
-        isFacetCell={true}
-      />
-    </div>
-  {/each}
+<div class="facets-grid-wrapper">
+  <div class="facets-grid" style={gridStyle}>
+    {#each visualizations as viz, idx (viz.id)}
+      <div class="facet-cell" style:width="{facetWidth}px">
+        <h4 class="facet-title">{viz.name}</h4>
+        <ThematicMap
+          tables={tables}
+          splitData={splitData}
+          geoJSONs={geoJSONs}
+          width={facetWidth}
+          height={facetHeight}
+          forcedVisualizationIds={[viz.id]}
+          onReady={idx === 0 ? onReady : undefined}
+          onMoveSync={syncPanZoom ? (s) => handleMoveSync(idx, s) : undefined}
+          syncViewState={getSyncViewState(idx)}
+          showLegendOverlay={false}
+          showGeoIndicationsOverlay={false}
+          showAnnotationOverlay={false}
+          isFacetCell={true}
+        />
+      </div>
+    {/each}
+  </div>
 </div>
 
-<style>
-  .facets-grid {
-    display: grid;
+<style lang="scss">
+  .facets-grid-wrapper {
     width: 100%;
     height: 100%;
-    padding: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     box-sizing: border-box;
+    padding: 16px;
+  }
+
+  .facets-grid {
+    display: grid;
+    justify-content: center;
+    align-content: center;
+    justify-items: center;
+    align-items: center;
   }
 
   .facet-cell {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 4px;
     min-height: 0;
   }
 
   .facet-title {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 500;
     text-align: center;
-    color: var(--cds-text-01);
+    color: var(--cds-text-primary, #161616);
     margin: 0;
-    padding: 4px;
-    background: var(--cds-layer-01);
-    border-radius: 4px;
+    padding: 2px 8px;
+    line-height: 20px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 </style>

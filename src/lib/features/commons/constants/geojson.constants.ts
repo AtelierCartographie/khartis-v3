@@ -1,11 +1,3 @@
-/**
- * GeoJSON type constants
- *
- * Standard GeoJSON geometry and feature type strings.
- * Centralizes all GeoJSON type literals used for feature creation,
- * parsing, and type checking.
- */
-
 export const GEOJSON_TYPE = {
   FEATURE: 'Feature',
   FEATURE_COLLECTION: 'FeatureCollection',

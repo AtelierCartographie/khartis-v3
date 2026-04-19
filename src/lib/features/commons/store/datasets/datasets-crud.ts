@@ -51,8 +51,20 @@ export async function deleteDataset(
 
   if (vizOps) {
     const vizs = vizOps.getVisualizationsByDataset(datasetId);
+    // Lazy import to avoid cycle between datasets and facets stores.
+    const { facetsStore } =
+      await import('$lib/features/step-toolbar/tools/facets/facets.store.svelte');
+    const facetsBaseVizId = facetsStore.baseVisualizationId;
+    const facetsBaseBeingDeleted =
+      facetsBaseVizId !== null &&
+      vizs.some((viz) => viz.id === facetsBaseVizId);
+
     for (const viz of vizs) {
       vizOps.removeVisualization(viz.id);
+    }
+
+    if (facetsBaseBeingDeleted) {
+      facetsStore.disable();
     }
   }
 
@@ -190,7 +202,25 @@ export function hasModifications(
   datasetId: string
 ): boolean {
   const dataset = findById(state.datasets, datasetId);
-  return dataset ? (dataset.metadata.transformations?.length ?? 0) > 0 : false;
+  if (!dataset) {
+    return false;
+  }
+
+  if ((dataset.metadata.transformations?.length ?? 0) > 0) {
+    return true;
+  }
+
+  const sourceFile = dataset.sourceFileId
+    ? projectStore.currentProject?.data?.sourceFiles?.find(
+        (file) => file.id === dataset.sourceFileId
+      )
+    : undefined;
+
+  return Boolean(
+    sourceFile &&
+    ((sourceFile.columnTransformations?.length ?? 0) > 0 ||
+      (sourceFile.deletedRowIds?.length ?? 0) > 0)
+  );
 }
 
 export function recordTransformation(

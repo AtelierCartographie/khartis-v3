@@ -46,8 +46,8 @@ export const PIPELINE_CONST = {
     ] as const
   },
   LIMITS: {
-    MAX_FILE_SIZE: 100 * 1024 * 1024,
-    WARNING_FILE_SIZE: 50 * 1024 * 1024,
+    MAX_FILE_SIZE: 200 * 1024 * 1024,
+    WARNING_FILE_SIZE: 120 * 1024 * 1024,
     SAMPLE_ROWS: 100,
     TYPE_THRESHOLD: 0.8
   },

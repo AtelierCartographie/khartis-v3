@@ -474,6 +474,233 @@ export function hasGPSCoordinateColumns(
   return resolveGPSCoordinateColumns(columns, geoDetection) !== null;
 }
 
+export interface GPSRangeValidation {
+  column: GeoColumnResult;
+  totalChecked: number;
+  outOfRange: number;
+  looksSwapped: boolean;
+}
+
+const LAT_RANGE: readonly [number, number] = [-90, 90];
+const LON_RANGE: readonly [number, number] = [-180, 180];
+
+function validateGPSColumnRange(
+  column: GeoColumnResult,
+  values: unknown[],
+  expectedRange: readonly [number, number],
+  swapRange: readonly [number, number]
+): GPSRangeValidation {
+  const numericValues = values
+    .map((raw) => parseFloat(String(raw)))
+    .filter((n) => Number.isFinite(n));
+  const outOfRange = numericValues.filter(
+    (n) => n < expectedRange[0] || n > expectedRange[1]
+  );
+  const looksSwapped =
+    numericValues.length > 0 &&
+    outOfRange.length / numericValues.length >= 0.5 &&
+    numericValues.every((n) => n >= swapRange[0] && n <= swapRange[1]);
+  return {
+    column,
+    totalChecked: numericValues.length,
+    outOfRange: outOfRange.length,
+    looksSwapped
+  };
+}
+
+function numericStats(values: unknown[]): {
+  count: number;
+  maxAbs: number;
+  minAbs: number;
+  mean: number;
+} {
+  const numbers = values
+    .map((v) => parseFloat(String(v)))
+    .filter((n) => Number.isFinite(n));
+  if (numbers.length === 0) {
+    return { count: 0, maxAbs: 0, minAbs: 0, mean: 0 };
+  }
+  const abs = numbers.map((n) => Math.abs(n));
+  return {
+    count: numbers.length,
+    maxAbs: Math.max(...abs),
+    minAbs: Math.min(...abs),
+    mean: numbers.reduce((a, b) => a + b, 0) / numbers.length
+  };
+}
+
+function detectMagnitudeSwap(
+  latValues: unknown[],
+  lonValues: unknown[]
+): boolean {
+  const latStats = numericStats(latValues);
+  const lonStats = numericStats(lonValues);
+  if (latStats.count < 2 || lonStats.count < 2) return false;
+  // Both axes are in their declared legal ranges but their magnitudes look
+  // reversed for European-style bounded datasets: latitude cluster small,
+  // longitude cluster large. This flags the CSV-11 Seveso IDF swap.
+  const latLooksLikeEuropeanLongitude =
+    latStats.maxAbs < 15 && latStats.minAbs < 15;
+  const lonLooksLikeEuropeanLatitude =
+    lonStats.minAbs > 40 && lonStats.maxAbs < 90;
+  return latLooksLikeEuropeanLongitude && lonLooksLikeEuropeanLatitude;
+}
+
+export function collectGPSRangeWarnings(
+  latColumn: GeoColumnResult | undefined,
+  lonColumn: GeoColumnResult | undefined,
+  context: {
+    headers: string[];
+    data: unknown[][];
+    sampleSize?: number;
+  }
+): string[] {
+  const warnings: string[] = [];
+  const { headers, data, sampleSize } = context;
+  const effectiveSample = sampleSize ?? Math.min(100, data.length);
+
+  function valuesFor(columnIndex: number): unknown[] {
+    return data
+      .slice(0, effectiveSample)
+      .map((row) => row[columnIndex])
+      .filter((v) => v != null && v !== '');
+  }
+
+  const latValidation = latColumn
+    ? validateGPSColumnRange(
+        latColumn,
+        valuesFor(latColumn.index),
+        LAT_RANGE,
+        LON_RANGE
+      )
+    : null;
+  const lonValidation = lonColumn
+    ? validateGPSColumnRange(
+        lonColumn,
+        valuesFor(lonColumn.index),
+        LON_RANGE,
+        LAT_RANGE
+      )
+    : null;
+
+  const bothLookSwapped =
+    !!latValidation &&
+    !!lonValidation &&
+    latValidation.looksSwapped &&
+    lonValidation.looksSwapped;
+
+  const magnitudeSwap =
+    !!latColumn &&
+    !!lonColumn &&
+    !bothLookSwapped &&
+    detectMagnitudeSwap(valuesFor(latColumn.index), valuesFor(lonColumn.index));
+
+  if (bothLookSwapped || magnitudeSwap) {
+    warnings.push(
+      `GPS columns "${latColumn!.columnName}" and "${lonColumn!.columnName}" appear to be swapped (lat values in longitude range and vice versa)`
+    );
+  } else {
+    if (
+      latValidation &&
+      latValidation.outOfRange > 0 &&
+      !latValidation.looksSwapped
+    ) {
+      warnings.push(
+        `Latitude column "${latColumn!.columnName}" has ${latValidation.outOfRange}/${latValidation.totalChecked} values outside [-90, 90]`
+      );
+    }
+    if (
+      lonValidation &&
+      lonValidation.outOfRange > 0 &&
+      !lonValidation.looksSwapped
+    ) {
+      warnings.push(
+        `Longitude column "${lonColumn!.columnName}" has ${lonValidation.outOfRange}/${lonValidation.totalChecked} values outside [-180, 180]`
+      );
+    }
+    if (latValidation && latValidation.looksSwapped && !bothLookSwapped) {
+      warnings.push(
+        `Latitude column "${latColumn!.columnName}" contains values that look like longitudes — please verify`
+      );
+    }
+    if (lonValidation && lonValidation.looksSwapped && !bothLookSwapped) {
+      warnings.push(
+        `Longitude column "${lonColumn!.columnName}" contains values that look like latitudes — please verify`
+      );
+    }
+  }
+
+  // Silence unused headers warning until callers need per-column headings
+  void headers;
+  return warnings;
+}
+
+interface FallbackGPSContext {
+  headers: string[];
+  data: unknown[][];
+  sampleSize?: number;
+  alreadyCoveredLatIndex?: number;
+  alreadyCoveredLonIndex?: number;
+}
+
+function collectFallbackGPSWarnings(context: FallbackGPSContext): string[] {
+  const warnings: string[] = [];
+  const {
+    headers,
+    data,
+    sampleSize,
+    alreadyCoveredLatIndex,
+    alreadyCoveredLonIndex
+  } = context;
+  const effectiveSample = sampleSize ?? Math.min(100, data.length);
+
+  const latIndex = headers.findIndex(
+    (h, i) =>
+      i !== alreadyCoveredLatIndex && COLUMN_NAME_PATTERNS.latitude.test(h)
+  );
+  const lonIndex = headers.findIndex(
+    (h, i) =>
+      i !== alreadyCoveredLonIndex && COLUMN_NAME_PATTERNS.longitude.test(h)
+  );
+
+  function valuesFor(columnIndex: number): number[] {
+    return data
+      .slice(0, effectiveSample)
+      .map((row) => parseFloat(String(row[columnIndex])))
+      .filter((n) => Number.isFinite(n));
+  }
+
+  if (latIndex >= 0 && latIndex !== alreadyCoveredLatIndex) {
+    const values = valuesFor(latIndex);
+    if (values.length > 0) {
+      const outOfRange = values.filter(
+        (n) => n < LAT_RANGE[0] || n > LAT_RANGE[1]
+      ).length;
+      if (outOfRange > 0) {
+        warnings.push(
+          `Latitude column "${headers[latIndex]}" has ${outOfRange}/${values.length} values outside [-90, 90]`
+        );
+      }
+    }
+  }
+
+  if (lonIndex >= 0 && lonIndex !== alreadyCoveredLonIndex) {
+    const values = valuesFor(lonIndex);
+    if (values.length > 0) {
+      const outOfRange = values.filter(
+        (n) => n < LON_RANGE[0] || n > LON_RANGE[1]
+      ).length;
+      if (outOfRange > 0) {
+        warnings.push(
+          `Longitude column "${headers[lonIndex]}" has ${outOfRange}/${values.length} values outside [-180, 180]`
+        );
+      }
+    }
+  }
+
+  return warnings;
+}
+
 export const GeoColumnDetector = {
   async detectGeoColumns(
     headers: string[],
@@ -522,6 +749,26 @@ export const GeoColumnDetector = {
       warnings.push('Latitude column detected without corresponding longitude');
     } else if (!latColumn && lonColumn) {
       warnings.push('Longitude column detected without corresponding latitude');
+    }
+
+    const rangeWarnings = collectGPSRangeWarnings(latColumn, lonColumn, {
+      headers,
+      data,
+      sampleSize
+    });
+    warnings.push(...rangeWarnings);
+
+    // Fallback: even if the detector rejected a lat/lon column because of out-of-range
+    // values, look at header names and emit range warnings so the user is told what's wrong.
+    if (!latColumn || !lonColumn) {
+      const fallbackWarnings = collectFallbackGPSWarnings({
+        headers,
+        data,
+        sampleSize,
+        alreadyCoveredLatIndex: latColumn?.index,
+        alreadyCoveredLonIndex: lonColumn?.index
+      });
+      warnings.push(...fallbackWarnings);
     }
 
     const hasGeoColumns = results.length > 0;

@@ -1,6 +1,5 @@
 <script lang="ts">
   import { RadioButton } from 'carbon-components-svelte';
-  import { ArrowRight } from 'carbon-icons-svelte';
   import clsx from 'clsx';
   import type { Snippet } from 'svelte';
   import { KEY } from '../commons/constants/dom.constants';
@@ -9,7 +8,6 @@
     title: string;
     icon: Snippet;
     selected?: boolean;
-    selectable?: boolean;
     name?: string;
     onclick?: (e: Event) => void | undefined;
     onkeydown?: (e: KeyboardEvent) => void | undefined;
@@ -21,7 +19,6 @@
     title,
     icon,
     selected = false,
-    selectable = true,
     name = 'project-type',
     onclick,
     onkeydown,
@@ -40,7 +37,7 @@
 
 <div
   class={clsx(
-    'project-card w-full relative cursor-pointer pl-5 pt-5 pb-5',
+    'project-card w-full cursor-pointer pl-5 pr-5 pt-5 pb-5',
     selected && 'selected'
   )}
   role="tab"
@@ -61,21 +58,13 @@
     </div>
 
     <div class="flex justify-end" aria-hidden="true">
-      {#if selectable}
-        <RadioButton name={name} checked={selected} />
-      {/if}
+      <RadioButton name={name} checked={selected} />
     </div>
   </div>
 
-  <div class="self-start mt-3 mb-5">
+  <div class="tab-content self-start mt-3">
     <p class="tab-title text-left">{title}</p>
   </div>
-
-  {#if !selectable}
-    <div class="nav-arrow">
-      <ArrowRight size={16} />
-    </div>
-  {/if}
 </div>
 
 <style>
@@ -97,17 +86,16 @@
     );
   }
 
+  .tab-content {
+    width: 100%;
+    padding-bottom: var(--cds-spacing-04);
+  }
+
   .tab-title {
+    min-width: 0;
     font-size: var(--cds-body-short-02-font-size, 1rem);
     font-weight: 600;
     line-height: 1.375rem;
     margin: 0;
-  }
-
-  .nav-arrow {
-    position: absolute;
-    bottom: var(--cds-spacing-05);
-    right: var(--cds-spacing-05);
-    opacity: 0.6;
   }
 </style>

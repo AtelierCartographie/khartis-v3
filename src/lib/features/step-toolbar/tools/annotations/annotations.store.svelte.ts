@@ -1143,6 +1143,7 @@ const { actions, getState } = createToolStore<
       textContent: _textContent,
       isDrawingMode: _isDrawingMode,
       drawingInProgress: _drawingInProgress,
+      activeType: _activeType,
       ...persisted
     }) => persisted
   }

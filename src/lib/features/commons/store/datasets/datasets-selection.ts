@@ -28,7 +28,6 @@ export function selectDataset(state: DatasetsState, datasetId: string): void {
 
   state.selectedDatasetId = datasetId;
 
-  // Keep data-tab state when a dataset gets replaced but still points to the same source file.
   if (!isSameSourceFile) {
     dataTabActions.reset();
   }

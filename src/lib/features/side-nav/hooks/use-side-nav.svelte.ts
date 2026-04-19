@@ -55,12 +55,14 @@ export function useSideNav(): UseSideNavReturn {
   }
 
   function handleNewProject() {
+    createProjectActions.resetAllTabs();
     createProjectActions.selectTab(1);
     globalState.isCreateProjectModalOpen = true;
     closeSideNav();
   }
 
   function handleOpenProject() {
+    createProjectActions.resetAllTabs();
     createProjectActions.selectTab(2);
     globalState.isCreateProjectModalOpen = true;
     closeSideNav();

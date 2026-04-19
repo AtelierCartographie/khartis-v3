@@ -26,6 +26,10 @@ class PersistenceRegistryImpl {
 
   private dirty = false;
 
+  private flushInFlight: Promise<void> | null = null;
+
+  private flushQueued = false;
+
   get isDirty(): boolean {
     return this.dirty;
   }
@@ -113,15 +117,39 @@ class PersistenceRegistryImpl {
 
   flush(): void {
     if (!this.dirty) return;
+    if (this.flushInFlight) {
+      this.flushQueued = true;
+      return;
+    }
+
     this.dirty = false;
-    this.saveCallback?.().catch((error) => {
-      logger.error('Persistence flush failed', LogCategory.PERSISTENCE, error);
-    });
+
+    if (!this.saveCallback) {
+      return;
+    }
+
+    this.flushInFlight = this.saveCallback()
+      .catch((error) => {
+        logger.error(
+          'Persistence flush failed',
+          LogCategory.PERSISTENCE,
+          error
+        );
+      })
+      .finally(() => {
+        this.flushInFlight = null;
+
+        if (this.flushQueued || this.dirty) {
+          this.flushQueued = false;
+          this.flush();
+        }
+      });
   }
 
   markClean(): void {
     this.cancelDebounce();
     this.dirty = false;
+    this.flushQueued = false;
   }
 
   private scheduleDebounce(): void {

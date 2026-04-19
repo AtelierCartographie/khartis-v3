@@ -1,10 +1,18 @@
 <script lang="ts">
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
+  import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
+  import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
+  import {
+    getAvailableProjectionIds,
+    resolveProjectionAvailabilityContext,
+    supportsCustomProjectionCode
+  } from '$lib/features/map/utils/projection-availability';
   import { m } from '$lib/paraglide/messages';
   import { Button, ComboBox, TextArea } from 'carbon-components-svelte';
   import { Code, List } from 'carbon-icons-svelte';
   import { createEventDispatcher } from 'svelte';
-  import { PROJECTIONS } from './data';
+  import { PROJECTIONS as PROJECTION_CATALOG } from '$lib/features/commons/utils/projection.utils';
+  import { getCompositeProjectionSelectionId } from '$lib/features/map/utils/user-projection.utils';
   import { projectionActions } from './projection.store.svelte';
 
   const dispatch = createEventDispatcher<{
@@ -17,11 +25,45 @@
   let crsCode = $state('');
   let catalogueQuery = $state('');
 
-  const items = PROJECTIONS.map((p) => ({
-    id: p.id,
-    projectionId: p.projectionId,
-    text: p.title
-  }));
+  const projectionContext = $derived(
+    resolveProjectionAvailabilityContext({
+      requiresMapLibre: basemapStyleStore.requiresMapLibre,
+      hasOSMBasemap: osmBasemapStore.isActive,
+      currentStyle: basemapStyleStore.selectedStyle,
+      preferredStyle: basemapStyleStore.preferredTiledStyle,
+      referenceBasemapId: basemapStyleStore.referenceBasemapId,
+      osmBasemapBbox: osmBasemapStore.activeOSMBasemap?.bbox ?? null
+    })
+  );
+  const customCodeEnabled = $derived(
+    supportsCustomProjectionCode(projectionContext)
+  );
+  const compositeItems = $derived([
+    {
+      id: getCompositeProjectionSelectionId('FRANCE_DOM_TOM'),
+      projectionId: getCompositeProjectionSelectionId('FRANCE_DOM_TOM'),
+      text: m.projection_name_france_dom_tom()
+    },
+    {
+      id: getCompositeProjectionSelectionId('EUROPE_DOM_TOM'),
+      projectionId: getCompositeProjectionSelectionId('EUROPE_DOM_TOM'),
+      text: m.projection_name_europe_dom_tom()
+    }
+  ]);
+  const items = $derived(
+    [
+      ...PROJECTION_CATALOG.map((projection) => ({
+        id: projection.id,
+        projectionId: projection.id,
+        text: projection.name
+      })),
+      ...compositeItems
+    ].filter(
+      (projection) =>
+        getAvailableProjectionIds(projectionContext, [projection.projectionId])
+          .length > 0
+    )
+  );
   const catalogueLabel = m.projection_catalog_label();
   const viewCodeLabel = m.projection_view_code();
   const otherSearchPlaceholder = m.projection_other_search_placeholder();
@@ -33,18 +75,36 @@
   const resetLabel = m.projection_code_reset?.() ?? 'Reset';
   const submitLabel = m.projection_code_submit?.() ?? 'Validate';
 
-  const viewTabs = [
-    {
-      icon: List,
-      label: catalogueLabel,
-      iconSize: 16
-    },
-    {
-      icon: Code,
-      label: viewCodeLabel || 'Code',
-      iconSize: 16
+  const viewTabs = $derived.by(() => {
+    const tabs = [
+      {
+        icon: List,
+        label: catalogueLabel,
+        iconSize: 16
+      }
+    ];
+
+    if (customCodeEnabled) {
+      tabs.push({
+        icon: Code,
+        label: viewCodeLabel,
+        iconSize: 16
+      });
     }
-  ];
+
+    return tabs;
+  });
+
+  $effect(() => {
+    if (customCodeEnabled) {
+      return;
+    }
+
+    if (activeTabIndex !== 0 || isCodeView) {
+      activeTabIndex = 0;
+      isCodeView = false;
+    }
+  });
 
   function handleViewChange(index: number): void {
     activeTabIndex = index;

@@ -1,3 +1,8 @@
+import {
+  getMaxFileSizeForType,
+  getWarningFileSizeForType
+} from '$lib/features/commons/configs/validation.config';
+import { detectFileType } from '$lib/features/commons/utils/file-import.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import * as m from '$lib/paraglide/messages';
 import { PIPELINE_CONST } from '../constants';
@@ -5,7 +10,9 @@ import type { ValidationResult } from '../types';
 import { validationFailure, validationSuccess } from '../types';
 
 export async function validateFile(file: File): Promise<ValidationResult> {
-  const { MAX_FILE_SIZE, WARNING_FILE_SIZE } = PIPELINE_CONST.LIMITS;
+  const fileType = detectFileType(file);
+  const maxFileSize = getMaxFileSizeForType(fileType);
+  const warningFileSize = getWarningFileSizeForType(fileType);
 
   const ext = `.${file.name.split('.').pop()?.toLowerCase()}`;
   if (
@@ -27,26 +34,21 @@ export async function validateFile(file: File): Promise<ValidationResult> {
     return validationFailure([m.pipeline_error_file_empty()]);
   }
 
-  if (file.size > MAX_FILE_SIZE) {
+  if (file.size > maxFileSize) {
     logger.warn('Uploaded file exceeds size limit', LogCategory.DATA, {
       fileName: file.name,
       fileSize: file.size,
-      maxSize: MAX_FILE_SIZE
+      maxSize: maxFileSize
     });
     return validationFailure([
       m.pipeline_error_file_size_limit({
-        limit: String(MAX_FILE_SIZE / (1024 * 1024))
+        limit: String(maxFileSize / (1024 * 1024))
       })
     ]);
   }
 
   const warnings: string[] = [];
-  if (file.size > WARNING_FILE_SIZE) {
-    logger.debug('Large file detected', LogCategory.DATA, {
-      fileName: file.name,
-      fileSize: file.size,
-      warningThreshold: WARNING_FILE_SIZE
-    });
+  if (file.size > warningFileSize) {
     warnings.push(
       m.pipeline_warning_large_file({
         size: (file.size / (1024 * 1024)).toFixed(1)

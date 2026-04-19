@@ -345,7 +345,7 @@
           max={100}
           step={5}
           stepMultiplier={4}
-          on:change={handleOpacityChange}
+          on:input={handleOpacityChange}
           minLabel=""
           maxLabel=""
         />
@@ -413,7 +413,7 @@
           min={0}
           max={100}
           step={5}
-          on:change={(e) =>
+          on:input={(e) =>
             annotationsActions.applyStyle({
               backgroundOpacity: (e as CustomEvent).detail
             })}

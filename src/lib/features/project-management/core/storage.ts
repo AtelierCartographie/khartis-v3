@@ -1,8 +1,3 @@
-/**
- * Key-value storage backed by the KhartisDB metadata object store.
- * Replaces localforage — all persistence goes through a single IndexedDB database.
- */
-
 import {
   safeJsonParse,
   safeJsonStringify
@@ -10,7 +5,6 @@ import {
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { PROJECT_CONST } from '../constants';
 
-/** Reuse the database connection opened by persistence.ts */
 async function getDb(): Promise<IDBDatabase> {
   const { openDatabase } = await import('./persistence');
   return openDatabase();

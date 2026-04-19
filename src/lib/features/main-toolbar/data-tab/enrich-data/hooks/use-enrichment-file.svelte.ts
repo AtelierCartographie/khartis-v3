@@ -74,11 +74,6 @@ export function useEnrichmentFile(): UseEnrichmentFileReturn {
     );
 
     if (isTrackedByDatasetsStore) {
-      logger.debug(
-        'Skipping enrichment table cleanup because table is tracked in datasets store',
-        LogCategory.DATA,
-        { tableName: dataset.tableName }
-      );
       return;
     }
 
@@ -132,11 +127,6 @@ export function useEnrichmentFile(): UseEnrichmentFileReturn {
         ? result.datasets[0]
         : result;
       await replaceEnrichmentDataset(dataset, file);
-
-      logger.debug('Enrichment file loaded', LogCategory.DATA, {
-        fileName: file.name,
-        rowCount: dataset.rowCount
-      });
     } catch (error) {
       logger.error('Failed to load enrichment file', LogCategory.DATA, error);
       uploadError =
@@ -188,10 +178,6 @@ export function useEnrichmentFile(): UseEnrichmentFileReturn {
         : result;
       await replaceEnrichmentDataset(dataset, null);
       pastedDataValue = '';
-
-      logger.debug('Pasted data loaded', LogCategory.DATA, {
-        rowCount: dataset.rowCount
-      });
     } catch (error) {
       logger.error('Failed to load pasted data', LogCategory.DATA, error);
       uploadError =

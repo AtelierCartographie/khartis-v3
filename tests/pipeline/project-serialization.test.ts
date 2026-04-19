@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { PROJECT_CONST } from '$lib/features/project-management/constants';
 import { migrateIfNeeded } from '$lib/features/project-management/core/schema-migration';
 import {
   serializeUploadedFile,
@@ -13,20 +14,29 @@ vi.mock('$lib/features/commons/utils/logger', () => ({
 // ─── migrateIfNeeded ───────────────────────────────────────────────────────
 
 describe('migrateIfNeeded', () => {
-  it('is a no-op when manifest version is already current (3.2.0)', () => {
-    const data = { manifest: { version: '3.2.0' }, settings: { value: 42 } };
+  it('is a no-op when manifest version is already current', () => {
+    const data = {
+      manifest: { version: PROJECT_CONST.APP_VERSION },
+      settings: { value: 42 }
+    };
     const result = migrateIfNeeded(data);
     expect(result.settings).toEqual({ value: 42 });
-    expect((result.manifest as { version: string }).version).toBe('3.2.0');
+    expect((result.manifest as { version: string }).version).toBe(
+      PROJECT_CONST.APP_VERSION
+    );
   });
 
   it('stamps APP_VERSION when no migration runs (no-op path)', () => {
-    const data = { manifest: { version: '3.2.0', extra: 'preserved' } };
+    const data = {
+      manifest: { version: PROJECT_CONST.APP_VERSION, extra: 'preserved' }
+    };
     const result = migrateIfNeeded(data);
     expect((result.manifest as Record<string, unknown>).extra).toBe(
       'preserved'
     );
-    expect((result.manifest as { version: string }).version).toBe('3.2.0');
+    expect((result.manifest as { version: string }).version).toBe(
+      PROJECT_CONST.APP_VERSION
+    );
   });
 
   it('applies the 3.0.0→3.1.0 migration — data is transformed', () => {
@@ -164,7 +174,7 @@ describe('migrateIfNeeded — .kh roundtrip', () => {
 
   it('accepts a current-version project without mutation on roundtrip', () => {
     const currentProject = {
-      manifest: { version: '3.2.0', name: 'Current' },
+      manifest: { version: PROJECT_CONST.APP_VERSION, name: 'Current' },
       visualizationSettings: [{ symbols: { type: 'circle', size: 14 } }]
     };
 
@@ -200,39 +210,39 @@ function minimalFile(overrides: Record<string, unknown> = {}) {
   } as never;
 }
 
-describe('serializeUploadedFile — string content', () => {
-  it('serializes string content with contentType "string"', () => {
-    const file = minimalFile({ content: 'col1,col2\n1,2' });
-    const s = serializeUploadedFile(file);
-    expect(s.content).toBe('col1,col2\n1,2');
-    expect(s.contentType).toBe('string');
-  });
-
-  it('omits content fields when content is absent', () => {
-    const s = serializeUploadedFile(minimalFile());
-    expect(s.content).toBeUndefined();
-    expect(s.contentType).toBeUndefined();
-  });
-});
-
-describe('serializeUploadedFile — ArrayBuffer content', () => {
-  it('serializes ArrayBuffer as number[] by default', () => {
-    const buf = new ArrayBuffer(3);
-    new Uint8Array(buf).set([10, 20, 30]);
-    const s = serializeUploadedFile(minimalFile({ content: buf }));
-    expect(s.contentType).toBe('arraybuffer');
-    expect(Array.isArray(s.content)).toBe(true);
-    expect(s.content).toEqual([10, 20, 30]);
-  });
-
-  it('serializes ArrayBuffer as Uint8Array when preserveBinary is true', () => {
-    const buf = new ArrayBuffer(3);
-    new Uint8Array(buf).set([10, 20, 30]);
-    const s = serializeUploadedFile(minimalFile({ content: buf }), {
-      preserveBinary: true
+describe('serializeUploadedFile — asset refs', () => {
+  it('persists asset refs and omits inline content', () => {
+    const file = minimalFile({
+      content: 'col1,col2\n1,2',
+      assetRef: {
+        assetId: 'asset-1',
+        originalName: 'data.csv',
+        mimeType: 'text/csv',
+        size: 12,
+        kind: 'primary'
+      }
     });
-    expect(s.content).toBeInstanceOf(Uint8Array);
-    expect(s.content).toEqual(new Uint8Array([10, 20, 30]));
+    const s = serializeUploadedFile(file);
+    expect(s.assetRef?.assetId).toBe('asset-1');
+    expect((s as unknown as Record<string, unknown>).content).toBeUndefined();
+  });
+
+  it('persists companion asset refs for multi-file sources', () => {
+    const s = serializeUploadedFile(
+      minimalFile({
+        companionAssetRefs: [
+          {
+            assetId: 'asset-2',
+            originalName: 'data.dbf',
+            mimeType: 'application/octet-stream',
+            size: 42,
+            kind: 'companion'
+          }
+        ]
+      })
+    );
+    expect(s.companionAssetRefs).toHaveLength(1);
+    expect(s.companionAssetRefs?.[0]?.originalName).toBe('data.dbf');
   });
 });
 
@@ -259,50 +269,31 @@ describe('serializeUploadedFile — optional fields', () => {
   });
 });
 
-describe('deserializeUploadedFile — string content round-trip', () => {
-  it('restores string content', () => {
-    const file = minimalFile({ content: 'hello,world' });
-    const s = serializeUploadedFile(file);
-    const restored = deserializeUploadedFile(s);
-    expect(restored.content).toBe('hello,world');
-  });
-});
-
-describe('deserializeUploadedFile — ArrayBuffer round-trip', () => {
-  it('restores ArrayBuffer from number array serialization', () => {
-    const buf = new ArrayBuffer(4);
-    new Uint8Array(buf).set([1, 2, 3, 4]);
-    const s = serializeUploadedFile(minimalFile({ content: buf }));
-    const restored = deserializeUploadedFile(s);
-    expect(restored.content).toBeInstanceOf(ArrayBuffer);
-    expect(new Uint8Array(restored.content as ArrayBuffer)).toEqual(
-      new Uint8Array([1, 2, 3, 4])
+describe('deserializeUploadedFile — asset ref round-trip', () => {
+  it('restores persisted asset references', () => {
+    const s = serializeUploadedFile(
+      minimalFile({
+        assetRef: {
+          assetId: 'asset-1',
+          originalName: 'hello.csv',
+          mimeType: 'text/csv',
+          size: 11,
+          kind: 'primary'
+        },
+        companionAssetRefs: [
+          {
+            assetId: 'asset-2',
+            originalName: 'hello.dbf',
+            mimeType: 'application/octet-stream',
+            size: 7,
+            kind: 'companion'
+          }
+        ]
+      })
     );
-  });
-
-  it('restores ArrayBuffer from Uint8Array (preserveBinary path)', () => {
-    const buf = new ArrayBuffer(4);
-    new Uint8Array(buf).set([5, 6, 7, 8]);
-    const s = serializeUploadedFile(minimalFile({ content: buf }), {
-      preserveBinary: true
-    });
     const restored = deserializeUploadedFile(s);
-    expect(new Uint8Array(restored.content as ArrayBuffer)).toEqual(
-      new Uint8Array([5, 6, 7, 8])
-    );
-  });
-});
-
-describe('deserializeUploadedFile — relatedFilesData round-trip', () => {
-  it('restores relatedFilesData to ArrayBuffer map', () => {
-    const sidecar = new ArrayBuffer(3);
-    new Uint8Array(sidecar).set([7, 8, 9]);
-    const file = minimalFile({ relatedFilesData: { 'data.dbf': sidecar } });
-    const s = serializeUploadedFile(file);
-    const restored = deserializeUploadedFile(s);
-    expect(restored.relatedFilesData!['data.dbf']).toBeInstanceOf(ArrayBuffer);
-    expect(new Uint8Array(restored.relatedFilesData!['data.dbf'])).toEqual(
-      new Uint8Array([7, 8, 9])
-    );
+    expect(restored.assetRef?.assetId).toBe('asset-1');
+    expect(restored.companionAssetRefs?.[0]?.assetId).toBe('asset-2');
+    expect(restored.content).toBeUndefined();
   });
 });

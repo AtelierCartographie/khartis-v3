@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { shouldAutoSelectSuggestedBasemap } from './basemap-auto-selection';
+import {
+  resolveSuggestedBasemapAutoSelectionTarget,
+  shouldAutoSelectSuggestedBasemap
+} from './basemap-auto-selection';
 
 describe('shouldAutoSelectSuggestedBasemap', () => {
   it('blocks auto-selection after a manual dismissal', () => {
@@ -28,5 +31,33 @@ describe('shouldAutoSelectSuggestedBasemap', () => {
         shouldRetryForDatasetChange: true
       })
     ).toBe(true);
+  });
+
+  it('prefers OSM for GPS datasets when auto-selection is allowed', () => {
+    expect(
+      resolveSuggestedBasemapAutoSelectionTarget({
+        hasDismissedSuggestedBasemap: false,
+        suggestionCount: 3,
+        isOSMActive: false,
+        hasDatasetGeometry: false,
+        persistedBasemapId: undefined,
+        selectedBasemapId: undefined,
+        preferOSM: true
+      })
+    ).toBe('osm');
+  });
+
+  it('keeps catalog suggestion auto-selection for non-GPS datasets', () => {
+    expect(
+      resolveSuggestedBasemapAutoSelectionTarget({
+        hasDismissedSuggestedBasemap: false,
+        suggestionCount: 2,
+        isOSMActive: false,
+        hasDatasetGeometry: false,
+        persistedBasemapId: undefined,
+        selectedBasemapId: undefined,
+        preferOSM: false
+      })
+    ).toBe('suggested');
   });
 });

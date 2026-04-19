@@ -78,7 +78,6 @@ function calculateOptimalMemory(): string {
 
 async function configureRuntimeSettings(): Promise<void> {
   if (!connection) return;
-  const start = performance.now();
 
   const pragmas: string[] = [
     `PRAGMA memory_limit='${calculateOptimalMemory()}';`,
@@ -91,10 +90,6 @@ async function configureRuntimeSettings(): Promise<void> {
 
   await executeQuery(connection, pragmas.join('\n'), {
     format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
-  });
-
-  logger.debug('Runtime settings applied', LogCategory.DUCKDB, {
-    durationMs: (performance.now() - start).toFixed(2)
   });
 }
 
@@ -129,8 +124,6 @@ async function configureLocalExtensionRepository(): Promise<void> {
 async function warmSpatialCoordinateSystems(): Promise<void> {
   if (!connection) return;
 
-  const startTime = performance.now();
-
   try {
     await executeQuery(
       connection,
@@ -141,10 +134,6 @@ async function warmSpatialCoordinateSystems(): Promise<void> {
        DROP TABLE "__khartis_crs_warmup";`,
       { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
     );
-
-    logger.debug('Spatial coordinate systems warmed', LogCategory.DUCKDB, {
-      durationMs: (performance.now() - startTime).toFixed(2)
-    });
   } catch (error) {
     logger.error(
       'Failed to warm spatial coordinate systems',
@@ -194,12 +183,7 @@ async function loadHTTPFSExtension(): Promise<void> {
 }
 
 async function preloadExtensions(): Promise<void> {
-  const startTime = performance.now();
   await Promise.all([loadSpatialExtension(), loadHTTPFSExtension()]);
-
-  logger.debug('Extensions preloaded', LogCategory.DUCKDB, {
-    totalDurationMs: (performance.now() - startTime).toFixed(2)
-  });
 }
 
 export async function initEngine(): Promise<void> {
@@ -285,11 +269,7 @@ export async function loadMacros(macrosSql: string): Promise<void> {
   if (!connection) {
     throw new DuckDBError('Connection not established');
   }
-  const macrosStart = performance.now();
   await executeQuery(connection, macrosSql, {
     format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
-  });
-  logger.debug('Custom macros registered', LogCategory.DUCKDB, {
-    durationMs: (performance.now() - macrosStart).toFixed(2)
   });
 }

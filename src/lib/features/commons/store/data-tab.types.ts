@@ -5,7 +5,6 @@ import {
 } from '$lib/features/commons/constants/ui.constants';
 
 export interface DataControlState {
-  selectedRowIds: (string | number)[];
   expandedRowIds: (string | number)[];
   searchQuery: string;
   filterActive: boolean;

@@ -17,6 +17,7 @@
   import { Undo, Earth, LicenseGlobal } from 'carbon-icons-svelte';
   import type { SimplificationResult } from './simplification.types';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
+  import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
   import {
     basemapService,
     getAvailableBasemapSimplificationLevels,
@@ -34,7 +35,9 @@
   let applyTimeoutId: ReturnType<typeof setTimeout> | null = null;
   let selectedGeoDatasetId: string | undefined = $state(undefined);
   const simplState = $derived(getSimplificationState());
-  const isOsmBasemapActive = $derived(osmBasemapStore.isActive);
+  const isOsmBasemapActive = $derived(
+    osmBasemapStore.isActive || basemapStyleStore.requiresMapLibre
+  );
   const isImportedBasemap = $derived(
     basemapService.currentBasemap?.metadata.isCustom === true
   );
@@ -166,11 +169,6 @@
 
   async function applySimplificationNow(trigger: string): Promise<void> {
     if (isBasemapSourceBlocked) {
-      logger.debug(
-        'Simplification skipped: basemap source blocked',
-        LogCategory.UI,
-        { trigger }
-      );
       return;
     }
 
@@ -260,7 +258,7 @@
             max={100}
             step={1}
             value={simplState.rate}
-            on:change={(e) => {
+            on:input={(e) => {
               store.setRate((e as CustomEvent).detail ?? 50);
               scheduleSimplificationApply('rate-change', 250);
             }}
@@ -279,7 +277,9 @@
           selected={resolvedBasemapLevel}
           on:change={(e) => {
             if (isBasemapSourceBlocked) return;
-            store.setLevel((e as CustomEvent).detail as SimplificationLevel);
+            const nextLevel = (e as CustomEvent).detail as SimplificationLevel;
+            if (nextLevel === resolvedBasemapLevel) return;
+            store.setLevel(nextLevel);
             scheduleSimplificationApply('level-change');
           }}
         >
@@ -323,7 +323,7 @@
           max={100}
           step={1}
           value={simplState.rate}
-          on:change={(e) => {
+          on:input={(e) => {
             store.setRate((e as CustomEvent).detail ?? 50);
             scheduleSimplificationApply('rate-change', 250);
           }}
@@ -371,8 +371,10 @@
   }
 
   .description {
-    color: var(--cds-text-secondary);
-    font-size: 1rem;
+    color: var(--cds-text-helper);
+    font-size: 0.75rem;
+    line-height: 1rem;
+    letter-spacing: 0.32px;
   }
 
   #khartis-simplification-tool :global(.source-tabs) {
@@ -392,14 +394,27 @@
   }
 
   .form-label {
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: var(--cds-text-01);
+    font-size: 0.75rem;
+    font-weight: 400;
+    line-height: 1rem;
+    letter-spacing: 0.32px;
+    color: var(--cds-text-secondary);
     margin-bottom: var(--cds-spacing-03);
     display: block;
   }
 
-  #khartis-simplification-tool :global(.bx--radio-button-group--horizontal) {
-    gap: 2rem;
+  #khartis-simplification-tool
+    :global(.bx--radio-button-group:not(.bx--radio-button-group--vertical)) {
+    gap: var(--cds-spacing-05);
+    width: 100%;
+  }
+
+  #khartis-simplification-tool
+    :global(
+      .bx--radio-button-group:not(.bx--radio-button-group--vertical)
+        .bx--radio-button-wrapper
+    ) {
+    flex: 1 0 0;
+    margin-right: 0;
   }
 </style>

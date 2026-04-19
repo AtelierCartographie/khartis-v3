@@ -164,4 +164,38 @@ describe('CreateNewProject', () => {
     expect(mocks.setOnlineFileUrlMock).toHaveBeenCalledWith(url);
     expect(mocks.loadOnlineFileMock).toHaveBeenCalledTimes(1);
   });
+
+  it('clears local URL and pasted data state when resetToken changes', async () => {
+    const { rerender } = render(CreateNewProject, {
+      props: {
+        isModal: true,
+        resetToken: 0
+      }
+    });
+
+    const urlInput = screen.getByLabelText(
+      /lien vers un fichier stocké en ligne/i
+    );
+    const pastedDataInput = screen.getByPlaceholderText(
+      /coller un tableau de données/i
+    );
+
+    await fireEvent.input(urlInput, {
+      target: { value: 'http://localhost/stale.csv' }
+    });
+    await fireEvent.input(pastedDataInput, {
+      target: { value: 'country,value\nFrance,1' }
+    });
+
+    expect(urlInput).toHaveValue('http://localhost/stale.csv');
+    expect(pastedDataInput).toHaveValue('country,value\nFrance,1');
+
+    await rerender({
+      isModal: true,
+      resetToken: 1
+    });
+
+    expect(urlInput).toHaveValue('');
+    expect(pastedDataInput).toHaveValue('');
+  });
 });

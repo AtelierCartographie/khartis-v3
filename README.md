@@ -101,7 +101,7 @@ pnpm build && pnpm preview
 ## Privacy, security, and data
 
 - **Client-side only**: imported data never leaves the browser; no server, no tracking
-- All processing runs in DuckDB WASM and IndexedDB
+- All processing and persistence run in-browser via DuckDB WASM and IndexedDB (metadata + binary asset store)
 - Dependency scanning via Dependabot
 - To report a security vulnerability, see [SECURITY.md](SECURITY.md)
 
