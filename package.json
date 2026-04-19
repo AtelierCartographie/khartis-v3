@@ -72,9 +72,9 @@
     "init:project": "npx husky init && pnpm install"
   },
   "devDependencies": {
+    "@duckdb/node-api": "1.4.4-r.1",
     "@commitlint/cli": "^20.5.0",
     "@commitlint/config-conventional": "^20.5.0",
-    "@duckdb/node-api": "1.4.4-r.1",
     "@eslint/compat": "^2.0.3",
     "@eslint/js": "^9.39.4",
     "@inlang/cli": "^3.1.9",
