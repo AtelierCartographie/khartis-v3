@@ -2,17 +2,18 @@
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import { ArrowsHorizontal, ChevronDown } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
-  import {
-    PalettePopover,
-    PaletteDropdown,
-    CategoriesAspectPopover
-  } from '../palette-popover';
-  import type { CategoryDraft } from '../palette-popover/categories-aspect-popover.types';
+  import PalettePopover from './palette-popover.svelte';
+  import PaletteDropdown from './palette-dropdown.svelte';
+  import CategoriesAspectPopover from './categories-aspect-popover.svelte';
+  import type {
+    CategoriesAspectVariant,
+    CategoryDraft
+  } from './categories-aspect-popover.types';
   import type {
     Palette,
     PaletteType,
     PatternParams
-  } from '../palette-popover/palette.constants';
+  } from './palette.constants';
   import type { ClassificationConfig } from '$lib/features/commons/store/visualization.store.svelte';
 
   interface Props {
@@ -24,6 +25,7 @@
     colorBlindFilter?: boolean;
     showInvertButton?: boolean;
     categoriesMode?: boolean;
+    categoriesVariant?: CategoriesAspectVariant;
     categoryLabels?: string[];
     onexpand?: () => void;
     oninvert?: () => void;
@@ -40,6 +42,7 @@
     colorBlindFilter = $bindable(false),
     showInvertButton = true,
     categoriesMode = false,
+    categoriesVariant = 'symbols-unique',
     categoryLabels = [],
     onexpand,
     oninvert,
@@ -51,7 +54,19 @@
   let popoverOpen = $state(false);
   let categoriesPopoverOpen = $state(false);
   let triggerRef = $state<HTMLDivElement>();
-  let colorInputRefs = $state<HTMLInputElement[]>([]);
+
+  const MAX_PREVIEW_SWATCHES = 20;
+  const displayColors = $derived.by(() => {
+    if (colors.length <= MAX_PREVIEW_SWATCHES) return colors;
+    const step = colors.length / MAX_PREVIEW_SWATCHES;
+    return Array.from(
+      { length: MAX_PREVIEW_SWATCHES },
+      (_, i) => colors[Math.min(colors.length - 1, Math.round(i * step))]
+    );
+  });
+  const dropdownPreviewCount = $derived(
+    colors.length > 0 ? Math.min(colors.length, MAX_PREVIEW_SWATCHES) : 5
+  );
 
   const categoryDrafts = $derived<CategoryDraft[]>(
     colors.map((color, i) => ({
@@ -61,24 +76,6 @@
       enabled: true
     }))
   );
-
-  function handleSwatchClick(index: number, event: MouseEvent) {
-    event.stopPropagation();
-    colorInputRefs[index]?.click();
-  }
-
-  function handleSwatchColorChange(index: number, event: Event) {
-    const input = event.target as HTMLInputElement;
-    const newColors = [...colors];
-    newColors[index] = input.value;
-    onClassificationChange?.({
-      colors: newColors,
-      paletteId: '__custom__',
-      inverted: false,
-      patternId: undefined,
-      patternParams: undefined
-    });
-  }
 
   function handleClick() {
     dropdownOpen = !dropdownOpen;
@@ -127,6 +124,10 @@
     categoriesPopoverOpen = false;
   }
 
+  function handleCategoriesValidateWithAspect(next: CategoryDraft[]) {
+    handleCategoriesValidate(next);
+  }
+
   function handleCategoriesClose() {
     categoriesPopoverOpen = false;
   }
@@ -169,28 +170,16 @@
       aria-expanded={dropdownOpen}
     >
       <div class="palette-preview">
-        {#each colors as color, i (i)}
-          <!-- svelte-ignore a11y_click_events_have_key_events -->
-          <!-- svelte-ignore a11y_no_static_element_interactions -->
+        {#each displayColors as color, i (i)}
           <div
             class="palette-color"
             style="background-color: {color}"
             title={color}
-            onclick={(e: MouseEvent) => handleSwatchClick(i, e)}
           ></div>
         {/each}
       </div>
       <ChevronDown size={16} />
     </button>
-    {#each colors as color, i (i)}
-      <input
-        type="color"
-        class="color-input-hidden"
-        value={color}
-        bind:this={colorInputRefs[i]}
-        onchange={(e: Event) => handleSwatchColorChange(i, e)}
-      />
-    {/each}
     {#if showInvertButton}
       <IconButton
         kind="ghost"
@@ -210,6 +199,7 @@
   paletteType={paletteType}
   colorBlindFilter={colorBlindFilter}
   numClasses={colors.length || 5}
+  previewCount={dropdownPreviewCount}
   onclose={handleDropdownClose}
   onselect={handleDropdownSelect}
   oncustomize={handleCustomize}
@@ -232,8 +222,9 @@
   bind:open={categoriesPopoverOpen}
   triggerElement={triggerRef}
   categories={categoryDrafts}
+  variant={categoriesVariant}
   onclose={handleCategoriesClose}
-  onvalidate={handleCategoriesValidate}
+  onvalidate={handleCategoriesValidateWithAspect}
 />
 
 <style lang="scss">
@@ -284,20 +275,5 @@
   .palette-color {
     flex: 1;
     height: 100%;
-    cursor: pointer;
-
-    &:hover {
-      outline: 2px solid var(--cds-focus, #0f62fe);
-      outline-offset: -2px;
-      z-index: 1;
-    }
-  }
-
-  .color-input-hidden {
-    position: absolute;
-    width: 0;
-    height: 0;
-    opacity: 0;
-    pointer-events: none;
   }
 </style>

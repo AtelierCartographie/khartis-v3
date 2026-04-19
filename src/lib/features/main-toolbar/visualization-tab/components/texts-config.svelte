@@ -13,7 +13,7 @@
     VizFilterButton,
     VizFilterPanel
   } from './shared';
-  import SingleColorPreview from './palette-popover/single-color-preview.svelte';
+  import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
   import type {
     ClassificationConfig,
     MissingDataConfig,
@@ -27,7 +27,7 @@
     DEFAULT_QUALITATIVE_PREVIEW,
     DEFAULT_SEQUENTIAL_PREVIEW,
     PALETTE_TYPE
-  } from './palette-popover/palette.constants';
+  } from '$lib/features/commons/components/palette-popover/palette.constants';
   import {
     Category,
     MisuseOutline,
@@ -75,6 +75,9 @@
     onBackgroundClassificationChange?: (
       updates: Partial<ClassificationConfig>
     ) => void;
+    onBackgroundStrokeClassificationChange?: (
+      updates: Partial<ClassificationConfig>
+    ) => void;
     onBackgroundMappingChange?: (
       updates: Partial<VisualizationConfig['mapping']>
     ) => void;
@@ -102,6 +105,7 @@
     onBackgroundStyleChange,
     onBackgroundModesChange,
     onBackgroundClassificationChange,
+    onBackgroundStrokeClassificationChange,
     onBackgroundMappingChange,
     onBackgroundInvertPalette,
     filters = [],
@@ -567,11 +571,25 @@
       FillMode.CLASSES,
       FillMode.CATEGORIES
     ];
-    fillMode = nextModes[index] || FillMode.NONE;
+    const next = nextModes[index] || FillMode.NONE;
+    if (next === fillMode) return;
+    fillMode = next;
     onBackgroundModesChange?.({ fill: fillMode });
 
     if (fillMode === FillMode.NONE) {
-      onBackgroundStyleChange?.({ fillOpacity: 0 });
+      fillColor = DEFAULT_COLORS.fill;
+      onBackgroundStyleChange?.({
+        fillOpacity: 0,
+        fillColor: DEFAULT_COLORS.fill
+      });
+      onBackgroundClassificationChange?.({
+        colors: undefined,
+        paletteId: undefined,
+        inverted: false,
+        patternId: undefined,
+        patternParams: undefined,
+        labels: undefined
+      });
       return;
     }
 
@@ -626,6 +644,12 @@
     if (discretizationTarget === 'background') {
       onBackgroundClassificationChange?.(classification);
     }
+  }
+
+  function handleBackgroundStrokeClassificationChange(
+    classification: Partial<ClassificationConfig>
+  ) {
+    onBackgroundStrokeClassificationChange?.(classification);
   }
 
   function toggleStylePopover(
@@ -892,6 +916,7 @@
               false}
             paletteType={PALETTE_TYPE.QUALITATIVE}
             categoriesMode={true}
+            categoriesVariant="texts"
             categoryLabels={backgroundVisualization?.classification?.labels ??
               []}
             oninvert={onBackgroundInvertPalette}
@@ -915,15 +940,15 @@
           visualization={backgroundVisualization}
           dataFields={dataFields}
           discretizationLabel={backgroundDiscretizationLabel}
-          classesPalette={backgroundCurrentPalette}
-          categoriesPalette={backgroundCategoriesPalette}
           showDashed={false}
           onStyleChange={onBackgroundStyleChange}
           onModesChange={onBackgroundModesChange}
           onMappingChange={onBackgroundMappingChange}
           onInvertPalette={onBackgroundInvertPalette}
           onOpenDiscretization={openBackgroundDiscretization}
-          onClassificationChange={onBackgroundClassificationChange}
+          onStrokeClassificationChange={handleBackgroundStrokeClassificationChange}
+          strokeClassification={backgroundVisualization?.text?.background
+            ?.strokeClassification}
           facetsValueSlotPath={FACET_SLOT.TEXT_BACKGROUND_VALUE}
           facetsCategorySlotPath={FACET_SLOT.TEXT_BACKGROUND_CATEGORY}
         />

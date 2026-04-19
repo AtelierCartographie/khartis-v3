@@ -43,7 +43,7 @@ describe('SymbolModeProportional (proportionnels.png + en classes.png)', () => {
 
   it('routes Fill Unique through SingleColorPreview for both SINGLE and DOUBLE variants', () => {
     expect(source).toContain(
-      "import SingleColorPreview from '../palette-popover/single-color-preview.svelte'"
+      "import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte'"
     );
     const uniqueBlock = source
       .split('fillMode === FillMode.UNIQUE')[1]
@@ -63,5 +63,49 @@ describe('SymbolModeProportional (proportionnels.png + en classes.png)', () => {
     expect(paletteBlock).toContain(
       'categoryLabels={visualization?.classification?.labels ?? []}'
     );
+  });
+
+  it('exposes commonScale switch in DOUBLE branch (Figma 697:76546)', () => {
+    const doubleBlock = source.split(
+      'proportionalType === ProportionalType.DOUBLE'
+    )[1];
+    expect(doubleBlock).toContain('m.common_scale_label()');
+    expect(doubleBlock).toContain('toggled={commonScale}');
+    expect(doubleBlock).toContain('onchange={handleCommonScaleChange}');
+  });
+
+  it('renders two FacetsVariablePicker / Dropdown for symbol A and B', () => {
+    const doubleBlock = source.split(
+      'proportionalType === ProportionalType.DOUBLE'
+    )[1];
+    expect(doubleBlock).toContain('m.symbol_a_size_according()');
+    expect(doubleBlock).toContain('m.symbol_b_size_according()');
+  });
+
+  it('exposes max size slider, shape and position dropdown in DOUBLE', () => {
+    const doubleBlock = source.split(
+      'proportionalType === ProportionalType.DOUBLE'
+    )[1];
+    expect(doubleBlock).toContain('label={m.max_size()}');
+    expect(doubleBlock).toContain('m.symbol_position_mode()');
+    expect(doubleBlock).toContain('items={positionModeItems}');
+  });
+
+  it('exposes breakValue A/B TextInputs bound to handleBreakValue*Change', () => {
+    const doubleBlock = source.split(
+      'proportionalType === ProportionalType.DOUBLE'
+    )[1];
+    expect(doubleBlock).toContain('m.symbol_a_break_value()');
+    expect(doubleBlock).toContain('m.symbol_b_break_value()');
+    expect(doubleBlock).toContain('handleBreakValueAChange');
+    expect(doubleBlock).toContain('handleBreakValueBChange');
+  });
+
+  it('exposes onSymbolPrimitiveChange prop for extended SymbolPrimitiveConfig fields', () => {
+    expect(source).toContain('onSymbolPrimitiveChange');
+    expect(source).toContain('onSymbolPrimitiveChange?.({ commonScale');
+    expect(source).toContain('onSymbolPrimitiveChange?.({ positionMode');
+    expect(source).toContain('onSymbolPrimitiveChange?.({ breakValueA');
+    expect(source).toContain('onSymbolPrimitiveChange?.({ breakValueB');
   });
 });

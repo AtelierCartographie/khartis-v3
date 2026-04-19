@@ -21,6 +21,7 @@
     paletteType: PaletteType;
     colorBlindFilter: boolean;
     numClasses: number;
+    previewCount?: number;
     onclose?: () => void;
     onselect?: (palette: Palette, colors: string[]) => void;
     oncustomize?: () => void;
@@ -33,6 +34,7 @@
     paletteType,
     colorBlindFilter,
     numClasses,
+    previewCount = numClasses,
     onclose,
     onselect,
     oncustomize
@@ -42,6 +44,18 @@
   let dropdownPos = $state({ top: 0, left: 0, width: 0 });
 
   const palettes = $derived(getPalettesForType(paletteType, colorBlindFilter));
+
+  function getPalettePreviewColors(palette: Palette): string[] {
+    if (palette.type === PALETTE_TYPE.QUALITATIVE) {
+      return palette.colors;
+    }
+
+    return generatePaletteColors(
+      palette,
+      previewCount,
+      colorBlindFilter ? 'high' : undefined
+    );
+  }
 
   function portal(node: HTMLElement) {
     document.body.appendChild(node);
@@ -203,7 +217,7 @@
               ></div>
             {:else}
               <div class="swatch-row">
-                {#each generatePaletteColors(palette, numClasses, colorBlindFilter ? 'high' : undefined) as color, i (i)}
+                {#each getPalettePreviewColors(palette) as color, i (i)}
                   <div
                     class="swatch-cell"
                     style="background-color: {color}"
