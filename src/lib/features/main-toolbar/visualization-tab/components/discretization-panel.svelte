@@ -109,6 +109,7 @@
     validationErrors = [];
     const target = e.currentTarget as HTMLSelectElement;
     const newMethod = target.value as ClassificationMethod;
+    if (newMethod === method) return;
     method = newMethod;
     if (newMethod === 'q6') {
       numClasses = 6;
@@ -135,7 +136,7 @@
   }
 
   function canEditBreakRow(index: number): boolean {
-    return method === 'manual' && index > 0;
+    return index > 0 && index < breaks.length;
   }
 
   function validateBreaks(breaksToValidate: ClassBreak[]): string[] {
@@ -175,6 +176,14 @@
     const nextBreaks = breaks.map((breakItem) => ({ ...breakItem }));
     validationErrors = validateBreaks(nextBreaks);
     if (validationErrors.length === 0) {
+      if (method !== 'manual') {
+        const wasQ6 = method === 'q6';
+        method = 'manual';
+        onmethodchange?.('manual');
+        if (wasQ6) {
+          onclasseschange?.(nextBreaks.length);
+        }
+      }
       onbreakschange?.(nextBreaks);
     }
   }
@@ -288,7 +297,7 @@
           {@const widthPercent = (breakItem.count / maxHistogramCount) * 100}
           <div class="histogram-row">
             <div class="histogram-label">
-              {#if index === 0}Min.{/if}
+              {#if index === 0}{m.discretization_min_abbrev()}{/if}
             </div>
             <div class="histogram-input-wrapper">
               <TextInput
@@ -320,7 +329,7 @@
           </div>
         {/each}
         <div class="histogram-row">
-          <div class="histogram-label">Max.</div>
+          <div class="histogram-label">{m.discretization_max_abbrev()}</div>
           <div class="histogram-input-wrapper">
             <TextInput
               id="break-value-{breaks.length}"
