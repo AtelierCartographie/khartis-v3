@@ -12,7 +12,11 @@ let dbInstance: Awaited<ReturnType<typeof DuckDBInstance.create>>;
 let dbConnection: DuckDBConnection;
 
 beforeAll(async () => {
-  dbInstance = await DuckDBInstance.create(':memory:', { threads: '2' });
+  dbInstance = await DuckDBInstance.create(':memory:', {
+    threads: '2',
+    autoinstall_known_extensions: 'true',
+    autoload_known_extensions: 'true'
+  });
   dbConnection = await dbInstance.connect();
   await dbConnection.run('LOAD spatial');
   await dbConnection.run(
