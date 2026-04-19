@@ -272,7 +272,6 @@ async function showTooltipForResult(
       }));
 
     mapTooltipStore.pinAt(160, 200, entries, null, rowId - 1);
-     
   } catch (error) {
     console.error(error);
   }
