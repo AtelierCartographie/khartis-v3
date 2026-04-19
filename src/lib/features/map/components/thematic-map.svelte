@@ -158,6 +158,10 @@
       return null;
     }
 
+    if (getProjectionState().overrideSource !== 'manual') {
+      return null;
+    }
+
     const basemapMeta =
       getProjectionMetadataForDataset(firstDatasetId) ??
       basemapService.currentMetadata;
@@ -309,10 +313,6 @@
     // — the user would see the world basemap flash before the correct one
     if (isLoadingReferenceBasemap) {
       pendingOnReady = true;
-      logger.debug(
-        'triggerOnReady deferred — reference basemap still loading',
-        LogCategory.MAP
-      );
       return;
     }
 
@@ -1541,7 +1541,6 @@
       untrack(() => {
         scheduleLayerUpdate('effect:noData');
 
-        // Retry basemap loading if it failed or hasn't completed yet
         if (!worldBaseTable) {
           loadWorldBasemap();
         }
@@ -1568,7 +1567,6 @@
         if (!hasData) {
           triggerOnReady();
 
-          // Fit to world basemap bounds after a view reset (all data removed)
           if (pendingViewReset && worldBaseTable) {
             pendingViewReset = false;
             if (mapInit.viewMode === ViewMode.MAPLIBRE && mapInit.map) {
@@ -1896,7 +1894,6 @@
               }
             }
           } else {
-            // Reference basemap failed — fall back to world basemap
             logger.warn(
               'Reference basemap failed, falling back to world',
               LogCategory.MAP,
@@ -2100,7 +2097,12 @@
           >
             <rect width={mapCanvasWidth} height={mapCanvasHeight} fill="white"
             ></rect>
-            <path d={projectionMaskPath} fill="black"></path>
+            <path
+              d={projectionMaskPath}
+              fill="black"
+              fill-rule="evenodd"
+              clip-rule="evenodd"
+            ></path>
           </mask>
         </defs>
         <rect
@@ -2147,7 +2149,12 @@
             >
               <rect width={mapCanvasWidth} height={mapCanvasHeight} fill="white"
               ></rect>
-              <path d={projectionMaskPath} fill="black"></path>
+              <path
+                d={projectionMaskPath}
+                fill="black"
+                fill-rule="evenodd"
+                clip-rule="evenodd"
+              ></path>
             </mask>
           </defs>
           <rect

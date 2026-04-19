@@ -85,6 +85,7 @@ import {
   createGeoJsonChoroplethColorAccessor,
   createGeoJsonProportionalSizeAccessor,
   createProportionalSizeAccessor,
+  resolveMissingDataRenderProps,
   withGeoJsonRowHighlight,
   withGeoJsonRowHighlightAccessor,
   withOpacity,
@@ -3203,7 +3204,6 @@ export function createPointLayers(
     ];
   }
 
-  // Parse Arrow table to binary point data
   const pointData = resolvePointParser(ctx.customProjection)(jsTable);
   if (usesDoubleProportionalSymbols(viz)) {
     return createDoubleProportionalPointLayers(
@@ -3221,7 +3221,6 @@ export function createPointLayers(
     PrimitiveFilterType.POINT
   );
 
-  // Build fill color: choropleth > categorical > static
   const baseFillAccessor =
     useChoropleth && viz
       ? createChoroplethColorAccessor(
@@ -3270,7 +3269,6 @@ export function createPointLayers(
     ? pointColorAttr(pointData, ctxRowAccessor(ctx, jsTable, fillColorAccessor))
     : null;
 
-  // Build line color
   const lineColorAccessor =
     pointMissingColumn || hasHighlights
       ? (row: DeckDataRow): [number, number, number, number] => {
@@ -3299,7 +3297,6 @@ export function createPointLayers(
     ? pointColorAttr(pointData, ctxRowAccessor(ctx, jsTable, lineColorAccessor))
     : null;
 
-  // Build radius: static or per-feature attribute
   const baseRadiusAccessor =
     useClassedSymbols && viz
       ? createClassedSizeAccessor(
@@ -3342,7 +3339,6 @@ export function createPointLayers(
     ? pointRadiusAttr(pointData, ctxRowAccessor(ctx, jsTable, radiusAccessor))
     : null;
 
-  // Inject binary attributes into data.attributes for ScatterplotLayer
   const scatterProps = createScatterplotLayerProps(pointData);
   const scatterBinaryData = scatterProps.data as {
     attributes: Record<string, unknown>;
@@ -3360,7 +3356,6 @@ export function createPointLayers(
     scatterBinaryData.attributes.getRadius = radiusBinAttr;
   }
 
-  // DataFilterExtension for GPU-side year filtering (binary points)
   const yearFilterProps = ctx.yearFilter
     ? buildYearFilterProps(
         pointData,
@@ -3537,7 +3532,6 @@ export function createLineLayers(
       PrimitiveFilterType.LINE
     );
 
-    // Build color: choropleth > categorical > static
     const choroplethAccessor =
       useChoropleth && viz
         ? createChoroplethColorAccessor(
@@ -3589,7 +3583,6 @@ export function createLineLayers(
       ? pathColorAttr(lineData, ctxRowAccessor(ctx, jsTable, lineColorFn))
       : null;
 
-    // Build width: proportional or static
     const widthFn =
       useClassedWidth && viz
         ? createClassedSizeAccessor(
@@ -3614,7 +3607,6 @@ export function createLineLayers(
       ? pathWidthAttr(lineData, ctxRowAccessor(ctx, jsTable, widthFn))
       : null;
 
-    // Inject binary attributes into data.attributes for PathLayer
     const pathProps = createPathLayerProps(lineData);
     const pathBinaryData = pathProps.data as {
       attributes: Record<string, unknown>;
@@ -3629,7 +3621,6 @@ export function createLineLayers(
       pathBinaryData.attributes.getWidth = widthBinaryAttr;
     }
 
-    // DataFilterExtension for GPU-side year filtering (binary lines)
     const lineYearFilterProps = ctx.yearFilter
       ? buildYearFilterProps(lineData, pathBinaryData, jsTable, ctx.yearFilter)
       : null;
@@ -3944,6 +3935,11 @@ export function createPolygonLayers(
   const strokeDashArray = strokeDashed ? DEFAULT_DASH_ARRAY : [0, 0];
   const layerId = createThematicLayerId(DeckLayerId.POLYGON_LAYER, ctx);
   const patternProps = buildPatternProps(ctx);
+  const { color: polygonMissingColor, show: showMissingPolygons } =
+    resolveMissingDataRenderProps(
+      polygonConfig,
+      hexToRgb(DEFAULT_COLORS.missingData)
+    );
 
   if (!isNativeGeoArrow && !isGeoJsonEncoded && !isWkbEncoded) {
     return [];
@@ -3966,13 +3962,14 @@ export function createPolygonLayers(
         PrimitiveFilterType.POLYGON
       );
 
-      // Build fill color: choropleth > categorical > static, with optional highlight dimming
       const choroplethAccessor =
         useChoropleth && viz
           ? createChoroplethColorAccessor(
               polygonValueColumn!,
               polygonClassification!.breaks!,
-              polygonClassification!.colors!
+              polygonClassification!.colors!,
+              polygonMissingColor,
+              showMissingPolygons
             )
           : null;
 
@@ -3980,7 +3977,9 @@ export function createPolygonLayers(
         useCategoricalColor && viz
           ? createCategoricalColorAccessor(
               polygonCategoryColumn!,
-              effectiveCategoryColorMap
+              effectiveCategoryColorMap,
+              polygonMissingColor,
+              showMissingPolygons
             )
           : null;
 
@@ -4011,7 +4010,6 @@ export function createPolygonLayers(
           )
         : null;
 
-      // Build stroke color
       const strokeColorFn = hasPolyHighlights
         ? withRowHighlight(
             polygonStrokeColor,
@@ -4030,7 +4028,6 @@ export function createPolygonLayers(
 
       const layers: Layer<DeckDataRow>[] = [];
 
-      // Build SolidPolygonLayer props, injecting fill color into data.attributes when binary
       const solidProps = createCompatibleSolidPolygonLayerProps(polyData);
       const solidBinaryData = solidProps.data as {
         attributes: Record<string, unknown>;
@@ -4042,7 +4039,6 @@ export function createPolygonLayers(
         solidBinaryData.attributes.getFillColor = fillColorBinaryAttr;
       }
 
-      // DataFilterExtension for GPU-side year filtering (binary polygons)
       const polyYearFilterProps = ctx.yearFilter
         ? buildYearFilterProps(
             polyData,
@@ -4052,7 +4048,6 @@ export function createPolygonLayers(
           )
         : {};
 
-      // Fill layer
       const fillLayer = new SolidPolygonLayer({
         id: layerId,
         ...(solidProps as unknown as Record<string, unknown>),
@@ -4084,13 +4079,14 @@ export function createPolygonLayers(
             polygonClassification?.colors,
             polygonCategoryColorMap,
             polygonClassification?.labels,
+            polygonConfig?.missingData?.color ?? DEFAULT_COLORS.missingData,
+            showMissingPolygons,
             polygonFillColor,
             hlVersion
           ]
         }
       });
 
-      // Stroke layer — inject binary color into data.attributes if needed
       const strokePathProps = createPathLayerProps(outlineData);
       const strokeBinaryData = strokePathProps.data as {
         attributes: Record<string, unknown>;
@@ -4099,7 +4095,6 @@ export function createPolygonLayers(
         strokeBinaryData.attributes.getColor = strokeColorBinaryAttr;
       }
 
-      // DataFilterExtension for GPU-side year filtering (binary polygon strokes)
       const strokeYearFilterProps = ctx.yearFilter
         ? buildYearFilterProps(
             outlineData,
@@ -4316,13 +4311,17 @@ export function createPolygonLayers(
           polygonValueColumn!,
           polygonClassification!.breaks!,
           polygonClassification!.colors!,
-          polygonFillColor
+          polygonFillColor,
+          polygonMissingColor,
+          showMissingPolygons
         )
       : useCategoricalColor && viz
         ? createGeoJsonCategoricalColorAccessor(
             polygonCategoryColumn!,
             effectiveCategoryColorMap,
-            polygonFillColor
+            polygonFillColor,
+            polygonMissingColor,
+            showMissingPolygons
           )
         : null;
 
@@ -4405,6 +4404,8 @@ export function createPolygonLayers(
           polygonClassification?.colors,
           polygonCategoryColorMap,
           polygonClassification?.labels,
+          polygonConfig?.missingData?.color ?? DEFAULT_COLORS.missingData,
+          showMissingPolygons,
           polygonFillColor,
           hlVersion
         ],
@@ -4482,7 +4483,6 @@ export function createGeoJsonLayers(
   const hasHighlights = highlightedRowIds && highlightedRowIds.size > 0;
   const hlVersion = ctx.highlightVersion ?? 0;
 
-  // When a basemap projection is active, pre-project GeoJSON coordinates
   const projectedData = ctx.customProjection
     ? projectGeoJSON(geojson, ctx.customProjection)
     : geojson;

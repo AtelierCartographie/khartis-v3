@@ -8,10 +8,23 @@ import {
   VisualizationType,
   type VisualizationConfig
 } from '$lib/features/commons/store/visualization.store.svelte';
-import { FillMode, StrokeMode } from '$lib/features/main-toolbar/constants';
+import {
+  FillMode,
+  MissingDataShape,
+  StrokeMode
+} from '$lib/features/main-toolbar/constants';
 import type { GeometryInfo, LayerContext } from '../types';
 
-const { arrowTableToGeoJSONMock, projectGeoJSONMock } = vi.hoisted(() => {
+const {
+  arrowTableToGeoJSONMock,
+  createCompatibleSolidPolygonLayerPropsMock,
+  createPathLayerPropsMock,
+  createPolygonFillColorAttributeMock,
+  parsePathsMock,
+  parseSolidPolygonsMock,
+  pathColorAttrMock,
+  projectGeoJSONMock
+} = vi.hoisted(() => {
   class WorkerStub {
     terminate() {}
 
@@ -28,7 +41,25 @@ const { arrowTableToGeoJSONMock, projectGeoJSONMock } = vi.hoisted(() => {
 
   return {
     arrowTableToGeoJSONMock: vi.fn(),
+    createCompatibleSolidPolygonLayerPropsMock: vi.fn(),
+    createPathLayerPropsMock: vi.fn(),
+    createPolygonFillColorAttributeMock: vi.fn(),
+    parsePathsMock: vi.fn(),
+    parseSolidPolygonsMock: vi.fn(),
+    pathColorAttrMock: vi.fn(),
     projectGeoJSONMock: vi.fn()
+  };
+});
+
+vi.mock('geoarrow-deck-stream', async () => {
+  const actual = await vi.importActual<typeof import('geoarrow-deck-stream')>(
+    'geoarrow-deck-stream'
+  );
+
+  return {
+    ...actual,
+    createPathLayerProps: createPathLayerPropsMock,
+    createPolygonFillColorAttribute: createPolygonFillColorAttributeMock
   };
 });
 
@@ -48,9 +79,27 @@ vi.mock('../utils/geoarrow-stream-bridge', async () => {
 
   return {
     ...actual,
-    projectGeoJSON: projectGeoJSONMock
+    parsePaths: parsePathsMock,
+    parseSolidPolygons: parseSolidPolygonsMock,
+    pathColorAttr: pathColorAttrMock,
+    projectGeoJSON: projectGeoJSONMock,
+    rowAccessor: vi.fn(
+      (
+        table: ArrowTable & {
+          get?: (index: number) => Record<string, unknown>;
+        },
+        accessor: (row: Record<string, unknown>) => unknown
+      ) =>
+        (featureId: number) =>
+          accessor(table.get?.(featureId) ?? {})
+    )
   };
 });
+
+vi.mock('../utils/solid-polygon-layer-props', () => ({
+  createCompatibleSolidPolygonLayerProps:
+    createCompatibleSolidPolygonLayerPropsMock
+}));
 
 vi.mock('./pattern-texture', async () => {
   const actual =
@@ -78,6 +127,20 @@ function createTableWithFields(fieldNames: string[]): ArrowTable {
   return {
     schema: {
       fields: fieldNames.map((name) => ({ name }))
+    }
+  } as unknown as ArrowTable;
+}
+
+function createTableWithRows(
+  rows: Record<string, unknown>[],
+  fieldNames: string[]
+): ArrowTable {
+  return {
+    schema: {
+      fields: fieldNames.map((name) => ({ name }))
+    },
+    get(index: number) {
+      return rows[index];
     }
   } as unknown as ArrowTable;
 }
@@ -181,6 +244,37 @@ function getPatternLayer(
 beforeEach(() => {
   vi.clearAllMocks();
   projectGeoJSONMock.mockImplementation((geojson) => geojson);
+  parseSolidPolygonsMock.mockReturnValue({
+    featureIds: new Uint32Array([0])
+  });
+  parsePathsMock.mockReturnValue({
+    featureIds: new Uint32Array([0])
+  });
+  createCompatibleSolidPolygonLayerPropsMock.mockImplementation((polyData) => ({
+    data: {
+      length: polyData.featureIds?.length ?? 0,
+      attributes: {}
+    }
+  }));
+  createPathLayerPropsMock.mockImplementation((pathData) => ({
+    data: {
+      length: pathData.featureIds?.length ?? 0,
+      attributes: {}
+    }
+  }));
+  createPolygonFillColorAttributeMock.mockImplementation(
+    (
+      polyData: { featureIds?: Uint32Array },
+      getFillColor: (featureId: number) => [number, number, number, number]
+    ) => ({
+      value: new Uint8ClampedArray(getFillColor(polyData.featureIds?.[0] ?? 0)),
+      size: 4
+    })
+  );
+  pathColorAttrMock.mockReturnValue({
+    value: new Uint8ClampedArray([0, 0, 0, 255]),
+    size: 4
+  });
 });
 
 describe('resolveSplitMappingFeatureIdColumn', () => {
@@ -268,5 +362,56 @@ describe('createPolygonLayers', () => {
     );
 
     expect(getPatternLayer(layers)).toBeUndefined();
+  });
+
+  it('propagates polygon missing-data styling to binary choropleth fills', () => {
+    const visualization = createVisualization(FillMode.CLASSES);
+    visualization.mapping = { valueColumn: 'value' };
+    visualization.polygon = {
+      ...visualization.polygon,
+      valueColumn: 'value',
+      classification: {
+        method: ClassificationMethod.MANUAL,
+        classes: 2,
+        breaks: [0, 1],
+        colors: ['#d0d7df', '#1b5eaa']
+      },
+      missingData: {
+        show: true,
+        shape: MissingDataShape.CIRCLE,
+        size: 2,
+        color: '#ff00ff'
+      }
+    };
+
+    const layers = createPolygonLayers(
+      createTableWithRows([{ value: null }], ['value']),
+      {
+        ...createGeometryInfo(),
+        encoding: 'geoarrow.polygon',
+        isNativeGeoArrow: true,
+        isGeoJsonEncoded: false
+      },
+      {
+        ...createContext(visualization),
+        customProjection: undefined
+      }
+    );
+
+    const fillLayer = layers[0];
+    const fillColorAttribute = (
+      fillLayer?.props.data as {
+        attributes: { getFillColor?: { value: Uint8ClampedArray } };
+      }
+    ).attributes.getFillColor;
+
+    expect(createPolygonFillColorAttributeMock).toHaveBeenCalled();
+    expect(fillColorAttribute).toBeDefined();
+    expect(fillColorAttribute?.value).toEqual(
+      new Uint8ClampedArray([255, 0, 255, 255])
+    );
+    expect(fillLayer?.props.updateTriggers?.getFillColor).toEqual(
+      expect.arrayContaining(['#ff00ff', true])
+    );
   });
 });
