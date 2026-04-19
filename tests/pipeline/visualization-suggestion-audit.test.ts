@@ -934,6 +934,7 @@ beforeAll(async () => {
     autoload_known_extensions: 'true'
   });
   dbConnection = await dbInstance.connect();
+  await dbConnection.run('INSTALL spatial');
   await dbConnection.run('LOAD spatial');
   await dbConnection.run(analyseMacros);
 });

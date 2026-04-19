@@ -18,6 +18,7 @@ beforeAll(async () => {
     autoload_known_extensions: 'true'
   });
   dbConnection = await dbInstance.connect();
+  await dbConnection.run('INSTALL spatial');
   await dbConnection.run('LOAD spatial');
   await dbConnection.run(
     `CREATE OR REPLACE TABLE nuts2 AS FROM ST_Read('${NUTS2_PATH}')`
