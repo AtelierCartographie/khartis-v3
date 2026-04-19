@@ -2,7 +2,6 @@ import type { DatasetResult } from '$lib/features/data-pipeline';
 import type { DuckDBDataset } from '$lib/features/duckdb';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { BBox } from '../types';
-import { shouldUseIdentityProjectionForDatasetCrs } from './dataset-crs';
 
 type OrthographicDatasetRef =
   | Pick<DatasetResult, 'geometry'>
@@ -46,8 +45,7 @@ export function shouldUseBasemapReferenceInOrthographicView(
 ): boolean {
   // Tabular data joined to basemap → use basemap bounds
   if (Boolean(duckDataset?.joinedBasemap) && !dataset?.geometry) return true;
-  // Reference basemap explicitly selected (overlay) → use basemap bounds
-  // so administrative boundaries are visible even with polygon data
+  // Reference basemap explicitly selected (overlay) → use basemap bounds so boundaries are visible with polygon data
   if (referenceBasemapId) return true;
   return false;
 }
@@ -99,10 +97,5 @@ export function resolveOrthographicDatasetBounds(
   const datasetOrthographicBounds = datasetBounds
     ? toOrthographicBounds(datasetBounds)
     : null;
-
-  if (shouldUseIdentityProjectionForDatasetCrs(dataset?.geometry?.crs)) {
-    return datasetOrthographicBounds;
-  }
-
   return tableBounds ?? datasetOrthographicBounds;
 }

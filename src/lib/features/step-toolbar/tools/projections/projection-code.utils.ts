@@ -78,11 +78,37 @@ function inferProjectionId(code: string): string {
   }
 
   if (
+    normalized.includes('equal earth') ||
+    normalized.includes('+proj=eqearth')
+  ) {
+    return 'equal-earth';
+  }
+
+  if (
     normalized.includes('natural earth') ||
-    normalized.includes('+proj=natearth') ||
-    normalized.includes('eqearth')
+    normalized.includes('+proj=natearth')
   ) {
     return 'natural-earth';
+  }
+
+  if (
+    normalized.includes('cylindrical equal') ||
+    normalized.includes('gall') ||
+    normalized.includes('+proj=cea')
+  ) {
+    return 'gall-peters';
+  }
+
+  if (normalized.includes('+proj=bonne') || normalized.includes('bonne')) {
+    return 'bonne';
+  }
+
+  if (normalized.includes('bertin')) {
+    return 'bertin-1953';
+  }
+
+  if (normalized.includes('interrupted') && normalized.includes('mollweide')) {
+    return 'interrupted-mollweide';
   }
 
   if (

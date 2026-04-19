@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { Dropdown } from 'carbon-components-svelte';
   import {
     MisuseOutline,
     SquareOutline,
@@ -27,8 +26,14 @@
   import ToggleWithLabel from './toggle-with-label.svelte';
   import {
     DEFAULT_SEQUENTIAL_PREVIEW,
-    DEFAULT_QUALITATIVE_PREVIEW
+    DEFAULT_QUALITATIVE_PREVIEW,
+    PALETTE_TYPE
   } from '../palette-popover/palette.constants';
+  import FacetsVariablePicker from '../symbols/facets-variable-picker.svelte';
+  import {
+    facetsStore,
+    type FacetSlotPath
+  } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
 
   interface Props {
     visualization?: VisualizationConfig;
@@ -37,6 +42,7 @@
     showDashed?: boolean;
     classesPalette?: string[];
     categoriesPalette?: string[];
+    categoryLabels?: string[];
     discretizationLabel?: string;
     categoryCount?: number;
     onStyleChange?: (updates: Partial<VisualizationConfig['style']>) => void;
@@ -49,6 +55,8 @@
     onClassificationChange?: (updates: Partial<ClassificationConfig>) => void;
     showSliderBounds?: boolean;
     sliderInputWidth?: string;
+    facetsValueSlotPath?: FacetSlotPath;
+    facetsCategorySlotPath?: FacetSlotPath;
   }
 
   let {
@@ -58,6 +66,7 @@
     showDashed = true,
     classesPalette = DEFAULT_SEQUENTIAL_PREVIEW,
     categoriesPalette = DEFAULT_QUALITATIVE_PREVIEW,
+    categoryLabels = [],
     discretizationLabel,
     categoryCount = 4,
     onStyleChange,
@@ -67,8 +76,17 @@
     onOpenDiscretization,
     onClassificationChange,
     showSliderBounds = true,
-    sliderInputWidth = '128px'
+    sliderInputWidth = '128px',
+    facetsValueSlotPath,
+    facetsCategorySlotPath
   }: Props = $props();
+
+  const resolvedClassesPalette = $derived(
+    visualization?.classification?.colors ?? classesPalette
+  );
+  const resolvedCategoriesPalette = $derived(
+    visualization?.classification?.colors ?? categoriesPalette
+  );
 
   const NONE_FIELD_ID = -1;
   let strokeMode = $state<StrokeMode>(StrokeMode.NONE);
@@ -77,8 +95,49 @@
   let strokeOpacity = $state<number>(VISUALIZATION_DEFAULTS.strokeOpacity);
   let strokeDashed = $state<boolean>(false);
   let colorFieldId = $state<number>(NONE_FIELD_ID);
+  let facetsPickerOpen = $state(false);
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
   const selectableDataFields = $derived([noneOption, ...dataFields]);
+
+  const selectedVizId = $derived(visualization?.id);
+
+  const activeFacetsSlotPath = $derived.by(() => {
+    if (
+      !facetsStore.enabled ||
+      !selectedVizId ||
+      facetsStore.baseVisualizationId !== selectedVizId
+    ) {
+      return null;
+    }
+    return facetsStore.primarySlotPath;
+  });
+
+  function isFacetsActiveForSlot(slotPath: FacetSlotPath | undefined): boolean {
+    return Boolean(slotPath && activeFacetsSlotPath === slotPath);
+  }
+
+  function getFacetsSelectedFieldIds(
+    slotPath: FacetSlotPath | undefined
+  ): number[] {
+    if (!slotPath || !isFacetsActiveForSlot(slotPath)) {
+      return [];
+    }
+    return facetsStore.variables
+      .map((name) => dataFields.find((field) => field.text === name)?.id)
+      .filter((id): id is number => typeof id === 'number');
+  }
+
+  const valueColumnName = $derived(
+    strokeMode === StrokeMode.CLASSES
+      ? (dataFields.find((field) => field.id === colorFieldId)?.text ?? '')
+      : ''
+  );
+
+  const categoryColumnName = $derived(
+    strokeMode === StrokeMode.CATEGORIES
+      ? (dataFields.find((field) => field.id === colorFieldId)?.text ?? '')
+      : ''
+  );
 
   $effect(() => {
     if (visualization?.modes) {
@@ -180,6 +239,46 @@
       }
     }
   }
+
+  async function handleFacetsVariablesChange(
+    baseVariableName: string,
+    slotPath: FacetSlotPath | undefined,
+    fieldIds: number[]
+  ) {
+    if (!selectedVizId || !slotPath) return;
+    const variableNames = fieldIds
+      .map((id) => dataFields.find((field) => field.id === id)?.text)
+      .filter((name): name is string => Boolean(name));
+    const merged =
+      baseVariableName && !variableNames.includes(baseVariableName)
+        ? [baseVariableName, ...variableNames]
+        : variableNames;
+    await facetsStore.updateVariables(selectedVizId, merged, slotPath);
+  }
+
+  async function handleFacetsToggle(
+    baseVariableName: string,
+    slotPath: FacetSlotPath | undefined,
+    enabled: boolean
+  ) {
+    if (!selectedVizId || !slotPath) return;
+    if (!enabled) {
+      facetsStore.disable();
+      return;
+    }
+
+    const available = dataFields
+      .map((field) => field.text)
+      .filter((name): name is string => Boolean(name));
+    const seed = baseVariableName ? [baseVariableName] : [];
+    const candidates = seed.slice();
+    for (const name of available) {
+      if (candidates.length >= 2) break;
+      if (!candidates.includes(name)) candidates.push(name);
+    }
+    if (candidates.length < 2) return;
+    await facetsStore.updateVariables(selectedVizId, candidates, slotPath);
+  }
 </script>
 
 <SectionHeading title={m.stroke()} infoText={infoText} />
@@ -212,12 +311,23 @@
     />
   {:else if strokeMode === StrokeMode.CLASSES}
     <div class="field-group">
-      <Dropdown
+      <FacetsVariablePicker
+        bind:open={facetsPickerOpen}
         titleText={m.color_according()}
-        items={selectableDataFields}
-        selectedId={colorFieldId}
-        on:select={(e) => handleColorFieldSelect(e.detail.selectedId)}
-        type="default"
+        dataFields={dataFields}
+        singleSelectItems={selectableDataFields}
+        selectedFieldId={colorFieldId}
+        selectedFieldIds={getFacetsSelectedFieldIds(facetsValueSlotPath)}
+        isCollectionEnabled={isFacetsActiveForSlot(facetsValueSlotPath)}
+        onSelect={handleColorFieldSelect}
+        onCollectionChange={(ids) =>
+          handleFacetsVariablesChange(
+            valueColumnName,
+            facetsValueSlotPath,
+            ids
+          )}
+        onToggleCollection={(enabled) =>
+          handleFacetsToggle(valueColumnName, facetsValueSlotPath, enabled)}
       />
     </div>
     <DiscretizationRow
@@ -227,20 +337,36 @@
     />
     <PalettePreview
       label={m.color_palette()}
-      colors={classesPalette}
+      colors={resolvedClassesPalette}
       selectedPaletteId={visualization?.classification?.paletteId}
       inverted={visualization?.classification?.inverted ?? false}
+      paletteType={PALETTE_TYPE.SEQUENTIAL}
       oninvert={onInvertPalette}
       onClassificationChange={onClassificationChange}
     />
   {:else if strokeMode === StrokeMode.CATEGORIES}
     <div class="field-group">
-      <Dropdown
+      <FacetsVariablePicker
+        bind:open={facetsPickerOpen}
         titleText={m.color_according()}
-        items={selectableDataFields}
-        selectedId={colorFieldId}
-        on:select={(e) => handleColorFieldSelect(e.detail.selectedId)}
-        type="default"
+        dataFields={dataFields}
+        singleSelectItems={selectableDataFields}
+        selectedFieldId={colorFieldId}
+        selectedFieldIds={getFacetsSelectedFieldIds(facetsCategorySlotPath)}
+        isCollectionEnabled={isFacetsActiveForSlot(facetsCategorySlotPath)}
+        onSelect={handleColorFieldSelect}
+        onCollectionChange={(ids) =>
+          handleFacetsVariablesChange(
+            categoryColumnName,
+            facetsCategorySlotPath,
+            ids
+          )}
+        onToggleCollection={(enabled) =>
+          handleFacetsToggle(
+            categoryColumnName,
+            facetsCategorySlotPath,
+            enabled
+          )}
       />
     </div>
     <DiscretizationRow
@@ -250,9 +376,14 @@
     />
     <PalettePreview
       label={m.color_palette()}
-      colors={categoriesPalette}
+      colors={resolvedCategoriesPalette}
       selectedPaletteId={visualization?.classification?.paletteId}
       inverted={visualization?.classification?.inverted ?? false}
+      paletteType={PALETTE_TYPE.QUALITATIVE}
+      categoriesMode={true}
+      categoryLabels={categoryLabels.length > 0
+        ? categoryLabels
+        : (visualization?.classification?.labels ?? [])}
       oninvert={onInvertPalette}
       onClassificationChange={onClassificationChange}
     />

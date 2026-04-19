@@ -47,7 +47,7 @@ const equi_width_macro = `CREATE OR REPLACE MACRO equi_width(tabname, colname, n
     WHERE COLUMNS(c -> c = colname) IS NOT NULL
   )
   FROM values
-  SELECT equi_width_bins(MIN(value), MAX(value), nb - 1, nice)
+  SELECT equi_width_bins(MIN(value), MAX(value), nb, nice)
 );`;
 
 /**

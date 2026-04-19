@@ -9,9 +9,7 @@ export interface ProjectionState {
   longitude: number;
   latitude: number;
   rotation: number;
-  scale?: number;
   center?: [number, number];
-  autoFit?: boolean;
   customCode?: string;
   simplifiedPreview?: boolean;
   suggestions?: {

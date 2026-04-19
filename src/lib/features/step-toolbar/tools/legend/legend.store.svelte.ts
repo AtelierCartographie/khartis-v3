@@ -53,7 +53,6 @@ type LegendActions = {
   updateLegendItem: (id: string, updates: Partial<LegendItem>) => void;
   toggleLegendVisibility: () => void;
   setVisibility: (visible: boolean) => void;
-  setPosition: (position: LegendPosition) => void;
   setDragPosition: (pos: LegendDragPosition | null) => void;
   setActiveTab: (tab: LegendTab) => void;
   updateStyle: (updates: Partial<LegendStyle>) => void;
@@ -211,10 +210,6 @@ const { actions, getState } = createToolStore<LegendState, LegendActions>(
     },
     setVisibility: (visible: boolean) => {
       s.visible = visible;
-    },
-    setPosition: (position: LegendPosition) => {
-      s.position = position;
-      s.dragPosition = null;
     },
     setDragPosition: (pos: LegendDragPosition | null) => {
       s.dragPosition = pos;

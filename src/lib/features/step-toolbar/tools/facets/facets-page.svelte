@@ -59,6 +59,9 @@
   const pageStyle = $derived(
     `background-color: ${pageBackgroundColor}; padding: ${pageMargins.top}px ${pageMargins.right}px ${pageMargins.bottom}px ${pageMargins.left}px;`
   );
+  const pageAspectRatio = $derived(
+    mapStageWidth > 0 ? mapStageHeight / mapStageWidth : 0.75
+  );
   const mapStageStyle = $derived(
     `width: ${mapStageWidth}px; height: ${mapStageHeight}px; background-color: ${pageBackgroundColor};`
   );
@@ -78,6 +81,7 @@
       syncPanZoom={syncPanZoom}
       containerWidth={mapStageWidth}
       containerHeight={mapStageHeight}
+      pageAspectRatio={pageAspectRatio}
       onReady={onReady}
     />
 

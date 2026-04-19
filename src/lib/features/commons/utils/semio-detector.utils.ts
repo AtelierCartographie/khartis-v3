@@ -81,7 +81,9 @@ function scoreGeoId(indicators: GeoIdIndicators): SemioScore {
   let score = 0;
   if (indicators.shareUniques >= 0.9) score += indicators.isNumeric ? 0.5 : 1;
   if (indicators.shareNulls <= 0.1) score += indicators.isNumeric ? 0.5 : 1.5;
-  if (indicators.idWords && indicators.shareUniques >= 0.5) score += 4;
+  if (indicators.idWords) {
+    score += indicators.shareUniques >= 0.5 ? 4 : 3.5;
+  }
   if (indicators.isNumeric && indicators.shareRankInterval >= 0.8) score += 2;
   if (indicators.isNumeric && indicators.shareRankInterval >= 0.95)
     score += 0.5;
@@ -271,6 +273,10 @@ export function detectSemioType(
   const best = results.sort((a, b) => b.score - a.score)[0];
 
   if (best.semioType === SEMIO_TYPES.QL && uniqueCount === 1) {
+    best.score = 0;
+  }
+
+  if (best.semioType === SEMIO_TYPES.GEOID && uniqueCount <= 1) {
     best.score = 0;
   }
 

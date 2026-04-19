@@ -14,7 +14,14 @@ const mocks = vi.hoisted(() => ({
   loggerInfoMock: vi.fn(),
   processUploadedFileMock: vi.fn(),
   dropTableMock: vi.fn(),
-  setEnrichDataStateMock: vi.fn()
+  setEnrichDataStateMock: vi.fn(),
+  currentProject: undefined as
+    | {
+        data: {
+          sourceFiles: Array<Record<string, unknown>>;
+        };
+      }
+    | undefined
 }));
 
 vi.mock('$lib/features/project-management/core/persistence-registry', () => ({
@@ -51,7 +58,9 @@ vi.mock('$lib/features/duckdb/orchestrator/orchestrator.svelte', () => ({
 
 vi.mock('$lib/features/commons/store/project.store.svelte', () => ({
   projectStore: {
-    currentProject: undefined
+    get currentProject() {
+      return mocks.currentProject;
+    }
   }
 }));
 
@@ -95,7 +104,11 @@ function makeDataset(id: string, sourceFileId = `source-${id}`) {
   };
 }
 
-function makeUploadedFile(id: string, name = `${id}.geojson`) {
+function makeUploadedFile(
+  id: string,
+  name = `${id}.geojson`,
+  overrides: Record<string, unknown> = {}
+) {
   return {
     id,
     name,
@@ -105,13 +118,15 @@ function makeUploadedFile(id: string, name = `${id}.geojson`) {
     status: FileStatus.COMPLETE,
     uploadProgress: 100,
     sourceType: DataSourceType.FILE_UPLOAD,
-    content: '{"type":"FeatureCollection","features":[]}'
+    content: '{"type":"FeatureCollection","features":[]}',
+    ...overrides
   };
 }
 
 describe('datasetsStore persisted view state', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.currentProject = undefined;
     datasetsStore.clear();
     datasetsStore.restorePersistedViewState(undefined);
   });
@@ -176,5 +191,64 @@ describe('datasetsStore persisted view state', () => {
       'dataset-2'
     ]);
     expect(datasetsStore.selectedDatasetId).toBe('dataset-2');
+  });
+
+  it('replays the pipeline from asset refs instead of exposing a stale preprocessed table', async () => {
+    mocks.processUploadedFileMock.mockResolvedValueOnce(
+      makeDataset('dataset-asset', 'source-asset')
+    );
+
+    await datasetsStore.addFile(
+      makeUploadedFile('source-asset', 'data.csv', {
+        content: undefined,
+        type: 'text/csv',
+        fileType: FileType.CSV,
+        duckdbTableName: 'legacy_data_csv_123',
+        parsedData: [{ country: 'France' }],
+        statistics: {
+          country: {
+            type: 'text',
+            count: 1
+          }
+        },
+        assetRef: {
+          assetId: 'asset-1',
+          originalName: 'data.csv',
+          mimeType: 'text/csv',
+          size: 16,
+          kind: 'primary'
+        }
+      }),
+      true
+    );
+
+    expect(mocks.processUploadedFileMock).toHaveBeenCalledTimes(1);
+    expect(datasetsStore.datasets.map((dataset) => dataset.id)).toEqual([
+      'dataset-asset'
+    ]);
+    expect(datasetsStore.datasets[0]?.tableName).toBe('table_dataset-asset');
+  });
+
+  it('treats persisted source-file row deletions and column transformations as modifications after restore', () => {
+    datasetsStore.addProcessedDataset(makeDataset('dataset-1', 'source-a'));
+    mocks.currentProject = {
+      data: {
+        sourceFiles: [
+          makeUploadedFile('source-a', 'data.csv', {
+            columnTransformations: [
+              {
+                type: 'rename',
+                column: 'place_name',
+                newValue: 'city_name',
+                timestamp: '2026-04-18T00:00:00.000Z'
+              }
+            ],
+            deletedRowIds: [1, 3, 8]
+          })
+        ]
+      }
+    };
+
+    expect(datasetsStore.hasModifications('dataset-1')).toBe(true);
   });
 });

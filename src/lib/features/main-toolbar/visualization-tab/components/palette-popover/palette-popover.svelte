@@ -16,6 +16,7 @@
     type PatternParams,
     type ContrastMode,
     generatePaletteColors,
+    generateCategoricalColorsFromSeed,
     findPaletteById
   } from './palette.constants';
 
@@ -67,7 +68,7 @@
       case PALETTE_TYPE.DIVERGING:
         return m.palette_diverging();
       case PALETTE_TYPE.QUALITATIVE:
-        return m.palette_qualitative();
+        return m.color();
       default:
         return m.palette_sequential();
     }
@@ -147,17 +148,24 @@
 
   function handlePatternSelect(palette: Palette, params: PatternParams) {
     draftPaletteId = palette.id;
-    // Keep existing classification colors — pattern overlays on top, doesn't replace
     draftPatternParams = params;
   }
 
-  function handleContrastChange(_contrast: ContrastMode | undefined) {
-    // Contrast is handled internally by PaletteCustom which re-emits colors
-  }
+  function handleContrastChange(_contrast: ContrastMode | undefined) {}
 
   function handleInvertToggle(value: boolean) {
     draftInverted = value;
     draftColors = [...draftColors].reverse();
+  }
+
+  function handleQualitativeColorSelect(hex: string) {
+    draftPaletteId = '__custom__';
+    draftInverted = false;
+    if (numClasses <= 1) {
+      draftColors = [hex];
+    } else {
+      draftColors = generateCategoricalColorsFromSeed(hex, numClasses, 'vif');
+    }
   }
 
   $effect(() => {
@@ -226,14 +234,17 @@
           bind:paletteType={draftType}
           bind:colorBlindFilter={draftColorBlindFilter}
           selectedPaletteId={draftPaletteId}
+          selectedColor={draftColors[0]}
           numClasses={numClasses}
           onTypeChange={handleTypeChange}
           onColorBlindChange={handleColorBlindChange}
           onSelect={handlePaletteSelect}
+          onColorSelect={handleQualitativeColorSelect}
         />
 
         <PaletteCustom
           selectedPaletteId={draftPaletteId}
+          paletteType={draftType}
           numClasses={numClasses}
           colorBlindFilter={draftColorBlindFilter}
           bind:inverted={draftInverted}
@@ -242,26 +253,31 @@
           onContrastChange={handleContrastChange}
           onInvertToggle={handleInvertToggle}
         />
-
-        <PaletteComparison
-          currentColors={currentColors}
-          newColors={draftColors}
-        />
       </div>
 
-      <footer class="popover-footer">
-        <Button kind="tertiary" size="small" on:click={handleCancel}>
-          {m.button_cancel()}
-        </Button>
-        <Button
-          kind="primary"
-          size="small"
-          icon={ArrowRight}
-          on:click={handleValidate}
-        >
-          {m.button_validate()}
-        </Button>
-      </footer>
+      <div class="popover-preview-wrap">
+        <div class="popover-divider"></div>
+        <div class="popover-preview">
+          <PaletteComparison
+            currentColors={currentColors}
+            newColors={draftColors}
+            paletteType={draftType}
+          />
+        </div>
+        <footer class="popover-footer">
+          <Button kind="tertiary" size="small" on:click={handleCancel}>
+            {m.button_cancel()}
+          </Button>
+          <Button
+            kind="primary"
+            size="small"
+            icon={ArrowRight}
+            on:click={handleValidate}
+          >
+            {m.button_validate()}
+          </Button>
+        </footer>
+      </div>
     </div>
   </div>
 {/if}
@@ -288,44 +304,70 @@
     max-height: calc(100vh - 32px);
     display: flex;
     flex-direction: column;
-    background: var(--cds-background);
+    background: var(--cds-background, #ffffff);
     border: 1px solid var(--cds-border-subtle);
     box-shadow:
       0 4px 16px rgba(0, 0, 0, 0.12),
       0 0 1px rgba(0, 0, 0, 0.15);
     z-index: var(--z-popover);
+    overflow: hidden;
   }
 
   .popover-header {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    padding: 12px 4px 8px 16px;
+    gap: 4px;
+    padding: 0 4px 8px 16px;
     flex-shrink: 0;
+    background: var(--cds-background, #ffffff);
 
     h3 {
+      flex: 1;
       margin: 0;
-      font-size: 1rem;
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-size: 16px;
       font-weight: 600;
-      color: var(--cds-text-primary);
+      line-height: 24px;
+      color: var(--cds-text-primary, #161616);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
   }
 
   .popover-content {
     flex: 1;
     overflow-y: auto;
-    padding: 8px 16px;
+    padding: 0 16px 8px 16px;
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-06);
+    gap: 32px;
+  }
+
+  .popover-preview-wrap {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+
+  .popover-divider {
+    height: 8px;
+    flex-shrink: 0;
+    border-top: 1px solid var(--cds-border-subtle-01, #c6c6c6);
+  }
+
+  .popover-preview {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 0 16px;
+    flex-shrink: 0;
   }
 
   .popover-footer {
     display: flex;
-    gap: var(--cds-spacing-03);
-    padding: var(--cds-spacing-04);
-    padding-top: 16px;
-    border-top: 1px solid var(--cds-border-subtle);
+    gap: 8px;
+    padding: 16px 16px 16px 16px;
     flex-shrink: 0;
 
     :global(.bx--btn) {

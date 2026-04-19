@@ -139,10 +139,6 @@ export function getPatternAtlas(): {
 
   cachedResult = motifAtlas(PATTERN_CONFIGS);
 
-  logger.debug('Pattern atlas generated via motif.js', LogCategory.MAP, {
-    patterns: Object.keys(cachedResult.mapping).length
-  });
-
   return { atlas: cachedResult.canvas, mapping: cachedResult.mapping };
 }
 

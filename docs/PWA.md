@@ -1,6 +1,6 @@
 # Configuration PWA
 
-> Progressive Web App : installation, cache hors-ligne et mises a jour.
+> Progressive Web App : installation, cache hors-ligne et mises à jour.
 
 **Voir aussi** : [Architecture](./ARCHITECTURE.md) | [Fonds de carte](./FONDS_DE_CARTE.md)
 
@@ -8,7 +8,9 @@
 
 ## Vue d'ensemble
 
-Khartis v3 utilise `vite-plugin-pwa` (Workbox) pour fonctionner hors-ligne apres la premiere visite. L'application peut etre installee sur l'appareil, met en cache les fonds de carte et le moteur DuckDB WASM, et propose des mises a jour automatiques.
+Khartis v3 utilise `vite-plugin-pwa` (Workbox) pour fonctionner hors-ligne après la première visite. L'application peut être installée sur l'appareil, met en cache les fonds de carte et le moteur DuckDB WASM, et propose des mises à jour automatiques.
+
+---
 
 ## Configuration principale
 
@@ -39,18 +41,20 @@ VitePWA({
 });
 ```
 
-## Strategies de cache
+---
 
-CacheFirst pour toutes les ressources (contenu statique, immutable). Aucune API distante n'est appelee (architecture client-only).
+## Stratégies de cache
 
-### Precache (app shell)
+CacheFirst pour toutes les ressources (contenu statique, immutable). Aucune API distante n'est appelée (architecture client-only).
+
+### Précache (app shell)
 
 ```ts
 globPatterns: ['**/*.{js,css,woff2,woff,ttf,eot,otf,splinecode}'];
 globIgnores: ['**/node_modules/**/*'];
 ```
 
-Les fichiers WASM sont exclus du precache et charges a la demande via le cache runtime.
+Les fichiers WASM sont exclus du précache et chargés à la demande via le cache runtime.
 
 ### Cache runtime
 
@@ -72,13 +76,15 @@ Les fichiers WASM sont exclus du precache et charges a la demande via le cache r
   options: { cacheName: 'osm-tiles', expiration: { maxEntries: 500, maxAgeSeconds: 90 * 86400 } } }
 ```
 
-## Tailles de cache estimees
+---
 
-> **Note** : ces tailles sont des estimations susceptibles de changer. Verifier les valeurs reelles dans `vite.config.ts` et `tsconfig.json` avant de s'y fier pour le dimensionnement d'un dispositif de stockage.
+## Tailles de cache estimées
 
-| Cache               | Contenu                   | Entrees max | Expiration | Taille estimee |
+> **Note** : ces tailles sont des estimations susceptibles de changer. Vérifier les valeurs réelles dans `vite.config.ts` et `tsconfig.json` avant de s'y fier pour le dimensionnement d'un dispositif de stockage.
+
+| Cache               | Contenu                   | Entrées max | Expiration | Taille estimée |
 | ------------------- | ------------------------- | ----------- | ---------- | -------------- |
-| `precache`          | App shell (JS/CSS/HTML)   | --          | --         | ~4 Mo          |
+| `precache`          | App shell (JS/CSS/HTML)   | —           | —          | ~4 Mo          |
 | `wasm-workers`      | Binaires WASM, workers    | 20          | 90 jours   | ~81 Mo         |
 | `basemaps-data`     | GeoParquet fonds de carte | 100         | 1 an       | ~25 Mo         |
 | `duckdb-extensions` | Extensions DuckDB         | 10          | 30 jours   | < 1 Mo         |
@@ -87,15 +93,19 @@ Les fichiers WASM sont exclus du precache et charges a la demande via le cache r
 | `openfreemap-tiles` | Tuiles OpenFreeMap        | 500         | 90 jours   | ~25 Mo         |
 | **Total**           |                           |             |            | **~186 Mo**    |
 
-Installation initiale : ~4 Mo. Apres utilisation complete : ~186 Mo.
+Installation initiale : ~4 Mo. Après une utilisation complète : ~186 Mo.
+
+---
 
 ## Manifest web app
 
-Le manifest declare `display: 'standalone'`, `orientation: 'portrait'`, avec 4 icones (64, 192, 512 + 512 maskable). Generation des icones : `pnpm generate-pwa-assets`.
+Le manifest déclare `display: 'standalone'`, `orientation: 'portrait'`, avec 4 icônes (64, 192, 512 + 512 maskable). Génération des icônes : `pnpm generate-pwa-assets`.
 
-## Mise a jour
+---
 
-Le service worker verifie les mises a jour toutes les heures. Quand une nouvelle version est detectee, une notification Carbon flottante propose la mise a jour avec l'emplacement d'action prevu par le composant (`actions`). Les projets IndexedDB sont preserves.
+## Mise à jour
+
+Le service worker vérifie les mises à jour toutes les heures. Quand une nouvelle version est détectée, une notification Carbon flottante propose la mise à jour à l'emplacement prévu par le composant (`actions`). Les projets IndexedDB sont préservés.
 
 ```ts
 const { needRefresh, updateServiceWorker } = useRegisterSW({
@@ -105,23 +115,27 @@ const { needRefresh, updateServiceWorker } = useRegisterSW({
 });
 ```
 
+---
+
 ## Mode hors-ligne
 
-**Fonctionne hors-ligne** : application complete, fonds de carte caches, DuckDB WASM, projets utilisateur (IndexedDB), jeux de donnees importes.
+**Fonctionne hors-ligne** : application complète, fonds de carte cachés, DuckDB WASM, projets utilisateur (IndexedDB), jeux de données importés.
 
-**Necessite le reseau** (premiere fois seulement) : telechargement des fonds de carte, extensions DuckDB, tuiles cartographiques.
+**Nécessite le réseau** (première fois uniquement) : téléchargement des fonds de carte, extensions DuckDB, tuiles cartographiques.
 
-## Depannage
+---
+
+## Dépannage
 
 ### Erreur `bad-precaching-response`
 
-Le service worker tente de precacher des fichiers inexistants. Verifier `navigateFallback` et les `globIgnores`.
+Le service worker tente de précacher des fichiers inexistants. Vérifier `navigateFallback` et les `globIgnores`.
 
-### L'application ne se met pas a jour
+### L'application ne se met pas à jour
 
-- Incrementer la version dans `package.json` avant le build
-- L'utilisateur doit cliquer sur "Mettre a jour"
-- En dev, desinscription forcee :
+- Incrémenter la version dans `package.json` avant le build.
+- L'utilisateur doit cliquer sur **Mettre à jour**.
+- En dev, désinscription forcée :
 
 ```js
 navigator.serviceWorker
@@ -130,10 +144,10 @@ navigator.serviceWorker
 location.reload();
 ```
 
-### Fichiers volumineux non caches
+### Fichiers volumineux non cachés
 
 Augmenter `maximumFileSizeToCacheInBytes` dans la config Workbox. Attention au quota de stockage sur mobile.
 
 ---
 
-**Voir aussi :** [ARCHITECTURE.md](./ARCHITECTURE.md) -- [FONDS_DE_CARTE.md](./FONDS_DE_CARTE.md)
+**Voir aussi :** [ARCHITECTURE.md](./ARCHITECTURE.md) — [FONDS_DE_CARTE.md](./FONDS_DE_CARTE.md)

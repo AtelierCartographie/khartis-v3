@@ -48,9 +48,7 @@ export async function processRemoteFile(
     format
   });
 
-  if (!dataset.geometry) {
-    await applyTabularGeoDetection(dataset);
-  }
+  await applyTabularGeoDetection(dataset);
 
   dataset.sourceFileId = url;
   dataset.name = filename;

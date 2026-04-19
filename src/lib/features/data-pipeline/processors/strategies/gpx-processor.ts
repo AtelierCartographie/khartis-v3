@@ -167,11 +167,6 @@ export const gpxProcessor: FileProcessor = {
     file: UploadedFile
   ): Promise<ProcessorDataset> {
     const start = performance.now();
-    logger.debug('Processing GPX file', LogCategory.DUCKDB, {
-      fileId: file.id,
-      tableName: ctx.tableName
-    });
-
     const rawContent = await readGpxContent(file);
     const geojson = parseGpxToGeoJson(rawContent);
     const geojsonFile = new File(

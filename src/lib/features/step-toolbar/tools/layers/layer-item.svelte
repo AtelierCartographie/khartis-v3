@@ -4,10 +4,6 @@
   import { OverflowMenu, OverflowMenuItem } from 'carbon-components-svelte';
   import { dragHandle } from 'svelte-dnd-action';
   import {
-    ArrowDown,
-    ArrowUp,
-    ChevronDown,
-    ChevronUp,
     Draggable,
     Settings,
     ViewFilled,
@@ -17,9 +13,6 @@
 
   interface Props {
     layer: Layer;
-    hasChildren?: boolean;
-    isCollapsed?: boolean;
-    onToggleCollapse?: () => void;
     onToggleVisibility: (layerId: string) => void;
     onOpenSettings: (layerId: string) => void;
     canMoveUp?: boolean;
@@ -33,9 +26,6 @@
 
   const {
     layer,
-    hasChildren = false,
-    isCollapsed = false,
-    onToggleCollapse,
     onToggleVisibility,
     onOpenSettings,
     canMoveUp = false,
@@ -70,22 +60,6 @@
       <IconButton
         kind="ghost"
         size="small"
-        icon={ArrowUp}
-        iconDescription={m.layers_move_up()}
-        disabled={!canMoveUp}
-        onclick={() => onMoveUp?.()}
-      />
-      <IconButton
-        kind="ghost"
-        size="small"
-        icon={ArrowDown}
-        iconDescription={m.layers_move_down()}
-        disabled={!canMoveDown}
-        onclick={() => onMoveDown?.()}
-      />
-      <IconButton
-        kind="ghost"
-        size="small"
         icon={layer.visible ? ViewFilled : ViewOff}
         iconDescription={layer.visible ? m.layers_hide() : m.layers_show()}
         onclick={() => onToggleVisibility(layer.id)}
@@ -108,33 +82,8 @@
     >
       <Draggable size={16} />
     </div>
-    {#if hasChildren}
-      <IconButton
-        kind="ghost"
-        size="small"
-        icon={isCollapsed ? ChevronDown : ChevronUp}
-        iconDescription={isCollapsed ? m.layers_expand() : m.layers_collapse()}
-        onclick={() => onToggleCollapse?.()}
-      />
-    {/if}
     <span class="layer-title">{layer.name}</span>
     <div class="layer-actions">
-      <IconButton
-        kind="ghost"
-        size="small"
-        icon={ArrowUp}
-        iconDescription={m.layers_move_up()}
-        disabled={!canMoveUp}
-        onclick={() => onMoveUp?.()}
-      />
-      <IconButton
-        kind="ghost"
-        size="small"
-        icon={ArrowDown}
-        iconDescription={m.layers_move_down()}
-        disabled={!canMoveDown}
-        onclick={() => onMoveDown?.()}
-      />
       <IconButton
         kind="ghost"
         size="small"
@@ -149,12 +98,26 @@
           iconDescription={m.layers_more_options()}
         >
           <OverflowMenuItem
+            text={m.layers_settings()}
+            on:click={() => onOpenSettings(layer.id)}
+          />
+          <OverflowMenuItem
             text={m.layers_rename()}
             on:click={() => onRenameLayer?.(layer.id)}
           />
           <OverflowMenuItem
             text={m.layers_duplicate()}
             on:click={() => onDuplicateLayer?.(layer.id)}
+          />
+          <OverflowMenuItem
+            text={m.layers_move_up()}
+            disabled={!canMoveUp}
+            on:click={() => onMoveUp?.()}
+          />
+          <OverflowMenuItem
+            text={m.layers_move_down()}
+            disabled={!canMoveDown}
+            on:click={() => onMoveDown?.()}
           />
           <OverflowMenuItem
             danger

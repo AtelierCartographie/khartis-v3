@@ -26,11 +26,6 @@ export const geopackageProcessor: FileProcessor = {
     file: UploadedFile
   ): Promise<ProcessorDataset> {
     const start = performance.now();
-    logger.debug('Processing GeoPackage file', LogCategory.DUCKDB, {
-      fileId: file.id,
-      tableName: ctx.tableName
-    });
-
     const gpkgFile = getFileForDuckDB(file, MIME.GEOPACKAGE);
 
     await ctx.Duck.register_files([gpkgFile]);

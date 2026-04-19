@@ -1,10 +1,3 @@
-/**
- * MIME type constants
- *
- * Standard MIME type strings used for file handling, Blob creation,
- * and content type detection throughout the application.
- */
-
 export const MIME = {
   CSV: 'text/csv',
   TSV: 'text/tab-separated-values',

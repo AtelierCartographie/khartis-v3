@@ -134,6 +134,47 @@ describe('detectSemioType — NUMERIC columns', () => {
     expect(result.semioType).toBe('QLO');
   });
 
+  it('detects GEOID for denormalized numeric code column (low shareUniques but id keyword)', () => {
+    const result = detectSemioType(
+      analysis('code_region_2016', NUMERIC, {
+        count: 34953,
+        uniques: 18,
+        nulls: 0,
+        min: 1,
+        max: 94,
+        share_integers: 1.0,
+        share_floats: 0,
+        share_rank_interval: 0,
+        extent_magnitude: 1.97
+      }) as never
+    );
+    expect(result.semioType).toBe('geoid');
+    expect(result.semioScore).toBeGreaterThanOrEqual(4);
+  });
+
+  it('detects GEOID for denormalized string code column (code_departement)', () => {
+    const result = detectSemioType(
+      analysis('code_departement', STRING, {
+        count: 34953,
+        uniques: 96,
+        nulls: 0
+      }) as never
+    );
+    expect(result.semioType).toBe('geoid');
+    expect(result.semioScore).toBeGreaterThanOrEqual(4);
+  });
+
+  it('does NOT classify as GEOID when id-keyword column has only 1 unique value', () => {
+    const result = detectSemioType(
+      analysis('code', STRING, {
+        count: 100,
+        uniques: 1,
+        nulls: 0
+      }) as never
+    );
+    expect(result.semioScore).toBe(0);
+  });
+
   it('QTR score is boosted by ratio keywords vs plain float column', () => {
     const withKeyword = detectSemioType(
       analysis('taux', NUMERIC, {

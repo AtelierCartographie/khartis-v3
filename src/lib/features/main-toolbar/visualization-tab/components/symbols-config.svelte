@@ -6,12 +6,12 @@
     Category,
     ChartBubble,
     CircleFilled,
-    Tag,
-    ChartScatter
+    Tag
   } from 'carbon-icons-svelte';
   import { SymbolMode } from '../../constants';
   import {
     ALL_PRIMITIVE_FILTERS,
+    getSymbolPrimitive,
     PrimitiveFilterType
   } from '$lib/features/commons/store/visualization.store.svelte';
   import type {
@@ -25,14 +25,13 @@
     SectionHeading,
     InfoPopover,
     VizFilterButton,
-    VizFilterSection
+    VizFilterPanel
   } from './shared';
   import type { VizDataFilter } from '$lib/features/commons/store/visualization.store.svelte';
   import {
     SymbolModeUnique,
     SymbolModeProportional,
-    SymbolModeCategories,
-    SymbolModeDensity
+    SymbolModeCategories
   } from './symbols';
 
   interface Props {
@@ -53,6 +52,10 @@
     onToggleVisibility?: (checked: boolean) => void;
     filters?: VizDataFilter[];
     onAddFilter?: (filter: Omit<VizDataFilter, 'id'>) => void;
+    onUpdateFilter?: (
+      filterId: string,
+      updates: Partial<Omit<VizDataFilter, 'id'>>
+    ) => void;
     onRemoveFilter?: (filterId: string) => void;
     onClearFilters?: () => void;
   }
@@ -71,8 +74,8 @@
     onToggleVisibility,
     filters = [],
     onAddFilter,
-    onRemoveFilter,
-    onClearFilters
+    onUpdateFilter,
+    onRemoveFilter
   }: Props = $props();
 
   let discretizationModalOpen = $state(false);
@@ -89,8 +92,8 @@
   }
 
   $effect(() => {
-    if (visualization?.modes) {
-      symbolMode = visualization.modes.symbol ?? SymbolMode.UNIQUE;
+    if (visualization) {
+      symbolMode = getSymbolPrimitive(visualization)?.mode ?? SymbolMode.UNIQUE;
     }
   });
 
@@ -98,8 +101,7 @@
     { icon: CircleFilled, label: m.symbol_mode_unique(), iconSize: 16 },
     { icon: ChartBubble, label: m.symbol_mode_proportional(), iconSize: 16 },
     { icon: Category, label: m.symbol_mode_classes(), iconSize: 16 },
-    { icon: Tag, label: m.symbol_mode_categories(), iconSize: 16 },
-    { icon: ChartScatter, label: m.symbol_mode_density(), iconSize: 16 }
+    { icon: Tag, label: m.symbol_mode_categories(), iconSize: 16 }
   ];
 
   function handleSymbolModeChange(index: number) {
@@ -107,8 +109,7 @@
       SymbolMode.UNIQUE,
       SymbolMode.PROPORTIONAL,
       SymbolMode.CLASSES,
-      SymbolMode.CATEGORIES,
-      SymbolMode.DENSITY
+      SymbolMode.CATEGORIES
     ];
     symbolMode = modes[index] || SymbolMode.UNIQUE;
     onModesChange?.({ symbol: symbolMode });
@@ -129,8 +130,7 @@
       SymbolMode.UNIQUE,
       SymbolMode.PROPORTIONAL,
       SymbolMode.CLASSES,
-      SymbolMode.CATEGORIES,
-      SymbolMode.DENSITY
+      SymbolMode.CATEGORIES
     ].indexOf(symbolMode)
   );
 </script>
@@ -213,25 +213,23 @@
         onInvertPalette={onInvertPalette}
         onOpenDiscretization={handleOpenDiscretization}
       />
-    {:else if symbolMode === SymbolMode.DENSITY}
-      <SymbolModeDensity
-        dataFields={dataFields}
-        visualization={visualization}
-        onMappingChange={onMappingChange}
-      />
-    {/if}
-
-    {#if filterSectionVisible || filters.length > 0}
-      <VizFilterSection
-        dataFields={dataFields}
-        filters={filters}
-        onAddFilter={onAddFilter ?? (() => {})}
-        onRemoveFilter={onRemoveFilter ?? (() => {})}
-        onClearFilters={onClearFilters ?? (() => {})}
-      />
     {/if}
   </div>
 </ExpandableSection>
+
+{#if filterSectionVisible}
+  <VizFilterPanel
+    title={m.symbols_title()}
+    dataFields={dataFields}
+    filters={filters}
+    onAddFilter={onAddFilter ?? (() => {})}
+    onUpdateFilter={onUpdateFilter}
+    onRemoveFilter={onRemoveFilter ?? (() => {})}
+    onClose={() => {
+      filterSectionVisible = false;
+    }}
+  />
+{/if}
 
 <DiscretizationModal
   bind:open={discretizationModalOpen}

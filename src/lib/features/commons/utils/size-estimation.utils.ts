@@ -14,6 +14,8 @@ function stripBinaryFields(project: unknown): unknown {
         content: _content,
         relatedFilesData: _relatedFilesData,
         preparedGeoJSON: _preparedGeoJSON,
+        originalFile: _originalFile,
+        relatedFileObjects: _relatedFileObjects,
         ...rest
       } = file;
       return rest;
@@ -24,44 +26,6 @@ function stripBinaryFields(project: unknown): unknown {
 }
 
 export function estimateProjectStorageSize(project: unknown): number {
-  let binarySize = 0;
-
-  if (project && typeof project === 'object') {
-    const data = (project as Record<string, unknown>).data as
-      | Record<string, unknown>
-      | undefined;
-    const sourceFiles = data?.sourceFiles;
-    if (Array.isArray(sourceFiles)) {
-      for (const file of sourceFiles) {
-        if (file.content instanceof ArrayBuffer) {
-          binarySize += file.content.byteLength;
-        } else if (typeof file.content === 'string') {
-          binarySize += file.content.length * 2;
-        }
-
-        if (
-          file.relatedFilesData &&
-          typeof file.relatedFilesData === 'object'
-        ) {
-          for (const buffer of Object.values(
-            file.relatedFilesData as Record<string, unknown>
-          )) {
-            if (buffer instanceof ArrayBuffer) {
-              binarySize += (buffer as ArrayBuffer).byteLength;
-            }
-          }
-        }
-
-        if (typeof file.preparedGeoJSON === 'string') {
-          binarySize += (file.preparedGeoJSON as string).length * 2;
-        }
-      }
-    }
-  }
-
   const stripped = stripBinaryFields(project);
-  const metadataSize = new Blob([JSON.stringify(stripped, bigIntReplacer)])
-    .size;
-
-  return binarySize + metadataSize;
+  return new Blob([JSON.stringify(stripped, bigIntReplacer)]).size;
 }

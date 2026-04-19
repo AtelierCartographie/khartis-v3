@@ -314,11 +314,6 @@ export async function addGeoArrowMetadataFromDuckDB(
       if (!geometryType.startsWith('ST_')) {
         geometryType = 'ST_' + geometryType;
       }
-
-      logger.debug('Using cached geometry metadata', LogCategory.DUCKDB, {
-        tableName,
-        geometryType
-      });
     } else {
       // Resolve geometry column: reuse pre-fetched info or call describe_table()
       if (prefetchedGeomColumn) {
@@ -476,16 +471,6 @@ export async function addGeoArrowMetadataFromDuckDB(
 
     const tableWithMetadata = new Table(newSchema, table.batches);
 
-    logger.debug('Added GeoArrow metadata to Arrow table', LogCategory.DUCKDB, {
-      tableName,
-      geometryType,
-      encoding,
-      hasSchemaMetadata: !!tableWithMetadata.schema.metadata,
-      geoFieldMetadata: updatedFields.find(
-        (f) => f.name === geomColumn!.column_name
-      )?.metadata
-    });
-
     return tableWithMetadata;
   } catch (error) {
     logger.error(
@@ -582,9 +567,6 @@ export async function getArrowTableDirect(
 
   const cached = getCachedTable();
   if (cached) {
-    logger.debug('Using cached Arrow table with metadata', LogCategory.DUCKDB, {
-      tableName
-    });
     return cached;
   }
 

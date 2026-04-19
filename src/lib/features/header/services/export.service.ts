@@ -58,7 +58,6 @@ export async function exportProject(fileName: string): Promise<void> {
   }
 
   await projectStore.exportProject(fileName);
-  logger.debug('Project exported', LogCategory.EXPORT, { fileName });
 }
 
 export async function exportMapAsSvg(
@@ -263,7 +262,6 @@ async function fetchDatasetsWithGeometry(
 
   for (const dataset of datasets) {
     if (!dataset.duckdbTableName || !dataset.geometry) {
-      // Check if this is a joined dataset (CSV joined to a basemap)
       if (dataset.sourceFileId) {
         const duckDataset = duckDBOrchestrator.getDatasetBySourceFile(
           dataset.sourceFileId
@@ -345,11 +343,6 @@ async function fetchDatasetsWithGeometry(
       results.push(dataset);
     }
   }
-
-  logger.debug('Datasets prepared for export', LogCategory.EXPORT, {
-    requested: datasets.length,
-    prepared: results.length
-  });
 
   return results;
 }

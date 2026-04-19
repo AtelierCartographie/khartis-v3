@@ -67,7 +67,6 @@ function createProjectStore() {
     }
   };
 
-  // Wire the persistence registry to auto-save via the project store
   persistenceRegistry.setSaveCallback(() => saveCurrentProject());
 
   async function initialize(): Promise<void> {

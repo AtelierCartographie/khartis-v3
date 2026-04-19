@@ -28,14 +28,17 @@ import type {
   ParserOptions,
   ProjectionLike
 } from 'geoarrow-deck-stream';
-import { geoPath, type GeoProjection } from 'd3-geo';
+import { type GeoProjection } from 'd3-geo';
 // d3-geo-projection has no bundled type declarations — import via namespace cast
 import * as _d3GeoProjection from 'd3-geo-projection';
 
-const { geoNaturalEarth2 } = _d3GeoProjection as unknown as Record<
-  string,
-  () => GeoProjection
->;
+const { geoNaturalEarth2, geoProject } = _d3GeoProjection as unknown as {
+  geoNaturalEarth2: () => GeoProjection;
+  geoProject: (
+    object: GeoJSON.GeoJsonObject,
+    projection: ProjectionLike
+  ) => GeoJSON.GeoJsonObject | null;
+};
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type {
   BasemapMetadata,
@@ -57,13 +60,7 @@ function resolveSimpleProjection(proj4String: string): GeoProjection {
   return proj4d3(proj4String);
 }
 
-// ---------------------------------------------------------------------------
-// Geometry column normalization
-// geoarrow-deck-stream expects the geometry column to be named "geometry".
-// DuckDB ST_Read typically names it "geom" or "wkb_geometry".
-// This helper renames the column in the Arrow schema so the library can find it.
-// ---------------------------------------------------------------------------
-
+// geoarrow-deck-stream requires a "geometry" column; DuckDB ST_Read names it "geom"/"wkb_geometry".
 const EXPECTED_GEOM_COL = 'geometry';
 const normalizedTableCache = new WeakMap<ArrowTable, ArrowTable>();
 const projectedBboxCache = new WeakMap<
@@ -71,55 +68,42 @@ const projectedBboxCache = new WeakMap<
   Map<string, [number, number, number, number] | null>
 >();
 
+function createProjectionPointSampler(
+  projection: ProjectionLike
+): (coordinates: [number, number]) => [number, number] | null {
+  let projected: [number, number] | null = null;
+  const stream = projection.stream({
+    point(x: number, y: number): void {
+      if (Number.isFinite(x) && Number.isFinite(y)) {
+        projected = [x, y];
+      }
+    },
+    lineStart(): void {},
+    lineEnd(): void {},
+    polygonStart(): void {},
+    polygonEnd(): void {}
+  });
+
+  return (coordinates: [number, number]) => {
+    projected = null;
+    stream.point(coordinates[0], coordinates[1]);
+    return projected;
+  };
+}
+
 function sampleProjectedBbox(
   projection: ProjectionLike,
   bbox: [number, number, number, number]
 ): [number, number, number, number] | null {
-  const polygon: GeoJSON.Feature<GeoJSON.Polygon> = {
-    type: 'Feature',
-    properties: {},
-    geometry: {
-      type: 'Polygon',
-      coordinates: [
-        [
-          [bbox[0], bbox[1]],
-          [bbox[2], bbox[1]],
-          [bbox[2], bbox[3]],
-          [bbox[0], bbox[3]],
-          [bbox[0], bbox[1]]
-        ]
-      ]
-    }
-  };
-
-  try {
-    const [[minX, minY], [maxX, maxY]] = geoPath(
-      projection as unknown as GeoProjection
-    ).bounds(polygon);
-
-    if (
-      [minX, minY, maxX, maxY].every((value) => Number.isFinite(value)) &&
-      maxX >= minX &&
-      maxY >= minY
-    ) {
-      return [minX, minY, maxX, maxY];
-    }
-  } catch {
-    // Fallback to manual edge sampling for projection-like objects that do not
-    // expose the full d3-geo path interface.
-  }
-
   const [west, south, east, north] = bbox;
-  const steps = 20;
+  const steps = 32;
   const xs: number[] = [];
   const ys: number[] = [];
+  const projectPoint = createProjectionPointSampler(projection);
 
   const tryProject = (lon: number, lat: number) => {
-    const proj = projection as unknown as (
-      c: [number, number]
-    ) => [number, number] | null;
-    const result = proj([lon, lat]);
-    if (result && isFinite(result[0]) && isFinite(result[1])) {
+    const result = projectPoint([lon, lat]);
+    if (result && Number.isFinite(result[0]) && Number.isFinite(result[1])) {
       xs.push(result[0]);
       ys.push(result[1]);
     }
@@ -185,10 +169,6 @@ function normalizeGeomColumnName(table: ArrowTable): ArrowTable {
   return result;
 }
 
-// ---------------------------------------------------------------------------
-// Identity parsing (lon/lat passthrough — for custom basemaps, MapLibre mode)
-// ---------------------------------------------------------------------------
-
 const IDENTITY_OPTIONS: ParserOptions = {
   projection: geoIdentity(),
   capacityMultiplier: 1.0,
@@ -253,11 +233,109 @@ export function parseSolidPolygons(table: ArrowTable): BinaryPolygonData {
   return result;
 }
 
+/**
+ * Fast WKB Point decoder for multi-batch Arrow tables (e.g. dot-density output).
+ *
+ * The `geoarrow-deck-stream` library's `parsePoints` only reads the first
+ * RecordBatch via `getFirstDataChunk`, so tables with N batches drop
+ * (N-1) / N of their rows. Instead of calling the library 58 times and
+ * concatenating (which re-allocates + re-runs WKB → native conversion per
+ * batch), we decode WKB Points directly: each point is a fixed 21 bytes
+ * (1 endian + 4 type + 8 X + 8 Y), so we iterate all batches in one pass
+ * and write straight into pre-allocated Float32/Uint32 output buffers.
+ */
+function decodeWkbPointsAllBatches(table: ArrowTable): BinaryPointData | null {
+  const geomVector =
+    table.getChild('geometry') ?? table.getChild('wkb_geometry');
+  if (!geomVector) return null;
+
+  const totalLength = table.numRows;
+  const positions = new Float32Array(totalLength * 2);
+  const featureIds = new Uint32Array(totalLength);
+  let outIdx = 0;
+
+  for (let b = 0; b < geomVector.data.length; b++) {
+    const data = geomVector.data[b];
+    const offsets = data.valueOffsets as Int32Array;
+    const values = data.values as Uint8Array;
+    const batchLen = data.length;
+
+    for (let i = 0; i < batchLen; i++) {
+      const start = offsets[i];
+      const end = offsets[i + 1];
+      // WKB Point = 21 bytes. Guard against malformed / non-Point WKB by
+      // bailing out and letting the caller fall back to the library.
+      if (end - start !== 21) return null;
+      const base = values.byteOffset + start;
+      const view = new DataView(values.buffer, base, 21);
+      const le = view.getUint8(0) === 1;
+      // bytes 1-4 = type; 1 = Point (we only handle the Point case here)
+      const type = view.getUint32(1, le);
+      if (type !== 1) return null;
+      positions[outIdx * 2] = view.getFloat64(5, le);
+      positions[outIdx * 2 + 1] = view.getFloat64(13, le);
+      featureIds[outIdx] = outIdx;
+      outIdx++;
+    }
+  }
+
+  return { length: outIdx, positions, featureIds, size: 2 };
+}
+
+function parsePointsAllBatches(
+  table: ArrowTable,
+  options: ParserOptions
+): BinaryPointData {
+  const normalized = normalizeGeomColumnName(table);
+  // Fast path: identity projection + WKB Points (density output) can skip the
+  // library entirely and decode straight to binary buffers in one pass.
+  const isIdentityProjection =
+    !options.projection || options.projection === IDENTITY_OPTIONS.projection;
+  if (isIdentityProjection && normalized.batches.length > 0) {
+    const direct = decodeWkbPointsAllBatches(normalized);
+    if (direct) return direct;
+  }
+
+  // Library's parsePoints only reads the first RecordBatch; for multi-batch
+  // tables we parse each batch as a single-batch table and concat the result.
+  if (normalized.batches.length <= 1) {
+    return parsePoints(normalized, options);
+  }
+
+  const perBatch = normalized.batches.map((batch) => {
+    const singleBatchTable = new ArrowTableImpl(normalized.schema, [batch]);
+    return parsePoints(singleBatchTable, options);
+  });
+
+  let totalLength = 0;
+  for (const r of perBatch) totalLength += r.length;
+
+  const positions = new Float32Array(totalLength * 2);
+  const featureIds = new Uint32Array(totalLength);
+  let posOffset = 0;
+  let idOffset = 0;
+  let featureIdBase = 0;
+  for (const r of perBatch) {
+    const posSlice = r.positions.subarray(0, r.length * 2);
+    positions.set(posSlice, posOffset);
+    posOffset += posSlice.length;
+
+    const idSlice = r.featureIds.subarray(0, r.length);
+    for (let i = 0; i < idSlice.length; i++) {
+      featureIds[idOffset + i] = idSlice[i] + featureIdBase;
+    }
+    idOffset += idSlice.length;
+    featureIdBase += r.length;
+  }
+
+  return { length: totalLength, positions, featureIds, size: 2 };
+}
+
 export function parsePointData(table: ArrowTable): BinaryPointData {
   let result = pointCache.get(table);
   if (!result) {
     try {
-      result = parsePoints(normalizeGeomColumnName(table), IDENTITY_OPTIONS);
+      result = parsePointsAllBatches(table, IDENTITY_OPTIONS);
     } catch (error) {
       logger.error(
         'Failed to parse points from Arrow table',
@@ -270,10 +348,6 @@ export function parsePointData(table: ArrowTable): BinaryPointData {
   }
   return result;
 }
-
-// ---------------------------------------------------------------------------
-// Projection-aware parsing (for built-in basemaps with composite/simple proj)
-// ---------------------------------------------------------------------------
 
 /**
  * Build a d3-compatible projection from basemap metadata.
@@ -306,33 +380,14 @@ export function buildProjectionForBasemap(
   }
 
   if (projTo.type === 'composite' && projTo.preset && projectionPresets) {
-    const preset = projectionPresets[projTo.preset];
-    if (preset?.entries?.length) {
-      try {
-        return buildCompositeProjection({
-          width,
-          height,
-          entries: preset.entries.map((entry) => ({
-            id: entry.id,
-            projection: resolveSimpleProjection(entry.proj4),
-            bounds: [
-              entry.bounds[0][0],
-              entry.bounds[0][1],
-              entry.bounds[1][0],
-              entry.bounds[1][1]
-            ],
-            layout: entry.layout,
-            scaleMultiplier: entry.scaleMultiplier
-          }))
-        });
-      } catch (error) {
-        logger.warn(
-          'Failed to build composite projection, falling back to identity',
-          LogCategory.MAP,
-          { preset: projTo.preset, error }
-        );
-        return geoIdentity();
-      }
+    const projection = buildCompositeProjectionFromPresetId(
+      projTo.preset,
+      width,
+      height,
+      projectionPresets
+    );
+    if (projection) {
+      return projection;
     }
   }
 
@@ -342,6 +397,48 @@ export function buildProjectionForBasemap(
     { projTo }
   );
   return geoIdentity();
+}
+
+export function buildCompositeProjectionFromPresetId(
+  presetId: string,
+  width: number,
+  height: number,
+  projectionPresets: ProjectionPresets | null
+): ProjectionLike | null {
+  if (!projectionPresets) {
+    return null;
+  }
+
+  const preset = projectionPresets[presetId];
+  if (!preset?.entries?.length) {
+    return null;
+  }
+
+  try {
+    return buildCompositeProjection({
+      width,
+      height,
+      entries: preset.entries.map((entry) => ({
+        id: entry.id,
+        projection: resolveSimpleProjection(entry.proj4),
+        bounds: [
+          entry.bounds[0][0],
+          entry.bounds[0][1],
+          entry.bounds[1][0],
+          entry.bounds[1][1]
+        ],
+        layout: entry.layout,
+        scaleMultiplier: entry.scaleMultiplier
+      }))
+    });
+  } catch (error) {
+    logger.warn(
+      'Failed to build composite projection, falling back to identity',
+      LogCategory.MAP,
+      { preset: presetId, error }
+    );
+    return null;
+  }
 }
 
 /**
@@ -481,7 +578,7 @@ export function parsePointDataWithProjection(
     const cached = projMap.get(projection);
     if (cached) return cached;
   }
-  const result = parsePoints(normalizeGeomColumnName(table), {
+  const result = parsePointsAllBatches(table, {
     projection,
     capacityMultiplier: 1.0,
     rewind
@@ -493,10 +590,6 @@ export function parsePointDataWithProjection(
   projMap.set(projection, result);
   return result;
 }
-
-// ---------------------------------------------------------------------------
-// Point attribute factories (not provided by geoarrow-deck-stream)
-// ---------------------------------------------------------------------------
 
 /**
  * Per-point color attribute for ScatterplotLayer.
@@ -610,10 +703,6 @@ export function pathWidthAttr(
   return { value: widths, size: 1 };
 }
 
-// ---------------------------------------------------------------------------
-// Row accessor adapters (bridges DeckDataRow accessors to featureId lookups)
-// ---------------------------------------------------------------------------
-
 export function rowAccessor<T>(
   table: ArrowTable,
   accessor: (row: Record<string, unknown>) => T
@@ -681,10 +770,6 @@ export function columnAccessor<T>(
   return (featureId: number): T => transform(vector.get(featureId));
 }
 
-// ---------------------------------------------------------------------------
-// DataFilterExtension: per-feature filter value attribute
-// ---------------------------------------------------------------------------
-
 /**
  * Build a Float32 binary attribute for DataFilterExtension's getFilterValue.
  * Works with any binary data type (points, paths, polygons) that has featureIds.
@@ -720,10 +805,6 @@ export function filterValueAttr(
   return { value: values, size: 1 };
 }
 
-// ---------------------------------------------------------------------------
-// Binary point extraction
-// ---------------------------------------------------------------------------
-
 /**
  * Extract positions from binary point data.
  */
@@ -735,10 +816,6 @@ export function pointPositions(data: BinaryPointData): Float64Array {
   }
   return result;
 }
-
-// ---------------------------------------------------------------------------
-// GeoJSON coordinate projection (for WKB fallback path)
-// ---------------------------------------------------------------------------
 
 /**
  * Project GeoJSON coordinates through a d3-compatible projection.
@@ -754,80 +831,41 @@ export function projectGeoJSON(
   geojson: GeoJSON.FeatureCollection,
   projection: ProjectionLike
 ): GeoJSON.FeatureCollection {
-  const proj = projection as unknown as (
-    c: [number, number]
-  ) => [number, number] | null;
-
-  function projectCoord(coord: number[]): [number, number] | null {
-    const result = proj([coord[0], coord[1]]);
-    if (result && isFinite(result[0]) && isFinite(result[1])) {
-      return [result[0], result[1]];
+  function sanitizeGeometry(
+    geometry: GeoJSON.Geometry | null
+  ): GeoJSON.Geometry | null {
+    if (!geometry) {
+      return null;
     }
-    return null;
+
+    if (geometry.type !== 'GeometryCollection') {
+      return geometry;
+    }
+
+    const geometries = geometry.geometries
+      .map((child) => sanitizeGeometry(child))
+      .filter((child): child is GeoJSON.Geometry => child !== null);
+
+    return geometries.length > 0 ? { ...geometry, geometries } : null;
   }
 
-  function projectCoords(coords: number[][]): number[][] | null {
-    const out: number[][] = [];
-    for (const c of coords) {
-      const p = projectCoord(c);
-      if (!p) return null;
-      out.push(p);
-    }
-    return out;
-  }
+  const projected = geoProject(
+    geojson,
+    projection
+  ) as GeoJSON.FeatureCollection | null;
 
-  function projectRings(rings: number[][][]): number[][][] | null {
-    const out: number[][][] = [];
-    for (const ring of rings) {
-      const r = projectCoords(ring);
-      if (!r) return null;
-      out.push(r);
-    }
-    return out;
-  }
-
-  function projectGeometry(geom: GeoJSON.Geometry): GeoJSON.Geometry | null {
-    switch (geom.type) {
-      case 'Point': {
-        const c = projectCoord(geom.coordinates);
-        return c ? { ...geom, coordinates: c } : null;
-      }
-      case 'MultiPoint': {
-        const cs = projectCoords(geom.coordinates);
-        return cs ? { ...geom, coordinates: cs } : null;
-      }
-      case 'LineString': {
-        const cs = projectCoords(geom.coordinates);
-        return cs ? { ...geom, coordinates: cs } : null;
-      }
-      case 'MultiLineString': {
-        const rs = projectRings(geom.coordinates);
-        return rs ? { ...geom, coordinates: rs } : null;
-      }
-      case 'Polygon': {
-        const rs = projectRings(geom.coordinates);
-        return rs ? { ...geom, coordinates: rs } : null;
-      }
-      case 'MultiPolygon': {
-        const projected = geom.coordinates.map(projectRings);
-        if (projected.some((r) => r === null)) return null;
-        return { ...geom, coordinates: projected as number[][][][] };
-      }
-      case 'GeometryCollection': {
-        const geoms = geom.geometries.map(projectGeometry);
-        if (geoms.some((g) => g === null)) return null;
-        return { ...geom, geometries: geoms as GeoJSON.Geometry[] };
-      }
-      default:
-        return geom;
-    }
+  if (!projected) {
+    return {
+      ...geojson,
+      features: []
+    };
   }
 
   return {
-    ...geojson,
-    features: geojson.features
+    ...projected,
+    features: projected.features
       .map((f) => {
-        const geometry = projectGeometry(f.geometry);
+        const geometry = sanitizeGeometry(f.geometry);
         return geometry ? ({ ...f, geometry } as GeoJSON.Feature) : null;
       })
       .filter((f): f is GeoJSON.Feature => f !== null)

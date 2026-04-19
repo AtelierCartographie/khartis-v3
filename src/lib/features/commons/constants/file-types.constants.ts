@@ -1,10 +1,3 @@
-/**
- * File type detection constants
- *
- * File extensions and MIME type mappings used for detecting uploaded file types.
- * Centralizes all file type identification logic to avoid scattered string literals.
- */
-
 export const FILE_EXTENSIONS = {
   CSV: ['csv'] as const,
   GEOJSON: ['geojson', 'json'] as const,

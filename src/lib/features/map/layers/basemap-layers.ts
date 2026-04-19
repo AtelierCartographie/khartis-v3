@@ -4,10 +4,7 @@ import { GeoJsonLayer } from '@deck.gl/layers';
 import { PathStyleExtension } from '@deck.gl/extensions';
 import { SolidPolygonLayer, PathLayer } from '@deck.gl/layers';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
-import {
-  createSolidPolygonLayerProps,
-  createPathLayerProps
-} from 'geoarrow-deck-stream';
+import { createPathLayerProps } from 'geoarrow-deck-stream';
 import {
   parsePaths,
   parseSolidPolygons,
@@ -62,6 +59,7 @@ import type { DeckDataRow, GeometryInfo, RGBColor } from '../types';
 import type { StylePreset, StylePresets } from '../types/basemap.types';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import { withOpacity, dottedPatternToDashArray } from './layer-helpers';
+import { createCompatibleSolidPolygonLayerProps } from '../utils/solid-polygon-layer-props';
 
 // Shared extension instance — avoids re-allocation per layer per frame
 const DASH_EXTENSION = new PathStyleExtension({
@@ -76,6 +74,10 @@ const DASH_EXTENSION = new PathStyleExtension({
 const basemapGeoJsonCache = new WeakMap<
   ArrowTable,
   Map<string, FeatureCollection | null>
+>();
+const projectedBasemapGeoJsonCache = new WeakMap<
+  FeatureCollection,
+  WeakMap<object, FeatureCollection>
 >();
 
 function getCachedBasemapGeoJSON(
@@ -95,13 +97,58 @@ function getCachedBasemapGeoJSON(
   return result;
 }
 
-// --- Graticule cache (Opt #2) ---
+function projectFeatureCollectionIfNeeded<T extends GeoJSON.Geometry>(
+  geojson: FeatureCollection<T>,
+  ctx: Pick<BasemapLayerContext, 'projection'>
+): FeatureCollection<T> {
+  if (!ctx.projection) {
+    return geojson;
+  }
+
+  const projectionKey = ctx.projection as ProjectionLike & object;
+  let projectionCache = projectedBasemapGeoJsonCache.get(geojson);
+  const cached = projectionCache?.get(projectionKey) as
+    | FeatureCollection<T>
+    | undefined;
+  if (cached) {
+    return cached;
+  }
+
+  const projected = _projectGeoJSON(
+    geojson,
+    ctx.projection
+  ) as FeatureCollection<T> | null;
+  const result = projected ?? {
+    ...geojson,
+    features: []
+  };
+
+  if (!projectionCache) {
+    projectionCache = new WeakMap<object, FeatureCollection>();
+    projectedBasemapGeoJsonCache.set(geojson, projectionCache);
+  }
+  projectionCache.set(projectionKey, result);
+
+  return result;
+}
+
+function getPreparedBasemapGeoJSON<T extends GeoJSON.Geometry>(
+  table: ArrowTable,
+  geoColumn: string,
+  ctx: Pick<BasemapLayerContext, 'projection'>
+): FeatureCollection<T> | null {
+  const geojson = getCachedBasemapGeoJSON(
+    table,
+    geoColumn
+  ) as FeatureCollection<T> | null;
+  return geojson ? projectFeatureCollectionIfNeeded(geojson, ctx) : null;
+}
+
 let cachedGraticuleKey: string | null = null;
 let cachedGraticuleData: FeatureCollection<
   LineString | MultiLineString
 > | null = null;
 
-// --- Cities cache (Opt #3) ---
 let cachedCitiesKey: string | null = null;
 let cachedCitiesSource: FeatureCollection<Point> | null = null;
 let cachedFilteredCities: FeatureCollection<Point> | null = null;
@@ -269,7 +316,7 @@ export function createTerreLayers(
     layers.push(
       new SolidPolygonLayer({
         id: layerId,
-        ...createSolidPolygonLayerProps(polyData),
+        ...createCompatibleSolidPolygonLayerProps(polyData),
         getFillColor: withOpacity(fillColor, fillOpacity),
         ...baseProps,
         updateTriggers: {
@@ -305,9 +352,10 @@ export function createTerreLayers(
   }
 
   if (geometryInfo.isWkbEncoded || geometryInfo.isGeoJsonEncoded) {
-    const geojson = getCachedBasemapGeoJSON(
+    const geojson = getPreparedBasemapGeoJSON(
       worldBaseTable,
-      geometryInfo.geoColumn
+      geometryInfo.geoColumn,
+      ctx
     );
     if (geojson) {
       if (config.fillShadow) {
@@ -502,9 +550,10 @@ export function createFrontieresLayer(
     isLineGeometry(geometryInfo) &&
     canRenderViaGeoJsonFallback(geometryInfo)
   ) {
-    const geojson = getCachedBasemapGeoJSON(
+    const geojson = getPreparedBasemapGeoJSON(
       frontieresTable,
-      geometryInfo.geoColumn
+      geometryInfo.geoColumn,
+      ctx
     );
     if (geojson) {
       return new GeoJsonLayer({
@@ -561,9 +610,10 @@ export function createFrontieresLayer(
   }
 
   if (canRenderViaGeoJsonFallback(geometryInfo)) {
-    const geojson = getCachedBasemapGeoJSON(
+    const geojson = getPreparedBasemapGeoJSON(
       frontieresTable,
-      geometryInfo.geoColumn
+      geometryInfo.geoColumn,
+      ctx
     );
     if (geojson) {
       return new GeoJsonLayer({
@@ -631,7 +681,7 @@ export function createEquateurLayer(
 
   return new GeoJsonLayer({
     id: layerId,
-    data: equatorGeoJSON,
+    data: projectFeatureCollectionIfNeeded(equatorGeoJSON, ctx),
     stroked: true,
     filled: false,
     getLineColor: withOpacity(strokeColor, opacity),
@@ -702,7 +752,7 @@ export function createMeridiensLayer(
 
   return new GeoJsonLayer({
     id: layerId,
-    data: featuresCollection,
+    data: projectFeatureCollectionIfNeeded(featuresCollection, ctx),
     stroked: true,
     filled: false,
     getLineColor: withOpacity(strokeColor, opacity),
@@ -735,7 +785,7 @@ export function createLacsLayer(
 
   return new GeoJsonLayer({
     id: layerId,
-    data: lakesData,
+    data: projectFeatureCollectionIfNeeded(lakesData, ctx),
     filled: true,
     stroked: config.thickness > 0,
     getFillColor: withOpacity(strokeColor, opacity * 0.5),
@@ -772,7 +822,7 @@ export function createRivieresLayer(
 
   return new GeoJsonLayer({
     id: layerId,
-    data: riversData,
+    data: projectFeatureCollectionIfNeeded(riversData, ctx),
     stroked: true,
     filled: false,
     getLineColor: withOpacity(strokeColor, opacity),
@@ -851,7 +901,7 @@ export function createReliefLayers(
       result.push(
         new SolidPolygonLayer({
           id: layerId,
-          ...createSolidPolygonLayerProps(polyData),
+          ...createCompatibleSolidPolygonLayerProps(polyData),
           getFillColor: withOpacity(baseColor, fillOpacity),
           ...baseProps,
           updateTriggers: {
@@ -882,9 +932,10 @@ export function createReliefLayers(
   }
 
   if (geometryInfo.isWkbEncoded || geometryInfo.isGeoJsonEncoded) {
-    const geojson = getCachedBasemapGeoJSON(
+    const geojson = getPreparedBasemapGeoJSON(
       worldBaseTable,
-      geometryInfo.geoColumn
+      geometryInfo.geoColumn,
+      ctx
     );
     if (geojson) {
       return [
@@ -951,10 +1002,11 @@ function createSymbolPolygon(
   sizePx: number,
   sides: number,
   angleOffset: number,
-  isStar: boolean
+  isStar: boolean,
+  radiusScale = 0.00001
 ): number[][] {
   const [cx, cy] = center;
-  const radius = sizePx * 0.00001;
+  const radius = sizePx * radiusScale;
   const points: number[][] = [];
   const startAngle = (angleOffset * Math.PI) / 180;
 
@@ -983,7 +1035,8 @@ function createSymbolPolygon(
 function convertCitiesToPolygons(
   cities: FeatureCollection<Point>,
   symbol: BasemapCitySymbol,
-  sizePx: number
+  sizePx: number,
+  radiusScale?: number
 ): FeatureCollection<Polygon> {
   const sides = getSymbolPolygonSides(symbol);
   const angleOffset = getSymbolAngleOffset(symbol);
@@ -996,7 +1049,8 @@ function convertCitiesToPolygons(
       sizePx,
       sides,
       angleOffset,
-      isStar
+      isStar,
+      radiusScale
     );
     return {
       type: GEOJSON_TYPE.FEATURE,
@@ -1067,13 +1121,17 @@ export function createVillesLayer(
     DeckLayerId.BASEMAP_VILLES,
     ctx.projectionSuffix
   );
+  const projectedCities = projectFeatureCollectionIfNeeded(
+    cachedFilteredCities,
+    ctx
+  ) as FeatureCollection<Point>;
 
   const isCircle = config.symbol === BasemapCitySymbol.POINT;
 
   if (isCircle) {
     return new GeoJsonLayer({
       id: layerId,
-      data: cachedFilteredCities,
+      data: projectedCities,
       filled: true,
       stroked: true,
       pointType: 'circle',
@@ -1088,20 +1146,26 @@ export function createVillesLayer(
       updateTriggers: {
         getFillColor: [config.color, config.opacity],
         getPointRadius: [config.size],
-        data: [config.category]
+        data: [config.category, Boolean(ctx.projection)]
       }
     });
   }
 
   // Cache polygon conversion by (category, symbol, size)
   const polygonKey = `${config.category}:${config.symbol}:${config.size}`;
-  if (cachedPolygonCitiesKey !== polygonKey || !cachedPolygonCities) {
+  const shouldUseProjectedSymbols = Boolean(ctx.projection);
+  if (
+    shouldUseProjectedSymbols ||
+    cachedPolygonCitiesKey !== polygonKey ||
+    !cachedPolygonCities
+  ) {
     cachedPolygonCities = convertCitiesToPolygons(
-      cachedFilteredCities,
+      projectedCities,
       config.symbol,
-      config.size
+      config.size,
+      shouldUseProjectedSymbols ? 0.5 : undefined
     );
-    cachedPolygonCitiesKey = polygonKey;
+    cachedPolygonCitiesKey = shouldUseProjectedSymbols ? null : polygonKey;
   }
 
   return new GeoJsonLayer({
@@ -1116,7 +1180,12 @@ export function createVillesLayer(
     ...getBaseLayerProps(ctx),
     updateTriggers: {
       getFillColor: [config.color, config.opacity],
-      data: [config.category, config.symbol, config.size]
+      data: [
+        config.category,
+        config.symbol,
+        config.size,
+        Boolean(ctx.projection)
+      ]
     }
   });
 }
@@ -1163,10 +1232,6 @@ function collectMetadataGeoJsonByGeometry<T extends MetadataGeometry>(
     features
   };
 }
-
-// ---------------------------------------------------------------------------
-// Metadata-driven layer types (from basemap metadata + style-presets.json)
-// ---------------------------------------------------------------------------
 
 export interface MetadataLayerEntry {
   table: ArrowTable;
@@ -1215,15 +1280,16 @@ function createMetadataLandLayers(
       layers.push(
         new SolidPolygonLayer({
           id: layerId,
-          ...createSolidPolygonLayerProps(polyData),
+          ...createCompatibleSolidPolygonLayerProps(polyData),
           getFillColor: fillColor,
           ...baseProps
         })
       );
     } else if (canRenderViaGeoJsonFallback(geometryInfo)) {
-      const geojson = getCachedBasemapGeoJSON(
+      const geojson = getPreparedBasemapGeoJSON(
         entry.table,
-        geometryInfo.geoColumn
+        geometryInfo.geoColumn,
+        ctx
       );
       if (geojson) {
         layers.push(
@@ -1329,9 +1395,10 @@ function createMetadataLimitLayers(
         })
       );
     } else if (canRenderViaGeoJsonFallback(geometryInfo)) {
-      const geojson = getCachedBasemapGeoJSON(
+      const geojson = getPreparedBasemapGeoJSON(
         entry.table,
-        geometryInfo.geoColumn
+        geometryInfo.geoColumn,
+        ctx
       );
       if (geojson) {
         layers.push(
@@ -1411,9 +1478,10 @@ function createMetadataGraticuleLayers(
         })
       );
     } else if (canRenderViaGeoJsonFallback(geometryInfo)) {
-      const geojson = getCachedBasemapGeoJSON(
+      const geojson = getPreparedBasemapGeoJSON(
         entry.table,
-        geometryInfo.geoColumn
+        geometryInfo.geoColumn,
+        ctx
       );
       if (geojson) {
         layers.push(
@@ -1493,9 +1561,10 @@ function createMetadataGeoLinesLayers(
         })
       );
     } else if (canRenderViaGeoJsonFallback(geometryInfo)) {
-      const geojson = getCachedBasemapGeoJSON(
+      const geojson = getPreparedBasemapGeoJSON(
         entry.table,
-        geometryInfo.geoColumn
+        geometryInfo.geoColumn,
+        ctx
       );
       if (geojson) {
         layers.push(
@@ -1520,10 +1589,6 @@ function createMetadataGeoLinesLayers(
 
   return layers;
 }
-
-// ---------------------------------------------------------------------------
-// Main basemap layer orchestrator
-// ---------------------------------------------------------------------------
 
 export interface BasemapAdditionalData {
   frontieresTable?: ArrowTable;
@@ -1586,7 +1651,6 @@ export function createBasemapLayers(
           : foregroundGroups;
 
       switch (config.id) {
-        // --- Background layers (below data) ---
         case BASEMAP_LAYER_ID.MERS: {
           const layer = createMersLayer(config as MersLayerConfig, ctx);
           if (layer) targetGroups.push([layer]);
@@ -1595,7 +1659,6 @@ export function createBasemapLayers(
 
         case BASEMAP_LAYER_ID.TERRE: {
           if (worldBaseTable) {
-            // Main basemap geometry provides full land coverage
             const terreLayers = createTerreLayers(
               worldBaseTable,
               config as TerreLayerConfig,
@@ -1608,7 +1671,6 @@ export function createBasemapLayers(
               targetGroups.push(terreLayers);
             }
           } else if (landEntries.length > 0) {
-            // Fallback: metadata land layers when no main geometry table
             const landLayers = createMetadataLandLayers(
               landEntries,
               stylePresets,
@@ -1650,9 +1712,7 @@ export function createBasemapLayers(
           }
           break;
 
-        // --- Foreground layers (above data) ---
         case BASEMAP_LAYER_ID.FRONTIERES: {
-          // Use metadata limits when available (supports multiple limit levels)
           if (hasMetadataLimits) {
             const limitLayers = createMetadataLimitLayers(
               limitEntries,

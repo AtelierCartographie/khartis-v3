@@ -4,6 +4,7 @@ import type {
 } from '$lib/features/project-management';
 import {
   ProjectStorageKey,
+  PROJECT_CONST,
   duplicateProject as duplicateProjectEntity,
   projectRepository,
   projectStorage,
@@ -53,7 +54,7 @@ export async function createProject(
   const project: KhartisProject = {
     id: crypto.randomUUID(),
     manifest: {
-      version: '3.0.0',
+      version: PROJECT_CONST.APP_VERSION,
       createdAt: new Date(),
       updatedAt: new Date(),
       name: sanitizedName,
