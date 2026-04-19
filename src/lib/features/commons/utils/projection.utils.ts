@@ -2,6 +2,8 @@ import * as m from '$lib/paraglide/messages';
 import type { GeoProjection } from 'd3-geo';
 import * as d3geo from 'd3-geo';
 import * as d3geoProjection from 'd3-geo-projection';
+
+type D3GeoProjectionModule = Record<string, (() => GeoProjection) | undefined>;
 import type { Feature, FeatureCollection } from 'geojson';
 import { GEOJSON_TYPE } from '$lib/features/commons/constants';
 import { proj4d3 } from '$lib/features/map/utils/proj4d3';
@@ -111,6 +113,58 @@ export const PROJECTIONS: ProjectionInfo[] = [
     category: 'azimuthal',
     description: m.projection_desc_azimuthal_equal_area(),
     projection: () => d3geo.geoAzimuthalEqualArea()
+  },
+  {
+    id: 'gall-peters',
+    name: m.projection_name_gall_peters(),
+    category: 'cylindrical',
+    description: m.projection_desc_gall_peters(),
+    projection: () =>
+      (d3geoProjection as D3GeoProjectionModule).geoCylindricalEqualArea!()
+  },
+  {
+    id: 'equal-earth',
+    name: m.projection_name_equal_earth(),
+    category: 'other',
+    description: m.projection_desc_equal_earth(),
+    projection: () => d3geo.geoEqualEarth()
+  },
+  {
+    id: 'bonne',
+    name: m.projection_name_bonne(),
+    category: 'conic',
+    description: m.projection_desc_bonne(),
+    projection: () => (d3geoProjection as D3GeoProjectionModule).geoBonne!()
+  },
+  {
+    id: 'armadillo',
+    name: m.projection_name_armadillo(),
+    category: 'other',
+    description: m.projection_desc_armadillo(),
+    projection: () => (d3geoProjection as D3GeoProjectionModule).geoArmadillo!()
+  },
+  {
+    id: 'atlantis',
+    name: m.projection_name_atlantis(),
+    category: 'other',
+    description: m.projection_desc_atlantis(),
+    projection: () => d3geoProjection.geoMollweide().rotate([30, -45, 0])
+  },
+  {
+    id: 'bertin-1953',
+    name: m.projection_name_bertin_1953(),
+    category: 'other',
+    description: m.projection_desc_bertin_1953(),
+    projection: () =>
+      (d3geoProjection as D3GeoProjectionModule).geoBertin1953!()
+  },
+  {
+    id: 'interrupted-mollweide',
+    name: m.projection_name_interrupted_mollweide(),
+    category: 'other',
+    description: m.projection_desc_interrupted_mollweide(),
+    projection: () =>
+      (d3geoProjection as D3GeoProjectionModule).geoInterruptedMollweide!()
   }
 ];
 
@@ -269,15 +323,12 @@ function createProjectionFitTarget(bbox: [number, number, number, number]) {
     : {
         type: GEOJSON_TYPE.FEATURE,
         geometry: {
-          type: 'Polygon' as const,
+          type: 'MultiPoint' as const,
           coordinates: [
-            [
-              [west, south],
-              [east, south],
-              [east, north],
-              [west, north],
-              [west, south]
-            ]
+            [west, south],
+            [east, south],
+            [east, north],
+            [west, north]
           ]
         },
         properties: {}

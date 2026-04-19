@@ -1,9 +1,17 @@
 import type { VisualizationConfig } from '../../commons/store/visualization.store.svelte';
 import {
-  VisualizationType,
-  ScaleType
+  getLinePrimitive,
+  getPrimitiveCategoryColumn,
+  PrimitiveFilterType,
+  getPrimitiveClassification,
+  getPrimitiveValueColumn,
+  getSymbolPrimitive,
+  getTextPrimitive,
+  getPolygonPrimitive,
+  ScaleType,
+  VisualizationType
 } from '../../commons/store/visualization.store.svelte';
-import { FillMode, SymbolMode } from '../../main-toolbar/constants';
+import { ColorMode, FillMode, SymbolMode } from '../../main-toolbar/constants';
 import { hexToRgb } from '../../commons/utils/color-utils';
 
 export function getColorForValue(
@@ -192,20 +200,93 @@ export function hasCompleteCategoricalColorMap(
   return categories.every((category) => categoryColorMap.has(category));
 }
 
-export function shouldApplyChoropleth(viz: VisualizationConfig): boolean {
+function usesClassedColor(
+  viz: VisualizationConfig,
+  primitive: PrimitiveFilterType
+): boolean {
+  switch (primitive) {
+    case PrimitiveFilterType.LINE:
+      return (
+        getLinePrimitive(viz)?.colorMode === ColorMode.CLASSES ||
+        viz.modes?.color === ColorMode.CLASSES ||
+        viz.modes?.fill === FillMode.CLASSES
+      );
+    case PrimitiveFilterType.TEXT:
+      return (
+        getTextPrimitive(viz)?.colorMode === ColorMode.CLASSES ||
+        viz.modes?.color === ColorMode.CLASSES
+      );
+    case PrimitiveFilterType.POINT:
+      return (
+        getSymbolPrimitive(viz)?.fillMode === FillMode.CLASSES ||
+        viz.modes?.fill === FillMode.CLASSES
+      );
+    case PrimitiveFilterType.POLYGON:
+    default:
+      return (
+        getPolygonPrimitive(viz)?.fillMode === FillMode.CLASSES ||
+        viz.modes?.fill === FillMode.CLASSES
+      );
+  }
+}
+
+function usesCategoricalColor(
+  viz: VisualizationConfig,
+  primitive: PrimitiveFilterType
+): boolean {
+  switch (primitive) {
+    case PrimitiveFilterType.LINE:
+      return (
+        getLinePrimitive(viz)?.colorMode === ColorMode.CATEGORIES ||
+        viz.modes?.color === ColorMode.CATEGORIES ||
+        viz.modes?.fill === FillMode.CATEGORIES
+      );
+    case PrimitiveFilterType.TEXT:
+      return (
+        getTextPrimitive(viz)?.colorMode === ColorMode.CATEGORIES ||
+        viz.modes?.color === ColorMode.CATEGORIES
+      );
+    case PrimitiveFilterType.POINT:
+      return (
+        getSymbolPrimitive(viz)?.fillMode === FillMode.CATEGORIES ||
+        viz.modes?.fill === FillMode.CATEGORIES
+      );
+    case PrimitiveFilterType.POLYGON:
+    default:
+      return (
+        getPolygonPrimitive(viz)?.fillMode === FillMode.CATEGORIES ||
+        viz.modes?.fill === FillMode.CATEGORIES
+      );
+  }
+}
+
+export function shouldApplyChoropleth(
+  viz: VisualizationConfig,
+  primitive: PrimitiveFilterType = PrimitiveFilterType.POLYGON
+): boolean {
+  const classification = getPrimitiveClassification(viz, primitive);
+  const valueColumn = getPrimitiveValueColumn(viz, primitive);
+
   return (
-    viz.modes?.fill === FillMode.CLASSES &&
-    !!viz.mapping.valueColumn &&
-    !!viz.classification?.breaks &&
-    !!viz.classification?.colors &&
-    viz.classification.breaks.length >= 2
+    usesClassedColor(viz, primitive) &&
+    !!valueColumn &&
+    !!classification?.breaks &&
+    !!classification?.colors &&
+    classification.breaks.length >= 2
   );
+}
+
+export function resolveChoroplethColorColumn(
+  viz: VisualizationConfig
+): string | undefined {
+  return viz.mapping.colorColumn ?? viz.mapping.valueColumn;
 }
 
 export function shouldApplyProportionalSymbols(
   viz: VisualizationConfig
 ): boolean {
-  const symbolMode = viz.modes?.symbol;
+  const symbol = getSymbolPrimitive(viz);
+  const symbolMode = symbol?.mode;
   const isSymbolSizingMode =
     symbolMode !== undefined
       ? symbolMode === SymbolMode.PROPORTIONAL ||
@@ -213,14 +294,28 @@ export function shouldApplyProportionalSymbols(
       : viz.type === VisualizationType.PROPORTIONAL ||
         viz.type === VisualizationType.BIVARIATE;
 
-  return isSymbolSizingMode && !!viz.mapping.sizeColumn && !!viz.symbols;
+  return isSymbolSizingMode && !!symbol?.sizeColumn && !!symbol;
 }
 
-export function shouldApplyCategorical(viz: VisualizationConfig): boolean {
+export function shouldApplyCategorical(
+  viz: VisualizationConfig,
+  primitive: PrimitiveFilterType = PrimitiveFilterType.POLYGON
+): boolean {
+  const classification = getPrimitiveClassification(viz, primitive);
+  const categoryColumn = getPrimitiveCategoryColumn(viz, primitive);
+
   return (
-    viz.modes?.fill === FillMode.CATEGORIES &&
-    !!viz.mapping.categoryColumn &&
-    !!viz.classification?.colors &&
-    viz.classification.colors.length > 0
+    usesCategoricalColor(viz, primitive) &&
+    !!categoryColumn &&
+    !!classification?.colors &&
+    classification.colors.length > 0
   );
+}
+
+export function shouldApplyLineCategorical(viz: VisualizationConfig): boolean {
+  return shouldApplyCategorical(viz, PrimitiveFilterType.LINE);
+}
+
+export function shouldApplyLineChoropleth(viz: VisualizationConfig): boolean {
+  return shouldApplyChoropleth(viz, PrimitiveFilterType.LINE);
 }

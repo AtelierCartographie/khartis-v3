@@ -10,22 +10,11 @@ const DEFAULT_STATE: ColorBlindnessState = {
 const { actions, getState } = createToolStore<
   ColorBlindnessState,
   {
-    toggleEnabled: () => void;
     setSimulationType: (type: ColorBlindnessType) => void;
   }
 >(
   DEFAULT_STATE,
   (s) => ({
-    toggleEnabled: () => {
-      const nextEnabled = !s.enabled;
-      s.enabled = nextEnabled;
-
-      if (!nextEnabled) {
-        s.simulationType = ColorBlindnessType.NONE;
-      } else if (s.simulationType === ColorBlindnessType.NONE) {
-        s.simulationType = ColorBlindnessType.DEUTERANOPIA;
-      }
-    },
     setSimulationType: (type: ColorBlindnessType) => {
       s.simulationType = type;
       s.enabled = type !== ColorBlindnessType.NONE;

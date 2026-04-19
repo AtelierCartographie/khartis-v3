@@ -81,4 +81,30 @@ describe('normalize_text macro', () => {
     );
     expect(rows[0].result).toBe('cote d or');
   });
+
+  it('strips HTML-like markup before normalizing', async () => {
+    const rows = await query(
+      db,
+      "SELECT normalize_text('<center><table><tr><td>The Pit</td><td>Tras Street</td></tr></table></center>') AS result"
+    );
+    expect(rows[0].result).toBe('the pit tras street');
+  });
+});
+
+describe('strip_html_text macro', () => {
+  it('projects HTML-like values to plain text', async () => {
+    const rows = await query(
+      db,
+      "SELECT strip_html_text('<center><table><tr><td>The Pit</td><td>Tras&nbsp;Street &amp; Co</td></tr></table></center>') AS result"
+    );
+    expect(rows[0].result).toBe('The Pit Tras Street & Co');
+  });
+
+  it('preserves plain text with comparison operators', async () => {
+    const rows = await query(
+      db,
+      "SELECT strip_html_text('temperature < 20 > 10') AS result"
+    );
+    expect(rows[0].result).toBe('temperature < 20 > 10');
+  });
 });

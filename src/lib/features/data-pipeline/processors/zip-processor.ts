@@ -174,15 +174,6 @@ async function processMultipleFilesFromZip(
   supportedFiles: ExtractedFile[],
   start: number
 ): Promise<ZipDatasetResult> {
-  logger.debug(
-    'ZIP contains multiple files, processing all',
-    LogCategory.DATA,
-    {
-      fileCount: supportedFiles.length,
-      files: supportedFiles.map((f) => f.name)
-    }
-  );
-
   const datasets: DatasetResult[] = [];
   const skippedFiles: string[] = [];
 

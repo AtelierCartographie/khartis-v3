@@ -56,6 +56,42 @@ const geoidCol = col({
   stats: { totalCount: 100, uniqueCount: 100, nullCount: 0 }
 });
 
+const geometryCol = col({
+  name: 'geom',
+  type: 'geometry',
+  stats: { totalCount: 100, uniqueCount: 100, nullCount: 0 }
+});
+
+const latitudeCol = col({
+  name: 'lat',
+  type: 'number',
+  geo_type: 'latitude',
+  geo_confidence: 0.98,
+  stats: {
+    totalCount: 100,
+    uniqueCount: 100,
+    nullCount: 0,
+    min: 42,
+    max: 49,
+    share_floats: 1
+  }
+});
+
+const longitudeCol = col({
+  name: 'lon',
+  type: 'number',
+  geo_type: 'longitude',
+  geo_confidence: 0.98,
+  stats: {
+    totalCount: 100,
+    uniqueCount: 100,
+    nullCount: 0,
+    min: 1,
+    max: 7,
+    share_floats: 1
+  }
+});
+
 const constantCol = col({
   name: 'flag',
   type: 'string',
@@ -93,6 +129,14 @@ describe('suggestVisualizations — no thematic columns', () => {
     );
     for (const s of results) expect(s.nbColumns).toBe(0);
   });
+
+  it('geometry-only column falls back to nbColumns=0 suggestions', () => {
+    const results = vizSuggester.suggestVisualizations(
+      [geometryCol],
+      'Polygon'
+    );
+    for (const s of results) expect(s.nbColumns).toBe(0);
+  });
 });
 
 describe('suggestVisualizations — Polygon thematic', () => {
@@ -117,6 +161,16 @@ describe('suggestVisualizations — Polygon thematic', () => {
       expect(s.columns ?? []).not.toContain('iso');
     }
   });
+
+  it('geometry columns do not appear in suggestion columns', () => {
+    const results = vizSuggester.suggestVisualizations(
+      [geometryCol, qlCol],
+      'Polygon'
+    );
+    for (const s of results) {
+      expect(s.columns ?? []).not.toContain('geom');
+    }
+  });
 });
 
 describe('suggestVisualizations — Point thematic', () => {
@@ -126,6 +180,19 @@ describe('suggestVisualizations — Point thematic', () => {
     });
     const ids = results.map((s) => s.id);
     expect(ids).toContain('symbols_proportional');
+  });
+
+  it('geo-detected coordinate columns do not appear in suggestion columns', () => {
+    const results = vizSuggester.suggestVisualizations(
+      [latitudeCol, longitudeCol, qlCol, qtaCol],
+      'Point',
+      { maxSuggestions: 10 }
+    );
+
+    for (const s of results) {
+      expect(s.columns ?? []).not.toContain('lat');
+      expect(s.columns ?? []).not.toContain('lon');
+    }
   });
 });
 

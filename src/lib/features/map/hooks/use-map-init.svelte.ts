@@ -19,6 +19,10 @@ import { ViewMode } from '../constants/map.constants';
 import { createHoverHandler, createClickHandler } from '../interactions';
 import { projectionStore } from '../stores/projection.store.svelte';
 import { mapProjectionStore } from '../stores/map-projection.store.svelte';
+import {
+  deckDebugStore,
+  type DeckDebugMetrics
+} from '../stores/deck-debug.store.svelte';
 import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
 import {
   DEFAULT_MAP_BASE_ZOOM,
@@ -87,6 +91,7 @@ const ORTHOGRAPHIC_VIEW = new OrthographicView({
   flipY: false
 });
 const DEFAULT_RENDER_PIXEL_RATIO = 1;
+const IS_DEV = import.meta.env.DEV;
 
 function getInitialRenderPixelRatio(): number {
   return typeof window !== 'undefined'
@@ -234,6 +239,37 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
   let currentViewMode = $state<ViewMode>(initialViewMode);
   let containerRef = $state<HTMLDivElement | null>(null);
 
+  function syncDeckDebugState(
+    viewMode: ViewMode,
+    canvasSize: { width: number; height: number } | null = null,
+    clearMetrics = false
+  ): void {
+    if (!IS_DEV) {
+      return;
+    }
+
+    deckDebugStore.setViewMode(viewMode);
+    deckDebugStore.setRenderPixelRatio(renderPixelRatio);
+
+    if (canvasSize) {
+      deckDebugStore.setCanvasSize(canvasSize);
+    }
+
+    if (clearMetrics) {
+      deckDebugStore.setMetrics(null);
+    }
+  }
+
+  function handleDeckMetrics(metrics: DeckDebugMetrics): void {
+    if (!IS_DEV) {
+      return;
+    }
+
+    deckDebugStore.setViewMode(currentViewMode);
+    deckDebugStore.setRenderPixelRatio(renderPixelRatio);
+    deckDebugStore.setMetrics(metrics);
+  }
+
   function ensureOrthographicFallbackCanvas(
     container: HTMLDivElement
   ): HTMLCanvasElement {
@@ -294,6 +330,7 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
     }
 
     renderPixelRatio = nextPixelRatio;
+    syncDeckDebugState(currentViewMode);
 
     if (currentViewMode === ViewMode.ORTHOGRAPHIC && deckInstance) {
       deckInstance.setProps({ useDevicePixels: nextPixelRatio });
@@ -330,6 +367,7 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
       height: container.clientHeight || 600
     };
     projectionStore.updateCanvasSize(canvasSize);
+    syncDeckDebugState(ViewMode.ORTHOGRAPHIC, canvasSize, true);
 
     if (!supportsWebGL2()) {
       ensureOrthographicFallbackCanvas(container);
@@ -381,7 +419,8 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
         new Deck({
           parent: container,
           deviceProps: {
-            type: DECK_DEVICE_TYPE
+            type: DECK_DEVICE_TYPE,
+            debugGPUTime: IS_DEV
           },
           useDevicePixels: renderPixelRatio,
           views: [ORTHOGRAPHIC_VIEW],
@@ -402,6 +441,7 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
           onViewStateChange: handleViewStateChange as DeckProps<
             [OrthographicView]
           >['onViewStateChange'],
+          _onMetrics: IS_DEV ? handleDeckMetrics : null,
           onLoad: () => {
             // Ignore late callbacks from a stale deck instance during view switches.
             if (deckInstance !== orthographicDeck) {
@@ -425,6 +465,7 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
           },
           onResize: ({ width, height }) => {
             projectionStore.updateCanvasSize({ width, height });
+            syncDeckDebugState(currentViewMode, { width, height });
           }
         })
     );
@@ -432,7 +473,7 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
     deckInstance = orthographicDeck;
     currentViewMode = ViewMode.ORTHOGRAPHIC;
     mapInstanceStore.setDeckInstance(orthographicDeck);
-    if (import.meta.env.DEV) {
+    if (IS_DEV) {
       (window as unknown as Record<string, unknown>).__deck = orthographicDeck;
     }
   }
@@ -450,6 +491,14 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
     containerRef = container;
     currentViewMode = ViewMode.MAPLIBRE;
     removeOrthographicFallbackCanvas();
+    syncDeckDebugState(
+      ViewMode.MAPLIBRE,
+      {
+        width: container.clientWidth || 800,
+        height: container.clientHeight || 600
+      },
+      true
+    );
 
     map = new maplibregl.Map({
       container,
@@ -482,7 +531,8 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
         interleaved: true,
         layers: [],
         onHover: hoverHandler,
-        onClick: clickHandler
+        onClick: clickHandler,
+        _onMetrics: IS_DEV ? handleDeckMetrics : null
       } as DeckProps);
 
       map.addControl(deckOverlay as maplibregl.IControl);
@@ -498,7 +548,7 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
       mapInstanceStore.setDeckOverlay(deckOverlay);
       mapInstanceStore.setMapLoaded(true);
       logger.success('MapLibre + Deck.gl ready', LogCategory.MAP);
-      if (import.meta.env.DEV) {
+      if (IS_DEV) {
         (window as unknown as Record<string, unknown>).__maplibreMap = map;
         (window as unknown as Record<string, unknown>).__deck = deckOverlay;
       }
@@ -532,6 +582,18 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
     });
 
     mapEventSubscriptions.push(
+      map.on('resize', () => {
+        const mapCanvas = map?.getCanvas();
+        syncDeckDebugState(
+          currentViewMode,
+          mapCanvas
+            ? {
+                width: mapCanvas.clientWidth || mapCanvas.width,
+                height: mapCanvas.clientHeight || mapCanvas.height
+              }
+            : null
+        );
+      }),
       map.on('zoom', onZoom),
       map.on('moveend', onMoveEnd),
       map.on('zoomend', onMoveEnd)
@@ -578,7 +640,6 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
     deckOverlay = null;
     isMapLoaded = false;
 
-    // Unsubscribe MapLibre event listeners to prevent memory leaks
     for (const sub of mapEventSubscriptions) {
       try {
         sub.unsubscribe();
@@ -613,6 +674,9 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
     removeOrthographicFallbackCanvas();
     projectionStore.reset();
     mapInstanceStore.reset();
+    if (IS_DEV) {
+      deckDebugStore.clear();
+    }
     logger.info('Map destroyed', LogCategory.MAP);
   }
 

@@ -97,7 +97,7 @@
           max={1000}
           step={1}
           stepMultiplier={5}
-          on:change={handleSizeChange}
+          on:input={handleSizeChange}
           minLabel=""
           maxLabel=""
         />
@@ -115,7 +115,7 @@
           max={100}
           step={5}
           stepMultiplier={5}
-          on:change={handleOpacityChange}
+          on:input={handleOpacityChange}
           minLabel=""
           maxLabel=""
         />

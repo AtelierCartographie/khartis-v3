@@ -31,12 +31,6 @@ export const geoparquetProcessor: FileProcessor = {
     file: UploadedFile
   ): Promise<ProcessorDataset> {
     const start = performance.now();
-    logger.debug('Processing GeoParquet file', LogCategory.DUCKDB, {
-      fileId: file.id,
-      tableName: ctx.tableName
-    });
-
-    // Register parquet file in DuckDB and create table via read_parquet().
     // DuckDB >= 1.33 handles geoarrow.wkb natively — no need for geoparquet-wasm.
     const buffer = await getArrayBuffer(file);
     const sanitizedName = ctx.tableName.replace(/[^a-zA-Z0-9_]/g, '_');

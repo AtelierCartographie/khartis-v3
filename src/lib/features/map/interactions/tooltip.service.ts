@@ -234,23 +234,15 @@ function resolvePickedRowIndex(info: PickingInfo): number | null {
   return null;
 }
 
-function extractDatasetIdFromLayerId(layerId: string): string | null {
-  const parts = layerId.split('-');
-  for (let i = 1; i < parts.length; i++) {
-    if (parts[i].startsWith('ds_')) {
-      return parts[i];
-    }
-  }
-  return parts.length >= 2 ? parts[1] : null;
-}
-
 function getVizColumnNames(
   visualizations: VisualizationConfig[],
-  datasetId: string
+  layerId: string
 ): Set<string> {
   const columns = new Set<string>();
   for (const viz of visualizations) {
-    if (viz.datasetId !== datasetId) continue;
+    if (!layerId.includes(viz.id) && !layerId.includes(viz.datasetId)) {
+      continue;
+    }
     const m = viz.mapping;
     if (m.valueColumn) columns.add(m.valueColumn);
     if (m.categoryColumn) columns.add(m.categoryColumn);
@@ -278,10 +270,6 @@ function sortEntriesByVizPriority(
   return [...priority, ...rest];
 }
 
-/**
- * Extract sorted tooltip entries from a Deck.gl pick event.
- * Returns an empty array when nothing is picked.
- */
 export function extractTooltipEntries(
   info: PickingInfo,
   visualizations?: VisualizationConfig[]
@@ -314,11 +302,8 @@ export function extractTooltipEntries(
   if (entries.length === 0) return [];
 
   if (visualizations && visualizations.length > 0 && info.layer?.id) {
-    const datasetId = extractDatasetIdFromLayerId(info.layer.id);
-    if (datasetId) {
-      const vizColumns = getVizColumnNames(visualizations, datasetId);
-      entries = sortEntriesByVizPriority(entries, vizColumns);
-    }
+    const vizColumns = getVizColumnNames(visualizations, info.layer.id);
+    entries = sortEntriesByVizPriority(entries, vizColumns);
   }
 
   return entries;
@@ -377,9 +362,6 @@ function scheduleHoverTooltip(payload: PendingHoverTooltipPayload): void {
   }, MAP_TIMING.TOOLTIP_DELAY_MS);
 }
 
-/**
- * Creates an onHover handler that populates the tooltip store.
- */
 export function createHoverHandler(
   getVisualizations?: () => VisualizationConfig[]
 ): (info: PickingInfo) => void {
@@ -422,22 +404,17 @@ export function createHoverHandler(
   };
 }
 
-/**
- * Creates an onClick handler that pins the tooltip until clicking away.
- */
 export function createClickHandler(
   getVisualizations?: () => VisualizationConfig[]
 ): (info: PickingInfo) => void {
   return (info: PickingInfo) => {
     clearPendingHoverTooltip();
 
-    // Click on empty space: unpin
     if (!info.picked || info.index === undefined || info.index === -1) {
       mapTooltipStore.unpin();
       return;
     }
 
-    // Pin on the clicked object
     const entries = extractTooltipEntries(info, getVisualizations?.());
     if (entries.length === 0) {
       mapTooltipStore.unpin();

@@ -8,6 +8,10 @@ import {
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { Duck } from '$lib/features/duckdb';
 import { createArrowTableWithMetadata } from '$lib/features/duckdb/orchestrator/arrow-ops';
+import {
+  createCompanionFilesFromAssetRefs,
+  createFileFromAssetRef
+} from '$lib/features/project-management/core/asset-store';
 import * as m from '$lib/paraglide/messages';
 import { isGeospatialFile } from '../constants';
 import { detectFileFormat, generateTableName } from '../core/format-detector';
@@ -183,9 +187,7 @@ export async function processFileInternal(
     );
   }
 
-  if (!isGeoFile) {
-    await applyTabularGeoDetection(dataset);
-  }
+  await applyTabularGeoDetection(dataset);
 
   logger.success('DuckDB dataset built', LogCategory.DATA, {
     tableName,
@@ -251,23 +253,8 @@ async function readTabularFile(
   // Read file head once, share between decimal and header detection (avoids double file.slice + decode)
   const cachedHead = await readFileHead(file, 20);
   const detection = await detectDecimalSeparator(file, { cachedHead });
-  if (detection.separator === ',') {
-    logger.debug('European decimal format detected', LogCategory.DATA, {
-      confidence: detection.confidence,
-      sampleSize: detection.sampleSize,
-      delimiter: detection.delimiter,
-      thousandsSeparator: detection.thousandsSeparator
-    });
-  }
   const headerDetection = await detectCsvHeader(file, detection.delimiter, {
     cachedHead
-  });
-  logger.debug('CSV header detection completed', LogCategory.DATA, {
-    hasHeader: headerDetection.hasHeader,
-    confidence: headerDetection.confidence,
-    comparedColumns: headerDetection.comparedColumns,
-    delimiter: detection.delimiter,
-    fileName
   });
 
   await Duck.read_tabular(file, {
@@ -304,6 +291,10 @@ export async function createFileFromUploadContent(
 export async function createFileFromUpload(
   uploadedFile: UploadedFilePayload
 ): Promise<File> {
+  if (uploadedFile.assetRef) {
+    return createFileFromAssetRef(uploadedFile.assetRef);
+  }
+
   if (!uploadedFile.content) {
     logger.error('Uploaded file is missing inline content', LogCategory.DATA, {
       fileId: uploadedFile.id,
@@ -320,7 +311,11 @@ export async function createFileFromUpload(
 
 export function createCompanionFilesFromUpload(
   uploadedFile: UploadedFilePayload
-): File[] | undefined {
+): File[] | undefined | Promise<File[] | undefined> {
+  if (uploadedFile.companionAssetRefs?.length) {
+    return createCompanionFilesFromAssetRefs(uploadedFile.companionAssetRefs);
+  }
+
   if (!uploadedFile.relatedFilesData) {
     return undefined;
   }

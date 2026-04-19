@@ -178,7 +178,11 @@
             <RadioButtonGroup
               legendText={m.geo_units()}
               selected={geoState.scale.units}
-              on:change={(e) => store.setScaleUnits((e as CustomEvent).detail)}
+              on:change={(e) => {
+                const next = (e as CustomEvent).detail;
+                if (next === geoState.scale.units) return;
+                store.setScaleUnits(next);
+              }}
             >
               <RadioButton
                 id="kilometers"
@@ -269,8 +273,11 @@
             <RadioButtonGroup
               legendText={m.geo_orientation_style()}
               selected={geoState.orientation.style}
-              on:change={(e) =>
-                store.setOrientationStyle((e as CustomEvent).detail)}
+              on:change={(e) => {
+                const next = (e as CustomEvent).detail;
+                if (next === geoState.orientation.style) return;
+                store.setOrientationStyle(next);
+              }}
             >
               <RadioButton
                 id="arrow-style"
@@ -294,7 +301,7 @@
               max={30}
               step={1}
               value={geoState.orientation.size}
-              on:change={(e) =>
+              on:input={(e) =>
                 store.setOrientationSize(
                   getNumericEventValue(e, geoState.orientation.size)
                 )}
@@ -340,8 +347,11 @@
             <RadioButtonGroup
               legendText={m.geo_inset_map_type()}
               selected={geoState.insetMap.type}
-              on:change={(e) =>
-                store.setInsetMapType((e as CustomEvent).detail)}
+              on:change={(e) => {
+                const next = (e as CustomEvent).detail;
+                if (next === geoState.insetMap.type) return;
+                store.setInsetMapType(next);
+              }}
             >
               <RadioButton
                 id="globe-type"
@@ -365,7 +375,7 @@
               max={1600}
               step={1}
               value={geoState.insetMap.size}
-              on:change={(e) =>
+              on:input={(e) =>
                 store.setInsetMapSize(
                   getNumericEventValue(e, geoState.insetMap.size)
                 )}

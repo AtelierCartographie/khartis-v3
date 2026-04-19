@@ -1,3 +1,5 @@
+import { m } from '$lib/paraglide/messages';
+
 export type ProjectionItem = {
   id: string;
   projectionId: string;
@@ -15,98 +17,138 @@ export type ProjectionItem = {
 export const PROJECTIONS: ProjectionItem[] = [
   {
     id: 'rect-1',
-    projectionId: 'equirectangular',
-    title: 'Gall Peters',
-    subtitle: 'Surfaces',
-    tag: 'Rectangulaire',
-    ratio: '16:9',
-    previewLabel: 'Projection preview',
-    variant: 'default',
-    equalArea: true
-  },
-  {
-    id: 'rect-2',
     projectionId: 'mercator',
-    title: 'Mercator',
-    subtitle: 'Surfaces',
+    title: m.projection_name_mercator(),
+    subtitle: m.card_subtitle_surfaces(),
     tag: 'Rectangulaire',
-    ratio: '16:9',
-    previewLabel: 'Projection preview',
-    variant: 'default'
-  },
-  {
-    id: 'rect-3',
-    projectionId: 'albers',
-    title: 'Bonne',
-    subtitle: 'Surfaces',
-    tag: 'Rectangulaire',
-    ratio: '16:9',
-    previewLabel: 'Projection preview',
+    ratio: '1:1',
+    previewLabel: m.projection_preview_label(),
     variant: 'default',
-    equalArea: true
+    description: m.projection_desc_mercator()
   },
   {
     id: 'arr-1',
     projectionId: 'natural-earth',
-    title: 'Equal Earth',
-    subtitle: 'Surfaces',
+    title: m.projection_name_natural_earth(),
+    subtitle: m.card_subtitle_surfaces(),
     tag: 'Arrondie',
-    ratio: '16:9',
-    previewLabel: 'Projection preview',
+    ratio: '2:1',
+    previewLabel: m.projection_preview_label(),
     variant: 'default',
-    equalArea: true
+    description: m.projection_desc_natural_earth()
+  },
+  {
+    id: 'rect-2',
+    projectionId: 'equirectangular',
+    title: m.projection_name_equirectangular(),
+    subtitle: m.card_subtitle_surfaces(),
+    tag: 'Rectangulaire',
+    ratio: '2:1',
+    previewLabel: m.projection_preview_label(),
+    variant: 'default',
+    description: m.projection_desc_equirectangular()
   },
   {
     id: 'arr-2',
     projectionId: 'orthographic',
-    title: 'Armadillo',
-    subtitle: 'Surfaces',
+    title: m.projection_name_orthographic(),
+    subtitle: m.card_subtitle_surfaces(),
     tag: 'Arrondie',
+    ratio: '1:1',
+    previewLabel: m.projection_preview_label(),
+    variant: 'default',
+    description: m.projection_desc_orthographic()
+  },
+  {
+    id: 'rect-3',
+    projectionId: 'albers',
+    title: m.projection_name_albers(),
+    subtitle: m.card_subtitle_surfaces(),
+    tag: 'Rectangulaire',
     ratio: '16:9',
-    previewLabel: 'Projection preview',
-    variant: 'default'
+    previewLabel: m.projection_preview_label(),
+    variant: 'default',
+    equalArea: true,
+    description: m.projection_desc_albers()
+  },
+  {
+    id: 'rect-4',
+    projectionId: 'lambert-conformal',
+    title: m.projection_name_lambert_conformal(),
+    subtitle: m.card_subtitle_surfaces(),
+    tag: 'Rectangulaire',
+    ratio: '16:9',
+    previewLabel: m.projection_preview_label(),
+    variant: 'default',
+    description: m.projection_desc_lambert_conformal()
   },
   {
     id: 'arr-3',
     projectionId: 'robinson',
-    title: 'Atlantis',
-    subtitle: 'Surfaces',
+    title: m.projection_name_robinson(),
+    subtitle: m.card_subtitle_surfaces(),
     tag: 'Arrondie',
-    ratio: '16:9',
-    previewLabel: 'Projection preview',
-    variant: 'default'
+    ratio: '2:1',
+    previewLabel: m.projection_preview_label(),
+    variant: 'default',
+    description: m.projection_desc_robinson()
   },
   {
-    id: 'disc-1',
+    id: 'arr-4',
     projectionId: 'winkel-tripel',
-    title: 'Air Ocean',
-    subtitle: 'Surfaces',
-    tag: 'Discontinue',
-    ratio: '16:9',
-    previewLabel: 'Projection preview',
-    variant: 'default'
+    title: m.projection_name_winkel_tripel(),
+    subtitle: m.card_subtitle_surfaces(),
+    tag: 'Arrondie',
+    ratio: '2:1',
+    previewLabel: m.projection_preview_label(),
+    variant: 'default',
+    description: m.projection_desc_winkel_tripel()
   },
   {
-    id: 'disc-2',
-    projectionId: 'mollweide',
-    title: 'Butterfly',
-    subtitle: 'Surfaces',
-    tag: 'Discontinue',
-    ratio: '16:9',
-    previewLabel: 'Projection preview',
+    id: 'arr-5',
+    projectionId: 'aitoff',
+    title: m.projection_name_aitoff(),
+    subtitle: m.card_subtitle_surfaces(),
+    tag: 'Arrondie',
+    ratio: '2:1',
+    previewLabel: m.projection_preview_label(),
     variant: 'default',
-    equalArea: true
+    description: m.projection_desc_aitoff()
   },
   {
-    id: 'disc-3',
+    id: 'arr-6',
     projectionId: 'mollweide',
-    title: 'Mollweide interrompue',
-    subtitle: 'Surfaces',
-    tag: 'Discontinue',
-    ratio: '16:9',
-    previewLabel: 'Projection preview',
+    title: m.projection_name_mollweide(),
+    subtitle: m.card_subtitle_surfaces(),
+    tag: 'Arrondie',
+    ratio: '2:1',
+    previewLabel: m.projection_preview_label(),
     variant: 'default',
-    equalArea: true
+    equalArea: true,
+    description: m.projection_desc_mollweide()
+  },
+  {
+    id: 'arr-7',
+    projectionId: 'stereographic',
+    title: m.projection_name_stereographic(),
+    subtitle: m.card_subtitle_surfaces(),
+    tag: 'Arrondie',
+    ratio: '1:1',
+    previewLabel: m.projection_preview_label(),
+    variant: 'default',
+    description: m.projection_desc_stereographic()
+  },
+  {
+    id: 'arr-8',
+    projectionId: 'azimuthal-equal-area',
+    title: m.projection_name_azimuthal_equal_area(),
+    subtitle: m.card_subtitle_surfaces(),
+    tag: 'Arrondie',
+    ratio: '1:1',
+    previewLabel: m.projection_preview_label(),
+    variant: 'default',
+    equalArea: true,
+    description: m.projection_desc_azimuthal_equal_area()
   }
 ];
 

@@ -1,12 +1,13 @@
 import type { Layer } from '@deck.gl/core';
 import type { MapboxOverlay } from '@deck.gl/mapbox';
 import type { Map as MapLibreMap } from 'maplibre-gl';
-import type { GeoProjection } from 'd3-geo';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { FeatureCollection } from 'geojson';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { Duck } from '$lib/features/duckdb';
+import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import type { VisualizationConfig } from '$lib/features/commons/store/visualization.store.svelte';
+import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
 import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
 import { mapProjectionStore } from '../stores/map-projection.store.svelte';
 import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
@@ -44,16 +45,15 @@ import {
 } from '../utils/layer-order.utils';
 import type { DataTableFilter } from '$lib/features/duckdb/types';
 import { getProjectionState } from '$lib/features/step-toolbar/tools/projections/projection.store.svelte';
-import { proj4d3 } from '../utils/proj4d3';
 import type { ProjectionLike } from 'geoarrow-deck-stream';
-import {
-  fitProjectionToBbox,
-  getProjectionById
-} from '$lib/features/commons/utils/projection.utils';
 import type { BasemapMetadata } from '../types/basemap.types';
 import { shouldUseIdentityProjectionForDatasetCrs } from '../utils/dataset-crs';
+import { fitBasemapRenderProjection } from '../utils/fit-basemap-render-projection.utils';
+import { shouldShowOrthographicBasemapLayers } from '../utils/orthographic-basemap-visibility';
 import { resolveProjectionForRender } from '../utils/projection-priority';
+import { resolveUserProjectionOverride } from '../utils/user-projection.utils';
 import { getRepresentativePointArrowTable } from '$lib/features/duckdb/orchestrator/arrow-ops';
+import { resolveRepresentativePointTableName } from './representative-point-table.utils';
 
 const GEOMETRY_TO_PRIMITIVE: Partial<Record<GeometryType, PrimitiveFilter>> = {
   [GeometryType.POINT]: PrimitiveFilterType.POINT,
@@ -118,6 +118,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       viz: null,
       datasetId,
       fillColor: DATA_PREVIEW_FILL_COLOR,
+      symbolFillColor: DATA_PREVIEW_FILL_COLOR,
       strokeColor: DATA_PREVIEW_STROKE_COLOR,
       fillOpacity: DATA_PREVIEW_FILL_OPACITY,
       strokeWidth: DATA_PREVIEW_STROKE_WIDTH,
@@ -184,7 +185,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
   >();
   const representativePointLoadFailures = new WeakSet<ArrowTable>();
   let cachedProjectionOverrideKey: string | null = null;
-  let cachedProjectionOverrideRef: GeoProjection | undefined;
+  let cachedProjectionOverrideRef: ProjectionLike | undefined;
 
   function getProjectionViewportSize(): { width: number; height: number } {
     return {
@@ -195,25 +196,38 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
 
   function getProjectionFromMetadata(
     metadata: BasemapMetadata | null | undefined,
-    isOrthographicMode: boolean
+    isOrthographicMode: boolean,
+    fitBbox: BBox | null,
+    fitPaddingPx: number
   ): ProjectionLike | undefined {
     if (!isOrthographicMode || !metadata || metadata.isCustom) {
       return undefined;
     }
 
     const viewportSize = getProjectionViewportSize();
-    const cacheKey = `${viewportSize.width}x${viewportSize.height}`;
+    const cacheKey = [
+      `${viewportSize.width}x${viewportSize.height}`,
+      `padding:${fitPaddingPx}`,
+      `bbox:${fitBbox?.join(',') ?? 'none'}`
+    ].join('|');
     const cached = basemapProjectionCache.get(metadata)?.get(cacheKey);
     if (cached) {
       return cached;
     }
 
-    const projection = buildProjectionForBasemap(
+    const projection = fitBasemapRenderProjection({
+      projection: buildProjectionForBasemap(
+        metadata,
+        viewportSize.width,
+        viewportSize.height,
+        basemapService.projectionPresets
+      ),
       metadata,
-      viewportSize.width,
-      viewportSize.height,
-      basemapService.projectionPresets
-    );
+      fitBbox,
+      width: viewportSize.width,
+      height: viewportSize.height,
+      padding: fitPaddingPx
+    });
     let entryCache = basemapProjectionCache.get(metadata);
     if (!entryCache) {
       entryCache = new Map();
@@ -257,44 +271,13 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       return cachedProjectionOverrideRef;
     }
 
-    let projectionOverride: GeoProjection | undefined;
-
-    if (projState.customCode) {
-      try {
-        projectionOverride = proj4d3(projState.customCode);
-      } catch (error) {
-        logger.error(
-          'Custom CRS code failed for thematic layers, using default basemap projection',
-          LogCategory.MAP,
-          { customCode: projState.customCode, error }
-        );
-      }
-    } else {
-      const projectionInfo = getProjectionById(projState.selected);
-      projectionOverride = projectionInfo?.projection();
-    }
-
-    if (projectionOverride) {
-      const center = projState.center ?? [
-        projState.longitude,
-        projState.latitude
-      ];
-
-      if ('center' in projectionOverride) {
-        projectionOverride.center(center);
-      }
-      if ('rotate' in projectionOverride) {
-        projectionOverride.rotate([projState.rotation, 0, 0]);
-      }
-
-      fitProjectionToBbox(
-        projectionOverride,
-        fitBbox,
-        viewportSize.width,
-        viewportSize.height,
-        fitPaddingPx
-      );
-    }
+    const projectionOverride = resolveUserProjectionOverride({
+      state: projState,
+      fitBbox,
+      viewportSize,
+      padding: fitPaddingPx,
+      projectionPresets: basemapService.projectionPresets
+    });
 
     // Downstream GeoArrow/projection caches key by ProjectionLike reference.
     // Recreating the same override projection on every layer refresh defeats
@@ -315,6 +298,24 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       datasetsStore.datasets.find((dataset) => dataset.id === datasetId)
         ?.tableName ?? null
     );
+  }
+
+  function getDatasetJoinedBasemap(datasetId: string): string | null {
+    const dataset = datasetsStore.datasets.find(
+      (item) => item.id === datasetId
+    );
+    if (dataset?.joinedBasemap) {
+      return dataset.joinedBasemap;
+    }
+
+    if (dataset?.sourceFileId) {
+      return (
+        duckDBOrchestrator.getDatasetBySourceFile(dataset.sourceFileId)
+          ?.joinedBasemap ?? null
+      );
+    }
+
+    return duckDBOrchestrator.getDatasetById(datasetId)?.joinedBasemap ?? null;
   }
 
   function supportsRepresentativePointTable(
@@ -347,7 +348,8 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
   function getRepresentativePointTable(
     datasetId: string,
     sourceTable: ArrowTable,
-    geometryInfo: NonNullable<LayerContext['geometryInfo']>
+    geometryInfo: NonNullable<LayerContext['geometryInfo']>,
+    joinedBasemapId?: string | null
   ): ArrowTable | null {
     if (!supportsRepresentativePointTable(geometryInfo.type)) {
       return null;
@@ -365,17 +367,42 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       return null;
     }
 
-    const tableName = getDatasetTableName(datasetId);
-    if (!tableName) {
-      return null;
-    }
+    const loadPromise = (async () => {
+      if (joinedBasemapId) {
+        await basemapService.ensureBasemapLayersLoaded(joinedBasemapId, [
+          BasemapLayerType.CENTROID
+        ]);
 
-    const loadPromise = getRepresentativePointArrowTable(
-      tableName,
-      geometryInfo.type,
-      Duck
-    )
+        const centroidTable = basemapService.getBasemapLayerTableByType(
+          joinedBasemapId,
+          BasemapLayerType.CENTROID
+        );
+
+        if (centroidTable) {
+          return centroidTable;
+        }
+      }
+
+      const tableName = await resolveRepresentativePointTableName({
+        datasetTableName: getDatasetTableName(datasetId),
+        joinedBasemapId,
+        loadBasemapGeometryTableName: (basemapId) =>
+          basemapService.loadGeometryIntoDuckDB(basemapId)
+      });
+      if (!tableName) {
+        return null;
+      }
+
+      return getRepresentativePointArrowTable(
+        tableName,
+        geometryInfo.type,
+        Duck
+      );
+    })()
       .then((representativePointTable) => {
+        if (!representativePointTable) {
+          return;
+        }
         representativePointTableCache.set(
           sourceTable,
           representativePointTable
@@ -388,7 +415,12 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         logger.warn(
           'Deferred representative point table loading failed',
           LogCategory.MAP,
-          { datasetId, tableName, geometryType: geometryInfo.type, error }
+          {
+            datasetId,
+            joinedBasemapId,
+            geometryType: geometryInfo.type,
+            error
+          }
         );
       })
       .finally(() => {
@@ -402,15 +434,29 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
   function getDatasetDefaultProjection(
     datasetId: string,
     metadata: BasemapMetadata | null | undefined,
-    isOrthographicMode: boolean
+    isOrthographicMode: boolean,
+    fitBbox: BBox | null,
+    fitPaddingPx: number
   ): ProjectionLike | undefined {
     const datasetGeometryCrs = getDatasetGeometryCrs(datasetId);
 
-    if (shouldUseIdentityProjectionForDatasetCrs(datasetGeometryCrs)) {
+    // Orthographic mode fits the camera against projectionStore.referenceBbox.
+    // WGS84 datasets still need the same render projection as the basemap when
+    // that reference bbox is already projected, otherwise the geometry collapses
+    // into a tiny patch against a world-scale frame.
+    if (
+      !isOrthographicMode &&
+      shouldUseIdentityProjectionForDatasetCrs(datasetGeometryCrs)
+    ) {
       return undefined;
     }
 
-    return getProjectionFromMetadata(metadata, isOrthographicMode);
+    return getProjectionFromMetadata(
+      metadata,
+      isOrthographicMode,
+      fitBbox,
+      fitPaddingPx
+    );
   }
 
   function getRequestedMetadataLayerTypes(
@@ -473,6 +519,8 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       const activeVisualizations = getActiveVisualizations();
       const visualizationsToRender =
         getVisualizationRenderOrder(activeVisualizations);
+      const hasRenderableUserData =
+        tables.size > 0 || geoJSONs.size > 0 || Boolean(splitData?.size);
 
       // Only apply modelMatrix in orthographic mode (Deck.gl standalone)
       // In MapLibre mode (deckOverlay), the map handles projection including globe
@@ -486,8 +534,9 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       const projectionSuffix = deckOverlay
         ? mapProjectionStore.projection
         : undefined;
+      const projectionFitBbox = getProjectionFitBbox?.() ?? null;
+      const fitPaddingPx = projectionStore.fitPaddingPx;
 
-      // Build basemap projection from metadata (composite/simple/identity).
       // Only applies in orthographic mode — in MapLibre mode, the map handles
       // projection natively (WebMercator/globe) and thematic data must stay in
       // WGS84 lat/lng. Applying a d3-geo projection here would convert coordinates
@@ -499,10 +548,11 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       const currentMetadata = basemapService.currentMetadata;
       const basemapProjection = getProjectionFromMetadata(
         currentMetadata,
-        isOrthographicMode
+        isOrthographicMode,
+        projectionFitBbox,
+        fitPaddingPx
       );
       const projectionState = getProjectionState();
-      const projectionFitBbox = getProjectionFitBbox?.() ?? null;
       const projectionOverride = getProjectionOverride(
         isOrthographicMode,
         projectionFitBbox
@@ -523,7 +573,12 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
 
       // Only show basemap layers in orthographic mode (Deck.gl standalone)
       // In MapLibre mode, the tiled basemap provides the background (OSM, Carte Facile, etc.)
-      const shouldShowBasemapLayers = !isOSMActive && isOrthographicMode;
+      const shouldShowBasemapLayers = shouldShowOrthographicBasemapLayers({
+        isOrthographicMode,
+        isOSMActive,
+        hasReferenceBasemap: Boolean(basemapStyleStore.referenceBasemapId),
+        hasUserData: hasRenderableUserData
+      });
 
       // Basemap layers are split into background (terre, mers, lacs, relief)
       // and foreground (frontières, rivières, graticules, villes).
@@ -541,7 +596,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           };
 
           const metadataLayers: MetadataLayerEntry[] = [];
-          if (currentMetadata && !currentMetadata.isCustom) {
+          if (currentMetadata && !currentMetadata.isCustom && worldBaseTable) {
             const requestedLayerTypes =
               getRequestedMetadataLayerTypes(worldBaseTable);
             if (requestedLayerTypes.length > 0) {
@@ -622,7 +677,9 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           const datasetDefaultProjection = getDatasetDefaultProjection(
             datasetId,
             datasetProjectionMetadata,
-            isOrthographicMode
+            isOrthographicMode,
+            projectionFitBbox,
+            fitPaddingPx
           );
           ctx.modelMatrix = matrixToApply;
           ctx.projectionSuffix = projectionSuffix;
@@ -669,8 +726,16 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             const filteredTable = viz.yearFilter
               ? filterArrowTableByYear(tableFiltered, viz.yearFilter)
               : tableFiltered;
+            const joinedBasemapId = split
+              ? getDatasetJoinedBasemap(datasetId)
+              : null;
             const representativePointBaseTable = geoInfo
-              ? getRepresentativePointTable(datasetId, table, geoInfo)
+              ? getRepresentativePointTable(
+                  datasetId,
+                  table,
+                  geoInfo,
+                  joinedBasemapId
+                )
               : null;
 
             if (representativePointBaseTable) {
@@ -744,7 +809,9 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           const datasetDefaultProjection = getDatasetDefaultProjection(
             datasetId,
             datasetProjectionMetadata,
-            isOrthographicMode
+            isOrthographicMode,
+            projectionFitBbox,
+            fitPaddingPx
           );
           fallbackCtx.modelMatrix = matrixToApply;
           fallbackCtx.projectionSuffix = projectionSuffix;

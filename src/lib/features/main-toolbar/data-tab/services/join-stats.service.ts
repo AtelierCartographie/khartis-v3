@@ -1,5 +1,4 @@
 import { JoinStatus } from '$lib/features/commons/constants/ui.constants';
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import {
   escapeIdentifier,
   escapeSqlString
@@ -35,13 +34,6 @@ export async function computeDatasetJoinStats(
 ): Promise<JoinStats> {
   const { sourceTableName, sourceColumn, targetTableName, targetColumn } =
     options;
-
-  logger.debug('Computing dataset join stats', LogCategory.DATA, {
-    sourceTableName,
-    sourceColumn,
-    targetTableName,
-    targetColumn
-  });
 
   // join_macros are loaded once at DuckDB init (duck.ts) — no need to reload
 
@@ -184,13 +176,6 @@ export async function computeDatasetJoinStats(
     entities,
     totalEntities: entities.length
   };
-
-  logger.debug('Dataset join stats computed', LogCategory.DATA, {
-    joinedCount: stats.joinedCount,
-    toVerifyCount: stats.toVerifyCount,
-    duplicateCount: stats.duplicateCount,
-    unrecognizedCount: stats.unrecognizedCount
-  });
 
   return stats;
 }
