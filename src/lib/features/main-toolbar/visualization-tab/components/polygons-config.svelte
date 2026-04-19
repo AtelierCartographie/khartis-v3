@@ -14,8 +14,8 @@
   import {
     DEFAULT_SEQUENTIAL_PREVIEW,
     PALETTE_TYPE
-  } from './palette-popover/palette.constants';
-  import SingleColorPreview from './palette-popover/single-color-preview.svelte';
+  } from '$lib/features/commons/components/palette-popover/palette.constants';
+  import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
   import {
     Category,
     ChartScatter,
@@ -60,6 +60,9 @@
     onModesChange?: (updates: Partial<VisualizationModes>) => void;
     onMissingDataChange?: (updates: Partial<MissingDataConfig>) => void;
     onClassificationChange?: (updates: Partial<ClassificationConfig>) => void;
+    onStrokeClassificationChange?: (
+      updates: Partial<ClassificationConfig>
+    ) => void;
     onMappingChange?: (
       updates: Partial<VisualizationConfig['mapping']>
     ) => void;
@@ -83,6 +86,7 @@
     onModesChange,
     onMissingDataChange,
     onClassificationChange,
+    onStrokeClassificationChange,
     onMappingChange,
     onInvertPalette,
     onToggleVisibility,
@@ -93,6 +97,7 @@
   }: Props = $props();
 
   let discretizationModalOpen = $state(false);
+  let discretizationTarget = $state<'fill' | 'stroke'>('fill');
   let filterSectionVisible = $state(false);
   let valuePickerOpen = $state(false);
   let categoryPickerOpen = $state(false);
@@ -169,21 +174,19 @@
   });
 
   $effect(() => {
-    if (visualization?.style) {
-      const fillOp = visualization.style.fillOpacity;
-      fillOpacity =
-        fillOp !== undefined
-          ? Math.round(fillOp * 100)
-          : VISUALIZATION_DEFAULTS.fillOpacity;
-      fillColor =
-        (visualization.style.fillColor as string) ?? DEFAULT_COLORS.fill;
-    }
-    if (visualization?.modes) {
-      fillMode =
-        (visualization.style.fillOpacity ?? 1) <= 0
-          ? FillMode.NONE
-          : (visualization.modes.fill ?? FillMode.UNIQUE);
-    }
+    const polygonConfig = visualization?.polygon;
+    const fillOp =
+      polygonConfig?.fillOpacity ?? visualization?.style.fillOpacity;
+    fillOpacity =
+      fillOp !== undefined
+        ? Math.round(fillOp * 100)
+        : VISUALIZATION_DEFAULTS.fillOpacity;
+    fillColor =
+      (polygonConfig?.fillColor as string | undefined) ??
+      (visualization?.style.fillColor as string | undefined) ??
+      DEFAULT_COLORS.fill;
+    fillMode =
+      polygonConfig?.fillMode ?? visualization?.modes?.fill ?? FillMode.UNIQUE;
     if (visualization?.missingData) {
       showMissingData = visualization.missingData.show ?? true;
       missingDataColor =
@@ -212,11 +215,29 @@
     fillMode = nextFillMode;
 
     if (nextFillMode === FillMode.NONE) {
-      onStyleChange?.({ fillOpacity: 0 });
-    } else if ((visualization?.style.fillOpacity ?? 1) <= 0) {
+      fillColor = DEFAULT_COLORS.fill;
       onStyleChange?.({
-        fillOpacity: VISUALIZATION_DEFAULTS.fillOpacity / 100
+        fillOpacity: 0,
+        fillColor: DEFAULT_COLORS.fill
       });
+      handleClassificationChange?.({
+        colors: undefined,
+        paletteId: undefined,
+        inverted: false,
+        patternId: undefined,
+        patternParams: undefined,
+        labels: undefined
+      });
+    } else {
+      const currentOpacity =
+        visualization?.polygon?.fillOpacity ??
+        visualization?.style.fillOpacity ??
+        1;
+      if (currentOpacity <= 0) {
+        onStyleChange?.({
+          fillOpacity: VISUALIZATION_DEFAULTS.fillOpacity / 100
+        });
+      }
     }
     onModesChange?.({ fill: nextFillMode });
   }
@@ -224,7 +245,11 @@
   function handleFillColorChange(value: string) {
     fillColor = value;
     const updates: Partial<VisualizationConfig['style']> = { fillColor: value };
-    if ((visualization?.style.fillOpacity ?? 1) <= 0) {
+    const currentOpacity =
+      visualization?.polygon?.fillOpacity ??
+      visualization?.style.fillOpacity ??
+      1;
+    if (currentOpacity <= 0) {
       updates.fillOpacity = VISUALIZATION_DEFAULTS.fillOpacity / 100;
       fillOpacity = VISUALIZATION_DEFAULTS.fillOpacity;
     }
@@ -233,7 +258,10 @@
 
   const effectiveFillMode = $derived.by(() => {
     const storedMode = fillMode;
-    const opacity = visualization?.style.fillOpacity ?? 1;
+    const opacity =
+      visualization?.polygon?.fillOpacity ??
+      visualization?.style.fillOpacity ??
+      1;
     if (opacity <= 0) return FillMode.NONE;
     return storedMode;
   });
@@ -260,6 +288,12 @@
   }
 
   function handleOpenDiscretization() {
+    discretizationTarget = 'fill';
+    discretizationModalOpen = true;
+  }
+
+  function handleOpenStrokeDiscretization() {
+    discretizationTarget = 'stroke';
     discretizationModalOpen = true;
   }
 
@@ -269,10 +303,36 @@
     onClassificationChange?.(classification);
   }
 
+  function handleStrokeDiscretizationChange(
+    classification: Partial<ClassificationConfig>
+  ) {
+    onStrokeClassificationChange?.(classification);
+  }
+
+  const activeDiscretizationClassification = $derived.by(() =>
+    discretizationTarget === 'stroke'
+      ? visualization?.polygon?.strokeClassification
+      : visualization?.classification
+  );
+
+  const discretizationOnchange = $derived(
+    discretizationTarget === 'stroke'
+      ? handleStrokeDiscretizationChange
+      : handleClassificationChange
+  );
+
   const discretizationLabel = $derived.by(() =>
     resolveDiscretizationLabel(
       visualization?.classification
         ? { ...visualization.classification }
+        : undefined
+    )
+  );
+
+  const strokeDiscretizationLabel = $derived.by(() =>
+    resolveDiscretizationLabel(
+      visualization?.polygon?.strokeClassification
+        ? { ...visualization.polygon.strokeClassification }
         : undefined
     )
   );
@@ -474,6 +534,7 @@
         inverted={visualization?.classification?.inverted ?? false}
         paletteType={PALETTE_TYPE.QUALITATIVE}
         categoriesMode={true}
+        categoriesVariant="polygons"
         categoryLabels={visualization?.classification?.labels ?? []}
         oninvert={onInvertPalette}
         onClassificationChange={handleClassificationChange}
@@ -505,14 +566,14 @@
       <StrokeSection
         visualization={visualization}
         dataFields={dataFields}
-        classesPalette={currentPalette}
-        discretizationLabel={discretizationLabel}
+        discretizationLabel={strokeDiscretizationLabel}
         onStyleChange={onStyleChange}
         onModesChange={onModesChange}
         onMappingChange={onMappingChange}
         onInvertPalette={onInvertPalette}
-        onOpenDiscretization={handleOpenDiscretization}
-        onClassificationChange={handleClassificationChange}
+        onOpenDiscretization={handleOpenStrokeDiscretization}
+        onStrokeClassificationChange={handleStrokeDiscretizationChange}
+        strokeClassification={visualization?.polygon?.strokeClassification}
         facetsValueSlotPath={FACET_SLOT.POLYGON_VALUE}
         facetsCategorySlotPath={FACET_SLOT.POLYGON_CATEGORY}
       />
@@ -537,7 +598,8 @@
 <DiscretizationModal
   bind:open={discretizationModalOpen}
   visualization={visualization}
-  onchange={handleClassificationChange}
+  classification={activeDiscretizationClassification}
+  onchange={discretizationOnchange}
 />
 
 <style lang="scss">

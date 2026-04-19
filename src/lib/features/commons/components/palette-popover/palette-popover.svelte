@@ -125,6 +125,7 @@
   function handlePaletteSelect(palette: Palette) {
     draftPaletteId = palette.id;
     draftInverted = false;
+    draftPatternParams = undefined;
     draftColors = generatePaletteColors(
       palette,
       numClasses,
@@ -143,6 +144,7 @@
   function handleCustomColorsChange(colors: string[]) {
     draftPaletteId = '__custom__';
     draftInverted = false;
+    draftPatternParams = undefined;
     draftColors = colors;
   }
 
@@ -161,6 +163,7 @@
   function handleQualitativeColorSelect(hex: string) {
     draftPaletteId = '__custom__';
     draftInverted = false;
+    draftPatternParams = undefined;
     if (numClasses <= 1) {
       draftColors = [hex];
     } else {

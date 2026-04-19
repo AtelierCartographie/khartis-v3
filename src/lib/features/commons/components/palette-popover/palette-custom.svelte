@@ -2,7 +2,11 @@
   import * as m from '$lib/paraglide/messages';
   import { RadioButtonGroup, RadioButton } from 'carbon-components-svelte';
   import ContentSwitcher from './content-switcher.svelte';
-  import { ColorSelector, SliderWithInput, ToggleWithLabel } from '../shared';
+  import {
+    ColorSelector,
+    SliderWithInput,
+    ToggleWithLabel
+  } from '$lib/features/main-toolbar/visualization-tab/components/shared';
   import {
     PALETTE_TYPE,
     type Palette,
@@ -257,7 +261,9 @@
 
 <div class="palette-custom">
   <div class="section-heading">
-    <span class="section-heading-text">{m.palette_custom()}</span>
+    <span class="section-heading-text"
+      >{isQualitative ? m.palette_custom_color() : m.palette_custom()}</span
+    >
     <div class="section-heading-line"></div>
   </div>
 
@@ -269,7 +275,7 @@
     />
 
     <ToggleWithLabel
-      label={m.pattern_preview()}
+      label={m.pattern()}
       toggled={motifEnabled}
       ontoggle={handleMotifToggle}
     />

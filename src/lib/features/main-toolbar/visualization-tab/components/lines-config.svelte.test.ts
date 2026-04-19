@@ -9,7 +9,9 @@ const source = readFileSync(
 
 describe('LinesConfig — palette wiring', () => {
   it('should import PALETTE_TYPE from palette-popover/palette.constants', () => {
-    expect(source).toContain("from './palette-popover/palette.constants'");
+    expect(source).toContain(
+      "from '$lib/features/commons/components/palette-popover/palette.constants'"
+    );
     expect(source).toContain('PALETTE_TYPE');
   });
 
@@ -39,7 +41,7 @@ describe('LinesConfig — palette wiring', () => {
 
   it('should route ColorMode.UNIQUE through SingleColorPreview', () => {
     expect(source).toContain(
-      "import SingleColorPreview from './palette-popover/single-color-preview.svelte'"
+      "import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte'"
     );
     const uniqueBlock = source
       .split('colorMode === ColorMode.UNIQUE')[1]

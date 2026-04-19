@@ -13,6 +13,13 @@ describe('PalettePreview — shell + popover routing', () => {
     expect(source).toContain('oncustomize={handleCustomize}');
   });
 
+  it('should keep swatches display-only and route all edits through customize', () => {
+    expect(source).not.toContain('type="color"');
+    expect(source).not.toContain('colorInputRefs');
+    expect(source).not.toContain('handleSwatchClick');
+    expect(source).toContain('previewCount={dropdownPreviewCount}');
+  });
+
   it('should always mount the PalettePopover for the default flow', () => {
     expect(source).toContain('<PalettePopover');
     expect(source).toContain('bind:open={popoverOpen}');
@@ -37,7 +44,7 @@ describe('PalettePreview — categoriesMode routing (Fill Categories)', () => {
     expect(source).toContain('<CategoriesAspectPopover');
     expect(source).toContain('bind:open={categoriesPopoverOpen}');
     expect(source).toContain('categories={categoryDrafts}');
-    expect(source).toContain('onvalidate={handleCategoriesValidate}');
+    expect(source).toContain('onvalidate={handleCategoriesValidateWithAspect}');
   });
 
   it('should build categoryDrafts from colors and categoryLabels with default labels fallback', () => {

@@ -2,7 +2,8 @@
   import {
     Dropdown,
     RadioButton,
-    RadioButtonGroup
+    RadioButtonGroup,
+    TextInput
   } from 'carbon-components-svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import * as m from '$lib/paraglide/messages';
@@ -10,18 +11,20 @@
     DEFAULT_SEQUENTIAL_PREVIEW,
     DEFAULT_QUALITATIVE_PREVIEW,
     PALETTE_TYPE
-  } from '../palette-popover/palette.constants';
+  } from '$lib/features/commons/components/palette-popover/palette.constants';
   import {
     MissingDataShape,
     ProportionalType,
     ShapeType,
     SLIDER_LIMITS,
+    SymbolDoublePosition,
     SymbolMode,
     VISUALIZATION_DEFAULTS,
     DEFAULT_COLORS,
     FillMode,
     availableShapesForSymbolMode
   } from '../../../constants';
+  import Switch from '$lib/features/commons/components/switch.svelte';
   import {
     DiscretizationRow,
     InfoPopover,
@@ -31,7 +34,7 @@
     PalettePreview,
     StrokeSection
   } from '../shared';
-  import SingleColorPreview from '../palette-popover/single-color-preview.svelte';
+  import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
   import type { SymbolModeProps } from './types';
   import {
     CaretUp,
@@ -60,8 +63,10 @@
     visualization,
     symbolMode,
     onSymbolsChange,
+    onSymbolPrimitiveChange,
     onMappingChange,
     onClassificationChange,
+    onStrokeClassificationChange,
     onMissingDataChange,
     onOpenDiscretization,
     onModesChange,
@@ -90,6 +95,10 @@
   let fillColor = $state<string>(DEFAULT_COLORS.fill);
   let fillColorB = $state<string>(DEFAULT_COLORS.secondary);
   let fillOpacity = $state<number>(VISUALIZATION_DEFAULTS.fillOpacity);
+  let commonScale = $state<boolean>(true);
+  let positionMode = $state<SymbolDoublePosition>(SymbolDoublePosition.OVERLAY);
+  let breakValueA = $state<number | null>(null);
+  let breakValueB = $state<number | null>(null);
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
   const selectableDataFields = $derived([noneOption, ...dataFields]);
   let isSyncingFromVisualization = $state(true);
@@ -155,7 +164,16 @@
       }
     }
 
-    if (visualization?.symbols) {
+    const symbolConfig = visualization?.symbol;
+    if (symbolConfig) {
+      symbolMaxSize =
+        symbolConfig.maxSize ?? VISUALIZATION_DEFAULTS.symbolMaxSize;
+      shapeType = (symbolConfig.shape as ShapeType) ?? ShapeType.CIRCLE;
+      fillOpacity =
+        symbolConfig.opacity !== undefined
+          ? Math.round(symbolConfig.opacity * 100)
+          : VISUALIZATION_DEFAULTS.symbolOpacity;
+    } else if (visualization?.symbols) {
       symbolMaxSize =
         visualization.symbols.maxSize ?? VISUALIZATION_DEFAULTS.symbolMaxSize;
       shapeType = visualization.symbols.type ?? ShapeType.CIRCLE;
@@ -174,15 +192,27 @@
       missingDataColor =
         visualization.missingData.color ?? DEFAULT_COLORS.missingData;
     }
-    if (visualization?.modes) {
-      fillMode = visualization.modes.fill ?? FillMode.UNIQUE;
+    if (symbolConfig) {
+      fillMode = symbolConfig.fillMode ?? FillMode.UNIQUE;
       proportionalType =
-        visualization.modes.proportionalType ?? ProportionalType.SINGLE;
-    }
-    if (visualization?.style) {
+        symbolConfig.proportionalType ?? ProportionalType.SINGLE;
       fillColor =
-        (visualization.style.symbolFillColor as string) ?? DEFAULT_COLORS.fill;
-      fillColorB = visualization.style.fillColorB ?? DEFAULT_COLORS.secondary;
+        (symbolConfig.fillColor as string | undefined) ?? DEFAULT_COLORS.fill;
+      fillColorB =
+        (symbolConfig.fillColorB as string | undefined) ??
+        DEFAULT_COLORS.secondary;
+    } else {
+      if (visualization?.modes) {
+        fillMode = visualization.modes.fill ?? FillMode.UNIQUE;
+        proportionalType =
+          visualization.modes.proportionalType ?? ProportionalType.SINGLE;
+      }
+      if (visualization?.style) {
+        fillColor =
+          (visualization.style.symbolFillColor as string) ??
+          DEFAULT_COLORS.fill;
+        fillColorB = visualization.style.fillColorB ?? DEFAULT_COLORS.secondary;
+      }
     }
     if (visualization?.classification) {
       categoryCount =
@@ -190,6 +220,19 @@
         visualization.classification.numClasses ??
         visualization.classification.classes ??
         4;
+    }
+    if (visualization?.symbol) {
+      commonScale = visualization.symbol.commonScale ?? true;
+      positionMode =
+        visualization.symbol.positionMode ?? SymbolDoublePosition.OVERLAY;
+      breakValueA =
+        visualization.symbol.breakValueA === undefined
+          ? null
+          : visualization.symbol.breakValueA;
+      breakValueB =
+        visualization.symbol.breakValueB === undefined
+          ? null
+          : visualization.symbol.breakValueB;
     }
 
     queueMicrotask(() => {
@@ -203,6 +246,14 @@
     resolveDiscretizationLabel(
       visualization?.classification
         ? { ...visualization.classification }
+        : undefined
+    )
+  );
+
+  const strokeDiscretizationLabel = $derived.by(() =>
+    resolveDiscretizationLabel(
+      visualization?.symbol?.strokeClassification
+        ? { ...visualization.symbol.strokeClassification }
         : undefined
     )
   );
@@ -232,6 +283,18 @@
     }
     proportionalType = type;
     onModesChange?.({ proportionalType: type });
+    if (type === ProportionalType.SINGLE) {
+      onMappingChange?.({ valueColumn: undefined });
+      selectedFieldBId = NONE_FIELD_ID;
+      fillColorB = DEFAULT_COLORS.secondary;
+      onSymbolPrimitiveChange?.({
+        commonScale: true,
+        positionMode: SymbolDoublePosition.OVERLAY,
+        breakValueA: null,
+        breakValueB: null
+      });
+      onStyleChange?.({ fillColorB: DEFAULT_COLORS.secondary });
+    }
   }
 
   function handleFieldBSelect(fieldId: number) {
@@ -339,6 +402,22 @@
     ];
     fillMode = modes[index] || FillMode.NONE;
     onModesChange?.({ fill: fillMode });
+    if (fillMode === FillMode.NONE) {
+      fillColor = DEFAULT_COLORS.fill;
+      fillColorB = DEFAULT_COLORS.secondary;
+      onStyleChange?.({
+        symbolFillColor: DEFAULT_COLORS.fill,
+        fillColorB: DEFAULT_COLORS.secondary
+      });
+      onClassificationChange?.({
+        colors: undefined,
+        paletteId: undefined,
+        inverted: false,
+        patternId: undefined,
+        patternParams: undefined,
+        labels: undefined
+      });
+    }
   }
 
   function handleFillColorChange(value: string) {
@@ -389,13 +468,13 @@
     }
   }
 
-  function handleClassificationChange(
+  function handleStrokeDiscretizationChange(
     classification: Partial<ClassificationConfig>
   ) {
     if (isSyncingFromVisualization) {
       return;
     }
-    onClassificationChange?.(classification);
+    onStrokeClassificationChange?.(classification);
   }
 
   function handleFillClassFieldSelect(fieldId: number) {
@@ -506,6 +585,42 @@
     if (candidates.length < 2) return;
     await facetsStore.updateVariables(selectedVizId, candidates, slotPath);
   }
+
+  function handleCommonScaleChange(value: boolean) {
+    if (isSyncingFromVisualization) return;
+    commonScale = value;
+    onSymbolPrimitiveChange?.({ commonScale: value });
+  }
+
+  function handlePositionModeChange(value: string | number) {
+    if (isSyncingFromVisualization) return;
+    const next =
+      (value as SymbolDoublePosition) ?? SymbolDoublePosition.OVERLAY;
+    if (next === positionMode) return;
+    positionMode = next;
+    onSymbolPrimitiveChange?.({ positionMode: next });
+  }
+
+  function handleBreakValueAChange(value: number | null) {
+    if (isSyncingFromVisualization) return;
+    breakValueA = value;
+    onSymbolPrimitiveChange?.({ breakValueA: value });
+  }
+
+  function handleBreakValueBChange(value: number | null) {
+    if (isSyncingFromVisualization) return;
+    breakValueB = value;
+    onSymbolPrimitiveChange?.({ breakValueB: value });
+  }
+
+  const positionModeItems = [
+    { id: SymbolDoublePosition.OVERLAY, text: m.symbol_position_overlay() },
+    {
+      id: SymbolDoublePosition.JUXTAPOSITION,
+      text: m.symbol_position_juxtaposition()
+    },
+    { id: SymbolDoublePosition.DIVISION, text: m.symbol_position_division() }
+  ];
 </script>
 
 {#if symbolMode === SymbolMode.PROPORTIONAL}
@@ -532,21 +647,25 @@
     </RadioButtonGroup>
   </div>
 
-  <div class="field-group">
-    <span class="field-label">
-      {proportionalType === ProportionalType.DOUBLE
-        ? m.symbol_variable_a()
-        : m.size_according()}
-      <InfoPopover text={m.size_according_info()} />
-    </span>
-    {#if proportionalType === ProportionalType.DOUBLE}
-      <Dropdown
-        items={selectableDataFields}
-        selectedId={selectedFieldId}
-        on:select={(e) => handleFieldSelect(e.detail.selectedId)}
-        type="default"
+  {#if proportionalType === ProportionalType.DOUBLE}
+    <div class="field-group">
+      <span class="field-label">
+        {m.common_scale_label()}
+        <InfoPopover text={m.common_scale_info()} />
+      </span>
+      <Switch
+        toggled={commonScale}
+        labelText={m.common_scale_label()}
+        hideLabel
+        onchange={handleCommonScaleChange}
       />
-    {:else}
+    </div>
+
+    <div class="field-group">
+      <span class="field-label">
+        {m.symbol_a_size_according()}
+        <InfoPopover text={m.size_according_info()} />
+      </span>
       <FacetsVariablePicker
         bind:open={sizePickerOpen}
         dataFields={dataFields}
@@ -564,19 +683,123 @@
         onToggleCollection={(enabled) =>
           handleFacetsToggle(sizeColumnName, FACET_SLOT.SYMBOL_SIZE, enabled)}
       />
-    {/if}
-  </div>
+    </div>
 
-  {#if proportionalType === ProportionalType.DOUBLE}
     <div class="field-group">
       <span class="field-label">
-        {m.symbol_variable_b()}
+        {m.symbol_b_size_according()}
       </span>
       <Dropdown
         items={selectableDataFields}
         selectedId={selectedFieldBId}
         on:select={(e) => handleFieldBSelect(e.detail.selectedId)}
         type="default"
+      />
+    </div>
+
+    <SliderWithInput
+      label={m.max_size()}
+      infoText={m.max_size_info()}
+      bind:value={symbolMaxSize}
+      min={SLIDER_LIMITS.symbolMaxSize.min}
+      max={SLIDER_LIMITS.symbolMaxSize.max}
+      onchange={handleSymbolMaxSizeChange}
+    />
+
+    <div class="field-group">
+      <span class="field-label">
+        {m.shape()}
+        <InfoPopover text={m.shape_info()} />
+      </span>
+      <Dropdown
+        items={shapeDropdownItems}
+        selectedId={shapeType}
+        on:select={(e) => handleShapeDropdownSelect(e.detail.selectedId)}
+        type="default"
+      />
+    </div>
+
+    <div class="field-group">
+      <span class="field-label">
+        {m.symbol_position_mode()}
+        <InfoPopover text={m.position_mode_info()} />
+      </span>
+      <Dropdown
+        items={positionModeItems}
+        selectedId={positionMode}
+        on:select={(e) => handlePositionModeChange(e.detail.selectedId)}
+        type="default"
+      />
+    </div>
+
+    <div class="field-group">
+      <span class="field-label">
+        {m.symbol_a_break_value()}
+        <InfoPopover text={m.break_value_info()} />
+      </span>
+      <TextInput
+        labelText=""
+        hideLabel
+        type="number"
+        placeholder={m.break_value_placeholder()}
+        value={breakValueA === null ? '' : String(breakValueA)}
+        on:input={(e) => {
+          const raw = (e.detail as string) ?? '';
+          const trimmed = raw.trim();
+          if (trimmed === '') {
+            handleBreakValueAChange(null);
+            return;
+          }
+          const next = Number(trimmed);
+          handleBreakValueAChange(Number.isFinite(next) ? next : null);
+        }}
+      />
+    </div>
+
+    <div class="field-group">
+      <span class="field-label">
+        {m.symbol_b_break_value()}
+      </span>
+      <TextInput
+        labelText=""
+        hideLabel
+        type="number"
+        placeholder={m.break_value_placeholder()}
+        value={breakValueB === null ? '' : String(breakValueB)}
+        on:input={(e) => {
+          const raw = (e.detail as string) ?? '';
+          const trimmed = raw.trim();
+          if (trimmed === '') {
+            handleBreakValueBChange(null);
+            return;
+          }
+          const next = Number(trimmed);
+          handleBreakValueBChange(Number.isFinite(next) ? next : null);
+        }}
+      />
+    </div>
+  {:else}
+    <div class="field-group">
+      <span class="field-label">
+        {m.size_according()}
+        <InfoPopover text={m.size_according_info()} />
+      </span>
+      <FacetsVariablePicker
+        bind:open={sizePickerOpen}
+        dataFields={dataFields}
+        singleSelectItems={selectableDataFields}
+        selectedFieldId={selectedFieldId}
+        selectedFieldIds={getFacetsSelectedFieldIds(FACET_SLOT.SYMBOL_SIZE)}
+        isCollectionEnabled={isFacetsActiveForSlot(FACET_SLOT.SYMBOL_SIZE)}
+        onSelect={handleFieldSelect}
+        onCollectionChange={(ids) =>
+          handleFacetsVariablesChange(
+            sizeColumnName,
+            FACET_SLOT.SYMBOL_SIZE,
+            ids
+          )}
+        onToggleCollection={(enabled) =>
+          handleFacetsToggle(sizeColumnName, FACET_SLOT.SYMBOL_SIZE, enabled)}
       />
     </div>
   {/if}
@@ -776,6 +999,7 @@
     inverted={visualization?.classification?.inverted ?? false}
     paletteType={PALETTE_TYPE.QUALITATIVE}
     categoriesMode={true}
+    categoriesVariant="symbols-unique"
     categoryLabels={visualization?.classification?.labels ?? []}
     oninvert={onInvertPalette}
     onClassificationChange={onClassificationChange}
@@ -801,13 +1025,15 @@
   visualization={visualization}
   dataFields={dataFields}
   infoText={m.stroke_section_info()}
-  showDashed={false}
-  discretizationLabel={discretizationLabel}
+  showDashed={true}
+  discretizationLabel={strokeDiscretizationLabel}
   onStyleChange={onStyleChange}
   onModesChange={onModesChange}
   onMappingChange={onMappingChange}
   onInvertPalette={onInvertPalette}
   onOpenDiscretization={() => (discretizationModalOpen = true)}
+  onStrokeClassificationChange={onStrokeClassificationChange ?? (() => {})}
+  strokeClassification={visualization?.symbol?.strokeClassification}
   facetsValueSlotPath={FACET_SLOT.SYMBOL_VALUE}
   facetsCategorySlotPath={FACET_SLOT.SYMBOL_CATEGORY}
 />
@@ -815,7 +1041,8 @@
 <DiscretizationModal
   bind:open={discretizationModalOpen}
   visualization={visualization}
-  onchange={handleClassificationChange}
+  classification={visualization?.symbol?.strokeClassification}
+  onchange={handleStrokeDiscretizationChange}
 />
 
 <style lang="scss">
