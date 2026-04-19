@@ -1,3 +1,13 @@
+# [1.0.0-staging.13](https://github.com/AtelierCartographie/khartis-v3/compare/v1.0.0-staging.12...v1.0.0-staging.13) (2026-04-19)
+
+### Bug Fixes
+
+- **ci:** import beforeEach from vitest in classification.service.test ([305c078](https://github.com/AtelierCartographie/khartis-v3/commit/305c0789f6f151bfda6bd18377d377d851ef6798))
+
+### Features
+
+- **w16:** category shape mode, suggestion origin, PWA, facets, search, and UI polish ([#99](https://github.com/AtelierCartographie/khartis-v3/issues/99)) ([dbde5de](https://github.com/AtelierCartographie/khartis-v3/commit/dbde5de4118930c1be907c5485eca4696c711b11)), closes [#90](https://github.com/AtelierCartographie/khartis-v3/issues/90) [#94](https://github.com/AtelierCartographie/khartis-v3/issues/94) [#92](https://github.com/AtelierCartographie/khartis-v3/issues/92) [#92](https://github.com/AtelierCartographie/khartis-v3/issues/92) [#93](https://github.com/AtelierCartographie/khartis-v3/issues/93) [AtelierCartographie/khartis-v3#93](https://github.com/AtelierCartographie/khartis-v3/issues/93) [#87](https://github.com/AtelierCartographie/khartis-v3/issues/87) [#87](https://github.com/AtelierCartographie/khartis-v3/issues/87) [#96](https://github.com/AtelierCartographie/khartis-v3/issues/96) [#98](https://github.com/AtelierCartographie/khartis-v3/issues/98)
+
 # [1.0.0-staging.12](https://github.com/AtelierCartographie/khartis-v3/compare/v1.0.0-staging.11...v1.0.0-staging.12) (2026-04-19)
 
 ### Performance Improvements
