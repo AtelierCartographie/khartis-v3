@@ -1,3 +1,13 @@
+# [1.0.0-staging.14](https://github.com/AtelierCartographie/khartis-v3/compare/v1.0.0-staging.13...v1.0.0-staging.14) (2026-04-19)
+
+### Bug Fixes
+
+- **viz:** étanchéité fill↔stroke, persistance discretization, FillMode.NONE ([#107](https://github.com/AtelierCartographie/khartis-v3/issues/107)) ([50e158f](https://github.com/AtelierCartographie/khartis-v3/commit/50e158f6c71e45b7f0ca370ae65c54e2963c09af))
+
+### Features
+
+- mode densité, MultiShapeLayer 9 formes, zoom responsive, jointure basemap optimisée ([#106](https://github.com/AtelierCartographie/khartis-v3/issues/106)) ([24b51e2](https://github.com/AtelierCartographie/khartis-v3/commit/24b51e21e0df10f712695d2c8b3cc80a2311dbd0)), closes [#90](https://github.com/AtelierCartographie/khartis-v3/issues/90) [#94](https://github.com/AtelierCartographie/khartis-v3/issues/94) [#92](https://github.com/AtelierCartographie/khartis-v3/issues/92) [#92](https://github.com/AtelierCartographie/khartis-v3/issues/92) [#93](https://github.com/AtelierCartographie/khartis-v3/issues/93) [AtelierCartographie/khartis-v3#93](https://github.com/AtelierCartographie/khartis-v3/issues/93) [#87](https://github.com/AtelierCartographie/khartis-v3/issues/87) [#87](https://github.com/AtelierCartographie/khartis-v3/issues/87) [#96](https://github.com/AtelierCartographie/khartis-v3/issues/96) [#98](https://github.com/AtelierCartographie/khartis-v3/issues/98) [#105](https://github.com/AtelierCartographie/khartis-v3/issues/105) [#93](https://github.com/AtelierCartographie/khartis-v3/issues/93) [#93](https://github.com/AtelierCartographie/khartis-v3/issues/93) [#93](https://github.com/AtelierCartographie/khartis-v3/issues/93) [#101](https://github.com/AtelierCartographie/khartis-v3/issues/101)
+
 # [1.0.0-staging.13](https://github.com/AtelierCartographie/khartis-v3/compare/v1.0.0-staging.12...v1.0.0-staging.13) (2026-04-19)
 
 ### Bug Fixes
