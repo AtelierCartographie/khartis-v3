@@ -36,6 +36,7 @@ import {
   ProportionalType,
   SizeMode,
   StrokeMode,
+  SymbolDoublePosition,
   SymbolMode,
   ThicknessMode,
   VISUALIZATION_DEFAULTS
@@ -905,6 +906,10 @@ export function resolveSuggestionBehavior(
         suggestion.id === 'symbols_proportional_double'
           ? ProportionalType.DOUBLE
           : ProportionalType.SINGLE,
+      commonScale: true,
+      positionMode: SymbolDoublePosition.OVERLAY,
+      breakValueA: null,
+      breakValueB: null,
       valueColumn: isClassedSymbol
         ? primaryColumn
         : suggestion.id === 'symbols_proportional_colorful_QTR' ||
