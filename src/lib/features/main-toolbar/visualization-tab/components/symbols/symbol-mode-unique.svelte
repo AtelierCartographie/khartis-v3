@@ -520,7 +520,7 @@
   onMappingChange={onMappingChange}
   onInvertPalette={onInvertPalette}
   onOpenDiscretization={onOpenDiscretization}
-  onStrokeClassificationChange={onStrokeClassificationChange}
+  onStrokeClassificationChange={onStrokeClassificationChange ?? (() => {})}
   strokeClassification={visualization?.symbol?.strokeClassification}
   facetsValueSlotPath={FACET_SLOT.SYMBOL_VALUE}
   facetsCategorySlotPath={FACET_SLOT.SYMBOL_CATEGORY}
