@@ -10,7 +10,7 @@ const source = readFileSync(
 describe('PolygonModeDensity', () => {
   it('routes color selection through SingleColorPreview', () => {
     expect(source).toContain(
-      "import SingleColorPreview from '../palette-popover/single-color-preview.svelte'"
+      "import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte'"
     );
     expect(source).toContain('<SingleColorPreview');
     expect(source).not.toContain('<ColorSelector');

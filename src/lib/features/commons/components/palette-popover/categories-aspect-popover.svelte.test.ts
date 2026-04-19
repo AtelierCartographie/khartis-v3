@@ -16,7 +16,9 @@ describe('CategoriesAspectPopover (Figma 952:156994 — Polygons variant)', () =
     expect(source).toContain(
       'draftCategories = categories.map((c) => ({ ...c }))'
     );
-    expect(source).toContain('onvalidate?.(draftCategories)');
+    expect(source).toContain(
+      'onvalidate?.(draftCategories, draftCommonAspect)'
+    );
   });
 
   it('should reuse PaletteSuggestions in QUALITATIVE mode for the Khartis suggestions section', () => {
@@ -51,5 +53,28 @@ describe('CategoriesAspectPopover (Figma 952:156994 — Polygons variant)', () =
     expect(source).toContain('{m.button_validate()}');
     expect(source).toContain('icon={ArrowRight}');
     expect(source).toContain('popover-divider');
+  });
+
+  it('should expose a variant prop with default symbols-unique', () => {
+    expect(source).toContain('variant?: CategoriesAspectVariant');
+    expect(source).toContain("variant = 'symbols-unique'");
+  });
+
+  it('should render the "Aspect commun" section when variant is not symbols-different-rank', () => {
+    expect(source).toContain(
+      "showCommonAspect = $derived(variant !== 'symbols-different-rank')"
+    );
+    expect(source).toContain('{#if showCommonAspect}');
+    expect(source).toContain('{m.aspect_common_section()}');
+    expect(source).toContain('{m.aspect_common_size_unique()}');
+    expect(source).toContain('{m.aspect_common_stroke_yesno()}');
+    expect(source).toContain('{m.aspect_common_auto_color()}');
+    expect(source).toContain('{m.aspect_common_pattern()}');
+  });
+
+  it('should ship a CategoriesCommonAspect draft initialised via DEFAULT_COMMON_ASPECT', () => {
+    expect(source).toContain('draftCommonAspect');
+    expect(source).toContain('DEFAULT_COMMON_ASPECT');
+    expect(source).toContain('handleCommonAspectChange');
   });
 });

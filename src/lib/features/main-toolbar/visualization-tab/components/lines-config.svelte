@@ -12,7 +12,7 @@
     VizFilterButton,
     VizFilterPanel
   } from './shared';
-  import SingleColorPreview from './palette-popover/single-color-preview.svelte';
+  import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
   import type {
     MissingDataConfig,
     VisualizationConfig,
@@ -28,7 +28,7 @@
     DEFAULT_SEQUENTIAL_PREVIEW,
     DEFAULT_QUALITATIVE_PREVIEW,
     PALETTE_TYPE
-  } from './palette-popover/palette.constants';
+  } from '$lib/features/commons/components/palette-popover/palette.constants';
   import { Category, Minimize, Subtract, Tag } from 'carbon-icons-svelte';
   import {
     ColorMode,
@@ -241,14 +241,48 @@
       ThicknessMode.PROPORTIONAL,
       ThicknessMode.CLASSES
     ];
-    thicknessMode = modes[index] || ThicknessMode.UNIQUE;
+    const next = modes[index] || ThicknessMode.UNIQUE;
+    if (next === thicknessMode) return;
+    thicknessMode = next;
     onModesChange?.({ thickness: thicknessMode });
+    if (thicknessMode === ThicknessMode.UNIQUE) {
+      thickness = VISUALIZATION_DEFAULTS.lineWidth;
+      onStyleChange?.({ lineWidth: VISUALIZATION_DEFAULTS.lineWidth });
+      onMappingChange?.({ sizeColumn: undefined });
+      onClassificationChange?.({
+        breaks: undefined,
+        counts: undefined,
+        breakpointValue: null
+      });
+    }
   }
 
   function handleColorModeChange(index: number) {
     const modes = [ColorMode.UNIQUE, ColorMode.CLASSES, ColorMode.CATEGORIES];
-    colorMode = modes[index] || ColorMode.UNIQUE;
+    const nextMode = modes[index] || ColorMode.UNIQUE;
+    if (nextMode === colorMode) return;
+    colorMode = nextMode;
     onModesChange?.({ color: colorMode });
+    onClassificationChange?.({
+      colors: undefined,
+      paletteId: undefined,
+      inverted: false,
+      patternId: undefined,
+      patternParams: undefined,
+      labels: undefined
+    });
+    const isUnique = nextMode === ColorMode.UNIQUE;
+    const isClasses = nextMode === ColorMode.CLASSES;
+    const isCategories = nextMode === ColorMode.CATEGORIES;
+    if (isUnique) {
+      color = DEFAULT_COLORS.line;
+      onStyleChange?.({ lineColor: DEFAULT_COLORS.line });
+      onMappingChange?.({ valueColumn: undefined, categoryColumn: undefined });
+    } else if (isClasses) {
+      onMappingChange?.({ categoryColumn: undefined });
+    } else if (isCategories) {
+      onMappingChange?.({ valueColumn: undefined });
+    }
   }
 
   function handleThicknessChange(value: number) {
@@ -605,6 +639,7 @@
         inverted={visualization?.classification?.inverted ?? false}
         paletteType={PALETTE_TYPE.QUALITATIVE}
         categoriesMode={true}
+        categoriesVariant="lines"
         categoryLabels={visualization?.classification?.labels ?? []}
         oninvert={onInvertPalette}
         onClassificationChange={handleClassificationChange}
@@ -656,6 +691,8 @@
 <DiscretizationModal
   bind:open={discretizationModalOpen}
   visualization={visualization}
+  classification={visualization?.line?.classification ??
+    visualization?.lineClassification}
   onchange={handleClassificationChange}
 />
 

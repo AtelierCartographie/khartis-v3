@@ -34,7 +34,7 @@ describe('SymbolModeUnique (aucun.png alignment)', () => {
 
   it('routes Fill Unique through SingleColorPreview (not ColorSelector)', () => {
     expect(source).toContain(
-      "import SingleColorPreview from '../palette-popover/single-color-preview.svelte'"
+      "import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte'"
     );
     const uniqueBlock = source
       .split('fillMode === FillMode.UNIQUE')[1]

@@ -16,7 +16,7 @@
   import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { InfoPopover, SliderWithInput } from '../shared';
-  import SingleColorPreview from '../palette-popover/single-color-preview.svelte';
+  import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
   import type {
     MissingDataConfig,
     VisualizationConfig,

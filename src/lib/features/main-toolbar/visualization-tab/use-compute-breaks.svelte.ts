@@ -17,7 +17,7 @@ import {
   findPaletteById,
   generatePaletteColors,
   PALETTE_TYPE
-} from './components/palette-popover/palette.constants';
+} from '$lib/features/commons/components/palette-popover/palette.constants';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { getColorBlindnessState } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
 
