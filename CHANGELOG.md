@@ -1,3 +1,9 @@
+# [1.0.0-staging.12](https://github.com/AtelierCartographie/khartis-v3/compare/v1.0.0-staging.11...v1.0.0-staging.12) (2026-04-19)
+
+### Performance Improvements
+
+- **join:** optimisation suggestion basemap — exact match + déduplication + parquet corrigé ([#101](https://github.com/AtelierCartographie/khartis-v3/issues/101)) ([68523f6](https://github.com/AtelierCartographie/khartis-v3/commit/68523f6de26f84e9042e608b80d052db672adaf8))
+
 # [1.0.0-staging.11](https://github.com/AtelierCartographie/khartis-v3/compare/v1.0.0-staging.10...v1.0.0-staging.11) (2026-04-19)
 
 ### Features
