@@ -1,3 +1,9 @@
+# [1.0.0-staging.11](https://github.com/AtelierCartographie/khartis-v3/compare/v1.0.0-staging.10...v1.0.0-staging.11) (2026-04-19)
+
+### Features
+
+- **w16:** density, projections, text styles, FACET_SLOT, Fisher-Jenks, CI fix ([#105](https://github.com/AtelierCartographie/khartis-v3/issues/105)) ([43c68c0](https://github.com/AtelierCartographie/khartis-v3/commit/43c68c0fe0d387a46eda35eabe5cd4cf0bba36f8)), closes [#92](https://github.com/AtelierCartographie/khartis-v3/issues/92) [#92](https://github.com/AtelierCartographie/khartis-v3/issues/92) [#93](https://github.com/AtelierCartographie/khartis-v3/issues/93) [AtelierCartographie/khartis-v3#93](https://github.com/AtelierCartographie/khartis-v3/issues/93) [#87](https://github.com/AtelierCartographie/khartis-v3/issues/87) [#87](https://github.com/AtelierCartographie/khartis-v3/issues/87) [#93](https://github.com/AtelierCartographie/khartis-v3/issues/93) [#93](https://github.com/AtelierCartographie/khartis-v3/issues/93) [#93](https://github.com/AtelierCartographie/khartis-v3/issues/93)
+
 # [1.0.0-staging.10](https://github.com/AtelierCartographie/khartis-v3/compare/v1.0.0-staging.9...v1.0.0-staging.10) (2026-04-16)
 
 ### Bug Fixes
