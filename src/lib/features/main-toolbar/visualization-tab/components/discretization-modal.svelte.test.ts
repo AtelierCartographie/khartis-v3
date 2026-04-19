@@ -1,5 +1,12 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { fireEvent, render } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
+
+const modalSource = readFileSync(
+  resolve(import.meta.dirname, 'discretization-modal.svelte'),
+  'utf8'
+);
 
 vi.mock('$lib/features/commons/services/classification.service', () => ({
   applyPaletteInversion: (colors: string[]) => colors,
@@ -129,6 +136,21 @@ describe('DiscretizationModal', () => {
       onbreakschange.mock.calls[onbreakschange.mock.calls.length - 1][0];
     expect(lastCall[0].max).toBe(12);
     expect(lastCall[1].min).toBe(12);
+  });
+
+  it('should include paletteId and inverted in the onchange payload', () => {
+    expect(modalSource).toContain('paletteId: activeClassification?.paletteId');
+    expect(modalSource).toContain(
+      'inverted: activeClassification?.inverted ?? false'
+    );
+  });
+
+  it('should use a single opening effect to avoid redundant state syncs', () => {
+    const openingSyncMatches = modalSource.match(
+      /syncStateFromVisualization\(activeClassification\)/g
+    );
+    expect(openingSyncMatches).not.toBeNull();
+    expect(openingSyncMatches!.length).toBeLessThanOrEqual(2);
   });
 
   it('allows clearing the breakpoint value', async () => {

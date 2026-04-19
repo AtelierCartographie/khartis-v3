@@ -17,7 +17,7 @@
     DEFAULT_SEQUENTIAL_PREVIEW,
     DEFAULT_QUALITATIVE_PREVIEW,
     PALETTE_TYPE
-  } from '../palette-popover/palette.constants';
+  } from '$lib/features/commons/components/palette-popover/palette.constants';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import {
     FillMode,
@@ -37,7 +37,7 @@
     MissingDataSection,
     StrokeSection
   } from '../shared';
-  import SingleColorPreview from '../palette-popover/single-color-preview.svelte';
+  import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
   import FacetsVariablePicker from './facets-variable-picker.svelte';
   import type { SymbolModeProps } from './types';
   import { resolveDiscretizationLabel } from '../discretization.utils';
@@ -56,6 +56,7 @@
     onMappingChange,
     onMissingDataChange,
     onClassificationChange,
+    onStrokeClassificationChange,
     onInvertPalette,
     onOpenDiscretization
   }: SymbolModeProps = $props();
@@ -102,23 +103,37 @@
       selectedCategoryFieldId = NONE_FIELD_ID;
     }
 
-    if (visualization?.modes) {
-      fillMode = visualization.modes.fill ?? FillMode.UNIQUE;
-    }
-    if (visualization?.style) {
+    const symbolConfig = visualization?.symbol;
+    if (symbolConfig) {
+      fillMode = symbolConfig.fillMode ?? FillMode.UNIQUE;
       fillColor =
-        (visualization.style.symbolFillColor as string) ?? DEFAULT_COLORS.fill;
-    }
-    if (visualization?.symbols) {
-      symbolSize =
-        visualization.symbols.size ?? VISUALIZATION_DEFAULTS.symbolSize;
-      shapeType = visualization.symbols.type ?? ShapeType.CIRCLE;
+        (symbolConfig.fillColor as string | undefined) ?? DEFAULT_COLORS.fill;
+      symbolSize = symbolConfig.size ?? VISUALIZATION_DEFAULTS.symbolSize;
+      shapeType = (symbolConfig.shape as ShapeType) ?? ShapeType.CIRCLE;
       fillOpacity =
-        visualization.symbols.opacity !== undefined
-          ? Math.round(visualization.symbols.opacity * 100)
+        symbolConfig.opacity !== undefined
+          ? Math.round(symbolConfig.opacity * 100)
           : VISUALIZATION_DEFAULTS.symbolOpacity;
     } else {
-      fillOpacity = VISUALIZATION_DEFAULTS.symbolOpacity;
+      if (visualization?.modes) {
+        fillMode = visualization.modes.fill ?? FillMode.UNIQUE;
+      }
+      if (visualization?.style) {
+        fillColor =
+          (visualization.style.symbolFillColor as string) ??
+          DEFAULT_COLORS.fill;
+      }
+      if (visualization?.symbols) {
+        symbolSize =
+          visualization.symbols.size ?? VISUALIZATION_DEFAULTS.symbolSize;
+        shapeType = visualization.symbols.type ?? ShapeType.CIRCLE;
+        fillOpacity =
+          visualization.symbols.opacity !== undefined
+            ? Math.round(visualization.symbols.opacity * 100)
+            : VISUALIZATION_DEFAULTS.symbolOpacity;
+      } else {
+        fillOpacity = VISUALIZATION_DEFAULTS.symbolOpacity;
+      }
     }
     if (visualization?.missingData) {
       showMissingData = visualization.missingData.show ?? true;
@@ -240,6 +255,18 @@
     ];
     fillMode = modes[index] || FillMode.NONE;
     onModesChange?.({ fill: fillMode });
+    if (fillMode === FillMode.NONE) {
+      fillColor = DEFAULT_COLORS.fill;
+      onStyleChange?.({ symbolFillColor: DEFAULT_COLORS.fill });
+      onClassificationChange?.({
+        colors: undefined,
+        paletteId: undefined,
+        inverted: false,
+        patternId: undefined,
+        patternParams: undefined,
+        labels: undefined
+      });
+    }
   }
 
   function handleSymbolSizeChange(value: number) {
@@ -460,6 +487,7 @@
     inverted={visualization?.classification?.inverted ?? false}
     paletteType={PALETTE_TYPE.QUALITATIVE}
     categoriesMode={true}
+    categoriesVariant="symbols-unique"
     categoryLabels={visualization?.classification?.labels ?? []}
     oninvert={onInvertPalette}
     onClassificationChange={onClassificationChange}
@@ -485,14 +513,15 @@
   visualization={visualization}
   dataFields={dataFields}
   infoText={m.stroke_section_info()}
-  showDashed={false}
+  showDashed={true}
   discretizationLabel={discretizationLabel}
   onStyleChange={onStyleChange}
   onModesChange={onModesChange}
   onMappingChange={onMappingChange}
   onInvertPalette={onInvertPalette}
   onOpenDiscretization={onOpenDiscretization}
-  onClassificationChange={onClassificationChange}
+  onStrokeClassificationChange={onStrokeClassificationChange ?? (() => {})}
+  strokeClassification={visualization?.symbol?.strokeClassification}
   facetsValueSlotPath={FACET_SLOT.SYMBOL_VALUE}
   facetsCategorySlotPath={FACET_SLOT.SYMBOL_CATEGORY}
 />

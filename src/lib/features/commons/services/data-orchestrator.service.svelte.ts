@@ -59,7 +59,7 @@ import {
   findPaletteById,
   generatePaletteColors,
   PALETTE_TYPE
-} from '../../main-toolbar/visualization-tab/components/palette-popover/palette.constants';
+} from '$lib/features/commons/components/palette-popover/palette.constants';
 import {
   normalizeClassificationMethod,
   resolveComputedClassCount,
