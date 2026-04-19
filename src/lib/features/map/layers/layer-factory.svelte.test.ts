@@ -367,8 +367,11 @@ describe('createPolygonLayers', () => {
   it('propagates polygon missing-data styling to binary choropleth fills', () => {
     const visualization = createVisualization(FillMode.CLASSES);
     visualization.mapping = { valueColumn: 'value' };
+    const basePolygon = visualization.polygon!;
     visualization.polygon = {
-      ...visualization.polygon,
+      ...basePolygon,
+      enabled: true,
+      fillMode: FillMode.CLASSES,
       valueColumn: 'value',
       classification: {
         method: ClassificationMethod.MANUAL,

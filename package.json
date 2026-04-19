@@ -72,12 +72,13 @@
     "init:project": "npx husky init && pnpm install"
   },
   "devDependencies": {
-    "@duckdb/node-api": "1.4.4-r.1",
     "@commitlint/cli": "^20.5.0",
     "@commitlint/config-conventional": "^20.5.0",
+    "@duckdb/node-api": "1.4.4-r.1",
     "@eslint/compat": "^2.0.3",
     "@eslint/js": "^9.39.4",
     "@inlang/cli": "^3.1.9",
+    "@math.gl/polygon": "4.1.0",
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/git": "^10.0.1",
     "@sveltejs/adapter-static": "^3.0.10",
@@ -90,6 +91,7 @@
     "@types/node": "^22.19.15",
     "@vite-pwa/assets-generator": "^1.0.2",
     "carbon-preprocess-svelte": "^0.11.29",
+    "earcut": "3.0.2",
     "eslint": "^9.39.4",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-svelte": "^3.16.0",
@@ -153,6 +155,9 @@
       "serialize-javascript": ">=7.0.3",
       "tar": ">=7.5.11",
       "cookie": ">=0.7.0"
+    },
+    "patchedDependencies": {
+      "@deck.gl/layers": "patches/@deck.gl__layers.patch"
     }
   },
   "lint-staged": {
