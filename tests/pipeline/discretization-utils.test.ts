@@ -25,9 +25,9 @@ import {
 // ─── normalizeClassificationMethod ────────────────────────────────────────
 
 describe('normalizeClassificationMethod', () => {
-  it('maps standard_deviation to nested_means', () => {
+  it('keeps standard_deviation unchanged', () => {
     expect(normalizeClassificationMethod('standard_deviation' as never)).toBe(
-      'nested_means'
+      'standard_deviation'
     );
   });
 
@@ -82,15 +82,15 @@ describe('resolveRequestedClassCount', () => {
     expect(resolveRequestedClassCount('nested_means' as never, 10)).toBe(8);
   });
 
-  it('snaps to nested-means scale for standard_deviation (via normalization)', () => {
+  it('keeps requested class count for standard_deviation', () => {
     expect(resolveRequestedClassCount('standard_deviation' as never, 5)).toBe(
-      4
+      5
     );
   });
 
-  it('returns the request as-is for quantiles / equal_intervals', () => {
+  it('returns the request as-is for quantiles / equal_interval', () => {
     expect(resolveRequestedClassCount('quantiles' as never, 7)).toBe(7);
-    expect(resolveRequestedClassCount('equal_intervals' as never, 5)).toBe(5);
+    expect(resolveRequestedClassCount('equal_interval' as never, 5)).toBe(5);
   });
 
   it('clamps requests below 2 up to 2', () => {
@@ -116,10 +116,10 @@ describe('resolveComputedClassCount', () => {
     expect(resolveComputedClassCount('quantiles' as never, 7, 3)).toBe(7);
   });
 
-  it('applies method normalization before resolution', () => {
-    expect(
-      resolveComputedClassCount('standard_deviation' as never, 5, 99)
-    ).toBe(4);
+  it('uses the actual class count when standard_deviation yields fewer bins', () => {
+    expect(resolveComputedClassCount('standard_deviation' as never, 5, 4)).toBe(
+      4
+    );
   });
 });
 

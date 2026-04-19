@@ -39,7 +39,11 @@
   const fileHook = useEnrichmentFile();
   const basemapHook = useEnrichmentBasemap();
   const overlayBasemapEnabled = $derived(basemapHook.hasActiveSelection);
+  const overlayBasemapSuggestionCount = $derived(
+    basemapHook.suggestedBasemaps.length
+  );
   let overlayBasemapExpanded = $state(false);
+  let overlayBasemapDismissed = $state(false);
 
   const enrichGeoDetection = $derived(fileHook.enrichmentDataset?.geoDetection);
 
@@ -80,10 +84,10 @@
       dataTabActions.setEnrichDataState({ joinTabularEnabled: false });
       fileHook.handleRemoveFile();
       joinHook.resetJoinState();
+      overlayBasemapDismissed = false;
     }
   });
 
-  // Reset join state when enrichment source changes to avoid stale stats/mappings.
   $effect(() => {
     const currentEnrichmentId = fileHook.enrichmentDataset?.id;
     if (currentEnrichmentId !== previousEnrichmentDatasetId) {
@@ -145,8 +149,15 @@
   });
 
   $effect(() => {
-    if (overlayBasemapEnabled) {
+    if (overlayBasemapDismissed) return;
+    if (overlayBasemapEnabled || overlayBasemapSuggestionCount > 0) {
       overlayBasemapExpanded = true;
+      // Mirror the toggle's onToggleChange path: when the section opens because
+      // suggestions are available but no basemap is active yet, auto-pick the top one
+      // so the CDC default selection rule applies even on geo datasets.
+      if (!overlayBasemapEnabled && overlayBasemapSuggestionCount > 0) {
+        basemapHook.activatePreferredBasemap();
+      }
     }
   });
 
@@ -233,9 +244,11 @@
       onToggleChange={(checked) => {
         overlayBasemapExpanded = checked;
         if (!checked) {
+          overlayBasemapDismissed = true;
           basemapHook.clearSelectedBasemap();
           return;
         }
+        overlayBasemapDismissed = false;
         basemapHook.activatePreferredBasemap();
       }}
     >

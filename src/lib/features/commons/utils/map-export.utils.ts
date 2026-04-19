@@ -40,7 +40,6 @@ async function prerenderWebgl(pixelRatio: number): Promise<() => void> {
   const currentRatio = map.getPixelRatio();
   const scale = Math.max(pixelRatio, currentRatio);
 
-  // Skip if the current ratio already meets or exceeds the target
   if (scale <= currentRatio) return () => {};
 
   await new Promise<void>((resolve, reject) => {
@@ -118,16 +117,6 @@ function dataUrlToBlob(dataUrl: string): Blob {
   return new Blob([decodeURIComponent(data)], { type: mimeType });
 }
 
-/**
- * Exports the map page as an SVG.
- *
- * Uses html-to-image to capture .page-container as-is: the page background,
- * margins, annotations, legend, and geo-indications are captured from the DOM.
- * The WebGL canvas (MapLibre + Deck.gl) is embedded as a PNG image inside the SVG.
- *
- * The WebGL canvas is pre-rendered at the target pixel ratio before capture so
- * the embedded PNG has full-resolution content.
- */
 export async function exportMapToSvg(
   options: Partial<ExportOptions> = {}
 ): Promise<Blob> {
@@ -163,22 +152,6 @@ export async function exportMapToSvg(
   }
 }
 
-/**
- * Exports the map page as a JPEG at the requested resolution.
- *
- * Two-step process:
- *   1. html-to-image captures .page-container as an HTMLCanvasElement, scaled
- *      so the page fits within the target dimensions (preserving aspect ratio).
- *      Using toCanvas (vs toBlob) avoids a wasteful PNG encode/decode round-trip.
- *   2. The canvas is composited into an exact target-sized OffscreenCanvas
- *      (white letterbox if the page aspect ratio differs from the target,
- *      e.g. A4 portrait in a 16:9 export), then encoded as JPEG via
- *      convertToBlob (Promise-based, avoids callback indirection).
- *
- * The WebGL canvas is pre-rendered at the correct pixel ratio before capture so
- * canvas.toDataURL() returns full-resolution content. 'render' (not 'idle') is
- * used because in interleaved Deck.gl mode 'idle' can be delayed indefinitely.
- */
 export async function exportMapToJpg(
   options: Partial<ExportOptions> = {}
 ): Promise<Blob> {

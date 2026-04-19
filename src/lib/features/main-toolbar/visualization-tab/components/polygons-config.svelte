@@ -11,9 +11,14 @@
     PrimitiveFilterType
   } from '$lib/features/commons/store/visualization.store.svelte';
   import * as m from '$lib/paraglide/messages';
-  import { DEFAULT_SEQUENTIAL_PREVIEW } from './palette-popover/palette.constants';
+  import {
+    DEFAULT_SEQUENTIAL_PREVIEW,
+    PALETTE_TYPE
+  } from './palette-popover/palette.constants';
+  import SingleColorPreview from './palette-popover/single-color-preview.svelte';
   import {
     Category,
+    ChartScatter,
     MisuseOutline,
     SquareFill,
     Tag
@@ -25,7 +30,6 @@
     VISUALIZATION_DEFAULTS
   } from '../../constants';
   import {
-    ColorSelector,
     DiscretizationRow,
     InfoPopover,
     MissingDataSection,
@@ -34,13 +38,19 @@
     SliderWithInput,
     StrokeSection,
     VizFilterButton,
-    VizFilterSection
+    VizFilterPanel
   } from './shared';
   import type { VizDataFilter } from '$lib/features/commons/store/visualization.store.svelte';
   import DiscretizationModal from './discretization-modal.svelte';
   import type { ClassificationConfig } from '$lib/features/commons/store/visualization.store.svelte';
-  import { Dropdown } from 'carbon-components-svelte';
   import { resolveDiscretizationLabel } from './discretization.utils';
+  import {
+    FACET_SLOT,
+    facetsStore,
+    type FacetSlotPath
+  } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
+  import FacetsVariablePicker from './symbols/facets-variable-picker.svelte';
+  import { PolygonModeDensity } from './polygons';
 
   interface Props {
     dataFields?: Array<{ id: number; text: string; type?: string }>;
@@ -57,6 +67,10 @@
     onToggleVisibility?: (checked: boolean) => void;
     filters?: VizDataFilter[];
     onAddFilter?: (filter: Omit<VizDataFilter, 'id'>) => void;
+    onUpdateFilter?: (
+      filterId: string,
+      updates: Partial<Omit<VizDataFilter, 'id'>>
+    ) => void;
     onRemoveFilter?: (filterId: string) => void;
     onClearFilters?: () => void;
   }
@@ -74,12 +88,14 @@
     onToggleVisibility,
     filters = [],
     onAddFilter,
-    onRemoveFilter,
-    onClearFilters
+    onUpdateFilter,
+    onRemoveFilter
   }: Props = $props();
 
   let discretizationModalOpen = $state(false);
   let filterSectionVisible = $state(false);
+  let valuePickerOpen = $state(false);
+  let categoryPickerOpen = $state(false);
   const NONE_FIELD_ID = -1;
   let selectedFieldId = $state<number>(NONE_FIELD_ID);
   let selectedCategoryFieldId = $state<number>(NONE_FIELD_ID);
@@ -146,7 +162,6 @@
   let fillOpacity = $state<number>(VISUALIZATION_DEFAULTS.fillOpacity);
   let showMissingData = $state<boolean>(true);
   let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
-  let fillPattern = $state<boolean>(false);
   const enabled = $derived.by(() => {
     const primitiveFilters =
       visualization?.primitiveFilters ?? ALL_PRIMITIVE_FILTERS;
@@ -173,51 +188,57 @@
       showMissingData = visualization.missingData.show ?? true;
       missingDataColor =
         visualization.missingData.color ?? DEFAULT_COLORS.missingData;
-      fillPattern = visualization.missingData.pattern ?? false;
     }
   });
 
   const fillModeItems = [
     { icon: MisuseOutline, label: m.fill_mode_none(), iconSize: 16 },
     { icon: SquareFill, label: m.fill_mode_unique(), iconSize: 16 },
+    { icon: ChartScatter, label: m.symbol_mode_density(), iconSize: 16 },
     { icon: Category, label: m.fill_mode_classes(), iconSize: 16 },
     { icon: Tag, label: m.fill_mode_categories(), iconSize: 16 }
   ];
 
-  function handleFillModeChange(index: number) {
-    const modes = [
-      FillMode.NONE,
-      FillMode.UNIQUE,
-      FillMode.CLASSES,
-      FillMode.CATEGORIES
-    ];
-    fillMode = modes[index] || FillMode.NONE;
-    onModesChange?.({ fill: fillMode });
-    if (fillMode === FillMode.NONE) {
-      onStyleChange?.({ fillOpacity: 0 });
-      return;
-    }
+  const FILL_MODE_ORDER: FillMode[] = [
+    FillMode.NONE,
+    FillMode.UNIQUE,
+    FillMode.DENSITY,
+    FillMode.CLASSES,
+    FillMode.CATEGORIES
+  ];
 
-    if ((visualization?.style.fillOpacity ?? 1) <= 0) {
+  function handleFillModeChange(index: number) {
+    const nextFillMode = FILL_MODE_ORDER[index] || FillMode.NONE;
+    fillMode = nextFillMode;
+
+    if (nextFillMode === FillMode.NONE) {
+      onStyleChange?.({ fillOpacity: 0 });
+    } else if ((visualization?.style.fillOpacity ?? 1) <= 0) {
       onStyleChange?.({
         fillOpacity: VISUALIZATION_DEFAULTS.fillOpacity / 100
       });
     }
+    onModesChange?.({ fill: nextFillMode });
   }
 
   function handleFillColorChange(value: string) {
     fillColor = value;
-    onStyleChange?.({ fillColor: value });
+    const updates: Partial<VisualizationConfig['style']> = { fillColor: value };
+    if ((visualization?.style.fillOpacity ?? 1) <= 0) {
+      updates.fillOpacity = VISUALIZATION_DEFAULTS.fillOpacity / 100;
+      fillOpacity = VISUALIZATION_DEFAULTS.fillOpacity;
+    }
+    onStyleChange?.(updates);
   }
 
-  const fillModeIndex = $derived(
-    [
-      FillMode.NONE,
-      FillMode.UNIQUE,
-      FillMode.CLASSES,
-      FillMode.CATEGORIES
-    ].indexOf(fillMode)
-  );
+  const effectiveFillMode = $derived.by(() => {
+    const storedMode = fillMode;
+    const opacity = visualization?.style.fillOpacity ?? 1;
+    if (opacity <= 0) return FillMode.NONE;
+    return storedMode;
+  });
+
+  const fillModeIndex = $derived(FILL_MODE_ORDER.indexOf(effectiveFillMode));
 
   function handleFillOpacityChange(value: number) {
     fillOpacity = value;
@@ -238,11 +259,6 @@
     onMissingDataChange?.({ color: value });
   }
 
-  function handleFillPatternChange(value: boolean) {
-    fillPattern = value;
-    onMissingDataChange?.({ pattern: value });
-  }
-
   function handleOpenDiscretization() {
     discretizationModalOpen = true;
   }
@@ -253,9 +269,88 @@
     onClassificationChange?.(classification);
   }
 
-  const discretizationLabel = $derived(
-    resolveDiscretizationLabel(visualization?.classification)
+  const discretizationLabel = $derived.by(() =>
+    resolveDiscretizationLabel(
+      visualization?.classification
+        ? { ...visualization.classification }
+        : undefined
+    )
   );
+
+  const selectedVizId = $derived(visualization?.id);
+
+  const activeFacetsSlotPath = $derived.by(() => {
+    if (
+      !facetsStore.enabled ||
+      !selectedVizId ||
+      facetsStore.baseVisualizationId !== selectedVizId
+    ) {
+      return null;
+    }
+    return facetsStore.primarySlotPath;
+  });
+
+  function isFacetsActiveForSlot(slotPath: FacetSlotPath): boolean {
+    return activeFacetsSlotPath === slotPath;
+  }
+
+  function getFacetsSelectedFieldIds(slotPath: FacetSlotPath): number[] {
+    if (!isFacetsActiveForSlot(slotPath)) {
+      return [];
+    }
+    return facetsStore.variables
+      .map((name) => dataFields.find((f) => f.text === name)?.id)
+      .filter((id): id is number => typeof id === 'number');
+  }
+
+  const valueColumnName = $derived(
+    dataFields.find((f) => f.id === selectedFieldId)?.text ?? ''
+  );
+
+  const categoryColumnName = $derived(
+    dataFields.find((f) => f.id === selectedCategoryFieldId)?.text ?? ''
+  );
+
+  async function handleFacetsVariablesChange(
+    baseVariableName: string,
+    slotPath: FacetSlotPath,
+    fieldIds: number[]
+  ) {
+    if (!selectedVizId) return;
+    const variableNames = fieldIds
+      .map((id) => dataFields.find((f) => f.id === id)?.text)
+      .filter((name): name is string => Boolean(name));
+    const hasBase = Boolean(baseVariableName);
+    const merged =
+      hasBase && !variableNames.includes(baseVariableName)
+        ? [baseVariableName, ...variableNames]
+        : variableNames;
+    await facetsStore.updateVariables(selectedVizId, merged, slotPath);
+  }
+
+  async function handleFacetsToggle(
+    baseVariableName: string,
+    slotPath: FacetSlotPath,
+    enabled: boolean
+  ) {
+    if (!selectedVizId) return;
+    if (!enabled) {
+      facetsStore.disable();
+      return;
+    }
+
+    const available = dataFields
+      .map((f) => f.text)
+      .filter((name): name is string => Boolean(name));
+    const seed = baseVariableName ? [baseVariableName] : [];
+    const candidates = seed.slice();
+    for (const name of available) {
+      if (candidates.length >= 2) break;
+      if (!candidates.includes(name)) candidates.push(name);
+    }
+    if (candidates.length < 2) return;
+    await facetsStore.updateVariables(selectedVizId, candidates, slotPath);
+  }
 </script>
 
 <ExpandableSection
@@ -290,20 +385,38 @@
       />
     </div>
 
-    {#if fillMode === FillMode.UNIQUE}
-      <ColorSelector
+    {#if effectiveFillMode === FillMode.UNIQUE}
+      <SingleColorPreview
         label={m.color()}
-        value={fillColor}
+        color={fillColor}
         onchange={handleFillColorChange}
       />
-    {:else if fillMode === FillMode.CLASSES}
+    {:else if effectiveFillMode === FillMode.DENSITY}
+      <PolygonModeDensity
+        dataFields={dataFields}
+        visualization={visualization}
+        onMappingChange={onMappingChange}
+        onStyleChange={onStyleChange}
+      />
+    {:else if effectiveFillMode === FillMode.CLASSES}
       <div class="field-group">
-        <Dropdown
+        <FacetsVariablePicker
+          bind:open={valuePickerOpen}
           titleText={m.color_according()}
-          items={selectableDataFields}
-          selectedId={selectedFieldId}
-          on:select={(e) => handleValueFieldSelect(e.detail.selectedId)}
-          type="default"
+          dataFields={dataFields}
+          singleSelectItems={selectableDataFields}
+          selectedFieldId={selectedFieldId}
+          selectedFieldIds={getFacetsSelectedFieldIds(FACET_SLOT.POLYGON_VALUE)}
+          isCollectionEnabled={isFacetsActiveForSlot(FACET_SLOT.POLYGON_VALUE)}
+          onSelect={handleValueFieldSelect}
+          onCollectionChange={(ids) =>
+            handleFacetsVariablesChange(
+              valueColumnName,
+              FACET_SLOT.POLYGON_VALUE,
+              ids
+            )}
+          onToggleCollection={(en) =>
+            handleFacetsToggle(valueColumnName, FACET_SLOT.POLYGON_VALUE, en)}
         />
       </div>
       <DiscretizationRow
@@ -316,17 +429,37 @@
         colors={currentPalette}
         selectedPaletteId={visualization?.classification?.paletteId}
         inverted={visualization?.classification?.inverted ?? false}
+        paletteType={PALETTE_TYPE.SEQUENTIAL}
         oninvert={onInvertPalette}
         onClassificationChange={handleClassificationChange}
       />
-    {:else if fillMode === FillMode.CATEGORIES}
+    {:else if effectiveFillMode === FillMode.CATEGORIES}
       <div class="field-group">
-        <Dropdown
+        <FacetsVariablePicker
+          bind:open={categoryPickerOpen}
           titleText={m.color_according()}
-          items={selectableDataFields}
-          selectedId={selectedCategoryFieldId}
-          on:select={(e) => handleCategoryFieldSelect(e.detail.selectedId)}
-          type="default"
+          dataFields={dataFields}
+          singleSelectItems={selectableDataFields}
+          selectedFieldId={selectedCategoryFieldId}
+          selectedFieldIds={getFacetsSelectedFieldIds(
+            FACET_SLOT.POLYGON_CATEGORY
+          )}
+          isCollectionEnabled={isFacetsActiveForSlot(
+            FACET_SLOT.POLYGON_CATEGORY
+          )}
+          onSelect={handleCategoryFieldSelect}
+          onCollectionChange={(ids) =>
+            handleFacetsVariablesChange(
+              categoryColumnName,
+              FACET_SLOT.POLYGON_CATEGORY,
+              ids
+            )}
+          onToggleCollection={(en) =>
+            handleFacetsToggle(
+              categoryColumnName,
+              FACET_SLOT.POLYGON_CATEGORY,
+              en
+            )}
         />
       </div>
       <DiscretizationRow
@@ -339,12 +472,15 @@
         colors={currentPalette}
         selectedPaletteId={visualization?.classification?.paletteId}
         inverted={visualization?.classification?.inverted ?? false}
+        paletteType={PALETTE_TYPE.QUALITATIVE}
+        categoriesMode={true}
+        categoryLabels={visualization?.classification?.labels ?? []}
         oninvert={onInvertPalette}
         onClassificationChange={handleClassificationChange}
       />
     {/if}
 
-    {#if fillMode !== FillMode.NONE}
+    {#if effectiveFillMode !== FillMode.NONE && effectiveFillMode !== FillMode.DENSITY}
       <SliderWithInput
         label={m.opacity()}
         min={SLIDER_LIMITS.opacity.min}
@@ -354,44 +490,49 @@
       />
     {/if}
 
-    {#if fillMode === FillMode.CLASSES || fillMode === FillMode.CATEGORIES}
+    {#if effectiveFillMode === FillMode.CLASSES || effectiveFillMode === FillMode.CATEGORIES}
       <MissingDataSection
         bind:show={showMissingData}
         color={missingDataColor}
         showShapeSelector={false}
         showSizeSlider={false}
-        showPattern={true}
-        pattern={fillPattern}
         onshowchange={handleMissingDataShowChange}
         oncolorchange={handleMissingDataColorChange}
-        onpatternchange={handleFillPatternChange}
       />
     {/if}
 
-    <StrokeSection
-      visualization={visualization}
-      dataFields={dataFields}
-      classesPalette={currentPalette}
-      discretizationLabel={discretizationLabel}
-      onStyleChange={onStyleChange}
-      onModesChange={onModesChange}
-      onMappingChange={onMappingChange}
-      onInvertPalette={onInvertPalette}
-      onOpenDiscretization={handleOpenDiscretization}
-      onClassificationChange={handleClassificationChange}
-    />
-
-    {#if filterSectionVisible || filters.length > 0}
-      <VizFilterSection
+    {#if effectiveFillMode !== FillMode.DENSITY}
+      <StrokeSection
+        visualization={visualization}
         dataFields={dataFields}
-        filters={filters}
-        onAddFilter={onAddFilter ?? (() => {})}
-        onRemoveFilter={onRemoveFilter ?? (() => {})}
-        onClearFilters={onClearFilters ?? (() => {})}
+        classesPalette={currentPalette}
+        discretizationLabel={discretizationLabel}
+        onStyleChange={onStyleChange}
+        onModesChange={onModesChange}
+        onMappingChange={onMappingChange}
+        onInvertPalette={onInvertPalette}
+        onOpenDiscretization={handleOpenDiscretization}
+        onClassificationChange={handleClassificationChange}
+        facetsValueSlotPath={FACET_SLOT.POLYGON_VALUE}
+        facetsCategorySlotPath={FACET_SLOT.POLYGON_CATEGORY}
       />
     {/if}
   </div>
 </ExpandableSection>
+
+{#if filterSectionVisible}
+  <VizFilterPanel
+    title={m.polygons_title()}
+    dataFields={dataFields}
+    filters={filters}
+    onAddFilter={onAddFilter ?? (() => {})}
+    onUpdateFilter={onUpdateFilter}
+    onRemoveFilter={onRemoveFilter ?? (() => {})}
+    onClose={() => {
+      filterSectionVisible = false;
+    }}
+  />
+{/if}
 
 <DiscretizationModal
   bind:open={discretizationModalOpen}

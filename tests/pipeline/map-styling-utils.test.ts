@@ -7,7 +7,141 @@ vi.mock('$lib/features/commons/store/visualization.store.svelte', () => ({
     CATEGORICAL: 'categorical',
     BIVARIATE: 'bivariate'
   },
-  ScaleType: { LINEAR: 'linear', SQRT: 'sqrt', LOG: 'log' }
+  ScaleType: { LINEAR: 'linear', SQRT: 'sqrt', LOG: 'log' },
+  PrimitiveFilterType: {
+    POINT: 'point',
+    LINE: 'line',
+    POLYGON: 'polygon',
+    TEXT: 'text'
+  },
+  getPrimitiveValueColumn: (
+    viz:
+      | {
+          mapping?: { valueColumn?: string; sizeColumn?: string };
+          symbol?: { valueColumn?: string; sizeColumn?: string };
+          line?: { valueColumn?: string; sizeColumn?: string };
+          text?: { valueColumn?: string };
+          polygon?: { valueColumn?: string };
+        }
+      | null
+      | undefined,
+    primitive: string
+  ) => {
+    if (!viz) return undefined;
+    switch (primitive) {
+      case 'point':
+        return viz.symbol?.valueColumn ?? viz.mapping?.valueColumn;
+      case 'line':
+        return viz.line?.valueColumn ?? viz.mapping?.valueColumn;
+      case 'text':
+        return viz.text?.valueColumn ?? viz.mapping?.valueColumn;
+      case 'polygon':
+      default:
+        return viz.polygon?.valueColumn ?? viz.mapping?.valueColumn;
+    }
+  },
+  getPrimitiveCategoryColumn: (
+    viz:
+      | {
+          mapping?: { categoryColumn?: string };
+          symbol?: { categoryColumn?: string };
+          line?: { categoryColumn?: string };
+          text?: { categoryColumn?: string };
+          polygon?: { categoryColumn?: string };
+        }
+      | null
+      | undefined,
+    primitive: string
+  ) => {
+    if (!viz) return undefined;
+    switch (primitive) {
+      case 'point':
+        return viz.symbol?.categoryColumn ?? viz.mapping?.categoryColumn;
+      case 'line':
+        return viz.line?.categoryColumn ?? viz.mapping?.categoryColumn;
+      case 'text':
+        return viz.text?.categoryColumn ?? viz.mapping?.categoryColumn;
+      case 'polygon':
+      default:
+        return viz.polygon?.categoryColumn ?? viz.mapping?.categoryColumn;
+    }
+  },
+  getPrimitiveClassification: (
+    viz:
+      | {
+          classification?: unknown;
+          symbolClassification?: unknown;
+          lineClassification?: unknown;
+          textClassification?: unknown;
+        }
+      | null
+      | undefined,
+    primitive: string
+  ) => {
+    if (!viz) return undefined;
+    switch (primitive) {
+      case 'point':
+        return viz.symbolClassification ?? viz.classification;
+      case 'line':
+        return viz.lineClassification ?? viz.classification;
+      case 'text':
+        return viz.textClassification ?? viz.classification;
+      case 'polygon':
+      default:
+        return viz.classification;
+    }
+  },
+  getSymbolPrimitive: (
+    viz:
+      | {
+          modes?: { symbol?: string; fill?: string };
+          mapping?: { sizeColumn?: string };
+          symbol?: { mode?: string; fillMode?: string; sizeColumn?: string };
+          symbols?: { type?: string };
+        }
+      | null
+      | undefined
+  ) => {
+    if (!viz || (!viz.symbol && !viz.symbols)) return undefined;
+    return {
+      mode: viz.symbol?.mode ?? viz.modes?.symbol,
+      fillMode: viz.symbol?.fillMode ?? viz.modes?.fill,
+      sizeColumn: viz.symbol?.sizeColumn ?? viz.mapping?.sizeColumn
+    };
+  },
+  getLinePrimitive: (
+    viz:
+      | {
+          modes?: { color?: string; fill?: string };
+          line?: { colorMode?: string };
+        }
+      | null
+      | undefined
+  ) => ({
+    colorMode: viz?.line?.colorMode ?? viz?.modes?.color ?? viz?.modes?.fill
+  }),
+  getTextPrimitive: (
+    viz:
+      | {
+          modes?: { color?: string };
+          text?: { colorMode?: string };
+        }
+      | null
+      | undefined
+  ) => ({
+    colorMode: viz?.text?.colorMode ?? viz?.modes?.color
+  }),
+  getPolygonPrimitive: (
+    viz:
+      | {
+          modes?: { fill?: string };
+          polygon?: { fillMode?: string };
+        }
+      | null
+      | undefined
+  ) => ({
+    fillMode: viz?.polygon?.fillMode ?? viz?.modes?.fill
+  })
 }));
 
 import {
@@ -16,6 +150,8 @@ import {
   getClassedSizeForValue,
   getCategoricalColorMap,
   hasCompleteCategoricalColorMap,
+  shouldApplyLineCategorical,
+  shouldApplyLineChoropleth,
   shouldApplyChoropleth,
   shouldApplyProportionalSymbols,
   shouldApplyCategorical
@@ -24,7 +160,11 @@ import {
   getVisualizationRenderOrder,
   getMapLayerRenderOrder
 } from '$lib/features/map/utils/layer-order.utils';
-import { FillMode, SymbolMode } from '$lib/features/main-toolbar/constants';
+import {
+  ColorMode,
+  FillMode,
+  SymbolMode
+} from '$lib/features/main-toolbar/constants';
 import { ScaleType } from '$lib/features/commons/store/visualization.store.svelte';
 
 // ─── getColorForValue ──────────────────────────────────────────────────────
@@ -257,6 +397,83 @@ describe('shouldApplyCategorical', () => {
       classification: { ...base.classification, colors: [] }
     };
     expect(shouldApplyCategorical(empty as never)).toBe(false);
+  });
+});
+
+describe('shouldApplyLineCategorical', () => {
+  const base = {
+    modes: { fill: FillMode.NONE, color: ColorMode.CATEGORIES },
+    mapping: { categoryColumn: 'type' },
+    classification: { colors: ['#f00', '#0f0'], method: 'manual', classes: 2 },
+    type: 'categorical' as never,
+    id: 'v1',
+    name: 'V',
+    datasetId: 'd1',
+    enabled: true,
+    style: {}
+  };
+
+  it('returns true when line color mode is CATEGORIES', () => {
+    expect(shouldApplyLineCategorical(base as never)).toBe(true);
+  });
+
+  it('returns true for legacy fill-based categorical lines', () => {
+    expect(
+      shouldApplyLineCategorical({
+        ...base,
+        modes: { fill: FillMode.CATEGORIES, color: ColorMode.UNIQUE }
+      } as never)
+    ).toBe(true);
+  });
+
+  it('returns false when line color mode is not categorical', () => {
+    expect(
+      shouldApplyLineCategorical({
+        ...base,
+        modes: { fill: FillMode.NONE, color: ColorMode.UNIQUE }
+      } as never)
+    ).toBe(false);
+  });
+});
+
+describe('shouldApplyLineChoropleth', () => {
+  const base = {
+    modes: { fill: FillMode.NONE, color: ColorMode.CLASSES },
+    mapping: { valueColumn: 'pop' },
+    classification: {
+      breaks: [0, 10, 20],
+      colors: ['#f00', '#0f0', '#00f'],
+      method: 'quantiles',
+      classes: 3
+    },
+    type: 'choropleth' as never,
+    id: 'v1',
+    name: 'V',
+    datasetId: 'd1',
+    enabled: true,
+    style: {}
+  };
+
+  it('returns true when line color mode is CLASSES', () => {
+    expect(shouldApplyLineChoropleth(base as never)).toBe(true);
+  });
+
+  it('returns true for legacy fill-based classed lines', () => {
+    expect(
+      shouldApplyLineChoropleth({
+        ...base,
+        modes: { fill: FillMode.CLASSES, color: ColorMode.UNIQUE }
+      } as never)
+    ).toBe(true);
+  });
+
+  it('returns false when line color mode is not classed', () => {
+    expect(
+      shouldApplyLineChoropleth({
+        ...base,
+        modes: { fill: FillMode.NONE, color: ColorMode.UNIQUE }
+      } as never)
+    ).toBe(false);
   });
 });
 

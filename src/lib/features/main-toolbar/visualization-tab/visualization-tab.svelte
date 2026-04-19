@@ -4,7 +4,7 @@
   import { SvelteSet } from 'svelte/reactivity';
   import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
-  import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+
   import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
   import ChooseVisualization from './choose-visualization.svelte';
@@ -57,15 +57,6 @@
     applyBlankVisualizationPreset(visualization.id, dataset, {
       mode: 'auto-suggestion'
     });
-
-    logger.debug(
-      '[visualization-tab] auto-created blank visualization from step entry',
-      LogCategory.UI,
-      {
-        datasetId: dataset.id,
-        defaultType
-      }
-    );
   });
 
   $effect(() => {

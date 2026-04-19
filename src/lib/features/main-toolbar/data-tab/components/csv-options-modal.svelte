@@ -47,7 +47,6 @@
     }
   });
 
-  // BUG FIX: Reset thousandsSeparator when it conflicts with decimalSeparator
   $effect(() => {
     if (!filteredThousandsOptions.some((o) => o.value === thousandsSeparator)) {
       thousandsSeparator = 'none';

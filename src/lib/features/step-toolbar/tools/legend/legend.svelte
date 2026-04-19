@@ -331,7 +331,7 @@
             max={100}
             step={1}
             bind:value={localOpacity}
-            on:change={handleOpacityChange}
+            on:input={handleOpacityChange}
             minLabel=""
             maxLabel=""
           />

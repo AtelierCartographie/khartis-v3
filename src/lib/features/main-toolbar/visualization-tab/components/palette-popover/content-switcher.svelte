@@ -18,7 +18,7 @@
       aria-selected={activeIndex === i}
       onclick={() => onchange?.(i)}
     >
-      {item}
+      <span class="switcher-label">{item}</span>
     </button>
     {#if i < items.length - 1 && activeIndex !== i && activeIndex !== i + 1}
       <div class="switcher-divider"></div>
@@ -30,37 +30,49 @@
   .content-switcher {
     display: flex;
     align-items: stretch;
-    border: 1px solid var(--cds-border-subtle-01);
+    width: 100%;
+    border: 1px solid #cac5c4;
     border-radius: 4px;
     overflow: hidden;
   }
 
   .switcher-item {
     flex: 1;
-    padding: 7px 16px;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 7px 12px;
+    font-family: 'IBM Plex Sans', sans-serif;
     font-size: 14px;
+    font-weight: 400;
     line-height: 18px;
     letter-spacing: 0.16px;
-    font-family: 'IBM Plex Sans', sans-serif;
     background: transparent;
     border: none;
-    color: var(--cds-text-secondary);
+    color: var(--cds-text-secondary, #525252);
     cursor: pointer;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
     transition:
       background-color 0.15s ease,
       color 0.15s ease;
 
     &:hover:not(.active) {
-      background: var(--cds-layer-hover);
+      background: var(--cds-layer-hover, #e8e8e8);
     }
 
     &.active {
-      background: var(--cds-border-subtle-01);
-      color: var(--cds-text-primary);
+      background: #cac5c4;
+      color: #161616;
     }
+  }
+
+  .switcher-label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: left;
   }
 
   .switcher-divider {

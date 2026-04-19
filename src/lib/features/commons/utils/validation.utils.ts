@@ -1,7 +1,12 @@
 import * as m from '$lib/paraglide/messages';
-import { STORAGE_LIMITS } from '../configs/validation.config';
+import {
+  STORAGE_LIMITS,
+  getMaxFileSizeForType,
+  getWarningFileSizeForType
+} from '../configs/validation.config';
 import { estimateProjectStorageSize } from './size-estimation.utils';
 import { GEOJSON_TYPE } from '$lib/features/commons/constants';
+import { detectFileType } from './file-import.utils';
 
 export type { ValidationResult } from '$lib/features/data-pipeline/types';
 export {
@@ -19,17 +24,21 @@ export const ProjectValidator = {
       warnings: []
     };
 
-    if (file.size > STORAGE_LIMITS.maxFileSize) {
+    const fileType = detectFileType(file);
+    const maxFileSize = getMaxFileSizeForType(fileType);
+    const warningFileSize = getWarningFileSizeForType(fileType);
+
+    if (file.size > maxFileSize) {
       result.isValid = false;
       result.errors.push(
         m.validation_file_exceeds_limit({
           name: file.name,
-          limit: String(STORAGE_LIMITS.maxFileSize / (1024 * 1024))
+          limit: String(maxFileSize / (1024 * 1024))
         })
       );
     }
 
-    if (file.size > STORAGE_LIMITS.maxFileSize * 0.8) {
+    if (file.size > warningFileSize) {
       result.warnings.push(
         m.validation_file_large_performance({ name: file.name })
       );

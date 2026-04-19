@@ -11,6 +11,28 @@ import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants'
 
 export const HIGHLIGHT_FILL_COLOR: RGBColor = [180, 180, 180];
 
+/**
+ * Resolves missingData render props from a VisualizationConfig. Returns the
+ * RGB color to use for features with missing values, and whether they should
+ * be rendered (alpha 255) or hidden (alpha 0).
+ */
+export function resolveMissingDataRenderProps(
+  viz: { missingData?: { show?: boolean; color?: string } } | undefined | null,
+  fallbackColor: RGBColor = HIGHLIGHT_FILL_COLOR
+): { color: RGBColor; show: boolean } {
+  const show = viz?.missingData?.show ?? true;
+  const rawColor = viz?.missingData?.color;
+  if (!rawColor) return { color: fallbackColor, show };
+  // Inline hex→rgb to keep this module dependency-free.
+  const clean = rawColor.replace('#', '');
+  const bigint = parseInt(clean, 16);
+  if (Number.isNaN(bigint)) return { color: fallbackColor, show };
+  return {
+    color: [(bigint >> 16) & 255, (bigint >> 8) & 255, bigint & 255],
+    show
+  };
+}
+
 export function withOpacity(color: number[], opacity = 1): Color {
   const normalized = Math.min(Math.max(opacity, 0), 1);
   const alpha = Math.round(normalized * 255);
@@ -19,12 +41,16 @@ export function withOpacity(color: number[], opacity = 1): Color {
 
 export function createCategoricalColorAccessor(
   categoryColumn: string,
-  colorMap: Map<string, RGBColor> | null
+  colorMap: Map<string, RGBColor> | null,
+  missingColor: RGBColor = HIGHLIGHT_FILL_COLOR,
+  showMissing = true
 ) {
+  const missingAlpha = showMissing ? 255 : 0;
   return (object: DeckDataRow): [number, number, number, number] => {
     const category = object[categoryColumn];
-    const rgb = colorMap?.get(String(category)) ?? HIGHLIGHT_FILL_COLOR;
-    return [rgb[0], rgb[1], rgb[2], 255];
+    const mapped = colorMap?.get(String(category));
+    if (mapped) return [mapped[0], mapped[1], mapped[2], 255];
+    return [missingColor[0], missingColor[1], missingColor[2], missingAlpha];
   };
 }
 
@@ -82,28 +108,23 @@ export function createClassedSizeAccessor(
 export function createChoroplethColorAccessor(
   valueColumn: string,
   breaks: number[],
-  colors: string[]
+  colors: string[],
+  missingColor: RGBColor = HIGHLIGHT_FILL_COLOR,
+  showMissing = true
 ) {
+  const missingAlpha = showMissing ? 255 : 0;
+  const missingTuple: [number, number, number, number] = [
+    missingColor[0],
+    missingColor[1],
+    missingColor[2],
+    missingAlpha
+  ];
   return (object: DeckDataRow): [number, number, number, number] => {
     const rawValue = object[valueColumn];
-    if (rawValue === null || rawValue === undefined) {
-      return [
-        HIGHLIGHT_FILL_COLOR[0],
-        HIGHLIGHT_FILL_COLOR[1],
-        HIGHLIGHT_FILL_COLOR[2],
-        255
-      ];
-    }
+    if (rawValue === null || rawValue === undefined) return missingTuple;
     const numericValue =
       typeof rawValue === 'number' ? rawValue : Number(rawValue);
-    if (!Number.isFinite(numericValue)) {
-      return [
-        HIGHLIGHT_FILL_COLOR[0],
-        HIGHLIGHT_FILL_COLOR[1],
-        HIGHLIGHT_FILL_COLOR[2],
-        255
-      ];
-    }
+    if (!Number.isFinite(numericValue)) return missingTuple;
     const rgb = getColorForValue(numericValue, breaks, colors);
     return [rgb[0], rgb[1], rgb[2], 255];
   };
@@ -112,18 +133,21 @@ export function createChoroplethColorAccessor(
 export function createGeoJsonCategoricalColorAccessor(
   categoryColumn: string,
   colorMap: Map<string, RGBColor> | null,
-  defaultColor: RGBColor
+  defaultColor: RGBColor,
+  missingColor: RGBColor = defaultColor,
+  showMissing = true
 ) {
+  const missingAlpha = showMissing ? 255 : 0;
   return (feature: {
     properties?: Record<string, unknown>;
   }): [number, number, number, number] => {
     const value = feature.properties?.[categoryColumn];
     if (value === null || value === undefined) {
-      return [defaultColor[0], defaultColor[1], defaultColor[2], 255];
+      return [missingColor[0], missingColor[1], missingColor[2], missingAlpha];
     }
     const colorVal = colorMap?.get(String(value));
-    const rgb = colorVal ?? defaultColor;
-    return [rgb[0], rgb[1], rgb[2], 255];
+    if (colorVal) return [colorVal[0], colorVal[1], colorVal[2], 255];
+    return [missingColor[0], missingColor[1], missingColor[2], missingAlpha];
   };
 }
 
@@ -182,20 +206,25 @@ export function createGeoJsonChoroplethColorAccessor(
   valueColumn: string,
   breaks: number[],
   colors: string[],
-  defaultColor: RGBColor
+  defaultColor: RGBColor,
+  missingColor: RGBColor = defaultColor,
+  showMissing = true
 ) {
+  const missingAlpha = showMissing ? 255 : 0;
+  const missingTuple: [number, number, number, number] = [
+    missingColor[0],
+    missingColor[1],
+    missingColor[2],
+    missingAlpha
+  ];
   return (feature: {
     properties?: Record<string, unknown>;
   }): [number, number, number, number] => {
     const value = feature.properties?.[valueColumn];
-    if (value === null || value === undefined) {
-      return [defaultColor[0], defaultColor[1], defaultColor[2], 255];
-    }
+    if (value === null || value === undefined) return missingTuple;
     const numValue =
       typeof value === 'number' ? value : parseFloat(String(value));
-    if (isNaN(numValue)) {
-      return [defaultColor[0], defaultColor[1], defaultColor[2], 255];
-    }
+    if (isNaN(numValue)) return missingTuple;
     const rgb = getColorForValue(numValue, breaks, colors);
     return [rgb[0], rgb[1], rgb[2], 255];
   };

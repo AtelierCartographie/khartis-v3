@@ -1,25 +1,27 @@
-# Gestion de l'etat
+# Gestion de l'état
 
-> Stores Svelte 5, persistance, undo/redo et patterns de features
+> Stores Svelte 5, persistance, undo/redo et patterns de features.
 
-**Voir aussi** : [Architecture](./ARCHITECTURE.md) | [Pipeline de donnees](./PIPELINE_DONNEES.md) | [Visualisation](./VISUALISATIONS.md)
+**Voir aussi** : [Architecture](./ARCHITECTURE.md) | [Pipeline de données](./PIPELINE_DONNEES.md) | [Visualisations](./VISUALISATIONS.md)
 
 ---
 
-## Les 4 couches d'etat
+## Les 4 couches d'état
 
-| Couche                      | Role                               | Duree de vie      | Stockage                              |
-| --------------------------- | ---------------------------------- | ----------------- | ------------------------------------- |
-| **Composant local**         | Etat UI ephemere (inputs, modales) | Montage composant | `$state` dans le `.svelte`            |
-| **Store feature**           | Modele domaine + actions           | Session           | `$state` dans le store `.svelte.ts`   |
-| **Store global**            | Coordination cross-feature         | Session           | Singleton `ProjectStore`              |
-| **IndexedDB / localforage** | Projets et datasets durables       | Persistant        | IndexedDB + localforage (metadonnees) |
+| Couche              | Rôle                               | Durée de vie      | Stockage                                                                                             |
+| ------------------- | ---------------------------------- | ----------------- | ---------------------------------------------------------------------------------------------------- |
+| **Composant local** | État UI éphémère (inputs, modales) | Montage composant | `$state` dans le `.svelte`                                                                           |
+| **Store feature**   | Modèle de domaine + actions        | Session           | `$state` dans le store `.svelte.ts`                                                                  |
+| **Store global**    | Coordination cross-feature         | Session           | Singleton `ProjectStore`                                                                             |
+| **IndexedDB**       | Projets, métadonnées et assets     | Persistant        | Object stores `projects`, `metadata`, `project_assets`, `project_asset_chunks`, `project_asset_refs` |
 
-**Flux** : Composant --> Store feature --> Store global --> IndexedDB (debounce 5 s sur mutations, auto-save intervalle 30 s)
+**Flux** : Composant → Store feature → Store global → IndexedDB (debounce 5 s sur les métadonnées projet, persistance immédiate des nouveaux assets binaires).
+
+---
 
 ## Pattern de store Svelte 5 Runes
 
-Chaque store est un **singleton fonctionnel** (function factory, pas de classe) avec `$state` prive, getters publics et methodes de mutation explicites.
+Chaque store est un **singleton fonctionnel** (factory, pas de classe) avec `$state` privé, getters publics et méthodes de mutation explicites.
 
 ```ts
 export function createFeatureStore() {
@@ -28,7 +30,7 @@ export function createFeatureStore() {
     data: null as MyData | null
   });
 
-  // Etat derive -- declare au top level, PAS dans un getter
+  // État dérivé — déclaré au top level, PAS dans un getter
   const isValid = $derived(state.data !== null);
 
   return {
@@ -40,7 +42,7 @@ export function createFeatureStore() {
       return state.data;
     },
 
-    // Getter pour etat derive (renvoie la valeur, ne cree pas le $derived)
+    // Getter pour état dérivé (renvoie la valeur, ne recrée pas le $derived)
     get isValid() {
       return isValid;
     },
@@ -62,15 +64,17 @@ export function createFeatureStore() {
 export const featureStore = createFeatureStore();
 ```
 
-**Regles** :
+**Règles** :
 
-- Pas d'affectation directe (toujours via methode), sauf pour les mutations UI ephemeres (`set settingPanel()`, etc.)
-- `$derived` est optionnel pour les valeurs derivees simples. Dans la pratique, le code utilise rarement `$derived` -- les getters qui recalculent (ex: `hasConsented`, `isMapMode`) sont acceptables pour des operations peu coteuses. Utiliser `$derived` uniquement pour des calculations coteuses (filtrage, mapping, etc.)
-- UI ephemere local au composant, seul l'etat domaine est persiste
+- Pas d'affectation directe (toujours via méthode), sauf pour les mutations UI éphémères (`set settingPanel()`, etc.).
+- `$derived` est optionnel pour les valeurs dérivées simples. Dans la pratique, le code utilise rarement `$derived` — les getters qui recalculent (par exemple `hasConsented`, `isMapMode`) sont acceptables pour des opérations peu coûteuses. Réserver `$derived` aux calculs coûteux (filtrage, mapping, etc.).
+- L'état UI éphémère reste local au composant ; seul l'état de domaine est persisté.
+
+---
 
 ## Stores principaux
 
-### projectStore
+### `projectStore`
 
 Cycle de vie projet, fichiers, historique.
 
@@ -85,7 +89,7 @@ deleteProject(id: string): Promise<void>
 addFilesToProject(files: UploadedFile[]): Promise<void>
 removeFileFromProject(fileId: string): Promise<void>
 
-// Mutations (creent un snapshot)
+// Mutations (créent un snapshot)
 updateProjectName(name: string): void
 updateVisualization(patch: Partial<VisualizationConfig>): void
 updateLayout(patch: Partial<LayoutConfig>): void
@@ -93,48 +97,50 @@ updateLayout(patch: Partial<LayoutConfig>): void
 // Historique
 undo(): void
 redo(): void
-canUndo: boolean  // appel a canUndoFn() -- pas un $derived
-canRedo: boolean  // appel a canRedoFn() -- pas un $derived
+canUndo: boolean  // appel à canUndoFn() — pas un $derived
+canRedo: boolean  // appel à canRedoFn() — pas un $derived
 
 // Archive .kh
 createProjectArchive(name?: string): Promise<Blob>
 importProjectArchive(file: File): Promise<void>
 ```
 
-### datasetsStore
+### `datasetsStore`
 
-Datasets charges, colonnes, statistiques.
+Datasets chargés, colonnes, statistiques.
 
-> **Pattern avance** : `datasetsState` et `datasetsInternals` sont exportes au niveau du module (`datasets-state.svelte.ts`) et non dans le store factory. Ce pattern "etat externe partage" permet a plusieurs sous-modules du store de partager le meme `$state`.
+> **Pattern avancé** : `datasetsState` et `datasetsInternals` sont exportés au niveau du module (`datasets-state.svelte.ts`) et non dans la factory du store. Ce pattern « état externe partagé » permet à plusieurs sous-modules du store de partager le même `$state`.
 
-### visualizationStore
+### `visualizationStore`
 
-Config visualisations. Types : `choropleth`, `proportional`, `categorical`, `bivariate`. Classifications : `equal-interval`, `quantile`, `jenks`, `stddev`, `manual`.
+Configurations de visualisations. Types : `choropleth`, `proportional`, `categorical`, `bivariate`. Classifications : `equal-interval`, `quantile`, `jenks`, `stddev`, `manual`.
 
-### globalState + globalActions
+### `globalState` + `globalActions`
 
-Zoom page, pan, etape active. `globalActions` est un export separe contenant les mutations coordonnees (ex: `setNavigationState`, `setToolbarState`).
+Zoom page, pan, étape active. `globalActions` est un export séparé contenant les mutations coordonnées (par exemple `setNavigationState`, `setToolbarState`).
 
-Les choix de navigation et de zoom sont persistes dans le snapshot projet via `uiSettings.globalUi` :
+Les choix de navigation et de zoom sont persistés dans le snapshot projet via `uiSettings.globalUi` :
 
 - `selectedStep`, `selectedTool`, `toolbarState`
 - `projectionFilter`, `projectionViewMode`
 - `selectedSourceFileId`
 - `pageZoomLevel`, `pagePanOffset`
 
-### projectsStore
+### `projectsStore`
 
-Liste des projets, projet actif. Localise dans `projects.store.svelte.ts`.
+Liste des projets, projet actif. Implémenté dans `projects.store.svelte.ts`.
 
-### consentStore
+### `consentStore`
 
 Consentement utilisateur (RGPD). Utilise un getter `hasConsented` qui recalcule (pas de `$derived`).
 
-### zoomModeStore
+### `zoomModeStore`
 
-Mode zoom (map vs page). Utilise un getter `isMapMode` qui recalcule (pas de `$derived`).
+Mode zoom (carte vs page). Utilise un getter `isMapMode` qui recalcule (pas de `$derived`).
 
-Le mode est persiste dans le projet via `uiSettings.zoomMode` et non plus seulement en memoire de session.
+Le mode est persisté dans le projet via `uiSettings.zoomMode`, plus seulement en mémoire de session.
+
+---
 
 ## Snapshot projet
 
@@ -148,7 +154,7 @@ interface KhartisProject {
     name: string;
     author?: string;
     description?: string;
-    format: 'kh' | 'khartis';
+    format: 'kh';
   };
   data: {
     sourceFiles: UploadedFile[];
@@ -160,40 +166,60 @@ interface KhartisProject {
 }
 ```
 
-Les fichiers sources (dont `parsedData`, `statistics`, `content`) sont embarques dans le projet.
+Le document projet persiste principalement des **métadonnées légères** :
 
-### Couches persistees via le registre
+- `datasetId`
+- `assetRef` / `companionAssetRefs`
+- aperçu (`parsedData`) limité
+- `statistics`, `deepAnalysis`
+- transformations, suppressions de lignes, informations de jointure ou de géolocalisation
 
-Le serializer ne lit pas les stores un par un. Chaque store s'enregistre dans `persistenceRegistry`, puis le projet est remappe vers quatre blocs stables :
+Les octets source ne sont plus embarqués dans le JSON projet. Ils sont stockés à part dans IndexedDB, par chunks de 8 Mo, puis rejoués dans DuckDB à la réouverture.
+
+### Asset store binaire
+
+| Object store           | Contenu                                        |
+| ---------------------- | ---------------------------------------------- |
+| `projects`             | Snapshot projet metadata-only                  |
+| `metadata`             | Liste des projets + dernier projet ouvert      |
+| `project_assets`       | Métadonnées d'assets (`assetId`, taille, MIME) |
+| `project_asset_chunks` | Chunks binaires des fichiers source            |
+| `project_asset_refs`   | Références `projectId → assetId`               |
+
+### Couches persistées via le registre
+
+Le serializer ne lit pas les stores un par un. Chaque store s'enregistre dans `persistenceRegistry`, puis le projet est remappé vers quatre blocs stables :
 
 - `basemapSettings` : couches, style, labels, groupes, projection carte, vue carte
-- `visualizationSettings` : visualisations, selection active
-- `layoutSettings` : format, annotations, legende, geo-indications, projection
-- `uiSettings` : etat UI durable cross-feature
+- `visualizationSettings` : visualisations, sélection active
+- `layoutSettings` : format, annotations, légende, indications géographiques, projection
+- `uiSettings` : état UI durable cross-feature
 
 `uiSettings` couvre actuellement :
 
 - `globalUi`
 - `zoomMode`
-- `dataTab` (resume statistique, tri courant, etat geolocalisation/jointure/enrichissement)
+- `dataTab` (résumé statistique, tri courant, état de géolocalisation / jointure / enrichissement)
 - `dataWorkflow`
 - `dataTools` (outil ouvert, recherche/remplacement, calculatrice)
-- `datasetsView` (datasets visibles, colonnes masquees, simplification appliquee)
+- `datasetsView` (datasets visibles, colonnes masquées, simplification appliquée)
 - `tableFilters`
 - `colorBlindness`
 - `facets`
 - `search`
 - `simplification`
 
-Regle pratique : on persiste l'etat UI qui doit survivre a un rechargement de projet, mais on exclut les etats purement transitoires comme les resultats de recherche, les selections temporaires d'annotation, ou un calcul en cours.
+Règle pratique : on persiste l'état UI qui doit survivre à un rechargement de projet, mais on exclut les états purement transitoires comme les résultats de recherche, les sélections temporaires d'annotation ou un calcul en cours.
+
+---
 
 ## Auto-sauvegarde
 
 ```mermaid
 flowchart LR
-    MUT["Mutation d'etat"] --> FLAG["Flag dirty"]
-    --> TIMER["Demarrage/reset timer<br/>(debounce 5 s)"]
-    --> JSON["Timer expire<br/>→ Serialisation JSON"]
+    MUT["Mutation d'état"] --> FLAG["Flag dirty"]
+    --> TIMER["Démarrage / reset du timer<br/>(debounce 5 s)"]
+    --> JSON["Timer expiré<br/>→ Sérialisation metadata-only"]
     --> VAL["Validation taille"]
     --> IDB["IndexedDB"]
 
@@ -201,71 +227,86 @@ flowchart LR
     style IDB fill:#e8f5e9
 ```
 
-**Sauvegarde immediate** (bypass debounce) : creation de projet, fin d'import, ajout/suppression de fichier, export explicite.
+**Sauvegarde immédiate** (bypass debounce) : création de projet, fin d'import, ajout / suppression de fichier, export explicite. Les assets binaires, eux, sont persistés au moment de l'import et ne sont pas réécrits à chaque auto-save.
 
 ### Limites de stockage
 
-| Limite             | Valeur | Comportement         |
-| ------------------ | ------ | -------------------- |
-| Taille max fichier | 50 Mo  | Erreur de validation |
-| Taille max projet  | 100 Mo | Avertissement a 80 % |
-| Nombre max projets | 50     | Avertissement a 80 % |
+| Limite produit                              | Valeur | Comportement         |
+| ------------------------------------------- | ------ | -------------------- |
+| CSV / TSV / GeoJSON / KML / KMZ / GPX       | 150 Mo | Erreur de validation |
+| GeoPackage / GeoParquet / Arrow / Shapefile | 200 Mo | Erreur de validation |
+| ZIP générique                               | 100 Mo | Erreur de validation |
+| Nombre max de projets                       | 50     | Avertissement à 80 % |
+
+---
 
 ## Undo / Redo
 
-### Declencheurs de snapshot
+### Déclencheurs de snapshot
 
-**Cree un snapshot** : creation de projet, renommage, mise a jour metadonnees, modification visualisation/layout.
+**Crée un snapshot** : création de projet, renommage, mise à jour métadonnées, modification de visualisation ou de layout.
 
-**Pas de snapshot** : changements UI transitoires (toggle panel, selection), saisie dans les inputs (avant commit debounce), ajout/suppression de fichier.
+**Pas de snapshot** : changements UI transitoires (toggle panel, sélection), saisie dans les inputs (avant commit debounce), ajout ou suppression de fichier.
 
 ### Historique
 
-| Parametre     | Valeur             | Comportement                            |
+| Paramètre     | Valeur             | Comportement                            |
 | ------------- | ------------------ | --------------------------------------- |
-| Max snapshots | 50                 | FIFO -- le plus ancien est supprime     |
+| Max snapshots | 50                 | FIFO — le plus ancien est supprimé      |
 | Stockage      | Snapshots complets | Pas de diffs structurels                |
-| Timeline      | Lineaire           | Tronquee apres undo + nouvelle mutation |
+| Timeline      | Linéaire           | Tronquée après undo + nouvelle mutation |
+
+---
 
 ## Format d'archive (.kh)
 
-- **Export** : JSON compresse gzip (`CompressionStream`), fallback sur JSON brut
-- **Import** : tente la decompression gzip d'abord, fallback JSON brut, valide le manifest
+- **Export** : archive `.kh` autoportante avec `manifest.json`, `project.json` et `assets/<assetId>/...`
+- **Import** : restaure d'abord les assets IndexedDB, puis le projet metadata-only, puis rejoue les tables DuckDB
+- **Compatibilité** : pas de support legacy pre-release ; le format cible est directement l'archive `.kh` multi-entrées
 
-## Metadonnees (localforage)
+---
 
-| Cle        | Type                     | Role                                       |
-| ---------- | ------------------------ | ------------------------------------------ |
-| `CURRENT`  | `string`                 | Dernier projet ouvert                      |
-| `METADATA` | `SavedProjectMetadata[]` | Liste des projets (id, nom, taille, dates) |
+## Métadonnées et références
+
+| Clé / store          | Type                     | Rôle                                        |
+| -------------------- | ------------------------ | ------------------------------------------- |
+| `CURRENT`            | `string`                 | Dernier projet ouvert                       |
+| `metadata`           | `SavedProjectMetadata[]` | Liste des projets (id, nom, taille, dates)  |
+| `project_asset_refs` | `projectId → assetId`    | Cycle de vie des assets et GC des orphelins |
+
+---
 
 ## Pattern pour ajouter un store feature
 
 ```
 src/lib/features/<nom-feature>/
-  <nom-feature>.svelte              # Composant d'entree
-  <nom-feature>.store.svelte.ts     # Etat + actions
-  <nom-feature>.types.ts            # Types
-  components/                        # Sous-composants
-  utils/                             # Utilitaires specifiques
-  tests/                             # Tests
+├── <nom-feature>.svelte              # Composant d'entrée
+├── <nom-feature>.store.svelte.ts     # État + actions
+├── <nom-feature>.types.ts            # Types
+├── components/                       # Sous-composants
+├── utils/                            # Utilitaires spécifiques
+└── tests/                            # Tests
 ```
 
-1. Creer le store avec `createFeatureStore()` (pattern ci-dessus)
-2. Creer le composant UI
-3. Enregistrer dans la configuration de navigation du toolbar
-4. Ajouter les cles i18n : `tool_<nom>_*`
-5. Ajouter les tests
+1. Créer le store avec `createFeatureStore()` (pattern ci-dessus).
+2. Créer le composant UI.
+3. Enregistrer dans la configuration de navigation du toolbar.
+4. Ajouter les clés i18n : `tool_<nom>_*`.
+5. Ajouter les tests.
+
+---
 
 ## Interactions cross-features
 
-| Declencheur              | Features impactees           | Action                     |
+| Déclencheur              | Features impactées           | Action                     |
 | ------------------------ | ---------------------------- | -------------------------- |
-| Changement de projection | Annotations, Geo-indicateurs | Recalcul des positions     |
-| Simplification           | Couches, Carte               | Rafraichissement geometrie |
-| Edition legende          | Carte, Export                | Re-rendu legende           |
-| Changement de format     | Mise en page, Export         | Ajustement d'echelle       |
+| Changement de projection | Annotations, indications géo | Recalcul des positions     |
+| Simplification           | Couches, carte               | Rafraîchissement géométrie |
+| Édition légende          | Carte, export                | Re-rendu légende           |
+| Changement de format     | Mise en page, export         | Ajustement d'échelle       |
+
+---
 
 ## Gestion d'erreur
 
-Expression invalide : garder la valeur precedente. Echec simplification : revert geometrie. Projection manquante : fallback Equirectangulaire. Quota depasse : purge du plus ancien projet.
+Expression invalide : conserver la valeur précédente. Échec de simplification : revert de la géométrie. Projection manquante : fallback équirectangulaire. Quota dépassé : purge du plus ancien projet.

@@ -383,8 +383,6 @@ function createBasemapLayersStore() {
       return;
     }
 
-    // Normalize potentially outdated serialized schemas by filling missing
-    // per-layer fields from current defaults while preserving user values.
     state.layers = normalizeSerializedLayers(layers);
     incrementVersion();
   }

@@ -347,7 +347,9 @@ describe('suggestion.service', () => {
     expect(updatedVisualization?.modes?.symbol).toBe(SymbolMode.UNIQUE);
     expect(updatedVisualization?.mapping.sizeColumn).toBeUndefined();
     expect(updatedVisualization?.mapping.valueColumn).toBeUndefined();
-    expect(updatedVisualization?.style.fillColor).toBe(DEFAULT_COLORS.gray);
+    expect(updatedVisualization?.style.symbolFillColor).toBe(
+      DEFAULT_COLORS.gray
+    );
     expect(updatedVisualization?.style.strokeColor).toBe(DEFAULT_COLORS.gray);
     expect(updatedVisualization?.style.lineColor).toBe(DEFAULT_COLORS.gray);
     expect(updatedVisualization?.missingData?.show).toBe(false);
@@ -382,16 +384,19 @@ describe('suggestion.service', () => {
     expect(updatedVisualization).toBeDefined();
     expect(updatedVisualization?.type).toBe(VisualizationType.BIVARIATE);
     expect(updatedVisualization?.mapping.labelColumn).toBe('name');
-    expect(updatedVisualization?.mapping.sizeColumn).toBe('population_total');
-    expect(updatedVisualization?.mapping.valueColumn).toBeUndefined();
+    expect(updatedVisualization?.mapping.valueColumn).toBe('population_total');
+    expect(updatedVisualization?.mapping.sizeColumn).toBeUndefined();
     expect(updatedVisualization?.modes?.size).toBeDefined();
     expect(updatedVisualization?.modes?.symbol).toBe(SymbolMode.UNIQUE);
-    expect(updatedVisualization?.primitiveFilters).toEqual([
-      PrimitiveFilterType.POLYGON
-    ]);
-    expect(updatedVisualization?.style.fillOpacity).toBe(0);
+    expect(updatedVisualization?.primitiveFilters).toEqual([]);
     expect(updatedVisualization?.style.textOpacity).toBe(1);
-    expect(updatedVisualization?.style.labelOpacity).toBe(0);
+    expect(updatedVisualization?.text?.enabled).toBe(true);
+    expect(updatedVisualization?.text?.opacity).toBe(1);
+    expect(updatedVisualization?.text?.secondaryLabels.enabled).toBe(false);
+    expect(updatedVisualization?.text?.secondaryLabels.labelColumn).toBe(
+      'population_total'
+    );
+    expect(updatedVisualization?.polygon?.enabled).toBe(false);
     expect(
       isVisualizationMatchingSuggestion(
         updatedVisualization!,
@@ -419,12 +424,11 @@ describe('suggestion.service', () => {
     );
 
     expect(updatedVisualization?.primitiveFilters).toEqual([
-      PrimitiveFilterType.POINT,
-      PrimitiveFilterType.POLYGON
+      PrimitiveFilterType.POINT
     ]);
     expect(updatedVisualization?.modes?.symbol).toBe(SymbolMode.PROPORTIONAL);
-    expect(updatedVisualization?.style.fillOpacity).toBe(0);
-    expect(updatedVisualization?.symbols?.opacity).toBe(0.8);
+    expect(updatedVisualization?.polygon?.enabled).toBe(false);
+    expect(updatedVisualization?.symbols?.opacity).toBe(1);
     expect(
       isVisualizationMatchingSuggestion(
         updatedVisualization!,
@@ -432,6 +436,43 @@ describe('suggestion.service', () => {
         suggestion
       )
     ).toBe(true);
+  });
+
+  it('should initialize symbolFillColor when applying a symbol suggestion so mutations to polygon fillColor do not leak into symbols', () => {
+    const dataset = createPolygonDataset();
+    mocks.datasets = [dataset];
+    mocks.selectedDatasetId = dataset.id;
+
+    const visualization = visualizationStore.createVisualization(
+      VisualizationType.PROPORTIONAL,
+      dataset.id
+    );
+    const suggestion = createSuggestionById(
+      'symbols_proportional_double',
+      'polygon'
+    );
+
+    applySuggestionToVisualization(visualization.id, suggestion);
+
+    const afterSuggestion = visualizationStore.visualizations.find(
+      (item) => item.id === visualization.id
+    );
+    expect(afterSuggestion?.style.symbolFillColor).toBe(DEFAULT_COLORS.fill);
+
+    visualizationStore.updateVisualization(visualization.id, {
+      style: {
+        ...afterSuggestion!.style,
+        fillColor: '#f287ac'
+      }
+    });
+
+    const afterPolygonFillChange = visualizationStore.visualizations.find(
+      (item) => item.id === visualization.id
+    );
+    expect(afterPolygonFillChange?.style.fillColor).toBe('#f287ac');
+    expect(afterPolygonFillChange?.style.symbolFillColor).toBe(
+      DEFAULT_COLORS.fill
+    );
   });
 
   it('keeps matching a proportional symbol suggestion after style tuning drift', () => {

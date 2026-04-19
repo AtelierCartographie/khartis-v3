@@ -8,7 +8,8 @@
   import * as m from '$lib/paraglide/messages';
   import {
     DEFAULT_SEQUENTIAL_PREVIEW,
-    DEFAULT_QUALITATIVE_PREVIEW
+    DEFAULT_QUALITATIVE_PREVIEW,
+    PALETTE_TYPE
   } from '../palette-popover/palette.constants';
   import {
     MissingDataShape,
@@ -27,10 +28,10 @@
     MissingDataSection,
     SectionHeading,
     SliderWithInput,
-    ColorSelector,
     PalettePreview,
     StrokeSection
   } from '../shared';
+  import SingleColorPreview from '../palette-popover/single-color-preview.svelte';
   import type { SymbolModeProps } from './types';
   import {
     CaretUp,
@@ -42,9 +43,12 @@
   } from 'carbon-icons-svelte';
   import DiscretizationModal from '../discretization-modal.svelte';
   import type { ClassificationConfig } from '$lib/features/commons/store/visualization.store.svelte';
-  import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
   import { resolveDiscretizationLabel } from '../discretization.utils';
-  import { facetsStore } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
+  import {
+    FACET_SLOT,
+    facetsStore,
+    type FacetSlotPath
+  } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
   import FacetsVariablePicker from './facets-variable-picker.svelte';
 
   interface Props extends SymbolModeProps {
@@ -66,6 +70,8 @@
   }: Props = $props();
 
   let discretizationModalOpen = $state(false);
+  let sizePickerOpen = $state(false);
+  let classesPickerOpen = $state(false);
   let proportionalType = $state<ProportionalType>(ProportionalType.SINGLE);
   const NONE_FIELD_ID = -1;
   let selectedFieldId = $state<number>(NONE_FIELD_ID);
@@ -84,7 +90,6 @@
   let fillColor = $state<string>(DEFAULT_COLORS.fill);
   let fillColorB = $state<string>(DEFAULT_COLORS.secondary);
   let fillOpacity = $state<number>(VISUALIZATION_DEFAULTS.fillOpacity);
-  let fillPattern = $state<boolean>(false);
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
   const selectableDataFields = $derived([noneOption, ...dataFields]);
   let isSyncingFromVisualization = $state(true);
@@ -168,7 +173,6 @@
       missingDataSize = visualization.missingData.size ?? 2;
       missingDataColor =
         visualization.missingData.color ?? DEFAULT_COLORS.missingData;
-      fillPattern = visualization.missingData.pattern ?? false;
     }
     if (visualization?.modes) {
       fillMode = visualization.modes.fill ?? FillMode.UNIQUE;
@@ -177,7 +181,7 @@
     }
     if (visualization?.style) {
       fillColor =
-        (visualization.style.fillColor as string) ?? DEFAULT_COLORS.fill;
+        (visualization.style.symbolFillColor as string) ?? DEFAULT_COLORS.fill;
       fillColorB = visualization.style.fillColorB ?? DEFAULT_COLORS.secondary;
     }
     if (visualization?.classification) {
@@ -195,8 +199,12 @@
     });
   });
 
-  const discretizationLabel = $derived(
-    resolveDiscretizationLabel(visualization?.classification)
+  const discretizationLabel = $derived.by(() =>
+    resolveDiscretizationLabel(
+      visualization?.classification
+        ? { ...visualization.classification }
+        : undefined
+    )
   );
 
   const fillModeItems = [
@@ -217,6 +225,9 @@
 
   function handleProportionalTypeChange(type: ProportionalType) {
     if (isSyncingFromVisualization) {
+      return;
+    }
+    if (type === proportionalType) {
       return;
     }
     proportionalType = type;
@@ -316,14 +327,6 @@
     onMissingDataChange?.({ color });
   }
 
-  function handleFillPatternChange(value: boolean) {
-    if (isSyncingFromVisualization) {
-      return;
-    }
-    fillPattern = value;
-    onMissingDataChange?.({ pattern: value });
-  }
-
   function handleFillModeChange(index: number) {
     if (isSyncingFromVisualization) {
       return;
@@ -343,7 +346,7 @@
       return;
     }
     fillColor = value;
-    onStyleChange?.({ fillColor: value });
+    onStyleChange?.({ symbolFillColor: value });
   }
 
   function handleFillOpacityChange(value: number) {
@@ -427,22 +430,31 @@
     }
   }
 
-  const selectedVizId = $derived(visualizationStore.selectedVisualization?.id);
+  const selectedVizId = $derived(visualization?.id);
 
-  const isFacetsActiveForViz = $derived(
-    facetsStore.enabled &&
-      selectedVizId !== undefined &&
-      facetsStore.baseVisualizationId === selectedVizId
-  );
+  const activeFacetsSlotPath = $derived.by(() => {
+    if (
+      !facetsStore.enabled ||
+      !selectedVizId ||
+      facetsStore.baseVisualizationId !== selectedVizId
+    ) {
+      return null;
+    }
+    return facetsStore.primarySlotPath;
+  });
 
-  const facetsSelectedFieldIds = $derived.by(() => {
-    if (!isFacetsActiveForViz) {
-      return [] as number[];
+  function isFacetsActiveForSlot(slotPath: FacetSlotPath): boolean {
+    return activeFacetsSlotPath === slotPath;
+  }
+
+  function getFacetsSelectedFieldIds(slotPath: FacetSlotPath): number[] {
+    if (!isFacetsActiveForSlot(slotPath)) {
+      return [];
     }
     return facetsStore.variables
       .map((name) => dataFields.find((f) => f.text === name)?.id)
       .filter((id): id is number => typeof id === 'number');
-  });
+  }
 
   const sizeColumnName = $derived(
     dataFields.find((f) => f.id === selectedFieldId)?.text ?? ''
@@ -454,6 +466,7 @@
 
   async function handleFacetsVariablesChange(
     baseVariableName: string,
+    slotPath: FacetSlotPath,
     fieldIds: number[]
   ) {
     if (!selectedVizId) return;
@@ -461,32 +474,37 @@
       .map((id) => dataFields.find((f) => f.id === id)?.text)
       .filter((name): name is string => Boolean(name));
 
-    const merged = variableNames.includes(baseVariableName)
-      ? variableNames
-      : [baseVariableName, ...variableNames];
+    const hasBase = Boolean(baseVariableName);
+    const merged =
+      hasBase && !variableNames.includes(baseVariableName)
+        ? [baseVariableName, ...variableNames]
+        : variableNames;
 
-    await facetsStore.updateVariables(selectedVizId, merged);
+    await facetsStore.updateVariables(selectedVizId, merged, slotPath);
   }
 
   async function handleFacetsToggle(
     baseVariableName: string,
+    slotPath: FacetSlotPath,
     enabled: boolean
   ) {
     if (!selectedVizId) return;
-    if (enabled) {
-      const seed = baseVariableName ? [baseVariableName] : [];
-      const numericColumns = dataFields.filter(
-        (f) => f.text !== baseVariableName
-      );
-      const second = numericColumns[0]?.text;
-      const candidates = second ? [...seed, second] : seed;
-      if (candidates.length < 2) {
-        return;
-      }
-      await facetsStore.updateVariables(selectedVizId, candidates);
-    } else {
+    if (!enabled) {
       facetsStore.disable();
+      return;
     }
+
+    const available = dataFields
+      .map((f) => f.text)
+      .filter((name): name is string => Boolean(name));
+    const seed = baseVariableName ? [baseVariableName] : [];
+    const candidates = seed.slice();
+    for (const name of available) {
+      if (candidates.length >= 2) break;
+      if (!candidates.includes(name)) candidates.push(name);
+    }
+    if (candidates.length < 2) return;
+    await facetsStore.updateVariables(selectedVizId, candidates, slotPath);
   }
 </script>
 
@@ -530,16 +548,21 @@
       />
     {:else}
       <FacetsVariablePicker
+        bind:open={sizePickerOpen}
         dataFields={dataFields}
         singleSelectItems={selectableDataFields}
         selectedFieldId={selectedFieldId}
-        selectedFieldIds={facetsSelectedFieldIds}
-        isCollectionEnabled={isFacetsActiveForViz}
+        selectedFieldIds={getFacetsSelectedFieldIds(FACET_SLOT.SYMBOL_SIZE)}
+        isCollectionEnabled={isFacetsActiveForSlot(FACET_SLOT.SYMBOL_SIZE)}
         onSelect={handleFieldSelect}
         onCollectionChange={(ids) =>
-          handleFacetsVariablesChange(sizeColumnName, ids)}
+          handleFacetsVariablesChange(
+            sizeColumnName,
+            FACET_SLOT.SYMBOL_SIZE,
+            ids
+          )}
         onToggleCollection={(enabled) =>
-          handleFacetsToggle(sizeColumnName, enabled)}
+          handleFacetsToggle(sizeColumnName, FACET_SLOT.SYMBOL_SIZE, enabled)}
       />
     {/if}
   </div>
@@ -566,16 +589,21 @@
       <InfoPopover text={m.size_according_info()} />
     </span>
     <FacetsVariablePicker
+      bind:open={classesPickerOpen}
       dataFields={dataFields}
       singleSelectItems={selectableDataFields}
       selectedFieldId={selectedFieldId}
-      selectedFieldIds={facetsSelectedFieldIds}
-      isCollectionEnabled={isFacetsActiveForViz}
+      selectedFieldIds={getFacetsSelectedFieldIds(FACET_SLOT.SYMBOL_VALUE)}
+      isCollectionEnabled={isFacetsActiveForSlot(FACET_SLOT.SYMBOL_VALUE)}
       onSelect={handleFieldSelect}
       onCollectionChange={(ids) =>
-        handleFacetsVariablesChange(valueColumnName, ids)}
+        handleFacetsVariablesChange(
+          valueColumnName,
+          FACET_SLOT.SYMBOL_VALUE,
+          ids
+        )}
       onToggleCollection={(enabled) =>
-        handleFacetsToggle(valueColumnName, enabled)}
+        handleFacetsToggle(valueColumnName, FACET_SLOT.SYMBOL_VALUE, enabled)}
     />
   </div>
   <SliderWithInput
@@ -633,24 +661,24 @@
   {#if proportionalType === ProportionalType.DOUBLE}
     <div class="double-color-row">
       <div class="double-color-item double-color-a">
-        <ColorSelector
+        <SingleColorPreview
           label={m.symbol_color_a()}
-          value={fillColor}
+          color={fillColor}
           onchange={handleFillColorChange}
         />
       </div>
       <div class="double-color-item double-color-b">
-        <ColorSelector
+        <SingleColorPreview
           label={m.symbol_color_b()}
-          value={fillColorB}
+          color={fillColorB}
           onchange={handleFillColorBChange}
         />
       </div>
     </div>
   {:else}
-    <ColorSelector
+    <SingleColorPreview
       label={m.color()}
-      value={fillColor}
+      color={fillColor}
       onchange={handleFillColorChange}
     />
   {/if}
@@ -663,12 +691,23 @@
   />
 {:else if fillMode === FillMode.CLASSES}
   <div class="field-group">
-    <Dropdown
+    <FacetsVariablePicker
+      bind:open={classesPickerOpen}
       titleText={m.color_according()}
-      items={selectableDataFields}
-      selectedId={fillClassFieldId}
-      on:select={(e) => handleFillClassFieldSelect(e.detail.selectedId)}
-      type="default"
+      dataFields={dataFields}
+      singleSelectItems={selectableDataFields}
+      selectedFieldId={fillClassFieldId}
+      selectedFieldIds={getFacetsSelectedFieldIds(FACET_SLOT.SYMBOL_VALUE)}
+      isCollectionEnabled={isFacetsActiveForSlot(FACET_SLOT.SYMBOL_VALUE)}
+      onSelect={handleFillClassFieldSelect}
+      onCollectionChange={(ids) =>
+        handleFacetsVariablesChange(
+          valueColumnName,
+          FACET_SLOT.SYMBOL_VALUE,
+          ids
+        )}
+      onToggleCollection={(enabled) =>
+        handleFacetsToggle(valueColumnName, FACET_SLOT.SYMBOL_VALUE, enabled)}
     />
   </div>
   <DiscretizationRow
@@ -681,6 +720,7 @@
     colors={currentPalette}
     selectedPaletteId={visualization?.classification?.paletteId}
     inverted={visualization?.classification?.inverted ?? false}
+    paletteType={PALETTE_TYPE.SEQUENTIAL}
     oninvert={onInvertPalette}
     onClassificationChange={onClassificationChange}
   />
@@ -696,20 +736,32 @@
     color={missingDataColor}
     showShapeSelector={false}
     showSizeSlider={false}
-    showPattern={true}
-    pattern={fillPattern}
     onshowchange={handleMissingDataShowChange}
     oncolorchange={handleMissingDataColorChange}
-    onpatternchange={handleFillPatternChange}
   />
 {:else if fillMode === FillMode.CATEGORIES}
   <div class="field-group">
-    <Dropdown
+    <FacetsVariablePicker
+      bind:open={classesPickerOpen}
       titleText={m.color_according()}
-      items={selectableDataFields}
-      selectedId={fillCategoryFieldId}
-      on:select={(e) => handleFillCategoryFieldSelect(e.detail.selectedId)}
-      type="default"
+      dataFields={dataFields}
+      singleSelectItems={selectableDataFields}
+      selectedFieldId={fillCategoryFieldId}
+      selectedFieldIds={getFacetsSelectedFieldIds(FACET_SLOT.SYMBOL_CATEGORY)}
+      isCollectionEnabled={isFacetsActiveForSlot(FACET_SLOT.SYMBOL_CATEGORY)}
+      onSelect={handleFillCategoryFieldSelect}
+      onCollectionChange={(ids) =>
+        handleFacetsVariablesChange(
+          dataFields.find((f) => f.id === fillCategoryFieldId)?.text ?? '',
+          FACET_SLOT.SYMBOL_CATEGORY,
+          ids
+        )}
+      onToggleCollection={(enabled) =>
+        handleFacetsToggle(
+          dataFields.find((f) => f.id === fillCategoryFieldId)?.text ?? '',
+          FACET_SLOT.SYMBOL_CATEGORY,
+          enabled
+        )}
     />
   </div>
   <DiscretizationRow
@@ -722,6 +774,9 @@
     colors={currentQualPalette}
     selectedPaletteId={visualization?.classification?.paletteId}
     inverted={visualization?.classification?.inverted ?? false}
+    paletteType={PALETTE_TYPE.QUALITATIVE}
+    categoriesMode={true}
+    categoryLabels={visualization?.classification?.labels ?? []}
     oninvert={onInvertPalette}
     onClassificationChange={onClassificationChange}
   />
@@ -737,11 +792,8 @@
     color={missingDataColor}
     showShapeSelector={false}
     showSizeSlider={false}
-    showPattern={true}
-    pattern={fillPattern}
     onshowchange={handleMissingDataShowChange}
     oncolorchange={handleMissingDataColorChange}
-    onpatternchange={handleFillPatternChange}
   />
 {/if}
 
@@ -756,6 +808,8 @@
   onMappingChange={onMappingChange}
   onInvertPalette={onInvertPalette}
   onOpenDiscretization={() => (discretizationModalOpen = true)}
+  facetsValueSlotPath={FACET_SLOT.SYMBOL_VALUE}
+  facetsCategorySlotPath={FACET_SLOT.SYMBOL_CATEGORY}
 />
 
 <DiscretizationModal

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import Button from '$lib/features/commons/components/carbon/button.svelte';
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
@@ -50,6 +51,7 @@
     shouldAutoApplySuggestion
   } from './suggestion-selection';
   import { UI_CONSTANTS } from '../constants';
+  import { appendToBody } from '$lib/features/commons/utils/append-to-body';
 
   interface Props {
     onCreateVisualization?: () => void;
@@ -93,23 +95,39 @@
 
     const dataset = selectedDataset;
     if (!dataset?.columns) return [];
+    const geoColumnsByName = new Map(
+      (dataset.geoDetection?.geoColumns ?? []).map((column) => [
+        column.columnName,
+        column
+      ])
+    );
 
-    const columnAnalysis = dataset.columns.map((col) => ({
-      name: col.name,
-      type: col.type,
-      stats: {
-        count: col.stats?.count ?? 0,
-        nulls: col.stats?.nulls ?? 0,
-        uniques: col.stats?.uniques ?? 0,
-        min: col.stats?.min,
-        max: col.stats?.max,
-        mean: col.stats?.mean,
-        share_integers: col.stats?.share_integers,
-        share_floats: col.stats?.share_floats,
-        share_rank_interval: col.stats?.share_rank_interval,
-        extent_magnitude: col.stats?.extent_magnitude
-      }
-    }));
+    const columnAnalysis = dataset.columns.map((col) => {
+      const geoColumn = geoColumnsByName.get(col.name);
+
+      return {
+        ...(geoColumn
+          ? {
+              geo_type: geoColumn.type,
+              geo_confidence: geoColumn.confidence
+            }
+          : {}),
+        name: col.name,
+        type: col.type,
+        stats: {
+          count: col.stats?.count ?? 0,
+          nulls: col.stats?.nulls ?? 0,
+          uniques: col.stats?.uniques ?? 0,
+          min: col.stats?.min,
+          max: col.stats?.max,
+          mean: col.stats?.mean,
+          share_integers: col.stats?.share_integers,
+          share_floats: col.stats?.share_floats,
+          share_rank_interval: col.stats?.share_rank_interval,
+          extent_magnitude: col.stats?.extent_magnitude
+        }
+      };
+    });
 
     const geometryType =
       resolveDatasetGeometryType(
@@ -410,15 +428,15 @@
 
   $effect(() => {
     const datasetId = selectedDatasetId;
-    if (!datasetId || datasetsStore.selectedDatasetId === datasetId) {
-      return;
-    }
+    if (!datasetId) return;
 
-    if (!datasetsStore.datasets.some((dataset) => dataset.id === datasetId)) {
-      return;
-    }
-
-    datasetsStore.selectDataset(datasetId);
+    untrack(() => {
+      if (datasetsStore.selectedDatasetId === datasetId) return;
+      if (!datasetsStore.datasets.some((dataset) => dataset.id === datasetId)) {
+        return;
+      }
+      datasetsStore.selectDataset(datasetId);
+    });
   });
 
   $effect(() => {
@@ -798,21 +816,25 @@
   </div>
 </section>
 
-<Modal
-  danger
-  open={isDeleteConfirmOpen}
-  modalHeading={m.viz_list_delete_title()}
-  primaryButtonText={m.delete_confirm_button()}
-  secondaryButtonText={m.cancel()}
-  size="sm"
-  on:click:button--secondary={cancelDeleteViz}
-  on:click:button--primary={confirmDeleteViz}
-  on:close={cancelDeleteViz}
->
-  <p>
-    {m.viz_list_delete_message({ name: deletingViz?.name ?? '' })}
-  </p>
-</Modal>
+{#if isDeleteConfirmOpen}
+  <div use:appendToBody>
+    <Modal
+      danger
+      bind:open={isDeleteConfirmOpen}
+      modalHeading={m.viz_list_delete_title()}
+      primaryButtonText={m.delete_confirm_button()}
+      secondaryButtonText={m.cancel()}
+      size="sm"
+      on:click:button--secondary={cancelDeleteViz}
+      on:click:button--primary={confirmDeleteViz}
+      on:close={cancelDeleteViz}
+    >
+      <p>
+        {m.viz_list_delete_message({ name: deletingViz?.name ?? '' })}
+      </p>
+    </Modal>
+  </div>
+{/if}
 
 <style lang="scss">
   #choose-visualization {

@@ -36,10 +36,22 @@ export function cleanFileForStorage(file: UploadedFile): UploadedFile {
     deepAnalysis: file.deepAnalysis,
     geoMatchResult: file.geoMatchResult,
     relatedFiles: file.relatedFiles,
+    assetRef: file.assetRef,
+    companionAssetRefs: file.companionAssetRefs,
     relatedFilesData: file.relatedFilesData,
     columnTransformations: file.columnTransformations,
+    deletedRowIds: file.deletedRowIds,
+    joinedBasemap: file.joinedBasemap,
+    geoColumn: file.geoColumn,
+    gpsMode: file.gpsMode,
+    gpsColumns: file.gpsColumns,
     duckdbTableName: file.duckdbTableName,
-    sourceArchive: file.sourceArchive
+    sourceArchive: file.sourceArchive,
+    shapefileBaseName: file.shapefileBaseName,
+    missingShapefileComponents: file.missingShapefileComponents,
+    isVirtualCopy: file.isVirtualCopy,
+    originalSourceFileId: file.originalSourceFileId,
+    datasetId: file.datasetId
   };
 }
 
@@ -193,6 +205,33 @@ export async function renameFile(
       }
       return fileName;
     });
+  }
+
+  if (updatedFile.assetRef) {
+    updatedFile.assetRef = {
+      ...updatedFile.assetRef,
+      originalName: newName
+    };
+  }
+
+  if (updatedFile.companionAssetRefs && oldBaseName !== newBaseName) {
+    updatedFile.companionAssetRefs = updatedFile.companionAssetRefs.map(
+      (assetRef) => {
+        const companionBaseName = getBaseName(assetRef.originalName);
+        const companionExt = assetRef.originalName.slice(
+          companionBaseName.length
+        );
+
+        if (companionBaseName.toLowerCase() === oldBaseName.toLowerCase()) {
+          return {
+            ...assetRef,
+            originalName: `${newBaseName}${companionExt}`
+          };
+        }
+
+        return assetRef;
+      }
+    );
   }
 
   updatedFiles[fileIndex] = updatedFile;

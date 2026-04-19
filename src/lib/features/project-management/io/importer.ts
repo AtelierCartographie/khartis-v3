@@ -1,20 +1,102 @@
-import { decompressData } from '$lib/features/commons/utils/compression.utils';
+import { unzipSync } from 'fflate';
+import type { AssetRef } from '$lib/features/commons/store/create-project.types';
 import type { SerializedProject } from '$lib/types/serialization.types';
+import { persistAssetBytes } from '../core/asset-store';
 import { saveProject } from '../core/persistence';
 import { migrateIfNeeded } from '../core/schema-migration';
 import { deserialize } from '../core/serializer';
 import type { KhartisProject } from '../types';
 
-export async function importProject(file: File): Promise<KhartisProject> {
-  const contents = await readFile(file);
-  const projectData = JSON.parse(contents);
+interface ProjectArchiveAssetEntry extends AssetRef {
+  path: string;
+}
 
-  if (!isSerializedProjectRecord(projectData)) {
-    throw new Error('Invalid project file structure');
+interface ProjectArchiveManifest {
+  archiveVersion: 2;
+  appVersion: string;
+  exportedAt: string;
+  projectId: string;
+  assetCount: number;
+  assets: ProjectArchiveAssetEntry[];
+}
+
+function decodeJson<T>(payload: Uint8Array, label: string): T {
+  try {
+    return JSON.parse(new TextDecoder().decode(payload)) as T;
+  } catch (error) {
+    throw new Error(`Invalid ${label} in project archive`, {
+      cause: error
+    });
+  }
+}
+
+function assertArchiveManifest(
+  value: unknown
+): asserts value is ProjectArchiveManifest {
+  if (!value || typeof value !== 'object') {
+    throw new Error('Invalid project archive manifest');
   }
 
+  const candidate = value as Record<string, unknown>;
+  if (
+    candidate.archiveVersion !== 2 ||
+    !Array.isArray(candidate.assets) ||
+    typeof candidate.projectId !== 'string'
+  ) {
+    throw new Error('Unsupported project archive manifest');
+  }
+}
+
+async function restoreArchiveAssets(
+  archiveEntries: Record<string, Uint8Array>,
+  manifest: ProjectArchiveManifest
+): Promise<void> {
+  for (const asset of manifest.assets) {
+    const payload = archiveEntries[asset.path];
+    if (!payload) {
+      throw new Error(`Missing archived asset: ${asset.originalName}`);
+    }
+
+    await persistAssetBytes(payload, asset);
+  }
+}
+
+function assertSerializedProject(
+  value: unknown
+): asserts value is SerializedProject {
+  if (!value || typeof value !== 'object') {
+    throw new Error('Invalid project archive payload');
+  }
+
+  const candidate = value as Record<string, unknown>;
+  const manifest = candidate.manifest as Record<string, unknown> | undefined;
+
+  if (!manifest || typeof manifest.name !== 'string') {
+    throw new Error('Invalid project archive payload');
+  }
+}
+
+export async function importProject(file: File): Promise<KhartisProject> {
+  const archiveBuffer = await file.arrayBuffer();
+  const archiveEntries = unzipSync(new Uint8Array(archiveBuffer));
+
+  const manifestPayload = archiveEntries['manifest.json'];
+  const projectPayload = archiveEntries['project.json'];
+
+  if (!manifestPayload || !projectPayload) {
+    throw new Error('Invalid .kh archive structure');
+  }
+
+  const archiveManifest = decodeJson<unknown>(manifestPayload, 'manifest.json');
+  assertArchiveManifest(archiveManifest);
+
+  await restoreArchiveAssets(archiveEntries, archiveManifest);
+
+  const serializedProject = decodeJson<unknown>(projectPayload, 'project.json');
+  assertSerializedProject(serializedProject);
+
   const migrated = migrateIfNeeded(
-    projectData as unknown as Record<string, unknown>
+    serializedProject as unknown as Record<string, unknown>
   ) as unknown as SerializedProject;
 
   const project = await deserialize({
@@ -28,40 +110,4 @@ export async function importProject(file: File): Promise<KhartisProject> {
 
   await saveProject(project);
   return project;
-}
-
-async function readFile(file: File): Promise<string> {
-  const buffer = await file.arrayBuffer();
-
-  try {
-    return await decompressData(buffer);
-  } catch {
-    const decoder = new TextDecoder();
-    return decoder.decode(buffer);
-  }
-}
-
-function isSerializedProjectRecord(data: unknown): data is SerializedProject {
-  if (typeof data !== 'object' || data === null) {
-    return false;
-  }
-
-  const record = data as Record<string, unknown>;
-  const manifest = record.manifest;
-
-  if (typeof record.id !== 'string' && typeof record.id !== 'undefined') {
-    return false;
-  }
-
-  if (typeof manifest !== 'object' || manifest === null) {
-    return false;
-  }
-
-  const manifestRecord = manifest as Record<string, unknown>;
-  return (
-    typeof manifestRecord.version === 'string' &&
-    typeof manifestRecord.name === 'string' &&
-    typeof manifestRecord.createdAt === 'string' &&
-    typeof manifestRecord.updatedAt === 'string'
-  );
 }
