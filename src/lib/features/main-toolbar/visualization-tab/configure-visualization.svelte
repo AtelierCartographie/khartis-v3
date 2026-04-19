@@ -74,6 +74,8 @@
   import PolygonsConfig from './components/polygons-config.svelte';
   import SymbolsConfig from './components/symbols-config.svelte';
   import TextsConfig from './components/texts-config.svelte';
+  import YearFilter from './components/year-filter.svelte';
+  import { isLikelyYearColumn } from './components/year-filter.utils';
 
   const CORE_PRIMITIVES = [
     PrimitiveFilterType.POINT,
@@ -150,6 +152,17 @@
     );
 
     return hasLatitude && hasLongitude;
+  });
+
+  const hasYearDimension = $derived.by(() => {
+    const dataset = getSelectedDataset() ?? datasetsStore.selectedDataset;
+    if (!dataset?.columns) {
+      return false;
+    }
+
+    const rows = dataset.originalData?.data ?? dataset.data ?? [];
+
+    return dataset.columns.some((column) => isLikelyYearColumn(column, rows));
   });
 
   const availablePrimitiveFilters = $derived.by(() => {
@@ -2234,6 +2247,10 @@
   </div>
 
   <div class="config-accordion">
+    {#if selectedViz && hasYearDimension}
+      <YearFilter visualization={selectedViz} />
+    {/if}
+
     <SymbolsConfig
       dataFields={dataFieldItems}
       visualization={symbolVisualization}

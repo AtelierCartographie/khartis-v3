@@ -26,8 +26,11 @@
     SliderWithInput
   } from '../shared';
   import type { SymbolModeProps } from './types';
-  import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
-  import { facetsStore } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
+  import {
+    FACET_SLOT,
+    facetsStore,
+    type FacetSlotPath
+  } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
   import FacetsVariablePicker from './facets-variable-picker.svelte';
 
   let {
@@ -175,20 +178,31 @@
     onSymbolsChange?.({ opacity: value / 100 });
   }
 
-  const selectedVizId = $derived(visualizationStore.selectedVisualization?.id);
+  const selectedVizId = $derived(visualization?.id);
 
-  const isFacetsActiveForViz = $derived(
-    facetsStore.enabled &&
-      selectedVizId !== undefined &&
-      facetsStore.baseVisualizationId === selectedVizId
-  );
+  const activeFacetsSlotPath = $derived.by(() => {
+    if (
+      !facetsStore.enabled ||
+      !selectedVizId ||
+      facetsStore.baseVisualizationId !== selectedVizId
+    ) {
+      return null;
+    }
+    return facetsStore.primarySlotPath;
+  });
 
-  const facetsSelectedFieldIds = $derived.by(() => {
-    if (!isFacetsActiveForViz) return [] as number[];
+  function isFacetsActiveForSlot(slotPath: FacetSlotPath): boolean {
+    return activeFacetsSlotPath === slotPath;
+  }
+
+  function getFacetsSelectedFieldIds(slotPath: FacetSlotPath): number[] {
+    if (!isFacetsActiveForSlot(slotPath)) {
+      return [];
+    }
     return facetsStore.variables
       .map((name) => dataFields.find((f) => f.text === name)?.id)
       .filter((id): id is number => typeof id === 'number');
-  });
+  }
 
   const categoryColumnName = $derived(
     dataFields.find((f) => f.id === selectedFieldId)?.text ?? ''
@@ -204,7 +218,11 @@
       hasBase && !variableNames.includes(categoryColumnName)
         ? [categoryColumnName, ...variableNames]
         : variableNames;
-    await facetsStore.updateVariables(selectedVizId, merged);
+    await facetsStore.updateVariables(
+      selectedVizId,
+      merged,
+      FACET_SLOT.SYMBOL_CATEGORY
+    );
   }
 
   async function handleFacetsToggle(enabled: boolean) {
@@ -224,7 +242,11 @@
       if (!candidates.includes(name)) candidates.push(name);
     }
     if (candidates.length < 2) return;
-    await facetsStore.updateVariables(selectedVizId, candidates);
+    await facetsStore.updateVariables(
+      selectedVizId,
+      candidates,
+      FACET_SLOT.SYMBOL_CATEGORY
+    );
   }
 </script>
 
@@ -238,8 +260,8 @@
     dataFields={dataFields}
     singleSelectItems={selectableDataFields}
     selectedFieldId={selectedFieldId}
-    selectedFieldIds={facetsSelectedFieldIds}
-    isCollectionEnabled={isFacetsActiveForViz}
+    selectedFieldIds={getFacetsSelectedFieldIds(FACET_SLOT.SYMBOL_CATEGORY)}
+    isCollectionEnabled={isFacetsActiveForSlot(FACET_SLOT.SYMBOL_CATEGORY)}
     onSelect={handleFieldSelect}
     onCollectionChange={handleFacetsVariablesChange}
     onToggleCollection={handleFacetsToggle}

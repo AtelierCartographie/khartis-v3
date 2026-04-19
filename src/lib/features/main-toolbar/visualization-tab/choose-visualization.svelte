@@ -51,6 +51,7 @@
     shouldAutoApplySuggestion
   } from './suggestion-selection';
   import { UI_CONSTANTS } from '../constants';
+  import { appendToBody } from '$lib/features/commons/utils/append-to-body';
 
   interface Props {
     onCreateVisualization?: () => void;
@@ -815,21 +816,25 @@
   </div>
 </section>
 
-<Modal
-  danger
-  open={isDeleteConfirmOpen}
-  modalHeading={m.viz_list_delete_title()}
-  primaryButtonText={m.delete_confirm_button()}
-  secondaryButtonText={m.cancel()}
-  size="sm"
-  on:click:button--secondary={cancelDeleteViz}
-  on:click:button--primary={confirmDeleteViz}
-  on:close={cancelDeleteViz}
->
-  <p>
-    {m.viz_list_delete_message({ name: deletingViz?.name ?? '' })}
-  </p>
-</Modal>
+{#if isDeleteConfirmOpen}
+  <div use:appendToBody>
+    <Modal
+      danger
+      bind:open={isDeleteConfirmOpen}
+      modalHeading={m.viz_list_delete_title()}
+      primaryButtonText={m.delete_confirm_button()}
+      secondaryButtonText={m.cancel()}
+      size="sm"
+      on:click:button--secondary={cancelDeleteViz}
+      on:click:button--primary={confirmDeleteViz}
+      on:close={cancelDeleteViz}
+    >
+      <p>
+        {m.viz_list_delete_message({ name: deletingViz?.name ?? '' })}
+      </p>
+    </Modal>
+  </div>
+{/if}
 
 <style lang="scss">
   #choose-visualization {

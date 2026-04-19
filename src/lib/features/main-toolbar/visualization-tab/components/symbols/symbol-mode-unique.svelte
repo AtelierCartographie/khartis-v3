@@ -38,8 +38,14 @@
     StrokeSection
   } from '../shared';
   import SingleColorPreview from '../palette-popover/single-color-preview.svelte';
+  import FacetsVariablePicker from './facets-variable-picker.svelte';
   import type { SymbolModeProps } from './types';
   import { resolveDiscretizationLabel } from '../discretization.utils';
+  import {
+    FACET_SLOT,
+    facetsStore,
+    type FacetSlotPath
+  } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
 
   let {
     dataFields = [],
@@ -68,6 +74,8 @@
   let selectedClassFieldId = $state<number>(NONE_FIELD_ID);
   let selectedCategoryFieldId = $state<number>(NONE_FIELD_ID);
   let categoryCount = $state<number>(4);
+  let classPickerOpen = $state(false);
+  let categoryPickerOpen = $state(false);
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
   const selectableDataFields = $derived([noneOption, ...dataFields]);
 
@@ -148,6 +156,80 @@
         : undefined
     )
   );
+
+  const selectedVizId = $derived(visualization?.id);
+
+  const activeFacetsSlotPath = $derived.by(() => {
+    if (
+      !facetsStore.enabled ||
+      !selectedVizId ||
+      facetsStore.baseVisualizationId !== selectedVizId
+    ) {
+      return null;
+    }
+    return facetsStore.primarySlotPath;
+  });
+
+  function isFacetsActiveForSlot(slotPath: FacetSlotPath): boolean {
+    return activeFacetsSlotPath === slotPath;
+  }
+
+  function getFacetsSelectedFieldIds(slotPath: FacetSlotPath): number[] {
+    if (!isFacetsActiveForSlot(slotPath)) {
+      return [];
+    }
+    return facetsStore.variables
+      .map((name) => dataFields.find((field) => field.text === name)?.id)
+      .filter((id): id is number => typeof id === 'number');
+  }
+
+  const classColumnName = $derived(
+    dataFields.find((field) => field.id === selectedClassFieldId)?.text ?? ''
+  );
+
+  const categoryColumnName = $derived(
+    dataFields.find((field) => field.id === selectedCategoryFieldId)?.text ?? ''
+  );
+
+  async function handleFacetsVariablesChange(
+    baseVariableName: string,
+    slotPath: FacetSlotPath,
+    fieldIds: number[]
+  ) {
+    if (!selectedVizId) return;
+    const variableNames = fieldIds
+      .map((id) => dataFields.find((field) => field.id === id)?.text)
+      .filter((name): name is string => Boolean(name));
+    const merged =
+      baseVariableName && !variableNames.includes(baseVariableName)
+        ? [baseVariableName, ...variableNames]
+        : variableNames;
+    await facetsStore.updateVariables(selectedVizId, merged, slotPath);
+  }
+
+  async function handleFacetsToggle(
+    baseVariableName: string,
+    slotPath: FacetSlotPath,
+    enabled: boolean
+  ) {
+    if (!selectedVizId) return;
+    if (!enabled) {
+      facetsStore.disable();
+      return;
+    }
+
+    const available = dataFields
+      .map((field) => field.text)
+      .filter((name): name is string => Boolean(name));
+    const seed = baseVariableName ? [baseVariableName] : [];
+    const candidates = seed.slice();
+    for (const name of available) {
+      if (candidates.length >= 2) break;
+      if (!candidates.includes(name)) candidates.push(name);
+    }
+    if (candidates.length < 2) return;
+    await facetsStore.updateVariables(selectedVizId, candidates, slotPath);
+  }
 
   function handleFillModeChange(index: number) {
     const modes = [
@@ -294,12 +376,23 @@
   />
 {:else if fillMode === FillMode.CLASSES}
   <div class="field-group">
-    <Dropdown
+    <FacetsVariablePicker
+      bind:open={classPickerOpen}
       titleText={m.color_according()}
-      items={selectableDataFields}
-      selectedId={selectedClassFieldId}
-      on:select={(e) => handleClassFieldSelect(e.detail.selectedId)}
-      type="default"
+      dataFields={dataFields}
+      singleSelectItems={selectableDataFields}
+      selectedFieldId={selectedClassFieldId}
+      selectedFieldIds={getFacetsSelectedFieldIds(FACET_SLOT.SYMBOL_VALUE)}
+      isCollectionEnabled={isFacetsActiveForSlot(FACET_SLOT.SYMBOL_VALUE)}
+      onSelect={handleClassFieldSelect}
+      onCollectionChange={(ids) =>
+        handleFacetsVariablesChange(
+          classColumnName,
+          FACET_SLOT.SYMBOL_VALUE,
+          ids
+        )}
+      onToggleCollection={(enabled) =>
+        handleFacetsToggle(classColumnName, FACET_SLOT.SYMBOL_VALUE, enabled)}
     />
   </div>
   <DiscretizationRow
@@ -333,12 +426,27 @@
   />
 {:else if fillMode === FillMode.CATEGORIES}
   <div class="field-group">
-    <Dropdown
+    <FacetsVariablePicker
+      bind:open={categoryPickerOpen}
       titleText={m.color_according()}
-      items={selectableDataFields}
-      selectedId={selectedCategoryFieldId}
-      on:select={(e) => handleCategoryFieldSelect(e.detail.selectedId)}
-      type="default"
+      dataFields={dataFields}
+      singleSelectItems={selectableDataFields}
+      selectedFieldId={selectedCategoryFieldId}
+      selectedFieldIds={getFacetsSelectedFieldIds(FACET_SLOT.SYMBOL_CATEGORY)}
+      isCollectionEnabled={isFacetsActiveForSlot(FACET_SLOT.SYMBOL_CATEGORY)}
+      onSelect={handleCategoryFieldSelect}
+      onCollectionChange={(ids) =>
+        handleFacetsVariablesChange(
+          categoryColumnName,
+          FACET_SLOT.SYMBOL_CATEGORY,
+          ids
+        )}
+      onToggleCollection={(enabled) =>
+        handleFacetsToggle(
+          categoryColumnName,
+          FACET_SLOT.SYMBOL_CATEGORY,
+          enabled
+        )}
     />
   </div>
   <DiscretizationRow
@@ -385,6 +493,8 @@
   onInvertPalette={onInvertPalette}
   onOpenDiscretization={onOpenDiscretization}
   onClassificationChange={onClassificationChange}
+  facetsValueSlotPath={FACET_SLOT.SYMBOL_VALUE}
+  facetsCategorySlotPath={FACET_SLOT.SYMBOL_CATEGORY}
 />
 
 <style lang="scss">

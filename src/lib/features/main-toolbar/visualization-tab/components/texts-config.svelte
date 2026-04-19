@@ -44,6 +44,12 @@
   import DiscretizationModal from './discretization-modal.svelte';
   import TextStylePopover from './text-style-popover.svelte';
   import { resolveDiscretizationLabel } from './discretization.utils';
+  import FacetsVariablePicker from './symbols/facets-variable-picker.svelte';
+  import {
+    FACET_SLOT,
+    facetsStore,
+    type FacetSlotPath
+  } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
 
   interface Props {
     dataFields?: Array<{ id: number; text: string; type?: string }>;
@@ -117,6 +123,7 @@
   let selectedBackgroundValueFieldId = $state<number>(NONE_FIELD_ID);
   let selectedBackgroundCategoryFieldId = $state<number>(NONE_FIELD_ID);
   let secondaryFieldId = $state<number>(NONE_FIELD_ID);
+  let backgroundFacetPickerOpen = $state(false);
 
   let textColor = $state<string>(DEFAULT_COLORS.text);
   let textOpacity = $state<number>(VISUALIZATION_DEFAULTS.textOpacity);
@@ -168,11 +175,38 @@
       DEFAULT_QUALITATIVE_PREVIEW
   );
   const backgroundAvailable = $derived(Boolean(backgroundVisualization));
+  const selectedBackgroundVizId = $derived(backgroundVisualization?.id);
   const activeDiscretizationVisualization = $derived(
     discretizationTarget === 'background'
       ? backgroundVisualization
       : visualization
   );
+
+  const activeBackgroundFacetsSlotPath = $derived.by(() => {
+    if (
+      !facetsStore.enabled ||
+      !selectedBackgroundVizId ||
+      facetsStore.baseVisualizationId !== selectedBackgroundVizId
+    ) {
+      return null;
+    }
+    return facetsStore.primarySlotPath;
+  });
+
+  function isBackgroundFacetsActiveForSlot(slotPath: FacetSlotPath): boolean {
+    return activeBackgroundFacetsSlotPath === slotPath;
+  }
+
+  function getBackgroundFacetsSelectedFieldIds(
+    slotPath: FacetSlotPath
+  ): number[] {
+    if (!isBackgroundFacetsActiveForSlot(slotPath)) {
+      return [];
+    }
+    return facetsStore.variables
+      .map((name) => dataFields.find((field) => field.text === name)?.id)
+      .filter((id): id is number => typeof id === 'number');
+  }
 
   const fillModeItems = [
     { icon: MisuseOutline, label: m.fill_mode_none(), iconSize: 16 },
@@ -376,6 +410,54 @@
     if (field) {
       onBackgroundMappingChange?.({ categoryColumn: field.text });
     }
+  }
+
+  async function handleBackgroundFacetsVariablesChange(
+    baseVariableName: string,
+    slotPath: FacetSlotPath,
+    fieldIds: number[]
+  ) {
+    if (!selectedBackgroundVizId) return;
+    const variableNames = fieldIds
+      .map((id) => dataFields.find((field) => field.id === id)?.text)
+      .filter((name): name is string => Boolean(name));
+    const merged =
+      baseVariableName && !variableNames.includes(baseVariableName)
+        ? [baseVariableName, ...variableNames]
+        : variableNames;
+    await facetsStore.updateVariables(
+      selectedBackgroundVizId,
+      merged,
+      slotPath
+    );
+  }
+
+  async function handleBackgroundFacetsToggle(
+    baseVariableName: string,
+    slotPath: FacetSlotPath,
+    enabled: boolean
+  ) {
+    if (!selectedBackgroundVizId) return;
+    if (!enabled) {
+      facetsStore.disable();
+      return;
+    }
+
+    const available = dataFields
+      .map((field) => field.text)
+      .filter((name): name is string => Boolean(name));
+    const seed = baseVariableName ? [baseVariableName] : [];
+    const candidates = seed.slice();
+    for (const name of available) {
+      if (candidates.length >= 2) break;
+      if (!candidates.includes(name)) candidates.push(name);
+    }
+    if (candidates.length < 2) return;
+    await facetsStore.updateVariables(
+      selectedBackgroundVizId,
+      candidates,
+      slotPath
+    );
   }
 
   function handleTextColorChange(value: string) {
@@ -713,13 +795,35 @@
           />
         {:else if fillMode === FillMode.CLASSES}
           <div class="field-group">
-            <Dropdown
+            <FacetsVariablePicker
+              bind:open={backgroundFacetPickerOpen}
               titleText={m.color_according()}
-              items={selectableDataFields}
-              selectedId={selectedBackgroundValueFieldId}
-              on:select={(event) =>
-                handleBackgroundValueFieldSelect(event.detail.selectedId)}
-              type="default"
+              dataFields={dataFields}
+              singleSelectItems={selectableDataFields}
+              selectedFieldId={selectedBackgroundValueFieldId}
+              selectedFieldIds={getBackgroundFacetsSelectedFieldIds(
+                FACET_SLOT.TEXT_BACKGROUND_VALUE
+              )}
+              isCollectionEnabled={isBackgroundFacetsActiveForSlot(
+                FACET_SLOT.TEXT_BACKGROUND_VALUE
+              )}
+              onSelect={handleBackgroundValueFieldSelect}
+              onCollectionChange={(ids) =>
+                handleBackgroundFacetsVariablesChange(
+                  dataFields.find(
+                    (field) => field.id === selectedBackgroundValueFieldId
+                  )?.text ?? '',
+                  FACET_SLOT.TEXT_BACKGROUND_VALUE,
+                  ids
+                )}
+              onToggleCollection={(enabled) =>
+                handleBackgroundFacetsToggle(
+                  dataFields.find(
+                    (field) => field.id === selectedBackgroundValueFieldId
+                  )?.text ?? '',
+                  FACET_SLOT.TEXT_BACKGROUND_VALUE,
+                  enabled
+                )}
             />
           </div>
           <DiscretizationRow
@@ -740,13 +844,35 @@
           />
         {:else if fillMode === FillMode.CATEGORIES}
           <div class="field-group">
-            <Dropdown
+            <FacetsVariablePicker
+              bind:open={backgroundFacetPickerOpen}
               titleText={m.color_according()}
-              items={selectableDataFields}
-              selectedId={selectedBackgroundCategoryFieldId}
-              on:select={(event) =>
-                handleBackgroundCategoryFieldSelect(event.detail.selectedId)}
-              type="default"
+              dataFields={dataFields}
+              singleSelectItems={selectableDataFields}
+              selectedFieldId={selectedBackgroundCategoryFieldId}
+              selectedFieldIds={getBackgroundFacetsSelectedFieldIds(
+                FACET_SLOT.TEXT_BACKGROUND_CATEGORY
+              )}
+              isCollectionEnabled={isBackgroundFacetsActiveForSlot(
+                FACET_SLOT.TEXT_BACKGROUND_CATEGORY
+              )}
+              onSelect={handleBackgroundCategoryFieldSelect}
+              onCollectionChange={(ids) =>
+                handleBackgroundFacetsVariablesChange(
+                  dataFields.find(
+                    (field) => field.id === selectedBackgroundCategoryFieldId
+                  )?.text ?? '',
+                  FACET_SLOT.TEXT_BACKGROUND_CATEGORY,
+                  ids
+                )}
+              onToggleCollection={(enabled) =>
+                handleBackgroundFacetsToggle(
+                  dataFields.find(
+                    (field) => field.id === selectedBackgroundCategoryFieldId
+                  )?.text ?? '',
+                  FACET_SLOT.TEXT_BACKGROUND_CATEGORY,
+                  enabled
+                )}
             />
           </div>
           <DiscretizationRow
@@ -798,6 +924,8 @@
           onInvertPalette={onBackgroundInvertPalette}
           onOpenDiscretization={openBackgroundDiscretization}
           onClassificationChange={onBackgroundClassificationChange}
+          facetsValueSlotPath={FACET_SLOT.TEXT_BACKGROUND_VALUE}
+          facetsCategorySlotPath={FACET_SLOT.TEXT_BACKGROUND_CATEGORY}
         />
       {/if}
     </div>

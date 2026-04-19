@@ -41,8 +41,11 @@
   import DiscretizationModal from './discretization-modal.svelte';
   import type { ClassificationConfig } from '$lib/features/commons/store/visualization.store.svelte';
   import { resolveDiscretizationLabel } from './discretization.utils';
-  import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
-  import { facetsStore } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
+  import {
+    FACET_SLOT,
+    facetsStore,
+    type FacetSlotPath
+  } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
   import FacetsVariablePicker from './symbols/facets-variable-picker.svelte';
 
   interface Props {
@@ -324,20 +327,31 @@
     )
   );
 
-  const selectedVizId = $derived(visualizationStore.selectedVisualization?.id);
+  const selectedVizId = $derived(visualization?.id);
 
-  const isFacetsActiveForViz = $derived(
-    facetsStore.enabled &&
-      selectedVizId !== undefined &&
-      facetsStore.baseVisualizationId === selectedVizId
-  );
+  const activeFacetsSlotPath = $derived.by(() => {
+    if (
+      !facetsStore.enabled ||
+      !selectedVizId ||
+      facetsStore.baseVisualizationId !== selectedVizId
+    ) {
+      return null;
+    }
+    return facetsStore.primarySlotPath;
+  });
 
-  const facetsSelectedFieldIds = $derived.by(() => {
-    if (!isFacetsActiveForViz) return [] as number[];
+  function isFacetsActiveForSlot(slotPath: FacetSlotPath): boolean {
+    return activeFacetsSlotPath === slotPath;
+  }
+
+  function getFacetsSelectedFieldIds(slotPath: FacetSlotPath): number[] {
+    if (!isFacetsActiveForSlot(slotPath)) {
+      return [];
+    }
     return facetsStore.variables
       .map((name) => dataFields.find((f) => f.text === name)?.id)
       .filter((id): id is number => typeof id === 'number');
-  });
+  }
 
   const valueColumnName = $derived(
     dataFields.find((f) => f.id === selectedValueFieldId)?.text ?? ''
@@ -353,6 +367,7 @@
 
   async function handleFacetsVariablesChange(
     baseVariableName: string,
+    slotPath: FacetSlotPath,
     fieldIds: number[]
   ) {
     if (!selectedVizId) return;
@@ -364,10 +379,14 @@
       hasBase && !variableNames.includes(baseVariableName)
         ? [baseVariableName, ...variableNames]
         : variableNames;
-    await facetsStore.updateVariables(selectedVizId, merged);
+    await facetsStore.updateVariables(selectedVizId, merged, slotPath);
   }
 
-  async function handleFacetsToggle(baseVariableName: string, en: boolean) {
+  async function handleFacetsToggle(
+    baseVariableName: string,
+    slotPath: FacetSlotPath,
+    en: boolean
+  ) {
     if (!selectedVizId) return;
     if (!en) {
       facetsStore.disable();
@@ -384,7 +403,7 @@
       if (!candidates.includes(name)) candidates.push(name);
     }
     if (candidates.length < 2) return;
-    await facetsStore.updateVariables(selectedVizId, candidates);
+    await facetsStore.updateVariables(selectedVizId, candidates, slotPath);
   }
 </script>
 
@@ -438,12 +457,17 @@
           dataFields={dataFields}
           singleSelectItems={selectableDataFields}
           selectedFieldId={selectedSizeFieldId}
-          selectedFieldIds={facetsSelectedFieldIds}
-          isCollectionEnabled={isFacetsActiveForViz}
+          selectedFieldIds={getFacetsSelectedFieldIds(FACET_SLOT.LINE_SIZE)}
+          isCollectionEnabled={isFacetsActiveForSlot(FACET_SLOT.LINE_SIZE)}
           onSelect={handleSizeFieldSelect}
           onCollectionChange={(ids) =>
-            handleFacetsVariablesChange(sizeColumnName, ids)}
-          onToggleCollection={(en) => handleFacetsToggle(sizeColumnName, en)}
+            handleFacetsVariablesChange(
+              sizeColumnName,
+              FACET_SLOT.LINE_SIZE,
+              ids
+            )}
+          onToggleCollection={(en) =>
+            handleFacetsToggle(sizeColumnName, FACET_SLOT.LINE_SIZE, en)}
         />
       </div>
       <SliderWithInput
@@ -463,12 +487,17 @@
           dataFields={dataFields}
           singleSelectItems={selectableDataFields}
           selectedFieldId={selectedValueFieldId}
-          selectedFieldIds={facetsSelectedFieldIds}
-          isCollectionEnabled={isFacetsActiveForViz}
+          selectedFieldIds={getFacetsSelectedFieldIds(FACET_SLOT.LINE_VALUE)}
+          isCollectionEnabled={isFacetsActiveForSlot(FACET_SLOT.LINE_VALUE)}
           onSelect={handleValueFieldSelect}
           onCollectionChange={(ids) =>
-            handleFacetsVariablesChange(valueColumnName, ids)}
-          onToggleCollection={(en) => handleFacetsToggle(valueColumnName, en)}
+            handleFacetsVariablesChange(
+              valueColumnName,
+              FACET_SLOT.LINE_VALUE,
+              ids
+            )}
+          onToggleCollection={(en) =>
+            handleFacetsToggle(valueColumnName, FACET_SLOT.LINE_VALUE, en)}
         />
       </div>
       <DiscretizationRow
@@ -512,12 +541,17 @@
           dataFields={dataFields}
           singleSelectItems={selectableDataFields}
           selectedFieldId={selectedValueFieldId}
-          selectedFieldIds={facetsSelectedFieldIds}
-          isCollectionEnabled={isFacetsActiveForViz}
+          selectedFieldIds={getFacetsSelectedFieldIds(FACET_SLOT.LINE_VALUE)}
+          isCollectionEnabled={isFacetsActiveForSlot(FACET_SLOT.LINE_VALUE)}
           onSelect={handleValueFieldSelect}
           onCollectionChange={(ids) =>
-            handleFacetsVariablesChange(valueColumnName, ids)}
-          onToggleCollection={(en) => handleFacetsToggle(valueColumnName, en)}
+            handleFacetsVariablesChange(
+              valueColumnName,
+              FACET_SLOT.LINE_VALUE,
+              ids
+            )}
+          onToggleCollection={(en) =>
+            handleFacetsToggle(valueColumnName, FACET_SLOT.LINE_VALUE, en)}
         />
       </div>
       <DiscretizationRow
@@ -542,13 +576,21 @@
           dataFields={dataFields}
           singleSelectItems={selectableDataFields}
           selectedFieldId={selectedCategoryFieldId}
-          selectedFieldIds={facetsSelectedFieldIds}
-          isCollectionEnabled={isFacetsActiveForViz}
+          selectedFieldIds={getFacetsSelectedFieldIds(FACET_SLOT.LINE_CATEGORY)}
+          isCollectionEnabled={isFacetsActiveForSlot(FACET_SLOT.LINE_CATEGORY)}
           onSelect={handleCategoryFieldSelect}
           onCollectionChange={(ids) =>
-            handleFacetsVariablesChange(categoryColumnName, ids)}
+            handleFacetsVariablesChange(
+              categoryColumnName,
+              FACET_SLOT.LINE_CATEGORY,
+              ids
+            )}
           onToggleCollection={(en) =>
-            handleFacetsToggle(categoryColumnName, en)}
+            handleFacetsToggle(
+              categoryColumnName,
+              FACET_SLOT.LINE_CATEGORY,
+              en
+            )}
         />
       </div>
       <DiscretizationRow
