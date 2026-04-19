@@ -9,7 +9,9 @@ const source = readFileSync(
 
 describe('TextsConfig — palette wiring', () => {
   it('should import PALETTE_TYPE from palette-popover/palette.constants', () => {
-    expect(source).toContain("from './palette-popover/palette.constants'");
+    expect(source).toContain(
+      "from '$lib/features/commons/components/palette-popover/palette.constants'"
+    );
     expect(source).toContain('PALETTE_TYPE');
   });
 
@@ -39,7 +41,7 @@ describe('TextsConfig — palette wiring', () => {
 
   it('should use SingleColorPreview for the background UNIQUE mode', () => {
     expect(source).toContain(
-      "import SingleColorPreview from './palette-popover/single-color-preview.svelte'"
+      "import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte'"
     );
     const singleColorCount = (source.match(/<SingleColorPreview/g) ?? [])
       .length;

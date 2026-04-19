@@ -40,7 +40,9 @@ describe('SymbolModeCategories (en categorie.png alignment)', () => {
 
   it('wires PalettePreview with paletteType=QUALITATIVE so the popover shows the Couleur title', () => {
     expect(source).toContain('paletteType={PALETTE_TYPE.QUALITATIVE}');
-    expect(source).toContain("from '../palette-popover/palette.constants'");
+    expect(source).toContain(
+      "from '$lib/features/commons/components/palette-popover/palette.constants'"
+    );
   });
 
   it('enables the Categories Aspect popover via categoriesMode + categoryLabels', () => {
@@ -48,5 +50,15 @@ describe('SymbolModeCategories (en categorie.png alignment)', () => {
     expect(source).toContain(
       'categoryLabels={visualization?.classification?.labels ?? []}'
     );
+  });
+
+  it('maps categoryShapeMode to CategoriesAspectVariant and passes categoriesVariant to PalettePreview', () => {
+    expect(source).toContain(
+      'categoriesVariant = $derived<CategoriesAspectVariant>'
+    );
+    expect(source).toContain("'symbols-different'");
+    expect(source).toContain("'symbols-different-rank'");
+    expect(source).toContain("'symbols-unique'");
+    expect(source).toContain('categoriesVariant={categoriesVariant}');
   });
 });

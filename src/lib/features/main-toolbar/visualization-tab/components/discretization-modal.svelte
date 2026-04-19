@@ -19,7 +19,7 @@
   import {
     findPaletteById,
     generatePaletteColors
-  } from './palette-popover/palette.constants';
+  } from '$lib/features/commons/components/palette-popover/palette.constants';
   import { getColorBlindnessState } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { onMount, tick, untrack } from 'svelte';
@@ -51,6 +51,7 @@
   interface Props {
     open?: boolean;
     visualization?: VisualizationConfig;
+    classification?: ClassificationConfig;
     onclose?: () => void;
     onchange?: (classification: Partial<ClassificationConfig>) => void;
   }
@@ -58,9 +59,14 @@
   let {
     open = $bindable(false),
     visualization,
+    classification: classificationOverride,
     onclose,
     onchange
   }: Props = $props();
+
+  const activeClassification = $derived<ClassificationConfig | undefined>(
+    classificationOverride ?? visualization?.classification
+  );
 
   let _isCalculating = $state(false);
   let breaksRequestId = 0;
@@ -166,8 +172,8 @@
     const contrast = getColorBlindnessState().enabled
       ? ('high' as const)
       : undefined;
-    const userPalette = visualization?.classification?.paletteId
-      ? findPaletteById(visualization.classification.paletteId)
+    const userPalette = activeClassification?.paletteId
+      ? findPaletteById(activeClassification.paletteId)
       : undefined;
     const divergingSplit =
       paletteType === 'diverging'
@@ -183,7 +189,7 @@
             contrast,
             divergingSplit
           ),
-      visualization?.classification?.inverted ?? false
+      activeClassification?.inverted ?? false
     );
   }
 
@@ -191,15 +197,15 @@
     const contrast = getColorBlindnessState().enabled
       ? ('high' as const)
       : undefined;
-    const userPalette = visualization?.classification?.paletteId
-      ? findPaletteById(visualization.classification.paletteId)
+    const userPalette = activeClassification?.paletteId
+      ? findPaletteById(activeClassification.paletteId)
       : undefined;
 
     return applyPaletteInversion(
       userPalette
         ? generatePaletteColors(userPalette, classCount, contrast)
         : generateColorsForBreaks(classCount, 'diverging', contrast),
-      visualization?.classification?.inverted ?? false
+      activeClassification?.inverted ?? false
     );
   }
 
@@ -229,7 +235,7 @@
       return currentBreaks.slice(0, -1).map((breakItem) => breakItem.max);
     }
 
-    return visualization?.classification?.breaks ?? [];
+    return activeClassification?.breaks ?? [];
   }
 
   function applyBreaksResult(
@@ -269,43 +275,23 @@
       breaks: result.breaks,
       counts: result.counts,
       colors,
-      breakpointValue: currentBreakpoint
+      breakpointValue: currentBreakpoint,
+      paletteId: activeClassification?.paletteId,
+      inverted: activeClassification?.inverted ?? false
     });
   }
 
   $effect(() => {
-    if (open) {
-      return;
-    }
-
-    syncStateFromVisualization(visualization?.classification);
-  });
-
-  $effect.pre(() => {
-    if (open && !wasOpen) {
-      syncStateFromVisualization(visualization?.classification);
-    }
-  });
-
-  $effect(() => {
-    if (!open) {
-      return;
-    }
-
-    updatePanelPosition();
-  });
-
-  $effect(() => {
     const isOpening = open && !wasOpen;
-
     wasOpen = open;
 
     if (!isOpening) {
       return;
     }
 
-    syncStateFromVisualization(visualization?.classification);
+    syncStateFromVisualization(activeClassification);
     panelRenderKey += 1;
+    updatePanelPosition();
 
     if (!visualization?.datasetId || !visualization?.mapping.valueColumn) {
       return;
@@ -443,7 +429,7 @@
   }
 
   function handleClose() {
-    syncStateFromVisualization(visualization?.classification);
+    syncStateFromVisualization(activeClassification);
     panelRenderKey += 1;
     wasOpen = false;
     open = false;

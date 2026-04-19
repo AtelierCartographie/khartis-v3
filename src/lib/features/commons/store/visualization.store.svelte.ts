@@ -14,6 +14,7 @@ import {
   ShapeType,
   SizeMode,
   StrokeMode,
+  SymbolDoublePosition,
   SymbolMode,
   ThicknessMode,
   VISUALIZATION_DEFAULTS,
@@ -94,6 +95,7 @@ export interface ClassificationConfig {
   breakpointValue?: number | null;
   patternId?: string;
   patternParams?: PatternParams;
+  categoryShapes?: ShapeType[];
 }
 
 export interface MissingDataConfig {
@@ -113,13 +115,16 @@ export interface PolygonPrimitiveConfig {
   fillColor?: string | string[];
   fillOpacity: number;
   strokeMode: StrokeMode;
-  strokeColor?: string;
+  strokeColor?: string | string[];
   strokeWidth: number;
   strokeOpacity: number;
   strokeDashed: boolean;
+  strokeValueColumn?: string;
+  strokeCategoryColumn?: string;
   valueColumn?: string;
   categoryColumn?: string;
   classification?: ClassificationConfig;
+  strokeClassification?: ClassificationConfig;
   missingData?: MissingDataConfig;
 }
 
@@ -136,11 +141,18 @@ export interface SymbolPrimitiveConfig {
   fillColor?: string | string[];
   fillColorB?: string;
   strokeMode: StrokeMode;
-  strokeColor?: string;
+  strokeColor?: string | string[];
   strokeWidth: number;
   strokeOpacity: number;
+  strokeValueColumn?: string;
+  strokeCategoryColumn?: string;
+  strokeClassification?: ClassificationConfig;
   proportionalType: ProportionalType;
   categoryShape: CategoryShapeMode;
+  commonScale?: boolean;
+  positionMode?: SymbolDoublePosition;
+  breakValueA?: number | null;
+  breakValueB?: number | null;
   valueColumn?: string;
   categoryColumn?: string;
   sizeColumn?: string;
@@ -183,13 +195,16 @@ export interface TextBackgroundConfig {
   fillColor?: string | string[];
   fillOpacity: number;
   strokeMode: StrokeMode;
-  strokeColor?: string;
+  strokeColor?: string | string[];
   strokeWidth: number;
   strokeOpacity: number;
   strokeDashed: boolean;
+  strokeValueColumn?: string;
+  strokeCategoryColumn?: string;
   valueColumn?: string;
   categoryColumn?: string;
   classification?: ClassificationConfig;
+  strokeClassification?: ClassificationConfig;
 }
 
 export interface TextPrimitiveConfig {
@@ -519,7 +534,10 @@ function buildPolygonPrimitiveConfig(
     valueColumn: existing?.valueColumn ?? visualization.mapping.valueColumn,
     categoryColumn:
       existing?.categoryColumn ?? visualization.mapping.categoryColumn,
+    strokeValueColumn: existing?.strokeValueColumn,
+    strokeCategoryColumn: existing?.strokeCategoryColumn,
     classification: existing?.classification ?? visualization.classification,
+    strokeClassification: existing?.strokeClassification,
     missingData: existing?.missingData ?? visualization.missingData
   };
 }
@@ -576,14 +594,21 @@ function buildSymbolPrimitiveConfig(
       existing?.categoryShape ??
       visualization.modes?.categoryShape ??
       CategoryShapeMode.UNIQUE,
+    commonScale: existing?.commonScale ?? true,
+    positionMode: existing?.positionMode ?? SymbolDoublePosition.OVERLAY,
+    breakValueA: existing?.breakValueA ?? null,
+    breakValueB: existing?.breakValueB ?? null,
     valueColumn: existing?.valueColumn ?? visualization.mapping.valueColumn,
     categoryColumn:
       existing?.categoryColumn ?? visualization.mapping.categoryColumn,
     sizeColumn: existing?.sizeColumn ?? visualization.mapping.sizeColumn,
+    strokeValueColumn: existing?.strokeValueColumn,
+    strokeCategoryColumn: existing?.strokeCategoryColumn,
     classification:
       existing?.classification ??
       visualization.symbolClassification ??
       visualization.classification,
+    strokeClassification: existing?.strokeClassification,
     missingData: existing?.missingData ?? visualization.missingData
   };
 }
@@ -642,7 +667,10 @@ function buildTextBackgroundConfig(
     strokeDashed: existing?.strokeDashed ?? false,
     valueColumn: existing?.valueColumn,
     categoryColumn: existing?.categoryColumn,
-    classification: existing?.classification
+    classification: existing?.classification,
+    strokeClassification: existing?.strokeClassification,
+    strokeValueColumn: existing?.strokeValueColumn,
+    strokeCategoryColumn: existing?.strokeCategoryColumn
   };
 }
 
@@ -915,6 +943,11 @@ export interface VisualizationStore {
     classification: Partial<ClassificationConfig>
   ) => void;
   updatePrimitiveClassification: (
+    id: string,
+    primitive: PrimitiveFilter,
+    classification: Partial<ClassificationConfig>
+  ) => void;
+  updatePrimitiveStrokeClassification: (
     id: string,
     primitive: PrimitiveFilter,
     classification: Partial<ClassificationConfig>
@@ -2001,6 +2034,44 @@ function createVisualizationStore(): VisualizationStore {
     });
   }
 
+  function updatePrimitiveStrokeClassification(
+    id: string,
+    primitive: PrimitiveFilter,
+    classification: Partial<ClassificationConfig>
+  ): void {
+    applyVisualizationUpdate(id, (visualization) => {
+      const primitiveConfig = getPrimitive(
+        visualization,
+        primitive
+      ) as PrimitiveConfigMap[PrimitiveConfigKind];
+      const primitiveKind = resolvePrimitiveKind(primitive);
+      const existing =
+        (
+          primitiveConfig as unknown as {
+            strokeClassification?: ClassificationConfig;
+          }
+        ).strokeClassification ??
+        ({
+          method: ClassificationMethod.JENKS,
+          classes: DEFAULT_QUANTILES_CLASS_COUNT
+        } as ClassificationConfig);
+
+      const merged = {
+        ...existing,
+        ...classification
+      } as ClassificationConfig;
+
+      const nextPrimitive = {
+        ...primitiveConfig,
+        strokeClassification: merged
+      };
+
+      return {
+        [primitiveKind]: nextPrimitive
+      } as Partial<VisualizationConfig>;
+    });
+  }
+
   function updateVisualization(
     id: string,
     updates: Partial<VisualizationConfig>
@@ -2580,6 +2651,7 @@ function createVisualizationStore(): VisualizationStore {
     updateMissingData,
     updateClassification,
     updatePrimitiveClassification,
+    updatePrimitiveStrokeClassification,
     updateVisualization,
     applyVisualizationPreset,
     duplicateVisualization,

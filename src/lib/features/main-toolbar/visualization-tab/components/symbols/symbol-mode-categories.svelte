@@ -8,7 +8,7 @@
   import {
     DEFAULT_QUALITATIVE_PREVIEW,
     PALETTE_TYPE
-  } from '../palette-popover/palette.constants';
+  } from '$lib/features/commons/components/palette-popover/palette.constants';
   import {
     CategoryShapeMode,
     MissingDataShape,
@@ -18,6 +18,7 @@
     DEFAULT_COLORS,
     availableShapesForSymbolMode
   } from '../../../constants';
+  import type { CategoriesAspectVariant } from '$lib/features/commons/components/palette-popover/categories-aspect-popover.types';
   import {
     DiscretizationRow,
     InfoPopover,
@@ -95,7 +96,22 @@
     if (next === categoryShapeMode) return;
     categoryShapeMode = next;
     onModesChange?.({ categoryShape: next });
+    if (next === CategoryShapeMode.UNIQUE) {
+      onClassificationChange?.({ categoryShapes: undefined });
+    } else if (next === CategoryShapeMode.DIFFERENT) {
+      onClassificationChange?.({ categoryShapes: undefined });
+    } else if (next === CategoryShapeMode.ORDERED) {
+      onClassificationChange?.({ categoryShapes: undefined });
+    }
   }
+
+  const categoriesVariant = $derived<CategoriesAspectVariant>(
+    categoryShapeMode === CategoryShapeMode.DIFFERENT
+      ? 'symbols-different'
+      : categoryShapeMode === CategoryShapeMode.ORDERED
+        ? 'symbols-different-rank'
+        : 'symbols-unique'
+  );
 
   $effect(() => {
     if (visualization?.mapping.categoryColumn && dataFields.length > 0) {
@@ -108,7 +124,19 @@
       selectedFieldId = NONE_FIELD_ID;
     }
 
-    if (visualization?.symbols) {
+    const symbolConfig = visualization?.symbol;
+    if (symbolConfig) {
+      symbolOpacity =
+        symbolConfig.opacity !== undefined
+          ? Math.round(symbolConfig.opacity * 100)
+          : 100;
+      const persistedShape =
+        (symbolConfig.shape as ShapeType) ?? ShapeType.CIRCLE;
+      shapeType = availableShapes.includes(persistedShape)
+        ? persistedShape
+        : ShapeType.CIRCLE;
+      categoryShapeMode = symbolConfig.categoryShape ?? categoryShapeMode;
+    } else if (visualization?.symbols) {
       symbolOpacity =
         visualization.symbols.opacity !== undefined
           ? Math.round(visualization.symbols.opacity * 100)
@@ -117,11 +145,14 @@
       shapeType = availableShapes.includes(persistedShape)
         ? persistedShape
         : ShapeType.CIRCLE;
+      if (visualization?.modes?.categoryShape) {
+        categoryShapeMode = visualization.modes.categoryShape;
+      }
     } else {
       symbolOpacity = 100;
-    }
-    if (visualization?.modes?.categoryShape) {
-      categoryShapeMode = visualization.modes.categoryShape;
+      if (visualization?.modes?.categoryShape) {
+        categoryShapeMode = visualization.modes.categoryShape;
+      }
     }
     if (visualization?.missingData) {
       showMissingData = visualization.missingData.show ?? true;
@@ -323,6 +354,7 @@
   inverted={visualization?.classification?.inverted ?? false}
   paletteType={PALETTE_TYPE.QUALITATIVE}
   categoriesMode={true}
+  categoriesVariant={categoriesVariant}
   categoryLabels={visualization?.classification?.labels ?? []}
   oninvert={onInvertPalette}
   onClassificationChange={onClassificationChange}

@@ -14,8 +14,10 @@
     getSymbolPrimitive,
     PrimitiveFilterType
   } from '$lib/features/commons/store/visualization.store.svelte';
+  import { ProportionalType } from '$lib/features/main-toolbar/constants';
   import type {
     MissingDataConfig,
+    SymbolPrimitiveConfig,
     VisualizationConfig,
     VisualizationModes,
     ClassificationConfig
@@ -43,11 +45,15 @@
     onSymbolsChange?: (
       updates: Partial<VisualizationConfig['symbols']>
     ) => void;
+    onSymbolPrimitiveChange?: (updates: Partial<SymbolPrimitiveConfig>) => void;
     onMappingChange?: (
       updates: Partial<VisualizationConfig['mapping']>
     ) => void;
     onMissingDataChange?: (updates: Partial<MissingDataConfig>) => void;
     onClassificationChange?: (updates: Partial<ClassificationConfig>) => void;
+    onStrokeClassificationChange?: (
+      updates: Partial<ClassificationConfig>
+    ) => void;
     onInvertPalette?: () => void;
     onToggleVisibility?: (checked: boolean) => void;
     filters?: VizDataFilter[];
@@ -67,9 +73,11 @@
     onStyleChange,
     onModesChange,
     onSymbolsChange,
+    onSymbolPrimitiveChange,
     onMappingChange,
     onMissingDataChange,
     onClassificationChange,
+    onStrokeClassificationChange,
     onInvertPalette,
     onToggleVisibility,
     filters = [],
@@ -111,8 +119,35 @@
       SymbolMode.CLASSES,
       SymbolMode.CATEGORIES
     ];
-    symbolMode = modes[index] || SymbolMode.UNIQUE;
+    const next = modes[index] || SymbolMode.UNIQUE;
+    if (next === symbolMode) return;
+    symbolMode = next;
     onModesChange?.({ symbol: symbolMode });
+    onClassificationChange?.({
+      colors: undefined,
+      paletteId: undefined,
+      breaks: undefined,
+      counts: undefined,
+      inverted: false,
+      patternId: undefined,
+      patternParams: undefined,
+      labels: undefined,
+      breakpointValue: null,
+      categoryShapes: undefined
+    });
+    if (symbolMode === SymbolMode.UNIQUE) {
+      onMappingChange?.({
+        sizeColumn: undefined,
+        valueColumn: undefined,
+        categoryColumn: undefined
+      });
+    } else if (symbolMode === SymbolMode.PROPORTIONAL) {
+      onMappingChange?.({ categoryColumn: undefined });
+    } else if (symbolMode === SymbolMode.CLASSES) {
+      onMappingChange?.({ categoryColumn: undefined });
+    } else if (symbolMode === SymbolMode.CATEGORIES) {
+      onMappingChange?.({ sizeColumn: undefined, valueColumn: undefined });
+    }
   }
 
   function handleOpenDiscretization() {
@@ -132,6 +167,12 @@
       SymbolMode.CLASSES,
       SymbolMode.CATEGORIES
     ].indexOf(symbolMode)
+  );
+
+  const isProportionalDouble = $derived(
+    symbolMode === SymbolMode.PROPORTIONAL &&
+      (getSymbolPrimitive(visualization)?.proportionalType ??
+        ProportionalType.SINGLE) === ProportionalType.DOUBLE
   );
 </script>
 
@@ -159,7 +200,9 @@
     <SectionHeading
       title={symbolMode === SymbolMode.CATEGORIES
         ? m.size_shape_and_color()
-        : m.size_and_shape()}
+        : isProportionalDouble
+          ? m.size_shape_and_fill()
+          : m.size_and_shape()}
     />
 
     <div class="field-group">
@@ -185,6 +228,7 @@
         onMappingChange={onMappingChange}
         onMissingDataChange={onMissingDataChange}
         onClassificationChange={onClassificationChange}
+        onStrokeClassificationChange={onStrokeClassificationChange}
         onInvertPalette={onInvertPalette}
         onOpenDiscretization={handleOpenDiscretization}
       />
@@ -194,11 +238,13 @@
         visualization={visualization}
         symbolMode={symbolMode}
         onSymbolsChange={onSymbolsChange}
+        onSymbolPrimitiveChange={onSymbolPrimitiveChange}
         onMappingChange={onMappingChange}
         onModesChange={onModesChange}
         onStyleChange={onStyleChange}
         onMissingDataChange={onMissingDataChange}
         onClassificationChange={onClassificationChange}
+        onStrokeClassificationChange={onStrokeClassificationChange}
         onInvertPalette={onInvertPalette}
         onOpenDiscretization={handleOpenDiscretization}
       />
@@ -210,6 +256,7 @@
         onMappingChange={onMappingChange}
         onMissingDataChange={onMissingDataChange}
         onClassificationChange={onClassificationChange}
+        onStrokeClassificationChange={onStrokeClassificationChange}
         onInvertPalette={onInvertPalette}
         onOpenDiscretization={handleOpenDiscretization}
       />
@@ -234,6 +281,8 @@
 <DiscretizationModal
   bind:open={discretizationModalOpen}
   visualization={visualization}
+  classification={visualization?.symbol?.classification ??
+    visualization?.symbolClassification}
   onchange={handleClassificationChange}
 />
 
