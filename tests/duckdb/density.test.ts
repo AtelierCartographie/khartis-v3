@@ -41,7 +41,6 @@ describe('density macros', () => {
 
   beforeAll(async () => {
     db = await createTestInstance();
-    await db.connection.run('INSTALL spatial');
     await db.connection.run('LOAD spatial');
     await loadDensityMacros(db);
   });
