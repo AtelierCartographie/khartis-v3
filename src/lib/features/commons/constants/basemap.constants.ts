@@ -1,10 +1,3 @@
-/**
- * Basemap layer constants
- *
- * Layer identifiers for basemap rendering and configuration.
- * These IDs are used across basemap layers, stores, and UI components.
- */
-
 export const BASEMAP_LAYER_ID = {
   TERRE: 'terre',
   MERS: 'mers',

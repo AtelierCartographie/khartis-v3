@@ -146,37 +146,64 @@ describe('estimateProjectStorageSize', () => {
     expect(estimateProjectStorageSize(project)).toBeGreaterThan(0);
   });
 
-  it('includes ArrayBuffer byte lengths', () => {
+  it('ignores inline ArrayBuffer payloads and measures metadata only', () => {
     const buf = new ArrayBuffer(1000);
     const project = {
       data: {
-        sourceFiles: [{ content: buf }]
+        sourceFiles: [{ content: buf, assetRef: { assetId: 'a1' } }]
       }
     };
     const size = estimateProjectStorageSize(project);
-    expect(size).toBeGreaterThan(1000);
+    expect(size).toBeLessThan(300);
   });
 
-  it('counts string content at 2 bytes per char', () => {
+  it('ignores inline string content when computing persisted size', () => {
     const str = 'x'.repeat(100);
     const withString = estimateProjectStorageSize({
-      data: { sourceFiles: [{ content: str }] }
+      data: { sourceFiles: [{ content: str, assetRef: { assetId: 'a1' } }] }
     });
     const withoutString = estimateProjectStorageSize({
-      data: { sourceFiles: [{}] }
+      data: { sourceFiles: [{ assetRef: { assetId: 'a1' } }] }
     });
-    expect(withString - withoutString).toBeGreaterThanOrEqual(200);
+    expect(withString - withoutString).toBeLessThan(50);
   });
 
-  it('strips binary fields before computing metadata JSON size', () => {
+  it('keeps lightweight persisted metadata like asset refs', () => {
     const buf = new ArrayBuffer(10000);
     const project = {
-      data: { sourceFiles: [{ content: buf, name: 'file.csv' }] }
+      data: {
+        sourceFiles: [
+          {
+            content: buf,
+            name: 'file.csv',
+            assetRef: {
+              assetId: 'asset-1',
+              originalName: 'file.csv',
+              mimeType: 'text/csv',
+              size: 10000,
+              kind: 'primary'
+            }
+          }
+        ]
+      }
     };
     const size = estimateProjectStorageSize(project);
     const metadataOnly = estimateProjectStorageSize({
-      data: { sourceFiles: [{ name: 'file.csv' }] }
+      data: {
+        sourceFiles: [
+          {
+            name: 'file.csv',
+            assetRef: {
+              assetId: 'asset-1',
+              originalName: 'file.csv',
+              mimeType: 'text/csv',
+              size: 10000,
+              kind: 'primary'
+            }
+          }
+        ]
+      }
     });
-    expect(size - metadataOnly).toBeCloseTo(10000, -2);
+    expect(size).toBe(metadataOnly);
   });
 });

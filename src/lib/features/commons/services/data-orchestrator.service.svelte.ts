@@ -14,6 +14,7 @@ import { cleanupDuckDBResources } from '$lib/features/commons/utils/duckdb-clean
 import { toJsonValue } from '$lib/features/commons/utils/json.utils';
 import type { SerializedProjectData } from '$lib/types/serialization.types';
 import { persistenceRegistry } from '$lib/features/project-management';
+import { createCompanionFilesFromAssetRefs } from '$lib/features/project-management/core/asset-store';
 import { layersActions } from '../../step-toolbar/tools/layers/layers.store.svelte';
 import { legendActions } from '../../step-toolbar/tools/legend/legend.store.svelte';
 import { projectionActions } from '../../step-toolbar/tools/projections/projection.store.svelte';
@@ -32,6 +33,7 @@ import { datasetsStore } from '../store/datasets.store.svelte';
 import { globalActions, globalState } from '../store/global.svelte';
 import { projectStore } from '../store/project.store.svelte';
 import {
+  ClassificationMethod,
   visualizationStore,
   type VisualizationConfig
 } from '../store/visualization.store.svelte';
@@ -48,6 +50,7 @@ import { importRollbackService } from './import-rollback.service';
 import {
   applyPaletteInversion,
   calculateBreaks,
+  computeDivergingSplit,
   generateColorsForBreaks
 } from './classification.service';
 import { FillMode } from '../../main-toolbar/constants';
@@ -229,15 +232,6 @@ function createDataOrchestratorService() {
         {
           geoDetection: dataset.geoDetection,
           preferredDatasetId: dataset.id
-        }
-      );
-
-      logger.debug(
-        'DuckDB table recreated from parsed data',
-        LogCategory.DUCKDB,
-        {
-          tableName,
-          rowCount: (file.parsedData as unknown[]).length
         }
       );
     } catch (error) {
@@ -750,6 +744,20 @@ function createDataOrchestratorService() {
           file.fileType === FileType.SHAPEFILE &&
           (!file.relatedFileObjects || file.relatedFileObjects.length === 0)
         ) {
+          if (file.companionAssetRefs?.length) {
+            try {
+              file.relatedFileObjects = await createCompanionFilesFromAssetRefs(
+                file.companionAssetRefs
+              );
+            } catch (err) {
+              logger.warn(
+                `Failed to restore companion assets for ${file.name}`,
+                LogCategory.DATA,
+                { error: err }
+              );
+            }
+          }
+
           if (file.relatedFilesData) {
             const companionFiles: File[] = [];
             for (const [name, buffer] of Object.entries(
@@ -846,7 +854,6 @@ function createDataOrchestratorService() {
 
     if (orphanedVizs.length === 0) return;
 
-    // Collect unique old dataset IDs preserving insertion order
     const uniqueOldIds: string[] = [];
     const seen = new Set<string>();
     for (const v of orphanedVizs) {
@@ -856,7 +863,6 @@ function createDataOrchestratorService() {
       }
     }
 
-    // Datasets that no viz currently points to
     const matchedIds = new Set(
       vizs
         .filter((v) => knownDatasetIds.has(v.datasetId))
@@ -895,13 +901,6 @@ function createDataOrchestratorService() {
     );
   }
 
-  /**
-   * Recompute missing classification breaks for all active visualizations.
-   * Breaks are normally computed inside configure-visualization.svelte,
-   * but that component is only mounted on the Visualization tab. After a
-   * page refresh on another tab, breaks may be missing from the restored
-   * config — causing the choropleth to fall back to a flat fill color.
-   */
   async function recomputeMissingBreaks(): Promise<void> {
     const vizs = visualizationStore.activeVisualizations;
     if (!Array.isArray(vizs) || vizs.length === 0) return;
@@ -917,6 +916,9 @@ function createDataOrchestratorService() {
       const numClasses =
         viz.classification!.numClasses ?? viz.classification!.classes ?? 5;
       const normalizedMethod = normalizeClassificationMethod(method);
+      if (normalizedMethod === ClassificationMethod.MANUAL) {
+        continue;
+      }
       const requestedClassCount = resolveRequestedClassCount(
         normalizedMethod,
         numClasses
@@ -942,6 +944,10 @@ function createDataOrchestratorService() {
         if (existingColors && existingColors.length === actualNumClasses) {
           colors = existingColors;
         } else {
+          const paletteType =
+            viz.classification?.breakpointValue != null
+              ? 'diverging'
+              : 'sequential';
           const contrast = getColorBlindnessState().enabled
             ? ('high' as const)
             : undefined;
@@ -949,13 +955,22 @@ function createDataOrchestratorService() {
             ? findPaletteById(viz.classification.paletteId)
             : undefined;
           const isPatternPalette = userPalette?.type === PALETTE_TYPE.PATTERN;
+          const divergingSplit =
+            paletteType === 'diverging'
+              ? computeDivergingSplit(
+                  actualNumClasses,
+                  result.breaks,
+                  viz.classification?.breakpointValue ?? null
+                )
+              : undefined;
           colors =
             userPalette && !isPatternPalette
               ? generatePaletteColors(userPalette, actualNumClasses, contrast)
               : generateColorsForBreaks(
                   actualNumClasses,
-                  'sequential',
-                  contrast
+                  paletteType,
+                  contrast,
+                  divergingSplit
                 );
           colors = applyPaletteInversion(
             colors,
@@ -991,7 +1006,8 @@ function createDataOrchestratorService() {
     if (
       viz.modes?.fill !== FillMode.CLASSES ||
       !viz.mapping.valueColumn ||
-      !viz.classification?.method
+      !viz.classification?.method ||
+      viz.classification.method === ClassificationMethod.MANUAL
     ) {
       return false;
     }
@@ -1030,6 +1046,17 @@ function createDataOrchestratorService() {
   /** Set to true once onProjectChanged() completes. If initialize() runs after,
    *  it skips the migration + breaks work that onProjectChanged already did. */
   let projectAlreadyRestored = false;
+  let pendingGeoColumnRestoreTimeout: ReturnType<typeof setTimeout> | null =
+    null;
+  let activeGeoColumnRestoreToken = 0;
+
+  function cancelPendingGeoColumnRestore(): void {
+    activeGeoColumnRestoreToken += 1;
+    if (pendingGeoColumnRestoreTimeout !== null) {
+      clearTimeout(pendingGeoColumnRestoreTimeout);
+      pendingGeoColumnRestoreTimeout = null;
+    }
+  }
 
   async function initialize(): Promise<void> {
     await projectStore.waitForInit();
@@ -1037,10 +1064,6 @@ function createDataOrchestratorService() {
     // onProjectChanged() may have already been called during projectStore init
     // (via loadLastProject → loadProject). If so, skip duplicate restoration.
     if (projectAlreadyRestored) {
-      logger.debug(
-        'initialize() skipping — onProjectChanged already restored project',
-        LogCategory.DATA
-      );
       return;
     }
 
@@ -1083,13 +1106,17 @@ function createDataOrchestratorService() {
 
   async function onProjectChanged(): Promise<void> {
     await duckDBOrchestrator.waitForInitialization();
-    await duckDBOrchestrator.clear();
+    cancelPendingGeoColumnRestore();
 
     visualizationStore.clear();
     datasetsStore.clear();
     layersActions.reset();
-
     processedFileIds.clear();
+
+    // Remove runtime datasets before dropping DuckDB tables so reactive UI
+    // components stop reading the soon-to-be-deleted tables during project
+    // switches.
+    await duckDBOrchestrator.clear();
 
     const currentProject = projectStore.currentProject;
     const vizSettings = (
@@ -1154,15 +1181,6 @@ function createDataOrchestratorService() {
             isSelectedSourceFile: true
           })
         : null;
-      logger.debug('Geo column restore check', LogCategory.DATA, {
-        hasSourceFiles: true,
-        restoredFileName: restoredFile?.name,
-        selectedSourceFileId,
-        geoColumn: restoredPrimaryJoinState?.geoColumn,
-        joinedBasemap: restoredPrimaryJoinState?.joinedBasemap,
-        gpsMode: restoredPrimaryJoinState?.gpsMode,
-        gpsColumns: restoredPrimaryJoinState?.gpsColumns
-      });
       if (restoredPrimaryJoinState?.joinedBasemap) {
         dataTabActions.selectBasemap(restoredPrimaryJoinState.joinedBasemap);
       }
@@ -1179,16 +1197,36 @@ function createDataOrchestratorService() {
         });
       } else if (restoredPrimaryJoinState?.geoColumn) {
         const geoCol = restoredPrimaryJoinState.geoColumn;
+        const currentProjectId = currentProject.id;
+        const restoredSourceFileId = restoredFile?.id;
+        cancelPendingGeoColumnRestore();
+        const restoreToken = activeGeoColumnRestoreToken;
+
         // Defer restoration until dataset is fully loaded. The component's
         // $effect resets linkedVariable when the dataset ID changes, so we
         // must wait for that reset to happen first, then override.
         const restoreGeoColumn = () => {
-          const dataset = datasetsStore.selectedDataset;
-          if (!dataset?.columns?.length) {
-            // Dataset not ready yet, retry
-            setTimeout(restoreGeoColumn, 200);
+          if (
+            restoreToken !== activeGeoColumnRestoreToken ||
+            projectStore.currentProject?.id !== currentProjectId
+          ) {
+            pendingGeoColumnRestoreTimeout = null;
             return;
           }
+
+          const dataset = datasetsStore.selectedDataset;
+          if (
+            !dataset?.columns?.length ||
+            (restoredSourceFileId &&
+              dataset.sourceFileId !== restoredSourceFileId)
+          ) {
+            // Dataset not ready yet, retry
+            pendingGeoColumnRestoreTimeout = setTimeout(restoreGeoColumn, 200);
+            return;
+          }
+
+          pendingGeoColumnRestoreTimeout = null;
+
           const colIndex = dataset.columns
             .filter((c) => c.name !== '__geom' && c.name !== '__id')
             .findIndex((c) => c.name === geoCol);
@@ -1198,14 +1236,10 @@ function createDataOrchestratorService() {
               linkedVariableName: geoCol,
               autoDetected: false
             });
-            logger.debug('Restored geo column from project', LogCategory.DATA, {
-              geoCol,
-              colIndex
-            });
           }
         };
         // Wait 2s for all Svelte $effects to settle after dataset loading
-        setTimeout(restoreGeoColumn, 2000);
+        pendingGeoColumnRestoreTimeout = setTimeout(restoreGeoColumn, 2000);
       }
     }
 

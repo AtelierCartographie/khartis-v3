@@ -4,6 +4,12 @@ import type { SerializedProject } from '$lib/types/serialization.types';
 import { PROJECT_CONST } from '../constants';
 import type { KhartisProject, SavedProjectMetadata } from '../types';
 import { ProjectStorageKey } from '../types';
+import {
+  ensureUploadedFileAssets,
+  registerAssetStores,
+  removeProjectAssetRefs,
+  syncProjectAssetRefs
+} from './asset-store';
 import { deserialize, prepareForIndexedDB } from './serializer';
 import { loadFromStorage, saveToStorage } from './storage';
 import { migrateIfNeeded } from './schema-migration';
@@ -56,6 +62,8 @@ export async function openDatabase(): Promise<IDBDatabase> {
           keyPath: 'key'
         });
       }
+
+      registerAssetStores(db);
     };
   });
 
@@ -64,13 +72,7 @@ export async function openDatabase(): Promise<IDBDatabase> {
   // One-shot migration: copy localforage keys to the new IDB metadata store
   if (!localforageMigrated) {
     localforageMigrated = true;
-    migrateFromLocalforage(database).catch((error) => {
-      logger.debug(
-        'Localforage migration skipped or failed (may already be migrated)',
-        LogCategory.PERSISTENCE,
-        error
-      );
-    });
+    migrateFromLocalforage(database).catch((error) => console.error(error));
   }
 
   return database;
@@ -110,7 +112,6 @@ async function migrateFromLocalforage(database: IDBDatabase): Promise<void> {
       tx.onerror = () => reject(tx.error);
     });
 
-    // Remove from localforage
     await lf.removeItem(key);
     migrated++;
   }
@@ -132,6 +133,13 @@ async function ensureDb(): Promise<IDBDatabase> {
 
 export async function saveProject(project: KhartisProject): Promise<void> {
   const database = await ensureDb();
+  project.manifest.version = PROJECT_CONST.APP_VERSION;
+
+  if (project.data?.sourceFiles?.length) {
+    project.data.sourceFiles = await Promise.all(
+      project.data.sourceFiles.map((file) => ensureUploadedFileAssets(file))
+    );
+  }
 
   const serialized = await prepareForIndexedDB(project);
   await new Promise<void>((resolve, reject) => {
@@ -140,15 +148,14 @@ export async function saveProject(project: KhartisProject): Promise<void> {
       'readwrite'
     );
     const store = transaction.objectStore(PROJECT_CONST.DB.STORE_NAME);
-    const request = store.put(serialized);
-
-    request.onsuccess = async () => {
-      await updateMetadata(project);
-      resolve();
-    };
-    request.onerror = () =>
-      reject(request.error || new Error('Failed to save project'));
+    store.put(serialized);
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () =>
+      reject(transaction.error || new Error('Failed to save project'));
   });
+
+  await syncProjectAssetRefs(project.id, project.data?.sourceFiles ?? []);
+  await updateMetadata(project);
 }
 
 export async function loadProject(id: string): Promise<KhartisProject | null> {
@@ -227,15 +234,14 @@ export async function removeProject(id: string): Promise<void> {
       'readwrite'
     );
     const store = transaction.objectStore(PROJECT_CONST.DB.STORE_NAME);
-    const request = store.delete(id);
-
-    request.onsuccess = async () => {
-      await removeFromMetadata(id);
-      resolve();
-    };
-    request.onerror = () =>
-      reject(request.error || new Error('Failed to delete project'));
+    store.delete(id);
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () =>
+      reject(transaction.error || new Error('Failed to delete project'));
   });
+
+  await removeProjectAssetRefs(id);
+  await removeFromMetadata(id);
 }
 
 export async function listMetadata(): Promise<SavedProjectMetadata[]> {

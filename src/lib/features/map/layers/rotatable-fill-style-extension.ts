@@ -18,8 +18,6 @@ import type {
 } from '@deck.gl/core';
 import type { Texture } from '@luma.gl/core';
 
-// --- Shader Module Logic ---
-
 const uniformBlock = /* glsl */ `\
 uniform fillUniforms {
   vec2 patternTextureSize;
@@ -175,8 +173,6 @@ const patternShaders = {
     uvCoordinateOrigin64Low: 'vec2<f32>'
   }
 } as const;
-
-// --- Extension Class ---
 
 export type RotatableFillStyleExtensionProps<DataT = unknown> = {
   fillPatternEnabled?: boolean;

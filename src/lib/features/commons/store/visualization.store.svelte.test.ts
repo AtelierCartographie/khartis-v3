@@ -23,6 +23,8 @@ import {
   ClassificationMethod,
   PrimitiveFilterType,
   VisualizationType,
+  getEnabledPrimitiveFilters,
+  getTextPrimitive,
   visualizationStore,
   type VisualizationConfig
 } from './visualization.store.svelte';
@@ -257,5 +259,81 @@ describe('visualizationStore suggestion origin tracking', () => {
         }
       }
     });
+  });
+});
+
+describe('visualizationStore text primitive enablement', () => {
+  afterEach(() => {
+    visualizationStore.clear();
+    datasetsStore.clear();
+    persistenceRegistry.markClean();
+  });
+
+  it('preserves per-primitive text enablement when legacy text opacity is zero', () => {
+    datasetsStore.addProcessedDataset(buildDataset());
+
+    const visualization = visualizationStore.createVisualization(
+      VisualizationType.CATEGORICAL,
+      'dataset-1'
+    );
+    const initialText = getTextPrimitive(visualization);
+
+    expect(initialText).toBeDefined();
+    if (!initialText) {
+      throw new Error('Expected createVisualization to initialize text config');
+    }
+
+    visualizationStore.updateVisualization(visualization.id, {
+      style: {
+        ...visualization.style,
+        textOpacity: 0
+      },
+      text: {
+        ...initialText,
+        enabled: true,
+        labelColumn: 'name',
+        opacity: 1
+      }
+    });
+
+    const updatedVisualization = visualizationStore.selectedVisualization;
+
+    expect(getTextPrimitive(updatedVisualization)?.enabled).toBe(true);
+    expect(getEnabledPrimitiveFilters(updatedVisualization)).toContain(
+      PrimitiveFilterType.TEXT
+    );
+  });
+
+  it('restores text opacity from legacy style when an enabled text primitive was persisted with zero opacity', () => {
+    datasetsStore.addProcessedDataset(buildDataset());
+
+    const visualization = visualizationStore.createVisualization(
+      VisualizationType.CATEGORICAL,
+      'dataset-1'
+    );
+    const initialText = getTextPrimitive(visualization);
+
+    expect(initialText).toBeDefined();
+    if (!initialText) {
+      throw new Error('Expected createVisualization to initialize text config');
+    }
+
+    visualizationStore.updateVisualization(visualization.id, {
+      style: {
+        ...visualization.style,
+        textOpacity: 1
+      },
+      text: {
+        ...initialText,
+        enabled: true,
+        labelColumn: 'name',
+        opacity: 0
+      }
+    });
+
+    const updatedVisualization = visualizationStore.selectedVisualization;
+
+    expect(getTextPrimitive(updatedVisualization)?.enabled).toBe(true);
+    expect(getTextPrimitive(updatedVisualization)?.opacity).toBe(1);
   });
 });

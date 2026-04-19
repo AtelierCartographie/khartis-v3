@@ -113,11 +113,6 @@ export const csvProcessor: FileProcessor = {
     file: UploadedFile
   ): Promise<ProcessorDataset> {
     const start = performance.now();
-    logger.debug('Processing CSV file', LogCategory.DUCKDB, {
-      fileId: file.id,
-      tableName: ctx.tableName
-    });
-
     if (!file.parsedData || !isTabularData(file.parsedData)) {
       throw new ParseError(
         'Invalid or missing parsed data for CSV file',

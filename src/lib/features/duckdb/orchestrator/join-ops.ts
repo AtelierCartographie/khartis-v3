@@ -355,6 +355,20 @@ function buildJoinQualityFromRows(
 
 /**
  * Join synthesis result: per-basemap share scores derived from similarity cache.
+ *
+ *   shareCandidate ∈ [0, 100]   — % of distinct dataset names that found ≥ 1 match
+ *   shareBasemap   ∈ [0, +∞)    — ratio matched_names / basemap_entity_count
+ *                                 (1 = perfect granularity, >1 = over-coverage,
+ *                                  <1 = under-coverage)
+ *
+ * The two scales are intentionally different: shareCandidate is the user-facing
+ * "match score" displayed as a percentage, while shareBasemap is an internal
+ * granularity signal used as a tiebreaker (see rankBasemapsByJoinSynthesis).
+ *
+ * Mirrors the POC's `join_synthesis` macro
+ * (https://github.com/AtelierCartographie/khartis-pipeline/blob/main/src/lib/duckdb/join.ts)
+ * but uses `COUNT(DISTINCT original_name)` so that CSVs with duplicate rows for
+ * the same entity (e.g. one row per year) don't inflate the share.
  */
 export interface JoinSynthesisResult {
   basemap: string;

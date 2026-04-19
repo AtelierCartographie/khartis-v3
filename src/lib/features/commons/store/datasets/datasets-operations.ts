@@ -1,5 +1,9 @@
 import type { DatasetResult } from '$lib/features/data-pipeline';
-import { dataPipeline, isZipDatasetResult } from '$lib/features/data-pipeline';
+import {
+  createFileFromUpload,
+  dataPipeline,
+  isZipDatasetResult
+} from '$lib/features/data-pipeline';
 import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import { Duck } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
@@ -131,7 +135,7 @@ export async function resetDataset(
     return false;
   }
 
-  if (!sourceFile.content && !sourceFile.originalFile) {
+  if (!sourceFile.content && !sourceFile.originalFile && !sourceFile.assetRef) {
     logger.warn('Source file has no content for reset', LogCategory.STORE, {
       datasetId,
       fileName: sourceFile.name
@@ -150,9 +154,12 @@ export async function resetDataset(
       gpsColumns: sourceFile.gpsColumns
     };
 
+    const restoredSourceFile =
+      sourceFile.originalFile ?? (await createFileFromUpload(sourceFile));
+
     const result = await dataPipeline.processUploadedFile(
       sourceFile,
-      sourceFile.originalFile
+      restoredSourceFile
     );
 
     const newDataset: DatasetResult = isZipDatasetResult(result)
@@ -264,6 +271,10 @@ export async function duplicateDataset(
       validation: originalFile?.validation
         ? clonePlainValue(originalFile.validation)
         : undefined,
+      assetRef: originalFile?.assetRef,
+      companionAssetRefs: originalFile?.companionAssetRefs
+        ? clonePlainValue(originalFile.companionAssetRefs)
+        : undefined,
       content: cloneContent(originalFile?.content),
       originalFile: originalFile?.originalFile,
       relatedFileObjects: originalFile?.relatedFileObjects
@@ -352,7 +363,6 @@ export async function duplicateDataset(
       }
     );
 
-    // Duplicate visualizations from the original dataset
     const originalVizs =
       visualizationStore.getVisualizationsByDataset(datasetId);
     for (const viz of originalVizs) {

@@ -94,7 +94,6 @@
   $effect(() => {
     if (open) {
       updatePosition();
-      // Refine position after render using actual dropdown height
       requestAnimationFrame(() => {
         if (dropdownRef) {
           const scale = globalState.zoom.pageZoomLevel / 100;

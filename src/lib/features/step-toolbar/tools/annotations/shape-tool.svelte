@@ -80,7 +80,6 @@
   let fillLightness = $state(100);
 
   $effect(() => {
-    // Sync dropdown when user selects an existing shape annotation on the canvas
     if (selectedShapeAnnotation) {
       const content = String(selectedShapeAnnotation.content);
       if (SHAPE_TYPES.includes(content as ShapeTypeValue)) {
@@ -201,7 +200,7 @@
           max={10}
           step={1}
           stepMultiplier={1}
-          on:change={handleThicknessChange}
+          on:input={handleThicknessChange}
           minLabel=""
           maxLabel=""
         />
@@ -220,7 +219,7 @@
             max={100}
             step={1}
             stepMultiplier={5}
-            on:change={handleCurvatureChange}
+            on:input={handleCurvatureChange}
             minLabel=""
             maxLabel=""
           />
@@ -239,7 +238,7 @@
           max={359}
           step={1}
           stepMultiplier={15}
-          on:change={handleRotationChange}
+          on:input={handleRotationChange}
           minLabel=""
           maxLabel=""
         />
@@ -341,8 +340,7 @@
           max={100}
           step={5}
           stepMultiplier={5}
-          on:change={(e) =>
-            annotationsActions.applyStyle({ opacity: e.detail })}
+          on:input={(e) => annotationsActions.applyStyle({ opacity: e.detail })}
           minLabel=""
           maxLabel=""
         />

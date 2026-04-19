@@ -4,7 +4,9 @@
   import ContentSwitcher from './content-switcher.svelte';
   import { ColorSelector, SliderWithInput, ToggleWithLabel } from '../shared';
   import {
+    PALETTE_TYPE,
     type Palette,
+    type PaletteType,
     type PatternParams,
     type ContrastMode,
     getPatternPalettes,
@@ -15,6 +17,7 @@
 
   interface Props {
     selectedPaletteId?: string;
+    paletteType?: PaletteType;
     numClasses: number;
     colorBlindFilter?: boolean;
     inverted?: boolean;
@@ -26,6 +29,7 @@
 
   let {
     selectedPaletteId,
+    paletteType = PALETTE_TYPE.SEQUENTIAL,
     numClasses,
     colorBlindFilter: _colorBlindFilter = false,
     inverted = $bindable(false),
@@ -40,10 +44,13 @@
   let startColor = $state('#f7fbff');
   let endColor = $state('#08519c');
   let contrastMode = $state<'low' | 'normal' | 'high'>('normal');
+  let motifEnabled = $state(false);
 
   let selectedPatternId = $state<string | null>(null);
   let patternSize = $state(4);
   let patternScale = $state(8);
+
+  const isQualitative = $derived(paletteType === PALETTE_TYPE.QUALITATIVE);
 
   const tabLabels = $derived([
     m.palette_custom_1_color(),
@@ -62,7 +69,6 @@
     }
   });
 
-  // Line patterns support angle selection (CDC §2.B.2.c)
   const LINE_PATTERN_IDS = [
     'diagonal',
     'diagonal-reverse',
@@ -139,10 +145,11 @@
   }
 
   function handleContrastChange(value: string) {
-    contrastMode = value as 'low' | 'normal' | 'high';
+    const next = value as 'low' | 'normal' | 'high';
+    if (next === contrastMode) return;
+    contrastMode = next;
     onContrastChange?.(resolvedContrast);
 
-    // Re-emit current colors with new contrast
     if (activeTab === 0) {
       const colors = generateSequentialFromColor(
         singleColor,
@@ -239,190 +246,227 @@
     inverted = value;
     onInvertToggle?.(value);
   }
+
+  function handleMotifToggle(value: boolean) {
+    motifEnabled = value;
+    if (!value) {
+      selectedPatternId = null;
+    }
+  }
 </script>
 
 <div class="palette-custom">
-  <div class="section-title">
-    <span class="section-title-text">{m.palette_custom()}</span>
-    <div class="section-title-line"></div>
+  <div class="section-heading">
+    <span class="section-heading-text">{m.palette_custom()}</span>
+    <div class="section-heading-line"></div>
   </div>
 
-  <ContentSwitcher
-    items={tabLabels}
-    activeIndex={activeTab}
-    onchange={handleTabChange}
-  />
+  {#if isQualitative}
+    <ColorSelector
+      label={m.color()}
+      value={singleColor}
+      onchange={handleSingleColorChange}
+    />
 
-  <div class="tab-content">
-    {#if activeTab === 0}
-      <ColorSelector
-        label={m.color()}
-        value={singleColor}
-        onchange={handleSingleColorChange}
-      />
-    {:else if activeTab === 1}
-      <div class="two-colors">
+    <ToggleWithLabel
+      label={m.pattern_preview()}
+      toggled={motifEnabled}
+      ontoggle={handleMotifToggle}
+    />
+  {:else}
+    <ContentSwitcher
+      items={tabLabels}
+      activeIndex={activeTab}
+      onchange={handleTabChange}
+    />
+
+    <div class="tab-content">
+      {#if activeTab === 0}
         <ColorSelector
           label={m.color()}
-          value={startColor}
-          onchange={handleStartColorChange}
+          value={singleColor}
+          onchange={handleSingleColorChange}
         />
-        <ColorSelector
-          label={m.color()}
-          value={endColor}
-          onchange={handleEndColorChange}
-        />
-      </div>
-    {:else if activeTab === 2}
-      <div class="pattern-list">
-        {#each patternPalettes as palette (palette.id)}
-          <button
-            type="button"
-            class="pattern-item"
-            class:selected={selectedPatternId === palette.id}
-            onclick={() => handlePatternClick(palette)}
-            aria-label={palette.name}
-            aria-pressed={selectedPatternId === palette.id}
-          >
-            <div
-              class="pattern-preview"
-              style="background: {buildPatternBackground(palette)}"
-            ></div>
-            <span class="pattern-name">{palette.name}</span>
-          </button>
-        {/each}
-      </div>
-
-      {#if selectedPalette}
-        <div class="pattern-params">
-          {#if isLinePattern}
-            <div class="param-row">
-              <span class="param-label">{m.pattern_angle()}</span>
-              <div class="angle-buttons">
-                {#each ANGLE_OPTIONS as opt (opt.angle)}
-                  <button
-                    type="button"
-                    class="angle-btn"
-                    class:active={currentAngle === opt.angle}
-                    onclick={() => handleAngleSelect(opt)}
-                    aria-pressed={currentAngle === opt.angle}
-                  >
-                    {opt.label}
-                  </button>
-                {/each}
-              </div>
-            </div>
-          {/if}
-
-          <SliderWithInput
-            label={m.pattern_size()}
-            min={1}
-            max={10}
-            value={patternSize}
-            onchange={handleSizeChange}
+      {:else if activeTab === 1}
+        <div class="two-colors">
+          <ColorSelector
+            label={m.color()}
+            value={startColor}
+            onchange={handleStartColorChange}
           />
-
-          <SliderWithInput
-            label={m.pattern_scale()}
-            min={4}
-            max={24}
-            value={patternScale}
-            onchange={handleScaleChange}
+          <ColorSelector
+            label={m.color()}
+            value={endColor}
+            onchange={handleEndColorChange}
           />
-
-          <div class="live-preview">
-            <span class="param-label">{m.pattern_preview()}</span>
-            <div
-              class="live-preview-swatch"
-              style="background: {livePreviewBg}"
-            ></div>
-          </div>
         </div>
+      {:else if activeTab === 2}
+        <div class="pattern-list">
+          {#each patternPalettes as palette (palette.id)}
+            <button
+              type="button"
+              class="pattern-item"
+              class:selected={selectedPatternId === palette.id}
+              onclick={() => handlePatternClick(palette)}
+              aria-label={palette.name}
+              aria-pressed={selectedPatternId === palette.id}
+            >
+              <div
+                class="pattern-preview"
+                style="background: {buildPatternBackground(palette)}"
+              ></div>
+              <span class="pattern-name">{palette.name}</span>
+            </button>
+          {/each}
+        </div>
+
+        {#if selectedPalette}
+          <div class="pattern-params">
+            {#if isLinePattern}
+              <div class="param-row">
+                <span class="param-label">{m.pattern_angle()}</span>
+                <div class="angle-buttons">
+                  {#each ANGLE_OPTIONS as opt (opt.angle)}
+                    <button
+                      type="button"
+                      class="angle-btn"
+                      class:active={currentAngle === opt.angle}
+                      onclick={() => handleAngleSelect(opt)}
+                      aria-pressed={currentAngle === opt.angle}
+                    >
+                      {opt.label}
+                    </button>
+                  {/each}
+                </div>
+              </div>
+            {/if}
+
+            <SliderWithInput
+              label={m.pattern_size()}
+              min={1}
+              max={10}
+              value={patternSize}
+              onchange={handleSizeChange}
+            />
+
+            <SliderWithInput
+              label={m.pattern_scale()}
+              min={4}
+              max={24}
+              value={patternScale}
+              onchange={handleScaleChange}
+            />
+
+            <div class="live-preview">
+              <span class="param-label">{m.pattern_preview()}</span>
+              <div
+                class="live-preview-swatch"
+                style="background: {livePreviewBg}"
+              ></div>
+            </div>
+          </div>
+        {/if}
       {/if}
-    {/if}
-  </div>
-
-  {#if activeTab !== 2}
-    <div class="contrast-section">
-      <span class="contrast-label">{m.contrast_label()}</span>
-      <RadioButtonGroup
-        selected={contrastMode}
-        legendText=""
-        orientation="horizontal"
-        on:change={(e) => handleContrastChange(String(e.detail))}
-      >
-        <RadioButton labelText={m.contrast_low()} value="low" />
-        <RadioButton labelText={m.contrast_normal()} value="normal" />
-        <RadioButton labelText={m.contrast_high()} value="high" />
-      </RadioButtonGroup>
     </div>
-  {/if}
 
-  <ToggleWithLabel
-    label={m.invert_palette_tooltip()}
-    toggled={inverted}
-    ontoggle={handleInvertToggle}
-  />
+    {#if activeTab !== 2}
+      <div class="contrast-section">
+        <span class="field-label">{m.contrast_label()}</span>
+        <RadioButtonGroup
+          selected={contrastMode}
+          legendText=""
+          orientation="horizontal"
+          on:change={(e) => {
+            const next = String(e.detail);
+            if (next === contrastMode) return;
+            handleContrastChange(next);
+          }}
+        >
+          <RadioButton labelText={m.contrast_low()} value="low" />
+          <RadioButton labelText={m.contrast_normal()} value="normal" />
+          <RadioButton labelText={m.contrast_high()} value="high" />
+        </RadioButtonGroup>
+      </div>
+    {/if}
+
+    <ToggleWithLabel
+      label={m.invert_palette_tooltip()}
+      toggled={inverted}
+      ontoggle={handleInvertToggle}
+    />
+  {/if}
 </div>
 
 <style lang="scss">
   .palette-custom {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-03);
+    gap: 16px;
+    width: 100%;
   }
 
-  .section-title {
+  .section-heading {
     display: flex;
     align-items: center;
-    gap: var(--cds-spacing-03);
+    gap: 8px;
+    height: 24px;
+    width: 100%;
   }
 
-  .section-title-text {
-    font-size: 0.875rem;
+  .section-heading-text {
+    font-family: 'IBM Plex Sans', sans-serif;
     font-weight: 600;
-    color: var(--cds-text-primary);
+    font-size: 14px;
+    line-height: 20px;
+    letter-spacing: 0.16px;
+    color: var(--cds-text-primary, #161616);
     white-space: nowrap;
   }
 
-  .section-title-line {
+  .section-heading-line {
     flex: 1;
     height: 1px;
-    background: var(--cds-border-subtle);
+    background: var(--cds-border-subtle-01, #c6c6c6);
+  }
+
+  .field-label {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-weight: 400;
+    font-size: 12px;
+    line-height: 16px;
+    letter-spacing: 0.32px;
+    color: var(--cds-text-secondary, #525252);
   }
 
   .tab-content {
-    padding-top: var(--cds-spacing-02);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
   }
 
   .two-colors {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-03);
+    gap: 16px;
   }
 
   .contrast-section {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-02);
-  }
-
-  .contrast-label {
-    font-size: 0.75rem;
-    color: var(--cds-text-secondary);
+    gap: 8px;
   }
 
   .pattern-list {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-02);
+    gap: 8px;
   }
 
   .pattern-item {
     display: flex;
     align-items: center;
-    gap: var(--cds-spacing-03);
-    padding: var(--cds-spacing-02);
+    gap: 8px;
+    padding: 8px;
     background: transparent;
     border: 1px solid var(--cds-border-subtle);
     border-radius: 4px;
@@ -452,29 +496,28 @@
   }
 
   .pattern-name {
-    font-size: 0.875rem;
+    font-size: 14px;
     color: var(--cds-text-primary);
   }
 
   .pattern-params {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-03);
-    padding: var(--cds-spacing-03);
+    gap: 8px;
+    padding: 8px;
     background: var(--cds-layer-01);
     border: 1px solid var(--cds-border-subtle);
     border-radius: 4px;
-    margin-top: var(--cds-spacing-02);
   }
 
   .param-row {
     display: flex;
     align-items: center;
-    gap: var(--cds-spacing-03);
+    gap: 8px;
   }
 
   .param-label {
-    font-size: 0.75rem;
+    font-size: 12px;
     color: var(--cds-text-secondary);
     white-space: nowrap;
     min-width: 48px;
@@ -482,12 +525,12 @@
 
   .angle-buttons {
     display: flex;
-    gap: var(--cds-spacing-02);
+    gap: 4px;
   }
 
   .angle-btn {
     padding: 2px 8px;
-    font-size: 0.75rem;
+    font-size: 12px;
     background: var(--cds-field);
     border: 1px solid var(--cds-border-strong);
     border-radius: 2px;
@@ -508,7 +551,7 @@
   .live-preview {
     display: flex;
     align-items: center;
-    gap: var(--cds-spacing-03);
+    gap: 8px;
   }
 
   .live-preview-swatch {

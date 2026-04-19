@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { duplicateProject } from '$lib/features/project-management/operations/duplicate';
 import { createAutoSaveController } from '$lib/features/project-management/operations/auto-save';
+import { PROJECT_CONST } from '$lib/features/project-management/constants';
 import type { KhartisProject } from '$lib/features/project-management/types';
 
 vi.mock('$lib/features/commons/utils/logger', () => ({
@@ -12,7 +13,7 @@ function makeProject(overrides: Partial<KhartisProject> = {}): KhartisProject {
   return {
     id: 'original-id',
     manifest: {
-      version: '3.2.0',
+      version: PROJECT_CONST.APP_VERSION,
       name: 'My Project',
       format: 'kh',
       createdAt: new Date('2024-01-01'),
@@ -69,13 +70,13 @@ describe('duplicateProject', () => {
     const original = makeProject({
       manifest: {
         ...makeProject().manifest,
-        version: '3.2.0',
+        version: PROJECT_CONST.APP_VERSION,
         author: 'Jean',
         format: 'kh'
       }
     });
     const dup = duplicateProject(original, 'Copy');
-    expect(dup.manifest.version).toBe('3.2.0');
+    expect(dup.manifest.version).toBe(PROJECT_CONST.APP_VERSION);
     expect(dup.manifest.format).toBe('kh');
     expect(dup.manifest.author).toBe('Jean');
   });

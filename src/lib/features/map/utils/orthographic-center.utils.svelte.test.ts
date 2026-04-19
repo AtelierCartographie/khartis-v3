@@ -1,9 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => {
-  const projectionFn = vi.fn(
-    ([lon, lat]: [number, number]) =>
-      [lon + 1000, lat + 2000] as [number, number]
+  const projectionFn = Object.assign(
+    vi.fn(
+      ([lon, lat]: [number, number]) =>
+        [lon + 1000, lat + 2000] as [number, number]
+    ),
+    {
+      fitExtent: vi.fn()
+    }
   );
 
   return {
@@ -13,6 +18,7 @@ const mocks = vi.hoisted(() => {
     getProjectionState: vi.fn(),
     fitProjectionToBbox: vi.fn(),
     buildProjectionForBasemap: vi.fn(() => projectionFn),
+    buildCompositeProjectionFromPresetId: vi.fn(),
     getPreferredBasemapFile: vi.fn((_: unknown, file: string) => file),
     initializeBasemap: vi.fn()
   };
@@ -74,6 +80,8 @@ vi.mock('./dataset-crs', () => ({
 
 vi.mock('./geoarrow-stream-bridge', () => ({
   buildProjectionForBasemap: mocks.buildProjectionForBasemap,
+  buildCompositeProjectionFromPresetId:
+    mocks.buildCompositeProjectionFromPresetId,
   getMainlandBboxForBasemap: vi.fn(() => null)
 }));
 
@@ -109,6 +117,7 @@ describe('resolveCenterCoordinates', () => {
     mocks.getProjectionState.mockReset();
     mocks.fitProjectionToBbox.mockReset();
     mocks.buildProjectionForBasemap.mockClear();
+    mocks.buildCompositeProjectionFromPresetId.mockReset();
     mocks.getPreferredBasemapFile.mockClear();
     mocks.initializeBasemap.mockReset();
 
@@ -145,6 +154,13 @@ describe('resolveCenterCoordinates', () => {
 
     expect(mocks.initializeBasemap).toHaveBeenCalled();
     expect(mocks.buildProjectionForBasemap).toHaveBeenCalled();
+    expect(mocks.fitProjectionToBbox).toHaveBeenCalledWith(
+      mocks.projectionFn,
+      [-10, 35, 30, 60],
+      800,
+      600,
+      40
+    );
     expect(center).toEqual({
       x: 1002.35,
       y: 2048.86

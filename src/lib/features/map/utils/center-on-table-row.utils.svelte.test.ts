@@ -191,4 +191,67 @@ describe('centerMapOnTableRow', () => {
 
     expect(mocks.centerOnDataPoint).toHaveBeenCalledWith(2.35, 48.86);
   });
+
+  it('centers on joined basemap rows backed by structured geom coordinates', async () => {
+    const { centerMapOnTableRow } = await import('./center-on-table-row.utils');
+
+    mocks.loadGeometryIntoDuckDB.mockResolvedValue('basemap_geom_world');
+    mocks.duckQuery.mockImplementation(async (sql: string) => {
+      if (
+        sql.includes('information_schema.columns') &&
+        sql.includes("table_name = 'joined_table'")
+      ) {
+        return [
+          { column_name: '__id', data_type: 'BIGINT' },
+          { column_name: 'basemap_id', data_type: 'VARCHAR' }
+        ];
+      }
+
+      if (
+        sql.includes('FROM "joined_table"') &&
+        sql.includes('WHERE __id = 27')
+      ) {
+        return [{ basemap_id: 'FRA', geometry_value: null }];
+      }
+
+      if (
+        sql.includes('information_schema.columns') &&
+        sql.includes("table_name = 'basemap_geom_world'")
+      ) {
+        return [
+          { column_name: 'id', data_type: 'VARCHAR' },
+          { column_name: 'geom', data_type: 'STRUCT(x DOUBLE, y DOUBLE)[][][]' }
+        ];
+      }
+
+      if (
+        sql.includes('FROM "basemap_geom_world"') &&
+        sql.includes(`'FRA'`) &&
+        sql.includes('geometry_value')
+      ) {
+        return [
+          {
+            geometry_value: [
+              [
+                [
+                  { x: 1, y: 2 },
+                  { x: 5, y: 6 }
+                ]
+              ]
+            ]
+          }
+        ];
+      }
+
+      return [];
+    });
+
+    await centerMapOnTableRow({
+      tableName: 'joined_table',
+      rowId: 27,
+      joinedBasemap: 'world'
+    });
+
+    expect(mocks.centerOnDataPoint).toHaveBeenCalledWith(3, 4);
+  });
 });
