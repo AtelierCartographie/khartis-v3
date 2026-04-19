@@ -149,10 +149,6 @@ export function isPipelineError(error: unknown): error is PipelineError {
   return error instanceof PipelineError;
 }
 
-/**
- * Non-fatal error that should show a toast but NOT trigger rollback
- * Examples: duplicate files, validation warnings, data quality issues
- */
 export type NonFatalError = PipelineError;
 
 interface NonFatalErrorConstructor {

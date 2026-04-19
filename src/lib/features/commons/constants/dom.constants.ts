@@ -1,10 +1,3 @@
-/**
- * DOM-related constants
- *
- * Keyboard keys and event types used throughout the application.
- * Centralizes all DOM event handling constants to avoid scattered string literals.
- */
-
 export const KEY = {
   ENTER: 'Enter',
   ESCAPE: 'Escape',

@@ -1,9 +1,3 @@
-/**
- * View mode constants
- *
- * Map view modes used for switching between 2D map and orthographic projections.
- */
-
 export const MAP_VIEW_MODE = {
   MAPLIBRE: 'maplibre',
   ORTHOGRAPHIC: 'orthographic'

@@ -2,7 +2,12 @@
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import { ArrowsHorizontal, ChevronDown } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
-  import { PalettePopover, PaletteDropdown } from '../palette-popover';
+  import {
+    PalettePopover,
+    PaletteDropdown,
+    CategoriesAspectPopover
+  } from '../palette-popover';
+  import type { CategoryDraft } from '../palette-popover/categories-aspect-popover.types';
   import type {
     Palette,
     PaletteType,
@@ -18,6 +23,8 @@
     paletteType?: PaletteType;
     colorBlindFilter?: boolean;
     showInvertButton?: boolean;
+    categoriesMode?: boolean;
+    categoryLabels?: string[];
     onexpand?: () => void;
     oninvert?: () => void;
     onselect?: (palette: Palette) => void;
@@ -32,6 +39,8 @@
     paletteType = $bindable<PaletteType>('sequential'),
     colorBlindFilter = $bindable(false),
     showInvertButton = true,
+    categoriesMode = false,
+    categoryLabels = [],
     onexpand,
     oninvert,
     onselect,
@@ -40,8 +49,18 @@
 
   let dropdownOpen = $state(false);
   let popoverOpen = $state(false);
+  let categoriesPopoverOpen = $state(false);
   let triggerRef = $state<HTMLDivElement>();
   let colorInputRefs = $state<HTMLInputElement[]>([]);
+
+  const categoryDrafts = $derived<CategoryDraft[]>(
+    colors.map((color, i) => ({
+      id: String(i),
+      label: categoryLabels[i] ?? `Cat. ${i + 1}`,
+      color,
+      enabled: true
+    }))
+  );
 
   function handleSwatchClick(index: number, event: MouseEvent) {
     event.stopPropagation();
@@ -85,11 +104,31 @@
 
   function handleCustomize() {
     dropdownOpen = false;
-    popoverOpen = true;
+    if (categoriesMode) {
+      categoriesPopoverOpen = true;
+    } else {
+      popoverOpen = true;
+    }
   }
 
   function handleDropdownClose() {
     dropdownOpen = false;
+  }
+
+  function handleCategoriesValidate(next: CategoryDraft[]) {
+    onClassificationChange?.({
+      colors: next.map((c) => c.color),
+      labels: next.map((c) => c.label),
+      paletteId: '__custom__',
+      inverted: false,
+      patternId: undefined,
+      patternParams: undefined
+    });
+    categoriesPopoverOpen = false;
+  }
+
+  function handleCategoriesClose() {
+    categoriesPopoverOpen = false;
   }
 
   function handlePopoverValidate(
@@ -187,6 +226,14 @@
   numClasses={colors.length || 5}
   onclose={handlePopoverClose}
   onvalidate={handlePopoverValidate}
+/>
+
+<CategoriesAspectPopover
+  bind:open={categoriesPopoverOpen}
+  triggerElement={triggerRef}
+  categories={categoryDrafts}
+  onclose={handleCategoriesClose}
+  onvalidate={handleCategoriesValidate}
 />
 
 <style lang="scss">

@@ -151,6 +151,28 @@ async function prefetchArrowMetadata(dataset: DuckDBDataset): Promise<void> {
 
 const joinedArrowCache: Map<string, Table> = new Map();
 
+function isMissingDuckTableError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    /Catalog Error:\s*Table with name .*?(does not exist|not found)/i.test(
+      error.message
+    )
+  );
+}
+
+function shouldIgnoreFinalizeJoinError(
+  datasetId: string,
+  expectedTableName: string,
+  error: unknown
+): boolean {
+  if (!isMissingDuckTableError(error)) {
+    return false;
+  }
+
+  const currentDataset = state.findDatasetByIdOrSourceFile(datasetId);
+  return !currentDataset || currentDataset.tableName !== expectedTableName;
+}
+
 function joinedArrowCacheKey(
   datasetTableName: string,
   basemapId: string
@@ -452,6 +474,10 @@ export const duckDBOrchestrator = {
       invalidateDatasetCache(dataset.tableName);
       state.bumpDatasetsVersion();
     } catch (error) {
+      if (shouldIgnoreFinalizeJoinError(datasetId, dataset.tableName, error)) {
+        return;
+      }
+
       logger.error('Failed to finalize join', LogCategory.DATA, {
         datasetId,
         basemap: basemap.file,

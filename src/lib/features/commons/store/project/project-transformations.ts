@@ -92,12 +92,6 @@ export async function addDeletedRows(
   const existingDeleted = file.deletedRowIds ?? [];
   const newDeletedIds = [...new Set([...existingDeleted, ...rowIds])];
 
-  logger.debug('Adding deleted rows to file', LogCategory.PROJECT, {
-    fileId,
-    newRowIds: rowIds.length,
-    totalDeleted: newDeletedIds.length
-  });
-
   const updatedFiles = [...project.data.sourceFiles];
   updatedFiles[fileIndex] = {
     ...file,

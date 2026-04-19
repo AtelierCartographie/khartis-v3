@@ -1,10 +1,3 @@
-/**
- * Commons constants - centralized exports
- *
- * This file re-exports all constants from individual constant files
- * for convenient imports.
- */
-
 export * from './basemap.constants';
 export * from './annotation.constants';
 export * from './colors.constants';

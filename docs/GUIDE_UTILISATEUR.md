@@ -188,11 +188,11 @@ Choisir le format de la carte (A4, A3, carré, ou dimensions personnalisées), s
 
 ### Fichier projet
 
-Le format `.kh` sauvegarde l'intégralité de votre projet (données, configuration, habillage). Vous pouvez le rouvrir dans Khartis pour reprendre votre travail.
+Le format `.kh` sauvegarde l'intégralité de votre projet dans une archive autoportante : configuration, habillage et fichiers source. Vous pouvez le rouvrir dans Khartis pour reprendre votre travail sur une autre machine ou plus tard.
 
 ### Sauvegarde automatique
 
-Khartis sauvegarde automatiquement votre projet dans le navigateur (IndexedDB). En rouvrant l'application, vous retrouvez votre dernier projet.
+Khartis sauvegarde automatiquement votre projet dans le navigateur (IndexedDB). Le projet et ses fichiers source restent stockés localement, ce qui permet de retrouver le dernier projet en rouvrant l'application, même hors ligne.
 
 ## 5. Confidentialité
 

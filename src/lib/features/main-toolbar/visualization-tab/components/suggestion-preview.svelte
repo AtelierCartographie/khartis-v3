@@ -58,6 +58,34 @@
       >
       <circle cx="76" cy="34" r="2" fill="var(--preview-light)" opacity="0.5" />
     </svg>
+  {:else if vizType === VisualizationType.CATEGORICAL && primaryGeom === 'line'}
+    <!-- Categorical lines: same width, distinct category colors -->
+    <svg viewBox="0 0 100 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path
+        d="M10 15 Q30 5, 55 20 T90 12"
+        stroke="var(--preview-accent)"
+        stroke-width="2.2"
+        stroke-linecap="round"
+      />
+      <path
+        d="M8 35 Q35 25, 60 38 T92 30"
+        stroke="var(--preview-cat2)"
+        stroke-width="2.2"
+        stroke-linecap="round"
+      />
+      <path
+        d="M10 52 Q40 42, 65 55 T88 48"
+        stroke="var(--preview-cat3)"
+        stroke-width="2.2"
+        stroke-linecap="round"
+      />
+      <path
+        d="M12 68 Q38 60, 58 70 T90 64"
+        stroke="var(--preview-accent)"
+        stroke-width="2.2"
+        stroke-linecap="round"
+      />
+    </svg>
   {:else if primaryGeom === 'line'}
     <!-- Line visualization: colored/sized lines -->
     <svg viewBox="0 0 100 80" fill="none" xmlns="http://www.w3.org/2000/svg">

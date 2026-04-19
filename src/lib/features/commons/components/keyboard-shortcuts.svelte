@@ -49,6 +49,7 @@
     function handleEscapeKey(): boolean {
       if (globalState.isCreateProjectModalOpen) {
         globalState.isCreateProjectModalOpen = false;
+        createProjectActions.resetAllTabs();
         return true;
       }
 
@@ -115,11 +116,13 @@
     }
 
     function handleNewProject(): void {
+      createProjectActions.resetAllTabs();
       createProjectActions.selectTab(1);
       globalState.isCreateProjectModalOpen = true;
     }
 
     function handleOpenProject(): void {
+      createProjectActions.resetAllTabs();
       createProjectActions.selectTab(2);
       globalState.isCreateProjectModalOpen = true;
     }

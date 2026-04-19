@@ -13,7 +13,6 @@ import type { DataTabState } from './data-tab.types';
 
 const DEFAULT_STATE: DataTabState = {
   dataControl: {
-    selectedRowIds: [],
     expandedRowIds: [],
     searchQuery: '',
     filterActive: false,
@@ -167,11 +166,6 @@ export const dataTabActions = {
 
   toggleNotification(type: 'variableTypes' | 'warnings'): void {
     dataTabState.notifications[type] = !dataTabState.notifications[type];
-    notifyPersistence();
-  },
-
-  selectRows(ids: (string | number)[]): void {
-    dataTabState.dataControl.selectedRowIds = ids;
     notifyPersistence();
   },
 

@@ -15,25 +15,38 @@
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-  import {
-    ColorSelector,
-    InfoPopover,
-    SectionHeading,
-    SliderWithInput
-  } from '../shared';
-  import type { SymbolModeProps } from './types';
+  import { InfoPopover, SliderWithInput } from '../shared';
+  import SingleColorPreview from '../palette-popover/single-color-preview.svelte';
+  import type {
+    MissingDataConfig,
+    VisualizationConfig,
+    VisualizationModes
+  } from '$lib/features/commons/store/visualization.store.svelte';
+
+  interface Props {
+    dataFields: Array<{ id: number; text: string; type?: string }>;
+    visualization?: VisualizationConfig;
+    onMappingChange?: (
+      updates: Partial<VisualizationConfig['mapping']>
+    ) => void;
+    onStyleChange?: (updates: Partial<VisualizationConfig['style']>) => void;
+    onModesChange?: (updates: Partial<VisualizationModes>) => void;
+    onMissingDataChange?: (updates: Partial<MissingDataConfig>) => void;
+  }
 
   let {
     dataFields = [],
     visualization,
-    onMappingChange
-  }: SymbolModeProps = $props();
+    onMappingChange,
+    onStyleChange
+  }: Props = $props();
 
   const NONE_FIELD_ID = -1;
   let selectedColumnId = $state<number>(NONE_FIELD_ID);
   let selectedLevel = $state<DensityLevelName>(DENSITY_DEFAULTS.level);
   let dotSize = $state<number>(DENSITY_DEFAULTS.dotSize);
   let fillColor = $state<string>(DENSITY_DEFAULTS.color);
+  let fillOpacity = $state<number>(100);
   let levelOptions = $state<DensityLevelOption[]>([]);
   let loadingLevels = $state<boolean>(false);
   let lastRequestedColumn = $state<string | null>(null);
@@ -82,6 +95,11 @@
     } else {
       fillColor = DENSITY_DEFAULTS.color;
     }
+    const persistedOpacity = visualization?.style.fillOpacity;
+    fillOpacity =
+      typeof persistedOpacity === 'number'
+        ? Math.round(Math.max(0, Math.min(1, persistedOpacity)) * 100)
+        : 100;
     const persistedColumn =
       visualization?.density?.valueColumn ??
       visualization?.mapping.valueColumn ??
@@ -117,7 +135,10 @@
       return;
     }
 
-    const signature = `${datasetId}::${column}`;
+    // Include ratio presence in the cache key — when ratio is reset (e.g.
+    // after a column change), we must re-compute even for the same column.
+    const hasRatio = Boolean(visualization?.density?.ratio);
+    const signature = `${datasetId}::${column}::${hasRatio ? 'r' : 'no-r'}`;
     if (signature === lastRequestedColumn) return;
     lastRequestedColumn = signature;
     loadingLevels = true;
@@ -213,6 +234,7 @@
   }
 
   function handleLevelChange(level: DensityLevelName) {
+    if (level === selectedLevel) return;
     selectedLevel = level;
     const option = dedupedLevelOptions.find((o) => o.level === level);
     if (option && visualization?.id) {
@@ -250,6 +272,11 @@
     }
   }
 
+  function handleFillOpacityChange(value: number) {
+    fillOpacity = value;
+    onStyleChange?.({ fillOpacity: value / 100 });
+  }
+
   function levelLabelFor(level: DensityLevelName): string {
     switch (level) {
       case DENSITY_LEVEL.MORE:
@@ -261,8 +288,6 @@
     }
   }
 </script>
-
-<SectionHeading title={m.symbol_mode_density()} />
 
 <div class="field-group">
   <span class="field-label">
@@ -319,10 +344,18 @@
   onchange={handleDotSizeChange}
 />
 
-<ColorSelector
+<SingleColorPreview
   label={m.color()}
-  value={fillColor}
+  color={fillColor}
   onchange={handleFillColorChange}
+/>
+
+<SliderWithInput
+  label={m.opacity()}
+  bind:value={fillOpacity}
+  min={0}
+  max={100}
+  onchange={handleFillOpacityChange}
 />
 
 <style lang="scss">
@@ -345,7 +378,7 @@
     gap: var(--cds-spacing-04);
   }
 
-  :global(.symbols-config .density-levels .bx--radio-button-group) {
+  :global(.polygons-config .density-levels .bx--radio-button-group) {
     flex-direction: column;
     gap: var(--cds-spacing-02);
     align-items: flex-start;

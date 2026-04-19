@@ -37,4 +37,16 @@ describe('SymbolModeCategories (en categorie.png alignment)', () => {
     expect(source).toContain('PalettePreview');
     expect(source).toContain('label={m.opacity()}');
   });
+
+  it('wires PalettePreview with paletteType=QUALITATIVE so the popover shows the Couleur title', () => {
+    expect(source).toContain('paletteType={PALETTE_TYPE.QUALITATIVE}');
+    expect(source).toContain("from '../palette-popover/palette.constants'");
+  });
+
+  it('enables the Categories Aspect popover via categoriesMode + categoryLabels', () => {
+    expect(source).toContain('categoriesMode={true}');
+    expect(source).toContain(
+      'categoryLabels={visualization?.classification?.labels ?? []}'
+    );
+  });
 });

@@ -71,11 +71,6 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
 
     if (styleKey === lastAppliedStyleKey) return;
 
-    logger.debug('Applying basemap style', LogCategory.MAP, {
-      from: lastAppliedStyleKey,
-      to: styleKey
-    });
-
     isStyleLoading = true;
 
     if (styleLoadHandler) {
@@ -182,10 +177,6 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
       }
 
       lastAppliedOSMRasterKey = nextRasterKey;
-      logger.debug('OSM raster basemap applied', LogCategory.MAP, {
-        basemap: osmBasemap.file,
-        title: osmBasemap.title_fr
-      });
     }
   }
 
@@ -201,7 +192,6 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
       if (!style?.layers) return;
 
       for (const layer of style.layers) {
-        // Skip layers managed by the cartefacile group system
         if (
           (layer.metadata as Record<string, unknown> | undefined)?.[
             'cartefacile:group'
@@ -257,8 +247,6 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
     const projection = mapProjectionStore.projection;
     map.setProjection({ type: projection });
 
-    logger.debug('Map projection changed', LogCategory.MAP, { projection });
-
     if (onProjectionChanged) {
       setTimeout(() => onProjectionChanged(), 10);
     }
@@ -273,7 +261,6 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
     isStyleLoading = false;
     lastAppliedStyleKey = null;
     lastAppliedOSMRasterKey = null;
-    logger.debug('Basemap hook cleanup completed', LogCategory.MAP);
   }
 
   return {

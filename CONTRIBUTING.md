@@ -162,6 +162,7 @@ BREAKING CHANGE: Legacy authentication method removed
 - **Feature‑based structure**: each feature in `src/lib/features/`; shared resources in `src/lib/features/commons/`
 - **Isolation**: features do not depend on each other; import only from commons or well‑defined APIs
 - **UI**: prefer Carbon components; avoid inline styles; use scoped CSS/utilities
+- **Carbon × Svelte 5 events**: `carbon-components-svelte@0.96.3` is Svelte 4 and dispatches phantom events on external prop updates. Use `on:input` on `<Slider>`, `on:change` (not `on:check`) on `<Checkbox>`, and a value guard on `<RadioButtonGroup on:change>`. Full rules in [`.claude/rules/carbon-svelte5.md`](.claude/rules/carbon-svelte5.md).
 - **i18n**: all user‑facing text must go through Paraglide; no hardcoded strings
 - **Data/performance**: heavy tasks in Web Workers; be mindful of memory and large datasets
 
@@ -308,15 +309,18 @@ pnpm build         # Ensure production build works
 - **Documentation**: See `/docs` folder for comprehensive guides:
   - `README.md` - Documentation overview
   - `GUIDE_UTILISATEUR.md` - User guide (data import, visualization, export)
-  - `GUIDE_DEVELOPPEUR.md` - Developer quick start and common tasks
+  - `CHEAT_SHEET_EXEMPLES.md` - Five URL-based examples to get started
   - `GLOSSAIRE.md` - Cartographic and technical glossary
+  - `GUIDE_DEVELOPPEUR.md` - Developer quick start and common tasks
   - `ARCHITECTURE.md` - System design and principles
-  - `PIPELINE_DONNEES.md` - Data processing architecture
-  - `VISUALISATIONS.md` - Rendering and visualization types
-  - `GESTION_ETAT.md` - State management patterns
+  - `PIPELINE_DONNEES.md` - Data ingestion and processing architecture
+  - `DUCKDB.md` - DuckDB WASM engine, orchestrator, SQL macros
+  - `CARTOGRAPHIE.md` - Thematic cartography (semiotics, classification, palettes)
+  - `VISUALISATIONS.md` - User-facing visualization tools and steps
+  - `MAP.md` - Deck.gl / MapLibre rendering pipeline
   - `FONDS_DE_CARTE.md` - Basemap preparation and catalog
-  - `REFERENCE.md` - Types and utilities reference
-  - `TESTS.md` - Testing strategies and examples
+  - `GESTION_ETAT.md` - State management patterns
+  - `REFERENCE.md` - Types, errors, keyboard shortcuts
   - `PWA.md` - Progressive Web App and offline support
 - **Issues**: Search existing ones or open a new issue
 - **Discussions**: Use GitHub Discussions for ideas and Q&A

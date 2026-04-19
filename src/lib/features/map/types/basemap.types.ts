@@ -7,8 +7,6 @@ import type {
 export type { JoinEntity };
 export type JoinQuality = JoinStats;
 
-// --- Projection types ---
-
 export type ProjectionType = 'composite' | 'simple' | 'identity';
 
 export interface ProjectionConfig {
@@ -16,8 +14,6 @@ export interface ProjectionConfig {
   preset?: string | null;
   proj4?: string | null;
 }
-
-// --- Preset types ---
 
 export interface ProjectionPresetEntry {
   id: string;
@@ -56,8 +52,6 @@ export type StylePreset = PathStylePreset | PolygonStylePreset;
 
 export type StylePresets = Record<string, StylePreset>;
 
-// --- Basemap layer ---
-
 export interface BasemapLayer {
   title_fr?: string;
   title_en?: string;
@@ -66,8 +60,6 @@ export interface BasemapLayer {
   style?: string | null;
   step?: number;
 }
-
-// --- Basemap metadata ---
 
 export interface BasemapMetadata {
   file: string;

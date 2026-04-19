@@ -6,7 +6,11 @@ export interface TestDuckDB {
 }
 
 export async function createTestInstance(): Promise<TestDuckDB> {
-  const instance = await DuckDBInstance.create(':memory:', { threads: '2' });
+  const instance = await DuckDBInstance.create(':memory:', {
+    threads: '2',
+    autoinstall_known_extensions: 'true',
+    autoload_known_extensions: 'true'
+  });
   const connection = await instance.connect();
   return { instance, connection };
 }

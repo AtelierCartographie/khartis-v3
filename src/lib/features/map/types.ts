@@ -103,6 +103,7 @@ export interface LayerContext {
     | null;
   datasetId: string | undefined;
   fillColor: RGBColor;
+  symbolFillColor: RGBColor;
   strokeColor: RGBColor;
   fillOpacity: number;
   strokeWidth: number;
@@ -110,6 +111,14 @@ export interface LayerContext {
   statistics: { min: number; max: number };
   secondaryStatistics?: { min: number; max: number };
   categoryColorMap: Map<string, RGBColor> | null;
+  pointStatistics?: { min: number; max: number };
+  pointSecondaryStatistics?: { min: number; max: number };
+  pointCategoryColorMap?: Map<string, RGBColor> | null;
+  lineStatistics?: { min: number; max: number };
+  lineCategoryColorMap?: Map<string, RGBColor> | null;
+  polygonCategoryColorMap?: Map<string, RGBColor> | null;
+  textStatistics?: { min: number; max: number };
+  textCategoryColorMap?: Map<string, RGBColor> | null;
   highlightedRowIds?: Set<number>;
   /** Scalar version counter for highlight changes (avoids Set ref in updateTriggers) */
   highlightVersion?: number;

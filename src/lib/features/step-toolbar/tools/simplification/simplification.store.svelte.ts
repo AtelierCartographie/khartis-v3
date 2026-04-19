@@ -16,6 +16,7 @@ import {
 } from '$lib/features/map/services/basemap.service.svelte';
 import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
 import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
+import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
 import {
   simplifyGeometryTable,
   calculateToleranceFromRate
@@ -70,17 +71,6 @@ const { actions, getState } = createToolStore<
 
       const tolerance = calculateToleranceFromRate(s.rate, metadata.bbox);
 
-      logger.debug(
-        'Starting imported basemap simplification',
-        LogCategory.DUCKDB,
-        {
-          basemapId: basemapTableName,
-          rate: s.rate,
-          tolerance,
-          inputTableName: rawTableExists[0]?.table_name ?? basemapTableName
-        }
-      );
-
       const metrics = await simplifyGeometryTable(
         Duck,
         basemapTableName,
@@ -104,12 +94,6 @@ const { actions, getState } = createToolStore<
       }
 
       await basemapService.refreshCustomBasemap(basemapTableName);
-
-      logger.debug(
-        'Imported basemap simplification completed',
-        LogCategory.DUCKDB,
-        { basemapId: basemapTableName, metrics }
-      );
 
       return {
         type: SimplificationTarget.BASEMAP,
@@ -146,12 +130,6 @@ const { actions, getState } = createToolStore<
         requestedLevel
       );
       if (!variantFile) {
-        logger.debug(
-          'No variant available for this basemap at this level',
-          LogCategory.DUCKDB,
-          { basemapId, level: requestedLevel }
-        );
-
         return {
           type: SimplificationTarget.BASEMAP,
           level: requestedLevel,
@@ -161,12 +139,6 @@ const { actions, getState } = createToolStore<
           simplifiedVertices: 0
         };
       }
-
-      logger.debug(
-        'Loading basemap variant for simplification',
-        LogCategory.DUCKDB,
-        { basemapId, level: requestedLevel, variantFile }
-      );
 
       const variantTable = await basemapService.loadVariant(
         basemapId,
@@ -175,11 +147,6 @@ const { actions, getState } = createToolStore<
       );
 
       if (!variantTable) {
-        logger.debug(
-          'Basemap variant not available, simplification skipped',
-          LogCategory.DUCKDB,
-          { basemapId, level: requestedLevel }
-        );
         return {
           type: SimplificationTarget.BASEMAP,
           level: requestedLevel,
@@ -189,11 +156,6 @@ const { actions, getState } = createToolStore<
           simplifiedVertices: 0
         };
       }
-
-      logger.debug('Basemap variant loaded', LogCategory.DUCKDB, {
-        basemapId,
-        variantFile
-      });
 
       return {
         type: SimplificationTarget.BASEMAP,
@@ -245,12 +207,6 @@ const { actions, getState } = createToolStore<
         dataset.geometry.bounds
       );
 
-      logger.debug('Starting dataset simplification', LogCategory.DUCKDB, {
-        datasetId: dataset.id,
-        rate: s.rate,
-        tolerance
-      });
-
       const metrics = await simplifyGeometryTable(
         Duck,
         dataset.tableName,
@@ -263,11 +219,6 @@ const { actions, getState } = createToolStore<
           tolerance,
           ...metrics
         }
-      });
-
-      logger.debug('Dataset simplification completed', LogCategory.DUCKDB, {
-        datasetId: dataset.id,
-        metrics
       });
 
       return {
@@ -284,7 +235,7 @@ const { actions, getState } = createToolStore<
       datasetId?: string;
     }): Promise<SimplificationResult> => {
       if (s.source === SimplificationSource.Basemap) {
-        if (osmBasemapStore.isActive) {
+        if (osmBasemapStore.isActive || basemapStyleStore.requiresMapLibre) {
           return {
             type: SimplificationTarget.BASEMAP,
             level: s.level,

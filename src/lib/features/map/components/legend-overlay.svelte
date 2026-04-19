@@ -356,7 +356,6 @@
   const legendState = $derived(getLegendState());
   const visibleItems = $derived(legendState.items.filter((i) => i.visible));
 
-  // Build a reactive map from variableId → visualization for color scale rendering
   const vizByItemId = $derived.by(() => {
     void visualizationStore.version;
     const map = new SvelteMap<string, VisualizationConfig>();
@@ -721,7 +720,6 @@
                 {:else}
                   <span
                     class="legend-color-swatch"
-                    class:patterned={Boolean(viz.missingData.pattern)}
                     style={getMissingDataAreaSwatchStyle(
                       viz,
                       viz.missingData.color
