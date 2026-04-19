@@ -12,6 +12,215 @@ export const SCALE_MODE = {
 export const MAX_FACETS_COLUMNS = 4;
 export const MAX_FACETS = 16;
 
+export const FACET_SLOT = {
+  SYMBOL_VALUE: 'symbol.valueColumn',
+  SYMBOL_CATEGORY: 'symbol.categoryColumn',
+  SYMBOL_SIZE: 'symbol.sizeColumn',
+  POLYGON_VALUE: 'polygon.valueColumn',
+  POLYGON_CATEGORY: 'polygon.categoryColumn',
+  LINE_VALUE: 'line.valueColumn',
+  LINE_CATEGORY: 'line.categoryColumn',
+  LINE_SIZE: 'line.sizeColumn',
+  TEXT_VALUE: 'text.valueColumn',
+  TEXT_CATEGORY: 'text.categoryColumn',
+  TEXT_BACKGROUND_VALUE: 'text.background.valueColumn',
+  TEXT_BACKGROUND_CATEGORY: 'text.background.categoryColumn'
+} as const;
+
+export type FacetSlotPath = (typeof FACET_SLOT)[keyof typeof FACET_SLOT];
+
+function isFacetSlotPath(value: unknown): value is FacetSlotPath {
+  return (Object.values(FACET_SLOT) as string[]).includes(value as string);
+}
+
+function resolveFacetMappingKey(
+  slotPath: FacetSlotPath
+): keyof NonNullable<VisualizationConfig['mapping']> {
+  if (slotPath.endsWith('.categoryColumn')) {
+    return 'categoryColumn';
+  }
+  if (slotPath.endsWith('.sizeColumn')) {
+    return 'sizeColumn';
+  }
+  return 'valueColumn';
+}
+
+function applyFacetVariableToVisualization(
+  visualization: VisualizationConfig,
+  slotPath: FacetSlotPath,
+  variableName: string
+): Partial<VisualizationConfig> {
+  const mappingKey = resolveFacetMappingKey(slotPath);
+  const nextMapping = {
+    ...visualization.mapping,
+    [mappingKey]: variableName
+  };
+
+  switch (slotPath) {
+    case FACET_SLOT.SYMBOL_VALUE:
+      return {
+        mapping: nextMapping,
+        ...(visualization.symbol
+          ? {
+              symbol: {
+                ...visualization.symbol,
+                valueColumn: variableName
+              }
+            }
+          : {})
+      };
+
+    case FACET_SLOT.SYMBOL_CATEGORY:
+      return {
+        mapping: nextMapping,
+        ...(visualization.symbol
+          ? {
+              symbol: {
+                ...visualization.symbol,
+                categoryColumn: variableName
+              }
+            }
+          : {})
+      };
+
+    case FACET_SLOT.SYMBOL_SIZE:
+      return {
+        mapping: nextMapping,
+        ...(visualization.symbol
+          ? {
+              symbol: {
+                ...visualization.symbol,
+                sizeColumn: variableName
+              }
+            }
+          : {})
+      };
+
+    case FACET_SLOT.POLYGON_VALUE:
+      return {
+        mapping: nextMapping,
+        ...(visualization.polygon
+          ? {
+              polygon: {
+                ...visualization.polygon,
+                valueColumn: variableName
+              }
+            }
+          : {})
+      };
+
+    case FACET_SLOT.POLYGON_CATEGORY:
+      return {
+        mapping: nextMapping,
+        ...(visualization.polygon
+          ? {
+              polygon: {
+                ...visualization.polygon,
+                categoryColumn: variableName
+              }
+            }
+          : {})
+      };
+
+    case FACET_SLOT.LINE_VALUE:
+      return {
+        mapping: nextMapping,
+        ...(visualization.line
+          ? {
+              line: {
+                ...visualization.line,
+                valueColumn: variableName
+              }
+            }
+          : {})
+      };
+
+    case FACET_SLOT.LINE_CATEGORY:
+      return {
+        mapping: nextMapping,
+        ...(visualization.line
+          ? {
+              line: {
+                ...visualization.line,
+                categoryColumn: variableName
+              }
+            }
+          : {})
+      };
+
+    case FACET_SLOT.LINE_SIZE:
+      return {
+        mapping: nextMapping,
+        ...(visualization.line
+          ? {
+              line: {
+                ...visualization.line,
+                sizeColumn: variableName
+              }
+            }
+          : {})
+      };
+
+    case FACET_SLOT.TEXT_VALUE:
+      return {
+        mapping: nextMapping,
+        ...(visualization.text
+          ? {
+              text: {
+                ...visualization.text,
+                valueColumn: variableName
+              }
+            }
+          : {})
+      };
+
+    case FACET_SLOT.TEXT_CATEGORY:
+      return {
+        mapping: nextMapping,
+        ...(visualization.text
+          ? {
+              text: {
+                ...visualization.text,
+                categoryColumn: variableName
+              }
+            }
+          : {})
+      };
+
+    case FACET_SLOT.TEXT_BACKGROUND_VALUE:
+      return {
+        mapping: nextMapping,
+        ...(visualization.text?.background
+          ? {
+              text: {
+                ...visualization.text,
+                background: {
+                  ...visualization.text.background,
+                  valueColumn: variableName
+                }
+              }
+            }
+          : {})
+      };
+
+    case FACET_SLOT.TEXT_BACKGROUND_CATEGORY:
+      return {
+        mapping: nextMapping,
+        ...(visualization.text?.background
+          ? {
+              text: {
+                ...visualization.text,
+                background: {
+                  ...visualization.text.background,
+                  categoryColumn: variableName
+                }
+              }
+            }
+          : {})
+      };
+  }
+}
+
 export function computeBestColumns(
   mapCount: number,
   maxCols: number = MAX_FACETS_COLUMNS
@@ -33,6 +242,7 @@ export interface FacetsLayout {
 export interface FacetsState {
   enabled: boolean;
   baseVisualizationId: string | null;
+  primarySlotPath: FacetSlotPath | null;
   variables: string[];
   layout: FacetsLayout;
   scaleMode: ScaleMode;
@@ -43,6 +253,7 @@ export interface FacetsState {
 const DEFAULT_STATE: FacetsState = {
   enabled: false,
   baseVisualizationId: null,
+  primarySlotPath: null,
   variables: [],
   layout: {
     columns: 3,
@@ -76,6 +287,10 @@ function createFacetsStore() {
         typeof restored.baseVisualizationId === 'string'
           ? restored.baseVisualizationId
           : DEFAULT_STATE.baseVisualizationId;
+
+      nextState.primarySlotPath = isFacetSlotPath(restored.primarySlotPath)
+        ? restored.primarySlotPath
+        : DEFAULT_STATE.primarySlotPath;
 
       nextState.variables = Array.isArray(restored.variables)
         ? (restored.variables as unknown[]).filter(
@@ -147,7 +362,11 @@ function createFacetsStore() {
       .filter((v): v is VisualizationConfig => v !== undefined);
   }
 
-  async function enable(baseVizId: string, variables: string[]): Promise<void> {
+  async function enable(
+    baseVizId: string,
+    variables: string[],
+    primarySlotPath: FacetSlotPath = FACET_SLOT.POLYGON_VALUE
+  ): Promise<void> {
     const sanitized = variables.filter(
       (v): v is string => typeof v === 'string' && v.length > 0
     );
@@ -172,21 +391,19 @@ function createFacetsStore() {
       const facetConfigs = await generateFacetVisualizations(
         baseViz,
         capped,
-        state.scaleMode
+        state.scaleMode,
+        primarySlotPath
       );
 
       visualizationStore.createBulkVisualizations(facetConfigs);
 
       state.enabled = true;
       state.baseVisualizationId = baseVizId;
+      state.primarySlotPath = primarySlotPath;
       state.variables = [...capped];
       state.generatedVisualizationIds = facetConfigs.map((c) => c.id);
       state.layout.columns = computeBestColumns(capped.length);
       notifyPersistence();
-
-      logger.debug('Facets enabled', LogCategory.STORE, {
-        facetsCount: facetConfigs.length
-      });
     } catch (error) {
       logger.error('Failed to enable facets', LogCategory.STORE, error);
     }
@@ -203,11 +420,10 @@ function createFacetsStore() {
 
     state.enabled = false;
     state.baseVisualizationId = null;
+    state.primarySlotPath = null;
     state.variables = [];
     state.generatedVisualizationIds = [];
     notifyPersistence();
-
-    logger.debug('Facets disabled', LogCategory.STORE);
   }
 
   function setVariables(variables: string[]): void {
@@ -236,7 +452,9 @@ function createFacetsStore() {
 
   async function updateVariables(
     baseVizId: string,
-    variables: string[]
+    variables: string[],
+    primarySlotPath: FacetSlotPath = state.primarySlotPath ??
+      FACET_SLOT.POLYGON_VALUE
   ): Promise<void> {
     const sanitized = variables.filter(
       (v): v is string => typeof v === 'string' && v.length > 0
@@ -249,7 +467,7 @@ function createFacetsStore() {
     }
 
     if (!state.enabled || state.baseVisualizationId !== baseVizId) {
-      await enable(baseVizId, sanitized);
+      await enable(baseVizId, sanitized, primarySlotPath);
       return;
     }
 
@@ -269,22 +487,20 @@ function createFacetsStore() {
       const newConfigs = await generateFacetVisualizations(
         baseViz,
         capped,
-        state.scaleMode
+        state.scaleMode,
+        primarySlotPath
       );
       visualizationStore.removeBulkVisualizations(
         state.generatedVisualizationIds
       );
       visualizationStore.createBulkVisualizations(newConfigs);
+      state.primarySlotPath = primarySlotPath;
       state.variables = [...capped];
       state.generatedVisualizationIds = newConfigs.map((config) => config.id);
       state.layout.columns = computeBestColumns(capped.length);
       restoreSelectionByName(newConfigs, previousName);
 
       notifyPersistence();
-      logger.debug(
-        'Variables updated and facets regenerated',
-        LogCategory.STORE
-      );
     } catch (error) {
       logger.error(
         'Failed to update facet variables',
@@ -298,7 +514,7 @@ function createFacetsStore() {
 
   function setVariableForSlot(
     mapIndex: number,
-    slotKey: string,
+    slotPath: FacetSlotPath,
     variableName: string
   ): boolean {
     if (!state.enabled) {
@@ -315,9 +531,10 @@ function createFacetsStore() {
       return false;
     }
 
-    visualizationStore.updateVisualization(vizId, {
-      mapping: { ...viz.mapping, [slotKey]: variableName }
-    });
+    visualizationStore.updateVisualization(
+      vizId,
+      applyFacetVariableToVisualization(viz, slotPath, variableName)
+    );
     notifyPersistence();
     return true;
   }
@@ -346,7 +563,8 @@ function createFacetsStore() {
           const newConfigs = await generateFacetVisualizations(
             baseViz,
             state.variables,
-            state.scaleMode
+            state.scaleMode,
+            state.primarySlotPath ?? FACET_SLOT.POLYGON_VALUE
           );
 
           visualizationStore.removeBulkVisualizations(
@@ -358,11 +576,6 @@ function createFacetsStore() {
           );
           restoreSelectionByName(newConfigs, previousName);
           notifyPersistence();
-
-          logger.debug(
-            'Variables reordered and facets regenerated',
-            LogCategory.STORE
-          );
         } finally {
           isRegenerating = false;
         }
@@ -408,7 +621,8 @@ function createFacetsStore() {
           const newConfigs = await generateFacetVisualizations(
             baseViz,
             state.variables,
-            newMode
+            newMode,
+            state.primarySlotPath ?? FACET_SLOT.POLYGON_VALUE
           );
 
           visualizationStore.removeBulkVisualizations(
@@ -420,11 +634,6 @@ function createFacetsStore() {
           );
           restoreSelectionByName(newConfigs, previousName);
           notifyPersistence();
-
-          logger.debug(
-            'Scale mode toggled and facets regenerated',
-            LogCategory.STORE
-          );
         } finally {
           isRegenerating = false;
         }
@@ -438,6 +647,9 @@ function createFacetsStore() {
     },
     get baseVisualizationId() {
       return state.baseVisualizationId;
+    },
+    get primarySlotPath() {
+      return state.primarySlotPath;
     },
     get variables() {
       return state.variables;
@@ -478,6 +690,7 @@ persistenceRegistry.register({
   serialize: () => ({
     enabled: facetsStore.enabled,
     baseVisualizationId: facetsStore.baseVisualizationId,
+    primarySlotPath: facetsStore.primarySlotPath,
     variables: [...facetsStore.variables],
     layout: { ...facetsStore.layout },
     scaleMode: facetsStore.scaleMode,

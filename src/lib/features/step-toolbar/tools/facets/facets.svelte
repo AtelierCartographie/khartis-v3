@@ -9,10 +9,12 @@
   import { facetsStore } from './facets.store.svelte';
   import {
     getSymbolPrimitive,
+    getTextPrimitive,
     visualizationStore,
     PrimitiveFilterType,
     type VisualizationConfig
   } from '$lib/features/commons/store/visualization.store.svelte';
+  import { FACET_SLOT, type FacetSlotPath } from './facets.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import {
     globalActions,
@@ -69,7 +71,7 @@
   });
 
   interface FacetSlot {
-    key: keyof NonNullable<VisualizationConfig['mapping']>;
+    path: FacetSlotPath;
     label: string;
   }
 
@@ -79,29 +81,36 @@
     slots: FacetSlot[];
   }
 
+  function pushSlot(slots: FacetSlot[], path: FacetSlotPath, label: string) {
+    if (!slots.some((slot) => slot.path === path)) {
+      slots.push({ path, label });
+    }
+  }
+
   function resolveSymbolSlots(viz: VisualizationConfig): FacetSlot[] {
     const slots: FacetSlot[] = [];
     const symbolMode = getSymbolPrimitive(viz)?.mode ?? SymbolMode.UNIQUE;
 
     if (symbolMode === SymbolMode.PROPORTIONAL) {
-      slots.push({ key: 'sizeColumn', label: m.facets_slot_size_shape() });
+      pushSlot(slots, FACET_SLOT.SYMBOL_SIZE, m.facets_slot_size_shape());
     } else if (symbolMode === SymbolMode.CLASSES) {
-      slots.push({ key: 'valueColumn', label: m.facets_slot_size_shape() });
+      pushSlot(slots, FACET_SLOT.SYMBOL_VALUE, m.facets_slot_size_shape());
     } else if (symbolMode === SymbolMode.CATEGORIES) {
-      slots.push({ key: 'categoryColumn', label: m.facets_slot_size_shape() });
+      pushSlot(slots, FACET_SLOT.SYMBOL_CATEGORY, m.facets_slot_size_shape());
     }
 
     const fillMode = viz.modes?.fill;
     if (fillMode === FillMode.CLASSES) {
-      const alreadyHas = slots.some((s) => s.key === 'valueColumn');
-      if (!alreadyHas) {
-        slots.push({ key: 'valueColumn', label: m.facets_slot_fill() });
-      }
+      pushSlot(slots, FACET_SLOT.SYMBOL_VALUE, m.facets_slot_fill());
     } else if (fillMode === FillMode.CATEGORIES) {
-      const alreadyHas = slots.some((s) => s.key === 'categoryColumn');
-      if (!alreadyHas) {
-        slots.push({ key: 'categoryColumn', label: m.facets_slot_fill() });
-      }
+      pushSlot(slots, FACET_SLOT.SYMBOL_CATEGORY, m.facets_slot_fill());
+    }
+
+    const strokeMode = viz.modes?.stroke;
+    if (strokeMode === StrokeMode.CLASSES) {
+      pushSlot(slots, FACET_SLOT.SYMBOL_VALUE, m.facets_slot_stroke());
+    } else if (strokeMode === StrokeMode.CATEGORIES) {
+      pushSlot(slots, FACET_SLOT.SYMBOL_CATEGORY, m.facets_slot_stroke());
     }
 
     return slots;
@@ -110,28 +119,58 @@
   function resolvePolygonSlots(viz: VisualizationConfig): FacetSlot[] {
     const slots: FacetSlot[] = [];
     if (viz.modes?.fill === FillMode.CLASSES) {
-      slots.push({ key: 'valueColumn', label: m.facets_slot_fill() });
+      pushSlot(slots, FACET_SLOT.POLYGON_VALUE, m.facets_slot_fill());
     } else if (viz.modes?.fill === FillMode.CATEGORIES) {
-      slots.push({ key: 'categoryColumn', label: m.facets_slot_fill() });
-    }
-    if (viz.modes?.color === ColorMode.CLASSES) {
-      if (!slots.some((s) => s.key === 'valueColumn')) {
-        slots.push({ key: 'valueColumn', label: m.facets_slot_color() });
-      }
+      pushSlot(slots, FACET_SLOT.POLYGON_CATEGORY, m.facets_slot_fill());
     }
     if (viz.modes?.stroke === StrokeMode.CLASSES) {
-      if (!slots.some((s) => s.key === 'valueColumn')) {
-        slots.push({ key: 'valueColumn', label: m.facets_slot_stroke() });
-      }
+      pushSlot(slots, FACET_SLOT.POLYGON_VALUE, m.facets_slot_stroke());
+    } else if (viz.modes?.stroke === StrokeMode.CATEGORIES) {
+      pushSlot(slots, FACET_SLOT.POLYGON_CATEGORY, m.facets_slot_stroke());
     }
     return slots;
   }
 
   function resolveLineSlots(viz: VisualizationConfig): FacetSlot[] {
     const slots: FacetSlot[] = [];
-    if (viz.modes?.thickness === ThicknessMode.CLASSES) {
-      slots.push({ key: 'valueColumn', label: m.facets_slot_size_shape() });
+    if (viz.modes?.thickness === ThicknessMode.PROPORTIONAL) {
+      pushSlot(slots, FACET_SLOT.LINE_SIZE, m.facets_slot_size_shape());
+    } else if (viz.modes?.thickness === ThicknessMode.CLASSES) {
+      pushSlot(slots, FACET_SLOT.LINE_VALUE, m.facets_slot_size_shape());
     }
+
+    if (viz.modes?.color === ColorMode.CLASSES) {
+      pushSlot(slots, FACET_SLOT.LINE_VALUE, m.facets_slot_color());
+    } else if (viz.modes?.color === ColorMode.CATEGORIES) {
+      pushSlot(slots, FACET_SLOT.LINE_CATEGORY, m.facets_slot_color());
+    }
+    return slots;
+  }
+
+  function resolveTextSlots(viz: VisualizationConfig): FacetSlot[] {
+    const slots: FacetSlot[] = [];
+    const background = getTextPrimitive(viz)?.background;
+
+    if (background?.fillMode === FillMode.CLASSES) {
+      pushSlot(slots, FACET_SLOT.TEXT_BACKGROUND_VALUE, m.facets_slot_fill());
+    } else if (background?.fillMode === FillMode.CATEGORIES) {
+      pushSlot(
+        slots,
+        FACET_SLOT.TEXT_BACKGROUND_CATEGORY,
+        m.facets_slot_fill()
+      );
+    }
+
+    if (background?.strokeMode === StrokeMode.CLASSES) {
+      pushSlot(slots, FACET_SLOT.TEXT_BACKGROUND_VALUE, m.facets_slot_stroke());
+    } else if (background?.strokeMode === StrokeMode.CATEGORIES) {
+      pushSlot(
+        slots,
+        FACET_SLOT.TEXT_BACKGROUND_CATEGORY,
+        m.facets_slot_stroke()
+      );
+    }
+
     return slots;
   }
 
@@ -180,6 +219,17 @@
       }
     }
 
+    if (primitives.includes(PrimitiveFilterType.TEXT)) {
+      const slots = resolveTextSlots(viz);
+      if (slots.length > 0) {
+        result.push({
+          id: 'texts',
+          title: m.texts_title(),
+          slots
+        });
+      }
+    }
+
     return result;
   });
 
@@ -195,18 +245,43 @@
 
   function getSlotVariable(
     mapIndex: number,
-    slotKey: FacetSlot['key']
+    slotPath: FacetSlot['path']
   ): string | undefined {
     const viz = facetVisualizations[mapIndex];
     if (!viz) return undefined;
-    return viz.mapping[slotKey];
+    switch (slotPath) {
+      case FACET_SLOT.SYMBOL_VALUE:
+        return viz.symbol?.valueColumn;
+      case FACET_SLOT.SYMBOL_CATEGORY:
+        return viz.symbol?.categoryColumn;
+      case FACET_SLOT.SYMBOL_SIZE:
+        return viz.symbol?.sizeColumn;
+      case FACET_SLOT.POLYGON_VALUE:
+        return viz.polygon?.valueColumn;
+      case FACET_SLOT.POLYGON_CATEGORY:
+        return viz.polygon?.categoryColumn;
+      case FACET_SLOT.LINE_VALUE:
+        return viz.line?.valueColumn;
+      case FACET_SLOT.LINE_CATEGORY:
+        return viz.line?.categoryColumn;
+      case FACET_SLOT.LINE_SIZE:
+        return viz.line?.sizeColumn;
+      case FACET_SLOT.TEXT_VALUE:
+        return viz.text?.valueColumn;
+      case FACET_SLOT.TEXT_CATEGORY:
+        return viz.text?.categoryColumn;
+      case FACET_SLOT.TEXT_BACKGROUND_VALUE:
+        return viz.text?.background?.valueColumn;
+      case FACET_SLOT.TEXT_BACKGROUND_CATEGORY:
+        return viz.text?.background?.categoryColumn;
+    }
   }
 
   function handleSlotVariableChange(
-    slotKey: FacetSlot['key'],
+    slotPath: FacetSlot['path'],
     variable: string
   ) {
-    facetsStore.setVariableForSlot(safeMapIndex, slotKey, variable);
+    facetsStore.setVariableForSlot(safeMapIndex, slotPath, variable);
   }
 
   function handleConfigureVisualization() {
@@ -291,7 +366,7 @@
       {#each sections as section (section.id)}
         <div class="subsection">
           <h2 class="subsection-title">{section.title}</h2>
-          {#each section.slots as slot, slotIdx (section.id + slot.key + slotIdx)}
+          {#each section.slots as slot, slotIdx (section.id + slot.path + slotIdx)}
             <div class="slot-card">
               <header class="slot-heading">
                 <span class="slot-title">{slot.label}</span>
@@ -304,19 +379,19 @@
                   role="radiogroup"
                   aria-label={slot.label}
                 >
-                  {#each variables as variable (section.id + slot.key + slotIdx + variable)}
+                  {#each variables as variable (section.id + slot.path + slotIdx + variable)}
                     {@const isNumeric = numericDataFields.includes(variable)}
                     <li class="variable-item">
                       <label class="variable-label">
                         <input
                           type="radio"
-                          name={`facet-slot-${section.id}-${slot.key}-${slotIdx}`}
+                          name={`facet-slot-${section.id}-${slot.path}-${slotIdx}`}
                           class="variable-radio"
                           value={variable}
-                          checked={getSlotVariable(safeMapIndex, slot.key) ===
+                          checked={getSlotVariable(safeMapIndex, slot.path) ===
                             variable}
                           onchange={() =>
-                            handleSlotVariableChange(slot.key, variable)}
+                            handleSlotVariableChange(slot.path, variable)}
                         />
                         <span class="variable-tag">
                           <span class="variable-tag-text">{variable}</span>
@@ -381,10 +456,6 @@
     align-items: center;
     gap: var(--cds-spacing-03, 8px);
     height: 24px;
-  }
-
-  .section-heading.plain .section-title {
-    font-size: 1rem;
   }
 
   .section-title {

@@ -32,7 +32,12 @@ vi.mock('$lib/features/commons/store/visualization.store.svelte', () => ({
   }
 }));
 
-import { facetsStore, MAX_FACETS, SCALE_MODE } from './facets.store.svelte';
+import {
+  FACET_SLOT,
+  facetsStore,
+  MAX_FACETS,
+  SCALE_MODE
+} from './facets.store.svelte';
 
 describe('facetsStore', () => {
   beforeEach(() => {
@@ -58,6 +63,7 @@ describe('facetsStore', () => {
     facetsStore.restoreFromSerialized({
       enabled: true,
       baseVisualizationId: 'base-viz',
+      primarySlotPath: FACET_SLOT.POLYGON_VALUE,
       variables: ['a', 'b', 'c'],
       layout: { columns: 3, gap: 16 },
       scaleMode: SCALE_MODE.SHARED,
@@ -71,7 +77,8 @@ describe('facetsStore', () => {
     expect(mocks.generateFacetVisualizationsMock).toHaveBeenCalledWith(
       mocks.visualizations[0],
       ['b', 'c', 'a'],
-      SCALE_MODE.SHARED
+      SCALE_MODE.SHARED,
+      FACET_SLOT.POLYGON_VALUE
     );
     expect(mocks.removeBulkVisualizationsMock).toHaveBeenCalledWith([
       'facet-a',
@@ -95,6 +102,7 @@ describe('facetsStore', () => {
       facetsStore.restoreFromSerialized({
         enabled: true,
         baseVisualizationId: 'base-viz',
+        primarySlotPath: FACET_SLOT.POLYGON_VALUE,
         variables: ['a', 'b', 'c'],
         layout: { columns: 3, gap: 16 },
         scaleMode: SCALE_MODE.SHARED,
@@ -102,7 +110,11 @@ describe('facetsStore', () => {
         generatedVisualizationIds: ['facet-a', 'facet-b', 'facet-c']
       });
 
-      await facetsStore.updateVariables('base-viz', ['a']);
+      await facetsStore.updateVariables(
+        'base-viz',
+        ['a'],
+        FACET_SLOT.POLYGON_VALUE
+      );
 
       expect(facetsStore.enabled).toBe(false);
       expect(mocks.removeBulkVisualizationsMock).toHaveBeenCalledWith([
@@ -118,7 +130,11 @@ describe('facetsStore', () => {
         { id: 'facet-b' }
       ]);
 
-      await facetsStore.updateVariables('base-viz', ['a', 'b']);
+      await facetsStore.updateVariables(
+        'base-viz',
+        ['a', 'b'],
+        FACET_SLOT.POLYGON_VALUE
+      );
 
       expect(facetsStore.enabled).toBe(true);
       expect(facetsStore.baseVisualizationId).toBe('base-viz');
@@ -126,7 +142,8 @@ describe('facetsStore', () => {
       expect(mocks.generateFacetVisualizationsMock).toHaveBeenCalledWith(
         mocks.visualizations[0],
         ['a', 'b'],
-        SCALE_MODE.INDEPENDENT
+        SCALE_MODE.INDEPENDENT,
+        FACET_SLOT.POLYGON_VALUE
       );
     });
 
@@ -140,6 +157,7 @@ describe('facetsStore', () => {
       facetsStore.restoreFromSerialized({
         enabled: true,
         baseVisualizationId: 'base-viz',
+        primarySlotPath: FACET_SLOT.POLYGON_VALUE,
         variables: ['a', 'b'],
         layout: { columns: 2, gap: 16 },
         scaleMode: SCALE_MODE.SHARED,
@@ -147,7 +165,11 @@ describe('facetsStore', () => {
         generatedVisualizationIds: ['facet-a', 'facet-b']
       });
 
-      await facetsStore.updateVariables('base-viz', ['a', 'b', 'd']);
+      await facetsStore.updateVariables(
+        'base-viz',
+        ['a', 'b', 'd'],
+        FACET_SLOT.POLYGON_VALUE
+      );
 
       expect(facetsStore.variables).toEqual(['a', 'b', 'd']);
       expect(mocks.removeBulkVisualizationsMock).toHaveBeenCalledWith([
@@ -169,7 +191,11 @@ describe('facetsStore', () => {
 
   describe('setVariableForSlot', () => {
     it('should return false when the collection is not enabled', () => {
-      const result = facetsStore.setVariableForSlot(0, 'sizeColumn', 'x');
+      const result = facetsStore.setVariableForSlot(
+        0,
+        FACET_SLOT.SYMBOL_SIZE,
+        'x'
+      );
       expect(result).toBe(false);
       expect(updateVisualizationMock).not.toHaveBeenCalled();
     });
@@ -183,17 +209,20 @@ describe('facetsStore', () => {
         {
           id: 'facet-a',
           name: 'a',
-          mapping: { sizeColumn: 'a' }
+          mapping: { sizeColumn: 'a' },
+          symbol: { sizeColumn: 'a' }
         },
         {
           id: 'facet-b',
           name: 'b',
-          mapping: { sizeColumn: 'b' }
+          mapping: { sizeColumn: 'b' },
+          symbol: { sizeColumn: 'b' }
         }
       ];
       facetsStore.restoreFromSerialized({
         enabled: true,
         baseVisualizationId: 'base-viz',
+        primarySlotPath: FACET_SLOT.SYMBOL_SIZE,
         variables: ['a', 'b'],
         layout: { columns: 2, gap: 16 },
         scaleMode: SCALE_MODE.INDEPENDENT,
@@ -201,11 +230,16 @@ describe('facetsStore', () => {
         generatedVisualizationIds: ['facet-a', 'facet-b']
       });
 
-      const result = facetsStore.setVariableForSlot(1, 'sizeColumn', 'new-var');
+      const result = facetsStore.setVariableForSlot(
+        1,
+        FACET_SLOT.SYMBOL_SIZE,
+        'new-var'
+      );
 
       expect(result).toBe(true);
       expect(updateVisualizationMock).toHaveBeenCalledWith('facet-b', {
-        mapping: { sizeColumn: 'new-var' }
+        mapping: { sizeColumn: 'new-var' },
+        symbol: { sizeColumn: 'new-var' }
       });
     });
 
@@ -213,6 +247,7 @@ describe('facetsStore', () => {
       facetsStore.restoreFromSerialized({
         enabled: true,
         baseVisualizationId: 'base-viz',
+        primarySlotPath: FACET_SLOT.SYMBOL_SIZE,
         variables: ['a'],
         layout: { columns: 1, gap: 16 },
         scaleMode: SCALE_MODE.INDEPENDENT,
@@ -220,7 +255,11 @@ describe('facetsStore', () => {
         generatedVisualizationIds: ['facet-a']
       });
 
-      const result = facetsStore.setVariableForSlot(5, 'sizeColumn', 'x');
+      const result = facetsStore.setVariableForSlot(
+        5,
+        FACET_SLOT.SYMBOL_SIZE,
+        'x'
+      );
 
       expect(result).toBe(false);
       expect(updateVisualizationMock).not.toHaveBeenCalled();
@@ -237,6 +276,7 @@ describe('facetsStore', () => {
       facetsStore.restoreFromSerialized({
         enabled: true,
         baseVisualizationId: 'base-viz',
+        primarySlotPath: FACET_SLOT.POLYGON_VALUE,
         variables: ['a', 'b'],
         layout: { columns: 2, gap: 16 },
         scaleMode: SCALE_MODE.INDEPENDENT,
@@ -250,7 +290,8 @@ describe('facetsStore', () => {
       expect(mocks.generateFacetVisualizationsMock).toHaveBeenCalledWith(
         mocks.visualizations[0],
         ['a', 'b'],
-        SCALE_MODE.SHARED
+        SCALE_MODE.SHARED,
+        FACET_SLOT.POLYGON_VALUE
       );
       expect(mocks.removeBulkVisualizationsMock).toHaveBeenCalledWith([
         'facet-a',
@@ -270,6 +311,7 @@ describe('facetsStore', () => {
       facetsStore.restoreFromSerialized({
         enabled: true,
         baseVisualizationId: 'base-viz',
+        primarySlotPath: FACET_SLOT.POLYGON_VALUE,
         variables: ['a'],
         layout: { columns: 1, gap: 16 },
         scaleMode: SCALE_MODE.SHARED,
@@ -398,7 +440,8 @@ describe('facetsStore', () => {
       expect(mocks.generateFacetVisualizationsMock).toHaveBeenCalledWith(
         mocks.visualizations[0],
         expectedCapped,
-        SCALE_MODE.INDEPENDENT
+        SCALE_MODE.INDEPENDENT,
+        FACET_SLOT.POLYGON_VALUE
       );
     });
   });
@@ -408,6 +451,7 @@ describe('facetsStore', () => {
       facetsStore.restoreFromSerialized({
         enabled: true,
         baseVisualizationId: 'deleted-viz',
+        primarySlotPath: FACET_SLOT.POLYGON_VALUE,
         variables: ['a', 'b'],
         layout: { columns: 2, gap: 16 },
         scaleMode: SCALE_MODE.SHARED,
