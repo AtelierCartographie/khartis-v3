@@ -11,8 +11,14 @@ import {
 const mocks = vi.hoisted(() => ({
   registerMock: vi.fn(),
   notifyChangeMock: vi.fn(),
-  getBboxCenterMock: vi.fn(() => [0, 0] as const),
-  getMaxScaleMock: vi.fn(() => 1)
+  getBboxCenterMock: vi.fn<() => [number, number]>(() => [0, 0]),
+  getMaxScaleMock: vi.fn(() => 1),
+  projectionStoreMock: {
+    referenceBbox: null as [number, number, number, number] | null,
+    canvasSize: { width: 800, height: 600 },
+    fitPaddingPx: 0,
+    isProjectedCoordinates: false
+  }
 }));
 
 vi.mock('$lib/features/project-management/core/persistence-registry', () => ({
@@ -23,12 +29,7 @@ vi.mock('$lib/features/project-management/core/persistence-registry', () => ({
 }));
 
 vi.mock('$lib/features/map/stores/projection.store.svelte', () => ({
-  projectionStore: {
-    referenceBbox: null,
-    canvasSize: { width: 800, height: 600 },
-    fitPaddingPx: 0,
-    isProjectedCoordinates: false
-  }
+  projectionStore: mocks.projectionStoreMock
 }));
 
 vi.mock('$lib/features/map/core/projscreen', () => ({
@@ -36,7 +37,14 @@ vi.mock('$lib/features/map/core/projscreen', () => ({
   get_max_scale: mocks.getMaxScaleMock
 }));
 
-import { mapInstanceStore } from './map-instance.store.svelte';
+import {
+  injectProjectionContext,
+  mapInstanceStore
+} from './map-instance.store.svelte';
+
+const mapViewStatePersistenceEntry = mocks.registerMock.mock.calls.find(
+  ([entry]) => entry?.key === 'mapViewState'
+)?.[0] as { serialize: () => unknown } | undefined;
 
 interface MockMapState {
   currentZoom: number;
@@ -86,9 +94,32 @@ function createMapMock(initialZoom = DEFAULT_MAP_BASE_ZOOM) {
   };
 }
 
+function createDeckMock() {
+  const deck = {
+    setProps: vi.fn()
+  };
+
+  return {
+    deck,
+    setPropsMock: deck.setProps
+  };
+}
+
 describe('mapInstanceStore map zoom bounds', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.projectionStoreMock.referenceBbox = null;
+    mocks.projectionStoreMock.canvasSize = { width: 800, height: 600 };
+    mocks.projectionStoreMock.fitPaddingPx = 0;
+    mocks.projectionStoreMock.isProjectedCoordinates = false;
+    mocks.getBboxCenterMock.mockReturnValue([0, 0]);
+    mocks.getMaxScaleMock.mockReturnValue(1);
+    injectProjectionContext(() => ({
+      referenceBbox: mocks.projectionStoreMock.referenceBbox,
+      canvasSize: mocks.projectionStoreMock.canvasSize,
+      fitPaddingPx: mocks.projectionStoreMock.fitPaddingPx,
+      isProjectedCoordinates: mocks.projectionStoreMock.isProjectedCoordinates
+    }));
     mapInstanceStore.reset();
   });
 
@@ -161,6 +192,87 @@ describe('mapInstanceStore map zoom bounds', () => {
       center: [2.35, 48.86]
     });
     expect(mapInstanceStore.viewportFitMode).toBe('manual');
+    expect(mocks.notifyChangeMock).toHaveBeenCalledWith('mapViewState');
+  });
+
+  it('does not serialize a fallback orthographic viewport before projection bounds exist', () => {
+    expect(mapViewStatePersistenceEntry?.serialize()).toBeNull();
+  });
+
+  it('waits for projection bounds before applying a restored orthographic view', () => {
+    const { deck, setPropsMock } = createDeckMock();
+
+    mapInstanceStore.setDeckInstance(deck as never);
+    mapInstanceStore.setMapLoaded(true);
+    mapInstanceStore.restoreFromSerialized({
+      zoom: 2,
+      target: [10, 20, 0]
+    });
+
+    mapInstanceStore.fitToOrthographicBounds();
+
+    expect(setPropsMock).not.toHaveBeenCalled();
+    expect(mocks.notifyChangeMock).not.toHaveBeenCalled();
+
+    mocks.projectionStoreMock.referenceBbox = [0, 0, 100, 100];
+    mocks.getBboxCenterMock.mockReturnValue([50, 50]);
+    mocks.getMaxScaleMock.mockReturnValue(2);
+
+    mapInstanceStore.fitToOrthographicBounds();
+
+    expect(setPropsMock).toHaveBeenCalledWith({
+      viewState: {
+        main: {
+          target: [-80, -60, 0],
+          zoom: 2,
+          minZoom: -10,
+          maxZoom: 10
+        }
+      },
+      initialViewState: {
+        main: {
+          target: [-80, -60, 0],
+          zoom: 2,
+          minZoom: -10,
+          maxZoom: 10
+        }
+      }
+    });
+    expect(mocks.notifyChangeMock).toHaveBeenCalledWith('mapViewState');
+  });
+
+  it('drops an implausible restored orthographic target and recenters the view', () => {
+    const { deck, setPropsMock } = createDeckMock();
+
+    mapInstanceStore.setDeckInstance(deck as never);
+    mapInstanceStore.setMapLoaded(true);
+    mocks.projectionStoreMock.referenceBbox = [200, 100, 600, 400];
+    mocks.getBboxCenterMock.mockReturnValue([400, 250]);
+    mapInstanceStore.restoreFromSerialized({
+      zoom: 0,
+      target: [0, 0, 0]
+    });
+
+    mapInstanceStore.fitToOrthographicBounds();
+
+    expect(setPropsMock).toHaveBeenCalledWith({
+      viewState: {
+        main: {
+          target: [0, 0, 0],
+          zoom: 0,
+          minZoom: -10,
+          maxZoom: 10
+        }
+      },
+      initialViewState: {
+        main: {
+          target: [0, 0, 0],
+          zoom: 0,
+          minZoom: -10,
+          maxZoom: 10
+        }
+      }
+    });
     expect(mocks.notifyChangeMock).toHaveBeenCalledWith('mapViewState');
   });
 });

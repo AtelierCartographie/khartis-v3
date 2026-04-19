@@ -26,4 +26,31 @@ describe('SymbolModeUnique (aucun.png alignment)', () => {
   it('still exposes the background (Fond) section to match existing feature set', () => {
     expect(source).toContain('title={m.background()}');
   });
+
+  it('wires SEQUENTIAL paletteType for CLASSES fill and QUALITATIVE for CATEGORIES fill', () => {
+    expect(source).toContain('paletteType={PALETTE_TYPE.SEQUENTIAL}');
+    expect(source).toContain('paletteType={PALETTE_TYPE.QUALITATIVE}');
+  });
+
+  it('routes Fill Unique through SingleColorPreview (not ColorSelector)', () => {
+    expect(source).toContain(
+      "import SingleColorPreview from '../palette-popover/single-color-preview.svelte'"
+    );
+    const uniqueBlock = source
+      .split('fillMode === FillMode.UNIQUE')[1]
+      ?.split('{:else if')[0];
+    expect(uniqueBlock).toContain('<SingleColorPreview');
+    expect(uniqueBlock).not.toContain('<ColorSelector');
+  });
+
+  it('enables the Categories Aspect popover via categoriesMode + categoryLabels on CATEGORIES', () => {
+    const categoriesBlock = source.split('fillMode === FillMode.CATEGORIES')[1];
+    const paletteBlock = categoriesBlock
+      ?.split('<PalettePreview')[1]
+      ?.split('/>')[0];
+    expect(paletteBlock).toContain('categoriesMode={true}');
+    expect(paletteBlock).toContain(
+      'categoryLabels={visualization?.classification?.labels ?? []}'
+    );
+  });
 });

@@ -2,7 +2,7 @@
 
 > Parcours utilisateur, outils de viz et habillage. Lire ARCHITECTURE.md, MAP.md et CARTOGRAPHIE.md d'abord.
 
-**Voir aussi** : [ARCHITECTURE](./ARCHITECTURE.md) — [CARTOGRAPHIE](./CARTOGRAPHIE.md) — [MAP](./MAP.md) — [PIPELINE](./PIPELINE.md) — [DUCKDB](./DUCKDB.md)
+**Voir aussi** : [ARCHITECTURE](./ARCHITECTURE.md) — [CARTOGRAPHIE](./CARTOGRAPHIE.md) — [MAP](./MAP.md) — [PIPELINE_DONNEES](./PIPELINE_DONNEES.md) — [DUCKDB](./DUCKDB.md)
 
 ---
 
@@ -135,7 +135,7 @@ Découpage de données continues en classes. 8 méthodes :
 | `q6`                 | 6 quantiles prédéfinis (5e, 27.5e, 50e, 72.5e, 95e) |
 | `nested_means`       | Moyennes emboîtées récursives                       |
 | `head_tail`          | Head/tail breaks (distributions lourdes)            |
-| `standard_deviation` | Écart-type (→ nested_means en fallback)             |
+| `standard_deviation` | Écart-type (classes centrées sur la moyenne)        |
 | `manual`             | Bornes saisies manuellement                         |
 
 Options : méthode + nombre de classes. **Valeur de rupture** : active la palette divergente, positionnable.
@@ -290,4 +290,4 @@ Fichier → validateFile() → DuckDB → DatasetResult
 
 ---
 
-**Voir aussi :** [ARCHITECTURE.md](./ARCHITECTURE.md) — [CARTOGRAPHIE.md](./CARTOGRAPHIE.md) — [MAP.md](./MAP.md) — [PIPELINE.md](./PIPELINE.md) — [DUCKDB.md](./DUCKDB.md) — [GUIDE_DEVELOPPEUR.md](./GUIDE_DEVELOPPEUR.md)
+**Voir aussi :** [ARCHITECTURE.md](./ARCHITECTURE.md) — [CARTOGRAPHIE.md](./CARTOGRAPHIE.md) — [MAP.md](./MAP.md) — [PIPELINE_DONNEES.md](./PIPELINE_DONNEES.md) — [DUCKDB.md](./DUCKDB.md) — [GUIDE_DEVELOPPEUR.md](./GUIDE_DEVELOPPEUR.md)

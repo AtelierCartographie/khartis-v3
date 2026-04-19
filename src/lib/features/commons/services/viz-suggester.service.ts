@@ -1,4 +1,8 @@
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import {
+  COLUMN_TYPE_GEOMETRY,
+  GEO_COLUMN_TYPE
+} from '$lib/features/commons/constants/data.constants';
+
 import {
   detectSemioType,
   SEMIO_TYPES,
@@ -41,14 +45,11 @@ export interface EnrichedColumn extends ColumnAnalysis {
   type: string;
   semioType: SemioType;
   score: number;
+  isSuggestionCandidate: boolean;
 }
 
 export { SEMIO_TYPES };
 
-/**
- * Cartographic visualization criteria
- * Based on https://docs.google.com/spreadsheets/d/1F6gk998PXV4FvPNRJZ59YPnmsXJ4h6BLyRZupvrRRdw/edit#gid=0
- */
 const VIZ_CRITERIA: readonly VizSuggestion[] = [
   {
     id: 'symbols_uniques',
@@ -323,9 +324,32 @@ function getNullCount(column: ColumnAnalysis): number {
   return 0;
 }
 
+function isGeometryColumn(column: ColumnAnalysis): boolean {
+  const columnType = String(column.type ?? '').toLowerCase();
+
+  return (
+    columnType === COLUMN_TYPE_GEOMETRY ||
+    columnType.includes(COLUMN_TYPE_GEOMETRY) ||
+    column.geometryInfo != null
+  );
+}
+
+function resolveGeoSemioType(column: ColumnAnalysis): SemioType | null {
+  switch (column.geo_type) {
+    case GEO_COLUMN_TYPE.LATITUDE:
+      return SEMIO_TYPES.GEOLAT;
+    case GEO_COLUMN_TYPE.LONGITUDE:
+      return SEMIO_TYPES.GEOLON;
+    default:
+      return null;
+  }
+}
+
 function getColumnSemioType(column: ColumnAnalysis): EnrichedColumn {
   const columnName = column.name ?? '';
   const columnType = (column.type ?? 'string').toString();
+  const geoSemioType = resolveGeoSemioType(column);
+  const suggestionCandidate = !isGeometryColumn(column) && !geoSemioType;
 
   const analysisLike = {
     name: columnName,
@@ -341,14 +365,17 @@ function getColumnSemioType(column: ColumnAnalysis): EnrichedColumn {
     extent_magnitude: column.stats?.extent_magnitude
   };
 
-  const { semioType, semioScore } = detectSemioType(analysisLike);
+  const { semioType, semioScore } = geoSemioType
+    ? { semioType: geoSemioType, semioScore: 6.5 }
+    : detectSemioType(analysisLike);
 
   return {
     ...column,
     name: columnName || '(column)',
     type: columnType,
     semioType,
-    score: semioScore
+    score: semioScore,
+    isSuggestionCandidate: suggestionCandidate
   };
 }
 
@@ -720,9 +747,9 @@ function dedupeSuggestionsByImplementation(
 function suggestVisualizations(
   columns: ColumnAnalysis[],
   geometryType: GeometryType | null,
-  options: { maxSuggestions?: number; debug?: boolean } = {}
+  options: { maxSuggestions?: number } = {}
 ): VizSuggestion[] {
-  const { maxSuggestions = 3, debug = false } = options;
+  const { maxSuggestions = 3 } = options;
 
   if (!geometryType) {
     return [];
@@ -732,6 +759,7 @@ function suggestVisualizations(
 
   const enrichedColumns = columns
     .map((col) => getColumnSemioType(col))
+    .filter((col) => col.isSuggestionCandidate)
     .sort((a, b) => {
       if (b.score !== a.score) return b.score - a.score;
       const aNulls = getNullCount(a);
@@ -746,20 +774,10 @@ function suggestVisualizations(
     .filter((col) => getUniqueCount(col) > 1);
 
   const textEligibleColumns = enrichedColumns
+    .filter((col) => col.semioType !== SEMIO_TYPES.GEOID)
     .filter((col) => col.semioType !== SEMIO_TYPES.GEOLAT)
     .filter((col) => col.semioType !== SEMIO_TYPES.GEOLON)
     .filter((col) => getUniqueCount(col) > 1);
-
-  if (debug) {
-    logger.debug('Viz suggester inputs', LogCategory.VISUALIZATION, {
-      geometry: simplifiedGeomType,
-      columns: rankedColumns.map((col) => ({
-        name: col.name,
-        semioType: col.semioType,
-        score: col.score
-      }))
-    });
-  }
 
   const suggestions = [
     ...generateSuggestions(rankedColumns, simplifiedGeomType),

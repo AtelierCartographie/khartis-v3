@@ -35,4 +35,33 @@ describe('SymbolModeProportional (proportionnels.png + en classes.png)', () => {
     expect(source).toContain('showShapeSelector={true}');
     expect(source).toContain('showSizeSlider={true}');
   });
+
+  it('wires SEQUENTIAL paletteType for the CLASSES fill palette and QUALITATIVE for CATEGORIES', () => {
+    expect(source).toContain('paletteType={PALETTE_TYPE.SEQUENTIAL}');
+    expect(source).toContain('paletteType={PALETTE_TYPE.QUALITATIVE}');
+  });
+
+  it('routes Fill Unique through SingleColorPreview for both SINGLE and DOUBLE variants', () => {
+    expect(source).toContain(
+      "import SingleColorPreview from '../palette-popover/single-color-preview.svelte'"
+    );
+    const uniqueBlock = source
+      .split('fillMode === FillMode.UNIQUE')[1]
+      ?.split('{:else if')[0];
+    // Both SINGLE and DOUBLE branches should use SingleColorPreview
+    const count = (uniqueBlock?.match(/<SingleColorPreview/g) ?? []).length;
+    expect(count).toBeGreaterThanOrEqual(3);
+    expect(uniqueBlock).not.toContain('<ColorSelector');
+  });
+
+  it('enables Categories Aspect popover via categoriesMode + categoryLabels on CATEGORIES', () => {
+    const categoriesBlock = source.split('fillMode === FillMode.CATEGORIES')[1];
+    const paletteBlock = categoriesBlock
+      ?.split('<PalettePreview')[1]
+      ?.split('/>')[0];
+    expect(paletteBlock).toContain('categoriesMode={true}');
+    expect(paletteBlock).toContain(
+      'categoryLabels={visualization?.classification?.labels ?? []}'
+    );
+  });
 });

@@ -98,17 +98,17 @@
     <Checkbox
       labelText={m.search_case_sensitive()}
       checked={searchState.caseSensitive}
-      on:check={() => searchActions.toggleCaseSensitive()}
+      on:change={() => searchActions.toggleCaseSensitive()}
     />
     <Checkbox
       labelText={m.search_whole_word()}
       checked={searchState.wholeWord}
-      on:check={() => searchActions.toggleWholeWord()}
+      on:change={() => searchActions.toggleWholeWord()}
     />
     <Checkbox
       labelText={m.search_use_regex()}
       checked={searchState.useRegex}
-      on:check={() => searchActions.toggleUseRegex()}
+      on:change={() => searchActions.toggleUseRegex()}
     />
   </div>
 

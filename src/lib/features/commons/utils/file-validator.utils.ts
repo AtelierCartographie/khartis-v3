@@ -1,4 +1,6 @@
 import {
+  getMaxFileSizeForType,
+  getWarningFileSizeForType,
   STORAGE_LIMITS,
   type ValidationResult
 } from '../configs/validation.config';
@@ -103,10 +105,10 @@ export const FileValidator = {
       metadata: {}
     };
 
-    FileValidator.validateBasicProperties(file, result);
-
     result.fileType = FileValidator.detectFileType(file);
     result.metadata!.detectedType = result.fileType;
+
+    FileValidator.validateBasicProperties(file, result, result.fileType);
 
     FileValidator.validateByType(file, result);
 
@@ -197,12 +199,19 @@ export const FileValidator = {
     };
   },
 
-  validateBasicProperties(file: File, result: DetailedValidationResult): void {
+  validateBasicProperties(
+    file: File,
+    result: DetailedValidationResult,
+    fileType: FileType
+  ): void {
+    const maxFileSize = getMaxFileSizeForType(fileType);
+    const warningFileSize = getWarningFileSizeForType(fileType);
+
     if (file.size === 0) {
       result.errors.push(m.validation_file_empty());
-    } else if (file.size > config.maxFileSize) {
+    } else if (file.size > maxFileSize) {
       result.errors.push(m.validation_file_too_large());
-    } else if (file.size > config.maxFileSize * 0.8) {
+    } else if (file.size > warningFileSize) {
       result.warnings.push(m.validation_large_file_slow());
     }
 

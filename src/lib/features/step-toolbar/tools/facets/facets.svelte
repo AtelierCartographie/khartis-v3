@@ -1,14 +1,20 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
-  import { Button } from 'carbon-components-svelte';
-  import { Launch, SettingsAdjust } from 'carbon-icons-svelte';
-  import Switch from '$lib/features/commons/components/switch.svelte';
-  import { facetsStore, SCALE_MODE } from './facets.store.svelte';
+  import { Button, Link } from 'carbon-components-svelte';
   import {
+    CharacterWholeNumber,
+    Launch,
+    SettingsAdjust
+  } from 'carbon-icons-svelte';
+  import { facetsStore } from './facets.store.svelte';
+  import {
+    getSymbolPrimitive,
+    getTextPrimitive,
     visualizationStore,
     PrimitiveFilterType,
     type VisualizationConfig
   } from '$lib/features/commons/store/visualization.store.svelte';
+  import { FACET_SLOT, type FacetSlotPath } from './facets.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import {
     globalActions,
@@ -29,15 +35,12 @@
     'https://cartographie.sciencespo.fr/khartis/help/facets';
   const CONFIGURE_SECTION_ID = 'configure-visualization';
   const FACETS_COLUMNS_MIN = 1;
-  const FACETS_COLUMNS_MAX = 6;
-  const FACETS_PERFORMANCE_THRESHOLD = 9;
+  const FACETS_COLUMNS_MAX = 4;
 
   const enabled = $derived(facetsStore.enabled);
   const layout = $derived(facetsStore.layout);
   const variables = $derived(facetsStore.variables);
   const facetVisualizations = $derived(facetsStore.facetVisualizations);
-  const syncPanZoom = $derived(facetsStore.syncPanZoom);
-  const scaleMode = $derived(facetsStore.scaleMode);
 
   let selectedMapIndex = $state(0);
 
@@ -68,7 +71,7 @@
   });
 
   interface FacetSlot {
-    key: keyof NonNullable<VisualizationConfig['mapping']>;
+    path: FacetSlotPath;
     label: string;
   }
 
@@ -78,29 +81,36 @@
     slots: FacetSlot[];
   }
 
+  function pushSlot(slots: FacetSlot[], path: FacetSlotPath, label: string) {
+    if (!slots.some((slot) => slot.path === path)) {
+      slots.push({ path, label });
+    }
+  }
+
   function resolveSymbolSlots(viz: VisualizationConfig): FacetSlot[] {
     const slots: FacetSlot[] = [];
-    const symbolMode = viz.modes?.symbol;
+    const symbolMode = getSymbolPrimitive(viz)?.mode ?? SymbolMode.UNIQUE;
 
     if (symbolMode === SymbolMode.PROPORTIONAL) {
-      slots.push({ key: 'sizeColumn', label: m.facets_slot_size_shape() });
+      pushSlot(slots, FACET_SLOT.SYMBOL_SIZE, m.facets_slot_size_shape());
     } else if (symbolMode === SymbolMode.CLASSES) {
-      slots.push({ key: 'valueColumn', label: m.facets_slot_size_shape() });
+      pushSlot(slots, FACET_SLOT.SYMBOL_VALUE, m.facets_slot_size_shape());
     } else if (symbolMode === SymbolMode.CATEGORIES) {
-      slots.push({ key: 'categoryColumn', label: m.facets_slot_size_shape() });
+      pushSlot(slots, FACET_SLOT.SYMBOL_CATEGORY, m.facets_slot_size_shape());
     }
 
     const fillMode = viz.modes?.fill;
     if (fillMode === FillMode.CLASSES) {
-      const alreadyHas = slots.some((s) => s.key === 'valueColumn');
-      if (!alreadyHas) {
-        slots.push({ key: 'valueColumn', label: m.facets_slot_fill() });
-      }
+      pushSlot(slots, FACET_SLOT.SYMBOL_VALUE, m.facets_slot_fill());
     } else if (fillMode === FillMode.CATEGORIES) {
-      const alreadyHas = slots.some((s) => s.key === 'categoryColumn');
-      if (!alreadyHas) {
-        slots.push({ key: 'categoryColumn', label: m.facets_slot_fill() });
-      }
+      pushSlot(slots, FACET_SLOT.SYMBOL_CATEGORY, m.facets_slot_fill());
+    }
+
+    const strokeMode = viz.modes?.stroke;
+    if (strokeMode === StrokeMode.CLASSES) {
+      pushSlot(slots, FACET_SLOT.SYMBOL_VALUE, m.facets_slot_stroke());
+    } else if (strokeMode === StrokeMode.CATEGORIES) {
+      pushSlot(slots, FACET_SLOT.SYMBOL_CATEGORY, m.facets_slot_stroke());
     }
 
     return slots;
@@ -109,28 +119,58 @@
   function resolvePolygonSlots(viz: VisualizationConfig): FacetSlot[] {
     const slots: FacetSlot[] = [];
     if (viz.modes?.fill === FillMode.CLASSES) {
-      slots.push({ key: 'valueColumn', label: m.facets_slot_fill() });
+      pushSlot(slots, FACET_SLOT.POLYGON_VALUE, m.facets_slot_fill());
     } else if (viz.modes?.fill === FillMode.CATEGORIES) {
-      slots.push({ key: 'categoryColumn', label: m.facets_slot_fill() });
-    }
-    if (viz.modes?.color === ColorMode.CLASSES) {
-      if (!slots.some((s) => s.key === 'valueColumn')) {
-        slots.push({ key: 'valueColumn', label: m.facets_slot_color() });
-      }
+      pushSlot(slots, FACET_SLOT.POLYGON_CATEGORY, m.facets_slot_fill());
     }
     if (viz.modes?.stroke === StrokeMode.CLASSES) {
-      if (!slots.some((s) => s.key === 'valueColumn')) {
-        slots.push({ key: 'valueColumn', label: m.facets_slot_stroke() });
-      }
+      pushSlot(slots, FACET_SLOT.POLYGON_VALUE, m.facets_slot_stroke());
+    } else if (viz.modes?.stroke === StrokeMode.CATEGORIES) {
+      pushSlot(slots, FACET_SLOT.POLYGON_CATEGORY, m.facets_slot_stroke());
     }
     return slots;
   }
 
   function resolveLineSlots(viz: VisualizationConfig): FacetSlot[] {
     const slots: FacetSlot[] = [];
-    if (viz.modes?.thickness === ThicknessMode.CLASSES) {
-      slots.push({ key: 'valueColumn', label: m.facets_slot_size_shape() });
+    if (viz.modes?.thickness === ThicknessMode.PROPORTIONAL) {
+      pushSlot(slots, FACET_SLOT.LINE_SIZE, m.facets_slot_size_shape());
+    } else if (viz.modes?.thickness === ThicknessMode.CLASSES) {
+      pushSlot(slots, FACET_SLOT.LINE_VALUE, m.facets_slot_size_shape());
     }
+
+    if (viz.modes?.color === ColorMode.CLASSES) {
+      pushSlot(slots, FACET_SLOT.LINE_VALUE, m.facets_slot_color());
+    } else if (viz.modes?.color === ColorMode.CATEGORIES) {
+      pushSlot(slots, FACET_SLOT.LINE_CATEGORY, m.facets_slot_color());
+    }
+    return slots;
+  }
+
+  function resolveTextSlots(viz: VisualizationConfig): FacetSlot[] {
+    const slots: FacetSlot[] = [];
+    const background = getTextPrimitive(viz)?.background;
+
+    if (background?.fillMode === FillMode.CLASSES) {
+      pushSlot(slots, FACET_SLOT.TEXT_BACKGROUND_VALUE, m.facets_slot_fill());
+    } else if (background?.fillMode === FillMode.CATEGORIES) {
+      pushSlot(
+        slots,
+        FACET_SLOT.TEXT_BACKGROUND_CATEGORY,
+        m.facets_slot_fill()
+      );
+    }
+
+    if (background?.strokeMode === StrokeMode.CLASSES) {
+      pushSlot(slots, FACET_SLOT.TEXT_BACKGROUND_VALUE, m.facets_slot_stroke());
+    } else if (background?.strokeMode === StrokeMode.CATEGORIES) {
+      pushSlot(
+        slots,
+        FACET_SLOT.TEXT_BACKGROUND_CATEGORY,
+        m.facets_slot_stroke()
+      );
+    }
+
     return slots;
   }
 
@@ -179,6 +219,17 @@
       }
     }
 
+    if (primitives.includes(PrimitiveFilterType.TEXT)) {
+      const slots = resolveTextSlots(viz);
+      if (slots.length > 0) {
+        result.push({
+          id: 'texts',
+          title: m.texts_title(),
+          slots
+        });
+      }
+    }
+
     return result;
   });
 
@@ -194,18 +245,43 @@
 
   function getSlotVariable(
     mapIndex: number,
-    slotKey: FacetSlot['key']
+    slotPath: FacetSlot['path']
   ): string | undefined {
     const viz = facetVisualizations[mapIndex];
     if (!viz) return undefined;
-    return viz.mapping[slotKey];
+    switch (slotPath) {
+      case FACET_SLOT.SYMBOL_VALUE:
+        return viz.symbol?.valueColumn;
+      case FACET_SLOT.SYMBOL_CATEGORY:
+        return viz.symbol?.categoryColumn;
+      case FACET_SLOT.SYMBOL_SIZE:
+        return viz.symbol?.sizeColumn;
+      case FACET_SLOT.POLYGON_VALUE:
+        return viz.polygon?.valueColumn;
+      case FACET_SLOT.POLYGON_CATEGORY:
+        return viz.polygon?.categoryColumn;
+      case FACET_SLOT.LINE_VALUE:
+        return viz.line?.valueColumn;
+      case FACET_SLOT.LINE_CATEGORY:
+        return viz.line?.categoryColumn;
+      case FACET_SLOT.LINE_SIZE:
+        return viz.line?.sizeColumn;
+      case FACET_SLOT.TEXT_VALUE:
+        return viz.text?.valueColumn;
+      case FACET_SLOT.TEXT_CATEGORY:
+        return viz.text?.categoryColumn;
+      case FACET_SLOT.TEXT_BACKGROUND_VALUE:
+        return viz.text?.background?.valueColumn;
+      case FACET_SLOT.TEXT_BACKGROUND_CATEGORY:
+        return viz.text?.background?.categoryColumn;
+    }
   }
 
   function handleSlotVariableChange(
-    slotKey: FacetSlot['key'],
+    slotPath: FacetSlot['path'],
     variable: string
   ) {
-    facetsStore.setVariableForSlot(safeMapIndex, slotKey, variable);
+    facetsStore.setVariableForSlot(safeMapIndex, slotPath, variable);
   }
 
   function handleConfigureVisualization() {
@@ -219,15 +295,6 @@
     }, 100);
   }
 
-  function handleLearnMore() {
-    window.open(FACETS_HELP_URL, '_blank');
-  }
-
-  function handleExit() {
-    facetsStore.disable();
-    selectedMapIndex = 0;
-  }
-
   function handleColumnsChange(value: number) {
     const clamped = Math.max(
       FACETS_COLUMNS_MIN,
@@ -235,54 +302,43 @@
     );
     facetsStore.setColumns(clamped);
   }
+
+  const isActive = $derived(enabled && facetVisualizations.length > 0);
 </script>
 
-<div id="khartis-facets-tool">
-  {#if enabled && facetVisualizations.length > 0}
-    <div class="facets-content">
-      <section class="section">
-        <header class="section-heading">
-          <span class="section-title">{m.facets_display_section()}</span>
-          <span class="section-divider" aria-hidden="true"></span>
-        </header>
-        <p class="helper-text">{m.facets_display_helper()}</p>
-        <SliderWithInput
-          label={m.facets_columns_label()}
-          value={columnsValue}
-          min={0}
-          max={FACETS_COLUMNS_MAX}
-          step={1}
-          onchange={handleColumnsChange}
-        />
-        <div class="toggle-row">
-          <Switch
-            size="sm"
-            labelText={m.facets_shared_scale_label()}
-            toggled={scaleMode === SCALE_MODE.SHARED}
-            onchange={() => facetsStore.toggleScaleMode()}
-          />
-        </div>
-        <div class="toggle-row">
-          <Switch
-            size="sm"
-            labelText={m.facets_sync_pan_zoom()}
-            toggled={syncPanZoom}
-            onchange={() => facetsStore.toggleSyncPanZoom()}
-          />
-        </div>
-        {#if mapCount > FACETS_PERFORMANCE_THRESHOLD}
-          <p class="warning-text">{m.facets_performance_warning()}</p>
-        {/if}
-      </section>
+<div
+  id="khartis-facets-tool"
+  class="facets-tool"
+  class:facets-tool--active={isActive}
+>
+  {#if isActive}
+    <section class="section">
+      <header class="section-heading">
+        <span class="section-title">{m.facets_display_section()}</span>
+        <span class="section-divider" aria-hidden="true"></span>
+      </header>
+      <p class="helper-text">{m.facets_display_helper()}</p>
+      <SliderWithInput
+        label={m.facets_columns_label()}
+        value={columnsValue}
+        min={FACETS_COLUMNS_MIN}
+        max={FACETS_COLUMNS_MAX}
+        step={1}
+        showMinMax
+        onchange={handleColumnsChange}
+      />
+    </section>
+
+    <section class="section">
+      <header class="section-heading">
+        <span class="section-title">{m.facets_distribution_section()}</span>
+        <span class="section-divider" aria-hidden="true"></span>
+      </header>
+      <p class="helper-text">{m.facets_distribution_helper()}</p>
 
       {#if mapCount > 0}
-        <section class="section">
-          <header class="section-heading">
-            <span class="section-title">{m.facets_distribution_section()}</span>
-            <span class="section-divider" aria-hidden="true"></span>
-          </header>
-          <p class="helper-text">{m.facets_distribution_helper()}</p>
-          <p class="sub-label">{m.facets_maps_label()}</p>
+        <div class="maps-picker">
+          <span class="field-label">{m.facets_maps_label()}</span>
           <div
             class="maps-grid"
             role="radiogroup"
@@ -304,96 +360,95 @@
               </div>
             {/each}
           </div>
-        </section>
+        </div>
       {/if}
 
       {#each sections as section (section.id)}
-        <section class="section">
-          <header class="section-heading plain">
-            <span class="section-title">{section.title}</span>
-          </header>
-          {#each section.slots as slot, slotIdx (section.id + slot.key + slotIdx)}
+        <div class="subsection">
+          <h2 class="subsection-title">{section.title}</h2>
+          {#each section.slots as slot, slotIdx (section.id + slot.path + slotIdx)}
             <div class="slot-card">
               <header class="slot-heading">
                 <span class="slot-title">{slot.label}</span>
-                <span class="section-divider" aria-hidden="true"></span>
+                <span class="slot-divider" aria-hidden="true"></span>
               </header>
-              <p class="sub-label">{m.facets_variables_label()}</p>
-              <ul
-                class="variable-list"
-                role="radiogroup"
-                aria-label={slot.label}
-              >
-                {#each variables as variable (section.id + slot.key + slotIdx + variable)}
-                  <li class="variable-item">
-                    <label class="variable-label">
-                      <input
-                        type="radio"
-                        name={`facet-slot-${section.id}-${slot.key}-${slotIdx}`}
-                        class="variable-radio"
-                        value={variable}
-                        checked={getSlotVariable(safeMapIndex, slot.key) ===
-                          variable}
-                        onchange={() =>
-                          handleSlotVariableChange(slot.key, variable)}
-                      />
-                      <span class="variable-tag">
-                        <span class="variable-tag-text">{variable}</span>
-                        {#if numericDataFields.includes(variable)}
-                          <span class="variable-tag-badge">123</span>
-                        {/if}
-                      </span>
-                    </label>
-                  </li>
-                {/each}
-              </ul>
+              <div class="slot-body">
+                <span class="field-label">{m.facets_variables_label()}</span>
+                <ul
+                  class="variable-list"
+                  role="radiogroup"
+                  aria-label={slot.label}
+                >
+                  {#each variables as variable (section.id + slot.path + slotIdx + variable)}
+                    {@const isNumeric = numericDataFields.includes(variable)}
+                    <li class="variable-item">
+                      <label class="variable-label">
+                        <input
+                          type="radio"
+                          name={`facet-slot-${section.id}-${slot.path}-${slotIdx}`}
+                          class="variable-radio"
+                          value={variable}
+                          checked={getSlotVariable(safeMapIndex, slot.path) ===
+                            variable}
+                          onchange={() =>
+                            handleSlotVariableChange(slot.path, variable)}
+                        />
+                        <span class="variable-tag">
+                          <span class="variable-tag-text">{variable}</span>
+                          {#if isNumeric}
+                            <span class="variable-tag-icon">
+                              <CharacterWholeNumber size={16} />
+                            </span>
+                          {/if}
+                        </span>
+                      </label>
+                    </li>
+                  {/each}
+                </ul>
+              </div>
             </div>
           {/each}
-        </section>
+        </div>
       {/each}
+    </section>
 
-      <button class="link-btn" type="button" onclick={handleLearnMore}>
-        <span>{m.facets_learn_more()}</span>
-        <Launch size={16} />
-      </button>
-
-      <Button kind="danger-tertiary" style="width: 100%;" onclick={handleExit}>
-        {m.facets_exit_mode()}
-      </Button>
-    </div>
+    <Link href={FACETS_HELP_URL} target="_blank" size="sm" icon={Launch}>
+      {m.facets_learn_more()}
+    </Link>
   {:else}
-    <div class="facets-content">
-      <p class="helper-text">{m.facets_collection_description()}</p>
-      <p class="helper-text">{m.facets_create_instruction()}</p>
+    <p class="helper-text">{m.facets_collection_description()}</p>
+    <p class="helper-text">{m.facets_create_instruction()}</p>
 
-      <button class="link-btn" type="button" onclick={handleLearnMore}>
-        <span>{m.facets_learn_more()}</span>
-        <Launch size={16} />
-      </button>
+    <Link href={FACETS_HELP_URL} target="_blank" size="sm" icon={Launch}>
+      {m.facets_learn_more()}
+    </Link>
 
-      <Button
-        kind="secondary"
-        icon={SettingsAdjust}
-        style="width: 100%;"
-        onclick={handleConfigureVisualization}
-      >
-        {m.facets_configure_visualization()}
-      </Button>
-    </div>
+    <Button
+      kind="secondary"
+      icon={SettingsAdjust}
+      style="width: 100%;"
+      onclick={handleConfigureVisualization}
+    >
+      {m.facets_configure_visualization()}
+    </Button>
   {/if}
 </div>
 
 <style lang="scss">
-  .facets-content {
+  .facets-tool {
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-05, 16px);
   }
 
+  .facets-tool--active {
+    gap: var(--cds-spacing-07, 32px);
+  }
+
   .section {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-04, 12px);
+    gap: var(--cds-spacing-05, 16px);
   }
 
   .section-heading {
@@ -401,10 +456,6 @@
     align-items: center;
     gap: var(--cds-spacing-03, 8px);
     height: 24px;
-  }
-
-  .section-heading.plain .section-title {
-    font-size: 1rem;
   }
 
   .section-title {
@@ -429,61 +480,31 @@
     line-height: 1rem;
     letter-spacing: 0.32px;
     margin: 0;
-    white-space: pre-wrap;
   }
 
-  .sub-label {
+  .field-label {
+    display: block;
     font-size: 0.75rem;
     color: var(--cds-text-secondary, #525252);
     line-height: 1rem;
     letter-spacing: 0.32px;
-    margin: 0;
+    font-weight: 400;
   }
 
-  .warning-text {
-    font-size: 0.75rem;
-    color: var(--cds-support-warning, #f1c21b);
-    line-height: 1rem;
-    margin: 0;
-  }
-
-  .toggle-row {
+  .maps-picker {
     display: flex;
-    align-items: center;
-  }
-
-  .toggle-row :global(.kh-switch-label) {
-    font-size: 0.75rem;
-    color: var(--cds-text-secondary, #525252);
-  }
-
-  .link-btn {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    background: none;
-    border: none;
-    padding: 0;
-    cursor: pointer;
-    font-size: 0.75rem;
-    color: var(--cds-link-primary, #726e6e);
-    line-height: 1rem;
-    letter-spacing: 0.32px;
-  }
-
-  .link-btn:hover {
-    text-decoration: underline;
+    flex-direction: column;
+    gap: var(--cds-spacing-03, 8px);
   }
 
   .maps-grid {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--cds-spacing-02, 4px);
   }
 
   .maps-row {
     display: flex;
-    gap: 0;
     border: 1px solid var(--cds-border-inverse, #cac5c4);
     border-radius: 4px;
     overflow: hidden;
@@ -491,8 +512,9 @@
 
   .map-btn {
     flex: 1;
+    min-width: 0;
     padding: 7px 16px;
-    background: none;
+    background: transparent;
     border: none;
     cursor: pointer;
     font-size: 0.875rem;
@@ -500,6 +522,7 @@
     line-height: 18px;
     letter-spacing: 0.16px;
     text-align: left;
+    font-family: inherit;
   }
 
   .map-btn + .map-btn {
@@ -511,13 +534,36 @@
     color: var(--cds-text-primary, #161616);
   }
 
-  .slot-card {
+  .map-btn:focus-visible {
+    outline: 2px solid var(--cds-focus, #0f62fe);
+    outline-offset: -2px;
+  }
+
+  .subsection {
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-03, 8px);
     padding: var(--cds-spacing-04, 12px);
     background-color: var(--cds-layer-01, #f4f4f4);
     border-radius: 4px;
+  }
+
+  .subsection-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--cds-text-primary, #161616);
+    line-height: 18px;
+    letter-spacing: 0.16px;
+    margin: 0;
+  }
+
+  .slot-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-03, 8px);
+    padding: var(--cds-spacing-03, 8px) var(--cds-spacing-05, 16px)
+      var(--cds-spacing-05, 16px);
+    background-color: var(--cds-layer-01, #f4f4f4);
   }
 
   .slot-heading {
@@ -528,19 +574,31 @@
   }
 
   .slot-title {
-    font-size: 0.875rem;
-    font-weight: 600;
+    font-size: 0.75rem;
+    font-weight: 400;
     color: var(--cds-text-primary, #161616);
-    line-height: 18px;
-    letter-spacing: 0.16px;
+    line-height: 1rem;
+    letter-spacing: 0.32px;
     white-space: nowrap;
     flex-shrink: 0;
+  }
+
+  .slot-divider {
+    flex: 1;
+    height: 1px;
+    background-color: var(--cds-border-subtle-01, #c6c6c6);
+  }
+
+  .slot-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-03, 8px);
   }
 
   .variable-list {
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-02, 4px);
+    gap: var(--cds-spacing-03, 8px);
     list-style: none;
     padding: 0;
     margin: 0;
@@ -558,11 +616,12 @@
   }
 
   .variable-radio {
-    width: 16px;
-    height: 16px;
+    width: 20px;
+    height: 20px;
     accent-color: var(--cds-icon-primary, #161616);
     flex-shrink: 0;
     cursor: pointer;
+    margin: 0;
   }
 
   .variable-tag {
@@ -571,31 +630,34 @@
     gap: var(--cds-spacing-02, 4px);
     flex: 1;
     min-width: 0;
-    height: 18px;
-    padding: 2px 8px;
+    min-height: 18px;
     background-color: var(--cds-tag-background-purple, #e8daff);
     border: 1px solid var(--cds-tag-border-purple, #be95ff);
     border-radius: 1000px;
+    overflow: hidden;
+  }
+
+  .variable-tag-text {
+    flex: 1;
+    min-width: 0;
+    padding: 0 6px 2px 8px;
     font-size: 0.75rem;
     color: var(--cds-tag-color-purple, #6929c4);
     line-height: 1rem;
     letter-spacing: 0.32px;
     overflow: hidden;
-  }
-
-  .variable-tag-text {
-    overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .variable-tag-badge {
-    font-size: 0.625rem;
-    font-weight: 500;
-    letter-spacing: 0.32px;
-    padding: 0 4px;
-    border: 1px solid currentColor;
-    border-radius: 2px;
+  .variable-tag-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     flex-shrink: 0;
+    padding: 0 var(--cds-spacing-02, 4px) 0 var(--cds-spacing-01, 2px);
+    color: var(--cds-tag-color-purple, #6929c4);
+    border-left: 1px solid var(--cds-tag-border-purple, #be95ff);
+    align-self: stretch;
   }
 </style>

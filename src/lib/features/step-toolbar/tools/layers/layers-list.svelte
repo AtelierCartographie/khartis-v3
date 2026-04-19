@@ -24,11 +24,6 @@
       layerId: string,
       direction: -1 | 1
     ) => void;
-    onMoveSubLayer?: (
-      parentId: string,
-      layerId: string,
-      direction: -1 | 1
-    ) => void;
     onRenameLayer?: (layerId: string) => void;
     onDuplicateLayer?: (layerId: string) => void;
     onDeleteLayer?: (layerId: string) => void;
@@ -43,7 +38,6 @@
     onReorderLayers,
     onReorderSubLayers,
     onMoveLayer,
-    onMoveSubLayer,
     onRenameLayer,
     onDuplicateLayer,
     onDeleteLayer,
@@ -69,11 +63,6 @@
   let childItems = $state<Record<string, Layer[]>>({});
   let draggingParent = $state(false);
   let draggingChildOf: string | null = null;
-  let collapsedLayers = $state<Record<string, boolean>>({});
-
-  function toggleCollapse(id: string): void {
-    collapsedLayers[id] = !collapsedLayers[id];
-  }
 
   $effect(() => {
     if (!untrack(() => draggingParent)) {
@@ -167,9 +156,6 @@
     <div class="layer-group">
       <LayerItem
         layer={parentLayer}
-        hasChildren={getChildren(parentLayer.id).length > 0}
-        isCollapsed={!!collapsedLayers[parentLayer.id]}
-        onToggleCollapse={() => toggleCollapse(parentLayer.id)}
         onToggleVisibility={onToggleVisibility}
         onOpenSettings={onOpenSettings}
         canMoveUp={parentIndex > 0}
@@ -181,7 +167,7 @@
         onDeleteLayer={onDeleteLayer}
       />
 
-      {#if getChildren(parentLayer.id).length > 0 && !collapsedLayers[parentLayer.id] && !draggingParent}
+      {#if getChildren(parentLayer.id).length > 0 && !draggingParent}
         <div class="sublayers-container">
           <div class="sublayers-line"></div>
           <div
@@ -196,18 +182,11 @@
             onconsider={(e: Event) => handleChildConsider(parentLayer.id, e)}
             onfinalize={(e: Event) => handleChildFinalize(parentLayer.id, e)}
           >
-            {#each getChildren(parentLayer.id) as childLayer, childIndex (childLayer.id)}
+            {#each getChildren(parentLayer.id) as childLayer (childLayer.id)}
               <LayerItem
                 layer={childLayer}
                 onToggleVisibility={onToggleVisibility}
                 onOpenSettings={onOpenSettings}
-                canMoveUp={childIndex > 0}
-                canMoveDown={childIndex <
-                  getChildren(parentLayer.id).length - 1}
-                onMoveUp={() =>
-                  onMoveSubLayer?.(parentLayer.id, childLayer.id, -1)}
-                onMoveDown={() =>
-                  onMoveSubLayer?.(parentLayer.id, childLayer.id, 1)}
               />
             {/each}
           </div>

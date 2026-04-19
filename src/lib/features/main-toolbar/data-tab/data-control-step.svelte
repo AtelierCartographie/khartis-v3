@@ -99,7 +99,6 @@
     void selectedDataset?.id;
     selectedRowIds = [];
     isDeleteMode = false;
-    dataTabActions.selectRows([]);
     warningsNotificationDismissed = false;
     variableTypesNotificationDismissed = false;
   });
@@ -484,7 +483,6 @@
 
   function handleSelectionChange(ids: number[], _count: number) {
     selectedRowIds = ids;
-    dataTabActions.selectRows(ids);
   }
 
   function handleSortChange(
@@ -510,7 +508,6 @@
 
     isDeleteMode = false;
     selectedRowIds = [];
-    dataTabActions.selectRows([]);
   }
 
   async function handleDeleteRows() {
@@ -540,7 +537,6 @@
 
       selectedRowIds = [];
       isDeleteMode = false;
-      dataTabActions.selectRows([]);
       refreshTable();
       showSuccess(
         m.rows_deleted_success_title(),

@@ -21,18 +21,12 @@
     color?: string;
     shape?: MissingDataShape;
     size?: number;
-    opacity?: number;
-    showPattern?: boolean;
-    pattern?: boolean;
     showShapeSelector?: boolean;
     showSizeSlider?: boolean;
-    showOpacitySlider?: boolean;
     onshowchange?: (show: boolean) => void;
     oncolorchange?: (color: string) => void;
     onshapechange?: (shape: MissingDataShape) => void;
     onsizechange?: (size: number) => void;
-    onopacitychange?: (opacity: number) => void;
-    onpatternchange?: (pattern: boolean) => void;
   }
 
   let {
@@ -40,18 +34,12 @@
     color = DEFAULT_COLORS.missingData,
     shape = MissingDataShape.CIRCLE,
     size = 2,
-    opacity = 1,
-    showPattern = false,
-    pattern = false,
     showShapeSelector = true,
     showSizeSlider = true,
-    showOpacitySlider = false,
     onshowchange,
     oncolorchange,
     onshapechange,
-    onsizechange,
-    onopacitychange,
-    onpatternchange
+    onsizechange
   }: Props = $props();
 
   function handleShowToggle(value: boolean) {
@@ -122,34 +110,6 @@
                 onchange={onsizechange}
               />
             </div>
-          </Column>
-        </Row>
-      {/if}
-
-      {#if showOpacitySlider}
-        <Row>
-          <Column>
-            <div class="size-slider">
-              <SliderWithInput
-                label={m.opacity()}
-                bind:value={opacity}
-                min={0}
-                max={100}
-                onchange={onopacitychange}
-              />
-            </div>
-          </Column>
-        </Row>
-      {/if}
-
-      {#if showPattern}
-        <Row>
-          <Column>
-            <ToggleWithLabel
-              label={m.pattern()}
-              toggled={pattern}
-              ontoggle={onpatternchange}
-            />
           </Column>
         </Row>
       {/if}

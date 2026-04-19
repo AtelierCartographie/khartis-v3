@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
       { name: 'OGC_FID', type: 'integer' },
       { name: 'NUTS_ID', type: 'text' },
       { name: 'NAME_LATN', type: 'text' },
+      { name: 'Description', type: 'text' },
       { name: 'geom', type: 'geometry' },
       { name: '__id', type: 'integer' }
     ]
@@ -184,6 +185,86 @@ describe('search store tooltip integration', () => {
       joinedBasemap: undefined,
       gpsColumns: undefined
     });
+  });
+
+  it('projects HTML-like values to plain text in results and pinned tooltips', async () => {
+    mocks.searchInTable.mockResolvedValue({
+      exactCount: 1,
+      containsCount: 0,
+      fuzzyCount: 0,
+      totalCount: 1,
+      results: [
+        {
+          rowId: 55,
+          columnName: 'Description',
+          value:
+            '<center><table><tr><td>The Pit</td><td>Tras Street</td></tr></table></center>',
+          score: 1
+        }
+      ]
+    });
+
+    const duckRow: Record<string, unknown> = {};
+    Object.defineProperties(duckRow, {
+      __id: { value: 55, enumerable: false },
+      OGC_FID: { value: 54, enumerable: false },
+      NUTS_ID: { value: 'DE91', enumerable: false },
+      NAME_LATN: { value: 'Braunschweig', enumerable: false },
+      Description: {
+        value:
+          '<center><table><tr><td>The Pit</td><td>Tras Street</td></tr></table></center>',
+        enumerable: false
+      },
+      geom: { value: 'binary-geom', enumerable: false }
+    });
+    mocks.duckQuery.mockResolvedValue([duckRow]);
+
+    const { searchActions, searchState } =
+      await import('./search.store.svelte');
+
+    searchActions.clearSearch();
+    searchActions.setSearchValue('Tras Street');
+    await searchActions.performSearch();
+
+    expect(searchState.results[0]?.value).toBe('The Pit Tras Street');
+
+    const entries = mocks.pinAt.mock.calls[0]?.[2];
+    expect(entries).toEqual(
+      expect.arrayContaining([
+        { key: 'Description', value: 'The Pit Tras Street' }
+      ])
+    );
+  });
+
+  it('uses the stripped HTML projection for regex searches', async () => {
+    const regexResult = [
+      {
+        row_id: 55,
+        column_name: 'Description',
+        column_value: 'The Pit Tras Street',
+        score: 1
+      }
+    ];
+    const duckRow: Record<string, unknown> = {};
+    Object.defineProperties(duckRow, {
+      __id: { value: 55, enumerable: false },
+      Description: { value: 'The Pit Tras Street', enumerable: false }
+    });
+    mocks.duckQuery
+      .mockResolvedValueOnce(regexResult)
+      .mockResolvedValueOnce([duckRow]);
+
+    const { searchActions } = await import('./search.store.svelte');
+
+    searchActions.clearSearch();
+    searchActions.toggleUseRegex();
+    searchActions.setSearchValue('Tras\\s+Street');
+    await searchActions.performSearch();
+
+    expect(mocks.duckQuery.mock.calls[0]?.[0]).toContain(
+      'regexp_matches(\n            strip_html_text("Description"::VARCHAR),'
+    );
+    expect(mocks.searchInTable).not.toHaveBeenCalled();
   });
 
   it('passes joined basemap metadata through to the centering helper for joined CSV data', async () => {

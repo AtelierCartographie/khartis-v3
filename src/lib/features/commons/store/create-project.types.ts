@@ -60,6 +60,16 @@ export interface ColumnTransformation {
   timestamp: string;
 }
 
+export type AssetKind = 'primary' | 'companion';
+
+export interface AssetRef {
+  assetId: string;
+  originalName: string;
+  mimeType: string;
+  size: number;
+  kind: AssetKind;
+}
+
 export interface UploadedFile {
   id: string;
   name: string;
@@ -70,10 +80,7 @@ export interface UploadedFile {
   originalFile?: File; // Keep reference to original File object to avoid re-parsing
   relatedFileObjects?: File[]; // For shapefiles: store all companion File objects (.shx, .dbf, .prj, etc.)
   parsedData?: ParsedData;
-  /**
-   * Optional normalized GeoJSON content generated during preprocessing
-   * so downstream services (DuckDB) can reuse it without re-stringifying.
-   */
+  // Cached GeoJSON from preprocessing — avoids re-stringifying in DuckDB.
   preparedGeoJSON?: string;
   status: FileStatus;
   errorMessage?: string;
@@ -81,6 +88,8 @@ export interface UploadedFile {
   sourceType: DataSourceType;
   relatedFiles?: string[];
   relatedFilesData?: Record<string, ArrayBuffer>;
+  assetRef?: AssetRef;
+  companionAssetRefs?: AssetRef[];
   uploadProgress?: number;
   statistics?: Record<string, unknown>;
   duplicates?: {

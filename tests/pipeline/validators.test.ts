@@ -1,13 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import * as m from '$lib/paraglide/messages';
-import { PIPELINE_CONST } from '$lib/features/data-pipeline/constants';
+import { FileType } from '$lib/features/commons/store/create-project.types';
+import {
+  getMaxFileSizeForType,
+  getWarningFileSizeForType
+} from '$lib/features/commons/configs/validation.config';
 import { validateFile } from '$lib/features/data-pipeline/core/validators';
 
 function fakeFile(name: string, size: number): File {
   return { name, size, type: 'application/octet-stream' } as File;
 }
 
-const { MAX_FILE_SIZE, WARNING_FILE_SIZE } = PIPELINE_CONST.LIMITS;
+const CSV_MAX_FILE_SIZE = getMaxFileSizeForType(FileType.CSV);
+const CSV_WARNING_FILE_SIZE = getWarningFileSizeForType(FileType.CSV);
 
 describe('validateFile', () => {
   it('rejects unsupported extension', async () => {
@@ -24,19 +29,21 @@ describe('validateFile', () => {
     expect(result.errors).toEqual([m.pipeline_error_file_empty()]);
   });
 
-  it('rejects files above 100 MB', async () => {
-    const result = await validateFile(fakeFile('data.csv', MAX_FILE_SIZE + 1));
+  it('rejects files above the per-type size limit', async () => {
+    const result = await validateFile(
+      fakeFile('data.csv', CSV_MAX_FILE_SIZE + 1)
+    );
     expect(result.isValid).toBe(false);
     expect(result.errors).toEqual([
       m.pipeline_error_file_size_limit({
-        limit: String(MAX_FILE_SIZE / (1024 * 1024))
+        limit: String(CSV_MAX_FILE_SIZE / (1024 * 1024))
       })
     ]);
   });
 
-  it('accepts files above 50 MB but below 100 MB with a warning', async () => {
+  it('accepts files above the warning threshold but below the max with a warning', async () => {
     const result = await validateFile(
-      fakeFile('data.csv', WARNING_FILE_SIZE + 1)
+      fakeFile('data.csv', CSV_WARNING_FILE_SIZE + 1)
     );
     expect(result.isValid).toBe(true);
     expect(result.errors).toHaveLength(0);

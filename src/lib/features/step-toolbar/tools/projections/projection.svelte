@@ -1,5 +1,11 @@
 <script lang="ts">
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
+  import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
+  import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
+  import {
+    resolveProjectionAvailabilityContext,
+    supportsCustomProjectionCode
+  } from '$lib/features/map/utils/projection-availability';
   import { m } from '$lib/paraglide/messages';
   import { InlineNotification } from 'carbon-components-svelte';
   import {
@@ -14,6 +20,19 @@
   import ProjectionSettings from './projection-settings.svelte';
 
   const title = m.projection_title();
+  const projectionContext = $derived(
+    resolveProjectionAvailabilityContext({
+      requiresMapLibre: basemapStyleStore.requiresMapLibre,
+      hasOSMBasemap: osmBasemapStore.isActive,
+      currentStyle: basemapStyleStore.selectedStyle,
+      preferredStyle: basemapStyleStore.preferredTiledStyle,
+      referenceBasemapId: basemapStyleStore.referenceBasemapId,
+      osmBasemapBbox: osmBasemapStore.activeOSMBasemap?.bbox ?? null
+    })
+  );
+  const showOtherProjectionSection = $derived(
+    supportsCustomProjectionCode(projectionContext)
+  );
 
   let crsError = $state(false);
 
@@ -46,24 +65,26 @@
       <ProjectionMain />
     </ExpandableSection>
 
-    <ExpandableSection title={m.projection_other_title()}>
-      {#snippet icon()}
-        <Catalog size={20} />
-      {/snippet}
+    {#if showOtherProjectionSection}
+      <ExpandableSection title={m.projection_other_title()}>
+        {#snippet icon()}
+          <Catalog size={20} />
+        {/snippet}
 
-      <ProjectionOther
-        on:apply={handleProjectionCodeApply}
-        on:reset={handleProjectionCodeReset}
-      />
-      {#if crsError}
-        <InlineNotification
-          kind="error"
-          lowContrast
-          title={m.projection_code_helper()}
-          on:close={() => (crsError = false)}
+        <ProjectionOther
+          on:apply={handleProjectionCodeApply}
+          on:reset={handleProjectionCodeReset}
         />
-      {/if}
-    </ExpandableSection>
+        {#if crsError}
+          <InlineNotification
+            kind="error"
+            lowContrast
+            title={m.projection_code_helper()}
+            on:close={() => (crsError = false)}
+          />
+        {/if}
+      </ExpandableSection>
+    {/if}
 
     <ExpandableSection title={m.projection_settings_title()}>
       {#snippet icon()}

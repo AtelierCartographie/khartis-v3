@@ -80,11 +80,7 @@
           );
         }
       } catch (error) {
-        logger.debug(
-          'Skipping dev service worker cleanup',
-          LogCategory.SYSTEM,
-          error
-        );
+        console.error(error);
       }
     })();
   });
