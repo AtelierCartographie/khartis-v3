@@ -9,7 +9,9 @@ const source = readFileSync(
 
 describe('StrokeSection — palette wiring', () => {
   it('should import PALETTE_TYPE from palette-popover/palette.constants', () => {
-    expect(source).toContain("from '../palette-popover/palette.constants'");
+    expect(source).toContain(
+      "from '$lib/features/commons/components/palette-popover/palette.constants'"
+    );
     expect(source).toContain('PALETTE_TYPE');
   });
 
@@ -30,14 +32,50 @@ describe('StrokeSection — palette wiring', () => {
       );
     });
   });
+});
 
-  it('should accept a categoryLabels prop and propagate it to the Categories popover', () => {
-    expect(source).toContain('categoryLabels?:');
-    expect(source).toContain('categoryLabels = []');
-    const categoriesPalette = source
-      .split('paletteType={PALETTE_TYPE.QUALITATIVE}')[1]
-      ?.split('/>')[0];
-    expect(categoriesPalette).toContain('categoriesMode={true}');
-    expect(categoriesPalette).toContain('categoryLabels={');
+describe('StrokeSection — anti-leak fill↔stroke', () => {
+  it('should require onStrokeClassificationChange (non-optional) in Props', () => {
+    const propsMatch = source.match(/onStrokeClassificationChange[^?:]*:\s*\(/);
+    expect(propsMatch).not.toBeNull();
+    expect(source).not.toContain('onStrokeClassificationChange?:');
+  });
+
+  it('should not declare an onClassificationChange prop (leak vector)', () => {
+    expect(source).not.toMatch(/onClassificationChange[?:]?:\s*\(/);
+  });
+
+  it('should never fall back to onClassificationChange when the stroke handler is missing', () => {
+    expect(source).not.toContain(
+      'onStrokeClassificationChange ?? onClassificationChange'
+    );
+    expect(source).not.toContain(
+      '(onStrokeClassificationChange ?? onClassificationChange)'
+    );
+  });
+
+  it('should not read fill palette state to render the stroke preview', () => {
+    expect(source).not.toContain('?? visualization?.classification?.paletteId');
+    expect(source).not.toContain('?? visualization?.classification?.inverted');
+    expect(source).not.toContain('?? visualization?.classification?.labels');
+  });
+
+  it('should derive stroke palette previews solely from strokeClassification', () => {
+    expect(source).toContain(
+      'strokeClassification?.colors ?? DEFAULT_SEQUENTIAL_PREVIEW'
+    );
+    expect(source).toContain(
+      'strokeClassification?.colors ?? DEFAULT_QUALITATIVE_PREVIEW'
+    );
+  });
+
+  it('should pass onStrokeClassificationChange directly to every PalettePreview', () => {
+    const paletteBlocks = source.match(/<PalettePreview[\s\S]*?\/>/g) || [];
+    expect(paletteBlocks.length).toBeGreaterThan(0);
+    paletteBlocks.forEach((block) => {
+      expect(block).toContain(
+        'onClassificationChange={onStrokeClassificationChange}'
+      );
+    });
   });
 });

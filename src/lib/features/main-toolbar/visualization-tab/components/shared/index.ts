@@ -2,7 +2,7 @@ export { default as SliderWithInput } from './slider-with-input.svelte';
 export { default as SectionTitle } from './section-title.svelte';
 export { default as SectionHeading } from './section-heading.svelte';
 export { default as ColorSelector } from './color-selector.svelte';
-export { default as PalettePreview } from './palette-preview.svelte';
+export { default as PalettePreview } from '$lib/features/commons/components/palette-popover/palette-preview.svelte';
 export { default as ToggleWithLabel } from './toggle-with-label.svelte';
 export { default as DiscretizationRow } from './discretization-row.svelte';
 export { default as MissingDataSection } from './missing-data-section.svelte';

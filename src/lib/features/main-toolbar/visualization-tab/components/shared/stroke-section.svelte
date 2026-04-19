@@ -20,7 +20,7 @@
   } from '$lib/features/commons/store/visualization.store.svelte';
   import ColorSelector from './color-selector.svelte';
   import DiscretizationRow from './discretization-row.svelte';
-  import PalettePreview from './palette-preview.svelte';
+  import PalettePreview from '$lib/features/commons/components/palette-popover/palette-preview.svelte';
   import SectionHeading from './section-heading.svelte';
   import SliderWithInput from './slider-with-input.svelte';
   import ToggleWithLabel from './toggle-with-label.svelte';
@@ -28,7 +28,7 @@
     DEFAULT_SEQUENTIAL_PREVIEW,
     DEFAULT_QUALITATIVE_PREVIEW,
     PALETTE_TYPE
-  } from '../palette-popover/palette.constants';
+  } from '$lib/features/commons/components/palette-popover/palette.constants';
   import FacetsVariablePicker from '../symbols/facets-variable-picker.svelte';
   import {
     facetsStore,
@@ -40,9 +40,6 @@
     dataFields?: Array<{ id: number; text: string }>;
     infoText?: string;
     showDashed?: boolean;
-    classesPalette?: string[];
-    categoriesPalette?: string[];
-    categoryLabels?: string[];
     discretizationLabel?: string;
     categoryCount?: number;
     onStyleChange?: (updates: Partial<VisualizationConfig['style']>) => void;
@@ -52,7 +49,10 @@
     ) => void;
     onInvertPalette?: () => void;
     onOpenDiscretization?: () => void;
-    onClassificationChange?: (updates: Partial<ClassificationConfig>) => void;
+    onStrokeClassificationChange: (
+      updates: Partial<ClassificationConfig>
+    ) => void;
+    strokeClassification?: ClassificationConfig;
     showSliderBounds?: boolean;
     sliderInputWidth?: string;
     facetsValueSlotPath?: FacetSlotPath;
@@ -64,9 +64,6 @@
     dataFields = [],
     infoText,
     showDashed = true,
-    classesPalette = DEFAULT_SEQUENTIAL_PREVIEW,
-    categoriesPalette = DEFAULT_QUALITATIVE_PREVIEW,
-    categoryLabels = [],
     discretizationLabel,
     categoryCount = 4,
     onStyleChange,
@@ -74,7 +71,8 @@
     onMappingChange,
     onInvertPalette,
     onOpenDiscretization,
-    onClassificationChange,
+    onStrokeClassificationChange,
+    strokeClassification,
     showSliderBounds = true,
     sliderInputWidth = '128px',
     facetsValueSlotPath,
@@ -82,11 +80,12 @@
   }: Props = $props();
 
   const resolvedClassesPalette = $derived(
-    visualization?.classification?.colors ?? classesPalette
+    strokeClassification?.colors ?? DEFAULT_SEQUENTIAL_PREVIEW
   );
   const resolvedCategoriesPalette = $derived(
-    visualization?.classification?.colors ?? categoriesPalette
+    strokeClassification?.colors ?? DEFAULT_QUALITATIVE_PREVIEW
   );
+  const resolvedCategoryLabels = $derived(strokeClassification?.labels ?? []);
 
   const NONE_FIELD_ID = -1;
   let strokeMode = $state<StrokeMode>(StrokeMode.NONE);
@@ -189,6 +188,26 @@
   function handleStrokeModeChange(index: number) {
     strokeMode = STROKE_MODES[index] || StrokeMode.NONE;
     onModesChange?.({ stroke: strokeMode });
+    if (strokeMode === StrokeMode.NONE) {
+      strokeColor = DEFAULT_COLORS.stroke;
+      strokeWidth = VISUALIZATION_DEFAULTS.strokeWidth;
+      strokeOpacity = VISUALIZATION_DEFAULTS.strokeOpacity;
+      strokeDashed = false;
+      onStyleChange?.({
+        strokeColor: DEFAULT_COLORS.stroke,
+        strokeWidth: VISUALIZATION_DEFAULTS.strokeWidth,
+        strokeOpacity: VISUALIZATION_DEFAULTS.strokeOpacity / 100,
+        strokeDashed: false
+      });
+      onStrokeClassificationChange({
+        colors: undefined,
+        paletteId: undefined,
+        inverted: false,
+        patternId: undefined,
+        patternParams: undefined,
+        labels: undefined
+      });
+    }
   }
 
   function handleStrokeColorChange(value: string) {
@@ -338,11 +357,11 @@
     <PalettePreview
       label={m.color_palette()}
       colors={resolvedClassesPalette}
-      selectedPaletteId={visualization?.classification?.paletteId}
-      inverted={visualization?.classification?.inverted ?? false}
+      selectedPaletteId={strokeClassification?.paletteId}
+      inverted={strokeClassification?.inverted ?? false}
       paletteType={PALETTE_TYPE.SEQUENTIAL}
       oninvert={onInvertPalette}
-      onClassificationChange={onClassificationChange}
+      onClassificationChange={onStrokeClassificationChange}
     />
   {:else if strokeMode === StrokeMode.CATEGORIES}
     <div class="field-group">
@@ -377,15 +396,14 @@
     <PalettePreview
       label={m.color_palette()}
       colors={resolvedCategoriesPalette}
-      selectedPaletteId={visualization?.classification?.paletteId}
-      inverted={visualization?.classification?.inverted ?? false}
+      selectedPaletteId={strokeClassification?.paletteId}
+      inverted={strokeClassification?.inverted ?? false}
       paletteType={PALETTE_TYPE.QUALITATIVE}
       categoriesMode={true}
-      categoryLabels={categoryLabels.length > 0
-        ? categoryLabels
-        : (visualization?.classification?.labels ?? [])}
+      categoriesVariant="lines"
+      categoryLabels={resolvedCategoryLabels}
       oninvert={onInvertPalette}
-      onClassificationChange={onClassificationChange}
+      onClassificationChange={onStrokeClassificationChange}
     />
   {/if}
 

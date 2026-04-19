@@ -39,9 +39,10 @@
   } from '$lib/features/commons/services/classification.service';
   import {
     findPaletteById,
+    generateCategoricalColorsFromSeed,
     generatePaletteColors,
     PALETTE_TYPE
-  } from './components/palette-popover/palette.constants';
+  } from '$lib/features/commons/components/palette-popover/palette.constants';
   import { getColorBlindnessState } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
   import {
     getLegendState,
@@ -56,7 +57,6 @@
     ColorMode,
     DEFAULT_COLORS,
     FillMode,
-    StrokeMode,
     SymbolMode,
     ThicknessMode,
     VISUALIZATION_DEFAULTS
@@ -195,18 +195,14 @@
     switch (primitive) {
       case PrimitiveFilterType.POLYGON: {
         const polygon = getPolygonPrimitive(visualization);
-        return (
-          polygon?.fillMode === FillMode.CATEGORIES ||
-          polygon?.strokeMode === StrokeMode.CATEGORIES
-        );
+        return polygon?.fillMode === FillMode.CATEGORIES;
       }
 
       case PrimitiveFilterType.POINT: {
         const symbol = getSymbolPrimitive(visualization);
         return (
           symbol?.mode === SymbolMode.CATEGORIES ||
-          symbol?.fillMode === FillMode.CATEGORIES ||
-          symbol?.strokeMode === StrokeMode.CATEGORIES
+          symbol?.fillMode === FillMode.CATEGORIES
         );
       }
 
@@ -235,18 +231,14 @@
     switch (primitive) {
       case PrimitiveFilterType.POLYGON: {
         const polygon = getPolygonPrimitive(visualization);
-        return (
-          polygon?.fillMode === FillMode.CLASSES ||
-          polygon?.strokeMode === StrokeMode.CLASSES
-        );
+        return polygon?.fillMode === FillMode.CLASSES;
       }
 
       case PrimitiveFilterType.POINT: {
         const symbol = getSymbolPrimitive(visualization);
         return (
           symbol?.mode === SymbolMode.CLASSES ||
-          symbol?.fillMode === FillMode.CLASSES ||
-          symbol?.strokeMode === StrokeMode.CLASSES
+          symbol?.fillMode === FillMode.CLASSES
         );
       }
 
@@ -1004,6 +996,64 @@
     updatePrimitiveClassificationState(PrimitiveFilterType.POINT, updates);
   }
 
+  function handleSymbolStrokeClassificationChange(
+    updates: Partial<ClassificationConfig>
+  ) {
+    if (!selectedViz?.id) return;
+    visualizationStore.updatePrimitiveStrokeClassification(
+      selectedViz.id,
+      PrimitiveFilterType.POINT,
+      updates
+    );
+  }
+
+  function handlePolygonStrokeClassificationChange(
+    updates: Partial<ClassificationConfig>
+  ) {
+    if (!selectedViz?.id) return;
+    visualizationStore.updatePrimitiveStrokeClassification(
+      selectedViz.id,
+      PrimitiveFilterType.POLYGON,
+      updates
+    );
+  }
+
+  function _handleTextStrokeClassificationChange(
+    updates: Partial<ClassificationConfig>
+  ) {
+    if (!selectedViz?.id) return;
+    visualizationStore.updatePrimitiveStrokeClassification(
+      selectedViz.id,
+      PrimitiveFilterType.TEXT,
+      updates
+    );
+  }
+
+  function handleTextBackgroundStrokeClassificationChange(
+    updates: Partial<ClassificationConfig>
+  ) {
+    if (!selectedViz?.id) return;
+    const currentText = selectedViz.text;
+    const currentBackground = currentText?.background;
+    if (!currentText || !currentBackground) return;
+    const currentStrokeClassification = currentBackground.strokeClassification;
+    const mergedStrokeClassification: ClassificationConfig = {
+      method: ClassificationMethod.JENKS,
+      classes: 5,
+      ...currentStrokeClassification,
+      ...updates
+    };
+    updateSelectedVisualization({
+      text: {
+        ...currentText,
+        background: {
+          ...currentBackground,
+          strokeClassification: mergedStrokeClassification
+        }
+      }
+    });
+  }
+
   function handleSymbolMappingChange(
     updates: Partial<VisualizationConfig['mapping']>
   ) {
@@ -1376,8 +1426,14 @@
             visible && symbol.opacity <= 0
               ? VISUALIZATION_DEFAULTS.symbolOpacity / 100
               : symbol.opacity,
-          fillColor: symbol.fillColor ?? DEFAULT_COLORS.fill,
-          strokeColor: symbol.strokeColor ?? DEFAULT_COLORS.gray
+          fillColor:
+            (Array.isArray(symbol.fillColor)
+              ? symbol.fillColor[0]
+              : symbol.fillColor) ?? DEFAULT_COLORS.fill,
+          strokeColor:
+            (Array.isArray(symbol.strokeColor)
+              ? symbol.strokeColor[0]
+              : symbol.strokeColor) ?? DEFAULT_COLORS.gray
         });
         return;
       }
@@ -1407,7 +1463,10 @@
             polygon.fillOpacity <= 0
               ? VISUALIZATION_DEFAULTS.fillOpacity / 100
               : polygon.fillOpacity,
-          strokeColor: polygon.strokeColor ?? DEFAULT_COLORS.gray
+          strokeColor:
+            (Array.isArray(polygon.strokeColor)
+              ? polygon.strokeColor[0]
+              : polygon.strokeColor) ?? DEFAULT_COLORS.gray
         });
       }
     }
@@ -1651,7 +1710,10 @@
         fillColor: polygon.fillColor,
         fillOpacity:
           polygon.fillMode === FillMode.NONE ? 0 : polygon.fillOpacity,
-        strokeColor: polygon.strokeColor,
+        strokeColor:
+          (Array.isArray(polygon.strokeColor)
+            ? polygon.strokeColor[0]
+            : polygon.strokeColor) ?? visualization.style.strokeColor,
         strokeWidth: polygon.strokeWidth,
         strokeOpacity: polygon.strokeOpacity,
         strokeDashed: polygon.strokeDashed
@@ -1689,7 +1751,9 @@
         ...visualization.style,
         symbolFillColor: symbol.fillColor,
         fillColorB: symbol.fillColorB,
-        strokeColor: symbol.strokeColor,
+        strokeColor: Array.isArray(symbol.strokeColor)
+          ? symbol.strokeColor[0]
+          : symbol.strokeColor,
         strokeWidth: symbol.strokeWidth,
         strokeOpacity: symbol.strokeOpacity
       },
@@ -1826,7 +1890,9 @@
         fillColor: background.fillColor,
         fillOpacity:
           background.fillMode === FillMode.NONE ? 0 : background.fillOpacity,
-        strokeColor: background.strokeColor,
+        strokeColor: Array.isArray(background.strokeColor)
+          ? background.strokeColor[0]
+          : background.strokeColor,
         strokeWidth: background.strokeWidth,
         strokeOpacity: background.strokeOpacity,
         strokeDashed: background.strokeDashed
@@ -2177,14 +2243,13 @@
               contrast
             );
           } else {
-            colors = DEFAULT_CATEGORICAL_COLORS.slice(0, resolvedColorCount);
-            if (colors.length < resolvedColorCount) {
-              colors = Array.from(
-                { length: resolvedColorCount },
-                (_, index) =>
-                  DEFAULT_CATEGORICAL_COLORS[
-                    index % DEFAULT_CATEGORICAL_COLORS.length
-                  ]
+            if (resolvedColorCount <= DEFAULT_CATEGORICAL_COLORS.length) {
+              colors = DEFAULT_CATEGORICAL_COLORS.slice(0, resolvedColorCount);
+            } else {
+              colors = generateCategoricalColorsFromSeed(
+                DEFAULT_CATEGORICAL_COLORS[0],
+                resolvedColorCount,
+                'vif'
               );
             }
           }
@@ -2259,9 +2324,11 @@
       onStyleChange={handleSymbolStyleChange}
       onModesChange={handleSymbolModesChange}
       onSymbolsChange={handleSymbolsChange}
+      onSymbolPrimitiveChange={handleSymbolChange}
       onMappingChange={handleSymbolMappingChange}
       onMissingDataChange={handleSymbolMissingDataChange}
       onClassificationChange={handleSymbolClassificationChange}
+      onStrokeClassificationChange={handleSymbolStrokeClassificationChange}
       onInvertPalette={handleSymbolPaletteInvert}
       onToggleVisibility={(checked) =>
         handlePrimitiveVisibilityChange(PrimitiveFilterType.POINT, checked)}
@@ -2273,6 +2340,7 @@
     />
 
     <PolygonsConfig
+      onStrokeClassificationChange={handlePolygonStrokeClassificationChange}
       dataFields={dataFieldItems}
       visualization={polygonVisualization}
       disabled={!showsPolygonsConfig}
@@ -2328,6 +2396,7 @@
       onBackgroundStyleChange={handleTextBackgroundStyleChange}
       onBackgroundModesChange={handleTextBackgroundModesChange}
       onBackgroundClassificationChange={handleTextBackgroundClassificationChange}
+      onBackgroundStrokeClassificationChange={handleTextBackgroundStrokeClassificationChange}
       onBackgroundMappingChange={handleTextBackgroundMappingChange}
       onBackgroundInvertPalette={handleTextBackgroundPaletteInvert}
       onToggleVisibility={handleTextVisibilityChange}
