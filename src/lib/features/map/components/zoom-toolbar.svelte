@@ -3,12 +3,15 @@
   import { Add, Document, Earth, Subtract } from 'carbon-icons-svelte';
   import IconButton from '../../commons/components/carbon/icon-button.svelte';
   import ToggleTabs from '../../commons/components/toggle-tabs.svelte';
+  import Tooltip from '../../commons/components/carbon/tooltip.svelte';
   import { KEY } from '../../commons/constants/dom.constants';
   import {
     globalActions,
     globalState
   } from '../../commons/store/global.svelte';
   import { mapInstanceStore } from '../../commons/store/map-instance.store.svelte';
+  import { ViewMode } from '../constants/map.constants';
+  import { deckDebugStore } from '../stores/deck-debug.store.svelte';
   import { zoomModeStore } from '../../commons/store/zoom-mode.store.svelte';
   import { dispatchWorkspaceFit } from '../../commons/utils/workspace-viewport.utils';
   import {
@@ -19,6 +22,15 @@
   } from '../utils/map-zoom.utils';
 
   const activeTabIndex = $derived(zoomModeStore.isMapMode ? 0 : 1);
+  const showDeckDebugPanel = import.meta.env.DEV;
+  const deckDebugMetrics = $derived(deckDebugStore.metrics);
+  const deckDebugViewMode = $derived(deckDebugStore.viewMode);
+  const debugTooltipDirection = $derived(
+    globalState.isMobileView ? 'bottom' : 'top'
+  );
+  const debugTooltipAlign = $derived(
+    globalState.isMobileView ? 'start' : 'center'
+  );
 
   const zoomItems = $derived([
     {
@@ -134,64 +146,215 @@
       (event.currentTarget as HTMLInputElement).blur();
     }
   }
+
+  function formatDebugNumber(
+    value: number | null | undefined,
+    digits = 1
+  ): string {
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      return '--';
+    }
+
+    const absolute = Math.abs(value);
+    const fractionDigits = absolute >= 100 ? 0 : absolute >= 10 ? 1 : digits;
+
+    return value.toFixed(fractionDigits);
+  }
+
+  function formatDebugMilliseconds(value: number | null | undefined): string {
+    const formatted = formatDebugNumber(value, 2);
+    return formatted === '--' ? formatted : `${formatted} ms`;
+  }
+
+  function isFiniteDebugMetric(
+    value: number | null | undefined
+  ): value is number {
+    return typeof value === 'number' && Number.isFinite(value);
+  }
+
+  function getFpsInsight(value: number | null | undefined): string {
+    if (!isFiniteDebugMetric(value)) {
+      return m.deck_debug_metric_pending();
+    }
+
+    if (value >= 50) {
+      return m.deck_debug_metric_fps_state_good();
+    }
+
+    if (value >= 30) {
+      return m.deck_debug_metric_fps_state_ok();
+    }
+
+    if (value >= 20) {
+      return m.deck_debug_metric_fps_state_warn();
+    }
+
+    return m.deck_debug_metric_fps_state_bad();
+  }
+
+  function getCpuInsight(value: number | null | undefined): string {
+    if (!isFiniteDebugMetric(value)) {
+      return m.deck_debug_metric_pending();
+    }
+
+    if (value <= 4) {
+      return m.deck_debug_metric_cpu_state_good();
+    }
+
+    if (value <= 8) {
+      return m.deck_debug_metric_cpu_state_ok();
+    }
+
+    if (value <= 16) {
+      return m.deck_debug_metric_cpu_state_warn();
+    }
+
+    return m.deck_debug_metric_cpu_state_bad();
+  }
+
+  function getGpuInsight(value: number | null | undefined): string {
+    if (!isFiniteDebugMetric(value)) {
+      return m.deck_debug_metric_pending();
+    }
+
+    if (value <= 4) {
+      return m.deck_debug_metric_gpu_state_good();
+    }
+
+    if (value <= 8) {
+      return m.deck_debug_metric_gpu_state_ok();
+    }
+
+    if (value <= 16) {
+      return m.deck_debug_metric_gpu_state_warn();
+    }
+
+    return m.deck_debug_metric_gpu_state_bad();
+  }
+
+  const debugMetricsList = $derived([
+    {
+      key: 'fps',
+      label: m.deck_debug_metric_fps(),
+      value: formatDebugNumber(deckDebugMetrics?.fps),
+      insight: getFpsInsight(deckDebugMetrics?.fps)
+    },
+    {
+      key: 'cpu',
+      label: m.deck_debug_metric_cpu(),
+      value: formatDebugMilliseconds(deckDebugMetrics?.cpuTimePerFrame),
+      insight: getCpuInsight(deckDebugMetrics?.cpuTimePerFrame)
+    },
+    {
+      key: 'gpu',
+      label: m.deck_debug_metric_gpu(),
+      value: formatDebugMilliseconds(deckDebugMetrics?.gpuTimePerFrame),
+      insight: getGpuInsight(deckDebugMetrics?.gpuTimePerFrame)
+    }
+  ]);
 </script>
 
-<nav id="khartis-zoom-toolbar" class="zoom-toolbar app-shadow">
-  <ToggleTabs
-    items={zoomItems}
-    activeIndex={activeTabIndex}
-    onChange={handleZoomModeChange}
-    onDoubleClick={handleTabDoubleClick}
-    tabTitle={tabTitle}
-    className="zoom-mode-tabs"
-    activeClass="active"
-    fullWidthClass="full-width"
-    hideInactiveLabel={true}
-  />
+<div class="zoom-toolbar-shell">
+  <nav id="khartis-zoom-toolbar" class="zoom-toolbar app-shadow">
+    <ToggleTabs
+      items={zoomItems}
+      activeIndex={activeTabIndex}
+      onChange={handleZoomModeChange}
+      onDoubleClick={handleTabDoubleClick}
+      tabTitle={tabTitle}
+      className="zoom-mode-tabs"
+      activeClass="active"
+      fullWidthClass="full-width"
+      hideInactiveLabel={true}
+    />
 
-  <div class="zoom-section" title={m.zoom_reset_title()}>
-    <div class="zoom-value">
-      <input
-        id="khartis-zoom-toolbar-input"
-        class="zoom-input"
-        type="number"
-        inputmode="numeric"
-        aria-label={m.zoom_value_input_label()}
-        min={MIN_MAP_ZOOM_PERCENT}
-        max={MAX_MAP_ZOOM_PERCENT}
-        step={MAP_ZOOM_INPUT_STEP}
-        value={zoomInputValue}
-        oninput={handleZoomInput}
-        onblur={handleZoomInputBlur}
-        onkeydown={handleZoomInputKeydown}
-      />
+    <div class="zoom-section" title={m.zoom_reset_title()}>
+      <div class="zoom-value">
+        <input
+          id="khartis-zoom-toolbar-input"
+          class="zoom-input"
+          type="number"
+          inputmode="numeric"
+          aria-label={m.zoom_value_input_label()}
+          min={MIN_MAP_ZOOM_PERCENT}
+          max={MAX_MAP_ZOOM_PERCENT}
+          step={MAP_ZOOM_INPUT_STEP}
+          value={zoomInputValue}
+          oninput={handleZoomInput}
+          onblur={handleZoomInputBlur}
+          onkeydown={handleZoomInputKeydown}
+        />
+      </div>
+
+      <div class="zoom-controls">
+        <IconButton
+          kind="ghost"
+          size="small"
+          class="zoom-button"
+          icon={Subtract}
+          iconDescription={m.zoom_out()}
+          tooltipPosition="top"
+          on:click={handleZoomOut}
+        />
+
+        <IconButton
+          kind="ghost"
+          size="small"
+          class="zoom-button"
+          icon={Add}
+          iconDescription={m.zoom_in()}
+          tooltipPosition="top"
+          on:click={handleZoomIn}
+        />
+      </div>
     </div>
+  </nav>
 
-    <div class="zoom-controls">
-      <IconButton
-        kind="ghost"
-        size="small"
-        class="zoom-button"
-        icon={Subtract}
-        iconDescription={m.zoom_out()}
-        tooltipPosition="top"
-        on:click={handleZoomOut}
-      />
+  {#if showDeckDebugPanel && deckDebugViewMode}
+    <aside class="zoom-debug-panel">
+      <div class="zoom-debug-content">
+        <div class="zoom-debug-header">
+          <span class="zoom-debug-mode">
+            {deckDebugViewMode === ViewMode.ORTHOGRAPHIC
+              ? m.deck_debug_mode_ortho()
+              : m.deck_debug_mode_map()}
+          </span>
+        </div>
 
-      <IconButton
-        kind="ghost"
-        size="small"
-        class="zoom-button"
-        icon={Add}
-        iconDescription={m.zoom_in()}
-        tooltipPosition="top"
-        on:click={handleZoomIn}
-      />
-    </div>
-  </div>
-</nav>
+        <div class="zoom-debug-metrics">
+          {#each debugMetricsList as metric (metric.key)}
+            <div class="zoom-debug-metric">
+              <Tooltip
+                direction={debugTooltipDirection}
+                align={debugTooltipAlign}
+                triggerText={`${metric.label} ${metric.value}`}
+                iconDescription={metric.label}
+              >
+                <div class="zoom-debug-tooltip-card">
+                  <p class="zoom-debug-tooltip-eyebrow">{metric.label}</p>
+                  <p class="zoom-debug-tooltip-value">{metric.value}</p>
+                  <p class="zoom-debug-tooltip-text">{metric.insight}</p>
+                </div>
+              </Tooltip>
+            </div>
+          {/each}
+        </div>
+      </div>
+    </aside>
+  {/if}
+</div>
 
 <style>
+  .zoom-toolbar-shell {
+    position: fixed;
+    bottom: 24px;
+    left: 24px;
+    z-index: var(--z-toolbar);
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+  }
+
   .zoom-toolbar {
     padding: 0;
     width: 180px;
@@ -199,11 +362,145 @@
     border-radius: 0;
     font-family: 'IBM Plex Sans', sans-serif;
     font-size: 0.75rem;
-    position: fixed;
-    bottom: 24px;
-    left: 24px;
-    z-index: var(--z-toolbar);
     overflow: hidden;
+  }
+
+  .zoom-debug-panel {
+    width: auto;
+    min-width: 0;
+    height: 84px;
+    padding: 0 0 0 0.85rem;
+    display: flex;
+    align-items: center;
+    pointer-events: auto;
+    position: relative;
+  }
+
+  .zoom-debug-panel::before {
+    content: '';
+    width: 1px;
+    height: 2.3rem;
+    margin-right: 0.85rem;
+    background: linear-gradient(
+      to bottom,
+      rgba(141, 141, 141, 0),
+      rgba(141, 141, 141, 0.5),
+      rgba(141, 141, 141, 0)
+    );
+  }
+
+  .zoom-debug-content {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.45rem;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .zoom-debug-header {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    width: 100%;
+    min-width: 0;
+    white-space: nowrap;
+  }
+
+  .zoom-debug-metrics {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    width: 100%;
+    min-width: 0;
+    white-space: nowrap;
+  }
+
+  .zoom-debug-mode {
+    font-size: 0.625rem;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .zoom-debug-value {
+    color: var(--cds-text-01, #161616);
+  }
+
+  .zoom-debug-mode {
+    color: var(--cds-text-gray, #525252);
+  }
+
+  .zoom-debug-metric {
+    min-width: 0;
+  }
+
+  .zoom-debug-metric :global(.khartis-carbon-rich-tooltip-trigger) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    padding: 0.28rem 0.5rem;
+    border-radius: 999px;
+    background: color-mix(
+      in srgb,
+      var(--cds-layer-hover, #e8e8e8) 72%,
+      transparent
+    );
+    color: inherit;
+    text-decoration: none;
+    font-size: 0.625rem;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .zoom-debug-metric :global(.khartis-carbon-rich-tooltip-trigger:hover),
+  .zoom-debug-metric :global(.khartis-carbon-rich-tooltip-trigger:focus) {
+    color: inherit;
+  }
+
+  .zoom-debug-metric :global(.khartis-carbon-rich-tooltip-trigger svg) {
+    display: none;
+  }
+
+  .zoom-debug-metric :global(.khartis-carbon-rich-tooltip-trigger span) {
+    min-width: 0;
+    white-space: nowrap;
+  }
+
+  .zoom-debug-tooltip-card {
+    display: grid;
+    gap: 0.25rem;
+    max-width: 13.5rem;
+  }
+
+  .zoom-debug-tooltip-eyebrow {
+    font-size: 0.6rem;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    opacity: 0.72;
+  }
+
+  .zoom-debug-tooltip-value {
+    font-family:
+      ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+      'Courier New', monospace;
+    font-size: 0.82rem;
+    font-weight: 600;
+    line-height: 1.2;
+  }
+
+  .zoom-debug-tooltip-text {
+    margin: 0;
+    max-width: 13.5rem;
+    font-size: 0.75rem;
+    line-height: 1.3;
   }
 
   #khartis-zoom-toolbar :global(.zoom-mode-tabs) {
@@ -329,9 +626,13 @@
   }
 
   @media (max-width: 1023px) {
-    .zoom-toolbar {
+    .zoom-toolbar-shell {
       bottom: calc(60px + env(safe-area-inset-bottom, 0px) + 70px);
       left: var(--cds-spacing-03);
+      gap: 6px;
+    }
+
+    .zoom-toolbar {
       width: 172px;
     }
 
@@ -346,6 +647,80 @@
 
     .zoom-section {
       padding-left: 0;
+    }
+
+    .zoom-debug-panel {
+      position: fixed;
+      top: calc(var(--cds-header-height) + var(--cds-spacing-03));
+      left: var(--cds-spacing-03);
+      right: var(--cds-spacing-03);
+      height: 56px;
+      padding: 0 0.65rem;
+      background: rgba(244, 244, 244, 0.9);
+      backdrop-filter: blur(12px);
+      z-index: var(--z-toolbar);
+    }
+
+    .zoom-debug-panel::before {
+      display: none;
+    }
+
+    .zoom-debug-content {
+      gap: 0.3rem;
+    }
+
+    .zoom-debug-header {
+      gap: 0.35rem;
+    }
+
+    .zoom-debug-metrics {
+      gap: 0.45rem;
+      justify-content: space-between;
+    }
+
+    .zoom-debug-mode,
+    .zoom-debug-metric :global(.khartis-carbon-rich-tooltip-trigger) {
+      font-size: 0.56rem;
+    }
+
+    .zoom-debug-metric {
+      min-width: 0;
+    }
+
+    .zoom-debug-metric :global(.khartis-carbon-rich-tooltip-trigger) {
+      padding: 0.24rem 0.34rem;
+    }
+
+    .zoom-debug-tooltip-card {
+      max-width: 12rem;
+    }
+
+    .zoom-debug-tooltip-value {
+      font-size: 0.76rem;
+    }
+
+    .zoom-debug-tooltip-text {
+      max-width: 12rem;
+      font-size: 0.69rem;
+    }
+  }
+
+  :global(:root[theme='g100']) .zoom-debug-mode {
+    color: var(--cds-text-gray, #a8a8a8);
+  }
+
+  :global(:root[theme='g100']) .zoom-debug-panel::before {
+    background: linear-gradient(
+      to bottom,
+      rgba(244, 244, 244, 0),
+      rgba(244, 244, 244, 0.28),
+      rgba(244, 244, 244, 0)
+    );
+  }
+
+  @media (max-width: 1023px) {
+    :global(:root[theme='g100']) .zoom-debug-panel {
+      background: rgba(22, 22, 22, 0.9);
     }
   }
 </style>

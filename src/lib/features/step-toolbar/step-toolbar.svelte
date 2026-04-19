@@ -4,6 +4,7 @@
     globalState
   } from '$lib/features/commons/store/global.svelte';
   import { ToolbarStep } from '$lib/features/commons/types/global';
+  import { ColorBlindnessType } from '$lib/features/commons/constants/ui.constants';
   import { m } from '$lib/paraglide/messages.js';
   import { ColorPalette, DataBase, RulerAlt } from 'carbon-icons-svelte';
   import { Popover } from 'carbon-components-svelte';
@@ -172,7 +173,8 @@
   >
     <Popover open={showColorBlindnessNotification} align="right-top" light>
       <ColorBlindnessNotification
-        ondeactivate={() => colorBlindnessActions.toggleEnabled()}
+        ondeactivate={() =>
+          colorBlindnessActions.setSimulationType(ColorBlindnessType.NONE)}
         onclose={() => (notificationDismissed = true)}
       />
     </Popover>

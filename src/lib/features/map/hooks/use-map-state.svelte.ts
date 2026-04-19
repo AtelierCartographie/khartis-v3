@@ -1,5 +1,13 @@
 import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
 import {
+  getLinePrimitive,
+  getPolygonPrimitive,
+  getPrimitiveCategoryColumn,
+  getPrimitiveClassification,
+  getPrimitiveSizeColumn,
+  getPrimitiveValueColumn,
+  getSymbolPrimitive,
+  PrimitiveFilterType,
   visualizationStore,
   type VisualizationConfig
 } from '$lib/features/commons/store/visualization.store.svelte';
@@ -11,6 +19,17 @@ import { getCategoricalColorMap, shouldApplyCategorical } from '../styling';
 import type { LayerContext, RGBColor } from '../types';
 
 const BASE_STROKE_COLOR: RGBColor = [255, 255, 255];
+
+function resolveColorToRgb(
+  color: string | string[] | undefined,
+  fallback: RGBColor
+): RGBColor {
+  if (Array.isArray(color)) {
+    return typeof color[0] === 'string' ? hexToRgb(color[0]) : fallback;
+  }
+
+  return typeof color === 'string' ? hexToRgb(color) : fallback;
+}
 
 function toFiniteNumber(value: unknown): number | null {
   if (typeof value === 'number') {
@@ -42,22 +61,31 @@ export interface UseMapStateOptions {
 
 function getColorsForViz(viz: VisualizationConfig | null): {
   fill: RGBColor;
+  symbolFill: RGBColor;
   stroke: RGBColor;
 } {
   if (!viz) {
     return {
       fill: HIGHLIGHT_FILL_COLOR,
+      symbolFill: HIGHLIGHT_FILL_COLOR,
       stroke: BASE_STROKE_COLOR
     };
   }
 
+  const polygon = getPolygonPrimitive(viz);
+  const symbol = getSymbolPrimitive(viz);
+  const line = getLinePrimitive(viz);
+
+  const fill = resolveColorToRgb(polygon?.fillColor, HIGHLIGHT_FILL_COLOR);
+  const symbolFill = resolveColorToRgb(symbol?.fillColor, HIGHLIGHT_FILL_COLOR);
+
   return {
-    fill: viz.style.fillColor
-      ? hexToRgb(viz.style.fillColor as string)
-      : HIGHLIGHT_FILL_COLOR,
-    stroke: viz.style.strokeColor
-      ? hexToRgb(viz.style.strokeColor)
-      : BASE_STROKE_COLOR
+    fill,
+    symbolFill,
+    stroke: resolveColorToRgb(
+      polygon?.strokeColor ?? line?.color,
+      BASE_STROKE_COLOR
+    )
   };
 }
 
@@ -83,44 +111,51 @@ function getColumnStatisticsForViz(
   return { min: 0, max: 100 };
 }
 
-function getStatisticsForViz(viz: VisualizationConfig): {
+function getStatisticsForViz(
+  viz: VisualizationConfig,
+  columnName: string | undefined
+): {
   min: number;
   max: number;
 } {
-  return getColumnStatisticsForViz(viz, viz.mapping.sizeColumn);
+  return getColumnStatisticsForViz(viz, columnName);
 }
 
-function getSecondaryStatisticsForViz(viz: VisualizationConfig):
+function getSecondaryStatisticsForViz(
+  viz: VisualizationConfig,
+  columnName: string | undefined
+):
   | {
       min: number;
       max: number;
     }
   | undefined {
-  const isDoubleProportional =
-    viz.modes?.proportionalType === ProportionalType.DOUBLE &&
-    !!viz.mapping.valueColumn;
-
-  if (!isDoubleProportional) {
+  if (!columnName) {
     return undefined;
   }
 
-  return getColumnStatisticsForViz(viz, viz.mapping.valueColumn);
+  return getColumnStatisticsForViz(viz, columnName);
 }
 
 function getCategoryColorMapForViz(
-  viz: VisualizationConfig
+  viz: VisualizationConfig,
+  primitive: PrimitiveFilterType
 ): Map<string, RGBColor> | null {
-  if (!viz.mapping.categoryColumn || !viz.datasetId) {
+  const categoryColumn = getPrimitiveCategoryColumn(viz, primitive);
+  const classification =
+    getPrimitiveClassification(viz, primitive) ?? viz.classification;
+
+  if (!categoryColumn || !viz.datasetId) {
     return null;
   }
 
-  const useCategoricalColor = shouldApplyCategorical(viz);
-  if (!useCategoricalColor || !viz.classification?.colors) {
+  const useCategoricalColor = shouldApplyCategorical(viz, primitive);
+  if (!useCategoricalColor || !classification?.colors) {
     return null;
   }
 
   const categories =
-    viz.classification.labels
+    classification.labels
       ?.map((label) => {
         if (label === null || label === undefined) {
           return null;
@@ -135,7 +170,7 @@ function getCategoryColorMapForViz(
     return null;
   }
 
-  return getCategoricalColorMap(categories, viz.classification.colors);
+  return getCategoricalColorMap(categories, classification.colors);
 }
 
 export function useMapState(options?: UseMapStateOptions): UseMapStateReturn {
@@ -156,21 +191,60 @@ export function useMapState(options?: UseMapStateOptions): UseMapStateReturn {
 
   function buildLayerContextForViz(viz: VisualizationConfig): LayerContext {
     const colors = getColorsForViz(viz);
-    const statistics = getStatisticsForViz(viz);
-    const secondaryStatistics = getSecondaryStatisticsForViz(viz);
-    const categoryColorMap = getCategoryColorMapForViz(viz);
+    const pointConfig = getSymbolPrimitive(viz);
+    const pointStatistics = getStatisticsForViz(
+      viz,
+      getPrimitiveSizeColumn(viz, PrimitiveFilterType.POINT)
+    );
+    const pointSecondaryStatistics =
+      pointConfig?.proportionalType === ProportionalType.DOUBLE
+        ? getSecondaryStatisticsForViz(viz, pointConfig.valueColumn)
+        : undefined;
+    const lineStatistics = getStatisticsForViz(
+      viz,
+      getPrimitiveSizeColumn(viz, PrimitiveFilterType.LINE)
+    );
+    const textStatistics = getStatisticsForViz(
+      viz,
+      getPrimitiveValueColumn(viz, PrimitiveFilterType.TEXT)
+    );
+    const pointCategoryColorMap = getCategoryColorMapForViz(
+      viz,
+      PrimitiveFilterType.POINT
+    );
+    const lineCategoryColorMap = getCategoryColorMapForViz(
+      viz,
+      PrimitiveFilterType.LINE
+    );
+    const polygonCategoryColorMap = getCategoryColorMapForViz(
+      viz,
+      PrimitiveFilterType.POLYGON
+    );
+    const textCategoryColorMap = getCategoryColorMapForViz(
+      viz,
+      PrimitiveFilterType.TEXT
+    );
 
     return {
       viz,
       datasetId: viz.datasetId,
       fillColor: colors.fill,
+      symbolFillColor: colors.symbolFill,
       strokeColor: colors.stroke,
       fillOpacity: viz.style.fillOpacity ?? 1,
       strokeWidth: viz.style.strokeWidth ?? 1,
       strokeOpacity: viz.style.strokeOpacity ?? 1,
-      statistics,
-      secondaryStatistics,
-      categoryColorMap,
+      statistics: pointStatistics,
+      secondaryStatistics: pointSecondaryStatistics,
+      categoryColorMap: pointCategoryColorMap,
+      pointStatistics,
+      pointSecondaryStatistics,
+      pointCategoryColorMap,
+      lineStatistics,
+      lineCategoryColorMap,
+      polygonCategoryColorMap,
+      textStatistics,
+      textCategoryColorMap,
       highlightedRowIds: mapHighlightStore.hasHighlights
         ? mapHighlightStore.highlightedRowIds
         : undefined,

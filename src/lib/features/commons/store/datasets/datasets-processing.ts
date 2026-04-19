@@ -343,10 +343,6 @@ export function createVisualizationsForGeoDatasets(
           dataset.id,
           dataset.name
         );
-        logger.debug(
-          `Created visualization for geo dataset: ${dataset.name}`,
-          LogCategory.STORE
-        );
       }
     }
   }
@@ -395,18 +391,10 @@ export async function processFiles(
         return internals.processingSemaphore.run(async () => {
           const restorableGeoSnapshot = createRestorableGeoSnapshot(file);
           if (restorableGeoSnapshot) {
-            logger.debug(
-              `Restoring geo snapshot via data pipeline for: ${file.name}`,
-              LogCategory.STORE
-            );
             return dataPipeline.processUploadedFile(restorableGeoSnapshot);
           }
 
           if (file.duckdbTableName) {
-            logger.debug(
-              `Using pre-processed data for: ${file.name} (table: ${file.duckdbTableName})`,
-              LogCategory.STORE
-            );
             return createDatasetFromPreprocessedFile(file);
           }
 
@@ -483,29 +471,22 @@ export async function addFile(
 
   try {
     const result = await internals.processingSemaphore.run(async () => {
+      const hasRestorableBinarySource = Boolean(
+        file.content ||
+        file.originalFile ||
+        file.assetRef ||
+        file.companionAssetRefs?.length
+      );
       const restorableGeoSnapshot = createRestorableGeoSnapshot(file);
       if (restorableGeoSnapshot) {
-        logger.debug(
-          `Restoring geo snapshot via data pipeline for: ${file.name}`,
-          LogCategory.STORE
-        );
         return dataPipeline.processUploadedFile(restorableGeoSnapshot);
       }
 
-      if (file.duckdbTableName) {
-        logger.debug(
-          `Using pre-processed data for: ${file.name} (table: ${file.duckdbTableName})`,
-          LogCategory.STORE
-        );
+      if (file.duckdbTableName && !hasRestorableBinarySource) {
         return createDatasetFromPreprocessedFile(file);
       }
 
-      if (
-        !file.content &&
-        !file.originalFile &&
-        file.parsedData &&
-        file.statistics
-      ) {
+      if (!hasRestorableBinarySource && file.parsedData && file.statistics) {
         logger.warn(
           `File ${file.name} has parsed data but no DuckDB table - creating from parsed data`,
           LogCategory.STORE
@@ -513,14 +494,9 @@ export async function addFile(
         return createDatasetFromPreprocessedFile(file);
       }
 
-      if (!file.content && !file.originalFile) {
+      if (!hasRestorableBinarySource) {
         throw new Error(`File ${file.name} has no content or originalFile`);
       }
-
-      logger.debug(
-        `Processing single file: ${file.name} (active: ${internals.processingSemaphore.activeCount})`,
-        LogCategory.STORE
-      );
 
       return await dataPipeline.processUploadedFile(file, file.originalFile);
     });
@@ -550,16 +526,6 @@ export async function addFile(
         }
 
         if (!addedDataset) addedDataset = dataset;
-        logger.debug(
-          'Replaced existing dataset for source file',
-          LogCategory.STORE,
-          {
-            fileName: file.name,
-            sourceFileId: dataset.sourceFileId,
-            existingDatasetId: existingDataset.id,
-            newDatasetId: dataset.id
-          }
-        );
       } else {
         state.datasets = [...state.datasets, dataset];
         if (autoEnable) {

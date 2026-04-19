@@ -11,6 +11,11 @@ overrides:
   tar: '>=7.5.11'
   cookie: '>=0.7.0'
 
+patchedDependencies:
+  '@deck.gl/layers':
+    hash: 9aac846c7f13f70f1f925bfd7534938ba9ba73a6af0d8ae3ed3131e2d1168202
+    path: patches/@deck.gl__layers.patch
+
 importers:
 
   .:
@@ -22,23 +27,23 @@ importers:
         specifier: ^0.1.4
         version: 0.1.4
       '@deck.gl/core':
-        specifier: ^9.2.11
-        version: 9.3.0
+        specifier: ^9.3.1
+        version: 9.3.1
       '@deck.gl/extensions':
-        specifier: ^9.2.11
-        version: 9.3.0(@deck.gl/core@9.3.0)(@luma.gl/core@9.3.2)(@luma.gl/engine@9.3.2(@luma.gl/core@9.3.2)(@luma.gl/shadertools@9.3.2(@luma.gl/core@9.3.2)))
+        specifier: ^9.3.1
+        version: 9.3.1(@deck.gl/core@9.3.1)(@luma.gl/core@9.3.2)(@luma.gl/engine@9.3.2(@luma.gl/core@9.3.2)(@luma.gl/shadertools@9.3.2(@luma.gl/core@9.3.2)))
       '@deck.gl/layers':
-        specifier: ^9.2.11
-        version: 9.3.0(@deck.gl/core@9.3.0)(@loaders.gl/core@4.4.1)(@luma.gl/core@9.3.2)(@luma.gl/engine@9.3.2(@luma.gl/core@9.3.2)(@luma.gl/shadertools@9.3.2(@luma.gl/core@9.3.2)))
+        specifier: ^9.3.1
+        version: 9.3.1(patch_hash=9aac846c7f13f70f1f925bfd7534938ba9ba73a6af0d8ae3ed3131e2d1168202)(@deck.gl/core@9.3.1)(@loaders.gl/core@4.4.1)(@luma.gl/core@9.3.2)(@luma.gl/engine@9.3.2(@luma.gl/core@9.3.2)(@luma.gl/shadertools@9.3.2(@luma.gl/core@9.3.2)))
       '@deck.gl/mapbox':
-        specifier: ^9.2.11
-        version: 9.3.0(@deck.gl/core@9.3.0)(@luma.gl/core@9.3.2)(@math.gl/web-mercator@4.1.0)
+        specifier: ^9.3.1
+        version: 9.3.1(@deck.gl/core@9.3.1)(@luma.gl/core@9.3.2)(@math.gl/web-mercator@4.1.0)
       '@duckdb/duckdb-wasm':
         specifier: 1.33.1-dev44.0
         version: 1.33.1-dev44.0
       '@inlang/paraglide-js':
-        specifier: ^2.15.3
-        version: 2.15.3
+        specifier: ^2.16.0
+        version: 2.16.0
       '@luma.gl/core':
         specifier: 9.3.2
         version: 9.3.2
@@ -73,8 +78,8 @@ importers:
         specifier: ^0.8.2
         version: 0.8.2
       geoarrow-deck-stream:
-        specifier: github:AtelierCartographie/geoarrow-deck-stream#1818bc856da4345420af8d77dd8fc55fa96a0450
-        version: git+https://git@github.com:AtelierCartographie/geoarrow-deck-stream.git#1818bc856da4345420af8d77dd8fc55fa96a0450(@deck.gl/core@9.3.0)(@deck.gl/layers@9.3.0(@deck.gl/core@9.3.0)(@loaders.gl/core@4.4.1)(@luma.gl/core@9.3.2)(@luma.gl/engine@9.3.2(@luma.gl/core@9.3.2)(@luma.gl/shadertools@9.3.2(@luma.gl/core@9.3.2))))(@geoarrow/geoarrow-js@0.3.3(apache-arrow@21.1.0))(apache-arrow@21.1.0)
+        specifier: github:AtelierCartographie/geoarrow-deck-stream#v1.0.2
+        version: git+https://git@github.com:AtelierCartographie/geoarrow-deck-stream.git#75493dfb51f764fe83c22e789aedd7989312de20(@deck.gl/core@9.3.1)(@deck.gl/layers@9.3.1(patch_hash=9aac846c7f13f70f1f925bfd7534938ba9ba73a6af0d8ae3ed3131e2d1168202)(@deck.gl/core@9.3.1)(@loaders.gl/core@4.4.1)(@luma.gl/core@9.3.2)(@luma.gl/engine@9.3.2(@luma.gl/core@9.3.2)(@luma.gl/shadertools@9.3.2(@luma.gl/core@9.3.2))))(@geoarrow/geoarrow-js@0.3.3(apache-arrow@21.1.0))(apache-arrow@21.1.0)
       html-to-image:
         specifier: ^1.11.13
         version: 1.11.13
@@ -118,6 +123,9 @@ importers:
       '@inlang/cli':
         specifier: ^3.1.9
         version: 3.1.9
+      '@math.gl/polygon':
+        specifier: 4.1.0
+        version: 4.1.0
       '@semantic-release/changelog':
         specifier: ^6.0.3
         version: 6.0.3(semantic-release@25.0.3(typescript@5.9.3))
@@ -154,6 +162,9 @@ importers:
       carbon-preprocess-svelte:
         specifier: ^0.11.29
         version: 0.11.30
+      earcut:
+        specifier: 3.0.2
+        version: 3.0.2
       eslint:
         specifier: ^9.39.4
         version: 9.39.4(jiti@2.6.1)
@@ -179,11 +190,11 @@ importers:
         specifier: ^16.4.0
         version: 16.4.0
       prettier:
-        specifier: ^3.8.2
-        version: 3.8.2
+        specifier: ^3.8.3
+        version: 3.8.3
       prettier-plugin-svelte:
         specifier: ^3.5.1
-        version: 3.5.1(prettier@3.8.2)(svelte@5.55.4)
+        version: 3.5.1(prettier@3.8.3)(svelte@5.55.4)
       rollup-plugin-visualizer:
         specifier: ^7.0.1
         version: 7.0.1(rollup@4.60.0)
@@ -878,26 +889,26 @@ packages:
     resolution: {integrity: sha512-QxULHAm7cNu72w97JUNCBFODFaXpbDg+dP8b/oWFAZ2MTRppA3U00Y2L1HqaS4J6yBqxwa/Y3nMBaxVKbB/NsA==}
     engines: {node: '>=20.19.0'}
 
-  '@deck.gl/core@9.3.0':
-    resolution: {integrity: sha512-LYa9+I/isYaDD/6ASmyZUCkB/XJjWFKaWYfFTg7NVcrkB+UduHLkmxcM2DXQ3p8ek10fcSB+IWXHfaO8RHTMZg==}
+  '@deck.gl/core@9.3.1':
+    resolution: {integrity: sha512-uixmBJhaAAgjzppcJ+0Hh2R1BYvFHvCHFReXN93iQxQoNB3VCC03pGEhZ0hrW7hcVLC8ExCUrg8VRJW60wXzcA==}
 
-  '@deck.gl/extensions@9.3.0':
-    resolution: {integrity: sha512-QhOPTQOq/OhMQ4wjElP8mLW5Lt2OjOajOXpThGLgk67tqCsd9yOOmXnlRO9jVV6r2/UBZ4j64m3MLxKYCFJgSw==}
+  '@deck.gl/extensions@9.3.1':
+    resolution: {integrity: sha512-XTJgC8pnS9zuiFRhlPTQnE0WKMuJCnZ4xdXmd9TMJRH58Z0DKaKHpc3j32heFKLoRHo3G/TKlCoP/my5tgYT+Q==}
     peerDependencies:
       '@deck.gl/core': ~9.3.0
       '@luma.gl/core': ~9.3.2
       '@luma.gl/engine': ~9.3.2
 
-  '@deck.gl/layers@9.3.0':
-    resolution: {integrity: sha512-71F2zAB3zerL/q6if+RtzJGHj39wpakDR/ud56fmuAVPEAHsVrYlsjMthdLsvIPZKE1SPUhY0163/a61PYlhew==}
+  '@deck.gl/layers@9.3.1':
+    resolution: {integrity: sha512-gUT/UMrmSCYsJCyv78qjHdeZVnqDexX61WxNP3dUa7ZplXiG3NxZvjhS0PYeBLritOtCJSv3b13vR2ka+j49ZQ==}
     peerDependencies:
       '@deck.gl/core': ~9.3.0
       '@loaders.gl/core': ^4.4.1
       '@luma.gl/core': ~9.3.2
       '@luma.gl/engine': ~9.3.2
 
-  '@deck.gl/mapbox@9.3.0':
-    resolution: {integrity: sha512-Kzf2mrxsr014UY3ozwt7HJziLe4kxeGaS051h53XnzOzbIAPpuXhh0w8MuMVUdVYOdvOCAqU/eHwZU+wVS9AYQ==}
+  '@deck.gl/mapbox@9.3.1':
+    resolution: {integrity: sha512-4SgpWMeZiqiZEiz9yPdr89cVRL8HFcvXLxXUA0ExhMreUdNuK/j2OIQHPhw6vp1xCFbJEEqRelQ0pJYkhGDkYw==}
     peerDependencies:
       '@deck.gl/core': ~9.3.0
       '@luma.gl/core': ~9.3.2
@@ -1297,8 +1308,8 @@ packages:
     engines: {node: '>=18.0.0'}
     hasBin: true
 
-  '@inlang/paraglide-js@2.15.3':
-    resolution: {integrity: sha512-gneANUhYEPnSjxbKp3QCwmMqQecG+1QWuJSAl3jiPprn2+LeaZu3BgnofRKpo8gkYzB6oE3AY2ecZBXu3UrpOw==}
+  '@inlang/paraglide-js@2.16.0':
+    resolution: {integrity: sha512-O7KKvVoTsGqPRt1VfSvd0UyfSjU2qHiABx968M2decgG7Af6TddW3dTJrTS3I78nOUgRAlYwCYfKefSGD4rGMA==}
     hasBin: true
 
   '@inlang/recommend-sherlock@0.2.1':
@@ -2902,8 +2913,8 @@ packages:
     engines: {node: '>=0.10.0'}
     hasBin: true
 
-  electron-to-chromium@1.5.336:
-    resolution: {integrity: sha512-AbH9q9J455r/nLmdNZes0G0ZKcRX73FicwowalLs6ijwOmCJSRRrLX63lcAlzy9ux3dWK1w1+1nsBJEWN11hcQ==}
+  electron-to-chromium@1.5.340:
+    resolution: {integrity: sha512-908qahOGocRMinT2nM3ajCEM99H4iPdv84eagPP3FfZy/1ZGeOy2CZYzjhms81ckOPCXPlW7LkY4XpxD8r1DrA==}
 
   emoji-regex@10.6.0:
     resolution: {integrity: sha512-toUI84YS5YmxW219erniWD0CIVOo46xGKColeNQRgOzDorgBi1v4D71/OFzgD9GO2UGKIv1C3Sp8DAn0+j5w7A==}
@@ -3243,9 +3254,9 @@ packages:
     resolution: {integrity: sha512-3hN7NaskYvMDLQY55gnW3NQ+mesEAepTqlg+VEbj7zzqEMBVNhzcGYYeqFo/TlYz6eQiFcp1HcsCZO+nGgS8zg==}
     engines: {node: '>=6.9.0'}
 
-  geoarrow-deck-stream@git+https://git@github.com:AtelierCartographie/geoarrow-deck-stream.git#1818bc856da4345420af8d77dd8fc55fa96a0450:
-    resolution: {commit: 1818bc856da4345420af8d77dd8fc55fa96a0450, repo: git@github.com:AtelierCartographie/geoarrow-deck-stream.git, type: git}
-    version: 1.0.0
+  geoarrow-deck-stream@git+https://git@github.com:AtelierCartographie/geoarrow-deck-stream.git#75493dfb51f764fe83c22e789aedd7989312de20:
+    resolution: {commit: 75493dfb51f764fe83c22e789aedd7989312de20, repo: git@github.com:AtelierCartographie/geoarrow-deck-stream.git, type: git}
+    version: 1.0.2
     peerDependencies:
       '@deck.gl/core': '>=9.0.0'
       '@deck.gl/layers': '>=9.0.0'
@@ -4386,8 +4397,8 @@ packages:
       prettier: ^3.0.0
       svelte: ^3.2.0 || ^4.0.0-next.0 || ^5.0.0-next.0
 
-  prettier@3.8.2:
-    resolution: {integrity: sha512-8c3mgTe0ASwWAJK+78dpviD+A8EqhndQPUBpNUIPt6+xWlIigCwfN01lWr9MAede4uqXGTEKeQWTvzb3vjia0Q==}
+  prettier@3.8.3:
+    resolution: {integrity: sha512-7igPTM53cGHMW8xWuVTydi2KO233VFiTNyF5hLJqpilHfmn8C8gPf+PS7dUT64YcXFbiMGZxS9pCSxL/Dxm/Jw==}
     engines: {node: '>=14'}
     hasBin: true
 
@@ -6495,7 +6506,7 @@ snapshots:
 
   '@csstools/css-tokenizer@4.0.0': {}
 
-  '@deck.gl/core@9.3.0':
+  '@deck.gl/core@9.3.1':
     dependencies:
       '@loaders.gl/core': 4.4.1
       '@loaders.gl/images': 4.4.1(@loaders.gl/core@4.4.1)
@@ -6516,18 +6527,18 @@ snapshots:
     transitivePeerDependencies:
       - '@75lb/nature'
 
-  '@deck.gl/extensions@9.3.0(@deck.gl/core@9.3.0)(@luma.gl/core@9.3.2)(@luma.gl/engine@9.3.2(@luma.gl/core@9.3.2)(@luma.gl/shadertools@9.3.2(@luma.gl/core@9.3.2)))':
+  '@deck.gl/extensions@9.3.1(@deck.gl/core@9.3.1)(@luma.gl/core@9.3.2)(@luma.gl/engine@9.3.2(@luma.gl/core@9.3.2)(@luma.gl/shadertools@9.3.2(@luma.gl/core@9.3.2)))':
     dependencies:
-      '@deck.gl/core': 9.3.0
+      '@deck.gl/core': 9.3.1
       '@luma.gl/core': 9.3.2
       '@luma.gl/engine': 9.3.2(@luma.gl/core@9.3.2)(@luma.gl/shadertools@9.3.2(@luma.gl/core@9.3.2))
       '@luma.gl/shadertools': 9.3.2(@luma.gl/core@9.3.2)
       '@luma.gl/webgl': 9.3.2(@luma.gl/core@9.3.2)
       '@math.gl/core': 4.1.0
 
-  '@deck.gl/layers@9.3.0(@deck.gl/core@9.3.0)(@loaders.gl/core@4.4.1)(@luma.gl/core@9.3.2)(@luma.gl/engine@9.3.2(@luma.gl/core@9.3.2)(@luma.gl/shadertools@9.3.2(@luma.gl/core@9.3.2)))':
+  '@deck.gl/layers@9.3.1(patch_hash=9aac846c7f13f70f1f925bfd7534938ba9ba73a6af0d8ae3ed3131e2d1168202)(@deck.gl/core@9.3.1)(@loaders.gl/core@4.4.1)(@luma.gl/core@9.3.2)(@luma.gl/engine@9.3.2(@luma.gl/core@9.3.2)(@luma.gl/shadertools@9.3.2(@luma.gl/core@9.3.2)))':
     dependencies:
-      '@deck.gl/core': 9.3.0
+      '@deck.gl/core': 9.3.1
       '@loaders.gl/core': 4.4.1
       '@loaders.gl/images': 4.4.1(@loaders.gl/core@4.4.1)
       '@loaders.gl/schema': 4.4.1
@@ -6542,9 +6553,9 @@ snapshots:
     transitivePeerDependencies:
       - '@75lb/nature'
 
-  '@deck.gl/mapbox@9.3.0(@deck.gl/core@9.3.0)(@luma.gl/core@9.3.2)(@math.gl/web-mercator@4.1.0)':
+  '@deck.gl/mapbox@9.3.1(@deck.gl/core@9.3.1)(@luma.gl/core@9.3.2)(@math.gl/web-mercator@4.1.0)':
     dependencies:
-      '@deck.gl/core': 9.3.0
+      '@deck.gl/core': 9.3.1
       '@luma.gl/core': 9.3.2
       '@math.gl/web-mercator': 4.1.0
 
@@ -6836,7 +6847,7 @@ snapshots:
     transitivePeerDependencies:
       - babel-plugin-macros
 
-  '@inlang/paraglide-js@2.15.3':
+  '@inlang/paraglide-js@2.16.0':
     dependencies:
       '@inlang/recommend-sherlock': 0.2.1
       '@inlang/sdk': 2.9.1
@@ -8053,7 +8064,7 @@ snapshots:
     dependencies:
       baseline-browser-mapping: 2.10.19
       caniuse-lite: 1.0.30001788
-      electron-to-chromium: 1.5.336
+      electron-to-chromium: 1.5.340
       node-releases: 2.0.37
       update-browserslist-db: 1.2.3(browserslist@4.28.2)
 
@@ -8450,7 +8461,7 @@ snapshots:
     dependencies:
       jake: 10.9.4
 
-  electron-to-chromium@1.5.336: {}
+  electron-to-chromium@1.5.340: {}
 
   emoji-regex@10.6.0: {}
 
@@ -8887,10 +8898,10 @@ snapshots:
 
   gensync@1.0.0-beta.2: {}
 
-  geoarrow-deck-stream@git+https://git@github.com:AtelierCartographie/geoarrow-deck-stream.git#1818bc856da4345420af8d77dd8fc55fa96a0450(@deck.gl/core@9.3.0)(@deck.gl/layers@9.3.0(@deck.gl/core@9.3.0)(@loaders.gl/core@4.4.1)(@luma.gl/core@9.3.2)(@luma.gl/engine@9.3.2(@luma.gl/core@9.3.2)(@luma.gl/shadertools@9.3.2(@luma.gl/core@9.3.2))))(@geoarrow/geoarrow-js@0.3.3(apache-arrow@21.1.0))(apache-arrow@21.1.0):
+  geoarrow-deck-stream@git+https://git@github.com:AtelierCartographie/geoarrow-deck-stream.git#75493dfb51f764fe83c22e789aedd7989312de20(@deck.gl/core@9.3.1)(@deck.gl/layers@9.3.1(patch_hash=9aac846c7f13f70f1f925bfd7534938ba9ba73a6af0d8ae3ed3131e2d1168202)(@deck.gl/core@9.3.1)(@loaders.gl/core@4.4.1)(@luma.gl/core@9.3.2)(@luma.gl/engine@9.3.2(@luma.gl/core@9.3.2)(@luma.gl/shadertools@9.3.2(@luma.gl/core@9.3.2))))(@geoarrow/geoarrow-js@0.3.3(apache-arrow@21.1.0))(apache-arrow@21.1.0):
     dependencies:
-      '@deck.gl/core': 9.3.0
-      '@deck.gl/layers': 9.3.0(@deck.gl/core@9.3.0)(@loaders.gl/core@4.4.1)(@luma.gl/core@9.3.2)(@luma.gl/engine@9.3.2(@luma.gl/core@9.3.2)(@luma.gl/shadertools@9.3.2(@luma.gl/core@9.3.2)))
+      '@deck.gl/core': 9.3.1
+      '@deck.gl/layers': 9.3.1(patch_hash=9aac846c7f13f70f1f925bfd7534938ba9ba73a6af0d8ae3ed3131e2d1168202)(@deck.gl/core@9.3.1)(@loaders.gl/core@4.4.1)(@luma.gl/core@9.3.2)(@luma.gl/engine@9.3.2(@luma.gl/core@9.3.2)(@luma.gl/shadertools@9.3.2(@luma.gl/core@9.3.2)))
       '@geoarrow/geoarrow-js': 0.3.3(apache-arrow@21.1.0)
       apache-arrow: 21.1.0
       d3-geo: 3.1.1
@@ -9930,12 +9941,12 @@ snapshots:
 
   prelude-ls@1.2.1: {}
 
-  prettier-plugin-svelte@3.5.1(prettier@3.8.2)(svelte@5.55.4):
+  prettier-plugin-svelte@3.5.1(prettier@3.8.3)(svelte@5.55.4):
     dependencies:
-      prettier: 3.8.2
+      prettier: 3.8.3
       svelte: 5.55.4
 
-  prettier@3.8.2: {}
+  prettier@3.8.3: {}
 
   pretty-bytes@5.6.0: {}
 

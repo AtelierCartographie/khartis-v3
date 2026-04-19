@@ -8,17 +8,17 @@ const source = readFileSync(
 );
 
 describe('SymbolsConfig container', () => {
-  it('still offers the five symbol modes (including density)', () => {
+  it('offers the four symbol modes without density (moved to polygons)', () => {
     expect(source).toContain('m.symbol_mode_unique()');
     expect(source).toContain('m.symbol_mode_proportional()');
     expect(source).toContain('m.symbol_mode_classes()');
     expect(source).toContain('m.symbol_mode_categories()');
-    expect(source).toContain('m.symbol_mode_density()');
+    expect(source).not.toContain('SymbolModeDensity');
+    expect(source).not.toContain('SymbolMode.DENSITY');
   });
 
-  it('routes the density branch to SymbolModeDensity (feature preserved)', () => {
-    expect(source).toContain('SymbolModeDensity');
-    expect(source).toContain('SymbolMode.DENSITY');
+  it('derives the active symbol mode from the canonical primitive config', () => {
+    expect(source).toContain('getSymbolPrimitive(visualization)?.mode');
   });
 
   it('switches the section title to "Taille, forme et couleur" in CATEGORIES mode', () => {

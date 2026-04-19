@@ -508,7 +508,6 @@ export async function readGeoParquetDirect(
   const wasmTable = readParquet(new Uint8Array(arrayBuffer));
   let table = tableFromIPC(wasmTable.intoIPCStream());
 
-  // Extract primary geometry column and encoding from parquet 'geo' metadata
   const geoMetaStr = table.schema.metadata?.get('geo');
   let primaryColumn = INTERNAL_COLUMN.GEOMETRY;
   let encoding: string | undefined;
@@ -542,7 +541,6 @@ export async function readGeoParquetDirect(
       return field;
     });
 
-    // Update 'geo' metadata to reflect renamed column
     const newSchemaMetadata = new Map(table.schema.metadata);
     if (geoMetaStr) {
       try {

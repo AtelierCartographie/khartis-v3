@@ -2,6 +2,8 @@
   import * as m from '$lib/paraglide/messages';
   import {
     CharacterWholeNumber,
+    Checkbox,
+    CheckboxCheckedFilled,
     ChevronDown,
     Checkmark,
     StringText
@@ -23,6 +25,7 @@
     isCollectionEnabled: boolean;
     canEnableCollection?: boolean;
     titleText?: string;
+    open?: boolean;
     onSelect: (fieldId: number) => void;
     onCollectionChange: (fieldIds: number[]) => void;
     onToggleCollection: (enabled: boolean) => void;
@@ -36,14 +39,13 @@
     isCollectionEnabled,
     canEnableCollection = true,
     titleText,
+    open = $bindable(false),
     onSelect,
     onCollectionChange,
     onToggleCollection
   }: Props = $props();
 
   const NONE_ID = -1;
-
-  let open = $state(false);
 
   const isNumeric = (field: DataField) => field.type === 'number';
 
@@ -65,6 +67,12 @@
     isCollectionEnabled && selectedFieldIds.length > 1
       ? selectedFieldIds.length
       : 0
+  );
+
+  const displayItems = $derived(
+    isCollectionEnabled
+      ? dataFields.filter((f) => f.id !== NONE_ID)
+      : singleSelectItems
   );
 
   function handleTriggerClick() {
@@ -153,7 +161,7 @@
   {#if open}
     <div class="dropdown-list" role="listbox">
       <div class="list-items">
-        {#each singleSelectItems as field (field.id)}
+        {#each displayItems as field (field.id)}
           <button
             type="button"
             role="option"
@@ -162,6 +170,15 @@
             class:selected={isSelected(field.id)}
             onclick={() => handleItemClick(field.id)}
           >
+            {#if isCollectionEnabled}
+              <span class="checkbox-icon">
+                {#if isSelected(field.id)}
+                  <CheckboxCheckedFilled size={20} />
+                {:else}
+                  <Checkbox size={20} />
+                {/if}
+              </span>
+            {/if}
             {#if field.id === NONE_ID}
               <span class="item-plain">{field.text}</span>
             {:else}
@@ -178,7 +195,7 @@
                 {/if}
               </span>
             {/if}
-            {#if isSelected(field.id)}
+            {#if !isCollectionEnabled && isSelected(field.id)}
               <span class="checkmark"><Checkmark size={16} /></span>
             {/if}
           </button>
@@ -305,7 +322,7 @@
   }
 
   .list-items {
-    max-height: 160px;
+    max-height: 200px;
     overflow-y: auto;
     overflow-x: hidden;
   }
@@ -313,7 +330,7 @@
   .list-item {
     display: flex;
     align-items: center;
-    gap: var(--cds-spacing-05);
+    gap: var(--cds-spacing-03);
     width: 100%;
     min-height: 40px;
     padding: 7px var(--cds-spacing-05);
@@ -341,6 +358,13 @@
     flex: 1;
     font-size: 0.875rem;
     color: var(--cds-text-primary, #161616);
+  }
+
+  .checkbox-icon {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    color: var(--cds-icon-primary, #161616);
   }
 
   .checkmark {

@@ -28,11 +28,6 @@ export const shapefileProcessor: FileProcessor = {
     file: UploadedFile
   ): Promise<ProcessorDataset> {
     const start = performance.now();
-    logger.debug('Processing Shapefile', LogCategory.DUCKDB, {
-      fileId: file.id,
-      tableName: ctx.tableName
-    });
-
     const shpFile = getFileForDuckDB(file, MIME.SHAPEFILE_SHP);
 
     const companionFiles =

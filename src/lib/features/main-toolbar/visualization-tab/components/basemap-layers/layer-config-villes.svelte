@@ -49,7 +49,9 @@
   }: Props = $props();
 
   function handleCategoryChange(e: CustomEvent<string | number>) {
-    onchange?.({ category: String(e.detail) as BasemapCityCategory });
+    const next = String(e.detail) as BasemapCityCategory;
+    if (next === category) return;
+    onchange?.({ category: next });
   }
 
   function handleSymbolChange(e: CustomEvent<{ selectedId: string }>) {

@@ -3,11 +3,20 @@
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import ProjectionCard from '$lib/features/commons/components/projection-card.svelte';
   import { ViewMode } from '$lib/features/commons/constants/ui.constants';
+  import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
   import {
     globalActions,
     globalState
   } from '$lib/features/commons/store/global.svelte';
   import type { ProjectionFilterId } from '$lib/features/commons/types/global';
+  import { mapProjectionStore } from '$lib/features/map/stores/map-projection.store.svelte';
+  import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
+  import {
+    getAvailableProjectionIds,
+    resolveDisplayedProjectionId,
+    resolveProjectionAvailabilityContext,
+    supportsProjectionSuggestions
+  } from '$lib/features/map/utils/projection-availability';
   import { m } from '$lib/paraglide/messages';
   import { Grid, List, MagicWandFilled } from 'carbon-icons-svelte';
   import clsx from 'clsx';
@@ -17,33 +26,38 @@
     projectionActions
   } from './projection.store.svelte';
   import type { ProjectionSuggestion } from './projection-suggest.service';
+  import { getNationalProjectionBadge } from './national-region-label';
 
   const description = m.projection_description();
 
   const projections = PROJECTIONS;
 
   const projectionState = $derived(getProjectionState());
-  const suggestions = $derived(projectionState.suggestions);
+  const projectionContext = $derived(
+    resolveProjectionAvailabilityContext({
+      requiresMapLibre: basemapStyleStore.requiresMapLibre,
+      hasOSMBasemap: osmBasemapStore.isActive,
+      currentStyle: basemapStyleStore.selectedStyle,
+      preferredStyle: basemapStyleStore.preferredTiledStyle,
+      referenceBasemapId: basemapStyleStore.referenceBasemapId,
+      osmBasemapBbox: osmBasemapStore.activeOSMBasemap?.bbox ?? null
+    })
+  );
+  const suggestionCardsEnabled = $derived(
+    supportsProjectionSuggestions(projectionContext)
+  );
+  const suggestions = $derived(
+    suggestionCardsEnabled ? projectionState.suggestions : undefined
+  );
   const hasSuggestions = $derived(
-    suggestions &&
+    Boolean(
+      suggestions &&
       (suggestions.national.length > 0 || suggestions.generic.length > 0)
+    )
   );
   const hasCustomProjection = $derived(
     Boolean(projectionState.customCode?.trim())
   );
-
-  const selectedCardId = $derived.by(() => {
-    if (hasCustomProjection) {
-      return null;
-    }
-
-    const selectedProjection = projectionState.selected;
-    const matchingCard = projections.find(
-      (projection) => projection.projectionId === selectedProjection
-    );
-    return matchingCard?.id ?? null;
-  });
-
   const filterOptions: ReadonlyArray<{
     id: ProjectionFilterId;
     label: string;
@@ -53,11 +67,55 @@
     { id: 'Arrondie', label: m.projection_filter_rounded() },
     { id: 'Discontinue', label: m.projection_filter_discontinuous() }
   ];
-
-  const activeFilter = $derived(globalState.projectionFilter ?? 'all');
-  const visibleProjections = $derived(
-    PROJECTIONS.filter((p) => activeFilter === 'all' || p.tag === activeFilter)
+  const availableProjectionIds = $derived(
+    new Set(
+      getAvailableProjectionIds(
+        projectionContext,
+        projections.map((projection) => projection.projectionId)
+      )
+    )
   );
+  const compatibleProjections = $derived(
+    projections.filter((projection) =>
+      availableProjectionIds.has(projection.projectionId)
+    )
+  );
+  const availableFilterOptions = $derived(
+    filterOptions.filter(
+      (option) =>
+        option.id === 'all' ||
+        compatibleProjections.some((projection) => projection.tag === option.id)
+    )
+  );
+  const activeFilter = $derived.by(() => {
+    const requestedFilter = globalState.projectionFilter ?? 'all';
+    return availableFilterOptions.some(
+      (option) => option.id === requestedFilter
+    )
+      ? requestedFilter
+      : 'all';
+  });
+  const visibleProjections = $derived(
+    compatibleProjections.filter(
+      (projection) => activeFilter === 'all' || projection.tag === activeFilter
+    )
+  );
+
+  const selectedCardId = $derived.by(() => {
+    if (hasCustomProjection) {
+      return null;
+    }
+
+    const selectedProjection = resolveDisplayedProjectionId({
+      context: projectionContext,
+      selectedProjectionId: projectionState.selected,
+      mapProjection: mapProjectionStore.projection
+    });
+    const matchingCard = projections.find(
+      (projection) => projection.projectionId === selectedProjection
+    );
+    return matchingCard?.id ?? null;
+  });
 
   function selectProjection(projectionId: string) {
     projectionActions.setSelected(projectionId);
@@ -85,10 +143,14 @@
     projection_group_discontinuous: m.projection_group_discontinuous
   } as const;
 
-  const groups = GROUPS.map((g) => ({
-    id: g.id,
-    label: groupLabelByKey[g.labelKey]()
-  }));
+  const groups = $derived(
+    GROUPS.filter((group) =>
+      compatibleProjections.some((projection) => projection.tag === group.id)
+    ).map((group) => ({
+      id: group.id,
+      label: groupLabelByKey[group.labelKey]()
+    }))
+  );
 </script>
 
 <div class="projection-content">
@@ -130,7 +192,10 @@
                 <ProjectionCard
                   title={s.name}
                   subtitle={s.epsg ? `EPSG:${s.epsg}` : ''}
-                  tag={m.projection_tag_national()}
+                  tag={getNationalProjectionBadge(
+                    s,
+                    m.projection_tag_national()
+                  )}
                   selected={projectionState.customCode === s.proj4String}
                   variant="blue"
                   equalArea={s.equalArea}
@@ -147,7 +212,7 @@
               {m.projection_suggestions_generic()}
             </div>
             <div class="projection-cards">
-              {#each suggestions.generic.slice(0, 5) as s (s.id)}
+              {#each suggestions.generic.slice(0, 3) as s (s.id)}
                 <ProjectionCard
                   title={s.name}
                   subtitle={s.equalArea
@@ -167,7 +232,7 @@
     {/if}
 
     <div class="projection-tags">
-      {#each filterOptions as opt (opt.id)}
+      {#each availableFilterOptions as opt (opt.id)}
         <button
           class="projection-tag"
           class:projection-tag--selected={activeFilter === opt.id}
@@ -210,7 +275,7 @@
             <div class="group-title">{g.label}</div>
 
             <div class="cards-col">
-              {#each projections.filter((p) => p.tag === g.id) as p (p.id + '-grid')}
+              {#each compatibleProjections.filter((p) => p.tag === g.id) as p (p.id + '-grid')}
                 <ProjectionCard
                   title={p.title}
                   subtitle={p.subtitle}

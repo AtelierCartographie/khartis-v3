@@ -27,6 +27,10 @@ interface GeoPackageLayerCandidate {
   definition: string | null;
 }
 
+interface GeoPackageBrowserFallbackOptions {
+  preferredLayer?: string;
+}
+
 type SqliteRow = Record<string, unknown>;
 type GeoPackageLayerRecord = SqliteRow & GeoPackageLayerRow;
 
@@ -226,7 +230,8 @@ async function getSqliteModule(): Promise<SqliteModule> {
 }
 
 async function selectPreferredLayer(
-  db: InstanceType<SqliteModule['oo1']['DB']>
+  db: InstanceType<SqliteModule['oo1']['DB']>,
+  preferredLayer?: string
 ): Promise<GeoPackageLayerCandidate> {
   const layerRows = db.selectObjects(`
     SELECT
@@ -265,6 +270,15 @@ async function selectPreferredLayer(
     } satisfies GeoPackageLayerCandidate;
   });
 
+  if (preferredLayer) {
+    const requestedLayer = candidates.find(
+      (candidate) => candidate.layerName === preferredLayer
+    );
+    if (requestedLayer) {
+      return requestedLayer;
+    }
+  }
+
   const selectedLayer = [...candidates].sort((left, right) => {
     const priorityDiff =
       getGeometryPriority(left.geometryType) -
@@ -288,7 +302,8 @@ async function selectPreferredLayer(
 }
 
 export async function convertGeoPackageToGeoJsonFile(
-  file: File
+  file: File,
+  options: GeoPackageBrowserFallbackOptions = {}
 ): Promise<File> {
   const sqlite3 = await getSqliteModule();
   const fileBytes = new Uint8Array(await file.arrayBuffer());
@@ -299,7 +314,10 @@ export async function convertGeoPackageToGeoJsonFile(
   const db = new sqlite3.oo1.DB(tempPath, 'r');
 
   try {
-    const selectedLayer = await selectPreferredLayer(db);
+    const selectedLayer = await selectPreferredLayer(
+      db,
+      options.preferredLayer
+    );
 
     ensureProjectionDefinition(
       selectedLayer.sourceCrs,

@@ -61,7 +61,7 @@
         maxLabel={deg(180)}
         hideTextInput={false}
         fullWidth
-        on:change={handleLongitudeChange}
+        on:input={handleLongitudeChange}
       />
 
       <Slider
@@ -74,7 +74,7 @@
         maxLabel={deg(90)}
         hideTextInput={false}
         fullWidth
-        on:change={handleLatitudeChange}
+        on:input={handleLatitudeChange}
       />
 
       <Slider
@@ -87,7 +87,7 @@
         maxLabel={deg(180)}
         hideTextInput={false}
         fullWidth
-        on:change={handleRotationChange}
+        on:input={handleRotationChange}
       />
 
       <div class="toggle-row">
@@ -113,8 +113,13 @@
     </div>
 
     <div class="footer">
-      <Button class="reset" disabled={!isDirty} icon={Renew} on:click={resetAll}
-        >{m.projection_settings_reset()}</Button
+      <Button
+        class="reset"
+        kind="tertiary"
+        size="small"
+        disabled={!isDirty}
+        icon={Renew}
+        on:click={resetAll}>{m.projection_settings_reset()}</Button
       >
     </div>
   </div>

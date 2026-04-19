@@ -18,8 +18,7 @@ export enum SymbolMode {
   UNIQUE = 'unique',
   PROPORTIONAL = 'proportional',
   CLASSES = 'classes',
-  CATEGORIES = 'categories',
-  DENSITY = 'density'
+  CATEGORIES = 'categories'
 }
 
 export type DensityLevelName = 'more' | 'standard' | 'less';
@@ -58,6 +57,7 @@ export enum ProportionalType {
 export enum FillMode {
   NONE = 'none',
   UNIQUE = 'unique',
+  DENSITY = 'density',
   CLASSES = 'classes',
   CATEGORIES = 'categories'
 }
@@ -149,8 +149,6 @@ export function availableShapesForSymbolMode(mode: SymbolMode): ShapeType[] {
         ShapeType.BAR,
         ShapeType.SPIKE
       ];
-    case SymbolMode.DENSITY:
-      return [ShapeType.CIRCLE];
     default:
       return [ShapeType.CIRCLE];
   }
@@ -184,7 +182,7 @@ export enum SizeMode {
 export const VISUALIZATION_DEFAULTS = {
   symbolMaxSize: 24,
   symbolSize: 12,
-  symbolOpacity: 80,
+  symbolOpacity: 100,
   strokeWidth: 1,
   strokeOpacity: 100,
   fillOpacity: 100,
@@ -219,7 +217,6 @@ export const DEFAULT_COLORS = {
   stroke: '#1e3a5f',
   line: '#1e3a5f',
   text: '#000000',
-  label: '#000000',
   halo: '#ffffff',
   missingData: '#c6c6c6',
   white: '#ffffff',

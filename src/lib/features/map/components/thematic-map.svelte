@@ -61,10 +61,6 @@
   import { getSimplificationState } from '../../step-toolbar/tools/simplification/simplification.store.svelte';
   import { getProjectionState } from '../../step-toolbar/tools/projections/projection.store.svelte';
   import { buildProjectionRenderKey } from '../../step-toolbar/tools/projections/projection-render-key';
-  import {
-    fitProjectionToBbox,
-    getProjectionById
-  } from '$lib/features/commons/utils/projection.utils';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { getFiltersMap } from '$lib/features/duckdb/orchestrator/state.svelte';
   import { annotationsActions } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
@@ -81,8 +77,10 @@
     computeProjectedBboxForProjection,
     getMainlandBboxForBasemap
   } from '../utils/geoarrow-stream-bridge';
-  import { proj4d3 } from '../utils/proj4d3';
+  import { fitBasemapRenderProjection } from '../utils/fit-basemap-render-projection.utils';
+  import { buildProjectionMaskPath } from '../utils/projection-mask.utils';
   import { resolveProjectionForRender } from '../utils/projection-priority';
+  import { resolveUserProjectionOverride } from '../utils/user-projection.utils';
   import {
     getBrowserMaxRenderBufferSizePx,
     resolveMapRenderPixelRatio
@@ -155,6 +153,26 @@
     // layers, otherwise out-of-projection areas look like editable ocean.
     return `background-color: ${pageBackgroundColor};`;
   });
+  const projectionMaskPath = $derived.by(() => {
+    if (mapInit.viewMode !== ViewMode.ORTHOGRAPHIC) {
+      return null;
+    }
+
+    if (getProjectionState().overrideSource !== 'manual') {
+      return null;
+    }
+
+    const basemapMeta =
+      getProjectionMetadataForDataset(firstDatasetId) ??
+      basemapService.currentMetadata;
+    const renderProjection = getOrthographicRenderProjection(basemapMeta);
+
+    return buildProjectionMaskPath({
+      projection: renderProjection,
+      width: mapCanvasWidth,
+      height: mapCanvasHeight
+    });
+  });
   const maxRenderBufferSizePx = $derived(getBrowserMaxRenderBufferSizePx());
   const renderPixelRatio = $derived.by(() =>
     resolveMapRenderPixelRatio(
@@ -177,12 +195,18 @@
   const colorBlindnessMatrix = $derived(
     getColorBlindnessMatrix(getColorBlindnessState().simulationType)
   );
+  const visibleVisualizations = $derived.by(() =>
+    globalState.selectedStep === ToolbarStep.Data
+      ? []
+      : mapState.activeVisualizations
+  );
 
   const MIN_SKELETON_DURATION_MS = 500;
   const MAX_WAIT_FOR_DATA_MS = 5000;
 
   let mapContainer: HTMLDivElement;
   let hasCalledOnReady = $state(false);
+  let projectionMaskId = $state<string | null>(null);
   let initStartTime = $state<number>(Date.now());
   let maxWaitTimeoutId: ReturnType<typeof setTimeout> | null = null;
   let worldBaseTable = $state.raw<ArrowTable | null>(null);
@@ -289,10 +313,6 @@
     // — the user would see the world basemap flash before the correct one
     if (isLoadingReferenceBasemap) {
       pendingOnReady = true;
-      logger.debug(
-        'triggerOnReady deferred — reference basemap still loading',
-        LogCategory.MAP
-      );
       return;
     }
 
@@ -379,7 +399,7 @@
       }
       isApplyingMapLibreSync = false;
     },
-    getActiveVisualizations: () => mapState.activeVisualizations,
+    getActiveVisualizations: () => visibleVisualizations,
     onOrthographicViewStateChanged: (target, zoom) => {
       mapInstanceStore.markViewportManual();
       onMoveSync?.({ type: 'orthographic', target, zoom });
@@ -449,15 +469,27 @@
           basemapService.projectionPresets
         )
       : null;
+    const datasetTableBounds = firstTable
+      ? toOrthographicBounds(calculateBoundsFromGeoArrow(firstTable))
+      : null;
 
     if (!firstDatasetId) {
       return mainlandBbox ?? currentBasemapMeta?.bbox ?? null;
     }
 
     const dataset = getRenderedDataset(firstDatasetId);
-    if (shouldUseIdentityProjectionForDatasetCrs(dataset?.geometry?.crs)) {
-      return null;
-    }
+    const resolvedDatasetBounds = resolveOrthographicDatasetBounds(
+      dataset,
+      datasetTableBounds
+    );
+    const resolvedDatasetBbox: BBox | null = resolvedDatasetBounds
+      ? [
+          resolvedDatasetBounds[0][0],
+          resolvedDatasetBounds[0][1],
+          resolvedDatasetBounds[1][0],
+          resolvedDatasetBounds[1][1]
+        ]
+      : null;
 
     const duckDataset = getRenderedDuckDBDataset(firstDatasetId);
     const shouldUseBasemapReference =
@@ -469,18 +501,12 @@
 
     if (shouldUseBasemapReference) {
       return (
-        mainlandBbox ??
-        currentBasemapMeta?.bbox ??
-        dataset?.geometry?.bounds ??
-        null
+        mainlandBbox ?? currentBasemapMeta?.bbox ?? resolvedDatasetBbox ?? null
       );
     }
 
     return (
-      dataset?.geometry?.bounds ??
-      mainlandBbox ??
-      currentBasemapMeta?.bbox ??
-      null
+      resolvedDatasetBbox ?? mainlandBbox ?? currentBasemapMeta?.bbox ?? null
     );
   }
 
@@ -490,7 +516,7 @@
     getMap: () => mapInit.map,
     getIsMapLoaded: () => mapInit.isMapLoaded,
     getWorldBaseTable: () => worldBaseTable,
-    getActiveVisualizations: () => mapState.activeVisualizations,
+    getActiveVisualizations: () => visibleVisualizations,
     buildLayerContextForViz: (viz) => mapState.buildLayerContextForViz(viz),
     getProjectionMetadataForDataset: (datasetId) =>
       getProjectionMetadataForDataset(datasetId),
@@ -693,61 +719,13 @@
       return undefined;
     }
 
-    if (projectionState.customCode) {
-      try {
-        const projection = proj4d3(projectionState.customCode);
-        const fitBbox = getProjectionFitBbox();
-        if (!fitBbox) {
-          return undefined;
-        }
-
-        const center = projectionState.center ?? [
-          projectionState.longitude,
-          projectionState.latitude
-        ];
-        projection.center(center);
-        projection.rotate([projectionState.rotation, 0, 0]);
-        fitProjectionToBbox(
-          projection,
-          fitBbox,
-          viewportSize.width,
-          viewportSize.height,
-          fitPaddingPx
-        );
-        return projection;
-      } catch (error) {
-        logger.error(
-          'Custom CRS code failed for orthographic reference bounds',
-          LogCategory.MAP,
-          { customCode: projectionState.customCode, error }
-        );
-        return undefined;
-      }
-    }
-
-    const projection = getProjectionById(
-      projectionState.selected
-    )?.projection();
-    const fitBbox = getProjectionFitBbox();
-    if (!projection || !fitBbox) {
-      return undefined;
-    }
-
-    const center = projectionState.center ?? [
-      projectionState.longitude,
-      projectionState.latitude
-    ];
-    projection.center(center);
-    projection.rotate([projectionState.rotation, 0, 0]);
-    fitProjectionToBbox(
-      projection,
-      fitBbox,
-      viewportSize.width,
-      viewportSize.height,
-      fitPaddingPx
-    );
-
-    return projection;
+    return resolveUserProjectionOverride({
+      state: projectionState,
+      fitBbox: getProjectionFitBbox(),
+      viewportSize,
+      padding: fitPaddingPx,
+      projectionPresets: basemapService.projectionPresets
+    });
   }
 
   function getOrthographicRenderProjection(
@@ -756,16 +734,24 @@
   ): ProjectionLike | undefined {
     const projectionState = getProjectionState();
     const viewportSize = getProjectionViewportSize();
+    const fitBbox = getProjectionFitBbox();
     const defaultProjection =
       basemapMeta &&
       !basemapMeta.isCustom &&
       basemapMeta.proj_to?.type !== 'identity'
-        ? buildProjectionForBasemap(
-            basemapMeta,
-            viewportSize.width,
-            viewportSize.height,
-            basemapService.projectionPresets
-          )
+        ? fitBasemapRenderProjection({
+            projection: buildProjectionForBasemap(
+              basemapMeta,
+              viewportSize.width,
+              viewportSize.height,
+              basemapService.projectionPresets
+            ),
+            metadata: basemapMeta,
+            fitBbox,
+            width: viewportSize.width,
+            height: viewportSize.height,
+            padding: mapViewportFitPaddingPx
+          })
         : undefined;
     const overrideProjection = getProjectionOverrideForRender();
 
@@ -1458,37 +1444,15 @@
   $effect(() => {
     const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
     if (firstGeoJSON && canUpdate) {
-      // When a reference basemap is selected, fit to basemap bounds
-      // so administrative boundaries are visible even with polygon data
-      const geoRefBasemapId = basemapStyleStore.referenceBasemapId;
-      const useBasemapBoundsForGeo = Boolean(geoRefBasemapId) && worldBaseTable;
-
       if (mapInit.viewMode === ViewMode.MAPLIBRE && mapInit.map) {
-        if (useBasemapBoundsForGeo) {
-          const bBounds = calculateBoundsFromGeoArrow(worldBaseTable!);
-          if (bBounds) {
-            untrack(() =>
-              mapBounds.fitToBounds(bBounds, {
-                animate: true,
-                reason: 'basemap'
-              })
-            );
-          }
-        } else {
-          untrack(() =>
-            mapBounds.fitToGeoJSONBounds(firstGeoJSON, {
-              reason: 'dataset'
-            })
-          );
-        }
+        untrack(() =>
+          mapBounds.fitToGeoJSONBounds(firstGeoJSON, {
+            reason: 'dataset'
+          })
+        );
       } else if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
         untrack(() => {
-          let bounds: ReturnType<typeof calculateBoundsFromGeoJSON>;
-          if (useBasemapBoundsForGeo) {
-            bounds = calculateBoundsFromGeoArrow(worldBaseTable!);
-          } else {
-            bounds = calculateBoundsFromGeoJSON(firstGeoJSON);
-          }
+          const bounds = calculateBoundsFromGeoJSON(firstGeoJSON);
           if (bounds) {
             const [[minX, minY], [maxX, maxY]] = bounds as [
               [number, number],
@@ -1496,9 +1460,7 @@
             ];
             projectionStore.setReferenceBbox([minX, minY, maxX, maxY]);
             scheduleLayerUpdate('effect:firstGeoJSON');
-            fitOrthographicViewport(
-              useBasemapBoundsForGeo ? 'basemap' : 'dataset'
-            );
+            fitOrthographicViewport('dataset');
           }
         });
         triggerOnReady();
@@ -1579,11 +1541,20 @@
       untrack(() => {
         scheduleLayerUpdate('effect:noData');
 
-        // Retry basemap loading if it failed or hasn't completed yet
         if (!worldBaseTable) {
           loadWorldBasemap();
         }
       });
+    }
+  });
+
+  $effect(() => {
+    const dataPresent = hasData;
+    const refId = basemapStyleStore.referenceBasemapId;
+
+    if (dataPresent && !refId && worldBaseTable) {
+      worldBaseTable = null;
+      untrack(() => scheduleLayerUpdate('effect:clearDefaultBasemapForData'));
     }
   });
 
@@ -1596,7 +1567,6 @@
         if (!hasData) {
           triggerOnReady();
 
-          // Fit to world basemap bounds after a view reset (all data removed)
           if (pendingViewReset && worldBaseTable) {
             pendingViewReset = false;
             if (mapInit.viewMode === ViewMode.MAPLIBRE && mapInit.map) {
@@ -1729,7 +1699,8 @@
     dataVersion,
     dataSize: `${tables.size}-${geoJSONs.size}`,
     filtersVersion,
-    projectionVersion: projectionRenderTrigger
+    projectionVersion: projectionRenderTrigger,
+    selectedStep: globalState.selectedStep
   });
 
   $effect(() => {
@@ -1792,7 +1763,6 @@
             if (!isSwitchingViewMode) {
               scheduleLayerUpdate('effect:referenceBasemapChanged');
 
-              // Fit map view to new basemap bounds
               if (mapInit.viewMode === ViewMode.MAPLIBRE && mapInit.map) {
                 let bounds = calculateBoundsFromGeoArrow(
                   resolvedBasemap.geometryTable
@@ -1845,8 +1815,11 @@
             triggerOnReady();
           }
         }
-      } else {
+      } else if (!hasData) {
         await loadWorldBasemap(requestId);
+      } else {
+        worldBaseTable = null;
+        scheduleLayerUpdate('effect:referenceBasemapCleared');
       }
     });
   });
@@ -1921,7 +1894,6 @@
               }
             }
           } else {
-            // Reference basemap failed — fall back to world basemap
             logger.warn(
               'Reference basemap failed, falling back to world',
               LogCategory.MAP,
@@ -1960,6 +1932,7 @@
       if (requestId !== referenceBasemapRequestId) {
         return;
       }
+
       if (loaded) {
         const resolvedBasemap =
           basemapService.getResolvedVariantData(
@@ -1973,8 +1946,9 @@
           );
         }
 
-        // No reference basemap — use world basemap directly
-        worldBaseTable = resolvedBasemap.geometryTable;
+        if (!hasData) {
+          worldBaseTable = resolvedBasemap.geometryTable;
+        }
         const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
         if (canUpdate) {
           scheduleLayerUpdate('loadWorldBasemap');
@@ -2018,6 +1992,11 @@
   });
 
   onMount(() => {
+    projectionMaskId =
+      typeof crypto?.randomUUID === 'function'
+        ? `projection-mask-${crypto.randomUUID()}`
+        : `projection-mask-${Math.random().toString(36).slice(2)}`;
+
     const initialViewMode = basemapStyleStore.requiresMapLibre
       ? ViewMode.MAPLIBRE
       : ViewMode.ORTHOGRAPHIC;
@@ -2103,6 +2082,38 @@
       style={mapCanvasStyle}
     ></div>
 
+    {#if projectionMaskPath && projectionMaskId}
+      <svg
+        aria-hidden="true"
+        class="projection-mask-overlay"
+        viewBox={`0 0 ${mapCanvasWidth} ${mapCanvasHeight}`}
+        preserveAspectRatio="none"
+      >
+        <defs>
+          <mask
+            id={projectionMaskId}
+            maskUnits="userSpaceOnUse"
+            maskContentUnits="userSpaceOnUse"
+          >
+            <rect width={mapCanvasWidth} height={mapCanvasHeight} fill="white"
+            ></rect>
+            <path
+              d={projectionMaskPath}
+              fill="black"
+              fill-rule="evenodd"
+              clip-rule="evenodd"
+            ></path>
+          </mask>
+        </defs>
+        <rect
+          width={mapCanvasWidth}
+          height={mapCanvasHeight}
+          fill={pageBackgroundColor}
+          mask={`url(#${projectionMaskId})`}
+        ></rect>
+      </svg>
+    {/if}
+
     {#if isSwitchingViewMode}
       <div class="view-mode-loader" transition:fade={{ duration: 200 }}>
         <SkeletonPlaceholder style="width: 100%; height: 100%;" />
@@ -2122,6 +2133,38 @@
         class="map-canvas"
         style={mapCanvasStyle}
       ></div>
+
+      {#if projectionMaskPath && projectionMaskId}
+        <svg
+          aria-hidden="true"
+          class="projection-mask-overlay"
+          viewBox={`0 0 ${mapCanvasWidth} ${mapCanvasHeight}`}
+          preserveAspectRatio="none"
+        >
+          <defs>
+            <mask
+              id={projectionMaskId}
+              maskUnits="userSpaceOnUse"
+              maskContentUnits="userSpaceOnUse"
+            >
+              <rect width={mapCanvasWidth} height={mapCanvasHeight} fill="white"
+              ></rect>
+              <path
+                d={projectionMaskPath}
+                fill="black"
+                fill-rule="evenodd"
+                clip-rule="evenodd"
+              ></path>
+            </mask>
+          </defs>
+          <rect
+            width={mapCanvasWidth}
+            height={mapCanvasHeight}
+            fill={pageBackgroundColor}
+            mask={`url(#${projectionMaskId})`}
+          ></rect>
+        </svg>
+      {/if}
 
       {#if showPageGrid}
         <div class="page-grid"></div>
@@ -2192,6 +2235,15 @@
 
   .map-canvas :global(canvas) {
     display: block;
+  }
+
+  .projection-mask-overlay {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: var(--z-map-layer);
+    pointer-events: none;
   }
 
   .view-mode-loader {

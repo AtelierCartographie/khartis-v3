@@ -1,3 +1,31 @@
+# [1.0.0-staging.13](https://github.com/AtelierCartographie/khartis-v3/compare/v1.0.0-staging.12...v1.0.0-staging.13) (2026-04-19)
+
+### Bug Fixes
+
+- **ci:** import beforeEach from vitest in classification.service.test ([305c078](https://github.com/AtelierCartographie/khartis-v3/commit/305c0789f6f151bfda6bd18377d377d851ef6798))
+
+### Features
+
+- **w16:** category shape mode, suggestion origin, PWA, facets, search, and UI polish ([#99](https://github.com/AtelierCartographie/khartis-v3/issues/99)) ([dbde5de](https://github.com/AtelierCartographie/khartis-v3/commit/dbde5de4118930c1be907c5485eca4696c711b11)), closes [#90](https://github.com/AtelierCartographie/khartis-v3/issues/90) [#94](https://github.com/AtelierCartographie/khartis-v3/issues/94) [#92](https://github.com/AtelierCartographie/khartis-v3/issues/92) [#92](https://github.com/AtelierCartographie/khartis-v3/issues/92) [#93](https://github.com/AtelierCartographie/khartis-v3/issues/93) [AtelierCartographie/khartis-v3#93](https://github.com/AtelierCartographie/khartis-v3/issues/93) [#87](https://github.com/AtelierCartographie/khartis-v3/issues/87) [#87](https://github.com/AtelierCartographie/khartis-v3/issues/87) [#96](https://github.com/AtelierCartographie/khartis-v3/issues/96) [#98](https://github.com/AtelierCartographie/khartis-v3/issues/98)
+
+# [1.0.0-staging.12](https://github.com/AtelierCartographie/khartis-v3/compare/v1.0.0-staging.11...v1.0.0-staging.12) (2026-04-19)
+
+### Performance Improvements
+
+- **join:** optimisation suggestion basemap — exact match + déduplication + parquet corrigé ([#101](https://github.com/AtelierCartographie/khartis-v3/issues/101)) ([68523f6](https://github.com/AtelierCartographie/khartis-v3/commit/68523f6de26f84e9042e608b80d052db672adaf8))
+
+# [1.0.0-staging.11](https://github.com/AtelierCartographie/khartis-v3/compare/v1.0.0-staging.10...v1.0.0-staging.11) (2026-04-19)
+
+### Features
+
+- **w16:** density, projections, text styles, FACET_SLOT, Fisher-Jenks, CI fix ([#105](https://github.com/AtelierCartographie/khartis-v3/issues/105)) ([43c68c0](https://github.com/AtelierCartographie/khartis-v3/commit/43c68c0fe0d387a46eda35eabe5cd4cf0bba36f8)), closes [#92](https://github.com/AtelierCartographie/khartis-v3/issues/92) [#92](https://github.com/AtelierCartographie/khartis-v3/issues/92) [#93](https://github.com/AtelierCartographie/khartis-v3/issues/93) [AtelierCartographie/khartis-v3#93](https://github.com/AtelierCartographie/khartis-v3/issues/93) [#87](https://github.com/AtelierCartographie/khartis-v3/issues/87) [#87](https://github.com/AtelierCartographie/khartis-v3/issues/87) [#93](https://github.com/AtelierCartographie/khartis-v3/issues/93) [#93](https://github.com/AtelierCartographie/khartis-v3/issues/93) [#93](https://github.com/AtelierCartographie/khartis-v3/issues/93)
+
+# [1.0.0-staging.10](https://github.com/AtelierCartographie/khartis-v3/compare/v1.0.0-staging.9...v1.0.0-staging.10) (2026-04-16)
+
+### Bug Fixes
+
+- **semio:** improve geoid column detection scoring ([2475e2a](https://github.com/AtelierCartographie/khartis-v3/commit/2475e2a22b38e53d291504402ae25974f50faf1c))
+
 # [1.0.0-staging.9](https://github.com/AtelierCartographie/khartis-v3/compare/v1.0.0-staging.8...v1.0.0-staging.9) (2026-04-16)
 
 ### Features

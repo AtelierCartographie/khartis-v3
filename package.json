@@ -1,7 +1,7 @@
 {
   "name": "khartis-v3",
   "private": true,
-  "version": "1.0.0-staging.9",
+  "version": "1.0.0-staging.13",
   "type": "module",
   "engines": {
     "node": ">=22.0.0 <25.0.0"
@@ -78,6 +78,7 @@
     "@eslint/compat": "^2.0.3",
     "@eslint/js": "^9.39.4",
     "@inlang/cli": "^3.1.9",
+    "@math.gl/polygon": "4.1.0",
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/git": "^10.0.1",
     "@sveltejs/adapter-static": "^3.0.10",
@@ -90,6 +91,7 @@
     "@types/node": "^22.19.15",
     "@vite-pwa/assets-generator": "^1.0.2",
     "carbon-preprocess-svelte": "^0.11.29",
+    "earcut": "3.0.2",
     "eslint": "^9.39.4",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-svelte": "^3.16.0",
@@ -98,7 +100,7 @@
     "jsdom": "^27.4.0",
     "knip": "^6.4.0",
     "lint-staged": "^16.4.0",
-    "prettier": "^3.8.2",
+    "prettier": "^3.8.3",
     "prettier-plugin-svelte": "^3.5.1",
     "rollup-plugin-visualizer": "^7.0.1",
     "sass-embedded": "^1.98.0",
@@ -114,12 +116,12 @@
   "dependencies": {
     "@ateliercartographie/motif.js": "^0.1.5",
     "@ateliercartographie/ok-palette": "^0.1.4",
-    "@deck.gl/core": "^9.2.11",
-    "@deck.gl/extensions": "^9.2.11",
-    "@deck.gl/layers": "^9.2.11",
-    "@deck.gl/mapbox": "^9.2.11",
+    "@deck.gl/core": "^9.3.1",
+    "@deck.gl/extensions": "^9.3.1",
+    "@deck.gl/layers": "^9.3.1",
+    "@deck.gl/mapbox": "^9.3.1",
     "@duckdb/duckdb-wasm": "1.33.1-dev44.0",
-    "@inlang/paraglide-js": "^2.15.3",
+    "@inlang/paraglide-js": "^2.16.0",
     "@luma.gl/core": "9.3.2",
     "@math.gl/core": "^4.1.0",
     "@sqlite.org/sqlite-wasm": "3.48.0-build4",
@@ -131,7 +133,7 @@
     "d3-geo": "^3.1.1",
     "d3-geo-projection": "^4.0.0",
     "fflate": "^0.8.2",
-    "geoarrow-deck-stream": "github:AtelierCartographie/geoarrow-deck-stream#1818bc856da4345420af8d77dd8fc55fa96a0450",
+    "geoarrow-deck-stream": "github:AtelierCartographie/geoarrow-deck-stream#v1.0.2",
     "html-to-image": "^1.11.13",
     "localforage": "^1.10.0",
     "maplibre-gl": "^5.21.1",
@@ -153,6 +155,9 @@
       "serialize-javascript": ">=7.0.3",
       "tar": ">=7.5.11",
       "cookie": ">=0.7.0"
+    },
+    "patchedDependencies": {
+      "@deck.gl/layers": "patches/@deck.gl__layers.patch"
     }
   },
   "lint-staged": {

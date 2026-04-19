@@ -10,6 +10,7 @@
     globalState,
     MOBILE_BREAKPOINT
   } from '$lib/features/commons/store/global.svelte';
+  import { createProjectActions } from '$lib/features/commons/store/create-project.store.svelte';
   import '$lib/features/commons/utils/uuid.utils';
   import { ToolbarStep } from '$lib/features/commons/types/global';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
@@ -163,7 +164,6 @@
         globalState.isCreateProjectModalOpen = true;
       }
 
-      // Wait for DuckDB, then restore any existing project data
       try {
         await duckDBReadyPromise;
         await dataOrchestratorService.initialize();
@@ -181,9 +181,6 @@
 
     initApp();
 
-    // Fix Carbon ComboBox ARIA: outer wrapper incorrectly has role="listbox"
-    // causing "ARIA required children" violations. Options list (.bx--list-box__menu)
-    // keeps its correct role="listbox".
     const fixComboboxAria = (root: Element | Document = document) => {
       (root as Element)
         .querySelectorAll?.('.bx--combo-box[role="listbox"]')
@@ -279,6 +276,7 @@
 
   function handleCloseModal() {
     globalState.isCreateProjectModalOpen = false;
+    createProjectActions.resetAllTabs();
   }
 
   const colorBlindnessState = $derived(getColorBlindnessState());
