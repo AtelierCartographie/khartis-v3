@@ -44,18 +44,12 @@
   }: Props = $props();
 
   let expanded = $state<boolean>(
-    untrack(() => (showToggle ? defaultOpen && toggleChecked : defaultOpen))
+    untrack(() => (showToggle ? toggleChecked : defaultOpen))
   );
-
-  let isInitialized = false;
 
   $effect(() => {
     const checked = toggleChecked;
     if (!showToggle) return;
-    if (!isInitialized) {
-      isInitialized = true;
-      return;
-    }
     expanded = checked;
   });
 

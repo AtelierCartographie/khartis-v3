@@ -98,7 +98,7 @@ export async function extractGeometryInfo(
 
     const consolidatedQuery = `
 			WITH bbox AS (
-				SELECT ST_Extent("${escapedGeomCol}") AS extent FROM "${escapedTable}"
+				SELECT ST_Extent_Agg("${escapedGeomCol}") AS extent FROM "${escapedTable}"
 			),
 			first_row AS (
 				SELECT "${escapedGeomCol}" AS geom FROM "${escapedTable}" WHERE "${escapedGeomCol}" IS NOT NULL LIMIT 1

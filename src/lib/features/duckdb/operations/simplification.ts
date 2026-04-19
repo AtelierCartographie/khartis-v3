@@ -135,14 +135,6 @@ export async function simplifyGeometryTable(
       CREATE OR REPLACE TABLE "${escapedInnerlines}" AS
       FROM extract_innerlines('${escapedTarget}')
     `);
-    logger.debug(
-      'Innerlines recomputed after simplification',
-      LogCategory.DUCKDB,
-      {
-        innerlinesTable,
-        sourceTable: resolvedTargetTable
-      }
-    );
   } catch (error) {
     logger.warn(
       'Failed to recompute innerlines after simplification',

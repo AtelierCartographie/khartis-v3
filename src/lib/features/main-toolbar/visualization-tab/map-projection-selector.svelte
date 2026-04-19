@@ -4,24 +4,30 @@
   import { InfoPopover } from './components/shared';
   import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
-  import { getBasemapZone } from '$lib/features/map/constants/basemap-styles';
   import { mapProjectionStore } from '$lib/features/map/stores/map-projection.store.svelte';
-  import { resolveTiledStyleContext } from './tiled-basemap-selection';
+  import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
   import {
     isGlobeProjectionAvailable,
     resolveGlobeProjectionDisableReason,
+    resolveProjectionAvailabilityContext,
     resolveProjectionForBasemapZone
   } from './map-projection-availability';
 
   const isGlobe = $derived(mapProjectionStore.isGlobe);
-  const requiresMapLibre = $derived(basemapStyleStore.requiresMapLibre);
-  const currentStyleContext = $derived(
-    resolveTiledStyleContext(
-      basemapStyleStore.selectedStyle,
-      basemapStyleStore.preferredTiledStyle
-    )
+  const usesMapLibre = $derived(
+    basemapStyleStore.requiresMapLibre || osmBasemapStore.isActive
   );
-  const selectedZone = $derived(getBasemapZone(currentStyleContext));
+  const projectionContext = $derived(
+    resolveProjectionAvailabilityContext({
+      requiresMapLibre: basemapStyleStore.requiresMapLibre,
+      hasOSMBasemap: osmBasemapStore.isActive,
+      currentStyle: basemapStyleStore.selectedStyle,
+      preferredStyle: basemapStyleStore.preferredTiledStyle,
+      referenceBasemapId: basemapStyleStore.referenceBasemapId,
+      osmBasemapBbox: osmBasemapStore.activeOSMBasemap?.bbox ?? null
+    })
+  );
+  const selectedZone = $derived(projectionContext.zone);
   const globeDisableReason = $derived(
     resolveGlobeProjectionDisableReason(
       selectedZone,
@@ -74,7 +80,7 @@
   }
 </script>
 
-{#if requiresMapLibre}
+{#if usesMapLibre}
   <div class="projection-selector">
     <span class="field-label">
       {m.map_projection_label()}

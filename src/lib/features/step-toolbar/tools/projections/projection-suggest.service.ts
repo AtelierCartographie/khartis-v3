@@ -25,6 +25,11 @@ export interface ProjectionSuggestion {
   shape?: string;
 }
 
+export interface BuiltProjectionSuggestion {
+  projection: GeoProjection;
+  source: 'proj4' | 'd3';
+}
+
 const D3_FACTORY_MAP: Record<string, (() => GeoProjection) | undefined> = {
   geoMercator: d3geo.geoMercator,
   geoEquirectangular: d3geo.geoEquirectangular,
@@ -101,6 +106,21 @@ function genericToSuggestion(proj: ResolvedProjection): ProjectionSuggestion {
   };
 }
 
+/**
+ * Returns ranked projection suggestions for a given dataset bbox, per
+ * CDC [VIZ-TOOLS-c] ("Algorithme basé sur emprise géographique").
+ *
+ * Delegates to `proj-suggest`, the official Atelier de cartographie library
+ * (Thomas Ansart) — a reimplementation of Snyder (1987) / Šavrič et al. (2016)
+ * cartographic decision tree. We do not re-rank here: `result.national` is
+ * already sorted by share of the bbox covered by the country/zone, and
+ * `result.generic` is sorted by suitability for the bbox extent.
+ *
+ * Returns null when the bbox is invalid (e.g. zero width, off-globe). Otherwise
+ * returns two parallel lists; the auto-selection layer prefers `national`
+ * because the CDC reserves that category for officially endorsed CRSes per zone
+ * (Lambert-93 for France, ETRS89-LAEA for Europe, etc.).
+ */
 export function suggestProjectionsForBbox(
   bbox: [number, number, number, number]
 ): {
@@ -127,11 +147,14 @@ export function suggestProjectionsForBbox(
 
 export function buildProjectionFromSuggestion(
   suggestion: ProjectionSuggestion
-): GeoProjection | null {
+): BuiltProjectionSuggestion | null {
   // Prefer proj4 string when available (more precise for national projections)
   if (suggestion.proj4String) {
     try {
-      return proj4d3(suggestion.proj4String);
+      return {
+        projection: proj4d3(suggestion.proj4String),
+        source: 'proj4'
+      };
     } catch (err) {
       logger.warn(
         'Failed to build projection from proj4 string, falling back to d3',
@@ -141,9 +164,14 @@ export function buildProjectionFromSuggestion(
     }
   }
 
-  // Fallback to d3 config
   if (suggestion.d3Config) {
-    return buildD3Projection(suggestion.d3Config);
+    const projection = buildD3Projection(suggestion.d3Config);
+    if (projection) {
+      return {
+        projection,
+        source: 'd3'
+      };
+    }
   }
 
   return null;

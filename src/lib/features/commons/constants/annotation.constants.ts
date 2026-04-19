@@ -1,10 +1,3 @@
-/**
- * Annotation constants
- *
- * Annotation roles and shape types used for map annotations.
- * Centralizes all annotation-related string literals.
- */
-
 export const ANNOTATION_ROLE = {
   TITLE: 'title',
   SUBTITLE: 'subtitle',

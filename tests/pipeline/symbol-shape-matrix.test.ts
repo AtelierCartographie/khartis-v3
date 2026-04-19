@@ -88,19 +88,9 @@ describe('symbol shape matrix (issue #92)', () => {
       );
     });
 
-    it('should expose only CIRCLE for DENSITY mode', () => {
-      expect(availableShapesForSymbolMode(SymbolMode.DENSITY)).toEqual([
-        ShapeType.CIRCLE
-      ]);
-    });
-
     it('should only include linear shapes in modes that scale by value (PROPORTIONAL, CLASSES)', () => {
       const linearBearingModes = [SymbolMode.PROPORTIONAL, SymbolMode.CLASSES];
-      const nonLinearBearingModes = [
-        SymbolMode.UNIQUE,
-        SymbolMode.CATEGORIES,
-        SymbolMode.DENSITY
-      ];
+      const nonLinearBearingModes = [SymbolMode.UNIQUE, SymbolMode.CATEGORIES];
 
       for (const mode of linearBearingModes) {
         const shapes = availableShapesForSymbolMode(mode);

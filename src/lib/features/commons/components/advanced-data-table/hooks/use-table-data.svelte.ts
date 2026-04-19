@@ -2,6 +2,7 @@ import type { ProcessedDataset } from '$lib/features/data-pipeline';
 import { type AnalysisResult } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { SvelteMap } from 'svelte/reactivity';
+import { datasetsStore } from '../../../store/datasets.store.svelte';
 import {
   isTextLikeColumnType,
   projectHtmlLikeText
@@ -38,6 +39,28 @@ export interface UseTableDataReturn {
 
 function getValue<T>(prop: T | (() => T)): T {
   return typeof prop === 'function' ? (prop as () => T)() : prop;
+}
+
+function isMissingDuckTableError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    /Catalog Error:\s*Table with name .*?(does not exist|not found)/i.test(
+      error.message
+    )
+  );
+}
+
+function isRequestedTableAvailable(tableName: string | undefined): boolean {
+  if (!tableName) {
+    return false;
+  }
+
+  return (
+    Boolean(duckDBOrchestrator.getDatasetByTable(tableName)) ||
+    datasetsStore
+      .getAllDatasets()
+      .some((dataset) => dataset.tableName === tableName)
+  );
 }
 
 function normalizeRowId(value: unknown): number | undefined {
@@ -92,10 +115,36 @@ export function useTableData(props: UseTableDataProps): UseTableDataReturn {
   let isLoadingRows = $state<boolean>(false);
   let initialLoadComplete = $state<boolean>(false);
   let error = $state<string | null>(null);
+  let columnsRequestId = 0;
+  let rowsRequestId = 0;
+
+  function isRequestStale(requestId: number, activeRequestId: number): boolean {
+    return requestId !== activeRequestId;
+  }
+
+  function shouldIgnoreTransientTableError(
+    err: unknown,
+    requestId: number,
+    activeRequestId: number,
+    requestedTableName: string | undefined,
+    _requestedDatasetId: string | undefined
+  ): boolean {
+    if (isRequestStale(requestId, activeRequestId)) {
+      return true;
+    }
+
+    if (!requestedTableName || !isMissingDuckTableError(err)) {
+      return false;
+    }
+
+    return !isRequestedTableAvailable(requestedTableName);
+  }
 
   async function loadColumnsInfo(): Promise<void> {
     const tableName = getValue(props.tableName);
     const dataset = getValue(props.dataset);
+    const requestedDatasetId = dataset?.id;
+    const requestId = ++columnsRequestId;
 
     try {
       isLoading = true;
@@ -112,6 +161,16 @@ export function useTableData(props: UseTableDataProps): UseTableDataReturn {
 
       if (tableName) {
         const analysis = await duckDBOrchestrator.getFullAnalysis(tableName);
+        if (isRequestStale(requestId, columnsRequestId)) {
+          return;
+        }
+
+        if (!isRequestedTableAvailable(tableName)) {
+          columns = [];
+          columnAnalysis = new SvelteMap();
+          numRows = 0;
+          return;
+        }
 
         const filteredAnalysis = analysis.filter(
           (a: AnalysisResult) =>
@@ -129,7 +188,17 @@ export function useTableData(props: UseTableDataProps): UseTableDataReturn {
         });
         columnAnalysis = analysisMap;
 
+        if (!isRequestedTableAvailable(tableName)) {
+          columns = [];
+          columnAnalysis = new SvelteMap();
+          numRows = 0;
+          return;
+        }
+
         const count = await duckDBOrchestrator.getRowCount(tableName);
+        if (isRequestStale(requestId, columnsRequestId)) {
+          return;
+        }
         numRows = count;
       } else if (dataset) {
         columns = dataset.columns.filter(
@@ -144,22 +213,42 @@ export function useTableData(props: UseTableDataProps): UseTableDataReturn {
         numRows = 0;
       }
     } catch (err) {
+      if (
+        shouldIgnoreTransientTableError(
+          err,
+          requestId,
+          columnsRequestId,
+          tableName,
+          requestedDatasetId
+        )
+      ) {
+        error = null;
+        columns = [];
+        columnAnalysis = new SvelteMap();
+        numRows = 0;
+        return;
+      }
+
       logger.error('Error loading columns info', LogCategory.UI, err);
       error = err instanceof Error ? err.message : 'Failed to load columns';
       columns = [];
       columnAnalysis = new SvelteMap();
       numRows = 0;
     } finally {
-      isLoading = false;
+      if (requestId === columnsRequestId) {
+        isLoading = false;
+      }
     }
   }
 
   async function loadRowsData(): Promise<void> {
     const tableName = getValue(props.tableName);
     const dataset = getValue(props.dataset);
+    const requestedDatasetId = dataset?.id;
     const rowIndices = getValue(props.rowIndices);
     const sortColumn = getValue(props.sortColumn);
     const sortOrder = getValue(props.sortOrder);
+    const requestId = ++rowsRequestId;
 
     if (!tableName && !dataset) {
       tableData = [];
@@ -180,6 +269,11 @@ export function useTableData(props: UseTableDataProps): UseTableDataReturn {
           : null;
 
       if (tableName) {
+        if (!isRequestedTableAvailable(tableName)) {
+          tableData = [];
+          return;
+        }
+
         const data = await duckDBOrchestrator.getTableData(tableName, {
           offset: rowIndices[0],
           limit: rowIndices.length,
@@ -187,6 +281,9 @@ export function useTableData(props: UseTableDataProps): UseTableDataReturn {
           orderByType: sortColumnType,
           order: sortOrder
         });
+        if (isRequestStale(requestId, rowsRequestId)) {
+          return;
+        }
 
         if (data && data.numRows > 0) {
           const rows: TableRow[] = [];
@@ -232,12 +329,28 @@ export function useTableData(props: UseTableDataProps): UseTableDataReturn {
         tableData = sourceData.slice(startIdx, endIdx);
       }
     } catch (err) {
+      if (
+        shouldIgnoreTransientTableError(
+          err,
+          requestId,
+          rowsRequestId,
+          tableName,
+          requestedDatasetId
+        )
+      ) {
+        error = null;
+        tableData = [];
+        return;
+      }
+
       logger.error('Error loading row data', LogCategory.UI, err);
       error = err instanceof Error ? err.message : 'Failed to load data';
       tableData = [];
     } finally {
-      isLoadingRows = false;
-      if (!initialLoadComplete) {
+      if (requestId === rowsRequestId) {
+        isLoadingRows = false;
+      }
+      if (requestId === rowsRequestId && !initialLoadComplete) {
         initialLoadComplete = true;
       }
     }

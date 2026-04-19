@@ -2,19 +2,32 @@
 
 > Préparation, stockage et rendu des fonds de carte vectoriels dans Khartis v3.
 
-Deux types de fonds : les **fonds inclus** préparés par l'Atelier de cartographie, et les **fonds personnalisés** importés par l'utilisateur. Ce document traite la préparation des fonds inclus.
+**Voir aussi** : [MAP.md](./MAP.md) (pipeline runtime) — [ARCHITECTURE.md](./ARCHITECTURE.md) — [DUCKDB.md](./DUCKDB.md)
 
-## Principe
+---
 
-Les fonds séparent géométrie et attributs pour optimiser le rendu :
+## Deux types de fonds
 
-- **Géométrie** — GeoParquet encodé en GeoArrow (pas WKB), lu directement par Deck.gl sans passer par DuckDB
-- **Attributs** — table Parquet au format long, importée dans DuckDB pour les jointures avec les données utilisateur
-- **Métadonnées** — JSON décrivant le fond (bbox, projection, couches d'habillage)
+- **Fonds inclus** — préparés en amont par l'Atelier de cartographie, au format GeoParquet + attributs Parquet long. Ce document décrit leur préparation.
+- **Fonds personnalisés** — importés à l'exécution par l'utilisateur (GeoJSON, Shapefile, GeoPackage). Reprojection et pipeline d'import détaillés dans [DUCKDB.md](./DUCKDB.md) (`basemap-import.utils.ts`).
+
+---
+
+## Principe de séparation
+
+Les fonds inclus séparent géométrie et attributs pour optimiser le rendu :
+
+- **Géométrie** — GeoParquet encodé en GeoArrow (pas WKB), lu directement par Deck.gl sans passer par DuckDB.
+- **Attributs** — table Parquet au format long, importée dans DuckDB uniquement pour les jointures avec les données utilisateur.
+- **Métadonnées** — JSON décrivant le fond (bbox, projection, couches d'habillage).
+
+Le pipeline runtime de lecture et de rendu (`geoarrow-deck-stream`, caches WeakMap, parsing par projection) est documenté dans [MAP.md](./MAP.md). Ce document se concentre sur la **préparation** et le **format** des fichiers livrés.
+
+---
 
 ## Format de la géométrie
 
-Un seul attribut dans le fichier : l'identifiant. Conversion via GDAL :
+Un seul attribut dans le fichier GeoParquet : l'identifiant. Conversion via GDAL :
 
 ```bash
 # Depuis un GeoJSON
@@ -39,11 +52,13 @@ ogr2ogr export.parquet input.shp \
 | ------------------------ | ------------------------------------------------------- |
 | `GEOMETRY_NAME=geom`     | Cohérence avec DuckDB                                   |
 | `SORT_BY_BBOX=YES`       | Fichier plus léger (GeoJSON uniquement)                 |
-| `COMPRESSION=ZSTD`       | Bon compromis compression/décompression                 |
+| `COMPRESSION=ZSTD`       | Bon compromis compression / décompression               |
 | `WRITE_COVERING_BBOX=NO` | Pas besoin de bbox par entité                           |
 | `-nlt PROMOTE_TO_MULTI`  | Force un seul type de géométrie (requis par GeoParquet) |
 
-> Documentation : https://gdal.org/en/stable/drivers/vector/parquet.html
+> Référence : https://gdal.org/en/stable/drivers/vector/parquet.html
+
+---
 
 ## Format des attributs
 
@@ -54,7 +69,7 @@ Les attributs sont stockés au **format long** :
 | FR101 | FR101 | ign_code | fr101      | FR_DPT  | 101           |
 | Ain   | FR101 | name     | ain        | FR_DPT  | 101           |
 
-Chaque variante d'identifiant (nom, code ISO, code officiel) est une ligne distincte. Le `basemap_count` sert au calcul du taux de réussite de jointure.
+Chaque variante d'identifiant (nom, code ISO, code officiel) occupe une ligne distincte. `basemap_count` sert au calcul du taux de réussite de jointure.
 
 ### Normalisation des identifiants
 
@@ -82,9 +97,19 @@ CREATE OR REPLACE MACRO reshape_attributes(table_name, basemap_name, id_col) AS 
         INTO NAME variant VALUE raw
     )
   FROM attr_long, nb
-  SELECT raw, id, variant, normalized: normalize_text(raw), basemap: basemap_name, basemap_count
+  SELECT
+    raw,
+    id,
+    variant,
+    normalized: normalize_text(raw),
+    basemap: basemap_name,
+    basemap_count
 );
 ```
+
+`query_table()` est la fonction table DuckDB permettant de paramétrer dynamiquement un nom de table dans une macro — pratique pour re-shaper plusieurs fonds via la même macro.
+
+---
 
 ## Métadonnées
 
@@ -108,28 +133,28 @@ Chaque fond inclut un fichier JSON de métadonnées :
 
 ### Types de projection (`proj_to`)
 
-| Type        | Description                                                                             | `proj_source`                  |
-| ----------- | --------------------------------------------------------------------------------------- | ------------------------------ |
-| `composite` | Projection composite avec encarts DOM-TOM. `preset` référence `projection-presets.json` | `EPSG:4326`                    |
-| `simple`    | Projection unique via `proj4d3(proj_to.proj4)`                                          | `EPSG:4326`                    |
-| `identity`  | Données pré-projetées, pas de reprojection → `geoIdentity()`                            | CRS effectif (ex: `EPSG:2154`) |
+| Type        | Description                                                                             | `proj_source`                   |
+| ----------- | --------------------------------------------------------------------------------------- | ------------------------------- |
+| `composite` | Projection composite avec encarts DOM-TOM. `preset` référence `projection-presets.json` | `EPSG:4326`                     |
+| `simple`    | Projection unique via `proj4d3(proj_to.proj4)`                                          | `EPSG:4326`                     |
+| `identity`  | Données pré-projetées, pas de reprojection → `geoIdentity()`                            | CRS effectif (ex : `EPSG:2154`) |
 
 ### Types de couches (`layers`)
 
 | Type               | Source          | Description                                      |
 | ------------------ | --------------- | ------------------------------------------------ |
 | `centroid`         | fichier Parquet | Points centroïdes des entités                    |
-| `limit`            | fichier Parquet | Lignes de frontières/limites                     |
+| `limit`            | fichier Parquet | Lignes de frontières / limites                   |
 | `land`             | fichier Parquet | Polygone de territoire (fond)                    |
-| `graticule`        | fichier Parquet | Méridiens et parallèles (généré avec mapshaper)  |
+| `graticule`        | fichier Parquet | Méridiens et parallèles (générés avec mapshaper) |
 | `geographic-lines` | fichier Parquet | Équateur, tropiques, cercles polaires, Greenwich |
 
 ### Variantes de simplification
 
 - Le catalogue n'expose qu'une variante par famille de fond, choisie parmi les niveaux réellement supportés.
 - Par défaut, Khartis préfère `medium`, puis `high`, puis `low`.
-- Les fonds administratifs France (`canton`, `commune`, `departement`, `region`) excluent `medium` de la sélection interactive: le catalogue pointe donc vers `high` et l'outil de simplification n'affiche que les niveaux réellement disponibles, voire uniquement un message s'il n'existe pas d'alternative.
-- Les couches annexes suivent les métadonnées de la variante active. Une couche partagée entre plusieurs niveaux, comme un graticule, peut donc garder le même fichier sans détection implicite côté code.
+- Les fonds administratifs France (`canton`, `commune`, `departement`, `region`) excluent `medium` de la sélection interactive : le catalogue pointe donc vers `high` et l'outil de simplification n'affiche que les niveaux réellement disponibles, voire uniquement un message s'il n'existe pas d'alternative.
+- Les couches annexes suivent les métadonnées de la variante active. Une couche partagée entre plusieurs niveaux — par exemple un graticule — peut garder le même fichier sans détection implicite côté code.
 
 Génération d'un fichier graticule :
 
@@ -139,6 +164,8 @@ ogr2ogr graticule-10.parquet tmp/graticule-10.json \
     -lco GEOMETRY_NAME=geom -lco GEOMETRY_ENCODING=GEOARROW \
     -lco COMPRESSION=ZSTD -lco WRITE_COVERING_BBOX=NO -nlt PROMOTE_TO_MULTI
 ```
+
+---
 
 ## Presets
 
@@ -162,6 +189,8 @@ Presets disponibles : **FRANCE_DOM_TOM** (Lambert-93 + 6 encarts), **EUROPE_DOM_
 
 Styles visuels des couches d'habillage. Clés : `limit-level-0/1/2`, `land`, `nuts-land`, `graticule`, `geographic-lines`. Les styles `path` exposent `width`, `color` (RGBA). Les styles `solid-polygon` exposent `fillColor`, `stroked`.
 
+---
+
 ## Structure finale
 
 ```
@@ -170,34 +199,22 @@ basemaps/
 │   ├── projection-presets.json
 │   └── style-presets.json
 ├── france/ europe/ monde/
-│   └── .../3-processed/*.json         ← métadonnées individuelles
-└── export/                            ← généré par script-export.sh
-    ├── all-basemaps-metadata.json     ← catalogue global
-    ├── all-basemaps-attributes.parquet ← attributs concaténés
+│   └── .../3-processed/*.json            ← métadonnées individuelles
+└── export/                               ← généré par script-export.sh
+    ├── all-basemaps-metadata.json        ← catalogue global
+    ├── all-basemaps-attributes.parquet   ← attributs concaténés
     ├── projection-presets.json
     ├── style-presets.json
-    └── geometry/*.parquet             ← fichiers GeoParquet
+    └── geometry/*.parquet                ← fichiers GeoParquet
 ```
 
-## Lecture dans Deck.gl
+---
 
-La librairie `geoarrow-deck-stream` transforme les géométries GeoArrow en buffers binaires pour Deck.gl, avec reprojection via d3-geo.
+## Jointure runtime
 
-```typescript
-// Chargement
-import { readGeoParquet } from '@geoarrow/geoparquet-wasm';
-import { tableFromIPC } from 'apache-arrow';
-const table = tableFromIPC(
-  readGeoParquet(new Uint8Array(buffer)).intoIPCStream()
-);
+Les attributs concaténés (`all-basemaps-attributes.parquet`) ne sont **pas chargés au démarrage**. Ils sont enregistrés dans DuckDB par `basemapService.ensureAttributesLoaded()` uniquement quand l'utilisateur déclenche une jointure. L'orchestration de la jointure (cache de similarité, corrections, finalisation) est implémentée dans `duckdb/orchestrator/join-ops.ts` et détaillée dans [DUCKDB.md](./DUCKDB.md#jointures-join-ops).
 
-// Données pré-projetées (identity) → geoIdentity(), rewind: false
-// Projection composite → buildCompositeProjection() avec les entrées du preset
-```
-
-### Jointure avec les données utilisateur
-
-Le champ `featureIds` permet de retrouver la ligne Arrow source pour chaque vertex, même après découpage aux bords de projection :
+Le mapping pick → ligne source côté rendu s'appuie sur `featureIds` (voir [MAP.md](./MAP.md#picking-et-tooltip)) :
 
 ```typescript
 const geoKeys = table.getChild('code');
@@ -215,6 +232,8 @@ new SolidPolygonLayer({
 });
 ```
 
+---
+
 ## Prérequis
 
 - GDAL 3.9+
@@ -223,4 +242,4 @@ new SolidPolygonLayer({
 
 ---
 
-**Voir aussi :** [VISUALISATIONS.md](./VISUALISATIONS.md) — [ARCHITECTURE.md](./ARCHITECTURE.md) — [GLOSSAIRE.md](./GLOSSAIRE.md)
+**Voir aussi :** [MAP.md](./MAP.md) — [DUCKDB.md](./DUCKDB.md) — [ARCHITECTURE.md](./ARCHITECTURE.md) — [GLOSSAIRE.md](./GLOSSAIRE.md)

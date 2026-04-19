@@ -1,4 +1,3 @@
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import proj4 from 'proj4';
 import { GEO_CONSTANTS } from '../constants';
 
@@ -24,7 +23,6 @@ function initializeProj4(): void {
   }
 
   proj4Initialized = true;
-  logger.debug('proj4 initialized with EPSG definitions', LogCategory.DUCKDB);
 }
 
 export function isProjectionSupported(epsgCode: string): boolean {

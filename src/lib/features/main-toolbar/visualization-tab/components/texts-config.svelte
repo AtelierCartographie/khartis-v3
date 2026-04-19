@@ -10,53 +10,51 @@
     SectionHeading,
     SliderWithInput,
     StrokeSection,
-    ToggleWithLabel,
     VizFilterButton,
-    VizFilterSection
+    VizFilterPanel
   } from './shared';
+  import SingleColorPreview from './palette-popover/single-color-preview.svelte';
   import type {
+    ClassificationConfig,
     MissingDataConfig,
+    TextSecondaryLabelsConfig,
     VisualizationConfig,
     VisualizationModes,
     VizDataFilter
   } from '$lib/features/commons/store/visualization.store.svelte';
   import * as m from '$lib/paraglide/messages';
   import {
+    DEFAULT_QUALITATIVE_PREVIEW,
     DEFAULT_SEQUENTIAL_PREVIEW,
-    DEFAULT_QUALITATIVE_PREVIEW
+    PALETTE_TYPE
   } from './palette-popover/palette.constants';
   import {
     Category,
     MisuseOutline,
     SquareFill,
-    Tag,
-    TextBold,
-    TextItalic,
-    TextAlignLeft,
-    TextAlignCenter,
-    TextAlignRight
+    Tag
   } from 'carbon-icons-svelte';
   import {
-    ColorMode,
     DEFAULT_COLORS,
     FillMode,
     SLIDER_LIMITS,
     VISUALIZATION_DEFAULTS
   } from '../../constants';
-  import {
-    Button,
-    Dropdown,
-    Select,
-    SelectItem,
-    TextInput
-  } from 'carbon-components-svelte';
+  import { Button, Dropdown, TextInput } from 'carbon-components-svelte';
   import DiscretizationModal from './discretization-modal.svelte';
-  import type { ClassificationConfig } from '$lib/features/commons/store/visualization.store.svelte';
+  import TextStylePopover from './text-style-popover.svelte';
   import { resolveDiscretizationLabel } from './discretization.utils';
+  import FacetsVariablePicker from './symbols/facets-variable-picker.svelte';
+  import {
+    FACET_SLOT,
+    facetsStore,
+    type FacetSlotPath
+  } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
 
   interface Props {
     dataFields?: Array<{ id: number; text: string; type?: string }>;
     visualization?: VisualizationConfig;
+    backgroundVisualization?: VisualizationConfig;
     disabled?: boolean;
     onStyleChange?: (updates: Partial<VisualizationConfig['style']>) => void;
     onModesChange?: (updates: Partial<VisualizationModes>) => void;
@@ -67,8 +65,26 @@
     ) => void;
     onInvertPalette?: () => void;
     onToggleVisibility?: (checked: boolean) => void;
+    onSecondaryLabelsChange?: (
+      updates: Partial<TextSecondaryLabelsConfig>
+    ) => void;
+    onBackgroundStyleChange?: (
+      updates: Partial<VisualizationConfig['style']>
+    ) => void;
+    onBackgroundModesChange?: (updates: Partial<VisualizationModes>) => void;
+    onBackgroundClassificationChange?: (
+      updates: Partial<ClassificationConfig>
+    ) => void;
+    onBackgroundMappingChange?: (
+      updates: Partial<VisualizationConfig['mapping']>
+    ) => void;
+    onBackgroundInvertPalette?: () => void;
     filters?: VizDataFilter[];
     onAddFilter?: (filter: Omit<VizDataFilter, 'id'>) => void;
+    onUpdateFilter?: (
+      filterId: string,
+      updates: Partial<Omit<VizDataFilter, 'id'>>
+    ) => void;
     onRemoveFilter?: (filterId: string) => void;
     onClearFilters?: () => void;
   }
@@ -76,35 +92,39 @@
   let {
     dataFields = [],
     visualization,
+    backgroundVisualization,
     disabled = false,
     onStyleChange,
-    onModesChange,
     onMissingDataChange,
-    onClassificationChange,
     onMappingChange,
-    onInvertPalette,
     onToggleVisibility,
+    onSecondaryLabelsChange,
+    onBackgroundStyleChange,
+    onBackgroundModesChange,
+    onBackgroundClassificationChange,
+    onBackgroundMappingChange,
+    onBackgroundInvertPalette,
     filters = [],
     onAddFilter,
-    onRemoveFilter,
-    onClearFilters
+    onUpdateFilter,
+    onRemoveFilter
   }: Props = $props();
 
   const NONE_FIELD_ID = -1;
-  let discretizationModalOpen = $state(false);
-  let filterSectionVisible = $state(false);
-
-  let selectedLabelFieldId = $state<number>(NONE_FIELD_ID);
-  let selectedValueFieldId = $state<number>(NONE_FIELD_ID);
-  let selectedCategoryFieldId = $state<number>(NONE_FIELD_ID);
-  let secondaryFieldId = $state<number>(NONE_FIELD_ID);
-
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
   const selectableDataFields = $derived([noneOption, ...dataFields]);
   const secondaryFieldItems = $derived([noneOption, ...dataFields]);
-  const hasSecondaryField = $derived(secondaryFieldId !== NONE_FIELD_ID);
 
-  let colorMode = $state<ColorMode>(ColorMode.UNIQUE);
+  let discretizationModalOpen = $state(false);
+  let discretizationTarget = $state<'text' | 'background'>('text');
+  let filterSectionVisible = $state(false);
+
+  let selectedLabelFieldId = $state<number>(NONE_FIELD_ID);
+  let selectedBackgroundValueFieldId = $state<number>(NONE_FIELD_ID);
+  let selectedBackgroundCategoryFieldId = $state<number>(NONE_FIELD_ID);
+  let secondaryFieldId = $state<number>(NONE_FIELD_ID);
+  let backgroundFacetPickerOpen = $state(false);
+
   let textColor = $state<string>(DEFAULT_COLORS.text);
   let textOpacity = $state<number>(VISUALIZATION_DEFAULTS.textOpacity);
   let bold = $state<boolean>(false);
@@ -117,6 +137,16 @@
   let collisionDetection = $state<boolean>(true);
   let dxpMasking = $state<boolean>(false);
 
+  let secondaryColor = $state<string>(DEFAULT_COLORS.text);
+  let secondaryOpacity = $state<number>(VISUALIZATION_DEFAULTS.labelOpacity);
+  let secondarySize = $state<number>(VISUALIZATION_DEFAULTS.labelSize);
+  let secondaryAlignment = $state<'left' | 'center' | 'right'>('left');
+  let secondaryHalo = $state<boolean>(false);
+  let secondaryHaloColor = $state<string>(DEFAULT_COLORS.halo);
+  let secondaryHaloWidth = $state<number>(VISUALIZATION_DEFAULTS.haloWidth);
+  let secondaryCollisionDetection = $state<boolean>(true);
+  let secondaryDxpMasking = $state<boolean>(false);
+
   let fillMode = $state<FillMode>(FillMode.NONE);
   let fillColor = $state<string>(DEFAULT_COLORS.fill);
   let fillOpacity = $state<number>(VISUALIZATION_DEFAULTS.fillOpacity);
@@ -125,66 +155,122 @@
   let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
   let missingDataLabel = $state<string>(m.missing_data_text());
 
-  let showPrimaryFormat = $state(false);
-  let showSecondaryFormat = $state(false);
+  type StyleSection = 'primary' | 'secondary';
+  type FormatTriggerRef = HTMLButtonElement | HTMLAnchorElement | null;
+  let showStylePopover = $state(false);
+  let activeStyleSection = $state<StyleSection>('primary');
+  let stylePopoverTrigger = $state<HTMLElement | undefined>();
+  let primaryTriggerRef = $state<FormatTriggerRef>(null);
+  let secondaryTriggerRef = $state<FormatTriggerRef>(null);
 
-  const enabled = $derived((visualization?.style.textOpacity ?? 1) > 0);
-  const currentPalette = $derived(
-    visualization?.classification?.colors ?? DEFAULT_SEQUENTIAL_PREVIEW
+  const enabled = $derived((visualization?.style.textOpacity ?? 0) > 0);
+  const hasPrimaryField = $derived(selectedLabelFieldId !== NONE_FIELD_ID);
+  const hasSecondaryField = $derived(secondaryFieldId !== NONE_FIELD_ID);
+  const backgroundCurrentPalette = $derived(
+    backgroundVisualization?.classification?.colors ??
+      DEFAULT_SEQUENTIAL_PREVIEW
   );
-  const qualitativePalette = DEFAULT_QUALITATIVE_PREVIEW;
+  const backgroundCategoriesPalette = $derived(
+    backgroundVisualization?.classification?.colors ??
+      DEFAULT_QUALITATIVE_PREVIEW
+  );
+  const backgroundAvailable = $derived(Boolean(backgroundVisualization));
+  const selectedBackgroundVizId = $derived(backgroundVisualization?.id);
+  const activeDiscretizationVisualization = $derived(
+    discretizationTarget === 'background'
+      ? backgroundVisualization
+      : visualization
+  );
+
+  const activeBackgroundFacetsSlotPath = $derived.by(() => {
+    if (
+      !facetsStore.enabled ||
+      !selectedBackgroundVizId ||
+      facetsStore.baseVisualizationId !== selectedBackgroundVizId
+    ) {
+      return null;
+    }
+    return facetsStore.primarySlotPath;
+  });
+
+  function isBackgroundFacetsActiveForSlot(slotPath: FacetSlotPath): boolean {
+    return activeBackgroundFacetsSlotPath === slotPath;
+  }
+
+  function getBackgroundFacetsSelectedFieldIds(
+    slotPath: FacetSlotPath
+  ): number[] {
+    if (!isBackgroundFacetsActiveForSlot(slotPath)) {
+      return [];
+    }
+    return facetsStore.variables
+      .map((name) => dataFields.find((field) => field.text === name)?.id)
+      .filter((id): id is number => typeof id === 'number');
+  }
+
+  const fillModeItems = [
+    { icon: MisuseOutline, label: m.fill_mode_none(), iconSize: 16 },
+    { icon: SquareFill, label: m.fill_mode_unique(), iconSize: 16 },
+    { icon: Category, label: m.fill_mode_classes(), iconSize: 16 },
+    { icon: Tag, label: m.fill_mode_categories(), iconSize: 16 }
+  ];
+
+  const fillModeIndex = $derived(
+    [
+      FillMode.NONE,
+      FillMode.UNIQUE,
+      FillMode.CLASSES,
+      FillMode.CATEGORIES
+    ].indexOf(fillMode)
+  );
+
+  const backgroundDiscretizationLabel = $derived.by(() =>
+    resolveDiscretizationLabel(
+      backgroundVisualization?.classification
+        ? { ...backgroundVisualization.classification }
+        : undefined
+    )
+  );
+
+  function resolveFieldId(columnName: string | undefined): number {
+    if (!columnName) {
+      return NONE_FIELD_ID;
+    }
+
+    const field = dataFields.find((item) => item.text === columnName);
+    return field?.id ?? NONE_FIELD_ID;
+  }
+
+  function parseOpacityToSlider(
+    value: number | undefined,
+    fallback: number
+  ): number {
+    if (value === undefined) {
+      return fallback;
+    }
+
+    return value <= 1 ? Math.round(value * 100) : value;
+  }
 
   $effect(() => {
-    if (visualization?.mapping.labelColumn && dataFields.length > 0) {
-      const fieldIndex = dataFields.findIndex(
-        (field) => field.text === visualization.mapping.labelColumn
-      );
-      selectedLabelFieldId =
-        fieldIndex >= 0 ? dataFields[fieldIndex].id : NONE_FIELD_ID;
-    } else {
-      selectedLabelFieldId = NONE_FIELD_ID;
-    }
-
-    if (visualization?.mapping.valueColumn && dataFields.length > 0) {
-      const fieldIndex = dataFields.findIndex(
-        (field) => field.text === visualization.mapping.valueColumn
-      );
-      selectedValueFieldId =
-        fieldIndex >= 0 ? dataFields[fieldIndex].id : NONE_FIELD_ID;
-    } else {
-      selectedValueFieldId = NONE_FIELD_ID;
-    }
-
-    if (visualization?.mapping.categoryColumn && dataFields.length > 0) {
-      const fieldIndex = dataFields.findIndex(
-        (field) => field.text === visualization.mapping.categoryColumn
-      );
-      selectedCategoryFieldId =
-        fieldIndex >= 0 ? dataFields[fieldIndex].id : NONE_FIELD_ID;
-    } else {
-      selectedCategoryFieldId = NONE_FIELD_ID;
-    }
-
-    if (visualization?.mapping.secondaryLabelColumn && dataFields.length > 0) {
-      const fieldIndex = secondaryFieldItems.findIndex(
-        (field) => field.text === visualization.mapping.secondaryLabelColumn
-      );
-      secondaryFieldId =
-        fieldIndex >= 0 ? secondaryFieldItems[fieldIndex].id : NONE_FIELD_ID;
-    } else {
-      secondaryFieldId = NONE_FIELD_ID;
-    }
+    selectedLabelFieldId = resolveFieldId(visualization?.mapping.labelColumn);
+    secondaryFieldId = resolveFieldId(
+      visualization?.mapping.secondaryLabelColumn
+    );
+    selectedBackgroundValueFieldId = resolveFieldId(
+      backgroundVisualization?.mapping.valueColumn
+    );
+    selectedBackgroundCategoryFieldId = resolveFieldId(
+      backgroundVisualization?.mapping.categoryColumn
+    );
   });
 
   $effect(() => {
     if (visualization?.style) {
-      const nextTextOpacity = visualization.style.textOpacity;
-      textOpacity =
-        nextTextOpacity !== undefined
-          ? nextTextOpacity <= 1
-            ? Math.round(nextTextOpacity * 100)
-            : nextTextOpacity
-          : VISUALIZATION_DEFAULTS.textOpacity;
+      textOpacity = parseOpacityToSlider(
+        visualization.style.textOpacity,
+        VISUALIZATION_DEFAULTS.textOpacity
+      );
       textColor =
         (visualization.style.textColor as string) ?? DEFAULT_COLORS.text;
       bold = visualization.style.textBold ?? false;
@@ -198,25 +284,23 @@
       collisionDetection = visualization.style.textCollisionDetection ?? false;
       dxpMasking = visualization.style.textDxpMasking ?? false;
 
-      const nextFillOpacity = visualization.style.fillOpacity;
-      fillOpacity =
-        nextFillOpacity !== undefined
-          ? Math.round(nextFillOpacity * 100)
-          : VISUALIZATION_DEFAULTS.fillOpacity;
-      fillColor =
-        (visualization.style.fillColor as string) ?? DEFAULT_COLORS.fill;
-    }
-
-    if (visualization?.modes) {
-      colorMode =
-        visualization.modes.color ??
-        (selectedLabelFieldId === NONE_FIELD_ID
-          ? ColorMode.NONE
-          : ColorMode.UNIQUE);
-      fillMode =
-        (visualization?.style.fillOpacity ?? 1) <= 0
-          ? FillMode.NONE
-          : (visualization.modes.fill ?? FillMode.UNIQUE);
+      secondaryColor =
+        (visualization.style.labelColor as string) ?? DEFAULT_COLORS.text;
+      secondaryOpacity = parseOpacityToSlider(
+        visualization.style.labelOpacity,
+        VISUALIZATION_DEFAULTS.labelOpacity
+      );
+      secondarySize =
+        visualization.style.labelSize ?? VISUALIZATION_DEFAULTS.labelSize;
+      secondaryAlignment = visualization.style.labelAlign ?? 'left';
+      secondaryHalo = visualization.style.labelHalo ?? false;
+      secondaryHaloColor =
+        visualization.style.labelHaloColor ?? DEFAULT_COLORS.halo;
+      secondaryHaloWidth =
+        visualization.style.labelHaloWidth ?? VISUALIZATION_DEFAULTS.haloWidth;
+      secondaryCollisionDetection =
+        visualization.style.labelCollisionDetection ?? true;
+      secondaryDxpMasking = visualization.style.labelDxpMasking ?? false;
     }
 
     if (visualization?.missingData) {
@@ -228,47 +312,26 @@
     }
   });
 
-  const colorModeItems = [
-    { icon: MisuseOutline, label: m.color_mode_none(), iconSize: 16 },
-    { icon: SquareFill, label: m.color_mode_unique(), iconSize: 16 },
-    { icon: Category, label: m.color_mode_classes(), iconSize: 16 },
-    { icon: Tag, label: m.color_mode_categories(), iconSize: 16 }
-  ];
+  $effect(() => {
+    if (!backgroundVisualization?.style) {
+      fillMode = FillMode.NONE;
+      fillColor = DEFAULT_COLORS.fill;
+      fillOpacity = VISUALIZATION_DEFAULTS.fillOpacity;
+      return;
+    }
 
-  const fillModeItems = [
-    { icon: MisuseOutline, label: m.fill_mode_none(), iconSize: 16 },
-    { icon: SquareFill, label: m.fill_mode_unique(), iconSize: 16 },
-    { icon: Category, label: m.fill_mode_classes(), iconSize: 16 },
-    { icon: Tag, label: m.fill_mode_categories(), iconSize: 16 }
-  ];
-
-  const alignmentItems = [
-    { icon: TextAlignLeft, label: m.alignment_left(), iconSize: 16 },
-    { icon: TextAlignCenter, label: m.alignment_center(), iconSize: 16 },
-    { icon: TextAlignRight, label: m.alignment_right(), iconSize: 16 }
-  ];
-
-  const colorModeIndex = $derived(
-    [
-      ColorMode.NONE,
-      ColorMode.UNIQUE,
-      ColorMode.CLASSES,
-      ColorMode.CATEGORIES
-    ].indexOf(colorMode)
-  );
-
-  const fillModeIndex = $derived(
-    [
-      FillMode.NONE,
-      FillMode.UNIQUE,
-      FillMode.CLASSES,
-      FillMode.CATEGORIES
-    ].indexOf(fillMode)
-  );
-
-  const alignmentIndex = $derived(
-    ['left', 'center', 'right'].indexOf(alignment)
-  );
+    fillOpacity = parseOpacityToSlider(
+      backgroundVisualization.style.fillOpacity,
+      VISUALIZATION_DEFAULTS.fillOpacity
+    );
+    fillColor =
+      (backgroundVisualization.style.fillColor as string) ??
+      DEFAULT_COLORS.fill;
+    fillMode =
+      (backgroundVisualization.style.fillOpacity ?? 1) <= 0
+        ? FillMode.NONE
+        : (backgroundVisualization.modes?.fill ?? FillMode.UNIQUE);
+  });
 
   function handleLabelFieldSelect(fieldId: number) {
     selectedLabelFieldId = fieldId;
@@ -278,7 +341,8 @@
         labelColumn: undefined,
         secondaryLabelColumn: undefined
       });
-      secondaryFieldId = NONE_FIELD_ID;
+      onSecondaryLabelsChange?.({ enabled: false, labelColumn: undefined });
+      showStylePopover = false;
       return;
     }
 
@@ -288,57 +352,112 @@
     }
   }
 
-  function handleValueFieldSelect(fieldId: number) {
-    selectedValueFieldId = fieldId;
-
-    if (fieldId === NONE_FIELD_ID) {
-      onMappingChange?.({ valueColumn: undefined });
-      return;
-    }
-
-    const field = dataFields.find((item) => item.id === fieldId);
-    if (field) {
-      onMappingChange?.({ valueColumn: field.text });
-    }
-  }
-
-  function handleCategoryFieldSelect(fieldId: number) {
-    selectedCategoryFieldId = fieldId;
-
-    if (fieldId === NONE_FIELD_ID) {
-      onMappingChange?.({ categoryColumn: undefined });
-      return;
-    }
-
-    const field = dataFields.find((item) => item.id === fieldId);
-    if (field) {
-      onMappingChange?.({ categoryColumn: field.text });
-    }
-  }
-
   function handleSecondaryFieldSelect(fieldId: number) {
     secondaryFieldId = fieldId;
 
     if (fieldId === NONE_FIELD_ID) {
       onMappingChange?.({ secondaryLabelColumn: undefined });
+      onSecondaryLabelsChange?.({ enabled: false, labelColumn: undefined });
+      showStylePopover = false;
       return;
     }
 
     const field = secondaryFieldItems.find((item) => item.id === fieldId);
+    if (!field) {
+      return;
+    }
+
+    onMappingChange?.({ secondaryLabelColumn: field.text });
+
+    const updates: Partial<TextSecondaryLabelsConfig> = {
+      enabled: true,
+      labelColumn: field.text
+    };
+
+    if (
+      (visualization?.style.labelOpacity ?? 0) <= 0 ||
+      visualization?.style.labelOpacity === undefined
+    ) {
+      updates.opacity = VISUALIZATION_DEFAULTS.labelOpacity / 100;
+    }
+
+    onSecondaryLabelsChange?.(updates);
+  }
+
+  function handleBackgroundValueFieldSelect(fieldId: number) {
+    selectedBackgroundValueFieldId = fieldId;
+
+    if (fieldId === NONE_FIELD_ID) {
+      onBackgroundMappingChange?.({ valueColumn: undefined });
+      return;
+    }
+
+    const field = dataFields.find((item) => item.id === fieldId);
     if (field) {
-      onMappingChange?.({ secondaryLabelColumn: field.text });
+      onBackgroundMappingChange?.({ valueColumn: field.text });
     }
   }
 
-  function handleColorModeChange(index: number) {
-    const nextModes = [
-      ColorMode.NONE,
-      ColorMode.UNIQUE,
-      ColorMode.CLASSES,
-      ColorMode.CATEGORIES
-    ];
-    colorMode = nextModes[index] || ColorMode.UNIQUE;
-    onModesChange?.({ color: colorMode });
+  function handleBackgroundCategoryFieldSelect(fieldId: number) {
+    selectedBackgroundCategoryFieldId = fieldId;
+
+    if (fieldId === NONE_FIELD_ID) {
+      onBackgroundMappingChange?.({ categoryColumn: undefined });
+      return;
+    }
+
+    const field = dataFields.find((item) => item.id === fieldId);
+    if (field) {
+      onBackgroundMappingChange?.({ categoryColumn: field.text });
+    }
+  }
+
+  async function handleBackgroundFacetsVariablesChange(
+    baseVariableName: string,
+    slotPath: FacetSlotPath,
+    fieldIds: number[]
+  ) {
+    if (!selectedBackgroundVizId) return;
+    const variableNames = fieldIds
+      .map((id) => dataFields.find((field) => field.id === id)?.text)
+      .filter((name): name is string => Boolean(name));
+    const merged =
+      baseVariableName && !variableNames.includes(baseVariableName)
+        ? [baseVariableName, ...variableNames]
+        : variableNames;
+    await facetsStore.updateVariables(
+      selectedBackgroundVizId,
+      merged,
+      slotPath
+    );
+  }
+
+  async function handleBackgroundFacetsToggle(
+    baseVariableName: string,
+    slotPath: FacetSlotPath,
+    enabled: boolean
+  ) {
+    if (!selectedBackgroundVizId) return;
+    if (!enabled) {
+      facetsStore.disable();
+      return;
+    }
+
+    const available = dataFields
+      .map((field) => field.text)
+      .filter((name): name is string => Boolean(name));
+    const seed = baseVariableName ? [baseVariableName] : [];
+    const candidates = seed.slice();
+    for (const name of available) {
+      if (candidates.length >= 2) break;
+      if (!candidates.includes(name)) candidates.push(name);
+    }
+    if (candidates.length < 2) return;
+    await facetsStore.updateVariables(
+      selectedBackgroundVizId,
+      candidates,
+      slotPath
+    );
   }
 
   function handleTextColorChange(value: string) {
@@ -366,14 +485,9 @@
     onStyleChange?.({ textSize: value });
   }
 
-  function handleAlignmentChange(index: number) {
-    const alignments: Array<'left' | 'center' | 'right'> = [
-      'left',
-      'center',
-      'right'
-    ];
-    alignment = alignments[index] || 'left';
-    onStyleChange?.({ textAlign: alignment });
+  function handleAlignmentChange(value: 'left' | 'center' | 'right') {
+    alignment = value;
+    onStyleChange?.({ textAlign: value });
   }
 
   function handleHaloToggle(value: boolean) {
@@ -401,7 +515,52 @@
     onStyleChange?.({ textDxpMasking: value });
   }
 
-  function handleFillModeChange(index: number) {
+  function handleSecondaryColorChange(value: string) {
+    secondaryColor = value;
+    onSecondaryLabelsChange?.({ color: value });
+  }
+
+  function handleSecondaryOpacityChange(value: number) {
+    secondaryOpacity = value;
+    onSecondaryLabelsChange?.({ opacity: value / 100 });
+  }
+
+  function handleSecondarySizeChange(value: number) {
+    secondarySize = value;
+    onSecondaryLabelsChange?.({ size: value });
+  }
+
+  function handleSecondaryAlignmentChange(value: 'left' | 'center' | 'right') {
+    secondaryAlignment = value;
+    onSecondaryLabelsChange?.({ align: value });
+  }
+
+  function handleSecondaryHaloToggle(value: boolean) {
+    secondaryHalo = value;
+    onSecondaryLabelsChange?.({ halo: value });
+  }
+
+  function handleSecondaryHaloColorChange(value: string) {
+    secondaryHaloColor = value;
+    onSecondaryLabelsChange?.({ haloColor: value });
+  }
+
+  function handleSecondaryHaloWidthChange(value: number) {
+    secondaryHaloWidth = value;
+    onSecondaryLabelsChange?.({ haloWidth: value });
+  }
+
+  function handleSecondaryCollisionChange(value: boolean) {
+    secondaryCollisionDetection = value;
+    onSecondaryLabelsChange?.({ collisionDetection: value });
+  }
+
+  function handleSecondaryDxpMaskingChange(value: boolean) {
+    secondaryDxpMasking = value;
+    onSecondaryLabelsChange?.({ dxpMasking: value });
+  }
+
+  function handleBackgroundFillModeChange(index: number) {
     const nextModes = [
       FillMode.NONE,
       FillMode.UNIQUE,
@@ -409,28 +568,28 @@
       FillMode.CATEGORIES
     ];
     fillMode = nextModes[index] || FillMode.NONE;
-    onModesChange?.({ fill: fillMode });
+    onBackgroundModesChange?.({ fill: fillMode });
 
     if (fillMode === FillMode.NONE) {
-      onStyleChange?.({ fillOpacity: 0 });
+      onBackgroundStyleChange?.({ fillOpacity: 0 });
       return;
     }
 
-    if ((visualization?.style.fillOpacity ?? 1) <= 0) {
-      onStyleChange?.({
+    if ((backgroundVisualization?.style.fillOpacity ?? 1) <= 0) {
+      onBackgroundStyleChange?.({
         fillOpacity: VISUALIZATION_DEFAULTS.fillOpacity / 100
       });
     }
   }
 
-  function handleFillColorChange(value: string) {
+  function handleBackgroundFillColorChange(value: string) {
     fillColor = value;
-    onStyleChange?.({ fillColor: value });
+    onBackgroundStyleChange?.({ fillColor: value });
   }
 
-  function handleFillOpacityChange(value: number) {
+  function handleBackgroundFillOpacityChange(value: number) {
     fillOpacity = value;
-    onStyleChange?.({ fillOpacity: value / 100 });
+    onBackgroundStyleChange?.({ fillOpacity: value / 100 });
   }
 
   function handleToggleChange(checked: boolean) {
@@ -456,31 +615,41 @@
     onMissingDataChange?.({ label: value });
   }
 
-  function handleOpenDiscretization() {
+  function openBackgroundDiscretization() {
+    discretizationTarget = 'background';
     discretizationModalOpen = true;
   }
 
-  function handleClassificationChange(
+  function handleDiscretizationChange(
     classification: Partial<ClassificationConfig>
   ) {
-    onClassificationChange?.(classification);
+    if (discretizationTarget === 'background') {
+      onBackgroundClassificationChange?.(classification);
+    }
   }
 
-  const discretizationLabel = $derived(
-    resolveDiscretizationLabel(visualization?.classification)
-  );
+  function toggleStylePopover(
+    section: StyleSection,
+    triggerRef: FormatTriggerRef
+  ) {
+    const isSameSectionOpen =
+      showStylePopover && activeStyleSection === section;
+
+    activeStyleSection = section;
+    stylePopoverTrigger = triggerRef ?? undefined;
+    showStylePopover = !isSameSectionOpen;
+  }
 
   function togglePrimaryFormat() {
-    showPrimaryFormat = !showPrimaryFormat;
-    showSecondaryFormat = false;
+    toggleStylePopover('primary', primaryTriggerRef);
   }
 
   function toggleSecondaryFormat() {
-    if (!hasSecondaryField) {
+    if (!hasPrimaryField || !hasSecondaryField) {
       return;
     }
-    showSecondaryFormat = !showSecondaryFormat;
-    showPrimaryFormat = false;
+
+    toggleStylePopover('secondary', secondaryTriggerRef);
   }
 </script>
 
@@ -513,7 +682,7 @@
         <div class="field-row">
           <div class="field-row-dropdown field-picker">
             <Dropdown
-              titleText={m.text_according()}
+              labelText={m.text_according()}
               items={selectableDataFields}
               selectedId={selectedLabelFieldId}
               on:select={(event) =>
@@ -523,9 +692,10 @@
           </div>
 
           <Button
-            class={`format-trigger ${showPrimaryFormat ? 'format-trigger--active' : ''}`}
+            bind:ref={primaryTriggerRef}
+            class={`format-trigger ${showStylePopover && activeStyleSection === 'primary' ? 'format-trigger--active' : ''}`}
             kind="ghost"
-            aria-pressed={showPrimaryFormat}
+            aria-pressed={showStylePopover && activeStyleSection === 'primary'}
             iconDescription={m.text_format_button()}
             onclick={togglePrimaryFormat}
           >
@@ -533,174 +703,13 @@
           </Button>
         </div>
 
-        {#if showPrimaryFormat}
-          <div class="format-panel">
-            <SectionHeading title={m.appearance()} />
-
-            <div class="field-group">
-              <ToggleTabs
-                items={colorModeItems}
-                activeIndex={colorModeIndex}
-                onChange={handleColorModeChange}
-                hideInactiveLabel={true}
-              />
-            </div>
-
-            {#if colorMode === ColorMode.UNIQUE}
-              <ColorSelector
-                label={m.color()}
-                value={textColor}
-                onchange={handleTextColorChange}
-              />
-            {:else if colorMode === ColorMode.CLASSES}
-              <div class="field-group">
-                <Dropdown
-                  titleText={m.color_according()}
-                  items={selectableDataFields}
-                  selectedId={selectedValueFieldId}
-                  on:select={(event) =>
-                    handleValueFieldSelect(event.detail.selectedId)}
-                  type="default"
-                />
-              </div>
-              <DiscretizationRow
-                label={m.discretization()}
-                value={discretizationLabel}
-                onsettings={handleOpenDiscretization}
-              />
-              <PalettePreview
-                label={m.color_palette()}
-                colors={currentPalette}
-                selectedPaletteId={visualization?.classification?.paletteId}
-                inverted={visualization?.classification?.inverted ?? false}
-                oninvert={onInvertPalette}
-                onClassificationChange={handleClassificationChange}
-              />
-            {:else if colorMode === ColorMode.CATEGORIES}
-              <div class="field-group">
-                <Dropdown
-                  titleText={m.color_according()}
-                  items={selectableDataFields}
-                  selectedId={selectedCategoryFieldId}
-                  on:select={(event) =>
-                    handleCategoryFieldSelect(event.detail.selectedId)}
-                  type="default"
-                />
-              </div>
-              <DiscretizationRow
-                label={m.category_aspect()}
-                value={m.categories_count({ count: 4 })}
-                onsettings={handleOpenDiscretization}
-              />
-              <PalettePreview
-                label={m.color_palette()}
-                colors={qualitativePalette}
-                inverted={visualization?.classification?.inverted ?? false}
-                oninvert={onInvertPalette}
-                onClassificationChange={handleClassificationChange}
-              />
-            {/if}
-
-            <SliderWithInput
-              label={m.opacity()}
-              min={SLIDER_LIMITS.textOpacity.min}
-              max={SLIDER_LIMITS.textOpacity.max}
-              value={textOpacity}
-              showMinMax
-              inputWidth="96px"
-              onchange={handleTextOpacityChange}
-            />
-
-            <SectionHeading title={m.text_style()} />
-
-            <div class="text-style-row">
-              <ToggleTabs
-                items={[{ icon: TextBold, label: '', iconSize: 16 }]}
-                activeIndex={bold ? 0 : -1}
-                onChange={() => handleBoldChange(!bold)}
-                hideInactiveLabel={true}
-              />
-              <ToggleTabs
-                items={[{ icon: TextItalic, label: '', iconSize: 16 }]}
-                activeIndex={italic ? 0 : -1}
-                onChange={() => handleItalicChange(!italic)}
-                hideInactiveLabel={true}
-              />
-            </div>
-
-            <div class="field-group">
-              <Select
-                labelText={m.font_size()}
-                selected={String(size)}
-                on:change={(event) =>
-                  handleSizeChange(
-                    Number((event.target as HTMLSelectElement).value)
-                  )}
-              >
-                <SelectItem value="8" text="8 px" />
-                <SelectItem value="10" text="10 px" />
-                <SelectItem value="12" text="12 px" />
-                <SelectItem value="14" text="14 px" />
-                <SelectItem value="16" text="16 px" />
-                <SelectItem value="18" text="18 px" />
-                <SelectItem value="20" text="20 px" />
-                <SelectItem value="24" text="24 px" />
-              </Select>
-            </div>
-
-            <div class="field-group">
-              <span class="field-label">{m.alignment()}</span>
-              <ToggleTabs
-                items={alignmentItems}
-                activeIndex={alignmentIndex}
-                onChange={handleAlignmentChange}
-                hideInactiveLabel={true}
-              />
-            </div>
-
-            <ToggleWithLabel
-              label={m.halo()}
-              toggled={halo}
-              ontoggle={handleHaloToggle}
-            />
-
-            {#if halo}
-              <ColorSelector
-                label={m.halo_color()}
-                value={haloColor}
-                onchange={handleHaloColorChange}
-              />
-              <SliderWithInput
-                label={m.halo_width()}
-                min={SLIDER_LIMITS.haloWidth.min}
-                max={SLIDER_LIMITS.haloWidth.max}
-                value={haloWidth}
-                onchange={handleHaloWidthChange}
-              />
-            {/if}
-
-            <ToggleWithLabel
-              label={m.collision_detection()}
-              infoText={m.collision_detection_info()}
-              toggled={collisionDetection}
-              ontoggle={handleCollisionDetectionChange}
-            />
-
-            <ToggleWithLabel
-              label={m.dxp_masking()}
-              infoText={m.dxp_masking_info()}
-              toggled={dxpMasking}
-              ontoggle={handleDxpMaskingChange}
-            />
-          </div>
-        {/if}
-
         <div class="field-row">
           <div class="field-row-dropdown field-picker">
             <Dropdown
-              titleText={m.secondary_text()}
+              labelText={m.secondary_text()}
               items={secondaryFieldItems}
               selectedId={secondaryFieldId}
+              disabled={!hasPrimaryField}
               on:select={(event) =>
                 handleSecondaryFieldSelect(event.detail.selectedId)}
               type="default"
@@ -708,57 +717,18 @@
           </div>
 
           <Button
-            class={`format-trigger ${showSecondaryFormat ? 'format-trigger--active' : ''}`}
+            bind:ref={secondaryTriggerRef}
+            class={`format-trigger ${showStylePopover && activeStyleSection === 'secondary' ? 'format-trigger--active' : ''}`}
             kind="ghost"
-            aria-pressed={showSecondaryFormat}
+            aria-pressed={showStylePopover &&
+              activeStyleSection === 'secondary'}
             iconDescription={m.text_format_button()}
-            disabled={!hasSecondaryField}
+            disabled={!hasPrimaryField || !hasSecondaryField}
             onclick={toggleSecondaryFormat}
           >
             Aa
           </Button>
         </div>
-
-        {#if showSecondaryFormat && hasSecondaryField}
-          <div class="format-panel">
-            <SectionHeading title={m.text_style()} />
-
-            <div class="text-style-row">
-              <ToggleTabs
-                items={[{ icon: TextBold, label: '', iconSize: 16 }]}
-                activeIndex={bold ? 0 : -1}
-                onChange={() => handleBoldChange(!bold)}
-                hideInactiveLabel={true}
-              />
-              <ToggleTabs
-                items={[{ icon: TextItalic, label: '', iconSize: 16 }]}
-                activeIndex={italic ? 0 : -1}
-                onChange={() => handleItalicChange(!italic)}
-                hideInactiveLabel={true}
-              />
-            </div>
-
-            <div class="field-group">
-              <Select
-                labelText={m.font_size()}
-                selected={String(size)}
-                on:change={(event) =>
-                  handleSizeChange(
-                    Number((event.target as HTMLSelectElement).value)
-                  )}
-              >
-                <SelectItem value="8" text="8 px" />
-                <SelectItem value="10" text="10 px" />
-                <SelectItem value="12" text="12 px" />
-                <SelectItem value="14" text="14 px" />
-                <SelectItem value="16" text="16 px" />
-                <SelectItem value="18" text="18 px" />
-                <SelectItem value="20" text="20 px" />
-                <SelectItem value="24" text="24 px" />
-              </Select>
-            </div>
-          </div>
-        {/if}
       </div>
 
       <div class="missing-data-block">
@@ -805,115 +775,232 @@
         {/if}
       </div>
 
-      <SectionHeading title={m.background()} />
+      {#if backgroundAvailable}
+        <SectionHeading title={m.background()} />
 
-      <div class="field-group">
-        <ToggleTabs
-          items={fillModeItems}
-          activeIndex={fillModeIndex}
-          onChange={handleFillModeChange}
-          hideInactiveLabel={true}
-        />
-      </div>
-
-      {#if fillMode === FillMode.UNIQUE}
-        <ColorSelector
-          label={m.color()}
-          value={fillColor}
-          onchange={handleFillColorChange}
-        />
-      {:else if fillMode === FillMode.CLASSES}
         <div class="field-group">
-          <Dropdown
-            titleText={m.color_according()}
-            items={selectableDataFields}
-            selectedId={selectedValueFieldId}
-            on:select={(event) =>
-              handleValueFieldSelect(event.detail.selectedId)}
-            type="default"
+          <ToggleTabs
+            items={fillModeItems}
+            activeIndex={fillModeIndex}
+            onChange={handleBackgroundFillModeChange}
+            hideInactiveLabel={true}
           />
         </div>
-        <DiscretizationRow
-          label={m.discretization()}
-          value={discretizationLabel}
-          onsettings={handleOpenDiscretization}
-        />
-        <PalettePreview
-          label={m.color_palette()}
-          colors={currentPalette}
-          selectedPaletteId={visualization?.classification?.paletteId}
-          inverted={visualization?.classification?.inverted ?? false}
-          oninvert={onInvertPalette}
-          onClassificationChange={handleClassificationChange}
-        />
-      {:else if fillMode === FillMode.CATEGORIES}
-        <div class="field-group">
-          <Dropdown
-            titleText={m.color_according()}
-            items={selectableDataFields}
-            selectedId={selectedCategoryFieldId}
-            on:select={(event) =>
-              handleCategoryFieldSelect(event.detail.selectedId)}
-            type="default"
+
+        {#if fillMode === FillMode.UNIQUE}
+          <SingleColorPreview
+            label={m.color()}
+            color={fillColor}
+            onchange={handleBackgroundFillColorChange}
           />
-        </div>
-        <DiscretizationRow
-          label={m.category_aspect()}
-          value={m.categories_count({ count: 4 })}
-          onsettings={handleOpenDiscretization}
-        />
-        <PalettePreview
-          label={m.color_palette()}
-          colors={qualitativePalette}
-          inverted={visualization?.classification?.inverted ?? false}
-          oninvert={onInvertPalette}
-          onClassificationChange={handleClassificationChange}
-        />
-      {/if}
+        {:else if fillMode === FillMode.CLASSES}
+          <div class="field-group">
+            <FacetsVariablePicker
+              bind:open={backgroundFacetPickerOpen}
+              titleText={m.color_according()}
+              dataFields={dataFields}
+              singleSelectItems={selectableDataFields}
+              selectedFieldId={selectedBackgroundValueFieldId}
+              selectedFieldIds={getBackgroundFacetsSelectedFieldIds(
+                FACET_SLOT.TEXT_BACKGROUND_VALUE
+              )}
+              isCollectionEnabled={isBackgroundFacetsActiveForSlot(
+                FACET_SLOT.TEXT_BACKGROUND_VALUE
+              )}
+              onSelect={handleBackgroundValueFieldSelect}
+              onCollectionChange={(ids) =>
+                handleBackgroundFacetsVariablesChange(
+                  dataFields.find(
+                    (field) => field.id === selectedBackgroundValueFieldId
+                  )?.text ?? '',
+                  FACET_SLOT.TEXT_BACKGROUND_VALUE,
+                  ids
+                )}
+              onToggleCollection={(enabled) =>
+                handleBackgroundFacetsToggle(
+                  dataFields.find(
+                    (field) => field.id === selectedBackgroundValueFieldId
+                  )?.text ?? '',
+                  FACET_SLOT.TEXT_BACKGROUND_VALUE,
+                  enabled
+                )}
+            />
+          </div>
+          <DiscretizationRow
+            label={m.discretization()}
+            value={backgroundDiscretizationLabel}
+            onsettings={openBackgroundDiscretization}
+          />
+          <PalettePreview
+            label={m.color_palette()}
+            colors={backgroundCurrentPalette}
+            selectedPaletteId={backgroundVisualization?.classification
+              ?.paletteId}
+            inverted={backgroundVisualization?.classification?.inverted ??
+              false}
+            paletteType={PALETTE_TYPE.SEQUENTIAL}
+            oninvert={onBackgroundInvertPalette}
+            onClassificationChange={onBackgroundClassificationChange}
+          />
+        {:else if fillMode === FillMode.CATEGORIES}
+          <div class="field-group">
+            <FacetsVariablePicker
+              bind:open={backgroundFacetPickerOpen}
+              titleText={m.color_according()}
+              dataFields={dataFields}
+              singleSelectItems={selectableDataFields}
+              selectedFieldId={selectedBackgroundCategoryFieldId}
+              selectedFieldIds={getBackgroundFacetsSelectedFieldIds(
+                FACET_SLOT.TEXT_BACKGROUND_CATEGORY
+              )}
+              isCollectionEnabled={isBackgroundFacetsActiveForSlot(
+                FACET_SLOT.TEXT_BACKGROUND_CATEGORY
+              )}
+              onSelect={handleBackgroundCategoryFieldSelect}
+              onCollectionChange={(ids) =>
+                handleBackgroundFacetsVariablesChange(
+                  dataFields.find(
+                    (field) => field.id === selectedBackgroundCategoryFieldId
+                  )?.text ?? '',
+                  FACET_SLOT.TEXT_BACKGROUND_CATEGORY,
+                  ids
+                )}
+              onToggleCollection={(enabled) =>
+                handleBackgroundFacetsToggle(
+                  dataFields.find(
+                    (field) => field.id === selectedBackgroundCategoryFieldId
+                  )?.text ?? '',
+                  FACET_SLOT.TEXT_BACKGROUND_CATEGORY,
+                  enabled
+                )}
+            />
+          </div>
+          <DiscretizationRow
+            label={m.category_aspect()}
+            value={m.categories_count({
+              count:
+                backgroundVisualization?.classification?.labels?.length ?? 0
+            })}
+            onsettings={openBackgroundDiscretization}
+          />
+          <PalettePreview
+            label={m.color_palette()}
+            colors={backgroundCategoriesPalette}
+            selectedPaletteId={backgroundVisualization?.classification
+              ?.paletteId}
+            inverted={backgroundVisualization?.classification?.inverted ??
+              false}
+            paletteType={PALETTE_TYPE.QUALITATIVE}
+            categoriesMode={true}
+            categoryLabels={backgroundVisualization?.classification?.labels ??
+              []}
+            oninvert={onBackgroundInvertPalette}
+            onClassificationChange={onBackgroundClassificationChange}
+          />
+        {/if}
 
-      {#if fillMode !== FillMode.NONE}
-        <SliderWithInput
-          label={m.opacity()}
-          min={SLIDER_LIMITS.opacity.min}
-          max={SLIDER_LIMITS.opacity.max}
-          value={fillOpacity}
-          showMinMax
-          inputWidth="128px"
-          onchange={handleFillOpacityChange}
-        />
-      {/if}
+        {#if fillMode !== FillMode.NONE}
+          <SliderWithInput
+            label={m.opacity()}
+            min={SLIDER_LIMITS.opacity.min}
+            max={SLIDER_LIMITS.opacity.max}
+            value={fillOpacity}
+            showMinMax
+            inputWidth="128px"
+            onchange={handleBackgroundFillOpacityChange}
+          />
+        {/if}
 
-      <StrokeSection
-        visualization={visualization}
-        dataFields={dataFields}
-        discretizationLabel={discretizationLabel}
-        classesPalette={currentPalette}
-        categoriesPalette={qualitativePalette}
-        showDashed={false}
-        onStyleChange={onStyleChange}
-        onModesChange={onModesChange}
-        onMappingChange={onMappingChange}
-        onInvertPalette={onInvertPalette}
-        onOpenDiscretization={handleOpenDiscretization}
-        onClassificationChange={handleClassificationChange}
-      />
-
-      {#if filterSectionVisible || filters.length > 0}
-        <VizFilterSection
+        <StrokeSection
+          visualization={backgroundVisualization}
           dataFields={dataFields}
-          filters={filters}
-          onAddFilter={onAddFilter ?? (() => {})}
-          onRemoveFilter={onRemoveFilter ?? (() => {})}
-          onClearFilters={onClearFilters ?? (() => {})}
+          discretizationLabel={backgroundDiscretizationLabel}
+          classesPalette={backgroundCurrentPalette}
+          categoriesPalette={backgroundCategoriesPalette}
+          showDashed={false}
+          onStyleChange={onBackgroundStyleChange}
+          onModesChange={onBackgroundModesChange}
+          onMappingChange={onBackgroundMappingChange}
+          onInvertPalette={onBackgroundInvertPalette}
+          onOpenDiscretization={openBackgroundDiscretization}
+          onClassificationChange={onBackgroundClassificationChange}
+          facetsValueSlotPath={FACET_SLOT.TEXT_BACKGROUND_VALUE}
+          facetsCategorySlotPath={FACET_SLOT.TEXT_BACKGROUND_CATEGORY}
         />
       {/if}
     </div>
   </ExpandableSection>
 
+  {#if filterSectionVisible}
+    <VizFilterPanel
+      title={m.texts_title()}
+      dataFields={dataFields}
+      filters={filters}
+      onAddFilter={onAddFilter ?? (() => {})}
+      onUpdateFilter={onUpdateFilter}
+      onRemoveFilter={onRemoveFilter ?? (() => {})}
+      onClose={() => {
+        filterSectionVisible = false;
+      }}
+    />
+  {/if}
+
   <DiscretizationModal
     bind:open={discretizationModalOpen}
-    visualization={visualization}
-    onchange={handleClassificationChange}
+    visualization={activeDiscretizationVisualization}
+    onchange={handleDiscretizationChange}
+  />
+
+  <TextStylePopover
+    bind:open={showStylePopover}
+    triggerElement={stylePopoverTrigger}
+    visibleSection={activeStyleSection}
+    primary={{
+      color: textColor,
+      opacity: textOpacity,
+      bold,
+      italic,
+      size,
+      align: alignment,
+      halo,
+      haloColor,
+      haloWidth,
+      collisionDetection,
+      dxpMasking,
+      onColorChange: handleTextColorChange,
+      onOpacityChange: handleTextOpacityChange,
+      onBoldChange: handleBoldChange,
+      onItalicChange: handleItalicChange,
+      onSizeChange: handleSizeChange,
+      onAlignmentChange: handleAlignmentChange,
+      onHaloChange: handleHaloToggle,
+      onHaloColorChange: handleHaloColorChange,
+      onHaloWidthChange: handleHaloWidthChange,
+      onCollisionDetectionChange: handleCollisionDetectionChange,
+      onDxpMaskingChange: handleDxpMaskingChange
+    }}
+    secondary={hasSecondaryField
+      ? {
+          color: secondaryColor,
+          opacity: secondaryOpacity,
+          size: secondarySize,
+          align: secondaryAlignment,
+          halo: secondaryHalo,
+          haloColor: secondaryHaloColor,
+          haloWidth: secondaryHaloWidth,
+          collisionDetection: secondaryCollisionDetection,
+          dxpMasking: secondaryDxpMasking,
+          onColorChange: handleSecondaryColorChange,
+          onOpacityChange: handleSecondaryOpacityChange,
+          onSizeChange: handleSecondarySizeChange,
+          onAlignmentChange: handleSecondaryAlignmentChange,
+          onHaloChange: handleSecondaryHaloToggle,
+          onHaloColorChange: handleSecondaryHaloColorChange,
+          onHaloWidthChange: handleSecondaryHaloWidthChange,
+          onCollisionDetectionChange: handleSecondaryCollisionChange,
+          onDxpMaskingChange: handleSecondaryDxpMaskingChange
+        }
+      : undefined}
   />
 </div>
 
@@ -958,26 +1045,33 @@
     font-weight: 400;
   }
 
-  :global(.format-trigger) {
-    width: 64px;
-    height: 64px;
-    border: 1px solid var(--cds-border-subtle-01, #c6c6c6);
-    background: var(--cds-layer-01, #ffffff);
-    color: var(--cds-text-secondary, #6f6f6f);
-    font-size: 1.25rem;
-    line-height: 1;
+  :global(.format-trigger.bx--btn) {
+    width: 40px !important;
+    height: 40px !important;
+    min-height: 40px !important;
+    max-height: 40px !important;
+    padding: 0 !important;
+    border: 1px solid var(--cds-border-subtle-01, #c6c6c6) !important;
+    background: var(--cds-layer-01, #ffffff) !important;
+    color: var(--cds-text-secondary, #6f6f6f) !important;
+    font-size: 0.875rem !important;
+    font-weight: 600 !important;
+    line-height: 1 !important;
     cursor: pointer;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
     transition:
       border-color 0.15s ease,
       color 0.15s ease,
       background-color 0.15s ease;
   }
 
-  :global(.format-trigger:hover:not(:disabled)),
-  :global(.format-trigger.format-trigger--active) {
-    border-color: var(--cds-border-interactive, #0f62fe);
-    color: var(--cds-text-primary, #161616);
-    background: var(--cds-layer-hover-01, #e8e8e8);
+  :global(.format-trigger.bx--btn:hover:not(:disabled)),
+  :global(.format-trigger.format-trigger--active.bx--btn) {
+    border-color: var(--cds-text-primary, #161616) !important;
+    color: var(--cds-text-primary, #161616) !important;
+    background: var(--cds-layer-hover-01, #e8e8e8) !important;
   }
 
   :global(.format-trigger:disabled) {
@@ -985,19 +1079,65 @@
     cursor: not-allowed;
   }
 
-  .format-panel {
+  .missing-data-block {
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-04);
-    padding: var(--cds-spacing-04);
-    border: 1px solid var(--cds-border-subtle-01, #c6c6c6);
-    background: var(--cds-layer-01, #ffffff);
+    padding-top: var(--cds-spacing-04);
+    border-top: 1px solid var(--cds-border-subtle-01, #c6c6c6);
   }
 
-  .text-style-row {
-    display: flex;
-    gap: var(--cds-spacing-03);
+  .missing-data-heading {
+    display: inline-flex;
     align-items: center;
+    gap: var(--cds-spacing-03);
+  }
+
+  .missing-data-title {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--cds-text-primary, #161616);
+  }
+
+  .missing-data-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--cds-spacing-03);
+  }
+
+  .missing-data-toggle-state {
+    font-size: 0.875rem;
+    color: var(--cds-text-primary, #161616);
+    font-weight: 500;
+  }
+
+  .missing-data-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--cds-spacing-04);
+  }
+
+  :global(.text-input-field .bx--text-input) {
+    height: 40px;
+  }
+
+  :global(.text-input-field .bx--text-input__field-wrapper) {
+    background: var(--cds-field-01, #f4f4f4);
+  }
+
+  :global(.texts-panel-shell .field-picker .bx--label) {
+    margin-bottom: 0.5rem;
+  }
+
+  :global(.texts-panel-shell .field-picker .bx--list-box__field) {
+    min-height: 40px;
+    background: var(--cds-field-01, #f4f4f4);
+  }
+
+  @media (max-width: 560px) {
+    .missing-data-fields {
+      grid-template-columns: 1fr;
+    }
   }
 
   .missing-data-block {

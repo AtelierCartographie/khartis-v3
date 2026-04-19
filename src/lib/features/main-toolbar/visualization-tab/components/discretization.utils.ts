@@ -6,16 +6,20 @@ import { ClassificationMethod as CM } from '$lib/features/commons/store/visualiz
 import * as m from '$lib/paraglide/messages.js';
 
 export const DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX = 12;
+
 export const NESTED_MEANS_CLASS_COUNTS = [2, 4, 8, 16] as const;
 
 export function normalizeClassificationMethod(
   method: ClassificationMethod
 ): ClassificationMethod {
-  return (
-    method === 'standard_deviation' ? 'nested_means' : method
-  ) as ClassificationMethod;
+  return method;
 }
 
+/**
+ * Snaps a requested class count to the nearest valid nested-means level.
+ * Nested means is recursive (each pass doubles the cuts) so only powers of 2
+ * are meaningful. Inputs <2 collapse to 2; ties favour the lower power of 2.
+ */
 export function resolveNestedMeansClassCount(
   requestedClassCount: number
 ): number {
@@ -58,7 +62,8 @@ export function resolveComputedClassCount(
   );
 
   if (
-    normalizedMethod === 'head_tail' &&
+    (normalizedMethod === 'head_tail' ||
+      normalizedMethod === 'standard_deviation') &&
     Number.isFinite(actualClassCount) &&
     actualClassCount >= 2
   ) {
@@ -86,7 +91,7 @@ const METHOD_LABELS: Record<ClassificationMethod, () => string> = {
   [CM.JENKS]: m.discretization_method_jenks,
   [CM.QUANTILES]: m.discretization_method_quantile,
   [CM.EQUAL_INTERVAL]: m.discretization_method_equal_interval,
-  [CM.STANDARD_DEVIATION]: m.discretization_method_nested_means,
+  [CM.STANDARD_DEVIATION]: m.discretization_method_stddev,
   [CM.MANUAL]: m.discretization_method_manual,
   [CM.Q6]: m.discretization_method_q6,
   [CM.NESTED_MEANS]: m.discretization_method_nested_means,
@@ -96,9 +101,11 @@ const METHOD_LABELS: Record<ClassificationMethod, () => string> = {
 export function resolveDiscretizationLabel(
   classification: ClassificationConfig | undefined
 ): string {
-  if (!classification) return m.discretization_method_jenks();
+  if (!classification) {
+    return `${m.discretization_method_jenks()}, 5 ${m.discretization_num_classes().toLowerCase()}`;
+  }
 
-  const method = classification.method ?? CM.QUANTILES;
+  const method = classification.method ?? CM.JENKS;
   const numClasses = classification.numClasses ?? classification.classes ?? 5;
   const methodLabel = METHOD_LABELS[method]?.() ?? String(method);
 

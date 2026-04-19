@@ -15,6 +15,20 @@ function filter(
   return { column: 'pop', operator, value, secondaryValue };
 }
 
+function textFilter(
+  operator: FilterOperatorEnum,
+  value?: string | number,
+  secondaryValue?: string | number
+) {
+  return {
+    column: 'description',
+    columnType: 'text',
+    operator,
+    value,
+    secondaryValue
+  };
+}
+
 describe('formatFilterValue', () => {
   it('returns NULL for undefined', () =>
     expect(formatFilterValue(undefined)).toBe('NULL'));
@@ -102,6 +116,30 @@ describe('buildFilterSQL — all 10 operators', () => {
     const sql = buildFilterSQL(tbl, filter(FilterOperatorEnum.NOT_EMPTY));
     expect(sql).toContain('IS NOT NULL');
     expect(sql).toContain("<> ''");
+  });
+
+  it('CONTAINS on text-like columns uses the stripped HTML projection', () => {
+    const sql = buildFilterSQL(
+      tbl,
+      textFilter(FilterOperatorEnum.CONTAINS, 'Tras Street')
+    );
+    expect(sql).toContain('strip_html_text("description"::VARCHAR)');
+    expect(sql).toContain("ILIKE '%' || 'Tras Street' || '%'");
+  });
+
+  it('EQUALS on text-like columns stays textual for numeric-looking values', () => {
+    const sql = buildFilterSQL(
+      tbl,
+      textFilter(FilterOperatorEnum.EQUALS, '42')
+    );
+    expect(sql).toContain(`strip_html_text("description"::VARCHAR) = '42'`);
+  });
+
+  it('EMPTY on text-like columns uses the stripped HTML projection', () => {
+    const sql = buildFilterSQL(tbl, textFilter(FilterOperatorEnum.EMPTY));
+    expect(sql).toContain(
+      `"description" IS NULL OR strip_html_text("description"::VARCHAR) = ''`
+    );
   });
 
   it('GTE without value throws DuckDBError', () => {

@@ -162,10 +162,6 @@ export async function searchInTable(
   const cacheKey = getCacheKey(table, trimmedQuery, column);
   const cached = getFromCache(cacheKey);
   if (cached) {
-    logger.debug('Search cache hit', LogCategory.DUCKDB, {
-      table,
-      query: trimmedQuery
-    });
     return cached;
   }
 

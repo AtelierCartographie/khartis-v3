@@ -1,3 +1,4 @@
+import { GEO_COLUMN_TYPE } from '$lib/features/commons/constants/data.constants';
 import { GeoColumnDetector } from '$lib/features/commons/utils/geo-detector.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
@@ -7,6 +8,12 @@ import type { DatasetResult } from '../types';
 const GEO_DETECTION_SAMPLE_LIMIT = 200;
 const GEO_NAME_HINT =
   /lat|lon|lng|coord|geo|point|location|wkt|iso|code|country|region|dept|commune|province|state|city|name|admin|id/i;
+
+const COORDINATE_GEO_TYPES = new Set<string>([
+  GEO_COLUMN_TYPE.LATITUDE,
+  GEO_COLUMN_TYPE.LONGITUDE,
+  GEO_COLUMN_TYPE.COORDINATES
+]);
 
 async function detectGeoColumnsFromTable(tableName: string, columns: string[]) {
   if (columns.length === 0) {
@@ -37,44 +44,66 @@ async function detectGeoColumnsFromTable(tableName: string, columns: string[]) {
 export async function applyTabularGeoDetection(
   dataset: DatasetResult
 ): Promise<DatasetResult> {
-  if (dataset.geometry) {
-    return dataset;
-  }
+  const isGeoDataset = Boolean(dataset.geometry);
+  const geometryColumnName = dataset.geometry?.columnName;
 
   try {
-    const hintedColumns = dataset.columns
-      .filter(
-        (column) => GEO_NAME_HINT.test(column.name) || column.type === 'text'
-      )
-      .map((column) => column.name);
+    const candidateColumns = dataset.columns.filter((column) => {
+      if (geometryColumnName && column.name === geometryColumnName)
+        return false;
+      return GEO_NAME_HINT.test(column.name) || column.type === 'text';
+    });
+    const fallbackColumns = dataset.columns.filter(
+      (column) => !geometryColumnName || column.name !== geometryColumnName
+    );
     const columnsToCheck =
-      hintedColumns.length > 0
-        ? hintedColumns
-        : dataset.columns.map((column) => column.name);
-    const geoDetection = await detectGeoColumnsFromTable(
+      candidateColumns.length > 0
+        ? candidateColumns.map((column) => column.name)
+        : fallbackColumns.map((column) => column.name);
+    const detection = await detectGeoColumnsFromTable(
       dataset.tableName,
       columnsToCheck
     );
 
-    if (!geoDetection) {
+    if (!detection) {
+      return dataset;
+    }
+
+    const geoDetection = isGeoDataset
+      ? {
+          ...detection,
+          geoColumns: detection.geoColumns.filter(
+            (column) => !COORDINATE_GEO_TYPES.has(column.type as string)
+          )
+        }
+      : detection;
+
+    if (isGeoDataset && geoDetection.geoColumns.length === 0) {
       return dataset;
     }
 
     dataset.geoDetection = geoDetection;
-    dataset.analysis = {
-      columns: dataset.analysis?.columns ?? dataset.columns,
-      hasGeoData:
-        geoDetection.hasGeoColumns ?? dataset.analysis?.hasGeoData ?? false,
-      geoColumns: geoDetection.geoColumns,
-      rowCount: dataset.rowCount,
-      warnings: [
-        ...(dataset.analysis?.warnings ?? []),
+    if (!isGeoDataset) {
+      dataset.analysis = {
+        columns: dataset.analysis?.columns ?? dataset.columns,
+        hasGeoData:
+          geoDetection.hasGeoColumns ?? dataset.analysis?.hasGeoData ?? false,
+        geoColumns: geoDetection.geoColumns,
+        rowCount: dataset.rowCount,
+        warnings: [
+          ...(dataset.analysis?.warnings ?? []),
+          ...geoDetection.warnings
+        ]
+      };
+    } else if (dataset.analysis) {
+      dataset.analysis.warnings = [
+        ...(dataset.analysis.warnings ?? []),
         ...geoDetection.warnings
-      ]
-    };
+      ];
+    }
   } catch (error) {
     logger.warn(
-      'Failed to compute geo detection for tabular dataset',
+      'Failed to compute geo detection for dataset',
       LogCategory.DATA,
       { tableName: dataset.tableName, error }
     );

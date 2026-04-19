@@ -12,7 +12,10 @@ import {
   type ProcessingCallbacks
 } from '../../create-project/services/file-processor.service';
 import { CreateProjectValidationService } from '../../create-project/services/validation.service';
-import { STORAGE_LIMITS } from '../configs/validation.config';
+import {
+  getMaxFileSizeForType,
+  STORAGE_LIMITS
+} from '../configs/validation.config';
 import {
   createUploadedFile,
   extractDataFromPaste,
@@ -73,6 +76,24 @@ export const createProjectState = $state<CreateProjectState>({
   ...DEFAULT_STATE
 });
 
+function hasDuplicateFileName(fileName: string): boolean {
+  const uploadingFiles = $state.snapshot(
+    createProjectState.newProject.uploadedFiles
+  );
+  const existsInSession = uploadingFiles.some(
+    (file) => file.name === fileName && file.status !== FileStatus.ERROR
+  );
+
+  if (existsInSession) {
+    return true;
+  }
+
+  const projectFiles = $state.snapshot(
+    projectStore.currentProject?.data?.sourceFiles ?? []
+  );
+  return projectFiles.some((file) => file.name === fileName);
+}
+
 export const createProjectActions = {
   selectTab(tab: ProjectTab): void {
     createProjectState.selectedTab = tab;
@@ -83,15 +104,7 @@ export const createProjectActions = {
   },
 
   isFileDuplicate(fileName: string): boolean {
-    const uploadingFiles = createProjectState.newProject.uploadedFiles;
-    const existsInSession = uploadingFiles.some(
-      (f) => f.name === fileName && f.status !== FileStatus.ERROR
-    );
-
-    if (existsInSession) return true;
-
-    const projectFiles = projectStore.currentProject?.data?.sourceFiles ?? [];
-    return projectFiles.some((f) => f.name === fileName);
+    return hasDuplicateFileName(fileName);
   },
 
   findIncompleteShapefile(baseName: string): UploadedFile | undefined {
@@ -248,7 +261,7 @@ export const createProjectActions = {
         const mainFileName =
           groupFiles.length === 1 ? groupFiles[0].name : baseName + '.shp';
 
-        if (this.isFileDuplicate(mainFileName)) {
+        if (hasDuplicateFileName(mainFileName)) {
           duplicates.push(mainFileName);
         } else {
           toProcess.set(baseName, groupFiles);
@@ -357,7 +370,7 @@ export const createProjectActions = {
     file: File,
     sourceType: DataSourceType = DataSourceType.FILE_UPLOAD
   ): Promise<void> {
-    if (this.isFileDuplicate(file.name)) {
+    if (hasDuplicateFileName(file.name)) {
       this.setNewProjectWarning(
         m.warning_files_duplicate_message({ files: file.name })
       );
@@ -391,11 +404,13 @@ export const createProjectActions = {
     sourceType: DataSourceType = DataSourceType.FILE_UPLOAD
   ): Promise<void> {
     const totalSize = files.reduce((sum, f) => sum + f.size, 0);
-    if (totalSize > STORAGE_LIMITS.maxFileSize) {
+    const maxShapefileSize = getMaxFileSizeForType(FileType.SHAPEFILE);
+
+    if (totalSize > maxShapefileSize) {
       this.setNewProjectError(
         m.error_shapefile_too_large_message({
           size: formatFileSize(totalSize),
-          max: formatFileSize(STORAGE_LIMITS.maxFileSize)
+          max: formatFileSize(maxShapefileSize)
         })
       );
       return;
@@ -490,7 +505,7 @@ export const createProjectActions = {
     let fileName = `${baseName}-${timestamp}.${extension}`;
 
     let counter = 1;
-    while (this.isFileDuplicate(fileName)) {
+    while (hasDuplicateFileName(fileName)) {
       fileName = `${baseName}-${timestamp}-${counter}.${extension}`;
       counter++;
     }
@@ -516,6 +531,7 @@ export const createProjectActions = {
         fileToRemove.relatedFilesData = undefined;
       }
       createProjectState.newProject.uploadedFiles.splice(index, 1);
+      this.recomputeGlobalValidationErrors();
     }
   },
 
@@ -738,13 +754,33 @@ export const createProjectActions = {
     }
   },
 
-  /**
-   * Clear only the upload UI state without touching DuckDB tables or project data.
-   * Used when closing the add-data modal after successful import.
-   */
   clearUploadState(): void {
     createProjectState.newProject.uploadedFiles = [];
     createProjectState.newProject.validationErrors = [];
+  },
+
+  recomputeGlobalValidationErrors(): void {
+    const uploadedFiles = createProjectState.newProject.uploadedFiles;
+    const totalSize = uploadedFiles.reduce((sum, file) => sum + file.size, 0);
+    const validationErrors: string[] = [];
+
+    if (uploadedFiles.length > STORAGE_LIMITS.maxFileCount) {
+      validationErrors.push(
+        m.validation_file_count_exceeded({
+          max: String(STORAGE_LIMITS.maxFileCount)
+        })
+      );
+    }
+
+    if (totalSize > STORAGE_LIMITS.maxTotalFileSize) {
+      validationErrors.push(
+        m.validation_total_size_exceeded({
+          size: String(STORAGE_LIMITS.maxTotalFileSize / (1024 * 1024))
+        })
+      );
+    }
+
+    createProjectState.newProject.validationErrors = validationErrors;
   },
 
   getFilesByStatus(status: UploadedFile['status']): UploadedFile[] {
@@ -819,21 +855,32 @@ export const createProjectActions = {
     createProjectState.newProject.onlineFileUrl = '';
     createProjectState.newProject.projectName = '';
     createProjectState.newProject.isLoading = false;
+    createProjectState.newProject.isProcessingFiles = false;
+    createProjectState.newProject.processingFileCount = 0;
     createProjectState.newProject.error = undefined;
+    createProjectState.newProject.warning = undefined;
+    createProjectState.newProject.validationErrors = [];
   },
 
   resetOpenProject(): void {
-    Object.assign(createProjectState.openProject, {
+    const savedProjects = createProjectState.openProject.savedProjects;
+    createProjectState.openProject = {
       ...DEFAULT_STATE.openProject,
-      savedProjects: createProjectState.openProject.savedProjects
-    });
+      savedProjects,
+      selectedProjectId: undefined,
+      importedFile: undefined,
+      error: undefined
+    };
   },
 
   resetTryExample(): void {
-    Object.assign(createProjectState.tryExample, {
+    const examples = createProjectState.tryExample.examples;
+    createProjectState.tryExample = {
       ...DEFAULT_STATE.tryExample,
-      examples: createProjectState.tryExample.examples
-    });
+      examples,
+      selectedExampleId: undefined,
+      error: undefined
+    };
   },
 
   resetAllTabs(): void {

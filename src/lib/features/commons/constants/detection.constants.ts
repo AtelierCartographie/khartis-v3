@@ -1,10 +1,3 @@
-/**
- * Detection confidence thresholds
- *
- * Thresholds used for geo-detection, data validation, and fuzzy matching.
- * These values determine minimum confidence levels for automated decisions.
- */
-
 export const GEO_DETECTION = {
   MIN_CONFIDENCE: 0.5,
   HIGH_CONFIDENCE: 0.8,

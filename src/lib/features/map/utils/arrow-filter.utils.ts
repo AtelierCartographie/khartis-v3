@@ -95,7 +95,6 @@ export function filterArrowTableByYear(
 
   const { column, value } = yearFilter;
 
-  // Check multi-entry cache: same table + same filter params → cached result
   const cacheKey = `${column}:${value}`;
   const tableCache = yearFilterCache.get(table);
   if (tableCache) {
@@ -327,7 +326,6 @@ export function filterArrowTableByDataFilters(
     : filters;
   if (!applicableFilters.length) return table;
 
-  // Check multi-entry cache
   const cacheKey = buildFilterCacheKey(applicableFilters);
   const tableCache = dataFilterCache.get(table);
   if (tableCache) {
@@ -465,7 +463,6 @@ export function filterArrowTableByTableFilters(
   );
   if (compatible.length === 0) return table;
 
-  // Check multi-entry cache
   const cacheKey = buildFilterCacheKey(compatible);
   const tblCache = tableFilterCache.get(table);
   if (tblCache) {

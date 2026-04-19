@@ -1,5 +1,6 @@
 import { deepClone } from '$lib/features/commons/utils/clone.utils';
 import { sanitizeProjectName } from '$lib/features/commons/utils/sanitize.utils';
+import { PROJECT_CONST } from '../constants';
 import type { KhartisProject } from '../types';
 
 export function duplicateProject(
@@ -15,6 +16,7 @@ export function duplicateProject(
     id: crypto.randomUUID(),
     manifest: {
       ...clone.manifest,
+      version: PROJECT_CONST.APP_VERSION,
       name: sanitizedName,
       createdAt: now,
       updatedAt: now

@@ -6,7 +6,6 @@
   import * as m from '$lib/paraglide/messages';
   import { Close } from 'carbon-icons-svelte';
   import { onMount, type Snippet } from 'svelte';
-  import { fly } from 'svelte/transition';
   import { dataToolsStore } from '../data-tools.store.svelte';
 
   interface Props {
@@ -80,12 +79,7 @@
   });
 </script>
 
-<aside
-  class="data-tool-panel"
-  style:right={panelRight}
-  in:fly={{ x: 20, duration: 200 }}
-  out:fly={{ x: 20, duration: 150 }}
->
+<aside class="data-tool-panel" style:right={panelRight}>
   <header class="panel-header">
     <h3>{title}</h3>
     <IconButton

@@ -120,10 +120,6 @@ export function useColumnOperations(
     }
 
     datasetsStore.toggleColumnHidden(datasetId, columnName);
-    logger.debug('Column visibility toggled', LogCategory.UI, {
-      datasetId,
-      columnName
-    });
   }
 
   async function handleDelete(columnName: string): Promise<void> {

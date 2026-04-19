@@ -1,4 +1,3 @@
-/** Badge type for variable/column indicators */
 export type VariableBadgeType =
   | 'geo'
   | 'geo-ref'
@@ -8,21 +7,11 @@ export type VariableBadgeType =
   | 'date';
 
 export interface VariableBadgeStyle {
-  /** Primary text/icon color */
   color: string;
-  /** Tag background color */
   bgColor: string;
-  /** Tag border color */
   borderColor: string;
 }
 
-/**
- * Badge styles matching Carbon tag color tokens from the Figma design system.
- * - geo / geo-ref: Tag/Teal tokens
- * - numeric: Tag/Purple tokens
- * - string: Tag/Magenta tokens
- * - date: Tag/Blue tokens
- */
 export const VARIABLE_BADGE_STYLES: Record<
   VariableBadgeType,
   VariableBadgeStyle

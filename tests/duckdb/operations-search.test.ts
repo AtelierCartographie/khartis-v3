@@ -37,4 +37,44 @@ describe('searchInTable', () => {
     const result = await searchInTable(ctx(), 'mytable', '');
     expect(result.isSampled).toBe(false);
   });
+
+  it('projects HTML-like text in generated DuckDB search SQL', async () => {
+    executeQueryMock
+      .mockResolvedValueOnce([
+        {
+          normalized_term: 'tras street',
+          row_count: 1,
+          col_count: 1
+        }
+      ])
+      .mockResolvedValueOnce([{ column_name: 'Description' }])
+      .mockResolvedValueOnce([
+        {
+          __id: 1,
+          column_name: 'Description',
+          column_value: 'The Pit Tras Street',
+          score: 1
+        }
+      ])
+      .mockResolvedValueOnce([]);
+
+    const result = await searchInTable(ctx(), 'mytable', 'Tras Street');
+
+    expect(result.results).toEqual([
+      {
+        rowId: 1,
+        columnName: 'Description',
+        value: 'The Pit Tras Street',
+        score: 1
+      }
+    ]);
+
+    const exactSearchSql = executeQueryMock.mock.calls[2]?.[1];
+    expect(exactSearchSql).toContain(
+      'strip_html_text("Description"::VARCHAR) AS column_value'
+    );
+    expect(exactSearchSql).toContain(
+      'length(trim(strip_html_text("Description"::VARCHAR))) > 0'
+    );
+  });
 });
