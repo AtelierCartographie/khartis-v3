@@ -16,7 +16,11 @@
     geoIndicationsActions,
     geoIndicationsState
   } from './geo-indications.store.svelte';
-  import { getNumericEventValue, type ColorPickerValidateEvent } from './utils';
+  import {
+    getNumericEventValue,
+    INSET_MAP_SIZE_LIMITS,
+    type ColorPickerValidateEvent
+  } from './utils';
 
   const store = geoIndicationsActions;
   const geoState = $derived(geoIndicationsState);
@@ -81,8 +85,8 @@
       <Column>
         <Slider
           labelText={m.geo_inset_map_size()}
-          min={20}
-          max={1600}
+          min={INSET_MAP_SIZE_LIMITS[geoState.insetMap.type].min}
+          max={INSET_MAP_SIZE_LIMITS[geoState.insetMap.type].max}
           step={1}
           value={geoState.insetMap.size}
           on:input={(e) =>
