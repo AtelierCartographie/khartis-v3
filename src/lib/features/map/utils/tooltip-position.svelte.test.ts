@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { resolveTooltipViewportPosition } from './tooltip-position';
 
 describe('resolveTooltipViewportPosition', () => {
-  it('positions the tooltip above the viewer when enough space is available', () => {
+  it('anchors the tooltip to the viewer right edge above the viewer when enough space is available', () => {
     const position = resolveTooltipViewportPosition({
       viewerRect: {
         left: 120,
@@ -23,12 +23,12 @@ describe('resolveTooltipViewportPosition', () => {
     });
 
     expect(position).toEqual({
-      left: 128,
+      left: 472,
       top: 88
     });
   });
 
-  it('repositions the tooltip inside the viewer when there is no space above it', () => {
+  it('keeps the tooltip aligned to the viewer right edge and clamps it to the viewport top when needed', () => {
     const position = resolveTooltipViewportPosition({
       viewerRect: {
         left: 120,
@@ -49,7 +49,34 @@ describe('resolveTooltipViewportPosition', () => {
     });
 
     expect(position).toEqual({
-      left: 128,
+      left: 472,
+      top: 8
+    });
+  });
+
+  it('anchors the interactive inspector inside the viewer top edge to stay below the navbar', () => {
+    const position = resolveTooltipViewportPosition({
+      viewerRect: {
+        left: 120,
+        top: 64,
+        width: 600,
+        height: 400
+      },
+      tooltipSize: {
+        width: 240,
+        height: 272
+      },
+      viewportSize: {
+        width: 1440,
+        height: 900
+      },
+      padding: 8,
+      gap: 12,
+      placement: 'inside-viewer-top'
+    });
+
+    expect(position).toEqual({
+      left: 472,
       top: 72
     });
   });
