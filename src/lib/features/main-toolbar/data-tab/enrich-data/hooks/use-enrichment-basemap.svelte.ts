@@ -27,7 +27,9 @@ import {
   loadBasemapFromUrl,
   processBasemapImport
 } from '$lib/features/map/utils/basemap-import.utils';
+import { mapLoadingStore } from '$lib/features/map/stores/map-loading.store.svelte';
 import * as m from '$lib/paraglide/messages';
+import { tick } from 'svelte';
 import { shouldAutoSelectSuggestedBasemap } from '../../services/basemap-auto-selection';
 import {
   PERSISTED_BASEMAP_TYPE,
@@ -36,6 +38,7 @@ import {
   resolveBasemapSource,
   type PersistedProjectBasemap
 } from '../../services/persisted-basemap';
+import { resolveDatasetIdForOrchestrator } from '../../services/dataset-resolution';
 import { resolveNextBasemapSelectionId } from '../../services/basemap-selection';
 
 export interface BasemapSuggestionItem {
@@ -48,6 +51,36 @@ const COORDINATE_GEO_TYPES = new Set<string>([
   GEO_COLUMN_TYPE.LONGITUDE,
   GEO_COLUMN_TYPE.COORDINATES
 ]);
+const DATASET_READY_RETRY_DELAY_MS = 200;
+const DATASET_READY_MAX_RETRIES = 15;
+
+async function waitForDatasetAvailability(
+  datasetId: string,
+  isCancelled: () => boolean
+): Promise<boolean> {
+  for (let attempt = 0; attempt <= DATASET_READY_MAX_RETRIES; attempt++) {
+    if (isCancelled()) {
+      return false;
+    }
+
+    const dataset =
+      duckDBOrchestrator.getDataset(datasetId) ||
+      duckDBOrchestrator.getDatasetBySourceFile(datasetId);
+    if (dataset) {
+      return true;
+    }
+
+    if (attempt === DATASET_READY_MAX_RETRIES) {
+      return false;
+    }
+
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, DATASET_READY_RETRY_DELAY_MS);
+    });
+  }
+
+  return false;
+}
 
 export function pickAutoLinkedGeoColumn(
   dataset: DatasetResult
@@ -107,6 +140,7 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
   let lastSelectedBasemapId = $state<string | undefined>(undefined);
   let lastSelectedBasemapSource = $state<BasemapSource | undefined>(undefined);
   let previousDatasetId = $state<string | undefined>(undefined);
+  let suggestionResolutionRunId = 0;
 
   const basemapTabIndex = $derived(dataTabState.enrichData.basemapTabIndex);
   const runtimePersistedBasemap = $derived.by(() =>
@@ -129,6 +163,33 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
       osmBasemapStore.isActive ||
       basemapStyleStore.referenceBasemapId !== null
   );
+
+  function setPreviewHold(
+    value: boolean,
+    runId: number | undefined = undefined
+  ): void {
+    if (runId !== undefined && runId !== suggestionResolutionRunId) {
+      return;
+    }
+
+    if (mapLoadingStore.isHoldingPreviewForSuggestedBasemap === value) {
+      return;
+    }
+
+    mapLoadingStore.setHoldingPreviewForSuggestedBasemap(value);
+  }
+
+  function shouldHoldPreviewWhileResolvingSuggestions(
+    dataset: DatasetResult | null | undefined
+  ): boolean {
+    return (
+      Boolean(dataset?.geometry) &&
+      !runtimePersistedBasemap?.id &&
+      !selectedBasemapId &&
+      !osmBasemapStore.isActive &&
+      basemapStyleStore.referenceBasemapId === null
+    );
+  }
 
   function clearSelectedBasemap(): void {
     selectedBasemapId = undefined;
@@ -287,10 +348,14 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
   }
 
   $effect(() => {
-    const datasetId = datasetsStore.selectedDataset?.id;
+    const selectedDataset = datasetsStore.selectedDataset;
+    const datasetId = selectedDataset?.id;
     if (datasetId !== previousDatasetId) {
       previousDatasetId = datasetId;
       hasDismissedSuggestedBasemap = false;
+      setPreviewHold(
+        shouldHoldPreviewWhileResolvingSuggestions(selectedDataset)
+      );
     }
   });
 
@@ -351,10 +416,16 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
     void linkedVariableName;
     void basemapCount;
 
+    const resolutionRunId = ++suggestionResolutionRunId;
     let cancelled = false;
 
     async function refreshSuggestions() {
       const selectedDataset = datasetsStore.selectedDataset;
+      const shouldHoldPreview =
+        shouldHoldPreviewWhileResolvingSuggestions(selectedDataset);
+
+      setPreviewHold(shouldHoldPreview, resolutionRunId);
+
       if (!selectedDataset) {
         if (!cancelled) {
           suggestedBasemaps = [];
@@ -369,26 +440,33 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
       const processedDataset = normalizeToProcessedDataset(selectedDataset);
       const geoColumnName = dataTabState.geolocation.linkedVariableName;
       const datasetId =
-        selectedDataset.id ?? selectedDataset.sourceFileId ?? null;
+        resolveDatasetIdForOrchestrator(selectedDataset) ?? null;
       let suggestions: BasemapSuggestion[] = [];
 
       if (datasetId && geoColumnName) {
-        try {
-          const synthesis = await duckDBOrchestrator.computeJoinSynthesis(
-            datasetId,
-            geoColumnName
-          );
-          suggestions = rankBasemapsByJoinSynthesis(
-            basemapCatalogService.basemaps,
-            synthesis,
-            3
-          );
-        } catch (error) {
-          logger.warn(
-            'Enrichment basemap suggestions fell back to heuristics',
-            LogCategory.MAP,
-            error
-          );
+        const datasetReady = await waitForDatasetAvailability(
+          datasetId,
+          () => cancelled
+        );
+
+        if (datasetReady) {
+          try {
+            const synthesis = await duckDBOrchestrator.computeJoinSynthesis(
+              datasetId,
+              geoColumnName
+            );
+            suggestions = rankBasemapsByJoinSynthesis(
+              basemapCatalogService.basemaps,
+              synthesis,
+              3
+            );
+          } catch (error) {
+            logger.warn(
+              'Enrichment basemap suggestions fell back to heuristics',
+              LogCategory.MAP,
+              error
+            );
+          }
         }
       }
 
@@ -417,6 +495,14 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
 
       suggestedBasemaps = mappedSuggestions;
 
+      if (shouldHoldPreview) {
+        await tick();
+      }
+
+      if (cancelled || resolutionRunId !== suggestionResolutionRunId) {
+        return;
+      }
+
       if (
         shouldAutoSelectSuggestedBasemap({
           hasDismissedSuggestedBasemap,
@@ -435,13 +521,27 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
       }
     }
 
-    void refreshSuggestions().catch(() => {
-      if (cancelled) return;
-      suggestedBasemaps = [];
-    });
+    void refreshSuggestions()
+      .catch(() => {
+        if (cancelled) return;
+        suggestedBasemaps = [];
+      })
+      .finally(() => {
+        if (cancelled) return;
+        if (
+          shouldHoldPreviewWhileResolvingSuggestions(
+            datasetsStore.selectedDataset
+          ) &&
+          basemapStyleStore.referenceBasemapId !== null
+        ) {
+          return;
+        }
+        setPreviewHold(false, resolutionRunId);
+      });
 
     return () => {
       cancelled = true;
+      setPreviewHold(false, resolutionRunId);
     };
   });
 
