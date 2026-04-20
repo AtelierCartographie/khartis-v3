@@ -76,6 +76,8 @@
     type PointSizeLegendScale
   } from '../utils/legend.utils';
 
+  let { hidden = false }: { hidden?: boolean } = $props();
+
   function getPatternOverlayColor(fillColor: string | undefined): string {
     if (!fillColor?.startsWith('#') || fillColor.length !== 7) {
       return '#000000';
@@ -386,9 +388,6 @@
   const textHex = $derived(
     hslToHex(textColor.hue, textColor.saturation, textColor.lightness)
   );
-  const isLegendStepVisible = $derived(
-    globalState.selectedStep === ToolbarStep.Styling
-  );
   const isLegendActive = $derived(
     globalState.selectedStep === ToolbarStep.Styling &&
       globalState.selectedTool === StylingTools.Legend
@@ -532,8 +531,8 @@
   });
 </script>
 
-{#if legendState.visible && visibleItems.length > 0 && isLegendStepVisible}
-  <div class="legend-overlay" bind:this={overlayElement}>
+{#if legendState.visible && visibleItems.length > 0}
+  <div class="legend-overlay" class:hidden={hidden} bind:this={overlayElement}>
     <div
       bind:this={legendElement}
       class="legend-container {positionClass}"
@@ -665,6 +664,18 @@
                     class="legend-proportional-symbol"
                     style={getPointLegendSymbolStyle(pointSizeScale, step.size)}
                   ></span>
+                  {#if pointSizeScale.secondary}
+                    <span
+                      class="legend-proportional-symbol legend-proportional-symbol-b"
+                      style={getPointLegendSymbolStyle(
+                        {
+                          ...pointSizeScale,
+                          fillColor: pointSizeScale.secondary.fillColor
+                        },
+                        step.size
+                      )}
+                    ></span>
+                  {/if}
                   <span class="legend-scale-label">
                     {getLegendStepLabel(
                       step,
@@ -748,6 +759,17 @@
     height: 100%;
     pointer-events: none;
     z-index: var(--z-content);
+  }
+
+  .legend-overlay.hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  :global(.is-exporting-map) .legend-overlay.hidden {
+    opacity: 1;
+    visibility: visible;
   }
 
   .legend-container {
