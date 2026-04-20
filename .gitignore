@@ -128,3 +128,4 @@ tmp/
 *-TRACKING-TESTS.md
 .agent-plans/
 .gitnexus
+.codex-artifacts/
