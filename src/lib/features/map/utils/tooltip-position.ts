@@ -15,12 +15,15 @@ export interface TooltipViewportSize {
   height: number;
 }
 
+export type TooltipPlacement = 'above-viewer' | 'inside-viewer-top';
+
 export interface ResolveTooltipViewportPositionParams {
   viewerRect?: TooltipViewerRect | null;
   tooltipSize: TooltipSize;
   viewportSize: TooltipViewportSize;
   padding: number;
   gap: number;
+  placement?: TooltipPlacement;
 }
 
 export interface TooltipViewportPosition {
@@ -41,19 +44,25 @@ export function resolveTooltipViewportPosition({
   tooltipSize,
   viewportSize,
   padding,
-  gap
+  gap,
+  placement = 'above-viewer'
 }: ResolveTooltipViewportPositionParams): TooltipViewportPosition {
-  const preferredLeft = (viewerRect?.left ?? 0) + padding;
+  const preferredLeft =
+    (viewerRect ? viewerRect.left + viewerRect.width : viewportSize.width) -
+    padding -
+    tooltipSize.width;
   const maxLeft = viewportSize.width - padding - tooltipSize.width;
   const left = clamp(preferredLeft, padding, maxLeft);
 
-  const topAboveViewer =
-    (viewerRect?.top ?? padding) - tooltipSize.height - gap;
+  const viewerTop = viewerRect?.top ?? padding;
+  const topAboveViewer = viewerTop - tooltipSize.height - gap;
+  const topInsideViewer = viewerTop + padding;
   const maxTop = viewportSize.height - padding - tooltipSize.height;
-  const top =
-    topAboveViewer >= padding
-      ? topAboveViewer
-      : clamp((viewerRect?.top ?? 0) + padding, padding, maxTop);
+  const top = clamp(
+    placement === 'inside-viewer-top' ? topInsideViewer : topAboveViewer,
+    placement === 'inside-viewer-top' ? topInsideViewer : padding,
+    maxTop
+  );
 
   return { left, top };
 }
