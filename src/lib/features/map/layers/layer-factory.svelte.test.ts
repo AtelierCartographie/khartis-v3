@@ -1,4 +1,4 @@
-import { GeoJsonLayer } from '@deck.gl/layers';
+import { GeoJsonLayer, ScatterplotLayer } from '@deck.gl/layers';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { Feature, FeatureCollection, Polygon } from 'geojson';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -20,7 +20,10 @@ const {
   createCompatibleSolidPolygonLayerPropsMock,
   createPathLayerPropsMock,
   createPolygonFillColorAttributeMock,
+  createScatterplotLayerPropsMock,
   parsePathsMock,
+  parsePointDataMock,
+  parsePointDataWithProjectionMock,
   parseSolidPolygonsMock,
   pathColorAttrMock,
   projectGeoJSONMock
@@ -44,7 +47,10 @@ const {
     createCompatibleSolidPolygonLayerPropsMock: vi.fn(),
     createPathLayerPropsMock: vi.fn(),
     createPolygonFillColorAttributeMock: vi.fn(),
+    createScatterplotLayerPropsMock: vi.fn(),
     parsePathsMock: vi.fn(),
+    parsePointDataMock: vi.fn(),
+    parsePointDataWithProjectionMock: vi.fn(),
     parseSolidPolygonsMock: vi.fn(),
     pathColorAttrMock: vi.fn(),
     projectGeoJSONMock: vi.fn()
@@ -59,7 +65,8 @@ vi.mock('geoarrow-deck-stream', async () => {
   return {
     ...actual,
     createPathLayerProps: createPathLayerPropsMock,
-    createPolygonFillColorAttribute: createPolygonFillColorAttributeMock
+    createPolygonFillColorAttribute: createPolygonFillColorAttributeMock,
+    createScatterplotLayerProps: createScatterplotLayerPropsMock
   };
 });
 
@@ -80,6 +87,8 @@ vi.mock('../utils/geoarrow-stream-bridge', async () => {
   return {
     ...actual,
     parsePaths: parsePathsMock,
+    parsePointData: parsePointDataMock,
+    parsePointDataWithProjection: parsePointDataWithProjectionMock,
     parseSolidPolygons: parseSolidPolygonsMock,
     pathColorAttr: pathColorAttrMock,
     projectGeoJSON: projectGeoJSONMock,
@@ -231,6 +240,17 @@ function createGeometryInfo(): GeometryInfo {
   };
 }
 
+function createPointGeometryInfo(): GeometryInfo {
+  return {
+    type: 'Point',
+    encoding: 'geoarrow.point',
+    geoColumn: 'geometry',
+    isNativeGeoArrow: true,
+    isWkbEncoded: false,
+    isGeoJsonEncoded: false
+  };
+}
+
 function getPatternLayer(
   layers: ReturnType<typeof createPolygonLayers>
 ): GeoJsonLayer | undefined {
@@ -262,6 +282,10 @@ beforeEach(() => {
       attributes: {}
     }
   }));
+  createScatterplotLayerPropsMock.mockReturnValue({
+    data: [{}],
+    getPosition: () => [0, 0]
+  });
   createPolygonFillColorAttributeMock.mockImplementation(
     (
       polyData: { featureIds?: Uint32Array },
@@ -275,6 +299,8 @@ beforeEach(() => {
     value: new Uint8ClampedArray([0, 0, 0, 255]),
     size: 4
   });
+  parsePointDataMock.mockReturnValue({});
+  parsePointDataWithProjectionMock.mockReturnValue({});
 });
 
 describe('resolveSplitMappingFeatureIdColumn', () => {
@@ -416,5 +442,33 @@ describe('createPolygonLayers', () => {
     expect(fillLayer?.props.updateTriggers?.getFillColor).toEqual(
       expect.arrayContaining(['#ff00ff', true])
     );
+  });
+
+  it('renders density from the dedicated density table without falling back to polygon fill', () => {
+    const visualization = createVisualization(FillMode.DENSITY);
+    visualization.density = {
+      valueColumn: 'value',
+      ratio: 250
+    };
+
+    const layers = createPolygonLayers(
+      createTableWithFields([]),
+      createGeometryInfo(),
+      {
+        ...createContext(visualization),
+        customProjection: undefined,
+        densityTable: createTableWithFields([]),
+        densityGeometryInfo: createPointGeometryInfo()
+      }
+    );
+
+    expect(
+      layers.some(
+        (layer) =>
+          layer instanceof ScatterplotLayer &&
+          String(layer.props.id).includes('-density')
+      )
+    ).toBe(true);
+    expect(arrowTableToGeoJSONMock).not.toHaveBeenCalled();
   });
 });

@@ -464,8 +464,9 @@ function createDoubleProportionalPointLayers(
     return [];
   }
 
-  const pointStrokeColor =
-    typeof pointConfig.strokeColor === 'string'
+  const pointStrokeColor = Array.isArray(pointConfig.strokeColor)
+    ? hexToRgb(pointConfig.strokeColor[0] ?? '#000000')
+    : typeof pointConfig.strokeColor === 'string'
       ? hexToRgb(pointConfig.strokeColor)
       : strokeColor;
   const pointStrokeWidth = pointConfig.strokeWidth ?? strokeWidth;
@@ -489,20 +490,35 @@ function createDoubleProportionalPointLayers(
   const missingPointShape = resolveMissingPointShape(
     pointConfig.missingData?.shape
   );
+  const commonScale = pointConfig.commonScale !== false;
+  const positionMode = pointConfig.positionMode ?? 'overlay';
+  const breakValueA = pointConfig.breakValueA ?? null;
+  const breakValueB = pointConfig.breakValueB ?? null;
   const hlVersion = ctx.highlightVersion ?? 0;
+  const primaryStats = pointStatistics;
+  const secondaryStats = pointSecondaryStatistics;
+  const sharedMin = commonScale
+    ? Math.min(primaryStats.min, secondaryStats.min)
+    : primaryStats.min;
+  const sharedMax = commonScale
+    ? Math.max(primaryStats.max, secondaryStats.max)
+    : primaryStats.max;
+  const primaryScaleMin = commonScale ? sharedMin : primaryStats.min;
+  const primaryScaleMax = commonScale ? sharedMax : primaryStats.max;
+  const secondaryScaleMin = commonScale ? sharedMin : secondaryStats.min;
+  const secondaryScaleMax = commonScale ? sharedMax : secondaryStats.max;
   const primaryRadiusAccessor = createProportionalSizeAccessor(
     pointSizeColumn,
-    pointStatistics.min,
-    pointStatistics.max,
+    primaryScaleMin,
+    primaryScaleMax,
     minPointRadius,
     maxPointRadius,
     pointConfig.sizeScale
   );
-  const secondaryStats = pointSecondaryStatistics;
   const secondaryRadiusAccessor = createProportionalSizeAccessor(
     pointValueColumn,
-    secondaryStats.min,
-    secondaryStats.max,
+    secondaryScaleMin,
+    secondaryScaleMax,
     minPointRadius,
     maxPointRadius,
     pointConfig.sizeScale
@@ -519,7 +535,12 @@ function createDoubleProportionalPointLayers(
     };
 
   const createFillAccessor =
-    (columnName: string, baseColor: RGBColor) =>
+    (
+      columnName: string,
+      baseColor: RGBColor,
+      alternateColor: RGBColor,
+      breakValue: number | null
+    ) =>
     (row: DeckDataRow): [number, number, number, number] => {
       const rowOpacity = resolveHighlightedOpacityForRow(
         row,
@@ -533,7 +554,21 @@ function createDoubleProportionalPointLayers(
           : [0, 0, 0, 0];
       }
 
-      return toMutableRgba(withOpacity(baseColor, rowOpacity));
+      const rawValue = row[columnName];
+      const numericValue =
+        typeof rawValue === 'number'
+          ? rawValue
+          : typeof rawValue === 'string'
+            ? Number(rawValue)
+            : Number.NaN;
+      const color =
+        breakValue !== null &&
+        Number.isFinite(numericValue) &&
+        numericValue < breakValue
+          ? alternateColor
+          : baseColor;
+
+      return toMutableRgba(withOpacity(color, rowOpacity));
     };
 
   const createLineAccessor =
@@ -557,11 +592,21 @@ function createDoubleProportionalPointLayers(
 
   const primaryFillByFeatureId = rowAccessor(
     jsTable,
-    createFillAccessor(pointSizeColumn, fillColor)
+    createFillAccessor(
+      pointSizeColumn,
+      fillColor,
+      secondaryFillColor,
+      breakValueA
+    )
   );
   const secondaryFillByFeatureId = rowAccessor(
     jsTable,
-    createFillAccessor(pointValueColumn, secondaryFillColor)
+    createFillAccessor(
+      pointValueColumn,
+      secondaryFillColor,
+      fillColor,
+      breakValueB
+    )
   );
   const primaryLineByFeatureId = rowAccessor(
     jsTable,
@@ -585,14 +630,43 @@ function createDoubleProportionalPointLayers(
   const missingShapeOrdinal =
     SHAPE_ORDINAL[missingPointShape] ?? SHAPE_ORDINAL[ShapeType.CIRCLE];
 
+  const offsetForRole = (
+    role: 'primary' | 'secondary'
+  ): {
+    offsetX: number;
+    offsetY: number;
+    halfMask: 0 | 1 | 2;
+    radiusScale: number;
+  } => {
+    if (positionMode === 'juxtaposition') {
+      return {
+        offsetX: role === 'primary' ? 0.35 : -0.35,
+        offsetY: 0,
+        halfMask: 0,
+        radiusScale: 2
+      };
+    }
+    if (positionMode === 'division') {
+      return {
+        offsetX: 0,
+        offsetY: 0,
+        halfMask: role === 'primary' ? 2 : 1,
+        radiusScale: 1
+      };
+    }
+    return { offsetX: 0, offsetY: 0, halfMask: 0, radiusScale: 1 };
+  };
+
   const createScatterLayer = (
     suffix: string,
     fillByFeatureId: (featureId: number) => [number, number, number, number],
     lineByFeatureId: (featureId: number) => [number, number, number, number],
     radiusByFeatureId: (featureId: number) => number,
     pickable: boolean,
-    triggerColumn: string
+    triggerColumn: string,
+    role: 'primary' | 'secondary'
   ) => {
+    const layoutProps = offsetForRole(role);
     const scatterProps = createScatterplotLayerProps(pointData);
     const scatterBinaryData = scatterProps.data as {
       attributes: Record<string, unknown>;
@@ -632,9 +706,14 @@ function createDoubleProportionalPointLayers(
     return new MultiShapeLayer({
       id: `${layerId}-${suffix}`,
       ...(scatterProps as unknown as Record<string, unknown>),
+      ...({
+        offsetX: layoutProps.offsetX,
+        offsetY: layoutProps.offsetY,
+        halfMask: layoutProps.halfMask
+      } as Record<string, unknown>),
       stroked: true,
       opacity: 1,
-      radiusScale: 1,
+      radiusScale: layoutProps.radiusScale,
       radiusUnits: 'pixels',
       lineWidthUnits: 'pixels',
       lineWidthScale: pointStrokeWidth / 3,
@@ -652,6 +731,8 @@ function createDoubleProportionalPointLayers(
           pointConfig.fillColorB,
           pointConfig.missingData?.show,
           pointConfig.missingData?.color,
+          breakValueA,
+          breakValueB,
           hlVersion
         ],
         getLineColor: [
@@ -663,15 +744,17 @@ function createDoubleProportionalPointLayers(
         ],
         getRadius: [
           triggerColumn,
-          pointStatistics.min,
-          pointStatistics.max,
-          secondaryStats.min,
-          secondaryStats.max,
+          primaryScaleMin,
+          primaryScaleMax,
+          secondaryScaleMin,
+          secondaryScaleMax,
           pointConfig.minSize,
           pointConfig.maxSize,
           pointConfig.sizeScale,
           pointConfig.missingData?.show,
-          pointConfig.missingData?.size
+          pointConfig.missingData?.size,
+          commonScale,
+          positionMode
         ],
         getShape: [shapeOrdinal, missingShapeOrdinal, triggerColumn],
         ...(ctx.yearFilter && {
@@ -688,7 +771,8 @@ function createDoubleProportionalPointLayers(
       primaryLineByFeatureId,
       primaryRadiusByFeatureId,
       true,
-      pointSizeColumn
+      pointSizeColumn,
+      'primary'
     ),
     createScatterLayer(
       'double-secondary',
@@ -696,7 +780,8 @@ function createDoubleProportionalPointLayers(
       secondaryLineByFeatureId,
       secondaryRadiusByFeatureId,
       false,
-      pointValueColumn
+      pointValueColumn,
+      'secondary'
     )
   ];
 }
@@ -761,8 +846,9 @@ function createRepresentativePointSymbolLayers(
   const pointValueColumn = pointConfig.valueColumn;
   const pointCategoryColumn = pointConfig.categoryColumn;
   const pointSizeColumn = pointConfig.sizeColumn;
-  const pointStrokeColor =
-    typeof pointConfig.strokeColor === 'string'
+  const pointStrokeColor = Array.isArray(pointConfig.strokeColor)
+    ? hexToRgb(pointConfig.strokeColor[0] ?? '#000000')
+    : typeof pointConfig.strokeColor === 'string'
       ? hexToRgb(pointConfig.strokeColor)
       : strokeColor;
   const pointStrokeWidth = pointConfig.strokeWidth ?? strokeWidth;
@@ -2821,8 +2907,9 @@ export function createPointLayers(
   const pointValueColumn = pointConfig?.valueColumn;
   const pointCategoryColumn = pointConfig?.categoryColumn;
   const pointSizeColumn = pointConfig?.sizeColumn;
-  const pointStrokeColor =
-    typeof pointConfig?.strokeColor === 'string'
+  const pointStrokeColor = Array.isArray(pointConfig?.strokeColor)
+    ? hexToRgb(pointConfig.strokeColor[0] ?? '#000000')
+    : typeof pointConfig?.strokeColor === 'string'
       ? hexToRgb(pointConfig.strokeColor)
       : strokeColor;
   const pointStrokeWidth = pointConfig?.strokeWidth ?? strokeWidth;
@@ -3913,8 +4000,9 @@ export function createPolygonLayers(
     polygonConfig?.fillColor,
     fillColor
   );
-  const polygonStrokeColor =
-    typeof polygonConfig?.strokeColor === 'string'
+  const polygonStrokeColor = Array.isArray(polygonConfig?.strokeColor)
+    ? hexToRgb(polygonConfig.strokeColor[0] ?? '#000000')
+    : typeof polygonConfig?.strokeColor === 'string'
       ? hexToRgb(polygonConfig.strokeColor)
       : strokeColor;
   const polygonFillOpacity = normalizeOpacity(
@@ -3940,6 +4028,59 @@ export function createPolygonLayers(
       polygonConfig,
       hexToRgb(DEFAULT_COLORS.missingData)
     );
+  const densityRequested =
+    polygonConfig?.fillMode === FillMode.DENSITY && Boolean(viz?.density);
+  const densityTable = ctx.densityTable;
+  const densityGeometryInfo = ctx.densityGeometryInfo;
+  const DEFAULT_PRIMITIVE_ORDER: PrimitiveFilter[] = [
+    PrimitiveFilterType.POINT,
+    PrimitiveFilterType.LINE,
+    PrimitiveFilterType.POLYGON
+  ];
+  const primitiveFilters = getEnabledPrimitiveFilters(ctx.viz);
+  const primitiveOrder = ctx.primitiveOrder ?? DEFAULT_PRIMITIVE_ORDER;
+  const polygonPrimitiveAllowed =
+    !ctx.viz || primitiveFilters.includes(PrimitiveFilterType.POLYGON);
+  const getOrderIndex = (primitive: PrimitiveFilter): number => {
+    const index = primitiveOrder.indexOf(primitive);
+    return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+  };
+
+  if (densityRequested) {
+    const densityLayers =
+      densityTable && densityGeometryInfo
+        ? createPointLayers(densityTable, densityGeometryInfo, ctx)
+        : [];
+    const pointLayers = createRepresentativePointSymbolLayers(jsTable, ctx);
+    const orderedLayers = [
+      ...(polygonPrimitiveAllowed
+        ? densityLayers.map((layer) => ({
+            primitive: PrimitiveFilterType.POLYGON as PrimitiveFilter,
+            layer
+          }))
+        : []),
+      ...pointLayers.map((layer) => ({
+        primitive: PrimitiveFilterType.POINT as PrimitiveFilter,
+        layer
+      }))
+    ].sort(
+      (left, right) =>
+        getOrderIndex(right.primitive) - getOrderIndex(left.primitive)
+    );
+    const layers = orderedLayers.map((entry) => entry.layer);
+    const selectionOverlay = createHighlightedPolygonOverlay(
+      layerId,
+      jsTable,
+      geoColumn,
+      polyHighlightedRowIds,
+      hlVersion,
+      ctx
+    );
+    if (selectionOverlay) {
+      layers.push(selectionOverlay);
+    }
+    return layers;
+  }
 
   if (!isNativeGeoArrow && !isGeoJsonEncoded && !isWkbEncoded) {
     return [];
@@ -4010,14 +4151,74 @@ export function createPolygonLayers(
           )
         : null;
 
-      const strokeColorFn = hasPolyHighlights
-        ? withRowHighlight(
-            polygonStrokeColor,
-            polygonStrokeOpacity,
-            HIGHLIGHT_DIMMING_FACTOR,
-            polyHighlightedRowIds!
-          )
-        : null;
+      const polygonStrokeMode = polygonConfig?.strokeMode ?? StrokeMode.UNIQUE;
+      const polygonStrokeClassification = polygonConfig?.strokeClassification;
+      const strokeColorsArray =
+        polygonStrokeClassification?.colors &&
+        polygonStrokeClassification.colors.length > 0
+          ? polygonStrokeClassification.colors
+          : Array.isArray(polygonConfig?.strokeColor)
+            ? polygonConfig.strokeColor
+            : undefined;
+      const strokeChoroplethAccessor =
+        polygonStrokeMode === StrokeMode.CLASSES &&
+        strokeColorsArray &&
+        polygonValueColumn &&
+        polygonClassification?.breaks &&
+        strokeColorsArray.length > 0
+          ? createChoroplethColorAccessor(
+              polygonValueColumn,
+              polygonClassification.breaks,
+              strokeColorsArray,
+              polygonMissingColor,
+              showMissingPolygons
+            )
+          : null;
+      const strokeCategoricalAccessor =
+        polygonStrokeMode === StrokeMode.CATEGORIES &&
+        strokeColorsArray &&
+        polygonCategoryColumn &&
+        strokeColorsArray.length > 0
+          ? (() => {
+              const labels =
+                polygonStrokeClassification?.labels ??
+                polygonClassification?.labels ??
+                [];
+              if (labels.length === 0) return null;
+              const map = new Map<string, RGBColor>();
+              labels.forEach((label, i) => {
+                const hex =
+                  strokeColorsArray[i] ??
+                  strokeColorsArray[strokeColorsArray.length - 1];
+                map.set(String(label), hexToRgb(hex));
+              });
+              return createCategoricalColorAccessor(
+                polygonCategoryColumn,
+                map,
+                polygonMissingColor,
+                showMissingPolygons
+              );
+            })()
+          : null;
+      const baseStrokeAccessor =
+        strokeChoroplethAccessor ?? strokeCategoricalAccessor;
+
+      const strokeColorFn =
+        hasPolyHighlights && polyHighlightedRowIds
+          ? baseStrokeAccessor
+            ? withRowHighlightAccessor(
+                baseStrokeAccessor,
+                polygonStrokeOpacity,
+                HIGHLIGHT_DIMMING_FACTOR,
+                polyHighlightedRowIds
+              )
+            : withRowHighlight(
+                polygonStrokeColor,
+                polygonStrokeOpacity,
+                HIGHLIGHT_DIMMING_FACTOR,
+                polyHighlightedRowIds
+              )
+          : baseStrokeAccessor;
 
       const strokeColorBinaryAttr = strokeColorFn
         ? pathColorAttr(
@@ -4150,17 +4351,6 @@ export function createPolygonLayers(
       }
 
       const pointLayers = createRepresentativePointSymbolLayers(jsTable, ctx);
-
-      // Determine layer order and stroke visibility from context
-      const DEFAULT_PRIMITIVE_ORDER: PrimitiveFilter[] = [
-        PrimitiveFilterType.POINT,
-        PrimitiveFilterType.LINE,
-        PrimitiveFilterType.POLYGON
-      ];
-      const primitiveFilters = getEnabledPrimitiveFilters(ctx.viz);
-      const primitiveOrder = ctx.primitiveOrder ?? DEFAULT_PRIMITIVE_ORDER;
-      const polygonPrimitiveAllowed =
-        !ctx.viz || primitiveFilters.includes(PrimitiveFilterType.POLYGON);
       const showFill =
         polygonPrimitiveAllowed &&
         polygonConfig?.fillMode !== FillMode.NONE &&
@@ -4170,10 +4360,6 @@ export function createPolygonLayers(
         polygonConfig?.strokeMode !== StrokeMode.NONE &&
         polygonStrokeOpacity > 0 &&
         polygonStrokeWidth > 0;
-      const getOrderIndex = (primitive: PrimitiveFilter): number => {
-        const index = primitiveOrder.indexOf(primitive);
-        return index === -1 ? Number.MAX_SAFE_INTEGER : index;
-      };
       const orderedLayers = [
         ...(showFill
           ? [{ primitive: PrimitiveFilterType.POLYGON, layer: fillLayer }]
