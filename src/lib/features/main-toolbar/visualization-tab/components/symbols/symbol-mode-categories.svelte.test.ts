@@ -62,3 +62,25 @@ describe('SymbolModeCategories (en categorie.png alignment)', () => {
     expect(source).toContain('categoriesVariant={categoriesVariant}');
   });
 });
+
+describe('SymbolModeCategories — anti-leak classification routing', () => {
+  it('routes PalettePreview strictly to onClassificationChange without fallback to a stroke handler', () => {
+    const paletteBlock = source.split('<PalettePreview')[1]?.split('/>')[0];
+    expect(paletteBlock).toBeDefined();
+    expect(paletteBlock).toContain(
+      'onClassificationChange={onClassificationChange}'
+    );
+    expect(paletteBlock).not.toMatch(
+      /onClassificationChange\s*\?\?\s*onStrokeClassificationChange/
+    );
+  });
+
+  it('never shadows onClassificationChange with any stroke-related callback', () => {
+    expect(source).not.toMatch(
+      /onClassificationChange\s*=\s*\{?onStrokeClassificationChange/
+    );
+    expect(source).not.toContain(
+      'onStrokeClassificationChange ?? onClassificationChange'
+    );
+  });
+});

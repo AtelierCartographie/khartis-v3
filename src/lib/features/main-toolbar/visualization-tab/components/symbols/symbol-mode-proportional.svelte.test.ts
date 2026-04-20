@@ -101,3 +101,32 @@ describe('SymbolModeProportional (proportionnels.png + en classes.png)', () => {
     expect(source).toContain('onSymbolPrimitiveChange?.({ breakValueB');
   });
 });
+
+describe('SymbolModeProportional — anti-leak fill ↔ stroke palette', () => {
+  it('routes StrokeSection strictly to onStrokeClassificationChange (no fallback)', () => {
+    const strokeBlock = source.split('<StrokeSection')[1]?.split('/>')[0];
+    expect(strokeBlock).toBeDefined();
+    expect(strokeBlock).toContain(
+      'onStrokeClassificationChange={onStrokeClassificationChange'
+    );
+    expect(strokeBlock).not.toMatch(
+      /onStrokeClassificationChange\s*\?\?\s*onClassificationChange/
+    );
+    expect(strokeBlock).not.toContain(
+      'onClassificationChange={onClassificationChange}'
+    );
+  });
+
+  it('routes FillSection strictly to onClassificationChange (fill role only)', () => {
+    const fillBlock = source
+      .split('<FillSection')[1]
+      ?.split('</FillSection>')[0];
+    expect(fillBlock).toBeDefined();
+    expect(fillBlock).toContain(
+      'onClassificationChange={onClassificationChange'
+    );
+    expect(fillBlock).not.toContain(
+      'onStrokeClassificationChange={onClassificationChange}'
+    );
+  });
+});
