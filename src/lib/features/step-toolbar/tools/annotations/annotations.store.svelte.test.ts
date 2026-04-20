@@ -4,6 +4,7 @@ import {
   AnnotationKind,
   DrawingType
 } from '$lib/features/commons/constants/ui.constants';
+import { TextAlign } from '$lib/features/commons/types/enums';
 import { formatActions } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
 import {
   annotationsActions,
@@ -63,6 +64,45 @@ describe('annotations store', () => {
     annotationsActions.selectAnnotation(title.id);
 
     expect(getAnnotationsState().predefinedStyle).toBe(ANNOTATION_ROLE.TITLE);
+  });
+
+  it('places the default page elements with more breathing room around the map frame', () => {
+    annotationsActions.initPageElements({ withPlaceholders: true });
+
+    const itemsByRole = new Map(
+      getAnnotationsState()
+        .items.filter((item) => item.role)
+        .map((item) => [item.role, item])
+    );
+
+    expect(itemsByRole.get(ANNOTATION_ROLE.TITLE)?.position).toEqual({
+      x: 44,
+      y: 44
+    });
+    expect(itemsByRole.get(ANNOTATION_ROLE.SUBTITLE)?.position).toEqual({
+      x: 44,
+      y: 68
+    });
+    expect(itemsByRole.get(ANNOTATION_ROLE.SOURCE)?.position).toEqual({
+      x: 564,
+      y: 456
+    });
+    expect(itemsByRole.get(ANNOTATION_ROLE.CREDIT)?.position).toEqual({
+      x: 564,
+      y: 528
+    });
+    expect(itemsByRole.get(ANNOTATION_ROLE.SOURCE)?.style?.textAlign).toBe(
+      TextAlign.Right
+    );
+    expect(
+      itemsByRole.get(ANNOTATION_ROLE.BASEMAP_SOURCE)?.style?.textAlign
+    ).toBe(TextAlign.Right);
+    expect(itemsByRole.get(ANNOTATION_ROLE.SIGNATURE)?.style?.textAlign).toBe(
+      TextAlign.Right
+    );
+    expect(itemsByRole.get(ANNOTATION_ROLE.CREDIT)?.style?.textAlign).toBe(
+      TextAlign.Right
+    );
   });
 
   it('spawns the first free text annotation in a neutral page zone', () => {
