@@ -128,6 +128,24 @@ export interface PolygonPrimitiveConfig {
   missingData?: MissingDataConfig;
 }
 
+export interface SymbolModeState {
+  size?: number;
+  minSize?: number;
+  maxSize?: number;
+  sizeScale?: ScaleType;
+  valueColumn?: string;
+  categoryColumn?: string;
+  sizeColumn?: string;
+  classification?: ClassificationConfig;
+  categoryShape?: CategoryShapeMode;
+  proportionalType?: ProportionalType;
+  commonScale?: boolean;
+  positionMode?: SymbolDoublePosition;
+  breakValueA?: number | null;
+  breakValueB?: number | null;
+  fillMode?: FillMode;
+}
+
 export interface SymbolPrimitiveConfig {
   enabled: boolean;
   mode: SymbolMode;
@@ -158,6 +176,7 @@ export interface SymbolPrimitiveConfig {
   sizeColumn?: string;
   classification?: ClassificationConfig;
   missingData?: MissingDataConfig;
+  modeStates?: Partial<Record<SymbolMode, SymbolModeState>>;
 }
 
 export interface LinePrimitiveConfig {
@@ -609,7 +628,8 @@ function buildSymbolPrimitiveConfig(
       visualization.symbolClassification ??
       visualization.classification,
     strokeClassification: existing?.strokeClassification,
-    missingData: existing?.missingData ?? visualization.missingData
+    missingData: existing?.missingData ?? visualization.missingData,
+    modeStates: existing?.modeStates
   };
 }
 
