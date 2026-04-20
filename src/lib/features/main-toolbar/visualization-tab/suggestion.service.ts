@@ -906,8 +906,11 @@ export function resolveSuggestionBehavior(
         suggestion.id === 'symbols_proportional_double'
           ? ProportionalType.DOUBLE
           : ProportionalType.SINGLE,
-      commonScale: true,
-      positionMode: SymbolDoublePosition.OVERLAY,
+      commonScale: suggestion.id !== 'symbols_proportional_double',
+      positionMode:
+        suggestion.id === 'symbols_proportional_double'
+          ? SymbolDoublePosition.JUXTAPOSITION
+          : SymbolDoublePosition.OVERLAY,
       breakValueA: null,
       breakValueB: null,
       valueColumn: isClassedSymbol

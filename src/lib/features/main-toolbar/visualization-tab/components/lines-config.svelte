@@ -443,11 +443,13 @@
 
 <ExpandableSection
   title={m.lines_title()}
+  description={disabled ? m.primitive_unavailable() : undefined}
   defaultOpen={false}
   showToggle
   actionsEnd
   toggleChecked={enabled}
   disabled={disabled}
+  disabledReason={disabled ? m.primitive_unavailable_reason() : undefined}
   onToggleChange={handleToggleChange}
 >
   {#snippet icon()}
