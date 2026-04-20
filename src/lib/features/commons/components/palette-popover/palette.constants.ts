@@ -478,10 +478,14 @@ export function generatePaletteColors(
       if (count <= palette.colors.length) {
         return palette.colors.slice(0, count);
       }
-      const cssColors = categorical(count, categoricalOptions ?? presets.vif);
-      return (
-        resolvePalette(cssColors, { format: 'webgl' }) as WebGLColor[]
-      ).map(webglToHex);
+      if (categoricalOptions) {
+        const cssColors = categorical(count, categoricalOptions);
+        return (
+          resolvePalette(cssColors, { format: 'webgl' }) as WebGLColor[]
+        ).map(webglToHex);
+      }
+      const base = palette.colors;
+      return Array.from({ length: count }, (_, i) => base[i % base.length]);
     }
     case PALETTE_TYPE.PATTERN:
       return palette.colors;
