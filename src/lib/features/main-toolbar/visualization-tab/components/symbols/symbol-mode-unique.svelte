@@ -22,7 +22,7 @@
   import { InfoPopover, SliderWithInput, StrokeSection } from '../shared';
   import FillSection from '../shared/fill-section.svelte';
   import { FILL_MODES_STANDARD } from '../shared/fill-mode-presets';
-  import type { SymbolModeProps } from './types';
+  import { NONE_FIELD_ID, type SymbolModeProps } from './types';
   import { resolveDiscretizationLabel } from '../discretization.utils';
   import {
     FACET_SLOT,
@@ -51,7 +51,6 @@
   let fillOpacity = $state<number>(VISUALIZATION_DEFAULTS.fillOpacity);
   let showMissingData = $state<boolean>(true);
   let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
-  const NONE_FIELD_ID = -1;
   let selectedClassFieldId = $state<number>(NONE_FIELD_ID);
   let selectedCategoryFieldId = $state<number>(NONE_FIELD_ID);
   let categoryCount = $state<number>(4);
