@@ -1,14 +1,6 @@
 import { cleanup, render, screen } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  globalActions,
-  globalState
-} from '$lib/features/commons/store/global.svelte';
-import { ToolbarStep } from '$lib/features/commons/types/global';
-import {
-  getLegendState,
-  legendActions
-} from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
+import { legendActions } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
 import LegendOverlay from './legend-overlay.svelte';
 
 vi.hoisted(() => {
@@ -25,10 +17,9 @@ vi.hoisted(() => {
   vi.stubGlobal('Worker', WorkerMock);
 });
 
-describe('legend overlay step visibility', () => {
+describe('legend overlay visibility', () => {
   beforeEach(() => {
     cleanup();
-    globalActions.resetNavigationState();
     legendActions.reset();
     legendActions.setVisibility(true);
     legendActions.addLegendItem({
@@ -45,25 +36,21 @@ describe('legend overlay step visibility', () => {
 
   afterEach(() => {
     cleanup();
-    globalActions.resetNavigationState();
-    globalState.selectedTool = undefined;
     legendActions.reset();
   });
 
-  it('renders the legend in the styling step', () => {
-    globalActions.setNavigationState(ToolbarStep.Styling);
-
+  it('renders the legend content when visible', () => {
     render(LegendOverlay);
 
     expect(screen.getByText('Population')).toBeInTheDocument();
   });
 
-  it('hides the legend in the visualizations step', () => {
-    globalActions.setNavigationState(ToolbarStep.Visualizations);
+  it('keeps the legend mounted but hidden when requested', () => {
+    const { container } = render(LegendOverlay, { hidden: true });
 
-    render(LegendOverlay);
-
-    expect(screen.queryByText('Population')).not.toBeInTheDocument();
-    expect(getLegendState().visible).toBe(true);
+    expect(
+      container.querySelector('.legend-overlay.hidden')
+    ).toBeInTheDocument();
+    expect(screen.getByText('Population')).toBeInTheDocument();
   });
 });

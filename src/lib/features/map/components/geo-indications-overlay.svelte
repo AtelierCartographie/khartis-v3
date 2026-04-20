@@ -42,7 +42,10 @@
     getDefaultScaleStyle
   } from '../utils/geo-indications-default-placement';
 
-  let { interactive = true }: { interactive?: boolean } = $props();
+  let {
+    interactive = true,
+    hidden = false
+  }: { interactive?: boolean; hidden?: boolean } = $props();
 
   const EARTH_CIRCUMFERENCE_KM = 40075.017;
   const EARTH_RADIUS_METERS = 6378137;
@@ -631,7 +634,9 @@
     legendPosition: legendState.position ?? LegendPosition.TOP_RIGHT,
     legendDragged: legendState.dragPosition !== null,
     scaleEnabled: geoIndicationsState.scale.enabled,
-    scaleDragged: geoIndicationsState.scale.dragPosition !== null
+    scaleDragged: geoIndicationsState.scale.dragPosition !== null,
+    orientationEnabled: geoIndicationsState.orientation.enabled,
+    orientationDragged: geoIndicationsState.orientation.dragPosition !== null
   }));
   const scaleStyle = $derived.by(() => {
     if (geoIndicationsState.scale.dragPosition) {
@@ -859,6 +864,7 @@
 
 <div
   class="geo-indications-overlay"
+  class:hidden={hidden}
   class:non-interactive={!interactive}
   bind:this={overlayElement}
 >
@@ -1133,6 +1139,17 @@
     height: 100%;
     pointer-events: none;
     z-index: var(--z-content);
+  }
+
+  .geo-indications-overlay.hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  :global(.is-exporting-map) .geo-indications-overlay.hidden {
+    opacity: 1;
+    visibility: visible;
   }
 
   .scale-bar {
