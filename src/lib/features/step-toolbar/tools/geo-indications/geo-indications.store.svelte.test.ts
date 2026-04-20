@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { PageModel } from '$lib/features/commons/constants/ui.constants';
+import {
+  DistanceUnit,
+  PageModel
+} from '$lib/features/commons/constants/ui.constants';
 import { hexToHsl } from '$lib/features/commons/utils/color-utils';
 import { formatActions } from '../format/format.store.svelte';
 import {
@@ -49,5 +52,25 @@ describe('geo indications store responsive defaults', () => {
     expect(geoIndicationsState.scale.fontSize).toBe(18);
     expect(geoIndicationsState.orientation.size).toBe(18);
     expect(geoIndicationsState.insetMap.size).toBe(320);
+  });
+
+  it('converts scale distance when the unit changes', () => {
+    geoIndicationsActions.setState({
+      scale: {
+        ...geoIndicationsState.scale,
+        distance: 100,
+        units: DistanceUnit.KILOMETERS
+      }
+    });
+
+    geoIndicationsActions.setScaleUnits(DistanceUnit.MILES);
+
+    expect(geoIndicationsState.scale.units).toBe(DistanceUnit.MILES);
+    expect(geoIndicationsState.scale.distance).toBe(62);
+
+    geoIndicationsActions.setScaleUnits(DistanceUnit.KILOMETERS);
+
+    expect(geoIndicationsState.scale.units).toBe(DistanceUnit.KILOMETERS);
+    expect(geoIndicationsState.scale.distance).toBe(100);
   });
 });
