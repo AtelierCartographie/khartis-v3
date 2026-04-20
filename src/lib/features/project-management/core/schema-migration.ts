@@ -82,6 +82,44 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
 
+function backfillSymbolDoubleFields(
+  data: Record<string, unknown>
+): Record<string, unknown> {
+  const walk = (node: unknown): unknown => {
+    if (Array.isArray(node)) {
+      return node.map((item) => walk(item));
+    }
+    if (!isRecord(node)) {
+      return node;
+    }
+    const clone: Record<string, unknown> = { ...node };
+    const symbol = isRecord(clone.symbol) ? clone.symbol : null;
+    if (symbol) {
+      const nextSymbol: Record<string, unknown> = { ...symbol };
+      if (nextSymbol.commonScale === undefined) {
+        nextSymbol.commonScale = true;
+      }
+      if (nextSymbol.positionMode === undefined) {
+        nextSymbol.positionMode = 'overlay';
+      }
+      if (nextSymbol.breakValueA === undefined) {
+        nextSymbol.breakValueA = null;
+      }
+      if (nextSymbol.breakValueB === undefined) {
+        nextSymbol.breakValueB = null;
+      }
+      clone.symbol = nextSymbol;
+    }
+    for (const key of Object.keys(clone)) {
+      if (key === 'symbol') continue;
+      clone[key] = walk(clone[key]);
+    }
+    return clone;
+  };
+
+  return walk(data) as Record<string, unknown>;
+}
+
 function backfillPrimitiveConfigs(
   data: Record<string, unknown>
 ): Record<string, unknown> {
@@ -230,7 +268,8 @@ const migrations: SchemaMigration[] = [
   { from: '3.0.0', to: '3.1.0', migrate: remapLegacyPointShape },
   { from: '3.1.0', to: '3.2.0', migrate: remapLegacyPointShape },
   { from: '3.2.0', to: '3.3.0', migrate: backfillSymbolFillColor },
-  { from: '3.3.0', to: '3.4.0', migrate: backfillPrimitiveConfigs }
+  { from: '3.3.0', to: '3.4.0', migrate: backfillPrimitiveConfigs },
+  { from: '3.4.0', to: '3.5.0', migrate: backfillSymbolDoubleFields }
 ];
 
 export function migrateIfNeeded(
