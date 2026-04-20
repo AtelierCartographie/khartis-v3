@@ -1072,32 +1072,60 @@ function createRepresentativePointSymbolLayers(
     useCategoryShape && pointCategoryColumn
       ? jsTable.getChild(pointCategoryColumn)
       : null;
-  const categoryShapeMap = (() => {
+  const orderedCategoryLabels = (() => {
     if (!useCategoryShape || !categoryShapeVector) return null;
     const labels = pointClassification?.labels;
-    const orderedCategories =
-      labels && labels.length > 0
-        ? labels
-        : (() => {
-            const seen = new Set<string>();
-            const out: string[] = [];
-            for (let i = 0; i < jsTable.numRows; i += 1) {
-              const raw = categoryShapeVector.get(i);
-              if (raw === null || raw === undefined) continue;
-              const key = String(raw);
-              if (!seen.has(key)) {
-                seen.add(key);
-                out.push(key);
-              }
-            }
-            return out;
-          })();
+    if (labels && labels.length > 0) return labels;
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (let i = 0; i < jsTable.numRows; i += 1) {
+      const raw = categoryShapeVector.get(i);
+      if (raw === null || raw === undefined) continue;
+      const key = String(raw);
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push(key);
+      }
+    }
+    return out;
+  })();
+  const categoryShapeMap = (() => {
+    if (!useCategoryShape || !orderedCategoryLabels) return null;
+    const userShapes = pointClassification?.categoryShapes;
+    const useUserShapes =
+      categoryShapeMode === CategoryShapeMode.DIFFERENT &&
+      Array.isArray(userShapes) &&
+      userShapes.length > 0;
     const map = new Map<string, number>();
-    for (let i = 0; i < orderedCategories.length; i += 1) {
-      const shape =
-        CATEGORY_SHAPE_CYCLE[i % CATEGORY_SHAPE_CYCLE.length] ??
-        ShapeType.CIRCLE;
-      map.set(orderedCategories[i], SHAPE_ORDINAL[shape]);
+    for (let i = 0; i < orderedCategoryLabels.length; i += 1) {
+      const shape = useUserShapes
+        ? (userShapes![i] ??
+          CATEGORY_SHAPE_CYCLE[i % CATEGORY_SHAPE_CYCLE.length] ??
+          ShapeType.CIRCLE)
+        : categoryShapeMode === CategoryShapeMode.ORDERED
+          ? pointShape
+          : (CATEGORY_SHAPE_CYCLE[i % CATEGORY_SHAPE_CYCLE.length] ??
+            ShapeType.CIRCLE);
+      map.set(orderedCategoryLabels[i], SHAPE_ORDINAL[shape]);
+    }
+    return map;
+  })();
+  const categoryRankRadiusMap = (() => {
+    if (
+      !useCategoryShape ||
+      categoryShapeMode !== CategoryShapeMode.ORDERED ||
+      !orderedCategoryLabels ||
+      orderedCategoryLabels.length === 0
+    ) {
+      return null;
+    }
+    const total = orderedCategoryLabels.length;
+    const rMin = Math.max(1, minPointRadius);
+    const rMax = Math.max(rMin + 2, maxPointRadius);
+    const map = new Map<string, number>();
+    for (let i = 0; i < total; i += 1) {
+      const t = total === 1 ? 0 : i / (total - 1);
+      map.set(orderedCategoryLabels[i], rMin + t * (rMax - rMin));
     }
     return map;
   })();
@@ -1130,6 +1158,34 @@ function createRepresentativePointSymbolLayers(
     })(),
     size: 1
   };
+
+  if (categoryRankRadiusMap && pointCategoryColumn) {
+    const featureIds = scatterBinaryData.featureIds;
+    const length = featureIds ? featureIds.length : jsTable.numRows;
+    const radiusArr = new Float32Array(length);
+    for (let i = 0; i < length; i += 1) {
+      const rowIdx = featureIds ? featureIds[i] : i;
+      const row = jsTable.get(rowIdx) as DeckDataRow | null;
+      if (
+        pointMissingColumn &&
+        row &&
+        isMissingThematicValue(row[pointMissingColumn])
+      ) {
+        radiusArr[i] = showMissingPoints ? missingPointRadius : 0;
+        continue;
+      }
+      const raw = row ? row[pointCategoryColumn] : null;
+      if (raw !== null && raw !== undefined) {
+        const mapped = categoryRankRadiusMap.get(String(raw));
+        if (mapped !== undefined) {
+          radiusArr[i] = mapped;
+          continue;
+        }
+      }
+      radiusArr[i] = uniquePointRadius;
+    }
+    scatterBinaryData.attributes.getRadius = { value: radiusArr, size: 1 };
+  }
 
   return [
     new MultiShapeLayer({
@@ -3443,6 +3499,136 @@ export function createPointLayers(
     scatterBinaryData.attributes.getRadius = radiusBinAttr;
   }
 
+  const categoryShapeMode =
+    pointConfig?.categoryShape ?? CategoryShapeMode.UNIQUE;
+  const useCategoryShape =
+    pointConfig?.mode === SymbolMode.CATEGORIES &&
+    categoryShapeMode !== CategoryShapeMode.UNIQUE &&
+    !!pointCategoryColumn;
+
+  const shapeOrdinal =
+    SHAPE_ORDINAL[pointShape] ?? SHAPE_ORDINAL[ShapeType.CIRCLE];
+  const missingShapeOrdinal =
+    SHAPE_ORDINAL[missingPointShape] ?? SHAPE_ORDINAL[ShapeType.CIRCLE];
+
+  const orderedCategoryLabels = (() => {
+    if (!useCategoryShape || !pointCategoryColumn) return null;
+    const categoryVector = jsTable.getChild(pointCategoryColumn);
+    if (!categoryVector) return null;
+    const labels = pointClassification?.labels;
+    if (labels && labels.length > 0) return labels;
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (let i = 0; i < jsTable.numRows; i += 1) {
+      const raw = categoryVector.get(i);
+      if (raw === null || raw === undefined) continue;
+      const key = String(raw);
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push(key);
+      }
+    }
+    return out;
+  })();
+
+  const categoryShapeMap = (() => {
+    if (!useCategoryShape || !orderedCategoryLabels) return null;
+    const userShapes = pointClassification?.categoryShapes;
+    const useUserShapes =
+      categoryShapeMode === CategoryShapeMode.DIFFERENT &&
+      Array.isArray(userShapes) &&
+      userShapes.length > 0;
+    const map = new Map<string, number>();
+    for (let i = 0; i < orderedCategoryLabels.length; i += 1) {
+      const shape = useUserShapes
+        ? (userShapes![i] ??
+          CATEGORY_SHAPE_CYCLE[i % CATEGORY_SHAPE_CYCLE.length] ??
+          ShapeType.CIRCLE)
+        : categoryShapeMode === CategoryShapeMode.ORDERED
+          ? pointShape
+          : (CATEGORY_SHAPE_CYCLE[i % CATEGORY_SHAPE_CYCLE.length] ??
+            ShapeType.CIRCLE);
+      map.set(orderedCategoryLabels[i], SHAPE_ORDINAL[shape]);
+    }
+    return map;
+  })();
+
+  const categoryRankRadiusMap = (() => {
+    if (
+      !useCategoryShape ||
+      categoryShapeMode !== CategoryShapeMode.ORDERED ||
+      !orderedCategoryLabels ||
+      orderedCategoryLabels.length === 0
+    ) {
+      return null;
+    }
+    const total = orderedCategoryLabels.length;
+    const rMin = Math.max(1, minPointRadius);
+    const rMax = Math.max(rMin, maxPointRadius);
+    const map = new Map<string, number>();
+    for (let i = 0; i < total; i += 1) {
+      const t = total === 1 ? 0 : i / (total - 1);
+      map.set(orderedCategoryLabels[i], rMin + t * (rMax - rMin));
+    }
+    return map;
+  })();
+
+  if (useCategoryShape && categoryShapeMap && pointCategoryColumn) {
+    const featureIds = scatterBinaryData.featureIds;
+    const categoryVector = jsTable.getChild(pointCategoryColumn);
+    const length = featureIds ? featureIds.length : jsTable.numRows;
+    const shapeArr = new Float32Array(length);
+    for (let i = 0; i < length; i += 1) {
+      const rowIdx = featureIds ? featureIds[i] : i;
+      if (pointMissingColumn) {
+        const row = jsTable.get(rowIdx) as DeckDataRow | null;
+        if (row && isMissingThematicValue(row[pointMissingColumn])) {
+          shapeArr[i] = missingShapeOrdinal;
+          continue;
+        }
+      }
+      const raw = categoryVector?.get(rowIdx);
+      if (raw !== null && raw !== undefined) {
+        const key = String(raw);
+        const mapped = categoryShapeMap.get(key);
+        if (mapped !== undefined) {
+          shapeArr[i] = mapped;
+          continue;
+        }
+      }
+      shapeArr[i] = shapeOrdinal;
+    }
+    scatterBinaryData.attributes.getShape = { value: shapeArr, size: 1 };
+  }
+
+  if (categoryRankRadiusMap && pointCategoryColumn) {
+    const featureIds = scatterBinaryData.featureIds;
+    const categoryVector = jsTable.getChild(pointCategoryColumn);
+    const length = featureIds ? featureIds.length : jsTable.numRows;
+    const radiusArr = new Float32Array(length);
+    for (let i = 0; i < length; i += 1) {
+      const rowIdx = featureIds ? featureIds[i] : i;
+      if (pointMissingColumn) {
+        const row = jsTable.get(rowIdx) as DeckDataRow | null;
+        if (row && isMissingThematicValue(row[pointMissingColumn])) {
+          radiusArr[i] = showMissingPoints ? missingPointRadius : 0;
+          continue;
+        }
+      }
+      const raw = categoryVector?.get(rowIdx);
+      if (raw !== null && raw !== undefined) {
+        const key = String(raw);
+        const mapped = categoryRankRadiusMap.get(key);
+        if (mapped !== undefined) {
+          radiusArr[i] = mapped;
+          continue;
+        }
+      }
+      radiusArr[i] = uniquePointRadius;
+    }
+    scatterBinaryData.attributes.getRadius = { value: radiusArr, size: 1 };
+  }
+
   const yearFilterProps = ctx.yearFilter
     ? buildYearFilterProps(
         pointData,
@@ -3452,8 +3638,10 @@ export function createPointLayers(
       )
     : null;
 
+  const LayerClass = useCategoryShape ? MultiShapeLayer : ScatterplotLayer;
+
   return [
-    new ScatterplotLayer({
+    new LayerClass({
       id: layerId,
       ...(scatterProps as unknown as Record<string, unknown>),
       stroked: true,
@@ -3514,6 +3702,15 @@ export function createPointLayers(
           pointMissingColumn,
           pointConfig?.missingData?.show,
           hlVersion
+        ],
+        getShape: [
+          shapeOrdinal,
+          missingShapeOrdinal,
+          useCategoryShape,
+          categoryShapeMode,
+          pointCategoryColumn,
+          pointClassification?.labels,
+          pointClassification?.categoryShapes
         ]
         // Note: getFilterValue is a binary attribute (baked once via filterValueAttr),
         // not a per-frame accessor. Year changes are handled by filterRange prop alone.
