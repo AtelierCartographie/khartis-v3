@@ -16,19 +16,22 @@ function createContext(
     legendDragged: false,
     scaleEnabled: true,
     scaleDragged: false,
+    orientationEnabled: true,
+    orientationDragged: false,
     ...overrides
   };
 }
 
 describe('geo indications default placement', () => {
-  it('moves orientation and inset away from a default top-right legend', () => {
+  it('stacks scale, orientation and inset in the lower-left area away from the title and legend', () => {
     const context = createContext();
 
-    expect(getDefaultScaleStyle(context)).toContain('left: 16px;');
-    expect(getDefaultOrientationStyle(context)).toContain('left: 16px;');
-    expect(getDefaultOrientationStyle(context)).toContain('top: 16px;');
-    expect(getDefaultInsetStyle(context)).toContain('left: 16px;');
-    expect(getDefaultInsetStyle(context)).toContain('bottom: 82px;');
+    expect(getDefaultScaleStyle(context)).toContain('left: 24px;');
+    expect(getDefaultScaleStyle(context)).toContain('bottom: 24px;');
+    expect(getDefaultOrientationStyle(context)).toContain('left: 24px;');
+    expect(getDefaultOrientationStyle(context)).toContain('bottom: 76px;');
+    expect(getDefaultInsetStyle(context)).toContain('left: 24px;');
+    expect(getDefaultInsetStyle(context)).toContain('bottom: 128px;');
   });
 
   it('mirrors defaults when the legend sits on the left side', () => {
@@ -36,25 +39,33 @@ describe('geo indications default placement', () => {
       legendPosition: LegendPosition.BOTTOM_LEFT
     });
 
-    expect(getDefaultScaleStyle(context)).toContain('right: 16px;');
-    expect(getDefaultOrientationStyle(context)).toContain('right: 16px;');
-    expect(getDefaultInsetStyle(context)).toContain('right: 16px;');
-    expect(getDefaultInsetStyle(context)).toContain('bottom: 82px;');
+    expect(getDefaultScaleStyle(context)).toContain('right: 24px;');
+    expect(getDefaultOrientationStyle(context)).toContain('right: 24px;');
+    expect(getDefaultOrientationStyle(context)).toContain('bottom: 76px;');
+    expect(getDefaultInsetStyle(context)).toContain('right: 24px;');
+    expect(getDefaultInsetStyle(context)).toContain('bottom: 128px;');
   });
 
-  it('keeps legacy defaults when the legend is hidden or already dragged', () => {
+  it('keeps the lower-left stack when the legend is hidden or already dragged', () => {
     const hiddenLegend = createContext({ legendVisible: false });
     const draggedLegend = createContext({ legendDragged: true });
 
-    expect(getDefaultOrientationStyle(hiddenLegend)).toContain('right: 16px;');
-    expect(getDefaultInsetStyle(hiddenLegend)).toContain('right: 16px;');
-    expect(getDefaultOrientationStyle(draggedLegend)).toContain('right: 16px;');
-    expect(getDefaultInsetStyle(draggedLegend)).toContain('right: 16px;');
+    expect(getDefaultOrientationStyle(hiddenLegend)).toContain('left: 24px;');
+    expect(getDefaultInsetStyle(hiddenLegend)).toContain('left: 24px;');
+    expect(getDefaultOrientationStyle(draggedLegend)).toContain('left: 24px;');
+    expect(getDefaultInsetStyle(draggedLegend)).toContain('left: 24px;');
   });
 
-  it('does not add an inset stack offset once the scale was manually dragged away', () => {
+  it('only reserves the remaining stack slots once the scale was manually dragged away', () => {
     const context = createContext({ scaleDragged: true });
 
-    expect(getDefaultInsetStyle(context)).toContain('bottom: 16px;');
+    expect(getDefaultOrientationStyle(context)).toContain('bottom: 24px;');
+    expect(getDefaultInsetStyle(context)).toContain('bottom: 76px;');
+  });
+
+  it('does not reserve the orientation slot once the north arrow was manually dragged away', () => {
+    const context = createContext({ orientationDragged: true });
+
+    expect(getDefaultInsetStyle(context)).toContain('bottom: 76px;');
   });
 });
