@@ -35,7 +35,9 @@ describe('CategoriesAspectPopover (Figma 952:156994 — Polygons variant)', () =
   });
 
   it('should render one category item per draft with color / label input / toggle', () => {
-    expect(source).toContain('{#each draftCategories as category, index');
+    expect(source).toContain(
+      '{#each visibleDraftCategories as category, index'
+    );
     expect(source).toContain('<SingleColorPreview');
     expect(source).toContain('class="category-label-input"');
     expect(source).toContain('<Switch');

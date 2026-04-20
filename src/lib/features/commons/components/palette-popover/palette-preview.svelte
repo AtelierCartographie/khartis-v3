@@ -27,6 +27,7 @@
     categoriesMode?: boolean;
     categoriesVariant?: CategoriesAspectVariant;
     categoryLabels?: string[];
+    categoriesPopoverOpen?: boolean;
     onexpand?: () => void;
     oninvert?: () => void;
     onselect?: (palette: Palette) => void;
@@ -44,6 +45,7 @@
     categoriesMode = false,
     categoriesVariant = 'symbols-unique',
     categoryLabels = [],
+    categoriesPopoverOpen = $bindable(false),
     onexpand,
     oninvert,
     onselect,
@@ -52,7 +54,6 @@
 
   let dropdownOpen = $state(false);
   let popoverOpen = $state(false);
-  let categoriesPopoverOpen = $state(false);
   let triggerRef = $state<HTMLDivElement>();
 
   const MAX_PREVIEW_SWATCHES = 20;
