@@ -123,4 +123,32 @@ describe('resolveDisplayedSuggestionKey', () => {
       })
     ).toBe('matched');
   });
+
+  it('suppresses the matched suggestion when the origin has been explicitly cleared (manual-blank)', () => {
+    expect(
+      resolveDisplayedSuggestionKey({
+        matchedSuggestionKey: 'matched',
+        originMode: 'manual-blank'
+      })
+    ).toBeUndefined();
+  });
+
+  it('suppresses the matched suggestion when the viz has diverged into custom mode', () => {
+    expect(
+      resolveDisplayedSuggestionKey({
+        matchedSuggestionKey: 'matched',
+        originMode: 'custom'
+      })
+    ).toBeUndefined();
+  });
+
+  it('still honours persisted key even when origin is custom (keeps explicit re-apply visible)', () => {
+    expect(
+      resolveDisplayedSuggestionKey({
+        persistedSuggestionKey: 'persisted',
+        matchedSuggestionKey: 'matched',
+        originMode: 'custom'
+      })
+    ).toBe('persisted');
+  });
 });

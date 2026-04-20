@@ -16,6 +16,7 @@ interface ResolveDisplayedSuggestionKeyOptions {
   selectedSuggestionKey?: string;
   persistedSuggestionKey?: string;
   matchedSuggestionKey?: string;
+  originMode?: VisualizationOriginMode;
 }
 
 export function getSuggestionSignature(
@@ -54,9 +55,13 @@ export function shouldAutoApplySuggestion({
 export function resolveDisplayedSuggestionKey({
   selectedSuggestionKey,
   persistedSuggestionKey,
-  matchedSuggestionKey
+  matchedSuggestionKey,
+  originMode
 }: ResolveDisplayedSuggestionKeyOptions): string | undefined {
-  return (
-    selectedSuggestionKey ?? persistedSuggestionKey ?? matchedSuggestionKey
-  );
+  if (selectedSuggestionKey) return selectedSuggestionKey;
+  if (persistedSuggestionKey) return persistedSuggestionKey;
+  if (originMode === 'manual-blank' || originMode === 'custom') {
+    return undefined;
+  }
+  return matchedSuggestionKey;
 }

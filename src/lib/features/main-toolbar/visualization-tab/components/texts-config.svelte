@@ -639,6 +639,7 @@
 <div class="viz-panel-shell texts-panel-shell">
   <ExpandableSection
     title={m.texts_title()}
+    description={disabled ? m.primitive_unavailable() : undefined}
     defaultOpen={false}
     showToggle
     actionsEnd

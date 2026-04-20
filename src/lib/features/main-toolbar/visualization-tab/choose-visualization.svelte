@@ -335,7 +335,10 @@
     resolveDisplayedSuggestionKey({
       selectedSuggestionKey,
       persistedSuggestionKey,
-      matchedSuggestionKey
+      matchedSuggestionKey,
+      originMode: targetVisualization?.origin
+        ? getVisualizationOriginMode(targetVisualization)
+        : undefined
     })
   );
 
