@@ -86,7 +86,8 @@ export interface UseMapLayersReturn {
   updateLayers: (
     tables: Map<string, ArrowTable>,
     geoJSONs: Map<string, FeatureCollection>,
-    splitData?: Map<string, SplitRenderingTable>
+    splitData?: Map<string, SplitRenderingTable>,
+    densityTables?: Map<string, ArrowTable>
   ) => void;
 }
 
@@ -498,7 +499,8 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
   function updateLayers(
     tables: Map<string, ArrowTable>,
     geoJSONs: Map<string, FeatureCollection>,
-    splitData?: Map<string, SplitRenderingTable>
+    splitData?: Map<string, SplitRenderingTable>,
+    densityTables?: Map<string, ArrowTable>
   ): void {
     const deckOverlay = getDeckOverlay();
     const deckInstance = getDeckInstance();
@@ -662,12 +664,18 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           const datasetId = viz.datasetId;
           const split = splitData?.get(datasetId);
           const table = split?.geometry ?? tables.get(datasetId);
+          const densityTable = densityTables?.get(datasetId);
           const geojson = geoJSONs.get(datasetId);
 
           const ctx = buildLayerContextForViz(viz);
           if (split) {
             ctx.splitDatasetTable = split.dataset;
             ctx.splitFeatureIdColumn = split.featureIdColumn;
+          }
+          if (densityTable) {
+            ctx.densityTable = densityTable;
+            ctx.densityGeometryInfo =
+              extractGeometryInfo(densityTable) ?? undefined;
           }
           const datasetProjectionMetadata =
             getProjectionMetadataForDataset?.(datasetId) ?? currentMetadata;

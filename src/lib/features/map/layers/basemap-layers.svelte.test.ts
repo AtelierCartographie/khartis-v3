@@ -1,4 +1,4 @@
-import { GeoJsonLayer } from '@deck.gl/layers';
+import { GeoJsonLayer, SolidPolygonLayer } from '@deck.gl/layers';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { ProjectionLike } from 'geoarrow-deck-stream';
 import type { FeatureCollection, LineString, Point, Polygon } from 'geojson';
@@ -81,6 +81,21 @@ function createProjectionContext() {
   };
 }
 
+function createCompositeProjectionContext() {
+  return {
+    projection: {
+      stream: (sink: {
+        point: (x: number, y: number) => void;
+        lineStart: () => void;
+        lineEnd: () => void;
+        polygonStart: () => void;
+        polygonEnd: () => void;
+      }) => sink,
+      getSubProjections: () => []
+    } as unknown as ProjectionLike
+  };
+}
+
 function createPolygonGeometryInfo(): GeometryInfo {
   return {
     type: 'Polygon',
@@ -89,6 +104,17 @@ function createPolygonGeometryInfo(): GeometryInfo {
     isNativeGeoArrow: false,
     isWkbEncoded: false,
     isGeoJsonEncoded: true
+  };
+}
+
+function createNativePolygonGeometryInfo(): GeometryInfo {
+  return {
+    type: 'MultiPolygon',
+    encoding: 'geoarrow.multipolygon',
+    geoColumn: 'geometry',
+    isNativeGeoArrow: true,
+    isWkbEncoded: false,
+    isGeoJsonEncoded: false
   };
 }
 
@@ -215,6 +241,27 @@ describe('basemap projection fallbacks', () => {
     expect(layer?.props.data).toBe(projectedGeoJSON);
   });
 
+  it('uses the GeoJSON fallback for terre when a composite projection is active', () => {
+    const sourceGeoJSON = createPolygonGeoJSON('raw-composite-land');
+    const projectedGeoJSON = createPolygonGeoJSON('projected-composite-land');
+    const table = {} as ArrowTable;
+    const ctx = createCompositeProjectionContext();
+
+    extractGeometryInfoMock.mockReturnValue(createNativePolygonGeometryInfo());
+    arrowTableToGeoJSONMock.mockReturnValue(sourceGeoJSON);
+    projectGeoJSONMock.mockReturnValue(projectedGeoJSON);
+
+    const layers = createTerreLayers(table, createTerreConfig(), ctx);
+    const layer = layers[0];
+
+    expect(projectGeoJSONMock).toHaveBeenCalledWith(
+      sourceGeoJSON,
+      ctx.projection
+    );
+    expect(layer).toBeInstanceOf(GeoJsonLayer);
+    expect(layer).not.toBeInstanceOf(SolidPolygonLayer);
+  });
+
   it('projects generated equator lines when a custom projection is active', () => {
     const projectedGeoJSON = createLineGeoJSON('projected-equator');
     const ctx = createProjectionContext();
@@ -303,6 +350,117 @@ describe('basemap projection fallbacks', () => {
     ) as GeoJsonLayer | undefined;
 
     expect(metaLandLayer?.props.data).toBe(projectedGeoJSON);
+  });
+
+  it('adds metadata land beneath terre when both a basemap table and land metadata exist', () => {
+    const worldBaseTable = { id: 'world-base' } as unknown as ArrowTable;
+    const metadataTable = { id: 'land-backdrop' } as unknown as ArrowTable;
+    const worldGeoJSON = createPolygonGeoJSON('raw-world-land');
+    const metadataGeoJSON = createPolygonGeoJSON('raw-meta-backdrop');
+    const projectedGeoJSON = createPolygonGeoJSON('projected-meta-backdrop');
+    const ctx = createProjectionContext();
+
+    basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.MERS, false);
+    basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.FRONTIERES, false);
+
+    extractGeometryInfoMock.mockImplementation((table: ArrowTable) =>
+      table === worldBaseTable || table === metadataTable
+        ? createPolygonGeometryInfo()
+        : null
+    );
+    arrowTableToGeoJSONMock.mockImplementation((table: ArrowTable) => {
+      if (table === metadataTable) {
+        return metadataGeoJSON;
+      }
+      if (table === worldBaseTable) {
+        return worldGeoJSON;
+      }
+      return null;
+    });
+    projectGeoJSONMock.mockImplementation((geojson) => {
+      if (geojson === metadataGeoJSON) {
+        return projectedGeoJSON;
+      }
+      return geojson;
+    });
+
+    const layers = createBasemapLayers(worldBaseTable, ctx, {
+      metadataLayers: [
+        {
+          table: metadataTable,
+          style: 'land',
+          type: BasemapLayerType.LAND,
+          file: 'land.geojson'
+        } satisfies MetadataLayerEntry
+      ],
+      availableMetadataLayerTypes: [BasemapLayerType.LAND],
+      stylePresets: {
+        land: {
+          fillColor: [220, 220, 220, 255],
+          layer_type: 'solid-polygon',
+          stroked: false,
+          description_fr: 'land',
+          description_en: 'land'
+        }
+      }
+    });
+
+    const metaLandLayer = layers.background.find(
+      (layer) =>
+        layer instanceof GeoJsonLayer &&
+        String(layer.props.id).includes('basemap-meta-land')
+    ) as GeoJsonLayer | undefined;
+    const terreLayer = layers.background.find((layer) =>
+      String(layer.props.id).includes('basemap-terre')
+    );
+
+    expect(metaLandLayer).toBeInstanceOf(GeoJsonLayer);
+    expect(metaLandLayer?.props.data).toBe(projectedGeoJSON);
+    expect(metaLandLayer?.props.getFillColor).toEqual([255, 255, 255, 255]);
+    expect(terreLayer).toBeDefined();
+  });
+
+  it('uses the GeoJSON fallback for native metadata land with composite projections', () => {
+    const metadataTable = { id: 'native-land' } as unknown as ArrowTable;
+    const sourceGeoJSON = createPolygonGeoJSON('raw-native-meta-land');
+    const projectedGeoJSON = createPolygonGeoJSON('projected-native-meta-land');
+    const ctx = createCompositeProjectionContext();
+
+    basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.MERS, false);
+    basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.FRONTIERES, false);
+
+    extractGeometryInfoMock.mockImplementation((table: ArrowTable) =>
+      table === metadataTable ? createNativePolygonGeometryInfo() : null
+    );
+    arrowTableToGeoJSONMock.mockImplementation((table: ArrowTable) =>
+      table === metadataTable ? sourceGeoJSON : null
+    );
+    projectGeoJSONMock.mockReturnValue(projectedGeoJSON);
+
+    const layers = createBasemapLayers(null, ctx, {
+      metadataLayers: [
+        {
+          table: metadataTable,
+          style: null,
+          type: BasemapLayerType.LAND,
+          file: 'native-land.parquet'
+        } satisfies MetadataLayerEntry
+      ],
+      availableMetadataLayerTypes: [BasemapLayerType.LAND],
+      stylePresets: null
+    });
+
+    const metaLandLayer = layers.background.find(
+      (layer) =>
+        layer instanceof GeoJsonLayer &&
+        String(layer.props.id).includes('basemap-meta-land')
+    );
+
+    expect(projectGeoJSONMock).toHaveBeenCalledWith(
+      sourceGeoJSON,
+      ctx.projection
+    );
+    expect(metaLandLayer).toBeInstanceOf(GeoJsonLayer);
   });
 
   it('projects metadata limit fallbacks inside createBasemapLayers', () => {

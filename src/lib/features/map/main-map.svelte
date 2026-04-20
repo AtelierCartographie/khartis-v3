@@ -58,6 +58,9 @@
   let displayTables = $state.raw<SvelteMap<string, ArrowTable>>(
     new SvelteMap<string, ArrowTable>()
   );
+  let displayDensityTables = $state.raw<SvelteMap<string, ArrowTable>>(
+    new SvelteMap<string, ArrowTable>()
+  );
   let displayGeoJSONs = $state.raw<SvelteMap<string, FeatureCollection>>(
     new SvelteMap<string, FeatureCollection>()
   );
@@ -148,6 +151,16 @@
     }
   }
 
+  function setDisplayDensityTable(datasetId: string, table: ArrowTable): void {
+    const previousTable = displayDensityTables.get(datasetId);
+    displayDensityTables.set(datasetId, table);
+
+    if (previousTable !== table) {
+      displayDensityTables = new SvelteMap(displayDensityTables);
+      bumpDisplayDataVersion();
+    }
+  }
+
   function setDisplaySplitTable(
     datasetId: string,
     split: SplitRenderingTable
@@ -207,6 +220,13 @@
     }
   }
 
+  function removeDensityTable(datasetId: string): void {
+    if (displayDensityTables.delete(datasetId)) {
+      displayDensityTables = new SvelteMap(displayDensityTables);
+      bumpDisplayDataVersion();
+    }
+  }
+
   async function loadGeoDatasetTable(
     dataset: DatasetResult,
     generation: number
@@ -231,36 +251,6 @@
         }
 
         if (tableName) {
-          const densityViz = findActiveDensityViz(dataset.id);
-          if (densityViz) {
-            densityLoadingStore.begin();
-            try {
-              const densityTable =
-                await duckDBOrchestrator.generateDotDensityArrowFromGeoTable(
-                  tableName,
-                  densityViz.density!.valueColumn!,
-                  densityViz.density!.ratio!,
-                  densityViz.density!.seed !== undefined
-                    ? { seed: densityViz.density!.seed }
-                    : undefined
-                );
-              if (densityTable) {
-                logger.success(
-                  'Density points ready for Deck.gl',
-                  LogCategory.MAP,
-                  {
-                    tableName,
-                    rows: densityTable.numRows,
-                    durationMs: (performance.now() - start).toFixed(2)
-                  }
-                );
-                return densityTable;
-              }
-            } finally {
-              densityLoadingStore.end();
-            }
-          }
-
           const shouldReprojectForTiledBasemap =
             usesTiledBasemap &&
             Boolean(dataset.geometry?.crs) &&
@@ -315,12 +305,16 @@
 
   function removeDatasetFromDisplay(datasetId: string): void {
     const removedTable = displayTables.delete(datasetId);
+    const removedDensityTable = displayDensityTables.delete(datasetId);
     const removedGeoJSON = displayGeoJSONs.delete(datasetId);
     const removedSplit = displaySplitData.delete(datasetId);
 
-    if (removedTable || removedGeoJSON || removedSplit) {
+    if (removedTable || removedDensityTable || removedGeoJSON || removedSplit) {
       if (removedTable) {
         displayTables = new SvelteMap(displayTables);
+      }
+      if (removedDensityTable) {
+        displayDensityTables = new SvelteMap(displayDensityTables);
       }
       if (removedGeoJSON) {
         displayGeoJSONs = new SvelteMap(displayGeoJSONs);
@@ -366,45 +360,6 @@
     });
 
     try {
-      const densityViz = findActiveDensityViz(datasetId);
-      if (densityViz) {
-        densityLoadingStore.begin();
-        let joinedTable: ArrowTable | undefined;
-        try {
-          joinedTable =
-            await duckDBOrchestrator.generateDotDensityArrowFromJoin(
-              joinedBasemap,
-              tableName,
-              densityViz.density!.valueColumn!,
-              densityViz.density!.ratio!,
-              densityViz.density!.seed !== undefined
-                ? { seed: densityViz.density!.seed }
-                : undefined
-            );
-        } finally {
-          densityLoadingStore.end();
-        }
-
-        if (isStaleLoad(generation)) return;
-        if (!datasetsStore.isDatasetEnabled(datasetId)) return;
-
-        if (joinedTable) {
-          setDisplayArrowTable(datasetId, joinedTable);
-          logger.success(
-            'Density basemap ready for rendering',
-            LogCategory.MAP,
-            {
-              datasetId,
-              rows: joinedTable.numRows,
-              durationMs: (performance.now() - start).toFixed(2)
-            }
-          );
-        } else {
-          removeDatasetFromDisplay(datasetId);
-        }
-        return;
-      }
-
       // Issue #87 split rendering: keep the basemap geometry Arrow ref-stable
       // (re-uses parseSolidPolygons WeakMap cache) and pair it with the dataset
       // attributes Arrow for lookup-based accessors.
@@ -467,6 +422,94 @@
     } catch (error) {
       logger.error('Failed to load joined basemap', LogCategory.MAP, error);
       removeDatasetFromDisplay(dataset.id);
+    }
+  }
+
+  async function loadDensityTableForDisplay(
+    dataset: DatasetResult,
+    generation: number
+  ): Promise<void> {
+    const densityViz = findActiveDensityViz(dataset.id);
+
+    if (!densityViz?.density?.valueColumn || !densityViz.density?.ratio) {
+      removeDensityTable(dataset.id);
+      return;
+    }
+
+    let tableName: string | undefined;
+
+    densityLoadingStore.begin();
+    try {
+      let densityTable: ArrowTable | undefined;
+
+      if (dataset.geometry && dataset.sourceFileId) {
+        const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(
+          dataset.sourceFileId
+        );
+        tableName = duckDBDataset?.tableName ?? dataset.tableName;
+
+        if (tableName) {
+          densityTable =
+            await duckDBOrchestrator.generateDotDensityArrowFromGeoTable(
+              tableName,
+              densityViz.density.valueColumn,
+              densityViz.density.ratio,
+              densityViz.density.seed !== undefined
+                ? { seed: densityViz.density.seed }
+                : undefined
+            );
+        }
+      } else if (dataset.sourceFileId) {
+        const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(
+          dataset.sourceFileId
+        );
+        tableName = duckDBDataset?.tableName;
+
+        if (duckDBDataset?.joinedBasemap && duckDBDataset.tableName) {
+          densityTable =
+            await duckDBOrchestrator.generateDotDensityArrowFromJoin(
+              duckDBDataset.joinedBasemap,
+              duckDBDataset.tableName,
+              densityViz.density.valueColumn,
+              densityViz.density.ratio,
+              densityViz.density.seed !== undefined
+                ? { seed: densityViz.density.seed }
+                : undefined
+            );
+        }
+      }
+
+      if (isStaleLoad(generation)) return;
+      if (!datasetsStore.isDatasetEnabled(dataset.id)) return;
+
+      if (densityTable) {
+        setDisplayDensityTable(dataset.id, densityTable);
+        logger.success('Density points ready for Deck.gl', LogCategory.MAP, {
+          datasetId: dataset.id,
+          rows: densityTable.numRows
+        });
+      } else {
+        removeDensityTable(dataset.id);
+      }
+    } catch (error) {
+      if (
+        (tableName &&
+          shouldIgnoreDatasetLoadError(
+            dataset.id,
+            generation,
+            error,
+            tableName
+          )) ||
+        isStaleLoad(generation) ||
+        !datasetsStore.isDatasetEnabled(dataset.id)
+      ) {
+        return;
+      }
+
+      logger.error('Failed to load density table', LogCategory.MAP, error);
+      removeDensityTable(dataset.id);
+    } finally {
+      densityLoadingStore.end();
     }
   }
 
@@ -568,6 +611,8 @@
           });
         }
       }
+
+      await loadDensityTableForDisplay(dataset, generation);
     } else {
       const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(
         dataset.sourceFileId
@@ -582,6 +627,9 @@
           duckDBDataset.tableName,
           generation
         );
+        await loadDensityTableForDisplay(dataset, generation);
+      } else {
+        removeDensityTable(datasetId);
       }
     }
   }
@@ -909,6 +957,7 @@
         <FacetsPage
           visualizations={facetVisualizations}
           tables={displayTables}
+          densityTables={displayDensityTables}
           splitData={displaySplitData}
           geoJSONs={displayGeoJSONs}
           layout={facetsLayout}
@@ -920,6 +969,7 @@
       {:else}
         <ThematicMap
           tables={displayTables}
+          densityTables={displayDensityTables}
           splitData={displaySplitData}
           geoJSONs={displayGeoJSONs}
           dataVersion={displayDataVersion}
