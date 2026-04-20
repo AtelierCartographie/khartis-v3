@@ -36,33 +36,25 @@ describe('SymbolModeProportional (proportionnels.png + en classes.png)', () => {
     expect(source).toContain('showSizeSlider={true}');
   });
 
-  it('wires SEQUENTIAL paletteType for the CLASSES fill palette and QUALITATIVE for CATEGORIES', () => {
-    expect(source).toContain('paletteType={PALETTE_TYPE.SEQUENTIAL}');
-    expect(source).toContain('paletteType={PALETTE_TYPE.QUALITATIVE}');
-  });
-
-  it('routes Fill Unique through SingleColorPreview for both SINGLE and DOUBLE variants', () => {
+  it('delegates Fill UI to the shared FillSection with standard modes', () => {
     expect(source).toContain(
-      "import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte'"
+      "import FillSection from '../shared/fill-section.svelte'"
     );
-    const uniqueBlock = source
-      .split('fillMode === FillMode.UNIQUE')[1]
-      ?.split('{:else if')[0];
-    // Both SINGLE and DOUBLE branches should use SingleColorPreview
-    const count = (uniqueBlock?.match(/<SingleColorPreview/g) ?? []).length;
-    expect(count).toBeGreaterThanOrEqual(3);
-    expect(uniqueBlock).not.toContain('<ColorSelector');
+    expect(source).toContain('<FillSection');
+    expect(source).toContain('primitive="symbol"');
+    expect(source).toContain('availableModes={FILL_MODES_STANDARD}');
+    expect(source).toContain('categoriesVariant="symbols-unique"');
   });
 
-  it('enables Categories Aspect popover via categoriesMode + categoryLabels on CATEGORIES', () => {
-    const categoriesBlock = source.split('fillMode === FillMode.CATEGORIES')[1];
-    const paletteBlock = categoriesBlock
-      ?.split('<PalettePreview')[1]
-      ?.split('/>')[0];
-    expect(paletteBlock).toContain('categoriesMode={true}');
-    expect(paletteBlock).toContain(
-      'categoryLabels={visualization?.classification?.labels ?? []}'
-    );
+  it('overrides FillMode.UNIQUE with a custom uniqueSnippet for SINGLE/DOUBLE variants', () => {
+    expect(source).toContain('{#snippet uniqueSnippet()}');
+    expect(source).toContain('proportionalType === ProportionalType.DOUBLE');
+    const uniqueSnippet = source
+      .split('{#snippet uniqueSnippet()}')[1]
+      ?.split('{/snippet}')[0];
+    expect(uniqueSnippet).toBeDefined();
+    const count = (uniqueSnippet?.match(/<SingleColorPreview/g) ?? []).length;
+    expect(count).toBeGreaterThanOrEqual(3);
   });
 
   it('exposes commonScale switch in DOUBLE branch (Figma 697:76546)', () => {

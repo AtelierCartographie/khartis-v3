@@ -1,6 +1,5 @@
 <script lang="ts">
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
-  import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import type {
     MissingDataConfig,
     VisualizationConfig,
@@ -12,27 +11,14 @@
   } from '$lib/features/commons/store/visualization.store.svelte';
   import * as m from '$lib/paraglide/messages';
   import {
-    DEFAULT_SEQUENTIAL_PREVIEW,
-    PALETTE_TYPE
-  } from '$lib/features/commons/components/palette-popover/palette.constants';
-  import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
-  import {
     DEFAULT_COLORS,
     FillMode,
-    SLIDER_LIMITS,
     VISUALIZATION_DEFAULTS
   } from '../../constants';
+  import { FILL_MODES_WITH_DENSITY } from './shared/fill-mode-presets';
+  import FillSection from './shared/fill-section.svelte';
   import {
-    FILL_MODES_WITH_DENSITY,
-    buildFillModeItems
-  } from './shared/fill-mode-presets';
-  import {
-    DiscretizationRow,
     InfoPopover,
-    MissingDataSection,
-    PalettePreview,
-    SectionHeading,
-    SliderWithInput,
     StrokeSection,
     VizFilterButton,
     VizFilterPanel
@@ -46,7 +32,6 @@
     facetsStore,
     type FacetSlotPath
   } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
-  import FacetsVariablePicker from './symbols/facets-variable-picker.svelte';
   import { PolygonModeDensity } from './polygons';
 
   interface Props {
@@ -96,8 +81,6 @@
   let discretizationModalOpen = $state(false);
   let discretizationTarget = $state<'fill' | 'stroke'>('fill');
   let filterSectionVisible = $state(false);
-  let valuePickerOpen = $state(false);
-  let categoryPickerOpen = $state(false);
   const NONE_FIELD_ID = -1;
   let selectedFieldId = $state<number>(NONE_FIELD_ID);
   let selectedCategoryFieldId = $state<number>(NONE_FIELD_ID);
@@ -152,9 +135,6 @@
     }
   }
 
-  const currentPalette = $derived(
-    visualization?.classification?.colors ?? DEFAULT_SEQUENTIAL_PREVIEW
-  );
   const categoryCount = $derived(
     visualization?.classification?.labels?.length ?? 4
   );
@@ -191,7 +171,6 @@
     }
   });
 
-  const fillModeItems = buildFillModeItems(FILL_MODES_WITH_DENSITY);
   const FILL_MODE_ORDER = FILL_MODES_WITH_DENSITY;
 
   function handleFillModeChange(index: number) {
@@ -249,8 +228,6 @@
     if (opacity <= 0) return FillMode.NONE;
     return storedMode;
   });
-
-  const fillModeIndex = $derived(FILL_MODE_ORDER.indexOf(effectiveFillMode));
 
   function handleFillOpacityChange(value: number) {
     fillOpacity = value;
@@ -347,14 +324,6 @@
       .filter((id): id is number => typeof id === 'number');
   }
 
-  const valueColumnName = $derived(
-    dataFields.find((f) => f.id === selectedFieldId)?.text ?? ''
-  );
-
-  const categoryColumnName = $derived(
-    dataFields.find((f) => f.id === selectedCategoryFieldId)?.text ?? ''
-  );
-
   async function handleFacetsVariablesChange(
     baseVariableName: string,
     slotPath: FacetSlotPath,
@@ -418,133 +387,50 @@
   {/snippet}
 
   <div class="polygons-config">
-    <SectionHeading title={m.fill()} />
-
-    <div class="field-group">
-      <ToggleTabs
-        items={fillModeItems}
-        activeIndex={fillModeIndex}
-        onChange={handleFillModeChange}
-        hideInactiveLabel={true}
-      />
-    </div>
-
-    {#if effectiveFillMode === FillMode.UNIQUE}
-      <SingleColorPreview
-        label={m.color()}
-        color={fillColor}
-        onchange={handleFillColorChange}
-      />
-    {:else if effectiveFillMode === FillMode.DENSITY}
-      <PolygonModeDensity
-        dataFields={dataFields}
-        visualization={visualization}
-        onMappingChange={onMappingChange}
-        onStyleChange={onStyleChange}
-      />
-    {:else if effectiveFillMode === FillMode.CLASSES}
-      <div class="field-group">
-        <FacetsVariablePicker
-          bind:open={valuePickerOpen}
-          titleText={m.color_according()}
+    <FillSection
+      visualization={visualization}
+      primitive="polygon"
+      dataFields={dataFields}
+      availableModes={FILL_MODES_WITH_DENSITY}
+      fillMode={effectiveFillMode}
+      fillColor={fillColor}
+      fillOpacity={fillOpacity}
+      selectedValueFieldId={selectedFieldId}
+      selectedCategoryFieldId={selectedCategoryFieldId}
+      discretizationLabel={discretizationLabel}
+      categoryCount={categoryCount}
+      facetsValueSlotPath={FACET_SLOT.POLYGON_VALUE}
+      facetsCategorySlotPath={FACET_SLOT.POLYGON_CATEGORY}
+      categoriesVariant="polygons"
+      showMissingData={showMissingData}
+      missingDataColor={missingDataColor}
+      sectionTitle={m.fill()}
+      selectableDataFields={selectableDataFields}
+      getFacetsSelectedFieldIds={getFacetsSelectedFieldIds}
+      isFacetsActiveForSlot={isFacetsActiveForSlot}
+      onFillModeChange={(mode) =>
+        handleFillModeChange(FILL_MODE_ORDER.indexOf(mode))}
+      onFillColorChange={handleFillColorChange}
+      onFillOpacityChange={handleFillOpacityChange}
+      onValueFieldSelect={handleValueFieldSelect}
+      onCategoryFieldSelect={handleCategoryFieldSelect}
+      onFacetsVariablesChange={handleFacetsVariablesChange}
+      onFacetsToggle={handleFacetsToggle}
+      onOpenDiscretization={handleOpenDiscretization}
+      onClassificationChange={handleClassificationChange}
+      onMissingDataShowChange={handleMissingDataShowChange}
+      onMissingDataColorChange={handleMissingDataColorChange}
+      onInvertPalette={onInvertPalette}
+    >
+      {#snippet densitySnippet()}
+        <PolygonModeDensity
           dataFields={dataFields}
-          singleSelectItems={selectableDataFields}
-          selectedFieldId={selectedFieldId}
-          selectedFieldIds={getFacetsSelectedFieldIds(FACET_SLOT.POLYGON_VALUE)}
-          isCollectionEnabled={isFacetsActiveForSlot(FACET_SLOT.POLYGON_VALUE)}
-          onSelect={handleValueFieldSelect}
-          onCollectionChange={(ids) =>
-            handleFacetsVariablesChange(
-              valueColumnName,
-              FACET_SLOT.POLYGON_VALUE,
-              ids
-            )}
-          onToggleCollection={(en) =>
-            handleFacetsToggle(valueColumnName, FACET_SLOT.POLYGON_VALUE, en)}
+          visualization={visualization}
+          onMappingChange={onMappingChange}
+          onStyleChange={onStyleChange}
         />
-      </div>
-      <DiscretizationRow
-        label={m.discretization()}
-        value={discretizationLabel}
-        onsettings={handleOpenDiscretization}
-      />
-      <PalettePreview
-        label={m.color_palette()}
-        colors={currentPalette}
-        selectedPaletteId={visualization?.classification?.paletteId}
-        inverted={visualization?.classification?.inverted ?? false}
-        paletteType={PALETTE_TYPE.SEQUENTIAL}
-        oninvert={onInvertPalette}
-        onClassificationChange={handleClassificationChange}
-      />
-    {:else if effectiveFillMode === FillMode.CATEGORIES}
-      <div class="field-group">
-        <FacetsVariablePicker
-          bind:open={categoryPickerOpen}
-          titleText={m.color_according()}
-          dataFields={dataFields}
-          singleSelectItems={selectableDataFields}
-          selectedFieldId={selectedCategoryFieldId}
-          selectedFieldIds={getFacetsSelectedFieldIds(
-            FACET_SLOT.POLYGON_CATEGORY
-          )}
-          isCollectionEnabled={isFacetsActiveForSlot(
-            FACET_SLOT.POLYGON_CATEGORY
-          )}
-          onSelect={handleCategoryFieldSelect}
-          onCollectionChange={(ids) =>
-            handleFacetsVariablesChange(
-              categoryColumnName,
-              FACET_SLOT.POLYGON_CATEGORY,
-              ids
-            )}
-          onToggleCollection={(en) =>
-            handleFacetsToggle(
-              categoryColumnName,
-              FACET_SLOT.POLYGON_CATEGORY,
-              en
-            )}
-        />
-      </div>
-      <DiscretizationRow
-        label={m.category_aspect()}
-        value={m.categories_count({ count: categoryCount })}
-        onsettings={handleOpenDiscretization}
-      />
-      <PalettePreview
-        label={m.color_palette()}
-        colors={currentPalette}
-        selectedPaletteId={visualization?.classification?.paletteId}
-        inverted={visualization?.classification?.inverted ?? false}
-        paletteType={PALETTE_TYPE.QUALITATIVE}
-        categoriesMode={true}
-        categoriesVariant="polygons"
-        categoryLabels={visualization?.classification?.labels ?? []}
-        oninvert={onInvertPalette}
-        onClassificationChange={handleClassificationChange}
-      />
-    {/if}
-
-    {#if effectiveFillMode !== FillMode.NONE && effectiveFillMode !== FillMode.DENSITY}
-      <SliderWithInput
-        label={m.opacity()}
-        min={SLIDER_LIMITS.opacity.min}
-        max={SLIDER_LIMITS.opacity.max}
-        value={fillOpacity}
-        onchange={handleFillOpacityChange}
-      />
-    {/if}
-
-    {#if effectiveFillMode === FillMode.CLASSES || effectiveFillMode === FillMode.CATEGORIES}
-      <MissingDataSection
-        bind:show={showMissingData}
-        color={missingDataColor}
-        showShapeSelector={false}
-        showSizeSlider={false}
-        onshowchange={handleMissingDataShowChange}
-        oncolorchange={handleMissingDataColorChange}
-      />
-    {/if}
+      {/snippet}
+    </FillSection>
 
     {#if effectiveFillMode !== FillMode.DENSITY}
       <StrokeSection
@@ -583,6 +469,7 @@
   bind:open={discretizationModalOpen}
   visualization={visualization}
   classification={activeDiscretizationClassification}
+  role={discretizationTarget}
   onchange={discretizationOnchange}
 />
 

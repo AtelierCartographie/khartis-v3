@@ -5,13 +5,7 @@
     RadioButtonGroup,
     TextInput
   } from 'carbon-components-svelte';
-  import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import * as m from '$lib/paraglide/messages';
-  import {
-    DEFAULT_SEQUENTIAL_PREVIEW,
-    DEFAULT_QUALITATIVE_PREVIEW,
-    PALETTE_TYPE
-  } from '$lib/features/commons/components/palette-popover/palette.constants';
   import {
     MissingDataShape,
     ProportionalType,
@@ -29,18 +23,14 @@
     DiscretizationRow,
     InfoPopover,
     MissingDataSection,
-    SectionHeading,
     SliderWithInput,
-    PalettePreview,
     StrokeSection
   } from '../shared';
   import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
   import type { SymbolModeProps } from './types';
   import { CaretUp, CircleFilled, SquareFill } from 'carbon-icons-svelte';
-  import {
-    FILL_MODES_STANDARD,
-    buildFillModeItems
-  } from '../shared/fill-mode-presets';
+  import FillSection from '../shared/fill-section.svelte';
+  import { FILL_MODES_STANDARD } from '../shared/fill-mode-presets';
   import DiscretizationModal from '../discretization-modal.svelte';
   import type { ClassificationConfig } from '$lib/features/commons/store/visualization.store.svelte';
   import { resolveDiscretizationLabel } from '../discretization.utils';
@@ -100,13 +90,6 @@
   const selectableDataFields = $derived([noneOption, ...dataFields]);
   let isSyncingFromVisualization = $state(true);
   let syncToken = 0;
-
-  const currentPalette = $derived(
-    visualization?.classification?.colors ?? DEFAULT_SEQUENTIAL_PREVIEW
-  );
-  const currentQualPalette = $derived(
-    visualization?.classification?.colors ?? DEFAULT_QUALITATIVE_PREVIEW
-  );
 
   $effect(() => {
     const currentSyncToken = ++syncToken;
@@ -254,10 +237,6 @@
         : undefined
     )
   );
-
-  const fillModeItems = buildFillModeItems(FILL_MODES_STANDARD);
-
-  const fillModeIndex = $derived(FILL_MODES_STANDARD.indexOf(fillMode));
 
   function handleProportionalTypeChange(type: ProportionalType) {
     if (isSyncingFromVisualization) {
@@ -854,157 +833,69 @@
   oncolorchange={handleMissingDataColorChange}
 />
 
-<SectionHeading title={m.background()} infoText={m.fill_section_info()} />
-
-<div class="field-group">
-  <ToggleTabs
-    items={fillModeItems}
-    activeIndex={fillModeIndex}
-    onChange={handleFillModeChange}
-    hideInactiveLabel={true}
-  />
-</div>
-
-{#if fillMode === FillMode.UNIQUE}
-  {#if proportionalType === ProportionalType.DOUBLE}
-    <div class="double-color-row">
-      <div class="double-color-item double-color-a">
-        <SingleColorPreview
-          label={m.symbol_color_a()}
-          color={fillColor}
-          onchange={handleFillColorChange}
-        />
+<FillSection
+  visualization={visualization}
+  primitive="symbol"
+  dataFields={dataFields}
+  availableModes={FILL_MODES_STANDARD}
+  fillMode={fillMode}
+  fillColor={fillColor}
+  fillOpacity={fillOpacity}
+  selectedValueFieldId={fillClassFieldId}
+  selectedCategoryFieldId={fillCategoryFieldId}
+  discretizationLabel={discretizationLabel}
+  categoryCount={categoryCount}
+  facetsValueSlotPath={FACET_SLOT.SYMBOL_VALUE}
+  facetsCategorySlotPath={FACET_SLOT.SYMBOL_CATEGORY}
+  categoriesVariant="symbols-unique"
+  showMissingData={showMissingData}
+  missingDataColor={missingDataColor}
+  sectionTitle={m.background()}
+  sectionInfoText={m.fill_section_info()}
+  selectableDataFields={selectableDataFields}
+  getFacetsSelectedFieldIds={getFacetsSelectedFieldIds}
+  isFacetsActiveForSlot={isFacetsActiveForSlot}
+  onFillModeChange={(mode: FillMode) =>
+    handleFillModeChange(FILL_MODES_STANDARD.indexOf(mode))}
+  onFillColorChange={handleFillColorChange}
+  onFillOpacityChange={handleFillOpacityChange}
+  onValueFieldSelect={handleFillClassFieldSelect}
+  onCategoryFieldSelect={handleFillCategoryFieldSelect}
+  onFacetsVariablesChange={handleFacetsVariablesChange}
+  onFacetsToggle={handleFacetsToggle}
+  onOpenDiscretization={onOpenDiscretization ?? (() => {})}
+  onClassificationChange={onClassificationChange ?? (() => {})}
+  onMissingDataShowChange={handleMissingDataShowChange}
+  onMissingDataColorChange={handleMissingDataColorChange}
+  onInvertPalette={onInvertPalette}
+>
+  {#snippet uniqueSnippet()}
+    {#if proportionalType === ProportionalType.DOUBLE}
+      <div class="double-color-row">
+        <div class="double-color-item double-color-a">
+          <SingleColorPreview
+            label={m.symbol_color_a()}
+            color={fillColor}
+            onchange={handleFillColorChange}
+          />
+        </div>
+        <div class="double-color-item double-color-b">
+          <SingleColorPreview
+            label={m.symbol_color_b()}
+            color={fillColorB}
+            onchange={handleFillColorBChange}
+          />
+        </div>
       </div>
-      <div class="double-color-item double-color-b">
-        <SingleColorPreview
-          label={m.symbol_color_b()}
-          color={fillColorB}
-          onchange={handleFillColorBChange}
-        />
-      </div>
-    </div>
-  {:else}
-    <SingleColorPreview
-      label={m.color()}
-      color={fillColor}
-      onchange={handleFillColorChange}
-    />
-  {/if}
-  <SliderWithInput
-    label={m.opacity()}
-    bind:value={fillOpacity}
-    min={SLIDER_LIMITS.opacity.min}
-    max={SLIDER_LIMITS.opacity.max}
-    onchange={handleFillOpacityChange}
-  />
-{:else if fillMode === FillMode.CLASSES}
-  <div class="field-group">
-    <FacetsVariablePicker
-      bind:open={classesPickerOpen}
-      titleText={m.color_according()}
-      dataFields={dataFields}
-      singleSelectItems={selectableDataFields}
-      selectedFieldId={fillClassFieldId}
-      selectedFieldIds={getFacetsSelectedFieldIds(FACET_SLOT.SYMBOL_VALUE)}
-      isCollectionEnabled={isFacetsActiveForSlot(FACET_SLOT.SYMBOL_VALUE)}
-      onSelect={handleFillClassFieldSelect}
-      onCollectionChange={(ids) =>
-        handleFacetsVariablesChange(
-          valueColumnName,
-          FACET_SLOT.SYMBOL_VALUE,
-          ids
-        )}
-      onToggleCollection={(enabled) =>
-        handleFacetsToggle(valueColumnName, FACET_SLOT.SYMBOL_VALUE, enabled)}
-    />
-  </div>
-  <DiscretizationRow
-    label={m.discretization()}
-    value={discretizationLabel}
-    onsettings={onOpenDiscretization}
-  />
-  <PalettePreview
-    label={m.color_palette()}
-    colors={currentPalette}
-    selectedPaletteId={visualization?.classification?.paletteId}
-    inverted={visualization?.classification?.inverted ?? false}
-    paletteType={PALETTE_TYPE.SEQUENTIAL}
-    oninvert={onInvertPalette}
-    onClassificationChange={onClassificationChange}
-  />
-  <SliderWithInput
-    label={m.opacity()}
-    bind:value={fillOpacity}
-    min={SLIDER_LIMITS.opacity.min}
-    max={SLIDER_LIMITS.opacity.max}
-    onchange={handleFillOpacityChange}
-  />
-  <MissingDataSection
-    bind:show={showMissingData}
-    color={missingDataColor}
-    showShapeSelector={false}
-    showSizeSlider={false}
-    onshowchange={handleMissingDataShowChange}
-    oncolorchange={handleMissingDataColorChange}
-  />
-{:else if fillMode === FillMode.CATEGORIES}
-  <div class="field-group">
-    <FacetsVariablePicker
-      bind:open={classesPickerOpen}
-      titleText={m.color_according()}
-      dataFields={dataFields}
-      singleSelectItems={selectableDataFields}
-      selectedFieldId={fillCategoryFieldId}
-      selectedFieldIds={getFacetsSelectedFieldIds(FACET_SLOT.SYMBOL_CATEGORY)}
-      isCollectionEnabled={isFacetsActiveForSlot(FACET_SLOT.SYMBOL_CATEGORY)}
-      onSelect={handleFillCategoryFieldSelect}
-      onCollectionChange={(ids) =>
-        handleFacetsVariablesChange(
-          dataFields.find((f) => f.id === fillCategoryFieldId)?.text ?? '',
-          FACET_SLOT.SYMBOL_CATEGORY,
-          ids
-        )}
-      onToggleCollection={(enabled) =>
-        handleFacetsToggle(
-          dataFields.find((f) => f.id === fillCategoryFieldId)?.text ?? '',
-          FACET_SLOT.SYMBOL_CATEGORY,
-          enabled
-        )}
-    />
-  </div>
-  <DiscretizationRow
-    label={m.category_aspect()}
-    value={m.categories_count({ count: categoryCount })}
-    onsettings={onOpenDiscretization}
-  />
-  <PalettePreview
-    label={m.color_palette()}
-    colors={currentQualPalette}
-    selectedPaletteId={visualization?.classification?.paletteId}
-    inverted={visualization?.classification?.inverted ?? false}
-    paletteType={PALETTE_TYPE.QUALITATIVE}
-    categoriesMode={true}
-    categoriesVariant="symbols-unique"
-    categoryLabels={visualization?.classification?.labels ?? []}
-    oninvert={onInvertPalette}
-    onClassificationChange={onClassificationChange}
-  />
-  <SliderWithInput
-    label={m.opacity()}
-    bind:value={fillOpacity}
-    min={SLIDER_LIMITS.opacity.min}
-    max={SLIDER_LIMITS.opacity.max}
-    onchange={handleFillOpacityChange}
-  />
-  <MissingDataSection
-    bind:show={showMissingData}
-    color={missingDataColor}
-    showShapeSelector={false}
-    showSizeSlider={false}
-    onshowchange={handleMissingDataShowChange}
-    oncolorchange={handleMissingDataColorChange}
-  />
-{/if}
+    {:else}
+      <SingleColorPreview
+        label={m.color()}
+        color={fillColor}
+        onchange={handleFillColorChange}
+      />
+    {/if}
+  {/snippet}
+</FillSection>
 
 <StrokeSection
   visualization={visualization}
