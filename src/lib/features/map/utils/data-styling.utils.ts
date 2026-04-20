@@ -322,3 +322,11 @@ export function shouldApplyLineCategorical(viz: VisualizationConfig): boolean {
 export function shouldApplyLineChoropleth(viz: VisualizationConfig): boolean {
   return shouldApplyChoropleth(viz, PrimitiveFilterType.LINE);
 }
+
+export function shouldHideSymbolFill(
+  viz: VisualizationConfig | null | undefined
+): boolean {
+  if (!viz) return false;
+  const symbol = getSymbolPrimitive(viz);
+  return symbol?.fillMode === FillMode.NONE;
+}

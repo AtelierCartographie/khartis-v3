@@ -750,7 +750,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
               const representativeVizFiltered = filterArrowTableByDataFilters(
                 representativePointBaseTable,
                 viz.dataFilters,
-                tablePrimitiveType
+                PrimitiveFilterType.POINT
               );
               const representativeTableFiltered =
                 filterArrowTableByTableFilters(
