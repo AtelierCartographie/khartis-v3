@@ -70,7 +70,7 @@
           labelText={m.geo_style()}
           selected={geoState.scale.form}
           on:change={handleScaleFormChange}
-          size="xl"
+          size="sm"
         >
           {#each formOptions as option (option.value)}
             <SelectItem value={option.value} text={option.text} />
@@ -91,7 +91,7 @@
             )}
           min={0}
           step={500}
-          size="xl"
+          size="sm"
         />
       </Column>
     </Row>
@@ -162,22 +162,26 @@
               {/each}
             </Select>
           </div>
-          <div class="text-style-color">
-            <ColorPicker
-              hex={scaleHex}
-              hue={geoState.scale.color.hue}
-              saturation={geoState.scale.color.saturation}
-              lightness={geoState.scale.color.lightness}
-              onValidate={({
-                hue,
-                saturation,
-                lightness
-              }: ColorPickerValidateEvent) => {
-                store.setScaleColor({ hue, saturation, lightness });
-              }}
-            />
-          </div>
         </div>
+      </Column>
+    </Row>
+
+    <Row>
+      <Column>
+        <ColorPicker
+          triggerLabel={m.color()}
+          hex={scaleHex}
+          hue={geoState.scale.color.hue}
+          saturation={geoState.scale.color.saturation}
+          lightness={geoState.scale.color.lightness}
+          onValidate={({
+            hue,
+            saturation,
+            lightness
+          }: ColorPickerValidateEvent) => {
+            store.setScaleColor({ hue, saturation, lightness });
+          }}
+        />
       </Column>
     </Row>
   </Grid>
@@ -188,6 +192,7 @@
     display: flex;
     align-items: flex-end;
     gap: var(--cds-spacing-02);
+    width: 100%;
   }
 
   .text-style-font {
@@ -198,10 +203,5 @@
   .text-style-size {
     width: 80px;
     flex-shrink: 0;
-  }
-
-  .text-style-color {
-    flex-shrink: 0;
-    padding-bottom: 1px;
   }
 </style>

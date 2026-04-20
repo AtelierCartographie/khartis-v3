@@ -15,6 +15,7 @@ import {
 } from '$lib/features/commons/utils/layout-sizing.utils';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
 import { getFormatState } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
+import { convertDistanceValue, INSET_MAP_SIZE_LIMITS } from './utils';
 import type {
   ColorState,
   DragPosition,
@@ -196,7 +197,22 @@ function normalizeState(
         nextInsetMap?.type === InsetMapType.PLANISPHERE
           ? nextInsetMap.type
           : current.insetMap.type,
-      size: clampNumber(nextInsetMap?.size, 20, 800, current.insetMap.size),
+      size: clampNumber(
+        nextInsetMap?.size,
+        INSET_MAP_SIZE_LIMITS[
+          nextInsetMap?.type === InsetMapType.GLOBE ||
+          nextInsetMap?.type === InsetMapType.PLANISPHERE
+            ? nextInsetMap.type
+            : current.insetMap.type
+        ].min,
+        INSET_MAP_SIZE_LIMITS[
+          nextInsetMap?.type === InsetMapType.GLOBE ||
+          nextInsetMap?.type === InsetMapType.PLANISPHERE
+            ? nextInsetMap.type
+            : current.insetMap.type
+        ].max,
+        current.insetMap.size
+      ),
       windowColor: normalizeColorState(
         nextInsetMap?.windowColor,
         current.insetMap.windowColor
@@ -341,6 +357,19 @@ const { state, actions } = createToolStore<
       s.scale.form = form;
     },
     setScaleUnits: (units: DistanceUnit) => {
+      if (units === s.scale.units) {
+        return;
+      }
+
+      if (s.scale.distance > 0) {
+        s.scale.distance = Math.max(
+          1,
+          Math.round(
+            convertDistanceValue(s.scale.distance, s.scale.units, units)
+          )
+        );
+      }
+
       s.scale.units = units;
     },
     setScaleColor: (colorState: ColorState) => {
@@ -379,9 +408,20 @@ const { state, actions } = createToolStore<
     },
     setInsetMapType: (type: InsetMapType) => {
       s.insetMap.type = type;
+      s.insetMap.size = clampNumber(
+        s.insetMap.size,
+        INSET_MAP_SIZE_LIMITS[type].min,
+        INSET_MAP_SIZE_LIMITS[type].max,
+        s.insetMap.size
+      );
     },
     setInsetMapSize: (size: number) => {
-      s.insetMap.size = clampNumber(size, 20, 800, s.insetMap.size);
+      s.insetMap.size = clampNumber(
+        size,
+        INSET_MAP_SIZE_LIMITS[s.insetMap.type].min,
+        INSET_MAP_SIZE_LIMITS[s.insetMap.type].max,
+        s.insetMap.size
+      );
     },
     setInsetMapWindowColor: (colorState: ColorState) => {
       s.insetMap.windowColor = colorState;
