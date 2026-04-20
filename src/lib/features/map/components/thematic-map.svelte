@@ -97,6 +97,7 @@
 
   let {
     tables,
+    densityTables,
     splitData,
     geoJSONs,
     dataVersion = 0,
@@ -299,7 +300,7 @@
       }
 
       mapLoadingStore.setUpdatingLayers(true);
-      mapLayers.updateLayers(tables, geoJSONs, splitData);
+      mapLayers.updateLayers(tables, geoJSONs, splitData, densityTables);
       requestAnimationFrame(() => {
         mapLoadingStore.setUpdatingLayers(false);
       });
@@ -2177,16 +2178,19 @@
       {/if}
 
       {#if showLegendOverlay}
-        <LegendOverlay />
+        <LegendOverlay hidden={!isStylingMode} />
       {/if}
 
       {#if showGeoIndicationsOverlay}
-        <GeoIndicationsOverlay interactive={isStylingMode} />
+        <GeoIndicationsOverlay
+          interactive={isStylingMode}
+          hidden={!isStylingMode}
+        />
       {/if}
     </div>
 
     {#if showAnnotationOverlay}
-      <AnnotationOverlay interactive={isStylingMode} />
+      <AnnotationOverlay interactive={isStylingMode} hidden={!isStylingMode} />
     {/if}
   </div>
 {/if}
@@ -2225,6 +2229,10 @@
     background-position:
       0 0,
       5px 5px;
+  }
+
+  .page-container.is-exporting-map .page-grid {
+    display: none !important;
   }
 
   .map-canvas {

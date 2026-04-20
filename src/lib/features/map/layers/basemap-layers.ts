@@ -214,6 +214,26 @@ function canRenderViaGeoJsonFallback(geometryInfo: GeometryInfo): boolean {
   );
 }
 
+function isCompositeProjection(
+  projection: ProjectionLike | undefined
+): projection is ProjectionLike & { getSubProjections: () => unknown } {
+  return Boolean(
+    projection &&
+    typeof (projection as { getSubProjections?: unknown }).getSubProjections ===
+      'function'
+  );
+}
+
+function shouldPreferProjectedGeoJsonFallback(
+  geometryInfo: GeometryInfo,
+  projection: ProjectionLike | undefined
+): boolean {
+  return (
+    canRenderViaGeoJsonFallback(geometryInfo) &&
+    isCompositeProjection(projection)
+  );
+}
+
 function toRgbColor(hex: string): RGBColor {
   const [r, g, b] = hexToRgb(hex);
   return [r, g, b];
@@ -279,10 +299,14 @@ export function createTerreLayers(
   };
 
   const layers: Layer<DeckDataRow>[] = [];
+  const preferProjectedGeoJsonFallback = shouldPreferProjectedGeoJsonFallback(
+    geometryInfo,
+    ctx.projection
+  );
 
   if (
-    isGeoArrowPolygonEncoding(geometryInfo) ||
-    geometryInfo.isNativeGeoArrow
+    !preferProjectedGeoJsonFallback &&
+    (isGeoArrowPolygonEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow)
   ) {
     const polyData = ctx.projection
       ? parseSolidPolygonsWithProjection(worldBaseTable, ctx.projection)
@@ -351,7 +375,7 @@ export function createTerreLayers(
     return layers;
   }
 
-  if (geometryInfo.isWkbEncoded || geometryInfo.isGeoJsonEncoded) {
+  if (canRenderViaGeoJsonFallback(geometryInfo)) {
     const geojson = getPreparedBasemapGeoJSON(
       worldBaseTable,
       geometryInfo.geoColumn,
@@ -1251,7 +1275,10 @@ function resolveStylePreset(
 function createMetadataLandLayers(
   entries: MetadataLayerEntry[],
   stylePresets: StylePresets | null,
-  ctx: BasemapLayerContext
+  ctx: BasemapLayerContext,
+  options?: {
+    fillColorOverride?: [number, number, number, number];
+  }
 ): Layer<DeckDataRow>[] {
   const layers: Layer<DeckDataRow>[] = [];
   const baseProps = getBaseLayerProps(ctx);
@@ -1263,16 +1290,23 @@ function createMetadataLandLayers(
 
     const preset = resolveStylePreset(entry.style, stylePresets);
     const fillColor: [number, number, number, number] =
-      preset && 'fillColor' in preset ? preset.fillColor : [220, 220, 220, 255];
+      options?.fillColorOverride ??
+      (preset && 'fillColor' in preset
+        ? preset.fillColor
+        : [220, 220, 220, 255]);
 
     const layerId = buildLayerId(
       DeckLayerId.BASEMAP_META_LAND,
       `${ctx.projectionSuffix}-${i}`
     );
+    const preferProjectedGeoJsonFallback = shouldPreferProjectedGeoJsonFallback(
+      geometryInfo,
+      ctx.projection
+    );
 
     if (
-      isGeoArrowPolygonEncoding(geometryInfo) ||
-      geometryInfo.isNativeGeoArrow
+      !preferProjectedGeoJsonFallback &&
+      (isGeoArrowPolygonEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow)
     ) {
       const polyData = ctx.projection
         ? parseSolidPolygonsWithProjection(entry.table, ctx.projection)
@@ -1658,10 +1692,25 @@ export function createBasemapLayers(
         }
 
         case BASEMAP_LAYER_ID.TERRE: {
+          const terreConfig = config as TerreLayerConfig;
+          const metadataLandLayers =
+            landEntries.length > 0
+              ? createMetadataLandLayers(landEntries, stylePresets, ctx, {
+                  fillColorOverride: withOpacity(
+                    toRgbColor(terreConfig.fillColor),
+                    terreConfig.fillOpacity / 100
+                  ) as [number, number, number, number]
+                })
+              : [];
+
+          if (metadataLandLayers.length > 0) {
+            targetGroups.push(metadataLandLayers);
+          }
+
           if (worldBaseTable) {
             const terreLayers = createTerreLayers(
               worldBaseTable,
-              config as TerreLayerConfig,
+              terreConfig,
               ctx,
               {
                 suppressStroke: hasMetadataLimits && isFrontieresVisible
@@ -1669,15 +1718,6 @@ export function createBasemapLayers(
             );
             if (terreLayers.length > 0) {
               targetGroups.push(terreLayers);
-            }
-          } else if (landEntries.length > 0) {
-            const landLayers = createMetadataLandLayers(
-              landEntries,
-              stylePresets,
-              ctx
-            );
-            if (landLayers.length > 0) {
-              targetGroups.push(landLayers);
             }
           }
           break;
