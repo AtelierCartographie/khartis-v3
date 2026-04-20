@@ -32,7 +32,10 @@
   } from '$lib/features/step-toolbar/tools/annotations/annotations.types';
   import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
 
-  let { interactive = true }: { interactive?: boolean } = $props();
+  let {
+    interactive = true,
+    hidden = false
+  }: { interactive?: boolean; hidden?: boolean } = $props();
 
   const DRAWING_POINT_STEP_PX = 6;
   const DRAWING_CLOSE_THRESHOLD_PX = 18;
@@ -967,6 +970,7 @@
 <div
   class="annotation-overlay"
   class:drawing-mode={isDrawingMode}
+  class:hidden={hidden}
   class:non-interactive={!interactive}
   bind:this={overlayElement}
 >
@@ -1250,6 +1254,17 @@
     z-index: var(--z-content-raised);
   }
 
+  .annotation-overlay.hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  :global(.is-exporting-map) .annotation-overlay.hidden {
+    opacity: 1;
+    visibility: visible;
+  }
+
   .annotation-map-layer {
     position: absolute;
     pointer-events: none;
@@ -1309,6 +1324,27 @@
 
   .annotation-item.dragging {
     cursor: grabbing;
+  }
+
+  .annotation-item[data-annotation-role] .annotation-text {
+    width: 100%;
+    max-width: none;
+    padding: 0;
+    border-radius: 0;
+    line-height: 1.35;
+  }
+
+  .annotation-item[data-annotation-role='title'],
+  .annotation-item[data-annotation-role='subtitle'] {
+    width: 320px;
+  }
+
+  .annotation-item[data-annotation-role='source'],
+  .annotation-item[data-annotation-role='basemap_source'],
+  .annotation-item[data-annotation-role='signature'],
+  .annotation-item[data-annotation-role='credit'],
+  .annotation-item[data-annotation-role='note'] {
+    width: 220px;
   }
 
   .annotation-text {
