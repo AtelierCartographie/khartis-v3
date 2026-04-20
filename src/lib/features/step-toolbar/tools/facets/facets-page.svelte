@@ -19,6 +19,7 @@
   interface Props {
     visualizations: VisualizationConfig[];
     tables: Map<string, ArrowTable>;
+    densityTables?: Map<string, ArrowTable>;
     splitData?: Map<string, SplitRenderingTable>;
     geoJSONs: Map<string, FeatureCollection>;
     layout: FacetsLayout;
@@ -31,6 +32,7 @@
   let {
     visualizations,
     tables,
+    densityTables,
     splitData,
     geoJSONs,
     layout,
@@ -75,6 +77,7 @@
     <FacetsGrid
       visualizations={visualizations}
       tables={tables}
+      densityTables={densityTables}
       splitData={splitData}
       geoJSONs={geoJSONs}
       layout={layout}
@@ -85,11 +88,14 @@
       onReady={onReady}
     />
 
-    <LegendOverlay />
-    <GeoIndicationsOverlay interactive={isStylingMode} />
+    <LegendOverlay hidden={!isStylingMode} />
+    <GeoIndicationsOverlay
+      interactive={isStylingMode}
+      hidden={!isStylingMode}
+    />
   </div>
 
-  <AnnotationOverlay interactive={isStylingMode} />
+  <AnnotationOverlay interactive={isStylingMode} hidden={!isStylingMode} />
 </div>
 
 <style lang="scss">

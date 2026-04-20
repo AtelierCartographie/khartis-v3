@@ -34,10 +34,16 @@ const multiShapeModule = {
   fs: `
     uniform multiShapeUniforms {
       float barWidth;
+      float offsetX;
+      float offsetY;
+      float halfMask;
     } multiShape;
   `,
   uniformTypes: {
-    barWidth: 'f32'
+    barWidth: 'f32',
+    offsetX: 'f32',
+    offsetY: 'f32',
+    halfMask: 'f32'
   }
 };
 
@@ -170,7 +176,10 @@ float getDistance(vec2 uv, float radiusPixels, int shapeType, float radius) {
 
 void main(void) {
     geometry.uv = unitPosition;
-    vec2 uv = unitPosition;
+    vec2 uv = unitPosition - vec2(multiShape.offsetX, multiShape.offsetY);
+
+    if (multiShape.halfMask > 0.5 && multiShape.halfMask < 1.5 && uv.y < 0.0) discard;
+    if (multiShape.halfMask > 1.5 && uv.y > 0.0) discard;
 
     float distToCenter = getDistance(uv, outerRadiusPixels, int(vShape), vRadius);
 
@@ -202,15 +211,23 @@ void main(void) {
 }
 `;
 
+export type HalfMaskMode = 0 | 1 | 2;
+
 export type MultiShapeLayerProps<DataT = unknown> = {
   getShape?: number | ((d: DataT) => number);
   barWidth?: number;
+  offsetX?: number;
+  offsetY?: number;
+  halfMask?: HalfMaskMode;
 };
 
 const defaultProps = {
   ...ScatterplotLayer.defaultProps,
   getShape: { type: 'accessor', value: 0 },
-  barWidth: { type: 'number', value: 24 }
+  barWidth: { type: 'number', value: 24 },
+  offsetX: { type: 'number', value: 0 },
+  offsetY: { type: 'number', value: 0 },
+  halfMask: { type: 'number', value: 0 }
 };
 
 interface MultiShapeLayerState {
@@ -267,12 +284,22 @@ vRadius = instanceRadius;
   }
 
   draw(opts: Parameters<ScatterplotLayer['draw']>[0]): void {
-    const { barWidth } = this.props as unknown as { barWidth?: number };
+    const { barWidth, offsetX, offsetY, halfMask } = this.props as unknown as {
+      barWidth?: number;
+      offsetX?: number;
+      offsetY?: number;
+      halfMask?: number;
+    };
     const state = this.state as unknown as MultiShapeLayerState;
     const shaderInputs = state.model?.shaderInputs;
     if (shaderInputs) {
       shaderInputs.setProps({
-        multiShape: { barWidth }
+        multiShape: {
+          barWidth,
+          offsetX: offsetX ?? 0,
+          offsetY: offsetY ?? 0,
+          halfMask: halfMask ?? 0
+        }
       });
     }
     super.draw(opts);

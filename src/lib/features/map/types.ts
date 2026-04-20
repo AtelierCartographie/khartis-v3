@@ -77,6 +77,7 @@ export interface SplitRenderingTable {
 
 export interface DeckMapProps {
   tables: Map<string, ArrowTable>;
+  densityTables?: Map<string, ArrowTable>;
   splitData?: Map<string, SplitRenderingTable>;
   geoJSONs: Map<string, FeatureCollection>;
   dataVersion?: number;
@@ -137,6 +138,8 @@ export interface LayerContext {
   customProjection?: ProjectionLike;
   /** Primitive sublayer render order (from viz store) */
   primitiveOrder?: import('$lib/features/commons/store/visualization.store.svelte').PrimitiveFilter[];
+  densityTable?: ArrowTable;
+  densityGeometryInfo?: GeometryInfo;
   /** Split rendering: dataset attributes Arrow paired with the basemap geometry. */
   splitDatasetTable?: ArrowTable;
   /** Split rendering: column in the geometry Arrow holding the stable feature id. */

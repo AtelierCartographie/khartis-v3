@@ -20,4 +20,11 @@ describe('MainMap density mode loading', () => {
       'for (const viz of visualizationStore.visualizations)'
     );
   });
+
+  it('keeps density tables separate from canonical dataset tables', () => {
+    expect(source).toContain('displayDensityTables');
+    expect(source).toContain('loadDensityTableForDisplay');
+    expect(source).toContain('densityTables={displayDensityTables}');
+    expect(source).not.toContain('return densityTable;');
+  });
 });
