@@ -18,6 +18,7 @@ import {
   DENSITY_DEFAULTS,
   FillMode,
   MissingDataShape,
+  ProportionalType,
   ShapeType,
   SymbolMode,
   ThicknessMode
@@ -48,6 +49,13 @@ export type PointSizeLegendScale = {
   strokeColor: string;
   fillOpacity: number;
   shape: ShapeType;
+  secondary?: {
+    fillColor: string;
+    valueColumn: string;
+    breakValue: number | null;
+  };
+  commonScale?: boolean;
+  positionMode?: 'overlay' | 'juxtaposition' | 'division';
 };
 
 export type DensityLegendScale = {
@@ -406,6 +414,20 @@ export function getPointSizeLegendScale(
       return null;
     }
 
+    const isDouble =
+      symbol.proportionalType === ProportionalType.DOUBLE &&
+      !!symbol.valueColumn;
+    const secondary = isDouble
+      ? {
+          fillColor: resolveStyleColor(
+            symbol.fillColorB,
+            DEFAULT_COLORS.secondary
+          ),
+          valueColumn: symbol.valueColumn as string,
+          breakValue: symbol.breakValueB ?? null
+        }
+      : undefined;
+
     return {
       kind: 'proportional',
       steps: buildContinuousLegendSteps(
@@ -418,7 +440,14 @@ export function getPointSizeLegendScale(
       fillColor: resolveSymbolFillColor(viz),
       strokeColor: resolveStyleColor(symbol.strokeColor, DEFAULT_COLORS.stroke),
       fillOpacity,
-      shape: symbol.shape ?? ShapeType.CIRCLE
+      shape: symbol.shape ?? ShapeType.CIRCLE,
+      ...(isDouble
+        ? {
+            secondary,
+            commonScale: symbol.commonScale !== false,
+            positionMode: symbol.positionMode ?? 'overlay'
+          }
+        : {})
     };
   }
 
