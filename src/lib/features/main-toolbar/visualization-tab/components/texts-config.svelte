@@ -29,17 +29,15 @@
     PALETTE_TYPE
   } from '$lib/features/commons/components/palette-popover/palette.constants';
   import {
-    Category,
-    MisuseOutline,
-    SquareFill,
-    Tag
-  } from 'carbon-icons-svelte';
-  import {
     DEFAULT_COLORS,
     FillMode,
     SLIDER_LIMITS,
     VISUALIZATION_DEFAULTS
   } from '../../constants';
+  import {
+    FILL_MODES_STANDARD,
+    buildFillModeItems
+  } from './shared/fill-mode-presets';
   import { Button, Dropdown, TextInput } from 'carbon-components-svelte';
   import DiscretizationModal from './discretization-modal.svelte';
   import TextStylePopover from './text-style-popover.svelte';
@@ -212,21 +210,9 @@
       .filter((id): id is number => typeof id === 'number');
   }
 
-  const fillModeItems = [
-    { icon: MisuseOutline, label: m.fill_mode_none(), iconSize: 16 },
-    { icon: SquareFill, label: m.fill_mode_unique(), iconSize: 16 },
-    { icon: Category, label: m.fill_mode_classes(), iconSize: 16 },
-    { icon: Tag, label: m.fill_mode_categories(), iconSize: 16 }
-  ];
+  const fillModeItems = buildFillModeItems(FILL_MODES_STANDARD);
 
-  const fillModeIndex = $derived(
-    [
-      FillMode.NONE,
-      FillMode.UNIQUE,
-      FillMode.CLASSES,
-      FillMode.CATEGORIES
-    ].indexOf(fillMode)
-  );
+  const fillModeIndex = $derived(FILL_MODES_STANDARD.indexOf(fillMode));
 
   const backgroundDiscretizationLabel = $derived.by(() =>
     resolveDiscretizationLabel(
