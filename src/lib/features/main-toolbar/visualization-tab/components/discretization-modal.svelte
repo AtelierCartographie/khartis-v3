@@ -52,6 +52,12 @@
     open?: boolean;
     visualization?: VisualizationConfig;
     classification?: ClassificationConfig;
+    /** Tag the classification context this modal mutates. The parent selects
+     * the correct classification source and wires `onchange` to the matching
+     * setter (fill → updatePrimitiveClassificationState, stroke →
+     * updatePrimitiveStrokeClassification). The prop is reflected as a
+     * data attribute for debugging / e2e tests. */
+    role?: 'fill' | 'stroke';
     onclose?: () => void;
     onchange?: (classification: Partial<ClassificationConfig>) => void;
   }
@@ -60,6 +66,7 @@
     open = $bindable(false),
     visualization,
     classification: classificationOverride,
+    role = 'fill',
     onclose,
     onchange
   }: Props = $props();
@@ -442,6 +449,7 @@
     class="discretization-floating-panel"
     style:right={panelRight}
     aria-label={m.discretization()}
+    data-role={role}
   >
     <header class="panel-header">
       <h3>{m.discretization()}</h3>
