@@ -164,8 +164,12 @@ const BOTTOM_RIGHT_STACK_ORDER: PageElementRole[] = [
   ANNOTATION_ROLE.SIGNATURE,
   ANNOTATION_ROLE.SOURCE
 ];
-const BOTTOM_RIGHT_SAFE_OFFSET = PAGE_GRID_SIZE_PX;
+const TOP_LEFT_SAFE_OFFSET = PAGE_GRID_SIZE_PX;
+const RIGHT_COLUMN_SAFE_OFFSET = PAGE_GRID_SIZE_PX * 2;
+const BOTTOM_RIGHT_SAFE_OFFSET = PAGE_GRID_SIZE_PX * 3;
 const BOTTOM_RIGHT_STACK_STEP = PAGE_GRID_SIZE_PX * 2;
+const TITLE_TOP_OFFSET = 44;
+const SUBTITLE_TOP_OFFSET = 68;
 const PAGE_NOTE_SAFE_OFFSET = 4;
 const PAGE_NOTE_HEIGHT = 28;
 const NON_PAGE_ANNOTATION_LEFT_OFFSET = PAGE_GRID_SIZE_PX * 2;
@@ -275,7 +279,8 @@ function getGridAlignedBounds(
 function clampPageElementPosition(
   position: { x: number; y: number },
   role: PageElementRole,
-  layout: PageLayout
+  layout: PageLayout,
+  snapToGridEnabled = true
 ): { x: number; y: number } {
   const { width, height, margins } = layout;
   const roleWidth = PAGE_ELEMENT_WIDTHS[role];
@@ -299,7 +304,7 @@ function clampPageElementPosition(
       : height - margins.bottom - 4
   );
 
-  if (!isGridEnabled()) {
+  if (!isGridEnabled() || !snapToGridEnabled) {
     return {
       x: clamp(position.x, minX, maxX),
       y: clamp(position.y, minY, maxY)
@@ -517,8 +522,12 @@ function getPageElementPosition(
   const roleWidth = PAGE_ELEMENT_WIDTHS[role];
   const minX = margins.left;
   const maxX = Math.max(minX, width - margins.right - roleWidth);
-  const titleX = clamp(margins.left + 4, minX, maxX);
-  const rightColumnX = clamp(width - margins.right - roleWidth, minX, maxX);
+  const titleX = clamp(margins.left + TOP_LEFT_SAFE_OFFSET, minX, maxX);
+  const rightColumnX = clamp(
+    width - margins.right - roleWidth - RIGHT_COLUMN_SAFE_OFFSET,
+    minX,
+    maxX
+  );
   const bottomY = height - margins.bottom;
   const minY =
     role === ANNOTATION_ROLE.TITLE || role === ANNOTATION_ROLE.SUBTITLE
@@ -537,12 +546,39 @@ function getPageElementPosition(
 
   switch (role) {
     case ANNOTATION_ROLE.TITLE:
-      return { x: titleX, y: clamp(24, minY, maxY) };
+      return { x: titleX, y: clamp(TITLE_TOP_OFFSET, minY, maxY) };
     case ANNOTATION_ROLE.SUBTITLE:
-      return { x: titleX, y: clamp(52, minY, maxY) };
+      return { x: titleX, y: clamp(SUBTITLE_TOP_OFFSET, minY, maxY) };
     default:
       return { x: titleX, y: clamp(margins.top + 24, minY, maxY) };
   }
+}
+
+function isBottomRightPageElementRole(role: PageElementRole): boolean {
+  return BOTTOM_RIGHT_STACK_ORDER.includes(role);
+}
+
+function shouldSnapAutoPageElement(role: PageElementRole): boolean {
+  return role !== ANNOTATION_ROLE.TITLE && role !== ANNOTATION_ROLE.SUBTITLE;
+}
+
+function reconcileAutoPageElementStyle(
+  role: PageElementRole,
+  positionMode: 'auto' | 'manual' | undefined,
+  style: AnnotationStyle | undefined
+): AnnotationStyle | undefined {
+  const nextStyle = { ...(style ?? {}) };
+
+  if (
+    positionMode !== 'manual' &&
+    isBottomRightPageElementRole(role) &&
+    (nextStyle.textAlign === undefined ||
+      nextStyle.textAlign === TextAlign.Left)
+  ) {
+    nextStyle.textAlign = TextAlign.Right;
+  }
+
+  return Object.keys(nextStyle).length > 0 ? nextStyle : undefined;
 }
 
 function isEmptyContent(content: unknown): boolean {
@@ -979,14 +1015,21 @@ const { actions, getState } = createToolStore<
               : clampPageElementPosition(
                   getPageElementPosition(item.role, layout),
                   item.role,
-                  layout
+                  layout,
+                  shouldSnapAutoPageElement(item.role)
                 );
+          const style = reconcileAutoPageElementStyle(
+            item.role,
+            positionMode,
+            item.style
+          );
 
           return {
             ...item,
             visible,
             positionMode,
             position,
+            style,
             content:
               withPlaceholders && isEmptyContent(item.content)
                 ? defaultContent
@@ -1025,28 +1068,32 @@ const { actions, getState } = createToolStore<
           role: ANNOTATION_ROLE.SOURCE,
           style: {
             ...PREDEFINED_STYLES.caption,
-            fontSize: tokens.annotations.captionFontSize
+            fontSize: tokens.annotations.captionFontSize,
+            textAlign: TextAlign.Right
           }
         },
         {
           role: ANNOTATION_ROLE.BASEMAP_SOURCE,
           style: {
             ...PREDEFINED_STYLES.caption,
-            fontSize: tokens.annotations.captionFontSize
+            fontSize: tokens.annotations.captionFontSize,
+            textAlign: TextAlign.Right
           }
         },
         {
           role: ANNOTATION_ROLE.SIGNATURE,
           style: {
             ...PREDEFINED_STYLES.caption,
-            fontSize: tokens.annotations.captionFontSize
+            fontSize: tokens.annotations.captionFontSize,
+            textAlign: TextAlign.Right
           }
         },
         {
           role: ANNOTATION_ROLE.CREDIT,
           style: {
             ...PREDEFINED_STYLES.caption,
-            fontSize: tokens.annotations.captionFontSize
+            fontSize: tokens.annotations.captionFontSize,
+            textAlign: TextAlign.Right
           }
         }
       ];
@@ -1064,7 +1111,8 @@ const { actions, getState } = createToolStore<
         position: clampPageElementPosition(
           getPageElementPosition(el.role, layout),
           el.role,
-          layout
+          layout,
+          shouldSnapAutoPageElement(el.role)
         ),
         positionMode: 'auto',
         style: { ...s.defaultStyle, ...el.style },
@@ -1117,9 +1165,16 @@ const { actions, getState } = createToolStore<
           return item;
         }
 
+        const style = reconcileAutoPageElementStyle(
+          item.role,
+          item.positionMode,
+          item.style
+        );
+
         if (item.positionMode === 'manual') {
           return {
             ...item,
+            style,
             position: clampPageElementPosition(item.position, item.role, layout)
           };
         }
@@ -1127,10 +1182,12 @@ const { actions, getState } = createToolStore<
         return {
           ...item,
           positionMode: item.positionMode ?? 'auto',
+          style,
           position: clampPageElementPosition(
             getPageElementPosition(item.role, layout),
             item.role,
-            layout
+            layout,
+            shouldSnapAutoPageElement(item.role)
           )
         };
       });
