@@ -27,7 +27,7 @@
     StrokeSection
   } from '../shared';
   import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
-  import type { SymbolModeProps } from './types';
+  import { NONE_FIELD_ID, type SymbolModeProps } from './types';
   import { CaretUp, CircleFilled, SquareFill } from 'carbon-icons-svelte';
   import FillSection from '../shared/fill-section.svelte';
   import { FILL_MODES_STANDARD } from '../shared/fill-mode-presets';
@@ -63,9 +63,9 @@
 
   let discretizationModalOpen = $state(false);
   let sizePickerOpen = $state(false);
+  let fieldBPickerOpen = $state(false);
   let classesPickerOpen = $state(false);
   let proportionalType = $state<ProportionalType>(ProportionalType.SINGLE);
-  const NONE_FIELD_ID = -1;
   let selectedFieldId = $state<number>(NONE_FIELD_ID);
   let selectedFieldBId = $state<number>(NONE_FIELD_ID);
   let fillClassFieldId = $state<number>(NONE_FIELD_ID);
@@ -657,11 +657,14 @@
       <span class="field-label">
         {m.symbol_b_size_according()}
       </span>
-      <Dropdown
-        items={selectableDataFields}
-        selectedId={selectedFieldBId}
-        on:select={(e) => handleFieldBSelect(e.detail.selectedId)}
-        type="default"
+      <FacetsVariablePicker
+        bind:open={fieldBPickerOpen}
+        dataFields={dataFields}
+        singleSelectItems={selectableDataFields}
+        selectedFieldId={selectedFieldBId}
+        isCollectionEnabled={false}
+        showCollectionFooter={false}
+        onSelect={handleFieldBSelect}
       />
     </div>
 
@@ -712,14 +715,12 @@
         placeholder={m.break_value_placeholder()}
         value={breakValueA === null ? '' : String(breakValueA)}
         on:input={(e) => {
-          const raw = (e.detail as string) ?? '';
-          const trimmed = raw.trim();
-          if (trimmed === '') {
-            handleBreakValueAChange(null);
-            return;
-          }
-          const next = Number(trimmed);
-          handleBreakValueAChange(Number.isFinite(next) ? next : null);
+          const detail = (e as CustomEvent).detail as number | null;
+          handleBreakValueAChange(
+            typeof detail === 'number' && Number.isFinite(detail)
+              ? detail
+              : null
+          );
         }}
       />
     </div>
@@ -735,14 +736,12 @@
         placeholder={m.break_value_placeholder()}
         value={breakValueB === null ? '' : String(breakValueB)}
         on:input={(e) => {
-          const raw = (e.detail as string) ?? '';
-          const trimmed = raw.trim();
-          if (trimmed === '') {
-            handleBreakValueBChange(null);
-            return;
-          }
-          const next = Number(trimmed);
-          handleBreakValueBChange(Number.isFinite(next) ? next : null);
+          const detail = (e as CustomEvent).detail as number | null;
+          handleBreakValueBChange(
+            typeof detail === 'number' && Number.isFinite(detail)
+              ? detail
+              : null
+          );
         }}
       />
     </div>
