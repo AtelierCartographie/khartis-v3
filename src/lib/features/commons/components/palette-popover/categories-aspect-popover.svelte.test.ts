@@ -14,7 +14,7 @@ describe('CategoriesAspectPopover (Figma 952:156994 — Polygons variant)', () =
 
   it('should clone incoming categories into a draft on open and restore on cancel', () => {
     expect(source).toContain(
-      'draftCategories = categories.map((c) => ({ ...c }))'
+      'draftCategories = categories.map((category, index) => ({'
     );
     expect(source).toContain(
       'onvalidate?.(draftCategories, draftCommonAspect)'
@@ -35,7 +35,7 @@ describe('CategoriesAspectPopover (Figma 952:156994 — Polygons variant)', () =
   });
 
   it('should render one category item per draft with color / label input / toggle', () => {
-    expect(source).toContain('{#each draftCategories as cat');
+    expect(source).toContain('{#each draftCategories as category, index');
     expect(source).toContain('<SingleColorPreview');
     expect(source).toContain('class="category-label-input"');
     expect(source).toContain('<Switch');
@@ -43,9 +43,7 @@ describe('CategoriesAspectPopover (Figma 952:156994 — Polygons variant)', () =
 
   it('should apply a suggestion color only to the selected category', () => {
     expect(source).toContain('if (!selectedCategoryId) return');
-    expect(source).toContain(
-      'c.id === selectedCategoryId ? { ...c, color: hex } : c'
-    );
+    expect(source).toContain('category.id === selectedCategoryId');
   });
 
   it('should expose the Annuler / Valider footer pair with the divider shell', () => {
@@ -60,10 +58,10 @@ describe('CategoriesAspectPopover (Figma 952:156994 — Polygons variant)', () =
     expect(source).toContain("variant = 'symbols-unique'");
   });
 
-  it('should render the "Aspect commun" section when variant is not symbols-different-rank', () => {
-    expect(source).toContain(
-      "showCommonAspect = $derived(variant !== 'symbols-different-rank')"
-    );
+  it('should render the "Aspect commun" section for the supported variants', () => {
+    expect(source).toContain("variant === 'symbols-unique' ||");
+    expect(source).toContain("variant === 'symbols-different-rank' ||");
+    expect(source).toContain("variant === 'polygons'");
     expect(source).toContain('{#if showCommonAspect}');
     expect(source).toContain('{m.aspect_common_section()}');
     expect(source).toContain('{m.aspect_common_size_unique()}');

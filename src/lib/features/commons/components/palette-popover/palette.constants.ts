@@ -56,7 +56,6 @@ export type PatternId =
 
 export interface Palette {
   id: string;
-  name: string;
   colors: string[];
   type: PaletteType;
   colorBlindSafe?: boolean;
@@ -65,7 +64,7 @@ export interface Palette {
 
 export type SuggestionPreset = 'monochrome' | 'bicolor' | 'sepia';
 
-export type QualitativePreset = 'vif' | 'pastel' | 'sepia';
+export type QualitativePreset = 'vif' | 'pastel' | 'sepia' | 'grayscale';
 
 /** Exact hex values from Figma node 893:153398 — "Color - Unique" Vif preset */
 export const VIF_MIXTE_COLORS = [
@@ -142,6 +141,14 @@ export const SEPIA_FROID_COLORS = [
   '#9c9478'
 ] as const;
 
+export const GRAYSCALE_COLORS = [
+  '#d9d9d9',
+  '#bdbdbd',
+  '#a3a3a3',
+  '#7a7a7a',
+  '#525252'
+] as const;
+
 export interface QualitativeColorGroups {
   mixte: string[];
   chaud: string[];
@@ -171,6 +178,11 @@ const COLORBLIND_SAFE_INDICES: Record<
     mixte: [0, 1, 2, 3, 4],
     chaud: [0, 1, 2, 3, 4],
     froid: [0, 1, 2, 3, 4]
+  },
+  grayscale: {
+    mixte: [0, 1, 2, 3, 4],
+    chaud: [0, 1, 2, 3, 4],
+    froid: [0, 1, 2, 3, 4]
   }
 };
 
@@ -178,35 +190,30 @@ const COLORBLIND_SAFE_INDICES: Record<
 export const monochromePalettes: Palette[] = [
   {
     id: 'mono-pink',
-    name: 'Rose',
     colors: ['#c2185b'],
     type: PALETTE_TYPE.SEQUENTIAL,
     colorBlindSafe: true
   },
   {
     id: 'mono-teal',
-    name: 'Turquoise',
     colors: ['#00897b'],
     type: PALETTE_TYPE.SEQUENTIAL,
     colorBlindSafe: true
   },
   {
     id: 'mono-gold',
-    name: 'Or',
     colors: ['#f9a825'],
     type: PALETTE_TYPE.SEQUENTIAL,
     colorBlindSafe: true
   },
   {
     id: 'mono-indigo',
-    name: 'Indigo',
     colors: ['#1565c0'],
     type: PALETTE_TYPE.SEQUENTIAL,
     colorBlindSafe: true
   },
   {
     id: 'mono-vermilion',
-    name: 'Vermillon',
     colors: ['#d84315'],
     type: PALETTE_TYPE.SEQUENTIAL,
     colorBlindSafe: true
@@ -217,35 +224,30 @@ export const monochromePalettes: Palette[] = [
 export const bicolorPalettes: Palette[] = [
   {
     id: 'blues',
-    name: 'Blues',
     colors: ['#f7fbff', '#08519c'],
     type: PALETTE_TYPE.SEQUENTIAL,
     colorBlindSafe: true
   },
   {
     id: 'greens',
-    name: 'Greens',
     colors: ['#f7fcf5', '#006d2c'],
     type: PALETTE_TYPE.SEQUENTIAL,
     colorBlindSafe: true
   },
   {
     id: 'oranges',
-    name: 'Oranges',
     colors: ['#fff5eb', '#a63603'],
     type: PALETTE_TYPE.SEQUENTIAL,
     colorBlindSafe: true
   },
   {
     id: 'purples',
-    name: 'Purples',
     colors: ['#fcfbfd', '#54278f'],
     type: PALETTE_TYPE.SEQUENTIAL,
     colorBlindSafe: true
   },
   {
     id: 'reds',
-    name: 'Reds',
     colors: ['#fff5f0', '#a50f15'],
     type: PALETTE_TYPE.SEQUENTIAL,
     colorBlindSafe: true
@@ -256,35 +258,30 @@ export const bicolorPalettes: Palette[] = [
 export const sepiaPalettes: Palette[] = [
   {
     id: 'sepia-sand',
-    name: 'Sable',
     colors: ['#d7ccc8'],
     type: PALETTE_TYPE.SEQUENTIAL,
     colorBlindSafe: true
   },
   {
     id: 'sepia-terre',
-    name: 'Terre',
     colors: ['#8d6e63'],
     type: PALETTE_TYPE.SEQUENTIAL,
     colorBlindSafe: true
   },
   {
     id: 'sepia-ochre',
-    name: 'Ocre',
     colors: ['#bf8f00'],
     type: PALETTE_TYPE.SEQUENTIAL,
     colorBlindSafe: true
   },
   {
     id: 'sepia-brique',
-    name: 'Brique',
     colors: ['#a1887f'],
     type: PALETTE_TYPE.SEQUENTIAL,
     colorBlindSafe: true
   },
   {
     id: 'sepia-olive',
-    name: 'Olive',
     colors: ['#827717'],
     type: PALETTE_TYPE.SEQUENTIAL,
     colorBlindSafe: true
@@ -297,35 +294,30 @@ export const sequentialPalettes: Palette[] = bicolorPalettes;
 export const divergingPalettes: Palette[] = [
   {
     id: 'rdbu',
-    name: 'Red-Blue',
     colors: ['#b2182b', '#f7f7f7', '#2166ac'],
     type: PALETTE_TYPE.DIVERGING,
     colorBlindSafe: true
   },
   {
     id: 'rdylgn',
-    name: 'Red-Yellow-Green',
     colors: ['#d73027', '#ffffbf', '#1a9850'],
     type: PALETTE_TYPE.DIVERGING,
     colorBlindSafe: false
   },
   {
     id: 'brbg',
-    name: 'Brown-BlueGreen',
     colors: ['#8c510a', '#f5f5f5', '#01665e'],
     type: PALETTE_TYPE.DIVERGING,
     colorBlindSafe: true
   },
   {
     id: 'piyg',
-    name: 'Pink-YellowGreen',
     colors: ['#c51b7d', '#f7f7f7', '#4d9221'],
     type: PALETTE_TYPE.DIVERGING,
     colorBlindSafe: false
   },
   {
     id: 'prgn',
-    name: 'Purple-Green',
     colors: ['#7b3294', '#f7f7f7', '#008837'],
     type: PALETTE_TYPE.DIVERGING,
     colorBlindSafe: true
@@ -335,28 +327,24 @@ export const divergingPalettes: Palette[] = [
 export const qualitativePalettes: Palette[] = [
   {
     id: 'set1',
-    name: 'Set 1',
     colors: ['#e41a1c', '#377eb8', '#4daf4a', '#984ea3', '#ff7f00'],
     type: PALETTE_TYPE.QUALITATIVE,
     colorBlindSafe: false
   },
   {
     id: 'set2',
-    name: 'Set 2',
     colors: ['#66c2a5', '#fc8d62', '#8da0cb', '#e78ac3', '#a6d854'],
     type: PALETTE_TYPE.QUALITATIVE,
     colorBlindSafe: true
   },
   {
     id: 'pastel',
-    name: 'Pastel',
     colors: ['#fbb4ae', '#b3cde3', '#ccebc5', '#decbe4', '#fed9a6'],
     type: PALETTE_TYPE.QUALITATIVE,
     colorBlindSafe: true
   },
   {
     id: 'dark',
-    name: 'Dark',
     colors: ['#1b9e77', '#d95f02', '#7570b3', '#e7298a', '#66a61e'],
     type: PALETTE_TYPE.QUALITATIVE,
     colorBlindSafe: true
@@ -367,7 +355,6 @@ export function getPatternPalettes(): Palette[] {
   return [
     {
       id: 'pattern-diagonal',
-      name: m.pattern_diagonal(),
       colors: ['#3d3d3d', '#f4f4f4'],
       type: PALETTE_TYPE.PATTERN,
       colorBlindSafe: true,
@@ -375,7 +362,6 @@ export function getPatternPalettes(): Palette[] {
     },
     {
       id: 'pattern-diagonal-reverse',
-      name: m.pattern_diagonal_reverse(),
       colors: ['#3d3d3d', '#f4f4f4'],
       type: PALETTE_TYPE.PATTERN,
       colorBlindSafe: true,
@@ -383,7 +369,6 @@ export function getPatternPalettes(): Palette[] {
     },
     {
       id: 'pattern-horizontal',
-      name: m.pattern_horizontal(),
       colors: ['#3d3d3d', '#f4f4f4'],
       type: PALETTE_TYPE.PATTERN,
       colorBlindSafe: true,
@@ -391,7 +376,6 @@ export function getPatternPalettes(): Palette[] {
     },
     {
       id: 'pattern-vertical',
-      name: m.pattern_vertical(),
       colors: ['#3d3d3d', '#f4f4f4'],
       type: PALETTE_TYPE.PATTERN,
       colorBlindSafe: true,
@@ -399,7 +383,6 @@ export function getPatternPalettes(): Palette[] {
     },
     {
       id: 'pattern-dots',
-      name: m.pattern_dots(),
       colors: ['#3d3d3d', '#f4f4f4'],
       type: PALETTE_TYPE.PATTERN,
       colorBlindSafe: true,
@@ -407,7 +390,6 @@ export function getPatternPalettes(): Palette[] {
     },
     {
       id: 'pattern-cross',
-      name: m.pattern_cross(),
       colors: ['#3d3d3d', '#f4f4f4'],
       type: PALETTE_TYPE.PATTERN,
       colorBlindSafe: true,
@@ -415,7 +397,6 @@ export function getPatternPalettes(): Palette[] {
     },
     {
       id: 'pattern-triangle',
-      name: m.pattern_triangle(),
       colors: ['#3d3d3d', '#f4f4f4'],
       type: PALETTE_TYPE.PATTERN,
       colorBlindSafe: true,
@@ -423,7 +404,6 @@ export function getPatternPalettes(): Palette[] {
     },
     {
       id: 'pattern-square',
-      name: m.pattern_square(),
       colors: ['#3d3d3d', '#f4f4f4'],
       type: PALETTE_TYPE.PATTERN,
       colorBlindSafe: true,
@@ -431,7 +411,6 @@ export function getPatternPalettes(): Palette[] {
     },
     {
       id: 'pattern-diamond',
-      name: m.pattern_diamond(),
       colors: ['#3d3d3d', '#f4f4f4'],
       type: PALETTE_TYPE.PATTERN,
       colorBlindSafe: true,
@@ -439,7 +418,6 @@ export function getPatternPalettes(): Palette[] {
     },
     {
       id: 'pattern-plus',
-      name: m.pattern_plus(),
       colors: ['#3d3d3d', '#f4f4f4'],
       type: PALETTE_TYPE.PATTERN,
       colorBlindSafe: true,
@@ -660,6 +638,81 @@ export function findPaletteById(id: string): Palette | undefined {
   return all.find((p) => p.id === id);
 }
 
+export function getPaletteDisplayName(palette: Palette): string {
+  switch (palette.id) {
+    case 'mono-pink':
+      return m.palette_name_mono_pink();
+    case 'mono-teal':
+      return m.palette_name_mono_teal();
+    case 'mono-gold':
+      return m.palette_name_mono_gold();
+    case 'mono-indigo':
+      return m.palette_name_mono_indigo();
+    case 'mono-vermilion':
+      return m.palette_name_mono_vermilion();
+    case 'blues':
+      return m.palette_name_blues();
+    case 'greens':
+      return m.palette_name_greens();
+    case 'oranges':
+      return m.palette_name_oranges();
+    case 'purples':
+      return m.palette_name_purples();
+    case 'reds':
+      return m.palette_name_reds();
+    case 'sepia-sand':
+      return m.palette_name_sepia_sand();
+    case 'sepia-terre':
+      return m.palette_name_sepia_earth();
+    case 'sepia-ochre':
+      return m.palette_name_sepia_ochre();
+    case 'sepia-brique':
+      return m.palette_name_sepia_brick();
+    case 'sepia-olive':
+      return m.palette_name_sepia_olive();
+    case 'rdbu':
+      return m.palette_name_rdbu();
+    case 'rdylgn':
+      return m.palette_name_rdylgn();
+    case 'brbg':
+      return m.palette_name_brbg();
+    case 'piyg':
+      return m.palette_name_piyg();
+    case 'prgn':
+      return m.palette_name_prgn();
+    case 'set1':
+      return m.palette_name_set1();
+    case 'set2':
+      return m.palette_name_set2();
+    case 'pastel':
+      return m.palette_name_pastel();
+    case 'dark':
+      return m.palette_name_dark();
+    case 'pattern-diagonal':
+      return m.pattern_diagonal();
+    case 'pattern-diagonal-reverse':
+      return m.pattern_diagonal_reverse();
+    case 'pattern-horizontal':
+      return m.pattern_horizontal();
+    case 'pattern-vertical':
+      return m.pattern_vertical();
+    case 'pattern-dots':
+      return m.pattern_dots();
+    case 'pattern-cross':
+      return m.pattern_cross();
+    case 'pattern-triangle':
+      return m.pattern_triangle();
+    case 'pattern-square':
+      return m.pattern_square();
+    case 'pattern-diamond':
+      return m.pattern_diamond();
+    case 'pattern-plus':
+      return m.pattern_plus();
+    default:
+      return m.color_palette();
+  }
+}
+
 function filterByIndices<T>(source: readonly T[], indices: number[]): T[] {
   return indices.map((i) => source[i]).filter((v): v is T => v !== undefined);
 }
@@ -673,19 +726,25 @@ export function getQualitativeColorGroups(
       ? [...VIF_MIXTE_COLORS]
       : preset === 'pastel'
         ? [...PASTEL_MIXTE_COLORS]
-        : [...SEPIA_MIXTE_COLORS];
+        : preset === 'sepia'
+          ? [...SEPIA_MIXTE_COLORS]
+          : [...GRAYSCALE_COLORS];
   const chaud =
     preset === 'vif'
       ? [...VIF_CHAUD_COLORS]
       : preset === 'pastel'
         ? [...PASTEL_CHAUD_COLORS]
-        : [...SEPIA_CHAUD_COLORS];
+        : preset === 'sepia'
+          ? [...SEPIA_CHAUD_COLORS]
+          : [...GRAYSCALE_COLORS];
   const froid =
     preset === 'vif'
       ? [...VIF_FROID_COLORS]
       : preset === 'pastel'
         ? [...PASTEL_FROID_COLORS]
-        : [...SEPIA_FROID_COLORS];
+        : preset === 'sepia'
+          ? [...SEPIA_FROID_COLORS]
+          : [...GRAYSCALE_COLORS];
 
   if (!colorBlindFilter) {
     return { mixte, chaud, froid };

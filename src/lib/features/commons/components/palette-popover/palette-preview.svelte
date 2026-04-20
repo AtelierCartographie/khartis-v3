@@ -71,7 +71,8 @@
   const categoryDrafts = $derived<CategoryDraft[]>(
     colors.map((color, i) => ({
       id: String(i),
-      label: categoryLabels[i] ?? `Cat. ${i + 1}`,
+      label:
+        categoryLabels[i] ?? m.palette_category_default_label({ index: i + 1 }),
       color,
       enabled: true
     }))
@@ -113,9 +114,18 @@
   }
 
   function handleCategoriesValidate(next: CategoryDraft[]) {
+    const categoryShapes = next.some((category) => category.shape)
+      ? next
+          .map((category) => category.shape)
+          .filter(
+            (shape): shape is NonNullable<typeof shape> => shape !== undefined
+          )
+      : undefined;
+
     onClassificationChange?.({
       colors: next.map((c) => c.color),
       labels: next.map((c) => c.label),
+      categoryShapes,
       paletteId: '__custom__',
       inverted: false,
       patternId: undefined,
@@ -244,9 +254,6 @@
     display: flex;
     align-items: center;
     gap: var(--cds-spacing-03);
-    padding: var(--cds-spacing-03);
-    background: var(--cds-field);
-    border: 1px solid var(--cds-border-strong);
   }
 
   .palette-main {
@@ -254,26 +261,42 @@
     display: flex;
     align-items: center;
     gap: var(--cds-spacing-03);
-    background: transparent;
+    min-width: 0;
+    height: 32px;
+    padding: 7px 16px;
+    background: var(--cds-field-01, #f4f4f4);
     border: none;
+    border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d);
     cursor: pointer;
-    padding: 0;
 
     &:hover {
-      opacity: 0.9;
+      background: var(--cds-field-hover-01, #e8e8e8);
     }
   }
 
   .palette-preview {
     display: flex;
     flex: 1;
-    height: 24px;
-    border-radius: 2px;
+    min-width: 0;
+    height: 18px;
     overflow: hidden;
+    border: 1px solid var(--cds-icon-on-color, #ffffff);
   }
 
   .palette-color {
     flex: 1;
+    min-width: 0;
     height: 100%;
+  }
+
+  .palette-main :global(svg) {
+    flex-shrink: 0;
+    color: var(--cds-icon-primary, #161616);
+  }
+
+  .palette-trigger :global(.bx--btn--ghost.bx--btn--sm) {
+    min-width: 32px;
+    min-height: 32px;
+    padding: 8px;
   }
 </style>

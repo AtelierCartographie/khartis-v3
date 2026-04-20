@@ -52,7 +52,9 @@ describe('PalettePreview — categoriesMode routing (Fill Categories)', () => {
       'const categoryDrafts = $derived<CategoryDraft[]>('
     );
     expect(source).toContain('colors.map((color, i) => ({');
-    expect(source).toContain('label: categoryLabels[i]');
+    expect(source).toContain(
+      'categoryLabels[i] ?? m.palette_category_default_label'
+    );
   });
 
   it('should propagate validated category drafts as ClassificationConfig colors + labels', () => {
