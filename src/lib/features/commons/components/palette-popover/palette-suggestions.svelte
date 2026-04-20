@@ -10,6 +10,7 @@
     type QualitativePreset,
     getSuggestionPalettes,
     getQualitativeColorGroups,
+    getPaletteDisplayName,
     generatePaletteColors,
     generateIntensityShadesForColor,
     buildPatternBackground,
@@ -22,6 +23,7 @@
     selectedPaletteId: string;
     selectedColor?: string;
     numClasses: number;
+    qualitativeMode?: 'single' | 'categories';
     onTypeChange?: (type: PaletteType) => void;
     onColorBlindChange?: (enabled: boolean) => void;
     onSelect?: (palette: Palette) => void;
@@ -35,6 +37,7 @@
     selectedPaletteId,
     selectedColor,
     numClasses,
+    qualitativeMode = 'single',
     onTypeChange: _onTypeChange,
     onColorBlindChange,
     onSelect,
@@ -43,6 +46,9 @@
   }: Props = $props();
 
   const isQualitative = $derived(paletteType === PALETTE_TYPE.QUALITATIVE);
+  const isCategoriesQualitative = $derived(
+    isQualitative && qualitativeMode === 'categories'
+  );
 
   let sequentialPreset = $state<SuggestionPreset>('monochrome');
   let qualitativePreset = $state<QualitativePreset>('vif');
@@ -140,6 +146,16 @@
       >
         {m.preset_sepia()}
       </button>
+      {#if isCategoriesQualitative}
+        <button
+          type="button"
+          class="filter-tag"
+          class:selected={qualitativePreset === 'grayscale'}
+          onclick={() => setQualitativePreset('grayscale')}
+        >
+          {m.preset_grayscale()}
+        </button>
+      {/if}
       <button
         type="button"
         class="filter-tag filter-tag--toggle"
@@ -169,25 +185,27 @@
       onColorSelect={selectQualitativeColor}
     />
 
-    <div class="intensity-section">
-      <p class="palette-label">{m.palette_intensity()}</p>
-      <div class="intensity-row">
-        {#each intensityShades as shade, i (i)}
-          <button
-            type="button"
-            class="intensity-cell"
-            class:selected={selectedIntensityIndex === i}
-            style="background-color: {shade}"
-            onclick={() => selectIntensity(i, shade)}
-            aria-label="{m.palette_intensity()} {i + 1}"
-          >
-            {#if selectedIntensityIndex === i}
-              <Checkmark size={20} />
-            {/if}
-          </button>
-        {/each}
+    {#if !isCategoriesQualitative}
+      <div class="intensity-section">
+        <p class="palette-label">{m.palette_intensity()}</p>
+        <div class="intensity-row">
+          {#each intensityShades as shade, i (i)}
+            <button
+              type="button"
+              class="intensity-cell"
+              class:selected={selectedIntensityIndex === i}
+              style="background-color: {shade}"
+              onclick={() => selectIntensity(i, shade)}
+              aria-label="{m.palette_intensity()} {i + 1}"
+            >
+              {#if selectedIntensityIndex === i}
+                <Checkmark size={20} />
+              {/if}
+            </button>
+          {/each}
+        </div>
       </div>
-    </div>
+    {/if}
   {:else}
     <div class="filter-tags">
       <button
@@ -227,13 +245,13 @@
     <div class="palette-list">
       {#each sequentialPalettes as palette (palette.id)}
         <div class="palette-box">
-          <p class="palette-label">{palette.name}</p>
+          <p class="palette-label">{getPaletteDisplayName(palette)}</p>
           <button
             type="button"
             class="palette-row"
             class:selected={selectedPaletteId === palette.id}
             onclick={() => selectPalette(palette)}
-            aria-label={palette.name}
+            aria-label={getPaletteDisplayName(palette)}
             aria-pressed={selectedPaletteId === palette.id}
           >
             {#if palette.type === PALETTE_TYPE.PATTERN}

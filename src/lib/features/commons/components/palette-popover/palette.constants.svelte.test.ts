@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import * as m from '$lib/paraglide/messages';
 
 // ok-palette's resolvePalette relies on OffscreenCanvas which jsdom does not expose.
 // Stub it with a deterministic dummy so tests can exercise count/branching logic
@@ -53,6 +54,7 @@ import {
   getPalettesForType,
   getQualitativeColorGroups,
   findPaletteById,
+  getPaletteDisplayName,
   buildPatternBackground,
   DEFAULT_SEQUENTIAL_PREVIEW,
   DEFAULT_QUALITATIVE_PREVIEW,
@@ -326,6 +328,33 @@ describe('palette.constants — findPaletteById', () => {
 
   it('should return undefined for an unknown palette id', () => {
     expect(findPaletteById('unknown-palette-id')).toBeUndefined();
+  });
+});
+
+describe('palette.constants — getPaletteDisplayName', () => {
+  it('should resolve a translated display name for every exported palette', () => {
+    const palettes = [
+      ...monochromePalettes,
+      ...bicolorPalettes,
+      ...sepiaPalettes,
+      ...divergingPalettes,
+      ...qualitativePalettes,
+      ...getPatternPalettes()
+    ];
+
+    palettes.forEach((palette) => {
+      expect(getPaletteDisplayName(palette)).toBeTruthy();
+    });
+  });
+
+  it('should return a translated generic fallback for an unknown palette id', () => {
+    expect(
+      getPaletteDisplayName({
+        id: 'unknown-id',
+        colors: ['#000000'],
+        type: PALETTE_TYPE.SEQUENTIAL
+      })
+    ).toBe(m.color_palette());
   });
 });
 

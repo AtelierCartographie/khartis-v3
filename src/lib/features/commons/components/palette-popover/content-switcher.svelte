@@ -42,7 +42,7 @@
     display: flex;
     align-items: center;
     justify-content: flex-start;
-    padding: 7px 12px;
+    padding: 7px 16px;
     font-family: 'IBM Plex Sans', sans-serif;
     font-size: 14px;
     font-weight: 400;
@@ -78,6 +78,6 @@
   .switcher-divider {
     width: 1px;
     align-self: stretch;
-    background: var(--cds-border-subtle-01);
+    background: var(--cds-border-inverse, #cac5c4);
   }
 </style>

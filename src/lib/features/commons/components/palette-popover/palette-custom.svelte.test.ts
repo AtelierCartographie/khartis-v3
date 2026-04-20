@@ -43,7 +43,7 @@ describe('PaletteCustom (Palette personnalisée section)', () => {
       .split('{#if isQualitative}')[1]
       ?.split('{:else}')[0];
     expect(qualitativeBlock).toBeDefined();
-    expect(qualitativeBlock).toContain('<ColorSelector');
+    expect(qualitativeBlock).toContain('<SingleColorPreview');
     expect(qualitativeBlock).toContain('<ToggleWithLabel');
     expect(qualitativeBlock).not.toContain('<ContentSwitcher');
   });
