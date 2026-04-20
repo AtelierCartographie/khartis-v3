@@ -1,5 +1,6 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
+  import { NONE_FIELD_ID } from './types';
   import {
     CharacterWholeNumber,
     Checkbox,
@@ -24,11 +25,12 @@
     selectedFieldIds?: number[];
     isCollectionEnabled: boolean;
     canEnableCollection?: boolean;
+    showCollectionFooter?: boolean;
     titleText?: string;
     open?: boolean;
     onSelect: (fieldId: number) => void;
-    onCollectionChange: (fieldIds: number[]) => void;
-    onToggleCollection: (enabled: boolean) => void;
+    onCollectionChange?: (fieldIds: number[]) => void;
+    onToggleCollection?: (enabled: boolean) => void;
   }
 
   let {
@@ -38,14 +40,13 @@
     selectedFieldIds = [],
     isCollectionEnabled,
     canEnableCollection = true,
+    showCollectionFooter = true,
     titleText,
     open = $bindable(false),
     onSelect,
     onCollectionChange,
     onToggleCollection
   }: Props = $props();
-
-  const NONE_ID = -1;
 
   const isNumeric = (field: DataField) => field.type === 'number';
 
@@ -71,7 +72,7 @@
 
   const displayItems = $derived(
     isCollectionEnabled
-      ? dataFields.filter((f) => f.id !== NONE_ID)
+      ? dataFields.filter((f) => f.id !== NONE_FIELD_ID)
       : singleSelectItems
   );
 
@@ -93,7 +94,7 @@
       const next = selectedFieldIds.includes(fieldId)
         ? selectedFieldIds.filter((id) => id !== fieldId)
         : [...selectedFieldIds, fieldId];
-      onCollectionChange(next);
+      onCollectionChange?.(next);
     } else {
       onSelect(fieldId);
       open = false;
@@ -101,7 +102,7 @@
   }
 
   function handleToggle(checked: boolean) {
-    onToggleCollection(checked);
+    onToggleCollection?.(checked);
   }
 </script>
 
@@ -122,7 +123,9 @@
   >
     <div class="trigger-value">
       {#if isCollectionEnabled && collectionCount > 1}
-        <span class="collection-count">{collectionCount} variables</span>
+        <span class="collection-count"
+          >{m.facets_variables_count({ count: collectionCount })}</span
+        >
       {:else if isCollectionEnabled && triggerLabel}
         <span
           class="variable-tag"
@@ -136,7 +139,7 @@
             <StringText size={16} />
           {/if}
         </span>
-      {:else if selectedField && selectedFieldId !== NONE_ID}
+      {:else if selectedField && selectedFieldId !== NONE_FIELD_ID}
         <span
           class="variable-tag"
           class:numeric={isNumeric(selectedField)}
@@ -179,7 +182,7 @@
                 {/if}
               </span>
             {/if}
-            {#if field.id === NONE_ID}
+            {#if field.id === NONE_FIELD_ID}
               <span class="item-plain">{field.text}</span>
             {:else}
               <span
@@ -202,15 +205,17 @@
         {/each}
       </div>
 
-      <div class="dropdown-footer" class:disabled={!canEnableCollection}>
-        <Switch
-          size="sm"
-          labelText={m.facets_toggle_create_collection()}
-          toggled={isCollectionEnabled}
-          disabled={!canEnableCollection}
-          onchange={handleToggle}
-        />
-      </div>
+      {#if showCollectionFooter}
+        <div class="dropdown-footer" class:disabled={!canEnableCollection}>
+          <Switch
+            size="sm"
+            labelText={m.facets_toggle_create_collection()}
+            toggled={isCollectionEnabled}
+            disabled={!canEnableCollection}
+            onchange={handleToggle}
+          />
+        </div>
+      {/if}
     </div>
   {/if}
 </div>

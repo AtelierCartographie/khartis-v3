@@ -27,7 +27,7 @@
     PalettePreview,
     SliderWithInput
   } from '../shared';
-  import type { SymbolModeProps } from './types';
+  import { NONE_FIELD_ID, type SymbolModeProps } from './types';
   import {
     FACET_SLOT,
     facetsStore,
@@ -52,7 +52,6 @@
       DEFAULT_QUALITATIVE_PREVIEW
   );
 
-  const NONE_FIELD_ID = -1;
   let selectedFieldId = $state<number>(NONE_FIELD_ID);
   let categoryPickerOpen = $state(false);
   let categoryCount = $state<number>(4);

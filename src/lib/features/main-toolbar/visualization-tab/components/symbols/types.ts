@@ -5,6 +5,9 @@ import type {
   VisualizationConfig,
   VisualizationModes
 } from '$lib/features/commons/store/visualization.store.svelte';
+
+export const NONE_FIELD_ID = -1;
+
 export interface SymbolModeProps {
   dataFields: Array<{ id: number; text: string; type?: string }>;
   visualization?: VisualizationConfig;
