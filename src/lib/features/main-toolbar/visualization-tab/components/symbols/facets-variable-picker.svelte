@@ -285,9 +285,9 @@
     }
 
     &.string {
-      background: var(--cds-layer-02, #e0e0e0);
-      border: 1px solid var(--cds-border-subtle-01, #c6c6c6);
-      color: var(--cds-text-primary, #161616);
+      background: var(--tag-magenta-tag-background, #ffd6e8);
+      border: 1px solid var(--tag-magenta-tag-border-operational, #ff7eb6);
+      color: var(--tag-magenta-tag-color, #9f1853);
     }
   }
 

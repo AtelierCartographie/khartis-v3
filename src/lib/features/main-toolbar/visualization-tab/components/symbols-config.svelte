@@ -8,7 +8,7 @@
     CircleFilled,
     Tag
   } from 'carbon-icons-svelte';
-  import { SymbolMode } from '../../constants';
+  import { FillMode, SymbolMode } from '../../constants';
   import {
     ALL_PRIMITIVE_FILTERS,
     getSymbolPrimitive,
@@ -122,32 +122,12 @@
     const next = modes[index] || SymbolMode.UNIQUE;
     if (next === symbolMode) return;
     symbolMode = next;
-    onModesChange?.({ symbol: symbolMode });
-    onClassificationChange?.({
-      colors: undefined,
-      paletteId: undefined,
-      breaks: undefined,
-      counts: undefined,
-      inverted: false,
-      patternId: undefined,
-      patternParams: undefined,
-      labels: undefined,
-      breakpointValue: null,
-      categoryShapes: undefined
+    const nextFillMode =
+      symbolMode === SymbolMode.CATEGORIES ? undefined : FillMode.UNIQUE;
+    onModesChange?.({
+      symbol: symbolMode,
+      ...(nextFillMode !== undefined && { fill: nextFillMode })
     });
-    if (symbolMode === SymbolMode.UNIQUE) {
-      onMappingChange?.({
-        sizeColumn: undefined,
-        valueColumn: undefined,
-        categoryColumn: undefined
-      });
-    } else if (symbolMode === SymbolMode.PROPORTIONAL) {
-      onMappingChange?.({ categoryColumn: undefined });
-    } else if (symbolMode === SymbolMode.CLASSES) {
-      onMappingChange?.({ categoryColumn: undefined });
-    } else if (symbolMode === SymbolMode.CATEGORIES) {
-      onMappingChange?.({ sizeColumn: undefined, valueColumn: undefined });
-    }
   }
 
   function handleOpenDiscretization() {
@@ -254,6 +234,7 @@
         visualization={visualization}
         onSymbolsChange={onSymbolsChange}
         onMappingChange={onMappingChange}
+        onModesChange={onModesChange}
         onMissingDataChange={onMissingDataChange}
         onClassificationChange={onClassificationChange}
         onStrokeClassificationChange={onStrokeClassificationChange}
