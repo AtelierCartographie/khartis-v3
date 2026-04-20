@@ -8,13 +8,14 @@ import type {
   SimplificationResult,
   SimplificationState
 } from './simplification.types';
-import { Duck } from '$lib/features/duckdb';
+import { Duck, duckDBOrchestrator } from '$lib/features/duckdb';
 import {
   basemapService,
   getPreferredBasemapSimplificationLevel,
   resolveBasemapVariantFile
 } from '$lib/features/map/services/basemap.service.svelte';
 import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+import { projectStore } from '$lib/features/commons/store/project.store.svelte';
 import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
 import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
 import {
@@ -35,6 +36,8 @@ const DEFAULT_STATE: SimplificationState = {
   isProcessing: false
 };
 
+const DATASET_SIMPLIFICATION_SUFFIX = '__simplified';
+
 type SimplificationActions = {
   setSource: (source: SimplificationSource) => void;
   setLevel: (level: SimplificationLevel) => void;
@@ -42,7 +45,7 @@ type SimplificationActions = {
   applySimplification: (options?: {
     datasetId?: string;
   }) => Promise<SimplificationResult | null>;
-  undoLastSimplification: () => boolean;
+  undoLastSimplification: () => Promise<boolean>;
 };
 
 const { actions, getState } = createToolStore<
@@ -206,14 +209,38 @@ const { actions, getState } = createToolStore<
         s.rate,
         dataset.geometry.bounds
       );
+      const datasetBaseTableName =
+        s.lastApplied?.source === SimplificationSource.Geo &&
+        s.lastApplied.datasetId === dataset.id &&
+        s.lastApplied.datasetBaseTableName
+          ? s.lastApplied.datasetBaseTableName
+          : getGeoDatasetBaseTableName(dataset);
+      const datasetSimplifiedTableName =
+        getGeoDatasetSimplifiedTableName(datasetBaseTableName);
 
       const metrics = await simplifyGeometryTable(
         Duck,
-        dataset.tableName,
-        tolerance
+        datasetSimplifiedTableName,
+        tolerance,
+        {
+          inputTableName: datasetBaseTableName,
+          targetTableName: datasetSimplifiedTableName
+        }
       );
 
-      await datasetsStore.updateDataset(dataset.id, {
+      if (dataset.sourceFileId) {
+        await duckDBOrchestrator.updateDatasetTableName(
+          dataset.sourceFileId,
+          datasetSimplifiedTableName
+        );
+      }
+
+      datasetsStore.updateDatasetTableName(
+        dataset.id,
+        datasetSimplifiedTableName
+      );
+
+      datasetsStore.updateDataset(dataset.id, {
         simplificationApplied: {
           rate: s.rate,
           tolerance,
@@ -227,7 +254,11 @@ const { actions, getState } = createToolStore<
         simplified: true,
         vertexReduction: metrics.reductionPercentage,
         originalVertices: metrics.originalVertices,
-        simplifiedVertices: metrics.simplifiedVertices
+        simplifiedVertices: metrics.simplifiedVertices,
+        datasetId: dataset.id,
+        datasetSourceFileId: dataset.sourceFileId,
+        datasetBaseTableName,
+        datasetSimplifiedTableName
       };
     }
 
@@ -314,9 +345,21 @@ const { actions, getState } = createToolStore<
                 s.source === SimplificationSource.Basemap
                   ? activeBasemapId
                   : undefined,
+              datasetId:
+                s.source === SimplificationSource.Geo
+                  ? result?.datasetId
+                  : undefined,
               datasetSourceFileId:
                 s.source === SimplificationSource.Geo
-                  ? activeDataset?.sourceFileId
+                  ? (result?.datasetSourceFileId ?? activeDataset?.sourceFileId)
+                  : undefined,
+              datasetBaseTableName:
+                s.source === SimplificationSource.Geo
+                  ? result?.datasetBaseTableName
+                  : undefined,
+              datasetSimplifiedTableName:
+                s.source === SimplificationSource.Geo
+                  ? result?.datasetSimplifiedTableName
                   : undefined,
               timestamp: Date.now()
             };
@@ -326,12 +369,58 @@ const { actions, getState } = createToolStore<
           s.isProcessing = false;
         }
       },
-      undoLastSimplification: (): boolean => {
-        if (s.lastApplied) {
+      undoLastSimplification: async (): Promise<boolean> => {
+        const lastApplied = s.lastApplied;
+        if (!lastApplied) {
+          return false;
+        }
+
+        if (
+          lastApplied.source !== SimplificationSource.Geo ||
+          !lastApplied.datasetBaseTableName
+        ) {
           s.lastApplied = undefined;
           return true;
         }
-        return false;
+
+        const dataset = lastApplied.datasetId
+          ? datasetsStore.datasets.find((d) => d.id === lastApplied.datasetId)
+          : datasetsStore.selectedDataset;
+
+        if (!dataset) {
+          logger.warn(
+            'Cannot undo dataset simplification: dataset not found',
+            LogCategory.DUCKDB,
+            lastApplied
+          );
+          return false;
+        }
+
+        try {
+          if (lastApplied.datasetSourceFileId) {
+            await duckDBOrchestrator.updateDatasetTableName(
+              lastApplied.datasetSourceFileId,
+              lastApplied.datasetBaseTableName
+            );
+          }
+
+          datasetsStore.updateDatasetTableName(
+            dataset.id,
+            lastApplied.datasetBaseTableName
+          );
+          datasetsStore.updateDataset(dataset.id, {
+            simplificationApplied: undefined
+          });
+          s.lastApplied = undefined;
+          return true;
+        } catch (error) {
+          logger.error(
+            'Failed to undo dataset simplification',
+            LogCategory.DUCKDB,
+            { lastApplied, error }
+          );
+          return false;
+        }
       }
     };
   },
@@ -344,3 +433,28 @@ const { actions, getState } = createToolStore<
 
 export const simplificationActions = actions;
 export const getSimplificationState = getState;
+
+function getGeoDatasetBaseTableName(dataset: {
+  sourceFileId?: string;
+  tableName: string;
+}): string {
+  const sourceFileTableName = dataset.sourceFileId
+    ? projectStore.currentProject?.data?.sourceFiles?.find(
+        (file) => file.id === dataset.sourceFileId
+      )?.duckdbTableName
+    : undefined;
+
+  return trimDatasetSimplificationSuffix(
+    sourceFileTableName ?? dataset.tableName
+  );
+}
+
+function getGeoDatasetSimplifiedTableName(baseTableName: string): string {
+  return `${trimDatasetSimplificationSuffix(baseTableName)}${DATASET_SIMPLIFICATION_SUFFIX}`;
+}
+
+function trimDatasetSimplificationSuffix(tableName: string): string {
+  return tableName.endsWith(DATASET_SIMPLIFICATION_SUFFIX)
+    ? tableName.slice(0, -DATASET_SIMPLIFICATION_SUFFIX.length)
+    : tableName;
+}
