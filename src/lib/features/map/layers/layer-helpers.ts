@@ -130,6 +130,70 @@ export function createChoroplethColorAccessor(
   };
 }
 
+interface StrokeClassificationAccessorOptions {
+  strokeMode: 'classes' | 'categories' | string;
+  strokeClassification?: {
+    colors?: string[];
+    breaks?: number[];
+    labels?: string[];
+  } | null;
+  valueColumn?: string | null;
+  categoryColumn?: string | null;
+  fallbackLabels?: string[];
+  fallbackBreaks?: number[];
+  missingColor: RGBColor;
+  showMissing: boolean;
+  hexToRgb: (hex: string) => RGBColor;
+}
+
+export function createStrokeClassificationAccessor(
+  options: StrokeClassificationAccessorOptions
+): ((row: DeckDataRow) => [number, number, number, number]) | null {
+  const {
+    strokeMode,
+    strokeClassification,
+    valueColumn,
+    categoryColumn,
+    fallbackLabels,
+    fallbackBreaks,
+    missingColor,
+    showMissing,
+    hexToRgb
+  } = options;
+  const colors = strokeClassification?.colors;
+  if (!colors || colors.length === 0) return null;
+
+  if (strokeMode === 'classes' && valueColumn) {
+    const breaks = strokeClassification?.breaks ?? fallbackBreaks;
+    if (!breaks || breaks.length < 2) return null;
+    return createChoroplethColorAccessor(
+      valueColumn,
+      breaks,
+      colors,
+      missingColor,
+      showMissing
+    );
+  }
+
+  if (strokeMode === 'categories' && categoryColumn) {
+    const labels = strokeClassification?.labels ?? fallbackLabels ?? [];
+    if (labels.length === 0) return null;
+    const colorMap = new Map<string, RGBColor>();
+    labels.forEach((label, i) => {
+      const hex = colors[i] ?? colors[colors.length - 1]!;
+      colorMap.set(String(label), hexToRgb(hex));
+    });
+    return createCategoricalColorAccessor(
+      categoryColumn,
+      colorMap,
+      missingColor,
+      showMissing
+    );
+  }
+
+  return null;
+}
+
 export function createGeoJsonCategoricalColorAccessor(
   categoryColumn: string,
   colorMap: Map<string, RGBColor> | null,
