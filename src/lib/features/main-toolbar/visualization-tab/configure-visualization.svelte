@@ -24,6 +24,7 @@
     type MissingDataConfig,
     type PolygonPrimitiveConfig,
     type PrimitiveFilter,
+    type SymbolModeState,
     type SymbolPrimitiveConfig,
     type TextPrimitiveConfig,
     type TextSecondaryLabelsConfig,
@@ -616,7 +617,8 @@
               )
                 ? { categoryColumn: updates.categoryColumn }
                 : {})
-            }
+            },
+            mapping: { ...selectedViz.mapping, ...updates }
           },
           (nextVisualization) => {
             syncLegendSubtitleAfterMappingChange(
@@ -650,7 +652,8 @@
               ...(Object.prototype.hasOwnProperty.call(updates, 'sizeColumn')
                 ? { sizeColumn: updates.sizeColumn }
                 : {})
-            }
+            },
+            mapping: { ...selectedViz.mapping, ...updates }
           },
           (nextVisualization) => {
             syncLegendSubtitleAfterMappingChange(
@@ -684,7 +687,8 @@
               ...(Object.prototype.hasOwnProperty.call(updates, 'sizeColumn')
                 ? { sizeColumn: updates.sizeColumn }
                 : {})
-            }
+            },
+            mapping: { ...selectedViz.mapping, ...updates }
           },
           (nextVisualization) => {
             syncLegendSubtitleAfterMappingChange(
@@ -746,7 +750,8 @@
                       }
                     }
                   : {})
-            }
+            },
+            mapping: { ...selectedViz.mapping, ...updates }
           },
           (nextVisualization) => {
             syncLegendSubtitleAfterMappingChange(
@@ -909,19 +914,91 @@
     });
   }
 
+  function snapshotSymbolModeState(
+    symbol: SymbolPrimitiveConfig
+  ): SymbolModeState {
+    return {
+      size: symbol.size,
+      minSize: symbol.minSize,
+      maxSize: symbol.maxSize,
+      sizeScale: symbol.sizeScale,
+      valueColumn: symbol.valueColumn,
+      categoryColumn: symbol.categoryColumn,
+      sizeColumn: symbol.sizeColumn,
+      classification: symbol.classification,
+      categoryShape: symbol.categoryShape,
+      proportionalType: symbol.proportionalType,
+      commonScale: symbol.commonScale,
+      positionMode: symbol.positionMode,
+      breakValueA: symbol.breakValueA,
+      breakValueB: symbol.breakValueB,
+      fillMode: symbol.fillMode
+    };
+  }
+
+  const SYMBOL_MODE_STATE_KEYS = [
+    'size',
+    'minSize',
+    'maxSize',
+    'sizeScale',
+    'valueColumn',
+    'categoryColumn',
+    'sizeColumn',
+    'classification',
+    'categoryShape',
+    'proportionalType',
+    'commonScale',
+    'positionMode',
+    'breakValueA',
+    'breakValueB',
+    'fillMode'
+  ] as const satisfies readonly (keyof SymbolModeState)[];
+
+  function applySymbolModeStateFields(
+    symbol: SymbolPrimitiveConfig,
+    state: SymbolModeState | undefined
+  ): Partial<SymbolPrimitiveConfig> {
+    const fields: Partial<SymbolPrimitiveConfig> = {};
+    for (const key of SYMBOL_MODE_STATE_KEYS) {
+      (fields as Record<string, unknown>)[key] = state?.[key];
+    }
+    return fields;
+  }
+
   function handleSymbolModesChange(updates: Partial<VisualizationModes>) {
     const symbol = getSymbolPrimitive(selectedViz);
     if (!symbol) {
       return;
     }
 
+    const modeChanging =
+      Object.prototype.hasOwnProperty.call(updates, 'symbol') &&
+      updates.symbol !== undefined &&
+      updates.symbol !== symbol.mode;
+
+    const previousMode = symbol.mode;
+    const nextMode = modeChanging
+      ? (updates.symbol as SymbolMode)
+      : symbol.mode;
+
+    const existingModeStates = symbol.modeStates ?? {};
+    const nextModeStates = modeChanging
+      ? {
+          ...existingModeStates,
+          [previousMode]: snapshotSymbolModeState(symbol)
+        }
+      : existingModeStates;
+    const restoredStateFields = modeChanging
+      ? applySymbolModeStateFields(symbol, existingModeStates[nextMode])
+      : {};
+
     updateSelectedVisualization(
       {
         symbol: {
           ...symbol,
-          ...(Object.prototype.hasOwnProperty.call(updates, 'symbol')
-            ? { mode: updates.symbol ?? symbol.mode }
-            : {}),
+          ...(modeChanging ? { mode: nextMode } : {}),
+          ...restoredStateFields,
+          modeStates: nextModeStates,
           ...(Object.prototype.hasOwnProperty.call(updates, 'fill')
             ? { fillMode: updates.fill ?? symbol.fillMode }
             : {}),

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import {
     Dropdown,
     RadioButton,
@@ -42,18 +43,20 @@
     onModesChange,
     onMissingDataChange,
     onClassificationChange,
-    onInvertPalette,
-    onOpenDiscretization
+    onInvertPalette
   }: SymbolModeProps = $props();
 
   const currentPalette = $derived(
-    visualization?.classification?.colors ?? DEFAULT_QUALITATIVE_PREVIEW
+    visualization?.symbol?.classification?.colors ??
+      visualization?.symbolClassification?.colors ??
+      DEFAULT_QUALITATIVE_PREVIEW
   );
 
   const NONE_FIELD_ID = -1;
   let selectedFieldId = $state<number>(NONE_FIELD_ID);
   let categoryPickerOpen = $state(false);
   let categoryCount = $state<number>(4);
+  let categoriesAspectOpen = $state(false);
   let symbolOpacity = $state<number>(100);
   let shapeType = $state<ShapeType>(ShapeType.CIRCLE);
   let categoryShapeMode = $state<CategoryShapeMode>(CategoryShapeMode.UNIQUE);
@@ -114,9 +117,12 @@
   );
 
   $effect(() => {
-    if (visualization?.mapping.categoryColumn && dataFields.length > 0) {
+    const categoryCol =
+      visualization?.symbol?.categoryColumn ??
+      visualization?.mapping.categoryColumn;
+    if (categoryCol && dataFields.length > 0) {
       const fieldIndex = dataFields.findIndex(
-        (field) => field.text === visualization.mapping.categoryColumn
+        (field) => field.text === categoryCol
       );
       selectedFieldId =
         fieldIndex >= 0 ? dataFields[fieldIndex].id : NONE_FIELD_ID;
@@ -135,7 +141,8 @@
       shapeType = availableShapes.includes(persistedShape)
         ? persistedShape
         : ShapeType.CIRCLE;
-      categoryShapeMode = symbolConfig.categoryShape ?? categoryShapeMode;
+      categoryShapeMode =
+        symbolConfig.categoryShape ?? untrack(() => categoryShapeMode);
     } else if (visualization?.symbols) {
       symbolOpacity =
         visualization.symbols.opacity !== undefined
@@ -162,11 +169,14 @@
       missingDataColor =
         visualization.missingData.color ?? DEFAULT_COLORS.missingData;
     }
-    if (visualization?.classification) {
+    const symClassification =
+      visualization?.symbol?.classification ??
+      visualization?.symbolClassification;
+    if (symClassification) {
       categoryCount =
-        visualization.classification.labels?.length ??
-        visualization.classification.numClasses ??
-        visualization.classification.classes ??
+        symClassification.labels?.length ??
+        symClassification.numClasses ??
+        symClassification.classes ??
         4;
     }
   });
@@ -305,6 +315,7 @@
     <InfoPopover text={m.category_shape_mode_info()} />
   </span>
   <RadioButtonGroup
+    name="cat-shape-mode"
     selected={categoryShapeMode}
     on:change={(e) =>
       handleCategoryShapeModeChange(e.detail as CategoryShapeMode)}
@@ -345,17 +356,25 @@
 <DiscretizationRow
   label={m.category_aspect()}
   value={m.categories_count({ count: categoryCount })}
-  onsettings={onOpenDiscretization}
+  onsettings={() => {
+    categoriesAspectOpen = true;
+  }}
 />
 <PalettePreview
   label={m.color_palette()}
   colors={currentPalette}
-  selectedPaletteId={visualization?.classification?.paletteId}
-  inverted={visualization?.classification?.inverted ?? false}
+  selectedPaletteId={visualization?.symbol?.classification?.paletteId ??
+    visualization?.symbolClassification?.paletteId}
+  inverted={visualization?.symbol?.classification?.inverted ??
+    visualization?.symbolClassification?.inverted ??
+    false}
   paletteType={PALETTE_TYPE.QUALITATIVE}
   categoriesMode={true}
   categoriesVariant={categoriesVariant}
-  categoryLabels={visualization?.classification?.labels ?? []}
+  categoryLabels={visualization?.symbol?.classification?.labels ??
+    visualization?.symbolClassification?.labels ??
+    []}
+  bind:categoriesPopoverOpen={categoriesAspectOpen}
   oninvert={onInvertPalette}
   onClassificationChange={onClassificationChange}
 />
