@@ -194,16 +194,16 @@
   onoutsideclick={handleOutsideClick}
 >
   {#if triggerLabel}
-    <label class="form-label" for="color-picker-trigger">{triggerLabel}</label>
+    <span class="form-label">{triggerLabel}</span>
   {/if}
 
   <button
-    id="color-picker-trigger"
     class="color-trigger"
     type="button"
     disabled={disabled}
     onclick={() => !disabled && (colorOpen = !colorOpen)}
     aria-expanded={colorOpen}
+    aria-label={triggerLabel || undefined}
     bind:this={triggerEl}
   >
     <div class="swatch" style={`background:${hex}`}></div>
