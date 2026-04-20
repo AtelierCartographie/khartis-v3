@@ -40,6 +40,7 @@
   } from '../commons/store/visualization.store.svelte';
   import { FillMode } from '../main-toolbar/constants';
   import { densityLoadingStore } from './stores/density-loading.store.svelte';
+  import { mapLoadingStore } from './stores/map-loading.store.svelte';
   import { basemapService } from './services/basemap.service.svelte';
   import type { SplitRenderingTable } from './types';
   import { INTERNAL_COLUMN } from '../commons/constants/data.constants';
@@ -87,6 +88,9 @@
   });
   const usesTiledBasemap = $derived(
     Boolean(activeOSMBasemap) || basemapStyleStore.requiresMapLibre
+  );
+  const shouldHideMapOutput = $derived(
+    mapLoadingStore.isHoldingPreviewForSuggestedBasemap
   );
   const facetsEnabled = $derived(facetsStore.enabled);
   const facetsLayout = $derived(facetsStore.layout);
@@ -927,10 +931,11 @@
   <!-- Skeleton loader - overlay above map, hidden via CSS when ready -->
   <div
     class="skeleton-loader"
-    class:hidden={isMapReady}
+    class:hidden={isMapReady && !shouldHideMapOutput}
+    class:held={shouldHideMapOutput}
     style="width: {formatState.width}px; height: {formatState.height}px;"
   >
-    <MapSkeleton paused={isMapReady} />
+    <MapSkeleton paused={isMapReady && !shouldHideMapOutput} />
   </div>
 
   <!-- Map wrapper - always rendered once initialized -->
@@ -950,7 +955,8 @@
   {:else if !isInitializing}
     <div
       class="thematic-map-wrapper"
-      class:visible={isMapReady}
+      class:held={shouldHideMapOutput}
+      class:visible={isMapReady && !shouldHideMapOutput}
       bind:this={thematicMapRef}
     >
       {#if facetsEnabled && facetVisualizations.length > 0}
@@ -1069,12 +1075,19 @@
 
   .thematic-map-wrapper {
     opacity: 0;
-    transition: opacity 0.3s ease-out;
     position: relative;
   }
 
   .thematic-map-wrapper.visible {
     opacity: 1;
+    transition: none;
+  }
+
+  .thematic-map-wrapper.held {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: none;
   }
 
   .skeleton-loader {
@@ -1094,6 +1107,12 @@
   .skeleton-loader.hidden {
     opacity: 0;
     pointer-events: none;
+  }
+
+  .skeleton-loader.held {
+    opacity: 1;
+    visibility: visible;
+    transition: none;
   }
 
   .error-state {
