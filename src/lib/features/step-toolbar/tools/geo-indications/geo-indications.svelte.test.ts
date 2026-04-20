@@ -37,6 +37,7 @@ describe('geo-indications tool', () => {
 
     expect(geoIndicationsState.scale.enabled).toBe(true);
     expect(await screen.findByText(m.geo_style())).toBeInTheDocument();
+    expect(screen.getByText(m.color())).toBeInTheDocument();
   });
 
   it('keeps the scale font-size select synchronized with stored state', async () => {
@@ -56,5 +57,20 @@ describe('geo-indications tool', () => {
 
     expect(fontSizeSelect).toBeDefined();
     expect(fontSizeSelect?.value).toBe('16');
+  });
+
+  it('exposes longitude and latitude controls for the inset map centering', async () => {
+    render(GeoIndications);
+
+    const insetSwitch = screen.getByRole('switch', { name: m.geo_inset_map() });
+
+    await fireEvent.click(insetSwitch);
+
+    expect(
+      await screen.findByText(m.geo_inset_map_center_longitude())
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(m.geo_inset_map_center_latitude())
+    ).toBeInTheDocument();
   });
 });

@@ -16,6 +16,11 @@
     geoIndicationsActions,
     geoIndicationsState
   } from '$lib/features/step-toolbar/tools/geo-indications/geo-indications.store.svelte';
+  import {
+    fromDistanceMeters,
+    INSET_MAP_SIZE_LIMITS,
+    toDistanceMeters
+  } from '$lib/features/step-toolbar/tools/geo-indications/utils';
   import { onDestroy, onMount } from 'svelte';
   import * as d3geo from 'd3-geo';
   import type { GeoPermissibleObjects, GeoProjection } from 'd3-geo';
@@ -49,8 +54,6 @@
 
   const EARTH_CIRCUMFERENCE_KM = 40075.017;
   const EARTH_RADIUS_METERS = 6378137;
-  const KM_TO_MILES = 0.621371;
-  const MILE_TO_METERS = 1609.344;
   const MM_TO_PAGE_PX = 72 / 25.4;
   const SCALE_PADDING = 6;
   const SCALE_SEGMENT_COUNT = 4;
@@ -75,12 +78,6 @@
   const SCALE_MAX_WIDTH_PX = 120;
   const ORIENTATION_MIN_SIZE_PX = 14;
   const ORIENTATION_MAX_SIZE_PX = 84;
-  const INSET_GLOBE_MIN_SIZE_PX = 56;
-  const INSET_GLOBE_MAX_SIZE_PX = 170;
-  const INSET_PLANISPHERE_MIN_WIDTH_PX = 72;
-  const INSET_PLANISPHERE_MAX_WIDTH_PX = 240;
-  const INSET_PLANISPHERE_MIN_HEIGHT_PX = 48;
-  const INSET_PLANISPHERE_MAX_HEIGHT_PX = 170;
 
   type WorldFeatureCollection = FeatureCollection<
     Polygon | MultiPolygon,
@@ -211,21 +208,6 @@
       return value;
     }
     return fallback;
-  }
-
-  function toDistanceMeters(distance: number, unit: DistanceUnit): number {
-    return unit === DistanceUnit.KILOMETERS
-      ? distance * 1000
-      : (distance / KM_TO_MILES) * 1000;
-  }
-
-  function fromDistanceMeters(
-    distanceMeters: number,
-    unit: DistanceUnit
-  ): number {
-    return unit === DistanceUnit.KILOMETERS
-      ? distanceMeters / 1000
-      : distanceMeters / MILE_TO_METERS;
   }
 
   function toNiceDistance(value: number): number {
@@ -558,22 +540,20 @@
     if (geoIndicationsState.insetMap.type === InsetMapType.GLOBE) {
       const size = clamp(
         requestedSize,
-        INSET_GLOBE_MIN_SIZE_PX,
-        INSET_GLOBE_MAX_SIZE_PX
+        INSET_MAP_SIZE_LIMITS[InsetMapType.GLOBE].min,
+        INSET_MAP_SIZE_LIMITS[InsetMapType.GLOBE].max
       );
       return { width: Math.round(size), height: Math.round(size) };
     }
 
     const width = clamp(
       requestedSize,
-      INSET_PLANISPHERE_MIN_WIDTH_PX,
-      INSET_PLANISPHERE_MAX_WIDTH_PX
+      INSET_MAP_SIZE_LIMITS[InsetMapType.PLANISPHERE].min,
+      INSET_MAP_SIZE_LIMITS[InsetMapType.PLANISPHERE].max
     );
-    const proposedHeight = width * INSET_PLANISPHERE_RATIO;
-    const height = clamp(
-      proposedHeight,
-      INSET_PLANISPHERE_MIN_HEIGHT_PX,
-      INSET_PLANISPHERE_MAX_HEIGHT_PX
+    const height = Math.max(
+      INSET_MAP_SIZE_LIMITS[InsetMapType.PLANISPHERE].min,
+      width * INSET_PLANISPHERE_RATIO
     );
 
     return {
