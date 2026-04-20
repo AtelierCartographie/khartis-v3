@@ -83,7 +83,7 @@ describe('PaletteSuggestions — SEQUENTIAL branch (Figma 930:114478)', () => {
 
   it('should render individual palette rows with family name labels', () => {
     expect(sequentialBlock).toContain('class="palette-label"');
-    expect(sequentialBlock).toContain('{palette.name}');
+    expect(sequentialBlock).toContain('{getPaletteDisplayName(palette)}');
     expect(sequentialBlock).toContain('{#each sequentialPalettes as palette');
   });
 
