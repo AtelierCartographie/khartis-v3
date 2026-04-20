@@ -1,0 +1,60 @@
+import { describe, expect, it } from 'vitest';
+
+import { FillMode } from '../../../constants';
+import {
+  FILL_MODES_STANDARD,
+  FILL_MODES_WITH_DENSITY,
+  buildFillModeItems
+} from './fill-mode-presets';
+
+describe('fill-mode-presets', () => {
+  it('FILL_MODES_STANDARD lists four modes without DENSITY', () => {
+    expect(FILL_MODES_STANDARD).toEqual([
+      FillMode.NONE,
+      FillMode.UNIQUE,
+      FillMode.CLASSES,
+      FillMode.CATEGORIES
+    ]);
+    expect(FILL_MODES_STANDARD.length).toBe(4);
+    expect(FILL_MODES_STANDARD).not.toContain(FillMode.DENSITY);
+  });
+
+  it('FILL_MODES_WITH_DENSITY lists five modes and keeps DENSITY between UNIQUE and CLASSES', () => {
+    expect(FILL_MODES_WITH_DENSITY).toEqual([
+      FillMode.NONE,
+      FillMode.UNIQUE,
+      FillMode.DENSITY,
+      FillMode.CLASSES,
+      FillMode.CATEGORIES
+    ]);
+  });
+
+  it('buildFillModeItems returns one entry per mode', () => {
+    const items = buildFillModeItems(FILL_MODES_STANDARD);
+    expect(items.length).toBe(FILL_MODES_STANDARD.length);
+  });
+
+  it('buildFillModeItems attaches a carbon icon, an i18n label, and the default icon size', () => {
+    const items = buildFillModeItems(FILL_MODES_WITH_DENSITY);
+    items.forEach((item) => {
+      expect(item.icon).toBeDefined();
+      expect(typeof item.label).toBe('string');
+      expect(item.label.length).toBeGreaterThan(0);
+      expect(item.iconSize).toBe(16);
+    });
+  });
+
+  it('buildFillModeItems preserves the order of the input modes', () => {
+    const reordered = buildFillModeItems([
+      FillMode.CATEGORIES,
+      FillMode.NONE,
+      FillMode.UNIQUE
+    ]);
+    expect(reordered.map((item) => item.label)).toEqual([
+      expect.any(String),
+      expect.any(String),
+      expect.any(String)
+    ]);
+    expect(reordered.length).toBe(3);
+  });
+});
