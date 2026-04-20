@@ -1,13 +1,10 @@
 <script lang="ts">
   import { Dropdown } from 'carbon-components-svelte';
   import {
-    MisuseOutline,
     CircleFilled,
-    SquareFill,
     Close,
     CaretUp,
-    Category,
-    Tag,
+    SquareFill,
     StarFilled,
     DiamondFill,
     Checkbox
@@ -39,6 +36,10 @@
   } from '../shared';
   import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
   import FacetsVariablePicker from './facets-variable-picker.svelte';
+  import {
+    FILL_MODES_STANDARD,
+    buildFillModeItems
+  } from '../shared/fill-mode-presets';
   import type { SymbolModeProps } from './types';
   import { resolveDiscretizationLabel } from '../discretization.utils';
   import {
@@ -148,21 +149,9 @@
     }
   });
 
-  const fillModeItems = [
-    { icon: MisuseOutline, label: m.fill_mode_none(), iconSize: 16 },
-    { icon: SquareFill, label: m.fill_mode_unique(), iconSize: 16 },
-    { icon: Category, label: m.fill_mode_classes(), iconSize: 16 },
-    { icon: Tag, label: m.fill_mode_categories(), iconSize: 16 }
-  ];
+  const fillModeItems = buildFillModeItems(FILL_MODES_STANDARD);
 
-  const fillModeIndex = $derived(
-    [
-      FillMode.NONE,
-      FillMode.UNIQUE,
-      FillMode.CLASSES,
-      FillMode.CATEGORIES
-    ].indexOf(fillMode)
-  );
+  const fillModeIndex = $derived(FILL_MODES_STANDARD.indexOf(fillMode));
 
   const discretizationLabel = $derived.by(() =>
     resolveDiscretizationLabel(

@@ -17,18 +17,15 @@
   } from '$lib/features/commons/components/palette-popover/palette.constants';
   import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
   import {
-    Category,
-    ChartScatter,
-    MisuseOutline,
-    SquareFill,
-    Tag
-  } from 'carbon-icons-svelte';
-  import {
     DEFAULT_COLORS,
     FillMode,
     SLIDER_LIMITS,
     VISUALIZATION_DEFAULTS
   } from '../../constants';
+  import {
+    FILL_MODES_WITH_DENSITY,
+    buildFillModeItems
+  } from './shared/fill-mode-presets';
   import {
     DiscretizationRow,
     InfoPopover,
@@ -194,21 +191,8 @@
     }
   });
 
-  const fillModeItems = [
-    { icon: MisuseOutline, label: m.fill_mode_none(), iconSize: 16 },
-    { icon: SquareFill, label: m.fill_mode_unique(), iconSize: 16 },
-    { icon: ChartScatter, label: m.symbol_mode_density(), iconSize: 16 },
-    { icon: Category, label: m.fill_mode_classes(), iconSize: 16 },
-    { icon: Tag, label: m.fill_mode_categories(), iconSize: 16 }
-  ];
-
-  const FILL_MODE_ORDER: FillMode[] = [
-    FillMode.NONE,
-    FillMode.UNIQUE,
-    FillMode.DENSITY,
-    FillMode.CLASSES,
-    FillMode.CATEGORIES
-  ];
+  const fillModeItems = buildFillModeItems(FILL_MODES_WITH_DENSITY);
+  const FILL_MODE_ORDER = FILL_MODES_WITH_DENSITY;
 
   function handleFillModeChange(index: number) {
     const nextFillMode = FILL_MODE_ORDER[index] || FillMode.NONE;
