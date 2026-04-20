@@ -2,6 +2,7 @@ import { formatValue } from '$lib/features/commons/utils/format.utils';
 import { projectHtmlLikeText } from '$lib/features/commons/utils/html-like-text.utils';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import type { VisualizationConfig } from '$lib/features/commons/store/visualization.store.svelte';
+import { globalState } from '$lib/features/commons/store/global.svelte';
 import type { PickingInfo } from '@deck.gl/core';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import { MAP_TIMING } from '../constants/timing.constants';
@@ -366,6 +367,12 @@ export function createHoverHandler(
   getVisualizations?: () => VisualizationConfig[]
 ): (info: PickingInfo) => void {
   return (info: PickingInfo) => {
+    if (globalState.isMobileView) {
+      clearPendingHoverTooltip();
+      mapTooltipStore.hide();
+      return;
+    }
+
     if (mapTooltipStore.pinned) {
       clearPendingHoverTooltip();
       return;
