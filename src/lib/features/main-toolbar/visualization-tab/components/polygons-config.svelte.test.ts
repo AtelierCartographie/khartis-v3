@@ -7,83 +7,60 @@ const source = readFileSync(
   'utf8'
 );
 
-describe('PolygonsConfig — palette wiring', () => {
-  it('should import PALETTE_TYPE from palette-popover/palette.constants', () => {
+describe('PolygonsConfig — FillSection wiring', () => {
+  it('delegates fill rendering to the shared FillSection component', () => {
     expect(source).toContain(
-      "from '$lib/features/commons/components/palette-popover/palette.constants'"
+      "import FillSection from './shared/fill-section.svelte'"
     );
-    expect(source).toContain('PALETTE_TYPE');
+    expect(source).toContain('<FillSection');
   });
 
-  it('should pass paletteType=SEQUENTIAL on the CLASSES branch PalettePreview', () => {
-    const classesBlock = source.split(
-      'effectiveFillMode === FillMode.CLASSES'
-    )[1];
-    expect(classesBlock).toBeDefined();
-    const classesPalette = classesBlock
-      .split('<PalettePreview')[1]
-      ?.split('/>')[0];
-    expect(classesPalette).toBeDefined();
-    expect(classesPalette).toContain('paletteType={PALETTE_TYPE.SEQUENTIAL}');
-  });
-
-  it('should pass paletteType=QUALITATIVE on the CATEGORIES branch PalettePreview', () => {
-    const categoriesBlock = source.split(
-      'effectiveFillMode === FillMode.CATEGORIES'
-    )[1];
-    expect(categoriesBlock).toBeDefined();
-    const categoriesPalette = categoriesBlock
-      .split('<PalettePreview')[1]
-      ?.split('/>')[0];
-    expect(categoriesPalette).toBeDefined();
-    expect(categoriesPalette).toContain(
-      'paletteType={PALETTE_TYPE.QUALITATIVE}'
-    );
-  });
-
-  it('should keep the DiscretizationRow + PalettePreview pair in both fill modes', () => {
-    const classesBlock = source.split(
-      'effectiveFillMode === FillMode.CLASSES'
-    )[1];
-    const categoriesBlock = source.split(
-      'effectiveFillMode === FillMode.CATEGORIES'
-    )[1];
-    expect(classesBlock).toContain('<DiscretizationRow');
-    expect(classesBlock).toContain('<PalettePreview');
-    expect(categoriesBlock).toContain('<DiscretizationRow');
-    expect(categoriesBlock).toContain('<PalettePreview');
-  });
-
-  it('should wire Fill Unique through SingleColorPreview (not the raw ColorSelector)', () => {
+  it('passes the polygon-specific availableModes with DENSITY', () => {
+    expect(source).toContain('availableModes={FILL_MODES_WITH_DENSITY}');
     expect(source).toContain(
-      "import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte'"
-    );
-    const uniqueBlock = source
-      .split('effectiveFillMode === FillMode.UNIQUE')[1]
-      ?.split('{:else if')[0];
-    expect(uniqueBlock).toBeDefined();
-    expect(uniqueBlock).toContain('<SingleColorPreview');
-    expect(uniqueBlock).toContain('color={fillColor}');
-    expect(uniqueBlock).toContain('onchange={handleFillColorChange}');
-    // ColorSelector should no longer be used for Fill Unique
-    expect(uniqueBlock).not.toContain('<ColorSelector');
-  });
-
-  it('should enable the Categories Aspect popover via categoriesMode prop on the CATEGORIES branch', () => {
-    const categoriesBlock = source.split(
-      'effectiveFillMode === FillMode.CATEGORIES'
-    )[1];
-    expect(categoriesBlock).toBeDefined();
-    const paletteBlock = categoriesBlock
-      .split('<PalettePreview')[1]
-      ?.split('/>')[0];
-    expect(paletteBlock).toContain('categoriesMode={true}');
-    expect(paletteBlock).toContain(
-      'categoryLabels={visualization?.classification?.labels ?? []}'
+      "import { FILL_MODES_WITH_DENSITY } from './shared/fill-mode-presets'"
     );
   });
 
-  it('exposes FillMode.DENSITY in the fill mode items (issue #93)', () => {
+  it('tags the primitive as polygon and sets categoriesVariant to polygons', () => {
+    const fillBlock = source
+      .split('<FillSection')[1]
+      ?.split('</FillSection>')[0];
+    expect(fillBlock).toBeDefined();
+    expect(fillBlock).toContain('primitive="polygon"');
+    expect(fillBlock).toContain('categoriesVariant="polygons"');
+  });
+
+  it('provides the density snippet consumed by FillSection for the DENSITY branch', () => {
+    const fillBlock = source
+      .split('<FillSection')[1]
+      ?.split('</FillSection>')[0];
+    expect(fillBlock).toContain('{#snippet densitySnippet()}');
+    expect(fillBlock).toContain('<PolygonModeDensity');
+  });
+
+  it('wires handleFillColorChange / handleFillOpacityChange / handleClassificationChange', () => {
+    const fillBlock = source
+      .split('<FillSection')[1]
+      ?.split('</FillSection>')[0];
+    expect(fillBlock).toContain('onFillColorChange={handleFillColorChange}');
+    expect(fillBlock).toContain(
+      'onFillOpacityChange={handleFillOpacityChange}'
+    );
+    expect(fillBlock).toContain(
+      'onClassificationChange={handleClassificationChange}'
+    );
+  });
+
+  it('keeps StrokeSection branch unchanged and gated on non-DENSITY fill mode', () => {
+    expect(source).toContain('{#if effectiveFillMode !== FillMode.DENSITY}');
+    expect(source).toContain('<StrokeSection');
+    expect(source).toContain(
+      'onStrokeClassificationChange={handleStrokeDiscretizationChange}'
+    );
+  });
+
+  it('exposes FillMode.DENSITY through PolygonModeDensity in the density snippet', () => {
     expect(source).toContain('FillMode.DENSITY');
     expect(source).toContain('<PolygonModeDensity');
     expect(source).toContain("from './polygons'");

@@ -1,19 +1,15 @@
 <script lang="ts">
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import Switch from '$lib/features/commons/components/switch.svelte';
-  import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import {
     ColorSelector,
-    DiscretizationRow,
     InfoPopover,
-    PalettePreview,
     SectionHeading,
-    SliderWithInput,
     StrokeSection,
     VizFilterButton,
     VizFilterPanel
   } from './shared';
-  import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
+  import FillSection from './shared/fill-section.svelte';
   import type {
     ClassificationConfig,
     MissingDataConfig,
@@ -24,25 +20,15 @@
   } from '$lib/features/commons/store/visualization.store.svelte';
   import * as m from '$lib/paraglide/messages';
   import {
-    DEFAULT_QUALITATIVE_PREVIEW,
-    DEFAULT_SEQUENTIAL_PREVIEW,
-    PALETTE_TYPE
-  } from '$lib/features/commons/components/palette-popover/palette.constants';
-  import {
     DEFAULT_COLORS,
     FillMode,
-    SLIDER_LIMITS,
     VISUALIZATION_DEFAULTS
   } from '../../constants';
-  import {
-    FILL_MODES_STANDARD,
-    buildFillModeItems
-  } from './shared/fill-mode-presets';
+  import { FILL_MODES_STANDARD } from './shared/fill-mode-presets';
   import { Button, Dropdown, TextInput } from 'carbon-components-svelte';
   import DiscretizationModal from './discretization-modal.svelte';
   import TextStylePopover from './text-style-popover.svelte';
   import { resolveDiscretizationLabel } from './discretization.utils';
-  import FacetsVariablePicker from './symbols/facets-variable-picker.svelte';
   import {
     FACET_SLOT,
     facetsStore,
@@ -125,7 +111,6 @@
   let selectedBackgroundValueFieldId = $state<number>(NONE_FIELD_ID);
   let selectedBackgroundCategoryFieldId = $state<number>(NONE_FIELD_ID);
   let secondaryFieldId = $state<number>(NONE_FIELD_ID);
-  let backgroundFacetPickerOpen = $state(false);
 
   let textColor = $state<string>(DEFAULT_COLORS.text);
   let textOpacity = $state<number>(VISUALIZATION_DEFAULTS.textOpacity);
@@ -168,14 +153,6 @@
   const enabled = $derived((visualization?.style.textOpacity ?? 0) > 0);
   const hasPrimaryField = $derived(selectedLabelFieldId !== NONE_FIELD_ID);
   const hasSecondaryField = $derived(secondaryFieldId !== NONE_FIELD_ID);
-  const backgroundCurrentPalette = $derived(
-    backgroundVisualization?.classification?.colors ??
-      DEFAULT_SEQUENTIAL_PREVIEW
-  );
-  const backgroundCategoriesPalette = $derived(
-    backgroundVisualization?.classification?.colors ??
-      DEFAULT_QUALITATIVE_PREVIEW
-  );
   const backgroundAvailable = $derived(Boolean(backgroundVisualization));
   const selectedBackgroundVizId = $derived(backgroundVisualization?.id);
   const activeDiscretizationVisualization = $derived(
@@ -209,10 +186,6 @@
       .map((name) => dataFields.find((field) => field.text === name)?.id)
       .filter((id): id is number => typeof id === 'number');
   }
-
-  const fillModeItems = buildFillModeItems(FILL_MODES_STANDARD);
-
-  const fillModeIndex = $derived(FILL_MODES_STANDARD.indexOf(fillMode));
 
   const backgroundDiscretizationLabel = $derived.by(() =>
     resolveDiscretizationLabel(
@@ -786,141 +759,40 @@
       </div>
 
       {#if backgroundAvailable}
-        <SectionHeading title={m.background()} />
-
-        <div class="field-group">
-          <ToggleTabs
-            items={fillModeItems}
-            activeIndex={fillModeIndex}
-            onChange={handleBackgroundFillModeChange}
-            hideInactiveLabel={true}
-          />
-        </div>
-
-        {#if fillMode === FillMode.UNIQUE}
-          <SingleColorPreview
-            label={m.color()}
-            color={fillColor}
-            onchange={handleBackgroundFillColorChange}
-          />
-        {:else if fillMode === FillMode.CLASSES}
-          <div class="field-group">
-            <FacetsVariablePicker
-              bind:open={backgroundFacetPickerOpen}
-              titleText={m.color_according()}
-              dataFields={dataFields}
-              singleSelectItems={selectableDataFields}
-              selectedFieldId={selectedBackgroundValueFieldId}
-              selectedFieldIds={getBackgroundFacetsSelectedFieldIds(
-                FACET_SLOT.TEXT_BACKGROUND_VALUE
-              )}
-              isCollectionEnabled={isBackgroundFacetsActiveForSlot(
-                FACET_SLOT.TEXT_BACKGROUND_VALUE
-              )}
-              onSelect={handleBackgroundValueFieldSelect}
-              onCollectionChange={(ids) =>
-                handleBackgroundFacetsVariablesChange(
-                  dataFields.find(
-                    (field) => field.id === selectedBackgroundValueFieldId
-                  )?.text ?? '',
-                  FACET_SLOT.TEXT_BACKGROUND_VALUE,
-                  ids
-                )}
-              onToggleCollection={(enabled) =>
-                handleBackgroundFacetsToggle(
-                  dataFields.find(
-                    (field) => field.id === selectedBackgroundValueFieldId
-                  )?.text ?? '',
-                  FACET_SLOT.TEXT_BACKGROUND_VALUE,
-                  enabled
-                )}
-            />
-          </div>
-          <DiscretizationRow
-            label={m.discretization()}
-            value={backgroundDiscretizationLabel}
-            onsettings={openBackgroundDiscretization}
-          />
-          <PalettePreview
-            label={m.color_palette()}
-            colors={backgroundCurrentPalette}
-            selectedPaletteId={backgroundVisualization?.classification
-              ?.paletteId}
-            inverted={backgroundVisualization?.classification?.inverted ??
-              false}
-            paletteType={PALETTE_TYPE.SEQUENTIAL}
-            oninvert={onBackgroundInvertPalette}
-            onClassificationChange={onBackgroundClassificationChange}
-          />
-        {:else if fillMode === FillMode.CATEGORIES}
-          <div class="field-group">
-            <FacetsVariablePicker
-              bind:open={backgroundFacetPickerOpen}
-              titleText={m.color_according()}
-              dataFields={dataFields}
-              singleSelectItems={selectableDataFields}
-              selectedFieldId={selectedBackgroundCategoryFieldId}
-              selectedFieldIds={getBackgroundFacetsSelectedFieldIds(
-                FACET_SLOT.TEXT_BACKGROUND_CATEGORY
-              )}
-              isCollectionEnabled={isBackgroundFacetsActiveForSlot(
-                FACET_SLOT.TEXT_BACKGROUND_CATEGORY
-              )}
-              onSelect={handleBackgroundCategoryFieldSelect}
-              onCollectionChange={(ids) =>
-                handleBackgroundFacetsVariablesChange(
-                  dataFields.find(
-                    (field) => field.id === selectedBackgroundCategoryFieldId
-                  )?.text ?? '',
-                  FACET_SLOT.TEXT_BACKGROUND_CATEGORY,
-                  ids
-                )}
-              onToggleCollection={(enabled) =>
-                handleBackgroundFacetsToggle(
-                  dataFields.find(
-                    (field) => field.id === selectedBackgroundCategoryFieldId
-                  )?.text ?? '',
-                  FACET_SLOT.TEXT_BACKGROUND_CATEGORY,
-                  enabled
-                )}
-            />
-          </div>
-          <DiscretizationRow
-            label={m.category_aspect()}
-            value={m.categories_count({
-              count:
-                backgroundVisualization?.classification?.labels?.length ?? 0
-            })}
-            onsettings={openBackgroundDiscretization}
-          />
-          <PalettePreview
-            label={m.color_palette()}
-            colors={backgroundCategoriesPalette}
-            selectedPaletteId={backgroundVisualization?.classification
-              ?.paletteId}
-            inverted={backgroundVisualization?.classification?.inverted ??
-              false}
-            paletteType={PALETTE_TYPE.QUALITATIVE}
-            categoriesMode={true}
-            categoriesVariant="texts"
-            categoryLabels={backgroundVisualization?.classification?.labels ??
-              []}
-            oninvert={onBackgroundInvertPalette}
-            onClassificationChange={onBackgroundClassificationChange}
-          />
-        {/if}
-
-        {#if fillMode !== FillMode.NONE}
-          <SliderWithInput
-            label={m.opacity()}
-            min={SLIDER_LIMITS.opacity.min}
-            max={SLIDER_LIMITS.opacity.max}
-            value={fillOpacity}
-            showMinMax
-            inputWidth="128px"
-            onchange={handleBackgroundFillOpacityChange}
-          />
-        {/if}
+        <FillSection
+          visualization={backgroundVisualization}
+          primitive="text"
+          dataFields={dataFields}
+          availableModes={FILL_MODES_STANDARD}
+          fillMode={fillMode}
+          fillColor={fillColor}
+          fillOpacity={fillOpacity}
+          selectedValueFieldId={selectedBackgroundValueFieldId}
+          selectedCategoryFieldId={selectedBackgroundCategoryFieldId}
+          discretizationLabel={backgroundDiscretizationLabel}
+          categoryCount={backgroundVisualization?.classification?.labels
+            ?.length ?? 0}
+          facetsValueSlotPath={FACET_SLOT.TEXT_BACKGROUND_VALUE}
+          facetsCategorySlotPath={FACET_SLOT.TEXT_BACKGROUND_CATEGORY}
+          categoriesVariant="texts"
+          showMissingDataSection={false}
+          sectionTitle={m.background()}
+          selectableDataFields={selectableDataFields}
+          getFacetsSelectedFieldIds={getBackgroundFacetsSelectedFieldIds}
+          isFacetsActiveForSlot={isBackgroundFacetsActiveForSlot}
+          onFillModeChange={(mode: FillMode) =>
+            handleBackgroundFillModeChange(FILL_MODES_STANDARD.indexOf(mode))}
+          onFillColorChange={handleBackgroundFillColorChange}
+          onFillOpacityChange={handleBackgroundFillOpacityChange}
+          onValueFieldSelect={handleBackgroundValueFieldSelect}
+          onCategoryFieldSelect={handleBackgroundCategoryFieldSelect}
+          onFacetsVariablesChange={handleBackgroundFacetsVariablesChange}
+          onFacetsToggle={handleBackgroundFacetsToggle}
+          onOpenDiscretization={openBackgroundDiscretization}
+          onClassificationChange={onBackgroundClassificationChange ??
+            (() => {})}
+          onInvertPalette={onBackgroundInvertPalette}
+        />
 
         <StrokeSection
           visualization={backgroundVisualization}
