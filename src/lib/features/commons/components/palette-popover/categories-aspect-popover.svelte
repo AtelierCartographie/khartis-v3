@@ -101,6 +101,14 @@
     draftCategories.find((category) => category.id === selectedCategoryId)
   );
 
+  const MAX_VISIBLE_CATEGORIES = 50;
+  const visibleDraftCategories = $derived(
+    draftCategories.slice(0, MAX_VISIBLE_CATEGORIES)
+  );
+  const hiddenCategoryCount = $derived(
+    Math.max(0, draftCategories.length - MAX_VISIBLE_CATEGORIES)
+  );
+
   function portal(node: HTMLElement) {
     document.body.appendChild(node);
     return {
@@ -535,7 +543,7 @@
           <div class="field-stack">
             <p class="list-label">{m.palette_categories_list_label()}</p>
             <ul class="category-list">
-              {#each draftCategories as category, index (category.id)}
+              {#each visibleDraftCategories as category, index (category.id)}
                 <li class="category-item">
                   <div class="category-header">
                     <div class="drag-handle" aria-hidden="true">
@@ -636,6 +644,12 @@
                 </li>
               {/each}
             </ul>
+            {#if hiddenCategoryCount > 0}
+              <p class="hidden-count-note">
+                + {hiddenCategoryCount} autres catégories (couleurs/formes générées
+                automatiquement)
+              </p>
+            {/if}
           </div>
         </section>
       </div>
@@ -852,6 +866,18 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
+  }
+
+  .hidden-count-note {
+    margin: 8px 0 0;
+    padding: 8px 12px;
+    background: var(--cds-layer-01, #f4f4f4);
+    border: 1px dashed var(--cds-border-subtle-01, #c6c6c6);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 12px;
+    font-style: italic;
+    line-height: 16px;
+    color: var(--cds-text-secondary, #525252);
   }
 
   .category-item {
