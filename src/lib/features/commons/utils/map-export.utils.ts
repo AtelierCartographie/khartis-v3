@@ -74,6 +74,16 @@ async function prerenderWebgl(pixelRatio: number): Promise<() => void> {
  * Returns a cleanup function that undoes both mutations.
  */
 function mutateDomForExport(pageContainer: HTMLElement): () => void {
+  pageContainer.classList.add('is-exporting-map');
+
+  const pageGrids = Array.from(
+    pageContainer.querySelectorAll<HTMLElement>('.page-grid')
+  );
+  const pageGridDisplays = pageGrids.map((grid) => grid.style.display);
+  pageGrids.forEach((grid) => {
+    grid.style.display = 'none';
+  });
+
   const sig = document.createElement('div');
   sig.style.cssText =
     'position:absolute;bottom:10px;left:10px;font-family:Arial,sans-serif;' +
@@ -88,9 +98,24 @@ function mutateDomForExport(pageContainer: HTMLElement): () => void {
   if (mapStage) mapStage.style.filter = 'none';
 
   return () => {
+    pageContainer.classList.remove('is-exporting-map');
     pageContainer.removeChild(sig);
+    pageGrids.forEach((grid, index) => {
+      grid.style.display = pageGridDisplays[index] ?? '';
+    });
     if (mapStage) mapStage.style.filter = savedFilter;
   };
+}
+
+function waitForNextFrame(): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => resolve());
+      return;
+    }
+
+    setTimeout(resolve, 0);
+  });
 }
 
 /**
@@ -136,6 +161,7 @@ export async function exportMapToSvg(
 
   const restoreRatio = await prerenderWebgl(pixelRatio);
   const restoreDom = mutateDomForExport(pageContainer);
+  await waitForNextFrame();
 
   try {
     const svgDataUrl = await htmlToImageSvg(pageContainer, {
@@ -174,6 +200,7 @@ export async function exportMapToJpg(
 
   const restoreRatio = await prerenderWebgl(pagePixelRatio);
   const restoreDom = mutateDomForExport(pageContainer);
+  await waitForNextFrame();
 
   let pageCanvas: HTMLCanvasElement | null = null;
   try {
