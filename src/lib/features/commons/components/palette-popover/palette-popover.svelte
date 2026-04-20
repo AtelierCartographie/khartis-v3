@@ -243,6 +243,7 @@
           onColorBlindChange={handleColorBlindChange}
           onSelect={handlePaletteSelect}
           onColorSelect={handleQualitativeColorSelect}
+          onIntensitySelect={handleQualitativeColorSelect}
         />
 
         <PaletteCustom

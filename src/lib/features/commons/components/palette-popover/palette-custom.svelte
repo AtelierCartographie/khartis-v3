@@ -2,8 +2,8 @@
   import * as m from '$lib/paraglide/messages';
   import { RadioButtonGroup, RadioButton } from 'carbon-components-svelte';
   import ContentSwitcher from './content-switcher.svelte';
+  import SingleColorPreview from './single-color-preview.svelte';
   import {
-    ColorSelector,
     SliderWithInput,
     ToggleWithLabel
   } from '$lib/features/main-toolbar/visualization-tab/components/shared';
@@ -13,6 +13,7 @@
     type PaletteType,
     type PatternParams,
     type ContrastMode,
+    getPaletteDisplayName,
     getPatternPalettes,
     generateSequentialFromColor,
     generateSequentialFromColors,
@@ -268,9 +269,9 @@
   </div>
 
   {#if isQualitative}
-    <ColorSelector
+    <SingleColorPreview
       label={m.color()}
-      value={singleColor}
+      color={singleColor}
       onchange={handleSingleColorChange}
     />
 
@@ -288,21 +289,21 @@
 
     <div class="tab-content">
       {#if activeTab === 0}
-        <ColorSelector
+        <SingleColorPreview
           label={m.color()}
-          value={singleColor}
+          color={singleColor}
           onchange={handleSingleColorChange}
         />
       {:else if activeTab === 1}
         <div class="two-colors">
-          <ColorSelector
+          <SingleColorPreview
             label={m.color()}
-            value={startColor}
+            color={startColor}
             onchange={handleStartColorChange}
           />
-          <ColorSelector
+          <SingleColorPreview
             label={m.color()}
-            value={endColor}
+            color={endColor}
             onchange={handleEndColorChange}
           />
         </div>
@@ -314,14 +315,14 @@
               class="pattern-item"
               class:selected={selectedPatternId === palette.id}
               onclick={() => handlePatternClick(palette)}
-              aria-label={palette.name}
+              aria-label={getPaletteDisplayName(palette)}
               aria-pressed={selectedPatternId === palette.id}
             >
               <div
                 class="pattern-preview"
                 style="background: {buildPatternBackground(palette)}"
               ></div>
-              <span class="pattern-name">{palette.name}</span>
+              <span class="pattern-name">{getPaletteDisplayName(palette)}</span>
             </button>
           {/each}
         </div>
@@ -465,35 +466,35 @@
   .pattern-list {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 4px;
   }
 
   .pattern-item {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 8px;
-    background: transparent;
-    border: 1px solid var(--cds-border-subtle);
-    border-radius: 4px;
+    min-height: 32px;
+    padding: 7px 12px;
+    background: var(--cds-field-01, #f4f4f4);
+    border: none;
+    border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d);
     cursor: pointer;
     width: 100%;
 
     &:hover {
-      background-color: var(--cds-layer-hover);
-      border-color: var(--cds-border-strong);
+      background: var(--cds-field-hover-01, #e8e8e8);
     }
 
     &.selected {
-      background-color: var(--cds-layer-selected);
-      border-color: var(--cds-border-interactive);
+      outline: 1px solid #012749;
+      outline-offset: -1px;
     }
   }
 
   .pattern-preview {
-    width: 60px;
-    height: 20px;
-    border-radius: 2px;
+    width: 56px;
+    height: 18px;
+    border: 1px solid var(--cds-icon-on-color, #ffffff);
     flex-shrink: 0;
     background-size:
       auto,
@@ -502,18 +503,18 @@
   }
 
   .pattern-name {
+    font-family: 'IBM Plex Sans', sans-serif;
     font-size: 14px;
-    color: var(--cds-text-primary);
+    line-height: 18px;
+    letter-spacing: 0.16px;
+    color: var(--cds-text-primary, #161616);
   }
 
   .pattern-params {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 8px;
-    background: var(--cds-layer-01);
-    border: 1px solid var(--cds-border-subtle);
-    border-radius: 4px;
+    gap: 16px;
+    padding-top: 8px;
   }
 
   .param-row {
@@ -532,25 +533,27 @@
   .angle-buttons {
     display: flex;
     gap: 4px;
+    flex-wrap: wrap;
   }
 
   .angle-btn {
-    padding: 2px 8px;
+    min-height: 24px;
+    padding: 0 8px 2px;
     font-size: 12px;
-    background: var(--cds-field);
-    border: 1px solid var(--cds-border-strong);
-    border-radius: 2px;
+    background: #e5f6ff;
+    border: 1px solid #82cfff;
+    border-radius: 9px;
     cursor: pointer;
-    color: var(--cds-text-primary);
+    color: #003a6d;
 
     &:hover {
-      background: var(--cds-layer-hover);
+      background: #cceeff;
     }
 
     &.active {
-      background: var(--cds-interactive);
-      color: var(--cds-text-on-color);
-      border-color: var(--cds-interactive);
+      background: #0072c3;
+      color: #ffffff;
+      border-color: #0072c3;
     }
   }
 
@@ -562,11 +565,28 @@
 
   .live-preview-swatch {
     flex: 1;
-    height: 24px;
-    border-radius: 2px;
+    height: 18px;
+    border: 1px solid var(--cds-icon-on-color, #ffffff);
     background-size:
       auto,
       8px 8px,
       auto;
+  }
+
+  .contrast-section :global(.bx--radio-button-group) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .contrast-section :global(.bx--radio-button-wrapper) {
+    margin: 0;
+  }
+
+  .contrast-section :global(.bx--radio-button__label) {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 14px;
+    line-height: 18px;
+    letter-spacing: 0.16px;
   }
 </style>
