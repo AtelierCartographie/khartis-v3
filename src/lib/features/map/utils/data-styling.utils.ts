@@ -246,11 +246,14 @@ function usesCategoricalColor(
         getTextPrimitive(viz)?.colorMode === ColorMode.CATEGORIES ||
         viz.modes?.color === ColorMode.CATEGORIES
       );
-    case PrimitiveFilterType.POINT:
+    case PrimitiveFilterType.POINT: {
+      const symbol = getSymbolPrimitive(viz);
       return (
-        getSymbolPrimitive(viz)?.fillMode === FillMode.CATEGORIES ||
+        symbol?.mode === SymbolMode.CATEGORIES ||
+        symbol?.fillMode === FillMode.CATEGORIES ||
         viz.modes?.fill === FillMode.CATEGORIES
       );
+    }
     case PrimitiveFilterType.POLYGON:
     default:
       return (
