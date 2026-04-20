@@ -48,7 +48,7 @@ describe('SymbolModeCategories (en categorie.png alignment)', () => {
   it('enables the Categories Aspect popover via categoriesMode + categoryLabels', () => {
     expect(source).toContain('categoriesMode={true}');
     expect(source).toContain(
-      'categoryLabels={visualization?.classification?.labels ?? []}'
+      'categoryLabels={visualization?.symbol?.classification?.labels ??'
     );
   });
 

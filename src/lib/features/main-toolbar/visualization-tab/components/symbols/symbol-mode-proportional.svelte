@@ -96,10 +96,14 @@
     isSyncingFromVisualization = true;
 
     if (dataFields.length > 0 && visualization?.mapping) {
+      const sym = visualization.symbol;
+      const sizeCol = sym?.sizeColumn ?? visualization.mapping.sizeColumn;
+      const valueCol = sym?.valueColumn ?? visualization.mapping.valueColumn;
+      const categoryCol =
+        sym?.categoryColumn ?? visualization.mapping.categoryColumn;
+
       const mappedFieldName =
-        symbolMode === SymbolMode.PROPORTIONAL
-          ? visualization.mapping.sizeColumn
-          : visualization.mapping.valueColumn;
+        symbolMode === SymbolMode.PROPORTIONAL ? sizeCol : valueCol;
 
       if (mappedFieldName) {
         const fieldIndex = dataFields.findIndex(
@@ -111,9 +115,9 @@
         selectedFieldId = NONE_FIELD_ID;
       }
 
-      if (visualization.mapping.valueColumn) {
+      if (valueCol) {
         const fieldBIndex = dataFields.findIndex(
-          (field) => field.text === visualization.mapping.valueColumn
+          (field) => field.text === valueCol
         );
         selectedFieldBId =
           fieldBIndex >= 0 ? dataFields[fieldBIndex].id : NONE_FIELD_ID;
@@ -121,9 +125,9 @@
         selectedFieldBId = NONE_FIELD_ID;
       }
 
-      if (visualization.mapping.valueColumn) {
+      if (valueCol) {
         const valueFieldIndex = dataFields.findIndex(
-          (field) => field.text === visualization.mapping.valueColumn
+          (field) => field.text === valueCol
         );
         fillClassFieldId =
           valueFieldIndex >= 0 ? dataFields[valueFieldIndex].id : NONE_FIELD_ID;
@@ -131,9 +135,9 @@
         fillClassFieldId = NONE_FIELD_ID;
       }
 
-      if (visualization.mapping.categoryColumn) {
+      if (categoryCol) {
         const categoryFieldIndex = dataFields.findIndex(
-          (field) => field.text === visualization.mapping.categoryColumn
+          (field) => field.text === categoryCol
         );
         fillCategoryFieldId =
           categoryFieldIndex >= 0
