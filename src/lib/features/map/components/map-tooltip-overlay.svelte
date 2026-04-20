@@ -6,24 +6,42 @@
   import { resolveTooltipViewportPosition } from '../utils/tooltip-position';
   import * as m from '$lib/paraglide/messages';
   import { KEY } from '$lib/features/commons/constants/dom.constants';
+  import { Tag } from 'carbon-components-svelte';
   import Close from 'carbon-icons-svelte/lib/Close.svelte';
 
   const PREVIEW_PRIMARY_ENTRIES_COUNT = 2;
-  const DESKTOP_INSPECTOR_TARGET_HEIGHT = 272;
-  const DESKTOP_INSPECTOR_MIN_HEIGHT = 160;
+  const DESKTOP_INSPECTOR_TARGET_HEIGHT = 352;
+  const DESKTOP_INSPECTOR_MIN_HEIGHT = 220;
   const TOOLTIP_VIEWER_GAP = 12;
   const VIEWPORT_PADDING = 8;
+  const HEADLINE_ENTRY_KEYS = ['NAME_LATIN', 'NAME', 'LABEL', 'TITLE'] as const;
+  const BADGE_ENTRY_KEYS = ['NUTS_ID', 'OGC_FID', 'ID', 'CODE'] as const;
 
   let tooltipElement = $state<HTMLDivElement | null>(null);
 
   const tooltipState = $derived(mapTooltipStore.state);
   const isMobileLayout = $derived(globalState.isMobileView);
   const isInteractive = $derived(isMobileLayout || tooltipState.pinned);
-  const visibleEntries = $derived(
-    isInteractive
-      ? tooltipState.entries
-      : tooltipState.entries.slice(0, PREVIEW_PRIMARY_ENTRIES_COUNT)
+  const headlineEntry = $derived.by(() =>
+    isInteractive ? resolveHeadlineEntry(tooltipState.entries) : null
   );
+  const badgeEntries = $derived.by(() =>
+    isInteractive
+      ? resolveBadgeEntries(tooltipState.entries, headlineEntry?.key ?? null)
+      : []
+  );
+  const visibleEntries = $derived.by(() => {
+    if (!isInteractive) {
+      return tooltipState.entries.slice(0, PREVIEW_PRIMARY_ENTRIES_COUNT);
+    }
+
+    const skippedKeys = new Set<string>([
+      ...(headlineEntry ? [headlineEntry.key] : []),
+      ...badgeEntries.map((entry) => entry.key)
+    ]);
+
+    return tooltipState.entries.filter((entry) => !skippedKeys.has(entry.key));
+  });
   const previewOverflowCount = $derived(
     isInteractive
       ? 0
@@ -78,6 +96,38 @@
     const { left, top, width, height } =
       viewportElement.getBoundingClientRect();
     return { left, top, width, height };
+  }
+
+  function resolveHeadlineEntry(
+    entries: typeof tooltipState.entries
+  ): (typeof tooltipState.entries)[number] | null {
+    for (const candidateKey of HEADLINE_ENTRY_KEYS) {
+      const candidate = entries.find((entry) => entry.key === candidateKey);
+      if (candidate) {
+        return candidate;
+      }
+    }
+
+    return null;
+  }
+
+  function resolveBadgeEntries(
+    entries: typeof tooltipState.entries,
+    excludedKey: string | null
+  ): typeof tooltipState.entries {
+    return entries.filter((entry) => {
+      if (entry.key === excludedKey) {
+        return false;
+      }
+
+      const isPreferredKey = BADGE_ENTRY_KEYS.includes(
+        entry.key as (typeof BADGE_ENTRY_KEYS)[number]
+      );
+      const isCompactValue =
+        entry.value.length <= 14 && !/\s{2,}/.test(entry.value);
+
+      return isPreferredKey && isCompactValue;
+    });
   }
 
   function resolveDesktopInspectorHeight(maxAvailableHeight: number): number {
@@ -231,6 +281,20 @@
             <Close size={16} />
           </button>
         </div>
+
+        {#if headlineEntry}
+          <div class="tooltip-title">{headlineEntry.value}</div>
+        {/if}
+
+        {#if badgeEntries.length > 0}
+          <div class="tooltip-badges">
+            {#each badgeEntries as entry (entry.key)}
+              <Tag size="sm" type="warm-gray">
+                {entry.key}: {entry.value}
+              </Tag>
+            {/each}
+          </div>
+        {/if}
       </div>
     {/if}
 
@@ -281,9 +345,9 @@
   }
 
   .map-tooltip.interactive {
-    width: min(15rem, calc(100vw - 24px));
-    max-width: min(15rem, calc(100vw - 24px));
-    height: var(--tooltip-interactive-height, 17rem);
+    width: min(18rem, calc(100vw - 24px));
+    max-width: min(18rem, calc(100vw - 24px));
+    height: var(--tooltip-interactive-height, 22rem);
     overflow: hidden;
     pointer-events: auto;
     user-select: text;
@@ -312,13 +376,39 @@
   .tooltip-shell-header {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 6px;
     padding: 6px 8px 0;
   }
 
   .tooltip-shell-actions {
     display: flex;
     justify-content: flex-end;
+  }
+
+  .tooltip-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    color: #161616;
+  }
+
+  .tooltip-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .tooltip-badges :global(.bx--tag),
+  .tooltip-badges :global(.cds--tag) {
+    max-width: 100%;
+    min-height: 1.25rem;
+  }
+
+  .tooltip-badges :global(.bx--tag__label),
+  .tooltip-badges :global(.cds--tag__label) {
+    overflow-wrap: anywhere;
   }
 
   .tooltip-shell-body {
@@ -414,6 +504,39 @@
   .interactive .tooltip-key,
   .interactive .tooltip-value {
     white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    max-width: none;
+  }
+
+  .interactive .tooltip-entries {
+    gap: 0;
+  }
+
+  .interactive .tooltip-row {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 2px;
+    padding: 5px 0;
+  }
+
+  .interactive .tooltip-row + .tooltip-row {
+    border-top: 1px solid rgba(22, 22, 22, 0.08);
+  }
+
+  .interactive .tooltip-key {
+    font-size: 10px;
+    line-height: 1.3;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: #6f6f6f;
+  }
+
+  .interactive .tooltip-value {
+    justify-self: start;
+    text-align: left;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   .mobile-sheet .tooltip-row {
