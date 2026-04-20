@@ -7,59 +7,40 @@ const source = readFileSync(
   'utf8'
 );
 
-describe('TextsConfig — palette wiring', () => {
-  it('should import PALETTE_TYPE from palette-popover/palette.constants', () => {
+describe('TextsConfig — FillSection wiring (background)', () => {
+  it('delegates the background fill rendering to the shared FillSection', () => {
     expect(source).toContain(
-      "from '$lib/features/commons/components/palette-popover/palette.constants'"
+      "import FillSection from './shared/fill-section.svelte'"
     );
-    expect(source).toContain('PALETTE_TYPE');
+    expect(source).toContain('<FillSection');
   });
 
-  it('should wire SEQUENTIAL paletteType on the background CLASSES-mode PalettePreview', () => {
-    const sequentialCount = (
-      source.match(/paletteType=\{PALETTE_TYPE\.SEQUENTIAL\}/g) || []
-    ).length;
-    expect(sequentialCount).toBeGreaterThanOrEqual(1);
-  });
-
-  it('should wire QUALITATIVE paletteType on the background CATEGORIES-mode PalettePreview', () => {
-    const qualitativeCount = (
-      source.match(/paletteType=\{PALETTE_TYPE\.QUALITATIVE\}/g) || []
-    ).length;
-    expect(qualitativeCount).toBeGreaterThanOrEqual(1);
-  });
-
-  it('should never default to the implicit paletteType on a PalettePreview', () => {
-    const paletteBlocks = source.match(/<PalettePreview[\s\S]*?\/>/g) || [];
-    expect(paletteBlocks.length).toBeGreaterThan(0);
-    paletteBlocks.forEach((block) => {
-      expect(block).toMatch(
-        /paletteType=\{PALETTE_TYPE\.(SEQUENTIAL|QUALITATIVE)\}/
-      );
-    });
-  });
-
-  it('should use SingleColorPreview for the background UNIQUE mode', () => {
+  it('uses the standard 4-mode preset for the text background (no DENSITY)', () => {
+    expect(source).toContain('availableModes={FILL_MODES_STANDARD}');
     expect(source).toContain(
-      "import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte'"
+      "import { FILL_MODES_STANDARD } from './shared/fill-mode-presets'"
     );
-    const singleColorCount = (source.match(/<SingleColorPreview/g) ?? [])
-      .length;
-    expect(singleColorCount).toBeGreaterThanOrEqual(1);
   });
 
-  it('should enable categoriesMode on every QUALITATIVE PalettePreview', () => {
-    const paletteBlocks = source.match(/<PalettePreview[\s\S]*?\/>/g) || [];
-    const qualitativeBlocks = paletteBlocks.filter((block) =>
-      block.includes('paletteType={PALETTE_TYPE.QUALITATIVE}')
+  it('tags the primitive as text and sets categoriesVariant to texts', () => {
+    const fillBlock = source.split('<FillSection')[1]?.split('/>')[0];
+    expect(fillBlock).toBeDefined();
+    expect(fillBlock).toContain('primitive="text"');
+    expect(fillBlock).toContain('categoriesVariant="texts"');
+  });
+
+  it('wires onBackgroundClassificationChange to the FillSection fill role', () => {
+    const fillBlock = source.split('<FillSection')[1]?.split('/>')[0];
+    expect(fillBlock).toContain(
+      'onClassificationChange={onBackgroundClassificationChange'
     );
-    expect(qualitativeBlocks.length).toBeGreaterThanOrEqual(1);
-    qualitativeBlocks.forEach((block) => {
-      expect(block).toContain('categoriesMode={true}');
-      expect(block).toMatch(
-        /categoryLabels=\{(visualization|backgroundVisualization)\?\.classification[\s\S]*?labels[\s\S]*?\?\?[\s\S]*?\[\]\}/
-      );
-    });
+  });
+
+  it('keeps the StrokeSection branch for the background halo', () => {
+    expect(source).toContain('<StrokeSection');
+    expect(source).toContain(
+      'onStrokeClassificationChange={handleBackgroundStrokeClassificationChange}'
+    );
   });
 });
 
