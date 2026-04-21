@@ -127,6 +127,8 @@ const FIT_PADDING_PX = 30;
 const MIN_FIT_ZOOM_PERCENT = 20;
 const MAX_FIT_ZOOM_PERCENT = 500;
 
+export const MIN_READABLE_PAGE_PREVIEW_SCALE = 0.6;
+
 export interface ResolveFitZoomParams {
   viewportWidth: number;
   viewportHeight: number;
@@ -162,6 +164,14 @@ export function resolveFitToWorkspaceZoom({
   const percent = Math.round(ratio * 100);
 
   return clamp(percent, MIN_FIT_ZOOM_PERCENT, MAX_FIT_ZOOM_PERCENT);
+}
+
+export function resolveReadablePagePreviewScale(scale: number): number {
+  if (!Number.isFinite(scale) || scale <= 0) {
+    return 1;
+  }
+
+  return clamp(scale, MIN_READABLE_PAGE_PREVIEW_SCALE, 1);
 }
 
 export const WORKSPACE_FIT_EVENT = 'khartis:workspace-fit';
