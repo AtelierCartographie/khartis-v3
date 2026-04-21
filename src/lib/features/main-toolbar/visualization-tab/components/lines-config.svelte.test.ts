@@ -15,16 +15,15 @@ describe('LinesConfig — palette wiring', () => {
     expect(source).toContain('PALETTE_TYPE');
   });
 
-  it('should pass dynamic paletteType (DIVERGING when breakpointValue set, else SEQUENTIAL) on the CLASSES branch PalettePreview', () => {
+  it('delegates the CLASSES branch PalettePreview paletteType to resolvePaletteTypeForBreakpoint', () => {
     const classesBlock = source.split('colorMode === ColorMode.CLASSES')[1];
     expect(classesBlock).toBeDefined();
     const classesPalette = classesBlock
       .split('<PalettePreview')[1]
       ?.split('/>')[0];
     expect(classesPalette).toBeDefined();
-    expect(classesPalette).toContain('PALETTE_TYPE.DIVERGING');
-    expect(classesPalette).toContain('PALETTE_TYPE.SEQUENTIAL');
-    expect(classesPalette).toMatch(/breakpointValue\s*!=\s*null/);
+    expect(classesPalette).toContain('resolvePaletteTypeForBreakpoint');
+    expect(classesPalette).toContain('visualization?.classification');
   });
 
   it('should pass paletteType=QUALITATIVE on the CATEGORIES branch PalettePreview', () => {

@@ -642,6 +642,22 @@ export function findPaletteById(id: string): Palette | undefined {
   return all.find((p) => p.id === id);
 }
 
+/**
+ * Resolves the palette kind that a classification should expose to the user.
+ * Single source of truth for the "has the user set a divergent breakpoint?"
+ * gate that flips the palette dropdown, color generator and SVG legend from
+ * sequential to diverging swatches. Keeps Figma `930:114478` and `930:115082`
+ * variants in sync across fill-section, stroke-section, lines-config and the
+ * classification.service break computation.
+ */
+export function resolvePaletteTypeForBreakpoint(
+  classification: { breakpointValue?: number | null } | null | undefined
+): PaletteType {
+  return classification?.breakpointValue != null
+    ? PALETTE_TYPE.DIVERGING
+    : PALETTE_TYPE.SEQUENTIAL;
+}
+
 export function getPaletteDisplayName(palette: Palette): string {
   switch (palette.id) {
     case 'mono-pink':
