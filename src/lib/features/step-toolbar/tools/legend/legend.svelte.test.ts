@@ -62,11 +62,22 @@ describe('legend tool', () => {
     render(Legend);
 
     await fireEvent.click(screen.getByRole('button', { name: /style/i }));
+
+    expect(
+      screen.queryByRole('button', { name: /^decrement$/i })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /^increment$/i })
+    ).not.toBeInTheDocument();
+
     await fireEvent.change(screen.getByRole('combobox', { name: /police/i }), {
       target: { value: 'Inter' }
     });
     await fireEvent.change(screen.getByRole('combobox', { name: /taille/i }), {
       target: { value: '24' }
+    });
+    await fireEvent.input(screen.getByRole('spinbutton'), {
+      target: { value: '42' }
     });
     await fireEvent.click(
       screen.getByRole('switch', { name: /arrière plan/i })
@@ -74,6 +85,7 @@ describe('legend tool', () => {
 
     expect(getLegendState().style.fontFamily).toBe('Inter');
     expect(getLegendState().style.fontSize).toBe(24);
+    expect(getLegendState().style.background.opacity).toBe(42);
     expect(getLegendState().style.background.enabled).toBe(false);
   });
 });
