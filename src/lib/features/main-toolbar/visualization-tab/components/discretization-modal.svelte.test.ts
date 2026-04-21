@@ -18,7 +18,8 @@ vi.mock('$lib/features/commons/services/classification.service', () => ({
 vi.mock(
   '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte',
   () => ({
-    getColorBlindnessState: () => ({ enabled: false })
+    getColorBlindnessState: () => ({ enabled: false, simulationType: 'none' }),
+    isColorBlindnessActive: () => false
   })
 );
 
