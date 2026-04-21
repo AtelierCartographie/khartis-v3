@@ -16,12 +16,7 @@
   import { globalState } from '../commons/store/global.svelte';
   import { ToolbarStep } from '../commons/types/global';
   import { LogCategory, logger } from '../commons/utils/logger';
-  import { applyColorBlindnessFilter } from '../commons/utils/color-blindness-filters';
-  import {
-    ColorBlindnessType,
-    FormatMode
-  } from '../commons/constants/ui.constants';
-  import { getColorBlindnessState } from '../step-toolbar/tools/color-blindness/color-blindness.store.svelte';
+  import { FormatMode } from '../commons/constants/ui.constants';
   import {
     formatActions,
     formatState
@@ -842,17 +837,6 @@
       }, remaining);
     }
   }
-
-  const colorBlindnessState = $derived(getColorBlindnessState());
-
-  $effect(() => {
-    const simulationType = colorBlindnessState.enabled
-      ? colorBlindnessState.simulationType
-      : ColorBlindnessType.NONE;
-    if (thematicMapRef) {
-      applyColorBlindnessFilter(thematicMapRef, simulationType);
-    }
-  });
 
   type ResizeEdge = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
   const RESIZE_EDGES: ResizeEdge[] = [
