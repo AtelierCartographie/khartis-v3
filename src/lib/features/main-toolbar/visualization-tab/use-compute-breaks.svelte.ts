@@ -19,7 +19,10 @@ import {
   PALETTE_TYPE
 } from '$lib/features/commons/components/palette-popover/palette.constants';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { getColorBlindnessState } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
+import {
+  getColorBlindnessState,
+  isColorBlindnessActive
+} from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
 
 export function useComputeBreaks(
   getSelectedViz: () => VisualizationConfig | undefined
@@ -87,7 +90,7 @@ export function useComputeBreaks(
           result.counts.length
         );
         const existingColors = currentViz.classification?.colors;
-        const contrast = getColorBlindnessState().enabled
+        const contrast = isColorBlindnessActive(getColorBlindnessState())
           ? ('high' as const)
           : undefined;
         let colors: string[];
