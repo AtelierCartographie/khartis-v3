@@ -4,6 +4,7 @@
   import ContentSwitcher from './content-switcher.svelte';
   import SingleColorPreview from './single-color-preview.svelte';
   import {
+    ColorSelector,
     SliderWithInput,
     ToggleWithLabel
   } from '$lib/features/main-toolbar/visualization-tab/components/shared';
@@ -175,11 +176,9 @@
 
   function handleSingleColorChange(color: string) {
     singleColor = color;
-    const colors = generateSequentialFromColor(
-      color,
-      numClasses,
-      resolvedContrast
-    );
+    const colors = isQualitative
+      ? [color]
+      : generateSequentialFromColor(color, numClasses, resolvedContrast);
     onColorsChange?.(colors);
   }
 
@@ -269,9 +268,9 @@
   </div>
 
   {#if isQualitative}
-    <SingleColorPreview
+    <ColorSelector
       label={m.color()}
-      color={singleColor}
+      value={singleColor}
       onchange={handleSingleColorChange}
     />
 

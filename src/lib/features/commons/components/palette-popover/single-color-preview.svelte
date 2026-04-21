@@ -12,10 +12,11 @@
   interface Props {
     label?: string;
     color: string;
+    exclusive?: boolean;
     onchange?: (hex: string) => void;
   }
 
-  let { label, color, onchange }: Props = $props();
+  let { label, color, exclusive = false, onchange }: Props = $props();
 
   let dropdownOpen = $state(false);
   let popoverOpen = $state(false);
@@ -77,6 +78,7 @@
   bind:open={dropdownOpen}
   triggerElement={triggerRef}
   selectedColor={color}
+  exclusive={exclusive}
   onclose={handleDropdownClose}
   onselect={handleDropdownSelect}
   oncustomize={handleCustomize}
@@ -91,6 +93,7 @@
   paletteType={PALETTE_TYPE.QUALITATIVE}
   colorBlindFilter={false}
   numClasses={1}
+  exclusive={exclusive}
   onclose={handlePopoverClose}
   onvalidate={handlePopoverValidate}
 />
