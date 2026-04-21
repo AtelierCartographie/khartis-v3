@@ -14,6 +14,7 @@ import {
   resolveLayoutSizingTokens
 } from '$lib/features/commons/utils/layout-sizing.utils';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
+import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
 import {
   getFormatLayoutSizingContext,
   getFormatState
@@ -21,7 +22,8 @@ import {
 import {
   clampScaleDistance,
   convertDistanceValue,
-  INSET_MAP_SIZE_LIMITS
+  INSET_MAP_SIZE_LIMITS,
+  normalizeScaleDistanceValue
 } from './utils';
 import type {
   ColorState,
@@ -257,6 +259,16 @@ function normalizeState(
   };
 }
 
+function getCurrentScaleDistanceContext() {
+  const center = mapInstanceStore.getMapCenter();
+
+  return {
+    map: mapInstanceStore.map,
+    zoom: mapInstanceStore.currentZoom,
+    centerLatitude: center?.lat ?? null
+  };
+}
+
 type GeoIndicationsActions = {
   setState: (newState: Partial<GeoIndicationsState>) => void;
   setVisibility: (visible: boolean) => void;
@@ -320,7 +332,8 @@ const { state, actions } = createToolStore<
       s.scale.distance = clampScaleDistance(
         distance,
         s.scale.units,
-        s.scale.distance
+        s.scale.distance,
+        getCurrentScaleDistanceContext()
       );
     },
     toggleOrientation: () => {
@@ -363,14 +376,12 @@ const { state, actions } = createToolStore<
 
       if (s.scale.distance > 0) {
         s.scale.distance = clampScaleDistance(
-          Math.max(
-            1,
-            Math.round(
-              convertDistanceValue(s.scale.distance, s.scale.units, units)
-            )
+          normalizeScaleDistanceValue(
+            convertDistanceValue(s.scale.distance, s.scale.units, units)
           ),
           units,
-          s.scale.distance
+          s.scale.distance,
+          getCurrentScaleDistanceContext()
         );
       }
 

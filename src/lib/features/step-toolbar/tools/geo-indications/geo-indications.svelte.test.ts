@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { DistanceUnit } from '$lib/features/commons/constants/ui.constants';
+import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
 import * as m from '$lib/paraglide/messages';
 import GeoIndications from './geo-indications.svelte';
 import {
@@ -9,9 +10,25 @@ import {
 } from './geo-indications.store.svelte';
 import { MAX_SCALE_DISTANCE_BY_UNIT } from './utils';
 
+function createScaleMap(widthPerLongitudeDegree: number) {
+  return {
+    getCenter: () => ({ lng: 0, lat: 0 }),
+    getZoom: () => 2,
+    project: ([lng]: [number, number]) => ({
+      x: lng * widthPerLongitudeDegree,
+      y: 0
+    }),
+    setMinZoom: () => undefined,
+    setMaxZoom: () => undefined,
+    on: () => undefined,
+    off: () => undefined
+  };
+}
+
 describe('geo-indications tool', () => {
   beforeEach(() => {
     geoIndicationsActions.reset();
+    mapInstanceStore.reset();
   });
 
   it('renders section toggles', () => {
@@ -83,6 +100,46 @@ describe('geo-indications tool', () => {
       'max',
       String(MAX_SCALE_DISTANCE_BY_UNIT[DistanceUnit.MILES])
     );
+  });
+
+  it('shows the current renderable max distance in the scale helper text', async () => {
+    mapInstanceStore.setMapInstance(createScaleMap(100) as never);
+
+    render(GeoIndications);
+
+    await fireEvent.click(screen.getByRole('switch', { name: m.geo_scale() }));
+
+    const distanceInput = await screen.findByRole('spinbutton', {
+      name: m.geo_distance()
+    });
+
+    expect(distanceInput).toHaveAttribute('max', '100');
+    expect(
+      screen.getByText(
+        m.geo_scale_max_distance_current_view({
+          distance: '100',
+          unit: 'km'
+        })
+      )
+    ).toBeInTheDocument();
+  });
+
+  it('clamps a huge distance entered from the UI to the current renderable max', async () => {
+    mapInstanceStore.setMapInstance(createScaleMap(100) as never);
+
+    render(GeoIndications);
+
+    await fireEvent.click(screen.getByRole('switch', { name: m.geo_scale() }));
+
+    const distanceInput = await screen.findByRole('spinbutton', {
+      name: m.geo_distance()
+    });
+
+    await fireEvent.change(distanceInput, {
+      target: { value: '500000000000000' }
+    });
+
+    expect(geoIndicationsState.scale.distance).toBe(100);
   });
 
   it('exposes longitude and latitude controls for the inset map centering', async () => {
