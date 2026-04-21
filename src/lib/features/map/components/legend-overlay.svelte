@@ -49,17 +49,33 @@
   } from '$lib/features/commons/types/global';
   import { LegendPosition } from '$lib/features/commons/constants/ui.constants';
   import {
+    getPrimitiveClassification,
+    getPrimitiveCategoryColumn,
+    getSymbolPrimitive,
+    PrimitiveFilterType,
     visualizationStore,
+    type ClassificationConfig,
     type VisualizationConfig
   } from '$lib/features/commons/store/visualization.store.svelte';
   import { hexToRgb, hslToHex } from '$lib/features/commons/utils/color-utils';
   import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
   import {
+    getDragBounds,
+    snapPointWithinBounds
+  } from '$lib/features/commons/utils/page-grid.utils';
+  import {
     getLegendState,
     legendActions
   } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
-  import { ShapeType } from '$lib/features/main-toolbar/constants';
+  import { getFormatState } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
+  import {
+    CATEGORY_SHAPE_CYCLE,
+    CategoryShapeMode,
+    ShapeType,
+    SymbolMode
+  } from '$lib/features/main-toolbar/constants';
   import * as m from '$lib/paraglide/messages';
+  import { untrack } from 'svelte';
   import { SvelteMap } from 'svelte/reactivity';
   import { onDestroy } from 'svelte';
   import { activateStylingToolFromMap } from '../utils/styling-tool-activation.utils';
@@ -114,8 +130,129 @@
     return `background-color: ${fillColor}; background-image: url(${patternTileUrl}); background-repeat: repeat; background-position: center;`;
   }
 
-  function getCategoryLabels(viz: VisualizationConfig | undefined): string[] {
-    return viz?.classification?.labels ?? [];
+  type LegendCategoricalEntry = {
+    key: string;
+    label: string;
+    color: string;
+    originalIndex: number;
+  };
+
+  function getLegendCategoricalClassification(
+    viz: VisualizationConfig | undefined
+  ): ClassificationConfig | undefined {
+    if (!viz) {
+      return undefined;
+    }
+
+    const swatchPrimitive = resolveLegendColorSwatchPrimitive(viz);
+    switch (swatchPrimitive) {
+      case 'point': {
+        const symbol = getSymbolPrimitive(viz);
+        if (
+          symbol?.enabled &&
+          symbol.mode === SymbolMode.CATEGORIES &&
+          getPrimitiveCategoryColumn(viz, PrimitiveFilterType.POINT)
+        ) {
+          return getPrimitiveClassification(viz, PrimitiveFilterType.POINT);
+        }
+        return undefined;
+      }
+      case 'line':
+        return getPrimitiveClassification(viz, PrimitiveFilterType.LINE);
+      case 'area':
+      default:
+        return (
+          getPrimitiveClassification(viz, PrimitiveFilterType.POLYGON) ??
+          viz.classification
+        );
+    }
+  }
+
+  function getLegendCategoricalEntries(
+    viz: VisualizationConfig | undefined
+  ): LegendCategoricalEntry[] {
+    const classification = getLegendCategoricalClassification(viz);
+    const colors = classification?.colors ?? [];
+    if (colors.length === 0) {
+      return [];
+    }
+
+    const labels = classification?.labels ?? [];
+    const disabled = new Set(
+      (classification?.disabledLabels ?? []).map((label) => String(label))
+    );
+
+    return colors
+      .map((color, index) => {
+        const label =
+          labels[index] ??
+          m.palette_category_default_label({ index: index + 1 });
+
+        return {
+          key: `${label}-${index}`,
+          label,
+          color,
+          originalIndex: index
+        };
+      })
+      .filter((entry) => !disabled.has(entry.label));
+  }
+
+  function getLegendPointCategoryShape(
+    viz: VisualizationConfig | undefined,
+    categoryIndex: number
+  ): ShapeType {
+    const symbol = getSymbolPrimitive(viz);
+    if (!symbol) {
+      return ShapeType.CIRCLE;
+    }
+
+    if (symbol.categoryShape === CategoryShapeMode.DIFFERENT) {
+      const classification =
+        viz && getPrimitiveClassification(viz, PrimitiveFilterType.POINT);
+
+      return (
+        classification?.categoryShapes?.[categoryIndex] ??
+        CATEGORY_SHAPE_CYCLE[categoryIndex % CATEGORY_SHAPE_CYCLE.length] ??
+        symbol.shape ??
+        ShapeType.CIRCLE
+      );
+    }
+
+    return symbol.shape ?? ShapeType.CIRCLE;
+  }
+
+  function getLegendPointCategorySize(
+    viz: VisualizationConfig | undefined,
+    categoryIndex: number
+  ): number {
+    const symbol = getSymbolPrimitive(viz);
+    if (!symbol) {
+      return 8;
+    }
+
+    if (symbol.categoryShape !== CategoryShapeMode.ORDERED) {
+      return 8;
+    }
+
+    const classification =
+      viz && getPrimitiveClassification(viz, PrimitiveFilterType.POINT);
+    const total = Math.max(
+      classification?.labels?.length ?? 0,
+      classification?.colors?.length ?? 0
+    );
+    if (total <= 1) {
+      return 8;
+    }
+
+    const minSize = Math.max(1, symbol.minSize ?? 1);
+    const maxSize = Math.max(minSize, symbol.maxSize ?? minSize);
+    const interpolatedSize =
+      minSize + ((maxSize - minSize) * categoryIndex) / (total - 1);
+
+    return Math.round(
+      normalizeLegendValue(interpolatedSize, minSize, maxSize, 6, 14)
+    );
   }
 
   function normalizeLegendValue(
@@ -356,6 +493,7 @@
   }
 
   const legendState = $derived(getLegendState());
+  const formatState = $derived(getFormatState());
   const visibleItems = $derived(legendState.items.filter((i) => i.visible));
 
   const vizByItemId = $derived.by(() => {
@@ -446,13 +584,82 @@
   let dragOffsetX = 0;
   let dragOffsetY = 0;
 
-  function clamp(value: number, min: number, max: number): number {
-    return Math.min(max, Math.max(min, value));
-  }
-
   function getPageScale(): number {
     return Math.max(globalState.zoom.pageZoomScale, 0.1);
   }
+
+  function arePointsEqual(
+    left: { x: number; y: number } | null,
+    right: { x: number; y: number } | null
+  ): boolean {
+    return left?.x === right?.x && left?.y === right?.y;
+  }
+
+  function getOverlaySize(): { width: number; height: number } | null {
+    if (!overlayElement) {
+      return null;
+    }
+
+    return {
+      width: overlayElement.offsetWidth,
+      height: overlayElement.offsetHeight
+    };
+  }
+
+  function getLegendSize(): { width: number; height: number } | null {
+    if (!legendElement) {
+      return null;
+    }
+
+    return {
+      width: legendElement.offsetWidth,
+      height: legendElement.offsetHeight
+    };
+  }
+
+  function normalizeLegendDragPosition(
+    position: { x: number; y: number },
+    snapEnabled = formatState.gridEnabled
+  ): { x: number; y: number } {
+    const overlaySize = getOverlaySize();
+    const legendSize = getLegendSize();
+
+    if (!overlaySize || !legendSize) {
+      return position;
+    }
+
+    return snapPointWithinBounds(
+      position,
+      getDragBounds(overlaySize, legendSize),
+      snapEnabled
+    );
+  }
+
+  $effect(() => {
+    void formatState.width;
+    void formatState.height;
+    void formatState.margins.top;
+    void formatState.margins.right;
+    void formatState.margins.bottom;
+    void formatState.margins.left;
+    void legendState.items;
+    void legendState.style.fontFamily;
+    void legendState.style.fontSize;
+    void legendState.style.background.enabled;
+
+    if (isDragging || !legendState.dragPosition) {
+      return;
+    }
+
+    const normalizedPosition = normalizeLegendDragPosition(
+      legendState.dragPosition,
+      untrack(() => formatState.gridEnabled)
+    );
+
+    if (!arePointsEqual(normalizedPosition, legendState.dragPosition)) {
+      legendActions.setDragPosition(normalizedPosition);
+    }
+  });
 
   function stopDragging(): void {
     isDragging = false;
@@ -471,13 +678,12 @@
 
     const scale = getPageScale();
     const rect = overlayElement.getBoundingClientRect();
-    const maxX = Math.max(0, rect.width / scale - 10);
-    const maxY = Math.max(0, rect.height / scale - 10);
+    const position = normalizeLegendDragPosition({
+      x: (event.clientX - rect.left) / scale - dragOffsetX,
+      y: (event.clientY - rect.top) / scale - dragOffsetY
+    });
 
-    const x = clamp((event.clientX - rect.left) / scale - dragOffsetX, 0, maxX);
-    const y = clamp((event.clientY - rect.top) / scale - dragOffsetY, 0, maxY);
-
-    legendActions.setDragPosition({ x, y });
+    legendActions.setDragPosition(position);
   }
 
   function handleLegendPointerDown(event: PointerEvent): void {
@@ -498,17 +704,19 @@
 
     const currentX = (legendRect.left - overlayRect.left) / scale;
     const currentY = (legendRect.top - overlayRect.top) / scale;
+    const dragPosition = normalizeLegendDragPosition(
+      legendState.dragPosition ?? {
+        x: currentX,
+        y: currentY
+      }
+    );
 
-    if (!legendState.dragPosition) {
-      legendActions.setDragPosition({ x: currentX, y: currentY });
+    if (!arePointsEqual(dragPosition, legendState.dragPosition)) {
+      legendActions.setDragPosition(dragPosition);
     }
 
-    dragOffsetX =
-      (event.clientX - overlayRect.left) / scale -
-      (legendState.dragPosition?.x ?? currentX);
-    dragOffsetY =
-      (event.clientY - overlayRect.top) / scale -
-      (legendState.dragPosition?.y ?? currentY);
+    dragOffsetX = (event.clientX - overlayRect.left) / scale - dragPosition.x;
+    dragOffsetY = (event.clientY - overlayRect.top) / scale - dragPosition.y;
 
     isDragging = true;
     window.addEventListener(EVENT.POINTERMOVE, handlePointerMove);
@@ -559,6 +767,7 @@
         {@const densityScale = getDensityLegendScale(viz)}
         {@const lineWidthScale = getLineWidthLegendScale(viz, sizeStats)}
         {@const classCount = getLegendClassCount(viz)}
+        {@const categoricalEntries = getLegendCategoricalEntries(viz)}
         <div class="legend-item">
           {#if item.title}
             <h4 class="legend-title">{item.title}</h4>
@@ -623,27 +832,24 @@
               {/each}
             </div>
           {/if}
-          {#if viz && hasCategoricalColorLegend(viz)}
-            {@const colors = viz.classification?.colors ?? []}
-            {@const catLabels = getCategoryLabels(viz)}
-            {@const displayCount =
-              catLabels.length > 0 ? catLabels.length : colors.length}
+          {#if viz && hasCategoricalColorLegend(viz) && categoricalEntries.length > 0}
             <div class="legend-color-scale">
-              {#each colors.slice(0, displayCount) as color, i (i)}
+              {#each categoricalEntries as entry (entry.key)}
                 <div class="legend-scale-row">
                   {#if colorLegendPrimitive === 'point'}
                     <span
                       class="legend-point-swatch"
                       style={getPointColorSwatchStyle(
-                        viz.symbols?.type ?? ShapeType.CIRCLE,
-                        color
+                        getLegendPointCategoryShape(viz, entry.originalIndex),
+                        entry.color,
+                        getLegendPointCategorySize(viz, entry.originalIndex)
                       )}
                     ></span>
                   {:else if colorLegendPrimitive === 'line'}
                     <span
                       class="legend-line-swatch"
                       style={getLineSwatchStyle(
-                        color,
+                        entry.color,
                         Math.max(3, Math.min(6, viz.style.lineWidth ?? 4)),
                         viz.style.lineOpacity ?? 1,
                         viz.style.lineDashed ?? false
@@ -652,10 +858,10 @@
                   {:else}
                     <span
                       class="legend-color-swatch"
-                      style="background-color: {color};"
+                      style="background-color: {entry.color};"
                     ></span>
                   {/if}
-                  <span class="legend-scale-label">{catLabels[i] ?? ''}</span>
+                  <span class="legend-scale-label">{entry.label}</span>
                 </div>
               {/each}
             </div>

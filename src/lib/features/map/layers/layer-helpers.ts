@@ -43,11 +43,17 @@ export function createCategoricalColorAccessor(
   categoryColumn: string,
   colorMap: Map<string, RGBColor> | null,
   missingColor: RGBColor = HIGHLIGHT_FILL_COLOR,
-  showMissing = true
+  showMissing = true,
+  disabledLabels: string[] = []
 ) {
   const missingAlpha = showMissing ? 255 : 0;
+  const hiddenTuple: [number, number, number, number] = [0, 0, 0, 0];
+  const disabled = new Set(disabledLabels.map(String));
   return (object: DeckDataRow): [number, number, number, number] => {
     const category = object[categoryColumn];
+    if (disabled.has(String(category))) {
+      return hiddenTuple;
+    }
     const mapped = colorMap?.get(String(category));
     if (mapped) return [mapped[0], mapped[1], mapped[2], 255];
     return [missingColor[0], missingColor[1], missingColor[2], missingAlpha];
@@ -136,6 +142,7 @@ interface StrokeClassificationAccessorOptions {
     colors?: string[];
     breaks?: number[];
     labels?: string[];
+    disabledLabels?: string[];
   } | null;
   valueColumn?: string | null;
   categoryColumn?: string | null;
@@ -187,7 +194,8 @@ export function createStrokeClassificationAccessor(
       categoryColumn,
       colorMap,
       missingColor,
-      showMissing
+      showMissing,
+      strokeClassification?.disabledLabels ?? []
     );
   }
 

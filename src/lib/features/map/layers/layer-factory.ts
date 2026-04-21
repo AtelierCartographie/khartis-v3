@@ -938,7 +938,10 @@ function createRepresentativePointSymbolLayers(
     : useCategoricalColor
       ? createCategoricalColorAccessor(
           pointCategoryColumn!,
-          effectiveCategoryColorMap
+          effectiveCategoryColorMap,
+          HIGHLIGHT_FILL_COLOR,
+          true,
+          pointClassification?.disabledLabels ?? []
         )
       : null;
   const linearShapeOverrideScale = isLinearShape(pointShape)
@@ -3454,7 +3457,10 @@ export function createPointLayers(
       : useCategoricalColor && viz
         ? createCategoricalColorAccessor(
             pointCategoryColumn!,
-            effectiveCategoryColorMap
+            effectiveCategoryColorMap,
+            HIGHLIGHT_FILL_COLOR,
+            true,
+            pointClassification?.disabledLabels ?? []
           )
         : null;
 
@@ -3945,7 +3951,10 @@ export function createLineLayers(
       useCategoricalColor && viz
         ? createCategoricalColorAccessor(
             lineCategoryColumn!,
-            effectiveCategoryColorMap
+            effectiveCategoryColorMap,
+            HIGHLIGHT_FILL_COLOR,
+            true,
+            lineClassification?.disabledLabels ?? []
           )
         : null;
 
@@ -4433,7 +4442,8 @@ export function createPolygonLayers(
               polygonCategoryColumn!,
               effectiveCategoryColorMap,
               polygonMissingColor,
-              showMissingPolygons
+              showMissingPolygons,
+              polygonClassification?.disabledLabels ?? []
             )
           : null;
 
@@ -4509,7 +4519,8 @@ export function createPolygonLayers(
                 polygonCategoryColumn,
                 map,
                 polygonMissingColor,
-                showMissingPolygons
+                showMissingPolygons,
+                polygonStrokeClassification?.disabledLabels ?? []
               );
             })()
           : null;

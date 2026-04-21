@@ -349,12 +349,24 @@ export function hasClassedColorLegend(
 export function hasCategoricalColorLegend(
   viz: VisualizationConfig | undefined
 ): boolean {
+  const symbol = getSymbolPrimitive(viz);
   const line = getLinePrimitive(viz);
   const polygon = getPolygonPrimitive(viz);
+  const pointClassification =
+    viz && getPrimitiveClassification(viz, PrimitiveFilterType.POINT);
   const lineClassification =
     viz && getPrimitiveClassification(viz, PrimitiveFilterType.LINE);
   const polygonClassification =
     viz && getPrimitiveClassification(viz, PrimitiveFilterType.POLYGON);
+
+  if (
+    symbol?.enabled &&
+    symbol.mode === SymbolMode.CATEGORIES &&
+    !!getPrimitiveCategoryColumn(viz, PrimitiveFilterType.POINT) &&
+    !!pointClassification?.colors?.length
+  ) {
+    return true;
+  }
 
   if (
     line?.enabled &&
