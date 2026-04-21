@@ -26,6 +26,7 @@
     type PrimitiveFilter,
     type SymbolModeState,
     type SymbolPrimitiveConfig,
+    type TextBackgroundConfig,
     type TextPrimitiveConfig,
     type TextSecondaryLabelsConfig,
     type VisualizationConfig,
@@ -39,12 +40,14 @@
     generateColorsForBreaks
   } from '$lib/features/commons/services/classification.service';
   import {
+    DEFAULT_QUALITATIVE_PRESET,
     findPaletteById,
     generateCategoricalColorsFromSeed,
     generatePaletteColors,
     PALETTE_TYPE,
     type PaletteType
   } from '$lib/features/commons/components/palette-popover/palette.constants';
+  import { collectDistinctCategoryLabels } from './components/shared/categorical-preview.utils';
   import {
     getColorBlindnessState,
     isColorBlindnessActive
@@ -62,6 +65,7 @@
     ColorMode,
     DEFAULT_COLORS,
     FillMode,
+    StrokeMode,
     SymbolMode,
     ThicknessMode,
     VISUALIZATION_DEFAULTS
@@ -95,6 +99,12 @@
   ] as const;
 
   type ClassifiablePrimitive = (typeof CLASSIFIABLE_PRIMITIVES)[number];
+  const STROKE_CLASSIFIABLE_PRIMITIVES = [
+    PrimitiveFilterType.POINT,
+    PrimitiveFilterType.POLYGON
+  ] as const;
+  type StrokeClassifiablePrimitive =
+    (typeof STROKE_CLASSIFIABLE_PRIMITIVES)[number];
 
   let selectedViz = $derived(visualizationStore.selectedVisualization);
   const lastCompletedBreaksKeyByPrimitive = new SvelteMap<
@@ -103,6 +113,14 @@
   >();
   const inFlightBreaksKeyByPrimitive = new SvelteMap<
     ClassifiablePrimitive,
+    string
+  >();
+  const lastCompletedStrokeBreaksKeyByPrimitive = new SvelteMap<
+    StrokeClassifiablePrimitive,
+    string
+  >();
+  const inFlightStrokeBreaksKeyByPrimitive = new SvelteMap<
+    StrokeClassifiablePrimitive,
     string
   >();
   /**
@@ -116,6 +134,10 @@
    */
   const computeRequestCounterByPrimitive = new SvelteMap<
     ClassifiablePrimitive,
+    number
+  >();
+  const computeStrokeRequestCounterByPrimitive = new SvelteMap<
+    StrokeClassifiablePrimitive,
     number
   >();
 
@@ -275,21 +297,23 @@
 
   function updatePrimitiveClassificationState(
     primitive: ClassifiablePrimitive,
-    updates: Partial<ClassificationConfig>
+    updates: Partial<ClassificationConfig>,
+    options: { preserveOrigin?: boolean } = {}
   ): void {
     if (!selectedViz?.id) {
       return;
     }
 
     if (primitive === PrimitiveFilterType.POLYGON) {
-      visualizationStore.updateClassification(selectedViz.id, updates);
+      visualizationStore.updateClassification(selectedViz.id, updates, options);
       return;
     }
 
     visualizationStore.updatePrimitiveClassification(
       selectedViz.id,
       primitive,
-      updates
+      updates,
+      options
     );
   }
 
@@ -297,23 +321,41 @@
     primitive: ClassifiablePrimitive,
     column: string,
     tableName: string,
+    datasetId?: string,
     useUntrack = false
   ): void {
     Duck.query(
-      `SELECT DISTINCT "${column}" FROM "${tableName}" WHERE "${column}" IS NOT NULL ORDER BY "${column}"`,
+      `SELECT DISTINCT "${column}" AS category_value FROM "${tableName}" WHERE "${column}" IS NOT NULL ORDER BY "${column}"`,
       { format: 'array' }
     )
       .then((rows) => {
-        const labels = (rows as Array<Record<string, unknown>>).map((row) =>
-          String(row[column])
+        const queriedLabels = collectDistinctCategoryLabels(
+          (rows as Array<Record<string, unknown> | unknown[]>).map((row) =>
+            Array.isArray(row)
+              ? row[0]
+              : ((row.category_value ?? row[column]) as unknown)
+          )
+        );
+        const labels = resolveFallbackCategoryLabels(
+          queriedLabels,
+          column,
+          datasetId
         );
         if (labels.length > 0) {
           if (useUntrack) {
             untrack(() =>
-              updatePrimitiveClassificationState(primitive, { labels })
+              updatePrimitiveClassificationState(
+                primitive,
+                { labels },
+                { preserveOrigin: true }
+              )
             );
           } else {
-            updatePrimitiveClassificationState(primitive, { labels });
+            updatePrimitiveClassificationState(
+              primitive,
+              { labels },
+              { preserveOrigin: true }
+            );
           }
         }
       })
@@ -326,6 +368,22 @@
       );
   }
 
+  function resolveFallbackCategoryLabels(
+    queriedLabels: string[],
+    column: string,
+    datasetId?: string
+  ): string[] {
+    if (queriedLabels.length > 0) {
+      return queriedLabels;
+    }
+
+    return datasetId
+      ? collectDistinctCategoryLabels(
+          datasetsStore.getUniqueValues(datasetId, column)
+        )
+      : [];
+  }
+
   function invertPrimitivePalette(primitive: ClassifiablePrimitive): void {
     const classification = getPrimitiveClassification(selectedViz, primitive);
     if (!classification?.colors?.length) {
@@ -333,6 +391,23 @@
     }
 
     updatePrimitiveClassificationState(primitive, {
+      colors: [...classification.colors].reverse(),
+      inverted: !(classification.inverted ?? false)
+    });
+  }
+
+  function invertPrimitiveStrokePalette(
+    primitive: StrokeClassifiablePrimitive
+  ): void {
+    const classification = getPrimitiveStrokeClassification(
+      selectedViz,
+      primitive
+    );
+    if (!classification?.colors?.length) {
+      return;
+    }
+
+    updatePrimitiveStrokeClassificationState(primitive, {
       colors: [...classification.colors].reverse(),
       inverted: !(classification.inverted ?? false)
     });
@@ -509,17 +584,21 @@
         currentPaletteType !== undefined &&
         currentPaletteType !== PALETTE_TYPE.QUALITATIVE;
       const needsColors = !classification?.colors?.length;
-      const needsLabels =
-        classification?.labels === undefined ||
-        classification?.labels.length === 0;
+      const needsLabels = classification?.labels === undefined;
 
       if (hasIncompatiblePalette || needsColors || needsLabels) {
-        updatePrimitiveClassificationState(primitive, {
-          colors: [...DEFAULT_CATEGORICAL_COLORS],
-          inverted: classification?.inverted ?? false,
-          labels: classification?.labels ?? [],
-          ...(hasIncompatiblePalette ? { paletteId: undefined } : {})
-        });
+        updatePrimitiveClassificationState(
+          primitive,
+          {
+            colors: needsColors
+              ? [...DEFAULT_CATEGORICAL_COLORS]
+              : (classification?.colors ?? []),
+            inverted: classification?.inverted ?? false,
+            ...(needsLabels ? { labels: [] } : {}),
+            ...(hasIncompatiblePalette ? { paletteId: undefined } : {})
+          },
+          { preserveOrigin: true }
+        );
       }
     }
   }
@@ -552,6 +631,404 @@
       if (autoCategoryColumn) {
         applyPrimitiveMappingUpdate(primitive, {
           categoryColumn: autoCategoryColumn
+        });
+      }
+    }
+  }
+
+  function getPrimitiveStrokeValueColumn(
+    visualization: VisualizationConfig | null | undefined,
+    primitive: StrokeClassifiablePrimitive
+  ): string | undefined {
+    switch (primitive) {
+      case PrimitiveFilterType.POLYGON:
+        return getPolygonPrimitive(visualization)?.strokeValueColumn;
+      case PrimitiveFilterType.POINT:
+      default:
+        return getSymbolPrimitive(visualization)?.strokeValueColumn;
+    }
+  }
+
+  function getPrimitiveStrokeCategoryColumn(
+    visualization: VisualizationConfig | null | undefined,
+    primitive: StrokeClassifiablePrimitive
+  ): string | undefined {
+    switch (primitive) {
+      case PrimitiveFilterType.POLYGON:
+        return getPolygonPrimitive(visualization)?.strokeCategoryColumn;
+      case PrimitiveFilterType.POINT:
+      default:
+        return getSymbolPrimitive(visualization)?.strokeCategoryColumn;
+    }
+  }
+
+  function getPrimitiveStrokeClassification(
+    visualization: VisualizationConfig | null | undefined,
+    primitive: StrokeClassifiablePrimitive
+  ): ClassificationConfig | undefined {
+    switch (primitive) {
+      case PrimitiveFilterType.POLYGON:
+        return getPolygonPrimitive(visualization)?.strokeClassification;
+      case PrimitiveFilterType.POINT:
+      default:
+        return getSymbolPrimitive(visualization)?.strokeClassification;
+    }
+  }
+
+  function usesStrokeBreakClassification(
+    visualization: VisualizationConfig | null | undefined,
+    primitive: StrokeClassifiablePrimitive
+  ): boolean {
+    switch (primitive) {
+      case PrimitiveFilterType.POLYGON:
+        return (
+          getPolygonPrimitive(visualization)?.strokeMode === StrokeMode.CLASSES
+        );
+      case PrimitiveFilterType.POINT:
+      default:
+        return (
+          getSymbolPrimitive(visualization)?.strokeMode === StrokeMode.CLASSES
+        );
+    }
+  }
+
+  function usesStrokeCategoricalClassification(
+    visualization: VisualizationConfig | null | undefined,
+    primitive: StrokeClassifiablePrimitive
+  ): boolean {
+    switch (primitive) {
+      case PrimitiveFilterType.POLYGON:
+        return (
+          getPolygonPrimitive(visualization)?.strokeMode ===
+          StrokeMode.CATEGORIES
+        );
+      case PrimitiveFilterType.POINT:
+      default:
+        return (
+          getSymbolPrimitive(visualization)?.strokeMode ===
+          StrokeMode.CATEGORIES
+        );
+    }
+  }
+
+  function updatePrimitiveStrokeClassificationState(
+    primitive: StrokeClassifiablePrimitive,
+    updates: Partial<ClassificationConfig>
+  ): void {
+    if (!selectedViz?.id) {
+      return;
+    }
+
+    visualizationStore.updatePrimitiveStrokeClassification(
+      selectedViz.id,
+      primitive,
+      updates
+    );
+  }
+
+  function ensurePrimitiveStrokeClassificationDefaults(
+    primitive: StrokeClassifiablePrimitive,
+    visualization: VisualizationConfig
+  ): void {
+    const classification = getPrimitiveStrokeClassification(
+      visualization,
+      primitive
+    );
+    const currentPaletteType = resolveClassificationPaletteType(classification);
+
+    if (usesStrokeBreakClassification(visualization, primitive)) {
+      const hasIncompatiblePalette =
+        currentPaletteType === PALETTE_TYPE.QUALITATIVE;
+      const resetPaletteFields = hasIncompatiblePalette
+        ? { paletteId: undefined, colors: [] }
+        : {};
+      if (!classification?.method || !classification?.numClasses) {
+        updatePrimitiveStrokeClassificationState(primitive, {
+          method: ClassificationMethod.JENKS,
+          classes: 5,
+          numClasses: 5,
+          ...resetPaletteFields
+        });
+      } else if (hasIncompatiblePalette) {
+        updatePrimitiveStrokeClassificationState(primitive, resetPaletteFields);
+      }
+      return;
+    }
+
+    if (usesStrokeCategoricalClassification(visualization, primitive)) {
+      const hasIncompatiblePalette =
+        currentPaletteType !== undefined &&
+        currentPaletteType !== PALETTE_TYPE.QUALITATIVE;
+      const needsColors = !classification?.colors?.length;
+      const needsLabels = classification?.labels === undefined;
+
+      if (hasIncompatiblePalette || needsColors || needsLabels) {
+        updatePrimitiveStrokeClassificationState(primitive, {
+          colors: needsColors
+            ? [...DEFAULT_CATEGORICAL_COLORS]
+            : (classification?.colors ?? []),
+          inverted: classification?.inverted ?? false,
+          ...(needsLabels ? { labels: [] } : {}),
+          ...(hasIncompatiblePalette ? { paletteId: undefined } : {})
+        });
+      }
+    }
+  }
+
+  function ensurePrimitiveStrokeAutoColumns(
+    primitive: StrokeClassifiablePrimitive,
+    visualization: VisualizationConfig
+  ): void {
+    const strokeValueColumn = getPrimitiveStrokeValueColumn(
+      visualization,
+      primitive
+    );
+    const strokeCategoryColumn = getPrimitiveStrokeCategoryColumn(
+      visualization,
+      primitive
+    );
+
+    if (
+      usesStrokeBreakClassification(visualization, primitive) &&
+      !strokeValueColumn
+    ) {
+      const nextValueColumn =
+        getPrimitiveValueColumn(visualization, primitive) ??
+        findAutoValueColumn(
+          getReservedColumnsForValue(visualization, primitive)
+        );
+      if (nextValueColumn) {
+        applyPrimitiveStrokeMappingUpdate(primitive, {
+          valueColumn: nextValueColumn
+        });
+      }
+    }
+
+    if (
+      usesStrokeCategoricalClassification(visualization, primitive) &&
+      !strokeCategoryColumn
+    ) {
+      const nextCategoryColumn =
+        getPrimitiveCategoryColumn(visualization, primitive) ??
+        findAutoCategoryColumn(
+          getReservedColumnsForCategory(visualization, primitive)
+        );
+      if (nextCategoryColumn) {
+        applyPrimitiveStrokeMappingUpdate(primitive, {
+          categoryColumn: nextCategoryColumn
+        });
+      }
+    }
+  }
+
+  function getTextBackgroundConfig(
+    visualization: VisualizationConfig | null | undefined
+  ): TextBackgroundConfig | undefined {
+    return getTextPrimitive(visualization)?.background;
+  }
+
+  function usesTextBackgroundBreakClassification(
+    visualization: VisualizationConfig | null | undefined
+  ): boolean {
+    return (
+      getTextBackgroundConfig(visualization)?.fillMode === FillMode.CLASSES
+    );
+  }
+
+  function usesTextBackgroundCategoricalClassification(
+    visualization: VisualizationConfig | null | undefined
+  ): boolean {
+    return (
+      getTextBackgroundConfig(visualization)?.fillMode === FillMode.CATEGORIES
+    );
+  }
+
+  function usesTextBackgroundStrokeBreakClassification(
+    visualization: VisualizationConfig | null | undefined
+  ): boolean {
+    return (
+      getTextBackgroundConfig(visualization)?.strokeMode === StrokeMode.CLASSES
+    );
+  }
+
+  function usesTextBackgroundStrokeCategoricalClassification(
+    visualization: VisualizationConfig | null | undefined
+  ): boolean {
+    return (
+      getTextBackgroundConfig(visualization)?.strokeMode ===
+      StrokeMode.CATEGORIES
+    );
+  }
+
+  function ensureTextBackgroundClassificationDefaults(
+    visualization: VisualizationConfig
+  ): void {
+    const background = getTextBackgroundConfig(visualization);
+    const classification = background?.classification;
+    const currentPaletteType = resolveClassificationPaletteType(classification);
+
+    if (usesTextBackgroundBreakClassification(visualization)) {
+      const hasIncompatiblePalette =
+        currentPaletteType === PALETTE_TYPE.QUALITATIVE;
+      const resetPaletteFields = hasIncompatiblePalette
+        ? { paletteId: undefined, colors: [] }
+        : {};
+      if (!classification?.method || !classification?.numClasses) {
+        updateTextBackgroundClassificationState({
+          method: ClassificationMethod.JENKS,
+          classes: 5,
+          numClasses: 5,
+          ...resetPaletteFields
+        });
+      } else if (hasIncompatiblePalette) {
+        updateTextBackgroundClassificationState(resetPaletteFields);
+      }
+      return;
+    }
+
+    if (usesTextBackgroundCategoricalClassification(visualization)) {
+      const hasIncompatiblePalette =
+        currentPaletteType !== undefined &&
+        currentPaletteType !== PALETTE_TYPE.QUALITATIVE;
+      const needsColors = !classification?.colors?.length;
+      const needsLabels = classification?.labels === undefined;
+
+      if (hasIncompatiblePalette || needsColors || needsLabels) {
+        updateTextBackgroundClassificationState({
+          colors: needsColors
+            ? [...DEFAULT_CATEGORICAL_COLORS]
+            : (classification?.colors ?? []),
+          inverted: classification?.inverted ?? false,
+          ...(needsLabels ? { labels: [] } : {}),
+          ...(hasIncompatiblePalette ? { paletteId: undefined } : {})
+        });
+      }
+    }
+  }
+
+  function ensureTextBackgroundStrokeClassificationDefaults(
+    visualization: VisualizationConfig
+  ): void {
+    const background = getTextBackgroundConfig(visualization);
+    const classification = background?.strokeClassification;
+    const currentPaletteType = resolveClassificationPaletteType(classification);
+
+    if (usesTextBackgroundStrokeBreakClassification(visualization)) {
+      const hasIncompatiblePalette =
+        currentPaletteType === PALETTE_TYPE.QUALITATIVE;
+      const resetPaletteFields = hasIncompatiblePalette
+        ? { paletteId: undefined, colors: [] }
+        : {};
+      if (!classification?.method || !classification?.numClasses) {
+        updateTextBackgroundStrokeClassificationState({
+          method: ClassificationMethod.JENKS,
+          classes: 5,
+          numClasses: 5,
+          ...resetPaletteFields
+        });
+      } else if (hasIncompatiblePalette) {
+        updateTextBackgroundStrokeClassificationState(resetPaletteFields);
+      }
+      return;
+    }
+
+    if (usesTextBackgroundStrokeCategoricalClassification(visualization)) {
+      const hasIncompatiblePalette =
+        currentPaletteType !== undefined &&
+        currentPaletteType !== PALETTE_TYPE.QUALITATIVE;
+      const needsColors = !classification?.colors?.length;
+      const needsLabels = classification?.labels === undefined;
+
+      if (hasIncompatiblePalette || needsColors || needsLabels) {
+        updateTextBackgroundStrokeClassificationState({
+          colors: needsColors
+            ? [...DEFAULT_CATEGORICAL_COLORS]
+            : (classification?.colors ?? []),
+          inverted: classification?.inverted ?? false,
+          ...(needsLabels ? { labels: [] } : {}),
+          ...(hasIncompatiblePalette ? { paletteId: undefined } : {})
+        });
+      }
+    }
+  }
+
+  function ensureTextBackgroundAutoColumns(
+    visualization: VisualizationConfig
+  ): void {
+    const background = getTextBackgroundConfig(visualization);
+    if (!background) {
+      return;
+    }
+
+    if (
+      usesTextBackgroundBreakClassification(visualization) &&
+      !background.valueColumn
+    ) {
+      const nextValueColumn =
+        getTextPrimitive(visualization)?.valueColumn ??
+        findAutoValueColumn(
+          getReservedColumnsForValue(visualization, PrimitiveFilterType.TEXT)
+        );
+      if (nextValueColumn) {
+        applyTextBackgroundMappingUpdate({ valueColumn: nextValueColumn });
+      }
+    }
+
+    if (
+      usesTextBackgroundCategoricalClassification(visualization) &&
+      !background.categoryColumn
+    ) {
+      const nextCategoryColumn =
+        getTextPrimitive(visualization)?.categoryColumn ??
+        findAutoCategoryColumn(
+          getReservedColumnsForCategory(visualization, PrimitiveFilterType.TEXT)
+        );
+      if (nextCategoryColumn) {
+        applyTextBackgroundMappingUpdate({
+          categoryColumn: nextCategoryColumn
+        });
+      }
+    }
+  }
+
+  function ensureTextBackgroundStrokeAutoColumns(
+    visualization: VisualizationConfig
+  ): void {
+    const background = getTextBackgroundConfig(visualization);
+    if (!background) {
+      return;
+    }
+
+    if (
+      usesTextBackgroundStrokeBreakClassification(visualization) &&
+      !background.strokeValueColumn
+    ) {
+      const nextValueColumn =
+        background.valueColumn ??
+        getTextPrimitive(visualization)?.valueColumn ??
+        findAutoValueColumn(
+          getReservedColumnsForValue(visualization, PrimitiveFilterType.TEXT)
+        );
+      if (nextValueColumn) {
+        applyTextBackgroundStrokeMappingUpdate({
+          valueColumn: nextValueColumn
+        });
+      }
+    }
+
+    if (
+      usesTextBackgroundStrokeCategoricalClassification(visualization) &&
+      !background.strokeCategoryColumn
+    ) {
+      const nextCategoryColumn =
+        background.categoryColumn ??
+        getTextPrimitive(visualization)?.categoryColumn ??
+        findAutoCategoryColumn(
+          getReservedColumnsForCategory(visualization, PrimitiveFilterType.TEXT)
+        );
+      if (nextCategoryColumn) {
+        applyTextBackgroundStrokeMappingUpdate({
+          categoryColumn: nextCategoryColumn
         });
       }
     }
@@ -805,6 +1282,75 @@
     }
   }
 
+  function applyPrimitiveStrokeMappingUpdate(
+    primitive: StrokeClassifiablePrimitive,
+    updates: Partial<VisualizationConfig['mapping']>
+  ): void {
+    if (!selectedViz) {
+      return;
+    }
+
+    switch (primitive) {
+      case PrimitiveFilterType.POLYGON: {
+        const polygon = getPolygonPrimitive(selectedViz);
+        if (!polygon) return;
+
+        updateSelectedVisualization(
+          {
+            polygon: {
+              ...polygon,
+              ...(Object.prototype.hasOwnProperty.call(updates, 'valueColumn')
+                ? { strokeValueColumn: updates.valueColumn }
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(
+                updates,
+                'categoryColumn'
+              )
+                ? { strokeCategoryColumn: updates.categoryColumn }
+                : {})
+            }
+          },
+          (nextVisualization) => {
+            ensurePrimitiveStrokeClassificationDefaults(
+              primitive,
+              nextVisualization
+            );
+          }
+        );
+        return;
+      }
+
+      case PrimitiveFilterType.POINT:
+      default: {
+        const symbol = getSymbolPrimitive(selectedViz);
+        if (!symbol) return;
+
+        updateSelectedVisualization(
+          {
+            symbol: {
+              ...symbol,
+              ...(Object.prototype.hasOwnProperty.call(updates, 'valueColumn')
+                ? { strokeValueColumn: updates.valueColumn }
+                : {}),
+              ...(Object.prototype.hasOwnProperty.call(
+                updates,
+                'categoryColumn'
+              )
+                ? { strokeCategoryColumn: updates.categoryColumn }
+                : {})
+            }
+          },
+          (nextVisualization) => {
+            ensurePrimitiveStrokeClassificationDefaults(
+              primitive,
+              nextVisualization
+            );
+          }
+        );
+      }
+    }
+  }
+
   function handlePolygonChange(updates: Partial<PolygonPrimitiveConfig>) {
     const polygon = getPolygonPrimitive(selectedViz);
     if (!polygon) {
@@ -877,6 +1423,14 @@
           nextVisualization
         );
         ensureAutoColumns(PrimitiveFilterType.POLYGON, nextVisualization);
+        ensurePrimitiveStrokeClassificationDefaults(
+          PrimitiveFilterType.POLYGON,
+          nextVisualization
+        );
+        ensurePrimitiveStrokeAutoColumns(
+          PrimitiveFilterType.POLYGON,
+          nextVisualization
+        );
       }
     );
   }
@@ -904,8 +1458,18 @@
     applyPrimitiveMappingUpdate(PrimitiveFilterType.POLYGON, updates);
   }
 
+  function handlePolygonStrokeMappingChange(
+    updates: Partial<VisualizationConfig['mapping']>
+  ) {
+    applyPrimitiveStrokeMappingUpdate(PrimitiveFilterType.POLYGON, updates);
+  }
+
   function handlePolygonPaletteInvert() {
     invertPrimitivePalette(PrimitiveFilterType.POLYGON);
+  }
+
+  function handlePolygonStrokePaletteInvert() {
+    invertPrimitiveStrokePalette(PrimitiveFilterType.POLYGON);
   }
 
   function handleSymbolChange(updates: Partial<SymbolPrimitiveConfig>) {
@@ -1061,6 +1625,14 @@
           nextVisualization
         );
         ensureAutoColumns(PrimitiveFilterType.POINT, nextVisualization);
+        ensurePrimitiveStrokeClassificationDefaults(
+          PrimitiveFilterType.POINT,
+          nextVisualization
+        );
+        ensurePrimitiveStrokeAutoColumns(
+          PrimitiveFilterType.POINT,
+          nextVisualization
+        );
       }
     );
   }
@@ -1115,9 +1687,7 @@
   function handleSymbolStrokeClassificationChange(
     updates: Partial<ClassificationConfig>
   ) {
-    if (!selectedViz?.id) return;
-    visualizationStore.updatePrimitiveStrokeClassification(
-      selectedViz.id,
+    updatePrimitiveStrokeClassificationState(
       PrimitiveFilterType.POINT,
       updates
     );
@@ -1126,9 +1696,7 @@
   function handlePolygonStrokeClassificationChange(
     updates: Partial<ClassificationConfig>
   ) {
-    if (!selectedViz?.id) return;
-    visualizationStore.updatePrimitiveStrokeClassification(
-      selectedViz.id,
+    updatePrimitiveStrokeClassificationState(
       PrimitiveFilterType.POLYGON,
       updates
     );
@@ -1148,26 +1716,7 @@
   function handleTextBackgroundStrokeClassificationChange(
     updates: Partial<ClassificationConfig>
   ) {
-    if (!selectedViz?.id) return;
-    const currentText = selectedViz.text;
-    const currentBackground = currentText?.background;
-    if (!currentText || !currentBackground) return;
-    const currentStrokeClassification = currentBackground.strokeClassification;
-    const mergedStrokeClassification: ClassificationConfig = {
-      method: ClassificationMethod.JENKS,
-      classes: 5,
-      ...currentStrokeClassification,
-      ...updates
-    };
-    updateSelectedVisualization({
-      text: {
-        ...currentText,
-        background: {
-          ...currentBackground,
-          strokeClassification: mergedStrokeClassification
-        }
-      }
-    });
+    updateTextBackgroundStrokeClassificationState(updates);
   }
 
   function handleSymbolMappingChange(
@@ -1176,8 +1725,18 @@
     applyPrimitiveMappingUpdate(PrimitiveFilterType.POINT, updates);
   }
 
+  function handleSymbolStrokeMappingChange(
+    updates: Partial<VisualizationConfig['mapping']>
+  ) {
+    applyPrimitiveStrokeMappingUpdate(PrimitiveFilterType.POINT, updates);
+  }
+
   function handleSymbolPaletteInvert() {
     invertPrimitivePalette(PrimitiveFilterType.POINT);
+  }
+
+  function handleSymbolStrokePaletteInvert() {
+    invertPrimitiveStrokePalette(PrimitiveFilterType.POINT);
   }
 
   function handleLineChange(updates: Partial<LinePrimitiveConfig>) {
@@ -1431,6 +1990,60 @@
     });
   }
 
+  function updateTextBackgroundClassificationState(
+    updates: Partial<ClassificationConfig>
+  ) {
+    updateTextBackground((background) => ({
+      classification: {
+        ...(background.classification ?? {
+          method: ClassificationMethod.JENKS,
+          classes: 5
+        }),
+        ...updates
+      } as ClassificationConfig
+    }));
+  }
+
+  function updateTextBackgroundStrokeClassificationState(
+    updates: Partial<ClassificationConfig>
+  ) {
+    updateTextBackground((background) => ({
+      strokeClassification: {
+        ...(background.strokeClassification ?? {
+          method: ClassificationMethod.JENKS,
+          classes: 5
+        }),
+        ...updates
+      } as ClassificationConfig
+    }));
+  }
+
+  function applyTextBackgroundMappingUpdate(
+    updates: Partial<VisualizationConfig['mapping']>
+  ) {
+    updateTextBackground(() => ({
+      ...(Object.prototype.hasOwnProperty.call(updates, 'valueColumn')
+        ? { valueColumn: updates.valueColumn }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'categoryColumn')
+        ? { categoryColumn: updates.categoryColumn }
+        : {})
+    }));
+  }
+
+  function applyTextBackgroundStrokeMappingUpdate(
+    updates: Partial<VisualizationConfig['mapping']>
+  ) {
+    updateTextBackground(() => ({
+      ...(Object.prototype.hasOwnProperty.call(updates, 'valueColumn')
+        ? { strokeValueColumn: updates.valueColumn }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'categoryColumn')
+        ? { strokeCategoryColumn: updates.categoryColumn }
+        : {})
+    }));
+  }
+
   function handleTextBackgroundStyleChange(
     updates: Partial<VisualizationConfig['style']>
   ) {
@@ -1459,41 +2072,51 @@
   function handleTextBackgroundModesChange(
     updates: Partial<VisualizationModes>
   ) {
-    updateTextBackground((background) => ({
-      ...(Object.prototype.hasOwnProperty.call(updates, 'fill')
-        ? { fillMode: updates.fill ?? background.fillMode }
-        : {}),
-      ...(Object.prototype.hasOwnProperty.call(updates, 'stroke')
-        ? { strokeMode: updates.stroke ?? background.strokeMode }
-        : {})
-    }));
+    const text = getTextPrimitive(selectedViz);
+    if (!text) {
+      return;
+    }
+
+    updateSelectedVisualization(
+      {
+        text: {
+          ...text,
+          background: {
+            ...text.background,
+            ...(Object.prototype.hasOwnProperty.call(updates, 'fill')
+              ? { fillMode: updates.fill ?? text.background.fillMode }
+              : {}),
+            ...(Object.prototype.hasOwnProperty.call(updates, 'stroke')
+              ? { strokeMode: updates.stroke ?? text.background.strokeMode }
+              : {})
+          }
+        }
+      },
+      (nextVisualization) => {
+        ensureTextBackgroundClassificationDefaults(nextVisualization);
+        ensureTextBackgroundAutoColumns(nextVisualization);
+        ensureTextBackgroundStrokeClassificationDefaults(nextVisualization);
+        ensureTextBackgroundStrokeAutoColumns(nextVisualization);
+      }
+    );
   }
 
   function handleTextBackgroundClassificationChange(
     updates: Partial<ClassificationConfig>
   ) {
-    updateTextBackground((background) => ({
-      classification: {
-        ...(background.classification ?? {
-          method: ClassificationMethod.JENKS,
-          classes: 5
-        }),
-        ...updates
-      } as ClassificationConfig
-    }));
+    updateTextBackgroundClassificationState(updates);
   }
 
   function handleTextBackgroundMappingChange(
     updates: Partial<VisualizationConfig['mapping']>
   ) {
-    updateTextBackground(() => ({
-      ...(Object.prototype.hasOwnProperty.call(updates, 'valueColumn')
-        ? { valueColumn: updates.valueColumn }
-        : {}),
-      ...(Object.prototype.hasOwnProperty.call(updates, 'categoryColumn')
-        ? { categoryColumn: updates.categoryColumn }
-        : {})
-    }));
+    applyTextBackgroundMappingUpdate(updates);
+  }
+
+  function handleTextBackgroundStrokeMappingChange(
+    updates: Partial<VisualizationConfig['mapping']>
+  ) {
+    applyTextBackgroundStrokeMappingUpdate(updates);
   }
 
   function handleTextBackgroundPaletteInvert() {
@@ -1504,13 +2127,24 @@
       return;
     }
 
-    updateTextBackground(() => ({
-      classification: {
-        ...classification,
-        colors: [...colors].reverse(),
-        inverted: !(classification.inverted ?? false)
-      } as ClassificationConfig
-    }));
+    updateTextBackgroundClassificationState({
+      colors: [...colors].reverse(),
+      inverted: !(classification.inverted ?? false)
+    });
+  }
+
+  function handleTextBackgroundStrokePaletteInvert() {
+    const text = getTextPrimitive(selectedViz);
+    const classification = text?.background.strokeClassification;
+    const colors = classification?.colors;
+    if (!classification || !colors?.length) {
+      return;
+    }
+
+    updateTextBackgroundStrokeClassificationState({
+      colors: [...colors].reverse(),
+      inverted: !(classification.inverted ?? false)
+    });
   }
 
   function handleTextVisibilityChange(visible: boolean) {
@@ -1642,6 +2276,10 @@
     ClassifiablePrimitive,
     { handle: ReturnType<typeof setTimeout>; key: string; attempts: number }
   >();
+  const pendingStrokeBreaksRetries = new SvelteMap<
+    StrokeClassifiablePrimitive,
+    { handle: ReturnType<typeof setTimeout>; key: string; attempts: number }
+  >();
   const MAX_BREAKS_RETRIES = 4;
   const BREAKS_RETRY_DELAY_MS = 250;
 
@@ -1650,6 +2288,10 @@
       clearTimeout(entry.handle);
     }
     pendingBreaksRetries.clear();
+    for (const entry of pendingStrokeBreaksRetries.values()) {
+      clearTimeout(entry.handle);
+    }
+    pendingStrokeBreaksRetries.clear();
   });
 
   function scheduleBreaksRetry(
@@ -1686,6 +2328,47 @@
       );
     }, BREAKS_RETRY_DELAY_MS);
     pendingBreaksRetries.set(primitive, {
+      handle,
+      key: breaksKey,
+      attempts: priorAttempts + 1
+    });
+    return true;
+  }
+
+  function scheduleStrokeBreaksRetry(
+    primitive: StrokeClassifiablePrimitive,
+    breaksKey: string
+  ): boolean {
+    const existing = pendingStrokeBreaksRetries.get(primitive);
+    if (existing) {
+      clearTimeout(existing.handle);
+    }
+    const priorAttempts =
+      existing && existing.key === breaksKey ? existing.attempts : 0;
+    if (priorAttempts >= MAX_BREAKS_RETRIES) {
+      pendingStrokeBreaksRetries.delete(primitive);
+      return false;
+    }
+    const handle = setTimeout(() => {
+      const target = primitiveStrokeClassificationTargets.find(
+        (t) => t.primitive === primitive
+      );
+      if (
+        !target?.usesBreaks ||
+        !target.classification?.method ||
+        !target.valueColumn ||
+        target.classification.breaks?.length
+      ) {
+        pendingStrokeBreaksRetries.delete(primitive);
+        return;
+      }
+      void computeBreaksForStrokePrimitive(
+        primitive,
+        '$timeout:retryAfterEmpty',
+        breaksKey
+      );
+    }, BREAKS_RETRY_DELAY_MS);
+    pendingStrokeBreaksRetries.set(primitive, {
       handle,
       key: breaksKey,
       attempts: priorAttempts + 1
@@ -1839,7 +2522,13 @@
             : undefined;
         colors =
           userPalette && !isPatternPalette
-            ? generatePaletteColors(userPalette, actualNumClasses, contrast)
+            ? generatePaletteColors(
+                userPalette,
+                actualNumClasses,
+                contrast,
+                undefined,
+                divergingSplit
+              )
             : generateColorsForBreaks(
                 actualNumClasses,
                 paletteType,
@@ -1876,6 +2565,190 @@
     } catch (error) {
       logger.error(
         '[configure-visualization] breaks computation crashed',
+        LogCategory.UI,
+        {
+          trigger,
+          requestId,
+          primitive,
+          error
+        }
+      );
+      clearInFlightBreaksKey();
+    }
+  }
+
+  async function computeBreaksForStrokePrimitive(
+    primitive: StrokeClassifiablePrimitive,
+    trigger = 'unknown',
+    _retryKey = ''
+  ) {
+    const valueColumn = getPrimitiveStrokeValueColumn(selectedViz, primitive);
+    const classification = getPrimitiveStrokeClassification(
+      selectedViz,
+      primitive
+    );
+
+    if (!selectedViz?.datasetId || !valueColumn) {
+      return;
+    }
+
+    const method = classification?.method;
+    const numClasses = classification?.numClasses ?? 5;
+
+    if (!method || method === ClassificationMethod.MANUAL) {
+      return;
+    }
+
+    const normalizedMethod = normalizeClassificationMethod(method);
+    const requestedClassCount = resolveRequestedClassCount(
+      normalizedMethod,
+      numClasses
+    );
+    const breaksKey = `${selectedViz.id}-${selectedViz.datasetId}-stroke-${primitive}-${valueColumn}-${normalizedMethod}-${requestedClassCount}`;
+    const hasExistingBreaks = Boolean(classification?.breaks?.length);
+    const lastCompletedKey = untrack(() =>
+      lastCompletedStrokeBreaksKeyByPrimitive.get(primitive)
+    );
+    const inFlightKey = untrack(() =>
+      inFlightStrokeBreaksKeyByPrimitive.get(primitive)
+    );
+
+    if (breaksKey === inFlightKey) {
+      return;
+    }
+
+    if (hasExistingBreaks && breaksKey === lastCompletedKey) {
+      return;
+    }
+
+    const clearInFlightBreaksKey = () =>
+      untrack(() => {
+        if (inFlightStrokeBreaksKeyByPrimitive.get(primitive) === breaksKey) {
+          inFlightStrokeBreaksKeyByPrimitive.delete(primitive);
+        }
+      });
+
+    untrack(() => inFlightStrokeBreaksKeyByPrimitive.set(primitive, breaksKey));
+    const nextRequestId =
+      (computeStrokeRequestCounterByPrimitive.get(primitive) ?? 0) + 1;
+    computeStrokeRequestCounterByPrimitive.set(primitive, nextRequestId);
+    const requestId = nextRequestId;
+
+    const dataset = datasetsStore.datasets.find(
+      (datasetItem) => datasetItem.id === selectedViz.datasetId
+    );
+    if (!dataset?.sourceFileId) {
+      clearInFlightBreaksKey();
+      return;
+    }
+
+    try {
+      const result = await calculateBreaks({
+        datasetId: dataset.sourceFileId,
+        columnName: valueColumn,
+        method: normalizedMethod,
+        numClasses: requestedClassCount
+      });
+
+      const latestRequestId =
+        computeStrokeRequestCounterByPrimitive.get(primitive) ?? 0;
+      if (requestId !== latestRequestId || !selectedViz?.id) {
+        clearInFlightBreaksKey();
+        return;
+      }
+
+      if (!result) {
+        clearInFlightBreaksKey();
+        const scheduled = scheduleStrokeBreaksRetry(primitive, breaksKey);
+        if (!scheduled) {
+          logger.error(
+            '[configure-visualization] stroke breaks computation failed after retry cap',
+            LogCategory.UI,
+            {
+              requestId,
+              primitive,
+              selectedVisualizationId: selectedViz.id,
+              valueColumn,
+              method: normalizedMethod
+            }
+          );
+        }
+        return;
+      }
+
+      const actualNumClasses = resolveComputedClassCount(
+        normalizedMethod,
+        requestedClassCount,
+        result.counts.length
+      );
+      const existingColors = classification?.colors;
+      const contrast = isColorBlindnessActive(getColorBlindnessState())
+        ? ('high' as const)
+        : undefined;
+      const paletteType =
+        classification?.breakpointValue != null ? 'diverging' : 'sequential';
+      const userPalette = classification?.paletteId
+        ? findPaletteById(classification.paletteId)
+        : undefined;
+      const isPatternPalette = userPalette?.type === PALETTE_TYPE.PATTERN;
+      const divergingSplit =
+        paletteType === 'diverging'
+          ? computeDivergingSplit(
+              actualNumClasses,
+              result.breaks,
+              classification?.breakpointValue ?? null
+            )
+          : undefined;
+      let colors: string[];
+
+      if (existingColors && existingColors.length === actualNumClasses) {
+        colors = existingColors;
+      } else {
+        colors =
+          userPalette && !isPatternPalette
+            ? generatePaletteColors(
+                userPalette,
+                actualNumClasses,
+                contrast,
+                undefined,
+                divergingSplit
+              )
+            : generateColorsForBreaks(
+                actualNumClasses,
+                paletteType,
+                contrast,
+                divergingSplit
+              );
+        colors = applyPaletteInversion(
+          colors,
+          classification?.inverted ?? false
+        );
+      }
+
+      const classificationUpdate: Partial<ClassificationConfig> = {
+        breaks: result.breaks,
+        counts: result.counts,
+        colors
+      };
+
+      if (
+        normalizedMethod !== method ||
+        actualNumClasses !== numClasses ||
+        classification?.classes !== actualNumClasses
+      ) {
+        classificationUpdate.method = normalizedMethod;
+        classificationUpdate.classes = actualNumClasses;
+        classificationUpdate.numClasses = actualNumClasses;
+      }
+
+      updatePrimitiveStrokeClassificationState(primitive, classificationUpdate);
+      untrack(() =>
+        lastCompletedStrokeBreaksKeyByPrimitive.set(primitive, breaksKey)
+      );
+      clearInFlightBreaksKey();
+    } catch (error) {
+      logger.error(
+        '[configure-visualization] stroke breaks computation crashed',
         LogCategory.UI,
         {
           trigger,
@@ -2133,6 +3006,20 @@
     }))
   );
 
+  const primitiveStrokeClassificationTargets = $derived.by(() =>
+    STROKE_CLASSIFIABLE_PRIMITIVES.map((primitive) => ({
+      primitive,
+      valueColumn: getPrimitiveStrokeValueColumn(selectedViz, primitive),
+      categoryColumn: getPrimitiveStrokeCategoryColumn(selectedViz, primitive),
+      classification: getPrimitiveStrokeClassification(selectedViz, primitive),
+      usesBreaks: usesStrokeBreakClassification(selectedViz, primitive),
+      usesCategories: usesStrokeCategoricalClassification(
+        selectedViz,
+        primitive
+      )
+    }))
+  );
+
   const textBackgroundTarget = $derived.by(() => {
     const text = getTextPrimitive(selectedViz);
     if (!text) return null;
@@ -2144,6 +3031,19 @@
       classification: bg.classification,
       usesBreaks: bg.fillMode === FillMode.CLASSES,
       usesCategories: bg.fillMode === FillMode.CATEGORIES
+    };
+  });
+
+  const textBackgroundStrokeTarget = $derived.by(() => {
+    const text = getTextPrimitive(selectedViz);
+    if (!text) return null;
+    const bg = text.background;
+    return {
+      valueColumn: bg.strokeValueColumn,
+      categoryColumn: bg.strokeCategoryColumn,
+      classification: bg.strokeClassification,
+      usesBreaks: bg.strokeMode === StrokeMode.CLASSES,
+      usesCategories: bg.strokeMode === StrokeMode.CATEGORIES
     };
   });
 
@@ -2180,8 +3080,73 @@
     ].join('|');
   });
 
+  const strokeColorParamsKey = $derived.by(() => {
+    const cbEnabled = isColorBlindnessActive(getColorBlindnessState());
+    return [
+      String(cbEnabled),
+      ...primitiveStrokeClassificationTargets.map((target) => {
+        const numColors = target.usesCategories
+          ? Math.max(target.classification?.labels?.length ?? 0, 0)
+          : (target.classification?.classes ?? 0);
+        const breakpointValue = target.classification?.breakpointValue;
+        const paletteType =
+          breakpointValue != null ? 'diverging' : 'sequential';
+        const breakpointKey =
+          paletteType === 'diverging' && Number.isFinite(breakpointValue)
+            ? String(breakpointValue)
+            : '';
+        const breaksKey =
+          paletteType === 'diverging'
+            ? (target.classification?.breaks ?? []).join(',')
+            : '';
+        return [
+          target.primitive,
+          target.classification?.paletteId ?? '',
+          String(target.classification?.inverted ?? false),
+          String(numColors),
+          paletteType,
+          breakpointKey,
+          breaksKey,
+          String(target.usesCategories)
+        ].join(':');
+      }),
+      (() => {
+        const target = textBackgroundStrokeTarget;
+        if (!target) {
+          return 'text-background-stroke:none';
+        }
+        const numColors = target.usesCategories
+          ? Math.max(target.classification?.labels?.length ?? 0, 0)
+          : (target.classification?.classes ?? 0);
+        const breakpointValue = target.classification?.breakpointValue;
+        const paletteType =
+          breakpointValue != null ? 'diverging' : 'sequential';
+        const breakpointKey =
+          paletteType === 'diverging' && Number.isFinite(breakpointValue)
+            ? String(breakpointValue)
+            : '';
+        const breaksKey =
+          paletteType === 'diverging'
+            ? (target.classification?.breaks ?? []).join(',')
+            : '';
+        return [
+          'text-background-stroke',
+          target.classification?.paletteId ?? '',
+          String(target.classification?.inverted ?? false),
+          String(numColors),
+          paletteType,
+          breakpointKey,
+          breaksKey,
+          String(target.usesCategories)
+        ].join(':');
+      })()
+    ].join('|');
+  });
+
   let lastTextBackgroundBreaksKey = '';
   let inFlightTextBackgroundBreaksKey = '';
+  let lastTextBackgroundStrokeBreaksKey = '';
+  let inFlightTextBackgroundStrokeBreaksKey = '';
 
   async function computeTextBackgroundBreaks(trigger = 'unknown') {
     const target = textBackgroundTarget;
@@ -2247,10 +3212,29 @@
           ? findPaletteById(target.classification.paletteId)
           : undefined;
         const isPatternPalette = userPalette?.type === PALETTE_TYPE.PATTERN;
+        const divergingSplit =
+          paletteType === 'diverging'
+            ? computeDivergingSplit(
+                actualNumClasses,
+                result.breaks,
+                target.classification?.breakpointValue ?? null
+              )
+            : undefined;
         colors =
           userPalette && !isPatternPalette
-            ? generatePaletteColors(userPalette, actualNumClasses, contrast)
-            : generateColorsForBreaks(actualNumClasses, paletteType, contrast);
+            ? generatePaletteColors(
+                userPalette,
+                actualNumClasses,
+                contrast,
+                undefined,
+                divergingSplit
+              )
+            : generateColorsForBreaks(
+                actualNumClasses,
+                paletteType,
+                contrast,
+                divergingSplit
+              );
         colors = applyPaletteInversion(
           colors,
           target.classification?.inverted ?? false
@@ -2288,14 +3272,26 @@
 
   async function fetchTextBackgroundCategoryLabels(
     column: string,
-    tableName: string
+    tableName: string,
+    datasetId?: string
   ) {
     try {
       const rows = (await Duck.query(
-        `SELECT DISTINCT "${column}" FROM "${tableName}" WHERE "${column}" IS NOT NULL ORDER BY "${column}"`,
+        `SELECT DISTINCT "${column}" AS category_value FROM "${tableName}" WHERE "${column}" IS NOT NULL ORDER BY "${column}"`,
         { format: 'array' }
-      )) as Array<Record<string, unknown>>;
-      const labels = rows.map((row) => String(row[column]));
+      )) as Array<Record<string, unknown> | unknown[]>;
+      const queriedLabels = collectDistinctCategoryLabels(
+        rows.map((row) =>
+          Array.isArray(row)
+            ? row[0]
+            : ((row.category_value ?? row[column]) as unknown)
+        )
+      );
+      const labels = resolveFallbackCategoryLabels(
+        queriedLabels,
+        column,
+        datasetId
+      );
       if (labels.length > 0) {
         untrack(() => handleTextBackgroundClassificationChange({ labels }));
       }
@@ -2307,6 +3303,188 @@
       );
     }
   }
+
+  async function computeTextBackgroundStrokeBreaks(trigger = 'unknown') {
+    const target = textBackgroundStrokeTarget;
+    if (!target || !selectedViz?.datasetId) return;
+    const valueColumn = target.valueColumn;
+    if (!valueColumn) return;
+    const method = target.classification?.method;
+    if (!method || method === ClassificationMethod.MANUAL) return;
+
+    const normalizedMethod = normalizeClassificationMethod(method);
+    const numClasses = target.classification?.numClasses ?? 5;
+    const requestedClassCount = resolveRequestedClassCount(
+      normalizedMethod,
+      numClasses
+    );
+    const breaksKey = `${selectedViz.id}-${selectedViz.datasetId}-textBackground-stroke-${valueColumn}-${normalizedMethod}-${requestedClassCount}`;
+    const hasExistingBreaks = Boolean(target.classification?.breaks?.length);
+
+    if (breaksKey === inFlightTextBackgroundStrokeBreaksKey) return;
+    if (hasExistingBreaks && breaksKey === lastTextBackgroundStrokeBreaksKey) {
+      return;
+    }
+
+    const dataset = datasetsStore.datasets.find(
+      (datasetItem) => datasetItem.id === selectedViz?.datasetId
+    );
+    if (!dataset?.sourceFileId) return;
+
+    untrack(() => {
+      inFlightTextBackgroundStrokeBreaksKey = breaksKey;
+    });
+
+    try {
+      const result = await calculateBreaks({
+        datasetId: dataset.sourceFileId,
+        columnName: valueColumn,
+        method: normalizedMethod,
+        numClasses: requestedClassCount
+      });
+
+      if (!result || !selectedViz?.id) {
+        inFlightTextBackgroundStrokeBreaksKey = '';
+        return;
+      }
+
+      const actualNumClasses = resolveComputedClassCount(
+        normalizedMethod,
+        requestedClassCount,
+        result.counts.length
+      );
+      const existingColors = target.classification?.colors;
+      const contrast = isColorBlindnessActive(getColorBlindnessState())
+        ? ('high' as const)
+        : undefined;
+      const paletteType =
+        target.classification?.breakpointValue != null
+          ? 'diverging'
+          : 'sequential';
+      const userPalette = target.classification?.paletteId
+        ? findPaletteById(target.classification.paletteId)
+        : undefined;
+      const isPatternPalette = userPalette?.type === PALETTE_TYPE.PATTERN;
+      const divergingSplit =
+        paletteType === 'diverging'
+          ? computeDivergingSplit(
+              actualNumClasses,
+              result.breaks,
+              target.classification?.breakpointValue ?? null
+            )
+          : undefined;
+      let colors: string[];
+
+      if (existingColors && existingColors.length === actualNumClasses) {
+        colors = existingColors;
+      } else {
+        colors =
+          userPalette && !isPatternPalette
+            ? generatePaletteColors(
+                userPalette,
+                actualNumClasses,
+                contrast,
+                undefined,
+                divergingSplit
+              )
+            : generateColorsForBreaks(
+                actualNumClasses,
+                paletteType,
+                contrast,
+                divergingSplit
+              );
+        colors = applyPaletteInversion(
+          colors,
+          target.classification?.inverted ?? false
+        );
+      }
+
+      const classificationUpdate: Partial<ClassificationConfig> = {
+        breaks: result.breaks,
+        counts: result.counts,
+        colors
+      };
+
+      if (
+        normalizedMethod !== method ||
+        actualNumClasses !== numClasses ||
+        target.classification?.classes !== actualNumClasses
+      ) {
+        classificationUpdate.method = normalizedMethod;
+        classificationUpdate.classes = actualNumClasses;
+        classificationUpdate.numClasses = actualNumClasses;
+      }
+
+      handleTextBackgroundStrokeClassificationChange(classificationUpdate);
+      lastTextBackgroundStrokeBreaksKey = breaksKey;
+      inFlightTextBackgroundStrokeBreaksKey = '';
+    } catch (error) {
+      logger.error(
+        '[configure-visualization] text background stroke breaks computation crashed',
+        LogCategory.UI,
+        { trigger, error }
+      );
+      inFlightTextBackgroundStrokeBreaksKey = '';
+    }
+  }
+
+  async function fetchTextBackgroundStrokeCategoryLabels(
+    column: string,
+    tableName: string,
+    datasetId?: string
+  ) {
+    try {
+      const rows = (await Duck.query(
+        `SELECT DISTINCT "${column}" AS category_value FROM "${tableName}" WHERE "${column}" IS NOT NULL ORDER BY "${column}"`,
+        { format: 'array' }
+      )) as Array<Record<string, unknown> | unknown[]>;
+      const queriedLabels = collectDistinctCategoryLabels(
+        rows.map((row) =>
+          Array.isArray(row)
+            ? row[0]
+            : ((row.category_value ?? row[column]) as unknown)
+        )
+      );
+      const labels = resolveFallbackCategoryLabels(
+        queriedLabels,
+        column,
+        datasetId
+      );
+      if (labels.length > 0) {
+        untrack(() =>
+          handleTextBackgroundStrokeClassificationChange({ labels })
+        );
+      }
+    } catch (error) {
+      logger.warn(
+        'Failed to fetch text background stroke category labels',
+        LogCategory.VISUALIZATION,
+        error
+      );
+    }
+  }
+
+  $effect(() => {
+    const visualization = selectedViz;
+    if (!visualization) {
+      return;
+    }
+
+    for (const primitive of CLASSIFIABLE_PRIMITIVES) {
+      ensurePrimitiveClassificationDefaults(primitive, visualization);
+      ensureAutoColumns(primitive, visualization);
+    }
+
+    for (const primitive of STROKE_CLASSIFIABLE_PRIMITIVES) {
+      ensurePrimitiveStrokeClassificationDefaults(primitive, visualization);
+      ensurePrimitiveStrokeAutoColumns(primitive, visualization);
+    }
+
+    ensureTextBackgroundClassificationDefaults(visualization);
+    ensureTextBackgroundAutoColumns(visualization);
+    ensureTextBackgroundStrokeClassificationDefaults(visualization);
+    ensureTextBackgroundStrokeAutoColumns(visualization);
+  });
 
   $effect(() => {
     const duckVersion = duckDBOrchestrator.datasetsVersion;
@@ -2326,6 +3504,21 @@
       }
     }
 
+    for (const target of primitiveStrokeClassificationTargets) {
+      if (
+        target.usesBreaks &&
+        target.valueColumn &&
+        target.classification?.method &&
+        !target.classification.breaks?.length
+      ) {
+        computeBreaksForStrokePrimitive(
+          target.primitive,
+          '$effect:missingBreaks',
+          String(duckVersion)
+        );
+      }
+    }
+
     const textBg = textBackgroundTarget;
     if (
       textBg?.usesBreaks &&
@@ -2334,6 +3527,16 @@
       !textBg.classification.breaks?.length
     ) {
       computeTextBackgroundBreaks('$effect:missingBreaks');
+    }
+
+    const textBgStroke = textBackgroundStrokeTarget;
+    if (
+      textBgStroke?.usesBreaks &&
+      textBgStroke.valueColumn &&
+      textBgStroke.classification?.method &&
+      !textBgStroke.classification.breaks?.length
+    ) {
+      computeTextBackgroundStrokeBreaks('$effect:missingBreaks');
     }
   });
 
@@ -2352,6 +3555,20 @@
       }
     }
 
+    for (const target of primitiveStrokeClassificationTargets) {
+      if (
+        target.usesBreaks &&
+        target.classification?.method &&
+        target.classification?.numClasses &&
+        target.valueColumn
+      ) {
+        computeBreaksForStrokePrimitive(
+          target.primitive,
+          '$effect:classificationParamsChanged'
+        );
+      }
+    }
+
     const textBg = textBackgroundTarget;
     if (
       textBg?.usesBreaks &&
@@ -2361,6 +3578,16 @@
     ) {
       computeTextBackgroundBreaks('$effect:classificationParamsChanged');
     }
+
+    const textBgStroke = textBackgroundStrokeTarget;
+    if (
+      textBgStroke?.usesBreaks &&
+      textBgStroke.classification?.method &&
+      textBgStroke.classification?.numClasses &&
+      textBgStroke.valueColumn
+    ) {
+      computeTextBackgroundStrokeBreaks('$effect:classificationParamsChanged');
+    }
   });
 
   $effect(() => {
@@ -2369,9 +3596,10 @@
       return;
     }
 
-    const dataset = datasetsStore.datasets.find(
-      (datasetItem) => datasetItem.id === visualization.datasetId
-    );
+    const dataset =
+      datasetsStore.datasets.find(
+        (datasetItem) => datasetItem.id === visualization.datasetId
+      ) ?? datasetsStore.selectedDataset;
     if (!dataset?.tableName) {
       return;
     }
@@ -2386,6 +3614,22 @@
         target.primitive,
         target.categoryColumn,
         dataset.tableName,
+        dataset.id,
+        true
+      );
+    }
+
+    for (const target of primitiveStrokeClassificationTargets) {
+      const hasLabels = (target.classification?.labels?.length ?? 0) > 0;
+      if (!target.usesCategories || !target.categoryColumn || hasLabels) {
+        continue;
+      }
+
+      fetchCategoryLabels(
+        target.primitive,
+        target.categoryColumn,
+        dataset.tableName,
+        dataset.id,
         true
       );
     }
@@ -2395,7 +3639,23 @@
     if (textBg?.usesCategories && textBg.categoryColumn && !hasBgLabels) {
       fetchTextBackgroundCategoryLabels(
         textBg.categoryColumn,
-        dataset.tableName
+        dataset.tableName,
+        dataset.id
+      );
+    }
+
+    const textBgStroke = textBackgroundStrokeTarget;
+    const hasBgStrokeLabels =
+      (textBgStroke?.classification?.labels?.length ?? 0) > 0;
+    if (
+      textBgStroke?.usesCategories &&
+      textBgStroke.categoryColumn &&
+      !hasBgStrokeLabels
+    ) {
+      fetchTextBackgroundStrokeCategoryLabels(
+        textBgStroke.categoryColumn,
+        dataset.tableName,
+        dataset.id
       );
     }
   });
@@ -2448,7 +3708,7 @@
               colors = generateCategoricalColorsFromSeed(
                 DEFAULT_CATEGORICAL_COLORS[0],
                 resolvedColorCount,
-                'vif'
+                DEFAULT_QUALITATIVE_PRESET
               );
             }
           }
@@ -2462,7 +3722,21 @@
             if (!palette) {
               continue;
             }
-            colors = generatePaletteColors(palette, numColors, contrast);
+            const divergingSplit =
+              paletteType === 'diverging'
+                ? computeDivergingSplit(
+                    numColors,
+                    classification.breaks ?? [],
+                    classification.breakpointValue ?? null
+                  )
+                : undefined;
+            colors = generatePaletteColors(
+              palette,
+              numColors,
+              contrast,
+              undefined,
+              divergingSplit
+            );
           } else {
             const divergingSplit =
               paletteType === 'diverging'
@@ -2495,6 +3769,189 @@
       }
     });
   });
+
+  $effect(() => {
+    void strokeColorParamsKey;
+
+    untrack(() => {
+      if (!selectedViz?.id) {
+        return;
+      }
+
+      const cbEnabled = isColorBlindnessActive(getColorBlindnessState());
+
+      for (const target of primitiveStrokeClassificationTargets) {
+        const classification = target.classification;
+        if (!classification) {
+          continue;
+        }
+
+        const paletteId = classification.paletteId;
+        const inverted = classification.inverted ?? false;
+        const paletteType =
+          classification.breakpointValue != null ? 'diverging' : 'sequential';
+        const numColors = target.usesCategories
+          ? Math.max(classification.labels?.length ?? 0, 0)
+          : classification.classes;
+        const contrast = cbEnabled ? ('high' as const) : undefined;
+        let colors: string[];
+
+        if (target.usesCategories) {
+          const resolvedColorCount = Math.max(
+            numColors || DEFAULT_CATEGORICAL_COLORS.length,
+            1
+          );
+          if (paletteId) {
+            const palette = findPaletteById(paletteId);
+            if (!palette) {
+              continue;
+            }
+            colors = generatePaletteColors(
+              palette,
+              resolvedColorCount,
+              contrast
+            );
+          } else if (resolvedColorCount <= DEFAULT_CATEGORICAL_COLORS.length) {
+            colors = DEFAULT_CATEGORICAL_COLORS.slice(0, resolvedColorCount);
+          } else {
+            colors = generateCategoricalColorsFromSeed(
+              DEFAULT_CATEGORICAL_COLORS[0],
+              resolvedColorCount,
+              DEFAULT_QUALITATIVE_PRESET
+            );
+          }
+        } else {
+          if (!numColors) {
+            continue;
+          }
+
+          const divergingSplit =
+            paletteType === 'diverging'
+              ? computeDivergingSplit(
+                  numColors,
+                  classification.breaks ?? [],
+                  classification.breakpointValue ?? null
+                )
+              : undefined;
+          if (paletteId) {
+            const palette = findPaletteById(paletteId);
+            if (!palette) {
+              continue;
+            }
+            colors = generatePaletteColors(
+              palette,
+              numColors,
+              contrast,
+              undefined,
+              divergingSplit
+            );
+          } else {
+            colors = generateColorsForBreaks(
+              numColors,
+              paletteType,
+              contrast,
+              divergingSplit
+            );
+          }
+        }
+
+        colors = applyPaletteInversion(colors, inverted);
+        const existing = classification.colors;
+        if (
+          existing &&
+          existing.length === colors.length &&
+          existing.every((color, index) => color === colors[index])
+        ) {
+          continue;
+        }
+
+        updatePrimitiveStrokeClassificationState(target.primitive, { colors });
+      }
+
+      const textBgStroke = textBackgroundStrokeTarget;
+      const classification = textBgStroke?.classification;
+      if (!textBgStroke || !classification) {
+        return;
+      }
+
+      const paletteId = classification.paletteId;
+      const inverted = classification.inverted ?? false;
+      const paletteType =
+        classification.breakpointValue != null ? 'diverging' : 'sequential';
+      const numColors = textBgStroke.usesCategories
+        ? Math.max(classification.labels?.length ?? 0, 0)
+        : classification.classes;
+      const contrast = cbEnabled ? ('high' as const) : undefined;
+      let colors: string[];
+
+      if (textBgStroke.usesCategories) {
+        const resolvedColorCount = Math.max(
+          numColors || DEFAULT_CATEGORICAL_COLORS.length,
+          1
+        );
+        if (paletteId) {
+          const palette = findPaletteById(paletteId);
+          if (!palette) {
+            return;
+          }
+          colors = generatePaletteColors(palette, resolvedColorCount, contrast);
+        } else if (resolvedColorCount <= DEFAULT_CATEGORICAL_COLORS.length) {
+          colors = DEFAULT_CATEGORICAL_COLORS.slice(0, resolvedColorCount);
+        } else {
+          colors = generateCategoricalColorsFromSeed(
+            DEFAULT_CATEGORICAL_COLORS[0],
+            resolvedColorCount,
+            DEFAULT_QUALITATIVE_PRESET
+          );
+        }
+      } else {
+        if (!numColors) {
+          return;
+        }
+
+        const divergingSplit =
+          paletteType === 'diverging'
+            ? computeDivergingSplit(
+                numColors,
+                classification.breaks ?? [],
+                classification.breakpointValue ?? null
+              )
+            : undefined;
+        if (paletteId) {
+          const palette = findPaletteById(paletteId);
+          if (!palette) {
+            return;
+          }
+          colors = generatePaletteColors(
+            palette,
+            numColors,
+            contrast,
+            undefined,
+            divergingSplit
+          );
+        } else {
+          colors = generateColorsForBreaks(
+            numColors,
+            paletteType,
+            contrast,
+            divergingSplit
+          );
+        }
+      }
+
+      colors = applyPaletteInversion(colors, inverted);
+      const existing = classification.colors;
+      if (
+        existing &&
+        existing.length === colors.length &&
+        existing.every((color, index) => color === colors[index])
+      ) {
+        return;
+      }
+
+      handleTextBackgroundStrokeClassificationChange({ colors });
+    });
+  });
 </script>
 
 <section id="configure-visualization">
@@ -2525,10 +3982,12 @@
       onSymbolsChange={handleSymbolsChange}
       onSymbolPrimitiveChange={handleSymbolChange}
       onMappingChange={handleSymbolMappingChange}
+      onStrokeMappingChange={handleSymbolStrokeMappingChange}
       onMissingDataChange={handleSymbolMissingDataChange}
       onClassificationChange={handleSymbolClassificationChange}
       onStrokeClassificationChange={handleSymbolStrokeClassificationChange}
       onInvertPalette={handleSymbolPaletteInvert}
+      onStrokeInvertPalette={handleSymbolStrokePaletteInvert}
       onToggleVisibility={(checked) =>
         handlePrimitiveVisibilityChange(PrimitiveFilterType.POINT, checked)}
       onAddFilter={(filter) =>
@@ -2540,6 +3999,7 @@
 
     <PolygonsConfig
       onStrokeClassificationChange={handlePolygonStrokeClassificationChange}
+      onStrokeMappingChange={handlePolygonStrokeMappingChange}
       dataFields={dataFieldItems}
       visualization={polygonVisualization}
       disabled={!showsPolygonsConfig}
@@ -2550,6 +4010,7 @@
       onClassificationChange={handlePolygonClassificationChange}
       onMappingChange={handlePolygonMappingChange}
       onInvertPalette={handlePolygonPaletteInvert}
+      onStrokeInvertPalette={handlePolygonStrokePaletteInvert}
       onToggleVisibility={(checked) =>
         handlePrimitiveVisibilityChange(PrimitiveFilterType.POLYGON, checked)}
       onAddFilter={(filter) =>
@@ -2596,8 +4057,10 @@
       onBackgroundModesChange={handleTextBackgroundModesChange}
       onBackgroundClassificationChange={handleTextBackgroundClassificationChange}
       onBackgroundStrokeClassificationChange={handleTextBackgroundStrokeClassificationChange}
+      onBackgroundStrokeMappingChange={handleTextBackgroundStrokeMappingChange}
       onBackgroundMappingChange={handleTextBackgroundMappingChange}
       onBackgroundInvertPalette={handleTextBackgroundPaletteInvert}
+      onBackgroundStrokeInvertPalette={handleTextBackgroundStrokePaletteInvert}
       onToggleVisibility={handleTextVisibilityChange}
       onAddFilter={(filter) =>
         handleAddDataFilter(filter, PrimitiveFilterType.TEXT)}

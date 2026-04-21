@@ -55,6 +55,7 @@
     open?: boolean;
     visualization?: VisualizationConfig;
     classification?: ClassificationConfig;
+    valueColumn?: string;
     /** Tag the classification context this modal mutates. The parent selects
      * the correct classification source and wires `onchange` to the matching
      * setter (fill → updatePrimitiveClassificationState, stroke →
@@ -69,6 +70,7 @@
     open = $bindable(false),
     visualization,
     classification: classificationOverride,
+    valueColumn,
     role = 'fill',
     onclose,
     onchange
@@ -76,6 +78,9 @@
 
   const activeClassification = $derived<ClassificationConfig | undefined>(
     classificationOverride ?? visualization?.classification
+  );
+  const activeValueColumn = $derived(
+    valueColumn ?? visualization?.mapping.valueColumn
   );
 
   let _isCalculating = $state(false);
@@ -192,7 +197,13 @@
 
     return applyPaletteInversion(
       userPalette
-        ? generatePaletteColors(userPalette, classCount, contrast)
+        ? generatePaletteColors(
+            userPalette,
+            classCount,
+            contrast,
+            undefined,
+            divergingSplit
+          )
         : generateColorsForBreaks(
             classCount,
             paletteType,
@@ -210,11 +221,27 @@
     const userPalette = activeClassification?.paletteId
       ? findPaletteById(activeClassification.paletteId)
       : undefined;
+    const divergingSplit = computeDivergingSplit(
+      classCount,
+      getCurrentBreakValues(),
+      currentBreakpoint
+    );
 
     return applyPaletteInversion(
       userPalette
-        ? generatePaletteColors(userPalette, classCount, contrast)
-        : generateColorsForBreaks(classCount, 'diverging', contrast),
+        ? generatePaletteColors(
+            userPalette,
+            classCount,
+            contrast,
+            undefined,
+            divergingSplit
+          )
+        : generateColorsForBreaks(
+            classCount,
+            'diverging',
+            contrast,
+            divergingSplit
+          ),
       activeClassification?.inverted ?? false
     );
   }
@@ -303,7 +330,7 @@
     panelRenderKey += 1;
     updatePanelPosition();
 
-    if (!visualization?.datasetId || !visualization?.mapping.valueColumn) {
+    if (!visualization?.datasetId || !activeValueColumn) {
       return;
     }
 
@@ -359,7 +386,7 @@
   });
 
   async function computeBreaks() {
-    if (!visualization?.datasetId || !visualization?.mapping.valueColumn) {
+    if (!visualization?.datasetId || !activeValueColumn) {
       return;
     }
 
@@ -387,13 +414,13 @@
         if (breakValues.length === expectedThresholdCount) {
           result = await calculateBreakCounts({
             datasetId: dataset.sourceFileId,
-            columnName: visualization.mapping.valueColumn,
+            columnName: activeValueColumn,
             breaks: breakValues
           });
         } else {
           result = await calculateBreaks({
             datasetId: dataset.sourceFileId,
-            columnName: visualization.mapping.valueColumn,
+            columnName: activeValueColumn,
             method: ClassificationMethod.EQUAL_INTERVAL,
             numClasses: requestedClassCount
           });
@@ -401,7 +428,7 @@
       } else {
         result = await calculateBreaks({
           datasetId: dataset.sourceFileId,
-          columnName: visualization.mapping.valueColumn,
+          columnName: activeValueColumn,
           method: storeMethod,
           numClasses: requestedClassCount
         });

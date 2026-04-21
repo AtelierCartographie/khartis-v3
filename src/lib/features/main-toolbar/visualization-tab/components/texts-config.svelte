@@ -62,10 +62,14 @@
     onBackgroundStrokeClassificationChange?: (
       updates: Partial<ClassificationConfig>
     ) => void;
+    onBackgroundStrokeMappingChange?: (
+      updates: Partial<VisualizationConfig['mapping']>
+    ) => void;
     onBackgroundMappingChange?: (
       updates: Partial<VisualizationConfig['mapping']>
     ) => void;
     onBackgroundInvertPalette?: () => void;
+    onBackgroundStrokeInvertPalette?: () => void;
     filters?: VizDataFilter[];
     onAddFilter?: (filter: Omit<VizDataFilter, 'id'>) => void;
     onUpdateFilter?: (
@@ -90,8 +94,10 @@
     onBackgroundModesChange,
     onBackgroundClassificationChange,
     onBackgroundStrokeClassificationChange,
+    onBackgroundStrokeMappingChange,
     onBackgroundMappingChange,
     onBackgroundInvertPalette,
+    onBackgroundStrokeInvertPalette,
     filters = [],
     onAddFilter,
     onUpdateFilter,
@@ -104,7 +110,9 @@
   const secondaryFieldItems = $derived([noneOption, ...dataFields]);
 
   let discretizationModalOpen = $state(false);
-  let discretizationTarget = $state<'text' | 'background'>('text');
+  let discretizationTarget = $state<'background-fill' | 'background-stroke'>(
+    'background-fill'
+  );
   let filterSectionVisible = $state(false);
 
   let selectedLabelFieldId = $state<number>(NONE_FIELD_ID);
@@ -155,11 +163,19 @@
   const hasSecondaryField = $derived(secondaryFieldId !== NONE_FIELD_ID);
   const backgroundAvailable = $derived(Boolean(backgroundVisualization));
   const selectedBackgroundVizId = $derived(backgroundVisualization?.id);
-  const activeDiscretizationVisualization = $derived(
-    discretizationTarget === 'background'
-      ? backgroundVisualization
-      : visualization
-  );
+  const activeDiscretizationVisualization = $derived(backgroundVisualization);
+  const activeDiscretizationClassification = $derived.by(() => {
+    if (discretizationTarget === 'background-stroke') {
+      return backgroundVisualization?.text?.background?.strokeClassification;
+    }
+    return backgroundVisualization?.classification;
+  });
+  const activeDiscretizationValueColumn = $derived.by(() => {
+    if (discretizationTarget === 'background-stroke') {
+      return backgroundVisualization?.text?.background?.strokeValueColumn;
+    }
+    return backgroundVisualization?.text?.background?.valueColumn;
+  });
 
   const activeBackgroundFacetsSlotPath = $derived.by(() => {
     if (
@@ -191,6 +207,13 @@
     resolveDiscretizationLabel(
       backgroundVisualization?.classification
         ? { ...backgroundVisualization.classification }
+        : undefined
+    )
+  );
+  const backgroundStrokeDiscretizationLabel = $derived.by(() =>
+    resolveDiscretizationLabel(
+      backgroundVisualization?.text?.background?.strokeClassification
+        ? { ...backgroundVisualization.text.background.strokeClassification }
         : undefined
     )
   );
@@ -593,16 +616,24 @@
   }
 
   function openBackgroundDiscretization() {
-    discretizationTarget = 'background';
+    discretizationTarget = 'background-fill';
+    discretizationModalOpen = true;
+  }
+
+  function openBackgroundStrokeDiscretization() {
+    discretizationTarget = 'background-stroke';
     discretizationModalOpen = true;
   }
 
   function handleDiscretizationChange(
     classification: Partial<ClassificationConfig>
   ) {
-    if (discretizationTarget === 'background') {
+    if (discretizationTarget === 'background-fill') {
       onBackgroundClassificationChange?.(classification);
+      return;
     }
+
+    onBackgroundStrokeClassificationChange?.(classification);
   }
 
   function handleBackgroundStrokeClassificationChange(
@@ -798,16 +829,21 @@
         <StrokeSection
           visualization={backgroundVisualization}
           dataFields={dataFields}
-          discretizationLabel={backgroundDiscretizationLabel}
+          discretizationLabel={backgroundStrokeDiscretizationLabel}
           showDashed={false}
           onStyleChange={onBackgroundStyleChange}
           onModesChange={onBackgroundModesChange}
           onMappingChange={onBackgroundMappingChange}
-          onInvertPalette={onBackgroundInvertPalette}
-          onOpenDiscretization={openBackgroundDiscretization}
+          onStrokeMappingChange={onBackgroundStrokeMappingChange}
+          onInvertPalette={onBackgroundStrokeInvertPalette}
+          onOpenDiscretization={openBackgroundStrokeDiscretization}
           onStrokeClassificationChange={handleBackgroundStrokeClassificationChange}
           strokeClassification={backgroundVisualization?.text?.background
             ?.strokeClassification}
+          strokeValueColumn={backgroundVisualization?.text?.background
+            ?.strokeValueColumn}
+          strokeCategoryColumn={backgroundVisualization?.text?.background
+            ?.strokeCategoryColumn}
           facetsValueSlotPath={FACET_SLOT.TEXT_BACKGROUND_VALUE}
           facetsCategorySlotPath={FACET_SLOT.TEXT_BACKGROUND_CATEGORY}
         />
@@ -832,6 +868,9 @@
   <DiscretizationModal
     bind:open={discretizationModalOpen}
     visualization={activeDiscretizationVisualization}
+    classification={activeDiscretizationClassification}
+    valueColumn={activeDiscretizationValueColumn}
+    role={discretizationTarget === 'background-stroke' ? 'stroke' : 'fill'}
     onchange={handleDiscretizationChange}
   />
 

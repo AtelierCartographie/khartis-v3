@@ -36,6 +36,12 @@ describe('ConfigureVisualization', () => {
     );
   });
 
+  it('preserves suggestion origin when polygon classification defaults sync automatically', () => {
+    expect(source).toContain(
+      'visualizationStore.updateClassification(selectedViz.id, updates, options);'
+    );
+  });
+
   it('wires text background handlers independently from polygon handlers', () => {
     const textsConfigBlock = source.match(/<TextsConfig[\s\S]*?\/>/);
     expect(textsConfigBlock).not.toBeNull();

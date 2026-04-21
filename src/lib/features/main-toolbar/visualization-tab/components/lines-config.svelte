@@ -19,6 +19,7 @@
     VisualizationModes,
     VizDataFilter
   } from '$lib/features/commons/store/visualization.store.svelte';
+  import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import {
     ALL_PRIMITIVE_FILTERS,
     PrimitiveFilterType
@@ -48,6 +49,10 @@
     type FacetSlotPath
   } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
   import FacetsVariablePicker from './symbols/facets-variable-picker.svelte';
+  import {
+    loadDistinctCategoryLabels,
+    resolveCategoryPreviewCount
+  } from './shared/categorical-preview.utils';
 
   interface Props {
     dataFields?: Array<{ id: number; text: string; type?: string }>;
@@ -94,6 +99,9 @@
   let thicknessPickerOpen = $state(false);
   let colorPickerOpen = $state(false);
   let categoryPickerOpen = $state(false);
+  let colorCategoriesPopoverOpen = $state(false);
+  let resolvedCategoryLabels = $state<string[]>([]);
+  let categoryLabelsRequestId = 0;
   const NONE_FIELD_ID = -1;
   let selectedValueFieldId = $state<number>(NONE_FIELD_ID);
   let selectedSizeFieldId = $state<number>(NONE_FIELD_ID);
@@ -178,6 +186,19 @@
   const categoriesPalette = $derived(
     visualization?.classification?.colors ?? DEFAULT_QUALITATIVE_PREVIEW
   );
+  const dataset = $derived(
+    visualization
+      ? (datasetsStore.datasets.find((d) => d.id === visualization.datasetId) ??
+          datasetsStore.selectedDataset)
+      : datasetsStore.selectedDataset
+  );
+  const categoryCount = $derived(
+    resolveCategoryPreviewCount(
+      visualization?.classification,
+      4,
+      resolvedCategoryLabels
+    )
+  );
 
   let thicknessMode = $state<ThicknessMode>(ThicknessMode.UNIQUE);
   let colorMode = $state<ColorMode>(ColorMode.UNIQUE);
@@ -194,6 +215,9 @@
   let showMissingData = $state<boolean>(true);
   let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
   let missingDataShape = $state<MissingDataShape>(MissingDataShape.CIRCLE);
+  const currentCategoryColumnName = $derived(
+    visualization?.mapping.categoryColumn ?? categoryColumnName
+  );
 
   $effect(() => {
     if (visualization?.style) {
@@ -222,6 +246,31 @@
       missingDataShape =
         visualization.missingData.shape ?? MissingDataShape.CIRCLE;
     }
+  });
+
+  $effect(() => {
+    const persistedLabels = visualization?.classification?.labels ?? [];
+    const requestId = ++categoryLabelsRequestId;
+
+    if (colorMode !== ColorMode.CATEGORIES) {
+      resolvedCategoryLabels = persistedLabels;
+      return;
+    }
+
+    if (persistedLabels.length > 0) {
+      resolvedCategoryLabels = persistedLabels;
+      return;
+    }
+
+    void loadDistinctCategoryLabels(dataset, currentCategoryColumnName).then(
+      (labels) => {
+        if (requestId !== categoryLabelsRequestId) {
+          return;
+        }
+
+        resolvedCategoryLabels = labels;
+      }
+    );
   });
 
   const thicknessModeItems = [
@@ -604,6 +653,7 @@
         paletteType={resolvePaletteTypeForBreakpoint(
           visualization?.classification
         )}
+        classification={visualization?.classification}
         oninvert={onInvertPalette}
         onClassificationChange={handleClassificationChange}
       />
@@ -634,8 +684,11 @@
       </div>
       <DiscretizationRow
         label={m.category_aspect()}
-        value={m.categories_count({ count: 4 })}
-        onsettings={handleOpenDiscretization}
+        value={m.categories_count({ count: categoryCount })}
+        settingsIconDescription={m.palette_categories_aspect_title()}
+        onsettings={() => {
+          colorCategoriesPopoverOpen = true;
+        }}
       />
       <PalettePreview
         label={m.color_palette()}
@@ -645,7 +698,8 @@
         paletteType={PALETTE_TYPE.QUALITATIVE}
         categoriesMode={true}
         categoriesVariant="lines"
-        categoryLabels={visualization?.classification?.labels ?? []}
+        categoryLabels={resolvedCategoryLabels}
+        bind:categoriesPopoverOpen={colorCategoriesPopoverOpen}
         oninvert={onInvertPalette}
         onClassificationChange={handleClassificationChange}
       />

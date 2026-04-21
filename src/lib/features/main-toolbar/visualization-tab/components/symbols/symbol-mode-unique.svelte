@@ -22,6 +22,7 @@
   import { InfoPopover, SliderWithInput, StrokeSection } from '../shared';
   import FillSection from '../shared/fill-section.svelte';
   import { FILL_MODES_STANDARD } from '../shared/fill-mode-presets';
+  import DiscretizationModal from '../discretization-modal.svelte';
   import { NONE_FIELD_ID, type SymbolModeProps } from './types';
   import { resolveDiscretizationLabel } from '../discretization.utils';
   import {
@@ -37,13 +38,16 @@
     onModesChange,
     onSymbolsChange,
     onMappingChange,
+    onStrokeMappingChange,
     onMissingDataChange,
     onClassificationChange,
     onStrokeClassificationChange,
     onInvertPalette,
+    onStrokeInvertPalette,
     onOpenDiscretization
   }: SymbolModeProps = $props();
 
+  let strokeDiscretizationModalOpen = $state(false);
   let fillMode = $state<FillMode>(FillMode.UNIQUE);
   let symbolSize = $state<number>(VISUALIZATION_DEFAULTS.symbolSize);
   let shapeType = $state<ShapeType>(ShapeType.CIRCLE);
@@ -119,6 +123,7 @@
     }
     if (visualization?.classification) {
       categoryCount =
+        visualization.classification.labels?.length ??
         visualization.classification.numClasses ??
         visualization.classification.classes ??
         4;
@@ -375,12 +380,26 @@
   onStyleChange={onStyleChange}
   onModesChange={onModesChange}
   onMappingChange={onMappingChange}
-  onInvertPalette={onInvertPalette}
-  onOpenDiscretization={onOpenDiscretization}
+  onStrokeMappingChange={onStrokeMappingChange}
+  onInvertPalette={onStrokeInvertPalette}
+  onOpenDiscretization={() => {
+    strokeDiscretizationModalOpen = true;
+  }}
   onStrokeClassificationChange={onStrokeClassificationChange ?? (() => {})}
   strokeClassification={visualization?.symbol?.strokeClassification}
+  strokeValueColumn={visualization?.symbol?.strokeValueColumn}
+  strokeCategoryColumn={visualization?.symbol?.strokeCategoryColumn}
   facetsValueSlotPath={FACET_SLOT.SYMBOL_VALUE}
   facetsCategorySlotPath={FACET_SLOT.SYMBOL_CATEGORY}
+/>
+
+<DiscretizationModal
+  bind:open={strokeDiscretizationModalOpen}
+  visualization={visualization}
+  classification={visualization?.symbol?.strokeClassification}
+  valueColumn={visualization?.symbol?.strokeValueColumn}
+  role="stroke"
+  onchange={onStrokeClassificationChange ?? (() => {})}
 />
 
 <style lang="scss">

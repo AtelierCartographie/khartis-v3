@@ -12,6 +12,11 @@ vi.mock('$lib/features/commons/services/classification.service', () => ({
   applyPaletteInversion: (colors: string[]) => colors,
   calculateBreakCounts: vi.fn(async () => null),
   calculateBreaks: vi.fn(async () => null),
+  computeDivergingSplit: vi.fn(() => ({
+    lowerCount: 2,
+    upperCount: 2,
+    hasCenterClass: true
+  })),
   generateColorsForBreaks: vi.fn(() => [])
 }));
 
@@ -143,6 +148,14 @@ describe('DiscretizationModal', () => {
     expect(modalSource).toContain('paletteId: activeClassification?.paletteId');
     expect(modalSource).toContain(
       'inverted: activeClassification?.inverted ?? false'
+    );
+  });
+
+  it('should allow a stroke-specific valueColumn override instead of always reading visualization.mapping.valueColumn', () => {
+    expect(modalSource).toContain('valueColumn?: string;');
+    expect(modalSource).toContain('const activeValueColumn = $derived(');
+    expect(modalSource).toContain(
+      'valueColumn ?? visualization?.mapping.valueColumn'
     );
   });
 

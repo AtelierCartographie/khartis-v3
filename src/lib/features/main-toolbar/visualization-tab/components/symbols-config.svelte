@@ -55,6 +55,10 @@
       updates: Partial<ClassificationConfig>
     ) => void;
     onInvertPalette?: () => void;
+    onStrokeInvertPalette?: () => void;
+    onStrokeMappingChange?: (
+      updates: Partial<VisualizationConfig['mapping']>
+    ) => void;
     onToggleVisibility?: (checked: boolean) => void;
     filters?: VizDataFilter[];
     onAddFilter?: (filter: Omit<VizDataFilter, 'id'>) => void;
@@ -79,6 +83,8 @@
     onClassificationChange,
     onStrokeClassificationChange,
     onInvertPalette,
+    onStrokeInvertPalette,
+    onStrokeMappingChange,
     onToggleVisibility,
     filters = [],
     onAddFilter,
@@ -212,6 +218,8 @@
         onClassificationChange={onClassificationChange}
         onStrokeClassificationChange={onStrokeClassificationChange}
         onInvertPalette={onInvertPalette}
+        onStrokeInvertPalette={onStrokeInvertPalette}
+        onStrokeMappingChange={onStrokeMappingChange}
         onOpenDiscretization={handleOpenDiscretization}
       />
     {:else if symbolMode === SymbolMode.PROPORTIONAL || symbolMode === SymbolMode.CLASSES}
@@ -228,6 +236,8 @@
         onClassificationChange={onClassificationChange}
         onStrokeClassificationChange={onStrokeClassificationChange}
         onInvertPalette={onInvertPalette}
+        onStrokeInvertPalette={onStrokeInvertPalette}
+        onStrokeMappingChange={onStrokeMappingChange}
         onOpenDiscretization={handleOpenDiscretization}
       />
     {:else if symbolMode === SymbolMode.CATEGORIES}
