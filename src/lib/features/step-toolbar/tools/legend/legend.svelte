@@ -1,6 +1,7 @@
 <script lang="ts">
   import ColorPicker from '$lib/features/commons/components/color-picker.svelte';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
+  import SliderWithInput from '$lib/features/commons/components/slider-with-input.svelte';
   import Switch from '$lib/features/commons/components/switch.svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import { LegendTab } from '$lib/features/commons/constants/ui.constants';
@@ -9,12 +10,7 @@
   import { sanitizeTextInput } from '$lib/features/commons/utils/sanitize.utils';
   import * as m from '$lib/paraglide/messages';
   import { TableOfContents, TextFont } from 'carbon-icons-svelte';
-  import {
-    Select,
-    SelectItem,
-    Slider,
-    TextInput
-  } from 'carbon-components-svelte';
+  import { Select, SelectItem, TextInput } from 'carbon-components-svelte';
   import { onMount } from 'svelte';
   import {
     AVAILABLE_FONTS,
@@ -165,10 +161,11 @@
     legendActions.updateBackground({ color });
   }
 
-  function handleOpacityChange(): void {
+  function handleOpacityChange(nextOpacity: number): void {
+    localOpacity = nextOpacity;
     const normalizedOpacity = Math.max(
       0,
-      Math.min(100, Math.round(localOpacity))
+      Math.min(100, Math.round(nextOpacity))
     );
     localOpacity = normalizedOpacity;
 
@@ -295,8 +292,8 @@
     >
       <p class="legend-description">{m.legend_common_settings()}</p>
 
-      <div class="legend-text-style-row">
-        <div class="legend-text-style-font">
+      <div class="legend-style-section">
+        <div class="legend-text-style-row">
           <Select
             id={DOM_IDS.FONT_SELECT}
             labelText={m.legend_font()}
@@ -308,9 +305,6 @@
               <SelectItem value={font} text={font} />
             {/each}
           </Select>
-        </div>
-
-        <div class="legend-text-style-size">
           <Select
             id={DOM_IDS.FONT_SIZE}
             labelText={m.legend_font_size()}
@@ -324,63 +318,67 @@
           </Select>
         </div>
 
-        <div class="legend-text-style-color">
-          <ColorPicker
-            triggerLabel={m.legend_text_color()}
-            hex={textColorHex}
-            hue={textColor.hue}
-            saturation={textColor.saturation}
-            lightness={textColor.lightness}
-            onValidate={({
-              hue,
-              saturation,
-              lightness
-            }: ColorPickerValidateEvent) => {
-              handleTextColorChange({ hue, saturation, lightness });
-            }}
-          />
-        </div>
+        <ColorPicker
+          triggerLabel={m.legend_text_color()}
+          hex={textColorHex}
+          hue={textColor.hue}
+          saturation={textColor.saturation}
+          lightness={textColor.lightness}
+          onValidate={({
+            hue,
+            saturation,
+            lightness
+          }: ColorPickerValidateEvent) => {
+            handleTextColorChange({ hue, saturation, lightness });
+          }}
+        />
       </div>
 
       <div class="legend-divider"></div>
 
-      <div class="legend-switch-row">
-        <span class="legend-switch-label">{m.legend_background()}</span>
-        <Switch
-          labelText={m.legend_background()}
-          hideLabel
-          toggled={backgroundEnabled}
-          labelA={m.no()}
-          labelB={m.yes()}
-          showStateLabel
-          onchange={handleBackgroundEnabledChange}
+      <div class="legend-background-row">
+        <div class="legend-background-toggle">
+          <span class="legend-field-label">{m.legend_background()}</span>
+          <Switch
+            labelText={m.legend_background()}
+            hideLabel
+            size="sm"
+            toggled={backgroundEnabled}
+            labelA={m.no()}
+            labelB={m.yes()}
+            showStateLabel
+            onchange={handleBackgroundEnabledChange}
+          />
+        </div>
+
+        <ColorPicker
+          triggerLabel={m.legend_background_color()}
+          hex={bgHex}
+          hue={bgColor.hue}
+          saturation={bgColor.saturation}
+          lightness={bgColor.lightness}
+          onValidate={({
+            hue,
+            saturation,
+            lightness
+          }: ColorPickerValidateEvent) => {
+            handleBackgroundColorChange({ hue, saturation, lightness });
+          }}
         />
       </div>
 
-      <ColorPicker
-        triggerLabel={m.legend_background_color()}
-        hex={bgHex}
-        hue={bgColor.hue}
-        saturation={bgColor.saturation}
-        lightness={bgColor.lightness}
-        onValidate={({
-          hue,
-          saturation,
-          lightness
-        }: ColorPickerValidateEvent) => {
-          handleBackgroundColorChange({ hue, saturation, lightness });
-        }}
-      />
-
-      <Slider
-        labelText={m.legend_opacity()}
+      <SliderWithInput
+        label={m.legend_opacity()}
+        bind:value={localOpacity}
         min={0}
         max={100}
         step={1}
-        bind:value={localOpacity}
-        on:input={handleOpacityChange}
-        minLabel=""
-        maxLabel=""
+        showMinMax
+        minLabel="0"
+        maxLabel="100"
+        inputWidth="72px"
+        showSteppers={false}
+        onchange={handleOpacityChange}
       />
     </div>
   {/if}
@@ -410,6 +408,12 @@
     gap: var(--cds-spacing-05);
   }
 
+  .legend-style-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-05);
+  }
+
   .legend-description {
     margin: 0;
     font-size: 0.875rem;
@@ -418,34 +422,25 @@
   }
 
   .legend-text-style-row {
-    display: flex;
-    align-items: flex-end;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 10rem;
     gap: var(--cds-spacing-02);
   }
 
-  .legend-text-style-font {
-    flex: 1 1 auto;
-    min-width: 0;
+  .legend-background-row {
+    display: grid;
+    grid-template-columns: minmax(6rem, auto) minmax(0, 1fr);
+    gap: var(--cds-spacing-05);
+    align-items: end;
   }
 
-  .legend-text-style-size {
-    width: 80px;
-    flex-shrink: 0;
-  }
-
-  .legend-text-style-color {
-    flex-shrink: 0;
-    padding-bottom: 1px;
-  }
-
-  .legend-switch-row {
+  .legend-background-toggle {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--cds-spacing-04);
+    flex-direction: column;
+    gap: var(--cds-spacing-03);
   }
 
-  .legend-switch-label {
+  .legend-field-label {
     font-size: 0.75rem;
     line-height: 1rem;
     letter-spacing: 0.32px;
@@ -465,46 +460,13 @@
     margin-bottom: 8px;
   }
 
+  :global(#khartis-legend-tool .legend-background-toggle .kh-switch-native) {
+    gap: var(--cds-spacing-03);
+  }
+
   :global(#khartis-legend-tool .bx--text-input) {
     font-size: 0.875rem;
     line-height: 1.125rem;
     letter-spacing: 0.16px;
-  }
-
-  :global(
-    #khartis-legend-tool
-      .legend-text-style-color
-      #khartis-color-picker
-      .color-trigger
-  ) {
-    width: 3.5rem;
-    min-width: 3.5rem;
-    justify-content: space-between;
-    gap: var(--cds-spacing-02);
-    margin-top: var(--cds-spacing-03);
-    padding: 0 var(--cds-spacing-03);
-    border: 1px solid var(--cds-border-strong, #8d8d8d);
-    border-radius: 999px;
-    background: var(--cds-ui-01, #ffffff);
-    box-shadow: inset 0 0 0 1px var(--cds-border-subtle, #e0e0e0);
-  }
-
-  :global(
-    #khartis-legend-tool .legend-text-style-color #khartis-color-picker .swatch
-  ) {
-    width: 1rem;
-    height: 1rem;
-    margin-right: 0;
-    border-radius: 999px;
-    border-color: var(--cds-border-strong, #8d8d8d);
-  }
-
-  :global(
-    #khartis-legend-tool .legend-text-style-color #khartis-color-picker .chevron
-  ) {
-    position: static;
-    display: flex;
-    align-items: center;
-    color: var(--cds-icon-secondary, #525252);
   }
 </style>
