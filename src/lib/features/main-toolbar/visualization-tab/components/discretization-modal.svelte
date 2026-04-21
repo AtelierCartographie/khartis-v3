@@ -33,6 +33,10 @@
     resolveHeadTailClassCountMax,
     resolveRequestedClassCount
   } from './discretization.utils';
+  import {
+    createExclusiveContextualSurfaceId,
+    engageExclusiveContextualSurface
+  } from '$lib/features/commons/utils/contextual-surface-coordinator';
 
   type PanelMethod =
     | 'jenks'
@@ -82,9 +86,16 @@
   const activeValueColumn = $derived(
     valueColumn ?? visualization?.mapping.valueColumn
   );
+  const activeContextKey = $derived(
+    `${visualization?.id ?? ''}:${role}:${activeValueColumn ?? ''}`
+  );
 
   let _isCalculating = $state(false);
   let breaksRequestId = 0;
+  let lastLocalClassification = $state<
+    Partial<ClassificationConfig> | undefined
+  >(undefined);
+  let lastLocalContextKey = $state('');
 
   function storeMethodToPanelMethod(method: ClassificationMethod): PanelMethod {
     const mapping: Record<ClassificationMethod, PanelMethod> = {
@@ -123,6 +134,9 @@
   const MAIN_TOOLBAR_ID = 'khartis-main-toolbar';
   let panelRight = $state(readPanelRight());
   let wasOpen = $state(false);
+  const contextualSurfaceId = createExclusiveContextualSurfaceId(
+    'discretization-modal'
+  );
 
   function getFallbackPanelRight(toolbarClassName = ''): string {
     if (toolbarClassName.includes('collapsed')) {
@@ -177,6 +191,33 @@
       method === ClassificationMethod.HEAD_TAIL
         ? resolveHeadTailClassCountMax(actualClassCount ?? storedNumClasses)
         : DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX;
+    lastLocalClassification = cloneClassification(classification);
+    lastLocalContextKey = activeContextKey;
+  }
+
+  function cloneClassification(
+    classification: Partial<ClassificationConfig> | undefined
+  ): Partial<ClassificationConfig> | undefined {
+    if (!classification) {
+      return undefined;
+    }
+
+    return {
+      ...classification,
+      breaks: classification.breaks ? [...classification.breaks] : undefined,
+      counts: classification.counts ? [...classification.counts] : undefined,
+      colors: classification.colors ? [...classification.colors] : undefined,
+      labels: classification.labels ? [...classification.labels] : undefined,
+      disabledLabels: classification.disabledLabels
+        ? [...classification.disabledLabels]
+        : undefined,
+      categoryShapes: classification.categoryShapes
+        ? [...classification.categoryShapes]
+        : undefined,
+      patternParams: classification.patternParams
+        ? { ...classification.patternParams }
+        : undefined
+    };
   }
 
   function resolvePaletteColors(
@@ -305,7 +346,7 @@
         ? resolveHeadTailClassCountMax(actualClassCount)
         : DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX;
 
-    onchange?.({
+    const nextClassification = {
       method: storeMethod,
       classes: resolvedClassCount,
       numClasses: resolvedClassCount,
@@ -315,7 +356,11 @@
       breakpointValue: currentBreakpoint,
       paletteId: activeClassification?.paletteId,
       inverted: activeClassification?.inverted ?? false
-    });
+    } satisfies Partial<ClassificationConfig>;
+
+    lastLocalClassification = cloneClassification(nextClassification);
+    lastLocalContextKey = activeContextKey;
+    onchange?.(nextClassification);
   }
 
   $effect(() => {
@@ -326,7 +371,14 @@
       return;
     }
 
-    syncStateFromVisualization(activeClassification);
+    const classificationForSync =
+      lastLocalContextKey === activeContextKey
+        ? ((lastLocalClassification ?? activeClassification) as
+            | ClassificationConfig
+            | undefined)
+        : activeClassification;
+
+    syncStateFromVisualization(classificationForSync);
     panelRenderKey += 1;
     updatePanelPosition();
 
@@ -356,6 +408,14 @@
     return () => {
       document.removeEventListener(EVENT.KEYDOWN, handleKeydown);
     };
+  });
+
+  $effect(() => {
+    if (!open) {
+      return;
+    }
+
+    return engageExclusiveContextualSurface(contextualSurfaceId, handleClose);
   });
 
   $effect(() => {
@@ -442,21 +502,72 @@
     }
   }
 
+  function persistSelectionDraft(options?: {
+    method?: PanelMethod;
+    numClasses?: number;
+    breakpointValue?: number | null;
+  }) {
+    const method = options?.method ?? currentMethod;
+    const storeMethod = panelMethodToStoreMethod(method);
+    const requestedClassCount = resolveRequestedClassCount(
+      storeMethod,
+      options?.numClasses ?? currentNumClasses
+    );
+    const breakpointValue =
+      options &&
+      Object.prototype.hasOwnProperty.call(options, 'breakpointValue')
+        ? (options.breakpointValue ?? null)
+        : currentBreakpoint;
+
+    const nextClassification = {
+      method: storeMethod,
+      classes: requestedClassCount,
+      numClasses: requestedClassCount,
+      breaks: undefined,
+      counts: undefined,
+      breakpointValue,
+      paletteId: activeClassification?.paletteId,
+      inverted: activeClassification?.inverted ?? false
+    } satisfies Partial<ClassificationConfig>;
+
+    lastLocalClassification = cloneClassification({
+      ...(lastLocalContextKey === activeContextKey
+        ? lastLocalClassification
+        : activeClassification),
+      ...nextClassification
+    });
+    lastLocalContextKey = activeContextKey;
+    onchange?.(nextClassification);
+  }
+
   function handleMethodChange(method: PanelMethod) {
     currentMethod = method;
+    currentNumClasses = resolveRequestedClassCount(
+      panelMethodToStoreMethod(method),
+      currentNumClasses
+    );
     if (method !== 'head-tail') {
       headTailClassCountMax = DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX;
     }
+    persistSelectionDraft({
+      method,
+      numClasses: currentNumClasses
+    });
     computeBreaks();
   }
 
   function handleClassesChange(num: number) {
-    currentNumClasses = num;
+    currentNumClasses = resolveRequestedClassCount(
+      panelMethodToStoreMethod(currentMethod),
+      num
+    );
+    persistSelectionDraft({ numClasses: currentNumClasses });
     computeBreaks();
   }
 
   function handleBreakpointChange(value: number | null) {
     currentBreakpoint = value;
+    persistSelectionDraft({ breakpointValue: value });
     computeBreaks();
   }
 
@@ -466,8 +577,6 @@
   }
 
   function handleClose() {
-    syncStateFromVisualization(activeClassification);
-    panelRenderKey += 1;
     wasOpen = false;
     open = false;
     onclose?.();
