@@ -6,7 +6,8 @@
   import {
     DEFAULT_SEQUENTIAL_PREVIEW,
     DEFAULT_QUALITATIVE_PREVIEW,
-    PALETTE_TYPE
+    PALETTE_TYPE,
+    resolvePaletteTypeForBreakpoint
   } from '$lib/features/commons/components/palette-popover/palette.constants';
   import * as m from '$lib/paraglide/messages';
   import type {
@@ -193,9 +194,7 @@
     colors={currentPalette}
     selectedPaletteId={visualization?.classification?.paletteId}
     inverted={visualization?.classification?.inverted ?? false}
-    paletteType={visualization?.classification?.breakpointValue != null
-      ? PALETTE_TYPE.DIVERGING
-      : PALETTE_TYPE.SEQUENTIAL}
+    paletteType={resolvePaletteTypeForBreakpoint(visualization?.classification)}
     oninvert={onInvertPalette}
     onClassificationChange={onClassificationChange}
   />
