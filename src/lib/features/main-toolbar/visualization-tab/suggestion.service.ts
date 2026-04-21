@@ -909,7 +909,7 @@ export function resolveSuggestionBehavior(
       commonScale: suggestion.id !== 'symbols_proportional_double',
       positionMode:
         suggestion.id === 'symbols_proportional_double'
-          ? SymbolDoublePosition.JUXTAPOSITION
+          ? SymbolDoublePosition.OVERLAY
           : SymbolDoublePosition.OVERLAY,
       breakValueA: null,
       breakValueB: null,
