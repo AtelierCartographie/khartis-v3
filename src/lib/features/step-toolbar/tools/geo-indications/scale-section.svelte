@@ -1,5 +1,8 @@
 <script lang="ts">
-  import { ScaleForm } from '$lib/features/commons/constants/ui.constants';
+  import {
+    DistanceUnit,
+    ScaleForm
+  } from '$lib/features/commons/constants/ui.constants';
   import ColorPicker from '$lib/features/commons/components/color-picker.svelte';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
@@ -22,7 +25,11 @@
     geoIndicationsActions,
     geoIndicationsState
   } from './geo-indications.store.svelte';
-  import { getNumericEventValue, type ColorPickerValidateEvent } from './utils';
+  import {
+    getNumericEventValue,
+    MAX_SCALE_DISTANCE_BY_UNIT,
+    type ColorPickerValidateEvent
+  } from './utils';
 
   const store = geoIndicationsActions;
   const geoState = $derived(geoIndicationsState);
@@ -90,6 +97,7 @@
               getNumericEventValue(e, geoState.scale.distance)
             )}
           min={0}
+          max={MAX_SCALE_DISTANCE_BY_UNIT[geoState.scale.units as DistanceUnit]}
           step={500}
           size="sm"
         />
