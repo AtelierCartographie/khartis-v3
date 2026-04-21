@@ -376,7 +376,7 @@
 
 <style lang="scss">
   .discretization-panel {
-    padding: var(--cds-spacing-05);
+    padding: 0 var(--cds-spacing-05) var(--cds-spacing-05);
   }
 
   .section {
@@ -508,10 +508,11 @@
   }
 
   .description-section {
-    padding-top: var(--cds-spacing-03);
+    padding-top: var(--cds-spacing-02);
     display: flex;
     flex-direction: column;
-    gap: var(--cds-spacing-03);
+    gap: var(--cds-spacing-04);
+    margin-bottom: 0;
   }
 
   .method-description {
