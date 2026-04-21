@@ -14,6 +14,7 @@ import {
   resolveLayoutSizingTokens
 } from '$lib/features/commons/utils/layout-sizing.utils';
 import {
+  getFormatLayoutSizingContext,
   getFormatState,
   PAGE_GRID_SIZE_PX
 } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
@@ -28,6 +29,7 @@ import type {
 } from './annotations.types';
 
 const ANNOTATION_ID_PREFIX = 'annotation-';
+const DEFAULT_NOTE_FONT_SIZE = 8;
 
 const DEFAULT_STATE: AnnotationsState = {
   visible: true,
@@ -41,7 +43,7 @@ const DEFAULT_STATE: AnnotationsState = {
   drawingInProgress: [],
   defaultStyle: {
     font: 'Cabin',
-    fontSize: PRINT_STANDARD_TOKENS.annotations.noteFontSize,
+    fontSize: DEFAULT_NOTE_FONT_SIZE,
     bold: false,
     italic: false,
     underlined: false,
@@ -94,7 +96,7 @@ type AnnotationsActions = {
 
 const PREDEFINED_STYLES: Record<string, Partial<AnnotationStyle>> = {
   note: {
-    fontSize: PRINT_STANDARD_TOKENS.annotations.noteFontSize,
+    fontSize: DEFAULT_NOTE_FONT_SIZE,
     bold: false,
     italic: false
   },
@@ -1040,11 +1042,9 @@ const { actions, getState } = createToolStore<
       }
 
       const fmt = getFormatState();
-      const tokens = resolveLayoutSizingTokens({
-        width: fmt.width,
-        height: fmt.height,
-        model: fmt.model
-      });
+      const tokens = resolveLayoutSizingTokens(
+        getFormatLayoutSizingContext(fmt)
+      );
 
       const pageElements: {
         role: PageElementRole;
