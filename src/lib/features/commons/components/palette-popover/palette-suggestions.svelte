@@ -8,6 +8,7 @@
     type Palette,
     type SuggestionPreset,
     type QualitativePreset,
+    DEFAULT_QUALITATIVE_PRESET,
     getSuggestionPalettes,
     getQualitativeColorGroups,
     getPaletteDisplayName,
@@ -23,12 +24,14 @@
     selectedPaletteId: string;
     selectedColor?: string;
     numClasses: number;
+    divergingSplit?: import('./palette.constants').DivergingPaletteSplit;
     qualitativeMode?: 'single' | 'categories';
     onTypeChange?: (type: PaletteType) => void;
     onColorBlindChange?: (enabled: boolean) => void;
     onSelect?: (palette: Palette) => void;
     onColorSelect?: (color: string) => void;
     onIntensitySelect?: (color: string) => void;
+    onQualitativePresetChange?: (preset: QualitativePreset) => void;
   }
 
   let {
@@ -37,12 +40,14 @@
     selectedPaletteId,
     selectedColor,
     numClasses,
+    divergingSplit,
     qualitativeMode = 'single',
     onTypeChange: _onTypeChange,
     onColorBlindChange,
     onSelect,
     onColorSelect,
-    onIntensitySelect
+    onIntensitySelect,
+    onQualitativePresetChange
   }: Props = $props();
 
   const isQualitative = $derived(paletteType === PALETTE_TYPE.QUALITATIVE);
@@ -51,7 +56,7 @@
   );
 
   let sequentialPreset = $state<SuggestionPreset>('monochrome');
-  let qualitativePreset = $state<QualitativePreset>('vif');
+  let qualitativePreset = $state<QualitativePreset>(DEFAULT_QUALITATIVE_PRESET);
 
   const sequentialPalettes = $derived(
     getSuggestionPalettes(sequentialPreset, colorBlindFilter)
@@ -89,6 +94,7 @@
 
   function setQualitativePreset(preset: QualitativePreset) {
     qualitativePreset = preset;
+    onQualitativePresetChange?.(preset);
   }
 
   function toggleColorBlind() {
@@ -261,7 +267,7 @@
               ></div>
             {:else}
               <div class="swatch-row">
-                {#each generatePaletteColors(palette, numClasses, colorBlindFilter ? 'high' : undefined) as color, i (i)}
+                {#each generatePaletteColors(palette, numClasses, colorBlindFilter ? 'high' : undefined, undefined, divergingSplit) as color, i (i)}
                   <div
                     class="swatch-cell"
                     style="background-color: {color}"
