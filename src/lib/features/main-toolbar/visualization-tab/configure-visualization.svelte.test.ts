@@ -42,6 +42,23 @@ describe('ConfigureVisualization', () => {
     );
   });
 
+  it('hydrates stroke categorical labels through stroke classification updates', () => {
+    expect(source).toContain('function fetchStrokeCategoryLabels(');
+    expect(source).toContain(
+      'updatePrimitiveStrokeClassificationState(primitive, { labels })'
+    );
+    expect(source).toMatch(
+      /for \(const target of primitiveStrokeClassificationTargets\)[\s\S]*fetchStrokeCategoryLabels\(/
+    );
+  });
+
+  it('propagates symbol strokeDashed through panel derivation and style updates', () => {
+    expect(source).toContain('strokeDashed: symbol.strokeDashed');
+    expect(source).toContain(
+      '? { strokeDashed: updates.strokeDashed ?? symbol.strokeDashed }'
+    );
+  });
+
   it('wires text background handlers independently from polygon handlers', () => {
     const textsConfigBlock = source.match(/<TextsConfig[\s\S]*?\/>/);
     expect(textsConfigBlock).not.toBeNull();
@@ -131,10 +148,22 @@ describe('ConfigureVisualization', () => {
       /const existingModeStates\s*=\s*symbol\.modeStates\s*\?\?\s*\{\}/
     );
     expect(source).toMatch(
+      /const nextModeState\s*=\s*modeChanging\s*\?\s*existingModeStates\[nextMode\]\s*:\s*undefined;/
+    );
+    expect(source).toMatch(
       /\[previousMode\]:\s*snapshotSymbolModeState\(symbol\)/
     );
     expect(source).toMatch(
-      /applySymbolModeStateFields\(symbol,\s*existingModeStates\[nextMode\]\)/
+      /nextModeState\s*\?\s*applySymbolModeStateFields\(symbol,\s*nextModeState\)\s*:\s*getDefaultSymbolModeStateFields\(nextMode\)/
     );
+  });
+
+  it('defaults categories mode to a borderless symbol state when no per-mode snapshot exists yet', () => {
+    expect(source).toContain('function getDefaultSymbolModeStateFields(');
+    expect(source).toContain('if (mode !== SymbolMode.CATEGORIES)');
+    expect(source).toContain('strokeMode: StrokeMode.NONE');
+    expect(source).toContain('strokeWidth: 0');
+    expect(source).toContain('strokeOpacity: 1');
+    expect(source).toContain('strokeDashed: false');
   });
 });
