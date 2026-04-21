@@ -30,17 +30,19 @@
 </script>
 
 <div id="khartis-color-blindness-tool">
-  <Select
-    id="simulation-select"
-    labelText={m.colorblind_simulation()}
-    selected={colorBlindnessState.simulationType}
-    on:change={handleSimulationChange}
-    size="xl"
-  >
-    {#each simulationOptions as option (option.value)}
-      <SelectItem value={option.value} text={option.text} />
-    {/each}
-  </Select>
+  <div class="simulation-field">
+    <Select
+      id="simulation-select"
+      labelText={m.colorblind_simulation()}
+      selected={colorBlindnessState.simulationType}
+      on:change={handleSimulationChange}
+      size="xl"
+    >
+      {#each simulationOptions as option (option.value)}
+        <SelectItem value={option.value} text={option.text} />
+      {/each}
+    </Select>
+  </div>
   <div class="helper-section">
     <p class="helper-text">{m.colorblind_helper_p1()}</p>
     <p class="helper-text">{m.colorblind_helper_p2()}</p>
@@ -54,10 +56,50 @@
     gap: var(--cds-spacing-05);
   }
 
+  .simulation-field {
+    width: 100%;
+  }
+
+  .simulation-field :global(.bx--form-item) {
+    margin-bottom: 0;
+  }
+
+  .simulation-field :global(.bx--label) {
+    margin-bottom: var(--cds-spacing-03);
+    color: var(--cds-text-secondary, #525252);
+  }
+
+  .simulation-field :global(.bx--select) {
+    width: 100%;
+  }
+
+  .simulation-field :global(.bx--select-input__wrapper) {
+    background: var(--cds-field-01, #f4f4f4);
+  }
+
+  .simulation-field :global(.bx--select-input) {
+    min-height: 48px;
+    padding: 15px 48px 15px 16px;
+    font-size: 0.875rem;
+    line-height: 1.125rem;
+    letter-spacing: 0.16px;
+    color: var(--cds-text-primary, #161616);
+    background: var(--cds-field-01, #f4f4f4);
+    border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d);
+  }
+
+  .simulation-field :global(.bx--select__arrow) {
+    right: 16px;
+    fill: var(--cds-icon-primary, #161616);
+  }
+
   .helper-section {
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-03);
+    width: 100%;
+    padding-top: var(--cds-spacing-02);
+    padding-bottom: var(--cds-spacing-03);
   }
 
   .helper-text {
