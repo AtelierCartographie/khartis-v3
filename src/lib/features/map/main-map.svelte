@@ -633,6 +633,16 @@
     }
   }
 
+  /**
+   * Pending animation-frame handle for the reload debounce. Multiple
+   * visualization mutations fired in the same tick (e.g. a mode switch that
+   * also resets palette + column mappings) used to schedule one full dataset
+   * reload per bump, generating a 4-8× "Preparing dataset" log burst and a
+   * visible FPS drop on the map. Coalescing into a single rAF collapses
+   * those bursts into a single reload per animation frame.
+   */
+  let pendingReloadHandle: number | null = null;
+
   $effect(() => {
     void duckDBDatasetsVersion;
     // Subscribe to visualization changes so density re-generates on config edits.
@@ -643,43 +653,54 @@
       return;
     }
 
-    hasError = false;
-    errorMessage = null;
-
-    const currentEnabledIds = new Set(currentEnabledDatasets.map((d) => d.id));
-
-    // displayTables/displayGeoJSONs are outputs of this effect.
-    // Read them untracked to avoid a self-triggering reload loop.
-    const tableIdsToRemove = untrack(() =>
-      [...displayTables.keys()].filter((id) => !currentEnabledIds.has(id))
-    );
-
-    const geojsonIdsToRemove = untrack(() =>
-      [...displayGeoJSONs.keys()].filter((id) => !currentEnabledIds.has(id))
-    );
-
-    const datasetIdsToRemove = new Set([
-      ...tableIdsToRemove,
-      ...geojsonIdsToRemove
-    ]);
-    for (const datasetId of datasetIdsToRemove) {
-      removeDatasetFromDisplay(datasetId);
+    if (pendingReloadHandle !== null) {
+      cancelAnimationFrame(pendingReloadHandle);
     }
 
-    // Bump load generation so any in-flight loads from a previous version are discarded
-    const thisGeneration = ++loadGeneration;
+    pendingReloadHandle = requestAnimationFrame(() => {
+      pendingReloadHandle = null;
+      untrack(() => {
+        hasError = false;
+        errorMessage = null;
 
-    untrack(() => {
-      void loadDatasetsSequentially(currentEnabledDatasets, (dataset) =>
-        loadDatasetForDisplay(dataset, thisGeneration)
-      ).catch((error) => {
-        logger.error(
-          'Failed to reload display datasets',
-          LogCategory.MAP,
-          error
+        const currentEnabledIds = new Set(
+          currentEnabledDatasets.map((d) => d.id)
         );
+
+        const tableIdsToRemove = [...displayTables.keys()].filter(
+          (id) => !currentEnabledIds.has(id)
+        );
+        const geojsonIdsToRemove = [...displayGeoJSONs.keys()].filter(
+          (id) => !currentEnabledIds.has(id)
+        );
+
+        const datasetIdsToRemove = new Set([
+          ...tableIdsToRemove,
+          ...geojsonIdsToRemove
+        ]);
+        for (const datasetId of datasetIdsToRemove) {
+          removeDatasetFromDisplay(datasetId);
+        }
+
+        const thisGeneration = ++loadGeneration;
+        void loadDatasetsSequentially(currentEnabledDatasets, (dataset) =>
+          loadDatasetForDisplay(dataset, thisGeneration)
+        ).catch((error) => {
+          logger.error(
+            'Failed to reload display datasets',
+            LogCategory.MAP,
+            error
+          );
+        });
       });
     });
+
+    return () => {
+      if (pendingReloadHandle !== null) {
+        cancelAnimationFrame(pendingReloadHandle);
+        pendingReloadHandle = null;
+      }
+    };
   });
 
   $effect(() => {
