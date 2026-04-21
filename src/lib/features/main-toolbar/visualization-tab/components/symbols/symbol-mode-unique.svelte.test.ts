@@ -82,3 +82,27 @@ describe('SymbolModeUnique — anti-leak fill ↔ stroke palette', () => {
     expect(source).toContain('StrokeSection');
   });
 });
+
+describe('SymbolModeUnique — stroke discretization isolation', () => {
+  it('wires the stroke section to symbol stroke-specific classification fields', () => {
+    expect(source).toContain(
+      'strokeClassification={visualization?.symbol?.strokeClassification}'
+    );
+    expect(source).toContain(
+      'strokeValueColumn={visualization?.symbol?.strokeValueColumn}'
+    );
+    expect(source).toContain(
+      'strokeCategoryColumn={visualization?.symbol?.strokeCategoryColumn}'
+    );
+  });
+
+  it('opens the shared discretization modal in stroke role for the outline channel', () => {
+    expect(source).toContain('role="stroke"');
+    expect(source).toContain(
+      'classification={visualization?.symbol?.strokeClassification}'
+    );
+    expect(source).toContain(
+      'valueColumn={visualization?.symbol?.strokeValueColumn}'
+    );
+  });
+});

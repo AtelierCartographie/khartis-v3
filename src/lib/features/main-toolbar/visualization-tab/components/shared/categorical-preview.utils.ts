@@ -8,9 +8,8 @@ type CategoryDatasetLike = {
   data?: Array<Record<string, unknown>> | null;
 };
 
-type CategoryClassificationLike = Pick<
-  ClassificationConfig,
-  'labels' | 'colors' | 'numClasses' | 'classes'
+type CategoryClassificationLike = Partial<
+  Pick<ClassificationConfig, 'labels' | 'colors' | 'numClasses' | 'classes'>
 >;
 
 export function collectDistinctCategoryLabels(values: unknown[]): string[] {

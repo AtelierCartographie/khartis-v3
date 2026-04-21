@@ -781,6 +781,7 @@
 
             <div class="field-group">
               <ColorSelector
+                exclusive
                 label={m.color()}
                 value={missingDataColor}
                 onchange={handleMissingDataColorChange}
