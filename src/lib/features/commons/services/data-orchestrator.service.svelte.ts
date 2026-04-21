@@ -968,7 +968,13 @@ function createDataOrchestratorService() {
               : undefined;
           colors =
             userPalette && !isPatternPalette
-              ? generatePaletteColors(userPalette, actualNumClasses, contrast)
+              ? generatePaletteColors(
+                  userPalette,
+                  actualNumClasses,
+                  contrast,
+                  undefined,
+                  divergingSplit
+                )
               : generateColorsForBreaks(
                   actualNumClasses,
                   paletteType,

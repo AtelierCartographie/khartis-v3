@@ -30,6 +30,7 @@ import {
   DEFAULT_STYLE_OPACITY,
   DEFAULT_STROKE_WIDTH
 } from '../constants/colors.constants';
+import { DEFAULT_CATEGORICAL_COLORS as FIGMA_DEFAULT_CATEGORICAL_COLORS } from '../constants/qualitative-palette.constants';
 import { COLUMN_TYPE_GEOMETRY } from '../constants/data.constants';
 import { isLikelyCoordinateColumn } from '../utils/geo-detector.utils';
 import * as m from '$lib/paraglide/messages';
@@ -961,12 +962,14 @@ export interface VisualizationStore {
   ) => void;
   updateClassification: (
     id: string,
-    classification: Partial<ClassificationConfig>
+    classification: Partial<ClassificationConfig>,
+    options?: { preserveOrigin?: boolean }
   ) => void;
   updatePrimitiveClassification: (
     id: string,
     primitive: PrimitiveFilter,
-    classification: Partial<ClassificationConfig>
+    classification: Partial<ClassificationConfig>,
+    options?: { preserveOrigin?: boolean }
   ) => void;
   updatePrimitiveStrokeClassification: (
     id: string,
@@ -1044,16 +1047,7 @@ const DEFAULT_CHOROPLETH_COLORS = [
   '#08519c'
 ];
 
-export const DEFAULT_CATEGORICAL_COLORS = [
-  '#e41a1c',
-  '#377eb8',
-  '#4daf4a',
-  '#984ea3',
-  '#ff7f00',
-  '#ffff33',
-  '#a65628',
-  '#f781bf'
-];
+export const DEFAULT_CATEGORICAL_COLORS = [...FIGMA_DEFAULT_CATEGORICAL_COLORS];
 
 const VISUALIZATION_MAPPING_KEYS = [
   'valueColumn',
@@ -1993,7 +1987,8 @@ function createVisualizationStore(): VisualizationStore {
 
   function updateClassification(
     id: string,
-    classification: Partial<ClassificationConfig>
+    classification: Partial<ClassificationConfig>,
+    options?: { preserveOrigin?: boolean }
   ): void {
     applyVisualizationUpdate(id, (visualization) => {
       const existing = visualization.classification ?? {
@@ -2002,6 +1997,9 @@ function createVisualizationStore(): VisualizationStore {
       };
 
       return {
+        ...(options?.preserveOrigin
+          ? { origin: deepClone(visualization.origin) }
+          : {}),
         classification: { ...existing, ...classification },
         polygon: {
           ...buildPolygonPrimitiveConfig(visualization),
@@ -2017,7 +2015,8 @@ function createVisualizationStore(): VisualizationStore {
   function updatePrimitiveClassification(
     id: string,
     primitive: PrimitiveFilter,
-    classification: Partial<ClassificationConfig>
+    classification: Partial<ClassificationConfig>,
+    options?: { preserveOrigin?: boolean }
   ): void {
     const targetKey = (
       {
@@ -2043,6 +2042,9 @@ function createVisualizationStore(): VisualizationStore {
       const primitiveKind = resolvePrimitiveKind(primitive);
 
       return {
+        ...(options?.preserveOrigin
+          ? { origin: deepClone(visualization.origin) }
+          : {}),
         [targetKey]: { ...existing, ...classification },
         [primitiveKind]: {
           ...primitiveConfig,

@@ -178,6 +178,7 @@ function createMapInstanceStore() {
     }
 
     const { minZoom, maxZoom } = resolveMapZoomBounds(state.baseZoomLevel);
+    state.map.setMaxZoom(Math.max(state.map.getMaxZoom(), maxZoom));
     state.map.setMinZoom(minZoom);
     state.map.setMaxZoom(maxZoom);
 
