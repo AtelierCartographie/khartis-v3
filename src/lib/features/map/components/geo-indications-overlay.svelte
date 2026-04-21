@@ -13,15 +13,24 @@
   import { PRINT_STANDARD_TOKENS } from '$lib/features/commons/utils/layout-sizing.utils';
   import { EVENT, KEY } from '$lib/features/commons/constants/dom.constants';
   import {
+    getDragBounds,
+    snapPointWithinBounds
+  } from '$lib/features/commons/utils/page-grid.utils';
+  import {
     geoIndicationsActions,
     geoIndicationsState
   } from '$lib/features/step-toolbar/tools/geo-indications/geo-indications.store.svelte';
+  import { getFormatState } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
   import {
-    fromDistanceMeters,
+    clampScaleDistance,
+    formatScaleDistance,
+    getScaleDistanceLimit,
+    getSuggestedScaleDistance,
     INSET_MAP_SIZE_LIMITS,
+    SCALE_MAX_WIDTH_PX,
     toDistanceMeters
   } from '$lib/features/step-toolbar/tools/geo-indications/utils';
-  import { onDestroy, onMount } from 'svelte';
+  import { onDestroy, onMount, untrack } from 'svelte';
   import * as d3geo from 'd3-geo';
   import type { GeoPermissibleObjects, GeoProjection } from 'd3-geo';
   import type {
@@ -38,7 +47,7 @@
   import * as m from '$lib/paraglide/messages';
   import { GEOJSON_TYPE } from '$lib/features/commons/constants';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-  import { duckDBOrchestrator } from '$lib/features/duckdb';
+  import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { readGeoParquetViaDuckDB } from '../utils/read-geojson-arrow';
   import { arrowTableToGeoJSON, extractGeometryInfo } from '../io';
   import {
@@ -52,7 +61,6 @@
     hidden = false
   }: { interactive?: boolean; hidden?: boolean } = $props();
 
-  const EARTH_CIRCUMFERENCE_KM = 40075.017;
   const EARTH_RADIUS_METERS = 6378137;
   const MM_TO_PAGE_PX = 72 / 25.4;
   const SCALE_PADDING = 6;
@@ -61,7 +69,6 @@
     { length: SCALE_SEGMENT_COUNT },
     (_, index) => index
   );
-  const SCALE_FALLBACK_ZOOM = 2;
   const INSET_MAP_DATA_PATH =
     '/basemaps/geometry/monde-countries-2024-low.parquet';
   const INSET_PLANISPHERE_RATIO = 0.62;
@@ -74,8 +81,6 @@
   const INSET_WORLD_WINDOW_INSET = 1.5;
   const INSET_LAND_STROKE_MIN = 0.35;
   const INSET_LAND_STROKE_MAX = 0.8;
-  const SCALE_TARGET_WIDTH_PX = 80;
-  const SCALE_MAX_WIDTH_PX = 120;
   const ORIENTATION_MIN_SIZE_PX = 14;
   const ORIENTATION_MAX_SIZE_PX = 84;
 
@@ -201,6 +206,7 @@
       geoIndicationsState.orientation.color.lightness
     )
   );
+  const formatState = $derived(getFormatState());
   const legendState = $derived(getLegendState());
 
   function toFiniteNumber(value: unknown, fallback: number): number {
@@ -208,20 +214,6 @@
       return value;
     }
     return fallback;
-  }
-
-  function toNiceDistance(value: number): number {
-    if (!Number.isFinite(value) || value <= 0) {
-      return 1;
-    }
-
-    const exponent = Math.floor(Math.log10(value));
-    const magnitude = Math.pow(10, exponent);
-    const normalized = value / magnitude;
-    const step =
-      normalized < 1.5 ? 1 : normalized < 3 ? 2 : normalized < 7 ? 5 : 10;
-
-    return step * magnitude;
   }
 
   function computeScaleWidthFromMap(distanceMeters: number): number | null {
@@ -249,64 +241,6 @@
 
     return Number.isFinite(width) ? width : null;
   }
-
-  function getProjectedMetersPerPixelAtCenter(): number | null {
-    const map = mapInstanceStore.map;
-    if (!map) {
-      return null;
-    }
-
-    const center = map.getCenter();
-    const safeLatitude = clamp(center.lat, -85, 85);
-    const latitudeRadians = (safeLatitude * Math.PI) / 180;
-    const cosLatitude = Math.cos(latitudeRadians);
-    if (Math.abs(cosLatitude) < 1e-6) {
-      return null;
-    }
-
-    const projectedCenter = map.project([center.lng, safeLatitude]);
-    const projectedEast = map.project([center.lng + 1, safeLatitude]);
-    const pixelDelta = Math.abs(projectedEast.x - projectedCenter.x);
-    if (!Number.isFinite(pixelDelta) || pixelDelta < 1e-6) {
-      return null;
-    }
-
-    const metersPerLongitudeDegree =
-      (Math.PI / 180) * EARTH_RADIUS_METERS * cosLatitude;
-    return metersPerLongitudeDegree / pixelDelta;
-  }
-
-  function getFallbackMetersPerPixel(): number {
-    const fallbackZoom = toFiniteNumber(
-      mapInstanceStore.currentZoom,
-      SCALE_FALLBACK_ZOOM
-    );
-    const centerLatitude =
-      mapInstanceStore.getMapCenter()?.lat ??
-      mapInstanceStore.map?.getCenter().lat ??
-      0;
-    const cosine = Math.max(
-      Math.cos((clamp(centerLatitude, -85, 85) * Math.PI) / 180),
-      1e-6
-    );
-
-    return (
-      (EARTH_CIRCUMFERENCE_KM * 1000 * cosine) / Math.pow(2, fallbackZoom + 8)
-    );
-  }
-
-  function getSuggestedScaleDistance(unit: DistanceUnit): number {
-    const metersPerPixel =
-      getProjectedMetersPerPixelAtCenter() ?? getFallbackMetersPerPixel();
-    const rawDistance = fromDistanceMeters(
-      SCALE_TARGET_WIDTH_PX * metersPerPixel,
-      unit
-    );
-    const niceDistance = toNiceDistance(rawDistance);
-
-    return Math.max(1, Math.round(niceDistance));
-  }
-
   function toWorldFeatureCollection(
     payload: unknown
   ): WorldFeatureCollection | null {
@@ -458,13 +392,48 @@
     return projection;
   }
 
+  function getScaleDistanceContext() {
+    const center = mapInstanceStore.getMapCenter();
+
+    return {
+      map: mapInstanceStore.map,
+      zoom: mapInstanceStore.currentZoom,
+      centerLatitude: center?.lat ?? null
+    };
+  }
+
+  const scaleDistanceLimit = $derived.by(() => {
+    const _revision = mapViewRevision;
+    const _zoomLevel = mapInstanceStore.zoomLevel;
+    void _revision;
+    void _zoomLevel;
+
+    return getScaleDistanceLimit(
+      geoIndicationsState.scale.units,
+      getScaleDistanceContext()
+    );
+  });
+
   const effectiveScaleDistance = $derived.by(() => {
+    const _revision = mapViewRevision;
+    const _zoomLevel = mapInstanceStore.zoomLevel;
+    void _revision;
+    void _zoomLevel;
+
     const distance = toFiniteNumber(geoIndicationsState.scale.distance, 0);
     if (distance > 0) {
-      return distance;
+      return clampScaleDistance(
+        distance,
+        geoIndicationsState.scale.units,
+        distance,
+        getScaleDistanceContext()
+      );
     }
 
-    return getSuggestedScaleDistance(geoIndicationsState.scale.units);
+    return getSuggestedScaleDistance(
+      geoIndicationsState.scale.units,
+      getScaleDistanceContext()
+    );
   });
 
   $effect(() => {
@@ -479,13 +448,27 @@
       geoIndicationsState.scale.distance,
       0
     );
-    if (currentDistance > 0) {
+    if (currentDistance <= 0) {
+      geoIndicationsActions.setScaleDistance(
+        getSuggestedScaleDistance(
+          geoIndicationsState.scale.units,
+          getScaleDistanceContext()
+        )
+      );
       return;
     }
 
-    geoIndicationsActions.setScaleDistance(
-      getSuggestedScaleDistance(geoIndicationsState.scale.units)
+    const clampedDistance = clampScaleDistance(
+      currentDistance,
+      geoIndicationsState.scale.units,
+      currentDistance,
+      getScaleDistanceContext()
     );
+    if (clampedDistance === currentDistance) {
+      return;
+    }
+
+    geoIndicationsActions.setScaleDistance(clampedDistance);
   });
 
   const scaleWidth = $derived.by(() => {
@@ -503,17 +486,17 @@
       return clamp(projectedWidth, 8, SCALE_MAX_WIDTH_PX);
     }
 
-    const metersPerPixel = getFallbackMetersPerPixel();
-    const fallbackWidth = distanceMeters / metersPerPixel;
-
-    return clamp(fallbackWidth, 8, SCALE_MAX_WIDTH_PX);
+    return clamp(
+      (effectiveScaleDistance / scaleDistanceLimit) * SCALE_MAX_WIDTH_PX,
+      8,
+      SCALE_MAX_WIDTH_PX
+    );
   });
 
   const scaleLabel = $derived.by(() => {
-    const distance = Math.max(1, Math.round(effectiveScaleDistance));
     const units = geoIndicationsState.scale.units;
     const unitLabel = units === DistanceUnit.KILOMETERS ? 'km' : 'mi';
-    return `${distance} ${unitLabel}`;
+    return `${formatScaleDistance(effectiveScaleDistance)} ${unitLabel}`;
   });
   const scaleRenderedWidth = $derived(Math.max(8, Math.round(scaleWidth)));
   const scaleSegmentWidth = $derived.by(() =>
@@ -719,6 +702,164 @@
     return Math.max(globalState.zoom.pageZoomScale, 0.1);
   }
 
+  function arePointsEqual(
+    left: { x: number; y: number } | null,
+    right: { x: number; y: number } | null
+  ): boolean {
+    return left?.x === right?.x && left?.y === right?.y;
+  }
+
+  function getOverlaySize(): { width: number; height: number } | null {
+    if (!overlayElement) {
+      return null;
+    }
+
+    return {
+      width: overlayElement.offsetWidth,
+      height: overlayElement.offsetHeight
+    };
+  }
+
+  function getDragElement(target: DragTarget): HTMLDivElement | null {
+    if (target === 'scale') {
+      return scaleElement;
+    }
+
+    if (target === 'orientation') {
+      return orientationElement;
+    }
+
+    return insetMapElement;
+  }
+
+  function getDragPosition(
+    target: DragTarget
+  ): { x: number; y: number } | null {
+    if (target === 'scale') {
+      return geoIndicationsState.scale.dragPosition;
+    }
+
+    if (target === 'orientation') {
+      return geoIndicationsState.orientation.dragPosition;
+    }
+
+    return geoIndicationsState.insetMap.dragPosition;
+  }
+
+  function setDragPosition(
+    target: DragTarget,
+    position: { x: number; y: number } | null
+  ): void {
+    if (target === 'scale') {
+      geoIndicationsActions.setScaleDragPosition(position);
+      return;
+    }
+
+    if (target === 'orientation') {
+      geoIndicationsActions.setOrientationDragPosition(position);
+      return;
+    }
+
+    geoIndicationsActions.setInsetMapDragPosition(position);
+  }
+
+  function normalizeDragPosition(
+    target: DragTarget,
+    position: { x: number; y: number },
+    snapEnabled = formatState.gridEnabled
+  ): { x: number; y: number } {
+    const overlaySize = getOverlaySize();
+    const dragElement = getDragElement(target);
+
+    if (!overlaySize || !dragElement) {
+      return position;
+    }
+
+    return snapPointWithinBounds(
+      position,
+      getDragBounds(overlaySize, {
+        width: dragElement.offsetWidth,
+        height: dragElement.offsetHeight
+      }),
+      snapEnabled
+    );
+  }
+
+  function normalizeStoredDragPosition(
+    target: DragTarget,
+    snapEnabled = formatState.gridEnabled
+  ): void {
+    if (currentDrag === target) {
+      return;
+    }
+
+    const dragPosition = getDragPosition(target);
+    if (!dragPosition) {
+      return;
+    }
+
+    const normalizedPosition = normalizeDragPosition(
+      target,
+      dragPosition,
+      snapEnabled
+    );
+
+    if (!arePointsEqual(normalizedPosition, dragPosition)) {
+      setDragPosition(target, normalizedPosition);
+    }
+  }
+
+  $effect(() => {
+    void formatState.width;
+    void formatState.height;
+    void formatState.margins.top;
+    void formatState.margins.right;
+    void formatState.margins.bottom;
+    void formatState.margins.left;
+    void geoIndicationsState.scale.form;
+    void geoIndicationsState.scale.fontSize;
+    void geoIndicationsState.scale.dragPosition;
+
+    normalizeStoredDragPosition(
+      'scale',
+      untrack(() => formatState.gridEnabled)
+    );
+  });
+
+  $effect(() => {
+    void formatState.width;
+    void formatState.height;
+    void formatState.margins.top;
+    void formatState.margins.right;
+    void formatState.margins.bottom;
+    void formatState.margins.left;
+    void geoIndicationsState.orientation.size;
+    void geoIndicationsState.orientation.style;
+    void geoIndicationsState.orientation.dragPosition;
+
+    normalizeStoredDragPosition(
+      'orientation',
+      untrack(() => formatState.gridEnabled)
+    );
+  });
+
+  $effect(() => {
+    void formatState.width;
+    void formatState.height;
+    void formatState.margins.top;
+    void formatState.margins.right;
+    void formatState.margins.bottom;
+    void formatState.margins.left;
+    void geoIndicationsState.insetMap.size;
+    void geoIndicationsState.insetMap.type;
+    void geoIndicationsState.insetMap.dragPosition;
+
+    normalizeStoredDragPosition(
+      'inset',
+      untrack(() => formatState.gridEnabled)
+    );
+  });
+
   function stopDragging(): void {
     currentDrag = null;
     window.removeEventListener(EVENT.POINTERMOVE, handlePointerMove);
@@ -736,33 +877,12 @@
 
     const scale = getPageScale();
     const rect = overlayElement.getBoundingClientRect();
-    const dragElement =
-      currentDrag === 'scale'
-        ? scaleElement
-        : currentDrag === 'orientation'
-          ? orientationElement
-          : insetMapElement;
-    const dragRect = dragElement?.getBoundingClientRect() ?? null;
-    const dragWidth = dragRect ? dragRect.width / scale : 0;
-    const dragHeight = dragRect ? dragRect.height / scale : 0;
-    const x = clamp(
-      (event.clientX - rect.left) / scale - dragOffsetX,
-      0,
-      Math.max(0, rect.width / scale - dragWidth)
-    );
-    const y = clamp(
-      (event.clientY - rect.top) / scale - dragOffsetY,
-      0,
-      Math.max(0, rect.height / scale - dragHeight)
-    );
+    const position = normalizeDragPosition(currentDrag, {
+      x: (event.clientX - rect.left) / scale - dragOffsetX,
+      y: (event.clientY - rect.top) / scale - dragOffsetY
+    });
 
-    if (currentDrag === 'scale') {
-      geoIndicationsActions.setScaleDragPosition({ x, y });
-    } else if (currentDrag === 'orientation') {
-      geoIndicationsActions.setOrientationDragPosition({ x, y });
-    } else if (currentDrag === 'inset') {
-      geoIndicationsActions.setInsetMapDragPosition({ x, y });
-    }
+    setDragPosition(currentDrag, position);
   }
 
   function startDrag(
@@ -783,26 +903,16 @@
 
     const currentX = (elementRect.left - overlayRect.left) / scale;
     const currentY = (elementRect.top - overlayRect.top) / scale;
-
-    let dragPos: { x: number; y: number } | null = null;
-    if (target === 'scale') {
-      dragPos = geoIndicationsState.scale.dragPosition;
-    } else if (target === 'orientation') {
-      dragPos = geoIndicationsState.orientation.dragPosition;
-    } else if (target === 'inset') {
-      dragPos = geoIndicationsState.insetMap.dragPosition;
-    }
-
-    if (!dragPos) {
-      const initialPos = { x: currentX, y: currentY };
-      if (target === 'scale') {
-        geoIndicationsActions.setScaleDragPosition(initialPos);
-      } else if (target === 'orientation') {
-        geoIndicationsActions.setOrientationDragPosition(initialPos);
-      } else if (target === 'inset') {
-        geoIndicationsActions.setInsetMapDragPosition(initialPos);
+    const dragPos = normalizeDragPosition(
+      target,
+      getDragPosition(target) ?? {
+        x: currentX,
+        y: currentY
       }
-      dragPos = initialPos;
+    );
+
+    if (!arePointsEqual(dragPos, getDragPosition(target))) {
+      setDragPosition(target, dragPos);
     }
 
     dragOffsetX = (event.clientX - overlayRect.left) / scale - dragPos.x;

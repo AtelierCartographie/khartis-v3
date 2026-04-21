@@ -56,8 +56,7 @@
   import {
     DEFAULT_PAGE_COLOR,
     getFormatLayoutSizingContext,
-    getFormatState,
-    PAGE_GRID_SIZE_PX
+    getFormatState
   } from '../../step-toolbar/tools/format/format.store.svelte';
   import { getSimplificationState } from '../../step-toolbar/tools/simplification/simplification.store.svelte';
   import { getProjectionState } from '../../step-toolbar/tools/projections/projection.store.svelte';
@@ -98,6 +97,7 @@
   import AnnotationOverlay from './annotation-overlay.svelte';
   import GeoIndicationsOverlay from './geo-indications-overlay.svelte';
   import LegendOverlay from './legend-overlay.svelte';
+  import PageGridOverlay from './page-grid-overlay.svelte';
 
   let {
     tables,
@@ -1966,10 +1966,7 @@
 {:else}
   <div class="page-container" style={pageStyle}>
     {#if showPageGrid}
-      <div
-        class="page-grid"
-        style={`--page-grid-size:${PAGE_GRID_SIZE_PX}px;`}
-      ></div>
+      <PageGridOverlay />
     {/if}
 
     <div
@@ -2068,20 +2065,6 @@
 
   .map-canvas.is-empty :global(canvas) {
     opacity: 0;
-  }
-
-  .page-grid {
-    position: absolute;
-    inset: 0;
-    z-index: var(--z-map-layer);
-    pointer-events: none;
-    background-image: radial-gradient(
-      circle,
-      rgba(22, 22, 22, 0.28) 0.75px,
-      transparent 0.75px
-    );
-    background-size: var(--page-grid-size) var(--page-grid-size);
-    background-position: 0 0;
   }
 
   .map-canvas {
