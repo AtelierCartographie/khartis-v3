@@ -14,7 +14,10 @@ import {
   resolveLayoutSizingTokens
 } from '$lib/features/commons/utils/layout-sizing.utils';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
-import { getFormatState } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
+import {
+  getFormatLayoutSizingContext,
+  getFormatState
+} from '$lib/features/step-toolbar/tools/format/format.store.svelte';
 import { convertDistanceValue, INSET_MAP_SIZE_LIMITS } from './utils';
 import type {
   ColorState,
@@ -303,11 +306,9 @@ const { state, actions } = createToolStore<
 
       if (!wasEnabled && s.scale.fontSize === DEFAULT_STATE.scale.fontSize) {
         const fmt = getFormatState();
-        const tokens = resolveLayoutSizingTokens({
-          width: fmt.width,
-          height: fmt.height,
-          model: fmt.model
-        });
+        const tokens = resolveLayoutSizingTokens(
+          getFormatLayoutSizingContext(fmt)
+        );
         s.scale.fontSize = tokens.geoIndications.scaleFontSize;
       }
     },
@@ -328,11 +329,9 @@ const { state, actions } = createToolStore<
         s.orientation.size === DEFAULT_STATE.orientation.size
       ) {
         const fmt = getFormatState();
-        const tokens = resolveLayoutSizingTokens({
-          width: fmt.width,
-          height: fmt.height,
-          model: fmt.model
-        });
+        const tokens = resolveLayoutSizingTokens(
+          getFormatLayoutSizingContext(fmt)
+        );
         s.orientation.size = tokens.geoIndications.orientationSizeMm;
       }
     },
@@ -342,11 +341,9 @@ const { state, actions } = createToolStore<
 
       if (!wasEnabled && s.insetMap.size === DEFAULT_STATE.insetMap.size) {
         const fmt = getFormatState();
-        const tokens = resolveLayoutSizingTokens({
-          width: fmt.width,
-          height: fmt.height,
-          model: fmt.model
-        });
+        const tokens = resolveLayoutSizingTokens(
+          getFormatLayoutSizingContext(fmt)
+        );
         s.insetMap.size = tokens.geoIndications.insetSize;
       }
     },

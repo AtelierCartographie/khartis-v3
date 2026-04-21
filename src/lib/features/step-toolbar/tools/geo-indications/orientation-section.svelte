@@ -1,6 +1,7 @@
 <script lang="ts">
   import ColorPicker from '$lib/features/commons/components/color-picker.svelte';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
+  import SliderWithInput from '$lib/features/commons/components/slider-with-input.svelte';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
   import * as m from '$lib/paraglide/messages.js';
   import {
@@ -8,14 +9,13 @@
     Grid,
     RadioButton,
     RadioButtonGroup,
-    Row,
-    Slider
+    Row
   } from 'carbon-components-svelte';
   import {
     geoIndicationsActions,
     geoIndicationsState
   } from './geo-indications.store.svelte';
-  import { getNumericEventValue, type ColorPickerValidateEvent } from './utils';
+  import type { ColorPickerValidateEvent } from './utils';
 
   const store = geoIndicationsActions;
   const geoState = $derived(geoIndicationsState);
@@ -64,20 +64,13 @@
 
     <Row>
       <Column>
-        <Slider
-          labelText={m.geo_orientation_size()}
+        <SliderWithInput
+          label={m.geo_orientation_size()}
           min={5}
           max={30}
           step={1}
           value={geoState.orientation.size}
-          on:input={(e) =>
-            store.setOrientationSize(
-              getNumericEventValue(e, geoState.orientation.size)
-            )}
-          minLabel=""
-          maxLabel=""
-          hideTextInput={false}
-          fullWidth
+          onchange={store.setOrientationSize}
         />
       </Column>
     </Row>

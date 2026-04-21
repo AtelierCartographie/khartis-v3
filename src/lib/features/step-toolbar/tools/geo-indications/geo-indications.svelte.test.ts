@@ -67,10 +67,32 @@ describe('geo-indications tool', () => {
     await fireEvent.click(insetSwitch);
 
     expect(
-      await screen.findByText(m.geo_inset_map_center_longitude())
+      await screen.findByRole('spinbutton', {
+        name: m.geo_inset_map_center_longitude()
+      })
     ).toBeInTheDocument();
     expect(
-      screen.getByText(m.geo_inset_map_center_latitude())
+      screen.getByRole('spinbutton', {
+        name: m.geo_inset_map_center_latitude()
+      })
     ).toBeInTheDocument();
+  });
+
+  it('updates the inset map size from the numeric input', async () => {
+    render(GeoIndications);
+
+    const insetSwitch = screen.getByRole('switch', { name: m.geo_inset_map() });
+
+    await fireEvent.click(insetSwitch);
+
+    const sizeInput = screen.getByRole('spinbutton', {
+      name: m.geo_inset_map_size()
+    });
+
+    await fireEvent.input(sizeInput, {
+      target: { value: '320' }
+    });
+
+    expect(geoIndicationsState.insetMap.size).toBe(320);
   });
 });

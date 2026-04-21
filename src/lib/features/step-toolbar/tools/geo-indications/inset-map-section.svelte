@@ -1,6 +1,7 @@
 <script lang="ts">
   import ColorPicker from '$lib/features/commons/components/color-picker.svelte';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
+  import SliderWithInput from '$lib/features/commons/components/slider-with-input.svelte';
   import Switch from '$lib/features/commons/components/switch.svelte';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
   import * as m from '$lib/paraglide/messages.js';
@@ -9,15 +10,13 @@
     Grid,
     RadioButton,
     RadioButtonGroup,
-    Row,
-    Slider
+    Row
   } from 'carbon-components-svelte';
   import {
     geoIndicationsActions,
     geoIndicationsState
   } from './geo-indications.store.svelte';
   import {
-    getNumericEventValue,
     INSET_MAP_SIZE_LIMITS,
     type ColorPickerValidateEvent
   } from './utils';
@@ -83,20 +82,13 @@
 
     <Row>
       <Column>
-        <Slider
-          labelText={m.geo_inset_map_size()}
+        <SliderWithInput
+          label={m.geo_inset_map_size()}
           min={INSET_MAP_SIZE_LIMITS[geoState.insetMap.type].min}
           max={INSET_MAP_SIZE_LIMITS[geoState.insetMap.type].max}
           step={1}
           value={geoState.insetMap.size}
-          on:input={(e) =>
-            store.setInsetMapSize(
-              getNumericEventValue(e, geoState.insetMap.size)
-            )}
-          minLabel=""
-          maxLabel=""
-          hideTextInput={false}
-          fullWidth
+          onchange={store.setInsetMapSize}
         />
       </Column>
     </Row>
@@ -122,60 +114,45 @@
 
     <Row>
       <Column>
-        <Slider
-          labelText={m.geo_inset_map_zoom()}
+        <SliderWithInput
+          label={m.geo_inset_map_zoom()}
           min={0}
           max={100}
           step={1}
           value={geoState.insetMap.zoom}
-          on:input={(e) =>
-            store.setInsetMapZoom(
-              getNumericEventValue(e, geoState.insetMap.zoom)
-            )}
-          minLabel=""
-          maxLabel=""
-          hideTextInput={false}
-          fullWidth
+          onchange={store.setInsetMapZoom}
         />
       </Column>
     </Row>
 
     <Row>
       <Column>
-        <Slider
-          labelText={m.geo_inset_map_center_longitude()}
+        <SliderWithInput
+          label={m.geo_inset_map_center_longitude()}
           min={-180}
           max={180}
           step={1}
           value={geoState.insetMap.centerLongitude}
-          on:input={(e) =>
-            store.setInsetMapCenterLongitude(
-              getNumericEventValue(e, geoState.insetMap.centerLongitude)
-            )}
+          showMinMax
           minLabel="-180°"
           maxLabel="180°"
-          hideTextInput={false}
-          fullWidth
+          onchange={store.setInsetMapCenterLongitude}
         />
       </Column>
     </Row>
 
     <Row>
       <Column>
-        <Slider
-          labelText={m.geo_inset_map_center_latitude()}
+        <SliderWithInput
+          label={m.geo_inset_map_center_latitude()}
           min={-90}
           max={90}
           step={1}
           value={geoState.insetMap.centerLatitude}
-          on:input={(e) =>
-            store.setInsetMapCenterLatitude(
-              getNumericEventValue(e, geoState.insetMap.centerLatitude)
-            )}
+          showMinMax
           minLabel="-90°"
           maxLabel="90°"
-          hideTextInput={false}
-          fullWidth
+          onchange={store.setInsetMapCenterLatitude}
         />
       </Column>
     </Row>
