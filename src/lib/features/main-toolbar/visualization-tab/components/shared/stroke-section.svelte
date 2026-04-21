@@ -27,7 +27,8 @@
   import {
     DEFAULT_SEQUENTIAL_PREVIEW,
     DEFAULT_QUALITATIVE_PREVIEW,
-    PALETTE_TYPE
+    PALETTE_TYPE,
+    resolvePaletteTypeForBreakpoint
   } from '$lib/features/commons/components/palette-popover/palette.constants';
   import FacetsVariablePicker from '../symbols/facets-variable-picker.svelte';
   import {
@@ -359,9 +360,7 @@
       colors={resolvedClassesPalette}
       selectedPaletteId={strokeClassification?.paletteId}
       inverted={strokeClassification?.inverted ?? false}
-      paletteType={strokeClassification?.breakpointValue != null
-        ? PALETTE_TYPE.DIVERGING
-        : PALETTE_TYPE.SEQUENTIAL}
+      paletteType={resolvePaletteTypeForBreakpoint(strokeClassification)}
       oninvert={onInvertPalette}
       onClassificationChange={onStrokeClassificationChange}
     />
