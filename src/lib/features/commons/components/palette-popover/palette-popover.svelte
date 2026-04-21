@@ -4,6 +4,10 @@
   import * as m from '$lib/paraglide/messages';
   import { ArrowRight, Close } from 'carbon-icons-svelte';
   import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
+  import {
+    createExclusiveContextualSurfaceId,
+    engageExclusiveContextualSurface
+  } from '$lib/features/commons/utils/contextual-surface-coordinator';
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import { ToolbarState } from '$lib/features/commons/types/global';
   import PaletteSuggestions from './palette-suggestions.svelte';
@@ -32,6 +36,7 @@
     colorBlindFilter?: boolean;
     numClasses?: number;
     divergingSplit?: import('./palette.constants').DivergingPaletteSplit;
+    exclusive?: boolean;
     onclose?: () => void;
     onvalidate?: (
       palette: Palette | undefined,
@@ -51,6 +56,7 @@
     colorBlindFilter = $bindable(false),
     numClasses = 5,
     divergingSplit,
+    exclusive = true,
     onclose,
     onvalidate
   }: Props = $props();
@@ -67,6 +73,8 @@
   let draftQualitativePreset = $state<QualitativePreset>(
     DEFAULT_QUALITATIVE_PRESET
   );
+  const contextualSurfaceId =
+    createExclusiveContextualSurfaceId('palette-popover');
 
   const popoverTitle = $derived.by(() => {
     switch (draftType) {
@@ -198,6 +206,14 @@
       initDraft();
       updatePosition();
     }
+  });
+
+  $effect(() => {
+    if (!open || !exclusive) {
+      return;
+    }
+
+    return engageExclusiveContextualSurface(contextualSurfaceId, handleClose);
   });
 
   $effect(() => {
