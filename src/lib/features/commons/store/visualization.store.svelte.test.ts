@@ -212,6 +212,96 @@ describe('visualizationStore suggestion origin tracking', () => {
     });
   });
 
+  it('keeps suggestion origin for preserved primitive classification updates', () => {
+    datasetsStore.addProcessedDataset(buildDataset());
+
+    const visualization = visualizationStore.createVisualization(
+      VisualizationType.CATEGORICAL,
+      'dataset-1'
+    );
+
+    visualizationStore.updateVisualization(visualization.id, {
+      origin: {
+        mode: 'manual-suggestion',
+        suggestionKey: 'lines_colorful_QL::1::segment::line::QL'
+      }
+    });
+
+    visualizationStore.updatePrimitiveClassification(
+      visualization.id,
+      PrimitiveFilterType.LINE,
+      {
+        colors: ['#1192e8', '#78a9cf', '#c8ddf0'],
+        labels: ['A', 'B', 'C']
+      },
+      { preserveOrigin: true }
+    );
+
+    const updatedVisualization = visualizationStore.selectedVisualization;
+
+    expect(updatedVisualization?.origin).toEqual({
+      mode: 'manual-suggestion',
+      suggestionKey: 'lines_colorful_QL::1::segment::line::QL'
+    });
+    expect(updatedVisualization?.line?.classification?.labels).toEqual([
+      'A',
+      'B',
+      'C'
+    ]);
+  });
+
+  it('keeps suggestion origin for preserved polygon classification sync updates', () => {
+    datasetsStore.addProcessedDataset(buildDataset());
+
+    const visualization = visualizationStore.createVisualization(
+      VisualizationType.CATEGORICAL,
+      'dataset-1'
+    );
+
+    visualizationStore.updateVisualization(visualization.id, {
+      origin: {
+        mode: 'manual-suggestion',
+        suggestionKey: 'lines_colorful_QL::1::li_type::line::QL'
+      },
+      modes: {
+        ...visualization.modes,
+        fill: FillMode.NONE,
+        stroke: StrokeMode.NONE
+      },
+      primitiveFilters: [PrimitiveFilterType.LINE],
+      polygon: {
+        ...visualization.polygon!,
+        enabled: false,
+        fillMode: FillMode.CATEGORIES,
+        strokeMode: StrokeMode.NONE
+      }
+    });
+
+    visualizationStore.updateClassification(
+      visualization.id,
+      {
+        method: ClassificationMethod.MANUAL,
+        classes: 0,
+        colors: ['#1192e8', '#78a9cf', '#c8ddf0'],
+        inverted: false,
+        labels: ['A', 'B', 'C']
+      },
+      { preserveOrigin: true }
+    );
+
+    const updatedVisualization = visualizationStore.selectedVisualization;
+
+    expect(updatedVisualization?.origin).toEqual({
+      mode: 'manual-suggestion',
+      suggestionKey: 'lines_colorful_QL::1::li_type::line::QL'
+    });
+    expect(updatedVisualization?.polygon?.classification?.labels).toEqual([
+      'A',
+      'B',
+      'C'
+    ]);
+  });
+
   it('switches to custom for semantic classification changes', () => {
     datasetsStore.addProcessedDataset(buildDataset());
 
