@@ -6,6 +6,7 @@
   import AnnotationOverlay from '$lib/features/map/components/annotation-overlay.svelte';
   import GeoIndicationsOverlay from '$lib/features/map/components/geo-indications-overlay.svelte';
   import LegendOverlay from '$lib/features/map/components/legend-overlay.svelte';
+  import PageGridOverlay from '$lib/features/map/components/page-grid-overlay.svelte';
   import {
     DEFAULT_PAGE_COLOR,
     getFormatState
@@ -70,9 +71,14 @@
   const isStylingMode = $derived(
     globalState.selectedStep === ToolbarStep.Styling
   );
+  const showPageGrid = $derived(fmtState.gridEnabled && isStylingMode);
 </script>
 
 <div class="facets-page" style={pageStyle}>
+  {#if showPageGrid}
+    <PageGridOverlay />
+  {/if}
+
   <div class="facets-map-stage" style={mapStageStyle}>
     <FacetsGrid
       visualizations={visualizations}
