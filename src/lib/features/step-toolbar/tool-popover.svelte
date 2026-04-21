@@ -215,7 +215,7 @@
     max-height: var(--popover-max-height);
     overflow-y: auto;
     overflow-x: hidden;
-    padding-bottom: var(--cds-spacing-03);
+    padding-bottom: 0;
   }
 
   :global(#khartis-tool-popover .bx--list-box__menu) {
