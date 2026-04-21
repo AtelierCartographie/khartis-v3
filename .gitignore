@@ -17,6 +17,7 @@ dist
 dev-dist/
 tmp
 .vscode
+.artifacts
 
 # Logs
 logs
