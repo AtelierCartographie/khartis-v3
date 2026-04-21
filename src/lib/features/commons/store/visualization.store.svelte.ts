@@ -146,6 +146,13 @@ export interface SymbolModeState {
   breakValueA?: number | null;
   breakValueB?: number | null;
   fillMode?: FillMode;
+  strokeMode?: StrokeMode;
+  strokeWidth?: number;
+  strokeOpacity?: number;
+  strokeDashed?: boolean;
+  strokeClassification?: ClassificationConfig;
+  strokeValueColumn?: string;
+  strokeCategoryColumn?: string;
 }
 
 export interface SymbolPrimitiveConfig {
@@ -164,6 +171,7 @@ export interface SymbolPrimitiveConfig {
   strokeColor?: string | string[];
   strokeWidth: number;
   strokeOpacity: number;
+  strokeDashed: boolean;
   strokeValueColumn?: string;
   strokeCategoryColumn?: string;
   strokeClassification?: ClassificationConfig;
@@ -607,6 +615,8 @@ function buildSymbolPrimitiveConfig(
       VISUALIZATION_DEFAULTS.strokeWidth,
     strokeOpacity:
       existing?.strokeOpacity ?? visualization.style.strokeOpacity ?? 1,
+    strokeDashed:
+      existing?.strokeDashed ?? visualization.style.strokeDashed ?? false,
     proportionalType:
       existing?.proportionalType ??
       visualization.modes?.proportionalType ??
