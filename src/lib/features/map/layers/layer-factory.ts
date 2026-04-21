@@ -194,41 +194,45 @@ function createPointSymbolSvg(
   shape: ShapeType,
   fillColor: Color,
   strokeColor: Color,
-  strokeWidth: number
+  strokeWidth: number,
+  dashed = false
 ): string {
   const fill = colorToCss(fillColor);
   const stroke = colorToCss(strokeColor);
   const scaledStrokeWidth = Math.max(2, strokeWidth * 4);
+  const strokeDashAttributes = dashed
+    ? ` stroke-dasharray="${Math.max(2, scaledStrokeWidth * DEFAULT_DASH_ARRAY[0])} ${Math.max(2, scaledStrokeWidth * DEFAULT_DASH_ARRAY[1])}" stroke-linecap="round"`
+    : '';
 
   let markup = '';
   switch (shape) {
     case ShapeType.SQUARE:
-      markup = `<rect x="10" y="10" width="44" height="44" rx="4" ry="4" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" />`;
+      markup = `<rect x="10" y="10" width="44" height="44" rx="4" ry="4" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}"${strokeDashAttributes} />`;
       break;
     case ShapeType.BAR:
-      markup = `<rect x="26" y="4" width="12" height="56" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round" />`;
+      markup = `<rect x="26" y="4" width="12" height="56" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round"${strokeDashAttributes} />`;
       break;
     case ShapeType.SPIKE:
-      markup = `<path d="M32 4 L42 60 H22 Z" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round" />`;
+      markup = `<path d="M32 4 L42 60 H22 Z" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round"${strokeDashAttributes} />`;
       break;
     case ShapeType.CROSS:
-      markup = `<path d="M22 8 H42 V22 H56 V42 H42 V56 H22 V42 H8 V22 H22 Z" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round" />`;
+      markup = `<path d="M22 8 H42 V22 H56 V42 H42 V56 H22 V42 H8 V22 H22 Z" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round"${strokeDashAttributes} />`;
       break;
     case ShapeType.DIAMOND:
-      markup = `<path d="M32 6 L58 32 L32 58 L6 32 Z" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round" />`;
+      markup = `<path d="M32 6 L58 32 L32 58 L6 32 Z" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round"${strokeDashAttributes} />`;
       break;
     case ShapeType.TRIANGLE:
-      markup = `<path d="M32 8 L56 56 H8 Z" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round" />`;
+      markup = `<path d="M32 8 L56 56 H8 Z" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round"${strokeDashAttributes} />`;
       break;
     case ShapeType.STAR:
-      markup = `<path d="M32 6 L39.4 24.6 L58.7 24.6 L43.1 36.1 L48.4 55.1 L32 44 L15.6 55.1 L20.9 36.1 L5.3 24.6 L24.6 24.6 Z" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round" />`;
+      markup = `<path d="M32 6 L39.4 24.6 L58.7 24.6 L43.1 36.1 L48.4 55.1 L32 44 L15.6 55.1 L20.9 36.1 L5.3 24.6 L24.6 24.6 Z" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round"${strokeDashAttributes} />`;
       break;
     case ShapeType.RECTANGLE:
-      markup = `<rect x="4" y="24" width="56" height="16" rx="2" ry="2" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" />`;
+      markup = `<rect x="4" y="24" width="56" height="16" rx="2" ry="2" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}"${strokeDashAttributes} />`;
       break;
     case ShapeType.CIRCLE:
     default:
-      markup = `<circle cx="32" cy="32" r="22" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" />`;
+      markup = `<circle cx="32" cy="32" r="22" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}"${strokeDashAttributes} />`;
       break;
   }
 
@@ -239,7 +243,8 @@ function createPointSymbolIcon(
   shape: ShapeType,
   fillColor: Color,
   strokeColor: Color,
-  strokeWidth: number
+  strokeWidth: number,
+  dashed = false
 ): {
   url: string;
   width: number;
@@ -248,14 +253,21 @@ function createPointSymbolIcon(
   anchorY: number;
   id: string;
 } {
-  const key = JSON.stringify({ shape, fillColor, strokeColor, strokeWidth });
+  const key = JSON.stringify({
+    shape,
+    fillColor,
+    strokeColor,
+    strokeWidth,
+    dashed
+  });
   let url = pointSymbolIconCache.get(key);
   if (!url) {
     const svg = createPointSymbolSvg(
       shape,
       fillColor,
       strokeColor,
-      strokeWidth
+      strokeWidth,
+      dashed
     );
     url = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
     pointSymbolIconCache.set(key, url);
@@ -477,6 +489,11 @@ function createDoubleProportionalPointLayers(
       : strokeColor;
   const pointStrokeWidth = pointConfig.strokeWidth ?? strokeWidth;
   const pointStrokeOpacity = pointConfig.strokeOpacity ?? rawStrokeOpacity;
+  const pointStrokeDashed = pointConfig.strokeDashed ?? false;
+  const showPointStroke =
+    pointConfig.strokeMode !== StrokeMode.NONE &&
+    pointStrokeOpacity > 0 &&
+    pointStrokeWidth > 0;
   const pointFillOpacity = pointConfig.opacity ?? rawFillOpacity;
   const secondaryFillColor = hexToRgb(pointConfig.fillColorB ?? '#ff832b');
   const pointShape = pointConfig.shape ?? ShapeType.CIRCLE;
@@ -597,6 +614,10 @@ function createDoubleProportionalPointLayers(
     (columnName: string) =>
     (row: DeckDataRow): [number, number, number, number] => {
       if (isMissingThematicValue(row[columnName]) && !showMissingPoints) {
+        return [0, 0, 0, 0];
+      }
+
+      if (!showPointStroke) {
         return [0, 0, 0, 0];
       }
 
@@ -751,13 +772,16 @@ function createDoubleProportionalPointLayers(
         offsetY: layoutProps.offsetY,
         halfMask: layoutProps.halfMask
       } as Record<string, unknown>),
-      stroked: true,
+      stroked: showPointStroke,
       filled: !hideSymbolFill,
+      dashed: showPointStroke && pointStrokeDashed,
+      dashLength: DEFAULT_DASH_ARRAY[0],
+      gapLength: DEFAULT_DASH_ARRAY[1],
       opacity: 1,
       radiusScale: layoutProps.radiusScale,
       radiusUnits: 'pixels',
       lineWidthUnits: 'pixels',
-      lineWidthScale: pointStrokeWidth / 3,
+      lineWidthScale: showPointStroke ? pointStrokeWidth / 3 : 0,
       pickable,
       parameters: THEMATIC_OVERLAY_PARAMETERS,
       ...resolveHoverHighlightProps(pickable),
@@ -783,6 +807,7 @@ function createDoubleProportionalPointLayers(
           pointStrokeOpacity,
           pointStrokeValueColumn,
           pointStrokeCategoryColumn,
+          showPointStroke,
           pointConfig.strokeClassification?.breaks,
           pointConfig.strokeClassification?.colors,
           pointConfig.strokeClassification?.labels,
@@ -905,6 +930,11 @@ function createRepresentativePointSymbolLayers(
       : strokeColor;
   const pointStrokeWidth = pointConfig.strokeWidth ?? strokeWidth;
   const pointStrokeOpacity = pointConfig.strokeOpacity ?? rawStrokeOpacity;
+  const pointStrokeDashed = pointConfig.strokeDashed ?? false;
+  const showPointStroke =
+    pointConfig.strokeMode !== StrokeMode.NONE &&
+    pointStrokeOpacity > 0 &&
+    pointStrokeWidth > 0;
   const hideSymbolFill = shouldHideSymbolFill(viz);
 
   const representativePointSource = getRepresentativePointSource(ctx);
@@ -1065,6 +1095,10 @@ function createRepresentativePointSymbolLayers(
       pointStrokeOpacity,
       highlightedRowIds
     );
+
+    if (!showPointStroke) {
+      return [0, 0, 0, 0];
+    }
 
     if (strokeClassificationAccessor) {
       const [r, g, b] = strokeClassificationAccessor(row);
@@ -1264,13 +1298,16 @@ function createRepresentativePointSymbolLayers(
     new MultiShapeLayer({
       id: `${pointLayerId}-centroids`,
       ...(scatterProps as unknown as Record<string, unknown>),
-      stroked: true,
+      stroked: showPointStroke,
       filled: !hideSymbolFill,
+      dashed: showPointStroke && pointStrokeDashed,
+      dashLength: DEFAULT_DASH_ARRAY[0],
+      gapLength: DEFAULT_DASH_ARRAY[1],
       opacity: 1,
       radiusScale: 1,
       radiusUnits: 'pixels',
       lineWidthUnits: 'pixels',
-      lineWidthScale: pointStrokeWidth / 3,
+      lineWidthScale: showPointStroke ? pointStrokeWidth / 3 : 0,
       pickable: true,
       parameters: THEMATIC_OVERLAY_PARAMETERS,
       ...resolveHoverHighlightProps(),
@@ -1301,6 +1338,7 @@ function createRepresentativePointSymbolLayers(
           pointConfig.missingData?.show,
           pointStrokeValueColumn,
           pointStrokeCategoryColumn,
+          showPointStroke,
           pointConfig.strokeMode,
           pointConfig.strokeClassification?.colors,
           pointConfig.strokeClassification?.breaks,
@@ -3110,6 +3148,11 @@ export function createPointLayers(
       : strokeColor;
   const pointStrokeWidth = pointConfig?.strokeWidth ?? strokeWidth;
   const pointStrokeOpacity = pointConfig?.strokeOpacity ?? rawStrokeOpacity;
+  const pointStrokeDashed = pointConfig?.strokeDashed ?? false;
+  const showPointStroke =
+    pointConfig?.strokeMode !== StrokeMode.NONE &&
+    pointStrokeOpacity > 0 &&
+    pointStrokeWidth > 0;
   const pointFillOpacity = pointConfig?.opacity ?? rawFillOpacity;
 
   // Density mode renders POINT geometries driven by the POLYGON primitive,
@@ -3357,7 +3400,10 @@ export function createPointLayers(
         ? isMissingThematicValue(feature.properties?.[pointMissingColumn])
         : false;
 
-    if (pointShape !== ShapeType.CIRCLE) {
+    if (
+      pointShape !== ShapeType.CIRCLE ||
+      (pointStrokeDashed && showPointStroke)
+    ) {
       return [
         new GeoJsonLayer({
           id: layerId,
@@ -3380,12 +3426,15 @@ export function createPointLayers(
                     ),
               isMissingGeoJsonPoint(feature) && !showMissingPoints
                 ? [0, 0, 0, 0]
-                : resolveGeoJsonLayerColor(
-                    geoJsonLineColor,
-                    feature,
-                    pointStrokeOpacity
-                  ),
-              pointStrokeWidth / 3
+                : !showPointStroke
+                  ? [0, 0, 0, 0]
+                  : resolveGeoJsonLayerColor(
+                      geoJsonLineColor,
+                      feature,
+                      pointStrokeOpacity
+                    ),
+              showPointStroke ? pointStrokeWidth / 3 : 0,
+              showPointStroke && pointStrokeDashed
             ),
           getIconSize: (feature) => {
             if (isMissingGeoJsonPoint(feature)) {
@@ -3423,6 +3472,7 @@ export function createPointLayers(
               pointStrokeColor,
               pointStrokeValueColumn,
               pointStrokeCategoryColumn,
+              showPointStroke,
               pointConfig?.strokeClassification?.breaks,
               pointConfig?.strokeClassification?.colors,
               pointConfig?.strokeClassification?.labels,
@@ -3430,6 +3480,7 @@ export function createPointLayers(
               pointFillOpacity,
               pointStrokeOpacity,
               pointStrokeWidth,
+              pointStrokeDashed,
               pointMissingColumn,
               pointConfig?.missingData?.show,
               pointConfig?.missingData?.color,
@@ -3464,7 +3515,7 @@ export function createPointLayers(
         data: filteredGeoJsonData,
         pointType: 'circle',
         filled: !hideSymbolFill,
-        stroked: true,
+        stroked: showPointStroke,
         getFillColor: (feature: { properties?: Record<string, unknown> }) => {
           if (isMissingGeoJsonPoint(feature)) {
             return showMissingPoints
@@ -3484,6 +3535,10 @@ export function createPointLayers(
             return [0, 0, 0, 0];
           }
 
+          if (!showPointStroke) {
+            return [0, 0, 0, 0];
+          }
+
           return typeof geoJsonLineColor === 'function'
             ? geoJsonLineColor(feature)
             : geoJsonLineColor;
@@ -3499,7 +3554,7 @@ export function createPointLayers(
         },
         pointRadiusUnits: 'pixels',
         lineWidthUnits: 'pixels',
-        getLineWidth: pointStrokeWidth / 3,
+        getLineWidth: showPointStroke ? pointStrokeWidth / 3 : 0,
         opacity: hasHighlights ? 1 : pointFillOpacity,
         pickable: true,
         ...resolveHoverHighlightProps(),
@@ -3539,6 +3594,7 @@ export function createPointLayers(
             pointStrokeOpacity,
             pointStrokeValueColumn,
             pointStrokeCategoryColumn,
+            showPointStroke,
             pointConfig?.strokeClassification?.breaks,
             pointConfig?.strokeClassification?.colors,
             pointConfig?.strokeClassification?.labels,
@@ -3640,6 +3696,10 @@ export function createPointLayers(
             isMissingThematicValue(row[pointMissingColumn]) &&
             !showMissingPoints
           ) {
+            return [0, 0, 0, 0];
+          }
+
+          if (!showPointStroke) {
             return [0, 0, 0, 0];
           }
 
@@ -3876,94 +3936,105 @@ export function createPointLayers(
       )
     : null;
 
-  const LayerClass = useCategoryShape ? MultiShapeLayer : ScatterplotLayer;
+  const useMultiShapeLayer =
+    useCategoryShape || (pointStrokeDashed && showPointStroke);
+  const baseLayerProps = {
+    id: layerId,
+    ...(scatterProps as unknown as Record<string, unknown>),
+    stroked: showPointStroke,
+    filled: !hideSymbolFill,
+    ...(!fillColorBinAttr && {
+      getFillColor: withOpacity(fillColor, hasHighlights ? 1 : pointFillOpacity)
+    }),
+    ...(!lineColorBinAttr && {
+      getLineColor: showPointStroke
+        ? withOpacity(pointStrokeColor, pointStrokeOpacity)
+        : ([0, 0, 0, 0] as [number, number, number, number])
+    }),
+    opacity: hasHighlights ? 1 : pointFillOpacity,
+    ...(!radiusBinAttr && { getRadius: uniquePointRadius }),
+    radiusScale: 1,
+    radiusUnits: 'pixels' as const,
+    lineWidthUnits: 'pixels' as const,
+    lineWidthScale: showPointStroke ? pointStrokeWidth / 3 : 0,
+    pickable: true,
+    ...resolveHoverHighlightProps(),
+    ...(modelMatrix && { modelMatrix }),
+    ...(beforeId && { beforeId }),
+    ...yearFilterProps,
+    updateTriggers: {
+      getFillColor: [
+        useChoropleth,
+        pointValueColumn,
+        pointClassification?.breaks,
+        pointClassification?.colors,
+        useCategoricalColor,
+        pointCategoryColumn,
+        pointCategoryColorMap,
+        pointClassification?.labels,
+        fillColor,
+        pointMissingColumn,
+        pointConfig?.missingData?.show,
+        pointConfig?.missingData?.color,
+        hideSymbolFill,
+        hlVersion
+      ],
+      getRadius: [
+        usesVariablePointSize,
+        pointSizeColumn,
+        pointValueColumn,
+        minValue,
+        maxValue,
+        pointClassification?.breaks,
+        pointConfig?.size,
+        pointConfig?.minSize,
+        pointConfig?.maxSize,
+        pointConfig?.sizeScale,
+        pointMissingColumn,
+        pointConfig?.missingData?.show,
+        pointConfig?.missingData?.size
+      ],
+      getLineColor: [
+        pointStrokeColor,
+        pointStrokeOpacity,
+        pointMissingColumn,
+        pointConfig?.missingData?.show,
+        pointStrokeValueColumn,
+        pointStrokeCategoryColumn,
+        pointConfig?.strokeMode,
+        showPointStroke,
+        pointConfig?.strokeClassification?.colors,
+        pointConfig?.strokeClassification?.breaks,
+        pointConfig?.strokeClassification?.labels,
+        pointConfig?.strokeClassification?.disabledLabels,
+        hlVersion
+      ],
+      getShape: [
+        shapeOrdinal,
+        missingShapeOrdinal,
+        useCategoryShape,
+        categoryShapeMode,
+        pointCategoryColumn,
+        pointClassification?.labels,
+        pointClassification?.categoryShapes
+      ]
+      // Note: getFilterValue is a binary attribute (baked once via filterValueAttr),
+      // not a per-frame accessor. Year changes are handled by filterRange prop alone.
+    }
+  };
 
-  return [
-    new LayerClass({
-      id: layerId,
-      ...(scatterProps as unknown as Record<string, unknown>),
-      stroked: true,
-      filled: !hideSymbolFill,
-      ...(!fillColorBinAttr && {
-        getFillColor: withOpacity(
-          fillColor,
-          hasHighlights ? 1 : pointFillOpacity
-        )
-      }),
-      ...(!lineColorBinAttr && {
-        getLineColor: withOpacity(pointStrokeColor, pointStrokeOpacity)
-      }),
-      opacity: hasHighlights ? 1 : pointFillOpacity,
-      ...(!radiusBinAttr && { getRadius: uniquePointRadius }),
-      radiusScale: 1,
-      radiusUnits: 'pixels',
-      lineWidthUnits: 'pixels',
-      lineWidthScale: pointStrokeWidth / 3,
-      pickable: true,
-      ...resolveHoverHighlightProps(),
-      ...(modelMatrix && { modelMatrix }),
-      ...(beforeId && { beforeId }),
-      ...yearFilterProps,
-      updateTriggers: {
-        getFillColor: [
-          useChoropleth,
-          pointValueColumn,
-          pointClassification?.breaks,
-          pointClassification?.colors,
-          useCategoricalColor,
-          pointCategoryColumn,
-          pointCategoryColorMap,
-          pointClassification?.labels,
-          fillColor,
-          pointMissingColumn,
-          pointConfig?.missingData?.show,
-          pointConfig?.missingData?.color,
-          hideSymbolFill,
-          hlVersion
-        ],
-        getRadius: [
-          usesVariablePointSize,
-          pointSizeColumn,
-          pointValueColumn,
-          minValue,
-          maxValue,
-          pointClassification?.breaks,
-          pointConfig?.size,
-          pointConfig?.minSize,
-          pointConfig?.maxSize,
-          pointConfig?.sizeScale,
-          pointMissingColumn,
-          pointConfig?.missingData?.show,
-          pointConfig?.missingData?.size
-        ],
-        getLineColor: [
-          pointStrokeColor,
-          pointStrokeOpacity,
-          pointMissingColumn,
-          pointConfig?.missingData?.show,
-          pointStrokeValueColumn,
-          pointStrokeCategoryColumn,
-          pointConfig?.strokeMode,
-          pointConfig?.strokeClassification?.colors,
-          pointConfig?.strokeClassification?.breaks,
-          pointConfig?.strokeClassification?.labels,
-          pointConfig?.strokeClassification?.disabledLabels,
-          hlVersion
-        ],
-        getShape: [
-          shapeOrdinal,
-          missingShapeOrdinal,
-          useCategoryShape,
-          categoryShapeMode,
-          pointCategoryColumn,
-          pointClassification?.labels,
-          pointClassification?.categoryShapes
-        ]
-        // Note: getFilterValue is a binary attribute (baked once via filterValueAttr),
-        // not a per-frame accessor. Year changes are handled by filterRange prop alone.
-      }
-    })
-  ];
+  if (useMultiShapeLayer) {
+    return [
+      new MultiShapeLayer({
+        ...baseLayerProps,
+        dashed: showPointStroke && pointStrokeDashed,
+        dashLength: DEFAULT_DASH_ARRAY[0],
+        gapLength: DEFAULT_DASH_ARRAY[1]
+      })
+    ];
+  }
+
+  return [new ScatterplotLayer(baseLayerProps)];
 }
 
 export function createLineLayers(
@@ -5030,8 +5101,17 @@ export function createPolygonLayers(
             ) as [number, number, number, number]
         : null;
 
-  const geoJsonStrokeColor =
-    hasPolyHighlights && polyHighlightedRowIds
+  const showGeoJsonFill =
+    polygonConfig?.enabled &&
+    polygonConfig.fillMode !== FillMode.NONE &&
+    polygonFillOpacity > 0;
+  const showGeoJsonStroke =
+    polygonConfig?.enabled &&
+    polygonConfig.strokeMode !== StrokeMode.NONE &&
+    polygonStrokeOpacity > 0 &&
+    polygonStrokeWidth > 0;
+  const geoJsonStrokeColor = showGeoJsonStroke
+    ? hasPolyHighlights && polyHighlightedRowIds
       ? baseGeoJsonStrokeColor
         ? withGeoJsonRowHighlightAccessor(
             baseGeoJsonStrokeColor,
@@ -5046,17 +5126,8 @@ export function createPolygonLayers(
             polyHighlightedRowIds
           )
       : (baseGeoJsonStrokeColor ??
-        withOpacity(polygonStrokeColor, polygonStrokeOpacity));
-
-  const showGeoJsonFill =
-    polygonConfig?.enabled &&
-    polygonConfig.fillMode !== FillMode.NONE &&
-    polygonFillOpacity > 0;
-  const showGeoJsonStroke =
-    polygonConfig?.enabled &&
-    polygonConfig.strokeMode !== StrokeMode.NONE &&
-    polygonStrokeOpacity > 0 &&
-    polygonStrokeWidth > 0;
+        withOpacity(polygonStrokeColor, polygonStrokeOpacity))
+    : ([0, 0, 0, 0] as [number, number, number, number]);
   const filteredPolygonGeojsonData = filterGeoJsonByYear(
     geojsonData,
     ctx.yearFilter
@@ -5071,12 +5142,12 @@ export function createPolygonLayers(
       filled: showGeoJsonFill,
       stroked: showGeoJsonStroke,
       extensions: showGeoJsonStroke && strokeDashed ? [DASH_EXTENSION] : [],
-      getDashArray: strokeDashArray,
+      getDashArray: showGeoJsonStroke ? strokeDashArray : [0, 0],
       dashJustified: true,
       opacity: hasPolyHighlights ? 1 : polygonFillOpacity,
       lineWidthUnits: 'pixels',
-      lineWidthScale: polygonStrokeWidth / 4,
-      lineWidthMinPixels: 0.5,
+      lineWidthScale: showGeoJsonStroke ? polygonStrokeWidth / 4 : 0,
+      lineWidthMinPixels: showGeoJsonStroke ? 0.5 : 0,
       pickable: true,
       ...resolveHoverHighlightProps(),
       parameters: {
@@ -5110,9 +5181,10 @@ export function createPolygonLayers(
           polygonConfig?.strokeClassification?.breaks,
           polygonConfig?.strokeClassification?.labels,
           polygonConfig?.strokeClassification?.disabledLabels,
+          showGeoJsonStroke,
           hlVersion
         ],
-        getDashArray: [strokeDashed]
+        getDashArray: [showGeoJsonStroke, strokeDashed]
       },
       dataComparator: (newData, oldData) => newData === oldData
     })
