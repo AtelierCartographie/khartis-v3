@@ -143,7 +143,7 @@
     const minSize = Math.min(...sizes);
     const maxSize = Math.max(...sizes);
 
-    return normalizeLegendValue(size, minSize, maxSize, 5, 22);
+    return normalizeLegendValue(size, minSize, maxSize, 4, 18);
   }
 
   function getLineLegendDisplayWidth(
@@ -154,7 +154,7 @@
     const minWidth = Math.min(...widths);
     const maxWidth = Math.max(...widths);
 
-    return normalizeLegendValue(width, minWidth, maxWidth, 2, 10);
+    return normalizeLegendValue(width, minWidth, maxWidth, 2, 8);
   }
 
   function getPointSymbolStyle(shape: ShapeType, size: number): string {
@@ -661,21 +661,31 @@
               {#each pointSizeScale.steps as step, index (index)}
                 <div class="legend-proportional-scale-row">
                   <span
-                    class="legend-proportional-symbol"
-                    style={getPointLegendSymbolStyle(pointSizeScale, step.size)}
-                  ></span>
-                  {#if pointSizeScale.secondary}
+                    class="legend-proportional-pair"
+                    data-position-mode={pointSizeScale.secondary
+                      ? (pointSizeScale.positionMode ?? 'juxtaposition')
+                      : undefined}
+                  >
                     <span
-                      class="legend-proportional-symbol legend-proportional-symbol-b"
+                      class="legend-proportional-symbol"
                       style={getPointLegendSymbolStyle(
-                        {
-                          ...pointSizeScale,
-                          fillColor: pointSizeScale.secondary.fillColor
-                        },
+                        pointSizeScale,
                         step.size
                       )}
                     ></span>
-                  {/if}
+                    {#if pointSizeScale.secondary}
+                      <span
+                        class="legend-proportional-symbol"
+                        style={getPointLegendSymbolStyle(
+                          {
+                            ...pointSizeScale,
+                            fillColor: pointSizeScale.secondary.fillColor
+                          },
+                          step.size
+                        )}
+                      ></span>
+                    {/if}
+                  </span>
                   <span class="legend-scale-label">
                     {getLegendStepLabel(
                       step,
@@ -905,15 +915,43 @@
   .legend-proportional-scale {
     display: flex;
     flex-direction: column;
-    gap: 0.35rem;
-    margin: 0.5rem 0;
+    gap: 0.25rem;
+    margin: 0.35rem 0;
   }
 
   .legend-proportional-scale-row {
     display: flex;
     align-items: flex-end;
-    gap: 0.625rem;
-    min-height: 1.5rem;
+    gap: 0.5rem;
+    min-height: 1.25rem;
+  }
+
+  .legend-proportional-pair {
+    position: relative;
+    display: flex;
+    align-items: flex-end;
+    gap: 0.25rem;
+    min-width: max-content;
+  }
+
+  .legend-proportional-pair[data-position-mode='overlay'] {
+    gap: 0;
+  }
+
+  .legend-proportional-pair[data-position-mode='overlay']
+    .legend-proportional-symbol
+    + .legend-proportional-symbol {
+    margin-left: -0.35rem;
+  }
+
+  .legend-proportional-pair[data-position-mode='overlay']
+    .legend-proportional-symbol:first-child {
+    z-index: 0;
+  }
+
+  .legend-proportional-pair[data-position-mode='overlay']
+    .legend-proportional-symbol:last-child {
+    z-index: 1;
   }
 
   .legend-proportional-symbol {
