@@ -3,6 +3,10 @@
   import { Button } from 'carbon-components-svelte';
   import { ColorPalette, Checkmark } from 'carbon-icons-svelte';
   import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
+  import {
+    createExclusiveContextualSurfaceId,
+    engageExclusiveContextualSurface
+  } from '$lib/features/commons/utils/contextual-surface-coordinator';
   import { globalState } from '$lib/features/commons/store/global.svelte';
 
   import {
@@ -23,6 +27,7 @@
     numClasses: number;
     previewCount?: number;
     divergingSplit?: import('./palette.constants').DivergingPaletteSplit;
+    exclusive?: boolean;
     onclose?: () => void;
     onselect?: (palette: Palette, colors: string[]) => void;
     oncustomize?: () => void;
@@ -37,6 +42,7 @@
     numClasses,
     previewCount = numClasses,
     divergingSplit,
+    exclusive = true,
     onclose,
     onselect,
     oncustomize
@@ -44,6 +50,8 @@
 
   let dropdownRef = $state<HTMLDivElement>();
   let dropdownPos = $state({ top: 0, left: 0, width: 0 });
+  const contextualSurfaceId =
+    createExclusiveContextualSurfaceId('palette-dropdown');
 
   const palettes = $derived(getPalettesForType(paletteType, colorBlindFilter));
 
@@ -135,6 +143,14 @@
         }
       });
     }
+  });
+
+  $effect(() => {
+    if (!open || !exclusive) {
+      return;
+    }
+
+    return engageExclusiveContextualSurface(contextualSurfaceId, handleClose);
   });
 
   function findScrollableParent(el: HTMLElement | null): HTMLElement | null {
