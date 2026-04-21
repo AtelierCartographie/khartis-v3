@@ -342,6 +342,16 @@
           datasetId
         );
         if (labels.length > 0) {
+          const currentLabels = getPrimitiveClassification(
+            selectedViz,
+            primitive
+          )?.labels;
+          const labelsChanged =
+            currentLabels?.length !== labels.length ||
+            currentLabels.some((label, index) => label !== labels[index]);
+          if (!labelsChanged) {
+            return;
+          }
           if (useUntrack) {
             untrack(() =>
               updatePrimitiveClassificationState(
@@ -362,6 +372,59 @@
       .catch((error) =>
         logger.warn(
           'Failed to fetch category labels',
+          LogCategory.VISUALIZATION,
+          error
+        )
+      );
+  }
+
+  function fetchStrokeCategoryLabels(
+    primitive: StrokeClassifiablePrimitive,
+    column: string,
+    tableName: string,
+    datasetId?: string,
+    useUntrack = false
+  ): void {
+    Duck.query(
+      `SELECT DISTINCT "${column}" AS category_value FROM "${tableName}" WHERE "${column}" IS NOT NULL ORDER BY "${column}"`,
+      { format: 'array' }
+    )
+      .then((rows) => {
+        const queriedLabels = collectDistinctCategoryLabels(
+          (rows as Array<Record<string, unknown> | unknown[]>).map((row) =>
+            Array.isArray(row)
+              ? row[0]
+              : ((row.category_value ?? row[column]) as unknown)
+          )
+        );
+        const labels = resolveFallbackCategoryLabels(
+          queriedLabels,
+          column,
+          datasetId
+        );
+        if (labels.length > 0) {
+          const currentLabels = getPrimitiveStrokeClassification(
+            selectedViz,
+            primitive
+          )?.labels;
+          const labelsChanged =
+            currentLabels?.length !== labels.length ||
+            currentLabels.some((label, index) => label !== labels[index]);
+          if (!labelsChanged) {
+            return;
+          }
+          if (useUntrack) {
+            untrack(() =>
+              updatePrimitiveStrokeClassificationState(primitive, { labels })
+            );
+          } else {
+            updatePrimitiveStrokeClassificationState(primitive, { labels });
+          }
+        }
+      })
+      .catch((error) =>
+        logger.warn(
+          'Failed to fetch stroke category labels',
           LogCategory.VISUALIZATION,
           error
         )
@@ -1513,6 +1576,9 @@
         : {}),
       ...(Object.prototype.hasOwnProperty.call(updates, 'strokeOpacity')
         ? { strokeOpacity: updates.strokeOpacity ?? symbol.strokeOpacity }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'strokeDashed')
+        ? { strokeDashed: updates.strokeDashed ?? symbol.strokeDashed }
         : {})
     });
   }
@@ -1535,7 +1601,14 @@
       positionMode: symbol.positionMode,
       breakValueA: symbol.breakValueA,
       breakValueB: symbol.breakValueB,
-      fillMode: symbol.fillMode
+      fillMode: symbol.fillMode,
+      strokeMode: symbol.strokeMode,
+      strokeWidth: symbol.strokeWidth,
+      strokeOpacity: symbol.strokeOpacity,
+      strokeDashed: symbol.strokeDashed,
+      strokeClassification: symbol.strokeClassification,
+      strokeValueColumn: symbol.strokeValueColumn,
+      strokeCategoryColumn: symbol.strokeCategoryColumn
     };
   }
 
@@ -1554,7 +1627,14 @@
     'positionMode',
     'breakValueA',
     'breakValueB',
-    'fillMode'
+    'fillMode',
+    'strokeMode',
+    'strokeWidth',
+    'strokeOpacity',
+    'strokeDashed',
+    'strokeClassification',
+    'strokeValueColumn',
+    'strokeCategoryColumn'
   ] as const satisfies readonly (keyof SymbolModeState)[];
 
   function applySymbolModeStateFields(
@@ -1566,6 +1646,24 @@
       (fields as Record<string, unknown>)[key] = state?.[key];
     }
     return fields;
+  }
+
+  function getDefaultSymbolModeStateFields(
+    mode: SymbolMode
+  ): Partial<SymbolPrimitiveConfig> {
+    if (mode !== SymbolMode.CATEGORIES) {
+      return {};
+    }
+
+    return {
+      strokeMode: StrokeMode.NONE,
+      strokeWidth: 0,
+      strokeOpacity: 1,
+      strokeDashed: false,
+      strokeClassification: undefined,
+      strokeValueColumn: undefined,
+      strokeCategoryColumn: undefined
+    };
   }
 
   function handleSymbolModesChange(updates: Partial<VisualizationModes>) {
@@ -1585,6 +1683,9 @@
       : symbol.mode;
 
     const existingModeStates = symbol.modeStates ?? {};
+    const nextModeState = modeChanging
+      ? existingModeStates[nextMode]
+      : undefined;
     const nextModeStates = modeChanging
       ? {
           ...existingModeStates,
@@ -1592,7 +1693,9 @@
         }
       : existingModeStates;
     const restoredStateFields = modeChanging
-      ? applySymbolModeStateFields(symbol, existingModeStates[nextMode])
+      ? nextModeState
+        ? applySymbolModeStateFields(symbol, nextModeState)
+        : getDefaultSymbolModeStateFields(nextMode)
       : {};
 
     updateSelectedVisualization(
@@ -2827,7 +2930,8 @@
           ? symbol.strokeColor[0]
           : symbol.strokeColor,
         strokeWidth: symbol.strokeWidth,
-        strokeOpacity: symbol.strokeOpacity
+        strokeOpacity: symbol.strokeOpacity,
+        strokeDashed: symbol.strokeDashed
       },
       mapping: {
         ...visualization.mapping,
@@ -3625,7 +3729,7 @@
         continue;
       }
 
-      fetchCategoryLabels(
+      fetchStrokeCategoryLabels(
         target.primitive,
         target.categoryColumn,
         dataset.tableName,
