@@ -20,6 +20,11 @@ describe('PalettePreview — shell + popover routing', () => {
     expect(source).toContain('previewCount={dropdownPreviewCount}');
   });
 
+  it('should normalize legacy selectedPaletteId values before opening dropdown/popover', () => {
+    expect(source).toContain('normalizePaletteId(selectedPaletteId)');
+    expect(source).toContain('selectedPaletteId={normalizedSelectedPaletteId}');
+  });
+
   it('should always mount the PalettePopover for the default flow', () => {
     expect(source).toContain('<PalettePopover');
     expect(source).toContain('bind:open={popoverOpen}');

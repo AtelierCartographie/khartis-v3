@@ -22,6 +22,7 @@
     colorBlindFilter: boolean;
     numClasses: number;
     previewCount?: number;
+    divergingSplit?: import('./palette.constants').DivergingPaletteSplit;
     onclose?: () => void;
     onselect?: (palette: Palette, colors: string[]) => void;
     oncustomize?: () => void;
@@ -35,6 +36,7 @@
     colorBlindFilter,
     numClasses,
     previewCount = numClasses,
+    divergingSplit,
     onclose,
     onselect,
     oncustomize
@@ -53,7 +55,9 @@
     return generatePaletteColors(
       palette,
       previewCount,
-      colorBlindFilter ? 'high' : undefined
+      colorBlindFilter ? 'high' : undefined,
+      undefined,
+      divergingSplit
     );
   }
 
@@ -89,7 +93,9 @@
     const colors = generatePaletteColors(
       palette,
       numClasses,
-      colorBlindFilter ? 'high' : undefined
+      colorBlindFilter ? 'high' : undefined,
+      undefined,
+      divergingSplit
     );
     onselect?.(palette, colors);
     open = false;
