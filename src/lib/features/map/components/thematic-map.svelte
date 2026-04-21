@@ -46,7 +46,6 @@
   import { mapLoadingStore } from '../stores/map-loading.store.svelte';
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import { zoomModeStore } from '$lib/features/commons/store/zoom-mode.store.svelte';
-  import { FormatMode } from '$lib/features/commons/constants/ui.constants';
   import { ToolbarStep } from '$lib/features/commons/types/global';
   import { resolveLayoutSizingTokens } from '$lib/features/commons/utils/layout-sizing.utils';
   import type {
@@ -56,7 +55,9 @@
   } from '../types';
   import {
     DEFAULT_PAGE_COLOR,
-    getFormatState
+    getFormatLayoutSizingContext,
+    getFormatState,
+    PAGE_GRID_SIZE_PX
   } from '../../step-toolbar/tools/format/format.store.svelte';
   import { getSimplificationState } from '../../step-toolbar/tools/simplification/simplification.store.svelte';
   import { getProjectionState } from '../../step-toolbar/tools/projections/projection.store.svelte';
@@ -64,7 +65,10 @@
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { getFiltersMap } from '$lib/features/duckdb/orchestrator/state.svelte';
   import { annotationsActions } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
-  import { getColorBlindnessState } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
+  import {
+    getColorBlindnessState,
+    isColorBlindnessActive
+  } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
   import { getColorBlindnessMatrix } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.filter';
   import {
     resolveOrthographicDatasetBounds,
@@ -125,11 +129,7 @@
   );
   const pageMargins = $derived(fmtState.margins);
   const layoutSizingTokens = $derived(
-    resolveLayoutSizingTokens({
-      width: fmtState.width,
-      height: fmtState.height,
-      model: fmtState.mode === FormatMode.PRESET ? fmtState.model : 'custom'
-    })
+    resolveLayoutSizingTokens(getFormatLayoutSizingContext(fmtState))
   );
   const mapViewportFitPaddingPx = $derived(
     layoutSizingTokens.mapViewport.fitPaddingPx
@@ -196,8 +196,11 @@
     projectStore.currentProject?.data?.sourceFiles?.length ?? 0
   );
 
+  const colorBlindnessState = $derived(getColorBlindnessState());
   const colorBlindnessMatrix = $derived(
-    getColorBlindnessMatrix(getColorBlindnessState().simulationType)
+    isColorBlindnessActive(colorBlindnessState)
+      ? getColorBlindnessMatrix(colorBlindnessState.simulationType)
+      : null
   );
   const visibleVisualizations = $derived.by(() =>
     globalState.selectedStep === ToolbarStep.Data
@@ -208,7 +211,7 @@
   const MIN_SKELETON_DURATION_MS = 500;
   const MAX_WAIT_FOR_DATA_MS = 5000;
 
-  let mapContainer: HTMLDivElement;
+  let mapContainer = $state<HTMLDivElement | undefined>(undefined);
   let hasCalledOnReady = $state(false);
   let projectionMaskId = $state<string | null>(null);
   let initStartTime = $state<number>(Date.now());
@@ -1828,6 +1831,12 @@
   });
 
   onMount(() => {
+    if (!mapContainer) {
+      return;
+    }
+
+    const container = mapContainer;
+
     projectionMaskId =
       typeof crypto?.randomUUID === 'function'
         ? `projection-mask-${crypto.randomUUID()}`
@@ -1836,7 +1845,7 @@
     const initialViewMode = basemapStyleStore.requiresMapLibre
       ? ViewMode.MAPLIBRE
       : ViewMode.ORTHOGRAPHIC;
-    mapInit.initialize(mapContainer, initialViewMode);
+    mapInit.initialize(container, initialViewMode);
 
     updateCanvasSize();
 
@@ -1866,7 +1875,7 @@
         }, RESIZE_DEBOUNCE_MS);
       }
     });
-    resizeObserver.observe(mapContainer);
+    resizeObserver.observe(container);
 
     return () => {
       resizeObserver.disconnect();
@@ -1956,6 +1965,13 @@
   </div>
 {:else}
   <div class="page-container" style={pageStyle}>
+    {#if showPageGrid}
+      <div
+        class="page-grid"
+        style={`--page-grid-size:${PAGE_GRID_SIZE_PX}px;`}
+      ></div>
+    {/if}
+
     <div
       class="map-stage"
       class:is-empty={isBlankCanvas}
@@ -2000,10 +2016,6 @@
             mask={`url(#${projectionMaskId})`}
           ></rect>
         </svg>
-      {/if}
-
-      {#if showPageGrid}
-        <div class="page-grid"></div>
       {/if}
 
       {#if isSwitchingViewMode}
@@ -2063,19 +2075,13 @@
     inset: 0;
     z-index: var(--z-map-layer);
     pointer-events: none;
-    background-image:
-      radial-gradient(circle, rgba(22, 22, 22, 0.35) 0.6px, transparent 0.6px),
-      radial-gradient(circle, rgba(22, 22, 22, 0.15) 0.5px, transparent 0.5px);
-    background-size:
-      20px 20px,
-      10px 10px;
-    background-position:
-      0 0,
-      5px 5px;
-  }
-
-  .page-container.is-exporting-map .page-grid {
-    display: none !important;
+    background-image: radial-gradient(
+      circle,
+      rgba(22, 22, 22, 0.28) 0.75px,
+      transparent 0.75px
+    );
+    background-size: var(--page-grid-size) var(--page-grid-size);
+    background-position: 0 0;
   }
 
   .map-canvas {

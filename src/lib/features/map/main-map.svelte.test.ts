@@ -27,4 +27,9 @@ describe('MainMap density mode loading', () => {
     expect(source).toContain('densityTables={displayDensityTables}');
     expect(source).not.toContain('return densityTable;');
   });
+
+  it('does not apply a second color-blindness filter wrapper around ThematicMap', () => {
+    expect(source).not.toContain('applyColorBlindnessFilter');
+    expect(source).not.toContain('color-blindness-filters');
+  });
 });
