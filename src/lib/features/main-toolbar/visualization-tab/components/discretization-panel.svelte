@@ -109,7 +109,6 @@
     validationErrors = [];
     const target = e.currentTarget as HTMLSelectElement;
     const newMethod = target.value as ClassificationMethod;
-    if (newMethod === method) return;
     method = newMethod;
     if (newMethod === 'q6') {
       numClasses = 6;
@@ -194,7 +193,7 @@
     <Select
       id="classification-method"
       labelText={m.discretization_method_label()}
-      bind:selected={method}
+      selected={method}
       on:change={handleMethodChange}
     >
       <SelectItem value="jenks" text={m.discretization_method_jenks()} />
