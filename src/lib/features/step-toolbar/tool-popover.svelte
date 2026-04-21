@@ -62,8 +62,9 @@
     const toolbarRect = toolbar.getBoundingClientRect();
     const popoverRect = popover.getBoundingClientRect();
 
-    computedTopOffset = Math.round(
-      (toolbarRect.height - popoverRect.height) / 2
+    computedTopOffset = Math.min(
+      0,
+      Math.round((toolbarRect.height - popoverRect.height) / 2)
     );
   }
 
@@ -215,7 +216,14 @@
     max-height: var(--popover-max-height);
     overflow-y: auto;
     overflow-x: hidden;
+    scrollbar-width: none;
     padding-bottom: 0;
+  }
+
+  .popover-scroll::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
   }
 
   :global(#khartis-tool-popover .bx--list-box__menu) {
