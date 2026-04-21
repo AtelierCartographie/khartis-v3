@@ -1,7 +1,7 @@
 <script lang="ts">
+  import CompactNumberInput from '$lib/features/commons/components/compact-number-input.svelte';
   import { Position } from '$lib/features/commons/types/enums';
   import { m } from '$lib/paraglide/messages';
-  import { Column, Grid, NumberInput, Row } from 'carbon-components-svelte';
   import { formatActions, getFormatState } from './format.store.svelte';
 
   const formatState = $derived(getFormatState());
@@ -36,64 +36,81 @@
 </script>
 
 <div id="khartis-margins-editor-tool">
-  <Grid noGutter>
-    <Row>
-      <Column>
-        <div class="margins-grid">
-          <div class="margin-input">
-            <NumberInput
-              id="margin-top"
-              labelText={m.format_margin_top()}
-              value={top}
-              on:change={(e) => updateMargin(Position.Top, e.detail ?? 0)}
-              min={0}
-              size="sm"
-            />
-          </div>
-          <div class="margin-input">
-            <NumberInput
-              id="margin-bottom"
-              labelText={m.format_margin_bottom()}
-              value={bottom}
-              on:change={(e) => updateMargin(Position.Bottom, e.detail ?? 0)}
-              min={0}
-              size="sm"
-            />
-          </div>
-          <div class="margin-input">
-            <NumberInput
-              id="margin-left"
-              labelText={m.format_margin_left()}
-              value={left}
-              on:change={(e) => updateMargin(Position.Left, e.detail ?? 0)}
-              min={0}
-              size="sm"
-            />
-          </div>
-          <div class="margin-input">
-            <NumberInput
-              id="margin-right"
-              labelText={m.format_margin_right()}
-              value={right}
-              on:change={(e) => updateMargin(Position.Right, e.detail ?? 0)}
-              min={0}
-              size="sm"
-            />
-          </div>
-        </div>
-      </Column>
-    </Row>
-  </Grid>
+  <div class="margins-grid">
+    <div class="margin-input">
+      <label class="bx--label" for="margin-top">
+        {m.format_margin_top()}
+      </label>
+      <CompactNumberInput
+        id="margin-top"
+        bind:value={top}
+        min={0}
+        max={Number.MAX_SAFE_INTEGER}
+        width="100%"
+        onchange={(value) => updateMargin(Position.Top, value)}
+      />
+    </div>
+
+    <div class="margin-input">
+      <label class="bx--label" for="margin-bottom">
+        {m.format_margin_bottom()}
+      </label>
+      <CompactNumberInput
+        id="margin-bottom"
+        bind:value={bottom}
+        min={0}
+        max={Number.MAX_SAFE_INTEGER}
+        width="100%"
+        onchange={(value) => updateMargin(Position.Bottom, value)}
+      />
+    </div>
+
+    <div class="margin-input">
+      <label class="bx--label" for="margin-left">
+        {m.format_margin_left()}
+      </label>
+      <CompactNumberInput
+        id="margin-left"
+        bind:value={left}
+        min={0}
+        max={Number.MAX_SAFE_INTEGER}
+        width="100%"
+        onchange={(value) => updateMargin(Position.Left, value)}
+      />
+    </div>
+
+    <div class="margin-input">
+      <label class="bx--label" for="margin-right">
+        {m.format_margin_right()}
+      </label>
+      <CompactNumberInput
+        id="margin-right"
+        bind:value={right}
+        min={0}
+        max={Number.MAX_SAFE_INTEGER}
+        width="100%"
+        onchange={(value) => updateMargin(Position.Right, value)}
+      />
+    </div>
+  </div>
 </div>
 
 <style>
   .margins-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px 32px;
+    width: 100%;
   }
 
-  .margin-input :global(.bx--number) {
-    width: 100%;
+  .margin-input {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-03);
+    min-width: 0;
+  }
+
+  .margin-input :global(.compact-number-input) {
+    min-width: 0;
   }
 </style>

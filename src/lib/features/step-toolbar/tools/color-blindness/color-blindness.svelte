@@ -3,11 +3,17 @@
   import { Select, SelectItem } from 'carbon-components-svelte';
   import {
     colorBlindnessActions,
-    getColorBlindnessState
+    getColorBlindnessState,
+    isColorBlindnessActive
   } from './color-blindness.store.svelte';
   import type { ColorBlindnessState } from './color-blindness.types';
+  import ColorBlindnessNotification from './color-blindness-notification.svelte';
 
   const colorBlindnessState = $derived(getColorBlindnessState());
+  let notificationDismissed = $state(false);
+  const showNotification = $derived(
+    isColorBlindnessActive(colorBlindnessState) && !notificationDismissed
+  );
 
   const simulationOptions = [
     { value: 'none', text: m.colorblind_none() },
@@ -27,6 +33,17 @@
       selectElement.value as ColorBlindnessState['simulationType']
     );
   }
+
+  function handleDeactivate() {
+    notificationDismissed = false;
+    colorBlindnessActions.reset();
+  }
+
+  $effect(() => {
+    if (!isColorBlindnessActive(colorBlindnessState)) {
+      notificationDismissed = false;
+    }
+  });
 </script>
 
 <div id="khartis-color-blindness-tool">
@@ -47,6 +64,15 @@
     <p class="helper-text">{m.colorblind_helper_p1()}</p>
     <p class="helper-text">{m.colorblind_helper_p2()}</p>
   </div>
+
+  {#if showNotification}
+    <div class="notification-shell">
+      <ColorBlindnessNotification
+        ondeactivate={handleDeactivate}
+        onclose={() => (notificationDismissed = true)}
+      />
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -108,5 +134,14 @@
     line-height: var(--cds-helper-text-01-line-height, 1rem);
     color: var(--cds-text-secondary, #525252);
     letter-spacing: var(--cds-helper-text-01-letter-spacing, 0.32px);
+  }
+
+  .notification-shell {
+    width: 100%;
+  }
+
+  .notification-shell :global(.bx--inline-notification) {
+    margin: 0;
+    max-width: 100%;
   }
 </style>

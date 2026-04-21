@@ -48,6 +48,7 @@
     WORKSPACE_FIT_EVENT,
     clampWorkspacePanOffset,
     isWorkspacePanTarget,
+    resolveReadablePagePreviewScale,
     resolveWorkspaceViewportBounds,
     type WorkspaceViewportBounds
   } from '$lib/features/commons/utils/workspace-viewport.utils';
@@ -333,10 +334,12 @@
       1,
       workspaceHeight - WORKSPACE_FIT_PADDING_PX * 2
     );
-    return Math.min(
-      1,
-      effectiveWidth / pageIntrinsicWidth,
-      effectiveHeight / pageIntrinsicHeight
+    return resolveReadablePagePreviewScale(
+      Math.min(
+        1,
+        effectiveWidth / pageIntrinsicWidth,
+        effectiveHeight / pageIntrinsicHeight
+      )
     );
   });
 
