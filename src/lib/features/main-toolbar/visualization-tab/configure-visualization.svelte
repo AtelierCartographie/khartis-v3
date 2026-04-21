@@ -105,7 +105,19 @@
     ClassifiablePrimitive,
     string
   >();
-  let computeRequestCounter = 0;
+  /**
+   * Per-primitive request counter. A shared global counter used to discard
+   * stale async `calculateBreaks` resolutions across all primitives, which
+   * meant that when a choropleth suggestion triggered the break-computation
+   * effect for POLYGON while SYMBOL/LINE/TEXT effects also fired within the
+   * same tick, every resolution saw a bumped global counter and aborted —
+   * leaving the map stuck on the uniform fallback fill. Scoping the counter
+   * per primitive lets each chain accept its own latest result.
+   */
+  const computeRequestCounterByPrimitive = new SvelteMap<
+    ClassifiablePrimitive,
+    number
+  >();
 
   function getSelectedDataset() {
     if (!selectedViz?.datasetId) {
@@ -1643,7 +1655,7 @@
   function scheduleBreaksRetry(
     primitive: ClassifiablePrimitive,
     breaksKey: string
-  ) {
+  ): boolean {
     const existing = pendingBreaksRetries.get(primitive);
     if (existing) {
       clearTimeout(existing.handle);
@@ -1652,7 +1664,7 @@
       existing && existing.key === breaksKey ? existing.attempts : 0;
     if (priorAttempts >= MAX_BREAKS_RETRIES) {
       pendingBreaksRetries.delete(primitive);
-      return;
+      return false;
     }
     const handle = setTimeout(() => {
       const target = primitiveClassificationTargets.find(
@@ -1678,6 +1690,7 @@
       key: breaksKey,
       attempts: priorAttempts + 1
     });
+    return true;
   }
 
   async function computeBreaksForPrimitive(
@@ -1729,8 +1742,10 @@
       });
 
     untrack(() => inFlightBreaksKeyByPrimitive.set(primitive, breaksKey));
-    computeRequestCounter += 1;
-    const requestId = computeRequestCounter;
+    const nextRequestId =
+      (computeRequestCounterByPrimitive.get(primitive) ?? 0) + 1;
+    computeRequestCounterByPrimitive.set(primitive, nextRequestId);
+    const requestId = nextRequestId;
 
     const dataset = datasetsStore.datasets.find(
       (datasetItem) => datasetItem.id === selectedViz.datasetId
@@ -1758,23 +1773,39 @@
         numClasses: requestedClassCount
       });
 
-      if (requestId !== computeRequestCounter || !selectedViz?.id) {
+      const latestRequestId =
+        computeRequestCounterByPrimitive.get(primitive) ?? 0;
+      if (requestId !== latestRequestId || !selectedViz?.id) {
         clearInFlightBreaksKey();
         return;
       }
 
       if (!result) {
-        logger.warn(
-          '[configure-visualization] breaks computation returned empty result, will retry',
-          LogCategory.UI,
-          {
-            requestId,
-            primitive,
-            selectedVisualizationId: selectedViz.id
-          }
-        );
         clearInFlightBreaksKey();
-        scheduleBreaksRetry(primitive, breaksKey);
+        const scheduled = scheduleBreaksRetry(primitive, breaksKey);
+        if (scheduled) {
+          logger.warn(
+            '[configure-visualization] breaks computation returned empty result, will retry',
+            LogCategory.UI,
+            {
+              requestId,
+              primitive,
+              selectedVisualizationId: selectedViz.id
+            }
+          );
+        } else {
+          logger.error(
+            '[configure-visualization] breaks computation failed after retry cap — classification will remain empty until the dataset or column changes',
+            LogCategory.UI,
+            {
+              requestId,
+              primitive,
+              selectedVisualizationId: selectedViz.id,
+              valueColumn,
+              method: normalizedMethod
+            }
+          );
+        }
         return;
       }
 
