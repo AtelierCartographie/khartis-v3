@@ -32,6 +32,19 @@ describe('annotations tool', () => {
     ).toBeInTheDocument();
   });
 
+  it('matches the figma default text controls for note annotations', () => {
+    render(Annotations);
+
+    const addTextButton = screen.getByRole('button', {
+      name: m.annotations_add_text()
+    });
+    const selects = screen.getAllByRole('combobox') as HTMLSelectElement[];
+
+    expect(addTextButton).toBeEnabled();
+    expect(selects[0]?.value).toBe(ANNOTATION_ROLE.NOTE);
+    expect(selects.at(-1)?.value).toBe('8');
+  });
+
   it('keeps the text font-size and predefined style controls in sync for title page elements', () => {
     annotationsActions.initPageElements({ withPlaceholders: true });
 
