@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   DistanceUnit,
+  FormatMode,
   PageModel
 } from '$lib/features/commons/constants/ui.constants';
 import { hexToHsl } from '$lib/features/commons/utils/color-utils';
@@ -36,6 +37,18 @@ describe('geo indications store responsive defaults', () => {
 
     expect(geoIndicationsState.scale.fontSize).toBe(10);
     expect(geoIndicationsState.orientation.size).toBe(12);
+    expect(geoIndicationsState.insetMap.size).toBe(130);
+  });
+
+  it('resolves default sizes from the current custom format instead of the previous preset', () => {
+    formatActions.setModel(PageModel.SCREEN_LANDSCAPE);
+    formatActions.setMode(FormatMode.CUSTOM);
+    formatActions.setSize(800, 800);
+
+    geoIndicationsActions.toggleScale();
+    geoIndicationsActions.toggleInsetMap();
+
+    expect(geoIndicationsState.scale.fontSize).toBe(10);
     expect(geoIndicationsState.insetMap.size).toBe(130);
   });
 
