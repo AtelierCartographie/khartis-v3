@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { onDestroy, untrack } from 'svelte';
   import { SvelteMap } from 'svelte/reactivity';
   import * as m from '$lib/paraglide/messages';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
@@ -42,7 +42,8 @@
     findPaletteById,
     generateCategoricalColorsFromSeed,
     generatePaletteColors,
-    PALETTE_TYPE
+    PALETTE_TYPE,
+    type PaletteType
   } from '$lib/features/commons/components/palette-popover/palette.constants';
   import {
     getColorBlindnessState,
@@ -457,41 +458,44 @@
     }
   }
 
+  function resolveClassificationPaletteType(
+    classification: ClassificationConfig | undefined
+  ): PaletteType | undefined {
+    return classification?.paletteId
+      ? findPaletteById(classification.paletteId)?.type
+      : undefined;
+  }
+
   function ensurePrimitiveClassificationDefaults(
     primitive: ClassifiablePrimitive,
     visualization: VisualizationConfig
   ): void {
     const classification = getPrimitiveClassification(visualization, primitive);
+    const currentPaletteType = resolveClassificationPaletteType(classification);
 
     if (usesBreakClassification(visualization, primitive)) {
-      const paletteType = classification?.paletteId
-        ? findPaletteById(classification.paletteId)?.type
-        : undefined;
-      const hasIncompatiblePalette = paletteType === PALETTE_TYPE.QUALITATIVE;
+      const hasIncompatiblePalette =
+        currentPaletteType === PALETTE_TYPE.QUALITATIVE;
+      const resetPaletteFields = hasIncompatiblePalette
+        ? { paletteId: undefined, colors: [] }
+        : {};
       if (!classification?.method || !classification?.numClasses) {
         updatePrimitiveClassificationState(primitive, {
           method: ClassificationMethod.JENKS,
           classes: 5,
           numClasses: 5,
-          ...(hasIncompatiblePalette
-            ? { paletteId: undefined, colors: [] }
-            : {})
+          ...resetPaletteFields
         });
       } else if (hasIncompatiblePalette) {
-        updatePrimitiveClassificationState(primitive, {
-          paletteId: undefined,
-          colors: []
-        });
+        updatePrimitiveClassificationState(primitive, resetPaletteFields);
       }
       return;
     }
 
     if (usesCategoricalClassification(visualization, primitive)) {
-      const paletteType = classification?.paletteId
-        ? findPaletteById(classification.paletteId)?.type
-        : undefined;
       const hasIncompatiblePalette =
-        paletteType !== undefined && paletteType !== PALETTE_TYPE.QUALITATIVE;
+        currentPaletteType !== undefined &&
+        currentPaletteType !== PALETTE_TYPE.QUALITATIVE;
       const needsColors = !classification?.colors?.length;
       const needsLabels =
         classification?.labels === undefined ||
@@ -1624,10 +1628,17 @@
    */
   const pendingBreaksRetries = new SvelteMap<
     ClassifiablePrimitive,
-    { handle: number; key: string; attempts: number }
+    { handle: ReturnType<typeof setTimeout>; key: string; attempts: number }
   >();
   const MAX_BREAKS_RETRIES = 4;
   const BREAKS_RETRY_DELAY_MS = 250;
+
+  onDestroy(() => {
+    for (const entry of pendingBreaksRetries.values()) {
+      clearTimeout(entry.handle);
+    }
+    pendingBreaksRetries.clear();
+  });
 
   function scheduleBreaksRetry(
     primitive: ClassifiablePrimitive,
@@ -1661,7 +1672,7 @@
         '$timeout:retryAfterEmpty',
         breaksKey
       );
-    }, BREAKS_RETRY_DELAY_MS) as unknown as number;
+    }, BREAKS_RETRY_DELAY_MS);
     pendingBreaksRetries.set(primitive, {
       handle,
       key: breaksKey,

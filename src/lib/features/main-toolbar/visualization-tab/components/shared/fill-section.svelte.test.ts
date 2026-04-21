@@ -26,14 +26,13 @@ describe('FillSection — interface', () => {
     );
   });
 
-  it('renders PalettePreview with DIVERGING paletteType when breakpointValue is set, otherwise SEQUENTIAL for FillMode.CLASSES', () => {
+  it('delegates the CLASSES-mode paletteType to resolvePaletteTypeForBreakpoint so DIVERGING/SEQUENTIAL stays in sync with the helper', () => {
     const classesBlock = source.match(
       /fillMode === FillMode\.CLASSES[\s\S]*?FillMode\.CATEGORIES/
     )?.[0];
     expect(classesBlock).toBeDefined();
-    expect(classesBlock).toContain('PALETTE_TYPE.DIVERGING');
-    expect(classesBlock).toContain('PALETTE_TYPE.SEQUENTIAL');
-    expect(classesBlock).toMatch(/breakpointValue\s*!=\s*null/);
+    expect(classesBlock).toContain('resolvePaletteTypeForBreakpoint');
+    expect(classesBlock).toContain('visualization?.classification');
   });
 
   it('renders PalettePreview with QUALITATIVE paletteType + categoriesMode for FillMode.CATEGORIES', () => {

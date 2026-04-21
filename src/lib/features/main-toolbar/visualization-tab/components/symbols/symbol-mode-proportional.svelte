@@ -569,50 +569,37 @@
     onSymbolPrimitiveChange?.({ positionMode: next });
   }
 
+  /**
+   * Commits a candidate (breakValueA, breakValueB) tuple to state, swapping
+   * the pair when both are finite numbers in the wrong order so downstream
+   * rendering always receives a normalised range. Keeps E-08 invariant in
+   * one place instead of mirroring swap logic across two handlers.
+   */
+  function commitBreakValues(nextA: number | null, nextB: number | null): void {
+    const shouldSwap =
+      nextA !== null &&
+      nextB !== null &&
+      Number.isFinite(nextA) &&
+      Number.isFinite(nextB) &&
+      nextA > nextB;
+    const finalA = shouldSwap ? nextB : nextA;
+    const finalB = shouldSwap ? nextA : nextB;
+    breakValueA = finalA;
+    breakValueB = finalB;
+    onSymbolPrimitiveChange?.({
+      breakValueA: finalA,
+      breakValueB: finalB
+    });
+  }
+
   function handleBreakValueAChange(value: number | null) {
     if (isSyncingFromVisualization) return;
-    if (
-      value !== null &&
-      breakValueB !== null &&
-      Number.isFinite(value) &&
-      Number.isFinite(breakValueB) &&
-      value > breakValueB
-    ) {
-      const swappedA = breakValueB;
-      const swappedB = value;
-      breakValueA = swappedA;
-      breakValueB = swappedB;
-      onSymbolPrimitiveChange?.({
-        breakValueA: swappedA,
-        breakValueB: swappedB
-      });
-      return;
-    }
-    breakValueA = value;
-    onSymbolPrimitiveChange?.({ breakValueA: value });
+    commitBreakValues(value, breakValueB);
   }
 
   function handleBreakValueBChange(value: number | null) {
     if (isSyncingFromVisualization) return;
-    if (
-      value !== null &&
-      breakValueA !== null &&
-      Number.isFinite(value) &&
-      Number.isFinite(breakValueA) &&
-      value < breakValueA
-    ) {
-      const swappedA = value;
-      const swappedB = breakValueA;
-      breakValueA = swappedA;
-      breakValueB = swappedB;
-      onSymbolPrimitiveChange?.({
-        breakValueA: swappedA,
-        breakValueB: swappedB
-      });
-      return;
-    }
-    breakValueB = value;
-    onSymbolPrimitiveChange?.({ breakValueB: value });
+    commitBreakValues(breakValueA, value);
   }
 
   const positionModeItems = [

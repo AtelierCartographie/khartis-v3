@@ -15,22 +15,25 @@ describe('StrokeSection — palette wiring', () => {
     expect(source).toContain('PALETTE_TYPE');
   });
 
-  it('should wire dynamic paletteType (DIVERGING when breakpointValue set, else SEQUENTIAL) on the classes-mode stroke palette', () => {
-    expect(source).toContain('PALETTE_TYPE.DIVERGING');
-    expect(source).toContain('PALETTE_TYPE.SEQUENTIAL');
-    expect(source).toMatch(/breakpointValue\s*!=\s*null/);
+  it('delegates the CLASSES-mode paletteType to resolvePaletteTypeForBreakpoint so DIVERGING/SEQUENTIAL stays in sync with the helper', () => {
+    expect(source).toContain(
+      'paletteType={resolvePaletteTypeForBreakpoint(strokeClassification)}'
+    );
+    expect(source).toContain('resolvePaletteTypeForBreakpoint');
   });
 
   it('should wire QUALITATIVE paletteType on the categories-mode stroke palette', () => {
     expect(source).toContain('paletteType={PALETTE_TYPE.QUALITATIVE}');
   });
 
-  it('should never render a PalettePreview without an explicit paletteType', () => {
+  it('should never render a PalettePreview without an explicit paletteType prop', () => {
     const paletteBlocks = source.match(/<PalettePreview[\s\S]*?\/>/g) || [];
     expect(paletteBlocks.length).toBeGreaterThan(0);
     paletteBlocks.forEach((block) => {
       expect(block).toMatch(/paletteType=/);
-      expect(block).toMatch(/PALETTE_TYPE\.(SEQUENTIAL|QUALITATIVE|DIVERGING)/);
+      expect(block).toMatch(
+        /(PALETTE_TYPE\.(SEQUENTIAL|QUALITATIVE|DIVERGING)|resolvePaletteTypeForBreakpoint)/
+      );
     });
   });
 });
