@@ -496,7 +496,6 @@
     max-height: calc(100dvh - 120px);
     z-index: var(--z-dropdown);
     background: var(--cds-ui-02, #ffffff);
-    border: 1px solid var(--cds-border-subtle, #e0e0e0);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -506,8 +505,9 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: var(--cds-spacing-04) var(--cds-spacing-05);
-    border-bottom: 1px solid var(--cds-border-subtle);
+    gap: var(--cds-spacing-02);
+    padding: var(--cds-spacing-04) var(--cds-spacing-02) var(--cds-spacing-03)
+      var(--cds-spacing-05);
     position: sticky;
     top: 0;
     flex-shrink: 0;
@@ -517,6 +517,8 @@
     h3 {
       font-size: 1rem;
       font-weight: 600;
+      line-height: 1.5rem;
+      letter-spacing: 0;
       margin: 0;
       color: var(--cds-text-01);
     }
@@ -525,5 +527,6 @@
   .panel-body {
     flex: 1;
     overflow-y: auto;
+    padding-top: var(--cds-spacing-03);
   }
 </style>

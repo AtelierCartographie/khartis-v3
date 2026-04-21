@@ -81,7 +81,7 @@ describe('DiscretizationModal', () => {
         option.textContent?.trim()
       )
     ).toEqual([
-      'K-means (seuils naturels)',
+      'Jenks',
       'Quantiles',
       'Intervalles égaux',
       'Écarts-types',
@@ -92,7 +92,7 @@ describe('DiscretizationModal', () => {
     ]);
   });
 
-  it('defaults the discretization select to K-means when no method is configured', () => {
+  it('defaults the discretization select to Jenks when no method is configured', () => {
     const visualization = createVisualization({ classification: undefined });
     const { container } = render(DiscretizationModal, {
       open: true,
