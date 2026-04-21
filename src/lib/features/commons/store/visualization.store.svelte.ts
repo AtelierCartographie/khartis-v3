@@ -92,6 +92,7 @@ export interface ClassificationConfig {
   paletteId?: string;
   inverted?: boolean;
   labels?: string[];
+  disabledLabels?: string[];
   breakpointValue?: number | null;
   patternId?: string;
   patternParams?: PatternParams;

@@ -15,11 +15,17 @@
     MissingDataShape,
     ShapeType,
     SLIDER_LIMITS,
+    StrokeMode,
     SymbolMode,
     DEFAULT_COLORS,
     availableShapesForSymbolMode
   } from '../../../constants';
-  import type { CategoriesAspectVariant } from '$lib/features/commons/components/palette-popover/categories-aspect-popover.types';
+  import {
+    DEFAULT_COMMON_ASPECT,
+    type CategoriesAspectVariant,
+    type CategoriesCommonAspect,
+    type CategoryDraft
+  } from '$lib/features/commons/components/palette-popover/categories-aspect-popover.types';
   import {
     DiscretizationRow,
     InfoPopover,
@@ -40,9 +46,11 @@
     visualization,
     onMappingChange,
     onSymbolsChange,
+    onSymbolPrimitiveChange,
     onModesChange,
     onMissingDataChange,
     onClassificationChange,
+    onStrokeClassificationChange,
     onInvertPalette
   }: SymbolModeProps = $props();
 
@@ -114,6 +122,26 @@
         ? 'symbols-different-rank'
         : 'symbols-unique'
   );
+
+  const categoriesCommonAspect = $derived<CategoriesCommonAspect>({
+    ...DEFAULT_COMMON_ASPECT,
+    size:
+      visualization?.symbol?.size ??
+      visualization?.symbols?.size ??
+      DEFAULT_COMMON_ASPECT.size,
+    stroke:
+      (visualization?.symbol?.strokeMode ?? StrokeMode.NONE) !==
+        StrokeMode.NONE && (visualization?.symbol?.strokeWidth ?? 0) > 0,
+    autoColor:
+      (visualization?.symbol?.strokeMode ?? StrokeMode.NONE) ===
+      StrokeMode.CATEGORIES,
+    strokeSize: Math.max(
+      1,
+      visualization?.symbol?.strokeWidth ?? DEFAULT_COMMON_ASPECT.strokeSize
+    ),
+    shape: visualization?.symbol?.shape ?? DEFAULT_COMMON_ASPECT.shape,
+    color: currentPalette[0] ?? DEFAULT_COMMON_ASPECT.color
+  });
 
   $effect(() => {
     const categoryCol =
@@ -216,6 +244,81 @@
   function handleOpacityChange(value: number) {
     symbolOpacity = value;
     onSymbolsChange?.({ opacity: value / 100 });
+  }
+
+  function resolveOrderedCategorySizeBounds(baseSize: number): {
+    minSize: number;
+    maxSize: number;
+  } {
+    const clampedBaseSize = Math.min(Math.max(baseSize, 1), 20);
+    const minSize = Math.max(1, Math.round(clampedBaseSize * 0.75));
+    const maxSize = Math.max(minSize + 1, Math.round(clampedBaseSize * 1.75));
+
+    return { minSize, maxSize };
+  }
+
+  function handleCategoriesCommonAspectChange(
+    commonAspect: CategoriesCommonAspect,
+    nextCategories: CategoryDraft[]
+  ) {
+    const symbolUpdates: Partial<
+      NonNullable<Parameters<NonNullable<typeof onSymbolPrimitiveChange>>[0]>
+    > = {};
+
+    if (commonAspect.sizeUnique) {
+      symbolUpdates.size = commonAspect.size;
+      if (categoryShapeMode === CategoryShapeMode.ORDERED) {
+        const { minSize, maxSize } = resolveOrderedCategorySizeBounds(
+          commonAspect.size
+        );
+        symbolUpdates.minSize = minSize;
+        symbolUpdates.maxSize = maxSize;
+      }
+    }
+
+    if (categoryShapeMode === CategoryShapeMode.ORDERED && commonAspect.shape) {
+      symbolUpdates.shape = commonAspect.shape;
+    }
+
+    if (commonAspect.stroke) {
+      symbolUpdates.strokeMode = commonAspect.autoColor
+        ? StrokeMode.CATEGORIES
+        : StrokeMode.UNIQUE;
+      symbolUpdates.strokeWidth = Math.max(1, commonAspect.strokeSize);
+    } else {
+      symbolUpdates.strokeMode = StrokeMode.NONE;
+      symbolUpdates.strokeWidth = 0;
+    }
+
+    if (Object.keys(symbolUpdates).length > 0) {
+      onSymbolPrimitiveChange?.(symbolUpdates);
+    }
+
+    if (commonAspect.stroke && commonAspect.autoColor) {
+      onStrokeClassificationChange?.({
+        colors: nextCategories.map((category) => category.color),
+        labels: nextCategories.map((category) => category.label),
+        disabledLabels: nextCategories
+          .filter((category) => !category.enabled)
+          .map((category) => category.label),
+        paletteId: undefined,
+        inverted: false,
+        patternId: undefined,
+        patternParams: undefined
+      });
+    } else {
+      onStrokeClassificationChange?.({
+        colors: undefined,
+        labels: undefined,
+        paletteId: undefined,
+        inverted: false,
+        patternId: undefined,
+        patternParams: undefined,
+        disabledLabels: undefined,
+        breaks: undefined,
+        counts: undefined
+      });
+    }
   }
 
   const selectedVizId = $derived(visualization?.id);
@@ -376,9 +479,15 @@
   categoryLabels={visualization?.symbol?.classification?.labels ??
     visualization?.symbolClassification?.labels ??
     []}
+  disabledCategoryLabels={visualization?.symbol?.classification
+    ?.disabledLabels ??
+    visualization?.symbolClassification?.disabledLabels ??
+    []}
+  categoriesCommonAspect={categoriesCommonAspect}
   bind:categoriesPopoverOpen={categoriesAspectOpen}
   oninvert={onInvertPalette}
   onClassificationChange={onClassificationChange}
+  onCategoriesCommonAspectChange={handleCategoriesCommonAspectChange}
 />
 <SliderWithInput
   label={m.opacity()}
