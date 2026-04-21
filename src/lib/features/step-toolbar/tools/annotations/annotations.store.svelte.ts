@@ -8,6 +8,12 @@ import {
   getShapeDefaultDimensions
 } from '$lib/features/commons/constants';
 import { TextAlign } from '$lib/features/commons/types/enums';
+import {
+  clampToRange,
+  PAGE_GRID_SIZE_PX,
+  snapPointToPageGrid,
+  snapPointWithinBounds
+} from '$lib/features/commons/utils/page-grid.utils';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
 import {
   PRINT_STANDARD_TOKENS,
@@ -15,8 +21,7 @@ import {
 } from '$lib/features/commons/utils/layout-sizing.utils';
 import {
   getFormatLayoutSizingContext,
-  getFormatState,
-  PAGE_GRID_SIZE_PX
+  getFormatState
 } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
 import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
 import { m } from '$lib/paraglide/messages';
@@ -238,44 +243,8 @@ const PAGE_ELEMENT_MESSAGE_BUNDLES = {
   }
 } satisfies Record<'en' | 'fr', PageElementMessageBundle>;
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
-
 function isGridEnabled(): boolean {
   return getFormatState().gridEnabled;
-}
-
-function snapToGrid(value: number): number {
-  if (!isGridEnabled()) {
-    return value;
-  }
-
-  return Math.round(value / PAGE_GRID_SIZE_PX) * PAGE_GRID_SIZE_PX;
-}
-
-function snapPositionToGrid(position: { x: number; y: number }): {
-  x: number;
-  y: number;
-} {
-  return {
-    x: snapToGrid(position.x),
-    y: snapToGrid(position.y)
-  };
-}
-
-function getGridAlignedBounds(
-  min: number,
-  max: number
-): { min: number; max: number } | null {
-  const alignedMin = Math.ceil(min / PAGE_GRID_SIZE_PX) * PAGE_GRID_SIZE_PX;
-  const alignedMax = Math.floor(max / PAGE_GRID_SIZE_PX) * PAGE_GRID_SIZE_PX;
-
-  if (alignedMin > alignedMax) {
-    return null;
-  }
-
-  return { min: alignedMin, max: alignedMax };
 }
 
 function clampPageElementPosition(
@@ -306,24 +275,16 @@ function clampPageElementPosition(
       : height - margins.bottom - 4
   );
 
-  if (!isGridEnabled() || !snapToGridEnabled) {
-    return {
-      x: clamp(position.x, minX, maxX),
-      y: clamp(position.y, minY, maxY)
-    };
-  }
-
-  const xGridBounds = getGridAlignedBounds(minX, maxX);
-  const yGridBounds = getGridAlignedBounds(minY, maxY);
-
-  return {
-    x: xGridBounds
-      ? clamp(snapToGrid(position.x), xGridBounds.min, xGridBounds.max)
-      : clamp(position.x, minX, maxX),
-    y: yGridBounds
-      ? clamp(snapToGrid(position.y), yGridBounds.min, yGridBounds.max)
-      : clamp(position.y, minY, maxY)
-  };
+  return snapPointWithinBounds(
+    position,
+    {
+      minX,
+      maxX,
+      minY,
+      maxY
+    },
+    isGridEnabled() && snapToGridEnabled
+  );
 }
 
 function resolvePageLayout(overrides?: {
@@ -399,24 +360,16 @@ function clampAnnotationPosition(
   const maxX = Math.max(minX, mapLayout.width - bounds.width);
   const maxY = Math.max(minY, mapLayout.height - bounds.height);
 
-  if (!isGridEnabled()) {
-    return {
-      x: clamp(position.x, minX, maxX),
-      y: clamp(position.y, minY, maxY)
-    };
-  }
-
-  const xGridBounds = getGridAlignedBounds(minX, maxX);
-  const yGridBounds = getGridAlignedBounds(minY, maxY);
-
-  return {
-    x: xGridBounds
-      ? clamp(snapToGrid(position.x), xGridBounds.min, xGridBounds.max)
-      : clamp(position.x, minX, maxX),
-    y: yGridBounds
-      ? clamp(snapToGrid(position.y), yGridBounds.min, yGridBounds.max)
-      : clamp(position.y, minY, maxY)
-  };
+  return snapPointWithinBounds(
+    position,
+    {
+      minX,
+      maxX,
+      minY,
+      maxY
+    },
+    isGridEnabled()
+  );
 }
 
 function resolveDrawingType(
@@ -496,24 +449,31 @@ function getPageNoteSpawnPosition(
   );
   const slots = [
     {
-      x: clamp(layout.width - noteWidth - PAGE_NOTE_SAFE_OFFSET, minX, maxX),
+      x: clampToRange(
+        layout.width - noteWidth - PAGE_NOTE_SAFE_OFFSET,
+        minX,
+        maxX
+      ),
       y: topY
     },
     {
-      x: clamp((layout.width - noteWidth) / 2, minX, maxX),
+      x: clampToRange((layout.width - noteWidth) / 2, minX, maxX),
       y: topY
     },
     {
-      x: clamp(layout.margins.left + 4, minX, maxX),
+      x: clampToRange(layout.margins.left + 4, minX, maxX),
       y: bottomY
     },
     {
-      x: clamp((layout.width - noteWidth) / 2, minX, maxX),
+      x: clampToRange((layout.width - noteWidth) / 2, minX, maxX),
       y: bottomY
     }
   ];
 
-  return snapPositionToGrid(slots[existingNotesCount % slots.length]);
+  return snapPointToPageGrid(
+    slots[existingNotesCount % slots.length],
+    isGridEnabled()
+  );
 }
 
 function getPageElementPosition(
@@ -524,8 +484,8 @@ function getPageElementPosition(
   const roleWidth = PAGE_ELEMENT_WIDTHS[role];
   const minX = margins.left;
   const maxX = Math.max(minX, width - margins.right - roleWidth);
-  const titleX = clamp(margins.left + TOP_LEFT_SAFE_OFFSET, minX, maxX);
-  const rightColumnX = clamp(
+  const titleX = clampToRange(margins.left + TOP_LEFT_SAFE_OFFSET, minX, maxX);
+  const rightColumnX = clampToRange(
     width - margins.right - roleWidth - RIGHT_COLUMN_SAFE_OFFSET,
     minX,
     maxX
@@ -542,17 +502,21 @@ function getPageElementPosition(
     const baseY = bottomY - BOTTOM_RIGHT_SAFE_OFFSET;
     return {
       x: rightColumnX,
-      y: clamp(baseY - bottomStackIndex * BOTTOM_RIGHT_STACK_STEP, minY, maxY)
+      y: clampToRange(
+        baseY - bottomStackIndex * BOTTOM_RIGHT_STACK_STEP,
+        minY,
+        maxY
+      )
     };
   }
 
   switch (role) {
     case ANNOTATION_ROLE.TITLE:
-      return { x: titleX, y: clamp(TITLE_TOP_OFFSET, minY, maxY) };
+      return { x: titleX, y: clampToRange(TITLE_TOP_OFFSET, minY, maxY) };
     case ANNOTATION_ROLE.SUBTITLE:
-      return { x: titleX, y: clamp(SUBTITLE_TOP_OFFSET, minY, maxY) };
+      return { x: titleX, y: clampToRange(SUBTITLE_TOP_OFFSET, minY, maxY) };
     default:
-      return { x: titleX, y: clamp(margins.top + 24, minY, maxY) };
+      return { x: titleX, y: clampToRange(margins.top + 24, minY, maxY) };
   }
 }
 
@@ -951,10 +915,13 @@ const { actions, getState } = createToolStore<
           content: duplicatedContent,
           style: original.style ? { ...original.style } : undefined,
           positionMode: 'manual',
-          position: snapPositionToGrid({
-            x: original.position.x + 20,
-            y: original.position.y + 20
-          })
+          position: snapPointToPageGrid(
+            {
+              x: original.position.x + 20,
+              y: original.position.y + 20
+            },
+            isGridEnabled()
+          )
         };
         s.items = [...s.items, duplicate];
         s.selectedId = duplicate.id;
@@ -965,7 +932,7 @@ const { actions, getState } = createToolStore<
         item.id === id
           ? {
               ...item,
-              position: snapPositionToGrid(newPosition),
+              position: snapPointToPageGrid(newPosition, isGridEnabled()),
               positionMode: 'manual'
             }
           : item

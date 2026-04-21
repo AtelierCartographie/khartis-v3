@@ -5,13 +5,12 @@ import {
   PageModel
 } from '$lib/features/commons/constants/ui.constants';
 import type { LayoutSizingContext } from '$lib/features/commons/utils/layout-sizing.utils';
+export { PAGE_GRID_SIZE_PX } from '$lib/features/commons/utils/page-grid.utils';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
 import type { FormatState } from './format.types';
 
 const HUE_MAX = 359;
 const PERCENTAGE_MAX = 100;
-
-export const PAGE_GRID_SIZE_PX = 12;
 
 export const DEFAULT_PAGE_COLOR: FormatState['color'] = {
   hue: 0,
