@@ -26,11 +26,39 @@ describe('categorical-preview.utils', () => {
   });
 
   it('derives preview count from available classification data', () => {
-    expect(resolveCategoryPreviewCount({ labels: ['A', 'B'] }, 4)).toBe(2);
-    expect(resolveCategoryPreviewCount({ colors: ['#111', '#222'] }, 4)).toBe(
-      2
-    );
-    expect(resolveCategoryPreviewCount({ numClasses: 5 }, 4)).toBe(5);
+    expect(
+      resolveCategoryPreviewCount(
+        {
+          labels: ['A', 'B'],
+          colors: [],
+          numClasses: undefined,
+          classes: undefined
+        },
+        4
+      )
+    ).toBe(2);
+    expect(
+      resolveCategoryPreviewCount(
+        {
+          labels: [],
+          colors: ['#111', '#222'],
+          numClasses: undefined,
+          classes: undefined
+        },
+        4
+      )
+    ).toBe(2);
+    expect(
+      resolveCategoryPreviewCount(
+        {
+          labels: [],
+          colors: [],
+          numClasses: 5,
+          classes: undefined
+        },
+        4
+      )
+    ).toBe(5);
     expect(resolveCategoryPreviewCount(undefined, 0)).toBe(4);
   });
 

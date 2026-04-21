@@ -903,6 +903,7 @@
       <div class="double-color-row">
         <div class="double-color-item double-color-a">
           <SingleColorPreview
+            exclusive
             label={m.symbol_color_a()}
             color={fillColor}
             onchange={handleFillColorChange}
@@ -910,6 +911,7 @@
         </div>
         <div class="double-color-item double-color-b">
           <SingleColorPreview
+            exclusive
             label={m.symbol_color_b()}
             color={fillColorB}
             onchange={handleFillColorBChange}
@@ -918,6 +920,7 @@
       </div>
     {:else}
       <SingleColorPreview
+        exclusive
         label={m.color()}
         color={fillColor}
         onchange={handleFillColorChange}

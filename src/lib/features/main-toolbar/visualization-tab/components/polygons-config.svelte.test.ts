@@ -66,3 +66,32 @@ describe('PolygonsConfig — FillSection wiring', () => {
     expect(source).toContain("from './polygons'");
   });
 });
+
+describe('PolygonsConfig — discretization routing', () => {
+  it('routes fill and stroke discretization openings through distinct targets', () => {
+    expect(source).toContain("discretizationTarget = 'fill'");
+    expect(source).toContain("discretizationTarget = 'stroke'");
+  });
+
+  it('binds the stroke section to polygon stroke-specific classification state', () => {
+    expect(source).toContain(
+      'strokeClassification={visualization?.polygon?.strokeClassification}'
+    );
+    expect(source).toContain(
+      'strokeValueColumn={visualization?.polygon?.strokeValueColumn}'
+    );
+    expect(source).toContain(
+      'strokeCategoryColumn={visualization?.polygon?.strokeCategoryColumn}'
+    );
+  });
+
+  it('forwards the active discretization role and matching value column to the shared modal', () => {
+    expect(source).toContain(
+      'classification={activeDiscretizationClassification}'
+    );
+    expect(source).toContain('role={discretizationTarget}');
+    expect(source).toContain("valueColumn={discretizationTarget === 'stroke'");
+    expect(source).toContain('visualization?.polygon?.strokeValueColumn');
+    expect(source).toContain('visualization?.polygon?.valueColumn');
+  });
+});

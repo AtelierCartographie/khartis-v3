@@ -109,3 +109,33 @@ describe('TextsConfig — Figma layout', () => {
     expect(source).toContain('if (!hasPrimaryField || !hasSecondaryField) {');
   });
 });
+
+describe('TextsConfig — background discretization routing', () => {
+  it('opens background fill and background stroke discretization through separate targets', () => {
+    expect(source).toContain("discretizationTarget = 'background-fill'");
+    expect(source).toContain("discretizationTarget = 'background-stroke'");
+  });
+
+  it('wires the background stroke section to its dedicated stroke classification state', () => {
+    expect(source).toContain(
+      'strokeClassification={backgroundVisualization?.text?.background'
+    );
+    expect(source).toContain('?.strokeClassification}');
+    expect(source).toContain(
+      'strokeValueColumn={backgroundVisualization?.text?.background'
+    );
+    expect(source).toContain(
+      'strokeCategoryColumn={backgroundVisualization?.text?.background'
+    );
+  });
+
+  it('passes the correct shared-modal role for background fill vs stroke', () => {
+    expect(source).toContain(
+      "role={discretizationTarget === 'background-stroke' ? 'stroke' : 'fill'}"
+    );
+    expect(source).toContain(
+      'classification={activeDiscretizationClassification}'
+    );
+    expect(source).toContain('valueColumn={activeDiscretizationValueColumn}');
+  });
+});

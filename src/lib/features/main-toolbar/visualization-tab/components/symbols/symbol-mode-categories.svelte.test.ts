@@ -38,6 +38,21 @@ describe('SymbolModeCategories (en categorie.png alignment)', () => {
     expect(source).toContain('label={m.opacity()}');
   });
 
+  it('renders the shared StrokeSection below missing data to match the Figma Contour block', () => {
+    expect(source).toContain('StrokeSection');
+    expect(source).toContain('infoText={m.stroke_section_info()}');
+    expect(source).toContain('showDashed={true}');
+    expect(source).toContain(
+      'strokeClassification={visualization?.symbol?.strokeClassification}'
+    );
+    expect(source).toContain(
+      'strokeCategoryColumn={visualization?.symbol?.strokeCategoryColumn}'
+    );
+    expect(source).toContain(
+      'strokeValueColumn={visualization?.symbol?.strokeValueColumn}'
+    );
+  });
+
   it('wires PalettePreview with paletteType=QUALITATIVE so the popover shows the Couleur title', () => {
     expect(source).toContain('paletteType={PALETTE_TYPE.QUALITATIVE}');
     expect(source).toContain(
@@ -96,6 +111,16 @@ describe('SymbolModeCategories (en categorie.png alignment)', () => {
     expect(source).toContain('event.stopPropagation();');
     expect(source).toContain('categoriesAspectOpen = true;');
   });
+
+  it('opens a dedicated stroke discretization modal for contour classes', () => {
+    expect(source).toContain('strokeDiscretizationModalOpen = $state(false)');
+    expect(source).toContain('const strokeDiscretizationLabel = $derived.by');
+    expect(source).toContain('<DiscretizationModal');
+    expect(source).toContain('role="stroke"');
+    expect(source).toContain(
+      'classification={visualization?.symbol?.strokeClassification}'
+    );
+  });
 });
 
 describe('SymbolModeCategories — anti-leak classification routing', () => {
@@ -116,6 +141,22 @@ describe('SymbolModeCategories — anti-leak classification routing', () => {
     );
     expect(source).not.toContain(
       'onStrokeClassificationChange ?? onClassificationChange'
+    );
+  });
+
+  it('routes StrokeSection strictly to stroke-specific handlers', () => {
+    const strokeBlock = source.split('<StrokeSection')[1]?.split('/>')[0];
+    expect(strokeBlock).toBeDefined();
+    expect(strokeBlock).toContain(
+      'onStrokeClassificationChange={onStrokeClassificationChange'
+    );
+    expect(strokeBlock).toContain('onStyleChange={onStyleChange}');
+    expect(strokeBlock).toContain(
+      'onStrokeMappingChange={onStrokeMappingChange}'
+    );
+    expect(strokeBlock).toContain('onInvertPalette={onStrokeInvertPalette}');
+    expect(strokeBlock).not.toContain(
+      'onClassificationChange={onClassificationChange}'
     );
   });
 });

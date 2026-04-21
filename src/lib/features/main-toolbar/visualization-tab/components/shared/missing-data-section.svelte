@@ -90,6 +90,7 @@
         {/if}
         <Column sm={2} md={4} lg={showShapeSelector ? 8 : 16}>
           <ColorSelector
+            exclusive
             label={m.color()}
             value={color}
             size="small"
