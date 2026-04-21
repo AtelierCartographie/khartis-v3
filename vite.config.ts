@@ -89,6 +89,7 @@ export default defineConfig(({ mode }) => {
         },
         workbox: {
           sourcemap: false,
+          inlineWorkboxRuntime: true,
           globPatterns:
             process.env.NODE_ENV === 'production'
               ? [

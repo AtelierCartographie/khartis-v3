@@ -458,10 +458,6 @@
     height: 24px;
   }
 
-  .section-heading.plain .section-title {
-    font-size: 1rem;
-  }
-
   .section-title {
     font-size: 0.875rem;
     font-weight: 600;
