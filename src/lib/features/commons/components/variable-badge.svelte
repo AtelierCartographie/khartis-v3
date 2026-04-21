@@ -10,7 +10,8 @@
   interface Props {
     label: string;
     type?: VariableBadgeType;
-    element?: HTMLButtonElement;
+    interactive?: boolean;
+    element?: HTMLElement;
     onclick?: (e: MouseEvent) => void;
     onmouseenter?: (e: MouseEvent) => void;
     onmouseleave?: (e: MouseEvent) => void;
@@ -22,6 +23,7 @@
   let {
     label,
     type = 'string',
+    interactive = true,
     element = $bindable(),
     onclick,
     onmouseenter,
@@ -34,13 +36,15 @@
   const style = $derived(VARIABLE_BADGE_STYLES[type]);
 </script>
 
-<button
+<svelte:element
+  this={interactive ? 'button' : 'span'}
   class="variable-badge"
   style="
     --badge-color: {style.color};
     --badge-bg: {style.bgColor};
     --badge-border: {style.borderColor};
   "
+  type={interactive ? 'button' : undefined}
   bind:this={element}
   onclick={onclick}
   onmouseenter={onmouseenter}
@@ -48,6 +52,8 @@
   onfocus={onfocus}
   onblur={onblur}
   aria-label={ariaLabel}
+  role={interactive ? 'button' : 'presentation'}
+  tabindex={interactive ? undefined : -1}
 >
   <span class="badge-label" title={label}>{label}</span>
   <span class="badge-divider"></span>
@@ -70,7 +76,7 @@
   {:else if type === 'string'}
     <span class="badge-icon-text">ABC</span>
   {/if}
-</button>
+</svelte:element>
 
 <style>
   .variable-badge {
