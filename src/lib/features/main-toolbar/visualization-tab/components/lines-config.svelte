@@ -600,7 +600,9 @@
         colors={currentPalette}
         selectedPaletteId={visualization?.classification?.paletteId}
         inverted={visualization?.classification?.inverted ?? false}
-        paletteType={PALETTE_TYPE.SEQUENTIAL}
+        paletteType={visualization?.classification?.breakpointValue != null
+          ? PALETTE_TYPE.DIVERGING
+          : PALETTE_TYPE.SEQUENTIAL}
         oninvert={onInvertPalette}
         onClassificationChange={handleClassificationChange}
       />

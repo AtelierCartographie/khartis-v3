@@ -400,6 +400,179 @@ describe('shouldApplyCategorical', () => {
   });
 });
 
+describe('shouldApplyCategorical — POINT SymbolMode x FillMode matrix', () => {
+  const PrimitiveFilterTypePOINT = 'point';
+  const classification = {
+    colors: ['#f00', '#0f0'],
+    method: 'manual',
+    classes: 2
+  };
+
+  function buildViz(
+    symbolMode: SymbolMode,
+    fillMode: FillMode
+  ): Record<string, unknown> {
+    return {
+      symbol: {
+        mode: symbolMode,
+        fillMode,
+        categoryColumn: 'segment'
+      },
+      symbolClassification: classification,
+      mapping: { categoryColumn: 'segment' },
+      type: 'proportional',
+      id: 'v1',
+      name: 'V',
+      datasetId: 'd1',
+      enabled: true,
+      style: {}
+    };
+  }
+
+  const expectedMatrix: Array<{
+    mode: SymbolMode;
+    fill: FillMode;
+    expected: boolean;
+  }> = [
+    { mode: SymbolMode.UNIQUE, fill: FillMode.UNIQUE, expected: false },
+    { mode: SymbolMode.UNIQUE, fill: FillMode.CLASSES, expected: false },
+    { mode: SymbolMode.UNIQUE, fill: FillMode.CATEGORIES, expected: true },
+    { mode: SymbolMode.UNIQUE, fill: FillMode.NONE, expected: false },
+    { mode: SymbolMode.PROPORTIONAL, fill: FillMode.UNIQUE, expected: false },
+    { mode: SymbolMode.PROPORTIONAL, fill: FillMode.CLASSES, expected: false },
+    {
+      mode: SymbolMode.PROPORTIONAL,
+      fill: FillMode.CATEGORIES,
+      expected: true
+    },
+    { mode: SymbolMode.CLASSES, fill: FillMode.UNIQUE, expected: false },
+    { mode: SymbolMode.CLASSES, fill: FillMode.CLASSES, expected: false },
+    { mode: SymbolMode.CLASSES, fill: FillMode.CATEGORIES, expected: true },
+    { mode: SymbolMode.CATEGORIES, fill: FillMode.UNIQUE, expected: true },
+    { mode: SymbolMode.CATEGORIES, fill: FillMode.CLASSES, expected: true },
+    { mode: SymbolMode.CATEGORIES, fill: FillMode.CATEGORIES, expected: true },
+    { mode: SymbolMode.CATEGORIES, fill: FillMode.NONE, expected: true }
+  ];
+
+  for (const { mode, fill, expected } of expectedMatrix) {
+    it(`returns ${expected} for SymbolMode.${mode} x FillMode.${fill}`, () => {
+      const viz = buildViz(mode, fill);
+      expect(
+        shouldApplyCategorical(viz as never, PrimitiveFilterTypePOINT as never)
+      ).toBe(expected);
+    });
+  }
+
+  it('returns false when categoryColumn is missing regardless of mode', () => {
+    const viz = buildViz(SymbolMode.CATEGORIES, FillMode.CATEGORIES);
+    const symbol = viz.symbol as Record<string, unknown>;
+    symbol.categoryColumn = undefined;
+    (viz.mapping as Record<string, unknown>).categoryColumn = undefined;
+    expect(
+      shouldApplyCategorical(viz as never, PrimitiveFilterTypePOINT as never)
+    ).toBe(false);
+  });
+});
+
+describe('Symbol edge cases — robustness on degenerate inputs', () => {
+  const PrimitiveFilterTypePOINT = 'point';
+
+  it('E-01: shouldApplyCategorical returns false when classification.colors is an empty array (empty dataset)', () => {
+    const viz = {
+      symbol: {
+        mode: SymbolMode.CATEGORIES,
+        fillMode: FillMode.CATEGORIES,
+        categoryColumn: 'segment'
+      },
+      symbolClassification: { colors: [], method: 'manual', classes: 0 },
+      mapping: { categoryColumn: 'segment' },
+      type: 'categorical',
+      id: 'v1',
+      name: 'V',
+      datasetId: 'd1',
+      enabled: true,
+      style: {}
+    };
+    expect(
+      shouldApplyCategorical(viz as never, PrimitiveFilterTypePOINT as never)
+    ).toBe(false);
+  });
+
+  it('E-02: shouldApplyProportionalSymbols returns false when sizeColumn is null/undefined (100% null column)', () => {
+    const viz = {
+      symbol: {
+        mode: SymbolMode.PROPORTIONAL,
+        sizeColumn: undefined
+      },
+      mapping: {},
+      type: 'proportional',
+      id: 'v1',
+      name: 'V',
+      datasetId: 'd1',
+      enabled: true,
+      style: {}
+    };
+    expect(shouldApplyProportionalSymbols(viz as never)).toBe(false);
+  });
+
+  it('E-03: shouldApplyCategorical returns true for a single-category dataset with one palette color', () => {
+    const viz = {
+      symbol: {
+        mode: SymbolMode.CATEGORIES,
+        fillMode: FillMode.CATEGORIES,
+        categoryColumn: 'segment'
+      },
+      symbolClassification: {
+        colors: ['#e41a1c'],
+        labels: ['onlyone'],
+        method: 'manual',
+        classes: 1
+      },
+      mapping: { categoryColumn: 'segment' },
+      type: 'categorical',
+      id: 'v1',
+      name: 'V',
+      datasetId: 'd1',
+      enabled: true,
+      style: {}
+    };
+    expect(
+      shouldApplyCategorical(viz as never, PrimitiveFilterTypePOINT as never)
+    ).toBe(true);
+  });
+
+  it('E-07: shouldApplyProportionalSymbols returns false when no numeric column is mapped (sizeColumn missing)', () => {
+    const viz = {
+      symbol: { mode: SymbolMode.CLASSES, sizeColumn: undefined },
+      mapping: { valueColumn: undefined, sizeColumn: undefined },
+      type: 'proportional',
+      id: 'v1',
+      name: 'V',
+      datasetId: 'd1',
+      enabled: true,
+      style: {}
+    };
+    expect(shouldApplyProportionalSymbols(viz as never)).toBe(false);
+  });
+
+  it('E-07bis: shouldApplyProportionalSymbols returns true once sizeColumn is set', () => {
+    const viz = {
+      symbol: {
+        mode: SymbolMode.PROPORTIONAL,
+        sizeColumn: 'population'
+      },
+      mapping: { sizeColumn: 'population' },
+      type: 'proportional',
+      id: 'v1',
+      name: 'V',
+      datasetId: 'd1',
+      enabled: true,
+      style: {}
+    };
+    expect(shouldApplyProportionalSymbols(viz as never)).toBe(true);
+  });
+});
+
 describe('shouldApplyLineCategorical', () => {
   const base = {
     modes: { fill: FillMode.NONE, color: ColorMode.CATEGORIES },
