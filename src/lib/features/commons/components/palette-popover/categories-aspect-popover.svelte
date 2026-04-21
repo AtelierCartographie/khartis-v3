@@ -12,6 +12,10 @@
     ShapeType
   } from '$lib/features/main-toolbar/constants';
   import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
+  import {
+    createExclusiveContextualSurfaceId,
+    engageExclusiveContextualSurface
+  } from '$lib/features/commons/utils/contextual-surface-coordinator';
   import { SliderWithInput } from '$lib/features/main-toolbar/visualization-tab/components/shared';
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import { ToolbarState } from '$lib/features/commons/types/global';
@@ -57,6 +61,9 @@
     ...DEFAULT_COMMON_ASPECT
   });
   let expandedCategoryId = $state<string | null>(null);
+  const contextualSurfaceId = createExclusiveContextualSurfaceId(
+    'categories-aspect-popover'
+  );
 
   const showSuggestions = $derived(variant !== 'symbols-different-rank');
   const showCommonAspect = $derived(
@@ -265,6 +272,14 @@
 
   $effect(() => {
     if (open) untrack(() => initDraft());
+  });
+
+  $effect(() => {
+    if (!open) {
+      return;
+    }
+
+    return engageExclusiveContextualSurface(contextualSurfaceId, handleClose);
   });
 
   $effect(() => {

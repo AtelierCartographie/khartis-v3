@@ -3,6 +3,10 @@
   import { Button } from 'carbon-components-svelte';
   import { ColorPalette, Checkmark } from 'carbon-icons-svelte';
   import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
+  import {
+    createExclusiveContextualSurfaceId,
+    engageExclusiveContextualSurface
+  } from '$lib/features/commons/utils/contextual-surface-coordinator';
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import { VIF_MIXTE_COLORS } from './palette.constants';
 
@@ -11,6 +15,7 @@
     triggerElement?: HTMLElement;
     selectedColor: string;
     presets?: readonly string[];
+    exclusive?: boolean;
     onclose?: () => void;
     onselect?: (hex: string) => void;
     oncustomize?: () => void;
@@ -21,6 +26,7 @@
     triggerElement,
     selectedColor,
     presets = VIF_MIXTE_COLORS,
+    exclusive = true,
     onclose,
     onselect,
     oncustomize
@@ -28,6 +34,9 @@
 
   let dropdownRef = $state<HTMLDivElement>();
   let dropdownPos = $state({ top: 0, left: 0, width: 0 });
+  const contextualSurfaceId = createExclusiveContextualSurfaceId(
+    'single-color-dropdown'
+  );
 
   function portal(node: HTMLElement) {
     document.body.appendChild(node);
@@ -73,6 +82,14 @@
 
   $effect(() => {
     if (open) updatePosition();
+  });
+
+  $effect(() => {
+    if (!open || !exclusive) {
+      return;
+    }
+
+    return engageExclusiveContextualSurface(contextualSurfaceId, handleClose);
   });
 
   $effect(() => {

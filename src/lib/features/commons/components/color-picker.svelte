@@ -2,6 +2,10 @@
   import { resolveColorPickerDropdownPosition } from '$lib/features/commons/utils/color-picker-position';
   import { hexToHsl, hslToHex } from '$lib/features/commons/utils/color-utils';
   import { clickOutside } from '$lib/features/commons/utils/click-outside';
+  import {
+    createExclusiveContextualSurfaceId,
+    engageExclusiveContextualSurface
+  } from '$lib/features/commons/utils/contextual-surface-coordinator';
   import { m } from '$lib/paraglide/messages';
   import { Button, Column, Grid, Row, Slider } from 'carbon-components-svelte';
   import { ChevronDown } from 'carbon-icons-svelte';
@@ -22,6 +26,7 @@
     lightness = 100,
     livePreview = false,
     disabled = false,
+    exclusive = false,
     onCancel = () => {},
     onPreview = (_color: ColorPayload) => {},
     onValidate = (_color: ColorPayload) => {},
@@ -34,6 +39,8 @@
   let dropdownPosition = $state({ top: 0, left: 0, width: 0, maxHeight: 0 });
   let openUpward = $state(false);
   let initialColor: ColorPayload | null = null;
+  const contextualSurfaceId =
+    createExclusiveContextualSurfaceId('color-picker');
 
   // Portal the dropdown to document.body so position:fixed is relative to the
   // true viewport — Carbon Popover uses transform:translateX which would
@@ -161,6 +168,17 @@
     revertPreviewState();
     colorOpen = false;
   }
+
+  $effect(() => {
+    if (!colorOpen || !exclusive) {
+      return;
+    }
+
+    return engageExclusiveContextualSurface(contextualSurfaceId, () => {
+      revertPreviewState();
+      colorOpen = false;
+    });
+  });
 
   $effect(() => {
     if (colorOpen) {
