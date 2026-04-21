@@ -25,3 +25,9 @@ const { actions, getState } = createToolStore<
 
 export const colorBlindnessActions = actions;
 export const getColorBlindnessState = getState;
+
+export function isColorBlindnessActive(
+  state: ColorBlindnessState = getState()
+): boolean {
+  return state.simulationType !== ColorBlindnessType.NONE;
+}
