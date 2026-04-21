@@ -1,6 +1,7 @@
 import {
   applyPaletteInversion,
   calculateBreaks,
+  computeDivergingSplit,
   generateColorsForBreaks
 } from '$lib/features/commons/services/classification.service';
 import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
@@ -97,17 +98,36 @@ export function useComputeBreaks(
         if (existingColors && existingColors.length === actualNumClasses) {
           colors = existingColors;
         } else {
+          const paletteType =
+            currentViz.classification?.breakpointValue != null
+              ? 'diverging'
+              : 'sequential';
           const userPalette = currentViz.classification?.paletteId
             ? findPaletteById(currentViz.classification.paletteId)
             : undefined;
           const isPatternPalette = userPalette?.type === PALETTE_TYPE.PATTERN;
+          const divergingSplit =
+            paletteType === 'diverging'
+              ? computeDivergingSplit(
+                  actualNumClasses,
+                  result.breaks,
+                  currentViz.classification?.breakpointValue ?? null
+                )
+              : undefined;
           colors =
             userPalette && !isPatternPalette
-              ? generatePaletteColors(userPalette, actualNumClasses, contrast)
+              ? generatePaletteColors(
+                  userPalette,
+                  actualNumClasses,
+                  contrast,
+                  undefined,
+                  divergingSplit
+                )
               : generateColorsForBreaks(
                   actualNumClasses,
-                  'sequential',
-                  contrast
+                  paletteType,
+                  contrast,
+                  divergingSplit
                 );
           colors = applyPaletteInversion(
             colors,

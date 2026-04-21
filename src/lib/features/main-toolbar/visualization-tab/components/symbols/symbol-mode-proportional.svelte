@@ -52,13 +52,15 @@
     onSymbolsChange,
     onSymbolPrimitiveChange,
     onMappingChange,
+    onStrokeMappingChange,
     onClassificationChange,
     onStrokeClassificationChange,
     onMissingDataChange,
     onOpenDiscretization,
     onModesChange,
     onStyleChange,
-    onInvertPalette
+    onInvertPalette,
+    onStrokeInvertPalette
   }: Props = $props();
 
   let discretizationModalOpen = $state(false);
@@ -933,10 +935,13 @@
   onStyleChange={onStyleChange}
   onModesChange={onModesChange}
   onMappingChange={onMappingChange}
-  onInvertPalette={onInvertPalette}
+  onStrokeMappingChange={onStrokeMappingChange}
+  onInvertPalette={onStrokeInvertPalette}
   onOpenDiscretization={() => (discretizationModalOpen = true)}
   onStrokeClassificationChange={onStrokeClassificationChange ?? (() => {})}
   strokeClassification={visualization?.symbol?.strokeClassification}
+  strokeValueColumn={visualization?.symbol?.strokeValueColumn}
+  strokeCategoryColumn={visualization?.symbol?.strokeCategoryColumn}
   facetsValueSlotPath={FACET_SLOT.SYMBOL_VALUE}
   facetsCategorySlotPath={FACET_SLOT.SYMBOL_CATEGORY}
 />
@@ -945,6 +950,8 @@
   bind:open={discretizationModalOpen}
   visualization={visualization}
   classification={visualization?.symbol?.strokeClassification}
+  valueColumn={visualization?.symbol?.strokeValueColumn}
+  role="stroke"
   onchange={handleStrokeDiscretizationChange}
 />
 

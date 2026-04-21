@@ -47,13 +47,23 @@ describe('SymbolModeCategories (en categorie.png alignment)', () => {
 
   it('enables the Categories Aspect popover via categoriesMode + categoryLabels', () => {
     expect(source).toContain('categoriesMode={true}');
-    expect(source).toContain(
-      'categoryLabels={visualization?.symbol?.classification?.labels ??'
-    );
+    expect(source).toContain('const resolvedCategoryLabels = $derived(');
+    expect(source).toContain('categoryLabels={resolvedCategoryLabels}');
     expect(source).toContain(
       'disabledCategoryLabels={visualization?.symbol?.classification'
     );
     expect(source).toContain('categoriesCommonAspect={categoriesCommonAspect}');
+  });
+
+  it('hydrates missing category labels from the dataset when the classification mirror is empty', () => {
+    expect(source).toContain(
+      "import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte'"
+    );
+    expect(source).toContain('loadDistinctCategoryLabels');
+    expect(source).toContain('syncFetchedCategoryLabels(');
+    expect(source).toContain(
+      'void loadDistinctCategoryLabels(currentDataset, currentCategoryColumn)'
+    );
   });
 
   it('maps categoryShapeMode to CategoriesAspectVariant and passes categoriesVariant to PalettePreview', () => {
@@ -76,6 +86,15 @@ describe('SymbolModeCategories (en categorie.png alignment)', () => {
     expect(source).toContain(
       'onCategoriesCommonAspectChange={handleCategoriesCommonAspectChange}'
     );
+  });
+
+  it('uses a dedicated categories-aspect trigger that stops propagation before opening the popover', () => {
+    expect(source).toContain('class="categories-aspect-settings"');
+    expect(source).toContain(
+      'aria-label={m.palette_categories_aspect_title()}'
+    );
+    expect(source).toContain('event.stopPropagation();');
+    expect(source).toContain('categoriesAspectOpen = true;');
   });
 });
 

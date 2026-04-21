@@ -16,11 +16,15 @@ export interface SymbolModeProps {
   onSymbolsChange?: (updates: Partial<VisualizationConfig['symbols']>) => void;
   onSymbolPrimitiveChange?: (updates: Partial<SymbolPrimitiveConfig>) => void;
   onMappingChange?: (updates: Partial<VisualizationConfig['mapping']>) => void;
+  onStrokeMappingChange?: (
+    updates: Partial<VisualizationConfig['mapping']>
+  ) => void;
   onMissingDataChange?: (updates: Partial<MissingDataConfig>) => void;
   onClassificationChange?: (updates: Partial<ClassificationConfig>) => void;
   onStrokeClassificationChange?: (
     updates: Partial<ClassificationConfig>
   ) => void;
   onInvertPalette?: () => void;
+  onStrokeInvertPalette?: () => void;
   onOpenDiscretization?: () => void;
 }

@@ -45,10 +45,14 @@
     onStrokeClassificationChange?: (
       updates: Partial<ClassificationConfig>
     ) => void;
+    onStrokeMappingChange?: (
+      updates: Partial<VisualizationConfig['mapping']>
+    ) => void;
     onMappingChange?: (
       updates: Partial<VisualizationConfig['mapping']>
     ) => void;
     onInvertPalette?: () => void;
+    onStrokeInvertPalette?: () => void;
     onToggleVisibility?: (checked: boolean) => void;
     filters?: VizDataFilter[];
     onAddFilter?: (filter: Omit<VizDataFilter, 'id'>) => void;
@@ -69,8 +73,10 @@
     onMissingDataChange,
     onClassificationChange,
     onStrokeClassificationChange,
+    onStrokeMappingChange,
     onMappingChange,
     onInvertPalette,
+    onStrokeInvertPalette,
     onToggleVisibility,
     filters = [],
     onAddFilter,
@@ -442,10 +448,13 @@
         onStyleChange={onStyleChange}
         onModesChange={onModesChange}
         onMappingChange={onMappingChange}
-        onInvertPalette={onInvertPalette}
+        onStrokeMappingChange={onStrokeMappingChange}
+        onInvertPalette={onStrokeInvertPalette}
         onOpenDiscretization={handleOpenStrokeDiscretization}
         onStrokeClassificationChange={handleStrokeDiscretizationChange}
         strokeClassification={visualization?.polygon?.strokeClassification}
+        strokeValueColumn={visualization?.polygon?.strokeValueColumn}
+        strokeCategoryColumn={visualization?.polygon?.strokeCategoryColumn}
         facetsValueSlotPath={FACET_SLOT.POLYGON_VALUE}
         facetsCategorySlotPath={FACET_SLOT.POLYGON_CATEGORY}
       />
@@ -471,6 +480,9 @@
   bind:open={discretizationModalOpen}
   visualization={visualization}
   classification={activeDiscretizationClassification}
+  valueColumn={discretizationTarget === 'stroke'
+    ? visualization?.polygon?.strokeValueColumn
+    : visualization?.polygon?.valueColumn}
   role={discretizationTarget}
   onchange={discretizationOnchange}
 />
@@ -481,11 +493,5 @@
     flex-direction: column;
     gap: var(--cds-spacing-04);
     padding: var(--cds-spacing-03);
-  }
-
-  .field-group {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-02);
   }
 </style>
