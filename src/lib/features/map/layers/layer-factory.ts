@@ -86,6 +86,7 @@ import {
   createGeoJsonCategoricalColorAccessor,
   createGeoJsonChoroplethColorAccessor,
   createGeoJsonProportionalSizeAccessor,
+  HIGHLIGHT_FILL_COLOR,
   createProportionalSizeAccessor,
   resolveMissingDataRenderProps,
   withGeoJsonRowHighlight,
@@ -451,7 +452,7 @@ function createDoubleProportionalPointLayers(
   const pointSecondaryStatistics =
     ctx.pointSecondaryStatistics ?? secondaryStatistics ?? pointStatistics;
 
-  if (!usesDoubleProportionalSymbols(viz)) {
+  if (!viz || !usesDoubleProportionalSymbols(viz)) {
     return [];
   }
 
@@ -462,6 +463,9 @@ function createDoubleProportionalPointLayers(
 
   const pointSizeColumn = pointConfig.sizeColumn;
   const pointValueColumn = pointConfig.valueColumn;
+  const pointStrokeValueColumn =
+    pointConfig.strokeValueColumn ?? pointValueColumn;
+  const pointStrokeCategoryColumn = pointConfig.strokeCategoryColumn;
   if (!pointSizeColumn || !pointValueColumn) {
     return [];
   }
@@ -498,6 +502,9 @@ function createDoubleProportionalPointLayers(
   const breakValueA = pointConfig.breakValueA ?? null;
   const breakValueB = pointConfig.breakValueB ?? null;
   const hlVersion = ctx.highlightVersion ?? 0;
+  const pointClassification =
+    getPrimitiveClassification(viz, PrimitiveFilterType.POINT) ??
+    viz.classification;
   const primaryStats = pointStatistics;
   const secondaryStats = pointSecondaryStatistics;
   const sharedMin = commonScale
@@ -574,11 +581,41 @@ function createDoubleProportionalPointLayers(
       return toMutableRgba(withOpacity(color, rowOpacity));
     };
 
+  const strokeClassificationAccessor = createStrokeClassificationAccessor({
+    strokeMode: pointConfig.strokeMode ?? 'unique',
+    strokeClassification: pointConfig.strokeClassification,
+    valueColumn: pointStrokeValueColumn,
+    categoryColumn: pointStrokeCategoryColumn,
+    fallbackLabels: pointClassification?.labels,
+    fallbackBreaks: pointClassification?.breaks,
+    missingColor: missingPointColor,
+    showMissing: showMissingPoints,
+    hexToRgb
+  });
+
   const createLineAccessor =
     (columnName: string) =>
     (row: DeckDataRow): [number, number, number, number] => {
       if (isMissingThematicValue(row[columnName]) && !showMissingPoints) {
         return [0, 0, 0, 0];
+      }
+
+      if (strokeClassificationAccessor) {
+        const [r, g, b] = strokeClassificationAccessor(row);
+        const alpha = Math.round(
+          Math.min(
+            Math.max(
+              resolveHighlightedOpacityForRow(
+                row,
+                pointStrokeOpacity,
+                highlightedRowIds
+              ),
+              0
+            ),
+            1
+          ) * 255
+        );
+        return [r, g, b, alpha];
       }
 
       return toMutableRgba(
@@ -744,6 +781,12 @@ function createDoubleProportionalPointLayers(
           triggerColumn,
           pointStrokeColor,
           pointStrokeOpacity,
+          pointStrokeValueColumn,
+          pointStrokeCategoryColumn,
+          pointConfig.strokeClassification?.breaks,
+          pointConfig.strokeClassification?.colors,
+          pointConfig.strokeClassification?.labels,
+          pointConfig.strokeClassification?.disabledLabels,
           pointConfig.missingData?.show,
           hlVersion
         ],
@@ -851,6 +894,10 @@ function createRepresentativePointSymbolLayers(
   const pointValueColumn = pointConfig.valueColumn;
   const pointCategoryColumn = pointConfig.categoryColumn;
   const pointSizeColumn = pointConfig.sizeColumn;
+  const pointStrokeValueColumn =
+    pointConfig.strokeValueColumn ?? pointValueColumn;
+  const pointStrokeCategoryColumn =
+    pointConfig.strokeCategoryColumn ?? pointCategoryColumn;
   const pointStrokeColor = Array.isArray(pointConfig.strokeColor)
     ? hexToRgb(pointConfig.strokeColor[0] ?? '#000000')
     : typeof pointConfig.strokeColor === 'string'
@@ -969,8 +1016,8 @@ function createRepresentativePointSymbolLayers(
   const strokeClassificationAccessor = createStrokeClassificationAccessor({
     strokeMode: pointConfig.strokeMode ?? 'unique',
     strokeClassification: pointConfig.strokeClassification,
-    valueColumn: pointValueColumn,
-    categoryColumn: pointCategoryColumn,
+    valueColumn: pointStrokeValueColumn,
+    categoryColumn: pointStrokeCategoryColumn,
     fallbackLabels: pointClassification?.labels,
     fallbackBreaks: pointClassification?.breaks,
     missingColor: missingPointColor,
@@ -1252,10 +1299,13 @@ function createRepresentativePointSymbolLayers(
           pointStrokeOpacity,
           pointMissingColumn,
           pointConfig.missingData?.show,
+          pointStrokeValueColumn,
+          pointStrokeCategoryColumn,
           pointConfig.strokeMode,
           pointConfig.strokeClassification?.colors,
           pointConfig.strokeClassification?.breaks,
           pointConfig.strokeClassification?.labels,
+          pointConfig.strokeClassification?.disabledLabels,
           hlVersion
         ],
         getRadius: [
@@ -2430,6 +2480,13 @@ function createTextOverlayLayers(
   const backgroundCategoryVector = textBackgroundConfig.categoryColumn
     ? textAttributeTable.getChild(textBackgroundConfig.categoryColumn)
     : null;
+  const backgroundStrokeValueVector = textBackgroundConfig.strokeValueColumn
+    ? textAttributeTable.getChild(textBackgroundConfig.strokeValueColumn)
+    : backgroundValueVector;
+  const backgroundStrokeCategoryVector =
+    textBackgroundConfig.strokeCategoryColumn
+      ? textAttributeTable.getChild(textBackgroundConfig.strokeCategoryColumn)
+      : backgroundCategoryVector;
   const backgroundCategoryColorMap = buildCategoryColorMapFromLabels(
     textBackgroundConfig.classification?.labels,
     textBackgroundConfig.classification?.colors
@@ -2476,7 +2533,7 @@ function createTextOverlayLayers(
   const backgroundBaseStrokeAccessor = backgroundStrokeActive
     ? textBackgroundConfig.strokeMode === StrokeMode.CLASSES
       ? createChoroplethTextColorAccessor(
-          backgroundValueVector,
+          backgroundStrokeValueVector,
           textBackgroundConfig.strokeClassification?.breaks ??
             textBackgroundConfig.classification?.breaks,
           textBackgroundConfig.strokeClassification?.colors,
@@ -2485,7 +2542,7 @@ function createTextOverlayLayers(
         )
       : textBackgroundConfig.strokeMode === StrokeMode.CATEGORIES
         ? createCategoricalAccessorFromMap(
-            backgroundCategoryVector,
+            backgroundStrokeCategoryVector,
             backgroundStrokeCategoryColorMap,
             backgroundStrokeFallback,
             textBackgroundConfig.strokeOpacity
@@ -3042,6 +3099,10 @@ export function createPointLayers(
   const pointValueColumn = pointConfig?.valueColumn;
   const pointCategoryColumn = pointConfig?.categoryColumn;
   const pointSizeColumn = pointConfig?.sizeColumn;
+  const pointStrokeValueColumn =
+    pointConfig?.strokeValueColumn ?? pointValueColumn;
+  const pointStrokeCategoryColumn =
+    pointConfig?.strokeCategoryColumn ?? pointCategoryColumn;
   const pointStrokeColor = Array.isArray(pointConfig?.strokeColor)
     ? hexToRgb(pointConfig.strokeColor[0] ?? '#000000')
     : typeof pointConfig?.strokeColor === 'string'
@@ -3191,6 +3252,13 @@ export function createPointLayers(
               fillColor
             )
           : fillColor;
+    const pointStrokeColors = pointConfig?.strokeClassification?.colors;
+    const pointStrokeBreaks =
+      pointConfig?.strokeClassification?.breaks ?? pointClassification?.breaks;
+    const pointStrokeGeoJsonColorMap = buildCategoryColorMapFromLabels(
+      pointConfig?.strokeClassification?.labels ?? pointClassification?.labels,
+      pointConfig?.strokeClassification?.colors
+    );
 
     const geoJsonFillColor =
       hasHighlights && highlightedRowIds
@@ -3209,14 +3277,56 @@ export function createPointLayers(
             )
         : baseFillColor;
 
-    const geoJsonLineColor = hasHighlights
-      ? withGeoJsonRowHighlight(
-          pointStrokeColor,
-          pointStrokeOpacity,
-          HIGHLIGHT_DIMMING_FACTOR,
-          highlightedRowIds!
-        )
-      : withOpacity(pointStrokeColor, pointStrokeOpacity);
+    const baseGeoJsonLineColor =
+      pointConfig?.strokeMode === StrokeMode.CLASSES &&
+      pointStrokeValueColumn &&
+      pointStrokeBreaks &&
+      pointStrokeColors?.length
+        ? (feature: { properties?: Record<string, unknown> }) =>
+            withOpacity(
+              createGeoJsonChoroplethColorAccessor(
+                pointStrokeValueColumn,
+                pointStrokeBreaks,
+                pointStrokeColors,
+                pointStrokeColor,
+                missingPointColor,
+                showMissingPoints
+              )(feature),
+              pointStrokeOpacity
+            ) as [number, number, number, number]
+        : pointConfig?.strokeMode === StrokeMode.CATEGORIES &&
+            pointStrokeCategoryColumn &&
+            pointStrokeColors?.length
+          ? (feature: { properties?: Record<string, unknown> }) =>
+              withOpacity(
+                createGeoJsonCategoricalColorAccessor(
+                  pointStrokeCategoryColumn,
+                  pointStrokeGeoJsonColorMap,
+                  pointStrokeColor,
+                  missingPointColor,
+                  showMissingPoints
+                )(feature),
+                pointStrokeOpacity
+              ) as [number, number, number, number]
+          : null;
+
+    const geoJsonLineColor =
+      hasHighlights && highlightedRowIds
+        ? baseGeoJsonLineColor
+          ? withGeoJsonRowHighlightAccessor(
+              baseGeoJsonLineColor,
+              pointStrokeOpacity,
+              HIGHLIGHT_DIMMING_FACTOR,
+              highlightedRowIds
+            )
+          : withGeoJsonRowHighlight(
+              pointStrokeColor,
+              pointStrokeOpacity,
+              HIGHLIGHT_DIMMING_FACTOR,
+              highlightedRowIds
+            )
+        : (baseGeoJsonLineColor ??
+          withOpacity(pointStrokeColor, pointStrokeOpacity));
 
     const geoJsonRadius =
       useClassedSymbols && viz
@@ -3311,6 +3421,12 @@ export function createPointLayers(
               pointClassification?.labels,
               fillColor,
               pointStrokeColor,
+              pointStrokeValueColumn,
+              pointStrokeCategoryColumn,
+              pointConfig?.strokeClassification?.breaks,
+              pointConfig?.strokeClassification?.colors,
+              pointConfig?.strokeClassification?.labels,
+              pointConfig?.strokeClassification?.disabledLabels,
               pointFillOpacity,
               pointStrokeOpacity,
               pointStrokeWidth,
@@ -3421,6 +3537,12 @@ export function createPointLayers(
           getLineColor: [
             pointStrokeColor,
             pointStrokeOpacity,
+            pointStrokeValueColumn,
+            pointStrokeCategoryColumn,
+            pointConfig?.strokeClassification?.breaks,
+            pointConfig?.strokeClassification?.colors,
+            pointConfig?.strokeClassification?.labels,
+            pointConfig?.strokeClassification?.disabledLabels,
             pointMissingColumn,
             pointConfig?.missingData?.show,
             hlVersion
@@ -3501,8 +3623,8 @@ export function createPointLayers(
   const strokeClassificationAccessor = createStrokeClassificationAccessor({
     strokeMode: pointConfig?.strokeMode ?? 'unique',
     strokeClassification: pointConfig?.strokeClassification,
-    valueColumn: pointValueColumn,
-    categoryColumn: pointCategoryColumn,
+    valueColumn: pointStrokeValueColumn,
+    categoryColumn: pointStrokeCategoryColumn,
     fallbackLabels: pointClassification?.labels,
     fallbackBreaks: pointClassification?.breaks,
     missingColor: missingPointColor,
@@ -3819,10 +3941,13 @@ export function createPointLayers(
           pointStrokeOpacity,
           pointMissingColumn,
           pointConfig?.missingData?.show,
+          pointStrokeValueColumn,
+          pointStrokeCategoryColumn,
           pointConfig?.strokeMode,
           pointConfig?.strokeClassification?.colors,
           pointConfig?.strokeClassification?.breaks,
           pointConfig?.strokeClassification?.labels,
+          pointConfig?.strokeClassification?.disabledLabels,
           hlVersion
         ],
         getShape: [
@@ -4314,6 +4439,10 @@ export function createPolygonLayers(
   const polygonConfig = viz ? getPolygonPrimitive(viz) : undefined;
   const polygonValueColumn = polygonConfig?.valueColumn;
   const polygonCategoryColumn = polygonConfig?.categoryColumn;
+  const polygonStrokeValueColumn =
+    polygonConfig?.strokeValueColumn ?? polygonValueColumn;
+  const polygonStrokeCategoryColumn =
+    polygonConfig?.strokeCategoryColumn ?? polygonCategoryColumn;
   const polygonClassification = viz
     ? (getPrimitiveClassification(viz, PrimitiveFilterType.POLYGON) ??
       viz.classification)
@@ -4486,12 +4615,14 @@ export function createPolygonLayers(
       const strokeChoroplethAccessor =
         polygonStrokeMode === StrokeMode.CLASSES &&
         strokeColorsArray &&
-        polygonValueColumn &&
-        polygonClassification?.breaks &&
+        polygonStrokeValueColumn &&
+        (polygonStrokeClassification?.breaks ??
+          polygonClassification?.breaks) &&
         strokeColorsArray.length > 0
           ? createChoroplethColorAccessor(
-              polygonValueColumn,
-              polygonClassification.breaks,
+              polygonStrokeValueColumn,
+              polygonStrokeClassification?.breaks ??
+                polygonClassification!.breaks!,
               strokeColorsArray,
               polygonMissingColor,
               showMissingPolygons
@@ -4500,7 +4631,7 @@ export function createPolygonLayers(
       const strokeCategoricalAccessor =
         polygonStrokeMode === StrokeMode.CATEGORIES &&
         strokeColorsArray &&
-        polygonCategoryColumn &&
+        polygonStrokeCategoryColumn &&
         strokeColorsArray.length > 0
           ? (() => {
               const labels =
@@ -4516,7 +4647,7 @@ export function createPolygonLayers(
                 map.set(String(label), hexToRgb(hex));
               });
               return createCategoricalColorAccessor(
-                polygonCategoryColumn,
+                polygonStrokeCategoryColumn,
                 map,
                 polygonMissingColor,
                 showMissingPolygons,
@@ -4857,15 +4988,65 @@ export function createPolygonLayers(
           polygonFillColor[2],
           255
         ] as [number, number, number, number]));
+  const polygonStrokeColors = polygonConfig?.strokeClassification?.colors;
+  const polygonStrokeBreaks =
+    polygonConfig?.strokeClassification?.breaks ??
+    polygonClassification?.breaks;
+  const polygonStrokeGeoJsonColorMap = buildCategoryColorMapFromLabels(
+    polygonConfig?.strokeClassification?.labels ??
+      polygonClassification?.labels,
+    polygonConfig?.strokeClassification?.colors
+  );
+  const baseGeoJsonStrokeColor =
+    polygonConfig?.strokeMode === StrokeMode.CLASSES &&
+    polygonStrokeValueColumn &&
+    polygonStrokeBreaks &&
+    polygonStrokeColors?.length
+      ? (feature: { properties?: Record<string, unknown> }) =>
+          withOpacity(
+            createGeoJsonChoroplethColorAccessor(
+              polygonStrokeValueColumn,
+              polygonStrokeBreaks,
+              polygonStrokeColors,
+              polygonStrokeColor,
+              polygonMissingColor,
+              showMissingPolygons
+            )(feature),
+            polygonStrokeOpacity
+          ) as [number, number, number, number]
+      : polygonConfig?.strokeMode === StrokeMode.CATEGORIES &&
+          polygonStrokeCategoryColumn &&
+          polygonStrokeColors?.length
+        ? (feature: { properties?: Record<string, unknown> }) =>
+            withOpacity(
+              createGeoJsonCategoricalColorAccessor(
+                polygonStrokeCategoryColumn,
+                polygonStrokeGeoJsonColorMap,
+                polygonStrokeColor,
+                polygonMissingColor,
+                showMissingPolygons
+              )(feature),
+              polygonStrokeOpacity
+            ) as [number, number, number, number]
+        : null;
 
-  const geoJsonStrokeColor = hasPolyHighlights
-    ? withGeoJsonRowHighlight(
-        polygonStrokeColor,
-        polygonStrokeOpacity,
-        HIGHLIGHT_DIMMING_FACTOR,
-        polyHighlightedRowIds!
-      )
-    : withOpacity(polygonStrokeColor, polygonStrokeOpacity);
+  const geoJsonStrokeColor =
+    hasPolyHighlights && polyHighlightedRowIds
+      ? baseGeoJsonStrokeColor
+        ? withGeoJsonRowHighlightAccessor(
+            baseGeoJsonStrokeColor,
+            polygonStrokeOpacity,
+            HIGHLIGHT_DIMMING_FACTOR,
+            polyHighlightedRowIds
+          )
+        : withGeoJsonRowHighlight(
+            polygonStrokeColor,
+            polygonStrokeOpacity,
+            HIGHLIGHT_DIMMING_FACTOR,
+            polyHighlightedRowIds
+          )
+      : (baseGeoJsonStrokeColor ??
+        withOpacity(polygonStrokeColor, polygonStrokeOpacity));
 
   const showGeoJsonFill =
     polygonConfig?.enabled &&
@@ -4919,7 +5100,18 @@ export function createPolygonLayers(
           polygonFillColor,
           hlVersion
         ],
-        getLineColor: [polygonStrokeColor, polygonStrokeOpacity, hlVersion],
+        getLineColor: [
+          polygonStrokeColor,
+          polygonStrokeOpacity,
+          polygonStrokeValueColumn,
+          polygonStrokeCategoryColumn,
+          polygonConfig?.strokeMode,
+          polygonConfig?.strokeClassification?.colors,
+          polygonConfig?.strokeClassification?.breaks,
+          polygonConfig?.strokeClassification?.labels,
+          polygonConfig?.strokeClassification?.disabledLabels,
+          hlVersion
+        ],
         getDashArray: [strokeDashed]
       },
       dataComparator: (newData, oldData) => newData === oldData
