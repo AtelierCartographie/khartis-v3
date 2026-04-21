@@ -43,6 +43,13 @@ describe('CategoriesAspectPopover (Figma 952:156994 — Polygons variant)', () =
     expect(source).toContain('<Switch');
   });
 
+  it('should wire the category list to drag-and-drop in manual sort mode', () => {
+    expect(source).toContain('import { dragHandle, dragHandleZone }');
+    expect(source).toContain('use:dragHandleZone');
+    expect(source).toContain('use:dragHandle');
+    expect(source).toContain('handleCategoryListReorder');
+  });
+
   it('should apply a suggestion color only to the selected category', () => {
     expect(source).toContain('if (!selectedCategoryId) return');
     expect(source).toContain('category.id === selectedCategoryId');
@@ -58,6 +65,13 @@ describe('CategoriesAspectPopover (Figma 952:156994 — Polygons variant)', () =
   it('should expose a variant prop with default symbols-unique', () => {
     expect(source).toContain('variant?: CategoriesAspectVariant');
     expect(source).toContain("variant = 'symbols-unique'");
+  });
+
+  it('should only seed per-category shapes for the symbols-different variant', () => {
+    expect(source).toContain("variant === 'symbols-different'");
+    expect(source).toContain(
+      'CATEGORY_SHAPE_CYCLE[index % CATEGORY_SHAPE_CYCLE.length]'
+    );
   });
 
   it('should render the "Aspect commun" section for the supported variants', () => {
@@ -76,6 +90,20 @@ describe('CategoriesAspectPopover (Figma 952:156994 — Polygons variant)', () =
     expect(source).toContain('draftCommonAspect');
     expect(source).toContain('DEFAULT_COMMON_ASPECT');
     expect(source).toContain('handleCommonAspectChange');
+  });
+
+  it('should suppress the per-category accordion for the ranked symbols variant', () => {
+    expect(source).toContain(
+      'const showPerCategoryAspect = $derived(!isSymbolsDifferentRank)'
+    );
+    expect(source).toContain('{#if showPerCategoryAspect}');
+  });
+
+  it('should keep disabled categories visible in the editor while dimming their row', () => {
+    expect(source).toContain(
+      'class:category-item--disabled={!category.enabled}'
+    );
+    expect(source).toContain('.category-item--disabled');
   });
 });
 
