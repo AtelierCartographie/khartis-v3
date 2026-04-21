@@ -4,6 +4,7 @@ import {
   PAGE_PRESETS,
   PageModel
 } from '$lib/features/commons/constants/ui.constants';
+import type { LayoutSizingContext } from '$lib/features/commons/utils/layout-sizing.utils';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
 import type { FormatState } from './format.types';
 
@@ -120,3 +121,13 @@ const { state, actions, getState } = createToolStore<
 export const formatState = state;
 export const formatActions = actions;
 export const getFormatState = getState;
+
+export function getFormatLayoutSizingContext(
+  format: FormatState = getState()
+): LayoutSizingContext {
+  return {
+    width: format.width,
+    height: format.height,
+    model: format.mode === FormatMode.PRESET ? format.model : 'custom'
+  };
+}

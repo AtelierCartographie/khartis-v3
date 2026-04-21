@@ -29,7 +29,7 @@ export const TEST_IDS = {
 export const POPOVER_DIMENSIONS = {
   DEFAULT_LIST_WIDTH: 320,
   DEFAULT_GRID_WIDTH: '790px',
-  MAX_HEIGHT: '70vh',
+  MAX_HEIGHT: 'min(952px, calc(100vh - 64px))',
   DROPDOWN_MAX_HEIGHT: '11rem'
 } as const;
 
