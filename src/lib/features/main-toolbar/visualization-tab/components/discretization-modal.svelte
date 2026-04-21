@@ -20,7 +20,10 @@
     findPaletteById,
     generatePaletteColors
   } from '$lib/features/commons/components/palette-popover/palette.constants';
-  import { getColorBlindnessState } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
+  import {
+    getColorBlindnessState,
+    isColorBlindnessActive
+  } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { onMount, tick, untrack } from 'svelte';
   import {
@@ -176,7 +179,7 @@
     breakValues: readonly number[]
   ): string[] {
     const paletteType = currentBreakpoint !== null ? 'diverging' : 'sequential';
-    const contrast = getColorBlindnessState().enabled
+    const contrast = isColorBlindnessActive(getColorBlindnessState())
       ? ('high' as const)
       : undefined;
     const userPalette = activeClassification?.paletteId
@@ -201,7 +204,7 @@
   }
 
   function resolveDivergingPreviewColors(classCount: number): string[] {
-    const contrast = getColorBlindnessState().enabled
+    const contrast = isColorBlindnessActive(getColorBlindnessState())
       ? ('high' as const)
       : undefined;
     const userPalette = activeClassification?.paletteId

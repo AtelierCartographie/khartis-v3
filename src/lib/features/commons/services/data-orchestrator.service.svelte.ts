@@ -54,7 +54,10 @@ import {
   generateColorsForBreaks
 } from './classification.service';
 import { FillMode } from '../../main-toolbar/constants';
-import { getColorBlindnessState } from '../../step-toolbar/tools/color-blindness/color-blindness.store.svelte';
+import {
+  getColorBlindnessState,
+  isColorBlindnessActive
+} from '../../step-toolbar/tools/color-blindness/color-blindness.store.svelte';
 import {
   findPaletteById,
   generatePaletteColors,
@@ -948,7 +951,7 @@ function createDataOrchestratorService() {
             viz.classification?.breakpointValue != null
               ? 'diverging'
               : 'sequential';
-          const contrast = getColorBlindnessState().enabled
+          const contrast = isColorBlindnessActive(getColorBlindnessState())
             ? ('high' as const)
             : undefined;
           const userPalette = viz.classification?.paletteId
