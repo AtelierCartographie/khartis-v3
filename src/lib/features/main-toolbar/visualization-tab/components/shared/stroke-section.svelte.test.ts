@@ -49,6 +49,13 @@ describe('StrokeSection — anti-leak fill↔stroke', () => {
     expect(source).not.toMatch(/onClassificationChange[?:]?:\s*\(/);
   });
 
+  it('should expose a dedicated onStrokeMappingChange prop for stroke-only field binding', () => {
+    expect(source).toContain('onStrokeMappingChange?:');
+    expect(source).toContain(
+      'const handleMappingChange = onStrokeMappingChange ?? onMappingChange;'
+    );
+  });
+
   it('should never fall back to onClassificationChange when the stroke handler is missing', () => {
     expect(source).not.toContain(
       'onStrokeClassificationChange ?? onClassificationChange'
@@ -73,6 +80,15 @@ describe('StrokeSection — anti-leak fill↔stroke', () => {
     );
   });
 
+  it('should read stroke-specific mapped columns before falling back to generic mapping', () => {
+    expect(source).toContain(
+      'strokeCategoryColumn ?? visualization?.mapping.categoryColumn'
+    );
+    expect(source).toContain(
+      'strokeValueColumn ?? visualization?.mapping.valueColumn'
+    );
+  });
+
   it('should pass onStrokeClassificationChange directly to every PalettePreview', () => {
     const paletteBlocks = source.match(/<PalettePreview[\s\S]*?\/>/g) || [];
     expect(paletteBlocks.length).toBeGreaterThan(0);
@@ -81,5 +97,12 @@ describe('StrokeSection — anti-leak fill↔stroke', () => {
         'onClassificationChange={onStrokeClassificationChange}'
       );
     });
+  });
+
+  it('opens the categories aspect popover directly instead of routing through the discretization modal', () => {
+    expect(source).toContain(
+      'bind:categoriesPopoverOpen={categoriesPopoverOpen}'
+    );
+    expect(source).toContain('categoriesPopoverOpen = true;');
   });
 });

@@ -16,4 +16,8 @@ describe('ChooseVisualization', () => {
     expect(source).toContain('<div use:appendToBody>');
     expect(source).toContain('bind:open={isDeleteConfirmOpen}');
   });
+
+  it('renders suggestion variable badges as non-interactive content', () => {
+    expect(source).toContain('interactive={false}');
+  });
 });

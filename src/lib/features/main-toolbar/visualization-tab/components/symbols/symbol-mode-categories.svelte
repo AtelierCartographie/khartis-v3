@@ -1,10 +1,12 @@
 <script lang="ts">
   import { untrack } from 'svelte';
+  import Button from '$lib/features/commons/components/carbon/button.svelte';
   import {
     Dropdown,
     RadioButton,
     RadioButtonGroup
   } from 'carbon-components-svelte';
+  import { Settings } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
   import {
     DEFAULT_QUALITATIVE_PREVIEW,
@@ -27,18 +29,22 @@
     type CategoryDraft
   } from '$lib/features/commons/components/palette-popover/categories-aspect-popover.types';
   import {
-    DiscretizationRow,
     InfoPopover,
     MissingDataSection,
     PalettePreview,
     SliderWithInput
   } from '../shared';
+  import {
+    loadDistinctCategoryLabels,
+    resolveCategoryPreviewCount
+  } from '../shared/categorical-preview.utils';
   import { NONE_FIELD_ID, type SymbolModeProps } from './types';
   import {
     FACET_SLOT,
     facetsStore,
     type FacetSlotPath
   } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
+  import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import FacetsVariablePicker from './facets-variable-picker.svelte';
 
   let {
@@ -59,6 +65,15 @@
       visualization?.symbolClassification?.colors ??
       DEFAULT_QUALITATIVE_PREVIEW
   );
+  const symbolClassification = $derived(
+    visualization?.symbol?.classification ?? visualization?.symbolClassification
+  );
+  const dataset = $derived(
+    visualization
+      ? (datasetsStore.datasets.find((d) => d.id === visualization.datasetId) ??
+          datasetsStore.selectedDataset)
+      : datasetsStore.selectedDataset
+  );
 
   let selectedFieldId = $state<number>(NONE_FIELD_ID);
   let categoryPickerOpen = $state(false);
@@ -71,8 +86,15 @@
   let missingDataShape = $state<MissingDataShape>(MissingDataShape.CIRCLE);
   let missingDataSize = $state<number>(2);
   let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
+  let fetchedCategoryLabels = $state<string[]>([]);
+  let categoryLabelsRequestId = 0;
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
   const selectableDataFields = $derived([noneOption, ...dataFields]);
+  const resolvedCategoryLabels = $derived(
+    (symbolClassification?.labels?.length ?? 0) > 0
+      ? (symbolClassification?.labels ?? [])
+      : fetchedCategoryLabels
+  );
 
   const availableShapes = availableShapesForSymbolMode(SymbolMode.CATEGORIES);
 
@@ -94,6 +116,22 @@
       text: shapeLabelByType[type]()
     }))
   );
+
+  function syncFetchedCategoryLabels(nextLabels: string[]) {
+    fetchedCategoryLabels = nextLabels;
+
+    const persistedLabels = symbolClassification?.labels ?? [];
+    if (
+      !onClassificationChange ||
+      nextLabels.length === 0 ||
+      (persistedLabels.length === nextLabels.length &&
+        persistedLabels.every((label, index) => label === nextLabels[index]))
+    ) {
+      return;
+    }
+
+    onClassificationChange({ labels: nextLabels });
+  }
 
   function handleShapeDropdownSelect(value: string | number) {
     const next =
@@ -196,16 +234,41 @@
       missingDataColor =
         visualization.missingData.color ?? DEFAULT_COLORS.missingData;
     }
-    const symClassification =
-      visualization?.symbol?.classification ??
-      visualization?.symbolClassification;
-    if (symClassification) {
-      categoryCount =
-        symClassification.labels?.length ??
-        symClassification.numClasses ??
-        symClassification.classes ??
-        4;
+
+    categoryCount = resolveCategoryPreviewCount(
+      symbolClassification,
+      4,
+      resolvedCategoryLabels
+    );
+  });
+
+  $effect(() => {
+    const persistedLabels = symbolClassification?.labels ?? [];
+    const currentCategoryColumn =
+      visualization?.symbol?.categoryColumn ??
+      visualization?.mapping.categoryColumn;
+    const currentDataset = dataset;
+    const requestId = ++categoryLabelsRequestId;
+
+    if (persistedLabels.length > 0) {
+      fetchedCategoryLabels = persistedLabels;
+      return;
     }
+
+    if (!currentCategoryColumn || !currentDataset) {
+      fetchedCategoryLabels = [];
+      return;
+    }
+
+    void loadDistinctCategoryLabels(currentDataset, currentCategoryColumn).then(
+      (labels) => {
+        if (requestId !== categoryLabelsRequestId) {
+          return;
+        }
+
+        syncFetchedCategoryLabels(labels);
+      }
+    );
   });
 
   function handleMissingDataShowChange(show: boolean) {
@@ -458,13 +521,24 @@
   </div>
 {/if}
 
-<DiscretizationRow
-  label={m.category_aspect()}
-  value={m.categories_count({ count: categoryCount })}
-  onsettings={() => {
-    categoriesAspectOpen = true;
-  }}
-/>
+<div class="categories-aspect-row">
+  <span class="field-label">{m.category_aspect()}</span>
+  <div class="categories-aspect-value">
+    <span>{m.categories_count({ count: categoryCount })}</span>
+    <Button
+      class="categories-aspect-settings"
+      kind="ghost"
+      size="small"
+      icon={Settings}
+      iconDescription={m.palette_categories_aspect_title()}
+      aria-label={m.palette_categories_aspect_title()}
+      onclick={(event: MouseEvent) => {
+        event.stopPropagation();
+        categoriesAspectOpen = true;
+      }}
+    />
+  </div>
+</div>
 <PalettePreview
   label={m.color_palette()}
   colors={currentPalette}
@@ -476,9 +550,7 @@
   paletteType={PALETTE_TYPE.QUALITATIVE}
   categoriesMode={true}
   categoriesVariant={categoriesVariant}
-  categoryLabels={visualization?.symbol?.classification?.labels ??
-    visualization?.symbolClassification?.labels ??
-    []}
+  categoryLabels={resolvedCategoryLabels}
   disabledCategoryLabels={visualization?.symbol?.classification
     ?.disabledLabels ??
     visualization?.symbolClassification?.disabledLabels ??
@@ -526,5 +598,32 @@
 
   :global(.field-group .bx--radio-button-group) {
     flex-direction: row;
+  }
+
+  .categories-aspect-row {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--cds-spacing-03) 0;
+    border-bottom: 1px solid var(--cds-border-subtle);
+    gap: var(--cds-spacing-02);
+  }
+
+  .categories-aspect-value {
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-03);
+
+    span {
+      font-size: 0.875rem;
+      color: var(--cds-text-primary);
+    }
+  }
+
+  :global(.categories-aspect-settings) {
+    min-width: 32px;
+    min-height: 32px;
+    padding: 8px;
   }
 </style>
