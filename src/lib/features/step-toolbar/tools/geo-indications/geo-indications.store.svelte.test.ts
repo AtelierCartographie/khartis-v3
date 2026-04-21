@@ -4,6 +4,7 @@ import {
   FormatMode,
   PageModel
 } from '$lib/features/commons/constants/ui.constants';
+import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
 import { hexToHsl } from '$lib/features/commons/utils/color-utils';
 import { formatActions } from '../format/format.store.svelte';
 import {
@@ -12,10 +13,26 @@ import {
 } from './geo-indications.store.svelte';
 import { MAX_SCALE_DISTANCE_BY_UNIT } from './utils';
 
+function createScaleMap(widthPerLongitudeDegree: number) {
+  return {
+    getCenter: () => ({ lng: 0, lat: 0 }),
+    getZoom: () => 2,
+    project: ([lng]: [number, number]) => ({
+      x: lng * widthPerLongitudeDegree,
+      y: 0
+    }),
+    setMinZoom: () => undefined,
+    setMaxZoom: () => undefined,
+    on: () => undefined,
+    off: () => undefined
+  };
+}
+
 describe('geo indications store responsive defaults', () => {
   beforeEach(() => {
     formatActions.reset();
     geoIndicationsActions.reset();
+    mapInstanceStore.reset();
   });
 
   it('starts the inset map from coherent basemap colors', () => {
@@ -86,6 +103,30 @@ describe('geo indications store responsive defaults', () => {
 
     expect(geoIndicationsState.scale.units).toBe(DistanceUnit.KILOMETERS);
     expect(geoIndicationsState.scale.distance).toBe(100);
+  });
+
+  it('clamps scale distance to the current renderable max when map context is available', () => {
+    mapInstanceStore.setMapInstance(createScaleMap(100) as never);
+
+    geoIndicationsActions.setScaleDistance(500);
+
+    expect(geoIndicationsState.scale.distance).toBe(100);
+  });
+
+  it('clamps converted scale distance against the current renderable max when the unit changes', () => {
+    mapInstanceStore.setMapInstance(createScaleMap(100) as never);
+    geoIndicationsActions.setState({
+      scale: {
+        ...geoIndicationsState.scale,
+        distance: 100,
+        units: DistanceUnit.KILOMETERS
+      }
+    });
+
+    geoIndicationsActions.setScaleUnits(DistanceUnit.MILES);
+
+    expect(geoIndicationsState.scale.units).toBe(DistanceUnit.MILES);
+    expect(geoIndicationsState.scale.distance).toBe(50);
   });
 
   it('clamps scale distance to the meaningful max for the active unit', () => {
