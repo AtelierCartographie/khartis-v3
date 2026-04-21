@@ -7,6 +7,7 @@
   } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
+  import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import {
     StrokeMode,
     SLIDER_LIMITS,
@@ -35,6 +36,10 @@
     facetsStore,
     type FacetSlotPath
   } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
+  import {
+    loadDistinctCategoryLabels,
+    resolveCategoryPreviewCount
+  } from './categorical-preview.utils';
 
   interface Props {
     visualization?: VisualizationConfig;
@@ -48,12 +53,17 @@
     onMappingChange?: (
       updates: Partial<VisualizationConfig['mapping']>
     ) => void;
+    onStrokeMappingChange?: (
+      updates: Partial<VisualizationConfig['mapping']>
+    ) => void;
     onInvertPalette?: () => void;
     onOpenDiscretization?: () => void;
     onStrokeClassificationChange: (
       updates: Partial<ClassificationConfig>
     ) => void;
     strokeClassification?: ClassificationConfig;
+    strokeValueColumn?: string;
+    strokeCategoryColumn?: string;
     showSliderBounds?: boolean;
     sliderInputWidth?: string;
     facetsValueSlotPath?: FacetSlotPath;
@@ -70,10 +80,13 @@
     onStyleChange,
     onModesChange,
     onMappingChange,
+    onStrokeMappingChange,
     onInvertPalette,
     onOpenDiscretization,
     onStrokeClassificationChange,
     strokeClassification,
+    strokeValueColumn,
+    strokeCategoryColumn,
     showSliderBounds = true,
     sliderInputWidth = '128px',
     facetsValueSlotPath,
@@ -86,7 +99,12 @@
   const resolvedCategoriesPalette = $derived(
     strokeClassification?.colors ?? DEFAULT_QUALITATIVE_PREVIEW
   );
-  const resolvedCategoryLabels = $derived(strokeClassification?.labels ?? []);
+  const dataset = $derived(
+    visualization
+      ? (datasetsStore.datasets.find((d) => d.id === visualization.datasetId) ??
+          datasetsStore.selectedDataset)
+      : datasetsStore.selectedDataset
+  );
 
   const NONE_FIELD_ID = -1;
   let strokeMode = $state<StrokeMode>(StrokeMode.NONE);
@@ -96,8 +114,18 @@
   let strokeDashed = $state<boolean>(false);
   let colorFieldId = $state<number>(NONE_FIELD_ID);
   let facetsPickerOpen = $state(false);
+  let categoriesPopoverOpen = $state(false);
+  let resolvedCategoryLabels = $state<string[]>([]);
+  let categoryLabelsRequestId = 0;
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
   const selectableDataFields = $derived([noneOption, ...dataFields]);
+  const resolvedCategoryCount = $derived(
+    resolveCategoryPreviewCount(
+      strokeClassification,
+      categoryCount || 4,
+      resolvedCategoryLabels
+    )
+  );
 
   const selectedVizId = $derived(visualization?.id);
 
@@ -138,6 +166,11 @@
       ? (dataFields.find((field) => field.id === colorFieldId)?.text ?? '')
       : ''
   );
+  const currentCategoryColumnName = $derived(
+    strokeCategoryColumn ??
+      visualization?.mapping.categoryColumn ??
+      categoryColumnName
+  );
 
   $effect(() => {
     if (visualization?.modes) {
@@ -155,9 +188,9 @@
     }
     const mappedFieldName =
       strokeMode === StrokeMode.CATEGORIES
-        ? visualization?.mapping.categoryColumn
+        ? (strokeCategoryColumn ?? visualization?.mapping.categoryColumn)
         : strokeMode === StrokeMode.CLASSES
-          ? visualization?.mapping.valueColumn
+          ? (strokeValueColumn ?? visualization?.mapping.valueColumn)
           : undefined;
     if (mappedFieldName && dataFields.length > 0) {
       const fieldIndex = dataFields.findIndex(
@@ -168,6 +201,31 @@
     } else {
       colorFieldId = NONE_FIELD_ID;
     }
+  });
+
+  $effect(() => {
+    const persistedLabels = strokeClassification?.labels ?? [];
+    const requestId = ++categoryLabelsRequestId;
+
+    if (strokeMode !== StrokeMode.CATEGORIES) {
+      resolvedCategoryLabels = persistedLabels;
+      return;
+    }
+
+    if (persistedLabels.length > 0) {
+      resolvedCategoryLabels = persistedLabels;
+      return;
+    }
+
+    void loadDistinctCategoryLabels(dataset, currentCategoryColumnName).then(
+      (labels) => {
+        if (requestId !== categoryLabelsRequestId) {
+          return;
+        }
+
+        resolvedCategoryLabels = labels;
+      }
+    );
   });
 
   const strokeModeItems = [
@@ -233,29 +291,30 @@
 
   function handleColorFieldSelect(fieldId: number) {
     colorFieldId = fieldId;
-    if (!onMappingChange) {
+    const handleMappingChange = onStrokeMappingChange ?? onMappingChange;
+    if (!handleMappingChange) {
       return;
     }
 
     if (strokeMode === StrokeMode.CLASSES) {
       if (fieldId === NONE_FIELD_ID) {
-        onMappingChange({ valueColumn: undefined });
+        handleMappingChange({ valueColumn: undefined });
         return;
       }
       const field = dataFields.find((item) => item.id === fieldId);
       if (field) {
-        onMappingChange({ valueColumn: field.text });
+        handleMappingChange({ valueColumn: field.text });
       }
     }
 
     if (strokeMode === StrokeMode.CATEGORIES) {
       if (fieldId === NONE_FIELD_ID) {
-        onMappingChange({ categoryColumn: undefined });
+        handleMappingChange({ categoryColumn: undefined });
         return;
       }
       const field = dataFields.find((item) => item.id === fieldId);
       if (field) {
-        onMappingChange({ categoryColumn: field.text });
+        handleMappingChange({ categoryColumn: field.text });
       }
     }
   }
@@ -361,6 +420,7 @@
       selectedPaletteId={strokeClassification?.paletteId}
       inverted={strokeClassification?.inverted ?? false}
       paletteType={resolvePaletteTypeForBreakpoint(strokeClassification)}
+      classification={strokeClassification}
       oninvert={onInvertPalette}
       onClassificationChange={onStrokeClassificationChange}
     />
@@ -391,8 +451,11 @@
     </div>
     <DiscretizationRow
       label={m.category_aspect()}
-      value={m.categories_count({ count: categoryCount })}
-      onsettings={onOpenDiscretization}
+      value={m.categories_count({ count: resolvedCategoryCount })}
+      settingsIconDescription={m.palette_categories_aspect_title()}
+      onsettings={() => {
+        categoriesPopoverOpen = true;
+      }}
     />
     <PalettePreview
       label={m.color_palette()}
@@ -403,6 +466,7 @@
       categoriesMode={true}
       categoriesVariant="lines"
       categoryLabels={resolvedCategoryLabels}
+      bind:categoriesPopoverOpen={categoriesPopoverOpen}
       oninvert={onInvertPalette}
       onClassificationChange={onStrokeClassificationChange}
     />

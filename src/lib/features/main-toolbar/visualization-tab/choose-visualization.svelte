@@ -727,6 +727,7 @@
                             ? colName.slice(0, 10) + '...'
                             : colName}
                           type={badgeType}
+                          interactive={false}
                         />
                         {#if suggestion.columns && suggestion.columns.length > 2 && idx === 0}
                           <span class="overflow-chip"

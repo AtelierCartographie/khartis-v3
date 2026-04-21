@@ -14,6 +14,7 @@
     ClassificationConfig,
     VisualizationConfig
   } from '$lib/features/commons/store/visualization.store.svelte';
+  import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { DEFAULT_COLORS, FillMode, SLIDER_LIMITS } from '../../../constants';
   import type { FacetSlotPath } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
   import SectionHeading from './section-heading.svelte';
@@ -23,6 +24,10 @@
   import FacetsVariablePicker from '../symbols/facets-variable-picker.svelte';
   import { buildFillModeItems } from './fill-mode-presets';
   import type { CategoriesAspectVariant } from '$lib/features/commons/components/palette-popover/categories-aspect-popover.types';
+  import {
+    loadDistinctCategoryLabels,
+    resolveCategoryPreviewCount
+  } from './categorical-preview.utils';
 
   export type FillPrimitiveKind = 'polygon' | 'symbol' | 'text';
 
@@ -119,6 +124,9 @@
 
   let valuePickerOpen = $state(false);
   let categoryPickerOpen = $state(false);
+  let categoriesPopoverOpen = $state(false);
+  let resolvedCategoryLabels = $state<string[]>([]);
+  let categoryLabelsRequestId = 0;
 
   const currentPalette = $derived(
     visualization?.classification?.colors ?? DEFAULT_SEQUENTIAL_PREVIEW
@@ -133,13 +141,58 @@
   const categoryColumnName = $derived(
     dataFields.find((f) => f.id === selectedCategoryFieldId)?.text ?? ''
   );
+  const currentCategoryColumnName = $derived(
+    visualization?.mapping.categoryColumn ?? categoryColumnName
+  );
+  const dataset = $derived(
+    visualization
+      ? (datasetsStore.datasets.find((d) => d.id === visualization.datasetId) ??
+          datasetsStore.selectedDataset)
+      : datasetsStore.selectedDataset
+  );
+  const resolvedCategoryCount = $derived(
+    resolveCategoryPreviewCount(
+      visualization?.classification,
+      categoryCount || 4,
+      resolvedCategoryLabels
+    )
+  );
 
   function handleToggleChange(index: number) {
     const nextMode = availableModes[index] ?? FillMode.NONE;
+    if (nextMode === fillMode) {
+      return;
+    }
+
     onFillModeChange(nextMode);
   }
 
   let missingDataShow = $derived(showMissingData);
+
+  $effect(() => {
+    const persistedLabels = visualization?.classification?.labels ?? [];
+    const requestId = ++categoryLabelsRequestId;
+
+    if (fillMode !== FillMode.CATEGORIES) {
+      resolvedCategoryLabels = persistedLabels;
+      return;
+    }
+
+    if (persistedLabels.length > 0) {
+      resolvedCategoryLabels = persistedLabels;
+      return;
+    }
+
+    void loadDistinctCategoryLabels(dataset, currentCategoryColumnName).then(
+      (labels) => {
+        if (requestId !== categoryLabelsRequestId) {
+          return;
+        }
+
+        resolvedCategoryLabels = labels;
+      }
+    );
+  });
 </script>
 
 {#if sectionTitle !== undefined}
@@ -195,6 +248,7 @@
     selectedPaletteId={visualization?.classification?.paletteId}
     inverted={visualization?.classification?.inverted ?? false}
     paletteType={resolvePaletteTypeForBreakpoint(visualization?.classification)}
+    classification={visualization?.classification}
     oninvert={onInvertPalette}
     onClassificationChange={onClassificationChange}
   />
@@ -221,8 +275,11 @@
   </div>
   <DiscretizationRow
     label={m.category_aspect()}
-    value={m.categories_count({ count: categoryCount })}
-    onsettings={onOpenDiscretization}
+    value={m.categories_count({ count: resolvedCategoryCount })}
+    settingsIconDescription={m.palette_categories_aspect_title()}
+    onsettings={() => {
+      categoriesPopoverOpen = true;
+    }}
   />
   <PalettePreview
     label={m.color_palette()}
@@ -232,7 +289,8 @@
     paletteType={PALETTE_TYPE.QUALITATIVE}
     categoriesMode={true}
     categoriesVariant={categoriesVariant}
-    categoryLabels={visualization?.classification?.labels ?? []}
+    categoryLabels={resolvedCategoryLabels}
+    bind:categoriesPopoverOpen={categoriesPopoverOpen}
     oninvert={onInvertPalette}
     onClassificationChange={onClassificationChange}
   />
