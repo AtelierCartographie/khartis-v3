@@ -44,7 +44,10 @@
     generatePaletteColors,
     PALETTE_TYPE
   } from '$lib/features/commons/components/palette-popover/palette.constants';
-  import { getColorBlindnessState } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
+  import {
+    getColorBlindnessState,
+    isColorBlindnessActive
+  } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
   import {
     getLegendState,
     legendActions
@@ -461,27 +464,47 @@
     const classification = getPrimitiveClassification(visualization, primitive);
 
     if (usesBreakClassification(visualization, primitive)) {
+      const paletteType = classification?.paletteId
+        ? findPaletteById(classification.paletteId)?.type
+        : undefined;
+      const hasIncompatiblePalette = paletteType === PALETTE_TYPE.QUALITATIVE;
       if (!classification?.method || !classification?.numClasses) {
         updatePrimitiveClassificationState(primitive, {
           method: ClassificationMethod.JENKS,
           classes: 5,
-          numClasses: 5
+          numClasses: 5,
+          ...(hasIncompatiblePalette
+            ? { paletteId: undefined, colors: [] }
+            : {})
+        });
+      } else if (hasIncompatiblePalette) {
+        updatePrimitiveClassificationState(primitive, {
+          paletteId: undefined,
+          colors: []
         });
       }
       return;
     }
 
-    if (
-      usesCategoricalClassification(visualization, primitive) &&
-      (!classification?.colors?.length ||
-        classification.labels === undefined ||
-        classification.labels.length === 0)
-    ) {
-      updatePrimitiveClassificationState(primitive, {
-        colors: [...DEFAULT_CATEGORICAL_COLORS],
-        inverted: classification?.inverted ?? false,
-        labels: classification?.labels ?? []
-      });
+    if (usesCategoricalClassification(visualization, primitive)) {
+      const paletteType = classification?.paletteId
+        ? findPaletteById(classification.paletteId)?.type
+        : undefined;
+      const hasIncompatiblePalette =
+        paletteType !== undefined && paletteType !== PALETTE_TYPE.QUALITATIVE;
+      const needsColors = !classification?.colors?.length;
+      const needsLabels =
+        classification?.labels === undefined ||
+        classification?.labels.length === 0;
+
+      if (hasIncompatiblePalette || needsColors || needsLabels) {
+        updatePrimitiveClassificationState(primitive, {
+          colors: [...DEFAULT_CATEGORICAL_COLORS],
+          inverted: classification?.inverted ?? false,
+          labels: classification?.labels ?? [],
+          ...(hasIncompatiblePalette ? { paletteId: undefined } : {})
+        });
+      }
     }
   }
 
@@ -1693,7 +1716,7 @@
         result.counts.length
       );
       const existingColors = classification?.colors;
-      const contrast = getColorBlindnessState().enabled
+      const contrast = isColorBlindnessActive(getColorBlindnessState())
         ? ('high' as const)
         : undefined;
       let colors: string[];
@@ -2026,7 +2049,7 @@
   });
 
   const primitiveColorParamsKey = $derived.by(() => {
-    const cbEnabled = getColorBlindnessState().enabled;
+    const cbEnabled = isColorBlindnessActive(getColorBlindnessState());
     return [
       String(cbEnabled),
       ...primitiveClassificationTargets.map((target) => {
@@ -2109,7 +2132,7 @@
         result.counts.length
       );
       const existingColors = target.classification?.colors;
-      const contrast = getColorBlindnessState().enabled
+      const contrast = isColorBlindnessActive(getColorBlindnessState())
         ? ('high' as const)
         : undefined;
       let colors: string[];
@@ -2286,7 +2309,7 @@
         return;
       }
 
-      const cbEnabled = getColorBlindnessState().enabled;
+      const cbEnabled = isColorBlindnessActive(getColorBlindnessState());
 
       for (const target of primitiveClassificationTargets) {
         const classification = target.classification;

@@ -24,10 +24,21 @@ import {
   PrimitiveFilterType,
   VisualizationType,
   getEnabledPrimitiveFilters,
+  getSymbolPrimitive,
   getTextPrimitive,
   visualizationStore,
   type VisualizationConfig
 } from './visualization.store.svelte';
+import {
+  CategoryShapeMode,
+  FillMode,
+  ProportionalType,
+  ShapeType,
+  StrokeMode,
+  SymbolDoublePosition,
+  SymbolMode
+} from '$lib/features/main-toolbar/constants';
+import { ScaleType } from './visualization.store.svelte';
 import { datasetsStore } from './datasets.store.svelte';
 import {
   ColumnType,
@@ -335,5 +346,224 @@ describe('visualizationStore text primitive enablement', () => {
 
     expect(getTextPrimitive(updatedVisualization)?.enabled).toBe(true);
     expect(getTextPrimitive(updatedVisualization)?.opacity).toBe(1);
+  });
+});
+
+describe('visualizationStore SymbolPrimitiveConfig round-trip persistence', () => {
+  afterEach(() => {
+    visualizationStore.clear();
+    datasetsStore.clear();
+    persistenceRegistry.markClean();
+  });
+
+  function buildRichSymbolVisualization(): VisualizationConfig {
+    return {
+      id: 'viz-symbol-full',
+      name: 'Symbols full',
+      datasetId: 'dataset-1',
+      enabled: true,
+      type: VisualizationType.CATEGORICAL,
+      primitiveFilters: [PrimitiveFilterType.POINT],
+      primitiveOrder: [PrimitiveFilterType.POINT],
+      modes: {
+        symbol: SymbolMode.CATEGORIES,
+        fill: FillMode.CATEGORIES
+      },
+      style: {
+        fillOpacity: 0.7,
+        strokeOpacity: 0.9,
+        strokeWidth: 2
+      },
+      mapping: {
+        geometryColumn: 'geom',
+        categoryColumn: 'segment',
+        valueColumn: 'capacity',
+        sizeColumn: 'population'
+      },
+      classification: {
+        method: ClassificationMethod.MANUAL,
+        classes: 4,
+        colors: ['#e41a1c', '#377eb8', '#4daf4a', '#984ea3'],
+        labels: ['A', 'B', 'C', 'D'],
+        categoryShapes: [
+          ShapeType.CIRCLE,
+          ShapeType.SQUARE,
+          ShapeType.TRIANGLE,
+          ShapeType.DIAMOND
+        ],
+        paletteId: 'categorical-set1'
+      },
+      symbolClassification: {
+        method: ClassificationMethod.MANUAL,
+        classes: 4,
+        colors: ['#e41a1c', '#377eb8', '#4daf4a', '#984ea3'],
+        labels: ['A', 'B', 'C', 'D'],
+        categoryShapes: [
+          ShapeType.CIRCLE,
+          ShapeType.SQUARE,
+          ShapeType.TRIANGLE,
+          ShapeType.DIAMOND
+        ],
+        paletteId: 'categorical-set1'
+      },
+      symbol: {
+        enabled: true,
+        mode: SymbolMode.CATEGORIES,
+        shape: ShapeType.CIRCLE,
+        size: 18,
+        minSize: 4,
+        maxSize: 48,
+        sizeScale: ScaleType.SQRT,
+        opacity: 0.7,
+        fillMode: FillMode.CATEGORIES,
+        fillColor: '#e41a1c',
+        strokeMode: StrokeMode.UNIQUE,
+        strokeColor: '#333333',
+        strokeWidth: 2,
+        strokeOpacity: 0.9,
+        proportionalType: ProportionalType.SINGLE,
+        categoryShape: CategoryShapeMode.DIFFERENT,
+        commonScale: true,
+        positionMode: SymbolDoublePosition.OVERLAY,
+        breakValueA: null,
+        breakValueB: null,
+        valueColumn: 'capacity',
+        categoryColumn: 'segment',
+        sizeColumn: 'population',
+        classification: {
+          method: ClassificationMethod.MANUAL,
+          classes: 4,
+          colors: ['#e41a1c', '#377eb8', '#4daf4a', '#984ea3'],
+          labels: ['A', 'B', 'C', 'D'],
+          categoryShapes: [
+            ShapeType.CIRCLE,
+            ShapeType.SQUARE,
+            ShapeType.TRIANGLE,
+            ShapeType.DIAMOND
+          ],
+          paletteId: 'categorical-set1'
+        },
+        modeStates: {
+          [SymbolMode.UNIQUE]: {
+            size: 12,
+            fillMode: FillMode.UNIQUE
+          },
+          [SymbolMode.PROPORTIONAL]: {
+            minSize: 4,
+            maxSize: 40,
+            sizeScale: ScaleType.SQRT,
+            sizeColumn: 'population',
+            proportionalType: ProportionalType.DOUBLE,
+            commonScale: false,
+            positionMode: SymbolDoublePosition.JUXTAPOSITION,
+            breakValueA: 100,
+            breakValueB: 1000
+          }
+        }
+      }
+    };
+  }
+
+  it('restores the full SymbolPrimitiveConfig from a serialized payload without losing any field', () => {
+    datasetsStore.addProcessedDataset(buildDataset());
+    const input = buildRichSymbolVisualization();
+
+    visualizationStore.restoreFromSerialized({
+      visualizations: [input],
+      selectedVisualizationId: input.id,
+      activeVisualizationIds: [input.id]
+    });
+
+    const viz = visualizationStore.selectedVisualization;
+    expect(viz).toBeDefined();
+    const symbol = getSymbolPrimitive(viz);
+    expect(symbol).toBeDefined();
+    if (!symbol || !viz) throw new Error('symbol config missing');
+
+    expect(symbol.mode).toBe(SymbolMode.CATEGORIES);
+    expect(symbol.shape).toBe(ShapeType.CIRCLE);
+    expect(symbol.size).toBe(18);
+    expect(symbol.minSize).toBe(4);
+    expect(symbol.maxSize).toBe(48);
+    expect(symbol.sizeScale).toBe(ScaleType.SQRT);
+    expect(symbol.opacity).toBeCloseTo(0.7);
+    expect(symbol.fillMode).toBe(FillMode.CATEGORIES);
+    expect(symbol.strokeMode).toBe(StrokeMode.UNIQUE);
+    expect(symbol.strokeWidth).toBe(2);
+    expect(symbol.strokeOpacity).toBeCloseTo(0.9);
+    expect(symbol.categoryShape).toBe(CategoryShapeMode.DIFFERENT);
+    expect(symbol.proportionalType).toBe(ProportionalType.SINGLE);
+    expect(symbol.valueColumn).toBe('capacity');
+    expect(symbol.categoryColumn).toBe('segment');
+    expect(symbol.sizeColumn).toBe('population');
+
+    expect(symbol.classification?.method).toBe(ClassificationMethod.MANUAL);
+    expect(symbol.classification?.colors).toEqual([
+      '#e41a1c',
+      '#377eb8',
+      '#4daf4a',
+      '#984ea3'
+    ]);
+    expect(symbol.classification?.labels).toEqual(['A', 'B', 'C', 'D']);
+    expect(symbol.classification?.categoryShapes).toEqual([
+      ShapeType.CIRCLE,
+      ShapeType.SQUARE,
+      ShapeType.TRIANGLE,
+      ShapeType.DIAMOND
+    ]);
+    expect(symbol.classification?.paletteId).toBe('categorical-set1');
+
+    expect(symbol.modeStates?.[SymbolMode.UNIQUE]?.size).toBe(12);
+    expect(symbol.modeStates?.[SymbolMode.UNIQUE]?.fillMode).toBe(
+      FillMode.UNIQUE
+    );
+
+    const proportional = symbol.modeStates?.[SymbolMode.PROPORTIONAL];
+    expect(proportional?.minSize).toBe(4);
+    expect(proportional?.maxSize).toBe(40);
+    expect(proportional?.sizeScale).toBe(ScaleType.SQRT);
+    expect(proportional?.sizeColumn).toBe('population');
+    expect(proportional?.proportionalType).toBe(ProportionalType.DOUBLE);
+    expect(proportional?.commonScale).toBe(false);
+    expect(proportional?.positionMode).toBe(SymbolDoublePosition.JUXTAPOSITION);
+    expect(proportional?.breakValueA).toBe(100);
+    expect(proportional?.breakValueB).toBe(1000);
+  });
+
+  it('keeps mapping.categoryColumn and mapping.sizeColumn in sync with the symbol primitive after restore', () => {
+    datasetsStore.addProcessedDataset(buildDataset());
+    const input = buildRichSymbolVisualization();
+
+    visualizationStore.restoreFromSerialized({
+      visualizations: [input],
+      selectedVisualizationId: input.id,
+      activeVisualizationIds: [input.id]
+    });
+
+    const viz = visualizationStore.selectedVisualization;
+    expect(viz?.mapping.categoryColumn).toBe('segment');
+    expect(viz?.mapping.sizeColumn).toBe('population');
+    expect(viz?.mapping.valueColumn).toBe('capacity');
+  });
+
+  it('falls back to the legacy symbolClassification mirror when symbol.classification is missing', () => {
+    datasetsStore.addProcessedDataset(buildDataset());
+    const input = buildRichSymbolVisualization();
+    const legacyOnly: VisualizationConfig = {
+      ...input,
+      symbol: input.symbol
+        ? { ...input.symbol, classification: undefined }
+        : undefined
+    };
+
+    visualizationStore.restoreFromSerialized({
+      visualizations: [legacyOnly],
+      selectedVisualizationId: legacyOnly.id,
+      activeVisualizationIds: [legacyOnly.id]
+    });
+
+    const viz = visualizationStore.selectedVisualization;
+    const symbol = getSymbolPrimitive(viz);
+    expect(symbol?.classification?.labels).toEqual(['A', 'B', 'C', 'D']);
   });
 });

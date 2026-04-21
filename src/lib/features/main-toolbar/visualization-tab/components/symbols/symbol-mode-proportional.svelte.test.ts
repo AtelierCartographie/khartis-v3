@@ -100,6 +100,42 @@ describe('SymbolModeProportional (proportionnels.png + en classes.png)', () => {
     expect(source).toContain('onSymbolPrimitiveChange?.({ breakValueA');
     expect(source).toContain('onSymbolPrimitiveChange?.({ breakValueB');
   });
+
+  it('E-08: normalises breakValueA > breakValueB by swapping them in the A handler', () => {
+    const handlerA = source.match(
+      /function handleBreakValueAChange\([\s\S]*?\n {2}\}/
+    )?.[0];
+    expect(handlerA).toBeDefined();
+    expect(handlerA).toContain('value > breakValueB');
+    expect(handlerA).toContain('const swappedA = breakValueB');
+    expect(handlerA).toContain('breakValueA: swappedA');
+    expect(handlerA).toContain('breakValueB: swappedB');
+  });
+
+  it('E-08: normalises breakValueB < breakValueA by swapping them in the B handler', () => {
+    const handlerB = source.match(
+      /function handleBreakValueBChange\([\s\S]*?\n {2}\}/
+    )?.[0];
+    expect(handlerB).toBeDefined();
+    expect(handlerB).toContain('value < breakValueA');
+    expect(handlerB).toContain('const swappedA = value');
+    expect(handlerB).toContain('const swappedB = breakValueA');
+    expect(handlerB).toContain('breakValueA: swappedA');
+    expect(handlerB).toContain('breakValueB: swappedB');
+  });
+
+  it('E-08: both break-value handlers guard Number.isFinite to avoid NaN-driven swaps', () => {
+    const handlerA = source.match(
+      /function handleBreakValueAChange\([\s\S]*?\n {2}\}/
+    )?.[0];
+    const handlerB = source.match(
+      /function handleBreakValueBChange\([\s\S]*?\n {2}\}/
+    )?.[0];
+    expect(handlerA).toContain('Number.isFinite(value)');
+    expect(handlerA).toContain('Number.isFinite(breakValueB)');
+    expect(handlerB).toContain('Number.isFinite(value)');
+    expect(handlerB).toContain('Number.isFinite(breakValueA)');
+  });
 });
 
 describe('SymbolModeProportional — anti-leak fill ↔ stroke palette', () => {
