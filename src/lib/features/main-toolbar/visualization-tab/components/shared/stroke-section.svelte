@@ -359,7 +359,9 @@
       colors={resolvedClassesPalette}
       selectedPaletteId={strokeClassification?.paletteId}
       inverted={strokeClassification?.inverted ?? false}
-      paletteType={PALETTE_TYPE.SEQUENTIAL}
+      paletteType={strokeClassification?.breakpointValue != null
+        ? PALETTE_TYPE.DIVERGING
+        : PALETTE_TYPE.SEQUENTIAL}
       oninvert={onInvertPalette}
       onClassificationChange={onStrokeClassificationChange}
     />

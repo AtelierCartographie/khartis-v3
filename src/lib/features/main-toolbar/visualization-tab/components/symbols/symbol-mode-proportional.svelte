@@ -571,12 +571,46 @@
 
   function handleBreakValueAChange(value: number | null) {
     if (isSyncingFromVisualization) return;
+    if (
+      value !== null &&
+      breakValueB !== null &&
+      Number.isFinite(value) &&
+      Number.isFinite(breakValueB) &&
+      value > breakValueB
+    ) {
+      const swappedA = breakValueB;
+      const swappedB = value;
+      breakValueA = swappedA;
+      breakValueB = swappedB;
+      onSymbolPrimitiveChange?.({
+        breakValueA: swappedA,
+        breakValueB: swappedB
+      });
+      return;
+    }
     breakValueA = value;
     onSymbolPrimitiveChange?.({ breakValueA: value });
   }
 
   function handleBreakValueBChange(value: number | null) {
     if (isSyncingFromVisualization) return;
+    if (
+      value !== null &&
+      breakValueA !== null &&
+      Number.isFinite(value) &&
+      Number.isFinite(breakValueA) &&
+      value < breakValueA
+    ) {
+      const swappedA = value;
+      const swappedB = breakValueA;
+      breakValueA = swappedA;
+      breakValueB = swappedB;
+      onSymbolPrimitiveChange?.({
+        breakValueA: swappedA,
+        breakValueB: swappedB
+      });
+      return;
+    }
     breakValueB = value;
     onSymbolPrimitiveChange?.({ breakValueB: value });
   }
@@ -599,8 +633,11 @@
     </span>
     <RadioButtonGroup
       selected={proportionalType}
-      on:change={(e) =>
-        handleProportionalTypeChange(e.detail as ProportionalType)}
+      on:change={(e) => {
+        const next = (e as CustomEvent).detail as ProportionalType;
+        if (next === proportionalType) return;
+        handleProportionalTypeChange(next);
+      }}
     >
       <RadioButton
         id="prop-single"

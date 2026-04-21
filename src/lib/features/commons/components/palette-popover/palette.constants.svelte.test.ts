@@ -200,6 +200,24 @@ describe('palette.constants — generatePaletteColors', () => {
     result.forEach((c) => expect(c).toMatch(HEX_REGEX));
   });
 
+  it('should cycle QUALITATIVE palette colors modulo when count exceeds length without categoricalOptions', () => {
+    const p = qualitativePalettes[0];
+    const count = p.colors.length * 3 + 2;
+    const result = generatePaletteColors(p, count);
+    expect(result).toHaveLength(count);
+    for (let i = 0; i < count; i++) {
+      expect(result[i]).toBe(p.colors[i % p.colors.length]);
+    }
+  });
+
+  it('should not fall back to vif preset on QUALITATIVE overflow across every qualitative palette', () => {
+    for (const palette of qualitativePalettes) {
+      const result = generatePaletteColors(palette, palette.colors.length + 10);
+      expect(result[0]).toBe(palette.colors[0]);
+      expect(result[palette.colors.length]).toBe(palette.colors[0]);
+    }
+  });
+
   it('should return raw palette colors for PATTERN type', () => {
     const p = getPatternPalettes()[0];
     const result = generatePaletteColors(p, 3);

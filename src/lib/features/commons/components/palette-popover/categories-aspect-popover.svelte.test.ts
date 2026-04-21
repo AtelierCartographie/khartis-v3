@@ -78,3 +78,26 @@ describe('CategoriesAspectPopover (Figma 952:156994 — Polygons variant)', () =
     expect(source).toContain('handleCommonAspectChange');
   });
 });
+
+describe('CategoriesAspectPopover — high cardinality cap (E-04)', () => {
+  it('caps the visible categories list to MAX_VISIBLE_CATEGORIES = 50', () => {
+    expect(source).toContain('const MAX_VISIBLE_CATEGORIES = 50');
+    expect(source).toMatch(
+      /draftCategories\.slice\(0,\s*MAX_VISIBLE_CATEGORIES\)/
+    );
+  });
+
+  it('renders a hidden-count note when categories exceed MAX_VISIBLE_CATEGORIES', () => {
+    expect(source).toContain('hidden-count-note');
+    expect(source).toMatch(
+      /Math\.max\(0,\s*draftCategories\.length\s*-\s*MAX_VISIBLE_CATEGORIES\)/
+    );
+  });
+
+  it('iterates visibleDraftCategories (capped) and not the full draftCategories', () => {
+    expect(source).toContain(
+      '{#each visibleDraftCategories as category, index'
+    );
+    expect(source).not.toContain('{#each draftCategories as category');
+  });
+});

@@ -316,8 +316,11 @@
   <RadioButtonGroup
     name="cat-shape-mode"
     selected={categoryShapeMode}
-    on:change={(e) =>
-      handleCategoryShapeModeChange(e.detail as CategoryShapeMode)}
+    on:change={(e) => {
+      const next = (e as CustomEvent).detail as CategoryShapeMode;
+      if (next === categoryShapeMode) return;
+      handleCategoryShapeModeChange(next);
+    }}
   >
     <RadioButton
       id="cat-shape-unique"
