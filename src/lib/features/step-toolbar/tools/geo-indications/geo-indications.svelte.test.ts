@@ -1,11 +1,13 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { DistanceUnit } from '$lib/features/commons/constants/ui.constants';
 import * as m from '$lib/paraglide/messages';
 import GeoIndications from './geo-indications.svelte';
 import {
   geoIndicationsActions,
   geoIndicationsState
 } from './geo-indications.store.svelte';
+import { MAX_SCALE_DISTANCE_BY_UNIT } from './utils';
 
 describe('geo-indications tool', () => {
   beforeEach(() => {
@@ -57,6 +59,30 @@ describe('geo-indications tool', () => {
 
     expect(fontSizeSelect).toBeDefined();
     expect(fontSizeSelect?.value).toBe('16');
+  });
+
+  it('updates the scale distance max when the unit changes', async () => {
+    render(GeoIndications);
+
+    const scaleSwitch = screen.getByRole('switch', { name: m.geo_scale() });
+
+    await fireEvent.click(scaleSwitch);
+
+    const distanceInput = await screen.findByRole('spinbutton', {
+      name: m.geo_distance()
+    });
+
+    expect(distanceInput).toHaveAttribute(
+      'max',
+      String(MAX_SCALE_DISTANCE_BY_UNIT[DistanceUnit.KILOMETERS])
+    );
+
+    await fireEvent.click(screen.getByRole('radio', { name: m.geo_miles() }));
+
+    expect(distanceInput).toHaveAttribute(
+      'max',
+      String(MAX_SCALE_DISTANCE_BY_UNIT[DistanceUnit.MILES])
+    );
   });
 
   it('exposes longitude and latitude controls for the inset map centering', async () => {

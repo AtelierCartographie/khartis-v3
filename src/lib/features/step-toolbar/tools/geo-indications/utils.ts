@@ -26,6 +26,21 @@ export const INSET_MAP_SIZE_LIMITS: Record<
 
 const METERS_PER_KILOMETER = 1000;
 const METERS_PER_MILE = 1609.344;
+const EARTH_CIRCUMFERENCE_KILOMETERS = 40075.017;
+
+export const MAX_SCALE_DISTANCE_BY_UNIT: Record<DistanceUnit, number> = {
+  [DistanceUnit.KILOMETERS]: Math.round(EARTH_CIRCUMFERENCE_KILOMETERS),
+  [DistanceUnit.MILES]: Math.round(EARTH_CIRCUMFERENCE_KILOMETERS / 1.609344)
+};
+
+export function clampScaleDistance(
+  distance: number,
+  unit: DistanceUnit,
+  fallback: number
+): number {
+  const candidate = Number.isFinite(distance) ? distance : fallback;
+  return Math.max(0, Math.min(MAX_SCALE_DISTANCE_BY_UNIT[unit], candidate));
+}
 
 export function toDistanceMeters(distance: number, unit: DistanceUnit): number {
   return unit === DistanceUnit.KILOMETERS
