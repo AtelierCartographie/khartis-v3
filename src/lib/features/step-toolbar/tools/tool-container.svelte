@@ -97,8 +97,7 @@
     display: flex;
     align-items: center;
     gap: var(--cds-spacing-02);
-    padding: var(--cds-spacing-03) var(--cds-spacing-02) var(--cds-spacing-03)
-      var(--cds-spacing-05);
+    padding: 0 var(--cds-spacing-02) var(--cds-spacing-03) var(--cds-spacing-05);
     position: sticky;
     top: 0;
     background-color: var(--cds-background, white);

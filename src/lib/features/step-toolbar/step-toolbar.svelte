@@ -24,7 +24,8 @@
   import ColorBlindnessNotification from './tools/color-blindness/color-blindness-notification.svelte';
   import {
     colorBlindnessActions,
-    getColorBlindnessState
+    getColorBlindnessState,
+    isColorBlindnessActive
   } from './tools/color-blindness/color-blindness.store.svelte';
   import { annotationsActions } from './tools/annotations/annotations.store.svelte';
 
@@ -40,14 +41,14 @@
   let notificationDismissed = $state(false);
 
   const showColorBlindnessNotification = $derived(
-    colorBlindnessState.enabled &&
+    isColorBlindnessActive(colorBlindnessState) &&
       globalState.selectedStep !== ToolbarStep.Styling &&
       !globalState.selectedTool &&
       !notificationDismissed
   );
 
   $effect(() => {
-    if (!colorBlindnessState.enabled) {
+    if (!isColorBlindnessActive(colorBlindnessState)) {
       notificationDismissed = false;
     }
   });
