@@ -462,7 +462,8 @@ describe('visualizationStore SymbolPrimitiveConfig round-trip persistence', () =
       style: {
         fillOpacity: 0.7,
         strokeOpacity: 0.9,
-        strokeWidth: 2
+        strokeWidth: 2,
+        strokeDashed: true
       },
       mapping: {
         geometryColumn: 'geom',
@@ -511,6 +512,7 @@ describe('visualizationStore SymbolPrimitiveConfig round-trip persistence', () =
         strokeColor: '#333333',
         strokeWidth: 2,
         strokeOpacity: 0.9,
+        strokeDashed: true,
         proportionalType: ProportionalType.SINGLE,
         categoryShape: CategoryShapeMode.DIFFERENT,
         commonScale: true,
@@ -536,7 +538,11 @@ describe('visualizationStore SymbolPrimitiveConfig round-trip persistence', () =
         modeStates: {
           [SymbolMode.UNIQUE]: {
             size: 12,
-            fillMode: FillMode.UNIQUE
+            fillMode: FillMode.UNIQUE,
+            strokeMode: StrokeMode.UNIQUE,
+            strokeWidth: 3,
+            strokeOpacity: 0.6,
+            strokeDashed: false
           },
           [SymbolMode.PROPORTIONAL]: {
             minSize: 4,
@@ -547,7 +553,11 @@ describe('visualizationStore SymbolPrimitiveConfig round-trip persistence', () =
             commonScale: false,
             positionMode: SymbolDoublePosition.JUXTAPOSITION,
             breakValueA: 100,
-            breakValueB: 1000
+            breakValueB: 1000,
+            strokeMode: StrokeMode.NONE,
+            strokeWidth: 0,
+            strokeOpacity: 1,
+            strokeDashed: false
           }
         }
       }
@@ -581,6 +591,7 @@ describe('visualizationStore SymbolPrimitiveConfig round-trip persistence', () =
     expect(symbol.strokeMode).toBe(StrokeMode.UNIQUE);
     expect(symbol.strokeWidth).toBe(2);
     expect(symbol.strokeOpacity).toBeCloseTo(0.9);
+    expect(symbol.strokeDashed).toBe(true);
     expect(symbol.categoryShape).toBe(CategoryShapeMode.DIFFERENT);
     expect(symbol.proportionalType).toBe(ProportionalType.SINGLE);
     expect(symbol.valueColumn).toBe('capacity');
@@ -607,6 +618,14 @@ describe('visualizationStore SymbolPrimitiveConfig round-trip persistence', () =
     expect(symbol.modeStates?.[SymbolMode.UNIQUE]?.fillMode).toBe(
       FillMode.UNIQUE
     );
+    expect(symbol.modeStates?.[SymbolMode.UNIQUE]?.strokeMode).toBe(
+      StrokeMode.UNIQUE
+    );
+    expect(symbol.modeStates?.[SymbolMode.UNIQUE]?.strokeWidth).toBe(3);
+    expect(symbol.modeStates?.[SymbolMode.UNIQUE]?.strokeOpacity).toBeCloseTo(
+      0.6
+    );
+    expect(symbol.modeStates?.[SymbolMode.UNIQUE]?.strokeDashed).toBe(false);
 
     const proportional = symbol.modeStates?.[SymbolMode.PROPORTIONAL];
     expect(proportional?.minSize).toBe(4);
@@ -618,6 +637,10 @@ describe('visualizationStore SymbolPrimitiveConfig round-trip persistence', () =
     expect(proportional?.positionMode).toBe(SymbolDoublePosition.JUXTAPOSITION);
     expect(proportional?.breakValueA).toBe(100);
     expect(proportional?.breakValueB).toBe(1000);
+    expect(proportional?.strokeMode).toBe(StrokeMode.NONE);
+    expect(proportional?.strokeWidth).toBe(0);
+    expect(proportional?.strokeOpacity).toBe(1);
+    expect(proportional?.strokeDashed).toBe(false);
   });
 
   it('keeps mapping.categoryColumn and mapping.sizeColumn in sync with the symbol primitive after restore', () => {
@@ -655,5 +678,89 @@ describe('visualizationStore SymbolPrimitiveConfig round-trip persistence', () =
     const viz = visualizationStore.selectedVisualization;
     const symbol = getSymbolPrimitive(viz);
     expect(symbol?.classification?.labels).toEqual(['A', 'B', 'C', 'D']);
+  });
+
+  it('keeps symbol stroke discretization fields through the persistence registry round-trip used by project saves', () => {
+    datasetsStore.addProcessedDataset(buildDataset());
+    const input = buildRichSymbolVisualization();
+    const strokeAwareInput: VisualizationConfig = {
+      ...input,
+      symbol: input.symbol
+        ? {
+            ...input.symbol,
+            strokeMode: StrokeMode.CATEGORIES,
+            strokeColor: undefined,
+            strokeCategoryColumn: 'outline_group',
+            strokeClassification: {
+              method: ClassificationMethod.MANUAL,
+              classes: 4,
+              colors: ['#111111', '#333333', '#555555', '#777777'],
+              labels: ['North', 'South', 'East', 'West'],
+              disabledLabels: ['West'],
+              paletteId: 'categorical-dark2'
+            },
+            modeStates: {
+              ...input.symbol.modeStates,
+              [SymbolMode.CATEGORIES]: {
+                size: 18,
+                categoryColumn: 'segment',
+                categoryShape: CategoryShapeMode.DIFFERENT,
+                fillMode: FillMode.CATEGORIES,
+                strokeMode: StrokeMode.CATEGORIES,
+                strokeWidth: 2,
+                strokeOpacity: 0.9,
+                strokeDashed: true,
+                strokeCategoryColumn: 'outline_group',
+                strokeClassification: {
+                  method: ClassificationMethod.MANUAL,
+                  classes: 4,
+                  colors: ['#111111', '#333333', '#555555', '#777777'],
+                  labels: ['North', 'South', 'East', 'West'],
+                  disabledLabels: ['West'],
+                  paletteId: 'categorical-dark2'
+                }
+              }
+            }
+          }
+        : undefined
+    };
+
+    visualizationStore.restoreFromSerialized({
+      visualizations: [strokeAwareInput],
+      selectedVisualizationId: strokeAwareInput.id,
+      activeVisualizationIds: [strokeAwareInput.id]
+    });
+
+    const serializedStores = persistenceRegistry.serializeAll();
+
+    visualizationStore.clear();
+
+    persistenceRegistry.deserializeAll({
+      visualization: serializedStores.visualization
+    });
+
+    const restoredVisualization = visualizationStore.selectedVisualization;
+    const restoredSymbol = getSymbolPrimitive(restoredVisualization);
+
+    expect(restoredVisualization?.id).toBe(strokeAwareInput.id);
+    expect(restoredSymbol?.strokeMode).toBe(StrokeMode.CATEGORIES);
+    expect(restoredSymbol?.strokeCategoryColumn).toBe('outline_group');
+    expect(restoredSymbol?.strokeDashed).toBe(true);
+    expect(restoredSymbol?.strokeClassification?.labels).toEqual([
+      'North',
+      'South',
+      'East',
+      'West'
+    ]);
+    expect(restoredSymbol?.strokeClassification?.disabledLabels).toEqual([
+      'West'
+    ]);
+    expect(
+      restoredSymbol?.modeStates?.[SymbolMode.CATEGORIES]?.strokeCategoryColumn
+    ).toBe('outline_group');
+    expect(
+      restoredSymbol?.modeStates?.[SymbolMode.CATEGORIES]?.strokeClassification
+        ?.labels
+    ).toEqual(['North', 'South', 'East', 'West']);
   });
 });
