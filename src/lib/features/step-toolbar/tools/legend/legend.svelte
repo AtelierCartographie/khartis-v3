@@ -241,11 +241,10 @@
 
   {#if isContentTab}
     <div id="legend-content-panel" class="legend-panel" role="tabpanel">
-      <div class="legend-accordion-list">
+      <div class="expandable-stack">
         {#each items as item (item.id)}
           <ExpandableSection
             title={getItemHeaderTitle(item)}
-            titleClass="legend-item-title"
             showToggle={true}
             toggleChecked={item.visible}
             open={isItemExpanded(item.id)}
@@ -389,10 +388,6 @@
 
 <style>
   .legend-tool {
-    --kh-legend-tab-border: #cac5c4;
-    --kh-legend-tab-active-bg: #cac5c4;
-    --kh-legend-toggle-bg: #726e6e;
-
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-03);
@@ -474,88 +469,6 @@
     font-size: 0.875rem;
     line-height: 1.125rem;
     letter-spacing: 0.16px;
-  }
-
-  :global(#khartis-legend-tool .legend-accordion-list .section-container) {
-    border-top: 1px solid var(--cds-border-subtle-00, #e0e0e0);
-    border-bottom: 0;
-  }
-
-  :global(
-    #khartis-legend-tool .legend-accordion-list .section-container:last-child
-  ) {
-    border-bottom: 1px solid var(--cds-border-subtle-01, #c6c6c6);
-  }
-
-  :global(#khartis-legend-tool .legend-accordion-list .section-header) {
-    background: var(--cds-background, #ffffff);
-  }
-
-  :global(#khartis-legend-tool .legend-accordion-list .section-toggle) {
-    padding: 14px 8px 14px 16px;
-  }
-
-  :global(#khartis-legend-tool .legend-accordion-list .section-expand-btn) {
-    padding: 14px 16px 14px 0;
-  }
-
-  :global(
-    #khartis-legend-tool .legend-accordion-list .section-title.legend-item-title
-  ) {
-    line-height: 1.25rem;
-  }
-
-  :global(#khartis-legend-tool .legend-accordion-list .section-body) {
-    padding: 8px 48px 24px 16px;
-    background: var(--cds-background, #ffffff);
-  }
-
-  :global(#khartis-legend-tool .legend-accordion-list .section-chevron) {
-    color: var(--cds-icon-primary, #161616);
-  }
-
-  :global(
-    #khartis-legend-tool .legend-accordion-list .section-chevron.toggle-off
-  ) {
-    opacity: 0.4;
-  }
-
-  :global(
-    #khartis-legend-tool .legend-accordion-list .section-toggle .kh-switch-input
-  ) {
-    width: 32px;
-    height: 16px;
-    background-color: var(--cds-icon-secondary, #6f6f6f);
-  }
-
-  :global(
-    #khartis-legend-tool
-      .legend-accordion-list
-      .section-toggle
-      .kh-switch-input::before
-  ) {
-    top: 3px;
-    left: 3px;
-    width: 10px;
-    height: 10px;
-  }
-
-  :global(
-    #khartis-legend-tool
-      .legend-accordion-list
-      .section-toggle
-      .kh-switch-input:checked
-  ) {
-    background-color: var(--kh-legend-toggle-bg);
-  }
-
-  :global(
-    #khartis-legend-tool
-      .legend-accordion-list
-      .section-toggle
-      .kh-switch-input:checked::before
-  ) {
-    transform: translateX(16px);
   }
 
   :global(
