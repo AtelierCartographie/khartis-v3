@@ -138,6 +138,10 @@
     return Math.min(max, Math.max(min, value));
   }
 
+  function getPageScale(): number {
+    return Math.max(globalState.zoom.pageZoomScale, 0.1);
+  }
+
   function getShapeDefaultSize(shapeType: string): {
     width: number;
     height: number;
@@ -152,13 +156,11 @@
   }
 
   function getDrawingPointThreshold(): number {
-    const scale = globalState.zoom.pageZoomLevel / 100;
-    return DRAWING_POINT_STEP_PX / Math.max(scale, 0.1);
+    return DRAWING_POINT_STEP_PX / getPageScale();
   }
 
   function getDrawingCloseThreshold(): number {
-    const scale = globalState.zoom.pageZoomLevel / 100;
-    return DRAWING_CLOSE_THRESHOLD_PX / Math.max(scale, 0.1);
+    return DRAWING_CLOSE_THRESHOLD_PX / getPageScale();
   }
 
   function getDistance(
@@ -271,7 +273,7 @@
       return;
     }
 
-    const scale = globalState.zoom.pageZoomLevel / 100;
+    const scale = getPageScale();
     const rect = layer.getBoundingClientRect();
     const maxX = Math.max(0, rect.width / scale - dragState.width);
     const maxY = Math.max(0, rect.height / scale - dragState.height);
@@ -304,7 +306,7 @@
 
     annotationsActions.selectAnnotation(item.id);
 
-    const scale = globalState.zoom.pageZoomLevel / 100;
+    const scale = getPageScale();
     const rect = layer.getBoundingClientRect();
     const currentTarget = event.currentTarget;
     const targetRect =
@@ -544,7 +546,7 @@
   function handleResizePointerMove(event: PointerEvent): void {
     if (!resizeState) return;
 
-    const scale = globalState.zoom.pageZoomLevel / 100;
+    const scale = getPageScale();
     const dx = (event.clientX - resizeState.startPointerX) / scale;
     const dy = (event.clientY - resizeState.startPointerY) / scale;
 
@@ -583,7 +585,7 @@
 
     if (!mapLayerElement) return;
 
-    const scale = globalState.zoom.pageZoomLevel / 100;
+    const scale = getPageScale();
     const rect = mapLayerElement.getBoundingClientRect();
     const shapeType = String(item.content ?? '');
     const defaultSize = getShapeDefaultSize(shapeType);
@@ -642,7 +644,7 @@
       | Pick<PointerEvent, 'clientX' | 'clientY'>
   ): { x: number; y: number } | null {
     if (!mapLayerElement) return null;
-    const scale = globalState.zoom.pageZoomLevel / 100;
+    const scale = getPageScale();
     const rect = mapLayerElement.getBoundingClientRect();
     return {
       x: (event.clientX - rect.left) / scale,
