@@ -51,10 +51,9 @@ export async function deleteDataset(
 
   if (vizOps) {
     const vizs = vizOps.getVisualizationsByDataset(datasetId);
-    // Lazy import to avoid cycle between datasets and facets stores.
-    const { facetsStore } =
-      await import('$lib/features/step-toolbar/tools/facets/facets.store.svelte');
-    const facetsBaseVizId = facetsStore.baseVisualizationId;
+    const { disableFacets, getFacetsBaseVisualizationId } =
+      await import('$lib/features/step-toolbar/tools/facets/facets-access');
+    const facetsBaseVizId = getFacetsBaseVisualizationId();
     const facetsBaseBeingDeleted =
       facetsBaseVizId !== null &&
       vizs.some((viz) => viz.id === facetsBaseVizId);
@@ -64,7 +63,7 @@ export async function deleteDataset(
     }
 
     if (facetsBaseBeingDeleted) {
-      facetsStore.disable();
+      disableFacets();
     }
   }
 
