@@ -18,7 +18,11 @@ import {
   getFormatLayoutSizingContext,
   getFormatState
 } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
-import { convertDistanceValue, INSET_MAP_SIZE_LIMITS } from './utils';
+import {
+  clampScaleDistance,
+  convertDistanceValue,
+  INSET_MAP_SIZE_LIMITS
+} from './utils';
 import type {
   ColorState,
   DragPosition,
@@ -122,6 +126,11 @@ function normalizeState(
   const nextScale = partial.scale;
   const nextOrientation = partial.orientation;
   const nextInsetMap = partial.insetMap;
+  const nextScaleUnits =
+    nextScale?.units === DistanceUnit.KILOMETERS ||
+    nextScale?.units === DistanceUnit.MILES
+      ? nextScale.units
+      : current.scale.units;
 
   return {
     visible:
@@ -135,17 +144,12 @@ function normalizeState(
         nextScale?.form === ScaleForm.LINE || nextScale?.form === ScaleForm.BOX
           ? nextScale.form
           : current.scale.form,
-      distance: clampNumber(
-        nextScale?.distance,
-        0,
-        Number.MAX_SAFE_INTEGER,
+      distance: clampScaleDistance(
+        toFiniteNumber(nextScale?.distance, current.scale.distance),
+        nextScaleUnits,
         current.scale.distance
       ),
-      units:
-        nextScale?.units === DistanceUnit.KILOMETERS ||
-        nextScale?.units === DistanceUnit.MILES
-          ? nextScale.units
-          : current.scale.units,
+      units: nextScaleUnits,
       color: normalizeColorState(nextScale?.color, current.scale.color),
       fontFamily:
         typeof nextScale?.fontFamily === 'string' &&
@@ -313,10 +317,9 @@ const { state, actions } = createToolStore<
       }
     },
     setScaleDistance: (distance: number) => {
-      s.scale.distance = clampNumber(
+      s.scale.distance = clampScaleDistance(
         distance,
-        0,
-        Number.MAX_SAFE_INTEGER,
+        s.scale.units,
         s.scale.distance
       );
     },
@@ -359,11 +362,15 @@ const { state, actions } = createToolStore<
       }
 
       if (s.scale.distance > 0) {
-        s.scale.distance = Math.max(
-          1,
-          Math.round(
-            convertDistanceValue(s.scale.distance, s.scale.units, units)
-          )
+        s.scale.distance = clampScaleDistance(
+          Math.max(
+            1,
+            Math.round(
+              convertDistanceValue(s.scale.distance, s.scale.units, units)
+            )
+          ),
+          units,
+          s.scale.distance
         );
       }
 

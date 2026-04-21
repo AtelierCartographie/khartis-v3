@@ -10,6 +10,7 @@ import {
   geoIndicationsActions,
   geoIndicationsState
 } from './geo-indications.store.svelte';
+import { MAX_SCALE_DISTANCE_BY_UNIT } from './utils';
 
 describe('geo indications store responsive defaults', () => {
   beforeEach(() => {
@@ -85,5 +86,34 @@ describe('geo indications store responsive defaults', () => {
 
     expect(geoIndicationsState.scale.units).toBe(DistanceUnit.KILOMETERS);
     expect(geoIndicationsState.scale.distance).toBe(100);
+  });
+
+  it('clamps scale distance to the meaningful max for the active unit', () => {
+    geoIndicationsActions.setScaleDistance(Number.MAX_SAFE_INTEGER);
+
+    expect(geoIndicationsState.scale.distance).toBe(
+      MAX_SCALE_DISTANCE_BY_UNIT[DistanceUnit.KILOMETERS]
+    );
+
+    geoIndicationsActions.setScaleUnits(DistanceUnit.MILES);
+    geoIndicationsActions.setScaleDistance(Number.MAX_SAFE_INTEGER);
+
+    expect(geoIndicationsState.scale.distance).toBe(
+      MAX_SCALE_DISTANCE_BY_UNIT[DistanceUnit.MILES]
+    );
+  });
+
+  it('normalizes restored scale distance against the active unit max', () => {
+    geoIndicationsActions.setState({
+      scale: {
+        ...geoIndicationsState.scale,
+        distance: 500_000_000_000_000,
+        units: DistanceUnit.KILOMETERS
+      }
+    });
+
+    expect(geoIndicationsState.scale.distance).toBe(
+      MAX_SCALE_DISTANCE_BY_UNIT[DistanceUnit.KILOMETERS]
+    );
   });
 });
