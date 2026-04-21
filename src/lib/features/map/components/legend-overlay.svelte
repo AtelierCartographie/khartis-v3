@@ -450,6 +450,10 @@
     return Math.min(max, Math.max(min, value));
   }
 
+  function getPageScale(): number {
+    return Math.max(globalState.zoom.pageZoomScale, 0.1);
+  }
+
   function stopDragging(): void {
     isDragging = false;
     window.removeEventListener(EVENT.POINTERMOVE, handlePointerMove);
@@ -465,7 +469,7 @@
       return;
     }
 
-    const scale = globalState.zoom.pageZoomLevel / 100;
+    const scale = getPageScale();
     const rect = overlayElement.getBoundingClientRect();
     const maxX = Math.max(0, rect.width / scale - 10);
     const maxY = Math.max(0, rect.height / scale - 10);
@@ -488,7 +492,7 @@
     event.preventDefault();
     event.stopPropagation();
 
-    const scale = globalState.zoom.pageZoomLevel / 100;
+    const scale = getPageScale();
     const overlayRect = overlayElement.getBoundingClientRect();
     const legendRect = legendElement.getBoundingClientRect();
 
