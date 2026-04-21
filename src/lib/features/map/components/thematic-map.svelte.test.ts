@@ -16,4 +16,14 @@ describe('ThematicMap projection mask overlay', () => {
     expect(source).toContain('fill-rule="evenodd"');
     expect(source).toContain('clip-rule="evenodd"');
   });
+
+  it('renders the alignment grid at page level and keeps it aligned with the shared snap size', () => {
+    expect(source).toContain('PAGE_GRID_SIZE_PX');
+    expect(source).toContain(
+      'style={`--page-grid-size:${PAGE_GRID_SIZE_PX}px;`}'
+    );
+    expect(source).toContain(
+      'background-size: var(--page-grid-size) var(--page-grid-size);'
+    );
+  });
 });
