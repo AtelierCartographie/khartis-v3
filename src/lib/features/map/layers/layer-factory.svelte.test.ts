@@ -1,4 +1,4 @@
-import { GeoJsonLayer, ScatterplotLayer } from '@deck.gl/layers';
+import { GeoJsonLayer, PathLayer, ScatterplotLayer } from '@deck.gl/layers';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { Feature, FeatureCollection, Polygon } from 'geojson';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -10,8 +10,10 @@ import {
 } from '$lib/features/commons/store/visualization.store.svelte';
 import {
   FillMode,
+  ColorMode,
   MissingDataShape,
-  StrokeMode
+  StrokeMode,
+  ThicknessMode
 } from '$lib/features/main-toolbar/constants';
 import type { GeometryInfo, LayerContext } from '../types';
 
@@ -128,6 +130,7 @@ vi.mock('./pattern-texture', async () => {
 });
 
 import {
+  createLineLayers,
   createPolygonLayers,
   resolveSplitMappingFeatureIdColumn
 } from './layer-factory';
@@ -244,6 +247,17 @@ function createPointGeometryInfo(): GeometryInfo {
   return {
     type: 'Point',
     encoding: 'geoarrow.point',
+    geoColumn: 'geometry',
+    isNativeGeoArrow: true,
+    isWkbEncoded: false,
+    isGeoJsonEncoded: false
+  };
+}
+
+function createLineGeometryInfo(): GeometryInfo {
+  return {
+    type: 'LineString',
+    encoding: 'geoarrow.linestring',
     geoColumn: 'geometry',
     isNativeGeoArrow: true,
     isWkbEncoded: false,
@@ -470,5 +484,53 @@ describe('createPolygonLayers', () => {
       )
     ).toBe(true);
     expect(arrowTableToGeoJSONMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('createLineLayers', () => {
+  it('creates native categorical line layers without throwing', () => {
+    const visualization: VisualizationConfig = {
+      id: 'viz-line-1',
+      name: 'Line categorical test',
+      type: VisualizationType.CATEGORICAL,
+      datasetId: 'dataset-1',
+      enabled: true,
+      primitiveFilters: [PrimitiveFilterType.LINE],
+      line: {
+        enabled: true,
+        colorMode: ColorMode.CATEGORIES,
+        thicknessMode: ThicknessMode.UNIQUE,
+        color: '#3366cc',
+        width: 3,
+        maxWidth: 6,
+        opacity: 1,
+        dashed: false,
+        categoryColumn: 'route_name',
+        classification: {
+          method: ClassificationMethod.MANUAL,
+          classes: 2,
+          colors: ['#ff0000', '#00ff00'],
+          labels: ['A', 'B']
+        }
+      },
+      style: {
+        fillOpacity: 1,
+        strokeOpacity: 1,
+        strokeWidth: 1
+      },
+      mapping: {}
+    };
+
+    const layers = createLineLayers(
+      createTableWithRows([{ route_name: 'A' }], ['route_name']),
+      createLineGeometryInfo(),
+      {
+        ...createContext(visualization),
+        customProjection: undefined
+      }
+    );
+
+    expect(pathColorAttrMock).toHaveBeenCalled();
+    expect(layers.some((layer) => layer instanceof PathLayer)).toBe(true);
   });
 });
