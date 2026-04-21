@@ -37,13 +37,19 @@ const multiShapeModule = {
       float offsetX;
       float offsetY;
       float halfMask;
+      float dashed;
+      float dashLength;
+      float gapLength;
     } multiShape;
   `,
   uniformTypes: {
     barWidth: 'f32',
     offsetX: 'f32',
     offsetY: 'f32',
-    halfMask: 'f32'
+    halfMask: 'f32',
+    dashed: 'f32',
+    dashLength: 'f32',
+    gapLength: 'f32'
   }
 };
 
@@ -62,6 +68,7 @@ in float outerRadiusPixels;
 
 out vec4 fragColor;
 
+#define PI 3.1415926535897932384626433832795
 #define TAU 6.2831853071795864769252867665590
 
 mat2 rotate2d(const in float angle) {
@@ -174,6 +181,19 @@ float getDistance(vec2 uv, float radiusPixels, int shapeType, float radius) {
     }
 }
 
+float getDashMask(vec2 uv) {
+    if (multiShape.dashed < 0.5) {
+        return 1.0;
+    }
+
+    float cycle = max(multiShape.dashLength + multiShape.gapLength, 0.0001);
+    float approxPerimeter = max(TAU * max(outerRadiusPixels, 1.0), cycle);
+    float repetitions = max(1.0, floor(approxPerimeter / cycle));
+    float phase = fract((atan(uv.y, uv.x) + PI) / TAU * repetitions);
+    float duty = clamp(multiShape.dashLength / cycle, 0.05, 0.95);
+    return 1.0 - step(duty, phase);
+}
+
 void main(void) {
     geometry.uv = unitPosition;
     vec2 uv = unitPosition - vec2(multiShape.offsetX, multiShape.offsetY);
@@ -190,15 +210,16 @@ void main(void) {
     if (inShape == 0.0) discard;
 
     if (scatterplot.stroked > 0.5) {
-        float isLine = scatterplot.antialiasing
+        float lineMask = scatterplot.antialiasing
             ? smoothedge(innerUnitRadius * outerRadiusPixels, distToCenter)
             : step(innerUnitRadius * outerRadiusPixels, distToCenter);
+        lineMask *= getDashMask(uv);
 
         if (scatterplot.filled > 0.5) {
-            fragColor = mix(vFillColor, vLineColor, isLine);
+            fragColor = mix(vFillColor, vLineColor, lineMask);
         } else {
-            if (isLine == 0.0) discard;
-            fragColor = vec4(vLineColor.rgb, vLineColor.a * isLine);
+            if (lineMask == 0.0) discard;
+            fragColor = vec4(vLineColor.rgb, vLineColor.a * lineMask);
         }
     } else if (scatterplot.filled < 0.5) {
         discard;
@@ -219,6 +240,9 @@ export type MultiShapeLayerProps<DataT = unknown> = {
   offsetX?: number;
   offsetY?: number;
   halfMask?: HalfMaskMode;
+  dashed?: boolean;
+  dashLength?: number;
+  gapLength?: number;
 };
 
 const defaultProps = {
@@ -227,7 +251,10 @@ const defaultProps = {
   barWidth: { type: 'number', value: 24 },
   offsetX: { type: 'number', value: 0 },
   offsetY: { type: 'number', value: 0 },
-  halfMask: { type: 'number', value: 0 }
+  halfMask: { type: 'number', value: 0 },
+  dashed: { type: 'boolean', value: false },
+  dashLength: { type: 'number', value: 3 },
+  gapLength: { type: 'number', value: 2 }
 };
 
 interface MultiShapeLayerState {
@@ -242,7 +269,10 @@ interface MultiShapeLayerState {
  * Extends deck.gl's ScatterplotLayer with an `instanceShapes` attribute and an
  * SDF fragment shader that dispatches on shape type.
  */
-export class MultiShapeLayer extends ScatterplotLayer {
+export class MultiShapeLayer<DataT = unknown> extends ScatterplotLayer<
+  DataT,
+  MultiShapeLayerProps<DataT>
+> {
   static layerName = 'MultiShapeLayer';
 
   static defaultProps = defaultProps;
@@ -283,13 +313,20 @@ vRadius = instanceRadius;
     };
   }
 
-  draw(opts: Parameters<ScatterplotLayer['draw']>[0]): void {
-    const { barWidth, offsetX, offsetY, halfMask } = this.props as unknown as {
-      barWidth?: number;
-      offsetX?: number;
-      offsetY?: number;
-      halfMask?: number;
-    };
+  draw(
+    opts: Parameters<
+      ScatterplotLayer<DataT, MultiShapeLayerProps<DataT>>['draw']
+    >[0]
+  ): void {
+    const {
+      barWidth,
+      offsetX,
+      offsetY,
+      halfMask,
+      dashed,
+      dashLength,
+      gapLength
+    } = this.props;
     const state = this.state as unknown as MultiShapeLayerState;
     const shaderInputs = state.model?.shaderInputs;
     if (shaderInputs) {
@@ -298,7 +335,10 @@ vRadius = instanceRadius;
           barWidth,
           offsetX: offsetX ?? 0,
           offsetY: offsetY ?? 0,
-          halfMask: halfMask ?? 0
+          halfMask: halfMask ?? 0,
+          dashed: dashed ? 1 : 0,
+          dashLength: dashLength ?? 3,
+          gapLength: gapLength ?? 2
         }
       });
     }

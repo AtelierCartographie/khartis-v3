@@ -1,18 +1,23 @@
 import { GeoJsonLayer, PathLayer, ScatterplotLayer } from '@deck.gl/layers';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
-import type { Feature, FeatureCollection, Polygon } from 'geojson';
+import type { Feature, FeatureCollection, Point, Polygon } from 'geojson';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ClassificationMethod,
   PrimitiveFilterType,
+  ScaleType,
   VisualizationType,
   type VisualizationConfig
 } from '$lib/features/commons/store/visualization.store.svelte';
 import {
+  CategoryShapeMode,
   FillMode,
   ColorMode,
   MissingDataShape,
+  ProportionalType,
+  ShapeType,
   StrokeMode,
+  SymbolMode,
   ThicknessMode
 } from '$lib/features/main-toolbar/constants';
 import type { GeometryInfo, LayerContext } from '../types';
@@ -131,6 +136,7 @@ vi.mock('./pattern-texture', async () => {
 
 import {
   createLineLayers,
+  createPointLayers,
   createPolygonLayers,
   resolveSplitMappingFeatureIdColumn
 } from './layer-factory';
@@ -179,6 +185,20 @@ function createPolygonFeature(
   };
 }
 
+function createPointFeature(
+  id: string,
+  year: number
+): Feature<Point, { id: string; year: number }> {
+  return {
+    type: 'Feature',
+    properties: { id, year },
+    geometry: {
+      type: 'Point',
+      coordinates: [0, 0]
+    }
+  };
+}
+
 function createVisualization(fillMode: FillMode): VisualizationConfig {
   return {
     id: 'viz-1',
@@ -205,6 +225,43 @@ function createVisualization(fillMode: FillMode): VisualizationConfig {
       fillOpacity: 1,
       strokeOpacity: 0,
       strokeWidth: 0
+    },
+    mapping: {}
+  };
+}
+
+function createSymbolVisualization(): VisualizationConfig {
+  return {
+    id: 'viz-point-1',
+    name: 'Point stroke test',
+    type: VisualizationType.PROPORTIONAL,
+    datasetId: 'dataset-1',
+    enabled: true,
+    primitiveFilters: [PrimitiveFilterType.POINT],
+    symbol: {
+      enabled: true,
+      mode: SymbolMode.UNIQUE,
+      shape: ShapeType.CIRCLE,
+      size: 10,
+      minSize: 2,
+      maxSize: 10,
+      sizeScale: ScaleType.LINEAR,
+      opacity: 1,
+      fillMode: FillMode.UNIQUE,
+      fillColor: '#3366cc',
+      fillColorB: '#ff832b',
+      strokeMode: StrokeMode.NONE,
+      strokeColor: '#1f1f1f',
+      strokeWidth: 2,
+      strokeOpacity: 1,
+      strokeDashed: false,
+      proportionalType: ProportionalType.SINGLE,
+      categoryShape: CategoryShapeMode.UNIQUE
+    },
+    style: {
+      fillOpacity: 1,
+      strokeOpacity: 1,
+      strokeWidth: 1
     },
     mapping: {}
   };
@@ -404,6 +461,40 @@ describe('createPolygonLayers', () => {
     expect(getPatternLayer(layers)).toBeUndefined();
   });
 
+  it('fully disables GeoJSON polygon stroke props when contour mode is none', () => {
+    arrowTableToGeoJSONMock.mockReturnValue({
+      type: 'FeatureCollection',
+      features: [createPolygonFeature('keep', 2024)]
+    } satisfies FeatureCollection<Polygon>);
+
+    const visualization = createVisualization(FillMode.UNIQUE);
+    visualization.polygon = {
+      ...visualization.polygon!,
+      strokeMode: StrokeMode.NONE,
+      strokeWidth: 3,
+      strokeOpacity: 1,
+      strokeDashed: true
+    };
+
+    const layers = createPolygonLayers(
+      createTableWithFields([]),
+      createGeometryInfo(),
+      createContext(visualization)
+    );
+
+    const polygonLayer = layers[0] as GeoJsonLayer;
+    const polygonLayerProps = polygonLayer.props as GeoJsonLayer['props'] & {
+      getDashArray?: [number, number];
+    };
+
+    expect(polygonLayerProps.stroked).toBe(false);
+    expect(polygonLayerProps.getLineColor).toEqual([0, 0, 0, 0]);
+    expect(polygonLayerProps.extensions).toEqual([]);
+    expect(polygonLayerProps.getDashArray).toEqual([0, 0]);
+    expect(polygonLayerProps.lineWidthScale).toBe(0);
+    expect(polygonLayerProps.lineWidthMinPixels).toBe(0);
+  });
+
   it('propagates polygon missing-data styling to binary choropleth fills', () => {
     const visualization = createVisualization(FillMode.CLASSES);
     visualization.mapping = { valueColumn: 'value' };
@@ -484,6 +575,28 @@ describe('createPolygonLayers', () => {
       )
     ).toBe(true);
     expect(arrowTableToGeoJSONMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('createPointLayers', () => {
+  it('fully disables point circle stroke props when contour mode is none', () => {
+    arrowTableToGeoJSONMock.mockReturnValue({
+      type: 'FeatureCollection',
+      features: [createPointFeature('keep', 2024)]
+    } satisfies FeatureCollection<Point>);
+
+    const layers = createPointLayers(
+      createTableWithFields([]),
+      createPointGeometryInfo(),
+      createContext(createSymbolVisualization())
+    );
+
+    const pointLayer = layers[0] as ScatterplotLayer;
+
+    expect(pointLayer).toBeInstanceOf(ScatterplotLayer);
+    expect(pointLayer.props.stroked).toBe(false);
+    expect(pointLayer.props.lineWidthScale).toBe(0);
+    expect(pointLayer.props.getLineColor).toEqual([0, 0, 0, 0]);
   });
 });
 

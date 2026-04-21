@@ -47,13 +47,16 @@ describe('MultiShapeLayer — class contract', () => {
     expect(typeof MultiShapeLayer.defaultProps).toBe('object');
   });
 
-  it('declares getShape, barWidth, offsetX, offsetY and halfMask defaults', () => {
+  it('declares getShape, barWidth, offsetX, offsetY, halfMask and dash defaults', () => {
     const props = MultiShapeLayer.defaultProps as Record<string, unknown>;
     expect(props.getShape).toMatchObject({ type: 'accessor', value: 0 });
     expect(props.barWidth).toMatchObject({ type: 'number', value: 24 });
     expect(props.offsetX).toMatchObject({ type: 'number', value: 0 });
     expect(props.offsetY).toMatchObject({ type: 'number', value: 0 });
     expect(props.halfMask).toMatchObject({ type: 'number', value: 0 });
+    expect(props.dashed).toMatchObject({ type: 'boolean', value: false });
+    expect(props.dashLength).toMatchObject({ type: 'number', value: 3 });
+    expect(props.gapLength).toMatchObject({ type: 'number', value: 2 });
   });
 });
 
@@ -68,17 +71,21 @@ describe('MultiShapeLayer — source invariants (keep SDF shader consistent)', (
     expect(source).toContain('vRadius = instanceRadius;');
   });
 
-  it('declares multiShape uniform block with barWidth/offsetX/offsetY/halfMask', () => {
+  it('declares multiShape uniform block with dash controls', () => {
     expect(source).toMatch(/uniform multiShapeUniforms\s*\{/);
     expect(source).toContain('float barWidth;');
     expect(source).toContain('float offsetX;');
     expect(source).toContain('float offsetY;');
     expect(source).toContain('float halfMask;');
+    expect(source).toContain('float dashed;');
+    expect(source).toContain('float dashLength;');
+    expect(source).toContain('float gapLength;');
+    expect(source).toContain('lineMask *= getDashMask(uv);');
   });
 
   it('calls super.draw after setting shaderInputs to avoid GPU state leaks', () => {
     const drawBlock = source.match(
-      /draw\(opts: Parameters<ScatterplotLayer\['draw'\]>\[0\]\): void \{[\s\S]*?super\.draw\(opts\);\s*\}/
+      /draw\([\s\S]*?\): void \{[\s\S]*?shaderInputs\.setProps\([\s\S]*?super\.draw\(opts\);\s*\}/
     );
     expect(drawBlock).not.toBeNull();
   });
