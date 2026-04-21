@@ -52,6 +52,7 @@
     { value: ANNOTATION_ROLE.SUBTITLE, text: m.annotations_style_subtitle() },
     { value: 'caption', text: m.annotations_style_caption() }
   ];
+  const ANNOTATION_FONT_SIZES = [8, ...LEGEND_FONT_SIZES];
 
   function handleAlignChange(align: TextAlign) {
     annotationsActions.applyStyle({ textAlign: align });
@@ -62,10 +63,12 @@
       ? String(selectedText.content ?? '')
       : annotationsState.textContent
   );
-  const canAddText = $derived(textEditorValue.trim().length > 0);
-
   function handleAddText() {
-    if (!canAddText) {
+    if (textEditorValue.trim().length === 0) {
+      const textarea = document.getElementById(
+        'text-content'
+      ) as HTMLTextAreaElement | null;
+      textarea?.focus();
       return;
     }
 
@@ -116,7 +119,7 @@
     }
     return { hex: hslToHex(c.hue, c.saturation, c.lightness), ...c };
   });
-  const bgOpacity = $derived(effectiveStyle.backgroundOpacity ?? 90);
+  const bgOpacity = $derived(effectiveStyle.backgroundOpacity ?? 100);
 
   let localFont = $state<string>(AVAILABLE_FONTS[0]);
   let localFontSize = $state<number>(LEGEND_FONT_SIZES[0]);
@@ -149,12 +152,7 @@
   <Row>
     <Column>
       <div class="section add-btn-section">
-        <Button
-          kind="primary"
-          icon={Add}
-          onclick={handleAddText}
-          disabled={!canAddText}
-        >
+        <Button kind="primary" icon={Add} onclick={handleAddText}>
           {m.annotations_add_text()}
         </Button>
         <p class="helper">{m.annotations_add_text_description()}</p>
@@ -217,7 +215,7 @@
               }}
               size="sm"
             >
-              {#each LEGEND_FONT_SIZES as s (s)}
+              {#each ANNOTATION_FONT_SIZES as s (s)}
                 <SelectItem value={String(s)} text={String(s)} />
               {/each}
             </Select>
@@ -445,7 +443,7 @@
 
 <style>
   .section {
-    margin-top: var(--cds-spacing-05);
+    margin-top: var(--cds-spacing-04);
   }
 
   .helper {
@@ -461,8 +459,8 @@
   }
 
   .textarea-wrapper :global(.bx--text-area) {
-    min-height: 128px;
-    height: 128px;
+    min-height: 112px;
+    height: 112px;
     resize: vertical;
   }
 

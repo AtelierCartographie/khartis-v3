@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { ANNOTATION_ROLE, SHAPE_TYPE } from '$lib/features/commons/constants';
 import {
   AnnotationKind,
-  DrawingType
+  DrawingType,
+  FormatMode,
+  PageModel
 } from '$lib/features/commons/constants/ui.constants';
 import { TextAlign } from '$lib/features/commons/types/enums';
 import { formatActions } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
@@ -103,6 +105,20 @@ describe('annotations store', () => {
     expect(itemsByRole.get(ANNOTATION_ROLE.CREDIT)?.style?.textAlign).toBe(
       TextAlign.Right
     );
+  });
+
+  it('uses the custom page sizing profile when page elements are initialized', () => {
+    formatActions.setModel(PageModel.SCREEN_LANDSCAPE);
+    formatActions.setMode(FormatMode.CUSTOM);
+    formatActions.setSize(680, 680);
+
+    annotationsActions.initPageElements({ withPlaceholders: true });
+
+    const title = getAnnotationsState().items.find(
+      (item) => item.role === ANNOTATION_ROLE.TITLE
+    );
+
+    expect(title?.style?.fontSize).toBe(14);
   });
 
   it('spawns the first free text annotation in a neutral page zone', () => {
