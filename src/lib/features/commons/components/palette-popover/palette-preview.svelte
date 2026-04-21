@@ -7,8 +7,10 @@
   import CategoriesAspectPopover from './categories-aspect-popover.svelte';
   import type {
     CategoriesAspectVariant,
+    CategoriesCommonAspect,
     CategoryDraft
   } from './categories-aspect-popover.types';
+  import { DEFAULT_COMMON_ASPECT } from './categories-aspect-popover.types';
   import type {
     Palette,
     PaletteType,
@@ -27,11 +29,17 @@
     categoriesMode?: boolean;
     categoriesVariant?: CategoriesAspectVariant;
     categoryLabels?: string[];
+    disabledCategoryLabels?: string[];
+    categoriesCommonAspect?: CategoriesCommonAspect;
     categoriesPopoverOpen?: boolean;
     onexpand?: () => void;
     oninvert?: () => void;
     onselect?: (palette: Palette) => void;
     onClassificationChange?: (updates: Partial<ClassificationConfig>) => void;
+    onCategoriesCommonAspectChange?: (
+      commonAspect: CategoriesCommonAspect,
+      next: CategoryDraft[]
+    ) => void;
   }
 
   let {
@@ -45,11 +53,14 @@
     categoriesMode = false,
     categoriesVariant = 'symbols-unique',
     categoryLabels = [],
+    disabledCategoryLabels = [],
+    categoriesCommonAspect = DEFAULT_COMMON_ASPECT,
     categoriesPopoverOpen = $bindable(false),
     onexpand,
     oninvert,
     onselect,
-    onClassificationChange
+    onClassificationChange,
+    onCategoriesCommonAspectChange
   }: Props = $props();
 
   let dropdownOpen = $state(false);
@@ -70,13 +81,17 @@
   );
 
   const categoryDrafts = $derived<CategoryDraft[]>(
-    colors.map((color, i) => ({
-      id: String(i),
-      label:
-        categoryLabels[i] ?? m.palette_category_default_label({ index: i + 1 }),
-      color,
-      enabled: true
-    }))
+    colors.map((color, i) => {
+      const label =
+        categoryLabels[i] ?? m.palette_category_default_label({ index: i + 1 });
+
+      return {
+        id: String(i),
+        label,
+        color,
+        enabled: !disabledCategoryLabels.includes(label)
+      };
+    })
   );
 
   function handleClick() {
@@ -114,29 +129,70 @@
     dropdownOpen = false;
   }
 
-  function handleCategoriesValidate(next: CategoryDraft[]) {
-    const categoryShapes = next.some((category) => category.shape)
-      ? next
-          .map((category) => category.shape)
-          .filter(
-            (shape): shape is NonNullable<typeof shape> => shape !== undefined
-          )
-      : undefined;
+  function resolveValidatedCategoryColors(
+    next: CategoryDraft[],
+    commonAspect: CategoriesCommonAspect
+  ): string[] {
+    if (categoriesVariant === 'symbols-different-rank') {
+      const color =
+        commonAspect.color ??
+        next[0]?.color ??
+        colors[0] ??
+        DEFAULT_COMMON_ASPECT.color ??
+        '#f287ac';
+      return next.map(() => color);
+    }
+
+    return next.map((category) => category.color);
+  }
+
+  function handleCategoriesValidateWithAspect(
+    next: CategoryDraft[],
+    commonAspect: CategoriesCommonAspect
+  ) {
+    handleCategoriesValidate(next, commonAspect);
+  }
+
+  function handleCategoriesValidate(
+    next: CategoryDraft[],
+    commonAspect: CategoriesCommonAspect
+  ) {
+    const resolvedColors = resolveValidatedCategoryColors(next, commonAspect);
+    const normalizedCategories = next.map((category, index) => ({
+      ...category,
+      color: resolvedColors[index] ?? category.color,
+      shape:
+        categoriesVariant === 'symbols-different' ? category.shape : undefined
+    }));
+    const categoryShapes =
+      categoriesVariant === 'symbols-different' &&
+      normalizedCategories.some((category) => category.shape)
+        ? normalizedCategories
+            .map((category) => category.shape)
+            .filter(
+              (shape): shape is NonNullable<typeof shape> => shape !== undefined
+            )
+        : undefined;
+    const paletteId =
+      resolvedColors.length === colors.length &&
+      resolvedColors.every((color, index) => color === colors[index])
+        ? (selectedPaletteId ?? '__custom__')
+        : '__custom__';
 
     onClassificationChange?.({
-      colors: next.map((c) => c.color),
-      labels: next.map((c) => c.label),
+      colors: resolvedColors,
+      labels: normalizedCategories.map((category) => category.label),
+      disabledLabels: normalizedCategories
+        .filter((category) => !category.enabled)
+        .map((category) => category.label),
       categoryShapes,
-      paletteId: '__custom__',
+      paletteId,
       inverted: false,
       patternId: undefined,
       patternParams: undefined
     });
+    onCategoriesCommonAspectChange?.(commonAspect, normalizedCategories);
     categoriesPopoverOpen = false;
-  }
-
-  function handleCategoriesValidateWithAspect(next: CategoryDraft[]) {
-    handleCategoriesValidate(next);
   }
 
   function handleCategoriesClose() {
@@ -234,6 +290,7 @@
   triggerElement={triggerRef}
   categories={categoryDrafts}
   variant={categoriesVariant}
+  commonAspect={categoriesCommonAspect}
   onclose={handleCategoriesClose}
   onvalidate={handleCategoriesValidateWithAspect}
 />

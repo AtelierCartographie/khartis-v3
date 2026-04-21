@@ -1,5 +1,6 @@
 <script lang="ts">
   import { untrack } from 'svelte';
+  import { dragHandle, dragHandleZone } from 'svelte-dnd-action';
   import Button from '$lib/features/commons/components/carbon/button.svelte';
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import CompactNumberInput from '$lib/features/commons/components/compact-number-input.svelte';
@@ -66,6 +67,7 @@
   );
   const showCategoryShapePicker = $derived(variant === 'symbols-different');
   const isSymbolsDifferentRank = $derived(variant === 'symbols-different-rank');
+  const showPerCategoryAspect = $derived(!isSymbolsDifferentRank);
   const primitiveKind = $derived<'symbols' | 'polygons' | 'lines' | 'texts'>(
     variant === 'polygons'
       ? 'polygons'
@@ -101,6 +103,7 @@
     draftCategories.find((category) => category.id === selectedCategoryId)
   );
 
+  const FLIP_DURATION_MS = 150;
   const MAX_VISIBLE_CATEGORIES = 50;
   const visibleDraftCategories = $derived(
     draftCategories.slice(0, MAX_VISIBLE_CATEGORIES)
@@ -122,11 +125,15 @@
     draftCategories = categories.map((category, index) => ({
       ...category,
       shape:
-        category.shape ??
-        CATEGORY_SHAPE_CYCLE[index % CATEGORY_SHAPE_CYCLE.length]
+        variant === 'symbols-different'
+          ? (category.shape ??
+            CATEGORY_SHAPE_CYCLE[index % CATEGORY_SHAPE_CYCLE.length])
+          : category.shape
     }));
     selectedCategoryId = draftCategories[0]?.id ?? null;
-    expandedCategoryId = draftCategories[0]?.id ?? null;
+    expandedCategoryId = showPerCategoryAspect
+      ? (draftCategories[0]?.id ?? null)
+      : null;
     draftColorBlindFilter = false;
     draftCommonAspect = commonAspect
       ? { ...DEFAULT_COMMON_ASPECT, ...commonAspect }
@@ -212,6 +219,18 @@
     toggleCategoryExpand(id);
   }
 
+  function applyVisibleCategoryOrder(items: CategoryDraft[]) {
+    draftCategories = [
+      ...items,
+      ...draftCategories.slice(Math.min(draftCategories.length, items.length))
+    ];
+  }
+
+  function handleCategoryListReorder(e: Event) {
+    const { items } = (e as CustomEvent<{ items: CategoryDraft[] }>).detail;
+    applyVisibleCategoryOrder(items);
+  }
+
   function handleSuggestionPaletteSelect(_palette: Palette) {}
 
   function categoryShape(category: CategoryDraft): ShapeType {
@@ -226,16 +245,22 @@
     category: CategoryDraft,
     index: number
   ): string {
+    const markerColor =
+      isSymbolsDifferentRank && draftCommonAspect.color
+        ? draftCommonAspect.color
+        : category.color;
+
     if (variant === 'lines') {
-      return `--marker-color: ${category.color}; --marker-size: 18px;`;
+      return `--marker-color: ${markerColor}; --marker-size: 18px;`;
     }
     if (variant === 'texts') {
-      return `--marker-color: ${category.color}; --marker-size: 18px;`;
+      return `--marker-color: ${markerColor}; --marker-size: 18px;`;
     }
 
-    const rankSize = isSymbolsDifferentRank ? 10 + index * 2 : 14;
+    const rankBaseSize = Math.max(12, draftCommonAspect.size * 4);
+    const rankSize = isSymbolsDifferentRank ? rankBaseSize + index * 4 : 14;
 
-    return `--marker-color: ${category.color}; --marker-size: ${rankSize}px;`;
+    return `--marker-color: ${markerColor}; --marker-size: ${rankSize}px;`;
   }
 
   $effect(() => {
@@ -534,19 +559,37 @@
 
           <div class="field-stack">
             <span class="field-label">{m.palette_categories_sort()}</span>
-            <div class="sort-dropdown">
-              <span>{m.palette_categories_sort_manual()}</span>
-              <ChevronDown size={16} />
-            </div>
+            <select class="common-select sort-select">
+              <option value="manual"
+                >{m.palette_categories_sort_manual()}</option
+              >
+            </select>
           </div>
 
           <div class="field-stack">
             <p class="list-label">{m.palette_categories_list_label()}</p>
-            <ul class="category-list">
+            <ul
+              class="category-list"
+              use:dragHandleZone={{
+                items: visibleDraftCategories,
+                flipDurationMs: FLIP_DURATION_MS,
+                dropTargetStyle: {},
+                useCursorForDetection: true
+              }}
+              onconsider={handleCategoryListReorder}
+              onfinalize={handleCategoryListReorder}
+            >
               {#each visibleDraftCategories as category, index (category.id)}
-                <li class="category-item">
+                <li
+                  class="category-item"
+                  class:category-item--disabled={!category.enabled}
+                >
                   <div class="category-header">
-                    <div class="drag-handle" aria-hidden="true">
+                    <div
+                      class="drag-handle"
+                      use:dragHandle
+                      aria-label={`${m.palette_categories_sort_manual()} ${category.label}`}
+                    >
                       <span></span>
                       <span></span>
                       <span></span>
@@ -590,56 +633,59 @@
                     </div>
                   </div>
 
-                  <button
-                    type="button"
-                    class="category-expand-button"
-                    onclick={() => handleCategoryExpand(category.id)}
-                    aria-expanded={expandedCategoryId === category.id}
-                  >
-                    <ChevronDown
-                      size={16}
-                      class={expandedCategoryId === category.id
-                        ? 'rotated'
-                        : undefined}
-                    />
-                    <span>{m.per_category_aspect()}</span>
-                  </button>
+                  {#if showPerCategoryAspect}
+                    <button
+                      type="button"
+                      class="category-expand-button"
+                      onclick={() => handleCategoryExpand(category.id)}
+                      aria-expanded={expandedCategoryId === category.id}
+                    >
+                      <ChevronDown
+                        size={16}
+                        class={expandedCategoryId === category.id
+                          ? 'rotated'
+                          : undefined}
+                      />
+                      <span>{m.per_category_aspect()}</span>
+                    </button>
 
-                  {#if expandedCategoryId === category.id}
-                    <div class="category-aspect-body">
-                      {#if showCategoryShapePicker}
+                    {#if expandedCategoryId === category.id}
+                      <div class="category-aspect-body">
+                        {#if showCategoryShapePicker}
+                          <div class="field-stack">
+                            <span class="field-label"
+                              >{m.per_category_shape()}</span
+                            >
+                            <select
+                              class="common-select"
+                              value={category.shape ?? ShapeType.CIRCLE}
+                              onchange={(e: Event) =>
+                                handleCategoryShape(
+                                  category.id,
+                                  (e.currentTarget as HTMLSelectElement).value
+                                )}
+                            >
+                              {#each shapeChoices as shapeChoice (shapeChoice.id)}
+                                <option value={shapeChoice.id}>
+                                  {shapeChoice.label}
+                                </option>
+                              {/each}
+                            </select>
+                          </div>
+                        {/if}
+
                         <div class="field-stack">
                           <span class="field-label"
-                            >{m.per_category_shape()}</span
+                            >{m.per_category_color()}</span
                           >
-                          <select
-                            class="common-select"
-                            value={category.shape ?? ShapeType.CIRCLE}
-                            onchange={(e: Event) =>
-                              handleCategoryShape(
-                                category.id,
-                                (e.currentTarget as HTMLSelectElement).value
-                              )}
-                          >
-                            {#each shapeChoices as shapeChoice (shapeChoice.id)}
-                              <option value={shapeChoice.id}>
-                                {shapeChoice.label}
-                              </option>
-                            {/each}
-                          </select>
+                          <SingleColorPreview
+                            color={category.color}
+                            onchange={(hex) =>
+                              handleCategoryColor(category.id, hex)}
+                          />
                         </div>
-                      {/if}
-
-                      <div class="field-stack">
-                        <span class="field-label">{m.per_category_color()}</span
-                        >
-                        <SingleColorPreview
-                          color={category.color}
-                          onchange={(hex) =>
-                            handleCategoryColor(category.id, hex)}
-                        />
                       </div>
-                    </div>
+                    {/if}
                   {/if}
                 </li>
               {/each}
@@ -826,8 +872,7 @@
     color: var(--cds-text-primary, #161616);
   }
 
-  .common-select,
-  .sort-dropdown {
+  .common-select {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -859,6 +904,10 @@
     padding-right: 32px;
   }
 
+  .sort-select {
+    cursor: pointer;
+  }
+
   .category-list {
     list-style: none;
     margin: 0;
@@ -883,10 +932,14 @@
   .category-item {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 4px;
     padding: 8px;
     background: var(--cds-layer-01, #f4f4f4);
     border: 1px solid var(--cds-border-subtle-01, #c6c6c6);
+  }
+
+  .category-item--disabled {
+    opacity: 0.56;
   }
 
   .category-header {
@@ -905,6 +958,7 @@
     justify-content: center;
     align-content: center;
     flex-shrink: 0;
+    cursor: grab;
 
     span {
       display: block;
@@ -1029,7 +1083,7 @@
     align-items: center;
     gap: 8px;
     width: 100%;
-    padding: 0 16px;
+    padding: 0 16px 0 22px;
     background: transparent;
     border: none;
     cursor: pointer;

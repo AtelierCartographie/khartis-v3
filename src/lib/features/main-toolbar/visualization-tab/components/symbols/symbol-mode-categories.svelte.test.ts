@@ -50,6 +50,10 @@ describe('SymbolModeCategories (en categorie.png alignment)', () => {
     expect(source).toContain(
       'categoryLabels={visualization?.symbol?.classification?.labels ??'
     );
+    expect(source).toContain(
+      'disabledCategoryLabels={visualization?.symbol?.classification'
+    );
+    expect(source).toContain('categoriesCommonAspect={categoriesCommonAspect}');
   });
 
   it('maps categoryShapeMode to CategoriesAspectVariant and passes categoriesVariant to PalettePreview', () => {
@@ -60,6 +64,18 @@ describe('SymbolModeCategories (en categorie.png alignment)', () => {
     expect(source).toContain("'symbols-different-rank'");
     expect(source).toContain("'symbols-unique'");
     expect(source).toContain('categoriesVariant={categoriesVariant}');
+  });
+
+  it('maps category common aspect updates back to the point symbol primitive', () => {
+    expect(source).toContain('function handleCategoriesCommonAspectChange');
+    expect(source).toContain('resolveOrderedCategorySizeBounds');
+    expect(source).toContain('symbolUpdates.minSize = minSize');
+    expect(source).toContain('symbolUpdates.maxSize = maxSize');
+    expect(source).toContain('disabledLabels: nextCategories');
+    expect(source).toContain('onSymbolPrimitiveChange?.(symbolUpdates)');
+    expect(source).toContain(
+      'onCategoriesCommonAspectChange={handleCategoriesCommonAspectChange}'
+    );
   });
 });
 

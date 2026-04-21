@@ -235,10 +235,12 @@
         dataFields={dataFields}
         visualization={visualization}
         onSymbolsChange={onSymbolsChange}
+        onSymbolPrimitiveChange={onSymbolPrimitiveChange}
         onMappingChange={onMappingChange}
         onModesChange={onModesChange}
         onMissingDataChange={onMissingDataChange}
         onClassificationChange={onClassificationChange}
+        onStrokeClassificationChange={onStrokeClassificationChange}
         onInvertPalette={onInvertPalette}
       />
     {/if}
