@@ -31,6 +31,7 @@ pnpm dev          # http://localhost:5176/cartographie/khartisnewpprd/
 ```
 
 **⚠️ Critical context before any change:**
+
 - This is a **client-only** app — all data processing runs in-browser via DuckDB WASM
 - Two rendering modes: **orthographic** (Deck.gl standalone) and **MapLibre interleaved** (OSM tiles)
 - Feature-based architecture — no direct feature-to-feature imports
@@ -61,6 +62,7 @@ static/
 ```
 
 **Key conventions:**
+
 - Components: `kebab-case.svelte`
 - Stores: `{subject}.store.svelte.ts`
 - Hooks: `use-{subject}.svelte.ts`
@@ -71,18 +73,18 @@ static/
 
 ## Development Commands
 
-| Command | Purpose |
-|---------|---------|
-| `pnpm dev` | Dev server (port 5176) |
-| `pnpm build` | Production static build → `build/` |
-| `pnpm check` | TypeScript + Svelte validation |
-| `pnpm lint` | Prettier check + ESLint |
-| `pnpm format` | Auto-format all files |
-| `pnpm test:unit` | Vitest (client jsdom) |
-| `pnpm test:pipeline` | Server-side pipeline + DuckDB tests |
-| `pnpm test:duckdb` | DuckDB integration tests |
-| `pnpm test:all` | Full test suite |
-| `pnpm machine-translate` | i18n translation via Inlang |
+| Command                  | Purpose                             |
+| ------------------------ | ----------------------------------- |
+| `pnpm dev`               | Dev server (port 5176)              |
+| `pnpm build`             | Production static build → `build/`  |
+| `pnpm check`             | TypeScript + Svelte validation      |
+| `pnpm lint`              | Prettier check + ESLint             |
+| `pnpm format`            | Auto-format all files               |
+| `pnpm test:unit`         | Vitest (client jsdom)               |
+| `pnpm test:pipeline`     | Server-side pipeline + DuckDB tests |
+| `pnpm test:duckdb`       | DuckDB integration tests            |
+| `pnpm test:all`          | Full test suite                     |
+| `pnpm machine-translate` | i18n translation via Inlang         |
 
 **Quality gate before commit:** `pnpm lint && pnpm check`
 
@@ -91,28 +93,32 @@ static/
 ## Coding Standards
 
 ### Formatting (Prettier authoritative)
+
 - 2-space indentation, single quotes, semicolons
 - No trailing commas, `printWidth: 80`
 
 ### Svelte 5 Patterns
+
 - `$state()` for reactive state, `$derived` for computed values
 - `$effect()` for side effects with cleanup functions
 - No `writable()`, `$:`, `export let`, `<slot>`, `$$props`
 - Callback props typed explicitly: `onclick?: (value: T) => void`
 
 ### Comment Policy
+
 - **Zero comments by default**. Well-named identifiers are documentation.
 - Only comment non-obvious invariants, bug workarounds (with ticket), hidden constraints.
 - One short line max. Never JSDoc. Never explain WHAT — explain WHY.
 - Never reference current task/PR/session in comments.
 
 ### Carbon × Svelte 5 Event Traps
+
 `carbon-components-svelte@0.96.3` (Svelte 4 source) dispatches phantom events under Svelte 5:
 
-| Component | Safe handler | Dangerous |
-|-----------|-------------|-----------|
-| `<Slider>` | `on:input` | `on:change` |
-| `<Checkbox>` | `on:change` | `on:check` |
+| Component            | Safe handler           | Dangerous             |
+| -------------------- | ---------------------- | --------------------- |
+| `<Slider>`           | `on:input`             | `on:change`           |
+| `<Checkbox>`         | `on:change`            | `on:check`            |
 | `<RadioButtonGroup>` | `on:change` with guard | unguarded `on:change` |
 
 Full rules: [`.claude/rules/carbon-svelte5.md`](.claude/rules/carbon-svelte5.md)
@@ -122,23 +128,27 @@ Full rules: [`.claude/rules/carbon-svelte5.md`](.claude/rules/carbon-svelte5.md)
 ## Architecture Rules
 
 ### Feature Boundaries
+
 - Features import only from `commons/` or documented public APIs
 - No direct feature-to-feature imports
 - Cross-feature coordination via shared stores in `commons/`
 
 ### DuckDB
+
 - Access through `Duck` facade or `duckDBOrchestrator` — never bypass
 - Macros and `LOAD spatial` run once at init
 - Keep data work in SQL; avoid JS `map/filter/reduce` for joins/aggregations
 - `DROP TABLE` does not reclaim WASM memory — avoid table churn
 
 ### Map Rendering
+
 - **Catalog basemaps**: GeoParquet → parquet-wasm → Arrow IPC → geoarrow-deck-stream (never DuckDB)
 - **User data**: DuckDB → Arrow IPC/WKB → geoarrow-deck-stream
 - Preserve stable Deck.gl layer IDs; use `updateTriggers` for style-only changes
 - Preserve WeakMap cache chain
 
 ### State Management
+
 - Store pattern: `.svelte.ts` files with `$state()` + getters + explicit mutation methods
 - Persistence: `SavePriority.DEBOUNCED` (default) or `SavePriority.IMMEDIATE`
 
@@ -146,14 +156,15 @@ Full rules: [`.claude/rules/carbon-svelte5.md`](.claude/rules/carbon-svelte5.md)
 
 ## Testing
 
-| Change type | Test command |
-|-------------|-------------|
-| Store/utility/component | `pnpm test:unit` |
-| Pipeline processor / format detection | `pnpm test:pipeline` |
-| DuckDB operations / macros | `pnpm test:duckdb` |
-| UI / rendering | Browser smoke test (`pnpm dev`) |
+| Change type                           | Test command                    |
+| ------------------------------------- | ------------------------------- |
+| Store/utility/component               | `pnpm test:unit`                |
+| Pipeline processor / format detection | `pnpm test:pipeline`            |
+| DuckDB operations / macros            | `pnpm test:duckdb`              |
+| UI / rendering                        | Browser smoke test (`pnpm dev`) |
 
 ### Browser Testing Requirements
+
 - UI changes touching map/toolbar **must** be validated in real browser
 - Use `mcp__Claude_Preview__*` first (port 5176)
 - **Base path trap**: app serves at `/cartographie/khartisnewpprd/`, not root
@@ -175,35 +186,39 @@ Full procedure: [`.claude/rules/browser-testing.md`](.claude/rules/browser-testi
 ## AI Assistant Rules
 
 ### Before Editing
+
 1. Check `.claude/rules/` for domain-specific rules
 2. Run `gitnexus_impact` on the symbol you're about to change
 3. Read existing tests for the file
 
 ### During Editing
+
 4. Follow the comment policy (zero comments unless necessary)
 5. Respect feature boundaries (no direct feature-to-feature imports)
 6. Wire Carbon components correctly (see Carbon × Svelte 5 section)
 
 ### After Editing
+
 7. Update tests if the file has existing tests
 8. Run relevant test suite
 9. Run `gitnexus_detect_changes()` before commit
 
 ### Rule Files Reference
+
 All detailed rules live in `.claude/rules/`:
 
-| File | Topic |
-|------|-------|
-| `svelte-patterns.md` | Component props, state, stores, hooks |
-| `duckdb.md` | DuckDB facade, SQL-first, memory |
-| `map-rendering.md` | Deck.gl/MapLibre, WeakMap caches |
-| `testing.md` | Test matrix, patterns, vitest tips |
-| `browser-testing.md` | Preview workflow, BASE_PATH, WebGL evidence |
-| `ui-and-i18n.md` | Carbon Design System, Paraglide, logger |
-| `carbon-svelte5.md` | Event dispatch traps (Slider/Checkbox/RadioButtonGroup) |
-| `palette-popover.md` | Palette customization, ok-palette generators |
-| `persistence.md` | Schema migrations, save semantics |
-| `viz-primitive-state.md` | Per-primitive classification dual-write |
+| File                     | Topic                                                   |
+| ------------------------ | ------------------------------------------------------- |
+| `svelte-patterns.md`     | Component props, state, stores, hooks                   |
+| `duckdb.md`              | DuckDB facade, SQL-first, memory                        |
+| `map-rendering.md`       | Deck.gl/MapLibre, WeakMap caches                        |
+| `testing.md`             | Test matrix, patterns, vitest tips                      |
+| `browser-testing.md`     | Preview workflow, BASE_PATH, WebGL evidence             |
+| `ui-and-i18n.md`         | Carbon Design System, Paraglide, logger                 |
+| `carbon-svelte5.md`      | Event dispatch traps (Slider/Checkbox/RadioButtonGroup) |
+| `palette-popover.md`     | Palette customization, ok-palette generators            |
+| `persistence.md`         | Schema migrations, save semantics                       |
+| `viz-primitive-state.md` | Per-primitive classification dual-write                 |
 
 ---
 
@@ -212,32 +227,34 @@ All detailed rules live in `.claude/rules/`:
 This project is indexed by GitNexus as **khartis-v3** (5163 symbols, 14436 relationships, 300 execution flows).
 
 ### Always Do
+
 - Run `gitnexus_impact({target: "symbolName", direction: "upstream"})` before editing
 - Run `gitnexus_detect_changes()` before committing
 - Warn on HIGH or CRITICAL risk from impact analysis
 
 ### Tools Quick Reference
 
-| Tool | Purpose | Example |
-|------|---------|---------|
-| `query` | Find by concept | `gitnexus_query({query: "auth validation"})` |
-| `context` | 360° view of symbol | `gitnexus_context({name: "validateUser"})` |
-| `impact` | Blast radius | `gitnexus_impact({target: "X", direction: "upstream"})` |
-| `detect_changes` | Pre-commit check | `gitnexus_detect_changes({scope: "staged"})` |
-| `rename` | Safe rename | `gitnexus_rename({symbol_name: "old", new_name: "new", dry_run: true})` |
+| Tool             | Purpose             | Example                                                                 |
+| ---------------- | ------------------- | ----------------------------------------------------------------------- |
+| `query`          | Find by concept     | `gitnexus_query({query: "auth validation"})`                            |
+| `context`        | 360° view of symbol | `gitnexus_context({name: "validateUser"})`                              |
+| `impact`         | Blast radius        | `gitnexus_impact({target: "X", direction: "upstream"})`                 |
+| `detect_changes` | Pre-commit check    | `gitnexus_detect_changes({scope: "staged"})`                            |
+| `rename`         | Safe rename         | `gitnexus_rename({symbol_name: "old", new_name: "new", dry_run: true})` |
 
 ### Impact Risk Levels
 
-| Depth | Meaning | Action |
-|-------|---------|--------|
-| d=1 | WILL BREAK — direct callers | MUST update |
-| d=2 | LIKELY AFFECTED — indirect | Should test |
-| d=3 | MAY NEED TESTING — transitive | Test if critical |
+| Depth | Meaning                       | Action           |
+| ----- | ----------------------------- | ---------------- |
+| d=1   | WILL BREAK — direct callers   | MUST update      |
+| d=2   | LIKELY AFFECTED — indirect    | Should test      |
+| d=3   | MAY NEED TESTING — transitive | Test if critical |
 
 **Index freshness**: Run `npx gitnexus analyze` if stale. Add `--embeddings` if `.gitnexus/meta.json` shows embeddings.
 
 <!-- gitnexus:start -->
 <!-- Full GitNexus documentation preserved from previous version -->
+
 # GitNexus — Code Intelligence
 
 This project is indexed by GitNexus as **khartis-v3** (5163 symbols, 14436 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
@@ -274,35 +291,36 @@ This project is indexed by GitNexus as **khartis-v3** (5163 symbols, 14436 relat
 
 ## Tools Quick Reference
 
-| Tool | When to use | Command |
-|------|-------------|---------|
-| `query` | Find code by concept | `gitnexus_query({query: "auth validation"})` |
-| `context` | 360-degree view of one symbol | `gitnexus_context({name: "validateUser"})` |
-| `impact` | Blast radius before editing | `gitnexus_impact({target: "X", direction: "upstream"})` |
-| `detect_changes` | Pre-commit scope check | `gitnexus_detect_changes({scope: "staged"})` |
-| `rename` | Safe multi-file rename | `gitnexus_rename({symbol_name: "old", new_name: "new", dry_run: true})` |
-| `cypher` | Custom graph queries | `gitnexus_cypher({query: "MATCH ..."})` |
+| Tool             | When to use                   | Command                                                                 |
+| ---------------- | ----------------------------- | ----------------------------------------------------------------------- |
+| `query`          | Find code by concept          | `gitnexus_query({query: "auth validation"})`                            |
+| `context`        | 360-degree view of one symbol | `gitnexus_context({name: "validateUser"})`                              |
+| `impact`         | Blast radius before editing   | `gitnexus_impact({target: "X", direction: "upstream"})`                 |
+| `detect_changes` | Pre-commit scope check        | `gitnexus_detect_changes({scope: "staged"})`                            |
+| `rename`         | Safe multi-file rename        | `gitnexus_rename({symbol_name: "old", new_name: "new", dry_run: true})` |
+| `cypher`         | Custom graph queries          | `gitnexus_cypher({query: "MATCH ..."})`                                 |
 
 ## Impact Risk Levels
 
-| Depth | Meaning | Action |
-|-------|---------|--------|
-| d=1 | WILL BREAK — direct callers/importers | MUST update these |
-| d=2 | LIKELY AFFECTED — indirect deps | Should test |
-| d=3 | MAY NEED TESTING — transitive | Test if critical path |
+| Depth | Meaning                               | Action                |
+| ----- | ------------------------------------- | --------------------- |
+| d=1   | WILL BREAK — direct callers/importers | MUST update these     |
+| d=2   | LIKELY AFFECTED — indirect deps       | Should test           |
+| d=3   | MAY NEED TESTING — transitive         | Test if critical path |
 
 ## Resources
 
-| Resource | Use for |
-|----------|---------|
-| `gitnexus://repo/khartis-v3/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/khartis-v3/clusters` | All functional areas |
-| `gitnexus://repo/khartis-v3/processes` | All execution flows |
-| `gitnexus://repo/khartis-v3/process/{name}` | Step-by-step execution trace |
+| Resource                                    | Use for                                  |
+| ------------------------------------------- | ---------------------------------------- |
+| `gitnexus://repo/khartis-v3/context`        | Codebase overview, check index freshness |
+| `gitnexus://repo/khartis-v3/clusters`       | All functional areas                     |
+| `gitnexus://repo/khartis-v3/processes`      | All execution flows                      |
+| `gitnexus://repo/khartis-v3/process/{name}` | Step-by-step execution trace             |
 
 ## Self-Check Before Finishing
 
 Before completing any code modification task, verify:
+
 1. `gitnexus_impact` was run for all modified symbols
 2. No HIGH/CRITICAL risk warnings were ignored
 3. `gitnexus_detect_changes()` confirms changes match expected scope
@@ -328,12 +346,13 @@ To check whether embeddings exist, inspect `.gitnexus/meta.json` — the `stats.
 
 ## CLI
 
-| Task | Read this skill file |
-|------|---------------------|
-| Understand architecture / "How does X work?" | `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md` |
-| Blast radius / "What breaks if I change X?" | `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
-| Trace bugs / "Why is X failing?" | `.claude/skills/gitnexus/gitnexus-debugging/SKILL.md` |
-| Rename / extract / split / refactor | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md` |
-| Tools, resources, schema reference | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md` |
-| Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
+| Task                                         | Read this skill file                                        |
+| -------------------------------------------- | ----------------------------------------------------------- |
+| Understand architecture / "How does X work?" | `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md`       |
+| Blast radius / "What breaks if I change X?"  | `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
+| Trace bugs / "Why is X failing?"             | `.claude/skills/gitnexus/gitnexus-debugging/SKILL.md`       |
+| Rename / extract / split / refactor          | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md`     |
+| Tools, resources, schema reference           | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md`           |
+| Index, status, clean, wiki CLI commands      | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md`             |
+
 <!-- gitnexus:end -->
