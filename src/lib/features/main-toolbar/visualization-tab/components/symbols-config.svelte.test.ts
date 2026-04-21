@@ -26,4 +26,21 @@ describe('SymbolsConfig container', () => {
     expect(source).toContain('m.size_shape_and_color()');
     expect(source).toContain('m.size_and_shape()');
   });
+
+  it('passes stroke-related props through to SymbolModeCategories', () => {
+    const categoriesBlock = source
+      .split('{:else if symbolMode === SymbolMode.CATEGORIES}')[1]
+      ?.split('{/if}')[0];
+    expect(categoriesBlock).toBeDefined();
+    expect(categoriesBlock).toContain('onStyleChange={onStyleChange}');
+    expect(categoriesBlock).toContain(
+      'onStrokeMappingChange={onStrokeMappingChange}'
+    );
+    expect(categoriesBlock).toContain(
+      'onStrokeClassificationChange={onStrokeClassificationChange}'
+    );
+    expect(categoriesBlock).toContain(
+      'onStrokeInvertPalette={onStrokeInvertPalette}'
+    );
+  });
 });

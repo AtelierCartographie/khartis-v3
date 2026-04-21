@@ -55,7 +55,8 @@ vi.mock('$lib/features/duckdb', () => ({
 
 vi.mock('$lib/features/step-toolbar/tools/facets/facets.store.svelte', () => ({
   FACET_SLOT: {
-    SYMBOL_CATEGORY: 'symbol.categoryColumn'
+    SYMBOL_CATEGORY: 'symbol.categoryColumn',
+    SYMBOL_VALUE: 'symbol.valueColumn'
   },
   facetsStore: {
     enabled: false,
@@ -99,6 +100,7 @@ function buildVisualization(): VisualizationConfig {
       sizeScale: ScaleType.LINEAR,
       strokeWidth: 0,
       strokeOpacity: 1,
+      strokeDashed: false,
       opacity: 1,
       proportionalType: ProportionalType.SINGLE,
       categoryShape: 'unique',
@@ -152,5 +154,14 @@ describe('SymbolModeCategories runtime', () => {
     await waitFor(() => {
       expect(screen.getByRole('dialog')).toBeInTheDocument();
     });
+  });
+
+  it('renders the contour section below missing data', () => {
+    render(SymbolModeCategories, {
+      dataFields: [{ id: 1, text: 'category', type: 'text' }],
+      visualization: buildVisualization()
+    });
+
+    expect(screen.getByText('Contour')).toBeInTheDocument();
   });
 });

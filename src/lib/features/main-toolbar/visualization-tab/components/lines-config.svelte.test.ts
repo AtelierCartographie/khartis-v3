@@ -59,8 +59,6 @@ describe('LinesConfig — palette wiring', () => {
       ?.split('<PalettePreview')[1]
       ?.split('/>')[0];
     expect(paletteBlock).toContain('categoriesMode={true}');
-    expect(paletteBlock).toContain(
-      'categoryLabels={visualization?.classification?.labels ?? []}'
-    );
+    expect(paletteBlock).toContain('categoryLabels={resolvedCategoryLabels}');
   });
 });

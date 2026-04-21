@@ -11,6 +11,10 @@
   } from 'carbon-icons-svelte';
   import Switch from '$lib/features/commons/components/switch.svelte';
   import { clickOutside } from '$lib/features/commons/utils/click-outside';
+  import {
+    createExclusiveContextualSurfaceId,
+    engageExclusiveContextualSurface
+  } from '$lib/features/commons/utils/contextual-surface-coordinator';
 
   interface DataField {
     id: number;
@@ -69,6 +73,9 @@
       ? selectedFieldIds.length
       : 0
   );
+  const contextualSurfaceId = createExclusiveContextualSurfaceId(
+    'facets-variable-picker'
+  );
 
   const displayItems = $derived(
     isCollectionEnabled
@@ -104,6 +111,16 @@
   function handleToggle(checked: boolean) {
     onToggleCollection?.(checked);
   }
+
+  $effect(() => {
+    if (!open) {
+      return;
+    }
+
+    return engageExclusiveContextualSurface(contextualSurfaceId, () => {
+      open = false;
+    });
+  });
 </script>
 
 {#if titleText}

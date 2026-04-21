@@ -213,6 +213,7 @@
     {@render uniqueSnippet()}
   {:else}
     <SingleColorPreview
+      exclusive
       label={m.color()}
       color={fillColor}
       onchange={onFillColorChange}

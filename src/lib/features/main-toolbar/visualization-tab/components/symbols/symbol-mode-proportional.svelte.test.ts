@@ -97,8 +97,6 @@ describe('SymbolModeProportional (proportionnels.png + en classes.png)', () => {
     expect(source).toContain('onSymbolPrimitiveChange');
     expect(source).toContain('onSymbolPrimitiveChange?.({ commonScale');
     expect(source).toContain('onSymbolPrimitiveChange?.({ positionMode');
-    // breakValueA/B are committed together via commitBreakValues, so the
-    // onSymbolPrimitiveChange payload always contains both keys.
     expect(source).toMatch(
       /onSymbolPrimitiveChange\?\.\(\{\s*breakValueA:[\s\S]{0,60}breakValueB:/
     );
@@ -156,6 +154,30 @@ describe('SymbolModeProportional — anti-leak fill ↔ stroke palette', () => {
     );
     expect(fillBlock).not.toContain(
       'onStrokeClassificationChange={onClassificationChange}'
+    );
+  });
+});
+
+describe('SymbolModeProportional — stroke discretization isolation', () => {
+  it('wires the stroke section to symbol stroke-specific classification fields', () => {
+    expect(source).toContain(
+      'strokeClassification={visualization?.symbol?.strokeClassification}'
+    );
+    expect(source).toContain(
+      'strokeValueColumn={visualization?.symbol?.strokeValueColumn}'
+    );
+    expect(source).toContain(
+      'strokeCategoryColumn={visualization?.symbol?.strokeCategoryColumn}'
+    );
+  });
+
+  it('opens the shared discretization modal in stroke role for the outline channel', () => {
+    expect(source).toContain('role="stroke"');
+    expect(source).toContain(
+      'classification={visualization?.symbol?.strokeClassification}'
+    );
+    expect(source).toContain(
+      'valueColumn={visualization?.symbol?.strokeValueColumn}'
     );
   });
 });
