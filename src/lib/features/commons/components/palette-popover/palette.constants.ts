@@ -15,10 +15,39 @@ import { motif } from '@ateliercartographie/motif.js';
 import type { PatternParams } from '$lib/features/commons/store/visualization.store.svelte';
 import { webglToHex } from '$lib/features/commons/utils/color-utils';
 import { PATTERN_TYPE_MAP } from '$lib/features/map/layers/pattern-texture';
+import {
+  DEFAULT_QUALITATIVE_PRESET,
+  GRAYSCALE_COLORS,
+  PASTEL_ALL_COLORS,
+  PASTEL_CHAUD_COLORS,
+  PASTEL_FROID_COLORS,
+  PASTEL_MIXTE_COLORS,
+  SEPIA_ALL_COLORS,
+  SEPIA_CHAUD_COLORS,
+  SEPIA_FROID_COLORS,
+  SEPIA_MIXTE_COLORS,
+  VIF_ALL_COLORS,
+  VIF_CHAUD_COLORS,
+  VIF_FROID_COLORS,
+  VIF_MIXTE_COLORS
+} from '$lib/features/commons/constants/qualitative-palette.constants';
 
 export type { PatternParams };
 export { presets };
 export type { ContrastMode, CategoricalColorOptions };
+export {
+  DEFAULT_QUALITATIVE_PRESET,
+  GRAYSCALE_COLORS,
+  PASTEL_CHAUD_COLORS,
+  PASTEL_FROID_COLORS,
+  PASTEL_MIXTE_COLORS,
+  SEPIA_CHAUD_COLORS,
+  SEPIA_FROID_COLORS,
+  SEPIA_MIXTE_COLORS,
+  VIF_CHAUD_COLORS,
+  VIF_FROID_COLORS,
+  VIF_MIXTE_COLORS
+} from '$lib/features/commons/constants/qualitative-palette.constants';
 
 export const DEFAULT_SEQUENTIAL_PREVIEW = [
   '#c8ddf0',
@@ -27,12 +56,7 @@ export const DEFAULT_SEQUENTIAL_PREVIEW = [
   '#084594'
 ];
 
-export const DEFAULT_QUALITATIVE_PREVIEW = [
-  '#009d9a',
-  '#f1c21b',
-  '#ff832b',
-  '#a56eff'
-];
+export const DEFAULT_QUALITATIVE_PREVIEW = [...VIF_MIXTE_COLORS.slice(0, 4)];
 
 export const PALETTE_TYPE = {
   SEQUENTIAL: 'sequential',
@@ -60,94 +84,18 @@ export interface Palette {
   type: PaletteType;
   colorBlindSafe?: boolean;
   patternId?: PatternId;
+  qualitativePreset?: QualitativePreset;
+}
+
+export interface DivergingPaletteSplit {
+  lowerCount: number;
+  upperCount: number;
+  hasCenterClass: boolean;
 }
 
 export type SuggestionPreset = 'monochrome' | 'bicolor' | 'sepia';
 
 export type QualitativePreset = 'vif' | 'pastel' | 'sepia' | 'grayscale';
-
-/** Exact hex values from Figma node 893:153398 — "Color - Unique" Vif preset */
-export const VIF_MIXTE_COLORS = [
-  '#f287ac',
-  '#00ad92',
-  '#c39800',
-  '#90a8ff',
-  '#da5e04'
-] as const;
-
-export const VIF_CHAUD_COLORS = [
-  '#bb98ff',
-  '#dd5642',
-  '#db6fb5',
-  '#e2a333',
-  '#b75dce'
-] as const;
-
-export const VIF_FROID_COLORS = [
-  '#aabf4c',
-  '#00a5cc',
-  '#2dbd86',
-  '#77b1ff',
-  '#51a738'
-] as const;
-
-/** Pastel preset — desaturated lighter variants derived from Vif seeds via ok-palette */
-export const PASTEL_MIXTE_COLORS = [
-  '#fbd0dd',
-  '#a9e8dd',
-  '#ecd79e',
-  '#cdd6ff',
-  '#f6c7a8'
-] as const;
-
-export const PASTEL_CHAUD_COLORS = [
-  '#dfcefe',
-  '#f3bfb2',
-  '#f3c6e1',
-  '#f3dab1',
-  '#e7c3f0'
-] as const;
-
-export const PASTEL_FROID_COLORS = [
-  '#dde5b0',
-  '#a9dfed',
-  '#bfe7d4',
-  '#c8def9',
-  '#c5e2b9'
-] as const;
-
-/** Sépia preset — warm desaturated earth tones */
-export const SEPIA_MIXTE_COLORS = [
-  '#b08c7a',
-  '#9f8a6a',
-  '#bf9c55',
-  '#a79279',
-  '#b58268'
-] as const;
-
-export const SEPIA_CHAUD_COLORS = [
-  '#9e8d81',
-  '#c7856e',
-  '#b08575',
-  '#c29a6d',
-  '#a38273'
-] as const;
-
-export const SEPIA_FROID_COLORS = [
-  '#a89874',
-  '#87918c',
-  '#94957e',
-  '#8a8e7c',
-  '#9c9478'
-] as const;
-
-export const GRAYSCALE_COLORS = [
-  '#d9d9d9',
-  '#bdbdbd',
-  '#a3a3a3',
-  '#7a7a7a',
-  '#525252'
-] as const;
 
 export interface QualitativeColorGroups {
   mixte: string[];
@@ -326,30 +274,47 @@ export const divergingPalettes: Palette[] = [
 
 export const qualitativePalettes: Palette[] = [
   {
-    id: 'set1',
-    colors: ['#e41a1c', '#377eb8', '#4daf4a', '#984ea3', '#ff7f00'],
+    id: 'vif',
+    colors: [...VIF_ALL_COLORS],
     type: PALETTE_TYPE.QUALITATIVE,
-    colorBlindSafe: false
-  },
-  {
-    id: 'set2',
-    colors: ['#66c2a5', '#fc8d62', '#8da0cb', '#e78ac3', '#a6d854'],
-    type: PALETTE_TYPE.QUALITATIVE,
-    colorBlindSafe: true
+    colorBlindSafe: true,
+    qualitativePreset: 'vif'
   },
   {
     id: 'pastel',
-    colors: ['#fbb4ae', '#b3cde3', '#ccebc5', '#decbe4', '#fed9a6'],
+    colors: [...PASTEL_ALL_COLORS],
     type: PALETTE_TYPE.QUALITATIVE,
-    colorBlindSafe: true
+    colorBlindSafe: true,
+    qualitativePreset: 'pastel'
   },
   {
-    id: 'dark',
-    colors: ['#1b9e77', '#d95f02', '#7570b3', '#e7298a', '#66a61e'],
+    id: 'sepia',
+    colors: [...SEPIA_ALL_COLORS],
     type: PALETTE_TYPE.QUALITATIVE,
-    colorBlindSafe: true
+    colorBlindSafe: true,
+    qualitativePreset: 'sepia'
+  },
+  {
+    id: 'grayscale',
+    colors: [...GRAYSCALE_COLORS],
+    type: PALETTE_TYPE.QUALITATIVE,
+    colorBlindSafe: true,
+    qualitativePreset: 'grayscale'
   }
 ];
+
+const LEGACY_PALETTE_ID_ALIASES: Record<string, string> = {
+  'categorical-set1': 'vif',
+  'categorical-set2': 'pastel',
+  'categorical-dark': 'sepia',
+  'categorical-vif': 'vif',
+  'categorical-pastel': 'pastel',
+  'categorical-sepia': 'sepia',
+  'categorical-grayscale': 'grayscale',
+  set1: 'vif',
+  set2: 'pastel',
+  dark: 'sepia'
+};
 
 export function getPatternPalettes(): Palette[] {
   return [
@@ -437,7 +402,8 @@ export function generatePaletteColors(
   palette: Palette,
   count: number,
   contrast?: ContrastMode,
-  categoricalOptions?: CategoricalColorOptions
+  categoricalOptions?: CategoricalColorOptions,
+  divergingSplit?: DivergingPaletteSplit
 ): string[] {
   if (count <= 0) return [];
   if (count === 1) return [palette.colors[0]];
@@ -461,13 +427,16 @@ export function generatePaletteColors(
     case PALETTE_TYPE.DIVERGING: {
       const colorA = palette.colors[0];
       const colorB = palette.colors[palette.colors.length - 1];
-      const hasCenterClass = count % 2 === 1;
-      const halfSteps = Math.floor(count / 2);
+      const split = divergingSplit ?? {
+        lowerCount: Math.floor(count / 2),
+        upperCount: Math.floor(count / 2),
+        hasCenterClass: count % 2 === 1
+      };
       const cssColors = divergentSequential({
         colorA,
         colorB,
-        steps: [halfSteps, halfSteps],
-        hasCenterClass,
+        steps: [split.lowerCount, split.upperCount],
+        hasCenterClass: split.hasCenterClass,
         contrast
       });
       return (
@@ -477,6 +446,29 @@ export function generatePaletteColors(
     case PALETTE_TYPE.QUALITATIVE: {
       if (count <= palette.colors.length) {
         return palette.colors.slice(0, count);
+      }
+      if (palette.qualitativePreset === 'grayscale') {
+        const generated = generateSequentialFromColors(
+          palette.colors[0] ?? GRAYSCALE_COLORS[0],
+          palette.colors[palette.colors.length - 1] ??
+            GRAYSCALE_COLORS[GRAYSCALE_COLORS.length - 1],
+          count,
+          contrast
+        );
+        return extendQualitativeColors(palette.colors, generated, count);
+      }
+      const presetOptions = getQualitativePresetOptions(
+        palette.qualitativePreset
+      );
+      if (presetOptions) {
+        const cssColors = categorical(count, {
+          ...presetOptions,
+          ...(categoricalOptions ?? {})
+        });
+        const generated = (
+          resolvePalette(cssColors, { format: 'webgl' }) as WebGLColor[]
+        ).map(webglToHex);
+        return extendQualitativeColors(palette.colors, generated, count);
       }
       if (categoricalOptions) {
         const cssColors = categorical(count, categoricalOptions);
@@ -631,6 +623,7 @@ export function getPalettesForType(
 }
 
 export function findPaletteById(id: string): Palette | undefined {
+  const resolvedId = normalizePaletteId(id) ?? id;
   const all = [
     ...monochromePalettes,
     ...bicolorPalettes,
@@ -639,7 +632,12 @@ export function findPaletteById(id: string): Palette | undefined {
     ...qualitativePalettes,
     ...getPatternPalettes()
   ];
-  return all.find((p) => p.id === id);
+  return all.find((p) => p.id === resolvedId);
+}
+
+export function normalizePaletteId(id: string | undefined): string | undefined {
+  if (!id) return id;
+  return LEGACY_PALETTE_ID_ALIASES[id] ?? id;
 }
 
 /**
@@ -701,13 +699,16 @@ export function getPaletteDisplayName(palette: Palette): string {
     case 'prgn':
       return m.palette_name_prgn();
     case 'set1':
-      return m.palette_name_set1();
+    case 'vif':
+      return m.preset_vif();
     case 'set2':
-      return m.palette_name_set2();
     case 'pastel':
-      return m.palette_name_pastel();
+      return m.preset_pastel();
     case 'dark':
-      return m.palette_name_dark();
+    case 'sepia':
+      return m.preset_sepia();
+    case 'grayscale':
+      return m.preset_grayscale();
     case 'pattern-diagonal':
       return m.pattern_diagonal();
     case 'pattern-diagonal-reverse':
@@ -735,6 +736,44 @@ export function getPaletteDisplayName(palette: Palette): string {
 
 function filterByIndices<T>(source: readonly T[], indices: number[]): T[] {
   return indices.map((i) => source[i]).filter((v): v is T => v !== undefined);
+}
+
+function getQualitativePresetOptions(
+  preset: QualitativePreset | undefined
+): CategoricalColorOptions | undefined {
+  if (preset === 'vif') return presets.vif;
+  if (preset === 'pastel') return presets.pastel;
+  if (preset === 'sepia') return presets.sepia;
+  return undefined;
+}
+
+function extendQualitativeColors(
+  baseColors: string[],
+  generatedColors: string[],
+  count: number
+): string[] {
+  const merged: string[] = [];
+  const seen = new Set<string>();
+
+  for (const color of [...baseColors, ...generatedColors]) {
+    const normalized = color.toLowerCase();
+    if (seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    merged.push(color);
+    if (merged.length === count) {
+      return merged;
+    }
+  }
+
+  if (merged.length === 0) {
+    return [];
+  }
+
+  return Array.from({ length: count }, (_, index) => {
+    return merged[index % merged.length];
+  });
 }
 
 export function getQualitativeColorGroups(
@@ -787,10 +826,17 @@ export function generateIntensityShadesForColor(seedHex: string): string[] {
 export function generateCategoricalColorsFromSeed(
   seedHex: string,
   count: number,
-  preset: QualitativePreset = 'vif'
+  preset: QualitativePreset = DEFAULT_QUALITATIVE_PRESET
 ): string[] {
   if (count <= 0) return [];
   if (count === 1) return [seedHex];
+  if (preset === 'grayscale') {
+    return generateSequentialFromColors(
+      GRAYSCALE_COLORS[0],
+      GRAYSCALE_COLORS[GRAYSCALE_COLORS.length - 1],
+      count
+    );
+  }
   const presetOption =
     preset === 'vif'
       ? presets.vif

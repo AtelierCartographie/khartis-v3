@@ -2,6 +2,7 @@
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import { ArrowsHorizontal, ChevronDown } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
+  import { computeDivergingSplit } from '$lib/features/commons/services/classification.service';
   import PalettePopover from './palette-popover.svelte';
   import PaletteDropdown from './palette-dropdown.svelte';
   import CategoriesAspectPopover from './categories-aspect-popover.svelte';
@@ -16,6 +17,7 @@
     PaletteType,
     PatternParams
   } from './palette.constants';
+  import { normalizePaletteId } from './palette.constants';
   import type { ClassificationConfig } from '$lib/features/commons/store/visualization.store.svelte';
 
   interface Props {
@@ -32,6 +34,7 @@
     disabledCategoryLabels?: string[];
     categoriesCommonAspect?: CategoriesCommonAspect;
     categoriesPopoverOpen?: boolean;
+    classification?: ClassificationConfig;
     onexpand?: () => void;
     oninvert?: () => void;
     onselect?: (palette: Palette) => void;
@@ -56,6 +59,7 @@
     disabledCategoryLabels = [],
     categoriesCommonAspect = DEFAULT_COMMON_ASPECT,
     categoriesPopoverOpen = $bindable(false),
+    classification,
     onexpand,
     oninvert,
     onselect,
@@ -79,6 +83,29 @@
   const dropdownPreviewCount = $derived(
     colors.length > 0 ? Math.min(colors.length, MAX_PREVIEW_SWATCHES) : 5
   );
+  const normalizedSelectedPaletteId = $derived(
+    normalizePaletteId(selectedPaletteId) ?? selectedPaletteId
+  );
+  const resolvedClassCount = $derived(
+    classification?.numClasses ??
+      classification?.classes ??
+      (colors.length || 5)
+  );
+  const divergingSplit = $derived.by(() => {
+    if (
+      paletteType !== 'diverging' ||
+      classification?.breakpointValue == null ||
+      resolvedClassCount <= 0
+    ) {
+      return undefined;
+    }
+
+    return computeDivergingSplit(
+      resolvedClassCount,
+      classification?.breaks ?? [],
+      classification.breakpointValue
+    );
+  });
 
   const categoryDrafts = $derived<CategoryDraft[]>(
     colors.map((color, i) => {
@@ -262,11 +289,12 @@
 <PaletteDropdown
   bind:open={dropdownOpen}
   triggerElement={triggerRef}
-  selectedPaletteId={selectedPaletteId}
+  selectedPaletteId={normalizedSelectedPaletteId}
   paletteType={paletteType}
   colorBlindFilter={colorBlindFilter}
-  numClasses={colors.length || 5}
+  numClasses={resolvedClassCount}
   previewCount={dropdownPreviewCount}
+  divergingSplit={divergingSplit}
   onclose={handleDropdownClose}
   onselect={handleDropdownSelect}
   oncustomize={handleCustomize}
@@ -277,10 +305,11 @@
   triggerElement={triggerRef}
   currentColors={colors}
   currentInverted={inverted}
-  selectedPaletteId={selectedPaletteId}
+  selectedPaletteId={normalizedSelectedPaletteId}
   bind:paletteType={paletteType}
   bind:colorBlindFilter={colorBlindFilter}
-  numClasses={colors.length || 5}
+  numClasses={resolvedClassCount}
+  divergingSplit={divergingSplit}
   onclose={handlePopoverClose}
   onvalidate={handlePopoverValidate}
 />
