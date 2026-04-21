@@ -15,6 +15,8 @@
     type Palette,
     type PatternParams,
     type ContrastMode,
+    type QualitativePreset,
+    DEFAULT_QUALITATIVE_PRESET,
     generatePaletteColors,
     generateCategoricalColorsFromSeed,
     findPaletteById
@@ -29,6 +31,7 @@
     paletteType?: PaletteType;
     colorBlindFilter?: boolean;
     numClasses?: number;
+    divergingSplit?: import('./palette.constants').DivergingPaletteSplit;
     onclose?: () => void;
     onvalidate?: (
       palette: Palette | undefined,
@@ -47,6 +50,7 @@
     paletteType = $bindable<PaletteType>(PALETTE_TYPE.SEQUENTIAL),
     colorBlindFilter = $bindable(false),
     numClasses = 5,
+    divergingSplit,
     onclose,
     onvalidate
   }: Props = $props();
@@ -60,6 +64,9 @@
   let draftType = $state<PaletteType>(PALETTE_TYPE.SEQUENTIAL);
   let draftColorBlindFilter = $state(false);
   let draftPatternParams = $state<PatternParams | undefined>(undefined);
+  let draftQualitativePreset = $state<QualitativePreset>(
+    DEFAULT_QUALITATIVE_PRESET
+  );
 
   const popoverTitle = $derived.by(() => {
     switch (draftType) {
@@ -105,6 +112,9 @@
     draftType = paletteType;
     draftColorBlindFilter = colorBlindFilter;
     draftPatternParams = undefined;
+    draftQualitativePreset =
+      findPaletteById(selectedPaletteId)?.qualitativePreset ??
+      DEFAULT_QUALITATIVE_PRESET;
   }
 
   function handleClose() {
@@ -126,10 +136,14 @@
     draftPaletteId = palette.id;
     draftInverted = false;
     draftPatternParams = undefined;
+    draftQualitativePreset =
+      palette.qualitativePreset ?? draftQualitativePreset;
     draftColors = generatePaletteColors(
       palette,
       numClasses,
-      draftColorBlindFilter ? 'high' : undefined
+      draftColorBlindFilter ? 'high' : undefined,
+      undefined,
+      divergingSplit
     );
   }
 
@@ -155,6 +169,10 @@
 
   function handleContrastChange(_contrast: ContrastMode | undefined) {}
 
+  function handleQualitativePresetChange(preset: QualitativePreset) {
+    draftQualitativePreset = preset;
+  }
+
   function handleInvertToggle(value: boolean) {
     draftInverted = value;
     draftColors = [...draftColors].reverse();
@@ -167,7 +185,11 @@
     if (numClasses <= 1) {
       draftColors = [hex];
     } else {
-      draftColors = generateCategoricalColorsFromSeed(hex, numClasses, 'vif');
+      draftColors = generateCategoricalColorsFromSeed(
+        hex,
+        numClasses,
+        draftQualitativePreset
+      );
     }
   }
 
@@ -239,11 +261,13 @@
           selectedPaletteId={draftPaletteId}
           selectedColor={draftColors[0]}
           numClasses={numClasses}
+          divergingSplit={divergingSplit}
           onTypeChange={handleTypeChange}
           onColorBlindChange={handleColorBlindChange}
           onSelect={handlePaletteSelect}
           onColorSelect={handleQualitativeColorSelect}
           onIntensitySelect={handleQualitativeColorSelect}
+          onQualitativePresetChange={handleQualitativePresetChange}
         />
 
         <PaletteCustom

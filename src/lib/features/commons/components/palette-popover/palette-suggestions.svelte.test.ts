@@ -57,12 +57,11 @@ describe('PaletteSuggestions — QUALITATIVE branch (Figma 893:153398)', () => {
   });
 
   it('should drive qualitativeGroups from getQualitativeColorGroups with the chosen preset', () => {
-    expect(source).toContain(
-      "let qualitativePreset = $state<QualitativePreset>('vif')"
-    );
+    expect(source).toContain('DEFAULT_QUALITATIVE_PRESET');
     expect(source).toContain(
       'getQualitativeColorGroups(qualitativePreset, colorBlindFilter)'
     );
+    expect(source).toContain('onQualitativePresetChange?.(preset)');
   });
 
   it('should propagate color selection via onColorSelect(hex)', () => {
