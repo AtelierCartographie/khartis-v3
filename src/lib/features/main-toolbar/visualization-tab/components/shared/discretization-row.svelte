@@ -20,7 +20,7 @@
       kind="ghost"
       size="small"
       icon={Settings}
-      iconDescription={m.more_info()}
+      iconDescription={m.discretization_settings()}
       on:click={() => onsettings?.()}
     />
   </div>

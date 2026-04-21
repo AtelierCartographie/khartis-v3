@@ -15,8 +15,10 @@ describe('StrokeSection — palette wiring', () => {
     expect(source).toContain('PALETTE_TYPE');
   });
 
-  it('should wire SEQUENTIAL paletteType on the classes-mode stroke palette', () => {
-    expect(source).toContain('paletteType={PALETTE_TYPE.SEQUENTIAL}');
+  it('should wire dynamic paletteType (DIVERGING when breakpointValue set, else SEQUENTIAL) on the classes-mode stroke palette', () => {
+    expect(source).toContain('PALETTE_TYPE.DIVERGING');
+    expect(source).toContain('PALETTE_TYPE.SEQUENTIAL');
+    expect(source).toMatch(/breakpointValue\s*!=\s*null/);
   });
 
   it('should wire QUALITATIVE paletteType on the categories-mode stroke palette', () => {
@@ -27,9 +29,8 @@ describe('StrokeSection — palette wiring', () => {
     const paletteBlocks = source.match(/<PalettePreview[\s\S]*?\/>/g) || [];
     expect(paletteBlocks.length).toBeGreaterThan(0);
     paletteBlocks.forEach((block) => {
-      expect(block).toMatch(
-        /paletteType=\{PALETTE_TYPE\.(SEQUENTIAL|QUALITATIVE)\}/
-      );
+      expect(block).toMatch(/paletteType=/);
+      expect(block).toMatch(/PALETTE_TYPE\.(SEQUENTIAL|QUALITATIVE|DIVERGING)/);
     });
   });
 });

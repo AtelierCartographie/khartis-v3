@@ -97,4 +97,38 @@ describe('ConfigureVisualization', () => {
     expect(source).toContain('{#if selectedViz && hasYearDimension}');
     expect(source).toContain('<YearFilter visualization={selectedViz} />');
   });
+
+  it('keeps SYMBOL_MODE_STATE_KEYS in sync with snapshotSymbolModeState body', () => {
+    const snapshotMatch = source.match(
+      /function snapshotSymbolModeState\([\s\S]*?\)\s*:\s*SymbolModeState\s*\{\s*return\s*\{([\s\S]*?)\};\s*\}/
+    );
+    expect(snapshotMatch).not.toBeNull();
+    const snapshotBody = snapshotMatch![1];
+    const snapshotKeys = Array.from(
+      snapshotBody.matchAll(/^\s*(\w+)\s*:\s*symbol\.\w+/gm)
+    ).map((m) => m[1]);
+
+    const keysArrayMatch = source.match(
+      /const SYMBOL_MODE_STATE_KEYS\s*=\s*\[([\s\S]*?)\]\s*as const/
+    );
+    expect(keysArrayMatch).not.toBeNull();
+    const literalKeys = Array.from(
+      keysArrayMatch![1].matchAll(/'([^']+)'/g)
+    ).map((m) => m[1]);
+
+    expect(snapshotKeys.length).toBeGreaterThan(10);
+    expect(literalKeys.sort()).toEqual(snapshotKeys.sort());
+  });
+
+  it('snapshots the symbol mode state under the previous mode before restoring the next one', () => {
+    expect(source).toMatch(
+      /const existingModeStates\s*=\s*symbol\.modeStates\s*\?\?\s*\{\}/
+    );
+    expect(source).toMatch(
+      /\[previousMode\]:\s*snapshotSymbolModeState\(symbol\)/
+    );
+    expect(source).toMatch(
+      /applySymbolModeStateFields\(symbol,\s*existingModeStates\[nextMode\]\)/
+    );
+  });
 });

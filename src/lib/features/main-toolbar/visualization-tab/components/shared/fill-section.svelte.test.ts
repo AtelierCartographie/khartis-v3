@@ -26,12 +26,14 @@ describe('FillSection — interface', () => {
     );
   });
 
-  it('renders PalettePreview with SEQUENTIAL paletteType for FillMode.CLASSES', () => {
+  it('renders PalettePreview with DIVERGING paletteType when breakpointValue is set, otherwise SEQUENTIAL for FillMode.CLASSES', () => {
     const classesBlock = source.match(
       /fillMode === FillMode\.CLASSES[\s\S]*?FillMode\.CATEGORIES/
     )?.[0];
     expect(classesBlock).toBeDefined();
-    expect(classesBlock).toContain('paletteType={PALETTE_TYPE.SEQUENTIAL}');
+    expect(classesBlock).toContain('PALETTE_TYPE.DIVERGING');
+    expect(classesBlock).toContain('PALETTE_TYPE.SEQUENTIAL');
+    expect(classesBlock).toMatch(/breakpointValue\s*!=\s*null/);
   });
 
   it('renders PalettePreview with QUALITATIVE paletteType + categoriesMode for FillMode.CATEGORIES', () => {
