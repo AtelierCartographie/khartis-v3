@@ -61,6 +61,7 @@ import {
 import {
   DEFAULT_COLORS,
   FillMode,
+  SymbolDoublePosition,
   SymbolMode
 } from '$lib/features/main-toolbar/constants';
 import {
@@ -473,6 +474,31 @@ describe('suggestion.service', () => {
     expect(afterPolygonFillChange?.style.fillColor).toBe('#f287ac');
     expect(afterPolygonFillChange?.style.symbolFillColor).toBe(
       DEFAULT_COLORS.fill
+    );
+  });
+
+  it('defaults double proportional symbol suggestions to overlay position mode', () => {
+    const dataset = createPolygonDataset();
+    mocks.datasets = [dataset];
+    mocks.selectedDatasetId = dataset.id;
+
+    const visualization = visualizationStore.createVisualization(
+      VisualizationType.PROPORTIONAL,
+      dataset.id
+    );
+    const suggestion = createSuggestionById(
+      'symbols_proportional_double',
+      'polygon'
+    );
+
+    applySuggestionToVisualization(visualization.id, suggestion);
+
+    const updatedVisualization = visualizationStore.visualizations.find(
+      (item) => item.id === visualization.id
+    );
+
+    expect(updatedVisualization?.symbol?.positionMode).toBe(
+      SymbolDoublePosition.OVERLAY
     );
   });
 
