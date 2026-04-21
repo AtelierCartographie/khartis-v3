@@ -1613,6 +1613,62 @@
     );
   }
 
+  /**
+   * Transient null results from calculateBreaks (e.g. the DuckDB table
+   * registration lands after the first compute dispatch) used to leave the
+   * classification without breaks forever, because the only retry hook was
+   * the `datasetsVersion` $effect which may already have fired. Schedule a
+   * bounded retry chain so the race resolves without breaking the
+   * "will retry" log contract, while capping at a handful of attempts to
+   * avoid infinite loops when the dataset is structurally unavailable.
+   */
+  const pendingBreaksRetries = new SvelteMap<
+    ClassifiablePrimitive,
+    { handle: number; key: string; attempts: number }
+  >();
+  const MAX_BREAKS_RETRIES = 4;
+  const BREAKS_RETRY_DELAY_MS = 250;
+
+  function scheduleBreaksRetry(
+    primitive: ClassifiablePrimitive,
+    breaksKey: string
+  ) {
+    const existing = pendingBreaksRetries.get(primitive);
+    if (existing) {
+      clearTimeout(existing.handle);
+    }
+    const priorAttempts =
+      existing && existing.key === breaksKey ? existing.attempts : 0;
+    if (priorAttempts >= MAX_BREAKS_RETRIES) {
+      pendingBreaksRetries.delete(primitive);
+      return;
+    }
+    const handle = setTimeout(() => {
+      const target = primitiveClassificationTargets.find(
+        (t) => t.primitive === primitive
+      );
+      if (
+        !target?.usesBreaks ||
+        !target.classification?.method ||
+        !target.valueColumn ||
+        target.classification.breaks?.length
+      ) {
+        pendingBreaksRetries.delete(primitive);
+        return;
+      }
+      void computeBreaksForPrimitive(
+        primitive,
+        '$timeout:retryAfterEmpty',
+        breaksKey
+      );
+    }, BREAKS_RETRY_DELAY_MS) as unknown as number;
+    pendingBreaksRetries.set(primitive, {
+      handle,
+      key: breaksKey,
+      attempts: priorAttempts + 1
+    });
+  }
+
   async function computeBreaksForPrimitive(
     primitive: ClassifiablePrimitive,
     trigger = 'unknown',
@@ -1707,6 +1763,7 @@
           }
         );
         clearInFlightBreaksKey();
+        scheduleBreaksRetry(primitive, breaksKey);
         return;
       }
 
