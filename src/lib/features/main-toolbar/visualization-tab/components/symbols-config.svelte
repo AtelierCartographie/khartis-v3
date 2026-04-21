@@ -244,14 +244,17 @@
       <SymbolModeCategories
         dataFields={dataFields}
         visualization={visualization}
+        onStyleChange={onStyleChange}
         onSymbolsChange={onSymbolsChange}
         onSymbolPrimitiveChange={onSymbolPrimitiveChange}
         onMappingChange={onMappingChange}
+        onStrokeMappingChange={onStrokeMappingChange}
         onModesChange={onModesChange}
         onMissingDataChange={onMissingDataChange}
         onClassificationChange={onClassificationChange}
         onStrokeClassificationChange={onStrokeClassificationChange}
         onInvertPalette={onInvertPalette}
+        onStrokeInvertPalette={onStrokeInvertPalette}
       />
     {/if}
   </div>

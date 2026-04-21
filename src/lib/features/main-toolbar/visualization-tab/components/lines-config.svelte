@@ -215,6 +215,9 @@
   let showMissingData = $state<boolean>(true);
   let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
   let missingDataShape = $state<MissingDataShape>(MissingDataShape.CIRCLE);
+  const categoryColumnName = $derived(
+    dataFields.find((f) => f.id === selectedCategoryFieldId)?.text ?? ''
+  );
   const currentCategoryColumnName = $derived(
     visualization?.mapping.categoryColumn ?? categoryColumnName
   );
@@ -445,10 +448,6 @@
     dataFields.find((f) => f.id === selectedSizeFieldId)?.text ?? ''
   );
 
-  const categoryColumnName = $derived(
-    dataFields.find((f) => f.id === selectedCategoryFieldId)?.text ?? ''
-  );
-
   async function handleFacetsVariablesChange(
     baseVariableName: string,
     slotPath: FacetSlotPath,
@@ -615,6 +614,7 @@
 
     {#if colorMode === ColorMode.UNIQUE}
       <SingleColorPreview
+        exclusive
         label={m.color()}
         color={color}
         onchange={handleColorChange}

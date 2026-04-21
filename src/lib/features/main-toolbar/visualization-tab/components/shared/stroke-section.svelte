@@ -384,6 +384,7 @@
 
   {#if strokeMode === StrokeMode.UNIQUE}
     <ColorSelector
+      exclusive
       label={m.color()}
       value={strokeColor}
       onchange={handleStrokeColorChange}

@@ -32,13 +32,16 @@
     InfoPopover,
     MissingDataSection,
     PalettePreview,
-    SliderWithInput
+    SliderWithInput,
+    StrokeSection
   } from '../shared';
   import {
     loadDistinctCategoryLabels,
     resolveCategoryPreviewCount
   } from '../shared/categorical-preview.utils';
   import { NONE_FIELD_ID, type SymbolModeProps } from './types';
+  import DiscretizationModal from '../discretization-modal.svelte';
+  import { resolveDiscretizationLabel } from '../discretization.utils';
   import {
     FACET_SLOT,
     facetsStore,
@@ -50,14 +53,17 @@
   let {
     dataFields = [],
     visualization,
+    onStyleChange,
     onMappingChange,
+    onStrokeMappingChange,
     onSymbolsChange,
     onSymbolPrimitiveChange,
     onModesChange,
     onMissingDataChange,
     onClassificationChange,
     onStrokeClassificationChange,
-    onInvertPalette
+    onInvertPalette,
+    onStrokeInvertPalette
   }: SymbolModeProps = $props();
 
   const currentPalette = $derived(
@@ -75,6 +81,7 @@
       : datasetsStore.selectedDataset
   );
 
+  let strokeDiscretizationModalOpen = $state(false);
   let selectedFieldId = $state<number>(NONE_FIELD_ID);
   let categoryPickerOpen = $state(false);
   let categoryCount = $state<number>(4);
@@ -308,6 +315,14 @@
     symbolOpacity = value;
     onSymbolsChange?.({ opacity: value / 100 });
   }
+
+  const strokeDiscretizationLabel = $derived.by(() =>
+    resolveDiscretizationLabel(
+      visualization?.symbol?.strokeClassification
+        ? { ...visualization.symbol.strokeClassification }
+        : undefined
+    )
+  );
 
   function resolveOrderedCategorySizeBounds(baseSize: number): {
     minSize: number;
@@ -578,6 +593,37 @@
   onshapechange={handleMissingDataShapeChange}
   onsizechange={handleMissingDataSizeChange}
   oncolorchange={handleMissingDataColorChange}
+/>
+
+<StrokeSection
+  visualization={visualization}
+  dataFields={dataFields}
+  infoText={m.stroke_section_info()}
+  showDashed={true}
+  discretizationLabel={strokeDiscretizationLabel}
+  onStyleChange={onStyleChange}
+  onModesChange={onModesChange}
+  onMappingChange={onMappingChange}
+  onStrokeMappingChange={onStrokeMappingChange}
+  onInvertPalette={onStrokeInvertPalette}
+  onOpenDiscretization={() => {
+    strokeDiscretizationModalOpen = true;
+  }}
+  onStrokeClassificationChange={onStrokeClassificationChange ?? (() => {})}
+  strokeClassification={visualization?.symbol?.strokeClassification}
+  strokeValueColumn={visualization?.symbol?.strokeValueColumn}
+  strokeCategoryColumn={visualization?.symbol?.strokeCategoryColumn}
+  facetsValueSlotPath={FACET_SLOT.SYMBOL_VALUE}
+  facetsCategorySlotPath={FACET_SLOT.SYMBOL_CATEGORY}
+/>
+
+<DiscretizationModal
+  bind:open={strokeDiscretizationModalOpen}
+  visualization={visualization}
+  classification={visualization?.symbol?.strokeClassification}
+  valueColumn={visualization?.symbol?.strokeValueColumn}
+  role="stroke"
+  onchange={onStrokeClassificationChange ?? (() => {})}
 />
 
 <style lang="scss">
