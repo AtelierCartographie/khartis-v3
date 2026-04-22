@@ -7,57 +7,40 @@ const source = readFileSync(
   'utf8'
 );
 
-describe('TextsConfig — palette wiring', () => {
-  it('should import PALETTE_TYPE from palette-popover/palette.constants', () => {
-    expect(source).toContain("from './palette-popover/palette.constants'");
-    expect(source).toContain('PALETTE_TYPE');
-  });
-
-  it('should wire SEQUENTIAL paletteType on the background CLASSES-mode PalettePreview', () => {
-    const sequentialCount = (
-      source.match(/paletteType=\{PALETTE_TYPE\.SEQUENTIAL\}/g) || []
-    ).length;
-    expect(sequentialCount).toBeGreaterThanOrEqual(1);
-  });
-
-  it('should wire QUALITATIVE paletteType on the background CATEGORIES-mode PalettePreview', () => {
-    const qualitativeCount = (
-      source.match(/paletteType=\{PALETTE_TYPE\.QUALITATIVE\}/g) || []
-    ).length;
-    expect(qualitativeCount).toBeGreaterThanOrEqual(1);
-  });
-
-  it('should never default to the implicit paletteType on a PalettePreview', () => {
-    const paletteBlocks = source.match(/<PalettePreview[\s\S]*?\/>/g) || [];
-    expect(paletteBlocks.length).toBeGreaterThan(0);
-    paletteBlocks.forEach((block) => {
-      expect(block).toMatch(
-        /paletteType=\{PALETTE_TYPE\.(SEQUENTIAL|QUALITATIVE)\}/
-      );
-    });
-  });
-
-  it('should use SingleColorPreview for the background UNIQUE mode', () => {
+describe('TextsConfig — FillSection wiring (background)', () => {
+  it('delegates the background fill rendering to the shared FillSection', () => {
     expect(source).toContain(
-      "import SingleColorPreview from './palette-popover/single-color-preview.svelte'"
+      "import FillSection from './shared/fill-section.svelte'"
     );
-    const singleColorCount = (source.match(/<SingleColorPreview/g) ?? [])
-      .length;
-    expect(singleColorCount).toBeGreaterThanOrEqual(1);
+    expect(source).toContain('<FillSection');
   });
 
-  it('should enable categoriesMode on every QUALITATIVE PalettePreview', () => {
-    const paletteBlocks = source.match(/<PalettePreview[\s\S]*?\/>/g) || [];
-    const qualitativeBlocks = paletteBlocks.filter((block) =>
-      block.includes('paletteType={PALETTE_TYPE.QUALITATIVE}')
+  it('uses the standard 4-mode preset for the text background (no DENSITY)', () => {
+    expect(source).toContain('availableModes={FILL_MODES_STANDARD}');
+    expect(source).toContain(
+      "import { FILL_MODES_STANDARD } from './shared/fill-mode-presets'"
     );
-    expect(qualitativeBlocks.length).toBeGreaterThanOrEqual(1);
-    qualitativeBlocks.forEach((block) => {
-      expect(block).toContain('categoriesMode={true}');
-      expect(block).toMatch(
-        /categoryLabels=\{(visualization|backgroundVisualization)\?\.classification[\s\S]*?labels[\s\S]*?\?\?[\s\S]*?\[\]\}/
-      );
-    });
+  });
+
+  it('tags the primitive as text and sets categoriesVariant to texts', () => {
+    const fillBlock = source.split('<FillSection')[1]?.split('/>')[0];
+    expect(fillBlock).toBeDefined();
+    expect(fillBlock).toContain('primitive="text"');
+    expect(fillBlock).toContain('categoriesVariant="texts"');
+  });
+
+  it('wires onBackgroundClassificationChange to the FillSection fill role', () => {
+    const fillBlock = source.split('<FillSection')[1]?.split('/>')[0];
+    expect(fillBlock).toContain(
+      'onClassificationChange={onBackgroundClassificationChange'
+    );
+  });
+
+  it('keeps the StrokeSection branch for the background halo', () => {
+    expect(source).toContain('<StrokeSection');
+    expect(source).toContain(
+      'onStrokeClassificationChange={handleBackgroundStrokeClassificationChange}'
+    );
   });
 });
 
@@ -117,12 +100,42 @@ describe('TextsConfig — Figma layout', () => {
 
   it('should disable secondary controls until a primary text field is selected', () => {
     expect(source).toContain(
-      'const hasPrimaryField = $derived(selectedLabelFieldId !== NONE_FIELD_ID);'
+      'labelFieldSelection.selectedFieldId !== NONE_FIELD_ID'
     );
     expect(source).toContain('disabled={!hasPrimaryField}');
     expect(source).toContain(
       'disabled={!hasPrimaryField || !hasSecondaryField}'
     );
     expect(source).toContain('if (!hasPrimaryField || !hasSecondaryField) {');
+  });
+});
+
+describe('TextsConfig — background discretization routing', () => {
+  it('opens background fill and background stroke discretization through separate targets', () => {
+    expect(source).toContain("discretizationTarget = 'background-fill'");
+    expect(source).toContain("discretizationTarget = 'background-stroke'");
+  });
+
+  it('wires the background stroke section to its dedicated stroke classification state', () => {
+    expect(source).toContain(
+      'strokeClassification={backgroundVisualization?.text?.background'
+    );
+    expect(source).toContain('?.strokeClassification}');
+    expect(source).toContain(
+      'strokeValueColumn={backgroundVisualization?.text?.background'
+    );
+    expect(source).toContain(
+      'strokeCategoryColumn={backgroundVisualization?.text?.background'
+    );
+  });
+
+  it('passes the correct shared-modal role for background fill vs stroke', () => {
+    expect(source).toContain(
+      "role={discretizationTarget === 'background-stroke' ? 'stroke' : 'fill'}"
+    );
+    expect(source).toContain(
+      'classification={activeDiscretizationClassification}'
+    );
+    expect(source).toContain('valueColumn={activeDiscretizationValueColumn}');
   });
 });

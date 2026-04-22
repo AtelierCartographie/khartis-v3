@@ -35,11 +35,5 @@ export const MAP_TIMING = {
    * Delay before showing tooltips on hover.
    * Prevents flicker during rapid mouse movement.
    */
-  TOOLTIP_DELAY_MS: 100,
-
-  /**
-   * Debounce delay for position persistence to localStorage.
-   * Balances responsiveness with reducing I/O operations.
-   */
-  POSITION_SAVE_DEBOUNCE_MS: 500
+  TOOLTIP_DELAY_MS: 100
 } as const;

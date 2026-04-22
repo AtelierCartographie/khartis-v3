@@ -3,7 +3,7 @@ import type { VisualizationTools } from '$lib/features/commons/types/global';
 
 export function shouldBlockToolClose(
   tool: StylingTools | VisualizationTools | undefined,
-  isAnnotationsDrawingMode: boolean
+  isAnnotationsCreationActive: boolean
 ): boolean {
-  return tool === StylingTools.Annotations && isAnnotationsDrawingMode;
+  return tool === StylingTools.Annotations && isAnnotationsCreationActive;
 }

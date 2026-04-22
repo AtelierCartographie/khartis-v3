@@ -53,10 +53,19 @@ interface SimilarityCacheEntry {
 }
 
 let activeSimilarityCache: SimilarityCacheEntry | null = null;
+const pendingSimilarityCacheBuilds = new Map<string, Promise<string>>();
 
 function getSimilarityCacheTableName(datasetTable: string): string {
   const sanitized = datasetTable.replace(/[^a-zA-Z0-9_]/g, '_');
   return `${SIMILARITY_CACHE_PREFIX}${sanitized}`;
+}
+
+function getSimilarityCacheBuildKey(
+  datasetTable: string,
+  geoColumn: string,
+  filterClause: string | null
+): string {
+  return `${datasetTable}::${geoColumn}::${filterClause ?? ''}`;
 }
 
 /**
@@ -85,6 +94,11 @@ async function ensureSimilarityCached(
 ): Promise<string> {
   const cacheTableName = getSimilarityCacheTableName(dataset.tableName);
   const normalizedFilter = filterClause || null;
+  const buildKey = getSimilarityCacheBuildKey(
+    dataset.tableName,
+    geoColumn,
+    normalizedFilter
+  );
 
   // Return existing cache if it matches the current dataset + geoColumn + filters
   if (
@@ -106,122 +120,143 @@ async function ensureSimilarityCached(
     activeSimilarityCache = null;
   }
 
-  const start = performance.now();
+  const pendingBuild = pendingSimilarityCacheBuilds.get(buildKey);
+  if (pendingBuild) {
+    return pendingBuild;
+  }
 
-  await ensureBasemapAttributesLoaded(Duck);
+  const buildPromise = (async () => {
+    const start = performance.now();
 
-  const escapedGeoCol = escapeIdentifier(geoColumn);
-  const escapedCacheTable = escapeIdentifier(cacheTableName);
+    await ensureBasemapAttributesLoaded(Duck);
 
-  // Build the similarity cache in two phases:
-  // Phase 1: exact match via equi-join on pre-normalized text (hash join, O(n+m))
-  //          — handles the vast majority of matches for code-based datasets (INSEE, ISO…).
-  // Phase 2: fuzzy Jaro-Winkler (score_cutoff=0.85) only on residual unmatched candidates
-  //          — the candidate set is typically tiny after phase 1, keeping the cross-join fast.
-  // Normalization is pre-computed once in the candidates CTE (like the get_similarity macro)
-  // to avoid redundant computation inside the join/cross-join.
-  await Duck.query(`
-    CREATE OR REPLACE TEMP TABLE "${escapedCacheTable}" AS
-    WITH source_raw AS (
-      SELECT
-        CAST("${escapedGeoCol}" AS VARCHAR) as original_name,
-        normalize_text_join(CAST("${escapedGeoCol}" AS VARCHAR)) as normalized_name
-      FROM "${escapeIdentifier(dataset.tableName)}"
-      WHERE "${escapedGeoCol}" IS NOT NULL${normalizedFilter ? ` AND (${normalizedFilter})` : ''}
-    ),
-    source_data AS (
-      SELECT
-        original_name,
-        normalized_name,
-        COUNT(*) OVER (PARTITION BY normalized_name) as source_dup_count
-      FROM source_raw
-    ),
-    candidates AS (
-      SELECT DISTINCT original_name, source_dup_count, normalized_name
-      FROM source_data
-    ),
-    -- Phase 1: exact match via equi-join (hash join)
-    exact_matches AS (
+    const escapedGeoCol = escapeIdentifier(geoColumn);
+    const escapedCacheTable = escapeIdentifier(cacheTableName);
+
+    // Build the similarity cache in two phases:
+    // Phase 1: exact match via equi-join on pre-normalized text (hash join, O(n+m))
+    //          — handles the vast majority of matches for code-based datasets (INSEE, ISO…).
+    // Phase 2: fuzzy Jaro-Winkler (score_cutoff=0.85) only on residual unmatched candidates
+    //          — the candidate set is typically tiny after phase 1, keeping the cross-join fast.
+    // Normalization is pre-computed once in the candidates CTE (like the get_similarity macro)
+    // to avoid redundant computation inside the join/cross-join.
+    await Duck.query(`
+      CREATE OR REPLACE TEMP TABLE "${escapedCacheTable}" AS
+      WITH source_raw AS (
+        SELECT
+          CAST("${escapedGeoCol}" AS VARCHAR) as original_name,
+          normalize_text_join(CAST("${escapedGeoCol}" AS VARCHAR)) as normalized_name
+        FROM "${escapeIdentifier(dataset.tableName)}"
+        WHERE "${escapedGeoCol}" IS NOT NULL${normalizedFilter ? ` AND (${normalizedFilter})` : ''}
+      ),
+      source_data AS (
+        SELECT
+          original_name,
+          normalized_name,
+          COUNT(*) OVER (PARTITION BY normalized_name) as source_dup_count
+        FROM source_raw
+      ),
+      candidates AS (
+        SELECT DISTINCT original_name, source_dup_count, normalized_name
+        FROM source_data
+      ),
+      -- Phase 1: exact match via equi-join (hash join)
+      exact_matches AS (
+        SELECT
+          c.original_name,
+          c.source_dup_count,
+          1.0 AS match_score,
+          'exact' AS typo_match,
+          ba.id AS match_id,
+          ba.raw AS match_raw,
+          ba.variant AS match_variant,
+          ba.basemap AS match_basemap,
+          ba.basemap_count AS match_basemap_count
+        FROM candidates c
+        JOIN basemap_attributes ba ON c.normalized_name = ba.normalized
+      ),
+      -- Phase 2: fuzzy Jaro-Winkler only for candidates without any exact match
+      unmatched AS (
+        SELECT c.*
+        FROM candidates c
+        WHERE NOT EXISTS (
+          SELECT 1 FROM exact_matches e WHERE e.original_name = c.original_name
+        )
+      ),
+      fuzzy_raw AS (
+        SELECT
+          u.original_name,
+          u.source_dup_count,
+          jaro_winkler_similarity(u.normalized_name, ba.normalized, 0.85) AS match_score,
+          ba.id AS match_id,
+          ba.raw AS match_raw,
+          ba.variant AS match_variant,
+          ba.basemap AS match_basemap,
+          ba.basemap_count AS match_basemap_count
+        FROM unmatched u, basemap_attributes ba
+      ),
+      fuzzy_matches AS (
+        SELECT
+          original_name,
+          source_dup_count,
+          match_score,
+          'partial' AS typo_match,
+          match_id,
+          match_raw,
+          match_variant,
+          match_basemap,
+          match_basemap_count
+        FROM fuzzy_raw
+        WHERE match_score > 0
+      ),
+      all_matches AS (
+        SELECT * FROM exact_matches
+        UNION ALL
+        SELECT * FROM fuzzy_matches
+      )
       SELECT
         c.original_name,
         c.source_dup_count,
-        1.0 AS match_score,
-        'exact' AS typo_match,
-        ba.id AS match_id,
-        ba.raw AS match_raw,
-        ba.variant AS match_variant,
-        ba.basemap AS match_basemap,
-        ba.basemap_count AS match_basemap_count
+        m.match_id,
+        m.match_raw,
+        m.match_variant,
+        m.match_score,
+        m.typo_match,
+        m.match_basemap,
+        m.match_basemap_count
       FROM candidates c
-      JOIN basemap_attributes ba ON c.normalized_name = ba.normalized
-    ),
-    -- Phase 2: fuzzy Jaro-Winkler only for candidates without any exact match
-    unmatched AS (
-      SELECT c.*
-      FROM candidates c
-      WHERE NOT EXISTS (
-        SELECT 1 FROM exact_matches e WHERE e.original_name = c.original_name
-      )
-    ),
-    fuzzy_raw AS (
-      SELECT
-        u.original_name,
-        u.source_dup_count,
-        jaro_winkler_similarity(u.normalized_name, ba.normalized, 0.85) AS match_score,
-        ba.id AS match_id,
-        ba.raw AS match_raw,
-        ba.variant AS match_variant,
-        ba.basemap AS match_basemap,
-        ba.basemap_count AS match_basemap_count
-      FROM unmatched u, basemap_attributes ba
-    ),
-    fuzzy_matches AS (
-      SELECT
-        original_name,
-        source_dup_count,
-        match_score,
-        'partial' AS typo_match,
-        match_id,
-        match_raw,
-        match_variant,
-        match_basemap,
-        match_basemap_count
-      FROM fuzzy_raw
-      WHERE match_score > 0
-    ),
-    all_matches AS (
-      SELECT * FROM exact_matches
-      UNION ALL
-      SELECT * FROM fuzzy_matches
-    )
-    SELECT
-      c.original_name,
-      c.source_dup_count,
-      m.match_id,
-      m.match_raw,
-      m.match_variant,
-      m.match_score,
-      m.typo_match,
-      m.match_basemap,
-      m.match_basemap_count
-    FROM candidates c
-    LEFT JOIN all_matches m ON c.original_name = m.original_name
-  `);
+      LEFT JOIN all_matches m ON c.original_name = m.original_name
+    `);
 
-  activeSimilarityCache = {
-    tableName: dataset.tableName,
-    geoColumn,
-    filterClause: normalizedFilter,
-    cacheTableName
-  };
+    activeSimilarityCache = {
+      tableName: dataset.tableName,
+      geoColumn,
+      filterClause: normalizedFilter,
+      cacheTableName
+    };
 
-  logger.info('Similarity cache built against all basemaps', LogCategory.DATA, {
-    cacheTableName,
-    datasetTable: dataset.tableName,
-    durationMs: (performance.now() - start).toFixed(2)
-  });
+    logger.info(
+      'Similarity cache built against all basemaps',
+      LogCategory.DATA,
+      {
+        cacheTableName,
+        datasetTable: dataset.tableName,
+        durationMs: (performance.now() - start).toFixed(2)
+      }
+    );
 
-  return cacheTableName;
+    return cacheTableName;
+  })();
+
+  pendingSimilarityCacheBuilds.set(buildKey, buildPromise);
+
+  try {
+    return await buildPromise;
+  } finally {
+    if (pendingSimilarityCacheBuilds.get(buildKey) === buildPromise) {
+      pendingSimilarityCacheBuilds.delete(buildKey);
+    }
+  }
 }
 
 /**

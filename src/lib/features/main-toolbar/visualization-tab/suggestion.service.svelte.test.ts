@@ -8,6 +8,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('$lib/features/project-management/core/persistence-registry', () => ({
+  SavePriority: {
+    IMMEDIATE: 'immediate',
+    DEBOUNCED: 'debounced'
+  },
   persistenceRegistry: {
     register: vi.fn(),
     notifyChange: mocks.notifyChangeMock
@@ -61,6 +65,7 @@ import {
 import {
   DEFAULT_COLORS,
   FillMode,
+  SymbolDoublePosition,
   SymbolMode
 } from '$lib/features/main-toolbar/constants';
 import {
@@ -71,6 +76,7 @@ import {
   SUGGESTION_BEHAVIOR_IDS,
   isVisualizationBlank,
   isVisualizationMatchingSuggestion,
+  resolveDatasetGeometryType,
   restoreVisualizationFromSuggestion
 } from './suggestion.service';
 
@@ -472,6 +478,31 @@ describe('suggestion.service', () => {
     expect(afterPolygonFillChange?.style.fillColor).toBe('#f287ac');
     expect(afterPolygonFillChange?.style.symbolFillColor).toBe(
       DEFAULT_COLORS.fill
+    );
+  });
+
+  it('defaults double proportional symbol suggestions to overlay position mode', () => {
+    const dataset = createPolygonDataset();
+    mocks.datasets = [dataset];
+    mocks.selectedDatasetId = dataset.id;
+
+    const visualization = visualizationStore.createVisualization(
+      VisualizationType.PROPORTIONAL,
+      dataset.id
+    );
+    const suggestion = createSuggestionById(
+      'symbols_proportional_double',
+      'polygon'
+    );
+
+    applySuggestionToVisualization(visualization.id, suggestion);
+
+    const updatedVisualization = visualizationStore.visualizations.find(
+      (item) => item.id === visualization.id
+    );
+
+    expect(updatedVisualization?.symbol?.positionMode).toBe(
+      SymbolDoublePosition.OVERLAY
     );
   });
 
@@ -883,5 +914,127 @@ describe('suggestion.service', () => {
 
       visualizationStore.clear();
     });
+  });
+});
+
+describe('resolveDatasetGeometryType / MultiPoint + centroid routing', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    visualizationStore.clear();
+    mocks.datasets = [];
+    mocks.selectedDatasetId = undefined;
+  });
+
+  function buildDataset(type: string): SuggestionTestDataset {
+    return {
+      id: `dataset-${type}`,
+      name: `${type} dataset`,
+      sourceFileId: `source-${type}`,
+      tableName: `${type.toLowerCase()}_dataset`,
+      rowCount: 4,
+      geometry: { type },
+      metadata: {
+        processedAt: new Date(),
+        fileType: 'geojson',
+        parserUsed: 'test'
+      },
+      columns: [
+        { name: 'geometry', type: 'geometry', stats: {}, values: [] },
+        { name: 'category', type: 'string', stats: {}, values: [] },
+        { name: 'population_total', type: 'number', stats: {}, values: [] }
+      ]
+    } as unknown as SuggestionTestDataset;
+  }
+
+  it('returns MultiPoint geometry type for MultiPoint datasets (not downgraded)', () => {
+    const ds = buildDataset('MultiPoint');
+    const type = resolveDatasetGeometryType(ds);
+    expect(type).toBe('MultiPoint');
+  });
+
+  it('returns MultiPolygon geometry type for MultiPolygon datasets', () => {
+    const ds = buildDataset('MultiPolygon');
+    const type = resolveDatasetGeometryType(ds);
+    expect(type).toBe('MultiPolygon');
+  });
+
+  it('returns MultiLineString geometry type for MultiLineString datasets', () => {
+    const ds = buildDataset('MultiLineString');
+    const type = resolveDatasetGeometryType(ds);
+    expect(type).toBe('MultiLineString');
+  });
+
+  it('treats a MultiPoint dataset as a point-compatible suggestion target', () => {
+    const ds = buildDataset('MultiPoint');
+    mocks.datasets = [ds];
+    mocks.selectedDatasetId = ds.id;
+
+    const visualization = visualizationStore.createVisualization(
+      VisualizationType.PROPORTIONAL,
+      ds.id
+    );
+    const suggestion: Parameters<typeof applySuggestionToVisualization>[1] = {
+      id: 'symbols_proportional',
+      label: 'Symboles proportionnels',
+      nbColumns: 1,
+      semioTypes: ['QTA'],
+      geometries: ['point'],
+      columns: ['population_total'],
+      score: 60
+    };
+
+    applySuggestionToVisualization(visualization.id, suggestion);
+
+    const updated = visualizationStore.visualizations.find(
+      (v) => v.id === visualization.id
+    );
+    expect(updated).toBeDefined();
+    expect(updated?.modes?.symbol).toBe(SymbolMode.PROPORTIONAL);
+    expect(updated?.mapping.sizeColumn).toBe('population_total');
+  });
+
+  it('treats a MultiPolygon dataset as a polygon-compatible target for centroid-based symbols', () => {
+    const ds = buildDataset('MultiPolygon');
+    mocks.datasets = [ds];
+    mocks.selectedDatasetId = ds.id;
+
+    const visualization = visualizationStore.createVisualization(
+      VisualizationType.PROPORTIONAL,
+      ds.id
+    );
+    const suggestion: Parameters<typeof applySuggestionToVisualization>[1] = {
+      id: 'symbols_proportional',
+      label: 'Symboles proportionnels',
+      nbColumns: 1,
+      semioTypes: ['QTA'],
+      geometries: ['polygon'],
+      columns: ['population_total'],
+      score: 58
+    };
+
+    applySuggestionToVisualization(visualization.id, suggestion);
+
+    const updated = visualizationStore.visualizations.find(
+      (v) => v.id === visualization.id
+    );
+    expect(updated?.modes?.symbol).toBe(SymbolMode.PROPORTIONAL);
+    expect(updated?.primitiveFilters).toContain(PrimitiveFilterType.POINT);
+  });
+
+  it('returns null when geometry type is absent and no GPS fallback is available', () => {
+    const ds = {
+      id: 'dataset-bare',
+      name: 'bare',
+      sourceFileId: undefined,
+      tableName: 'bare',
+      rowCount: 0,
+      metadata: {
+        processedAt: new Date(),
+        fileType: 'csv',
+        parserUsed: 'test'
+      },
+      columns: []
+    } as unknown as SuggestionTestDataset;
+    expect(resolveDatasetGeometryType(ds)).toBeNull();
   });
 });

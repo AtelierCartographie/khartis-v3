@@ -615,7 +615,7 @@ export function pointColorAttr(
     colors[offset + 2] = color[2];
     colors[offset + 3] = color[3];
   }
-  return { value: colors, size: 4 };
+  return { value: colors, size: 4, normalized: true };
 }
 
 /**

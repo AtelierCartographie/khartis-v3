@@ -1,24 +1,15 @@
 <script lang="ts">
   import { Dropdown } from 'carbon-components-svelte';
   import {
-    MisuseOutline,
     CircleFilled,
-    SquareFill,
     Close,
     CaretUp,
-    Category,
-    Tag,
+    SquareFill,
     StarFilled,
     DiamondFill,
     Checkbox
   } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
-  import {
-    DEFAULT_SEQUENTIAL_PREVIEW,
-    DEFAULT_QUALITATIVE_PREVIEW,
-    PALETTE_TYPE
-  } from '../palette-popover/palette.constants';
-  import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import {
     FillMode,
     ShapeType,
@@ -28,41 +19,41 @@
     DEFAULT_COLORS,
     availableShapesForSymbolMode
   } from '../../../constants';
-  import {
-    DiscretizationRow,
-    InfoPopover,
-    PalettePreview,
-    SectionHeading,
-    SliderWithInput,
-    MissingDataSection,
-    StrokeSection
-  } from '../shared';
-  import SingleColorPreview from '../palette-popover/single-color-preview.svelte';
-  import FacetsVariablePicker from './facets-variable-picker.svelte';
+  import { InfoPopover, SliderWithInput, StrokeSection } from '../shared';
+  import FillSection from '../shared/fill-section.svelte';
+  import { FILL_MODES_STANDARD } from '../shared/fill-mode-presets';
+  import DiscretizationModal from '../discretization-modal.svelte';
   import type { SymbolModeProps } from './types';
   import { resolveDiscretizationLabel } from '../discretization.utils';
   import {
     FACET_SLOT,
     facetsStore,
     type FacetSlotPath
-  } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
+  } from '../../facets-adapter.svelte';
+  import {
+    NONE_FIELD_ID,
+    useFieldSelection
+  } from '../../use-field-selection.svelte';
 
   let {
     dataFields = [],
     visualization,
+    fillVisualization,
     onStyleChange,
     onModesChange,
     onSymbolsChange,
     onMappingChange,
+    onFillMappingChange,
+    onStrokeMappingChange,
     onMissingDataChange,
-    onClassificationChange,
-    onInvertPalette,
-    onOpenDiscretization
+    onFillClassificationChange,
+    onStrokeClassificationChange,
+    onFillInvertPalette,
+    onStrokeInvertPalette,
+    onOpenFillDiscretization
   }: SymbolModeProps = $props();
 
-  const sequentialPalette = DEFAULT_SEQUENTIAL_PREVIEW;
-  const qualitativePalette = DEFAULT_QUALITATIVE_PREVIEW;
-
+  let strokeDiscretizationModalOpen = $state(false);
   let fillMode = $state<FillMode>(FillMode.UNIQUE);
   let symbolSize = $state<number>(VISUALIZATION_DEFAULTS.symbolSize);
   let shapeType = $state<ShapeType>(ShapeType.CIRCLE);
@@ -70,89 +61,66 @@
   let fillOpacity = $state<number>(VISUALIZATION_DEFAULTS.fillOpacity);
   let showMissingData = $state<boolean>(true);
   let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
-  const NONE_FIELD_ID = -1;
-  let selectedClassFieldId = $state<number>(NONE_FIELD_ID);
-  let selectedCategoryFieldId = $state<number>(NONE_FIELD_ID);
   let categoryCount = $state<number>(4);
-  let classPickerOpen = $state(false);
-  let categoryPickerOpen = $state(false);
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
   const selectableDataFields = $derived([noneOption, ...dataFields]);
+  const classFieldSelection = useFieldSelection(() => dataFields);
+  const categoryFieldSelection = useFieldSelection(() => dataFields);
 
   $effect(() => {
-    if (visualization?.mapping.valueColumn && dataFields.length > 0) {
-      const valueFieldIndex = dataFields.findIndex(
-        (field) => field.text === visualization.mapping.valueColumn
-      );
-      selectedClassFieldId =
-        valueFieldIndex >= 0 ? dataFields[valueFieldIndex].id : NONE_FIELD_ID;
-    } else {
-      selectedClassFieldId = NONE_FIELD_ID;
-    }
+    classFieldSelection.sync(fillVisualization?.mapping.valueColumn);
+    categoryFieldSelection.sync(fillVisualization?.mapping.categoryColumn);
 
-    if (visualization?.mapping.categoryColumn && dataFields.length > 0) {
-      const categoryFieldIndex = dataFields.findIndex(
-        (field) => field.text === visualization.mapping.categoryColumn
-      );
-      selectedCategoryFieldId =
-        categoryFieldIndex >= 0
-          ? dataFields[categoryFieldIndex].id
-          : NONE_FIELD_ID;
-    } else {
-      selectedCategoryFieldId = NONE_FIELD_ID;
-    }
-
-    if (visualization?.modes) {
-      fillMode = visualization.modes.fill ?? FillMode.UNIQUE;
-    }
-    if (visualization?.style) {
+    const symbolConfig = visualization?.symbol;
+    if (symbolConfig) {
+      fillMode = symbolConfig.fillMode ?? FillMode.UNIQUE;
       fillColor =
-        (visualization.style.symbolFillColor as string) ?? DEFAULT_COLORS.fill;
-    }
-    if (visualization?.symbols) {
-      symbolSize =
-        visualization.symbols.size ?? VISUALIZATION_DEFAULTS.symbolSize;
-      shapeType = visualization.symbols.type ?? ShapeType.CIRCLE;
+        (symbolConfig.fillColor as string | undefined) ?? DEFAULT_COLORS.fill;
+      symbolSize = symbolConfig.size ?? VISUALIZATION_DEFAULTS.symbolSize;
+      shapeType = (symbolConfig.shape as ShapeType) ?? ShapeType.CIRCLE;
       fillOpacity =
-        visualization.symbols.opacity !== undefined
-          ? Math.round(visualization.symbols.opacity * 100)
+        symbolConfig.opacity !== undefined
+          ? Math.round(symbolConfig.opacity * 100)
           : VISUALIZATION_DEFAULTS.symbolOpacity;
     } else {
-      fillOpacity = VISUALIZATION_DEFAULTS.symbolOpacity;
+      if (visualization?.modes) {
+        fillMode = visualization.modes.fill ?? FillMode.UNIQUE;
+      }
+      if (visualization?.style) {
+        fillColor =
+          (visualization.style.symbolFillColor as string) ??
+          DEFAULT_COLORS.fill;
+      }
+      if (visualization?.symbols) {
+        symbolSize =
+          visualization.symbols.size ?? VISUALIZATION_DEFAULTS.symbolSize;
+        shapeType = visualization.symbols.type ?? ShapeType.CIRCLE;
+        fillOpacity =
+          visualization.symbols.opacity !== undefined
+            ? Math.round(visualization.symbols.opacity * 100)
+            : VISUALIZATION_DEFAULTS.symbolOpacity;
+      } else {
+        fillOpacity = VISUALIZATION_DEFAULTS.symbolOpacity;
+      }
     }
     if (visualization?.missingData) {
       showMissingData = visualization.missingData.show ?? true;
       missingDataColor =
         visualization.missingData.color ?? DEFAULT_COLORS.missingData;
     }
-    if (visualization?.classification) {
+    if (fillVisualization?.classification) {
       categoryCount =
-        visualization.classification.numClasses ??
-        visualization.classification.classes ??
+        fillVisualization.classification.labels?.length ??
+        fillVisualization.classification.numClasses ??
+        fillVisualization.classification.classes ??
         4;
     }
   });
 
-  const fillModeItems = [
-    { icon: MisuseOutline, label: m.fill_mode_none(), iconSize: 16 },
-    { icon: SquareFill, label: m.fill_mode_unique(), iconSize: 16 },
-    { icon: Category, label: m.fill_mode_classes(), iconSize: 16 },
-    { icon: Tag, label: m.fill_mode_categories(), iconSize: 16 }
-  ];
-
-  const fillModeIndex = $derived(
-    [
-      FillMode.NONE,
-      FillMode.UNIQUE,
-      FillMode.CLASSES,
-      FillMode.CATEGORIES
-    ].indexOf(fillMode)
-  );
-
   const discretizationLabel = $derived.by(() =>
     resolveDiscretizationLabel(
-      visualization?.classification
-        ? { ...visualization.classification }
+      fillVisualization?.classification
+        ? { ...fillVisualization.classification }
         : undefined
     )
   );
@@ -182,14 +150,6 @@
       .map((name) => dataFields.find((field) => field.text === name)?.id)
       .filter((id): id is number => typeof id === 'number');
   }
-
-  const classColumnName = $derived(
-    dataFields.find((field) => field.id === selectedClassFieldId)?.text ?? ''
-  );
-
-  const categoryColumnName = $derived(
-    dataFields.find((field) => field.id === selectedCategoryFieldId)?.text ?? ''
-  );
 
   async function handleFacetsVariablesChange(
     baseVariableName: string,
@@ -240,6 +200,18 @@
     ];
     fillMode = modes[index] || FillMode.NONE;
     onModesChange?.({ fill: fillMode });
+    if (fillMode === FillMode.NONE) {
+      fillColor = DEFAULT_COLORS.fill;
+      onStyleChange?.({ symbolFillColor: DEFAULT_COLORS.fill });
+      onFillClassificationChange?.({
+        colors: undefined,
+        paletteId: undefined,
+        inverted: false,
+        patternId: undefined,
+        patternParams: undefined,
+        labels: undefined
+      });
+    }
   }
 
   function handleSymbolSizeChange(value: number) {
@@ -273,28 +245,28 @@
   }
 
   function handleClassFieldSelect(fieldId: number) {
-    selectedClassFieldId = fieldId;
+    classFieldSelection.set(fieldId);
     if (fieldId === NONE_FIELD_ID) {
-      onMappingChange?.({ valueColumn: undefined });
+      onFillMappingChange?.({ valueColumn: undefined });
       return;
     }
 
     const field = dataFields.find((item) => item.id === fieldId);
     if (field) {
-      onMappingChange?.({ valueColumn: field.text });
+      onFillMappingChange?.({ valueColumn: field.text });
     }
   }
 
   function handleCategoryFieldSelect(fieldId: number) {
-    selectedCategoryFieldId = fieldId;
+    categoryFieldSelection.set(fieldId);
     if (fieldId === NONE_FIELD_ID) {
-      onMappingChange?.({ categoryColumn: undefined });
+      onFillMappingChange?.({ categoryColumn: undefined });
       return;
     }
 
     const field = dataFields.find((item) => item.id === fieldId);
     if (field) {
-      onMappingChange?.({ categoryColumn: field.text });
+      onFillMappingChange?.({ categoryColumn: field.text });
     }
   }
 
@@ -350,151 +322,71 @@
   />
 </div>
 
-<SectionHeading title={m.background()} infoText={m.fill_section_info()} />
-
-<div class="field-group">
-  <ToggleTabs
-    items={fillModeItems}
-    activeIndex={fillModeIndex}
-    onChange={handleFillModeChange}
-    hideInactiveLabel={true}
-  />
-</div>
-
-{#if fillMode === FillMode.UNIQUE}
-  <SingleColorPreview
-    label={m.color()}
-    color={fillColor}
-    onchange={handleFillColorChange}
-  />
-  <SliderWithInput
-    label={m.opacity()}
-    bind:value={fillOpacity}
-    min={SLIDER_LIMITS.opacity.min}
-    max={SLIDER_LIMITS.opacity.max}
-    onchange={handleFillOpacityChange}
-  />
-{:else if fillMode === FillMode.CLASSES}
-  <div class="field-group">
-    <FacetsVariablePicker
-      bind:open={classPickerOpen}
-      titleText={m.color_according()}
-      dataFields={dataFields}
-      singleSelectItems={selectableDataFields}
-      selectedFieldId={selectedClassFieldId}
-      selectedFieldIds={getFacetsSelectedFieldIds(FACET_SLOT.SYMBOL_VALUE)}
-      isCollectionEnabled={isFacetsActiveForSlot(FACET_SLOT.SYMBOL_VALUE)}
-      onSelect={handleClassFieldSelect}
-      onCollectionChange={(ids) =>
-        handleFacetsVariablesChange(
-          classColumnName,
-          FACET_SLOT.SYMBOL_VALUE,
-          ids
-        )}
-      onToggleCollection={(enabled) =>
-        handleFacetsToggle(classColumnName, FACET_SLOT.SYMBOL_VALUE, enabled)}
-    />
-  </div>
-  <DiscretizationRow
-    label={m.discretization()}
-    value={discretizationLabel}
-    onsettings={onOpenDiscretization}
-  />
-  <PalettePreview
-    label={m.color_palette()}
-    colors={sequentialPalette}
-    selectedPaletteId={visualization?.classification?.paletteId}
-    inverted={visualization?.classification?.inverted ?? false}
-    paletteType={PALETTE_TYPE.SEQUENTIAL}
-    oninvert={onInvertPalette}
-    onClassificationChange={onClassificationChange}
-  />
-  <SliderWithInput
-    label={m.opacity()}
-    bind:value={fillOpacity}
-    min={SLIDER_LIMITS.opacity.min}
-    max={SLIDER_LIMITS.opacity.max}
-    onchange={handleFillOpacityChange}
-  />
-  <MissingDataSection
-    bind:show={showMissingData}
-    color={missingDataColor}
-    showShapeSelector={false}
-    showSizeSlider={false}
-    onshowchange={handleMissingDataShowChange}
-    oncolorchange={handleMissingDataColorChange}
-  />
-{:else if fillMode === FillMode.CATEGORIES}
-  <div class="field-group">
-    <FacetsVariablePicker
-      bind:open={categoryPickerOpen}
-      titleText={m.color_according()}
-      dataFields={dataFields}
-      singleSelectItems={selectableDataFields}
-      selectedFieldId={selectedCategoryFieldId}
-      selectedFieldIds={getFacetsSelectedFieldIds(FACET_SLOT.SYMBOL_CATEGORY)}
-      isCollectionEnabled={isFacetsActiveForSlot(FACET_SLOT.SYMBOL_CATEGORY)}
-      onSelect={handleCategoryFieldSelect}
-      onCollectionChange={(ids) =>
-        handleFacetsVariablesChange(
-          categoryColumnName,
-          FACET_SLOT.SYMBOL_CATEGORY,
-          ids
-        )}
-      onToggleCollection={(enabled) =>
-        handleFacetsToggle(
-          categoryColumnName,
-          FACET_SLOT.SYMBOL_CATEGORY,
-          enabled
-        )}
-    />
-  </div>
-  <DiscretizationRow
-    label={m.category_aspect()}
-    value={m.categories_count({ count: categoryCount })}
-    onsettings={onOpenDiscretization}
-  />
-  <PalettePreview
-    label={m.color_palette()}
-    colors={qualitativePalette}
-    inverted={visualization?.classification?.inverted ?? false}
-    paletteType={PALETTE_TYPE.QUALITATIVE}
-    categoriesMode={true}
-    categoryLabels={visualization?.classification?.labels ?? []}
-    oninvert={onInvertPalette}
-    onClassificationChange={onClassificationChange}
-  />
-  <SliderWithInput
-    label={m.opacity()}
-    bind:value={fillOpacity}
-    min={SLIDER_LIMITS.opacity.min}
-    max={SLIDER_LIMITS.opacity.max}
-    onchange={handleFillOpacityChange}
-  />
-  <MissingDataSection
-    bind:show={showMissingData}
-    color={missingDataColor}
-    showShapeSelector={false}
-    showSizeSlider={false}
-    onshowchange={handleMissingDataShowChange}
-    oncolorchange={handleMissingDataColorChange}
-  />
-{/if}
+<FillSection
+  visualization={fillVisualization}
+  primitive="symbol"
+  dataFields={dataFields}
+  availableModes={FILL_MODES_STANDARD}
+  fillMode={fillMode}
+  fillColor={fillColor}
+  fillOpacity={fillOpacity}
+  selectedValueFieldId={classFieldSelection.selectedFieldId}
+  selectedCategoryFieldId={categoryFieldSelection.selectedFieldId}
+  discretizationLabel={discretizationLabel}
+  categoryCount={categoryCount}
+  facetsValueSlotPath={FACET_SLOT.SYMBOL_FILL_VALUE}
+  facetsCategorySlotPath={FACET_SLOT.SYMBOL_FILL_CATEGORY}
+  categoriesVariant="symbols-unique"
+  showMissingData={showMissingData}
+  missingDataColor={missingDataColor}
+  sectionTitle={m.background()}
+  selectableDataFields={selectableDataFields}
+  getFacetsSelectedFieldIds={getFacetsSelectedFieldIds}
+  isFacetsActiveForSlot={isFacetsActiveForSlot}
+  onFillModeChange={(mode) =>
+    handleFillModeChange(FILL_MODES_STANDARD.indexOf(mode))}
+  onFillColorChange={handleFillColorChange}
+  onFillOpacityChange={handleFillOpacityChange}
+  onValueFieldSelect={handleClassFieldSelect}
+  onCategoryFieldSelect={handleCategoryFieldSelect}
+  onFacetsVariablesChange={handleFacetsVariablesChange}
+  onFacetsToggle={handleFacetsToggle}
+  onOpenDiscretization={onOpenFillDiscretization ?? (() => {})}
+  onClassificationChange={onFillClassificationChange ?? (() => {})}
+  onMissingDataShowChange={handleMissingDataShowChange}
+  onMissingDataColorChange={handleMissingDataColorChange}
+  onInvertPalette={onFillInvertPalette}
+/>
 
 <StrokeSection
   visualization={visualization}
   dataFields={dataFields}
   infoText={m.stroke_section_info()}
-  showDashed={false}
+  showDashed={true}
   discretizationLabel={discretizationLabel}
   onStyleChange={onStyleChange}
   onModesChange={onModesChange}
   onMappingChange={onMappingChange}
-  onInvertPalette={onInvertPalette}
-  onOpenDiscretization={onOpenDiscretization}
-  onClassificationChange={onClassificationChange}
+  onStrokeMappingChange={onStrokeMappingChange}
+  onInvertPalette={onStrokeInvertPalette}
+  onOpenDiscretization={() => {
+    strokeDiscretizationModalOpen = true;
+  }}
+  onStrokeClassificationChange={onStrokeClassificationChange ?? (() => {})}
+  strokeClassification={visualization?.symbol?.strokeClassification}
+  strokeValueColumn={visualization?.symbol?.strokeValueColumn}
+  strokeCategoryColumn={visualization?.symbol?.strokeCategoryColumn}
   facetsValueSlotPath={FACET_SLOT.SYMBOL_VALUE}
   facetsCategorySlotPath={FACET_SLOT.SYMBOL_CATEGORY}
+/>
+
+<DiscretizationModal
+  bind:open={strokeDiscretizationModalOpen}
+  visualization={visualization}
+  classification={visualization?.symbol?.strokeClassification}
+  valueColumn={visualization?.symbol?.strokeValueColumn}
+  role="stroke"
+  onchange={onStrokeClassificationChange ?? (() => {})}
 />
 
 <style lang="scss">

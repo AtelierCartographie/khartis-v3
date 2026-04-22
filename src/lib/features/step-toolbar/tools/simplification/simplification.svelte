@@ -354,8 +354,11 @@
       size="small"
       icon={Undo}
       on:click={() => {
-        store.undoLastSimplification();
-        lastResult = null;
+        void store.undoLastSimplification().then((undone) => {
+          if (undone) {
+            lastResult = null;
+          }
+        });
       }}
     >
       {m.projection_code_reset()}

@@ -20,4 +20,16 @@ describe('MainMap density mode loading', () => {
       'for (const viz of visualizationStore.visualizations)'
     );
   });
+
+  it('keeps density tables separate from canonical dataset tables', () => {
+    expect(source).toContain('displayDensityTables');
+    expect(source).toContain('loadDensityTableForDisplay');
+    expect(source).toContain('densityTables={displayDensityTables}');
+    expect(source).not.toContain('return densityTable;');
+  });
+
+  it('does not apply a second color-blindness filter wrapper around ThematicMap', () => {
+    expect(source).not.toContain('applyColorBlindnessFilter');
+    expect(source).not.toContain('color-blindness-filters');
+  });
 });

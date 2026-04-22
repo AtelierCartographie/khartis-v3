@@ -3,6 +3,7 @@ import {
   getLinePrimitive,
   getPolygonPrimitive,
   getPrimitiveClassification,
+  getSymbolFillClassification,
   getSymbolPrimitive,
   getTextPrimitive,
   PrimitiveFilterType,
@@ -11,7 +12,7 @@ import {
   type VisualizationConfig
 } from '$lib/features/commons/store/visualization.store.svelte';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
-import { FillMode } from '$lib/features/main-toolbar/constants';
+import { FillMode, SymbolMode } from '$lib/features/main-toolbar/constants';
 import {
   basemapLayersStore,
   BASEMAP_LAYER_ID,
@@ -86,7 +87,9 @@ export function getVisualizationColor(viz: VisualizationConfig): string {
   const symbolColor =
     getStyleColor(symbol?.fillColor) ??
     getClassificationColor(
-      getPrimitiveClassification(viz, PrimitiveFilterType.POINT)
+      symbol?.mode === SymbolMode.CATEGORIES
+        ? getPrimitiveClassification(viz, PrimitiveFilterType.POINT)
+        : getSymbolFillClassification(viz)
     );
   if (symbol?.enabled && symbolColor) {
     return symbolColor;
@@ -177,7 +180,9 @@ export function getVisualizationPrimitiveColor(
     default: {
       const symbol = getSymbolPrimitive(viz);
       const classificationColor = getClassificationColor(
-        getPrimitiveClassification(viz, PrimitiveFilterType.POINT)
+        symbol?.mode === SymbolMode.CATEGORIES
+          ? getPrimitiveClassification(viz, PrimitiveFilterType.POINT)
+          : getSymbolFillClassification(viz)
       );
       return (
         getStyleColor(symbol?.fillColor) ??
@@ -350,9 +355,9 @@ function buildLayers(): Layer[] {
     let layerName: string;
     if (isFacetViz) {
       facetIndex += 1;
-      layerName = `${m.tool_facets()} ${facetIndex} — ${viz.name}`;
+      layerName = `${m.layers_carte_title()} ${facetIndex} (${viz.name})`;
     } else {
-      layerName = `${m.viz_tab_label()} (${vizOrder + 1})`;
+      layerName = viz.name || `${m.viz_tab_label()} (${vizOrder + 1})`;
     }
 
     const parentLayer: Layer = {
@@ -367,7 +372,7 @@ function buildLayers(): Layer[] {
 
     const vizPrimitiveOrder = (
       viz.primitiveOrder ?? VISUALIZATION_SUBLAYER_ORDER
-    ).filter((primitive) => primitiveFilters.includes(primitive));
+    ).filter((primitive, index, order) => order.indexOf(primitive) === index);
 
     const vizSubLayers = vizPrimitiveOrder.map(
       (primitive, i): Layer => ({
@@ -376,7 +381,7 @@ function buildLayers(): Layer[] {
         isSubLayer: true,
         primitive,
         name: getVisualizationPrimitiveName(primitive),
-        visible: true,
+        visible: primitiveFilters.includes(primitive),
         type: 'visualization',
         color: getVisualizationPrimitiveColor(viz, primitive),
         opacity: getVisualizationPrimitiveOpacity(viz, primitive),
@@ -428,7 +433,7 @@ const { state, actions } = createToolStore<LayersState, LayersActions>(
           if (!visualization) return;
 
           if (updates.name !== undefined) {
-            visualizationStore.updateVisualization(id, { name: updates.name });
+            visualizationStore.renameVisualization(id, updates.name);
           }
         }
 

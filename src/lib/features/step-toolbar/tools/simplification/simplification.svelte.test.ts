@@ -40,7 +40,7 @@ const mocks = vi.hoisted(() => ({
     setLevel: vi.fn(),
     setRate: vi.fn(),
     applySimplification: vi.fn().mockResolvedValue(null),
-    undoLastSimplification: vi.fn()
+    undoLastSimplification: vi.fn().mockResolvedValue(true)
   },
   availableLevels: [] as SimplLevelValue[],
   preferredLevel: null as SimplLevelValue | null,

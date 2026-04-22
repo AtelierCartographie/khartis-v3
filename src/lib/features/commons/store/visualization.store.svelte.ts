@@ -2,7 +2,11 @@ import type {
   DatasetResult,
   ProcessedDataset
 } from '$lib/features/data-pipeline';
-import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
+import {
+  SavePriority,
+  persistenceRegistry,
+  type SavePriorityType
+} from '$lib/features/project-management/core/persistence-registry';
 import {
   CategoryShapeMode,
   ColorMode,
@@ -14,6 +18,7 @@ import {
   ShapeType,
   SizeMode,
   StrokeMode,
+  SymbolDoublePosition,
   SymbolMode,
   ThicknessMode,
   VISUALIZATION_DEFAULTS,
@@ -21,6 +26,7 @@ import {
 } from '$lib/features/main-toolbar/constants';
 import { deepClone } from '../utils/clone.utils';
 import { generateUniqueNameWithCounter } from '../utils/naming.utils';
+import { sanitizeTextInput } from '../utils/sanitize.utils';
 import { datasetsStore } from './datasets.store.svelte';
 import { findById, updateById } from '../utils/array-helpers';
 import {
@@ -29,6 +35,7 @@ import {
   DEFAULT_STYLE_OPACITY,
   DEFAULT_STROKE_WIDTH
 } from '../constants/colors.constants';
+import { DEFAULT_CATEGORICAL_COLORS as FIGMA_DEFAULT_CATEGORICAL_COLORS } from '../constants/qualitative-palette.constants';
 import { COLUMN_TYPE_GEOMETRY } from '../constants/data.constants';
 import { isLikelyCoordinateColumn } from '../utils/geo-detector.utils';
 import * as m from '$lib/paraglide/messages';
@@ -91,9 +98,11 @@ export interface ClassificationConfig {
   paletteId?: string;
   inverted?: boolean;
   labels?: string[];
+  disabledLabels?: string[];
   breakpointValue?: number | null;
   patternId?: string;
   patternParams?: PatternParams;
+  categoryShapes?: ShapeType[];
 }
 
 export interface MissingDataConfig {
@@ -113,14 +122,45 @@ export interface PolygonPrimitiveConfig {
   fillColor?: string | string[];
   fillOpacity: number;
   strokeMode: StrokeMode;
-  strokeColor?: string;
+  strokeColor?: string | string[];
   strokeWidth: number;
   strokeOpacity: number;
   strokeDashed: boolean;
+  strokeValueColumn?: string;
+  strokeCategoryColumn?: string;
   valueColumn?: string;
   categoryColumn?: string;
   classification?: ClassificationConfig;
+  strokeClassification?: ClassificationConfig;
   missingData?: MissingDataConfig;
+}
+
+export interface SymbolModeState {
+  size?: number;
+  minSize?: number;
+  maxSize?: number;
+  sizeScale?: ScaleType;
+  valueColumn?: string;
+  categoryColumn?: string;
+  sizeColumn?: string;
+  classification?: ClassificationConfig;
+  fillValueColumn?: string;
+  fillCategoryColumn?: string;
+  fillClassification?: ClassificationConfig;
+  categoryShape?: CategoryShapeMode;
+  proportionalType?: ProportionalType;
+  commonScale?: boolean;
+  positionMode?: SymbolDoublePosition;
+  breakValueA?: number | null;
+  breakValueB?: number | null;
+  fillMode?: FillMode;
+  strokeMode?: StrokeMode;
+  strokeWidth?: number;
+  strokeOpacity?: number;
+  strokeDashed?: boolean;
+  strokeClassification?: ClassificationConfig;
+  strokeValueColumn?: string;
+  strokeCategoryColumn?: string;
 }
 
 export interface SymbolPrimitiveConfig {
@@ -136,16 +176,28 @@ export interface SymbolPrimitiveConfig {
   fillColor?: string | string[];
   fillColorB?: string;
   strokeMode: StrokeMode;
-  strokeColor?: string;
+  strokeColor?: string | string[];
   strokeWidth: number;
   strokeOpacity: number;
+  strokeDashed: boolean;
+  strokeValueColumn?: string;
+  strokeCategoryColumn?: string;
+  strokeClassification?: ClassificationConfig;
   proportionalType: ProportionalType;
   categoryShape: CategoryShapeMode;
+  commonScale?: boolean;
+  positionMode?: SymbolDoublePosition;
+  breakValueA?: number | null;
+  breakValueB?: number | null;
   valueColumn?: string;
   categoryColumn?: string;
   sizeColumn?: string;
   classification?: ClassificationConfig;
+  fillValueColumn?: string;
+  fillCategoryColumn?: string;
+  fillClassification?: ClassificationConfig;
   missingData?: MissingDataConfig;
+  modeStates?: Partial<Record<SymbolMode, SymbolModeState>>;
 }
 
 export interface LinePrimitiveConfig {
@@ -183,13 +235,16 @@ export interface TextBackgroundConfig {
   fillColor?: string | string[];
   fillOpacity: number;
   strokeMode: StrokeMode;
-  strokeColor?: string;
+  strokeColor?: string | string[];
   strokeWidth: number;
   strokeOpacity: number;
   strokeDashed: boolean;
+  strokeValueColumn?: string;
+  strokeCategoryColumn?: string;
   valueColumn?: string;
   categoryColumn?: string;
   classification?: ClassificationConfig;
+  strokeClassification?: ClassificationConfig;
 }
 
 export interface TextPrimitiveConfig {
@@ -519,7 +574,10 @@ function buildPolygonPrimitiveConfig(
     valueColumn: existing?.valueColumn ?? visualization.mapping.valueColumn,
     categoryColumn:
       existing?.categoryColumn ?? visualization.mapping.categoryColumn,
+    strokeValueColumn: existing?.strokeValueColumn,
+    strokeCategoryColumn: existing?.strokeCategoryColumn,
     classification: existing?.classification ?? visualization.classification,
+    strokeClassification: existing?.strokeClassification,
     missingData: existing?.missingData ?? visualization.missingData
   };
 }
@@ -529,6 +587,21 @@ function buildSymbolPrimitiveConfig(
 ): SymbolPrimitiveConfig {
   const existing = visualization.symbol;
   const legacySymbols = visualization.symbols;
+  const legacyFillClassification =
+    existing?.fillMode === FillMode.CLASSES ||
+    existing?.fillMode === FillMode.CATEGORIES
+      ? (existing?.classification ??
+        visualization.symbolClassification ??
+        visualization.classification)
+      : undefined;
+  const legacyFillValueColumn =
+    existing?.fillMode === FillMode.CLASSES
+      ? (existing?.valueColumn ?? visualization.mapping.valueColumn)
+      : undefined;
+  const legacyFillCategoryColumn =
+    existing?.fillMode === FillMode.CATEGORIES
+      ? (existing?.categoryColumn ?? visualization.mapping.categoryColumn)
+      : undefined;
 
   return {
     enabled: resolveLegacyPrimitiveEnabled(
@@ -568,6 +641,8 @@ function buildSymbolPrimitiveConfig(
       VISUALIZATION_DEFAULTS.strokeWidth,
     strokeOpacity:
       existing?.strokeOpacity ?? visualization.style.strokeOpacity ?? 1,
+    strokeDashed:
+      existing?.strokeDashed ?? visualization.style.strokeDashed ?? false,
     proportionalType:
       existing?.proportionalType ??
       visualization.modes?.proportionalType ??
@@ -576,15 +651,28 @@ function buildSymbolPrimitiveConfig(
       existing?.categoryShape ??
       visualization.modes?.categoryShape ??
       CategoryShapeMode.UNIQUE,
+    commonScale: existing?.commonScale ?? true,
+    positionMode: existing?.positionMode ?? SymbolDoublePosition.OVERLAY,
+    breakValueA: existing?.breakValueA ?? null,
+    breakValueB: existing?.breakValueB ?? null,
     valueColumn: existing?.valueColumn ?? visualization.mapping.valueColumn,
     categoryColumn:
       existing?.categoryColumn ?? visualization.mapping.categoryColumn,
     sizeColumn: existing?.sizeColumn ?? visualization.mapping.sizeColumn,
+    fillValueColumn: existing?.fillValueColumn ?? legacyFillValueColumn,
+    fillCategoryColumn:
+      existing?.fillCategoryColumn ?? legacyFillCategoryColumn,
+    fillClassification:
+      existing?.fillClassification ?? legacyFillClassification,
+    strokeValueColumn: existing?.strokeValueColumn,
+    strokeCategoryColumn: existing?.strokeCategoryColumn,
     classification:
       existing?.classification ??
       visualization.symbolClassification ??
       visualization.classification,
-    missingData: existing?.missingData ?? visualization.missingData
+    strokeClassification: existing?.strokeClassification,
+    missingData: existing?.missingData ?? visualization.missingData,
+    modeStates: existing?.modeStates
   };
 }
 
@@ -642,7 +730,10 @@ function buildTextBackgroundConfig(
     strokeDashed: existing?.strokeDashed ?? false,
     valueColumn: existing?.valueColumn,
     categoryColumn: existing?.categoryColumn,
-    classification: existing?.classification
+    classification: existing?.classification,
+    strokeClassification: existing?.strokeClassification,
+    strokeValueColumn: existing?.strokeValueColumn,
+    strokeCategoryColumn: existing?.strokeCategoryColumn
   };
 }
 
@@ -718,6 +809,35 @@ export function getSymbolPrimitive(
   visualization: VisualizationConfig | null | undefined
 ): SymbolPrimitiveConfig | undefined {
   return visualization ? buildSymbolPrimitiveConfig(visualization) : undefined;
+}
+
+export function getSymbolFillValueColumn(
+  visualization: VisualizationConfig | null | undefined
+): string | undefined {
+  return getSymbolPrimitive(visualization)?.fillValueColumn;
+}
+
+export function getSymbolFillCategoryColumn(
+  visualization: VisualizationConfig | null | undefined
+): string | undefined {
+  return getSymbolPrimitive(visualization)?.fillCategoryColumn;
+}
+
+export function getSymbolFillClassification(
+  visualization:
+    | Pick<
+        VisualizationConfig,
+        'symbol' | 'classification' | 'symbolClassification'
+      >
+    | null
+    | undefined
+): ClassificationConfig | undefined {
+  if (!visualization) {
+    return undefined;
+  }
+
+  return getSymbolPrimitive(visualization as VisualizationConfig)
+    ?.fillClassification;
 }
 
 export function getLinePrimitive(
@@ -912,9 +1032,16 @@ export interface VisualizationStore {
   ) => void;
   updateClassification: (
     id: string,
-    classification: Partial<ClassificationConfig>
+    classification: Partial<ClassificationConfig>,
+    options?: { preserveOrigin?: boolean }
   ) => void;
   updatePrimitiveClassification: (
+    id: string,
+    primitive: PrimitiveFilter,
+    classification: Partial<ClassificationConfig>,
+    options?: { preserveOrigin?: boolean }
+  ) => void;
+  updatePrimitiveStrokeClassification: (
     id: string,
     primitive: PrimitiveFilter,
     classification: Partial<ClassificationConfig>
@@ -923,6 +1050,7 @@ export interface VisualizationStore {
     id: string,
     updates: Partial<VisualizationConfig>
   ) => void;
+  renameVisualization: (id: string, name: string) => void;
   applyVisualizationPreset: (id: string, type: VisualizationType) => void;
   duplicateVisualization: (
     id: string,
@@ -990,16 +1118,7 @@ const DEFAULT_CHOROPLETH_COLORS = [
   '#08519c'
 ];
 
-export const DEFAULT_CATEGORICAL_COLORS = [
-  '#e41a1c',
-  '#377eb8',
-  '#4daf4a',
-  '#984ea3',
-  '#ff7f00',
-  '#ffff33',
-  '#a65628',
-  '#f781bf'
-];
+export const DEFAULT_CATEGORICAL_COLORS = [...FIGMA_DEFAULT_CATEGORICAL_COLORS];
 
 const VISUALIZATION_MAPPING_KEYS = [
   'valueColumn',
@@ -1022,9 +1141,12 @@ type VisualizationMappingKey = (typeof VISUALIZATION_MAPPING_KEYS)[number];
 
 type GeometryFamily = 'point' | 'line' | 'polygon' | 'unknown';
 
-function incrementVersion(state: VisualizationState): void {
+function incrementVersion(
+  state: VisualizationState,
+  priority: SavePriorityType = SavePriority.DEBOUNCED
+): void {
   state.version++;
-  persistenceRegistry.notifyChange('visualization');
+  persistenceRegistry.notifyChange('visualization', priority);
 }
 
 function getDefaultStyle(
@@ -1771,7 +1893,8 @@ function createVisualizationStore(): VisualizationStore {
     id: string,
     resolveUpdates: (
       visualization: VisualizationConfig
-    ) => Partial<VisualizationConfig> | null
+    ) => Partial<VisualizationConfig> | null,
+    priority: SavePriorityType = SavePriority.DEBOUNCED
   ): void {
     const visualization = getVisualizationById(id);
     if (!visualization) {
@@ -1797,7 +1920,7 @@ function createVisualizationStore(): VisualizationStore {
       id,
       nextVisualization
     );
-    incrementVersion(state);
+    incrementVersion(state, priority);
   }
 
   function createVisualization(
@@ -1826,7 +1949,7 @@ function createVisualizationStore(): VisualizationStore {
     state.visualizations.push(visualization);
     state.selectedVisualizationId = visualization.id;
     updateActiveVisualizationIds((ids) => ids.add(visualization.id));
-    incrementVersion(state);
+    incrementVersion(state, SavePriority.IMMEDIATE);
 
     return visualization;
   }
@@ -1939,7 +2062,8 @@ function createVisualizationStore(): VisualizationStore {
 
   function updateClassification(
     id: string,
-    classification: Partial<ClassificationConfig>
+    classification: Partial<ClassificationConfig>,
+    options?: { preserveOrigin?: boolean }
   ): void {
     applyVisualizationUpdate(id, (visualization) => {
       const existing = visualization.classification ?? {
@@ -1948,6 +2072,9 @@ function createVisualizationStore(): VisualizationStore {
       };
 
       return {
+        ...(options?.preserveOrigin
+          ? { origin: deepClone(visualization.origin) }
+          : {}),
         classification: { ...existing, ...classification },
         polygon: {
           ...buildPolygonPrimitiveConfig(visualization),
@@ -1963,7 +2090,8 @@ function createVisualizationStore(): VisualizationStore {
   function updatePrimitiveClassification(
     id: string,
     primitive: PrimitiveFilter,
-    classification: Partial<ClassificationConfig>
+    classification: Partial<ClassificationConfig>,
+    options?: { preserveOrigin?: boolean }
   ): void {
     const targetKey = (
       {
@@ -1989,6 +2117,9 @@ function createVisualizationStore(): VisualizationStore {
       const primitiveKind = resolvePrimitiveKind(primitive);
 
       return {
+        ...(options?.preserveOrigin
+          ? { origin: deepClone(visualization.origin) }
+          : {}),
         [targetKey]: { ...existing, ...classification },
         [primitiveKind]: {
           ...primitiveConfig,
@@ -2001,11 +2132,64 @@ function createVisualizationStore(): VisualizationStore {
     });
   }
 
+  function updatePrimitiveStrokeClassification(
+    id: string,
+    primitive: PrimitiveFilter,
+    classification: Partial<ClassificationConfig>
+  ): void {
+    applyVisualizationUpdate(id, (visualization) => {
+      const primitiveConfig = getPrimitive(
+        visualization,
+        primitive
+      ) as PrimitiveConfigMap[PrimitiveConfigKind];
+      const primitiveKind = resolvePrimitiveKind(primitive);
+      const existing =
+        (
+          primitiveConfig as unknown as {
+            strokeClassification?: ClassificationConfig;
+          }
+        ).strokeClassification ??
+        ({
+          method: ClassificationMethod.JENKS,
+          classes: DEFAULT_QUANTILES_CLASS_COUNT
+        } as ClassificationConfig);
+
+      const merged = {
+        ...existing,
+        ...classification
+      } as ClassificationConfig;
+
+      const nextPrimitive = {
+        ...primitiveConfig,
+        strokeClassification: merged
+      };
+
+      return {
+        [primitiveKind]: nextPrimitive
+      } as Partial<VisualizationConfig>;
+    });
+  }
+
   function updateVisualization(
     id: string,
     updates: Partial<VisualizationConfig>
   ): void {
     applyVisualizationUpdate(id, () => updates);
+  }
+
+  function renameVisualization(id: string, name: string): void {
+    applyVisualizationUpdate(
+      id,
+      (visualization) => {
+        const sanitizedName = sanitizeTextInput(name);
+        if (!sanitizedName || sanitizedName === visualization.name) {
+          return null;
+        }
+
+        return { name: sanitizedName };
+      },
+      SavePriority.IMMEDIATE
+    );
   }
 
   function applyVisualizationPreset(id: string, type: VisualizationType): void {
@@ -2049,7 +2233,7 @@ function createVisualizationStore(): VisualizationStore {
     state.visualizations.push(duplicatedVisualization);
     state.selectedVisualizationId = duplicatedVisualization.id;
     updateActiveVisualizationIds((ids) => ids.add(duplicatedVisualization.id));
-    incrementVersion(state);
+    incrementVersion(state, SavePriority.IMMEDIATE);
 
     return duplicatedVisualization;
   }
@@ -2069,7 +2253,7 @@ function createVisualizationStore(): VisualizationStore {
     }
 
     state.visualizations = remainingVisualizations;
-    incrementVersion(state);
+    incrementVersion(state, SavePriority.IMMEDIATE);
   }
 
   function createBulkVisualizations(configs: VisualizationConfig[]): void {
@@ -2083,7 +2267,7 @@ function createVisualizationStore(): VisualizationStore {
       updateActiveVisualizationIds((ids) => ids.add(normalizedConfig.id));
     });
 
-    incrementVersion(state);
+    incrementVersion(state, SavePriority.IMMEDIATE);
   }
 
   function removeBulkVisualizations(ids: string[]): void {
@@ -2111,7 +2295,7 @@ function createVisualizationStore(): VisualizationStore {
     }
 
     state.visualizations = remainingVisualizations;
-    incrementVersion(state);
+    incrementVersion(state, SavePriority.IMMEDIATE);
   }
 
   function setVisualizationOrder(orderedIds: string[]): void {
@@ -2218,6 +2402,8 @@ function createVisualizationStore(): VisualizationStore {
         symbol.valueColumn === columnName ||
         symbol.categoryColumn === columnName ||
         symbol.sizeColumn === columnName ||
+        symbol.fillValueColumn === columnName ||
+        symbol.fillCategoryColumn === columnName ||
         line.valueColumn === columnName ||
         line.categoryColumn === columnName ||
         line.sizeColumn === columnName ||
@@ -2275,6 +2461,10 @@ function createVisualizationStore(): VisualizationStore {
       nextSymbol.valueColumn = renameColumn(nextSymbol.valueColumn);
       nextSymbol.categoryColumn = renameColumn(nextSymbol.categoryColumn);
       nextSymbol.sizeColumn = renameColumn(nextSymbol.sizeColumn);
+      nextSymbol.fillValueColumn = renameColumn(nextSymbol.fillValueColumn);
+      nextSymbol.fillCategoryColumn = renameColumn(
+        nextSymbol.fillCategoryColumn
+      );
       nextLine.valueColumn = renameColumn(nextLine.valueColumn);
       nextLine.categoryColumn = renameColumn(nextLine.categoryColumn);
       nextLine.sizeColumn = renameColumn(nextLine.sizeColumn);
@@ -2394,11 +2584,23 @@ function createVisualizationStore(): VisualizationStore {
         nextSymbol.categoryColumn,
         nextSymbol.sizeColumn
       );
+      const hadSymbolFillClassificationDependency =
+        clearClassificationForColumn(
+          nextSymbol.fillValueColumn,
+          nextSymbol.fillCategoryColumn
+        );
       nextSymbol.valueColumn = clearColumn(nextSymbol.valueColumn);
       nextSymbol.categoryColumn = clearColumn(nextSymbol.categoryColumn);
       nextSymbol.sizeColumn = clearColumn(nextSymbol.sizeColumn);
+      nextSymbol.fillValueColumn = clearColumn(nextSymbol.fillValueColumn);
+      nextSymbol.fillCategoryColumn = clearColumn(
+        nextSymbol.fillCategoryColumn
+      );
       if (hadSymbolClassificationDependency) {
         nextSymbol.classification = undefined;
+      }
+      if (hadSymbolFillClassificationDependency) {
+        nextSymbol.fillClassification = undefined;
       }
 
       const hadLineClassificationDependency = clearClassificationForColumn(
@@ -2580,7 +2782,9 @@ function createVisualizationStore(): VisualizationStore {
     updateMissingData,
     updateClassification,
     updatePrimitiveClassification,
+    updatePrimitiveStrokeClassification,
     updateVisualization,
+    renameVisualization,
     applyVisualizationPreset,
     duplicateVisualization,
     removeVisualization,

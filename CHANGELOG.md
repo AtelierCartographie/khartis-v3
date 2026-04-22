@@ -1,3 +1,92 @@
+# [1.0.0-staging.15](https://github.com/AtelierCartographie/khartis-v3/compare/v1.0.0-staging.14...v1.0.0-staging.15) (2026-04-22)
+
+### Bug Fixes
+
+- **annotations:** page elements placement with breathing room and auto-alignment ([063e274](https://github.com/AtelierCartographie/khartis-v3/commit/063e274937f0095657bb679ee4603d8df573f720))
+- **deps:** remove missing patch reference from package.json ([6d9ae14](https://github.com/AtelierCartographie/khartis-v3/commit/6d9ae144bf3737ed4813b1701b700cb36bb5ee51))
+- **map:** geo-indications placement - orientation stacking and margin ([f73873a](https://github.com/AtelierCartographie/khartis-v3/commit/f73873a9a6690ebd18c12a9b5aa883b65f28b97a))
+- **map:** update annotation, geo-indications, and legend overlays ([5070a16](https://github.com/AtelierCartographie/khartis-v3/commit/5070a1648c7896d3f527040afb2b67dae51e19c1))
+- **persistence:** improve localforage migration robustness ([096f6c4](https://github.com/AtelierCartographie/khartis-v3/commit/096f6c479e9c1e8f078bf62392bdf5bd556e4b93))
+- **slider:** simplify slider-with-input, update discretization-modal ([a427b4a](https://github.com/AtelierCartographie/khartis-v3/commit/a427b4ab471eb5f5ad1645445dad07ebd74898dc))
+- **symbols:** harden Symbole tool against CDC gaps and UX mismatches ([d8180e2](https://github.com/AtelierCartographie/khartis-v3/commit/d8180e2bd7aa4633d0577ab19756276d2a13314c))
+- **ui:** update color-picker component ([154487e](https://github.com/AtelierCartographie/khartis-v3/commit/154487e7d34deb73451b82d5c96ca4dbf20b07a0))
+- **ui:** update step-toolbar layout, tool-popover, and root layout ([ca1bc4a](https://github.com/AtelierCartographie/khartis-v3/commit/ca1bc4ad1a76bc9ebe2c5e8317abb3adaaa411fc))
+- **ui:** update step-toolbar, color-blindness, format tools, and root layout ([609007b](https://github.com/AtelierCartographie/khartis-v3/commit/609007b87d76b84a49216fe23a71d6c691439e2a))
+- **viz:** étanchéité fill↔stroke + persistance discretization + hydratation FillMode ([37f76bb](https://github.com/AtelierCartographie/khartis-v3/commit/37f76bb2eaaa3d0c777bc5f7bfe43fadff803e9d))
+- **viz:** guard onStrokeClassificationChange avec fallback no-op dans symbol-mode ([73f99d3](https://github.com/AtelierCartographie/khartis-v3/commit/73f99d31ce48389c0bc163dd8fc90c886c663628))
+- **viz:** retry breaks computation when calculateBreaks transiently returns null ([c6c1875](https://github.com/AtelierCartographie/khartis-v3/commit/c6c1875c45dd01e847b345c1a6c5be475ae02609))
+- **viz:** scope break-computation request counter per primitive to unblock choropleth suggestions ([c7dcb5e](https://github.com/AtelierCartographie/khartis-v3/commit/c7dcb5e09fda31f728df07a4e43e075d5faf891f))
+
+### Features
+
+- **annotations:** fix font size defaults, use layout sizing context ([d99174f](https://github.com/AtelierCartographie/khartis-v3/commit/d99174f32c9cb3568d2ecdeccbad922014361b68))
+- **data-tab:** unify basemap slider layout and improve enrichment upload ([2417e13](https://github.com/AtelierCartographie/khartis-v3/commit/2417e139d97dc542822ebab95474f72fd03005ac))
+- **data-tab:** update join-ops, basemap-join, enrich and geolocation steps ([aae4270](https://github.com/AtelierCartographie/khartis-v3/commit/aae427046298c7639c561355d2c5568818a0114d))
+- **db:** simplification - geometry metric tolerance and table rename tracking ([213c544](https://github.com/AtelierCartographie/khartis-v3/commit/213c544db272711fdaf0a7afd81446f3efb31a1e))
+- **discretization:** refactor modal and panel with test coverage ([aec0b15](https://github.com/AtelierCartographie/khartis-v3/commit/aec0b15d068f9fc07ca06c4a8c303471362fcdc7))
+- **discretization:** refactor modal, panel, utils, and add tests ([81b516a](https://github.com/AtelierCartographie/khartis-v3/commit/81b516a3b0e01395ed8b281b36ad4cd52c959d2c))
+- **enrich:** hold map preview during suggested basemap resolution ([88eb7d8](https://github.com/AtelierCartographie/khartis-v3/commit/88eb7d835d3744730b434a6120c024257fb855d5))
+- **geo-indications:** refactor panel into dedicated sections, add scale unit conversion ([c7f3a6b](https://github.com/AtelierCartographie/khartis-v3/commit/c7f3a6bd67ff40a501fdc004c88ab377c0c97afc))
+- **geo-indications:** refactor sections, update store and tests ([17b89dd](https://github.com/AtelierCartographie/khartis-v3/commit/17b89dd3c8e8c64ccc94ee7883e4f6b643b2013a))
+- **geo-indications:** update store, scale-section, utils, and tests ([cc9245e](https://github.com/AtelierCartographie/khartis-v3/commit/cc9245ea822f91a39c7b653207f94cbef30feb40))
+- **layers:** layer factory refactoring and density table tracking ([82a0072](https://github.com/AtelierCartographie/khartis-v3/commit/82a00721c915c62582eb136ed6ad81e32e81fcc3))
+- **layers:** refactor layer factory with arrow filter and data styling improvements ([cacffa6](https://github.com/AtelierCartographie/khartis-v3/commit/cacffa65fb82593d804f8c16fcdf0b0ccf373df7))
+- **layers:** simplify orderedCategoryLabels resolution and fix categorical color detection ([8e24281](https://github.com/AtelierCartographie/khartis-v3/commit/8e242815f02ecd67abcfcfcdb6ab83f8de944c2b))
+- **legend:** redesign legend component with expandable sections ([3762bc9](https://github.com/AtelierCartographie/khartis-v3/commit/3762bc98c17bbf531a0e6da3ba033523e047949a))
+- **legend:** simplify component, add test coverage ([ad11a5f](https://github.com/AtelierCartographie/khartis-v3/commit/ad11a5f03e0c57bd4e17016931d412322bd2e30e))
+- **legend:** update store, simplify component, add tests ([f3b4ec3](https://github.com/AtelierCartographie/khartis-v3/commit/f3b4ec380dfcb568f4a01b414eb82e6fd41bc5cb))
+- **map:** add headline title and identifier badge tags to tooltip inspector ([4677012](https://github.com/AtelierCartographie/khartis-v3/commit/467701296d6457b5e930eee5367e164afb216e25))
+- **map:** add hidden prop to overlays and export mode class ([4314249](https://github.com/AtelierCartographie/khartis-v3/commit/4314249aed463b958c95ac8eda99eee3f372c5f7))
+- **map:** add page-grid-overlay component ([5a602f9](https://github.com/AtelierCartographie/khartis-v3/commit/5a602f997b739108d9eef367ea422f3706a13a90))
+- **map:** add preview hold state machine for suggested basemap resolution ([d2d6f14](https://github.com/AtelierCartographie/khartis-v3/commit/d2d6f144fa9c1254b25ace5ba152ed0f46ae5235))
+- **map:** improve representative point loading and layer factory ([ee7c164](https://github.com/AtelierCartographie/khartis-v3/commit/ee7c164f07a17fd2714eaa7b964c3d7fbbe7a447))
+- **map:** refactor legend-overlay, thematic-map, main-map ([ffa17c4](https://github.com/AtelierCartographie/khartis-v3/commit/ffa17c4e6edf77faf4efb01a91763005cdda349c))
+- **map:** refactor overlays, thematic-map, layer factory, and legend utils ([e416cec](https://github.com/AtelierCartographie/khartis-v3/commit/e416cecf0ffda6a393e28337ae6c5e749a9ec38b))
+- **map:** update layer factory, zoom toolbar, and map zoom utils ([1104673](https://github.com/AtelierCartographie/khartis-v3/commit/1104673b98bd2a1d36511e0af2761fbbff6a63fb))
+- **map:** update layer-factory and multi-shape-layer with tests ([35e80db](https://github.com/AtelierCartographie/khartis-v3/commit/35e80db321003ecf4df0fc04977c8c571b6a7c9d))
+- **palette:** fix qualitative color generation, bindable popover open, cap visible categories ([a7f8001](https://github.com/AtelierCartographie/khartis-v3/commit/a7f80013b2b49252bfd734dbb58c85765db24732))
+- **palette:** refactor categories aspect popover layout ([2758865](https://github.com/AtelierCartographie/khartis-v3/commit/275886536a414c630a77ef6cce499c6ae8198851))
+- **palette:** refactor categories-aspect-popover and palette-custom ([7133480](https://github.com/AtelierCartographie/khartis-v3/commit/7133480a7d3ea0b27e71dc40e5d71d4bfc4e2595))
+- **palette:** refactor palette popover components, dropdown, and constants ([bf462cf](https://github.com/AtelierCartographie/khartis-v3/commit/bf462cf344263b08ace5d1868b1b6829b3e07ef0))
+- **palette:** update color-picker and palette popover components ([d08b18c](https://github.com/AtelierCartographie/khartis-v3/commit/d08b18c2956555b5886f35582e87e2ace859a124))
+- **palette:** update popover components, store, and i18n ([0b88f7b](https://github.com/AtelierCartographie/khartis-v3/commit/0b88f7bf35e8bafe0f373ca8c14a2129f3d75c03))
+- **project:** add database-access, refactor asset-store and storage ([e565500](https://github.com/AtelierCartographie/khartis-v3/commit/e56550056dd03c80d37ef0a0d39dd088e0fd7c62))
+- **step-toolbar:** add facets-access, update facets and projections ([7c3a76e](https://github.com/AtelierCartographie/khartis-v3/commit/7c3a76e126be60f1421f773c4d787e810fea436b))
+- **step-toolbar:** update geo-indications, facets, annotations, and format ([72bc5a3](https://github.com/AtelierCartographie/khartis-v3/commit/72bc5a369b5472650161d1a0492313e686663215))
+- **store:** add SymbolModeState interface and modeStates field to SymbolPrimitiveConfig ([e348778](https://github.com/AtelierCartographie/khartis-v3/commit/e348778ec73765603b8622a6bc03406418b921a3))
+- **store:** harden project persistence and state restore ([4a08d5b](https://github.com/AtelierCartographie/khartis-v3/commit/4a08d5b17c27e6e03e19a3bcc1c1a4fad0ec8551))
+- **store:** schema migration 3.4.0 to 3.5.0 - backfill symbol double fields ([95b17a6](https://github.com/AtelierCartographie/khartis-v3/commit/95b17a61eb87dae6b9ea1c929feb7de48a28defa))
+- **store:** update visualization store with tests ([f844db6](https://github.com/AtelierCartographie/khartis-v3/commit/f844db6e2b3cd9f8b3bfa9fdcd25bee661fc8fbc))
+- **store:** update visualization store, datasets CRUD, map instance, and orchestrator ([235feb5](https://github.com/AtelierCartographie/khartis-v3/commit/235feb518e38f48dd3518d1471e290796809d789))
+- **symbols:** add proportional type support and refactor symbol mode components ([2079ebe](https://github.com/AtelierCartographie/khartis-v3/commit/2079ebeac0fc50e5fa8ae91adc191e21a04f8c9a))
+- **symbols:** snapshot and restore per-mode state on symbol mode switch ([3b5a9c5](https://github.com/AtelierCartographie/khartis-v3/commit/3b5a9c53c429c3eebae350e1cfd71c40f14e0cf5))
+- **ui:** collapsible layer groups and facet import fix ([68435d6](https://github.com/AtelierCartographie/khartis-v3/commit/68435d66288f990acb0c9856a1970663e9359d37))
+- **ui:** update toggle-tabs and variable-badge components, add tests ([d31e89e](https://github.com/AtelierCartographie/khartis-v3/commit/d31e89eb363eb43a821744581294f6e2aa29b1f3))
+- **utils:** add contextual surface coordinator with tests ([abac966](https://github.com/AtelierCartographie/khartis-v3/commit/abac96611907318dc5970209aca0bb024de3f201))
+- **utils:** add page-grid utilities ([58ef9de](https://github.com/AtelierCartographie/khartis-v3/commit/58ef9de6914f96102533f2a93d90e0cee5810443))
+- **utils:** add workspace viewport utilities ([f6d9983](https://github.com/AtelierCartographie/khartis-v3/commit/f6d9983a0e3c9537f43fcee393ab77fd02a800d0))
+- **viz:** refactor classification hooks and panel controller ([9e7c5e0](https://github.com/AtelierCartographie/khartis-v3/commit/9e7c5e09e47fcd647023e64b8fbc3fa51ed22668))
+- **viz:** refactor filter panel, suggestion service, and choose-visualization ([56a54f2](https://github.com/AtelierCartographie/khartis-v3/commit/56a54f20ffa88494b9ab4da28329b652ed62e0ce))
+- **viz:** refactor primitive configs, shared components, and add hooks ([c7c141b](https://github.com/AtelierCartographie/khartis-v3/commit/c7c141b459b5485689ab0a75fd42b293168e3bdb))
+- **viz:** refactor visualization tab components, symbols, discretization, and config ([01cddf1](https://github.com/AtelierCartographie/khartis-v3/commit/01cddf1565b9debfd4d70c28350e4363d4101ef2))
+- **viz:** rework palette-popover for categories and qualitative mode ([d995fe9](https://github.com/AtelierCartographie/khartis-v3/commit/d995fe978aaae3f24b5f463e30d05c849e9e94a1))
+- **viz:** update configure-visualization and suggestion service ([2aa76b8](https://github.com/AtelierCartographie/khartis-v3/commit/2aa76b8ebe27dc61a57735ffa54b981418e701ec))
+- **viz:** update primitive configs, shared components, and symbol modes ([4c0581a](https://github.com/AtelierCartographie/khartis-v3/commit/4c0581ab37fe260eb24665252e8736633ab34b72))
+
+### Performance Improvements
+
+- **map:** coalesce dataset reloads into one animation frame ([109c9ec](https://github.com/AtelierCartographie/khartis-v3/commit/109c9eced06f6ba130703e30d2f75faa00694442))
+
+# [1.0.0-staging.14](https://github.com/AtelierCartographie/khartis-v3/compare/v1.0.0-staging.13...v1.0.0-staging.14) (2026-04-19)
+
+### Bug Fixes
+
+- **viz:** étanchéité fill↔stroke, persistance discretization, FillMode.NONE ([#107](https://github.com/AtelierCartographie/khartis-v3/issues/107)) ([50e158f](https://github.com/AtelierCartographie/khartis-v3/commit/50e158f6c71e45b7f0ca370ae65c54e2963c09af))
+
+### Features
+
+- mode densité, MultiShapeLayer 9 formes, zoom responsive, jointure basemap optimisée ([#106](https://github.com/AtelierCartographie/khartis-v3/issues/106)) ([24b51e2](https://github.com/AtelierCartographie/khartis-v3/commit/24b51e21e0df10f712695d2c8b3cc80a2311dbd0)), closes [#90](https://github.com/AtelierCartographie/khartis-v3/issues/90) [#94](https://github.com/AtelierCartographie/khartis-v3/issues/94) [#92](https://github.com/AtelierCartographie/khartis-v3/issues/92) [#92](https://github.com/AtelierCartographie/khartis-v3/issues/92) [#93](https://github.com/AtelierCartographie/khartis-v3/issues/93) [AtelierCartographie/khartis-v3#93](https://github.com/AtelierCartographie/khartis-v3/issues/93) [#87](https://github.com/AtelierCartographie/khartis-v3/issues/87) [#87](https://github.com/AtelierCartographie/khartis-v3/issues/87) [#96](https://github.com/AtelierCartographie/khartis-v3/issues/96) [#98](https://github.com/AtelierCartographie/khartis-v3/issues/98) [#105](https://github.com/AtelierCartographie/khartis-v3/issues/105) [#93](https://github.com/AtelierCartographie/khartis-v3/issues/93) [#93](https://github.com/AtelierCartographie/khartis-v3/issues/93) [#93](https://github.com/AtelierCartographie/khartis-v3/issues/93) [#101](https://github.com/AtelierCartographie/khartis-v3/issues/101)
+
 # [1.0.0-staging.13](https://github.com/AtelierCartographie/khartis-v3/compare/v1.0.0-staging.12...v1.0.0-staging.13) (2026-04-19)
 
 ### Bug Fixes

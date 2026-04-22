@@ -4,6 +4,7 @@ export const MIN_MAP_ZOOM_PERCENT = 10;
 export const MAX_MAP_ZOOM_PERCENT = 500;
 export const MAP_ZOOM_INPUT_STEP = 10;
 export const MAP_ZOOM_FACTOR_STEP = 1.1;
+export const MIN_MAPLIBRE_ZOOM = -2;
 
 export interface MapZoomBounds {
   minZoom: number;
@@ -52,7 +53,10 @@ export function resolveMapZoomLevel(
 
 export function resolveMapZoomBounds(baseZoomLevel: number): MapZoomBounds {
   return {
-    minZoom: resolveMapZoomLevel(baseZoomLevel, MIN_MAP_ZOOM_PERCENT),
+    minZoom: Math.max(
+      MIN_MAPLIBRE_ZOOM,
+      resolveMapZoomLevel(baseZoomLevel, MIN_MAP_ZOOM_PERCENT)
+    ),
     maxZoom: resolveMapZoomLevel(baseZoomLevel, MAX_MAP_ZOOM_PERCENT)
   };
 }

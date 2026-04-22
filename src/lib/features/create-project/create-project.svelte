@@ -45,7 +45,7 @@
   const TAB_COUNT = 3;
   let tabRefs = $state<HTMLElement[]>([]);
   let resetToken = $state(0);
-  let wasOpen = open;
+  let wasOpen = $state(false);
 
   $effect(() => {
     if (open && !wasOpen) {
