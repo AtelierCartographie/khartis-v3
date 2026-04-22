@@ -185,6 +185,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     Promise<void>
   >();
   const representativePointLoadFailures = new WeakSet<ArrowTable>();
+  const representativePointNotifyOnReady = new WeakSet<ArrowTable>();
   let cachedProjectionOverrideKey: string | null = null;
   let cachedProjectionOverrideRef: ProjectionLike | undefined;
 
@@ -346,26 +347,27 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     return geometryInfo;
   }
 
-  function getRepresentativePointTable(
+  function startRepresentativePointTableLoad(
     datasetId: string,
     sourceTable: ArrowTable,
     geometryInfo: NonNullable<LayerContext['geometryInfo']>,
-    joinedBasemapId?: string | null
-  ): ArrowTable | null {
+    joinedBasemapId?: string | null,
+    notifyOnReady = false
+  ): void {
     if (!supportsRepresentativePointTable(geometryInfo.type)) {
-      return null;
+      return;
     }
 
-    const cachedTable = representativePointTableCache.get(sourceTable);
-    if (cachedTable) {
-      return cachedTable;
+    if (notifyOnReady) {
+      representativePointNotifyOnReady.add(sourceTable);
     }
 
     if (
+      representativePointTableCache.has(sourceTable) ||
       representativePointLoadPromises.has(sourceTable) ||
       representativePointLoadFailures.has(sourceTable)
     ) {
-      return null;
+      return;
     }
 
     const loadPromise = (async () => {
@@ -409,10 +411,14 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           representativePointTable
         );
         getCachedRepresentativeGeometryInfo(representativePointTable);
-        onRepresentativePointTablesLoaded?.();
+        if (representativePointNotifyOnReady.has(sourceTable)) {
+          representativePointNotifyOnReady.delete(sourceTable);
+          onRepresentativePointTablesLoaded?.();
+        }
       })
       .catch((error) => {
         representativePointLoadFailures.add(sourceTable);
+        representativePointNotifyOnReady.delete(sourceTable);
         logger.warn(
           'Deferred representative point table loading failed',
           LogCategory.MAP,
@@ -429,6 +435,49 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       });
 
     representativePointLoadPromises.set(sourceTable, loadPromise);
+  }
+
+  function prefetchRepresentativePointTable(
+    datasetId: string,
+    sourceTable: ArrowTable,
+    geometryInfo: NonNullable<LayerContext['geometryInfo']>,
+    joinedBasemapId?: string | null
+  ): void {
+    startRepresentativePointTableLoad(
+      datasetId,
+      sourceTable,
+      geometryInfo,
+      joinedBasemapId,
+      false
+    );
+  }
+
+  function getRepresentativePointTable(
+    datasetId: string,
+    sourceTable: ArrowTable,
+    geometryInfo: NonNullable<LayerContext['geometryInfo']>,
+    joinedBasemapId?: string | null
+  ): ArrowTable | null {
+    if (!supportsRepresentativePointTable(geometryInfo.type)) {
+      return null;
+    }
+
+    const cachedTable = representativePointTableCache.get(sourceTable);
+    if (cachedTable) {
+      return cachedTable;
+    }
+
+    if (representativePointLoadFailures.has(sourceTable)) {
+      return null;
+    }
+
+    startRepresentativePointTableLoad(
+      datasetId,
+      sourceTable,
+      geometryInfo,
+      joinedBasemapId,
+      true
+    );
     return null;
   }
 
@@ -794,6 +843,21 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
 
       const shouldRenderDatasetFallbacks =
         getShouldRenderDatasetFallbacks?.() ?? false;
+
+      if (shouldRenderDatasetFallbacks) {
+        for (const [datasetId, table] of tables) {
+          if (!getDatasetJoinedBasemap(datasetId)) {
+            continue;
+          }
+
+          const geometryInfo = extractGeometryInfo(table);
+          if (!geometryInfo) {
+            continue;
+          }
+
+          prefetchRepresentativePointTable(datasetId, table, geometryInfo);
+        }
+      }
 
       if (shouldRenderDatasetFallbacks) {
         const fallbackDatasetIds = new Set<string>([
