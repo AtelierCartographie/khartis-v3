@@ -133,33 +133,18 @@
       <p class="section-subtitle">
         {m.basemap_suggestions_desc()}
       </p>
-      {#if isCompact}
-        <div class="compact-rail">
-          <div class="compact-rail-track">
-            {#each suggestedBasemaps as { basemap, score } (basemap.file)}
-              <BasemapCardVertical
-                basemap={basemap}
-                matchScore={score}
-                selected={basemap.file === basemapSelected}
-                onclick={() => onSelectBasemap(basemap)}
-              />
-            {/each}
-          </div>
+      <div class="basemap-slider" class:compact-slider={isCompact}>
+        <div class="basemap-slider-track">
+          {#each suggestedBasemaps as { basemap, score } (basemap.file)}
+            <BasemapCardVertical
+              basemap={basemap}
+              matchScore={score}
+              selected={basemap.file === basemapSelected}
+              onclick={() => onSelectBasemap(basemap)}
+            />
+          {/each}
         </div>
-      {:else}
-        <div class="suggestions-container">
-          <div class="suggestions-scroll">
-            {#each suggestedBasemaps as { basemap, score } (basemap.file)}
-              <BasemapCardVertical
-                basemap={basemap}
-                matchScore={score}
-                selected={basemap.file === basemapSelected}
-                onclick={() => onSelectBasemap(basemap)}
-              />
-            {/each}
-          </div>
-        </div>
-      {/if}
+      </div>
     {:else}
       <InlineNotification
         kind="info"
@@ -223,9 +208,12 @@
 
       {#if displayedBasemaps.length === 0}
         <p class="no-results">{m.basemap_no_results()}</p>
-      {:else if isCompact}
-        <div class="compact-rail compact-rail-catalog">
-          <div class="compact-rail-track">
+      {:else}
+        <div
+          class="basemap-slider basemap-slider-catalog"
+          class:compact-slider={isCompact}
+        >
+          <div class="basemap-slider-track">
             {#each displayedBasemaps as basemap (basemap.file)}
               <BasemapCardVertical
                 basemap={basemap}
@@ -236,18 +224,6 @@
               />
             {/each}
           </div>
-        </div>
-      {:else}
-        <div class="basemap-cards-grid">
-          {#each displayedBasemaps as basemap (basemap.file)}
-            <BasemapCardVertical
-              basemap={basemap}
-              selected={basemap.file === basemapSelected}
-              onclick={() => onSelectBasemap(basemap)}
-              showMatchScore={false}
-              variant="gray"
-            />
-          {/each}
         </div>
       {/if}
       {#if onSuggestBasemap}
@@ -279,36 +255,7 @@
     line-height: 1.25rem;
   }
 
-  .suggestions-container {
-    margin-left: calc(-1 * var(--cds-spacing-04));
-    margin-right: calc(-1 * var(--cds-spacing-04));
-    padding-left: var(--cds-spacing-04);
-    padding-right: var(--cds-spacing-04);
-    overflow-x: auto;
-    scrollbar-width: thin;
-    scrollbar-color: var(--cds-border-subtle) transparent;
-  }
-
-  .suggestions-container::-webkit-scrollbar {
-    height: 6px;
-  }
-
-  .suggestions-container::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  .suggestions-container::-webkit-scrollbar-thumb {
-    background-color: var(--cds-border-subtle);
-    border-radius: 3px;
-  }
-
-  .suggestions-scroll {
-    display: flex;
-    gap: var(--cds-spacing-04);
-    padding-bottom: var(--cds-spacing-03);
-  }
-
-  .compact-rail {
+  .basemap-slider {
     margin-left: calc(-1 * var(--cds-spacing-04));
     margin-right: calc(-1 * var(--cds-spacing-04));
     padding-left: var(--cds-spacing-04);
@@ -318,39 +265,44 @@
     scrollbar-width: thin;
     scrollbar-color: var(--cds-border-subtle) transparent;
     scroll-snap-type: x proximity;
-    --basemap-card-width: 176px;
-    --basemap-card-preview-min-height: 88px;
-    --basemap-card-padding-bottom: 12px;
+    scroll-padding-inline: var(--cds-spacing-04);
+    overscroll-behavior-x: contain;
+    --basemap-card-width: 13rem;
+    --basemap-card-preview-min-height: 6.5rem;
+    --basemap-card-padding-bottom: 0.875rem;
   }
 
-  .compact-rail::-webkit-scrollbar {
+  .basemap-slider::-webkit-scrollbar {
     height: 6px;
   }
 
-  .compact-rail::-webkit-scrollbar-track {
+  .basemap-slider::-webkit-scrollbar-track {
     background: transparent;
   }
 
-  .compact-rail::-webkit-scrollbar-thumb {
+  .basemap-slider::-webkit-scrollbar-thumb {
     background-color: var(--cds-border-subtle);
+    border-radius: 3px;
   }
 
-  .compact-rail-track {
-    display: grid;
-    grid-auto-flow: column;
-    grid-template-rows: repeat(2, auto);
-    grid-auto-columns: var(--basemap-card-width);
+  .basemap-slider-track {
+    display: flex;
     gap: var(--cds-spacing-03);
-    align-items: stretch;
     width: max-content;
     padding-bottom: var(--cds-spacing-03);
   }
 
-  .compact-rail-track :global(.basemap-card) {
+  .basemap-slider-track :global(.basemap-card) {
     scroll-snap-align: start;
   }
 
-  .compact-rail-catalog {
+  .compact-slider {
+    --basemap-card-width: 11rem;
+    --basemap-card-preview-min-height: 5.5rem;
+    --basemap-card-padding-bottom: 0.75rem;
+  }
+
+  .basemap-slider-catalog {
     margin-top: var(--cds-spacing-03);
   }
 
@@ -377,7 +329,7 @@
     padding-right: var(--cds-spacing-04);
   }
 
-  .catalogue-section.compact-mode .compact-rail-catalog {
+  .catalogue-section.compact-mode .basemap-slider-catalog {
     margin-left: 0;
     margin-right: 0;
     padding-left: 0;
@@ -396,13 +348,6 @@
     font-weight: 600;
     color: var(--cds-text-01);
     margin-right: var(--cds-spacing-03);
-  }
-
-  .basemap-cards-grid {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--cds-spacing-03);
-    margin-top: var(--cds-spacing-03);
   }
 
   .no-results {
