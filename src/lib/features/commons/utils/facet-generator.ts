@@ -97,7 +97,6 @@ function resolveQualitativePalette(
 
   return {
     id: 'facet-derived-qualitative',
-    name: 'Facet derived qualitative',
     colors: classification.colors,
     type: PALETTE_TYPE.QUALITATIVE
   };

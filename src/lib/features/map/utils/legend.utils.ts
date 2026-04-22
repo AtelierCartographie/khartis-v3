@@ -5,6 +5,9 @@ import {
   getPrimitiveCategoryColumn,
   getPrimitiveClassification,
   getPrimitiveValueColumn,
+  getSymbolFillCategoryColumn,
+  getSymbolFillClassification,
+  getSymbolFillValueColumn,
   getSymbolPrimitive,
   PrimitiveFilterType,
   ScaleType,
@@ -18,6 +21,7 @@ import {
   DENSITY_DEFAULTS,
   FillMode,
   MissingDataShape,
+  ProportionalType,
   ShapeType,
   SymbolMode,
   ThicknessMode
@@ -48,6 +52,13 @@ export type PointSizeLegendScale = {
   strokeColor: string;
   fillOpacity: number;
   shape: ShapeType;
+  secondary?: {
+    fillColor: string;
+    valueColumn: string;
+    breakValue: number | null;
+  };
+  commonScale?: boolean;
+  positionMode?: 'overlay' | 'juxtaposition' | 'division';
 };
 
 export type DensityLegendScale = {
@@ -171,7 +182,9 @@ function shouldUsePointSwatches(viz: VisualizationConfig | undefined): boolean {
   return (
     symbol?.mode === SymbolMode.PROPORTIONAL ||
     symbol?.mode === SymbolMode.CLASSES ||
-    symbol?.mode === SymbolMode.CATEGORIES
+    symbol?.mode === SymbolMode.CATEGORIES ||
+    symbol?.fillMode === FillMode.CLASSES ||
+    symbol?.fillMode === FillMode.CATEGORIES
   );
 }
 
@@ -312,12 +325,24 @@ export function resolveMissingDataLegendPrimitive(
 export function hasClassedColorLegend(
   viz: VisualizationConfig | undefined
 ): boolean {
+  const symbol = getSymbolPrimitive(viz);
   const line = getLinePrimitive(viz);
   const polygon = getPolygonPrimitive(viz);
+  const pointClassification = viz && getSymbolFillClassification(viz);
   const lineClassification =
     viz && getPrimitiveClassification(viz, PrimitiveFilterType.LINE);
   const polygonClassification =
     viz && getPrimitiveClassification(viz, PrimitiveFilterType.POLYGON);
+
+  if (
+    symbol?.enabled &&
+    symbol.fillMode === FillMode.CLASSES &&
+    !!getSymbolFillValueColumn(viz) &&
+    !!pointClassification?.colors?.length &&
+    !!pointClassification?.breaks?.length
+  ) {
+    return true;
+  }
 
   if (
     line?.enabled &&
@@ -341,12 +366,31 @@ export function hasClassedColorLegend(
 export function hasCategoricalColorLegend(
   viz: VisualizationConfig | undefined
 ): boolean {
+  const symbol = getSymbolPrimitive(viz);
   const line = getLinePrimitive(viz);
   const polygon = getPolygonPrimitive(viz);
+  const pointClassification =
+    viz && symbol?.mode === SymbolMode.CATEGORIES
+      ? getPrimitiveClassification(viz, PrimitiveFilterType.POINT)
+      : getSymbolFillClassification(viz);
+  const pointCategoryColumn =
+    symbol?.mode === SymbolMode.CATEGORIES
+      ? getPrimitiveCategoryColumn(viz, PrimitiveFilterType.POINT)
+      : getSymbolFillCategoryColumn(viz);
   const lineClassification =
     viz && getPrimitiveClassification(viz, PrimitiveFilterType.LINE);
   const polygonClassification =
     viz && getPrimitiveClassification(viz, PrimitiveFilterType.POLYGON);
+
+  if (
+    symbol?.enabled &&
+    (symbol.mode === SymbolMode.CATEGORIES ||
+      symbol.fillMode === FillMode.CATEGORIES) &&
+    !!pointCategoryColumn &&
+    !!pointClassification?.colors?.length
+  ) {
+    return true;
+  }
 
   if (
     line?.enabled &&
@@ -406,6 +450,20 @@ export function getPointSizeLegendScale(
       return null;
     }
 
+    const isDouble =
+      symbol.proportionalType === ProportionalType.DOUBLE &&
+      !!symbol.valueColumn;
+    const secondary = isDouble
+      ? {
+          fillColor: resolveStyleColor(
+            symbol.fillColorB,
+            DEFAULT_COLORS.secondary
+          ),
+          valueColumn: symbol.valueColumn as string,
+          breakValue: symbol.breakValueB ?? null
+        }
+      : undefined;
+
     return {
       kind: 'proportional',
       steps: buildContinuousLegendSteps(
@@ -418,7 +476,14 @@ export function getPointSizeLegendScale(
       fillColor: resolveSymbolFillColor(viz),
       strokeColor: resolveStyleColor(symbol.strokeColor, DEFAULT_COLORS.stroke),
       fillOpacity,
-      shape: symbol.shape ?? ShapeType.CIRCLE
+      shape: symbol.shape ?? ShapeType.CIRCLE,
+      ...(isDouble
+        ? {
+            secondary,
+            commonScale: symbol.commonScale !== false,
+            positionMode: symbol.positionMode ?? 'overlay'
+          }
+        : {})
     };
   }
 

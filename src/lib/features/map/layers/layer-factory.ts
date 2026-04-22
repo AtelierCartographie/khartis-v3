@@ -30,6 +30,9 @@ import {
   getPrimitiveClassification,
   getPrimitiveSizeColumn,
   getPrimitiveValueColumn,
+  getSymbolFillCategoryColumn,
+  getSymbolFillClassification,
+  getSymbolFillValueColumn,
   getSymbolPrimitive,
   getTextPrimitive,
   PrimitiveFilterType,
@@ -73,7 +76,8 @@ import {
   shouldApplyLineChoropleth,
   shouldApplyCategorical,
   shouldApplyChoropleth,
-  shouldApplyProportionalSymbols
+  shouldApplyProportionalSymbols,
+  shouldHideSymbolFill
 } from '../utils/data-styling.utils';
 import { resolveTextLabelPlacement } from '../utils/text-label-placement';
 import {
@@ -81,9 +85,11 @@ import {
   createCategoricalColorAccessor,
   createGeoJsonClassedSizeAccessor,
   createChoroplethColorAccessor,
+  createStrokeClassificationAccessor,
   createGeoJsonCategoricalColorAccessor,
   createGeoJsonChoroplethColorAccessor,
   createGeoJsonProportionalSizeAccessor,
+  HIGHLIGHT_FILL_COLOR,
   createProportionalSizeAccessor,
   resolveMissingDataRenderProps,
   withGeoJsonRowHighlight,
@@ -191,43 +197,39 @@ function createPointSymbolSvg(
   shape: ShapeType,
   fillColor: Color,
   strokeColor: Color,
-  strokeWidth: number
+  strokeWidth: number,
+  dashed = false
 ): string {
   const fill = colorToCss(fillColor);
   const stroke = colorToCss(strokeColor);
   const scaledStrokeWidth = Math.max(2, strokeWidth * 4);
+  const strokeDashAttributes = dashed
+    ? ` stroke-dasharray="${Math.max(2, scaledStrokeWidth * DEFAULT_DASH_ARRAY[0])} ${Math.max(2, scaledStrokeWidth * DEFAULT_DASH_ARRAY[1])}" stroke-linecap="round"`
+    : '';
 
-  let markup = '';
-  switch (shape) {
-    case ShapeType.SQUARE:
-      markup = `<rect x="10" y="10" width="44" height="44" rx="4" ry="4" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" />`;
-      break;
-    case ShapeType.BAR:
-      markup = `<rect x="26" y="4" width="12" height="56" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round" />`;
-      break;
-    case ShapeType.SPIKE:
-      markup = `<path d="M32 4 L42 60 H22 Z" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round" />`;
-      break;
-    case ShapeType.CROSS:
-      markup = `<path d="M22 8 H42 V22 H56 V42 H42 V56 H22 V42 H8 V22 H22 Z" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round" />`;
-      break;
-    case ShapeType.DIAMOND:
-      markup = `<path d="M32 6 L58 32 L32 58 L6 32 Z" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round" />`;
-      break;
-    case ShapeType.TRIANGLE:
-      markup = `<path d="M32 8 L56 56 H8 Z" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round" />`;
-      break;
-    case ShapeType.STAR:
-      markup = `<path d="M32 6 L39.4 24.6 L58.7 24.6 L43.1 36.1 L48.4 55.1 L32 44 L15.6 55.1 L20.9 36.1 L5.3 24.6 L24.6 24.6 Z" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round" />`;
-      break;
-    case ShapeType.RECTANGLE:
-      markup = `<rect x="4" y="24" width="56" height="16" rx="2" ry="2" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" />`;
-      break;
-    case ShapeType.CIRCLE:
-    default:
-      markup = `<circle cx="32" cy="32" r="22" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" />`;
-      break;
-  }
+  const markup = ((): string => {
+    switch (shape) {
+      case ShapeType.SQUARE:
+        return `<rect x="10" y="10" width="44" height="44" rx="4" ry="4" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}"${strokeDashAttributes} />`;
+      case ShapeType.BAR:
+        return `<rect x="26" y="4" width="12" height="56" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round"${strokeDashAttributes} />`;
+      case ShapeType.SPIKE:
+        return `<path d="M32 4 L42 60 H22 Z" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round"${strokeDashAttributes} />`;
+      case ShapeType.CROSS:
+        return `<path d="M22 8 H42 V22 H56 V42 H42 V56 H22 V42 H8 V22 H22 Z" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round"${strokeDashAttributes} />`;
+      case ShapeType.DIAMOND:
+        return `<path d="M32 6 L58 32 L32 58 L6 32 Z" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round"${strokeDashAttributes} />`;
+      case ShapeType.TRIANGLE:
+        return `<path d="M32 8 L56 56 H8 Z" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round"${strokeDashAttributes} />`;
+      case ShapeType.STAR:
+        return `<path d="M32 6 L39.4 24.6 L58.7 24.6 L43.1 36.1 L48.4 55.1 L32 44 L15.6 55.1 L20.9 36.1 L5.3 24.6 L24.6 24.6 Z" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round"${strokeDashAttributes} />`;
+      case ShapeType.RECTANGLE:
+        return `<rect x="4" y="24" width="56" height="16" rx="2" ry="2" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}"${strokeDashAttributes} />`;
+      case ShapeType.CIRCLE:
+      default:
+        return `<circle cx="32" cy="32" r="22" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}"${strokeDashAttributes} />`;
+    }
+  })();
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${POINT_SYMBOL_ICON_VIEWBOX_SIZE}" height="${POINT_SYMBOL_ICON_VIEWBOX_SIZE}" viewBox="0 0 ${POINT_SYMBOL_ICON_VIEWBOX_SIZE} ${POINT_SYMBOL_ICON_VIEWBOX_SIZE}">${markup}</svg>`;
 }
@@ -236,7 +238,8 @@ function createPointSymbolIcon(
   shape: ShapeType,
   fillColor: Color,
   strokeColor: Color,
-  strokeWidth: number
+  strokeWidth: number,
+  dashed = false
 ): {
   url: string;
   width: number;
@@ -245,14 +248,21 @@ function createPointSymbolIcon(
   anchorY: number;
   id: string;
 } {
-  const key = JSON.stringify({ shape, fillColor, strokeColor, strokeWidth });
+  const key = JSON.stringify({
+    shape,
+    fillColor,
+    strokeColor,
+    strokeWidth,
+    dashed
+  });
   let url = pointSymbolIconCache.get(key);
   if (!url) {
     const svg = createPointSymbolSvg(
       shape,
       fillColor,
       strokeColor,
-      strokeWidth
+      strokeWidth,
+      dashed
     );
     url = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
     pointSymbolIconCache.set(key, url);
@@ -290,6 +300,28 @@ type BinaryLayerInteractionData = {
   khartisSplitDatasetRowByGeomRow?: Int32Array;
   featureIds?: Uint32Array;
 };
+
+type ScatterBinaryData = {
+  attributes: Record<string, unknown>;
+  khartisSourceTable?: ArrowTable;
+  featureIds?: Uint32Array;
+};
+
+function cloneScatterBinaryData(
+  scatterProps: ReturnType<typeof createScatterplotLayerProps>
+): ScatterBinaryData {
+  const sourceData = scatterProps.data as ScatterBinaryData;
+  const clonedData: ScatterBinaryData = {
+    ...sourceData,
+    attributes: { ...sourceData.attributes }
+  };
+  (
+    scatterProps as unknown as {
+      data: ScatterBinaryData;
+    }
+  ).data = clonedData;
+  return clonedData;
+}
 
 function attachBinaryPickingMetadata(
   target: BinaryLayerInteractionData,
@@ -440,16 +472,18 @@ function createDoubleProportionalPointLayers(
     strokeWidth,
     strokeOpacity: rawStrokeOpacity,
     statistics,
+    categoryColorMap,
     secondaryStatistics,
     highlightedRowIds,
     modelMatrix,
     beforeId
   } = ctx;
   const pointStatistics = ctx.pointStatistics ?? statistics;
+  const pointCategoryColorMap = ctx.pointCategoryColorMap ?? categoryColorMap;
   const pointSecondaryStatistics =
     ctx.pointSecondaryStatistics ?? secondaryStatistics ?? pointStatistics;
 
-  if (!usesDoubleProportionalSymbols(viz)) {
+  if (!viz || !usesDoubleProportionalSymbols(viz)) {
     return [];
   }
 
@@ -460,16 +494,27 @@ function createDoubleProportionalPointLayers(
 
   const pointSizeColumn = pointConfig.sizeColumn;
   const pointValueColumn = pointConfig.valueColumn;
+  const pointFillValueColumn = getSymbolFillValueColumn(viz);
+  const pointFillCategoryColumn = getSymbolFillCategoryColumn(viz);
+  const pointStrokeValueColumn =
+    pointConfig.strokeValueColumn ?? pointValueColumn;
+  const pointStrokeCategoryColumn = pointConfig.strokeCategoryColumn;
   if (!pointSizeColumn || !pointValueColumn) {
     return [];
   }
 
-  const pointStrokeColor =
-    typeof pointConfig.strokeColor === 'string'
+  const pointStrokeColor = Array.isArray(pointConfig.strokeColor)
+    ? hexToRgb(pointConfig.strokeColor[0] ?? '#000000')
+    : typeof pointConfig.strokeColor === 'string'
       ? hexToRgb(pointConfig.strokeColor)
       : strokeColor;
   const pointStrokeWidth = pointConfig.strokeWidth ?? strokeWidth;
   const pointStrokeOpacity = pointConfig.strokeOpacity ?? rawStrokeOpacity;
+  const pointStrokeDashed = pointConfig.strokeDashed ?? false;
+  const showPointStroke =
+    pointConfig.strokeMode !== StrokeMode.NONE &&
+    pointStrokeOpacity > 0 &&
+    pointStrokeWidth > 0;
   const pointFillOpacity = pointConfig.opacity ?? rawFillOpacity;
   const secondaryFillColor = hexToRgb(pointConfig.fillColorB ?? '#ff832b');
   const pointShape = pointConfig.shape ?? ShapeType.CIRCLE;
@@ -489,20 +534,66 @@ function createDoubleProportionalPointLayers(
   const missingPointShape = resolveMissingPointShape(
     pointConfig.missingData?.shape
   );
+  const commonScale = pointConfig.commonScale !== false;
+  const positionMode = pointConfig.positionMode ?? 'overlay';
+  const hideSymbolFill = shouldHideSymbolFill(viz);
+  const breakValueA = pointConfig.breakValueA ?? null;
+  const breakValueB = pointConfig.breakValueB ?? null;
   const hlVersion = ctx.highlightVersion ?? 0;
+  const pointClassification =
+    getPrimitiveClassification(viz, PrimitiveFilterType.POINT) ??
+    viz.classification;
+  const pointFillClassification =
+    getSymbolFillClassification(viz) ?? viz.classification;
+  const useFillChoropleth = Boolean(
+    pointConfig.fillMode === FillMode.CLASSES &&
+    pointFillValueColumn &&
+    pointFillClassification?.breaks &&
+    pointFillClassification?.colors &&
+    pointFillClassification.breaks.length >= 2
+  );
+  const useFillCategorical = Boolean(
+    pointConfig.fillMode === FillMode.CATEGORIES &&
+    pointFillCategoryColumn &&
+    pointFillClassification?.colors?.length
+  );
+  const effectiveCategoryColorMap =
+    useFillCategorical && pointFillCategoryColumn
+      ? resolveEffectiveCategoryColorMap(
+          jsTable,
+          viz,
+          pointCategoryColorMap,
+          pointFillCategoryColumn,
+          PrimitiveFilterType.POINT
+        )
+      : pointCategoryColorMap;
+  const disabledFillLabels = new Set(
+    (pointFillClassification?.disabledLabels ?? []).map(String)
+  );
+  const primaryStats = pointStatistics;
+  const secondaryStats = pointSecondaryStatistics;
+  const sharedMin = commonScale
+    ? Math.min(primaryStats.min, secondaryStats.min)
+    : primaryStats.min;
+  const sharedMax = commonScale
+    ? Math.max(primaryStats.max, secondaryStats.max)
+    : primaryStats.max;
+  const primaryScaleMin = commonScale ? sharedMin : primaryStats.min;
+  const primaryScaleMax = commonScale ? sharedMax : primaryStats.max;
+  const secondaryScaleMin = commonScale ? sharedMin : secondaryStats.min;
+  const secondaryScaleMax = commonScale ? sharedMax : secondaryStats.max;
   const primaryRadiusAccessor = createProportionalSizeAccessor(
     pointSizeColumn,
-    pointStatistics.min,
-    pointStatistics.max,
+    primaryScaleMin,
+    primaryScaleMax,
     minPointRadius,
     maxPointRadius,
     pointConfig.sizeScale
   );
-  const secondaryStats = pointSecondaryStatistics;
   const secondaryRadiusAccessor = createProportionalSizeAccessor(
     pointValueColumn,
-    secondaryStats.min,
-    secondaryStats.max,
+    secondaryScaleMin,
+    secondaryScaleMax,
     minPointRadius,
     maxPointRadius,
     pointConfig.sizeScale
@@ -519,7 +610,12 @@ function createDoubleProportionalPointLayers(
     };
 
   const createFillAccessor =
-    (columnName: string, baseColor: RGBColor) =>
+    (
+      columnName: string,
+      baseColor: RGBColor,
+      alternateColor: RGBColor,
+      breakValue: number | null
+    ) =>
     (row: DeckDataRow): [number, number, number, number] => {
       const rowOpacity = resolveHighlightedOpacityForRow(
         row,
@@ -527,20 +623,122 @@ function createDoubleProportionalPointLayers(
         highlightedRowIds
       );
 
-      if (isMissingThematicValue(row[columnName])) {
+      const missingColorColumn =
+        useFillChoropleth || useFillCategorical
+          ? useFillChoropleth
+            ? pointFillValueColumn
+            : pointFillCategoryColumn
+          : columnName;
+      if (
+        missingColorColumn &&
+        isMissingThematicValue(row[missingColorColumn])
+      ) {
         return showMissingPoints
           ? toMutableRgba(withOpacity(missingPointColor, rowOpacity))
           : [0, 0, 0, 0];
       }
 
-      return toMutableRgba(withOpacity(baseColor, rowOpacity));
+      if (
+        useFillChoropleth &&
+        pointFillValueColumn &&
+        pointFillClassification?.breaks &&
+        pointFillClassification?.colors
+      ) {
+        const rawFillValue = row[pointFillValueColumn];
+        const numericFillValue =
+          typeof rawFillValue === 'number'
+            ? rawFillValue
+            : Number(rawFillValue);
+        if (!Number.isFinite(numericFillValue)) {
+          return showMissingPoints
+            ? toMutableRgba(withOpacity(missingPointColor, rowOpacity))
+            : [0, 0, 0, 0];
+        }
+        const [r, g, b] = getColorForValue(
+          numericFillValue,
+          pointFillClassification.breaks,
+          pointFillClassification.colors
+        );
+        return [
+          r,
+          g,
+          b,
+          Math.round(Math.min(Math.max(rowOpacity, 0), 1) * 255)
+        ];
+      }
+
+      if (useFillCategorical && pointFillCategoryColumn) {
+        const categoryLabel = String(row[pointFillCategoryColumn]);
+        if (disabledFillLabels.has(categoryLabel)) {
+          return [0, 0, 0, 0];
+        }
+        const mapped = effectiveCategoryColorMap?.get(categoryLabel);
+        if (mapped) {
+          return [
+            mapped[0],
+            mapped[1],
+            mapped[2],
+            Math.round(Math.min(Math.max(rowOpacity, 0), 1) * 255)
+          ];
+        }
+      }
+
+      const rawValue = row[columnName];
+      const numericValue =
+        typeof rawValue === 'number'
+          ? rawValue
+          : typeof rawValue === 'string'
+            ? Number(rawValue)
+            : Number.NaN;
+      const color =
+        breakValue !== null &&
+        Number.isFinite(numericValue) &&
+        numericValue < breakValue
+          ? alternateColor
+          : baseColor;
+
+      return toMutableRgba(withOpacity(color, rowOpacity));
     };
+
+  const strokeClassificationAccessor = createStrokeClassificationAccessor({
+    strokeMode: pointConfig.strokeMode ?? 'unique',
+    strokeClassification: pointConfig.strokeClassification,
+    valueColumn: pointStrokeValueColumn,
+    categoryColumn: pointStrokeCategoryColumn,
+    fallbackLabels: pointClassification?.labels,
+    fallbackBreaks: pointClassification?.breaks,
+    missingColor: missingPointColor,
+    showMissing: showMissingPoints,
+    hexToRgb
+  });
 
   const createLineAccessor =
     (columnName: string) =>
     (row: DeckDataRow): [number, number, number, number] => {
       if (isMissingThematicValue(row[columnName]) && !showMissingPoints) {
         return [0, 0, 0, 0];
+      }
+
+      if (!showPointStroke) {
+        return [0, 0, 0, 0];
+      }
+
+      if (strokeClassificationAccessor) {
+        const [r, g, b] = strokeClassificationAccessor(row);
+        const alpha = Math.round(
+          Math.min(
+            Math.max(
+              resolveHighlightedOpacityForRow(
+                row,
+                pointStrokeOpacity,
+                highlightedRowIds
+              ),
+              0
+            ),
+            1
+          ) * 255
+        );
+        return [r, g, b, alpha];
       }
 
       return toMutableRgba(
@@ -557,11 +755,21 @@ function createDoubleProportionalPointLayers(
 
   const primaryFillByFeatureId = rowAccessor(
     jsTable,
-    createFillAccessor(pointSizeColumn, fillColor)
+    createFillAccessor(
+      pointSizeColumn,
+      fillColor,
+      secondaryFillColor,
+      breakValueA
+    )
   );
   const secondaryFillByFeatureId = rowAccessor(
     jsTable,
-    createFillAccessor(pointValueColumn, secondaryFillColor)
+    createFillAccessor(
+      pointValueColumn,
+      secondaryFillColor,
+      fillColor,
+      breakValueB
+    )
   );
   const primaryLineByFeatureId = rowAccessor(
     jsTable,
@@ -585,20 +793,45 @@ function createDoubleProportionalPointLayers(
   const missingShapeOrdinal =
     SHAPE_ORDINAL[missingPointShape] ?? SHAPE_ORDINAL[ShapeType.CIRCLE];
 
+  const offsetForRole = (
+    role: 'primary' | 'secondary'
+  ): {
+    offsetX: number;
+    offsetY: number;
+    halfMask: 0 | 1 | 2;
+    radiusScale: number;
+  } => {
+    if (positionMode === 'juxtaposition') {
+      return {
+        offsetX: role === 'primary' ? 0.35 : -0.35,
+        offsetY: 0,
+        halfMask: 0,
+        radiusScale: 2
+      };
+    }
+    if (positionMode === 'division') {
+      return {
+        offsetX: 0,
+        offsetY: 0,
+        halfMask: role === 'primary' ? 2 : 1,
+        radiusScale: 1
+      };
+    }
+    return { offsetX: 0, offsetY: 0, halfMask: 0, radiusScale: 1 };
+  };
+
   const createScatterLayer = (
     suffix: string,
     fillByFeatureId: (featureId: number) => [number, number, number, number],
     lineByFeatureId: (featureId: number) => [number, number, number, number],
     radiusByFeatureId: (featureId: number) => number,
     pickable: boolean,
-    triggerColumn: string
+    triggerColumn: string,
+    role: 'primary' | 'secondary'
   ) => {
+    const layoutProps = offsetForRole(role);
     const scatterProps = createScatterplotLayerProps(pointData);
-    const scatterBinaryData = scatterProps.data as {
-      attributes: Record<string, unknown>;
-      khartisSourceTable?: ArrowTable;
-      featureIds?: Uint32Array;
-    };
+    const scatterBinaryData = cloneScatterBinaryData(scatterProps);
     attachBinaryPickingMetadata(scatterBinaryData, jsTable, pointData, ctx);
     scatterBinaryData.attributes.getFillColor = pointColorAttr(
       pointData,
@@ -632,12 +865,21 @@ function createDoubleProportionalPointLayers(
     return new MultiShapeLayer({
       id: `${layerId}-${suffix}`,
       ...(scatterProps as unknown as Record<string, unknown>),
-      stroked: true,
+      ...({
+        offsetX: layoutProps.offsetX,
+        offsetY: layoutProps.offsetY,
+        halfMask: layoutProps.halfMask
+      } as Record<string, unknown>),
+      stroked: showPointStroke,
+      filled: !hideSymbolFill,
+      dashed: showPointStroke && pointStrokeDashed,
+      dashLength: DEFAULT_DASH_ARRAY[0],
+      gapLength: DEFAULT_DASH_ARRAY[1],
       opacity: 1,
-      radiusScale: 1,
+      radiusScale: layoutProps.radiusScale,
       radiusUnits: 'pixels',
       lineWidthUnits: 'pixels',
-      lineWidthScale: pointStrokeWidth / 3,
+      lineWidthScale: showPointStroke ? pointStrokeWidth / 3 : 0,
       pickable,
       parameters: THEMATIC_OVERLAY_PARAMETERS,
       ...resolveHoverHighlightProps(pickable),
@@ -650,28 +892,47 @@ function createDoubleProportionalPointLayers(
           pointFillOpacity,
           fillColor,
           pointConfig.fillColorB,
+          pointFillValueColumn,
+          pointFillCategoryColumn,
+          pointFillClassification?.breaks,
+          pointFillClassification?.colors,
+          pointFillClassification?.labels,
+          pointFillClassification?.disabledLabels,
+          effectiveCategoryColorMap,
           pointConfig.missingData?.show,
           pointConfig.missingData?.color,
+          breakValueA,
+          breakValueB,
+          hideSymbolFill,
           hlVersion
         ],
         getLineColor: [
           triggerColumn,
           pointStrokeColor,
           pointStrokeOpacity,
+          pointStrokeValueColumn,
+          pointStrokeCategoryColumn,
+          showPointStroke,
+          pointConfig.strokeClassification?.breaks,
+          pointConfig.strokeClassification?.colors,
+          pointConfig.strokeClassification?.labels,
+          pointConfig.strokeClassification?.disabledLabels,
           pointConfig.missingData?.show,
           hlVersion
         ],
         getRadius: [
           triggerColumn,
-          pointStatistics.min,
-          pointStatistics.max,
-          secondaryStats.min,
-          secondaryStats.max,
+          primaryScaleMin,
+          primaryScaleMax,
+          secondaryScaleMin,
+          secondaryScaleMax,
           pointConfig.minSize,
           pointConfig.maxSize,
           pointConfig.sizeScale,
           pointConfig.missingData?.show,
-          pointConfig.missingData?.size
+          pointConfig.missingData?.size,
+          commonScale,
+          positionMode
         ],
         getShape: [shapeOrdinal, missingShapeOrdinal, triggerColumn],
         ...(ctx.yearFilter && {
@@ -688,7 +949,8 @@ function createDoubleProportionalPointLayers(
       primaryLineByFeatureId,
       primaryRadiusByFeatureId,
       true,
-      pointSizeColumn
+      pointSizeColumn,
+      'primary'
     ),
     createScatterLayer(
       'double-secondary',
@@ -696,7 +958,8 @@ function createDoubleProportionalPointLayers(
       secondaryLineByFeatureId,
       secondaryRadiusByFeatureId,
       false,
-      pointValueColumn
+      pointValueColumn,
+      'secondary'
     )
   ];
 }
@@ -761,12 +1024,25 @@ function createRepresentativePointSymbolLayers(
   const pointValueColumn = pointConfig.valueColumn;
   const pointCategoryColumn = pointConfig.categoryColumn;
   const pointSizeColumn = pointConfig.sizeColumn;
-  const pointStrokeColor =
-    typeof pointConfig.strokeColor === 'string'
+  const pointFillValueColumn = getSymbolFillValueColumn(viz);
+  const pointFillCategoryColumn = getSymbolFillCategoryColumn(viz);
+  const pointStrokeValueColumn =
+    pointConfig.strokeValueColumn ?? pointValueColumn;
+  const pointStrokeCategoryColumn =
+    pointConfig.strokeCategoryColumn ?? pointCategoryColumn;
+  const pointStrokeColor = Array.isArray(pointConfig.strokeColor)
+    ? hexToRgb(pointConfig.strokeColor[0] ?? '#000000')
+    : typeof pointConfig.strokeColor === 'string'
       ? hexToRgb(pointConfig.strokeColor)
       : strokeColor;
   const pointStrokeWidth = pointConfig.strokeWidth ?? strokeWidth;
   const pointStrokeOpacity = pointConfig.strokeOpacity ?? rawStrokeOpacity;
+  const pointStrokeDashed = pointConfig.strokeDashed ?? false;
+  const showPointStroke =
+    pointConfig.strokeMode !== StrokeMode.NONE &&
+    pointStrokeOpacity > 0 &&
+    pointStrokeWidth > 0;
+  const hideSymbolFill = shouldHideSymbolFill(viz);
 
   const representativePointSource = getRepresentativePointSource(ctx);
   if (!representativePointSource) {
@@ -792,6 +1068,16 @@ function createRepresentativePointSymbolLayers(
   const pointClassification =
     getPrimitiveClassification(viz, PrimitiveFilterType.POINT) ??
     viz.classification;
+  const pointFillClassification =
+    getSymbolFillClassification(viz) ?? viz.classification;
+  const pointColorCategoryColumn =
+    pointConfig.mode === SymbolMode.CATEGORIES
+      ? pointCategoryColumn
+      : pointFillCategoryColumn;
+  const pointColorClassification =
+    pointConfig.mode === SymbolMode.CATEGORIES
+      ? pointClassification
+      : pointFillClassification;
   const useProportionalSymbols = shouldApplyProportionalSymbols(viz);
   const useClassedSymbols =
     pointConfig.mode === SymbolMode.CLASSES &&
@@ -834,19 +1120,24 @@ function createRepresentativePointSymbolLayers(
     jsTable,
     viz,
     pointCategoryColorMap,
-    pointCategoryColumn,
+    pointColorCategoryColumn,
     PrimitiveFilterType.POINT
   );
   const baseFillAccessor = useChoropleth
     ? createChoroplethColorAccessor(
-        pointValueColumn!,
-        pointClassification!.breaks!,
-        pointClassification!.colors!
+        pointFillValueColumn!,
+        pointFillClassification!.breaks!,
+        pointFillClassification!.colors!,
+        missingPointColor,
+        showMissingPoints
       )
     : useCategoricalColor
       ? createCategoricalColorAccessor(
-          pointCategoryColumn!,
-          effectiveCategoryColorMap
+          pointColorCategoryColumn!,
+          effectiveCategoryColorMap,
+          missingPointColor,
+          showMissingPoints,
+          pointColorClassification?.disabledLabels ?? []
         )
       : null;
   const linearShapeOverrideScale = isLinearShape(pointShape)
@@ -870,6 +1161,24 @@ function createRepresentativePointSymbolLayers(
           linearShapeOverrideScale ?? pointConfig.sizeScale
         )
       : null;
+
+  const strokeClassificationAccessor = createStrokeClassificationAccessor({
+    strokeMode: pointConfig.strokeMode ?? 'unique',
+    strokeClassification: pointConfig.strokeClassification,
+    valueColumn: pointStrokeValueColumn,
+    categoryColumn: pointStrokeCategoryColumn,
+    fallbackLabels:
+      pointStrokeCategoryColumn === pointColorCategoryColumn
+        ? pointColorClassification?.labels
+        : pointClassification?.labels,
+    fallbackBreaks:
+      pointStrokeValueColumn === pointFillValueColumn
+        ? pointFillClassification?.breaks
+        : pointClassification?.breaks,
+    missingColor: missingPointColor,
+    showMissing: showMissingPoints,
+    hexToRgb
+  });
 
   const resolveFillColorForRow = (
     row: DeckDataRow
@@ -906,16 +1215,25 @@ function createRepresentativePointSymbolLayers(
       return [0, 0, 0, 0];
     }
 
-    return toMutableRgba(
-      withOpacity(
-        pointStrokeColor,
-        resolveHighlightedOpacityForRow(
-          row,
-          pointStrokeOpacity,
-          highlightedRowIds
-        )
-      )
+    const rowStrokeOpacity = resolveHighlightedOpacityForRow(
+      row,
+      pointStrokeOpacity,
+      highlightedRowIds
     );
+
+    if (!showPointStroke) {
+      return [0, 0, 0, 0];
+    }
+
+    if (strokeClassificationAccessor) {
+      const [r, g, b] = strokeClassificationAccessor(row);
+      const alpha = Math.round(
+        Math.min(Math.max(rowStrokeOpacity, 0), 1) * 255
+      );
+      return [r, g, b, alpha];
+    }
+
+    return toMutableRgba(withOpacity(pointStrokeColor, rowStrokeOpacity));
   };
 
   const resolveRadiusForRow = (row: DeckDataRow): number => {
@@ -943,11 +1261,7 @@ function createRepresentativePointSymbolLayers(
   const radiusByFeatureId = ctxRowAccessor(ctx, jsTable, resolveRadiusForRow);
 
   const scatterProps = createScatterplotLayerProps(pointData);
-  const scatterBinaryData = scatterProps.data as {
-    attributes: Record<string, unknown>;
-    khartisSourceTable?: ArrowTable;
-    featureIds?: Uint32Array;
-  };
+  const scatterBinaryData = cloneScatterBinaryData(scatterProps);
   attachBinaryPickingMetadata(scatterBinaryData, jsTable, pointData, ctx);
   scatterBinaryData.attributes.getFillColor = pointColorAttr(
     pointData,
@@ -986,32 +1300,60 @@ function createRepresentativePointSymbolLayers(
     useCategoryShape && pointCategoryColumn
       ? jsTable.getChild(pointCategoryColumn)
       : null;
-  const categoryShapeMap = (() => {
+  const orderedCategoryLabels = (() => {
     if (!useCategoryShape || !categoryShapeVector) return null;
     const labels = pointClassification?.labels;
-    const orderedCategories =
-      labels && labels.length > 0
-        ? labels
-        : (() => {
-            const seen = new Set<string>();
-            const out: string[] = [];
-            for (let i = 0; i < jsTable.numRows; i += 1) {
-              const raw = categoryShapeVector.get(i);
-              if (raw === null || raw === undefined) continue;
-              const key = String(raw);
-              if (!seen.has(key)) {
-                seen.add(key);
-                out.push(key);
-              }
-            }
-            return out;
-          })();
+    if (labels && labels.length > 0) return labels;
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (let i = 0; i < jsTable.numRows; i += 1) {
+      const raw = categoryShapeVector.get(i);
+      if (raw === null || raw === undefined) continue;
+      const key = String(raw);
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push(key);
+      }
+    }
+    return out;
+  })();
+  const categoryShapeMap = (() => {
+    if (!useCategoryShape || !orderedCategoryLabels) return null;
+    const userShapes = pointClassification?.categoryShapes;
+    const useUserShapes =
+      categoryShapeMode === CategoryShapeMode.DIFFERENT &&
+      Array.isArray(userShapes) &&
+      userShapes.length > 0;
     const map = new Map<string, number>();
-    for (let i = 0; i < orderedCategories.length; i += 1) {
-      const shape =
-        CATEGORY_SHAPE_CYCLE[i % CATEGORY_SHAPE_CYCLE.length] ??
-        ShapeType.CIRCLE;
-      map.set(orderedCategories[i], SHAPE_ORDINAL[shape]);
+    for (let i = 0; i < orderedCategoryLabels.length; i += 1) {
+      const shape = useUserShapes
+        ? (userShapes![i] ??
+          CATEGORY_SHAPE_CYCLE[i % CATEGORY_SHAPE_CYCLE.length] ??
+          ShapeType.CIRCLE)
+        : categoryShapeMode === CategoryShapeMode.ORDERED
+          ? pointShape
+          : (CATEGORY_SHAPE_CYCLE[i % CATEGORY_SHAPE_CYCLE.length] ??
+            ShapeType.CIRCLE);
+      map.set(orderedCategoryLabels[i], SHAPE_ORDINAL[shape]);
+    }
+    return map;
+  })();
+  const categoryRankRadiusMap = (() => {
+    if (
+      !useCategoryShape ||
+      categoryShapeMode !== CategoryShapeMode.ORDERED ||
+      !orderedCategoryLabels ||
+      orderedCategoryLabels.length === 0
+    ) {
+      return null;
+    }
+    const total = orderedCategoryLabels.length;
+    const rMin = Math.max(1, minPointRadius);
+    const rMax = Math.max(rMin + 2, maxPointRadius);
+    const map = new Map<string, number>();
+    for (let i = 0; i < total; i += 1) {
+      const t = total === 1 ? 0 : i / (total - 1);
+      map.set(orderedCategoryLabels[i], rMin + t * (rMax - rMin));
     }
     return map;
   })();
@@ -1045,16 +1387,48 @@ function createRepresentativePointSymbolLayers(
     size: 1
   };
 
+  if (categoryRankRadiusMap && pointCategoryColumn) {
+    const featureIds = scatterBinaryData.featureIds;
+    const length = featureIds ? featureIds.length : jsTable.numRows;
+    const radiusArr = new Float32Array(length);
+    for (let i = 0; i < length; i += 1) {
+      const rowIdx = featureIds ? featureIds[i] : i;
+      const row = jsTable.get(rowIdx) as DeckDataRow | null;
+      if (
+        pointMissingColumn &&
+        row &&
+        isMissingThematicValue(row[pointMissingColumn])
+      ) {
+        radiusArr[i] = showMissingPoints ? missingPointRadius : 0;
+        continue;
+      }
+      const raw = row ? row[pointCategoryColumn] : null;
+      if (raw !== null && raw !== undefined) {
+        const mapped = categoryRankRadiusMap.get(String(raw));
+        if (mapped !== undefined) {
+          radiusArr[i] = mapped;
+          continue;
+        }
+      }
+      radiusArr[i] = uniquePointRadius;
+    }
+    scatterBinaryData.attributes.getRadius = { value: radiusArr, size: 1 };
+  }
+
   return [
     new MultiShapeLayer({
       id: `${pointLayerId}-centroids`,
       ...(scatterProps as unknown as Record<string, unknown>),
-      stroked: true,
+      stroked: showPointStroke,
+      filled: !hideSymbolFill,
+      dashed: showPointStroke && pointStrokeDashed,
+      dashLength: DEFAULT_DASH_ARRAY[0],
+      gapLength: DEFAULT_DASH_ARRAY[1],
       opacity: 1,
       radiusScale: 1,
       radiusUnits: 'pixels',
       lineWidthUnits: 'pixels',
-      lineWidthScale: pointStrokeWidth / 3,
+      lineWidthScale: showPointStroke ? pointStrokeWidth / 3 : 0,
       pickable: true,
       parameters: THEMATIC_OVERLAY_PARAMETERS,
       ...resolveHoverHighlightProps(),
@@ -1064,17 +1438,19 @@ function createRepresentativePointSymbolLayers(
       updateTriggers: {
         getFillColor: [
           useChoropleth,
-          pointValueColumn,
-          pointClassification?.breaks,
-          pointClassification?.colors,
+          pointFillValueColumn,
+          pointFillClassification?.breaks,
+          pointFillClassification?.colors,
           useCategoricalColor,
-          pointCategoryColumn,
-          pointCategoryColorMap,
+          pointColorCategoryColumn,
+          effectiveCategoryColorMap,
           fillColor,
           pointFillOpacity,
           pointMissingColumn,
           pointConfig.missingData?.show,
           pointConfig.missingData?.color,
+          hideSymbolFill,
+          pointColorClassification?.disabledLabels,
           hlVersion
         ],
         getLineColor: [
@@ -1082,6 +1458,14 @@ function createRepresentativePointSymbolLayers(
           pointStrokeOpacity,
           pointMissingColumn,
           pointConfig.missingData?.show,
+          pointStrokeValueColumn,
+          pointStrokeCategoryColumn,
+          showPointStroke,
+          pointConfig.strokeMode,
+          pointConfig.strokeClassification?.colors,
+          pointConfig.strokeClassification?.breaks,
+          pointConfig.strokeClassification?.labels,
+          pointConfig.strokeClassification?.disabledLabels,
           hlVersion
         ],
         getRadius: [
@@ -1145,7 +1529,9 @@ function resolvePointMissingColumn(
   }
 
   if (useClassedSymbols || useChoropleth) {
-    return getPrimitiveValueColumn(viz, PrimitiveFilterType.POINT) ?? null;
+    return useClassedSymbols
+      ? (getPrimitiveValueColumn(viz, PrimitiveFilterType.POINT) ?? null)
+      : (getSymbolFillValueColumn(viz) ?? null);
   }
 
   if (useProportionalSymbols) {
@@ -1153,7 +1539,9 @@ function resolvePointMissingColumn(
   }
 
   if (useCategoricalColor) {
-    return getPrimitiveCategoryColumn(viz, PrimitiveFilterType.POINT) ?? null;
+    return getSymbolPrimitive(viz)?.mode === SymbolMode.CATEGORIES
+      ? (getPrimitiveCategoryColumn(viz, PrimitiveFilterType.POINT) ?? null)
+      : (getSymbolFillCategoryColumn(viz) ?? null);
   }
 
   return null;
@@ -1519,6 +1907,40 @@ function buildPatternProps(ctx: LayerContext): {
   };
 }
 
+function createPolygonPatternOverlayLayer(
+  layerId: string,
+  polygonPatternId: string | undefined,
+  patternGeojson: FeatureCollection,
+  patternProps: NonNullable<ReturnType<typeof buildPatternProps>>,
+  ctx: Pick<LayerContext, 'modelMatrix' | 'beforeId'>
+): GeoJsonLayer {
+  const { modelMatrix, beforeId } = ctx;
+
+  return new GeoJsonLayer({
+    id: `${layerId}-pattern-${polygonPatternId ?? 'none'}`,
+    data: patternGeojson,
+    getFillColor: [0, 0, 0, 255],
+    stroked: false,
+    opacity: 0.6,
+    pickable: false,
+    extensions: patternProps.extensions,
+    fillPatternAtlas: patternProps.fillPatternAtlas,
+    fillPatternMapping: patternProps.fillPatternMapping,
+    fillPatternMask: true,
+    getFillPattern: patternProps.getFillPattern,
+    getFillPatternScale: patternProps.getFillPatternScale,
+    getFillPatternRotation: patternProps.getFillPatternRotation,
+    ...(modelMatrix && { modelMatrix }),
+    ...(beforeId && { beforeId }),
+    updateTriggers: {
+      getFillPattern: [polygonPatternId],
+      getFillPatternScale: [polygonPatternId],
+      getFillPatternRotation: [polygonPatternId]
+    },
+    dataComparator: (newData, oldData) => newData === oldData
+  });
+}
+
 export type { LayerContext };
 
 function resolveThematicScopeId(ctx: LayerContext): string {
@@ -1583,7 +2005,11 @@ export function resolveEffectiveCategoryColorMap(
   primitive: PrimitiveFilterType = PrimitiveFilterType.POLYGON
 ): Map<string, RGBColor> | null {
   const classification = viz
-    ? (getPrimitiveClassification(viz, primitive) ?? viz.classification)
+    ? primitive === PrimitiveFilterType.POINT
+      ? getSymbolPrimitive(viz)?.mode === SymbolMode.CATEGORIES
+        ? (getPrimitiveClassification(viz, primitive) ?? viz.classification)
+        : (getSymbolFillClassification(viz) ?? viz.classification)
+      : (getPrimitiveClassification(viz, primitive) ?? viz.classification)
     : undefined;
   if (!viz || !categoryColumn || !classification?.colors?.length) {
     return categoryColorMap ?? null;
@@ -1595,7 +2021,13 @@ export function resolveEffectiveCategoryColorMap(
       ?.map((label) => toTextValue(label))
       .filter((label): label is string => label !== null) ?? [];
   if (storedLabels.length > 0) {
-    if (hasCompleteCategoricalColorMap(storedLabels, categoryColorMap)) {
+    if (
+      hasCompleteCategoricalColorMap(
+        storedLabels,
+        categoryColorMap,
+        classificationColors
+      )
+    ) {
       return categoryColorMap ?? null;
     }
 
@@ -1620,7 +2052,13 @@ export function resolveEffectiveCategoryColorMap(
   }
 
   const categoryList = [...categories];
-  if (hasCompleteCategoricalColorMap(categoryList, categoryColorMap)) {
+  if (
+    hasCompleteCategoricalColorMap(
+      categoryList,
+      categoryColorMap,
+      classificationColors
+    )
+  ) {
     return categoryColorMap ?? null;
   }
 
@@ -2256,6 +2694,13 @@ function createTextOverlayLayers(
   const backgroundCategoryVector = textBackgroundConfig.categoryColumn
     ? textAttributeTable.getChild(textBackgroundConfig.categoryColumn)
     : null;
+  const backgroundStrokeValueVector = textBackgroundConfig.strokeValueColumn
+    ? textAttributeTable.getChild(textBackgroundConfig.strokeValueColumn)
+    : backgroundValueVector;
+  const backgroundStrokeCategoryVector =
+    textBackgroundConfig.strokeCategoryColumn
+      ? textAttributeTable.getChild(textBackgroundConfig.strokeCategoryColumn)
+      : backgroundCategoryVector;
   const backgroundCategoryColorMap = buildCategoryColorMapFromLabels(
     textBackgroundConfig.classification?.labels,
     textBackgroundConfig.classification?.colors
@@ -2294,8 +2739,45 @@ function createTextOverlayLayers(
   const backgroundBorderWidth = backgroundStrokeActive
     ? textBackgroundConfig.strokeWidth
     : 0;
+  const backgroundStrokeCategoryColorMap = buildCategoryColorMapFromLabels(
+    textBackgroundConfig.strokeClassification?.labels ??
+      textBackgroundConfig.classification?.labels,
+    textBackgroundConfig.strokeClassification?.colors
+  );
+  const backgroundBaseStrokeAccessor = backgroundStrokeActive
+    ? textBackgroundConfig.strokeMode === StrokeMode.CLASSES
+      ? createChoroplethTextColorAccessor(
+          backgroundStrokeValueVector,
+          textBackgroundConfig.strokeClassification?.breaks ??
+            textBackgroundConfig.classification?.breaks,
+          textBackgroundConfig.strokeClassification?.colors,
+          backgroundStrokeFallback,
+          textBackgroundConfig.strokeOpacity
+        )
+      : textBackgroundConfig.strokeMode === StrokeMode.CATEGORIES
+        ? createCategoricalAccessorFromMap(
+            backgroundStrokeCategoryVector,
+            backgroundStrokeCategoryColorMap,
+            backgroundStrokeFallback,
+            textBackgroundConfig.strokeOpacity
+          )
+        : null
+    : null;
+  const resolveBackgroundStrokeColor = (datum: TextLayerDatum): Color => {
+    if (datum.isMissingData) {
+      return TRANSPARENT_BACKGROUND_COLOR;
+    }
+    return typeof backgroundBaseStrokeAccessor === 'function'
+      ? backgroundBaseStrokeAccessor(datum)
+      : (backgroundBaseStrokeAccessor ?? TRANSPARENT_BACKGROUND_COLOR);
+  };
   const backgroundBorderColor = backgroundStrokeActive
-    ? withOpacity(backgroundStrokeFallback, textBackgroundConfig.strokeOpacity)
+    ? backgroundBaseStrokeAccessor
+      ? resolveBackgroundStrokeColor
+      : withOpacity(
+          backgroundStrokeFallback,
+          textBackgroundConfig.strokeOpacity
+        )
     : TRANSPARENT_BACKGROUND_COLOR;
   const sharedBackgroundPadding = backgroundEnabled
     ? TEXT_BACKGROUND_PADDING
@@ -2511,7 +2993,12 @@ function createTextOverlayLayers(
           getBorderColor: [
             textBackgroundConfig.strokeMode,
             textBackgroundConfig.strokeColor,
-            textBackgroundConfig.strokeOpacity
+            textBackgroundConfig.strokeOpacity,
+            textBackgroundConfig.valueColumn,
+            textBackgroundConfig.categoryColumn,
+            textBackgroundConfig.strokeClassification?.colors,
+            textBackgroundConfig.strokeClassification?.breaks,
+            textBackgroundConfig.strokeClassification?.labels
           ]
         }
       };
@@ -2684,7 +3171,12 @@ function createTextOverlayLayers(
             getBorderColor: [
               textBackgroundConfig.strokeMode,
               textBackgroundConfig.strokeColor,
-              textBackgroundConfig.strokeOpacity
+              textBackgroundConfig.strokeOpacity,
+              textBackgroundConfig.valueColumn,
+              textBackgroundConfig.categoryColumn,
+              textBackgroundConfig.strokeClassification?.colors,
+              textBackgroundConfig.strokeClassification?.breaks,
+              textBackgroundConfig.strokeClassification?.labels
             ]
           }
         }) as ThematicLayer
@@ -2752,19 +3244,21 @@ function createDotDensityLayers(
     alpha
   ];
 
-  let pointData: BinaryPointData | null = null;
-  try {
-    pointData = ctx.customProjection
-      ? parsePointDataWithProjection(jsTable, ctx.customProjection)
-      : parsePointData(jsTable);
-  } catch (error) {
-    logger.error(
-      'Failed to parse density points from Arrow table',
-      LogCategory.MAP,
-      error
-    );
-    return [];
-  }
+  const pointData = ((): BinaryPointData | null => {
+    try {
+      return ctx.customProjection
+        ? parsePointDataWithProjection(jsTable, ctx.customProjection)
+        : parsePointData(jsTable);
+    } catch (error) {
+      logger.error(
+        'Failed to parse density points from Arrow table',
+        LogCategory.MAP,
+        error
+      );
+      return null;
+    }
+  })();
+
   if (!pointData) return [];
 
   const densityLayer = new ScatterplotLayer({
@@ -2821,12 +3315,22 @@ export function createPointLayers(
   const pointValueColumn = pointConfig?.valueColumn;
   const pointCategoryColumn = pointConfig?.categoryColumn;
   const pointSizeColumn = pointConfig?.sizeColumn;
-  const pointStrokeColor =
-    typeof pointConfig?.strokeColor === 'string'
+  const pointStrokeValueColumn =
+    pointConfig?.strokeValueColumn ?? pointValueColumn;
+  const pointStrokeCategoryColumn =
+    pointConfig?.strokeCategoryColumn ?? pointCategoryColumn;
+  const pointStrokeColor = Array.isArray(pointConfig?.strokeColor)
+    ? hexToRgb(pointConfig.strokeColor[0] ?? '#000000')
+    : typeof pointConfig?.strokeColor === 'string'
       ? hexToRgb(pointConfig.strokeColor)
       : strokeColor;
   const pointStrokeWidth = pointConfig?.strokeWidth ?? strokeWidth;
   const pointStrokeOpacity = pointConfig?.strokeOpacity ?? rawStrokeOpacity;
+  const pointStrokeDashed = pointConfig?.strokeDashed ?? false;
+  const showPointStroke =
+    pointConfig?.strokeMode !== StrokeMode.NONE &&
+    pointStrokeOpacity > 0 &&
+    pointStrokeWidth > 0;
   const pointFillOpacity = pointConfig?.opacity ?? rawFillOpacity;
 
   // Density mode renders POINT geometries driven by the POLYGON primitive,
@@ -2856,6 +3360,7 @@ export function createPointLayers(
     viz && shouldApplyCategorical(viz, PrimitiveFilterType.POINT);
   const useChoropleth =
     viz && shouldApplyChoropleth(viz, PrimitiveFilterType.POINT);
+  const hideSymbolFill = shouldHideSymbolFill(viz);
   const { min: minValue, max: maxValue } = pointStatistics;
   const pointMissingColumn = resolvePointMissingColumn(
     viz,
@@ -2968,6 +3473,13 @@ export function createPointLayers(
               fillColor
             )
           : fillColor;
+    const pointStrokeColors = pointConfig?.strokeClassification?.colors;
+    const pointStrokeBreaks =
+      pointConfig?.strokeClassification?.breaks ?? pointClassification?.breaks;
+    const pointStrokeGeoJsonColorMap = buildCategoryColorMapFromLabels(
+      pointConfig?.strokeClassification?.labels ?? pointClassification?.labels,
+      pointConfig?.strokeClassification?.colors
+    );
 
     const geoJsonFillColor =
       hasHighlights && highlightedRowIds
@@ -2986,14 +3498,56 @@ export function createPointLayers(
             )
         : baseFillColor;
 
-    const geoJsonLineColor = hasHighlights
-      ? withGeoJsonRowHighlight(
-          pointStrokeColor,
-          pointStrokeOpacity,
-          HIGHLIGHT_DIMMING_FACTOR,
-          highlightedRowIds!
-        )
-      : withOpacity(pointStrokeColor, pointStrokeOpacity);
+    const baseGeoJsonLineColor =
+      pointConfig?.strokeMode === StrokeMode.CLASSES &&
+      pointStrokeValueColumn &&
+      pointStrokeBreaks &&
+      pointStrokeColors?.length
+        ? (feature: { properties?: Record<string, unknown> }) =>
+            withOpacity(
+              createGeoJsonChoroplethColorAccessor(
+                pointStrokeValueColumn,
+                pointStrokeBreaks,
+                pointStrokeColors,
+                pointStrokeColor,
+                missingPointColor,
+                showMissingPoints
+              )(feature),
+              pointStrokeOpacity
+            ) as [number, number, number, number]
+        : pointConfig?.strokeMode === StrokeMode.CATEGORIES &&
+            pointStrokeCategoryColumn &&
+            pointStrokeColors?.length
+          ? (feature: { properties?: Record<string, unknown> }) =>
+              withOpacity(
+                createGeoJsonCategoricalColorAccessor(
+                  pointStrokeCategoryColumn,
+                  pointStrokeGeoJsonColorMap,
+                  pointStrokeColor,
+                  missingPointColor,
+                  showMissingPoints
+                )(feature),
+                pointStrokeOpacity
+              ) as [number, number, number, number]
+          : null;
+
+    const geoJsonLineColor =
+      hasHighlights && highlightedRowIds
+        ? baseGeoJsonLineColor
+          ? withGeoJsonRowHighlightAccessor(
+              baseGeoJsonLineColor,
+              pointStrokeOpacity,
+              HIGHLIGHT_DIMMING_FACTOR,
+              highlightedRowIds
+            )
+          : withGeoJsonRowHighlight(
+              pointStrokeColor,
+              pointStrokeOpacity,
+              HIGHLIGHT_DIMMING_FACTOR,
+              highlightedRowIds
+            )
+        : (baseGeoJsonLineColor ??
+          withOpacity(pointStrokeColor, pointStrokeOpacity));
 
     const geoJsonRadius =
       useClassedSymbols && viz
@@ -3024,7 +3578,10 @@ export function createPointLayers(
         ? isMissingThematicValue(feature.properties?.[pointMissingColumn])
         : false;
 
-    if (pointShape !== ShapeType.CIRCLE) {
+    if (
+      pointShape !== ShapeType.CIRCLE ||
+      (pointStrokeDashed && showPointStroke)
+    ) {
       return [
         new GeoJsonLayer({
           id: layerId,
@@ -3038,19 +3595,24 @@ export function createPointLayers(
                     missingPointColor,
                     hasHighlights ? 1 : pointFillOpacity
                   )
-                : resolveGeoJsonLayerColor(
-                    geoJsonFillColor,
-                    feature,
-                    hasHighlights ? 1 : pointFillOpacity
-                  ),
+                : hideSymbolFill
+                  ? [0, 0, 0, 0]
+                  : resolveGeoJsonLayerColor(
+                      geoJsonFillColor,
+                      feature,
+                      hasHighlights ? 1 : pointFillOpacity
+                    ),
               isMissingGeoJsonPoint(feature) && !showMissingPoints
                 ? [0, 0, 0, 0]
-                : resolveGeoJsonLayerColor(
-                    geoJsonLineColor,
-                    feature,
-                    pointStrokeOpacity
-                  ),
-              pointStrokeWidth / 3
+                : !showPointStroke
+                  ? [0, 0, 0, 0]
+                  : resolveGeoJsonLayerColor(
+                      geoJsonLineColor,
+                      feature,
+                      pointStrokeOpacity
+                    ),
+              showPointStroke ? pointStrokeWidth / 3 : 0,
+              showPointStroke && pointStrokeDashed
             ),
           getIconSize: (feature) => {
             if (isMissingGeoJsonPoint(feature)) {
@@ -3086,14 +3648,23 @@ export function createPointLayers(
               pointClassification?.labels,
               fillColor,
               pointStrokeColor,
+              pointStrokeValueColumn,
+              pointStrokeCategoryColumn,
+              showPointStroke,
+              pointConfig?.strokeClassification?.breaks,
+              pointConfig?.strokeClassification?.colors,
+              pointConfig?.strokeClassification?.labels,
+              pointConfig?.strokeClassification?.disabledLabels,
               pointFillOpacity,
               pointStrokeOpacity,
               pointStrokeWidth,
+              pointStrokeDashed,
               pointMissingColumn,
               pointConfig?.missingData?.show,
               pointConfig?.missingData?.color,
               pointConfig?.missingData?.size,
               pointConfig?.missingData?.shape,
+              hideSymbolFill,
               hlVersion
             ],
             getIconSize: [
@@ -3121,8 +3692,8 @@ export function createPointLayers(
         id: layerId,
         data: filteredGeoJsonData,
         pointType: 'circle',
-        filled: true,
-        stroked: true,
+        filled: !hideSymbolFill,
+        stroked: showPointStroke,
         getFillColor: (feature: { properties?: Record<string, unknown> }) => {
           if (isMissingGeoJsonPoint(feature)) {
             return showMissingPoints
@@ -3142,6 +3713,10 @@ export function createPointLayers(
             return [0, 0, 0, 0];
           }
 
+          if (!showPointStroke) {
+            return [0, 0, 0, 0];
+          }
+
           return typeof geoJsonLineColor === 'function'
             ? geoJsonLineColor(feature)
             : geoJsonLineColor;
@@ -3157,7 +3732,7 @@ export function createPointLayers(
         },
         pointRadiusUnits: 'pixels',
         lineWidthUnits: 'pixels',
-        getLineWidth: pointStrokeWidth / 3,
+        getLineWidth: showPointStroke ? pointStrokeWidth / 3 : 0,
         opacity: hasHighlights ? 1 : pointFillOpacity,
         pickable: true,
         ...resolveHoverHighlightProps(),
@@ -3195,6 +3770,13 @@ export function createPointLayers(
           getLineColor: [
             pointStrokeColor,
             pointStrokeOpacity,
+            pointStrokeValueColumn,
+            pointStrokeCategoryColumn,
+            showPointStroke,
+            pointConfig?.strokeClassification?.breaks,
+            pointConfig?.strokeClassification?.colors,
+            pointConfig?.strokeClassification?.labels,
+            pointConfig?.strokeClassification?.disabledLabels,
             pointMissingColumn,
             pointConfig?.missingData?.show,
             hlVersion
@@ -3231,7 +3813,10 @@ export function createPointLayers(
       : useCategoricalColor && viz
         ? createCategoricalColorAccessor(
             pointCategoryColumn!,
-            effectiveCategoryColorMap
+            effectiveCategoryColorMap,
+            HIGHLIGHT_FILL_COLOR,
+            true,
+            pointClassification?.disabledLabels ?? []
           )
         : null;
 
@@ -3269,8 +3854,20 @@ export function createPointLayers(
     ? pointColorAttr(pointData, ctxRowAccessor(ctx, jsTable, fillColorAccessor))
     : null;
 
+  const strokeClassificationAccessor = createStrokeClassificationAccessor({
+    strokeMode: pointConfig?.strokeMode ?? 'unique',
+    strokeClassification: pointConfig?.strokeClassification,
+    valueColumn: pointStrokeValueColumn,
+    categoryColumn: pointStrokeCategoryColumn,
+    fallbackLabels: pointClassification?.labels,
+    fallbackBreaks: pointClassification?.breaks,
+    missingColor: missingPointColor,
+    showMissing: showMissingPoints,
+    hexToRgb
+  });
+
   const lineColorAccessor =
-    pointMissingColumn || hasHighlights
+    strokeClassificationAccessor || pointMissingColumn || hasHighlights
       ? (row: DeckDataRow): [number, number, number, number] => {
           if (
             pointMissingColumn &&
@@ -3278,6 +3875,28 @@ export function createPointLayers(
             !showMissingPoints
           ) {
             return [0, 0, 0, 0];
+          }
+
+          if (!showPointStroke) {
+            return [0, 0, 0, 0];
+          }
+
+          if (strokeClassificationAccessor) {
+            const [r, g, b] = strokeClassificationAccessor(row);
+            const alpha = Math.round(
+              Math.min(
+                Math.max(
+                  resolveHighlightedOpacityForRow(
+                    row,
+                    pointStrokeOpacity,
+                    highlightedRowIds
+                  ),
+                  0
+                ),
+                1
+              ) * 255
+            );
+            return [r, g, b, alpha];
           }
 
           return toMutableRgba(
@@ -3340,11 +3959,7 @@ export function createPointLayers(
     : null;
 
   const scatterProps = createScatterplotLayerProps(pointData);
-  const scatterBinaryData = scatterProps.data as {
-    attributes: Record<string, unknown>;
-    khartisSourceTable?: ArrowTable;
-    featureIds?: Uint32Array;
-  };
+  const scatterBinaryData = cloneScatterBinaryData(scatterProps);
   attachBinaryPickingMetadata(scatterBinaryData, jsTable, pointData, ctx);
   if (fillColorBinAttr) {
     scatterBinaryData.attributes.getFillColor = fillColorBinAttr;
@@ -3356,6 +3971,136 @@ export function createPointLayers(
     scatterBinaryData.attributes.getRadius = radiusBinAttr;
   }
 
+  const categoryShapeMode =
+    pointConfig?.categoryShape ?? CategoryShapeMode.UNIQUE;
+  const useCategoryShape =
+    pointConfig?.mode === SymbolMode.CATEGORIES &&
+    categoryShapeMode !== CategoryShapeMode.UNIQUE &&
+    !!pointCategoryColumn;
+
+  const shapeOrdinal =
+    SHAPE_ORDINAL[pointShape] ?? SHAPE_ORDINAL[ShapeType.CIRCLE];
+  const missingShapeOrdinal =
+    SHAPE_ORDINAL[missingPointShape] ?? SHAPE_ORDINAL[ShapeType.CIRCLE];
+
+  const orderedCategoryLabels = (() => {
+    if (!useCategoryShape || !pointCategoryColumn) return null;
+    const categoryVector = jsTable.getChild(pointCategoryColumn);
+    if (!categoryVector) return null;
+    const labels = pointClassification?.labels;
+    if (labels && labels.length > 0) return labels;
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (let i = 0; i < jsTable.numRows; i += 1) {
+      const raw = categoryVector.get(i);
+      if (raw === null || raw === undefined) continue;
+      const key = String(raw);
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push(key);
+      }
+    }
+    return out;
+  })();
+
+  const categoryShapeMap = (() => {
+    if (!useCategoryShape || !orderedCategoryLabels) return null;
+    const userShapes = pointClassification?.categoryShapes;
+    const useUserShapes =
+      categoryShapeMode === CategoryShapeMode.DIFFERENT &&
+      Array.isArray(userShapes) &&
+      userShapes.length > 0;
+    const map = new Map<string, number>();
+    for (let i = 0; i < orderedCategoryLabels.length; i += 1) {
+      const shape = useUserShapes
+        ? (userShapes![i] ??
+          CATEGORY_SHAPE_CYCLE[i % CATEGORY_SHAPE_CYCLE.length] ??
+          ShapeType.CIRCLE)
+        : categoryShapeMode === CategoryShapeMode.ORDERED
+          ? pointShape
+          : (CATEGORY_SHAPE_CYCLE[i % CATEGORY_SHAPE_CYCLE.length] ??
+            ShapeType.CIRCLE);
+      map.set(orderedCategoryLabels[i], SHAPE_ORDINAL[shape]);
+    }
+    return map;
+  })();
+
+  const categoryRankRadiusMap = (() => {
+    if (
+      !useCategoryShape ||
+      categoryShapeMode !== CategoryShapeMode.ORDERED ||
+      !orderedCategoryLabels ||
+      orderedCategoryLabels.length === 0
+    ) {
+      return null;
+    }
+    const total = orderedCategoryLabels.length;
+    const rMin = Math.max(1, minPointRadius);
+    const rMax = Math.max(rMin, maxPointRadius);
+    const map = new Map<string, number>();
+    for (let i = 0; i < total; i += 1) {
+      const t = total === 1 ? 0 : i / (total - 1);
+      map.set(orderedCategoryLabels[i], rMin + t * (rMax - rMin));
+    }
+    return map;
+  })();
+
+  if (useCategoryShape && categoryShapeMap && pointCategoryColumn) {
+    const featureIds = scatterBinaryData.featureIds;
+    const categoryVector = jsTable.getChild(pointCategoryColumn);
+    const length = featureIds ? featureIds.length : jsTable.numRows;
+    const shapeArr = new Float32Array(length);
+    for (let i = 0; i < length; i += 1) {
+      const rowIdx = featureIds ? featureIds[i] : i;
+      if (pointMissingColumn) {
+        const row = jsTable.get(rowIdx) as DeckDataRow | null;
+        if (row && isMissingThematicValue(row[pointMissingColumn])) {
+          shapeArr[i] = missingShapeOrdinal;
+          continue;
+        }
+      }
+      const raw = categoryVector?.get(rowIdx);
+      if (raw !== null && raw !== undefined) {
+        const key = String(raw);
+        const mapped = categoryShapeMap.get(key);
+        if (mapped !== undefined) {
+          shapeArr[i] = mapped;
+          continue;
+        }
+      }
+      shapeArr[i] = shapeOrdinal;
+    }
+    scatterBinaryData.attributes.getShape = { value: shapeArr, size: 1 };
+  }
+
+  if (categoryRankRadiusMap && pointCategoryColumn) {
+    const featureIds = scatterBinaryData.featureIds;
+    const categoryVector = jsTable.getChild(pointCategoryColumn);
+    const length = featureIds ? featureIds.length : jsTable.numRows;
+    const radiusArr = new Float32Array(length);
+    for (let i = 0; i < length; i += 1) {
+      const rowIdx = featureIds ? featureIds[i] : i;
+      if (pointMissingColumn) {
+        const row = jsTable.get(rowIdx) as DeckDataRow | null;
+        if (row && isMissingThematicValue(row[pointMissingColumn])) {
+          radiusArr[i] = showMissingPoints ? missingPointRadius : 0;
+          continue;
+        }
+      }
+      const raw = categoryVector?.get(rowIdx);
+      if (raw !== null && raw !== undefined) {
+        const key = String(raw);
+        const mapped = categoryRankRadiusMap.get(key);
+        if (mapped !== undefined) {
+          radiusArr[i] = mapped;
+          continue;
+        }
+      }
+      radiusArr[i] = uniquePointRadius;
+    }
+    scatterBinaryData.attributes.getRadius = { value: radiusArr, size: 1 };
+  }
+
   const yearFilterProps = ctx.yearFilter
     ? buildYearFilterProps(
         pointData,
@@ -3365,74 +4110,105 @@ export function createPointLayers(
       )
     : null;
 
-  return [
-    new ScatterplotLayer({
-      id: layerId,
-      ...(scatterProps as unknown as Record<string, unknown>),
-      stroked: true,
-      ...(!fillColorBinAttr && {
-        getFillColor: withOpacity(
-          fillColor,
-          hasHighlights ? 1 : pointFillOpacity
-        )
-      }),
-      ...(!lineColorBinAttr && {
-        getLineColor: withOpacity(pointStrokeColor, pointStrokeOpacity)
-      }),
-      opacity: hasHighlights ? 1 : pointFillOpacity,
-      ...(!radiusBinAttr && { getRadius: uniquePointRadius }),
-      radiusScale: 1,
-      radiusUnits: 'pixels',
-      lineWidthUnits: 'pixels',
-      lineWidthScale: pointStrokeWidth / 3,
-      pickable: true,
-      ...resolveHoverHighlightProps(),
-      ...(modelMatrix && { modelMatrix }),
-      ...(beforeId && { beforeId }),
-      ...yearFilterProps,
-      updateTriggers: {
-        getFillColor: [
-          useChoropleth,
-          pointValueColumn,
-          pointClassification?.breaks,
-          pointClassification?.colors,
-          useCategoricalColor,
-          pointCategoryColumn,
-          pointCategoryColorMap,
-          pointClassification?.labels,
-          fillColor,
-          pointMissingColumn,
-          pointConfig?.missingData?.show,
-          pointConfig?.missingData?.color,
-          hlVersion
-        ],
-        getRadius: [
-          usesVariablePointSize,
-          pointSizeColumn,
-          pointValueColumn,
-          minValue,
-          maxValue,
-          pointClassification?.breaks,
-          pointConfig?.size,
-          pointConfig?.minSize,
-          pointConfig?.maxSize,
-          pointConfig?.sizeScale,
-          pointMissingColumn,
-          pointConfig?.missingData?.show,
-          pointConfig?.missingData?.size
-        ],
-        getLineColor: [
-          pointStrokeColor,
-          pointStrokeOpacity,
-          pointMissingColumn,
-          pointConfig?.missingData?.show,
-          hlVersion
-        ]
-        // Note: getFilterValue is a binary attribute (baked once via filterValueAttr),
-        // not a per-frame accessor. Year changes are handled by filterRange prop alone.
-      }
-    })
-  ];
+  const useMultiShapeLayer =
+    useCategoryShape || (pointStrokeDashed && showPointStroke);
+  const baseLayerProps = {
+    id: layerId,
+    ...(scatterProps as unknown as Record<string, unknown>),
+    stroked: showPointStroke,
+    filled: !hideSymbolFill,
+    ...(!fillColorBinAttr && {
+      getFillColor: withOpacity(fillColor, hasHighlights ? 1 : pointFillOpacity)
+    }),
+    ...(!lineColorBinAttr && {
+      getLineColor: showPointStroke
+        ? withOpacity(pointStrokeColor, pointStrokeOpacity)
+        : ([0, 0, 0, 0] as [number, number, number, number])
+    }),
+    opacity: hasHighlights ? 1 : pointFillOpacity,
+    ...(!radiusBinAttr && { getRadius: uniquePointRadius }),
+    radiusScale: 1,
+    radiusUnits: 'pixels' as const,
+    lineWidthUnits: 'pixels' as const,
+    lineWidthScale: showPointStroke ? pointStrokeWidth / 3 : 0,
+    pickable: true,
+    ...resolveHoverHighlightProps(),
+    ...(modelMatrix && { modelMatrix }),
+    ...(beforeId && { beforeId }),
+    ...yearFilterProps,
+    updateTriggers: {
+      getFillColor: [
+        useChoropleth,
+        pointValueColumn,
+        pointClassification?.breaks,
+        pointClassification?.colors,
+        useCategoricalColor,
+        pointCategoryColumn,
+        pointCategoryColorMap,
+        pointClassification?.labels,
+        fillColor,
+        pointMissingColumn,
+        pointConfig?.missingData?.show,
+        pointConfig?.missingData?.color,
+        hideSymbolFill,
+        hlVersion
+      ],
+      getRadius: [
+        usesVariablePointSize,
+        pointSizeColumn,
+        pointValueColumn,
+        minValue,
+        maxValue,
+        pointClassification?.breaks,
+        pointConfig?.size,
+        pointConfig?.minSize,
+        pointConfig?.maxSize,
+        pointConfig?.sizeScale,
+        pointMissingColumn,
+        pointConfig?.missingData?.show,
+        pointConfig?.missingData?.size
+      ],
+      getLineColor: [
+        pointStrokeColor,
+        pointStrokeOpacity,
+        pointMissingColumn,
+        pointConfig?.missingData?.show,
+        pointStrokeValueColumn,
+        pointStrokeCategoryColumn,
+        pointConfig?.strokeMode,
+        showPointStroke,
+        pointConfig?.strokeClassification?.colors,
+        pointConfig?.strokeClassification?.breaks,
+        pointConfig?.strokeClassification?.labels,
+        pointConfig?.strokeClassification?.disabledLabels,
+        hlVersion
+      ],
+      getShape: [
+        shapeOrdinal,
+        missingShapeOrdinal,
+        useCategoryShape,
+        categoryShapeMode,
+        pointCategoryColumn,
+        pointClassification?.labels,
+        pointClassification?.categoryShapes
+      ]
+      // Note: getFilterValue is a binary attribute (baked once via filterValueAttr),
+      // not a per-frame accessor. Year changes are handled by filterRange prop alone.
+    }
+  };
+
+  if (useMultiShapeLayer) {
+    return [
+      new MultiShapeLayer({
+        ...baseLayerProps,
+        dashed: showPointStroke && pointStrokeDashed,
+        dashLength: DEFAULT_DASH_ARRAY[0],
+        gapLength: DEFAULT_DASH_ARRAY[1]
+      })
+    ];
+  }
+
+  return [new ScatterplotLayer(baseLayerProps)];
 }
 
 export function createLineLayers(
@@ -3545,7 +4321,10 @@ export function createLineLayers(
       useCategoricalColor && viz
         ? createCategoricalColorAccessor(
             lineCategoryColumn!,
-            effectiveCategoryColorMap
+            effectiveCategoryColorMap,
+            HIGHLIGHT_FILL_COLOR,
+            true,
+            lineClassification?.disabledLabels ?? []
           )
         : null;
 
@@ -3905,6 +4684,10 @@ export function createPolygonLayers(
   const polygonConfig = viz ? getPolygonPrimitive(viz) : undefined;
   const polygonValueColumn = polygonConfig?.valueColumn;
   const polygonCategoryColumn = polygonConfig?.categoryColumn;
+  const polygonStrokeValueColumn =
+    polygonConfig?.strokeValueColumn ?? polygonValueColumn;
+  const polygonStrokeCategoryColumn =
+    polygonConfig?.strokeCategoryColumn ?? polygonCategoryColumn;
   const polygonClassification = viz
     ? (getPrimitiveClassification(viz, PrimitiveFilterType.POLYGON) ??
       viz.classification)
@@ -3913,8 +4696,9 @@ export function createPolygonLayers(
     polygonConfig?.fillColor,
     fillColor
   );
-  const polygonStrokeColor =
-    typeof polygonConfig?.strokeColor === 'string'
+  const polygonStrokeColor = Array.isArray(polygonConfig?.strokeColor)
+    ? hexToRgb(polygonConfig.strokeColor[0] ?? '#000000')
+    : typeof polygonConfig?.strokeColor === 'string'
       ? hexToRgb(polygonConfig.strokeColor)
       : strokeColor;
   const polygonFillOpacity = normalizeOpacity(
@@ -3940,6 +4724,59 @@ export function createPolygonLayers(
       polygonConfig,
       hexToRgb(DEFAULT_COLORS.missingData)
     );
+  const densityRequested =
+    polygonConfig?.fillMode === FillMode.DENSITY && Boolean(viz?.density);
+  const densityTable = ctx.densityTable;
+  const densityGeometryInfo = ctx.densityGeometryInfo;
+  const DEFAULT_PRIMITIVE_ORDER: PrimitiveFilter[] = [
+    PrimitiveFilterType.POINT,
+    PrimitiveFilterType.LINE,
+    PrimitiveFilterType.POLYGON
+  ];
+  const primitiveFilters = getEnabledPrimitiveFilters(ctx.viz);
+  const primitiveOrder = ctx.primitiveOrder ?? DEFAULT_PRIMITIVE_ORDER;
+  const polygonPrimitiveAllowed =
+    !ctx.viz || primitiveFilters.includes(PrimitiveFilterType.POLYGON);
+  const getOrderIndex = (primitive: PrimitiveFilter): number => {
+    const index = primitiveOrder.indexOf(primitive);
+    return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+  };
+
+  if (densityRequested) {
+    const densityLayers =
+      densityTable && densityGeometryInfo
+        ? createPointLayers(densityTable, densityGeometryInfo, ctx)
+        : [];
+    const pointLayers = createRepresentativePointSymbolLayers(jsTable, ctx);
+    const orderedLayers = [
+      ...(polygonPrimitiveAllowed
+        ? densityLayers.map((layer) => ({
+            primitive: PrimitiveFilterType.POLYGON as PrimitiveFilter,
+            layer
+          }))
+        : []),
+      ...pointLayers.map((layer) => ({
+        primitive: PrimitiveFilterType.POINT as PrimitiveFilter,
+        layer
+      }))
+    ].sort(
+      (left, right) =>
+        getOrderIndex(right.primitive) - getOrderIndex(left.primitive)
+    );
+    const layers = orderedLayers.map((entry) => entry.layer);
+    const selectionOverlay = createHighlightedPolygonOverlay(
+      layerId,
+      jsTable,
+      geoColumn,
+      polyHighlightedRowIds,
+      hlVersion,
+      ctx
+    );
+    if (selectionOverlay) {
+      layers.push(selectionOverlay);
+    }
+    return layers;
+  }
 
   if (!isNativeGeoArrow && !isGeoJsonEncoded && !isWkbEncoded) {
     return [];
@@ -3979,7 +4816,8 @@ export function createPolygonLayers(
               polygonCategoryColumn!,
               effectiveCategoryColorMap,
               polygonMissingColor,
-              showMissingPolygons
+              showMissingPolygons,
+              polygonClassification?.disabledLabels ?? []
             )
           : null;
 
@@ -4010,14 +4848,77 @@ export function createPolygonLayers(
           )
         : null;
 
-      const strokeColorFn = hasPolyHighlights
-        ? withRowHighlight(
-            polygonStrokeColor,
-            polygonStrokeOpacity,
-            HIGHLIGHT_DIMMING_FACTOR,
-            polyHighlightedRowIds!
-          )
-        : null;
+      const polygonStrokeMode = polygonConfig?.strokeMode ?? StrokeMode.UNIQUE;
+      const polygonStrokeClassification = polygonConfig?.strokeClassification;
+      const strokeColorsArray =
+        polygonStrokeClassification?.colors &&
+        polygonStrokeClassification.colors.length > 0
+          ? polygonStrokeClassification.colors
+          : Array.isArray(polygonConfig?.strokeColor)
+            ? polygonConfig.strokeColor
+            : undefined;
+      const strokeChoroplethAccessor =
+        polygonStrokeMode === StrokeMode.CLASSES &&
+        strokeColorsArray &&
+        polygonStrokeValueColumn &&
+        (polygonStrokeClassification?.breaks ??
+          polygonClassification?.breaks) &&
+        strokeColorsArray.length > 0
+          ? createChoroplethColorAccessor(
+              polygonStrokeValueColumn,
+              polygonStrokeClassification?.breaks ??
+                polygonClassification!.breaks!,
+              strokeColorsArray,
+              polygonMissingColor,
+              showMissingPolygons
+            )
+          : null;
+      const strokeCategoricalAccessor =
+        polygonStrokeMode === StrokeMode.CATEGORIES &&
+        strokeColorsArray &&
+        polygonStrokeCategoryColumn &&
+        strokeColorsArray.length > 0
+          ? (() => {
+              const labels =
+                polygonStrokeClassification?.labels ??
+                polygonClassification?.labels ??
+                [];
+              if (labels.length === 0) return null;
+              const map = new Map<string, RGBColor>();
+              labels.forEach((label, i) => {
+                const hex =
+                  strokeColorsArray[i] ??
+                  strokeColorsArray[strokeColorsArray.length - 1];
+                map.set(String(label), hexToRgb(hex));
+              });
+              return createCategoricalColorAccessor(
+                polygonStrokeCategoryColumn,
+                map,
+                polygonMissingColor,
+                showMissingPolygons,
+                polygonStrokeClassification?.disabledLabels ?? []
+              );
+            })()
+          : null;
+      const baseStrokeAccessor =
+        strokeChoroplethAccessor ?? strokeCategoricalAccessor;
+
+      const strokeColorFn =
+        hasPolyHighlights && polyHighlightedRowIds
+          ? baseStrokeAccessor
+            ? withRowHighlightAccessor(
+                baseStrokeAccessor,
+                polygonStrokeOpacity,
+                HIGHLIGHT_DIMMING_FACTOR,
+                polyHighlightedRowIds
+              )
+            : withRowHighlight(
+                polygonStrokeColor,
+                polygonStrokeOpacity,
+                HIGHLIGHT_DIMMING_FACTOR,
+                polyHighlightedRowIds
+              )
+          : baseStrokeAccessor;
 
       const strokeColorBinaryAttr = strokeColorFn
         ? pathColorAttr(
@@ -4149,51 +5050,8 @@ export function createPolygonLayers(
         });
       }
 
-      const pointLayers = createRepresentativePointSymbolLayers(jsTable, ctx);
-
-      // Determine layer order and stroke visibility from context
-      const DEFAULT_PRIMITIVE_ORDER: PrimitiveFilter[] = [
-        PrimitiveFilterType.POINT,
-        PrimitiveFilterType.LINE,
-        PrimitiveFilterType.POLYGON
-      ];
-      const primitiveFilters = getEnabledPrimitiveFilters(ctx.viz);
-      const primitiveOrder = ctx.primitiveOrder ?? DEFAULT_PRIMITIVE_ORDER;
-      const polygonPrimitiveAllowed =
-        !ctx.viz || primitiveFilters.includes(PrimitiveFilterType.POLYGON);
-      const showFill =
-        polygonPrimitiveAllowed &&
-        polygonConfig?.fillMode !== FillMode.NONE &&
-        polygonFillOpacity > 0;
-      const showStroke =
-        polygonPrimitiveAllowed &&
-        polygonConfig?.strokeMode !== StrokeMode.NONE &&
-        polygonStrokeOpacity > 0 &&
-        polygonStrokeWidth > 0;
-      const getOrderIndex = (primitive: PrimitiveFilter): number => {
-        const index = primitiveOrder.indexOf(primitive);
-        return index === -1 ? Number.MAX_SAFE_INTEGER : index;
-      };
-      const orderedLayers = [
-        ...(showFill
-          ? [{ primitive: PrimitiveFilterType.POLYGON, layer: fillLayer }]
-          : []),
-        ...(showStroke
-          ? [{ primitive: PrimitiveFilterType.LINE, layer: strokeLayer }]
-          : []),
-        ...pointLayers.map((layer) => ({
-          primitive: PrimitiveFilterType.POINT as PrimitiveFilter,
-          layer
-        }))
-      ].sort(
-        (left, right) =>
-          getOrderIndex(right.primitive) - getOrderIndex(left.primitive)
-      );
-
-      layers.push(...orderedLayers.map((entry) => entry.layer));
-
-      // Pattern overlay must follow the same projection/filter visibility as the fill.
-      if (patternProps && showFill) {
+      let patternLayer: Layer<DeckDataRow> | null = null;
+      if (patternProps) {
         let patternGeojson: FeatureCollection | null = null;
         try {
           const rawPatternGeojson = getCachedGeoJSON(jsTable, geoColumn);
@@ -4208,36 +5066,50 @@ export function createPolygonLayers(
             );
           }
         } catch {
-          // Silently skip pattern overlay if GeoJSON conversion fails
+          patternGeojson = null;
         }
+
         if (patternGeojson && patternGeojson.features.length > 0) {
-          layers.push(
-            new GeoJsonLayer({
-              id: `${layerId}-pattern-${polygonClassification?.patternId ?? 'none'}`,
-              data: patternGeojson,
-              getFillColor: [0, 0, 0, 255],
-              stroked: false,
-              opacity: 0.6,
-              pickable: false,
-              extensions: patternProps.extensions,
-              fillPatternAtlas: patternProps.fillPatternAtlas,
-              fillPatternMapping: patternProps.fillPatternMapping,
-              fillPatternMask: true,
-              getFillPattern: patternProps.getFillPattern,
-              getFillPatternScale: patternProps.getFillPatternScale,
-              getFillPatternRotation: patternProps.getFillPatternRotation,
-              ...(modelMatrix && { modelMatrix }),
-              ...(beforeId && { beforeId }),
-              updateTriggers: {
-                getFillPattern: [polygonClassification?.patternId],
-                getFillPatternScale: [polygonClassification?.patternId],
-                getFillPatternRotation: [polygonClassification?.patternId]
-              },
-              dataComparator: (newData, oldData) => newData === oldData
-            })
+          patternLayer = createPolygonPatternOverlayLayer(
+            layerId,
+            polygonClassification?.patternId,
+            patternGeojson,
+            patternProps,
+            ctx
           );
         }
       }
+
+      const pointLayers = createRepresentativePointSymbolLayers(jsTable, ctx);
+      const showFill =
+        polygonPrimitiveAllowed &&
+        polygonConfig?.fillMode !== FillMode.NONE &&
+        polygonFillOpacity > 0;
+      const showStroke =
+        polygonPrimitiveAllowed &&
+        polygonConfig?.strokeMode !== StrokeMode.NONE &&
+        polygonStrokeOpacity > 0 &&
+        polygonStrokeWidth > 0;
+      const orderedLayers = [
+        ...(showFill
+          ? [{ primitive: PrimitiveFilterType.POLYGON, layer: fillLayer }]
+          : []),
+        ...(showFill && patternLayer
+          ? [{ primitive: PrimitiveFilterType.POLYGON, layer: patternLayer }]
+          : []),
+        ...(showStroke
+          ? [{ primitive: PrimitiveFilterType.LINE, layer: strokeLayer }]
+          : []),
+        ...pointLayers.map((layer) => ({
+          primitive: PrimitiveFilterType.POINT as PrimitiveFilter,
+          layer
+        }))
+      ].sort(
+        (left, right) =>
+          getOrderIndex(right.primitive) - getOrderIndex(left.primitive)
+      );
+
+      layers.push(...orderedLayers.map((entry) => entry.layer));
 
       const selectionOverlay = createHighlightedPolygonOverlay(
         layerId,
@@ -4347,15 +5219,47 @@ export function createPolygonLayers(
           polygonFillColor[2],
           255
         ] as [number, number, number, number]));
-
-  const geoJsonStrokeColor = hasPolyHighlights
-    ? withGeoJsonRowHighlight(
-        polygonStrokeColor,
-        polygonStrokeOpacity,
-        HIGHLIGHT_DIMMING_FACTOR,
-        polyHighlightedRowIds!
-      )
-    : withOpacity(polygonStrokeColor, polygonStrokeOpacity);
+  const polygonStrokeColors = polygonConfig?.strokeClassification?.colors;
+  const polygonStrokeBreaks =
+    polygonConfig?.strokeClassification?.breaks ??
+    polygonClassification?.breaks;
+  const polygonStrokeGeoJsonColorMap = buildCategoryColorMapFromLabels(
+    polygonConfig?.strokeClassification?.labels ??
+      polygonClassification?.labels,
+    polygonConfig?.strokeClassification?.colors
+  );
+  const baseGeoJsonStrokeColor =
+    polygonConfig?.strokeMode === StrokeMode.CLASSES &&
+    polygonStrokeValueColumn &&
+    polygonStrokeBreaks &&
+    polygonStrokeColors?.length
+      ? (feature: { properties?: Record<string, unknown> }) =>
+          withOpacity(
+            createGeoJsonChoroplethColorAccessor(
+              polygonStrokeValueColumn,
+              polygonStrokeBreaks,
+              polygonStrokeColors,
+              polygonStrokeColor,
+              polygonMissingColor,
+              showMissingPolygons
+            )(feature),
+            polygonStrokeOpacity
+          ) as [number, number, number, number]
+      : polygonConfig?.strokeMode === StrokeMode.CATEGORIES &&
+          polygonStrokeCategoryColumn &&
+          polygonStrokeColors?.length
+        ? (feature: { properties?: Record<string, unknown> }) =>
+            withOpacity(
+              createGeoJsonCategoricalColorAccessor(
+                polygonStrokeCategoryColumn,
+                polygonStrokeGeoJsonColorMap,
+                polygonStrokeColor,
+                polygonMissingColor,
+                showMissingPolygons
+              )(feature),
+              polygonStrokeOpacity
+            ) as [number, number, number, number]
+        : null;
 
   const showGeoJsonFill =
     polygonConfig?.enabled &&
@@ -4366,87 +5270,181 @@ export function createPolygonLayers(
     polygonConfig.strokeMode !== StrokeMode.NONE &&
     polygonStrokeOpacity > 0 &&
     polygonStrokeWidth > 0;
+  const geoJsonStrokeColor = showGeoJsonStroke
+    ? hasPolyHighlights && polyHighlightedRowIds
+      ? baseGeoJsonStrokeColor
+        ? withGeoJsonRowHighlightAccessor(
+            baseGeoJsonStrokeColor,
+            polygonStrokeOpacity,
+            HIGHLIGHT_DIMMING_FACTOR,
+            polyHighlightedRowIds
+          )
+        : withGeoJsonRowHighlight(
+            polygonStrokeColor,
+            polygonStrokeOpacity,
+            HIGHLIGHT_DIMMING_FACTOR,
+            polyHighlightedRowIds
+          )
+      : (baseGeoJsonStrokeColor ??
+        withOpacity(polygonStrokeColor, polygonStrokeOpacity))
+    : ([0, 0, 0, 0] as [number, number, number, number]);
   const filteredPolygonGeojsonData = filterGeoJsonByYear(
     geojsonData,
     ctx.yearFilter
   );
 
-  const geoJsonLayers: Layer<DeckDataRow>[] = [
-    new GeoJsonLayer({
-      id: layerId,
-      data: filteredPolygonGeojsonData,
-      getFillColor: geoJsonFillColor,
-      getLineColor: geoJsonStrokeColor,
-      filled: showGeoJsonFill,
-      stroked: showGeoJsonStroke,
-      extensions: showGeoJsonStroke && strokeDashed ? [DASH_EXTENSION] : [],
-      getDashArray: strokeDashArray,
-      dashJustified: true,
-      opacity: hasPolyHighlights ? 1 : polygonFillOpacity,
-      lineWidthUnits: 'pixels',
-      lineWidthScale: polygonStrokeWidth / 4,
-      lineWidthMinPixels: 0.5,
-      pickable: true,
-      ...resolveHoverHighlightProps(),
-      parameters: {
-        depthCompare: 'always' as const,
-        stencilCompare: 'always' as const
-      },
-      ...(modelMatrix && { modelMatrix }),
-      ...(beforeId && { beforeId }),
-      updateTriggers: {
-        getFillColor: [
-          useChoropleth,
-          useCategoricalColor,
-          polygonValueColumn,
-          polygonCategoryColumn,
-          polygonClassification?.breaks,
-          polygonClassification?.colors,
-          polygonCategoryColorMap,
-          polygonClassification?.labels,
-          polygonConfig?.missingData?.color ?? DEFAULT_COLORS.missingData,
-          showMissingPolygons,
-          polygonFillColor,
-          hlVersion
-        ],
-        getLineColor: [polygonStrokeColor, polygonStrokeOpacity, hlVersion],
-        getDashArray: [strokeDashed]
-      },
-      dataComparator: (newData, oldData) => newData === oldData
-    })
-  ];
-
-  // Pattern overlay must respect the same filtered/projected fill footprint.
-  if (
+  const patternLayer =
     patternProps &&
     showGeoJsonFill &&
     filteredPolygonGeojsonData.features.length > 0
-  ) {
-    geoJsonLayers.push(
+      ? createPolygonPatternOverlayLayer(
+          layerId,
+          polygonClassification?.patternId,
+          filteredPolygonGeojsonData,
+          patternProps,
+          ctx
+        )
+      : null;
+
+  const shouldSplitGeoJsonLayers = Boolean(patternLayer && showGeoJsonStroke);
+
+  let geoJsonLayers: Layer<DeckDataRow>[];
+  if (shouldSplitGeoJsonLayers && patternLayer) {
+    geoJsonLayers = [
       new GeoJsonLayer({
-        id: `${layerId}-pattern-${polygonClassification?.patternId ?? 'none'}`,
+        id: layerId,
         data: filteredPolygonGeojsonData,
-        getFillColor: [0, 0, 0, 255],
+        getFillColor: geoJsonFillColor,
+        filled: showGeoJsonFill,
         stroked: false,
-        opacity: 0.6,
-        pickable: false,
-        extensions: patternProps.extensions,
-        fillPatternAtlas: patternProps.fillPatternAtlas,
-        fillPatternMapping: patternProps.fillPatternMapping,
-        fillPatternMask: true,
-        getFillPattern: patternProps.getFillPattern,
-        getFillPatternScale: patternProps.getFillPatternScale,
-        getFillPatternRotation: patternProps.getFillPatternRotation,
+        opacity: hasPolyHighlights ? 1 : polygonFillOpacity,
+        pickable: true,
+        ...resolveHoverHighlightProps(),
+        parameters: {
+          depthCompare: 'always' as const,
+          stencilCompare: 'always' as const
+        },
         ...(modelMatrix && { modelMatrix }),
         ...(beforeId && { beforeId }),
         updateTriggers: {
-          getFillPattern: [polygonClassification?.patternId],
-          getFillPatternScale: [polygonClassification?.patternId],
-          getFillPatternRotation: [polygonClassification?.patternId]
+          getFillColor: [
+            useChoropleth,
+            useCategoricalColor,
+            polygonValueColumn,
+            polygonCategoryColumn,
+            polygonClassification?.breaks,
+            polygonClassification?.colors,
+            polygonCategoryColorMap,
+            polygonClassification?.labels,
+            polygonConfig?.missingData?.color ?? DEFAULT_COLORS.missingData,
+            showMissingPolygons,
+            polygonFillColor,
+            hlVersion
+          ]
         },
         dataComparator: (newData, oldData) => newData === oldData
-      })
-    );
+      }),
+      patternLayer,
+      ...(showGeoJsonStroke
+        ? [
+            new GeoJsonLayer({
+              id: `${layerId}-stroke`,
+              data: filteredPolygonGeojsonData,
+              getLineColor: geoJsonStrokeColor,
+              filled: false,
+              stroked: true,
+              extensions: strokeDashed ? [DASH_EXTENSION] : [],
+              getDashArray: strokeDashArray,
+              dashJustified: true,
+              lineWidthUnits: 'pixels',
+              lineWidthScale: polygonStrokeWidth / 4,
+              lineWidthMinPixels: 0.5,
+              pickable: false,
+              parameters: {
+                depthCompare: 'always' as const,
+                stencilCompare: 'always' as const
+              },
+              ...(modelMatrix && { modelMatrix }),
+              ...(beforeId && { beforeId }),
+              updateTriggers: {
+                getLineColor: [
+                  polygonStrokeColor,
+                  polygonStrokeOpacity,
+                  polygonStrokeValueColumn,
+                  polygonStrokeCategoryColumn,
+                  polygonConfig?.strokeMode,
+                  polygonConfig?.strokeClassification?.colors,
+                  polygonConfig?.strokeClassification?.breaks,
+                  polygonConfig?.strokeClassification?.labels,
+                  polygonConfig?.strokeClassification?.disabledLabels,
+                  showGeoJsonStroke,
+                  hlVersion
+                ],
+                getDashArray: [strokeDashed]
+              },
+              dataComparator: (newData, oldData) => newData === oldData
+            })
+          ]
+        : [])
+    ];
+  } else {
+    geoJsonLayers = [
+      new GeoJsonLayer({
+        id: layerId,
+        data: filteredPolygonGeojsonData,
+        getFillColor: geoJsonFillColor,
+        getLineColor: geoJsonStrokeColor,
+        filled: showGeoJsonFill,
+        stroked: showGeoJsonStroke,
+        extensions: showGeoJsonStroke && strokeDashed ? [DASH_EXTENSION] : [],
+        getDashArray: showGeoJsonStroke ? strokeDashArray : [0, 0],
+        dashJustified: true,
+        opacity: hasPolyHighlights ? 1 : polygonFillOpacity,
+        lineWidthUnits: 'pixels',
+        lineWidthScale: showGeoJsonStroke ? polygonStrokeWidth / 4 : 0,
+        lineWidthMinPixels: showGeoJsonStroke ? 0.5 : 0,
+        pickable: true,
+        ...resolveHoverHighlightProps(),
+        parameters: {
+          depthCompare: 'always' as const,
+          stencilCompare: 'always' as const
+        },
+        ...(modelMatrix && { modelMatrix }),
+        ...(beforeId && { beforeId }),
+        updateTriggers: {
+          getFillColor: [
+            useChoropleth,
+            useCategoricalColor,
+            polygonValueColumn,
+            polygonCategoryColumn,
+            polygonClassification?.breaks,
+            polygonClassification?.colors,
+            polygonCategoryColorMap,
+            polygonClassification?.labels,
+            polygonConfig?.missingData?.color ?? DEFAULT_COLORS.missingData,
+            showMissingPolygons,
+            polygonFillColor,
+            hlVersion
+          ],
+          getLineColor: [
+            polygonStrokeColor,
+            polygonStrokeOpacity,
+            polygonStrokeValueColumn,
+            polygonStrokeCategoryColumn,
+            polygonConfig?.strokeMode,
+            polygonConfig?.strokeClassification?.colors,
+            polygonConfig?.strokeClassification?.breaks,
+            polygonConfig?.strokeClassification?.labels,
+            polygonConfig?.strokeClassification?.disabledLabels,
+            showGeoJsonStroke,
+            hlVersion
+          ],
+          getDashArray: [showGeoJsonStroke, strokeDashed]
+        },
+        dataComparator: (newData, oldData) => newData === oldData
+      }),
+      ...(patternLayer ? [patternLayer] : [])
+    ];
   }
 
   const selectionOverlay = createHighlightedPolygonOverlay(

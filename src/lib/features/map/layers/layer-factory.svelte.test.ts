@@ -1,17 +1,26 @@
-import { GeoJsonLayer } from '@deck.gl/layers';
+import { GeoJsonLayer, PathLayer, ScatterplotLayer } from '@deck.gl/layers';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
-import type { Feature, FeatureCollection, Polygon } from 'geojson';
+import type { Feature, FeatureCollection, Point, Polygon } from 'geojson';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ClassificationMethod,
   PrimitiveFilterType,
+  ScaleType,
   VisualizationType,
   type VisualizationConfig
 } from '$lib/features/commons/store/visualization.store.svelte';
 import {
+  CategoryShapeMode,
   FillMode,
+  ColorMode,
   MissingDataShape,
-  StrokeMode
+  ProportionalType,
+  ShapeType,
+  StrokeMode,
+  SymbolMode,
+  ThicknessMode
 } from '$lib/features/main-toolbar/constants';
 import type { GeometryInfo, LayerContext } from '../types';
 
@@ -20,7 +29,10 @@ const {
   createCompatibleSolidPolygonLayerPropsMock,
   createPathLayerPropsMock,
   createPolygonFillColorAttributeMock,
+  createScatterplotLayerPropsMock,
   parsePathsMock,
+  parsePointDataMock,
+  parsePointDataWithProjectionMock,
   parseSolidPolygonsMock,
   pathColorAttrMock,
   projectGeoJSONMock
@@ -44,7 +56,10 @@ const {
     createCompatibleSolidPolygonLayerPropsMock: vi.fn(),
     createPathLayerPropsMock: vi.fn(),
     createPolygonFillColorAttributeMock: vi.fn(),
+    createScatterplotLayerPropsMock: vi.fn(),
     parsePathsMock: vi.fn(),
+    parsePointDataMock: vi.fn(),
+    parsePointDataWithProjectionMock: vi.fn(),
     parseSolidPolygonsMock: vi.fn(),
     pathColorAttrMock: vi.fn(),
     projectGeoJSONMock: vi.fn()
@@ -59,7 +74,8 @@ vi.mock('geoarrow-deck-stream', async () => {
   return {
     ...actual,
     createPathLayerProps: createPathLayerPropsMock,
-    createPolygonFillColorAttribute: createPolygonFillColorAttributeMock
+    createPolygonFillColorAttribute: createPolygonFillColorAttributeMock,
+    createScatterplotLayerProps: createScatterplotLayerPropsMock
   };
 });
 
@@ -80,6 +96,8 @@ vi.mock('../utils/geoarrow-stream-bridge', async () => {
   return {
     ...actual,
     parsePaths: parsePathsMock,
+    parsePointData: parsePointDataMock,
+    parsePointDataWithProjection: parsePointDataWithProjectionMock,
     parseSolidPolygons: parseSolidPolygonsMock,
     pathColorAttr: pathColorAttrMock,
     projectGeoJSON: projectGeoJSONMock,
@@ -119,9 +137,18 @@ vi.mock('./pattern-texture', async () => {
 });
 
 import {
+  createLineLayers,
+  createPointLayers,
   createPolygonLayers,
+  resolveEffectiveCategoryColorMap,
   resolveSplitMappingFeatureIdColumn
 } from './layer-factory';
+import { hexToRgb } from '$lib/features/commons/utils/color-utils';
+
+const source = readFileSync(
+  join(process.cwd(), 'src/lib/features/map/layers/layer-factory.ts'),
+  'utf8'
+);
 
 function createTableWithFields(fieldNames: string[]): ArrowTable {
   return {
@@ -145,6 +172,52 @@ function createTableWithRows(
   } as unknown as ArrowTable;
 }
 
+function createCategoryTable(
+  values: Array<string | null | undefined>
+): ArrowTable {
+  return {
+    numRows: values.length,
+    getChild(name: string) {
+      if (name !== 'category') {
+        return null;
+      }
+
+      return {
+        get(index: number) {
+          return values[index];
+        }
+      };
+    }
+  } as unknown as ArrowTable;
+}
+
+function createCategoricalSymbolVisualization(
+  colors: string[]
+): VisualizationConfig {
+  const visualization = createSymbolVisualization();
+
+  return {
+    ...visualization,
+    classification: undefined,
+    symbol: {
+      ...visualization.symbol!,
+      fillMode: FillMode.CATEGORIES,
+      classification: {
+        method: ClassificationMethod.MANUAL,
+        classes: colors.length,
+        labels: ['North', 'South'],
+        colors
+      },
+      fillClassification: {
+        method: ClassificationMethod.MANUAL,
+        classes: colors.length,
+        labels: ['North', 'South'],
+        colors
+      }
+    }
+  };
+}
+
 function createPolygonFeature(
   id: string,
   year: number
@@ -163,6 +236,20 @@ function createPolygonFeature(
           [0, 0]
         ]
       ]
+    }
+  };
+}
+
+function createPointFeature(
+  id: string,
+  year: number
+): Feature<Point, { id: string; year: number }> {
+  return {
+    type: 'Feature',
+    properties: { id, year },
+    geometry: {
+      type: 'Point',
+      coordinates: [0, 0]
     }
   };
 }
@@ -193,6 +280,43 @@ function createVisualization(fillMode: FillMode): VisualizationConfig {
       fillOpacity: 1,
       strokeOpacity: 0,
       strokeWidth: 0
+    },
+    mapping: {}
+  };
+}
+
+function createSymbolVisualization(): VisualizationConfig {
+  return {
+    id: 'viz-point-1',
+    name: 'Point stroke test',
+    type: VisualizationType.PROPORTIONAL,
+    datasetId: 'dataset-1',
+    enabled: true,
+    primitiveFilters: [PrimitiveFilterType.POINT],
+    symbol: {
+      enabled: true,
+      mode: SymbolMode.UNIQUE,
+      shape: ShapeType.CIRCLE,
+      size: 10,
+      minSize: 2,
+      maxSize: 10,
+      sizeScale: ScaleType.LINEAR,
+      opacity: 1,
+      fillMode: FillMode.UNIQUE,
+      fillColor: '#3366cc',
+      fillColorB: '#ff832b',
+      strokeMode: StrokeMode.NONE,
+      strokeColor: '#1f1f1f',
+      strokeWidth: 2,
+      strokeOpacity: 1,
+      strokeDashed: false,
+      proportionalType: ProportionalType.SINGLE,
+      categoryShape: CategoryShapeMode.UNIQUE
+    },
+    style: {
+      fillOpacity: 1,
+      strokeOpacity: 1,
+      strokeWidth: 1
     },
     mapping: {}
   };
@@ -231,6 +355,28 @@ function createGeometryInfo(): GeometryInfo {
   };
 }
 
+function createPointGeometryInfo(): GeometryInfo {
+  return {
+    type: 'Point',
+    encoding: 'geoarrow.point',
+    geoColumn: 'geometry',
+    isNativeGeoArrow: true,
+    isWkbEncoded: false,
+    isGeoJsonEncoded: false
+  };
+}
+
+function createLineGeometryInfo(): GeometryInfo {
+  return {
+    type: 'LineString',
+    encoding: 'geoarrow.linestring',
+    geoColumn: 'geometry',
+    isNativeGeoArrow: true,
+    isWkbEncoded: false,
+    isGeoJsonEncoded: false
+  };
+}
+
 function getPatternLayer(
   layers: ReturnType<typeof createPolygonLayers>
 ): GeoJsonLayer | undefined {
@@ -239,6 +385,10 @@ function getPatternLayer(
       layer instanceof GeoJsonLayer &&
       String(layer.props.id).includes('-pattern-')
   ) as GeoJsonLayer | undefined;
+}
+
+function getLayerIds(layers: ReturnType<typeof createPolygonLayers>): string[] {
+  return layers.map((layer) => String(layer.props.id));
 }
 
 beforeEach(() => {
@@ -262,6 +412,10 @@ beforeEach(() => {
       attributes: {}
     }
   }));
+  createScatterplotLayerPropsMock.mockReturnValue({
+    data: [{}],
+    getPosition: () => [0, 0]
+  });
   createPolygonFillColorAttributeMock.mockImplementation(
     (
       polyData: { featureIds?: Uint32Array },
@@ -275,6 +429,8 @@ beforeEach(() => {
     value: new Uint8ClampedArray([0, 0, 0, 255]),
     size: 4
   });
+  parsePointDataMock.mockReturnValue({});
+  parsePointDataWithProjectionMock.mockReturnValue({});
 });
 
 describe('resolveSplitMappingFeatureIdColumn', () => {
@@ -292,6 +448,54 @@ describe('resolveSplitMappingFeatureIdColumn', () => {
     expect(resolveSplitMappingFeatureIdColumn(table, '__feature_id__')).toBe(
       'basemap_id'
     );
+  });
+});
+
+describe('resolveEffectiveCategoryColorMap', () => {
+  it('rebuilds categorical colors when labels stay same but palette changes', () => {
+    const staleColorMap = new Map([
+      ['North', hexToRgb('#ff0000')],
+      ['South', hexToRgb('#00ff00')]
+    ]);
+
+    const resolvedColorMap = resolveEffectiveCategoryColorMap(
+      createCategoryTable(['North', 'South']),
+      createCategoricalSymbolVisualization(['#123456', '#abcdef']),
+      staleColorMap,
+      'category',
+      PrimitiveFilterType.POINT
+    );
+
+    expect(resolvedColorMap).not.toBe(staleColorMap);
+    expect(resolvedColorMap?.get('North')).toEqual(hexToRgb('#123456'));
+    expect(resolvedColorMap?.get('South')).toEqual(hexToRgb('#abcdef'));
+  });
+
+  it('keeps existing categorical map when labels and colors already match', () => {
+    const currentColorMap = new Map([
+      ['North', hexToRgb('#123456')],
+      ['South', hexToRgb('#abcdef')]
+    ]);
+
+    const resolvedColorMap = resolveEffectiveCategoryColorMap(
+      createCategoryTable(['North', 'South']),
+      createCategoricalSymbolVisualization(['#123456', '#abcdef']),
+      currentColorMap,
+      'category',
+      PrimitiveFilterType.POINT
+    );
+
+    expect(resolvedColorMap).toBe(currentColorMap);
+  });
+});
+
+describe('binary scatter styling refresh', () => {
+  it('clones shared scatterplot binary data before overriding fill/line/radius attributes', () => {
+    expect(source).toContain('function cloneScatterBinaryData');
+    expect(source).toContain('attributes: { ...sourceData.attributes }');
+    const cloneCalls = source.match(/cloneScatterBinaryData\(scatterProps\)/g);
+    expect(cloneCalls).not.toBeNull();
+    expect((cloneCalls ?? []).length).toBeGreaterThanOrEqual(3);
   });
 });
 
@@ -364,6 +568,78 @@ describe('createPolygonLayers', () => {
     expect(getPatternLayer(layers)).toBeUndefined();
   });
 
+  it('renders the GeoJSON fallback pattern below the polygon stroke', () => {
+    arrowTableToGeoJSONMock.mockReturnValue({
+      type: 'FeatureCollection',
+      features: [createPolygonFeature('keep', 2024)]
+    } satisfies FeatureCollection<Polygon>);
+
+    const visualization = createVisualization(FillMode.UNIQUE);
+    visualization.polygon = {
+      ...visualization.polygon!,
+      strokeMode: StrokeMode.UNIQUE,
+      strokeColor: '#ffffff',
+      strokeWidth: 3,
+      strokeOpacity: 1,
+      classification: {
+        ...visualization.polygon!.classification!,
+        patternId: 'dots'
+      }
+    };
+
+    const layers = createPolygonLayers(
+      createTableWithFields([]),
+      createGeometryInfo(),
+      createContext(visualization)
+    );
+    const layerIds = getLayerIds(layers);
+    const fillLayerIndex = layerIds.findIndex(
+      (id) => !id.includes('-pattern-') && !id.includes('-stroke')
+    );
+    const patternLayerIndex = layerIds.findIndex((id) =>
+      id.includes('-pattern-')
+    );
+    const strokeLayerIndex = layerIds.findIndex((id) => id.includes('-stroke'));
+
+    expect(fillLayerIndex).toBeGreaterThanOrEqual(0);
+    expect(patternLayerIndex).toBeGreaterThan(fillLayerIndex);
+    expect(strokeLayerIndex).toBeGreaterThan(patternLayerIndex);
+  });
+
+  it('fully disables GeoJSON polygon stroke props when contour mode is none', () => {
+    arrowTableToGeoJSONMock.mockReturnValue({
+      type: 'FeatureCollection',
+      features: [createPolygonFeature('keep', 2024)]
+    } satisfies FeatureCollection<Polygon>);
+
+    const visualization = createVisualization(FillMode.UNIQUE);
+    visualization.polygon = {
+      ...visualization.polygon!,
+      strokeMode: StrokeMode.NONE,
+      strokeWidth: 3,
+      strokeOpacity: 1,
+      strokeDashed: true
+    };
+
+    const layers = createPolygonLayers(
+      createTableWithFields([]),
+      createGeometryInfo(),
+      createContext(visualization)
+    );
+
+    const polygonLayer = layers[0] as GeoJsonLayer;
+    const polygonLayerProps = polygonLayer.props as GeoJsonLayer['props'] & {
+      getDashArray?: [number, number];
+    };
+
+    expect(polygonLayerProps.stroked).toBe(false);
+    expect(polygonLayerProps.getLineColor).toEqual([0, 0, 0, 0]);
+    expect(polygonLayerProps.extensions).toEqual([]);
+    expect(polygonLayerProps.getDashArray).toEqual([0, 0]);
+    expect(polygonLayerProps.lineWidthScale).toBe(0);
+    expect(polygonLayerProps.lineWidthMinPixels).toBe(0);
+  });
+
   it('propagates polygon missing-data styling to binary choropleth fills', () => {
     const visualization = createVisualization(FillMode.CLASSES);
     visualization.mapping = { valueColumn: 'value' };
@@ -416,5 +692,144 @@ describe('createPolygonLayers', () => {
     expect(fillLayer?.props.updateTriggers?.getFillColor).toEqual(
       expect.arrayContaining(['#ff00ff', true])
     );
+  });
+
+  it('renders the binary polygon pattern below the stroke layer', () => {
+    const visualization = createVisualization(FillMode.UNIQUE);
+    visualization.polygon = {
+      ...visualization.polygon!,
+      strokeMode: StrokeMode.UNIQUE,
+      strokeColor: '#ffffff',
+      strokeWidth: 3,
+      strokeOpacity: 1,
+      classification: {
+        ...visualization.polygon!.classification!,
+        patternId: 'dots'
+      }
+    };
+
+    const layers = createPolygonLayers(
+      createTableWithFields([]),
+      {
+        ...createGeometryInfo(),
+        encoding: 'geoarrow.polygon',
+        isNativeGeoArrow: true,
+        isGeoJsonEncoded: false
+      },
+      {
+        ...createContext(visualization),
+        customProjection: undefined
+      }
+    );
+    const layerIds = getLayerIds(layers);
+    const fillLayerIndex = layerIds.findIndex(
+      (id) => !id.includes('-pattern-') && !id.includes('-stroke')
+    );
+    const patternLayerIndex = layerIds.findIndex((id) =>
+      id.includes('-pattern-')
+    );
+    const strokeLayerIndex = layerIds.findIndex((id) => id.includes('-stroke'));
+
+    expect(fillLayerIndex).toBeGreaterThanOrEqual(0);
+    expect(patternLayerIndex).toBeGreaterThan(fillLayerIndex);
+    expect(strokeLayerIndex).toBeGreaterThan(patternLayerIndex);
+  });
+
+  it('renders density from the dedicated density table without falling back to polygon fill', () => {
+    const visualization = createVisualization(FillMode.DENSITY);
+    visualization.density = {
+      valueColumn: 'value',
+      ratio: 250
+    };
+
+    const layers = createPolygonLayers(
+      createTableWithFields([]),
+      createGeometryInfo(),
+      {
+        ...createContext(visualization),
+        customProjection: undefined,
+        densityTable: createTableWithFields([]),
+        densityGeometryInfo: createPointGeometryInfo()
+      }
+    );
+
+    expect(
+      layers.some(
+        (layer) =>
+          layer instanceof ScatterplotLayer &&
+          String(layer.props.id).includes('-density')
+      )
+    ).toBe(true);
+    expect(arrowTableToGeoJSONMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('createPointLayers', () => {
+  it('fully disables point circle stroke props when contour mode is none', () => {
+    arrowTableToGeoJSONMock.mockReturnValue({
+      type: 'FeatureCollection',
+      features: [createPointFeature('keep', 2024)]
+    } satisfies FeatureCollection<Point>);
+
+    const layers = createPointLayers(
+      createTableWithFields([]),
+      createPointGeometryInfo(),
+      createContext(createSymbolVisualization())
+    );
+
+    const pointLayer = layers[0] as ScatterplotLayer;
+
+    expect(pointLayer).toBeInstanceOf(ScatterplotLayer);
+    expect(pointLayer.props.stroked).toBe(false);
+    expect(pointLayer.props.lineWidthScale).toBe(0);
+    expect(pointLayer.props.getLineColor).toEqual([0, 0, 0, 0]);
+  });
+});
+
+describe('createLineLayers', () => {
+  it('creates native categorical line layers without throwing', () => {
+    const visualization: VisualizationConfig = {
+      id: 'viz-line-1',
+      name: 'Line categorical test',
+      type: VisualizationType.CATEGORICAL,
+      datasetId: 'dataset-1',
+      enabled: true,
+      primitiveFilters: [PrimitiveFilterType.LINE],
+      line: {
+        enabled: true,
+        colorMode: ColorMode.CATEGORIES,
+        thicknessMode: ThicknessMode.UNIQUE,
+        color: '#3366cc',
+        width: 3,
+        maxWidth: 6,
+        opacity: 1,
+        dashed: false,
+        categoryColumn: 'route_name',
+        classification: {
+          method: ClassificationMethod.MANUAL,
+          classes: 2,
+          colors: ['#ff0000', '#00ff00'],
+          labels: ['A', 'B']
+        }
+      },
+      style: {
+        fillOpacity: 1,
+        strokeOpacity: 1,
+        strokeWidth: 1
+      },
+      mapping: {}
+    };
+
+    const layers = createLineLayers(
+      createTableWithRows([{ route_name: 'A' }], ['route_name']),
+      createLineGeometryInfo(),
+      {
+        ...createContext(visualization),
+        customProjection: undefined
+      }
+    );
+
+    expect(pathColorAttrMock).toHaveBeenCalled();
+    expect(layers.some((layer) => layer instanceof PathLayer)).toBe(true);
   });
 });

@@ -51,10 +51,9 @@ export async function deleteDataset(
 
   if (vizOps) {
     const vizs = vizOps.getVisualizationsByDataset(datasetId);
-    // Lazy import to avoid cycle between datasets and facets stores.
-    const { facetsStore } =
-      await import('$lib/features/step-toolbar/tools/facets/facets.store.svelte');
-    const facetsBaseVizId = facetsStore.baseVisualizationId;
+    const { disableFacets, getFacetsBaseVisualizationId } =
+      await import('$lib/features/step-toolbar/tools/facets/facets-access');
+    const facetsBaseVizId = getFacetsBaseVisualizationId();
     const facetsBaseBeingDeleted =
       facetsBaseVizId !== null &&
       vizs.some((viz) => viz.id === facetsBaseVizId);
@@ -64,7 +63,7 @@ export async function deleteDataset(
     }
 
     if (facetsBaseBeingDeleted) {
-      facetsStore.disable();
+      disableFacets();
     }
   }
 
@@ -165,35 +164,14 @@ export async function renameDataset(
     return false;
   }
 
-  state.datasets = updateById(state.datasets, datasetId, {
-    name: sanitizedName
-  });
-
   if (dataset.sourceFileId) {
     await projectStore.renameFile(dataset.sourceFileId, sanitizedName);
   }
 
-  return true;
-}
-
-export function renameDatasetOnly(
-  state: DatasetsState,
-  datasetId: string,
-  newName: string
-): boolean {
-  const dataset = findById(state.datasets, datasetId);
-  if (!dataset) {
-    return false;
-  }
-
-  const sanitizedName = sanitizeTextInput(newName);
-  if (!sanitizedName) {
-    return false;
-  }
-
   state.datasets = updateById(state.datasets, datasetId, {
     name: sanitizedName
   });
+
   return true;
 }
 

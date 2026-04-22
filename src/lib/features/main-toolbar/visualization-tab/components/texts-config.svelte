@@ -1,19 +1,15 @@
 <script lang="ts">
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import Switch from '$lib/features/commons/components/switch.svelte';
-  import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import {
     ColorSelector,
-    DiscretizationRow,
     InfoPopover,
-    PalettePreview,
     SectionHeading,
-    SliderWithInput,
     StrokeSection,
     VizFilterButton,
     VizFilterPanel
   } from './shared';
-  import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
+  import FillSection from './shared/fill-section.svelte';
   import type {
     ClassificationConfig,
     MissingDataConfig,
@@ -24,32 +20,24 @@
   } from '$lib/features/commons/store/visualization.store.svelte';
   import * as m from '$lib/paraglide/messages';
   import {
-    DEFAULT_QUALITATIVE_PREVIEW,
-    DEFAULT_SEQUENTIAL_PREVIEW,
-    PALETTE_TYPE
-  } from '$lib/features/commons/components/palette-popover/palette.constants';
-  import {
-    Category,
-    MisuseOutline,
-    SquareFill,
-    Tag
-  } from 'carbon-icons-svelte';
-  import {
     DEFAULT_COLORS,
     FillMode,
-    SLIDER_LIMITS,
     VISUALIZATION_DEFAULTS
   } from '../../constants';
+  import { FILL_MODES_STANDARD } from './shared/fill-mode-presets';
   import { Button, Dropdown, TextInput } from 'carbon-components-svelte';
   import DiscretizationModal from './discretization-modal.svelte';
   import TextStylePopover from './text-style-popover.svelte';
   import { resolveDiscretizationLabel } from './discretization.utils';
-  import FacetsVariablePicker from './symbols/facets-variable-picker.svelte';
   import {
     FACET_SLOT,
     facetsStore,
     type FacetSlotPath
-  } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
+  } from '../facets-adapter.svelte';
+  import {
+    NONE_FIELD_ID,
+    useFieldSelection
+  } from '../use-field-selection.svelte';
 
   interface Props {
     dataFields?: Array<{ id: number; text: string; type?: string }>;
@@ -78,10 +66,14 @@
     onBackgroundStrokeClassificationChange?: (
       updates: Partial<ClassificationConfig>
     ) => void;
+    onBackgroundStrokeMappingChange?: (
+      updates: Partial<VisualizationConfig['mapping']>
+    ) => void;
     onBackgroundMappingChange?: (
       updates: Partial<VisualizationConfig['mapping']>
     ) => void;
     onBackgroundInvertPalette?: () => void;
+    onBackgroundStrokeInvertPalette?: () => void;
     filters?: VizDataFilter[];
     onAddFilter?: (filter: Omit<VizDataFilter, 'id'>) => void;
     onUpdateFilter?: (
@@ -106,28 +98,30 @@
     onBackgroundModesChange,
     onBackgroundClassificationChange,
     onBackgroundStrokeClassificationChange,
+    onBackgroundStrokeMappingChange,
     onBackgroundMappingChange,
     onBackgroundInvertPalette,
+    onBackgroundStrokeInvertPalette,
     filters = [],
     onAddFilter,
     onUpdateFilter,
     onRemoveFilter
   }: Props = $props();
 
-  const NONE_FIELD_ID = -1;
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
   const selectableDataFields = $derived([noneOption, ...dataFields]);
   const secondaryFieldItems = $derived([noneOption, ...dataFields]);
 
   let discretizationModalOpen = $state(false);
-  let discretizationTarget = $state<'text' | 'background'>('text');
+  let discretizationTarget = $state<'background-fill' | 'background-stroke'>(
+    'background-fill'
+  );
   let filterSectionVisible = $state(false);
 
-  let selectedLabelFieldId = $state<number>(NONE_FIELD_ID);
-  let selectedBackgroundValueFieldId = $state<number>(NONE_FIELD_ID);
-  let selectedBackgroundCategoryFieldId = $state<number>(NONE_FIELD_ID);
-  let secondaryFieldId = $state<number>(NONE_FIELD_ID);
-  let backgroundFacetPickerOpen = $state(false);
+  const labelFieldSelection = useFieldSelection(() => dataFields);
+  const backgroundValueFieldSelection = useFieldSelection(() => dataFields);
+  const backgroundCategoryFieldSelection = useFieldSelection(() => dataFields);
+  const secondaryLabelFieldSelection = useFieldSelection(() => dataFields);
 
   let textColor = $state<string>(DEFAULT_COLORS.text);
   let textOpacity = $state<number>(VISUALIZATION_DEFAULTS.textOpacity);
@@ -168,23 +162,27 @@
   let secondaryTriggerRef = $state<FormatTriggerRef>(null);
 
   const enabled = $derived((visualization?.style.textOpacity ?? 0) > 0);
-  const hasPrimaryField = $derived(selectedLabelFieldId !== NONE_FIELD_ID);
-  const hasSecondaryField = $derived(secondaryFieldId !== NONE_FIELD_ID);
-  const backgroundCurrentPalette = $derived(
-    backgroundVisualization?.classification?.colors ??
-      DEFAULT_SEQUENTIAL_PREVIEW
+  const hasPrimaryField = $derived(
+    labelFieldSelection.selectedFieldId !== NONE_FIELD_ID
   );
-  const backgroundCategoriesPalette = $derived(
-    backgroundVisualization?.classification?.colors ??
-      DEFAULT_QUALITATIVE_PREVIEW
+  const hasSecondaryField = $derived(
+    secondaryLabelFieldSelection.selectedFieldId !== NONE_FIELD_ID
   );
   const backgroundAvailable = $derived(Boolean(backgroundVisualization));
   const selectedBackgroundVizId = $derived(backgroundVisualization?.id);
-  const activeDiscretizationVisualization = $derived(
-    discretizationTarget === 'background'
-      ? backgroundVisualization
-      : visualization
-  );
+  const activeDiscretizationVisualization = $derived(backgroundVisualization);
+  const activeDiscretizationClassification = $derived.by(() => {
+    if (discretizationTarget === 'background-stroke') {
+      return backgroundVisualization?.text?.background?.strokeClassification;
+    }
+    return backgroundVisualization?.classification;
+  });
+  const activeDiscretizationValueColumn = $derived.by(() => {
+    if (discretizationTarget === 'background-stroke') {
+      return backgroundVisualization?.text?.background?.strokeValueColumn;
+    }
+    return backgroundVisualization?.text?.background?.valueColumn;
+  });
 
   const activeBackgroundFacetsSlotPath = $derived.by(() => {
     if (
@@ -212,22 +210,6 @@
       .filter((id): id is number => typeof id === 'number');
   }
 
-  const fillModeItems = [
-    { icon: MisuseOutline, label: m.fill_mode_none(), iconSize: 16 },
-    { icon: SquareFill, label: m.fill_mode_unique(), iconSize: 16 },
-    { icon: Category, label: m.fill_mode_classes(), iconSize: 16 },
-    { icon: Tag, label: m.fill_mode_categories(), iconSize: 16 }
-  ];
-
-  const fillModeIndex = $derived(
-    [
-      FillMode.NONE,
-      FillMode.UNIQUE,
-      FillMode.CLASSES,
-      FillMode.CATEGORIES
-    ].indexOf(fillMode)
-  );
-
   const backgroundDiscretizationLabel = $derived.by(() =>
     resolveDiscretizationLabel(
       backgroundVisualization?.classification
@@ -235,15 +217,13 @@
         : undefined
     )
   );
-
-  function resolveFieldId(columnName: string | undefined): number {
-    if (!columnName) {
-      return NONE_FIELD_ID;
-    }
-
-    const field = dataFields.find((item) => item.text === columnName);
-    return field?.id ?? NONE_FIELD_ID;
-  }
+  const backgroundStrokeDiscretizationLabel = $derived.by(() =>
+    resolveDiscretizationLabel(
+      backgroundVisualization?.text?.background?.strokeClassification
+        ? { ...backgroundVisualization.text.background.strokeClassification }
+        : undefined
+    )
+  );
 
   function parseOpacityToSlider(
     value: number | undefined,
@@ -257,14 +237,14 @@
   }
 
   $effect(() => {
-    selectedLabelFieldId = resolveFieldId(visualization?.mapping.labelColumn);
-    secondaryFieldId = resolveFieldId(
+    labelFieldSelection.sync(visualization?.mapping.labelColumn);
+    secondaryLabelFieldSelection.sync(
       visualization?.mapping.secondaryLabelColumn
     );
-    selectedBackgroundValueFieldId = resolveFieldId(
+    backgroundValueFieldSelection.sync(
       backgroundVisualization?.mapping.valueColumn
     );
-    selectedBackgroundCategoryFieldId = resolveFieldId(
+    backgroundCategoryFieldSelection.sync(
       backgroundVisualization?.mapping.categoryColumn
     );
   });
@@ -338,7 +318,7 @@
   });
 
   function handleLabelFieldSelect(fieldId: number) {
-    selectedLabelFieldId = fieldId;
+    labelFieldSelection.set(fieldId);
 
     if (fieldId === NONE_FIELD_ID) {
       onMappingChange?.({
@@ -357,7 +337,7 @@
   }
 
   function handleSecondaryFieldSelect(fieldId: number) {
-    secondaryFieldId = fieldId;
+    secondaryLabelFieldSelection.set(fieldId);
 
     if (fieldId === NONE_FIELD_ID) {
       onMappingChange?.({ secondaryLabelColumn: undefined });
@@ -389,7 +369,7 @@
   }
 
   function handleBackgroundValueFieldSelect(fieldId: number) {
-    selectedBackgroundValueFieldId = fieldId;
+    backgroundValueFieldSelection.set(fieldId);
 
     if (fieldId === NONE_FIELD_ID) {
       onBackgroundMappingChange?.({ valueColumn: undefined });
@@ -403,7 +383,7 @@
   }
 
   function handleBackgroundCategoryFieldSelect(fieldId: number) {
-    selectedBackgroundCategoryFieldId = fieldId;
+    backgroundCategoryFieldSelection.set(fieldId);
 
     if (fieldId === NONE_FIELD_ID) {
       onBackgroundMappingChange?.({ categoryColumn: undefined });
@@ -634,16 +614,24 @@
   }
 
   function openBackgroundDiscretization() {
-    discretizationTarget = 'background';
+    discretizationTarget = 'background-fill';
+    discretizationModalOpen = true;
+  }
+
+  function openBackgroundStrokeDiscretization() {
+    discretizationTarget = 'background-stroke';
     discretizationModalOpen = true;
   }
 
   function handleDiscretizationChange(
     classification: Partial<ClassificationConfig>
   ) {
-    if (discretizationTarget === 'background') {
+    if (discretizationTarget === 'background-fill') {
       onBackgroundClassificationChange?.(classification);
+      return;
     }
+
+    onBackgroundStrokeClassificationChange?.(classification);
   }
 
   function handleBackgroundStrokeClassificationChange(
@@ -680,8 +668,10 @@
 <div class="viz-panel-shell texts-panel-shell">
   <ExpandableSection
     title={m.texts_title()}
+    description={disabled ? m.primitive_unavailable() : undefined}
     defaultOpen={false}
     showToggle
+    toggleVariant="suggestions"
     actionsEnd
     toggleChecked={enabled}
     disabled={disabled}
@@ -708,7 +698,7 @@
             <Dropdown
               labelText={m.text_according()}
               items={selectableDataFields}
-              selectedId={selectedLabelFieldId}
+              selectedId={labelFieldSelection.selectedFieldId}
               on:select={(event) =>
                 handleLabelFieldSelect(event.detail.selectedId)}
               type="default"
@@ -732,7 +722,7 @@
             <Dropdown
               labelText={m.secondary_text()}
               items={secondaryFieldItems}
-              selectedId={secondaryFieldId}
+              selectedId={secondaryLabelFieldSelection.selectedFieldId}
               disabled={!hasPrimaryField}
               on:select={(event) =>
                 handleSecondaryFieldSelect(event.detail.selectedId)}
@@ -790,6 +780,7 @@
 
             <div class="field-group">
               <ColorSelector
+                exclusive
                 label={m.color()}
                 value={missingDataColor}
                 onchange={handleMissingDataColorChange}
@@ -800,155 +791,59 @@
       </div>
 
       {#if backgroundAvailable}
-        <SectionHeading title={m.background()} />
-
-        <div class="field-group">
-          <ToggleTabs
-            items={fillModeItems}
-            activeIndex={fillModeIndex}
-            onChange={handleBackgroundFillModeChange}
-            hideInactiveLabel={true}
-          />
-        </div>
-
-        {#if fillMode === FillMode.UNIQUE}
-          <SingleColorPreview
-            label={m.color()}
-            color={fillColor}
-            onchange={handleBackgroundFillColorChange}
-          />
-        {:else if fillMode === FillMode.CLASSES}
-          <div class="field-group">
-            <FacetsVariablePicker
-              bind:open={backgroundFacetPickerOpen}
-              titleText={m.color_according()}
-              dataFields={dataFields}
-              singleSelectItems={selectableDataFields}
-              selectedFieldId={selectedBackgroundValueFieldId}
-              selectedFieldIds={getBackgroundFacetsSelectedFieldIds(
-                FACET_SLOT.TEXT_BACKGROUND_VALUE
-              )}
-              isCollectionEnabled={isBackgroundFacetsActiveForSlot(
-                FACET_SLOT.TEXT_BACKGROUND_VALUE
-              )}
-              onSelect={handleBackgroundValueFieldSelect}
-              onCollectionChange={(ids) =>
-                handleBackgroundFacetsVariablesChange(
-                  dataFields.find(
-                    (field) => field.id === selectedBackgroundValueFieldId
-                  )?.text ?? '',
-                  FACET_SLOT.TEXT_BACKGROUND_VALUE,
-                  ids
-                )}
-              onToggleCollection={(enabled) =>
-                handleBackgroundFacetsToggle(
-                  dataFields.find(
-                    (field) => field.id === selectedBackgroundValueFieldId
-                  )?.text ?? '',
-                  FACET_SLOT.TEXT_BACKGROUND_VALUE,
-                  enabled
-                )}
-            />
-          </div>
-          <DiscretizationRow
-            label={m.discretization()}
-            value={backgroundDiscretizationLabel}
-            onsettings={openBackgroundDiscretization}
-          />
-          <PalettePreview
-            label={m.color_palette()}
-            colors={backgroundCurrentPalette}
-            selectedPaletteId={backgroundVisualization?.classification
-              ?.paletteId}
-            inverted={backgroundVisualization?.classification?.inverted ??
-              false}
-            paletteType={PALETTE_TYPE.SEQUENTIAL}
-            oninvert={onBackgroundInvertPalette}
-            onClassificationChange={onBackgroundClassificationChange}
-          />
-        {:else if fillMode === FillMode.CATEGORIES}
-          <div class="field-group">
-            <FacetsVariablePicker
-              bind:open={backgroundFacetPickerOpen}
-              titleText={m.color_according()}
-              dataFields={dataFields}
-              singleSelectItems={selectableDataFields}
-              selectedFieldId={selectedBackgroundCategoryFieldId}
-              selectedFieldIds={getBackgroundFacetsSelectedFieldIds(
-                FACET_SLOT.TEXT_BACKGROUND_CATEGORY
-              )}
-              isCollectionEnabled={isBackgroundFacetsActiveForSlot(
-                FACET_SLOT.TEXT_BACKGROUND_CATEGORY
-              )}
-              onSelect={handleBackgroundCategoryFieldSelect}
-              onCollectionChange={(ids) =>
-                handleBackgroundFacetsVariablesChange(
-                  dataFields.find(
-                    (field) => field.id === selectedBackgroundCategoryFieldId
-                  )?.text ?? '',
-                  FACET_SLOT.TEXT_BACKGROUND_CATEGORY,
-                  ids
-                )}
-              onToggleCollection={(enabled) =>
-                handleBackgroundFacetsToggle(
-                  dataFields.find(
-                    (field) => field.id === selectedBackgroundCategoryFieldId
-                  )?.text ?? '',
-                  FACET_SLOT.TEXT_BACKGROUND_CATEGORY,
-                  enabled
-                )}
-            />
-          </div>
-          <DiscretizationRow
-            label={m.category_aspect()}
-            value={m.categories_count({
-              count:
-                backgroundVisualization?.classification?.labels?.length ?? 0
-            })}
-            onsettings={openBackgroundDiscretization}
-          />
-          <PalettePreview
-            label={m.color_palette()}
-            colors={backgroundCategoriesPalette}
-            selectedPaletteId={backgroundVisualization?.classification
-              ?.paletteId}
-            inverted={backgroundVisualization?.classification?.inverted ??
-              false}
-            paletteType={PALETTE_TYPE.QUALITATIVE}
-            categoriesMode={true}
-            categoriesVariant="texts"
-            categoryLabels={backgroundVisualization?.classification?.labels ??
-              []}
-            oninvert={onBackgroundInvertPalette}
-            onClassificationChange={onBackgroundClassificationChange}
-          />
-        {/if}
-
-        {#if fillMode !== FillMode.NONE}
-          <SliderWithInput
-            label={m.opacity()}
-            min={SLIDER_LIMITS.opacity.min}
-            max={SLIDER_LIMITS.opacity.max}
-            value={fillOpacity}
-            showMinMax
-            inputWidth="128px"
-            onchange={handleBackgroundFillOpacityChange}
-          />
-        {/if}
+        <FillSection
+          visualization={backgroundVisualization}
+          primitive="text"
+          dataFields={dataFields}
+          availableModes={FILL_MODES_STANDARD}
+          fillMode={fillMode}
+          fillColor={fillColor}
+          fillOpacity={fillOpacity}
+          selectedValueFieldId={backgroundValueFieldSelection.selectedFieldId}
+          selectedCategoryFieldId={backgroundCategoryFieldSelection.selectedFieldId}
+          discretizationLabel={backgroundDiscretizationLabel}
+          categoryCount={backgroundVisualization?.classification?.labels
+            ?.length ?? 0}
+          facetsValueSlotPath={FACET_SLOT.TEXT_BACKGROUND_VALUE}
+          facetsCategorySlotPath={FACET_SLOT.TEXT_BACKGROUND_CATEGORY}
+          categoriesVariant="texts"
+          showMissingDataSection={false}
+          sectionTitle={m.background()}
+          selectableDataFields={selectableDataFields}
+          getFacetsSelectedFieldIds={getBackgroundFacetsSelectedFieldIds}
+          isFacetsActiveForSlot={isBackgroundFacetsActiveForSlot}
+          onFillModeChange={(mode: FillMode) =>
+            handleBackgroundFillModeChange(FILL_MODES_STANDARD.indexOf(mode))}
+          onFillColorChange={handleBackgroundFillColorChange}
+          onFillOpacityChange={handleBackgroundFillOpacityChange}
+          onValueFieldSelect={handleBackgroundValueFieldSelect}
+          onCategoryFieldSelect={handleBackgroundCategoryFieldSelect}
+          onFacetsVariablesChange={handleBackgroundFacetsVariablesChange}
+          onFacetsToggle={handleBackgroundFacetsToggle}
+          onOpenDiscretization={openBackgroundDiscretization}
+          onClassificationChange={onBackgroundClassificationChange ??
+            (() => {})}
+          onInvertPalette={onBackgroundInvertPalette}
+        />
 
         <StrokeSection
           visualization={backgroundVisualization}
           dataFields={dataFields}
-          discretizationLabel={backgroundDiscretizationLabel}
+          discretizationLabel={backgroundStrokeDiscretizationLabel}
           showDashed={false}
           onStyleChange={onBackgroundStyleChange}
           onModesChange={onBackgroundModesChange}
           onMappingChange={onBackgroundMappingChange}
-          onInvertPalette={onBackgroundInvertPalette}
-          onOpenDiscretization={openBackgroundDiscretization}
+          onStrokeMappingChange={onBackgroundStrokeMappingChange}
+          onInvertPalette={onBackgroundStrokeInvertPalette}
+          onOpenDiscretization={openBackgroundStrokeDiscretization}
           onStrokeClassificationChange={handleBackgroundStrokeClassificationChange}
           strokeClassification={backgroundVisualization?.text?.background
             ?.strokeClassification}
+          strokeValueColumn={backgroundVisualization?.text?.background
+            ?.strokeValueColumn}
+          strokeCategoryColumn={backgroundVisualization?.text?.background
+            ?.strokeCategoryColumn}
           facetsValueSlotPath={FACET_SLOT.TEXT_BACKGROUND_VALUE}
           facetsCategorySlotPath={FACET_SLOT.TEXT_BACKGROUND_CATEGORY}
         />
@@ -973,6 +868,9 @@
   <DiscretizationModal
     bind:open={discretizationModalOpen}
     visualization={activeDiscretizationVisualization}
+    classification={activeDiscretizationClassification}
+    valueColumn={activeDiscretizationValueColumn}
+    role={discretizationTarget === 'background-stroke' ? 'stroke' : 'fill'}
     onchange={handleDiscretizationChange}
   />
 

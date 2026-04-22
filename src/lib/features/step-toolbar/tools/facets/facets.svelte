@@ -29,7 +29,7 @@
     StrokeMode,
     ThicknessMode
   } from '$lib/features/main-toolbar/constants';
-  import SliderWithInput from '$lib/features/main-toolbar/visualization-tab/components/shared/slider-with-input.svelte';
+  import SliderWithInput from '$lib/features/commons/components/viz-controls/slider-with-input.svelte';
 
   const FACETS_HELP_URL =
     'https://cartographie.sciencespo.fr/khartis/help/facets';
@@ -101,9 +101,9 @@
 
     const fillMode = viz.modes?.fill;
     if (fillMode === FillMode.CLASSES) {
-      pushSlot(slots, FACET_SLOT.SYMBOL_VALUE, m.facets_slot_fill());
+      pushSlot(slots, FACET_SLOT.SYMBOL_FILL_VALUE, m.facets_slot_fill());
     } else if (fillMode === FillMode.CATEGORIES) {
-      pushSlot(slots, FACET_SLOT.SYMBOL_CATEGORY, m.facets_slot_fill());
+      pushSlot(slots, FACET_SLOT.SYMBOL_FILL_CATEGORY, m.facets_slot_fill());
     }
 
     const strokeMode = viz.modes?.stroke;
@@ -256,6 +256,10 @@
         return viz.symbol?.categoryColumn;
       case FACET_SLOT.SYMBOL_SIZE:
         return viz.symbol?.sizeColumn;
+      case FACET_SLOT.SYMBOL_FILL_VALUE:
+        return viz.symbol?.fillValueColumn;
+      case FACET_SLOT.SYMBOL_FILL_CATEGORY:
+        return viz.symbol?.fillCategoryColumn;
       case FACET_SLOT.POLYGON_VALUE:
         return viz.polygon?.valueColumn;
       case FACET_SLOT.POLYGON_CATEGORY:
@@ -456,10 +460,6 @@
     align-items: center;
     gap: var(--cds-spacing-03, 8px);
     height: 24px;
-  }
-
-  .section-heading.plain .section-title {
-    font-size: 1rem;
   }
 
   .section-title {

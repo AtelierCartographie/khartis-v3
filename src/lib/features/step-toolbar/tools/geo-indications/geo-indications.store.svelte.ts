@@ -14,7 +14,17 @@ import {
   resolveLayoutSizingTokens
 } from '$lib/features/commons/utils/layout-sizing.utils';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
-import { getFormatState } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
+import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
+import {
+  getFormatLayoutSizingContext,
+  getFormatState
+} from '$lib/features/step-toolbar/tools/format/format.store.svelte';
+import {
+  clampScaleDistance,
+  convertDistanceValue,
+  INSET_MAP_SIZE_LIMITS,
+  normalizeScaleDistanceValue
+} from './utils';
 import type {
   ColorState,
   DragPosition,
@@ -118,6 +128,11 @@ function normalizeState(
   const nextScale = partial.scale;
   const nextOrientation = partial.orientation;
   const nextInsetMap = partial.insetMap;
+  const nextScaleUnits =
+    nextScale?.units === DistanceUnit.KILOMETERS ||
+    nextScale?.units === DistanceUnit.MILES
+      ? nextScale.units
+      : current.scale.units;
 
   return {
     visible:
@@ -131,17 +146,12 @@ function normalizeState(
         nextScale?.form === ScaleForm.LINE || nextScale?.form === ScaleForm.BOX
           ? nextScale.form
           : current.scale.form,
-      distance: clampNumber(
-        nextScale?.distance,
-        0,
-        Number.MAX_SAFE_INTEGER,
+      distance: clampScaleDistance(
+        toFiniteNumber(nextScale?.distance, current.scale.distance),
+        nextScaleUnits,
         current.scale.distance
       ),
-      units:
-        nextScale?.units === DistanceUnit.KILOMETERS ||
-        nextScale?.units === DistanceUnit.MILES
-          ? nextScale.units
-          : current.scale.units,
+      units: nextScaleUnits,
       color: normalizeColorState(nextScale?.color, current.scale.color),
       fontFamily:
         typeof nextScale?.fontFamily === 'string' &&
@@ -196,7 +206,22 @@ function normalizeState(
         nextInsetMap?.type === InsetMapType.PLANISPHERE
           ? nextInsetMap.type
           : current.insetMap.type,
-      size: clampNumber(nextInsetMap?.size, 20, 800, current.insetMap.size),
+      size: clampNumber(
+        nextInsetMap?.size,
+        INSET_MAP_SIZE_LIMITS[
+          nextInsetMap?.type === InsetMapType.GLOBE ||
+          nextInsetMap?.type === InsetMapType.PLANISPHERE
+            ? nextInsetMap.type
+            : current.insetMap.type
+        ].min,
+        INSET_MAP_SIZE_LIMITS[
+          nextInsetMap?.type === InsetMapType.GLOBE ||
+          nextInsetMap?.type === InsetMapType.PLANISPHERE
+            ? nextInsetMap.type
+            : current.insetMap.type
+        ].max,
+        current.insetMap.size
+      ),
       windowColor: normalizeColorState(
         nextInsetMap?.windowColor,
         current.insetMap.windowColor
@@ -231,6 +256,16 @@ function normalizeState(
         current.insetMap.dragPosition
       )
     }
+  };
+}
+
+function getCurrentScaleDistanceContext() {
+  const center = mapInstanceStore.getMapCenter();
+
+  return {
+    map: mapInstanceStore.map,
+    zoom: mapInstanceStore.currentZoom,
+    centerLatitude: center?.lat ?? null
   };
 }
 
@@ -287,20 +322,18 @@ const { state, actions } = createToolStore<
 
       if (!wasEnabled && s.scale.fontSize === DEFAULT_STATE.scale.fontSize) {
         const fmt = getFormatState();
-        const tokens = resolveLayoutSizingTokens({
-          width: fmt.width,
-          height: fmt.height,
-          model: fmt.model
-        });
+        const tokens = resolveLayoutSizingTokens(
+          getFormatLayoutSizingContext(fmt)
+        );
         s.scale.fontSize = tokens.geoIndications.scaleFontSize;
       }
     },
     setScaleDistance: (distance: number) => {
-      s.scale.distance = clampNumber(
+      s.scale.distance = clampScaleDistance(
         distance,
-        0,
-        Number.MAX_SAFE_INTEGER,
-        s.scale.distance
+        s.scale.units,
+        s.scale.distance,
+        getCurrentScaleDistanceContext()
       );
     },
     toggleOrientation: () => {
@@ -312,11 +345,9 @@ const { state, actions } = createToolStore<
         s.orientation.size === DEFAULT_STATE.orientation.size
       ) {
         const fmt = getFormatState();
-        const tokens = resolveLayoutSizingTokens({
-          width: fmt.width,
-          height: fmt.height,
-          model: fmt.model
-        });
+        const tokens = resolveLayoutSizingTokens(
+          getFormatLayoutSizingContext(fmt)
+        );
         s.orientation.size = tokens.geoIndications.orientationSizeMm;
       }
     },
@@ -326,11 +357,9 @@ const { state, actions } = createToolStore<
 
       if (!wasEnabled && s.insetMap.size === DEFAULT_STATE.insetMap.size) {
         const fmt = getFormatState();
-        const tokens = resolveLayoutSizingTokens({
-          width: fmt.width,
-          height: fmt.height,
-          model: fmt.model
-        });
+        const tokens = resolveLayoutSizingTokens(
+          getFormatLayoutSizingContext(fmt)
+        );
         s.insetMap.size = tokens.geoIndications.insetSize;
       }
     },
@@ -341,6 +370,21 @@ const { state, actions } = createToolStore<
       s.scale.form = form;
     },
     setScaleUnits: (units: DistanceUnit) => {
+      if (units === s.scale.units) {
+        return;
+      }
+
+      if (s.scale.distance > 0) {
+        s.scale.distance = clampScaleDistance(
+          normalizeScaleDistanceValue(
+            convertDistanceValue(s.scale.distance, s.scale.units, units)
+          ),
+          units,
+          s.scale.distance,
+          getCurrentScaleDistanceContext()
+        );
+      }
+
       s.scale.units = units;
     },
     setScaleColor: (colorState: ColorState) => {
@@ -379,9 +423,20 @@ const { state, actions } = createToolStore<
     },
     setInsetMapType: (type: InsetMapType) => {
       s.insetMap.type = type;
+      s.insetMap.size = clampNumber(
+        s.insetMap.size,
+        INSET_MAP_SIZE_LIMITS[type].min,
+        INSET_MAP_SIZE_LIMITS[type].max,
+        s.insetMap.size
+      );
     },
     setInsetMapSize: (size: number) => {
-      s.insetMap.size = clampNumber(size, 20, 800, s.insetMap.size);
+      s.insetMap.size = clampNumber(
+        size,
+        INSET_MAP_SIZE_LIMITS[s.insetMap.type].min,
+        INSET_MAP_SIZE_LIMITS[s.insetMap.type].max,
+        s.insetMap.size
+      );
     },
     setInsetMapWindowColor: (colorState: ColorState) => {
       s.insetMap.windowColor = colorState;

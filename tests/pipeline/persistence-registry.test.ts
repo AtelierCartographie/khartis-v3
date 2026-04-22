@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   persistenceRegistry,
   SavePriority
@@ -15,12 +15,37 @@ async function flushMicrotasks(iterations = 3): Promise<void> {
   }
 }
 
+beforeEach(() => {
+  vi.useFakeTimers();
+});
+
 afterEach(() => {
+  vi.useRealTimers();
   persistenceRegistry.markClean();
   persistenceRegistry.setSaveCallback(async () => {});
+  persistenceRegistry.setStatusCallback(null);
+  persistenceRegistry.updateSavePolicy({
+    enabled: true,
+    debounceInterval: 750
+  });
 });
 
 describe('persistenceRegistry.flush', () => {
+  it('debounces changes with the configured save interval', async () => {
+    const saveCallback = vi.fn<() => Promise<void>>().mockResolvedValue();
+
+    persistenceRegistry.setSaveCallback(saveCallback);
+    persistenceRegistry.notifyChange('globalUi');
+
+    vi.advanceTimersByTime(749);
+    await flushMicrotasks();
+    expect(saveCallback).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(1);
+    await flushMicrotasks();
+    expect(saveCallback).toHaveBeenCalledOnce();
+  });
+
   it('coalesces immediate notifications while a save is already in flight', async () => {
     let resolveFirstFlush: (() => void) | undefined;
     const firstFlush = new Promise<void>((resolve) => {
@@ -45,5 +70,64 @@ describe('persistenceRegistry.flush', () => {
     await flushMicrotasks();
 
     expect(saveCallback).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not auto-save while the save policy is disabled, but still flushes manually', async () => {
+    const saveCallback = vi.fn<() => Promise<void>>().mockResolvedValue();
+
+    persistenceRegistry.setSaveCallback(saveCallback);
+    persistenceRegistry.updateSavePolicy({ enabled: false });
+    persistenceRegistry.notifyChange('visualization');
+
+    vi.runAllTimers();
+    await flushMicrotasks();
+    expect(saveCallback).not.toHaveBeenCalled();
+    expect(persistenceRegistry.isDirty).toBe(true);
+
+    await persistenceRegistry.flush();
+    expect(saveCallback).toHaveBeenCalledOnce();
+    expect(persistenceRegistry.isDirty).toBe(false);
+  });
+
+  it('ignores notifications while persistence is suspended', async () => {
+    const saveCallback = vi.fn<() => Promise<void>>().mockResolvedValue();
+
+    persistenceRegistry.setSaveCallback(saveCallback);
+
+    await persistenceRegistry.withPersistenceSuspended(async () => {
+      persistenceRegistry.notifyChange('dataTab', SavePriority.IMMEDIATE);
+      persistenceRegistry.notifyChange('visualization');
+    });
+
+    vi.runAllTimers();
+    await flushMicrotasks();
+    expect(saveCallback).not.toHaveBeenCalled();
+    expect(persistenceRegistry.isDirty).toBe(false);
+  });
+
+  it('publishes dirty and last-saved status through the status callback', async () => {
+    const saveCallback = vi.fn<() => Promise<void>>().mockResolvedValue();
+    const statusCallback = vi.fn();
+
+    persistenceRegistry.setSaveCallback(saveCallback);
+    persistenceRegistry.setStatusCallback(statusCallback);
+
+    persistenceRegistry.notifyChange('globalUi');
+
+    expect(statusCallback).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        isDirty: true
+      })
+    );
+
+    vi.advanceTimersByTime(750);
+    await flushMicrotasks();
+
+    const lastStatus = statusCallback.mock.calls.at(-1)?.[0] as
+      | { isDirty: boolean; lastSaved?: Date }
+      | undefined;
+
+    expect(lastStatus?.isDirty).toBe(false);
+    expect(lastStatus?.lastSaved).toBeInstanceOf(Date);
   });
 });

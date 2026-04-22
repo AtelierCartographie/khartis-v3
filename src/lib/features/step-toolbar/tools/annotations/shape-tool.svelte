@@ -33,6 +33,10 @@
 
   const selectedAnnotation = useSelectedAnnotationByType(AnnotationKind.SHAPE);
   const selectedShapeAnnotation = $derived(selectedAnnotation.selected);
+  const isShapePlacementActive = $derived(
+    annotationsState.creationMode === 'placing' &&
+      annotationsState.pendingType === AnnotationKind.SHAPE
+  );
 
   const effectiveStyle = $derived(
     selectedShapeAnnotation?.style ?? defaultStyle
@@ -131,11 +135,14 @@
     const value = (e.currentTarget as HTMLSelectElement).value;
     if (SHAPE_TYPES.includes(value as ShapeTypeValue)) {
       selectedShape = value as ShapeTypeValue;
+      if (isShapePlacementActive) {
+        annotationsActions.beginPlacement(AnnotationKind.SHAPE, selectedShape);
+      }
     }
   }
 
   function handleAddShape() {
-    annotationsActions.addAnnotation(AnnotationKind.SHAPE, selectedShape);
+    annotationsActions.beginPlacement(AnnotationKind.SHAPE, selectedShape);
   }
 
   function handleThicknessChange(e: CustomEvent<number>) {

@@ -16,6 +16,7 @@ import { migrateIfNeeded } from './schema-migration';
 
 let db: IDBDatabase | null = null;
 let localforageMigrated = false;
+let localforageMigrationPromise: Promise<void> | null = null;
 
 function isSerializedProject(value: unknown): value is SerializedProject {
   if (!value || typeof value !== 'object') {
@@ -72,10 +73,63 @@ export async function openDatabase(): Promise<IDBDatabase> {
   // One-shot migration: copy localforage keys to the new IDB metadata store
   if (!localforageMigrated) {
     localforageMigrated = true;
-    migrateFromLocalforage(database).catch((error) => console.error(error));
+    localforageMigrationPromise = migrateFromLocalforage(database)
+      .catch((error) => {
+        logger.error(
+          'Failed to migrate localforage project metadata',
+          LogCategory.PERSISTENCE,
+          error
+        );
+      })
+      .finally(() => {
+        localforageMigrationPromise = null;
+      });
+  }
+
+  if (localforageMigrationPromise) {
+    await localforageMigrationPromise;
   }
 
   return database;
+}
+
+async function loadMetadataStoreValue(
+  database: IDBDatabase,
+  key: string
+): Promise<string | null> {
+  return new Promise((resolve, reject) => {
+    const tx = database.transaction(
+      [PROJECT_CONST.DB.METADATA_STORE_NAME],
+      'readonly'
+    );
+    const request = tx
+      .objectStore(PROJECT_CONST.DB.METADATA_STORE_NAME)
+      .get(key);
+
+    request.onsuccess = () => {
+      resolve(
+        typeof request.result?.value === 'string' ? request.result.value : null
+      );
+    };
+    request.onerror = () =>
+      reject(request.error || new Error('Failed to read metadata'));
+  });
+}
+
+async function saveMetadataStoreValue(
+  database: IDBDatabase,
+  key: string,
+  value: string
+): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const tx = database.transaction(
+      [PROJECT_CONST.DB.METADATA_STORE_NAME],
+      'readwrite'
+    );
+    tx.objectStore(PROJECT_CONST.DB.METADATA_STORE_NAME).put({ key, value });
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
 }
 
 async function migrateFromLocalforage(database: IDBDatabase): Promise<void> {
@@ -93,32 +147,26 @@ async function migrateFromLocalforage(database: IDBDatabase): Promise<void> {
 
   const keys = [ProjectStorageKey.CURRENT, ProjectStorageKey.METADATA];
   let migrated = 0;
+  let skipped = 0;
 
   for (const key of keys) {
     const value = await lf.getItem(key);
     if (value === null) continue;
 
-    // Write to new IDB metadata store
-    await new Promise<void>((resolve, reject) => {
-      const tx = database.transaction(
-        [PROJECT_CONST.DB.METADATA_STORE_NAME],
-        'readwrite'
-      );
-      tx.objectStore(PROJECT_CONST.DB.METADATA_STORE_NAME).put({
-        key,
-        value
-      });
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
+    const existingValue = await loadMetadataStoreValue(database, key);
+    if (existingValue === null) {
+      await saveMetadataStoreValue(database, key, value);
+      migrated++;
+    } else {
+      skipped++;
+    }
 
     await lf.removeItem(key);
-    migrated++;
   }
 
-  if (migrated > 0) {
+  if (migrated > 0 || skipped > 0) {
     logger.info(
-      `Migrated ${migrated} keys from localforage to IDB metadata store`,
+      `Migrated ${migrated} keys from localforage to IDB metadata store${skipped > 0 ? ` (${skipped} already present in IDB)` : ''}`,
       LogCategory.PERSISTENCE
     );
   }

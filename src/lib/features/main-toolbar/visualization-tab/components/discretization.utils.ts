@@ -101,13 +101,9 @@ const METHOD_LABELS: Record<ClassificationMethod, () => string> = {
 export function resolveDiscretizationLabel(
   classification: ClassificationConfig | undefined
 ): string {
-  if (!classification) {
-    return `${m.discretization_method_jenks()}, 5 ${m.discretization_num_classes().toLowerCase()}`;
-  }
-
-  const method = classification.method ?? CM.JENKS;
-  const numClasses = classification.numClasses ?? classification.classes ?? 5;
+  const method = classification?.method ?? CM.JENKS;
+  const numClasses = classification?.numClasses ?? classification?.classes ?? 5;
   const methodLabel = METHOD_LABELS[method]?.() ?? String(method);
 
-  return `${methodLabel}, ${numClasses} ${m.discretization_num_classes().toLowerCase()}`;
+  return `${methodLabel}, ${numClasses} classes`;
 }

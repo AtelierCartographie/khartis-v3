@@ -20,6 +20,11 @@
     onUrlChange: (value: string) => void;
   }
 
+  type ValueInputEvent = Event & {
+    detail?: string | number | null;
+    target: EventTarget | null;
+  };
+
   let {
     isUploading,
     pastedDataValue,
@@ -30,6 +35,15 @@
     onPastedDataChange,
     onUrlChange
   }: Props = $props();
+
+  function resolveInputValue(
+    event: ValueInputEvent,
+    target: HTMLInputElement | HTMLTextAreaElement | null
+  ): string {
+    return typeof event.detail === 'string'
+      ? event.detail
+      : (target?.value ?? '');
+  }
 </script>
 
 <div class="import-section">
@@ -48,11 +62,7 @@
         value={pastedDataValue}
         on:input={(e) => {
           const target = e.target as HTMLTextAreaElement | null;
-          const detailValue = (e as CustomEvent<string | number | null>).detail;
-          const valueFromDetail =
-            typeof detailValue === 'string' ? detailValue : null;
-          const value = valueFromDetail ?? target?.value ?? '';
-          onPastedDataChange(value);
+          onPastedDataChange(resolveInputValue(e, target));
         }}
         placeholder={m.enrich_paste_data()}
         rows={5}
@@ -75,11 +85,7 @@
         value={onlineUrlValue}
         on:input={(e) => {
           const target = e.target as HTMLInputElement | null;
-          const detailValue = (e as CustomEvent<string | number | null>).detail;
-          const valueFromDetail =
-            typeof detailValue === 'string' ? detailValue : null;
-          const value = valueFromDetail ?? target?.value ?? '';
-          onUrlChange(value);
+          onUrlChange(resolveInputValue(e, target));
         }}
         placeholder={m.url_placeholder()}
         size="sm"

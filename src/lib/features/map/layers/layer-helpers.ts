@@ -43,11 +43,17 @@ export function createCategoricalColorAccessor(
   categoryColumn: string,
   colorMap: Map<string, RGBColor> | null,
   missingColor: RGBColor = HIGHLIGHT_FILL_COLOR,
-  showMissing = true
+  showMissing = true,
+  disabledLabels: string[] = []
 ) {
   const missingAlpha = showMissing ? 255 : 0;
+  const hiddenTuple: [number, number, number, number] = [0, 0, 0, 0];
+  const disabled = new Set(disabledLabels.map(String));
   return (object: DeckDataRow): [number, number, number, number] => {
     const category = object[categoryColumn];
+    if (disabled.has(String(category))) {
+      return hiddenTuple;
+    }
     const mapped = colorMap?.get(String(category));
     if (mapped) return [mapped[0], mapped[1], mapped[2], 255];
     return [missingColor[0], missingColor[1], missingColor[2], missingAlpha];
@@ -128,6 +134,72 @@ export function createChoroplethColorAccessor(
     const rgb = getColorForValue(numericValue, breaks, colors);
     return [rgb[0], rgb[1], rgb[2], 255];
   };
+}
+
+interface StrokeClassificationAccessorOptions {
+  strokeMode: 'classes' | 'categories' | string;
+  strokeClassification?: {
+    colors?: string[];
+    breaks?: number[];
+    labels?: string[];
+    disabledLabels?: string[];
+  } | null;
+  valueColumn?: string | null;
+  categoryColumn?: string | null;
+  fallbackLabels?: string[];
+  fallbackBreaks?: number[];
+  missingColor: RGBColor;
+  showMissing: boolean;
+  hexToRgb: (hex: string) => RGBColor;
+}
+
+export function createStrokeClassificationAccessor(
+  options: StrokeClassificationAccessorOptions
+): ((row: DeckDataRow) => [number, number, number, number]) | null {
+  const {
+    strokeMode,
+    strokeClassification,
+    valueColumn,
+    categoryColumn,
+    fallbackLabels,
+    fallbackBreaks,
+    missingColor,
+    showMissing,
+    hexToRgb
+  } = options;
+  const colors = strokeClassification?.colors;
+  if (!colors || colors.length === 0) return null;
+
+  if (strokeMode === 'classes' && valueColumn) {
+    const breaks = strokeClassification?.breaks ?? fallbackBreaks;
+    if (!breaks || breaks.length < 2) return null;
+    return createChoroplethColorAccessor(
+      valueColumn,
+      breaks,
+      colors,
+      missingColor,
+      showMissing
+    );
+  }
+
+  if (strokeMode === 'categories' && categoryColumn) {
+    const labels = strokeClassification?.labels ?? fallbackLabels ?? [];
+    if (labels.length === 0) return null;
+    const colorMap = new Map<string, RGBColor>();
+    labels.forEach((label, i) => {
+      const hex = colors[i] ?? colors[colors.length - 1]!;
+      colorMap.set(String(label), hexToRgb(hex));
+    });
+    return createCategoricalColorAccessor(
+      categoryColumn,
+      colorMap,
+      missingColor,
+      showMissing,
+      strokeClassification?.disabledLabels ?? []
+    );
+  }
+
+  return null;
 }
 
 export function createGeoJsonCategoricalColorAccessor(

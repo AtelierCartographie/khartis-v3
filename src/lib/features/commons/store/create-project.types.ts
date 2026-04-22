@@ -127,14 +127,6 @@ export interface ExampleProject {
   tags?: string[];
 }
 
-export interface SavedProject {
-  id: string;
-  title: string;
-  subtitle: string;
-  createdAt: Date;
-  thumbnail?: string;
-}
-
 export { ExampleCategory, FileStatus };
 
 export interface CreateProjectState {
@@ -151,14 +143,6 @@ export interface CreateProjectState {
     error?: string;
     warning?: string;
     validationErrors: string[];
-  };
-
-  openProject: {
-    savedProjects: SavedProject[];
-    selectedProjectId?: string;
-    importedFile?: UploadedFile;
-    isLoading: boolean;
-    error?: string;
   };
 
   tryExample: {

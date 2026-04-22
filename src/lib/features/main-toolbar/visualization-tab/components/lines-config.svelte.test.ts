@@ -15,19 +15,20 @@ describe('LinesConfig — palette wiring', () => {
     expect(source).toContain('PALETTE_TYPE');
   });
 
-  it('should pass paletteType=SEQUENTIAL on the CLASSES branch PalettePreview', () => {
+  it('delegates the CLASSES branch PalettePreview paletteType to resolvePaletteTypeForBreakpoint', () => {
     const classesBlock = source.split('colorMode === ColorMode.CLASSES')[1];
     expect(classesBlock).toBeDefined();
     const classesPalette = classesBlock
       .split('<PalettePreview')[1]
       ?.split('/>')[0];
     expect(classesPalette).toBeDefined();
-    expect(classesPalette).toContain('paletteType={PALETTE_TYPE.SEQUENTIAL}');
+    expect(classesPalette).toContain('resolvePaletteTypeForBreakpoint');
+    expect(classesPalette).toContain('visualization?.classification');
   });
 
   it('should pass paletteType=QUALITATIVE on the CATEGORIES branch PalettePreview', () => {
     const categoriesBlock = source.split(
-      'colorMode === ColorMode.CATEGORIES'
+      '{:else if colorMode === ColorMode.CATEGORIES}'
     )[1];
     expect(categoriesBlock).toBeDefined();
     const categoriesPalette = categoriesBlock
@@ -52,14 +53,12 @@ describe('LinesConfig — palette wiring', () => {
 
   it('should enable Categories Aspect popover via categoriesMode + categoryLabels on CATEGORIES', () => {
     const categoriesBlock = source.split(
-      'colorMode === ColorMode.CATEGORIES'
+      '{:else if colorMode === ColorMode.CATEGORIES}'
     )[1];
     const paletteBlock = categoriesBlock
       ?.split('<PalettePreview')[1]
       ?.split('/>')[0];
     expect(paletteBlock).toContain('categoriesMode={true}');
-    expect(paletteBlock).toContain(
-      'categoryLabels={visualization?.classification?.labels ?? []}'
-    );
+    expect(paletteBlock).toContain('categoryLabels={categoryLabels.labels}');
   });
 });

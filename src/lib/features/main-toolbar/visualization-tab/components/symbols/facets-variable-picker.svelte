@@ -1,5 +1,6 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
+  import { NONE_FIELD_ID } from './types';
   import {
     CharacterWholeNumber,
     Checkbox,
@@ -10,6 +11,10 @@
   } from 'carbon-icons-svelte';
   import Switch from '$lib/features/commons/components/switch.svelte';
   import { clickOutside } from '$lib/features/commons/utils/click-outside';
+  import {
+    createExclusiveContextualSurfaceId,
+    engageExclusiveContextualSurface
+  } from '$lib/features/commons/utils/contextual-surface-coordinator';
 
   interface DataField {
     id: number;
@@ -24,11 +29,12 @@
     selectedFieldIds?: number[];
     isCollectionEnabled: boolean;
     canEnableCollection?: boolean;
+    showCollectionFooter?: boolean;
     titleText?: string;
     open?: boolean;
     onSelect: (fieldId: number) => void;
-    onCollectionChange: (fieldIds: number[]) => void;
-    onToggleCollection: (enabled: boolean) => void;
+    onCollectionChange?: (fieldIds: number[]) => void;
+    onToggleCollection?: (enabled: boolean) => void;
   }
 
   let {
@@ -38,14 +44,13 @@
     selectedFieldIds = [],
     isCollectionEnabled,
     canEnableCollection = true,
+    showCollectionFooter = true,
     titleText,
     open = $bindable(false),
     onSelect,
     onCollectionChange,
     onToggleCollection
   }: Props = $props();
-
-  const NONE_ID = -1;
 
   const isNumeric = (field: DataField) => field.type === 'number';
 
@@ -68,10 +73,13 @@
       ? selectedFieldIds.length
       : 0
   );
+  const contextualSurfaceId = createExclusiveContextualSurfaceId(
+    'facets-variable-picker'
+  );
 
   const displayItems = $derived(
     isCollectionEnabled
-      ? dataFields.filter((f) => f.id !== NONE_ID)
+      ? dataFields.filter((f) => f.id !== NONE_FIELD_ID)
       : singleSelectItems
   );
 
@@ -93,7 +101,7 @@
       const next = selectedFieldIds.includes(fieldId)
         ? selectedFieldIds.filter((id) => id !== fieldId)
         : [...selectedFieldIds, fieldId];
-      onCollectionChange(next);
+      onCollectionChange?.(next);
     } else {
       onSelect(fieldId);
       open = false;
@@ -101,8 +109,18 @@
   }
 
   function handleToggle(checked: boolean) {
-    onToggleCollection(checked);
+    onToggleCollection?.(checked);
   }
+
+  $effect(() => {
+    if (!open) {
+      return;
+    }
+
+    return engageExclusiveContextualSurface(contextualSurfaceId, () => {
+      open = false;
+    });
+  });
 </script>
 
 {#if titleText}
@@ -122,7 +140,9 @@
   >
     <div class="trigger-value">
       {#if isCollectionEnabled && collectionCount > 1}
-        <span class="collection-count">{collectionCount} variables</span>
+        <span class="collection-count"
+          >{m.facets_variables_count({ count: collectionCount })}</span
+        >
       {:else if isCollectionEnabled && triggerLabel}
         <span
           class="variable-tag"
@@ -136,7 +156,7 @@
             <StringText size={16} />
           {/if}
         </span>
-      {:else if selectedField && selectedFieldId !== NONE_ID}
+      {:else if selectedField && selectedFieldId !== NONE_FIELD_ID}
         <span
           class="variable-tag"
           class:numeric={isNumeric(selectedField)}
@@ -179,7 +199,7 @@
                 {/if}
               </span>
             {/if}
-            {#if field.id === NONE_ID}
+            {#if field.id === NONE_FIELD_ID}
               <span class="item-plain">{field.text}</span>
             {:else}
               <span
@@ -202,15 +222,17 @@
         {/each}
       </div>
 
-      <div class="dropdown-footer" class:disabled={!canEnableCollection}>
-        <Switch
-          size="sm"
-          labelText={m.facets_toggle_create_collection()}
-          toggled={isCollectionEnabled}
-          disabled={!canEnableCollection}
-          onchange={handleToggle}
-        />
-      </div>
+      {#if showCollectionFooter}
+        <div class="dropdown-footer" class:disabled={!canEnableCollection}>
+          <Switch
+            size="sm"
+            labelText={m.facets_toggle_create_collection()}
+            toggled={isCollectionEnabled}
+            disabled={!canEnableCollection}
+            onchange={handleToggle}
+          />
+        </div>
+      {/if}
     </div>
   {/if}
 </div>
@@ -285,9 +307,9 @@
     }
 
     &.string {
-      background: var(--cds-layer-02, #e0e0e0);
-      border: 1px solid var(--cds-border-subtle-01, #c6c6c6);
-      color: var(--cds-text-primary, #161616);
+      background: var(--tag-magenta-tag-background, #ffd6e8);
+      border: 1px solid var(--tag-magenta-tag-border-operational, #ff7eb6);
+      color: var(--tag-magenta-tag-color, #9f1853);
     }
   }
 

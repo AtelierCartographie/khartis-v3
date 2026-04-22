@@ -212,6 +212,22 @@ function toComparableNumber(value: unknown): number | null {
   return Number.isFinite(timestamp) ? timestamp : null;
 }
 
+function isFilterIncomplete(filter: VizDataFilter): boolean {
+  const op = filter.operator;
+  if (op === 'empty' || op === 'not_empty') return false;
+  if (op === 'top_asc' || op === 'top_desc') {
+    const limit = filter.limit ?? Number(filter.value);
+    return !Number.isFinite(limit) || limit <= 0;
+  }
+  const trimmed = String(filter.value ?? '').trim();
+  if (trimmed === '') return true;
+  if (op === 'between') {
+    const trimmedSecondary = String(filter.secondaryValue ?? '').trim();
+    if (trimmedSecondary === '') return true;
+  }
+  return false;
+}
+
 function matchesOperator(
   cellValue: unknown,
   operator: FilterOperator,
@@ -318,12 +334,16 @@ export function filterArrowTableByDataFilters(
 ): ArrowTable {
   if (!filters?.length) return table;
 
-  // Apply only filters matching the given primitiveType (or global filters with no type)
-  const applicableFilters = primitiveType
-    ? filters.filter(
-        (f) => !f.primitiveType || f.primitiveType === primitiveType
-      )
-    : filters;
+  // Apply only filters matching the given primitiveType (or global filters with no type),
+  // and skip filters that are not yet fully configured (e.g. empty value after creation)
+  // so the map does not blank out while the user is still typing.
+  const applicableFilters = (
+    primitiveType
+      ? filters.filter(
+          (f) => !f.primitiveType || f.primitiveType === primitiveType
+        )
+      : filters
+  ).filter((f) => !isFilterIncomplete(f));
   if (!applicableFilters.length) return table;
 
   const cacheKey = buildFilterCacheKey(applicableFilters);

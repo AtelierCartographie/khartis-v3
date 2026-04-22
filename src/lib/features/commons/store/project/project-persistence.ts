@@ -2,7 +2,10 @@ import {
   ProjectStorageKey,
   projectFiles,
   projectRepository,
-  projectStorage
+  projectStorage,
+  persistenceRegistry,
+  SavePriority,
+  type SavePriorityType
 } from '$lib/features/project-management';
 import { deserializeUploadedFile } from '$lib/features/project-management/core/serializer';
 import type {
@@ -164,6 +167,7 @@ export async function saveCurrentProject(
     container._state.currentProject.manifest.updatedAt = new Date();
 
     await projectRepository.save(container._state.currentProject);
+    persistenceRegistry.markClean();
     container._state.isDirty = false;
     container._state.lastSaved = new Date();
   } catch (error) {
@@ -233,45 +237,17 @@ export async function importProject(
   }
 }
 
-export function markDirty(container: ProjectStateContainer): void {
+export function markDirty(
+  container: ProjectStateContainer,
+  priority: SavePriorityType = SavePriority.DEBOUNCED
+): void {
   container._state.isDirty = true;
-  scheduleAutoSave(container);
+  persistenceRegistry.notifyChange('project', priority);
 }
 
 export async function markDirtyAndSave(
   container: ProjectStateContainer
 ): Promise<void> {
-  container._state.isDirty = true;
-  await saveCurrentProject(container);
-}
-
-export function scheduleAutoSave(container: ProjectStateContainer): void {
-  container.autoSave.updateConfig({
-    enabled: container._state.autoSaveEnabled,
-    interval: container._state.autoSaveInterval
-  });
-  container.autoSave.schedule(container._state.isDirty);
-}
-
-export function setAutoSave(
-  container: ProjectStateContainer,
-  enabled: boolean,
-  interval?: number
-): void {
-  container._state.autoSaveEnabled = enabled;
-
-  if (interval) {
-    container._state.autoSaveInterval = interval;
-  }
-
-  container.autoSave.updateConfig({
-    enabled: container._state.autoSaveEnabled,
-    interval: container._state.autoSaveInterval
-  });
-
-  if (enabled && container._state.isDirty) {
-    scheduleAutoSave(container);
-  } else if (!enabled) {
-    container.autoSave.cancel();
-  }
+  markDirty(container, SavePriority.IMMEDIATE);
+  await persistenceRegistry.flush();
 }

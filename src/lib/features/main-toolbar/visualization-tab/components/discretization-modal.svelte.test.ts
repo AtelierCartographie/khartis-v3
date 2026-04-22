@@ -12,13 +12,19 @@ vi.mock('$lib/features/commons/services/classification.service', () => ({
   applyPaletteInversion: (colors: string[]) => colors,
   calculateBreakCounts: vi.fn(async () => null),
   calculateBreaks: vi.fn(async () => null),
+  computeDivergingSplit: vi.fn(() => ({
+    lowerCount: 2,
+    upperCount: 2,
+    hasCenterClass: true
+  })),
   generateColorsForBreaks: vi.fn(() => [])
 }));
 
 vi.mock(
   '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte',
   () => ({
-    getColorBlindnessState: () => ({ enabled: false })
+    getColorBlindnessState: () => ({ enabled: false, simulationType: 'none' }),
+    isColorBlindnessActive: () => false
   })
 );
 
@@ -80,7 +86,7 @@ describe('DiscretizationModal', () => {
         option.textContent?.trim()
       )
     ).toEqual([
-      'K-means (seuils naturels)',
+      'Jenks',
       'Quantiles',
       'Intervalles égaux',
       'Écarts-types',
@@ -91,7 +97,7 @@ describe('DiscretizationModal', () => {
     ]);
   });
 
-  it('defaults the discretization select to K-means when no method is configured', () => {
+  it('defaults the discretization select to Jenks when no method is configured', () => {
     const visualization = createVisualization({ classification: undefined });
     const { container } = render(DiscretizationModal, {
       open: true,
@@ -104,6 +110,125 @@ describe('DiscretizationModal', () => {
 
     expect(select).not.toBeNull();
     expect(select?.value).toBe('jenks');
+  });
+
+  it('persists the selected method immediately even before breaks can be recomputed', async () => {
+    const onchange = vi.fn();
+    const visualization = createVisualization({
+      classification: {
+        method: ClassificationMethod.JENKS,
+        classes: 5,
+        numClasses: 5,
+        breaks: [12, 24, 36, 48],
+        counts: [1, 1, 1, 1, 1],
+        colors: ['#f7fbff', '#c6dbef', '#6baed6', '#2171b5', '#08519c']
+      }
+    });
+    const { container } = render(DiscretizationModal, {
+      open: true,
+      visualization,
+      onchange
+    });
+
+    const select = container.querySelector(
+      '#classification-method'
+    ) as HTMLSelectElement | null;
+
+    expect(select).not.toBeNull();
+
+    await fireEvent.change(select!, {
+      target: { value: 'quantile' }
+    });
+
+    expect(onchange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: ClassificationMethod.QUANTILES,
+        classes: 5,
+        numClasses: 5,
+        breaks: undefined,
+        counts: undefined
+      })
+    );
+  });
+
+  it('keeps the local method choice when the parent props have not caught up yet', async () => {
+    const initialClassification = {
+      method: ClassificationMethod.JENKS,
+      classes: 5,
+      numClasses: 5,
+      breaks: [12, 24, 36, 48],
+      counts: [1, 1, 1, 1, 1],
+      colors: ['#f7fbff', '#c6dbef', '#6baed6', '#2171b5', '#08519c']
+    };
+    const visualization = createVisualization({
+      classification: initialClassification
+    });
+    const onchange = vi.fn();
+    const { container, rerender } = render(DiscretizationModal, {
+      open: true,
+      visualization,
+      classification: initialClassification,
+      onchange
+    });
+
+    const select = container.querySelector(
+      '#classification-method'
+    ) as HTMLSelectElement | null;
+
+    expect(select).not.toBeNull();
+
+    await fireEvent.change(select!, {
+      target: { value: 'quantile' }
+    });
+
+    await rerender({
+      open: false,
+      visualization,
+      classification: initialClassification,
+      onchange
+    });
+    await rerender({
+      open: true,
+      visualization,
+      classification: initialClassification,
+      onchange
+    });
+
+    const reopenedSelect = container.querySelector(
+      '#classification-method'
+    ) as HTMLSelectElement | null;
+
+    expect(reopenedSelect).not.toBeNull();
+    expect(reopenedSelect?.value).toBe('quantile');
+  });
+
+  it('propagates the selected method change from the panel to the parent callback', async () => {
+    const onmethodchange = vi.fn();
+    const { container } = render(DiscretizationPanel, {
+      method: 'jenks',
+      numClasses: 5,
+      breaks: [
+        { min: 0, max: 10, count: 1, color: '#111111' },
+        { min: 10, max: 20, count: 1, color: '#222222' },
+        { min: 20, max: 30, count: 1, color: '#333333' },
+        { min: 30, max: 40, count: 1, color: '#444444' },
+        { min: 40, max: 50, count: 1, color: '#555555' }
+      ],
+      onmethodchange
+    });
+
+    const select = container.querySelector(
+      '#classification-method'
+    ) as HTMLSelectElement | null;
+
+    expect(select).not.toBeNull();
+
+    await fireEvent.change(select!, {
+      target: { value: 'equal-interval' }
+    });
+
+    expect(onmethodchange).toHaveBeenCalledWith('equal-interval');
+    expect(select?.value).toBe('equal-interval');
   });
 
   it('should update both adjacent bounds when editing a shared break value in manual mode', async () => {
@@ -145,12 +270,21 @@ describe('DiscretizationModal', () => {
     );
   });
 
+  it('should allow a stroke-specific valueColumn override instead of always reading visualization.mapping.valueColumn', () => {
+    expect(modalSource).toContain('valueColumn?: string;');
+    expect(modalSource).toContain('const activeValueColumn = $derived(');
+    expect(modalSource).toContain(
+      'valueColumn ?? visualization?.mapping.valueColumn'
+    );
+  });
+
   it('should use a single opening effect to avoid redundant state syncs', () => {
+    expect(modalSource).toContain('const classificationForSync =');
     const openingSyncMatches = modalSource.match(
-      /syncStateFromVisualization\(activeClassification\)/g
+      /syncStateFromVisualization\(classificationForSync\)/g
     );
     expect(openingSyncMatches).not.toBeNull();
-    expect(openingSyncMatches!.length).toBeLessThanOrEqual(2);
+    expect(openingSyncMatches!.length).toBe(1);
   });
 
   it('allows clearing the breakpoint value', async () => {
@@ -170,5 +304,22 @@ describe('DiscretizationModal', () => {
 
     expect(onbreakpointchange).toHaveBeenLastCalledWith(null);
     expect(breakpointInput.value).toBe('');
+  });
+
+  it('can hide breakpoint controls for non-color discretizations', () => {
+    const { container } = render(DiscretizationModal, {
+      open: true,
+      visualization: createVisualization(),
+      showBreakpointControls: false,
+      role: 'size'
+    });
+
+    expect(container.querySelector('.breakpoint-section')).toBeNull();
+    expect(container.querySelector('#breakpoint-value')).toBeNull();
+    expect(
+      container.querySelector(
+        '.discretization-floating-panel[data-role="size"]'
+      )
+    ).not.toBeNull();
   });
 });

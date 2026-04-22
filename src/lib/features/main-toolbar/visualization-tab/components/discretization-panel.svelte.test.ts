@@ -8,6 +8,20 @@ const source = readFileSync(
 );
 
 describe('DiscretizationPanel — break edition policy', () => {
+  it('drives the classification method select through the change handler, not bind:selected', () => {
+    expect(source).toContain('selected={method}');
+    expect(source).toContain('on:change={handleMethodChange}');
+    expect(source).not.toContain('bind:selected={method}');
+  });
+
+  it('does not short-circuit method changes before notifying the parent', () => {
+    const methodBlock = source
+      .split('function handleMethodChange(e: Event)')[1]
+      ?.split('function ')[0];
+    expect(methodBlock).not.toContain('if (newMethod === method) return;');
+    expect(methodBlock).toContain('onmethodchange?.(newMethod);');
+  });
+
   it('allows editing every interior break regardless of method (Figma 766:107296)', () => {
     expect(source).toContain(
       'function canEditBreakRow(index: number): boolean {\n    return index > 0 && index < breaks.length;'
@@ -44,6 +58,12 @@ describe('DiscretizationPanel — break edition policy', () => {
 
   it('renders histogram bars for Répartition des valeurs', () => {
     expect(source).toContain('histogram');
+  });
+
+  it('allows parents to hide breakpoint controls when the classification does not drive a color scale', () => {
+    expect(source).toContain('showBreakpointControls?: boolean;');
+    expect(source).toContain('showBreakpointControls = true');
+    expect(source).toContain('{#if showBreakpointControls}');
   });
 
   it('exposes classification edge safety: guards empty breaks, NaN min/max', () => {

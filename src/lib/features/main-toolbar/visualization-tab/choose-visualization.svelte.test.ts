@@ -16,4 +16,20 @@ describe('ChooseVisualization', () => {
     expect(source).toContain('<div use:appendToBody>');
     expect(source).toContain('bind:open={isDeleteConfirmOpen}');
   });
+
+  it('renders suggestion cards through the reusable card component', () => {
+    expect(source).toContain(
+      "import VisualizationSuggestionCard from './components/visualization-suggestion-card.svelte';"
+    );
+    expect(source).toContain('<VisualizationSuggestionCard');
+  });
+
+  it('commits visualization renames through the immediate rename action', () => {
+    expect(source).toContain(
+      'visualizationStore.renameVisualization(id, trimmed);'
+    );
+    expect(source).not.toContain(
+      'visualizationStore.updateVisualization(id, { name: trimmed });'
+    );
+  });
 });

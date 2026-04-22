@@ -9,18 +9,6 @@
     type ClassificationConfig,
     type VisualizationConfig
   } from '$lib/features/commons/store/visualization.store.svelte';
-  import {
-    applyPaletteInversion,
-    calculateBreakCounts,
-    calculateBreaks,
-    computeDivergingSplit,
-    generateColorsForBreaks
-  } from '$lib/features/commons/services/classification.service';
-  import {
-    findPaletteById,
-    generatePaletteColors
-  } from '$lib/features/commons/components/palette-popover/palette.constants';
-  import { getColorBlindnessState } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { onMount, tick, untrack } from 'svelte';
   import {
@@ -30,6 +18,15 @@
     resolveHeadTailClassCountMax,
     resolveRequestedClassCount
   } from './discretization.utils';
+  import {
+    createExclusiveContextualSurfaceId,
+    engageExclusiveContextualSurface
+  } from '$lib/features/commons/utils/contextual-surface-coordinator';
+  import {
+    computeClassificationBreaks,
+    resolveClassificationBreakColors,
+    type ClassificationBreaksComputation
+  } from '../use-classification-breaks.svelte';
 
   type PanelMethod =
     | 'jenks'
@@ -52,6 +49,9 @@
     open?: boolean;
     visualization?: VisualizationConfig;
     classification?: ClassificationConfig;
+    valueColumn?: string;
+    showBreakpointControls?: boolean;
+    role?: 'fill' | 'stroke' | 'size';
     onclose?: () => void;
     onchange?: (classification: Partial<ClassificationConfig>) => void;
   }
@@ -60,6 +60,9 @@
     open = $bindable(false),
     visualization,
     classification: classificationOverride,
+    valueColumn,
+    showBreakpointControls = true,
+    role = 'fill',
     onclose,
     onchange
   }: Props = $props();
@@ -67,9 +70,19 @@
   const activeClassification = $derived<ClassificationConfig | undefined>(
     classificationOverride ?? visualization?.classification
   );
+  const activeValueColumn = $derived(
+    valueColumn ?? visualization?.mapping.valueColumn
+  );
+  const activeContextKey = $derived(
+    `${visualization?.id ?? ''}:${role}:${activeValueColumn ?? ''}`
+  );
 
   let _isCalculating = $state(false);
   let breaksRequestId = 0;
+  let lastLocalClassification = $state<
+    Partial<ClassificationConfig> | undefined
+  >(undefined);
+  let lastLocalContextKey = $state('');
 
   function storeMethodToPanelMethod(method: ClassificationMethod): PanelMethod {
     const mapping: Record<ClassificationMethod, PanelMethod> = {
@@ -108,6 +121,9 @@
   const MAIN_TOOLBAR_ID = 'khartis-main-toolbar';
   let panelRight = $state(readPanelRight());
   let wasOpen = $state(false);
+  const contextualSurfaceId = createExclusiveContextualSurfaceId(
+    'discretization-modal'
+  );
 
   function getFallbackPanelRight(toolbarClassName = ''): string {
     if (toolbarClassName.includes('collapsed')) {
@@ -162,50 +178,41 @@
       method === ClassificationMethod.HEAD_TAIL
         ? resolveHeadTailClassCountMax(actualClassCount ?? storedNumClasses)
         : DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX;
+    lastLocalClassification = cloneClassification(classification);
+    lastLocalContextKey = activeContextKey;
   }
 
-  function resolvePaletteColors(
-    classCount: number,
-    breakValues: readonly number[]
-  ): string[] {
-    const paletteType = currentBreakpoint !== null ? 'diverging' : 'sequential';
-    const contrast = getColorBlindnessState().enabled
-      ? ('high' as const)
-      : undefined;
-    const userPalette = activeClassification?.paletteId
-      ? findPaletteById(activeClassification.paletteId)
-      : undefined;
-    const divergingSplit =
-      paletteType === 'diverging'
-        ? computeDivergingSplit(classCount, breakValues, currentBreakpoint)
-        : undefined;
+  function cloneClassification(
+    classification: Partial<ClassificationConfig> | undefined
+  ): Partial<ClassificationConfig> | undefined {
+    if (!classification) {
+      return undefined;
+    }
 
-    return applyPaletteInversion(
-      userPalette
-        ? generatePaletteColors(userPalette, classCount, contrast)
-        : generateColorsForBreaks(
-            classCount,
-            paletteType,
-            contrast,
-            divergingSplit
-          ),
-      activeClassification?.inverted ?? false
-    );
+    return {
+      ...classification,
+      breaks: classification.breaks ? [...classification.breaks] : undefined,
+      counts: classification.counts ? [...classification.counts] : undefined,
+      colors: classification.colors ? [...classification.colors] : undefined,
+      labels: classification.labels ? [...classification.labels] : undefined,
+      disabledLabels: classification.disabledLabels
+        ? [...classification.disabledLabels]
+        : undefined,
+      categoryShapes: classification.categoryShapes
+        ? [...classification.categoryShapes]
+        : undefined,
+      patternParams: classification.patternParams
+        ? { ...classification.patternParams }
+        : undefined
+    };
   }
 
   function resolveDivergingPreviewColors(classCount: number): string[] {
-    const contrast = getColorBlindnessState().enabled
-      ? ('high' as const)
-      : undefined;
-    const userPalette = activeClassification?.paletteId
-      ? findPaletteById(activeClassification.paletteId)
-      : undefined;
-
-    return applyPaletteInversion(
-      userPalette
-        ? generatePaletteColors(userPalette, classCount, contrast)
-        : generateColorsForBreaks(classCount, 'diverging', contrast),
-      activeClassification?.inverted ?? false
+    return resolveClassificationBreakColors(
+      activeClassification,
+      classCount,
+      getCurrentBreakValues(),
+      currentBreakpoint
     );
   }
 
@@ -239,23 +246,15 @@
   }
 
   function applyBreaksResult(
-    storeMethod: ClassificationMethod,
-    requestedClassCount: number,
-    result: Awaited<ReturnType<typeof calculateBreaks>>
+    computation: ClassificationBreaksComputation | null
   ) {
-    if (!result) {
+    if (!computation) {
       return;
     }
 
-    const actualClassCount = result.counts.length;
-    const resolvedClassCount = resolveComputedClassCount(
-      storeMethod,
-      requestedClassCount,
-      actualClassCount
-    );
-    const colors = resolvePaletteColors(resolvedClassCount, result.breaks);
+    const { actualClassCount, colors, normalizedMethod, result } = computation;
 
-    currentNumClasses = resolvedClassCount;
+    currentNumClasses = actualClassCount;
     currentBreaks = toClassBreaks(
       result.min,
       result.max,
@@ -264,21 +263,25 @@
       colors
     );
     headTailClassCountMax =
-      storeMethod === ClassificationMethod.HEAD_TAIL
-        ? resolveHeadTailClassCountMax(actualClassCount)
+      normalizedMethod === ClassificationMethod.HEAD_TAIL
+        ? resolveHeadTailClassCountMax(computation.result.counts.length)
         : DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX;
 
-    onchange?.({
-      method: storeMethod,
-      classes: resolvedClassCount,
-      numClasses: resolvedClassCount,
+    const nextClassification = {
+      method: normalizedMethod,
+      classes: actualClassCount,
+      numClasses: actualClassCount,
       breaks: result.breaks,
       counts: result.counts,
       colors,
       breakpointValue: currentBreakpoint,
       paletteId: activeClassification?.paletteId,
       inverted: activeClassification?.inverted ?? false
-    });
+    } satisfies Partial<ClassificationConfig>;
+
+    lastLocalClassification = cloneClassification(nextClassification);
+    lastLocalContextKey = activeContextKey;
+    onchange?.(nextClassification);
   }
 
   $effect(() => {
@@ -289,11 +292,18 @@
       return;
     }
 
-    syncStateFromVisualization(activeClassification);
+    const classificationForSync =
+      lastLocalContextKey === activeContextKey
+        ? ((lastLocalClassification ?? activeClassification) as
+            | ClassificationConfig
+            | undefined)
+        : activeClassification;
+
+    syncStateFromVisualization(classificationForSync);
     panelRenderKey += 1;
     updatePanelPosition();
 
-    if (!visualization?.datasetId || !visualization?.mapping.valueColumn) {
+    if (!visualization?.datasetId || !activeValueColumn) {
       return;
     }
 
@@ -319,6 +329,14 @@
     return () => {
       document.removeEventListener(EVENT.KEYDOWN, handleKeydown);
     };
+  });
+
+  $effect(() => {
+    if (!open) {
+      return;
+    }
+
+    return engageExclusiveContextualSurface(contextualSurfaceId, handleClose);
   });
 
   $effect(() => {
@@ -349,7 +367,7 @@
   });
 
   async function computeBreaks() {
-    if (!visualization?.datasetId || !visualization?.mapping.valueColumn) {
+    if (!visualization?.datasetId || !activeValueColumn) {
       return;
     }
 
@@ -364,62 +382,90 @@
     _isCalculating = true;
     try {
       const storeMethod = panelMethodToStoreMethod(currentMethod);
-      const requestedClassCount = resolveRequestedClassCount(
-        storeMethod,
-        currentNumClasses
-      );
-      let result: Awaited<ReturnType<typeof calculateBreaks>> = null;
-
-      if (storeMethod === ClassificationMethod.MANUAL) {
-        const breakValues = getCurrentBreakValues();
-        const expectedThresholdCount = Math.max(currentNumClasses - 1, 0);
-
-        if (breakValues.length === expectedThresholdCount) {
-          result = await calculateBreakCounts({
-            datasetId: dataset.sourceFileId,
-            columnName: visualization.mapping.valueColumn,
-            breaks: breakValues
-          });
-        } else {
-          result = await calculateBreaks({
-            datasetId: dataset.sourceFileId,
-            columnName: visualization.mapping.valueColumn,
-            method: ClassificationMethod.EQUAL_INTERVAL,
-            numClasses: requestedClassCount
-          });
-        }
-      } else {
-        result = await calculateBreaks({
-          datasetId: dataset.sourceFileId,
-          columnName: visualization.mapping.valueColumn,
-          method: storeMethod,
-          numClasses: requestedClassCount
-        });
-      }
+      const computation = await computeClassificationBreaks({
+        datasetSourceFileId: dataset.sourceFileId,
+        valueColumn: activeValueColumn,
+        classification: activeClassification,
+        method: storeMethod,
+        numClasses: currentNumClasses,
+        breakValues: getCurrentBreakValues(),
+        breakpointValue: currentBreakpoint
+      });
 
       if (myRequestId !== breaksRequestId) return;
 
-      applyBreaksResult(storeMethod, requestedClassCount, result);
+      applyBreaksResult(computation);
     } finally {
       _isCalculating = false;
     }
   }
 
+  function persistSelectionDraft(options?: {
+    method?: PanelMethod;
+    numClasses?: number;
+    breakpointValue?: number | null;
+  }) {
+    const method = options?.method ?? currentMethod;
+    const storeMethod = panelMethodToStoreMethod(method);
+    const requestedClassCount = resolveRequestedClassCount(
+      storeMethod,
+      options?.numClasses ?? currentNumClasses
+    );
+    const breakpointValue =
+      options &&
+      Object.prototype.hasOwnProperty.call(options, 'breakpointValue')
+        ? (options.breakpointValue ?? null)
+        : currentBreakpoint;
+
+    const nextClassification = {
+      method: storeMethod,
+      classes: requestedClassCount,
+      numClasses: requestedClassCount,
+      breaks: undefined,
+      counts: undefined,
+      breakpointValue,
+      paletteId: activeClassification?.paletteId,
+      inverted: activeClassification?.inverted ?? false
+    } satisfies Partial<ClassificationConfig>;
+
+    lastLocalClassification = cloneClassification({
+      ...(lastLocalContextKey === activeContextKey
+        ? lastLocalClassification
+        : activeClassification),
+      ...nextClassification
+    });
+    lastLocalContextKey = activeContextKey;
+    onchange?.(nextClassification);
+  }
+
   function handleMethodChange(method: PanelMethod) {
     currentMethod = method;
+    currentNumClasses = resolveRequestedClassCount(
+      panelMethodToStoreMethod(method),
+      currentNumClasses
+    );
     if (method !== 'head-tail') {
       headTailClassCountMax = DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX;
     }
+    persistSelectionDraft({
+      method,
+      numClasses: currentNumClasses
+    });
     computeBreaks();
   }
 
   function handleClassesChange(num: number) {
-    currentNumClasses = num;
+    currentNumClasses = resolveRequestedClassCount(
+      panelMethodToStoreMethod(currentMethod),
+      num
+    );
+    persistSelectionDraft({ numClasses: currentNumClasses });
     computeBreaks();
   }
 
   function handleBreakpointChange(value: number | null) {
     currentBreakpoint = value;
+    persistSelectionDraft({ breakpointValue: value });
     computeBreaks();
   }
 
@@ -429,8 +475,6 @@
   }
 
   function handleClose() {
-    syncStateFromVisualization(activeClassification);
-    panelRenderKey += 1;
     wasOpen = false;
     open = false;
     onclose?.();
@@ -442,6 +486,7 @@
     class="discretization-floating-panel"
     style:right={panelRight}
     aria-label={m.discretization()}
+    data-role={role}
   >
     <header class="panel-header">
       <h3>{m.discretization()}</h3>
@@ -460,6 +505,7 @@
           bind:numClasses={currentNumClasses}
           bind:breaks={currentBreaks}
           bind:breakpointValue={currentBreakpoint}
+          showBreakpointControls={showBreakpointControls}
           divergingPreviewColors={divergingPreview}
           classCountMax={currentMethod === 'head-tail'
             ? headTailClassCountMax
@@ -485,7 +531,6 @@
     max-height: calc(100dvh - 120px);
     z-index: var(--z-dropdown);
     background: var(--cds-ui-02, #ffffff);
-    border: 1px solid var(--cds-border-subtle, #e0e0e0);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -495,8 +540,9 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: var(--cds-spacing-04) var(--cds-spacing-05);
-    border-bottom: 1px solid var(--cds-border-subtle);
+    gap: var(--cds-spacing-02);
+    padding: var(--cds-spacing-04) var(--cds-spacing-02) var(--cds-spacing-03)
+      var(--cds-spacing-05);
     position: sticky;
     top: 0;
     flex-shrink: 0;
@@ -506,6 +552,8 @@
     h3 {
       font-size: 1rem;
       font-weight: 600;
+      line-height: 1.5rem;
+      letter-spacing: 0;
       margin: 0;
       color: var(--cds-text-01);
     }
@@ -514,5 +562,6 @@
   .panel-body {
     flex: 1;
     overflow-y: auto;
+    padding-top: var(--cds-spacing-03);
   }
 </style>
