@@ -236,7 +236,10 @@
         patternParams: undefined,
         labels: undefined
       });
+      return;
     }
+
+    ensureVisibleStrokeWidth();
   }
 
   function handleStrokeColorChange(value: string) {
@@ -258,6 +261,19 @@
     strokeDashed = value;
     onStyleChange?.({ strokeDashed: value });
   }
+
+  function ensureVisibleStrokeWidth() {
+    if (strokeMode === StrokeMode.NONE || strokeWidth > 0) {
+      return;
+    }
+
+    strokeWidth = VISUALIZATION_DEFAULTS.strokeWidth;
+    onStyleChange?.({ strokeWidth: VISUALIZATION_DEFAULTS.strokeWidth });
+  }
+
+  $effect(() => {
+    ensureVisibleStrokeWidth();
+  });
 
   function handleColorFieldSelect(fieldId: number) {
     colorFieldId = fieldId;

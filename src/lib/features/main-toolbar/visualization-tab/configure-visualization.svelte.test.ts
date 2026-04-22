@@ -28,12 +28,30 @@ describe('ConfigureVisualization', () => {
     expect(source).toContain('column.type === GEO_COLUMN_TYPE.LONGITUDE');
   });
 
-  it('keeps computed-break cache outside the reactive graph', () => {
-    expect(source).toContain('const lastCompletedKey = untrack(() =>');
-    expect(source).toContain('const inFlightKey = untrack(() =>');
+  it('delegates break computation to the shared controller', () => {
+    expect(source).toContain("from './use-classification-breaks.svelte';");
+    expect(source).toContain('useClassificationBreaksController');
+    expect(source).toContain('CLASSIFICATION_BREAKS_TRIGGER');
+    expect(source).toContain('buildClassificationScopeKey');
     expect(source).toContain(
-      'untrack(() => inFlightBreaksKeyByPrimitive.set(primitive, breaksKey));'
+      'const classificationBreaks = useClassificationBreaksController({'
     );
+    expect(source).toContain('classificationBreaks.compute({');
+  });
+
+  it('delegates shared primitive orchestration to the dedicated controller', () => {
+    expect(source).toContain(
+      "  } from './use-primitive-panel-controller.svelte';"
+    );
+    expect(source).toContain(
+      'const primitivePanelController = usePrimitivePanelController({'
+    );
+    expect(source).toContain(
+      'updateTextPrimitive: (updates) => handleTextChange(updates),'
+    );
+    expect(source).toContain('buildNextPrimitiveFilters,');
+    expect(source).toContain('ensurePrimitiveClassificationDefaults,');
+    expect(source).toContain('updateTextBackground,');
   });
 
   it('preserves suggestion origin when polygon classification defaults sync automatically', () => {
@@ -53,9 +71,11 @@ describe('ConfigureVisualization', () => {
   });
 
   it('propagates symbol strokeDashed through panel derivation and style updates', () => {
-    expect(source).toContain('strokeDashed: symbol.strokeDashed');
     expect(source).toContain(
       '? { strokeDashed: updates.strokeDashed ?? symbol.strokeDashed }'
+    );
+    expect(source).toContain(
+      'import {\n    buildLinePanelVisualization,\n    buildPolygonPanelVisualization,\n    buildSymbolPanelVisualization,'
     );
   });
 
@@ -102,7 +122,7 @@ describe('ConfigureVisualization', () => {
   });
 
   it('writes text background updates through the text primitive, not polygon', () => {
-    expect(source).toContain('function updateTextBackground');
+    expect(source).toContain('updateTextBackground((background) => ({');
     expect(source).toContain('handleTextChange({');
   });
 
@@ -121,49 +141,15 @@ describe('ConfigureVisualization', () => {
     expect(source).toContain('<YearFilter visualization={selectedViz} />');
   });
 
-  it('keeps SYMBOL_MODE_STATE_KEYS in sync with snapshotSymbolModeState body', () => {
-    const snapshotMatch = source.match(
-      /function snapshotSymbolModeState\([\s\S]*?\)\s*:\s*SymbolModeState\s*\{\s*return\s*\{([\s\S]*?)\};\s*\}/
+  it('delegates symbol mode snapshot/restore to the dedicated helper', () => {
+    expect(source).toContain(
+      "import { resolveSymbolModeTransition } from './use-symbol-mode-state.svelte';"
     );
-    expect(snapshotMatch).not.toBeNull();
-    const snapshotBody = snapshotMatch![1];
-    const snapshotKeys = Array.from(
-      snapshotBody.matchAll(/^\s*(\w+)\s*:\s*symbol\.\w+/gm)
-    ).map((m) => m[1]);
-
-    const keysArrayMatch = source.match(
-      /const SYMBOL_MODE_STATE_KEYS\s*=\s*\[([\s\S]*?)\]\s*as const/
+    expect(source).toContain('const modeTransition = modeChanging');
+    expect(source).toContain('resolveSymbolModeTransition(symbol, nextMode)');
+    expect(source).toContain('...(modeTransition?.restoredStateFields ?? {}),');
+    expect(source).toContain(
+      'modeStates: modeTransition?.nextModeStates ?? symbol.modeStates ?? {}'
     );
-    expect(keysArrayMatch).not.toBeNull();
-    const literalKeys = Array.from(
-      keysArrayMatch![1].matchAll(/'([^']+)'/g)
-    ).map((m) => m[1]);
-
-    expect(snapshotKeys.length).toBeGreaterThan(10);
-    expect(literalKeys.sort()).toEqual(snapshotKeys.sort());
-  });
-
-  it('snapshots the symbol mode state under the previous mode before restoring the next one', () => {
-    expect(source).toMatch(
-      /const existingModeStates\s*=\s*symbol\.modeStates\s*\?\?\s*\{\}/
-    );
-    expect(source).toMatch(
-      /const nextModeState\s*=\s*modeChanging\s*\?\s*existingModeStates\[nextMode\]\s*:\s*undefined;/
-    );
-    expect(source).toMatch(
-      /\[previousMode\]:\s*snapshotSymbolModeState\(symbol\)/
-    );
-    expect(source).toMatch(
-      /nextModeState\s*\?\s*applySymbolModeStateFields\(symbol,\s*nextModeState\)\s*:\s*getDefaultSymbolModeStateFields\(nextMode\)/
-    );
-  });
-
-  it('defaults categories mode to a borderless symbol state when no per-mode snapshot exists yet', () => {
-    expect(source).toContain('function getDefaultSymbolModeStateFields(');
-    expect(source).toContain('if (mode !== SymbolMode.CATEGORIES)');
-    expect(source).toContain('strokeMode: StrokeMode.NONE');
-    expect(source).toContain('strokeWidth: 0');
-    expect(source).toContain('strokeOpacity: 1');
-    expect(source).toContain('strokeDashed: false');
   });
 });

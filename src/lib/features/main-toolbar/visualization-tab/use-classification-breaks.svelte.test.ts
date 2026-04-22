@@ -4,6 +4,9 @@ const storeMocks = vi.hoisted(() => ({
   ClassificationMethod: {
     JENKS: 'jenks',
     MANUAL: 'manual'
+  } as const,
+  PrimitiveFilterType: {
+    POLYGON: 'polygon'
   } as const
 }));
 
@@ -22,7 +25,11 @@ const serviceMocks = vi.hoisted(() => ({
 }));
 
 const paletteMocks = vi.hoisted(() => ({
+  DEFAULT_QUALITATIVE_PRESET: 'qualitative-default',
   findPaletteById: vi.fn(),
+  generateCategoricalColorsFromSeed: vi.fn((_seed: string, count: number) =>
+    Array.from({ length: count }, (_, index) => `#seed-${index}`)
+  ),
   generatePaletteColors: vi.fn((_, count: number) =>
     Array.from({ length: count }, (_, index) => `#palette-${index}`)
   )
@@ -49,16 +56,23 @@ vi.mock(
 );
 
 vi.mock('$lib/features/commons/store/visualization.store.svelte', () => ({
-  ClassificationMethod: storeMocks.ClassificationMethod
+  ClassificationMethod: storeMocks.ClassificationMethod,
+  PrimitiveFilterType: storeMocks.PrimitiveFilterType,
+  DEFAULT_CATEGORICAL_COLORS: ['#cat-0', '#cat-1', '#cat-2']
 }));
 
 import {
   ClassificationMethod,
+  PrimitiveFilterType,
   type ClassificationConfig
 } from '$lib/features/commons/store/visualization.store.svelte';
 
 import {
+  CLASSIFICATION_BREAKS_TRIGGER,
+  areClassificationColorsEqual,
+  buildClassificationScopeKey,
   computeClassificationBreaks,
+  resolveClassificationColors,
   resolveClassificationBreakColors,
   useClassificationBreaksController
 } from './use-classification-breaks.svelte';
@@ -71,7 +85,31 @@ describe('use-classification-breaks', () => {
     serviceMocks.computeDivergingSplit.mockClear();
     serviceMocks.generateColorsForBreaks.mockClear();
     paletteMocks.findPaletteById.mockReset();
+    paletteMocks.generateCategoricalColorsFromSeed.mockClear();
     paletteMocks.generatePaletteColors.mockClear();
+  });
+
+  it('centralizes scope keys and trigger labels for break orchestration', () => {
+    expect(
+      buildClassificationScopeKey('fill', PrimitiveFilterType.POLYGON)
+    ).toBe('fill:polygon');
+    expect(CLASSIFICATION_BREAKS_TRIGGER.MISSING_BREAKS).toBe('missing-breaks');
+  });
+
+  it('resolves categorical colors through the shared helper', () => {
+    const colors = resolveClassificationColors({
+      classification: {
+        labels: ['A', 'B', 'C'],
+        colors: ['#old'],
+        classes: 3
+      } as ClassificationConfig,
+      usesCategories: true
+    });
+
+    expect(colors).toEqual(['#cat-0', '#cat-1', '#cat-2']);
+    expect(
+      paletteMocks.generateCategoricalColorsFromSeed
+    ).not.toHaveBeenCalled();
   });
 
   it('reuses existing colors when the class count already matches', () => {
@@ -87,6 +125,18 @@ describe('use-classification-breaks', () => {
 
     expect(colors).toEqual(['#111111', '#222222']);
     expect(serviceMocks.generateColorsForBreaks).not.toHaveBeenCalled();
+  });
+
+  it('compares color arrays without false positives', () => {
+    expect(
+      areClassificationColorsEqual(
+        ['#111111', '#222222'],
+        ['#111111', '#222222']
+      )
+    ).toBe(true);
+    expect(
+      areClassificationColorsEqual(['#111111'], ['#111111', '#222222'])
+    ).toBe(false);
   });
 
   it('computes automatic breaks and resolves colors through the shared service', async () => {

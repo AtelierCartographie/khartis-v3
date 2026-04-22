@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { FillMode, StrokeMode, SymbolMode } from '../constants';
+import {
+  FillMode,
+  StrokeMode,
+  SymbolMode,
+  VISUALIZATION_DEFAULTS
+} from '../constants';
 import {
   SYMBOL_MODE_STATE_KEYS,
   getDefaultSymbolModeStateFields,
@@ -52,7 +57,7 @@ function createSymbol(): SymbolPrimitiveConfig {
         breakValueB: null,
         fillMode: FillMode.CATEGORIES,
         strokeMode: StrokeMode.NONE,
-        strokeWidth: 0,
+        strokeWidth: VISUALIZATION_DEFAULTS.strokeWidth,
         strokeOpacity: 1,
         strokeDashed: false,
         strokeClassification: undefined,
@@ -95,6 +100,9 @@ describe('use-symbol-mode-state', () => {
     );
     expect(transition.restoredStateFields).toEqual(
       getDefaultSymbolModeStateFields(SymbolMode.CATEGORIES)
+    );
+    expect(transition.restoredStateFields.strokeWidth).toBe(
+      VISUALIZATION_DEFAULTS.strokeWidth
     );
   });
 
