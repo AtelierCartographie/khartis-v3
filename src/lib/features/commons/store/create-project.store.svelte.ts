@@ -34,7 +34,6 @@ import type {
   CreateProjectState,
   ExampleProject,
   ProjectTab,
-  SavedProject,
   UploadedFile
 } from './create-project.types';
 import { DataSourceType } from './create-project.types';
@@ -58,11 +57,6 @@ const DEFAULT_STATE: CreateProjectState = {
     isProcessingFiles: false,
     processingFileCount: 0,
     validationErrors: []
-  },
-
-  openProject: {
-    savedProjects: [],
-    isLoading: false
   },
 
   tryExample: {
@@ -802,29 +796,6 @@ export const createProjectActions = {
     );
   },
 
-  setSavedProjects(projects: SavedProject[]): void {
-    createProjectState.openProject.savedProjects = projects;
-  },
-
-  selectSavedProject(projectId?: string): void {
-    createProjectState.openProject.selectedProjectId = projectId;
-  },
-
-  setImportedFile(file?: UploadedFile): void {
-    createProjectState.openProject.importedFile = file;
-  },
-
-  setOpenProjectLoading(loading: boolean): void {
-    createProjectState.openProject.isLoading = loading;
-  },
-
-  setOpenProjectError(error?: string): void {
-    createProjectState.openProject.error = error;
-    if (error) {
-      logger.error('Open project error', LogCategory.PROJECT, error);
-    }
-  },
-
   setExamples(examples: ExampleProject[]): void {
     createProjectState.tryExample.examples = examples;
   },
@@ -862,17 +833,6 @@ export const createProjectActions = {
     createProjectState.newProject.validationErrors = [];
   },
 
-  resetOpenProject(): void {
-    const savedProjects = createProjectState.openProject.savedProjects;
-    createProjectState.openProject = {
-      ...DEFAULT_STATE.openProject,
-      savedProjects,
-      selectedProjectId: undefined,
-      importedFile: undefined,
-      error: undefined
-    };
-  },
-
   resetTryExample(): void {
     const examples = createProjectState.tryExample.examples;
     createProjectState.tryExample = {
@@ -885,7 +845,6 @@ export const createProjectActions = {
 
   resetAllTabs(): void {
     this.resetNewProject();
-    this.resetOpenProject();
     this.resetTryExample();
     createProjectState.selectedTab = 1;
   },

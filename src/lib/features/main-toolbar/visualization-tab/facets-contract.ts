@@ -2,6 +2,8 @@ export const FACET_SLOT = {
   SYMBOL_VALUE: 'symbol.valueColumn',
   SYMBOL_CATEGORY: 'symbol.categoryColumn',
   SYMBOL_SIZE: 'symbol.sizeColumn',
+  SYMBOL_FILL_VALUE: 'symbol.fillValueColumn',
+  SYMBOL_FILL_CATEGORY: 'symbol.fillCategoryColumn',
   POLYGON_VALUE: 'polygon.valueColumn',
   POLYGON_CATEGORY: 'polygon.categoryColumn',
   LINE_VALUE: 'line.valueColumn',

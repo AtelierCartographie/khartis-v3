@@ -19,42 +19,10 @@ export interface ProjectData {
   };
 }
 
-export interface VisualizationConfig {
-  type:
-    | 'choropleth'
-    | 'proportional'
-    | 'categorical'
-    | 'bivariate'
-    | 'combined';
-  variables?: string[];
-  classification?: Record<string, unknown>;
-  palette?: Record<string, unknown>;
-  parameters?: Record<string, unknown>;
-}
-
-export interface LayoutConfig {
-  pageFormat?: string;
-  orientation?: 'portrait' | 'landscape';
-  margins?: {
-    top: number;
-    right: number;
-    bottom: number;
-    left: number;
-  };
-  grid?: {
-    enabled: boolean;
-    size: number;
-  };
-  elements?: Record<string, unknown>[];
-}
-
 export interface KhartisProject {
   id: string;
   manifest: ProjectManifest;
   data: ProjectData;
-  visualization?: VisualizationConfig;
-  layout?: LayoutConfig;
-  resources?: Record<string, unknown>;
 }
 
 export interface ProjectState {
@@ -89,9 +57,4 @@ export interface SavedProjectMetadata {
 export enum ProjectStorageKey {
   CURRENT = 'khartis_current_project',
   METADATA = 'khartis_projects_metadata'
-}
-
-export interface AutoSaveConfig {
-  enabled: boolean;
-  interval: number;
 }

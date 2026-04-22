@@ -26,7 +26,6 @@
     useMapBounds,
     useMapInit,
     useMapLayers,
-    useMapPosition,
     useMapState
   } from '../hooks';
   import {
@@ -383,18 +382,14 @@
         scheduleLayerUpdate();
       } else {
         startMaxWaitTimeout();
-        if (mapBounds.shouldRestorePosition) {
-          setTimeout(() => {
-            if (mapPosition.restorePosition()) {
-              mapInstanceStore.markViewportManual();
-            }
-          }, 100);
+        if (mapInit.viewMode === ViewMode.MAPLIBRE) {
+          mapInstanceStore.applyPendingMapLibreRestore();
         }
       }
     },
     onZoom: () => mapInstanceStore.updateZoomFromMap(),
     onMoveEnd: () => {
-      mapPosition.savePosition();
+      mapInstanceStore.persistCurrentMapLibreViewState();
       if (
         onMoveSync &&
         mapInit.viewMode === ViewMode.MAPLIBRE &&
@@ -414,14 +409,6 @@
     onOrthographicViewStateChanged: (target, zoom) => {
       mapInstanceStore.markViewportManual();
       onMoveSync?.({ type: 'orthographic', target, zoom });
-    }
-  });
-
-  const mapPosition = useMapPosition({
-    getMap: () => mapInit.map,
-    getIsMapLoaded: () => mapInit.isMapLoaded,
-    onPositionRestored: (position) => {
-      mapInstanceStore.setBaseZoomLevel(position.zoom);
     }
   });
 
@@ -996,6 +983,10 @@
       return;
     }
 
+    if (mapInstanceStore.applyPendingMapLibreRestore()) {
+      return;
+    }
+
     const refBasemapId = basemapStyleStore.referenceBasemapId;
     const currentWorldBaseTable = worldBaseTable;
 
@@ -1039,6 +1030,12 @@
     }
   }
 
+  function hasPendingViewportRestore(): boolean {
+    return mapInit.viewMode === ViewMode.MAPLIBRE
+      ? mapInstanceStore.hasPendingMapLibreRestore
+      : mapInstanceStore.hasPendingOrthographicRestore;
+  }
+
   const mapBasemap = useMapBasemap({
     getMap: () => mapInit.map,
     getIsMapLoaded: () => mapInit.isMapLoaded,
@@ -1070,7 +1067,6 @@
     onBoundsUpdated: (zoom) => {
       mapInstanceStore.setBaseZoomLevel(zoom);
     },
-    savePosition: () => mapPosition.savePosition(),
     onFitComplete: () => {
       mapLoadingStore.markSuggestedPreviewViewportSettled();
       triggerOnReady();
@@ -1149,7 +1145,7 @@
         mapInit.isMapLoaded &&
         !isSwitchingViewMode &&
         mapInstanceStore.isViewportAutoFitManaged &&
-        !mapInstanceStore.hasPendingRestore
+        !hasPendingViewportRestore()
       ) {
         pendingViewportAutoRefitReason = getCurrentViewportAutoFitReason();
       }
@@ -1184,7 +1180,7 @@
           mapInit.map?.resize();
         } else if (
           mapInit.viewMode === ViewMode.ORTHOGRAPHIC &&
-          mapInstanceStore.hasPendingRestore
+          mapInstanceStore.hasPendingOrthographicRestore
         ) {
           // Canvas resized while a saved view state is pending — recompute
           // the world-coordinate target with the updated model matrix scale.
@@ -1194,7 +1190,7 @@
         if (
           hasViewportChanged &&
           mapInstanceStore.isViewportAutoFitManaged &&
-          !mapInstanceStore.hasPendingRestore
+          !hasPendingViewportRestore()
         ) {
           pendingViewportAutoRefitReason = getCurrentViewportAutoFitReason();
         }
@@ -1226,7 +1222,7 @@
       !reason ||
       !mapInit.isMapLoaded ||
       isSwitchingViewMode ||
-      mapInstanceStore.hasPendingRestore
+      hasPendingViewportRestore()
     ) {
       return;
     }
@@ -1377,6 +1373,10 @@
           }
         }
       } else if (mapInit.map && shouldFit) {
+        if (mapInstanceStore.applyPendingMapLibreRestore()) {
+          triggerOnReady();
+          return;
+        }
         if (refBasemapId && worldBaseTable) {
           const bBounds = calculateBoundsFromGeoArrow(worldBaseTable);
           if (bBounds) {
@@ -1402,6 +1402,10 @@
     const canUpdate = mapInit.isMapLoaded && !isSwitchingViewMode;
     if (firstGeoJSON && canUpdate) {
       if (mapInit.viewMode === ViewMode.MAPLIBRE && mapInit.map) {
+        if (mapInstanceStore.applyPendingMapLibreRestore()) {
+          triggerOnReady();
+          return;
+        }
         untrack(() =>
           mapBounds.fitToGeoJSONBounds(firstGeoJSON, {
             reason: 'dataset'

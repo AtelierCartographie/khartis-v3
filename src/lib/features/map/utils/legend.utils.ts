@@ -5,6 +5,9 @@ import {
   getPrimitiveCategoryColumn,
   getPrimitiveClassification,
   getPrimitiveValueColumn,
+  getSymbolFillCategoryColumn,
+  getSymbolFillClassification,
+  getSymbolFillValueColumn,
   getSymbolPrimitive,
   PrimitiveFilterType,
   ScaleType,
@@ -179,7 +182,9 @@ function shouldUsePointSwatches(viz: VisualizationConfig | undefined): boolean {
   return (
     symbol?.mode === SymbolMode.PROPORTIONAL ||
     symbol?.mode === SymbolMode.CLASSES ||
-    symbol?.mode === SymbolMode.CATEGORIES
+    symbol?.mode === SymbolMode.CATEGORIES ||
+    symbol?.fillMode === FillMode.CLASSES ||
+    symbol?.fillMode === FillMode.CATEGORIES
   );
 }
 
@@ -320,12 +325,24 @@ export function resolveMissingDataLegendPrimitive(
 export function hasClassedColorLegend(
   viz: VisualizationConfig | undefined
 ): boolean {
+  const symbol = getSymbolPrimitive(viz);
   const line = getLinePrimitive(viz);
   const polygon = getPolygonPrimitive(viz);
+  const pointClassification = viz && getSymbolFillClassification(viz);
   const lineClassification =
     viz && getPrimitiveClassification(viz, PrimitiveFilterType.LINE);
   const polygonClassification =
     viz && getPrimitiveClassification(viz, PrimitiveFilterType.POLYGON);
+
+  if (
+    symbol?.enabled &&
+    symbol.fillMode === FillMode.CLASSES &&
+    !!getSymbolFillValueColumn(viz) &&
+    !!pointClassification?.colors?.length &&
+    !!pointClassification?.breaks?.length
+  ) {
+    return true;
+  }
 
   if (
     line?.enabled &&
@@ -353,7 +370,13 @@ export function hasCategoricalColorLegend(
   const line = getLinePrimitive(viz);
   const polygon = getPolygonPrimitive(viz);
   const pointClassification =
-    viz && getPrimitiveClassification(viz, PrimitiveFilterType.POINT);
+    viz && symbol?.mode === SymbolMode.CATEGORIES
+      ? getPrimitiveClassification(viz, PrimitiveFilterType.POINT)
+      : getSymbolFillClassification(viz);
+  const pointCategoryColumn =
+    symbol?.mode === SymbolMode.CATEGORIES
+      ? getPrimitiveCategoryColumn(viz, PrimitiveFilterType.POINT)
+      : getSymbolFillCategoryColumn(viz);
   const lineClassification =
     viz && getPrimitiveClassification(viz, PrimitiveFilterType.LINE);
   const polygonClassification =
@@ -361,8 +384,9 @@ export function hasCategoricalColorLegend(
 
   if (
     symbol?.enabled &&
-    symbol.mode === SymbolMode.CATEGORIES &&
-    !!getPrimitiveCategoryColumn(viz, PrimitiveFilterType.POINT) &&
+    (symbol.mode === SymbolMode.CATEGORIES ||
+      symbol.fillMode === FillMode.CATEGORIES) &&
+    !!pointCategoryColumn &&
     !!pointClassification?.colors?.length
   ) {
     return true;

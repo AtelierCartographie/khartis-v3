@@ -4,10 +4,20 @@ import type {
 } from '$lib/features/commons/store/visualization.store.svelte';
 import {
   FillMode,
+  ProportionalType,
   StrokeMode,
+  SymbolDoublePosition,
   SymbolMode,
   VISUALIZATION_DEFAULTS
 } from '$lib/features/main-toolbar/constants';
+
+const NON_PROPORTIONAL_SYMBOL_STATE_FIELDS = {
+  proportionalType: ProportionalType.SINGLE,
+  commonScale: true,
+  positionMode: SymbolDoublePosition.OVERLAY,
+  breakValueA: null,
+  breakValueB: null
+} as const satisfies Partial<SymbolPrimitiveConfig>;
 
 export function snapshotSymbolModeState(
   symbol: SymbolPrimitiveConfig
@@ -21,6 +31,9 @@ export function snapshotSymbolModeState(
     categoryColumn: symbol.categoryColumn,
     sizeColumn: symbol.sizeColumn,
     classification: symbol.classification,
+    fillValueColumn: symbol.fillValueColumn,
+    fillCategoryColumn: symbol.fillCategoryColumn,
+    fillClassification: symbol.fillClassification,
     categoryShape: symbol.categoryShape,
     proportionalType: symbol.proportionalType,
     commonScale: symbol.commonScale,
@@ -47,6 +60,9 @@ export const SYMBOL_MODE_STATE_KEYS = [
   'categoryColumn',
   'sizeColumn',
   'classification',
+  'fillValueColumn',
+  'fillCategoryColumn',
+  'fillClassification',
   'categoryShape',
   'proportionalType',
   'commonScale',
@@ -76,11 +92,16 @@ export function applySymbolModeStateFields(
 export function getDefaultSymbolModeStateFields(
   mode: SymbolMode
 ): Partial<SymbolPrimitiveConfig> {
-  if (mode !== SymbolMode.CATEGORIES) {
+  if (mode === SymbolMode.PROPORTIONAL) {
     return {};
   }
 
+  if (mode !== SymbolMode.CATEGORIES) {
+    return { ...NON_PROPORTIONAL_SYMBOL_STATE_FIELDS };
+  }
+
   return {
+    ...NON_PROPORTIONAL_SYMBOL_STATE_FIELDS,
     fillMode: FillMode.CATEGORIES,
     strokeMode: StrokeMode.NONE,
     strokeWidth: VISUALIZATION_DEFAULTS.strokeWidth,
@@ -102,6 +123,10 @@ export function resolveSymbolModeTransition(
   const previousMode = symbol.mode;
   const existingModeStates = symbol.modeStates ?? {};
   const nextModeState = existingModeStates[nextMode];
+  const sanitizedNextModeState =
+    nextMode === SymbolMode.PROPORTIONAL
+      ? {}
+      : NON_PROPORTIONAL_SYMBOL_STATE_FIELDS;
 
   return {
     nextModeStates: {
@@ -109,7 +134,10 @@ export function resolveSymbolModeTransition(
       [previousMode]: snapshotSymbolModeState(symbol)
     },
     restoredStateFields: nextModeState
-      ? applySymbolModeStateFields(nextModeState)
+      ? {
+          ...applySymbolModeStateFields(nextModeState),
+          ...sanitizedNextModeState
+        }
       : getDefaultSymbolModeStateFields(nextMode)
   };
 }

@@ -5,6 +5,9 @@ import {
   PrimitiveFilterType,
   getPrimitiveClassification,
   getPrimitiveValueColumn,
+  getSymbolFillCategoryColumn,
+  getSymbolFillClassification,
+  getSymbolFillValueColumn,
   getSymbolPrimitive,
   getTextPrimitive,
   getPolygonPrimitive,
@@ -282,8 +285,14 @@ export function shouldApplyChoropleth(
   viz: VisualizationConfig,
   primitive: PrimitiveFilterType = PrimitiveFilterType.POLYGON
 ): boolean {
-  const classification = getPrimitiveClassification(viz, primitive);
-  const valueColumn = getPrimitiveValueColumn(viz, primitive);
+  const classification =
+    primitive === PrimitiveFilterType.POINT
+      ? getSymbolFillClassification(viz)
+      : getPrimitiveClassification(viz, primitive);
+  const valueColumn =
+    primitive === PrimitiveFilterType.POINT
+      ? getSymbolFillValueColumn(viz)
+      : getPrimitiveValueColumn(viz, primitive);
 
   return (
     usesClassedColor(viz, primitive) &&
@@ -319,8 +328,22 @@ export function shouldApplyCategorical(
   viz: VisualizationConfig,
   primitive: PrimitiveFilterType = PrimitiveFilterType.POLYGON
 ): boolean {
-  const classification = getPrimitiveClassification(viz, primitive);
-  const categoryColumn = getPrimitiveCategoryColumn(viz, primitive);
+  const pointSymbol =
+    primitive === PrimitiveFilterType.POINT
+      ? getSymbolPrimitive(viz)
+      : undefined;
+  const classification =
+    primitive === PrimitiveFilterType.POINT
+      ? pointSymbol?.mode === SymbolMode.CATEGORIES
+        ? getPrimitiveClassification(viz, primitive)
+        : getSymbolFillClassification(viz)
+      : getPrimitiveClassification(viz, primitive);
+  const categoryColumn =
+    primitive === PrimitiveFilterType.POINT
+      ? pointSymbol?.mode === SymbolMode.CATEGORIES
+        ? getPrimitiveCategoryColumn(viz, primitive)
+        : getSymbolFillCategoryColumn(viz)
+      : getPrimitiveCategoryColumn(viz, primitive);
 
   return (
     usesCategoricalColor(viz, primitive) &&

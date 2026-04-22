@@ -193,19 +193,20 @@ export async function exportMapToJpg(
   const restoreDom = mutateDomForExport(pageContainer);
   await waitForNextFrame();
 
-  let pageCanvas: HTMLCanvasElement | null = null;
-  try {
-    // Step 1 — capture as canvas. toCanvas skips the PNG Blob encode/decode
-    // round-trip that toBlob + createImageBitmap would incur.
-    pageCanvas = await htmlToImageCanvas(pageContainer, {
-      pixelRatio: pagePixelRatio,
-      style: { boxShadow: 'none' },
-      filter: exportFilter
-    });
-  } finally {
-    restoreDom();
-    restoreRatio();
-  }
+  const pageCanvas = await (async (): Promise<HTMLCanvasElement | null> => {
+    try {
+      // Step 1 — capture as canvas. toCanvas skips the PNG Blob encode/decode
+      // round-trip that toBlob + createImageBitmap would incur.
+      return await htmlToImageCanvas(pageContainer, {
+        pixelRatio: pagePixelRatio,
+        style: { boxShadow: 'none' },
+        filter: exportFilter
+      });
+    } finally {
+      restoreDom();
+      restoreRatio();
+    }
+  })();
 
   if (!pageCanvas) {
     return Promise.reject(new Error('Failed to capture page'));

@@ -237,12 +237,14 @@
     flex-direction: column;
     gap: 2px;
     outline: none;
+    padding-bottom: var(--cds-spacing-03);
   }
 
   .sublayers-container {
     display: flex;
     gap: var(--cds-spacing-03);
     padding-left: var(--cds-spacing-05);
+    margin-bottom: var(--cds-spacing-05);
   }
 
   .sublayers-line {

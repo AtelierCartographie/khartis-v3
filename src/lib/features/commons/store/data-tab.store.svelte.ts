@@ -9,7 +9,7 @@ import {
   persistenceRegistry
 } from '$lib/features/project-management/core/persistence-registry';
 import type { JoinQuality } from '$lib/features/map/types/basemap.types';
-import type { DataTabState } from './data-tab.types';
+import type { DataTabState, SerializedDataTabState } from './data-tab.types';
 
 const DEFAULT_STATE: DataTabState = {
   dataControl: {
@@ -59,7 +59,10 @@ function notifyPersistence(
 }
 
 function restoreFromSerialized(data: unknown): void {
-  const restored = data as Partial<DataTabState> | undefined;
+  const restored = data as
+    | Partial<DataTabState>
+    | Partial<SerializedDataTabState>
+    | undefined;
   const nextState = structuredClone(DEFAULT_STATE);
 
   if (restored?.dataControl) {
@@ -69,7 +72,31 @@ function restoreFromSerialized(data: unknown): void {
     Object.assign(nextState.geolocation, restored.geolocation);
   }
   if (restored?.basemapJoin) {
-    Object.assign(nextState.basemapJoin, restored.basemapJoin);
+    Object.assign(nextState.basemapJoin, {
+      joinedEntities: restored.basemapJoin.joinedEntities,
+      entitiesToVerify: restored.basemapJoin.entitiesToVerify,
+      duplicateEntities: restored.basemapJoin.duplicateEntities,
+      unrecognizedEntities: restored.basemapJoin.unrecognizedEntities,
+      joinMappings: restored.basemapJoin.joinMappings
+    });
+
+    if (
+      'selectedBasemap' in restored.basemapJoin &&
+      typeof restored.basemapJoin.selectedBasemap === 'string'
+    ) {
+      nextState.basemapJoin.selectedBasemap =
+        restored.basemapJoin.selectedBasemap;
+    }
+
+    if (
+      'basemapSource' in restored.basemapJoin &&
+      Object.values(BasemapSource).includes(
+        restored.basemapJoin.basemapSource as BasemapSource
+      )
+    ) {
+      nextState.basemapJoin.basemapSource = restored.basemapJoin
+        .basemapSource as BasemapSource;
+    }
   }
   if (restored?.enrichData) {
     Object.assign(nextState.enrichData, restored.enrichData);
@@ -81,12 +108,13 @@ function restoreFromSerialized(data: unknown): void {
   Object.assign(dataTabState, nextState);
 }
 
-function serializeDataTabState(): DataTabState {
+function serializeDataTabState(): SerializedDataTabState {
   return {
     dataControl: { ...dataTabState.dataControl },
     geolocation: { ...dataTabState.geolocation },
     basemapJoin: {
-      ...dataTabState.basemapJoin,
+      joinedEntities: dataTabState.basemapJoin.joinedEntities,
+      entitiesToVerify: dataTabState.basemapJoin.entitiesToVerify,
       duplicateEntities: [...dataTabState.basemapJoin.duplicateEntities],
       unrecognizedEntities: [...dataTabState.basemapJoin.unrecognizedEntities],
       joinMappings: dataTabState.basemapJoin.joinMappings.map((mapping) => ({

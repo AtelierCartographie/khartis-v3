@@ -19,7 +19,7 @@
     originalName = projectStore.projectName;
   });
 
-  function handleSave() {
+  async function handleSave() {
     const trimmed = inputValue.trim();
 
     if (!trimmed) {
@@ -31,7 +31,7 @@
 
     if (sanitized !== originalName) {
       projectStore.updateProjectName(sanitized);
-      projectStore.saveCurrentProject();
+      await projectStore.saveCurrentProject();
       originalName = sanitized;
       inputValue = sanitized;
     }
@@ -40,7 +40,7 @@
   function handleKeydown(event: KeyboardEvent) {
     if (event.key === KEY.ENTER) {
       event.preventDefault();
-      handleSave();
+      void handleSave();
     } else if (event.key === KEY.ESCAPE) {
       event.preventDefault();
       inputValue = originalName;
@@ -48,7 +48,7 @@
   }
 
   function handleBlur() {
-    handleSave();
+    void handleSave();
   }
 </script>
 

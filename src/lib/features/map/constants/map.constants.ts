@@ -67,11 +67,6 @@ export enum DeckLayerId {
   BASEMAP_META_CENTROID = 'basemap-meta-centroid'
 }
 
-export enum MapStorageKey {
-  MAP_CENTER = 'khartis_map_center',
-  MAP_ZOOM = 'khartis_maplibre_zoom'
-}
-
 export enum OSMTileServer {
   STANDARD = 'osm-standard',
   CARTO = 'osm-carto',

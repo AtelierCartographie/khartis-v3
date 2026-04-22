@@ -164,35 +164,14 @@ export async function renameDataset(
     return false;
   }
 
-  state.datasets = updateById(state.datasets, datasetId, {
-    name: sanitizedName
-  });
-
   if (dataset.sourceFileId) {
     await projectStore.renameFile(dataset.sourceFileId, sanitizedName);
   }
 
-  return true;
-}
-
-export function renameDatasetOnly(
-  state: DatasetsState,
-  datasetId: string,
-  newName: string
-): boolean {
-  const dataset = findById(state.datasets, datasetId);
-  if (!dataset) {
-    return false;
-  }
-
-  const sanitizedName = sanitizeTextInput(newName);
-  if (!sanitizedName) {
-    return false;
-  }
-
   state.datasets = updateById(state.datasets, datasetId, {
     name: sanitizedName
   });
+
   return true;
 }
 

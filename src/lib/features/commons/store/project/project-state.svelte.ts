@@ -1,7 +1,6 @@
 import type { ProjectState } from '$lib/features/project-management';
-import type { AutoSaveController } from '$lib/features/project-management';
 
-export const DEFAULT_AUTO_SAVE_INTERVAL = 30000;
+export const DEFAULT_AUTO_SAVE_INTERVAL = 750;
 export const DEFAULT_MAX_HISTORY_SIZE = 50;
 
 export function createProjectState(): ProjectState {
@@ -21,6 +20,5 @@ export function createProjectState(): ProjectState {
 
 export interface ProjectStateContainer {
   _state: ProjectState;
-  autoSave: AutoSaveController;
   initPromise?: Promise<void>;
 }

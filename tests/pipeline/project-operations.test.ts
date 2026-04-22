@@ -1,6 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { duplicateProject } from '$lib/features/project-management/operations/duplicate';
-import { createAutoSaveController } from '$lib/features/project-management/operations/auto-save';
 import { PROJECT_CONST } from '$lib/features/project-management/constants';
 import type { KhartisProject } from '$lib/features/project-management/types';
 
@@ -88,102 +87,5 @@ describe('duplicateProject', () => {
     const dup = duplicateProject(original, 'Copy');
     dup.data.sourceFiles.push({ id: 'f2', name: 'other.csv' } as never);
     expect(original.data.sourceFiles).toHaveLength(1);
-  });
-});
-
-// ─── createAutoSaveController ──────────────────────────────────────────────
-
-describe('createAutoSaveController', () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it('does not call save when schedule(false) is called', () => {
-    const save = vi.fn().mockResolvedValue(undefined);
-    const ctrl = createAutoSaveController(save, {
-      enabled: true,
-      interval: 1000
-    });
-    ctrl.schedule(false);
-    vi.runAllTimers();
-    expect(save).not.toHaveBeenCalled();
-  });
-
-  it('calls save after interval when schedule(true) is called', async () => {
-    const save = vi.fn().mockResolvedValue(undefined);
-    const ctrl = createAutoSaveController(save, {
-      enabled: true,
-      interval: 1000
-    });
-    ctrl.schedule(true);
-    vi.advanceTimersByTime(1000);
-    await Promise.resolve();
-    expect(save).toHaveBeenCalledOnce();
-  });
-
-  it('does not schedule when enabled is false', () => {
-    const save = vi.fn().mockResolvedValue(undefined);
-    const ctrl = createAutoSaveController(save, {
-      enabled: false,
-      interval: 1000
-    });
-    ctrl.schedule(true);
-    vi.runAllTimers();
-    expect(save).not.toHaveBeenCalled();
-  });
-
-  it('cancel() prevents the scheduled save from running', () => {
-    const save = vi.fn().mockResolvedValue(undefined);
-    const ctrl = createAutoSaveController(save, {
-      enabled: true,
-      interval: 1000
-    });
-    ctrl.schedule(true);
-    ctrl.cancel();
-    vi.runAllTimers();
-    expect(save).not.toHaveBeenCalled();
-  });
-
-  it('rescheduling resets the timer — only one save fires', async () => {
-    const save = vi.fn().mockResolvedValue(undefined);
-    const ctrl = createAutoSaveController(save, {
-      enabled: true,
-      interval: 1000
-    });
-    ctrl.schedule(true);
-    vi.advanceTimersByTime(500);
-    ctrl.schedule(true);
-    vi.advanceTimersByTime(1000);
-    await Promise.resolve();
-    expect(save).toHaveBeenCalledOnce();
-  });
-
-  it('updateConfig disables subsequent schedules', () => {
-    const save = vi.fn().mockResolvedValue(undefined);
-    const ctrl = createAutoSaveController(save, {
-      enabled: true,
-      interval: 1000
-    });
-    ctrl.updateConfig({ enabled: false });
-    ctrl.schedule(true);
-    vi.runAllTimers();
-    expect(save).not.toHaveBeenCalled();
-  });
-
-  it('updateConfig changes the save interval', async () => {
-    const save = vi.fn().mockResolvedValue(undefined);
-    const ctrl = createAutoSaveController(save, {
-      enabled: true,
-      interval: 5000
-    });
-    ctrl.updateConfig({ interval: 100 });
-    ctrl.schedule(true);
-    vi.advanceTimersByTime(100);
-    await Promise.resolve();
-    expect(save).toHaveBeenCalledOnce();
   });
 });

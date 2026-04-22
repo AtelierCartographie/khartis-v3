@@ -60,6 +60,12 @@ describe('DiscretizationPanel — break edition policy', () => {
     expect(source).toContain('histogram');
   });
 
+  it('allows parents to hide breakpoint controls when the classification does not drive a color scale', () => {
+    expect(source).toContain('showBreakpointControls?: boolean;');
+    expect(source).toContain('showBreakpointControls = true');
+    expect(source).toContain('{#if showBreakpointControls}');
+  });
+
   it('exposes classification edge safety: guards empty breaks, NaN min/max', () => {
     expect(source).toContain('maxHistogramCount');
     expect(source).toContain('Math.max(...breaks.map');

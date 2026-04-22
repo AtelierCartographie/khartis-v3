@@ -1,6 +1,21 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { VisualizationConfig } from '$lib/features/commons/store/visualization.store.svelte';
 import type { BasemapLayerConfig } from '$lib/features/map/stores/basemap-layers.store.svelte';
+
+const { mockVisualizationStore } = vi.hoisted(() => ({
+  mockVisualizationStore: {
+    activeVisualizations: [] as VisualizationConfig[],
+    visualizations: [] as VisualizationConfig[],
+    togglePrimitiveFilter: vi.fn(),
+    toggleVisualization: vi.fn(),
+    removeVisualization: vi.fn(),
+    setVisualizationOrder: vi.fn(),
+    setPrimitiveFilterOrder: vi.fn(),
+    duplicateVisualization: vi.fn(),
+    updateVisualization: vi.fn(),
+    renameVisualization: vi.fn()
+  }
+}));
 
 vi.mock('$lib/features/commons/store/visualization.store.svelte', () => {
   const PrimitiveFilterType = {
@@ -75,6 +90,9 @@ vi.mock('$lib/features/commons/store/visualization.store.svelte', () => {
   const getPrimitiveClassification = (visualization: VisualizationConfig) =>
     visualization.classification;
 
+  const getSymbolFillClassification = (visualization: VisualizationConfig) =>
+    visualization.symbol?.fillClassification ?? visualization.classification;
+
   return {
     ALL_PRIMITIVE_FILTERS: [
       PrimitiveFilterType.POINT,
@@ -89,19 +107,10 @@ vi.mock('$lib/features/commons/store/visualization.store.svelte', () => {
     getLinePrimitive,
     getPolygonPrimitive,
     getPrimitiveClassification,
+    getSymbolFillClassification,
     getSymbolPrimitive,
     getTextPrimitive,
-    visualizationStore: {
-      activeVisualizations: [],
-      visualizations: [],
-      togglePrimitiveFilter: vi.fn(),
-      toggleVisualization: vi.fn(),
-      removeVisualization: vi.fn(),
-      setVisualizationOrder: vi.fn(),
-      setPrimitiveFilterOrder: vi.fn(),
-      duplicateVisualization: vi.fn(),
-      updateVisualization: vi.fn()
-    }
+    visualizationStore: mockVisualizationStore
   };
 });
 
@@ -140,7 +149,9 @@ import {
 import {
   getBasemapLayerColor,
   getVisualizationColor,
-  getVisualizationPrimitiveColor
+  getVisualizationPrimitiveColor,
+  layersActions,
+  layersState
 } from './layers.store.svelte';
 
 function createVisualization(
@@ -189,6 +200,12 @@ function createVisualization(
 }
 
 describe('layers color helpers', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockVisualizationStore.activeVisualizations = [];
+    mockVisualizationStore.visualizations = [];
+  });
+
   it('uses the classification palette before a white outline for choropleths', () => {
     const visualization = createVisualization({
       classification: {
@@ -254,5 +271,69 @@ describe('layers color helpers', () => {
 
     expect(getBasemapLayerColor(terre)).toBe('#a8a8a8');
     expect(getBasemapLayerColor(mers)).toBe('#d0e2ff');
+  });
+
+  it('keeps hidden primitive rows available so they can be shown again', () => {
+    const visualization = createVisualization({
+      primitiveFilters: [PrimitiveFilterType.LINE, PrimitiveFilterType.POLYGON]
+    });
+
+    mockVisualizationStore.visualizations = [visualization];
+    mockVisualizationStore.activeVisualizations = [visualization];
+
+    layersActions.syncWithVisualizations();
+
+    expect(layersState.layers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'viz-1::point',
+          parentId: 'viz-1',
+          isSubLayer: true,
+          visible: false
+        }),
+        expect.objectContaining({
+          id: 'viz-1::line',
+          parentId: 'viz-1',
+          isSubLayer: true,
+          visible: true
+        })
+      ])
+    );
+  });
+
+  it('uses the canonical visualization name for parent layers', () => {
+    const visualization = createVisualization({
+      name: 'Audit viz'
+    });
+
+    mockVisualizationStore.visualizations = [visualization];
+    mockVisualizationStore.activeVisualizations = [visualization];
+
+    layersActions.syncWithVisualizations();
+
+    expect(layersState.layers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'viz-1',
+          name: 'Audit viz'
+        })
+      ])
+    );
+  });
+
+  it('renames parent visualization layers through the dedicated immediate path', () => {
+    const visualization = createVisualization();
+
+    mockVisualizationStore.visualizations = [visualization];
+    mockVisualizationStore.activeVisualizations = [visualization];
+
+    layersActions.syncWithVisualizations();
+    layersActions.updateLayer('viz-1', { name: 'Renamed layer' });
+
+    expect(mockVisualizationStore.renameVisualization).toHaveBeenCalledWith(
+      'viz-1',
+      'Renamed layer'
+    );
+    expect(mockVisualizationStore.updateVisualization).not.toHaveBeenCalled();
   });
 });

@@ -3,7 +3,6 @@
   import Button from '$lib/features/commons/components/carbon/button.svelte';
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
-  import VariableBadge from '$lib/features/commons/components/variable-badge.svelte';
   import type { VariableBadgeType } from '$lib/features/commons/components/variable-badge.types';
   import {
     vizSuggester,
@@ -13,7 +12,6 @@
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import {
     getVisualizationOriginMode,
-    PrimitiveFilterType,
     visualizationStore
   } from '$lib/features/commons/store/visualization.store.svelte';
   import { isNumericType } from '$lib/features/commons/utils/format.utils';
@@ -25,13 +23,10 @@
     Launch,
     MagicWandFilled,
     Pin,
-    CircleFilled,
-    Shapes,
-    EdgeNode,
     TrashCan,
     Copy
   } from 'carbon-icons-svelte';
-  import SuggestionPreview from './components/suggestion-preview.svelte';
+  import VisualizationSuggestionCard from './components/visualization-suggestion-card.svelte';
   import { InfoPopover } from './components/shared';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import {
@@ -161,29 +156,6 @@
     if (type === 'boolean') return 'boolean';
     if (type === 'date' || type === 'timestamp') return 'date';
     return 'string';
-  }
-
-  function getGeometryIcon(geometry: string) {
-    switch (geometry) {
-      case PrimitiveFilterType.POINT:
-        return CircleFilled;
-      case PrimitiveFilterType.POLYGON:
-        return Shapes;
-      case PrimitiveFilterType.LINE:
-        return EdgeNode;
-      default:
-        return CircleFilled;
-    }
-  }
-
-  function getSemioTypeLabel(semioType: string): string {
-    const labels: Record<string, () => string> = {
-      QTA: m.semio_label_QTA,
-      QTR: m.semio_label_QTR,
-      QL: m.semio_label_QL,
-      QLO: m.semio_label_QLO
-    };
-    return labels[semioType]?.() ?? semioType;
   }
 
   function handleShowMore() {
@@ -403,7 +375,7 @@
   function handleConfirmRename(id: string) {
     const trimmed = renameValue.trim();
     if (trimmed) {
-      visualizationStore.updateVisualization(id, { name: trimmed });
+      visualizationStore.renameVisualization(id, trimmed);
     }
     renamingVizId = undefined;
   }
@@ -655,135 +627,12 @@
           {#each visibleSuggestions as suggestion (getSuggestionSignature(suggestion))}
             {@const isSelected =
               appliedSuggestionKey === getSuggestionSignature(suggestion)}
-            <button
-              type="button"
-              class="suggestion-card"
-              class:selected={isSelected}
+            <VisualizationSuggestionCard
+              suggestion={suggestion}
+              selected={isSelected}
+              resolveBadgeType={getColumnBadgeType}
               onclick={() => handleSelectSuggestion(suggestion)}
-              role="radio"
-              aria-checked={isSelected}
-            >
-              <div class="card-preview">
-                <SuggestionPreview
-                  suggestionId={suggestion.id}
-                  geometries={suggestion.geometries}
-                />
-                <div class="preview-primitives">
-                  {#each suggestion.geometries as geometry (geometry)}
-                    {@const GeomIcon = getGeometryIcon(geometry)}
-                    <GeomIcon size={16} />
-                  {/each}
-                </div>
-                {#if suggestion.semioTypes && suggestion.semioTypes.length > 0}
-                  <div class="preview-semio">
-                    {suggestion.semioTypes.map(getSemioTypeLabel).join(' + ')}
-                  </div>
-                {/if}
-              </div>
-
-              <div class="card-content">
-                <div class="card-header">
-                  <p class="card-title">{suggestion.label}</p>
-                  <span class="radio-indicator" aria-hidden="true">
-                    <span class="radio-indicator-ring">
-                      {#if isSelected}
-                        <span class="radio-indicator-dot"></span>
-                      {/if}
-                    </span>
-                  </span>
-                </div>
-
-                {#if suggestion.score != null && suggestion.score > 0}
-                  <div class="card-score">
-                    {m.suggestion_score_label({
-                      score: String(suggestion.score)
-                    })}
-                  </div>
-                {/if}
-
-                <div class="card-variables">
-                  {#if suggestion.columns && suggestion.columns.length > 0}
-                    {#each suggestion.columns.slice(0, 2) as colName, idx (colName)}
-                      {@const badgeType = getColumnBadgeType(colName)}
-                      <div class="variable-row">
-                        <span class="variable-arrow">
-                          <svg
-                            width="16"
-                            height="16"
-                            viewBox="0 0 16 16"
-                            fill="none"
-                          >
-                            <path
-                              d="M4 2V10H12"
-                              stroke="currentColor"
-                              stroke-width="1.5"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                            />
-                          </svg>
-                        </span>
-                        <VariableBadge
-                          label={colName.length > 10
-                            ? colName.slice(0, 10) + '...'
-                            : colName}
-                          type={badgeType}
-                          interactive={false}
-                        />
-                        {#if suggestion.columns && suggestion.columns.length > 2 && idx === 0}
-                          <span class="overflow-chip"
-                            >+ {suggestion.columns.length - 1}</span
-                          >
-                        {/if}
-                      </div>
-                    {/each}
-                  {:else}
-                    <div class="variable-row empty">
-                      <span class="no-variable">{m.no_variable()}</span>
-                    </div>
-                  {/if}
-                </div>
-
-                {#if suggestion.nbColumns > 2}
-                  <div class="card-collection">
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                      <rect
-                        x="1"
-                        y="1"
-                        width="6"
-                        height="6"
-                        stroke="currentColor"
-                        stroke-width="1"
-                      />
-                      <rect
-                        x="9"
-                        y="1"
-                        width="6"
-                        height="6"
-                        stroke="currentColor"
-                        stroke-width="1"
-                      />
-                      <rect
-                        x="1"
-                        y="9"
-                        width="6"
-                        height="6"
-                        stroke="currentColor"
-                        stroke-width="1"
-                      />
-                      <rect
-                        x="9"
-                        y="9"
-                        width="6"
-                        height="6"
-                        stroke="currentColor"
-                        stroke-width="1"
-                      />
-                    </svg>
-                    <span>{m.map_collection()}</span>
-                  </div>
-                {/if}
-              </div>
-            </button>
+            />
           {/each}
         </div>
 
@@ -903,185 +752,6 @@
     gap: var(--cds-spacing-03);
     margin: 0 0 var(--cds-spacing-05) 0;
     padding-right: 32px;
-  }
-
-  .suggestion-card {
-    display: flex;
-    align-items: stretch;
-    border: 1px solid
-      var(--khartis-additions-border-tile-01-suggestions, #82cfff);
-    cursor: pointer;
-    transition: all 0.15s ease;
-    text-align: left;
-    padding: 0;
-    min-height: 120px;
-    background: transparent;
-    box-sizing: border-box;
-    outline: none;
-
-    &:hover {
-      border-color: var(
-        --khartis-additions-border-tile-01-suggestions,
-        #82cfff
-      );
-    }
-
-    &.selected {
-      border: 3px solid var(--tag-border, #1192e8);
-    }
-
-    &:focus-visible {
-      outline: 2px solid var(--cds-focus, #0f62fe);
-      outline-offset: 2px;
-    }
-  }
-
-  .card-preview {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    flex: 1 1 50%;
-    width: 50%;
-    min-width: 0;
-    padding: var(--cds-spacing-04);
-    background: var(--khartis-additions-layer-02-suggestions, #ffffff);
-    border-right: 1px solid
-      var(--khartis-additions-border-tile-01-suggestions, #82cfff);
-    color: var(--khartis-additions-interactive-suggestions, #0072c3);
-    box-sizing: border-box;
-  }
-
-  .preview-primitives {
-    display: flex;
-    gap: var(--cds-spacing-02);
-    margin-top: var(--cds-spacing-02);
-    color: var(--khartis-additions-interactive-suggestions, #0072c3);
-  }
-
-  .preview-semio {
-    font-size: 0.625rem;
-    font-weight: 600;
-    margin-top: var(--cds-spacing-01);
-    color: var(--khartis-additions-interactive-suggestions, #0072c3);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-
-  .card-content {
-    flex: 1 1 50%;
-    width: 50%;
-    min-width: 0;
-    padding: var(--cds-spacing-04);
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-03);
-    background: var(--khartis-additions-layer-01-suggestions, #e5f6ff);
-    color: var(--khartis-additions-text-primary-suggestions, #003a6d);
-    transition: background 0.15s ease;
-    box-sizing: border-box;
-  }
-
-  .card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-  }
-
-  .radio-indicator {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    pointer-events: none;
-  }
-
-  .radio-indicator-ring {
-    width: 1.25rem;
-    height: 1.25rem;
-    border: 2px solid var(--tag-border, #1192e8);
-    border-radius: 999px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    box-sizing: border-box;
-    background: var(--khartis-additions-layer-02-suggestions, #ffffff);
-  }
-
-  .radio-indicator-dot {
-    width: 0.5rem;
-    height: 0.5rem;
-    border-radius: 999px;
-    background: var(--tag-border, #1192e8);
-    display: block;
-  }
-
-  .card-title {
-    font-size: 0.875rem;
-    font-weight: 600;
-    margin: 0;
-    color: var(--khartis-additions-text-primary-suggestions, #003a6d);
-  }
-
-  .card-score {
-    font-size: 0.6875rem;
-    font-weight: 500;
-    color: var(--khartis-additions-text-helper-suggestions, #0072c3);
-    line-height: 1rem;
-    letter-spacing: 0.32px;
-  }
-
-  .card-variables {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-02);
-  }
-
-  .variable-row {
-    display: flex;
-    align-items: center;
-    gap: var(--cds-spacing-02);
-    flex-wrap: wrap;
-
-    &.empty {
-      color: var(--khartis-additions-text-secondary-suggestions, #00539a);
-      font-size: 0.75rem;
-      opacity: 0.7;
-    }
-  }
-
-  .variable-arrow {
-    color: var(--khartis-additions-text-secondary-suggestions, #00539a);
-    display: flex;
-    align-items: center;
-  }
-
-  .overflow-chip {
-    display: inline-flex;
-    align-items: center;
-    height: 18px;
-    padding: 0 8px;
-    border-radius: 1000px;
-    background: var(--tag-background, #bae6ff);
-    border: 1px solid var(--tag-border, #1192e8);
-    font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 0.75rem;
-    line-height: 16px;
-    letter-spacing: 0.32px;
-    color: var(--tag-color, #00539a);
-    white-space: nowrap;
-  }
-
-  .no-variable {
-    font-style: italic;
-  }
-
-  .card-collection {
-    display: flex;
-    align-items: center;
-    gap: var(--cds-spacing-02);
-    font-size: 0.75rem;
-    color: var(--khartis-additions-text-helper-suggestions, #0072c3);
-    margin-top: var(--cds-spacing-02);
   }
 
   .suggestions-actions {

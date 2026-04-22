@@ -42,8 +42,8 @@ describe('drawing tool', () => {
   });
 
   it('requires three points before enabling finish for zones', async () => {
-    annotationsActions.startDrawingMode(DrawingType.ZONE);
-    annotationsActions.setDrawingInProgress([
+    annotationsActions.beginDrawing(DrawingType.ZONE);
+    annotationsActions.updateDrawing([
       { x: 0, y: 0 },
       { x: 60, y: 20 }
     ]);
