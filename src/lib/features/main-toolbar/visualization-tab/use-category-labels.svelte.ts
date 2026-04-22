@@ -1,13 +1,49 @@
 import {
+  collectDistinctCategoryLabels,
   loadDistinctCategoryLabels,
   resolveCategoryPreviewCount
 } from './components/shared/categorical-preview.utils';
 import type { ClassificationConfig } from '$lib/features/commons/store/visualization.store.svelte';
 
-type CategoryDatasetLike = Parameters<typeof loadDistinctCategoryLabels>[0];
+type CategoryDatasetLike = Parameters<typeof loadDistinctCategoryLabels>[0] & {
+  id?: string;
+};
 type CategoryClassificationLike = Partial<
   Pick<ClassificationConfig, 'labels' | 'colors' | 'numClasses' | 'classes'>
 >;
+
+export interface ResolveCategoryLabelsOptions {
+  dataset: CategoryDatasetLike | undefined;
+  columnName: string | undefined;
+  getFallbackValues?: (columnName: string) => unknown[];
+}
+
+export function haveCategoryLabelsChanged(
+  currentLabels: readonly string[] | undefined,
+  nextLabels: readonly string[]
+): boolean {
+  if (!currentLabels) {
+    return nextLabels.length > 0;
+  }
+
+  return (
+    currentLabels.length !== nextLabels.length ||
+    currentLabels.some((label, index) => label !== nextLabels[index])
+  );
+}
+
+export async function resolveCategoryLabels({
+  dataset,
+  columnName,
+  getFallbackValues
+}: ResolveCategoryLabelsOptions): Promise<string[]> {
+  const labels = await loadDistinctCategoryLabels(dataset, columnName);
+  if (labels.length > 0 || !columnName || !getFallbackValues) {
+    return labels;
+  }
+
+  return collectDistinctCategoryLabels(getFallbackValues(columnName));
+}
 
 interface UseCategoryLabelsOptions {
   enabled?: () => boolean;
@@ -57,7 +93,10 @@ export function useCategoryLabels({
       return;
     }
 
-    void loadDistinctCategoryLabels(dataset, columnName).then((nextLabels) => {
+    void resolveCategoryLabels({
+      dataset,
+      columnName
+    }).then((nextLabels) => {
       if (currentRequestId !== requestId) {
         return;
       }

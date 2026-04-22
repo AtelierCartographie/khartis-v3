@@ -3,9 +3,8 @@ import { readFileSync } from 'node:fs';
 
 const files = [
   'src/lib/features/commons/services/data-orchestrator.service.svelte.ts',
-  'src/lib/features/main-toolbar/visualization-tab/components/discretization-modal.svelte',
   'src/lib/features/main-toolbar/visualization-tab/configure-visualization.svelte',
-  'src/lib/features/main-toolbar/visualization-tab/use-compute-breaks.svelte.ts'
+  'src/lib/features/main-toolbar/visualization-tab/use-classification-breaks.svelte.ts'
 ] as const;
 
 describe('color blindness integrations', () => {

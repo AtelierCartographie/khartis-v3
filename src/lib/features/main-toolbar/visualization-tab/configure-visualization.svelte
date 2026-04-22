@@ -1,20 +1,15 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte';
-  import { SvelteMap } from 'svelte/reactivity';
   import * as m from '$lib/paraglide/messages';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import {
     visualizationStore,
     ALL_PRIMITIVE_FILTERS,
-    ClassificationMethod,
-    DEFAULT_CATEGORICAL_COLORS,
     PrimitiveFilterType,
-    getEnabledPrimitiveFilters,
     getLinePrimitive,
     getPolygonPrimitive,
     getPrimitiveCategoryColumn,
     getPrimitiveClassification,
-    getPrimitiveSizeColumn,
     getPrimitiveValueColumn,
     getSymbolPrimitive,
     getTextPrimitive,
@@ -24,9 +19,7 @@
     type MissingDataConfig,
     type PolygonPrimitiveConfig,
     type PrimitiveFilter,
-    type SymbolModeState,
     type SymbolPrimitiveConfig,
-    type TextBackgroundConfig,
     type TextPrimitiveConfig,
     type TextSecondaryLabelsConfig,
     type VisualizationConfig,
@@ -34,45 +27,18 @@
     type VizDataFilter
   } from '$lib/features/commons/store/visualization.store.svelte';
   import {
-    applyPaletteInversion,
-    calculateBreaks,
-    computeDivergingSplit,
-    generateColorsForBreaks
-  } from '$lib/features/commons/services/classification.service';
-  import {
-    DEFAULT_QUALITATIVE_PRESET,
-    findPaletteById,
-    generateCategoricalColorsFromSeed,
-    generatePaletteColors,
-    PALETTE_TYPE,
-    type PaletteType
-  } from '$lib/features/commons/components/palette-popover/palette.constants';
-  import { collectDistinctCategoryLabels } from './components/shared/categorical-preview.utils';
-  import {
     getColorBlindnessState,
     isColorBlindnessActive
   } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
   import {
-    getLegendState,
-    legendActions
-  } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
-  import {
-    normalizeClassificationMethod,
-    resolveComputedClassCount,
-    resolveRequestedClassCount
-  } from './components/discretization.utils';
-  import {
-    ColorMode,
     DEFAULT_COLORS,
     FillMode,
     StrokeMode,
     SymbolMode,
-    ThicknessMode,
     VISUALIZATION_DEFAULTS
   } from '../constants';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
-  import { Duck } from '$lib/features/duckdb';
   import {
     COLUMN_TYPE_GEOMETRY,
     GEO_COLUMN_TYPE
@@ -85,61 +51,42 @@
   import TextsConfig from './components/texts-config.svelte';
   import YearFilter from './components/year-filter.svelte';
   import { isLikelyYearColumn } from './components/year-filter.utils';
-
-  const CORE_PRIMITIVES = [
-    PrimitiveFilterType.POINT,
-    PrimitiveFilterType.LINE,
-    PrimitiveFilterType.POLYGON
-  ] as const;
-  const CLASSIFIABLE_PRIMITIVES = [
-    PrimitiveFilterType.POLYGON,
-    PrimitiveFilterType.POINT,
-    PrimitiveFilterType.LINE,
-    PrimitiveFilterType.TEXT
-  ] as const;
-
-  type ClassifiablePrimitive = (typeof CLASSIFIABLE_PRIMITIVES)[number];
-  const STROKE_CLASSIFIABLE_PRIMITIVES = [
-    PrimitiveFilterType.POINT,
-    PrimitiveFilterType.POLYGON
-  ] as const;
-  type StrokeClassifiablePrimitive =
-    (typeof STROKE_CLASSIFIABLE_PRIMITIVES)[number];
+  import {
+    buildLinePanelVisualization,
+    buildPolygonPanelVisualization,
+    buildSymbolPanelVisualization,
+    buildTextBackgroundPanelVisualization,
+    buildTextPanelVisualization
+  } from './primitive-panel-visualization';
+  import {
+    CLASSIFIABLE_PRIMITIVES,
+    STROKE_CLASSIFIABLE_PRIMITIVES,
+    type ClassifiablePrimitive,
+    type StrokeClassifiablePrimitive,
+    usePrimitivePanelController
+  } from './use-primitive-panel-controller.svelte';
+  import {
+    haveCategoryLabelsChanged,
+    resolveCategoryLabels,
+    type ResolveCategoryLabelsOptions
+  } from './use-category-labels.svelte';
+  import { resolveSymbolModeTransition } from './use-symbol-mode-state.svelte';
+  import {
+    areClassificationColorsEqual,
+    buildClassificationScopeKey,
+    CLASSIFICATION_BREAKS_TRIGGER,
+    type ClassificationBreakTrigger,
+    resolveClassificationColors,
+    TEXT_BACKGROUND_SCOPE_TARGET,
+    useClassificationBreaksController
+  } from './use-classification-breaks.svelte';
 
   let selectedViz = $derived(visualizationStore.selectedVisualization);
-  const lastCompletedBreaksKeyByPrimitive = new SvelteMap<
-    ClassifiablePrimitive,
-    string
-  >();
-  const inFlightBreaksKeyByPrimitive = new SvelteMap<
-    ClassifiablePrimitive,
-    string
-  >();
-  const lastCompletedStrokeBreaksKeyByPrimitive = new SvelteMap<
-    StrokeClassifiablePrimitive,
-    string
-  >();
-  const inFlightStrokeBreaksKeyByPrimitive = new SvelteMap<
-    StrokeClassifiablePrimitive,
-    string
-  >();
-  /**
-   * Per-primitive request counter. A shared global counter used to discard
-   * stale async `calculateBreaks` resolutions across all primitives, which
-   * meant that when a choropleth suggestion triggered the break-computation
-   * effect for POLYGON while SYMBOL/LINE/TEXT effects also fired within the
-   * same tick, every resolution saw a bumped global counter and aborted —
-   * leaving the map stuck on the uniform fallback fill. Scoping the counter
-   * per primitive lets each chain accept its own latest result.
-   */
-  const computeRequestCounterByPrimitive = new SvelteMap<
-    ClassifiablePrimitive,
-    number
-  >();
-  const computeStrokeRequestCounterByPrimitive = new SvelteMap<
-    StrokeClassifiablePrimitive,
-    number
-  >();
+  const classificationBreaks = useClassificationBreaksController({
+    resolveDatasetSourceFileId: (datasetId) =>
+      datasetsStore.datasets.find((dataset) => dataset.id === datasetId)
+        ?.sourceFileId
+  });
 
   function getSelectedDataset() {
     if (!selectedViz?.datasetId) {
@@ -223,78 +170,6 @@
     availablePrimitiveFilters.includes(PrimitiveFilterType.LINE)
   );
 
-  function usesCategoricalClassification(
-    visualization: VisualizationConfig | undefined,
-    primitive: ClassifiablePrimitive
-  ): boolean {
-    if (!visualization) {
-      return false;
-    }
-
-    switch (primitive) {
-      case PrimitiveFilterType.POLYGON: {
-        const polygon = getPolygonPrimitive(visualization);
-        return polygon?.fillMode === FillMode.CATEGORIES;
-      }
-
-      case PrimitiveFilterType.POINT: {
-        const symbol = getSymbolPrimitive(visualization);
-        return (
-          symbol?.mode === SymbolMode.CATEGORIES ||
-          symbol?.fillMode === FillMode.CATEGORIES
-        );
-      }
-
-      case PrimitiveFilterType.LINE: {
-        return (
-          getLinePrimitive(visualization)?.colorMode === ColorMode.CATEGORIES
-        );
-      }
-
-      case PrimitiveFilterType.TEXT: {
-        return (
-          getTextPrimitive(visualization)?.colorMode === ColorMode.CATEGORIES
-        );
-      }
-    }
-  }
-
-  function usesBreakClassification(
-    visualization: VisualizationConfig | undefined,
-    primitive: ClassifiablePrimitive
-  ): boolean {
-    if (!visualization) {
-      return false;
-    }
-
-    switch (primitive) {
-      case PrimitiveFilterType.POLYGON: {
-        const polygon = getPolygonPrimitive(visualization);
-        return polygon?.fillMode === FillMode.CLASSES;
-      }
-
-      case PrimitiveFilterType.POINT: {
-        const symbol = getSymbolPrimitive(visualization);
-        return (
-          symbol?.mode === SymbolMode.CLASSES ||
-          symbol?.fillMode === FillMode.CLASSES
-        );
-      }
-
-      case PrimitiveFilterType.LINE: {
-        const line = getLinePrimitive(visualization);
-        return (
-          line?.colorMode === ColorMode.CLASSES ||
-          line?.thicknessMode === ThicknessMode.CLASSES
-        );
-      }
-
-      case PrimitiveFilterType.TEXT: {
-        return getTextPrimitive(visualization)?.colorMode === ColorMode.CLASSES;
-      }
-    }
-  }
-
   function updatePrimitiveClassificationState(
     primitive: ClassifiablePrimitive,
     updates: Partial<ClassificationConfig>,
@@ -317,182 +192,128 @@
     );
   }
 
+  const primitivePanelController = usePrimitivePanelController({
+    getDataFields: () => dataFieldItems,
+    getVisualization: () => selectedViz,
+    updatePrimitiveClassification: updatePrimitiveClassificationState,
+    updatePrimitiveStrokeClassification:
+      updatePrimitiveStrokeClassificationState,
+    updateTextPrimitive: (updates) => handleTextChange(updates),
+    updateVisualization: updateSelectedVisualization
+  });
+  const {
+    applyPrimitiveMappingUpdate,
+    applyPrimitiveStrokeMappingUpdate,
+    applyTextBackgroundMappingUpdate,
+    applyTextBackgroundStrokeMappingUpdate,
+    buildNextPrimitiveFilters,
+    ensureAutoColumns,
+    ensurePrimitiveClassificationDefaults,
+    ensurePrimitiveStrokeAutoColumns,
+    ensurePrimitiveStrokeClassificationDefaults,
+    ensureTextBackgroundAutoColumns,
+    ensureTextBackgroundClassificationDefaults,
+    ensureTextBackgroundStrokeAutoColumns,
+    ensureTextBackgroundStrokeClassificationDefaults,
+    getPrimitiveStrokeCategoryColumn,
+    getPrimitiveStrokeClassification,
+    getPrimitiveStrokeValueColumn,
+    invertPrimitivePalette,
+    invertPrimitiveStrokePalette,
+    invertTextBackgroundPalette,
+    invertTextBackgroundStrokePalette,
+    updateTextBackground,
+    updateTextBackgroundClassificationState,
+    updateTextBackgroundStrokeClassificationState,
+    usesBreakClassification,
+    usesCategoricalClassification,
+    usesStrokeBreakClassification,
+    usesStrokeCategoricalClassification
+  } = primitivePanelController;
+
+  const CATEGORY_LABEL_FETCH_ERROR = {
+    FILL: 'Failed to fetch category labels',
+    STROKE: 'Failed to fetch stroke category labels',
+    TEXT_BACKGROUND: 'Failed to fetch text background category labels',
+    TEXT_BACKGROUND_STROKE:
+      'Failed to fetch text background stroke category labels'
+  } as const;
+
+  type CategoryLabelsDataset = ResolveCategoryLabelsOptions['dataset'];
+
+  async function fetchClassificationLabels(options: {
+    dataset: CategoryLabelsDataset;
+    column: string;
+    getCurrentLabels: () => readonly string[] | undefined;
+    applyLabels: (labels: string[]) => void;
+    useUntrack?: boolean;
+    errorMessage: (typeof CATEGORY_LABEL_FETCH_ERROR)[keyof typeof CATEGORY_LABEL_FETCH_ERROR];
+  }): Promise<void> {
+    try {
+      const labels = await resolveCategoryLabels({
+        dataset: options.dataset,
+        columnName: options.column,
+        getFallbackValues: (columnName) =>
+          options.dataset?.id
+            ? datasetsStore.getUniqueValues(options.dataset.id, columnName)
+            : []
+      });
+
+      if (
+        labels.length === 0 ||
+        !haveCategoryLabelsChanged(options.getCurrentLabels(), labels)
+      ) {
+        return;
+      }
+
+      if (options.useUntrack) {
+        untrack(() => options.applyLabels(labels));
+        return;
+      }
+
+      options.applyLabels(labels);
+    } catch (error) {
+      logger.warn(options.errorMessage, LogCategory.VISUALIZATION, error);
+    }
+  }
+
   function fetchCategoryLabels(
     primitive: ClassifiablePrimitive,
     column: string,
-    tableName: string,
-    datasetId?: string,
+    dataset: CategoryLabelsDataset,
     useUntrack = false
   ): void {
-    Duck.query(
-      `SELECT DISTINCT "${column}" AS category_value FROM "${tableName}" WHERE "${column}" IS NOT NULL ORDER BY "${column}"`,
-      { format: 'array' }
-    )
-      .then((rows) => {
-        const queriedLabels = collectDistinctCategoryLabels(
-          (rows as Array<Record<string, unknown> | unknown[]>).map((row) =>
-            Array.isArray(row)
-              ? row[0]
-              : ((row.category_value ?? row[column]) as unknown)
-          )
-        );
-        const labels = resolveFallbackCategoryLabels(
-          queriedLabels,
-          column,
-          datasetId
-        );
-        if (labels.length > 0) {
-          const currentLabels = getPrimitiveClassification(
-            selectedViz,
-            primitive
-          )?.labels;
-          const labelsChanged =
-            currentLabels?.length !== labels.length ||
-            currentLabels.some((label, index) => label !== labels[index]);
-          if (!labelsChanged) {
-            return;
-          }
-          if (useUntrack) {
-            untrack(() =>
-              updatePrimitiveClassificationState(
-                primitive,
-                { labels },
-                { preserveOrigin: true }
-              )
-            );
-          } else {
-            updatePrimitiveClassificationState(
-              primitive,
-              { labels },
-              { preserveOrigin: true }
-            );
-          }
-        }
-      })
-      .catch((error) =>
-        logger.warn(
-          'Failed to fetch category labels',
-          LogCategory.VISUALIZATION,
-          error
-        )
-      );
+    void fetchClassificationLabels({
+      dataset,
+      column,
+      getCurrentLabels: () =>
+        getPrimitiveClassification(selectedViz, primitive)?.labels,
+      applyLabels: (labels) =>
+        updatePrimitiveClassificationState(
+          primitive,
+          { labels },
+          { preserveOrigin: true }
+        ),
+      useUntrack,
+      errorMessage: CATEGORY_LABEL_FETCH_ERROR.FILL
+    });
   }
 
   function fetchStrokeCategoryLabels(
     primitive: StrokeClassifiablePrimitive,
     column: string,
-    tableName: string,
-    datasetId?: string,
+    dataset: CategoryLabelsDataset,
     useUntrack = false
   ): void {
-    Duck.query(
-      `SELECT DISTINCT "${column}" AS category_value FROM "${tableName}" WHERE "${column}" IS NOT NULL ORDER BY "${column}"`,
-      { format: 'array' }
-    )
-      .then((rows) => {
-        const queriedLabels = collectDistinctCategoryLabels(
-          (rows as Array<Record<string, unknown> | unknown[]>).map((row) =>
-            Array.isArray(row)
-              ? row[0]
-              : ((row.category_value ?? row[column]) as unknown)
-          )
-        );
-        const labels = resolveFallbackCategoryLabels(
-          queriedLabels,
-          column,
-          datasetId
-        );
-        if (labels.length > 0) {
-          const currentLabels = getPrimitiveStrokeClassification(
-            selectedViz,
-            primitive
-          )?.labels;
-          const labelsChanged =
-            currentLabels?.length !== labels.length ||
-            currentLabels.some((label, index) => label !== labels[index]);
-          if (!labelsChanged) {
-            return;
-          }
-          if (useUntrack) {
-            untrack(() =>
-              updatePrimitiveStrokeClassificationState(primitive, { labels })
-            );
-          } else {
-            updatePrimitiveStrokeClassificationState(primitive, { labels });
-          }
-        }
-      })
-      .catch((error) =>
-        logger.warn(
-          'Failed to fetch stroke category labels',
-          LogCategory.VISUALIZATION,
-          error
-        )
-      );
-  }
-
-  function resolveFallbackCategoryLabels(
-    queriedLabels: string[],
-    column: string,
-    datasetId?: string
-  ): string[] {
-    if (queriedLabels.length > 0) {
-      return queriedLabels;
-    }
-
-    return datasetId
-      ? collectDistinctCategoryLabels(
-          datasetsStore.getUniqueValues(datasetId, column)
-        )
-      : [];
-  }
-
-  function invertPrimitivePalette(primitive: ClassifiablePrimitive): void {
-    const classification = getPrimitiveClassification(selectedViz, primitive);
-    if (!classification?.colors?.length) {
-      return;
-    }
-
-    updatePrimitiveClassificationState(primitive, {
-      colors: [...classification.colors].reverse(),
-      inverted: !(classification.inverted ?? false)
-    });
-  }
-
-  function invertPrimitiveStrokePalette(
-    primitive: StrokeClassifiablePrimitive
-  ): void {
-    const classification = getPrimitiveStrokeClassification(
-      selectedViz,
-      primitive
-    );
-    if (!classification?.colors?.length) {
-      return;
-    }
-
-    updatePrimitiveStrokeClassificationState(primitive, {
-      colors: [...classification.colors].reverse(),
-      inverted: !(classification.inverted ?? false)
-    });
-  }
-
-  function buildNextPrimitiveFilters(
-    overrides: Partial<Record<(typeof CORE_PRIMITIVES)[number], boolean>> = {}
-  ): PrimitiveFilter[] {
-    return CORE_PRIMITIVES.filter((primitive) => {
-      const override = overrides[primitive];
-      if (override !== undefined) {
-        return override;
-      }
-
-      switch (primitive) {
-        case PrimitiveFilterType.POINT:
-          return getSymbolPrimitive(selectedViz)?.enabled ?? false;
-        case PrimitiveFilterType.LINE:
-          return getLinePrimitive(selectedViz)?.enabled ?? false;
-        case PrimitiveFilterType.POLYGON:
-          return getPolygonPrimitive(selectedViz)?.enabled ?? false;
-      }
+    void fetchClassificationLabels({
+      dataset,
+      column,
+      getCurrentLabels: () =>
+        getPrimitiveStrokeClassification(selectedViz, primitive)?.labels,
+      applyLabels: (labels) =>
+        updatePrimitiveStrokeClassificationState(primitive, { labels }),
+      useUntrack,
+      errorMessage: CATEGORY_LABEL_FETCH_ERROR.STROKE
     });
   }
 
@@ -515,265 +336,6 @@
     }
   }
 
-  function findAutoValueColumn(
-    reservedColumns: Array<string | undefined>
-  ): string | undefined {
-    const reserved = new Set(
-      reservedColumns.filter((name): name is string => Boolean(name))
-    );
-    const isIdLikeColumn = (name: string): boolean =>
-      /^(ogc_fid|fid|id|gid|objectid|oid|__id__|__feature_id__)$/i.test(
-        name.trim()
-      );
-
-    return dataFieldItems.find(
-      (item) =>
-        item.type === 'number' &&
-        !reserved.has(item.text) &&
-        !isIdLikeColumn(item.text)
-    )?.text;
-  }
-
-  function findAutoCategoryColumn(
-    reservedColumns: Array<string | undefined>
-  ): string | undefined {
-    const reserved = new Set(
-      reservedColumns.filter((name): name is string => Boolean(name))
-    );
-
-    return dataFieldItems.find(
-      (item) => item.type === 'text' && !reserved.has(item.text)
-    )?.text;
-  }
-
-  function getReservedColumnsForValue(
-    visualization: VisualizationConfig,
-    primitive: ClassifiablePrimitive
-  ): Array<string | undefined> {
-    switch (primitive) {
-      case PrimitiveFilterType.POLYGON: {
-        const polygon = getPolygonPrimitive(visualization);
-        return [polygon?.categoryColumn];
-      }
-
-      case PrimitiveFilterType.POINT: {
-        const symbol = getSymbolPrimitive(visualization);
-        return [symbol?.categoryColumn, symbol?.sizeColumn];
-      }
-
-      case PrimitiveFilterType.LINE: {
-        const line = getLinePrimitive(visualization);
-        return [line?.categoryColumn, line?.sizeColumn];
-      }
-
-      case PrimitiveFilterType.TEXT: {
-        const text = getTextPrimitive(visualization);
-        return [
-          text?.labelColumn,
-          text?.secondaryLabels.labelColumn,
-          text?.categoryColumn
-        ];
-      }
-    }
-  }
-
-  function getReservedColumnsForCategory(
-    visualization: VisualizationConfig,
-    primitive: ClassifiablePrimitive
-  ): Array<string | undefined> {
-    switch (primitive) {
-      case PrimitiveFilterType.POLYGON: {
-        const polygon = getPolygonPrimitive(visualization);
-        return [polygon?.valueColumn];
-      }
-
-      case PrimitiveFilterType.POINT: {
-        const symbol = getSymbolPrimitive(visualization);
-        return [symbol?.valueColumn, symbol?.sizeColumn];
-      }
-
-      case PrimitiveFilterType.LINE: {
-        const line = getLinePrimitive(visualization);
-        return [line?.valueColumn, line?.sizeColumn];
-      }
-
-      case PrimitiveFilterType.TEXT: {
-        const text = getTextPrimitive(visualization);
-        return [
-          text?.labelColumn,
-          text?.secondaryLabels.labelColumn,
-          text?.valueColumn
-        ];
-      }
-    }
-  }
-
-  function resolveClassificationPaletteType(
-    classification: ClassificationConfig | undefined
-  ): PaletteType | undefined {
-    return classification?.paletteId
-      ? findPaletteById(classification.paletteId)?.type
-      : undefined;
-  }
-
-  function ensurePrimitiveClassificationDefaults(
-    primitive: ClassifiablePrimitive,
-    visualization: VisualizationConfig
-  ): void {
-    const classification = getPrimitiveClassification(visualization, primitive);
-    const currentPaletteType = resolveClassificationPaletteType(classification);
-
-    if (usesBreakClassification(visualization, primitive)) {
-      const hasIncompatiblePalette =
-        currentPaletteType === PALETTE_TYPE.QUALITATIVE;
-      const resetPaletteFields = hasIncompatiblePalette
-        ? { paletteId: undefined, colors: [] }
-        : {};
-      if (!classification?.method || !classification?.numClasses) {
-        updatePrimitiveClassificationState(primitive, {
-          method: ClassificationMethod.JENKS,
-          classes: 5,
-          numClasses: 5,
-          ...resetPaletteFields
-        });
-      } else if (hasIncompatiblePalette) {
-        updatePrimitiveClassificationState(primitive, resetPaletteFields);
-      }
-      return;
-    }
-
-    if (usesCategoricalClassification(visualization, primitive)) {
-      const hasIncompatiblePalette =
-        currentPaletteType !== undefined &&
-        currentPaletteType !== PALETTE_TYPE.QUALITATIVE;
-      const needsColors = !classification?.colors?.length;
-      const needsLabels = classification?.labels === undefined;
-
-      if (hasIncompatiblePalette || needsColors || needsLabels) {
-        updatePrimitiveClassificationState(
-          primitive,
-          {
-            colors: needsColors
-              ? [...DEFAULT_CATEGORICAL_COLORS]
-              : (classification?.colors ?? []),
-            inverted: classification?.inverted ?? false,
-            ...(needsLabels ? { labels: [] } : {}),
-            ...(hasIncompatiblePalette ? { paletteId: undefined } : {})
-          },
-          { preserveOrigin: true }
-        );
-      }
-    }
-  }
-
-  function ensureAutoColumns(
-    primitive: ClassifiablePrimitive,
-    visualization: VisualizationConfig
-  ): void {
-    const valueColumn = getPrimitiveValueColumn(visualization, primitive);
-    const categoryColumn = getPrimitiveCategoryColumn(visualization, primitive);
-
-    if (usesBreakClassification(visualization, primitive) && !valueColumn) {
-      const autoValueColumn = findAutoValueColumn(
-        getReservedColumnsForValue(visualization, primitive)
-      );
-      if (autoValueColumn) {
-        applyPrimitiveMappingUpdate(primitive, {
-          valueColumn: autoValueColumn
-        });
-      }
-    }
-
-    if (
-      usesCategoricalClassification(visualization, primitive) &&
-      !categoryColumn
-    ) {
-      const autoCategoryColumn = findAutoCategoryColumn(
-        getReservedColumnsForCategory(visualization, primitive)
-      );
-      if (autoCategoryColumn) {
-        applyPrimitiveMappingUpdate(primitive, {
-          categoryColumn: autoCategoryColumn
-        });
-      }
-    }
-  }
-
-  function getPrimitiveStrokeValueColumn(
-    visualization: VisualizationConfig | null | undefined,
-    primitive: StrokeClassifiablePrimitive
-  ): string | undefined {
-    switch (primitive) {
-      case PrimitiveFilterType.POLYGON:
-        return getPolygonPrimitive(visualization)?.strokeValueColumn;
-      case PrimitiveFilterType.POINT:
-      default:
-        return getSymbolPrimitive(visualization)?.strokeValueColumn;
-    }
-  }
-
-  function getPrimitiveStrokeCategoryColumn(
-    visualization: VisualizationConfig | null | undefined,
-    primitive: StrokeClassifiablePrimitive
-  ): string | undefined {
-    switch (primitive) {
-      case PrimitiveFilterType.POLYGON:
-        return getPolygonPrimitive(visualization)?.strokeCategoryColumn;
-      case PrimitiveFilterType.POINT:
-      default:
-        return getSymbolPrimitive(visualization)?.strokeCategoryColumn;
-    }
-  }
-
-  function getPrimitiveStrokeClassification(
-    visualization: VisualizationConfig | null | undefined,
-    primitive: StrokeClassifiablePrimitive
-  ): ClassificationConfig | undefined {
-    switch (primitive) {
-      case PrimitiveFilterType.POLYGON:
-        return getPolygonPrimitive(visualization)?.strokeClassification;
-      case PrimitiveFilterType.POINT:
-      default:
-        return getSymbolPrimitive(visualization)?.strokeClassification;
-    }
-  }
-
-  function usesStrokeBreakClassification(
-    visualization: VisualizationConfig | null | undefined,
-    primitive: StrokeClassifiablePrimitive
-  ): boolean {
-    switch (primitive) {
-      case PrimitiveFilterType.POLYGON:
-        return (
-          getPolygonPrimitive(visualization)?.strokeMode === StrokeMode.CLASSES
-        );
-      case PrimitiveFilterType.POINT:
-      default:
-        return (
-          getSymbolPrimitive(visualization)?.strokeMode === StrokeMode.CLASSES
-        );
-    }
-  }
-
-  function usesStrokeCategoricalClassification(
-    visualization: VisualizationConfig | null | undefined,
-    primitive: StrokeClassifiablePrimitive
-  ): boolean {
-    switch (primitive) {
-      case PrimitiveFilterType.POLYGON:
-        return (
-          getPolygonPrimitive(visualization)?.strokeMode ===
-          StrokeMode.CATEGORIES
-        );
-      case PrimitiveFilterType.POINT:
-      default:
-        return (
-          getSymbolPrimitive(visualization)?.strokeMode ===
-          StrokeMode.CATEGORIES
-        );
-    }
-  }
-
   function updatePrimitiveStrokeClassificationState(
     primitive: StrokeClassifiablePrimitive,
     updates: Partial<ClassificationConfig>
@@ -787,631 +349,6 @@
       primitive,
       updates
     );
-  }
-
-  function ensurePrimitiveStrokeClassificationDefaults(
-    primitive: StrokeClassifiablePrimitive,
-    visualization: VisualizationConfig
-  ): void {
-    const classification = getPrimitiveStrokeClassification(
-      visualization,
-      primitive
-    );
-    const currentPaletteType = resolveClassificationPaletteType(classification);
-
-    if (usesStrokeBreakClassification(visualization, primitive)) {
-      const hasIncompatiblePalette =
-        currentPaletteType === PALETTE_TYPE.QUALITATIVE;
-      const resetPaletteFields = hasIncompatiblePalette
-        ? { paletteId: undefined, colors: [] }
-        : {};
-      if (!classification?.method || !classification?.numClasses) {
-        updatePrimitiveStrokeClassificationState(primitive, {
-          method: ClassificationMethod.JENKS,
-          classes: 5,
-          numClasses: 5,
-          ...resetPaletteFields
-        });
-      } else if (hasIncompatiblePalette) {
-        updatePrimitiveStrokeClassificationState(primitive, resetPaletteFields);
-      }
-      return;
-    }
-
-    if (usesStrokeCategoricalClassification(visualization, primitive)) {
-      const hasIncompatiblePalette =
-        currentPaletteType !== undefined &&
-        currentPaletteType !== PALETTE_TYPE.QUALITATIVE;
-      const needsColors = !classification?.colors?.length;
-      const needsLabels = classification?.labels === undefined;
-
-      if (hasIncompatiblePalette || needsColors || needsLabels) {
-        updatePrimitiveStrokeClassificationState(primitive, {
-          colors: needsColors
-            ? [...DEFAULT_CATEGORICAL_COLORS]
-            : (classification?.colors ?? []),
-          inverted: classification?.inverted ?? false,
-          ...(needsLabels ? { labels: [] } : {}),
-          ...(hasIncompatiblePalette ? { paletteId: undefined } : {})
-        });
-      }
-    }
-  }
-
-  function ensurePrimitiveStrokeAutoColumns(
-    primitive: StrokeClassifiablePrimitive,
-    visualization: VisualizationConfig
-  ): void {
-    const strokeValueColumn = getPrimitiveStrokeValueColumn(
-      visualization,
-      primitive
-    );
-    const strokeCategoryColumn = getPrimitiveStrokeCategoryColumn(
-      visualization,
-      primitive
-    );
-
-    if (
-      usesStrokeBreakClassification(visualization, primitive) &&
-      !strokeValueColumn
-    ) {
-      const nextValueColumn =
-        getPrimitiveValueColumn(visualization, primitive) ??
-        findAutoValueColumn(
-          getReservedColumnsForValue(visualization, primitive)
-        );
-      if (nextValueColumn) {
-        applyPrimitiveStrokeMappingUpdate(primitive, {
-          valueColumn: nextValueColumn
-        });
-      }
-    }
-
-    if (
-      usesStrokeCategoricalClassification(visualization, primitive) &&
-      !strokeCategoryColumn
-    ) {
-      const nextCategoryColumn =
-        getPrimitiveCategoryColumn(visualization, primitive) ??
-        findAutoCategoryColumn(
-          getReservedColumnsForCategory(visualization, primitive)
-        );
-      if (nextCategoryColumn) {
-        applyPrimitiveStrokeMappingUpdate(primitive, {
-          categoryColumn: nextCategoryColumn
-        });
-      }
-    }
-  }
-
-  function getTextBackgroundConfig(
-    visualization: VisualizationConfig | null | undefined
-  ): TextBackgroundConfig | undefined {
-    return getTextPrimitive(visualization)?.background;
-  }
-
-  function usesTextBackgroundBreakClassification(
-    visualization: VisualizationConfig | null | undefined
-  ): boolean {
-    return (
-      getTextBackgroundConfig(visualization)?.fillMode === FillMode.CLASSES
-    );
-  }
-
-  function usesTextBackgroundCategoricalClassification(
-    visualization: VisualizationConfig | null | undefined
-  ): boolean {
-    return (
-      getTextBackgroundConfig(visualization)?.fillMode === FillMode.CATEGORIES
-    );
-  }
-
-  function usesTextBackgroundStrokeBreakClassification(
-    visualization: VisualizationConfig | null | undefined
-  ): boolean {
-    return (
-      getTextBackgroundConfig(visualization)?.strokeMode === StrokeMode.CLASSES
-    );
-  }
-
-  function usesTextBackgroundStrokeCategoricalClassification(
-    visualization: VisualizationConfig | null | undefined
-  ): boolean {
-    return (
-      getTextBackgroundConfig(visualization)?.strokeMode ===
-      StrokeMode.CATEGORIES
-    );
-  }
-
-  function ensureTextBackgroundClassificationDefaults(
-    visualization: VisualizationConfig
-  ): void {
-    const background = getTextBackgroundConfig(visualization);
-    const classification = background?.classification;
-    const currentPaletteType = resolveClassificationPaletteType(classification);
-
-    if (usesTextBackgroundBreakClassification(visualization)) {
-      const hasIncompatiblePalette =
-        currentPaletteType === PALETTE_TYPE.QUALITATIVE;
-      const resetPaletteFields = hasIncompatiblePalette
-        ? { paletteId: undefined, colors: [] }
-        : {};
-      if (!classification?.method || !classification?.numClasses) {
-        updateTextBackgroundClassificationState({
-          method: ClassificationMethod.JENKS,
-          classes: 5,
-          numClasses: 5,
-          ...resetPaletteFields
-        });
-      } else if (hasIncompatiblePalette) {
-        updateTextBackgroundClassificationState(resetPaletteFields);
-      }
-      return;
-    }
-
-    if (usesTextBackgroundCategoricalClassification(visualization)) {
-      const hasIncompatiblePalette =
-        currentPaletteType !== undefined &&
-        currentPaletteType !== PALETTE_TYPE.QUALITATIVE;
-      const needsColors = !classification?.colors?.length;
-      const needsLabels = classification?.labels === undefined;
-
-      if (hasIncompatiblePalette || needsColors || needsLabels) {
-        updateTextBackgroundClassificationState({
-          colors: needsColors
-            ? [...DEFAULT_CATEGORICAL_COLORS]
-            : (classification?.colors ?? []),
-          inverted: classification?.inverted ?? false,
-          ...(needsLabels ? { labels: [] } : {}),
-          ...(hasIncompatiblePalette ? { paletteId: undefined } : {})
-        });
-      }
-    }
-  }
-
-  function ensureTextBackgroundStrokeClassificationDefaults(
-    visualization: VisualizationConfig
-  ): void {
-    const background = getTextBackgroundConfig(visualization);
-    const classification = background?.strokeClassification;
-    const currentPaletteType = resolveClassificationPaletteType(classification);
-
-    if (usesTextBackgroundStrokeBreakClassification(visualization)) {
-      const hasIncompatiblePalette =
-        currentPaletteType === PALETTE_TYPE.QUALITATIVE;
-      const resetPaletteFields = hasIncompatiblePalette
-        ? { paletteId: undefined, colors: [] }
-        : {};
-      if (!classification?.method || !classification?.numClasses) {
-        updateTextBackgroundStrokeClassificationState({
-          method: ClassificationMethod.JENKS,
-          classes: 5,
-          numClasses: 5,
-          ...resetPaletteFields
-        });
-      } else if (hasIncompatiblePalette) {
-        updateTextBackgroundStrokeClassificationState(resetPaletteFields);
-      }
-      return;
-    }
-
-    if (usesTextBackgroundStrokeCategoricalClassification(visualization)) {
-      const hasIncompatiblePalette =
-        currentPaletteType !== undefined &&
-        currentPaletteType !== PALETTE_TYPE.QUALITATIVE;
-      const needsColors = !classification?.colors?.length;
-      const needsLabels = classification?.labels === undefined;
-
-      if (hasIncompatiblePalette || needsColors || needsLabels) {
-        updateTextBackgroundStrokeClassificationState({
-          colors: needsColors
-            ? [...DEFAULT_CATEGORICAL_COLORS]
-            : (classification?.colors ?? []),
-          inverted: classification?.inverted ?? false,
-          ...(needsLabels ? { labels: [] } : {}),
-          ...(hasIncompatiblePalette ? { paletteId: undefined } : {})
-        });
-      }
-    }
-  }
-
-  function ensureTextBackgroundAutoColumns(
-    visualization: VisualizationConfig
-  ): void {
-    const background = getTextBackgroundConfig(visualization);
-    if (!background) {
-      return;
-    }
-
-    if (
-      usesTextBackgroundBreakClassification(visualization) &&
-      !background.valueColumn
-    ) {
-      const nextValueColumn =
-        getTextPrimitive(visualization)?.valueColumn ??
-        findAutoValueColumn(
-          getReservedColumnsForValue(visualization, PrimitiveFilterType.TEXT)
-        );
-      if (nextValueColumn) {
-        applyTextBackgroundMappingUpdate({ valueColumn: nextValueColumn });
-      }
-    }
-
-    if (
-      usesTextBackgroundCategoricalClassification(visualization) &&
-      !background.categoryColumn
-    ) {
-      const nextCategoryColumn =
-        getTextPrimitive(visualization)?.categoryColumn ??
-        findAutoCategoryColumn(
-          getReservedColumnsForCategory(visualization, PrimitiveFilterType.TEXT)
-        );
-      if (nextCategoryColumn) {
-        applyTextBackgroundMappingUpdate({
-          categoryColumn: nextCategoryColumn
-        });
-      }
-    }
-  }
-
-  function ensureTextBackgroundStrokeAutoColumns(
-    visualization: VisualizationConfig
-  ): void {
-    const background = getTextBackgroundConfig(visualization);
-    if (!background) {
-      return;
-    }
-
-    if (
-      usesTextBackgroundStrokeBreakClassification(visualization) &&
-      !background.strokeValueColumn
-    ) {
-      const nextValueColumn =
-        background.valueColumn ??
-        getTextPrimitive(visualization)?.valueColumn ??
-        findAutoValueColumn(
-          getReservedColumnsForValue(visualization, PrimitiveFilterType.TEXT)
-        );
-      if (nextValueColumn) {
-        applyTextBackgroundStrokeMappingUpdate({
-          valueColumn: nextValueColumn
-        });
-      }
-    }
-
-    if (
-      usesTextBackgroundStrokeCategoricalClassification(visualization) &&
-      !background.strokeCategoryColumn
-    ) {
-      const nextCategoryColumn =
-        background.categoryColumn ??
-        getTextPrimitive(visualization)?.categoryColumn ??
-        findAutoCategoryColumn(
-          getReservedColumnsForCategory(visualization, PrimitiveFilterType.TEXT)
-        );
-      if (nextCategoryColumn) {
-        applyTextBackgroundStrokeMappingUpdate({
-          categoryColumn: nextCategoryColumn
-        });
-      }
-    }
-  }
-
-  function getLegendSubtitleForPrimitive(
-    visualization: VisualizationConfig,
-    primitive: ClassifiablePrimitive
-  ): string {
-    switch (primitive) {
-      case PrimitiveFilterType.POLYGON:
-        return (
-          getPrimitiveValueColumn(visualization, primitive) ??
-          getPrimitiveCategoryColumn(visualization, primitive) ??
-          ''
-        );
-
-      case PrimitiveFilterType.POINT:
-        return (
-          getPrimitiveValueColumn(visualization, primitive) ??
-          getPrimitiveSizeColumn(visualization, primitive) ??
-          getPrimitiveCategoryColumn(visualization, primitive) ??
-          ''
-        );
-
-      case PrimitiveFilterType.LINE:
-        return (
-          getPrimitiveSizeColumn(visualization, primitive) ??
-          getPrimitiveValueColumn(visualization, primitive) ??
-          getPrimitiveCategoryColumn(visualization, primitive) ??
-          ''
-        );
-
-      case PrimitiveFilterType.TEXT: {
-        const text = getTextPrimitive(visualization);
-        return (
-          text?.valueColumn ?? text?.categoryColumn ?? text?.labelColumn ?? ''
-        );
-      }
-    }
-  }
-
-  function syncLegendSubtitleAfterMappingChange(
-    primitive: ClassifiablePrimitive,
-    previousVisualization: VisualizationConfig,
-    nextVisualization: VisualizationConfig
-  ): void {
-    const previousAutoSubtitle = getLegendSubtitleForPrimitive(
-      previousVisualization,
-      primitive
-    );
-    const nextAutoSubtitle = getLegendSubtitleForPrimitive(
-      nextVisualization,
-      primitive
-    );
-    const legendItem = getLegendState().items.find(
-      (item) => item.variableId === nextVisualization.id
-    );
-    const usesAutomaticSubtitle =
-      legendItem?.subtitleMode === 'auto' ||
-      (!legendItem?.subtitleMode &&
-        (!legendItem?.subtitle ||
-          legendItem.subtitle === previousAutoSubtitle));
-
-    if (
-      legendItem &&
-      usesAutomaticSubtitle &&
-      legendItem.subtitle !== nextAutoSubtitle
-    ) {
-      legendActions.updateLegendItem(legendItem.id, {
-        subtitle: nextAutoSubtitle,
-        subtitleMode: 'auto'
-      });
-    }
-  }
-
-  function applyPrimitiveMappingUpdate(
-    primitive: ClassifiablePrimitive,
-    updates: Partial<VisualizationConfig['mapping']>
-  ): void {
-    if (!selectedViz) {
-      return;
-    }
-
-    const previousVisualization = selectedViz;
-
-    switch (primitive) {
-      case PrimitiveFilterType.POLYGON: {
-        const polygon = getPolygonPrimitive(selectedViz);
-        if (!polygon) return;
-
-        updateSelectedVisualization(
-          {
-            polygon: {
-              ...polygon,
-              ...(Object.prototype.hasOwnProperty.call(updates, 'valueColumn')
-                ? { valueColumn: updates.valueColumn }
-                : {}),
-              ...(Object.prototype.hasOwnProperty.call(
-                updates,
-                'categoryColumn'
-              )
-                ? { categoryColumn: updates.categoryColumn }
-                : {})
-            },
-            mapping: { ...selectedViz.mapping, ...updates }
-          },
-          (nextVisualization) => {
-            syncLegendSubtitleAfterMappingChange(
-              primitive,
-              previousVisualization,
-              nextVisualization
-            );
-            ensurePrimitiveClassificationDefaults(primitive, nextVisualization);
-          }
-        );
-        return;
-      }
-
-      case PrimitiveFilterType.POINT: {
-        const symbol = getSymbolPrimitive(selectedViz);
-        if (!symbol) return;
-
-        updateSelectedVisualization(
-          {
-            symbol: {
-              ...symbol,
-              ...(Object.prototype.hasOwnProperty.call(updates, 'valueColumn')
-                ? { valueColumn: updates.valueColumn }
-                : {}),
-              ...(Object.prototype.hasOwnProperty.call(
-                updates,
-                'categoryColumn'
-              )
-                ? { categoryColumn: updates.categoryColumn }
-                : {}),
-              ...(Object.prototype.hasOwnProperty.call(updates, 'sizeColumn')
-                ? { sizeColumn: updates.sizeColumn }
-                : {})
-            },
-            mapping: { ...selectedViz.mapping, ...updates }
-          },
-          (nextVisualization) => {
-            syncLegendSubtitleAfterMappingChange(
-              primitive,
-              previousVisualization,
-              nextVisualization
-            );
-            ensurePrimitiveClassificationDefaults(primitive, nextVisualization);
-          }
-        );
-        return;
-      }
-
-      case PrimitiveFilterType.LINE: {
-        const line = getLinePrimitive(selectedViz);
-        if (!line) return;
-
-        updateSelectedVisualization(
-          {
-            line: {
-              ...line,
-              ...(Object.prototype.hasOwnProperty.call(updates, 'valueColumn')
-                ? { valueColumn: updates.valueColumn }
-                : {}),
-              ...(Object.prototype.hasOwnProperty.call(
-                updates,
-                'categoryColumn'
-              )
-                ? { categoryColumn: updates.categoryColumn }
-                : {}),
-              ...(Object.prototype.hasOwnProperty.call(updates, 'sizeColumn')
-                ? { sizeColumn: updates.sizeColumn }
-                : {})
-            },
-            mapping: { ...selectedViz.mapping, ...updates }
-          },
-          (nextVisualization) => {
-            syncLegendSubtitleAfterMappingChange(
-              primitive,
-              previousVisualization,
-              nextVisualization
-            );
-            ensurePrimitiveClassificationDefaults(primitive, nextVisualization);
-          }
-        );
-        return;
-      }
-
-      case PrimitiveFilterType.TEXT: {
-        const text = getTextPrimitive(selectedViz);
-        if (!text) return;
-
-        const secondaryLabelColumnProvided =
-          Object.prototype.hasOwnProperty.call(updates, 'secondaryLabelColumn');
-        const nextSecondaryLabelColumn = secondaryLabelColumnProvided
-          ? updates.secondaryLabelColumn
-          : text.secondaryLabels.labelColumn;
-
-        updateSelectedVisualization(
-          {
-            text: {
-              ...text,
-              ...(Object.prototype.hasOwnProperty.call(updates, 'labelColumn')
-                ? { labelColumn: updates.labelColumn }
-                : {}),
-              ...(Object.prototype.hasOwnProperty.call(updates, 'valueColumn')
-                ? { valueColumn: updates.valueColumn }
-                : {}),
-              ...(Object.prototype.hasOwnProperty.call(
-                updates,
-                'categoryColumn'
-              )
-                ? { categoryColumn: updates.categoryColumn }
-                : {}),
-              ...(Object.prototype.hasOwnProperty.call(
-                updates,
-                'labelColumn'
-              ) && updates.labelColumn === undefined
-                ? {
-                    secondaryLabels: {
-                      ...text.secondaryLabels,
-                      enabled: false,
-                      labelColumn: undefined
-                    }
-                  }
-                : secondaryLabelColumnProvided
-                  ? {
-                      secondaryLabels: {
-                        ...text.secondaryLabels,
-                        enabled:
-                          text.secondaryLabels.enabled &&
-                          Boolean(nextSecondaryLabelColumn),
-                        labelColumn: nextSecondaryLabelColumn
-                      }
-                    }
-                  : {})
-            },
-            mapping: { ...selectedViz.mapping, ...updates }
-          },
-          (nextVisualization) => {
-            syncLegendSubtitleAfterMappingChange(
-              primitive,
-              previousVisualization,
-              nextVisualization
-            );
-            ensurePrimitiveClassificationDefaults(primitive, nextVisualization);
-          }
-        );
-      }
-    }
-  }
-
-  function applyPrimitiveStrokeMappingUpdate(
-    primitive: StrokeClassifiablePrimitive,
-    updates: Partial<VisualizationConfig['mapping']>
-  ): void {
-    if (!selectedViz) {
-      return;
-    }
-
-    switch (primitive) {
-      case PrimitiveFilterType.POLYGON: {
-        const polygon = getPolygonPrimitive(selectedViz);
-        if (!polygon) return;
-
-        updateSelectedVisualization(
-          {
-            polygon: {
-              ...polygon,
-              ...(Object.prototype.hasOwnProperty.call(updates, 'valueColumn')
-                ? { strokeValueColumn: updates.valueColumn }
-                : {}),
-              ...(Object.prototype.hasOwnProperty.call(
-                updates,
-                'categoryColumn'
-              )
-                ? { strokeCategoryColumn: updates.categoryColumn }
-                : {})
-            }
-          },
-          (nextVisualization) => {
-            ensurePrimitiveStrokeClassificationDefaults(
-              primitive,
-              nextVisualization
-            );
-          }
-        );
-        return;
-      }
-
-      case PrimitiveFilterType.POINT:
-      default: {
-        const symbol = getSymbolPrimitive(selectedViz);
-        if (!symbol) return;
-
-        updateSelectedVisualization(
-          {
-            symbol: {
-              ...symbol,
-              ...(Object.prototype.hasOwnProperty.call(updates, 'valueColumn')
-                ? { strokeValueColumn: updates.valueColumn }
-                : {}),
-              ...(Object.prototype.hasOwnProperty.call(
-                updates,
-                'categoryColumn'
-              )
-                ? { strokeCategoryColumn: updates.categoryColumn }
-                : {})
-            }
-          },
-          (nextVisualization) => {
-            ensurePrimitiveStrokeClassificationDefaults(
-              primitive,
-              nextVisualization
-            );
-          }
-        );
-      }
-    }
   }
 
   function handlePolygonChange(updates: Partial<PolygonPrimitiveConfig>) {
@@ -1583,89 +520,6 @@
     });
   }
 
-  function snapshotSymbolModeState(
-    symbol: SymbolPrimitiveConfig
-  ): SymbolModeState {
-    return {
-      size: symbol.size,
-      minSize: symbol.minSize,
-      maxSize: symbol.maxSize,
-      sizeScale: symbol.sizeScale,
-      valueColumn: symbol.valueColumn,
-      categoryColumn: symbol.categoryColumn,
-      sizeColumn: symbol.sizeColumn,
-      classification: symbol.classification,
-      categoryShape: symbol.categoryShape,
-      proportionalType: symbol.proportionalType,
-      commonScale: symbol.commonScale,
-      positionMode: symbol.positionMode,
-      breakValueA: symbol.breakValueA,
-      breakValueB: symbol.breakValueB,
-      fillMode: symbol.fillMode,
-      strokeMode: symbol.strokeMode,
-      strokeWidth: symbol.strokeWidth,
-      strokeOpacity: symbol.strokeOpacity,
-      strokeDashed: symbol.strokeDashed,
-      strokeClassification: symbol.strokeClassification,
-      strokeValueColumn: symbol.strokeValueColumn,
-      strokeCategoryColumn: symbol.strokeCategoryColumn
-    };
-  }
-
-  const SYMBOL_MODE_STATE_KEYS = [
-    'size',
-    'minSize',
-    'maxSize',
-    'sizeScale',
-    'valueColumn',
-    'categoryColumn',
-    'sizeColumn',
-    'classification',
-    'categoryShape',
-    'proportionalType',
-    'commonScale',
-    'positionMode',
-    'breakValueA',
-    'breakValueB',
-    'fillMode',
-    'strokeMode',
-    'strokeWidth',
-    'strokeOpacity',
-    'strokeDashed',
-    'strokeClassification',
-    'strokeValueColumn',
-    'strokeCategoryColumn'
-  ] as const satisfies readonly (keyof SymbolModeState)[];
-
-  function applySymbolModeStateFields(
-    symbol: SymbolPrimitiveConfig,
-    state: SymbolModeState | undefined
-  ): Partial<SymbolPrimitiveConfig> {
-    const fields: Partial<SymbolPrimitiveConfig> = {};
-    for (const key of SYMBOL_MODE_STATE_KEYS) {
-      (fields as Record<string, unknown>)[key] = state?.[key];
-    }
-    return fields;
-  }
-
-  function getDefaultSymbolModeStateFields(
-    mode: SymbolMode
-  ): Partial<SymbolPrimitiveConfig> {
-    if (mode !== SymbolMode.CATEGORIES) {
-      return {};
-    }
-
-    return {
-      strokeMode: StrokeMode.NONE,
-      strokeWidth: 0,
-      strokeOpacity: 1,
-      strokeDashed: false,
-      strokeClassification: undefined,
-      strokeValueColumn: undefined,
-      strokeCategoryColumn: undefined
-    };
-  }
-
   function handleSymbolModesChange(updates: Partial<VisualizationModes>) {
     const symbol = getSymbolPrimitive(selectedViz);
     if (!symbol) {
@@ -1677,34 +531,20 @@
       updates.symbol !== undefined &&
       updates.symbol !== symbol.mode;
 
-    const previousMode = symbol.mode;
     const nextMode = modeChanging
       ? (updates.symbol as SymbolMode)
       : symbol.mode;
-
-    const existingModeStates = symbol.modeStates ?? {};
-    const nextModeState = modeChanging
-      ? existingModeStates[nextMode]
-      : undefined;
-    const nextModeStates = modeChanging
-      ? {
-          ...existingModeStates,
-          [previousMode]: snapshotSymbolModeState(symbol)
-        }
-      : existingModeStates;
-    const restoredStateFields = modeChanging
-      ? nextModeState
-        ? applySymbolModeStateFields(symbol, nextModeState)
-        : getDefaultSymbolModeStateFields(nextMode)
-      : {};
+    const modeTransition = modeChanging
+      ? resolveSymbolModeTransition(symbol, nextMode)
+      : null;
 
     updateSelectedVisualization(
       {
         symbol: {
           ...symbol,
           ...(modeChanging ? { mode: nextMode } : {}),
-          ...restoredStateFields,
-          modeStates: nextModeStates,
+          ...(modeTransition?.restoredStateFields ?? {}),
+          modeStates: modeTransition?.nextModeStates ?? symbol.modeStates ?? {},
           ...(Object.prototype.hasOwnProperty.call(updates, 'fill')
             ? { fillMode: updates.fill ?? symbol.fillMode }
             : {}),
@@ -1801,17 +641,6 @@
   ) {
     updatePrimitiveStrokeClassificationState(
       PrimitiveFilterType.POLYGON,
-      updates
-    );
-  }
-
-  function _handleTextStrokeClassificationChange(
-    updates: Partial<ClassificationConfig>
-  ) {
-    if (!selectedViz?.id) return;
-    visualizationStore.updatePrimitiveStrokeClassification(
-      selectedViz.id,
-      PrimitiveFilterType.TEXT,
       updates
     );
   }
@@ -2075,78 +904,6 @@
     invertPrimitivePalette(PrimitiveFilterType.TEXT);
   }
 
-  function updateTextBackground(
-    updater: (
-      background: TextPrimitiveConfig['background']
-    ) => Partial<TextPrimitiveConfig['background']>
-  ) {
-    const text = getTextPrimitive(selectedViz);
-    if (!text) {
-      return;
-    }
-
-    handleTextChange({
-      background: {
-        ...text.background,
-        ...updater(text.background)
-      }
-    });
-  }
-
-  function updateTextBackgroundClassificationState(
-    updates: Partial<ClassificationConfig>
-  ) {
-    updateTextBackground((background) => ({
-      classification: {
-        ...(background.classification ?? {
-          method: ClassificationMethod.JENKS,
-          classes: 5
-        }),
-        ...updates
-      } as ClassificationConfig
-    }));
-  }
-
-  function updateTextBackgroundStrokeClassificationState(
-    updates: Partial<ClassificationConfig>
-  ) {
-    updateTextBackground((background) => ({
-      strokeClassification: {
-        ...(background.strokeClassification ?? {
-          method: ClassificationMethod.JENKS,
-          classes: 5
-        }),
-        ...updates
-      } as ClassificationConfig
-    }));
-  }
-
-  function applyTextBackgroundMappingUpdate(
-    updates: Partial<VisualizationConfig['mapping']>
-  ) {
-    updateTextBackground(() => ({
-      ...(Object.prototype.hasOwnProperty.call(updates, 'valueColumn')
-        ? { valueColumn: updates.valueColumn }
-        : {}),
-      ...(Object.prototype.hasOwnProperty.call(updates, 'categoryColumn')
-        ? { categoryColumn: updates.categoryColumn }
-        : {})
-    }));
-  }
-
-  function applyTextBackgroundStrokeMappingUpdate(
-    updates: Partial<VisualizationConfig['mapping']>
-  ) {
-    updateTextBackground(() => ({
-      ...(Object.prototype.hasOwnProperty.call(updates, 'valueColumn')
-        ? { strokeValueColumn: updates.valueColumn }
-        : {}),
-      ...(Object.prototype.hasOwnProperty.call(updates, 'categoryColumn')
-        ? { strokeCategoryColumn: updates.categoryColumn }
-        : {})
-    }));
-  }
-
   function handleTextBackgroundStyleChange(
     updates: Partial<VisualizationConfig['style']>
   ) {
@@ -2223,31 +980,11 @@
   }
 
   function handleTextBackgroundPaletteInvert() {
-    const text = getTextPrimitive(selectedViz);
-    const classification = text?.background.classification;
-    const colors = classification?.colors;
-    if (!classification || !colors?.length) {
-      return;
-    }
-
-    updateTextBackgroundClassificationState({
-      colors: [...colors].reverse(),
-      inverted: !(classification.inverted ?? false)
-    });
+    invertTextBackgroundPalette();
   }
 
   function handleTextBackgroundStrokePaletteInvert() {
-    const text = getTextPrimitive(selectedViz);
-    const classification = text?.background.strokeClassification;
-    const colors = classification?.colors;
-    if (!classification || !colors?.length) {
-      return;
-    }
-
-    updateTextBackgroundStrokeClassificationState({
-      colors: [...colors].reverse(),
-      inverted: !(classification.inverted ?? false)
-    });
+    invertTextBackgroundStrokePalette();
   }
 
   function handleTextVisibilityChange(visible: boolean) {
@@ -2366,721 +1103,38 @@
     );
   }
 
-  /**
-   * Transient null results from calculateBreaks (e.g. the DuckDB table
-   * registration lands after the first compute dispatch) used to leave the
-   * classification without breaks forever, because the only retry hook was
-   * the `datasetsVersion` $effect which may already have fired. Schedule a
-   * bounded retry chain so the race resolves without breaking the
-   * "will retry" log contract, while capping at a handful of attempts to
-   * avoid infinite loops when the dataset is structurally unavailable.
-   */
-  const pendingBreaksRetries = new SvelteMap<
-    ClassifiablePrimitive,
-    { handle: ReturnType<typeof setTimeout>; key: string; attempts: number }
-  >();
-  const pendingStrokeBreaksRetries = new SvelteMap<
-    StrokeClassifiablePrimitive,
-    { handle: ReturnType<typeof setTimeout>; key: string; attempts: number }
-  >();
-  const MAX_BREAKS_RETRIES = 4;
-  const BREAKS_RETRY_DELAY_MS = 250;
-
   onDestroy(() => {
-    for (const entry of pendingBreaksRetries.values()) {
-      clearTimeout(entry.handle);
-    }
-    pendingBreaksRetries.clear();
-    for (const entry of pendingStrokeBreaksRetries.values()) {
-      clearTimeout(entry.handle);
-    }
-    pendingStrokeBreaksRetries.clear();
+    classificationBreaks.destroy();
   });
 
-  function scheduleBreaksRetry(
+  function computeBreaksForPrimitive(
     primitive: ClassifiablePrimitive,
-    breaksKey: string
-  ): boolean {
-    const existing = pendingBreaksRetries.get(primitive);
-    if (existing) {
-      clearTimeout(existing.handle);
-    }
-    const priorAttempts =
-      existing && existing.key === breaksKey ? existing.attempts : 0;
-    if (priorAttempts >= MAX_BREAKS_RETRIES) {
-      pendingBreaksRetries.delete(primitive);
-      return false;
-    }
-    const handle = setTimeout(() => {
-      const target = primitiveClassificationTargets.find(
-        (t) => t.primitive === primitive
-      );
-      if (
-        !target?.usesBreaks ||
-        !target.classification?.method ||
-        !target.valueColumn ||
-        target.classification.breaks?.length
-      ) {
-        pendingBreaksRetries.delete(primitive);
-        return;
-      }
-      void computeBreaksForPrimitive(
-        primitive,
-        '$timeout:retryAfterEmpty',
-        breaksKey
-      );
-    }, BREAKS_RETRY_DELAY_MS);
-    pendingBreaksRetries.set(primitive, {
-      handle,
-      key: breaksKey,
-      attempts: priorAttempts + 1
+    trigger: ClassificationBreakTrigger = CLASSIFICATION_BREAKS_TRIGGER.UNKNOWN
+  ): void {
+    void classificationBreaks.compute({
+      scopeKey: buildClassificationScopeKey('fill', primitive),
+      datasetId: selectedViz?.datasetId,
+      valueColumn: getPrimitiveValueColumn(selectedViz, primitive),
+      classification: getPrimitiveClassification(selectedViz, primitive),
+      trigger,
+      applyUpdate: (updates) =>
+        updatePrimitiveClassificationState(primitive, updates)
     });
-    return true;
   }
 
-  function scheduleStrokeBreaksRetry(
+  function computeBreaksForStrokePrimitive(
     primitive: StrokeClassifiablePrimitive,
-    breaksKey: string
-  ): boolean {
-    const existing = pendingStrokeBreaksRetries.get(primitive);
-    if (existing) {
-      clearTimeout(existing.handle);
-    }
-    const priorAttempts =
-      existing && existing.key === breaksKey ? existing.attempts : 0;
-    if (priorAttempts >= MAX_BREAKS_RETRIES) {
-      pendingStrokeBreaksRetries.delete(primitive);
-      return false;
-    }
-    const handle = setTimeout(() => {
-      const target = primitiveStrokeClassificationTargets.find(
-        (t) => t.primitive === primitive
-      );
-      if (
-        !target?.usesBreaks ||
-        !target.classification?.method ||
-        !target.valueColumn ||
-        target.classification.breaks?.length
-      ) {
-        pendingStrokeBreaksRetries.delete(primitive);
-        return;
-      }
-      void computeBreaksForStrokePrimitive(
-        primitive,
-        '$timeout:retryAfterEmpty',
-        breaksKey
-      );
-    }, BREAKS_RETRY_DELAY_MS);
-    pendingStrokeBreaksRetries.set(primitive, {
-      handle,
-      key: breaksKey,
-      attempts: priorAttempts + 1
+    trigger: ClassificationBreakTrigger = CLASSIFICATION_BREAKS_TRIGGER.UNKNOWN
+  ): void {
+    void classificationBreaks.compute({
+      scopeKey: buildClassificationScopeKey('stroke', primitive),
+      datasetId: selectedViz?.datasetId,
+      valueColumn: getPrimitiveStrokeValueColumn(selectedViz, primitive),
+      classification: getPrimitiveStrokeClassification(selectedViz, primitive),
+      trigger,
+      applyUpdate: (updates) =>
+        updatePrimitiveStrokeClassificationState(primitive, updates)
     });
-    return true;
-  }
-
-  async function computeBreaksForPrimitive(
-    primitive: ClassifiablePrimitive,
-    trigger = 'unknown',
-    _retryKey = ''
-  ) {
-    const valueColumn = getPrimitiveValueColumn(selectedViz, primitive);
-    const classification = getPrimitiveClassification(selectedViz, primitive);
-
-    if (!selectedViz?.datasetId || !valueColumn) {
-      return;
-    }
-
-    const method = classification?.method;
-    const numClasses = classification?.numClasses ?? 5;
-
-    if (!method || method === ClassificationMethod.MANUAL) {
-      return;
-    }
-
-    const normalizedMethod = normalizeClassificationMethod(method);
-    const requestedClassCount = resolveRequestedClassCount(
-      normalizedMethod,
-      numClasses
-    );
-    const breaksKey = `${selectedViz.id}-${selectedViz.datasetId}-${primitive}-${valueColumn}-${normalizedMethod}-${requestedClassCount}`;
-    const hasExistingBreaks = Boolean(classification?.breaks?.length);
-    const lastCompletedKey = untrack(() =>
-      lastCompletedBreaksKeyByPrimitive.get(primitive)
-    );
-    const inFlightKey = untrack(() =>
-      inFlightBreaksKeyByPrimitive.get(primitive)
-    );
-
-    if (breaksKey === inFlightKey) {
-      return;
-    }
-
-    if (hasExistingBreaks && breaksKey === lastCompletedKey) {
-      return;
-    }
-
-    const clearInFlightBreaksKey = () =>
-      untrack(() => {
-        if (inFlightBreaksKeyByPrimitive.get(primitive) === breaksKey) {
-          inFlightBreaksKeyByPrimitive.delete(primitive);
-        }
-      });
-
-    untrack(() => inFlightBreaksKeyByPrimitive.set(primitive, breaksKey));
-    const nextRequestId =
-      (computeRequestCounterByPrimitive.get(primitive) ?? 0) + 1;
-    computeRequestCounterByPrimitive.set(primitive, nextRequestId);
-    const requestId = nextRequestId;
-
-    const dataset = datasetsStore.datasets.find(
-      (datasetItem) => datasetItem.id === selectedViz.datasetId
-    );
-    if (!dataset?.sourceFileId) {
-      logger.warn(
-        '[configure-visualization] skipped breaks computation (missing sourceFileId)',
-        LogCategory.UI,
-        {
-          trigger,
-          requestId,
-          primitive,
-          datasetId: selectedViz.datasetId
-        }
-      );
-      clearInFlightBreaksKey();
-      return;
-    }
-
-    try {
-      const result = await calculateBreaks({
-        datasetId: dataset.sourceFileId,
-        columnName: valueColumn,
-        method: normalizedMethod,
-        numClasses: requestedClassCount
-      });
-
-      const latestRequestId =
-        computeRequestCounterByPrimitive.get(primitive) ?? 0;
-      if (requestId !== latestRequestId || !selectedViz?.id) {
-        clearInFlightBreaksKey();
-        return;
-      }
-
-      if (!result) {
-        clearInFlightBreaksKey();
-        const scheduled = scheduleBreaksRetry(primitive, breaksKey);
-        if (scheduled) {
-          logger.warn(
-            '[configure-visualization] breaks computation returned empty result, will retry',
-            LogCategory.UI,
-            {
-              requestId,
-              primitive,
-              selectedVisualizationId: selectedViz.id
-            }
-          );
-        } else {
-          logger.error(
-            '[configure-visualization] breaks computation failed after retry cap — classification will remain empty until the dataset or column changes',
-            LogCategory.UI,
-            {
-              requestId,
-              primitive,
-              selectedVisualizationId: selectedViz.id,
-              valueColumn,
-              method: normalizedMethod
-            }
-          );
-        }
-        return;
-      }
-
-      const actualNumClasses = resolveComputedClassCount(
-        normalizedMethod,
-        requestedClassCount,
-        result.counts.length
-      );
-      const existingColors = classification?.colors;
-      const contrast = isColorBlindnessActive(getColorBlindnessState())
-        ? ('high' as const)
-        : undefined;
-      let colors: string[];
-
-      if (existingColors && existingColors.length === actualNumClasses) {
-        colors = existingColors;
-      } else {
-        const paletteType =
-          classification?.breakpointValue != null ? 'diverging' : 'sequential';
-        const userPalette = classification?.paletteId
-          ? findPaletteById(classification.paletteId)
-          : undefined;
-        const isPatternPalette = userPalette?.type === PALETTE_TYPE.PATTERN;
-        const divergingSplit =
-          paletteType === 'diverging'
-            ? computeDivergingSplit(
-                actualNumClasses,
-                result.breaks,
-                classification?.breakpointValue ?? null
-              )
-            : undefined;
-        colors =
-          userPalette && !isPatternPalette
-            ? generatePaletteColors(
-                userPalette,
-                actualNumClasses,
-                contrast,
-                undefined,
-                divergingSplit
-              )
-            : generateColorsForBreaks(
-                actualNumClasses,
-                paletteType,
-                contrast,
-                divergingSplit
-              );
-        colors = applyPaletteInversion(
-          colors,
-          classification?.inverted ?? false
-        );
-      }
-
-      const classificationUpdate: Partial<ClassificationConfig> = {
-        breaks: result.breaks,
-        counts: result.counts,
-        colors
-      };
-
-      if (
-        normalizedMethod !== method ||
-        actualNumClasses !== numClasses ||
-        classification?.classes !== actualNumClasses
-      ) {
-        classificationUpdate.method = normalizedMethod;
-        classificationUpdate.classes = actualNumClasses;
-        classificationUpdate.numClasses = actualNumClasses;
-      }
-
-      updatePrimitiveClassificationState(primitive, classificationUpdate);
-      untrack(() =>
-        lastCompletedBreaksKeyByPrimitive.set(primitive, breaksKey)
-      );
-      clearInFlightBreaksKey();
-    } catch (error) {
-      logger.error(
-        '[configure-visualization] breaks computation crashed',
-        LogCategory.UI,
-        {
-          trigger,
-          requestId,
-          primitive,
-          error
-        }
-      );
-      clearInFlightBreaksKey();
-    }
-  }
-
-  async function computeBreaksForStrokePrimitive(
-    primitive: StrokeClassifiablePrimitive,
-    trigger = 'unknown',
-    _retryKey = ''
-  ) {
-    const valueColumn = getPrimitiveStrokeValueColumn(selectedViz, primitive);
-    const classification = getPrimitiveStrokeClassification(
-      selectedViz,
-      primitive
-    );
-
-    if (!selectedViz?.datasetId || !valueColumn) {
-      return;
-    }
-
-    const method = classification?.method;
-    const numClasses = classification?.numClasses ?? 5;
-
-    if (!method || method === ClassificationMethod.MANUAL) {
-      return;
-    }
-
-    const normalizedMethod = normalizeClassificationMethod(method);
-    const requestedClassCount = resolveRequestedClassCount(
-      normalizedMethod,
-      numClasses
-    );
-    const breaksKey = `${selectedViz.id}-${selectedViz.datasetId}-stroke-${primitive}-${valueColumn}-${normalizedMethod}-${requestedClassCount}`;
-    const hasExistingBreaks = Boolean(classification?.breaks?.length);
-    const lastCompletedKey = untrack(() =>
-      lastCompletedStrokeBreaksKeyByPrimitive.get(primitive)
-    );
-    const inFlightKey = untrack(() =>
-      inFlightStrokeBreaksKeyByPrimitive.get(primitive)
-    );
-
-    if (breaksKey === inFlightKey) {
-      return;
-    }
-
-    if (hasExistingBreaks && breaksKey === lastCompletedKey) {
-      return;
-    }
-
-    const clearInFlightBreaksKey = () =>
-      untrack(() => {
-        if (inFlightStrokeBreaksKeyByPrimitive.get(primitive) === breaksKey) {
-          inFlightStrokeBreaksKeyByPrimitive.delete(primitive);
-        }
-      });
-
-    untrack(() => inFlightStrokeBreaksKeyByPrimitive.set(primitive, breaksKey));
-    const nextRequestId =
-      (computeStrokeRequestCounterByPrimitive.get(primitive) ?? 0) + 1;
-    computeStrokeRequestCounterByPrimitive.set(primitive, nextRequestId);
-    const requestId = nextRequestId;
-
-    const dataset = datasetsStore.datasets.find(
-      (datasetItem) => datasetItem.id === selectedViz.datasetId
-    );
-    if (!dataset?.sourceFileId) {
-      clearInFlightBreaksKey();
-      return;
-    }
-
-    try {
-      const result = await calculateBreaks({
-        datasetId: dataset.sourceFileId,
-        columnName: valueColumn,
-        method: normalizedMethod,
-        numClasses: requestedClassCount
-      });
-
-      const latestRequestId =
-        computeStrokeRequestCounterByPrimitive.get(primitive) ?? 0;
-      if (requestId !== latestRequestId || !selectedViz?.id) {
-        clearInFlightBreaksKey();
-        return;
-      }
-
-      if (!result) {
-        clearInFlightBreaksKey();
-        const scheduled = scheduleStrokeBreaksRetry(primitive, breaksKey);
-        if (!scheduled) {
-          logger.error(
-            '[configure-visualization] stroke breaks computation failed after retry cap',
-            LogCategory.UI,
-            {
-              requestId,
-              primitive,
-              selectedVisualizationId: selectedViz.id,
-              valueColumn,
-              method: normalizedMethod
-            }
-          );
-        }
-        return;
-      }
-
-      const actualNumClasses = resolveComputedClassCount(
-        normalizedMethod,
-        requestedClassCount,
-        result.counts.length
-      );
-      const existingColors = classification?.colors;
-      const contrast = isColorBlindnessActive(getColorBlindnessState())
-        ? ('high' as const)
-        : undefined;
-      const paletteType =
-        classification?.breakpointValue != null ? 'diverging' : 'sequential';
-      const userPalette = classification?.paletteId
-        ? findPaletteById(classification.paletteId)
-        : undefined;
-      const isPatternPalette = userPalette?.type === PALETTE_TYPE.PATTERN;
-      const divergingSplit =
-        paletteType === 'diverging'
-          ? computeDivergingSplit(
-              actualNumClasses,
-              result.breaks,
-              classification?.breakpointValue ?? null
-            )
-          : undefined;
-      let colors: string[];
-
-      if (existingColors && existingColors.length === actualNumClasses) {
-        colors = existingColors;
-      } else {
-        colors =
-          userPalette && !isPatternPalette
-            ? generatePaletteColors(
-                userPalette,
-                actualNumClasses,
-                contrast,
-                undefined,
-                divergingSplit
-              )
-            : generateColorsForBreaks(
-                actualNumClasses,
-                paletteType,
-                contrast,
-                divergingSplit
-              );
-        colors = applyPaletteInversion(
-          colors,
-          classification?.inverted ?? false
-        );
-      }
-
-      const classificationUpdate: Partial<ClassificationConfig> = {
-        breaks: result.breaks,
-        counts: result.counts,
-        colors
-      };
-
-      if (
-        normalizedMethod !== method ||
-        actualNumClasses !== numClasses ||
-        classification?.classes !== actualNumClasses
-      ) {
-        classificationUpdate.method = normalizedMethod;
-        classificationUpdate.classes = actualNumClasses;
-        classificationUpdate.numClasses = actualNumClasses;
-      }
-
-      updatePrimitiveStrokeClassificationState(primitive, classificationUpdate);
-      untrack(() =>
-        lastCompletedStrokeBreaksKeyByPrimitive.set(primitive, breaksKey)
-      );
-      clearInFlightBreaksKey();
-    } catch (error) {
-      logger.error(
-        '[configure-visualization] stroke breaks computation crashed',
-        LogCategory.UI,
-        {
-          trigger,
-          requestId,
-          primitive,
-          error
-        }
-      );
-      clearInFlightBreaksKey();
-    }
-  }
-
-  function buildPolygonPanelVisualization(
-    visualization: VisualizationConfig | undefined
-  ): VisualizationConfig | undefined {
-    const polygon = getPolygonPrimitive(visualization);
-    if (!visualization || !polygon) {
-      return undefined;
-    }
-
-    return {
-      ...visualization,
-      primitiveFilters: getEnabledPrimitiveFilters(visualization),
-      modes: {
-        ...visualization.modes,
-        fill: polygon.fillMode,
-        stroke: polygon.strokeMode
-      },
-      style: {
-        ...visualization.style,
-        fillColor: polygon.fillColor,
-        fillOpacity:
-          polygon.fillMode === FillMode.NONE ? 0 : polygon.fillOpacity,
-        strokeColor:
-          (Array.isArray(polygon.strokeColor)
-            ? polygon.strokeColor[0]
-            : polygon.strokeColor) ?? visualization.style.strokeColor,
-        strokeWidth: polygon.strokeWidth,
-        strokeOpacity: polygon.strokeOpacity,
-        strokeDashed: polygon.strokeDashed
-      },
-      mapping: {
-        ...visualization.mapping,
-        valueColumn: polygon.valueColumn,
-        categoryColumn: polygon.categoryColumn
-      },
-      classification: polygon.classification,
-      missingData: polygon.missingData
-    };
-  }
-
-  function buildSymbolPanelVisualization(
-    visualization: VisualizationConfig | undefined
-  ): VisualizationConfig | undefined {
-    const symbol = getSymbolPrimitive(visualization);
-    if (!visualization || !symbol) {
-      return undefined;
-    }
-
-    return {
-      ...visualization,
-      primitiveFilters: getEnabledPrimitiveFilters(visualization),
-      modes: {
-        ...visualization.modes,
-        symbol: symbol.mode,
-        fill: symbol.fillMode,
-        stroke: symbol.strokeMode,
-        proportionalType: symbol.proportionalType,
-        categoryShape: symbol.categoryShape
-      },
-      style: {
-        ...visualization.style,
-        symbolFillColor: symbol.fillColor,
-        fillColorB: symbol.fillColorB,
-        strokeColor: Array.isArray(symbol.strokeColor)
-          ? symbol.strokeColor[0]
-          : symbol.strokeColor,
-        strokeWidth: symbol.strokeWidth,
-        strokeOpacity: symbol.strokeOpacity,
-        strokeDashed: symbol.strokeDashed
-      },
-      mapping: {
-        ...visualization.mapping,
-        valueColumn: symbol.valueColumn,
-        categoryColumn: symbol.categoryColumn,
-        sizeColumn: symbol.sizeColumn
-      },
-      classification: symbol.classification,
-      symbols: {
-        ...(visualization.symbols ?? {
-          type: symbol.shape,
-          minSize: symbol.minSize,
-          maxSize: symbol.maxSize,
-          sizeScale: symbol.sizeScale
-        }),
-        type: symbol.shape,
-        size: symbol.size,
-        minSize: symbol.minSize,
-        maxSize: symbol.maxSize,
-        sizeScale: symbol.sizeScale,
-        opacity: symbol.opacity
-      },
-      missingData: symbol.missingData
-    };
-  }
-
-  function buildLinePanelVisualization(
-    visualization: VisualizationConfig | undefined
-  ): VisualizationConfig | undefined {
-    const line = getLinePrimitive(visualization);
-    if (!visualization || !line) {
-      return undefined;
-    }
-
-    return {
-      ...visualization,
-      primitiveFilters: getEnabledPrimitiveFilters(visualization),
-      modes: {
-        ...visualization.modes,
-        color: line.colorMode,
-        thickness: line.thicknessMode
-      },
-      style: {
-        ...visualization.style,
-        lineColor: line.color,
-        lineOpacity: line.opacity,
-        lineWidth: line.width,
-        lineMaxWidth: line.maxWidth,
-        lineDashed: line.dashed
-      },
-      mapping: {
-        ...visualization.mapping,
-        valueColumn: line.valueColumn,
-        categoryColumn: line.categoryColumn,
-        sizeColumn: line.sizeColumn
-      },
-      classification: line.classification,
-      missingData: line.missingData
-    };
-  }
-
-  function buildTextPanelVisualization(
-    visualization: VisualizationConfig | undefined
-  ): VisualizationConfig | undefined {
-    const text = getTextPrimitive(visualization);
-    if (!visualization || !text) {
-      return undefined;
-    }
-
-    return {
-      ...visualization,
-      primitiveFilters: getEnabledPrimitiveFilters(visualization),
-      modes: {
-        ...visualization.modes,
-        color: text.colorMode,
-        size: text.sizeMode
-      },
-      style: {
-        ...visualization.style,
-        textColor: text.color,
-        textOpacity: text.enabled ? text.opacity : 0,
-        textSize: text.size,
-        textBold: text.bold,
-        textItalic: text.italic,
-        textAlign: text.align,
-        textHalo: text.halo,
-        textHaloColor: text.haloColor,
-        textHaloWidth: text.haloWidth,
-        textCollisionDetection: text.collisionDetection,
-        textDxpMasking: text.dxpMasking,
-        labelColor: text.secondaryLabels.color,
-        labelOpacity: text.secondaryLabels.opacity,
-        labelSize: text.secondaryLabels.size,
-        labelAlign: text.secondaryLabels.align,
-        labelHalo: text.secondaryLabels.halo,
-        labelHaloColor: text.secondaryLabels.haloColor,
-        labelHaloWidth: text.secondaryLabels.haloWidth,
-        labelCollisionDetection: text.secondaryLabels.collisionDetection,
-        labelDxpMasking: text.secondaryLabels.dxpMasking
-      },
-      mapping: {
-        ...visualization.mapping,
-        labelColumn: text.labelColumn,
-        valueColumn: text.valueColumn,
-        categoryColumn: text.categoryColumn,
-        secondaryLabelColumn: text.secondaryLabels.labelColumn
-      },
-      classification: text.classification,
-      missingData: text.missingData
-    };
-  }
-
-  function buildTextBackgroundPanelVisualization(
-    visualization: VisualizationConfig | undefined
-  ): VisualizationConfig | undefined {
-    const text = getTextPrimitive(visualization);
-    if (!visualization || !text) {
-      return undefined;
-    }
-
-    const background = text.background;
-    return {
-      ...visualization,
-      primitiveFilters: getEnabledPrimitiveFilters(visualization),
-      modes: {
-        ...visualization.modes,
-        fill: background.fillMode,
-        stroke: background.strokeMode
-      },
-      style: {
-        ...visualization.style,
-        fillColor: background.fillColor,
-        fillOpacity:
-          background.fillMode === FillMode.NONE ? 0 : background.fillOpacity,
-        strokeColor: Array.isArray(background.strokeColor)
-          ? background.strokeColor[0]
-          : background.strokeColor,
-        strokeWidth: background.strokeWidth,
-        strokeOpacity: background.strokeOpacity,
-        strokeDashed: background.strokeDashed
-      },
-      mapping: {
-        ...visualization.mapping,
-        valueColumn: background.valueColumn,
-        categoryColumn: background.categoryColumn
-      },
-      classification: background.classification,
-      missingData: undefined
-    };
   }
 
   const symbolVisualization = $derived.by(() =>
@@ -3151,36 +1205,57 @@
     };
   });
 
+  function buildClassificationColorParamsKey(
+    key: string,
+    target:
+      | {
+          classification: ClassificationConfig | undefined;
+          usesCategories: boolean;
+        }
+      | null
+      | undefined
+  ): string {
+    if (!target) {
+      return `${key}:none`;
+    }
+
+    const numColors = target.usesCategories
+      ? Math.max(target.classification?.labels?.length ?? 0, 0)
+      : (target.classification?.classes ?? 0);
+    const breakpointValue = target.classification?.breakpointValue;
+    const paletteType = breakpointValue != null ? 'diverging' : 'sequential';
+    const breakpointKey =
+      paletteType === 'diverging' && Number.isFinite(breakpointValue)
+        ? String(breakpointValue)
+        : '';
+    const breaksKey =
+      paletteType === 'diverging'
+        ? (target.classification?.breaks ?? []).join(',')
+        : '';
+
+    return [
+      key,
+      target.classification?.paletteId ?? '',
+      String(target.classification?.inverted ?? false),
+      String(numColors),
+      paletteType,
+      breakpointKey,
+      breaksKey,
+      String(target.usesCategories)
+    ].join(':');
+  }
+
   const primitiveColorParamsKey = $derived.by(() => {
     const cbEnabled = isColorBlindnessActive(getColorBlindnessState());
     return [
       String(cbEnabled),
-      ...primitiveClassificationTargets.map((target) => {
-        const numColors = target.usesCategories
-          ? Math.max(target.classification?.labels?.length ?? 0, 0)
-          : (target.classification?.classes ?? 0);
-        const breakpointValue = target.classification?.breakpointValue;
-        const paletteType =
-          breakpointValue != null ? 'diverging' : 'sequential';
-        const breakpointKey =
-          paletteType === 'diverging' && Number.isFinite(breakpointValue)
-            ? String(breakpointValue)
-            : '';
-        const breaksKey =
-          paletteType === 'diverging'
-            ? (target.classification?.breaks ?? []).join(',')
-            : '';
-        return [
-          target.primitive,
-          target.classification?.paletteId ?? '',
-          String(target.classification?.inverted ?? false),
-          String(numColors),
-          paletteType,
-          breakpointKey,
-          breaksKey,
-          String(target.usesCategories)
-        ].join(':');
-      })
+      ...primitiveClassificationTargets.map((target) =>
+        buildClassificationColorParamsKey(String(target.primitive), target)
+      ),
+      buildClassificationColorParamsKey(
+        TEXT_BACKGROUND_SCOPE_TARGET,
+        textBackgroundTarget
+      )
     ].join('|');
   });
 
@@ -3188,384 +1263,79 @@
     const cbEnabled = isColorBlindnessActive(getColorBlindnessState());
     return [
       String(cbEnabled),
-      ...primitiveStrokeClassificationTargets.map((target) => {
-        const numColors = target.usesCategories
-          ? Math.max(target.classification?.labels?.length ?? 0, 0)
-          : (target.classification?.classes ?? 0);
-        const breakpointValue = target.classification?.breakpointValue;
-        const paletteType =
-          breakpointValue != null ? 'diverging' : 'sequential';
-        const breakpointKey =
-          paletteType === 'diverging' && Number.isFinite(breakpointValue)
-            ? String(breakpointValue)
-            : '';
-        const breaksKey =
-          paletteType === 'diverging'
-            ? (target.classification?.breaks ?? []).join(',')
-            : '';
-        return [
-          target.primitive,
-          target.classification?.paletteId ?? '',
-          String(target.classification?.inverted ?? false),
-          String(numColors),
-          paletteType,
-          breakpointKey,
-          breaksKey,
-          String(target.usesCategories)
-        ].join(':');
-      }),
-      (() => {
-        const target = textBackgroundStrokeTarget;
-        if (!target) {
-          return 'text-background-stroke:none';
-        }
-        const numColors = target.usesCategories
-          ? Math.max(target.classification?.labels?.length ?? 0, 0)
-          : (target.classification?.classes ?? 0);
-        const breakpointValue = target.classification?.breakpointValue;
-        const paletteType =
-          breakpointValue != null ? 'diverging' : 'sequential';
-        const breakpointKey =
-          paletteType === 'diverging' && Number.isFinite(breakpointValue)
-            ? String(breakpointValue)
-            : '';
-        const breaksKey =
-          paletteType === 'diverging'
-            ? (target.classification?.breaks ?? []).join(',')
-            : '';
-        return [
-          'text-background-stroke',
-          target.classification?.paletteId ?? '',
-          String(target.classification?.inverted ?? false),
-          String(numColors),
-          paletteType,
-          breakpointKey,
-          breaksKey,
-          String(target.usesCategories)
-        ].join(':');
-      })()
+      ...primitiveStrokeClassificationTargets.map((target) =>
+        buildClassificationColorParamsKey(String(target.primitive), target)
+      ),
+      buildClassificationColorParamsKey(
+        `${TEXT_BACKGROUND_SCOPE_TARGET}-stroke`,
+        textBackgroundStrokeTarget
+      )
     ].join('|');
   });
 
-  let lastTextBackgroundBreaksKey = '';
-  let inFlightTextBackgroundBreaksKey = '';
-  let lastTextBackgroundStrokeBreaksKey = '';
-  let inFlightTextBackgroundStrokeBreaksKey = '';
-
-  async function computeTextBackgroundBreaks(trigger = 'unknown') {
+  function computeTextBackgroundBreaks(
+    trigger: ClassificationBreakTrigger = CLASSIFICATION_BREAKS_TRIGGER.UNKNOWN
+  ): void {
     const target = textBackgroundTarget;
-    if (!target || !selectedViz?.datasetId) return;
-    const valueColumn = target.valueColumn;
-    if (!valueColumn) return;
-    const method = target.classification?.method;
-    if (!method || method === ClassificationMethod.MANUAL) return;
-
-    const normalizedMethod = normalizeClassificationMethod(method);
-    const numClasses = target.classification?.numClasses ?? 5;
-    const requestedClassCount = resolveRequestedClassCount(
-      normalizedMethod,
-      numClasses
-    );
-    const breaksKey = `${selectedViz.id}-${selectedViz.datasetId}-textBackground-${valueColumn}-${normalizedMethod}-${requestedClassCount}`;
-    const hasExistingBreaks = Boolean(target.classification?.breaks?.length);
-
-    if (breaksKey === inFlightTextBackgroundBreaksKey) return;
-    if (hasExistingBreaks && breaksKey === lastTextBackgroundBreaksKey) return;
-
-    const dataset = datasetsStore.datasets.find(
-      (datasetItem) => datasetItem.id === selectedViz?.datasetId
-    );
-    if (!dataset?.sourceFileId) return;
-
-    untrack(() => {
-      inFlightTextBackgroundBreaksKey = breaksKey;
+    void classificationBreaks.compute({
+      scopeKey: buildClassificationScopeKey(
+        'fill',
+        TEXT_BACKGROUND_SCOPE_TARGET
+      ),
+      datasetId: selectedViz?.datasetId,
+      valueColumn: target?.valueColumn,
+      classification: target?.classification,
+      trigger,
+      applyUpdate: handleTextBackgroundClassificationChange
     });
-
-    try {
-      const result = await calculateBreaks({
-        datasetId: dataset.sourceFileId,
-        columnName: valueColumn,
-        method: normalizedMethod,
-        numClasses: requestedClassCount
-      });
-
-      if (!result || !selectedViz?.id) {
-        inFlightTextBackgroundBreaksKey = '';
-        return;
-      }
-
-      const actualNumClasses = resolveComputedClassCount(
-        normalizedMethod,
-        requestedClassCount,
-        result.counts.length
-      );
-      const existingColors = target.classification?.colors;
-      const contrast = isColorBlindnessActive(getColorBlindnessState())
-        ? ('high' as const)
-        : undefined;
-      let colors: string[];
-
-      if (existingColors && existingColors.length === actualNumClasses) {
-        colors = existingColors;
-      } else {
-        const paletteType =
-          target.classification?.breakpointValue != null
-            ? 'diverging'
-            : 'sequential';
-        const userPalette = target.classification?.paletteId
-          ? findPaletteById(target.classification.paletteId)
-          : undefined;
-        const isPatternPalette = userPalette?.type === PALETTE_TYPE.PATTERN;
-        const divergingSplit =
-          paletteType === 'diverging'
-            ? computeDivergingSplit(
-                actualNumClasses,
-                result.breaks,
-                target.classification?.breakpointValue ?? null
-              )
-            : undefined;
-        colors =
-          userPalette && !isPatternPalette
-            ? generatePaletteColors(
-                userPalette,
-                actualNumClasses,
-                contrast,
-                undefined,
-                divergingSplit
-              )
-            : generateColorsForBreaks(
-                actualNumClasses,
-                paletteType,
-                contrast,
-                divergingSplit
-              );
-        colors = applyPaletteInversion(
-          colors,
-          target.classification?.inverted ?? false
-        );
-      }
-
-      const classificationUpdate: Partial<ClassificationConfig> = {
-        breaks: result.breaks,
-        counts: result.counts,
-        colors
-      };
-
-      if (
-        normalizedMethod !== method ||
-        actualNumClasses !== numClasses ||
-        target.classification?.classes !== actualNumClasses
-      ) {
-        classificationUpdate.method = normalizedMethod;
-        classificationUpdate.classes = actualNumClasses;
-        classificationUpdate.numClasses = actualNumClasses;
-      }
-
-      handleTextBackgroundClassificationChange(classificationUpdate);
-      lastTextBackgroundBreaksKey = breaksKey;
-      inFlightTextBackgroundBreaksKey = '';
-    } catch (error) {
-      logger.error(
-        '[configure-visualization] text background breaks computation crashed',
-        LogCategory.UI,
-        { trigger, error }
-      );
-      inFlightTextBackgroundBreaksKey = '';
-    }
   }
 
-  async function fetchTextBackgroundCategoryLabels(
+  function fetchTextBackgroundCategoryLabels(
     column: string,
-    tableName: string,
-    datasetId?: string
-  ) {
-    try {
-      const rows = (await Duck.query(
-        `SELECT DISTINCT "${column}" AS category_value FROM "${tableName}" WHERE "${column}" IS NOT NULL ORDER BY "${column}"`,
-        { format: 'array' }
-      )) as Array<Record<string, unknown> | unknown[]>;
-      const queriedLabels = collectDistinctCategoryLabels(
-        rows.map((row) =>
-          Array.isArray(row)
-            ? row[0]
-            : ((row.category_value ?? row[column]) as unknown)
-        )
-      );
-      const labels = resolveFallbackCategoryLabels(
-        queriedLabels,
-        column,
-        datasetId
-      );
-      if (labels.length > 0) {
-        untrack(() => handleTextBackgroundClassificationChange({ labels }));
-      }
-    } catch (error) {
-      logger.warn(
-        'Failed to fetch text background category labels',
-        LogCategory.VISUALIZATION,
-        error
-      );
-    }
+    dataset: CategoryLabelsDataset
+  ): void {
+    void fetchClassificationLabels({
+      dataset,
+      column,
+      getCurrentLabels: () => textBackgroundTarget?.classification?.labels,
+      applyLabels: (labels) =>
+        handleTextBackgroundClassificationChange({ labels }),
+      useUntrack: true,
+      errorMessage: CATEGORY_LABEL_FETCH_ERROR.TEXT_BACKGROUND
+    });
   }
 
-  async function computeTextBackgroundStrokeBreaks(trigger = 'unknown') {
+  function computeTextBackgroundStrokeBreaks(
+    trigger: ClassificationBreakTrigger = CLASSIFICATION_BREAKS_TRIGGER.UNKNOWN
+  ): void {
     const target = textBackgroundStrokeTarget;
-    if (!target || !selectedViz?.datasetId) return;
-    const valueColumn = target.valueColumn;
-    if (!valueColumn) return;
-    const method = target.classification?.method;
-    if (!method || method === ClassificationMethod.MANUAL) return;
-
-    const normalizedMethod = normalizeClassificationMethod(method);
-    const numClasses = target.classification?.numClasses ?? 5;
-    const requestedClassCount = resolveRequestedClassCount(
-      normalizedMethod,
-      numClasses
-    );
-    const breaksKey = `${selectedViz.id}-${selectedViz.datasetId}-textBackground-stroke-${valueColumn}-${normalizedMethod}-${requestedClassCount}`;
-    const hasExistingBreaks = Boolean(target.classification?.breaks?.length);
-
-    if (breaksKey === inFlightTextBackgroundStrokeBreaksKey) return;
-    if (hasExistingBreaks && breaksKey === lastTextBackgroundStrokeBreaksKey) {
-      return;
-    }
-
-    const dataset = datasetsStore.datasets.find(
-      (datasetItem) => datasetItem.id === selectedViz?.datasetId
-    );
-    if (!dataset?.sourceFileId) return;
-
-    untrack(() => {
-      inFlightTextBackgroundStrokeBreaksKey = breaksKey;
+    void classificationBreaks.compute({
+      scopeKey: buildClassificationScopeKey(
+        'stroke',
+        TEXT_BACKGROUND_SCOPE_TARGET
+      ),
+      datasetId: selectedViz?.datasetId,
+      valueColumn: target?.valueColumn,
+      classification: target?.classification,
+      trigger,
+      applyUpdate: handleTextBackgroundStrokeClassificationChange
     });
-
-    try {
-      const result = await calculateBreaks({
-        datasetId: dataset.sourceFileId,
-        columnName: valueColumn,
-        method: normalizedMethod,
-        numClasses: requestedClassCount
-      });
-
-      if (!result || !selectedViz?.id) {
-        inFlightTextBackgroundStrokeBreaksKey = '';
-        return;
-      }
-
-      const actualNumClasses = resolveComputedClassCount(
-        normalizedMethod,
-        requestedClassCount,
-        result.counts.length
-      );
-      const existingColors = target.classification?.colors;
-      const contrast = isColorBlindnessActive(getColorBlindnessState())
-        ? ('high' as const)
-        : undefined;
-      const paletteType =
-        target.classification?.breakpointValue != null
-          ? 'diverging'
-          : 'sequential';
-      const userPalette = target.classification?.paletteId
-        ? findPaletteById(target.classification.paletteId)
-        : undefined;
-      const isPatternPalette = userPalette?.type === PALETTE_TYPE.PATTERN;
-      const divergingSplit =
-        paletteType === 'diverging'
-          ? computeDivergingSplit(
-              actualNumClasses,
-              result.breaks,
-              target.classification?.breakpointValue ?? null
-            )
-          : undefined;
-      let colors: string[];
-
-      if (existingColors && existingColors.length === actualNumClasses) {
-        colors = existingColors;
-      } else {
-        colors =
-          userPalette && !isPatternPalette
-            ? generatePaletteColors(
-                userPalette,
-                actualNumClasses,
-                contrast,
-                undefined,
-                divergingSplit
-              )
-            : generateColorsForBreaks(
-                actualNumClasses,
-                paletteType,
-                contrast,
-                divergingSplit
-              );
-        colors = applyPaletteInversion(
-          colors,
-          target.classification?.inverted ?? false
-        );
-      }
-
-      const classificationUpdate: Partial<ClassificationConfig> = {
-        breaks: result.breaks,
-        counts: result.counts,
-        colors
-      };
-
-      if (
-        normalizedMethod !== method ||
-        actualNumClasses !== numClasses ||
-        target.classification?.classes !== actualNumClasses
-      ) {
-        classificationUpdate.method = normalizedMethod;
-        classificationUpdate.classes = actualNumClasses;
-        classificationUpdate.numClasses = actualNumClasses;
-      }
-
-      handleTextBackgroundStrokeClassificationChange(classificationUpdate);
-      lastTextBackgroundStrokeBreaksKey = breaksKey;
-      inFlightTextBackgroundStrokeBreaksKey = '';
-    } catch (error) {
-      logger.error(
-        '[configure-visualization] text background stroke breaks computation crashed',
-        LogCategory.UI,
-        { trigger, error }
-      );
-      inFlightTextBackgroundStrokeBreaksKey = '';
-    }
   }
 
-  async function fetchTextBackgroundStrokeCategoryLabels(
+  function fetchTextBackgroundStrokeCategoryLabels(
     column: string,
-    tableName: string,
-    datasetId?: string
-  ) {
-    try {
-      const rows = (await Duck.query(
-        `SELECT DISTINCT "${column}" AS category_value FROM "${tableName}" WHERE "${column}" IS NOT NULL ORDER BY "${column}"`,
-        { format: 'array' }
-      )) as Array<Record<string, unknown> | unknown[]>;
-      const queriedLabels = collectDistinctCategoryLabels(
-        rows.map((row) =>
-          Array.isArray(row)
-            ? row[0]
-            : ((row.category_value ?? row[column]) as unknown)
-        )
-      );
-      const labels = resolveFallbackCategoryLabels(
-        queriedLabels,
-        column,
-        datasetId
-      );
-      if (labels.length > 0) {
-        untrack(() =>
-          handleTextBackgroundStrokeClassificationChange({ labels })
-        );
-      }
-    } catch (error) {
-      logger.warn(
-        'Failed to fetch text background stroke category labels',
-        LogCategory.VISUALIZATION,
-        error
-      );
-    }
+    dataset: CategoryLabelsDataset
+  ): void {
+    void fetchClassificationLabels({
+      dataset,
+      column,
+      getCurrentLabels: () =>
+        textBackgroundStrokeTarget?.classification?.labels,
+      applyLabels: (labels) =>
+        handleTextBackgroundStrokeClassificationChange({ labels }),
+      useUntrack: true,
+      errorMessage: CATEGORY_LABEL_FETCH_ERROR.TEXT_BACKGROUND_STROKE
+    });
   }
 
   $effect(() => {
@@ -3591,7 +1361,7 @@
   });
 
   $effect(() => {
-    const duckVersion = duckDBOrchestrator.datasetsVersion;
+    const _duckVersion = duckDBOrchestrator.datasetsVersion;
 
     for (const target of primitiveClassificationTargets) {
       if (
@@ -3602,8 +1372,7 @@
       ) {
         computeBreaksForPrimitive(
           target.primitive,
-          '$effect:missingBreaks',
-          String(duckVersion)
+          CLASSIFICATION_BREAKS_TRIGGER.MISSING_BREAKS
         );
       }
     }
@@ -3617,8 +1386,7 @@
       ) {
         computeBreaksForStrokePrimitive(
           target.primitive,
-          '$effect:missingBreaks',
-          String(duckVersion)
+          CLASSIFICATION_BREAKS_TRIGGER.MISSING_BREAKS
         );
       }
     }
@@ -3630,7 +1398,7 @@
       textBg.classification?.method &&
       !textBg.classification.breaks?.length
     ) {
-      computeTextBackgroundBreaks('$effect:missingBreaks');
+      computeTextBackgroundBreaks(CLASSIFICATION_BREAKS_TRIGGER.MISSING_BREAKS);
     }
 
     const textBgStroke = textBackgroundStrokeTarget;
@@ -3640,7 +1408,9 @@
       textBgStroke.classification?.method &&
       !textBgStroke.classification.breaks?.length
     ) {
-      computeTextBackgroundStrokeBreaks('$effect:missingBreaks');
+      computeTextBackgroundStrokeBreaks(
+        CLASSIFICATION_BREAKS_TRIGGER.MISSING_BREAKS
+      );
     }
   });
 
@@ -3654,7 +1424,7 @@
       ) {
         computeBreaksForPrimitive(
           target.primitive,
-          '$effect:classificationParamsChanged'
+          CLASSIFICATION_BREAKS_TRIGGER.CLASSIFICATION_PARAMS_CHANGED
         );
       }
     }
@@ -3668,7 +1438,7 @@
       ) {
         computeBreaksForStrokePrimitive(
           target.primitive,
-          '$effect:classificationParamsChanged'
+          CLASSIFICATION_BREAKS_TRIGGER.CLASSIFICATION_PARAMS_CHANGED
         );
       }
     }
@@ -3680,7 +1450,9 @@
       textBg.classification?.numClasses &&
       textBg.valueColumn
     ) {
-      computeTextBackgroundBreaks('$effect:classificationParamsChanged');
+      computeTextBackgroundBreaks(
+        CLASSIFICATION_BREAKS_TRIGGER.CLASSIFICATION_PARAMS_CHANGED
+      );
     }
 
     const textBgStroke = textBackgroundStrokeTarget;
@@ -3690,7 +1462,9 @@
       textBgStroke.classification?.numClasses &&
       textBgStroke.valueColumn
     ) {
-      computeTextBackgroundStrokeBreaks('$effect:classificationParamsChanged');
+      computeTextBackgroundStrokeBreaks(
+        CLASSIFICATION_BREAKS_TRIGGER.CLASSIFICATION_PARAMS_CHANGED
+      );
     }
   });
 
@@ -3704,7 +1478,7 @@
       datasetsStore.datasets.find(
         (datasetItem) => datasetItem.id === visualization.datasetId
       ) ?? datasetsStore.selectedDataset;
-    if (!dataset?.tableName) {
+    if (!dataset) {
       return;
     }
 
@@ -3717,8 +1491,7 @@
       fetchCategoryLabels(
         target.primitive,
         target.categoryColumn,
-        dataset.tableName,
-        dataset.id,
+        dataset,
         true
       );
     }
@@ -3732,8 +1505,7 @@
       fetchStrokeCategoryLabels(
         target.primitive,
         target.categoryColumn,
-        dataset.tableName,
-        dataset.id,
+        dataset,
         true
       );
     }
@@ -3741,11 +1513,7 @@
     const textBg = textBackgroundTarget;
     const hasBgLabels = (textBg?.classification?.labels?.length ?? 0) > 0;
     if (textBg?.usesCategories && textBg.categoryColumn && !hasBgLabels) {
-      fetchTextBackgroundCategoryLabels(
-        textBg.categoryColumn,
-        dataset.tableName,
-        dataset.id
-      );
+      fetchTextBackgroundCategoryLabels(textBg.categoryColumn, dataset);
     }
 
     const textBgStroke = textBackgroundStrokeTarget;
@@ -3758,11 +1526,29 @@
     ) {
       fetchTextBackgroundStrokeCategoryLabels(
         textBgStroke.categoryColumn,
-        dataset.tableName,
-        dataset.id
+        dataset
       );
     }
   });
+
+  function syncClassificationColors(
+    classification: ClassificationConfig | undefined,
+    usesCategories: boolean,
+    applyUpdate: (updates: Partial<ClassificationConfig>) => void
+  ): void {
+    const colors = resolveClassificationColors({
+      classification,
+      usesCategories
+    });
+    if (
+      !colors ||
+      areClassificationColorsEqual(classification?.colors, colors)
+    ) {
+      return;
+    }
+
+    applyUpdate({ colors });
+  }
 
   $effect(() => {
     void primitiveColorParamsKey;
@@ -3772,104 +1558,22 @@
         return;
       }
 
-      const cbEnabled = isColorBlindnessActive(getColorBlindnessState());
-
       for (const target of primitiveClassificationTargets) {
-        const classification = target.classification;
-        if (!classification) {
-          continue;
-        }
+        syncClassificationColors(
+          target.classification,
+          target.usesCategories,
+          (updates) =>
+            updatePrimitiveClassificationState(target.primitive, updates)
+        );
+      }
 
-        const paletteId = classification.paletteId;
-        const inverted = classification.inverted ?? false;
-        const paletteType =
-          classification.breakpointValue != null ? 'diverging' : 'sequential';
-        const numColors = target.usesCategories
-          ? Math.max(classification.labels?.length ?? 0, 0)
-          : classification.classes;
-        const contrast = cbEnabled ? ('high' as const) : undefined;
-        let colors: string[];
-
-        if (target.usesCategories) {
-          const resolvedColorCount = Math.max(
-            numColors || DEFAULT_CATEGORICAL_COLORS.length,
-            1
-          );
-          if (paletteId) {
-            const palette = findPaletteById(paletteId);
-            if (!palette) {
-              continue;
-            }
-            colors = generatePaletteColors(
-              palette,
-              resolvedColorCount,
-              contrast
-            );
-          } else {
-            if (resolvedColorCount <= DEFAULT_CATEGORICAL_COLORS.length) {
-              colors = DEFAULT_CATEGORICAL_COLORS.slice(0, resolvedColorCount);
-            } else {
-              colors = generateCategoricalColorsFromSeed(
-                DEFAULT_CATEGORICAL_COLORS[0],
-                resolvedColorCount,
-                DEFAULT_QUALITATIVE_PRESET
-              );
-            }
-          }
-        } else {
-          if (!numColors) {
-            continue;
-          }
-
-          if (paletteId) {
-            const palette = findPaletteById(paletteId);
-            if (!palette) {
-              continue;
-            }
-            const divergingSplit =
-              paletteType === 'diverging'
-                ? computeDivergingSplit(
-                    numColors,
-                    classification.breaks ?? [],
-                    classification.breakpointValue ?? null
-                  )
-                : undefined;
-            colors = generatePaletteColors(
-              palette,
-              numColors,
-              contrast,
-              undefined,
-              divergingSplit
-            );
-          } else {
-            const divergingSplit =
-              paletteType === 'diverging'
-                ? computeDivergingSplit(
-                    numColors,
-                    classification.breaks ?? [],
-                    classification.breakpointValue ?? null
-                  )
-                : undefined;
-            colors = generateColorsForBreaks(
-              numColors,
-              paletteType,
-              contrast,
-              divergingSplit
-            );
-          }
-        }
-
-        colors = applyPaletteInversion(colors, inverted);
-        const existing = classification.colors;
-        if (
-          existing &&
-          existing.length === colors.length &&
-          existing.every((color, index) => color === colors[index])
-        ) {
-          continue;
-        }
-
-        updatePrimitiveClassificationState(target.primitive, { colors });
+      const textBg = textBackgroundTarget;
+      if (textBg) {
+        syncClassificationColors(
+          textBg.classification,
+          textBg.usesCategories,
+          handleTextBackgroundClassificationChange
+        );
       }
     });
   });
@@ -3882,178 +1586,23 @@
         return;
       }
 
-      const cbEnabled = isColorBlindnessActive(getColorBlindnessState());
-
       for (const target of primitiveStrokeClassificationTargets) {
-        const classification = target.classification;
-        if (!classification) {
-          continue;
-        }
-
-        const paletteId = classification.paletteId;
-        const inverted = classification.inverted ?? false;
-        const paletteType =
-          classification.breakpointValue != null ? 'diverging' : 'sequential';
-        const numColors = target.usesCategories
-          ? Math.max(classification.labels?.length ?? 0, 0)
-          : classification.classes;
-        const contrast = cbEnabled ? ('high' as const) : undefined;
-        let colors: string[];
-
-        if (target.usesCategories) {
-          const resolvedColorCount = Math.max(
-            numColors || DEFAULT_CATEGORICAL_COLORS.length,
-            1
-          );
-          if (paletteId) {
-            const palette = findPaletteById(paletteId);
-            if (!palette) {
-              continue;
-            }
-            colors = generatePaletteColors(
-              palette,
-              resolvedColorCount,
-              contrast
-            );
-          } else if (resolvedColorCount <= DEFAULT_CATEGORICAL_COLORS.length) {
-            colors = DEFAULT_CATEGORICAL_COLORS.slice(0, resolvedColorCount);
-          } else {
-            colors = generateCategoricalColorsFromSeed(
-              DEFAULT_CATEGORICAL_COLORS[0],
-              resolvedColorCount,
-              DEFAULT_QUALITATIVE_PRESET
-            );
-          }
-        } else {
-          if (!numColors) {
-            continue;
-          }
-
-          const divergingSplit =
-            paletteType === 'diverging'
-              ? computeDivergingSplit(
-                  numColors,
-                  classification.breaks ?? [],
-                  classification.breakpointValue ?? null
-                )
-              : undefined;
-          if (paletteId) {
-            const palette = findPaletteById(paletteId);
-            if (!palette) {
-              continue;
-            }
-            colors = generatePaletteColors(
-              palette,
-              numColors,
-              contrast,
-              undefined,
-              divergingSplit
-            );
-          } else {
-            colors = generateColorsForBreaks(
-              numColors,
-              paletteType,
-              contrast,
-              divergingSplit
-            );
-          }
-        }
-
-        colors = applyPaletteInversion(colors, inverted);
-        const existing = classification.colors;
-        if (
-          existing &&
-          existing.length === colors.length &&
-          existing.every((color, index) => color === colors[index])
-        ) {
-          continue;
-        }
-
-        updatePrimitiveStrokeClassificationState(target.primitive, { colors });
+        syncClassificationColors(
+          target.classification,
+          target.usesCategories,
+          (updates) =>
+            updatePrimitiveStrokeClassificationState(target.primitive, updates)
+        );
       }
 
       const textBgStroke = textBackgroundStrokeTarget;
-      const classification = textBgStroke?.classification;
-      if (!textBgStroke || !classification) {
-        return;
-      }
-
-      const paletteId = classification.paletteId;
-      const inverted = classification.inverted ?? false;
-      const paletteType =
-        classification.breakpointValue != null ? 'diverging' : 'sequential';
-      const numColors = textBgStroke.usesCategories
-        ? Math.max(classification.labels?.length ?? 0, 0)
-        : classification.classes;
-      const contrast = cbEnabled ? ('high' as const) : undefined;
-      let colors: string[];
-
-      if (textBgStroke.usesCategories) {
-        const resolvedColorCount = Math.max(
-          numColors || DEFAULT_CATEGORICAL_COLORS.length,
-          1
+      if (textBgStroke) {
+        syncClassificationColors(
+          textBgStroke.classification,
+          textBgStroke.usesCategories,
+          handleTextBackgroundStrokeClassificationChange
         );
-        if (paletteId) {
-          const palette = findPaletteById(paletteId);
-          if (!palette) {
-            return;
-          }
-          colors = generatePaletteColors(palette, resolvedColorCount, contrast);
-        } else if (resolvedColorCount <= DEFAULT_CATEGORICAL_COLORS.length) {
-          colors = DEFAULT_CATEGORICAL_COLORS.slice(0, resolvedColorCount);
-        } else {
-          colors = generateCategoricalColorsFromSeed(
-            DEFAULT_CATEGORICAL_COLORS[0],
-            resolvedColorCount,
-            DEFAULT_QUALITATIVE_PRESET
-          );
-        }
-      } else {
-        if (!numColors) {
-          return;
-        }
-
-        const divergingSplit =
-          paletteType === 'diverging'
-            ? computeDivergingSplit(
-                numColors,
-                classification.breaks ?? [],
-                classification.breakpointValue ?? null
-              )
-            : undefined;
-        if (paletteId) {
-          const palette = findPaletteById(paletteId);
-          if (!palette) {
-            return;
-          }
-          colors = generatePaletteColors(
-            palette,
-            numColors,
-            contrast,
-            undefined,
-            divergingSplit
-          );
-        } else {
-          colors = generateColorsForBreaks(
-            numColors,
-            paletteType,
-            contrast,
-            divergingSplit
-          );
-        }
       }
-
-      colors = applyPaletteInversion(colors, inverted);
-      const existing = classification.colors;
-      if (
-        existing &&
-        existing.length === colors.length &&
-        existing.every((color, index) => color === colors[index])
-      ) {
-        return;
-      }
-
-      handleTextBackgroundStrokeClassificationChange({ colors });
     });
   });
 </script>
