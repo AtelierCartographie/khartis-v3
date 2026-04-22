@@ -29,7 +29,7 @@
     StrokeMode,
     ThicknessMode
   } from '$lib/features/main-toolbar/constants';
-  import SliderWithInput from '$lib/features/main-toolbar/visualization-tab/components/shared/slider-with-input.svelte';
+  import SliderWithInput from '$lib/features/commons/components/viz-controls/slider-with-input.svelte';
 
   const FACETS_HELP_URL =
     'https://cartographie.sciencespo.fr/khartis/help/facets';
