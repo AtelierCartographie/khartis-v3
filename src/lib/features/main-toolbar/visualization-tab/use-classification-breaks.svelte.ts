@@ -5,10 +5,18 @@ import {
   computeDivergingSplit,
   generateColorsForBreaks
 } from '$lib/features/commons/services/classification.service';
-import type { ClassificationConfig } from '$lib/features/commons/store/visualization.store.svelte';
-import { ClassificationMethod } from '$lib/features/commons/store/visualization.store.svelte';
+import type {
+  ClassificationConfig,
+  PrimitiveFilter
+} from '$lib/features/commons/store/visualization.store.svelte';
 import {
+  ClassificationMethod,
+  DEFAULT_CATEGORICAL_COLORS
+} from '$lib/features/commons/store/visualization.store.svelte';
+import {
+  DEFAULT_QUALITATIVE_PRESET,
   findPaletteById,
+  generateCategoricalColorsFromSeed,
   generatePaletteColors,
   PALETTE_TYPE
 } from '$lib/features/commons/components/palette-popover/palette.constants';
@@ -24,6 +32,24 @@ import {
 } from './components/discretization.utils';
 
 type BreaksResult = Awaited<ReturnType<typeof calculateBreaks>>;
+
+export const CLASSIFICATION_BREAKS_TRIGGER = {
+  UNKNOWN: 'unknown',
+  MISSING_BREAKS: 'missing-breaks',
+  CLASSIFICATION_PARAMS_CHANGED: 'classification-params-changed'
+} as const;
+
+export type ClassificationBreakTrigger =
+  (typeof CLASSIFICATION_BREAKS_TRIGGER)[keyof typeof CLASSIFICATION_BREAKS_TRIGGER];
+
+export const TEXT_BACKGROUND_SCOPE_TARGET = 'text-background' as const;
+
+export function buildClassificationScopeKey(
+  role: 'fill' | 'stroke',
+  target: PrimitiveFilter | typeof TEXT_BACKGROUND_SCOPE_TARGET
+): string {
+  return `${role}:${target}`;
+}
 
 export interface ClassificationBreaksComputation {
   normalizedMethod: ClassificationMethod;
@@ -60,7 +86,7 @@ interface ComputeClassificationBreaksTargetOptions {
   datasetId?: string;
   valueColumn?: string;
   classification?: ClassificationConfig;
-  trigger?: string;
+  trigger?: ClassificationBreakTrigger;
   applyUpdate: (updates: Partial<ClassificationConfig>) => void;
 }
 
@@ -81,32 +107,121 @@ export function resolveClassificationBreakColors(
     return existingColors;
   }
 
+  const colors = resolveClassificationColors({
+    classification,
+    usesCategories: false,
+    classCount: actualClassCount,
+    breakValues,
+    breakpointValue,
+    ignorePatternPalette: true
+  });
+
+  return colors ?? [];
+}
+
+export function areClassificationColorsEqual(
+  existing: readonly string[] | undefined,
+  next: readonly string[] | undefined
+): boolean {
+  if (!existing || !next) {
+    return false;
+  }
+
+  return (
+    existing.length === next.length &&
+    existing.every((color, index) => color === next[index])
+  );
+}
+
+interface ResolveClassificationColorsOptions {
+  classification: ClassificationConfig | undefined;
+  usesCategories: boolean;
+  classCount?: number;
+  breakValues?: readonly number[];
+  breakpointValue?: number | null;
+  ignorePatternPalette?: boolean;
+}
+
+export function resolveClassificationColors({
+  classification,
+  usesCategories,
+  classCount,
+  breakValues,
+  breakpointValue,
+  ignorePatternPalette = false
+}: ResolveClassificationColorsOptions): string[] | null {
+  if (!classification) {
+    return null;
+  }
+
   const contrast = getContrastMode();
-  const paletteType = breakpointValue != null ? 'diverging' : 'sequential';
   const userPalette = classification?.paletteId
     ? findPaletteById(classification.paletteId)
     : undefined;
-  const isPatternPalette = userPalette?.type === PALETTE_TYPE.PATTERN;
-  const divergingSplit =
-    paletteType === 'diverging'
-      ? computeDivergingSplit(actualClassCount, breakValues, breakpointValue)
-      : undefined;
+  let colors: string[];
 
-  const colors =
-    userPalette && !isPatternPalette
-      ? generatePaletteColors(
-          userPalette,
-          actualClassCount,
-          contrast,
-          undefined,
-          divergingSplit
-        )
-      : generateColorsForBreaks(
-          actualClassCount,
-          paletteType,
-          contrast,
-          divergingSplit
-        );
+  if (usesCategories) {
+    const resolvedColorCount = Math.max(
+      classCount ??
+        classification.labels?.length ??
+        DEFAULT_CATEGORICAL_COLORS.length,
+      1
+    );
+
+    if (
+      userPalette &&
+      (!ignorePatternPalette || userPalette.type !== PALETTE_TYPE.PATTERN)
+    ) {
+      colors = generatePaletteColors(userPalette, resolvedColorCount, contrast);
+    } else if (resolvedColorCount <= DEFAULT_CATEGORICAL_COLORS.length) {
+      colors = DEFAULT_CATEGORICAL_COLORS.slice(0, resolvedColorCount);
+    } else {
+      colors = generateCategoricalColorsFromSeed(
+        DEFAULT_CATEGORICAL_COLORS[0],
+        resolvedColorCount,
+        DEFAULT_QUALITATIVE_PRESET
+      );
+    }
+  } else {
+    const resolvedClassCount =
+      classCount ?? classification.classes ?? classification.numClasses ?? 0;
+    if (!resolvedClassCount) {
+      return null;
+    }
+
+    const resolvedBreakpointValue =
+      breakpointValue ?? classification.breakpointValue;
+    const paletteType =
+      resolvedBreakpointValue != null ? 'diverging' : 'sequential';
+    const divergingSplit =
+      paletteType === 'diverging'
+        ? computeDivergingSplit(
+            resolvedClassCount,
+            breakValues ?? classification.breaks ?? [],
+            resolvedBreakpointValue
+          )
+        : undefined;
+
+    if (
+      userPalette &&
+      (!ignorePatternPalette || userPalette.type !== PALETTE_TYPE.PATTERN)
+    ) {
+      colors = generatePaletteColors(
+        userPalette,
+        resolvedClassCount,
+        contrast,
+        undefined,
+        divergingSplit
+      );
+    } else {
+      colors = generateColorsForBreaks(
+        resolvedClassCount,
+        paletteType,
+        contrast,
+        divergingSplit
+      );
+    }
+  }
 
   return applyPaletteInversion(colors, classification?.inverted ?? false);
 }
@@ -126,34 +241,20 @@ export async function computeClassificationBreaks(
       5
   );
 
-  let result: BreaksResult = null;
-
-  if (storeMethod === ClassificationMethod.MANUAL) {
-    const breakValues = options.breakValues ?? classification?.breaks ?? [];
-    const expectedThresholdCount = Math.max(requestedClassCount - 1, 0);
-
-    if (breakValues.length === expectedThresholdCount) {
-      result = await calculateBreakCounts({
-        datasetId: options.datasetSourceFileId,
-        columnName: options.valueColumn,
-        breaks: breakValues
-      });
-    } else {
-      result = await calculateBreaks({
-        datasetId: options.datasetSourceFileId,
-        columnName: options.valueColumn,
-        method: ClassificationMethod.EQUAL_INTERVAL,
-        numClasses: requestedClassCount
-      });
-    }
-  } else {
-    result = await calculateBreaks({
-      datasetId: options.datasetSourceFileId,
-      columnName: options.valueColumn,
-      method: storeMethod,
-      numClasses: requestedClassCount
-    });
-  }
+  const result: BreaksResult =
+    storeMethod === ClassificationMethod.MANUAL
+      ? await computeManualBreaks({
+          datasetSourceFileId: options.datasetSourceFileId,
+          valueColumn: options.valueColumn,
+          requestedClassCount,
+          breakValues: options.breakValues ?? classification?.breaks ?? []
+        })
+      : await calculateBreaks({
+          datasetId: options.datasetSourceFileId,
+          columnName: options.valueColumn,
+          method: storeMethod,
+          numClasses: requestedClassCount
+        });
 
   if (!result) {
     return null;
@@ -178,6 +279,35 @@ export async function computeClassificationBreaks(
     result,
     colors
   };
+}
+
+async function computeManualBreaks({
+  datasetSourceFileId,
+  valueColumn,
+  requestedClassCount,
+  breakValues
+}: {
+  datasetSourceFileId: string;
+  valueColumn: string;
+  requestedClassCount: number;
+  breakValues: number[];
+}): Promise<BreaksResult> {
+  const expectedThresholdCount = Math.max(requestedClassCount - 1, 0);
+
+  if (breakValues.length === expectedThresholdCount) {
+    return await calculateBreakCounts({
+      datasetId: datasetSourceFileId,
+      columnName: valueColumn,
+      breaks: breakValues
+    });
+  }
+
+  return await calculateBreaks({
+    datasetId: datasetSourceFileId,
+    columnName: valueColumn,
+    method: ClassificationMethod.EQUAL_INTERVAL,
+    numClasses: requestedClassCount
+  });
 }
 
 export function useClassificationBreaksController({
