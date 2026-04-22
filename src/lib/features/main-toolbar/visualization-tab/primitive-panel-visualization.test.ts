@@ -7,6 +7,7 @@ import { FillMode, StrokeMode, SymbolMode } from '../constants';
 import {
   buildLinePanelVisualization,
   buildPolygonPanelVisualization,
+  buildSymbolFillPanelVisualization,
   buildSymbolPanelVisualization,
   buildTextBackgroundPanelVisualization,
   buildTextPanelVisualization
@@ -56,6 +57,9 @@ function createVisualization(): VisualizationConfig {
       strokeDashed: true,
       valueColumn: 'amount',
       categoryColumn: 'group',
+      fillValueColumn: 'fill_amount',
+      fillCategoryColumn: 'fill_group',
+      fillClassification: { labels: ['Fill A', 'Fill B'] },
       sizeColumn: 'size_col',
       size: 11,
       minSize: 2,
@@ -157,6 +161,18 @@ describe('primitive-panel-visualization', () => {
     expect(visualization?.mapping?.sizeColumn).toBe('size_col');
     expect(visualization?.symbols?.type).toBe('square');
     expect(visualization?.symbols?.opacity).toBe(0.4);
+  });
+
+  it('flattens symbol fill state independently from symbol size classes', () => {
+    const visualization = buildSymbolFillPanelVisualization(
+      createVisualization()
+    );
+    expect(visualization?.modes?.fill).toBe(FillMode.CATEGORIES);
+    expect(visualization?.mapping?.valueColumn).toBe('fill_amount');
+    expect(visualization?.mapping?.categoryColumn).toBe('fill_group');
+    expect(visualization?.classification).toEqual(
+      createVisualization().symbol?.fillClassification
+    );
   });
 
   it('flattens line state into shared color/thickness slots', () => {

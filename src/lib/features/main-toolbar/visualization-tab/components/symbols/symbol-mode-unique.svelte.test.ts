@@ -68,7 +68,7 @@ describe('SymbolModeUnique — anti-leak fill ↔ stroke palette', () => {
     const fillBlock = source.split('<FillSection')[1]?.split('/>')[0];
     expect(fillBlock).toBeDefined();
     expect(fillBlock).toContain(
-      'onClassificationChange={onClassificationChange'
+      'onClassificationChange={onFillClassificationChange'
     );
     expect(fillBlock).not.toContain(
       'onStrokeClassificationChange={onClassificationChange}'
@@ -103,6 +103,20 @@ describe('SymbolModeUnique — stroke discretization isolation', () => {
     );
     expect(source).toContain(
       'valueColumn={visualization?.symbol?.strokeValueColumn}'
+    );
+  });
+
+  it('binds FillSection to the dedicated symbol fill visualization and facet slots', () => {
+    const fillBlock = source.split('<FillSection')[1]?.split('/>')[0];
+    expect(fillBlock).toContain('visualization={fillVisualization}');
+    expect(fillBlock).toContain(
+      'facetsValueSlotPath={FACET_SLOT.SYMBOL_FILL_VALUE}'
+    );
+    expect(fillBlock).toContain(
+      'facetsCategorySlotPath={FACET_SLOT.SYMBOL_FILL_CATEGORY}'
+    );
+    expect(fillBlock).toContain(
+      'onOpenDiscretization={onOpenFillDiscretization'
     );
   });
 });

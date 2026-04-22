@@ -45,7 +45,10 @@ import {
   FileFormatEnum,
   type EnrichedColumn
 } from '$lib/features/data-pipeline/types';
-import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
+import {
+  SavePriority,
+  persistenceRegistry
+} from '$lib/features/project-management/core/persistence-registry';
 
 function buildColumn(name: string, type: ColumnType): EnrichedColumn {
   return {
@@ -360,6 +363,34 @@ describe('visualizationStore suggestion origin tracking', () => {
         }
       }
     });
+  });
+});
+
+describe('visualizationStore rename persistence', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    visualizationStore.clear();
+    datasetsStore.clear();
+    persistenceRegistry.markClean();
+  });
+
+  it('persists explicit renames through the immediate save path', () => {
+    datasetsStore.addProcessedDataset(buildDataset());
+
+    const visualization = visualizationStore.createVisualization(
+      VisualizationType.CATEGORICAL,
+      'dataset-1'
+    );
+    const notifyChangeSpy = vi.spyOn(persistenceRegistry, 'notifyChange');
+
+    notifyChangeSpy.mockClear();
+    visualizationStore.renameVisualization(visualization.id, '  Atlas  ');
+
+    expect(visualizationStore.selectedVisualization?.name).toBe('Atlas');
+    expect(notifyChangeSpy).toHaveBeenCalledWith(
+      'visualization',
+      SavePriority.IMMEDIATE
+    );
   });
 });
 

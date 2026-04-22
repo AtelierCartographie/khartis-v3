@@ -71,6 +71,7 @@ vi.mock('$lib/features/commons/store/visualization.store.svelte', () => ({
       | {
           classification?: unknown;
           symbolClassification?: unknown;
+          symbol?: { fillClassification?: unknown };
           lineClassification?: unknown;
           textClassification?: unknown;
         }
@@ -91,12 +92,42 @@ vi.mock('$lib/features/commons/store/visualization.store.svelte', () => ({
         return viz.classification;
     }
   },
+  getSymbolFillClassification: (
+    viz:
+      | {
+          symbol?: { fillClassification?: unknown };
+          classification?: unknown;
+        }
+      | null
+      | undefined
+  ) => viz?.symbol?.fillClassification ?? viz?.classification,
+  getSymbolFillValueColumn: (
+    viz:
+      | {
+          symbol?: { fillValueColumn?: string };
+        }
+      | null
+      | undefined
+  ) => viz?.symbol?.fillValueColumn,
+  getSymbolFillCategoryColumn: (
+    viz:
+      | {
+          symbol?: { fillCategoryColumn?: string };
+        }
+      | null
+      | undefined
+  ) => viz?.symbol?.fillCategoryColumn,
   getSymbolPrimitive: (
     viz:
       | {
           modes?: { symbol?: string; fill?: string };
           mapping?: { sizeColumn?: string };
-          symbol?: { mode?: string; fillMode?: string; sizeColumn?: string };
+          symbol?: {
+            mode?: string;
+            fillMode?: string;
+            sizeColumn?: string;
+            categoryColumn?: string;
+          };
           symbols?: { type?: string };
         }
       | null
@@ -106,7 +137,8 @@ vi.mock('$lib/features/commons/store/visualization.store.svelte', () => ({
     return {
       mode: viz.symbol?.mode ?? viz.modes?.symbol,
       fillMode: viz.symbol?.fillMode ?? viz.modes?.fill,
-      sizeColumn: viz.symbol?.sizeColumn ?? viz.mapping?.sizeColumn
+      sizeColumn: viz.symbol?.sizeColumn ?? viz.mapping?.sizeColumn,
+      categoryColumn: viz.symbol?.categoryColumn
     };
   },
   getLinePrimitive: (
@@ -320,6 +352,7 @@ describe('hasCompleteCategoricalColorMap', () => {
 // ─── shouldApply* guards ───────────────────────────────────────────────────
 
 describe('shouldApplyChoropleth', () => {
+  const PrimitiveFilterTypePOINT = 'point';
   const base = {
     modes: { fill: FillMode.CLASSES },
     mapping: { valueColumn: 'pop' },
@@ -363,9 +396,44 @@ describe('shouldApplyChoropleth', () => {
     };
     expect(shouldApplyChoropleth(noBreaks as never)).toBe(false);
   });
+
+  it('uses the symbol fill channel, not the symbol size-class channel, for point choropleths', () => {
+    const viz = {
+      symbol: {
+        mode: SymbolMode.CLASSES,
+        fillMode: FillMode.CLASSES,
+        valueColumn: 'size_metric',
+        fillValueColumn: 'fill_metric',
+        fillClassification: {
+          breaks: [0, 10, 20],
+          colors: ['#f00', '#0f0', '#00f'],
+          method: 'quantiles',
+          classes: 3
+        }
+      },
+      symbolClassification: {
+        breaks: [1],
+        colors: ['#999'],
+        method: 'quantiles',
+        classes: 1
+      },
+      mapping: { valueColumn: 'size_metric' },
+      type: 'proportional',
+      id: 'v-point-choropleth',
+      name: 'Point choropleth',
+      datasetId: 'd1',
+      enabled: true,
+      style: {}
+    };
+
+    expect(
+      shouldApplyChoropleth(viz as never, PrimitiveFilterTypePOINT as never)
+    ).toBe(true);
+  });
 });
 
 describe('shouldApplyCategorical', () => {
+  const PrimitiveFilterTypePOINT = 'point';
   const base = {
     modes: { fill: FillMode.CATEGORIES },
     mapping: { categoryColumn: 'type' },
@@ -398,6 +466,34 @@ describe('shouldApplyCategorical', () => {
     };
     expect(shouldApplyCategorical(empty as never)).toBe(false);
   });
+
+  it('uses the symbol fill category channel independently from the main symbol category mapping', () => {
+    const viz = {
+      symbol: {
+        mode: SymbolMode.PROPORTIONAL,
+        fillMode: FillMode.CATEGORIES,
+        categoryColumn: 'shape_category',
+        fillCategoryColumn: 'fill_category',
+        fillClassification: {
+          colors: ['#f00', '#0f0'],
+          labels: ['A', 'B'],
+          method: 'manual',
+          classes: 2
+        }
+      },
+      mapping: { categoryColumn: 'shape_category' },
+      type: 'proportional',
+      id: 'v-point-categorical',
+      name: 'Point categorical',
+      datasetId: 'd1',
+      enabled: true,
+      style: {}
+    };
+
+    expect(
+      shouldApplyCategorical(viz as never, PrimitiveFilterTypePOINT as never)
+    ).toBe(true);
+  });
 });
 
 describe('shouldApplyCategorical — POINT SymbolMode x FillMode matrix', () => {
@@ -416,7 +512,9 @@ describe('shouldApplyCategorical — POINT SymbolMode x FillMode matrix', () => 
       symbol: {
         mode: symbolMode,
         fillMode,
-        categoryColumn: 'segment'
+        categoryColumn: 'segment',
+        fillCategoryColumn: 'segment',
+        fillClassification: classification
       },
       symbolClassification: classification,
       mapping: { categoryColumn: 'segment' },

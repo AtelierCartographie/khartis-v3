@@ -72,7 +72,7 @@
       return;
     }
 
-    annotationsActions.addAnnotation(AnnotationKind.TEXT, textEditorValue);
+    annotationsActions.beginPlacement(AnnotationKind.TEXT, textEditorValue);
   }
 
   function handleContentInput(e: Event) {

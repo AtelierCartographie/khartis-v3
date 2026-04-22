@@ -12,59 +12,16 @@ import { persistenceRegistry } from '$lib/features/project-management/core/persi
 import { datasetsStore } from './datasets.store.svelte';
 import { projectStore } from './project.store.svelte';
 
-const SELECTED_TAB_STORAGE_KEY = 'khartis_selected_tab';
-const PAGE_ZOOM_STORAGE_KEY = 'khartis_page_zoom_level';
-const PAGE_ZOOM_SCHEMA_VERSION_KEY = 'khartis_page_zoom_schema_version';
-const PAGE_ZOOM_SCHEMA_VERSION = '2';
-const TOOLBAR_STATE_STORAGE_KEY = 'khartis_toolbar_state';
-const SELECTED_STEP_STORAGE_KEY = 'khartis_selected_step';
-
 export const MOBILE_BREAKPOINT = 1024;
-
-function migratePageZoomStorage(): void {
-  if (typeof window === 'undefined') return;
-  const currentVersion = localStorage.getItem(PAGE_ZOOM_SCHEMA_VERSION_KEY);
-  if (currentVersion === PAGE_ZOOM_SCHEMA_VERSION) return;
-  localStorage.removeItem(PAGE_ZOOM_STORAGE_KEY);
-  localStorage.setItem(PAGE_ZOOM_SCHEMA_VERSION_KEY, PAGE_ZOOM_SCHEMA_VERSION);
-}
-
-migratePageZoomStorage();
-
-const VALID_TOOLBAR_STATES = new Set<string>([
-  ToolbarState.Full,
-  ToolbarState.Compact,
-  ToolbarState.Collapsed
-]);
-
-const VALID_TOOLBAR_STEPS = new Set<string>([
-  ToolbarStep.Data,
-  ToolbarStep.Visualizations,
-  ToolbarStep.Styling
-]);
-
-function readToolbarStateFromStorage(): ToolbarState {
-  if (typeof window === 'undefined') return ToolbarState.Full;
-  const stored = localStorage.getItem(TOOLBAR_STATE_STORAGE_KEY);
-  if (stored && VALID_TOOLBAR_STATES.has(stored)) return stored as ToolbarState;
-  return ToolbarState.Full;
-}
-
-function readStepFromStorage(): ToolbarStep {
-  if (typeof window === 'undefined') return ToolbarStep.Data;
-  const stored = localStorage.getItem(SELECTED_STEP_STORAGE_KEY);
-  if (stored && VALID_TOOLBAR_STEPS.has(stored)) return stored as ToolbarStep;
-  return ToolbarStep.Data;
-}
 
 function resolveInitialToolbarState(step: ToolbarStep): ToolbarState {
   if (step === ToolbarStep.Styling) return ToolbarState.Collapsed;
   if (step === ToolbarStep.Visualizations) return ToolbarState.Compact;
-  return readToolbarStateFromStorage();
+  return ToolbarState.Full;
 }
 
 function createGlobalStore() {
-  const initialStep = readStepFromStorage();
+  const initialStep = ToolbarStep.Data;
   const state = $state<GlobalState>({
     settingPanel: false,
     mainPanel: true,
@@ -78,10 +35,7 @@ function createGlobalStore() {
     projectionFilter: 'all',
     projectionViewMode: 'list',
     zoom: {
-      pageZoomLevel:
-        typeof window !== 'undefined'
-          ? Number(localStorage.getItem(PAGE_ZOOM_STORAGE_KEY)) || 100
-          : 100,
+      pageZoomLevel: 100,
       minPageZoom: 10,
       maxPageZoom: 500,
       pageZoomStep: 10,
@@ -98,10 +52,7 @@ function createGlobalStore() {
   const selectedDataButtonState = $state<{
     id: string | undefined;
   }>({
-    id:
-      typeof window !== 'undefined'
-        ? localStorage.getItem(SELECTED_TAB_STORAGE_KEY) || undefined
-        : undefined
+    id: undefined
   });
   let isUpdatingSelection = false;
   const pendingDatasetSelections = new Set<string>();
@@ -181,9 +132,6 @@ function createGlobalStore() {
           }
         );
         selectedDataButtonState.id = undefined;
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem(SELECTED_TAB_STORAGE_KEY);
-        }
       }
     } finally {
       isUpdatingSelection = false;
@@ -204,35 +152,6 @@ function createGlobalStore() {
 
   function notifyPersistence(): void {
     persistenceRegistry.notifyChange('globalUi');
-  }
-
-  function syncSelectedStepToStorage(selectedStep: ToolbarStep): void {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(SELECTED_STEP_STORAGE_KEY, selectedStep);
-    }
-  }
-
-  function syncToolbarStateToStorage(toolbarState: ToolbarState): void {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(TOOLBAR_STATE_STORAGE_KEY, toolbarState);
-    }
-  }
-
-  function syncSelectedTabToStorage(id: string | undefined): void {
-    if (typeof window === 'undefined') {
-      return;
-    }
-    if (id) {
-      localStorage.setItem(SELECTED_TAB_STORAGE_KEY, id);
-    } else {
-      localStorage.removeItem(SELECTED_TAB_STORAGE_KEY);
-    }
-  }
-
-  function syncPageZoomToStorage(pageZoomLevel: number): void {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(PAGE_ZOOM_STORAGE_KEY, String(pageZoomLevel));
-    }
   }
 
   function setMobileView(value: boolean): void {
@@ -262,12 +181,9 @@ function createGlobalStore() {
     } else if (selectedStep === ToolbarStep.Visualizations) {
       state.toolbarState = ToolbarState.Compact;
     } else if (state.toolbarState === ToolbarState.Collapsed) {
-      const preferred = readToolbarStateFromStorage();
-      state.toolbarState =
-        preferred === ToolbarState.Collapsed ? ToolbarState.Full : preferred;
+      state.toolbarState = ToolbarState.Full;
     }
 
-    syncSelectedStepToStorage(selectedStep);
     notifyPersistence();
   }
 
@@ -277,7 +193,6 @@ function createGlobalStore() {
     }
 
     state.toolbarState = nextState;
-    syncToolbarStateToStorage(nextState);
     notifyPersistence();
   }
 
@@ -300,8 +215,6 @@ function createGlobalStore() {
       return;
     }
     selectedDataButtonState.id = id;
-
-    syncSelectedTabToStorage(id);
 
     ensureDatasetSelectionForSourceFile(id);
     syncMapVisibilityWithSelectedTab(id);
@@ -329,7 +242,6 @@ function createGlobalStore() {
     const newZoomLevel = clamp(currentLevel + direction * step, limit);
 
     state.zoom.pageZoomLevel = newZoomLevel;
-    syncPageZoomToStorage(state.zoom.pageZoomLevel);
     notifyPersistence();
   }
 
@@ -344,7 +256,6 @@ function createGlobalStore() {
   function resetPageZoom(): void {
     state.zoom.pageZoomLevel = 100;
     state.zoom.pagePanOffset = { x: 0, y: 0 };
-    syncPageZoomToStorage(100);
     notifyPersistence();
   }
 
@@ -378,7 +289,6 @@ function createGlobalStore() {
       state.zoom.minPageZoom,
       Math.min(level, state.zoom.maxPageZoom)
     );
-    syncPageZoomToStorage(state.zoom.pageZoomLevel);
     notifyPersistence();
   }
 
@@ -408,11 +318,6 @@ function createGlobalStore() {
 
     selectedDataButtonState.id = undefined;
     pendingDatasetSelections.clear();
-
-    syncSelectedStepToStorage(ToolbarStep.Data);
-    syncToolbarStateToStorage(ToolbarState.Full);
-    syncSelectedTabToStorage(undefined);
-    syncPageZoomToStorage(100);
   }
 
   function restoreFromSerialized(data: unknown): void {
@@ -444,11 +349,6 @@ function createGlobalStore() {
       y: persisted.pagePanOffset?.y ?? 0
     };
     selectedDataButtonState.id = persisted.selectedSourceFileId;
-
-    syncSelectedStepToStorage(state.selectedStep);
-    syncToolbarStateToStorage(state.toolbarState);
-    syncSelectedTabToStorage(selectedDataButtonState.id);
-    syncPageZoomToStorage(state.zoom.pageZoomLevel);
   }
 
   return {
@@ -499,7 +399,6 @@ function createGlobalStore() {
     },
     set selectedStep(value: ToolbarStep) {
       state.selectedStep = value;
-      syncSelectedStepToStorage(value);
       notifyPersistence();
     },
     get selectedTool() {
@@ -514,7 +413,6 @@ function createGlobalStore() {
     },
     set toolbarState(value: ToolbarState) {
       state.toolbarState = value;
-      syncToolbarStateToStorage(value);
       notifyPersistence();
     },
     get projectionFilter(): ProjectionFilterId | undefined {

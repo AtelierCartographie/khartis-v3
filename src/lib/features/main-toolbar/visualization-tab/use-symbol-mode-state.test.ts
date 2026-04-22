@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   FillMode,
+  ProportionalType,
   StrokeMode,
+  SymbolDoublePosition,
   SymbolMode,
   VISUALIZATION_DEFAULTS
 } from '../constants';
@@ -25,6 +27,9 @@ function createSymbol(): SymbolPrimitiveConfig {
     categoryColumn: 'category',
     sizeColumn: 'size',
     classification: { labels: ['A'] },
+    fillValueColumn: 'fill_value',
+    fillCategoryColumn: 'fill_category',
+    fillClassification: { labels: ['Fill'] },
     categoryShape: 'unique',
     proportionalType: 'double',
     commonScale: false,
@@ -49,6 +54,9 @@ function createSymbol(): SymbolPrimitiveConfig {
         categoryColumn: 'region',
         sizeColumn: undefined,
         classification: { labels: ['North', 'South'] },
+        fillValueColumn: 'density',
+        fillCategoryColumn: 'family',
+        fillClassification: { labels: ['Cold', 'Warm'] },
         categoryShape: 'different',
         proportionalType: 'single',
         commonScale: true,
@@ -87,6 +95,8 @@ describe('use-symbol-mode-state', () => {
     });
     expect(transition.restoredStateFields).toMatchObject({
       categoryColumn: 'region',
+      fillValueColumn: 'density',
+      fillCategoryColumn: 'family',
       fillMode: FillMode.CATEGORIES,
       strokeMode: StrokeMode.NONE
     });
@@ -104,9 +114,39 @@ describe('use-symbol-mode-state', () => {
     expect(transition.restoredStateFields.strokeWidth).toBe(
       VISUALIZATION_DEFAULTS.strokeWidth
     );
+    expect(transition.restoredStateFields.proportionalType).toBe(
+      ProportionalType.SINGLE
+    );
+    expect(transition.restoredStateFields.breakValueA).toBeNull();
+    expect(transition.restoredStateFields.breakValueB).toBeNull();
   });
 
-  it('does not inject category defaults for non-category target modes', () => {
-    expect(getDefaultSymbolModeStateFields(SymbolMode.UNIQUE)).toEqual({});
+  it('sanitizes proportional-only fields when switching to a non-proportional mode', () => {
+    const transition = resolveSymbolModeTransition(
+      createSymbol(),
+      SymbolMode.CLASSES
+    );
+    expect(transition.restoredStateFields.proportionalType).toBe(
+      ProportionalType.SINGLE
+    );
+    expect(transition.restoredStateFields.commonScale).toBe(true);
+    expect(transition.restoredStateFields.positionMode).toBe(
+      SymbolDoublePosition.OVERLAY
+    );
+    expect(transition.restoredStateFields.breakValueA).toBeNull();
+    expect(transition.restoredStateFields.breakValueB).toBeNull();
+  });
+
+  it('does not inject category fill/stroke defaults for unique mode', () => {
+    expect(getDefaultSymbolModeStateFields(SymbolMode.UNIQUE)).toMatchObject({
+      proportionalType: ProportionalType.SINGLE,
+      commonScale: true,
+      positionMode: SymbolDoublePosition.OVERLAY,
+      breakValueA: null,
+      breakValueB: null
+    });
+    expect(
+      getDefaultSymbolModeStateFields(SymbolMode.UNIQUE)
+    ).not.toHaveProperty('strokeWidth');
   });
 });

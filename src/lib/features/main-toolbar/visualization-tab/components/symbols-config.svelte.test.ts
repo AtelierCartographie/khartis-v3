@@ -43,4 +43,31 @@ describe('SymbolsConfig container', () => {
       'onStrokeInvertPalette={onStrokeInvertPalette}'
     );
   });
+
+  it('keeps a separate discretization target for symbol size and fill channels', () => {
+    expect(source).toContain(
+      "let discretizationTarget = $state<'size' | 'fill'>"
+    );
+    expect(source).toContain('handleOpenFillDiscretization');
+    expect(source).toContain('activeDiscretizationVisualization');
+    expect(source).toContain('activeDiscretizationClassification');
+  });
+
+  it('passes fill-specific props to unique and proportional symbol modes', () => {
+    expect(source).toContain('fillVisualization={fillVisualization}');
+    expect(source).toContain('onFillMappingChange={onFillMappingChange}');
+    expect(source).toContain(
+      'onFillClassificationChange={onFillClassificationChange}'
+    );
+    expect(source).toContain('onFillInvertPalette={onFillInvertPalette}');
+  });
+
+  it('shows breakpoint controls only for the symbol fill discretization modal', () => {
+    expect(source).toContain(
+      "showBreakpointControls={discretizationTarget === 'fill'}"
+    );
+    expect(source).toContain(
+      "role={discretizationTarget === 'fill' ? 'fill' : 'size'}"
+    );
+  });
 });

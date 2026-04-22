@@ -11,6 +11,9 @@
     getPrimitiveCategoryColumn,
     getPrimitiveClassification,
     getPrimitiveValueColumn,
+    getSymbolFillCategoryColumn,
+    getSymbolFillClassification,
+    getSymbolFillValueColumn,
     getSymbolPrimitive,
     getTextPrimitive,
     resolveAllowedPrimitiveFilters,
@@ -54,6 +57,7 @@
   import {
     buildLinePanelVisualization,
     buildPolygonPanelVisualization,
+    buildSymbolFillPanelVisualization,
     buildSymbolPanelVisualization,
     buildTextBackgroundPanelVisualization,
     buildTextPanelVisualization
@@ -77,6 +81,7 @@
     CLASSIFICATION_BREAKS_TRIGGER,
     type ClassificationBreakTrigger,
     resolveClassificationColors,
+    SYMBOL_FILL_SCOPE_TARGET,
     TEXT_BACKGROUND_SCOPE_TARGET,
     useClassificationBreaksController
   } from './use-classification-breaks.svelte';
@@ -204,6 +209,7 @@
   const {
     applyPrimitiveMappingUpdate,
     applyPrimitiveStrokeMappingUpdate,
+    applySymbolFillMappingUpdate,
     applyTextBackgroundMappingUpdate,
     applyTextBackgroundStrokeMappingUpdate,
     buildNextPrimitiveFilters,
@@ -211,6 +217,8 @@
     ensurePrimitiveClassificationDefaults,
     ensurePrimitiveStrokeAutoColumns,
     ensurePrimitiveStrokeClassificationDefaults,
+    ensureSymbolFillAutoColumns,
+    ensureSymbolFillClassificationDefaults,
     ensureTextBackgroundAutoColumns,
     ensureTextBackgroundClassificationDefaults,
     ensureTextBackgroundStrokeAutoColumns,
@@ -220,20 +228,25 @@
     getPrimitiveStrokeValueColumn,
     invertPrimitivePalette,
     invertPrimitiveStrokePalette,
+    invertSymbolFillPalette,
     invertTextBackgroundPalette,
     invertTextBackgroundStrokePalette,
+    updateSymbolFillClassificationState,
     updateTextBackground,
     updateTextBackgroundClassificationState,
     updateTextBackgroundStrokeClassificationState,
     usesBreakClassification,
     usesCategoricalClassification,
     usesStrokeBreakClassification,
-    usesStrokeCategoricalClassification
+    usesStrokeCategoricalClassification,
+    usesSymbolFillBreakClassification,
+    usesSymbolFillCategoricalClassification
   } = primitivePanelController;
 
   const CATEGORY_LABEL_FETCH_ERROR = {
     FILL: 'Failed to fetch category labels',
     STROKE: 'Failed to fetch stroke category labels',
+    SYMBOL_FILL: 'Failed to fetch symbol fill category labels',
     TEXT_BACKGROUND: 'Failed to fetch text background category labels',
     TEXT_BACKGROUND_STROKE:
       'Failed to fetch text background stroke category labels'
@@ -568,6 +581,8 @@
           nextVisualization
         );
         ensureAutoColumns(PrimitiveFilterType.POINT, nextVisualization);
+        ensureSymbolFillClassificationDefaults(nextVisualization);
+        ensureSymbolFillAutoColumns(nextVisualization);
         ensurePrimitiveStrokeClassificationDefaults(
           PrimitiveFilterType.POINT,
           nextVisualization
@@ -627,6 +642,12 @@
     updatePrimitiveClassificationState(PrimitiveFilterType.POINT, updates);
   }
 
+  function handleSymbolFillClassificationChange(
+    updates: Partial<ClassificationConfig>
+  ) {
+    updateSymbolFillClassificationState(updates);
+  }
+
   function handleSymbolStrokeClassificationChange(
     updates: Partial<ClassificationConfig>
   ) {
@@ -657,6 +678,12 @@
     applyPrimitiveMappingUpdate(PrimitiveFilterType.POINT, updates);
   }
 
+  function handleSymbolFillMappingChange(
+    updates: Partial<VisualizationConfig['mapping']>
+  ) {
+    applySymbolFillMappingUpdate(updates);
+  }
+
   function handleSymbolStrokeMappingChange(
     updates: Partial<VisualizationConfig['mapping']>
   ) {
@@ -665,6 +692,10 @@
 
   function handleSymbolPaletteInvert() {
     invertPrimitivePalette(PrimitiveFilterType.POINT);
+  }
+
+  function handleSymbolFillPaletteInvert() {
+    invertSymbolFillPalette();
   }
 
   function handleSymbolStrokePaletteInvert() {
@@ -1137,8 +1168,39 @@
     });
   }
 
+  function computeSymbolFillBreaks(
+    trigger: ClassificationBreakTrigger = CLASSIFICATION_BREAKS_TRIGGER.UNKNOWN
+  ): void {
+    const target = symbolFillTarget;
+    void classificationBreaks.compute({
+      scopeKey: buildClassificationScopeKey('fill', SYMBOL_FILL_SCOPE_TARGET),
+      datasetId: selectedViz?.datasetId,
+      valueColumn: target?.valueColumn,
+      classification: target?.classification,
+      trigger,
+      applyUpdate: handleSymbolFillClassificationChange
+    });
+  }
+
+  function fetchSymbolFillCategoryLabels(
+    column: string,
+    dataset: CategoryLabelsDataset
+  ): void {
+    void fetchClassificationLabels({
+      dataset,
+      column,
+      getCurrentLabels: () => symbolFillTarget?.classification?.labels,
+      applyLabels: (labels) => handleSymbolFillClassificationChange({ labels }),
+      useUntrack: true,
+      errorMessage: CATEGORY_LABEL_FETCH_ERROR.SYMBOL_FILL
+    });
+  }
+
   const symbolVisualization = $derived.by(() =>
     buildSymbolPanelVisualization(selectedViz)
+  );
+  const symbolFillVisualization = $derived.by(() =>
+    buildSymbolFillPanelVisualization(selectedViz)
   );
   const polygonVisualization = $derived.by(() =>
     buildPolygonPanelVisualization(selectedViz)
@@ -1177,6 +1239,19 @@
       )
     }))
   );
+
+  const symbolFillTarget = $derived.by(() => {
+    const symbol = getSymbolPrimitive(selectedViz);
+    if (!symbol) return null;
+    return {
+      fillMode: symbol.fillMode,
+      valueColumn: getSymbolFillValueColumn(selectedViz),
+      categoryColumn: getSymbolFillCategoryColumn(selectedViz),
+      classification: getSymbolFillClassification(selectedViz),
+      usesBreaks: usesSymbolFillBreakClassification(selectedViz),
+      usesCategories: usesSymbolFillCategoricalClassification(selectedViz)
+    };
+  });
 
   const textBackgroundTarget = $derived.by(() => {
     const text = getTextPrimitive(selectedViz);
@@ -1251,6 +1326,10 @@
       String(cbEnabled),
       ...primitiveClassificationTargets.map((target) =>
         buildClassificationColorParamsKey(String(target.primitive), target)
+      ),
+      buildClassificationColorParamsKey(
+        SYMBOL_FILL_SCOPE_TARGET,
+        symbolFillTarget
       ),
       buildClassificationColorParamsKey(
         TEXT_BACKGROUND_SCOPE_TARGET,
@@ -1354,6 +1433,8 @@
       ensurePrimitiveStrokeAutoColumns(primitive, visualization);
     }
 
+    ensureSymbolFillClassificationDefaults(visualization);
+    ensureSymbolFillAutoColumns(visualization);
     ensureTextBackgroundClassificationDefaults(visualization);
     ensureTextBackgroundAutoColumns(visualization);
     ensureTextBackgroundStrokeClassificationDefaults(visualization);
@@ -1389,6 +1470,16 @@
           CLASSIFICATION_BREAKS_TRIGGER.MISSING_BREAKS
         );
       }
+    }
+
+    const symbolFill = symbolFillTarget;
+    if (
+      symbolFill?.usesBreaks &&
+      symbolFill.valueColumn &&
+      symbolFill.classification?.method &&
+      !symbolFill.classification.breaks?.length
+    ) {
+      computeSymbolFillBreaks(CLASSIFICATION_BREAKS_TRIGGER.MISSING_BREAKS);
     }
 
     const textBg = textBackgroundTarget;
@@ -1441,6 +1532,18 @@
           CLASSIFICATION_BREAKS_TRIGGER.CLASSIFICATION_PARAMS_CHANGED
         );
       }
+    }
+
+    const symbolFill = symbolFillTarget;
+    if (
+      symbolFill?.usesBreaks &&
+      symbolFill.classification?.method &&
+      symbolFill.classification?.numClasses &&
+      symbolFill.valueColumn
+    ) {
+      computeSymbolFillBreaks(
+        CLASSIFICATION_BREAKS_TRIGGER.CLASSIFICATION_PARAMS_CHANGED
+      );
     }
 
     const textBg = textBackgroundTarget;
@@ -1510,6 +1613,17 @@
       );
     }
 
+    const symbolFill = symbolFillTarget;
+    const hasSymbolFillLabels =
+      (symbolFill?.classification?.labels?.length ?? 0) > 0;
+    if (
+      symbolFill?.usesCategories &&
+      symbolFill.categoryColumn &&
+      !hasSymbolFillLabels
+    ) {
+      fetchSymbolFillCategoryLabels(symbolFill.categoryColumn, dataset);
+    }
+
     const textBg = textBackgroundTarget;
     const hasBgLabels = (textBg?.classification?.labels?.length ?? 0) > 0;
     if (textBg?.usesCategories && textBg.categoryColumn && !hasBgLabels) {
@@ -1564,6 +1678,15 @@
           target.usesCategories,
           (updates) =>
             updatePrimitiveClassificationState(target.primitive, updates)
+        );
+      }
+
+      const symbolFill = symbolFillTarget;
+      if (symbolFill) {
+        syncClassificationColors(
+          symbolFill.classification,
+          symbolFill.usesCategories,
+          handleSymbolFillClassificationChange
         );
       }
 
@@ -1628,6 +1751,7 @@
     <SymbolsConfig
       dataFields={dataFieldItems}
       visualization={symbolVisualization}
+      fillVisualization={symbolFillVisualization}
       disabled={!showsSymbolsConfig}
       filters={getFiltersForPrimitive(PrimitiveFilterType.POINT)}
       onStyleChange={handleSymbolStyleChange}
@@ -1635,11 +1759,14 @@
       onSymbolsChange={handleSymbolsChange}
       onSymbolPrimitiveChange={handleSymbolChange}
       onMappingChange={handleSymbolMappingChange}
+      onFillMappingChange={handleSymbolFillMappingChange}
       onStrokeMappingChange={handleSymbolStrokeMappingChange}
       onMissingDataChange={handleSymbolMissingDataChange}
       onClassificationChange={handleSymbolClassificationChange}
+      onFillClassificationChange={handleSymbolFillClassificationChange}
       onStrokeClassificationChange={handleSymbolStrokeClassificationChange}
       onInvertPalette={handleSymbolPaletteInvert}
+      onFillInvertPalette={handleSymbolFillPaletteInvert}
       onStrokeInvertPalette={handleSymbolStrokePaletteInvert}
       onToggleVisibility={(checked) =>
         handlePrimitiveVisibilityChange(PrimitiveFilterType.POINT, checked)}

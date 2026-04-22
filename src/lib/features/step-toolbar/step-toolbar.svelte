@@ -3,7 +3,10 @@
     globalActions,
     globalState
   } from '$lib/features/commons/store/global.svelte';
-  import { ToolbarStep } from '$lib/features/commons/types/global';
+  import {
+    ToolbarStep,
+    VisualizationTools as VisualizationToolId
+  } from '$lib/features/commons/types/global';
   import { ColorBlindnessType } from '$lib/features/commons/constants/ui.constants';
   import { m } from '$lib/paraglide/messages.js';
   import { ColorPalette, DataBase, RulerAlt } from 'carbon-icons-svelte';
@@ -79,6 +82,12 @@
             ToolbarStep.Styling
         ]
       : undefined
+  );
+
+  const popoverViewMode = $derived(
+    globalState.selectedTool === VisualizationToolId.Projection
+      ? (globalState.projectionViewMode ?? 'list')
+      : 'list'
   );
 
   const selectStep = async (step: ToolbarStep): Promise<void> => {
@@ -159,9 +168,9 @@
     light
     open={!!globalState.selectedTool}
     align="right-top"
-    viewMode={globalState.projectionViewMode ?? 'list'}
+    viewMode={popoverViewMode}
     listWidth={POPOVER_DIMENSIONS.DEFAULT_LIST_WIDTH}
-    gridWidth={POPOVER_DIMENSIONS.DEFAULT_GRID_WIDTH}
+    gridWidth={POPOVER_DIMENSIONS.PROJECTION_GRID_WIDTH}
   >
     {#snippet content()}
       <ToolContainer />

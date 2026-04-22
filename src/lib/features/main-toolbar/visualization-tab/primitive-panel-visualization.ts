@@ -101,6 +101,36 @@ export function buildSymbolPanelVisualization(
   };
 }
 
+export function buildSymbolFillPanelVisualization(
+  visualization: VisualizationConfig | undefined
+): VisualizationConfig | undefined {
+  const symbol = getSymbolPrimitive(visualization);
+  if (!visualization || !symbol) {
+    return undefined;
+  }
+
+  return {
+    ...visualization,
+    primitiveFilters: getEnabledPrimitiveFilters(visualization),
+    modes: {
+      ...visualization.modes,
+      fill: symbol.fillMode
+    },
+    style: {
+      ...visualization.style,
+      symbolFillColor: symbol.fillColor,
+      fillColorB: symbol.fillColorB
+    },
+    mapping: {
+      ...visualization.mapping,
+      valueColumn: symbol.fillValueColumn,
+      categoryColumn: symbol.fillCategoryColumn
+    },
+    classification: symbol.fillClassification,
+    missingData: symbol.missingData
+  };
+}
+
 export function buildLinePanelVisualization(
   visualization: VisualizationConfig | undefined
 ): VisualizationConfig | undefined {

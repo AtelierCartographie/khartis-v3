@@ -37,6 +37,7 @@
   import DeleteConfirmModal from './commons/components/delete-confirm-modal.svelte';
   import DuplicateProjectModal from './commons/components/duplicate-project-modal.svelte';
   import Separator from './commons/components/separator.svelte';
+  import Switch from './commons/components/switch.svelte';
   import { useSideNav } from './side-nav/hooks/use-side-nav.svelte';
 
   const sideNav = useSideNav();
@@ -45,6 +46,7 @@
   let isInstallDialogOpen = $state(false);
   let isInstalledAsApp = $state(false);
   let currentBrowser = $state<BrowserFamily>('other');
+  let currentTheme = $state<'white' | 'g10' | 'g80' | 'g90' | 'g100'>('white');
 
   type BrowserFamily =
     | 'ios'
@@ -217,6 +219,14 @@
 
   function closeInstallDialog() {
     isInstallDialogOpen = false;
+  }
+
+  const isDarkTheme = $derived(
+    currentTheme === 'g80' || currentTheme === 'g90' || currentTheme === 'g100'
+  );
+
+  function handleThemeToggle(checked: boolean) {
+    currentTheme = checked ? 'g100' : 'white';
   }
 
   async function handleInstallApp() {
@@ -556,17 +566,20 @@
         </Row>
 
         <Row class="mr-5 ml-5 mb-5 flex justify-center">
-          <Theme
-            render="toggle"
-            persist
-            toggle={{
-              themes: ['white', 'g100'],
-              labelA: m.theme_light_mode(),
-              labelB: m.theme_dark_mode(),
-              hideLabel: true,
-              size: 'sm'
-            }}
-          />
+          <Theme bind:theme={currentTheme} persist>
+            <div class="theme-toggle">
+              <Switch
+                size="sm"
+                labelText={m.theme_dark_mode()}
+                labelA={m.theme_light_mode()}
+                labelB={m.theme_dark_mode()}
+                hideLabel
+                showStateLabel
+                toggled={isDarkTheme}
+                onchange={handleThemeToggle}
+              />
+            </div>
+          </Theme>
         </Row>
       </Grid>
 
@@ -680,6 +693,12 @@
     font-size: 0.65rem;
     color: var(--cds-text-03);
     margin-left: auto;
+  }
+
+  .theme-toggle {
+    display: flex;
+    justify-content: center;
+    width: 100%;
   }
 
   #khartis-install-dialog :global(.install-help-modal) {

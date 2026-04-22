@@ -20,6 +20,19 @@ describe('annotation drawing utils', () => {
     expect(bounds.height).toBeGreaterThan(104);
   });
 
+  it('exposes the drawing origin so the preview can be positioned at the real gesture bounds', () => {
+    const points = [
+      { x: 40, y: 80 },
+      { x: 120, y: 96 }
+    ];
+
+    const bounds = computeDrawingBounds(points, 2, 0, false);
+
+    expect(bounds.originX).toBe(37);
+    expect(bounds.originY).toBe(77);
+    expect(bounds.viewBox).toBe('37 77 86 22');
+  });
+
   it('keeps the same closed path command for preview and final rendering', () => {
     const points = [
       { x: 0, y: 0 },

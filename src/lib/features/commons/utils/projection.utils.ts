@@ -197,7 +197,9 @@ export function projectGeoJSON(
       );
       const fallback = getProjectionById(projectionId);
       if (!fallback) {
-        throw new Error(`Unknown projection: ${projectionId}`);
+        throw new Error(`Unknown projection: ${projectionId}`, {
+          cause: error
+        });
       }
       projection = fallback.projection();
     }
@@ -260,7 +262,9 @@ export function fitProjectionToGeoJSON(
       );
       const fallback = getProjectionById(projectionId);
       if (!fallback) {
-        throw new Error(`Unknown projection: ${projectionId}`);
+        throw new Error(`Unknown projection: ${projectionId}`, {
+          cause: error
+        });
       }
       projection = fallback.projection();
     }

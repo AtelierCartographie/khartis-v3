@@ -38,4 +38,17 @@ describe('ExpandableSection', () => {
 
     expect(button).toHaveAttribute('aria-expanded', 'false');
   });
+
+  it('forwards the suggestions toggle variant to the shared switch', () => {
+    render(ExpandableSection, {
+      title: 'Projection settings',
+      showToggle: true,
+      toggleChecked: true,
+      toggleVariant: 'suggestions'
+    });
+
+    const toggle = screen.getByRole('switch', { name: /projection settings/i });
+
+    expect(toggle.closest('label')).toHaveClass('variant-suggestions');
+  });
 });

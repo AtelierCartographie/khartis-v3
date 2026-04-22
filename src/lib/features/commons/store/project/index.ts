@@ -39,9 +39,7 @@ export {
   exportProject,
   importProject,
   markDirty,
-  markDirtyAndSave,
-  scheduleAutoSave,
-  setAutoSave
+  markDirtyAndSave
 } from './project-persistence';
 
 export {

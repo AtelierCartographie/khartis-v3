@@ -39,6 +39,7 @@
   interface Props {
     dataFields?: Array<{ id: number; text: string; type?: string }>;
     visualization?: VisualizationConfig;
+    fillVisualization?: VisualizationConfig;
     disabled?: boolean;
     onStyleChange?: (updates: Partial<VisualizationConfig['style']>) => void;
     onModesChange?: (updates: Partial<VisualizationModes>) => void;
@@ -49,12 +50,19 @@
     onMappingChange?: (
       updates: Partial<VisualizationConfig['mapping']>
     ) => void;
+    onFillMappingChange?: (
+      updates: Partial<VisualizationConfig['mapping']>
+    ) => void;
     onMissingDataChange?: (updates: Partial<MissingDataConfig>) => void;
     onClassificationChange?: (updates: Partial<ClassificationConfig>) => void;
+    onFillClassificationChange?: (
+      updates: Partial<ClassificationConfig>
+    ) => void;
     onStrokeClassificationChange?: (
       updates: Partial<ClassificationConfig>
     ) => void;
     onInvertPalette?: () => void;
+    onFillInvertPalette?: () => void;
     onStrokeInvertPalette?: () => void;
     onStrokeMappingChange?: (
       updates: Partial<VisualizationConfig['mapping']>
@@ -73,16 +81,20 @@
   let {
     dataFields = [],
     visualization,
+    fillVisualization,
     disabled = false,
     onStyleChange,
     onModesChange,
     onSymbolsChange,
     onSymbolPrimitiveChange,
     onMappingChange,
+    onFillMappingChange,
     onMissingDataChange,
     onClassificationChange,
+    onFillClassificationChange,
     onStrokeClassificationChange,
     onInvertPalette,
+    onFillInvertPalette,
     onStrokeInvertPalette,
     onStrokeMappingChange,
     onToggleVisibility,
@@ -93,6 +105,7 @@
   }: Props = $props();
 
   let discretizationModalOpen = $state(false);
+  let discretizationTarget = $state<'size' | 'fill'>('size');
   let filterSectionVisible = $state(false);
   let symbolMode = $state<SymbolMode>(SymbolMode.UNIQUE);
   const enabled = $derived.by(() => {
@@ -137,12 +150,23 @@
   }
 
   function handleOpenDiscretization() {
+    discretizationTarget = 'size';
+    discretizationModalOpen = true;
+  }
+
+  function handleOpenFillDiscretization() {
+    discretizationTarget = 'fill';
     discretizationModalOpen = true;
   }
 
   function handleClassificationChange(
     classification: Partial<ClassificationConfig>
   ) {
+    if (discretizationTarget === 'fill') {
+      onFillClassificationChange?.(classification);
+      return;
+    }
+
     onClassificationChange?.(classification);
   }
 
@@ -160,6 +184,30 @@
       (getSymbolPrimitive(visualization)?.proportionalType ??
         ProportionalType.SINGLE) === ProportionalType.DOUBLE
   );
+
+  const activeDiscretizationVisualization = $derived(
+    discretizationTarget === 'fill'
+      ? (fillVisualization ?? visualization)
+      : visualization
+  );
+  const activeDiscretizationClassification = $derived.by(() => {
+    if (discretizationTarget === 'fill') {
+      return fillVisualization?.classification;
+    }
+
+    return (
+      visualization?.symbol?.classification ?? visualization?.classification
+    );
+  });
+  const activeDiscretizationValueColumn = $derived.by(() => {
+    if (discretizationTarget === 'fill') {
+      return fillVisualization?.mapping.valueColumn;
+    }
+
+    return (
+      visualization?.symbol?.valueColumn ?? visualization?.mapping.valueColumn
+    );
+  });
 </script>
 
 <ExpandableSection
@@ -167,6 +215,7 @@
   description={disabled ? m.primitive_unavailable() : undefined}
   defaultOpen={false}
   showToggle
+  toggleVariant="suggestions"
   actionsEnd
   toggleChecked={enabled}
   disabled={disabled}
@@ -210,35 +259,44 @@
       <SymbolModeUnique
         dataFields={dataFields}
         visualization={visualization}
+        fillVisualization={fillVisualization}
         onStyleChange={onStyleChange}
         onModesChange={onModesChange}
         onSymbolsChange={onSymbolsChange}
         onMappingChange={onMappingChange}
+        onFillMappingChange={onFillMappingChange}
         onMissingDataChange={onMissingDataChange}
         onClassificationChange={onClassificationChange}
+        onFillClassificationChange={onFillClassificationChange}
         onStrokeClassificationChange={onStrokeClassificationChange}
         onInvertPalette={onInvertPalette}
+        onFillInvertPalette={onFillInvertPalette}
         onStrokeInvertPalette={onStrokeInvertPalette}
         onStrokeMappingChange={onStrokeMappingChange}
-        onOpenDiscretization={handleOpenDiscretization}
+        onOpenFillDiscretization={handleOpenFillDiscretization}
       />
     {:else if symbolMode === SymbolMode.PROPORTIONAL || symbolMode === SymbolMode.CLASSES}
       <SymbolModeProportional
         dataFields={dataFields}
         visualization={visualization}
+        fillVisualization={fillVisualization}
         symbolMode={symbolMode}
         onSymbolsChange={onSymbolsChange}
         onSymbolPrimitiveChange={onSymbolPrimitiveChange}
         onMappingChange={onMappingChange}
+        onFillMappingChange={onFillMappingChange}
         onModesChange={onModesChange}
         onStyleChange={onStyleChange}
         onMissingDataChange={onMissingDataChange}
         onClassificationChange={onClassificationChange}
+        onFillClassificationChange={onFillClassificationChange}
         onStrokeClassificationChange={onStrokeClassificationChange}
         onInvertPalette={onInvertPalette}
+        onFillInvertPalette={onFillInvertPalette}
         onStrokeInvertPalette={onStrokeInvertPalette}
         onStrokeMappingChange={onStrokeMappingChange}
-        onOpenDiscretization={handleOpenDiscretization}
+        onOpenSizeDiscretization={handleOpenDiscretization}
+        onOpenFillDiscretization={handleOpenFillDiscretization}
       />
     {:else if symbolMode === SymbolMode.CATEGORIES}
       <SymbolModeCategories
@@ -276,9 +334,11 @@
 
 <DiscretizationModal
   bind:open={discretizationModalOpen}
-  visualization={visualization}
-  classification={visualization?.symbol?.classification ??
-    visualization?.symbolClassification}
+  visualization={activeDiscretizationVisualization}
+  classification={activeDiscretizationClassification}
+  valueColumn={activeDiscretizationValueColumn}
+  showBreakpointControls={discretizationTarget === 'fill'}
+  role={discretizationTarget === 'fill' ? 'fill' : 'size'}
   onchange={handleClassificationChange}
 />
 

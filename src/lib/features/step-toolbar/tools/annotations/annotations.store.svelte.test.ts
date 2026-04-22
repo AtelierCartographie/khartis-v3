@@ -121,58 +121,95 @@ describe('annotations store', () => {
     expect(title?.style?.fontSize).toBe(14);
   });
 
-  it('spawns the first free text annotation in a neutral page zone', () => {
-    annotationsActions.addAnnotation(AnnotationKind.TEXT, 'Free text');
+  it('keeps legacy annotations without coordinateSpace in map space when moved', () => {
+    annotationsActions.setState({
+      items: [
+        {
+          id: 'legacy-shape',
+          type: AnnotationKind.SHAPE,
+          content: SHAPE_TYPE.ARROW,
+          position: { x: 12, y: 24 },
+          style: { shapeWidth: 120, shapeHeight: 60 }
+        }
+      ]
+    });
 
-    const annotation = getAnnotationsState().items.find(
-      (item) =>
-        item.role === ANNOTATION_ROLE.NOTE && item.type === AnnotationKind.TEXT
-    );
+    annotationsActions.moveAnnotation('legacy-shape', { x: 40, y: 72 });
 
-    expect(annotation).toBeDefined();
-    expect(annotation?.position).toEqual({ x: 624, y: 0 });
+    const [legacyShape] = getAnnotationsState().items;
+
+    expect(legacyShape.coordinateSpace).toBe('map');
+    expect(legacyShape.position).toEqual({ x: 36, y: 72 });
   });
 
-  it('spawns the first image annotation clear of the left tool panel', () => {
-    annotationsActions.addAnnotation(
+  it('starts placement without spawning the annotation until commit', () => {
+    annotationsActions.beginPlacement(AnnotationKind.SHAPE, SHAPE_TYPE.ARROW);
+
+    const placingState = getAnnotationsState();
+
+    expect(placingState.items).toHaveLength(0);
+    expect(placingState.creationMode).toBe('placing');
+    expect(placingState.pendingType).toBe(AnnotationKind.SHAPE);
+    expect(placingState.pendingStyle?.shapeWidth).toBe(120);
+    expect(placingState.pendingStyle?.shapeHeight).toBe(60);
+
+    annotationsActions.updatePlacement({
+      coordinateSpace: 'page',
+      type: AnnotationKind.SHAPE,
+      position: { x: 96, y: 128 },
+      size: { width: 140, height: 70 },
+      content: SHAPE_TYPE.ARROW,
+      style: { rotation: 15 }
+    });
+
+    const createdShape = annotationsActions.commitPlacement();
+
+    expect(createdShape).toBeTruthy();
+    expect(createdShape?.coordinateSpace).toBe('page');
+    expect(createdShape?.position).toEqual({ x: 96, y: 128 });
+    expect(createdShape?.style?.shapeWidth).toBe(140);
+    expect(createdShape?.style?.shapeHeight).toBe(70);
+    expect(createdShape?.style?.rotation).toBe(15);
+    expect(getAnnotationsState().creationMode).toBe('idle');
+    expect(getAnnotationsState().items).toHaveLength(1);
+  });
+
+  it('cancels placement without creating a shape or image', () => {
+    annotationsActions.beginPlacement(
       AnnotationKind.IMAGE,
       'data:image/svg+xml;base64,PHN2Zy8+'
     );
+    annotationsActions.updatePlacement({
+      coordinateSpace: 'page',
+      type: AnnotationKind.IMAGE,
+      position: { x: 32, y: 48 },
+      size: { width: 120, height: 120 },
+      content: 'data:image/svg+xml;base64,PHN2Zy8+'
+    });
 
-    const annotation = getAnnotationsState().items.find(
-      (item) => item.role == null && item.type === AnnotationKind.IMAGE
-    );
+    annotationsActions.cancelPlacement();
 
-    expect(annotation).toBeDefined();
-    expect(annotation?.position).toEqual({ x: 72, y: 24 });
+    expect(getAnnotationsState().creationMode).toBe('idle');
+    expect(getAnnotationsState().pendingType).toBeNull();
+    expect(getAnnotationsState().previewGeometry).toBeNull();
+    expect(getAnnotationsState().items).toHaveLength(0);
   });
 
   it('keeps zone drawings in progress until at least three points exist', () => {
-    annotationsActions.startDrawingMode(DrawingType.ZONE);
-    annotationsActions.setDrawingInProgress([
+    annotationsActions.beginDrawing(DrawingType.ZONE);
+    annotationsActions.updateDrawing([
       { x: 0, y: 0 },
       { x: 80, y: 24 }
     ]);
 
-    annotationsActions.finalizeDrawingMode();
+    annotationsActions.finishDrawing();
 
-    expect(getAnnotationsState().isDrawingMode).toBe(true);
+    expect(getAnnotationsState().creationMode).toBe('drawing');
     expect(getAnnotationsState().drawingInProgress).toHaveLength(2);
     expect(
       getAnnotationsState().items.filter(
         (item) => item.type === AnnotationKind.DRAWING
       )
     ).toHaveLength(0);
-  });
-
-  it('initializes new arrow shapes with the canonical default size', () => {
-    annotationsActions.addAnnotation(AnnotationKind.SHAPE, SHAPE_TYPE.ARROW);
-
-    const shape = getAnnotationsState().items.find(
-      (item) => item.type === AnnotationKind.SHAPE
-    );
-
-    expect(shape?.style?.shapeWidth).toBe(120);
-    expect(shape?.style?.shapeHeight).toBe(60);
   });
 });
