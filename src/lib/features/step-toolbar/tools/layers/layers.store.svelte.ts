@@ -350,7 +350,7 @@ function buildLayers(): Layer[] {
     let layerName: string;
     if (isFacetViz) {
       facetIndex += 1;
-      layerName = `${m.tool_facets()} ${facetIndex} — ${viz.name}`;
+      layerName = `${m.layers_carte_title()} ${facetIndex} (${viz.name})`;
     } else {
       layerName = `${m.viz_tab_label()} (${vizOrder + 1})`;
     }
