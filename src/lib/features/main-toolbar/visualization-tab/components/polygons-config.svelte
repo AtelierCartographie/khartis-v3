@@ -1,5 +1,6 @@
 <script lang="ts">
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
+  import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import type {
     MissingDataConfig,
     VisualizationConfig,
@@ -31,8 +32,13 @@
     FACET_SLOT,
     facetsStore,
     type FacetSlotPath
-  } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
+  } from '../facets-adapter.svelte';
   import { PolygonModeDensity } from './polygons';
+  import {
+    NONE_FIELD_ID,
+    useFieldSelection
+  } from '../use-field-selection.svelte';
+  import { useCategoryLabels } from '../use-category-labels.svelte';
 
   interface Props {
     dataFields?: Array<{ id: number; text: string; type?: string }>;
@@ -87,36 +93,18 @@
   let discretizationModalOpen = $state(false);
   let discretizationTarget = $state<'fill' | 'stroke'>('fill');
   let filterSectionVisible = $state(false);
-  const NONE_FIELD_ID = -1;
-  let selectedFieldId = $state<number>(NONE_FIELD_ID);
-  let selectedCategoryFieldId = $state<number>(NONE_FIELD_ID);
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
   const selectableDataFields = $derived([noneOption, ...dataFields]);
+  const valueFieldSelection = useFieldSelection(() => dataFields);
+  const categoryFieldSelection = useFieldSelection(() => dataFields);
 
   $effect(() => {
-    if (visualization?.mapping.valueColumn && dataFields.length > 0) {
-      const fieldIndex = dataFields.findIndex(
-        (f) => f.text === visualization.mapping.valueColumn
-      );
-      selectedFieldId =
-        fieldIndex >= 0 ? dataFields[fieldIndex].id : NONE_FIELD_ID;
-    } else {
-      selectedFieldId = NONE_FIELD_ID;
-    }
-
-    if (visualization?.mapping.categoryColumn && dataFields.length > 0) {
-      const fieldIndex = dataFields.findIndex(
-        (f) => f.text === visualization.mapping.categoryColumn
-      );
-      selectedCategoryFieldId =
-        fieldIndex >= 0 ? dataFields[fieldIndex].id : NONE_FIELD_ID;
-    } else {
-      selectedCategoryFieldId = NONE_FIELD_ID;
-    }
+    valueFieldSelection.sync(visualization?.mapping.valueColumn);
+    categoryFieldSelection.sync(visualization?.mapping.categoryColumn);
   });
 
   function handleValueFieldSelect(fieldId: number) {
-    selectedFieldId = fieldId;
+    valueFieldSelection.set(fieldId);
     if (fieldId === NONE_FIELD_ID) {
       onMappingChange?.({ valueColumn: undefined });
       return;
@@ -129,7 +117,7 @@
   }
 
   function handleCategoryFieldSelect(fieldId: number) {
-    selectedCategoryFieldId = fieldId;
+    categoryFieldSelection.set(fieldId);
     if (fieldId === NONE_FIELD_ID) {
       onMappingChange?.({ categoryColumn: undefined });
       return;
@@ -141,9 +129,24 @@
     }
   }
 
-  const categoryCount = $derived(
-    visualization?.classification?.labels?.length ?? 4
+  const categoryColumnName = $derived(
+    categoryFieldSelection.selectedFieldName ?? ''
   );
+  const dataset = $derived(
+    visualization
+      ? (datasetsStore.datasets.find((d) => d.id === visualization.datasetId) ??
+          datasetsStore.selectedDataset)
+      : datasetsStore.selectedDataset
+  );
+  const categoryLabels = useCategoryLabels({
+    enabled: () => fillMode === FillMode.CATEGORIES,
+    getDataset: () => dataset,
+    getColumnName: () =>
+      visualization?.mapping.categoryColumn ?? categoryColumnName,
+    getClassification: () => visualization?.classification,
+    fallbackCount: 4
+  });
+  const categoryCount = $derived(categoryLabels.count);
 
   let fillMode = $state<FillMode>(FillMode.UNIQUE);
   let fillColor = $state<string>(DEFAULT_COLORS.fill);
@@ -403,8 +406,8 @@
       fillMode={effectiveFillMode}
       fillColor={fillColor}
       fillOpacity={fillOpacity}
-      selectedValueFieldId={selectedFieldId}
-      selectedCategoryFieldId={selectedCategoryFieldId}
+      selectedValueFieldId={valueFieldSelection.selectedFieldId}
+      selectedCategoryFieldId={categoryFieldSelection.selectedFieldId}
       discretizationLabel={discretizationLabel}
       categoryCount={categoryCount}
       facetsValueSlotPath={FACET_SLOT.POLYGON_VALUE}

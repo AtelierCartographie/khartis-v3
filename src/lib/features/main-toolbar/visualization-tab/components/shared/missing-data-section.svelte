@@ -12,9 +12,11 @@
     MissingDataShape,
     SLIDER_LIMITS
   } from '../../../constants';
-  import ColorSelector from './color-selector.svelte';
-  import SliderWithInput from './slider-with-input.svelte';
-  import ToggleWithLabel from './toggle-with-label.svelte';
+  import {
+    ColorSelector,
+    SliderWithInput,
+    ToggleWithLabel
+  } from '$lib/features/commons/components/viz-controls';
 
   interface Props {
     show: boolean;

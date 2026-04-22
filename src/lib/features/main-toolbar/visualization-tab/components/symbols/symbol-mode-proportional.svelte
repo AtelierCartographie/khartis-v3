@@ -27,7 +27,7 @@
     StrokeSection
   } from '../shared';
   import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
-  import { NONE_FIELD_ID, type SymbolModeProps } from './types';
+  import type { SymbolModeProps } from './types';
   import { CaretUp, CircleFilled, SquareFill } from 'carbon-icons-svelte';
   import FillSection from '../shared/fill-section.svelte';
   import { FILL_MODES_STANDARD } from '../shared/fill-mode-presets';
@@ -38,8 +38,12 @@
     FACET_SLOT,
     facetsStore,
     type FacetSlotPath
-  } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
+  } from '../../facets-adapter.svelte';
   import FacetsVariablePicker from './facets-variable-picker.svelte';
+  import {
+    NONE_FIELD_ID,
+    useFieldSelection
+  } from '../../use-field-selection.svelte';
 
   interface Props extends SymbolModeProps {
     symbolMode: SymbolMode.PROPORTIONAL | SymbolMode.CLASSES;
@@ -68,10 +72,6 @@
   let fieldBPickerOpen = $state(false);
   let classesPickerOpen = $state(false);
   let proportionalType = $state<ProportionalType>(ProportionalType.SINGLE);
-  let selectedFieldId = $state<number>(NONE_FIELD_ID);
-  let selectedFieldBId = $state<number>(NONE_FIELD_ID);
-  let fillClassFieldId = $state<number>(NONE_FIELD_ID);
-  let fillCategoryFieldId = $state<number>(NONE_FIELD_ID);
   let symbolMaxSize = $state<number>(VISUALIZATION_DEFAULTS.symbolMaxSize);
   let shapeType = $state<ShapeType>(ShapeType.CIRCLE);
   let showMissingData = $state<boolean>(true);
@@ -90,6 +90,10 @@
   let breakValueB = $state<number | null>(null);
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
   const selectableDataFields = $derived([noneOption, ...dataFields]);
+  const primaryFieldSelection = useFieldSelection(() => dataFields);
+  const secondaryValueFieldSelection = useFieldSelection(() => dataFields);
+  const fillClassFieldSelection = useFieldSelection(() => dataFields);
+  const fillCategoryFieldSelection = useFieldSelection(() => dataFields);
   let isSyncingFromVisualization = $state(true);
   let syncToken = 0;
 
@@ -107,47 +111,10 @@
       const mappedFieldName =
         symbolMode === SymbolMode.PROPORTIONAL ? sizeCol : valueCol;
 
-      if (mappedFieldName) {
-        const fieldIndex = dataFields.findIndex(
-          (field) => field.text === mappedFieldName
-        );
-        selectedFieldId =
-          fieldIndex >= 0 ? dataFields[fieldIndex].id : NONE_FIELD_ID;
-      } else {
-        selectedFieldId = NONE_FIELD_ID;
-      }
-
-      if (valueCol) {
-        const fieldBIndex = dataFields.findIndex(
-          (field) => field.text === valueCol
-        );
-        selectedFieldBId =
-          fieldBIndex >= 0 ? dataFields[fieldBIndex].id : NONE_FIELD_ID;
-      } else {
-        selectedFieldBId = NONE_FIELD_ID;
-      }
-
-      if (valueCol) {
-        const valueFieldIndex = dataFields.findIndex(
-          (field) => field.text === valueCol
-        );
-        fillClassFieldId =
-          valueFieldIndex >= 0 ? dataFields[valueFieldIndex].id : NONE_FIELD_ID;
-      } else {
-        fillClassFieldId = NONE_FIELD_ID;
-      }
-
-      if (categoryCol) {
-        const categoryFieldIndex = dataFields.findIndex(
-          (field) => field.text === categoryCol
-        );
-        fillCategoryFieldId =
-          categoryFieldIndex >= 0
-            ? dataFields[categoryFieldIndex].id
-            : NONE_FIELD_ID;
-      } else {
-        fillCategoryFieldId = NONE_FIELD_ID;
-      }
+      primaryFieldSelection.sync(mappedFieldName);
+      secondaryValueFieldSelection.sync(valueCol);
+      fillClassFieldSelection.sync(valueCol);
+      fillCategoryFieldSelection.sync(categoryCol);
     }
 
     const symbolConfig = visualization?.symbol;
@@ -255,7 +222,7 @@
     onModesChange?.({ proportionalType: type });
     if (type === ProportionalType.SINGLE) {
       onMappingChange?.({ valueColumn: undefined });
-      selectedFieldBId = NONE_FIELD_ID;
+      secondaryValueFieldSelection.set(NONE_FIELD_ID);
       fillColorB = DEFAULT_COLORS.secondary;
       onSymbolPrimitiveChange?.({
         commonScale: true,
@@ -271,7 +238,7 @@
     if (isSyncingFromVisualization) {
       return;
     }
-    selectedFieldBId = fieldId;
+    secondaryValueFieldSelection.set(fieldId);
     if (fieldId === NONE_FIELD_ID) {
       onMappingChange?.({ valueColumn: undefined });
       return;
@@ -418,7 +385,7 @@
     if (isSyncingFromVisualization) {
       return;
     }
-    selectedFieldId = fieldId;
+    primaryFieldSelection.set(fieldId);
     if (fieldId === NONE_FIELD_ID) {
       if (symbolMode === SymbolMode.PROPORTIONAL) {
         onMappingChange?.({ sizeColumn: undefined });
@@ -451,7 +418,7 @@
     if (isSyncingFromVisualization) {
       return;
     }
-    fillClassFieldId = fieldId;
+    fillClassFieldSelection.set(fieldId);
     if (fieldId === NONE_FIELD_ID) {
       onMappingChange?.({ valueColumn: undefined });
       return;
@@ -467,7 +434,7 @@
     if (isSyncingFromVisualization) {
       return;
     }
-    fillCategoryFieldId = fieldId;
+    fillCategoryFieldSelection.set(fieldId);
     if (fieldId === NONE_FIELD_ID) {
       onMappingChange?.({ categoryColumn: undefined });
       return;
@@ -506,11 +473,11 @@
   }
 
   const sizeColumnName = $derived(
-    dataFields.find((f) => f.id === selectedFieldId)?.text ?? ''
+    primaryFieldSelection.selectedFieldName ?? ''
   );
 
   const valueColumnName = $derived(
-    dataFields.find((f) => f.id === fillClassFieldId)?.text ?? ''
+    fillClassFieldSelection.selectedFieldName ?? ''
   );
 
   async function handleFacetsVariablesChange(
@@ -664,7 +631,7 @@
         bind:open={sizePickerOpen}
         dataFields={dataFields}
         singleSelectItems={selectableDataFields}
-        selectedFieldId={selectedFieldId}
+        selectedFieldId={primaryFieldSelection.selectedFieldId}
         selectedFieldIds={getFacetsSelectedFieldIds(FACET_SLOT.SYMBOL_SIZE)}
         isCollectionEnabled={isFacetsActiveForSlot(FACET_SLOT.SYMBOL_SIZE)}
         onSelect={handleFieldSelect}
@@ -687,7 +654,7 @@
         bind:open={fieldBPickerOpen}
         dataFields={dataFields}
         singleSelectItems={selectableDataFields}
-        selectedFieldId={selectedFieldBId}
+        selectedFieldId={secondaryValueFieldSelection.selectedFieldId}
         isCollectionEnabled={false}
         showCollectionFooter={false}
         onSelect={handleFieldBSelect}
@@ -781,7 +748,7 @@
         bind:open={sizePickerOpen}
         dataFields={dataFields}
         singleSelectItems={selectableDataFields}
-        selectedFieldId={selectedFieldId}
+        selectedFieldId={primaryFieldSelection.selectedFieldId}
         selectedFieldIds={getFacetsSelectedFieldIds(FACET_SLOT.SYMBOL_SIZE)}
         isCollectionEnabled={isFacetsActiveForSlot(FACET_SLOT.SYMBOL_SIZE)}
         onSelect={handleFieldSelect}
@@ -808,7 +775,7 @@
       bind:open={classesPickerOpen}
       dataFields={dataFields}
       singleSelectItems={selectableDataFields}
-      selectedFieldId={selectedFieldId}
+      selectedFieldId={primaryFieldSelection.selectedFieldId}
       selectedFieldIds={getFacetsSelectedFieldIds(FACET_SLOT.SYMBOL_VALUE)}
       isCollectionEnabled={isFacetsActiveForSlot(FACET_SLOT.SYMBOL_VALUE)}
       onSelect={handleFieldSelect}
@@ -870,8 +837,8 @@
   fillMode={fillMode}
   fillColor={fillColor}
   fillOpacity={fillOpacity}
-  selectedValueFieldId={fillClassFieldId}
-  selectedCategoryFieldId={fillCategoryFieldId}
+  selectedValueFieldId={fillClassFieldSelection.selectedFieldId}
+  selectedCategoryFieldId={fillCategoryFieldSelection.selectedFieldId}
   discretizationLabel={discretizationLabel}
   categoryCount={categoryCount}
   facetsValueSlotPath={FACET_SLOT.SYMBOL_VALUE}
