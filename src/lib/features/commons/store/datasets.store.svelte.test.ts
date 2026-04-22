@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   processUploadedFileMock: vi.fn(),
   dropTableMock: vi.fn(),
   setEnrichDataStateMock: vi.fn(),
+  renameFileMock: vi.fn(),
   currentProject: undefined as
     | {
         data: {
@@ -60,7 +61,8 @@ vi.mock('$lib/features/commons/store/project.store.svelte', () => ({
   projectStore: {
     get currentProject() {
       return mocks.currentProject;
-    }
+    },
+    renameFile: mocks.renameFileMock
   }
 }));
 
@@ -250,5 +252,25 @@ describe('datasetsStore persisted view state', () => {
     };
 
     expect(datasetsStore.hasModifications('dataset-1')).toBe(true);
+  });
+
+  it('renames datasets through the persistent source-file path', async () => {
+    datasetsStore.addProcessedDataset(makeDataset('dataset-1', 'source-a'));
+
+    const success = await datasetsStore.renameDataset('dataset-1', '  Census ');
+
+    expect(success).toBe(true);
+    expect(mocks.renameFileMock).toHaveBeenCalledWith('source-a', 'Census');
+    expect(datasetsStore.datasets[0]?.name).toBe('Census');
+  });
+
+  it('does not mutate the in-memory dataset name when persistent rename fails', async () => {
+    datasetsStore.addProcessedDataset(makeDataset('dataset-1', 'source-a'));
+    mocks.renameFileMock.mockRejectedValueOnce(new Error('rename failed'));
+
+    await expect(
+      datasetsStore.renameDataset('dataset-1', 'Persisted name')
+    ).rejects.toThrow('rename failed');
+    expect(datasetsStore.datasets[0]?.name).toBe('Dataset dataset-1');
   });
 });

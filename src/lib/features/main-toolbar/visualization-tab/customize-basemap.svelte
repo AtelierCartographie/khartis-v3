@@ -149,6 +149,7 @@
       <ExpandableSection
         title={m.basemap_layer_terre()}
         showToggle={true}
+        toggleVariant="suggestions"
         toggleChecked={getConfig('terre')?.visible ?? true}
         onToggleChange={(checked) => handleLayerToggle('terre', checked)}
       >
@@ -168,6 +169,7 @@
       <ExpandableSection
         title={m.basemap_layer_mers()}
         showToggle={true}
+        toggleVariant="suggestions"
         toggleChecked={getConfig('mers')?.visible ?? true}
         onToggleChange={(checked) => handleLayerToggle('mers', checked)}
       >
@@ -187,6 +189,7 @@
           ? m.basemap_layer_unavailable()
           : undefined}
         showToggle={true}
+        toggleVariant="suggestions"
         toggleChecked={getConfig('lacs')?.visible ?? false}
         toggleDisabled={!supportsLakesRivers}
         disabled={!supportsLakesRivers}
@@ -210,6 +213,7 @@
       <ExpandableSection
         title={m.basemap_layer_relief()}
         showToggle={true}
+        toggleVariant="suggestions"
         toggleChecked={getConfig('relief')?.visible ?? true}
         onToggleChange={(checked) => handleLayerToggle('relief', checked)}
       >
@@ -224,6 +228,7 @@
       <ExpandableSection
         title={m.basemap_layer_equateur()}
         showToggle={true}
+        toggleVariant="suggestions"
         toggleChecked={getConfig('equateur')?.visible ?? true}
         onToggleChange={(checked) => handleLayerToggle('equateur', checked)}
       >
@@ -248,6 +253,7 @@
       <ExpandableSection
         title={m.basemap_layer_meridiens()}
         showToggle={true}
+        toggleVariant="suggestions"
         toggleChecked={getConfig('meridiens')?.visible ?? true}
         onToggleChange={(checked) => handleLayerToggle('meridiens', checked)}
       >
@@ -269,6 +275,7 @@
       <ExpandableSection
         title={m.basemap_layer_frontieres()}
         showToggle={true}
+        toggleVariant="suggestions"
         toggleChecked={getConfig('frontieres')?.visible ?? true}
         onToggleChange={(checked) => handleLayerToggle('frontieres', checked)}
       >
@@ -296,6 +303,7 @@
           ? m.basemap_layer_unavailable()
           : undefined}
         showToggle={true}
+        toggleVariant="suggestions"
         toggleChecked={getConfig('villes')?.visible ?? true}
         toggleDisabled={!supportsCities}
         disabled={!supportsCities}
@@ -319,6 +327,7 @@
       title={m.basemap_tiled_label()}
       defaultOpen={isTiledBasemapEnabled}
       showToggle={true}
+      toggleVariant="suggestions"
       toggleChecked={isTiledBasemapEnabled}
       onToggleChange={handleTiledBasemapToggle}
     >

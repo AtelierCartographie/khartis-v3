@@ -6,10 +6,16 @@
   interface Props {
     label: string;
     value: string;
-    onsettings?: () => void;
+    settingsIconDescription?: string;
+    onsettings?: (event: MouseEvent) => void;
   }
 
-  let { label, value, onsettings }: Props = $props();
+  let {
+    label,
+    value,
+    settingsIconDescription = m.discretization_settings(),
+    onsettings
+  }: Props = $props();
 </script>
 
 <div class="discretization-row">
@@ -20,8 +26,8 @@
       kind="ghost"
       size="small"
       icon={Settings}
-      iconDescription={m.more_info()}
-      on:click={() => onsettings?.()}
+      iconDescription={settingsIconDescription}
+      on:click={(event) => onsettings?.(event)}
     />
   </div>
 </div>

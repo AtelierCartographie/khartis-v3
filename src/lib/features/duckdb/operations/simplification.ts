@@ -25,16 +25,33 @@ function buildFallbackSimplificationSelect(
   const escapedInputTable = escapeIdentifier(inputTableName);
   const escapedGeometryColumn = escapeIdentifier(geometryColumn);
   const escapedGeom = escapeIdentifier('geom');
+  const metricExpression = `CASE
+    WHEN CAST(ST_GeometryType("${escapedGeometryColumn}") AS VARCHAR) IN ('LINESTRING', 'MULTILINESTRING')
+      THEN ST_Length("${escapedGeometryColumn}")
+    ELSE ST_Perimeter("${escapedGeometryColumn}")
+  END`;
   const simplifiedExpression = `CASE
     WHEN "${escapedGeometryColumn}" IS NULL THEN NULL
-    ELSE ST_Simplify("${escapedGeometryColumn}", ${tolerance})
+    ELSE ST_Simplify("${escapedGeometryColumn}", COALESCE(computed_tolerance, 0.0))
   END`;
 
   if (geometryColumn === 'geom') {
-    return `SELECT * REPLACE (${simplifiedExpression} AS "${escapedGeom}") FROM "${escapedInputTable}"`;
+    return `WITH simplification_metric AS (
+      SELECT COALESCE(AVG(${metricExpression}) * ${tolerance} * 0.05, 0.0) AS computed_tolerance
+      FROM "${escapedInputTable}"
+      WHERE "${escapedGeometryColumn}" IS NOT NULL
+    )
+    SELECT * REPLACE (${simplifiedExpression} AS "${escapedGeom}")
+    FROM "${escapedInputTable}", simplification_metric`;
   }
 
-  return `SELECT * EXCLUDE ("${escapedGeometryColumn}"), ${simplifiedExpression} AS "${escapedGeom}" FROM "${escapedInputTable}"`;
+  return `WITH simplification_metric AS (
+    SELECT COALESCE(AVG(${metricExpression}) * ${tolerance} * 0.05, 0.0) AS computed_tolerance
+    FROM "${escapedInputTable}"
+    WHERE "${escapedGeometryColumn}" IS NOT NULL
+  )
+  SELECT * EXCLUDE ("${escapedGeometryColumn}"), ${simplifiedExpression} AS "${escapedGeom}"
+  FROM "${escapedInputTable}", simplification_metric`;
 }
 
 async function countVertices(

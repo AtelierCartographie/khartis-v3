@@ -28,7 +28,7 @@
   import { ComboBox, InlineNotification, Link } from 'carbon-components-svelte';
   import ChartTSne from 'carbon-icons-svelte/lib/ChartTSne.svelte';
   import { Launch, List, Map as MapIcon } from 'carbon-icons-svelte';
-  import { InfoPopover } from '../visualization-tab/components/shared';
+  import { InfoPopover } from '$lib/features/commons/components/viz-controls';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import type { GeoComboBoxItem } from './data-tab.shared.types';
   import { dataTabStore } from './data-tab.store.svelte';

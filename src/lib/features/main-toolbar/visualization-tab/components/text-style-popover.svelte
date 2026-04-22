@@ -1,5 +1,9 @@
 <script lang="ts">
   import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
+  import {
+    createExclusiveContextualSurfaceId,
+    engageExclusiveContextualSurface
+  } from '$lib/features/commons/utils/contextual-surface-coordinator';
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import { ToolbarState } from '$lib/features/commons/types/global';
   import { AVAILABLE_FONTS } from '$lib/features/step-toolbar/constants/fonts.constants';
@@ -76,6 +80,8 @@
   let popoverRef = $state<HTMLDivElement>();
   let primaryQuickColorInput = $state<HTMLInputElement>();
   let secondaryQuickColorInput = $state<HTMLInputElement>();
+  const contextualSurfaceId =
+    createExclusiveContextualSurfaceId('text-style-popover');
 
   function portal(node: HTMLElement) {
     document.body.appendChild(node);
@@ -251,6 +257,14 @@
 
     onchange(value);
   }
+
+  $effect(() => {
+    if (!open) {
+      return;
+    }
+
+    return engageExclusiveContextualSurface(contextualSurfaceId, handleClose);
+  });
 
   $effect(() => {
     if (!open) return;

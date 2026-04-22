@@ -26,6 +26,10 @@ vi.mock('$lib/features/duckdb/orchestrator/orchestrator.svelte', () => ({
 }));
 
 vi.mock('$lib/features/project-management/core/persistence-registry', () => ({
+  SavePriority: {
+    IMMEDIATE: 'immediate',
+    DEBOUNCED: 'debounced'
+  },
   persistenceRegistry: { register: vi.fn(), notifyChange: vi.fn() }
 }));
 

@@ -74,7 +74,8 @@ export default defineConfig(({ mode }) => {
       sveltekit(),
       paraglideVitePlugin({
         project: './project.inlang',
-        outdir: './src/lib/paraglide'
+        outdir: './src/lib/paraglide',
+        emitTsDeclarations: true
       }),
       VitePWA({
         includeAssets: [
@@ -89,6 +90,7 @@ export default defineConfig(({ mode }) => {
         },
         workbox: {
           sourcemap: false,
+          inlineWorkboxRuntime: true,
           globPatterns:
             process.env.NODE_ENV === 'production'
               ? [

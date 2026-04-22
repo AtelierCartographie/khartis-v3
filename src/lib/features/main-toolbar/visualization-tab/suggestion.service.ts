@@ -36,6 +36,7 @@ import {
   ProportionalType,
   SizeMode,
   StrokeMode,
+  SymbolDoublePosition,
   SymbolMode,
   ThicknessMode,
   VISUALIZATION_DEFAULTS
@@ -905,6 +906,13 @@ export function resolveSuggestionBehavior(
         suggestion.id === 'symbols_proportional_double'
           ? ProportionalType.DOUBLE
           : ProportionalType.SINGLE,
+      commonScale: suggestion.id !== 'symbols_proportional_double',
+      positionMode:
+        suggestion.id === 'symbols_proportional_double'
+          ? SymbolDoublePosition.OVERLAY
+          : SymbolDoublePosition.OVERLAY,
+      breakValueA: null,
+      breakValueB: null,
       valueColumn: isClassedSymbol
         ? primaryColumn
         : suggestion.id === 'symbols_proportional_colorful_QTR' ||
@@ -1324,7 +1332,26 @@ export function isVisualizationBlank(
     dataset as Parameters<typeof resolveVisualizationPreset>[1]
   );
 
-  return isVisualizationUsingPreset(visualization, blankPreset);
+  return (
+    visualization.type === blankPreset.type &&
+    matchesExpectedSubset(visualization.modes, blankPreset.modes) &&
+    areVisualizationPresetValuesEqual(
+      visualization.primitiveFilters,
+      blankPreset.primitiveFilters
+    ) &&
+    matchesExpectedSubset(visualization.style, blankPreset.style) &&
+    matchesExpectedSubset(visualization.mapping, blankPreset.mapping) &&
+    matchesExpectedSubset(visualization.polygon, blankPreset.polygon) &&
+    matchesExpectedSubset(visualization.symbol, blankPreset.symbol) &&
+    matchesExpectedSubset(visualization.line, blankPreset.line) &&
+    matchesExpectedSubset(visualization.text, blankPreset.text) &&
+    areVisualizationPresetValuesEqual(
+      normalizeClassificationForPresetComparison(visualization.classification),
+      normalizeClassificationForPresetComparison(blankPreset.classification)
+    ) &&
+    matchesExpectedSubset(visualization.symbols, blankPreset.symbols) &&
+    matchesExpectedSubset(visualization.missingData, blankPreset.missingData)
+  );
 }
 
 export function resolveNextSuggestionSelection(

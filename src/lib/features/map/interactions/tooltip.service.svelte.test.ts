@@ -2,6 +2,29 @@ import { describe, expect, it } from 'vitest';
 import type { PickingInfo } from '@deck.gl/core';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { TooltipEntry } from '../types';
+import { vi } from 'vitest';
+
+vi.mock('$lib/features/commons/store/global.svelte', () => ({
+  globalState: {
+    isMobileView: false
+  }
+}));
+
+vi.mock('../stores/map-tooltip.store.svelte', () => ({
+  mapTooltipStore: {
+    showAtHover: vi.fn(),
+    hide: vi.fn(),
+    pinAt: vi.fn(),
+    unpin: vi.fn(),
+    pinned: false,
+    visible: false,
+    state: {
+      layerId: null,
+      rowIndex: -1
+    }
+  }
+}));
+
 import { extractTooltipEntries } from './tooltip.service';
 import type {
   VisualizationConfig,

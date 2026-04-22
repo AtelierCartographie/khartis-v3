@@ -106,6 +106,7 @@
 
 <nav
   id="khartis-main-toolbar"
+  hidden={globalState.selectedStep === ToolbarStep.Styling}
   class={clsx('app-shadow scrollbar-hidden', globalState.toolbarState, {
     'collapsed-toolbar': globalState.toolbarState === ToolbarState.Collapsed
   })}
@@ -212,6 +213,10 @@
 </nav>
 
 <style>
+  #khartis-main-toolbar[hidden] {
+    display: none !important;
+  }
+
   #khartis-main-toolbar {
     background-color: var(--cds-ui-01);
   }

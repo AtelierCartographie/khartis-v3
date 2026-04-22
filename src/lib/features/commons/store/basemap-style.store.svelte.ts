@@ -1,5 +1,8 @@
 import type maplibregl from 'maplibre-gl';
-import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
+import {
+  SavePriority,
+  persistenceRegistry
+} from '$lib/features/project-management/core/persistence-registry';
 import {
   BasemapStyle,
   DEFAULT_BASEMAP_STYLE,
@@ -55,7 +58,7 @@ function createBasemapStyleStore() {
 
   function setReferenceBasemap(id: string | null): void {
     state.referenceBasemapId = id;
-    persistenceRegistry.notifyChange('basemapStyle');
+    persistenceRegistry.notifyChange('basemapStyle', SavePriority.IMMEDIATE);
   }
 
   function setStyle(style: BasemapStyle): void {
@@ -78,18 +81,18 @@ function createBasemapStyleStore() {
       groupVisibilityVersion++;
     }
 
-    persistenceRegistry.notifyChange('basemapStyle');
+    persistenceRegistry.notifyChange('basemapStyle', SavePriority.IMMEDIATE);
   }
 
   function setShowLabels(show: boolean): void {
     state.showLabels = show;
-    persistenceRegistry.notifyChange('basemapStyle');
+    persistenceRegistry.notifyChange('basemapStyle', SavePriority.IMMEDIATE);
   }
 
   function setGroupVisibility(groupId: LayerGroupId, visible: boolean): void {
     state.groupVisibility[groupId] = visible;
     groupVisibilityVersion++;
-    persistenceRegistry.notifyChange('basemapStyle');
+    persistenceRegistry.notifyChange('basemapStyle', SavePriority.IMMEDIATE);
   }
 
   function requestViewportReset(

@@ -24,17 +24,31 @@ import {
   PrimitiveFilterType,
   VisualizationType,
   getEnabledPrimitiveFilters,
+  getSymbolPrimitive,
   getTextPrimitive,
   visualizationStore,
   type VisualizationConfig
 } from './visualization.store.svelte';
+import {
+  CategoryShapeMode,
+  FillMode,
+  ProportionalType,
+  ShapeType,
+  StrokeMode,
+  SymbolDoublePosition,
+  SymbolMode
+} from '$lib/features/main-toolbar/constants';
+import { ScaleType } from './visualization.store.svelte';
 import { datasetsStore } from './datasets.store.svelte';
 import {
   ColumnType,
   FileFormatEnum,
   type EnrichedColumn
 } from '$lib/features/data-pipeline/types';
-import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
+import {
+  SavePriority,
+  persistenceRegistry
+} from '$lib/features/project-management/core/persistence-registry';
 
 function buildColumn(name: string, type: ColumnType): EnrichedColumn {
   return {
@@ -201,6 +215,96 @@ describe('visualizationStore suggestion origin tracking', () => {
     });
   });
 
+  it('keeps suggestion origin for preserved primitive classification updates', () => {
+    datasetsStore.addProcessedDataset(buildDataset());
+
+    const visualization = visualizationStore.createVisualization(
+      VisualizationType.CATEGORICAL,
+      'dataset-1'
+    );
+
+    visualizationStore.updateVisualization(visualization.id, {
+      origin: {
+        mode: 'manual-suggestion',
+        suggestionKey: 'lines_colorful_QL::1::segment::line::QL'
+      }
+    });
+
+    visualizationStore.updatePrimitiveClassification(
+      visualization.id,
+      PrimitiveFilterType.LINE,
+      {
+        colors: ['#1192e8', '#78a9cf', '#c8ddf0'],
+        labels: ['A', 'B', 'C']
+      },
+      { preserveOrigin: true }
+    );
+
+    const updatedVisualization = visualizationStore.selectedVisualization;
+
+    expect(updatedVisualization?.origin).toEqual({
+      mode: 'manual-suggestion',
+      suggestionKey: 'lines_colorful_QL::1::segment::line::QL'
+    });
+    expect(updatedVisualization?.line?.classification?.labels).toEqual([
+      'A',
+      'B',
+      'C'
+    ]);
+  });
+
+  it('keeps suggestion origin for preserved polygon classification sync updates', () => {
+    datasetsStore.addProcessedDataset(buildDataset());
+
+    const visualization = visualizationStore.createVisualization(
+      VisualizationType.CATEGORICAL,
+      'dataset-1'
+    );
+
+    visualizationStore.updateVisualization(visualization.id, {
+      origin: {
+        mode: 'manual-suggestion',
+        suggestionKey: 'lines_colorful_QL::1::li_type::line::QL'
+      },
+      modes: {
+        ...visualization.modes,
+        fill: FillMode.NONE,
+        stroke: StrokeMode.NONE
+      },
+      primitiveFilters: [PrimitiveFilterType.LINE],
+      polygon: {
+        ...visualization.polygon!,
+        enabled: false,
+        fillMode: FillMode.CATEGORIES,
+        strokeMode: StrokeMode.NONE
+      }
+    });
+
+    visualizationStore.updateClassification(
+      visualization.id,
+      {
+        method: ClassificationMethod.MANUAL,
+        classes: 0,
+        colors: ['#1192e8', '#78a9cf', '#c8ddf0'],
+        inverted: false,
+        labels: ['A', 'B', 'C']
+      },
+      { preserveOrigin: true }
+    );
+
+    const updatedVisualization = visualizationStore.selectedVisualization;
+
+    expect(updatedVisualization?.origin).toEqual({
+      mode: 'manual-suggestion',
+      suggestionKey: 'lines_colorful_QL::1::li_type::line::QL'
+    });
+    expect(updatedVisualization?.polygon?.classification?.labels).toEqual([
+      'A',
+      'B',
+      'C'
+    ]);
+  });
+
   it('switches to custom for semantic classification changes', () => {
     datasetsStore.addProcessedDataset(buildDataset());
 
@@ -259,6 +363,34 @@ describe('visualizationStore suggestion origin tracking', () => {
         }
       }
     });
+  });
+});
+
+describe('visualizationStore rename persistence', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    visualizationStore.clear();
+    datasetsStore.clear();
+    persistenceRegistry.markClean();
+  });
+
+  it('persists explicit renames through the immediate save path', () => {
+    datasetsStore.addProcessedDataset(buildDataset());
+
+    const visualization = visualizationStore.createVisualization(
+      VisualizationType.CATEGORICAL,
+      'dataset-1'
+    );
+    const notifyChangeSpy = vi.spyOn(persistenceRegistry, 'notifyChange');
+
+    notifyChangeSpy.mockClear();
+    visualizationStore.renameVisualization(visualization.id, '  Atlas  ');
+
+    expect(visualizationStore.selectedVisualization?.name).toBe('Atlas');
+    expect(notifyChangeSpy).toHaveBeenCalledWith(
+      'visualization',
+      SavePriority.IMMEDIATE
+    );
   });
 });
 
@@ -335,5 +467,331 @@ describe('visualizationStore text primitive enablement', () => {
 
     expect(getTextPrimitive(updatedVisualization)?.enabled).toBe(true);
     expect(getTextPrimitive(updatedVisualization)?.opacity).toBe(1);
+  });
+});
+
+describe('visualizationStore SymbolPrimitiveConfig round-trip persistence', () => {
+  afterEach(() => {
+    visualizationStore.clear();
+    datasetsStore.clear();
+    persistenceRegistry.markClean();
+  });
+
+  function buildRichSymbolVisualization(): VisualizationConfig {
+    return {
+      id: 'viz-symbol-full',
+      name: 'Symbols full',
+      datasetId: 'dataset-1',
+      enabled: true,
+      type: VisualizationType.CATEGORICAL,
+      primitiveFilters: [PrimitiveFilterType.POINT],
+      primitiveOrder: [PrimitiveFilterType.POINT],
+      modes: {
+        symbol: SymbolMode.CATEGORIES,
+        fill: FillMode.CATEGORIES
+      },
+      style: {
+        fillOpacity: 0.7,
+        strokeOpacity: 0.9,
+        strokeWidth: 2,
+        strokeDashed: true
+      },
+      mapping: {
+        geometryColumn: 'geom',
+        categoryColumn: 'segment',
+        valueColumn: 'capacity',
+        sizeColumn: 'population'
+      },
+      classification: {
+        method: ClassificationMethod.MANUAL,
+        classes: 4,
+        colors: ['#e41a1c', '#377eb8', '#4daf4a', '#984ea3'],
+        labels: ['A', 'B', 'C', 'D'],
+        categoryShapes: [
+          ShapeType.CIRCLE,
+          ShapeType.SQUARE,
+          ShapeType.TRIANGLE,
+          ShapeType.DIAMOND
+        ],
+        paletteId: 'categorical-set1'
+      },
+      symbolClassification: {
+        method: ClassificationMethod.MANUAL,
+        classes: 4,
+        colors: ['#e41a1c', '#377eb8', '#4daf4a', '#984ea3'],
+        labels: ['A', 'B', 'C', 'D'],
+        categoryShapes: [
+          ShapeType.CIRCLE,
+          ShapeType.SQUARE,
+          ShapeType.TRIANGLE,
+          ShapeType.DIAMOND
+        ],
+        paletteId: 'categorical-set1'
+      },
+      symbol: {
+        enabled: true,
+        mode: SymbolMode.CATEGORIES,
+        shape: ShapeType.CIRCLE,
+        size: 18,
+        minSize: 4,
+        maxSize: 48,
+        sizeScale: ScaleType.SQRT,
+        opacity: 0.7,
+        fillMode: FillMode.CATEGORIES,
+        fillColor: '#e41a1c',
+        strokeMode: StrokeMode.UNIQUE,
+        strokeColor: '#333333',
+        strokeWidth: 2,
+        strokeOpacity: 0.9,
+        strokeDashed: true,
+        proportionalType: ProportionalType.SINGLE,
+        categoryShape: CategoryShapeMode.DIFFERENT,
+        commonScale: true,
+        positionMode: SymbolDoublePosition.OVERLAY,
+        breakValueA: null,
+        breakValueB: null,
+        valueColumn: 'capacity',
+        categoryColumn: 'segment',
+        sizeColumn: 'population',
+        classification: {
+          method: ClassificationMethod.MANUAL,
+          classes: 4,
+          colors: ['#e41a1c', '#377eb8', '#4daf4a', '#984ea3'],
+          labels: ['A', 'B', 'C', 'D'],
+          categoryShapes: [
+            ShapeType.CIRCLE,
+            ShapeType.SQUARE,
+            ShapeType.TRIANGLE,
+            ShapeType.DIAMOND
+          ],
+          paletteId: 'categorical-set1'
+        },
+        modeStates: {
+          [SymbolMode.UNIQUE]: {
+            size: 12,
+            fillMode: FillMode.UNIQUE,
+            strokeMode: StrokeMode.UNIQUE,
+            strokeWidth: 3,
+            strokeOpacity: 0.6,
+            strokeDashed: false
+          },
+          [SymbolMode.PROPORTIONAL]: {
+            minSize: 4,
+            maxSize: 40,
+            sizeScale: ScaleType.SQRT,
+            sizeColumn: 'population',
+            proportionalType: ProportionalType.DOUBLE,
+            commonScale: false,
+            positionMode: SymbolDoublePosition.JUXTAPOSITION,
+            breakValueA: 100,
+            breakValueB: 1000,
+            strokeMode: StrokeMode.NONE,
+            strokeWidth: 0,
+            strokeOpacity: 1,
+            strokeDashed: false
+          }
+        }
+      }
+    };
+  }
+
+  it('restores the full SymbolPrimitiveConfig from a serialized payload without losing any field', () => {
+    datasetsStore.addProcessedDataset(buildDataset());
+    const input = buildRichSymbolVisualization();
+
+    visualizationStore.restoreFromSerialized({
+      visualizations: [input],
+      selectedVisualizationId: input.id,
+      activeVisualizationIds: [input.id]
+    });
+
+    const viz = visualizationStore.selectedVisualization;
+    expect(viz).toBeDefined();
+    const symbol = getSymbolPrimitive(viz);
+    expect(symbol).toBeDefined();
+    if (!symbol || !viz) throw new Error('symbol config missing');
+
+    expect(symbol.mode).toBe(SymbolMode.CATEGORIES);
+    expect(symbol.shape).toBe(ShapeType.CIRCLE);
+    expect(symbol.size).toBe(18);
+    expect(symbol.minSize).toBe(4);
+    expect(symbol.maxSize).toBe(48);
+    expect(symbol.sizeScale).toBe(ScaleType.SQRT);
+    expect(symbol.opacity).toBeCloseTo(0.7);
+    expect(symbol.fillMode).toBe(FillMode.CATEGORIES);
+    expect(symbol.strokeMode).toBe(StrokeMode.UNIQUE);
+    expect(symbol.strokeWidth).toBe(2);
+    expect(symbol.strokeOpacity).toBeCloseTo(0.9);
+    expect(symbol.strokeDashed).toBe(true);
+    expect(symbol.categoryShape).toBe(CategoryShapeMode.DIFFERENT);
+    expect(symbol.proportionalType).toBe(ProportionalType.SINGLE);
+    expect(symbol.valueColumn).toBe('capacity');
+    expect(symbol.categoryColumn).toBe('segment');
+    expect(symbol.sizeColumn).toBe('population');
+
+    expect(symbol.classification?.method).toBe(ClassificationMethod.MANUAL);
+    expect(symbol.classification?.colors).toEqual([
+      '#e41a1c',
+      '#377eb8',
+      '#4daf4a',
+      '#984ea3'
+    ]);
+    expect(symbol.classification?.labels).toEqual(['A', 'B', 'C', 'D']);
+    expect(symbol.classification?.categoryShapes).toEqual([
+      ShapeType.CIRCLE,
+      ShapeType.SQUARE,
+      ShapeType.TRIANGLE,
+      ShapeType.DIAMOND
+    ]);
+    expect(symbol.classification?.paletteId).toBe('categorical-set1');
+
+    expect(symbol.modeStates?.[SymbolMode.UNIQUE]?.size).toBe(12);
+    expect(symbol.modeStates?.[SymbolMode.UNIQUE]?.fillMode).toBe(
+      FillMode.UNIQUE
+    );
+    expect(symbol.modeStates?.[SymbolMode.UNIQUE]?.strokeMode).toBe(
+      StrokeMode.UNIQUE
+    );
+    expect(symbol.modeStates?.[SymbolMode.UNIQUE]?.strokeWidth).toBe(3);
+    expect(symbol.modeStates?.[SymbolMode.UNIQUE]?.strokeOpacity).toBeCloseTo(
+      0.6
+    );
+    expect(symbol.modeStates?.[SymbolMode.UNIQUE]?.strokeDashed).toBe(false);
+
+    const proportional = symbol.modeStates?.[SymbolMode.PROPORTIONAL];
+    expect(proportional?.minSize).toBe(4);
+    expect(proportional?.maxSize).toBe(40);
+    expect(proportional?.sizeScale).toBe(ScaleType.SQRT);
+    expect(proportional?.sizeColumn).toBe('population');
+    expect(proportional?.proportionalType).toBe(ProportionalType.DOUBLE);
+    expect(proportional?.commonScale).toBe(false);
+    expect(proportional?.positionMode).toBe(SymbolDoublePosition.JUXTAPOSITION);
+    expect(proportional?.breakValueA).toBe(100);
+    expect(proportional?.breakValueB).toBe(1000);
+    expect(proportional?.strokeMode).toBe(StrokeMode.NONE);
+    expect(proportional?.strokeWidth).toBe(0);
+    expect(proportional?.strokeOpacity).toBe(1);
+    expect(proportional?.strokeDashed).toBe(false);
+  });
+
+  it('keeps mapping.categoryColumn and mapping.sizeColumn in sync with the symbol primitive after restore', () => {
+    datasetsStore.addProcessedDataset(buildDataset());
+    const input = buildRichSymbolVisualization();
+
+    visualizationStore.restoreFromSerialized({
+      visualizations: [input],
+      selectedVisualizationId: input.id,
+      activeVisualizationIds: [input.id]
+    });
+
+    const viz = visualizationStore.selectedVisualization;
+    expect(viz?.mapping.categoryColumn).toBe('segment');
+    expect(viz?.mapping.sizeColumn).toBe('population');
+    expect(viz?.mapping.valueColumn).toBe('capacity');
+  });
+
+  it('falls back to the legacy symbolClassification mirror when symbol.classification is missing', () => {
+    datasetsStore.addProcessedDataset(buildDataset());
+    const input = buildRichSymbolVisualization();
+    const legacyOnly: VisualizationConfig = {
+      ...input,
+      symbol: input.symbol
+        ? { ...input.symbol, classification: undefined }
+        : undefined
+    };
+
+    visualizationStore.restoreFromSerialized({
+      visualizations: [legacyOnly],
+      selectedVisualizationId: legacyOnly.id,
+      activeVisualizationIds: [legacyOnly.id]
+    });
+
+    const viz = visualizationStore.selectedVisualization;
+    const symbol = getSymbolPrimitive(viz);
+    expect(symbol?.classification?.labels).toEqual(['A', 'B', 'C', 'D']);
+  });
+
+  it('keeps symbol stroke discretization fields through the persistence registry round-trip used by project saves', () => {
+    datasetsStore.addProcessedDataset(buildDataset());
+    const input = buildRichSymbolVisualization();
+    const strokeAwareInput: VisualizationConfig = {
+      ...input,
+      symbol: input.symbol
+        ? {
+            ...input.symbol,
+            strokeMode: StrokeMode.CATEGORIES,
+            strokeColor: undefined,
+            strokeCategoryColumn: 'outline_group',
+            strokeClassification: {
+              method: ClassificationMethod.MANUAL,
+              classes: 4,
+              colors: ['#111111', '#333333', '#555555', '#777777'],
+              labels: ['North', 'South', 'East', 'West'],
+              disabledLabels: ['West'],
+              paletteId: 'categorical-dark2'
+            },
+            modeStates: {
+              ...input.symbol.modeStates,
+              [SymbolMode.CATEGORIES]: {
+                size: 18,
+                categoryColumn: 'segment',
+                categoryShape: CategoryShapeMode.DIFFERENT,
+                fillMode: FillMode.CATEGORIES,
+                strokeMode: StrokeMode.CATEGORIES,
+                strokeWidth: 2,
+                strokeOpacity: 0.9,
+                strokeDashed: true,
+                strokeCategoryColumn: 'outline_group',
+                strokeClassification: {
+                  method: ClassificationMethod.MANUAL,
+                  classes: 4,
+                  colors: ['#111111', '#333333', '#555555', '#777777'],
+                  labels: ['North', 'South', 'East', 'West'],
+                  disabledLabels: ['West'],
+                  paletteId: 'categorical-dark2'
+                }
+              }
+            }
+          }
+        : undefined
+    };
+
+    visualizationStore.restoreFromSerialized({
+      visualizations: [strokeAwareInput],
+      selectedVisualizationId: strokeAwareInput.id,
+      activeVisualizationIds: [strokeAwareInput.id]
+    });
+
+    const serializedStores = persistenceRegistry.serializeAll();
+
+    visualizationStore.clear();
+
+    persistenceRegistry.deserializeAll({
+      visualization: serializedStores.visualization
+    });
+
+    const restoredVisualization = visualizationStore.selectedVisualization;
+    const restoredSymbol = getSymbolPrimitive(restoredVisualization);
+
+    expect(restoredVisualization?.id).toBe(strokeAwareInput.id);
+    expect(restoredSymbol?.strokeMode).toBe(StrokeMode.CATEGORIES);
+    expect(restoredSymbol?.strokeCategoryColumn).toBe('outline_group');
+    expect(restoredSymbol?.strokeDashed).toBe(true);
+    expect(restoredSymbol?.strokeClassification?.labels).toEqual([
+      'North',
+      'South',
+      'East',
+      'West'
+    ]);
+    expect(restoredSymbol?.strokeClassification?.disabledLabels).toEqual([
+      'West'
+    ]);
+    expect(
+      restoredSymbol?.modeStates?.[SymbolMode.CATEGORIES]?.strokeCategoryColumn
+    ).toBe('outline_group');
+    expect(
+      restoredSymbol?.modeStates?.[SymbolMode.CATEGORIES]?.strokeClassification
+        ?.labels
+    ).toEqual(['North', 'South', 'East', 'West']);
   });
 });

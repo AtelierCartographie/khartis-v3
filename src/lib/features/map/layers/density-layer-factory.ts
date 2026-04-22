@@ -1,10 +1,7 @@
 import { ScatterplotLayer } from '@deck.gl/layers';
 import type { Layer } from '@deck.gl/core';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
-import {
-  createScatterplotLayerProps,
-  type BinaryPointData
-} from 'geoarrow-deck-stream';
+import { createScatterplotLayerProps } from 'geoarrow-deck-stream';
 import {
   parsePointData,
   parsePointDataWithProjection
@@ -37,19 +34,20 @@ export function createDotDensityLayers(
     alpha
   ];
 
-  let pointData: BinaryPointData | null = null;
-  try {
-    pointData = ctx.customProjection
-      ? parsePointDataWithProjection(jsTable, ctx.customProjection)
-      : parsePointData(jsTable);
-  } catch (error) {
-    logger.error(
-      'Failed to parse density points from Arrow table',
-      LogCategory.MAP,
-      error
-    );
-    return [];
-  }
+  const pointData = (() => {
+    try {
+      return ctx.customProjection
+        ? parsePointDataWithProjection(jsTable, ctx.customProjection)
+        : parsePointData(jsTable);
+    } catch (error) {
+      logger.error(
+        'Failed to parse density points from Arrow table',
+        LogCategory.MAP,
+        error
+      );
+      return null;
+    }
+  })();
   if (!pointData) return [];
 
   const densityLayer = new ScatterplotLayer({

@@ -9,22 +9,37 @@ const mocks = vi.hoisted(() => ({
   duckQuery: vi.fn(),
   simplifyGeometryTable: vi.fn(),
   calculateToleranceFromRate: vi.fn(),
+  updateDuckDatasetTableName: vi.fn(),
   refreshImportedBasemapHelperTables: vi.fn(),
   refreshCustomBasemap: vi.fn(),
   loadVariant: vi.fn(),
   updateDataset: vi.fn(),
+  updateDatasetTableName: vi.fn(),
   resolveBasemapVariantFile: vi.fn(),
   getPreferredBasemapSimplificationLevel: vi.fn(),
   currentBasemap: { metadata: null as unknown },
   availableBasemaps: [] as unknown[],
   osmIsActive: false,
   requiresMapLibre: false,
+  currentProject: undefined as
+    | {
+        data?: {
+          sourceFiles?: Array<{
+            id: string;
+            duckdbTableName?: string;
+          }>;
+        };
+      }
+    | undefined,
   selectedDataset: null as unknown,
   datasets: [] as unknown[]
 }));
 
 vi.mock('$lib/features/duckdb', () => ({
-  Duck: { query: mocks.duckQuery }
+  Duck: { query: mocks.duckQuery },
+  duckDBOrchestrator: {
+    updateDatasetTableName: mocks.updateDuckDatasetTableName
+  }
 }));
 
 vi.mock('$lib/features/duckdb/operations/simplification', () => ({
@@ -61,7 +76,16 @@ vi.mock('$lib/features/commons/store/datasets.store.svelte', () => ({
     get datasets() {
       return mocks.datasets;
     },
-    updateDataset: mocks.updateDataset
+    updateDataset: mocks.updateDataset,
+    updateDatasetTableName: mocks.updateDatasetTableName
+  }
+}));
+
+vi.mock('$lib/features/commons/store/project.store.svelte', () => ({
+  projectStore: {
+    get currentProject() {
+      return mocks.currentProject;
+    }
   }
 }));
 
@@ -86,7 +110,7 @@ const { simplificationActions, getSimplificationState } =
 
 function resetStore() {
   simplificationActions.reset();
-  simplificationActions.undoLastSimplification();
+  simplificationActions.setState({ lastApplied: undefined });
 }
 
 describe('simplification store — synchronous actions', () => {
@@ -96,6 +120,7 @@ describe('simplification store — synchronous actions', () => {
     mocks.availableBasemaps = [];
     mocks.osmIsActive = false;
     mocks.requiresMapLibre = false;
+    mocks.currentProject = undefined;
     mocks.selectedDataset = null;
     mocks.datasets = [];
     mocks.getPreferredBasemapSimplificationLevel.mockReturnValue(undefined);
@@ -160,8 +185,10 @@ describe('simplification store — synchronous actions', () => {
     expect(getSimplificationState().level).toBe(SimplificationLevel.High);
   });
 
-  it('should return false from undoLastSimplification when nothing was applied', () => {
-    expect(simplificationActions.undoLastSimplification()).toBe(false);
+  it('should return false from undoLastSimplification when nothing was applied', async () => {
+    await expect(simplificationActions.undoLastSimplification()).resolves.toBe(
+      false
+    );
   });
 });
 
@@ -171,6 +198,7 @@ describe('simplification store — applySimplification dispatch', () => {
     mocks.currentBasemap = { metadata: {} };
     mocks.availableBasemaps = [];
     mocks.osmIsActive = false;
+    mocks.currentProject = undefined;
     mocks.selectedDataset = null;
     mocks.datasets = [];
     mocks.getPreferredBasemapSimplificationLevel.mockReturnValue(undefined);
@@ -284,12 +312,21 @@ describe('simplification store — applySimplification dispatch', () => {
     };
     mocks.datasets = [dataset];
     mocks.selectedDataset = dataset;
+    mocks.currentProject = {
+      data: {
+        sourceFiles: [{ id: 'src-1', duckdbTableName: 'dataset_table' }]
+      }
+    };
     mocks.calculateToleranceFromRate.mockReturnValue(0.5);
     mocks.simplifyGeometryTable.mockResolvedValue({
       originalVertices: 500,
       simplifiedVertices: 200,
       reductionPercentage: 60,
       tolerance: 0.5
+    });
+    mocks.updateDuckDatasetTableName.mockResolvedValue({
+      id: 'duck-ds-1',
+      tableName: 'dataset_table__simplified'
     });
 
     simplificationActions.setSource(SimplificationSource.Geo);
@@ -299,8 +336,20 @@ describe('simplification store — applySimplification dispatch', () => {
 
     expect(mocks.simplifyGeometryTable).toHaveBeenCalledWith(
       expect.anything(),
-      'dataset_table',
-      0.5
+      'dataset_table__simplified',
+      0.5,
+      {
+        inputTableName: 'dataset_table',
+        targetTableName: 'dataset_table__simplified'
+      }
+    );
+    expect(mocks.updateDuckDatasetTableName).toHaveBeenCalledWith(
+      'src-1',
+      'dataset_table__simplified'
+    );
+    expect(mocks.updateDatasetTableName).toHaveBeenCalledWith(
+      'ds-1',
+      'dataset_table__simplified'
     );
     expect(mocks.updateDataset).toHaveBeenCalledWith(
       'ds-1',
@@ -310,6 +359,10 @@ describe('simplification store — applySimplification dispatch', () => {
     );
     expect(result?.simplified).toBe(true);
     expect(result?.type).toBe(SimplificationTarget.GEODATA);
+    expect(result?.datasetBaseTableName).toBe('dataset_table');
+    expect(result?.datasetSimplifiedTableName).toBe(
+      'dataset_table__simplified'
+    );
     expect(getSimplificationState().lastApplied?.datasetSourceFileId).toBe(
       'src-1'
     );
@@ -357,6 +410,21 @@ describe('simplification store — undo', () => {
     };
     mocks.osmIsActive = false;
     mocks.requiresMapLibre = false;
+    mocks.currentProject = {
+      data: {
+        sourceFiles: [{ id: 'src-1', duckdbTableName: 'dataset_table' }]
+      }
+    };
+    mocks.datasets = [
+      {
+        id: 'ds-1',
+        sourceFileId: 'src-1',
+        tableName: 'dataset_table',
+        joinedBasemap: undefined,
+        geometry: { bounds: [0, 0, 5, 5] }
+      }
+    ];
+    mocks.selectedDataset = mocks.datasets[0];
     mocks.getPreferredBasemapSimplificationLevel.mockReturnValue(undefined);
     mocks.duckQuery.mockResolvedValue([{ table_name: 'custom-map__raw' }]);
     mocks.calculateToleranceFromRate.mockReturnValue(0.25);
@@ -365,16 +433,36 @@ describe('simplification store — undo', () => {
       simplifiedVertices: 400,
       reductionPercentage: 60
     });
+    mocks.updateDuckDatasetTableName.mockResolvedValue({
+      id: 'duck-ds-1',
+      tableName: 'dataset_table__simplified'
+    });
     resetStore();
   });
 
-  it('should clear lastApplied and return true after undoLastSimplification', async () => {
-    await simplificationActions.applySimplification();
+  it('should restore the original dataset table and clear lastApplied after undoLastSimplification', async () => {
+    simplificationActions.setSource(SimplificationSource.Geo);
+    await simplificationActions.applySimplification({ datasetId: 'ds-1' });
     expect(getSimplificationState().lastApplied).toBeDefined();
 
-    const undone = simplificationActions.undoLastSimplification();
+    mocks.updateDuckDatasetTableName.mockClear();
+    mocks.updateDatasetTableName.mockClear();
+    mocks.updateDataset.mockClear();
+
+    const undone = await simplificationActions.undoLastSimplification();
 
     expect(undone).toBe(true);
+    expect(mocks.updateDuckDatasetTableName).toHaveBeenCalledWith(
+      'src-1',
+      'dataset_table'
+    );
+    expect(mocks.updateDatasetTableName).toHaveBeenCalledWith(
+      'ds-1',
+      'dataset_table'
+    );
+    expect(mocks.updateDataset).toHaveBeenCalledWith('ds-1', {
+      simplificationApplied: undefined
+    });
     expect(getSimplificationState().lastApplied).toBeUndefined();
   });
 });

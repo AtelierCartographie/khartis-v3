@@ -176,7 +176,7 @@ describe('mapInstanceStore map zoom bounds', () => {
     mapInstanceStore.zoomOut();
 
     expect(mapMock.state.currentZoom).toBeCloseTo(
-      resolveMapZoomLevel(DEFAULT_MAP_BASE_ZOOM, MIN_MAP_ZOOM_PERCENT),
+      resolveMapZoomBounds(DEFAULT_MAP_BASE_ZOOM).minZoom,
       10
     );
   });
@@ -193,6 +193,45 @@ describe('mapInstanceStore map zoom bounds', () => {
     });
     expect(mapInstanceStore.viewportFitMode).toBe('manual');
     expect(mocks.notifyChangeMock).toHaveBeenCalledWith('mapViewState');
+  });
+
+  it('serializes the current maplibre viewport through the registry payload', () => {
+    const mapMock = createMapMock(5.25);
+    (
+      mapMock.map as unknown as {
+        getCenter: () => { lng: number; lat: number };
+      }
+    ).getCenter = vi.fn(() => ({ lng: 2.35, lat: 48.86 }));
+    mapInstanceStore.setMapInstance(mapMock.map);
+    mapInstanceStore.setMapLoaded(true);
+    mapInstanceStore.setBaseZoomLevel(4.8);
+
+    expect(mapViewStatePersistenceEntry?.serialize()).toEqual({
+      zoom: 5.25,
+      center: [2.35, 48.86],
+      baseZoom: 4.8
+    });
+  });
+
+  it('applies a restored maplibre viewport without going through auto-fit', () => {
+    const mapMock = createMapMock();
+    mapInstanceStore.setMapInstance(mapMock.map);
+    mapInstanceStore.setMapLoaded(true);
+    mapInstanceStore.restoreFromSerialized({
+      zoom: 6,
+      center: [2.35, 48.86],
+      baseZoom: 5.1
+    });
+
+    expect(mapInstanceStore.hasPendingMapLibreRestore).toBe(true);
+    expect(mapInstanceStore.applyPendingMapLibreRestore()).toBe(true);
+    expect(mapMock.map.jumpTo).toHaveBeenCalledWith({
+      center: [2.35, 48.86],
+      zoom: 6
+    });
+    expect(mapInstanceStore.hasPendingMapLibreRestore).toBe(false);
+    expect(mapInstanceStore.baseZoomLevel).toBe(5.1);
+    expect(mapInstanceStore.viewportFitMode).toBe('manual');
   });
 
   it('does not serialize a fallback orthographic viewport before projection bounds exist', () => {
