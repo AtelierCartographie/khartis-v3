@@ -23,13 +23,17 @@
   import FillSection from '../shared/fill-section.svelte';
   import { FILL_MODES_STANDARD } from '../shared/fill-mode-presets';
   import DiscretizationModal from '../discretization-modal.svelte';
-  import { NONE_FIELD_ID, type SymbolModeProps } from './types';
+  import type { SymbolModeProps } from './types';
   import { resolveDiscretizationLabel } from '../discretization.utils';
   import {
     FACET_SLOT,
     facetsStore,
     type FacetSlotPath
-  } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
+  } from '../../facets-adapter.svelte';
+  import {
+    NONE_FIELD_ID,
+    useFieldSelection
+  } from '../../use-field-selection.svelte';
 
   let {
     dataFields = [],
@@ -55,34 +59,15 @@
   let fillOpacity = $state<number>(VISUALIZATION_DEFAULTS.fillOpacity);
   let showMissingData = $state<boolean>(true);
   let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
-  let selectedClassFieldId = $state<number>(NONE_FIELD_ID);
-  let selectedCategoryFieldId = $state<number>(NONE_FIELD_ID);
   let categoryCount = $state<number>(4);
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
   const selectableDataFields = $derived([noneOption, ...dataFields]);
+  const classFieldSelection = useFieldSelection(() => dataFields);
+  const categoryFieldSelection = useFieldSelection(() => dataFields);
 
   $effect(() => {
-    if (visualization?.mapping.valueColumn && dataFields.length > 0) {
-      const valueFieldIndex = dataFields.findIndex(
-        (field) => field.text === visualization.mapping.valueColumn
-      );
-      selectedClassFieldId =
-        valueFieldIndex >= 0 ? dataFields[valueFieldIndex].id : NONE_FIELD_ID;
-    } else {
-      selectedClassFieldId = NONE_FIELD_ID;
-    }
-
-    if (visualization?.mapping.categoryColumn && dataFields.length > 0) {
-      const categoryFieldIndex = dataFields.findIndex(
-        (field) => field.text === visualization.mapping.categoryColumn
-      );
-      selectedCategoryFieldId =
-        categoryFieldIndex >= 0
-          ? dataFields[categoryFieldIndex].id
-          : NONE_FIELD_ID;
-    } else {
-      selectedCategoryFieldId = NONE_FIELD_ID;
-    }
+    classFieldSelection.sync(visualization?.mapping.valueColumn);
+    categoryFieldSelection.sync(visualization?.mapping.categoryColumn);
 
     const symbolConfig = visualization?.symbol;
     if (symbolConfig) {
@@ -258,7 +243,7 @@
   }
 
   function handleClassFieldSelect(fieldId: number) {
-    selectedClassFieldId = fieldId;
+    classFieldSelection.set(fieldId);
     if (fieldId === NONE_FIELD_ID) {
       onMappingChange?.({ valueColumn: undefined });
       return;
@@ -271,7 +256,7 @@
   }
 
   function handleCategoryFieldSelect(fieldId: number) {
-    selectedCategoryFieldId = fieldId;
+    categoryFieldSelection.set(fieldId);
     if (fieldId === NONE_FIELD_ID) {
       onMappingChange?.({ categoryColumn: undefined });
       return;
@@ -343,8 +328,8 @@
   fillMode={fillMode}
   fillColor={fillColor}
   fillOpacity={fillOpacity}
-  selectedValueFieldId={selectedClassFieldId}
-  selectedCategoryFieldId={selectedCategoryFieldId}
+  selectedValueFieldId={classFieldSelection.selectedFieldId}
+  selectedCategoryFieldId={categoryFieldSelection.selectedFieldId}
   discretizationLabel={discretizationLabel}
   categoryCount={categoryCount}
   facetsValueSlotPath={FACET_SLOT.SYMBOL_VALUE}

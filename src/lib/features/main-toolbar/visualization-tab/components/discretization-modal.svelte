@@ -9,21 +9,6 @@
     type ClassificationConfig,
     type VisualizationConfig
   } from '$lib/features/commons/store/visualization.store.svelte';
-  import {
-    applyPaletteInversion,
-    calculateBreakCounts,
-    calculateBreaks,
-    computeDivergingSplit,
-    generateColorsForBreaks
-  } from '$lib/features/commons/services/classification.service';
-  import {
-    findPaletteById,
-    generatePaletteColors
-  } from '$lib/features/commons/components/palette-popover/palette.constants';
-  import {
-    getColorBlindnessState,
-    isColorBlindnessActive
-  } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { onMount, tick, untrack } from 'svelte';
   import {
@@ -37,6 +22,11 @@
     createExclusiveContextualSurfaceId,
     engageExclusiveContextualSurface
   } from '$lib/features/commons/utils/contextual-surface-coordinator';
+  import {
+    computeClassificationBreaks,
+    resolveClassificationBreakColors,
+    type ClassificationBreaksComputation
+  } from '../use-classification-breaks.svelte';
 
   type PanelMethod =
     | 'jenks'
@@ -220,70 +210,12 @@
     };
   }
 
-  function resolvePaletteColors(
-    classCount: number,
-    breakValues: readonly number[]
-  ): string[] {
-    const paletteType = currentBreakpoint !== null ? 'diverging' : 'sequential';
-    const contrast = isColorBlindnessActive(getColorBlindnessState())
-      ? ('high' as const)
-      : undefined;
-    const userPalette = activeClassification?.paletteId
-      ? findPaletteById(activeClassification.paletteId)
-      : undefined;
-    const divergingSplit =
-      paletteType === 'diverging'
-        ? computeDivergingSplit(classCount, breakValues, currentBreakpoint)
-        : undefined;
-
-    return applyPaletteInversion(
-      userPalette
-        ? generatePaletteColors(
-            userPalette,
-            classCount,
-            contrast,
-            undefined,
-            divergingSplit
-          )
-        : generateColorsForBreaks(
-            classCount,
-            paletteType,
-            contrast,
-            divergingSplit
-          ),
-      activeClassification?.inverted ?? false
-    );
-  }
-
   function resolveDivergingPreviewColors(classCount: number): string[] {
-    const contrast = isColorBlindnessActive(getColorBlindnessState())
-      ? ('high' as const)
-      : undefined;
-    const userPalette = activeClassification?.paletteId
-      ? findPaletteById(activeClassification.paletteId)
-      : undefined;
-    const divergingSplit = computeDivergingSplit(
+    return resolveClassificationBreakColors(
+      activeClassification,
       classCount,
       getCurrentBreakValues(),
       currentBreakpoint
-    );
-
-    return applyPaletteInversion(
-      userPalette
-        ? generatePaletteColors(
-            userPalette,
-            classCount,
-            contrast,
-            undefined,
-            divergingSplit
-          )
-        : generateColorsForBreaks(
-            classCount,
-            'diverging',
-            contrast,
-            divergingSplit
-          ),
-      activeClassification?.inverted ?? false
     );
   }
 
@@ -317,23 +249,15 @@
   }
 
   function applyBreaksResult(
-    storeMethod: ClassificationMethod,
-    requestedClassCount: number,
-    result: Awaited<ReturnType<typeof calculateBreaks>>
+    computation: ClassificationBreaksComputation | null
   ) {
-    if (!result) {
+    if (!computation) {
       return;
     }
 
-    const actualClassCount = result.counts.length;
-    const resolvedClassCount = resolveComputedClassCount(
-      storeMethod,
-      requestedClassCount,
-      actualClassCount
-    );
-    const colors = resolvePaletteColors(resolvedClassCount, result.breaks);
+    const { actualClassCount, colors, normalizedMethod, result } = computation;
 
-    currentNumClasses = resolvedClassCount;
+    currentNumClasses = actualClassCount;
     currentBreaks = toClassBreaks(
       result.min,
       result.max,
@@ -342,14 +266,14 @@
       colors
     );
     headTailClassCountMax =
-      storeMethod === ClassificationMethod.HEAD_TAIL
-        ? resolveHeadTailClassCountMax(actualClassCount)
+      normalizedMethod === ClassificationMethod.HEAD_TAIL
+        ? resolveHeadTailClassCountMax(computation.result.counts.length)
         : DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX;
 
     const nextClassification = {
-      method: storeMethod,
-      classes: resolvedClassCount,
-      numClasses: resolvedClassCount,
+      method: normalizedMethod,
+      classes: actualClassCount,
+      numClasses: actualClassCount,
       breaks: result.breaks,
       counts: result.counts,
       colors,
@@ -461,42 +385,19 @@
     _isCalculating = true;
     try {
       const storeMethod = panelMethodToStoreMethod(currentMethod);
-      const requestedClassCount = resolveRequestedClassCount(
-        storeMethod,
-        currentNumClasses
-      );
-      let result: Awaited<ReturnType<typeof calculateBreaks>> = null;
-
-      if (storeMethod === ClassificationMethod.MANUAL) {
-        const breakValues = getCurrentBreakValues();
-        const expectedThresholdCount = Math.max(currentNumClasses - 1, 0);
-
-        if (breakValues.length === expectedThresholdCount) {
-          result = await calculateBreakCounts({
-            datasetId: dataset.sourceFileId,
-            columnName: activeValueColumn,
-            breaks: breakValues
-          });
-        } else {
-          result = await calculateBreaks({
-            datasetId: dataset.sourceFileId,
-            columnName: activeValueColumn,
-            method: ClassificationMethod.EQUAL_INTERVAL,
-            numClasses: requestedClassCount
-          });
-        }
-      } else {
-        result = await calculateBreaks({
-          datasetId: dataset.sourceFileId,
-          columnName: activeValueColumn,
-          method: storeMethod,
-          numClasses: requestedClassCount
-        });
-      }
+      const computation = await computeClassificationBreaks({
+        datasetSourceFileId: dataset.sourceFileId,
+        valueColumn: activeValueColumn,
+        classification: activeClassification,
+        method: storeMethod,
+        numClasses: currentNumClasses,
+        breakValues: getCurrentBreakValues(),
+        breakpointValue: currentBreakpoint
+      });
 
       if (myRequestId !== breaksRequestId) return;
 
-      applyBreaksResult(storeMethod, requestedClassCount, result);
+      applyBreaksResult(computation);
     } finally {
       _isCalculating = false;
     }

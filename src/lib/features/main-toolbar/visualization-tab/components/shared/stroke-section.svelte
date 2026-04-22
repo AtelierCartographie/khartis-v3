@@ -9,6 +9,11 @@
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import {
+    SectionHeading,
+    SliderWithInput,
+    ToggleWithLabel
+  } from '$lib/features/commons/components/viz-controls';
+  import {
     StrokeMode,
     SLIDER_LIMITS,
     VISUALIZATION_DEFAULTS,
@@ -22,9 +27,6 @@
   import ColorSelector from './color-selector.svelte';
   import DiscretizationRow from './discretization-row.svelte';
   import PalettePreview from '$lib/features/commons/components/palette-popover/palette-preview.svelte';
-  import SectionHeading from './section-heading.svelte';
-  import SliderWithInput from './slider-with-input.svelte';
-  import ToggleWithLabel from './toggle-with-label.svelte';
   import {
     DEFAULT_SEQUENTIAL_PREVIEW,
     DEFAULT_QUALITATIVE_PREVIEW,
@@ -32,14 +34,8 @@
     resolvePaletteTypeForBreakpoint
   } from '$lib/features/commons/components/palette-popover/palette.constants';
   import FacetsVariablePicker from '../symbols/facets-variable-picker.svelte';
-  import {
-    facetsStore,
-    type FacetSlotPath
-  } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
-  import {
-    loadDistinctCategoryLabels,
-    resolveCategoryPreviewCount
-  } from './categorical-preview.utils';
+  import { facetsStore, type FacetSlotPath } from '../../facets-adapter.svelte';
+  import { useCategoryLabels } from '../../use-category-labels.svelte';
 
   interface Props {
     visualization?: VisualizationConfig;
@@ -115,17 +111,8 @@
   let colorFieldId = $state<number>(NONE_FIELD_ID);
   let facetsPickerOpen = $state(false);
   let categoriesPopoverOpen = $state(false);
-  let resolvedCategoryLabels = $state<string[]>([]);
-  let categoryLabelsRequestId = 0;
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
   const selectableDataFields = $derived([noneOption, ...dataFields]);
-  const resolvedCategoryCount = $derived(
-    resolveCategoryPreviewCount(
-      strokeClassification,
-      categoryCount || 4,
-      resolvedCategoryLabels
-    )
-  );
 
   const selectedVizId = $derived(visualization?.id);
 
@@ -171,6 +158,14 @@
       visualization?.mapping.categoryColumn ??
       categoryColumnName
   );
+  const categoryLabels = useCategoryLabels({
+    enabled: () => strokeMode === StrokeMode.CATEGORIES,
+    getDataset: () => dataset,
+    getColumnName: () => currentCategoryColumnName,
+    getClassification: () => strokeClassification,
+    fallbackCount: () => categoryCount || 4
+  });
+  const resolvedCategoryCount = $derived(categoryLabels.count);
 
   $effect(() => {
     if (visualization?.modes) {
@@ -201,31 +196,6 @@
     } else {
       colorFieldId = NONE_FIELD_ID;
     }
-  });
-
-  $effect(() => {
-    const persistedLabels = strokeClassification?.labels ?? [];
-    const requestId = ++categoryLabelsRequestId;
-
-    if (strokeMode !== StrokeMode.CATEGORIES) {
-      resolvedCategoryLabels = persistedLabels;
-      return;
-    }
-
-    if (persistedLabels.length > 0) {
-      resolvedCategoryLabels = persistedLabels;
-      return;
-    }
-
-    void loadDistinctCategoryLabels(dataset, currentCategoryColumnName).then(
-      (labels) => {
-        if (requestId !== categoryLabelsRequestId) {
-          return;
-        }
-
-        resolvedCategoryLabels = labels;
-      }
-    );
   });
 
   const strokeModeItems = [
@@ -466,7 +436,7 @@
       paletteType={PALETTE_TYPE.QUALITATIVE}
       categoriesMode={true}
       categoriesVariant="lines"
-      categoryLabels={resolvedCategoryLabels}
+      categoryLabels={categoryLabels.labels}
       bind:categoriesPopoverOpen={categoriesPopoverOpen}
       oninvert={onInvertPalette}
       onClassificationChange={onStrokeClassificationChange}

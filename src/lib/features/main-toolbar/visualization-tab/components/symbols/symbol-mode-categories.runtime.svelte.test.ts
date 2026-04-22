@@ -53,7 +53,7 @@ vi.mock('$lib/features/duckdb', () => ({
   }
 }));
 
-vi.mock('$lib/features/step-toolbar/tools/facets/facets.store.svelte', () => ({
+vi.mock('../../facets-adapter.svelte', () => ({
   FACET_SLOT: {
     SYMBOL_CATEGORY: 'symbol.categoryColumn',
     SYMBOL_VALUE: 'symbol.valueColumn'

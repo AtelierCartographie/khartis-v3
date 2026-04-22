@@ -47,12 +47,13 @@
     FACET_SLOT,
     facetsStore,
     type FacetSlotPath
-  } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
+  } from '../facets-adapter.svelte';
   import FacetsVariablePicker from './symbols/facets-variable-picker.svelte';
   import {
-    loadDistinctCategoryLabels,
-    resolveCategoryPreviewCount
-  } from './shared/categorical-preview.utils';
+    NONE_FIELD_ID,
+    useFieldSelection
+  } from '../use-field-selection.svelte';
+  import { useCategoryLabels } from '../use-category-labels.svelte';
 
   interface Props {
     dataFields?: Array<{ id: number; text: string; type?: string }>;
@@ -100,49 +101,20 @@
   let colorPickerOpen = $state(false);
   let categoryPickerOpen = $state(false);
   let colorCategoriesPopoverOpen = $state(false);
-  let resolvedCategoryLabels = $state<string[]>([]);
-  let categoryLabelsRequestId = 0;
-  const NONE_FIELD_ID = -1;
-  let selectedValueFieldId = $state<number>(NONE_FIELD_ID);
-  let selectedSizeFieldId = $state<number>(NONE_FIELD_ID);
-  let selectedCategoryFieldId = $state<number>(NONE_FIELD_ID);
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
   const selectableDataFields = $derived([noneOption, ...dataFields]);
+  const valueFieldSelection = useFieldSelection(() => dataFields);
+  const sizeFieldSelection = useFieldSelection(() => dataFields);
+  const categoryFieldSelection = useFieldSelection(() => dataFields);
 
   $effect(() => {
-    if (visualization?.mapping.valueColumn && dataFields.length > 0) {
-      const fieldIndex = dataFields.findIndex(
-        (f) => f.text === visualization.mapping.valueColumn
-      );
-      selectedValueFieldId =
-        fieldIndex >= 0 ? dataFields[fieldIndex].id : NONE_FIELD_ID;
-    } else {
-      selectedValueFieldId = NONE_FIELD_ID;
-    }
-
-    if (visualization?.mapping.sizeColumn && dataFields.length > 0) {
-      const sizeIndex = dataFields.findIndex(
-        (f) => f.text === visualization.mapping.sizeColumn
-      );
-      selectedSizeFieldId =
-        sizeIndex >= 0 ? dataFields[sizeIndex].id : NONE_FIELD_ID;
-    } else {
-      selectedSizeFieldId = NONE_FIELD_ID;
-    }
-
-    if (visualization?.mapping.categoryColumn && dataFields.length > 0) {
-      const categoryIndex = dataFields.findIndex(
-        (f) => f.text === visualization.mapping.categoryColumn
-      );
-      selectedCategoryFieldId =
-        categoryIndex >= 0 ? dataFields[categoryIndex].id : NONE_FIELD_ID;
-    } else {
-      selectedCategoryFieldId = NONE_FIELD_ID;
-    }
+    valueFieldSelection.sync(visualization?.mapping.valueColumn);
+    sizeFieldSelection.sync(visualization?.mapping.sizeColumn);
+    categoryFieldSelection.sync(visualization?.mapping.categoryColumn);
   });
 
   function handleValueFieldSelect(fieldId: number) {
-    selectedValueFieldId = fieldId;
+    valueFieldSelection.set(fieldId);
     if (fieldId === NONE_FIELD_ID) {
       onMappingChange?.({ valueColumn: undefined });
       return;
@@ -155,7 +127,7 @@
   }
 
   function handleSizeFieldSelect(fieldId: number) {
-    selectedSizeFieldId = fieldId;
+    sizeFieldSelection.set(fieldId);
     if (fieldId === NONE_FIELD_ID) {
       onMappingChange?.({ sizeColumn: undefined });
       return;
@@ -168,7 +140,7 @@
   }
 
   function handleCategoryFieldSelect(fieldId: number) {
-    selectedCategoryFieldId = fieldId;
+    categoryFieldSelection.set(fieldId);
     if (fieldId === NONE_FIELD_ID) {
       onMappingChange?.({ categoryColumn: undefined });
       return;
@@ -192,13 +164,14 @@
           datasetsStore.selectedDataset)
       : datasetsStore.selectedDataset
   );
-  const categoryCount = $derived(
-    resolveCategoryPreviewCount(
-      visualization?.classification,
-      4,
-      resolvedCategoryLabels
-    )
-  );
+  const categoryLabels = useCategoryLabels({
+    enabled: () => colorMode === ColorMode.CATEGORIES,
+    getDataset: () => dataset,
+    getColumnName: () => currentCategoryColumnName,
+    getClassification: () => visualization?.classification,
+    fallbackCount: 4
+  });
+  const categoryCount = $derived(categoryLabels.count);
 
   let thicknessMode = $state<ThicknessMode>(ThicknessMode.UNIQUE);
   let colorMode = $state<ColorMode>(ColorMode.UNIQUE);
@@ -216,7 +189,7 @@
   let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
   let missingDataShape = $state<MissingDataShape>(MissingDataShape.CIRCLE);
   const categoryColumnName = $derived(
-    dataFields.find((f) => f.id === selectedCategoryFieldId)?.text ?? ''
+    categoryFieldSelection.selectedFieldName ?? ''
   );
   const currentCategoryColumnName = $derived(
     visualization?.mapping.categoryColumn ?? categoryColumnName
@@ -249,31 +222,6 @@
       missingDataShape =
         visualization.missingData.shape ?? MissingDataShape.CIRCLE;
     }
-  });
-
-  $effect(() => {
-    const persistedLabels = visualization?.classification?.labels ?? [];
-    const requestId = ++categoryLabelsRequestId;
-
-    if (colorMode !== ColorMode.CATEGORIES) {
-      resolvedCategoryLabels = persistedLabels;
-      return;
-    }
-
-    if (persistedLabels.length > 0) {
-      resolvedCategoryLabels = persistedLabels;
-      return;
-    }
-
-    void loadDistinctCategoryLabels(dataset, currentCategoryColumnName).then(
-      (labels) => {
-        if (requestId !== categoryLabelsRequestId) {
-          return;
-        }
-
-        resolvedCategoryLabels = labels;
-      }
-    );
   });
 
   const thicknessModeItems = [
@@ -440,13 +388,9 @@
       .filter((id): id is number => typeof id === 'number');
   }
 
-  const valueColumnName = $derived(
-    dataFields.find((f) => f.id === selectedValueFieldId)?.text ?? ''
-  );
+  const valueColumnName = $derived(valueFieldSelection.selectedFieldName ?? '');
 
-  const sizeColumnName = $derived(
-    dataFields.find((f) => f.id === selectedSizeFieldId)?.text ?? ''
-  );
+  const sizeColumnName = $derived(sizeFieldSelection.selectedFieldName ?? '');
 
   async function handleFacetsVariablesChange(
     baseVariableName: string,
@@ -541,7 +485,7 @@
           titleText={m.thickness_according()}
           dataFields={dataFields}
           singleSelectItems={selectableDataFields}
-          selectedFieldId={selectedSizeFieldId}
+          selectedFieldId={sizeFieldSelection.selectedFieldId}
           selectedFieldIds={getFacetsSelectedFieldIds(FACET_SLOT.LINE_SIZE)}
           isCollectionEnabled={isFacetsActiveForSlot(FACET_SLOT.LINE_SIZE)}
           onSelect={handleSizeFieldSelect}
@@ -571,7 +515,7 @@
           titleText={m.thickness_according()}
           dataFields={dataFields}
           singleSelectItems={selectableDataFields}
-          selectedFieldId={selectedValueFieldId}
+          selectedFieldId={valueFieldSelection.selectedFieldId}
           selectedFieldIds={getFacetsSelectedFieldIds(FACET_SLOT.LINE_VALUE)}
           isCollectionEnabled={isFacetsActiveForSlot(FACET_SLOT.LINE_VALUE)}
           onSelect={handleValueFieldSelect}
@@ -626,7 +570,7 @@
           titleText={m.color_according()}
           dataFields={dataFields}
           singleSelectItems={selectableDataFields}
-          selectedFieldId={selectedValueFieldId}
+          selectedFieldId={valueFieldSelection.selectedFieldId}
           selectedFieldIds={getFacetsSelectedFieldIds(FACET_SLOT.LINE_VALUE)}
           isCollectionEnabled={isFacetsActiveForSlot(FACET_SLOT.LINE_VALUE)}
           onSelect={handleValueFieldSelect}
@@ -664,7 +608,7 @@
           titleText={m.color_according()}
           dataFields={dataFields}
           singleSelectItems={selectableDataFields}
-          selectedFieldId={selectedCategoryFieldId}
+          selectedFieldId={categoryFieldSelection.selectedFieldId}
           selectedFieldIds={getFacetsSelectedFieldIds(FACET_SLOT.LINE_CATEGORY)}
           isCollectionEnabled={isFacetsActiveForSlot(FACET_SLOT.LINE_CATEGORY)}
           onSelect={handleCategoryFieldSelect}
@@ -698,7 +642,7 @@
         paletteType={PALETTE_TYPE.QUALITATIVE}
         categoriesMode={true}
         categoriesVariant="lines"
-        categoryLabels={resolvedCategoryLabels}
+        categoryLabels={categoryLabels.labels}
         bind:categoriesPopoverOpen={colorCategoriesPopoverOpen}
         oninvert={onInvertPalette}
         onClassificationChange={handleClassificationChange}

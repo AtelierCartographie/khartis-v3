@@ -100,7 +100,7 @@ describe('TextsConfig — Figma layout', () => {
 
   it('should disable secondary controls until a primary text field is selected', () => {
     expect(source).toContain(
-      'const hasPrimaryField = $derived(selectedLabelFieldId !== NONE_FIELD_ID);'
+      'labelFieldSelection.selectedFieldId !== NONE_FIELD_ID'
     );
     expect(source).toContain('disabled={!hasPrimaryField}');
     expect(source).toContain(

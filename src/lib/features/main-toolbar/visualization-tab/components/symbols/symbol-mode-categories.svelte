@@ -35,20 +35,22 @@
     SliderWithInput,
     StrokeSection
   } from '../shared';
-  import {
-    loadDistinctCategoryLabels,
-    resolveCategoryPreviewCount
-  } from '../shared/categorical-preview.utils';
-  import { NONE_FIELD_ID, type SymbolModeProps } from './types';
+  import { resolveCategoryPreviewCount } from '../shared/categorical-preview.utils';
+  import type { SymbolModeProps } from './types';
   import DiscretizationModal from '../discretization-modal.svelte';
   import { resolveDiscretizationLabel } from '../discretization.utils';
   import {
     FACET_SLOT,
     facetsStore,
     type FacetSlotPath
-  } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
+  } from '../../facets-adapter.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import FacetsVariablePicker from './facets-variable-picker.svelte';
+  import { useCategoryLabels } from '../../use-category-labels.svelte';
+  import {
+    NONE_FIELD_ID,
+    useFieldSelection
+  } from '../../use-field-selection.svelte';
 
   let {
     dataFields = [],
@@ -82,7 +84,6 @@
   );
 
   let strokeDiscretizationModalOpen = $state(false);
-  let selectedFieldId = $state<number>(NONE_FIELD_ID);
   let categoryPickerOpen = $state(false);
   let categoryCount = $state<number>(4);
   let categoriesAspectOpen = $state(false);
@@ -93,15 +94,22 @@
   let missingDataShape = $state<MissingDataShape>(MissingDataShape.CIRCLE);
   let missingDataSize = $state<number>(2);
   let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
-  let fetchedCategoryLabels = $state<string[]>([]);
-  let categoryLabelsRequestId = 0;
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
   const selectableDataFields = $derived([noneOption, ...dataFields]);
-  const resolvedCategoryLabels = $derived(
-    (symbolClassification?.labels?.length ?? 0) > 0
-      ? (symbolClassification?.labels ?? [])
-      : fetchedCategoryLabels
+  const categoryFieldSelection = useFieldSelection(() => dataFields);
+  const categoryColumnName = $derived(
+    categoryFieldSelection.selectedFieldName ?? ''
   );
+  const categoryLabels = useCategoryLabels({
+    getDataset: () => dataset,
+    getColumnName: () =>
+      visualization?.symbol?.categoryColumn ??
+      visualization?.mapping.categoryColumn,
+    getClassification: () => symbolClassification,
+    fallbackCount: 4,
+    onResolvedLabels: syncFetchedCategoryLabels
+  });
+  const resolvedCategoryLabels = $derived(categoryLabels.labels);
 
   const availableShapes = availableShapesForSymbolMode(SymbolMode.CATEGORIES);
 
@@ -125,8 +133,6 @@
   );
 
   function syncFetchedCategoryLabels(nextLabels: string[]) {
-    fetchedCategoryLabels = nextLabels;
-
     const persistedLabels = symbolClassification?.labels ?? [];
     if (
       !onClassificationChange ||
@@ -192,15 +198,7 @@
     const categoryCol =
       visualization?.symbol?.categoryColumn ??
       visualization?.mapping.categoryColumn;
-    if (categoryCol && dataFields.length > 0) {
-      const fieldIndex = dataFields.findIndex(
-        (field) => field.text === categoryCol
-      );
-      selectedFieldId =
-        fieldIndex >= 0 ? dataFields[fieldIndex].id : NONE_FIELD_ID;
-    } else {
-      selectedFieldId = NONE_FIELD_ID;
-    }
+    categoryFieldSelection.sync(categoryCol);
 
     const symbolConfig = visualization?.symbol;
     if (symbolConfig) {
@@ -249,35 +247,6 @@
     );
   });
 
-  $effect(() => {
-    const persistedLabels = symbolClassification?.labels ?? [];
-    const currentCategoryColumn =
-      visualization?.symbol?.categoryColumn ??
-      visualization?.mapping.categoryColumn;
-    const currentDataset = dataset;
-    const requestId = ++categoryLabelsRequestId;
-
-    if (persistedLabels.length > 0) {
-      fetchedCategoryLabels = persistedLabels;
-      return;
-    }
-
-    if (!currentCategoryColumn || !currentDataset) {
-      fetchedCategoryLabels = [];
-      return;
-    }
-
-    void loadDistinctCategoryLabels(currentDataset, currentCategoryColumn).then(
-      (labels) => {
-        if (requestId !== categoryLabelsRequestId) {
-          return;
-        }
-
-        syncFetchedCategoryLabels(labels);
-      }
-    );
-  });
-
   function handleMissingDataShowChange(show: boolean) {
     showMissingData = show;
     onMissingDataChange?.({ show });
@@ -299,7 +268,7 @@
   }
 
   function handleFieldSelect(fieldId: number) {
-    selectedFieldId = fieldId;
+    categoryFieldSelection.set(fieldId);
     if (fieldId === NONE_FIELD_ID) {
       onMappingChange?.({ categoryColumn: undefined });
       return;
@@ -425,10 +394,6 @@
       .filter((id): id is number => typeof id === 'number');
   }
 
-  const categoryColumnName = $derived(
-    dataFields.find((f) => f.id === selectedFieldId)?.text ?? ''
-  );
-
   async function handleFacetsVariablesChange(fieldIds: number[]) {
     if (!selectedVizId) return;
     const variableNames = fieldIds
@@ -480,7 +445,7 @@
     bind:open={categoryPickerOpen}
     dataFields={dataFields}
     singleSelectItems={selectableDataFields}
-    selectedFieldId={selectedFieldId}
+    selectedFieldId={categoryFieldSelection.selectedFieldId}
     selectedFieldIds={getFacetsSelectedFieldIds(FACET_SLOT.SYMBOL_CATEGORY)}
     isCollectionEnabled={isFacetsActiveForSlot(FACET_SLOT.SYMBOL_CATEGORY)}
     onSelect={handleFieldSelect}
