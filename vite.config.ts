@@ -74,7 +74,8 @@ export default defineConfig(({ mode }) => {
       sveltekit(),
       paraglideVitePlugin({
         project: './project.inlang',
-        outdir: './src/lib/paraglide'
+        outdir: './src/lib/paraglide',
+        emitTsDeclarations: true
       }),
       VitePWA({
         includeAssets: [
