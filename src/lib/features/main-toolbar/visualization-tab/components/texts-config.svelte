@@ -33,7 +33,11 @@
     FACET_SLOT,
     facetsStore,
     type FacetSlotPath
-  } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
+  } from '../facets-adapter.svelte';
+  import {
+    NONE_FIELD_ID,
+    useFieldSelection
+  } from '../use-field-selection.svelte';
 
   interface Props {
     dataFields?: Array<{ id: number; text: string; type?: string }>;
@@ -104,7 +108,6 @@
     onRemoveFilter
   }: Props = $props();
 
-  const NONE_FIELD_ID = -1;
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
   const selectableDataFields = $derived([noneOption, ...dataFields]);
   const secondaryFieldItems = $derived([noneOption, ...dataFields]);
@@ -115,10 +118,10 @@
   );
   let filterSectionVisible = $state(false);
 
-  let selectedLabelFieldId = $state<number>(NONE_FIELD_ID);
-  let selectedBackgroundValueFieldId = $state<number>(NONE_FIELD_ID);
-  let selectedBackgroundCategoryFieldId = $state<number>(NONE_FIELD_ID);
-  let secondaryFieldId = $state<number>(NONE_FIELD_ID);
+  const labelFieldSelection = useFieldSelection(() => dataFields);
+  const backgroundValueFieldSelection = useFieldSelection(() => dataFields);
+  const backgroundCategoryFieldSelection = useFieldSelection(() => dataFields);
+  const secondaryLabelFieldSelection = useFieldSelection(() => dataFields);
 
   let textColor = $state<string>(DEFAULT_COLORS.text);
   let textOpacity = $state<number>(VISUALIZATION_DEFAULTS.textOpacity);
@@ -159,8 +162,12 @@
   let secondaryTriggerRef = $state<FormatTriggerRef>(null);
 
   const enabled = $derived((visualization?.style.textOpacity ?? 0) > 0);
-  const hasPrimaryField = $derived(selectedLabelFieldId !== NONE_FIELD_ID);
-  const hasSecondaryField = $derived(secondaryFieldId !== NONE_FIELD_ID);
+  const hasPrimaryField = $derived(
+    labelFieldSelection.selectedFieldId !== NONE_FIELD_ID
+  );
+  const hasSecondaryField = $derived(
+    secondaryLabelFieldSelection.selectedFieldId !== NONE_FIELD_ID
+  );
   const backgroundAvailable = $derived(Boolean(backgroundVisualization));
   const selectedBackgroundVizId = $derived(backgroundVisualization?.id);
   const activeDiscretizationVisualization = $derived(backgroundVisualization);
@@ -218,15 +225,6 @@
     )
   );
 
-  function resolveFieldId(columnName: string | undefined): number {
-    if (!columnName) {
-      return NONE_FIELD_ID;
-    }
-
-    const field = dataFields.find((item) => item.text === columnName);
-    return field?.id ?? NONE_FIELD_ID;
-  }
-
   function parseOpacityToSlider(
     value: number | undefined,
     fallback: number
@@ -239,14 +237,14 @@
   }
 
   $effect(() => {
-    selectedLabelFieldId = resolveFieldId(visualization?.mapping.labelColumn);
-    secondaryFieldId = resolveFieldId(
+    labelFieldSelection.sync(visualization?.mapping.labelColumn);
+    secondaryLabelFieldSelection.sync(
       visualization?.mapping.secondaryLabelColumn
     );
-    selectedBackgroundValueFieldId = resolveFieldId(
+    backgroundValueFieldSelection.sync(
       backgroundVisualization?.mapping.valueColumn
     );
-    selectedBackgroundCategoryFieldId = resolveFieldId(
+    backgroundCategoryFieldSelection.sync(
       backgroundVisualization?.mapping.categoryColumn
     );
   });
@@ -320,7 +318,7 @@
   });
 
   function handleLabelFieldSelect(fieldId: number) {
-    selectedLabelFieldId = fieldId;
+    labelFieldSelection.set(fieldId);
 
     if (fieldId === NONE_FIELD_ID) {
       onMappingChange?.({
@@ -339,7 +337,7 @@
   }
 
   function handleSecondaryFieldSelect(fieldId: number) {
-    secondaryFieldId = fieldId;
+    secondaryLabelFieldSelection.set(fieldId);
 
     if (fieldId === NONE_FIELD_ID) {
       onMappingChange?.({ secondaryLabelColumn: undefined });
@@ -371,7 +369,7 @@
   }
 
   function handleBackgroundValueFieldSelect(fieldId: number) {
-    selectedBackgroundValueFieldId = fieldId;
+    backgroundValueFieldSelection.set(fieldId);
 
     if (fieldId === NONE_FIELD_ID) {
       onBackgroundMappingChange?.({ valueColumn: undefined });
@@ -385,7 +383,7 @@
   }
 
   function handleBackgroundCategoryFieldSelect(fieldId: number) {
-    selectedBackgroundCategoryFieldId = fieldId;
+    backgroundCategoryFieldSelection.set(fieldId);
 
     if (fieldId === NONE_FIELD_ID) {
       onBackgroundMappingChange?.({ categoryColumn: undefined });
@@ -699,7 +697,7 @@
             <Dropdown
               labelText={m.text_according()}
               items={selectableDataFields}
-              selectedId={selectedLabelFieldId}
+              selectedId={labelFieldSelection.selectedFieldId}
               on:select={(event) =>
                 handleLabelFieldSelect(event.detail.selectedId)}
               type="default"
@@ -723,7 +721,7 @@
             <Dropdown
               labelText={m.secondary_text()}
               items={secondaryFieldItems}
-              selectedId={secondaryFieldId}
+              selectedId={secondaryLabelFieldSelection.selectedFieldId}
               disabled={!hasPrimaryField}
               on:select={(event) =>
                 handleSecondaryFieldSelect(event.detail.selectedId)}
@@ -800,8 +798,8 @@
           fillMode={fillMode}
           fillColor={fillColor}
           fillOpacity={fillOpacity}
-          selectedValueFieldId={selectedBackgroundValueFieldId}
-          selectedCategoryFieldId={selectedBackgroundCategoryFieldId}
+          selectedValueFieldId={backgroundValueFieldSelection.selectedFieldId}
+          selectedCategoryFieldId={backgroundCategoryFieldSelection.selectedFieldId}
           discretizationLabel={backgroundDiscretizationLabel}
           categoryCount={backgroundVisualization?.classification?.labels
             ?.length ?? 0}

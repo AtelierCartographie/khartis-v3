@@ -15,19 +15,18 @@
     VisualizationConfig
   } from '$lib/features/commons/store/visualization.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+  import {
+    SectionHeading,
+    SliderWithInput
+  } from '$lib/features/commons/components/viz-controls';
   import { DEFAULT_COLORS, FillMode, SLIDER_LIMITS } from '../../../constants';
-  import type { FacetSlotPath } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
-  import SectionHeading from './section-heading.svelte';
+  import type { FacetSlotPath } from '../../facets-contract';
   import DiscretizationRow from './discretization-row.svelte';
-  import SliderWithInput from './slider-with-input.svelte';
   import MissingDataSection from './missing-data-section.svelte';
   import FacetsVariablePicker from '../symbols/facets-variable-picker.svelte';
   import { buildFillModeItems } from './fill-mode-presets';
   import type { CategoriesAspectVariant } from '$lib/features/commons/components/palette-popover/categories-aspect-popover.types';
-  import {
-    loadDistinctCategoryLabels,
-    resolveCategoryPreviewCount
-  } from './categorical-preview.utils';
+  import { useCategoryLabels } from '../../use-category-labels.svelte';
 
   export type FillPrimitiveKind = 'polygon' | 'symbol' | 'text';
 
@@ -125,8 +124,6 @@
   let valuePickerOpen = $state(false);
   let categoryPickerOpen = $state(false);
   let categoriesPopoverOpen = $state(false);
-  let resolvedCategoryLabels = $state<string[]>([]);
-  let categoryLabelsRequestId = 0;
 
   const currentPalette = $derived(
     visualization?.classification?.colors ?? DEFAULT_SEQUENTIAL_PREVIEW
@@ -150,13 +147,14 @@
           datasetsStore.selectedDataset)
       : datasetsStore.selectedDataset
   );
-  const resolvedCategoryCount = $derived(
-    resolveCategoryPreviewCount(
-      visualization?.classification,
-      categoryCount || 4,
-      resolvedCategoryLabels
-    )
-  );
+  const categoryLabels = useCategoryLabels({
+    enabled: () => fillMode === FillMode.CATEGORIES,
+    getDataset: () => dataset,
+    getColumnName: () => currentCategoryColumnName,
+    getClassification: () => visualization?.classification,
+    fallbackCount: () => categoryCount || 4
+  });
+  const resolvedCategoryCount = $derived(categoryLabels.count);
 
   function handleToggleChange(index: number) {
     const nextMode = availableModes[index] ?? FillMode.NONE;
@@ -168,31 +166,6 @@
   }
 
   let missingDataShow = $derived(showMissingData);
-
-  $effect(() => {
-    const persistedLabels = visualization?.classification?.labels ?? [];
-    const requestId = ++categoryLabelsRequestId;
-
-    if (fillMode !== FillMode.CATEGORIES) {
-      resolvedCategoryLabels = persistedLabels;
-      return;
-    }
-
-    if (persistedLabels.length > 0) {
-      resolvedCategoryLabels = persistedLabels;
-      return;
-    }
-
-    void loadDistinctCategoryLabels(dataset, currentCategoryColumnName).then(
-      (labels) => {
-        if (requestId !== categoryLabelsRequestId) {
-          return;
-        }
-
-        resolvedCategoryLabels = labels;
-      }
-    );
-  });
 </script>
 
 {#if sectionTitle !== undefined}
@@ -290,7 +263,7 @@
     paletteType={PALETTE_TYPE.QUALITATIVE}
     categoriesMode={true}
     categoriesVariant={categoriesVariant}
-    categoryLabels={resolvedCategoryLabels}
+    categoryLabels={categoryLabels.labels}
     bind:categoriesPopoverOpen={categoriesPopoverOpen}
     oninvert={onInvertPalette}
     onClassificationChange={onClassificationChange}

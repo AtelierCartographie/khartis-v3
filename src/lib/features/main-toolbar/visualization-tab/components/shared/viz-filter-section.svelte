@@ -13,7 +13,7 @@
     VizDataFilter,
     VizFilterOperator
   } from '$lib/features/commons/store/visualization.store.svelte';
-  import SectionHeading from './section-heading.svelte';
+  import { SectionHeading } from '$lib/features/commons/components/viz-controls';
 
   interface DataFieldOption {
     id: number;
