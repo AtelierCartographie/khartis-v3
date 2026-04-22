@@ -7,7 +7,7 @@
     ColorSelector,
     SliderWithInput,
     ToggleWithLabel
-  } from '$lib/features/main-toolbar/visualization-tab/components/shared';
+  } from '$lib/features/commons/components/viz-controls';
   import {
     PALETTE_TYPE,
     type Palette,

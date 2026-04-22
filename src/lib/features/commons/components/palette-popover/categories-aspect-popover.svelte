@@ -16,7 +16,7 @@
     createExclusiveContextualSurfaceId,
     engageExclusiveContextualSurface
   } from '$lib/features/commons/utils/contextual-surface-coordinator';
-  import { SliderWithInput } from '$lib/features/main-toolbar/visualization-tab/components/shared';
+  import { SliderWithInput } from '$lib/features/commons/components/viz-controls';
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import { ToolbarState } from '$lib/features/commons/types/global';
   import PaletteSuggestions from './palette-suggestions.svelte';
@@ -248,6 +248,18 @@
     return draftCommonAspect.shape ?? ShapeType.CIRCLE;
   }
 
+  function resolveOrderedRankPreviewSize(index: number, total: number): number {
+    const clampedBaseSize = Math.min(Math.max(draftCommonAspect.size, 1), 20);
+    const minSize = Math.max(1, Math.round(clampedBaseSize * 0.75));
+    const maxSize = Math.max(minSize + 1, Math.round(clampedBaseSize * 1.75));
+
+    if (total <= 1) {
+      return maxSize;
+    }
+
+    return Math.round(minSize + ((maxSize - minSize) * index) / (total - 1));
+  }
+
   function categoryPreviewStyle(
     category: CategoryDraft,
     index: number
@@ -264,8 +276,9 @@
       return `--marker-color: ${markerColor}; --marker-size: 18px;`;
     }
 
-    const rankBaseSize = Math.max(12, draftCommonAspect.size * 4);
-    const rankSize = isSymbolsDifferentRank ? rankBaseSize + index * 4 : 14;
+    const rankSize = isSymbolsDifferentRank
+      ? resolveOrderedRankPreviewSize(index, visibleDraftCategories.length)
+      : 14;
 
     return `--marker-color: ${markerColor}; --marker-size: ${rankSize}px;`;
   }
