@@ -5,7 +5,8 @@ import type {
 import {
   FillMode,
   StrokeMode,
-  SymbolMode
+  SymbolMode,
+  VISUALIZATION_DEFAULTS
 } from '$lib/features/main-toolbar/constants';
 
 export function snapshotSymbolModeState(
@@ -82,7 +83,7 @@ export function getDefaultSymbolModeStateFields(
   return {
     fillMode: FillMode.CATEGORIES,
     strokeMode: StrokeMode.NONE,
-    strokeWidth: 0,
+    strokeWidth: VISUALIZATION_DEFAULTS.strokeWidth,
     strokeOpacity: 1,
     strokeDashed: false,
     strokeClassification: undefined,

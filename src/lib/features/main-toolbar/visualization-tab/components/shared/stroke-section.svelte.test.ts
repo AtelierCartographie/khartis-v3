@@ -39,6 +39,19 @@ describe('StrokeSection — palette wiring', () => {
 });
 
 describe('StrokeSection — anti-leak fill↔stroke', () => {
+  it('restores a visible stroke width when an active stroke mode inherits width 0', () => {
+    expect(source).toContain('function ensureVisibleStrokeWidth()');
+    expect(source).toContain(
+      'if (strokeMode === StrokeMode.NONE || strokeWidth > 0)'
+    );
+    expect(source).toContain(
+      'strokeWidth = VISUALIZATION_DEFAULTS.strokeWidth;'
+    );
+    expect(source).toContain(
+      'onStyleChange?.({ strokeWidth: VISUALIZATION_DEFAULTS.strokeWidth });'
+    );
+  });
+
   it('should require onStrokeClassificationChange (non-optional) in Props', () => {
     const propsMatch = source.match(/onStrokeClassificationChange[^?:]*:\s*\(/);
     expect(propsMatch).not.toBeNull();
