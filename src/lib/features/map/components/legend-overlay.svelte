@@ -49,17 +49,37 @@
   } from '$lib/features/commons/types/global';
   import { LegendPosition } from '$lib/features/commons/constants/ui.constants';
   import {
+    getPrimitiveClassification,
+    getPrimitiveCategoryColumn,
+    getSymbolFillCategoryColumn,
+    getSymbolFillClassification,
+    getSymbolFillValueColumn,
+    getSymbolPrimitive,
+    PrimitiveFilterType,
     visualizationStore,
+    type ClassificationConfig,
     type VisualizationConfig
   } from '$lib/features/commons/store/visualization.store.svelte';
   import { hexToRgb, hslToHex } from '$lib/features/commons/utils/color-utils';
   import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
   import {
+    getDragBounds,
+    snapPointWithinBounds
+  } from '$lib/features/commons/utils/page-grid.utils';
+  import {
     getLegendState,
     legendActions
   } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
-  import { ShapeType } from '$lib/features/main-toolbar/constants';
+  import { getFormatState } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
+  import {
+    CATEGORY_SHAPE_CYCLE,
+    CategoryShapeMode,
+    FillMode,
+    ShapeType,
+    SymbolMode
+  } from '$lib/features/main-toolbar/constants';
   import * as m from '$lib/paraglide/messages';
+  import { untrack } from 'svelte';
   import { SvelteMap } from 'svelte/reactivity';
   import { onDestroy } from 'svelte';
   import { activateStylingToolFromMap } from '../utils/styling-tool-activation.utils';
@@ -75,6 +95,8 @@
     type LineWidthLegendScale,
     type PointSizeLegendScale
   } from '../utils/legend.utils';
+
+  let { hidden = false }: { hidden?: boolean } = $props();
 
   function getPatternOverlayColor(fillColor: string | undefined): string {
     if (!fillColor?.startsWith('#') || fillColor.length !== 7) {
@@ -112,8 +134,173 @@
     return `background-color: ${fillColor}; background-image: url(${patternTileUrl}); background-repeat: repeat; background-position: center;`;
   }
 
-  function getCategoryLabels(viz: VisualizationConfig | undefined): string[] {
-    return viz?.classification?.labels ?? [];
+  type LegendCategoricalEntry = {
+    key: string;
+    label: string;
+    color: string;
+    originalIndex: number;
+  };
+
+  function getLegendCategoricalClassification(
+    viz: VisualizationConfig | undefined
+  ): ClassificationConfig | undefined {
+    if (!viz) {
+      return undefined;
+    }
+
+    const swatchPrimitive = resolveLegendColorSwatchPrimitive(viz);
+    switch (swatchPrimitive) {
+      case 'point': {
+        const symbol = getSymbolPrimitive(viz);
+        if (
+          symbol?.enabled &&
+          symbol.mode === SymbolMode.CATEGORIES &&
+          getPrimitiveCategoryColumn(viz, PrimitiveFilterType.POINT)
+        ) {
+          return getPrimitiveClassification(viz, PrimitiveFilterType.POINT);
+        }
+        if (
+          symbol?.enabled &&
+          symbol.fillMode === FillMode.CATEGORIES &&
+          getSymbolFillCategoryColumn(viz)
+        ) {
+          return getSymbolFillClassification(viz);
+        }
+        return undefined;
+      }
+      case 'line':
+        return getPrimitiveClassification(viz, PrimitiveFilterType.LINE);
+      case 'area':
+      default:
+        return (
+          getPrimitiveClassification(viz, PrimitiveFilterType.POLYGON) ??
+          viz.classification
+        );
+    }
+  }
+
+  function getLegendClassedColorClassification(
+    viz: VisualizationConfig | undefined
+  ): ClassificationConfig | undefined {
+    if (!viz) {
+      return undefined;
+    }
+
+    const swatchPrimitive = resolveLegendColorSwatchPrimitive(viz);
+    switch (swatchPrimitive) {
+      case 'point': {
+        const symbol = getSymbolPrimitive(viz);
+        if (
+          symbol?.enabled &&
+          symbol.fillMode === FillMode.CLASSES &&
+          getSymbolFillValueColumn(viz) !== undefined
+        ) {
+          return getSymbolFillClassification(viz);
+        }
+        return undefined;
+      }
+      case 'line':
+        return getPrimitiveClassification(viz, PrimitiveFilterType.LINE);
+      case 'area':
+      default:
+        return (
+          getPrimitiveClassification(viz, PrimitiveFilterType.POLYGON) ??
+          viz.classification
+        );
+    }
+  }
+
+  function getLegendCategoricalEntries(
+    viz: VisualizationConfig | undefined
+  ): LegendCategoricalEntry[] {
+    const classification = getLegendCategoricalClassification(viz);
+    const colors = classification?.colors ?? [];
+    if (colors.length === 0) {
+      return [];
+    }
+
+    const labels = classification?.labels ?? [];
+    const disabled = new Set(
+      (classification?.disabledLabels ?? []).map((label) => String(label))
+    );
+
+    return colors
+      .map((color, index) => {
+        const label =
+          labels[index] ??
+          m.palette_category_default_label({ index: index + 1 });
+
+        return {
+          key: `${label}-${index}`,
+          label,
+          color,
+          originalIndex: index
+        };
+      })
+      .filter((entry) => !disabled.has(entry.label));
+  }
+
+  function getLegendPointCategoryShape(
+    viz: VisualizationConfig | undefined,
+    categoryIndex: number
+  ): ShapeType {
+    const symbol = getSymbolPrimitive(viz);
+    if (!symbol) {
+      return ShapeType.CIRCLE;
+    }
+
+    if (
+      symbol.mode === SymbolMode.CATEGORIES &&
+      symbol.categoryShape === CategoryShapeMode.DIFFERENT
+    ) {
+      const classification =
+        viz && getPrimitiveClassification(viz, PrimitiveFilterType.POINT);
+
+      return (
+        classification?.categoryShapes?.[categoryIndex] ??
+        CATEGORY_SHAPE_CYCLE[categoryIndex % CATEGORY_SHAPE_CYCLE.length] ??
+        symbol.shape ??
+        ShapeType.CIRCLE
+      );
+    }
+
+    return symbol.shape ?? ShapeType.CIRCLE;
+  }
+
+  function getLegendPointCategorySize(
+    viz: VisualizationConfig | undefined,
+    categoryIndex: number
+  ): number {
+    const symbol = getSymbolPrimitive(viz);
+    if (!symbol) {
+      return 8;
+    }
+
+    if (
+      symbol.mode !== SymbolMode.CATEGORIES ||
+      symbol.categoryShape !== CategoryShapeMode.ORDERED
+    ) {
+      return 8;
+    }
+
+    const classification =
+      viz && getPrimitiveClassification(viz, PrimitiveFilterType.POINT);
+    const total = Math.max(
+      classification?.labels?.length ?? 0,
+      classification?.colors?.length ?? 0
+    );
+    if (total <= 1) {
+      return 8;
+    }
+
+    const minSize = Math.max(1, symbol.minSize ?? 1);
+    const maxSize = Math.max(minSize, symbol.maxSize ?? minSize);
+    const interpolatedSize =
+      minSize + ((maxSize - minSize) * categoryIndex) / (total - 1);
+
+    return Math.round(
+      normalizeLegendValue(interpolatedSize, minSize, maxSize, 6, 14)
+    );
   }
 
   function normalizeLegendValue(
@@ -141,7 +328,7 @@
     const minSize = Math.min(...sizes);
     const maxSize = Math.max(...sizes);
 
-    return normalizeLegendValue(size, minSize, maxSize, 5, 22);
+    return normalizeLegendValue(size, minSize, maxSize, 4, 18);
   }
 
   function getLineLegendDisplayWidth(
@@ -152,7 +339,7 @@
     const minWidth = Math.min(...widths);
     const maxWidth = Math.max(...widths);
 
-    return normalizeLegendValue(width, minWidth, maxWidth, 2, 10);
+    return normalizeLegendValue(width, minWidth, maxWidth, 2, 8);
   }
 
   function getPointSymbolStyle(shape: ShapeType, size: number): string {
@@ -286,17 +473,16 @@
   }
 
   function getLegendClassCount(viz: VisualizationConfig | undefined): number {
-    if (!viz?.classification) {
+    const classification = getLegendClassedColorClassification(viz);
+    if (!classification) {
       return 0;
     }
 
     return (
-      viz.classification.numClasses ??
-      viz.classification.labels?.length ??
-      viz.classification.colors?.length ??
-      (viz.classification.breaks?.length
-        ? viz.classification.breaks.length + 1
-        : 0)
+      classification.numClasses ??
+      classification.labels?.length ??
+      classification.colors?.length ??
+      (classification.breaks?.length ? classification.breaks.length + 1 : 0)
     );
   }
 
@@ -354,6 +540,7 @@
   }
 
   const legendState = $derived(getLegendState());
+  const formatState = $derived(getFormatState());
   const visibleItems = $derived(legendState.items.filter((i) => i.visible));
 
   const vizByItemId = $derived.by(() => {
@@ -385,9 +572,6 @@
   const textColor = $derived(legendState.style.textColor);
   const textHex = $derived(
     hslToHex(textColor.hue, textColor.saturation, textColor.lightness)
-  );
-  const isLegendStepVisible = $derived(
-    globalState.selectedStep === ToolbarStep.Styling
   );
   const isLegendActive = $derived(
     globalState.selectedStep === ToolbarStep.Styling &&
@@ -447,9 +631,82 @@
   let dragOffsetX = 0;
   let dragOffsetY = 0;
 
-  function clamp(value: number, min: number, max: number): number {
-    return Math.min(max, Math.max(min, value));
+  function getPageScale(): number {
+    return Math.max(globalState.zoom.pageZoomScale, 0.1);
   }
+
+  function arePointsEqual(
+    left: { x: number; y: number } | null,
+    right: { x: number; y: number } | null
+  ): boolean {
+    return left?.x === right?.x && left?.y === right?.y;
+  }
+
+  function getOverlaySize(): { width: number; height: number } | null {
+    if (!overlayElement) {
+      return null;
+    }
+
+    return {
+      width: overlayElement.offsetWidth,
+      height: overlayElement.offsetHeight
+    };
+  }
+
+  function getLegendSize(): { width: number; height: number } | null {
+    if (!legendElement) {
+      return null;
+    }
+
+    return {
+      width: legendElement.offsetWidth,
+      height: legendElement.offsetHeight
+    };
+  }
+
+  function normalizeLegendDragPosition(
+    position: { x: number; y: number },
+    snapEnabled = formatState.gridEnabled
+  ): { x: number; y: number } {
+    const overlaySize = getOverlaySize();
+    const legendSize = getLegendSize();
+
+    if (!overlaySize || !legendSize) {
+      return position;
+    }
+
+    return snapPointWithinBounds(
+      position,
+      getDragBounds(overlaySize, legendSize),
+      snapEnabled
+    );
+  }
+
+  $effect(() => {
+    void formatState.width;
+    void formatState.height;
+    void formatState.margins.top;
+    void formatState.margins.right;
+    void formatState.margins.bottom;
+    void formatState.margins.left;
+    void legendState.items;
+    void legendState.style.fontFamily;
+    void legendState.style.fontSize;
+    void legendState.style.background.enabled;
+
+    if (isDragging || !legendState.dragPosition) {
+      return;
+    }
+
+    const normalizedPosition = normalizeLegendDragPosition(
+      legendState.dragPosition,
+      untrack(() => formatState.gridEnabled)
+    );
+
+    if (!arePointsEqual(normalizedPosition, legendState.dragPosition)) {
+      legendActions.setDragPosition(normalizedPosition);
+    }
+  });
 
   function stopDragging(): void {
     isDragging = false;
@@ -466,15 +723,14 @@
       return;
     }
 
-    const scale = globalState.zoom.pageZoomLevel / 100;
+    const scale = getPageScale();
     const rect = overlayElement.getBoundingClientRect();
-    const maxX = Math.max(0, rect.width / scale - 10);
-    const maxY = Math.max(0, rect.height / scale - 10);
+    const position = normalizeLegendDragPosition({
+      x: (event.clientX - rect.left) / scale - dragOffsetX,
+      y: (event.clientY - rect.top) / scale - dragOffsetY
+    });
 
-    const x = clamp((event.clientX - rect.left) / scale - dragOffsetX, 0, maxX);
-    const y = clamp((event.clientY - rect.top) / scale - dragOffsetY, 0, maxY);
-
-    legendActions.setDragPosition({ x, y });
+    legendActions.setDragPosition(position);
   }
 
   function handleLegendPointerDown(event: PointerEvent): void {
@@ -489,23 +745,25 @@
     event.preventDefault();
     event.stopPropagation();
 
-    const scale = globalState.zoom.pageZoomLevel / 100;
+    const scale = getPageScale();
     const overlayRect = overlayElement.getBoundingClientRect();
     const legendRect = legendElement.getBoundingClientRect();
 
     const currentX = (legendRect.left - overlayRect.left) / scale;
     const currentY = (legendRect.top - overlayRect.top) / scale;
+    const dragPosition = normalizeLegendDragPosition(
+      legendState.dragPosition ?? {
+        x: currentX,
+        y: currentY
+      }
+    );
 
-    if (!legendState.dragPosition) {
-      legendActions.setDragPosition({ x: currentX, y: currentY });
+    if (!arePointsEqual(dragPosition, legendState.dragPosition)) {
+      legendActions.setDragPosition(dragPosition);
     }
 
-    dragOffsetX =
-      (event.clientX - overlayRect.left) / scale -
-      (legendState.dragPosition?.x ?? currentX);
-    dragOffsetY =
-      (event.clientY - overlayRect.top) / scale -
-      (legendState.dragPosition?.y ?? currentY);
+    dragOffsetX = (event.clientX - overlayRect.left) / scale - dragPosition.x;
+    dragOffsetY = (event.clientY - overlayRect.top) / scale - dragPosition.y;
 
     isDragging = true;
     window.addEventListener(EVENT.POINTERMOVE, handlePointerMove);
@@ -532,8 +790,8 @@
   });
 </script>
 
-{#if legendState.visible && visibleItems.length > 0 && isLegendStepVisible}
-  <div class="legend-overlay" bind:this={overlayElement}>
+{#if legendState.visible && visibleItems.length > 0}
+  <div class="legend-overlay" class:hidden={hidden} bind:this={overlayElement}>
     <div
       bind:this={legendElement}
       class="legend-container {positionClass}"
@@ -555,7 +813,10 @@
         {@const pointSizeScale = getPointSizeLegendScale(viz, sizeStats)}
         {@const densityScale = getDensityLegendScale(viz)}
         {@const lineWidthScale = getLineWidthLegendScale(viz, sizeStats)}
+        {@const classedColorClassification =
+          getLegendClassedColorClassification(viz)}
         {@const classCount = getLegendClassCount(viz)}
+        {@const categoricalEntries = getLegendCategoricalEntries(viz)}
         <div class="legend-item">
           {#if item.title}
             <h4 class="legend-title">{item.title}</h4>
@@ -575,11 +836,11 @@
             </div>
           {/if}
           {#if viz && hasClassedColorLegend(viz)}
-            {@const colors = viz.classification?.colors ?? []}
-            {@const breaks = viz.classification?.breaks ?? []}
+            {@const colors = classedColorClassification?.colors ?? []}
+            {@const breaks = classedColorClassification?.breaks ?? []}
             {@const hasPatternScale =
               colorLegendPrimitive === 'area' &&
-              Boolean(viz.classification?.patternId)}
+              Boolean(classedColorClassification?.patternId)}
             <div class="legend-color-scale">
               {#each colors as color, i (i)}
                 <div class="legend-scale-row">
@@ -606,9 +867,9 @@
                       class="legend-color-swatch"
                       class:patterned={hasPatternScale}
                       style={getPatternSwatchStyle(
-                        viz.classification?.patternId,
+                        classedColorClassification?.patternId,
                         color,
-                        viz.classification?.patternParams
+                        classedColorClassification?.patternParams
                       )}
                     >
                     </span>
@@ -620,27 +881,24 @@
               {/each}
             </div>
           {/if}
-          {#if viz && hasCategoricalColorLegend(viz)}
-            {@const colors = viz.classification?.colors ?? []}
-            {@const catLabels = getCategoryLabels(viz)}
-            {@const displayCount =
-              catLabels.length > 0 ? catLabels.length : colors.length}
+          {#if viz && hasCategoricalColorLegend(viz) && categoricalEntries.length > 0}
             <div class="legend-color-scale">
-              {#each colors.slice(0, displayCount) as color, i (i)}
+              {#each categoricalEntries as entry (entry.key)}
                 <div class="legend-scale-row">
                   {#if colorLegendPrimitive === 'point'}
                     <span
                       class="legend-point-swatch"
                       style={getPointColorSwatchStyle(
-                        viz.symbols?.type ?? ShapeType.CIRCLE,
-                        color
+                        getLegendPointCategoryShape(viz, entry.originalIndex),
+                        entry.color,
+                        getLegendPointCategorySize(viz, entry.originalIndex)
                       )}
                     ></span>
                   {:else if colorLegendPrimitive === 'line'}
                     <span
                       class="legend-line-swatch"
                       style={getLineSwatchStyle(
-                        color,
+                        entry.color,
                         Math.max(3, Math.min(6, viz.style.lineWidth ?? 4)),
                         viz.style.lineOpacity ?? 1,
                         viz.style.lineDashed ?? false
@@ -649,10 +907,10 @@
                   {:else}
                     <span
                       class="legend-color-swatch"
-                      style="background-color: {color};"
+                      style="background-color: {entry.color};"
                     ></span>
                   {/if}
-                  <span class="legend-scale-label">{catLabels[i] ?? ''}</span>
+                  <span class="legend-scale-label">{entry.label}</span>
                 </div>
               {/each}
             </div>
@@ -662,9 +920,31 @@
               {#each pointSizeScale.steps as step, index (index)}
                 <div class="legend-proportional-scale-row">
                   <span
-                    class="legend-proportional-symbol"
-                    style={getPointLegendSymbolStyle(pointSizeScale, step.size)}
-                  ></span>
+                    class="legend-proportional-pair"
+                    data-position-mode={pointSizeScale.secondary
+                      ? (pointSizeScale.positionMode ?? 'juxtaposition')
+                      : undefined}
+                  >
+                    <span
+                      class="legend-proportional-symbol"
+                      style={getPointLegendSymbolStyle(
+                        pointSizeScale,
+                        step.size
+                      )}
+                    ></span>
+                    {#if pointSizeScale.secondary}
+                      <span
+                        class="legend-proportional-symbol"
+                        style={getPointLegendSymbolStyle(
+                          {
+                            ...pointSizeScale,
+                            fillColor: pointSizeScale.secondary.fillColor
+                          },
+                          step.size
+                        )}
+                      ></span>
+                    {/if}
+                  </span>
                   <span class="legend-scale-label">
                     {getLegendStepLabel(
                       step,
@@ -748,6 +1028,17 @@
     height: 100%;
     pointer-events: none;
     z-index: var(--z-content);
+  }
+
+  .legend-overlay.hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  :global(.is-exporting-map) .legend-overlay.hidden {
+    opacity: 1;
+    visibility: visible;
   }
 
   .legend-container {
@@ -883,15 +1174,43 @@
   .legend-proportional-scale {
     display: flex;
     flex-direction: column;
-    gap: 0.35rem;
-    margin: 0.5rem 0;
+    gap: 0.25rem;
+    margin: 0.35rem 0;
   }
 
   .legend-proportional-scale-row {
     display: flex;
     align-items: flex-end;
-    gap: 0.625rem;
-    min-height: 1.5rem;
+    gap: 0.5rem;
+    min-height: 1.25rem;
+  }
+
+  .legend-proportional-pair {
+    position: relative;
+    display: flex;
+    align-items: flex-end;
+    gap: 0.25rem;
+    min-width: max-content;
+  }
+
+  .legend-proportional-pair[data-position-mode='overlay'] {
+    gap: 0;
+  }
+
+  .legend-proportional-pair[data-position-mode='overlay']
+    .legend-proportional-symbol
+    + .legend-proportional-symbol {
+    margin-left: -0.35rem;
+  }
+
+  .legend-proportional-pair[data-position-mode='overlay']
+    .legend-proportional-symbol:first-child {
+    z-index: 0;
+  }
+
+  .legend-proportional-pair[data-position-mode='overlay']
+    .legend-proportional-symbol:last-child {
+    z-index: 1;
   }
 
   .legend-proportional-symbol {

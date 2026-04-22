@@ -1,6 +1,6 @@
 <script lang="ts">
+  import CompactNumberInput from '$lib/features/commons/components/compact-number-input.svelte';
   import { m } from '$lib/paraglide/messages';
-  import { Column, Grid, NumberInput, Row } from 'carbon-components-svelte';
   import { formatState, formatActions } from './format.store.svelte';
 
   let width = $state(formatState.width ?? 842);
@@ -19,44 +19,53 @@
 </script>
 
 <div id="khartis-custom-size-tool">
-  <Grid noGutter>
-    <Row>
-      <Column>
-        <div class="size-grid">
-          <div class="size-input">
-            <NumberInput
-              id="width-input"
-              labelText={m.format_width()}
-              value={width}
-              on:change={(e) => updateSize(e.detail ?? width, height)}
-              min={1}
-              size="sm"
-            />
-          </div>
-          <div class="size-input">
-            <NumberInput
-              id="height-input"
-              labelText={m.format_height()}
-              value={height}
-              on:change={(e) => updateSize(width, e.detail ?? height)}
-              min={1}
-              size="sm"
-            />
-          </div>
-        </div>
-      </Column>
-    </Row>
-  </Grid>
+  <div class="size-grid">
+    <div class="size-input">
+      <label class="bx--label" for="width-input">
+        {m.format_width()}
+      </label>
+      <CompactNumberInput
+        id="width-input"
+        bind:value={width}
+        min={1}
+        max={Number.MAX_SAFE_INTEGER}
+        width="100%"
+        onchange={(value) => updateSize(value, height)}
+      />
+    </div>
+
+    <div class="size-input">
+      <label class="bx--label" for="height-input">
+        {m.format_height()}
+      </label>
+      <CompactNumberInput
+        id="height-input"
+        bind:value={height}
+        min={1}
+        max={Number.MAX_SAFE_INTEGER}
+        width="100%"
+        onchange={(value) => updateSize(width, value)}
+      />
+    </div>
+  </div>
 </div>
 
 <style>
   .size-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 32px;
+    width: 100%;
   }
 
-  .size-input :global(.bx--number) {
-    width: 100%;
+  .size-input {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-03);
+    min-width: 0;
+  }
+
+  .size-input :global(.compact-number-input) {
+    min-width: 0;
   }
 </style>

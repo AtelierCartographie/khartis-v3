@@ -12,10 +12,11 @@
   interface Props {
     label?: string;
     color: string;
+    exclusive?: boolean;
     onchange?: (hex: string) => void;
   }
 
-  let { label, color, onchange }: Props = $props();
+  let { label, color, exclusive = false, onchange }: Props = $props();
 
   let dropdownOpen = $state(false);
   let popoverOpen = $state(false);
@@ -77,6 +78,7 @@
   bind:open={dropdownOpen}
   triggerElement={triggerRef}
   selectedColor={color}
+  exclusive={exclusive}
   onclose={handleDropdownClose}
   onselect={handleDropdownSelect}
   oncustomize={handleCustomize}
@@ -91,6 +93,7 @@
   paletteType={PALETTE_TYPE.QUALITATIVE}
   colorBlindFilter={false}
   numClasses={1}
+  exclusive={exclusive}
   onclose={handlePopoverClose}
   onvalidate={handlePopoverValidate}
 />
@@ -111,10 +114,6 @@
   .color-trigger {
     display: flex;
     align-items: center;
-    gap: var(--cds-spacing-03);
-    padding: var(--cds-spacing-03);
-    background: var(--cds-field);
-    border: 1px solid var(--cds-border-strong);
   }
 
   .color-main {
@@ -122,19 +121,28 @@
     display: flex;
     align-items: center;
     gap: var(--cds-spacing-03);
-    background: transparent;
+    min-width: 0;
+    height: 32px;
+    padding: 7px 16px;
+    background: var(--cds-field-01, #f4f4f4);
     border: none;
+    border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d);
     cursor: pointer;
-    padding: 0;
 
     &:hover {
-      opacity: 0.9;
+      background: var(--cds-field-hover-01, #e8e8e8);
     }
   }
 
   .color-swatch {
     flex: 1;
-    height: 24px;
-    border-radius: 2px;
+    min-width: 0;
+    height: 18px;
+    border: 1px solid var(--cds-icon-on-color, #ffffff);
+  }
+
+  .color-main :global(svg) {
+    flex-shrink: 0;
+    color: var(--cds-icon-primary, #161616);
   }
 </style>

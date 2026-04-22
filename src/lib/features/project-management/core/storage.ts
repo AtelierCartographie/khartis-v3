@@ -6,8 +6,8 @@ import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { PROJECT_CONST } from '../constants';
 
 async function getDb(): Promise<IDBDatabase> {
-  const { openDatabase } = await import('./persistence');
-  return openDatabase();
+  const { getProjectDatabase } = await import('./database-access');
+  return getProjectDatabase();
 }
 
 export async function saveToStorage<T>(key: string, data: T): Promise<void> {

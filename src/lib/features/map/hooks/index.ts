@@ -1,10 +1,5 @@
 export { useMapState, type UseMapStateReturn } from './use-map-state.svelte';
 export {
-  useMapPosition,
-  type UseMapPositionProps,
-  type UseMapPositionReturn
-} from './use-map-position.svelte';
-export {
   useMapLayers,
   type UseMapLayersProps,
   type UseMapLayersReturn

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   clampWorkspacePanOffset,
   isWorkspacePanTarget,
+  resolveReadablePagePreviewScale,
   resolveFitToWorkspaceZoom,
   resolveWorkspaceViewportBounds
 } from './workspace-viewport.utils';
@@ -159,6 +160,20 @@ describe('workspace viewport utils', () => {
           pageHeight: 595
         })
       ).toBe(100);
+    });
+  });
+
+  describe('resolveReadablePagePreviewScale', () => {
+    it('should preserve readable preview scale for oversized page formats', () => {
+      expect(resolveReadablePagePreviewScale(0.435185)).toBe(0.6);
+    });
+
+    it('should keep scales that are already readable unchanged', () => {
+      expect(resolveReadablePagePreviewScale(0.79)).toBe(0.79);
+    });
+
+    it('should clamp invalid values back to 1', () => {
+      expect(resolveReadablePagePreviewScale(0)).toBe(1);
     });
   });
 });

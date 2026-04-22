@@ -28,12 +28,56 @@ describe('ConfigureVisualization', () => {
     expect(source).toContain('column.type === GEO_COLUMN_TYPE.LONGITUDE');
   });
 
-  it('keeps computed-break cache outside the reactive graph', () => {
-    expect(source).toContain('const lastCompletedKey = untrack(() =>');
-    expect(source).toContain('const inFlightKey = untrack(() =>');
+  it('delegates break computation to the shared controller', () => {
+    expect(source).toContain("from './use-classification-breaks.svelte';");
+    expect(source).toContain('useClassificationBreaksController');
+    expect(source).toContain('CLASSIFICATION_BREAKS_TRIGGER');
+    expect(source).toContain('buildClassificationScopeKey');
     expect(source).toContain(
-      'untrack(() => inFlightBreaksKeyByPrimitive.set(primitive, breaksKey));'
+      'const classificationBreaks = useClassificationBreaksController({'
     );
+    expect(source).toContain('classificationBreaks.compute({');
+  });
+
+  it('delegates shared primitive orchestration to the dedicated controller', () => {
+    expect(source).toContain(
+      "  } from './use-primitive-panel-controller.svelte';"
+    );
+    expect(source).toContain(
+      'const primitivePanelController = usePrimitivePanelController({'
+    );
+    expect(source).toContain(
+      'updateTextPrimitive: (updates) => handleTextChange(updates),'
+    );
+    expect(source).toContain('buildNextPrimitiveFilters,');
+    expect(source).toContain('ensurePrimitiveClassificationDefaults,');
+    expect(source).toContain('updateTextBackground,');
+  });
+
+  it('preserves suggestion origin when polygon classification defaults sync automatically', () => {
+    expect(source).toContain(
+      'visualizationStore.updateClassification(selectedViz.id, updates, options);'
+    );
+  });
+
+  it('hydrates stroke categorical labels through stroke classification updates', () => {
+    expect(source).toContain('function fetchStrokeCategoryLabels(');
+    expect(source).toContain(
+      'updatePrimitiveStrokeClassificationState(primitive, { labels })'
+    );
+    expect(source).toMatch(
+      /for \(const target of primitiveStrokeClassificationTargets\)[\s\S]*fetchStrokeCategoryLabels\(/
+    );
+  });
+
+  it('propagates symbol strokeDashed through panel derivation and style updates', () => {
+    expect(source).toContain(
+      '? { strokeDashed: updates.strokeDashed ?? symbol.strokeDashed }'
+    );
+    expect(source).toContain('buildLinePanelVisualization');
+    expect(source).toContain('buildPolygonPanelVisualization');
+    expect(source).toContain('buildSymbolFillPanelVisualization');
+    expect(source).toContain('buildSymbolPanelVisualization');
   });
 
   it('wires text background handlers independently from polygon handlers', () => {
@@ -79,7 +123,7 @@ describe('ConfigureVisualization', () => {
   });
 
   it('writes text background updates through the text primitive, not polygon', () => {
-    expect(source).toContain('function updateTextBackground');
+    expect(source).toContain('updateTextBackground((background) => ({');
     expect(source).toContain('handleTextChange({');
   });
 
@@ -96,5 +140,17 @@ describe('ConfigureVisualization', () => {
     );
     expect(source).toContain('{#if selectedViz && hasYearDimension}');
     expect(source).toContain('<YearFilter visualization={selectedViz} />');
+  });
+
+  it('delegates symbol mode snapshot/restore to the dedicated helper', () => {
+    expect(source).toContain(
+      "import { resolveSymbolModeTransition } from './use-symbol-mode-state.svelte';"
+    );
+    expect(source).toContain('const modeTransition = modeChanging');
+    expect(source).toContain('resolveSymbolModeTransition(symbol, nextMode)');
+    expect(source).toContain('...(modeTransition?.restoredStateFields ?? {}),');
+    expect(source).toContain(
+      'modeStates: modeTransition?.nextModeStates ?? symbol.modeStates ?? {}'
+    );
   });
 });

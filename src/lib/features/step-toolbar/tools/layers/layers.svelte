@@ -1,13 +1,6 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
-  import { Button, Modal, TextInput } from 'carbon-components-svelte';
-  import {
-    ChevronDown,
-    ChevronUp,
-    ColorPalette,
-    Earth
-  } from 'carbon-icons-svelte';
-  import { tick } from 'svelte';
+  import { Modal, TextInput } from 'carbon-components-svelte';
   import LayersList from './layers-list.svelte';
   import { layersActions, layersState } from './layers.store.svelte';
   import type { Layer, LayerReorderScope } from './layers.types.js';
@@ -20,7 +13,7 @@
     globalState
   } from '$lib/features/commons/store/global.svelte';
   import { ToolbarStep } from '$lib/features/commons/types/global';
-  import { facetsStore } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
+  import { tick } from 'svelte';
 
   const store = layersActions;
   const currentState = $derived(layersState);
@@ -31,26 +24,12 @@
     store.syncWithVisualizations();
   });
 
-  let layers = $derived(
-    currentState.layers.map((l: Layer) => ({
-      ...l,
-      icon: l.isSubLayer
-        ? l.type === 'geographic'
-          ? Earth
-          : ColorPalette
-        : l.type === 'visualization'
-          ? ColorPalette
-          : Earth
-    }))
-  );
-
   const hasActiveTiledBasemap = $derived(
     basemapStyleStore.requiresMapLibre || osmBasemapStore.isActive
   );
 
+  const layers = $derived(currentState.layers as Layer[]);
   const parentLayers = $derived(layers.filter((layer) => !layer.isSubLayer));
-
-  const isCollectionMode = $derived(facetsStore.enabled);
 
   const childLayersByParent = $derived.by(() => {
     const children: Record<string, Layer[]> = {};
@@ -71,17 +50,6 @@
 
     return children;
   });
-
-  let collapsedCartes = $state<Record<number, boolean>>({});
-
-  function toggleCarte(index: number): void {
-    collapsedCartes[index] = !collapsedCartes[index];
-  }
-
-  function isCarteCollapsed(index: number): boolean {
-    if (index in collapsedCartes) return collapsedCartes[index];
-    return index > 0;
-  }
 
   let renameModalOpen = $state(false);
   let renameLayerId = $state<string | null>(null);
@@ -110,7 +78,7 @@
   }
 
   function handleOpenSettings(layerId: string): void {
-    const layer = layers.find((l) => l.id === layerId);
+    const layer = layers.find((item) => item.id === layerId);
     if (!layer) return;
 
     globalState.selectedTool = undefined;
@@ -138,7 +106,7 @@
   }
 
   function handleRenameLayer(layerId: string): void {
-    const layer = layers.find((l) => l.id === layerId);
+    const layer = layers.find((item) => item.id === layerId);
     if (!layer || layer.isSubLayer) return;
     renameLayerId = layerId;
     renameValue = layer.name;
@@ -161,13 +129,13 @@
   }
 
   function handleDuplicateLayer(layerId: string): void {
-    const layer = layers.find((l) => l.id === layerId);
+    const layer = layers.find((item) => item.id === layerId);
     if (!layer || layer.isSubLayer) return;
     store.duplicateLayer(layerId);
   }
 
   function handleDeleteLayer(layerId: string): void {
-    const layer = layers.find((l) => l.id === layerId);
+    const layer = layers.find((item) => item.id === layerId);
     if (!layer || layer.isSubLayer) return;
     deleteLayerId = layerId;
     deleteModalOpen = true;
@@ -229,62 +197,19 @@
     <p class="description description--tiled">{m.basemap_tiled_info()}</p>
   {/if}
 
-  {#if isCollectionMode}
-    {#each parentLayers as parentLayer, index (parentLayer.id)}
-      <section
-        class="carte-section"
-        aria-label={`${m.layers_carte_title()} ${index + 1}`}
-      >
-        <Button
-          kind="ghost"
-          size="small"
-          class="carte-header"
-          on:click={() => toggleCarte(index)}
-          aria-expanded={!isCarteCollapsed(index)}
-        >
-          <span class="carte-title">
-            {m.layers_carte_title()}
-            {index + 1} ({parentLayer.name})
-          </span>
-          {#if isCarteCollapsed(index)}
-            <ChevronDown size={16} />
-          {:else}
-            <ChevronUp size={16} />
-          {/if}
-        </Button>
-
-        {#if !isCarteCollapsed(index)}
-          <LayersList
-            parentLayers={[parentLayer]}
-            childLayersByParent={childLayersByParent}
-            reorderScope="visualization"
-            onToggleVisibility={handleToggleVisibility}
-            onOpenSettings={handleOpenSettings}
-            onReorderLayers={handleReorderLayers}
-            onReorderSubLayers={handleReorderSubLayers}
-            onMoveLayer={handleMoveLayer}
-            onRenameLayer={handleRenameLayer}
-            onDuplicateLayer={handleDuplicateLayer}
-            onDeleteLayer={handleDeleteLayer}
-          />
-        {/if}
-      </section>
-    {/each}
-  {:else}
-    <LayersList
-      parentLayers={parentLayers}
-      childLayersByParent={childLayersByParent}
-      reorderScope="visualization"
-      onToggleVisibility={handleToggleVisibility}
-      onOpenSettings={handleOpenSettings}
-      onReorderLayers={handleReorderLayers}
-      onReorderSubLayers={handleReorderSubLayers}
-      onMoveLayer={handleMoveLayer}
-      onRenameLayer={handleRenameLayer}
-      onDuplicateLayer={handleDuplicateLayer}
-      onDeleteLayer={handleDeleteLayer}
-    />
-  {/if}
+  <LayersList
+    parentLayers={parentLayers}
+    childLayersByParent={childLayersByParent}
+    reorderScope="visualization"
+    onToggleVisibility={handleToggleVisibility}
+    onOpenSettings={handleOpenSettings}
+    onReorderLayers={handleReorderLayers}
+    onReorderSubLayers={handleReorderSubLayers}
+    onMoveLayer={handleMoveLayer}
+    onRenameLayer={handleRenameLayer}
+    onDuplicateLayer={handleDuplicateLayer}
+    onDeleteLayer={handleDeleteLayer}
+  />
 </div>
 
 <Modal
@@ -337,36 +262,5 @@
 
   .description--tiled {
     color: var(--cds-text-secondary);
-  }
-
-  .carte-section {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-03);
-  }
-
-  .carte-section + .carte-section {
-    padding-top: var(--cds-spacing-04);
-    border-top: 1px solid var(--cds-border-subtle);
-  }
-
-  .carte-section :global(.carte-header) {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    width: 100%;
-    max-width: 100%;
-    padding: var(--cds-spacing-03) var(--cds-spacing-03);
-    color: var(--cds-text-primary);
-    font-size: 14px;
-    line-height: 18px;
-    letter-spacing: 0.16px;
-    font-weight: 400;
-  }
-
-  .carte-title {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 </style>

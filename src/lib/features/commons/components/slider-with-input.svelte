@@ -1,31 +1,47 @@
 <script lang="ts">
   import { Slider } from 'carbon-components-svelte';
-  import CompactNumberInput from '$lib/features/commons/components/compact-number-input.svelte';
-  import InfoPopover from './info-popover.svelte';
+  import CompactNumberInput from './compact-number-input.svelte';
 
   interface Props {
     label?: string;
-    infoText?: string;
     value: number;
     min?: number;
     max?: number;
     step?: number;
     showMinMax?: boolean;
+    minLabel?: string | number;
+    maxLabel?: string | number;
     inputWidth?: string;
+    disabled?: boolean;
+    id?: string;
+    showLabel?: boolean;
+    showSteppers?: boolean;
     onchange?: (value: number) => void;
   }
 
   let {
     label,
-    infoText,
     value = $bindable(),
     min = 0,
     max = 100,
     step = 1,
     showMinMax = false,
+    minLabel,
+    maxLabel,
     inputWidth = '128px',
+    disabled = false,
+    id,
+    showLabel = true,
+    showSteppers = true,
     onchange
   }: Props = $props();
+
+  const fallbackInputId = `slider-input-${Math.random().toString(36).slice(2, 10)}`;
+  const fallbackSliderId = `slider-${Math.random().toString(36).slice(2, 10)}`;
+
+  const inputId = $derived(id ?? fallbackInputId);
+  const sliderId = $derived(`${id ?? fallbackSliderId}-control`);
+  const accessibleLabel = $derived(label || 'Slider');
 
   function handleChange(newValue: number | null) {
     if (newValue === null) return;
@@ -35,32 +51,39 @@
 </script>
 
 <div class="slider-with-input-wrapper">
-  {#if label}
-    <span class="field-label">
+  {#if showLabel && label}
+    <label class="field-label" for={inputId}>
       {label}
-      {#if infoText}
-        <InfoPopover text={infoText} />
-      {/if}
-    </span>
+    </label>
   {/if}
+
   <div class="slider-with-input">
     {#if showMinMax}
-      <span class="slider-bound">{min}</span>
+      <span class="slider-bound">{minLabel ?? min}</span>
     {/if}
+
     <div class="slider-container">
       <Slider
+        id={sliderId}
         min={min}
         max={max}
         step={step}
         value={value}
+        disabled={disabled}
+        labelText={accessibleLabel}
+        hideLabel
         hideTextInput
+        fullWidth
         on:input={(e) => handleChange(e.detail)}
       />
     </div>
+
     {#if showMinMax}
-      <span class="slider-bound">{max}</span>
+      <span class="slider-bound">{maxLabel ?? max}</span>
     {/if}
+
     <CompactNumberInput
+      id={inputId}
       bind:value={value}
       min={min}
       max={max}
@@ -68,6 +91,8 @@
       width={inputWidth}
       height="40px"
       valueMinWidth="3.5rem"
+      disabled={disabled}
+      showSteppers={showSteppers}
       onchange={handleChange}
     />
   </div>

@@ -3,6 +3,10 @@
   import { Button } from 'carbon-components-svelte';
   import { ColorPalette, Checkmark } from 'carbon-icons-svelte';
   import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
+  import {
+    createExclusiveContextualSurfaceId,
+    engageExclusiveContextualSurface
+  } from '$lib/features/commons/utils/contextual-surface-coordinator';
   import { globalState } from '$lib/features/commons/store/global.svelte';
 
   import {
@@ -22,6 +26,8 @@
     colorBlindFilter: boolean;
     numClasses: number;
     previewCount?: number;
+    divergingSplit?: import('./palette.constants').DivergingPaletteSplit;
+    exclusive?: boolean;
     onclose?: () => void;
     onselect?: (palette: Palette, colors: string[]) => void;
     oncustomize?: () => void;
@@ -35,6 +41,8 @@
     colorBlindFilter,
     numClasses,
     previewCount = numClasses,
+    divergingSplit,
+    exclusive = true,
     onclose,
     onselect,
     oncustomize
@@ -42,6 +50,8 @@
 
   let dropdownRef = $state<HTMLDivElement>();
   let dropdownPos = $state({ top: 0, left: 0, width: 0 });
+  const contextualSurfaceId =
+    createExclusiveContextualSurfaceId('palette-dropdown');
 
   const palettes = $derived(getPalettesForType(paletteType, colorBlindFilter));
 
@@ -53,7 +63,9 @@
     return generatePaletteColors(
       palette,
       previewCount,
-      colorBlindFilter ? 'high' : undefined
+      colorBlindFilter ? 'high' : undefined,
+      undefined,
+      divergingSplit
     );
   }
 
@@ -89,7 +101,9 @@
     const colors = generatePaletteColors(
       palette,
       numClasses,
-      colorBlindFilter ? 'high' : undefined
+      colorBlindFilter ? 'high' : undefined,
+      undefined,
+      divergingSplit
     );
     onselect?.(palette, colors);
     open = false;
@@ -129,6 +143,14 @@
         }
       });
     }
+  });
+
+  $effect(() => {
+    if (!open || !exclusive) {
+      return;
+    }
+
+    return engageExclusiveContextualSurface(contextualSurfaceId, handleClose);
   });
 
   function findScrollableParent(el: HTMLElement | null): HTMLElement | null {
@@ -263,10 +285,10 @@
 
   :global(.palette-dropdown) {
     position: fixed;
-    background: var(--cds-ui-01);
-    border: 1px solid var(--cds-border-subtle);
+    background: var(--cds-background, #ffffff);
+    border: 1px solid var(--cds-border-subtle-01, #c6c6c6);
     box-shadow:
-      0 2px 8px rgba(0, 0, 0, 0.1),
+      0 4px 16px rgba(0, 0, 0, 0.12),
       0 0 1px rgba(0, 0, 0, 0.12);
     z-index: var(--z-popover);
     display: flex;
@@ -276,8 +298,8 @@
   .dropdown-list {
     display: flex;
     flex-direction: column;
-    padding: var(--cds-spacing-03);
-    gap: var(--cds-spacing-02);
+    padding: 8px;
+    gap: 4px;
     max-height: 60vh;
     overflow-y: auto;
   }
@@ -287,27 +309,26 @@
     display: flex;
     align-items: center;
     width: 100%;
-    padding: var(--cds-spacing-02);
+    padding: 4px;
     background: transparent;
-    border: 2px solid transparent;
-    border-radius: 4px;
+    border: 1px solid transparent;
     cursor: pointer;
     transition: border-color 0.15s ease;
 
     &:hover {
-      border-color: var(--cds-border-strong);
+      border-color: var(--cds-border-strong-01, #8d8d8d);
     }
 
     &.selected {
-      border-color: var(--cds-interactive);
+      border-color: #012749;
     }
   }
 
   .swatch-row {
     display: flex;
     flex: 1;
-    height: 24px;
-    border-radius: 2px;
+    height: 18px;
+    border: 1px solid var(--cds-icon-on-color, #ffffff);
     overflow: hidden;
   }
 
@@ -335,7 +356,14 @@
   }
 
   .dropdown-footer {
-    padding: var(--cds-spacing-02) var(--cds-spacing-03);
-    border-top: 1px solid var(--cds-border-subtle);
+    padding: 8px 16px 12px;
+    border-top: 1px solid var(--cds-border-subtle-01, #c6c6c6);
+
+    :global(.bx--btn) {
+      width: 100%;
+      justify-content: flex-start;
+      padding-inline: 0;
+      min-height: 32px;
+    }
   }
 </style>

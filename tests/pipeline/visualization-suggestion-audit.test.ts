@@ -54,6 +54,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('$lib/features/project-management/core/persistence-registry', () => ({
+  SavePriority: {
+    IMMEDIATE: 'immediate',
+    DEBOUNCED: 'debounced'
+  },
   persistenceRegistry: {
     register: vi.fn(),
     notifyChange: mocks.notifyChangeMock
@@ -247,6 +251,11 @@ const DEFAULT_AUDIT_SOURCES = [
     join(REPO_ROOT, 'static/tests-datasets', relativePath)
   )
 ];
+
+const DBF_HEADER_LENGTH_OFFSET = 8;
+const DBF_FIELD_DESCRIPTOR_LENGTH = 32;
+const DBF_FIELD_NAME_LENGTH = 11;
+const DBF_HEADER_TERMINATOR = 0x0d;
 
 const FULL_AUDIT_SOURCES = [
   ...DEFAULT_AUDIT_SOURCES,
@@ -614,9 +623,10 @@ function buildDatasetResult(params: {
 }
 
 async function importGeoDataset(source: string): Promise<ImportedAuditDataset> {
+  const preparedSource = await prepareGeoDatasetSource(source);
   const tableName = `audit_${buildDatasetId(source).replace(/[^a-zA-Z0-9_]/g, '_')}`;
   const escapedTable = escapeIdentifier(tableName);
-  const escapedSource = escapeSqlString(source);
+  const escapedSource = escapeSqlString(preparedSource);
 
   await dbConnection.run(`DROP TABLE IF EXISTS "${escapedTable}"`);
   await dbConnection.run(
@@ -639,6 +649,147 @@ async function importGeoDataset(source: string): Promise<ImportedAuditDataset> {
       geometry
     })
   };
+}
+
+function decodeDbfFieldName(bytes: Uint8Array): string {
+  let end = bytes.length;
+  while (end > 0 && bytes[end - 1] === 0) {
+    end -= 1;
+  }
+
+  return String.fromCharCode(...bytes.slice(0, end));
+}
+
+function encodeDbfFieldName(name: string): Uint8Array {
+  const encoded = new Uint8Array(DBF_FIELD_NAME_LENGTH);
+
+  for (
+    let index = 0;
+    index < name.length && index < DBF_FIELD_NAME_LENGTH;
+    index += 1
+  ) {
+    encoded[index] = name.charCodeAt(index) & 0xff;
+  }
+
+  return encoded;
+}
+
+function normalizeDbfFieldKey(name: string): string {
+  return name.trim().toLowerCase();
+}
+
+function createUniqueDbfFieldName(name: string, usedKeys: Set<string>): string {
+  const trimmed = name.trim() || 'field';
+  let attempt = 2;
+
+  while (true) {
+    const suffix = `_${attempt}`;
+    const maxBaseLength = DBF_FIELD_NAME_LENGTH - suffix.length;
+    const candidate = `${trimmed.slice(0, Math.max(1, maxBaseLength))}${suffix}`;
+    const key = normalizeDbfFieldKey(candidate);
+
+    if (!usedKeys.has(key)) {
+      return candidate;
+    }
+
+    attempt += 1;
+  }
+}
+
+async function prepareGeoDatasetSource(source: string): Promise<string> {
+  if (extname(source).toLowerCase() !== '.shp') {
+    return source;
+  }
+
+  const dbfPath = join(dirname(source), `${basename(source, '.shp')}.dbf`);
+  let dbfBytes: Uint8Array;
+
+  try {
+    dbfBytes = new Uint8Array(await readFile(dbfPath));
+  } catch {
+    return source;
+  }
+
+  const headerLength =
+    dbfBytes[DBF_HEADER_LENGTH_OFFSET] |
+    (dbfBytes[DBF_HEADER_LENGTH_OFFSET + 1] << 8);
+
+  if (
+    !Number.isFinite(headerLength) ||
+    headerLength <= DBF_FIELD_DESCRIPTOR_LENGTH ||
+    headerLength > dbfBytes.length
+  ) {
+    return source;
+  }
+
+  const fieldOffsets: Array<{ offset: number; name: string }> = [];
+  for (
+    let offset = DBF_FIELD_DESCRIPTOR_LENGTH;
+    offset + DBF_FIELD_DESCRIPTOR_LENGTH <= headerLength;
+    offset += DBF_FIELD_DESCRIPTOR_LENGTH
+  ) {
+    if (dbfBytes[offset] === DBF_HEADER_TERMINATOR) {
+      break;
+    }
+
+    fieldOffsets.push({
+      offset,
+      name: decodeDbfFieldName(
+        dbfBytes.slice(offset, offset + DBF_FIELD_NAME_LENGTH)
+      )
+    });
+  }
+
+  const usedKeys = new Set<string>();
+  let renamedCount = 0;
+
+  for (const field of fieldOffsets) {
+    const currentKey = normalizeDbfFieldKey(field.name);
+    if (!usedKeys.has(currentKey)) {
+      usedKeys.add(currentKey);
+      continue;
+    }
+
+    const replacement = createUniqueDbfFieldName(field.name, usedKeys);
+    usedKeys.add(normalizeDbfFieldKey(replacement));
+    dbfBytes.set(encodeDbfFieldName(replacement), field.offset);
+    renamedCount += 1;
+  }
+
+  if (renamedCount === 0) {
+    return source;
+  }
+
+  const tempRoot = await mkdtemp(join(tmpdir(), 'khartis-suggestions-shp-'));
+  tempRoots.push(tempRoot);
+  const sourceDir = dirname(source);
+  const sourceBaseName = basename(source, extname(source)).toLowerCase();
+  const directoryEntries = await readdir(sourceDir, { withFileTypes: true });
+
+  await Promise.all(
+    directoryEntries.map(async (entry) => {
+      if (entry.isDirectory()) {
+        return;
+      }
+
+      const entryPath = join(sourceDir, entry.name);
+      if (
+        basename(entry.name, extname(entry.name)).toLowerCase() !==
+        sourceBaseName
+      ) {
+        return;
+      }
+
+      const targetPath = join(tempRoot, entry.name);
+      const content =
+        extname(entry.name).toLowerCase() === '.dbf'
+          ? dbfBytes
+          : await readFile(entryPath);
+      await writeFile(targetPath, content);
+    })
+  );
+
+  return join(tempRoot, basename(source));
 }
 
 async function importCsvDataset(source: string): Promise<ImportedAuditDataset> {
@@ -709,7 +860,7 @@ async function importCsvDataset(source: string): Promise<ImportedAuditDataset> {
     return Number(cnt ?? 0);
   };
 
-  let rowCount = 0;
+  let rowCount: number;
   try {
     rowCount = await runCsvImport();
     if (rowCount === 0) {
@@ -740,7 +891,7 @@ async function importCsvDataset(source: string): Promise<ImportedAuditDataset> {
       source,
       tableName,
       columns,
-      rowCount: 0
+      rowCount
     })
   );
   return {

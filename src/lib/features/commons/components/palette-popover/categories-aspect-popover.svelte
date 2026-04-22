@@ -1,11 +1,22 @@
 <script lang="ts">
   import { untrack } from 'svelte';
+  import { dragHandle, dragHandleZone } from 'svelte-dnd-action';
   import Button from '$lib/features/commons/components/carbon/button.svelte';
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
+  import CompactNumberInput from '$lib/features/commons/components/compact-number-input.svelte';
   import Switch from '$lib/features/commons/components/switch.svelte';
   import * as m from '$lib/paraglide/messages';
   import { ArrowRight, Close, ChevronDown } from 'carbon-icons-svelte';
+  import {
+    CATEGORY_SHAPE_CYCLE,
+    ShapeType
+  } from '$lib/features/main-toolbar/constants';
   import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
+  import {
+    createExclusiveContextualSurfaceId,
+    engageExclusiveContextualSurface
+  } from '$lib/features/commons/utils/contextual-surface-coordinator';
+  import { SliderWithInput } from '$lib/features/commons/components/viz-controls';
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import { ToolbarState } from '$lib/features/commons/types/global';
   import PaletteSuggestions from './palette-suggestions.svelte';
@@ -49,9 +60,21 @@
   let draftCommonAspect = $state<CategoriesCommonAspect>({
     ...DEFAULT_COMMON_ASPECT
   });
+  let expandedCategoryId = $state<string | null>(null);
+  const contextualSurfaceId = createExclusiveContextualSurfaceId(
+    'categories-aspect-popover'
+  );
 
-  const showCommonAspect = $derived(variant !== 'symbols-different-rank');
+  const showSuggestions = $derived(variant !== 'symbols-different-rank');
+  const showCommonAspect = $derived(
+    variant === 'symbols-unique' ||
+      variant === 'symbols-different' ||
+      variant === 'symbols-different-rank' ||
+      variant === 'polygons'
+  );
   const showCategoryShapePicker = $derived(variant === 'symbols-different');
+  const isSymbolsDifferentRank = $derived(variant === 'symbols-different-rank');
+  const showPerCategoryAspect = $derived(!isSymbolsDifferentRank);
   const primitiveKind = $derived<'symbols' | 'polygons' | 'lines' | 'texts'>(
     variant === 'polygons'
       ? 'polygons'
@@ -61,26 +84,15 @@
           ? 'texts'
           : 'symbols'
   );
-  let expandedCategoryId = $state<string | null>(null);
 
-  function toggleCategoryExpand(id: string) {
-    expandedCategoryId = expandedCategoryId === id ? null : id;
-  }
-
-  function handleCategoryShape(id: string, shape: string) {
-    draftCategories = draftCategories.map((c) =>
-      c.id === id ? { ...c, shape: shape as CategoryDraft['shape'] } : c
-    );
-  }
-
-  const shapeChoices = $derived<Array<{ id: string; label: string }>>([
-    { id: 'circle', label: m.shape_circle() },
-    { id: 'square', label: m.shape_square() },
-    { id: 'triangle', label: m.shape_triangle() },
-    { id: 'diamond', label: m.shape_diamond() },
-    { id: 'cross', label: m.shape_cross() },
-    { id: 'star', label: m.shape_star() },
-    { id: 'rectangle', label: m.shape_rectangle() }
+  const shapeChoices = $derived<Array<{ id: ShapeType; label: string }>>([
+    { id: ShapeType.CIRCLE, label: m.shape_circle() },
+    { id: ShapeType.SQUARE, label: m.shape_square() },
+    { id: ShapeType.TRIANGLE, label: m.shape_triangle() },
+    { id: ShapeType.DIAMOND, label: m.shape_diamond() },
+    { id: ShapeType.CROSS, label: m.shape_cross() },
+    { id: ShapeType.STAR, label: m.shape_star() },
+    { id: ShapeType.RECTANGLE, label: m.shape_rectangle() }
   ]);
 
   const toolbarWidth = $derived.by(() => {
@@ -94,6 +106,19 @@
     }
   });
 
+  const selectedCategory = $derived(
+    draftCategories.find((category) => category.id === selectedCategoryId)
+  );
+
+  const FLIP_DURATION_MS = 150;
+  const MAX_VISIBLE_CATEGORIES = 50;
+  const visibleDraftCategories = $derived(
+    draftCategories.slice(0, MAX_VISIBLE_CATEGORIES)
+  );
+  const hiddenCategoryCount = $derived(
+    Math.max(0, draftCategories.length - MAX_VISIBLE_CATEGORIES)
+  );
+
   function portal(node: HTMLElement) {
     document.body.appendChild(node);
     return {
@@ -104,11 +129,21 @@
   }
 
   function initDraft() {
-    draftCategories = categories.map((c) => ({ ...c }));
+    draftCategories = categories.map((category, index) => ({
+      ...category,
+      shape:
+        variant === 'symbols-different'
+          ? (category.shape ??
+            CATEGORY_SHAPE_CYCLE[index % CATEGORY_SHAPE_CYCLE.length])
+          : category.shape
+    }));
     selectedCategoryId = draftCategories[0]?.id ?? null;
+    expandedCategoryId = showPerCategoryAspect
+      ? (draftCategories[0]?.id ?? null)
+      : null;
     draftColorBlindFilter = false;
     draftCommonAspect = commonAspect
-      ? { ...commonAspect }
+      ? { ...DEFAULT_COMMON_ASPECT, ...commonAspect }
       : { ...DEFAULT_COMMON_ASPECT };
     popoverRight = toolbarWidth;
   }
@@ -134,28 +169,47 @@
     draftCommonAspect = { ...draftCommonAspect, [key]: value };
   }
 
+  function handleCommonAspectToggle<K extends keyof CategoriesCommonAspect>(
+    key: K,
+    enabled: boolean,
+    enabledValue: CategoriesCommonAspect[K],
+    disabledValue: CategoriesCommonAspect[K]
+  ) {
+    handleCommonAspectChange(key, enabled ? enabledValue : disabledValue);
+  }
+
   function handleSuggestionColor(hex: string) {
     if (!selectedCategoryId) return;
-    draftCategories = draftCategories.map((c) =>
-      c.id === selectedCategoryId ? { ...c, color: hex } : c
+    draftCategories = draftCategories.map((category) =>
+      category.id === selectedCategoryId
+        ? { ...category, color: hex }
+        : category
     );
   }
 
   function handleCategoryColor(id: string, hex: string) {
-    draftCategories = draftCategories.map((c) =>
-      c.id === id ? { ...c, color: hex } : c
+    draftCategories = draftCategories.map((category) =>
+      category.id === id ? { ...category, color: hex } : category
+    );
+  }
+
+  function handleCategoryShape(id: string, shape: string) {
+    draftCategories = draftCategories.map((category) =>
+      category.id === id
+        ? { ...category, shape: shape as CategoryDraft['shape'] }
+        : category
     );
   }
 
   function handleCategoryLabel(id: string, label: string) {
-    draftCategories = draftCategories.map((c) =>
-      c.id === id ? { ...c, label } : c
+    draftCategories = draftCategories.map((category) =>
+      category.id === id ? { ...category, label } : category
     );
   }
 
   function handleCategoryToggle(id: string, enabled: boolean) {
-    draftCategories = draftCategories.map((c) =>
-      c.id === id ? { ...c, enabled } : c
+    draftCategories = draftCategories.map((category) =>
+      category.id === id ? { ...category, enabled } : category
     );
   }
 
@@ -163,17 +217,82 @@
     selectedCategoryId = id;
   }
 
-  const selectedCategory = $derived(
-    draftCategories.find((c) => c.id === selectedCategoryId)
-  );
+  function toggleCategoryExpand(id: string) {
+    expandedCategoryId = expandedCategoryId === id ? null : id;
+  }
 
-  function handleSuggestionPaletteSelect(_palette: Palette) {
-    // Categories popover only surfaces individual color picks from suggestions.
-    // Palette-level selection (sequential) is not exposed here.
+  function handleCategoryExpand(id: string) {
+    selectCategory(id);
+    toggleCategoryExpand(id);
+  }
+
+  function applyVisibleCategoryOrder(items: CategoryDraft[]) {
+    draftCategories = [
+      ...items,
+      ...draftCategories.slice(Math.min(draftCategories.length, items.length))
+    ];
+  }
+
+  function handleCategoryListReorder(e: Event) {
+    const { items } = (e as CustomEvent<{ items: CategoryDraft[] }>).detail;
+    applyVisibleCategoryOrder(items);
+  }
+
+  function handleSuggestionPaletteSelect(_palette: Palette) {}
+
+  function categoryShape(category: CategoryDraft): ShapeType {
+    if (variant === 'symbols-different') {
+      return category.shape ?? ShapeType.CIRCLE;
+    }
+
+    return draftCommonAspect.shape ?? ShapeType.CIRCLE;
+  }
+
+  function resolveOrderedRankPreviewSize(index: number, total: number): number {
+    const clampedBaseSize = Math.min(Math.max(draftCommonAspect.size, 1), 20);
+    const minSize = Math.max(1, Math.round(clampedBaseSize * 0.75));
+    const maxSize = Math.max(minSize + 1, Math.round(clampedBaseSize * 1.75));
+
+    if (total <= 1) {
+      return maxSize;
+    }
+
+    return Math.round(minSize + ((maxSize - minSize) * index) / (total - 1));
+  }
+
+  function categoryPreviewStyle(
+    category: CategoryDraft,
+    index: number
+  ): string {
+    const markerColor =
+      isSymbolsDifferentRank && draftCommonAspect.color
+        ? draftCommonAspect.color
+        : category.color;
+
+    if (variant === 'lines') {
+      return `--marker-color: ${markerColor}; --marker-size: 18px;`;
+    }
+    if (variant === 'texts') {
+      return `--marker-color: ${markerColor}; --marker-size: 18px;`;
+    }
+
+    const rankSize = isSymbolsDifferentRank
+      ? resolveOrderedRankPreviewSize(index, visibleDraftCategories.length)
+      : 14;
+
+    return `--marker-color: ${markerColor}; --marker-size: ${rankSize}px;`;
   }
 
   $effect(() => {
     if (open) untrack(() => initDraft());
+  });
+
+  $effect(() => {
+    if (!open) {
+      return;
+    }
+
+    return engageExclusiveContextualSurface(contextualSurfaceId, handleClose);
   });
 
   $effect(() => {
@@ -214,20 +333,6 @@
           first.focus();
         }
       }
-      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-        const active = document.activeElement as HTMLElement | null;
-        const items = Array.from(
-          popoverRef?.querySelectorAll<HTMLElement>('.category-main') ?? []
-        );
-        const idx = items.indexOf(active ?? ({} as HTMLElement));
-        if (idx === -1) return;
-        e.preventDefault();
-        const next =
-          e.key === 'ArrowDown'
-            ? items[(idx + 1) % items.length]
-            : items[(idx - 1 + items.length) % items.length];
-        next?.focus();
-      }
     }
 
     const timer = setTimeout(() => {
@@ -264,179 +369,240 @@
       </header>
 
       <div class="popover-content">
-        <PaletteSuggestions
-          paletteType={PALETTE_TYPE.QUALITATIVE}
-          bind:colorBlindFilter={draftColorBlindFilter}
-          selectedPaletteId="__custom__"
-          selectedColor={selectedCategory?.color}
-          numClasses={draftCategories.length}
-          onSelect={handleSuggestionPaletteSelect}
-          onColorSelect={handleSuggestionColor}
-        />
+        {#if showSuggestions}
+          <PaletteSuggestions
+            paletteType={PALETTE_TYPE.QUALITATIVE}
+            qualitativeMode="categories"
+            bind:colorBlindFilter={draftColorBlindFilter}
+            selectedPaletteId="__custom__"
+            selectedColor={selectedCategory?.color}
+            numClasses={draftCategories.length}
+            onSelect={handleSuggestionPaletteSelect}
+            onColorSelect={handleSuggestionColor}
+          />
+        {/if}
 
         {#if showCommonAspect}
-          <section class="aspect-common">
+          <section class="aspect-section">
             <div class="section-heading">
-              <span class="section-heading-text">
-                {m.aspect_common_section()}
-              </span>
+              <span class="section-heading-text"
+                >{m.aspect_common_section()}</span
+              >
               <div class="section-heading-line"></div>
             </div>
-            <div class="common-row">
-              {#if primitiveKind === 'symbols'}
-                <label class="common-toggle">
-                  <span>{m.aspect_common_size_unique()}</span>
-                  <Switch
-                    toggled={draftCommonAspect.sizeUnique}
-                    labelText={m.aspect_common_size_unique()}
-                    hideLabel
-                    onchange={(v) => handleCommonAspectChange('sizeUnique', v)}
-                  />
-                </label>
-                <label class="common-toggle">
-                  <span>{m.aspect_common_stroke_yesno()}</span>
-                  <Switch
-                    toggled={draftCommonAspect.stroke}
-                    labelText={m.aspect_common_stroke_yesno()}
-                    hideLabel
-                    onchange={(v) => handleCommonAspectChange('stroke', v)}
-                  />
-                </label>
-                <label class="common-toggle">
-                  <span>{m.aspect_common_auto_color()}</span>
-                  <Switch
-                    toggled={draftCommonAspect.autoColor}
-                    labelText={m.aspect_common_auto_color()}
-                    hideLabel
-                    onchange={(v) => handleCommonAspectChange('autoColor', v)}
-                  />
-                </label>
-                <label class="common-toggle">
-                  <span>{m.aspect_common_stroke_size()}</span>
-                  <Switch
-                    toggled={(draftCommonAspect.strokeSize ?? 1) > 0}
-                    labelText={m.aspect_common_stroke_size()}
-                    hideLabel
-                    onchange={(v) =>
-                      handleCommonAspectChange('strokeSize', v ? 1 : 0)}
-                  />
-                </label>
-                <label class="common-toggle">
-                  <span>{m.aspect_common_pattern()}</span>
-                  <Switch
-                    toggled={draftCommonAspect.pattern}
-                    labelText={m.aspect_common_pattern()}
-                    hideLabel
-                    onchange={(v) => handleCommonAspectChange('pattern', v)}
-                  />
-                </label>
-              {:else if primitiveKind === 'polygons'}
-                <label class="common-toggle">
-                  <span>{m.aspect_common_stroke_yesno()}</span>
-                  <Switch
-                    toggled={draftCommonAspect.stroke}
-                    labelText={m.aspect_common_stroke_yesno()}
-                    hideLabel
-                    onchange={(v) => handleCommonAspectChange('stroke', v)}
-                  />
-                </label>
-                <label class="common-toggle">
-                  <span>{m.aspect_common_stroke_size()}</span>
-                  <Switch
-                    toggled={(draftCommonAspect.strokeSize ?? 1) > 0}
-                    labelText={m.aspect_common_stroke_size()}
-                    hideLabel
-                    onchange={(v) =>
-                      handleCommonAspectChange('strokeSize', v ? 1 : 0)}
-                  />
-                </label>
-                <label class="common-toggle">
-                  <span>{m.aspect_common_auto_color()}</span>
-                  <Switch
-                    toggled={draftCommonAspect.autoColor}
-                    labelText={m.aspect_common_auto_color()}
-                    hideLabel
-                    onchange={(v) => handleCommonAspectChange('autoColor', v)}
-                  />
-                </label>
-                <label class="common-toggle">
-                  <span>{m.aspect_common_pattern()}</span>
-                  <Switch
-                    toggled={draftCommonAspect.pattern}
-                    labelText={m.aspect_common_pattern()}
-                    hideLabel
-                    onchange={(v) => handleCommonAspectChange('pattern', v)}
-                  />
-                </label>
-              {:else if primitiveKind === 'lines'}
-                <label class="common-toggle">
-                  <span>{m.aspect_common_thickness()}</span>
-                  <Switch
-                    toggled={(draftCommonAspect.thickness ?? 1) > 0}
-                    labelText={m.aspect_common_thickness()}
-                    hideLabel
-                    onchange={(v) =>
-                      handleCommonAspectChange('thickness', v ? 1 : 0)}
-                  />
-                </label>
-                <label class="common-toggle">
-                  <span>{m.aspect_common_dashed()}</span>
-                  <Switch
-                    toggled={draftCommonAspect.dashed ?? false}
-                    labelText={m.aspect_common_dashed()}
-                    hideLabel
-                    onchange={(v) => handleCommonAspectChange('dashed', v)}
-                  />
-                </label>
-                <label class="common-toggle">
-                  <span>{m.aspect_common_auto_color()}</span>
-                  <Switch
-                    toggled={draftCommonAspect.autoColor}
-                    labelText={m.aspect_common_auto_color()}
-                    hideLabel
-                    onchange={(v) => handleCommonAspectChange('autoColor', v)}
-                  />
-                </label>
-              {:else if primitiveKind === 'texts'}
-                <label class="common-toggle">
-                  <span>{m.aspect_common_label_size()}</span>
-                  <Switch
-                    toggled={(draftCommonAspect.labelSize ?? 12) > 0}
-                    labelText={m.aspect_common_label_size()}
-                    hideLabel
-                    onchange={(v) =>
-                      handleCommonAspectChange('labelSize', v ? 12 : 0)}
-                  />
-                </label>
-                <label class="common-toggle">
-                  <span>{m.aspect_common_font_style()}</span>
-                  <Switch
-                    toggled={(draftCommonAspect.fontStyle ?? 'regular') !==
-                      'regular'}
-                    labelText={m.aspect_common_font_style()}
-                    hideLabel
-                    onchange={(v) =>
+
+            {#if isSymbolsDifferentRank}
+              <div class="common-stack">
+                <div class="field-stack">
+                  <span class="field-label">{m.shape()}</span>
+                  <select
+                    class="common-select"
+                    value={draftCommonAspect.shape ?? ShapeType.CIRCLE}
+                    onchange={(e: Event) =>
                       handleCommonAspectChange(
-                        'fontStyle',
-                        v ? 'bold' : 'regular'
+                        'shape',
+                        (e.currentTarget as HTMLSelectElement)
+                          .value as ShapeType
                       )}
+                  >
+                    {#each shapeChoices as shapeChoice (shapeChoice.id)}
+                      <option value={shapeChoice.id}>{shapeChoice.label}</option
+                      >
+                    {/each}
+                  </select>
+                </div>
+
+                <div class="field-stack">
+                  <span class="field-label">{m.color()}</span>
+                  <SingleColorPreview
+                    color={draftCommonAspect.color ?? '#f287ac'}
+                    onchange={(hex) => handleCommonAspectChange('color', hex)}
                   />
-                </label>
-                <label class="common-toggle">
-                  <span>{m.aspect_common_auto_color()}</span>
-                  <Switch
-                    toggled={draftCommonAspect.autoColor}
-                    labelText={m.aspect_common_auto_color()}
-                    hideLabel
-                    onchange={(v) => handleCommonAspectChange('autoColor', v)}
+                </div>
+
+                <div class="field-stack">
+                  <span class="field-label">{m.size()}</span>
+                  <SliderWithInput
+                    min={1}
+                    max={20}
+                    value={draftCommonAspect.size}
+                    showMinMax
+                    inputWidth="96px"
+                    onchange={(value) =>
+                      handleCommonAspectChange('size', value)}
                   />
-                </label>
-              {/if}
-            </div>
+                </div>
+              </div>
+            {:else if primitiveKind === 'symbols'}
+              <div class="common-symbols-layout">
+                <div class="common-paired-row common-paired-row--with-input">
+                  <div class="common-field common-field--toggle">
+                    <span class="field-label"
+                      >{m.aspect_common_size_unique()}</span
+                    >
+                    <div class="common-toggle-value">
+                      <div class="toggle-control">
+                        <Switch
+                          toggled={draftCommonAspect.sizeUnique}
+                          hideLabel
+                          labelText={m.aspect_common_size_unique()}
+                          onchange={(value) =>
+                            handleCommonAspectChange('sizeUnique', value)}
+                        />
+                        <span class="toggle-state">
+                          {draftCommonAspect.sizeUnique ? m.yes() : m.no()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="common-field common-field--input">
+                    <CompactNumberInput
+                      value={draftCommonAspect.size}
+                      min={1}
+                      max={20}
+                      width="100%"
+                      height="32px"
+                      showSteppers={false}
+                      disabled={!draftCommonAspect.sizeUnique}
+                      onchange={(value) =>
+                        handleCommonAspectChange('size', value)}
+                    />
+                  </div>
+                </div>
+
+                <div class="common-divider"></div>
+
+                <div class="common-paired-row">
+                  <div class="common-field common-field--toggle">
+                    <span class="field-label"
+                      >{m.aspect_common_stroke_yesno()}</span
+                    >
+                    <div class="common-toggle-value">
+                      <div class="toggle-control">
+                        <Switch
+                          toggled={draftCommonAspect.stroke}
+                          hideLabel
+                          labelText={m.aspect_common_stroke_yesno()}
+                          onchange={(value) =>
+                            handleCommonAspectChange('stroke', value)}
+                        />
+                        <span class="toggle-state">
+                          {draftCommonAspect.stroke ? m.yes() : m.no()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="common-field common-field--toggle">
+                    <span class="field-label"
+                      >{m.aspect_common_auto_color()}</span
+                    >
+                    <div class="common-toggle-value">
+                      <div class="toggle-control">
+                        <Switch
+                          toggled={draftCommonAspect.autoColor}
+                          hideLabel
+                          labelText={m.aspect_common_auto_color()}
+                          onchange={(value) =>
+                            handleCommonAspectChange('autoColor', value)}
+                        />
+                        <span class="toggle-state">
+                          {draftCommonAspect.autoColor ? m.yes() : m.no()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="common-paired-row common-paired-row--with-input">
+                  <div class="common-field common-field--toggle">
+                    <span class="field-label"
+                      >{m.aspect_common_stroke_size()}</span
+                    >
+                    <div class="common-toggle-value">
+                      <div class="toggle-control">
+                        <Switch
+                          toggled={draftCommonAspect.strokeSize > 0}
+                          hideLabel
+                          labelText={m.aspect_common_stroke_size()}
+                          onchange={(value) =>
+                            handleCommonAspectToggle(
+                              'strokeSize',
+                              value,
+                              draftCommonAspect.strokeSize > 0
+                                ? draftCommonAspect.strokeSize
+                                : 1,
+                              0
+                            )}
+                        />
+                        <span class="toggle-state">
+                          {draftCommonAspect.strokeSize > 0 ? m.yes() : m.no()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="common-field common-field--input">
+                    <CompactNumberInput
+                      value={Math.max(1, draftCommonAspect.strokeSize)}
+                      min={1}
+                      max={20}
+                      width="100%"
+                      height="32px"
+                      showSteppers={false}
+                      disabled={draftCommonAspect.strokeSize <= 0}
+                      onchange={(value) =>
+                        handleCommonAspectChange('strokeSize', value)}
+                    />
+                  </div>
+                </div>
+
+                <div class="common-divider"></div>
+
+                <div
+                  class="common-field common-field--toggle common-field--full"
+                >
+                  <span class="field-label">{m.aspect_common_pattern()}</span>
+                  <div class="common-toggle-value">
+                    <div class="toggle-control">
+                      <Switch
+                        toggled={draftCommonAspect.pattern}
+                        hideLabel
+                        labelText={m.aspect_common_pattern()}
+                        onchange={(value) =>
+                          handleCommonAspectChange('pattern', value)}
+                      />
+                      <span class="toggle-state">
+                        {draftCommonAspect.pattern ? m.yes() : m.no()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            {:else if primitiveKind === 'polygons'}
+              <div class="common-grid">
+                <div class="common-grid-row common-grid-row--full">
+                  <span class="field-label">{m.aspect_common_pattern()}</span>
+                  <div class="toggle-control">
+                    <Switch
+                      toggled={draftCommonAspect.pattern}
+                      hideLabel
+                      labelText={m.aspect_common_pattern()}
+                      onchange={(value) =>
+                        handleCommonAspectChange('pattern', value)}
+                    />
+                    <span class="toggle-state">
+                      {draftCommonAspect.pattern ? m.yes() : m.no()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            {/if}
           </section>
         {/if}
 
-        <section class="aspect-custom">
+        <section class="aspect-section">
           <div class="section-heading">
             <span class="section-heading-text">
               {m.palette_categories_custom_section()}
@@ -444,101 +610,146 @@
             <div class="section-heading-line"></div>
           </div>
 
-          <div class="sort-row">
-            <span class="sort-label">{m.palette_categories_sort()}</span>
-            <div class="sort-dropdown">
-              <span>{m.palette_categories_sort_manual()}</span>
-              <ChevronDown size={16} />
-            </div>
+          <div class="field-stack">
+            <span class="field-label">{m.palette_categories_sort()}</span>
+            <select class="common-select sort-select">
+              <option value="manual"
+                >{m.palette_categories_sort_manual()}</option
+              >
+            </select>
           </div>
 
-          <p class="list-label">{m.palette_categories_list_label()}</p>
-          <ul class="category-list">
-            {#each draftCategories as cat (cat.id)}
-              <li
-                class="category-item"
-                class:selected={selectedCategoryId === cat.id}
-              >
-                <div class="category-header">
-                  <button
-                    type="button"
-                    class="category-main"
-                    onclick={() => {
-                      selectCategory(cat.id);
-                      toggleCategoryExpand(cat.id);
-                    }}
-                    aria-expanded={expandedCategoryId === cat.id}
-                  >
-                    <SingleColorPreview
-                      color={cat.color}
-                      onchange={(hex) => handleCategoryColor(cat.id, hex)}
-                    />
+          <div class="field-stack">
+            <p class="list-label">{m.palette_categories_list_label()}</p>
+            <ul
+              class="category-list"
+              use:dragHandleZone={{
+                items: visibleDraftCategories,
+                flipDurationMs: FLIP_DURATION_MS,
+                dropTargetStyle: {},
+                useCursorForDetection: true
+              }}
+              onconsider={handleCategoryListReorder}
+              onfinalize={handleCategoryListReorder}
+            >
+              {#each visibleDraftCategories as category, index (category.id)}
+                <li
+                  class="category-item"
+                  class:category-item--disabled={!category.enabled}
+                >
+                  <div class="category-header">
+                    <div
+                      class="drag-handle"
+                      use:dragHandle
+                      aria-label={`${m.palette_categories_sort_manual()} ${category.label}`}
+                    >
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                    </div>
+
+                    <div
+                      class="category-marker"
+                      data-kind={primitiveKind}
+                      data-shape={categoryShape(category)}
+                      class:is-ranked={isSymbolsDifferentRank}
+                      style={categoryPreviewStyle(category, index)}
+                    >
+                      {#if primitiveKind === 'texts'}
+                        T
+                      {/if}
+                    </div>
+
                     <input
                       type="text"
                       class="category-label-input"
-                      value={cat.label}
+                      value={category.label}
+                      onfocus={() => selectCategory(category.id)}
                       oninput={(e: Event) =>
                         handleCategoryLabel(
-                          cat.id,
+                          category.id,
                           (e.currentTarget as HTMLInputElement).value
                         )}
                     />
-                    <ChevronDown
-                      size={16}
-                      style={expandedCategoryId === cat.id
-                        ? 'transform: rotate(180deg)'
-                        : ''}
-                    />
-                  </button>
-                  <div class="category-toggle">
-                    <Switch
-                      toggled={cat.enabled}
-                      labelText={cat.label}
-                      hideLabel
-                      onchange={(v) => handleCategoryToggle(cat.id, v)}
-                    />
-                  </div>
-                </div>
 
-                {#if expandedCategoryId === cat.id}
-                  <div class="category-aspect-expand">
-                    <span class="aspect-expand-title"
-                      >{m.per_category_aspect()}</span
-                    >
-                    <div class="aspect-row">
-                      <span class="aspect-row-label"
-                        >{m.per_category_color()}</span
-                      >
-                      <SingleColorPreview
-                        color={cat.color}
-                        onchange={(hex) => handleCategoryColor(cat.id, hex)}
+                    <div class="toggle-only-control">
+                      <Switch
+                        toggled={category.enabled}
+                        hideLabel
+                        labelText={category.label}
+                        onchange={(value) =>
+                          handleCategoryToggle(category.id, value)}
                       />
                     </div>
-                    {#if showCategoryShapePicker}
-                      <div class="aspect-row">
-                        <span class="aspect-row-label"
-                          >{m.per_category_shape()}</span
-                        >
-                        <select
-                          class="aspect-shape-select"
-                          value={cat.shape ?? 'circle'}
-                          onchange={(e: Event) =>
-                            handleCategoryShape(
-                              cat.id,
-                              (e.currentTarget as HTMLSelectElement).value
-                            )}
-                        >
-                          {#each shapeChoices as sc (sc.id)}
-                            <option value={sc.id}>{sc.label}</option>
-                          {/each}
-                        </select>
+                  </div>
+
+                  {#if showPerCategoryAspect}
+                    <button
+                      type="button"
+                      class="category-expand-button"
+                      onclick={() => handleCategoryExpand(category.id)}
+                      aria-expanded={expandedCategoryId === category.id}
+                    >
+                      <ChevronDown
+                        size={16}
+                        class={expandedCategoryId === category.id
+                          ? 'rotated'
+                          : undefined}
+                      />
+                      <span>{m.per_category_aspect()}</span>
+                    </button>
+
+                    {#if expandedCategoryId === category.id}
+                      <div class="category-aspect-body">
+                        {#if showCategoryShapePicker}
+                          <div class="field-stack">
+                            <span class="field-label"
+                              >{m.per_category_shape()}</span
+                            >
+                            <select
+                              class="common-select"
+                              value={category.shape ?? ShapeType.CIRCLE}
+                              onchange={(e: Event) =>
+                                handleCategoryShape(
+                                  category.id,
+                                  (e.currentTarget as HTMLSelectElement).value
+                                )}
+                            >
+                              {#each shapeChoices as shapeChoice (shapeChoice.id)}
+                                <option value={shapeChoice.id}>
+                                  {shapeChoice.label}
+                                </option>
+                              {/each}
+                            </select>
+                          </div>
+                        {/if}
+
+                        <div class="field-stack">
+                          <span class="field-label"
+                            >{m.per_category_color()}</span
+                          >
+                          <SingleColorPreview
+                            color={category.color}
+                            onchange={(hex) =>
+                              handleCategoryColor(category.id, hex)}
+                          />
+                        </div>
                       </div>
                     {/if}
-                  </div>
-                {/if}
-              </li>
-            {/each}
-          </ul>
+                  {/if}
+                </li>
+              {/each}
+            </ul>
+            {#if hiddenCategoryCount > 0}
+              <p class="hidden-count-note">
+                + {hiddenCategoryCount} autres catégories (couleurs/formes générées
+                automatiquement)
+              </p>
+            {/if}
+          </div>
         </section>
       </div>
 
@@ -585,7 +796,6 @@
     display: flex;
     flex-direction: column;
     background: var(--cds-background, #ffffff);
-    border: 1px solid var(--cds-border-subtle);
     box-shadow:
       0 4px 16px rgba(0, 0, 0, 0.12),
       0 0 1px rgba(0, 0, 0, 0.15);
@@ -615,88 +825,31 @@
   }
 
   .popover-content {
-    flex: 1;
-    overflow-y: auto;
-    padding: 0 16px 8px 16px;
     display: flex;
     flex-direction: column;
     gap: 32px;
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 16px 8px;
   }
 
-  .aspect-custom {
+  .aspect-section {
     display: flex;
     flex-direction: column;
     gap: 16px;
-  }
-
-  .aspect-common {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .common-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px 16px;
-  }
-
-  .common-toggle {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    font-size: 12px;
-    color: var(--cds-text-secondary, #525252);
-  }
-
-  .category-aspect-expand {
-    margin-top: 8px;
-    padding: 8px;
-    border-top: 1px solid var(--cds-border-subtle-01, #c6c6c6);
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .aspect-expand-title {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--cds-text-secondary, #525252);
-  }
-
-  .aspect-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .aspect-row-label {
-    font-size: 12px;
-    color: var(--cds-text-secondary);
-    min-width: 60px;
-  }
-
-  .aspect-shape-select {
-    flex: 1;
-    padding: 4px 8px;
-    font-size: 14px;
-    background: var(--cds-field-01, #f4f4f4);
-    border: none;
-    border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d);
   }
 
   .section-heading {
     display: flex;
     align-items: center;
     gap: 8px;
-    height: 24px;
+    min-height: 24px;
   }
 
   .section-heading-text {
     font-family: 'IBM Plex Sans', sans-serif;
-    font-weight: 600;
     font-size: 14px;
+    font-weight: 600;
     line-height: 20px;
     letter-spacing: 0.16px;
     color: var(--cds-text-primary, #161616);
@@ -709,33 +862,160 @@
     background: var(--cds-border-subtle-01, #c6c6c6);
   }
 
-  .sort-row {
+  .field-stack {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 8px;
   }
 
-  .sort-label {
+  .field-label,
+  .list-label {
+    margin: 0;
+    font-family: 'IBM Plex Sans', sans-serif;
     font-size: 12px;
+    font-weight: 400;
+    line-height: 16px;
+    letter-spacing: 0.32px;
     color: var(--cds-text-secondary, #525252);
   }
 
-  .sort-dropdown {
+  .common-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .common-symbols-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+  }
+
+  .common-paired-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    width: 100%;
+  }
+
+  .common-paired-row--with-input {
+    align-items: flex-end;
+  }
+
+  .common-field {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .common-field--input {
+    justify-content: flex-end;
+    min-width: 64px;
+  }
+
+  .common-field--full {
+    width: 100%;
+  }
+
+  .common-toggle-value {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 18px;
+  }
+
+  .common-divider {
+    width: 100%;
+    height: 1px;
+    background: var(--cds-border-subtle-01, #c6c6c6);
+  }
+
+  .common-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+
+  .common-grid-row {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .common-grid-row--full {
+    grid-column: 1 / -1;
+  }
+
+  .toggle-control,
+  .toggle-only-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .toggle-state {
+    min-width: 20px;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 14px;
+    line-height: 18px;
+    letter-spacing: 0.16px;
+    color: var(--cds-text-primary, #161616);
+  }
+
+  .common-symbols-layout :global(.kh-switch-native) {
+    --kh-switch-on-bg: #726e6e;
+    --kh-switch-off-bg: #c6c6c6;
+  }
+
+  .common-symbols-layout :global(.kh-switch-native.sm .kh-switch-input) {
+    width: 32px;
+    height: 16px;
+  }
+
+  .common-symbols-layout
+    :global(.kh-switch-native.sm .kh-switch-input::before) {
+    width: 10px;
+    height: 10px;
+  }
+
+  .common-select {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    width: 100%;
+    min-height: 32px;
     padding: 7px 16px;
-    height: 32px;
     background: var(--cds-field-01, #f4f4f4);
+    border: none;
     border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d);
+    font-family: 'IBM Plex Sans', sans-serif;
     font-size: 14px;
+    line-height: 18px;
+    letter-spacing: 0.16px;
+    color: var(--cds-text-primary, #161616);
   }
 
-  .list-label {
-    margin: 0;
-    font-size: 12px;
-    color: var(--cds-text-secondary, #525252);
-    letter-spacing: 0.32px;
+  .common-select {
+    appearance: none;
+    background-image:
+      linear-gradient(45deg, transparent 50%, currentColor 50%),
+      linear-gradient(135deg, currentColor 50%, transparent 50%);
+    background-position:
+      calc(100% - 18px) 13px,
+      calc(100% - 13px) 13px;
+    background-size:
+      5px 5px,
+      5px 5px;
+    background-repeat: no-repeat;
+    padding-right: 32px;
+  }
+
+  .sort-select {
+    cursor: pointer;
   }
 
   .category-list {
@@ -747,53 +1027,199 @@
     gap: 8px;
   }
 
+  .hidden-count-note {
+    margin: 8px 0 0;
+    padding: 8px 12px;
+    background: var(--cds-layer-01, #f4f4f4);
+    border: 1px dashed var(--cds-border-subtle-01, #c6c6c6);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 12px;
+    font-style: italic;
+    line-height: 16px;
+    color: var(--cds-text-secondary, #525252);
+  }
+
   .category-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
     padding: 8px;
     background: var(--cds-layer-01, #f4f4f4);
     border: 1px solid var(--cds-border-subtle-01, #c6c6c6);
+  }
 
-    &.selected {
-      border-color: var(--cds-interactive);
-    }
+  .category-item--disabled {
+    opacity: 0.56;
   }
 
   .category-header {
     display: flex;
     align-items: center;
     gap: 8px;
-    width: 100%;
+    min-width: 0;
   }
 
-  .category-main {
-    flex: 1;
-    display: flex;
+  .drag-handle {
+    width: 16px;
+    display: grid;
+    grid-template-columns: repeat(2, 2px);
+    grid-auto-rows: 2px;
+    gap: 2px;
+    justify-content: center;
+    align-content: center;
+    flex-shrink: 0;
+    cursor: grab;
+
+    span {
+      display: block;
+      width: 2px;
+      height: 2px;
+      border-radius: 50%;
+      background: var(--cds-icon-secondary, #525252);
+    }
+  }
+
+  .category-marker {
+    position: relative;
+    display: inline-flex;
     align-items: center;
-    gap: 8px;
+    justify-content: center;
+    width: var(--marker-size, 14px);
+    height: var(--marker-size, 14px);
+    flex-shrink: 0;
+    color: var(--marker-color, #f287ac);
+    background: var(--marker-color, #f287ac);
+    border-radius: 50%;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 1;
+  }
+
+  .category-marker[data-kind='polygons'] {
+    border-radius: 0;
+  }
+
+  .category-marker[data-kind='lines'] {
+    height: 4px;
+    border-radius: 999px;
+    width: 18px;
+  }
+
+  .category-marker[data-kind='texts'] {
+    width: auto;
+    height: auto;
     background: transparent;
-    border: none;
-    padding: 0;
-    cursor: pointer;
-    text-align: left;
+  }
+
+  .category-marker[data-shape='square'] {
+    border-radius: 0;
+  }
+
+  .category-marker[data-shape='triangle'] {
+    clip-path: polygon(50% 0, 0 100%, 100% 100%);
+    border-radius: 0;
+  }
+
+  .category-marker[data-shape='diamond'] {
+    border-radius: 0;
+    transform: rotate(45deg) scale(0.8);
+  }
+
+  .category-marker[data-shape='rectangle'] {
+    width: calc(var(--marker-size, 14px) * 1.3);
+    border-radius: 0;
+  }
+
+  .category-marker[data-shape='cross'] {
+    background: transparent;
+  }
+
+  .category-marker[data-shape='cross']::before,
+  .category-marker[data-shape='cross']::after {
+    content: '';
+    position: absolute;
+    background: var(--marker-color, #f287ac);
+  }
+
+  .category-marker[data-shape='cross']::before {
+    width: calc(var(--marker-size, 14px) * 0.2);
+    height: 100%;
+  }
+
+  .category-marker[data-shape='cross']::after {
+    width: 100%;
+    height: calc(var(--marker-size, 14px) * 0.2);
+  }
+
+  .category-marker[data-shape='star'] {
+    clip-path: polygon(
+      50% 0,
+      61% 35%,
+      98% 35%,
+      68% 57%,
+      79% 91%,
+      50% 70%,
+      21% 91%,
+      32% 57%,
+      2% 35%,
+      39% 35%
+    );
+    border-radius: 0;
   }
 
   .category-label-input {
     flex: 1;
     min-width: 0;
-    padding: 4px 8px;
-    border: 1px solid transparent;
-    background: transparent;
+    height: 32px;
+    padding: 7px 16px;
+    border: none;
+    border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d);
+    background: var(--cds-field-02, #ffffff);
+    font-family: 'IBM Plex Sans', sans-serif;
     font-size: 14px;
-    color: var(--cds-text-primary);
-
-    &:focus {
-      outline: none;
-      border-color: var(--cds-border-interactive);
-    }
+    line-height: 18px;
+    letter-spacing: 0.16px;
+    color: var(--cds-text-primary, #161616);
   }
 
-  .category-toggle {
+  .category-label-input:focus {
+    outline: 2px solid var(--cds-focus, #0f62fe);
+    outline-offset: 2px;
+  }
+
+  .category-expand-button {
     display: flex;
     align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 0 16px 0 22px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 14px;
+    line-height: 20px;
+    letter-spacing: 0.16px;
+    color: var(--cds-text-primary, #161616);
+    text-align: left;
+  }
+
+  .category-expand-button :global(svg) {
+    flex-shrink: 0;
+    color: var(--cds-icon-secondary, #525252);
+    transition: transform 0.15s ease;
+  }
+
+  .category-expand-button :global(svg.rotated) {
+    transform: rotate(180deg);
+  }
+
+  .category-aspect-body {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding-left: 22px;
   }
 
   .popover-footer-wrap {
@@ -804,7 +1230,6 @@
 
   .popover-divider {
     height: 8px;
-    flex-shrink: 0;
     border-top: 1px solid var(--cds-border-subtle-01, #c6c6c6);
   }
 
@@ -817,5 +1242,36 @@
     :global(.bx--btn) {
       flex: 1;
     }
+  }
+
+  .toggle-control :global(.kh-switch-input),
+  .toggle-only-control :global(.kh-switch-input) {
+    width: 32px;
+    height: 16px;
+    background-color: #c6c6c6;
+  }
+
+  .toggle-control :global(.kh-switch-input)::before,
+  .toggle-only-control :global(.kh-switch-input)::before {
+    top: 3px;
+    left: 3px;
+    width: 10px;
+    height: 10px;
+    background-color: #ffffff;
+  }
+
+  .toggle-control :global(.kh-switch-input:checked),
+  .toggle-only-control :global(.kh-switch-input:checked) {
+    background-color: #726e6e;
+  }
+
+  .toggle-control :global(.kh-switch-input:checked)::before,
+  .toggle-only-control :global(.kh-switch-input:checked)::before {
+    transform: translateX(16px);
+  }
+
+  .toggle-control :global(.kh-switch-native),
+  .toggle-only-control :global(.kh-switch-native) {
+    gap: 0;
   }
 </style>

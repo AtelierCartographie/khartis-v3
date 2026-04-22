@@ -1,6 +1,6 @@
 <script lang="ts">
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
-  import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
+  import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import type {
     MissingDataConfig,
     VisualizationConfig,
@@ -12,30 +12,14 @@
   } from '$lib/features/commons/store/visualization.store.svelte';
   import * as m from '$lib/paraglide/messages';
   import {
-    DEFAULT_SEQUENTIAL_PREVIEW,
-    PALETTE_TYPE
-  } from '$lib/features/commons/components/palette-popover/palette.constants';
-  import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
-  import {
-    Category,
-    ChartScatter,
-    MisuseOutline,
-    SquareFill,
-    Tag
-  } from 'carbon-icons-svelte';
-  import {
     DEFAULT_COLORS,
     FillMode,
-    SLIDER_LIMITS,
     VISUALIZATION_DEFAULTS
   } from '../../constants';
+  import { FILL_MODES_WITH_DENSITY } from './shared/fill-mode-presets';
+  import FillSection from './shared/fill-section.svelte';
   import {
-    DiscretizationRow,
     InfoPopover,
-    MissingDataSection,
-    PalettePreview,
-    SectionHeading,
-    SliderWithInput,
     StrokeSection,
     VizFilterButton,
     VizFilterPanel
@@ -48,9 +32,13 @@
     FACET_SLOT,
     facetsStore,
     type FacetSlotPath
-  } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
-  import FacetsVariablePicker from './symbols/facets-variable-picker.svelte';
+  } from '../facets-adapter.svelte';
   import { PolygonModeDensity } from './polygons';
+  import {
+    NONE_FIELD_ID,
+    useFieldSelection
+  } from '../use-field-selection.svelte';
+  import { useCategoryLabels } from '../use-category-labels.svelte';
 
   interface Props {
     dataFields?: Array<{ id: number; text: string; type?: string }>;
@@ -63,10 +51,14 @@
     onStrokeClassificationChange?: (
       updates: Partial<ClassificationConfig>
     ) => void;
+    onStrokeMappingChange?: (
+      updates: Partial<VisualizationConfig['mapping']>
+    ) => void;
     onMappingChange?: (
       updates: Partial<VisualizationConfig['mapping']>
     ) => void;
     onInvertPalette?: () => void;
+    onStrokeInvertPalette?: () => void;
     onToggleVisibility?: (checked: boolean) => void;
     filters?: VizDataFilter[];
     onAddFilter?: (filter: Omit<VizDataFilter, 'id'>) => void;
@@ -87,8 +79,10 @@
     onMissingDataChange,
     onClassificationChange,
     onStrokeClassificationChange,
+    onStrokeMappingChange,
     onMappingChange,
     onInvertPalette,
+    onStrokeInvertPalette,
     onToggleVisibility,
     filters = [],
     onAddFilter,
@@ -99,38 +93,18 @@
   let discretizationModalOpen = $state(false);
   let discretizationTarget = $state<'fill' | 'stroke'>('fill');
   let filterSectionVisible = $state(false);
-  let valuePickerOpen = $state(false);
-  let categoryPickerOpen = $state(false);
-  const NONE_FIELD_ID = -1;
-  let selectedFieldId = $state<number>(NONE_FIELD_ID);
-  let selectedCategoryFieldId = $state<number>(NONE_FIELD_ID);
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
   const selectableDataFields = $derived([noneOption, ...dataFields]);
+  const valueFieldSelection = useFieldSelection(() => dataFields);
+  const categoryFieldSelection = useFieldSelection(() => dataFields);
 
   $effect(() => {
-    if (visualization?.mapping.valueColumn && dataFields.length > 0) {
-      const fieldIndex = dataFields.findIndex(
-        (f) => f.text === visualization.mapping.valueColumn
-      );
-      selectedFieldId =
-        fieldIndex >= 0 ? dataFields[fieldIndex].id : NONE_FIELD_ID;
-    } else {
-      selectedFieldId = NONE_FIELD_ID;
-    }
-
-    if (visualization?.mapping.categoryColumn && dataFields.length > 0) {
-      const fieldIndex = dataFields.findIndex(
-        (f) => f.text === visualization.mapping.categoryColumn
-      );
-      selectedCategoryFieldId =
-        fieldIndex >= 0 ? dataFields[fieldIndex].id : NONE_FIELD_ID;
-    } else {
-      selectedCategoryFieldId = NONE_FIELD_ID;
-    }
+    valueFieldSelection.sync(visualization?.mapping.valueColumn);
+    categoryFieldSelection.sync(visualization?.mapping.categoryColumn);
   });
 
   function handleValueFieldSelect(fieldId: number) {
-    selectedFieldId = fieldId;
+    valueFieldSelection.set(fieldId);
     if (fieldId === NONE_FIELD_ID) {
       onMappingChange?.({ valueColumn: undefined });
       return;
@@ -143,7 +117,7 @@
   }
 
   function handleCategoryFieldSelect(fieldId: number) {
-    selectedCategoryFieldId = fieldId;
+    categoryFieldSelection.set(fieldId);
     if (fieldId === NONE_FIELD_ID) {
       onMappingChange?.({ categoryColumn: undefined });
       return;
@@ -155,12 +129,24 @@
     }
   }
 
-  const currentPalette = $derived(
-    visualization?.classification?.colors ?? DEFAULT_SEQUENTIAL_PREVIEW
+  const categoryColumnName = $derived(
+    categoryFieldSelection.selectedFieldName ?? ''
   );
-  const categoryCount = $derived(
-    visualization?.classification?.labels?.length ?? 4
+  const dataset = $derived(
+    visualization
+      ? (datasetsStore.datasets.find((d) => d.id === visualization.datasetId) ??
+          datasetsStore.selectedDataset)
+      : datasetsStore.selectedDataset
   );
+  const categoryLabels = useCategoryLabels({
+    enabled: () => fillMode === FillMode.CATEGORIES,
+    getDataset: () => dataset,
+    getColumnName: () =>
+      visualization?.mapping.categoryColumn ?? categoryColumnName,
+    getClassification: () => visualization?.classification,
+    fallbackCount: 4
+  });
+  const categoryCount = $derived(categoryLabels.count);
 
   let fillMode = $state<FillMode>(FillMode.UNIQUE);
   let fillColor = $state<string>(DEFAULT_COLORS.fill);
@@ -194,21 +180,7 @@
     }
   });
 
-  const fillModeItems = [
-    { icon: MisuseOutline, label: m.fill_mode_none(), iconSize: 16 },
-    { icon: SquareFill, label: m.fill_mode_unique(), iconSize: 16 },
-    { icon: ChartScatter, label: m.symbol_mode_density(), iconSize: 16 },
-    { icon: Category, label: m.fill_mode_classes(), iconSize: 16 },
-    { icon: Tag, label: m.fill_mode_categories(), iconSize: 16 }
-  ];
-
-  const FILL_MODE_ORDER: FillMode[] = [
-    FillMode.NONE,
-    FillMode.UNIQUE,
-    FillMode.DENSITY,
-    FillMode.CLASSES,
-    FillMode.CATEGORIES
-  ];
+  const FILL_MODE_ORDER = FILL_MODES_WITH_DENSITY;
 
   function handleFillModeChange(index: number) {
     const nextFillMode = FILL_MODE_ORDER[index] || FillMode.NONE;
@@ -265,8 +237,6 @@
     if (opacity <= 0) return FillMode.NONE;
     return storedMode;
   });
-
-  const fillModeIndex = $derived(FILL_MODE_ORDER.indexOf(effectiveFillMode));
 
   function handleFillOpacityChange(value: number) {
     fillOpacity = value;
@@ -363,14 +333,6 @@
       .filter((id): id is number => typeof id === 'number');
   }
 
-  const valueColumnName = $derived(
-    dataFields.find((f) => f.id === selectedFieldId)?.text ?? ''
-  );
-
-  const categoryColumnName = $derived(
-    dataFields.find((f) => f.id === selectedCategoryFieldId)?.text ?? ''
-  );
-
   async function handleFacetsVariablesChange(
     baseVariableName: string,
     slotPath: FacetSlotPath,
@@ -415,11 +377,14 @@
 
 <ExpandableSection
   title={m.polygons_title()}
+  description={disabled ? m.primitive_unavailable() : undefined}
   defaultOpen={false}
   showToggle
+  toggleVariant="suggestions"
   actionsEnd
   toggleChecked={enabled}
   disabled={disabled}
+  disabledReason={disabled ? m.primitive_unavailable_reason() : undefined}
   onToggleChange={handleToggleChange}
 >
   {#snippet icon()}
@@ -434,133 +399,50 @@
   {/snippet}
 
   <div class="polygons-config">
-    <SectionHeading title={m.fill()} />
-
-    <div class="field-group">
-      <ToggleTabs
-        items={fillModeItems}
-        activeIndex={fillModeIndex}
-        onChange={handleFillModeChange}
-        hideInactiveLabel={true}
-      />
-    </div>
-
-    {#if effectiveFillMode === FillMode.UNIQUE}
-      <SingleColorPreview
-        label={m.color()}
-        color={fillColor}
-        onchange={handleFillColorChange}
-      />
-    {:else if effectiveFillMode === FillMode.DENSITY}
-      <PolygonModeDensity
-        dataFields={dataFields}
-        visualization={visualization}
-        onMappingChange={onMappingChange}
-        onStyleChange={onStyleChange}
-      />
-    {:else if effectiveFillMode === FillMode.CLASSES}
-      <div class="field-group">
-        <FacetsVariablePicker
-          bind:open={valuePickerOpen}
-          titleText={m.color_according()}
+    <FillSection
+      visualization={visualization}
+      primitive="polygon"
+      dataFields={dataFields}
+      availableModes={FILL_MODES_WITH_DENSITY}
+      fillMode={effectiveFillMode}
+      fillColor={fillColor}
+      fillOpacity={fillOpacity}
+      selectedValueFieldId={valueFieldSelection.selectedFieldId}
+      selectedCategoryFieldId={categoryFieldSelection.selectedFieldId}
+      discretizationLabel={discretizationLabel}
+      categoryCount={categoryCount}
+      facetsValueSlotPath={FACET_SLOT.POLYGON_VALUE}
+      facetsCategorySlotPath={FACET_SLOT.POLYGON_CATEGORY}
+      categoriesVariant="polygons"
+      showMissingData={showMissingData}
+      missingDataColor={missingDataColor}
+      sectionTitle={m.fill()}
+      selectableDataFields={selectableDataFields}
+      getFacetsSelectedFieldIds={getFacetsSelectedFieldIds}
+      isFacetsActiveForSlot={isFacetsActiveForSlot}
+      onFillModeChange={(mode) =>
+        handleFillModeChange(FILL_MODE_ORDER.indexOf(mode))}
+      onFillColorChange={handleFillColorChange}
+      onFillOpacityChange={handleFillOpacityChange}
+      onValueFieldSelect={handleValueFieldSelect}
+      onCategoryFieldSelect={handleCategoryFieldSelect}
+      onFacetsVariablesChange={handleFacetsVariablesChange}
+      onFacetsToggle={handleFacetsToggle}
+      onOpenDiscretization={handleOpenDiscretization}
+      onClassificationChange={handleClassificationChange}
+      onMissingDataShowChange={handleMissingDataShowChange}
+      onMissingDataColorChange={handleMissingDataColorChange}
+      onInvertPalette={onInvertPalette}
+    >
+      {#snippet densitySnippet()}
+        <PolygonModeDensity
           dataFields={dataFields}
-          singleSelectItems={selectableDataFields}
-          selectedFieldId={selectedFieldId}
-          selectedFieldIds={getFacetsSelectedFieldIds(FACET_SLOT.POLYGON_VALUE)}
-          isCollectionEnabled={isFacetsActiveForSlot(FACET_SLOT.POLYGON_VALUE)}
-          onSelect={handleValueFieldSelect}
-          onCollectionChange={(ids) =>
-            handleFacetsVariablesChange(
-              valueColumnName,
-              FACET_SLOT.POLYGON_VALUE,
-              ids
-            )}
-          onToggleCollection={(en) =>
-            handleFacetsToggle(valueColumnName, FACET_SLOT.POLYGON_VALUE, en)}
+          visualization={visualization}
+          onMappingChange={onMappingChange}
+          onStyleChange={onStyleChange}
         />
-      </div>
-      <DiscretizationRow
-        label={m.discretization()}
-        value={discretizationLabel}
-        onsettings={handleOpenDiscretization}
-      />
-      <PalettePreview
-        label={m.color_palette()}
-        colors={currentPalette}
-        selectedPaletteId={visualization?.classification?.paletteId}
-        inverted={visualization?.classification?.inverted ?? false}
-        paletteType={PALETTE_TYPE.SEQUENTIAL}
-        oninvert={onInvertPalette}
-        onClassificationChange={handleClassificationChange}
-      />
-    {:else if effectiveFillMode === FillMode.CATEGORIES}
-      <div class="field-group">
-        <FacetsVariablePicker
-          bind:open={categoryPickerOpen}
-          titleText={m.color_according()}
-          dataFields={dataFields}
-          singleSelectItems={selectableDataFields}
-          selectedFieldId={selectedCategoryFieldId}
-          selectedFieldIds={getFacetsSelectedFieldIds(
-            FACET_SLOT.POLYGON_CATEGORY
-          )}
-          isCollectionEnabled={isFacetsActiveForSlot(
-            FACET_SLOT.POLYGON_CATEGORY
-          )}
-          onSelect={handleCategoryFieldSelect}
-          onCollectionChange={(ids) =>
-            handleFacetsVariablesChange(
-              categoryColumnName,
-              FACET_SLOT.POLYGON_CATEGORY,
-              ids
-            )}
-          onToggleCollection={(en) =>
-            handleFacetsToggle(
-              categoryColumnName,
-              FACET_SLOT.POLYGON_CATEGORY,
-              en
-            )}
-        />
-      </div>
-      <DiscretizationRow
-        label={m.category_aspect()}
-        value={m.categories_count({ count: categoryCount })}
-        onsettings={handleOpenDiscretization}
-      />
-      <PalettePreview
-        label={m.color_palette()}
-        colors={currentPalette}
-        selectedPaletteId={visualization?.classification?.paletteId}
-        inverted={visualization?.classification?.inverted ?? false}
-        paletteType={PALETTE_TYPE.QUALITATIVE}
-        categoriesMode={true}
-        categoriesVariant="polygons"
-        categoryLabels={visualization?.classification?.labels ?? []}
-        oninvert={onInvertPalette}
-        onClassificationChange={handleClassificationChange}
-      />
-    {/if}
-
-    {#if effectiveFillMode !== FillMode.NONE && effectiveFillMode !== FillMode.DENSITY}
-      <SliderWithInput
-        label={m.opacity()}
-        min={SLIDER_LIMITS.opacity.min}
-        max={SLIDER_LIMITS.opacity.max}
-        value={fillOpacity}
-        onchange={handleFillOpacityChange}
-      />
-    {/if}
-
-    {#if effectiveFillMode === FillMode.CLASSES || effectiveFillMode === FillMode.CATEGORIES}
-      <MissingDataSection
-        bind:show={showMissingData}
-        color={missingDataColor}
-        showShapeSelector={false}
-        showSizeSlider={false}
-        onshowchange={handleMissingDataShowChange}
-        oncolorchange={handleMissingDataColorChange}
-      />
-    {/if}
+      {/snippet}
+    </FillSection>
 
     {#if effectiveFillMode !== FillMode.DENSITY}
       <StrokeSection
@@ -570,10 +452,13 @@
         onStyleChange={onStyleChange}
         onModesChange={onModesChange}
         onMappingChange={onMappingChange}
-        onInvertPalette={onInvertPalette}
+        onStrokeMappingChange={onStrokeMappingChange}
+        onInvertPalette={onStrokeInvertPalette}
         onOpenDiscretization={handleOpenStrokeDiscretization}
         onStrokeClassificationChange={handleStrokeDiscretizationChange}
         strokeClassification={visualization?.polygon?.strokeClassification}
+        strokeValueColumn={visualization?.polygon?.strokeValueColumn}
+        strokeCategoryColumn={visualization?.polygon?.strokeCategoryColumn}
         facetsValueSlotPath={FACET_SLOT.POLYGON_VALUE}
         facetsCategorySlotPath={FACET_SLOT.POLYGON_CATEGORY}
       />
@@ -599,6 +484,10 @@
   bind:open={discretizationModalOpen}
   visualization={visualization}
   classification={activeDiscretizationClassification}
+  valueColumn={discretizationTarget === 'stroke'
+    ? visualization?.polygon?.strokeValueColumn
+    : visualization?.polygon?.valueColumn}
+  role={discretizationTarget}
   onchange={discretizationOnchange}
 />
 
@@ -608,11 +497,5 @@
     flex-direction: column;
     gap: var(--cds-spacing-04);
     padding: var(--cds-spacing-03);
-  }
-
-  .field-group {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-02);
   }
 </style>

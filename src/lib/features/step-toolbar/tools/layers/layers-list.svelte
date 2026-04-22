@@ -61,6 +61,7 @@
 
   let parentItems = $state<Layer[]>([]);
   let childItems = $state<Record<string, Layer[]>>({});
+  let collapsedParents = $state<Record<string, boolean>>({});
   let draggingParent = $state(false);
   let draggingChildOf: string | null = null;
 
@@ -80,8 +81,39 @@
     }
   });
 
+  $effect(() => {
+    const previousState = untrack(() => collapsedParents);
+    const nextState = Object.fromEntries(
+      parentLayers.map((layer, index) => [
+        layer.id,
+        previousState[layer.id] ?? index > 0
+      ])
+    );
+
+    const previousEntries = Object.entries(previousState);
+    const nextEntries = Object.entries(nextState);
+    const hasChanged =
+      previousEntries.length !== nextEntries.length ||
+      nextEntries.some(([id, collapsed]) => previousState[id] !== collapsed);
+
+    if (hasChanged) {
+      collapsedParents = nextState;
+    }
+  });
+
   function getChildren(parentId: string): Layer[] {
     return childItems[parentId] ?? [];
+  }
+
+  function toggleParent(parentId: string): void {
+    collapsedParents = {
+      ...collapsedParents,
+      [parentId]: !isParentCollapsed(parentId)
+    };
+  }
+
+  function isParentCollapsed(parentId: string): boolean {
+    return collapsedParents[parentId] ?? false;
   }
 
   function markRecentDndInteraction(): void {
@@ -165,9 +197,12 @@
         onRenameLayer={onRenameLayer}
         onDuplicateLayer={onDuplicateLayer}
         onDeleteLayer={onDeleteLayer}
+        isExpanded={!isParentCollapsed(parentLayer.id)}
+        showExpandToggle={getChildren(parentLayer.id).length > 0}
+        onToggleExpanded={() => toggleParent(parentLayer.id)}
       />
 
-      {#if getChildren(parentLayer.id).length > 0 && !draggingParent}
+      {#if getChildren(parentLayer.id).length > 0 && !draggingParent && !isParentCollapsed(parentLayer.id)}
         <div class="sublayers-container">
           <div class="sublayers-line"></div>
           <div
@@ -202,12 +237,14 @@
     flex-direction: column;
     gap: 2px;
     outline: none;
+    padding-bottom: var(--cds-spacing-03);
   }
 
   .sublayers-container {
     display: flex;
     gap: var(--cds-spacing-03);
     padding-left: var(--cds-spacing-05);
+    margin-bottom: var(--cds-spacing-05);
   }
 
   .sublayers-line {

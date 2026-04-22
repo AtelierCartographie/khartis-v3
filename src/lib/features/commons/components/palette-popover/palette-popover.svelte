@@ -4,6 +4,10 @@
   import * as m from '$lib/paraglide/messages';
   import { ArrowRight, Close } from 'carbon-icons-svelte';
   import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
+  import {
+    createExclusiveContextualSurfaceId,
+    engageExclusiveContextualSurface
+  } from '$lib/features/commons/utils/contextual-surface-coordinator';
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import { ToolbarState } from '$lib/features/commons/types/global';
   import PaletteSuggestions from './palette-suggestions.svelte';
@@ -15,6 +19,8 @@
     type Palette,
     type PatternParams,
     type ContrastMode,
+    type QualitativePreset,
+    DEFAULT_QUALITATIVE_PRESET,
     generatePaletteColors,
     generateCategoricalColorsFromSeed,
     findPaletteById
@@ -29,6 +35,8 @@
     paletteType?: PaletteType;
     colorBlindFilter?: boolean;
     numClasses?: number;
+    divergingSplit?: import('./palette.constants').DivergingPaletteSplit;
+    exclusive?: boolean;
     onclose?: () => void;
     onvalidate?: (
       palette: Palette | undefined,
@@ -47,6 +55,8 @@
     paletteType = $bindable<PaletteType>(PALETTE_TYPE.SEQUENTIAL),
     colorBlindFilter = $bindable(false),
     numClasses = 5,
+    divergingSplit,
+    exclusive = true,
     onclose,
     onvalidate
   }: Props = $props();
@@ -60,6 +70,11 @@
   let draftType = $state<PaletteType>(PALETTE_TYPE.SEQUENTIAL);
   let draftColorBlindFilter = $state(false);
   let draftPatternParams = $state<PatternParams | undefined>(undefined);
+  let draftQualitativePreset = $state<QualitativePreset>(
+    DEFAULT_QUALITATIVE_PRESET
+  );
+  const contextualSurfaceId =
+    createExclusiveContextualSurfaceId('palette-popover');
 
   const popoverTitle = $derived.by(() => {
     switch (draftType) {
@@ -105,6 +120,9 @@
     draftType = paletteType;
     draftColorBlindFilter = colorBlindFilter;
     draftPatternParams = undefined;
+    draftQualitativePreset =
+      findPaletteById(selectedPaletteId)?.qualitativePreset ??
+      DEFAULT_QUALITATIVE_PRESET;
   }
 
   function handleClose() {
@@ -126,10 +144,14 @@
     draftPaletteId = palette.id;
     draftInverted = false;
     draftPatternParams = undefined;
+    draftQualitativePreset =
+      palette.qualitativePreset ?? draftQualitativePreset;
     draftColors = generatePaletteColors(
       palette,
       numClasses,
-      draftColorBlindFilter ? 'high' : undefined
+      draftColorBlindFilter ? 'high' : undefined,
+      undefined,
+      divergingSplit
     );
   }
 
@@ -155,6 +177,10 @@
 
   function handleContrastChange(_contrast: ContrastMode | undefined) {}
 
+  function handleQualitativePresetChange(preset: QualitativePreset) {
+    draftQualitativePreset = preset;
+  }
+
   function handleInvertToggle(value: boolean) {
     draftInverted = value;
     draftColors = [...draftColors].reverse();
@@ -167,7 +193,11 @@
     if (numClasses <= 1) {
       draftColors = [hex];
     } else {
-      draftColors = generateCategoricalColorsFromSeed(hex, numClasses, 'vif');
+      draftColors = generateCategoricalColorsFromSeed(
+        hex,
+        numClasses,
+        draftQualitativePreset
+      );
     }
   }
 
@@ -176,6 +206,14 @@
       initDraft();
       updatePosition();
     }
+  });
+
+  $effect(() => {
+    if (!open || !exclusive) {
+      return;
+    }
+
+    return engageExclusiveContextualSurface(contextualSurfaceId, handleClose);
   });
 
   $effect(() => {
@@ -239,10 +277,13 @@
           selectedPaletteId={draftPaletteId}
           selectedColor={draftColors[0]}
           numClasses={numClasses}
+          divergingSplit={divergingSplit}
           onTypeChange={handleTypeChange}
           onColorBlindChange={handleColorBlindChange}
           onSelect={handlePaletteSelect}
           onColorSelect={handleQualitativeColorSelect}
+          onIntensitySelect={handleQualitativeColorSelect}
+          onQualitativePresetChange={handleQualitativePresetChange}
         />
 
         <PaletteCustom

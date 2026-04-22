@@ -3,6 +3,10 @@
   import { Button } from 'carbon-components-svelte';
   import { ColorPalette, Checkmark } from 'carbon-icons-svelte';
   import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
+  import {
+    createExclusiveContextualSurfaceId,
+    engageExclusiveContextualSurface
+  } from '$lib/features/commons/utils/contextual-surface-coordinator';
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import { VIF_MIXTE_COLORS } from './palette.constants';
 
@@ -11,6 +15,7 @@
     triggerElement?: HTMLElement;
     selectedColor: string;
     presets?: readonly string[];
+    exclusive?: boolean;
     onclose?: () => void;
     onselect?: (hex: string) => void;
     oncustomize?: () => void;
@@ -21,6 +26,7 @@
     triggerElement,
     selectedColor,
     presets = VIF_MIXTE_COLORS,
+    exclusive = true,
     onclose,
     onselect,
     oncustomize
@@ -28,6 +34,9 @@
 
   let dropdownRef = $state<HTMLDivElement>();
   let dropdownPos = $state({ top: 0, left: 0, width: 0 });
+  const contextualSurfaceId = createExclusiveContextualSurfaceId(
+    'single-color-dropdown'
+  );
 
   function portal(node: HTMLElement) {
     document.body.appendChild(node);
@@ -73,6 +82,14 @@
 
   $effect(() => {
     if (open) updatePosition();
+  });
+
+  $effect(() => {
+    if (!open || !exclusive) {
+      return;
+    }
+
+    return engageExclusiveContextualSurface(contextualSurfaceId, handleClose);
   });
 
   $effect(() => {
@@ -161,10 +178,10 @@
 
   :global(.single-color-dropdown) {
     position: fixed;
-    background: var(--cds-ui-01);
-    border: 1px solid var(--cds-border-subtle);
+    background: var(--cds-background, #ffffff);
+    border: 1px solid var(--cds-border-subtle-01, #c6c6c6);
     box-shadow:
-      0 2px 8px rgba(0, 0, 0, 0.1),
+      0 4px 16px rgba(0, 0, 0, 0.12),
       0 0 1px rgba(0, 0, 0, 0.12);
     z-index: var(--z-popover);
     display: flex;
@@ -174,8 +191,8 @@
   .dropdown-list {
     display: flex;
     flex-direction: column;
-    padding: var(--cds-spacing-03);
-    gap: var(--cds-spacing-02);
+    padding: 8px;
+    gap: 4px;
     max-height: 60vh;
     overflow-y: auto;
   }
@@ -185,26 +202,25 @@
     display: flex;
     align-items: center;
     width: 100%;
-    padding: var(--cds-spacing-02);
+    padding: 4px;
     background: transparent;
-    border: 2px solid transparent;
-    border-radius: 4px;
+    border: 1px solid transparent;
     cursor: pointer;
     transition: border-color 0.15s ease;
 
     &:hover {
-      border-color: var(--cds-border-strong);
+      border-color: var(--cds-border-strong-01, #8d8d8d);
     }
 
     &.selected {
-      border-color: var(--cds-interactive);
+      border-color: #012749;
     }
   }
 
   .color-bar {
     flex: 1;
     height: 18px;
-    border-radius: 2px;
+    border: 1px solid var(--cds-icon-on-color, #ffffff);
   }
 
   .check-icon {
@@ -219,7 +235,14 @@
   }
 
   .dropdown-footer {
-    padding: var(--cds-spacing-02) var(--cds-spacing-03);
-    border-top: 1px solid var(--cds-border-subtle);
+    padding: 8px 16px 12px;
+    border-top: 1px solid var(--cds-border-subtle-01, #c6c6c6);
+
+    :global(.bx--btn) {
+      width: 100%;
+      justify-content: flex-start;
+      padding-inline: 0;
+      min-height: 32px;
+    }
   }
 </style>

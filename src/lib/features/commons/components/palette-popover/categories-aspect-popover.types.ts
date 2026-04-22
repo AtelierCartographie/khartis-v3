@@ -1,4 +1,4 @@
-import type { ShapeType } from '$lib/features/main-toolbar/constants';
+import { ShapeType } from '$lib/features/main-toolbar/constants';
 
 export type CategoriesAspectVariant =
   | 'symbols-unique'
@@ -23,6 +23,8 @@ export interface CategoriesCommonAspect {
   autoColor: boolean;
   strokeSize: number;
   pattern: boolean;
+  shape?: ShapeType;
+  color?: string;
   thickness?: number;
   dashed?: boolean;
   labelSize?: number;
@@ -36,6 +38,8 @@ export const DEFAULT_COMMON_ASPECT: CategoriesCommonAspect = {
   autoColor: true,
   strokeSize: 1,
   pattern: false,
+  shape: ShapeType.CIRCLE,
+  color: '#f287ac',
   thickness: 1,
   dashed: false,
   labelSize: 12,

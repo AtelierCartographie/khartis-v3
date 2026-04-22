@@ -137,19 +137,10 @@
     })
   );
 
-  const groupLabelByKey = {
-    projection_group_rectangular: m.projection_group_rectangular,
-    projection_group_rounded: m.projection_group_rounded,
-    projection_group_discontinuous: m.projection_group_discontinuous
-  } as const;
-
-  const groups = $derived(
-    GROUPS.filter((group) =>
-      compatibleProjections.some((projection) => projection.tag === group.id)
-    ).map((group) => ({
-      id: group.id,
-      label: groupLabelByKey[group.labelKey]()
-    }))
+  const gridProjections = $derived(
+    GROUPS.flatMap((group) =>
+      compatibleProjections.filter((projection) => projection.tag === group.id)
+    )
   );
 </script>
 
@@ -268,34 +259,24 @@
       >{m.show_other_suggestions()}</Button
     >
   {:else}
-    <div class="projection-scroll-x">
-      <div class="projection-grid">
-        {#each groups as g (g.id)}
-          <div class="grid-col">
-            <div class="group-title">{g.label}</div>
-
-            <div class="cards-col">
-              {#each compatibleProjections.filter((p) => p.tag === g.id) as p (p.id + '-grid')}
-                <ProjectionCard
-                  title={p.title}
-                  subtitle={p.subtitle}
-                  tag={p.tag}
-                  ratio={p.ratio}
-                  previewLabel={p.previewLabel}
-                  selected={selectedCardId === p.id}
-                  disabled={p.disabled}
-                  variant={p.variant}
-                  equalArea={p.equalArea}
-                  description={p.description}
-                  layout="vertical"
-                  fullWidth
-                  onclick={() => selectProjection(p.projectionId)}
-                />
-              {/each}
-            </div>
-          </div>
-        {/each}
-      </div>
+    <div class="projection-grid">
+      {#each gridProjections as p (p.id + '-grid')}
+        <ProjectionCard
+          title={p.title}
+          subtitle={p.subtitle}
+          tag={p.tag}
+          ratio={p.ratio}
+          previewLabel={p.previewLabel}
+          selected={selectedCardId === p.id}
+          disabled={p.disabled}
+          variant={p.variant}
+          equalArea={p.equalArea}
+          description={p.description}
+          layout="vertical"
+          fullWidth
+          onclick={() => selectProjection(p.projectionId)}
+        />
+      {/each}
     </div>
   {/if}
 </div>
@@ -388,37 +369,15 @@
   }
 
   .projection-grid {
-    display: flex;
-    flex-wrap: nowrap;
-    gap: var(--cds-spacing-05);
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-auto-rows: 19rem;
+    gap: var(--cds-spacing-03);
     width: 100%;
     align-items: stretch;
   }
 
-  .projection-scroll-x {
-    overflow-x: hidden;
-    overflow-y: hidden;
-    padding-bottom: var(--cds-spacing-02);
-    width: 100%;
-  }
-
-  .grid-col {
-    display: flex;
-    flex-direction: column;
-    flex: 0 0 calc((100% - (2 * var(--cds-spacing-05))) / 3);
-    max-width: calc((100% - (2 * var(--cds-spacing-05))) / 3);
-    min-width: 0;
-  }
-
-  .group-title {
-    font-weight: 600;
-    margin-bottom: var(--cds-spacing-04);
-    color: var(--cds-dark-blue);
-  }
-
-  .cards-col {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-03);
+  .projection-grid :global(.projection-card) {
+    height: 100%;
   }
 </style>
