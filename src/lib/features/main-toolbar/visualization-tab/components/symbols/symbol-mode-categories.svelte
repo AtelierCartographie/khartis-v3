@@ -1,9 +1,12 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
+  import Button from '$lib/features/commons/components/carbon/button.svelte';
   import {
     Dropdown,
     RadioButton,
     RadioButtonGroup
   } from 'carbon-components-svelte';
+  import { Settings } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
   import {
     DEFAULT_QUALITATIVE_PREVIEW,
@@ -14,46 +17,76 @@
     MissingDataShape,
     ShapeType,
     SLIDER_LIMITS,
+    StrokeMode,
     SymbolMode,
     DEFAULT_COLORS,
     availableShapesForSymbolMode
   } from '../../../constants';
-  import type { CategoriesAspectVariant } from '$lib/features/commons/components/palette-popover/categories-aspect-popover.types';
   import {
-    DiscretizationRow,
+    DEFAULT_COMMON_ASPECT,
+    type CategoriesAspectVariant,
+    type CategoriesCommonAspect,
+    type CategoryDraft
+  } from '$lib/features/commons/components/palette-popover/categories-aspect-popover.types';
+  import {
     InfoPopover,
     MissingDataSection,
     PalettePreview,
-    SliderWithInput
+    SliderWithInput,
+    StrokeSection
   } from '../shared';
+  import { resolveCategoryPreviewCount } from '../shared/categorical-preview.utils';
   import type { SymbolModeProps } from './types';
+  import DiscretizationModal from '../discretization-modal.svelte';
+  import { resolveDiscretizationLabel } from '../discretization.utils';
   import {
     FACET_SLOT,
     facetsStore,
     type FacetSlotPath
-  } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
+  } from '../../facets-adapter.svelte';
+  import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import FacetsVariablePicker from './facets-variable-picker.svelte';
+  import { useCategoryLabels } from '../../use-category-labels.svelte';
+  import {
+    NONE_FIELD_ID,
+    useFieldSelection
+  } from '../../use-field-selection.svelte';
 
   let {
     dataFields = [],
     visualization,
+    onStyleChange,
     onMappingChange,
+    onStrokeMappingChange,
     onSymbolsChange,
+    onSymbolPrimitiveChange,
     onModesChange,
     onMissingDataChange,
     onClassificationChange,
+    onStrokeClassificationChange,
     onInvertPalette,
-    onOpenDiscretization
+    onStrokeInvertPalette
   }: SymbolModeProps = $props();
 
   const currentPalette = $derived(
-    visualization?.classification?.colors ?? DEFAULT_QUALITATIVE_PREVIEW
+    visualization?.symbol?.classification?.colors ??
+      visualization?.symbolClassification?.colors ??
+      DEFAULT_QUALITATIVE_PREVIEW
+  );
+  const symbolClassification = $derived(
+    visualization?.symbol?.classification ?? visualization?.symbolClassification
+  );
+  const dataset = $derived(
+    visualization
+      ? (datasetsStore.datasets.find((d) => d.id === visualization.datasetId) ??
+          datasetsStore.selectedDataset)
+      : datasetsStore.selectedDataset
   );
 
-  const NONE_FIELD_ID = -1;
-  let selectedFieldId = $state<number>(NONE_FIELD_ID);
+  let strokeDiscretizationModalOpen = $state(false);
   let categoryPickerOpen = $state(false);
   let categoryCount = $state<number>(4);
+  let categoriesAspectOpen = $state(false);
   let symbolOpacity = $state<number>(100);
   let shapeType = $state<ShapeType>(ShapeType.CIRCLE);
   let categoryShapeMode = $state<CategoryShapeMode>(CategoryShapeMode.UNIQUE);
@@ -63,6 +96,20 @@
   let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
   const selectableDataFields = $derived([noneOption, ...dataFields]);
+  const categoryFieldSelection = useFieldSelection(() => dataFields);
+  const categoryColumnName = $derived(
+    categoryFieldSelection.selectedFieldName ?? ''
+  );
+  const categoryLabels = useCategoryLabels({
+    getDataset: () => dataset,
+    getColumnName: () =>
+      visualization?.symbol?.categoryColumn ??
+      visualization?.mapping.categoryColumn,
+    getClassification: () => symbolClassification,
+    fallbackCount: 4,
+    onResolvedLabels: syncFetchedCategoryLabels
+  });
+  const resolvedCategoryLabels = $derived(categoryLabels.labels);
 
   const availableShapes = availableShapesForSymbolMode(SymbolMode.CATEGORIES);
 
@@ -84,6 +131,20 @@
       text: shapeLabelByType[type]()
     }))
   );
+
+  function syncFetchedCategoryLabels(nextLabels: string[]) {
+    const persistedLabels = symbolClassification?.labels ?? [];
+    if (
+      !onClassificationChange ||
+      nextLabels.length === 0 ||
+      (persistedLabels.length === nextLabels.length &&
+        persistedLabels.every((label, index) => label === nextLabels[index]))
+    ) {
+      return;
+    }
+
+    onClassificationChange({ labels: nextLabels });
+  }
 
   function handleShapeDropdownSelect(value: string | number) {
     const next =
@@ -113,16 +174,31 @@
         : 'symbols-unique'
   );
 
+  const categoriesCommonAspect = $derived<CategoriesCommonAspect>({
+    ...DEFAULT_COMMON_ASPECT,
+    size:
+      visualization?.symbol?.size ??
+      visualization?.symbols?.size ??
+      DEFAULT_COMMON_ASPECT.size,
+    stroke:
+      (visualization?.symbol?.strokeMode ?? StrokeMode.NONE) !==
+        StrokeMode.NONE && (visualization?.symbol?.strokeWidth ?? 0) > 0,
+    autoColor:
+      (visualization?.symbol?.strokeMode ?? StrokeMode.NONE) ===
+      StrokeMode.CATEGORIES,
+    strokeSize: Math.max(
+      1,
+      visualization?.symbol?.strokeWidth ?? DEFAULT_COMMON_ASPECT.strokeSize
+    ),
+    shape: visualization?.symbol?.shape ?? DEFAULT_COMMON_ASPECT.shape,
+    color: currentPalette[0] ?? DEFAULT_COMMON_ASPECT.color
+  });
+
   $effect(() => {
-    if (visualization?.mapping.categoryColumn && dataFields.length > 0) {
-      const fieldIndex = dataFields.findIndex(
-        (field) => field.text === visualization.mapping.categoryColumn
-      );
-      selectedFieldId =
-        fieldIndex >= 0 ? dataFields[fieldIndex].id : NONE_FIELD_ID;
-    } else {
-      selectedFieldId = NONE_FIELD_ID;
-    }
+    const categoryCol =
+      visualization?.symbol?.categoryColumn ??
+      visualization?.mapping.categoryColumn;
+    categoryFieldSelection.sync(categoryCol);
 
     const symbolConfig = visualization?.symbol;
     if (symbolConfig) {
@@ -135,7 +211,8 @@
       shapeType = availableShapes.includes(persistedShape)
         ? persistedShape
         : ShapeType.CIRCLE;
-      categoryShapeMode = symbolConfig.categoryShape ?? categoryShapeMode;
+      categoryShapeMode =
+        symbolConfig.categoryShape ?? untrack(() => categoryShapeMode);
     } else if (visualization?.symbols) {
       symbolOpacity =
         visualization.symbols.opacity !== undefined
@@ -162,13 +239,12 @@
       missingDataColor =
         visualization.missingData.color ?? DEFAULT_COLORS.missingData;
     }
-    if (visualization?.classification) {
-      categoryCount =
-        visualization.classification.labels?.length ??
-        visualization.classification.numClasses ??
-        visualization.classification.classes ??
-        4;
-    }
+
+    categoryCount = resolveCategoryPreviewCount(
+      symbolClassification,
+      4,
+      resolvedCategoryLabels
+    );
   });
 
   function handleMissingDataShowChange(show: boolean) {
@@ -192,7 +268,7 @@
   }
 
   function handleFieldSelect(fieldId: number) {
-    selectedFieldId = fieldId;
+    categoryFieldSelection.set(fieldId);
     if (fieldId === NONE_FIELD_ID) {
       onMappingChange?.({ categoryColumn: undefined });
       return;
@@ -207,6 +283,89 @@
   function handleOpacityChange(value: number) {
     symbolOpacity = value;
     onSymbolsChange?.({ opacity: value / 100 });
+  }
+
+  const strokeDiscretizationLabel = $derived.by(() =>
+    resolveDiscretizationLabel(
+      visualization?.symbol?.strokeClassification
+        ? { ...visualization.symbol.strokeClassification }
+        : undefined
+    )
+  );
+
+  function resolveOrderedCategorySizeBounds(baseSize: number): {
+    minSize: number;
+    maxSize: number;
+  } {
+    const clampedBaseSize = Math.min(Math.max(baseSize, 1), 20);
+    const minSize = Math.max(1, Math.round(clampedBaseSize * 0.75));
+    const maxSize = Math.max(minSize + 1, Math.round(clampedBaseSize * 1.75));
+
+    return { minSize, maxSize };
+  }
+
+  function handleCategoriesCommonAspectChange(
+    commonAspect: CategoriesCommonAspect,
+    nextCategories: CategoryDraft[]
+  ) {
+    const symbolUpdates: Partial<
+      NonNullable<Parameters<NonNullable<typeof onSymbolPrimitiveChange>>[0]>
+    > = {};
+
+    if (commonAspect.sizeUnique) {
+      symbolUpdates.size = commonAspect.size;
+      if (categoryShapeMode === CategoryShapeMode.ORDERED) {
+        const { minSize, maxSize } = resolveOrderedCategorySizeBounds(
+          commonAspect.size
+        );
+        symbolUpdates.minSize = minSize;
+        symbolUpdates.maxSize = maxSize;
+      }
+    }
+
+    if (categoryShapeMode === CategoryShapeMode.ORDERED && commonAspect.shape) {
+      symbolUpdates.shape = commonAspect.shape;
+    }
+
+    if (commonAspect.stroke) {
+      symbolUpdates.strokeMode = commonAspect.autoColor
+        ? StrokeMode.CATEGORIES
+        : StrokeMode.UNIQUE;
+      symbolUpdates.strokeWidth = Math.max(1, commonAspect.strokeSize);
+    } else {
+      symbolUpdates.strokeMode = StrokeMode.NONE;
+      symbolUpdates.strokeWidth = 0;
+    }
+
+    if (Object.keys(symbolUpdates).length > 0) {
+      onSymbolPrimitiveChange?.(symbolUpdates);
+    }
+
+    if (commonAspect.stroke && commonAspect.autoColor) {
+      onStrokeClassificationChange?.({
+        colors: nextCategories.map((category) => category.color),
+        labels: nextCategories.map((category) => category.label),
+        disabledLabels: nextCategories
+          .filter((category) => !category.enabled)
+          .map((category) => category.label),
+        paletteId: undefined,
+        inverted: false,
+        patternId: undefined,
+        patternParams: undefined
+      });
+    } else {
+      onStrokeClassificationChange?.({
+        colors: undefined,
+        labels: undefined,
+        paletteId: undefined,
+        inverted: false,
+        patternId: undefined,
+        patternParams: undefined,
+        disabledLabels: undefined,
+        breaks: undefined,
+        counts: undefined
+      });
+    }
   }
 
   const selectedVizId = $derived(visualization?.id);
@@ -234,10 +393,6 @@
       .map((name) => dataFields.find((f) => f.text === name)?.id)
       .filter((id): id is number => typeof id === 'number');
   }
-
-  const categoryColumnName = $derived(
-    dataFields.find((f) => f.id === selectedFieldId)?.text ?? ''
-  );
 
   async function handleFacetsVariablesChange(fieldIds: number[]) {
     if (!selectedVizId) return;
@@ -290,7 +445,7 @@
     bind:open={categoryPickerOpen}
     dataFields={dataFields}
     singleSelectItems={selectableDataFields}
-    selectedFieldId={selectedFieldId}
+    selectedFieldId={categoryFieldSelection.selectedFieldId}
     selectedFieldIds={getFacetsSelectedFieldIds(FACET_SLOT.SYMBOL_CATEGORY)}
     isCollectionEnabled={isFacetsActiveForSlot(FACET_SLOT.SYMBOL_CATEGORY)}
     onSelect={handleFieldSelect}
@@ -305,9 +460,13 @@
     <InfoPopover text={m.category_shape_mode_info()} />
   </span>
   <RadioButtonGroup
+    name="cat-shape-mode"
     selected={categoryShapeMode}
-    on:change={(e) =>
-      handleCategoryShapeModeChange(e.detail as CategoryShapeMode)}
+    on:change={(e) => {
+      const next = (e as CustomEvent).detail as CategoryShapeMode;
+      if (next === categoryShapeMode) return;
+      handleCategoryShapeModeChange(next);
+    }}
   >
     <RadioButton
       id="cat-shape-unique"
@@ -342,22 +501,45 @@
   </div>
 {/if}
 
-<DiscretizationRow
-  label={m.category_aspect()}
-  value={m.categories_count({ count: categoryCount })}
-  onsettings={onOpenDiscretization}
-/>
+<div class="categories-aspect-row">
+  <span class="field-label">{m.category_aspect()}</span>
+  <div class="categories-aspect-value">
+    <span>{m.categories_count({ count: categoryCount })}</span>
+    <Button
+      class="categories-aspect-settings"
+      kind="ghost"
+      size="small"
+      icon={Settings}
+      iconDescription={m.palette_categories_aspect_title()}
+      aria-label={m.palette_categories_aspect_title()}
+      onclick={(event: MouseEvent) => {
+        event.stopPropagation();
+        categoriesAspectOpen = true;
+      }}
+    />
+  </div>
+</div>
 <PalettePreview
   label={m.color_palette()}
   colors={currentPalette}
-  selectedPaletteId={visualization?.classification?.paletteId}
-  inverted={visualization?.classification?.inverted ?? false}
+  selectedPaletteId={visualization?.symbol?.classification?.paletteId ??
+    visualization?.symbolClassification?.paletteId}
+  inverted={visualization?.symbol?.classification?.inverted ??
+    visualization?.symbolClassification?.inverted ??
+    false}
   paletteType={PALETTE_TYPE.QUALITATIVE}
   categoriesMode={true}
   categoriesVariant={categoriesVariant}
-  categoryLabels={visualization?.classification?.labels ?? []}
+  categoryLabels={resolvedCategoryLabels}
+  disabledCategoryLabels={visualization?.symbol?.classification
+    ?.disabledLabels ??
+    visualization?.symbolClassification?.disabledLabels ??
+    []}
+  categoriesCommonAspect={categoriesCommonAspect}
+  bind:categoriesPopoverOpen={categoriesAspectOpen}
   oninvert={onInvertPalette}
   onClassificationChange={onClassificationChange}
+  onCategoriesCommonAspectChange={handleCategoriesCommonAspectChange}
 />
 <SliderWithInput
   label={m.opacity()}
@@ -378,6 +560,37 @@
   oncolorchange={handleMissingDataColorChange}
 />
 
+<StrokeSection
+  visualization={visualization}
+  dataFields={dataFields}
+  infoText={m.stroke_section_info()}
+  showDashed={true}
+  discretizationLabel={strokeDiscretizationLabel}
+  onStyleChange={onStyleChange}
+  onModesChange={onModesChange}
+  onMappingChange={onMappingChange}
+  onStrokeMappingChange={onStrokeMappingChange}
+  onInvertPalette={onStrokeInvertPalette}
+  onOpenDiscretization={() => {
+    strokeDiscretizationModalOpen = true;
+  }}
+  onStrokeClassificationChange={onStrokeClassificationChange ?? (() => {})}
+  strokeClassification={visualization?.symbol?.strokeClassification}
+  strokeValueColumn={visualization?.symbol?.strokeValueColumn}
+  strokeCategoryColumn={visualization?.symbol?.strokeCategoryColumn}
+  facetsValueSlotPath={FACET_SLOT.SYMBOL_VALUE}
+  facetsCategorySlotPath={FACET_SLOT.SYMBOL_CATEGORY}
+/>
+
+<DiscretizationModal
+  bind:open={strokeDiscretizationModalOpen}
+  visualization={visualization}
+  classification={visualization?.symbol?.strokeClassification}
+  valueColumn={visualization?.symbol?.strokeValueColumn}
+  role="stroke"
+  onchange={onStrokeClassificationChange ?? (() => {})}
+/>
+
 <style lang="scss">
   .field-group {
     display: flex;
@@ -396,5 +609,32 @@
 
   :global(.field-group .bx--radio-button-group) {
     flex-direction: row;
+  }
+
+  .categories-aspect-row {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--cds-spacing-03) 0;
+    border-bottom: 1px solid var(--cds-border-subtle);
+    gap: var(--cds-spacing-02);
+  }
+
+  .categories-aspect-value {
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-03);
+
+    span {
+      font-size: 0.875rem;
+      color: var(--cds-text-primary);
+    }
+  }
+
+  :global(.categories-aspect-settings) {
+    min-width: 32px;
+    min-height: 32px;
+    padding: 8px;
   }
 </style>

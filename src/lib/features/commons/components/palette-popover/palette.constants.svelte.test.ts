@@ -1,14 +1,29 @@
 import { describe, expect, it, vi } from 'vitest';
+import * as m from '$lib/paraglide/messages';
 
 // ok-palette's resolvePalette relies on OffscreenCanvas which jsdom does not expose.
 // Stub it with a deterministic dummy so tests can exercise count/branching logic
 // without needing a working canvas 2D context.
 vi.mock('@ateliercartographie/ok-palette', async () => {
+  const divergentSequential = vi.fn(
+    ({
+      steps,
+      hasCenterClass
+    }: {
+      steps: [number, number];
+      hasCenterClass: boolean;
+    }) =>
+      Array.from(
+        { length: steps[0] + steps[1] + (hasCenterClass ? 1 : 0) },
+        (_, i) => `#mock-${i}`
+      )
+  );
   const actual = await vi.importActual<
     typeof import('@ateliercartographie/ok-palette')
   >('@ateliercartographie/ok-palette');
   return {
     ...actual,
+    divergentSequential,
     resolvePalette: (colors: string[]) =>
       colors.map((_, i) => {
         const v = (i * 37) % 256;
@@ -53,6 +68,7 @@ import {
   getPalettesForType,
   getQualitativeColorGroups,
   findPaletteById,
+  getPaletteDisplayName,
   buildPatternBackground,
   DEFAULT_SEQUENTIAL_PREVIEW,
   DEFAULT_QUALITATIVE_PREVIEW,
@@ -63,6 +79,7 @@ import {
   SEPIA_MIXTE_COLORS,
   type Palette
 } from './palette.constants';
+import { divergentSequential } from '@ateliercartographie/ok-palette';
 
 const HEX_REGEX = /^#[0-9a-fA-F]{6}$/;
 
@@ -83,6 +100,9 @@ describe('palette.constants — default previews', () => {
 
   it('should return four qualitative preview colors in hex format', () => {
     expect(DEFAULT_QUALITATIVE_PREVIEW).toHaveLength(4);
+    expect(DEFAULT_QUALITATIVE_PREVIEW).toEqual([
+      ...VIF_MIXTE_COLORS.slice(0, 4)
+    ]);
     DEFAULT_QUALITATIVE_PREVIEW.forEach((c) => expect(c).toMatch(HEX_REGEX));
   });
 });
@@ -127,7 +147,17 @@ describe('palette.constants — palette collections', () => {
     qualitativePalettes.forEach((p) => {
       expect(p.type).toBe(PALETTE_TYPE.QUALITATIVE);
       expect(p.colors.length).toBeGreaterThanOrEqual(3);
+      expect(p.colorBlindSafe).toBe(true);
     });
+  });
+
+  it('should expose the Figma-aligned qualitative palette ids in dropdown order', () => {
+    expect(qualitativePalettes.map((palette) => palette.id)).toEqual([
+      'vif',
+      'pastel',
+      'sepia',
+      'grayscale'
+    ]);
   });
 });
 
@@ -185,17 +215,50 @@ describe('palette.constants — generatePaletteColors', () => {
     result.forEach((c) => expect(c).toMatch(HEX_REGEX));
   });
 
+  it('should forward an asymmetric diverging split to ok-palette for custom diverging palettes', () => {
+    const p = divergingPalettes[0];
+    generatePaletteColors(p, 5, undefined, undefined, {
+      lowerCount: 1,
+      upperCount: 3,
+      hasCenterClass: true
+    });
+
+    expect(vi.mocked(divergentSequential)).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        steps: [1, 3],
+        hasCenterClass: true
+      })
+    );
+  });
+
   it('should slice QUALITATIVE palette colors when count <= palette length', () => {
     const p = qualitativePalettes[0];
     const result = generatePaletteColors(p, 3);
     expect(result).toEqual(p.colors.slice(0, 3));
   });
 
-  it('should generate N colors via categorical for QUALITATIVE when count exceeds palette length', () => {
+  it('should extend QUALITATIVE palette colors when count exceeds palette length', () => {
     const p = qualitativePalettes[0];
     const result = generatePaletteColors(p, p.colors.length + 5);
     expect(result).toHaveLength(p.colors.length + 5);
     result.forEach((c) => expect(c).toMatch(HEX_REGEX));
+    expect(result.slice(0, p.colors.length)).toEqual(p.colors);
+  });
+
+  it('should preserve the seed order before appending generated QUALITATIVE colors', () => {
+    const p = qualitativePalettes[0];
+    const count = p.colors.length + 3;
+    const result = generatePaletteColors(p, count);
+    expect(result).toHaveLength(count);
+    expect(result.slice(0, p.colors.length)).toEqual(p.colors);
+    expect(result[p.colors.length]).not.toBeUndefined();
+  });
+
+  it('should keep each QUALITATIVE palette own seeds on overflow across every qualitative palette', () => {
+    for (const palette of qualitativePalettes) {
+      const result = generatePaletteColors(palette, palette.colors.length + 10);
+      expect(result.slice(0, palette.colors.length)).toEqual(palette.colors);
+    }
   });
 
   it('should return raw palette colors for PATTERN type', () => {
@@ -324,8 +387,43 @@ describe('palette.constants — findPaletteById', () => {
     expect(findPaletteById(first.id)?.id).toBe(first.id);
   });
 
+  it('should resolve legacy qualitative palette ids to the new Figma presets', () => {
+    expect(findPaletteById('set1')?.id).toBe('vif');
+    expect(findPaletteById('set2')?.id).toBe('pastel');
+    expect(findPaletteById('dark')?.id).toBe('sepia');
+    expect(findPaletteById('categorical-set1')?.id).toBe('vif');
+    expect(findPaletteById('categorical-set2')?.id).toBe('pastel');
+  });
+
   it('should return undefined for an unknown palette id', () => {
     expect(findPaletteById('unknown-palette-id')).toBeUndefined();
+  });
+});
+
+describe('palette.constants — getPaletteDisplayName', () => {
+  it('should resolve a translated display name for every exported palette', () => {
+    const palettes = [
+      ...monochromePalettes,
+      ...bicolorPalettes,
+      ...sepiaPalettes,
+      ...divergingPalettes,
+      ...qualitativePalettes,
+      ...getPatternPalettes()
+    ];
+
+    palettes.forEach((palette) => {
+      expect(getPaletteDisplayName(palette)).toBeTruthy();
+    });
+  });
+
+  it('should return a translated generic fallback for an unknown palette id', () => {
+    expect(
+      getPaletteDisplayName({
+        id: 'unknown-id',
+        colors: ['#000000'],
+        type: PALETTE_TYPE.SEQUENTIAL
+      })
+    ).toBe(m.color_palette());
   });
 });
 

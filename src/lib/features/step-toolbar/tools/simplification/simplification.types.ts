@@ -12,6 +12,10 @@ export interface SimplificationResult {
   simplifiedVertices: number;
   level?: SimplificationLevel;
   rate?: number;
+  datasetId?: string;
+  datasetSourceFileId?: string;
+  datasetBaseTableName?: string;
+  datasetSimplifiedTableName?: string;
 }
 
 export interface SimplificationState {
@@ -24,7 +28,10 @@ export interface SimplificationState {
     level?: SimplificationLevel;
     rate?: number;
     basemapId?: string;
+    datasetId?: string;
     datasetSourceFileId?: string;
+    datasetBaseTableName?: string;
+    datasetSimplifiedTableName?: string;
     timestamp: number;
   };
 }

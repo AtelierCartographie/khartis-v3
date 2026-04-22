@@ -37,4 +37,13 @@ describe('PalettePopover (Figma 930:114478 + 893:153398 alignment)', () => {
   it('should reverse draft colors when the invert toggle flips on', () => {
     expect(source).toContain('draftColors = [...draftColors].reverse()');
   });
+
+  it('should derive qualitative generation from the active preset instead of hardcoding vif', () => {
+    expect(source).toContain('DEFAULT_QUALITATIVE_PRESET');
+    expect(source).toContain(
+      'onQualitativePresetChange={handleQualitativePresetChange}'
+    );
+    expect(source).toContain('generateCategoricalColorsFromSeed(');
+    expect(source).toContain('draftQualitativePreset');
+  });
 });

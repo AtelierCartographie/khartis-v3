@@ -14,7 +14,7 @@ describe('CategoriesAspectPopover (Figma 952:156994 — Polygons variant)', () =
 
   it('should clone incoming categories into a draft on open and restore on cancel', () => {
     expect(source).toContain(
-      'draftCategories = categories.map((c) => ({ ...c }))'
+      'draftCategories = categories.map((category, index) => ({'
     );
     expect(source).toContain(
       'onvalidate?.(draftCategories, draftCommonAspect)'
@@ -35,17 +35,24 @@ describe('CategoriesAspectPopover (Figma 952:156994 — Polygons variant)', () =
   });
 
   it('should render one category item per draft with color / label input / toggle', () => {
-    expect(source).toContain('{#each draftCategories as cat');
+    expect(source).toContain(
+      '{#each visibleDraftCategories as category, index'
+    );
     expect(source).toContain('<SingleColorPreview');
     expect(source).toContain('class="category-label-input"');
     expect(source).toContain('<Switch');
   });
 
+  it('should wire the category list to drag-and-drop in manual sort mode', () => {
+    expect(source).toContain('import { dragHandle, dragHandleZone }');
+    expect(source).toContain('use:dragHandleZone');
+    expect(source).toContain('use:dragHandle');
+    expect(source).toContain('handleCategoryListReorder');
+  });
+
   it('should apply a suggestion color only to the selected category', () => {
     expect(source).toContain('if (!selectedCategoryId) return');
-    expect(source).toContain(
-      'c.id === selectedCategoryId ? { ...c, color: hex } : c'
-    );
+    expect(source).toContain('category.id === selectedCategoryId');
   });
 
   it('should expose the Annuler / Valider footer pair with the divider shell', () => {
@@ -60,10 +67,17 @@ describe('CategoriesAspectPopover (Figma 952:156994 — Polygons variant)', () =
     expect(source).toContain("variant = 'symbols-unique'");
   });
 
-  it('should render the "Aspect commun" section when variant is not symbols-different-rank', () => {
+  it('should only seed per-category shapes for the symbols-different variant', () => {
+    expect(source).toContain("variant === 'symbols-different'");
     expect(source).toContain(
-      "showCommonAspect = $derived(variant !== 'symbols-different-rank')"
+      'CATEGORY_SHAPE_CYCLE[index % CATEGORY_SHAPE_CYCLE.length]'
     );
+  });
+
+  it('should render the "Aspect commun" section for the supported variants', () => {
+    expect(source).toContain("variant === 'symbols-unique' ||");
+    expect(source).toContain("variant === 'symbols-different-rank' ||");
+    expect(source).toContain("variant === 'polygons'");
     expect(source).toContain('{#if showCommonAspect}');
     expect(source).toContain('{m.aspect_common_section()}');
     expect(source).toContain('{m.aspect_common_size_unique()}');
@@ -72,9 +86,69 @@ describe('CategoriesAspectPopover (Figma 952:156994 — Polygons variant)', () =
     expect(source).toContain('{m.aspect_common_pattern()}');
   });
 
+  it('should match the Figma common symbols layout instead of a flat two-column grid', () => {
+    expect(source).toContain('class="common-symbols-layout"');
+    expect(source).toContain(
+      'class="common-paired-row common-paired-row--with-input"'
+    );
+    expect(source).toContain('class="common-divider"');
+    expect(source).toContain(
+      '.common-symbols-layout :global(.kh-switch-native)'
+    );
+  });
+
   it('should ship a CategoriesCommonAspect draft initialised via DEFAULT_COMMON_ASPECT', () => {
     expect(source).toContain('draftCommonAspect');
     expect(source).toContain('DEFAULT_COMMON_ASPECT');
     expect(source).toContain('handleCommonAspectChange');
+  });
+
+  it('should suppress the per-category accordion for the ranked symbols variant', () => {
+    expect(source).toContain(
+      'const showPerCategoryAspect = $derived(!isSymbolsDifferentRank)'
+    );
+    expect(source).toContain('{#if showPerCategoryAspect}');
+  });
+
+  it('should bound ranked marker previews to the ordered size range instead of growing unbounded per row', () => {
+    expect(source).toContain('function resolveOrderedRankPreviewSize');
+    expect(source).toContain(
+      'resolveOrderedRankPreviewSize(index, visibleDraftCategories.length)'
+    );
+    expect(source).toContain('Math.max(1, Math.round(clampedBaseSize * 0.75))');
+    expect(source).toContain(
+      'Math.max(minSize + 1, Math.round(clampedBaseSize * 1.75))'
+    );
+    expect(source).not.toContain('rankBaseSize + index * 4');
+  });
+
+  it('should keep disabled categories visible in the editor while dimming their row', () => {
+    expect(source).toContain(
+      'class:category-item--disabled={!category.enabled}'
+    );
+    expect(source).toContain('.category-item--disabled');
+  });
+});
+
+describe('CategoriesAspectPopover — high cardinality cap (E-04)', () => {
+  it('caps the visible categories list to MAX_VISIBLE_CATEGORIES = 50', () => {
+    expect(source).toContain('const MAX_VISIBLE_CATEGORIES = 50');
+    expect(source).toMatch(
+      /draftCategories\.slice\(0,\s*MAX_VISIBLE_CATEGORIES\)/
+    );
+  });
+
+  it('renders a hidden-count note when categories exceed MAX_VISIBLE_CATEGORIES', () => {
+    expect(source).toContain('hidden-count-note');
+    expect(source).toMatch(
+      /Math\.max\(0,\s*draftCategories\.length\s*-\s*MAX_VISIBLE_CATEGORIES\)/
+    );
+  });
+
+  it('iterates visibleDraftCategories (capped) and not the full draftCategories', () => {
+    expect(source).toContain(
+      '{#each visibleDraftCategories as category, index'
+    );
+    expect(source).not.toContain('{#each draftCategories as category');
   });
 });

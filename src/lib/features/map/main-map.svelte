@@ -16,12 +16,7 @@
   import { globalState } from '../commons/store/global.svelte';
   import { ToolbarStep } from '../commons/types/global';
   import { LogCategory, logger } from '../commons/utils/logger';
-  import { applyColorBlindnessFilter } from '../commons/utils/color-blindness-filters';
-  import {
-    ColorBlindnessType,
-    FormatMode
-  } from '../commons/constants/ui.constants';
-  import { getColorBlindnessState } from '../step-toolbar/tools/color-blindness/color-blindness.store.svelte';
+  import { FormatMode } from '../commons/constants/ui.constants';
   import {
     formatActions,
     formatState
@@ -40,6 +35,7 @@
   } from '../commons/store/visualization.store.svelte';
   import { FillMode } from '../main-toolbar/constants';
   import { densityLoadingStore } from './stores/density-loading.store.svelte';
+  import { mapLoadingStore } from './stores/map-loading.store.svelte';
   import { basemapService } from './services/basemap.service.svelte';
   import type { SplitRenderingTable } from './types';
   import { INTERNAL_COLUMN } from '../commons/constants/data.constants';
@@ -56,6 +52,9 @@
 
   const TOOLBAR_TRANSITION_SAFETY_MS = 400;
   let displayTables = $state.raw<SvelteMap<string, ArrowTable>>(
+    new SvelteMap<string, ArrowTable>()
+  );
+  let displayDensityTables = $state.raw<SvelteMap<string, ArrowTable>>(
     new SvelteMap<string, ArrowTable>()
   );
   let displayGeoJSONs = $state.raw<SvelteMap<string, FeatureCollection>>(
@@ -84,6 +83,9 @@
   });
   const usesTiledBasemap = $derived(
     Boolean(activeOSMBasemap) || basemapStyleStore.requiresMapLibre
+  );
+  const shouldHideMapOutput = $derived(
+    mapLoadingStore.isHoldingPreviewForSuggestedBasemap
   );
   const facetsEnabled = $derived(facetsStore.enabled);
   const facetsLayout = $derived(facetsStore.layout);
@@ -148,6 +150,16 @@
     }
   }
 
+  function setDisplayDensityTable(datasetId: string, table: ArrowTable): void {
+    const previousTable = displayDensityTables.get(datasetId);
+    displayDensityTables.set(datasetId, table);
+
+    if (previousTable !== table) {
+      displayDensityTables = new SvelteMap(displayDensityTables);
+      bumpDisplayDataVersion();
+    }
+  }
+
   function setDisplaySplitTable(
     datasetId: string,
     split: SplitRenderingTable
@@ -207,6 +219,13 @@
     }
   }
 
+  function removeDensityTable(datasetId: string): void {
+    if (displayDensityTables.delete(datasetId)) {
+      displayDensityTables = new SvelteMap(displayDensityTables);
+      bumpDisplayDataVersion();
+    }
+  }
+
   async function loadGeoDatasetTable(
     dataset: DatasetResult,
     generation: number
@@ -231,36 +250,6 @@
         }
 
         if (tableName) {
-          const densityViz = findActiveDensityViz(dataset.id);
-          if (densityViz) {
-            densityLoadingStore.begin();
-            try {
-              const densityTable =
-                await duckDBOrchestrator.generateDotDensityArrowFromGeoTable(
-                  tableName,
-                  densityViz.density!.valueColumn!,
-                  densityViz.density!.ratio!,
-                  densityViz.density!.seed !== undefined
-                    ? { seed: densityViz.density!.seed }
-                    : undefined
-                );
-              if (densityTable) {
-                logger.success(
-                  'Density points ready for Deck.gl',
-                  LogCategory.MAP,
-                  {
-                    tableName,
-                    rows: densityTable.numRows,
-                    durationMs: (performance.now() - start).toFixed(2)
-                  }
-                );
-                return densityTable;
-              }
-            } finally {
-              densityLoadingStore.end();
-            }
-          }
-
           const shouldReprojectForTiledBasemap =
             usesTiledBasemap &&
             Boolean(dataset.geometry?.crs) &&
@@ -315,12 +304,16 @@
 
   function removeDatasetFromDisplay(datasetId: string): void {
     const removedTable = displayTables.delete(datasetId);
+    const removedDensityTable = displayDensityTables.delete(datasetId);
     const removedGeoJSON = displayGeoJSONs.delete(datasetId);
     const removedSplit = displaySplitData.delete(datasetId);
 
-    if (removedTable || removedGeoJSON || removedSplit) {
+    if (removedTable || removedDensityTable || removedGeoJSON || removedSplit) {
       if (removedTable) {
         displayTables = new SvelteMap(displayTables);
+      }
+      if (removedDensityTable) {
+        displayDensityTables = new SvelteMap(displayDensityTables);
       }
       if (removedGeoJSON) {
         displayGeoJSONs = new SvelteMap(displayGeoJSONs);
@@ -366,45 +359,6 @@
     });
 
     try {
-      const densityViz = findActiveDensityViz(datasetId);
-      if (densityViz) {
-        densityLoadingStore.begin();
-        let joinedTable: ArrowTable | undefined;
-        try {
-          joinedTable =
-            await duckDBOrchestrator.generateDotDensityArrowFromJoin(
-              joinedBasemap,
-              tableName,
-              densityViz.density!.valueColumn!,
-              densityViz.density!.ratio!,
-              densityViz.density!.seed !== undefined
-                ? { seed: densityViz.density!.seed }
-                : undefined
-            );
-        } finally {
-          densityLoadingStore.end();
-        }
-
-        if (isStaleLoad(generation)) return;
-        if (!datasetsStore.isDatasetEnabled(datasetId)) return;
-
-        if (joinedTable) {
-          setDisplayArrowTable(datasetId, joinedTable);
-          logger.success(
-            'Density basemap ready for rendering',
-            LogCategory.MAP,
-            {
-              datasetId,
-              rows: joinedTable.numRows,
-              durationMs: (performance.now() - start).toFixed(2)
-            }
-          );
-        } else {
-          removeDatasetFromDisplay(datasetId);
-        }
-        return;
-      }
-
       // Issue #87 split rendering: keep the basemap geometry Arrow ref-stable
       // (re-uses parseSolidPolygons WeakMap cache) and pair it with the dataset
       // attributes Arrow for lookup-based accessors.
@@ -467,6 +421,94 @@
     } catch (error) {
       logger.error('Failed to load joined basemap', LogCategory.MAP, error);
       removeDatasetFromDisplay(dataset.id);
+    }
+  }
+
+  async function loadDensityTableForDisplay(
+    dataset: DatasetResult,
+    generation: number
+  ): Promise<void> {
+    const densityViz = findActiveDensityViz(dataset.id);
+
+    if (!densityViz?.density?.valueColumn || !densityViz.density?.ratio) {
+      removeDensityTable(dataset.id);
+      return;
+    }
+
+    let tableName: string | undefined;
+
+    densityLoadingStore.begin();
+    try {
+      let densityTable: ArrowTable | undefined;
+
+      if (dataset.geometry && dataset.sourceFileId) {
+        const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(
+          dataset.sourceFileId
+        );
+        tableName = duckDBDataset?.tableName ?? dataset.tableName;
+
+        if (tableName) {
+          densityTable =
+            await duckDBOrchestrator.generateDotDensityArrowFromGeoTable(
+              tableName,
+              densityViz.density.valueColumn,
+              densityViz.density.ratio,
+              densityViz.density.seed !== undefined
+                ? { seed: densityViz.density.seed }
+                : undefined
+            );
+        }
+      } else if (dataset.sourceFileId) {
+        const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(
+          dataset.sourceFileId
+        );
+        tableName = duckDBDataset?.tableName;
+
+        if (duckDBDataset?.joinedBasemap && duckDBDataset.tableName) {
+          densityTable =
+            await duckDBOrchestrator.generateDotDensityArrowFromJoin(
+              duckDBDataset.joinedBasemap,
+              duckDBDataset.tableName,
+              densityViz.density.valueColumn,
+              densityViz.density.ratio,
+              densityViz.density.seed !== undefined
+                ? { seed: densityViz.density.seed }
+                : undefined
+            );
+        }
+      }
+
+      if (isStaleLoad(generation)) return;
+      if (!datasetsStore.isDatasetEnabled(dataset.id)) return;
+
+      if (densityTable) {
+        setDisplayDensityTable(dataset.id, densityTable);
+        logger.success('Density points ready for Deck.gl', LogCategory.MAP, {
+          datasetId: dataset.id,
+          rows: densityTable.numRows
+        });
+      } else {
+        removeDensityTable(dataset.id);
+      }
+    } catch (error) {
+      if (
+        (tableName &&
+          shouldIgnoreDatasetLoadError(
+            dataset.id,
+            generation,
+            error,
+            tableName
+          )) ||
+        isStaleLoad(generation) ||
+        !datasetsStore.isDatasetEnabled(dataset.id)
+      ) {
+        return;
+      }
+
+      logger.error('Failed to load density table', LogCategory.MAP, error);
+      removeDensityTable(dataset.id);
+    } finally {
+      densityLoadingStore.end();
     }
   }
 
@@ -568,6 +610,8 @@
           });
         }
       }
+
+      await loadDensityTableForDisplay(dataset, generation);
     } else {
       const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(
         dataset.sourceFileId
@@ -582,9 +626,22 @@
           duckDBDataset.tableName,
           generation
         );
+        await loadDensityTableForDisplay(dataset, generation);
+      } else {
+        removeDensityTable(datasetId);
       }
     }
   }
+
+  /**
+   * Pending animation-frame handle for the reload debounce. Multiple
+   * visualization mutations fired in the same tick (e.g. a mode switch that
+   * also resets palette + column mappings) used to schedule one full dataset
+   * reload per bump, generating a 4-8× "Preparing dataset" log burst and a
+   * visible FPS drop on the map. Coalescing into a single rAF collapses
+   * those bursts into a single reload per animation frame.
+   */
+  let pendingReloadHandle: number | null = null;
 
   $effect(() => {
     void duckDBDatasetsVersion;
@@ -596,43 +653,54 @@
       return;
     }
 
-    hasError = false;
-    errorMessage = null;
-
-    const currentEnabledIds = new Set(currentEnabledDatasets.map((d) => d.id));
-
-    // displayTables/displayGeoJSONs are outputs of this effect.
-    // Read them untracked to avoid a self-triggering reload loop.
-    const tableIdsToRemove = untrack(() =>
-      [...displayTables.keys()].filter((id) => !currentEnabledIds.has(id))
-    );
-
-    const geojsonIdsToRemove = untrack(() =>
-      [...displayGeoJSONs.keys()].filter((id) => !currentEnabledIds.has(id))
-    );
-
-    const datasetIdsToRemove = new Set([
-      ...tableIdsToRemove,
-      ...geojsonIdsToRemove
-    ]);
-    for (const datasetId of datasetIdsToRemove) {
-      removeDatasetFromDisplay(datasetId);
+    if (pendingReloadHandle !== null) {
+      cancelAnimationFrame(pendingReloadHandle);
     }
 
-    // Bump load generation so any in-flight loads from a previous version are discarded
-    const thisGeneration = ++loadGeneration;
+    pendingReloadHandle = requestAnimationFrame(() => {
+      pendingReloadHandle = null;
+      untrack(() => {
+        hasError = false;
+        errorMessage = null;
 
-    untrack(() => {
-      void loadDatasetsSequentially(currentEnabledDatasets, (dataset) =>
-        loadDatasetForDisplay(dataset, thisGeneration)
-      ).catch((error) => {
-        logger.error(
-          'Failed to reload display datasets',
-          LogCategory.MAP,
-          error
+        const currentEnabledIds = new Set(
+          currentEnabledDatasets.map((d) => d.id)
         );
+
+        const tableIdsToRemove = [...displayTables.keys()].filter(
+          (id) => !currentEnabledIds.has(id)
+        );
+        const geojsonIdsToRemove = [...displayGeoJSONs.keys()].filter(
+          (id) => !currentEnabledIds.has(id)
+        );
+
+        const datasetIdsToRemove = new Set([
+          ...tableIdsToRemove,
+          ...geojsonIdsToRemove
+        ]);
+        for (const datasetId of datasetIdsToRemove) {
+          removeDatasetFromDisplay(datasetId);
+        }
+
+        const thisGeneration = ++loadGeneration;
+        void loadDatasetsSequentially(currentEnabledDatasets, (dataset) =>
+          loadDatasetForDisplay(dataset, thisGeneration)
+        ).catch((error) => {
+          logger.error(
+            'Failed to reload display datasets',
+            LogCategory.MAP,
+            error
+          );
+        });
       });
     });
+
+    return () => {
+      if (pendingReloadHandle !== null) {
+        cancelAnimationFrame(pendingReloadHandle);
+        pendingReloadHandle = null;
+      }
+    };
   });
 
   $effect(() => {
@@ -791,17 +859,6 @@
     }
   }
 
-  const colorBlindnessState = $derived(getColorBlindnessState());
-
-  $effect(() => {
-    const simulationType = colorBlindnessState.enabled
-      ? colorBlindnessState.simulationType
-      : ColorBlindnessType.NONE;
-    if (thematicMapRef) {
-      applyColorBlindnessFilter(thematicMapRef, simulationType);
-    }
-  });
-
   type ResizeEdge = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
   const RESIZE_EDGES: ResizeEdge[] = [
     'n',
@@ -879,10 +936,11 @@
   <!-- Skeleton loader - overlay above map, hidden via CSS when ready -->
   <div
     class="skeleton-loader"
-    class:hidden={isMapReady}
+    class:hidden={isMapReady && !shouldHideMapOutput}
+    class:held={shouldHideMapOutput}
     style="width: {formatState.width}px; height: {formatState.height}px;"
   >
-    <MapSkeleton paused={isMapReady} />
+    <MapSkeleton paused={isMapReady && !shouldHideMapOutput} />
   </div>
 
   <!-- Map wrapper - always rendered once initialized -->
@@ -902,13 +960,15 @@
   {:else if !isInitializing}
     <div
       class="thematic-map-wrapper"
-      class:visible={isMapReady}
+      class:held={shouldHideMapOutput}
+      class:visible={isMapReady && !shouldHideMapOutput}
       bind:this={thematicMapRef}
     >
       {#if facetsEnabled && facetVisualizations.length > 0}
         <FacetsPage
           visualizations={facetVisualizations}
           tables={displayTables}
+          densityTables={displayDensityTables}
           splitData={displaySplitData}
           geoJSONs={displayGeoJSONs}
           layout={facetsLayout}
@@ -920,6 +980,7 @@
       {:else}
         <ThematicMap
           tables={displayTables}
+          densityTables={displayDensityTables}
           splitData={displaySplitData}
           geoJSONs={displayGeoJSONs}
           dataVersion={displayDataVersion}
@@ -1019,12 +1080,19 @@
 
   .thematic-map-wrapper {
     opacity: 0;
-    transition: opacity 0.3s ease-out;
     position: relative;
   }
 
   .thematic-map-wrapper.visible {
     opacity: 1;
+    transition: none;
+  }
+
+  .thematic-map-wrapper.held {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: none;
   }
 
   .skeleton-loader {
@@ -1044,6 +1112,12 @@
   .skeleton-loader.hidden {
     opacity: 0;
     pointer-events: none;
+  }
+
+  .skeleton-loader.held {
+    opacity: 1;
+    visibility: visible;
+    transition: none;
   }
 
   .error-state {

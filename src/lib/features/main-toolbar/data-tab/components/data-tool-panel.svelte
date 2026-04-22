@@ -1,6 +1,10 @@
 <script lang="ts">
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import { EVENT } from '$lib/features/commons/constants/dom.constants';
+  import {
+    createExclusiveContextualSurfaceId,
+    engageExclusiveContextualSurface
+  } from '$lib/features/commons/utils/contextual-surface-coordinator';
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import { ToolbarState } from '$lib/features/commons/types/global';
   import * as m from '$lib/paraglide/messages';
@@ -16,6 +20,8 @@
   let { title, children }: Props = $props();
 
   const MAIN_TOOLBAR_ID = 'khartis-main-toolbar';
+  const contextualSurfaceId =
+    createExclusiveContextualSurfaceId('data-tool-panel');
 
   function getFallbackPanelRight(toolbarState: ToolbarState): string {
     switch (toolbarState) {
@@ -54,6 +60,12 @@
     void globalState.toolbarState;
     updatePanelPosition();
   });
+
+  $effect(() =>
+    engageExclusiveContextualSurface(contextualSurfaceId, () => {
+      dataToolsStore.closeTool();
+    })
+  );
 
   onMount(() => {
     updatePanelPosition();

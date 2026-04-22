@@ -47,7 +47,7 @@
       const reader = new FileReader();
       reader.onload = (ev) => {
         const dataUrl = ev.target?.result as string;
-        annotationsActions.addAnnotation(AnnotationKind.IMAGE, dataUrl);
+        annotationsActions.beginPlacement(AnnotationKind.IMAGE, dataUrl);
       };
       reader.readAsDataURL(file);
     }
@@ -71,9 +71,12 @@
 <Grid noGutter fullWidth>
   <Row>
     <Column>
-      <Button kind="primary" icon={Upload} onclick={triggerFileDialog}>
-        {m.annotations_import_image()}
-      </Button>
+      <div class="section">
+        <Button kind="primary" icon={Upload} onclick={triggerFileDialog}>
+          {m.annotations_import_image()}
+        </Button>
+        <p class="helper">{m.annotations_import_image_description()}</p>
+      </div>
       <div class="visually-hidden" bind:this={hiddenUploader}>
         <FileUploader
           labelTitle=""
@@ -154,6 +157,13 @@
 <style>
   .section {
     margin-top: var(--cds-spacing-05);
+  }
+
+  .helper {
+    margin: var(--cds-spacing-03) 0 0 0;
+    color: var(--cds-text-secondary);
+    font-size: 0.75rem;
+    line-height: 1rem;
   }
 
   .visually-hidden {

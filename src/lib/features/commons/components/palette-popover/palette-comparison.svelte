@@ -57,7 +57,7 @@
   .palette-comparison {
     display: flex;
     flex-direction: column;
-    gap: 1px;
+    gap: 8px;
     width: 100%;
 
     &.side-by-side {
@@ -81,6 +81,8 @@
   }
 
   .comparison-label {
+    display: block;
+    margin: 0;
     padding: 0 0 8px 0;
     font-family: 'IBM Plex Sans', sans-serif;
     font-weight: 400;
@@ -93,7 +95,7 @@
   .swatch-row {
     display: flex;
     width: 100%;
-    height: 18px;
+    height: 16px;
     overflow: hidden;
   }
 

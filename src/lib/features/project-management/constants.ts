@@ -17,7 +17,7 @@ export const PROJECT_CONST = {
     HISTORY_LIMIT: 50
   },
   TIMINGS: {
-    AUTO_SAVE_DELAY: 5000
+    AUTO_SAVE_DELAY: 750
   },
-  APP_VERSION: '3.4.0'
+  APP_VERSION: '3.6.0'
 } as const;
