@@ -99,6 +99,18 @@ describe('CategoriesAspectPopover (Figma 952:156994 — Polygons variant)', () =
     expect(source).toContain('{#if showPerCategoryAspect}');
   });
 
+  it('should bound ranked marker previews to the ordered size range instead of growing unbounded per row', () => {
+    expect(source).toContain('function resolveOrderedRankPreviewSize');
+    expect(source).toContain(
+      'resolveOrderedRankPreviewSize(index, visibleDraftCategories.length)'
+    );
+    expect(source).toContain('Math.max(1, Math.round(clampedBaseSize * 0.75))');
+    expect(source).toContain(
+      'Math.max(minSize + 1, Math.round(clampedBaseSize * 1.75))'
+    );
+    expect(source).not.toContain('rankBaseSize + index * 4');
+  });
+
   it('should keep disabled categories visible in the editor while dimming their row', () => {
     expect(source).toContain(
       'class:category-item--disabled={!category.enabled}'
