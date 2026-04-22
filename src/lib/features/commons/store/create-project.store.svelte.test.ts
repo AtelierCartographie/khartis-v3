@@ -193,7 +193,7 @@ describe('createProjectActions.removeUploadedFile', () => {
     ]);
   });
 
-  it('resetAllTabs clears stale modal state across create/open/example tabs', () => {
+  it('resetAllTabs clears stale modal state across create/example tabs', () => {
     createProjectState.selectedTab = 3;
     createProjectState.newProject.uploadedFiles = [
       makeUploadedFile('stale', 1)
@@ -207,8 +207,6 @@ describe('createProjectActions.removeUploadedFile', () => {
     createProjectState.newProject.error = 'stale-error';
     createProjectState.newProject.warning = 'stale-warning';
     createProjectState.newProject.validationErrors = ['stale-validation'];
-    createProjectState.openProject.selectedProjectId = 'project-1';
-    createProjectState.openProject.error = 'open-error';
     createProjectState.tryExample.selectedExampleId = 'example-1';
     createProjectState.tryExample.error = 'example-error';
 
@@ -225,8 +223,6 @@ describe('createProjectActions.removeUploadedFile', () => {
     expect(createProjectState.newProject.error).toBeUndefined();
     expect(createProjectState.newProject.warning).toBeUndefined();
     expect(createProjectState.newProject.validationErrors).toEqual([]);
-    expect(createProjectState.openProject.selectedProjectId).toBeUndefined();
-    expect(createProjectState.openProject.error).toBeUndefined();
     expect(createProjectState.tryExample.selectedExampleId).toBeUndefined();
     expect(createProjectState.tryExample.error).toBeUndefined();
   });

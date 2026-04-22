@@ -1,6 +1,5 @@
 import * as m from '$lib/paraglide/messages';
 import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
-import { PRINT_STANDARD_TOKENS } from '$lib/features/commons/utils/layout-sizing.utils';
 import {
   toCanvas as htmlToImageCanvas,
   toSvg as htmlToImageSvg
@@ -67,19 +66,22 @@ async function prerenderWebgl(pixelRatio: number): Promise<() => void> {
 
 /**
  * Temporarily mutates .page-container for export:
- *   - Adds the signature watermark div
+ *   - Hides the alignment grid
  *   - Strips the color-blindness CSS filter (CDC §2.C.2.e: not exported; the
  *     filter also refs an SVG sibling outside the container so html-to-image
  *     wouldn't resolve it anyway)
  * Returns a cleanup function that undoes both mutations.
  */
 function mutateDomForExport(pageContainer: HTMLElement): () => void {
-  const sig = document.createElement('div');
-  sig.style.cssText =
-    'position:absolute;bottom:10px;left:10px;font-family:Arial,sans-serif;' +
-    `font-size:${PRINT_STANDARD_TOKENS.annotations.captionFontSize}px;color:rgba(102,102,102,0.7);pointer-events:none;z-index:9999;`;
-  sig.textContent = m.map_export_signature();
-  pageContainer.appendChild(sig);
+  pageContainer.classList.add('is-exporting-map');
+
+  const pageGrids = Array.from(
+    pageContainer.querySelectorAll<HTMLElement>('.page-grid')
+  );
+  const pageGridDisplays = pageGrids.map((grid) => grid.style.display);
+  pageGrids.forEach((grid) => {
+    grid.style.display = 'none';
+  });
 
   const mapStage = pageContainer.querySelector(
     '.map-stage'
@@ -88,9 +90,23 @@ function mutateDomForExport(pageContainer: HTMLElement): () => void {
   if (mapStage) mapStage.style.filter = 'none';
 
   return () => {
-    pageContainer.removeChild(sig);
+    pageContainer.classList.remove('is-exporting-map');
+    pageGrids.forEach((grid, index) => {
+      grid.style.display = pageGridDisplays[index] ?? '';
+    });
     if (mapStage) mapStage.style.filter = savedFilter;
   };
+}
+
+function waitForNextFrame(): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => resolve());
+      return;
+    }
+
+    setTimeout(resolve, 0);
+  });
 }
 
 /**
@@ -136,6 +152,7 @@ export async function exportMapToSvg(
 
   const restoreRatio = await prerenderWebgl(pixelRatio);
   const restoreDom = mutateDomForExport(pageContainer);
+  await waitForNextFrame();
 
   try {
     const svgDataUrl = await htmlToImageSvg(pageContainer, {
@@ -174,20 +191,22 @@ export async function exportMapToJpg(
 
   const restoreRatio = await prerenderWebgl(pagePixelRatio);
   const restoreDom = mutateDomForExport(pageContainer);
+  await waitForNextFrame();
 
-  let pageCanvas: HTMLCanvasElement | null = null;
-  try {
-    // Step 1 — capture as canvas. toCanvas skips the PNG Blob encode/decode
-    // round-trip that toBlob + createImageBitmap would incur.
-    pageCanvas = await htmlToImageCanvas(pageContainer, {
-      pixelRatio: pagePixelRatio,
-      style: { boxShadow: 'none' },
-      filter: exportFilter
-    });
-  } finally {
-    restoreDom();
-    restoreRatio();
-  }
+  const pageCanvas = await (async (): Promise<HTMLCanvasElement | null> => {
+    try {
+      // Step 1 — capture as canvas. toCanvas skips the PNG Blob encode/decode
+      // round-trip that toBlob + createImageBitmap would incur.
+      return await htmlToImageCanvas(pageContainer, {
+        pixelRatio: pagePixelRatio,
+        style: { boxShadow: 'none' },
+        filter: exportFilter
+      });
+    } finally {
+      restoreDom();
+      restoreRatio();
+    }
+  })();
 
   if (!pageCanvas) {
     return Promise.reject(new Error('Failed to capture page'));

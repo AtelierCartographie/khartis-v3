@@ -1,12 +1,13 @@
 <script lang="ts">
   import { m } from '$lib/paraglide/messages';
-  import { Column, Grid, Row, Toggle } from 'carbon-components-svelte';
+  import { Column, Grid, Row } from 'carbon-components-svelte';
+  import Switch from '$lib/features/commons/components/switch.svelte';
   import { formatActions, getFormatState } from './format.store.svelte';
 
   const formatState = $derived(getFormatState());
 
-  function handleToggle(event: CustomEvent<{ toggled: boolean }>): void {
-    if (event.detail.toggled !== formatState.gridEnabled) {
+  function handleToggle(checked: boolean): void {
+    if (checked !== formatState.gridEnabled) {
       formatActions.toggleGrid();
     }
   }
@@ -16,13 +17,14 @@
   <Grid noGutter>
     <Row>
       <Column>
-        <Toggle
+        <Switch
           size="sm"
           labelText={m.format_grid()}
           labelA={m.projection_settings_no()}
           labelB={m.projection_settings_yes()}
+          showStateLabel
           toggled={formatState.gridEnabled}
-          on:toggle={handleToggle}
+          onchange={handleToggle}
         />
         <p class="helper-text">{m.format_grid_description()}</p>
       </Column>

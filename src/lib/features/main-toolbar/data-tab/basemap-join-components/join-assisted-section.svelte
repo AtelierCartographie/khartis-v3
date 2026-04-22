@@ -19,7 +19,7 @@
     WarningAltFilled,
     WarningFilled
   } from 'carbon-icons-svelte';
-  import { InfoPopover } from '../../visualization-tab/components/shared';
+  import { InfoPopover } from '$lib/features/commons/components/viz-controls';
 
   interface JoinRow {
     dataValue: string;

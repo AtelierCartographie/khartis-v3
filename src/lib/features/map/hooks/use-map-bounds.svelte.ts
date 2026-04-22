@@ -19,7 +19,6 @@ export interface UseMapBoundsProps {
   getDatasetId: () => string | undefined;
   getFitPaddingPx: () => number;
   onBoundsUpdated: (zoom: number) => void;
-  savePosition: () => void;
   onFitComplete?: () => void;
 }
 
@@ -39,8 +38,6 @@ export interface UseMapBoundsReturn {
     options?: FitViewportOptions
   ) => void;
   fitToBounds: (bounds: LngLatBoundsLike, options?: FitViewportOptions) => void;
-  readonly shouldRestorePosition: boolean;
-  setShouldRestorePosition: (value: boolean) => void;
   resetFitState: () => void;
 }
 
@@ -51,13 +48,11 @@ export function useMapBounds(props: UseMapBoundsProps): UseMapBoundsReturn {
     getDatasetId,
     getFitPaddingPx,
     onBoundsUpdated,
-    savePosition,
     onFitComplete
   } = props;
 
   let lastFitDatasetId: string | null = null;
   let lastFitGeoJSON: FeatureCollection | null = null;
-  let shouldRestorePosition = $state(true);
 
   function getNormalizedFitPaddingPx(): number {
     const padding = getFitPaddingPx();
@@ -95,7 +90,6 @@ export function useMapBounds(props: UseMapBoundsProps): UseMapBoundsReturn {
       if (map) {
         const zoomAfter = map.getZoom();
         onBoundsUpdated(zoomAfter);
-        savePosition();
         map.off('moveend', onMoveEnd);
         onFitComplete?.();
       }
@@ -132,7 +126,6 @@ export function useMapBounds(props: UseMapBoundsProps): UseMapBoundsReturn {
       return;
     }
 
-    shouldRestorePosition = false;
     const bounds = calculateBoundsFromGeoArrow(jsTable);
     if (bounds) {
       logger.info('Fitting map to Arrow dataset bounds', LogCategory.MAP, {
@@ -169,7 +162,6 @@ export function useMapBounds(props: UseMapBoundsProps): UseMapBoundsReturn {
       return;
     }
 
-    shouldRestorePosition = false;
     const bounds = calculateBoundsFromGeoJSON(geojson);
     if (bounds) {
       logger.info('Fitting map to GeoJSON bounds', LogCategory.MAP, {
@@ -185,10 +177,6 @@ export function useMapBounds(props: UseMapBoundsProps): UseMapBoundsReturn {
     }
   }
 
-  function setShouldRestorePosition(value: boolean): void {
-    shouldRestorePosition = value;
-  }
-
   function resetFitState(): void {
     lastFitDatasetId = null;
     lastFitGeoJSON = null;
@@ -200,7 +188,6 @@ export function useMapBounds(props: UseMapBoundsProps): UseMapBoundsReturn {
   ): void {
     const map = getMap();
     if (!map || !getIsMapLoaded()) return;
-    shouldRestorePosition = false;
     executeFitBounds(bounds, {
       reason: options.reason ?? 'dataset',
       animate: options.animate
@@ -211,10 +198,6 @@ export function useMapBounds(props: UseMapBoundsProps): UseMapBoundsReturn {
     fitToArrowBounds,
     fitToGeoJSONBounds,
     fitToBounds,
-    get shouldRestorePosition() {
-      return shouldRestorePosition;
-    },
-    setShouldRestorePosition,
     resetFitState
   };
 }

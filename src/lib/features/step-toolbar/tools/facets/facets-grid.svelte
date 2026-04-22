@@ -12,6 +12,7 @@
   let {
     visualizations,
     tables,
+    densityTables,
     splitData,
     geoJSONs,
     layout,
@@ -23,6 +24,7 @@
   }: {
     visualizations: VisualizationConfig[];
     tables: Map<string, ArrowTable>;
+    densityTables?: Map<string, ArrowTable>;
     splitData?: Map<string, SplitRenderingTable>;
     geoJSONs: Map<string, FeatureCollection>;
     layout: FacetsLayout;
@@ -102,6 +104,7 @@
         <h4 class="facet-title">{viz.name}</h4>
         <ThematicMap
           tables={tables}
+          densityTables={densityTables}
           splitData={splitData}
           geoJSONs={geoJSONs}
           width={facetWidth}

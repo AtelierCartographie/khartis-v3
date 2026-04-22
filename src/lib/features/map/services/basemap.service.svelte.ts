@@ -787,7 +787,11 @@ function createBasemapService() {
     if (cached) {
       const variant = getResolvedBasemapVariant(cached);
       const geometryTable = variant?.geometryTable ?? cached.geometryTable;
-      if (geometryTable) return geometryTable;
+      if (geometryTable) {
+        currentBasemap = cached;
+        updateProjectionFromTable(geometryTable);
+        return geometryTable;
+      }
     }
     const loaded = await loadBasemapInternal(basemapId);
     if (!loaded) return null;

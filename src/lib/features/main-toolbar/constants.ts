@@ -87,6 +87,12 @@ export enum CategoryShapeMode {
   ORDERED = 'ordered'
 }
 
+export enum SymbolDoublePosition {
+  OVERLAY = 'overlay',
+  JUXTAPOSITION = 'juxtaposition',
+  DIVISION = 'division'
+}
+
 export const CATEGORY_SHAPE_CYCLE: readonly ShapeType[] = [
   ShapeType.CIRCLE,
   ShapeType.SQUARE,

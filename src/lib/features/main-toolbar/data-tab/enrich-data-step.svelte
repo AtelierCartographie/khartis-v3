@@ -8,7 +8,7 @@
   import * as m from '$lib/paraglide/messages';
   import { InlineNotification } from 'carbon-components-svelte';
   import { DataEnrichment } from 'carbon-icons-svelte';
-  import { InfoPopover } from '../visualization-tab/components/shared';
+  import { InfoPopover } from '$lib/features/commons/components/viz-controls';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import {
     EnrichmentBasemapSelector,

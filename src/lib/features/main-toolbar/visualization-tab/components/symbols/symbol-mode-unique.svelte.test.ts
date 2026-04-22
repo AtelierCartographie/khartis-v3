@@ -23,34 +23,100 @@ describe('SymbolModeUnique (aucun.png alignment)', () => {
     expect(source).toContain('max={SLIDER_LIMITS.symbolSize.max}');
   });
 
-  it('still exposes the background (Fond) section to match existing feature set', () => {
-    expect(source).toContain('title={m.background()}');
-  });
-
-  it('wires SEQUENTIAL paletteType for CLASSES fill and QUALITATIVE for CATEGORIES fill', () => {
-    expect(source).toContain('paletteType={PALETTE_TYPE.SEQUENTIAL}');
-    expect(source).toContain('paletteType={PALETTE_TYPE.QUALITATIVE}');
-  });
-
-  it('routes Fill Unique through SingleColorPreview (not ColorSelector)', () => {
+  it('delegates the background fill rendering to the shared FillSection', () => {
     expect(source).toContain(
-      "import SingleColorPreview from '../palette-popover/single-color-preview.svelte'"
+      "import FillSection from '../shared/fill-section.svelte'"
     );
-    const uniqueBlock = source
-      .split('fillMode === FillMode.UNIQUE')[1]
-      ?.split('{:else if')[0];
-    expect(uniqueBlock).toContain('<SingleColorPreview');
-    expect(uniqueBlock).not.toContain('<ColorSelector');
+    expect(source).toContain('<FillSection');
+    expect(source).toContain('primitive="symbol"');
   });
 
-  it('enables the Categories Aspect popover via categoriesMode + categoryLabels on CATEGORIES', () => {
-    const categoriesBlock = source.split('fillMode === FillMode.CATEGORIES')[1];
-    const paletteBlock = categoriesBlock
-      ?.split('<PalettePreview')[1]
-      ?.split('/>')[0];
-    expect(paletteBlock).toContain('categoriesMode={true}');
-    expect(paletteBlock).toContain(
-      'categoryLabels={visualization?.classification?.labels ?? []}'
+  it('uses the standard 4-mode preset (no DENSITY for symbols unique)', () => {
+    expect(source).toContain('availableModes={FILL_MODES_STANDARD}');
+    expect(source).toContain(
+      "import { FILL_MODES_STANDARD } from '../shared/fill-mode-presets'"
+    );
+  });
+
+  it('passes the background section title to FillSection', () => {
+    const fillBlock = source.split('<FillSection')[1]?.split('/>')[0];
+    expect(fillBlock).toContain('sectionTitle={m.background()}');
+  });
+
+  it('sets categoriesVariant to symbols-unique', () => {
+    const fillBlock = source.split('<FillSection')[1]?.split('/>')[0];
+    expect(fillBlock).toContain('categoriesVariant="symbols-unique"');
+  });
+});
+
+describe('SymbolModeUnique — anti-leak fill ↔ stroke palette', () => {
+  it('routes StrokeSection strictly to onStrokeClassificationChange (no fallback to onClassificationChange)', () => {
+    const strokeBlock = source.split('<StrokeSection')[1]?.split('/>')[0];
+    expect(strokeBlock).toBeDefined();
+    expect(strokeBlock).toContain(
+      'onStrokeClassificationChange={onStrokeClassificationChange'
+    );
+    expect(strokeBlock).not.toMatch(
+      /onStrokeClassificationChange\s*\?\?\s*onClassificationChange/
+    );
+    expect(strokeBlock).not.toContain(
+      'onClassificationChange={onClassificationChange}'
+    );
+  });
+
+  it('routes FillSection strictly to onClassificationChange (fill role)', () => {
+    const fillBlock = source.split('<FillSection')[1]?.split('/>')[0];
+    expect(fillBlock).toBeDefined();
+    expect(fillBlock).toContain(
+      'onClassificationChange={onFillClassificationChange'
+    );
+    expect(fillBlock).not.toContain(
+      'onStrokeClassificationChange={onClassificationChange}'
+    );
+  });
+
+  it('imports FillSection and StrokeSection as separate components (distinct roles)', () => {
+    expect(source).toContain(
+      "import FillSection from '../shared/fill-section.svelte'"
+    );
+    expect(source).toContain('StrokeSection');
+  });
+});
+
+describe('SymbolModeUnique — stroke discretization isolation', () => {
+  it('wires the stroke section to symbol stroke-specific classification fields', () => {
+    expect(source).toContain(
+      'strokeClassification={visualization?.symbol?.strokeClassification}'
+    );
+    expect(source).toContain(
+      'strokeValueColumn={visualization?.symbol?.strokeValueColumn}'
+    );
+    expect(source).toContain(
+      'strokeCategoryColumn={visualization?.symbol?.strokeCategoryColumn}'
+    );
+  });
+
+  it('opens the shared discretization modal in stroke role for the outline channel', () => {
+    expect(source).toContain('role="stroke"');
+    expect(source).toContain(
+      'classification={visualization?.symbol?.strokeClassification}'
+    );
+    expect(source).toContain(
+      'valueColumn={visualization?.symbol?.strokeValueColumn}'
+    );
+  });
+
+  it('binds FillSection to the dedicated symbol fill visualization and facet slots', () => {
+    const fillBlock = source.split('<FillSection')[1]?.split('/>')[0];
+    expect(fillBlock).toContain('visualization={fillVisualization}');
+    expect(fillBlock).toContain(
+      'facetsValueSlotPath={FACET_SLOT.SYMBOL_FILL_VALUE}'
+    );
+    expect(fillBlock).toContain(
+      'facetsCategorySlotPath={FACET_SLOT.SYMBOL_FILL_CATEGORY}'
+    );
+    expect(fillBlock).toContain(
+      'onOpenDiscretization={onOpenFillDiscretization'
     );
   });
 });

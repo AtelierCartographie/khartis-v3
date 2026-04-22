@@ -44,7 +44,6 @@ import {
   updateDatasetTableName as updateDatasetTableNameFn,
   updateDatasetCsvOptions as updateDatasetCsvOptionsFn,
   renameDataset as renameDatasetFn,
-  renameDatasetOnly as renameDatasetOnlyFn,
   hasModifications as hasModificationsFn,
   recordTransformation as recordTransformationFn,
   waitForDatasetBySourceFile as waitForDatasetBySourceFileFn,
@@ -313,10 +312,6 @@ function createDatasetsStore() {
     return renameDatasetFn(datasetsState, datasetId, newName);
   }
 
-  function renameDatasetOnly(datasetId: string, newName: string): boolean {
-    return renameDatasetOnlyFn(datasetsState, datasetId, newName);
-  }
-
   function updateDatasetTableName(datasetId: string, tableName: string): void {
     updateDatasetTableNameFn(datasetsState, datasetId, tableName);
   }
@@ -416,7 +411,6 @@ function createDatasetsStore() {
     updateDatasetRowCount,
     renameDatasetColumn,
     renameDataset,
-    renameDatasetOnly,
     updateDatasetTableName,
     updateDatasetCsvOptions,
     hideColumn,

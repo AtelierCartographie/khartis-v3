@@ -3,7 +3,6 @@
   import Switch from '$lib/features/commons/components/switch.svelte';
   import { InfoPopover } from './components/shared';
   import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
-  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { mapProjectionStore } from '$lib/features/map/stores/map-projection.store.svelte';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
   import {
@@ -63,9 +62,6 @@
     }
 
     mapProjectionStore.setProjection(nextProjection);
-    if (projectStore.currentProject) {
-      void projectStore.saveCurrentProject();
-    }
   });
 
   async function handleToggle(isGlobe: boolean): Promise<void> {
@@ -74,9 +70,6 @@
     }
 
     mapProjectionStore.setProjection(isGlobe ? 'globe' : 'mercator');
-    if (projectStore.currentProject) {
-      await projectStore.saveCurrentProject();
-    }
   }
 </script>
 

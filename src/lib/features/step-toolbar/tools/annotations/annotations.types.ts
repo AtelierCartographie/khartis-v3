@@ -6,12 +6,15 @@ import { type AnnotationRoleValue } from '$lib/features/commons/constants';
 import { TextAlign } from '$lib/features/commons/types/enums';
 
 export type PageElementRole = AnnotationRoleValue;
+export type AnnotationCoordinateSpace = 'page' | 'map';
+export type AnnotationCreationMode = 'idle' | 'placing' | 'drawing';
 
 export interface Annotation {
   id: string;
   type: AnnotationKind;
   content: unknown;
   position: { x: number; y: number };
+  coordinateSpace?: AnnotationCoordinateSpace;
   positionMode?: 'auto' | 'manual';
   style?: AnnotationStyle;
   visible?: boolean;
@@ -50,6 +53,15 @@ export interface AnnotationStyle {
   rotation?: number;
 }
 
+export interface AnnotationPlacementPreview {
+  coordinateSpace: AnnotationCoordinateSpace;
+  type: AnnotationKind;
+  position: { x: number; y: number };
+  size: { width: number; height: number };
+  content?: unknown;
+  style?: Partial<AnnotationStyle>;
+}
+
 export interface AnnotationsState {
   visible: boolean;
   items: Annotation[];
@@ -58,7 +70,21 @@ export interface AnnotationsState {
   predefinedStyle: string;
   textContent: string;
   defaultStyle: AnnotationStyle;
-  isDrawingMode: boolean;
+  creationMode: AnnotationCreationMode;
+  pendingType: AnnotationKind | null;
+  pendingContent: unknown;
+  pendingStyle: AnnotationStyle | null;
+  previewGeometry: AnnotationPlacementPreview | null;
   drawingModeType: DrawingType;
   drawingInProgress: { x: number; y: number }[];
+}
+
+export function resolveAnnotationCoordinateSpace(
+  annotation: Pick<Annotation, 'coordinateSpace' | 'role'>
+): AnnotationCoordinateSpace {
+  if (annotation.role) {
+    return 'page';
+  }
+
+  return annotation.coordinateSpace ?? 'map';
 }

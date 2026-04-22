@@ -107,7 +107,9 @@ export function useSideNav(): UseSideNavReturn {
     if (projectStore.currentProject) {
       const projectId = projectStore.currentProject.id;
       await projectStore.deleteProject(projectId);
-      window.location.reload();
+      await projectsStore.refresh();
+      globalState.isCreateProjectModalOpen = true;
+      closeSideNav();
     }
     closeModal();
   }

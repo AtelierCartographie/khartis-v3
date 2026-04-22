@@ -415,6 +415,7 @@
             titleText={m.filter_operator()}
             items={availOps.map((op) => ({ id: op.value, text: op.label }))}
             selectedId={filter.operator}
+            direction="top"
             on:select={(e) =>
               handleOperatorChange(
                 filter,
@@ -575,16 +576,21 @@
     align-items: center;
     justify-content: space-between;
     padding: var(--cds-spacing-04) var(--cds-spacing-05);
-    background: var(--cds-button-primary, #161616);
-    color: var(--cds-text-on-color, #ffffff);
+    background: var(--cds-layer-inverse, #393939);
+    color: var(--cds-text-inverse, #ffffff);
     border: none;
     cursor: pointer;
     font-size: 0.875rem;
     font-weight: 400;
     width: 100%;
+    transition: background 0.1s ease;
 
     &:hover:not(:disabled) {
-      background: var(--cds-button-primary-hover, #2e2e2e);
+      background: var(--cds-layer-inverse-hover, #474747);
+    }
+
+    &:active:not(:disabled) {
+      background: var(--cds-layer-inverse-active, #6f6f6f);
     }
 
     &:disabled {

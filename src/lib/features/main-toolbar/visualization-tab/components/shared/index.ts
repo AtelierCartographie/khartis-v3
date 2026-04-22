@@ -1,12 +1,12 @@
-export { default as SliderWithInput } from './slider-with-input.svelte';
+export { default as SliderWithInput } from '$lib/features/commons/components/viz-controls/slider-with-input.svelte';
 export { default as SectionTitle } from './section-title.svelte';
-export { default as SectionHeading } from './section-heading.svelte';
+export { default as SectionHeading } from '$lib/features/commons/components/viz-controls/section-heading.svelte';
 export { default as ColorSelector } from './color-selector.svelte';
-export { default as PalettePreview } from './palette-preview.svelte';
-export { default as ToggleWithLabel } from './toggle-with-label.svelte';
+export { default as PalettePreview } from '$lib/features/commons/components/palette-popover/palette-preview.svelte';
+export { default as ToggleWithLabel } from '$lib/features/commons/components/viz-controls/toggle-with-label.svelte';
 export { default as DiscretizationRow } from './discretization-row.svelte';
 export { default as MissingDataSection } from './missing-data-section.svelte';
-export { default as InfoPopover } from './info-popover.svelte';
+export { default as InfoPopover } from '$lib/features/commons/components/viz-controls/info-popover.svelte';
 export { default as StrokeSection } from './stroke-section.svelte';
 export { default as VizFilterSection } from './viz-filter-section.svelte';
 export { default as VizFilterButton } from './viz-filter-button.svelte';
