@@ -80,6 +80,19 @@ describe('ConfigureVisualization', () => {
     expect(source).toContain('buildSymbolPanelVisualization');
   });
 
+  it('routes polygon density edits through a dedicated handler instead of generic polygon mapping', () => {
+    expect(source).toContain(
+      'function handlePolygonDensityChange(updates: Partial<DensityConfig>)'
+    );
+    expect(source).toContain('density: {');
+    expect(source).toContain('...(selectedViz?.density ?? {}),');
+    const polygonsConfigBlock = source.match(/<PolygonsConfig[\s\S]*?\/>/);
+    expect(polygonsConfigBlock).not.toBeNull();
+    expect(polygonsConfigBlock![0]).toContain(
+      'onDensityChange={handlePolygonDensityChange}'
+    );
+  });
+
   it('wires text background handlers independently from polygon handlers', () => {
     const textsConfigBlock = source.match(/<TextsConfig[\s\S]*?\/>/);
     expect(textsConfigBlock).not.toBeNull();

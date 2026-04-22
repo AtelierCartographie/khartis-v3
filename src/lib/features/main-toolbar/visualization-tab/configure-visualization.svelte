@@ -35,6 +35,7 @@
   } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
   import {
     DEFAULT_COLORS,
+    type DensityConfig,
     FillMode,
     StrokeMode,
     SymbolMode,
@@ -479,6 +480,15 @@
 
   function handlePolygonPaletteInvert() {
     invertPrimitivePalette(PrimitiveFilterType.POLYGON);
+  }
+
+  function handlePolygonDensityChange(updates: Partial<DensityConfig>) {
+    updateSelectedVisualization({
+      density: {
+        ...(selectedViz?.density ?? {}),
+        ...updates
+      }
+    });
   }
 
   function handlePolygonStrokePaletteInvert() {
@@ -1786,6 +1796,7 @@
       filters={getFiltersForPrimitive(PrimitiveFilterType.POLYGON)}
       onStyleChange={handlePolygonStyleChange}
       onModesChange={handlePolygonModesChange}
+      onDensityChange={handlePolygonDensityChange}
       onMissingDataChange={handlePolygonMissingDataChange}
       onClassificationChange={handlePolygonClassificationChange}
       onMappingChange={handlePolygonMappingChange}

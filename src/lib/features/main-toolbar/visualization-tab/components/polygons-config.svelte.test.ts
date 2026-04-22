@@ -37,6 +37,7 @@ describe('PolygonsConfig — FillSection wiring', () => {
       ?.split('</FillSection>')[0];
     expect(fillBlock).toContain('{#snippet densitySnippet()}');
     expect(fillBlock).toContain('<PolygonModeDensity');
+    expect(fillBlock).toContain('onDensityChange={onDensityChange}');
   });
 
   it('wires handleFillColorChange / handleFillOpacityChange / handleClassificationChange', () => {

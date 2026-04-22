@@ -14,6 +14,7 @@
   import {
     DEFAULT_COLORS,
     FillMode,
+    type DensityConfig,
     VISUALIZATION_DEFAULTS
   } from '../../constants';
   import { FILL_MODES_WITH_DENSITY } from './shared/fill-mode-presets';
@@ -46,6 +47,7 @@
     disabled?: boolean;
     onStyleChange?: (updates: Partial<VisualizationConfig['style']>) => void;
     onModesChange?: (updates: Partial<VisualizationModes>) => void;
+    onDensityChange?: (updates: Partial<DensityConfig>) => void;
     onMissingDataChange?: (updates: Partial<MissingDataConfig>) => void;
     onClassificationChange?: (updates: Partial<ClassificationConfig>) => void;
     onStrokeClassificationChange?: (
@@ -76,6 +78,7 @@
     disabled = false,
     onStyleChange,
     onModesChange,
+    onDensityChange,
     onMissingDataChange,
     onClassificationChange,
     onStrokeClassificationChange,
@@ -438,7 +441,7 @@
         <PolygonModeDensity
           dataFields={dataFields}
           visualization={visualization}
-          onMappingChange={onMappingChange}
+          onDensityChange={onDensityChange}
           onStyleChange={onStyleChange}
         />
       {/snippet}
