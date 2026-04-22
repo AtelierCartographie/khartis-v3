@@ -43,7 +43,7 @@
   import BasemapOsmTab from './basemap-join-components/basemap-osm-tab.svelte';
   import JoinAssistedSection from './basemap-join-components/join-assisted-section.svelte';
   import BasemapSuggestionModal from './components/basemap-suggestion-modal.svelte';
-  import { InfoPopover } from '../visualization-tab/components/shared';
+  import { InfoPopover } from '$lib/features/commons/components/viz-controls';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import { dataTabStore } from './data-tab.store.svelte';
   import { resolveSuggestedBasemapAutoSelectionTarget } from './services/basemap-auto-selection';
