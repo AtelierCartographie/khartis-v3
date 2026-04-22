@@ -160,4 +160,14 @@ describe('SymbolModeCategories — anti-leak classification routing', () => {
       'onClassificationChange={onClassificationChange}'
     );
   });
+
+  it('maps categoryShapeMode to CategoriesAspectVariant and passes categoriesVariant to PalettePreview', () => {
+    expect(source).toContain(
+      'categoriesVariant = $derived<CategoriesAspectVariant>'
+    );
+    expect(source).toContain("'symbols-different'");
+    expect(source).toContain("'symbols-different-rank'");
+    expect(source).toContain("'symbols-unique'");
+    expect(source).toContain('categoriesVariant={categoriesVariant}');
+  });
 });
