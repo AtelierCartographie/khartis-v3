@@ -86,6 +86,17 @@ describe('CategoriesAspectPopover (Figma 952:156994 — Polygons variant)', () =
     expect(source).toContain('{m.aspect_common_pattern()}');
   });
 
+  it('should match the Figma common symbols layout instead of a flat two-column grid', () => {
+    expect(source).toContain('class="common-symbols-layout"');
+    expect(source).toContain(
+      'class="common-paired-row common-paired-row--with-input"'
+    );
+    expect(source).toContain('class="common-divider"');
+    expect(source).toContain(
+      '.common-symbols-layout :global(.kh-switch-native)'
+    );
+  });
+
   it('should ship a CategoriesCommonAspect draft initialised via DEFAULT_COMMON_ASPECT', () => {
     expect(source).toContain('draftCommonAspect');
     expect(source).toContain('DEFAULT_COMMON_ASPECT');

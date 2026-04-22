@@ -57,14 +57,19 @@ describe('PalettePreview — categoriesMode routing (Fill Categories)', () => {
     expect(source).toContain('onvalidate={handleCategoriesValidateWithAspect}');
   });
 
-  it('should build categoryDrafts from colors and categoryLabels with default labels fallback', () => {
+  it('should build categoryDrafts from the full labels/colors span with default labels fallback', () => {
     expect(source).toContain(
       'const categoryDrafts = $derived<CategoryDraft[]>('
     );
-    expect(source).toContain('colors.map((color, i) => {');
+    expect(source).toContain('const categoryDraftCount = $derived(');
+    expect(source).toContain('Math.max(colors.length, categoryLabels.length)');
+    expect(source).toContain(
+      'Array.from({ length: categoryDraftCount }, (_, i) => {'
+    );
     expect(source).toContain(
       'categoryLabels[i] ?? m.palette_category_default_label'
     );
+    expect(source).toContain('colors[i % Math.max(colors.length, 1)]');
     expect(source).toContain(
       'enabled: !disabledCategoryLabels.includes(label)'
     );

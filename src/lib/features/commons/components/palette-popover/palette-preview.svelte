@@ -107,10 +107,17 @@
     );
   });
 
+  const categoryDraftCount = $derived(
+    Math.max(colors.length, categoryLabels.length)
+  );
   const categoryDrafts = $derived<CategoryDraft[]>(
-    colors.map((color, i) => {
+    Array.from({ length: categoryDraftCount }, (_, i) => {
       const label =
         categoryLabels[i] ?? m.palette_category_default_label({ index: i + 1 });
+      const color =
+        colors[i % Math.max(colors.length, 1)] ??
+        DEFAULT_COMMON_ASPECT.color ??
+        '#f287ac';
 
       return {
         id: String(i),
