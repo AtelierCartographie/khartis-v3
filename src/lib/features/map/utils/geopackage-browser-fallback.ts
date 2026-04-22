@@ -212,17 +212,7 @@ export function extractWkbFromGeoPackageGeometry(
 async function getSqliteModule(): Promise<SqliteModule> {
   if (!sqliteModulePromise) {
     sqliteModulePromise = import('@sqlite.org/sqlite-wasm').then(
-      ({ default: initSqlite }) =>
-        initSqlite({
-          print: () => {},
-          printErr: (...args) => {
-            logger.warn(
-              'SQLite Wasm stderr during GeoPackage fallback',
-              LogCategory.MAP,
-              { args }
-            );
-          }
-        })
+      ({ default: initSqlite }) => initSqlite()
     );
   }
 

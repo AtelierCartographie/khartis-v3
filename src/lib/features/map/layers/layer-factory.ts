@@ -204,37 +204,29 @@ function createPointSymbolSvg(
     ? ` stroke-dasharray="${Math.max(2, scaledStrokeWidth * DEFAULT_DASH_ARRAY[0])} ${Math.max(2, scaledStrokeWidth * DEFAULT_DASH_ARRAY[1])}" stroke-linecap="round"`
     : '';
 
-  let markup = '';
-  switch (shape) {
-    case ShapeType.SQUARE:
-      markup = `<rect x="10" y="10" width="44" height="44" rx="4" ry="4" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}"${strokeDashAttributes} />`;
-      break;
-    case ShapeType.BAR:
-      markup = `<rect x="26" y="4" width="12" height="56" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round"${strokeDashAttributes} />`;
-      break;
-    case ShapeType.SPIKE:
-      markup = `<path d="M32 4 L42 60 H22 Z" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round"${strokeDashAttributes} />`;
-      break;
-    case ShapeType.CROSS:
-      markup = `<path d="M22 8 H42 V22 H56 V42 H42 V56 H22 V42 H8 V22 H22 Z" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round"${strokeDashAttributes} />`;
-      break;
-    case ShapeType.DIAMOND:
-      markup = `<path d="M32 6 L58 32 L32 58 L6 32 Z" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round"${strokeDashAttributes} />`;
-      break;
-    case ShapeType.TRIANGLE:
-      markup = `<path d="M32 8 L56 56 H8 Z" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round"${strokeDashAttributes} />`;
-      break;
-    case ShapeType.STAR:
-      markup = `<path d="M32 6 L39.4 24.6 L58.7 24.6 L43.1 36.1 L48.4 55.1 L32 44 L15.6 55.1 L20.9 36.1 L5.3 24.6 L24.6 24.6 Z" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round"${strokeDashAttributes} />`;
-      break;
-    case ShapeType.RECTANGLE:
-      markup = `<rect x="4" y="24" width="56" height="16" rx="2" ry="2" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}"${strokeDashAttributes} />`;
-      break;
-    case ShapeType.CIRCLE:
-    default:
-      markup = `<circle cx="32" cy="32" r="22" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}"${strokeDashAttributes} />`;
-      break;
-  }
+  const markup = ((): string => {
+    switch (shape) {
+      case ShapeType.SQUARE:
+        return `<rect x="10" y="10" width="44" height="44" rx="4" ry="4" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}"${strokeDashAttributes} />`;
+      case ShapeType.BAR:
+        return `<rect x="26" y="4" width="12" height="56" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round"${strokeDashAttributes} />`;
+      case ShapeType.SPIKE:
+        return `<path d="M32 4 L42 60 H22 Z" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round"${strokeDashAttributes} />`;
+      case ShapeType.CROSS:
+        return `<path d="M22 8 H42 V22 H56 V42 H42 V56 H22 V42 H8 V22 H22 Z" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round"${strokeDashAttributes} />`;
+      case ShapeType.DIAMOND:
+        return `<path d="M32 6 L58 32 L32 58 L6 32 Z" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round"${strokeDashAttributes} />`;
+      case ShapeType.TRIANGLE:
+        return `<path d="M32 8 L56 56 H8 Z" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round"${strokeDashAttributes} />`;
+      case ShapeType.STAR:
+        return `<path d="M32 6 L39.4 24.6 L58.7 24.6 L43.1 36.1 L48.4 55.1 L32 44 L15.6 55.1 L20.9 36.1 L5.3 24.6 L24.6 24.6 Z" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}" stroke-linejoin="round"${strokeDashAttributes} />`;
+      case ShapeType.RECTANGLE:
+        return `<rect x="4" y="24" width="56" height="16" rx="2" ry="2" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}"${strokeDashAttributes} />`;
+      case ShapeType.CIRCLE:
+      default:
+        return `<circle cx="32" cy="32" r="22" fill="${fill}" stroke="${stroke}" stroke-width="${scaledStrokeWidth}"${strokeDashAttributes} />`;
+    }
+  })();
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${POINT_SYMBOL_ICON_VIEWBOX_SIZE}" height="${POINT_SYMBOL_ICON_VIEWBOX_SIZE}" viewBox="0 0 ${POINT_SYMBOL_ICON_VIEWBOX_SIZE} ${POINT_SYMBOL_ICON_VIEWBOX_SIZE}">${markup}</svg>`;
 }
@@ -305,6 +297,28 @@ type BinaryLayerInteractionData = {
   khartisSplitDatasetRowByGeomRow?: Int32Array;
   featureIds?: Uint32Array;
 };
+
+type ScatterBinaryData = {
+  attributes: Record<string, unknown>;
+  khartisSourceTable?: ArrowTable;
+  featureIds?: Uint32Array;
+};
+
+function cloneScatterBinaryData(
+  scatterProps: ReturnType<typeof createScatterplotLayerProps>
+): ScatterBinaryData {
+  const sourceData = scatterProps.data as ScatterBinaryData;
+  const clonedData: ScatterBinaryData = {
+    ...sourceData,
+    attributes: { ...sourceData.attributes }
+  };
+  (
+    scatterProps as unknown as {
+      data: ScatterBinaryData;
+    }
+  ).data = clonedData;
+  return clonedData;
+}
 
 function attachBinaryPickingMetadata(
   target: BinaryLayerInteractionData,
@@ -729,11 +743,7 @@ function createDoubleProportionalPointLayers(
   ) => {
     const layoutProps = offsetForRole(role);
     const scatterProps = createScatterplotLayerProps(pointData);
-    const scatterBinaryData = scatterProps.data as {
-      attributes: Record<string, unknown>;
-      khartisSourceTable?: ArrowTable;
-      featureIds?: Uint32Array;
-    };
+    const scatterBinaryData = cloneScatterBinaryData(scatterProps);
     attachBinaryPickingMetadata(scatterBinaryData, jsTable, pointData, ctx);
     scatterBinaryData.attributes.getFillColor = pointColorAttr(
       pointData,
@@ -1136,11 +1146,7 @@ function createRepresentativePointSymbolLayers(
   const radiusByFeatureId = ctxRowAccessor(ctx, jsTable, resolveRadiusForRow);
 
   const scatterProps = createScatterplotLayerProps(pointData);
-  const scatterBinaryData = scatterProps.data as {
-    attributes: Record<string, unknown>;
-    khartisSourceTable?: ArrowTable;
-    featureIds?: Uint32Array;
-  };
+  const scatterBinaryData = cloneScatterBinaryData(scatterProps);
   attachBinaryPickingMetadata(scatterBinaryData, jsTable, pointData, ctx);
   scatterBinaryData.attributes.getFillColor = pointColorAttr(
     pointData,
@@ -1857,7 +1863,13 @@ export function resolveEffectiveCategoryColorMap(
       ?.map((label) => toTextValue(label))
       .filter((label): label is string => label !== null) ?? [];
   if (storedLabels.length > 0) {
-    if (hasCompleteCategoricalColorMap(storedLabels, categoryColorMap)) {
+    if (
+      hasCompleteCategoricalColorMap(
+        storedLabels,
+        categoryColorMap,
+        classificationColors
+      )
+    ) {
       return categoryColorMap ?? null;
     }
 
@@ -1882,7 +1894,13 @@ export function resolveEffectiveCategoryColorMap(
   }
 
   const categoryList = [...categories];
-  if (hasCompleteCategoricalColorMap(categoryList, categoryColorMap)) {
+  if (
+    hasCompleteCategoricalColorMap(
+      categoryList,
+      categoryColorMap,
+      classificationColors
+    )
+  ) {
     return categoryColorMap ?? null;
   }
 
@@ -3068,19 +3086,21 @@ function createDotDensityLayers(
     alpha
   ];
 
-  let pointData: BinaryPointData | null = null;
-  try {
-    pointData = ctx.customProjection
-      ? parsePointDataWithProjection(jsTable, ctx.customProjection)
-      : parsePointData(jsTable);
-  } catch (error) {
-    logger.error(
-      'Failed to parse density points from Arrow table',
-      LogCategory.MAP,
-      error
-    );
-    return [];
-  }
+  const pointData = ((): BinaryPointData | null => {
+    try {
+      return ctx.customProjection
+        ? parsePointDataWithProjection(jsTable, ctx.customProjection)
+        : parsePointData(jsTable);
+    } catch (error) {
+      logger.error(
+        'Failed to parse density points from Arrow table',
+        LogCategory.MAP,
+        error
+      );
+      return null;
+    }
+  })();
+
   if (!pointData) return [];
 
   const densityLayer = new ScatterplotLayer({
@@ -3781,11 +3801,7 @@ export function createPointLayers(
     : null;
 
   const scatterProps = createScatterplotLayerProps(pointData);
-  const scatterBinaryData = scatterProps.data as {
-    attributes: Record<string, unknown>;
-    khartisSourceTable?: ArrowTable;
-    featureIds?: Uint32Array;
-  };
+  const scatterBinaryData = cloneScatterBinaryData(scatterProps);
   attachBinaryPickingMetadata(scatterBinaryData, jsTable, pointData, ctx);
   if (fillColorBinAttr) {
     scatterBinaryData.attributes.getFillColor = fillColorBinAttr;
