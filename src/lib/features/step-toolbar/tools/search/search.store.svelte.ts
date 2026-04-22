@@ -273,7 +273,7 @@ async function showTooltipForResult(
 
     mapTooltipStore.pinAt(160, 200, entries, null, rowId - 1);
   } catch (error) {
-    console.error(error);
+    logger.error('Error pinning search tooltip', LogCategory.UI, error);
   }
 }
 

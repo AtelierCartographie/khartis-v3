@@ -96,9 +96,7 @@ describe('visualization search tool', () => {
   it('does not expose internal id or geometry columns in the source dropdown', async () => {
     render(SearchTool);
 
-    await fireEvent.click(
-      screen.getByRole('button', { name: /toutes les variables/i })
-    );
+    await fireEvent.click(screen.getByRole('combobox'));
 
     expect(screen.getByRole('option', { name: 'city' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'region' })).toBeInTheDocument();

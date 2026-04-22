@@ -6,6 +6,7 @@
     label?: string;
     value: string;
     size?: 'default' | 'small';
+    exclusive?: boolean;
     onchange?: (color: string) => void;
   }
 
@@ -14,6 +15,7 @@
     label = '',
     value,
     size: _size = 'default',
+    exclusive = false,
     onchange
   }: Props = $props();
 
@@ -21,6 +23,7 @@
 </script>
 
 <ColorPicker
+  exclusive={exclusive}
   triggerLabel={label}
   hex={value}
   hue={hsl.hue}

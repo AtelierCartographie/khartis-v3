@@ -4,6 +4,8 @@
   import { OverflowMenu, OverflowMenuItem } from 'carbon-components-svelte';
   import { dragHandle } from 'svelte-dnd-action';
   import {
+    ChevronDown,
+    ChevronUp,
     Draggable,
     Settings,
     ViewFilled,
@@ -22,6 +24,9 @@
     onRenameLayer?: (layerId: string) => void;
     onDuplicateLayer?: (layerId: string) => void;
     onDeleteLayer?: (layerId: string) => void;
+    isExpanded?: boolean;
+    showExpandToggle?: boolean;
+    onToggleExpanded?: () => void;
   }
 
   const {
@@ -34,7 +39,10 @@
     onMoveDown,
     onRenameLayer,
     onDuplicateLayer,
-    onDeleteLayer
+    onDeleteLayer,
+    isExpanded = true,
+    showExpandToggle = false,
+    onToggleExpanded
   }: Props = $props();
 </script>
 
@@ -91,6 +99,16 @@
         iconDescription={layer.visible ? m.layers_hide() : m.layers_show()}
         onclick={() => onToggleVisibility(layer.id)}
       />
+      {#if showExpandToggle}
+        <IconButton
+          kind="ghost"
+          size="small"
+          icon={isExpanded ? ChevronUp : ChevronDown}
+          iconDescription={m.section_toggle()}
+          aria-expanded={isExpanded}
+          onclick={() => onToggleExpanded?.()}
+        />
+      {/if}
       {#if layer.type === 'visualization'}
         <OverflowMenu
           size="sm"

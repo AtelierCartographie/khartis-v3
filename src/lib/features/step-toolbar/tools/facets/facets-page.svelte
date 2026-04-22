@@ -6,6 +6,7 @@
   import AnnotationOverlay from '$lib/features/map/components/annotation-overlay.svelte';
   import GeoIndicationsOverlay from '$lib/features/map/components/geo-indications-overlay.svelte';
   import LegendOverlay from '$lib/features/map/components/legend-overlay.svelte';
+  import PageGridOverlay from '$lib/features/map/components/page-grid-overlay.svelte';
   import {
     DEFAULT_PAGE_COLOR,
     getFormatState
@@ -19,6 +20,7 @@
   interface Props {
     visualizations: VisualizationConfig[];
     tables: Map<string, ArrowTable>;
+    densityTables?: Map<string, ArrowTable>;
     splitData?: Map<string, SplitRenderingTable>;
     geoJSONs: Map<string, FeatureCollection>;
     layout: FacetsLayout;
@@ -31,6 +33,7 @@
   let {
     visualizations,
     tables,
+    densityTables,
     splitData,
     geoJSONs,
     layout,
@@ -68,13 +71,19 @@
   const isStylingMode = $derived(
     globalState.selectedStep === ToolbarStep.Styling
   );
+  const showPageGrid = $derived(fmtState.gridEnabled && isStylingMode);
 </script>
 
 <div class="facets-page" style={pageStyle}>
+  {#if showPageGrid}
+    <PageGridOverlay />
+  {/if}
+
   <div class="facets-map-stage" style={mapStageStyle}>
     <FacetsGrid
       visualizations={visualizations}
       tables={tables}
+      densityTables={densityTables}
       splitData={splitData}
       geoJSONs={geoJSONs}
       layout={layout}
@@ -85,11 +94,14 @@
       onReady={onReady}
     />
 
-    <LegendOverlay />
-    <GeoIndicationsOverlay interactive={isStylingMode} />
+    <LegendOverlay hidden={!isStylingMode} />
+    <GeoIndicationsOverlay
+      interactive={isStylingMode}
+      hidden={!isStylingMode}
+    />
   </div>
 
-  <AnnotationOverlay interactive={isStylingMode} />
+  <AnnotationOverlay interactive={isStylingMode} hidden={!isStylingMode} />
 </div>
 
 <style lang="scss">

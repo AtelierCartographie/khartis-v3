@@ -32,6 +32,10 @@
   }: Props = $props();
 
   function handleClick(index: number): void {
+    if (index === activeIndex) {
+      return;
+    }
+
     onChange(index);
   }
 

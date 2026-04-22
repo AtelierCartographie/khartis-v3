@@ -2,9 +2,7 @@
 
 # Diagnostic reports
 report.*.json
-*AGENTS.md
 .codex/
-*PROMPT.md
 # Output
 .output
 .vercel
@@ -15,6 +13,15 @@ report.*.json
 /build
 dist
 dev-dist/
+tmp
+.vscode
+.artifacts
+
+# Local configuration files (should not be tracked)
+AGENTS.md
+.PROMPT.md
+*.local.md
+.local.*.md
 
 # Logs
 logs
@@ -128,3 +135,4 @@ tmp/
 *-TRACKING-TESTS.md
 .agent-plans/
 .gitnexus
+.codex-artifacts/

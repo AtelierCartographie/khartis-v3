@@ -5,13 +5,7 @@
     RadioButtonGroup,
     TextInput
   } from 'carbon-components-svelte';
-  import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import * as m from '$lib/paraglide/messages';
-  import {
-    DEFAULT_SEQUENTIAL_PREVIEW,
-    DEFAULT_QUALITATIVE_PREVIEW,
-    PALETTE_TYPE
-  } from '$lib/features/commons/components/palette-popover/palette.constants';
   import {
     MissingDataShape,
     ProportionalType,
@@ -29,21 +23,14 @@
     DiscretizationRow,
     InfoPopover,
     MissingDataSection,
-    SectionHeading,
     SliderWithInput,
-    PalettePreview,
     StrokeSection
   } from '../shared';
   import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
   import type { SymbolModeProps } from './types';
-  import {
-    CaretUp,
-    CircleFilled,
-    SquareFill,
-    MisuseOutline,
-    Category,
-    Tag
-  } from 'carbon-icons-svelte';
+  import { CaretUp, CircleFilled, SquareFill } from 'carbon-icons-svelte';
+  import FillSection from '../shared/fill-section.svelte';
+  import { FILL_MODES_STANDARD } from '../shared/fill-mode-presets';
   import DiscretizationModal from '../discretization-modal.svelte';
   import type { ClassificationConfig } from '$lib/features/commons/store/visualization.store.svelte';
   import { resolveDiscretizationLabel } from '../discretization.utils';
@@ -51,8 +38,12 @@
     FACET_SLOT,
     facetsStore,
     type FacetSlotPath
-  } from '$lib/features/step-toolbar/tools/facets/facets.store.svelte';
+  } from '../../facets-adapter.svelte';
   import FacetsVariablePicker from './facets-variable-picker.svelte';
+  import {
+    NONE_FIELD_ID,
+    useFieldSelection
+  } from '../../use-field-selection.svelte';
 
   interface Props extends SymbolModeProps {
     symbolMode: SymbolMode.PROPORTIONAL | SymbolMode.CLASSES;
@@ -61,28 +52,29 @@
   let {
     dataFields = [],
     visualization,
+    fillVisualization,
     symbolMode,
     onSymbolsChange,
     onSymbolPrimitiveChange,
     onMappingChange,
-    onClassificationChange,
+    onFillMappingChange,
+    onStrokeMappingChange,
+    onFillClassificationChange,
     onStrokeClassificationChange,
     onMissingDataChange,
-    onOpenDiscretization,
+    onOpenSizeDiscretization,
+    onOpenFillDiscretization,
     onModesChange,
     onStyleChange,
-    onInvertPalette
+    onFillInvertPalette,
+    onStrokeInvertPalette
   }: Props = $props();
 
   let discretizationModalOpen = $state(false);
   let sizePickerOpen = $state(false);
+  let fieldBPickerOpen = $state(false);
   let classesPickerOpen = $state(false);
   let proportionalType = $state<ProportionalType>(ProportionalType.SINGLE);
-  const NONE_FIELD_ID = -1;
-  let selectedFieldId = $state<number>(NONE_FIELD_ID);
-  let selectedFieldBId = $state<number>(NONE_FIELD_ID);
-  let fillClassFieldId = $state<number>(NONE_FIELD_ID);
-  let fillCategoryFieldId = $state<number>(NONE_FIELD_ID);
   let symbolMaxSize = $state<number>(VISUALIZATION_DEFAULTS.symbolMaxSize);
   let shapeType = $state<ShapeType>(ShapeType.CIRCLE);
   let showMissingData = $state<boolean>(true);
@@ -101,67 +93,30 @@
   let breakValueB = $state<number | null>(null);
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
   const selectableDataFields = $derived([noneOption, ...dataFields]);
+  const primaryFieldSelection = useFieldSelection(() => dataFields);
+  const secondaryValueFieldSelection = useFieldSelection(() => dataFields);
+  const fillClassFieldSelection = useFieldSelection(() => dataFields);
+  const fillCategoryFieldSelection = useFieldSelection(() => dataFields);
   let isSyncingFromVisualization = $state(true);
   let syncToken = 0;
-
-  const currentPalette = $derived(
-    visualization?.classification?.colors ?? DEFAULT_SEQUENTIAL_PREVIEW
-  );
-  const currentQualPalette = $derived(
-    visualization?.classification?.colors ?? DEFAULT_QUALITATIVE_PREVIEW
-  );
 
   $effect(() => {
     const currentSyncToken = ++syncToken;
     isSyncingFromVisualization = true;
 
     if (dataFields.length > 0 && visualization?.mapping) {
+      const sym = visualization.symbol;
+      const sizeCol = sym?.sizeColumn ?? visualization.mapping.sizeColumn;
+      const valueCol = sym?.valueColumn ?? visualization.mapping.valueColumn;
       const mappedFieldName =
-        symbolMode === SymbolMode.PROPORTIONAL
-          ? visualization.mapping.sizeColumn
-          : visualization.mapping.valueColumn;
+        symbolMode === SymbolMode.PROPORTIONAL ? sizeCol : valueCol;
 
-      if (mappedFieldName) {
-        const fieldIndex = dataFields.findIndex(
-          (field) => field.text === mappedFieldName
-        );
-        selectedFieldId =
-          fieldIndex >= 0 ? dataFields[fieldIndex].id : NONE_FIELD_ID;
-      } else {
-        selectedFieldId = NONE_FIELD_ID;
-      }
-
-      if (visualization.mapping.valueColumn) {
-        const fieldBIndex = dataFields.findIndex(
-          (field) => field.text === visualization.mapping.valueColumn
-        );
-        selectedFieldBId =
-          fieldBIndex >= 0 ? dataFields[fieldBIndex].id : NONE_FIELD_ID;
-      } else {
-        selectedFieldBId = NONE_FIELD_ID;
-      }
-
-      if (visualization.mapping.valueColumn) {
-        const valueFieldIndex = dataFields.findIndex(
-          (field) => field.text === visualization.mapping.valueColumn
-        );
-        fillClassFieldId =
-          valueFieldIndex >= 0 ? dataFields[valueFieldIndex].id : NONE_FIELD_ID;
-      } else {
-        fillClassFieldId = NONE_FIELD_ID;
-      }
-
-      if (visualization.mapping.categoryColumn) {
-        const categoryFieldIndex = dataFields.findIndex(
-          (field) => field.text === visualization.mapping.categoryColumn
-        );
-        fillCategoryFieldId =
-          categoryFieldIndex >= 0
-            ? dataFields[categoryFieldIndex].id
-            : NONE_FIELD_ID;
-      } else {
-        fillCategoryFieldId = NONE_FIELD_ID;
-      }
+      primaryFieldSelection.sync(mappedFieldName);
+      secondaryValueFieldSelection.sync(valueCol);
+      fillClassFieldSelection.sync(fillVisualization?.mapping.valueColumn);
+      fillCategoryFieldSelection.sync(
+        fillVisualization?.mapping.categoryColumn
+      );
     }
 
     const symbolConfig = visualization?.symbol;
@@ -214,11 +169,11 @@
         fillColorB = visualization.style.fillColorB ?? DEFAULT_COLORS.secondary;
       }
     }
-    if (visualization?.classification) {
+    if (fillVisualization?.classification) {
       categoryCount =
-        visualization.classification.labels?.length ??
-        visualization.classification.numClasses ??
-        visualization.classification.classes ??
+        fillVisualization.classification.labels?.length ??
+        fillVisualization.classification.numClasses ??
+        fillVisualization.classification.classes ??
         4;
     }
     if (visualization?.symbol) {
@@ -250,28 +205,20 @@
     )
   );
 
+  const fillDiscretizationLabel = $derived.by(() =>
+    resolveDiscretizationLabel(
+      fillVisualization?.classification
+        ? { ...fillVisualization.classification }
+        : undefined
+    )
+  );
+
   const strokeDiscretizationLabel = $derived.by(() =>
     resolveDiscretizationLabel(
       visualization?.symbol?.strokeClassification
         ? { ...visualization.symbol.strokeClassification }
         : undefined
     )
-  );
-
-  const fillModeItems = [
-    { icon: MisuseOutline, label: m.fill_mode_none(), iconSize: 16 },
-    { icon: SquareFill, label: m.fill_mode_unique(), iconSize: 16 },
-    { icon: Category, label: m.fill_mode_classes(), iconSize: 16 },
-    { icon: Tag, label: m.fill_mode_categories(), iconSize: 16 }
-  ];
-
-  const fillModeIndex = $derived(
-    [
-      FillMode.NONE,
-      FillMode.UNIQUE,
-      FillMode.CLASSES,
-      FillMode.CATEGORIES
-    ].indexOf(fillMode)
   );
 
   function handleProportionalTypeChange(type: ProportionalType) {
@@ -285,7 +232,7 @@
     onModesChange?.({ proportionalType: type });
     if (type === ProportionalType.SINGLE) {
       onMappingChange?.({ valueColumn: undefined });
-      selectedFieldBId = NONE_FIELD_ID;
+      secondaryValueFieldSelection.set(NONE_FIELD_ID);
       fillColorB = DEFAULT_COLORS.secondary;
       onSymbolPrimitiveChange?.({
         commonScale: true,
@@ -301,7 +248,7 @@
     if (isSyncingFromVisualization) {
       return;
     }
-    selectedFieldBId = fieldId;
+    secondaryValueFieldSelection.set(fieldId);
     if (fieldId === NONE_FIELD_ID) {
       onMappingChange?.({ valueColumn: undefined });
       return;
@@ -409,7 +356,7 @@
         symbolFillColor: DEFAULT_COLORS.fill,
         fillColorB: DEFAULT_COLORS.secondary
       });
-      onClassificationChange?.({
+      onFillClassificationChange?.({
         colors: undefined,
         paletteId: undefined,
         inverted: false,
@@ -448,7 +395,7 @@
     if (isSyncingFromVisualization) {
       return;
     }
-    selectedFieldId = fieldId;
+    primaryFieldSelection.set(fieldId);
     if (fieldId === NONE_FIELD_ID) {
       if (symbolMode === SymbolMode.PROPORTIONAL) {
         onMappingChange?.({ sizeColumn: undefined });
@@ -481,15 +428,15 @@
     if (isSyncingFromVisualization) {
       return;
     }
-    fillClassFieldId = fieldId;
+    fillClassFieldSelection.set(fieldId);
     if (fieldId === NONE_FIELD_ID) {
-      onMappingChange?.({ valueColumn: undefined });
+      onFillMappingChange?.({ valueColumn: undefined });
       return;
     }
 
     const field = dataFields.find((item) => item.id === fieldId);
     if (field) {
-      onMappingChange?.({ valueColumn: field.text });
+      onFillMappingChange?.({ valueColumn: field.text });
     }
   }
 
@@ -497,15 +444,15 @@
     if (isSyncingFromVisualization) {
       return;
     }
-    fillCategoryFieldId = fieldId;
+    fillCategoryFieldSelection.set(fieldId);
     if (fieldId === NONE_FIELD_ID) {
-      onMappingChange?.({ categoryColumn: undefined });
+      onFillMappingChange?.({ categoryColumn: undefined });
       return;
     }
 
     const field = dataFields.find((item) => item.id === fieldId);
     if (field) {
-      onMappingChange?.({ categoryColumn: field.text });
+      onFillMappingChange?.({ categoryColumn: field.text });
     }
   }
 
@@ -536,11 +483,11 @@
   }
 
   const sizeColumnName = $derived(
-    dataFields.find((f) => f.id === selectedFieldId)?.text ?? ''
+    primaryFieldSelection.selectedFieldName ?? ''
   );
 
   const valueColumnName = $derived(
-    dataFields.find((f) => f.id === fillClassFieldId)?.text ?? ''
+    fillClassFieldSelection.selectedFieldName ?? ''
   );
 
   async function handleFacetsVariablesChange(
@@ -601,16 +548,37 @@
     onSymbolPrimitiveChange?.({ positionMode: next });
   }
 
+  /**
+   * Commits a candidate (breakValueA, breakValueB) tuple to state, swapping
+   * the pair when both are finite numbers in the wrong order so downstream
+   * rendering always receives a normalised range. Keeps E-08 invariant in
+   * one place instead of mirroring swap logic across two handlers.
+   */
+  function commitBreakValues(nextA: number | null, nextB: number | null): void {
+    const shouldSwap =
+      nextA !== null &&
+      nextB !== null &&
+      Number.isFinite(nextA) &&
+      Number.isFinite(nextB) &&
+      nextA > nextB;
+    const finalA = shouldSwap ? nextB : nextA;
+    const finalB = shouldSwap ? nextA : nextB;
+    breakValueA = finalA;
+    breakValueB = finalB;
+    onSymbolPrimitiveChange?.({
+      breakValueA: finalA,
+      breakValueB: finalB
+    });
+  }
+
   function handleBreakValueAChange(value: number | null) {
     if (isSyncingFromVisualization) return;
-    breakValueA = value;
-    onSymbolPrimitiveChange?.({ breakValueA: value });
+    commitBreakValues(value, breakValueB);
   }
 
   function handleBreakValueBChange(value: number | null) {
     if (isSyncingFromVisualization) return;
-    breakValueB = value;
-    onSymbolPrimitiveChange?.({ breakValueB: value });
+    commitBreakValues(breakValueA, value);
   }
 
   const positionModeItems = [
@@ -631,8 +599,11 @@
     </span>
     <RadioButtonGroup
       selected={proportionalType}
-      on:change={(e) =>
-        handleProportionalTypeChange(e.detail as ProportionalType)}
+      on:change={(e) => {
+        const next = (e as CustomEvent).detail as ProportionalType;
+        if (next === proportionalType) return;
+        handleProportionalTypeChange(next);
+      }}
     >
       <RadioButton
         id="prop-single"
@@ -670,7 +641,7 @@
         bind:open={sizePickerOpen}
         dataFields={dataFields}
         singleSelectItems={selectableDataFields}
-        selectedFieldId={selectedFieldId}
+        selectedFieldId={primaryFieldSelection.selectedFieldId}
         selectedFieldIds={getFacetsSelectedFieldIds(FACET_SLOT.SYMBOL_SIZE)}
         isCollectionEnabled={isFacetsActiveForSlot(FACET_SLOT.SYMBOL_SIZE)}
         onSelect={handleFieldSelect}
@@ -689,11 +660,14 @@
       <span class="field-label">
         {m.symbol_b_size_according()}
       </span>
-      <Dropdown
-        items={selectableDataFields}
-        selectedId={selectedFieldBId}
-        on:select={(e) => handleFieldBSelect(e.detail.selectedId)}
-        type="default"
+      <FacetsVariablePicker
+        bind:open={fieldBPickerOpen}
+        dataFields={dataFields}
+        singleSelectItems={selectableDataFields}
+        selectedFieldId={secondaryValueFieldSelection.selectedFieldId}
+        isCollectionEnabled={false}
+        showCollectionFooter={false}
+        onSelect={handleFieldBSelect}
       />
     </div>
 
@@ -744,14 +718,12 @@
         placeholder={m.break_value_placeholder()}
         value={breakValueA === null ? '' : String(breakValueA)}
         on:input={(e) => {
-          const raw = (e.detail as string) ?? '';
-          const trimmed = raw.trim();
-          if (trimmed === '') {
-            handleBreakValueAChange(null);
-            return;
-          }
-          const next = Number(trimmed);
-          handleBreakValueAChange(Number.isFinite(next) ? next : null);
+          const detail = (e as CustomEvent).detail as number | null;
+          handleBreakValueAChange(
+            typeof detail === 'number' && Number.isFinite(detail)
+              ? detail
+              : null
+          );
         }}
       />
     </div>
@@ -767,14 +739,12 @@
         placeholder={m.break_value_placeholder()}
         value={breakValueB === null ? '' : String(breakValueB)}
         on:input={(e) => {
-          const raw = (e.detail as string) ?? '';
-          const trimmed = raw.trim();
-          if (trimmed === '') {
-            handleBreakValueBChange(null);
-            return;
-          }
-          const next = Number(trimmed);
-          handleBreakValueBChange(Number.isFinite(next) ? next : null);
+          const detail = (e as CustomEvent).detail as number | null;
+          handleBreakValueBChange(
+            typeof detail === 'number' && Number.isFinite(detail)
+              ? detail
+              : null
+          );
         }}
       />
     </div>
@@ -788,7 +758,7 @@
         bind:open={sizePickerOpen}
         dataFields={dataFields}
         singleSelectItems={selectableDataFields}
-        selectedFieldId={selectedFieldId}
+        selectedFieldId={primaryFieldSelection.selectedFieldId}
         selectedFieldIds={getFacetsSelectedFieldIds(FACET_SLOT.SYMBOL_SIZE)}
         isCollectionEnabled={isFacetsActiveForSlot(FACET_SLOT.SYMBOL_SIZE)}
         onSelect={handleFieldSelect}
@@ -815,7 +785,7 @@
       bind:open={classesPickerOpen}
       dataFields={dataFields}
       singleSelectItems={selectableDataFields}
-      selectedFieldId={selectedFieldId}
+      selectedFieldId={primaryFieldSelection.selectedFieldId}
       selectedFieldIds={getFacetsSelectedFieldIds(FACET_SLOT.SYMBOL_VALUE)}
       isCollectionEnabled={isFacetsActiveForSlot(FACET_SLOT.SYMBOL_VALUE)}
       onSelect={handleFieldSelect}
@@ -840,7 +810,7 @@
   <DiscretizationRow
     label={m.discretization()}
     value={discretizationLabel}
-    onsettings={onOpenDiscretization}
+    onsettings={onOpenSizeDiscretization}
   />
   <div class="field-group">
     <span class="field-label">
@@ -869,157 +839,72 @@
   oncolorchange={handleMissingDataColorChange}
 />
 
-<SectionHeading title={m.background()} infoText={m.fill_section_info()} />
-
-<div class="field-group">
-  <ToggleTabs
-    items={fillModeItems}
-    activeIndex={fillModeIndex}
-    onChange={handleFillModeChange}
-    hideInactiveLabel={true}
-  />
-</div>
-
-{#if fillMode === FillMode.UNIQUE}
-  {#if proportionalType === ProportionalType.DOUBLE}
-    <div class="double-color-row">
-      <div class="double-color-item double-color-a">
-        <SingleColorPreview
-          label={m.symbol_color_a()}
-          color={fillColor}
-          onchange={handleFillColorChange}
-        />
+<FillSection
+  visualization={fillVisualization}
+  primitive="symbol"
+  dataFields={dataFields}
+  availableModes={FILL_MODES_STANDARD}
+  fillMode={fillMode}
+  fillColor={fillColor}
+  fillOpacity={fillOpacity}
+  selectedValueFieldId={fillClassFieldSelection.selectedFieldId}
+  selectedCategoryFieldId={fillCategoryFieldSelection.selectedFieldId}
+  discretizationLabel={fillDiscretizationLabel}
+  categoryCount={categoryCount}
+  facetsValueSlotPath={FACET_SLOT.SYMBOL_FILL_VALUE}
+  facetsCategorySlotPath={FACET_SLOT.SYMBOL_FILL_CATEGORY}
+  categoriesVariant="symbols-unique"
+  showMissingData={showMissingData}
+  missingDataColor={missingDataColor}
+  sectionTitle={m.background()}
+  sectionInfoText={m.fill_section_info()}
+  selectableDataFields={selectableDataFields}
+  getFacetsSelectedFieldIds={getFacetsSelectedFieldIds}
+  isFacetsActiveForSlot={isFacetsActiveForSlot}
+  onFillModeChange={(mode: FillMode) =>
+    handleFillModeChange(FILL_MODES_STANDARD.indexOf(mode))}
+  onFillColorChange={handleFillColorChange}
+  onFillOpacityChange={handleFillOpacityChange}
+  onValueFieldSelect={handleFillClassFieldSelect}
+  onCategoryFieldSelect={handleFillCategoryFieldSelect}
+  onFacetsVariablesChange={handleFacetsVariablesChange}
+  onFacetsToggle={handleFacetsToggle}
+  onOpenDiscretization={onOpenFillDiscretization ?? (() => {})}
+  onClassificationChange={onFillClassificationChange ?? (() => {})}
+  onMissingDataShowChange={handleMissingDataShowChange}
+  onMissingDataColorChange={handleMissingDataColorChange}
+  onInvertPalette={onFillInvertPalette}
+>
+  {#snippet uniqueSnippet()}
+    {#if symbolMode === SymbolMode.PROPORTIONAL && proportionalType === ProportionalType.DOUBLE}
+      <div class="double-color-row">
+        <div class="double-color-item double-color-a">
+          <SingleColorPreview
+            exclusive
+            label={m.symbol_color_a()}
+            color={fillColor}
+            onchange={handleFillColorChange}
+          />
+        </div>
+        <div class="double-color-item double-color-b">
+          <SingleColorPreview
+            exclusive
+            label={m.symbol_color_b()}
+            color={fillColorB}
+            onchange={handleFillColorBChange}
+          />
+        </div>
       </div>
-      <div class="double-color-item double-color-b">
-        <SingleColorPreview
-          label={m.symbol_color_b()}
-          color={fillColorB}
-          onchange={handleFillColorBChange}
-        />
-      </div>
-    </div>
-  {:else}
-    <SingleColorPreview
-      label={m.color()}
-      color={fillColor}
-      onchange={handleFillColorChange}
-    />
-  {/if}
-  <SliderWithInput
-    label={m.opacity()}
-    bind:value={fillOpacity}
-    min={SLIDER_LIMITS.opacity.min}
-    max={SLIDER_LIMITS.opacity.max}
-    onchange={handleFillOpacityChange}
-  />
-{:else if fillMode === FillMode.CLASSES}
-  <div class="field-group">
-    <FacetsVariablePicker
-      bind:open={classesPickerOpen}
-      titleText={m.color_according()}
-      dataFields={dataFields}
-      singleSelectItems={selectableDataFields}
-      selectedFieldId={fillClassFieldId}
-      selectedFieldIds={getFacetsSelectedFieldIds(FACET_SLOT.SYMBOL_VALUE)}
-      isCollectionEnabled={isFacetsActiveForSlot(FACET_SLOT.SYMBOL_VALUE)}
-      onSelect={handleFillClassFieldSelect}
-      onCollectionChange={(ids) =>
-        handleFacetsVariablesChange(
-          valueColumnName,
-          FACET_SLOT.SYMBOL_VALUE,
-          ids
-        )}
-      onToggleCollection={(enabled) =>
-        handleFacetsToggle(valueColumnName, FACET_SLOT.SYMBOL_VALUE, enabled)}
-    />
-  </div>
-  <DiscretizationRow
-    label={m.discretization()}
-    value={discretizationLabel}
-    onsettings={onOpenDiscretization}
-  />
-  <PalettePreview
-    label={m.color_palette()}
-    colors={currentPalette}
-    selectedPaletteId={visualization?.classification?.paletteId}
-    inverted={visualization?.classification?.inverted ?? false}
-    paletteType={PALETTE_TYPE.SEQUENTIAL}
-    oninvert={onInvertPalette}
-    onClassificationChange={onClassificationChange}
-  />
-  <SliderWithInput
-    label={m.opacity()}
-    bind:value={fillOpacity}
-    min={SLIDER_LIMITS.opacity.min}
-    max={SLIDER_LIMITS.opacity.max}
-    onchange={handleFillOpacityChange}
-  />
-  <MissingDataSection
-    bind:show={showMissingData}
-    color={missingDataColor}
-    showShapeSelector={false}
-    showSizeSlider={false}
-    onshowchange={handleMissingDataShowChange}
-    oncolorchange={handleMissingDataColorChange}
-  />
-{:else if fillMode === FillMode.CATEGORIES}
-  <div class="field-group">
-    <FacetsVariablePicker
-      bind:open={classesPickerOpen}
-      titleText={m.color_according()}
-      dataFields={dataFields}
-      singleSelectItems={selectableDataFields}
-      selectedFieldId={fillCategoryFieldId}
-      selectedFieldIds={getFacetsSelectedFieldIds(FACET_SLOT.SYMBOL_CATEGORY)}
-      isCollectionEnabled={isFacetsActiveForSlot(FACET_SLOT.SYMBOL_CATEGORY)}
-      onSelect={handleFillCategoryFieldSelect}
-      onCollectionChange={(ids) =>
-        handleFacetsVariablesChange(
-          dataFields.find((f) => f.id === fillCategoryFieldId)?.text ?? '',
-          FACET_SLOT.SYMBOL_CATEGORY,
-          ids
-        )}
-      onToggleCollection={(enabled) =>
-        handleFacetsToggle(
-          dataFields.find((f) => f.id === fillCategoryFieldId)?.text ?? '',
-          FACET_SLOT.SYMBOL_CATEGORY,
-          enabled
-        )}
-    />
-  </div>
-  <DiscretizationRow
-    label={m.category_aspect()}
-    value={m.categories_count({ count: categoryCount })}
-    onsettings={onOpenDiscretization}
-  />
-  <PalettePreview
-    label={m.color_palette()}
-    colors={currentQualPalette}
-    selectedPaletteId={visualization?.classification?.paletteId}
-    inverted={visualization?.classification?.inverted ?? false}
-    paletteType={PALETTE_TYPE.QUALITATIVE}
-    categoriesMode={true}
-    categoriesVariant="symbols-unique"
-    categoryLabels={visualization?.classification?.labels ?? []}
-    oninvert={onInvertPalette}
-    onClassificationChange={onClassificationChange}
-  />
-  <SliderWithInput
-    label={m.opacity()}
-    bind:value={fillOpacity}
-    min={SLIDER_LIMITS.opacity.min}
-    max={SLIDER_LIMITS.opacity.max}
-    onchange={handleFillOpacityChange}
-  />
-  <MissingDataSection
-    bind:show={showMissingData}
-    color={missingDataColor}
-    showShapeSelector={false}
-    showSizeSlider={false}
-    onshowchange={handleMissingDataShowChange}
-    oncolorchange={handleMissingDataColorChange}
-  />
-{/if}
+    {:else}
+      <SingleColorPreview
+        exclusive
+        label={m.color()}
+        color={fillColor}
+        onchange={handleFillColorChange}
+      />
+    {/if}
+  {/snippet}
+</FillSection>
 
 <StrokeSection
   visualization={visualization}
@@ -1030,10 +915,13 @@
   onStyleChange={onStyleChange}
   onModesChange={onModesChange}
   onMappingChange={onMappingChange}
-  onInvertPalette={onInvertPalette}
+  onStrokeMappingChange={onStrokeMappingChange}
+  onInvertPalette={onStrokeInvertPalette}
   onOpenDiscretization={() => (discretizationModalOpen = true)}
   onStrokeClassificationChange={onStrokeClassificationChange ?? (() => {})}
   strokeClassification={visualization?.symbol?.strokeClassification}
+  strokeValueColumn={visualization?.symbol?.strokeValueColumn}
+  strokeCategoryColumn={visualization?.symbol?.strokeCategoryColumn}
   facetsValueSlotPath={FACET_SLOT.SYMBOL_VALUE}
   facetsCategorySlotPath={FACET_SLOT.SYMBOL_CATEGORY}
 />
@@ -1042,6 +930,8 @@
   bind:open={discretizationModalOpen}
   visualization={visualization}
   classification={visualization?.symbol?.strokeClassification}
+  valueColumn={visualization?.symbol?.strokeValueColumn}
+  role="stroke"
   onchange={handleStrokeDiscretizationChange}
 />
 

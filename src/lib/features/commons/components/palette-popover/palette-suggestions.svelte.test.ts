@@ -57,12 +57,11 @@ describe('PaletteSuggestions — QUALITATIVE branch (Figma 893:153398)', () => {
   });
 
   it('should drive qualitativeGroups from getQualitativeColorGroups with the chosen preset', () => {
-    expect(source).toContain(
-      "let qualitativePreset = $state<QualitativePreset>('vif')"
-    );
+    expect(source).toContain('DEFAULT_QUALITATIVE_PRESET');
     expect(source).toContain(
       'getQualitativeColorGroups(qualitativePreset, colorBlindFilter)'
     );
+    expect(source).toContain('onQualitativePresetChange?.(preset)');
   });
 
   it('should propagate color selection via onColorSelect(hex)', () => {
@@ -83,7 +82,7 @@ describe('PaletteSuggestions — SEQUENTIAL branch (Figma 930:114478)', () => {
 
   it('should render individual palette rows with family name labels', () => {
     expect(sequentialBlock).toContain('class="palette-label"');
-    expect(sequentialBlock).toContain('{palette.name}');
+    expect(sequentialBlock).toContain('{getPaletteDisplayName(palette)}');
     expect(sequentialBlock).toContain('{#each sequentialPalettes as palette');
   });
 

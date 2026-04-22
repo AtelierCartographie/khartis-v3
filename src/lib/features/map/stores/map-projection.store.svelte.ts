@@ -2,7 +2,10 @@ import {
   MAP_PROJECTION_TYPE,
   type MapProjectionTypeValue
 } from '$lib/features/commons/constants';
-import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
+import {
+  SavePriority,
+  persistenceRegistry
+} from '$lib/features/project-management/core/persistence-registry';
 
 export type MapProjectionType = MapProjectionTypeValue;
 
@@ -17,7 +20,7 @@ function createMapProjectionStore() {
 
   function setProjection(projection: MapProjectionType): void {
     state.projection = projection;
-    persistenceRegistry.notifyChange('mapProjection');
+    persistenceRegistry.notifyChange('mapProjection', SavePriority.IMMEDIATE);
   }
 
   function toggle(): void {
@@ -25,7 +28,7 @@ function createMapProjectionStore() {
       state.projection === PROJECTION_MERCATOR
         ? PROJECTION_GLOBE
         : PROJECTION_MERCATOR;
-    persistenceRegistry.notifyChange('mapProjection');
+    persistenceRegistry.notifyChange('mapProjection', SavePriority.IMMEDIATE);
   }
 
   function reset(): void {

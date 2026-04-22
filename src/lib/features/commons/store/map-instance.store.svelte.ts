@@ -1,7 +1,11 @@
 import type { Deck, View } from '@deck.gl/core';
 import type { MapboxOverlay } from '@deck.gl/mapbox';
 import type { Map as MapLibreMap } from 'maplibre-gl';
-import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
+import {
+  persistenceRegistry,
+  type SavePriorityType
+} from '$lib/features/project-management/core/persistence-registry';
+import type { SerializedMapViewState } from '$lib/types/serialization.types';
 import {
   clampMapZoomLevel,
   DEFAULT_MAP_BASE_ZOOM,
@@ -118,7 +122,13 @@ interface PendingViewState {
   target: [number, number, number];
 }
 
-type SerializedViewState = PendingViewState;
+interface PendingMapLibreViewState {
+  zoom: number;
+  center: [number, number];
+  baseZoom: number;
+}
+
+type SerializedViewState = SerializedMapViewState;
 
 function createMapInstanceStore() {
   const state = $state<{
@@ -143,10 +153,24 @@ function createMapInstanceStore() {
     viewportFitReason: null
   });
 
-  let pendingRestore: PendingViewState | null = null;
+  let pendingOrthographicRestore: PendingViewState | null = null;
+  let pendingMapLibreRestore: PendingMapLibreViewState | null = null;
   let lastSerializedViewState: SerializedViewState | null = null;
 
   function buildSerializedViewState(): SerializedViewState | null {
+    if (state.map && state.isMapLoaded) {
+      const center = state.map.getCenter();
+      const zoom = state.map.getZoom();
+      const serialized = {
+        zoom,
+        center: [center.lng, center.lat] as [number, number],
+        baseZoom: state.baseZoomLevel
+      } satisfies SerializedViewState;
+
+      lastSerializedViewState = serialized;
+      return serialized;
+    }
+
     const worldTarget = normalizeTarget(state.deckViewState.target);
     const ctx = projectionContextGetter();
 
@@ -166,7 +190,7 @@ function createMapInstanceStore() {
     const serialized = {
       zoom: state.deckViewState.zoom,
       target: worldToData(worldTarget)
-    };
+    } satisfies SerializedViewState;
 
     lastSerializedViewState = serialized;
     return serialized;
@@ -178,6 +202,12 @@ function createMapInstanceStore() {
     }
 
     const { minZoom, maxZoom } = resolveMapZoomBounds(state.baseZoomLevel);
+    const getMaxZoom = state.map.getMaxZoom?.bind(state.map);
+    const currentMaxZoom =
+      typeof getMaxZoom === 'function' ? getMaxZoom() : maxZoom;
+    if (typeof state.map.setMaxZoom === 'function') {
+      state.map.setMaxZoom(Math.max(currentMaxZoom, maxZoom));
+    }
     state.map.setMinZoom(minZoom);
     state.map.setMaxZoom(maxZoom);
 
@@ -273,7 +303,7 @@ function createMapInstanceStore() {
     updateZoomFromMap();
     if (fromUserInteraction) {
       markViewportManual();
-      pendingRestore = null;
+      pendingOrthographicRestore = null;
       persistenceRegistry.notifyChange('mapViewState');
       applyDeckViewState();
     }
@@ -296,13 +326,48 @@ function createMapInstanceStore() {
   }
 
   function consumePendingRestore(): void {
-    pendingRestore = null;
+    pendingOrthographicRestore = null;
     persistenceRegistry.notifyChange('mapViewState', 'immediate');
+  }
+
+  function persistCurrentMapLibreViewState(
+    priority: SavePriorityType = 'debounced'
+  ): void {
+    if (!state.map || !state.isMapLoaded) {
+      return;
+    }
+
+    pendingMapLibreRestore = null;
+    buildSerializedViewState();
+    persistenceRegistry.notifyChange('mapViewState', priority);
+  }
+
+  function applyPendingMapLibreRestore(): boolean {
+    if (!state.map || !state.isMapLoaded || !pendingMapLibreRestore) {
+      return false;
+    }
+
+    const restore = pendingMapLibreRestore;
+    pendingMapLibreRestore = null;
+    state.baseZoomLevel =
+      Number.isFinite(restore.baseZoom) && restore.baseZoom > 0
+        ? restore.baseZoom
+        : restore.zoom;
+    applyMapZoomBounds();
+    state.map.jumpTo({
+      center: restore.center,
+      zoom: restore.zoom
+    });
+    markViewportManual();
+    lastSerializedViewState = restore;
+    updateZoomFromMap();
+    return true;
   }
 
   function zoomIn() {
     if (state.map) {
       markViewportManual();
+      pendingMapLibreRestore = null;
       state.map.setZoom(
         nudgeMapZoomLevel(state.baseZoomLevel, state.map.getZoom(), 1)
       );
@@ -311,7 +376,7 @@ function createMapInstanceStore() {
 
     if (state.deckInstance) {
       markViewportManual();
-      pendingRestore = null;
+      pendingOrthographicRestore = null;
       const newZoom = Math.min(
         state.deckViewState.zoom + DECK_ZOOM_STEP,
         state.deckViewState.maxZoom
@@ -329,6 +394,7 @@ function createMapInstanceStore() {
   function zoomOut() {
     if (state.map) {
       markViewportManual();
+      pendingMapLibreRestore = null;
       state.map.setZoom(
         nudgeMapZoomLevel(state.baseZoomLevel, state.map.getZoom(), -1)
       );
@@ -337,7 +403,7 @@ function createMapInstanceStore() {
 
     if (state.deckInstance) {
       markViewportManual();
-      pendingRestore = null;
+      pendingOrthographicRestore = null;
       const newZoom = Math.max(
         state.deckViewState.zoom - DECK_ZOOM_STEP,
         state.deckViewState.minZoom
@@ -355,13 +421,14 @@ function createMapInstanceStore() {
   function setZoom(zoom: number) {
     if (state.map) {
       markViewportManual();
+      pendingMapLibreRestore = null;
       state.map.setZoom(clampMapZoomLevel(state.baseZoomLevel, zoom));
       return;
     }
 
     if (state.deckInstance) {
       markViewportManual();
-      pendingRestore = null;
+      pendingOrthographicRestore = null;
       const clampedZoom = Math.max(
         state.deckViewState.minZoom,
         Math.min(zoom, state.deckViewState.maxZoom)
@@ -379,7 +446,7 @@ function createMapInstanceStore() {
   function centerOnDataPoint(dataLon: number, dataLat: number): void {
     if (state.map) {
       markViewportManual();
-      pendingRestore = null;
+      pendingMapLibreRestore = null;
       state.map.jumpTo({ center: [dataLon, dataLat] });
       persistenceRegistry.notifyChange('mapViewState');
       return;
@@ -390,7 +457,7 @@ function createMapInstanceStore() {
       target: dataToWorld([dataLon, dataLat, 0])
     };
     markViewportManual();
-    pendingRestore = null;
+    pendingOrthographicRestore = null;
     applyDeckViewState();
     updateZoomFromMap();
     persistenceRegistry.notifyChange('mapViewState');
@@ -399,13 +466,14 @@ function createMapInstanceStore() {
   function resetZoom() {
     if (state.map) {
       markViewportManual();
+      pendingMapLibreRestore = null;
       state.map.setZoom(state.baseZoomLevel);
       return;
     }
 
     if (state.deckInstance) {
       markViewportManual();
-      pendingRestore = null;
+      pendingOrthographicRestore = null;
       state.deckViewState = {
         ...state.deckViewState,
         zoom: 0
@@ -432,16 +500,19 @@ function createMapInstanceStore() {
 
     let restoredViewApplied = false;
 
-    if (pendingRestore) {
+    if (pendingOrthographicRestore) {
       const ctx = projectionContextGetter();
       if (!ctx.referenceBbox) {
         return;
       }
 
       if (
-        !isPlausibleSerializedTarget(pendingRestore.target, ctx.referenceBbox)
+        !isPlausibleSerializedTarget(
+          pendingOrthographicRestore.target,
+          ctx.referenceBbox
+        )
       ) {
-        pendingRestore = null;
+        pendingOrthographicRestore = null;
         lastSerializedViewState = null;
       } else {
         const scale = get_max_scale(
@@ -455,8 +526,8 @@ function createMapInstanceStore() {
 
         state.deckViewState = {
           ...state.deckViewState,
-          target: dataToWorld(pendingRestore.target),
-          zoom: pendingRestore.zoom
+          target: dataToWorld(pendingOrthographicRestore.target),
+          zoom: pendingOrthographicRestore.zoom
         };
         markViewportManual();
         restoredViewApplied = true;
@@ -480,10 +551,14 @@ function createMapInstanceStore() {
     persistenceRegistry.notifyChange('mapViewState');
   }
 
-  function restoreFromSerialized(data: {
-    zoom?: number;
-    target?: [number, number, number];
-  }): void {
+  function restoreFromSerialized(data: SerializedViewState | null): void {
+    pendingOrthographicRestore = null;
+    pendingMapLibreRestore = null;
+
+    if (!data || typeof data !== 'object') {
+      return;
+    }
+
     const zoom =
       typeof data.zoom === 'number' && Number.isFinite(data.zoom)
         ? data.zoom
@@ -491,7 +566,28 @@ function createMapInstanceStore() {
 
     if (zoom == null) return;
 
-    const raw = data.target;
+    if (
+      'center' in data &&
+      Array.isArray(data.center) &&
+      data.center.length >= 2 &&
+      typeof data.center[0] === 'number' &&
+      Number.isFinite(data.center[0]) &&
+      typeof data.center[1] === 'number' &&
+      Number.isFinite(data.center[1])
+    ) {
+      pendingMapLibreRestore = {
+        zoom,
+        center: [data.center[0], data.center[1]],
+        baseZoom:
+          typeof data.baseZoom === 'number' && Number.isFinite(data.baseZoom)
+            ? data.baseZoom
+            : zoom
+      };
+      lastSerializedViewState = pendingMapLibreRestore;
+      return;
+    }
+
+    const raw = 'target' in data ? data.target : undefined;
     const hasValidXY =
       Array.isArray(raw) &&
       raw.length >= 2 &&
@@ -503,12 +599,13 @@ function createMapInstanceStore() {
       ? [raw[0], raw[1], 0]
       : [0, 0, 0];
 
-    pendingRestore = { zoom, target };
-    lastSerializedViewState = pendingRestore;
+    pendingOrthographicRestore = { zoom, target };
+    lastSerializedViewState = pendingOrthographicRestore;
   }
 
   function clearPersistedViewState(): void {
-    pendingRestore = null;
+    pendingOrthographicRestore = null;
+    pendingMapLibreRestore = null;
     lastSerializedViewState = null;
     state.deckViewState = { ...DEFAULT_DECK_VIEW_STATE };
     state.viewportFitMode = 'auto';
@@ -552,7 +649,15 @@ function createMapInstanceStore() {
       return state.isMapLoaded;
     },
     get hasPendingRestore() {
-      return pendingRestore !== null;
+      return (
+        pendingOrthographicRestore !== null || pendingMapLibreRestore !== null
+      );
+    },
+    get hasPendingOrthographicRestore() {
+      return pendingOrthographicRestore !== null;
+    },
+    get hasPendingMapLibreRestore() {
+      return pendingMapLibreRestore !== null;
     },
     get currentZoom(): number {
       if (state.map) {
@@ -592,6 +697,8 @@ function createMapInstanceStore() {
     markViewportManual,
     updateDeckViewState,
     buildSerializedViewState,
+    persistCurrentMapLibreViewState,
+    applyPendingMapLibreRestore,
     zoomIn,
     zoomOut,
     setZoom,
@@ -611,7 +718,7 @@ persistenceRegistry.register({
   serialize: () => mapInstanceStore.buildSerializedViewState(),
   deserialize: (data: unknown) =>
     mapInstanceStore.restoreFromSerialized(
-      data as { zoom?: number; target?: [number, number, number] }
+      data as SerializedMapViewState | null
     ),
   reset: () => mapInstanceStore.clearPersistedViewState(),
   priority: 'debounced'

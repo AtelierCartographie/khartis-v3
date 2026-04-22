@@ -16,6 +16,7 @@
     showToggle?: boolean;
     toggleChecked?: boolean;
     toggleDisabled?: boolean;
+    toggleVariant?: 'default' | 'suggestions';
     disabled?: boolean;
     disabledReason?: string;
     onToggleChange?: (checked: boolean) => void;
@@ -35,6 +36,7 @@
     showToggle = false,
     toggleChecked = false,
     toggleDisabled = false,
+    toggleVariant = 'default',
     disabled = false,
     disabledReason,
     onToggleChange,
@@ -102,7 +104,11 @@
   }
 </script>
 
-<div class="section-container" class:disabled={disabled}>
+<div
+  class="section-container"
+  class:disabled={disabled}
+  class:toggle-suggestions={toggleVariant === 'suggestions'}
+>
   <div
     class="section-header"
     class:expanded={expanded && !disabled}
@@ -115,6 +121,8 @@
         <Switch
           toggled={toggleChecked}
           disabled={toggleDisabled || disabled}
+          size={toggleVariant === 'suggestions' ? 'md' : 'sm'}
+          variant={toggleVariant}
           hideLabel
           labelText={title}
           onchange={handleToggleChange}
@@ -291,6 +299,10 @@
 
   .section-container.disabled {
     opacity: 0.5;
+  }
+
+  .section-container.toggle-suggestions.disabled {
+    opacity: 1;
   }
 
   .section-expand-btn:disabled {

@@ -38,14 +38,21 @@ describe('PaletteCustom (Palette personnalisée section)', () => {
     expect(source).toContain('{m.invert_palette_tooltip()}');
   });
 
-  it('should render a Motif toggle instead of the content switcher in QUALITATIVE mode', () => {
+  it('should render a direct ColorSelector and a Motif toggle instead of the content switcher in QUALITATIVE mode', () => {
     const qualitativeBlock = source
       .split('{#if isQualitative}')[1]
       ?.split('{:else}')[0];
     expect(qualitativeBlock).toBeDefined();
     expect(qualitativeBlock).toContain('<ColorSelector');
     expect(qualitativeBlock).toContain('<ToggleWithLabel');
+    expect(qualitativeBlock).not.toContain('<SingleColorPreview');
     expect(qualitativeBlock).not.toContain('<ContentSwitcher');
+  });
+
+  it('should keep the exact picked color in QUALITATIVE mode instead of generating a sequential ramp', () => {
+    expect(source).toMatch(
+      /const colors = isQualitative\s*\?\s*\[color\]\s*:\s*generateSequentialFromColor\(color,\s*numClasses,\s*resolvedContrast\)/
+    );
   });
 
   it('should expose angle options for line patterns (0°, 45°, 315°)', () => {

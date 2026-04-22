@@ -9,7 +9,10 @@ import {
 import { FillMode } from '$lib/features/main-toolbar/constants';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
 import { resolveLayoutSizingTokens } from '$lib/features/commons/utils/layout-sizing.utils';
-import { getFormatState } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
+import {
+  getFormatLayoutSizingContext,
+  getFormatState
+} from '$lib/features/step-toolbar/tools/format/format.store.svelte';
 import { LEGEND_DEFAULTS, LEGEND_ID_PREFIXES } from './legend.constants';
 import type {
   LegendDragPosition,
@@ -250,11 +253,9 @@ const { actions, getState } = createToolStore<LegendState, LegendActions>(
 
       if (!s.hasBeenOpened) {
         const fmt = getFormatState();
-        const tokens = resolveLayoutSizingTokens({
-          width: fmt.width,
-          height: fmt.height,
-          model: fmt.model
-        });
+        const tokens = resolveLayoutSizingTokens(
+          getFormatLayoutSizingContext(fmt)
+        );
         s.style.fontSize = tokens.legend.fontSize;
       }
     }

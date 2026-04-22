@@ -1,9 +1,9 @@
 import type {
+  AssetRef,
   ColumnTransformation,
-  UploadedFile,
-  AssetRef
+  UploadedFile
 } from '$lib/features/commons/store/create-project.types';
-import type { DataTabState } from '$lib/features/commons/store/data-tab.types';
+import type { SerializedDataTabState } from '$lib/features/commons/store/data-tab.types';
 import type { VisualizationConfig } from '$lib/features/commons/store/visualization.store.svelte';
 import type { ZoomMode } from '$lib/features/commons/store/zoom-mode.store.svelte';
 import type {
@@ -42,9 +42,6 @@ export interface SerializedProject {
     description?: string;
   };
   data?: SerializedProjectData;
-  visualization?: unknown; // TODO: Type visualization state
-  layout?: unknown; // TODO: Type layout state
-  resources?: unknown; // TODO: Type resources
 }
 
 export interface SerializedBasemapAttribute {
@@ -64,12 +61,20 @@ export interface SerializedBasemapSettings {
   referenceBasemapId?: string | null;
   showLabels?: boolean;
   groupVisibility?: Record<string, boolean>;
-  mapViewState?: {
-    zoom: number;
-    target: [number, number, number];
-  };
+  mapViewState?: SerializedMapViewState;
   osmBasemap?: string | null;
 }
+
+export type SerializedMapViewState =
+  | {
+      zoom: number;
+      target: [number, number, number];
+    }
+  | {
+      zoom: number;
+      center: [number, number];
+      baseZoom?: number;
+    };
 
 export interface SerializedVisualizationSettings {
   visualizations: VisualizationConfig[];
@@ -81,7 +86,14 @@ export interface SerializedLayoutSettings {
   format: FormatState;
   annotations: Omit<
     AnnotationsState,
-    'selectedId' | 'textContent' | 'isDrawingMode' | 'drawingInProgress'
+    | 'selectedId'
+    | 'textContent'
+    | 'creationMode'
+    | 'pendingType'
+    | 'pendingContent'
+    | 'pendingStyle'
+    | 'previewGeometry'
+    | 'drawingInProgress'
   >;
   legend: Omit<LegendState, 'activeTab'>;
   geoIndications: GeoIndicationsState;
@@ -132,7 +144,7 @@ export type SerializedSimplificationState = Omit<
 export interface SerializedUiSettings {
   globalUi?: SerializedGlobalUiState;
   zoomMode?: ZoomMode;
-  dataTab?: DataTabState;
+  dataTab?: SerializedDataTabState;
   dataWorkflow?: DataTabWorkflowState;
   dataTools?: DataToolsState;
   datasetsView?: SerializedDatasetsViewState;

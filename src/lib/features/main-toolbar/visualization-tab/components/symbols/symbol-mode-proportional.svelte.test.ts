@@ -36,33 +36,33 @@ describe('SymbolModeProportional (proportionnels.png + en classes.png)', () => {
     expect(source).toContain('showSizeSlider={true}');
   });
 
-  it('wires SEQUENTIAL paletteType for the CLASSES fill palette and QUALITATIVE for CATEGORIES', () => {
-    expect(source).toContain('paletteType={PALETTE_TYPE.SEQUENTIAL}');
-    expect(source).toContain('paletteType={PALETTE_TYPE.QUALITATIVE}');
-  });
-
-  it('routes Fill Unique through SingleColorPreview for both SINGLE and DOUBLE variants', () => {
+  it('delegates Fill UI to the shared FillSection with standard modes', () => {
     expect(source).toContain(
-      "import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte'"
+      "import FillSection from '../shared/fill-section.svelte'"
     );
-    const uniqueBlock = source
-      .split('fillMode === FillMode.UNIQUE')[1]
-      ?.split('{:else if')[0];
-    // Both SINGLE and DOUBLE branches should use SingleColorPreview
-    const count = (uniqueBlock?.match(/<SingleColorPreview/g) ?? []).length;
-    expect(count).toBeGreaterThanOrEqual(3);
-    expect(uniqueBlock).not.toContain('<ColorSelector');
+    expect(source).toContain('<FillSection');
+    expect(source).toContain('primitive="symbol"');
+    expect(source).toContain('availableModes={FILL_MODES_STANDARD}');
+    expect(source).toContain('categoriesVariant="symbols-unique"');
   });
 
-  it('enables Categories Aspect popover via categoriesMode + categoryLabels on CATEGORIES', () => {
-    const categoriesBlock = source.split('fillMode === FillMode.CATEGORIES')[1];
-    const paletteBlock = categoriesBlock
-      ?.split('<PalettePreview')[1]
-      ?.split('/>')[0];
-    expect(paletteBlock).toContain('categoriesMode={true}');
-    expect(paletteBlock).toContain(
-      'categoryLabels={visualization?.classification?.labels ?? []}'
-    );
+  it('overrides FillMode.UNIQUE with a custom uniqueSnippet for SINGLE/DOUBLE variants', () => {
+    expect(source).toContain('{#snippet uniqueSnippet()}');
+    expect(source).toContain('symbolMode === SymbolMode.PROPORTIONAL &&');
+    expect(source).toContain('proportionalType === ProportionalType.DOUBLE');
+    const uniqueSnippet = source
+      .split('{#snippet uniqueSnippet()}')[1]
+      ?.split('{/snippet}')[0];
+    expect(uniqueSnippet).toBeDefined();
+    const count = (uniqueSnippet?.match(/<SingleColorPreview/g) ?? []).length;
+    expect(count).toBeGreaterThanOrEqual(3);
+  });
+
+  it('never shows the double fill background controls inside CLASSES mode', () => {
+    const uniqueSnippet = source
+      .split('{#snippet uniqueSnippet()}')[1]
+      ?.split('{/snippet}')[0];
+    expect(uniqueSnippet).toContain('symbolMode === SymbolMode.PROPORTIONAL');
   });
 
   it('exposes commonScale switch in DOUBLE branch (Figma 697:76546)', () => {
@@ -105,7 +105,104 @@ describe('SymbolModeProportional (proportionnels.png + en classes.png)', () => {
     expect(source).toContain('onSymbolPrimitiveChange');
     expect(source).toContain('onSymbolPrimitiveChange?.({ commonScale');
     expect(source).toContain('onSymbolPrimitiveChange?.({ positionMode');
-    expect(source).toContain('onSymbolPrimitiveChange?.({ breakValueA');
-    expect(source).toContain('onSymbolPrimitiveChange?.({ breakValueB');
+    expect(source).toMatch(
+      /onSymbolPrimitiveChange\?\.\(\{\s*breakValueA:[\s\S]{0,60}breakValueB:/
+    );
+  });
+
+  it('E-08: centralises swap logic in a single commitBreakValues helper (no mirrored handlers)', () => {
+    expect(source).toMatch(/function commitBreakValues\([\s\S]*?\n {2}\}/);
+    const helper = source.match(
+      /function commitBreakValues\([\s\S]*?\n {2}\}/
+    )?.[0];
+    expect(helper).toBeDefined();
+    expect(helper).toContain('Number.isFinite(nextA)');
+    expect(helper).toContain('Number.isFinite(nextB)');
+    expect(helper).toContain('nextA > nextB');
+    expect(helper).toContain('breakValueA: finalA');
+    expect(helper).toContain('breakValueB: finalB');
+  });
+
+  it('E-08: break-value handlers forward to commitBreakValues with the current pair', () => {
+    const handlerA = source.match(
+      /function handleBreakValueAChange\([\s\S]*?\n {2}\}/
+    )?.[0];
+    const handlerB = source.match(
+      /function handleBreakValueBChange\([\s\S]*?\n {2}\}/
+    )?.[0];
+    expect(handlerA).toContain('commitBreakValues(value, breakValueB)');
+    expect(handlerB).toContain('commitBreakValues(breakValueA, value)');
+    expect(handlerA).toContain('isSyncingFromVisualization');
+    expect(handlerB).toContain('isSyncingFromVisualization');
+  });
+});
+
+describe('SymbolModeProportional — anti-leak fill ↔ stroke palette', () => {
+  it('routes StrokeSection strictly to onStrokeClassificationChange (no fallback)', () => {
+    const strokeBlock = source.split('<StrokeSection')[1]?.split('/>')[0];
+    expect(strokeBlock).toBeDefined();
+    expect(strokeBlock).toContain(
+      'onStrokeClassificationChange={onStrokeClassificationChange'
+    );
+    expect(strokeBlock).not.toMatch(
+      /onStrokeClassificationChange\s*\?\?\s*onClassificationChange/
+    );
+    expect(strokeBlock).not.toContain(
+      'onClassificationChange={onClassificationChange}'
+    );
+  });
+
+  it('routes FillSection strictly to onClassificationChange (fill role only)', () => {
+    const fillBlock = source
+      .split('<FillSection')[1]
+      ?.split('</FillSection>')[0];
+    expect(fillBlock).toBeDefined();
+    expect(fillBlock).toContain(
+      'onClassificationChange={onFillClassificationChange'
+    );
+    expect(fillBlock).not.toContain(
+      'onStrokeClassificationChange={onClassificationChange}'
+    );
+  });
+});
+
+describe('SymbolModeProportional — stroke discretization isolation', () => {
+  it('wires the stroke section to symbol stroke-specific classification fields', () => {
+    expect(source).toContain(
+      'strokeClassification={visualization?.symbol?.strokeClassification}'
+    );
+    expect(source).toContain(
+      'strokeValueColumn={visualization?.symbol?.strokeValueColumn}'
+    );
+    expect(source).toContain(
+      'strokeCategoryColumn={visualization?.symbol?.strokeCategoryColumn}'
+    );
+  });
+
+  it('opens the shared discretization modal in stroke role for the outline channel', () => {
+    expect(source).toContain('role="stroke"');
+    expect(source).toContain(
+      'classification={visualization?.symbol?.strokeClassification}'
+    );
+    expect(source).toContain(
+      'valueColumn={visualization?.symbol?.strokeValueColumn}'
+    );
+  });
+
+  it('keeps size and fill discretization callbacks separate', () => {
+    expect(source).toContain('onsettings={onOpenSizeDiscretization}');
+    const fillBlock = source
+      .split('<FillSection')[1]
+      ?.split('</FillSection>')[0];
+    expect(fillBlock).toContain('visualization={fillVisualization}');
+    expect(fillBlock).toContain(
+      'facetsValueSlotPath={FACET_SLOT.SYMBOL_FILL_VALUE}'
+    );
+    expect(fillBlock).toContain(
+      'facetsCategorySlotPath={FACET_SLOT.SYMBOL_FILL_CATEGORY}'
+    );
+    expect(fillBlock).toContain(
+      'onOpenDiscretization={onOpenFillDiscretization'
+    );
   });
 });

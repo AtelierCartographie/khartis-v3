@@ -113,23 +113,33 @@
     editedDatasetName = name;
   }
 
-  function saveDatasetRename() {
+  async function saveDatasetRename() {
     if (!editingDatasetId || !editedDatasetName.trim()) {
       cancelDatasetEditing();
       return;
     }
 
-    const success = datasetsStore.renameDatasetOnly(
-      editingDatasetId,
-      editedDatasetName.trim()
-    );
-    if (success) {
+    const datasetId = editingDatasetId;
+    const nextName = editedDatasetName.trim();
+
+    try {
+      const success = await datasetsStore.renameDataset(datasetId, nextName);
+      if (!success) {
+        return;
+      }
+
       showSuccess(
         m.success_dataset_renamed_title(),
-        m.success_dataset_renamed_message({ name: editedDatasetName.trim() })
+        m.success_dataset_renamed_message({ name: nextName })
+      );
+      cancelDatasetEditing();
+    } catch (error) {
+      showError(
+        m.error_save_project_title(),
+        error instanceof Error ? error.message : m.error_save_project_title(),
+        error
       );
     }
-    cancelDatasetEditing();
   }
 
   function cancelDatasetEditing() {

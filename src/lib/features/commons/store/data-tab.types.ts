@@ -56,3 +56,15 @@ export interface DataTabState {
     warnings: boolean;
   };
 }
+
+export type SerializedBasemapJoinState = Omit<
+  BasemapJoinState,
+  'selectedBasemap' | 'basemapSource'
+>;
+
+export interface SerializedDataTabState extends Omit<
+  DataTabState,
+  'basemapJoin'
+> {
+  basemapJoin: SerializedBasemapJoinState;
+}
