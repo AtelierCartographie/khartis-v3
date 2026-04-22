@@ -1,6 +1,8 @@
 import { GeoJsonLayer, PathLayer, ScatterplotLayer } from '@deck.gl/layers';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { Feature, FeatureCollection, Point, Polygon } from 'geojson';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ClassificationMethod,
@@ -138,8 +140,15 @@ import {
   createLineLayers,
   createPointLayers,
   createPolygonLayers,
+  resolveEffectiveCategoryColorMap,
   resolveSplitMappingFeatureIdColumn
 } from './layer-factory';
+import { hexToRgb } from '$lib/features/commons/utils/color-utils';
+
+const source = readFileSync(
+  join(process.cwd(), 'src/lib/features/map/layers/layer-factory.ts'),
+  'utf8'
+);
 
 function createTableWithFields(fieldNames: string[]): ArrowTable {
   return {
@@ -161,6 +170,45 @@ function createTableWithRows(
       return rows[index];
     }
   } as unknown as ArrowTable;
+}
+
+function createCategoryTable(
+  values: Array<string | null | undefined>
+): ArrowTable {
+  return {
+    numRows: values.length,
+    getChild(name: string) {
+      if (name !== 'category') {
+        return null;
+      }
+
+      return {
+        get(index: number) {
+          return values[index];
+        }
+      };
+    }
+  } as unknown as ArrowTable;
+}
+
+function createCategoricalSymbolVisualization(
+  colors: string[]
+): VisualizationConfig {
+  const visualization = createSymbolVisualization();
+
+  return {
+    ...visualization,
+    classification: undefined,
+    symbol: {
+      ...visualization.symbol!,
+      classification: {
+        method: ClassificationMethod.MANUAL,
+        classes: colors.length,
+        labels: ['North', 'South'],
+        colors
+      }
+    }
+  };
 }
 
 function createPolygonFeature(
@@ -389,6 +437,54 @@ describe('resolveSplitMappingFeatureIdColumn', () => {
     expect(resolveSplitMappingFeatureIdColumn(table, '__feature_id__')).toBe(
       'basemap_id'
     );
+  });
+});
+
+describe('resolveEffectiveCategoryColorMap', () => {
+  it('rebuilds categorical colors when labels stay same but palette changes', () => {
+    const staleColorMap = new Map([
+      ['North', hexToRgb('#ff0000')],
+      ['South', hexToRgb('#00ff00')]
+    ]);
+
+    const resolvedColorMap = resolveEffectiveCategoryColorMap(
+      createCategoryTable(['North', 'South']),
+      createCategoricalSymbolVisualization(['#123456', '#abcdef']),
+      staleColorMap,
+      'category',
+      PrimitiveFilterType.POINT
+    );
+
+    expect(resolvedColorMap).not.toBe(staleColorMap);
+    expect(resolvedColorMap?.get('North')).toEqual(hexToRgb('#123456'));
+    expect(resolvedColorMap?.get('South')).toEqual(hexToRgb('#abcdef'));
+  });
+
+  it('keeps existing categorical map when labels and colors already match', () => {
+    const currentColorMap = new Map([
+      ['North', hexToRgb('#123456')],
+      ['South', hexToRgb('#abcdef')]
+    ]);
+
+    const resolvedColorMap = resolveEffectiveCategoryColorMap(
+      createCategoryTable(['North', 'South']),
+      createCategoricalSymbolVisualization(['#123456', '#abcdef']),
+      currentColorMap,
+      'category',
+      PrimitiveFilterType.POINT
+    );
+
+    expect(resolvedColorMap).toBe(currentColorMap);
+  });
+});
+
+describe('binary scatter styling refresh', () => {
+  it('clones shared scatterplot binary data before overriding fill/line/radius attributes', () => {
+    expect(source).toContain('function cloneScatterBinaryData');
+    expect(source).toContain('attributes: { ...sourceData.attributes }');
+    const cloneCalls = source.match(/cloneScatterBinaryData\(scatterProps\)/g);
+    expect(cloneCalls).not.toBeNull();
+    expect((cloneCalls ?? []).length).toBeGreaterThanOrEqual(3);
   });
 });
 

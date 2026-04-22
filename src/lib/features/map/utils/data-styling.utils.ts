@@ -191,13 +191,28 @@ export function getCategoricalColorMap(
 
 export function hasCompleteCategoricalColorMap(
   categories: string[],
-  categoryColorMap: Map<string, [number, number, number]> | null | undefined
+  categoryColorMap: Map<string, [number, number, number]> | null | undefined,
+  colors?: string[]
 ): boolean {
   if (!categoryColorMap || categoryColorMap.size !== categories.length) {
     return false;
   }
 
-  return categories.every((category) => categoryColorMap.has(category));
+  return categories.every((category, index) => {
+    const currentColor = categoryColorMap.get(category);
+    if (!currentColor) {
+      return false;
+    }
+
+    if (!colors?.length) {
+      return true;
+    }
+
+    const expectedColor = hexToRgb(colors[index % colors.length]);
+    return currentColor.every(
+      (channel, channelIndex) => channel === expectedColor[channelIndex]
+    );
+  });
 }
 
 function usesClassedColor(
