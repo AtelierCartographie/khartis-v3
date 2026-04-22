@@ -7,9 +7,18 @@
  *
  * See: https://github.com/AtelierCartographie/khartis-v3/pull/101
  */
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi
+} from 'vitest';
 import { join_macros } from '$lib/features/duckdb/macros/join';
 import {
+  computeJoinSynthesis,
   computeJoinStats,
   invalidateSimilarityCache,
   type DuckDBClientForJoin
@@ -182,5 +191,40 @@ describe('exact_claimed_ids deduplication', () => {
     const code = quality.entities.find((e) => e.dataValue === '69123');
     expect(code).toBeDefined();
     expect(code!.status).toBe(JoinStatus.JOINED);
+  });
+
+  it('builds the similarity cache only once for concurrent synthesis requests', async () => {
+    await run(db, `CREATE OR REPLACE TABLE user_data3 (geo VARCHAR)`);
+    await run(
+      db,
+      `INSERT INTO user_data3 VALUES ('Sainte-Colombe'), ('Saint-Colombe'), ('Lyon')`
+    );
+
+    const baseDuck = makeDuckClient(db);
+    const querySpy = vi.fn(baseDuck.query);
+    const Duck: DuckDBClientForJoin = {
+      ...baseDuck,
+      query: querySpy
+    };
+    const dataset = makeDataset('user_data3');
+
+    const [first, second, third] = await Promise.all([
+      computeJoinSynthesis(dataset, 'geo', Duck),
+      computeJoinSynthesis(dataset, 'geo', Duck),
+      computeJoinSynthesis(dataset, 'geo', Duck)
+    ]);
+
+    expect(second).toEqual(first);
+    expect(third).toEqual(first);
+
+    const cacheBuildCount = querySpy.mock.calls.filter(([sql]) => {
+      return (
+        typeof sql === 'string' &&
+        sql.includes('CREATE OR REPLACE TEMP TABLE') &&
+        sql.includes('__similarity_cache__')
+      );
+    }).length;
+
+    expect(cacheBuildCount).toBe(1);
   });
 });

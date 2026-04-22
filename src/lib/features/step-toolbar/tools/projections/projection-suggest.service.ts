@@ -30,6 +30,19 @@ export interface BuiltProjectionSuggestion {
   source: 'proj4' | 'd3';
 }
 
+type GeoProjectionFactory = () => GeoProjection;
+
+const d3ProjectionFactories = d3geoProjection as Record<string, unknown>;
+
+function getD3ProjectionFactory(
+  name: string
+): GeoProjectionFactory | undefined {
+  const candidate = d3ProjectionFactories[name];
+  return typeof candidate === 'function'
+    ? (candidate as GeoProjectionFactory)
+    : undefined;
+}
+
 const D3_FACTORY_MAP: Record<string, (() => GeoProjection) | undefined> = {
   geoMercator: d3geo.geoMercator,
   geoEquirectangular: d3geo.geoEquirectangular,
@@ -45,40 +58,20 @@ const D3_FACTORY_MAP: Record<string, (() => GeoProjection) | undefined> = {
   geoTransverseMercator: d3geo.geoTransverseMercator,
   geoNaturalEarth1: d3geo.geoNaturalEarth1,
   geoGnomonic: d3geo.geoGnomonic,
-  geoBonne: (d3geoProjection as Record<string, unknown>).geoBonne as
-    | (() => GeoProjection)
-    | undefined,
-  geoCassini: (d3geoProjection as Record<string, unknown>).geoCassini as
-    | (() => GeoProjection)
-    | undefined,
-  geoTimes: (d3geoProjection as Record<string, unknown>).geoTimes as
-    | (() => GeoProjection)
-    | undefined,
-  geoBertin1953: (d3geoProjection as Record<string, unknown>).geoBertin1953 as
-    | (() => GeoProjection)
-    | undefined,
-  geoArmadillo: (d3geoProjection as Record<string, unknown>).geoArmadillo as
-    | (() => GeoProjection)
-    | undefined,
-  geoMollweide: (d3geoProjection as Record<string, unknown>).geoMollweide as
-    | (() => GeoProjection)
-    | undefined,
-  geoInterruptedMollweide: (d3geoProjection as Record<string, unknown>)
-    .geoInterruptedMollweide as (() => GeoProjection) | undefined,
-  geoInterruptedMollweideHemispheres: (
-    d3geoProjection as Record<string, unknown>
-  ).geoInterruptedMollweideHemispheres as (() => GeoProjection) | undefined,
-  geoAirocean: (d3geoProjection as Record<string, unknown>).geoAirocean as
-    | (() => GeoProjection)
-    | undefined,
-  geoImago: (d3geoProjection as Record<string, unknown>).geoImago as
-    | (() => GeoProjection)
-    | undefined,
-  geoCylindricalEqualArea: (d3geoProjection as Record<string, unknown>)
-    .geoCylindricalEqualArea as (() => GeoProjection) | undefined,
-  geoRobinson: (d3geoProjection as Record<string, unknown>).geoRobinson as
-    | (() => GeoProjection)
-    | undefined
+  geoBonne: getD3ProjectionFactory('geoBonne'),
+  geoCassini: getD3ProjectionFactory('geoCassini'),
+  geoTimes: getD3ProjectionFactory('geoTimes'),
+  geoBertin1953: getD3ProjectionFactory('geoBertin1953'),
+  geoArmadillo: getD3ProjectionFactory('geoArmadillo'),
+  geoMollweide: getD3ProjectionFactory('geoMollweide'),
+  geoInterruptedMollweide: getD3ProjectionFactory('geoInterruptedMollweide'),
+  geoInterruptedMollweideHemispheres: getD3ProjectionFactory(
+    'geoInterruptedMollweideHemispheres'
+  ),
+  geoAirocean: getD3ProjectionFactory('geoAirocean'),
+  geoImago: getD3ProjectionFactory('geoImago'),
+  geoCylindricalEqualArea: getD3ProjectionFactory('geoCylindricalEqualArea'),
+  geoRobinson: getD3ProjectionFactory('geoRobinson')
 };
 
 function nationalToSuggestion(country: MatchedCountry): ProjectionSuggestion {

@@ -9,6 +9,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('$lib/features/project-management/core/persistence-registry', () => ({
+  SavePriority: {
+    IMMEDIATE: 'immediate',
+    DEBOUNCED: 'debounced'
+  },
   persistenceRegistry: {
     register: vi.fn(),
     notifyChange: mocks.notifyChangeMock

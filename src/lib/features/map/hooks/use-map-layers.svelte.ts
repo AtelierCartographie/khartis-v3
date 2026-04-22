@@ -86,7 +86,8 @@ export interface UseMapLayersReturn {
   updateLayers: (
     tables: Map<string, ArrowTable>,
     geoJSONs: Map<string, FeatureCollection>,
-    splitData?: Map<string, SplitRenderingTable>
+    splitData?: Map<string, SplitRenderingTable>,
+    densityTables?: Map<string, ArrowTable>
   ) => void;
 }
 
@@ -184,6 +185,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     Promise<void>
   >();
   const representativePointLoadFailures = new WeakSet<ArrowTable>();
+  const representativePointNotifyOnReady = new WeakSet<ArrowTable>();
   let cachedProjectionOverrideKey: string | null = null;
   let cachedProjectionOverrideRef: ProjectionLike | undefined;
 
@@ -345,26 +347,27 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     return geometryInfo;
   }
 
-  function getRepresentativePointTable(
+  function startRepresentativePointTableLoad(
     datasetId: string,
     sourceTable: ArrowTable,
     geometryInfo: NonNullable<LayerContext['geometryInfo']>,
-    joinedBasemapId?: string | null
-  ): ArrowTable | null {
+    joinedBasemapId?: string | null,
+    notifyOnReady = false
+  ): void {
     if (!supportsRepresentativePointTable(geometryInfo.type)) {
-      return null;
+      return;
     }
 
-    const cachedTable = representativePointTableCache.get(sourceTable);
-    if (cachedTable) {
-      return cachedTable;
+    if (notifyOnReady) {
+      representativePointNotifyOnReady.add(sourceTable);
     }
 
     if (
+      representativePointTableCache.has(sourceTable) ||
       representativePointLoadPromises.has(sourceTable) ||
       representativePointLoadFailures.has(sourceTable)
     ) {
-      return null;
+      return;
     }
 
     const loadPromise = (async () => {
@@ -408,10 +411,14 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           representativePointTable
         );
         getCachedRepresentativeGeometryInfo(representativePointTable);
-        onRepresentativePointTablesLoaded?.();
+        if (representativePointNotifyOnReady.has(sourceTable)) {
+          representativePointNotifyOnReady.delete(sourceTable);
+          onRepresentativePointTablesLoaded?.();
+        }
       })
       .catch((error) => {
         representativePointLoadFailures.add(sourceTable);
+        representativePointNotifyOnReady.delete(sourceTable);
         logger.warn(
           'Deferred representative point table loading failed',
           LogCategory.MAP,
@@ -428,6 +435,49 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       });
 
     representativePointLoadPromises.set(sourceTable, loadPromise);
+  }
+
+  function prefetchRepresentativePointTable(
+    datasetId: string,
+    sourceTable: ArrowTable,
+    geometryInfo: NonNullable<LayerContext['geometryInfo']>,
+    joinedBasemapId?: string | null
+  ): void {
+    startRepresentativePointTableLoad(
+      datasetId,
+      sourceTable,
+      geometryInfo,
+      joinedBasemapId,
+      false
+    );
+  }
+
+  function getRepresentativePointTable(
+    datasetId: string,
+    sourceTable: ArrowTable,
+    geometryInfo: NonNullable<LayerContext['geometryInfo']>,
+    joinedBasemapId?: string | null
+  ): ArrowTable | null {
+    if (!supportsRepresentativePointTable(geometryInfo.type)) {
+      return null;
+    }
+
+    const cachedTable = representativePointTableCache.get(sourceTable);
+    if (cachedTable) {
+      return cachedTable;
+    }
+
+    if (representativePointLoadFailures.has(sourceTable)) {
+      return null;
+    }
+
+    startRepresentativePointTableLoad(
+      datasetId,
+      sourceTable,
+      geometryInfo,
+      joinedBasemapId,
+      true
+    );
     return null;
   }
 
@@ -498,7 +548,8 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
   function updateLayers(
     tables: Map<string, ArrowTable>,
     geoJSONs: Map<string, FeatureCollection>,
-    splitData?: Map<string, SplitRenderingTable>
+    splitData?: Map<string, SplitRenderingTable>,
+    densityTables?: Map<string, ArrowTable>
   ): void {
     const deckOverlay = getDeckOverlay();
     const deckInstance = getDeckInstance();
@@ -662,12 +713,18 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           const datasetId = viz.datasetId;
           const split = splitData?.get(datasetId);
           const table = split?.geometry ?? tables.get(datasetId);
+          const densityTable = densityTables?.get(datasetId);
           const geojson = geoJSONs.get(datasetId);
 
           const ctx = buildLayerContextForViz(viz);
           if (split) {
             ctx.splitDatasetTable = split.dataset;
             ctx.splitFeatureIdColumn = split.featureIdColumn;
+          }
+          if (densityTable) {
+            ctx.densityTable = densityTable;
+            ctx.densityGeometryInfo =
+              extractGeometryInfo(densityTable) ?? undefined;
           }
           const datasetProjectionMetadata =
             getProjectionMetadataForDataset?.(datasetId) ?? currentMetadata;
@@ -742,7 +799,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
               const representativeVizFiltered = filterArrowTableByDataFilters(
                 representativePointBaseTable,
                 viz.dataFilters,
-                tablePrimitiveType
+                PrimitiveFilterType.POINT
               );
               const representativeTableFiltered =
                 filterArrowTableByTableFilters(
@@ -786,6 +843,21 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
 
       const shouldRenderDatasetFallbacks =
         getShouldRenderDatasetFallbacks?.() ?? false;
+
+      if (shouldRenderDatasetFallbacks) {
+        for (const [datasetId, table] of tables) {
+          if (!getDatasetJoinedBasemap(datasetId)) {
+            continue;
+          }
+
+          const geometryInfo = extractGeometryInfo(table);
+          if (!geometryInfo) {
+            continue;
+          }
+
+          prefetchRepresentativePointTable(datasetId, table, geometryInfo);
+        }
+      }
 
       if (shouldRenderDatasetFallbacks) {
         const fallbackDatasetIds = new Set<string>([

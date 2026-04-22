@@ -16,4 +16,12 @@ describe('ThematicMap projection mask overlay', () => {
     expect(source).toContain('fill-rule="evenodd"');
     expect(source).toContain('clip-rule="evenodd"');
   });
+
+  it('renders the alignment grid at page level and keeps it aligned with the shared snap size', () => {
+    expect(source).toContain(
+      "import PageGridOverlay from './page-grid-overlay.svelte';"
+    );
+    expect(source).toContain('{#if showPageGrid}');
+    expect(source).toContain('<PageGridOverlay />');
+  });
 });

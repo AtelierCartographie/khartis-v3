@@ -1,18 +1,10 @@
 import type {
   KhartisProject,
-  LayoutConfig,
   ProjectData,
   ProjectHistoryEntry,
-  SavedProjectMetadata,
-  VisualizationConfig
+  SavedProjectMetadata
 } from '$lib/features/project-management';
-import {
-  createAutoSaveController,
-  persistenceRegistry,
-  type AutoSaveController
-} from '$lib/features/project-management';
-import { EVENT } from '$lib/features/commons/constants/dom.constants';
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { persistenceRegistry } from '$lib/features/project-management';
 import type {
   ColumnTransformation,
   UploadedFile
@@ -40,17 +32,10 @@ import {
   exportProject as exportProjectFn,
   importProject as importProjectFn,
   markDirty as markDirtyFn,
-  setAutoSave as setAutoSaveFn,
   addColumnTransformation as addColumnTransformationFn,
   clearColumnTransformations as clearColumnTransformationsFn,
   addDeletedRows as addDeletedRowsFn
 } from './project';
-
-const EXIT_FLUSH_DEDUP_MS = 1000;
-
-let flushPendingPersistenceRef: (() => void) | null = null;
-let areExitListenersRegistered = false;
-let lastExitFlushAt = 0;
 
 function createProjectStore() {
   const state = $state(createProjectState());
@@ -58,7 +43,6 @@ function createProjectStore() {
 
   const container: ProjectStateContainer = {
     _state: state,
-    autoSave: createAutoSaveController(() => saveCurrentProject()),
     get initPromise() {
       return initPromise;
     },
@@ -68,6 +52,16 @@ function createProjectStore() {
   };
 
   persistenceRegistry.setSaveCallback(() => saveCurrentProject());
+  persistenceRegistry.setStatusCallback((status) => {
+    state.isDirty = status.isDirty;
+    if (status.lastSaved) {
+      state.lastSaved = new Date(status.lastSaved);
+    }
+  });
+  persistenceRegistry.updateSavePolicy({
+    enabled: state.autoSaveEnabled,
+    debounceInterval: state.autoSaveInterval
+  });
 
   async function initialize(): Promise<void> {
     state.isLoading = true;
@@ -170,7 +164,6 @@ function createProjectStore() {
 
   function markAsDirty(): void {
     markDirtyFn(container);
-    container.autoSave.schedule(true);
   }
 
   function updateProjectName(name: string): void {
@@ -198,36 +191,6 @@ function createProjectStore() {
     addToHistoryFn(container, 'Project data updated');
   }
 
-  function updateVisualization(config: Partial<VisualizationConfig>): void {
-    if (!state.currentProject) {
-      return;
-    }
-
-    state.currentProject.visualization = {
-      ...state.currentProject.visualization,
-      ...config
-    } as VisualizationConfig;
-
-    state.currentProject.manifest.updatedAt = new Date();
-    markAsDirty();
-    addToHistoryFn(container, 'Visualization updated');
-  }
-
-  function updateLayout(config: Partial<LayoutConfig>): void {
-    if (!state.currentProject) {
-      return;
-    }
-
-    state.currentProject.layout = {
-      ...state.currentProject.layout,
-      ...config
-    };
-
-    state.currentProject.manifest.updatedAt = new Date();
-    markAsDirty();
-    addToHistoryFn(container, 'Layout updated');
-  }
-
   function undo(): void {
     if (undoFn(container)) {
       markAsDirty();
@@ -244,64 +207,12 @@ function createProjectStore() {
     return clearProjectFn(container);
   }
 
-  function setAutoSave(enabled: boolean, interval?: number): void {
-    setAutoSaveFn(container, enabled, interval);
-  }
-
-  function flushPendingPersistence(): void {
-    if (!state.currentProject) {
-      return;
-    }
-
-    const now = Date.now();
-    if (now - lastExitFlushAt < EXIT_FLUSH_DEDUP_MS) {
-      return;
-    }
-    lastExitFlushAt = now;
-
-    container.autoSave.cancel();
-
-    if (persistenceRegistry.isDirty) {
-      persistenceRegistry.flush();
-      return;
-    }
-
-    if (!state.isDirty) {
-      return;
-    }
-
-    void saveCurrentProject().catch((error) => {
-      logger.error(
-        'Failed to save project during page lifecycle flush',
-        LogCategory.PERSISTENCE,
-        error
-      );
-    });
-  }
-
   if (typeof window !== 'undefined') {
-    flushPendingPersistenceRef = flushPendingPersistence;
-
-    if (!areExitListenersRegistered) {
-      const flushOnExit = () => flushPendingPersistenceRef?.();
-
-      document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'hidden') {
-          flushOnExit();
-        }
-      });
-      window.addEventListener('pagehide', flushOnExit);
-      window.addEventListener(EVENT.BEFOREUNLOAD, flushOnExit);
-
-      areExitListenersRegistered = true;
-    }
-
     initPromise = initialize();
   }
 
   return {
     _state: state,
-    autoSave: container.autoSave as AutoSaveController,
     get initPromise(): Promise<void> | undefined {
       return initPromise;
     },
@@ -352,12 +263,9 @@ function createProjectStore() {
     markAsDirty,
     updateProjectName,
     updateProjectData,
-    updateVisualization,
-    updateLayout,
     undo,
     redo,
-    clearProject,
-    setAutoSave
+    clearProject
   };
 }
 

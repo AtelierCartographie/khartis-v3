@@ -38,8 +38,8 @@ function createProjectAssetRefId(projectId: string, assetId: string): string {
 }
 
 async function getDb(): Promise<IDBDatabase> {
-  const { openDatabase } = await import('./persistence');
-  return openDatabase();
+  const { getProjectDatabase } = await import('./database-access');
+  return getProjectDatabase();
 }
 
 function getChunkCount(size: number, chunkSize = CHUNK_SIZE): number {

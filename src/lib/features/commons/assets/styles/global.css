@@ -46,11 +46,21 @@
   --khartis-additions-text-primary-suggestions: #003a6d;
   --khartis-additions-text-secondary-suggestions: #00539a;
   --khartis-additions-text-helper-suggestions: #0072c3;
+  --khartis-additions-icon-primary-suggestions: #003a6d;
+  --khartis-additions-icon-secondary-suggestions: #00539a;
   --khartis-additions-interactive-suggestions: #0072c3;
   --khartis-additions-focus-suggestions: #0072c3;
+  --khartis-additions-border-strong-01-suggestions: #1192e8;
+  --khartis-additions-border-interactive-suggestions: #0072c3;
+  --khartis-additions-border-subtle-01-suggestions: #82cfff;
   --khartis-additions-border-tile-01-suggestions: #82cfff;
+  --khartis-additions-border-disabled-suggestions: #82cfff;
   --khartis-additions-layer-01-suggestions: #e5f6ff;
   --khartis-additions-layer-02-suggestions: #ffffff;
+  --khartis-additions-layer-hover-01-suggestions: #cceeff;
+  --khartis-additions-layer-hover-02-suggestions: #cceeff;
+  --khartis-additions-text-disabled-suggestions: #003a6d40;
+  --khartis-additions-icon-disabled-suggestions: #003a6d40;
 
   /* Tag colors - Purple */
   --tag-purple-tag-background: #e8daff;
@@ -100,11 +110,21 @@
   --khartis-additions-text-primary-suggestions: #82cfff;
   --khartis-additions-text-secondary-suggestions: #a8e2ff;
   --khartis-additions-text-helper-suggestions: #33b1ff;
+  --khartis-additions-icon-primary-suggestions: #82cfff;
+  --khartis-additions-icon-secondary-suggestions: #a8e2ff;
   --khartis-additions-interactive-suggestions: #33b1ff;
   --khartis-additions-focus-suggestions: #33b1ff;
+  --khartis-additions-border-strong-01-suggestions: #33b1ff;
+  --khartis-additions-border-interactive-suggestions: #33b1ff;
+  --khartis-additions-border-subtle-01-suggestions: #00539a;
   --khartis-additions-border-tile-01-suggestions: #00539a;
+  --khartis-additions-border-disabled-suggestions: #00539a;
   --khartis-additions-layer-01-suggestions: #003a6d;
   --khartis-additions-layer-02-suggestions: #012749;
+  --khartis-additions-layer-hover-01-suggestions: #00437a;
+  --khartis-additions-layer-hover-02-suggestions: #01315b;
+  --khartis-additions-text-disabled-suggestions: #82cfff66;
+  --khartis-additions-icon-disabled-suggestions: #82cfff66;
 
   /* Tag colors - Purple (dark theme) */
   --tag-purple-tag-background: #3e1d66;
@@ -168,6 +188,79 @@ label {
 
 .bx--radio-button-group-wrapper .bx--label {
   font-size: 0.875rem;
+}
+
+.kh-card-radio {
+  --kh-card-radio-color: var(--cds-text-primary, #161616);
+  --kh-card-radio-disabled-color: var(
+    --cds-icon-disabled,
+    rgba(22, 22, 22, 0.25)
+  );
+  --kh-card-radio-focus-color: var(--kh-card-radio-color);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.kh-card-radio .bx--radio-button-wrapper {
+  display: inline-flex;
+  align-items: center;
+}
+
+.kh-card-radio .bx--radio-button__label {
+  padding: 0;
+  margin-right: 0;
+}
+
+.kh-card-radio .bx--radio-button__appearance {
+  width: 0.875rem;
+  height: 0.875rem;
+  margin: 0;
+  border-color: var(--kh-card-radio-color);
+}
+
+.kh-card-radio
+  .bx--radio-button:checked
+  + .bx--radio-button__label
+  .bx--radio-button__appearance {
+  border-color: var(--kh-card-radio-color);
+}
+
+.kh-card-radio
+  .bx--radio-button:checked
+  + .bx--radio-button__label
+  .bx--radio-button__appearance::before {
+  background-color: var(--kh-card-radio-color);
+}
+
+.kh-card-radio
+  .bx--radio-button:disabled
+  + .bx--radio-button__label
+  .bx--radio-button__appearance,
+.kh-card-radio
+  .bx--radio-button:disabled:checked
+  + .bx--radio-button__label
+  .bx--radio-button__appearance {
+  border-color: var(--kh-card-radio-disabled-color);
+}
+
+.kh-card-radio
+  .bx--radio-button:disabled
+  + .bx--radio-button__label
+  .bx--radio-button__appearance::before,
+.kh-card-radio
+  .bx--radio-button:disabled:checked
+  + .bx--radio-button__label
+  .bx--radio-button__appearance::before {
+  background-color: var(--kh-card-radio-disabled-color);
+}
+
+.kh-card-radio
+  .bx--radio-button:focus
+  + .bx--radio-button__label
+  .bx--radio-button__appearance {
+  outline-color: var(--kh-card-radio-focus-color);
 }
 
 /* Carbon Slider: remove the 200px min-width so the track shrinks in narrow containers.

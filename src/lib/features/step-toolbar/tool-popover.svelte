@@ -62,8 +62,9 @@
     const toolbarRect = toolbar.getBoundingClientRect();
     const popoverRect = popover.getBoundingClientRect();
 
-    computedTopOffset = Math.round(
-      (toolbarRect.height - popoverRect.height) / 2
+    computedTopOffset = Math.min(
+      0,
+      Math.round((toolbarRect.height - popoverRect.height) / 2)
     );
   }
 
@@ -71,7 +72,7 @@
     if (
       shouldBlockToolClose(
         globalState.selectedTool,
-        getAnnotationsState().isDrawingMode
+        getAnnotationsState().creationMode !== 'idle'
       )
     ) {
       return;
@@ -114,7 +115,7 @@
         if (
           shouldBlockToolClose(
             globalState.selectedTool,
-            getAnnotationsState().isDrawingMode
+            getAnnotationsState().creationMode !== 'idle'
           )
         ) {
           return;
@@ -215,7 +216,14 @@
     max-height: var(--popover-max-height);
     overflow-y: auto;
     overflow-x: hidden;
-    padding-bottom: var(--cds-spacing-03);
+    scrollbar-width: none;
+    padding-bottom: 0;
+  }
+
+  .popover-scroll::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
   }
 
   :global(#khartis-tool-popover .bx--list-box__menu) {

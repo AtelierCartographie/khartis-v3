@@ -7,6 +7,16 @@ export const SavePriority = {
 
 export type SavePriorityType = (typeof SavePriority)[keyof typeof SavePriority];
 
+export interface PersistenceSavePolicy {
+  enabled: boolean;
+  debounceInterval: number;
+}
+
+export interface PersistenceStatus {
+  isDirty: boolean;
+  lastSaved?: Date;
+}
+
 export interface PersistenceEntry<T = unknown> {
   key: string;
   serialize: () => T;
@@ -15,7 +25,7 @@ export interface PersistenceEntry<T = unknown> {
   priority: SavePriorityType;
 }
 
-const DEBOUNCE_INTERVAL = 5000;
+const DEFAULT_DEBOUNCE_INTERVAL = 750;
 
 class PersistenceRegistryImpl {
   private entries = new Map<string, PersistenceEntry>();
@@ -30,12 +40,67 @@ class PersistenceRegistryImpl {
 
   private flushQueued = false;
 
+  private savePolicy: PersistenceSavePolicy = {
+    enabled: true,
+    debounceInterval: DEFAULT_DEBOUNCE_INTERVAL
+  };
+
+  private statusCallback: ((status: PersistenceStatus) => void) | null = null;
+
+  private lastSavedAt: Date | undefined;
+
+  private suppressedNotificationsDepth = 0;
+
   get isDirty(): boolean {
     return this.dirty;
   }
 
+  get lastSaved(): Date | undefined {
+    return this.lastSavedAt;
+  }
+
+  get currentSavePolicy(): PersistenceSavePolicy {
+    return { ...this.savePolicy };
+  }
+
   setSaveCallback(cb: () => Promise<void>): void {
     this.saveCallback = cb;
+  }
+
+  setStatusCallback(cb: ((status: PersistenceStatus) => void) | null): void {
+    this.statusCallback = cb;
+    this.emitStatus();
+  }
+
+  updateSavePolicy(partial: Partial<PersistenceSavePolicy>): void {
+    this.savePolicy = {
+      ...this.savePolicy,
+      ...partial
+    };
+
+    if (!this.savePolicy.enabled) {
+      this.cancelDebounce();
+    } else if (this.dirty) {
+      this.scheduleDebounce();
+    }
+
+    this.emitStatus();
+  }
+
+  async withPersistenceSuspended<T>(
+    operation: () => Promise<T> | T
+  ): Promise<T> {
+    this.suppressedNotificationsDepth += 1;
+    this.cancelDebounce();
+
+    try {
+      return await operation();
+    } finally {
+      this.suppressedNotificationsDepth = Math.max(
+        0,
+        this.suppressedNotificationsDepth - 1
+      );
+    }
   }
 
   register<T>(entry: PersistenceEntry<T>): void {
@@ -52,15 +117,24 @@ class PersistenceRegistryImpl {
     this.entries.delete(key);
   }
 
-  notifyChange(
-    _key: string,
-    priority: SavePriorityType = SavePriority.DEBOUNCED
-  ): void {
-    this.dirty = true;
+  notifyChange(_key: string, priority?: SavePriorityType): void {
+    if (this.suppressedNotificationsDepth > 0) {
+      return;
+    }
 
-    if (priority === SavePriority.IMMEDIATE) {
+    const resolvedPriority =
+      priority ?? this.entries.get(_key)?.priority ?? SavePriority.DEBOUNCED;
+
+    this.dirty = true;
+    this.emitStatus();
+
+    if (!this.savePolicy.enabled) {
+      return;
+    }
+
+    if (resolvedPriority === SavePriority.IMMEDIATE) {
       this.cancelDebounce();
-      this.flush();
+      void this.flush();
     } else {
       this.scheduleDebounce();
     }
@@ -115,21 +189,40 @@ class PersistenceRegistryImpl {
     return [...this.entries.keys()];
   }
 
-  flush(): void {
-    if (!this.dirty) return;
+  flush(): Promise<void> {
+    this.cancelDebounce();
+
+    if (this.suppressedNotificationsDepth > 0) {
+      return Promise.resolve();
+    }
+
     if (this.flushInFlight) {
       this.flushQueued = true;
-      return;
+      return this.flushInFlight;
+    }
+
+    if (!this.dirty) {
+      return Promise.resolve();
+    }
+
+    if (!this.saveCallback) {
+      return Promise.resolve();
     }
 
     this.dirty = false;
+    this.emitStatus();
 
-    if (!this.saveCallback) {
-      return;
-    }
+    let flushFailed = false;
 
     this.flushInFlight = this.saveCallback()
+      .then(() => {
+        this.lastSavedAt = new Date();
+        this.emitStatus();
+      })
       .catch((error) => {
+        flushFailed = true;
+        this.dirty = true;
+        this.emitStatus();
         logger.error(
           'Persistence flush failed',
           LogCategory.PERSISTENCE,
@@ -139,25 +232,28 @@ class PersistenceRegistryImpl {
       .finally(() => {
         this.flushInFlight = null;
 
-        if (this.flushQueued || this.dirty) {
+        if (!flushFailed && (this.flushQueued || this.dirty)) {
           this.flushQueued = false;
-          this.flush();
+          void this.flush();
         }
       });
+
+    return this.flushInFlight;
   }
 
   markClean(): void {
     this.cancelDebounce();
     this.dirty = false;
     this.flushQueued = false;
+    this.emitStatus();
   }
 
   private scheduleDebounce(): void {
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
     this.debounceTimer = setTimeout(() => {
       this.debounceTimer = undefined;
-      this.flush();
-    }, DEBOUNCE_INTERVAL);
+      void this.flush();
+    }, this.savePolicy.debounceInterval);
   }
 
   private cancelDebounce(): void {
@@ -165,6 +261,13 @@ class PersistenceRegistryImpl {
       clearTimeout(this.debounceTimer);
       this.debounceTimer = undefined;
     }
+  }
+
+  private emitStatus(): void {
+    this.statusCallback?.({
+      isDirty: this.dirty,
+      lastSaved: this.lastSavedAt
+    });
   }
 }
 

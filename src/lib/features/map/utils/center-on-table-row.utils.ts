@@ -298,23 +298,26 @@ async function getBasemapFeatureCenter(
   const escapedGeometryColumn = escapeIdentifier(geometryColumn.columnName);
   const escapedFeatureId = escapeSqlString(String(basemapFeatureId));
   const featureIdentifierColumn = findFeatureIdentifierColumn(columns);
+  const whereClause = (() => {
+    if (featureIdentifierColumn) {
+      return `CAST("${escapeIdentifier(featureIdentifierColumn)}" AS VARCHAR) = '${escapedFeatureId}'`;
+    }
 
-  let whereClause = '';
-
-  if (featureIdentifierColumn) {
-    whereClause = `CAST("${escapeIdentifier(featureIdentifierColumn)}" AS VARCHAR) = '${escapedFeatureId}'`;
-  } else {
     const textColumns = getTextColumns(columns);
     if (textColumns.length === 0) {
       return null;
     }
 
-    whereClause = textColumns
+    return textColumns
       .map(
         (columnName) =>
           `CAST("${escapeIdentifier(columnName)}" AS VARCHAR) = '${escapedFeatureId}'`
       )
       .join(' OR ');
+  })();
+
+  if (!whereClause) {
+    return null;
   }
 
   if (!geometryColumn.isSpatialGeometry) {

@@ -39,23 +39,25 @@
   } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
   import {
     colorBlindnessActions,
-    getColorBlindnessState
+    getColorBlindnessState,
+    isColorBlindnessActive
   } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
-  import { ColorBlindnessType } from '$lib/features/commons/constants/ui.constants';
   import { zoomModeStore } from '$lib/features/commons/store/zoom-mode.store.svelte';
   import {
     DEFAULT_WORKSPACE_VIEWPORT_BOUNDS,
     WORKSPACE_FIT_EVENT,
     clampWorkspacePanOffset,
     isWorkspacePanTarget,
+    resolveReadablePagePreviewScale,
     resolveWorkspaceViewportBounds,
     type WorkspaceViewportBounds
   } from '$lib/features/commons/utils/workspace-viewport.utils';
   import StepToolbar from '$lib/features/step-toolbar/step-toolbar.svelte';
-  import { Button, Tag, Theme } from 'carbon-components-svelte';
+  import { Tag, Theme } from 'carbon-components-svelte';
   import { WarningAltFilled } from 'carbon-icons-svelte';
   import { onMount, untrack } from 'svelte';
   import * as m from '$lib/paraglide/messages';
+  import ColorBlindnessNotification from '$lib/features/step-toolbar/tools/color-blindness/color-blindness-notification.svelte';
 
   import 'carbon-components-svelte/css/all.css';
 
@@ -101,12 +103,18 @@
       window.addEventListener(EVENT.BEFOREUNLOAD, handleBeforeUnload);
     }
 
+    const handleLifecycleFlush = () => {
+      void persistenceRegistry.flush();
+    };
+
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
-        persistenceRegistry.flush();
+        handleLifecycleFlush();
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pagehide', handleLifecycleFlush);
+    window.addEventListener(EVENT.BEFOREUNLOAD, handleLifecycleFlush);
 
     pageResizeObserver = new ResizeObserver(() => {
       updateWorkspaceViewportState();
@@ -208,6 +216,8 @@
       }
       ariaObserver.disconnect();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pagehide', handleLifecycleFlush);
+      window.removeEventListener(EVENT.BEFOREUNLOAD, handleLifecycleFlush);
       workspaceResizeObserver?.disconnect();
       pageResizeObserver?.disconnect();
       pageMutationObserver?.disconnect();
@@ -280,14 +290,28 @@
   }
 
   const colorBlindnessState = $derived(getColorBlindnessState());
-  const isColorBlindnessActive = $derived(
-    colorBlindnessState.simulationType !== ColorBlindnessType.NONE
+  const hasActiveColorBlindnessSimulation = $derived(
+    isColorBlindnessActive(colorBlindnessState)
+  );
+  let mobileColorBlindnessNotificationDismissed = $state(false);
+  const showMobileColorBlindnessNotification = $derived(
+    globalState.isMobileView &&
+      hasActiveColorBlindnessSimulation &&
+      globalState.selectedStep !== ToolbarStep.Styling &&
+      !globalState.selectedTool &&
+      !mobileColorBlindnessNotificationDismissed
   );
   const isPageMode = $derived(zoomModeStore.isPageMode);
 
   function handleDeactivateColorBlindness() {
-    colorBlindnessActions.setSimulationType(ColorBlindnessType.NONE);
+    colorBlindnessActions.reset();
   }
+
+  $effect(() => {
+    if (!hasActiveColorBlindnessSimulation) {
+      mobileColorBlindnessNotificationDismissed = false;
+    }
+  });
 
   const LEFT_BUTTON = 0;
   const MIDDLE_BUTTON = 1;
@@ -318,10 +342,12 @@
       1,
       workspaceHeight - WORKSPACE_FIT_PADDING_PX * 2
     );
-    return Math.min(
-      1,
-      effectiveWidth / pageIntrinsicWidth,
-      effectiveHeight / pageIntrinsicHeight
+    return resolveReadablePagePreviewScale(
+      Math.min(
+        1,
+        effectiveWidth / pageIntrinsicWidth,
+        effectiveHeight / pageIntrinsicHeight
+      )
     );
   });
 
@@ -621,19 +647,12 @@
         </div>
       {/if}
 
-      {#if isColorBlindnessActive}
+      {#if showMobileColorBlindnessNotification}
         <div class="colorblind-notification">
-          <div class="colorblind-notification-content">
-            <strong>{m.colorblind_notification_title()}</strong>
-            <p>{m.colorblind_notification_message()}</p>
-            <Button
-              kind="ghost"
-              size="small"
-              on:click={handleDeactivateColorBlindness}
-            >
-              {m.colorblind_deactivate()}
-            </Button>
-          </div>
+          <ColorBlindnessNotification
+            ondeactivate={handleDeactivateColorBlindness}
+            onclose={() => (mobileColorBlindnessNotificationDismissed = true)}
+          />
         </div>
       {/if}
     </article>
@@ -784,27 +803,19 @@
     bottom: var(--cds-spacing-05);
     right: var(--cds-spacing-05);
     z-index: var(--z-content);
-  }
-
-  .colorblind-notification-content {
-    background: var(--cds-ui-01);
-    border: 1px solid var(--cds-border-subtle);
-    border-left: 3px solid var(--cds-support-warning, #f1c21b);
-    padding: var(--cds-spacing-04);
     max-width: 320px;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
   }
 
-  .colorblind-notification-content strong {
-    display: block;
-    margin-bottom: var(--cds-spacing-02);
-    font-size: 0.875rem;
+  .colorblind-notification :global(.bx--inline-notification) {
+    margin: 0;
+    max-width: 100%;
   }
 
-  .colorblind-notification-content p {
-    font-size: 0.75rem;
-    color: var(--cds-text-secondary);
-    margin-bottom: var(--cds-spacing-03);
-    line-height: 1.3;
+  @media (max-width: 672px) {
+    .colorblind-notification {
+      left: var(--cds-spacing-05);
+      right: var(--cds-spacing-05);
+      max-width: none;
+    }
   }
 </style>

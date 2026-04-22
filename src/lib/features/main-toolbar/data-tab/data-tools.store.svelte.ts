@@ -69,27 +69,27 @@ function toggleTool(tool: DataToolType) {
 
 function setSearchQuery(query: string) {
   state.searchQuery = query;
-  notifyPersistence('IMMEDIATE');
+  notifyPersistence();
 }
 
 function setSearchSource(source: SearchSource | string) {
   state.searchSource = source;
-  notifyPersistence('IMMEDIATE');
+  notifyPersistence();
 }
 
 function setReplaceValue(value: string) {
   state.replaceValue = value;
-  notifyPersistence('IMMEDIATE');
+  notifyPersistence();
 }
 
 function setCalculatorName(name: string) {
   state.calculatorName = name;
-  notifyPersistence('IMMEDIATE');
+  notifyPersistence();
 }
 
 function setCalculatorFormula(formula: string) {
   state.calculatorFormula = formula;
-  notifyPersistence('IMMEDIATE');
+  notifyPersistence();
 }
 
 function setCalculatorTestResult(result: unknown) {

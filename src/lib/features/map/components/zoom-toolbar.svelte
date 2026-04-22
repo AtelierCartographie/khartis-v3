@@ -424,10 +424,6 @@
     text-transform: uppercase;
   }
 
-  .zoom-debug-value {
-    color: var(--cds-text-01, #161616);
-  }
-
   .zoom-debug-mode {
     color: var(--cds-text-gray, #525252);
   }

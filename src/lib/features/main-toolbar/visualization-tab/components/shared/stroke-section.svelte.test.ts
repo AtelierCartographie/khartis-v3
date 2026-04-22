@@ -9,35 +9,113 @@ const source = readFileSync(
 
 describe('StrokeSection — palette wiring', () => {
   it('should import PALETTE_TYPE from palette-popover/palette.constants', () => {
-    expect(source).toContain("from '../palette-popover/palette.constants'");
+    expect(source).toContain(
+      "from '$lib/features/commons/components/palette-popover/palette.constants'"
+    );
     expect(source).toContain('PALETTE_TYPE');
   });
 
-  it('should wire SEQUENTIAL paletteType on the classes-mode stroke palette', () => {
-    expect(source).toContain('paletteType={PALETTE_TYPE.SEQUENTIAL}');
+  it('delegates the CLASSES-mode paletteType to resolvePaletteTypeForBreakpoint so DIVERGING/SEQUENTIAL stays in sync with the helper', () => {
+    expect(source).toContain(
+      'paletteType={resolvePaletteTypeForBreakpoint(strokeClassification)}'
+    );
+    expect(source).toContain('resolvePaletteTypeForBreakpoint');
   });
 
   it('should wire QUALITATIVE paletteType on the categories-mode stroke palette', () => {
     expect(source).toContain('paletteType={PALETTE_TYPE.QUALITATIVE}');
   });
 
-  it('should never render a PalettePreview without an explicit paletteType', () => {
+  it('should never render a PalettePreview without an explicit paletteType prop', () => {
     const paletteBlocks = source.match(/<PalettePreview[\s\S]*?\/>/g) || [];
     expect(paletteBlocks.length).toBeGreaterThan(0);
     paletteBlocks.forEach((block) => {
+      expect(block).toMatch(/paletteType=/);
       expect(block).toMatch(
-        /paletteType=\{PALETTE_TYPE\.(SEQUENTIAL|QUALITATIVE)\}/
+        /(PALETTE_TYPE\.(SEQUENTIAL|QUALITATIVE|DIVERGING)|resolvePaletteTypeForBreakpoint)/
+      );
+    });
+  });
+});
+
+describe('StrokeSection — anti-leak fill↔stroke', () => {
+  it('restores a visible stroke width when an active stroke mode inherits width 0', () => {
+    expect(source).toContain('function ensureVisibleStrokeWidth()');
+    expect(source).toContain(
+      'if (strokeMode === StrokeMode.NONE || strokeWidth > 0)'
+    );
+    expect(source).toContain(
+      'strokeWidth = VISUALIZATION_DEFAULTS.strokeWidth;'
+    );
+    expect(source).toContain(
+      'onStyleChange?.({ strokeWidth: VISUALIZATION_DEFAULTS.strokeWidth });'
+    );
+  });
+
+  it('should require onStrokeClassificationChange (non-optional) in Props', () => {
+    const propsMatch = source.match(/onStrokeClassificationChange[^?:]*:\s*\(/);
+    expect(propsMatch).not.toBeNull();
+    expect(source).not.toContain('onStrokeClassificationChange?:');
+  });
+
+  it('should not declare an onClassificationChange prop (leak vector)', () => {
+    expect(source).not.toMatch(/onClassificationChange[?:]?:\s*\(/);
+  });
+
+  it('should expose a dedicated onStrokeMappingChange prop for stroke-only field binding', () => {
+    expect(source).toContain('onStrokeMappingChange?:');
+    expect(source).toContain(
+      'const handleMappingChange = onStrokeMappingChange ?? onMappingChange;'
+    );
+  });
+
+  it('should never fall back to onClassificationChange when the stroke handler is missing', () => {
+    expect(source).not.toContain(
+      'onStrokeClassificationChange ?? onClassificationChange'
+    );
+    expect(source).not.toContain(
+      '(onStrokeClassificationChange ?? onClassificationChange)'
+    );
+  });
+
+  it('should not read fill palette state to render the stroke preview', () => {
+    expect(source).not.toContain('?? visualization?.classification?.paletteId');
+    expect(source).not.toContain('?? visualization?.classification?.inverted');
+    expect(source).not.toContain('?? visualization?.classification?.labels');
+  });
+
+  it('should derive stroke palette previews solely from strokeClassification', () => {
+    expect(source).toContain(
+      'strokeClassification?.colors ?? DEFAULT_SEQUENTIAL_PREVIEW'
+    );
+    expect(source).toContain(
+      'strokeClassification?.colors ?? DEFAULT_QUALITATIVE_PREVIEW'
+    );
+  });
+
+  it('should read stroke-specific mapped columns before falling back to generic mapping', () => {
+    expect(source).toContain(
+      'strokeCategoryColumn ?? visualization?.mapping.categoryColumn'
+    );
+    expect(source).toContain(
+      'strokeValueColumn ?? visualization?.mapping.valueColumn'
+    );
+  });
+
+  it('should pass onStrokeClassificationChange directly to every PalettePreview', () => {
+    const paletteBlocks = source.match(/<PalettePreview[\s\S]*?\/>/g) || [];
+    expect(paletteBlocks.length).toBeGreaterThan(0);
+    paletteBlocks.forEach((block) => {
+      expect(block).toContain(
+        'onClassificationChange={onStrokeClassificationChange}'
       );
     });
   });
 
-  it('should accept a categoryLabels prop and propagate it to the Categories popover', () => {
-    expect(source).toContain('categoryLabels?:');
-    expect(source).toContain('categoryLabels = []');
-    const categoriesPalette = source
-      .split('paletteType={PALETTE_TYPE.QUALITATIVE}')[1]
-      ?.split('/>')[0];
-    expect(categoriesPalette).toContain('categoriesMode={true}');
-    expect(categoriesPalette).toContain('categoryLabels={');
+  it('opens the categories aspect popover directly instead of routing through the discretization modal', () => {
+    expect(source).toContain(
+      'bind:categoriesPopoverOpen={categoriesPopoverOpen}'
+    );
+    expect(source).toContain('categoriesPopoverOpen = true;');
   });
 });

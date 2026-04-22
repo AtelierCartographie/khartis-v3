@@ -12,7 +12,7 @@ import {
   generatePaletteColors,
   PALETTE_TYPE,
   type Palette
-} from '$lib/features/main-toolbar/visualization-tab/components/palette-popover/palette.constants';
+} from '$lib/features/commons/components/palette-popover/palette.constants';
 
 function buildEqualIntervalBreaks(
   min: number,
@@ -97,7 +97,6 @@ function resolveQualitativePalette(
 
   return {
     id: 'facet-derived-qualitative',
-    name: 'Facet derived qualitative',
     colors: classification.colors,
     type: PALETTE_TYPE.QUALITATIVE
   };

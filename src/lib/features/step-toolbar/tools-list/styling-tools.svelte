@@ -10,15 +10,17 @@
     legendActions
   } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
   import { annotationsActions } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
-  import { getColorBlindnessState } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
-  import { ColorBlindnessType } from '$lib/features/commons/constants/ui.constants';
+  import {
+    getColorBlindnessState,
+    isColorBlindnessActive
+  } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
   import { selectTool } from './tool-list.utils.svelte';
   import ToolsListContainer from './tools-list-container.svelte';
   import { CSS_CLASSES } from '../step-toolbar.constants';
 
   const colorBlindnessState = $derived(getColorBlindnessState());
   const showColorBlindnessBadge = $derived(
-    colorBlindnessState.simulationType !== ColorBlindnessType.NONE
+    isColorBlindnessActive(colorBlindnessState)
   );
 
   const legendState = $derived(getLegendState());
