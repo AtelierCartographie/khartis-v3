@@ -74,11 +74,12 @@ describe('SymbolModeCategories (en categorie.png alignment)', () => {
     expect(source).toContain(
       "import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte'"
     );
-    expect(source).toContain('loadDistinctCategoryLabels');
-    expect(source).toContain('syncFetchedCategoryLabels(');
     expect(source).toContain(
-      'void loadDistinctCategoryLabels(currentDataset, currentCategoryColumn)'
+      "import { useCategoryLabels } from '../../use-category-labels.svelte';"
     );
+    expect(source).toContain('syncFetchedCategoryLabels(');
+    expect(source).toContain('const categoryLabels = useCategoryLabels({');
+    expect(source).toContain('onResolvedLabels: syncFetchedCategoryLabels');
   });
 
   it('maps categoryShapeMode to CategoriesAspectVariant and passes categoriesVariant to PalettePreview', () => {

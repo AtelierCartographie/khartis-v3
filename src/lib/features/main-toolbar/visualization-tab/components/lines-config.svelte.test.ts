@@ -28,7 +28,7 @@ describe('LinesConfig — palette wiring', () => {
 
   it('should pass paletteType=QUALITATIVE on the CATEGORIES branch PalettePreview', () => {
     const categoriesBlock = source.split(
-      'colorMode === ColorMode.CATEGORIES'
+      '{:else if colorMode === ColorMode.CATEGORIES}'
     )[1];
     expect(categoriesBlock).toBeDefined();
     const categoriesPalette = categoriesBlock
@@ -53,12 +53,12 @@ describe('LinesConfig — palette wiring', () => {
 
   it('should enable Categories Aspect popover via categoriesMode + categoryLabels on CATEGORIES', () => {
     const categoriesBlock = source.split(
-      'colorMode === ColorMode.CATEGORIES'
+      '{:else if colorMode === ColorMode.CATEGORIES}'
     )[1];
     const paletteBlock = categoriesBlock
       ?.split('<PalettePreview')[1]
       ?.split('/>')[0];
     expect(paletteBlock).toContain('categoriesMode={true}');
-    expect(paletteBlock).toContain('categoryLabels={resolvedCategoryLabels}');
+    expect(paletteBlock).toContain('categoryLabels={categoryLabels.labels}');
   });
 });
