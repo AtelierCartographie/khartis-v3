@@ -28,8 +28,10 @@
   } from '../utils/annotation-drawing.utils';
   import type {
     Annotation,
+    AnnotationPlacementPreview,
     AnnotationStyle
   } from '$lib/features/step-toolbar/tools/annotations/annotations.types';
+  import { resolveAnnotationCoordinateSpace } from '$lib/features/step-toolbar/tools/annotations/annotations.types';
   import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
 
   let {
@@ -39,6 +41,7 @@
 
   const DRAWING_POINT_STEP_PX = 6;
   const DRAWING_CLOSE_THRESHOLD_PX = 18;
+  const SHAPE_PLACEMENT_DRAG_THRESHOLD_PX = 4;
   const MIN_SHAPE_SIZE = 24;
   const SHAPE_VIEWBOX_PADDING = 8;
 
@@ -71,6 +74,12 @@
     startRotation: number;
     startAngle: number;
   } | null>(null);
+  let placementDragState = $state<{
+    pointerId: number;
+    startPoint: { x: number; y: number };
+    currentPoint: { x: number; y: number };
+    didDrag: boolean;
+  } | null>(null);
   let drawingPointerId = $state<number | null>(null);
   let drawingCloseToStart = $state(false);
 
@@ -94,10 +103,17 @@
       `height: ${height}px`
     ].join('; ');
   });
-  const isDrawingMode = $derived(annotationsState.isDrawingMode);
+  const creationMode = $derived(annotationsState.creationMode);
+  const isPlacementMode = $derived(creationMode === 'placing');
+  const isDrawingMode = $derived(creationMode === 'drawing');
+  const isCreationActive = $derived(creationMode !== 'idle');
+  const pendingType = $derived(annotationsState.pendingType);
+  const pendingPreview = $derived(annotationsState.previewGeometry);
   const drawingPoints = $derived(annotationsState.drawingInProgress);
   const currentDrawingStyle = $derived(
-    getVectorStyle(annotationsState.defaultStyle)
+    getVectorStyle(
+      annotationsState.pendingStyle ?? annotationsState.defaultStyle
+    )
   );
   const drawingPreviewPoints = $derived.by(() => {
     if (
@@ -153,6 +169,72 @@
     const { width, height } = getShapeDefaultSize(shapeType);
 
     return `${-SHAPE_VIEWBOX_PADDING} ${-SHAPE_VIEWBOX_PADDING} ${width + SHAPE_VIEWBOX_PADDING * 2} ${height + SHAPE_VIEWBOX_PADDING * 2}`;
+  }
+
+  function getDefaultPlacementSize(
+    type: AnnotationKind,
+    content: unknown,
+    style: AnnotationStyle | undefined
+  ): { width: number; height: number } {
+    if (type === AnnotationKind.TEXT) {
+      return { width: 220, height: 64 };
+    }
+
+    if (type === AnnotationKind.IMAGE) {
+      const size = Math.max(40, Number(style?.size ?? 200));
+      return { width: size, height: size };
+    }
+
+    if (type === AnnotationKind.SHAPE) {
+      const dimensions = getShapeDefaultSize(
+        String(content ?? SHAPE_TYPE.RECTANGLE)
+      );
+      return {
+        width: Math.max(MIN_SHAPE_SIZE, style?.shapeWidth ?? dimensions.width),
+        height: Math.max(
+          MIN_SHAPE_SIZE,
+          style?.shapeHeight ?? dimensions.height
+        )
+      };
+    }
+
+    return { width: 132, height: 80 };
+  }
+
+  function clampPreviewPosition(
+    position: { x: number; y: number },
+    size: { width: number; height: number }
+  ): { x: number; y: number } {
+    return {
+      x: clamp(position.x, 0, Math.max(0, formatState.width - size.width)),
+      y: clamp(position.y, 0, Math.max(0, formatState.height - size.height))
+    };
+  }
+
+  function createCenteredPlacementPreview(
+    type: AnnotationKind,
+    point: { x: number; y: number }
+  ): AnnotationPlacementPreview {
+    const size = getDefaultPlacementSize(
+      type,
+      annotationsState.pendingContent,
+      annotationsState.pendingStyle ?? annotationsState.defaultStyle
+    );
+    const position = clampPreviewPosition(
+      {
+        x: point.x - size.width / 2,
+        y: point.y - size.height / 2
+      },
+      size
+    );
+
+    return {
+      coordinateSpace: 'page',
+      type,
+      position,
+      size,
+      content: annotationsState.pendingContent
+    };
   }
 
   function getDrawingPointThreshold(): number {
@@ -215,8 +297,8 @@
     return getDistance(points[0], point) <= getDrawingCloseThreshold();
   }
 
-  function isPageElement(item: Annotation): boolean {
-    return item.role != null;
+  function getAnnotationScope(item: Annotation): AnnotationInteractionScope {
+    return resolveAnnotationCoordinateSpace(item) === 'page' ? 'page' : 'map';
   }
 
   function getInteractionLayer(
@@ -226,7 +308,7 @@
   }
 
   function getRenderedPosition(item: Annotation): { x: number; y: number } {
-    if (isPageElement(item)) {
+    if (getAnnotationScope(item) === 'page') {
       return item.position;
     }
 
@@ -295,7 +377,7 @@
       return;
     }
 
-    const scope = isPageElement(item) ? 'page' : 'map';
+    const scope = getAnnotationScope(item);
     const layer = getInteractionLayer(scope);
     if (!layer) {
       return;
@@ -583,18 +665,28 @@
     event.preventDefault();
     event.stopPropagation();
 
-    if (!mapLayerElement) return;
+    const scope = getAnnotationScope(item);
+    const layer = getInteractionLayer(scope);
+    if (!layer) return;
 
     const scale = getPageScale();
-    const rect = mapLayerElement.getBoundingClientRect();
+    const rect = layer.getBoundingClientRect();
     const shapeType = String(item.content ?? '');
     const defaultSize = getShapeDefaultSize(shapeType);
     const shapeW = item.style?.shapeWidth ?? defaultSize.width;
     const shapeH = item.style?.shapeHeight ?? defaultSize.height;
 
     // Center of shape in screen coords (accounting for zoom transform)
-    const centerX = rect.left + (item.position.x + shapeW / 2) * scale;
-    const centerY = rect.top + (item.position.y + shapeH / 2) * scale;
+    const renderedPosition = getRenderedPosition(item);
+    const localPosition =
+      scope === 'page'
+        ? renderedPosition
+        : {
+            x: renderedPosition.x - pageMargins.left,
+            y: renderedPosition.y - pageMargins.top
+          };
+    const centerX = rect.left + (localPosition.x + shapeW / 2) * scale;
+    const centerY = rect.top + (localPosition.y + shapeH / 2) * scale;
 
     const startAngle =
       Math.atan2(event.clientY - centerY, event.clientX - centerX) *
@@ -638,14 +730,14 @@
     });
   }
 
-  function getOverlayPoint(
+  function getPageCapturePoint(
     event:
       | Pick<MouseEvent, 'clientX' | 'clientY'>
       | Pick<PointerEvent, 'clientX' | 'clientY'>
   ): { x: number; y: number } | null {
-    if (!mapLayerElement) return null;
+    if (!overlayElement) return null;
     const scale = getPageScale();
-    const rect = mapLayerElement.getBoundingClientRect();
+    const rect = overlayElement.getBoundingClientRect();
     return {
       x: (event.clientX - rect.left) / scale,
       y: (event.clientY - rect.top) / scale
@@ -655,6 +747,226 @@
   function resetDrawingPointerState(): void {
     drawingPointerId = null;
     drawingCloseToStart = false;
+  }
+
+  function resetPlacementPointerState(): void {
+    placementDragState = null;
+  }
+
+  function shouldLockShapeAspectRatio(
+    shapeType: string,
+    shiftKey: boolean
+  ): boolean {
+    return shapeType === SHAPE_TYPE.RECTANGLE
+      ? shiftKey
+      : isShapeAspectRatioLocked(shapeType);
+  }
+
+  function snapLineEndpoint(
+    startPoint: { x: number; y: number },
+    currentPoint: { x: number; y: number }
+  ): { x: number; y: number } {
+    const dx = currentPoint.x - startPoint.x;
+    const dy = currentPoint.y - startPoint.y;
+    const distance = Math.max(1, Math.hypot(dx, dy));
+    const step = Math.PI / 4;
+    const angle = Math.atan2(dy, dx);
+    const snappedAngle = Math.round(angle / step) * step;
+
+    return {
+      x: startPoint.x + Math.cos(snappedAngle) * distance,
+      y: startPoint.y + Math.sin(snappedAngle) * distance
+    };
+  }
+
+  function buildShapePlacementPreview(
+    startPoint: { x: number; y: number },
+    currentPoint: { x: number; y: number },
+    shiftKey: boolean
+  ): AnnotationPlacementPreview {
+    const shapeType = String(
+      annotationsState.pendingContent ?? SHAPE_TYPE.RECTANGLE
+    );
+    const baseSize = getDefaultPlacementSize(
+      AnnotationKind.SHAPE,
+      shapeType,
+      annotationsState.pendingStyle ?? annotationsState.defaultStyle
+    );
+
+    if (shapeType === SHAPE_TYPE.LINE || shapeType === SHAPE_TYPE.ARROW) {
+      const resolvedEnd = shiftKey
+        ? snapLineEndpoint(startPoint, currentPoint)
+        : currentPoint;
+      const dx = resolvedEnd.x - startPoint.x;
+      const dy = resolvedEnd.y - startPoint.y;
+      const width = Math.max(MIN_SHAPE_SIZE, Math.hypot(dx, dy));
+      const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+      const position = clampPreviewPosition(
+        {
+          x: (startPoint.x + resolvedEnd.x) / 2 - width / 2,
+          y: (startPoint.y + resolvedEnd.y) / 2 - baseSize.height / 2
+        },
+        {
+          width,
+          height: baseSize.height
+        }
+      );
+
+      return {
+        coordinateSpace: 'page',
+        type: AnnotationKind.SHAPE,
+        position,
+        size: {
+          width,
+          height: baseSize.height
+        },
+        content: shapeType,
+        style: {
+          rotation: angle
+        }
+      };
+    }
+
+    const lockAspectRatio = shouldLockShapeAspectRatio(shapeType, shiftKey);
+    let width = Math.max(
+      MIN_SHAPE_SIZE,
+      Math.abs(currentPoint.x - startPoint.x)
+    );
+    let height = Math.max(
+      MIN_SHAPE_SIZE,
+      Math.abs(currentPoint.y - startPoint.y)
+    );
+
+    if (lockAspectRatio) {
+      const size = Math.max(width, height);
+      width = size;
+      height = size;
+    }
+
+    const position = clampPreviewPosition(
+      {
+        x: currentPoint.x >= startPoint.x ? startPoint.x : startPoint.x - width,
+        y: currentPoint.y >= startPoint.y ? startPoint.y : startPoint.y - height
+      },
+      { width, height }
+    );
+
+    return {
+      coordinateSpace: 'page',
+      type: AnnotationKind.SHAPE,
+      position,
+      size: { width, height },
+      content: shapeType
+    };
+  }
+
+  function handlePlacementPointerDown(event: PointerEvent): void {
+    if (!isPlacementMode || !pendingType) {
+      return;
+    }
+
+    const point = getPageCapturePoint(event);
+    if (!point) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (pendingType !== AnnotationKind.SHAPE) {
+      const preview = createCenteredPlacementPreview(pendingType, point);
+      annotationsActions.updatePlacement(preview);
+      annotationsActions.commitPlacement(preview);
+      return;
+    }
+
+    placementDragState = {
+      pointerId: event.pointerId,
+      startPoint: point,
+      currentPoint: point,
+      didDrag: false
+    };
+    annotationsActions.updatePlacement(
+      createCenteredPlacementPreview(AnnotationKind.SHAPE, point)
+    );
+
+    if (event.currentTarget instanceof HTMLElement) {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
+  }
+
+  function handlePlacementPointerMove(event: PointerEvent): void {
+    if (!isPlacementMode || !pendingType) {
+      return;
+    }
+
+    const point = getPageCapturePoint(event);
+    if (!point) {
+      return;
+    }
+
+    if (pendingType !== AnnotationKind.SHAPE) {
+      annotationsActions.updatePlacement(
+        createCenteredPlacementPreview(pendingType, point)
+      );
+      return;
+    }
+
+    if (placementDragState?.pointerId !== event.pointerId) {
+      annotationsActions.updatePlacement(
+        createCenteredPlacementPreview(AnnotationKind.SHAPE, point)
+      );
+      return;
+    }
+
+    event.preventDefault();
+
+    const didDrag =
+      getDistance(placementDragState.startPoint, point) >=
+      SHAPE_PLACEMENT_DRAG_THRESHOLD_PX / getPageScale();
+
+    placementDragState = {
+      ...placementDragState,
+      currentPoint: point,
+      didDrag
+    };
+
+    annotationsActions.updatePlacement(
+      didDrag
+        ? buildShapePlacementPreview(
+            placementDragState.startPoint,
+            point,
+            event.shiftKey
+          )
+        : createCenteredPlacementPreview(AnnotationKind.SHAPE, point)
+    );
+  }
+
+  function handlePlacementPointerUp(event: PointerEvent): void {
+    if (
+      !isPlacementMode ||
+      pendingType !== AnnotationKind.SHAPE ||
+      placementDragState?.pointerId !== event.pointerId
+    ) {
+      return;
+    }
+
+    const point = getPageCapturePoint(event) ?? placementDragState.currentPoint;
+    const preview = placementDragState.didDrag
+      ? buildShapePlacementPreview(
+          placementDragState.startPoint,
+          point,
+          event.shiftKey
+        )
+      : createCenteredPlacementPreview(AnnotationKind.SHAPE, point);
+
+    if (event.currentTarget instanceof HTMLElement) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    annotationsActions.updatePlacement(preview);
+    annotationsActions.commitPlacement(preview);
+    resetPlacementPointerState();
   }
 
   function getReleasedDrawingPoints(
@@ -687,7 +999,7 @@
       return;
     }
 
-    const point = getOverlayPoint(event);
+    const point = getPageCapturePoint(event);
     if (!point) {
       return;
     }
@@ -696,7 +1008,7 @@
     event.stopPropagation();
 
     const nextPoints = appendDrawingSample(drawingPoints, point);
-    annotationsActions.setDrawingInProgress(nextPoints);
+    annotationsActions.updateDrawing(nextPoints);
     drawingCloseToStart = isNearDrawingStart(point);
     drawingPointerId = event.pointerId;
 
@@ -710,7 +1022,7 @@
       return;
     }
 
-    const point = getOverlayPoint(event);
+    const point = getPageCapturePoint(event);
     if (!point) {
       return;
     }
@@ -719,7 +1031,7 @@
 
     const nextPoints = appendDrawingSample(drawingPoints, point);
     if (nextPoints !== drawingPoints) {
-      annotationsActions.setDrawingInProgress(nextPoints);
+      annotationsActions.updateDrawing(nextPoints);
     }
 
     drawingCloseToStart = isNearDrawingStart(point);
@@ -730,7 +1042,7 @@
       return;
     }
 
-    const point = getOverlayPoint(event);
+    const point = getPageCapturePoint(event);
     const nextPoints = getReleasedDrawingPoints(point);
     const minimumPointCount = getMinimumDrawingPoints(
       annotationsState.drawingModeType
@@ -749,32 +1061,63 @@
     }
 
     if (annotationsState.drawingModeType === DrawingType.LINE) {
-      annotationsActions.setDrawingInProgress(nextPoints);
+      annotationsActions.updateDrawing(nextPoints);
       if (finalPointCount >= minimumPointCount) {
-        annotationsActions.finalizeDrawingMode();
+        annotationsActions.finishDrawing();
       }
       resetDrawingPointerState();
       return;
     }
 
-    annotationsActions.setDrawingInProgress(zoneAutoClosedPoints);
+    annotationsActions.updateDrawing(zoneAutoClosedPoints);
 
     if (shouldAutoCloseZone && finalPointCount >= minimumPointCount) {
-      annotationsActions.finalizeDrawingMode();
+      annotationsActions.finishDrawing();
     }
 
     resetDrawingPointerState();
   }
 
+  function handleCapturePointerDown(event: PointerEvent): void {
+    handlePlacementPointerDown(event);
+    handleDrawingPointerDown(event);
+  }
+
+  function handleCapturePointerMove(event: PointerEvent): void {
+    handlePlacementPointerMove(event);
+    handleDrawingPointerMove(event);
+  }
+
+  function handleCapturePointerUp(event: PointerEvent): void {
+    handlePlacementPointerUp(event);
+    handleDrawingPointerUp(event);
+  }
+
   $effect(() => {
-    if (!isDrawingMode) {
+    if (!isCreationActive) {
+      resetPlacementPointerState();
       resetDrawingPointerState();
       return;
     }
 
     function handleKeydown(e: KeyboardEvent) {
       if (e.key === 'Escape') {
-        annotationsActions.cancelDrawingMode();
+        e.preventDefault();
+        if (isDrawingMode) {
+          annotationsActions.cancelDrawing();
+        } else {
+          annotationsActions.cancelPlacement();
+        }
+      }
+
+      if (
+        e.key === KEY.ENTER &&
+        isDrawingMode &&
+        drawingPoints.length >=
+          getMinimumDrawingPoints(annotationsState.drawingModeType)
+      ) {
+        e.preventDefault();
+        annotationsActions.finishDrawing();
       }
     }
 
@@ -786,6 +1129,8 @@
     stopDragging();
     stopResizing();
     stopRotating();
+    resetPlacementPointerState();
+    resetDrawingPointerState();
   });
 
   function getColorValue(
@@ -815,38 +1160,38 @@
     return clampedPercent / 100;
   }
 
-  function getTextStyle(item: Annotation): string {
-    const style = item.style ?? {};
+  function getTextStyleFromStyle(style: AnnotationStyle | undefined): string {
+    const resolvedStyle = style ?? {};
     const styles: string[] = [];
 
-    if (style.font) {
-      styles.push(`font-family: ${style.font}, sans-serif`);
+    if (resolvedStyle.font) {
+      styles.push(`font-family: ${resolvedStyle.font}, sans-serif`);
     }
-    if (style.fontSize) {
-      styles.push(`font-size: ${style.fontSize}px`);
+    if (resolvedStyle.fontSize) {
+      styles.push(`font-size: ${resolvedStyle.fontSize}px`);
     }
-    if (style.bold) {
+    if (resolvedStyle.bold) {
       styles.push('font-weight: bold');
     }
-    if (style.italic) {
+    if (resolvedStyle.italic) {
       styles.push('font-style: italic');
     }
-    if (style.underlined) {
+    if (resolvedStyle.underlined) {
       styles.push('text-decoration: underline');
     }
-    if (style.textAlign) {
-      styles.push(`text-align: ${style.textAlign}`);
+    if (resolvedStyle.textAlign) {
+      styles.push(`text-align: ${resolvedStyle.textAlign}`);
     }
-    styles.push(`opacity: ${toOpacityUnit(style.opacity)}`);
+    styles.push(`opacity: ${toOpacityUnit(resolvedStyle.opacity)}`);
 
-    const color = getColorValue(style.color, '#000000');
+    const color = getColorValue(resolvedStyle.color, '#000000');
     styles.push(`color: ${color}`);
 
-    if (style.backgroundColor) {
-      const bgColor = getColorValue(style.backgroundColor, '#ffffff');
+    if (resolvedStyle.backgroundColor) {
+      const bgColor = getColorValue(resolvedStyle.backgroundColor, '#ffffff');
       const bgOpacity =
-        style.backgroundOpacity !== undefined
-          ? Math.max(0, Math.min(100, style.backgroundOpacity)) / 100
+        resolvedStyle.backgroundOpacity !== undefined
+          ? Math.max(0, Math.min(100, resolvedStyle.backgroundOpacity)) / 100
           : 0.9;
       styles.push(
         `background: color-mix(in srgb, ${bgColor} ${bgOpacity * 100}%, transparent)`
@@ -857,6 +1202,10 @@
     }
 
     return styles.join('; ');
+  }
+
+  function getTextStyle(item: Annotation): string {
+    return getTextStyleFromStyle(item.style);
   }
 
   function getVectorStyle(style: AnnotationStyle | undefined): {
@@ -878,6 +1227,43 @@
             ? '2,2'
             : undefined,
       opacity: toOpacityUnit(resolvedStyle.opacity)
+    };
+  }
+
+  function getGuideVectorStyle(style: AnnotationStyle | null | undefined): {
+    stroke: string;
+    strokeWidth: number;
+    strokeDasharray: string;
+  } {
+    const resolvedStyle = style ?? {};
+
+    return {
+      stroke: 'rgba(82, 82, 82, 0.9)',
+      strokeWidth: Math.max((resolvedStyle.strokeWidth ?? 2) + 1, 3),
+      strokeDasharray: '6,4'
+    };
+  }
+
+  function buildPlacementPreviewAnnotation(
+    preview: AnnotationPlacementPreview
+  ): Annotation {
+    return {
+      id: 'annotation-preview',
+      type: preview.type,
+      content: preview.content ?? annotationsState.pendingContent,
+      position: preview.position,
+      coordinateSpace: 'page',
+      positionMode: 'manual',
+      style: {
+        ...(annotationsState.pendingStyle ?? annotationsState.defaultStyle),
+        ...(preview.style ?? {}),
+        ...(preview.type === AnnotationKind.SHAPE
+          ? {
+              shapeWidth: preview.size.width,
+              shapeHeight: preview.size.height
+            }
+          : {})
+      }
     };
   }
 
@@ -980,40 +1366,152 @@
     class="annotation-map-layer"
     bind:this={mapLayerElement}
     style={mapLayerStyle}
-  >
-    {#if isDrawingMode}
-      {@const previewSmoothness = annotationsState.defaultStyle.smoothness ?? 0}
-      {@const previewIsClosed =
-        annotationsState.drawingModeType === DrawingType.ZONE}
-      {@const previewBounds = computeDrawingBounds(
-        drawingPreviewPoints,
-        currentDrawingStyle.strokeWidth,
-        previewSmoothness,
-        previewIsClosed
-      )}
-      <div
-        class="drawing-capture"
-        role="presentation"
-        data-workspace-pan-ignore="true"
-        onpointerdown={handleDrawingPointerDown}
-        onpointermove={handleDrawingPointerMove}
-        onpointerup={handleDrawingPointerUp}
-        onpointercancel={handleDrawingPointerUp}
-      >
+  ></div>
+
+  {#if isCreationActive}
+    <div
+      class="annotation-capture-layer"
+      class:drawing-capture={isDrawingMode}
+      class:placement-capture={isPlacementMode}
+      role="presentation"
+      data-workspace-pan-ignore="true"
+      onpointerdown={handleCapturePointerDown}
+      onpointermove={handleCapturePointerMove}
+      onpointerup={handleCapturePointerUp}
+      onpointercancel={handleCapturePointerUp}
+    >
+      {#if isPlacementMode && pendingPreview}
+        {@const previewItem = buildPlacementPreviewAnnotation(pendingPreview)}
+        {@const previewStyle = getVectorStyle(previewItem.style)}
+        {@const guideStyle = getGuideVectorStyle(previewItem.style)}
+        {@const previewRotation = previewItem.style?.rotation ?? 0}
+        <div
+          class="placement-preview"
+          data-placement-type={pendingPreview.type}
+          style={`left: ${pendingPreview.position.x}px; top: ${pendingPreview.position.y}px; width: ${pendingPreview.size.width}px; height: ${pendingPreview.size.height}px;`}
+        >
+          {#if pendingPreview.type === AnnotationKind.TEXT}
+            <div
+              class="annotation-text annotation-preview-text"
+              style={getTextStyle(previewItem)}
+            >
+              {String(previewItem.content ?? '')}
+            </div>
+          {:else if pendingPreview.type === AnnotationKind.IMAGE}
+            {@const imgSrc = String(previewItem.content ?? '')}
+            {#if imgSrc}
+              <img
+                src={imgSrc}
+                alt={m.annotationImageAlt()}
+                class="annotation-image annotation-preview-image"
+                style={`width: ${pendingPreview.size.width}px; height: ${pendingPreview.size.height}px; opacity: ${toOpacityUnit(previewItem.style?.opacity)};`}
+              />
+            {/if}
+          {:else if pendingPreview.type === AnnotationKind.SHAPE}
+            {@const previewShapeType = String(
+              previewItem.content ?? SHAPE_TYPE.CIRCLE
+            )}
+            {@const previewShapeData = renderShape(
+              previewItem,
+              previewShapeType
+            )}
+            <div
+              class="shape-content"
+              style={`width: ${pendingPreview.size.width}px; height: ${pendingPreview.size.height}px; transform: rotate(${previewRotation}deg);`}
+            >
+              <svg
+                width={pendingPreview.size.width}
+                height={pendingPreview.size.height}
+                viewBox={getShapeViewBox(previewShapeType)}
+                class="annotation-shape annotation-preview-shape"
+                style={`opacity: ${previewStyle.opacity};`}
+              >
+                {#if previewShapeData.type === SHAPE_TYPE.CIRCLE}
+                  <circle
+                    cx={previewShapeData.cx}
+                    cy={previewShapeData.cy}
+                    r={previewShapeData.r}
+                    fill="none"
+                    stroke={guideStyle.stroke}
+                    stroke-width={guideStyle.strokeWidth}
+                    stroke-dasharray={guideStyle.strokeDasharray}
+                  />
+                  <circle
+                    cx={previewShapeData.cx}
+                    cy={previewShapeData.cy}
+                    r={previewShapeData.r}
+                    fill={previewStyle.fill}
+                    stroke={previewStyle.stroke}
+                    stroke-width={previewStyle.strokeWidth}
+                    stroke-dasharray={previewStyle.strokeDasharray}
+                  />
+                {:else}
+                  <path
+                    d={previewShapeData.path}
+                    fill="none"
+                    stroke={guideStyle.stroke}
+                    stroke-width={guideStyle.strokeWidth}
+                    stroke-dasharray={guideStyle.strokeDasharray}
+                    stroke-linejoin="round"
+                    stroke-linecap="round"
+                  />
+                  <path
+                    d={previewShapeData.path}
+                    fill={previewShapeData.type === SHAPE_TYPE.ARROW
+                      ? previewStyle.stroke
+                      : previewStyle.fill}
+                    stroke={previewStyle.stroke}
+                    stroke-width={previewStyle.strokeWidth}
+                    stroke-dasharray={previewStyle.strokeDasharray}
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                {/if}
+              </svg>
+            </div>
+          {/if}
+        </div>
+      {/if}
+
+      {#if isDrawingMode}
+        {@const previewSmoothness =
+          annotationsState.pendingStyle?.smoothness ??
+          annotationsState.defaultStyle.smoothness ??
+          0}
+        {@const previewIsClosed =
+          annotationsState.drawingModeType === DrawingType.ZONE}
+        {@const previewBounds = computeDrawingBounds(
+          drawingPreviewPoints,
+          currentDrawingStyle.strokeWidth,
+          previewSmoothness,
+          previewIsClosed
+        )}
+        {@const guideStyle = getGuideVectorStyle(annotationsState.pendingStyle)}
         {#if drawingPoints.length > 0}
           <svg
             class="drawing-preview"
             width={previewBounds.width}
             height={previewBounds.height}
             viewBox={previewBounds.viewBox}
+            style={`left: ${previewBounds.originX}px; top: ${previewBounds.originY}px;`}
           >
             {#if drawingPreviewPoints.length >= 2}
+              {@const previewPath = smoothDrawingPath(
+                drawingPreviewPoints,
+                previewSmoothness,
+                previewIsClosed
+              )}
               <path
-                d={smoothDrawingPath(
-                  drawingPreviewPoints,
-                  previewSmoothness,
-                  previewIsClosed
-                )}
+                d={previewPath}
+                fill="none"
+                stroke={guideStyle.stroke}
+                stroke-width={guideStyle.strokeWidth}
+                stroke-dasharray={guideStyle.strokeDasharray}
+                stroke-linejoin="round"
+                stroke-linecap="round"
+              />
+              <path
+                d={previewPath}
                 fill={previewIsClosed ? currentDrawingStyle.fill : 'none'}
                 stroke={currentDrawingStyle.stroke}
                 stroke-width={currentDrawingStyle.strokeWidth}
@@ -1023,35 +1521,38 @@
                 opacity={currentDrawingStyle.opacity}
               />
             {/if}
-            {#each drawingPoints as point, i (i)}
-              <circle
-                cx={point.x}
-                cy={point.y}
-                r={i === 0 ? 5 : 3}
-                fill={i === 0 ? currentDrawingStyle.stroke : 'white'}
-                stroke={currentDrawingStyle.stroke}
-                stroke-width="2"
-              />
-            {/each}
+            {#if previewIsClosed}
+              {#each drawingPoints as point, i (i)}
+                <circle
+                  cx={point.x}
+                  cy={point.y}
+                  r={i === 0 ? 5 : 4}
+                  fill="white"
+                  stroke={currentDrawingStyle.stroke}
+                  stroke-width="2"
+                />
+              {/each}
+            {/if}
             {#if previewIsClosed && drawingPoints.length >= 3}
               {@const startPoint = drawingPoints[0]}
               <circle
                 class:drawing-close-target-active={drawingCloseToStart}
                 cx={startPoint.x}
                 cy={startPoint.y}
-                r={drawingCloseToStart ? 10 : 7}
+                r={drawingCloseToStart ? 15 : 11}
                 fill="none"
-                stroke={currentDrawingStyle.stroke}
+                stroke={drawingCloseToStart
+                  ? 'var(--cds-interactive-01, #0f62fe)'
+                  : 'rgba(82, 82, 82, 0.85)'}
                 stroke-width="2"
-                stroke-dasharray="4,3"
-                opacity="0.7"
+                stroke-dasharray="6,4"
               />
             {/if}
           </svg>
         {/if}
-      </div>
-    {/if}
-  </div>
+      {/if}
+    </div>
+  {/if}
 
   {#each visibleItems as item (item.id)}
     <div
@@ -1270,26 +1771,35 @@
   .annotation-map-layer {
     position: absolute;
     pointer-events: none;
+    z-index: 1;
   }
 
-  .drawing-capture {
+  .annotation-capture-layer {
     position: absolute;
-    top: 0;
-    left: 0;
+    inset: 0;
     width: 100%;
     height: 100%;
     cursor: crosshair;
     pointer-events: auto;
     touch-action: none;
-    z-index: 5;
+    z-index: 8;
   }
 
-  .drawing-preview {
+  .annotation-overlay.non-interactive .annotation-capture-layer {
+    pointer-events: none;
+  }
+
+  .drawing-preview,
+  .placement-preview {
     position: absolute;
-    top: 0;
-    left: 0;
     overflow: visible;
     pointer-events: none;
+  }
+
+  .placement-preview {
+    display: flex;
+    align-items: stretch;
+    justify-content: stretch;
   }
 
   .annotation-item {
@@ -1298,6 +1808,7 @@
     cursor: pointer;
     touch-action: none;
     outline: none;
+    z-index: 4;
   }
 
   .annotation-overlay.non-interactive .annotation-item {
@@ -1311,17 +1822,31 @@
   }
 
   .annotation-item:hover:not(:has(.shape-frame)) {
-    outline: 1px dashed #726e6e;
+    outline: 1px dashed var(--cds-border-strong-02, #6f6f6f);
+    outline-offset: 2px;
   }
 
   .annotation-item:hover .shape-frame {
-    outline: 1px dashed #726e6e;
+    outline: 1px dashed var(--cds-border-strong-02, #6f6f6f);
+    outline-offset: 2px;
+  }
+
+  .annotation-item:focus-visible:not(:has(.shape-frame)) {
+    outline: 1px dashed var(--cds-interactive-01, #0f62fe);
+    outline-offset: 2px;
+    border-radius: 0;
+  }
+
+  .annotation-item:focus-visible .shape-frame {
+    outline: 1px dashed var(--cds-interactive-01, #0f62fe);
+    outline-offset: 2px;
   }
 
   .annotation-item.selected {
-    outline: 1px dashed #726e6e;
-    box-shadow: 0 0 0 2px var(--cds-interactive-01);
-    border-radius: 4px;
+    outline: 1px dashed var(--cds-interactive-01, #0f62fe);
+    outline-offset: 2px;
+    box-shadow: none;
+    border-radius: 0;
   }
 
   .annotation-item.dragging {
@@ -1370,12 +1895,29 @@
     object-fit: contain;
   }
 
+  .annotation-preview-text {
+    width: 100%;
+    max-width: none;
+    min-height: 100%;
+  }
+
+  .annotation-preview-image {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .annotation-preview-shape {
+    overflow: visible;
+  }
+
   .shape-frame {
     position: relative;
   }
 
   .shape-frame.shape-selected {
     outline: 1px dashed var(--cds-interactive-01, #0072c3);
+    outline-offset: 2px;
   }
 
   .shape-content {
@@ -1406,7 +1948,7 @@
   }
 
   .drawing-close-target-active {
-    filter: drop-shadow(0 0 4px rgba(0, 114, 195, 0.45));
+    opacity: 1;
   }
 
   .resize-nw {

@@ -122,39 +122,43 @@
 </script>
 
 <div class="tab-content">
-  <ExpandableSection
-    title={m.section_suggestions()}
-    open={suggestedBasemaps.length > 0}
-  >
-    {#snippet icon()}
-      <MagicWand size={16} />
-    {/snippet}
-    {#if suggestedBasemaps.length > 0}
-      <p class="section-subtitle">
-        {m.basemap_suggestions_desc()}
-      </p>
-      <div class="basemap-slider" class:compact-slider={isCompact}>
-        <div class="basemap-slider-track">
-          {#each suggestedBasemaps as { basemap, score } (basemap.file)}
-            <BasemapCardVertical
-              basemap={basemap}
-              matchScore={score}
-              selected={basemap.file === basemapSelected}
-              onclick={() => onSelectBasemap(basemap)}
-            />
-          {/each}
+  <div class="suggestions-section" class:compact-mode={isCompact}>
+    <ExpandableSection
+      title={m.section_suggestions()}
+      open={suggestedBasemaps.length > 0}
+    >
+      {#snippet icon()}
+        <MagicWand size={16} />
+      {/snippet}
+      {#if suggestedBasemaps.length > 0}
+        <p class="section-subtitle">
+          {m.basemap_suggestions_desc()}
+        </p>
+        <div class="basemap-slider" class:compact-slider={isCompact}>
+          <div class="basemap-slider-track">
+            {#each suggestedBasemaps as { basemap, score } (basemap.file)}
+              <BasemapCardVertical
+                basemap={basemap}
+                matchScore={score}
+                selected={basemap.file === basemapSelected}
+                onclick={() => onSelectBasemap(basemap)}
+              />
+            {/each}
+          </div>
         </div>
-      </div>
-    {:else}
-      <InlineNotification
-        kind="info"
-        title={m.basemap_no_suggestions_title()}
-        subtitle={m.basemap_no_suggestions_subtitle()}
-        hideCloseButton={true}
-        lowContrast
-      />
-    {/if}
-  </ExpandableSection>
+      {:else}
+        <div class="suggestions-notification">
+          <InlineNotification
+            kind="info"
+            title={m.basemap_no_suggestions_title()}
+            subtitle={m.basemap_no_suggestions_subtitle()}
+            hideCloseButton={true}
+            lowContrast
+          />
+        </div>
+      {/if}
+    </ExpandableSection>
+  </div>
 
   <div class="catalogue-section" class:compact-mode={isCompact}>
     <ExpandableSection
@@ -255,6 +259,10 @@
     line-height: 1.25rem;
   }
 
+  .suggestions-notification {
+    padding-bottom: var(--cds-spacing-02);
+  }
+
   .basemap-slider {
     margin-left: calc(-1 * var(--cds-spacing-04));
     margin-right: calc(-1 * var(--cds-spacing-04));
@@ -267,7 +275,7 @@
     scroll-snap-type: x proximity;
     scroll-padding-inline: var(--cds-spacing-04);
     overscroll-behavior-x: contain;
-    --basemap-card-width: 13rem;
+    --basemap-card-width: 176px;
     --basemap-card-preview-min-height: 6.5rem;
     --basemap-card-padding-bottom: 0.875rem;
   }
@@ -297,7 +305,7 @@
   }
 
   .compact-slider {
-    --basemap-card-width: 11rem;
+    --basemap-card-width: 176px;
     --basemap-card-preview-min-height: 5.5rem;
     --basemap-card-padding-bottom: 0.75rem;
   }
@@ -317,11 +325,14 @@
     padding-left: 0;
   }
 
+  .suggestions-section.compact-mode :global(.section-body),
   .catalogue-section.compact-mode :global(.section-body) {
     padding-left: 0;
     padding-right: 0;
   }
 
+  .suggestions-section.compact-mode .section-subtitle,
+  .suggestions-section.compact-mode .suggestions-notification,
   .catalogue-section.compact-mode .catalogue-filters,
   .catalogue-section.compact-mode .suggest-action,
   .catalogue-section.compact-mode .no-results {
@@ -329,6 +340,7 @@
     padding-right: var(--cds-spacing-04);
   }
 
+  .suggestions-section.compact-mode .basemap-slider,
   .catalogue-section.compact-mode .basemap-slider-catalog {
     margin-left: 0;
     margin-right: 0;

@@ -36,6 +36,7 @@
     classCountMax?: number;
     breaks?: ClassBreak[];
     breakpointValue?: number | null;
+    showBreakpointControls?: boolean;
     divergingPreviewColors?: string[];
     showHistogram?: boolean;
     onmethodchange?: (method: ClassificationMethod) => void;
@@ -56,6 +57,7 @@
       { min: 80, max: 100, count: 29, color: '#08519c' }
     ]),
     breakpointValue = $bindable<number | null>(null),
+    showBreakpointControls = true,
     divergingPreviewColors = [],
     showHistogram = true,
     onmethodchange,
@@ -247,46 +249,51 @@
     </div>
   </div>
 
-  <div class="section breakpoint-section">
-    <div class="breakpoint-row">
-      <div class="breakpoint-input-col">
-        <p class="input-label">{m.discretization_breakpoint_value()}</p>
-        <TextInput
-          id="breakpoint-value"
-          size="sm"
-          hideLabel
-          labelText={m.discretization_breakpoint_value()}
-          placeholder={m.discretization_none_placeholder()}
-          value={breakpointValue !== null ? String(breakpointValue) : ''}
-          on:input={(e) => {
-            const parsed = parseFloat(String(e.detail ?? ''));
-            breakpointValue = isNaN(parsed) ? null : parsed;
-            onbreakpointchange?.(breakpointValue);
-          }}
-        />
-      </div>
-      <div class="breakpoint-slider-col">
-        <p class="input-label">{m.discretization_position()}</p>
-        <Slider
-          min={dataMin}
-          max={dataMax}
-          value={breakpointSliderValue}
-          hideTextInput
-          minLabel=""
-          maxLabel=""
-          on:input={(e) => {
-            breakpointValue = e.detail;
-            onbreakpointchange?.(e.detail);
-          }}
-        />
-        <div class="palette-strip">
-          {#each paletteStripColors as color, index (`${index}-${color}`)}
-            <div class="palette-swatch" style="background-color: {color}"></div>
-          {/each}
+  {#if showBreakpointControls}
+    <div class="section breakpoint-section">
+      <div class="breakpoint-row">
+        <div class="breakpoint-input-col">
+          <p class="input-label">{m.discretization_breakpoint_value()}</p>
+          <TextInput
+            id="breakpoint-value"
+            size="sm"
+            hideLabel
+            labelText={m.discretization_breakpoint_value()}
+            placeholder={m.discretization_none_placeholder()}
+            value={breakpointValue !== null ? String(breakpointValue) : ''}
+            on:input={(e) => {
+              const parsed = parseFloat(String(e.detail ?? ''));
+              breakpointValue = isNaN(parsed) ? null : parsed;
+              onbreakpointchange?.(breakpointValue);
+            }}
+          />
+        </div>
+        <div class="breakpoint-slider-col">
+          <p class="input-label">{m.discretization_position()}</p>
+          <Slider
+            min={dataMin}
+            max={dataMax}
+            value={breakpointSliderValue}
+            hideTextInput
+            minLabel=""
+            maxLabel=""
+            on:input={(e) => {
+              breakpointValue = e.detail;
+              onbreakpointchange?.(e.detail);
+            }}
+          />
+          <div class="palette-strip">
+            {#each paletteStripColors as color, index (`${index}-${color}`)}
+              <div
+                class="palette-swatch"
+                style="background-color: {color}"
+              ></div>
+            {/each}
+          </div>
         </div>
       </div>
     </div>
-  </div>
+  {/if}
 
   {#if showHistogram}
     <div class="section histogram-section">

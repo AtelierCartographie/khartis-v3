@@ -38,17 +38,19 @@
   let {
     dataFields = [],
     visualization,
+    fillVisualization,
     onStyleChange,
     onModesChange,
     onSymbolsChange,
     onMappingChange,
+    onFillMappingChange,
     onStrokeMappingChange,
     onMissingDataChange,
-    onClassificationChange,
+    onFillClassificationChange,
     onStrokeClassificationChange,
-    onInvertPalette,
+    onFillInvertPalette,
     onStrokeInvertPalette,
-    onOpenDiscretization
+    onOpenFillDiscretization
   }: SymbolModeProps = $props();
 
   let strokeDiscretizationModalOpen = $state(false);
@@ -66,8 +68,8 @@
   const categoryFieldSelection = useFieldSelection(() => dataFields);
 
   $effect(() => {
-    classFieldSelection.sync(visualization?.mapping.valueColumn);
-    categoryFieldSelection.sync(visualization?.mapping.categoryColumn);
+    classFieldSelection.sync(fillVisualization?.mapping.valueColumn);
+    categoryFieldSelection.sync(fillVisualization?.mapping.categoryColumn);
 
     const symbolConfig = visualization?.symbol;
     if (symbolConfig) {
@@ -106,19 +108,19 @@
       missingDataColor =
         visualization.missingData.color ?? DEFAULT_COLORS.missingData;
     }
-    if (visualization?.classification) {
+    if (fillVisualization?.classification) {
       categoryCount =
-        visualization.classification.labels?.length ??
-        visualization.classification.numClasses ??
-        visualization.classification.classes ??
+        fillVisualization.classification.labels?.length ??
+        fillVisualization.classification.numClasses ??
+        fillVisualization.classification.classes ??
         4;
     }
   });
 
   const discretizationLabel = $derived.by(() =>
     resolveDiscretizationLabel(
-      visualization?.classification
-        ? { ...visualization.classification }
+      fillVisualization?.classification
+        ? { ...fillVisualization.classification }
         : undefined
     )
   );
@@ -201,7 +203,7 @@
     if (fillMode === FillMode.NONE) {
       fillColor = DEFAULT_COLORS.fill;
       onStyleChange?.({ symbolFillColor: DEFAULT_COLORS.fill });
-      onClassificationChange?.({
+      onFillClassificationChange?.({
         colors: undefined,
         paletteId: undefined,
         inverted: false,
@@ -245,26 +247,26 @@
   function handleClassFieldSelect(fieldId: number) {
     classFieldSelection.set(fieldId);
     if (fieldId === NONE_FIELD_ID) {
-      onMappingChange?.({ valueColumn: undefined });
+      onFillMappingChange?.({ valueColumn: undefined });
       return;
     }
 
     const field = dataFields.find((item) => item.id === fieldId);
     if (field) {
-      onMappingChange?.({ valueColumn: field.text });
+      onFillMappingChange?.({ valueColumn: field.text });
     }
   }
 
   function handleCategoryFieldSelect(fieldId: number) {
     categoryFieldSelection.set(fieldId);
     if (fieldId === NONE_FIELD_ID) {
-      onMappingChange?.({ categoryColumn: undefined });
+      onFillMappingChange?.({ categoryColumn: undefined });
       return;
     }
 
     const field = dataFields.find((item) => item.id === fieldId);
     if (field) {
-      onMappingChange?.({ categoryColumn: field.text });
+      onFillMappingChange?.({ categoryColumn: field.text });
     }
   }
 
@@ -321,7 +323,7 @@
 </div>
 
 <FillSection
-  visualization={visualization}
+  visualization={fillVisualization}
   primitive="symbol"
   dataFields={dataFields}
   availableModes={FILL_MODES_STANDARD}
@@ -332,8 +334,8 @@
   selectedCategoryFieldId={categoryFieldSelection.selectedFieldId}
   discretizationLabel={discretizationLabel}
   categoryCount={categoryCount}
-  facetsValueSlotPath={FACET_SLOT.SYMBOL_VALUE}
-  facetsCategorySlotPath={FACET_SLOT.SYMBOL_CATEGORY}
+  facetsValueSlotPath={FACET_SLOT.SYMBOL_FILL_VALUE}
+  facetsCategorySlotPath={FACET_SLOT.SYMBOL_FILL_CATEGORY}
   categoriesVariant="symbols-unique"
   showMissingData={showMissingData}
   missingDataColor={missingDataColor}
@@ -349,11 +351,11 @@
   onCategoryFieldSelect={handleCategoryFieldSelect}
   onFacetsVariablesChange={handleFacetsVariablesChange}
   onFacetsToggle={handleFacetsToggle}
-  onOpenDiscretization={onOpenDiscretization ?? (() => {})}
-  onClassificationChange={onClassificationChange ?? (() => {})}
+  onOpenDiscretization={onOpenFillDiscretization ?? (() => {})}
+  onClassificationChange={onFillClassificationChange ?? (() => {})}
   onMissingDataShowChange={handleMissingDataShowChange}
   onMissingDataColorChange={handleMissingDataColorChange}
-  onInvertPalette={onInvertPalette}
+  onInvertPalette={onFillInvertPalette}
 />
 
 <StrokeSection

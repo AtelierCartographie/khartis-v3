@@ -103,12 +103,18 @@
       window.addEventListener(EVENT.BEFOREUNLOAD, handleBeforeUnload);
     }
 
+    const handleLifecycleFlush = () => {
+      void persistenceRegistry.flush();
+    };
+
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
-        persistenceRegistry.flush();
+        handleLifecycleFlush();
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pagehide', handleLifecycleFlush);
+    window.addEventListener(EVENT.BEFOREUNLOAD, handleLifecycleFlush);
 
     pageResizeObserver = new ResizeObserver(() => {
       updateWorkspaceViewportState();
@@ -210,6 +216,8 @@
       }
       ariaObserver.disconnect();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pagehide', handleLifecycleFlush);
+      window.removeEventListener(EVENT.BEFOREUNLOAD, handleLifecycleFlush);
       workspaceResizeObserver?.disconnect();
       pageResizeObserver?.disconnect();
       pageMutationObserver?.disconnect();

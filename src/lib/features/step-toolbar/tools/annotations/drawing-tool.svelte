@@ -114,7 +114,7 @@
   });
 
   function handleStartDrawing() {
-    annotationsActions.startDrawingMode(drawingType);
+    annotationsActions.beginDrawing(drawingType);
   }
 
   function handleDrawingTypeChange(event: CustomEvent<string | number>) {
@@ -138,9 +138,12 @@
   }
 
   const activeDrawingType = $derived(
-    annotationsState.isDrawingMode
+    annotationsState.creationMode === 'drawing'
       ? annotationsState.drawingModeType
       : drawingType
+  );
+  const isDrawingCreationActive = $derived(
+    annotationsState.creationMode === 'drawing'
   );
   const minimumPointsToFinish = $derived(
     activeDrawingType === DrawingType.ZONE ? 3 : 2
@@ -174,7 +177,7 @@
     </Column>
   </Row>
 
-  {#if annotationsState.isDrawingMode}
+  {#if isDrawingCreationActive}
     <Row>
       <Column>
         <div class="section drawing-mode-active">
@@ -184,13 +187,13 @@
               kind="primary"
               disabled={annotationsState.drawingInProgress.length <
                 minimumPointsToFinish}
-              onclick={() => annotationsActions.finalizeDrawingMode()}
+              onclick={() => annotationsActions.finishDrawing()}
             >
               {m.annotations_drawing_finish()}
             </Button>
             <Button
               kind="secondary"
-              onclick={() => annotationsActions.cancelDrawingMode()}
+              onclick={() => annotationsActions.cancelDrawing()}
             >
               {m.button_cancel()}
             </Button>
@@ -305,7 +308,7 @@
     </Column>
   </Row>
 
-  {#if drawingType === DrawingType.ZONE}
+  {#if activeDrawingType === DrawingType.ZONE}
     <Row>
       <Column>
         <div class="section">

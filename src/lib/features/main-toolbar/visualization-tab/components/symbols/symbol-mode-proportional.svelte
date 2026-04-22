@@ -52,18 +52,21 @@
   let {
     dataFields = [],
     visualization,
+    fillVisualization,
     symbolMode,
     onSymbolsChange,
     onSymbolPrimitiveChange,
     onMappingChange,
+    onFillMappingChange,
     onStrokeMappingChange,
-    onClassificationChange,
+    onFillClassificationChange,
     onStrokeClassificationChange,
     onMissingDataChange,
-    onOpenDiscretization,
+    onOpenSizeDiscretization,
+    onOpenFillDiscretization,
     onModesChange,
     onStyleChange,
-    onInvertPalette,
+    onFillInvertPalette,
     onStrokeInvertPalette
   }: Props = $props();
 
@@ -105,16 +108,15 @@
       const sym = visualization.symbol;
       const sizeCol = sym?.sizeColumn ?? visualization.mapping.sizeColumn;
       const valueCol = sym?.valueColumn ?? visualization.mapping.valueColumn;
-      const categoryCol =
-        sym?.categoryColumn ?? visualization.mapping.categoryColumn;
-
       const mappedFieldName =
         symbolMode === SymbolMode.PROPORTIONAL ? sizeCol : valueCol;
 
       primaryFieldSelection.sync(mappedFieldName);
       secondaryValueFieldSelection.sync(valueCol);
-      fillClassFieldSelection.sync(valueCol);
-      fillCategoryFieldSelection.sync(categoryCol);
+      fillClassFieldSelection.sync(fillVisualization?.mapping.valueColumn);
+      fillCategoryFieldSelection.sync(
+        fillVisualization?.mapping.categoryColumn
+      );
     }
 
     const symbolConfig = visualization?.symbol;
@@ -167,11 +169,11 @@
         fillColorB = visualization.style.fillColorB ?? DEFAULT_COLORS.secondary;
       }
     }
-    if (visualization?.classification) {
+    if (fillVisualization?.classification) {
       categoryCount =
-        visualization.classification.labels?.length ??
-        visualization.classification.numClasses ??
-        visualization.classification.classes ??
+        fillVisualization.classification.labels?.length ??
+        fillVisualization.classification.numClasses ??
+        fillVisualization.classification.classes ??
         4;
     }
     if (visualization?.symbol) {
@@ -199,6 +201,14 @@
     resolveDiscretizationLabel(
       visualization?.classification
         ? { ...visualization.classification }
+        : undefined
+    )
+  );
+
+  const fillDiscretizationLabel = $derived.by(() =>
+    resolveDiscretizationLabel(
+      fillVisualization?.classification
+        ? { ...fillVisualization.classification }
         : undefined
     )
   );
@@ -346,7 +356,7 @@
         symbolFillColor: DEFAULT_COLORS.fill,
         fillColorB: DEFAULT_COLORS.secondary
       });
-      onClassificationChange?.({
+      onFillClassificationChange?.({
         colors: undefined,
         paletteId: undefined,
         inverted: false,
@@ -420,13 +430,13 @@
     }
     fillClassFieldSelection.set(fieldId);
     if (fieldId === NONE_FIELD_ID) {
-      onMappingChange?.({ valueColumn: undefined });
+      onFillMappingChange?.({ valueColumn: undefined });
       return;
     }
 
     const field = dataFields.find((item) => item.id === fieldId);
     if (field) {
-      onMappingChange?.({ valueColumn: field.text });
+      onFillMappingChange?.({ valueColumn: field.text });
     }
   }
 
@@ -436,13 +446,13 @@
     }
     fillCategoryFieldSelection.set(fieldId);
     if (fieldId === NONE_FIELD_ID) {
-      onMappingChange?.({ categoryColumn: undefined });
+      onFillMappingChange?.({ categoryColumn: undefined });
       return;
     }
 
     const field = dataFields.find((item) => item.id === fieldId);
     if (field) {
-      onMappingChange?.({ categoryColumn: field.text });
+      onFillMappingChange?.({ categoryColumn: field.text });
     }
   }
 
@@ -800,7 +810,7 @@
   <DiscretizationRow
     label={m.discretization()}
     value={discretizationLabel}
-    onsettings={onOpenDiscretization}
+    onsettings={onOpenSizeDiscretization}
   />
   <div class="field-group">
     <span class="field-label">
@@ -830,7 +840,7 @@
 />
 
 <FillSection
-  visualization={visualization}
+  visualization={fillVisualization}
   primitive="symbol"
   dataFields={dataFields}
   availableModes={FILL_MODES_STANDARD}
@@ -839,10 +849,10 @@
   fillOpacity={fillOpacity}
   selectedValueFieldId={fillClassFieldSelection.selectedFieldId}
   selectedCategoryFieldId={fillCategoryFieldSelection.selectedFieldId}
-  discretizationLabel={discretizationLabel}
+  discretizationLabel={fillDiscretizationLabel}
   categoryCount={categoryCount}
-  facetsValueSlotPath={FACET_SLOT.SYMBOL_VALUE}
-  facetsCategorySlotPath={FACET_SLOT.SYMBOL_CATEGORY}
+  facetsValueSlotPath={FACET_SLOT.SYMBOL_FILL_VALUE}
+  facetsCategorySlotPath={FACET_SLOT.SYMBOL_FILL_CATEGORY}
   categoriesVariant="symbols-unique"
   showMissingData={showMissingData}
   missingDataColor={missingDataColor}
@@ -859,14 +869,14 @@
   onCategoryFieldSelect={handleFillCategoryFieldSelect}
   onFacetsVariablesChange={handleFacetsVariablesChange}
   onFacetsToggle={handleFacetsToggle}
-  onOpenDiscretization={onOpenDiscretization ?? (() => {})}
-  onClassificationChange={onClassificationChange ?? (() => {})}
+  onOpenDiscretization={onOpenFillDiscretization ?? (() => {})}
+  onClassificationChange={onFillClassificationChange ?? (() => {})}
   onMissingDataShowChange={handleMissingDataShowChange}
   onMissingDataColorChange={handleMissingDataColorChange}
-  onInvertPalette={onInvertPalette}
+  onInvertPalette={onFillInvertPalette}
 >
   {#snippet uniqueSnippet()}
-    {#if proportionalType === ProportionalType.DOUBLE}
+    {#if symbolMode === SymbolMode.PROPORTIONAL && proportionalType === ProportionalType.DOUBLE}
       <div class="double-color-row">
         <div class="double-color-item double-color-a">
           <SingleColorPreview

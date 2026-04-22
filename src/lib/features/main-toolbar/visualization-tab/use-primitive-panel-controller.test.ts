@@ -55,6 +55,8 @@ function createVisualization(): VisualizationConfig {
       strokeOpacity: 1,
       strokeDashed: false,
       categoryColumn: 'region',
+      fillValueColumn: 'population',
+      fillCategoryColumn: 'region',
       size: 10,
       minSize: 5,
       maxSize: 20,
@@ -67,6 +69,11 @@ function createVisualization(): VisualizationConfig {
         method: ClassificationMethod.JENKS,
         classes: 5,
         labels: ['Old']
+      },
+      fillClassification: {
+        method: ClassificationMethod.JENKS,
+        classes: 5,
+        labels: ['Fill old']
       },
       strokeClassification: {
         method: ClassificationMethod.JENKS,
@@ -226,9 +233,59 @@ describe('use-primitive-panel-controller', () => {
         disabledLabels: undefined,
         categoryShapes: undefined
       },
+      fillClassification: {
+        labels: ['Fill old']
+      },
       strokeClassification: {
         labels: undefined,
         disabledLabels: undefined
+      }
+    });
+  });
+
+  it('resets symbol fill labels when the fill category mapping changes', () => {
+    const harness = createHarness();
+
+    harness.controller.applySymbolFillMappingUpdate({
+      categoryColumn: 'group'
+    });
+
+    expect(harness.visualizationUpdates[0]).toMatchObject({
+      symbol: {
+        fillCategoryColumn: 'group',
+        fillClassification: {
+          labels: [],
+          disabledLabels: undefined
+        }
+      }
+    });
+  });
+
+  it('auto-selects a numeric value column for symbol fill classes without reusing size/category fields', () => {
+    const harness = createHarness({
+      visualization: {
+        ...createVisualization(),
+        symbol: {
+          ...createVisualization().symbol,
+          fillMode: FillMode.CLASSES,
+          fillValueColumn: undefined,
+          sizeColumn: 'population',
+          categoryColumn: 'region'
+        }
+      } as VisualizationConfig,
+      dataFields: [
+        { id: 0, text: 'id', type: 'number' },
+        { id: 1, text: 'region', type: 'text' },
+        { id: 2, text: 'population', type: 'number' },
+        { id: 3, text: 'income', type: 'number' }
+      ]
+    });
+
+    harness.controller.ensureSymbolFillAutoColumns(harness.visualization);
+
+    expect(harness.visualizationUpdates[0]).toMatchObject({
+      symbol: {
+        fillValueColumn: 'income'
       }
     });
   });

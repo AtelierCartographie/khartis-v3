@@ -1,14 +1,11 @@
 export { ProjectStorageKey } from './types';
 export type {
-  AutoSaveConfig,
   KhartisProject,
-  LayoutConfig,
   ProjectData,
   ProjectHistoryEntry,
   ProjectManifest,
   ProjectState,
-  SavedProjectMetadata,
-  VisualizationConfig
+  SavedProjectMetadata
 } from './types';
 
 export { PROJECT_CONST } from './constants';
@@ -27,11 +24,6 @@ export { projectRepository } from './core/persistence';
 export { projectStorage } from './core/storage';
 
 export { duplicateProject } from './operations/duplicate';
-
-export {
-  createAutoSaveController,
-  type AutoSaveController
-} from './operations/auto-save';
 
 export const projectFiles = {
   exportProject: async (

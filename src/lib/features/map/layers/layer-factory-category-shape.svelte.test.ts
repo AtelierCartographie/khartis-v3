@@ -25,7 +25,11 @@ describe('layer-factory — CategoryShapeMode routing to MultiShapeLayer', () =>
 
   it('picks MultiShapeLayer over ScatterplotLayer when useCategoryShape is true (native scatter path)', () => {
     expect(source).toMatch(
-      /const LayerClass\s*=\s*useCategoryShape\s*\?\s*MultiShapeLayer\s*:\s*ScatterplotLayer/
+      /const useMultiShapeLayer\s*=\s*useCategoryShape\s*\|\|\s*\(pointStrokeDashed && showPointStroke\)/
+    );
+    expect(source).toMatch(/if \(useMultiShapeLayer\) \{/);
+    expect(source).toMatch(
+      /return \[new ScatterplotLayer\(baseLayerProps\)\];/
     );
   });
 

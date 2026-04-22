@@ -51,6 +51,9 @@
   import {
     getPrimitiveClassification,
     getPrimitiveCategoryColumn,
+    getSymbolFillCategoryColumn,
+    getSymbolFillClassification,
+    getSymbolFillValueColumn,
     getSymbolPrimitive,
     PrimitiveFilterType,
     visualizationStore,
@@ -71,6 +74,7 @@
   import {
     CATEGORY_SHAPE_CYCLE,
     CategoryShapeMode,
+    FillMode,
     ShapeType,
     SymbolMode
   } from '$lib/features/main-toolbar/constants';
@@ -155,6 +159,44 @@
         ) {
           return getPrimitiveClassification(viz, PrimitiveFilterType.POINT);
         }
+        if (
+          symbol?.enabled &&
+          symbol.fillMode === FillMode.CATEGORIES &&
+          getSymbolFillCategoryColumn(viz)
+        ) {
+          return getSymbolFillClassification(viz);
+        }
+        return undefined;
+      }
+      case 'line':
+        return getPrimitiveClassification(viz, PrimitiveFilterType.LINE);
+      case 'area':
+      default:
+        return (
+          getPrimitiveClassification(viz, PrimitiveFilterType.POLYGON) ??
+          viz.classification
+        );
+    }
+  }
+
+  function getLegendClassedColorClassification(
+    viz: VisualizationConfig | undefined
+  ): ClassificationConfig | undefined {
+    if (!viz) {
+      return undefined;
+    }
+
+    const swatchPrimitive = resolveLegendColorSwatchPrimitive(viz);
+    switch (swatchPrimitive) {
+      case 'point': {
+        const symbol = getSymbolPrimitive(viz);
+        if (
+          symbol?.enabled &&
+          symbol.fillMode === FillMode.CLASSES &&
+          getSymbolFillValueColumn(viz) !== undefined
+        ) {
+          return getSymbolFillClassification(viz);
+        }
         return undefined;
       }
       case 'line':
@@ -207,7 +249,10 @@
       return ShapeType.CIRCLE;
     }
 
-    if (symbol.categoryShape === CategoryShapeMode.DIFFERENT) {
+    if (
+      symbol.mode === SymbolMode.CATEGORIES &&
+      symbol.categoryShape === CategoryShapeMode.DIFFERENT
+    ) {
       const classification =
         viz && getPrimitiveClassification(viz, PrimitiveFilterType.POINT);
 
@@ -231,7 +276,10 @@
       return 8;
     }
 
-    if (symbol.categoryShape !== CategoryShapeMode.ORDERED) {
+    if (
+      symbol.mode !== SymbolMode.CATEGORIES ||
+      symbol.categoryShape !== CategoryShapeMode.ORDERED
+    ) {
       return 8;
     }
 
@@ -425,17 +473,16 @@
   }
 
   function getLegendClassCount(viz: VisualizationConfig | undefined): number {
-    if (!viz?.classification) {
+    const classification = getLegendClassedColorClassification(viz);
+    if (!classification) {
       return 0;
     }
 
     return (
-      viz.classification.numClasses ??
-      viz.classification.labels?.length ??
-      viz.classification.colors?.length ??
-      (viz.classification.breaks?.length
-        ? viz.classification.breaks.length + 1
-        : 0)
+      classification.numClasses ??
+      classification.labels?.length ??
+      classification.colors?.length ??
+      (classification.breaks?.length ? classification.breaks.length + 1 : 0)
     );
   }
 
@@ -766,6 +813,8 @@
         {@const pointSizeScale = getPointSizeLegendScale(viz, sizeStats)}
         {@const densityScale = getDensityLegendScale(viz)}
         {@const lineWidthScale = getLineWidthLegendScale(viz, sizeStats)}
+        {@const classedColorClassification =
+          getLegendClassedColorClassification(viz)}
         {@const classCount = getLegendClassCount(viz)}
         {@const categoricalEntries = getLegendCategoricalEntries(viz)}
         <div class="legend-item">
@@ -787,11 +836,11 @@
             </div>
           {/if}
           {#if viz && hasClassedColorLegend(viz)}
-            {@const colors = viz.classification?.colors ?? []}
-            {@const breaks = viz.classification?.breaks ?? []}
+            {@const colors = classedColorClassification?.colors ?? []}
+            {@const breaks = classedColorClassification?.breaks ?? []}
             {@const hasPatternScale =
               colorLegendPrimitive === 'area' &&
-              Boolean(viz.classification?.patternId)}
+              Boolean(classedColorClassification?.patternId)}
             <div class="legend-color-scale">
               {#each colors as color, i (i)}
                 <div class="legend-scale-row">
@@ -818,9 +867,9 @@
                       class="legend-color-swatch"
                       class:patterned={hasPatternScale}
                       style={getPatternSwatchStyle(
-                        viz.classification?.patternId,
+                        classedColorClassification?.patternId,
                         color,
-                        viz.classification?.patternParams
+                        classedColorClassification?.patternParams
                       )}
                     >
                     </span>

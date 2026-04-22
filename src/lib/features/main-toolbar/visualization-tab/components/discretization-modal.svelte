@@ -50,12 +50,8 @@
     visualization?: VisualizationConfig;
     classification?: ClassificationConfig;
     valueColumn?: string;
-    /** Tag the classification context this modal mutates. The parent selects
-     * the correct classification source and wires `onchange` to the matching
-     * setter (fill → updatePrimitiveClassificationState, stroke →
-     * updatePrimitiveStrokeClassification). The prop is reflected as a
-     * data attribute for debugging / e2e tests. */
-    role?: 'fill' | 'stroke';
+    showBreakpointControls?: boolean;
+    role?: 'fill' | 'stroke' | 'size';
     onclose?: () => void;
     onchange?: (classification: Partial<ClassificationConfig>) => void;
   }
@@ -65,6 +61,7 @@
     visualization,
     classification: classificationOverride,
     valueColumn,
+    showBreakpointControls = true,
     role = 'fill',
     onclose,
     onchange
@@ -508,6 +505,7 @@
           bind:numClasses={currentNumClasses}
           bind:breaks={currentBreaks}
           bind:breakpointValue={currentBreakpoint}
+          showBreakpointControls={showBreakpointControls}
           divergingPreviewColors={divergingPreview}
           classCountMax={currentMethod === 'head-tail'
             ? headTailClassCountMax

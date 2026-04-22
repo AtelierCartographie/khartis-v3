@@ -1055,15 +1055,160 @@ function createDataOrchestratorService() {
   /** Set to true once onProjectChanged() completes. If initialize() runs after,
    *  it skips the migration + breaks work that onProjectChanged already did. */
   let projectAlreadyRestored = false;
-  let pendingGeoColumnRestoreTimeout: ReturnType<typeof setTimeout> | null =
-    null;
+  let projectRestoreInProgress = $state(false);
   let activeGeoColumnRestoreToken = 0;
 
   function cancelPendingGeoColumnRestore(): void {
     activeGeoColumnRestoreToken += 1;
-    if (pendingGeoColumnRestoreTimeout !== null) {
-      clearTimeout(pendingGeoColumnRestoreTimeout);
-      pendingGeoColumnRestoreTimeout = null;
+  }
+
+  function hasPersistedJoinState(file: UploadedFile): boolean {
+    return Boolean(file.geoColumn || file.joinedBasemap || file.gpsMode);
+  }
+
+  function resolveRestoredJoinFile(
+    currentProject: typeof projectStore.currentProject
+  ): UploadedFile | undefined {
+    if (!currentProject?.data?.sourceFiles) {
+      return undefined;
+    }
+
+    const selectedSourceFileId =
+      datasetsStore.selectedDataset?.sourceFileId ??
+      globalState.selectedDataButtonId;
+
+    return (
+      currentProject.data.sourceFiles.find(
+        (file) =>
+          file.id === selectedSourceFileId && hasPersistedJoinState(file)
+      ) ?? currentProject.data.sourceFiles.find(hasPersistedJoinState)
+    );
+  }
+
+  async function restorePersistedDataTabState(
+    currentProject: NonNullable<typeof projectStore.currentProject>,
+    restoreToken: number
+  ): Promise<void> {
+    const restoredFile = resolveRestoredJoinFile(currentProject);
+    if (!restoredFile) {
+      return;
+    }
+
+    globalActions.selectDataButton(restoredFile.id);
+    await datasetsStore.waitForDatasetBySourceFile(restoredFile.id);
+
+    if (
+      restoreToken !== activeGeoColumnRestoreToken ||
+      projectStore.currentProject?.id !== currentProject.id
+    ) {
+      return;
+    }
+
+    const restoredDataset = datasetsStore.getDatasetBySourceFile(
+      restoredFile.id
+    );
+    const restoredDuckDataset = duckDBOrchestrator.getDatasetBySourceFile(
+      restoredFile.id
+    );
+    const restoredPrimaryJoinState = resolvePersistedJoinState({
+      file: restoredFile,
+      duckDataset: restoredDuckDataset,
+      selectedBasemapId: currentProject.data.basemap?.id,
+      linkedGeoColumn: restoredFile.geoColumn,
+      selectedGpsColumns: restoredFile.gpsColumns,
+      isSelectedSourceFile: true
+    });
+
+    if (restoredPrimaryJoinState.joinedBasemap) {
+      dataTabActions.selectBasemap(restoredPrimaryJoinState.joinedBasemap);
+    }
+
+    if (
+      restoredPrimaryJoinState.gpsMode &&
+      restoredPrimaryJoinState.gpsColumns
+    ) {
+      dataTabActions.setGeolocationState({
+        linkedVariable: null,
+        linkedVariableName: '',
+        latitudeColumn: restoredPrimaryJoinState.gpsColumns.lat,
+        longitudeColumn: restoredPrimaryJoinState.gpsColumns.lon,
+        autoDetected: false
+      });
+      return;
+    }
+
+    if (
+      !restoredPrimaryJoinState.geoColumn ||
+      !restoredDataset?.columns?.length
+    ) {
+      return;
+    }
+
+    const colIndex = restoredDataset.columns
+      .filter((c) => c.name !== '__geom' && c.name !== '__id')
+      .findIndex((c) => c.name === restoredPrimaryJoinState.geoColumn);
+
+    if (colIndex >= 0) {
+      dataTabActions.setGeolocationState({
+        linkedVariable: colIndex,
+        linkedVariableName: restoredPrimaryJoinState.geoColumn,
+        autoDetected: false
+      });
+    }
+  }
+
+  async function restoreCurrentProjectState(): Promise<void> {
+    const restoreToken = activeGeoColumnRestoreToken;
+    const currentProject = projectStore.currentProject;
+    const vizSettings = (
+      currentProject?.data as SerializedProjectData | undefined
+    )?.visualizationSettings;
+    const projectionSettings = (
+      currentProject?.data as SerializedProjectData | undefined
+    )?.layoutSettings?.projection;
+
+    projectRestoreInProgress = true;
+
+    try {
+      await persistenceRegistry.withPersistenceSuspended(async () => {
+        visualizationStore.clear();
+        datasetsStore.clear();
+        layersActions.reset();
+        processedFileIds.clear();
+
+        await duckDBOrchestrator.clear();
+
+        if (currentProject?.data?.sourceFiles) {
+          await processProjectFiles(currentProject.data.sourceFiles);
+        }
+
+        if (vizSettings) {
+          visualizationStore.restoreFromSerialized(vizSettings);
+        }
+
+        migrateOrphanedVizDatasetIds();
+        await recomputeMissingBreaks();
+
+        if (projectionSettings) {
+          projectionActions.setState(projectionSettings);
+        }
+
+        globalActions.ensureTabSelected();
+        datasetsStore.applyPersistedViewState();
+        duckDBOrchestrator.applyPersistedTableFilters();
+
+        if (currentProject) {
+          await restorePersistedDataTabState(currentProject, restoreToken);
+        }
+
+        layersActions.syncWithVisualizations();
+        legendActions.syncWithVisualizations();
+      });
+
+      persistenceRegistry.markClean();
+      projectAlreadyRestored = true;
+    } finally {
+      projectRestoreInProgress = false;
     }
   }
 
@@ -1075,193 +1220,21 @@ function createDataOrchestratorService() {
     if (projectAlreadyRestored) {
       return;
     }
-
-    const currentProject = projectStore.currentProject;
-
-    const vizSettings = (
-      currentProject?.data as SerializedProjectData | undefined
-    )?.visualizationSettings;
-
-    // Preload persisted visualizations before datasets are restored so the
-    // $effect in visualization-tab.svelte does not see 0 vizs and auto-create.
-    if (vizSettings) {
-      visualizationStore.restoreFromSerialized(vizSettings);
-    }
-
-    if (currentProject?.data?.sourceFiles) {
-      await processProjectFiles(currentProject.data.sourceFiles);
-    }
-
-    // Restore once more after dataset loading so the runtime store matches the
-    // serialized project exactly, even if dataset restoration created
-    // temporary default visualizations.
-    if (vizSettings) {
-      visualizationStore.restoreFromSerialized(vizSettings);
-    }
-
-    migrateOrphanedVizDatasetIds();
-
-    // Ensure all choropleth visualizations have valid breaks.
-    // Breaks are normally computed in configure-visualization.svelte, but
-    // that component is only mounted on the Viz tab — after a refresh on
-    // another tab, or if the project was saved before breaks were computed,
-    // the choropleth would render without colors.
-    await recomputeMissingBreaks();
-
-    layersActions.syncWithVisualizations();
-    legendActions.syncWithVisualizations();
-    persistenceRegistry.markClean();
+    await restoreCurrentProjectState();
   }
 
   async function onProjectChanged(): Promise<void> {
     await duckDBOrchestrator.waitForInitialization();
     cancelPendingGeoColumnRestore();
-
-    visualizationStore.clear();
-    datasetsStore.clear();
-    layersActions.reset();
-    processedFileIds.clear();
-
-    // Remove runtime datasets before dropping DuckDB tables so reactive UI
-    // components stop reading the soon-to-be-deleted tables during project
-    // switches.
-    await duckDBOrchestrator.clear();
-
-    const currentProject = projectStore.currentProject;
-    const vizSettings = (
-      currentProject?.data as SerializedProjectData | undefined
-    )?.visualizationSettings;
-    const projectionSettings = (
-      currentProject?.data as SerializedProjectData | undefined
-    )?.layoutSettings?.projection;
-
-    // Preload persisted visualizations before datasets are restored so the
-    // project reload path does not briefly recreate default visualizations.
-    if (vizSettings) {
-      visualizationStore.restoreFromSerialized(vizSettings);
-    }
-
-    if (currentProject?.data?.sourceFiles) {
-      await processProjectFiles(currentProject.data.sourceFiles);
-    }
-
-    // Restore once more after dataset loading so the runtime store matches the
-    // serialized project exactly, even if dataset restoration created
-    // temporary default visualizations.
-    if (vizSettings) {
-      visualizationStore.restoreFromSerialized(vizSettings);
-    }
-
-    migrateOrphanedVizDatasetIds();
-    await recomputeMissingBreaks();
-    if (projectionSettings) {
-      projectionActions.setState(projectionSettings);
-    }
-
-    globalActions.ensureTabSelected();
-    datasetsStore.applyPersistedViewState();
-    duckDBOrchestrator.applyPersistedTableFilters();
-
-    // Restore the geo column selection in the data tab UI so users don't
-    // lose their manual choice (e.g. "entity" for fuzzy-countries) on reload.
-    if (currentProject?.data?.sourceFiles) {
-      const selectedSourceFileId =
-        datasetsStore.selectedDataset?.sourceFileId ??
-        globalState.selectedDataButtonId;
-      const restoredFile =
-        currentProject.data.sourceFiles.find(
-          (file) =>
-            file.id === selectedSourceFileId &&
-            (file.geoColumn || file.joinedBasemap || file.gpsMode)
-        ) ??
-        currentProject.data.sourceFiles.find(
-          (file) => file.geoColumn || file.joinedBasemap || file.gpsMode
-        );
-      const restoredDuckDataset = restoredFile
-        ? duckDBOrchestrator.getDatasetBySourceFile(restoredFile.id)
-        : null;
-      const restoredPrimaryJoinState = restoredFile
-        ? resolvePersistedJoinState({
-            file: restoredFile,
-            duckDataset: restoredDuckDataset,
-            selectedBasemapId: currentProject.data.basemap?.id,
-            linkedGeoColumn: restoredFile.geoColumn,
-            selectedGpsColumns: restoredFile.gpsColumns,
-            isSelectedSourceFile: true
-          })
-        : null;
-      if (restoredPrimaryJoinState?.joinedBasemap) {
-        dataTabActions.selectBasemap(restoredPrimaryJoinState.joinedBasemap);
-      }
-      if (
-        restoredPrimaryJoinState?.gpsMode &&
-        restoredPrimaryJoinState.gpsColumns
-      ) {
-        dataTabActions.setGeolocationState({
-          linkedVariable: null,
-          linkedVariableName: '',
-          latitudeColumn: restoredPrimaryJoinState.gpsColumns.lat,
-          longitudeColumn: restoredPrimaryJoinState.gpsColumns.lon,
-          autoDetected: false
-        });
-      } else if (restoredPrimaryJoinState?.geoColumn) {
-        const geoCol = restoredPrimaryJoinState.geoColumn;
-        const currentProjectId = currentProject.id;
-        const restoredSourceFileId = restoredFile?.id;
-        cancelPendingGeoColumnRestore();
-        const restoreToken = activeGeoColumnRestoreToken;
-
-        // Defer restoration until dataset is fully loaded. The component's
-        // $effect resets linkedVariable when the dataset ID changes, so we
-        // must wait for that reset to happen first, then override.
-        const restoreGeoColumn = () => {
-          if (
-            restoreToken !== activeGeoColumnRestoreToken ||
-            projectStore.currentProject?.id !== currentProjectId
-          ) {
-            pendingGeoColumnRestoreTimeout = null;
-            return;
-          }
-
-          const dataset = datasetsStore.selectedDataset;
-          if (
-            !dataset?.columns?.length ||
-            (restoredSourceFileId &&
-              dataset.sourceFileId !== restoredSourceFileId)
-          ) {
-            // Dataset not ready yet, retry
-            pendingGeoColumnRestoreTimeout = setTimeout(restoreGeoColumn, 200);
-            return;
-          }
-
-          pendingGeoColumnRestoreTimeout = null;
-
-          const colIndex = dataset.columns
-            .filter((c) => c.name !== '__geom' && c.name !== '__id')
-            .findIndex((c) => c.name === geoCol);
-          if (colIndex >= 0) {
-            dataTabActions.setGeolocationState({
-              linkedVariable: colIndex,
-              linkedVariableName: geoCol,
-              autoDetected: false
-            });
-          }
-        };
-        // Wait 2s for all Svelte $effects to settle after dataset loading
-        pendingGeoColumnRestoreTimeout = setTimeout(restoreGeoColumn, 2000);
-      }
-    }
-
-    layersActions.syncWithVisualizations();
-    legendActions.syncWithVisualizations();
-    persistenceRegistry.markClean();
-
-    projectAlreadyRestored = true;
+    await restoreCurrentProjectState();
   }
 
   return {
     get geometryDatasetsVersion() {
       return geometryDatasetsVersion;
+    },
+    get isProjectRestoreInProgress() {
+      return projectRestoreInProgress;
     },
     initialize,
     onFileAdded,

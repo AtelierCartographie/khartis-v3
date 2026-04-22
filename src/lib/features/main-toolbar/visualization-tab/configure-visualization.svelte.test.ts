@@ -74,9 +74,10 @@ describe('ConfigureVisualization', () => {
     expect(source).toContain(
       '? { strokeDashed: updates.strokeDashed ?? symbol.strokeDashed }'
     );
-    expect(source).toContain(
-      'import {\n    buildLinePanelVisualization,\n    buildPolygonPanelVisualization,\n    buildSymbolPanelVisualization,'
-    );
+    expect(source).toContain('buildLinePanelVisualization');
+    expect(source).toContain('buildPolygonPanelVisualization');
+    expect(source).toContain('buildSymbolFillPanelVisualization');
+    expect(source).toContain('buildSymbolPanelVisualization');
   });
 
   it('wires text background handlers independently from polygon handlers', () => {

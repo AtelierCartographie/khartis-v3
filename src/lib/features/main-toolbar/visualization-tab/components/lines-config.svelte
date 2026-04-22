@@ -439,6 +439,7 @@
   description={disabled ? m.primitive_unavailable() : undefined}
   defaultOpen={false}
   showToggle
+  toggleVariant="suggestions"
   actionsEnd
   toggleChecked={enabled}
   disabled={disabled}

@@ -62,7 +62,6 @@ export {
   updateDatasetTableName,
   updateDatasetCsvOptions,
   renameDataset,
-  renameDatasetOnly,
   hasModifications,
   recordTransformation,
   waitForDatasetBySourceFile

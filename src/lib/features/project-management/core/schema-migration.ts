@@ -263,13 +263,62 @@ function backfillPrimitiveConfigs(
   return walk(data) as Record<string, unknown>;
 }
 
+function normalizePersistenceSchema(
+  data: Record<string, unknown>
+): Record<string, unknown> {
+  const clone = structuredClone(data);
+
+  delete clone.visualization;
+  delete clone.layout;
+  delete clone.resources;
+
+  const projectData = isRecord(clone.data) ? clone.data : null;
+  const basemapSettings = projectData?.basemapSettings;
+  const mapViewState = isRecord(basemapSettings)
+    ? basemapSettings.mapViewState
+    : null;
+
+  if (
+    isRecord(mapViewState) &&
+    Array.isArray(mapViewState.center) &&
+    mapViewState.center.length >= 2 &&
+    typeof mapViewState.zoom === 'number' &&
+    !Number.isFinite(mapViewState.baseZoom)
+  ) {
+    mapViewState.baseZoom = mapViewState.zoom;
+  }
+
+  const uiSettings = isRecord(projectData?.uiSettings)
+    ? projectData.uiSettings
+    : null;
+  const dataTab = isRecord(uiSettings?.dataTab) ? uiSettings.dataTab : null;
+  const basemapJoin = isRecord(dataTab?.basemapJoin)
+    ? dataTab.basemapJoin
+    : null;
+  const projectBasemap = isRecord(projectData?.basemap)
+    ? projectData.basemap
+    : null;
+
+  if (
+    basemapJoin &&
+    typeof projectBasemap?.id === 'string' &&
+    projectBasemap.id.length > 0
+  ) {
+    delete basemapJoin.selectedBasemap;
+    delete basemapJoin.basemapSource;
+  }
+
+  return clone;
+}
+
 const migrations: SchemaMigration[] = [
   // remapLegacyPointShape is idempotent — safe to apply at both 3.0.0 and 3.1.0.
   { from: '3.0.0', to: '3.1.0', migrate: remapLegacyPointShape },
   { from: '3.1.0', to: '3.2.0', migrate: remapLegacyPointShape },
   { from: '3.2.0', to: '3.3.0', migrate: backfillSymbolFillColor },
   { from: '3.3.0', to: '3.4.0', migrate: backfillPrimitiveConfigs },
-  { from: '3.4.0', to: '3.5.0', migrate: backfillSymbolDoubleFields }
+  { from: '3.4.0', to: '3.5.0', migrate: backfillSymbolDoubleFields },
+  { from: '3.5.0', to: '3.6.0', migrate: normalizePersistenceSchema }
 ];
 
 export function migrateIfNeeded(
