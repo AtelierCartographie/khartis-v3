@@ -67,7 +67,7 @@
     "test:pipeline": "vitest run --project server tests/pipeline --reporter=agent --passWithNoTests",
     "test:unit": "vitest run --project client --reporter=agent",
     "reset:packages": "find . -type dir -name node_modules | xargs rm -rf && rm -rf pnpm-lock.yaml",
-    "update:packages": "pnpm update --interactive",
+    "update:packages": "pnpm update --interactive --latest",
     "generate-pwa-assets": "pwa-assets-generator",
     "init:project": "npx husky init && pnpm install"
   },
@@ -155,9 +155,6 @@
       "serialize-javascript": ">=7.0.3",
       "tar": ">=7.5.11",
       "cookie": ">=0.7.0"
-    },
-    "patchedDependencies": {
-      "@deck.gl/layers": "patches/@deck.gl__layers.patch"
     }
   },
   "lint-staged": {
