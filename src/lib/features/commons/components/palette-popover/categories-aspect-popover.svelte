@@ -434,29 +434,34 @@
                 </div>
               </div>
             {:else if primitiveKind === 'symbols'}
-              <div class="common-grid">
-                <div class="common-grid-row">
-                  <span class="field-label"
-                    >{m.aspect_common_size_unique()}</span
-                  >
-                  <div class="common-row-control">
-                    <div class="toggle-control">
-                      <Switch
-                        toggled={draftCommonAspect.sizeUnique}
-                        hideLabel
-                        labelText={m.aspect_common_size_unique()}
-                        onchange={(value) =>
-                          handleCommonAspectChange('sizeUnique', value)}
-                      />
-                      <span class="toggle-state">
-                        {draftCommonAspect.sizeUnique ? m.yes() : m.no()}
-                      </span>
+              <div class="common-symbols-layout">
+                <div class="common-paired-row common-paired-row--with-input">
+                  <div class="common-field common-field--toggle">
+                    <span class="field-label"
+                      >{m.aspect_common_size_unique()}</span
+                    >
+                    <div class="common-toggle-value">
+                      <div class="toggle-control">
+                        <Switch
+                          toggled={draftCommonAspect.sizeUnique}
+                          hideLabel
+                          labelText={m.aspect_common_size_unique()}
+                          onchange={(value) =>
+                            handleCommonAspectChange('sizeUnique', value)}
+                        />
+                        <span class="toggle-state">
+                          {draftCommonAspect.sizeUnique ? m.yes() : m.no()}
+                        </span>
+                      </div>
                     </div>
+                  </div>
+
+                  <div class="common-field common-field--input">
                     <CompactNumberInput
                       value={draftCommonAspect.size}
                       min={1}
                       max={20}
-                      width="96px"
+                      width="100%"
                       height="32px"
                       showSteppers={false}
                       disabled={!draftCommonAspect.sizeUnique}
@@ -466,70 +471,84 @@
                   </div>
                 </div>
 
-                <div class="common-grid-row">
-                  <span class="field-label"
-                    >{m.aspect_common_stroke_yesno()}</span
-                  >
-                  <div class="toggle-control">
-                    <Switch
-                      toggled={draftCommonAspect.stroke}
-                      hideLabel
-                      labelText={m.aspect_common_stroke_yesno()}
-                      onchange={(value) =>
-                        handleCommonAspectChange('stroke', value)}
-                    />
-                    <span class="toggle-state">
-                      {draftCommonAspect.stroke ? m.yes() : m.no()}
-                    </span>
-                  </div>
-                </div>
+                <div class="common-divider"></div>
 
-                <div class="common-grid-row">
-                  <span class="field-label">{m.aspect_common_auto_color()}</span
-                  >
-                  <div class="toggle-control">
-                    <Switch
-                      toggled={draftCommonAspect.autoColor}
-                      hideLabel
-                      labelText={m.aspect_common_auto_color()}
-                      onchange={(value) =>
-                        handleCommonAspectChange('autoColor', value)}
-                    />
-                    <span class="toggle-state">
-                      {draftCommonAspect.autoColor ? m.yes() : m.no()}
-                    </span>
-                  </div>
-                </div>
-
-                <div class="common-grid-row">
-                  <span class="field-label"
-                    >{m.aspect_common_stroke_size()}</span
-                  >
-                  <div class="common-row-control">
-                    <div class="toggle-control">
-                      <Switch
-                        toggled={draftCommonAspect.strokeSize > 0}
-                        hideLabel
-                        labelText={m.aspect_common_stroke_size()}
-                        onchange={(value) =>
-                          handleCommonAspectToggle(
-                            'strokeSize',
-                            value,
-                            draftCommonAspect.strokeSize > 0
-                              ? draftCommonAspect.strokeSize
-                              : 1,
-                            0
-                          )}
-                      />
-                      <span class="toggle-state">
-                        {draftCommonAspect.strokeSize > 0 ? m.yes() : m.no()}
-                      </span>
+                <div class="common-paired-row">
+                  <div class="common-field common-field--toggle">
+                    <span class="field-label"
+                      >{m.aspect_common_stroke_yesno()}</span
+                    >
+                    <div class="common-toggle-value">
+                      <div class="toggle-control">
+                        <Switch
+                          toggled={draftCommonAspect.stroke}
+                          hideLabel
+                          labelText={m.aspect_common_stroke_yesno()}
+                          onchange={(value) =>
+                            handleCommonAspectChange('stroke', value)}
+                        />
+                        <span class="toggle-state">
+                          {draftCommonAspect.stroke ? m.yes() : m.no()}
+                        </span>
+                      </div>
                     </div>
+                  </div>
+
+                  <div class="common-field common-field--toggle">
+                    <span class="field-label"
+                      >{m.aspect_common_auto_color()}</span
+                    >
+                    <div class="common-toggle-value">
+                      <div class="toggle-control">
+                        <Switch
+                          toggled={draftCommonAspect.autoColor}
+                          hideLabel
+                          labelText={m.aspect_common_auto_color()}
+                          onchange={(value) =>
+                            handleCommonAspectChange('autoColor', value)}
+                        />
+                        <span class="toggle-state">
+                          {draftCommonAspect.autoColor ? m.yes() : m.no()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="common-paired-row common-paired-row--with-input">
+                  <div class="common-field common-field--toggle">
+                    <span class="field-label"
+                      >{m.aspect_common_stroke_size()}</span
+                    >
+                    <div class="common-toggle-value">
+                      <div class="toggle-control">
+                        <Switch
+                          toggled={draftCommonAspect.strokeSize > 0}
+                          hideLabel
+                          labelText={m.aspect_common_stroke_size()}
+                          onchange={(value) =>
+                            handleCommonAspectToggle(
+                              'strokeSize',
+                              value,
+                              draftCommonAspect.strokeSize > 0
+                                ? draftCommonAspect.strokeSize
+                                : 1,
+                              0
+                            )}
+                        />
+                        <span class="toggle-state">
+                          {draftCommonAspect.strokeSize > 0 ? m.yes() : m.no()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="common-field common-field--input">
                     <CompactNumberInput
                       value={Math.max(1, draftCommonAspect.strokeSize)}
                       min={1}
                       max={20}
-                      width="96px"
+                      width="100%"
                       height="32px"
                       showSteppers={false}
                       disabled={draftCommonAspect.strokeSize <= 0}
@@ -539,19 +558,25 @@
                   </div>
                 </div>
 
-                <div class="common-grid-row common-grid-row--full">
+                <div class="common-divider"></div>
+
+                <div
+                  class="common-field common-field--toggle common-field--full"
+                >
                   <span class="field-label">{m.aspect_common_pattern()}</span>
-                  <div class="toggle-control">
-                    <Switch
-                      toggled={draftCommonAspect.pattern}
-                      hideLabel
-                      labelText={m.aspect_common_pattern()}
-                      onchange={(value) =>
-                        handleCommonAspectChange('pattern', value)}
-                    />
-                    <span class="toggle-state">
-                      {draftCommonAspect.pattern ? m.yes() : m.no()}
-                    </span>
+                  <div class="common-toggle-value">
+                    <div class="toggle-control">
+                      <Switch
+                        toggled={draftCommonAspect.pattern}
+                        hideLabel
+                        labelText={m.aspect_common_pattern()}
+                        onchange={(value) =>
+                          handleCommonAspectChange('pattern', value)}
+                      />
+                      <span class="toggle-state">
+                        {draftCommonAspect.pattern ? m.yes() : m.no()}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -860,6 +885,54 @@
     gap: 16px;
   }
 
+  .common-symbols-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+  }
+
+  .common-paired-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    width: 100%;
+  }
+
+  .common-paired-row--with-input {
+    align-items: flex-end;
+  }
+
+  .common-field {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .common-field--input {
+    justify-content: flex-end;
+    min-width: 64px;
+  }
+
+  .common-field--full {
+    width: 100%;
+  }
+
+  .common-toggle-value {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 18px;
+  }
+
+  .common-divider {
+    width: 100%;
+    height: 1px;
+    background: var(--cds-border-subtle-01, #c6c6c6);
+  }
+
   .common-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -877,13 +950,6 @@
     grid-column: 1 / -1;
   }
 
-  .common-row-control {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-  }
-
   .toggle-control,
   .toggle-only-control {
     display: inline-flex;
@@ -898,6 +964,22 @@
     line-height: 18px;
     letter-spacing: 0.16px;
     color: var(--cds-text-primary, #161616);
+  }
+
+  .common-symbols-layout :global(.kh-switch-native) {
+    --kh-switch-on-bg: #726e6e;
+    --kh-switch-off-bg: #c6c6c6;
+  }
+
+  .common-symbols-layout :global(.kh-switch-native.sm .kh-switch-input) {
+    width: 32px;
+    height: 16px;
+  }
+
+  .common-symbols-layout
+    :global(.kh-switch-native.sm .kh-switch-input::before) {
+    width: 10px;
+    height: 10px;
   }
 
   .common-select {
