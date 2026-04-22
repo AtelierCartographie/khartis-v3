@@ -43,10 +43,14 @@ export type ClassificationBreakTrigger =
   (typeof CLASSIFICATION_BREAKS_TRIGGER)[keyof typeof CLASSIFICATION_BREAKS_TRIGGER];
 
 export const TEXT_BACKGROUND_SCOPE_TARGET = 'text-background' as const;
+export const SYMBOL_FILL_SCOPE_TARGET = 'symbol-fill' as const;
 
 export function buildClassificationScopeKey(
   role: 'fill' | 'stroke',
-  target: PrimitiveFilter | typeof TEXT_BACKGROUND_SCOPE_TARGET
+  target:
+    | PrimitiveFilter
+    | typeof TEXT_BACKGROUND_SCOPE_TARGET
+    | typeof SYMBOL_FILL_SCOPE_TARGET
 ): string {
   return `${role}:${target}`;
 }

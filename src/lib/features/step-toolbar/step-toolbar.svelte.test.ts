@@ -29,7 +29,7 @@ describe('StepToolbar', () => {
 
   it('uses the shared maximum popover height', () => {
     expect(POPOVER_DIMENSIONS.MAX_HEIGHT).toBe(
-      'min(58vh, calc(100dvh - 96px))'
+      'min(max(488px, 58vh), calc(100dvh - 80px))'
     );
   });
 
@@ -44,6 +44,22 @@ describe('StepToolbar', () => {
     expect(toolPopoverSource).toContain('computedTopOffset = Math.min(');
     expect(toolPopoverSource).toContain(
       'Math.round((toolbarRect.height - popoverRect.height) / 2)'
+    );
+  });
+
+  it('keeps non-projection tools at list width', () => {
+    expect(source).toContain('const popoverViewMode = $derived(');
+    expect(source).toContain(
+      'globalState.selectedTool === VisualizationToolId.Projection'
+    );
+    expect(source).toContain("globalState.projectionViewMode ?? 'list'");
+    expect(source).toContain('viewMode={popoverViewMode}');
+  });
+
+  it('uses a narrower dedicated width for the projection grid popover', () => {
+    expect(POPOVER_DIMENSIONS.PROJECTION_GRID_WIDTH).toBe('570px');
+    expect(source).toContain(
+      'gridWidth={POPOVER_DIMENSIONS.PROJECTION_GRID_WIDTH}'
     );
   });
 });

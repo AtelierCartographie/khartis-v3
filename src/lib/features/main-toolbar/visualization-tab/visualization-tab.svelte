@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { dataOrchestratorService } from '$lib/features/commons/services/data-orchestrator.service.svelte';
   import { dataTabState } from '$lib/features/commons/store/data-tab.store.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { SvelteSet } from 'svelte/reactivity';
@@ -33,6 +34,8 @@
   }
 
   $effect(() => {
+    if (dataOrchestratorService.isProjectRestoreInProgress) return;
+
     const dataset = datasetsStore.selectedDataset;
     if (!dataset) return;
 

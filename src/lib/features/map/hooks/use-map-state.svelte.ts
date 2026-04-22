@@ -6,13 +6,18 @@ import {
   getPrimitiveClassification,
   getPrimitiveSizeColumn,
   getPrimitiveValueColumn,
+  getSymbolFillCategoryColumn,
+  getSymbolFillClassification,
   getSymbolPrimitive,
   PrimitiveFilterType,
   visualizationStore,
   type VisualizationConfig
 } from '$lib/features/commons/store/visualization.store.svelte';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
-import { ProportionalType } from '$lib/features/main-toolbar/constants';
+import {
+  ProportionalType,
+  SymbolMode
+} from '$lib/features/main-toolbar/constants';
 import { HIGHLIGHT_FILL_COLOR } from '../layers';
 import { mapHighlightStore } from '../stores/map-highlight.store.svelte';
 import { getCategoricalColorMap, shouldApplyCategorical } from '../styling';
@@ -141,9 +146,22 @@ function getCategoryColorMapForViz(
   viz: VisualizationConfig,
   primitive: PrimitiveFilterType
 ): Map<string, RGBColor> | null {
-  const categoryColumn = getPrimitiveCategoryColumn(viz, primitive);
+  const pointSymbol =
+    primitive === PrimitiveFilterType.POINT
+      ? getSymbolPrimitive(viz)
+      : undefined;
+  const categoryColumn =
+    primitive === PrimitiveFilterType.POINT
+      ? pointSymbol?.mode === SymbolMode.CATEGORIES
+        ? getPrimitiveCategoryColumn(viz, primitive)
+        : getSymbolFillCategoryColumn(viz)
+      : getPrimitiveCategoryColumn(viz, primitive);
   const classification =
-    getPrimitiveClassification(viz, primitive) ?? viz.classification;
+    primitive === PrimitiveFilterType.POINT
+      ? pointSymbol?.mode === SymbolMode.CATEGORIES
+        ? (getPrimitiveClassification(viz, primitive) ?? viz.classification)
+        : (getSymbolFillClassification(viz) ?? viz.classification)
+      : (getPrimitiveClassification(viz, primitive) ?? viz.classification);
 
   if (!categoryColumn || !viz.datasetId) {
     return null;

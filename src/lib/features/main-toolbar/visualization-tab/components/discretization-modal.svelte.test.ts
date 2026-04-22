@@ -305,4 +305,21 @@ describe('DiscretizationModal', () => {
     expect(onbreakpointchange).toHaveBeenLastCalledWith(null);
     expect(breakpointInput.value).toBe('');
   });
+
+  it('can hide breakpoint controls for non-color discretizations', () => {
+    const { container } = render(DiscretizationModal, {
+      open: true,
+      visualization: createVisualization(),
+      showBreakpointControls: false,
+      role: 'size'
+    });
+
+    expect(container.querySelector('.breakpoint-section')).toBeNull();
+    expect(container.querySelector('#breakpoint-value')).toBeNull();
+    expect(
+      container.querySelector(
+        '.discretization-floating-panel[data-role="size"]'
+      )
+    ).not.toBeNull();
+  });
 });

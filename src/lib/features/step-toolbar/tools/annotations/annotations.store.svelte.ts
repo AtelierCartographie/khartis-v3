@@ -28,10 +28,13 @@ import { m } from '$lib/paraglide/messages';
 import { getLocale, type Locale } from '$lib/paraglide/runtime.js';
 import type {
   Annotation,
+  AnnotationCoordinateSpace,
+  AnnotationPlacementPreview,
   AnnotationsState,
   AnnotationStyle,
   PageElementRole
 } from './annotations.types';
+import { resolveAnnotationCoordinateSpace } from './annotations.types';
 
 const ANNOTATION_ID_PREFIX = 'annotation-';
 const DEFAULT_NOTE_FONT_SIZE = 8;
@@ -43,7 +46,11 @@ const DEFAULT_STATE: AnnotationsState = {
   activeType: AnnotationKind.TEXT,
   predefinedStyle: ANNOTATION_ROLE.NOTE,
   textContent: '',
-  isDrawingMode: false,
+  creationMode: 'idle',
+  pendingType: null,
+  pendingContent: null,
+  pendingStyle: null,
+  previewGeometry: null,
   drawingModeType: DrawingType.LINE,
   drawingInProgress: [],
   defaultStyle: {
@@ -61,12 +68,18 @@ const DEFAULT_STATE: AnnotationsState = {
 type AnnotationsActions = {
   setVisibility: (visible: boolean) => void;
   addAnnotation: (type: AnnotationKind, content: string) => void;
-  startDrawingMode: (type: DrawingType) => void;
+  beginPlacement: (type: AnnotationKind, content: unknown) => void;
+  updatePlacement: (previewGeometry: AnnotationPlacementPreview | null) => void;
+  commitPlacement: (
+    previewGeometry?: AnnotationPlacementPreview | null
+  ) => Annotation | null;
+  cancelPlacement: () => void;
+  beginDrawing: (type: DrawingType) => void;
   addDrawingPoint: (point: { x: number; y: number }) => void;
-  setDrawingInProgress: (points: { x: number; y: number }[]) => void;
+  updateDrawing: (points: { x: number; y: number }[]) => void;
   removeLastDrawingPoint: () => void;
-  finalizeDrawingMode: () => void;
-  cancelDrawingMode: () => void;
+  finishDrawing: () => Annotation | null;
+  cancelDrawing: () => void;
   selectAnnotation: (id: string | null) => void;
   updateAnnotation: (id: string, updates: Partial<Annotation>) => void;
   removeAnnotation: (id: string) => void;
@@ -205,6 +218,11 @@ type MapCanvasLayout = {
   height: number;
 };
 
+type CoordinateLayout = {
+  width: number;
+  height: number;
+};
+
 type PageElementMessageBundle = {
   annotations_placeholder_title: () => string;
   annotations_placeholder_subtitle: () => string;
@@ -319,6 +337,18 @@ function resolveMapCanvasLayout(layout: PageLayout): MapCanvasLayout {
   };
 }
 
+function resolveCoordinateLayout(
+  layout: PageLayout,
+  coordinateSpace: AnnotationCoordinateSpace
+): CoordinateLayout {
+  return coordinateSpace === 'page'
+    ? {
+        width: Math.max(1, layout.width),
+        height: Math.max(1, layout.height)
+      }
+    : resolveMapCanvasLayout(layout);
+}
+
 function getAnnotationBounds(
   type: AnnotationKind,
   style: AnnotationStyle,
@@ -350,15 +380,16 @@ function clampAnnotationPosition(
   type: AnnotationKind,
   style: AnnotationStyle,
   layout: PageLayout,
+  coordinateSpace: AnnotationCoordinateSpace,
   content?: unknown
 ): { x: number; y: number } {
-  const mapLayout = resolveMapCanvasLayout(layout);
+  const coordinateLayout = resolveCoordinateLayout(layout, coordinateSpace);
   const bounds = getAnnotationBounds(type, style, content);
 
   const minX = 0;
   const minY = 0;
-  const maxX = Math.max(minX, mapLayout.width - bounds.width);
-  const maxY = Math.max(minY, mapLayout.height - bounds.height);
+  const maxX = Math.max(minX, coordinateLayout.width - bounds.width);
+  const maxY = Math.max(minY, coordinateLayout.height - bounds.height);
 
   return snapPointWithinBounds(
     position,
@@ -370,6 +401,69 @@ function clampAnnotationPosition(
     },
     isGridEnabled()
   );
+}
+
+function cloneStyle(
+  style: AnnotationStyle | null | undefined
+): AnnotationStyle {
+  return style ? { ...style } : {};
+}
+
+function createAnnotationId(): string {
+  return `${ANNOTATION_ID_PREFIX}${Date.now()}`;
+}
+
+function buildPendingStyle(
+  type: AnnotationKind,
+  baseStyle: AnnotationStyle,
+  content?: unknown
+): AnnotationStyle {
+  const nextStyle: AnnotationStyle = { ...baseStyle };
+
+  if (type === AnnotationKind.DRAWING) {
+    nextStyle.drawingType = resolveDrawingType(content, baseStyle.drawingType);
+  }
+
+  if (type === AnnotationKind.SHAPE) {
+    const defaultDimensions = getShapeDefaultDimensions(String(content ?? ''));
+    nextStyle.shapeWidth = defaultDimensions.width;
+    nextStyle.shapeHeight = defaultDimensions.height;
+  }
+
+  return nextStyle;
+}
+
+function clearCreationState(state: AnnotationsState): void {
+  state.creationMode = 'idle';
+  state.pendingType = null;
+  state.pendingContent = null;
+  state.pendingStyle = null;
+  state.previewGeometry = null;
+  state.drawingInProgress = [];
+}
+
+function createPlacedAnnotation(
+  previewGeometry: AnnotationPlacementPreview,
+  style: AnnotationStyle
+): Annotation {
+  return {
+    id: createAnnotationId(),
+    type: previewGeometry.type,
+    content: previewGeometry.content,
+    position: previewGeometry.position,
+    coordinateSpace: previewGeometry.coordinateSpace,
+    positionMode: 'manual',
+    style: {
+      ...style,
+      ...(previewGeometry.style ?? {}),
+      ...(previewGeometry.type === AnnotationKind.SHAPE
+        ? {
+            shapeWidth: previewGeometry.size.width,
+            shapeHeight: previewGeometry.size.height
+          }
+        : {})
+    }
+  };
 }
 
 function resolveDrawingType(
@@ -410,13 +504,14 @@ function getNonPageAnnotationSpawnPosition(
   style: AnnotationStyle,
   existingAnnotationsCount: number,
   layout: PageLayout,
+  coordinateSpace: AnnotationCoordinateSpace,
   content?: unknown
 ): { x: number; y: number } {
-  const mapLayout = resolveMapCanvasLayout(layout);
+  const coordinateLayout = resolveCoordinateLayout(layout, coordinateSpace);
   const bounds = getAnnotationBounds(type, style, content);
   const availableVerticalSpace = Math.max(
     0,
-    mapLayout.height - NON_PAGE_ANNOTATION_TOP_OFFSET - bounds.height
+    coordinateLayout.height - NON_PAGE_ANNOTATION_TOP_OFFSET - bounds.height
   );
   const maxRows = Math.max(
     1,
@@ -432,7 +527,14 @@ function getNonPageAnnotationSpawnPosition(
   const x = leftOffset + column * NON_PAGE_ANNOTATION_COLUMN_STEP;
   const y = NON_PAGE_ANNOTATION_TOP_OFFSET + row * NON_PAGE_ANNOTATION_ROW_STEP;
 
-  return clampAnnotationPosition({ x, y }, type, style, layout, content);
+  return clampAnnotationPosition(
+    { x, y },
+    type,
+    style,
+    layout,
+    coordinateSpace,
+    content
+  );
 }
 
 function getPageNoteSpawnPosition(
@@ -689,6 +791,7 @@ const { actions, getState } = createToolStore<
       s.visible = visible;
       if (!visible) {
         s.selectedId = null;
+        clearCreationState(s);
       }
     },
     addAnnotation: (type: AnnotationKind, content: string) => {
@@ -701,20 +804,7 @@ const { actions, getState } = createToolStore<
         type === AnnotationKind.DRAWING
           ? resolveDrawingType(content, s.defaultStyle.drawingType)
           : null;
-      const shapeDimensions =
-        type === AnnotationKind.SHAPE
-          ? getShapeDefaultDimensions(String(content))
-          : null;
-      const style: AnnotationStyle = {
-        ...s.defaultStyle,
-        ...(drawingType ? { drawingType } : {}),
-        ...(shapeDimensions
-          ? {
-              shapeWidth: shapeDimensions.width,
-              shapeHeight: shapeDimensions.height
-            }
-          : {})
-      };
+      const style = buildPendingStyle(type, s.defaultStyle, content);
       const nonPageItemsCount = s.items.filter(
         (item) => item.role == null
       ).length;
@@ -735,25 +825,76 @@ const { actions, getState } = createToolStore<
             style,
             nonPageItemsCount,
             layout,
+            'page',
             normalizedContent
           );
 
       const newAnnotation: Annotation = {
-        id: `${ANNOTATION_ID_PREFIX}${Date.now()}`,
+        id: createAnnotationId(),
         type,
         content: normalizedContent,
         position,
+        coordinateSpace: 'page',
         positionMode: 'manual',
         style,
         ...(isFreePageNote ? { role: ANNOTATION_ROLE.NOTE } : {})
       };
       s.items = [...s.items, newAnnotation];
       s.selectedId = newAnnotation.id;
-      if (type === AnnotationKind.TEXT) {
-        s.textContent = '';
+      s.activeType = type;
+      clearCreationState(s);
+    },
+    beginPlacement: (type: AnnotationKind, content: unknown) => {
+      if (type === AnnotationKind.TEXT && isEmptyContent(content)) {
+        return;
       }
+
+      clearCreationState(s);
+      s.creationMode = 'placing';
+      s.pendingType = type;
+      s.pendingContent = content;
+      s.pendingStyle = buildPendingStyle(type, s.defaultStyle, content);
+      s.previewGeometry = null;
+      s.selectedId = null;
+      s.activeType = type;
+    },
+    updatePlacement: (previewGeometry: AnnotationPlacementPreview | null) => {
+      if (s.creationMode !== 'placing') {
+        return;
+      }
+
+      s.previewGeometry = previewGeometry;
+    },
+    commitPlacement: (previewGeometry?: AnnotationPlacementPreview | null) => {
+      if (s.creationMode !== 'placing' || !s.pendingType || !s.pendingStyle) {
+        return null;
+      }
+
+      const resolvedPreview = previewGeometry ?? s.previewGeometry;
+      if (!resolvedPreview) {
+        return null;
+      }
+
+      const newAnnotation = createPlacedAnnotation(
+        {
+          ...resolvedPreview,
+          content: resolvedPreview.content ?? s.pendingContent
+        },
+        s.pendingStyle
+      );
+
+      s.items = [...s.items, newAnnotation];
+      s.selectedId = newAnnotation.id;
+      s.activeType = newAnnotation.type;
+      clearCreationState(s);
+
+      return newAnnotation;
+    },
+    cancelPlacement: () => {
+      clearCreationState(s);
     },
     selectAnnotation: (id: string | null) => {
+      clearCreationState(s);
       s.selectedId = id;
       if (id) {
         const item = s.items.find((i) => i.id === id);
@@ -781,30 +922,53 @@ const { actions, getState } = createToolStore<
       }
     },
     setActiveType: (type: AnnotationKind) => {
+      clearCreationState(s);
+      if (s.selectedId) {
+        const selectedItem = s.items.find((item) => item.id === s.selectedId);
+        if (selectedItem?.type !== type) {
+          s.selectedId = null;
+        }
+      }
       s.activeType = type;
     },
-    startDrawingMode: (type: DrawingType) => {
-      s.isDrawingMode = true;
+    beginDrawing: (type: DrawingType) => {
+      clearCreationState(s);
+      s.creationMode = 'drawing';
+      s.pendingType = AnnotationKind.DRAWING;
+      s.pendingContent = type;
+      s.pendingStyle = buildPendingStyle(
+        AnnotationKind.DRAWING,
+        s.defaultStyle,
+        type
+      );
       s.drawingModeType = type;
-      s.drawingInProgress = [];
       s.selectedId = null;
+      s.activeType = AnnotationKind.DRAWING;
     },
     addDrawingPoint: (point: { x: number; y: number }) => {
+      if (s.creationMode !== 'drawing') {
+        return;
+      }
+
       s.drawingInProgress = [...s.drawingInProgress, point];
     },
-    setDrawingInProgress: (points: { x: number; y: number }[]) => {
+    updateDrawing: (points: { x: number; y: number }[]) => {
+      if (s.creationMode !== 'drawing') {
+        return;
+      }
+
       s.drawingInProgress = [...points];
     },
     removeLastDrawingPoint: () => {
-      if (s.drawingInProgress.length > 0) {
+      if (s.creationMode === 'drawing' && s.drawingInProgress.length > 0) {
         s.drawingInProgress = s.drawingInProgress.slice(0, -1);
       }
     },
-    finalizeDrawingMode: () => {
+    finishDrawing: () => {
       const points = normalizeDrawingPoints(s.drawingInProgress);
       if (points.length < getMinimumDrawingPoints(s.drawingModeType)) {
         s.drawingInProgress = points;
-        return;
+        return null;
       }
 
       const minX = Math.min(...points.map((p) => p.x));
@@ -816,7 +980,7 @@ const { actions, getState } = createToolStore<
 
       const layout = resolvePageLayout();
       const style: AnnotationStyle = {
-        ...s.defaultStyle,
+        ...cloneStyle(s.pendingStyle ?? s.defaultStyle),
         drawingType: s.drawingModeType
       };
       const position = clampAnnotationPosition(
@@ -824,32 +988,38 @@ const { actions, getState } = createToolStore<
         AnnotationKind.DRAWING,
         style,
         layout,
+        'page',
         relativePoints
       );
 
       const newAnnotation: Annotation = {
-        id: `${ANNOTATION_ID_PREFIX}${Date.now()}`,
+        id: createAnnotationId(),
         type: AnnotationKind.DRAWING,
         content: relativePoints,
         position,
+        coordinateSpace: 'page',
         positionMode: 'manual',
         style
       };
 
       s.items = [...s.items, newAnnotation];
       s.selectedId = newAnnotation.id;
-      s.isDrawingMode = false;
-      s.drawingInProgress = [];
+      s.activeType = AnnotationKind.DRAWING;
+      clearCreationState(s);
+
+      return newAnnotation;
     },
-    cancelDrawingMode: () => {
-      s.isDrawingMode = false;
-      s.drawingInProgress = [];
+    cancelDrawing: () => {
+      clearCreationState(s);
     },
     setPredefinedStyle: (styleName: string) => {
       const style = PREDEFINED_STYLES[styleName];
       if (style) {
         s.predefinedStyle = styleName;
         s.defaultStyle = { ...s.defaultStyle, ...style };
+        if (s.pendingStyle) {
+          s.pendingStyle = { ...s.pendingStyle, ...style };
+        }
 
         if (s.selectedId) {
           s.items = s.items.map((item) =>
@@ -862,6 +1032,12 @@ const { actions, getState } = createToolStore<
     },
     setTextContent: (content: string) => {
       s.textContent = content;
+      if (
+        s.creationMode === 'placing' &&
+        s.pendingType === AnnotationKind.TEXT
+      ) {
+        s.pendingContent = content;
+      }
     },
     updateDefaultStyle: (styleUpdates: Partial<AnnotationStyle>) => {
       const normalizedUpdates: Partial<AnnotationStyle> = { ...styleUpdates };
@@ -872,6 +1048,9 @@ const { actions, getState } = createToolStore<
       }
 
       s.defaultStyle = { ...s.defaultStyle, ...normalizedUpdates };
+      if (s.pendingStyle) {
+        s.pendingStyle = { ...s.pendingStyle, ...normalizedUpdates };
+      }
     },
     applyStyle: (styleUpdates: Partial<AnnotationStyle>) => {
       const normalizedUpdates: Partial<AnnotationStyle> = { ...styleUpdates };
@@ -882,6 +1061,9 @@ const { actions, getState } = createToolStore<
       }
 
       s.defaultStyle = { ...s.defaultStyle, ...normalizedUpdates };
+      if (s.pendingStyle) {
+        s.pendingStyle = { ...s.pendingStyle, ...normalizedUpdates };
+      }
 
       if (s.selectedId) {
         s.items = s.items.map((item) =>
@@ -911,9 +1093,10 @@ const { actions, getState } = createToolStore<
 
         const duplicate: Annotation = {
           ...original,
-          id: `${ANNOTATION_ID_PREFIX}${Date.now()}`,
+          id: createAnnotationId(),
           content: duplicatedContent,
           style: original.style ? { ...original.style } : undefined,
+          coordinateSpace: resolveAnnotationCoordinateSpace(original),
           positionMode: 'manual',
           position: snapPointToPageGrid(
             {
@@ -932,6 +1115,7 @@ const { actions, getState } = createToolStore<
         item.id === id
           ? {
               ...item,
+              coordinateSpace: resolveAnnotationCoordinateSpace(item),
               position: snapPointToPageGrid(newPosition, isGridEnabled()),
               positionMode: 'manual'
             }
@@ -946,15 +1130,26 @@ const { actions, getState } = createToolStore<
     clearAll: () => {
       s.items = [];
       s.selectedId = null;
+      clearCreationState(s);
     },
     toggleStyleProperty: (property: 'bold' | 'italic' | 'underlined') => {
+      const nextValue = !s.defaultStyle[property];
       s.defaultStyle = {
         ...s.defaultStyle,
-        [property]: !s.defaultStyle[property]
+        [property]: nextValue
       };
+      if (s.pendingStyle) {
+        s.pendingStyle = {
+          ...s.pendingStyle,
+          [property]: nextValue
+        };
+      }
     },
     setTextAlign: (align: TextAlign) => {
       s.defaultStyle = { ...s.defaultStyle, textAlign: align };
+      if (s.pendingStyle) {
+        s.pendingStyle = { ...s.pendingStyle, textAlign: align };
+      }
     },
     initPageElements: (options) => {
       const withPlaceholders = options?.withPlaceholders ?? false;
@@ -1165,7 +1360,11 @@ const { actions, getState } = createToolStore<
     serializeFilter: ({
       selectedId: _selectedId,
       textContent: _textContent,
-      isDrawingMode: _isDrawingMode,
+      creationMode: _creationMode,
+      pendingType: _pendingType,
+      pendingContent: _pendingContent,
+      pendingStyle: _pendingStyle,
+      previewGeometry: _previewGeometry,
       drawingInProgress: _drawingInProgress,
       activeType: _activeType,
       ...persisted

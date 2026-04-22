@@ -103,10 +103,7 @@ export async function serialize(
           ? project.manifest.updatedAt.toISOString()
           : project.manifest.updatedAt
     },
-    data: serializedData,
-    visualization: project.visualization,
-    layout: project.layout,
-    resources: project.resources
+    data: serializedData
   };
 }
 
@@ -307,7 +304,11 @@ export async function serializeProjectData(
         };
       }
     } catch (error) {
-      console.error(error);
+      logger.error(
+        'Failed to serialize custom basemap attributes',
+        LogCategory.PROJECT,
+        error
+      );
     }
   }
 
@@ -388,14 +389,17 @@ export async function deserializeProjectData(
         basemapCatalogService.addCustomBasemap(basemap);
       });
     } catch (error) {
-      console.error(error);
+      logger.error(
+        'Failed to restore custom basemap attributes',
+        LogCategory.PROJECT,
+        error
+      );
     }
   }
 
   persistenceRegistry.resetAll();
   const storeData = mapSerializedFormatToRegistry(data);
   persistenceRegistry.deserializeAll(storeData);
-  persistenceRegistry.markClean();
 
   return deserialized;
 }

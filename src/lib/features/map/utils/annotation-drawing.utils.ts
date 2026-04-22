@@ -119,9 +119,21 @@ export function computeDrawingBounds(
   strokeWidth: number = 2,
   smoothness: number = 0,
   closed: boolean = false
-): { width: number; height: number; viewBox: string } {
+): {
+  width: number;
+  height: number;
+  viewBox: string;
+  originX: number;
+  originY: number;
+} {
   if (points.length === 0) {
-    return { width: 10, height: 10, viewBox: '0 0 10 10' };
+    return {
+      width: 10,
+      height: 10,
+      viewBox: '0 0 10 10',
+      originX: 0,
+      originY: 0
+    };
   }
 
   const segments = getDrawingBezierSegments(points, smoothness, closed);
@@ -151,6 +163,8 @@ export function computeDrawingBounds(
   return {
     width: vbW,
     height: vbH,
-    viewBox: `${vbX} ${vbY} ${vbW} ${vbH}`
+    viewBox: `${vbX} ${vbY} ${vbW} ${vbH}`,
+    originX: vbX,
+    originY: vbY
   };
 }

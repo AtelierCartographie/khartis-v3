@@ -48,6 +48,7 @@ describe('SymbolModeProportional (proportionnels.png + en classes.png)', () => {
 
   it('overrides FillMode.UNIQUE with a custom uniqueSnippet for SINGLE/DOUBLE variants', () => {
     expect(source).toContain('{#snippet uniqueSnippet()}');
+    expect(source).toContain('symbolMode === SymbolMode.PROPORTIONAL &&');
     expect(source).toContain('proportionalType === ProportionalType.DOUBLE');
     const uniqueSnippet = source
       .split('{#snippet uniqueSnippet()}')[1]
@@ -55,6 +56,13 @@ describe('SymbolModeProportional (proportionnels.png + en classes.png)', () => {
     expect(uniqueSnippet).toBeDefined();
     const count = (uniqueSnippet?.match(/<SingleColorPreview/g) ?? []).length;
     expect(count).toBeGreaterThanOrEqual(3);
+  });
+
+  it('never shows the double fill background controls inside CLASSES mode', () => {
+    const uniqueSnippet = source
+      .split('{#snippet uniqueSnippet()}')[1]
+      ?.split('{/snippet}')[0];
+    expect(uniqueSnippet).toContain('symbolMode === SymbolMode.PROPORTIONAL');
   });
 
   it('exposes commonScale switch in DOUBLE branch (Figma 697:76546)', () => {
@@ -150,7 +158,7 @@ describe('SymbolModeProportional — anti-leak fill ↔ stroke palette', () => {
       ?.split('</FillSection>')[0];
     expect(fillBlock).toBeDefined();
     expect(fillBlock).toContain(
-      'onClassificationChange={onClassificationChange'
+      'onClassificationChange={onFillClassificationChange'
     );
     expect(fillBlock).not.toContain(
       'onStrokeClassificationChange={onClassificationChange}'
@@ -178,6 +186,23 @@ describe('SymbolModeProportional — stroke discretization isolation', () => {
     );
     expect(source).toContain(
       'valueColumn={visualization?.symbol?.strokeValueColumn}'
+    );
+  });
+
+  it('keeps size and fill discretization callbacks separate', () => {
+    expect(source).toContain('onsettings={onOpenSizeDiscretization}');
+    const fillBlock = source
+      .split('<FillSection')[1]
+      ?.split('</FillSection>')[0];
+    expect(fillBlock).toContain('visualization={fillVisualization}');
+    expect(fillBlock).toContain(
+      'facetsValueSlotPath={FACET_SLOT.SYMBOL_FILL_VALUE}'
+    );
+    expect(fillBlock).toContain(
+      'facetsCategorySlotPath={FACET_SLOT.SYMBOL_FILL_CATEGORY}'
+    );
+    expect(fillBlock).toContain(
+      'onOpenDiscretization={onOpenFillDiscretization'
     );
   });
 });

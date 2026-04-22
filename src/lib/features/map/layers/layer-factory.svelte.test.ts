@@ -201,7 +201,14 @@ function createCategoricalSymbolVisualization(
     classification: undefined,
     symbol: {
       ...visualization.symbol!,
+      fillMode: FillMode.CATEGORIES,
       classification: {
+        method: ClassificationMethod.MANUAL,
+        classes: colors.length,
+        labels: ['North', 'South'],
+        colors
+      },
+      fillClassification: {
         method: ClassificationMethod.MANUAL,
         classes: colors.length,
         labels: ['North', 'South'],
@@ -378,6 +385,10 @@ function getPatternLayer(
       layer instanceof GeoJsonLayer &&
       String(layer.props.id).includes('-pattern-')
   ) as GeoJsonLayer | undefined;
+}
+
+function getLayerIds(layers: ReturnType<typeof createPolygonLayers>): string[] {
+  return layers.map((layer) => String(layer.props.id));
 }
 
 beforeEach(() => {
@@ -557,6 +568,44 @@ describe('createPolygonLayers', () => {
     expect(getPatternLayer(layers)).toBeUndefined();
   });
 
+  it('renders the GeoJSON fallback pattern below the polygon stroke', () => {
+    arrowTableToGeoJSONMock.mockReturnValue({
+      type: 'FeatureCollection',
+      features: [createPolygonFeature('keep', 2024)]
+    } satisfies FeatureCollection<Polygon>);
+
+    const visualization = createVisualization(FillMode.UNIQUE);
+    visualization.polygon = {
+      ...visualization.polygon!,
+      strokeMode: StrokeMode.UNIQUE,
+      strokeColor: '#ffffff',
+      strokeWidth: 3,
+      strokeOpacity: 1,
+      classification: {
+        ...visualization.polygon!.classification!,
+        patternId: 'dots'
+      }
+    };
+
+    const layers = createPolygonLayers(
+      createTableWithFields([]),
+      createGeometryInfo(),
+      createContext(visualization)
+    );
+    const layerIds = getLayerIds(layers);
+    const fillLayerIndex = layerIds.findIndex(
+      (id) => !id.includes('-pattern-') && !id.includes('-stroke')
+    );
+    const patternLayerIndex = layerIds.findIndex((id) =>
+      id.includes('-pattern-')
+    );
+    const strokeLayerIndex = layerIds.findIndex((id) => id.includes('-stroke'));
+
+    expect(fillLayerIndex).toBeGreaterThanOrEqual(0);
+    expect(patternLayerIndex).toBeGreaterThan(fillLayerIndex);
+    expect(strokeLayerIndex).toBeGreaterThan(patternLayerIndex);
+  });
+
   it('fully disables GeoJSON polygon stroke props when contour mode is none', () => {
     arrowTableToGeoJSONMock.mockReturnValue({
       type: 'FeatureCollection',
@@ -643,6 +692,47 @@ describe('createPolygonLayers', () => {
     expect(fillLayer?.props.updateTriggers?.getFillColor).toEqual(
       expect.arrayContaining(['#ff00ff', true])
     );
+  });
+
+  it('renders the binary polygon pattern below the stroke layer', () => {
+    const visualization = createVisualization(FillMode.UNIQUE);
+    visualization.polygon = {
+      ...visualization.polygon!,
+      strokeMode: StrokeMode.UNIQUE,
+      strokeColor: '#ffffff',
+      strokeWidth: 3,
+      strokeOpacity: 1,
+      classification: {
+        ...visualization.polygon!.classification!,
+        patternId: 'dots'
+      }
+    };
+
+    const layers = createPolygonLayers(
+      createTableWithFields([]),
+      {
+        ...createGeometryInfo(),
+        encoding: 'geoarrow.polygon',
+        isNativeGeoArrow: true,
+        isGeoJsonEncoded: false
+      },
+      {
+        ...createContext(visualization),
+        customProjection: undefined
+      }
+    );
+    const layerIds = getLayerIds(layers);
+    const fillLayerIndex = layerIds.findIndex(
+      (id) => !id.includes('-pattern-') && !id.includes('-stroke')
+    );
+    const patternLayerIndex = layerIds.findIndex((id) =>
+      id.includes('-pattern-')
+    );
+    const strokeLayerIndex = layerIds.findIndex((id) => id.includes('-stroke'));
+
+    expect(fillLayerIndex).toBeGreaterThanOrEqual(0);
+    expect(patternLayerIndex).toBeGreaterThan(fillLayerIndex);
+    expect(strokeLayerIndex).toBeGreaterThan(patternLayerIndex);
   });
 
   it('renders density from the dedicated density table without falling back to polygon fill', () => {

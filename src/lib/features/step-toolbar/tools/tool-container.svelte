@@ -64,7 +64,7 @@
     if (
       shouldBlockToolClose(
         globalState.selectedTool,
-        getAnnotationsState().isDrawingMode
+        getAnnotationsState().creationMode !== 'idle'
       )
     ) {
       return;
