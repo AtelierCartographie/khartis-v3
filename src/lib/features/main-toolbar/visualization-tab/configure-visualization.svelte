@@ -75,6 +75,7 @@
     resolveCategoryLabels,
     type ResolveCategoryLabelsOptions
   } from './use-category-labels.svelte';
+  import { resolveLineModeTransition } from './use-line-mode-state.svelte';
   import { resolveSymbolModeTransition } from './use-symbol-mode-state.svelte';
   import {
     areClassificationColorsEqual,
@@ -759,21 +760,30 @@
 
   function handleLineModesChange(updates: Partial<VisualizationModes>) {
     const line = getLinePrimitive(selectedViz);
-    if (!line) {
+    if (!line || !selectedViz) {
       return;
     }
 
+    const modeTransition = resolveLineModeTransition(line, {
+      ...(Object.prototype.hasOwnProperty.call(updates, 'color')
+        ? { color: updates.color }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'thickness')
+        ? { thickness: updates.thickness }
+        : {})
+    });
+
     updateSelectedVisualization(
       {
-        line: {
-          ...line,
-          ...(Object.prototype.hasOwnProperty.call(updates, 'color')
-            ? { colorMode: updates.color ?? line.colorMode }
-            : {}),
-          ...(Object.prototype.hasOwnProperty.call(updates, 'thickness')
-            ? { thicknessMode: updates.thickness ?? line.thicknessMode }
-            : {})
-        }
+        line: { ...line, ...modeTransition.nextLineUpdates },
+        ...(Object.keys(modeTransition.nextMappingUpdates).length > 0
+          ? {
+              mapping: {
+                ...selectedViz.mapping,
+                ...modeTransition.nextMappingUpdates
+              }
+            }
+          : {})
       },
       (nextVisualization) => {
         ensurePrimitiveClassificationDefaults(

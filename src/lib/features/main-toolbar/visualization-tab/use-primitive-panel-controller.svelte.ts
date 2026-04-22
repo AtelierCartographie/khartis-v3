@@ -125,7 +125,7 @@ export function usePrimitivePanelController({
       reservedColumns.filter((name): name is string => Boolean(name))
     );
     const isIdLikeColumn = (name: string): boolean =>
-      /^(ogc_fid|fid|id|gid|objectid|oid|__id__|__feature_id__)$/i.test(
+      /^(ogc_fid|fid|id|gid|objectid|oid|__id__?|__feature_id__)$/i.test(
         name.trim()
       );
 
@@ -651,9 +651,14 @@ export function usePrimitivePanelController({
   ): void {
     const classification = getPrimitiveClassification(visualization, primitive);
     const currentPaletteType = resolveClassificationPaletteType(classification);
+    const line = getLinePrimitive(visualization);
 
     if (usesBreakClassification(visualization, primitive)) {
+      const shouldResetBreakPalette =
+        primitive !== PrimitiveFilterType.LINE ||
+        line?.colorMode === ColorMode.CLASSES;
       const hasIncompatiblePalette =
+        shouldResetBreakPalette &&
         currentPaletteType === PALETTE_TYPE.QUALITATIVE;
       const resetPaletteFields = hasIncompatiblePalette
         ? { paletteId: undefined, colors: [] }
@@ -1288,8 +1293,35 @@ export function usePrimitivePanelController({
           return;
         }
 
+        const previousCategoryColumn =
+          line.categoryColumn ?? visualization.mapping.categoryColumn;
+        const categoryColumnChanged =
+          hasOwnKey(updates, 'categoryColumn') &&
+          updates.categoryColumn !== previousCategoryColumn;
+        const nextLineClassification =
+          categoryColumnChanged && line.classification
+            ? {
+                ...line.classification,
+                labels: [],
+                disabledLabels: undefined
+              }
+            : line.classification;
+        const rootLineClassificationBase =
+          visualization.lineClassification ?? line.classification;
+        const nextRootLineClassification =
+          categoryColumnChanged && rootLineClassificationBase
+            ? {
+                ...rootLineClassificationBase,
+                labels: [],
+                disabledLabels: undefined
+              }
+            : undefined;
+
         updateVisualization(
           {
+            ...(nextRootLineClassification
+              ? { lineClassification: nextRootLineClassification }
+              : {}),
             line: {
               ...line,
               ...(hasOwnKey(updates, 'valueColumn')
@@ -1300,6 +1332,9 @@ export function usePrimitivePanelController({
                 : {}),
               ...(hasOwnKey(updates, 'sizeColumn')
                 ? { sizeColumn: updates.sizeColumn }
+                : {}),
+              ...(nextLineClassification
+                ? { classification: nextLineClassification }
                 : {})
             },
             mapping: { ...visualization.mapping, ...updates }

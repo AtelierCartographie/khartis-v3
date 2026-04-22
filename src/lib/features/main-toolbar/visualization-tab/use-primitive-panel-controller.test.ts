@@ -86,6 +86,12 @@ function createVisualization(): VisualizationConfig {
       classes: 5,
       labels: ['Root']
     },
+    lineClassification: {
+      method: ClassificationMethod.JENKS,
+      classes: 5,
+      labels: ['Root line'],
+      disabledLabels: ['Root line']
+    },
     line: {
       enabled: false,
       colorMode: ColorMode.UNIQUE,
@@ -93,7 +99,14 @@ function createVisualization(): VisualizationConfig {
       opacity: 1,
       width: 1,
       maxWidth: 4,
-      dashed: false
+      dashed: false,
+      categoryColumn: 'region',
+      classification: {
+        method: ClassificationMethod.JENKS,
+        classes: 5,
+        labels: ['Line'],
+        disabledLabels: ['Line']
+      }
     },
     text: {
       enabled: true,
@@ -261,6 +274,87 @@ describe('use-primitive-panel-controller', () => {
     });
   });
 
+  it('resets line category labels when the line category mapping changes', () => {
+    const harness = createHarness({
+      visualization: {
+        ...createVisualization(),
+        line: {
+          ...createVisualization().line,
+          enabled: true,
+          colorMode: ColorMode.CATEGORIES,
+          categoryColumn: 'region',
+          classification: {
+            method: ClassificationMethod.JENKS,
+            classes: 5,
+            labels: ['A', 'B'],
+            disabledLabels: ['B']
+          }
+        },
+        lineClassification: {
+          method: ClassificationMethod.JENKS,
+          classes: 5,
+          labels: ['Root A', 'Root B'],
+          disabledLabels: ['Root A']
+        }
+      } as VisualizationConfig
+    });
+
+    harness.controller.applyPrimitiveMappingUpdate(PrimitiveFilterType.LINE, {
+      categoryColumn: 'group'
+    });
+
+    expect(harness.visualizationUpdates[0]).toMatchObject({
+      lineClassification: {
+        labels: [],
+        disabledLabels: undefined
+      },
+      line: {
+        categoryColumn: 'group',
+        classification: {
+          labels: [],
+          disabledLabels: undefined
+        }
+      }
+    });
+  });
+
+  it('preserves the qualitative line palette when only line thickness uses classes', () => {
+    const harness = createHarness({
+      visualization: {
+        ...createVisualization(),
+        line: {
+          ...createVisualization().line,
+          enabled: true,
+          colorMode: ColorMode.CATEGORIES,
+          thicknessMode: ThicknessMode.CLASSES,
+          classification: {
+            method: ClassificationMethod.JENKS,
+            classes: 5,
+            numClasses: 5,
+            paletteId: 'vif',
+            colors: ['#ff0000', '#00ff00'],
+            labels: ['A', 'B']
+          }
+        },
+        lineClassification: {
+          method: ClassificationMethod.JENKS,
+          classes: 5,
+          numClasses: 5,
+          paletteId: 'vif',
+          colors: ['#ff0000', '#00ff00'],
+          labels: ['A', 'B']
+        }
+      } as VisualizationConfig
+    });
+
+    harness.controller.ensurePrimitiveClassificationDefaults(
+      PrimitiveFilterType.LINE,
+      harness.visualization
+    );
+
+    expect(harness.primitiveClassificationUpdates).toEqual([]);
+  });
+
   it('auto-selects a numeric value column for symbol fill classes without reusing size/category fields', () => {
     const harness = createHarness({
       visualization: {
@@ -275,9 +369,10 @@ describe('use-primitive-panel-controller', () => {
       } as VisualizationConfig,
       dataFields: [
         { id: 0, text: 'id', type: 'number' },
-        { id: 1, text: 'region', type: 'text' },
-        { id: 2, text: 'population', type: 'number' },
-        { id: 3, text: 'income', type: 'number' }
+        { id: 1, text: '__id', type: 'number' },
+        { id: 2, text: 'region', type: 'text' },
+        { id: 3, text: 'population', type: 'number' },
+        { id: 4, text: 'income', type: 'number' }
       ]
     });
 
@@ -307,6 +402,39 @@ describe('use-primitive-panel-controller', () => {
     expect(harness.visualizationUpdates[0]).toMatchObject({
       mapping: { valueColumn: 'population' },
       polygon: { valueColumn: 'population' }
+    });
+  });
+
+  it('auto-selects a numeric value column for line classes without reusing category and size fields', () => {
+    const harness = createHarness({
+      visualization: {
+        ...createVisualization(),
+        line: {
+          ...createVisualization().line,
+          enabled: true,
+          colorMode: ColorMode.UNIQUE,
+          thicknessMode: ThicknessMode.CLASSES,
+          valueColumn: undefined,
+          categoryColumn: 'region',
+          sizeColumn: 'population'
+        }
+      } as VisualizationConfig,
+      dataFields: [
+        { id: 0, text: 'id', type: 'number' },
+        { id: 1, text: 'region', type: 'text' },
+        { id: 2, text: 'population', type: 'number' },
+        { id: 3, text: 'income', type: 'number' }
+      ]
+    });
+
+    harness.controller.ensureAutoColumns(
+      PrimitiveFilterType.LINE,
+      harness.visualization
+    );
+
+    expect(harness.visualizationUpdates[0]).toMatchObject({
+      mapping: { valueColumn: 'income' },
+      line: { valueColumn: 'income' }
     });
   });
 

@@ -8,6 +8,29 @@ const source = readFileSync(
 );
 
 describe('LinesConfig — palette wiring', () => {
+  it('keeps the Figma section structure for thickness, color and global controls', () => {
+    expect(source).toContain('<SectionHeading title={m.thickness()} />');
+    expect(source).toContain('<SectionHeading title={m.color()} />');
+    expect(source).toContain('<ToggleWithLabel');
+    expect(source).toContain('<MissingDataSection');
+  });
+
+  it('renders the proportional and classes thickness branches with shared controls', () => {
+    const proportionalBlock = source.split(
+      '{:else if thicknessMode === ThicknessMode.PROPORTIONAL}'
+    )[1];
+    expect(proportionalBlock).toBeDefined();
+    expect(proportionalBlock).toContain('<FacetsVariablePicker');
+    expect(proportionalBlock).toContain('label={m.max_thickness()}');
+
+    const classesBlock = source.split(
+      '{:else if thicknessMode === ThicknessMode.CLASSES}'
+    )[1];
+    expect(classesBlock).toBeDefined();
+    expect(classesBlock).toContain('<DiscretizationRow');
+    expect(classesBlock).toContain('label={m.max_thickness()}');
+  });
+
   it('should import PALETTE_TYPE from palette-popover/palette.constants', () => {
     expect(source).toContain(
       "from '$lib/features/commons/components/palette-popover/palette.constants'"
@@ -60,5 +83,34 @@ describe('LinesConfig — palette wiring', () => {
       ?.split('/>')[0];
     expect(paletteBlock).toContain('categoriesMode={true}');
     expect(paletteBlock).toContain('categoryLabels={categoryLabels.labels}');
+  });
+
+  it('does not hard-reset mappings or classification inside mode handlers', () => {
+    const thicknessHandler = source
+      .split('function handleThicknessModeChange(index: number) {')[1]
+      ?.split('function handleColorModeChange(index: number) {')[0];
+    const colorHandler = source
+      .split('function handleColorModeChange(index: number) {')[1]
+      ?.split('function handleThicknessChange(value: number) {')[0];
+
+    expect(thicknessHandler).toBeDefined();
+    expect(colorHandler).toBeDefined();
+
+    expect(thicknessHandler).not.toContain(
+      'onMappingChange?.({ sizeColumn: undefined });'
+    );
+    expect(thicknessHandler).not.toContain('breaks: undefined');
+    expect(thicknessHandler).not.toContain('counts: undefined');
+    expect(colorHandler).not.toContain(
+      'onMappingChange?.({ valueColumn: undefined, categoryColumn: undefined });'
+    );
+    expect(colorHandler).not.toContain(
+      'onMappingChange?.({ categoryColumn: undefined });'
+    );
+    expect(colorHandler).not.toContain(
+      'onMappingChange?.({ valueColumn: undefined });'
+    );
+    expect(colorHandler).not.toContain('paletteId: undefined');
+    expect(colorHandler).not.toContain('patternParams: undefined');
   });
 });
