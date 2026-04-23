@@ -11,7 +11,8 @@ export default defineConfig(({ mode }) => {
   const baseLogger = createLogger();
   const ignoredWarningPatterns = [
     /Unknown output options: codeSplitting/,
-    /"spawn" is not exported by "__vite-browser-external"/
+    /"spawn" is not exported by "__vite-browser-external"/,
+    /Sourcemap for ".*" points to a source file outside its package/
   ];
 
   return {
@@ -28,6 +29,21 @@ export default defineConfig(({ mode }) => {
           return;
         }
         baseLogger.warnOnce(message, options);
+      }
+    },
+    css: {
+      preprocessorOptions: {
+        scss: {
+          loadPaths: ['node_modules'],
+          quietDeps: true,
+          silenceDeprecations: [
+            'import',
+            'global-builtin',
+            'color-functions',
+            'slash-div',
+            'if-function'
+          ]
+        }
       }
     },
     server: {

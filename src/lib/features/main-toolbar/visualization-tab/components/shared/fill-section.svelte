@@ -45,7 +45,9 @@
     showMissingData?: boolean;
     missingDataColor?: string;
     showOpacitySlider?: boolean;
+    showOpacityBounds?: boolean;
     showMissingDataSection?: boolean;
+    opacityInputWidth?: string;
     sectionTitle?: string;
     sectionInfoText?: string;
     densitySnippet?: Snippet;
@@ -92,7 +94,9 @@
     showMissingData = true,
     missingDataColor = DEFAULT_COLORS.missingData,
     showOpacitySlider = true,
+    showOpacityBounds = false,
     showMissingDataSection = true,
+    opacityInputWidth = '128px',
     sectionTitle,
     sectionInfoText,
     densitySnippet,
@@ -272,6 +276,8 @@
     min={SLIDER_LIMITS.opacity.min}
     max={SLIDER_LIMITS.opacity.max}
     value={fillOpacity}
+    showMinMax={showOpacityBounds}
+    inputWidth={opacityInputWidth}
     onchange={onFillOpacityChange}
   />
 {/if}

@@ -374,6 +374,39 @@
 </Modal>
 
 <style>
+  :global(html[theme='g100'] #khartis-download-button .bx--btn--primary) {
+    background-color: var(--khartis-control-surface-background) !important;
+    border-color: var(--cds-border-subtle-01) !important;
+    color: var(--cds-text-01) !important;
+  }
+
+  :global(html[theme='g100'] #khartis-download-button .bx--btn--primary:hover) {
+    background-color: var(
+      --khartis-control-surface-hover-background
+    ) !important;
+    color: var(--cds-text-01) !important;
+  }
+
+  :global(html[theme='g100'] #khartis-download-button .bx--btn--primary:focus) {
+    border-color: var(--cds-focus) !important;
+    box-shadow:
+      inset 0 0 0 1px var(--cds-focus),
+      inset 0 0 0 2px var(--khartis-control-surface-background) !important;
+  }
+
+  :global(
+    html[theme='g100'] #khartis-download-button .bx--btn--primary:active
+  ) {
+    background-color: var(--cds-hover-ui) !important;
+    color: var(--cds-text-01) !important;
+  }
+
+  :global(
+    html[theme='g100'] #khartis-download-button .bx--btn--primary .bx--btn__icon
+  ) {
+    fill: currentColor !important;
+  }
+
   :global(.download-modal .bx--modal-container),
   :global(.download-modal .bx--modal-header),
   :global(.download-modal .bx--modal-content) {

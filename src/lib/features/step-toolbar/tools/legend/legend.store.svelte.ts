@@ -10,6 +10,11 @@ import { FillMode } from '$lib/features/main-toolbar/constants';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
 import { resolveLayoutSizingTokens } from '$lib/features/commons/utils/layout-sizing.utils';
 import {
+  clampFontSize,
+  DEFAULT_FONT_FAMILY,
+  normalizeFontFamily
+} from '$lib/features/step-toolbar/constants/fonts.constants';
+import {
   getFormatLayoutSizingContext,
   getFormatState
 } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
@@ -221,7 +226,18 @@ const { actions, getState } = createToolStore<LegendState, LegendActions>(
       s.activeTab = tab;
     },
     updateStyle: (updates: Partial<LegendStyle>) => {
-      Object.assign(s.style, updates);
+      const normalizedUpdates = { ...updates };
+      if (updates.fontFamily !== undefined) {
+        normalizedUpdates.fontFamily =
+          normalizeFontFamily(updates.fontFamily) ?? DEFAULT_FONT_FAMILY;
+      }
+      if (updates.fontSize !== undefined) {
+        normalizedUpdates.fontSize = clampFontSize(
+          updates.fontSize,
+          LEGEND_DEFAULTS.FONT_SIZE
+        );
+      }
+      Object.assign(s.style, normalizedUpdates);
     },
     updateBackground: (
       updates: Partial<LegendState['style']['background']>

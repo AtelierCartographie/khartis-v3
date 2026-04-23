@@ -201,7 +201,7 @@
     max-height: calc(100% - var(--cds-spacing-05) * 2);
     z-index: var(--z-toolbar);
     scrollbar-width: none;
-    background: var(--khartis-control-surface-background);
+    background: var(--cds-background);
     box-shadow:
       0 4px 16px rgba(0, 0, 0, 0.1),
       0 1px 4px rgba(0, 0, 0, 0.06);
@@ -272,10 +272,10 @@
   }
 
   :global(html[theme='g100'] #khartis-tool-popover) {
-    --khartis-expandable-section-background: var(
+    --khartis-expandable-section-background: var(--cds-background);
+    --khartis-expandable-section-hover-background: var(
       --khartis-control-surface-background
     );
-    --khartis-expandable-section-hover-background: var(--cds-hover-ui);
   }
 
   :global(#khartis-colorblindness-notification .bx--popover--right-top) {

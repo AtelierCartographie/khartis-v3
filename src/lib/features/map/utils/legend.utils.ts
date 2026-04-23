@@ -163,29 +163,31 @@ function shouldUsePointSwatches(viz: VisualizationConfig | undefined): boolean {
 
   const symbol = getSymbolPrimitive(viz);
   const enabledFilters = getEnabledPrimitiveFilters(viz);
-
-  if (
-    viz.type === VisualizationType.PROPORTIONAL ||
-    viz.type === VisualizationType.BIVARIATE
-  ) {
-    return true;
-  }
-
   const hasPointPrimitive = enabledFilters.includes(PrimitiveFilterType.POINT);
   const hasPolygonPrimitive = enabledFilters.includes(
     PrimitiveFilterType.POLYGON
   );
 
+  if (
+    (viz.type === VisualizationType.PROPORTIONAL ||
+      viz.type === VisualizationType.BIVARIATE) &&
+    symbol?.enabled &&
+    hasPointPrimitive
+  ) {
+    return true;
+  }
+
   if (hasPointPrimitive && !hasPolygonPrimitive) {
     return true;
   }
 
-  return (
-    symbol?.mode === SymbolMode.PROPORTIONAL ||
-    symbol?.mode === SymbolMode.CLASSES ||
-    symbol?.mode === SymbolMode.CATEGORIES ||
-    symbol?.fillMode === FillMode.CLASSES ||
-    symbol?.fillMode === FillMode.CATEGORIES
+  return Boolean(
+    symbol?.enabled &&
+    (symbol.mode === SymbolMode.PROPORTIONAL ||
+      symbol?.mode === SymbolMode.CLASSES ||
+      symbol?.mode === SymbolMode.CATEGORIES ||
+      symbol?.fillMode === FillMode.CLASSES ||
+      symbol?.fillMode === FillMode.CATEGORIES)
   );
 }
 

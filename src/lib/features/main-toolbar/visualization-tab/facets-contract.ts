@@ -12,7 +12,9 @@ export const FACET_SLOT = {
   TEXT_VALUE: 'text.valueColumn',
   TEXT_CATEGORY: 'text.categoryColumn',
   TEXT_BACKGROUND_VALUE: 'text.background.valueColumn',
-  TEXT_BACKGROUND_CATEGORY: 'text.background.categoryColumn'
+  TEXT_BACKGROUND_CATEGORY: 'text.background.categoryColumn',
+  TEXT_BACKGROUND_STROKE_VALUE: 'text.background.strokeValueColumn',
+  TEXT_BACKGROUND_STROKE_CATEGORY: 'text.background.strokeCategoryColumn'
 } as const;
 
 export type FacetSlotPath = (typeof FACET_SLOT)[keyof typeof FACET_SLOT];

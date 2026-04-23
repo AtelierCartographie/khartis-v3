@@ -164,11 +164,15 @@
     }
 
     if (background?.strokeMode === StrokeMode.CLASSES) {
-      pushSlot(slots, FACET_SLOT.TEXT_BACKGROUND_VALUE, m.facets_slot_stroke());
+      pushSlot(
+        slots,
+        FACET_SLOT.TEXT_BACKGROUND_STROKE_VALUE,
+        m.facets_slot_stroke()
+      );
     } else if (background?.strokeMode === StrokeMode.CATEGORIES) {
       pushSlot(
         slots,
-        FACET_SLOT.TEXT_BACKGROUND_CATEGORY,
+        FACET_SLOT.TEXT_BACKGROUND_STROKE_CATEGORY,
         m.facets_slot_stroke()
       );
     }
@@ -280,6 +284,10 @@
         return viz.text?.background?.valueColumn;
       case FACET_SLOT.TEXT_BACKGROUND_CATEGORY:
         return viz.text?.background?.categoryColumn;
+      case FACET_SLOT.TEXT_BACKGROUND_STROKE_VALUE:
+        return viz.text?.background?.strokeValueColumn;
+      case FACET_SLOT.TEXT_BACKGROUND_STROKE_CATEGORY:
+        return viz.text?.background?.strokeCategoryColumn;
     }
   }
 

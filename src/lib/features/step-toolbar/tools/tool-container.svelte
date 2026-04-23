@@ -95,7 +95,7 @@
 <style>
   .tool-container {
     position: relative;
-    background-color: var(--khartis-control-surface-background, white);
+    background-color: var(--cds-background, white);
   }
 
   .tool-header {

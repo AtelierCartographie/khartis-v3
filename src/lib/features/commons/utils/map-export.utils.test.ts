@@ -22,4 +22,8 @@ describe('map export DOM mutations', () => {
     expect(source).toContain('id="khartis-layer-annotations"');
     expect(source).not.toContain('toSvg as htmlToImageSvg');
   });
+
+  it('waits for embedded fonts before exporting the page', () => {
+    expect(source).toContain('await fontAssetsStore.ensureLoaded();');
+  });
 });

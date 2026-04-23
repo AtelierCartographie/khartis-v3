@@ -1,5 +1,6 @@
 import * as m from '$lib/paraglide/messages';
 import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
+import { fontAssetsStore } from '$lib/features/commons/store/font-assets.store.svelte';
 import { toCanvas as htmlToImageCanvas } from 'html-to-image';
 
 interface ExportOptions {
@@ -501,6 +502,7 @@ export async function exportMapToSvg(
   options: Partial<ExportOptions> = {}
 ): Promise<Blob> {
   const opts = { ...DEFAULT_EXPORT_OPTIONS, ...options };
+  await fontAssetsStore.ensureLoaded();
 
   const pageContainer = document.querySelector(
     '.page-container'
@@ -532,6 +534,7 @@ export async function exportMapToJpg(
   options: Partial<ExportOptions> = {}
 ): Promise<Blob> {
   const opts = { ...DEFAULT_EXPORT_OPTIONS, ...options };
+  await fontAssetsStore.ensureLoaded();
 
   const pageContainer = document.querySelector(
     '.page-container'

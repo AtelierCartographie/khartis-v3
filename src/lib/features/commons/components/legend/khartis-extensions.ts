@@ -1,0 +1,571 @@
+import Textbox from '@borgar/textbox';
+import {
+  createLegendCanvasRect,
+  createLegendFont,
+  escapeSvgAttribute,
+  escapeSvgText,
+  resolveLegendFontFamily,
+  type CommonLegendTextOptions
+} from './utils';
+
+export type KhartisLegendSwatchType = 'box' | 'line' | 'symbol' | 'pattern';
+export type KhartisDoubleSymbolPosition =
+  | 'overlay'
+  | 'juxtaposition'
+  | 'division';
+
+export interface KhartisLegendSwatchItem {
+  label: string;
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: number;
+  opacity?: number;
+  symbol?: string | null;
+  size?: number;
+  patternUrl?: string | null;
+  dashed?: boolean;
+}
+
+export interface KhartisSwatchLegendOptions extends CommonLegendTextOptions {
+  type?: KhartisLegendSwatchType;
+  footerItems?: KhartisLegendSwatchItem[];
+  footerType?: KhartisLegendSwatchType;
+}
+
+export interface KhartisLineWidthLegendStep {
+  label: string;
+  width: number;
+  color: string;
+  opacity?: number;
+  dashed?: boolean;
+}
+
+export interface KhartisLineWidthLegendOptions extends CommonLegendTextOptions {
+  footerItems?: KhartisLegendSwatchItem[];
+  footerType?: KhartisLegendSwatchType;
+}
+
+export interface KhartisDensityLegendOptions extends CommonLegendTextOptions {
+  ratioLabel: string;
+  dotSize: number;
+  fill: string;
+  footerItems?: KhartisLegendSwatchItem[];
+  footerType?: KhartisLegendSwatchType;
+}
+
+export interface KhartisDoubleSymbolsLegendStep {
+  label: string;
+  size: number;
+  symbol: string;
+  fill: string;
+  secondaryFill: string;
+  stroke?: string;
+  opacity?: number;
+  positionMode?: KhartisDoubleSymbolPosition;
+}
+
+export interface KhartisDoubleSymbolsLegendOptions extends CommonLegendTextOptions {
+  footerItems?: KhartisLegendSwatchItem[];
+  footerType?: KhartisLegendSwatchType;
+}
+
+type RowShapeFactory<T> = (
+  item: T,
+  x: number,
+  y: number,
+  size: number,
+  index: number
+) => { markup: string; defs?: string };
+
+interface RowLegendOptions<T> extends CommonLegendTextOptions {
+  className: string;
+  items: T[];
+  getLabel: (item: T) => string;
+  drawShape: RowShapeFactory<T>;
+  shapeWidth?: number;
+  minRowHeight?: number;
+  footerItems?: KhartisLegendSwatchItem[];
+  footerType?: KhartisLegendSwatchType;
+}
+
+export function draw_khartis_swatch_legend(
+  items: KhartisLegendSwatchItem[],
+  options: KhartisSwatchLegendOptions = {}
+): string {
+  const type = options.type ?? 'box';
+
+  return draw_row_legend({
+    ...options,
+    className: `khartis_${type}_legend`,
+    items,
+    getLabel: (item) => item.label,
+    shapeWidth: getSwatchShapeWidth(
+      type,
+      Math.round((options.fontSize ?? 12) * 1.25)
+    ),
+    footerItems: options.footerItems,
+    footerType: options.footerType,
+    drawShape: (item, x, y, size, index) =>
+      draw_swatch_shape(item, type, x, y, size, index)
+  });
+}
+
+export function draw_khartis_line_width_legend(
+  steps: KhartisLineWidthLegendStep[],
+  options: KhartisLineWidthLegendOptions = {}
+): string {
+  return draw_row_legend({
+    ...options,
+    className: 'khartis_line_width_legend',
+    items: steps,
+    getLabel: (step) => step.label,
+    shapeWidth: 34,
+    minRowHeight: Math.max(18, ...steps.map((step) => step.width + 8)),
+    footerItems: options.footerItems,
+    footerType: options.footerType,
+    drawShape: (step, x, y, size) => {
+      const mid = y + size / 2;
+      const swatch: Partial<KhartisLegendSwatchItem> = {
+        stroke: step.color,
+        strokeWidth: step.width,
+        opacity: step.opacity,
+        dashed: step.dashed
+      };
+
+      return { markup: draw_line(swatch, x, mid, 34) };
+    }
+  });
+}
+
+export function draw_khartis_density_legend(
+  options: KhartisDensityLegendOptions
+): string {
+  return draw_row_legend({
+    ...options,
+    className: 'khartis_density_legend',
+    items: [options],
+    getLabel: (item) => item.ratioLabel,
+    footerItems: options.footerItems,
+    footerType: options.footerType,
+    drawShape: (item, x, y, size) => {
+      const radius = Math.max(2, Math.min(size / 2, item.dotSize * 2));
+      return {
+        markup: `<circle cx="${x + size / 2}" cy="${y + size / 2}" r="${radius}" fill="${escapeSvgAttribute(item.fill)}" />`
+      };
+    }
+  });
+}
+
+export function draw_khartis_double_symbols_legend(
+  steps: KhartisDoubleSymbolsLegendStep[],
+  options: KhartisDoubleSymbolsLegendOptions = {}
+): string {
+  return draw_row_legend({
+    ...options,
+    className: 'khartis_double_symbol_legend',
+    items: steps,
+    getLabel: (step) => step.label,
+    shapeWidth: 38,
+    minRowHeight: Math.max(
+      18,
+      ...steps.map((step) => getDoubleSymbolRadius(step.size) * 2)
+    ),
+    footerItems: options.footerItems,
+    footerType: options.footerType,
+    drawShape: (step, x, y, size) => {
+      const radius = getDoubleSymbolRadius(step.size);
+      const mode = step.positionMode ?? 'overlay';
+      const symbolBox = Math.max(size, radius * 2);
+      const cy = y + symbolBox / 2;
+      const firstX =
+        mode === 'juxtaposition' ? x + radius : x + symbolBox / 2 - radius / 2;
+      const secondX =
+        mode === 'juxtaposition'
+          ? x + radius * 2 + 8
+          : mode === 'division'
+            ? x + symbolBox / 2 + radius / 2
+            : x + symbolBox / 2 + radius / 2;
+      const first = draw_symbol(
+        {
+          symbol: step.symbol,
+          fill: step.fill,
+          stroke: step.stroke,
+          opacity: step.opacity,
+          size: radius
+        },
+        firstX,
+        cy,
+        radius * 2
+      );
+      const second = draw_symbol(
+        {
+          symbol: step.symbol,
+          fill: step.secondaryFill,
+          stroke: step.stroke,
+          opacity: step.opacity,
+          size: radius
+        },
+        secondX,
+        cy,
+        radius * 2
+      );
+
+      return {
+        markup: `<g class="double-symbol-pair" data-position-mode="${escapeSvgAttribute(mode)}">${first}${second}</g>`
+      };
+    }
+  });
+}
+
+function getDoubleSymbolRadius(size: number): number {
+  return Math.max(4, Math.min(12, size));
+}
+
+function draw_row_legend<T>(options: RowLegendOptions<T>): string {
+  const fontSize = options.fontSize ?? 12;
+  const fontFamily = resolveLegendFontFamily(options.fontFamily);
+  const titleSize = options.title ? Math.round(fontSize * 1.16) : 0;
+  const subtitleSize = options.subtitle ? fontSize : 0;
+  const noteSize = options.note ? Math.round(fontSize * 0.92) : 0;
+  const lineHeight = fontSize * 1.2;
+  const font = createLegendFont({ fontSize, lineHeight, fontFamily });
+  const margin = Math.max(5, Math.round(fontSize * 0.3));
+  const gap = Math.max(3, Math.round(fontSize * 0.3));
+  const shapeSize = Math.round(fontSize * 1.25);
+  const footerType = options.footerType ?? 'box';
+  const footerItems = options.footerItems ?? [];
+  const shapeWidth = Math.max(
+    options.shapeWidth ?? shapeSize,
+    footerItems.length > 0 ? getSwatchShapeWidth(footerType, shapeSize) : 0
+  );
+  const labelWidth = Math.round(fontSize * 15);
+  const labelLines = options.items.map((item) =>
+    wrap_text(options.getLabel(item), font, labelWidth).slice(0, 2)
+  );
+  const footerLabelLines = footerItems.map((item) =>
+    wrap_text(item.label, font, labelWidth).slice(0, 2)
+  );
+  const measuredLabelWidth = Math.max(
+    0,
+    ...[...labelLines, ...footerLabelLines]
+      .flat()
+      .map((line) => Textbox.measureText(line, font))
+  );
+  const bodyWidth = margin + shapeWidth + gap + measuredLabelWidth + margin;
+  const maxTextWidth = bodyWidth - margin * 2;
+  const header = render_header(
+    options,
+    margin,
+    margin,
+    maxTextWidth,
+    titleSize,
+    subtitleSize,
+    fontFamily
+  );
+  const rowHeight =
+    options.minRowHeight ?? Math.max(shapeSize, lineHeight * 2) + gap;
+  const startY = margin + header.height + gap;
+  const getRowContentHeight = (lines: string[]) =>
+    Math.max(shapeSize, lines.length > 1 ? lineHeight * 2 : lineHeight);
+  const rows = options.items.map((item, index) => {
+    const x = margin;
+    const y = startY + index * rowHeight;
+    const labelX = x + shapeWidth + gap;
+    const labelY = y + shapeSize / 2;
+    const shape = options.drawShape(item, x, y, shapeSize, index);
+    const label = render_label(
+      labelLines[index] ?? [],
+      labelX,
+      labelY,
+      lineHeight
+    );
+
+    return {
+      markup: `${shape.markup}${label}`,
+      defs: shape.defs
+    };
+  });
+  const mainBottom =
+    labelLines.length > 0
+      ? startY +
+        (labelLines.length - 1) * rowHeight +
+        getRowContentHeight(labelLines[labelLines.length - 1] ?? [])
+      : startY;
+  const footerRowHeight = Math.max(shapeSize, lineHeight) + gap;
+  const footerStartY =
+    footerItems.length > 0 ? mainBottom + Math.max(3, gap) : mainBottom;
+  const footerRows = footerItems.map((item, index) => {
+    const x = margin;
+    const y = footerStartY + index * footerRowHeight;
+    const labelX = x + shapeWidth + gap;
+    const labelY = y + shapeSize / 2;
+    const shape = draw_swatch_shape(
+      item,
+      footerType,
+      x,
+      y,
+      shapeSize,
+      options.items.length + index
+    );
+    const label = render_label(
+      footerLabelLines[index] ?? [],
+      labelX,
+      labelY,
+      lineHeight
+    );
+
+    return {
+      markup: `${shape.markup}${label}`,
+      defs: shape.defs
+    };
+  });
+  const footerBottom =
+    footerLabelLines.length > 0
+      ? footerStartY +
+        (footerLabelLines.length - 1) * footerRowHeight +
+        getRowContentHeight(footerLabelLines[footerLabelLines.length - 1] ?? [])
+      : mainBottom;
+  const bottom = footerItems.length > 0 ? footerBottom : mainBottom;
+  const noteGap = options.note ? Math.max(4, gap) : 0;
+  const note = render_note(
+    options.note,
+    margin,
+    bottom + noteGap,
+    maxTextWidth,
+    noteSize,
+    fontFamily
+  );
+  const height = bottom + note.height + margin;
+  const defs = rows
+    .map((row) => row.defs)
+    .concat(footerRows.map((row) => row.defs))
+    .filter((def): def is string => Boolean(def))
+    .join('');
+
+  return `<g class="${escapeSvgAttribute(options.className)}" font-family="${escapeSvgAttribute(fontFamily)}">
+    ${createLegendCanvasRect(bodyWidth, height)}
+    ${defs ? `<defs>${defs}</defs>` : ''}
+    <g class="items" font-size="${fontSize}" dominant-baseline="middle">
+      ${rows.map((row) => row.markup).join('')}
+      ${footerRows.map((row) => row.markup).join('')}
+    </g>
+    ${header.markup}
+    ${note.markup}
+  </g>`;
+}
+
+function getSwatchShapeWidth(
+  type: KhartisLegendSwatchType,
+  shapeSize: number
+): number {
+  return type === 'line' ? 28 : shapeSize;
+}
+
+function draw_swatch_shape(
+  item: KhartisLegendSwatchItem,
+  type: KhartisLegendSwatchType,
+  x: number,
+  y: number,
+  size: number,
+  index: number
+): { markup: string; defs?: string } {
+  if (type === 'line') {
+    return { markup: draw_line(item, x, y + size / 2, 28) };
+  }
+
+  if (type === 'symbol') {
+    return {
+      markup: draw_symbol(item, x + size / 2, y + size / 2, size)
+    };
+  }
+
+  if (type === 'pattern') {
+    return draw_pattern_box(item, x, y, size, index);
+  }
+
+  return {
+    markup: `<rect x="${x}" y="${y}" width="${size}" height="${size}" fill="${escapeSvgAttribute(item.fill ?? 'none')}" stroke="${escapeSvgAttribute(item.stroke ?? 'rgba(0, 0, 0, 0.15)')}" stroke-width="${item.strokeWidth ?? 1}" opacity="${normalizeOpacity(item.opacity)}" />`
+  };
+}
+
+function draw_line(
+  item: Partial<KhartisLegendSwatchItem>,
+  x: number,
+  y: number,
+  width: number
+): string {
+  const dash = item.dashed ? ' stroke-dasharray="5,3"' : '';
+  return `<line x1="${x}" y1="${y}" x2="${x + width}" y2="${y}" stroke="${escapeSvgAttribute(item.stroke ?? item.fill ?? 'currentColor')}" stroke-width="${Math.max(1, item.strokeWidth ?? 2)}" opacity="${normalizeOpacity(item.opacity)}"${dash} stroke-linecap="round" />`;
+}
+
+function draw_symbol(
+  item: Partial<KhartisLegendSwatchItem>,
+  cx: number,
+  cy: number,
+  size: number
+): string {
+  const scale = Math.max(0.1, (item.size ?? size) / 16);
+  return `<path d="${escapeSvgAttribute(item.symbol ?? '')}" transform="translate(${cx},${cy}) scale(${scale})" fill="${escapeSvgAttribute(item.fill ?? 'none')}" stroke="${escapeSvgAttribute(item.stroke ?? 'rgba(0, 0, 0, 0.25)')}" stroke-width="${item.strokeWidth ?? 0.75}" opacity="${normalizeOpacity(item.opacity)}" />`;
+}
+
+function draw_pattern_box(
+  item: KhartisLegendSwatchItem,
+  x: number,
+  y: number,
+  size: number,
+  index: number
+): { markup: string; defs?: string } {
+  const id = `khartis-legend-pattern-${index}`;
+  const fill = escapeSvgAttribute(item.fill ?? '#ffffff');
+  const url = sanitizeDataImageUrl(item.patternUrl);
+
+  if (!url) {
+    return {
+      markup: `<rect x="${x}" y="${y}" width="${size}" height="${size}" fill="${fill}" stroke="${escapeSvgAttribute(item.stroke ?? 'rgba(0, 0, 0, 0.15)')}" stroke-width="${item.strokeWidth ?? 1}" />`
+    };
+  }
+
+  return {
+    defs: `<pattern id="${id}" patternUnits="userSpaceOnUse" width="${size}" height="${size}"><rect width="${size}" height="${size}" fill="${fill}" /><image href="${url}" width="${size}" height="${size}" preserveAspectRatio="none" /></pattern>`,
+    markup: `<rect x="${x}" y="${y}" width="${size}" height="${size}" fill="url(#${id})" stroke="${escapeSvgAttribute(item.stroke ?? 'rgba(0, 0, 0, 0.15)')}" stroke-width="${item.strokeWidth ?? 1}" />`
+  };
+}
+
+function render_header(
+  options: CommonLegendTextOptions,
+  x: number,
+  y: number,
+  maxWidth: number,
+  titleSize: number,
+  subtitleSize: number,
+  fontFamily: string
+): { markup: string; height: number } {
+  const headerGap = 3;
+  let markup = '';
+  let cursor = y;
+
+  if (options.title) {
+    const lines = wrap_text(
+      options.title,
+      createLegendFont({
+        fontSize: titleSize,
+        fontFamily,
+        weight: 'bold'
+      }),
+      maxWidth
+    );
+    const lineHeight = titleSize * 1.2;
+    markup += `<g class="title" text-anchor="start" dominant-baseline="hanging" font-size="${titleSize}" font-weight="bold">`;
+    lines.forEach((line, index) => {
+      markup += `<text x="${x}" y="${cursor + index * lineHeight}">${escapeSvgText(line)}</text>`;
+    });
+    markup += `</g>`;
+    cursor += lines.length * lineHeight + headerGap;
+  }
+
+  if (options.subtitle) {
+    const lines = wrap_text(
+      options.subtitle,
+      createLegendFont({ fontSize: subtitleSize, fontFamily }),
+      maxWidth
+    );
+    const lineHeight = subtitleSize * 1.2;
+    markup += `<g class="subtitle" text-anchor="start" dominant-baseline="hanging" font-size="${subtitleSize}">`;
+    lines.forEach((line, index) => {
+      markup += `<text x="${x}" y="${cursor + index * lineHeight}">${escapeSvgText(line)}</text>`;
+    });
+    markup += `</g>`;
+    cursor += lines.length * lineHeight + headerGap;
+  }
+
+  return { markup, height: Math.max(0, cursor - y) };
+}
+
+function render_note(
+  note: string | null | undefined,
+  x: number,
+  y: number,
+  maxWidth: number,
+  noteSize: number,
+  fontFamily: string
+): { markup: string; height: number } {
+  if (!note) {
+    return { markup: '', height: 0 };
+  }
+
+  const lines = wrap_text(
+    note,
+    createLegendFont({ fontSize: noteSize, fontFamily }),
+    maxWidth
+  );
+  const lineHeight = noteSize * 1.2;
+  let markup = `<g class="note" text-anchor="start" dominant-baseline="hanging" font-size="${noteSize}">`;
+  lines.forEach((line, index) => {
+    markup += `<text x="${x}" y="${y + index * lineHeight}">${escapeSvgText(line)}</text>`;
+  });
+  markup += `</g>`;
+
+  return { markup, height: lines.length * lineHeight };
+}
+
+function render_label(
+  lines: string[],
+  x: number,
+  y: number,
+  lineHeight: number
+): string {
+  if (lines.length <= 1) {
+    return `<text x="${x}" y="${y}">${escapeSvgText(lines[0] ?? '')}</text>`;
+  }
+
+  return `<text>${lines
+    .map(
+      (line, index) =>
+        `<tspan x="${x}" y="${y}" dy="${index === 0 ? -lineHeight / 2 : lineHeight}">${escapeSvgText(line)}</tspan>`
+    )
+    .join('')}</text>`;
+}
+
+function wrap_text(text: string, font: string, maxWidth: number): string[] {
+  const words = text.split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let currentLine = words[0] ?? '';
+
+  for (let index = 1; index < words.length; index++) {
+    const candidate = `${currentLine} ${words[index]}`;
+    if (Textbox.measureText(candidate, font) <= maxWidth) {
+      currentLine = candidate;
+    } else {
+      lines.push(currentLine);
+      currentLine = words[index];
+    }
+  }
+
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+
+  return lines;
+}
+
+function normalizeOpacity(value: number | undefined): number {
+  if (value === undefined) {
+    return 1;
+  }
+
+  return Math.max(0, Math.min(1, value));
+}
+
+function sanitizeDataImageUrl(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+
+  if (
+    /^data:image\/(?:png|webp|jpeg|svg\+xml);base64,[a-z0-9+/=]+$/i.test(value)
+  ) {
+    return escapeSvgAttribute(value);
+  }
+
+  return null;
+}

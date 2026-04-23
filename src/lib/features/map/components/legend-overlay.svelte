@@ -69,6 +69,10 @@
   } from '$lib/features/commons/store/visualization.store.svelte';
   import { hexToRgb, hslToHex } from '$lib/features/commons/utils/color-utils';
   import { resolveLayoutSizingTokens } from '$lib/features/commons/utils/layout-sizing.utils';
+  import {
+    clampFontSize,
+    resolveFontFamilyStack
+  } from '$lib/features/step-toolbar/constants/fonts.constants';
   import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
   import {
     getDragBounds,
@@ -631,6 +635,7 @@
     count: number
   ): CommonLegendTextOptions {
     return {
+      fontFamily: legendState.style.fontFamily,
       fontSize: legendState.style.fontSize,
       title: index === 0 ? item.title : null,
       subtitle: index === 0 ? item.subtitle : null,
@@ -1530,6 +1535,13 @@
 
   const containerStyle = $derived.by(() => {
     const scale = getPageScale();
+    const hasBackground = legendState.style.background.enabled;
+    const shellPaddingInline = hasBackground
+      ? Math.max(4, Math.round(layoutTokens.legend.paddingInline * 0.35))
+      : 0;
+    const shellPaddingBlock = hasBackground
+      ? Math.max(3, Math.round(layoutTokens.legend.paddingBlock * 0.35))
+      : 0;
     const transform =
       !legendState.dragPosition &&
       legendState.position === LegendPosition.BOTTOM_CENTER
@@ -1537,18 +1549,18 @@
         : `scale(${scale})`;
     const styles: string[] = [
       `--legend-page-scale: ${scale}`,
-      `--legend-padding-inline: ${layoutTokens.legend.paddingInline}px`,
-      `--legend-padding-block: ${layoutTokens.legend.paddingBlock}px`,
+      `--legend-padding-inline: ${shellPaddingInline}px`,
+      `--legend-padding-block: ${shellPaddingBlock}px`,
       `--legend-max-width: ${layoutTokens.legend.maxWidth}px`,
-      `--legend-item-gap: ${Math.max(6, Math.round(layoutTokens.legend.fontSize * 0.6))}px`,
-      `font-family: ${legendState.style.fontFamily}, sans-serif`,
-      `font-size: ${legendState.style.fontSize}px`,
+      `--legend-item-gap: ${Math.max(4, Math.round(layoutTokens.legend.fontSize * 0.45))}px`,
+      `font-family: ${resolveFontFamilyStack(legendState.style.fontFamily)}`,
+      `font-size: ${clampFontSize(legendState.style.fontSize, layoutTokens.legend.fontSize)}px`,
       `color: ${textHex}`,
       `transform: ${transform}`,
       `transform-origin: ${getLegendTransformOrigin(legendState.position, Boolean(legendState.dragPosition))}`
     ];
 
-    if (legendState.style.background.enabled) {
+    if (hasBackground) {
       styles.push(`background-color: ${bgHsl}`);
       styles.push('box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15)');
     } else {
@@ -1892,18 +1904,18 @@
 
   .legend-container {
     --legend-page-scale: 1;
-    --legend-padding-inline: 12px;
-    --legend-padding-block: 8px;
+    --legend-padding-inline: 0px;
+    --legend-padding-block: 0px;
     --legend-max-width: 160px;
-    --legend-item-gap: 8px;
+    --legend-item-gap: 4px;
     position: absolute;
     display: flex;
     flex-direction: column;
     gap: var(--legend-item-gap);
-    background: rgba(255, 255, 255, 0.95);
+    background: transparent;
     padding: var(--legend-padding-block) var(--legend-padding-inline);
     border-radius: 3px;
-    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.14);
+    box-shadow: none;
     max-width: var(--legend-max-width);
     overflow-wrap: anywhere;
     pointer-events: auto;
@@ -1988,7 +2000,7 @@
     display: block;
     max-width: 100%;
     height: auto;
-    margin: 1px 0;
+    margin: 0;
     overflow: visible;
   }
 </style>

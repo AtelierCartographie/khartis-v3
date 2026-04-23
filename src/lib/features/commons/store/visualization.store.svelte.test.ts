@@ -139,7 +139,10 @@ function buildLegacyLabelVisualization(
     style: {
       labelOpacity: 0.72,
       labelColor: '#1357aa',
+      labelFontFamily: 'Inter',
       labelSize: 14,
+      labelBold: true,
+      labelItalic: true,
       labelAlign: 'left',
       labelHalo: true,
       labelHaloColor: '#ffffff',
@@ -176,7 +179,10 @@ describe('visualizationStore legacy label normalization', () => {
     expect(visualization).toBeDefined();
     expect(visualization?.style.textOpacity).toBe(0.72);
     expect(visualization?.style.textColor).toBe('#1357aa');
+    expect(visualization?.style.textFontFamily).toBe('Inter');
     expect(visualization?.style.textSize).toBe(14);
+    expect(visualization?.style.textBold).toBe(true);
+    expect(visualization?.style.textItalic).toBe(true);
     expect(visualization?.style.textAlign).toBe('left');
     expect(visualization?.style.textHalo).toBe(true);
     expect(visualization?.style.textHaloColor).toBe('#ffffff');

@@ -20,9 +20,7 @@ describe('tool container', () => {
   });
 
   it('keeps the shared tool surfaces opaque', () => {
-    expect(source).toContain(
-      'background-color: var(--khartis-control-surface-background, white);'
-    );
+    expect(source).toContain('background-color: var(--cds-background, white);');
     expect(source).toContain('background-color: inherit;');
   });
 

@@ -15,6 +15,10 @@
     DrawingType
   } from '$lib/features/commons/constants/ui.constants';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
+  import {
+    clampFontSize,
+    resolveFontFamilyStack
+  } from '$lib/features/step-toolbar/constants/fonts.constants';
   import { onDestroy, tick } from 'svelte';
   import {
     annotationsActions,
@@ -1344,10 +1348,10 @@
     const styles: string[] = [];
 
     if (resolvedStyle.font) {
-      styles.push(`font-family: ${resolvedStyle.font}, sans-serif`);
+      styles.push(`font-family: ${resolveFontFamilyStack(resolvedStyle.font)}`);
     }
     if (resolvedStyle.fontSize) {
-      styles.push(`font-size: ${resolvedStyle.fontSize}px`);
+      styles.push(`font-size: ${clampFontSize(resolvedStyle.fontSize, 8)}px`);
     }
     if (resolvedStyle.bold) {
       styles.push('font-weight: bold');

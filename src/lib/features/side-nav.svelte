@@ -685,6 +685,62 @@
     height: calc(100dvh - var(--khartis-side-nav-top)) !important;
   }
 
+  :global(html[theme='g100'] #khartis-side-nav .bx--side-nav) {
+    background-color: var(--cds-background);
+  }
+
+  :global(html[theme='g100'] #khartis-side-nav .menu-bar-item.bx--btn--ghost) {
+    color: var(--cds-text-01) !important;
+    background-color: transparent !important;
+    border-color: transparent !important;
+  }
+
+  :global(
+    html[theme='g100'] #khartis-side-nav .menu-bar-item.bx--btn--ghost:hover
+  ) {
+    color: var(--cds-text-01) !important;
+    background-color: var(--khartis-control-surface-background) !important;
+  }
+
+  :global(
+    html[theme='g100'] #khartis-side-nav .menu-bar-item.bx--btn--ghost:focus
+  ) {
+    color: var(--cds-text-01) !important;
+    border-color: var(--cds-focus) !important;
+    box-shadow:
+      inset 0 0 0 1px var(--cds-focus),
+      inset 0 0 0 2px var(--cds-background) !important;
+  }
+
+  :global(
+    html[theme='g100'] #khartis-side-nav .menu-bar-item.bx--btn--ghost:active
+  ) {
+    color: var(--cds-text-01) !important;
+    background-color: var(
+      --khartis-control-surface-hover-background
+    ) !important;
+  }
+
+  :global(
+    html[theme='g100']
+      #khartis-side-nav
+      .menu-bar-item.bx--btn--ghost.bx--btn--disabled
+  ),
+  :global(
+    html[theme='g100'] #khartis-side-nav .menu-bar-item.bx--btn--ghost:disabled
+  ) {
+    color: var(--cds-text-disabled) !important;
+  }
+
+  :global(
+    html[theme='g100']
+      #khartis-side-nav
+      .menu-bar-item.bx--btn--ghost
+      .bx--btn__icon
+  ) {
+    fill: currentColor !important;
+  }
+
   h6 {
     padding: 0.25rem 0 0.5rem 1rem;
     font-size: 0.8rem;

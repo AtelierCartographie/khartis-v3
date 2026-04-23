@@ -14,6 +14,10 @@
   import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
   import { PRINT_STANDARD_TOKENS } from '$lib/features/commons/utils/layout-sizing.utils';
+  import {
+    clampFontSize,
+    resolveFontFamilyStack
+  } from '$lib/features/step-toolbar/constants/fonts.constants';
   import { EVENT, KEY } from '$lib/features/commons/constants/dom.constants';
   import {
     getDragBounds,
@@ -202,9 +206,14 @@
     )
   );
   const scaleFontFamily = $derived(
-    `${geoIndicationsState.scale.fontFamily}, sans-serif`
+    resolveFontFamilyStack(geoIndicationsState.scale.fontFamily)
   );
-  const scaleFontSize = $derived(geoIndicationsState.scale.fontSize);
+  const scaleFontSize = $derived(
+    clampFontSize(
+      geoIndicationsState.scale.fontSize,
+      PRINT_STANDARD_TOKENS.geoIndications.scaleFontSize
+    )
+  );
   const orientationFontFamily = $derived(scaleFontFamily);
 
   const orientationColor = $derived(

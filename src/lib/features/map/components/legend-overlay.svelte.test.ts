@@ -288,6 +288,52 @@ describe('legend overlay visibility', () => {
     expect(style).toContain('transform-origin: top right');
   });
 
+  it('routes font family, shell background, and compact padding into SVG legends', () => {
+    mockVisualizationStore.version = 1;
+    mockVisualizationStore.visualizations = [buildClassedPolygonViz()];
+    legendActions.reset();
+    legendActions.setVisibility(true);
+    legendActions.updateStyle({ fontFamily: 'Inter' });
+    legendActions.updateBackground({
+      enabled: true,
+      color: { hue: 210, saturation: 10, lightness: 98 },
+      opacity: 60
+    });
+
+    const { container } = render(LegendOverlay);
+    const legend = container.querySelector('.legend-container');
+    const quantitative = container.querySelector('.quantitative_legend');
+    const style = legend?.getAttribute('style');
+
+    expect(style).toContain('background-color: rgba(249, 250, 250, 0.6)');
+    expect(style).toContain('--legend-padding-inline: 6px');
+    expect(style).toContain('--legend-padding-block: 4px');
+    expect(quantitative?.getAttribute('font-family')).toContain('Inter');
+    expect(
+      container.querySelector('.quantitative_legend > rect[fill="transparent"]')
+    ).toBeInTheDocument();
+    expect(
+      container.querySelector('.quantitative_legend > rect[fill="white"]')
+    ).not.toBeInTheDocument();
+  });
+
+  it('removes shell background padding when the legend tool disables the panel background', () => {
+    mockVisualizationStore.version = 1;
+    mockVisualizationStore.visualizations = [buildClassedPolygonViz()];
+    legendActions.reset();
+    legendActions.setVisibility(true);
+    legendActions.updateBackground({ enabled: false });
+
+    const { container } = render(LegendOverlay);
+    const style = container
+      .querySelector('.legend-container')
+      ?.getAttribute('style');
+
+    expect(style).toContain('background-color: transparent');
+    expect(style).toContain('--legend-padding-inline: 0px');
+    expect(style).toContain('--legend-padding-block: 0px');
+  });
+
   it('keeps the legend mounted but hidden when requested', () => {
     const { container } = render(LegendOverlay, { hidden: true });
 

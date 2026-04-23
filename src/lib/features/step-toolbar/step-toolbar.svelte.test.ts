@@ -40,20 +40,20 @@ describe('StepToolbar', () => {
     expect(toolPopoverSource).toContain('display: none;');
   });
 
-  it('keeps tool expandables on the shared control surface in dark theme', () => {
+  it('keeps tool expandables on the shared dark background in dark theme', () => {
     expect(source).toContain(
       ":global(html[theme='g100'] #khartis-tool-popover)"
     );
-    expect(source).toContain('--khartis-expandable-section-background: var(');
+    expect(source).toContain(
+      '--khartis-expandable-section-background: var(--cds-background);'
+    );
     expect(source).not.toContain(
       ':global(:root #khartis-tool-popover) {\n    --khartis-expandable-section-background'
     );
   });
 
   it('keeps the step toolbar itself opaque', () => {
-    expect(source).toContain(
-      'background: var(--khartis-control-surface-background);'
-    );
+    expect(source).toContain('background: var(--cds-background);');
     expect(source).not.toContain('backdrop-filter: blur(10px) saturate(1.2);');
   });
 

@@ -19,7 +19,11 @@ import {
   PRINT_STANDARD_TOKENS,
   resolveLayoutSizingTokens
 } from '$lib/features/commons/utils/layout-sizing.utils';
-import { DEFAULT_FONT_FAMILY } from '$lib/features/step-toolbar/constants/fonts.constants';
+import {
+  clampFontSize,
+  DEFAULT_FONT_FAMILY,
+  normalizeFontFamily
+} from '$lib/features/step-toolbar/constants/fonts.constants';
 import {
   getFormatLayoutSizingContext,
   getFormatState
@@ -137,6 +141,26 @@ const PREDEFINED_STYLES: Record<string, Partial<AnnotationStyle>> = {
     italic: true
   }
 };
+
+function normalizeAnnotationStyleUpdates(
+  styleUpdates: Partial<AnnotationStyle>
+): Partial<AnnotationStyle> {
+  const normalizedUpdates: Partial<AnnotationStyle> = { ...styleUpdates };
+  if (styleUpdates.opacity !== undefined) {
+    normalizedUpdates.opacity = normalizeOpacityPercent(styleUpdates.opacity);
+  }
+  if (styleUpdates.font !== undefined) {
+    normalizedUpdates.font =
+      normalizeFontFamily(styleUpdates.font) ?? DEFAULT_FONT_FAMILY;
+  }
+  if (styleUpdates.fontSize !== undefined) {
+    normalizedUpdates.fontSize = clampFontSize(
+      styleUpdates.fontSize,
+      DEFAULT_NOTE_FONT_SIZE
+    );
+  }
+  return normalizedUpdates;
+}
 
 function getPredefinedStyleForItem(item: Annotation): string | null {
   if (item.type !== AnnotationKind.TEXT) {
@@ -1051,26 +1075,14 @@ const { actions, getState } = createToolStore<
       }
     },
     updateDefaultStyle: (styleUpdates: Partial<AnnotationStyle>) => {
-      const normalizedUpdates: Partial<AnnotationStyle> = { ...styleUpdates };
-      if (styleUpdates.opacity !== undefined) {
-        normalizedUpdates.opacity = normalizeOpacityPercent(
-          styleUpdates.opacity
-        );
-      }
-
+      const normalizedUpdates = normalizeAnnotationStyleUpdates(styleUpdates);
       s.defaultStyle = { ...s.defaultStyle, ...normalizedUpdates };
       if (s.pendingStyle) {
         s.pendingStyle = { ...s.pendingStyle, ...normalizedUpdates };
       }
     },
     applyStyle: (styleUpdates: Partial<AnnotationStyle>) => {
-      const normalizedUpdates: Partial<AnnotationStyle> = { ...styleUpdates };
-      if (styleUpdates.opacity !== undefined) {
-        normalizedUpdates.opacity = normalizeOpacityPercent(
-          styleUpdates.opacity
-        );
-      }
-
+      const normalizedUpdates = normalizeAnnotationStyleUpdates(styleUpdates);
       s.defaultStyle = { ...s.defaultStyle, ...normalizedUpdates };
       if (s.pendingStyle) {
         s.pendingStyle = { ...s.pendingStyle, ...normalizedUpdates };

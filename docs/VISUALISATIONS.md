@@ -2,7 +2,7 @@
 
 > Parcours utilisateur, outils de viz et habillage. Lire ARCHITECTURE.md, MAP.md et CARTOGRAPHIE.md d'abord.
 
-**Voir aussi** : [ARCHITECTURE](./ARCHITECTURE.md) — [CARTOGRAPHIE](./CARTOGRAPHIE.md) — [MAP](./MAP.md) — [PIPELINE_DONNEES](./PIPELINE_DONNEES.md) — [DUCKDB](./DUCKDB.md)
+**Voir aussi** : [ARCHITECTURE](./ARCHITECTURE.md) — [CARTOGRAPHIE](./CARTOGRAPHIE.md) — [MAP](./MAP.md) — [PIPELINE_DONNEES](./PIPELINE_DONNEES.md) — [DUCKDB](./DUCKDB.md) — [LEGENDES](./LEGENDES.md)
 
 ---
 
@@ -147,6 +147,9 @@ Générée automatiquement :
 - Choroplèthe → rampe de couleurs + seuils
 - Catégoriel → swatches discrètes
 - Proportionnel → échelle de tailles
+- Lignes → swatches de couleur ou d’épaisseur
+- Textes → légendes de couleur et de taille dédiées
+- Bivarié → combinaison compacte des segments nécessaires
 - Motifs → swatches hatchées
 
 ---
