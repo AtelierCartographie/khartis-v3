@@ -39,6 +39,13 @@ describe('ConfigureVisualization', () => {
     expect(source).toContain('classificationBreaks.compute({');
   });
 
+  it('clears pending break retries when a break slot points to a non-numeric field', () => {
+    expect(source).toContain('function isNumericDataField(');
+    expect(source).toContain('!isNumericDataField(valueColumn)');
+    expect(source).toContain('!isNumericDataField(target?.valueColumn)');
+    expect(source).toContain('classificationBreaks.clearRetry(scopeKey);');
+  });
+
   it('delegates shared primitive orchestration to the dedicated controller', () => {
     expect(source).toContain(
       "  } from './use-primitive-panel-controller.svelte';"

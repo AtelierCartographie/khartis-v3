@@ -25,6 +25,7 @@ import type { PrimitiveFilter } from '$lib/features/commons/store/visualization.
 import {
   getEnabledPrimitiveFilters,
   getLinePrimitive,
+  getLineThicknessClassification,
   getPolygonPrimitive,
   getPrimitiveCategoryColumn,
   getPrimitiveClassification,
@@ -4258,9 +4259,12 @@ export function createLineLayers(
     isWkbEncoded,
     isGeoJsonEncoded
   } = geometryInfo;
-  const lineClassification = viz
+  const lineColorClassification = viz
     ? (getPrimitiveClassification(viz, PrimitiveFilterType.LINE) ??
       viz.classification)
+    : undefined;
+  const lineThicknessClassification = viz
+    ? getLineThicknessClassification(viz)
     : undefined;
   const useChoropleth = viz && shouldApplyLineChoropleth(viz);
   const useCategoricalColor = viz && shouldApplyLineCategorical(viz);
@@ -4272,8 +4276,8 @@ export function createLineLayers(
   const useClassedWidth =
     lineConfig?.thicknessMode === ThicknessMode.CLASSES &&
     !!lineValueColumn &&
-    !!lineClassification?.breaks &&
-    lineClassification.breaks.length >= 2;
+    !!lineThicknessClassification?.breaks &&
+    lineThicknessClassification.breaks.length >= 2;
   const usesVariableLineWidth = useProportionalWidth || useClassedWidth;
   const { min: minValue, max: maxValue } = lineStatistics;
   const resolvedSizeScale = viz?.symbols?.sizeScale ?? ScaleType.LINEAR;
@@ -4312,8 +4316,8 @@ export function createLineLayers(
       useChoropleth && viz
         ? createChoroplethColorAccessor(
             lineValueColumn!,
-            lineClassification!.breaks!,
-            lineClassification!.colors!
+            lineColorClassification!.breaks!,
+            lineColorClassification!.colors!
           )
         : null;
 
@@ -4324,7 +4328,7 @@ export function createLineLayers(
             effectiveCategoryColorMap,
             HIGHLIGHT_FILL_COLOR,
             true,
-            lineClassification?.disabledLabels ?? []
+            lineColorClassification?.disabledLabels ?? []
           )
         : null;
 
@@ -4366,10 +4370,11 @@ export function createLineLayers(
       useClassedWidth && viz
         ? createClassedSizeAccessor(
             lineValueColumn!,
-            lineClassification!.breaks!,
+            lineThicknessClassification!.breaks!,
             1,
             maxLineWidth,
-            lineClassification?.numClasses ?? lineClassification?.colors?.length
+            lineThicknessClassification?.numClasses ??
+              lineThicknessClassification?.colors?.length
           )
         : useProportionalWidth && viz
           ? createProportionalSizeAccessor(
@@ -4427,10 +4432,10 @@ export function createLineLayers(
           useCategoricalColor,
           lineValueColumn,
           lineCategoryColumn,
-          lineClassification?.breaks,
-          lineClassification?.colors,
+          lineColorClassification?.breaks,
+          lineColorClassification?.colors,
           lineCategoryColorMap,
-          lineClassification?.labels,
+          lineColorClassification?.labels,
           resolvedLineColor,
           normalizedLineOpacity,
           hlVersion
@@ -4442,7 +4447,7 @@ export function createLineLayers(
           lineValueColumn,
           minValue,
           maxValue,
-          lineClassification?.breaks,
+          lineThicknessClassification?.breaks,
           maxLineWidth,
           resolvedSizeScale,
           resolvedLineWidth
@@ -4522,8 +4527,8 @@ export function createLineLayers(
           withOpacity(
             createGeoJsonChoroplethColorAccessor(
               lineValueColumn!,
-              lineClassification!.breaks!,
-              lineClassification!.colors!,
+              lineColorClassification!.breaks!,
+              lineColorClassification!.colors!,
               resolvedLineColor
             )(feature),
             normalizedLineOpacity
@@ -4562,10 +4567,11 @@ export function createLineLayers(
     useClassedWidth && viz
       ? createGeoJsonClassedSizeAccessor(
           lineValueColumn!,
-          lineClassification!.breaks!,
+          lineThicknessClassification!.breaks!,
           1,
           maxLineWidth,
-          lineClassification?.numClasses ?? lineClassification?.colors?.length,
+          lineThicknessClassification?.numClasses ??
+            lineThicknessClassification?.colors?.length,
           resolvedLineWidth
         )
       : useProportionalWidth && viz
@@ -4606,10 +4612,10 @@ export function createLineLayers(
         useCategoricalColor,
         lineValueColumn,
         lineCategoryColumn,
-        lineClassification?.breaks,
-        lineClassification?.colors,
+        lineColorClassification?.breaks,
+        lineColorClassification?.colors,
         lineCategoryColorMap,
-        lineClassification?.labels,
+        lineColorClassification?.labels,
         resolvedLineColor,
         normalizedLineOpacity,
         hlVersion
@@ -4621,7 +4627,7 @@ export function createLineLayers(
         lineValueColumn,
         minValue,
         maxValue,
-        lineClassification?.breaks,
+        lineThicknessClassification?.breaks,
         maxLineWidth,
         resolvedSizeScale,
         resolvedLineWidth

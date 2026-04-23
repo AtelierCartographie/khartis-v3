@@ -1,10 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import {
   ClassificationMethod,
+  type ClassificationConfig,
   type LinePrimitiveConfig
 } from '$lib/features/commons/store/visualization.store.svelte';
 import { ColorMode, ThicknessMode } from '../constants';
 import { resolveLineModeTransition } from './use-line-mode-state.svelte';
+
+function createClassification(
+  overrides: Partial<ClassificationConfig> = {}
+): ClassificationConfig {
+  return {
+    method: ClassificationMethod.JENKS,
+    classes: 5,
+    ...overrides
+  };
+}
 
 function createLine(
   overrides: Partial<LinePrimitiveConfig> = {}
@@ -21,11 +32,12 @@ function createLine(
     valueColumn: 'flow',
     categoryColumn: 'type',
     sizeColumn: 'magnitude',
-    classification: {
-      method: ClassificationMethod.JENKS,
-      classes: 5,
-      labels: ['A', 'B']
-    },
+    classification: createClassification({ labels: ['A', 'B'] }),
+    thicknessClassification: createClassification({
+      classes: 4,
+      numClasses: 4,
+      breaks: [10, 20, 30]
+    }),
     ...overrides
   };
 }
@@ -42,19 +54,143 @@ describe('resolveLineModeTransition', () => {
     });
 
     expect(transition.nextLineUpdates).toMatchObject({
-      colorMode: ColorMode.UNIQUE
+      colorMode: ColorMode.UNIQUE,
+      valueColumn: 'flow'
     });
-    expect(transition.nextLineUpdates.valueColumn).toBeUndefined();
-    expect(Object.hasOwn(transition.nextLineUpdates, 'valueColumn')).toBe(
-      false
-    );
-    expect(transition.nextMappingUpdates).toEqual({});
+    expect(transition.nextVisualizationUpdates).toEqual({
+      lineClassification: undefined
+    });
+    expect(transition.nextMappingUpdates).toEqual({
+      valueColumn: 'flow',
+      categoryColumn: undefined
+    });
   });
 
-  it('keeps the categorical mapping when only the thickness axis changes', () => {
+  it('restores the classed color state without overriding an active classed thickness value column', () => {
     const line = createLine({
       colorMode: ColorMode.CATEGORIES,
-      thicknessMode: ThicknessMode.CLASSES
+      thicknessMode: ThicknessMode.CLASSES,
+      valueColumn: 'flow',
+      categoryColumn: 'type',
+      classification: createClassification({ labels: ['Category A'] }),
+      colorModeStates: {
+        [ColorMode.CLASSES]: {
+          valueColumn: 'population',
+          classification: createClassification({ labels: ['Class A'] })
+        }
+      }
+    });
+
+    const transition = resolveLineModeTransition(line, {
+      color: ColorMode.CLASSES
+    });
+
+    expect(transition.nextLineUpdates).toMatchObject({
+      colorMode: ColorMode.CLASSES,
+      valueColumn: 'flow',
+      classification: createClassification({ labels: ['Class A'] }),
+      categoryColumn: undefined
+    });
+    expect(
+      transition.nextLineUpdates.colorModeStates?.[ColorMode.CATEGORIES]
+    ).toMatchObject({
+      categoryColumn: 'type',
+      classification: createClassification({ labels: ['Category A'] })
+    });
+    expect(transition.nextMappingUpdates).toEqual({
+      valueColumn: 'flow',
+      categoryColumn: undefined
+    });
+  });
+
+  it('restores the categorical color state from the saved mode snapshot', () => {
+    const line = createLine({
+      colorMode: ColorMode.CLASSES,
+      thicknessMode: ThicknessMode.UNIQUE,
+      valueColumn: 'flow',
+      classification: createClassification({ labels: ['Class A'] }),
+      colorModeStates: {
+        [ColorMode.CATEGORIES]: {
+          categoryColumn: 'segment',
+          classification: createClassification({ labels: ['Segment A'] })
+        }
+      }
+    });
+
+    const transition = resolveLineModeTransition(line, {
+      color: ColorMode.CATEGORIES
+    });
+
+    expect(transition.nextLineUpdates).toMatchObject({
+      colorMode: ColorMode.CATEGORIES,
+      valueColumn: undefined,
+      categoryColumn: 'segment',
+      classification: createClassification({ labels: ['Segment A'] })
+    });
+    expect(
+      transition.nextLineUpdates.colorModeStates?.[ColorMode.CLASSES]
+    ).toMatchObject({
+      valueColumn: 'flow',
+      classification: createClassification({ labels: ['Class A'] })
+    });
+    expect(transition.nextVisualizationUpdates).toEqual({
+      lineClassification: createClassification({ labels: ['Segment A'] })
+    });
+    expect(transition.nextMappingUpdates).toEqual({
+      valueColumn: undefined,
+      categoryColumn: 'segment'
+    });
+  });
+
+  it('restores the proportional thickness state and clears the classed thickness mirror', () => {
+    const line = createLine({
+      colorMode: ColorMode.CATEGORIES,
+      thicknessMode: ThicknessMode.CLASSES,
+      maxWidth: 18,
+      valueColumn: 'flow',
+      thicknessClassification: createClassification({
+        classes: 4,
+        numClasses: 4,
+        breaks: [10, 20, 30]
+      }),
+      thicknessModeStates: {
+        [ThicknessMode.PROPORTIONAL]: {
+          sizeColumn: 'magnitude',
+          maxWidth: 12
+        }
+      }
+    });
+
+    const transition = resolveLineModeTransition(line, {
+      thickness: ThicknessMode.PROPORTIONAL
+    });
+
+    expect(transition.nextLineUpdates).toMatchObject({
+      thicknessMode: ThicknessMode.PROPORTIONAL,
+      sizeColumn: 'magnitude',
+      maxWidth: 12,
+      thicknessClassification: undefined
+    });
+    expect(transition.nextVisualizationUpdates).toEqual({
+      lineThicknessClassification: undefined
+    });
+    expect(transition.nextMappingUpdates).toEqual({
+      valueColumn: undefined,
+      sizeColumn: 'magnitude'
+    });
+  });
+
+  it('restores the unique thickness width from its saved mode snapshot', () => {
+    const line = createLine({
+      colorMode: ColorMode.UNIQUE,
+      thicknessMode: ThicknessMode.PROPORTIONAL,
+      sizeColumn: 'magnitude',
+      maxWidth: 16,
+      thicknessModeStates: {
+        [ThicknessMode.UNIQUE]: {
+          width: 4
+        }
+      }
     });
 
     const transition = resolveLineModeTransition(line, {
@@ -62,15 +198,14 @@ describe('resolveLineModeTransition', () => {
     });
 
     expect(transition.nextLineUpdates).toMatchObject({
-      thicknessMode: ThicknessMode.UNIQUE
+      thicknessMode: ThicknessMode.UNIQUE,
+      width: 4,
+      sizeColumn: undefined
     });
-    expect(Object.hasOwn(transition.nextLineUpdates, 'categoryColumn')).toBe(
-      false
-    );
-    expect(transition.nextMappingUpdates.categoryColumn).toBeUndefined();
-    expect(Object.hasOwn(transition.nextMappingUpdates, 'categoryColumn')).toBe(
-      false
-    );
+    expect(transition.nextMappingUpdates).toEqual({
+      valueColumn: undefined,
+      sizeColumn: undefined
+    });
   });
 
   it('clears only the columns no longer used by proportional plus categories', () => {
@@ -89,12 +224,10 @@ describe('resolveLineModeTransition', () => {
       thicknessMode: ThicknessMode.PROPORTIONAL,
       valueColumn: undefined
     });
-    expect(Object.hasOwn(transition.nextLineUpdates, 'categoryColumn')).toBe(
-      false
-    );
-    expect(Object.hasOwn(transition.nextLineUpdates, 'sizeColumn')).toBe(false);
     expect(transition.nextMappingUpdates).toEqual({
-      valueColumn: undefined
+      valueColumn: undefined,
+      categoryColumn: undefined,
+      sizeColumn: undefined
     });
   });
 
@@ -135,12 +268,11 @@ describe('resolveLineModeTransition', () => {
 
     expect(transition.nextLineUpdates).toMatchObject({
       thicknessMode: ThicknessMode.CLASSES,
+      valueColumn: 'population',
       sizeColumn: undefined
     });
-    expect(Object.hasOwn(transition.nextLineUpdates, 'valueColumn')).toBe(
-      false
-    );
     expect(transition.nextMappingUpdates).toEqual({
+      valueColumn: 'population',
       sizeColumn: undefined
     });
   });
@@ -162,6 +294,7 @@ describe('resolveLineModeTransition', () => {
       sizeColumn: undefined
     });
     expect(transition.nextMappingUpdates).toEqual({
+      valueColumn: undefined,
       sizeColumn: undefined
     });
   });

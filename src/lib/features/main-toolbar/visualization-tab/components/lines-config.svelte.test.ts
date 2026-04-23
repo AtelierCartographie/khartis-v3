@@ -46,7 +46,7 @@ describe('LinesConfig — palette wiring', () => {
       ?.split('/>')[0];
     expect(classesPalette).toBeDefined();
     expect(classesPalette).toContain('resolvePaletteTypeForBreakpoint');
-    expect(classesPalette).toContain('visualization?.classification');
+    expect(classesPalette).toContain('lineColorClassification');
   });
 
   it('should pass paletteType=QUALITATIVE on the CATEGORIES branch PalettePreview', () => {

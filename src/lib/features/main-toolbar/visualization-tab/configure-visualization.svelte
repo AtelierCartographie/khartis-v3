@@ -7,6 +7,7 @@
     ALL_PRIMITIVE_FILTERS,
     PrimitiveFilterType,
     getLinePrimitive,
+    getLineThicknessClassification,
     getPolygonPrimitive,
     getPrimitiveCategoryColumn,
     getPrimitiveClassification,
@@ -34,6 +35,7 @@
     isColorBlindnessActive
   } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
   import {
+    ColorMode,
     DEFAULT_COLORS,
     type DensityConfig,
     FillMode,
@@ -114,6 +116,16 @@
       .filter((col) => col.type !== COLUMN_TYPE_GEOMETRY)
       .map((col, id) => ({ id, text: col.name, type: col.type }));
   });
+
+  function isNumericDataField(columnName: string | undefined): boolean {
+    if (!columnName) {
+      return false;
+    }
+
+    return dataFieldItems.some(
+      (field) => field.text === columnName && field.type === 'number'
+    );
+  }
 
   const hasGeometry = $derived.by(() => {
     const dataset = getSelectedDataset() ?? datasetsStore.selectedDataset;
@@ -203,6 +215,17 @@
     getDataFields: () => dataFieldItems,
     getVisualization: () => selectedViz,
     updatePrimitiveClassification: updatePrimitiveClassificationState,
+    updateLineThicknessClassification: (updates, options) => {
+      if (!selectedViz?.id) {
+        return;
+      }
+
+      visualizationStore.updateLineThicknessClassification(
+        selectedViz.id,
+        updates,
+        options
+      );
+    },
     updatePrimitiveStrokeClassification:
       updatePrimitiveStrokeClassificationState,
     updateTextPrimitive: (updates) => handleTextChange(updates),
@@ -216,6 +239,7 @@
     applyTextBackgroundStrokeMappingUpdate,
     buildNextPrimitiveFilters,
     ensureAutoColumns,
+    ensureLineThicknessClassificationDefaults,
     ensurePrimitiveClassificationDefaults,
     ensurePrimitiveStrokeAutoColumns,
     ensurePrimitiveStrokeClassificationDefaults,
@@ -233,12 +257,14 @@
     invertSymbolFillPalette,
     invertTextBackgroundPalette,
     invertTextBackgroundStrokePalette,
+    updateLineThicknessClassificationState,
     updateSymbolFillClassificationState,
     updateTextBackground,
     updateTextBackgroundClassificationState,
     updateTextBackgroundStrokeClassificationState,
     usesBreakClassification,
     usesCategoricalClassification,
+    usesLineThicknessBreakClassification,
     usesStrokeBreakClassification,
     usesStrokeCategoricalClassification,
     usesSymbolFillBreakClassification,
@@ -775,6 +801,25 @@
 
     updateSelectedVisualization(
       {
+        ...(Object.prototype.hasOwnProperty.call(
+          modeTransition.nextVisualizationUpdates,
+          'lineClassification'
+        )
+          ? {
+              lineClassification:
+                modeTransition.nextVisualizationUpdates.lineClassification
+            }
+          : {}),
+        ...(Object.prototype.hasOwnProperty.call(
+          modeTransition.nextVisualizationUpdates,
+          'lineThicknessClassification'
+        )
+          ? {
+              lineThicknessClassification:
+                modeTransition.nextVisualizationUpdates
+                  .lineThicknessClassification
+            }
+          : {}),
         line: { ...line, ...modeTransition.nextLineUpdates },
         ...(Object.keys(modeTransition.nextMappingUpdates).length > 0
           ? {
@@ -810,6 +855,12 @@
     updates: Partial<ClassificationConfig>
   ) {
     updatePrimitiveClassificationState(PrimitiveFilterType.LINE, updates);
+  }
+
+  function handleLineThicknessClassificationChange(
+    updates: Partial<ClassificationConfig>
+  ) {
+    updateLineThicknessClassificationState(updates);
   }
 
   function handleLineMappingChange(
@@ -1162,10 +1213,17 @@
     primitive: ClassifiablePrimitive,
     trigger: ClassificationBreakTrigger = CLASSIFICATION_BREAKS_TRIGGER.UNKNOWN
   ): void {
+    const scopeKey = buildClassificationScopeKey('fill', primitive);
+    const valueColumn = getPrimitiveValueColumn(selectedViz, primitive);
+    if (!isNumericDataField(valueColumn)) {
+      classificationBreaks.clearRetry(scopeKey);
+      return;
+    }
+
     void classificationBreaks.compute({
-      scopeKey: buildClassificationScopeKey('fill', primitive),
+      scopeKey,
       datasetId: selectedViz?.datasetId,
-      valueColumn: getPrimitiveValueColumn(selectedViz, primitive),
+      valueColumn,
       classification: getPrimitiveClassification(selectedViz, primitive),
       trigger,
       applyUpdate: (updates) =>
@@ -1173,14 +1231,44 @@
     });
   }
 
+  function computeLineThicknessBreaks(
+    trigger: ClassificationBreakTrigger = CLASSIFICATION_BREAKS_TRIGGER.UNKNOWN
+  ): void {
+    const target = lineThicknessTarget;
+    const scopeKey = buildClassificationScopeKey(
+      'size',
+      PrimitiveFilterType.LINE
+    );
+    if (!isNumericDataField(target?.valueColumn)) {
+      classificationBreaks.clearRetry(scopeKey);
+      return;
+    }
+
+    void classificationBreaks.compute({
+      scopeKey,
+      datasetId: selectedViz?.datasetId,
+      valueColumn: target?.valueColumn,
+      classification: target?.classification,
+      trigger,
+      applyUpdate: handleLineThicknessClassificationChange
+    });
+  }
+
   function computeBreaksForStrokePrimitive(
     primitive: StrokeClassifiablePrimitive,
     trigger: ClassificationBreakTrigger = CLASSIFICATION_BREAKS_TRIGGER.UNKNOWN
   ): void {
+    const scopeKey = buildClassificationScopeKey('stroke', primitive);
+    const valueColumn = getPrimitiveStrokeValueColumn(selectedViz, primitive);
+    if (!isNumericDataField(valueColumn)) {
+      classificationBreaks.clearRetry(scopeKey);
+      return;
+    }
+
     void classificationBreaks.compute({
-      scopeKey: buildClassificationScopeKey('stroke', primitive),
+      scopeKey,
       datasetId: selectedViz?.datasetId,
-      valueColumn: getPrimitiveStrokeValueColumn(selectedViz, primitive),
+      valueColumn,
       classification: getPrimitiveStrokeClassification(selectedViz, primitive),
       trigger,
       applyUpdate: (updates) =>
@@ -1192,8 +1280,17 @@
     trigger: ClassificationBreakTrigger = CLASSIFICATION_BREAKS_TRIGGER.UNKNOWN
   ): void {
     const target = symbolFillTarget;
+    const scopeKey = buildClassificationScopeKey(
+      'fill',
+      SYMBOL_FILL_SCOPE_TARGET
+    );
+    if (!isNumericDataField(target?.valueColumn)) {
+      classificationBreaks.clearRetry(scopeKey);
+      return;
+    }
+
     void classificationBreaks.compute({
-      scopeKey: buildClassificationScopeKey('fill', SYMBOL_FILL_SCOPE_TARGET),
+      scopeKey,
       datasetId: selectedViz?.datasetId,
       valueColumn: target?.valueColumn,
       classification: target?.classification,
@@ -1241,10 +1338,26 @@
       valueColumn: getPrimitiveValueColumn(selectedViz, primitive),
       categoryColumn: getPrimitiveCategoryColumn(selectedViz, primitive),
       classification: getPrimitiveClassification(selectedViz, primitive),
-      usesBreaks: usesBreakClassification(selectedViz, primitive),
+      usesBreaks:
+        primitive === PrimitiveFilterType.LINE
+          ? getLinePrimitive(selectedViz)?.colorMode === ColorMode.CLASSES
+          : usesBreakClassification(selectedViz, primitive),
       usesCategories: usesCategoricalClassification(selectedViz, primitive)
     }))
   );
+
+  const lineThicknessTarget = $derived.by(() => {
+    const line = getLinePrimitive(selectedViz);
+    if (!line) {
+      return null;
+    }
+
+    return {
+      valueColumn: line.valueColumn,
+      classification: getLineThicknessClassification(selectedViz),
+      usesBreaks: usesLineThicknessBreakClassification(selectedViz)
+    };
+  });
 
   const primitiveStrokeClassificationTargets = $derived.by(() =>
     STROKE_CLASSIFIABLE_PRIMITIVES.map((primitive) => ({
@@ -1376,11 +1489,17 @@
     trigger: ClassificationBreakTrigger = CLASSIFICATION_BREAKS_TRIGGER.UNKNOWN
   ): void {
     const target = textBackgroundTarget;
+    const scopeKey = buildClassificationScopeKey(
+      'fill',
+      TEXT_BACKGROUND_SCOPE_TARGET
+    );
+    if (!isNumericDataField(target?.valueColumn)) {
+      classificationBreaks.clearRetry(scopeKey);
+      return;
+    }
+
     void classificationBreaks.compute({
-      scopeKey: buildClassificationScopeKey(
-        'fill',
-        TEXT_BACKGROUND_SCOPE_TARGET
-      ),
+      scopeKey,
       datasetId: selectedViz?.datasetId,
       valueColumn: target?.valueColumn,
       classification: target?.classification,
@@ -1408,11 +1527,17 @@
     trigger: ClassificationBreakTrigger = CLASSIFICATION_BREAKS_TRIGGER.UNKNOWN
   ): void {
     const target = textBackgroundStrokeTarget;
+    const scopeKey = buildClassificationScopeKey(
+      'stroke',
+      TEXT_BACKGROUND_SCOPE_TARGET
+    );
+    if (!isNumericDataField(target?.valueColumn)) {
+      classificationBreaks.clearRetry(scopeKey);
+      return;
+    }
+
     void classificationBreaks.compute({
-      scopeKey: buildClassificationScopeKey(
-        'stroke',
-        TEXT_BACKGROUND_SCOPE_TARGET
-      ),
+      scopeKey,
       datasetId: selectedViz?.datasetId,
       valueColumn: target?.valueColumn,
       classification: target?.classification,
@@ -1447,6 +1572,8 @@
       ensurePrimitiveClassificationDefaults(primitive, visualization);
       ensureAutoColumns(primitive, visualization);
     }
+
+    ensureLineThicknessClassificationDefaults(visualization);
 
     for (const primitive of STROKE_CLASSIFIABLE_PRIMITIVES) {
       ensurePrimitiveStrokeClassificationDefaults(primitive, visualization);
@@ -1493,6 +1620,16 @@
     }
 
     const symbolFill = symbolFillTarget;
+    const lineThickness = lineThicknessTarget;
+    if (
+      lineThickness?.usesBreaks &&
+      lineThickness.valueColumn &&
+      lineThickness.classification?.method &&
+      !lineThickness.classification.breaks?.length
+    ) {
+      computeLineThicknessBreaks(CLASSIFICATION_BREAKS_TRIGGER.MISSING_BREAKS);
+    }
+
     if (
       symbolFill?.usesBreaks &&
       symbolFill.valueColumn &&
@@ -1552,6 +1689,18 @@
           CLASSIFICATION_BREAKS_TRIGGER.CLASSIFICATION_PARAMS_CHANGED
         );
       }
+    }
+
+    const lineThickness = lineThicknessTarget;
+    if (
+      lineThickness?.usesBreaks &&
+      lineThickness.classification?.method &&
+      lineThickness.classification?.numClasses &&
+      lineThickness.valueColumn
+    ) {
+      computeLineThicknessBreaks(
+        CLASSIFICATION_BREAKS_TRIGGER.CLASSIFICATION_PARAMS_CHANGED
+      );
     }
 
     const symbolFill = symbolFillTarget;
@@ -1693,6 +1842,10 @@
       }
 
       for (const target of primitiveClassificationTargets) {
+        if (!target.usesBreaks && !target.usesCategories) {
+          continue;
+        }
+
         syncClassificationColors(
           target.classification,
           target.usesCategories,
@@ -1730,6 +1883,10 @@
       }
 
       for (const target of primitiveStrokeClassificationTargets) {
+        if (!target.usesBreaks && !target.usesCategories) {
+          continue;
+        }
+
         syncClassificationColors(
           target.classification,
           target.usesCategories,
@@ -1830,6 +1987,7 @@
       onModesChange={handleLineModesChange}
       onMissingDataChange={handleLineMissingDataChange}
       onClassificationChange={handleLineClassificationChange}
+      onThicknessClassificationChange={handleLineThicknessClassificationChange}
       onMappingChange={handleLineMappingChange}
       onInvertPalette={handleLinePaletteInvert}
       onToggleVisibility={(checked) =>
