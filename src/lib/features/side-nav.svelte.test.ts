@@ -15,4 +15,11 @@ describe('side nav', () => {
     expect(source).toContain('color: var(--cds-text-01)');
     expect(source).not.toContain(':global(:root) #khartis-side-nav');
   });
+
+  it('renders the version label from an environment variable', () => {
+    expect(source).toContain(
+      'const appVersion = import.meta.env.VITE_APP_VERSION || DEFAULT_APP_VERSION;'
+    );
+    expect(source).toContain('m.sidenav_version({ version: appVersion })');
+  });
 });

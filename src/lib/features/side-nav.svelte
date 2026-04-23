@@ -40,7 +40,9 @@
   import Switch from './commons/components/switch.svelte';
   import { useSideNav } from './side-nav/hooks/use-side-nav.svelte';
 
+  const DEFAULT_APP_VERSION = '1.6.0-staging.1';
   const sideNav = useSideNav();
+  const appVersion = import.meta.env.VITE_APP_VERSION || DEFAULT_APP_VERSION;
   let shortcutLabels = $state(getSideNavShortcutLabels(false));
   let deferredInstallPrompt = $state<BeforeInstallPromptEvent | null>(null);
   let isInstallDialogOpen = $state(false);
@@ -583,7 +585,7 @@
         </Row>
       </Grid>
 
-      <span>{m.sidenav_version()}</span>
+      <span>{m.sidenav_version({ version: appVersion })}</span>
       <span>{m.sidenav_copyright({ year: new Date().getFullYear() })}</span>
     </aside>
   </SideNav>
