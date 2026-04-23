@@ -70,4 +70,9 @@ describe('SymbolsConfig container', () => {
       "role={discretizationTarget === 'fill' ? 'fill' : 'size'}"
     );
   });
+
+  it('forwards clear-all to the shared filter panel', () => {
+    expect(source).toContain('onClearFilters?: () => void');
+    expect(source).toContain('onClearFilters={onClearFilters}');
+  });
 });

@@ -22,10 +22,10 @@ describe('TextsConfig — FillSection wiring (background)', () => {
     );
   });
 
-  it('tags the primitive as text and sets categoriesVariant to texts', () => {
+  it('sets categoriesVariant to texts without a redundant primitive tag', () => {
     const fillBlock = source.split('<FillSection')[1]?.split('/>')[0];
     expect(fillBlock).toBeDefined();
-    expect(fillBlock).toContain('primitive="text"');
+    expect(fillBlock).not.toContain('primitive=');
     expect(fillBlock).toContain('categoriesVariant="texts"');
   });
 

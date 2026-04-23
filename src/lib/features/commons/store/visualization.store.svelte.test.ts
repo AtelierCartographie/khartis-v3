@@ -30,13 +30,16 @@ import {
   type VisualizationConfig
 } from './visualization.store.svelte';
 import {
+  ColorMode,
   CategoryShapeMode,
   FillMode,
+  MissingDataShape,
   ProportionalType,
   ShapeType,
   StrokeMode,
   SymbolDoublePosition,
-  SymbolMode
+  SymbolMode,
+  ThicknessMode
 } from '$lib/features/main-toolbar/constants';
 import { ScaleType } from './visualization.store.svelte';
 import { datasetsStore } from './datasets.store.svelte';
@@ -85,6 +88,35 @@ function buildDataset(): DatasetResult {
     },
     metadata: {
       processedAt: new Date('2026-04-16T00:00:00.000Z'),
+      fileType: 'geojson',
+      parserUsed: 'test'
+    },
+    format: FileFormatEnum.GEOJSON
+  };
+}
+
+function buildDatasetWithHiddenNumericId(): DatasetResult {
+  return {
+    id: 'dataset-hidden-id',
+    name: 'Dataset with hidden numeric id',
+    sourceFileId: 'source-hidden-id',
+    tableName: 'dataset_with_hidden_numeric_id',
+    columns: [
+      buildColumn('__id', ColumnType.NUMBER),
+      buildColumn('id', ColumnType.NUMBER),
+      buildColumn('li_type', ColumnType.TEXT),
+      buildColumn('geom', ColumnType.GEOMETRY)
+    ],
+    rowCount: 10,
+    geometry: {
+      type: 'LineString',
+      columnName: 'geom',
+      bounds: [0, 0, 1, 1],
+      centroid: [0.5, 0.5],
+      featureCount: 10
+    },
+    metadata: {
+      processedAt: new Date('2026-04-22T00:00:00.000Z'),
       fileType: 'geojson',
       parserUsed: 'test'
     },
@@ -175,6 +207,33 @@ describe('visualizationStore legacy label normalization', () => {
     expect(visualization?.style.textColor).toBe('#ff5500');
     expect(visualization?.style.textSize).toBe(9);
     expect(visualization?.style.labelOpacity).toBe(0);
+  });
+});
+
+describe('visualizationStore default mapping selection', () => {
+  afterEach(() => {
+    visualizationStore.clear();
+    datasetsStore.clear();
+    persistenceRegistry.markClean();
+  });
+
+  it('prefers a visible id column over hidden technical ids for numeric defaults', () => {
+    const dataset = buildDatasetWithHiddenNumericId();
+    datasetsStore.addProcessedDataset(dataset);
+
+    const proportional = visualizationStore.createVisualization(
+      VisualizationType.PROPORTIONAL,
+      dataset.id
+    );
+    const choropleth = visualizationStore.createVisualization(
+      VisualizationType.CHOROPLETH,
+      dataset.id
+    );
+
+    expect(proportional.mapping.sizeColumn).toBe('id');
+    expect(choropleth.mapping.valueColumn).toBe('id');
+    expect(proportional.mapping.sizeColumn).not.toBe('__id');
+    expect(choropleth.mapping.valueColumn).not.toBe('__id');
   });
 });
 
@@ -345,6 +404,7 @@ describe('visualizationStore suggestion origin tracking', () => {
 
     expect(updatedVisualization?.origin).toEqual({
       mode: 'custom',
+      suggestionKey: 'choropleth::1::population::polygon::QTR',
       restoreState: {
         origin: { mode: 'manual-blank' },
         visualization: {
@@ -362,6 +422,31 @@ describe('visualizationStore suggestion origin tracking', () => {
           dataFilters: visualization.dataFilters
         }
       }
+    });
+  });
+
+  it('preserves the last applied suggestion key when semantic edits promote a suggestion to custom', () => {
+    datasetsStore.addProcessedDataset(buildDataset());
+
+    const visualization = visualizationStore.createVisualization(
+      VisualizationType.CATEGORICAL,
+      'dataset-1'
+    );
+
+    visualizationStore.updateVisualization(visualization.id, {
+      origin: {
+        mode: 'manual-suggestion',
+        suggestionKey: 'lines_colorful_QL::1::li_type::line::QL'
+      }
+    });
+
+    visualizationStore.updateModes(visualization.id, {
+      color: ColorMode.UNIQUE
+    });
+
+    expect(visualizationStore.selectedVisualization?.origin).toEqual({
+      mode: 'custom',
+      suggestionKey: 'lines_colorful_QL::1::li_type::line::QL'
     });
   });
 });
@@ -793,5 +878,190 @@ describe('visualizationStore SymbolPrimitiveConfig round-trip persistence', () =
       restoredSymbol?.modeStates?.[SymbolMode.CATEGORIES]?.strokeClassification
         ?.labels
     ).toEqual(['North', 'South', 'East', 'West']);
+  });
+});
+
+describe('visualizationStore LinePrimitiveConfig round-trip persistence', () => {
+  afterEach(() => {
+    visualizationStore.clear();
+    datasetsStore.clear();
+    persistenceRegistry.markClean();
+  });
+
+  function buildRichLineVisualization(): VisualizationConfig {
+    return {
+      id: 'viz-line-full',
+      name: 'Lines full',
+      datasetId: 'dataset-1',
+      enabled: true,
+      type: VisualizationType.CATEGORICAL,
+      primitiveFilters: [PrimitiveFilterType.LINE],
+      primitiveOrder: [PrimitiveFilterType.LINE],
+      modes: {
+        color: ColorMode.CATEGORIES,
+        thickness: ThicknessMode.PROPORTIONAL
+      },
+      style: {
+        lineOpacity: 0.66,
+        lineWidth: 2,
+        lineMaxWidth: 14,
+        lineDashed: true
+      },
+      mapping: {
+        geometryColumn: 'geom',
+        categoryColumn: 'segment',
+        valueColumn: 'capacity',
+        sizeColumn: 'population'
+      },
+      lineClassification: {
+        method: ClassificationMethod.MANUAL,
+        classes: 4,
+        numClasses: 4,
+        colors: ['#e41a1c', '#377eb8', '#4daf4a', '#984ea3'],
+        labels: ['A', 'B', 'C', 'D'],
+        disabledLabels: ['D'],
+        paletteId: 'categorical-set1'
+      },
+      lineThicknessClassification: {
+        method: ClassificationMethod.JENKS,
+        classes: 3,
+        numClasses: 3,
+        breaks: [10, 20],
+        counts: [2, 3, 1],
+        colors: ['#f7fbff', '#6baed6', '#08519c']
+      },
+      line: {
+        enabled: true,
+        colorMode: ColorMode.CATEGORIES,
+        thicknessMode: ThicknessMode.PROPORTIONAL,
+        color: '#e41a1c',
+        width: 2,
+        maxWidth: 14,
+        opacity: 0.66,
+        dashed: true,
+        valueColumn: 'capacity',
+        categoryColumn: 'segment',
+        sizeColumn: 'population',
+        classification: {
+          method: ClassificationMethod.MANUAL,
+          classes: 4,
+          numClasses: 4,
+          colors: ['#e41a1c', '#377eb8', '#4daf4a', '#984ea3'],
+          labels: ['A', 'B', 'C', 'D'],
+          disabledLabels: ['D'],
+          paletteId: 'categorical-set1'
+        },
+        thicknessClassification: {
+          method: ClassificationMethod.JENKS,
+          classes: 3,
+          numClasses: 3,
+          breaks: [10, 20],
+          counts: [2, 3, 1],
+          colors: ['#f7fbff', '#6baed6', '#08519c']
+        },
+        colorModeStates: {
+          [ColorMode.CLASSES]: {
+            valueColumn: 'capacity',
+            classification: {
+              method: ClassificationMethod.JENKS,
+              classes: 5,
+              numClasses: 5,
+              breaks: [5, 10, 20, 30],
+              colors: ['#fee5d9', '#fcae91', '#fb6a4a', '#de2d26', '#a50f15']
+            }
+          },
+          [ColorMode.UNIQUE]: {
+            color: '#0055aa'
+          }
+        },
+        thicknessModeStates: {
+          [ThicknessMode.UNIQUE]: {
+            width: 4
+          },
+          [ThicknessMode.CLASSES]: {
+            valueColumn: 'capacity',
+            maxWidth: 18,
+            thicknessClassification: {
+              method: ClassificationMethod.MANUAL,
+              classes: 4,
+              numClasses: 4,
+              breaks: [8, 16, 24],
+              counts: [3, 2, 1, 1]
+            }
+          }
+        },
+        missingData: {
+          show: true,
+          shape: MissingDataShape.CIRCLE,
+          size: 3,
+          color: '#bdbdbd',
+          opacity: 0.5
+        }
+      }
+    };
+  }
+
+  it('keeps proportional size mapping and categorical classification through the persistence registry round-trip used by project saves', () => {
+    datasetsStore.addProcessedDataset(buildDataset());
+    const input = buildRichLineVisualization();
+
+    visualizationStore.restoreFromSerialized({
+      visualizations: [input],
+      selectedVisualizationId: input.id,
+      activeVisualizationIds: [input.id]
+    });
+
+    const serialized = persistenceRegistry.serializeAll().visualization as {
+      visualizations: VisualizationConfig[];
+      selectedVisualizationId?: string;
+      activeVisualizationIds?: string[];
+    };
+
+    visualizationStore.clear();
+
+    visualizationStore.restoreFromSerialized({
+      visualizations: serialized.visualizations,
+      selectedVisualizationId: serialized.selectedVisualizationId,
+      activeVisualizationIds: serialized.activeVisualizationIds ?? []
+    });
+
+    const viz = visualizationStore.selectedVisualization;
+    expect(viz).toBeDefined();
+    if (!viz) {
+      throw new Error(
+        'line visualization missing after persistence round-trip'
+      );
+    }
+
+    expect(viz.mapping.categoryColumn).toBe('segment');
+    expect(viz.mapping.valueColumn).toBe('capacity');
+    expect(viz.mapping.sizeColumn).toBe('population');
+    expect(viz.line?.colorMode).toBe(ColorMode.CATEGORIES);
+    expect(viz.line?.thicknessMode).toBe(ThicknessMode.PROPORTIONAL);
+    expect(viz.line?.opacity).toBeCloseTo(0.66);
+    expect(viz.line?.maxWidth).toBe(14);
+    expect(viz.line?.dashed).toBe(true);
+    expect(viz.line?.classification?.labels).toEqual(['A', 'B', 'C', 'D']);
+    expect(viz.line?.classification?.disabledLabels).toEqual(['D']);
+    expect(viz.line?.classification?.paletteId).toBe('categorical-set1');
+    expect(viz.line?.thicknessClassification?.breaks).toEqual([10, 20]);
+    expect(viz.lineThicknessClassification?.counts).toEqual([2, 3, 1]);
+    expect(viz.line?.colorModeStates?.[ColorMode.CLASSES]?.valueColumn).toBe(
+      'capacity'
+    );
+    expect(viz.line?.colorModeStates?.[ColorMode.UNIQUE]?.color).toBe(
+      '#0055aa'
+    );
+    expect(viz.line?.thicknessModeStates?.[ThicknessMode.UNIQUE]?.width).toBe(
+      4
+    );
+    expect(
+      viz.line?.thicknessModeStates?.[ThicknessMode.CLASSES]?.maxWidth
+    ).toBe(18);
+    expect(
+      viz.line?.thicknessModeStates?.[ThicknessMode.CLASSES]
+        ?.thicknessClassification?.breaks
+    ).toEqual([8, 16, 24]);
+    expect(viz.line?.missingData?.color).toBe('#bdbdbd');
   });
 });

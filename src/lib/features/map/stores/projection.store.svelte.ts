@@ -11,6 +11,7 @@ interface ProjectionState {
   referenceGeoMetadata: string | null;
   canvasSize: CanvasSize;
   fitPaddingPx: number;
+  renderScale: number;
   modelMatrix: Matrix4 | null;
   /** True when referenceBbox is in d3-geo projected coordinates (Y-down) */
   isProjectedCoordinates: boolean;
@@ -25,6 +26,7 @@ function createProjectionStore() {
     referenceGeoMetadata: null,
     canvasSize: DEFAULT_CANVAS_SIZE,
     fitPaddingPx: DEFAULT_FIT_PADDING_PX,
+    renderScale: 1,
     modelMatrix: null,
     isProjectedCoordinates: false
   });
@@ -107,11 +109,19 @@ function createProjectionStore() {
     recalculateModelMatrix();
   }
 
+  function setRenderScale(renderScale: number): void {
+    const nextRenderScale =
+      Number.isFinite(renderScale) && renderScale > 0 ? renderScale : 1;
+
+    state.renderScale = nextRenderScale;
+  }
+
   function clear(): void {
     state.referenceBbox = null;
     state.referenceGeoMetadata = null;
     state.modelMatrix = null;
     state.fitPaddingPx = DEFAULT_FIT_PADDING_PX;
+    state.renderScale = 1;
     state.isProjectedCoordinates = false;
   }
 
@@ -121,6 +131,7 @@ function createProjectionStore() {
     state.canvasSize = DEFAULT_CANVAS_SIZE;
     state.modelMatrix = null;
     state.fitPaddingPx = DEFAULT_FIT_PADDING_PX;
+    state.renderScale = 1;
     state.isProjectedCoordinates = false;
   }
 
@@ -140,6 +151,9 @@ function createProjectionStore() {
     get fitPaddingPx(): number {
       return state.fitPaddingPx;
     },
+    get renderScale(): number {
+      return state.renderScale;
+    },
     get hasProjection(): boolean {
       return state.modelMatrix !== null;
     },
@@ -147,6 +161,7 @@ function createProjectionStore() {
     setReferenceBbox,
     updateCanvasSize,
     setFitPadding,
+    setRenderScale,
     clear,
     reset
   };

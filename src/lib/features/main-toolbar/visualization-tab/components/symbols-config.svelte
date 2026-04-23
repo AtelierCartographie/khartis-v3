@@ -101,7 +101,8 @@
     filters = [],
     onAddFilter,
     onUpdateFilter,
-    onRemoveFilter
+    onRemoveFilter,
+    onClearFilters
   }: Props = $props();
 
   let discretizationModalOpen = $state(false);
@@ -326,6 +327,7 @@
     onAddFilter={onAddFilter ?? (() => {})}
     onUpdateFilter={onUpdateFilter}
     onRemoveFilter={onRemoveFilter ?? (() => {})}
+    onClearFilters={onClearFilters}
     onClose={() => {
       filterSectionVisible = false;
     }}

@@ -92,9 +92,7 @@ describe('CategoriesAspectPopover (Figma 952:156994 — Polygons variant)', () =
       'class="common-paired-row common-paired-row--with-input"'
     );
     expect(source).toContain('class="common-divider"');
-    expect(source).toContain(
-      '.common-symbols-layout :global(.kh-switch-native)'
-    );
+    expect(source).not.toContain('--kh-switch-on-bg');
   });
 
   it('should ship a CategoriesCommonAspect draft initialised via DEFAULT_COMMON_ASPECT', () => {

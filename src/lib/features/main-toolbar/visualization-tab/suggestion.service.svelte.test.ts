@@ -66,7 +66,8 @@ import {
   DEFAULT_COLORS,
   FillMode,
   SymbolDoublePosition,
-  SymbolMode
+  SymbolMode,
+  ThicknessMode
 } from '$lib/features/main-toolbar/constants';
 import {
   applyBlankVisualizationPreset,
@@ -157,6 +158,30 @@ function createLineDataset(): SuggestionTestDataset {
       { name: 'category', type: 'string', stats: {}, values: [] },
       { name: 'population_total', type: 'number', stats: {}, values: [] },
       { name: 'density', type: 'number', stats: {}, values: [] }
+    ]
+  } as unknown as SuggestionTestDataset;
+}
+
+function createLineDatasetWithHiddenTechnicalId(): SuggestionTestDataset {
+  return {
+    id: 'dataset-4',
+    name: 'Line dataset with hidden id',
+    sourceFileId: 'source-4',
+    tableName: 'line_dataset_hidden_id',
+    rowCount: 12,
+    geometry: {
+      type: 'LineString'
+    },
+    metadata: {
+      processedAt: new Date(),
+      fileType: 'geojson',
+      parserUsed: 'test'
+    },
+    columns: [
+      { name: 'geometry', type: 'geometry', stats: {}, values: [] },
+      { name: '__id', type: 'number', stats: {}, values: [] },
+      { name: 'id', type: 'number', stats: {}, values: [] },
+      { name: 'li_type', type: 'string', stats: {}, values: [] }
     ]
   } as unknown as SuggestionTestDataset;
 }
@@ -566,6 +591,47 @@ describe('suggestion.service', () => {
     expect(updatedVisualization?.mapping.valueColumn).toBe('population_total');
     expect(updatedVisualization?.style.textOpacity).toBe(0);
     expect(updatedVisualization?.style.labelOpacity).toBe(0);
+  });
+
+  it('does not leak hidden technical ids into line suggestions or proportional defaults', () => {
+    const dataset = createLineDatasetWithHiddenTechnicalId();
+    mocks.datasets = [dataset];
+    mocks.selectedDatasetId = dataset.id;
+
+    const visualization = visualizationStore.createVisualization(
+      VisualizationType.CHOROPLETH,
+      dataset.id
+    );
+
+    applySuggestionToVisualization(visualization.id, {
+      id: 'lines_colorful_QL',
+      label: 'Lignes colorées',
+      nbColumns: 1,
+      semioTypes: ['QL'],
+      geometries: ['line'],
+      columns: ['li_type'],
+      score: 50
+    });
+
+    visualizationStore.updateVisualization(visualization.id, {
+      line: {
+        ...visualizationStore.visualizations.find(
+          (item) => item.id === visualization.id
+        )!.line!,
+        thicknessMode: ThicknessMode.PROPORTIONAL
+      }
+    });
+
+    const updatedVisualization = visualizationStore.visualizations.find(
+      (item) => item.id === visualization.id
+    );
+
+    expect(updatedVisualization?.mapping.categoryColumn).toBe('li_type');
+    expect(updatedVisualization?.mapping.valueColumn).toBeUndefined();
+    expect(updatedVisualization?.mapping.sizeColumn).not.toBe('__id');
+    expect(updatedVisualization?.line?.categoryColumn).toBe('li_type');
+    expect(updatedVisualization?.line?.valueColumn).toBeUndefined();
+    expect(updatedVisualization?.line?.sizeColumn).not.toBe('__id');
   });
 
   it('restores the previous manual visualization when a suggestion is deselected', () => {

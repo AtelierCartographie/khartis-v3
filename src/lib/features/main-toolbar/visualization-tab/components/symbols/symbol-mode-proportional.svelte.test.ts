@@ -41,7 +41,7 @@ describe('SymbolModeProportional (proportionnels.png + en classes.png)', () => {
       "import FillSection from '../shared/fill-section.svelte'"
     );
     expect(source).toContain('<FillSection');
-    expect(source).toContain('primitive="symbol"');
+    expect(source).not.toContain('primitive="symbol"');
     expect(source).toContain('availableModes={FILL_MODES_STANDARD}');
     expect(source).toContain('categoriesVariant="symbols-unique"');
   });

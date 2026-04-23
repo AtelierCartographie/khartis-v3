@@ -39,6 +39,13 @@ describe('ConfigureVisualization', () => {
     expect(source).toContain('classificationBreaks.compute({');
   });
 
+  it('clears pending break retries when a break slot points to a non-numeric field', () => {
+    expect(source).toContain('function isNumericDataField(');
+    expect(source).toContain('!isNumericDataField(valueColumn)');
+    expect(source).toContain('!isNumericDataField(target?.valueColumn)');
+    expect(source).toContain('classificationBreaks.clearRetry(scopeKey);');
+  });
+
   it('delegates shared primitive orchestration to the dedicated controller', () => {
     expect(source).toContain(
       "  } from './use-primitive-panel-controller.svelte';"
@@ -78,6 +85,19 @@ describe('ConfigureVisualization', () => {
     expect(source).toContain('buildPolygonPanelVisualization');
     expect(source).toContain('buildSymbolFillPanelVisualization');
     expect(source).toContain('buildSymbolPanelVisualization');
+  });
+
+  it('routes polygon density edits through a dedicated handler instead of generic polygon mapping', () => {
+    expect(source).toContain(
+      'function handlePolygonDensityChange(updates: Partial<DensityConfig>)'
+    );
+    expect(source).toContain('density: {');
+    expect(source).toContain('...(selectedViz?.density ?? {}),');
+    const polygonsConfigBlock = source.match(/<PolygonsConfig[\s\S]*?\/>/);
+    expect(polygonsConfigBlock).not.toBeNull();
+    expect(polygonsConfigBlock![0]).toContain(
+      'onDensityChange={handlePolygonDensityChange}'
+    );
   });
 
   it('wires text background handlers independently from polygon handlers', () => {

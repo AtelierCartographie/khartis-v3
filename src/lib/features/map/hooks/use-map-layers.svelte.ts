@@ -1,5 +1,6 @@
 import type { Layer } from '@deck.gl/core';
 import type { MapboxOverlay } from '@deck.gl/mapbox';
+import type { Matrix4 } from '@math.gl/core';
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { FeatureCollection } from 'geojson';
@@ -76,6 +77,7 @@ export interface UseMapLayersProps {
     datasetId: string
   ) => BasemapMetadata | null;
   getProjectionFitBbox?: () => BBox | null;
+  getModelMatrix?: () => Matrix4 | null | undefined;
   getShouldRenderDatasetFallbacks?: () => boolean;
   getTableFilters?: (datasetId: string) => DataTableFilter[] | undefined;
   onBasemapLayersLoaded?: () => void;
@@ -102,6 +104,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     buildLayerContextForViz,
     getProjectionMetadataForDataset,
     getProjectionFitBbox,
+    getModelMatrix,
     getShouldRenderDatasetFallbacks,
     getTableFilters,
     onBasemapLayersLoaded,
@@ -577,7 +580,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       // In MapLibre mode (deckOverlay), the map handles projection including globe
       const isOrthographicMode = !deckOverlay && Boolean(deckInstance);
       const matrixToApply = isOrthographicMode
-        ? projectionStore.modelMatrix
+        ? (getModelMatrix?.() ?? projectionStore.modelMatrix)
         : null;
 
       // In MapLibre mode, use projection suffix to force layer re-creation when projection changes

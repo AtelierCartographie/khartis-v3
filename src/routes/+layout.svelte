@@ -48,7 +48,6 @@
     WORKSPACE_FIT_EVENT,
     clampWorkspacePanOffset,
     isWorkspacePanTarget,
-    resolveReadablePagePreviewScale,
     resolveWorkspaceViewportBounds,
     type WorkspaceViewportBounds
   } from '$lib/features/commons/utils/workspace-viewport.utils';
@@ -241,16 +240,12 @@
   }
 
   $effect(() => {
-    void pageZoomScale;
+    void globalState.zoom.pageZoomScale;
     void zoomModeStore.mode;
 
     requestAnimationFrame(() => {
       updateWorkspaceViewportState();
     });
-  });
-
-  $effect(() => {
-    globalActions.setPageZoomScale(pageZoomScale);
   });
 
   $effect(() => {
@@ -315,51 +310,16 @@
 
   const LEFT_BUTTON = 0;
   const MIDDLE_BUTTON = 1;
-  const WORKSPACE_FIT_PADDING_PX = 30;
   let workspaceViewportElement = $state<HTMLElement | null>(null);
   let stepToolbarWidth = $state(0);
-  let workspaceWidth = $state(0);
-  let workspaceHeight = $state(0);
-  let pageIntrinsicWidth = $state(0);
-  let pageIntrinsicHeight = $state(0);
   let stepToolbarResizeObserver: ResizeObserver | null = null;
   let observedPageElement: HTMLElement | null = null;
 
-  const fitScale = $derived.by(() => {
-    if (
-      workspaceWidth <= 0 ||
-      workspaceHeight <= 0 ||
-      pageIntrinsicWidth <= 0 ||
-      pageIntrinsicHeight <= 0
-    ) {
-      return 1;
-    }
-    const effectiveWidth = Math.max(
-      1,
-      workspaceWidth - stepToolbarWidth - WORKSPACE_FIT_PADDING_PX * 2
-    );
-    const effectiveHeight = Math.max(
-      1,
-      workspaceHeight - WORKSPACE_FIT_PADDING_PX * 2
-    );
-    return resolveReadablePagePreviewScale(
-      Math.min(
-        1,
-        effectiveWidth / pageIntrinsicWidth,
-        effectiveHeight / pageIntrinsicHeight
-      )
-    );
-  });
-
-  const pageZoomScale = $derived(
-    fitScale * (globalState.zoom.pageZoomLevel / 100)
-  );
   const pagePan = $derived(globalState.zoom.pagePanOffset);
   const workspaceCenteringOffsetX = $derived(stepToolbarWidth / 2);
   const workspaceCameraStyle = $derived(
     `transform: translate(${pagePan.x + workspaceCenteringOffsetX}px, ${pagePan.y}px);`
   );
-  const pageScaleStyle = $derived(`zoom: ${pageZoomScale};`);
   let workspaceViewportBounds = $state<WorkspaceViewportBounds>(
     DEFAULT_WORKSPACE_VIEWPORT_BOUNDS
   );
@@ -389,17 +349,12 @@
       return;
     }
 
-    workspaceWidth = viewportElement.clientWidth;
-    workspaceHeight = viewportElement.clientHeight;
-    pageIntrinsicWidth = pageElement.offsetWidth;
-    pageIntrinsicHeight = pageElement.offsetHeight;
-
     const nextBounds = resolveWorkspaceViewportBounds({
       viewportWidth: viewportElement.clientWidth,
       viewportHeight: viewportElement.clientHeight,
       pageWidth: pageElement.offsetWidth,
       pageHeight: pageElement.offsetHeight,
-      pageZoomScale
+      pageZoomScale: 1
     });
 
     workspaceViewportBounds = nextBounds;
@@ -627,7 +582,7 @@
         class:has-overflow={hasWorkspaceOverflow}
       >
         <div class="workspace-camera" style={workspaceCameraStyle}>
-          <div class="page-scale-layer" style={pageScaleStyle}>
+          <div class="page-scale-layer">
             <div class="page-content-wrapper">
               {@render children()}
             </div>

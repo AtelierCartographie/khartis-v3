@@ -966,22 +966,6 @@
     color: var(--cds-text-primary, #161616);
   }
 
-  .common-symbols-layout :global(.kh-switch-native) {
-    --kh-switch-on-bg: #726e6e;
-    --kh-switch-off-bg: #c6c6c6;
-  }
-
-  .common-symbols-layout :global(.kh-switch-native.sm .kh-switch-input) {
-    width: 32px;
-    height: 16px;
-  }
-
-  .common-symbols-layout
-    :global(.kh-switch-native.sm .kh-switch-input::before) {
-    width: 10px;
-    height: 10px;
-  }
-
   .common-select {
     display: flex;
     align-items: center;
@@ -1242,32 +1226,6 @@
     :global(.bx--btn) {
       flex: 1;
     }
-  }
-
-  .toggle-control :global(.kh-switch-input),
-  .toggle-only-control :global(.kh-switch-input) {
-    width: 32px;
-    height: 16px;
-    background-color: #c6c6c6;
-  }
-
-  .toggle-control :global(.kh-switch-input)::before,
-  .toggle-only-control :global(.kh-switch-input)::before {
-    top: 3px;
-    left: 3px;
-    width: 10px;
-    height: 10px;
-    background-color: #ffffff;
-  }
-
-  .toggle-control :global(.kh-switch-input:checked),
-  .toggle-only-control :global(.kh-switch-input:checked) {
-    background-color: #726e6e;
-  }
-
-  .toggle-control :global(.kh-switch-input:checked)::before,
-  .toggle-only-control :global(.kh-switch-input:checked)::before {
-    transform: translateX(16px);
   }
 
   .toggle-control :global(.kh-switch-native),

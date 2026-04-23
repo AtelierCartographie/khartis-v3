@@ -8,36 +8,28 @@
   import {
     DENSITY_DEFAULTS,
     DENSITY_LEVEL,
+    type DensityConfig,
     type DensityLevelName,
     type DensityLevelOption
   } from '$lib/features/main-toolbar/constants';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
-  import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { InfoPopover, SliderWithInput } from '../shared';
   import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
-  import type {
-    MissingDataConfig,
-    VisualizationConfig,
-    VisualizationModes
-  } from '$lib/features/commons/store/visualization.store.svelte';
+  import type { VisualizationConfig } from '$lib/features/commons/store/visualization.store.svelte';
 
   interface Props {
     dataFields: Array<{ id: number; text: string; type?: string }>;
     visualization?: VisualizationConfig;
-    onMappingChange?: (
-      updates: Partial<VisualizationConfig['mapping']>
-    ) => void;
+    onDensityChange?: (updates: Partial<DensityConfig>) => void;
     onStyleChange?: (updates: Partial<VisualizationConfig['style']>) => void;
-    onModesChange?: (updates: Partial<VisualizationModes>) => void;
-    onMissingDataChange?: (updates: Partial<MissingDataConfig>) => void;
   }
 
   let {
     dataFields = [],
     visualization,
-    onMappingChange,
+    onDensityChange,
     onStyleChange
   }: Props = $props();
 
@@ -109,17 +101,8 @@
         (field) => field.text === persistedColumn
       );
       selectedColumnId = idx >= 0 ? dataFields[idx].id : NONE_FIELD_ID;
-      if (
-        visualization?.id &&
-        !visualization.density?.valueColumn &&
-        persistedColumn
-      ) {
-        visualizationStore.updateVisualization(visualization.id, {
-          density: {
-            ...(visualization.density ?? {}),
-            valueColumn: persistedColumn
-          }
-        });
+      if (!visualization?.density?.valueColumn && persistedColumn) {
+        onDensityChange?.({ valueColumn: persistedColumn });
       }
     } else {
       selectedColumnId = NONE_FIELD_ID;
@@ -175,18 +158,15 @@
         }
         levelOptions = fresh;
         const standard = fresh.find((o) => o.level === DENSITY_LEVEL.STANDARD);
-        if (standard && visualization?.id) {
+        if (standard) {
           const currentLevel =
             visualization?.density?.level ?? DENSITY_DEFAULTS.level;
           const picked =
             fresh.find((o) => o.level === currentLevel) ?? standard;
-          visualizationStore.updateVisualization(visualization.id, {
-            density: {
-              ...(visualization.density ?? {}),
-              valueColumn: column,
-              level: picked.level,
-              ratio: picked.ratio
-            }
+          onDensityChange?.({
+            valueColumn: column,
+            level: picked.level,
+            ratio: picked.ratio
           });
         }
       } catch (error) {
@@ -205,71 +185,33 @@
   function handleColumnSelect(fieldId: number) {
     selectedColumnId = fieldId;
     if (fieldId === NONE_FIELD_ID) {
-      onMappingChange?.({ valueColumn: undefined });
-      if (visualization?.id) {
-        visualizationStore.updateVisualization(visualization.id, {
-          density: {
-            ...(visualization.density ?? {}),
-            valueColumn: undefined,
-            ratio: undefined
-          }
-        });
-      }
+      onDensityChange?.({ valueColumn: undefined, ratio: undefined });
       return;
     }
 
     const field = dataFields.find((item) => item.id === fieldId);
     if (!field) return;
 
-    onMappingChange?.({ valueColumn: field.text });
-    if (visualization?.id) {
-      visualizationStore.updateVisualization(visualization.id, {
-        density: {
-          ...(visualization.density ?? {}),
-          valueColumn: field.text,
-          ratio: undefined
-        }
-      });
-    }
+    onDensityChange?.({ valueColumn: field.text, ratio: undefined });
   }
 
   function handleLevelChange(level: DensityLevelName) {
     if (level === selectedLevel) return;
     selectedLevel = level;
     const option = dedupedLevelOptions.find((o) => o.level === level);
-    if (option && visualization?.id) {
-      visualizationStore.updateVisualization(visualization.id, {
-        density: {
-          ...(visualization.density ?? {}),
-          level,
-          ratio: option.ratio
-        }
-      });
+    if (option) {
+      onDensityChange?.({ level, ratio: option.ratio });
     }
   }
 
   function handleDotSizeChange(value: number) {
     dotSize = value;
-    if (visualization?.id) {
-      visualizationStore.updateVisualization(visualization.id, {
-        density: {
-          ...(visualization.density ?? {}),
-          dotSize: value
-        }
-      });
-    }
+    onDensityChange?.({ dotSize: value });
   }
 
   function handleFillColorChange(value: string) {
     fillColor = value;
-    if (visualization?.id) {
-      visualizationStore.updateVisualization(visualization.id, {
-        density: {
-          ...(visualization.density ?? {}),
-          color: value
-        }
-      });
-    }
+    onDensityChange?.({ color: value });
   }
 
   function handleFillOpacityChange(value: number) {

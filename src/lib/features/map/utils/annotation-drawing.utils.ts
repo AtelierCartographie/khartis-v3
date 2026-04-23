@@ -1,18 +1,127 @@
 type DrawingPoint = { x: number; y: number };
 
-type DrawingBezierSegment = {
-  cp1: DrawingPoint;
-  cp2: DrawingPoint;
-  end: DrawingPoint;
-  start: DrawingPoint;
-};
+const MAX_DRAWING_SMOOTHING_ITERATIONS = 3;
+const MAX_DRAWING_CUT_RATIO = 0.22;
+const MIN_DRAWING_NEIGHBOR_WEIGHT = 0.18;
+const MAX_DRAWING_NEIGHBOR_WEIGHT = 0.5;
 
 function normalizeSmoothness(smoothness: number): number {
   return Math.max(0, Math.min(100, smoothness));
 }
 
-function getDrawingTension(smoothness: number): number {
-  return (normalizeSmoothness(smoothness) / 100) * 0.5;
+function getDrawingSmoothnessFactor(smoothness: number): number {
+  return Math.sqrt(normalizeSmoothness(smoothness) / 100);
+}
+
+function interpolateDrawingPoint(
+  start: DrawingPoint,
+  end: DrawingPoint,
+  ratio: number
+): DrawingPoint {
+  return {
+    x: start.x + (end.x - start.x) * ratio,
+    y: start.y + (end.y - start.y) * ratio
+  };
+}
+
+function roundDrawingPoint(point: DrawingPoint): DrawingPoint {
+  return {
+    x: Math.round(point.x * 100) / 100,
+    y: Math.round(point.y * 100) / 100
+  };
+}
+
+function dedupeDrawingPoints(points: DrawingPoint[]): DrawingPoint[] {
+  const deduped: DrawingPoint[] = [];
+
+  for (const point of points) {
+    const previous = deduped[deduped.length - 1];
+    if (
+      previous &&
+      Math.abs(previous.x - point.x) < 0.01 &&
+      Math.abs(previous.y - point.y) < 0.01
+    ) {
+      continue;
+    }
+
+    deduped.push(roundDrawingPoint(point));
+  }
+
+  return deduped;
+}
+
+function smoothDrawingPointPositions(
+  points: DrawingPoint[],
+  smoothnessFactor: number,
+  closed: boolean
+): DrawingPoint[] {
+  if (points.length < 3 || smoothnessFactor < 0.001) {
+    return points;
+  }
+
+  const passes = Math.max(
+    1,
+    Math.ceil(smoothnessFactor * MAX_DRAWING_SMOOTHING_ITERATIONS)
+  );
+  const neighborWeight =
+    MIN_DRAWING_NEIGHBOR_WEIGHT +
+    (MAX_DRAWING_NEIGHBOR_WEIGHT - MIN_DRAWING_NEIGHBOR_WEIGHT) *
+      smoothnessFactor;
+
+  let smoothedPoints = points.map((point) => ({ ...point }));
+
+  for (let pass = 0; pass < passes; pass += 1) {
+    smoothedPoints = smoothedPoints.map((point, index) => {
+      if (!closed && (index === 0 || index === smoothedPoints.length - 1)) {
+        return point;
+      }
+
+      const previous = getDrawingPoint(smoothedPoints, index - 1, closed);
+      const next = getDrawingPoint(smoothedPoints, index + 1, closed);
+      const neighborhood = {
+        x: (previous.x + next.x) / 2,
+        y: (previous.y + next.y) / 2
+      };
+
+      return interpolateDrawingPoint(point, neighborhood, neighborWeight);
+    });
+  }
+
+  return smoothedPoints;
+}
+
+function cutDrawingCorners(
+  points: DrawingPoint[],
+  cutRatio: number,
+  closed: boolean
+): DrawingPoint[] {
+  if (points.length < 2 || cutRatio < 0.001) {
+    return points;
+  }
+
+  const nextPoints: DrawingPoint[] = [];
+
+  if (!closed) {
+    nextPoints.push(points[0]);
+  }
+
+  const segmentCount = closed ? points.length : points.length - 1;
+
+  for (let index = 0; index < segmentCount; index += 1) {
+    const start = getDrawingPoint(points, index, closed);
+    const end = getDrawingPoint(points, index + 1, closed);
+
+    nextPoints.push(
+      interpolateDrawingPoint(start, end, cutRatio),
+      interpolateDrawingPoint(start, end, 1 - cutRatio)
+    );
+  }
+
+  if (!closed) {
+    nextPoints.push(points[points.length - 1]);
+  }
+
+  return nextPoints;
 }
 
 function getDrawingPoint(
@@ -28,52 +137,51 @@ function getDrawingPoint(
   return points[Math.max(0, Math.min(points.length - 1, index))];
 }
 
-function getDrawingBezierSegments(
+function getSmoothedDrawingPoints(
   points: DrawingPoint[],
   smoothness: number,
   closed: boolean
-): DrawingBezierSegment[] {
-  if (points.length < 2) {
-    return [];
+): DrawingPoint[] {
+  if (points.length < 2 || (closed && points.length < 3)) {
+    return points;
   }
 
-  const tension = getDrawingTension(smoothness);
-  if (tension < 0.001 || points.length === 2) {
-    return [];
+  const smoothnessFactor = getDrawingSmoothnessFactor(smoothness);
+  if (smoothnessFactor < 0.001) {
+    return points;
   }
 
-  const segmentCount = closed ? points.length : points.length - 1;
-  const segments: DrawingBezierSegment[] = [];
+  const cutRatio =
+    MAX_DRAWING_CUT_RATIO * 0.5 +
+    MAX_DRAWING_CUT_RATIO * 0.5 * smoothnessFactor;
+  const iterations = Math.max(
+    1,
+    Math.ceil((smoothnessFactor * MAX_DRAWING_SMOOTHING_ITERATIONS) / 1.5)
+  );
 
-  for (let index = 0; index < segmentCount; index += 1) {
-    const previous = getDrawingPoint(points, index - 1, closed);
-    const start = getDrawingPoint(points, index, closed);
-    const end = getDrawingPoint(points, index + 1, closed);
-    const next = getDrawingPoint(points, index + 2, closed);
+  let smoothedPoints = smoothDrawingPointPositions(
+    points,
+    smoothnessFactor,
+    closed
+  );
 
-    segments.push({
-      start,
-      end,
-      cp1: {
-        x: start.x + (end.x - previous.x) * tension,
-        y: start.y + (end.y - previous.y) * tension
-      },
-      cp2: {
-        x: end.x - (next.x - start.x) * tension,
-        y: end.y - (next.y - start.y) * tension
-      }
-    });
+  for (let iteration = 0; iteration < iterations; iteration += 1) {
+    smoothedPoints = cutDrawingCorners(smoothedPoints, cutRatio, closed);
   }
 
-  return segments;
+  if (closed && smoothedPoints.length > 1) {
+    return dedupeDrawingPoints(smoothedPoints);
+  }
+
+  return dedupeDrawingPoints(smoothedPoints);
 }
 
 /**
  * Converts a list of drawing points to an SVG path string.
- * When smoothness > 0, applies Catmull-Rom spline interpolation for smooth curves.
+ * When smoothness > 0, rounds the polyline with iterative corner cutting.
  *
  * @param points - Array of 2D points
- * @param smoothness - 0 (straight lines) to 100 (maximum smoothing, tension=0.5)
+ * @param smoothness - 0 (straight lines) to 100 (maximum smoothing)
  * @param closed - Whether to close the path (for zone drawings)
  */
 export function smoothDrawingPath(
@@ -84,26 +192,13 @@ export function smoothDrawingPath(
   if (points.length === 0) return '';
   if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
 
-  const segments = getDrawingBezierSegments(points, smoothness, closed);
-  if (segments.length === 0) {
-    const path = points
-      .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`)
-      .join(' ');
-
-    return closed ? `${path} Z` : path;
-  }
-
-  let path = `M ${points[0].x} ${points[0].y}`;
-
-  for (const segment of segments) {
-    path +=
-      ` C ${segment.cp1.x.toFixed(2)},${segment.cp1.y.toFixed(2)}` +
-      ` ${segment.cp2.x.toFixed(2)},${segment.cp2.y.toFixed(2)}` +
-      ` ${segment.end.x},${segment.end.y}`;
-  }
+  const smoothedPoints = getSmoothedDrawingPoints(points, smoothness, closed);
+  const path = smoothedPoints
+    .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`)
+    .join(' ');
 
   if (closed) {
-    path += ' Z';
+    return `${path} Z`;
   }
 
   return path;
@@ -111,8 +206,8 @@ export function smoothDrawingPath(
 
 /**
  * Computes the bounding box for an SVG drawing given its points and stroke width.
- * When smoothing is enabled, the returned bounds include Bezier control points so
- * the exported SVG does not clip overshooting smoothed paths.
+ * When smoothing is enabled, the returned bounds follow the rounded polyline so
+ * the exported SVG does not clip the rendered stroke.
  */
 export function computeDrawingBounds(
   points: DrawingPoint[],
@@ -136,16 +231,7 @@ export function computeDrawingBounds(
     };
   }
 
-  const segments = getDrawingBezierSegments(points, smoothness, closed);
-  const boundaryPoints =
-    segments.length === 0
-      ? points
-      : segments.flatMap((segment) => [
-          segment.start,
-          segment.cp1,
-          segment.cp2,
-          segment.end
-        ]);
+  const boundaryPoints = getSmoothedDrawingPoints(points, smoothness, closed);
 
   const xs = boundaryPoints.map((point) => point.x);
   const ys = boundaryPoints.map((point) => point.y);

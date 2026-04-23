@@ -27,7 +27,7 @@
       size="small"
       icon={Settings}
       iconDescription={settingsIconDescription}
-      on:click={(event) => onsettings?.(event)}
+      onclick={onsettings}
     />
   </div>
 </div>

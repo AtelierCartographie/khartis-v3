@@ -374,7 +374,7 @@
     min-width: 0;
     height: 18px;
     overflow: hidden;
-    border: 1px solid var(--cds-icon-on-color, #ffffff);
+    border: 1px solid var(--khartis-palette-swatch-border-color);
   }
 
   .palette-color {

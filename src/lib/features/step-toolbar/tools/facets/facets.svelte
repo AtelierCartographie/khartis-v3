@@ -6,7 +6,7 @@
     Launch,
     SettingsAdjust
   } from 'carbon-icons-svelte';
-  import { facetsStore } from './facets.store.svelte';
+  import { facetsStore, SCALE_MODE } from './facets.store.svelte';
   import {
     getSymbolPrimitive,
     getTextPrimitive,
@@ -30,6 +30,7 @@
     ThicknessMode
   } from '$lib/features/main-toolbar/constants';
   import SliderWithInput from '$lib/features/commons/components/viz-controls/slider-with-input.svelte';
+  import Switch from '$lib/features/commons/components/switch.svelte';
 
   const FACETS_HELP_URL =
     'https://cartographie.sciencespo.fr/khartis/help/facets';
@@ -50,6 +51,7 @@
 
   const mapCount = $derived(facetVisualizations.length);
   const columnsValue = $derived(layout.columns);
+  const isSharedScale = $derived(facetsStore.scaleMode === SCALE_MODE.SHARED);
 
   const mapRows = $derived.by(() => {
     const rows: number[][] = [];
@@ -307,6 +309,17 @@
     facetsStore.setColumns(clamped);
   }
 
+  async function handleScaleModeChange(shared: boolean) {
+    if (
+      (shared && facetsStore.scaleMode === SCALE_MODE.SHARED) ||
+      (!shared && facetsStore.scaleMode === SCALE_MODE.INDEPENDENT)
+    ) {
+      return;
+    }
+
+    await facetsStore.toggleScaleMode();
+  }
+
   const isActive = $derived(enabled && facetVisualizations.length > 0);
 </script>
 
@@ -331,6 +344,14 @@
         showMinMax
         onchange={handleColumnsChange}
       />
+      <div class="field-group">
+        <Switch
+          size="sm"
+          labelText={m.facets_scale_shared_label()}
+          toggled={isSharedScale}
+          onchange={handleScaleModeChange}
+        />
+      </div>
     </section>
 
     <section class="section">
@@ -493,6 +514,12 @@
     line-height: 1rem;
     letter-spacing: 0.32px;
     font-weight: 400;
+  }
+
+  .field-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-03, 8px);
   }
 
   .maps-picker {

@@ -85,6 +85,12 @@ function createVisualization(): VisualizationConfig {
       categoryColumn: 'type',
       sizeColumn: 'size_flow',
       classification: { labels: ['Road', 'Rail'] },
+      thicknessClassification: {
+        method: 'jenks',
+        numClasses: 4,
+        classes: 4,
+        breaks: [10, 20, 30]
+      },
       missingData: { show: true, color: '#999999' }
     },
     text: {
@@ -181,6 +187,9 @@ describe('primitive-panel-visualization', () => {
     expect(visualization?.modes?.thickness).toBe('classes');
     expect(visualization?.style?.lineColor).toBe('#00ff00');
     expect(visualization?.mapping?.categoryColumn).toBe('type');
+    expect(visualization?.lineThicknessClassification).toEqual(
+      createVisualization().line?.thicknessClassification
+    );
   });
 
   it('flattens text label state independently from background state', () => {

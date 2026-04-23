@@ -19,8 +19,7 @@
     SLIDER_LIMITS,
     StrokeMode,
     SymbolMode,
-    DEFAULT_COLORS,
-    availableShapesForSymbolMode
+    DEFAULT_COLORS
   } from '../../../constants';
   import {
     DEFAULT_COMMON_ASPECT,
@@ -39,11 +38,7 @@
   import type { SymbolModeProps } from './types';
   import DiscretizationModal from '../discretization-modal.svelte';
   import { resolveDiscretizationLabel } from '../discretization.utils';
-  import {
-    FACET_SLOT,
-    facetsStore,
-    type FacetSlotPath
-  } from '../../facets-adapter.svelte';
+  import { FACET_SLOT } from '../../facets-adapter.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import FacetsVariablePicker from './facets-variable-picker.svelte';
   import { useCategoryLabels } from '../../use-category-labels.svelte';
@@ -51,6 +46,12 @@
     NONE_FIELD_ID,
     useFieldSelection
   } from '../../use-field-selection.svelte';
+  import { useFacetsVariableSelection } from '../../use-facets-variable-selection.svelte';
+  import { resetCategoryVisualClassification } from '../shared/classification-reset.utils';
+  import {
+    buildSymbolShapeDropdownItems,
+    getSymbolShapeTypes
+  } from './symbol-shape-options';
 
   let {
     dataFields = [],
@@ -97,6 +98,10 @@
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
   const selectableDataFields = $derived([noneOption, ...dataFields]);
   const categoryFieldSelection = useFieldSelection(() => dataFields);
+  const facetsSelection = useFacetsVariableSelection({
+    getVisualizationId: () => visualization?.id,
+    getDataFields: () => dataFields
+  });
   const categoryColumnName = $derived(
     categoryFieldSelection.selectedFieldName ?? ''
   );
@@ -111,25 +116,9 @@
   });
   const resolvedCategoryLabels = $derived(categoryLabels.labels);
 
-  const availableShapes = availableShapesForSymbolMode(SymbolMode.CATEGORIES);
-
-  const shapeLabelByType: Record<ShapeType, () => string> = {
-    [ShapeType.CIRCLE]: m.shape_circle,
-    [ShapeType.SQUARE]: m.shape_square,
-    [ShapeType.CROSS]: m.shape_cross,
-    [ShapeType.DIAMOND]: m.shape_diamond,
-    [ShapeType.TRIANGLE]: m.shape_triangle,
-    [ShapeType.STAR]: m.shape_star,
-    [ShapeType.RECTANGLE]: m.shape_rectangle,
-    [ShapeType.BAR]: m.shape_bar,
-    [ShapeType.SPIKE]: m.shape_spike
-  };
-
+  const availableShapes = getSymbolShapeTypes(SymbolMode.CATEGORIES);
   const shapeDropdownItems = $derived(
-    availableShapes.map((type) => ({
-      id: type,
-      text: shapeLabelByType[type]()
-    }))
+    buildSymbolShapeDropdownItems(SymbolMode.CATEGORIES)
   );
 
   function syncFetchedCategoryLabels(nextLabels: string[]) {
@@ -354,84 +343,23 @@
         patternParams: undefined
       });
     } else {
-      onStrokeClassificationChange?.({
-        colors: undefined,
-        labels: undefined,
-        paletteId: undefined,
-        inverted: false,
-        patternId: undefined,
-        patternParams: undefined,
-        disabledLabels: undefined,
-        breaks: undefined,
-        counts: undefined
-      });
+      onStrokeClassificationChange?.(resetCategoryVisualClassification());
     }
-  }
-
-  const selectedVizId = $derived(visualization?.id);
-
-  const activeFacetsSlotPath = $derived.by(() => {
-    if (
-      !facetsStore.enabled ||
-      !selectedVizId ||
-      facetsStore.baseVisualizationId !== selectedVizId
-    ) {
-      return null;
-    }
-    return facetsStore.primarySlotPath;
-  });
-
-  function isFacetsActiveForSlot(slotPath: FacetSlotPath): boolean {
-    return activeFacetsSlotPath === slotPath;
-  }
-
-  function getFacetsSelectedFieldIds(slotPath: FacetSlotPath): number[] {
-    if (!isFacetsActiveForSlot(slotPath)) {
-      return [];
-    }
-    return facetsStore.variables
-      .map((name) => dataFields.find((f) => f.text === name)?.id)
-      .filter((id): id is number => typeof id === 'number');
   }
 
   async function handleFacetsVariablesChange(fieldIds: number[]) {
-    if (!selectedVizId) return;
-    const variableNames = fieldIds
-      .map((id) => dataFields.find((f) => f.id === id)?.text)
-      .filter((name): name is string => Boolean(name));
-    const hasBase = Boolean(categoryColumnName);
-    const merged =
-      hasBase && !variableNames.includes(categoryColumnName)
-        ? [categoryColumnName, ...variableNames]
-        : variableNames;
-    await facetsStore.updateVariables(
-      selectedVizId,
-      merged,
-      FACET_SLOT.SYMBOL_CATEGORY
+    await facetsSelection.updateVariables(
+      categoryColumnName,
+      FACET_SLOT.SYMBOL_CATEGORY,
+      fieldIds
     );
   }
 
   async function handleFacetsToggle(enabled: boolean) {
-    if (!selectedVizId) return;
-    if (!enabled) {
-      facetsStore.disable();
-      return;
-    }
-
-    const available = dataFields
-      .map((f) => f.text)
-      .filter((name): name is string => Boolean(name));
-    const seed = categoryColumnName ? [categoryColumnName] : [];
-    const candidates = seed.slice();
-    for (const name of available) {
-      if (candidates.length >= 2) break;
-      if (!candidates.includes(name)) candidates.push(name);
-    }
-    if (candidates.length < 2) return;
-    await facetsStore.updateVariables(
-      selectedVizId,
-      candidates,
-      FACET_SLOT.SYMBOL_CATEGORY
+    await facetsSelection.toggle(
+      categoryColumnName,
+      FACET_SLOT.SYMBOL_CATEGORY,
+      enabled
     );
   }
 </script>
@@ -446,8 +374,12 @@
     dataFields={dataFields}
     singleSelectItems={selectableDataFields}
     selectedFieldId={categoryFieldSelection.selectedFieldId}
-    selectedFieldIds={getFacetsSelectedFieldIds(FACET_SLOT.SYMBOL_CATEGORY)}
-    isCollectionEnabled={isFacetsActiveForSlot(FACET_SLOT.SYMBOL_CATEGORY)}
+    selectedFieldIds={facetsSelection.getSelectedFieldIds(
+      FACET_SLOT.SYMBOL_CATEGORY
+    )}
+    isCollectionEnabled={facetsSelection.isActiveForSlot(
+      FACET_SLOT.SYMBOL_CATEGORY
+    )}
     onSelect={handleFieldSelect}
     onCollectionChange={handleFacetsVariablesChange}
     onToggleCollection={handleFacetsToggle}

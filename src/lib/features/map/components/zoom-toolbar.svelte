@@ -1,6 +1,7 @@
 <script lang="ts">
   import { m } from '$lib/paraglide/messages';
   import { Add, Document, Earth, Subtract } from 'carbon-icons-svelte';
+  import clsx from 'clsx';
   import IconButton from '../../commons/components/carbon/icon-button.svelte';
   import ToggleTabs from '../../commons/components/toggle-tabs.svelte';
   import Tooltip from '../../commons/components/carbon/tooltip.svelte';
@@ -10,6 +11,7 @@
     globalState
   } from '../../commons/store/global.svelte';
   import { mapInstanceStore } from '../../commons/store/map-instance.store.svelte';
+  import { EnvironmentUtils } from '../../commons/utils/environment.utils';
   import { ViewMode } from '../constants/map.constants';
   import { deckDebugStore } from '../stores/deck-debug.store.svelte';
   import { zoomModeStore } from '../../commons/store/zoom-mode.store.svelte';
@@ -21,8 +23,10 @@
     resolveMapZoomLevel
   } from '../utils/map-zoom.utils';
 
+  type DebugMetricTone = 'neutral' | 'good' | 'warn' | 'bad';
+
   const activeTabIndex = $derived(zoomModeStore.isMapMode ? 0 : 1);
-  const showDeckDebugPanel = import.meta.env.DEV;
+  const showDeckDebugPanel = $derived(isDeckDebugEnabled());
   const deckDebugMetrics = $derived(deckDebugStore.metrics);
   const deckDebugViewMode = $derived(deckDebugStore.viewMode);
   const debugTooltipDirection = $derived(
@@ -44,6 +48,10 @@
       iconSize: 20
     }
   ]);
+
+  function isDeckDebugEnabled(): boolean {
+    return import.meta.env.DEV || EnvironmentUtils.hasPreproductionUrlMarker();
+  }
 
   function handleZoomModeChange(index: number): void {
     zoomModeStore.setMode(index === 0 ? 'map' : 'page');
@@ -232,24 +240,75 @@
     return m.deck_debug_metric_gpu_state_bad();
   }
 
+  function getFpsTone(value: number | null | undefined): DebugMetricTone {
+    if (!isFiniteDebugMetric(value)) {
+      return 'neutral';
+    }
+
+    if (value >= 30) {
+      return 'good';
+    }
+
+    if (value >= 20) {
+      return 'warn';
+    }
+
+    return 'bad';
+  }
+
+  function getCpuTone(value: number | null | undefined): DebugMetricTone {
+    if (!isFiniteDebugMetric(value)) {
+      return 'neutral';
+    }
+
+    if (value <= 8) {
+      return 'good';
+    }
+
+    if (value <= 16) {
+      return 'warn';
+    }
+
+    return 'bad';
+  }
+
+  function getGpuTone(value: number | null | undefined): DebugMetricTone {
+    if (!isFiniteDebugMetric(value)) {
+      return 'neutral';
+    }
+
+    if (value <= 8) {
+      return 'good';
+    }
+
+    if (value <= 16) {
+      return 'warn';
+    }
+
+    return 'bad';
+  }
+
   const debugMetricsList = $derived([
     {
       key: 'fps',
       label: m.deck_debug_metric_fps(),
       value: formatDebugNumber(deckDebugMetrics?.fps),
-      insight: getFpsInsight(deckDebugMetrics?.fps)
+      insight: getFpsInsight(deckDebugMetrics?.fps),
+      tone: getFpsTone(deckDebugMetrics?.fps)
     },
     {
       key: 'cpu',
       label: m.deck_debug_metric_cpu(),
       value: formatDebugMilliseconds(deckDebugMetrics?.cpuTimePerFrame),
-      insight: getCpuInsight(deckDebugMetrics?.cpuTimePerFrame)
+      insight: getCpuInsight(deckDebugMetrics?.cpuTimePerFrame),
+      tone: getCpuTone(deckDebugMetrics?.cpuTimePerFrame)
     },
     {
       key: 'gpu',
       label: m.deck_debug_metric_gpu(),
       value: formatDebugMilliseconds(deckDebugMetrics?.gpuTimePerFrame),
-      insight: getGpuInsight(deckDebugMetrics?.gpuTimePerFrame)
+      insight: getGpuInsight(deckDebugMetrics?.gpuTimePerFrame),
+      tone: getGpuTone(deckDebugMetrics?.gpuTimePerFrame)
     }
   ]);
 </script>
@@ -323,7 +382,12 @@
 
         <div class="zoom-debug-metrics">
           {#each debugMetricsList as metric (metric.key)}
-            <div class="zoom-debug-metric">
+            <div
+              class={clsx(
+                'zoom-debug-metric',
+                `zoom-debug-metric--${metric.tone}`
+              )}
+            >
               <Tooltip
                 direction={debugTooltipDirection}
                 align={debugTooltipAlign}
@@ -430,6 +494,27 @@
 
   .zoom-debug-metric {
     min-width: 0;
+    --zoom-debug-metric-background: color-mix(
+      in srgb,
+      var(--cds-layer-hover, #e8e8e8) 72%,
+      transparent
+    );
+    --zoom-debug-metric-color: inherit;
+  }
+
+  .zoom-debug-metric--good {
+    --zoom-debug-metric-background: var(--cds-support-success, #24a148);
+    --zoom-debug-metric-color: var(--cds-text-on-color, #ffffff);
+  }
+
+  .zoom-debug-metric--warn {
+    --zoom-debug-metric-background: var(--cds-support-warning, #f1c21b);
+    --zoom-debug-metric-color: var(--cds-text-primary, #161616);
+  }
+
+  .zoom-debug-metric--bad {
+    --zoom-debug-metric-background: var(--cds-support-error, #da1e28);
+    --zoom-debug-metric-color: var(--cds-text-on-color, #ffffff);
   }
 
   .zoom-debug-metric :global(.khartis-carbon-rich-tooltip-trigger) {
@@ -438,13 +523,9 @@
     justify-content: center;
     min-width: 0;
     padding: 0.28rem 0.5rem;
-    border-radius: 999px;
-    background: color-mix(
-      in srgb,
-      var(--cds-layer-hover, #e8e8e8) 72%,
-      transparent
-    );
-    color: inherit;
+    border-radius: 0;
+    background: var(--zoom-debug-metric-background);
+    color: var(--zoom-debug-metric-color);
     text-decoration: none;
     font-size: 0.625rem;
     font-weight: 600;
@@ -456,7 +537,7 @@
 
   .zoom-debug-metric :global(.khartis-carbon-rich-tooltip-trigger:hover),
   .zoom-debug-metric :global(.khartis-carbon-rich-tooltip-trigger:focus) {
-    color: inherit;
+    color: var(--zoom-debug-metric-color);
   }
 
   .zoom-debug-metric :global(.khartis-carbon-rich-tooltip-trigger svg) {
@@ -508,6 +589,7 @@
     min-height: 42px;
     height: 42px;
     gap: 8px;
+    border-radius: 0;
     transition:
       width 0.15s ease,
       padding 0.15s ease;
