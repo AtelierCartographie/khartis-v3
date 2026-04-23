@@ -11,6 +11,7 @@ import {
   geoIndicationsActions,
   geoIndicationsState
 } from '$lib/features/step-toolbar/tools/geo-indications/geo-indications.store.svelte';
+import { DRAGGING_STYLING_TARGET_BODY_CLASS } from '../utils/tool-popover-drag-visibility.utils';
 import GeoIndicationsOverlay from './geo-indications-overlay.svelte';
 
 const { mockFetch, mockWaitForInitialization, mockInitDuckDb } = vi.hoisted(
@@ -200,6 +201,11 @@ describe('geo indications overlay dragging', () => {
       clientX: 18,
       clientY: 140
     });
+
+    expect(
+      document.body.classList.contains(DRAGGING_STYLING_TARGET_BODY_CLASS)
+    ).toBe(true);
+
     await fireEvent.pointerMove(window, {
       clientX: 600,
       clientY: 400
@@ -209,6 +215,12 @@ describe('geo indications overlay dragging', () => {
       x: 240,
       y: 168
     });
+
+    await fireEvent.pointerUp(window);
+
+    expect(
+      document.body.classList.contains(DRAGGING_STYLING_TARGET_BODY_CLASS)
+    ).toBe(false);
   });
 
   it('keeps orientation dragging free-form when the grid is disabled', async () => {

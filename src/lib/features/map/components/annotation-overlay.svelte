@@ -15,6 +15,10 @@
     DrawingType
   } from '$lib/features/commons/constants/ui.constants';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
+  import {
+    clampFontSize,
+    resolveFontFamilyStack
+  } from '$lib/features/step-toolbar/constants/fonts.constants';
   import { onDestroy, tick } from 'svelte';
   import {
     annotationsActions,
@@ -30,10 +34,12 @@
     computeDrawingBounds,
     smoothDrawingPath
   } from '../utils/annotation-drawing.utils';
+  import { setStylingToolPopoverDragging } from '../utils/tool-popover-drag-visibility.utils';
   import type {
     Annotation,
     AnnotationPlacementPreview,
-    AnnotationStyle
+    AnnotationStyle,
+    PageElementRole
   } from '$lib/features/step-toolbar/tools/annotations/annotations.types';
   import { resolveAnnotationCoordinateSpace } from '$lib/features/step-toolbar/tools/annotations/annotations.types';
   import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
@@ -46,6 +52,9 @@
   const DRAWING_POINT_STEP_PX = 6;
   const DRAWING_CLOSE_THRESHOLD_PX = 18;
   const SHAPE_PLACEMENT_DRAG_THRESHOLD_PX = 4;
+  const FOCUS_RESET_DEBOUNCE_MS = 200;
+  const ANNOTATION_DRAG_THRESHOLD_PX = 3;
+  const DRAG_CLICK_SUPPRESSION_MS = 120;
   const MIN_SHAPE_SIZE = 24;
   const SHAPE_VIEWBOX_PADDING = 8;
 
@@ -60,6 +69,10 @@
     offsetY: number;
     width: number;
     height: number;
+    startClientX: number;
+    startClientY: number;
+    didDrag: boolean;
+    role?: PageElementRole;
   } | null>(null);
   let resizeState = $state<{
     id: string;
@@ -87,11 +100,16 @@
   let drawingPointerId = $state<number | null>(null);
   let drawingCloseToStart = $state(false);
   let centeredAnnotationId = $state<string | null>(null);
+  let focusResetTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  let suppressedClickAnnotationId: string | null = null;
+  let suppressedClickTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
   const annotationsState = $derived(getAnnotationsState());
   const formatState = $derived(getFormatState());
   const pageMargins = $derived(formatState.margins);
+  const pageScale = $derived(Math.max(globalState.zoom.pageZoomScale, 0.1));
   const mapLayerStyle = $derived.by(() => {
+    const scale = pageScale;
     const width = Math.max(
       1,
       formatState.width - pageMargins.left - pageMargins.right
@@ -102,10 +120,10 @@
     );
 
     return [
-      `left: ${pageMargins.left}px`,
-      `top: ${pageMargins.top}px`,
-      `width: ${width}px`,
-      `height: ${height}px`
+      `left: ${pageMargins.left * scale}px`,
+      `top: ${pageMargins.top * scale}px`,
+      `width: ${width * scale}px`,
+      `height: ${height * scale}px`
     ].join('; ');
   });
   const creationMode = $derived(annotationsState.creationMode);
@@ -160,7 +178,7 @@
   }
 
   function getPageScale(): number {
-    return Math.max(globalState.zoom.pageZoomScale, 0.1);
+    return pageScale;
   }
 
   function getShapeDefaultSize(shapeType: string): {
@@ -325,12 +343,52 @@
 
   function getAnnotationPositionStyle(item: Annotation): string {
     const { x, y } = getRenderedPosition(item);
-    return `left: ${x}px; top: ${y}px;`;
+    const scale = getPageScale();
+    return `left: ${x * scale}px; top: ${y * scale}px; transform: scale(${scale});`;
+  }
+
+  function getScaledPreviewStyle(
+    position: { x: number; y: number },
+    size: { width: number; height: number }
+  ): string {
+    const scale = getPageScale();
+    return `left: ${position.x * scale}px; top: ${position.y * scale}px; width: ${size.width}px; height: ${size.height}px; transform: scale(${scale});`;
+  }
+
+  function getScaledDrawingPreviewStyle(bounds: {
+    originX: number;
+    originY: number;
+  }): string {
+    const scale = getPageScale();
+    return `left: ${bounds.originX * scale}px; top: ${bounds.originY * scale}px; transform: scale(${scale});`;
+  }
+
+  function setAnnotationDragVisualState(active: boolean): void {
+    setStylingToolPopoverDragging(active);
+  }
+
+  function clearSuppressedAnnotationClick(): void {
+    if (suppressedClickTimeoutId) {
+      clearTimeout(suppressedClickTimeoutId);
+      suppressedClickTimeoutId = null;
+    }
+
+    suppressedClickAnnotationId = null;
+  }
+
+  function suppressNextAnnotationClick(id: string): void {
+    clearSuppressedAnnotationClick();
+    suppressedClickAnnotationId = id;
+    suppressedClickTimeoutId = setTimeout(() => {
+      suppressedClickTimeoutId = null;
+      suppressedClickAnnotationId = null;
+    }, DRAG_CLICK_SUPPRESSION_MS);
   }
 
   function stopDragging(): void {
     window.removeEventListener('pointermove', handlePointerMove);
     window.removeEventListener('pointerup', handlePointerUp);
+    setAnnotationDragVisualState(false);
     dragState = null;
   }
 
@@ -347,6 +405,10 @@
   }
 
   function handlePointerUp(): void {
+    if (dragState?.didDrag) {
+      suppressNextAnnotationClick(dragState.id);
+    }
+
     stopDragging();
   }
 
@@ -362,14 +424,39 @@
 
     const scale = getPageScale();
     const rect = layer.getBoundingClientRect();
-    const maxX = Math.max(0, rect.width / scale - dragState.width);
-    const maxY = Math.max(0, rect.height / scale - dragState.height);
+    const pointerDistance = Math.hypot(
+      event.clientX - dragState.startClientX,
+      event.clientY - dragState.startClientY
+    );
+
+    if (!dragState.didDrag && pointerDistance >= ANNOTATION_DRAG_THRESHOLD_PX) {
+      dragState.didDrag = true;
+    }
+
+    const minX =
+      dragState.scope === 'page' && dragState.role ? pageMargins.left : 0;
+    const minY =
+      dragState.scope === 'page' && dragState.role ? pageMargins.top : 0;
+    const maxX =
+      dragState.scope === 'page' && dragState.role
+        ? Math.max(
+            minX,
+            formatState.width - pageMargins.right - dragState.width
+          )
+        : Math.max(0, rect.width / scale - dragState.width);
+    const maxY =
+      dragState.scope === 'page' && dragState.role
+        ? Math.max(
+            minY,
+            formatState.height - pageMargins.bottom - dragState.height
+          )
+        : Math.max(0, rect.height / scale - dragState.height);
 
     let x = (event.clientX - rect.left) / scale - dragState.offsetX;
     let y = (event.clientY - rect.top) / scale - dragState.offsetY;
 
-    x = clamp(x, 0, maxX);
-    y = clamp(y, 0, maxY);
+    x = clamp(x, minX, maxX);
+    y = clamp(y, minY, maxY);
 
     annotationsActions.moveAnnotation(dragState.id, { x, y });
   }
@@ -391,6 +478,7 @@
     event.preventDefault();
     event.stopPropagation();
 
+    cancelFocusedAnnotationReset();
     annotationsActions.selectAnnotation(item.id);
 
     const scale = getPageScale();
@@ -406,8 +494,13 @@
       offsetX: (event.clientX - rect.left) / scale - item.position.x,
       offsetY: (event.clientY - rect.top) / scale - item.position.y,
       width: targetRect ? targetRect.width / scale : 0,
-      height: targetRect ? targetRect.height / scale : 0
+      height: targetRect ? targetRect.height / scale : 0,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      didDrag: false,
+      role: item.role
     };
+    setAnnotationDragVisualState(true);
 
     window.addEventListener(EVENT.POINTERMOVE, handlePointerMove);
     window.addEventListener(EVENT.POINTERUP, handlePointerUp);
@@ -416,12 +509,19 @@
   function handleAnnotationClick(event: MouseEvent, itemId: string): void {
     event.stopPropagation();
 
+    if (suppressedClickAnnotationId === itemId) {
+      clearSuppressedAnnotationClick();
+      annotationsActions.selectAnnotation(itemId);
+      return;
+    }
+
     if (!isAnnotationEditing) {
       activateStylingToolFromMap(StylingTools.Annotations);
       annotationsActions.setPageElementsVisibility(true);
     }
 
     centeredAnnotationId = itemId;
+    cancelFocusedAnnotationReset();
 
     const currentTarget = event.currentTarget;
     if (currentTarget instanceof HTMLElement) {
@@ -456,6 +556,7 @@
       event.stopPropagation();
 
       if (centeredAnnotationId === itemId) {
+        cancelFocusedAnnotationReset();
         resetCenteredAnnotationPan();
       }
 
@@ -470,6 +571,7 @@
         annotationsActions.setPageElementsVisibility(true);
       }
       centeredAnnotationId = itemId;
+      cancelFocusedAnnotationReset();
       void tick().then(() => {
         centerAnnotationInViewport(event.currentTarget);
       });
@@ -486,12 +588,38 @@
     globalActions.resetPagePan();
   }
 
+  function cancelFocusedAnnotationReset(): void {
+    if (!focusResetTimeoutId) {
+      return;
+    }
+
+    clearTimeout(focusResetTimeoutId);
+    focusResetTimeoutId = null;
+  }
+
+  function scheduleCenteredAnnotationReset(itemId: string): void {
+    cancelFocusedAnnotationReset();
+    focusResetTimeoutId = setTimeout(() => {
+      focusResetTimeoutId = null;
+
+      if (centeredAnnotationId !== itemId) {
+        return;
+      }
+
+      if (dragState || resizeState || rotateState) {
+        scheduleCenteredAnnotationReset(itemId);
+        return;
+      }
+
+      resetCenteredAnnotationPan();
+    }, FOCUS_RESET_DEBOUNCE_MS);
+  }
   function handleAnnotationBlur(_event: FocusEvent, itemId: string): void {
     if (centeredAnnotationId !== itemId) {
       return;
     }
 
-    resetCenteredAnnotationPan();
+    scheduleCenteredAnnotationReset(itemId);
   }
 
   function handleResizePointerDown(
@@ -501,6 +629,7 @@
   ): void {
     event.preventDefault();
     event.stopPropagation();
+    cancelFocusedAnnotationReset();
 
     const shapeType = String(item.content ?? '');
     const defaultSize = getShapeDefaultSize(shapeType);
@@ -703,6 +832,7 @@
   ): void {
     event.preventDefault();
     event.stopPropagation();
+    cancelFocusedAnnotationReset();
 
     const scope = getAnnotationScope(item);
     const layer = getInteractionLayer(scope);
@@ -1176,6 +1306,8 @@
 
   onDestroy(() => {
     centeredAnnotationId = null;
+    cancelFocusedAnnotationReset();
+    clearSuppressedAnnotationClick();
     stopDragging();
     stopResizing();
     stopRotating();
@@ -1215,10 +1347,10 @@
     const styles: string[] = [];
 
     if (resolvedStyle.font) {
-      styles.push(`font-family: ${resolvedStyle.font}, sans-serif`);
+      styles.push(`font-family: ${resolveFontFamilyStack(resolvedStyle.font)}`);
     }
     if (resolvedStyle.fontSize) {
-      styles.push(`font-size: ${resolvedStyle.fontSize}px`);
+      styles.push(`font-size: ${clampFontSize(resolvedStyle.fontSize, 8)}px`);
     }
     if (resolvedStyle.bold) {
       styles.push('font-weight: bold');
@@ -1438,7 +1570,10 @@
         <div
           class="placement-preview"
           data-placement-type={pendingPreview.type}
-          style={`left: ${pendingPreview.position.x}px; top: ${pendingPreview.position.y}px; width: ${pendingPreview.size.width}px; height: ${pendingPreview.size.height}px;`}
+          style={getScaledPreviewStyle(
+            pendingPreview.position,
+            pendingPreview.size
+          )}
         >
           {#if pendingPreview.type === AnnotationKind.TEXT}
             <div
@@ -1543,7 +1678,7 @@
             width={previewBounds.width}
             height={previewBounds.height}
             viewBox={previewBounds.viewBox}
-            style={`left: ${previewBounds.originX}px; top: ${previewBounds.originY}px;`}
+            style={getScaledDrawingPreviewStyle(previewBounds)}
           >
             {#if drawingPreviewPoints.length >= 2}
               {@const previewPath = smoothDrawingPath(
@@ -1843,6 +1978,7 @@
     position: absolute;
     overflow: visible;
     pointer-events: none;
+    transform-origin: top left;
   }
 
   .placement-preview {
@@ -1857,6 +1993,7 @@
     cursor: pointer;
     touch-action: none;
     outline: none;
+    transform-origin: top left;
     z-index: 4;
   }
 
@@ -1898,8 +2035,18 @@
     border-radius: 0;
   }
 
+  .annotation-item[data-annotation-role]:hover:not(:has(.shape-frame)),
+  .annotation-item[data-annotation-role]:focus-visible:not(:has(.shape-frame)),
+  .annotation-item[data-annotation-role].selected {
+    outline-offset: 0;
+  }
+
   .annotation-item.dragging {
     cursor: grabbing;
+  }
+
+  .annotation-item[data-annotation-role] {
+    min-height: 24px;
   }
 
   .annotation-item[data-annotation-role] .annotation-text {
@@ -1907,12 +2054,12 @@
     max-width: none;
     padding: 0;
     border-radius: 0;
-    line-height: 1.35;
+    line-height: 24px;
   }
 
   .annotation-item[data-annotation-role='title'],
   .annotation-item[data-annotation-role='subtitle'] {
-    width: 320px;
+    width: 324px;
   }
 
   .annotation-item[data-annotation-role='source'],
@@ -1920,7 +2067,7 @@
   .annotation-item[data-annotation-role='signature'],
   .annotation-item[data-annotation-role='credit'],
   .annotation-item[data-annotation-role='note'] {
-    width: 220px;
+    width: 216px;
   }
 
   .annotation-text {

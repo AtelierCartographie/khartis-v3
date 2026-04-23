@@ -1,17 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PickingInfo } from '@deck.gl/core';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { TooltipEntry } from '../types';
-import { vi } from 'vitest';
+import { ToolbarStep } from '$lib/features/commons/types/global';
 
-vi.mock('$lib/features/commons/store/global.svelte', () => ({
-  globalState: {
-    isMobileView: false
-  }
-}));
-
-vi.mock('../stores/map-tooltip.store.svelte', () => ({
-  mapTooltipStore: {
+const { mockGlobalState, mockMapTooltipStore } = vi.hoisted(() => ({
+  mockGlobalState: {
+    isMobileView: false,
+    selectedStep: 'data'
+  },
+  mockMapTooltipStore: {
     showAtHover: vi.fn(),
     hide: vi.fn(),
     pinAt: vi.fn(),
@@ -25,7 +23,19 @@ vi.mock('../stores/map-tooltip.store.svelte', () => ({
   }
 }));
 
-import { extractTooltipEntries } from './tooltip.service';
+vi.mock('$lib/features/commons/store/global.svelte', () => ({
+  globalState: mockGlobalState
+}));
+
+vi.mock('../stores/map-tooltip.store.svelte', () => ({
+  mapTooltipStore: mockMapTooltipStore
+}));
+
+import {
+  createClickHandler,
+  createHoverHandler,
+  extractTooltipEntries
+} from './tooltip.service';
 import type {
   VisualizationConfig,
   VisualizationType
@@ -124,5 +134,34 @@ describe('extractTooltipEntries', () => {
     );
 
     expect(keys(entries)).toEqual(['value', 'OGC_FID', 'id', 'name']);
+  });
+});
+
+describe('tooltip handlers', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGlobalState.isMobileView = false;
+    mockGlobalState.selectedStep = ToolbarStep.Data;
+    mockMapTooltipStore.pinned = false;
+    mockMapTooltipStore.visible = false;
+    mockMapTooltipStore.state = {
+      layerId: null,
+      rowIndex: -1
+    };
+  });
+
+  it('unpins and suppresses map tooltips while the styling step is active', () => {
+    mockGlobalState.selectedStep = ToolbarStep.Styling;
+    const pickingInfo = {
+      picked: true,
+      index: 0
+    } as PickingInfo;
+
+    createHoverHandler()(pickingInfo);
+    createClickHandler()(pickingInfo);
+
+    expect(mockMapTooltipStore.unpin).toHaveBeenCalledTimes(2);
+    expect(mockMapTooltipStore.showAtHover).not.toHaveBeenCalled();
+    expect(mockMapTooltipStore.pinAt).not.toHaveBeenCalled();
   });
 });

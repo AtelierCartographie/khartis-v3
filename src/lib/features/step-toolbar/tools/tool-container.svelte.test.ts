@@ -19,6 +19,11 @@ describe('tool container', () => {
     expect(source).toContain('line-height: 1.25rem;');
   });
 
+  it('keeps the shared tool surfaces opaque', () => {
+    expect(source).toContain('background-color: var(--cds-background, white);');
+    expect(source).toContain('background-color: inherit;');
+  });
+
   it('closes through the shared panel close handler', () => {
     expect(source).toContain('import { closeSelectedToolPanel }');
     expect(source).toContain('closeSelectedToolPanel();');

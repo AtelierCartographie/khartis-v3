@@ -39,6 +39,7 @@
   } from '../services/basemap.service.svelte';
   import { shouldUseIdentityProjectionForDatasetCrs } from '../utils/dataset-crs';
   import { basemapLayersStore } from '../stores/basemap-layers.store.svelte';
+  import { fontAssetsStore } from '$lib/features/commons/store/font-assets.store.svelte';
   import { mapHighlightStore } from '../stores/map-highlight.store.svelte';
   import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
   import { projectionStore } from '../stores/projection.store.svelte';
@@ -1788,6 +1789,7 @@
   const layerUpdateTrigger = $derived({
     vizVersion: visualizationStore.version,
     basemapVersion: basemapLayersStore.version,
+    fontVersion: fontAssetsStore.version,
     highlightVersion: mapHighlightStore.version,
     dataVersion,
     dataSize: `${tables.size}-${geoJSONs.size}`,

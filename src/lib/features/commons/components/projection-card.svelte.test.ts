@@ -13,12 +13,12 @@ describe('ProjectionCard', () => {
     expect(source).toContain('--khartis-additions-layer-hover-02-suggestions');
   });
 
-  it('positions the radio in the preview area for vertical cards', () => {
-    expect(source).toContain('{#if isVertical}');
+  it('positions the radio in the preview area for all card layouts', () => {
     expect(source).toContain('class="preview-radio kh-card-radio"');
     expect(source).toContain('position: absolute;');
     expect(source).toContain('top: 8px;');
-    expect(source).toContain('right: 8px;');
+    expect(source).toContain('left: 8px;');
+    expect(source).not.toContain('class="radio-wrapper kh-card-radio"');
   });
 
   it('maps the radio theme to card-specific CSS variables', () => {

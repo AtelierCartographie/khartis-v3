@@ -10,7 +10,7 @@ const source = readFileSync(
 describe('resolveDiscretizationLabel', () => {
   it('defaults the compact summary to Jenks and 5 classes', () => {
     expect(source).toContain(
-      'const method = classification?.method ?? CM.JENKS;'
+      "const method = classification?.method ?? 'jenks';"
     );
     expect(source).toContain(
       'const numClasses = classification?.numClasses ?? classification?.classes ?? 5;'
@@ -22,5 +22,13 @@ describe('resolveDiscretizationLabel', () => {
     expect(source).not.toContain(
       'm.discretization_num_classes().toLowerCase()'
     );
+  });
+
+  it('can import the module without a runtime initialization error', async () => {
+    const module = await import('./discretization.utils');
+    const label = module.resolveDiscretizationLabel(undefined);
+
+    expect(label).toContain('5 classes');
+    expect(label.length).toBeGreaterThan('5 classes'.length);
   });
 });

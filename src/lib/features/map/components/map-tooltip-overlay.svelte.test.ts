@@ -51,6 +51,17 @@ describe('MapTooltipOverlay — responsive inspector UX', () => {
     expect(source).toContain('mapTooltipStore.hide();');
   });
 
+  it('does not render or keep map tooltips while the styling step is active', () => {
+    expect(source).toContain(
+      "import { ToolbarStep } from '$lib/features/commons/types/global';"
+    );
+    expect(source).toContain(
+      'globalState.selectedStep === ToolbarStep.Styling'
+    );
+    expect(source).toContain('mapTooltipStore.unpin();');
+    expect(source).toContain('{#if tooltipState.visible && !isStylingStep}');
+  });
+
   it('removes visible borders and tightens the typography', () => {
     expect(source).toContain('border: none;');
     expect(source).toContain('font-size: 11px;');

@@ -3,6 +3,7 @@ import { projectHtmlLikeText } from '$lib/features/commons/utils/html-like-text.
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import type { VisualizationConfig } from '$lib/features/commons/store/visualization.store.svelte';
 import { globalState } from '$lib/features/commons/store/global.svelte';
+import { ToolbarStep } from '$lib/features/commons/types/global';
 import type { PickingInfo } from '@deck.gl/core';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import { MAP_TIMING } from '../constants/timing.constants';
@@ -367,6 +368,12 @@ export function createHoverHandler(
   getVisualizations?: () => VisualizationConfig[]
 ): (info: PickingInfo) => void {
   return (info: PickingInfo) => {
+    if (globalState.selectedStep === ToolbarStep.Styling) {
+      clearPendingHoverTooltip();
+      mapTooltipStore.unpin();
+      return;
+    }
+
     if (globalState.isMobileView) {
       clearPendingHoverTooltip();
       mapTooltipStore.hide();
@@ -416,6 +423,11 @@ export function createClickHandler(
 ): (info: PickingInfo) => void {
   return (info: PickingInfo) => {
     clearPendingHoverTooltip();
+
+    if (globalState.selectedStep === ToolbarStep.Styling) {
+      mapTooltipStore.unpin();
+      return;
+    }
 
     if (!info.picked || info.index === undefined || info.index === -1) {
       mapTooltipStore.unpin();

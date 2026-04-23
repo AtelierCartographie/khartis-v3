@@ -20,6 +20,11 @@ import {
   resolveLayoutSizingTokens
 } from '$lib/features/commons/utils/layout-sizing.utils';
 import {
+  clampFontSize,
+  DEFAULT_FONT_FAMILY,
+  normalizeFontFamily
+} from '$lib/features/step-toolbar/constants/fonts.constants';
+import {
   getFormatLayoutSizingContext,
   getFormatState
 } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
@@ -55,7 +60,7 @@ const DEFAULT_STATE: AnnotationsState = {
   drawingModeType: DrawingType.LINE,
   drawingInProgress: [],
   defaultStyle: {
-    font: 'Cabin',
+    font: DEFAULT_FONT_FAMILY,
     fontSize: DEFAULT_NOTE_FONT_SIZE,
     bold: false,
     italic: false,
@@ -137,6 +142,26 @@ const PREDEFINED_STYLES: Record<string, Partial<AnnotationStyle>> = {
   }
 };
 
+function normalizeAnnotationStyleUpdates(
+  styleUpdates: Partial<AnnotationStyle>
+): Partial<AnnotationStyle> {
+  const normalizedUpdates: Partial<AnnotationStyle> = { ...styleUpdates };
+  if (styleUpdates.opacity !== undefined) {
+    normalizedUpdates.opacity = normalizeOpacityPercent(styleUpdates.opacity);
+  }
+  if (styleUpdates.font !== undefined) {
+    normalizedUpdates.font =
+      normalizeFontFamily(styleUpdates.font) ?? DEFAULT_FONT_FAMILY;
+  }
+  if (styleUpdates.fontSize !== undefined) {
+    normalizedUpdates.fontSize = clampFontSize(
+      styleUpdates.fontSize,
+      DEFAULT_NOTE_FONT_SIZE
+    );
+  }
+  return normalizedUpdates;
+}
+
 function getPredefinedStyleForItem(item: Annotation): string | null {
   if (item.type !== AnnotationKind.TEXT) {
     return null;
@@ -170,14 +195,33 @@ type PageLayout = {
   };
 };
 
+type PageFrame = {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+  width: number;
+  height: number;
+};
+
 const PAGE_ELEMENT_WIDTHS: Record<PageElementRole, number> = {
-  [ANNOTATION_ROLE.TITLE]: 320,
-  [ANNOTATION_ROLE.SUBTITLE]: 320,
-  [ANNOTATION_ROLE.SOURCE]: 220,
-  [ANNOTATION_ROLE.BASEMAP_SOURCE]: 220,
-  [ANNOTATION_ROLE.SIGNATURE]: 220,
-  [ANNOTATION_ROLE.CREDIT]: 220,
-  [ANNOTATION_ROLE.NOTE]: 220
+  [ANNOTATION_ROLE.TITLE]: 324,
+  [ANNOTATION_ROLE.SUBTITLE]: 324,
+  [ANNOTATION_ROLE.SOURCE]: 216,
+  [ANNOTATION_ROLE.BASEMAP_SOURCE]: 216,
+  [ANNOTATION_ROLE.SIGNATURE]: 216,
+  [ANNOTATION_ROLE.CREDIT]: 216,
+  [ANNOTATION_ROLE.NOTE]: 216
+};
+
+const PAGE_ELEMENT_HEIGHTS: Record<PageElementRole, number> = {
+  [ANNOTATION_ROLE.TITLE]: 24,
+  [ANNOTATION_ROLE.SUBTITLE]: 24,
+  [ANNOTATION_ROLE.SOURCE]: 24,
+  [ANNOTATION_ROLE.BASEMAP_SOURCE]: 24,
+  [ANNOTATION_ROLE.SIGNATURE]: 24,
+  [ANNOTATION_ROLE.CREDIT]: 24,
+  [ANNOTATION_ROLE.NOTE]: 24
 };
 
 const BOTTOM_RIGHT_STACK_ORDER: PageElementRole[] = [
@@ -190,10 +234,8 @@ const TOP_LEFT_SAFE_OFFSET = PAGE_GRID_SIZE_PX;
 const RIGHT_COLUMN_SAFE_OFFSET = PAGE_GRID_SIZE_PX * 2;
 const BOTTOM_RIGHT_SAFE_OFFSET = PAGE_GRID_SIZE_PX * 3;
 const BOTTOM_RIGHT_STACK_STEP = PAGE_GRID_SIZE_PX * 2;
-const TITLE_TOP_OFFSET = 44;
-const SUBTITLE_TOP_OFFSET = 68;
-const PAGE_NOTE_SAFE_OFFSET = 4;
-const PAGE_NOTE_HEIGHT = 28;
+const TITLE_TOP_OFFSET = PAGE_GRID_SIZE_PX;
+const SUBTITLE_TOP_OFFSET = PAGE_GRID_SIZE_PX * 3;
 const NON_PAGE_ANNOTATION_LEFT_OFFSET = PAGE_GRID_SIZE_PX * 2;
 const NON_PAGE_IMAGE_LEFT_OFFSET = PAGE_GRID_SIZE_PX * 6;
 const NON_PAGE_ANNOTATION_TOP_OFFSET = PAGE_GRID_SIZE_PX * 2;
@@ -267,33 +309,35 @@ function isGridEnabled(): boolean {
   return getFormatState().gridEnabled;
 }
 
+function resolveMapFrame(layout: PageLayout): PageFrame {
+  const left = layout.margins.left;
+  const top = layout.margins.top;
+  const right = Math.max(left, layout.width - layout.margins.right);
+  const bottom = Math.max(top, layout.height - layout.margins.bottom);
+
+  return {
+    left,
+    top,
+    right,
+    bottom,
+    width: Math.max(1, right - left),
+    height: Math.max(1, bottom - top)
+  };
+}
+
 function clampPageElementPosition(
   position: { x: number; y: number },
   role: PageElementRole,
   layout: PageLayout,
   snapToGridEnabled = true
 ): { x: number; y: number } {
-  const { width, height, margins } = layout;
+  const frame = resolveMapFrame(layout);
   const roleWidth = PAGE_ELEMENT_WIDTHS[role];
-  const isFreePageNote = role === ANNOTATION_ROLE.NOTE;
-  const minX = isFreePageNote ? PAGE_NOTE_SAFE_OFFSET : margins.left;
-  const maxX = Math.max(
-    minX,
-    isFreePageNote
-      ? width - roleWidth - PAGE_NOTE_SAFE_OFFSET
-      : width - margins.right - roleWidth
-  );
-  const minY = isFreePageNote
-    ? PAGE_NOTE_SAFE_OFFSET
-    : role === ANNOTATION_ROLE.TITLE || role === ANNOTATION_ROLE.SUBTITLE
-      ? 12
-      : margins.top + 12;
-  const maxY = Math.max(
-    minY,
-    isFreePageNote
-      ? height - PAGE_NOTE_HEIGHT - PAGE_NOTE_SAFE_OFFSET
-      : height - margins.bottom - 4
-  );
+  const roleHeight = PAGE_ELEMENT_HEIGHTS[role];
+  const minX = frame.left;
+  const maxX = Math.max(minX, frame.right - roleWidth);
+  const minY = frame.top;
+  const maxY = Math.max(minY, frame.bottom - roleHeight);
 
   return snapPointWithinBounds(
     position,
@@ -540,43 +584,20 @@ function getNonPageAnnotationSpawnPosition(
 }
 
 function getPageNoteSpawnPosition(
-  existingNotesCount: number,
+  bottomRightItemsCount: number,
   layout: PageLayout
 ): { x: number; y: number } {
+  const frame = resolveMapFrame(layout);
   const noteWidth = PAGE_ELEMENT_WIDTHS[ANNOTATION_ROLE.NOTE];
-  const minX = PAGE_NOTE_SAFE_OFFSET;
-  const maxX = Math.max(minX, layout.width - noteWidth - PAGE_NOTE_SAFE_OFFSET);
-  const topY = PAGE_NOTE_SAFE_OFFSET;
-  const bottomY = Math.max(
-    topY,
-    layout.height - PAGE_NOTE_HEIGHT - PAGE_NOTE_SAFE_OFFSET
-  );
-  const slots = [
-    {
-      x: clampToRange(
-        layout.width - noteWidth - PAGE_NOTE_SAFE_OFFSET,
-        minX,
-        maxX
-      ),
-      y: topY
-    },
-    {
-      x: clampToRange((layout.width - noteWidth) / 2, minX, maxX),
-      y: topY
-    },
-    {
-      x: clampToRange(layout.margins.left + 4, minX, maxX),
-      y: bottomY
-    },
-    {
-      x: clampToRange((layout.width - noteWidth) / 2, minX, maxX),
-      y: bottomY
-    }
-  ];
+  const baseY = frame.bottom - BOTTOM_RIGHT_SAFE_OFFSET;
 
-  return snapPointToPageGrid(
-    slots[existingNotesCount % slots.length],
-    isGridEnabled()
+  return clampPageElementPosition(
+    {
+      x: frame.right - noteWidth - RIGHT_COLUMN_SAFE_OFFSET,
+      y: baseY - bottomRightItemsCount * BOTTOM_RIGHT_STACK_STEP
+    },
+    ANNOTATION_ROLE.NOTE,
+    layout
   );
 }
 
@@ -584,26 +605,23 @@ function getPageElementPosition(
   role: PageElementRole,
   layout: PageLayout
 ): { x: number; y: number } {
-  const { width, height, margins } = layout;
+  const frame = resolveMapFrame(layout);
   const roleWidth = PAGE_ELEMENT_WIDTHS[role];
-  const minX = margins.left;
-  const maxX = Math.max(minX, width - margins.right - roleWidth);
-  const titleX = clampToRange(margins.left + TOP_LEFT_SAFE_OFFSET, minX, maxX);
+  const roleHeight = PAGE_ELEMENT_HEIGHTS[role];
+  const minX = frame.left;
+  const maxX = Math.max(minX, frame.right - roleWidth);
+  const titleX = clampToRange(frame.left + TOP_LEFT_SAFE_OFFSET, minX, maxX);
   const rightColumnX = clampToRange(
-    width - margins.right - roleWidth - RIGHT_COLUMN_SAFE_OFFSET,
+    frame.right - roleWidth - RIGHT_COLUMN_SAFE_OFFSET,
     minX,
     maxX
   );
-  const bottomY = height - margins.bottom;
-  const minY =
-    role === ANNOTATION_ROLE.TITLE || role === ANNOTATION_ROLE.SUBTITLE
-      ? 12
-      : margins.top + 12;
-  const maxY = Math.max(minY, bottomY - 4);
+  const minY = frame.top;
+  const maxY = Math.max(minY, frame.bottom - roleHeight);
   const bottomStackIndex = BOTTOM_RIGHT_STACK_ORDER.indexOf(role);
 
   if (bottomStackIndex !== -1) {
-    const baseY = bottomY - BOTTOM_RIGHT_SAFE_OFFSET;
+    const baseY = frame.bottom - BOTTOM_RIGHT_SAFE_OFFSET;
     return {
       x: rightColumnX,
       y: clampToRange(
@@ -616,11 +634,25 @@ function getPageElementPosition(
 
   switch (role) {
     case ANNOTATION_ROLE.TITLE:
-      return { x: titleX, y: clampToRange(TITLE_TOP_OFFSET, minY, maxY) };
+      return {
+        x: titleX,
+        y: clampToRange(frame.top + TITLE_TOP_OFFSET, minY, maxY)
+      };
     case ANNOTATION_ROLE.SUBTITLE:
-      return { x: titleX, y: clampToRange(SUBTITLE_TOP_OFFSET, minY, maxY) };
+      return {
+        x: titleX,
+        y: clampToRange(frame.top + SUBTITLE_TOP_OFFSET, minY, maxY)
+      };
+    case ANNOTATION_ROLE.NOTE:
+      return {
+        x: rightColumnX,
+        y: clampToRange(frame.bottom - BOTTOM_RIGHT_SAFE_OFFSET, minY, maxY)
+      };
     default:
-      return { x: titleX, y: clampToRange(margins.top + 24, minY, maxY) };
+      return {
+        x: titleX,
+        y: clampToRange(frame.top + PAGE_GRID_SIZE_PX * 2, minY, maxY)
+      };
   }
 }
 
@@ -629,7 +661,7 @@ function isBottomRightPageElementRole(role: PageElementRole): boolean {
 }
 
 function shouldSnapAutoPageElement(role: PageElementRole): boolean {
-  return role !== ANNOTATION_ROLE.TITLE && role !== ANNOTATION_ROLE.SUBTITLE;
+  return isPageElementRole(role);
 }
 
 function reconcileAutoPageElementStyle(
@@ -810,10 +842,11 @@ const { actions, getState } = createToolStore<
       const nonPageItemsCount = s.items.filter(
         (item) => item.role == null
       ).length;
-      const pageNoteCount = s.items.filter(
+      const bottomRightItemsCount = s.items.filter(
         (item) =>
-          item.type === AnnotationKind.TEXT &&
-          item.role === ANNOTATION_ROLE.NOTE
+          isPageElementRole(item.role) &&
+          (isBottomRightPageElementRole(item.role) ||
+            item.role === ANNOTATION_ROLE.NOTE)
       ).length;
       const normalizedContent =
         type === AnnotationKind.DRAWING && drawingType
@@ -821,7 +854,7 @@ const { actions, getState } = createToolStore<
           : content;
       const isFreePageNote = type === AnnotationKind.TEXT;
       const position = isFreePageNote
-        ? getPageNoteSpawnPosition(pageNoteCount, layout)
+        ? getPageNoteSpawnPosition(bottomRightItemsCount, layout)
         : getNonPageAnnotationSpawnPosition(
             type,
             style,
@@ -1042,26 +1075,14 @@ const { actions, getState } = createToolStore<
       }
     },
     updateDefaultStyle: (styleUpdates: Partial<AnnotationStyle>) => {
-      const normalizedUpdates: Partial<AnnotationStyle> = { ...styleUpdates };
-      if (styleUpdates.opacity !== undefined) {
-        normalizedUpdates.opacity = normalizeOpacityPercent(
-          styleUpdates.opacity
-        );
-      }
-
+      const normalizedUpdates = normalizeAnnotationStyleUpdates(styleUpdates);
       s.defaultStyle = { ...s.defaultStyle, ...normalizedUpdates };
       if (s.pendingStyle) {
         s.pendingStyle = { ...s.pendingStyle, ...normalizedUpdates };
       }
     },
     applyStyle: (styleUpdates: Partial<AnnotationStyle>) => {
-      const normalizedUpdates: Partial<AnnotationStyle> = { ...styleUpdates };
-      if (styleUpdates.opacity !== undefined) {
-        normalizedUpdates.opacity = normalizeOpacityPercent(
-          styleUpdates.opacity
-        );
-      }
-
+      const normalizedUpdates = normalizeAnnotationStyleUpdates(styleUpdates);
       s.defaultStyle = { ...s.defaultStyle, ...normalizedUpdates };
       if (s.pendingStyle) {
         s.pendingStyle = { ...s.pendingStyle, ...normalizedUpdates };
@@ -1118,7 +1139,13 @@ const { actions, getState } = createToolStore<
           ? {
               ...item,
               coordinateSpace: resolveAnnotationCoordinateSpace(item),
-              position: snapPointToPageGrid(newPosition, isGridEnabled()),
+              position: isPageElementRole(item.role)
+                ? clampPageElementPosition(
+                    newPosition,
+                    item.role,
+                    resolvePageLayout()
+                  )
+                : snapPointToPageGrid(newPosition, isGridEnabled()),
               positionMode: 'manual'
             }
           : item

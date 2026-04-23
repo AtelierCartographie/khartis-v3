@@ -1,6 +1,5 @@
 <script lang="ts">
-  import ColorPicker from '$lib/features/commons/components/color-picker.svelte';
-  import { hexToHsl } from '$lib/features/commons/utils/color-utils';
+  import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
 
   interface Props {
     label?: string;
@@ -18,23 +17,11 @@
     exclusive = false,
     onchange
   }: Props = $props();
-
-  const hsl = $derived(hexToHsl(value));
 </script>
 
-<ColorPicker
+<SingleColorPreview
+  label={label}
+  color={value}
   exclusive={exclusive}
-  triggerLabel={label}
-  hex={value}
-  hue={hsl.hue}
-  saturation={hsl.saturation}
-  lightness={hsl.lightness}
-  onValidate={({
-    hex
-  }: {
-    hex: string;
-    hue: number;
-    saturation: number;
-    lightness: number;
-  }) => onchange?.(hex)}
+  onchange={onchange}
 />

@@ -82,6 +82,7 @@ describe('ExpandableSection', () => {
   it('allows scoped surface tokens for themed parent sections', () => {
     expect(source).toContain('--khartis-expandable-section-background');
     expect(source).toContain('--khartis-expandable-section-hover-background');
+    expect(source).toContain('--khartis-expandable-section-body-padding');
     expect(source).toContain('.section-header:hover:not(.disabled)');
   });
 });
