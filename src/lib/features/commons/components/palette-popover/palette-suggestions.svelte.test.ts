@@ -11,6 +11,8 @@ describe('PaletteSuggestions — shared heading', () => {
   it('should render the Suggestions heading with the magic wand icon', () => {
     expect(source).toContain('{m.palette_suggestions()}');
     expect(source).toContain('<MagicWandFilled');
+    expect(source).toContain('--khartis-additions-text-primary-suggestions');
+    expect(source).toContain('--khartis-additions-interactive-suggestions');
   });
 
   it('should derive isQualitative from paletteType to branch rendering', () => {

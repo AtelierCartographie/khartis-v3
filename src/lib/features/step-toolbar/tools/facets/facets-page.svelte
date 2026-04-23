@@ -27,6 +27,9 @@
     syncPanZoom?: boolean;
     width: number;
     height: number;
+    logicalWidth?: number;
+    logicalHeight?: number;
+    displayScale?: number;
     onReady?: () => void;
   }
 
@@ -40,6 +43,9 @@
     syncPanZoom = false,
     width,
     height,
+    logicalWidth = width,
+    logicalHeight = height,
+    displayScale = 1,
     onReady
   }: Props = $props();
 
@@ -53,14 +59,34 @@
     hslToHex(pageColor.hue, pageColor.saturation, pageColor.lightness)
   );
   const pageMargins = $derived(fmtState.margins);
+  const pageDisplayScale = $derived(
+    Number.isFinite(displayScale) && displayScale > 0 ? displayScale : 1
+  );
+  const renderedPageMargins = $derived({
+    top: pageMargins.top * pageDisplayScale,
+    right: pageMargins.right * pageDisplayScale,
+    bottom: pageMargins.bottom * pageDisplayScale,
+    left: pageMargins.left * pageDisplayScale
+  });
   const mapStageWidth = $derived(
-    Math.max(1, width - pageMargins.left - pageMargins.right)
+    Math.max(
+      1,
+      Math.round(
+        (logicalWidth - pageMargins.left - pageMargins.right) * pageDisplayScale
+      )
+    )
   );
   const mapStageHeight = $derived(
-    Math.max(1, height - pageMargins.top - pageMargins.bottom)
+    Math.max(
+      1,
+      Math.round(
+        (logicalHeight - pageMargins.top - pageMargins.bottom) *
+          pageDisplayScale
+      )
+    )
   );
   const pageStyle = $derived(
-    `background-color: ${pageBackgroundColor}; padding: ${pageMargins.top}px ${pageMargins.right}px ${pageMargins.bottom}px ${pageMargins.left}px;`
+    `background-color: ${pageBackgroundColor}; padding: ${renderedPageMargins.top}px ${renderedPageMargins.right}px ${renderedPageMargins.bottom}px ${renderedPageMargins.left}px;`
   );
   const pageAspectRatio = $derived(
     mapStageWidth > 0 ? mapStageHeight / mapStageWidth : 0.75
@@ -76,7 +102,7 @@
 
 <div class="facets-page" style={pageStyle}>
   {#if showPageGrid}
-    <PageGridOverlay />
+    <PageGridOverlay displayScale={pageDisplayScale} />
   {/if}
 
   <div class="facets-map-stage" style={mapStageStyle}>

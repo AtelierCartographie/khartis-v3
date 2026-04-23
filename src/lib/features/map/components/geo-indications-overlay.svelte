@@ -7,7 +7,10 @@
     ScaleForm
   } from '$lib/features/commons/constants/ui.constants';
   import { StylingTools } from '$lib/features/commons/types/global';
-  import { globalState } from '$lib/features/commons/store/global.svelte';
+  import {
+    globalActions,
+    globalState
+  } from '$lib/features/commons/store/global.svelte';
   import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
   import { PRINT_STANDARD_TOKENS } from '$lib/features/commons/utils/layout-sizing.utils';
@@ -30,7 +33,7 @@
     SCALE_MAX_WIDTH_PX,
     toDistanceMeters
   } from '$lib/features/step-toolbar/tools/geo-indications/utils';
-  import { onDestroy, onMount, untrack } from 'svelte';
+  import { onDestroy, onMount, tick, untrack } from 'svelte';
   import * as d3geo from 'd3-geo';
   import type { GeoPermissibleObjects, GeoProjection } from 'd3-geo';
   import type {
@@ -42,6 +45,10 @@
   } from 'geojson';
   import { basemapLayersStore } from '../stores/basemap-layers.store.svelte';
   import { activateStylingToolFromMap } from '../utils/styling-tool-activation.utils';
+  import {
+    getElementCenteringDelta,
+    getFocusViewportElement
+  } from '../utils/focus-viewport.utils';
   import { resolveStaticAssetUrl } from '$lib/features/commons/utils/static-asset-url';
   import { getLegendState } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
   import * as m from '$lib/paraglide/messages';
@@ -693,6 +700,10 @@
   let currentDrag = $state<DragTarget | null>(null);
   let dragOffsetX = 0;
   let dragOffsetY = 0;
+  let centeredGeoTarget = $state<DragTarget | null>(null);
+  let previousScaleEnabled = $state<boolean | null>(null);
+  let previousOrientationEnabled = $state<boolean | null>(null);
+  let previousInsetMapEnabled = $state<boolean | null>(null);
 
   const isGeoIndicationsActive = $derived(
     globalState.selectedTool === StylingTools.GeoIndications
@@ -720,6 +731,10 @@
     };
   }
 
+  function getViewportElement(): HTMLElement | null {
+    return getFocusViewportElement(overlayElement);
+  }
+
   function getDragElement(target: DragTarget): HTMLDivElement | null {
     if (target === 'scale') {
       return scaleElement;
@@ -730,6 +745,23 @@
     }
 
     return insetMapElement;
+  }
+
+  function centerGeoTargetInViewport(target: DragTarget): void {
+    const delta = getElementCenteringDelta(
+      getViewportElement(),
+      getDragElement(target)
+    );
+
+    if (!delta) {
+      return;
+    }
+
+    if (Math.abs(delta.x) < 0.5 && Math.abs(delta.y) < 0.5) {
+      return;
+    }
+
+    globalActions.panPageBy(delta.x, delta.y);
   }
 
   function getDragPosition(
@@ -930,14 +962,150 @@
     activateStylingToolFromMap(StylingTools.GeoIndications);
   }
 
-  function handleGeoIndicationsKeyDown(event: KeyboardEvent): void {
+  function centerGeoTargetOnClick(target: DragTarget): void {
+    centerGeoTargetInViewport(target);
+  }
+
+  function isCenteredGeoTargetVisible(target: DragTarget): boolean {
+    if (!geoIndicationsState.visible) {
+      return false;
+    }
+
+    if (target === 'scale') {
+      return geoIndicationsState.scale.enabled;
+    }
+
+    if (target === 'orientation') {
+      return geoIndicationsState.orientation.enabled;
+    }
+
+    return geoIndicationsState.insetMap.enabled;
+  }
+
+  function resetCenteredGeoTargetPan(): void {
+    if (!centeredGeoTarget) {
+      return;
+    }
+
+    centeredGeoTarget = null;
+    globalActions.resetPagePan();
+  }
+
+  function handleGeoIndicationsClick(
+    event: MouseEvent,
+    target: DragTarget
+  ): void {
+    handleGeoIndicationsActivate(event);
+    centeredGeoTarget = target;
+
+    const currentTarget = event.currentTarget;
+    if (currentTarget instanceof HTMLElement) {
+      currentTarget.focus({ preventScroll: true });
+    }
+
+    void tick().then(() => {
+      centerGeoTargetOnClick(target);
+    });
+  }
+
+  function handleGeoIndicationsBlur(target: DragTarget): void {
+    if (centeredGeoTarget !== target) {
+      return;
+    }
+
+    resetCenteredGeoTargetPan();
+  }
+
+  function handleGeoIndicationsKeyDown(
+    event: KeyboardEvent,
+    target: DragTarget
+  ): void {
     if (event.key !== KEY.ENTER && event.key !== KEY.SPACE) {
       return;
     }
 
     event.preventDefault();
     handleGeoIndicationsActivate(event);
+    centeredGeoTarget = target;
+    void tick().then(() => {
+      centerGeoTargetOnClick(target);
+    });
   }
+
+  $effect(() => {
+    if (!centeredGeoTarget) {
+      return;
+    }
+
+    if (hidden || !isCenteredGeoTargetVisible(centeredGeoTarget)) {
+      resetCenteredGeoTargetPan();
+      return;
+    }
+
+    if (!isGeoIndicationsActive) {
+      resetCenteredGeoTargetPan();
+    }
+  });
+
+  $effect(() => {
+    const scaleEnabled = geoIndicationsState.scale.enabled;
+    const orientationEnabled = geoIndicationsState.orientation.enabled;
+    const insetMapEnabled = geoIndicationsState.insetMap.enabled;
+
+    if (
+      previousScaleEnabled === null ||
+      previousOrientationEnabled === null ||
+      previousInsetMapEnabled === null
+    ) {
+      previousScaleEnabled = scaleEnabled;
+      previousOrientationEnabled = orientationEnabled;
+      previousInsetMapEnabled = insetMapEnabled;
+      return;
+    }
+
+    const shouldCenterScale = !previousScaleEnabled && scaleEnabled;
+    const shouldCenterOrientation =
+      !previousOrientationEnabled && orientationEnabled;
+    const shouldCenterInsetMap = !previousInsetMapEnabled && insetMapEnabled;
+
+    previousScaleEnabled = scaleEnabled;
+    previousOrientationEnabled = orientationEnabled;
+    previousInsetMapEnabled = insetMapEnabled;
+
+    if (hidden || !interactive) {
+      return;
+    }
+
+    const targetsToCenter: DragTarget[] = [];
+
+    if (shouldCenterScale) {
+      targetsToCenter.push('scale');
+    }
+
+    if (shouldCenterOrientation) {
+      targetsToCenter.push('orientation');
+    }
+
+    if (shouldCenterInsetMap) {
+      targetsToCenter.push('inset');
+    }
+
+    if (targetsToCenter.length === 0) {
+      return;
+    }
+
+    void tick().then(() => {
+      if (hidden || !interactive) {
+        return;
+      }
+
+      for (const target of targetsToCenter) {
+        if (isCenteredGeoTargetVisible(target)) {
+          centerGeoTargetInViewport(target);
+        }
+      }
+    });
+  });
 
   function handleScalePointerDown(event: PointerEvent): void {
     startDrag(event, 'scale', scaleElement);
@@ -952,6 +1120,7 @@
   }
 
   onDestroy(() => {
+    centeredGeoTarget = null;
     stopDragging();
   });
 </script>
@@ -973,8 +1142,10 @@
       role="button"
       tabindex="0"
       aria-label={m.tool_geo_indications()}
-      onclick={handleGeoIndicationsActivate}
-      onkeydown={handleGeoIndicationsKeyDown}
+      onclick={(event: MouseEvent) => handleGeoIndicationsClick(event, 'scale')}
+      onblur={() => handleGeoIndicationsBlur('scale')}
+      onkeydown={(event: KeyboardEvent) =>
+        handleGeoIndicationsKeyDown(event, 'scale')}
       onpointerdown={handleScalePointerDown}
     >
       <svg
@@ -1039,8 +1210,11 @@
       role="button"
       tabindex="0"
       aria-label={m.tool_geo_indications()}
-      onclick={handleGeoIndicationsActivate}
-      onkeydown={handleGeoIndicationsKeyDown}
+      onclick={(event: MouseEvent) =>
+        handleGeoIndicationsClick(event, 'orientation')}
+      onblur={() => handleGeoIndicationsBlur('orientation')}
+      onkeydown={(event: KeyboardEvent) =>
+        handleGeoIndicationsKeyDown(event, 'orientation')}
       onpointerdown={handleOrientationPointerDown}
     >
       <svg
@@ -1118,8 +1292,10 @@
       role="button"
       tabindex="0"
       aria-label={m.tool_geo_indications()}
-      onclick={handleGeoIndicationsActivate}
-      onkeydown={handleGeoIndicationsKeyDown}
+      onclick={(event: MouseEvent) => handleGeoIndicationsClick(event, 'inset')}
+      onblur={() => handleGeoIndicationsBlur('inset')}
+      onkeydown={(event: KeyboardEvent) =>
+        handleGeoIndicationsKeyDown(event, 'inset')}
       onpointerdown={handleInsetMapPointerDown}
     >
       <div

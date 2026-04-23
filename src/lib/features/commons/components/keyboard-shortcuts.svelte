@@ -5,7 +5,7 @@
   import { zoomModeStore } from '../store/zoom-mode.store.svelte';
   import { createProjectActions } from '../store/create-project.store.svelte';
   import { projectStore } from '../store/project.store.svelte';
-  import { ToolbarState, ToolbarStep } from '../types/global';
+  import { StylingTools, ToolbarState, ToolbarStep } from '../types/global';
   import {
     detectApplePlatform,
     hasAnyPrimaryModifier,
@@ -21,6 +21,17 @@
     '2': ToolbarStep.Visualizations,
     '3': ToolbarStep.Styling
   };
+  const STYLING_TOOL_IDS: readonly string[] = [
+    StylingTools.Format,
+    StylingTools.Legend,
+    StylingTools.GeoIndications,
+    StylingTools.Annotations,
+    StylingTools.ColorBlindness
+  ];
+
+  function isStylingTool(tool: string | undefined): boolean {
+    return tool !== undefined && STYLING_TOOL_IDS.includes(tool);
+  }
 
   onMount(() => {
     const isApplePlatform = detectApplePlatform();
@@ -36,6 +47,18 @@
 
     function setProjectShortcutPrefix(): void {
       projectShortcutExpiresAt = Date.now() + PROJECT_SHORTCUT_TIMEOUT_MS;
+    }
+
+    function clearSelectedTool(): void {
+      const selectedTool = globalState.selectedTool;
+      if (!selectedTool) {
+        return;
+      }
+
+      globalState.selectedTool = undefined;
+      if (isStylingTool(selectedTool)) {
+        globalActions.resetPagePan();
+      }
     }
 
     function isInputField(target: HTMLElement): boolean {
@@ -58,11 +81,6 @@
         return true;
       }
 
-      if (globalState.selectedTool) {
-        globalState.selectedTool = undefined;
-        return true;
-      }
-
       return false;
     }
 
@@ -70,6 +88,7 @@
       const step = NAVIGATION_SHORTCUTS[key];
       if (!step) return;
 
+      clearSelectedTool();
       globalActions.setNavigationState(step);
       if (
         step !== ToolbarStep.Styling &&

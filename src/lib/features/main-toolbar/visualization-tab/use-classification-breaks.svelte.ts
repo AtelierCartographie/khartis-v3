@@ -46,7 +46,7 @@ export const TEXT_BACKGROUND_SCOPE_TARGET = 'text-background' as const;
 export const SYMBOL_FILL_SCOPE_TARGET = 'symbol-fill' as const;
 
 export function buildClassificationScopeKey(
-  role: 'fill' | 'stroke',
+  role: 'fill' | 'stroke' | 'size',
   target:
     | PrimitiveFilter
     | typeof TEXT_BACKGROUND_SCOPE_TARGET

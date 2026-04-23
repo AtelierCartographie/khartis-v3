@@ -137,6 +137,10 @@ export interface ResolveFitZoomParams {
   paddingPx?: number;
 }
 
+export interface ResolveWorkspaceFitScaleParams extends ResolveFitZoomParams {
+  reservedInlineStartPx?: number;
+}
+
 export function resolveFitToWorkspaceZoom({
   viewportWidth,
   viewportHeight,
@@ -172,6 +176,32 @@ export function resolveReadablePagePreviewScale(scale: number): number {
   }
 
   return clamp(scale, MIN_READABLE_PAGE_PREVIEW_SCALE, 1);
+}
+
+export function resolveWorkspaceFitScale({
+  viewportWidth,
+  viewportHeight,
+  pageWidth,
+  pageHeight,
+  paddingPx = FIT_PADDING_PX,
+  reservedInlineStartPx = 0
+}: ResolveWorkspaceFitScaleParams): number {
+  if (
+    viewportWidth <= 0 ||
+    viewportHeight <= 0 ||
+    pageWidth <= 0 ||
+    pageHeight <= 0
+  ) {
+    return 1;
+  }
+
+  const availableWidth = Math.max(
+    1,
+    viewportWidth - reservedInlineStartPx - paddingPx * 2
+  );
+  const availableHeight = Math.max(1, viewportHeight - paddingPx * 2);
+
+  return Math.min(availableWidth / pageWidth, availableHeight / pageHeight);
 }
 
 export const WORKSPACE_FIT_EVENT = 'khartis:workspace-fit';

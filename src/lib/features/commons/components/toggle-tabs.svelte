@@ -10,7 +10,9 @@
   interface Props {
     activeIndex?: number;
     items?: ToggleItem[];
+    onchange?: (index: number) => void;
     onChange?: (index: number) => void;
+    ondblclick?: (index: number) => void;
     onDoubleClick?: (index: number) => void;
     className?: string;
     activeClass?: string;
@@ -22,7 +24,9 @@
   let {
     activeIndex = 0,
     items = [],
+    onchange,
     onChange = () => {},
+    ondblclick,
     onDoubleClick,
     className = '',
     activeClass = 'active',
@@ -36,11 +40,11 @@
       return;
     }
 
-    onChange(index);
+    (onchange ?? onChange)(index);
   }
 
   function handleDoubleClick(index: number): void {
-    onDoubleClick?.(index);
+    (ondblclick ?? onDoubleClick)?.(index);
   }
 </script>
 

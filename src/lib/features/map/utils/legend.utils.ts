@@ -1,6 +1,7 @@
 import {
   getEnabledPrimitiveFilters,
   getLinePrimitive,
+  getLineThicknessClassification,
   getPolygonPrimitive,
   getPrimitiveCategoryColumn,
   getPrimitiveClassification,
@@ -515,8 +516,7 @@ export function getLineWidthLegendScale(
   statistics?: ColumnStatisticsLike
 ): LineWidthLegendScale | null {
   const line = getLinePrimitive(viz);
-  const classification =
-    viz && getPrimitiveClassification(viz, PrimitiveFilterType.LINE);
+  const classification = viz && getLineThicknessClassification(viz);
 
   if (!line?.enabled) {
     return null;

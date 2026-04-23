@@ -22,6 +22,42 @@ describe('ThematicMap projection mask overlay', () => {
       "import PageGridOverlay from './page-grid-overlay.svelte';"
     );
     expect(source).toContain('{#if showPageGrid}');
-    expect(source).toContain('<PageGridOverlay />');
+    expect(source).toContain(
+      '<PageGridOverlay displayScale={pageDisplayScale} />'
+    );
+  });
+
+  it('throttles live MapLibre facet sync and caps facet cell pixel ratio', () => {
+    expect(source).toContain('const FACET_CELL_RENDER_PIXEL_RATIO_MAX = 1;');
+    expect(source).toContain(
+      'let pendingMapLibreSyncFrameId: number | null = null;'
+    );
+    expect(source).toContain("map.on('move', scheduleMapLibreSync);");
+    expect(source).toContain(
+      '? Math.min(resolvedPixelRatio, FACET_CELL_RENDER_PIXEL_RATIO_MAX)'
+    );
+  });
+
+  it('does not compensate for CSS page scaling when resolving the map pixel ratio', () => {
+    expect(source).toContain(
+      'resolveMapRenderPixelRatio(\n      typeof window'
+    );
+    expect(source).not.toContain('globalState.zoom.pageZoomScale,');
+  });
+
+  it('uses logical page dimensions for viewport refits and rendered dimensions for canvas sharpness', () => {
+    expect(source).toContain('logicalMapCanvasWidth');
+    expect(source).toContain('logicalMapCanvasHeight');
+    expect(source).toContain('getModelMatrix: () => renderModelMatrix');
+    expect(source).toContain(
+      'projectionStore.setRenderScale(pageDisplayScale)'
+    );
+    expect(source).toContain(
+      'projectionStore.setFitPadding(logicalMapViewportFitPaddingPx)'
+    );
+    expect(source).toContain(
+      'const viewportSnapshot = `${logicalMapCanvasWidth}x${logicalMapCanvasHeight}-${logicalMapViewportFitPaddingPx}`;'
+    );
+    expect(source).toContain("scheduleLayerUpdate('effect:canvasResize')");
   });
 });

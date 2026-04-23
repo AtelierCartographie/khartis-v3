@@ -38,6 +38,7 @@ import { resolveAnnotationCoordinateSpace } from './annotations.types';
 
 const ANNOTATION_ID_PREFIX = 'annotation-';
 const DEFAULT_NOTE_FONT_SIZE = 8;
+const DEFAULT_DRAWING_SMOOTHNESS = 0;
 
 const DEFAULT_STATE: AnnotationsState = {
   visible: true,
@@ -61,7 +62,8 @@ const DEFAULT_STATE: AnnotationsState = {
     underlined: false,
     textAlign: TextAlign.Left,
     opacity: 100,
-    color: '#000000'
+    color: '#000000',
+    smoothness: DEFAULT_DRAWING_SMOOTHNESS
   }
 };
 

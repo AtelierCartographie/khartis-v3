@@ -22,6 +22,18 @@ describe('ChooseVisualization', () => {
       "import VisualizationSuggestionCard from './components/visualization-suggestion-card.svelte';"
     );
     expect(source).toContain('<VisualizationSuggestionCard');
+    expect(source).toContain(
+      'activate={() => handleSelectSuggestion(suggestion)}'
+    );
+    expect(source).not.toContain(
+      'onclick={() => handleSelectSuggestion(suggestion)}'
+    );
+  });
+
+  it('keeps persisted suggestion keys visible even after a suggestion-backed viz becomes custom', () => {
+    expect(source).toContain("originMode !== 'auto-suggestion'");
+    expect(source).toContain("originMode !== 'manual-suggestion'");
+    expect(source).toContain("originMode !== 'custom'");
   });
 
   it('commits visualization renames through the immediate rename action', () => {

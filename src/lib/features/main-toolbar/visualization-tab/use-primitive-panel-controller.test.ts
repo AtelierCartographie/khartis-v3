@@ -86,6 +86,19 @@ function createVisualization(): VisualizationConfig {
       classes: 5,
       labels: ['Root']
     },
+    lineClassification: {
+      method: ClassificationMethod.JENKS,
+      classes: 5,
+      labels: ['Root line'],
+      disabledLabels: ['Root line']
+    },
+    lineThicknessClassification: {
+      method: ClassificationMethod.JENKS,
+      classes: 4,
+      numClasses: 4,
+      breaks: [10, 20, 30],
+      colors: ['#f7fbff', '#c6dbef', '#6baed6', '#2171b5']
+    },
     line: {
       enabled: false,
       colorMode: ColorMode.UNIQUE,
@@ -93,7 +106,21 @@ function createVisualization(): VisualizationConfig {
       opacity: 1,
       width: 1,
       maxWidth: 4,
-      dashed: false
+      dashed: false,
+      categoryColumn: 'region',
+      classification: {
+        method: ClassificationMethod.JENKS,
+        classes: 5,
+        labels: ['Line'],
+        disabledLabels: ['Line']
+      },
+      thicknessClassification: {
+        method: ClassificationMethod.JENKS,
+        classes: 4,
+        numClasses: 4,
+        breaks: [10, 20, 30],
+        colors: ['#f7fbff', '#c6dbef', '#6baed6', '#2171b5']
+      }
     },
     text: {
       enabled: true,
@@ -151,6 +178,10 @@ function createHarness(options?: {
     updates: Partial<ClassificationConfig>;
     options?: { preserveOrigin?: boolean };
   }> = [];
+  const lineThicknessClassificationUpdates: Array<{
+    updates: Partial<ClassificationConfig>;
+    options?: { preserveOrigin?: boolean };
+  }> = [];
   const primitiveStrokeClassificationUpdates: Array<{
     primitive: PrimitiveFilterType.POINT | PrimitiveFilterType.POLYGON;
     updates: Partial<ClassificationConfig>;
@@ -164,6 +195,12 @@ function createHarness(options?: {
     updatePrimitiveClassification: (primitive, updates, updateOptions) => {
       primitiveClassificationUpdates.push({
         primitive,
+        updates,
+        options: updateOptions
+      });
+    },
+    updateLineThicknessClassification: (updates, updateOptions) => {
+      lineThicknessClassificationUpdates.push({
         updates,
         options: updateOptions
       });
@@ -188,6 +225,80 @@ function createHarness(options?: {
       return visualization;
     },
     primitiveClassificationUpdates,
+    lineThicknessClassificationUpdates,
+    primitiveStrokeClassificationUpdates,
+    textPrimitiveUpdates,
+    visualizationUpdates
+  };
+}
+
+function createStaleAfterUpdateHarness(options?: {
+  dataFields?: Array<{ id: number; text: string; type?: string }>;
+  visualization?: VisualizationConfig;
+}) {
+  let visualization = options?.visualization ?? createVisualization();
+  const dataFields = options?.dataFields ?? [
+    { id: 0, text: 'id', type: 'number' },
+    { id: 1, text: 'region', type: 'text' },
+    { id: 2, text: 'population', type: 'number' }
+  ];
+  const primitiveClassificationUpdates: Array<{
+    primitive: ClassifiablePrimitive;
+    updates: Partial<ClassificationConfig>;
+    options?: { preserveOrigin?: boolean };
+  }> = [];
+  const lineThicknessClassificationUpdates: Array<{
+    updates: Partial<ClassificationConfig>;
+    options?: { preserveOrigin?: boolean };
+  }> = [];
+  const primitiveStrokeClassificationUpdates: Array<{
+    primitive: PrimitiveFilterType.POINT | PrimitiveFilterType.POLYGON;
+    updates: Partial<ClassificationConfig>;
+  }> = [];
+  const textPrimitiveUpdates: Partial<TextPrimitiveConfig>[] = [];
+  const visualizationUpdates: Partial<VisualizationConfig>[] = [];
+
+  const controller = usePrimitivePanelController({
+    getDataFields: () => dataFields,
+    getVisualization: () => visualization,
+    updatePrimitiveClassification: (primitive, updates, updateOptions) => {
+      primitiveClassificationUpdates.push({
+        primitive,
+        updates,
+        options: updateOptions
+      });
+    },
+    updateLineThicknessClassification: (updates, updateOptions) => {
+      lineThicknessClassificationUpdates.push({
+        updates,
+        options: updateOptions
+      });
+    },
+    updatePrimitiveStrokeClassification: (primitive, updates) => {
+      primitiveStrokeClassificationUpdates.push({ primitive, updates });
+    },
+    updateTextPrimitive: (updates) => {
+      textPrimitiveUpdates.push(updates);
+    },
+    updateVisualization: (updates, afterUpdate) => {
+      visualizationUpdates.push(updates);
+      const nextVisualization = {
+        ...visualization,
+        ...updates
+      } as VisualizationConfig;
+      afterUpdate?.(nextVisualization);
+      visualization = nextVisualization;
+    }
+  });
+
+  return {
+    controller,
+    dataFields,
+    get visualization() {
+      return visualization;
+    },
+    primitiveClassificationUpdates,
+    lineThicknessClassificationUpdates,
     primitiveStrokeClassificationUpdates,
     textPrimitiveUpdates,
     visualizationUpdates
@@ -261,6 +372,170 @@ describe('use-primitive-panel-controller', () => {
     });
   });
 
+  it('resets line category labels when the line category mapping changes', () => {
+    const harness = createHarness({
+      visualization: {
+        ...createVisualization(),
+        line: {
+          ...createVisualization().line,
+          enabled: true,
+          colorMode: ColorMode.CATEGORIES,
+          categoryColumn: 'region',
+          classification: {
+            method: ClassificationMethod.JENKS,
+            classes: 5,
+            labels: ['A', 'B'],
+            disabledLabels: ['B']
+          }
+        },
+        lineClassification: {
+          method: ClassificationMethod.JENKS,
+          classes: 5,
+          labels: ['Root A', 'Root B'],
+          disabledLabels: ['Root A']
+        }
+      } as VisualizationConfig
+    });
+
+    harness.controller.applyPrimitiveMappingUpdate(PrimitiveFilterType.LINE, {
+      categoryColumn: 'group'
+    });
+
+    expect(harness.visualizationUpdates[0]).toMatchObject({
+      lineClassification: {
+        labels: [],
+        disabledLabels: undefined
+      },
+      line: {
+        categoryColumn: 'group',
+        classification: {
+          labels: [],
+          disabledLabels: undefined
+        }
+      }
+    });
+    expect(
+      harness.visualizationUpdates[0]?.line?.thicknessClassification
+    ).toEqual(createVisualization().line?.thicknessClassification);
+  });
+
+  it('preserves the qualitative line palette when only line thickness uses classes', () => {
+    const harness = createHarness({
+      visualization: {
+        ...createVisualization(),
+        line: {
+          ...createVisualization().line,
+          enabled: true,
+          colorMode: ColorMode.CATEGORIES,
+          thicknessMode: ThicknessMode.CLASSES,
+          classification: {
+            method: ClassificationMethod.JENKS,
+            classes: 5,
+            numClasses: 5,
+            paletteId: 'vif',
+            colors: ['#ff0000', '#00ff00'],
+            labels: ['A', 'B']
+          }
+        },
+        lineClassification: {
+          method: ClassificationMethod.JENKS,
+          classes: 5,
+          numClasses: 5,
+          paletteId: 'vif',
+          colors: ['#ff0000', '#00ff00'],
+          labels: ['A', 'B']
+        }
+      } as VisualizationConfig
+    });
+
+    harness.controller.ensurePrimitiveClassificationDefaults(
+      PrimitiveFilterType.LINE,
+      harness.visualization
+    );
+
+    expect(harness.primitiveClassificationUpdates).toEqual([]);
+    harness.controller.ensureLineThicknessClassificationDefaults(
+      harness.visualization
+    );
+    expect(harness.lineThicknessClassificationUpdates).toEqual([]);
+  });
+
+  it('initializes a dedicated thickness classification when line width classes are active', () => {
+    const harness = createHarness({
+      visualization: {
+        ...createVisualization(),
+        lineThicknessClassification: undefined,
+        line: {
+          ...createVisualization().line,
+          enabled: true,
+          colorMode: ColorMode.UNIQUE,
+          thicknessMode: ThicknessMode.CLASSES,
+          thicknessClassification: undefined
+        }
+      } as VisualizationConfig
+    });
+
+    harness.controller.ensureLineThicknessClassificationDefaults(
+      harness.visualization
+    );
+
+    expect(harness.lineThicknessClassificationUpdates).toEqual([
+      {
+        updates: {
+          method: ClassificationMethod.JENKS,
+          classes: 5,
+          numClasses: 5
+        },
+        options: undefined
+      }
+    ]);
+  });
+
+  it('does not treat the color classification as an existing thickness classification', () => {
+    const harness = createHarness({
+      visualization: {
+        ...createVisualization(),
+        lineClassification: {
+          method: ClassificationMethod.JENKS,
+          classes: 4,
+          numClasses: 4,
+          breaks: [10, 20, 30],
+          colors: ['#f7fbff', '#c6dbef', '#6baed6', '#2171b5']
+        },
+        lineThicknessClassification: undefined,
+        line: {
+          ...createVisualization().line,
+          enabled: true,
+          colorMode: ColorMode.CLASSES,
+          thicknessMode: ThicknessMode.CLASSES,
+          classification: {
+            method: ClassificationMethod.JENKS,
+            classes: 4,
+            numClasses: 4,
+            breaks: [10, 20, 30],
+            colors: ['#fee5d9', '#fcae91', '#fb6a4a', '#de2d26']
+          },
+          thicknessClassification: undefined
+        }
+      } as VisualizationConfig
+    });
+
+    harness.controller.ensureLineThicknessClassificationDefaults(
+      harness.visualization
+    );
+
+    expect(harness.lineThicknessClassificationUpdates).toEqual([
+      {
+        updates: {
+          method: ClassificationMethod.JENKS,
+          classes: 5,
+          numClasses: 5
+        },
+        options: undefined
+      }
+    ]);
+  });
+
   it('auto-selects a numeric value column for symbol fill classes without reusing size/category fields', () => {
     const harness = createHarness({
       visualization: {
@@ -275,9 +550,10 @@ describe('use-primitive-panel-controller', () => {
       } as VisualizationConfig,
       dataFields: [
         { id: 0, text: 'id', type: 'number' },
-        { id: 1, text: 'region', type: 'text' },
-        { id: 2, text: 'population', type: 'number' },
-        { id: 3, text: 'income', type: 'number' }
+        { id: 1, text: '__id', type: 'number' },
+        { id: 2, text: 'region', type: 'text' },
+        { id: 3, text: 'population', type: 'number' },
+        { id: 4, text: 'income', type: 'number' }
       ]
     });
 
@@ -307,6 +583,249 @@ describe('use-primitive-panel-controller', () => {
     expect(harness.visualizationUpdates[0]).toMatchObject({
       mapping: { valueColumn: 'population' },
       polygon: { valueColumn: 'population' }
+    });
+  });
+
+  it('auto-selects a numeric value column for line classes without reusing category and size fields', () => {
+    const harness = createHarness({
+      visualization: {
+        ...createVisualization(),
+        line: {
+          ...createVisualization().line,
+          enabled: true,
+          colorMode: ColorMode.UNIQUE,
+          thicknessMode: ThicknessMode.CLASSES,
+          valueColumn: undefined,
+          categoryColumn: 'region',
+          sizeColumn: 'population'
+        }
+      } as VisualizationConfig,
+      dataFields: [
+        { id: 0, text: 'id', type: 'number' },
+        { id: 1, text: 'region', type: 'text' },
+        { id: 2, text: 'population', type: 'number' },
+        { id: 3, text: 'income', type: 'number' }
+      ]
+    });
+
+    harness.controller.ensureAutoColumns(
+      PrimitiveFilterType.LINE,
+      harness.visualization
+    );
+
+    expect(harness.visualizationUpdates[0]).toMatchObject({
+      mapping: { valueColumn: 'income' },
+      line: { valueColumn: 'income' }
+    });
+  });
+
+  it('falls back to a visible id column for line classes when no semantic numeric field exists', () => {
+    const harness = createHarness({
+      visualization: {
+        ...createVisualization(),
+        line: {
+          ...createVisualization().line,
+          enabled: true,
+          colorMode: ColorMode.CLASSES,
+          thicknessMode: ThicknessMode.UNIQUE,
+          valueColumn: undefined,
+          categoryColumn: 'region',
+          sizeColumn: undefined
+        }
+      } as VisualizationConfig,
+      dataFields: [
+        { id: 0, text: '__id', type: 'number' },
+        { id: 1, text: 'id', type: 'number' },
+        { id: 2, text: 'region', type: 'text' }
+      ]
+    });
+
+    harness.controller.ensureAutoColumns(
+      PrimitiveFilterType.LINE,
+      harness.visualization
+    );
+
+    expect(harness.visualizationUpdates[0]).toMatchObject({
+      mapping: { valueColumn: 'id' },
+      line: { valueColumn: 'id' }
+    });
+  });
+
+  it('skips coordinate-like text fields when auto-selecting a line category column', () => {
+    const harness = createHarness({
+      visualization: {
+        ...createVisualization(),
+        line: {
+          ...createVisualization().line,
+          enabled: true,
+          colorMode: ColorMode.CATEGORIES,
+          thicknessMode: ThicknessMode.UNIQUE,
+          categoryColumn: undefined,
+          valueColumn: undefined
+        }
+      } as VisualizationConfig,
+      dataFields: [
+        { id: 0, text: 'geo_point_2d', type: 'text' },
+        { id: 1, text: 'gml_id', type: 'text' },
+        { id: 2, text: 'li_type', type: 'text' }
+      ]
+    });
+
+    harness.controller.ensureAutoColumns(
+      PrimitiveFilterType.LINE,
+      harness.visualization
+    );
+
+    expect(harness.visualizationUpdates[0]).toMatchObject({
+      mapping: { categoryColumn: 'li_type' },
+      line: { categoryColumn: 'li_type' }
+    });
+  });
+
+  it('preserves the next proportional line mode while auto-selecting the default size column', () => {
+    const initialVisualization = {
+      ...createVisualization(),
+      line: {
+        ...createVisualization().line,
+        enabled: true,
+        colorMode: ColorMode.UNIQUE,
+        thicknessMode: ThicknessMode.UNIQUE,
+        valueColumn: undefined,
+        sizeColumn: undefined,
+        categoryColumn: 'region'
+      }
+    } as VisualizationConfig;
+    const harness = createStaleAfterUpdateHarness({
+      visualization: initialVisualization
+    });
+    const nextVisualization = {
+      ...initialVisualization,
+      line: {
+        ...initialVisualization.line,
+        thicknessMode: ThicknessMode.PROPORTIONAL
+      }
+    } as VisualizationConfig;
+
+    harness.controller.ensureAutoColumns(
+      PrimitiveFilterType.LINE,
+      nextVisualization
+    );
+
+    expect(harness.visualization.line).toMatchObject({
+      thicknessMode: ThicknessMode.PROPORTIONAL,
+      sizeColumn: 'population'
+    });
+    expect(harness.visualization.mapping).toMatchObject({
+      sizeColumn: 'population'
+    });
+  });
+
+  it('falls back to a visible id column for proportional line sizing when no other numeric field exists', () => {
+    const initialVisualization = {
+      ...createVisualization(),
+      line: {
+        ...createVisualization().line,
+        enabled: true,
+        colorMode: ColorMode.UNIQUE,
+        thicknessMode: ThicknessMode.UNIQUE,
+        valueColumn: undefined,
+        sizeColumn: undefined,
+        categoryColumn: 'region'
+      }
+    } as VisualizationConfig;
+    const harness = createStaleAfterUpdateHarness({
+      visualization: initialVisualization,
+      dataFields: [
+        { id: 0, text: '__id', type: 'number' },
+        { id: 1, text: 'id', type: 'number' },
+        { id: 2, text: 'region', type: 'text' }
+      ]
+    });
+    const nextVisualization = {
+      ...initialVisualization,
+      line: {
+        ...initialVisualization.line,
+        thicknessMode: ThicknessMode.PROPORTIONAL
+      }
+    } as VisualizationConfig;
+
+    harness.controller.ensureAutoColumns(
+      PrimitiveFilterType.LINE,
+      nextVisualization
+    );
+
+    expect(harness.visualization.line).toMatchObject({
+      thicknessMode: ThicknessMode.PROPORTIONAL,
+      sizeColumn: 'id'
+    });
+    expect(harness.visualization.mapping).toMatchObject({
+      sizeColumn: 'id'
+    });
+  });
+
+  it('preserves the next symbol fill mode while initializing categorical fill defaults', () => {
+    const initialVisualization = {
+      ...createVisualization(),
+      symbol: {
+        ...createVisualization().symbol,
+        fillMode: FillMode.UNIQUE,
+        fillClassification: undefined
+      }
+    } as VisualizationConfig;
+    const harness = createStaleAfterUpdateHarness({
+      visualization: initialVisualization
+    });
+    const nextVisualization = {
+      ...initialVisualization,
+      symbol: {
+        ...initialVisualization.symbol,
+        fillMode: FillMode.CATEGORIES,
+        fillClassification: undefined
+      }
+    } as VisualizationConfig;
+
+    harness.controller.ensureSymbolFillClassificationDefaults(
+      nextVisualization
+    );
+
+    expect(harness.visualization.symbol).toMatchObject({
+      fillMode: FillMode.CATEGORIES,
+      fillClassification: {
+        colors: expect.any(Array),
+        labels: []
+      }
+    });
+  });
+
+  it('preserves the next polygon stroke mode while auto-selecting the default stroke value column', () => {
+    const initialVisualization = {
+      ...createVisualization(),
+      polygon: {
+        ...createVisualization().polygon,
+        strokeMode: StrokeMode.UNIQUE,
+        strokeValueColumn: undefined
+      }
+    } as VisualizationConfig;
+    const harness = createStaleAfterUpdateHarness({
+      visualization: initialVisualization
+    });
+    const nextVisualization = {
+      ...initialVisualization,
+      polygon: {
+        ...initialVisualization.polygon,
+        strokeMode: StrokeMode.CLASSES,
+        strokeValueColumn: undefined
+      }
+    } as VisualizationConfig;
+
+    harness.controller.ensurePrimitiveStrokeAutoColumns(
+      PrimitiveFilterType.POLYGON,
+      nextVisualization
+    );
+
+    expect(harness.visualization.polygon).toMatchObject({
+      strokeMode: StrokeMode.CLASSES,
+      strokeValueColumn: 'id'
     });
   });
 

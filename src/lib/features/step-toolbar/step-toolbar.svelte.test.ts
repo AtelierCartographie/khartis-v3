@@ -40,6 +40,18 @@ describe('StepToolbar', () => {
     expect(toolPopoverSource).toContain('display: none;');
   });
 
+  it('keeps tool expandables flat only in dark theme', () => {
+    expect(source).toContain(
+      ":global(html[theme='g100'] #khartis-tool-popover)"
+    );
+    expect(source).toContain(
+      '--khartis-expandable-section-background: transparent;'
+    );
+    expect(source).not.toContain(
+      ':global(:root #khartis-tool-popover) {\n    --khartis-expandable-section-background'
+    );
+  });
+
   it('does not push shorter right-top popovers downward', () => {
     expect(toolPopoverSource).toContain('computedTopOffset = Math.min(');
     expect(toolPopoverSource).toContain(

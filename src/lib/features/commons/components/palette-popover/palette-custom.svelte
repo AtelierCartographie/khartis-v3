@@ -493,7 +493,7 @@
   .pattern-preview {
     width: 56px;
     height: 18px;
-    border: 1px solid var(--cds-icon-on-color, #ffffff);
+    border: 1px solid var(--khartis-palette-swatch-border-color);
     flex-shrink: 0;
     background-size:
       auto,
@@ -565,7 +565,7 @@
   .live-preview-swatch {
     flex: 1;
     height: 18px;
-    border: 1px solid var(--cds-icon-on-color, #ffffff);
+    border: 1px solid var(--khartis-palette-swatch-border-color);
     background-size:
       auto,
       8px 8px,

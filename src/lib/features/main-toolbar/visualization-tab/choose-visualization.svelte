@@ -290,7 +290,8 @@
     const originMode = getVisualizationOriginMode(targetViz);
     if (
       originMode !== 'auto-suggestion' &&
-      originMode !== 'manual-suggestion'
+      originMode !== 'manual-suggestion' &&
+      originMode !== 'custom'
     ) {
       return undefined;
     }
@@ -631,7 +632,7 @@
               suggestion={suggestion}
               selected={isSelected}
               resolveBadgeType={getColumnBadgeType}
-              onclick={() => handleSelectSuggestion(suggestion)}
+              activate={() => handleSelectSuggestion(suggestion)}
             />
           {/each}
         </div>

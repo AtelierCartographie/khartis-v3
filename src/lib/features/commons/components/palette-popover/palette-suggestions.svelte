@@ -309,7 +309,7 @@
     font-size: 14px;
     line-height: 20px;
     letter-spacing: 0.16px;
-    color: #003a6d;
+    color: var(--khartis-additions-text-primary-suggestions, #003a6d);
     white-space: nowrap;
   }
 
@@ -317,7 +317,7 @@
     display: inline-flex;
     align-items: center;
     padding-top: 2px;
-    color: #003a6d;
+    color: var(--khartis-additions-interactive-suggestions, #003a6d);
   }
 
   .section-heading-line {
