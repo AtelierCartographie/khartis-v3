@@ -11,6 +11,10 @@ const toolPopoverSource = readFileSync(
   resolve(import.meta.dirname, 'tool-popover.svelte'),
   'utf8'
 );
+const toolContainerSource = readFileSync(
+  resolve(import.meta.dirname, 'tools/tool-container.svelte'),
+  'utf8'
+);
 
 describe('StepToolbar', () => {
   it('keeps popovers outside of the scrollable viewport', () => {
@@ -60,6 +64,14 @@ describe('StepToolbar', () => {
   it('keeps tool popover contents opaque', () => {
     expect(toolPopoverSource).toContain(
       'background: var(--khartis-control-surface-background);'
+    );
+  });
+
+  it('covers the sticky header seam at the top of tool panels', () => {
+    expect(toolContainerSource).toContain('position: sticky;');
+    expect(toolContainerSource).toContain('top: 0;');
+    expect(toolContainerSource).toContain(
+      'box-shadow: 0 -1px 0 var(--cds-background, white);'
     );
   });
 

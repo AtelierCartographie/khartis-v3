@@ -10,6 +10,10 @@ describe('EPSG_DEFINITIONS', () => {
     expect('EPSG:2154' in EPSG_DEFINITIONS).toBe(true);
   });
 
+  it('includes EPSG:3035 (ETRS89-LAEA Europe)', () => {
+    expect('EPSG:3035' in EPSG_DEFINITIONS).toBe(true);
+  });
+
   it('includes EPSG:4326 (WGS84)', () => {
     const hasWgs84 = Object.keys(EPSG_DEFINITIONS).some((k) =>
       k.toUpperCase().includes('4326')
@@ -25,6 +29,10 @@ describe('isProjectionSupported', () => {
 
   it('returns true for EPSG:4326 (WGS84)', () => {
     expect(isProjectionSupported('EPSG:4326')).toBe(true);
+  });
+
+  it('returns true for EPSG:3035 (ETRS89-LAEA Europe)', () => {
+    expect(isProjectionSupported('EPSG:3035')).toBe(true);
   });
 
   it('is case-insensitive', () => {

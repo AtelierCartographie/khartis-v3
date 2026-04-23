@@ -107,6 +107,7 @@
     position: sticky;
     top: 0;
     background-color: var(--cds-background, white);
+    box-shadow: 0 -1px 0 var(--cds-background, white);
     z-index: 2;
   }
 
