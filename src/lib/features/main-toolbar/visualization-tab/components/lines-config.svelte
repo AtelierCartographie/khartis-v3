@@ -43,17 +43,14 @@
   import DiscretizationModal from './discretization-modal.svelte';
   import type { ClassificationConfig } from '$lib/features/commons/store/visualization.store.svelte';
   import { resolveDiscretizationLabel } from './discretization.utils';
-  import {
-    FACET_SLOT,
-    facetsStore,
-    type FacetSlotPath
-  } from '../facets-adapter.svelte';
+  import { FACET_SLOT } from '../facets-adapter.svelte';
   import FacetsVariablePicker from './symbols/facets-variable-picker.svelte';
   import {
     NONE_FIELD_ID,
     useFieldSelection
   } from '../use-field-selection.svelte';
   import { useCategoryLabels } from '../use-category-labels.svelte';
+  import { useFacetsVariableSelection } from '../use-facets-variable-selection.svelte';
 
   interface Props {
     dataFields?: Array<{ id: number; text: string; type?: string }>;
@@ -63,6 +60,9 @@
     onModesChange?: (updates: Partial<VisualizationModes>) => void;
     onMissingDataChange?: (updates: Partial<MissingDataConfig>) => void;
     onClassificationChange?: (updates: Partial<ClassificationConfig>) => void;
+    onThicknessClassificationChange?: (
+      updates: Partial<ClassificationConfig>
+    ) => void;
     onMappingChange?: (
       updates: Partial<VisualizationConfig['mapping']>
     ) => void;
@@ -86,16 +86,19 @@
     onModesChange,
     onMissingDataChange,
     onClassificationChange,
+    onThicknessClassificationChange,
     onMappingChange,
     onInvertPalette,
     onToggleVisibility,
     filters = [],
     onAddFilter,
     onUpdateFilter,
-    onRemoveFilter
+    onRemoveFilter,
+    onClearFilters
   }: Props = $props();
 
   let discretizationModalOpen = $state(false);
+  let discretizationTarget = $state<'color' | 'thickness'>('color');
   let filterSectionVisible = $state(false);
   let thicknessPickerOpen = $state(false);
   let colorPickerOpen = $state(false);
@@ -106,6 +109,10 @@
   const valueFieldSelection = useFieldSelection(() => dataFields);
   const sizeFieldSelection = useFieldSelection(() => dataFields);
   const categoryFieldSelection = useFieldSelection(() => dataFields);
+  const facetsSelection = useFacetsVariableSelection({
+    getVisualizationId: () => visualization?.id,
+    getDataFields: () => dataFields
+  });
 
   $effect(() => {
     valueFieldSelection.sync(visualization?.mapping.valueColumn);
@@ -152,11 +159,22 @@
     }
   }
 
+  const lineColorClassification = $derived.by(
+    () =>
+      visualization?.line?.classification ??
+      visualization?.lineClassification ??
+      visualization?.classification
+  );
+  const lineThicknessClassification = $derived.by(
+    () =>
+      visualization?.line?.thicknessClassification ??
+      visualization?.lineThicknessClassification
+  );
   const currentPalette = $derived(
-    visualization?.classification?.colors ?? DEFAULT_SEQUENTIAL_PREVIEW
+    lineColorClassification?.colors ?? DEFAULT_SEQUENTIAL_PREVIEW
   );
   const categoriesPalette = $derived(
-    visualization?.classification?.colors ?? DEFAULT_QUALITATIVE_PREVIEW
+    lineColorClassification?.colors ?? DEFAULT_QUALITATIVE_PREVIEW
   );
   const dataset = $derived(
     visualization
@@ -168,7 +186,7 @@
     enabled: () => colorMode === ColorMode.CATEGORIES,
     getDataset: () => dataset,
     getColumnName: () => currentCategoryColumnName,
-    getClassification: () => visualization?.classification,
+    getClassification: () => lineColorClassification,
     fallbackCount: 4
   });
   const categoryCount = $derived(categoryLabels.count);
@@ -246,16 +264,6 @@
     if (next === thicknessMode) return;
     thicknessMode = next;
     onModesChange?.({ thickness: thicknessMode });
-    if (thicknessMode === ThicknessMode.UNIQUE) {
-      thickness = VISUALIZATION_DEFAULTS.lineWidth;
-      onStyleChange?.({ lineWidth: VISUALIZATION_DEFAULTS.lineWidth });
-      onMappingChange?.({ sizeColumn: undefined });
-      onClassificationChange?.({
-        breaks: undefined,
-        counts: undefined,
-        breakpointValue: null
-      });
-    }
   }
 
   function handleColorModeChange(index: number) {
@@ -264,26 +272,6 @@
     if (nextMode === colorMode) return;
     colorMode = nextMode;
     onModesChange?.({ color: colorMode });
-    onClassificationChange?.({
-      colors: undefined,
-      paletteId: undefined,
-      inverted: false,
-      patternId: undefined,
-      patternParams: undefined,
-      labels: undefined
-    });
-    const isUnique = nextMode === ColorMode.UNIQUE;
-    const isClasses = nextMode === ColorMode.CLASSES;
-    const isCategories = nextMode === ColorMode.CATEGORIES;
-    if (isUnique) {
-      color = DEFAULT_COLORS.line;
-      onStyleChange?.({ lineColor: DEFAULT_COLORS.line });
-      onMappingChange?.({ valueColumn: undefined, categoryColumn: undefined });
-    } else if (isClasses) {
-      onMappingChange?.({ categoryColumn: undefined });
-    } else if (isCategories) {
-      onMappingChange?.({ valueColumn: undefined });
-    }
   }
 
   function handleThicknessChange(value: number) {
@@ -344,94 +332,45 @@
     )
   );
 
-  function handleOpenDiscretization() {
+  function handleOpenColorDiscretization() {
+    discretizationTarget = 'color';
     discretizationModalOpen = true;
   }
 
-  function handleClassificationChange(
+  function handleOpenThicknessDiscretization() {
+    discretizationTarget = 'thickness';
+    discretizationModalOpen = true;
+  }
+
+  function handleColorClassificationChange(
     classification: Partial<ClassificationConfig>
   ) {
     onClassificationChange?.(classification);
   }
 
-  const discretizationLabel = $derived.by(() =>
+  function handleThicknessClassificationChange(
+    classification: Partial<ClassificationConfig>
+  ) {
+    onThicknessClassificationChange?.(classification);
+  }
+
+  const colorDiscretizationLabel = $derived.by(() =>
     resolveDiscretizationLabel(
-      visualization?.classification
-        ? { ...visualization.classification }
+      lineColorClassification ? { ...lineColorClassification } : undefined
+    )
+  );
+
+  const thicknessDiscretizationLabel = $derived.by(() =>
+    resolveDiscretizationLabel(
+      lineThicknessClassification
+        ? { ...lineThicknessClassification }
         : undefined
     )
   );
 
-  const selectedVizId = $derived(visualization?.id);
-
-  const activeFacetsSlotPath = $derived.by(() => {
-    if (
-      !facetsStore.enabled ||
-      !selectedVizId ||
-      facetsStore.baseVisualizationId !== selectedVizId
-    ) {
-      return null;
-    }
-    return facetsStore.primarySlotPath;
-  });
-
-  function isFacetsActiveForSlot(slotPath: FacetSlotPath): boolean {
-    return activeFacetsSlotPath === slotPath;
-  }
-
-  function getFacetsSelectedFieldIds(slotPath: FacetSlotPath): number[] {
-    if (!isFacetsActiveForSlot(slotPath)) {
-      return [];
-    }
-    return facetsStore.variables
-      .map((name) => dataFields.find((f) => f.text === name)?.id)
-      .filter((id): id is number => typeof id === 'number');
-  }
-
   const valueColumnName = $derived(valueFieldSelection.selectedFieldName ?? '');
 
   const sizeColumnName = $derived(sizeFieldSelection.selectedFieldName ?? '');
-
-  async function handleFacetsVariablesChange(
-    baseVariableName: string,
-    slotPath: FacetSlotPath,
-    fieldIds: number[]
-  ) {
-    if (!selectedVizId) return;
-    const variableNames = fieldIds
-      .map((id) => dataFields.find((f) => f.id === id)?.text)
-      .filter((name): name is string => Boolean(name));
-    const hasBase = Boolean(baseVariableName);
-    const merged =
-      hasBase && !variableNames.includes(baseVariableName)
-        ? [baseVariableName, ...variableNames]
-        : variableNames;
-    await facetsStore.updateVariables(selectedVizId, merged, slotPath);
-  }
-
-  async function handleFacetsToggle(
-    baseVariableName: string,
-    slotPath: FacetSlotPath,
-    en: boolean
-  ) {
-    if (!selectedVizId) return;
-    if (!en) {
-      facetsStore.disable();
-      return;
-    }
-
-    const available = dataFields
-      .map((f) => f.text)
-      .filter((name): name is string => Boolean(name));
-    const seed = baseVariableName ? [baseVariableName] : [];
-    const candidates = seed.slice();
-    for (const name of available) {
-      if (candidates.length >= 2) break;
-      if (!candidates.includes(name)) candidates.push(name);
-    }
-    if (candidates.length < 2) return;
-    await facetsStore.updateVariables(selectedVizId, candidates, slotPath);
-  }
 </script>
 
 <ExpandableSection
@@ -487,17 +426,21 @@
           dataFields={dataFields}
           singleSelectItems={selectableDataFields}
           selectedFieldId={sizeFieldSelection.selectedFieldId}
-          selectedFieldIds={getFacetsSelectedFieldIds(FACET_SLOT.LINE_SIZE)}
-          isCollectionEnabled={isFacetsActiveForSlot(FACET_SLOT.LINE_SIZE)}
+          selectedFieldIds={facetsSelection.getSelectedFieldIds(
+            FACET_SLOT.LINE_SIZE
+          )}
+          isCollectionEnabled={facetsSelection.isActiveForSlot(
+            FACET_SLOT.LINE_SIZE
+          )}
           onSelect={handleSizeFieldSelect}
           onCollectionChange={(ids) =>
-            handleFacetsVariablesChange(
+            facetsSelection.updateVariables(
               sizeColumnName,
               FACET_SLOT.LINE_SIZE,
               ids
             )}
           onToggleCollection={(en) =>
-            handleFacetsToggle(sizeColumnName, FACET_SLOT.LINE_SIZE, en)}
+            facetsSelection.toggle(sizeColumnName, FACET_SLOT.LINE_SIZE, en)}
         />
       </div>
       <SliderWithInput
@@ -517,23 +460,27 @@
           dataFields={dataFields}
           singleSelectItems={selectableDataFields}
           selectedFieldId={valueFieldSelection.selectedFieldId}
-          selectedFieldIds={getFacetsSelectedFieldIds(FACET_SLOT.LINE_VALUE)}
-          isCollectionEnabled={isFacetsActiveForSlot(FACET_SLOT.LINE_VALUE)}
+          selectedFieldIds={facetsSelection.getSelectedFieldIds(
+            FACET_SLOT.LINE_VALUE
+          )}
+          isCollectionEnabled={facetsSelection.isActiveForSlot(
+            FACET_SLOT.LINE_VALUE
+          )}
           onSelect={handleValueFieldSelect}
           onCollectionChange={(ids) =>
-            handleFacetsVariablesChange(
+            facetsSelection.updateVariables(
               valueColumnName,
               FACET_SLOT.LINE_VALUE,
               ids
             )}
           onToggleCollection={(en) =>
-            handleFacetsToggle(valueColumnName, FACET_SLOT.LINE_VALUE, en)}
+            facetsSelection.toggle(valueColumnName, FACET_SLOT.LINE_VALUE, en)}
         />
       </div>
       <DiscretizationRow
         label={m.discretization()}
-        value={discretizationLabel}
-        onsettings={handleOpenDiscretization}
+        value={thicknessDiscretizationLabel}
+        onsettings={handleOpenThicknessDiscretization}
       />
       <SliderWithInput
         label={m.max_thickness()}
@@ -572,35 +519,37 @@
           dataFields={dataFields}
           singleSelectItems={selectableDataFields}
           selectedFieldId={valueFieldSelection.selectedFieldId}
-          selectedFieldIds={getFacetsSelectedFieldIds(FACET_SLOT.LINE_VALUE)}
-          isCollectionEnabled={isFacetsActiveForSlot(FACET_SLOT.LINE_VALUE)}
+          selectedFieldIds={facetsSelection.getSelectedFieldIds(
+            FACET_SLOT.LINE_VALUE
+          )}
+          isCollectionEnabled={facetsSelection.isActiveForSlot(
+            FACET_SLOT.LINE_VALUE
+          )}
           onSelect={handleValueFieldSelect}
           onCollectionChange={(ids) =>
-            handleFacetsVariablesChange(
+            facetsSelection.updateVariables(
               valueColumnName,
               FACET_SLOT.LINE_VALUE,
               ids
             )}
           onToggleCollection={(en) =>
-            handleFacetsToggle(valueColumnName, FACET_SLOT.LINE_VALUE, en)}
+            facetsSelection.toggle(valueColumnName, FACET_SLOT.LINE_VALUE, en)}
         />
       </div>
       <DiscretizationRow
         label={m.discretization()}
-        value={discretizationLabel}
-        onsettings={handleOpenDiscretization}
+        value={colorDiscretizationLabel}
+        onsettings={handleOpenColorDiscretization}
       />
       <PalettePreview
         label={m.color_palette()}
         colors={currentPalette}
-        selectedPaletteId={visualization?.classification?.paletteId}
-        inverted={visualization?.classification?.inverted ?? false}
-        paletteType={resolvePaletteTypeForBreakpoint(
-          visualization?.classification
-        )}
-        classification={visualization?.classification}
+        selectedPaletteId={lineColorClassification?.paletteId}
+        inverted={lineColorClassification?.inverted ?? false}
+        paletteType={resolvePaletteTypeForBreakpoint(lineColorClassification)}
+        classification={lineColorClassification}
         oninvert={onInvertPalette}
-        onClassificationChange={handleClassificationChange}
+        onClassificationChange={handleColorClassificationChange}
       />
     {:else if colorMode === ColorMode.CATEGORIES}
       <div class="field-group">
@@ -610,17 +559,21 @@
           dataFields={dataFields}
           singleSelectItems={selectableDataFields}
           selectedFieldId={categoryFieldSelection.selectedFieldId}
-          selectedFieldIds={getFacetsSelectedFieldIds(FACET_SLOT.LINE_CATEGORY)}
-          isCollectionEnabled={isFacetsActiveForSlot(FACET_SLOT.LINE_CATEGORY)}
+          selectedFieldIds={facetsSelection.getSelectedFieldIds(
+            FACET_SLOT.LINE_CATEGORY
+          )}
+          isCollectionEnabled={facetsSelection.isActiveForSlot(
+            FACET_SLOT.LINE_CATEGORY
+          )}
           onSelect={handleCategoryFieldSelect}
           onCollectionChange={(ids) =>
-            handleFacetsVariablesChange(
+            facetsSelection.updateVariables(
               categoryColumnName,
               FACET_SLOT.LINE_CATEGORY,
               ids
             )}
           onToggleCollection={(en) =>
-            handleFacetsToggle(
+            facetsSelection.toggle(
               categoryColumnName,
               FACET_SLOT.LINE_CATEGORY,
               en
@@ -638,15 +591,15 @@
       <PalettePreview
         label={m.color_palette()}
         colors={categoriesPalette}
-        selectedPaletteId={visualization?.classification?.paletteId}
-        inverted={visualization?.classification?.inverted ?? false}
+        selectedPaletteId={lineColorClassification?.paletteId}
+        inverted={lineColorClassification?.inverted ?? false}
         paletteType={PALETTE_TYPE.QUALITATIVE}
         categoriesMode={true}
         categoriesVariant="lines"
         categoryLabels={categoryLabels.labels}
         bind:categoriesPopoverOpen={colorCategoriesPopoverOpen}
         oninvert={onInvertPalette}
-        onClassificationChange={handleClassificationChange}
+        onClassificationChange={handleColorClassificationChange}
       />
     {/if}
 
@@ -686,6 +639,7 @@
     onAddFilter={onAddFilter ?? (() => {})}
     onUpdateFilter={onUpdateFilter}
     onRemoveFilter={onRemoveFilter ?? (() => {})}
+    onClearFilters={onClearFilters}
     onClose={() => {
       filterSectionVisible = false;
     }}
@@ -695,9 +649,14 @@
 <DiscretizationModal
   bind:open={discretizationModalOpen}
   visualization={visualization}
-  classification={visualization?.line?.classification ??
-    visualization?.lineClassification}
-  onchange={handleClassificationChange}
+  classification={discretizationTarget === 'thickness'
+    ? lineThicknessClassification
+    : lineColorClassification}
+  valueColumn={visualization?.mapping.valueColumn}
+  role={discretizationTarget === 'thickness' ? 'size' : 'fill'}
+  onchange={discretizationTarget === 'thickness'
+    ? handleThicknessClassificationChange
+    : handleColorClassificationChange}
 />
 
 <style lang="scss">

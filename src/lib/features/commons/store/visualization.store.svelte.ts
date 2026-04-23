@@ -37,7 +37,10 @@ import {
 } from '../constants/colors.constants';
 import { DEFAULT_CATEGORICAL_COLORS as FIGMA_DEFAULT_CATEGORICAL_COLORS } from '../constants/qualitative-palette.constants';
 import { COLUMN_TYPE_GEOMETRY } from '../constants/data.constants';
-import { isLikelyCoordinateColumn } from '../utils/geo-detector.utils';
+import {
+  findPreferredNumericColumn,
+  findPreferredTextColumn
+} from '../utils/visualization-columns.utils';
 import * as m from '$lib/paraglide/messages';
 
 export enum VisualizationType {
@@ -163,6 +166,21 @@ export interface SymbolModeState {
   strokeCategoryColumn?: string;
 }
 
+export interface LineColorModeState {
+  color?: string | string[];
+  valueColumn?: string;
+  categoryColumn?: string;
+  classification?: ClassificationConfig;
+}
+
+export interface LineThicknessModeState {
+  width?: number;
+  maxWidth?: number;
+  valueColumn?: string;
+  sizeColumn?: string;
+  thicknessClassification?: ClassificationConfig;
+}
+
 export interface SymbolPrimitiveConfig {
   enabled: boolean;
   mode: SymbolMode;
@@ -213,7 +231,10 @@ export interface LinePrimitiveConfig {
   categoryColumn?: string;
   sizeColumn?: string;
   classification?: ClassificationConfig;
+  thicknessClassification?: ClassificationConfig;
   missingData?: MissingDataConfig;
+  colorModeStates?: Partial<Record<ColorMode, LineColorModeState>>;
+  thicknessModeStates?: Partial<Record<ThicknessMode, LineThicknessModeState>>;
 }
 
 export interface TextSecondaryLabelsConfig {
@@ -414,6 +435,7 @@ export interface VisualizationConfig {
   classification?: ClassificationConfig;
   symbolClassification?: ClassificationConfig;
   lineClassification?: ClassificationConfig;
+  lineThicknessClassification?: ClassificationConfig;
   textClassification?: ClassificationConfig;
   symbols?: {
     type: ShapeType;
@@ -680,18 +702,32 @@ function buildLinePrimitiveConfig(
   visualization: VisualizationConfig
 ): LinePrimitiveConfig {
   const existing = visualization.line;
+  const colorMode =
+    existing?.colorMode ?? visualization.modes?.color ?? ColorMode.UNIQUE;
+  const thicknessMode =
+    existing?.thicknessMode ??
+    visualization.modes?.thickness ??
+    ThicknessMode.UNIQUE;
+  const usesColorClassification =
+    colorMode === ColorMode.CLASSES || colorMode === ColorMode.CATEGORIES;
+  const colorClassification =
+    existing?.classification ??
+    (usesColorClassification
+      ? (visualization.lineClassification ?? visualization.classification)
+      : undefined);
+  const thicknessClassification =
+    existing?.thicknessClassification ??
+    (thicknessMode === ThicknessMode.CLASSES
+      ? visualization.lineThicknessClassification
+      : undefined);
 
   return {
     enabled: resolveLegacyPrimitiveEnabled(
       visualization,
       PrimitiveFilterType.LINE
     ),
-    colorMode:
-      existing?.colorMode ?? visualization.modes?.color ?? ColorMode.UNIQUE,
-    thicknessMode:
-      existing?.thicknessMode ??
-      visualization.modes?.thickness ??
-      ThicknessMode.UNIQUE,
+    colorMode,
+    thicknessMode,
     color: existing?.color ?? visualization.style.lineColor,
     width:
       existing?.width ??
@@ -707,11 +743,11 @@ function buildLinePrimitiveConfig(
     categoryColumn:
       existing?.categoryColumn ?? visualization.mapping.categoryColumn,
     sizeColumn: existing?.sizeColumn ?? visualization.mapping.sizeColumn,
-    classification:
-      existing?.classification ??
-      visualization.lineClassification ??
-      visualization.classification,
-    missingData: existing?.missingData ?? visualization.missingData
+    classification: colorClassification,
+    thicknessClassification,
+    missingData: existing?.missingData ?? visualization.missingData,
+    colorModeStates: existing?.colorModeStates,
+    thicknessModeStates: existing?.thicknessModeStates
   };
 }
 
@@ -844,6 +880,33 @@ export function getLinePrimitive(
   visualization: VisualizationConfig | null | undefined
 ): LinePrimitiveConfig | undefined {
   return visualization ? buildLinePrimitiveConfig(visualization) : undefined;
+}
+
+export function getLineThicknessClassification(
+  visualization:
+    | Pick<
+        VisualizationConfig,
+        | 'line'
+        | 'classification'
+        | 'lineClassification'
+        | 'lineThicknessClassification'
+      >
+    | null
+    | undefined
+): ClassificationConfig | undefined {
+  if (!visualization) {
+    return undefined;
+  }
+
+  const line = visualization.line;
+  const usesThicknessClasses = line?.thicknessMode === ThicknessMode.CLASSES;
+
+  return (
+    line?.thicknessClassification ??
+    (usesThicknessClasses
+      ? visualization.lineThicknessClassification
+      : undefined)
+  );
 }
 
 export function getTextPrimitive(
@@ -1041,6 +1104,11 @@ export interface VisualizationStore {
     classification: Partial<ClassificationConfig>,
     options?: { preserveOrigin?: boolean }
   ) => void;
+  updateLineThicknessClassification: (
+    id: string,
+    classification: Partial<ClassificationConfig>,
+    options?: { preserveOrigin?: boolean }
+  ) => void;
   updatePrimitiveStrokeClassification: (
     id: string,
     primitive: PrimitiveFilter,
@@ -1096,9 +1164,6 @@ export interface VisualizationStore {
 
 const getDefaultVisualizationName = () => m.default_visualization_name();
 const getDatasetNotFoundError = () => m.dataset_not_found_error();
-
-const COLUMN_TYPE_NUMBER = 'number';
-const COLUMN_TYPE_STRING = 'string';
 
 const DEFAULT_SYMBOL_SIZE = VISUALIZATION_DEFAULTS.symbolSize;
 const DEFAULT_SYMBOL_MIN_SIZE = 5;
@@ -1206,17 +1271,19 @@ function getDefaultMapping(
   type: VisualizationType,
   dataset: ProcessedDataset | DatasetResult
 ): VisualizationConfig['mapping'] {
-  const numericColumns = dataset.columns.filter(
-    (column) =>
-      column.type === COLUMN_TYPE_NUMBER &&
-      !isLikelyCoordinateColumn(column.name)
-  );
-  const stringColumns = dataset.columns.filter(
-    (column) => column.type === COLUMN_TYPE_STRING
-  );
   const geometryColumn = dataset.columns.find(
     (column) => column.type === COLUMN_TYPE_GEOMETRY
   );
+  const firstNumericColumn = findPreferredNumericColumn(dataset.columns, {
+    allowIdLikeFallback: true,
+    excludeLikelyCoordinates: true
+  });
+  const secondNumericColumn = findPreferredNumericColumn(dataset.columns, {
+    exclude: [firstNumericColumn],
+    allowIdLikeFallback: true,
+    excludeLikelyCoordinates: true
+  });
+  const firstTextColumn = findPreferredTextColumn(dataset.columns);
 
   const mapping: VisualizationConfig['mapping'] = {
     geometryColumn: geometryColumn?.name
@@ -1224,20 +1291,20 @@ function getDefaultMapping(
 
   switch (type) {
     case VisualizationType.CHOROPLETH:
-      mapping.valueColumn = numericColumns[0]?.name;
+      mapping.valueColumn = firstNumericColumn;
       break;
 
     case VisualizationType.PROPORTIONAL:
-      mapping.sizeColumn = numericColumns[0]?.name;
+      mapping.sizeColumn = firstNumericColumn;
       break;
 
     case VisualizationType.CATEGORICAL:
-      mapping.categoryColumn = stringColumns[0]?.name;
+      mapping.categoryColumn = firstTextColumn;
       break;
 
     case VisualizationType.BIVARIATE:
-      mapping.sizeColumn = numericColumns[0]?.name;
-      mapping.valueColumn = numericColumns[1]?.name;
+      mapping.sizeColumn = firstNumericColumn;
+      mapping.valueColumn = secondNumericColumn;
       break;
   }
 
@@ -1644,6 +1711,7 @@ const ORIGIN_TRACKED_UPDATE_KEYS = [
   'classification',
   'symbolClassification',
   'lineClassification',
+  'lineThicknessClassification',
   'textClassification',
   'symbols',
   'missingData',
@@ -1687,12 +1755,14 @@ const CLASSIFICATION_LIKE_UPDATE_KEYS = new Set<
     | 'classification'
     | 'symbolClassification'
     | 'lineClassification'
+    | 'lineThicknessClassification'
     | 'textClassification'
   >
 >([
   'classification',
   'symbolClassification',
   'lineClassification',
+  'lineThicknessClassification',
   'textClassification'
 ]);
 
@@ -1702,12 +1772,14 @@ function isClassificationLikeUpdateKey(
   | 'classification'
   | 'symbolClassification'
   | 'lineClassification'
+  | 'lineThicknessClassification'
   | 'textClassification' {
   return CLASSIFICATION_LIKE_UPDATE_KEYS.has(
     key as
       | 'classification'
       | 'symbolClassification'
       | 'lineClassification'
+      | 'lineThicknessClassification'
       | 'textClassification'
   );
 }
@@ -1734,14 +1806,30 @@ function isDerivedPrimitiveClassificationUpdate(
       JSON.stringify(currentPrimitive[typedKey] ?? null) !==
       JSON.stringify(nextPrimitive[typedKey] ?? null)
     );
-  }) as Array<keyof typeof nextPrimitive>;
+  });
 
-  return (
-    updateKeys.length === 1 &&
-    updateKeys[0] === 'classification' &&
+  if (updateKeys.length !== 1) {
+    return false;
+  }
+
+  const [onlyKey] = updateKeys;
+  if (
+    onlyKey === 'classification' &&
     isDerivedClassificationUpdate(
       currentPrimitive.classification,
       nextPrimitive.classification
+    )
+  ) {
+    return true;
+  }
+
+  return (
+    onlyKey === 'thicknessClassification' &&
+    'thicknessClassification' in currentPrimitive &&
+    'thicknessClassification' in nextPrimitive &&
+    isDerivedClassificationUpdate(
+      currentPrimitive.thicknessClassification,
+      nextPrimitive.thicknessClassification
     )
   );
 }
@@ -1763,7 +1851,9 @@ function touchesVisualizationSemantics(
             ? visualization.symbolClassification
             : key === 'lineClassification'
               ? visualization.lineClassification
-              : visualization.textClassification;
+              : key === 'lineThicknessClassification'
+                ? visualization.lineThicknessClassification
+                : visualization.textClassification;
 
       const nextClassification = updates[key] as
         | Partial<ClassificationConfig>
@@ -1815,6 +1905,9 @@ function resolveNextVisualizationOrigin(
 
   return {
     mode: 'custom',
+    ...(visualization.origin?.suggestionKey
+      ? { suggestionKey: visualization.origin.suggestionKey }
+      : {}),
     ...(visualization.origin?.restoreState
       ? { restoreState: deepClone(visualization.origin.restoreState) }
       : {})
@@ -2132,6 +2225,38 @@ function createVisualizationStore(): VisualizationStore {
     });
   }
 
+  function updateLineThicknessClassification(
+    id: string,
+    classification: Partial<ClassificationConfig>,
+    options?: { preserveOrigin?: boolean }
+  ): void {
+    applyVisualizationUpdate(id, (visualization) => {
+      const line = buildLinePrimitiveConfig(visualization);
+      const existing = visualization.lineThicknessClassification ??
+        line.thicknessClassification ??
+        line.classification ??
+        visualization.lineClassification ??
+        visualization.classification ?? {
+          method: ClassificationMethod.JENKS,
+          classes: DEFAULT_QUANTILES_CLASS_COUNT
+        };
+
+      return {
+        ...(options?.preserveOrigin
+          ? { origin: deepClone(visualization.origin) }
+          : {}),
+        lineThicknessClassification: { ...existing, ...classification },
+        line: {
+          ...line,
+          thicknessClassification: {
+            ...line.thicknessClassification,
+            ...classification
+          } as ClassificationConfig
+        }
+      } as Partial<VisualizationConfig>;
+    });
+  }
+
   function updatePrimitiveStrokeClassification(
     id: string,
     primitive: PrimitiveFilter,
@@ -2374,6 +2499,114 @@ function createVisualizationStore(): VisualizationStore {
     );
   }
 
+  function someLineModeStateUsesColumn(
+    line: LinePrimitiveConfig | undefined,
+    columnName: string
+  ): boolean {
+    if (!line || !columnName) {
+      return false;
+    }
+
+    return (
+      Object.values(line.colorModeStates ?? {}).some(
+        (state) =>
+          state?.valueColumn === columnName ||
+          state?.categoryColumn === columnName
+      ) ||
+      Object.values(line.thicknessModeStates ?? {}).some(
+        (state) =>
+          state?.valueColumn === columnName || state?.sizeColumn === columnName
+      )
+    );
+  }
+
+  function renameLineModeStateColumns(
+    line: LinePrimitiveConfig,
+    renameColumn: (value?: string) => string | undefined
+  ): void {
+    if (line.colorModeStates) {
+      line.colorModeStates = Object.fromEntries(
+        Object.entries(line.colorModeStates).map(([mode, state]) => [
+          mode,
+          state
+            ? {
+                ...state,
+                valueColumn: renameColumn(state.valueColumn),
+                categoryColumn: renameColumn(state.categoryColumn)
+              }
+            : state
+        ])
+      ) as NonNullable<LinePrimitiveConfig['colorModeStates']>;
+    }
+
+    if (line.thicknessModeStates) {
+      line.thicknessModeStates = Object.fromEntries(
+        Object.entries(line.thicknessModeStates).map(([mode, state]) => [
+          mode,
+          state
+            ? {
+                ...state,
+                valueColumn: renameColumn(state.valueColumn),
+                sizeColumn: renameColumn(state.sizeColumn)
+              }
+            : state
+        ])
+      ) as NonNullable<LinePrimitiveConfig['thicknessModeStates']>;
+    }
+  }
+
+  function removeLineModeStateColumns(
+    line: LinePrimitiveConfig,
+    columnName: string,
+    clearColumn: (value?: string) => string | undefined
+  ): void {
+    if (line.colorModeStates) {
+      line.colorModeStates = Object.fromEntries(
+        Object.entries(line.colorModeStates).map(([mode, state]) => {
+          if (!state) {
+            return [mode, state];
+          }
+
+          const clearsClassification =
+            state.valueColumn === columnName ||
+            state.categoryColumn === columnName;
+
+          return [
+            mode,
+            {
+              ...state,
+              valueColumn: clearColumn(state.valueColumn),
+              categoryColumn: clearColumn(state.categoryColumn),
+              ...(clearsClassification ? { classification: undefined } : {})
+            }
+          ];
+        })
+      ) as NonNullable<LinePrimitiveConfig['colorModeStates']>;
+    }
+
+    if (line.thicknessModeStates) {
+      line.thicknessModeStates = Object.fromEntries(
+        Object.entries(line.thicknessModeStates).map(([mode, state]) => {
+          if (!state) {
+            return [mode, state];
+          }
+
+          return [
+            mode,
+            {
+              ...state,
+              valueColumn: clearColumn(state.valueColumn),
+              sizeColumn: clearColumn(state.sizeColumn),
+              ...(state.valueColumn === columnName
+                ? { thicknessClassification: undefined }
+                : {})
+            }
+          ];
+        })
+      ) as NonNullable<LinePrimitiveConfig['thicknessModeStates']>;
+    }
+  }
+
   function getVisualizationsUsingColumn(
     datasetId: string,
     columnName: string
@@ -2407,6 +2640,7 @@ function createVisualizationStore(): VisualizationStore {
         line.valueColumn === columnName ||
         line.categoryColumn === columnName ||
         line.sizeColumn === columnName ||
+        someLineModeStateUsesColumn(line, columnName) ||
         text.labelColumn === columnName ||
         text.valueColumn === columnName ||
         text.categoryColumn === columnName ||
@@ -2468,6 +2702,7 @@ function createVisualizationStore(): VisualizationStore {
       nextLine.valueColumn = renameColumn(nextLine.valueColumn);
       nextLine.categoryColumn = renameColumn(nextLine.categoryColumn);
       nextLine.sizeColumn = renameColumn(nextLine.sizeColumn);
+      renameLineModeStateColumns(nextLine, renameColumn);
       nextText.labelColumn = renameColumn(nextText.labelColumn);
       nextText.valueColumn = renameColumn(nextText.valueColumn);
       nextText.categoryColumn = renameColumn(nextText.categoryColumn);
@@ -2603,16 +2838,20 @@ function createVisualizationStore(): VisualizationStore {
         nextSymbol.fillClassification = undefined;
       }
 
-      const hadLineClassificationDependency = clearClassificationForColumn(
-        nextLine.valueColumn,
-        nextLine.categoryColumn,
-        nextLine.sizeColumn
-      );
+      const hadLineColorClassificationDependency =
+        nextLine.valueColumn === columnName ||
+        nextLine.categoryColumn === columnName;
+      const hadLineThicknessClassificationDependency =
+        nextLine.valueColumn === columnName;
       nextLine.valueColumn = clearColumn(nextLine.valueColumn);
       nextLine.categoryColumn = clearColumn(nextLine.categoryColumn);
       nextLine.sizeColumn = clearColumn(nextLine.sizeColumn);
-      if (hadLineClassificationDependency) {
+      removeLineModeStateColumns(nextLine, columnName, clearColumn);
+      if (hadLineColorClassificationDependency) {
         nextLine.classification = undefined;
+      }
+      if (hadLineThicknessClassificationDependency) {
+        nextLine.thicknessClassification = undefined;
       }
 
       const hadTextClassificationDependency = clearClassificationForColumn(
@@ -2656,6 +2895,12 @@ function createVisualizationStore(): VisualizationStore {
         polygon: nextPolygon,
         symbol: nextSymbol,
         line: nextLine,
+        lineClassification: hadLineColorClassificationDependency
+          ? undefined
+          : visualization.lineClassification,
+        lineThicknessClassification: hadLineThicknessClassificationDependency
+          ? undefined
+          : visualization.lineThicknessClassification,
         text: nextText,
         mapping: nextMapping,
         classification: shouldClearClassification
@@ -2782,6 +3027,7 @@ function createVisualizationStore(): VisualizationStore {
     updateMissingData,
     updateClassification,
     updatePrimitiveClassification,
+    updateLineThicknessClassification,
     updatePrimitiveStrokeClassification,
     updateVisualization,
     renameVisualization,

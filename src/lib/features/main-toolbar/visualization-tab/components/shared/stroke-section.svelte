@@ -34,8 +34,10 @@
     resolvePaletteTypeForBreakpoint
   } from '$lib/features/commons/components/palette-popover/palette.constants';
   import FacetsVariablePicker from '../symbols/facets-variable-picker.svelte';
-  import { facetsStore, type FacetSlotPath } from '../../facets-adapter.svelte';
+  import type { FacetSlotPath } from '../../facets-adapter.svelte';
   import { useCategoryLabels } from '../../use-category-labels.svelte';
+  import { useFacetsVariableSelection } from '../../use-facets-variable-selection.svelte';
+  import { resetVisualClassification } from './classification-reset.utils';
 
   interface Props {
     visualization?: VisualizationConfig;
@@ -113,34 +115,10 @@
   let categoriesPopoverOpen = $state(false);
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
   const selectableDataFields = $derived([noneOption, ...dataFields]);
-
-  const selectedVizId = $derived(visualization?.id);
-
-  const activeFacetsSlotPath = $derived.by(() => {
-    if (
-      !facetsStore.enabled ||
-      !selectedVizId ||
-      facetsStore.baseVisualizationId !== selectedVizId
-    ) {
-      return null;
-    }
-    return facetsStore.primarySlotPath;
+  const facetsSelection = useFacetsVariableSelection({
+    getVisualizationId: () => visualization?.id,
+    getDataFields: () => dataFields
   });
-
-  function isFacetsActiveForSlot(slotPath: FacetSlotPath | undefined): boolean {
-    return Boolean(slotPath && activeFacetsSlotPath === slotPath);
-  }
-
-  function getFacetsSelectedFieldIds(
-    slotPath: FacetSlotPath | undefined
-  ): number[] {
-    if (!slotPath || !isFacetsActiveForSlot(slotPath)) {
-      return [];
-    }
-    return facetsStore.variables
-      .map((name) => dataFields.find((field) => field.text === name)?.id)
-      .filter((id): id is number => typeof id === 'number');
-  }
 
   const valueColumnName = $derived(
     strokeMode === StrokeMode.CLASSES
@@ -228,14 +206,7 @@
         strokeOpacity: VISUALIZATION_DEFAULTS.strokeOpacity / 100,
         strokeDashed: false
       });
-      onStrokeClassificationChange({
-        colors: undefined,
-        paletteId: undefined,
-        inverted: false,
-        patternId: undefined,
-        patternParams: undefined,
-        labels: undefined
-      });
+      onStrokeClassificationChange(resetVisualClassification());
       return;
     }
 
@@ -304,46 +275,6 @@
       }
     }
   }
-
-  async function handleFacetsVariablesChange(
-    baseVariableName: string,
-    slotPath: FacetSlotPath | undefined,
-    fieldIds: number[]
-  ) {
-    if (!selectedVizId || !slotPath) return;
-    const variableNames = fieldIds
-      .map((id) => dataFields.find((field) => field.id === id)?.text)
-      .filter((name): name is string => Boolean(name));
-    const merged =
-      baseVariableName && !variableNames.includes(baseVariableName)
-        ? [baseVariableName, ...variableNames]
-        : variableNames;
-    await facetsStore.updateVariables(selectedVizId, merged, slotPath);
-  }
-
-  async function handleFacetsToggle(
-    baseVariableName: string,
-    slotPath: FacetSlotPath | undefined,
-    enabled: boolean
-  ) {
-    if (!selectedVizId || !slotPath) return;
-    if (!enabled) {
-      facetsStore.disable();
-      return;
-    }
-
-    const available = dataFields
-      .map((field) => field.text)
-      .filter((name): name is string => Boolean(name));
-    const seed = baseVariableName ? [baseVariableName] : [];
-    const candidates = seed.slice();
-    for (const name of available) {
-      if (candidates.length >= 2) break;
-      if (!candidates.includes(name)) candidates.push(name);
-    }
-    if (candidates.length < 2) return;
-    await facetsStore.updateVariables(selectedVizId, candidates, slotPath);
-  }
 </script>
 
 <SectionHeading title={m.stroke()} infoText={infoText} />
@@ -383,17 +314,21 @@
         dataFields={dataFields}
         singleSelectItems={selectableDataFields}
         selectedFieldId={colorFieldId}
-        selectedFieldIds={getFacetsSelectedFieldIds(facetsValueSlotPath)}
-        isCollectionEnabled={isFacetsActiveForSlot(facetsValueSlotPath)}
+        selectedFieldIds={facetsSelection.getSelectedFieldIds(
+          facetsValueSlotPath
+        )}
+        isCollectionEnabled={facetsSelection.isActiveForSlot(
+          facetsValueSlotPath
+        )}
         onSelect={handleColorFieldSelect}
         onCollectionChange={(ids) =>
-          handleFacetsVariablesChange(
+          facetsSelection.updateVariables(
             valueColumnName,
             facetsValueSlotPath,
             ids
           )}
         onToggleCollection={(enabled) =>
-          handleFacetsToggle(valueColumnName, facetsValueSlotPath, enabled)}
+          facetsSelection.toggle(valueColumnName, facetsValueSlotPath, enabled)}
       />
     </div>
     <DiscretizationRow
@@ -419,17 +354,21 @@
         dataFields={dataFields}
         singleSelectItems={selectableDataFields}
         selectedFieldId={colorFieldId}
-        selectedFieldIds={getFacetsSelectedFieldIds(facetsCategorySlotPath)}
-        isCollectionEnabled={isFacetsActiveForSlot(facetsCategorySlotPath)}
+        selectedFieldIds={facetsSelection.getSelectedFieldIds(
+          facetsCategorySlotPath
+        )}
+        isCollectionEnabled={facetsSelection.isActiveForSlot(
+          facetsCategorySlotPath
+        )}
         onSelect={handleColorFieldSelect}
         onCollectionChange={(ids) =>
-          handleFacetsVariablesChange(
+          facetsSelection.updateVariables(
             categoryColumnName,
             facetsCategorySlotPath,
             ids
           )}
         onToggleCollection={(enabled) =>
-          handleFacetsToggle(
+          facetsSelection.toggle(
             categoryColumnName,
             facetsCategorySlotPath,
             enabled

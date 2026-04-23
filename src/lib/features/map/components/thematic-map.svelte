@@ -2,6 +2,7 @@
   import 'maplibre-gl/dist/maplibre-gl.css';
   import type { Table as ArrowTable } from 'apache-arrow/Arrow';
   import { SkeletonPlaceholder } from 'carbon-components-svelte';
+  import { Matrix4 } from '@math.gl/core';
   import type { LngLatBoundsLike } from 'maplibre-gl';
   import { onMount, untrack } from 'svelte';
   import { fade } from 'svelte/transition';
@@ -106,6 +107,9 @@
     dataVersion = 0,
     width,
     height,
+    logicalWidth = width,
+    logicalHeight = height,
+    displayScale = 1,
     onReady,
     forcedVisualizationIds,
     onMoveSync,
@@ -130,8 +134,20 @@
   const layoutSizingTokens = $derived(
     resolveLayoutSizingTokens(getFormatLayoutSizingContext(fmtState))
   );
-  const mapViewportFitPaddingPx = $derived(
+  const logicalMapViewportFitPaddingPx = $derived(
     layoutSizingTokens.mapViewport.fitPaddingPx
+  );
+  const pageDisplayScale = $derived(
+    Number.isFinite(displayScale) && displayScale > 0 ? displayScale : 1
+  );
+  const renderedPageMargins = $derived({
+    top: pageMargins.top * pageDisplayScale,
+    right: pageMargins.right * pageDisplayScale,
+    bottom: pageMargins.bottom * pageDisplayScale,
+    left: pageMargins.left * pageDisplayScale
+  });
+  const mapViewportFitPaddingPx = $derived(
+    logicalMapViewportFitPaddingPx * pageDisplayScale
   );
   const showPageGrid = $derived(
     fmtState.gridEnabled && globalState.selectedStep === ToolbarStep.Styling
@@ -139,14 +155,32 @@
   const isStylingMode = $derived(
     globalState.selectedStep === ToolbarStep.Styling
   );
+  const logicalMapCanvasWidth = $derived(
+    Math.max(1, logicalWidth - pageMargins.left - pageMargins.right)
+  );
+  const logicalMapCanvasHeight = $derived(
+    Math.max(1, logicalHeight - pageMargins.top - pageMargins.bottom)
+  );
   const mapCanvasWidth = $derived(
-    Math.max(1, width - pageMargins.left - pageMargins.right)
+    Math.max(1, Math.round(logicalMapCanvasWidth * pageDisplayScale))
   );
   const mapCanvasHeight = $derived(
-    Math.max(1, height - pageMargins.top - pageMargins.bottom)
+    Math.max(1, Math.round(logicalMapCanvasHeight * pageDisplayScale))
   );
+  const projectionMaskWidth = $derived(Math.max(1, logicalMapCanvasWidth));
+  const projectionMaskHeight = $derived(Math.max(1, logicalMapCanvasHeight));
+  const renderModelMatrix = $derived.by(() => {
+    const modelMatrix = projectionStore.modelMatrix;
+    if (!modelMatrix) {
+      return null;
+    }
+
+    return new Matrix4(modelMatrix).multiplyLeft(
+      new Matrix4().scale([pageDisplayScale, pageDisplayScale, 1])
+    );
+  });
   const pageStyle = $derived(
-    `background-color: ${pageBackgroundColor}; padding: ${pageMargins.top}px ${pageMargins.right}px ${pageMargins.bottom}px ${pageMargins.left}px;`
+    `background-color: ${pageBackgroundColor}; padding: ${renderedPageMargins.top}px ${renderedPageMargins.right}px ${renderedPageMargins.bottom}px ${renderedPageMargins.left}px;`
   );
   const mapCanvasStyle = $derived.by(() => {
     // Keep a neutral canvas background. Sea color must come only from map
@@ -169,19 +203,23 @@
 
     return buildProjectionMaskPath({
       projection: renderProjection,
-      width: mapCanvasWidth,
-      height: mapCanvasHeight
+      width: projectionMaskWidth,
+      height: projectionMaskHeight
     });
   });
   const maxRenderBufferSizePx = $derived(getBrowserMaxRenderBufferSizePx());
-  const renderPixelRatio = $derived.by(() =>
-    resolveMapRenderPixelRatio(
+  const renderPixelRatio = $derived.by(() => {
+    const resolvedPixelRatio = resolveMapRenderPixelRatio(
       typeof window !== 'undefined' ? window.devicePixelRatio : 1,
-      globalState.zoom.pageZoomScale,
+      1,
       Math.max(mapCanvasWidth, mapCanvasHeight),
       maxRenderBufferSizePx
-    )
-  );
+    );
+
+    return isFacetCell
+      ? Math.min(resolvedPixelRatio, FACET_CELL_RENDER_PIXEL_RATIO_MAX)
+      : resolvedPixelRatio;
+  });
   const firstTable = $derived(
     tables.size > 0 ? tables.values().next().value : null
   );
@@ -209,6 +247,8 @@
 
   const MIN_SKELETON_DURATION_MS = 500;
   const MAX_WAIT_FOR_DATA_MS = 5000;
+  const FACET_CELL_RENDER_PIXEL_RATIO_MAX = 1;
+  const MAPLIBRE_SYNC_EPSILON = 1e-4;
 
   let mapContainer = $state<HTMLDivElement | undefined>(undefined);
   let hasCalledOnReady = $state(false);
@@ -235,6 +275,7 @@
   let pendingViewportAutoRefitReason = $state<ViewportFitReason | null>(null);
   let lastMapViewportSnapshot: string | null = null;
   let pendingMapLibreManualInteraction = false;
+  let pendingMapLibreSyncFrameId: number | null = null;
   let projectEmptyResetTimeoutId: ReturnType<typeof setTimeout> | null = null;
   let lastDatasetCountSnapshot = -1;
   let lastLayoutSnapshot: string | null = null;
@@ -367,6 +408,72 @@
     getForcedVisualizationIds: () => forcedVisualizationIds
   });
 
+  function cancelPendingMapLibreSync(): void {
+    if (pendingMapLibreSyncFrameId !== null) {
+      cancelAnimationFrame(pendingMapLibreSyncFrameId);
+      pendingMapLibreSyncFrameId = null;
+    }
+  }
+
+  function shouldApplyMapLibreSync(
+    center: [number, number],
+    zoom: number
+  ): boolean {
+    const map = mapInit.map;
+    if (!map) {
+      return false;
+    }
+
+    const currentCenter = map.getCenter();
+    return (
+      Math.abs(currentCenter.lng - center[0]) > MAPLIBRE_SYNC_EPSILON ||
+      Math.abs(currentCenter.lat - center[1]) > MAPLIBRE_SYNC_EPSILON ||
+      Math.abs(map.getZoom() - zoom) > MAPLIBRE_SYNC_EPSILON
+    );
+  }
+
+  function emitMapLibreSync(immediate: boolean = false): void {
+    if (
+      !onMoveSync ||
+      mapInit.viewMode !== ViewMode.MAPLIBRE ||
+      !mapInit.map ||
+      isApplyingMapLibreSync
+    ) {
+      return;
+    }
+
+    const publish = () => {
+      pendingMapLibreSyncFrameId = null;
+
+      const map = mapInit.map;
+      if (
+        !map ||
+        mapInit.viewMode !== ViewMode.MAPLIBRE ||
+        isApplyingMapLibreSync
+      ) {
+        return;
+      }
+
+      const center = map.getCenter();
+      onMoveSync({
+        type: 'maplibre',
+        center: [center.lng, center.lat],
+        zoom: map.getZoom()
+      });
+    };
+
+    cancelPendingMapLibreSync();
+
+    if (immediate) {
+      publish();
+      return;
+    }
+
+    pendingMapLibreSyncFrameId = requestAnimationFrame(() => {
+      publish();
+    });
+  }
+
   const mapInit = useMapInit({
     onMapLoaded: () => {
       const shouldUseMapLibre =
@@ -396,12 +503,7 @@
         mapInit.map &&
         !isApplyingMapLibreSync
       ) {
-        const center = mapInit.map.getCenter();
-        onMoveSync({
-          type: 'maplibre',
-          center: [center.lng, center.lat],
-          zoom: mapInit.map.getZoom()
-        });
+        emitMapLibreSync(true);
       }
       isApplyingMapLibreSync = false;
     },
@@ -519,6 +621,7 @@
     getProjectionMetadataForDataset: (datasetId) =>
       getProjectionMetadataForDataset(datasetId),
     getProjectionFitBbox: () => getProjectionFitBbox(),
+    getModelMatrix: () => renderModelMatrix,
     getShouldRenderDatasetFallbacks: () =>
       globalState.selectedStep === ToolbarStep.Data,
     getTableFilters: getTableFiltersForDataset,
@@ -529,18 +632,16 @@
   });
 
   function updateCanvasSize() {
-    if (mapContainer) {
-      projectionStore.updateCanvasSize({
-        width: mapContainer.offsetWidth || 800,
-        height: mapContainer.offsetHeight || 600
-      });
-    }
+    projectionStore.updateCanvasSize({
+      width: Math.max(1, Math.round(logicalMapCanvasWidth)),
+      height: Math.max(1, Math.round(logicalMapCanvasHeight))
+    });
   }
 
   function getProjectionViewportSize(): { width: number; height: number } {
     return {
-      width: Math.max(1, mapCanvasWidth),
-      height: Math.max(1, mapCanvasHeight)
+      width: Math.max(1, logicalMapCanvasWidth),
+      height: Math.max(1, logicalMapCanvasHeight)
     };
   }
 
@@ -654,7 +755,7 @@
   ): ProjectionLike | undefined {
     const projectionState = getProjectionState();
     const viewportSize = getProjectionViewportSize();
-    const fitPaddingPx = mapViewportFitPaddingPx;
+    const fitPaddingPx = logicalMapViewportFitPaddingPx;
     if (
       !projectionState.overrideActive ||
       (requiredSource && projectionState.overrideSource !== requiredSource)
@@ -693,7 +794,7 @@
             fitBbox,
             width: viewportSize.width,
             height: viewportSize.height,
-            padding: mapViewportFitPaddingPx
+            padding: logicalMapViewportFitPaddingPx
           })
         : undefined;
     const overrideProjection = getProjectionOverrideForRender();
@@ -1109,6 +1210,28 @@
   });
 
   $effect(() => {
+    const map = mapInit.map;
+    const isMapLibreSyncActive =
+      Boolean(onMoveSync) && mapInit.viewMode === ViewMode.MAPLIBRE;
+
+    if (!map || !isMapLibreSyncActive) {
+      cancelPendingMapLibreSync();
+      return;
+    }
+
+    const scheduleMapLibreSync = () => {
+      emitMapLibreSync(false);
+    };
+
+    map.on('move', scheduleMapLibreSync);
+
+    return () => {
+      cancelPendingMapLibreSync();
+      map.off('move', scheduleMapLibreSync);
+    };
+  });
+
+  $effect(() => {
     if (renderPixelRatioTimeoutId) {
       clearTimeout(renderPixelRatioTimeoutId);
       renderPixelRatioTimeoutId = null;
@@ -1164,27 +1287,30 @@
   $effect(() => {
     void mapCanvasWidth;
     void mapCanvasHeight;
+    void logicalMapCanvasWidth;
+    void logicalMapCanvasHeight;
     void mapViewportFitPaddingPx;
+    void logicalMapViewportFitPaddingPx;
 
-    const viewportSnapshot = `${mapCanvasWidth}x${mapCanvasHeight}-${mapViewportFitPaddingPx}`;
+    const viewportSnapshot = `${logicalMapCanvasWidth}x${logicalMapCanvasHeight}-${logicalMapViewportFitPaddingPx}`;
     const hasViewportChanged =
       lastMapViewportSnapshot !== null &&
       viewportSnapshot !== lastMapViewportSnapshot;
     lastMapViewportSnapshot = viewportSnapshot;
 
     untrack(() => {
-      projectionStore.setFitPadding(mapViewportFitPaddingPx);
+      projectionStore.setRenderScale(pageDisplayScale);
+      projectionStore.setFitPadding(logicalMapViewportFitPaddingPx);
       updateCanvasSize();
       if (mapInit.isMapLoaded && !isSwitchingViewMode) {
         if (mapInit.viewMode === ViewMode.MAPLIBRE) {
           mapInit.map?.resize();
-        } else if (
-          mapInit.viewMode === ViewMode.ORTHOGRAPHIC &&
-          mapInstanceStore.hasPendingOrthographicRestore
-        ) {
-          // Canvas resized while a saved view state is pending — recompute
-          // the world-coordinate target with the updated model matrix scale.
-          mapInstanceStore.fitToOrthographicBounds();
+        } else if (mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
+          scheduleLayerUpdate('effect:canvasResize');
+          if (mapInstanceStore.hasPendingOrthographicRestore) {
+            // Apply the saved view after the logical projection state is ready.
+            mapInstanceStore.fitToOrthographicBounds();
+          }
         }
 
         if (
@@ -1829,6 +1955,10 @@
         >[0]['viewState']
       });
     } else if (sv.type === 'maplibre' && sv.center && map) {
+      if (!shouldApplyMapLibreSync(sv.center, sv.zoom)) {
+        return;
+      }
+
       isApplyingMapLibreSync = true;
       map.jumpTo({ center: sv.center, zoom: sv.zoom });
     }
@@ -1884,6 +2014,7 @@
     return () => {
       resizeObserver.disconnect();
       mapInit.destroy();
+      projectionStore.reset();
       waitingForStyleIdle = false;
       if (maxWaitTimeoutId) {
         clearTimeout(maxWaitTimeoutId);
@@ -1933,7 +2064,7 @@
       <svg
         aria-hidden="true"
         class="projection-mask-overlay"
-        viewBox={`0 0 ${mapCanvasWidth} ${mapCanvasHeight}`}
+        viewBox={`0 0 ${projectionMaskWidth} ${projectionMaskHeight}`}
         preserveAspectRatio="none"
       >
         <defs>
@@ -1942,7 +2073,10 @@
             maskUnits="userSpaceOnUse"
             maskContentUnits="userSpaceOnUse"
           >
-            <rect width={mapCanvasWidth} height={mapCanvasHeight} fill="white"
+            <rect
+              width={projectionMaskWidth}
+              height={projectionMaskHeight}
+              fill="white"
             ></rect>
             <path
               d={projectionMaskPath}
@@ -1953,8 +2087,8 @@
           </mask>
         </defs>
         <rect
-          width={mapCanvasWidth}
-          height={mapCanvasHeight}
+          width={projectionMaskWidth}
+          height={projectionMaskHeight}
           fill={pageBackgroundColor}
           mask={`url(#${projectionMaskId})`}
         ></rect>
@@ -1970,7 +2104,7 @@
 {:else}
   <div class="page-container" style={pageStyle}>
     {#if showPageGrid}
-      <PageGridOverlay />
+      <PageGridOverlay displayScale={pageDisplayScale} />
     {/if}
 
     <div
@@ -1991,7 +2125,7 @@
         <svg
           aria-hidden="true"
           class="projection-mask-overlay"
-          viewBox={`0 0 ${mapCanvasWidth} ${mapCanvasHeight}`}
+          viewBox={`0 0 ${projectionMaskWidth} ${projectionMaskHeight}`}
           preserveAspectRatio="none"
         >
           <defs>
@@ -2000,7 +2134,10 @@
               maskUnits="userSpaceOnUse"
               maskContentUnits="userSpaceOnUse"
             >
-              <rect width={mapCanvasWidth} height={mapCanvasHeight} fill="white"
+              <rect
+                width={projectionMaskWidth}
+                height={projectionMaskHeight}
+                fill="white"
               ></rect>
               <path
                 d={projectionMaskPath}
@@ -2011,8 +2148,8 @@
             </mask>
           </defs>
           <rect
-            width={mapCanvasWidth}
-            height={mapCanvasHeight}
+            width={projectionMaskWidth}
+            height={projectionMaskHeight}
             fill={pageBackgroundColor}
             mask={`url(#${projectionMaskId})`}
           ></rect>

@@ -668,11 +668,11 @@
     padding: 7px 8px 0;
     border-bottom: 1px solid var(--cds-border-subtle-01, #c6c6c6);
     min-width: 128px;
-    background-color: var(--cds-ui-03, #e0e0e0);
+    background-color: var(--khartis-data-table-header-background);
   }
 
   th:hover {
-    background-color: var(--cds-layer-accent-hover-01, #d1d1d1);
+    background-color: var(--khartis-data-table-header-hover-background);
   }
 
   .col-header {
@@ -851,7 +851,7 @@
   .summary-plot-wrapper {
     margin: 0 -8px;
     padding: 13px 8px 12px;
-    background-color: var(--cds-ui-01, #f4f4f4);
+    background-color: var(--khartis-data-table-header-background);
   }
 
   .summary-plot {

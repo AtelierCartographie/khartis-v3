@@ -19,7 +19,23 @@ import {
   annotationsActions,
   getAnnotationsState
 } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
+import { computeDrawingBounds } from '../utils/annotation-drawing.utils';
 import AnnotationOverlay from './annotation-overlay.svelte';
+
+function extractPathPoints(
+  path: string | null
+): Array<{ x: number; y: number }> {
+  if (!path) {
+    return [];
+  }
+
+  return Array.from(
+    path.matchAll(/[ML]\s(-?\d+(?:\.\d+)?)\s(-?\d+(?:\.\d+)?)/g)
+  ).map(([, x, y]) => ({
+    x: Number(x),
+    y: Number(y)
+  }));
+}
 
 vi.hoisted(() => {
   class WorkerMock {
@@ -95,6 +111,58 @@ function setupCaptureLayer(): {
   return { capture, container: container as HTMLElement };
 }
 
+function setupAnnotationViewport(): {
+  container: HTMLElement;
+  item: HTMLElement;
+  viewport: HTMLDivElement;
+} {
+  const viewport = document.createElement('div');
+  viewport.className = 'workspace-viewport';
+  document.body.appendChild(viewport);
+
+  const { container } = render(AnnotationOverlay, {
+    target: viewport
+  });
+  const overlay = container.querySelector('.annotation-overlay');
+  const item = container.querySelector('.annotation-item');
+
+  if (!(overlay instanceof HTMLDivElement)) {
+    throw new Error('Overlay was not rendered');
+  }
+
+  if (!(item instanceof HTMLElement)) {
+    throw new Error('Annotation item was not rendered');
+  }
+
+  Object.defineProperty(viewport, 'getBoundingClientRect', {
+    configurable: true,
+    value: () => createDomRect(400, 300)
+  });
+  Object.defineProperty(item, 'getBoundingClientRect', {
+    configurable: true,
+    value: () =>
+      ({
+        x: 60,
+        y: 40,
+        width: 80,
+        height: 80,
+        top: 40,
+        left: 60,
+        right: 140,
+        bottom: 120,
+        toJSON() {
+          return this;
+        }
+      }) as DOMRect
+  });
+
+  return {
+    container: container as HTMLElement,
+    item,
+    viewport
+  };
+}
+
 describe('annotation overlay drawing interactions', () => {
   beforeEach(() => {
     cleanup();
@@ -134,6 +202,52 @@ describe('annotation overlay drawing interactions', () => {
 
     expect(preview).toBeTruthy();
     expect(preview?.getAttribute('style')).toContain('left: 47px; top: 57px;');
+  });
+
+  it('keeps uneven high-smoothness drawings within tight rendered bounds', () => {
+    const points = [
+      { x: 0, y: 0 },
+      { x: 10, y: 0 },
+      { x: 11, y: 100 },
+      { x: 20, y: 100 }
+    ];
+
+    annotationsActions.updateDefaultStyle({ smoothness: 100 });
+    annotationsActions.beginDrawing(DrawingType.LINE);
+    annotationsActions.updateDrawing(points);
+    annotationsActions.finishDrawing();
+
+    const bounds = computeDrawingBounds(points, 2, 100, false);
+    const { container } = render(AnnotationOverlay);
+    const drawing = container.querySelector('.annotation-drawing');
+    const path = container.querySelector('.annotation-drawing path');
+    const pathSegments = path?.getAttribute('d')?.match(/L/g) ?? [];
+
+    expect(drawing?.getAttribute('viewBox')).toBe(bounds.viewBox);
+    expect(Number(drawing?.getAttribute('height'))).toBeLessThan(120);
+    expect(pathSegments.length).toBeGreaterThan(points.length);
+  });
+
+  it('renders freehand drawings without smoothing by default', () => {
+    const points = [
+      { x: 0, y: 0 },
+      { x: 20, y: 20 },
+      { x: 40, y: 0 },
+      { x: 60, y: 20 },
+      { x: 120, y: 104 }
+    ];
+
+    annotationsActions.beginDrawing(DrawingType.LINE);
+    annotationsActions.updateDrawing(points);
+    annotationsActions.finishDrawing();
+
+    const { container } = render(AnnotationOverlay);
+    const path = container.querySelector('.annotation-drawing path');
+    const pathPoints = extractPathPoints(path?.getAttribute('d') ?? null);
+
+    expect(getAnnotationsState().items[0]?.style?.smoothness).toBe(0);
+    expect(pathPoints).toHaveLength(points.length);
+    expect(pathPoints[1]).toEqual(points[1]);
   });
 
   it('keeps zone drawings active when the pointer is released away from the starting point', async () => {
@@ -289,5 +403,56 @@ describe('annotation overlay drawing interactions', () => {
     const [image] = getAnnotationsState().items;
     expect(image.coordinateSpace).toBe('page');
     expect(image.position).toEqual({ x: 0, y: 0 });
+  });
+
+  it('recenters the page when a centered annotation loses focus', async () => {
+    annotationsActions.addAnnotation(AnnotationKind.TEXT, 'Focus item');
+
+    const { item } = setupAnnotationViewport();
+
+    await fireEvent.click(item);
+
+    await waitFor(() => {
+      expect(globalState.zoom.pagePanOffset).toEqual({ x: 100, y: 70 });
+    });
+
+    await fireEvent.blur(item);
+
+    await waitFor(() => {
+      expect(globalState.zoom.pagePanOffset).toEqual({ x: 0, y: 0 });
+    });
+  });
+
+  it('deletes a focused annotation with Delete', async () => {
+    annotationsActions.addAnnotation(AnnotationKind.TEXT, 'Delete me');
+
+    const { item } = setupAnnotationViewport();
+
+    item.focus();
+    await fireEvent.keyDown(item, { key: 'Delete' });
+
+    await waitFor(() => {
+      expect(getAnnotationsState().items).toHaveLength(0);
+    });
+  });
+
+  it('deletes a focused annotation with Backspace and resets centered pan', async () => {
+    annotationsActions.addAnnotation(AnnotationKind.TEXT, 'Delete me too');
+
+    const { item } = setupAnnotationViewport();
+
+    await fireEvent.click(item);
+
+    await waitFor(() => {
+      expect(globalState.zoom.pagePanOffset).toEqual({ x: 100, y: 70 });
+    });
+
+    item.focus();
+    await fireEvent.keyDown(item, { key: 'Backspace' });
+
+    await waitFor(() => {
+      expect(getAnnotationsState().items).toHaveLength(0);
+      expect(globalState.zoom.pagePanOffset).toEqual({ x: 0, y: 0 });
+    });
   });
 });

@@ -4,6 +4,7 @@ import {
   isWorkspacePanTarget,
   resolveReadablePagePreviewScale,
   resolveFitToWorkspaceZoom,
+  resolveWorkspaceFitScale,
   resolveWorkspaceViewportBounds
 } from './workspace-viewport.utils';
 
@@ -174,6 +175,42 @@ describe('workspace viewport utils', () => {
 
     it('should clamp invalid values back to 1', () => {
       expect(resolveReadablePagePreviewScale(0)).toBe(1);
+    });
+  });
+
+  describe('resolveWorkspaceFitScale', () => {
+    it('should scale the page up when the available workspace is larger than the page', () => {
+      expect(
+        resolveWorkspaceFitScale({
+          viewportWidth: 1600,
+          viewportHeight: 1000,
+          pageWidth: 842,
+          pageHeight: 595
+        })
+      ).toBeCloseTo((1000 - 60) / 595, 6);
+    });
+
+    it('should reserve the step toolbar width and keep 30px inline padding on both sides', () => {
+      expect(
+        resolveWorkspaceFitScale({
+          viewportWidth: 1000,
+          viewportHeight: 900,
+          pageWidth: 842,
+          pageHeight: 595,
+          reservedInlineStartPx: 98
+        })
+      ).toBeCloseTo((1000 - 98 - 60) / 842, 6);
+    });
+
+    it('should shrink below the readable preview floor when needed to fit the workspace', () => {
+      expect(
+        resolveWorkspaceFitScale({
+          viewportWidth: 420,
+          viewportHeight: 300,
+          pageWidth: 842,
+          pageHeight: 595
+        })
+      ).toBeLessThan(0.6);
     });
   });
 });

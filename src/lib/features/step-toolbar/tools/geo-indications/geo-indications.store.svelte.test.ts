@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   DistanceUnit,
   FormatMode,
@@ -7,6 +7,17 @@ import {
 import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
 import { hexToHsl } from '$lib/features/commons/utils/color-utils';
 import { formatActions } from '../format/format.store.svelte';
+
+const mocks = vi.hoisted(() => ({
+  resetPagePan: vi.fn()
+}));
+
+vi.mock('$lib/features/commons/store/global.svelte', () => ({
+  globalActions: {
+    resetPagePan: mocks.resetPagePan
+  }
+}));
+
 import {
   geoIndicationsActions,
   geoIndicationsState
@@ -30,6 +41,7 @@ function createScaleMap(widthPerLongitudeDegree: number) {
 
 describe('geo indications store responsive defaults', () => {
   beforeEach(() => {
+    mocks.resetPagePan.mockClear();
     formatActions.reset();
     geoIndicationsActions.reset();
     mapInstanceStore.reset();
@@ -156,5 +168,50 @@ describe('geo indications store responsive defaults', () => {
     expect(geoIndicationsState.scale.distance).toBe(
       MAX_SCALE_DISTANCE_BY_UNIT[DistanceUnit.KILOMETERS]
     );
+  });
+
+  it('recenters the page when the last geo indication is disabled', () => {
+    geoIndicationsActions.toggleScale();
+    mocks.resetPagePan.mockClear();
+
+    geoIndicationsActions.toggleScale();
+
+    expect(geoIndicationsState.scale.enabled).toBe(false);
+    expect(mocks.resetPagePan).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the page offset while another geo indication remains enabled', () => {
+    geoIndicationsActions.toggleScale();
+    geoIndicationsActions.toggleOrientation();
+    mocks.resetPagePan.mockClear();
+
+    geoIndicationsActions.toggleScale();
+
+    expect(geoIndicationsState.scale.enabled).toBe(false);
+    expect(geoIndicationsState.orientation.enabled).toBe(true);
+    expect(mocks.resetPagePan).not.toHaveBeenCalled();
+
+    geoIndicationsActions.toggleOrientation();
+
+    expect(mocks.resetPagePan).toHaveBeenCalledOnce();
+  });
+
+  it('recenters the page when setState disables all geo indications', () => {
+    geoIndicationsActions.toggleScale();
+    geoIndicationsActions.toggleInsetMap();
+    mocks.resetPagePan.mockClear();
+
+    geoIndicationsActions.setState({
+      scale: {
+        ...geoIndicationsState.scale,
+        enabled: false
+      },
+      insetMap: {
+        ...geoIndicationsState.insetMap,
+        enabled: false
+      }
+    });
+
+    expect(mocks.resetPagePan).toHaveBeenCalledOnce();
   });
 });

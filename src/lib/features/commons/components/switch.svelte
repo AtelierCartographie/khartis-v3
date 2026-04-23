@@ -87,13 +87,13 @@
 
 <style lang="scss">
   .kh-switch-native {
-    --_kh-switch-width: 40px;
-    --_kh-switch-height: 22px;
-    --_kh-switch-knob-size: 16px;
+    --_kh-switch-width: 36px;
+    --_kh-switch-height: 20px;
+    --_kh-switch-knob-size: 14px;
     --_kh-switch-knob-offset: 3px;
-    --_kh-switch-knob-translate: 18px;
+    --_kh-switch-knob-translate: 16px;
     --_kh-switch-track-off: var(--cds-ui-04, #8d8d8d);
-    --_kh-switch-track-on: var(--cds-support-02, #198038);
+    --_kh-switch-track-on: var(--cds-blue, #0072c3);
     --_kh-switch-knob-bg: var(--cds-icon-03, #ffffff);
     --_kh-switch-label-size: 0.875rem;
     --_kh-switch-label-line-height: 1.125rem;
@@ -118,25 +118,22 @@
   }
 
   .kh-switch-native.sm {
-    --_kh-switch-width: 36px;
-    --_kh-switch-height: 20px;
-    --_kh-switch-knob-size: 14px;
+    --_kh-switch-width: 32px;
+    --_kh-switch-height: 16px;
+    --_kh-switch-knob-size: 10px;
     --_kh-switch-knob-translate: 16px;
   }
 
   .kh-switch-native.variant-suggestions {
-    --_kh-switch-width: 48px;
-    --_kh-switch-height: 24px;
-    --_kh-switch-knob-size: 18px;
-    --_kh-switch-knob-translate: 24px;
+    --_kh-switch-width: 40px;
+    --_kh-switch-height: 22px;
+    --_kh-switch-knob-size: 16px;
+    --_kh-switch-knob-translate: 18px;
     --_kh-switch-track-off: var(
       --khartis-additions-border-tile-01-suggestions,
       #82cfff
     );
-    --_kh-switch-track-on: var(
-      --khartis-additions-interactive-suggestions,
-      #0072c3
-    );
+    --_kh-switch-track-on: var(--cds-blue, #0072c3);
     --_kh-switch-knob-bg: var(--cds-icon-on-color, #ffffff);
     --_kh-switch-label-size: 0.75rem;
     --_kh-switch-label-line-height: 1rem;

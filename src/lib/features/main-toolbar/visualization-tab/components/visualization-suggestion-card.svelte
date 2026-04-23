@@ -13,7 +13,9 @@
     selected?: boolean;
     disabled?: boolean;
     resolveBadgeType: (columnName: string) => VariableBadgeType;
+    activate?: () => void;
     onclick?: () => void;
+    onClick?: () => void;
   }
 
   let {
@@ -21,7 +23,9 @@
     selected = false,
     disabled = false,
     resolveBadgeType,
-    onclick
+    activate,
+    onclick,
+    onClick
   }: Props = $props();
 
   const columns = $derived(suggestion.columns ?? []);
@@ -48,7 +52,7 @@
 
   function handleActivate() {
     if (!disabled) {
-      onclick?.();
+      (activate ?? onclick ?? onClick)?.();
     }
   }
 
@@ -192,8 +196,14 @@
     );
     --viz-card-border-width: 1px;
     --viz-card-focus-color: var(--khartis-additions-focus-suggestions, #0072c3);
-    --kh-card-radio-color: #003a6d;
-    --kh-card-radio-disabled-color: rgba(0, 58, 109, 0.25);
+    --kh-card-radio-color: var(
+      --khartis-additions-text-primary-suggestions,
+      #003a6d
+    );
+    --kh-card-radio-disabled-color: var(
+      --khartis-additions-icon-disabled-suggestions,
+      rgba(0, 58, 109, 0.25)
+    );
     --kh-card-radio-focus-color: var(--viz-card-focus-color);
     display: flex;
     align-items: stretch;

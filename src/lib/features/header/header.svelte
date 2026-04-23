@@ -59,6 +59,21 @@
     background: var(--cds-background) !important;
   }
 
+  :global(html[theme='g100'])
+    #khartis-header
+    :global(.header-help-button.bx--btn--tertiary) {
+    border-color: var(--cds-border-subtle-01);
+    color: var(--cds-text-02);
+  }
+
+  :global(html[theme='g100'])
+    #khartis-header
+    :global(.header-help-button.bx--btn--tertiary:hover) {
+    border-color: var(--cds-border-strong-01);
+    background-color: var(--cds-hover-ui);
+    color: var(--cds-text-01);
+  }
+
   @media (max-width: 1023px) {
     #khartis-header :global(.header-help-button.bx--btn) {
       min-width: 3rem;

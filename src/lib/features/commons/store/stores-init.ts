@@ -35,6 +35,7 @@ export function initializeStores(): void {
     referenceBbox: projectionStore.referenceBbox,
     canvasSize: projectionStore.canvasSize,
     fitPaddingPx: projectionStore.fitPaddingPx,
+    renderScale: projectionStore.renderScale,
     isProjectedCoordinates: projectionStore.isProjectedCoordinates
   }));
 

@@ -530,7 +530,7 @@
     min-height: 320px;
     max-height: calc(100dvh - 120px);
     z-index: var(--z-dropdown);
-    background: var(--cds-ui-02, #ffffff);
+    background: var(--cds-background, #ffffff);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -546,7 +546,7 @@
     position: sticky;
     top: 0;
     flex-shrink: 0;
-    background: var(--cds-ui-02, #ffffff);
+    background: var(--cds-background, #ffffff);
     z-index: 1;
 
     h3 {

@@ -45,6 +45,10 @@ import {
   getLegendState,
   legendActions
 } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
+import {
+  findPreferredNumericColumn,
+  findPreferredTextColumn
+} from '$lib/features/commons/utils/visualization-columns.utils';
 
 import { projectStore } from '$lib/features/commons/store/project.store.svelte';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
@@ -431,8 +435,22 @@ export function resolveSuggestionBehavior(
   );
   const datasetPrimitive = resolveDatasetPrimitive(dataset);
   const isPolygonDataset = datasetPrimitive === PrimitiveFilterType.POLYGON;
-  const primaryColumn = suggestion.columns?.[0];
-  const secondaryColumn = suggestion.columns?.[1];
+  const primaryNumericColumn = findPreferredNumericColumn(dataset.columns, {
+    preferred: suggestion.columns?.[0],
+    allowIdLikeFallback: true,
+    excludeLikelyCoordinates: true
+  });
+  const secondaryNumericColumn = findPreferredNumericColumn(dataset.columns, {
+    preferred: suggestion.columns?.[1],
+    allowIdLikeFallback: true,
+    excludeLikelyCoordinates: true
+  });
+  const primaryTextColumn = findPreferredTextColumn(dataset.columns, {
+    preferred: suggestion.columns?.[0]
+  });
+  const secondaryTextColumn = findPreferredTextColumn(dataset.columns, {
+    preferred: suggestion.columns?.[1]
+  });
   const symbolPrimitiveFilters = [PrimitiveFilterType.POINT];
   const textPrimitiveFilters: PrimitiveFilter[] = [];
 
@@ -462,8 +480,8 @@ export function resolveSuggestionBehavior(
         ],
         primitiveFilters: textPrimitiveFilters,
         mapping: buildClearedMapping(preset.mapping.geometryColumn, {
-          labelColumn: primaryColumn,
-          categoryColumn: secondaryColumn
+          labelColumn: primaryTextColumn,
+          categoryColumn: secondaryTextColumn
         }),
         modes: {
           ...preset.modes,
@@ -478,8 +496,8 @@ export function resolveSuggestionBehavior(
         symbols: baseSymbols,
         missingData: buildDisabledMissingData(preset.missingData),
         text: buildTextPrimitiveConfig(preset, visualization, {
-          labelColumn: primaryColumn,
-          categoryColumn: secondaryColumn,
+          labelColumn: primaryTextColumn,
+          categoryColumn: secondaryTextColumn,
           colorMode: ColorMode.CATEGORIES,
           sizeMode: SizeMode.FIXED,
           classification: categoricalPreset.classification,
@@ -515,9 +533,9 @@ export function resolveSuggestionBehavior(
         ],
         primitiveFilters: textPrimitiveFilters,
         mapping: buildClearedMapping(preset.mapping.geometryColumn, {
-          labelColumn: primaryColumn,
-          valueColumn: secondaryColumn,
-          secondaryLabelColumn: secondaryColumn
+          labelColumn: primaryTextColumn,
+          valueColumn: secondaryNumericColumn,
+          secondaryLabelColumn: secondaryNumericColumn
         }),
         modes: {
           ...preset.modes,
@@ -532,15 +550,15 @@ export function resolveSuggestionBehavior(
         symbols: baseSymbols,
         missingData: buildDisabledMissingData(preset.missingData),
         text: buildTextPrimitiveConfig(preset, visualization, {
-          labelColumn: primaryColumn,
-          valueColumn: secondaryColumn,
+          labelColumn: primaryTextColumn,
+          valueColumn: secondaryNumericColumn,
           colorMode: ColorMode.CLASSES,
           sizeMode: SizeMode.FIXED,
           classification: choroplethPreset.classification,
           missingData: buildDisabledMissingData(preset.missingData),
           secondaryLabels: {
             enabled: false,
-            labelColumn: secondaryColumn
+            labelColumn: secondaryNumericColumn
           }
         }),
         symbol: {
@@ -566,9 +584,9 @@ export function resolveSuggestionBehavior(
       ],
       primitiveFilters: textPrimitiveFilters,
       mapping: buildClearedMapping(preset.mapping.geometryColumn, {
-        labelColumn: primaryColumn,
-        valueColumn: secondaryColumn,
-        secondaryLabelColumn: secondaryColumn
+        labelColumn: primaryTextColumn,
+        valueColumn: secondaryNumericColumn,
+        secondaryLabelColumn: secondaryNumericColumn
       }),
       modes: {
         ...preset.modes,
@@ -583,15 +601,15 @@ export function resolveSuggestionBehavior(
       symbols: baseSymbols,
       missingData: buildDisabledMissingData(preset.missingData),
       text: buildTextPrimitiveConfig(preset, visualization, {
-        labelColumn: primaryColumn,
-        valueColumn: secondaryColumn,
+        labelColumn: primaryTextColumn,
+        valueColumn: secondaryNumericColumn,
         colorMode: ColorMode.UNIQUE,
         sizeMode: SizeMode.PROPORTIONAL,
         classification: undefined,
         missingData: buildDisabledMissingData(preset.missingData),
         secondaryLabels: {
           enabled: false,
-          labelColumn: secondaryColumn
+          labelColumn: secondaryNumericColumn
         }
       }),
       symbol: {
@@ -620,7 +638,7 @@ export function resolveSuggestionBehavior(
         ],
         primitiveFilters: [PrimitiveFilterType.POLYGON],
         mapping: buildClearedMapping(preset.mapping.geometryColumn, {
-          valueColumn: primaryColumn
+          valueColumn: primaryNumericColumn
         }),
         modes: {
           ...preset.modes,
@@ -633,7 +651,7 @@ export function resolveSuggestionBehavior(
         polygon: {
           enabled: true,
           fillMode: FillMode.CLASSES,
-          valueColumn: primaryColumn,
+          valueColumn: primaryNumericColumn,
           classification: choroplethPreset.classification,
           missingData: preset.missingData
         },
@@ -662,7 +680,7 @@ export function resolveSuggestionBehavior(
         ],
         primitiveFilters: [PrimitiveFilterType.POLYGON],
         mapping: buildClearedMapping(preset.mapping.geometryColumn, {
-          categoryColumn: primaryColumn
+          categoryColumn: primaryTextColumn
         }),
         modes: {
           ...preset.modes,
@@ -675,7 +693,7 @@ export function resolveSuggestionBehavior(
         polygon: {
           enabled: true,
           fillMode: FillMode.CATEGORIES,
-          categoryColumn: primaryColumn,
+          categoryColumn: primaryTextColumn,
           classification: categoricalPreset.classification,
           missingData: preset.missingData
         },
@@ -751,16 +769,16 @@ export function resolveSuggestionBehavior(
       primitiveFilters: [PrimitiveFilterType.LINE],
       mapping: buildClearedMapping(preset.mapping.geometryColumn, {
         valueColumn: isClassedLine
-          ? primaryColumn
+          ? primaryNumericColumn
           : suggestion.id === 'lines_proportional_colorful_QTR'
-            ? secondaryColumn
+            ? secondaryNumericColumn
             : undefined,
         categoryColumn: isCategoricalLine
           ? isProportionalLine
-            ? secondaryColumn
-            : primaryColumn
+            ? secondaryTextColumn
+            : primaryTextColumn
           : undefined,
-        sizeColumn: isProportionalLine ? primaryColumn : undefined
+        sizeColumn: isProportionalLine ? primaryNumericColumn : undefined
       }),
       modes: {
         ...preset.modes,
@@ -793,16 +811,16 @@ export function resolveSuggestionBehavior(
           ? ThicknessMode.PROPORTIONAL
           : ThicknessMode.UNIQUE,
         valueColumn: isClassedLine
-          ? primaryColumn
+          ? primaryNumericColumn
           : suggestion.id === 'lines_proportional_colorful_QTR'
-            ? secondaryColumn
+            ? secondaryNumericColumn
             : undefined,
         categoryColumn: isCategoricalLine
           ? isProportionalLine
-            ? secondaryColumn
-            : primaryColumn
+            ? secondaryTextColumn
+            : primaryTextColumn
           : undefined,
-        sizeColumn: isProportionalLine ? primaryColumn : undefined,
+        sizeColumn: isProportionalLine ? primaryNumericColumn : undefined,
         classification: isCategoricalLine
           ? categoricalPreset.classification
           : isClassedLine
@@ -836,17 +854,17 @@ export function resolveSuggestionBehavior(
     primitiveFilters: symbolPrimitiveFilters,
     mapping: buildClearedMapping(preset.mapping.geometryColumn, {
       valueColumn: isClassedSymbol
-        ? primaryColumn
+        ? primaryNumericColumn
         : suggestion.id === 'symbols_proportional_colorful_QTR' ||
             suggestion.id === 'symbols_proportional_double'
-          ? secondaryColumn
+          ? secondaryNumericColumn
           : undefined,
       categoryColumn: isCategoricalSymbol
         ? isProportionalSymbol
-          ? secondaryColumn
-          : primaryColumn
+          ? secondaryTextColumn
+          : primaryTextColumn
         : undefined,
-      sizeColumn: isProportionalSymbol ? primaryColumn : undefined
+      sizeColumn: isProportionalSymbol ? primaryNumericColumn : undefined
     }),
     modes: {
       ...preset.modes,
@@ -914,17 +932,17 @@ export function resolveSuggestionBehavior(
       breakValueA: null,
       breakValueB: null,
       valueColumn: isClassedSymbol
-        ? primaryColumn
+        ? primaryNumericColumn
         : suggestion.id === 'symbols_proportional_colorful_QTR' ||
             suggestion.id === 'symbols_proportional_double'
-          ? secondaryColumn
+          ? secondaryNumericColumn
           : undefined,
       categoryColumn: isCategoricalSymbol
         ? isProportionalSymbol
-          ? secondaryColumn
-          : primaryColumn
+          ? secondaryTextColumn
+          : primaryTextColumn
         : undefined,
-      sizeColumn: isProportionalSymbol ? primaryColumn : undefined,
+      sizeColumn: isProportionalSymbol ? primaryNumericColumn : undefined,
       fillColor: visualization?.style.symbolFillColor ?? DEFAULT_COLORS.fill,
       fillColorB:
         suggestion.id === 'symbols_proportional_double'

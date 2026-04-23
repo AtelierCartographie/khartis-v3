@@ -314,4 +314,48 @@ describe('mapInstanceStore map zoom bounds', () => {
     });
     expect(mocks.notifyChangeMock).toHaveBeenCalledWith('mapViewState');
   });
+
+  it('delegates zoom commands to a synchronized viewport controller when one is registered', () => {
+    const synchronizedViewportController = {
+      zoomIn: vi.fn(),
+      zoomOut: vi.fn(),
+      setZoom: vi.fn(),
+      resetZoom: vi.fn()
+    };
+
+    mapInstanceStore.setSynchronizedViewportController(
+      synchronizedViewportController
+    );
+
+    mapInstanceStore.zoomIn();
+    mapInstanceStore.zoomOut();
+    mapInstanceStore.setZoom(2.5);
+    mapInstanceStore.resetZoom();
+
+    expect(synchronizedViewportController.zoomIn).toHaveBeenCalledTimes(1);
+    expect(synchronizedViewportController.zoomOut).toHaveBeenCalledTimes(1);
+    expect(synchronizedViewportController.setZoom).toHaveBeenCalledWith(2.5);
+    expect(synchronizedViewportController.resetZoom).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses the orthographic view-state adapter when one is registered', () => {
+    const { deck, setPropsMock } = createDeckMock();
+    const applyViewStateMock = vi.fn();
+
+    mapInstanceStore.setDeckInstance(deck as never);
+    mapInstanceStore.setMapLoaded(true);
+    mapInstanceStore.setOrthographicViewStateAdapter({
+      applyViewState: applyViewStateMock
+    });
+
+    mapInstanceStore.setZoomLocal(1.25);
+
+    expect(applyViewStateMock).toHaveBeenCalledWith({
+      target: [0, 0, 0],
+      zoom: 1.25,
+      minZoom: -10,
+      maxZoom: 10
+    });
+    expect(setPropsMock).not.toHaveBeenCalled();
+  });
 });

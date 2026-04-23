@@ -1,8 +1,19 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DistanceUnit } from '$lib/features/commons/constants/ui.constants';
 import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
 import * as m from '$lib/paraglide/messages';
+
+const mocks = vi.hoisted(() => ({
+  resetPagePan: vi.fn()
+}));
+
+vi.mock('$lib/features/commons/store/global.svelte', () => ({
+  globalActions: {
+    resetPagePan: mocks.resetPagePan
+  }
+}));
+
 import GeoIndications from './geo-indications.svelte';
 import {
   geoIndicationsActions,
@@ -27,6 +38,7 @@ function createScaleMap(widthPerLongitudeDegree: number) {
 
 describe('geo-indications tool', () => {
   beforeEach(() => {
+    mocks.resetPagePan.mockClear();
     geoIndicationsActions.reset();
     mapInstanceStore.reset();
   });
