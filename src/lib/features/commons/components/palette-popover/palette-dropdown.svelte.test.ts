@@ -23,4 +23,8 @@ describe('PaletteDropdown — compact preview rows', () => {
       '{#each getPalettePreviewColors(palette) as color, i (i)}'
     );
   });
+
+  it('uses the shared palette swatch border token', () => {
+    expect(source).toContain('--khartis-palette-swatch-border-color');
+  });
 });

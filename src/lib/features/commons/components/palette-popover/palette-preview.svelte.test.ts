@@ -29,6 +29,10 @@ describe('PalettePreview — shell + popover routing', () => {
     expect(source).toContain('<PalettePopover');
     expect(source).toContain('bind:open={popoverOpen}');
   });
+
+  it('uses the shared palette swatch border token', () => {
+    expect(source).toContain('--khartis-palette-swatch-border-color');
+  });
 });
 
 describe('PalettePreview — categoriesMode routing (Fill Categories)', () => {

@@ -138,7 +138,7 @@
     flex: 1;
     min-width: 0;
     height: 18px;
-    border: 1px solid var(--cds-icon-on-color, #ffffff);
+    border: 1px solid var(--khartis-palette-swatch-border-color);
   }
 
   .color-main :global(svg) {

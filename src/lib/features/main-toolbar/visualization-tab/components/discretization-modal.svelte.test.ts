@@ -287,6 +287,11 @@ describe('DiscretizationModal', () => {
     expect(openingSyncMatches!.length).toBe(1);
   });
 
+  it('uses the same contextual panel background token as palette popovers', () => {
+    expect(modalSource).toContain('background: var(--cds-background, #ffffff)');
+    expect(modalSource).not.toContain('background: var(--cds-ui-02, #ffffff)');
+  });
+
   it('allows clearing the breakpoint value', async () => {
     const onbreakpointchange = vi.fn();
     const { container } = render(DiscretizationPanel, {

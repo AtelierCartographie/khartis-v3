@@ -121,7 +121,7 @@
         <Switch
           toggled={toggleChecked}
           disabled={toggleDisabled || disabled}
-          size={toggleVariant === 'suggestions' ? 'md' : 'sm'}
+          size="sm"
           variant={toggleVariant}
           hideLabel
           labelText={title}
@@ -143,12 +143,14 @@
         (e.preventDefault(), toggle())}
     >
       <div class="section-title-group">
-        <span class="section-title {titleClass}" class:actions-end={actionsEnd}>
+        <span class="section-title {titleClass}">
           {title}{count !== undefined ? ` (${count})` : ''}
 
-          {#if icon}
+          {#if icon && !actionsEnd}
             <span
               class="section-custom-icon"
+              class:disabled={disabled}
+              inert={disabled}
               onclick={(e: MouseEvent) => e.stopPropagation()}
               onkeydown={(e: KeyboardEvent) => e.stopPropagation()}
               role="presentation"
@@ -161,6 +163,19 @@
           <span class="section-description">{description}</span>
         {/if}
       </div>
+
+      {#if icon && actionsEnd}
+        <span
+          class="section-custom-icon section-actions-end"
+          class:disabled={disabled}
+          inert={disabled}
+          onclick={(e: MouseEvent) => e.stopPropagation()}
+          onkeydown={(e: KeyboardEvent) => e.stopPropagation()}
+          role="presentation"
+        >
+          {@render icon()}
+        </span>
+      {/if}
 
       <span
         class="section-chevron"
@@ -201,11 +216,17 @@
   .section-header {
     display: flex;
     align-items: center;
-    background-color: var(--cds-layer-01);
+    background-color: var(
+      --khartis-expandable-section-background,
+      var(--cds-layer-01)
+    );
   }
 
   .section-header.collapsed {
-    background-color: var(--cds-layer-01);
+    background-color: var(
+      --khartis-expandable-section-background,
+      var(--cds-layer-01)
+    );
   }
 
   .section-expand-btn {
@@ -261,12 +282,24 @@
   .section-custom-icon {
     display: flex;
     align-items: center;
+    gap: var(--cds-spacing-03);
     margin-left: var(--cds-spacing-02);
   }
 
-  .section-title.actions-end .section-custom-icon {
-    margin-left: auto;
-    gap: var(--cds-spacing-03);
+  .section-custom-icon.section-actions-end {
+    align-self: center;
+    flex-shrink: 0;
+    margin-left: 0;
+  }
+
+  .section-custom-icon.disabled {
+    color: var(--cds-icon-disabled);
+    pointer-events: none;
+  }
+
+  .section-custom-icon.disabled :global(button) {
+    color: var(--cds-icon-disabled);
+    cursor: not-allowed;
   }
 
   .section-chevron {
@@ -281,16 +314,25 @@
   }
 
   .section-body {
-    background-color: var(--cds-layer-01);
+    background-color: var(
+      --khartis-expandable-section-background,
+      var(--cds-layer-01)
+    );
     padding: 8px 16px 16px 16px;
   }
 
   .section-expand-btn:hover:not(:disabled) {
-    background-color: var(--cds-layer-hover-01);
+    background-color: var(
+      --khartis-expandable-section-hover-background,
+      var(--cds-layer-hover-01)
+    );
   }
 
-  .section-header:not(.has-toggle):hover:not(.disabled) {
-    background-color: var(--cds-layer-hover-01);
+  .section-header:hover:not(.disabled) {
+    background-color: var(
+      --khartis-expandable-section-hover-background,
+      var(--cds-layer-hover-01)
+    );
   }
 
   .section-header.expanded .section-title {
@@ -303,6 +345,10 @@
 
   .section-container.toggle-suggestions.disabled {
     opacity: 1;
+  }
+
+  .section-container.toggle-suggestions.disabled .section-custom-icon.disabled {
+    opacity: 0.5;
   }
 
   .section-expand-btn:disabled {

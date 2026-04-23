@@ -1,6 +1,16 @@
 :root {
   --cds-main-toolbar-width: 50vw;
   --cds-header-height: 47px;
+  --khartis-floating-panel-background: rgba(255, 255, 255, 0.78);
+  --khartis-data-table-header-background: var(--cds-ui-03);
+  --khartis-data-table-header-hover-background: var(
+    --cds-layer-accent-hover-01
+  );
+  --khartis-control-surface-background: var(--cds-ui-02, #ffffff);
+  --khartis-control-surface-hover-background: var(--cds-hover-ui, #e8e8e8);
+  --khartis-main-toolbar-background: var(--cds-ui-01, #f4f4f4);
+  --khartis-main-toolbar-surface-background: var(--cds-ui-02, #ffffff);
+  --khartis-palette-swatch-border-color: var(--cds-icon-on-color, #ffffff);
 
   /* Z-index layering system */
   --z-base: 1;
@@ -39,6 +49,26 @@
   --cds-dark-gray: #8d8d8d;
   --cds-text-gray: #525252;
   --cds-border-subtle-01: #cac5c4;
+  --cds-border-subtle-00: var(--cds-ui-03);
+  --cds-border-subtle-02: var(--cds-border-subtle-01);
+  --cds-border-strong-01: var(--cds-ui-04);
+  --cds-border-strong-02: var(--cds-text-05);
+  --cds-border-tile-01: var(--cds-border-subtle-01);
+  --cds-field-hover-01: var(--cds-hover-ui);
+  --cds-layer-01: var(--khartis-control-surface-background);
+  --cds-layer-02: var(--cds-ui-02);
+  --cds-layer-accent-01: var(--cds-ui-03);
+  --cds-layer-accent-hover-01: var(--cds-hover-ui);
+  --cds-layer-active-01: var(--cds-active-ui);
+  --cds-layer-hover-01: var(--khartis-control-surface-hover-background);
+  --cds-layer-hover-02: var(--cds-hover-ui);
+  --cds-layer-inverse: var(--cds-inverse-02);
+  --cds-layer-inverse-active: var(--cds-active-ui);
+  --cds-layer-inverse-hover: var(--cds-inverse-hover-ui);
+  --cds-layer-selected-01: var(--cds-selected-ui);
+  --cds-layer-selected-02: var(--cds-selected-ui);
+  --cds-layer-selected-hover-01: var(--cds-hover-selected-ui);
+  --cds-selected-ui-hover: var(--cds-hover-selected-ui);
   --cds-hover-tertiary: #1a1a1a;
   --cds-button-primary: #3c3838;
 
@@ -80,6 +110,16 @@
 
 :root[theme='g100'] {
   --cds-main-toolbar-width: 50vw;
+  --khartis-floating-panel-background: rgba(22, 22, 22, 0.78);
+  --khartis-data-table-header-background: #1f1f1f;
+  --khartis-data-table-header-hover-background: #2b2b2b;
+  --khartis-control-surface-background: #303030;
+  --khartis-control-surface-hover-background: #3a3a3a;
+  --khartis-main-toolbar-background: var(--cds-background, #161616);
+  --khartis-main-toolbar-surface-background: var(
+    --khartis-control-surface-background
+  );
+  --khartis-palette-swatch-border-color: var(--cds-border-subtle-01, #525252);
   --cds-interactive-01: #393939;
   --cds-interactive-04: #393939;
   --cds-hover-primary: #464646;
@@ -103,6 +143,26 @@
   --cds-text-gray: #a3a3a3;
   --cds-text-01: #f4f4f4;
   --cds-border-subtle-01: #525252;
+  --cds-border-subtle-00: var(--cds-ui-03);
+  --cds-border-subtle-02: var(--cds-border-subtle-01);
+  --cds-border-strong-01: var(--cds-ui-04);
+  --cds-border-strong-02: var(--cds-text-05);
+  --cds-border-tile-01: var(--cds-border-subtle-01);
+  --cds-field-hover-01: var(--cds-hover-ui);
+  --cds-layer-01: var(--khartis-control-surface-background);
+  --cds-layer-02: var(--cds-ui-02);
+  --cds-layer-accent-01: var(--cds-ui-03);
+  --cds-layer-accent-hover-01: var(--cds-hover-ui);
+  --cds-layer-active-01: var(--cds-active-ui);
+  --cds-layer-hover-01: var(--khartis-control-surface-hover-background);
+  --cds-layer-hover-02: var(--cds-hover-ui);
+  --cds-layer-inverse: var(--cds-inverse-02);
+  --cds-layer-inverse-active: var(--cds-active-ui);
+  --cds-layer-inverse-hover: var(--cds-inverse-hover-ui);
+  --cds-layer-selected-01: var(--cds-selected-ui);
+  --cds-layer-selected-02: var(--cds-selected-ui);
+  --cds-layer-selected-hover-01: var(--cds-hover-selected-ui);
+  --cds-selected-ui-hover: var(--cds-hover-selected-ui);
   --cds-hover-tertiary: #e5e5e5;
   --cds-button-primary: white;
 
