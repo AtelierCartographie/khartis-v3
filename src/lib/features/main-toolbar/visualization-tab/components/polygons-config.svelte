@@ -29,17 +29,15 @@
   import DiscretizationModal from './discretization-modal.svelte';
   import type { ClassificationConfig } from '$lib/features/commons/store/visualization.store.svelte';
   import { resolveDiscretizationLabel } from './discretization.utils';
-  import {
-    FACET_SLOT,
-    facetsStore,
-    type FacetSlotPath
-  } from '../facets-adapter.svelte';
+  import { FACET_SLOT } from '../facets-adapter.svelte';
   import { PolygonModeDensity } from './polygons';
   import {
     NONE_FIELD_ID,
     useFieldSelection
   } from '../use-field-selection.svelte';
   import { useCategoryLabels } from '../use-category-labels.svelte';
+  import { useFacetsVariableSelection } from '../use-facets-variable-selection.svelte';
+  import { resetVisualClassification } from './shared/classification-reset.utils';
 
   interface Props {
     dataFields?: Array<{ id: number; text: string; type?: string }>;
@@ -90,7 +88,8 @@
     filters = [],
     onAddFilter,
     onUpdateFilter,
-    onRemoveFilter
+    onRemoveFilter,
+    onClearFilters
   }: Props = $props();
 
   let discretizationModalOpen = $state(false);
@@ -100,6 +99,10 @@
   const selectableDataFields = $derived([noneOption, ...dataFields]);
   const valueFieldSelection = useFieldSelection(() => dataFields);
   const categoryFieldSelection = useFieldSelection(() => dataFields);
+  const facetsSelection = useFacetsVariableSelection({
+    getVisualizationId: () => visualization?.id,
+    getDataFields: () => dataFields
+  });
 
   $effect(() => {
     valueFieldSelection.sync(visualization?.mapping.valueColumn);
@@ -195,14 +198,7 @@
         fillOpacity: 0,
         fillColor: DEFAULT_COLORS.fill
       });
-      handleClassificationChange?.({
-        colors: undefined,
-        paletteId: undefined,
-        inverted: false,
-        patternId: undefined,
-        patternParams: undefined,
-        labels: undefined
-      });
+      handleClassificationChange(resetVisualClassification());
     } else {
       const currentOpacity =
         visualization?.polygon?.fillOpacity ??
@@ -309,73 +305,6 @@
         : undefined
     )
   );
-
-  const selectedVizId = $derived(visualization?.id);
-
-  const activeFacetsSlotPath = $derived.by(() => {
-    if (
-      !facetsStore.enabled ||
-      !selectedVizId ||
-      facetsStore.baseVisualizationId !== selectedVizId
-    ) {
-      return null;
-    }
-    return facetsStore.primarySlotPath;
-  });
-
-  function isFacetsActiveForSlot(slotPath: FacetSlotPath): boolean {
-    return activeFacetsSlotPath === slotPath;
-  }
-
-  function getFacetsSelectedFieldIds(slotPath: FacetSlotPath): number[] {
-    if (!isFacetsActiveForSlot(slotPath)) {
-      return [];
-    }
-    return facetsStore.variables
-      .map((name) => dataFields.find((f) => f.text === name)?.id)
-      .filter((id): id is number => typeof id === 'number');
-  }
-
-  async function handleFacetsVariablesChange(
-    baseVariableName: string,
-    slotPath: FacetSlotPath,
-    fieldIds: number[]
-  ) {
-    if (!selectedVizId) return;
-    const variableNames = fieldIds
-      .map((id) => dataFields.find((f) => f.id === id)?.text)
-      .filter((name): name is string => Boolean(name));
-    const hasBase = Boolean(baseVariableName);
-    const merged =
-      hasBase && !variableNames.includes(baseVariableName)
-        ? [baseVariableName, ...variableNames]
-        : variableNames;
-    await facetsStore.updateVariables(selectedVizId, merged, slotPath);
-  }
-
-  async function handleFacetsToggle(
-    baseVariableName: string,
-    slotPath: FacetSlotPath,
-    enabled: boolean
-  ) {
-    if (!selectedVizId) return;
-    if (!enabled) {
-      facetsStore.disable();
-      return;
-    }
-
-    const available = dataFields
-      .map((f) => f.text)
-      .filter((name): name is string => Boolean(name));
-    const seed = baseVariableName ? [baseVariableName] : [];
-    const candidates = seed.slice();
-    for (const name of available) {
-      if (candidates.length >= 2) break;
-      if (!candidates.includes(name)) candidates.push(name);
-    }
-    if (candidates.length < 2) return;
-    await facetsStore.updateVariables(selectedVizId, candidates, slotPath);
-  }
 </script>
 
 <ExpandableSection
@@ -404,7 +333,6 @@
   <div class="polygons-config">
     <FillSection
       visualization={visualization}
-      primitive="polygon"
       dataFields={dataFields}
       availableModes={FILL_MODES_WITH_DENSITY}
       fillMode={effectiveFillMode}
@@ -421,16 +349,16 @@
       missingDataColor={missingDataColor}
       sectionTitle={m.fill()}
       selectableDataFields={selectableDataFields}
-      getFacetsSelectedFieldIds={getFacetsSelectedFieldIds}
-      isFacetsActiveForSlot={isFacetsActiveForSlot}
+      getFacetsSelectedFieldIds={facetsSelection.getSelectedFieldIds}
+      isFacetsActiveForSlot={facetsSelection.isActiveForSlot}
       onFillModeChange={(mode) =>
         handleFillModeChange(FILL_MODE_ORDER.indexOf(mode))}
       onFillColorChange={handleFillColorChange}
       onFillOpacityChange={handleFillOpacityChange}
       onValueFieldSelect={handleValueFieldSelect}
       onCategoryFieldSelect={handleCategoryFieldSelect}
-      onFacetsVariablesChange={handleFacetsVariablesChange}
-      onFacetsToggle={handleFacetsToggle}
+      onFacetsVariablesChange={facetsSelection.updateVariables}
+      onFacetsToggle={facetsSelection.toggle}
       onOpenDiscretization={handleOpenDiscretization}
       onClassificationChange={handleClassificationChange}
       onMissingDataShowChange={handleMissingDataShowChange}
@@ -477,6 +405,7 @@
     onAddFilter={onAddFilter ?? (() => {})}
     onUpdateFilter={onUpdateFilter}
     onRemoveFilter={onRemoveFilter ?? (() => {})}
+    onClearFilters={onClearFilters}
     onClose={() => {
       filterSectionVisible = false;
     }}

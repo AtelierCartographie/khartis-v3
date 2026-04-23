@@ -55,11 +55,9 @@ describe('FillSection — interface', () => {
     );
   });
 
-  it('accepts a primitive prop tagging the consumer type', () => {
-    expect(source).toContain('primitive: FillPrimitiveKind');
-    expect(source).toContain(
-      "export type FillPrimitiveKind = 'polygon' | 'symbol' | 'text'"
-    );
+  it('does not require a consumer primitive tag', () => {
+    expect(source).not.toContain('primitive: FillPrimitiveKind');
+    expect(source).not.toContain('FillPrimitiveKind');
   });
 
   it('exposes onClassificationChange strictly (no leak to another role)', () => {

@@ -22,12 +22,12 @@ describe('PolygonsConfig — FillSection wiring', () => {
     );
   });
 
-  it('tags the primitive as polygon and sets categoriesVariant to polygons', () => {
+  it('sets categoriesVariant to polygons without a redundant primitive tag', () => {
     const fillBlock = source
       .split('<FillSection')[1]
       ?.split('</FillSection>')[0];
     expect(fillBlock).toBeDefined();
-    expect(fillBlock).toContain('primitive="polygon"');
+    expect(fillBlock).not.toContain('primitive=');
     expect(fillBlock).toContain('categoriesVariant="polygons"');
   });
 
@@ -94,5 +94,12 @@ describe('PolygonsConfig — discretization routing', () => {
     expect(source).toContain("valueColumn={discretizationTarget === 'stroke'");
     expect(source).toContain('visualization?.polygon?.strokeValueColumn');
     expect(source).toContain('visualization?.polygon?.valueColumn');
+  });
+});
+
+describe('PolygonsConfig — filters', () => {
+  it('forwards clear-all to the shared filter panel', () => {
+    expect(source).toContain('onClearFilters?: () => void');
+    expect(source).toContain('onClearFilters={onClearFilters}');
   });
 });
