@@ -1,6 +1,6 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
-  import ColorDropdown from './color-dropdown.svelte';
+  import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
   import { SliderWithInput } from '../shared';
   import DottedToggle from './dotted-toggle.svelte';
   import {
@@ -63,7 +63,11 @@
 
 <div class="layer-config-content">
   {#if showColor}
-    <ColorDropdown value={color} onchange={handleColorChange} />
+    <SingleColorPreview
+      label={m.basemap_config_color()}
+      color={color}
+      onchange={handleColorChange}
+    />
   {/if}
 
   {#if showDotted}
@@ -102,6 +106,5 @@
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-05);
-    padding: var(--cds-spacing-04);
   }
 </style>

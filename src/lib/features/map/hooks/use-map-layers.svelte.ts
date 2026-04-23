@@ -650,7 +650,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           };
 
           const metadataLayers: MetadataLayerEntry[] = [];
-          if (currentMetadata && !currentMetadata.isCustom && worldBaseTable) {
+          if (currentMetadata) {
             const requestedLayerTypes =
               getRequestedMetadataLayerTypes(worldBaseTable);
             if (requestedLayerTypes.length > 0) {
@@ -673,7 +673,9 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             for (const layer of currentMetadata.layers) {
               const table = layer.file
                 ? basemapService.currentLayers.get(layer.file)
-                : worldBaseTable;
+                : currentMetadata.isCustom
+                  ? null
+                  : worldBaseTable;
               if (!table) continue;
               metadataLayers.push({
                 table,
@@ -688,7 +690,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             frontieresTable:
               basemapService.getLayerTableByType(BasemapLayerType.LIMIT) ??
               undefined,
-            availableMetadataLayerTypes: currentMetadata?.layers.map(
+            availableMetadataLayerTypes: metadataLayers.map(
               (layer) => layer.type
             ),
             metadataLayers,
