@@ -1,3 +1,9 @@
+# [1.6.0-staging.2](https://github.com/AtelierCartographie/khartis-v3/compare/v1.6.0-staging.1...v1.6.0-staging.2) (2026-04-23)
+
+### Features
+
+- **ui:** improve styling, legends, projections, and basemaps ([#117](https://github.com/AtelierCartographie/khartis-v3/issues/117)) ([25fdf38](https://github.com/AtelierCartographie/khartis-v3/commit/25fdf38bd8c28fa5af28c5d16eade586852dc2b5)), closes [#103](https://github.com/AtelierCartographie/khartis-v3/issues/103)
+
 # [1.6.0-staging.1](https://github.com/AtelierCartographie/khartis-v3/compare/v1.5.0...v1.6.0-staging.1) (2026-04-23)
 
 ### Bug Fixes
