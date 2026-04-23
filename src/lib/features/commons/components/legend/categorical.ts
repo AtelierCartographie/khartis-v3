@@ -74,7 +74,6 @@ export function draw_categorical_legend(
     w: footerType === 'line' ? box_dim * 1.5 : box_dim
   };
   const gap = Math.round(fontSize * 0.42);
-  const double_gap = gap * 2;
   const gutter = 20;
   let label_width = Math.round(fontSize * 15);
   const items_nb = raw_categories.length;
@@ -121,7 +120,6 @@ export function draw_categorical_legend(
       return { index: i, width, x };
     });
 
-  let y_max = { y: 0, nb_lines: 1 };
   const last_column = columns_width[column_nb - 1] ?? {
     index: 0,
     width: 0,
@@ -132,6 +130,21 @@ export function draw_categorical_legend(
   const footer_lines = footerItems.map((item) =>
     text_box.linebreak(item.label)
   );
+  const maxLabelLineCount = Math.max(
+    1,
+    ...categories.map((item) => item.nb_lines)
+  );
+  const row_body_height = Math.max(box.h, line_height * maxLabelLineCount);
+  const row_step = row_body_height + gap;
+  const maxFooterLineCount = Math.max(
+    1,
+    ...footer_lines.map((lineBreak) => lineBreak.length)
+  );
+  const footer_body_height = Math.max(
+    footerBox.h,
+    line_height * maxFooterLineCount
+  );
+  const footer_row_step = footer_body_height + gap;
   const footer_label_width =
     footer_lines.length > 0
       ? Math.max(...footer_lines.map((lineBreak) => lineBreak.width))
@@ -174,20 +187,11 @@ export function draw_categorical_legend(
       ? subtitle_lines.length * (subtitleSize * 1.2) + header_gap
       : 0);
   const y_start = margin.top + actual_header_height + gap * 2;
-  let current_y = y_start;
-
   categories.forEach((d) => {
-    const label_height =
-      d.nb_lines === 1 ? box.h + double_gap : line_height * 2 + double_gap;
     const x = margin.left + columns_width[d.x_index].x;
-    if (d.y_index === 0 && (d.x_index === 1 || d.x_index === 2)) {
-      current_y = y_start;
-    }
-    const y = current_y;
-    current_y += label_height;
+    const y = y_start + d.y_index * row_step;
     d.x = x;
     d.y = y;
-    y_max = { y: Math.max(y_max.y, y), nb_lines: d.nb_lines };
   });
 
   const boxes = categories.map((d) =>
@@ -206,22 +210,23 @@ export function draw_categorical_legend(
     )
   );
   const labels = categories.map((d) =>
-    create_label(d.x + box.w, d.y, line_height, d)
+    create_label(d.x + box.w, d.y, row_body_height, line_height, d)
   );
   const categories_bottom =
     categories.length > 0
-      ? y_max.y + (y_max.nb_lines === 2 ? line_height * 2 : box.h)
+      ? y_start +
+        (Math.max(...categories.map((item) => item.y_index)) + 1) * row_step -
+        gap
       : y_start;
   const footer_start =
     footerItems.length > 0
       ? categories_bottom + Math.max(3, gap)
       : categories_bottom;
-  const footerRowHeight = Math.max(footerBox.h, line_height) + gap;
   const footerBoxes = footerItems.map((item, index) =>
     create_shape(
       footerType,
       margin.left,
-      footer_start + index * footerRowHeight,
+      footer_start + index * footer_row_step,
       footerBox.w,
       footerBox.h,
       item.fill,
@@ -236,7 +241,8 @@ export function draw_categorical_legend(
   const footerLabels = footerItems.map((item, index) =>
     create_label(
       margin.left + footerBox.w,
-      footer_start + index * footerRowHeight,
+      footer_start + index * footer_row_step,
+      footer_body_height,
       line_height,
       {
         ...item,
@@ -248,20 +254,13 @@ export function draw_categorical_legend(
         x_index: 0,
         y_index: index,
         x: margin.left,
-        y: footer_start + index * footerRowHeight
+        y: footer_start + index * footer_row_step
       }
     )
   );
   const footer_bottom =
     footerItems.length > 0
-      ? footer_start +
-        (footerItems.length - 1) * footerRowHeight +
-        Math.max(
-          footerBox.h,
-          (footer_lines[footerItems.length - 1]?.length ?? 1) > 1
-            ? line_height * 2
-            : line_height
-        )
+      ? footer_start + footerItems.length * footer_row_step - gap
       : categories_bottom;
   const content_bottom =
     footerItems.length > 0 ? footer_bottom : categories_bottom;
@@ -335,7 +334,7 @@ export function draw_categorical_legend(
   }
 
   function create_svg_markup(boxes: string[], labels: string[]): string {
-    const [dx, dy] = [gap, box.h / 2];
+    const dx = gap;
     const safeFontFamily = escapeSvgAttribute(resolvedFontFamily);
     let header_markup = '';
     let y_cursor = margin.top;
@@ -375,7 +374,7 @@ export function draw_categorical_legend(
       <g class="box">
         ${boxes.join('')}
       </g>
-      <g class="labels" text-anchor="start" dominant-baseline="middle" font-size="${fontSize}" transform="translate(${dx},${dy})">
+      <g class="labels" text-anchor="start" dominant-baseline="middle" font-size="${fontSize}" transform="translate(${dx},0)">
         ${labels.join('')}
       </g>
       ${header_markup}
@@ -430,18 +429,21 @@ function create_shape(
 function create_label(
   x: number,
   y: number,
+  rowHeight: number,
   dy: number,
   text: CategoryWithLayout
 ): string {
+  const centerY = y + rowHeight / 2;
+
   if (text.nb_lines === 1) {
-    return `<text x="${x}" y="${y}">${escapeSvgText(text.lines[0]?.toLocaleString() ?? '')}</text>`;
+    return `<text x="${x}" y="${centerY}">${escapeSvgText(text.lines[0]?.toLocaleString() ?? '')}</text>`;
   }
 
   return `<text>${text.lines
-    .map(
-      (d, i) =>
-        `<tspan x="${x}" y="${y}" dy="${i === 1 ? dy : 0}">${escapeSvgText(d.toLocaleString())}</tspan>`
-    )
+    .map((d, i) => {
+      const lineY = centerY + (i - (text.nb_lines - 1) / 2) * dy;
+      return `<tspan x="${x}" y="${lineY}">${escapeSvgText(d.toLocaleString())}</tspan>`;
+    })
     .join('')}</text>`;
 }
 

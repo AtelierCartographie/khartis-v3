@@ -6,7 +6,6 @@ import {
   visualizationStore,
   type VisualizationConfig
 } from '$lib/features/commons/store/visualization.store.svelte';
-import { FillMode } from '$lib/features/main-toolbar/constants';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
 import { resolveLayoutSizingTokens } from '$lib/features/commons/utils/layout-sizing.utils';
 import {
@@ -14,6 +13,7 @@ import {
   DEFAULT_FONT_FAMILY,
   normalizeFontFamily
 } from '$lib/features/step-toolbar/constants/fonts.constants';
+import { getVisualizationLegendSubtitle } from '$lib/features/commons/utils/legend-subtitle.utils';
 import {
   getFormatLayoutSizingContext,
   getFormatState
@@ -72,16 +72,7 @@ type LegendActions = {
 };
 
 function getLegendSubtitle(visualization: VisualizationConfig): string {
-  if (visualization.modes?.fill === FillMode.CATEGORIES) {
-    return visualization.mapping.categoryColumn ?? '';
-  }
-  return (
-    visualization.mapping.valueColumn ??
-    visualization.mapping.sizeColumn ??
-    visualization.mapping.categoryColumn ??
-    visualization.mapping.colorColumn ??
-    ''
-  );
+  return getVisualizationLegendSubtitle(visualization);
 }
 
 function createLegendItemFromVisualization(

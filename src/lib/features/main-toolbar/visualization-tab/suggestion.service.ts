@@ -54,6 +54,7 @@ import {
   DEFAULT_FONT_FAMILY,
   normalizeFontFamily
 } from '$lib/features/step-toolbar/constants/fonts.constants';
+import { getVisualizationLegendSubtitle } from '$lib/features/commons/utils/legend-subtitle.utils';
 
 import { projectStore } from '$lib/features/commons/store/project.store.svelte';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
@@ -1408,17 +1409,7 @@ export function resolveNextSuggestionSelection(
 function getLegendSubtitleForVisualization(
   visualization: VisualizationConfig
 ): string {
-  if (visualization.modes?.fill === FillMode.CATEGORIES) {
-    return visualization.mapping.categoryColumn ?? '';
-  }
-
-  return (
-    visualization.mapping.valueColumn ??
-    visualization.mapping.sizeColumn ??
-    visualization.mapping.categoryColumn ??
-    visualization.mapping.colorColumn ??
-    ''
-  );
+  return getVisualizationLegendSubtitle(visualization);
 }
 
 function syncLegendSubtitleAfterSuggestion(

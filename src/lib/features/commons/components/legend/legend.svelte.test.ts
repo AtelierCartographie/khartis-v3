@@ -225,7 +225,55 @@ describe('common legend generators', () => {
 
     expect(svg.markup).toContain('khartis_double_symbol_legend');
     expect(svg.markup).toContain('Absence de données');
-    expect(svg.height).toBeLessThan(140);
+    expect(svg.height).toBeLessThan(155);
+  });
+
+  it('aligns double symbol labels on the same row axis with consistent spacing', () => {
+    const markup = draw_khartis_double_symbols_legend([
+      {
+        label: '227,119',
+        size: 18,
+        symbol: 'M0,-8A8,8,0,1,1,0,8A8,8,0,1,1,0,-8',
+        fill: '#4585f5',
+        secondaryFill: '#ff812a'
+      },
+      {
+        label: '113,567',
+        size: 11,
+        symbol: 'M0,-8A8,8,0,1,1,0,8A8,8,0,1,1,0,-8',
+        fill: '#4585f5',
+        secondaryFill: '#ff812a'
+      },
+      {
+        label: '14',
+        size: 4,
+        symbol: 'M0,-8A8,8,0,1,1,0,8A8,8,0,1,1,0,-8',
+        fill: '#4585f5',
+        secondaryFill: '#ff812a'
+      }
+    ]);
+    const host = document.createElement('div');
+    host.innerHTML = `<svg>${markup}</svg>`;
+
+    const rowGroups = [...host.querySelectorAll('.double-symbol-pair')];
+    const labelTexts = ['227,119', '113,567', '14'].map((label) =>
+      [...host.querySelectorAll('text')].find(
+        (node) => node.textContent?.trim() === label
+      )
+    );
+    const rowCenters = rowGroups.map((group) => {
+      const transform = group.querySelector('path')?.getAttribute('transform');
+      const match = transform?.match(/translate\([^,]+,([^)]+)\)/);
+      return Number(match?.[1] ?? NaN);
+    });
+    const labelYs = labelTexts.map((node) => Number(node?.getAttribute('y')));
+
+    expect(rowCenters).toHaveLength(3);
+    expect(labelYs).toHaveLength(3);
+    rowCenters.forEach((center, index) => {
+      expect(center).toBeCloseTo(labelYs[index], 5);
+    });
+    expect(labelYs[1] - labelYs[0]).toBeCloseTo(labelYs[2] - labelYs[1], 5);
   });
 
   it('escapes SVG text, colors, and paths in Khartis extensions', () => {

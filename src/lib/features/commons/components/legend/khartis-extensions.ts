@@ -72,9 +72,10 @@ export interface KhartisDoubleSymbolsLegendOptions extends CommonLegendTextOptio
 type RowShapeFactory<T> = (
   item: T,
   x: number,
-  y: number,
+  rowTop: number,
   size: number,
-  index: number
+  index: number,
+  rowHeight: number
 ) => { markup: string; defs?: string };
 
 interface RowLegendOptions<T> extends CommonLegendTextOptions {
@@ -105,8 +106,8 @@ export function draw_khartis_swatch_legend(
     ),
     footerItems: options.footerItems,
     footerType: options.footerType,
-    drawShape: (item, x, y, size, index) =>
-      draw_swatch_shape(item, type, x, y, size, index)
+    drawShape: (item, x, rowTop, size, index, rowHeight) =>
+      draw_swatch_shape(item, type, x, rowTop, size, index, rowHeight)
   });
 }
 
@@ -123,8 +124,8 @@ export function draw_khartis_line_width_legend(
     minRowHeight: Math.max(18, ...steps.map((step) => step.width + 8)),
     footerItems: options.footerItems,
     footerType: options.footerType,
-    drawShape: (step, x, y, size) => {
-      const mid = y + size / 2;
+    drawShape: (step, x, rowTop, _size, _index, rowHeight) => {
+      const mid = rowTop + rowHeight / 2;
       const swatch: Partial<KhartisLegendSwatchItem> = {
         stroke: step.color,
         strokeWidth: step.width,
@@ -147,10 +148,10 @@ export function draw_khartis_density_legend(
     getLabel: (item) => item.ratioLabel,
     footerItems: options.footerItems,
     footerType: options.footerType,
-    drawShape: (item, x, y, size) => {
+    drawShape: (item, x, rowTop, size, _index, rowHeight) => {
       const radius = Math.max(2, Math.min(size / 2, item.dotSize * 2));
       return {
-        markup: `<circle cx="${x + size / 2}" cy="${y + size / 2}" r="${radius}" fill="${escapeSvgAttribute(item.fill)}" />`
+        markup: `<circle cx="${x + size / 2}" cy="${rowTop + rowHeight / 2}" r="${radius}" fill="${escapeSvgAttribute(item.fill)}" />`
       };
     }
   });
@@ -160,31 +161,29 @@ export function draw_khartis_double_symbols_legend(
   steps: KhartisDoubleSymbolsLegendStep[],
   options: KhartisDoubleSymbolsLegendOptions = {}
 ): string {
+  const shapeWidth = getDoubleSymbolShapeWidth(steps);
+
   return draw_row_legend({
     ...options,
     className: 'khartis_double_symbol_legend',
     items: steps,
     getLabel: (step) => step.label,
-    shapeWidth: 38,
+    shapeWidth,
     minRowHeight: Math.max(
       18,
       ...steps.map((step) => getDoubleSymbolRadius(step.size) * 2)
     ),
     footerItems: options.footerItems,
     footerType: options.footerType,
-    drawShape: (step, x, y, size) => {
+    drawShape: (step, x, rowTop, size, _index, rowHeight) => {
       const radius = getDoubleSymbolRadius(step.size);
       const mode = step.positionMode ?? 'overlay';
-      const symbolBox = Math.max(size, radius * 2);
-      const cy = y + symbolBox / 2;
-      const firstX =
-        mode === 'juxtaposition' ? x + radius : x + symbolBox / 2 - radius / 2;
+      const pairWidth = getDoubleSymbolPairWidth(step);
+      const left = x + (shapeWidth - pairWidth) / 2;
+      const cy = rowTop + rowHeight / 2;
+      const firstX = left + radius;
       const secondX =
-        mode === 'juxtaposition'
-          ? x + radius * 2 + 8
-          : mode === 'division'
-            ? x + symbolBox / 2 + radius / 2
-            : x + symbolBox / 2 + radius / 2;
+        mode === 'juxtaposition' ? left + radius * 2 + 8 : left + radius * 2;
       const first = draw_symbol(
         {
           symbol: step.symbol,
@@ -219,6 +218,21 @@ export function draw_khartis_double_symbols_legend(
 
 function getDoubleSymbolRadius(size: number): number {
   return Math.max(4, Math.min(12, size));
+}
+
+function getDoubleSymbolPairWidth(
+  step: KhartisDoubleSymbolsLegendStep
+): number {
+  const radius = getDoubleSymbolRadius(step.size);
+  const mode = step.positionMode ?? 'overlay';
+
+  return mode === 'juxtaposition' ? radius * 3 + 8 : radius * 3;
+}
+
+function getDoubleSymbolShapeWidth(
+  steps: KhartisDoubleSymbolsLegendStep[]
+): number {
+  return Math.max(38, ...steps.map((step) => getDoubleSymbolPairWidth(step)));
 }
 
 function draw_row_legend<T>(options: RowLegendOptions<T>): string {
@@ -262,17 +276,30 @@ function draw_row_legend<T>(options: RowLegendOptions<T>): string {
     subtitleSize,
     fontFamily
   );
-  const rowHeight =
-    options.minRowHeight ?? Math.max(shapeSize, lineHeight * 2) + gap;
+  const maxLabelLineCount = Math.max(
+    1,
+    ...labelLines.map((lines) => lines.length)
+  );
+  const rowBodyHeight = Math.max(
+    options.minRowHeight ?? 0,
+    shapeSize,
+    lineHeight * maxLabelLineCount
+  );
+  const rowStep = rowBodyHeight + gap;
   const startY = margin + header.height + gap;
-  const getRowContentHeight = (lines: string[]) =>
-    Math.max(shapeSize, lines.length > 1 ? lineHeight * 2 : lineHeight);
   const rows = options.items.map((item, index) => {
     const x = margin;
-    const y = startY + index * rowHeight;
+    const rowTop = startY + index * rowStep;
     const labelX = x + shapeWidth + gap;
-    const labelY = y + shapeSize / 2;
-    const shape = options.drawShape(item, x, y, shapeSize, index);
+    const labelY = rowTop + rowBodyHeight / 2;
+    const shape = options.drawShape(
+      item,
+      x,
+      rowTop,
+      shapeSize,
+      index,
+      rowBodyHeight
+    );
     const label = render_label(
       labelLines[index] ?? [],
       labelX,
@@ -286,26 +313,30 @@ function draw_row_legend<T>(options: RowLegendOptions<T>): string {
     };
   });
   const mainBottom =
-    labelLines.length > 0
-      ? startY +
-        (labelLines.length - 1) * rowHeight +
-        getRowContentHeight(labelLines[labelLines.length - 1] ?? [])
+    options.items.length > 0
+      ? startY + options.items.length * rowStep - gap
       : startY;
-  const footerRowHeight = Math.max(shapeSize, lineHeight) + gap;
+  const maxFooterLineCount = Math.max(
+    1,
+    ...footerLabelLines.map((lines) => lines.length)
+  );
+  const footerBodyHeight = Math.max(shapeSize, lineHeight * maxFooterLineCount);
+  const footerRowStep = footerBodyHeight + gap;
   const footerStartY =
     footerItems.length > 0 ? mainBottom + Math.max(3, gap) : mainBottom;
   const footerRows = footerItems.map((item, index) => {
     const x = margin;
-    const y = footerStartY + index * footerRowHeight;
+    const rowTop = footerStartY + index * footerRowStep;
     const labelX = x + shapeWidth + gap;
-    const labelY = y + shapeSize / 2;
+    const labelY = rowTop + footerBodyHeight / 2;
     const shape = draw_swatch_shape(
       item,
       footerType,
       x,
-      y,
+      rowTop,
       shapeSize,
-      options.items.length + index
+      options.items.length + index,
+      footerBodyHeight
     );
     const label = render_label(
       footerLabelLines[index] ?? [],
@@ -320,10 +351,8 @@ function draw_row_legend<T>(options: RowLegendOptions<T>): string {
     };
   });
   const footerBottom =
-    footerLabelLines.length > 0
-      ? footerStartY +
-        (footerLabelLines.length - 1) * footerRowHeight +
-        getRowContentHeight(footerLabelLines[footerLabelLines.length - 1] ?? [])
+    footerItems.length > 0
+      ? footerStartY + footerItems.length * footerRowStep - gap
       : mainBottom;
   const bottom = footerItems.length > 0 ? footerBottom : mainBottom;
   const noteGap = options.note ? Math.max(4, gap) : 0;
@@ -365,17 +394,20 @@ function draw_swatch_shape(
   item: KhartisLegendSwatchItem,
   type: KhartisLegendSwatchType,
   x: number,
-  y: number,
+  rowTop: number,
   size: number,
-  index: number
+  index: number,
+  rowHeight: number
 ): { markup: string; defs?: string } {
+  const y = rowTop + (rowHeight - size) / 2;
+
   if (type === 'line') {
-    return { markup: draw_line(item, x, y + size / 2, 28) };
+    return { markup: draw_line(item, x, rowTop + rowHeight / 2, 28) };
   }
 
   if (type === 'symbol') {
     return {
-      markup: draw_symbol(item, x + size / 2, y + size / 2, size)
+      markup: draw_symbol(item, x + size / 2, rowTop + rowHeight / 2, size)
     };
   }
 
@@ -519,10 +551,10 @@ function render_label(
   }
 
   return `<text>${lines
-    .map(
-      (line, index) =>
-        `<tspan x="${x}" y="${y}" dy="${index === 0 ? -lineHeight / 2 : lineHeight}">${escapeSvgText(line)}</tspan>`
-    )
+    .map((line, index) => {
+      const lineY = y + (index - (lines.length - 1) / 2) * lineHeight;
+      return `<tspan x="${x}" y="${lineY}">${escapeSvgText(line)}</tspan>`;
+    })
     .join('')}</text>`;
 }
 

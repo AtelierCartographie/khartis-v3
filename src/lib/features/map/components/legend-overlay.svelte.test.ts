@@ -308,6 +308,7 @@ describe('legend overlay visibility', () => {
     expect(style).toContain('background-color: rgba(249, 250, 250, 0.6)');
     expect(style).toContain('--legend-padding-inline: 6px');
     expect(style).toContain('--legend-padding-block: 4px');
+    expect(style).toContain('border-radius: 0px');
     expect(quantitative?.getAttribute('font-family')).toContain('Inter');
     expect(
       container.querySelector('.quantitative_legend > rect[fill="transparent"]')
@@ -332,6 +333,7 @@ describe('legend overlay visibility', () => {
     expect(style).toContain('background-color: transparent');
     expect(style).toContain('--legend-padding-inline: 0px');
     expect(style).toContain('--legend-padding-block: 0px');
+    expect(style).toContain('border-radius: 0px');
   });
 
   it('keeps the legend mounted but hidden when requested', () => {
@@ -361,6 +363,14 @@ describe('legend overlay visibility', () => {
     ).toBeInTheDocument();
     expect(pair?.querySelectorAll('path')).toHaveLength(2);
     expect(screen.getByText('15,907,951')).toBeInTheDocument();
+    expect(
+      container.querySelector('.khartis_double_symbol_legend .subtitle')
+        ?.textContent
+    ).toContain('population /');
+    expect(
+      container.querySelector('.khartis_double_symbol_legend .subtitle')
+        ?.textContent
+    ).toContain('secondary-population');
   });
 
   it('renders point categories in the legend and hides disabled categories', () => {
@@ -409,6 +419,25 @@ describe('legend overlay visibility', () => {
     expect(screen.getByText('Absence de données')).toBeInTheDocument();
   });
 
+  it('renders point classed fill legends with the active fill value column and class count', () => {
+    mockVisualizationStore.version = 1;
+    mockVisualizationStore.visualizations = [buildPointClassedFillViz()];
+    legendActions.reset();
+    legendActions.setVisibility(true);
+
+    const { container } = render(LegendOverlay);
+
+    expect(
+      container.querySelector('.legend-svg--categorical')
+    ).toBeInTheDocument();
+    expect(screen.getByText('capacity')).toBeInTheDocument();
+    expect(screen.queryByText('category')).not.toBeInTheDocument();
+    expect(screen.getByText('< 610')).toBeInTheDocument();
+    expect(screen.getByText('610 – 980')).toBeInTheDocument();
+    expect(screen.getByText('980 – 1,200')).toBeInTheDocument();
+    expect(screen.getByText('≥ 1,200')).toBeInTheDocument();
+  });
+
   it('renders classed choropleth colors with the integrated quantitative SVG legend', () => {
     mockVisualizationStore.version = 1;
     mockVisualizationStore.visualizations = [buildClassedPolygonViz()];
@@ -446,6 +475,32 @@ describe('legend overlay visibility', () => {
     expect(
       container.querySelector('.legend-svg--symbols')
     ).not.toBeInTheDocument();
+  });
+
+  it('keeps polygon-only legend subtitles focused on active polygon columns', () => {
+    const viz = buildProportionalPolygonClassesOnlyViz();
+    viz.mapping = {
+      ...viz.mapping,
+      sizeColumn: 'area'
+    };
+    if (viz.symbol) {
+      viz.symbol = {
+        ...viz.symbol,
+        sizeColumn: 'area'
+      };
+    }
+    mockVisualizationStore.version = 1;
+    mockVisualizationStore.visualizations = [viz];
+    legendActions.reset();
+    legendActions.setVisibility(true);
+
+    const { container } = render(LegendOverlay);
+    const subtitle = container.querySelector(
+      '.quantitative_legend .subtitle'
+    )?.textContent;
+
+    expect(subtitle).toContain('population');
+    expect(subtitle).not.toContain('area');
   });
 
   it('renders density legends through the common SVG component', () => {
@@ -498,6 +553,23 @@ describe('legend overlay visibility', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('renders point size class legends with class labels derived from breaks', () => {
+    mockVisualizationStore.version = 1;
+    mockVisualizationStore.visualizations = [buildPointSizeClassesViz()];
+    legendActions.reset();
+    legendActions.setVisibility(true);
+
+    const { container } = render(LegendOverlay);
+
+    expect(container.querySelector('.legend-svg--symbols')).toBeInTheDocument();
+    expect(screen.getByText('capacity_total')).toBeInTheDocument();
+    expect(screen.getByText('< 610')).toBeInTheDocument();
+    expect(screen.getByText('610 – 980')).toBeInTheDocument();
+    expect(screen.getByText('980 – 1,200')).toBeInTheDocument();
+    expect(screen.getByText('≥ 1,200')).toBeInTheDocument();
+    expect(screen.queryAllByText('1,200')).toHaveLength(0);
+  });
+
   it('renders text categorical legends through the common SVG system', () => {
     mockVisualizationStore.version = 1;
     mockVisualizationStore.visualizations = [buildTextCategoriesViz()];
@@ -512,6 +584,30 @@ describe('legend overlay visibility', () => {
     expect(container.querySelector('.categorical_legend')).toBeInTheDocument();
     expect(screen.getByText('Préfecture')).toBeInTheDocument();
     expect(screen.getByText('Sous-préfecture')).toBeInTheDocument();
+  });
+
+  it('renders missing data only once across multi-segment legends', () => {
+    const viz = buildTextBivariateViz();
+    if (!viz.text) {
+      throw new Error('Text primitive is required for this test');
+    }
+    viz.text = {
+      ...viz.text,
+      missingData: {
+        show: true,
+        shape: MissingDataShape.CIRCLE,
+        size: 6,
+        color: '#c6c6c6'
+      }
+    };
+    mockVisualizationStore.version = 1;
+    mockVisualizationStore.visualizations = [viz];
+    legendActions.reset();
+    legendActions.setVisibility(true);
+
+    render(LegendOverlay);
+
+    expect(screen.getAllByText('Absence de données')).toHaveLength(1);
   });
 
   it('renders proportional text size legends through the original symbol legend generator', () => {
@@ -847,6 +943,61 @@ function buildPointCategoriesViz(): VisualizationConfig {
   } as VisualizationConfig;
 }
 
+function buildPointClassedFillViz(): VisualizationConfig {
+  return {
+    id: 'viz-point-classed-fill',
+    name: 'Capacity',
+    type: 'categorical',
+    datasetId: 'dataset-1',
+    enabled: true,
+    primitiveFilters: ['point'],
+    primitiveOrder: ['point'],
+    symbol: {
+      enabled: true,
+      mode: SymbolMode.UNIQUE,
+      shape: ShapeType.CIRCLE,
+      size: 10,
+      minSize: 6,
+      maxSize: 14,
+      sizeScale: 'linear',
+      opacity: 1,
+      fillMode: FillMode.CLASSES,
+      fillColor: '#4585f5',
+      strokeMode: StrokeMode.UNIQUE,
+      strokeColor: '#ffffff',
+      strokeWidth: 1,
+      strokeOpacity: 1,
+      proportionalType: ProportionalType.SINGLE,
+      categoryShape: CategoryShapeMode.UNIQUE,
+      fillValueColumn: 'capacity',
+      fillClassification: {
+        method: ClassificationMethod.QUANTILES,
+        classes: 4,
+        breaks: [610, 980, 1200],
+        colors: ['#d0e2ff', '#78a9ff', '#4589ff', '#0f62fe', '#0043ce']
+      },
+      missingData: {
+        show: true,
+        shape: MissingDataShape.CIRCLE,
+        size: 6,
+        color: '#d9d9d9'
+      }
+    },
+    style: {
+      fillColor: '#4585f5',
+      fillOpacity: 100,
+      strokeColor: '#ffffff',
+      strokeWidth: 1,
+      strokeOpacity: 100
+    },
+    mapping: {
+      categoryColumn: 'category',
+      colorColumn: 'category',
+      geometryColumn: 'geom'
+    }
+  } as VisualizationConfig;
+}
+
 function buildClassedPolygonViz(): VisualizationConfig {
   const classification = {
     method: ClassificationMethod.QUANTILES,
@@ -1053,6 +1204,67 @@ function buildLineWidthViz(): VisualizationConfig {
     mapping: {
       valueColumn: 'population',
       sizeColumn: 'population',
+      geometryColumn: 'geom'
+    }
+  } as VisualizationConfig;
+}
+
+function buildPointSizeClassesViz(): VisualizationConfig {
+  return {
+    id: 'viz-point-size-classes',
+    name: 'Capacity total',
+    type: 'proportional',
+    datasetId: 'dataset-1',
+    enabled: true,
+    primitiveFilters: ['point'],
+    primitiveOrder: ['point'],
+    symbol: {
+      enabled: true,
+      mode: SymbolMode.CLASSES,
+      shape: ShapeType.CIRCLE,
+      minSize: 6,
+      maxSize: 24,
+      sizeScale: 'linear',
+      opacity: 1,
+      fillMode: FillMode.UNIQUE,
+      fillColor: '#4585f5',
+      strokeMode: StrokeMode.UNIQUE,
+      strokeColor: '#ffffff',
+      strokeWidth: 1,
+      strokeOpacity: 1,
+      proportionalType: ProportionalType.SINGLE,
+      categoryShape: CategoryShapeMode.UNIQUE,
+      valueColumn: 'capacity_total',
+      sizeColumn: 'capacity_total',
+      classification: {
+        method: ClassificationMethod.QUANTILES,
+        classes: 5,
+        breaks: [610, 980, 1200],
+        colors: ['#d0e2ff', '#78a9ff', '#4589ff', '#0f62fe', '#0043ce']
+      },
+      missingData: {
+        show: true,
+        shape: MissingDataShape.CIRCLE,
+        size: 6,
+        color: '#d9d9d9'
+      }
+    },
+    classification: {
+      method: ClassificationMethod.QUANTILES,
+      classes: 5,
+      breaks: [610, 980, 1200],
+      colors: ['#d0e2ff', '#78a9ff', '#4589ff', '#0f62fe', '#0043ce']
+    },
+    style: {
+      fillColor: '#4585f5',
+      fillOpacity: 100,
+      strokeColor: '#ffffff',
+      strokeWidth: 1,
+      strokeOpacity: 100
+    },
+    mapping: {
+      valueColumn: 'capacity_total',
+      sizeColumn: 'capacity_total',
       geometryColumn: 'geom'
     }
   } as VisualizationConfig;

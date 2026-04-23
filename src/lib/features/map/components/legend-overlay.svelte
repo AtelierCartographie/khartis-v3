@@ -166,7 +166,10 @@
     key: string;
     className: string;
     consumesMissingData?: boolean;
-    create: (options: CommonLegendTextOptions) => LegendSvgDefinition | null;
+    create: (
+      options: CommonLegendTextOptions,
+      context: { includeMissingDataFooter: boolean }
+    ) => LegendSvgDefinition | null;
   };
 
   type LegendSegment = {
@@ -549,6 +552,17 @@
     return fallbackBreak !== undefined ? formatBreakValue(fallbackBreak) : '';
   }
 
+  function getEffectiveClassedColors(
+    colors: string[],
+    breaks: number[]
+  ): string[] {
+    if (breaks.length > 0 && colors.length > breaks.length + 1) {
+      return colors.slice(0, breaks.length + 1);
+    }
+
+    return colors;
+  }
+
   function getShapePath(shape: ShapeType): string {
     switch (shape) {
       case ShapeType.SQUARE:
@@ -612,10 +626,17 @@
       }
     }
 
+    const lastMissingDataDraftIndex = drafts.findLastIndex(
+      (draft) => draft.consumesMissingData
+    );
+
     return drafts
       .map((draft, index) => {
         const svg = draft.create(
-          getLegendTextOptions(item, index, drafts.length)
+          getLegendTextOptions(item, index, drafts.length),
+          {
+            includeMissingDataFooter: index === lastMissingDataDraftIndex
+          }
         );
 
         return svg
@@ -678,12 +699,15 @@
       className:
         type === 'pattern' ? 'legend-svg--patterns' : 'legend-svg--categorical',
       consumesMissingData: Boolean(viz.missingData?.show),
-      create: (options) =>
+      create: (options, context) =>
         toLegendSvg(
           draw_khartis_swatch_legend(items, {
             ...options,
             type,
-            ...getMissingDataFooterOptions(viz)
+            ...getMissingDataFooterOptions(
+              viz,
+              context.includeMissingDataFooter
+            )
           })
         )
     };
@@ -738,12 +762,15 @@
         key: 'text-categorical-color',
         className: 'legend-svg--text-color',
         consumesMissingData: Boolean(missingData?.show),
-        create: (options) =>
+        create: (options, context) =>
           toLegendSvg(
             draw_categorical_legend(categories, {
               ...options,
               type: 'symbol',
-              ...getTextCategoricalMissingDataFooterOptions(text)
+              ...getTextCategoricalMissingDataFooterOptions(
+                text,
+                context.includeMissingDataFooter
+              )
             })
           )
       };
@@ -753,8 +780,11 @@
       text.colorMode === ColorMode.CLASSES &&
       getPrimitiveValueColumn(viz, PrimitiveFilterType.TEXT)
     ) {
-      const breaks = classification.breaks ?? [];
-      const colors = classification.colors ?? [];
+      const breaks = (classification.breaks ?? []).filter(Number.isFinite);
+      const colors = getEffectiveClassedColors(
+        classification.colors ?? [],
+        breaks
+      );
       const items = colors.map((color, index) => ({
         label: getColorScaleLabel(breaks, colors.length, index),
         fill: color,
@@ -773,12 +803,15 @@
         key: 'text-classed-color',
         className: 'legend-svg--text-color',
         consumesMissingData: Boolean(missingData?.show),
-        create: (options) =>
+        create: (options, context) =>
           toLegendSvg(
             draw_khartis_swatch_legend(items, {
               ...options,
               type: 'symbol',
-              ...getTextMissingDataFooterOptions(text)
+              ...getTextMissingDataFooterOptions(
+                text,
+                context.includeMissingDataFooter
+              )
             })
           )
       };
@@ -827,7 +860,7 @@
       key: 'text-size',
       className: 'legend-svg--text-size',
       consumesMissingData: Boolean(text.missingData?.show),
-      create: (options) =>
+      create: (options, context) =>
         toLegendSvg(
           draw_symbols_legend(values, {
             ...options,
@@ -835,8 +868,12 @@
             size: maxLegendSize,
             fill,
             stroke,
-            nodata: Boolean(text.missingData?.show),
-            nodataLabel: m.missing_data_text()
+            nodata: context.includeMissingDataFooter
+              ? Boolean(text.missingData?.show)
+              : false,
+            nodataLabel: context.includeMissingDataFooter
+              ? m.missing_data_text()
+              : undefined
           })
         )
     };
@@ -873,12 +910,16 @@
       key: 'quantitative-color',
       className: 'legend-svg--quantitative',
       consumesMissingData: Boolean(viz.missingData?.show),
-      create: (options) =>
+      create: (options, context) =>
         toLegendSvg(
           draw_quanti_color_legend(thresholds, classification.colors ?? [], {
             ...options,
-            nodata: Boolean(viz.missingData?.show),
-            nodataLabel: m.missing_data_text()
+            nodata: context.includeMissingDataFooter
+              ? Boolean(viz.missingData?.show)
+              : false,
+            nodataLabel: context.includeMissingDataFooter
+              ? m.missing_data_text()
+              : undefined
           })
         )
     };
@@ -908,12 +949,15 @@
         key: 'categorical-patterns',
         className: 'legend-svg--patterns',
         consumesMissingData: Boolean(viz.missingData?.show),
-        create: (options) =>
+        create: (options, context) =>
           toLegendSvg(
             draw_khartis_swatch_legend(items, {
               ...options,
               type: 'pattern',
-              ...getMissingDataFooterOptions(viz)
+              ...getMissingDataFooterOptions(
+                viz,
+                context.includeMissingDataFooter
+              )
             })
           )
       };
@@ -929,12 +973,16 @@
       key: 'categorical-color',
       className: 'legend-svg--categorical',
       consumesMissingData: Boolean(viz.missingData?.show),
-      create: (options) =>
+      create: (options, context) =>
         toLegendSvg(
           draw_categorical_legend(categories, {
             ...options,
             type,
-            ...getCategoricalMissingDataFooterOptions(viz, primitive)
+            ...getCategoricalMissingDataFooterOptions(
+              viz,
+              primitive,
+              context.includeMissingDataFooter
+            )
           })
         )
     };
@@ -961,7 +1009,7 @@
           key: 'point-size',
           className: 'legend-svg--symbols',
           consumesMissingData: Boolean(viz.missingData?.show),
-          create: (options) =>
+          create: (options, context) =>
             toLegendSvg(
               draw_symbols_legend(values, {
                 ...options,
@@ -969,8 +1017,12 @@
                 size: 18,
                 fill: scale.fillColor,
                 stroke: scale.strokeColor,
-                nodata: Boolean(viz.missingData?.show),
-                nodataLabel: m.missing_data_text()
+                nodata: context.includeMissingDataFooter
+                  ? Boolean(viz.missingData?.show)
+                  : false,
+                nodataLabel: context.includeMissingDataFooter
+                  ? m.missing_data_text()
+                  : undefined
               })
             )
         };
@@ -987,11 +1039,14 @@
         key: 'double-point-size',
         className: 'legend-svg--double-symbols',
         consumesMissingData: Boolean(viz.missingData?.show),
-        create: (options) =>
+        create: (options, context) =>
           toLegendSvg(
             draw_khartis_double_symbols_legend(steps, {
               ...options,
-              ...getMissingDataFooterOptions(viz)
+              ...getMissingDataFooterOptions(
+                viz,
+                context.includeMissingDataFooter
+              )
             })
           )
       };
@@ -1006,12 +1061,15 @@
       key: 'point-size-classes',
       className: 'legend-svg--symbols',
       consumesMissingData: Boolean(viz.missingData?.show),
-      create: (options) =>
+      create: (options, context) =>
         toLegendSvg(
           draw_khartis_swatch_legend(items, {
             ...options,
             type: 'symbol',
-            ...getMissingDataFooterOptions(viz)
+            ...getMissingDataFooterOptions(
+              viz,
+              context.includeMissingDataFooter
+            )
           })
         )
     };
@@ -1045,11 +1103,14 @@
       key: 'line-width',
       className: 'legend-svg--line-width',
       consumesMissingData: Boolean(viz.missingData?.show),
-      create: (options) =>
+      create: (options, context) =>
         toLegendSvg(
           draw_khartis_line_width_legend(steps, {
             ...options,
-            ...getMissingDataFooterOptions(viz)
+            ...getMissingDataFooterOptions(
+              viz,
+              context.includeMissingDataFooter
+            )
           })
         )
     };
@@ -1068,14 +1129,17 @@
       key: 'density',
       className: 'legend-svg--density',
       consumesMissingData: Boolean(viz.missingData?.show),
-      create: (options) =>
+      create: (options, context) =>
         toLegendSvg(
           draw_khartis_density_legend({
             ...options,
             ratioLabel: m.density_ratio_label({ ratio: String(scale.ratio) }),
             dotSize: scale.dotSize,
             fill: scale.fillColor,
-            ...getMissingDataFooterOptions(viz)
+            ...getMissingDataFooterOptions(
+              viz,
+              context.includeMissingDataFooter
+            )
           })
         )
     };
@@ -1095,7 +1159,7 @@
     return {
       key: 'missing-data',
       className: 'legend-svg--missing-data',
-      create: (options) =>
+      create: (options, _context) =>
         toLegendSvg(
           draw_khartis_swatch_legend([item], {
             ...options,
@@ -1152,8 +1216,11 @@
     classification: ClassificationConfig,
     primitive: ReturnType<typeof resolveLegendColorSwatchPrimitive>
   ): KhartisLegendSwatchItem[] {
-    const colors = classification.colors ?? [];
-    const breaks = classification.breaks ?? [];
+    const breaks = (classification.breaks ?? []).filter(Number.isFinite);
+    const colors = getEffectiveClassedColors(
+      classification.colors ?? [],
+      breaks
+    );
 
     return colors.map((color, index) => {
       const label = getColorScaleLabel(breaks, colors.length, index);
@@ -1242,11 +1309,14 @@
     }));
   }
 
-  function getMissingDataFooterOptions(viz: VisualizationConfig): {
+  function getMissingDataFooterOptions(
+    viz: VisualizationConfig,
+    includeFooter = true
+  ): {
     footerItems?: KhartisLegendSwatchItem[];
     footerType?: KhartisLegendSwatchType;
   } {
-    if (!viz.missingData?.show) {
+    if (!includeFooter || !viz.missingData?.show) {
       return {};
     }
 
@@ -1258,12 +1328,13 @@
   }
 
   function getTextMissingDataFooterOptions(
-    text: NonNullable<ReturnType<typeof getTextPrimitive>>
+    text: NonNullable<ReturnType<typeof getTextPrimitive>>,
+    includeFooter = true
   ): {
     footerItems?: KhartisLegendSwatchItem[];
     footerType?: KhartisLegendSwatchType;
   } {
-    if (!text.missingData?.show) {
+    if (!includeFooter || !text.missingData?.show) {
       return {};
     }
 
@@ -1274,12 +1345,13 @@
   }
 
   function getTextCategoricalMissingDataFooterOptions(
-    text: NonNullable<ReturnType<typeof getTextPrimitive>>
+    text: NonNullable<ReturnType<typeof getTextPrimitive>>,
+    includeFooter = true
   ): {
     footerItems?: CategoryItem[];
     footerType?: CategoricalFooterShapeType;
   } {
-    if (!text.missingData?.show) {
+    if (!includeFooter || !text.missingData?.show) {
       return {};
     }
 
@@ -1291,12 +1363,13 @@
 
   function getCategoricalMissingDataFooterOptions(
     viz: VisualizationConfig,
-    primitive: ReturnType<typeof resolveLegendColorSwatchPrimitive>
+    primitive: ReturnType<typeof resolveLegendColorSwatchPrimitive>,
+    includeFooter = true
   ): {
     footerItems?: CategoryItem[];
     footerType?: CategoricalFooterShapeType;
   } {
-    if (!viz.missingData?.show) {
+    if (!includeFooter || !viz.missingData?.show) {
       return {};
     }
 
@@ -1423,10 +1496,13 @@
     }
 
     return (
+      (classification.breaks?.length
+        ? classification.breaks.length + 1
+        : undefined) ??
       classification.numClasses ??
       classification.labels?.length ??
       classification.colors?.length ??
-      (classification.breaks?.length ? classification.breaks.length + 1 : 0)
+      0
     );
   }
 
@@ -1556,6 +1632,7 @@
       `font-family: ${resolveFontFamilyStack(legendState.style.fontFamily)}`,
       `font-size: ${clampFontSize(legendState.style.fontSize, layoutTokens.legend.fontSize)}px`,
       `color: ${textHex}`,
+      'border-radius: 0px',
       `transform: ${transform}`,
       `transform-origin: ${getLegendTransformOrigin(legendState.position, Boolean(legendState.dragPosition))}`
     ];
@@ -1914,7 +1991,7 @@
     gap: var(--legend-item-gap);
     background: transparent;
     padding: var(--legend-padding-block) var(--legend-padding-inline);
-    border-radius: 3px;
+    border-radius: 0;
     box-shadow: none;
     max-width: var(--legend-max-width);
     overflow-wrap: anywhere;

@@ -128,6 +128,10 @@ function resolveClassificationClassCount(
     return 0;
   }
 
+  if (classification.breaks?.length) {
+    return classification.breaks.length + 1;
+  }
+
   if (classification.numClasses && classification.numClasses > 0) {
     return classification.numClasses;
   }
@@ -138,10 +142,6 @@ function resolveClassificationClassCount(
 
   if (classification.colors?.length) {
     return classification.colors.length;
-  }
-
-  if (classification.breaks?.length) {
-    return classification.breaks.length + 1;
   }
 
   return classification.classes ?? 0;
