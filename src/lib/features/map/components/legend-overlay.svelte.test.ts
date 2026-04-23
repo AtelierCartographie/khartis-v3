@@ -124,9 +124,79 @@ function bindElementBox(
   });
 }
 
+function setupLegendViewport(): {
+  legend: HTMLDivElement;
+  viewport: HTMLDivElement;
+} {
+  const viewport = document.createElement('div');
+  viewport.className = 'workspace-viewport';
+  document.body.appendChild(viewport);
+
+  const { container } = render(LegendOverlay, {
+    target: viewport
+  });
+  const legend = container.querySelector('.legend-container');
+
+  if (!(legend instanceof HTMLDivElement)) {
+    throw new Error('Legend was not rendered');
+  }
+
+  bindElementBox(viewport, {
+    left: 0,
+    top: 0,
+    width: 400,
+    height: 300
+  });
+  bindElementBox(legend, {
+    left: 70,
+    top: 60,
+    width: 80,
+    height: 60
+  });
+
+  return { legend, viewport };
+}
+
+function setupLegendOccludedViewport(): {
+  legend: HTMLDivElement;
+  popover: HTMLDivElement;
+  toolbar: HTMLDivElement;
+  viewport: HTMLDivElement;
+} {
+  const { legend, viewport } = setupLegendViewport();
+  const toolbar = document.createElement('div');
+  const popoverRoot = document.createElement('div');
+  const popover = document.createElement('div');
+
+  toolbar.id = 'khartis-step-toolbar';
+  popoverRoot.id = 'khartis-tool-popover';
+  popover.className = 'bx--popover';
+  popoverRoot.appendChild(popover);
+
+  document.body.appendChild(toolbar);
+  document.body.appendChild(popoverRoot);
+
+  bindElementBox(toolbar, {
+    left: 0,
+    top: 0,
+    width: 80,
+    height: 300
+  });
+  bindElementBox(popover, {
+    left: 88,
+    top: 20,
+    width: 120,
+    height: 200
+  });
+
+  return { legend, popover, toolbar, viewport };
+}
+
 describe('legend overlay visibility', () => {
   beforeEach(() => {
     cleanup();
+    document.getElementById('khartis-step-toolbar')?.remove();
+    document.getElementById('khartis-tool-popover')?.remove();
     mockVisualizationStore.version = 0;
     mockVisualizationStore.visualizations = [];
     legendActions.reset();
@@ -148,6 +218,8 @@ describe('legend overlay visibility', () => {
 
   afterEach(() => {
     cleanup();
+    document.getElementById('khartis-step-toolbar')?.remove();
+    document.getElementById('khartis-tool-popover')?.remove();
     legendActions.reset();
     formatActions.reset();
     globalActions.resetNavigationState();
@@ -301,6 +373,32 @@ describe('legend overlay visibility', () => {
 
     await waitFor(() => {
       expect(getLegendState().dragPosition).toEqual({ x: 120, y: 72 });
+    });
+  });
+
+  it('recenters the page when a centered legend loses focus', async () => {
+    const { legend } = setupLegendViewport();
+
+    await fireEvent.click(legend);
+
+    await waitFor(() => {
+      expect(globalState.zoom.pagePanOffset).toEqual({ x: 90, y: 60 });
+    });
+
+    await fireEvent.blur(legend);
+
+    await waitFor(() => {
+      expect(globalState.zoom.pagePanOffset).toEqual({ x: 0, y: 0 });
+    });
+  });
+
+  it('centers legend focus in the visible area beside the tool popover', async () => {
+    const { legend } = setupLegendOccludedViewport();
+
+    await fireEvent.click(legend);
+
+    await waitFor(() => {
+      expect(globalState.zoom.pagePanOffset).toEqual({ x: 128, y: 60 });
     });
   });
 });

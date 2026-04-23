@@ -28,7 +28,7 @@ describe('SymbolModeUnique (aucun.png alignment)', () => {
       "import FillSection from '../shared/fill-section.svelte'"
     );
     expect(source).toContain('<FillSection');
-    expect(source).toContain('primitive="symbol"');
+    expect(source).not.toContain('primitive="symbol"');
   });
 
   it('uses the standard 4-mode preset (no DENSITY for symbols unique)', () => {
@@ -94,6 +94,8 @@ describe('SymbolModeUnique — stroke discretization isolation', () => {
     expect(source).toContain(
       'strokeCategoryColumn={visualization?.symbol?.strokeCategoryColumn}'
     );
+    expect(source).toContain('const strokeDiscretizationLabel = $derived.by');
+    expect(source).toContain('discretizationLabel={strokeDiscretizationLabel}');
   });
 
   it('opens the shared discretization modal in stroke role for the outline channel', () => {

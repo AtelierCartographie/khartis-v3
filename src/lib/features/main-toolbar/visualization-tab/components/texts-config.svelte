@@ -29,15 +29,13 @@
   import DiscretizationModal from './discretization-modal.svelte';
   import TextStylePopover from './text-style-popover.svelte';
   import { resolveDiscretizationLabel } from './discretization.utils';
-  import {
-    FACET_SLOT,
-    facetsStore,
-    type FacetSlotPath
-  } from '../facets-adapter.svelte';
+  import { FACET_SLOT } from '../facets-adapter.svelte';
   import {
     NONE_FIELD_ID,
     useFieldSelection
   } from '../use-field-selection.svelte';
+  import { resetVisualClassification } from './shared/classification-reset.utils';
+  import { useFacetsVariableSelection } from '../use-facets-variable-selection.svelte';
 
   interface Props {
     dataFields?: Array<{ id: number; text: string; type?: string }>;
@@ -105,7 +103,8 @@
     filters = [],
     onAddFilter,
     onUpdateFilter,
-    onRemoveFilter
+    onRemoveFilter,
+    onClearFilters
   }: Props = $props();
 
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
@@ -122,6 +121,10 @@
   const backgroundValueFieldSelection = useFieldSelection(() => dataFields);
   const backgroundCategoryFieldSelection = useFieldSelection(() => dataFields);
   const secondaryLabelFieldSelection = useFieldSelection(() => dataFields);
+  const backgroundFacetsSelection = useFacetsVariableSelection({
+    getVisualizationId: () => backgroundVisualization?.id,
+    getDataFields: () => dataFields
+  });
 
   let textColor = $state<string>(DEFAULT_COLORS.text);
   let textOpacity = $state<number>(VISUALIZATION_DEFAULTS.textOpacity);
@@ -169,7 +172,6 @@
     secondaryLabelFieldSelection.selectedFieldId !== NONE_FIELD_ID
   );
   const backgroundAvailable = $derived(Boolean(backgroundVisualization));
-  const selectedBackgroundVizId = $derived(backgroundVisualization?.id);
   const activeDiscretizationVisualization = $derived(backgroundVisualization);
   const activeDiscretizationClassification = $derived.by(() => {
     if (discretizationTarget === 'background-stroke') {
@@ -183,32 +185,6 @@
     }
     return backgroundVisualization?.text?.background?.valueColumn;
   });
-
-  const activeBackgroundFacetsSlotPath = $derived.by(() => {
-    if (
-      !facetsStore.enabled ||
-      !selectedBackgroundVizId ||
-      facetsStore.baseVisualizationId !== selectedBackgroundVizId
-    ) {
-      return null;
-    }
-    return facetsStore.primarySlotPath;
-  });
-
-  function isBackgroundFacetsActiveForSlot(slotPath: FacetSlotPath): boolean {
-    return activeBackgroundFacetsSlotPath === slotPath;
-  }
-
-  function getBackgroundFacetsSelectedFieldIds(
-    slotPath: FacetSlotPath
-  ): number[] {
-    if (!isBackgroundFacetsActiveForSlot(slotPath)) {
-      return [];
-    }
-    return facetsStore.variables
-      .map((name) => dataFields.find((field) => field.text === name)?.id)
-      .filter((id): id is number => typeof id === 'number');
-  }
 
   const backgroundDiscretizationLabel = $derived.by(() =>
     resolveDiscretizationLabel(
@@ -396,54 +372,6 @@
     }
   }
 
-  async function handleBackgroundFacetsVariablesChange(
-    baseVariableName: string,
-    slotPath: FacetSlotPath,
-    fieldIds: number[]
-  ) {
-    if (!selectedBackgroundVizId) return;
-    const variableNames = fieldIds
-      .map((id) => dataFields.find((field) => field.id === id)?.text)
-      .filter((name): name is string => Boolean(name));
-    const merged =
-      baseVariableName && !variableNames.includes(baseVariableName)
-        ? [baseVariableName, ...variableNames]
-        : variableNames;
-    await facetsStore.updateVariables(
-      selectedBackgroundVizId,
-      merged,
-      slotPath
-    );
-  }
-
-  async function handleBackgroundFacetsToggle(
-    baseVariableName: string,
-    slotPath: FacetSlotPath,
-    enabled: boolean
-  ) {
-    if (!selectedBackgroundVizId) return;
-    if (!enabled) {
-      facetsStore.disable();
-      return;
-    }
-
-    const available = dataFields
-      .map((field) => field.text)
-      .filter((name): name is string => Boolean(name));
-    const seed = baseVariableName ? [baseVariableName] : [];
-    const candidates = seed.slice();
-    for (const name of available) {
-      if (candidates.length >= 2) break;
-      if (!candidates.includes(name)) candidates.push(name);
-    }
-    if (candidates.length < 2) return;
-    await facetsStore.updateVariables(
-      selectedBackgroundVizId,
-      candidates,
-      slotPath
-    );
-  }
-
   function handleTextColorChange(value: string) {
     textColor = value;
     onStyleChange?.({ textColor: value });
@@ -562,14 +490,7 @@
         fillOpacity: 0,
         fillColor: DEFAULT_COLORS.fill
       });
-      onBackgroundClassificationChange?.({
-        colors: undefined,
-        paletteId: undefined,
-        inverted: false,
-        patternId: undefined,
-        patternParams: undefined,
-        labels: undefined
-      });
+      onBackgroundClassificationChange?.(resetVisualClassification());
       return;
     }
 
@@ -793,7 +714,6 @@
       {#if backgroundAvailable}
         <FillSection
           visualization={backgroundVisualization}
-          primitive="text"
           dataFields={dataFields}
           availableModes={FILL_MODES_STANDARD}
           fillMode={fillMode}
@@ -810,16 +730,16 @@
           showMissingDataSection={false}
           sectionTitle={m.background()}
           selectableDataFields={selectableDataFields}
-          getFacetsSelectedFieldIds={getBackgroundFacetsSelectedFieldIds}
-          isFacetsActiveForSlot={isBackgroundFacetsActiveForSlot}
+          getFacetsSelectedFieldIds={backgroundFacetsSelection.getSelectedFieldIds}
+          isFacetsActiveForSlot={backgroundFacetsSelection.isActiveForSlot}
           onFillModeChange={(mode: FillMode) =>
             handleBackgroundFillModeChange(FILL_MODES_STANDARD.indexOf(mode))}
           onFillColorChange={handleBackgroundFillColorChange}
           onFillOpacityChange={handleBackgroundFillOpacityChange}
           onValueFieldSelect={handleBackgroundValueFieldSelect}
           onCategoryFieldSelect={handleBackgroundCategoryFieldSelect}
-          onFacetsVariablesChange={handleBackgroundFacetsVariablesChange}
-          onFacetsToggle={handleBackgroundFacetsToggle}
+          onFacetsVariablesChange={backgroundFacetsSelection.updateVariables}
+          onFacetsToggle={backgroundFacetsSelection.toggle}
           onOpenDiscretization={openBackgroundDiscretization}
           onClassificationChange={onBackgroundClassificationChange ??
             (() => {})}
@@ -859,6 +779,7 @@
       onAddFilter={onAddFilter ?? (() => {})}
       onUpdateFilter={onUpdateFilter}
       onRemoveFilter={onRemoveFilter ?? (() => {})}
+      onClearFilters={onClearFilters}
       onClose={() => {
         filterSectionVisible = false;
       }}

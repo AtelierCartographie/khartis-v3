@@ -42,7 +42,10 @@
 
 <script lang="ts">
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
-  import { globalState } from '$lib/features/commons/store/global.svelte';
+  import {
+    globalActions,
+    globalState
+  } from '$lib/features/commons/store/global.svelte';
   import {
     StylingTools,
     ToolbarStep
@@ -67,6 +70,10 @@
     snapPointWithinBounds
   } from '$lib/features/commons/utils/page-grid.utils';
   import {
+    getElementCenteringDelta,
+    getFocusViewportElement
+  } from '../utils/focus-viewport.utils';
+  import {
     getLegendState,
     legendActions
   } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
@@ -79,7 +86,7 @@
     SymbolMode
   } from '$lib/features/main-toolbar/constants';
   import * as m from '$lib/paraglide/messages';
-  import { untrack } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { SvelteMap } from 'svelte/reactivity';
   import { onDestroy } from 'svelte';
   import { activateStylingToolFromMap } from '../utils/styling-tool-activation.utils';
@@ -630,6 +637,7 @@
   let isDragging = $state(false);
   let dragOffsetX = 0;
   let dragOffsetY = 0;
+  let isLegendCentered = $state(false);
 
   function getPageScale(): number {
     return Math.max(globalState.zoom.pageZoomScale, 0.1);
@@ -776,6 +784,52 @@
     activateStylingToolFromMap(StylingTools.Legend);
   }
 
+  function centerLegendInViewport(target: EventTarget | null): void {
+    const targetElement =
+      target instanceof HTMLElement ? target : legendElement;
+    const delta = getElementCenteringDelta(
+      getFocusViewportElement(overlayElement),
+      targetElement
+    );
+
+    if (!delta) {
+      return;
+    }
+
+    if (Math.abs(delta.x) < 0.5 && Math.abs(delta.y) < 0.5) {
+      return;
+    }
+
+    globalActions.panPageBy(delta.x, delta.y);
+  }
+
+  function resetLegendCentering(): void {
+    if (!isLegendCentered) {
+      return;
+    }
+
+    isLegendCentered = false;
+    globalActions.resetPagePan();
+  }
+
+  function handleLegendFocusClick(event: MouseEvent): void {
+    handleLegendClick(event);
+    isLegendCentered = true;
+
+    const currentTarget = event.currentTarget;
+    if (currentTarget instanceof HTMLElement) {
+      currentTarget.focus({ preventScroll: true });
+    }
+
+    void tick().then(() => {
+      centerLegendInViewport(currentTarget);
+    });
+  }
+
+  function handleLegendBlur(): void {
+    resetLegendCentering();
+  }
+
   function handleLegendKeyDown(event: KeyboardEvent): void {
     if (event.key !== KEY.ENTER && event.key !== KEY.SPACE) {
       return;
@@ -783,9 +837,29 @@
 
     event.preventDefault();
     handleLegendClick(event);
+    isLegendCentered = true;
+    void tick().then(() => {
+      centerLegendInViewport(event.currentTarget);
+    });
   }
 
+  $effect(() => {
+    if (!isLegendCentered) {
+      return;
+    }
+
+    if (hidden || !legendState.visible || visibleItems.length === 0) {
+      resetLegendCentering();
+      return;
+    }
+
+    if (!isLegendActive) {
+      resetLegendCentering();
+    }
+  });
+
   onDestroy(() => {
+    isLegendCentered = false;
     stopDragging();
   });
 </script>
@@ -802,7 +876,8 @@
       role="button"
       tabindex="0"
       aria-label={m.tool_legend()}
-      onclick={handleLegendClick}
+      onclick={handleLegendFocusClick}
+      onblur={handleLegendBlur}
       onkeydown={handleLegendKeyDown}
       onpointerdown={handleLegendPointerDown}
     >

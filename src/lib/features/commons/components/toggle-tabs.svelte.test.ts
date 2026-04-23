@@ -3,35 +3,42 @@ import { describe, expect, it, vi } from 'vitest';
 import ToggleTabs from './toggle-tabs.svelte';
 
 describe('ToggleTabs', () => {
-  it('ignores clicks on the active tab', async () => {
-    const onChange = vi.fn();
-    const { container } = render(ToggleTabs, {
-      props: {
-        items: [{ label: 'A' }, { label: 'B' }],
-        activeIndex: 1,
-        onChange
-      }
+  it('invokes the lowercase onchange prop when a different tab is clicked', async () => {
+    const onchange = vi.fn();
+    const { getByRole } = render(ToggleTabs, {
+      activeIndex: 0,
+      items: [{ label: 'Unique' }, { label: 'Classes' }],
+      onchange
     });
 
-    const buttons = container.querySelectorAll('button');
-    await fireEvent.click(buttons[1]);
+    await fireEvent.click(getByRole('button', { name: 'Classes' }));
 
-    expect(onChange).not.toHaveBeenCalled();
+    expect(onchange).toHaveBeenCalledWith(1);
   });
 
-  it('still emits changes for inactive tabs', async () => {
-    const onChange = vi.fn();
-    const { container } = render(ToggleTabs, {
-      props: {
-        items: [{ label: 'A' }, { label: 'B' }],
-        activeIndex: 0,
-        onChange
-      }
+  it('ignores clicks on the already active tab', async () => {
+    const onchange = vi.fn();
+    const { getByRole } = render(ToggleTabs, {
+      activeIndex: 0,
+      items: [{ label: 'Unique' }, { label: 'Classes' }],
+      onchange
     });
 
-    const buttons = container.querySelectorAll('button');
-    await fireEvent.click(buttons[1]);
+    await fireEvent.click(getByRole('button', { name: 'Unique' }));
 
-    expect(onChange).toHaveBeenCalledWith(1);
+    expect(onchange).not.toHaveBeenCalled();
+  });
+
+  it('invokes the lowercase ondblclick prop on double click', async () => {
+    const ondblclick = vi.fn();
+    const { getByRole } = render(ToggleTabs, {
+      activeIndex: 0,
+      items: [{ label: 'Unique' }, { label: 'Classes' }],
+      ondblclick
+    });
+
+    await fireEvent.dblClick(getByRole('button', { name: 'Classes' }));
+
+    expect(ondblclick).toHaveBeenCalledWith(1);
   });
 });

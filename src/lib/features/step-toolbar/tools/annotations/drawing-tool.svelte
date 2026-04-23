@@ -237,7 +237,7 @@
       <div class="section">
         <Slider
           labelText={m.annotations_smoothness()}
-          value={effectiveStyle.smoothness ?? 50}
+          value={effectiveStyle.smoothness ?? 0}
           min={0}
           max={100}
           step={1}

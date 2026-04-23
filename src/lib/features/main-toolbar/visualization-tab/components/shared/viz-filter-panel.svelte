@@ -31,6 +31,7 @@
       updates: Partial<Omit<VizDataFilter, 'id'>>
     ) => void;
     onRemoveFilter: (filterId: string) => void;
+    onClearFilters?: () => void;
     onClose: () => void;
   }
 
@@ -42,6 +43,7 @@
     onAddFilter,
     onUpdateFilter,
     onRemoveFilter,
+    onClearFilters,
     onClose
   }: Props = $props();
 
@@ -364,6 +366,12 @@
       <Add size={16} />
     </button>
 
+    {#if hasFilters && onClearFilters}
+      <button type="button" class="clear-button" onclick={onClearFilters}>
+        {m.filter_clear_all()}
+      </button>
+    {/if}
+
     <a
       class="learn-more-link"
       href="https://khartis.sciencespo.fr/faq"
@@ -596,6 +604,20 @@
     &:disabled {
       opacity: 0.5;
       cursor: not-allowed;
+    }
+  }
+
+  .clear-button {
+    align-self: flex-start;
+    background: transparent;
+    border: none;
+    color: var(--cds-link-01, #0f62fe);
+    cursor: pointer;
+    font-size: 0.75rem;
+    padding: 0;
+
+    &:hover {
+      text-decoration: underline;
     }
   }
 

@@ -1,6 +1,7 @@
 const LOCALHOST = 'localhost';
 const LOOPBACK = '127.0.0.1';
 const PREPROD_PATH = '/cartographie/khartisnewpprd';
+const PREPROD_URL_MARKER = 'khartisnewpprd';
 
 export enum Environment {
   DEVELOPMENT = 'development',
@@ -9,6 +10,13 @@ export enum Environment {
 }
 
 export const EnvironmentUtils = {
+  hasPreproductionUrlMarker(): boolean {
+    return (
+      typeof window !== 'undefined' &&
+      window.location.href.includes(PREPROD_URL_MARKER)
+    );
+  },
+
   getEnvironment(): Environment {
     if (typeof window === 'undefined') {
       return Environment.DEVELOPMENT;
@@ -20,7 +28,10 @@ export const EnvironmentUtils = {
       return Environment.DEVELOPMENT;
     }
 
-    if (pathname.startsWith(PREPROD_PATH)) {
+    if (
+      pathname.startsWith(PREPROD_PATH) ||
+      EnvironmentUtils.hasPreproductionUrlMarker()
+    ) {
       return Environment.PREPRODUCTION;
     }
 

@@ -3,9 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   notifyChangeMock: vi.fn(),
   visualizations: [] as Array<Record<string, unknown>>,
+  datasets: [] as Array<Record<string, unknown>>,
   createBulkVisualizationsMock: vi.fn(),
   removeBulkVisualizationsMock: vi.fn(),
-  generateFacetVisualizationsMock: vi.fn()
+  setVisualizationOrderMock: vi.fn(),
+  generateFacetVisualizationsMock: vi.fn(),
+  buildFacetVisualizationUpdatesMock: vi.fn()
 }));
 
 vi.mock('$lib/features/project-management/core/persistence-registry', () => ({
@@ -20,7 +23,16 @@ vi.mock('$lib/features/project-management/core/persistence-registry', () => ({
 }));
 
 vi.mock('$lib/features/commons/utils/facet-generator', () => ({
-  generateFacetVisualizations: mocks.generateFacetVisualizationsMock
+  generateFacetVisualizations: mocks.generateFacetVisualizationsMock,
+  buildFacetVisualizationUpdates: mocks.buildFacetVisualizationUpdatesMock
+}));
+
+vi.mock('$lib/features/commons/store/datasets.store.svelte', () => ({
+  datasetsStore: {
+    get datasets() {
+      return mocks.datasets;
+    }
+  }
 }));
 
 const updateVisualizationMock = vi.hoisted(() => vi.fn());
@@ -32,6 +44,7 @@ vi.mock('$lib/features/commons/store/visualization.store.svelte', () => ({
     },
     createBulkVisualizations: mocks.createBulkVisualizationsMock,
     removeBulkVisualizations: mocks.removeBulkVisualizationsMock,
+    setVisualizationOrder: mocks.setVisualizationOrderMock,
     updateVisualization: updateVisualizationMock
   }
 }));
@@ -46,6 +59,20 @@ import {
 describe('facetsStore', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.buildFacetVisualizationUpdatesMock.mockImplementation(
+      ({
+        variable,
+        baseViz
+      }: {
+        variable: string;
+        baseViz: { id: string };
+      }) => ({
+        name: variable,
+        facet: {
+          baseVisualizationId: baseViz.id
+        }
+      })
+    );
 
     mocks.visualizations = [
       {
@@ -53,16 +80,21 @@ describe('facetsStore', () => {
         name: 'Base visualization'
       }
     ];
+    mocks.datasets = [];
 
     facetsStore.restoreFromSerialized(undefined);
   });
 
-  it('reorders variables and regenerates facet visualizations in the new order', async () => {
-    mocks.generateFacetVisualizationsMock.mockResolvedValue([
-      { id: 'facet-b' },
-      { id: 'facet-c' },
-      { id: 'facet-a' }
-    ]);
+  it('reorders variables without regenerating facet visualizations', async () => {
+    mocks.visualizations = [
+      {
+        id: 'base-viz',
+        name: 'Base visualization'
+      },
+      { id: 'facet-a', name: 'a' },
+      { id: 'facet-b', name: 'b' },
+      { id: 'facet-c', name: 'c' }
+    ];
 
     facetsStore.restoreFromSerialized({
       enabled: true,
@@ -78,21 +110,14 @@ describe('facetsStore', () => {
     await facetsStore.reorderVariables(0, 2);
 
     expect(facetsStore.variables).toEqual(['b', 'c', 'a']);
-    expect(mocks.generateFacetVisualizationsMock).toHaveBeenCalledWith(
-      mocks.visualizations[0],
-      ['b', 'c', 'a'],
-      SCALE_MODE.SHARED,
-      FACET_SLOT.POLYGON_VALUE
-    );
-    expect(mocks.removeBulkVisualizationsMock).toHaveBeenCalledWith([
-      'facet-a',
+    expect(mocks.generateFacetVisualizationsMock).not.toHaveBeenCalled();
+    expect(mocks.removeBulkVisualizationsMock).not.toHaveBeenCalled();
+    expect(mocks.createBulkVisualizationsMock).not.toHaveBeenCalled();
+    expect(mocks.setVisualizationOrderMock).toHaveBeenCalledWith([
+      'base-viz',
       'facet-b',
-      'facet-c'
-    ]);
-    expect(mocks.createBulkVisualizationsMock).toHaveBeenCalledWith([
-      { id: 'facet-b' },
-      { id: 'facet-c' },
-      { id: 'facet-a' }
+      'facet-c',
+      'facet-a'
     ]);
     expect(facetsStore.generatedVisualizationIds).toEqual([
       'facet-b',
@@ -151,6 +176,83 @@ describe('facetsStore', () => {
       );
     });
 
+    it('filters incompatible text fields out of numeric facet slots before generation', async () => {
+      mocks.visualizations = [
+        {
+          id: 'base-viz',
+          name: 'Base visualization',
+          datasetId: 'dataset-1'
+        }
+      ];
+      mocks.datasets = [
+        {
+          id: 'dataset-1',
+          columns: [
+            { name: 'label', type: 'text' },
+            { name: 'a', type: 'number' },
+            { name: 'b', type: 'number' }
+          ]
+        }
+      ];
+      mocks.generateFacetVisualizationsMock.mockResolvedValue([
+        { id: 'facet-a' },
+        { id: 'facet-b' }
+      ]);
+
+      await facetsStore.updateVariables(
+        'base-viz',
+        ['label', 'a', 'b'],
+        FACET_SLOT.POLYGON_VALUE
+      );
+
+      expect(facetsStore.variables).toEqual(['a', 'b']);
+      expect(mocks.generateFacetVisualizationsMock).toHaveBeenCalledWith(
+        mocks.visualizations[0],
+        ['a', 'b'],
+        SCALE_MODE.INDEPENDENT,
+        FACET_SLOT.POLYGON_VALUE
+      );
+    });
+
+    it('fills the activation seed with another compatible numeric variable when the initial toggle includes text fields', async () => {
+      mocks.visualizations = [
+        {
+          id: 'base-viz',
+          name: 'Base visualization',
+          datasetId: 'dataset-1'
+        }
+      ];
+      mocks.datasets = [
+        {
+          id: 'dataset-1',
+          columns: [
+            { name: 'label', type: 'text' },
+            { name: 'a', type: 'number' },
+            { name: 'b', type: 'number' }
+          ]
+        }
+      ];
+      mocks.generateFacetVisualizationsMock.mockResolvedValue([
+        { id: 'facet-a' },
+        { id: 'facet-b' }
+      ]);
+
+      await facetsStore.updateVariables(
+        'base-viz',
+        ['label', 'a'],
+        FACET_SLOT.POLYGON_VALUE
+      );
+
+      expect(facetsStore.enabled).toBe(true);
+      expect(facetsStore.variables).toEqual(['a', 'b']);
+      expect(mocks.generateFacetVisualizationsMock).toHaveBeenCalledWith(
+        mocks.visualizations[0],
+        ['a', 'b'],
+        SCALE_MODE.INDEPENDENT,
+        FACET_SLOT.POLYGON_VALUE
+      );
+    });
+
     it('should regenerate facets when the collection is already enabled', async () => {
       mocks.generateFacetVisualizationsMock.mockResolvedValue([
         { id: 'facet-a' },
@@ -191,6 +293,29 @@ describe('facetsStore', () => {
         'facet-d'
       ]);
     });
+
+    it('should skip regeneration when the requested collection already matches the current one', async () => {
+      facetsStore.restoreFromSerialized({
+        enabled: true,
+        baseVisualizationId: 'base-viz',
+        primarySlotPath: FACET_SLOT.POLYGON_VALUE,
+        variables: ['a', 'b'],
+        layout: { columns: 2, gap: 16 },
+        scaleMode: SCALE_MODE.SHARED,
+        syncPanZoom: false,
+        generatedVisualizationIds: ['facet-a', 'facet-b']
+      });
+
+      await facetsStore.updateVariables(
+        'base-viz',
+        ['a', 'b'],
+        FACET_SLOT.POLYGON_VALUE
+      );
+
+      expect(mocks.generateFacetVisualizationsMock).not.toHaveBeenCalled();
+      expect(mocks.removeBulkVisualizationsMock).not.toHaveBeenCalled();
+      expect(mocks.createBulkVisualizationsMock).not.toHaveBeenCalled();
+    });
   });
 
   describe('setVariableForSlot', () => {
@@ -208,7 +333,8 @@ describe('facetsStore', () => {
       mocks.visualizations = [
         {
           id: 'base-viz',
-          name: 'Base'
+          name: 'Base',
+          datasetId: 'dataset-1'
         },
         {
           id: 'facet-a',
@@ -221,6 +347,15 @@ describe('facetsStore', () => {
           name: 'b',
           mapping: { sizeColumn: 'b' },
           symbol: { sizeColumn: 'b' }
+        }
+      ];
+      mocks.datasets = [
+        {
+          id: 'dataset-1',
+          columns: [
+            { name: 'new-var', type: 'number' },
+            { name: 'label', type: 'text' }
+          ]
         }
       ];
       facetsStore.restoreFromSerialized({
@@ -247,6 +382,48 @@ describe('facetsStore', () => {
       });
     });
 
+    it('rejects incompatible text fields for numeric facet slots', () => {
+      mocks.visualizations = [
+        {
+          id: 'base-viz',
+          name: 'Base',
+          datasetId: 'dataset-1'
+        },
+        {
+          id: 'facet-a',
+          name: 'a',
+          mapping: { sizeColumn: 'a' },
+          symbol: { sizeColumn: 'a' }
+        }
+      ];
+      mocks.datasets = [
+        {
+          id: 'dataset-1',
+          columns: [{ name: 'label', type: 'text' }]
+        }
+      ];
+
+      facetsStore.restoreFromSerialized({
+        enabled: true,
+        baseVisualizationId: 'base-viz',
+        primarySlotPath: FACET_SLOT.SYMBOL_SIZE,
+        variables: ['a'],
+        layout: { columns: 1, gap: 16 },
+        scaleMode: SCALE_MODE.INDEPENDENT,
+        syncPanZoom: false,
+        generatedVisualizationIds: ['facet-a']
+      });
+
+      const result = facetsStore.setVariableForSlot(
+        0,
+        FACET_SLOT.SYMBOL_SIZE,
+        'label'
+      );
+
+      expect(result).toBe(false);
+      expect(updateVisualizationMock).not.toHaveBeenCalled();
+    });
+
     it('should return false when the map index points to no facette', () => {
       facetsStore.restoreFromSerialized({
         enabled: true,
@@ -271,12 +448,33 @@ describe('facetsStore', () => {
   });
 
   describe('toggleScaleMode', () => {
-    it('should toggle from independent to shared and regenerate facets', async () => {
-      mocks.generateFacetVisualizationsMock.mockResolvedValue([
-        { id: 'new-a' },
-        { id: 'new-b' }
-      ]);
-
+    it('should toggle from independent to shared without regenerating facets when generated visualizations are present', async () => {
+      mocks.visualizations = [
+        {
+          id: 'base-viz',
+          name: 'Base'
+        },
+        {
+          id: 'facet-a',
+          name: 'a',
+          mapping: { valueColumn: 'a' },
+          polygon: {
+            valueColumn: 'a',
+            classification: { breaks: [0, 5, 10] }
+          },
+          classification: { breaks: [0, 5, 10] }
+        },
+        {
+          id: 'facet-b',
+          name: 'b',
+          mapping: { valueColumn: 'b' },
+          polygon: {
+            valueColumn: 'b',
+            classification: { breaks: [0, 5, 10] }
+          },
+          classification: { breaks: [0, 5, 10] }
+        }
+      ];
       facetsStore.restoreFromSerialized({
         enabled: true,
         baseVisualizationId: 'base-viz',
@@ -291,20 +489,18 @@ describe('facetsStore', () => {
       await facetsStore.toggleScaleMode();
 
       expect(facetsStore.scaleMode).toBe(SCALE_MODE.SHARED);
-      expect(mocks.generateFacetVisualizationsMock).toHaveBeenCalledWith(
-        mocks.visualizations[0],
-        ['a', 'b'],
-        SCALE_MODE.SHARED,
-        FACET_SLOT.POLYGON_VALUE
-      );
-      expect(mocks.removeBulkVisualizationsMock).toHaveBeenCalledWith([
+      expect(mocks.generateFacetVisualizationsMock).not.toHaveBeenCalled();
+      expect(mocks.removeBulkVisualizationsMock).not.toHaveBeenCalled();
+      expect(mocks.createBulkVisualizationsMock).not.toHaveBeenCalled();
+      expect(updateVisualizationMock).toHaveBeenCalledTimes(2);
+      expect(updateVisualizationMock).toHaveBeenNthCalledWith(
+        1,
         'facet-a',
-        'facet-b'
-      ]);
-      expect(mocks.createBulkVisualizationsMock).toHaveBeenCalledWith([
-        { id: 'new-a' },
-        { id: 'new-b' }
-      ]);
+        expect.objectContaining({
+          name: 'a',
+          facet: { baseVisualizationId: 'base-viz' }
+        })
+      );
     });
 
     it('should toggle from shared to independent', async () => {
@@ -331,13 +527,13 @@ describe('facetsStore', () => {
 
   describe('toggleSyncPanZoom', () => {
     it('should toggle syncPanZoom state', () => {
-      expect(facetsStore.syncPanZoom).toBe(false);
-
-      facetsStore.toggleSyncPanZoom();
       expect(facetsStore.syncPanZoom).toBe(true);
 
       facetsStore.toggleSyncPanZoom();
       expect(facetsStore.syncPanZoom).toBe(false);
+
+      facetsStore.toggleSyncPanZoom();
+      expect(facetsStore.syncPanZoom).toBe(true);
     });
 
     it('should notify persistence on toggle', () => {
@@ -378,6 +574,7 @@ describe('facetsStore', () => {
       expect(facetsStore.variables).toEqual([]);
       expect(facetsStore.layout.columns).toBe(3);
       expect(facetsStore.scaleMode).toBe(SCALE_MODE.INDEPENDENT);
+      expect(facetsStore.syncPanZoom).toBe(true);
     });
 
     it('should fall back to defaults when given a non-object', () => {
@@ -385,6 +582,7 @@ describe('facetsStore', () => {
 
       expect(facetsStore.enabled).toBe(false);
       expect(facetsStore.variables).toEqual([]);
+      expect(facetsStore.syncPanZoom).toBe(true);
     });
 
     it('should clamp columns to valid range', () => {

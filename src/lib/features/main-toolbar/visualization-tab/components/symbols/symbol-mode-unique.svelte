@@ -1,14 +1,5 @@
 <script lang="ts">
   import { Dropdown } from 'carbon-components-svelte';
-  import {
-    CircleFilled,
-    Close,
-    CaretUp,
-    SquareFill,
-    StarFilled,
-    DiamondFill,
-    Checkbox
-  } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
   import {
     FillMode,
@@ -16,8 +7,7 @@
     SLIDER_LIMITS,
     SymbolMode,
     VISUALIZATION_DEFAULTS,
-    DEFAULT_COLORS,
-    availableShapesForSymbolMode
+    DEFAULT_COLORS
   } from '../../../constants';
   import { InfoPopover, SliderWithInput, StrokeSection } from '../shared';
   import FillSection from '../shared/fill-section.svelte';
@@ -25,15 +15,17 @@
   import DiscretizationModal from '../discretization-modal.svelte';
   import type { SymbolModeProps } from './types';
   import { resolveDiscretizationLabel } from '../discretization.utils';
-  import {
-    FACET_SLOT,
-    facetsStore,
-    type FacetSlotPath
-  } from '../../facets-adapter.svelte';
+  import { FACET_SLOT } from '../../facets-adapter.svelte';
   import {
     NONE_FIELD_ID,
     useFieldSelection
   } from '../../use-field-selection.svelte';
+  import { useFacetsVariableSelection } from '../../use-facets-variable-selection.svelte';
+  import { resetVisualClassification } from '../shared/classification-reset.utils';
+  import {
+    buildSymbolShapeDropdownItems,
+    getSymbolShapeTypes
+  } from './symbol-shape-options';
 
   let {
     dataFields = [],
@@ -66,6 +58,10 @@
   const selectableDataFields = $derived([noneOption, ...dataFields]);
   const classFieldSelection = useFieldSelection(() => dataFields);
   const categoryFieldSelection = useFieldSelection(() => dataFields);
+  const facetsSelection = useFacetsVariableSelection({
+    getVisualizationId: () => visualization?.id,
+    getDataFields: () => dataFields
+  });
 
   $effect(() => {
     classFieldSelection.sync(fillVisualization?.mapping.valueColumn);
@@ -125,71 +121,13 @@
     )
   );
 
-  const selectedVizId = $derived(visualization?.id);
-
-  const activeFacetsSlotPath = $derived.by(() => {
-    if (
-      !facetsStore.enabled ||
-      !selectedVizId ||
-      facetsStore.baseVisualizationId !== selectedVizId
-    ) {
-      return null;
-    }
-    return facetsStore.primarySlotPath;
-  });
-
-  function isFacetsActiveForSlot(slotPath: FacetSlotPath): boolean {
-    return activeFacetsSlotPath === slotPath;
-  }
-
-  function getFacetsSelectedFieldIds(slotPath: FacetSlotPath): number[] {
-    if (!isFacetsActiveForSlot(slotPath)) {
-      return [];
-    }
-    return facetsStore.variables
-      .map((name) => dataFields.find((field) => field.text === name)?.id)
-      .filter((id): id is number => typeof id === 'number');
-  }
-
-  async function handleFacetsVariablesChange(
-    baseVariableName: string,
-    slotPath: FacetSlotPath,
-    fieldIds: number[]
-  ) {
-    if (!selectedVizId) return;
-    const variableNames = fieldIds
-      .map((id) => dataFields.find((field) => field.id === id)?.text)
-      .filter((name): name is string => Boolean(name));
-    const merged =
-      baseVariableName && !variableNames.includes(baseVariableName)
-        ? [baseVariableName, ...variableNames]
-        : variableNames;
-    await facetsStore.updateVariables(selectedVizId, merged, slotPath);
-  }
-
-  async function handleFacetsToggle(
-    baseVariableName: string,
-    slotPath: FacetSlotPath,
-    enabled: boolean
-  ) {
-    if (!selectedVizId) return;
-    if (!enabled) {
-      facetsStore.disable();
-      return;
-    }
-
-    const available = dataFields
-      .map((field) => field.text)
-      .filter((name): name is string => Boolean(name));
-    const seed = baseVariableName ? [baseVariableName] : [];
-    const candidates = seed.slice();
-    for (const name of available) {
-      if (candidates.length >= 2) break;
-      if (!candidates.includes(name)) candidates.push(name);
-    }
-    if (candidates.length < 2) return;
-    await facetsStore.updateVariables(selectedVizId, candidates, slotPath);
-  }
+  const strokeDiscretizationLabel = $derived.by(() =>
+    resolveDiscretizationLabel(
+      visualization?.symbol?.strokeClassification
+        ? { ...visualization.symbol.strokeClassification }
+        : undefined
+    )
+  );
 
   function handleFillModeChange(index: number) {
     const modes = [
@@ -203,14 +141,7 @@
     if (fillMode === FillMode.NONE) {
       fillColor = DEFAULT_COLORS.fill;
       onStyleChange?.({ symbolFillColor: DEFAULT_COLORS.fill });
-      onFillClassificationChange?.({
-        colors: undefined,
-        paletteId: undefined,
-        inverted: false,
-        patternId: undefined,
-        patternParams: undefined,
-        labels: undefined
-      });
+      onFillClassificationChange?.(resetVisualClassification());
     }
   }
 
@@ -270,28 +201,9 @@
     }
   }
 
-  const shapeDescriptors: Record<
-    ShapeType,
-    { icon: typeof CircleFilled; label: () => string }
-  > = {
-    [ShapeType.CIRCLE]: { icon: CircleFilled, label: m.shape_circle },
-    [ShapeType.SQUARE]: { icon: SquareFill, label: m.shape_square },
-    [ShapeType.BAR]: { icon: SquareFill, label: m.shape_bar },
-    [ShapeType.SPIKE]: { icon: CaretUp, label: m.shape_spike },
-    [ShapeType.CROSS]: { icon: Close, label: m.shape_cross },
-    [ShapeType.DIAMOND]: { icon: DiamondFill, label: m.shape_diamond },
-    [ShapeType.TRIANGLE]: { icon: CaretUp, label: m.shape_triangle },
-    [ShapeType.STAR]: { icon: StarFilled, label: m.shape_star },
-    [ShapeType.RECTANGLE]: { icon: Checkbox, label: m.shape_rectangle }
-  };
-
-  const shapeTypes = availableShapesForSymbolMode(SymbolMode.UNIQUE);
-
+  const shapeTypes = getSymbolShapeTypes(SymbolMode.UNIQUE);
   const shapeDropdownItems = $derived(
-    shapeTypes.map((type) => ({
-      id: type,
-      text: shapeDescriptors[type].label()
-    }))
+    buildSymbolShapeDropdownItems(SymbolMode.UNIQUE)
   );
 
   function handleShapeDropdownSelect(value: string | number) {
@@ -324,7 +236,6 @@
 
 <FillSection
   visualization={fillVisualization}
-  primitive="symbol"
   dataFields={dataFields}
   availableModes={FILL_MODES_STANDARD}
   fillMode={fillMode}
@@ -341,16 +252,16 @@
   missingDataColor={missingDataColor}
   sectionTitle={m.background()}
   selectableDataFields={selectableDataFields}
-  getFacetsSelectedFieldIds={getFacetsSelectedFieldIds}
-  isFacetsActiveForSlot={isFacetsActiveForSlot}
+  getFacetsSelectedFieldIds={facetsSelection.getSelectedFieldIds}
+  isFacetsActiveForSlot={facetsSelection.isActiveForSlot}
   onFillModeChange={(mode) =>
     handleFillModeChange(FILL_MODES_STANDARD.indexOf(mode))}
   onFillColorChange={handleFillColorChange}
   onFillOpacityChange={handleFillOpacityChange}
   onValueFieldSelect={handleClassFieldSelect}
   onCategoryFieldSelect={handleCategoryFieldSelect}
-  onFacetsVariablesChange={handleFacetsVariablesChange}
-  onFacetsToggle={handleFacetsToggle}
+  onFacetsVariablesChange={facetsSelection.updateVariables}
+  onFacetsToggle={facetsSelection.toggle}
   onOpenDiscretization={onOpenFillDiscretization ?? (() => {})}
   onClassificationChange={onFillClassificationChange ?? (() => {})}
   onMissingDataShowChange={handleMissingDataShowChange}
@@ -363,7 +274,7 @@
   dataFields={dataFields}
   infoText={m.stroke_section_info()}
   showDashed={true}
-  discretizationLabel={discretizationLabel}
+  discretizationLabel={strokeDiscretizationLabel}
   onStyleChange={onStyleChange}
   onModesChange={onModesChange}
   onMappingChange={onMappingChange}

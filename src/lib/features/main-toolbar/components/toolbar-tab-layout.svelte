@@ -28,13 +28,19 @@
     flex-direction: column;
     gap: 32px;
     padding: 16px;
-    background-color: var(--cds-ui-01, #f4f4f4);
+    background-color: var(
+      --khartis-main-toolbar-background,
+      var(--cds-ui-01, #f4f4f4)
+    );
     min-height: 100%;
   }
 
   .toolbar-tab > :global(section),
   .toolbar-tab > :global(div) > :global(section) {
-    background-color: var(--cds-ui-02, #ffffff);
+    background-color: var(
+      --khartis-main-toolbar-surface-background,
+      var(--cds-ui-02, #ffffff)
+    );
     padding: 16px;
   }
 

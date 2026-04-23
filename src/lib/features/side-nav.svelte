@@ -655,6 +655,10 @@
 </div>
 
 <style>
+  #khartis-side-nav {
+    --khartis-side-nav-top: var(--cds-spacing-09, 3rem);
+  }
+
   #khartis-side-nav :global(.sidenav-bottom-padding) {
     padding-bottom: var(--cds-spacing-04);
   }
@@ -663,8 +667,22 @@
     width: 100%;
   }
 
+  #khartis-side-nav :global(.bx--side-nav) {
+    top: var(--khartis-side-nav-top);
+    height: calc(100dvh - var(--khartis-side-nav-top)) !important;
+  }
+
+  #khartis-side-nav :global(.bx--side-nav__overlay) {
+    top: var(--khartis-side-nav-top);
+  }
+
+  #khartis-side-nav :global(.bx--side-nav__overlay-active) {
+    height: calc(100dvh - var(--khartis-side-nav-top));
+    block-size: calc(100dvh - var(--khartis-side-nav-top));
+  }
+
   #khartis-side-nav :global(.bx--side-nav__navigation) {
-    height: auto !important;
+    height: calc(100dvh - var(--khartis-side-nav-top)) !important;
   }
 
   h6 {

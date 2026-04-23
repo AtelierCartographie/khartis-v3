@@ -212,4 +212,18 @@ describe('annotations store', () => {
       )
     ).toHaveLength(0);
   });
+
+  it('stores the default smoothing value on finished freehand drawings', () => {
+    annotationsActions.beginDrawing(DrawingType.LINE);
+    annotationsActions.updateDrawing([
+      { x: 0, y: 0 },
+      { x: 32, y: 4 },
+      { x: 36, y: 72 },
+      { x: 88, y: 76 }
+    ]);
+
+    const drawing = annotationsActions.finishDrawing();
+
+    expect(drawing?.style?.smoothness).toBe(0);
+  });
 });

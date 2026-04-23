@@ -13,6 +13,7 @@
   } from './step-toolbar.constants';
   import { getAnnotationsState } from './tools/annotations/annotations.store.svelte';
   import { shouldBlockToolClose } from './tools/tool-close-guard';
+  import { closeSelectedToolPanel } from './tools-list/tool-list.utils.svelte';
 
   const {
     open = false,
@@ -103,7 +104,7 @@
     }
 
     if (!toolbar || !toolbar.contains(target)) {
-      globalState.selectedTool = undefined;
+      closeSelectedToolPanel();
     }
   }
 
@@ -120,7 +121,7 @@
         ) {
           return;
         }
-        globalState.selectedTool = undefined;
+        closeSelectedToolPanel();
       }
     };
 

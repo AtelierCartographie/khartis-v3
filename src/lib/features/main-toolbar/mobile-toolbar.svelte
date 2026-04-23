@@ -35,7 +35,10 @@
     getLegendState,
     legendActions
   } from '../step-toolbar/tools/legend/legend.store.svelte';
-  import { selectTool } from '../step-toolbar/tools-list/tool-list.utils.svelte';
+  import {
+    closeSelectedToolPanel,
+    selectTool
+  } from '../step-toolbar/tools-list/tool-list.utils.svelte';
   import ToolContainer from '../step-toolbar/tools/tool-container.svelte';
   import { VizSubTab } from './constants';
   import DataTab from './data-tab/data-tab.svelte';
@@ -64,7 +67,7 @@
       globalActions.setNavigationState(step);
       globalActions.openMobileToolbar();
     }
-    globalState.selectedTool = undefined;
+    closeSelectedToolPanel();
   };
 
   const isStepSelected = (step: ToolbarStep): boolean => {
@@ -86,7 +89,7 @@
 
     if (tool === StylingTools.Annotations) {
       if (globalState.selectedTool === StylingTools.Annotations) {
-        globalState.selectedTool = undefined;
+        closeSelectedToolPanel();
         return;
       }
 
@@ -96,7 +99,7 @@
       });
     }
 
-    globalState.selectedTool = tool;
+    selectTool(tool);
   };
 
   const showToolsBar = $derived(

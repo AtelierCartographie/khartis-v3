@@ -14,6 +14,7 @@ import {
   resolveLayoutSizingTokens
 } from '$lib/features/commons/utils/layout-sizing.utils';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
+import { globalActions } from '$lib/features/commons/store/global.svelte';
 import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
 import {
   getFormatLayoutSizingContext,
@@ -269,6 +270,21 @@ function getCurrentScaleDistanceContext() {
   };
 }
 
+function hasActiveGeoIndication(state: GeoIndicationsState): boolean {
+  return (
+    state.scale.enabled || state.orientation.enabled || state.insetMap.enabled
+  );
+}
+
+function resetPagePanWhenLastIndicationIsDisabled(
+  hadActiveIndication: boolean,
+  state: GeoIndicationsState
+): void {
+  if (hadActiveIndication && !hasActiveGeoIndication(state)) {
+    globalActions.resetPagePan();
+  }
+}
+
 type GeoIndicationsActions = {
   setState: (newState: Partial<GeoIndicationsState>) => void;
   setVisibility: (visible: boolean) => void;
@@ -311,12 +327,15 @@ const { state, actions } = createToolStore<
   DEFAULT_STATE,
   (s) => ({
     setState: (newState: Partial<GeoIndicationsState>) => {
+      const hadActiveIndication = hasActiveGeoIndication(s);
       Object.assign(s, normalizeState(newState, s));
+      resetPagePanWhenLastIndicationIsDisabled(hadActiveIndication, s);
     },
     setVisibility: (visible: boolean) => {
       s.visible = visible;
     },
     toggleScale: () => {
+      const hadActiveIndication = hasActiveGeoIndication(s);
       const wasEnabled = s.scale.enabled;
       s.scale.enabled = !wasEnabled;
 
@@ -327,6 +346,8 @@ const { state, actions } = createToolStore<
         );
         s.scale.fontSize = tokens.geoIndications.scaleFontSize;
       }
+
+      resetPagePanWhenLastIndicationIsDisabled(hadActiveIndication, s);
     },
     setScaleDistance: (distance: number) => {
       s.scale.distance = clampScaleDistance(
@@ -337,6 +358,7 @@ const { state, actions } = createToolStore<
       );
     },
     toggleOrientation: () => {
+      const hadActiveIndication = hasActiveGeoIndication(s);
       const wasEnabled = s.orientation.enabled;
       s.orientation.enabled = !wasEnabled;
 
@@ -350,8 +372,11 @@ const { state, actions } = createToolStore<
         );
         s.orientation.size = tokens.geoIndications.orientationSizeMm;
       }
+
+      resetPagePanWhenLastIndicationIsDisabled(hadActiveIndication, s);
     },
     toggleInsetMap: () => {
+      const hadActiveIndication = hasActiveGeoIndication(s);
       const wasEnabled = s.insetMap.enabled;
       s.insetMap.enabled = !wasEnabled;
 
@@ -362,6 +387,8 @@ const { state, actions } = createToolStore<
         );
         s.insetMap.size = tokens.geoIndications.insetSize;
       }
+
+      resetPagePanWhenLastIndicationIsDisabled(hadActiveIndication, s);
     },
     toggleScaleExpanded: () => {
       s.scale.expanded = !s.scale.expanded;

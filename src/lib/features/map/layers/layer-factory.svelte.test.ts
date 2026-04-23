@@ -35,6 +35,7 @@ const {
   parsePointDataWithProjectionMock,
   parseSolidPolygonsMock,
   pathColorAttrMock,
+  pathWidthAttrMock,
   projectGeoJSONMock
 } = vi.hoisted(() => {
   class WorkerStub {
@@ -62,6 +63,7 @@ const {
     parsePointDataWithProjectionMock: vi.fn(),
     parseSolidPolygonsMock: vi.fn(),
     pathColorAttrMock: vi.fn(),
+    pathWidthAttrMock: vi.fn(),
     projectGeoJSONMock: vi.fn()
   };
 });
@@ -100,6 +102,7 @@ vi.mock('../utils/geoarrow-stream-bridge', async () => {
     parsePointDataWithProjection: parsePointDataWithProjectionMock,
     parseSolidPolygons: parseSolidPolygonsMock,
     pathColorAttr: pathColorAttrMock,
+    pathWidthAttr: pathWidthAttrMock,
     projectGeoJSON: projectGeoJSONMock,
     rowAccessor: vi.fn(
       (
@@ -428,6 +431,10 @@ beforeEach(() => {
   pathColorAttrMock.mockReturnValue({
     value: new Uint8ClampedArray([0, 0, 0, 255]),
     size: 4
+  });
+  pathWidthAttrMock.mockReturnValue({
+    value: new Float32Array([3]),
+    size: 1
   });
   parsePointDataMock.mockReturnValue({});
   parsePointDataWithProjectionMock.mockReturnValue({});
@@ -831,5 +838,79 @@ describe('createLineLayers', () => {
 
     expect(pathColorAttrMock).toHaveBeenCalled();
     expect(layers.some((layer) => layer instanceof PathLayer)).toBe(true);
+  });
+
+  it('uses a dedicated thickness classification for classed line widths', () => {
+    const visualization: VisualizationConfig = {
+      id: 'viz-line-2',
+      name: 'Line split classification test',
+      type: VisualizationType.CATEGORICAL,
+      datasetId: 'dataset-1',
+      enabled: true,
+      primitiveFilters: [PrimitiveFilterType.LINE],
+      lineClassification: {
+        method: ClassificationMethod.MANUAL,
+        classes: 2,
+        colors: ['#ff0000', '#00ff00'],
+        labels: ['A', 'B']
+      },
+      lineThicknessClassification: {
+        method: ClassificationMethod.JENKS,
+        classes: 4,
+        numClasses: 4,
+        breaks: [10, 20, 30]
+      },
+      line: {
+        enabled: true,
+        colorMode: ColorMode.CATEGORIES,
+        thicknessMode: ThicknessMode.CLASSES,
+        color: '#3366cc',
+        width: 3,
+        maxWidth: 9,
+        opacity: 1,
+        dashed: false,
+        valueColumn: 'flow',
+        categoryColumn: 'route_name',
+        classification: {
+          method: ClassificationMethod.MANUAL,
+          classes: 2,
+          colors: ['#ff0000', '#00ff00'],
+          labels: ['A', 'B']
+        },
+        thicknessClassification: {
+          method: ClassificationMethod.JENKS,
+          classes: 4,
+          numClasses: 4,
+          breaks: [10, 20, 30]
+        }
+      },
+      style: {
+        fillOpacity: 1,
+        strokeOpacity: 1,
+        strokeWidth: 1
+      },
+      mapping: {}
+    };
+
+    const layers = createLineLayers(
+      createTableWithRows(
+        [{ route_name: 'A', flow: 18 }],
+        ['route_name', 'flow']
+      ),
+      createLineGeometryInfo(),
+      {
+        ...createContext(visualization),
+        statistics: { min: 0, max: 40 },
+        customProjection: undefined
+      }
+    );
+
+    const lineLayer = layers[0] as PathLayer;
+    const layerData = lineLayer.props.data as {
+      attributes?: Record<string, unknown>;
+    };
+
+    expect(layerData.attributes?.getWidth).toBeDefined();
+    expect(pathColorAttrMock).toHaveBeenCalled();
   });
 });

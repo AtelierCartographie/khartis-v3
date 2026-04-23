@@ -28,11 +28,8 @@
   import type { CategoriesAspectVariant } from '$lib/features/commons/components/palette-popover/categories-aspect-popover.types';
   import { useCategoryLabels } from '../../use-category-labels.svelte';
 
-  export type FillPrimitiveKind = 'polygon' | 'symbol' | 'text';
-
   interface Props {
     visualization?: VisualizationConfig;
-    primitive: FillPrimitiveKind;
     dataFields: Array<{ id: number; text: string; type?: string }>;
     availableModes: readonly FillMode[];
     fillMode: FillMode;
@@ -80,7 +77,6 @@
 
   let {
     visualization,
-    primitive: _primitive,
     dataFields,
     availableModes,
     fillMode,

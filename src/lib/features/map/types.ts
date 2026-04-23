@@ -78,6 +78,9 @@ export interface DeckMapProps {
   dataVersion?: number;
   width: number;
   height: number;
+  logicalWidth?: number;
+  logicalHeight?: number;
+  displayScale?: number;
   onReady?: () => void;
   forcedVisualizationIds?: string[];
   onMoveSync?: (state: FacetSyncViewState) => void;

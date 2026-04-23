@@ -32,4 +32,14 @@ describe('MainMap density mode loading', () => {
     expect(source).not.toContain('applyColorBlindnessFilter');
     expect(source).not.toContain('color-blindness-filters');
   });
+
+  it('passes real responsive page dimensions to the map instead of scaling it with CSS', () => {
+    expect(source).toContain('renderedPageWidth');
+    expect(source).toContain('renderedPageHeight');
+    expect(source).toContain('width={renderedPageWidth}');
+    expect(source).toContain('height={renderedPageHeight}');
+    expect(source).toContain('logicalWidth={formatState.width}');
+    expect(source).toContain('logicalHeight={formatState.height}');
+    expect(source).toContain('displayScale={renderedPageScale}');
+  });
 });

@@ -92,6 +92,60 @@ function bindElementBox(
   });
 }
 
+function setupGeoViewport(): {
+  scale: HTMLDivElement;
+  viewport: HTMLDivElement;
+} {
+  const viewport = document.createElement('div');
+  viewport.className = 'workspace-viewport';
+  document.body.appendChild(viewport);
+
+  const { container } = render(GeoIndicationsOverlay, {
+    target: viewport
+  });
+  const scale = container.querySelector('.scale-bar');
+
+  if (!(scale instanceof HTMLDivElement)) {
+    throw new Error('Scale bar was not rendered');
+  }
+
+  bindElementBox(viewport, {
+    left: 0,
+    top: 0,
+    width: 400,
+    height: 300
+  });
+  bindElementBox(scale, {
+    left: 70,
+    top: 105,
+    width: 80,
+    height: 30
+  });
+
+  return { scale, viewport };
+}
+
+function setupEmptyGeoViewport(): {
+  viewport: HTMLDivElement;
+} {
+  const viewport = document.createElement('div');
+  viewport.className = 'workspace-viewport';
+  document.body.appendChild(viewport);
+
+  bindElementBox(viewport, {
+    left: 0,
+    top: 0,
+    width: 300,
+    height: 200
+  });
+
+  render(GeoIndicationsOverlay, {
+    target: viewport
+  });
+
+  return { viewport };
+}
+
 describe('geo indications overlay dragging', () => {
   beforeEach(() => {
     cleanup();
@@ -232,5 +286,97 @@ describe('geo indications overlay dragging', () => {
         y: 36
       });
     });
+  });
+
+  it('recenters the page when a centered geo indication loses focus', async () => {
+    geoIndicationsActions.toggleScale();
+
+    const { scale } = setupGeoViewport();
+
+    await fireEvent.click(scale);
+
+    await waitFor(() => {
+      expect(globalState.zoom.pagePanOffset).toEqual({ x: 90, y: 30 });
+    });
+
+    await fireEvent.blur(scale);
+
+    await waitFor(() => {
+      expect(globalState.zoom.pagePanOffset).toEqual({ x: 0, y: 0 });
+    });
+  });
+
+  it('centers a newly added scale indication in the viewport', async () => {
+    const { viewport } = setupEmptyGeoViewport();
+    const originalGetBoundingClientRect =
+      HTMLElement.prototype.getBoundingClientRect;
+
+    Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
+      configurable: true,
+      value: function mockGetBoundingClientRect() {
+        if (this === viewport) {
+          return createDomRect(0, 0, 300, 200);
+        }
+
+        if (
+          this instanceof HTMLElement &&
+          this.classList.contains('scale-bar')
+        ) {
+          return createDomRect(24, 130, 60, 26);
+        }
+
+        return createDomRect(0, 0, 0, 0);
+      }
+    });
+
+    try {
+      geoIndicationsActions.toggleScale();
+
+      await waitFor(() => {
+        expect(globalState.zoom.pagePanOffset).toEqual({ x: 96, y: -43 });
+      });
+    } finally {
+      Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
+        configurable: true,
+        value: originalGetBoundingClientRect
+      });
+    }
+  });
+
+  it('centers a newly added orientation indication in the viewport', async () => {
+    const { viewport } = setupEmptyGeoViewport();
+    const originalGetBoundingClientRect =
+      HTMLElement.prototype.getBoundingClientRect;
+
+    Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
+      configurable: true,
+      value: function mockGetBoundingClientRect() {
+        if (this === viewport) {
+          return createDomRect(0, 0, 300, 200);
+        }
+
+        if (
+          this instanceof HTMLElement &&
+          this.classList.contains('north-arrow')
+        ) {
+          return createDomRect(220, 18, 30, 40);
+        }
+
+        return createDomRect(0, 0, 0, 0);
+      }
+    });
+
+    try {
+      geoIndicationsActions.toggleOrientation();
+
+      await waitFor(() => {
+        expect(globalState.zoom.pagePanOffset).toEqual({ x: -85, y: 62 });
+      });
+    } finally {
+      Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', {
+        configurable: true,
+        value: originalGetBoundingClientRect
+      });
+    }
   });
 });

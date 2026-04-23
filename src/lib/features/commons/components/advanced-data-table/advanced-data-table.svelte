@@ -990,7 +990,7 @@
     position: sticky;
     top: 0;
     z-index: var(--z-content);
-    background-color: var(--cds-ui-03, #e0e0e0);
+    background-color: var(--khartis-data-table-header-background);
   }
 
   thead .row-index-header {
@@ -999,7 +999,7 @@
     max-width: 52px;
     padding: 0;
     border-bottom: 1px solid var(--cds-border-subtle-01, #c6c6c6);
-    background-color: var(--cds-ui-03, #e0e0e0);
+    background-color: var(--khartis-data-table-header-background);
     vertical-align: top;
     overflow: visible;
     position: relative;
@@ -1041,7 +1041,7 @@
     justify-content: center;
     height: 63px;
     flex-shrink: 0;
-    background-color: var(--cds-ui-01, #f4f4f4);
+    background-color: var(--khartis-data-table-header-background);
     line-height: 1.2;
   }
 

@@ -1,11 +1,18 @@
 <script lang="ts">
   import { PAGE_GRID_SIZE_PX } from '$lib/features/commons/utils/page-grid.utils';
+
+  let { displayScale = 1 }: { displayScale?: number } = $props();
+
+  const pageDisplayScale = $derived(
+    Number.isFinite(displayScale) && displayScale > 0 ? displayScale : 1
+  );
+  const gridSize = $derived(PAGE_GRID_SIZE_PX * pageDisplayScale);
 </script>
 
 <div
   aria-hidden="true"
   class="page-grid"
-  style={`--page-grid-size:${PAGE_GRID_SIZE_PX}px;`}
+  style={`--page-grid-size:${gridSize}px;`}
 ></div>
 
 <style>

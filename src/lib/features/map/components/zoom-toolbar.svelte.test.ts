@@ -8,9 +8,12 @@ const source = readFileSync(
 );
 
 describe('ZoomToolbar debug panel', () => {
-  it('renders a compact dev-only deck panel with a stacked mode header and a mobile top bar layout', () => {
+  it('renders a compact deck panel for dev or preproduction URLs with a stacked mode header and a mobile top bar layout', () => {
     expect(source).toContain('showDeckDebugPanel && deckDebugViewMode');
-    expect(source).toContain('const showDeckDebugPanel = import.meta.env.DEV;');
+    expect(source).toContain(
+      'const showDeckDebugPanel = $derived(isDeckDebugEnabled());'
+    );
+    expect(source).toContain('EnvironmentUtils.hasPreproductionUrlMarker()');
     expect(source).toContain('class="zoom-toolbar-shell"');
     expect(source).toContain('class="zoom-debug-panel"');
     expect(source).toContain('class="zoom-debug-content"');
@@ -21,7 +24,7 @@ describe('ZoomToolbar debug panel', () => {
     expect(source).toContain('gap: 8px;');
     expect(source).toContain('height: 84px;');
     expect(source).toContain('flex-direction: column;');
-    expect(source).toContain('border-radius: 999px;');
+    expect(source).toContain('border-radius: 0;');
     expect(source).toContain('background: color-mix(');
     expect(source).toContain('.zoom-debug-panel::before');
     expect(source).not.toContain('border: 1px solid');
@@ -48,6 +51,9 @@ describe('ZoomToolbar debug panel', () => {
     expect(source).toContain('getFpsInsight(');
     expect(source).toContain('getCpuInsight(');
     expect(source).toContain('getGpuInsight(');
+    expect(source).toContain('getFpsTone(');
+    expect(source).toContain('getCpuTone(');
+    expect(source).toContain('getGpuTone(');
     expect(source).not.toContain('getLayersInsight()');
     expect(source).not.toContain('m.deck_debug_metric_layers()');
     expect(source).not.toContain('VRAM');
@@ -57,8 +63,28 @@ describe('ZoomToolbar debug panel', () => {
   });
 
   it('opens tooltips from the whole badge instead of only the text label', () => {
+    expect(source).toContain("import clsx from 'clsx';");
+    expect(source).toContain(
+      "class={clsx(\n                'zoom-debug-metric',"
+    );
+    expect(source).toContain('`zoom-debug-metric--${metric.tone}`');
     expect(source).toContain('justify-content: center;');
     expect(source).toContain('font-variant-numeric: tabular-nums;');
     expect(source).toContain('triggerText={`${metric.label} ${metric.value}`}');
+  });
+
+  it('maps debug badge states to green, yellow, and red backgrounds', () => {
+    expect(source).toContain('.zoom-debug-metric--good');
+    expect(source).toContain(
+      '--zoom-debug-metric-background: var(--cds-support-success, #24a148);'
+    );
+    expect(source).toContain('.zoom-debug-metric--warn');
+    expect(source).toContain(
+      '--zoom-debug-metric-background: var(--cds-support-warning, #f1c21b);'
+    );
+    expect(source).toContain('.zoom-debug-metric--bad');
+    expect(source).toContain(
+      '--zoom-debug-metric-background: var(--cds-support-error, #da1e28);'
+    );
   });
 });

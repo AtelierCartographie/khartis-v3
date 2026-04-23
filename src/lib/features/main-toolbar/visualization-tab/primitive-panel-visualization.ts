@@ -162,6 +162,8 @@ export function buildLinePanelVisualization(
       sizeColumn: line.sizeColumn
     },
     classification: line.classification,
+    lineClassification: line.classification,
+    lineThicknessClassification: line.thicknessClassification,
     missingData: line.missingData
   };
 }
