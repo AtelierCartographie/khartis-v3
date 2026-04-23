@@ -85,7 +85,6 @@ describe('StepToolbar', () => {
     expect(toolPopoverSource).toContain('opacity: 0.28;');
     expect(toolPopoverSource).toContain('pointer-events: none;');
   });
-
   it('does not push shorter right-top popovers downward', () => {
     expect(toolPopoverSource).toContain('computedTopOffset = Math.min(');
     expect(toolPopoverSource).toContain(
