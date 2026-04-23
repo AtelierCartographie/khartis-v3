@@ -614,7 +614,6 @@
       resetCenteredAnnotationPan();
     }, FOCUS_RESET_DEBOUNCE_MS);
   }
-
   function handleAnnotationBlur(_event: FocusEvent, itemId: string): void {
     if (centeredAnnotationId !== itemId) {
       return;
