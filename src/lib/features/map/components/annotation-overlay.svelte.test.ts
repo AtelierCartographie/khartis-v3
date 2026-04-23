@@ -430,7 +430,6 @@ describe('annotation overlay drawing interactions', () => {
     expect(style).toContain(`top: ${12 * 1.2}px`);
     expect(style).toContain('transform: scale(1.2)');
   });
-
   it('recenters the page when a centered annotation loses focus', async () => {
     annotationsActions.addAnnotation(AnnotationKind.TEXT, 'Focus item');
 
@@ -451,7 +450,6 @@ describe('annotation overlay drawing interactions', () => {
     expect(globalState.zoom.pagePanOffset).toEqual({ x: 100, y: 70 });
 
     await vi.advanceTimersByTimeAsync(1);
-
     await waitFor(() => {
       expect(globalState.zoom.pagePanOffset).toEqual({ x: 0, y: 0 });
     });
@@ -581,7 +579,6 @@ describe('annotation overlay drawing interactions', () => {
       document.body.classList.contains(DRAGGING_STYLING_TARGET_BODY_CLASS)
     ).toBe(false);
   });
-
   it('deletes a focused annotation with Delete', async () => {
     annotationsActions.addAnnotation(AnnotationKind.TEXT, 'Delete me');
 
