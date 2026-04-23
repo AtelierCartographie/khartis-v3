@@ -15,13 +15,17 @@
     DrawingType
   } from '$lib/features/commons/constants/ui.constants';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
-  import { onDestroy } from 'svelte';
+  import { onDestroy, tick } from 'svelte';
   import {
     annotationsActions,
     getAnnotationsState
   } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
   import { getFormatState } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
   import { activateStylingToolFromMap } from '../utils/styling-tool-activation.utils';
+  import {
+    getElementCenteringDelta,
+    getFocusViewportElement
+  } from '../utils/focus-viewport.utils';
   import {
     computeDrawingBounds,
     smoothDrawingPath
@@ -82,6 +86,7 @@
   } | null>(null);
   let drawingPointerId = $state<number | null>(null);
   let drawingCloseToStart = $state(false);
+  let centeredAnnotationId = $state<string | null>(null);
 
   const annotationsState = $derived(getAnnotationsState());
   const formatState = $derived(getFormatState());
@@ -416,43 +421,77 @@
       annotationsActions.setPageElementsVisibility(true);
     }
 
+    centeredAnnotationId = itemId;
+
+    const currentTarget = event.currentTarget;
+    if (currentTarget instanceof HTMLElement) {
+      currentTarget.focus({ preventScroll: true });
+    }
+
+    void tick().then(() => {
+      centerAnnotationInViewport(currentTarget);
+    });
     annotationsActions.selectAnnotation(itemId);
   }
 
-  function handleAnnotationDblClick(event: MouseEvent, itemId: string): void {
-    event.stopPropagation();
-    activateStylingToolFromMap(StylingTools.Annotations);
-    annotationsActions.setPageElementsVisibility(true);
-    annotationsActions.selectAnnotation(itemId);
-
-    centerPageOnClick(event);
-  }
-
-  function centerPageOnClick(event: MouseEvent): void {
-    const viewportElement =
-      overlayElement?.closest('.workspace-viewport') ??
-      overlayElement?.closest('.main-content');
-    if (!viewportElement) return;
-
-    const rect = viewportElement.getBoundingClientRect();
-    const contentCenterX = rect.left + rect.width / 2;
-    const contentCenterY = rect.top + rect.height / 2;
-
-    globalActions.panPageBy(
-      contentCenterX - event.clientX,
-      contentCenterY - event.clientY
+  function centerAnnotationInViewport(target: EventTarget | null): void {
+    const targetElement = target instanceof HTMLElement ? target : null;
+    const delta = getElementCenteringDelta(
+      getFocusViewportElement(overlayElement),
+      targetElement
     );
+
+    if (!delta) return;
+
+    if (Math.abs(delta.x) < 0.5 && Math.abs(delta.y) < 0.5) {
+      return;
+    }
+
+    globalActions.panPageBy(delta.x, delta.y);
   }
 
   function handleAnnotationKeyDown(event: KeyboardEvent, itemId: string): void {
+    if (event.key === KEY.DELETE || event.key === KEY.BACKSPACE) {
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (centeredAnnotationId === itemId) {
+        resetCenteredAnnotationPan();
+      }
+
+      annotationsActions.removeAnnotation(itemId);
+      return;
+    }
+
     if (event.key === KEY.ENTER || event.key === KEY.SPACE) {
       event.preventDefault();
       if (!isAnnotationEditing) {
         activateStylingToolFromMap(StylingTools.Annotations);
         annotationsActions.setPageElementsVisibility(true);
       }
+      centeredAnnotationId = itemId;
+      void tick().then(() => {
+        centerAnnotationInViewport(event.currentTarget);
+      });
       annotationsActions.selectAnnotation(itemId);
     }
+  }
+
+  function resetCenteredAnnotationPan(): void {
+    if (!centeredAnnotationId) {
+      return;
+    }
+
+    centeredAnnotationId = null;
+    globalActions.resetPagePan();
+  }
+
+  function handleAnnotationBlur(_event: FocusEvent, itemId: string): void {
+    if (centeredAnnotationId !== itemId) {
+      return;
+    }
+
+    resetCenteredAnnotationPan();
   }
 
   function handleResizePointerDown(
@@ -1125,7 +1164,18 @@
     return () => window.removeEventListener('keydown', handleKeydown);
   });
 
+  $effect(() => {
+    if (!centeredAnnotationId) {
+      return;
+    }
+
+    if (!isAnnotationEditing || selectedId !== centeredAnnotationId) {
+      resetCenteredAnnotationPan();
+    }
+  });
+
   onDestroy(() => {
+    centeredAnnotationId = null;
     stopDragging();
     stopResizing();
     stopRotating();
@@ -1574,8 +1624,7 @@
         ? item.content.trim()
         : m.annotationImageAlt()}
       onclick={(event: MouseEvent) => handleAnnotationClick(event, item.id)}
-      ondblclick={(event: MouseEvent) =>
-        handleAnnotationDblClick(event, item.id)}
+      onblur={(event: FocusEvent) => handleAnnotationBlur(event, item.id)}
       onpointerdown={(event: PointerEvent) =>
         handleAnnotationPointerDown(event, item)}
       onkeydown={(event: KeyboardEvent) =>

@@ -8,7 +8,7 @@
   import { m } from '$lib/paraglide/messages';
   import { Close } from 'carbon-icons-svelte';
   import type { Snippet } from 'svelte';
-  import { selectTool } from '../tools-list/tool-list.utils.svelte';
+  import { closeSelectedToolPanel } from '../tools-list/tool-list.utils.svelte';
   import { getAnnotationsState } from './annotations/annotations.store.svelte';
   import { shouldBlockToolClose } from './tool-close-guard';
   import Annotations from './annotations/annotations.svelte';
@@ -70,7 +70,7 @@
       return;
     }
 
-    selectTool(undefined);
+    closeSelectedToolPanel();
   }
 </script>
 
@@ -97,7 +97,8 @@
     display: flex;
     align-items: center;
     gap: var(--cds-spacing-02);
-    padding: 0 var(--cds-spacing-02) var(--cds-spacing-03) var(--cds-spacing-05);
+    padding: var(--cds-spacing-05) var(--cds-spacing-02) var(--cds-spacing-04)
+      var(--cds-spacing-05);
     position: sticky;
     top: 0;
     background-color: var(--cds-background, white);
@@ -107,9 +108,9 @@
   .tool-title {
     flex: 1 0 0;
     margin: 0;
-    font-size: 1rem;
+    font-size: 0.875rem;
     font-weight: 600;
-    line-height: 1.5rem;
+    line-height: 1.25rem;
     color: var(--cds-text-01, #161616);
     overflow: hidden;
     text-overflow: ellipsis;

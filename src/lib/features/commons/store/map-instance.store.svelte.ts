@@ -47,6 +47,7 @@ export interface ProjectionContext {
   referenceBbox: [number, number, number, number] | null;
   canvasSize: { width: number; height: number };
   fitPaddingPx: number;
+  renderScale?: number;
   isProjectedCoordinates: boolean;
 }
 
@@ -54,6 +55,7 @@ let projectionContextGetter: () => ProjectionContext = () => ({
   referenceBbox: null,
   canvasSize: { width: 0, height: 0 },
   fitPaddingPx: 0,
+  renderScale: 1,
   isProjectedCoordinates: false
 });
 
@@ -70,11 +72,9 @@ function worldToData(target: number[]): [number, number, number] {
   const ctx = projectionContextGetter();
   if (!ctx.referenceBbox) return t;
   const [cx, cy] = get_bbox_center(ctx.referenceBbox);
-  const scale = get_max_scale(
-    ctx.canvasSize,
-    ctx.referenceBbox,
-    ctx.fitPaddingPx
-  );
+  const scale =
+    get_max_scale(ctx.canvasSize, ctx.referenceBbox, ctx.fitPaddingPx) *
+    (ctx.renderScale ?? 1);
   if (scale === 0) return t;
   const yDirection = ctx.isProjectedCoordinates ? -1 : 1;
   return [t[0] / scale + cx, (t[1] * yDirection) / scale + cy, 0];
@@ -85,11 +85,9 @@ function dataToWorld(target: number[]): [number, number, number] {
   const ctx = projectionContextGetter();
   if (!ctx.referenceBbox) return t;
   const [cx, cy] = get_bbox_center(ctx.referenceBbox);
-  const scale = get_max_scale(
-    ctx.canvasSize,
-    ctx.referenceBbox,
-    ctx.fitPaddingPx
-  );
+  const scale =
+    get_max_scale(ctx.canvasSize, ctx.referenceBbox, ctx.fitPaddingPx) *
+    (ctx.renderScale ?? 1);
   const yDirection = ctx.isProjectedCoordinates ? -1 : 1;
   return [scale * (t[0] - cx), yDirection * scale * (t[1] - cy), 0];
 }
@@ -130,6 +128,17 @@ interface PendingMapLibreViewState {
 
 type SerializedViewState = SerializedMapViewState;
 
+export interface SynchronizedViewportController {
+  zoomIn: () => void;
+  zoomOut: () => void;
+  setZoom: (zoom: number) => void;
+  resetZoom: () => void;
+}
+
+export interface OrthographicViewStateAdapter {
+  applyViewState: (viewState: DeckViewState) => void;
+}
+
 function createMapInstanceStore() {
   const state = $state<{
     map: MapLibreMap | null;
@@ -156,6 +165,9 @@ function createMapInstanceStore() {
   let pendingOrthographicRestore: PendingViewState | null = null;
   let pendingMapLibreRestore: PendingMapLibreViewState | null = null;
   let lastSerializedViewState: SerializedViewState | null = null;
+  let synchronizedViewportController: SynchronizedViewportController | null =
+    null;
+  let orthographicViewStateAdapter: OrthographicViewStateAdapter | null = null;
 
   function buildSerializedViewState(): SerializedViewState | null {
     if (state.map && state.isMapLoaded) {
@@ -231,6 +243,9 @@ function createMapInstanceStore() {
 
   function setDeckInstance(instance: DeckInstance | null) {
     state.deckInstance = instance;
+    if (instance === null) {
+      orthographicViewStateAdapter = null;
+    }
   }
 
   function setMapLoaded(loaded: boolean) {
@@ -310,11 +325,18 @@ function createMapInstanceStore() {
   }
 
   function applyDeckViewState(): void {
-    const deck = state.deckInstance;
-    if (!deck) {
+    if (!state.deckInstance) {
       return;
     }
+
     const nextViewState = { ...state.deckViewState };
+
+    if (orthographicViewStateAdapter) {
+      orthographicViewStateAdapter.applyViewState(nextViewState);
+      return;
+    }
+
+    const deck = state.deckInstance;
     const setProps = deck.setProps.bind(deck) as (props: {
       viewState?: Record<string, DeckViewState>;
       initialViewState?: Record<string, DeckViewState>;
@@ -364,7 +386,19 @@ function createMapInstanceStore() {
     return true;
   }
 
-  function zoomIn() {
+  function setSynchronizedViewportController(
+    controller: SynchronizedViewportController | null
+  ): void {
+    synchronizedViewportController = controller;
+  }
+
+  function setOrthographicViewStateAdapter(
+    adapter: OrthographicViewStateAdapter | null
+  ): void {
+    orthographicViewStateAdapter = adapter;
+  }
+
+  function zoomInLocal() {
     if (state.map) {
       markViewportManual();
       pendingMapLibreRestore = null;
@@ -391,7 +425,16 @@ function createMapInstanceStore() {
     }
   }
 
-  function zoomOut() {
+  function zoomIn() {
+    if (synchronizedViewportController) {
+      synchronizedViewportController.zoomIn();
+      return;
+    }
+
+    zoomInLocal();
+  }
+
+  function zoomOutLocal() {
     if (state.map) {
       markViewportManual();
       pendingMapLibreRestore = null;
@@ -418,7 +461,16 @@ function createMapInstanceStore() {
     }
   }
 
-  function setZoom(zoom: number) {
+  function zoomOut() {
+    if (synchronizedViewportController) {
+      synchronizedViewportController.zoomOut();
+      return;
+    }
+
+    zoomOutLocal();
+  }
+
+  function setZoomLocal(zoom: number) {
     if (state.map) {
       markViewportManual();
       pendingMapLibreRestore = null;
@@ -443,6 +495,15 @@ function createMapInstanceStore() {
     }
   }
 
+  function setZoom(zoom: number) {
+    if (synchronizedViewportController) {
+      synchronizedViewportController.setZoom(zoom);
+      return;
+    }
+
+    setZoomLocal(zoom);
+  }
+
   function centerOnDataPoint(dataLon: number, dataLat: number): void {
     if (state.map) {
       markViewportManual();
@@ -463,7 +524,7 @@ function createMapInstanceStore() {
     persistenceRegistry.notifyChange('mapViewState');
   }
 
-  function resetZoom() {
+  function resetZoomLocal() {
     if (state.map) {
       markViewportManual();
       pendingMapLibreRestore = null;
@@ -482,6 +543,15 @@ function createMapInstanceStore() {
       updateZoomFromMap();
       consumePendingRestore();
     }
+  }
+
+  function resetZoom() {
+    if (synchronizedViewportController) {
+      synchronizedViewportController.resetZoom();
+      return;
+    }
+
+    resetZoomLocal();
   }
 
   /**
@@ -515,11 +585,9 @@ function createMapInstanceStore() {
         pendingOrthographicRestore = null;
         lastSerializedViewState = null;
       } else {
-        const scale = get_max_scale(
-          ctx.canvasSize,
-          ctx.referenceBbox,
-          ctx.fitPaddingPx
-        );
+        const scale =
+          get_max_scale(ctx.canvasSize, ctx.referenceBbox, ctx.fitPaddingPx) *
+          (ctx.renderScale ?? 1);
         if (scale === 0) {
           return;
         }
@@ -628,6 +696,8 @@ function createMapInstanceStore() {
     state.deckViewState = { ...DEFAULT_DECK_VIEW_STATE };
     state.viewportFitMode = 'auto';
     state.viewportFitReason = null;
+    synchronizedViewportController = null;
+    orthographicViewStateAdapter = null;
     // Note: pendingRestore is intentionally NOT cleared here.
     // reset() is called during map teardown (view switch, destroy)
     // but pendingRestore must survive until fitToOrthographicBounds()
@@ -683,6 +753,8 @@ function createMapInstanceStore() {
     get viewportFitReason() {
       return state.viewportFitReason;
     },
+    setSynchronizedViewportController,
+    setOrthographicViewStateAdapter,
     setMapInstance,
     setDeckOverlay,
     setDeckInstance,
@@ -699,9 +771,13 @@ function createMapInstanceStore() {
     buildSerializedViewState,
     persistCurrentMapLibreViewState,
     applyPendingMapLibreRestore,
+    zoomInLocal,
     zoomIn,
+    zoomOutLocal,
     zoomOut,
+    setZoomLocal,
     setZoom,
+    resetZoomLocal,
     resetZoom,
     centerOnDataPoint,
     fitToOrthographicBounds,

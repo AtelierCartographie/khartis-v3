@@ -13,7 +13,7 @@
   import { datasetsStore } from '../commons/store/datasets.store.svelte';
   import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
   import { isWgs84LikeCrs } from './utils/dataset-crs';
-  import { globalState } from '../commons/store/global.svelte';
+  import { globalActions, globalState } from '../commons/store/global.svelte';
   import { ToolbarStep } from '../commons/types/global';
   import { LogCategory, logger } from '../commons/utils/logger';
   import { FormatMode } from '../commons/constants/ui.constants';
@@ -28,6 +28,7 @@
   import { facetsStore } from '../step-toolbar/tools/facets/facets.store.svelte';
   import FacetsPage from '../step-toolbar/tools/facets/facets-page.svelte';
   import { loadDatasetsSequentially } from './utils/load-datasets-sequentially';
+  import { resolveWorkspaceFitScale } from '../commons/utils/workspace-viewport.utils';
   import {
     getPolygonPrimitive,
     visualizationStore,
@@ -94,6 +95,72 @@
 
   /** Incremented each time the main data-load $effect fires so stale async loads are discarded. */
   let loadGeneration = 0;
+  const WORKSPACE_FIT_PADDING_PX = 30;
+  let responsiveMapResizeObserver: ResizeObserver | null = null;
+  let workspaceWidth = $state(0);
+  let workspaceHeight = $state(0);
+  let stepToolbarWidth = $state(0);
+
+  const fitScale = $derived(
+    resolveWorkspaceFitScale({
+      viewportWidth: workspaceWidth,
+      viewportHeight: workspaceHeight,
+      pageWidth: formatState.width,
+      pageHeight: formatState.height,
+      paddingPx: WORKSPACE_FIT_PADDING_PX,
+      reservedInlineStartPx: globalState.isMobileView ? 0 : stepToolbarWidth
+    })
+  );
+  const renderedPageScale = $derived(
+    fitScale * (globalState.zoom.pageZoomLevel / 100)
+  );
+  const renderedPageWidth = $derived(
+    Math.max(1, Math.round(formatState.width * renderedPageScale))
+  );
+  const renderedPageHeight = $derived(
+    Math.max(1, Math.round(formatState.height * renderedPageScale))
+  );
+
+  function updateResponsiveMapBounds(): void {
+    const workspace = document.querySelector('.workspace-viewport');
+    const stepToolbar = document.getElementById('khartis-step-toolbar');
+
+    workspaceWidth =
+      workspace instanceof HTMLElement ? workspace.clientWidth : 0;
+    workspaceHeight =
+      workspace instanceof HTMLElement ? workspace.clientHeight : 0;
+    stepToolbarWidth =
+      stepToolbar instanceof HTMLElement
+        ? Math.round(stepToolbar.getBoundingClientRect().width)
+        : 0;
+  }
+
+  function startResponsiveMapObservers(): void {
+    const workspace = document.querySelector('.workspace-viewport');
+    const stepToolbar = document.getElementById('khartis-step-toolbar');
+
+    if (typeof ResizeObserver !== 'undefined') {
+      responsiveMapResizeObserver = new ResizeObserver(() => {
+        updateResponsiveMapBounds();
+      });
+
+      if (workspace instanceof HTMLElement) {
+        responsiveMapResizeObserver.observe(workspace);
+      }
+      if (stepToolbar instanceof HTMLElement) {
+        responsiveMapResizeObserver.observe(stepToolbar);
+      }
+    }
+
+    window.addEventListener(EVENT.RESIZE, updateResponsiveMapBounds);
+    updateResponsiveMapBounds();
+  }
+
+  function stopResponsiveMapObservers(): void {
+    responsiveMapResizeObserver?.disconnect();
+    responsiveMapResizeObserver = null;
+    window.removeEventListener(EVENT.RESIZE, updateResponsiveMapBounds);
+  }
 
   function isStaleLoad(generation: number): boolean {
     return loadGeneration !== generation;
@@ -828,6 +895,7 @@
   }
 
   onMount(() => {
+    startResponsiveMapObservers();
     initializeMap();
 
     return () => {
@@ -838,6 +906,7 @@
         clearTimeout(skeletonTimeoutId);
       }
       cleanupTransitionListener();
+      stopResponsiveMapObservers();
       handleResizeUp();
     };
   });
@@ -858,6 +927,10 @@
       }, remaining);
     }
   }
+
+  $effect(() => {
+    globalActions.setPageZoomScale(renderedPageScale);
+  });
 
   type ResizeEdge = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
   const RESIZE_EDGES: ResizeEdge[] = [
@@ -906,7 +979,7 @@
   function handleResizeMove(event: PointerEvent): void {
     if (!resizeState) return;
     const { edge, startX, startY, startW, startH } = resizeState;
-    const scale = globalState.zoom.pageZoomLevel / 100;
+    const scale = Math.max(globalState.zoom.pageZoomScale, 0.1);
     const dx = (event.clientX - startX) / scale;
     const dy = (event.clientY - startY) / scale;
 
@@ -938,7 +1011,7 @@
     class="skeleton-loader"
     class:hidden={isMapReady && !shouldHideMapOutput}
     class:held={shouldHideMapOutput}
-    style="width: {formatState.width}px; height: {formatState.height}px;"
+    style="width: {renderedPageWidth}px; height: {renderedPageHeight}px;"
   >
     <MapSkeleton paused={isMapReady && !shouldHideMapOutput} />
   </div>
@@ -973,8 +1046,11 @@
           geoJSONs={displayGeoJSONs}
           layout={facetsLayout}
           syncPanZoom={facetsSyncPanZoom}
-          width={formatState.width}
-          height={formatState.height}
+          width={renderedPageWidth}
+          height={renderedPageHeight}
+          logicalWidth={formatState.width}
+          logicalHeight={formatState.height}
+          displayScale={renderedPageScale}
           onReady={handleMapReady}
         />
       {:else}
@@ -984,8 +1060,11 @@
           splitData={displaySplitData}
           geoJSONs={displayGeoJSONs}
           dataVersion={displayDataVersion}
-          width={formatState.width}
-          height={formatState.height}
+          width={renderedPageWidth}
+          height={renderedPageHeight}
+          logicalWidth={formatState.width}
+          logicalHeight={formatState.height}
+          displayScale={renderedPageScale}
           onReady={handleMapReady}
         />
       {/if}
@@ -1007,7 +1086,7 @@
     <div
       class="resize-handles-frame"
       class:highlighted={hoveredResizeEdge !== null || resizeState !== null}
-      style="width: {formatState.width}px; height: {formatState.height}px;"
+      style="width: {renderedPageWidth}px; height: {renderedPageHeight}px;"
     >
       {#each RESIZE_EDGES as edge (edge)}
         <div

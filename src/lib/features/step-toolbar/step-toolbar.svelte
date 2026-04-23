@@ -31,6 +31,7 @@
     isColorBlindnessActive
   } from './tools/color-blindness/color-blindness.store.svelte';
   import { annotationsActions } from './tools/annotations/annotations.store.svelte';
+  import { closeSelectedToolPanel } from './tools-list/tool-list.utils.svelte';
 
   const MAIN_TOOLBAR_CONTENT_SELECTOR =
     '#khartis-main-toolbar .toolbar-content';
@@ -91,8 +92,8 @@
   );
 
   const selectStep = async (step: ToolbarStep): Promise<void> => {
+    closeSelectedToolPanel();
     globalActions.setNavigationState(step);
-    globalState.selectedTool = undefined;
     await tick();
     const content = document.querySelector(MAIN_TOOLBAR_CONTENT_SELECTOR);
     if (content) {
@@ -200,7 +201,7 @@
     max-height: calc(100% - var(--cds-spacing-05) * 2);
     z-index: var(--z-toolbar);
     scrollbar-width: none;
-    background: rgba(255, 255, 255, 0.78);
+    background: var(--khartis-floating-panel-background);
     backdrop-filter: blur(10px) saturate(1.2);
     -webkit-backdrop-filter: blur(10px) saturate(1.2);
     box-shadow:
@@ -276,6 +277,11 @@
 
   :global(#khartis-tool-popover .bx--popover) {
     z-index: var(--z-popover);
+  }
+
+  :global(html[theme='g100'] #khartis-tool-popover) {
+    --khartis-expandable-section-background: transparent;
+    --khartis-expandable-section-hover-background: var(--cds-hover-ui);
   }
 
   :global(#khartis-colorblindness-notification .bx--popover--right-top) {

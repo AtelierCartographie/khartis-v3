@@ -4,6 +4,7 @@ import { MapboxOverlay } from '@deck.gl/mapbox';
 import { CanvasContext } from '@luma.gl/core';
 import maplibregl from 'maplibre-gl';
 import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
+import { EnvironmentUtils } from '$lib/features/commons/utils/environment.utils';
 
 export type DeckInstance = Deck<View | View[] | null>;
 import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
@@ -17,7 +18,6 @@ import {
 } from '../constants';
 import { ViewMode } from '../constants/map.constants';
 import { createHoverHandler, createClickHandler } from '../interactions';
-import { projectionStore } from '../stores/projection.store.svelte';
 import { mapProjectionStore } from '../stores/map-projection.store.svelte';
 import {
   deckDebugStore,
@@ -93,6 +93,10 @@ const ORTHOGRAPHIC_VIEW = new OrthographicView({
 const DEFAULT_RENDER_PIXEL_RATIO = 1;
 const IS_DEV = import.meta.env.DEV;
 
+function isDeckDebugEnabled(): boolean {
+  return IS_DEV || EnvironmentUtils.hasPreproductionUrlMarker();
+}
+
 function getInitialRenderPixelRatio(): number {
   return typeof window !== 'undefined'
     ? window.devicePixelRatio || DEFAULT_RENDER_PIXEL_RATIO
@@ -102,7 +106,7 @@ function getInitialRenderPixelRatio(): number {
 let hasPatchedLumaCanvasContext = false;
 let hasWebGL2Support: boolean | null = null;
 
-function supportsWebGL2(): boolean {
+export function supportsWebGL2(): boolean {
   if (hasWebGL2Support !== null) {
     return hasWebGL2Support;
   }
@@ -122,7 +126,7 @@ function supportsWebGL2(): boolean {
   return hasWebGL2Support;
 }
 
-function patchLumaCanvasContextResizeGuard(): void {
+export function patchLumaCanvasContextResizeGuard(): void {
   if (hasPatchedLumaCanvasContext) {
     return;
   }
@@ -161,7 +165,7 @@ function patchLumaCanvasContextResizeGuard(): void {
   };
 }
 
-function createDeckWithDeferredResizeObserver(
+export function createDeckWithDeferredResizeObserver(
   deckFactory: () => DeckInstance
 ): DeckInstance {
   if (typeof window === 'undefined' || typeof ResizeObserver === 'undefined') {
@@ -244,7 +248,7 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
     canvasSize: { width: number; height: number } | null = null,
     clearMetrics = false
   ): void {
-    if (!IS_DEV) {
+    if (!isDeckDebugEnabled()) {
       return;
     }
 
@@ -261,7 +265,7 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
   }
 
   function handleDeckMetrics(metrics: DeckDebugMetrics): void {
-    if (!IS_DEV) {
+    if (!isDeckDebugEnabled()) {
       return;
     }
 
@@ -366,7 +370,6 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
       width: container.clientWidth || 800,
       height: container.clientHeight || 600
     };
-    projectionStore.updateCanvasSize(canvasSize);
     syncDeckDebugState(ViewMode.ORTHOGRAPHIC, canvasSize, true);
 
     if (!supportsWebGL2()) {
@@ -420,7 +423,7 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
           parent: container,
           deviceProps: {
             type: DECK_DEVICE_TYPE,
-            debugGPUTime: IS_DEV
+            debugGPUTime: isDeckDebugEnabled()
           },
           useDevicePixels: renderPixelRatio,
           views: [ORTHOGRAPHIC_VIEW],
@@ -441,7 +444,7 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
           onViewStateChange: handleViewStateChange as DeckProps<
             [OrthographicView]
           >['onViewStateChange'],
-          _onMetrics: IS_DEV ? handleDeckMetrics : null,
+          _onMetrics: isDeckDebugEnabled() ? handleDeckMetrics : null,
           onLoad: () => {
             // Ignore late callbacks from a stale deck instance during view switches.
             if (deckInstance !== orthographicDeck) {
@@ -464,7 +467,6 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
             );
           },
           onResize: ({ width, height }) => {
-            projectionStore.updateCanvasSize({ width, height });
             syncDeckDebugState(currentViewMode, { width, height });
           }
         })
@@ -473,7 +475,7 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
     deckInstance = orthographicDeck;
     currentViewMode = ViewMode.ORTHOGRAPHIC;
     mapInstanceStore.setDeckInstance(orthographicDeck);
-    if (IS_DEV) {
+    if (isDeckDebugEnabled()) {
       (window as unknown as Record<string, unknown>).__deck = orthographicDeck;
     }
   }
@@ -532,7 +534,7 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
         layers: [],
         onHover: hoverHandler,
         onClick: clickHandler,
-        _onMetrics: IS_DEV ? handleDeckMetrics : null
+        _onMetrics: isDeckDebugEnabled() ? handleDeckMetrics : null
       } as DeckProps);
 
       map.addControl(deckOverlay as maplibregl.IControl);
@@ -548,7 +550,7 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
       mapInstanceStore.setDeckOverlay(deckOverlay);
       mapInstanceStore.setMapLoaded(true);
       logger.success('MapLibre + Deck.gl ready', LogCategory.MAP);
-      if (IS_DEV) {
+      if (isDeckDebugEnabled()) {
         (window as unknown as Record<string, unknown>).__maplibreMap = map;
         (window as unknown as Record<string, unknown>).__deck = deckOverlay;
       }
@@ -672,9 +674,8 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
       }
     }
     removeOrthographicFallbackCanvas();
-    projectionStore.reset();
     mapInstanceStore.reset();
-    if (IS_DEV) {
+    if (isDeckDebugEnabled()) {
       deckDebugStore.clear();
     }
     logger.info('Map destroyed', LogCategory.MAP);
