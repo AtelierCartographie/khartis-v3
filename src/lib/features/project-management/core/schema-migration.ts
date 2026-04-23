@@ -1,4 +1,9 @@
 import { PROJECT_CONST } from '../constants';
+import {
+  clampFontSize,
+  DEFAULT_FONT_FAMILY,
+  normalizeFontFamily
+} from '$lib/features/step-toolbar/constants/fonts.constants';
 
 export interface SchemaMigration {
   from: string;
@@ -222,9 +227,13 @@ function backfillPrimitiveConfigs(
       labelColumn: mapping.labelColumn,
       colorMode: modes?.color ?? 'unique',
       sizeMode: modes?.size ?? 'fixed',
+      fontFamily:
+        normalizeFontFamily(
+          typeof style.textFontFamily === 'string' ? style.textFontFamily : null
+        ) ?? DEFAULT_FONT_FAMILY,
       color: style.textColor,
       opacity: style.textOpacity ?? 0,
-      size: style.textSize ?? 12,
+      size: clampFontSize(style.textSize as number | undefined, 12),
       bold: style.textBold ?? false,
       italic: style.textItalic ?? false,
       align: style.textAlign ?? 'left',
@@ -245,9 +254,17 @@ function backfillPrimitiveConfigs(
           style.labelOpacity > 0
         ),
         labelColumn: mapping.secondaryLabelColumn,
+        fontFamily:
+          normalizeFontFamily(
+            typeof style.labelFontFamily === 'string'
+              ? style.labelFontFamily
+              : null
+          ) ?? DEFAULT_FONT_FAMILY,
         color: style.labelColor,
         opacity: style.labelOpacity ?? 0,
-        size: style.labelSize ?? 12,
+        size: clampFontSize(style.labelSize as number | undefined, 12),
+        bold: style.labelBold ?? false,
+        italic: style.labelItalic ?? false,
         align: style.labelAlign ?? 'left',
         halo: style.labelHalo ?? false,
         haloColor: style.labelHaloColor,

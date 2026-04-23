@@ -504,6 +504,17 @@ describe('binary scatter styling refresh', () => {
     expect(cloneCalls).not.toBeNull();
     expect((cloneCalls ?? []).length).toBeGreaterThanOrEqual(3);
   });
+
+  it('applies secondary text bold and italic styles to the label layer', () => {
+    expect(source).toContain("secondaryLabelsConfig.bold ? '700' : '400'");
+    expect(source).toContain('secondaryLabelsConfig.italic');
+    expect(source).toContain(
+      'resolveDeckTextFontFamily(secondaryLabelsConfig.fontFamily)'
+    );
+    expect(source).toContain(
+      'resolveDeckTextFontFamily(textConfig.fontFamily)'
+    );
+  });
 });
 
 describe('createPolygonLayers', () => {
@@ -912,5 +923,17 @@ describe('createLineLayers', () => {
 
     expect(layerData.attributes?.getWidth).toBeDefined();
     expect(pathColorAttrMock).toHaveBeenCalled();
+  });
+
+  it('allows text background contour to render when fill is disabled', () => {
+    expect(source).toContain(
+      'const backgroundDecorationEnabled =\n    backgroundEnabled || textBackgroundConfig.strokeMode !== StrokeMode.NONE;'
+    );
+    expect(source).toContain(
+      'const backgroundStrokeActive =\n    textBackgroundConfig.strokeMode !== StrokeMode.NONE'
+    );
+    expect(source).toContain(
+      'const sharedBackgroundPadding = backgroundDecorationEnabled'
+    );
   });
 });

@@ -1,7 +1,7 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
-  import Switch from '$lib/features/commons/components/switch.svelte';
   import { Dropdown } from 'carbon-components-svelte';
+  import { ToggleWithLabel } from '../shared';
   import { BasemapDottedPattern } from '../../../constants';
 
   interface PatternOption {
@@ -59,19 +59,12 @@
 </script>
 
 <div class="dotted-toggle">
-  <div class="dotted-toggle-row">
-    <span class="dotted-label">{label}</span>
-    <Switch
-      toggled={enabled}
-      disabled={disabled}
-      labelText={label}
-      hideLabel
-      labelA={m.option_non()}
-      labelB={m.option_oui()}
-      showStateLabel
-      onchange={handleToggle}
-    />
-  </div>
+  <ToggleWithLabel
+    label={label}
+    toggled={enabled}
+    disabled={disabled}
+    ontoggle={handleToggle}
+  />
 
   {#if showPattern && enabled}
     <div class="pattern-selector">
@@ -97,20 +90,8 @@
     gap: var(--cds-spacing-03);
   }
 
-  .dotted-toggle-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--cds-spacing-03);
-  }
-
-  .dotted-label {
-    font-size: 0.75rem;
-    color: var(--cds-text-02);
-  }
-
   .pattern-selector {
-    margin-top: var(--cds-spacing-02);
+    margin-top: calc(-1 * var(--cds-spacing-02));
   }
 
   .disabled-reason {

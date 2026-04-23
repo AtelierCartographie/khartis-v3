@@ -95,15 +95,13 @@
   aria-disabled={disabled}
 >
   <div class="preview-section">
-    {#if isVertical}
-      <div class="preview-radio kh-card-radio">
-        <RadioButton
-          checked={selected}
-          disabled={disabled}
-          onclick={handleRadioClick}
-        />
-      </div>
-    {/if}
+    <div class="preview-radio kh-card-radio">
+      <RadioButton
+        checked={selected}
+        disabled={disabled}
+        onclick={handleRadioClick}
+      />
+    </div>
 
     <TilePreview
       ratio={ratio}
@@ -120,16 +118,6 @@
           <p class="subtitle">{subtitle}</p>
         {/if}
       </div>
-
-      {#if !isVertical}
-        <div class="radio-wrapper kh-card-radio">
-          <RadioButton
-            checked={selected}
-            disabled={disabled}
-            onclick={handleRadioClick}
-          />
-        </div>
-      {/if}
     </div>
 
     <div class="footer">
@@ -255,7 +243,7 @@
   .preview-radio {
     position: absolute;
     top: 8px;
-    right: 8px;
+    left: 8px;
     z-index: 1;
   }
 
@@ -335,11 +323,6 @@
 
   .projection-card--default .subtitle {
     color: var(--cds-text-secondary, #525252);
-  }
-
-  .radio-wrapper {
-    flex-shrink: 0;
-    margin-top: 1px;
   }
 
   .footer {

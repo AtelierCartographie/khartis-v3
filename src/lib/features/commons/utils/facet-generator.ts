@@ -72,6 +72,10 @@ function resolveFacetClassification(
     case FACET_SLOT.TEXT_BACKGROUND_CATEGORY:
       return visualization.text?.background?.classification;
 
+    case FACET_SLOT.TEXT_BACKGROUND_STROKE_VALUE:
+    case FACET_SLOT.TEXT_BACKGROUND_STROKE_CATEGORY:
+      return visualization.text?.background?.strokeClassification;
+
     case FACET_SLOT.POLYGON_VALUE:
     case FACET_SLOT.POLYGON_CATEGORY:
     default:
@@ -250,6 +254,30 @@ function applyFacetVariableToVisualization(
         };
       }
       return;
+
+    case FACET_SLOT.TEXT_BACKGROUND_STROKE_VALUE:
+      if (visualization.text?.background) {
+        visualization.text = {
+          ...visualization.text,
+          background: {
+            ...visualization.text.background,
+            strokeValueColumn: variable
+          }
+        };
+      }
+      return;
+
+    case FACET_SLOT.TEXT_BACKGROUND_STROKE_CATEGORY:
+      if (visualization.text?.background) {
+        visualization.text = {
+          ...visualization.text,
+          background: {
+            ...visualization.text.background,
+            strokeCategoryColumn: variable
+          }
+        };
+      }
+      return;
   }
 }
 
@@ -305,6 +333,19 @@ function applyFacetClassificationToVisualization(
           background: {
             ...visualization.text.background,
             classification
+          }
+        };
+      }
+      return;
+
+    case FACET_SLOT.TEXT_BACKGROUND_STROKE_VALUE:
+    case FACET_SLOT.TEXT_BACKGROUND_STROKE_CATEGORY:
+      if (visualization.text?.background) {
+        visualization.text = {
+          ...visualization.text,
+          background: {
+            ...visualization.text.background,
+            strokeClassification: classification
           }
         };
       }

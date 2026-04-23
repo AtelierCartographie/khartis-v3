@@ -201,6 +201,23 @@
 </div>
 
 <style>
+  :global(#khartis-tool-popover) {
+    transition: opacity 120ms ease;
+  }
+
+  :global(#khartis-tool-popover .bx--popover) {
+    transition: opacity 120ms ease;
+  }
+
+  :global(body.is-dragging-styling-target #khartis-tool-popover) {
+    pointer-events: none;
+  }
+
+  :global(body.is-dragging-styling-target #khartis-tool-popover .bx--popover) {
+    opacity: 0.28;
+    pointer-events: none;
+  }
+
   :global(#khartis-tool-popover .bx--popover--right-top) {
     top: var(--tool-popover-top-offset) !important;
   }
@@ -210,6 +227,7 @@
     max-width: var(--tool-popover-width) !important;
     max-height: var(--popover-max-height);
     overflow: visible;
+    background: var(--khartis-control-surface-background);
     padding: 0;
   }
 

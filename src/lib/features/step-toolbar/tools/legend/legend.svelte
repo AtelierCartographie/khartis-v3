@@ -14,11 +14,12 @@
   import { onMount } from 'svelte';
   import {
     AVAILABLE_FONTS,
-    CSS_CLASSES,
-    DOM_IDS,
-    LEGEND_DEFAULTS,
-    LEGEND_FONT_SIZES
-  } from './legend.constants';
+    clampFontSize,
+    DEFAULT_FONT_FAMILY,
+    FONT_SIZE_OPTIONS,
+    normalizeFontFamily
+  } from '$lib/features/step-toolbar/constants/fonts.constants';
+  import { CSS_CLASSES, DOM_IDS, LEGEND_DEFAULTS } from './legend.constants';
   import { getLegendState, legendActions } from './legend.store.svelte';
   import type { LegendItem } from './legend.types';
 
@@ -35,14 +36,18 @@
   const items = $derived(legendState.items);
   const isContentTab = $derived(legendState.activeTab === LegendTab.CONTENT);
 
-  let localFontFamily = $state<string>(AVAILABLE_FONTS[0]);
+  let localFontFamily = $state<string>(DEFAULT_FONT_FAMILY);
   let localFontSize = $state<number>(LEGEND_DEFAULTS.FONT_SIZE);
   let localOpacity = $state<number>(LEGEND_DEFAULTS.OPACITY);
   let expandedItemIds = $state<string[]>([]);
 
   $effect(() => {
-    localFontFamily = legendState.style.fontFamily;
-    localFontSize = legendState.style.fontSize;
+    localFontFamily =
+      normalizeFontFamily(legendState.style.fontFamily) ?? DEFAULT_FONT_FAMILY;
+    localFontSize = clampFontSize(
+      legendState.style.fontSize,
+      LEGEND_DEFAULTS.FONT_SIZE
+    );
     localOpacity = legendState.style.background.opacity;
   });
 
@@ -312,8 +317,8 @@
             on:change={handleFontSizeChange}
             size="sm"
           >
-            {#each LEGEND_FONT_SIZES as size (size)}
-              <SelectItem value={String(size)} text={String(size)} />
+            {#each FONT_SIZE_OPTIONS as sizeOption (sizeOption)}
+              <SelectItem value={sizeOption} text={sizeOption} />
             {/each}
           </Select>
         </div>
@@ -423,7 +428,9 @@
 
   .legend-text-style-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 10rem;
+    grid-template-columns:
+      minmax(0, 1fr)
+      var(--kh-text-size-control-width, 80px);
     gap: var(--cds-spacing-02);
   }
 

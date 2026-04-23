@@ -902,6 +902,9 @@
       ...(Object.prototype.hasOwnProperty.call(updates, 'textSize')
         ? { size: updates.textSize ?? text.size }
         : {}),
+      ...(Object.prototype.hasOwnProperty.call(updates, 'textFontFamily')
+        ? { fontFamily: updates.textFontFamily ?? text.fontFamily }
+        : {}),
       ...(Object.prototype.hasOwnProperty.call(updates, 'textBold')
         ? { bold: updates.textBold ?? text.bold }
         : {}),

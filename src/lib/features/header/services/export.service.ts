@@ -21,6 +21,7 @@ import { parseGeoJsonGeometry } from '$lib/features/map/io/geometry-parser';
 import type { ProcessedDataset } from '$lib/features/data-pipeline/types';
 import {
   COLUMN_TYPE_GEOMETRY,
+  GEO_COLUMN_NAMES,
   INTERNAL_COLUMN
 } from '$lib/features/commons/constants/data.constants';
 import {
@@ -135,6 +136,21 @@ function getDataFormatConfig(format: DataExportFormat): {
   }
 }
 
+function isGeometryColumnName(name: string): boolean {
+  return (GEO_COLUMN_NAMES as readonly string[]).includes(name.toLowerCase());
+}
+
+function resolveDatasetGeometryColumn(
+  dataset: ProcessedDataset
+): ProcessedDataset['columns'][0] | undefined {
+  return dataset.columns.find(
+    (column) =>
+      column.type === COLUMN_TYPE_GEOMETRY ||
+      ((Boolean(dataset.geometry) || dataset.analysis.hasGeoData) &&
+        isGeometryColumnName(column.name))
+  );
+}
+
 async function fetchJoinedDatasetWithGeometry(
   dataset: ProcessedDataset,
   joinedBasemapId: string,
@@ -169,7 +185,7 @@ async function fetchJoinedDatasetWithGeometry(
     const escapedJoinCol = escapeIdentifier(joinColumn);
     await Duck.query(`
       CREATE OR REPLACE TEMP VIEW "${viewName}" AS
-      SELECT d.*, g.geom AS geom
+      SELECT d.*, ST_AsGeoJSON(g.geom::GEOMETRY) AS geom
       FROM "${escapedDataset}" d
       INNER JOIN "${escapedGeometry}" g
         ON CAST(d.basemap_id AS VARCHAR) = CAST(g."${escapedJoinCol}" AS VARCHAR)
@@ -201,7 +217,7 @@ async function fetchJoinedDatasetWithGeometry(
         ON ${colList}
         INTO NAME _attr_col VALUE _attr_val
       )
-      SELECT d.*, gu.geom AS geom
+      SELECT d.*, ST_AsGeoJSON(gu.geom::GEOMETRY) AS geom
       FROM "${escapedDataset}" d
       INNER JOIN (
         SELECT DISTINCT _attr_val, geom
@@ -261,7 +277,10 @@ async function fetchDatasetsWithGeometry(
   const results: ProcessedDataset[] = [];
 
   for (const dataset of datasets) {
-    if (!dataset.duckdbTableName || !dataset.geometry) {
+    if (
+      !dataset.duckdbTableName ||
+      (!dataset.geometry && !dataset.analysis.hasGeoData)
+    ) {
       if (dataset.sourceFileId) {
         const duckDataset = duckDBOrchestrator.getDatasetBySourceFile(
           dataset.sourceFileId
@@ -294,16 +313,24 @@ async function fetchDatasetsWithGeometry(
       continue;
     }
 
-    const geomColumn = dataset.columns.find(
-      (col) => col.type === COLUMN_TYPE_GEOMETRY
-    );
+    const geomColumn = resolveDatasetGeometryColumn(dataset);
     if (!geomColumn) {
       results.push(dataset);
       continue;
     }
 
     try {
-      const query = `SELECT * FROM "${dataset.duckdbTableName}"`;
+      const selectList = dataset.columns
+        .map((column) => {
+          const escapedName = escapeIdentifier(column.name);
+          if (column.name === geomColumn.name) {
+            return `ST_AsGeoJSON("${escapedName}"::GEOMETRY) AS "${escapedName}"`;
+          }
+          return `"${escapedName}"`;
+        })
+        .join(', ');
+
+      const query = `SELECT ${selectList} FROM "${dataset.duckdbTableName}"`;
 
       const rows = (await Duck.query(query, { format: 'array' })) as Record<
         string,
@@ -328,6 +355,11 @@ async function fetchDatasetsWithGeometry(
 
       results.push({
         ...dataset,
+        columns: dataset.columns.map((column) =>
+          column.name === geomColumn.name
+            ? { ...column, type: COLUMN_TYPE_GEOMETRY }
+            : column
+        ),
         data: dataWithParsedGeometry
       });
     } catch (error) {

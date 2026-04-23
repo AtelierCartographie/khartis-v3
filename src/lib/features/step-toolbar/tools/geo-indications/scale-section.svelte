@@ -20,8 +20,12 @@
   } from 'carbon-components-svelte';
   import {
     AVAILABLE_FONTS,
-    LEGEND_FONT_SIZES
-  } from '$lib/features/step-toolbar/tools/legend/legend.constants';
+    DEFAULT_FONT_FAMILY,
+    clampFontSize,
+    FONT_SIZE_OPTIONS,
+    MIN_FONT_SIZE,
+    normalizeFontFamily
+  } from '$lib/features/step-toolbar/constants/fonts.constants';
   import {
     geoIndicationsActions,
     geoIndicationsState
@@ -36,13 +40,14 @@
 
   const store = geoIndicationsActions;
   const geoState = $derived(geoIndicationsState);
-  let localScaleFontFamily = $state<string>(AVAILABLE_FONTS[0]);
-  let localScaleFontSize = $state<number>(LEGEND_FONT_SIZES[0]);
+  let localScaleFontFamily = $state<string>(DEFAULT_FONT_FAMILY);
+  let localScaleFontSize = $state<number>(MIN_FONT_SIZE);
   let mapViewRevision = $state(0);
 
   $effect(() => {
-    localScaleFontFamily = geoState.scale.fontFamily;
-    localScaleFontSize = geoState.scale.fontSize;
+    localScaleFontFamily =
+      normalizeFontFamily(geoState.scale.fontFamily) ?? DEFAULT_FONT_FAMILY;
+    localScaleFontSize = clampFontSize(geoState.scale.fontSize, MIN_FONT_SIZE);
   });
 
   $effect(() => {
@@ -219,8 +224,8 @@
                 }}
                 size="sm"
               >
-                {#each LEGEND_FONT_SIZES as s (s)}
-                  <SelectItem value={String(s)} text={String(s)} />
+                {#each FONT_SIZE_OPTIONS as sizeOption (sizeOption)}
+                  <SelectItem value={sizeOption} text={sizeOption} />
                 {/each}
               </Select>
             </div>
@@ -268,7 +273,7 @@
   }
 
   .text-style-size {
-    width: 80px;
+    width: var(--kh-text-size-control-width, 80px);
     flex-shrink: 0;
   }
 </style>

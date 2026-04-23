@@ -210,7 +210,7 @@ export const SLIDER_LIMITS = {
   lineOpacity: { min: 0, max: 100 },
   symbolSize: { min: 1, max: 100 },
   symbolMaxSize: { min: 1, max: 100 },
-  textSize: { min: 8, max: 32 },
+  textSize: { min: 8, max: 24 },
   textOpacity: { min: 0, max: 100 },
   labelOpacity: { min: 0, max: 100 },
   haloWidth: { min: 0, max: 10 },

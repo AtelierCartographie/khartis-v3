@@ -6,10 +6,18 @@
   } from '$lib/features/commons/utils/contextual-surface-coordinator';
   import { globalState } from '$lib/features/commons/store/global.svelte';
   import { ToolbarState } from '$lib/features/commons/types/global';
-  import { AVAILABLE_FONTS } from '$lib/features/step-toolbar/constants/fonts.constants';
+  import {
+    AVAILABLE_FONTS,
+    clampFontSize,
+    DEFAULT_FONT_FAMILY,
+    MIN_FONT_SIZE,
+    normalizeFontFamily,
+    resolveFontSizeOptions
+  } from '$lib/features/step-toolbar/constants/fonts.constants';
   import * as m from '$lib/paraglide/messages';
   import {
     ChevronDown,
+    Close,
     TextAlignCenter,
     TextAlignLeft,
     TextAlignRight,
@@ -18,9 +26,9 @@
     TextItalic,
     TextUnderline
   } from 'carbon-icons-svelte';
-  import { SectionHeading } from './shared';
 
   interface SectionHandlers {
+    fontFamily: string;
     color: string;
     opacity?: number;
     bold?: boolean;
@@ -32,6 +40,7 @@
     haloWidth?: number;
     collisionDetection?: boolean;
     dxpMasking?: boolean;
+    onFontFamilyChange: (value: string) => void;
     onColorChange: (value: string) => void;
     onOpacityChange?: (value: number) => void;
     onBoldChange?: (value: boolean) => void;
@@ -65,12 +74,11 @@
     onclose
   }: Props = $props();
 
-  const DEFAULT_FONT_FAMILY = AVAILABLE_FONTS[0] ?? 'Cabin';
-  const DEFAULT_FONT_SIZES = ['8', '10', '12', '14', '16', '18', '20', '24'];
-  const DEFAULT_POPOVER_WIDTH = 488;
+  const DEFAULT_SECONDARY_FONT_SIZE = MIN_FONT_SIZE;
+  const DEFAULT_POPOVER_WIDTH = 320;
   const VIEWPORT_GUTTER = 16;
   const TRIGGER_GAP = 12;
-  const ESTIMATED_POPOVER_HEIGHT = 264;
+  const ESTIMATED_POPOVER_HEIGHT = 380;
   const ALIGNMENTS: Array<'left' | 'center' | 'right'> = [
     'left',
     'center',
@@ -79,7 +87,13 @@
 
   let popoverRef = $state<HTMLDivElement>();
   let primaryQuickColorInput = $state<HTMLInputElement>();
+  let primaryQuickHaloColorInput = $state<HTMLInputElement>();
   let secondaryQuickColorInput = $state<HTMLInputElement>();
+  let secondaryQuickHaloColorInput = $state<HTMLInputElement>();
+  let primaryFontSelectRef = $state<HTMLSelectElement>();
+  let primarySizeSelectRef = $state<HTMLSelectElement>();
+  let secondaryFontSelectRef = $state<HTMLSelectElement>();
+  let secondarySizeSelectRef = $state<HTMLSelectElement>();
   const contextualSurfaceId =
     createExclusiveContextualSurfaceId('text-style-popover');
 
@@ -155,30 +169,18 @@
   });
 
   const showPrimarySection = $derived(visibleSection !== 'secondary');
-  const showSecondarySection = $derived(
-    Boolean(secondary) && visibleSection !== 'primary'
-  );
-  const showSectionHeadings = $derived(visibleSection === 'both');
+  const showSecondarySection = $derived(visibleSection !== 'primary');
   const PrimaryQuickAlignmentIcon = $derived(
     resolveAlignmentIcon(primary.align)
   );
   const SecondaryQuickAlignmentIcon = $derived(
     resolveAlignmentIcon(secondary?.align ?? 'left')
   );
-  const primaryFontSizes = $derived(getFontSizeOptions(primary.size));
+  const primaryFontSizes = $derived(resolveFontSizeOptions(primary.size));
   const secondaryFontSizes = $derived(
-    getFontSizeOptions(secondary?.size ?? Number(DEFAULT_FONT_SIZES[0]))
+    resolveFontSizeOptions(secondary?.size ?? DEFAULT_SECONDARY_FONT_SIZE)
   );
-  const popoverTitle = $derived.by(() => {
-    switch (visibleSection) {
-      case 'primary':
-        return m.text_style_primary_title();
-      case 'secondary':
-        return m.text_style_secondary_title();
-      default:
-        return m.text_style_popover_title();
-    }
-  });
+  const popoverTitle = $derived(m.text_style_popover_title());
 
   function handleClose() {
     open = false;
@@ -218,22 +220,23 @@
     }
   }
 
-  function getFontSizeOptions(size: number) {
-    const nextSize = String(size);
-    if (DEFAULT_FONT_SIZES.includes(nextSize)) {
-      return DEFAULT_FONT_SIZES;
-    }
-
-    return [...DEFAULT_FONT_SIZES, nextSize].sort(
-      (left, right) => Number(left) - Number(right)
-    );
-  }
-
   function openQuickColorInput(input?: HTMLInputElement) {
     if (!input) {
       return;
     }
 
+    input.click();
+  }
+
+  function openQuickHaloColorInput(
+    section: SectionHandlers,
+    input?: HTMLInputElement
+  ) {
+    if (!section.onHaloColorChange || !input) {
+      return;
+    }
+
+    section.onHaloChange?.(true);
     input.click();
   }
 
@@ -249,13 +252,74 @@
     onchange(value);
   }
 
+  function handleQuickHaloColorInput(section: SectionHandlers, event: Event) {
+    const value = (event.currentTarget as HTMLInputElement).value;
+    if (!value) {
+      return;
+    }
+
+    section.onHaloChange?.(true);
+    section.onHaloColorChange?.(value);
+  }
+
   function handleSizeSelect(onchange: (value: number) => void, event: Event) {
     const value = Number((event.currentTarget as HTMLSelectElement).value);
     if (!Number.isFinite(value)) {
       return;
     }
 
+    onchange(clampFontSize(value, MIN_FONT_SIZE));
+  }
+
+  function handleFontFamilySelect(
+    onchange: (value: string) => void,
+    event: Event
+  ) {
+    const value = (event.currentTarget as HTMLSelectElement).value;
+    if (!value) {
+      return;
+    }
+
     onchange(value);
+  }
+
+  function openSelectPicker(select?: HTMLSelectElement) {
+    if (!select || select.disabled) {
+      return;
+    }
+
+    select.focus();
+
+    if (typeof select.showPicker === 'function') {
+      select.showPicker();
+      return;
+    }
+
+    select.click();
+  }
+
+  function eventTargetsElement(
+    path: EventTarget[],
+    target: EventTarget | null,
+    element?: HTMLElement | null
+  ) {
+    if (!element) {
+      return false;
+    }
+
+    if (path.includes(element)) {
+      return true;
+    }
+
+    return target instanceof Node && element.contains(target);
+  }
+
+  function eventTargetsColorPicker(path: EventTarget[]) {
+    return path.some(
+      (target) =>
+        target instanceof HTMLElement &&
+        target.id === 'khartis-color-picker-dropdown'
+    );
   }
 
   $effect(() => {
@@ -270,15 +334,16 @@
     if (!open) return;
 
     function handleClick(e: MouseEvent) {
-      const target = e.target as Node;
-      if (popoverRef && !popoverRef.contains(target)) {
-        if (triggerElement && triggerElement.contains(target)) return;
-        const path = e.composedPath() as Element[];
-        if (path.some((el) => el.id === 'khartis-color-picker-dropdown')) {
-          return;
-        }
-        handleClose();
+      const path = e.composedPath();
+      if (
+        eventTargetsElement(path, e.target, popoverRef) ||
+        eventTargetsElement(path, e.target, triggerElement) ||
+        eventTargetsColorPicker(path)
+      ) {
+        return;
       }
+
+      handleClose();
     }
 
     function handleKeydown(e: KeyboardEvent) {
@@ -313,37 +378,58 @@
     >
       <header class="popover-header">
         <h3>{popoverTitle}</h3>
-        <span class="popover-header-divider" aria-hidden="true"></span>
+        <button
+          type="button"
+          class="popover-close-button"
+          aria-label={m.close()}
+          onclick={handleClose}
+        >
+          <Close size={16} />
+        </button>
       </header>
 
       <div class="popover-content">
         {#if showPrimarySection}
           <section class="text-style-section">
-            {#if showSectionHeadings}
-              <SectionHeading title={m.text_style_primary_title()} />
-            {/if}
+            <div class="text-style-section-heading">
+              <h4>{m.text_style_primary_title()}</h4>
+              <span aria-hidden="true"></span>
+            </div>
 
             <div class="text-style-grid">
               <div class="compact-field compact-field--wide">
                 <span class="compact-field__label">{m.annotations_font()}</span>
-                <div
-                  class="compact-field__control compact-field__control--static"
-                >
-                  <span class="compact-field__value">
-                    {DEFAULT_FONT_FAMILY}
-                  </span>
-                  <span class="compact-field__icon" aria-hidden="true">
-                    <ChevronDown size={24} />
-                  </span>
+                <div class="compact-field__control">
+                  <select
+                    bind:this={primaryFontSelectRef}
+                    aria-label={m.annotations_font()}
+                    value={normalizeFontFamily(primary.fontFamily) ??
+                      DEFAULT_FONT_FAMILY}
+                    onchange={(event: Event) =>
+                      handleFontFamilySelect(primary.onFontFamilyChange, event)}
+                  >
+                    {#each AVAILABLE_FONTS as fontFamily (fontFamily)}
+                      <option value={fontFamily}>{fontFamily}</option>
+                    {/each}
+                  </select>
+                  <button
+                    type="button"
+                    class="compact-field__picker-trigger"
+                    aria-label={m.annotations_font()}
+                    onclick={() => openSelectPicker(primaryFontSelectRef)}
+                  >
+                    <ChevronDown size={16} />
+                  </button>
                 </div>
               </div>
 
-              <label class="compact-field">
+              <div class="compact-field compact-field--size">
                 <span class="compact-field__label">{m.annotations_size()}</span>
                 <div class="compact-field__control">
                   <select
+                    bind:this={primarySizeSelectRef}
                     aria-label={m.annotations_size()}
-                    value={String(primary.size)}
+                    value={String(clampFontSize(primary.size, MIN_FONT_SIZE))}
                     onchange={(event: Event) =>
                       handleSizeSelect(primary.onSizeChange, event)}
                   >
@@ -351,52 +437,55 @@
                       <option value={fontSize}>{fontSize}</option>
                     {/each}
                   </select>
-                  <span class="compact-field__icon" aria-hidden="true">
-                    <ChevronDown size={24} />
-                  </span>
+                  <button
+                    type="button"
+                    class="compact-field__picker-trigger"
+                    aria-label={m.annotations_size()}
+                    onclick={() => openSelectPicker(primarySizeSelectRef)}
+                  >
+                    <ChevronDown size={16} />
+                  </button>
                 </div>
-              </label>
+              </div>
             </div>
 
             <div
               class="quick-format-toolbar"
               role="toolbar"
-              aria-label={m.text_style()}
+              aria-label={m.text_style_primary_title()}
             >
-              {#if primary.onBoldChange}
-                <button
-                  type="button"
-                  class="quick-format-button"
-                  class:quick-format-button--active={primary.bold}
-                  aria-label={m.annotations_bold()}
-                  title={m.annotations_bold()}
-                  onclick={() => primary.onBoldChange?.(!primary.bold)}
-                >
-                  <TextBold size={24} />
-                </button>
-              {/if}
+              <button
+                type="button"
+                class="quick-format-button"
+                class:quick-format-button--active={primary.bold}
+                aria-label={m.annotations_bold()}
+                title={m.annotations_bold()}
+                disabled={!primary.onBoldChange}
+                onclick={() => primary.onBoldChange?.(!primary.bold)}
+              >
+                <TextBold size={16} />
+              </button>
 
-              {#if primary.onItalicChange}
-                <button
-                  type="button"
-                  class="quick-format-button"
-                  class:quick-format-button--active={primary.italic}
-                  aria-label={m.annotations_italic()}
-                  title={m.annotations_italic()}
-                  onclick={() => primary.onItalicChange?.(!primary.italic)}
-                >
-                  <TextItalic size={24} />
-                </button>
-              {/if}
+              <button
+                type="button"
+                class="quick-format-button"
+                class:quick-format-button--active={primary.italic}
+                aria-label={m.annotations_italic()}
+                title={m.annotations_italic()}
+                disabled={!primary.onItalicChange}
+                onclick={() => primary.onItalicChange?.(!primary.italic)}
+              >
+                <TextItalic size={16} />
+              </button>
 
               <button
                 type="button"
                 class="quick-format-button"
                 aria-label={m.annotations_underline()}
                 title={m.annotations_underline()}
-                aria-disabled="true"
+                disabled
               >
-                <TextUnderline size={24} />
+                <TextUnderline size={16} />
               </button>
 
               <button
@@ -407,7 +496,7 @@
                 title={m.color()}
                 onclick={() => openQuickColorInput(primaryQuickColorInput)}
               >
-                <TextColor size={24} />
+                <TextColor size={16} />
               </button>
               <input
                 bind:this={primaryQuickColorInput}
@@ -420,22 +509,32 @@
                   handleQuickColorInput(primary.onColorChange, event)}
               />
 
-              {#if primary.onHaloChange}
-                <button
-                  type="button"
-                  class="quick-format-button"
-                  class:quick-format-button--active={primary.halo}
-                  aria-label={m.halo()}
-                  title={m.halo()}
-                  onclick={() =>
-                    primary.onHaloChange?.(!(primary.halo ?? false))}
-                >
-                  <span class="outline-text-icon" aria-hidden="true">
-                    <span class="outline-text-icon__glyph">A</span>
-                    <span class="outline-text-icon__underline"></span>
-                  </span>
-                </button>
-              {/if}
+              <button
+                type="button"
+                class="quick-format-button quick-format-button--halo"
+                class:quick-format-button--active={primary.halo}
+                style={`--quick-format-accent: ${primary.haloColor ?? '#ffffff'};`}
+                aria-label={m.halo_color()}
+                title={m.halo_color()}
+                disabled={!primary.onHaloColorChange}
+                onclick={() =>
+                  openQuickHaloColorInput(primary, primaryQuickHaloColorInput)}
+              >
+                <span class="outline-text-icon" aria-hidden="true">
+                  <span class="outline-text-icon__glyph">A</span>
+                  <span class="outline-text-icon__underline"></span>
+                </span>
+              </button>
+              <input
+                bind:this={primaryQuickHaloColorInput}
+                class="quick-format-color-input"
+                type="color"
+                value={primary.haloColor ?? '#ffffff'}
+                tabindex="-1"
+                aria-hidden="true"
+                oninput={(event: Event) =>
+                  handleQuickHaloColorInput(primary, event)}
+              />
 
               <button
                 type="button"
@@ -445,115 +544,212 @@
                 onclick={() =>
                   primary.onAlignmentChange(nextAlignment(primary.align))}
               >
-                <PrimaryQuickAlignmentIcon size={24} />
+                <PrimaryQuickAlignmentIcon size={16} />
               </button>
             </div>
           </section>
         {/if}
 
-        {#if secondary && showSecondarySection}
-          <section class="text-style-section">
-            {#if showSectionHeadings}
-              <SectionHeading title={m.text_style_secondary_title()} />
-            {/if}
+        {#if showSecondarySection}
+          <section
+            class="text-style-section"
+            class:text-style-section--disabled={!secondary}
+          >
+            <div class="text-style-section-heading">
+              <h4>{m.text_style_secondary_title()}</h4>
+              <span aria-hidden="true"></span>
+            </div>
 
             <div class="text-style-grid">
               <div class="compact-field compact-field--wide">
                 <span class="compact-field__label">{m.annotations_font()}</span>
-                <div
-                  class="compact-field__control compact-field__control--static"
-                >
-                  <span class="compact-field__value">
-                    {DEFAULT_FONT_FAMILY}
-                  </span>
-                  <span class="compact-field__icon" aria-hidden="true">
-                    <ChevronDown size={24} />
-                  </span>
+                <div class="compact-field__control" aria-disabled={!secondary}>
+                  <select
+                    bind:this={secondaryFontSelectRef}
+                    aria-label={m.annotations_font()}
+                    value={normalizeFontFamily(secondary?.fontFamily) ??
+                      DEFAULT_FONT_FAMILY}
+                    disabled={!secondary}
+                    onchange={(event: Event) => {
+                      if (secondary) {
+                        handleFontFamilySelect(
+                          secondary.onFontFamilyChange,
+                          event
+                        );
+                      }
+                    }}
+                  >
+                    {#each AVAILABLE_FONTS as fontFamily (fontFamily)}
+                      <option value={fontFamily}>{fontFamily}</option>
+                    {/each}
+                  </select>
+                  <button
+                    type="button"
+                    class="compact-field__picker-trigger"
+                    aria-label={m.annotations_font()}
+                    disabled={!secondary}
+                    onclick={() => openSelectPicker(secondaryFontSelectRef)}
+                  >
+                    <ChevronDown size={16} />
+                  </button>
                 </div>
               </div>
 
-              <label class="compact-field">
+              <div class="compact-field compact-field--size">
                 <span class="compact-field__label">{m.annotations_size()}</span>
                 <div class="compact-field__control">
                   <select
+                    bind:this={secondarySizeSelectRef}
                     aria-label={m.annotations_size()}
-                    value={String(secondary.size)}
-                    onchange={(event: Event) =>
-                      handleSizeSelect(secondary.onSizeChange, event)}
+                    value={String(
+                      clampFontSize(
+                        secondary?.size,
+                        DEFAULT_SECONDARY_FONT_SIZE
+                      )
+                    )}
+                    disabled={!secondary}
+                    onchange={(event: Event) => {
+                      if (secondary) {
+                        handleSizeSelect(secondary.onSizeChange, event);
+                      }
+                    }}
                   >
                     {#each secondaryFontSizes as fontSize (fontSize)}
                       <option value={fontSize}>{fontSize}</option>
                     {/each}
                   </select>
-                  <span class="compact-field__icon" aria-hidden="true">
-                    <ChevronDown size={24} />
-                  </span>
+                  <button
+                    type="button"
+                    class="compact-field__picker-trigger"
+                    aria-label={m.annotations_size()}
+                    disabled={!secondary}
+                    onclick={() => openSelectPicker(secondarySizeSelectRef)}
+                  >
+                    <ChevronDown size={16} />
+                  </button>
                 </div>
-              </label>
+              </div>
             </div>
 
             <div
               class="quick-format-toolbar"
               role="toolbar"
-              aria-label={m.text_style()}
+              aria-label={m.text_style_secondary_title()}
             >
+              <button
+                type="button"
+                class="quick-format-button"
+                class:quick-format-button--active={Boolean(secondary?.bold)}
+                aria-label={m.annotations_bold()}
+                title={m.annotations_bold()}
+                disabled={!secondary?.onBoldChange}
+                onclick={() => {
+                  if (secondary?.onBoldChange) {
+                    secondary.onBoldChange(!secondary.bold);
+                  }
+                }}
+              >
+                <TextBold size={16} />
+              </button>
+
+              <button
+                type="button"
+                class="quick-format-button"
+                class:quick-format-button--active={Boolean(secondary?.italic)}
+                aria-label={m.annotations_italic()}
+                title={m.annotations_italic()}
+                disabled={!secondary?.onItalicChange}
+                onclick={() => {
+                  if (secondary?.onItalicChange) {
+                    secondary.onItalicChange(!secondary.italic);
+                  }
+                }}
+              >
+                <TextItalic size={16} />
+              </button>
+
               <button
                 type="button"
                 class="quick-format-button"
                 aria-label={m.annotations_underline()}
                 title={m.annotations_underline()}
-                aria-disabled="true"
+                disabled
               >
-                <TextUnderline size={24} />
+                <TextUnderline size={16} />
               </button>
 
               <button
                 type="button"
                 class="quick-format-button quick-format-button--color"
-                style={`--quick-format-accent: ${secondary.color};`}
+                style={`--quick-format-accent: ${secondary?.color ?? '#8d8d8d'};`}
                 aria-label={m.color()}
                 title={m.color()}
+                disabled={!secondary}
                 onclick={() => openQuickColorInput(secondaryQuickColorInput)}
               >
-                <TextColor size={24} />
+                <TextColor size={16} />
               </button>
-              <input
-                bind:this={secondaryQuickColorInput}
-                class="quick-format-color-input"
-                type="color"
-                value={secondary.color}
-                tabindex="-1"
-                aria-hidden="true"
-                oninput={(event: Event) =>
-                  handleQuickColorInput(secondary.onColorChange, event)}
-              />
+              {#if secondary}
+                <input
+                  bind:this={secondaryQuickColorInput}
+                  class="quick-format-color-input"
+                  type="color"
+                  value={secondary.color}
+                  tabindex="-1"
+                  aria-hidden="true"
+                  oninput={(event: Event) =>
+                    handleQuickColorInput(secondary.onColorChange, event)}
+                />
+              {/if}
 
-              {#if secondary.onHaloChange}
-                <button
-                  type="button"
-                  class="quick-format-button"
-                  class:quick-format-button--active={secondary.halo}
-                  aria-label={m.halo()}
-                  title={m.halo()}
-                  onclick={() =>
-                    secondary.onHaloChange?.(!(secondary.halo ?? false))}
-                >
-                  <span class="outline-text-icon" aria-hidden="true">
-                    <span class="outline-text-icon__glyph">A</span>
-                    <span class="outline-text-icon__underline"></span>
-                  </span>
-                </button>
+              <button
+                type="button"
+                class="quick-format-button quick-format-button--halo"
+                class:quick-format-button--active={Boolean(secondary?.halo)}
+                style={`--quick-format-accent: ${secondary?.haloColor ?? '#ffffff'};`}
+                aria-label={m.halo_color()}
+                title={m.halo_color()}
+                disabled={!secondary?.onHaloColorChange}
+                onclick={() => {
+                  if (secondary) {
+                    openQuickHaloColorInput(
+                      secondary,
+                      secondaryQuickHaloColorInput
+                    );
+                  }
+                }}
+              >
+                <span class="outline-text-icon" aria-hidden="true">
+                  <span class="outline-text-icon__glyph">A</span>
+                  <span class="outline-text-icon__underline"></span>
+                </span>
+              </button>
+              {#if secondary}
+                <input
+                  bind:this={secondaryQuickHaloColorInput}
+                  class="quick-format-color-input"
+                  type="color"
+                  value={secondary.haloColor ?? '#ffffff'}
+                  tabindex="-1"
+                  aria-hidden="true"
+                  oninput={(event: Event) =>
+                    handleQuickHaloColorInput(secondary, event)}
+                />
               {/if}
 
               <button
                 type="button"
                 class="quick-format-button"
-                aria-label={resolveAlignmentLabel(secondary.align)}
-                title={resolveAlignmentLabel(secondary.align)}
-                onclick={() =>
-                  secondary.onAlignmentChange(nextAlignment(secondary.align))}
+                aria-label={resolveAlignmentLabel(secondary?.align ?? 'left')}
+                title={resolveAlignmentLabel(secondary?.align ?? 'left')}
+                disabled={!secondary}
+                onclick={() => {
+                  if (secondary) {
+                    secondary.onAlignmentChange(nextAlignment(secondary.align));
+                  }
+                }}
               >
-                <SecondaryQuickAlignmentIcon size={24} />
+                <SecondaryQuickAlignmentIcon size={16} />
               </button>
             </div>
           </section>
@@ -578,15 +774,16 @@
 
   :global(.text-style-popover) {
     position: fixed;
-    width: 488px;
+    width: 320px;
     max-height: calc(100vh - 32px);
     display: flex;
     flex-direction: column;
-    padding: 24px;
-    background: var(--cds-layer-01, #f4f4f4);
-    border: 1px solid var(--cds-border-subtle-01, #e0e0e0);
+    gap: var(--cds-spacing-03, 8px);
+    padding: 0 0 var(--cds-spacing-05, 16px);
+    background: var(--cds-background, #ffffff);
+    border: none;
     box-shadow:
-      0 12px 32px rgba(0, 0, 0, 0.16),
+      0 8px 24px rgba(0, 0, 0, 0.14),
       0 0 1px rgba(0, 0, 0, 0.2);
     z-index: var(--z-popover);
     overflow: hidden;
@@ -595,89 +792,164 @@
   .popover-header {
     display: flex;
     align-items: center;
-    gap: 20px;
-    margin-bottom: 24px;
+    gap: var(--cds-spacing-02, 4px);
+    padding: 0 var(--cds-spacing-02, 4px) var(--cds-spacing-03, 8px)
+      var(--cds-spacing-05, 16px);
     flex-shrink: 0;
+    background: var(--cds-background, #ffffff);
 
     h3 {
+      flex: 1 1 auto;
+      min-width: 0;
       margin: 0;
       font-family: 'IBM Plex Sans', sans-serif;
-      font-size: 1.75rem;
+      font-size: 1rem;
       font-weight: 600;
-      line-height: 1.15;
+      line-height: 1.5;
       color: var(--cds-text-primary, #161616);
+      overflow: hidden;
+      text-overflow: ellipsis;
       white-space: nowrap;
     }
   }
 
-  .popover-header-divider {
-    flex: 1;
-    height: 2px;
-    background: var(--cds-border-strong-01, #8d8d8d);
+  .popover-close-button {
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--cds-icon-primary, #161616);
+    cursor: pointer;
+
+    &:hover {
+      background: var(--cds-layer-hover-01, #e8e8e8);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--cds-focus, #0f62fe);
+      outline-offset: -2px;
+    }
   }
 
   .popover-content {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: var(--cds-spacing-05, 16px);
+    padding: 0 var(--cds-spacing-05, 16px);
     overflow-y: auto;
   }
 
   .text-style-section {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 10px;
+    padding: var(--cds-spacing-05, 16px);
+    background: var(--cds-layer-01, #f4f4f4);
+  }
+
+  .text-style-section--disabled {
+    color: var(--cds-text-disabled, rgba(22, 22, 22, 0.25));
+  }
+
+  .text-style-section-heading {
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-03, 8px);
+    width: 100%;
+
+    h4 {
+      margin: 0;
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-size: 0.875rem;
+      font-weight: 600;
+      line-height: 1.2857;
+      letter-spacing: 0.16px;
+      color: var(--cds-text-primary, #161616);
+      white-space: nowrap;
+    }
+
+    span {
+      flex: 1 1 auto;
+      min-width: 0;
+      border-top: 1px solid var(--cds-border-strong-01, #8d8d8d);
+    }
+  }
+
+  .text-style-section--disabled .text-style-section-heading {
+    h4 {
+      color: var(--cds-text-disabled, rgba(22, 22, 22, 0.25));
+    }
+
+    span {
+      border-color: var(--cds-border-disabled, #c6c6c6);
+    }
   }
 
   .text-style-grid {
-    display: grid;
-    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
-    gap: 20px;
-    align-items: end;
+    display: flex;
+    gap: var(--cds-spacing-03, 8px);
+    align-items: flex-start;
+    width: 100%;
   }
 
   .compact-field {
     display: flex;
     flex-direction: column;
-    gap: 10px;
     min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .compact-field--size {
+    flex: 0 0 var(--kh-text-size-control-width, 80px);
   }
 
   .compact-field__label {
+    display: block;
+    padding-bottom: var(--cds-spacing-03, 8px);
     color: var(--cds-text-secondary, #525252);
     font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 400;
-    letter-spacing: 0.16px;
+    line-height: 1.3333;
+    letter-spacing: 0.32px;
+  }
+
+  .text-style-section--disabled .compact-field__label {
+    color: var(--cds-text-disabled, rgba(22, 22, 22, 0.25));
   }
 
   .compact-field__control {
     position: relative;
-    min-height: 56px;
+    height: 32px;
     display: flex;
     align-items: center;
-    background: var(--cds-field-01, #ffffff);
+    background: var(--cds-field-02, #ffffff);
     border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d);
   }
 
-  .compact-field__control--static {
-    padding: 0 48px 0 16px;
+  .compact-field__control[aria-disabled='true'] {
+    border-color: transparent;
+    color: var(--cds-text-disabled, rgba(22, 22, 22, 0.25));
   }
 
-  .compact-field__value,
   .compact-field select {
     width: 100%;
     color: var(--cds-text-primary, #161616);
     font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 1.125rem;
+    font-size: 0.875rem;
     font-weight: 400;
-    line-height: 1.25;
-    letter-spacing: 0;
+    line-height: 1.2857;
+    letter-spacing: 0.16px;
   }
 
   .compact-field select {
-    min-height: 56px;
-    padding: 0 48px 0 16px;
+    height: 32px;
+    min-height: 32px;
+    padding: 0 40px 0 var(--cds-spacing-05, 16px);
     border: none;
     background: transparent;
     appearance: none;
@@ -685,27 +957,50 @@
     cursor: pointer;
   }
 
-  .compact-field__icon {
+  .compact-field select:disabled,
+  .text-style-section--disabled .compact-field select {
+    color: var(--cds-text-disabled, rgba(22, 22, 22, 0.25));
+    cursor: not-allowed;
+  }
+
+  .compact-field__picker-trigger {
     position: absolute;
-    top: 50%;
-    right: 12px;
-    transform: translateY(-50%);
+    top: 0;
+    right: 0;
+    width: 40px;
+    height: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: none;
+    background: transparent;
     color: var(--cds-icon-primary, #161616);
-    pointer-events: none;
+    cursor: pointer;
+  }
+
+  .compact-field__picker-trigger:focus-visible {
+    outline: 2px solid var(--cds-focus, #0f62fe);
+    outline-offset: 2px;
+  }
+
+  .compact-field__picker-trigger:disabled,
+  .text-style-section--disabled .compact-field__picker-trigger {
+    color: var(--cds-icon-on-color-disabled, #8d8d8d);
+    cursor: not-allowed;
   }
 
   .quick-format-toolbar {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: 12px;
   }
 
   .quick-format-button {
     --quick-format-accent: currentColor;
 
-    width: 40px;
-    height: 40px;
+    width: 32px;
+    height: 32px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -722,9 +1017,15 @@
       background: var(--cds-layer-hover-01, #e8e8e8);
     }
 
+    &:disabled {
+      color: var(--cds-text-disabled, rgba(22, 22, 22, 0.25));
+      cursor: not-allowed;
+      background: transparent;
+    }
+
     &:focus-visible {
       outline: 2px solid var(--cds-focus, #0f62fe);
-      outline-offset: 2px;
+      outline-offset: -2px;
     }
   }
 
@@ -741,10 +1042,13 @@
     position: absolute;
     left: 10px;
     right: 10px;
-    bottom: 8px;
-    height: 3px;
-    border-radius: 999px;
+    bottom: 6px;
+    height: 1px;
     background: var(--quick-format-accent);
+  }
+
+  .quick-format-button:disabled.quick-format-button--color::after {
+    background: var(--cds-text-disabled, rgba(22, 22, 22, 0.25));
   }
 
   .quick-format-color-input {
@@ -757,8 +1061,8 @@
 
   .outline-text-icon {
     position: relative;
-    width: 24px;
-    height: 24px;
+    width: 16px;
+    height: 16px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -769,11 +1073,11 @@
     position: relative;
     z-index: 1;
     font-family: 'IBM Plex Sans', sans-serif;
-    font-size: 1.5rem;
+    font-size: 0.875rem;
     font-weight: 600;
     line-height: 1;
-    color: var(--cds-layer-01, #f4f4f4);
-    -webkit-text-stroke: 1.4px var(--cds-text-primary, #161616);
+    color: var(--cds-field-02, #ffffff);
+    -webkit-text-stroke: 1px var(--cds-text-primary, #161616);
     text-shadow:
       -1px 0 var(--cds-text-primary, #161616),
       0 1px var(--cds-text-primary, #161616),
@@ -783,37 +1087,46 @@
 
   .outline-text-icon__underline {
     position: absolute;
-    left: 2px;
-    right: 2px;
+    left: 1px;
+    right: 1px;
     bottom: 0;
-    height: 3px;
-    border-radius: 999px;
-    background: currentColor;
+    height: 1px;
+    background: var(--quick-format-accent);
+  }
+
+  .quick-format-button:disabled .outline-text-icon__glyph {
+    color: transparent;
+    -webkit-text-stroke-color: var(--cds-text-disabled, rgba(22, 22, 22, 0.25));
+    text-shadow:
+      -1px 0 var(--cds-text-disabled, rgba(22, 22, 22, 0.25)),
+      0 1px var(--cds-text-disabled, rgba(22, 22, 22, 0.25)),
+      1px 0 var(--cds-text-disabled, rgba(22, 22, 22, 0.25)),
+      0 -1px var(--cds-text-disabled, rgba(22, 22, 22, 0.25));
+  }
+
+  .quick-format-button:disabled .outline-text-icon__underline {
+    background: var(--cds-text-disabled, rgba(22, 22, 22, 0.25));
   }
 
   @media (max-width: 640px) {
     :global(.text-style-popover) {
       width: calc(100vw - 24px);
-      padding: 18px;
     }
 
-    .popover-header {
-      gap: 16px;
-      margin-bottom: 18px;
+    .popover-content {
+      padding: 0 var(--cds-spacing-03, 8px);
+    }
+
+    .text-style-section {
+      padding: var(--cds-spacing-04, 12px);
     }
 
     .text-style-grid {
-      grid-template-columns: 1fr;
-      gap: 16px;
+      flex-wrap: wrap;
     }
 
-    .quick-format-toolbar {
-      gap: 10px;
-    }
-
-    .quick-format-button {
-      width: 36px;
-      height: 36px;
+    .compact-field--size {
+      flex: 0 0 var(--kh-text-size-control-width, 80px);
     }
   }
 </style>

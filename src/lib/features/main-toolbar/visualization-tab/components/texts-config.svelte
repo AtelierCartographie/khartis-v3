@@ -1,10 +1,12 @@
 <script lang="ts">
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import Switch from '$lib/features/commons/components/switch.svelte';
+  import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
+  import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
   import {
-    ColorSelector,
     InfoPopover,
     SectionHeading,
+    SliderWithInput,
     StrokeSection,
     VizFilterButton,
     VizFilterPanel
@@ -22,14 +24,24 @@
   import {
     DEFAULT_COLORS,
     FillMode,
+    SizeMode,
     VISUALIZATION_DEFAULTS
   } from '../../constants';
+  import {
+    clampFontSize,
+    DEFAULT_FONT_FAMILY,
+    MAX_FONT_SIZE,
+    MIN_FONT_SIZE,
+    normalizeFontFamily
+  } from '$lib/features/step-toolbar/constants/fonts.constants';
   import { FILL_MODES_STANDARD } from './shared/fill-mode-presets';
   import { Button, Dropdown, TextInput } from 'carbon-components-svelte';
+  import { TextAllCaps, TextScale } from 'carbon-icons-svelte';
   import DiscretizationModal from './discretization-modal.svelte';
   import TextStylePopover from './text-style-popover.svelte';
   import { resolveDiscretizationLabel } from './discretization.utils';
   import { FACET_SLOT } from '../facets-adapter.svelte';
+  import FacetsVariablePicker from './symbols/facets-variable-picker.svelte';
   import {
     NONE_FIELD_ID,
     useFieldSelection
@@ -91,6 +103,7 @@
     onMissingDataChange,
     onMappingChange,
     onToggleVisibility,
+    onModesChange,
     onSecondaryLabelsChange,
     onBackgroundStyleChange,
     onBackgroundModesChange,
@@ -118,9 +131,14 @@
   let filterSectionVisible = $state(false);
 
   const labelFieldSelection = useFieldSelection(() => dataFields);
+  const sizeFieldSelection = useFieldSelection(() => dataFields);
   const backgroundValueFieldSelection = useFieldSelection(() => dataFields);
   const backgroundCategoryFieldSelection = useFieldSelection(() => dataFields);
   const secondaryLabelFieldSelection = useFieldSelection(() => dataFields);
+  const textFacetsSelection = useFacetsVariableSelection({
+    getVisualizationId: () => visualization?.id,
+    getDataFields: () => dataFields
+  });
   const backgroundFacetsSelection = useFacetsVariableSelection({
     getVisualizationId: () => backgroundVisualization?.id,
     getDataFields: () => dataFields
@@ -128,9 +146,11 @@
 
   let textColor = $state<string>(DEFAULT_COLORS.text);
   let textOpacity = $state<number>(VISUALIZATION_DEFAULTS.textOpacity);
+  let fontFamily = $state<string>(DEFAULT_FONT_FAMILY);
   let bold = $state<boolean>(false);
   let italic = $state<boolean>(false);
   let size = $state<number>(VISUALIZATION_DEFAULTS.textSize);
+  let sizeMode = $state<SizeMode>(SizeMode.FIXED);
   let alignment = $state<'left' | 'center' | 'right'>('left');
   let halo = $state<boolean>(false);
   let haloColor = $state<string>(DEFAULT_COLORS.halo);
@@ -140,7 +160,10 @@
 
   let secondaryColor = $state<string>(DEFAULT_COLORS.text);
   let secondaryOpacity = $state<number>(VISUALIZATION_DEFAULTS.labelOpacity);
+  let secondaryFontFamily = $state<string>(DEFAULT_FONT_FAMILY);
   let secondarySize = $state<number>(VISUALIZATION_DEFAULTS.labelSize);
+  let secondaryBold = $state<boolean>(false);
+  let secondaryItalic = $state<boolean>(false);
   let secondaryAlignment = $state<'left' | 'center' | 'right'>('left');
   let secondaryHalo = $state<boolean>(false);
   let secondaryHaloColor = $state<string>(DEFAULT_COLORS.halo);
@@ -158,11 +181,15 @@
 
   type StyleSection = 'primary' | 'secondary';
   type FormatTriggerRef = HTMLButtonElement | HTMLAnchorElement | null;
+  const TEXT_SIZE_SLIDER_MIN = MIN_FONT_SIZE;
+  const TEXT_SIZE_SLIDER_MAX = MAX_FONT_SIZE;
+  const TEXT_SIZE_MODES = [SizeMode.FIXED, SizeMode.PROPORTIONAL] as const;
   let showStylePopover = $state(false);
   let activeStyleSection = $state<StyleSection>('primary');
   let stylePopoverTrigger = $state<HTMLElement | undefined>();
   let primaryTriggerRef = $state<FormatTriggerRef>(null);
   let secondaryTriggerRef = $state<FormatTriggerRef>(null);
+  let sizePickerOpen = $state(false);
 
   const enabled = $derived((visualization?.style.textOpacity ?? 0) > 0);
   const hasPrimaryField = $derived(
@@ -214,6 +241,7 @@
 
   $effect(() => {
     labelFieldSelection.sync(visualization?.mapping.labelColumn);
+    sizeFieldSelection.sync(visualization?.mapping.valueColumn);
     secondaryLabelFieldSelection.sync(
       visualization?.mapping.secondaryLabelColumn
     );
@@ -233,9 +261,16 @@
       );
       textColor =
         (visualization.style.textColor as string) ?? DEFAULT_COLORS.text;
+      fontFamily =
+        normalizeFontFamily(visualization.style.textFontFamily) ??
+        DEFAULT_FONT_FAMILY;
       bold = visualization.style.textBold ?? false;
       italic = visualization.style.textItalic ?? false;
-      size = visualization.style.textSize ?? VISUALIZATION_DEFAULTS.textSize;
+      size = clampFontSize(
+        visualization.style.textSize,
+        VISUALIZATION_DEFAULTS.textSize
+      );
+      sizeMode = visualization.modes?.size ?? SizeMode.FIXED;
       alignment = visualization.style.textAlign ?? 'left';
       halo = visualization.style.textHalo ?? false;
       haloColor = visualization.style.textHaloColor ?? DEFAULT_COLORS.halo;
@@ -246,12 +281,19 @@
 
       secondaryColor =
         (visualization.style.labelColor as string) ?? DEFAULT_COLORS.text;
+      secondaryFontFamily =
+        normalizeFontFamily(visualization.style.labelFontFamily) ??
+        DEFAULT_FONT_FAMILY;
       secondaryOpacity = parseOpacityToSlider(
         visualization.style.labelOpacity,
         VISUALIZATION_DEFAULTS.labelOpacity
       );
-      secondarySize =
-        visualization.style.labelSize ?? VISUALIZATION_DEFAULTS.labelSize;
+      secondarySize = clampFontSize(
+        visualization.style.labelSize,
+        VISUALIZATION_DEFAULTS.labelSize
+      );
+      secondaryBold = visualization.style.labelBold ?? false;
+      secondaryItalic = visualization.style.labelItalic ?? false;
       secondaryAlignment = visualization.style.labelAlign ?? 'left';
       secondaryHalo = visualization.style.labelHalo ?? false;
       secondaryHaloColor =
@@ -382,6 +424,11 @@
     onStyleChange?.({ textOpacity: value / 100 });
   }
 
+  function handleFontFamilyChange(value: string) {
+    fontFamily = value;
+    onStyleChange?.({ textFontFamily: value });
+  }
+
   function handleBoldChange(value: boolean) {
     bold = value;
     onStyleChange?.({ textBold: value });
@@ -393,8 +440,32 @@
   }
 
   function handleSizeChange(value: number) {
-    size = value;
-    onStyleChange?.({ textSize: value });
+    const nextSize = clampFontSize(value, VISUALIZATION_DEFAULTS.textSize);
+    size = nextSize;
+    onStyleChange?.({ textSize: nextSize });
+  }
+
+  function handleSizeModeChange(index: number) {
+    const nextMode = TEXT_SIZE_MODES[index] ?? SizeMode.FIXED;
+    if (nextMode === sizeMode) {
+      return;
+    }
+
+    sizeMode = nextMode;
+    onModesChange?.({ size: nextMode });
+  }
+
+  function handleSizeFieldSelect(fieldId: number) {
+    sizeFieldSelection.set(fieldId);
+    if (fieldId === NONE_FIELD_ID) {
+      onMappingChange?.({ valueColumn: undefined });
+      return;
+    }
+
+    const field = dataFields.find((item) => item.id === fieldId);
+    if (field) {
+      onMappingChange?.({ valueColumn: field.text });
+    }
   }
 
   function handleAlignmentChange(value: 'left' | 'center' | 'right') {
@@ -437,9 +508,25 @@
     onSecondaryLabelsChange?.({ opacity: value / 100 });
   }
 
+  function handleSecondaryFontFamilyChange(value: string) {
+    secondaryFontFamily = value;
+    onSecondaryLabelsChange?.({ fontFamily: value });
+  }
+
   function handleSecondarySizeChange(value: number) {
-    secondarySize = value;
-    onSecondaryLabelsChange?.({ size: value });
+    const nextSize = clampFontSize(value, VISUALIZATION_DEFAULTS.labelSize);
+    secondarySize = nextSize;
+    onSecondaryLabelsChange?.({ size: nextSize });
+  }
+
+  function handleSecondaryBoldChange(value: boolean) {
+    secondaryBold = value;
+    onSecondaryLabelsChange?.({ bold: value });
+  }
+
+  function handleSecondaryItalicChange(value: boolean) {
+    secondaryItalic = value;
+    onSecondaryLabelsChange?.({ italic: value });
   }
 
   function handleSecondaryAlignmentChange(value: 'left' | 'center' | 'right') {
@@ -584,6 +671,13 @@
 
     toggleStylePopover('secondary', secondaryTriggerRef);
   }
+
+  const sizeModeItems = $derived([
+    { icon: TextAllCaps, label: m.unique(), iconSize: 16 },
+    { icon: TextScale, label: m.proportional(), iconSize: 16 }
+  ]);
+  const sizeModeIndex = $derived(TEXT_SIZE_MODES.indexOf(sizeMode));
+  const sizeColumnName = $derived(sizeFieldSelection.selectedFieldName ?? '');
 </script>
 
 <div class="viz-panel-shell texts-panel-shell">
@@ -632,7 +726,7 @@
             kind="ghost"
             aria-pressed={showStylePopover && activeStyleSection === 'primary'}
             iconDescription={m.text_format_button()}
-            onclick={togglePrimaryFormat}
+            on:click={togglePrimaryFormat}
           >
             Aa
           </Button>
@@ -659,7 +753,7 @@
               activeStyleSection === 'secondary'}
             iconDescription={m.text_format_button()}
             disabled={!hasPrimaryField || !hasSecondaryField}
-            onclick={toggleSecondaryFormat}
+            on:click={toggleSecondaryFormat}
           >
             Aa
           </Button>
@@ -700,16 +794,68 @@
             </label>
 
             <div class="field-group">
-              <ColorSelector
+              <SingleColorPreview
                 exclusive
                 label={m.color()}
-                value={missingDataColor}
+                color={missingDataColor}
                 onchange={handleMissingDataColorChange}
               />
             </div>
           </div>
         {/if}
       </div>
+
+      <SectionHeading title={m.size_label()} />
+
+      <div class="field-group">
+        <ToggleTabs
+          items={sizeModeItems}
+          activeIndex={sizeModeIndex}
+          onChange={handleSizeModeChange}
+          hideInactiveLabel={true}
+        />
+      </div>
+
+      {#if sizeMode === SizeMode.PROPORTIONAL}
+        <div class="field-group">
+          <FacetsVariablePicker
+            bind:open={sizePickerOpen}
+            titleText={m.size_according()}
+            dataFields={dataFields}
+            singleSelectItems={selectableDataFields}
+            selectedFieldId={sizeFieldSelection.selectedFieldId}
+            selectedFieldIds={textFacetsSelection.getSelectedFieldIds(
+              FACET_SLOT.TEXT_VALUE
+            )}
+            isCollectionEnabled={textFacetsSelection.isActiveForSlot(
+              FACET_SLOT.TEXT_VALUE
+            )}
+            onSelect={handleSizeFieldSelect}
+            onCollectionChange={(ids) =>
+              textFacetsSelection.updateVariables(
+                sizeColumnName,
+                FACET_SLOT.TEXT_VALUE,
+                ids
+              )}
+            onToggleCollection={(enabled) =>
+              textFacetsSelection.toggle(
+                sizeColumnName,
+                FACET_SLOT.TEXT_VALUE,
+                enabled
+              )}
+          />
+        </div>
+      {/if}
+
+      <SliderWithInput
+        label={m.size_label()}
+        min={TEXT_SIZE_SLIDER_MIN}
+        max={TEXT_SIZE_SLIDER_MAX}
+        value={size}
+        showMinMax
+        inputWidth="64px"
+        onchange={handleSizeChange}
+      />
 
       {#if backgroundAvailable}
         <FillSection
@@ -728,6 +874,8 @@
           facetsCategorySlotPath={FACET_SLOT.TEXT_BACKGROUND_CATEGORY}
           categoriesVariant="texts"
           showMissingDataSection={false}
+          showOpacityBounds={true}
+          opacityInputWidth="64px"
           sectionTitle={m.background()}
           selectableDataFields={selectableDataFields}
           getFacetsSelectedFieldIds={backgroundFacetsSelection.getSelectedFieldIds}
@@ -751,6 +899,7 @@
           dataFields={dataFields}
           discretizationLabel={backgroundStrokeDiscretizationLabel}
           showDashed={false}
+          sliderInputWidth="64px"
           onStyleChange={onBackgroundStyleChange}
           onModesChange={onBackgroundModesChange}
           onMappingChange={onBackgroundMappingChange}
@@ -764,8 +913,8 @@
             ?.strokeValueColumn}
           strokeCategoryColumn={backgroundVisualization?.text?.background
             ?.strokeCategoryColumn}
-          facetsValueSlotPath={FACET_SLOT.TEXT_BACKGROUND_VALUE}
-          facetsCategorySlotPath={FACET_SLOT.TEXT_BACKGROUND_CATEGORY}
+          facetsValueSlotPath={FACET_SLOT.TEXT_BACKGROUND_STROKE_VALUE}
+          facetsCategorySlotPath={FACET_SLOT.TEXT_BACKGROUND_STROKE_CATEGORY}
         />
       {/if}
     </div>
@@ -798,10 +947,10 @@
   <TextStylePopover
     bind:open={showStylePopover}
     triggerElement={stylePopoverTrigger}
-    visibleSection={activeStyleSection}
     primary={{
       color: textColor,
       opacity: textOpacity,
+      fontFamily,
       bold,
       italic,
       size,
@@ -813,6 +962,7 @@
       dxpMasking,
       onColorChange: handleTextColorChange,
       onOpacityChange: handleTextOpacityChange,
+      onFontFamilyChange: handleFontFamilyChange,
       onBoldChange: handleBoldChange,
       onItalicChange: handleItalicChange,
       onSizeChange: handleSizeChange,
@@ -827,7 +977,10 @@
       ? {
           color: secondaryColor,
           opacity: secondaryOpacity,
+          fontFamily: secondaryFontFamily,
           size: secondarySize,
+          bold: secondaryBold,
+          italic: secondaryItalic,
           align: secondaryAlignment,
           halo: secondaryHalo,
           haloColor: secondaryHaloColor,
@@ -836,7 +989,10 @@
           dxpMasking: secondaryDxpMasking,
           onColorChange: handleSecondaryColorChange,
           onOpacityChange: handleSecondaryOpacityChange,
+          onFontFamilyChange: handleSecondaryFontFamilyChange,
           onSizeChange: handleSecondarySizeChange,
+          onBoldChange: handleSecondaryBoldChange,
+          onItalicChange: handleSecondaryItalicChange,
           onAlignmentChange: handleSecondaryAlignmentChange,
           onHaloChange: handleSecondaryHaloToggle,
           onHaloColorChange: handleSecondaryHaloColorChange,
@@ -921,137 +1077,6 @@
   :global(.format-trigger:disabled) {
     opacity: 0.4;
     cursor: not-allowed;
-  }
-
-  .missing-data-block {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-04);
-    padding-top: var(--cds-spacing-04);
-    border-top: 1px solid var(--cds-border-subtle-01, #c6c6c6);
-  }
-
-  .missing-data-heading {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--cds-spacing-03);
-  }
-
-  .missing-data-title {
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: var(--cds-text-primary, #161616);
-  }
-
-  .missing-data-toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--cds-spacing-03);
-  }
-
-  .missing-data-toggle-state {
-    font-size: 0.875rem;
-    color: var(--cds-text-primary, #161616);
-    font-weight: 500;
-  }
-
-  .missing-data-fields {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--cds-spacing-04);
-  }
-
-  :global(.text-input-field .bx--text-input) {
-    height: 40px;
-  }
-
-  :global(.text-input-field .bx--text-input__field-wrapper) {
-    background: var(--cds-field-01, #f4f4f4);
-  }
-
-  :global(.texts-panel-shell .field-picker .bx--label) {
-    margin-bottom: 0.5rem;
-  }
-
-  :global(.texts-panel-shell .field-picker .bx--list-box__field) {
-    min-height: 40px;
-    background: var(--cds-field-01, #f4f4f4);
-  }
-
-  @media (max-width: 560px) {
-    .missing-data-fields {
-      grid-template-columns: 1fr;
-    }
-  }
-
-  .missing-data-block {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-04);
-    padding-top: var(--cds-spacing-04);
-    border-top: 1px solid var(--cds-border-subtle-01, #c6c6c6);
-  }
-
-  .missing-data-heading {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--cds-spacing-03);
-  }
-
-  .missing-data-title {
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: var(--cds-text-primary, #161616);
-  }
-
-  .missing-data-toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--cds-spacing-03);
-  }
-
-  .missing-data-toggle-state {
-    font-size: 0.875rem;
-    color: var(--cds-text-primary, #161616);
-    font-weight: 500;
-  }
-
-  .missing-data-fields {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--cds-spacing-04);
-  }
-
-  :global(.text-input-field .bx--text-input) {
-    height: 40px;
-  }
-
-  :global(.text-input-field .bx--text-input__field-wrapper) {
-    background: var(--cds-field-01, #f4f4f4);
-  }
-
-  :global(.texts-panel-shell .field-picker .bx--label) {
-    margin-bottom: 0.5rem;
-  }
-
-  :global(.texts-panel-shell .field-picker .bx--list-box__field) {
-    min-height: 40px;
-    background: var(--cds-field-01, #f4f4f4);
-  }
-
-  @media (max-width: 560px) {
-    .field-row {
-      grid-template-columns: 1fr;
-    }
-
-    :global(.format-trigger) {
-      width: 100%;
-      height: 48px;
-    }
-
-    .missing-data-fields {
-      grid-template-columns: 1fr;
-    }
   }
 
   .missing-data-block {

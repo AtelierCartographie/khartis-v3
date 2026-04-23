@@ -10,6 +10,7 @@
     globalState,
     MOBILE_BREAKPOINT
   } from '$lib/features/commons/store/global.svelte';
+  import { fontAssetsStore } from '$lib/features/commons/store/font-assets.store.svelte';
   import { createProjectActions } from '$lib/features/commons/store/create-project.store.svelte';
   import '$lib/features/commons/utils/uuid.utils';
   import { ToolbarStep } from '$lib/features/commons/types/global';
@@ -58,10 +59,10 @@
   import * as m from '$lib/paraglide/messages';
   import ColorBlindnessNotification from '$lib/features/step-toolbar/tools/color-blindness/color-blindness-notification.svelte';
 
-  import 'carbon-components-svelte/css/all.css';
-
   import '$lib/features/commons/assets/styles/dimension.css';
   import '$lib/features/commons/assets/styles/flex.css';
+  import '$lib/features/commons/assets/styles/fonts.css';
+  import '$lib/features/commons/assets/styles/carbon-offline.scss';
   import '$lib/features/commons/assets/styles/global.css';
   import '$lib/features/commons/assets/styles/figma-tokens.css';
   import '$lib/features/commons/assets/styles/spacing.css';
@@ -78,6 +79,8 @@
   };
 
   onMount(() => {
+    void fontAssetsStore.ensureLoaded();
+
     const hasCookie = document.cookie.includes(cookieName);
     if (!hasCookie && typeof navigator !== 'undefined') {
       const browserLang = navigator.language?.split('-')[0];

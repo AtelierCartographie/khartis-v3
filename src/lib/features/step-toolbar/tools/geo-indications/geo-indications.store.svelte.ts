@@ -5,9 +5,10 @@ import {
   ScaleForm
 } from '$lib/features/commons/constants/ui.constants';
 import {
-  AVAILABLE_FONTS,
-  LEGEND_FONT_SIZES
-} from '$lib/features/step-toolbar/tools/legend/legend.constants';
+  DEFAULT_FONT_FAMILY,
+  isAvailableFont,
+  isAvailableFontSize
+} from '$lib/features/step-toolbar/constants/fonts.constants';
 import { hexToHsl } from '$lib/features/commons/utils/color-utils';
 import {
   PRINT_STANDARD_TOKENS,
@@ -44,7 +45,7 @@ const DEFAULT_STATE: GeoIndicationsState = {
     distance: 0,
     units: DistanceUnit.KILOMETERS,
     color: { hue: 0, saturation: 0, lightness: 0 },
-    fontFamily: AVAILABLE_FONTS[0],
+    fontFamily: DEFAULT_FONT_FAMILY,
     fontSize: PRINT_STANDARD_TOKENS.geoIndications.scaleFontSize,
     expanded: true,
     dragPosition: null
@@ -156,16 +157,12 @@ function normalizeState(
       color: normalizeColorState(nextScale?.color, current.scale.color),
       fontFamily:
         typeof nextScale?.fontFamily === 'string' &&
-        AVAILABLE_FONTS.includes(
-          nextScale.fontFamily as (typeof AVAILABLE_FONTS)[number]
-        )
+        isAvailableFont(nextScale.fontFamily)
           ? nextScale.fontFamily
           : current.scale.fontFamily,
       fontSize:
         typeof nextScale?.fontSize === 'number' &&
-        LEGEND_FONT_SIZES.includes(
-          nextScale.fontSize as (typeof LEGEND_FONT_SIZES)[number]
-        )
+        isAvailableFontSize(nextScale.fontSize)
           ? nextScale.fontSize
           : current.scale.fontSize,
       expanded:
@@ -421,18 +418,12 @@ const { state, actions } = createToolStore<
       s.scale.color = hexToHsl(hex);
     },
     setScaleFontFamily: (fontFamily: string) => {
-      if (
-        AVAILABLE_FONTS.includes(fontFamily as (typeof AVAILABLE_FONTS)[number])
-      ) {
+      if (isAvailableFont(fontFamily)) {
         s.scale.fontFamily = fontFamily;
       }
     },
     setScaleFontSize: (fontSize: number) => {
-      if (
-        LEGEND_FONT_SIZES.includes(
-          fontSize as (typeof LEGEND_FONT_SIZES)[number]
-        )
-      ) {
+      if (isAvailableFontSize(fontSize)) {
         s.scale.fontSize = fontSize;
       }
     },

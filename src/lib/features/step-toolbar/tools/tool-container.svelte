@@ -93,6 +93,11 @@
 </aside>
 
 <style>
+  .tool-container {
+    position: relative;
+    background-color: var(--cds-background, white);
+  }
+
   .tool-header {
     display: flex;
     align-items: center;
@@ -102,6 +107,7 @@
     position: sticky;
     top: 0;
     background-color: var(--cds-background, white);
+    box-shadow: 0 -1px 0 var(--cds-background, white);
     z-index: 2;
   }
 
@@ -117,11 +123,8 @@
     white-space: nowrap;
   }
 
-  aside {
-    position: relative;
-  }
-
   .tool-body {
+    background-color: inherit;
     padding: 0 var(--cds-spacing-05) var(--cds-spacing-05);
   }
 

@@ -119,7 +119,23 @@ function getFocusOccluders(): HTMLElement[] {
   );
 }
 
-function getFocusTargetX(focusArea: RectBounds): number {
+function clampTargetCenterX(
+  value: number,
+  focusArea: RectBounds,
+  targetWidth: number
+): number {
+  const inset = Math.max(0, targetWidth / 2);
+  const min = focusArea.left + inset;
+  const max = focusArea.right - inset;
+
+  if (min > max) {
+    return focusArea.left + focusArea.width / 2;
+  }
+
+  return clamp(value, min, max);
+}
+
+function getFocusTargetX(focusArea: RectBounds, targetWidth: number): number {
   const toolPopover = getToolPopoverElement();
 
   if (!toolPopover) {
@@ -127,9 +143,11 @@ function getFocusTargetX(focusArea: RectBounds): number {
   }
 
   const targetX =
-    toolPopover.getBoundingClientRect().right + FOCUS_TARGET_GAP_FROM_TOOL_PX;
+    toolPopover.getBoundingClientRect().right +
+    FOCUS_TARGET_GAP_FROM_TOOL_PX +
+    targetWidth / 2;
 
-  return clamp(targetX, focusArea.left, focusArea.right);
+  return clampTargetCenterX(targetX, focusArea, targetWidth);
 }
 
 export function getFocusViewportElement(
@@ -173,7 +191,7 @@ export function getElementCenteringDelta(
   }
 
   const targetRect = targetElement.getBoundingClientRect();
-  const focusTargetX = getFocusTargetX(focusArea);
+  const focusTargetX = getFocusTargetX(focusArea, targetRect.width);
   const focusCenterY = focusArea.top + focusArea.height / 2;
   const targetCenterX = targetRect.left + targetRect.width / 2;
   const targetCenterY = targetRect.top + targetRect.height / 2;

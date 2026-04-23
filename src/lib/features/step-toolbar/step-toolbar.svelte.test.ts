@@ -11,6 +11,10 @@ const toolPopoverSource = readFileSync(
   resolve(import.meta.dirname, 'tool-popover.svelte'),
   'utf8'
 );
+const toolContainerSource = readFileSync(
+  resolve(import.meta.dirname, 'tools/tool-container.svelte'),
+  'utf8'
+);
 
 describe('StepToolbar', () => {
   it('keeps popovers outside of the scrollable viewport', () => {
@@ -40,18 +44,47 @@ describe('StepToolbar', () => {
     expect(toolPopoverSource).toContain('display: none;');
   });
 
-  it('keeps tool expandables flat only in dark theme', () => {
+  it('keeps tool expandables on the shared dark background in dark theme', () => {
     expect(source).toContain(
       ":global(html[theme='g100'] #khartis-tool-popover)"
     );
     expect(source).toContain(
-      '--khartis-expandable-section-background: transparent;'
+      '--khartis-expandable-section-background: var(--cds-background);'
     );
     expect(source).not.toContain(
       ':global(:root #khartis-tool-popover) {\n    --khartis-expandable-section-background'
     );
   });
 
+  it('keeps the step toolbar itself opaque', () => {
+    expect(source).toContain('background: var(--cds-background);');
+    expect(source).not.toContain('backdrop-filter: blur(10px) saturate(1.2);');
+  });
+
+  it('keeps tool popover contents opaque', () => {
+    expect(toolPopoverSource).toContain(
+      'background: var(--khartis-control-surface-background);'
+    );
+  });
+
+  it('covers the sticky header seam at the top of tool panels', () => {
+    expect(toolContainerSource).toContain('position: sticky;');
+    expect(toolContainerSource).toContain('top: 0;');
+    expect(toolContainerSource).toContain(
+      'box-shadow: 0 -1px 0 var(--cds-background, white);'
+    );
+  });
+
+  it('dims the tool popover while a styling element is being dragged', () => {
+    expect(toolPopoverSource).toContain(
+      ':global(body.is-dragging-styling-target #khartis-tool-popover)'
+    );
+    expect(toolPopoverSource).toContain(
+      ':global(body.is-dragging-styling-target #khartis-tool-popover .bx--popover)'
+    );
+    expect(toolPopoverSource).toContain('opacity: 0.28;');
+    expect(toolPopoverSource).toContain('pointer-events: none;');
+  });
   it('does not push shorter right-top popovers downward', () => {
     expect(toolPopoverSource).toContain('computedTopOffset = Math.min(');
     expect(toolPopoverSource).toContain(

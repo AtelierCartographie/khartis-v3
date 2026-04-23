@@ -64,7 +64,7 @@ describe('focus viewport utils', () => {
     document.body.replaceChildren();
   });
 
-  it('places focused elements 30px to the right of the open tool popover', () => {
+  it('places the focused element edge 30px to the right of the open tool popover', () => {
     const viewport = createBox('div', {
       left: 0,
       top: 0,
@@ -95,7 +95,7 @@ describe('focus viewport utils', () => {
     });
 
     expect(getElementCenteringDelta(viewport, target)).toEqual({
-      x: -250,
+      x: -230,
       y: 200
     });
   });
@@ -153,7 +153,7 @@ describe('focus viewport utils', () => {
     });
 
     expect(getElementCenteringDelta(viewport, target)).toEqual({
-      x: 100,
+      x: 95,
       y: 100
     });
   });

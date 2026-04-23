@@ -11,6 +11,7 @@ import RotatableFillStyleExtension from './rotatable-fill-style-extension';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { FeatureCollection, Geometry } from 'geojson';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { fontAssetsStore } from '$lib/features/commons/store/font-assets.store.svelte';
 import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
 import { PRINT_STANDARD_TOKENS } from '$lib/features/commons/utils/layout-sizing.utils';
 import * as m from '$lib/paraglide/messages';
@@ -67,6 +68,10 @@ import type {
   YearFilterInfo
 } from '../types';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
+import {
+  DEFAULT_FONT_FAMILY,
+  resolveFontFamilyStack
+} from '$lib/features/step-toolbar/constants/fonts.constants';
 import {
   getCategoricalColorMap,
   hasCompleteCategoricalColorMap,
@@ -160,7 +165,7 @@ const HIGHLIGHT_DIMMING_FACTOR = 0.3;
 
 export const DEFAULT_TEXT_SIZE = PRINT_STANDARD_TOKENS.annotations.noteFontSize;
 export const DEFAULT_HALO_WIDTH = 2;
-export const DEFAULT_TEXT_FONT = 'IBM Plex Sans, sans-serif';
+export const DEFAULT_TEXT_FONT = resolveFontFamilyStack(DEFAULT_FONT_FAMILY);
 export const DEFAULT_TEXT_FONT_SETTINGS = { sdf: true } as const;
 const SELECTED_POLYGON_STROKE_COLOR: [number, number, number, number] = [
   15, 98, 254, 255
@@ -192,6 +197,10 @@ export function resolveDeckTextFontWeight(
   italic = false
 ): string | number {
   return italic ? `italic ${weight}` : weight;
+}
+
+export function resolveDeckTextFontFamily(fontFamily?: string): string {
+  return resolveFontFamilyStack(fontFamily) || DEFAULT_TEXT_FONT;
 }
 
 function createPointSymbolSvg(
@@ -2397,6 +2406,9 @@ function createTextOverlayLayers(
   if (!viz || !textConfig?.enabled || !textConfig.labelColumn) {
     return [];
   }
+  if (!fontAssetsStore.ready) {
+    return [];
+  }
   const textStatistics = ctx.textStatistics ?? ctx.statistics;
 
   const secondaryLabelsConfig = textConfig.secondaryLabels;
@@ -2689,6 +2701,8 @@ function createTextOverlayLayers(
 
   const textBackgroundConfig = textConfig.background;
   const backgroundEnabled = textBackgroundConfig.fillMode !== FillMode.NONE;
+  const backgroundDecorationEnabled =
+    backgroundEnabled || textBackgroundConfig.strokeMode !== StrokeMode.NONE;
   const backgroundValueVector = textBackgroundConfig.valueColumn
     ? textAttributeTable.getChild(textBackgroundConfig.valueColumn)
     : null;
@@ -2733,7 +2747,6 @@ function createTextOverlayLayers(
         : withOpacity(backgroundFillFallback, textBackgroundConfig.fillOpacity)
     : null;
   const backgroundStrokeActive =
-    backgroundEnabled &&
     textBackgroundConfig.strokeMode !== StrokeMode.NONE &&
     textBackgroundConfig.strokeWidth > 0 &&
     textBackgroundConfig.strokeOpacity > 0;
@@ -2780,7 +2793,7 @@ function createTextOverlayLayers(
           textBackgroundConfig.strokeOpacity
         )
     : TRANSPARENT_BACKGROUND_COLOR;
-  const sharedBackgroundPadding = backgroundEnabled
+  const sharedBackgroundPadding = backgroundDecorationEnabled
     ? TEXT_BACKGROUND_PADDING
     : textConfig.dxpMasking
       ? DEFAULT_TEXT_MASK_PADDING
@@ -2897,8 +2910,11 @@ function createTextOverlayLayers(
           resolveSecondaryPlacement(d).secondaryAlignmentBaseline,
         getPixelOffset: (d) =>
           resolveSecondaryPlacement(d).secondaryPixelOffset,
-        fontFamily: DEFAULT_TEXT_FONT,
-        fontWeight: resolveDeckTextFontWeight('400'),
+        fontFamily: resolveDeckTextFontFamily(secondaryLabelsConfig.fontFamily),
+        fontWeight: resolveDeckTextFontWeight(
+          secondaryLabelsConfig.bold ? '700' : '400',
+          secondaryLabelsConfig.italic
+        ),
         characterSet: 'auto',
         fontSettings: DEFAULT_TEXT_FONT_SETTINGS,
         outlineColor: withOpacity(
@@ -3060,7 +3076,7 @@ function createTextOverlayLayers(
           getAlignmentBaseline: (d) =>
             resolvePrimaryPlacement(d).primaryAlignmentBaseline,
           getPixelOffset: (d) => resolvePrimaryPlacement(d).primaryPixelOffset,
-          fontFamily: DEFAULT_TEXT_FONT,
+          fontFamily: resolveDeckTextFontFamily(textConfig.fontFamily),
           fontWeight: resolveDeckTextFontWeight(
             textConfig.bold ? '700' : '400',
             textConfig.italic

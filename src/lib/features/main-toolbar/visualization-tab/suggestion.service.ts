@@ -49,6 +49,12 @@ import {
   findPreferredNumericColumn,
   findPreferredTextColumn
 } from '$lib/features/commons/utils/visualization-columns.utils';
+import {
+  clampFontSize,
+  DEFAULT_FONT_FAMILY,
+  normalizeFontFamily
+} from '$lib/features/step-toolbar/constants/fonts.constants';
+import { getVisualizationLegendSubtitle } from '$lib/features/commons/utils/legend-subtitle.utils';
 
 import { projectStore } from '$lib/features/commons/store/project.store.svelte';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
@@ -280,9 +286,17 @@ function buildTextPrimitiveConfig(
   const baseSecondaryLabels = {
     enabled: false,
     labelColumn: text?.secondaryLabels.labelColumn,
+    fontFamily:
+      normalizeFontFamily(text?.secondaryLabels.fontFamily) ??
+      DEFAULT_FONT_FAMILY,
     color: text?.secondaryLabels.color ?? DEFAULT_COLORS.text,
     opacity: text?.secondaryLabels.opacity ?? 1,
-    size: text?.secondaryLabels.size ?? VISUALIZATION_DEFAULTS.labelSize,
+    size: clampFontSize(
+      text?.secondaryLabels.size ?? VISUALIZATION_DEFAULTS.labelSize,
+      VISUALIZATION_DEFAULTS.labelSize
+    ),
+    bold: text?.secondaryLabels.bold ?? false,
+    italic: text?.secondaryLabels.italic ?? false,
     align: text?.secondaryLabels.align ?? 'left',
     halo: text?.secondaryLabels.halo ?? false,
     haloColor: text?.secondaryLabels.haloColor ?? DEFAULT_COLORS.halo,
@@ -296,12 +310,16 @@ function buildTextPrimitiveConfig(
     enabled: true,
     colorMode: text?.colorMode ?? ColorMode.UNIQUE,
     sizeMode: text?.sizeMode ?? SizeMode.FIXED,
+    fontFamily: normalizeFontFamily(text?.fontFamily) ?? DEFAULT_FONT_FAMILY,
     color: text?.color ?? DEFAULT_COLORS.text,
     opacity:
       text?.opacity !== undefined && text.opacity > 0
         ? text.opacity
         : defaultTextOpacity,
-    size: text?.size ?? VISUALIZATION_DEFAULTS.textSize,
+    size: clampFontSize(
+      text?.size ?? VISUALIZATION_DEFAULTS.textSize,
+      VISUALIZATION_DEFAULTS.textSize
+    ),
     bold: text?.bold ?? false,
     italic: text?.italic ?? false,
     align: text?.align ?? 'left',
@@ -990,9 +1008,13 @@ export function resolveBlankVisualizationPreset(
   const style = {
     ...preset.style,
     lineColor: DEFAULT_COLORS.gray,
+    textFontFamily: DEFAULT_FONT_FAMILY,
     textHalo: false,
     textCollisionDetection: false,
     textDxpMasking: false,
+    labelFontFamily: DEFAULT_FONT_FAMILY,
+    labelBold: false,
+    labelItalic: false,
     labelHalo: false,
     labelCollisionDetection: false,
     labelDxpMasking: false
@@ -1288,8 +1310,11 @@ function mergeTextPrimitiveConfig(
     secondaryLabels: {
       ...(base?.secondaryLabels ?? {
         enabled: false,
+        fontFamily: DEFAULT_FONT_FAMILY,
         opacity: 1,
         size: VISUALIZATION_DEFAULTS.labelSize,
+        bold: false,
+        italic: false,
         align: 'left',
         halo: false,
         haloColor: DEFAULT_COLORS.halo,
@@ -1384,17 +1409,7 @@ export function resolveNextSuggestionSelection(
 function getLegendSubtitleForVisualization(
   visualization: VisualizationConfig
 ): string {
-  if (visualization.modes?.fill === FillMode.CATEGORIES) {
-    return visualization.mapping.categoryColumn ?? '';
-  }
-
-  return (
-    visualization.mapping.valueColumn ??
-    visualization.mapping.sizeColumn ??
-    visualization.mapping.categoryColumn ??
-    visualization.mapping.colorColumn ??
-    ''
-  );
+  return getVisualizationLegendSubtitle(visualization);
 }
 
 function syncLegendSubtitleAfterSuggestion(

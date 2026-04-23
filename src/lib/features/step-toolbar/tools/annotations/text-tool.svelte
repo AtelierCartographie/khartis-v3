@@ -9,8 +9,12 @@
   import { hslToHex, hexToHsl } from '$lib/features/commons/utils/color-utils';
   import {
     AVAILABLE_FONTS,
-    LEGEND_FONT_SIZES
-  } from '$lib/features/step-toolbar/tools/legend/legend.constants';
+    DEFAULT_FONT_FAMILY,
+    FONT_SIZE_OPTIONS,
+    MIN_FONT_SIZE,
+    clampFontSize,
+    normalizeFontFamily
+  } from '$lib/features/step-toolbar/constants/fonts.constants';
   import { PRINT_STANDARD_TOKENS } from '$lib/features/commons/utils/layout-sizing.utils';
   import * as m from '$lib/paraglide/messages';
   import {
@@ -52,7 +56,6 @@
     { value: ANNOTATION_ROLE.SUBTITLE, text: m.annotations_style_subtitle() },
     { value: 'caption', text: m.annotations_style_caption() }
   ];
-  const ANNOTATION_FONT_SIZES = [8, ...LEGEND_FONT_SIZES];
 
   function handleAlignChange(align: TextAlign) {
     annotationsActions.applyStyle({ textAlign: align });
@@ -95,7 +98,9 @@
     return value <= 1 ? value * 100 : value;
   }
 
-  const effectiveFont = $derived(effectiveStyle.font ?? 'Cabin');
+  const effectiveFont = $derived(
+    normalizeFontFamily(effectiveStyle.font) ?? DEFAULT_FONT_FAMILY
+  );
   const effectiveFontSize = $derived(
     effectiveStyle.fontSize ?? PRINT_STANDARD_TOKENS.annotations.noteFontSize
   );
@@ -121,12 +126,12 @@
   });
   const bgOpacity = $derived(effectiveStyle.backgroundOpacity ?? 100);
 
-  let localFont = $state<string>(AVAILABLE_FONTS[0]);
-  let localFontSize = $state<number>(LEGEND_FONT_SIZES[0]);
+  let localFont = $state<string>(DEFAULT_FONT_FAMILY);
+  let localFontSize = $state<number>(MIN_FONT_SIZE);
 
   $effect(() => {
     localFont = effectiveFont;
-    localFontSize = effectiveFontSize;
+    localFontSize = clampFontSize(effectiveFontSize, MIN_FONT_SIZE);
   });
 </script>
 
@@ -215,8 +220,8 @@
               }}
               size="sm"
             >
-              {#each ANNOTATION_FONT_SIZES as s (s)}
-                <SelectItem value={String(s)} text={String(s)} />
+              {#each FONT_SIZE_OPTIONS as sizeOption (sizeOption)}
+                <SelectItem value={sizeOption} text={sizeOption} />
               {/each}
             </Select>
           </div>
@@ -476,7 +481,7 @@
   }
 
   .text-style-size {
-    width: 80px;
+    width: var(--kh-text-size-control-width, 80px);
     flex-shrink: 0;
   }
 

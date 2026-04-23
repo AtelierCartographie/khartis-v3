@@ -21,6 +21,9 @@ importers:
       '@ateliercartographie/ok-palette':
         specifier: ^0.1.4
         version: 0.1.4
+      '@borgar/textbox':
+        specifier: ^2.0.0
+        version: 2.0.0
       '@deck.gl/core':
         specifier: ^9.3.1
         version: 9.3.1
@@ -36,6 +39,24 @@ importers:
       '@duckdb/duckdb-wasm':
         specifier: 1.33.1-dev45.0
         version: 1.33.1-dev45.0
+      '@fontsource/cabin':
+        specifier: ^5.2.8
+        version: 5.2.8
+      '@fontsource/ibm-plex-mono':
+        specifier: ^5.2.7
+        version: 5.2.7
+      '@fontsource/ibm-plex-sans':
+        specifier: ^5.2.8
+        version: 5.2.8
+      '@fontsource/inter':
+        specifier: ^5.2.8
+        version: 5.2.8
+      '@fontsource/lato':
+        specifier: ^5.2.7
+        version: 5.2.7
+      '@fontsource/open-sans':
+        specifier: ^5.2.7
+        version: 5.2.7
       '@inlang/paraglide-js':
         specifier: ^2.16.0
         version: 2.16.0
@@ -54,6 +75,9 @@ importers:
       apache-arrow:
         specifier: ^21.1.0
         version: 21.1.0
+      carbon-components:
+        specifier: 10.58.12
+        version: 10.58.12
       carbon-components-svelte:
         specifier: ^0.106.2
         version: 0.106.2
@@ -63,6 +87,9 @@ importers:
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
+      d3-array:
+        specifier: ^3.2.4
+        version: 3.2.4
       d3-geo:
         specifier: ^3.1.1
         version: 3.1.1
@@ -142,6 +169,9 @@ importers:
       '@testing-library/svelte':
         specifier: ^5.3.1
         version: 5.3.1(svelte@5.55.4)(vite@8.0.9(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.6.1)(sass-embedded@1.99.0)(sass@1.99.0)(terser@5.46.1)(yaml@2.8.3))(vitest@4.1.5(@types/node@25.6.0)(jsdom@29.0.2)(vite@8.0.9(@types/node@25.6.0)(esbuild@0.27.7)(jiti@2.6.1)(sass-embedded@1.99.0)(sass@1.99.0)(terser@5.46.1)(yaml@2.8.3)))
+      '@types/d3-array':
+        specifier: ^3.2.2
+        version: 3.2.2
       '@types/d3-geo':
         specifier: ^3.1.0
         version: 3.1.0
@@ -760,6 +790,9 @@ packages:
     resolution: {integrity: sha512-LwdZHpScM4Qz8Xw2iKSzS+cfglZzJGvofQICy7W7v4caru4EaAmyUuO6BGrbyQ2mYV11W0U8j5mBhd14dd3B0A==}
     engines: {node: '>=6.9.0'}
 
+  '@borgar/textbox@2.0.0':
+    resolution: {integrity: sha512-uFbjmbJ+5s6ZauFgar5WYfZ3M5qmBXK/Cb+Xpll7AjFBleCSlLIW6BU2iSOuCzzN/6ivxbVvh15Y7DRfMYoPTg==}
+
   '@bramus/specificity@2.4.2':
     resolution: {integrity: sha512-ctxtJ/eA+t+6q2++vj5j7FYX3nRu311q1wfYH3xjlLOsczhlhxAg2FWNUXhpGvAw3BWo1xBcvOV6/YLc2r5FJw==}
     hasBin: true
@@ -769,6 +802,10 @@ packages:
 
   '@canvas/image-data@1.1.0':
     resolution: {integrity: sha512-QdObRRjRbcXGmM1tmJ+MrHcaz1MftF2+W7YI+MsphnsCrmtyfS0d5qJbk0MeSbUeyM/jCb0hmnkXPsy026L7dA==}
+
+  '@carbon/telemetry@0.1.0':
+    resolution: {integrity: sha512-kNWt0bkgPwGW0i5h7HFuljbKRXPvIhsKbB+1tEURAYLXoJg9iJLF1eGvWN5iVoFCS2zje4GR3OGOsvvKVe7Hlg==}
+    hasBin: true
 
   '@colors/colors@1.5.0':
     resolution: {integrity: sha512-ooWCrlZP11i8GImSjTHYHLkvFDP48nS4+204nGb1RiX/WXYHmJA2III9/e2DWVabCESdW7hBAEzHRqUn9OUVvQ==}
@@ -1176,6 +1213,24 @@ packages:
     peerDependenciesMeta:
       '@noble/hashes':
         optional: true
+
+  '@fontsource/cabin@5.2.8':
+    resolution: {integrity: sha512-Gu3MMA3pvxqZDhZcnMS1FvCL9y4ejhYqZFcccps80jvkAehhUGLP65N7JBNtJzYRaNRSO4Kss3OXrNaELG5N1A==}
+
+  '@fontsource/ibm-plex-mono@5.2.7':
+    resolution: {integrity: sha512-MKAb8qV+CaiMQn2B0dIi1OV3565NYzp3WN5b4oT6LTkk+F0jR6j0ZN+5BKJiIhffDC3rtBULsYZE65+0018z9w==}
+
+  '@fontsource/ibm-plex-sans@5.2.8':
+    resolution: {integrity: sha512-eztSXjDhPhcpxNIiGTgMebdLP9qS4rWkysuE1V7c+DjOR0qiezaiDaTwQE7bTnG5HxAY/8M43XKDvs3cYq6ZYQ==}
+
+  '@fontsource/inter@5.2.8':
+    resolution: {integrity: sha512-P6r5WnJoKiNVV+zvW2xM13gNdFhAEpQ9dQJHt3naLvfg+LkF2ldgSLiF4T41lf1SQCM9QmkqPTn4TH568IRagg==}
+
+  '@fontsource/lato@5.2.7':
+    resolution: {integrity: sha512-k5mum1ADbDW5cTw1Ett1eQVWeoZ6gq0ct6SFBibEhB4LRxhniChJZTBgd6ph5yBxLkN1fcnsnmicBNA4S/3nbw==}
+
+  '@fontsource/open-sans@5.2.7':
+    resolution: {integrity: sha512-8yfgDYjE5O0vmTPdrcjV35y4yMnctsokmi9gN49Gcsr0sjzkMkR97AnKDe6OqZh2SFkYlR28fxOvi21bYEgMSw==}
 
   '@geoarrow/geoarrow-js@0.3.3':
     resolution: {integrity: sha512-mtVzYisEqa0FbxgybFut/1w3tu7Ay2L8LwyGGVFo2l0Q3iDQgop7dgEaFFfdxpoManHML6Nm0r3HQJ3EncS2ug==}
@@ -2264,6 +2319,9 @@ packages:
   '@types/cookie@0.6.0':
     resolution: {integrity: sha512-4Kh9a6B2bQciAhf7FSuMRRkUWecJgJu9nPnx3yzpsfXX/c50REIqpHY4C82bXP90qrLtXtkDxTZosYO3UpOwlA==}
 
+  '@types/d3-array@3.2.2':
+    resolution: {integrity: sha512-hOLWVbm7uRza0BYXpIIW5pxfrKe0W+D5lrFiAEYR+pb6w3N2SwSMaJbXdUfSEv+dT4MfHBLtn5js0LAWaO6otw==}
+
   '@types/d3-geo@3.1.0':
     resolution: {integrity: sha512-856sckF0oP/diXtS4jNsiQw/UuK5fQG8l/a9VVLeSouf1/PPbBE1i1W852zVwKwYCBkFJJB7nCFTbk6UMEXBOQ==}
 
@@ -2622,6 +2680,10 @@ packages:
 
   carbon-components-svelte@0.106.2:
     resolution: {integrity: sha512-cMCj+Ye2eHfuS+Zp3Nl9DatY38eiqzmsGqr3HYuSfX5y7kkn8BBZa2z/jClwR6tUFYq88V+C/wpiNcSEsqFILw==}
+
+  carbon-components@10.58.12:
+    resolution: {integrity: sha512-Ep1aXo6JUCrI5QA/Wa0EFXdxx5EoJIg84pXExp3ieUO5gi7NaCeMBqjAhI1RHpjAEw8gPTUWzPGKayHU80hJlA==}
+    deprecated: This package is no longer supported. More info at https://carbondesignsystem.com/deprecations/
 
   carbon-icons-svelte@13.10.0:
     resolution: {integrity: sha512-gjHuvxYIKWe97aabVoFcSed3eOXLUEccoLmn1M29n6JPF8NGtOOIj/wkihR3Vc/2UERNH1gSdtHJKgMXsD352A==}
@@ -3279,6 +3341,9 @@ packages:
 
   flatbuffers@25.9.23:
     resolution: {integrity: sha512-MI1qs7Lo4Syw0EOzUl0xjs2lsoeqFku44KpngfIduHBYvzm8h2+7K8YMQh1JtVVVrUvhLpNwqVi4DERegUJhPQ==}
+
+  flatpickr@4.6.1:
+    resolution: {integrity: sha512-3ULSxbXmcMIRzer/2jLNweoqHpwDvsjEawO2FUd9UFR8uPwLM+LruZcPDpuZStcEgbQKhuFOfXo4nYdGladSNw==}
 
   flatpickr@4.6.9:
     resolution: {integrity: sha512-F0azNNi8foVWKSF+8X+ZJzz8r9sE1G4hl06RyceIaLvyltKvDl6vqk9Lm/6AUUCi5HWaIjiUbk7UpeE/fOXOpw==}
@@ -4050,6 +4115,10 @@ packages:
   log-update@6.1.0:
     resolution: {integrity: sha512-9ie8ItPR6tjY5uYJh8K/Zrv/RMZ5VOlOWvtZdEHYSTFKZfIBPQa9tOAEeAWhd+AnIneLJ22w5fjOYtoutpWq5w==}
     engines: {node: '>=18'}
+
+  loose-envify@1.4.0:
+    resolution: {integrity: sha512-lyuxPGr/Wfhrlem2CL/UcnUc1zcqKAImBDzukY7Y5F/yQiNdko6+fRLevlw1HgMySw7f611UIY408EtxRSoK3Q==}
+    hasBin: true
 
   lru-cache@10.4.3:
     resolution: {integrity: sha512-JNAzZcXrCt42VGLuYz0zfAzDfAvJWW6AfYlDBQyDV5DClI2m5sAmK+OIO7s59XfsRsWHp02jAJrRadPRGTt6SQ==}
@@ -5587,6 +5656,9 @@ packages:
     resolution: {integrity: sha512-3hu+tD8YzSLGuFYtPRb48vdhKMi0KQV5sn+uWr8+7dMEq/2G/dtLrdDinkLjqq5TIbIBjYJ4Ax/n3YiaW7QM8A==}
     engines: {node: 20 || >=22}
 
+  warning@3.0.0:
+    resolution: {integrity: sha512-jMBt6pUrKn5I+OGgtQ4YZLdhIeJmObddh6CsibPxyQ5yPZm1XExSyzC1LCNX7BzhxWgiHmizBWJTHJIjMjTQYQ==}
+
   web-worker@1.5.0:
     resolution: {integrity: sha512-RiMReJrTAiA+mBjGONMnjVDP2u3p9R1vkcGz6gDIrOMT3oGuYwX2WRMYI9ipkphSuE5XKEhydbhNEJh4NY9mlw==}
 
@@ -6483,6 +6555,8 @@ snapshots:
       '@babel/helper-string-parser': 7.27.1
       '@babel/helper-validator-identifier': 7.28.5
 
+  '@borgar/textbox@2.0.0': {}
+
   '@bramus/specificity@2.4.2':
     dependencies:
       css-tree: 3.2.1
@@ -6490,6 +6564,8 @@ snapshots:
   '@bufbuild/protobuf@2.11.0': {}
 
   '@canvas/image-data@1.1.0': {}
+
+  '@carbon/telemetry@0.1.0': {}
 
   '@colors/colors@1.5.0':
     optional: true
@@ -6865,6 +6941,18 @@ snapshots:
       levn: 0.4.1
 
   '@exodus/bytes@1.15.0': {}
+
+  '@fontsource/cabin@5.2.8': {}
+
+  '@fontsource/ibm-plex-mono@5.2.7': {}
+
+  '@fontsource/ibm-plex-sans@5.2.8': {}
+
+  '@fontsource/inter@5.2.8': {}
+
+  '@fontsource/lato@5.2.7': {}
+
+  '@fontsource/open-sans@5.2.7': {}
 
   '@geoarrow/geoarrow-js@0.3.3(apache-arrow@21.1.0)':
     dependencies:
@@ -7855,6 +7943,8 @@ snapshots:
 
   '@types/cookie@0.6.0': {}
 
+  '@types/d3-array@3.2.2': {}
+
   '@types/d3-geo@3.1.0':
     dependencies:
       '@types/geojson': 7946.0.16
@@ -8260,6 +8350,13 @@ snapshots:
     dependencies:
       '@ibm/telemetry-js': 1.11.0
       flatpickr: 4.6.9
+
+  carbon-components@10.58.12:
+    dependencies:
+      '@carbon/telemetry': 0.1.0
+      flatpickr: 4.6.1
+      lodash.debounce: 4.0.8
+      warning: 3.0.0
 
   carbon-icons-svelte@13.10.0: {}
 
@@ -8991,6 +9088,8 @@ snapshots:
 
   flatbuffers@25.9.23: {}
 
+  flatpickr@4.6.1: {}
+
   flatpickr@4.6.9: {}
 
   flatted@3.4.2: {}
@@ -9710,6 +9809,10 @@ snapshots:
       slice-ansi: 7.1.2
       strip-ansi: 7.2.0
       wrap-ansi: 9.0.2
+
+  loose-envify@1.4.0:
+    dependencies:
+      js-tokens: 4.0.0
 
   lru-cache@10.4.3: {}
 
@@ -11257,6 +11360,10 @@ snapshots:
       xml-name-validator: 5.0.0
 
   walk-up-path@4.0.0: {}
+
+  warning@3.0.0:
+    dependencies:
+      loose-envify: 1.4.0
 
   web-worker@1.5.0: {}
 

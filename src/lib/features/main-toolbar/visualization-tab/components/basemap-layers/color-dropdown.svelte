@@ -85,6 +85,7 @@
   style:--selected-color={selectedColor.color}
 >
   <Dropdown
+    size="sm"
     titleText={label}
     selectedId={selectedColor.id}
     items={colors}
@@ -111,13 +112,13 @@
     :global(.bx--list-box__label) {
       display: flex;
       align-items: center;
-      gap: var(--cds-spacing-03);
+      gap: var(--cds-spacing-02);
 
       &::before {
         content: '';
         display: inline-block;
-        width: 20px;
-        height: 20px;
+        width: 16px;
+        height: 16px;
         flex-shrink: 0;
         background-color: var(--selected-color);
         border: 1px solid var(--cds-border-subtle);
@@ -128,12 +129,12 @@
   .color-item {
     display: flex;
     align-items: center;
-    gap: var(--cds-spacing-03);
+    gap: var(--cds-spacing-02);
   }
 
   .color-swatch {
-    width: 20px;
-    height: 20px;
+    width: 16px;
+    height: 16px;
     border: 1px solid var(--cds-border-subtle);
     flex-shrink: 0;
   }

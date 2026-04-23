@@ -179,7 +179,7 @@ describe('workspace viewport utils', () => {
   });
 
   describe('resolveWorkspaceFitScale', () => {
-    it('should scale the page up when the available workspace is larger than the page', () => {
+    it('should scale the page up to at most 85% of the available workspace', () => {
       expect(
         resolveWorkspaceFitScale({
           viewportWidth: 1600,
@@ -187,10 +187,10 @@ describe('workspace viewport utils', () => {
           pageWidth: 842,
           pageHeight: 595
         })
-      ).toBeCloseTo((1000 - 60) / 595, 6);
+      ).toBeCloseTo(((1000 - 60) * 0.85) / 595, 6);
     });
 
-    it('should reserve the step toolbar width and keep 30px inline padding on both sides', () => {
+    it('should reserve the step toolbar width before applying the 85% cap', () => {
       expect(
         resolveWorkspaceFitScale({
           viewportWidth: 1000,
@@ -199,7 +199,19 @@ describe('workspace viewport utils', () => {
           pageHeight: 595,
           reservedInlineStartPx: 98
         })
-      ).toBeCloseTo((1000 - 98 - 60) / 842, 6);
+      ).toBeCloseTo(((1000 - 98 - 60) * 0.85) / 842, 6);
+    });
+
+    it('should allow callers to opt into full available workspace coverage', () => {
+      expect(
+        resolveWorkspaceFitScale({
+          viewportWidth: 1600,
+          viewportHeight: 1000,
+          pageWidth: 842,
+          pageHeight: 595,
+          maxViewportCoverageRatio: 1
+        })
+      ).toBeCloseTo((1000 - 60) / 595, 6);
     });
 
     it('should shrink below the readable preview floor when needed to fit the workspace', () => {

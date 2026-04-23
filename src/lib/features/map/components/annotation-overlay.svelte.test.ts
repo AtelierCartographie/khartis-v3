@@ -20,6 +20,7 @@ import {
   getAnnotationsState
 } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
 import { computeDrawingBounds } from '../utils/annotation-drawing.utils';
+import { DRAGGING_STYLING_TARGET_BODY_CLASS } from '../utils/tool-popover-drag-visibility.utils';
 import AnnotationOverlay from './annotation-overlay.svelte';
 
 function extractPathPoints(
@@ -114,6 +115,7 @@ function setupCaptureLayer(): {
 function setupAnnotationViewport(): {
   container: HTMLElement;
   item: HTMLElement;
+  overlay: HTMLDivElement;
   viewport: HTMLDivElement;
 } {
   const viewport = document.createElement('div');
@@ -138,6 +140,10 @@ function setupAnnotationViewport(): {
     configurable: true,
     value: () => createDomRect(400, 300)
   });
+  Object.defineProperty(overlay, 'getBoundingClientRect', {
+    configurable: true,
+    value: () => createDomRect(400, 300)
+  });
   Object.defineProperty(item, 'getBoundingClientRect', {
     configurable: true,
     value: () =>
@@ -159,6 +165,7 @@ function setupAnnotationViewport(): {
   return {
     container: container as HTMLElement,
     item,
+    overlay,
     viewport
   };
 }
@@ -168,6 +175,7 @@ describe('annotation overlay drawing interactions', () => {
     cleanup();
     annotationsActions.reset();
     globalActions.resetNavigationState();
+    globalActions.setPageZoomScale(1);
     globalState.selectedTool = StylingTools.Annotations;
     formatActions.setSize(400, 300);
     formatActions.setMargins({
@@ -180,8 +188,10 @@ describe('annotation overlay drawing interactions', () => {
 
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
     annotationsActions.reset();
     globalActions.resetNavigationState();
+    globalActions.setPageZoomScale(1);
     globalState.selectedTool = undefined;
     formatActions.setSize(
       PAGE_PRESETS[PageModel.A4_LANDSCAPE].width,
@@ -405,6 +415,21 @@ describe('annotation overlay drawing interactions', () => {
     expect(image.position).toEqual({ x: 0, y: 0 });
   });
 
+  it('scales page element positions with the rendered page size', () => {
+    globalActions.setPageZoomScale(1.2);
+    annotationsActions.initPageElements({ withPlaceholders: true });
+
+    const { container } = render(AnnotationOverlay);
+    const title = container.querySelector(
+      '.annotation-item[data-annotation-role="title"]'
+    );
+
+    const style = title?.getAttribute('style');
+
+    expect(style).toContain(`left: ${12 * 1.2}px`);
+    expect(style).toContain(`top: ${12 * 1.2}px`);
+    expect(style).toContain('transform: scale(1.2)');
+  });
   it('recenters the page when a centered annotation loses focus', async () => {
     annotationsActions.addAnnotation(AnnotationKind.TEXT, 'Focus item');
 
@@ -416,13 +441,144 @@ describe('annotation overlay drawing interactions', () => {
       expect(globalState.zoom.pagePanOffset).toEqual({ x: 100, y: 70 });
     });
 
+    vi.useFakeTimers();
     await fireEvent.blur(item);
 
+    expect(globalState.zoom.pagePanOffset).toEqual({ x: 100, y: 70 });
+
+    await vi.advanceTimersByTimeAsync(199);
+    expect(globalState.zoom.pagePanOffset).toEqual({ x: 100, y: 70 });
+
+    await vi.advanceTimersByTimeAsync(1);
     await waitFor(() => {
       expect(globalState.zoom.pagePanOffset).toEqual({ x: 0, y: 0 });
     });
   });
 
+  it('keeps centered annotation pan while a blurred item is being dragged', async () => {
+    annotationsActions.addAnnotation(AnnotationKind.TEXT, 'Drag focus item');
+
+    const { item } = setupAnnotationViewport();
+
+    await fireEvent.click(item);
+
+    await waitFor(() => {
+      expect(globalState.zoom.pagePanOffset).toEqual({ x: 100, y: 70 });
+    });
+
+    vi.useFakeTimers();
+    await fireEvent.pointerDown(item, {
+      clientX: 70,
+      clientY: 50,
+      pointerId: 1
+    });
+    await fireEvent.blur(item);
+    await vi.advanceTimersByTimeAsync(250);
+
+    expect(globalState.zoom.pagePanOffset).toEqual({ x: 100, y: 70 });
+
+    await fireEvent.pointerUp(window, { pointerId: 1 });
+    await vi.advanceTimersByTimeAsync(200);
+
+    expect(globalState.zoom.pagePanOffset).toEqual({ x: 0, y: 0 });
+  });
+
+  it('does not auto-center from the synthetic click after a drag', async () => {
+    annotationsActions.addAnnotation(AnnotationKind.TEXT, 'Drag click item');
+
+    const { item } = setupAnnotationViewport();
+
+    vi.useFakeTimers();
+    await fireEvent.pointerDown(item, {
+      clientX: 70,
+      clientY: 50,
+      pointerId: 1
+    });
+    await fireEvent.pointerMove(window, {
+      clientX: 120,
+      clientY: 50,
+      pointerId: 1
+    });
+    await fireEvent.pointerUp(window, { pointerId: 1 });
+    await fireEvent.click(item);
+
+    expect(globalState.zoom.pagePanOffset).toEqual({ x: 0, y: 0 });
+  });
+
+  it('drags page text annotations to the right edge of the map frame', async () => {
+    formatActions.toggleGrid();
+    formatActions.setMargins({
+      top: 40,
+      right: 40,
+      bottom: 40,
+      left: 40
+    });
+    annotationsActions.addAnnotation(AnnotationKind.TEXT, 'Right edge');
+
+    const [note] = getAnnotationsState().items;
+    if (!note) {
+      throw new Error('Expected a note annotation');
+    }
+    const { container } = render(AnnotationOverlay);
+    const overlay = container.querySelector('.annotation-overlay');
+    const item = container.querySelector('.annotation-item');
+
+    expect(overlay).toBeInstanceOf(HTMLDivElement);
+    expect(item).toBeInstanceOf(HTMLElement);
+
+    if (
+      !(overlay instanceof HTMLDivElement) ||
+      !(item instanceof HTMLElement)
+    ) {
+      return;
+    }
+
+    Object.defineProperty(overlay, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => createDomRect(400, 300)
+    });
+    Object.defineProperty(item, 'getBoundingClientRect', {
+      configurable: true,
+      value: () =>
+        ({
+          x: note.position.x,
+          y: note.position.y,
+          width: 216,
+          height: 28,
+          top: note.position.y,
+          left: note.position.x,
+          right: note.position.x + 216,
+          bottom: note.position.y + 28,
+          toJSON() {
+            return this;
+          }
+        }) as DOMRect
+    });
+
+    await fireEvent.pointerDown(item, {
+      clientX: note.position.x + 5,
+      clientY: note.position.y + 5,
+      pointerId: 1
+    });
+
+    expect(
+      document.body.classList.contains(DRAGGING_STYLING_TARGET_BODY_CLASS)
+    ).toBe(true);
+
+    await fireEvent.pointerMove(window, {
+      clientX: 600,
+      clientY: note.position.y + 5,
+      pointerId: 1
+    });
+
+    expect(getAnnotationsState().items[0]?.position.x).toBe(144);
+
+    await fireEvent.pointerUp(window, { pointerId: 1 });
+
+    expect(
+      document.body.classList.contains(DRAGGING_STYLING_TARGET_BODY_CLASS)
+    ).toBe(false);
+  });
   it('deletes a focused annotation with Delete', async () => {
     annotationsActions.addAnnotation(AnnotationKind.TEXT, 'Delete me');
 

@@ -8,6 +8,9 @@
     toggled: boolean;
     showYesNo?: boolean;
     infoText?: string;
+    disabled?: boolean;
+    switchSize?: 'sm' | 'md';
+    switchVariant?: 'default' | 'suggestions';
     ontoggle?: (value: boolean) => void;
   }
 
@@ -16,6 +19,9 @@
     toggled = $bindable(),
     showYesNo = true,
     infoText,
+    disabled = false,
+    switchSize = 'sm',
+    switchVariant = 'default',
     ontoggle
   }: Props = $props();
 
@@ -63,6 +69,9 @@
   <div class="toggle-with-label" use:stopBubbleEvents>
     <Switch
       toggled={toggled}
+      disabled={disabled}
+      size={switchSize}
+      variant={switchVariant}
       hideLabel
       labelText={label}
       onchange={handleToggleChange}

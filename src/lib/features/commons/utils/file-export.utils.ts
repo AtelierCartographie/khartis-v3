@@ -6,7 +6,10 @@ import { LogCategory, logger } from './logger';
 import { escapeIdentifier, escapeSqlString } from './sanitize.utils';
 import { generateFilename } from './string.utils';
 import { MIME, GEOJSON_TYPE } from '../constants';
-import { COLUMN_TYPE_GEOMETRY } from '../constants/data.constants';
+import {
+  COLUMN_TYPE_GEOMETRY,
+  GEO_COLUMN_NAMES
+} from '../constants/data.constants';
 
 const CSV_BOM = '\uFEFF';
 const CSV_MIME_TYPE_UTF8 = `${MIME.CSV};charset=utf-8`;
@@ -82,7 +85,7 @@ export async function exportDatasetToCsv(
 
     const viewName = `export_view_${Date.now()}`;
     const nonGeomColumns = dataset.columns
-      .filter((col) => col.type !== COLUMN_TYPE_GEOMETRY)
+      .filter((col) => !isDatasetGeometryColumn(dataset, col))
       .map((col) => `"${escapeIdentifier(col.name)}"`)
       .join(', ');
 
@@ -108,7 +111,7 @@ export async function exportDatasetToCsv(
   }
 
   const headers = dataset.columns
-    .filter((col) => col.type !== COLUMN_TYPE_GEOMETRY)
+    .filter((col) => !isDatasetGeometryColumn(dataset, col))
     .map((col) => col.name);
 
   const data = dataset.data.map((row) => {
@@ -173,10 +176,11 @@ async function exportDatasetsToCsvWithGeometry(
       const exportRow: Record<string, unknown> = {};
 
       for (const col of dataset.columns) {
-        if (col.type === COLUMN_TYPE_GEOMETRY) {
+        if (isDatasetGeometryColumn(dataset, col)) {
           const geometry = row[col.name];
-          if (geometry && typeof geometry === 'object') {
-            exportRow['geometry_wkt'] = geometryToWkt(geometry);
+          const wkt = geometryToWkt(geometry);
+          if (wkt) {
+            exportRow['geometry_wkt'] = wkt;
           }
         } else {
           exportRow[col.name] = row[col.name];
@@ -199,7 +203,24 @@ async function exportDatasetsToCsvWithGeometry(
 }
 
 function geometryToWkt(geometry: unknown): string {
-  if (!geometry || typeof geometry !== 'object') {
+  if (!geometry) {
+    return '';
+  }
+
+  if (typeof geometry === 'string') {
+    const trimmed = geometry.trim();
+    if (!trimmed) {
+      return '';
+    }
+
+    try {
+      return geometryToWkt(JSON.parse(trimmed));
+    } catch {
+      return isWktGeometry(trimmed) ? trimmed : '';
+    }
+  }
+
+  if (typeof geometry !== 'object') {
     return '';
   }
 
@@ -227,6 +248,12 @@ function geometryToWkt(geometry: unknown): string {
     default:
       return JSON.stringify(geometry);
   }
+}
+
+function isWktGeometry(value: string): boolean {
+  return /^(POINT|MULTIPOINT|LINESTRING|MULTILINESTRING|POLYGON|MULTIPOLYGON|GEOMETRYCOLLECTION)\s*\(/i.test(
+    value
+  );
 }
 
 function formatCoords(coords: unknown): string {
@@ -286,7 +313,7 @@ export async function exportProcessedDatasets(
       try {
         const unionParts = datasets.map((dataset) => {
           const nonGeomColumns = dataset.columns
-            .filter((col) => col.type !== COLUMN_TYPE_GEOMETRY)
+            .filter((col) => !isDatasetGeometryColumn(dataset, col))
             .map((col) => `"${escapeIdentifier(col.name)}"`)
             .join(', ');
           const escapedName = escapeSqlString(dataset.name);
@@ -331,7 +358,7 @@ export async function exportProcessedDatasets(
       new Set(
         datasets.flatMap((d) =>
           d.columns
-            .filter((col) => col.type !== COLUMN_TYPE_GEOMETRY)
+            .filter((col) => !isDatasetGeometryColumn(d, col))
             .map((col) => col.name)
         )
       )
@@ -345,17 +372,17 @@ export async function exportProcessedDatasets(
     const allFeatures: unknown[] = [];
 
     for (const dataset of datasets) {
-      if (!dataset.geometry) {
+      if (!dataset.geometry && !dataset.analysis.hasGeoData) {
         continue;
       }
 
-      const geometryColumn = dataset.columns.find(
-        (col) => col.type === COLUMN_TYPE_GEOMETRY
+      const geometryColumn = dataset.columns.find((col) =>
+        isDatasetGeometryColumn(dataset, col)
       );
       dataset.data.forEach((row) => {
         const properties: Record<string, unknown> = {};
         dataset.columns
-          .filter((col) => col.type !== COLUMN_TYPE_GEOMETRY)
+          .filter((col) => !isDatasetGeometryColumn(dataset, col))
           .forEach((col) => {
             properties[col.name] = row[col.name];
           });
@@ -363,7 +390,9 @@ export async function exportProcessedDatasets(
 
         allFeatures.push({
           type: 'Feature' as const,
-          geometry: geometryColumn ? row[geometryColumn.name] : null,
+          geometry: geometryColumn
+            ? normalizeGeoJsonGeometry(row[geometryColumn.name])
+            : null,
           properties
         });
       });
@@ -397,6 +426,45 @@ export async function exportProcessedDatasets(
   };
 
   return exportToJson(exportData);
+}
+
+function isKnownGeometryColumnName(name: string): boolean {
+  return (GEO_COLUMN_NAMES as readonly string[]).includes(name.toLowerCase());
+}
+
+function isDatasetGeometryColumn(
+  dataset: ProcessedDataset,
+  column: ProcessedDataset['columns'][0]
+): boolean {
+  return (
+    column.type === COLUMN_TYPE_GEOMETRY ||
+    ((Boolean(dataset.geometry) || dataset.analysis.hasGeoData) &&
+      isKnownGeometryColumnName(column.name))
+  );
+}
+
+function isGeoJsonGeometryValue(value: unknown): boolean {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const geometry = value as { type?: unknown; coordinates?: unknown };
+  return (
+    typeof geometry.type === 'string' && Array.isArray(geometry.coordinates)
+  );
+}
+
+function normalizeGeoJsonGeometry(value: unknown): unknown {
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return isGeoJsonGeometryValue(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  return isGeoJsonGeometryValue(value) ? value : null;
 }
 
 export function downloadFile(blob: Blob, filename: string): void {

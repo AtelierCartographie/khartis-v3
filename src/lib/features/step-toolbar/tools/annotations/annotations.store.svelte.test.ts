@@ -78,19 +78,19 @@ describe('annotations store', () => {
     );
 
     expect(itemsByRole.get(ANNOTATION_ROLE.TITLE)?.position).toEqual({
-      x: 44,
-      y: 44
+      x: 48,
+      y: 48
     });
     expect(itemsByRole.get(ANNOTATION_ROLE.SUBTITLE)?.position).toEqual({
-      x: 44,
-      y: 68
+      x: 48,
+      y: 72
     });
     expect(itemsByRole.get(ANNOTATION_ROLE.SOURCE)?.position).toEqual({
-      x: 564,
+      x: 576,
       y: 456
     });
     expect(itemsByRole.get(ANNOTATION_ROLE.CREDIT)?.position).toEqual({
-      x: 564,
+      x: 576,
       y: 528
     });
     expect(itemsByRole.get(ANNOTATION_ROLE.SOURCE)?.style?.textAlign).toBe(
@@ -105,6 +105,41 @@ describe('annotations store', () => {
     expect(itemsByRole.get(ANNOTATION_ROLE.CREDIT)?.style?.textAlign).toBe(
       TextAlign.Right
     );
+  });
+
+  it('spawns added text notes in the bottom-right map frame stack', () => {
+    annotationsActions.initPageElements({ withPlaceholders: true });
+    annotationsActions.addAnnotation(AnnotationKind.TEXT, 'Manual note');
+
+    const note = getAnnotationsState().items.find(
+      (item) => item.role === ANNOTATION_ROLE.NOTE
+    );
+
+    expect(note?.position).toEqual({ x: 576, y: 432 });
+    expect(note?.coordinateSpace).toBe('page');
+    expect(note?.positionMode).toBe('manual');
+  });
+
+  it('clamps manually moved page elements inside the map frame', () => {
+    formatActions.toggleGrid();
+    annotationsActions.initPageElements({ withPlaceholders: true });
+
+    const title = getAnnotationsState().items.find(
+      (item) => item.role === ANNOTATION_ROLE.TITLE
+    );
+
+    expect(title).toBeDefined();
+    if (!title) {
+      return;
+    }
+
+    annotationsActions.moveAnnotation(title.id, { x: 0, y: 0 });
+
+    const movedTitle = getAnnotationsState().items.find(
+      (item) => item.id === title.id
+    );
+
+    expect(movedTitle?.position).toEqual({ x: 32, y: 32 });
   });
 
   it('uses the custom page sizing profile when page elements are initialized', () => {

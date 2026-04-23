@@ -2,7 +2,7 @@
 
 > Concepts cartographiques appliqués dans Khartis v3. Lire ARCHITECTURE.md et MAP.md d'abord pour le pipeline technique.
 
-**Voir aussi** : [ARCHITECTURE](./ARCHITECTURE.md) — [MAP](./MAP.md) — [PIPELINE_DONNEES](./PIPELINE_DONNEES.md) — [DUCKDB](./DUCKDB.md) — [GUIDE_DEVELOPPEUR](./GUIDE_DEVELOPPEUR.md)
+**Voir aussi** : [ARCHITECTURE](./ARCHITECTURE.md) — [MAP](./MAP.md) — [PIPELINE_DONNEES](./PIPELINE_DONNEES.md) — [DUCKDB](./DUCKDB.md) — [GUIDE_DEVELOPPEUR](./GUIDE_DEVELOPPEUR.md) — [LEGENDES](./LEGENDES.md)
 
 ---
 
@@ -272,16 +272,19 @@ Stockées dans `annotations.store.svelte.ts` — synchronisées avec la config d
 
 Génération automatique dès création de visualisation. Types de contenus :
 
-| Type viz / mode     | Contenu légende                                                                 |
-| ------------------- | ------------------------------------------------------------------------------- |
-| Choroplèthe         | Rampe de couleurs (classes + seuils)                                            |
-| Catégoriel          | Swatches discrètes, avec primitive cohérente avec la visualisation              |
-| Proportionnel       | Échelle de tailles (min, intermédiaire, max)                                    |
-| Symboles en classes | Échelle discrète de tailles par classe                                          |
-| Lignes en couleur   | Swatches linéaires (classes ou catégories)                                      |
-| Lignes en épaisseur | Échelle d’épaisseurs (proportionnelle ou par classes)                           |
-| Motif               | Swatches avec motif hatch (accessibilité)                                       |
-| Données manquantes  | Entrée dédiée reflétant la représentation choisie (surface, rond, carré, croix) |
+| Type viz / mode       | Contenu légende                                                                 |
+| --------------------- | ------------------------------------------------------------------------------- |
+| Choroplèthe           | Rampe de couleurs (classes + seuils)                                            |
+| Catégoriel            | Swatches discrètes, avec primitive cohérente avec la visualisation              |
+| Proportionnel         | Échelle de tailles (min, intermédiaire, max)                                    |
+| Symboles en classes   | Échelle discrète de tailles par classe                                          |
+| Lignes en couleur     | Swatches linéaires (classes ou catégories)                                      |
+| Lignes en épaisseur   | Échelle d’épaisseurs (proportionnelle ou par classes)                           |
+| Textes en couleur     | Swatches à symbole texte, qualitatifs ou quantitatifs                           |
+| Textes proportionnels | Échelle de tailles utilisant le symbole texte                                   |
+| Textes bivariés       | Combinaison compacte des segments couleur + taille                              |
+| Motif                 | Swatches avec motif hatch (accessibilité)                                       |
+| Données manquantes    | Entrée dédiée reflétant la représentation choisie (surface, rond, carré, croix) |
 
 Légendes synchronisées avec `visualizationStore` via `syncWithVisualizations()`. Items déplaçables (4 coins), personnalisables (police, taille, couleur texte, fond, opacité).
 

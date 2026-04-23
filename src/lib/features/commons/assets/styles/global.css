@@ -1,6 +1,7 @@
 :root {
   --cds-main-toolbar-width: 50vw;
   --cds-header-height: 47px;
+  --kh-text-size-control-width: 80px;
   --khartis-floating-panel-background: rgba(255, 255, 255, 0.78);
   --khartis-data-table-header-background: var(--cds-ui-03);
   --khartis-data-table-header-hover-background: var(

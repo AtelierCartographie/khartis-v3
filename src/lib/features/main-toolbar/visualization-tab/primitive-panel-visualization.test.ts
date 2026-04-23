@@ -97,6 +97,7 @@ function createVisualization(): VisualizationConfig {
       enabled: true,
       colorMode: 'classes',
       sizeMode: 'fixed',
+      fontFamily: 'Inter',
       color: '#101010',
       opacity: 0.8,
       size: 14,
@@ -115,9 +116,12 @@ function createVisualization(): VisualizationConfig {
       secondaryLabels: {
         enabled: true,
         labelColumn: 'label_secondary',
+        fontFamily: 'Lato',
         color: '#202020',
         opacity: 0.6,
         size: 11,
+        bold: true,
+        italic: true,
         align: 'right',
         halo: false,
         haloColor: '#eeeeee',
@@ -195,7 +199,11 @@ describe('primitive-panel-visualization', () => {
   it('flattens text label state independently from background state', () => {
     const visualization = buildTextPanelVisualization(createVisualization());
     expect(visualization?.style?.textColor).toBe('#101010');
+    expect(visualization?.style?.textFontFamily).toBe('Inter');
     expect(visualization?.style?.labelColor).toBe('#202020');
+    expect(visualization?.style?.labelFontFamily).toBe('Lato');
+    expect(visualization?.style?.labelBold).toBe(true);
+    expect(visualization?.style?.labelItalic).toBe(true);
     expect(visualization?.mapping?.labelColumn).toBe('label');
     expect(visualization?.mapping?.secondaryLabelColumn).toBe(
       'label_secondary'

@@ -20,7 +20,7 @@ import {
 } from './projection-suggest.service';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
-import { canUseBoundsForProjectionSuggestion } from '$lib/features/map/utils/dataset-crs';
+import { normalizeBoundsForProjectionSuggestion } from '$lib/features/map/utils/dataset-crs';
 import {
   resolveProjectionAvailabilityContext,
   resolveProjectionSuggestionBoundsFromBasemap,
@@ -55,12 +55,6 @@ type ProjectionActions = {
 };
 
 const MERCATOR_PROJECTION_TYPE = 'mercator';
-
-function toBoundsTuple(
-  bounds: [number, number, number, number]
-): [number, number, number, number] {
-  return [bounds[0], bounds[1], bounds[2], bounds[3]];
-}
 
 function toBoundsFromGpsBounds(gpsBounds: {
   minLon: number;
@@ -123,11 +117,14 @@ async function resolveSuggestionBounds(): Promise<
   const candidates = getSuggestionCandidates();
 
   for (const dataset of candidates) {
-    if (
-      dataset.geometry?.bounds &&
-      canUseBoundsForProjectionSuggestion(dataset.geometry.crs)
-    ) {
-      return toBoundsTuple(dataset.geometry.bounds);
+    if (dataset.geometry?.bounds) {
+      const normalizedBounds = normalizeBoundsForProjectionSuggestion(
+        dataset.geometry.bounds,
+        dataset.geometry.crs
+      );
+      if (normalizedBounds) {
+        return normalizedBounds;
+      }
     }
 
     if (!dataset.sourceFileId) {
