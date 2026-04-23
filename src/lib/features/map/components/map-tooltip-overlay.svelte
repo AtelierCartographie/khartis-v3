@@ -1,5 +1,6 @@
 <script lang="ts">
   import { globalState } from '$lib/features/commons/store/global.svelte';
+  import { ToolbarStep } from '$lib/features/commons/types/global';
   import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
   import { mapTooltipStore } from '../stores/map-tooltip.store.svelte';
   import { DECK_CANVAS_ID } from '../constants';
@@ -21,6 +22,9 @@
 
   const tooltipState = $derived(mapTooltipStore.state);
   const isMobileLayout = $derived(globalState.isMobileView);
+  const isStylingStep = $derived(
+    globalState.selectedStep === ToolbarStep.Styling
+  );
   const isInteractive = $derived(isMobileLayout || tooltipState.pinned);
   const headlineEntry = $derived.by(() =>
     isInteractive ? resolveHeadlineEntry(tooltipState.entries) : null
@@ -146,6 +150,12 @@
   }
 
   $effect(() => {
+    if (isStylingStep && tooltipState.visible) {
+      mapTooltipStore.unpin();
+    }
+  });
+
+  $effect(() => {
     if (
       globalState.isMobileView &&
       tooltipState.visible &&
@@ -254,7 +264,7 @@
   }
 </script>
 
-{#if tooltipState.visible}
+{#if tooltipState.visible && !isStylingStep}
   <div
     bind:this={tooltipElement}
     class="map-tooltip"

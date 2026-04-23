@@ -13,4 +13,13 @@ describe('map export DOM mutations', () => {
     expect(source).not.toContain('pageContainer.appendChild(sig)');
     expect(source).not.toContain('m.map_export_signature()');
   });
+
+  it('builds SVG exports as structured layers instead of a single html snapshot', () => {
+    expect(source).toContain('function buildStructuredSvgMarkup');
+    expect(source).toContain('id="khartis-layer-page"');
+    expect(source).toContain('id="khartis-layer-visualizations"');
+    expect(source).toContain('id="khartis-layer-legend"');
+    expect(source).toContain('id="khartis-layer-annotations"');
+    expect(source).not.toContain('toSvg as htmlToImageSvg');
+  });
 });
