@@ -5,15 +5,29 @@ import {
   screen,
   waitFor
 } from '@testing-library/svelte';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import Textbox from '@borgar/textbox';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi
+} from 'vitest';
 import {
   CategoryShapeMode,
+  ColorMode,
   FillMode,
+  MissingDataShape,
   ProportionalType,
+  SizeMode,
   ShapeType,
   StrokeMode,
   SymbolDoublePosition,
-  SymbolMode
+  SymbolMode,
+  ThicknessMode
 } from '$lib/features/main-toolbar/constants';
 import {
   globalActions,
@@ -25,6 +39,7 @@ import {
   type VisualizationConfig
 } from '$lib/features/commons/store/visualization.store.svelte';
 import { formatActions } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
+import { DRAGGING_STYLING_TARGET_BODY_CLASS } from '../utils/tool-popover-drag-visibility.utils';
 
 const { mockVisualizationStore, mockDatasetsStore } = vi.hoisted(() => ({
   mockVisualizationStore: {
@@ -67,9 +82,28 @@ vi.mock('$lib/features/commons/store/datasets.store.svelte', () => ({
   }
 }));
 
+vi.mock('@ateliercartographie/motif.js', () => ({
+  motif: () => ({
+    tile: () => ({
+      toDataURL: () => 'data:image/png;base64,AAAA'
+    })
+  }),
+  motifAtlas: () => ({
+    canvas: {},
+    mapping: {}
+  })
+}));
+
 import { legendActions } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
 import { getLegendState } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
 import LegendOverlay from './legend-overlay.svelte';
+
+const measureCanvas = {
+  getContext: () => ({
+    font: '',
+    measureText: (text: string) => ({ width: text.length * 7 })
+  })
+};
 
 vi.hoisted(() => {
   class WorkerMock {
@@ -193,6 +227,10 @@ function setupLegendOccludedViewport(): {
 }
 
 describe('legend overlay visibility', () => {
+  beforeAll(() => {
+    Textbox.setMeasureCanvas(measureCanvas);
+  });
+
   beforeEach(() => {
     cleanup();
     document.getElementById('khartis-step-toolbar')?.remove();
@@ -202,6 +240,7 @@ describe('legend overlay visibility', () => {
     legendActions.reset();
     formatActions.reset();
     globalActions.resetNavigationState();
+    globalActions.setPageZoomScale(1);
     globalState.selectedStep = ToolbarStep.Styling;
     legendActions.setVisibility(true);
     legendActions.addLegendItem({
@@ -223,12 +262,30 @@ describe('legend overlay visibility', () => {
     legendActions.reset();
     formatActions.reset();
     globalActions.resetNavigationState();
+    globalActions.setPageZoomScale(1);
+  });
+
+  afterAll(() => {
+    Textbox.setMeasureCanvas(null);
   });
 
   it('renders the legend content when visible', () => {
     render(LegendOverlay);
 
     expect(screen.getByText('Population')).toBeInTheDocument();
+  });
+
+  it('scales legend chrome with the rendered page size', () => {
+    globalActions.setPageZoomScale(0.5);
+
+    const { container } = render(LegendOverlay);
+    const legend = container.querySelector('.legend-container');
+    const style = legend?.getAttribute('style');
+
+    expect(style).toContain('--legend-page-scale: 0.5');
+    expect(style).toContain('font-size: 10px');
+    expect(style).toContain('transform: scale(0.5)');
+    expect(style).toContain('transform-origin: top right');
   });
 
   it('keeps the legend mounted but hidden when requested', () => {
@@ -249,13 +306,14 @@ describe('legend overlay visibility', () => {
     const { container } = render(LegendOverlay);
 
     const pair = container.querySelector(
-      '.legend-proportional-pair[data-position-mode="overlay"]'
+      '.double-symbol-pair[data-position-mode="overlay"]'
     );
 
     expect(pair).toBeInTheDocument();
-    expect(pair?.querySelectorAll('.legend-proportional-symbol')).toHaveLength(
-      2
-    );
+    expect(
+      container.querySelector('.legend-svg--double-symbols')
+    ).toBeInTheDocument();
+    expect(pair?.querySelectorAll('path')).toHaveLength(2);
     expect(screen.getByText('15,907,951')).toBeInTheDocument();
   });
 
@@ -270,7 +328,178 @@ describe('legend overlay visibility', () => {
     expect(screen.getByText('Actif')).toBeInTheDocument();
     expect(screen.getByText('Dormant')).toBeInTheDocument();
     expect(screen.queryByText('Pause')).not.toBeInTheDocument();
-    expect(container.querySelectorAll('.legend-point-swatch')).toHaveLength(2);
+    expect(
+      container.querySelector('.legend-svg--categorical')
+    ).toBeInTheDocument();
+    expect(container.querySelectorAll('.categorical_legend path')).toHaveLength(
+      2
+    );
+    expect(
+      container.querySelector('.legend-color-scale')
+    ).not.toBeInTheDocument();
+  });
+
+  it('renders categorical missing data as a compact footer', () => {
+    const viz = buildPointCategoriesViz();
+    viz.missingData = {
+      show: true,
+      shape: MissingDataShape.CIRCLE,
+      size: 4,
+      color: '#c6c6c6'
+    };
+    mockVisualizationStore.version = 1;
+    mockVisualizationStore.visualizations = [viz];
+    legendActions.reset();
+    legendActions.setVisibility(true);
+
+    const { container } = render(LegendOverlay);
+
+    expect(
+      container.querySelector('.legend-svg--categorical')
+    ).toBeInTheDocument();
+    expect(
+      container.querySelector('.legend-svg--missing-data')
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('Absence de données')).toBeInTheDocument();
+  });
+
+  it('renders classed choropleth colors with the integrated quantitative SVG legend', () => {
+    mockVisualizationStore.version = 1;
+    mockVisualizationStore.visualizations = [buildClassedPolygonViz()];
+    legendActions.reset();
+    legendActions.setVisibility(true);
+
+    const { container } = render(LegendOverlay);
+
+    expect(
+      container.querySelector('.legend-svg--quantitative')
+    ).toBeInTheDocument();
+    expect(container.querySelector('.quantitative_legend')).toBeInTheDocument();
+    expect(
+      container.querySelectorAll('.quantitative_legend .box rect')
+    ).toHaveLength(4);
+    expect(
+      container.querySelector('.legend-proportional-scale')
+    ).not.toBeInTheDocument();
+  });
+
+  it('renders polygon classes on proportional visualizations when symbols are disabled', () => {
+    mockVisualizationStore.version = 1;
+    mockVisualizationStore.visualizations = [
+      buildProportionalPolygonClassesOnlyViz()
+    ];
+    legendActions.reset();
+    legendActions.setVisibility(true);
+
+    const { container } = render(LegendOverlay);
+
+    expect(
+      container.querySelector('.legend-svg--quantitative')
+    ).toBeInTheDocument();
+    expect(container.querySelector('.quantitative_legend')).toBeInTheDocument();
+    expect(
+      container.querySelector('.legend-svg--symbols')
+    ).not.toBeInTheDocument();
+  });
+
+  it('renders density legends through the common SVG component', () => {
+    mockVisualizationStore.version = 1;
+    mockVisualizationStore.visualizations = [buildDensityPolygonViz()];
+    legendActions.reset();
+    legendActions.setVisibility(true);
+
+    const { container } = render(LegendOverlay);
+
+    expect(container.querySelector('.legend-svg--density')).toBeInTheDocument();
+    expect(
+      container.querySelector('.khartis_density_legend')
+    ).toBeInTheDocument();
+  });
+
+  it('renders patterned categorical legends without HTML swatches', () => {
+    mockVisualizationStore.version = 1;
+    mockVisualizationStore.visualizations = [buildPatternedPolygonViz()];
+    legendActions.reset();
+    legendActions.setVisibility(true);
+
+    const { container } = render(LegendOverlay);
+
+    expect(
+      container.querySelector('.legend-svg--patterns')
+    ).toBeInTheDocument();
+    expect(container.querySelector('pattern')).toBeInTheDocument();
+    expect(
+      container.querySelector('.legend-color-scale')
+    ).not.toBeInTheDocument();
+  });
+
+  it('renders line width legends through SVG rows', () => {
+    mockVisualizationStore.version = 1;
+    mockVisualizationStore.visualizations = [buildLineWidthViz()];
+    legendActions.reset();
+    legendActions.setVisibility(true);
+
+    const { container } = render(LegendOverlay);
+
+    expect(
+      container.querySelector('.legend-svg--line-width')
+    ).toBeInTheDocument();
+    expect(
+      container.querySelector('.khartis_line_width_legend')
+    ).toBeInTheDocument();
+    expect(
+      container.querySelector('.legend-proportional-scale')
+    ).not.toBeInTheDocument();
+  });
+
+  it('renders text categorical legends through the common SVG system', () => {
+    mockVisualizationStore.version = 1;
+    mockVisualizationStore.visualizations = [buildTextCategoriesViz()];
+    legendActions.reset();
+    legendActions.setVisibility(true);
+
+    const { container } = render(LegendOverlay);
+
+    expect(
+      container.querySelector('.legend-svg--text-color')
+    ).toBeInTheDocument();
+    expect(container.querySelector('.categorical_legend')).toBeInTheDocument();
+    expect(screen.getByText('Préfecture')).toBeInTheDocument();
+    expect(screen.getByText('Sous-préfecture')).toBeInTheDocument();
+  });
+
+  it('renders proportional text size legends through the original symbol legend generator', () => {
+    mockVisualizationStore.version = 1;
+    mockVisualizationStore.visualizations = [buildTextProportionalViz()];
+    legendActions.reset();
+    legendActions.setVisibility(true);
+
+    const { container } = render(LegendOverlay);
+
+    expect(
+      container.querySelector('.legend-svg--text-size')
+    ).toBeInTheDocument();
+    expect(container.querySelector('.symbol_legend')).toBeInTheDocument();
+    expect(screen.getByText('Absence de données')).toBeInTheDocument();
+  });
+
+  it('renders bivariate text legends as compact color and size blocks', () => {
+    mockVisualizationStore.version = 1;
+    mockVisualizationStore.visualizations = [buildTextBivariateViz()];
+    legendActions.reset();
+    legendActions.setVisibility(true);
+
+    const { container } = render(LegendOverlay);
+
+    expect(
+      container.querySelector('.legend-svg--text-color')
+    ).toBeInTheDocument();
+    expect(
+      container.querySelector('.legend-svg--text-size')
+    ).toBeInTheDocument();
+    expect(
+      container.querySelectorAll('.legend-svg').length
+    ).toBeGreaterThanOrEqual(2);
   });
 
   it('snaps legend dragging to the shared page grid when enabled', async () => {
@@ -300,12 +529,23 @@ describe('legend overlay visibility', () => {
       clientX: 18,
       clientY: 18
     });
+
+    expect(
+      document.body.classList.contains(DRAGGING_STYLING_TARGET_BODY_CLASS)
+    ).toBe(true);
+
     await fireEvent.pointerMove(window, {
       clientX: 41,
       clientY: 43
     });
 
     expect(getLegendState().dragPosition).toEqual({ x: 36, y: 36 });
+
+    await fireEvent.pointerUp(window);
+
+    expect(
+      document.body.classList.contains(DRAGGING_STYLING_TARGET_BODY_CLASS)
+    ).toBe(false);
   });
 
   it('keeps legend dragging free-form when the grid is disabled', async () => {
@@ -342,6 +582,39 @@ describe('legend overlay visibility', () => {
     });
 
     expect(getLegendState().dragPosition).toEqual({ x: 37, y: 35 });
+  });
+
+  it('keeps dragged legend coordinates logical when the rendered page is scaled', async () => {
+    globalState.selectedTool = StylingTools.Legend;
+    globalActions.setPageZoomScale(0.5);
+
+    const { container } = render(LegendOverlay);
+    const overlay = container.querySelector('.legend-overlay');
+    const legend = container.querySelector('.legend-container');
+
+    expect(overlay).toBeInstanceOf(HTMLDivElement);
+    expect(legend).toBeInstanceOf(HTMLDivElement);
+
+    if (
+      !(overlay instanceof HTMLDivElement) ||
+      !(legend instanceof HTMLDivElement)
+    ) {
+      return;
+    }
+
+    bindElementBox(overlay, { left: 0, top: 0, width: 300, height: 200 });
+    bindElementBox(legend, { left: 7, top: 5, width: 50, height: 40 });
+
+    await fireEvent.pointerDown(legend, {
+      clientX: 9,
+      clientY: 9
+    });
+    await fireEvent.pointerMove(window, {
+      clientX: 20.5,
+      clientY: 21.5
+    });
+
+    expect(getLegendState().dragPosition).toEqual({ x: 36, y: 36 });
   });
 
   it('reclamps a dragged legend after the page size shrinks', async () => {
@@ -398,7 +671,7 @@ describe('legend overlay visibility', () => {
     await fireEvent.click(legend);
 
     await waitFor(() => {
-      expect(globalState.zoom.pagePanOffset).toEqual({ x: 128, y: 60 });
+      expect(globalState.zoom.pagePanOffset).toEqual({ x: 168, y: 60 });
     });
   });
 });
@@ -524,6 +797,369 @@ function buildPointCategoriesViz(): VisualizationConfig {
       minSize: 6,
       maxSize: 14,
       sizeScale: 'linear'
+    }
+  } as VisualizationConfig;
+}
+
+function buildClassedPolygonViz(): VisualizationConfig {
+  const classification = {
+    method: ClassificationMethod.QUANTILES,
+    classes: 4,
+    breaks: [100_000, 500_000, 1_000_000],
+    colors: ['#f7fbff', '#c6dbef', '#6baed6', '#2171b5']
+  };
+
+  return {
+    id: 'viz-poly',
+    name: 'Density',
+    type: 'choropleth',
+    datasetId: 'dataset-1',
+    enabled: true,
+    primitiveFilters: ['polygon'],
+    primitiveOrder: ['polygon'],
+    modes: {
+      fill: FillMode.CLASSES
+    },
+    polygon: {
+      enabled: true,
+      fillMode: FillMode.CLASSES,
+      fillColor: '#4585f5',
+      fillOpacity: 100,
+      strokeMode: StrokeMode.UNIQUE,
+      strokeColor: '#ffffff',
+      strokeWidth: 1,
+      strokeOpacity: 100,
+      strokeDashed: false,
+      valueColumn: 'population',
+      classification
+    },
+    classification,
+    style: {
+      fillColor: '#4585f5',
+      fillOpacity: 100,
+      strokeColor: '#ffffff',
+      strokeWidth: 1,
+      strokeOpacity: 100
+    },
+    mapping: {
+      valueColumn: 'population',
+      geometryColumn: 'geom'
+    }
+  } as VisualizationConfig;
+}
+
+function buildProportionalPolygonClassesOnlyViz(): VisualizationConfig {
+  return {
+    ...buildClassedPolygonViz(),
+    id: 'viz-prop-poly',
+    type: 'proportional',
+    primitiveFilters: ['polygon'],
+    primitiveOrder: ['polygon'],
+    symbol: {
+      enabled: false,
+      mode: SymbolMode.PROPORTIONAL,
+      shape: ShapeType.CIRCLE,
+      size: 12,
+      minSize: 4,
+      maxSize: 24,
+      sizeScale: 'linear',
+      opacity: 1,
+      fillMode: FillMode.UNIQUE,
+      fillColor: '#4585f5',
+      strokeMode: StrokeMode.UNIQUE,
+      strokeColor: '#ffffff',
+      strokeWidth: 1,
+      strokeOpacity: 1,
+      proportionalType: ProportionalType.SINGLE,
+      categoryShape: CategoryShapeMode.UNIQUE,
+      sizeColumn: 'population'
+    }
+  } as VisualizationConfig;
+}
+
+function buildDensityPolygonViz(): VisualizationConfig {
+  return {
+    id: 'viz-density',
+    name: 'Density',
+    type: 'choropleth',
+    datasetId: 'dataset-1',
+    enabled: true,
+    primitiveFilters: ['polygon'],
+    primitiveOrder: ['polygon'],
+    modes: {
+      fill: FillMode.DENSITY
+    },
+    polygon: {
+      enabled: true,
+      fillMode: FillMode.DENSITY,
+      fillColor: '#4585f5',
+      fillOpacity: 100,
+      strokeMode: StrokeMode.UNIQUE,
+      strokeColor: '#ffffff',
+      strokeWidth: 1,
+      strokeOpacity: 100,
+      strokeDashed: false
+    },
+    density: {
+      ratio: 42,
+      dotSize: 2,
+      color: '#4585f5'
+    },
+    style: {
+      fillColor: '#4585f5',
+      fillOpacity: 100,
+      strokeColor: '#ffffff',
+      strokeWidth: 1,
+      strokeOpacity: 100
+    },
+    mapping: {
+      valueColumn: 'population',
+      geometryColumn: 'geom'
+    }
+  } as VisualizationConfig;
+}
+
+function buildPatternedPolygonViz(): VisualizationConfig {
+  const classification = {
+    method: ClassificationMethod.MANUAL,
+    classes: 2,
+    labels: ['Urbain', 'Rural'],
+    colors: ['#f7fbff', '#2171b5'],
+    patternId: 'diagonal'
+  };
+
+  return {
+    id: 'viz-pattern',
+    name: 'Land use',
+    type: 'categorical',
+    datasetId: 'dataset-1',
+    enabled: true,
+    primitiveFilters: ['polygon'],
+    primitiveOrder: ['polygon'],
+    modes: {
+      fill: FillMode.CATEGORIES
+    },
+    polygon: {
+      enabled: true,
+      fillMode: FillMode.CATEGORIES,
+      fillColor: '#4585f5',
+      fillOpacity: 100,
+      strokeMode: StrokeMode.UNIQUE,
+      strokeColor: '#ffffff',
+      strokeWidth: 1,
+      strokeOpacity: 100,
+      strokeDashed: false,
+      categoryColumn: 'land_use',
+      classification
+    },
+    classification,
+    style: {
+      fillColor: '#4585f5',
+      fillOpacity: 100,
+      strokeColor: '#ffffff',
+      strokeWidth: 1,
+      strokeOpacity: 100
+    },
+    mapping: {
+      categoryColumn: 'land_use',
+      geometryColumn: 'geom'
+    }
+  } as VisualizationConfig;
+}
+
+function buildLineWidthViz(): VisualizationConfig {
+  const classification = {
+    method: ClassificationMethod.QUANTILES,
+    classes: 3,
+    breaks: [10, 20],
+    colors: ['#4585f5', '#4585f5', '#4585f5']
+  };
+
+  return {
+    id: 'viz-line',
+    name: 'Flows',
+    type: 'proportional',
+    datasetId: 'dataset-1',
+    enabled: true,
+    primitiveFilters: ['line'],
+    primitiveOrder: ['line'],
+    line: {
+      enabled: true,
+      colorMode: ColorMode.UNIQUE,
+      thicknessMode: ThicknessMode.CLASSES,
+      color: '#1e3a5f',
+      width: 2,
+      maxWidth: 12,
+      opacity: 1,
+      dashed: true,
+      valueColumn: 'population',
+      sizeColumn: 'population',
+      thicknessClassification: classification
+    },
+    lineThicknessClassification: classification,
+    style: {
+      lineColor: '#1e3a5f',
+      lineWidth: 2,
+      lineMaxWidth: 12,
+      lineOpacity: 1,
+      lineDashed: true
+    },
+    mapping: {
+      valueColumn: 'population',
+      sizeColumn: 'population',
+      geometryColumn: 'geom'
+    }
+  } as VisualizationConfig;
+}
+
+function buildTextCategoriesViz(): VisualizationConfig {
+  const classification = {
+    method: ClassificationMethod.MANUAL,
+    classes: 2,
+    labels: ['Préfecture', 'Sous-préfecture'],
+    colors: ['#0f62fe', '#ff832b']
+  };
+
+  return {
+    id: 'viz-text-cat',
+    name: 'Statut administratif',
+    type: 'categorical',
+    datasetId: 'dataset-1',
+    enabled: true,
+    primitiveFilters: ['text'],
+    primitiveOrder: ['text'],
+    modes: {
+      color: ColorMode.CATEGORIES,
+      size: SizeMode.FIXED
+    },
+    text: {
+      enabled: true,
+      labelColumn: 'label',
+      colorMode: ColorMode.CATEGORIES,
+      sizeMode: SizeMode.FIXED,
+      color: '#111111',
+      opacity: 1,
+      size: 12,
+      categoryColumn: 'status',
+      classification,
+      missingData: {
+        show: false,
+        shape: MissingDataShape.CIRCLE,
+        size: 6,
+        color: '#c6c6c6'
+      }
+    },
+    textClassification: classification,
+    style: {
+      textOpacity: 1,
+      textColor: '#111111',
+      textSize: 12
+    },
+    mapping: {
+      labelColumn: 'label',
+      categoryColumn: 'status',
+      geometryColumn: 'geom'
+    }
+  } as VisualizationConfig;
+}
+
+function buildTextProportionalViz(): VisualizationConfig {
+  return {
+    id: 'viz-text-size',
+    name: 'Population',
+    type: 'proportional',
+    datasetId: 'dataset-1',
+    enabled: true,
+    primitiveFilters: ['text'],
+    primitiveOrder: ['text'],
+    modes: {
+      color: ColorMode.UNIQUE,
+      size: SizeMode.PROPORTIONAL
+    },
+    text: {
+      enabled: true,
+      labelColumn: 'label',
+      colorMode: ColorMode.UNIQUE,
+      sizeMode: SizeMode.PROPORTIONAL,
+      color: '#1f1f1f',
+      opacity: 1,
+      size: 13,
+      valueColumn: 'population',
+      missingData: {
+        show: true,
+        shape: MissingDataShape.CIRCLE,
+        size: 6,
+        color: '#c6c6c6'
+      }
+    },
+    style: {
+      textOpacity: 1,
+      textColor: '#1f1f1f',
+      textSize: 13
+    },
+    mapping: {
+      labelColumn: 'label',
+      valueColumn: 'population',
+      geometryColumn: 'geom'
+    },
+    missingData: {
+      show: true,
+      shape: MissingDataShape.CIRCLE,
+      size: 6,
+      color: '#c6c6c6'
+    }
+  } as VisualizationConfig;
+}
+
+function buildTextBivariateViz(): VisualizationConfig {
+  const classification = {
+    method: ClassificationMethod.MANUAL,
+    classes: 2,
+    labels: ['Métropole', 'Ville moyenne'],
+    colors: ['#0f62fe', '#ff832b']
+  };
+
+  return {
+    id: 'viz-text-bi',
+    name: 'Armature urbaine',
+    type: 'bivariate',
+    datasetId: 'dataset-1',
+    enabled: true,
+    primitiveFilters: ['text'],
+    primitiveOrder: ['text'],
+    modes: {
+      color: ColorMode.CATEGORIES,
+      size: SizeMode.PROPORTIONAL
+    },
+    text: {
+      enabled: true,
+      labelColumn: 'label',
+      colorMode: ColorMode.CATEGORIES,
+      sizeMode: SizeMode.PROPORTIONAL,
+      color: '#111111',
+      opacity: 1,
+      size: 12,
+      categoryColumn: 'status',
+      valueColumn: 'population',
+      classification,
+      missingData: {
+        show: false,
+        shape: MissingDataShape.CIRCLE,
+        size: 6,
+        color: '#c6c6c6'
+      }
+    },
+    textClassification: classification,
+    style: {
+      textOpacity: 1,
+      textColor: '#111111',
+      textSize: 12
+    },
+    mapping: {
+      labelColumn: 'label',
+      categoryColumn: 'status',
+      valueColumn: 'population',
+      geometryColumn: 'geom'
     }
   } as VisualizationConfig;
 }

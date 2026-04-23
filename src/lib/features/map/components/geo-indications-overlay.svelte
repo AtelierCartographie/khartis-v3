@@ -49,6 +49,7 @@
     getElementCenteringDelta,
     getFocusViewportElement
   } from '../utils/focus-viewport.utils';
+  import { setStylingToolPopoverDragging } from '../utils/tool-popover-drag-visibility.utils';
   import { resolveStaticAssetUrl } from '$lib/features/commons/utils/static-asset-url';
   import { getLegendState } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
   import * as m from '$lib/paraglide/messages';
@@ -894,6 +895,7 @@
 
   function stopDragging(): void {
     currentDrag = null;
+    setStylingToolPopoverDragging(false);
     window.removeEventListener(EVENT.POINTERMOVE, handlePointerMove);
     window.removeEventListener(EVENT.POINTERUP, handlePointerUp);
   }
@@ -950,6 +952,7 @@
     dragOffsetX = (event.clientX - overlayRect.left) / scale - dragPos.x;
     dragOffsetY = (event.clientY - overlayRect.top) / scale - dragPos.y;
     currentDrag = target;
+    setStylingToolPopoverDragging(true);
 
     window.addEventListener(EVENT.POINTERMOVE, handlePointerMove);
     window.addEventListener(EVENT.POINTERUP, handlePointerUp);

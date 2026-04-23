@@ -93,6 +93,11 @@
 </aside>
 
 <style>
+  .tool-container {
+    position: relative;
+    background-color: var(--khartis-control-surface-background, white);
+  }
+
   .tool-header {
     display: flex;
     align-items: center;
@@ -117,11 +122,8 @@
     white-space: nowrap;
   }
 
-  aside {
-    position: relative;
-  }
-
   .tool-body {
+    background-color: inherit;
     padding: 0 var(--cds-spacing-05) var(--cds-spacing-05);
   }
 

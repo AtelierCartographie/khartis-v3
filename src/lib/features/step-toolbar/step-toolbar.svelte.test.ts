@@ -40,16 +40,38 @@ describe('StepToolbar', () => {
     expect(toolPopoverSource).toContain('display: none;');
   });
 
-  it('keeps tool expandables flat only in dark theme', () => {
+  it('keeps tool expandables on the shared control surface in dark theme', () => {
     expect(source).toContain(
       ":global(html[theme='g100'] #khartis-tool-popover)"
     );
-    expect(source).toContain(
-      '--khartis-expandable-section-background: transparent;'
-    );
+    expect(source).toContain('--khartis-expandable-section-background: var(');
     expect(source).not.toContain(
       ':global(:root #khartis-tool-popover) {\n    --khartis-expandable-section-background'
     );
+  });
+
+  it('keeps the step toolbar itself opaque', () => {
+    expect(source).toContain(
+      'background: var(--khartis-control-surface-background);'
+    );
+    expect(source).not.toContain('backdrop-filter: blur(10px) saturate(1.2);');
+  });
+
+  it('keeps tool popover contents opaque', () => {
+    expect(toolPopoverSource).toContain(
+      'background: var(--khartis-control-surface-background);'
+    );
+  });
+
+  it('dims the tool popover while a styling element is being dragged', () => {
+    expect(toolPopoverSource).toContain(
+      ':global(body.is-dragging-styling-target #khartis-tool-popover)'
+    );
+    expect(toolPopoverSource).toContain(
+      ':global(body.is-dragging-styling-target #khartis-tool-popover .bx--popover)'
+    );
+    expect(toolPopoverSource).toContain('opacity: 0.28;');
+    expect(toolPopoverSource).toContain('pointer-events: none;');
   });
 
   it('does not push shorter right-top popovers downward', () => {
