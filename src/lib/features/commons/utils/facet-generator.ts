@@ -377,6 +377,49 @@ function buildFacetClassification(
   };
 }
 
+export function buildFacetVisualizationUpdates({
+  baseViz,
+  visualization,
+  variable,
+  scaleMode,
+  primarySlotPath
+}: {
+  baseViz: VisualizationConfig;
+  visualization: VisualizationConfig;
+  variable: string;
+  scaleMode: ScaleMode;
+  primarySlotPath: FacetSlotPath;
+}): Partial<VisualizationConfig> {
+  const nextVisualization = deepClone(visualization);
+
+  applyFacetVariableToVisualization(
+    nextVisualization,
+    primarySlotPath,
+    variable
+  );
+  applyFacetClassificationToVisualization(
+    nextVisualization,
+    primarySlotPath,
+    buildFacetClassification(baseViz, variable, scaleMode, primarySlotPath)
+  );
+
+  return {
+    name: variable,
+    mapping: nextVisualization.mapping,
+    classification: nextVisualization.classification,
+    symbolClassification: nextVisualization.symbolClassification,
+    lineClassification: nextVisualization.lineClassification,
+    textClassification: nextVisualization.textClassification,
+    symbol: nextVisualization.symbol,
+    polygon: nextVisualization.polygon,
+    line: nextVisualization.line,
+    text: nextVisualization.text,
+    facet: {
+      baseVisualizationId: baseViz.id
+    }
+  };
+}
+
 export async function generateFacetVisualizations(
   baseViz: VisualizationConfig,
   variables: string[],
@@ -402,15 +445,15 @@ export async function generateFacetVisualizations(
       name: variable,
       facet: {
         baseVisualizationId: baseViz.id
-      }
+      },
+      ...buildFacetVisualizationUpdates({
+        baseViz,
+        visualization: cloned,
+        variable,
+        scaleMode,
+        primarySlotPath
+      })
     };
-
-    applyFacetVariableToVisualization(facetConfig, primarySlotPath, variable);
-    applyFacetClassificationToVisualization(
-      facetConfig,
-      primarySlotPath,
-      buildFacetClassification(baseViz, variable, scaleMode, primarySlotPath)
-    );
 
     facetConfigs.push(facetConfig);
   }

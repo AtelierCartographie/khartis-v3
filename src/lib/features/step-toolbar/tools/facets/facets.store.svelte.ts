@@ -1,8 +1,12 @@
 import type { VisualizationConfig } from '$lib/features/commons/store/visualization.store.svelte';
+import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
 import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
-import { generateFacetVisualizations } from '$lib/features/commons/utils/facet-generator';
+import {
+  buildFacetVisualizationUpdates,
+  generateFacetVisualizations
+} from '$lib/features/commons/utils/facet-generator';
 
 export const SCALE_MODE = {
   SHARED: 'shared',
@@ -45,6 +49,98 @@ function resolveFacetMappingKey(
     return 'sizeColumn';
   }
   return 'valueColumn';
+}
+
+function slotRequiresNumericVariable(slotPath: FacetSlotPath): boolean {
+  return slotPath.endsWith('.valueColumn') || slotPath.endsWith('.sizeColumn');
+}
+
+function getCompatibleDatasetVariables(
+  visualization: VisualizationConfig,
+  slotPath: FacetSlotPath
+): string[] {
+  const dataset = datasetsStore.datasets.find(
+    (candidate) => candidate.id === visualization.datasetId
+  );
+  if (!dataset?.columns?.length) {
+    return [];
+  }
+
+  return dataset.columns
+    .filter(
+      (column) =>
+        !slotRequiresNumericVariable(slotPath) || column.type === 'number'
+    )
+    .map((column) => column.name);
+}
+
+function filterCompatibleFacetVariables(
+  visualization: VisualizationConfig,
+  variables: string[],
+  slotPath: FacetSlotPath
+): string[] {
+  const sanitized = variables.filter(
+    (value): value is string => typeof value === 'string' && value.length > 0
+  );
+  if (!slotRequiresNumericVariable(slotPath)) {
+    return sanitized;
+  }
+
+  const dataset = datasetsStore.datasets.find(
+    (candidate) => candidate.id === visualization.datasetId
+  );
+  if (!dataset?.columns?.length) {
+    return sanitized;
+  }
+
+  const numericColumns = new Set(
+    dataset.columns
+      .filter((column) => column.type === 'number')
+      .map((column) => column.name)
+  );
+
+  return sanitized.filter((variable) => numericColumns.has(variable));
+}
+
+function normalizeFacetVariablesForEnable(
+  visualization: VisualizationConfig,
+  variables: string[],
+  slotPath: FacetSlotPath
+): string[] {
+  const compatible = filterCompatibleFacetVariables(
+    visualization,
+    variables,
+    slotPath
+  );
+  if (compatible.length >= 2 || !slotRequiresNumericVariable(slotPath)) {
+    return compatible;
+  }
+
+  const nextCompatible = [...compatible];
+  for (const variable of getCompatibleDatasetVariables(
+    visualization,
+    slotPath
+  )) {
+    if (nextCompatible.length >= 2) {
+      break;
+    }
+    if (!nextCompatible.includes(variable)) {
+      nextCompatible.push(variable);
+    }
+  }
+
+  return nextCompatible;
+}
+
+function isFacetVariableCompatible(
+  visualization: VisualizationConfig,
+  variableName: string,
+  slotPath: FacetSlotPath
+): boolean {
+  return (
+    filterCompatibleFacetVariables(visualization, [variableName], slotPath)
+      .length === 1
+  );
 }
 
 function applyFacetVariableToVisualization(
@@ -288,9 +384,26 @@ const DEFAULT_STATE: FacetsState = {
     gap: 16
   },
   scaleMode: SCALE_MODE.INDEPENDENT,
-  syncPanZoom: false,
+  syncPanZoom: true,
   generatedVisualizationIds: []
 };
+
+function reorderItems<T>(items: T[], fromIndex: number, toIndex: number): T[] {
+  const next = [...items];
+  const [moved] = next.splice(fromIndex, 1);
+  if (moved === undefined) {
+    return next;
+  }
+  next.splice(toIndex, 0, moved);
+  return next;
+}
+
+function arraysEqual<T>(left: T[], right: T[]): boolean {
+  return (
+    left.length === right.length &&
+    left.every((value, index) => value === right[index])
+  );
+}
 
 function createFacetsStore() {
   const state = $state<FacetsState>({ ...DEFAULT_STATE });
@@ -298,6 +411,38 @@ function createFacetsStore() {
 
   function notifyPersistence(): void {
     persistenceRegistry.notifyChange('facets');
+  }
+
+  function canReorderGeneratedFacets(nextGeneratedIds: string[]): boolean {
+    if (nextGeneratedIds.length !== state.generatedVisualizationIds.length) {
+      return false;
+    }
+
+    const currentIds = new Set(
+      visualizationStore.visualizations.map((visualization) => visualization.id)
+    );
+
+    return nextGeneratedIds.every((id) => currentIds.has(id));
+  }
+
+  function applyGeneratedFacetOrder(nextGeneratedIds: string[]): void {
+    const reorderedVisualizations = visualizationStore.visualizations.map(
+      (visualization) => visualization.id
+    );
+    let nextFacetIndex = 0;
+
+    for (let i = 0; i < reorderedVisualizations.length; i += 1) {
+      if (
+        !state.generatedVisualizationIds.includes(reorderedVisualizations[i])
+      ) {
+        continue;
+      }
+
+      reorderedVisualizations[i] = nextGeneratedIds[nextFacetIndex];
+      nextFacetIndex += 1;
+    }
+
+    visualizationStore.setVisualizationOrder(reorderedVisualizations);
   }
 
   function restoreFromSerialized(data: unknown): void {
@@ -395,15 +540,6 @@ function createFacetsStore() {
     variables: string[],
     primarySlotPath: FacetSlotPath = FACET_SLOT.POLYGON_VALUE
   ): Promise<void> {
-    const sanitized = variables.filter(
-      (v): v is string => typeof v === 'string' && v.length > 0
-    );
-    if (sanitized.length < 2) {
-      return;
-    }
-
-    const capped = sanitized.slice(0, MAX_FACETS);
-
     const baseViz = visualizationStore.visualizations.find(
       (v) => v.id === baseVizId
     );
@@ -414,6 +550,17 @@ function createFacetsStore() {
       });
       return;
     }
+
+    const compatible = normalizeFacetVariablesForEnable(
+      baseViz,
+      variables,
+      primarySlotPath
+    );
+    if (compatible.length < 2) {
+      return;
+    }
+
+    const capped = compatible.slice(0, MAX_FACETS);
 
     try {
       const facetConfigs = await generateFacetVisualizations(
@@ -484,21 +631,6 @@ function createFacetsStore() {
     primarySlotPath: FacetSlotPath = state.primarySlotPath ??
       FACET_SLOT.POLYGON_VALUE
   ): Promise<void> {
-    const sanitized = variables.filter(
-      (v): v is string => typeof v === 'string' && v.length > 0
-    );
-    if (sanitized.length < 2) {
-      if (state.enabled) {
-        disable();
-      }
-      return;
-    }
-
-    if (!state.enabled || state.baseVisualizationId !== baseVizId) {
-      await enable(baseVizId, sanitized, primarySlotPath);
-      return;
-    }
-
     const baseViz = visualizationStore.visualizations.find(
       (v) => v.id === baseVizId
     );
@@ -506,7 +638,31 @@ function createFacetsStore() {
       return;
     }
 
-    const capped = sanitized.slice(0, MAX_FACETS);
+    if (!state.enabled || state.baseVisualizationId !== baseVizId) {
+      await enable(baseVizId, variables, primarySlotPath);
+      return;
+    }
+
+    const compatible = filterCompatibleFacetVariables(
+      baseViz,
+      variables,
+      primarySlotPath
+    );
+    if (compatible.length < 2) {
+      if (state.enabled) {
+        disable();
+      }
+      return;
+    }
+
+    const capped = compatible.slice(0, MAX_FACETS);
+
+    if (
+      state.primarySlotPath === primarySlotPath &&
+      arraysEqual(state.variables, capped)
+    ) {
+      return;
+    }
 
     isRegenerating = true;
     try {
@@ -559,6 +715,18 @@ function createFacetsStore() {
       return false;
     }
 
+    const baseViz = state.baseVisualizationId
+      ? visualizationStore.visualizations.find(
+          (item) => item.id === state.baseVisualizationId
+        )
+      : undefined;
+    if (
+      baseViz &&
+      !isFacetVariableCompatible(baseViz, variableName, slotPath)
+    ) {
+      return false;
+    }
+
     visualizationStore.updateVisualization(
       vizId,
       applyFacetVariableToVisualization(viz, slotPath, variableName)
@@ -573,42 +741,21 @@ function createFacetsStore() {
   ): Promise<void> {
     if (fromIndex === toIndex) return;
 
-    const next = [...state.variables];
-    const [moved] = next.splice(fromIndex, 1);
-    next.splice(toIndex, 0, moved);
-    state.variables = next;
+    const nextVariables = reorderItems(state.variables, fromIndex, toIndex);
+    const nextGeneratedIds = reorderItems(
+      state.generatedVisualizationIds,
+      fromIndex,
+      toIndex
+    );
 
-    if (state.enabled && state.baseVisualizationId) {
-      const baseViz = visualizationStore.visualizations.find(
-        (v) => v.id === state.baseVisualizationId
-      );
+    state.variables = nextVariables;
 
-      if (baseViz) {
-        isRegenerating = true;
-        try {
-          const previousName = capturePreviousGeneratedName();
-
-          const newConfigs = await generateFacetVisualizations(
-            baseViz,
-            state.variables,
-            state.scaleMode,
-            state.primarySlotPath ?? FACET_SLOT.POLYGON_VALUE
-          );
-
-          visualizationStore.removeBulkVisualizations(
-            state.generatedVisualizationIds
-          );
-          visualizationStore.createBulkVisualizations(newConfigs);
-          state.generatedVisualizationIds = newConfigs.map(
-            (config) => config.id
-          );
-          restoreSelectionByName(newConfigs, previousName);
-          notifyPersistence();
-        } finally {
-          isRegenerating = false;
-        }
-      }
+    if (state.enabled && canReorderGeneratedFacets(nextGeneratedIds)) {
+      applyGeneratedFacetOrder(nextGeneratedIds);
+      state.generatedVisualizationIds = nextGeneratedIds;
     }
+
+    notifyPersistence();
   }
 
   function setColumns(columns: number): void {
@@ -644,23 +791,62 @@ function createFacetsStore() {
       if (baseViz) {
         isRegenerating = true;
         try {
-          const previousName = capturePreviousGeneratedName();
+          const primarySlotPath =
+            state.primarySlotPath ?? FACET_SLOT.POLYGON_VALUE;
+          const generatedVisualizations = state.generatedVisualizationIds
+            .map((id) =>
+              visualizationStore.visualizations.find(
+                (visualization) => visualization.id === id
+              )
+            )
+            .filter((visualization): visualization is VisualizationConfig =>
+              Boolean(visualization)
+            );
+          let nextGeneratedIds = state.generatedVisualizationIds;
 
-          const newConfigs = await generateFacetVisualizations(
-            baseViz,
-            state.variables,
-            newMode,
-            state.primarySlotPath ?? FACET_SLOT.POLYGON_VALUE
-          );
+          if (
+            generatedVisualizations.length ===
+            state.generatedVisualizationIds.length
+          ) {
+            generatedVisualizations.forEach((visualization, index) => {
+              const variable = state.variables[index];
+              if (!variable) {
+                return;
+              }
 
-          visualizationStore.removeBulkVisualizations(
-            state.generatedVisualizationIds
-          );
-          visualizationStore.createBulkVisualizations(newConfigs);
-          state.generatedVisualizationIds = newConfigs.map(
-            (config) => config.id
-          );
-          restoreSelectionByName(newConfigs, previousName);
+              visualizationStore.updateVisualization(
+                visualization.id,
+                buildFacetVisualizationUpdates({
+                  baseViz,
+                  visualization,
+                  variable,
+                  scaleMode: newMode,
+                  primarySlotPath
+                })
+              );
+            });
+
+            nextGeneratedIds = generatedVisualizations.map(
+              (visualization) => visualization.id
+            );
+          } else {
+            const previousName = capturePreviousGeneratedName();
+            const newConfigs = await generateFacetVisualizations(
+              baseViz,
+              state.variables,
+              newMode,
+              primarySlotPath
+            );
+
+            visualizationStore.removeBulkVisualizations(
+              state.generatedVisualizationIds
+            );
+            visualizationStore.createBulkVisualizations(newConfigs);
+            nextGeneratedIds = newConfigs.map((config) => config.id);
+            restoreSelectionByName(newConfigs, previousName);
+          }
+
+          state.generatedVisualizationIds = nextGeneratedIds;
           notifyPersistence();
         } finally {
           isRegenerating = false;

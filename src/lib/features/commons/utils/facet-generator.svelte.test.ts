@@ -17,7 +17,10 @@ vi.mock('$lib/features/commons/utils/logger', () => ({
   LogCategory: { STORE: 'STORE' }
 }));
 
-import { generateFacetVisualizations } from './facet-generator';
+import {
+  buildFacetVisualizationUpdates,
+  generateFacetVisualizations
+} from './facet-generator';
 import {
   FACET_SLOT,
   SCALE_MODE
@@ -179,6 +182,37 @@ describe('generateFacetVisualizations', () => {
     );
 
     expect(result[0].classification?.breaks).toEqual([10, 20, 30, 40, 50]);
+  });
+
+  it('builds an in-place visualization update for scale mode changes without changing ids', () => {
+    mocks.getColumnStatistics.mockReturnValue({ min: 10, max: 50 });
+
+    const base = makeBaseViz();
+    const update = buildFacetVisualizationUpdates({
+      baseViz: base as never,
+      visualization: {
+        ...makeBaseViz({
+          id: 'facet-a',
+          name: 'pop',
+          polygon: {
+            valueColumn: 'pop'
+          }
+        }),
+        id: 'facet-a',
+        name: 'pop'
+      } as never,
+      variable: 'gdp',
+      scaleMode: SCALE_MODE.INDEPENDENT,
+      primarySlotPath: FACET_SLOT.POLYGON_VALUE
+    });
+
+    expect(update.name).toBe('gdp');
+    expect(update.mapping).toEqual({
+      valueColumn: 'gdp',
+      sizeColumn: 'area'
+    });
+    expect(update.polygon?.valueColumn).toBe('gdp');
+    expect(update.classification?.breaks).toEqual([10, 20, 30, 40, 50]);
   });
 
   it('should fall back to base breaks when stats are missing in independent mode', async () => {
