@@ -41,6 +41,11 @@ import {
   findPreferredNumericColumn,
   findPreferredTextColumn
 } from '../utils/visualization-columns.utils';
+import {
+  clampFontSize,
+  DEFAULT_FONT_FAMILY,
+  normalizeFontFamily
+} from '$lib/features/step-toolbar/constants/fonts.constants';
 import * as m from '$lib/paraglide/messages';
 
 export enum VisualizationType {
@@ -240,9 +245,12 @@ export interface LinePrimitiveConfig {
 export interface TextSecondaryLabelsConfig {
   enabled: boolean;
   labelColumn?: string;
+  fontFamily: string;
   color?: string | string[];
   opacity: number;
   size: number;
+  bold: boolean;
+  italic: boolean;
   align: 'left' | 'center' | 'right';
   halo: boolean;
   haloColor?: string;
@@ -273,6 +281,7 @@ export interface TextPrimitiveConfig {
   labelColumn?: string;
   colorMode: ColorMode;
   sizeMode: SizeMode;
+  fontFamily: string;
   color?: string | string[];
   opacity: number;
   size: number;
@@ -404,6 +413,7 @@ export interface VisualizationConfig {
     lineDashed?: boolean;
     textColor?: string | string[];
     textOpacity?: number;
+    textFontFamily?: string;
     textSize?: number;
     textBold?: boolean;
     textItalic?: boolean;
@@ -415,7 +425,10 @@ export interface VisualizationConfig {
     textDxpMasking?: boolean;
     labelColor?: string | string[];
     labelOpacity?: number;
+    labelFontFamily?: string;
     labelSize?: number;
+    labelBold?: boolean;
+    labelItalic?: boolean;
     labelAlign?: 'left' | 'center' | 'right';
     labelHalo?: boolean;
     labelHaloColor?: string;
@@ -540,12 +553,20 @@ function buildSecondaryLabelsConfig(
       ),
     labelColumn:
       existing?.labelColumn ?? visualization.mapping.secondaryLabelColumn,
+    fontFamily:
+      normalizeFontFamily(
+        existing?.fontFamily ?? visualization.style.labelFontFamily
+      ) ?? DEFAULT_FONT_FAMILY,
     color: existing?.color ?? visualization.style.labelColor,
     opacity: existing?.opacity ?? visualization.style.labelOpacity ?? 0,
-    size:
+    size: clampFontSize(
       existing?.size ??
-      visualization.style.labelSize ??
-      VISUALIZATION_DEFAULTS.labelSize,
+        visualization.style.labelSize ??
+        VISUALIZATION_DEFAULTS.labelSize,
+      VISUALIZATION_DEFAULTS.labelSize
+    ),
+    bold: existing?.bold ?? visualization.style.labelBold ?? false,
+    italic: existing?.italic ?? visualization.style.labelItalic ?? false,
     align: existing?.align ?? visualization.style.labelAlign ?? 'left',
     halo: existing?.halo ?? visualization.style.labelHalo ?? false,
     haloColor:
@@ -798,12 +819,18 @@ function buildTextPrimitiveConfig(
     colorMode:
       existing?.colorMode ?? visualization.modes?.color ?? ColorMode.UNIQUE,
     sizeMode: existing?.sizeMode ?? visualization.modes?.size ?? SizeMode.FIXED,
+    fontFamily:
+      normalizeFontFamily(
+        existing?.fontFamily ?? visualization.style.textFontFamily
+      ) ?? DEFAULT_FONT_FAMILY,
     color: existing?.color ?? visualization.style.textColor,
     opacity: normalizedOpacity,
-    size:
+    size: clampFontSize(
       existing?.size ??
-      visualization.style.textSize ??
-      VISUALIZATION_DEFAULTS.textSize,
+        visualization.style.textSize ??
+        VISUALIZATION_DEFAULTS.textSize,
+      VISUALIZATION_DEFAULTS.textSize
+    ),
     bold: existing?.bold ?? visualization.style.textBold ?? false,
     italic: existing?.italic ?? visualization.style.textItalic ?? false,
     align: existing?.align ?? visualization.style.textAlign ?? 'left',
@@ -1220,9 +1247,13 @@ function getDefaultStyle(
   const textOverlayDefaults: VisualizationConfig['style'] = {
     labelColor: DEFAULT_COLORS.text,
     labelOpacity: DEFAULT_LABEL_OPACITY,
+    labelFontFamily: DEFAULT_FONT_FAMILY,
+    labelBold: false,
+    labelItalic: false,
     labelCollisionDetection: true,
     textColor: DEFAULT_COLORS.text,
     textOpacity: DEFAULT_TEXT_OPACITY,
+    textFontFamily: DEFAULT_FONT_FAMILY,
     textCollisionDetection: true
   };
 
@@ -1575,7 +1606,10 @@ function normalizeLegacyLabelStyle(
   if (hasLegacyLabelLayer && !hasActiveTextLayer) {
     style.textOpacity = labelOpacity;
     style.textColor = style.labelColor ?? style.textColor;
+    style.textFontFamily = style.labelFontFamily ?? style.textFontFamily;
     style.textSize = style.labelSize ?? style.textSize;
+    style.textBold = style.labelBold ?? style.textBold;
+    style.textItalic = style.labelItalic ?? style.textItalic;
     style.textAlign = style.labelAlign ?? style.textAlign;
     style.textHalo = style.labelHalo ?? style.textHalo;
     style.textHaloColor = style.labelHaloColor ?? style.textHaloColor;

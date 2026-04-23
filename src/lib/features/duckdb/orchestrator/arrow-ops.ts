@@ -14,6 +14,11 @@ import {
   ArrowExtension,
   GeometryType
 } from '$lib/features/map/constants/map.constants';
+import {
+  isProjectionSupported,
+  reprojectPoint
+} from '$lib/features/duckdb/io/reprojection';
+import { tableFromArrays } from 'apache-arrow';
 import { Field, Schema, Table, Type, tableFromIPC } from 'apache-arrow/Arrow';
 // Plain Map — metadata is non-reactive data processing (no need for SvelteMap proxy)
 import { DUCK_CONST, GEO_CONSTANTS } from '../constants';
@@ -94,6 +99,184 @@ export function buildYearFilterWhereClause(
 export interface GeomColumnInfo {
   column_name: string;
   column_type: string;
+}
+
+async function getTableColumns(
+  tableName: string,
+  Duck: DuckDBClientForArrow
+): Promise<GeomColumnInfo[]> {
+  const tableInfo = await Duck.describe_table(tableName);
+  return tableInfo.name.map((name: string, index: number) => ({
+    column_name: name,
+    column_type: tableInfo.type[index]
+  }));
+}
+
+function findGeometryColumn(
+  columns: GeomColumnInfo[]
+): GeomColumnInfo | undefined {
+  return columns.find((column) => isGeometryColumnType(column.column_type));
+}
+
+async function resolveGeometryTypeForTable(
+  tableName: string,
+  geomColumnName: string,
+  Duck: DuckDBClientForArrow
+): Promise<string> {
+  const geomTypeResult = (await Duck.query(
+    `SELECT DISTINCT geom_type FROM (
+       SELECT ST_GeometryType("${geomColumnName}") as geom_type
+       FROM "${tableName}"
+       WHERE "${geomColumnName}" IS NOT NULL
+       LIMIT 1000
+     )`,
+    { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
+  )) as Array<{ geom_type: string }>;
+
+  const types = geomTypeResult.map((result) => result.geom_type);
+
+  if (types.length === 0) {
+    return GEOMETRY_COLUMN_TYPE;
+  }
+
+  if (types.length === 1) {
+    return types[0];
+  }
+
+  const hasPoint = hasGeometryType(types, 'POINT');
+  const hasMultiPoint = hasGeometryType(types, 'MULTI_POINT');
+  const hasLineString = hasGeometryType(types, 'LINE_STRING');
+  const hasMultiLineString = hasGeometryType(types, 'MULTI_LINE_STRING');
+  const hasPolygon = hasGeometryType(types, 'POLYGON');
+  const hasMultiPolygon = hasGeometryType(types, 'MULTI_POLYGON');
+
+  let geometryType = GEOMETRY_COLUMN_TYPE;
+
+  if (hasPolygon || hasMultiPolygon) {
+    geometryType = GEOMETRY_WKT_TYPES.MULTI_POLYGON;
+  } else if (hasLineString || hasMultiLineString) {
+    geometryType = GEOMETRY_WKT_TYPES.MULTI_LINE_STRING;
+  } else if (hasPoint || hasMultiPoint) {
+    geometryType = GEOMETRY_WKT_TYPES.MULTI_POINT;
+  }
+
+  logger.info(
+    'Mixed geometry types detected, normalized to Multi* variant',
+    LogCategory.DUCKDB,
+    {
+      tableName,
+      detectedTypes: types.join(', '),
+      normalizedType: geometryType
+    }
+  );
+
+  return geometryType;
+}
+
+function reprojectGeoJsonCoordinates(
+  coordinates: unknown,
+  sourceCrs: string,
+  targetCrs: string
+): void {
+  if (!Array.isArray(coordinates)) {
+    return;
+  }
+
+  if (
+    coordinates.length >= 2 &&
+    typeof coordinates[0] === 'number' &&
+    typeof coordinates[1] === 'number'
+  ) {
+    const result = reprojectPoint(
+      coordinates[0],
+      coordinates[1],
+      sourceCrs,
+      targetCrs
+    );
+
+    if (result.success && result.coordinates) {
+      coordinates[0] = result.coordinates[0];
+      coordinates[1] = result.coordinates[1];
+    }
+    return;
+  }
+
+  for (const child of coordinates) {
+    reprojectGeoJsonCoordinates(child, sourceCrs, targetCrs);
+  }
+}
+
+function reprojectGeoJsonValue(
+  value: unknown,
+  sourceCrs: string,
+  targetCrs: string
+): unknown {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  try {
+    const geometry = JSON.parse(value) as { coordinates?: unknown };
+    reprojectGeoJsonCoordinates(geometry.coordinates, sourceCrs, targetCrs);
+    return JSON.stringify(geometry);
+  } catch {
+    return value;
+  }
+}
+
+async function reprojectArrowTableWithProj4(
+  tableName: string,
+  Duck: DuckDBClientForArrow,
+  geomColumn: GeomColumnInfo,
+  sourceCrs: string,
+  targetCrs: string,
+  geometryType: string
+): Promise<Table> {
+  const rawResult = (await Duck.query(
+    `SELECT * EXCLUDE ("${geomColumn.column_name}"),
+            ST_AsGeoJSON("${geomColumn.column_name}") AS "${geomColumn.column_name}"
+     FROM "${tableName}"`,
+    { format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC }
+  )) as Uint8Array;
+
+  const rawTable = tableFromIPC(rawResult);
+  const columns = Object.fromEntries(
+    rawTable.schema.fields.map((field) => [field.name, [] as unknown[]])
+  );
+
+  for (let rowIndex = 0; rowIndex < rawTable.numRows; rowIndex++) {
+    for (const field of rawTable.schema.fields) {
+      const vector = rawTable.getChild(field.name);
+      const value = vector?.get(rowIndex) ?? null;
+      columns[field.name].push(
+        field.name === geomColumn.column_name
+          ? reprojectGeoJsonValue(value, sourceCrs, targetCrs)
+          : value
+      );
+    }
+  }
+
+  const reprojectedTable = tableFromArrays(columns);
+  const targetGeoArrowCrs = buildGeoArrowCrs(targetCrs);
+  const syntheticMetadata: GeoArrowMetadata = {
+    version: '1.0.0',
+    primary_column: geomColumn.column_name,
+    columns: {
+      [geomColumn.column_name]: {
+        encoding: ArrowExtension.GEOJSON,
+        geometry_types: [geometryType.replace('ST_', '')],
+        ...(targetGeoArrowCrs ? { crs: targetGeoArrowCrs } : {}),
+        bbox: [-180, -90, 180, 90]
+      }
+    }
+  };
+
+  return addGeoArrowMetadataFromDuckDB(
+    reprojectedTable,
+    tableName,
+    Duck,
+    syntheticMetadata
+  );
 }
 
 async function executeArrowIpcQuery(
@@ -185,6 +368,9 @@ export async function fetchArrowTableWithGeometry(
   );
 
   const normalizedTargetCrs = normalizeCrsName(targetCrs);
+  const geometrySourceCrs = geomColumn
+    ? extractGeometryColumnCrs(geomColumn.column_type)
+    : undefined;
   const projectedColumnNames = projectColumns
     ? projectColumns.filter((name) =>
         columns.some((c) => c.column_name === name)
@@ -192,13 +378,17 @@ export async function fetchArrowTableWithGeometry(
     : null;
 
   const geometryProjection =
-    geomColumn && normalizedTargetCrs
+    geomColumn && normalizedTargetCrs && geometrySourceCrs
       ? `ST_Transform("${geomColumn.column_name}", '${escapeSqlLiteral(
-          normalizedTargetCrs
-        )}') AS "${geomColumn.column_name}"`
-      : geomColumn
-        ? `"${geomColumn.column_name}"`
-        : null;
+          geometrySourceCrs
+        )}', '${escapeSqlLiteral(normalizedTargetCrs)}', true) AS "${geomColumn.column_name}"`
+      : geomColumn && normalizedTargetCrs
+        ? `ST_Transform("${geomColumn.column_name}", '${escapeSqlLiteral(
+            normalizedTargetCrs
+          )}') AS "${geomColumn.column_name}"`
+        : geomColumn
+          ? `"${geomColumn.column_name}"`
+          : null;
 
   let query: string;
   if (projectedColumnNames && projectedColumnNames.length > 0) {
@@ -319,15 +509,7 @@ export async function addGeoArrowMetadataFromDuckDB(
       if (prefetchedGeomColumn) {
         geomColumn = prefetchedGeomColumn;
       } else {
-        const tableInfo = await Duck.describe_table(tableName);
-        const columns = tableInfo.name.map((name: string, index: number) => ({
-          column_name: name,
-          column_type: tableInfo.type[index]
-        }));
-
-        geomColumn = columns.find((c: { column_type: string }) =>
-          isGeometryColumnType(c.column_type)
-        );
+        geomColumn = findGeometryColumn(await getTableColumns(tableName, Duck));
       }
 
       if (!geomColumn) {
@@ -344,56 +526,11 @@ export async function addGeoArrowMetadataFromDuckDB(
       if (overrides?.geometryType) {
         geometryType = overrides.geometryType;
       } else {
-        // Sample geometry types from first 1000 non-null rows instead of full table scan.
-        // DISTINCT on the full table is O(n) and expensive for large datasets.
-        // 1000 rows is sufficient to detect mixed types (Point + MultiPoint, etc.).
-        const geomTypeResult = (await Duck.query(
-          `SELECT DISTINCT geom_type FROM (
-             SELECT ST_GeometryType("${geomColumn.column_name}") as geom_type
-             FROM "${tableName}"
-             WHERE "${geomColumn.column_name}" IS NOT NULL
-             LIMIT 1000
-           )`,
-          { format: DUCK_CONST.QUERY_FORMAT.ARRAY }
-        )) as Array<{ geom_type: string }>;
-
-        const types = geomTypeResult.map((r) => r.geom_type);
-
-        if (types.length === 0) {
-          geometryType = GEOMETRY_COLUMN_TYPE;
-        } else if (types.length === 1) {
-          geometryType = types[0];
-        } else {
-          const hasPoint = hasGeometryType(types, 'POINT');
-          const hasMultiPoint = hasGeometryType(types, 'MULTI_POINT');
-          const hasLineString = hasGeometryType(types, 'LINE_STRING');
-          const hasMultiLineString = hasGeometryType(
-            types,
-            'MULTI_LINE_STRING'
-          );
-          const hasPolygon = hasGeometryType(types, 'POLYGON');
-          const hasMultiPolygon = hasGeometryType(types, 'MULTI_POLYGON');
-
-          if (hasPolygon || hasMultiPolygon) {
-            geometryType = GEOMETRY_WKT_TYPES.MULTI_POLYGON;
-          } else if (hasLineString || hasMultiLineString) {
-            geometryType = GEOMETRY_WKT_TYPES.MULTI_LINE_STRING;
-          } else if (hasPoint || hasMultiPoint) {
-            geometryType = GEOMETRY_WKT_TYPES.MULTI_POINT;
-          } else {
-            geometryType = GEOMETRY_COLUMN_TYPE;
-          }
-
-          logger.info(
-            'Mixed geometry types detected, normalized to Multi* variant',
-            LogCategory.DUCKDB,
-            {
-              tableName,
-              detectedTypes: types.join(', '),
-              normalizedType: geometryType
-            }
-          );
-        }
+        geometryType = await resolveGeometryTypeForTable(
+          tableName,
+          geomColumn.column_name,
+          Duck
+        );
       }
     }
 
@@ -403,12 +540,14 @@ export async function addGeoArrowMetadataFromDuckDB(
     const isGeoJsonString =
       geomColumnIndex !== -1 &&
       table.schema.fields[geomColumnIndex].typeId === Type.Utf8;
+    const cachedEncoding =
+      cachedGeoArrowMetadata?.columns?.[geomColumn!.column_name]?.encoding;
 
     // Normalize DuckDB geometry export to geoarrow.wkb so the layer factory
     // always stays on the binary geoarrow-deck-stream path.
-    const encoding = isGeoJsonString
-      ? ArrowExtension.GEOJSON
-      : ArrowExtension.GEOARROW_WKB;
+    const encoding =
+      cachedEncoding ??
+      (isGeoJsonString ? ArrowExtension.GEOJSON : ArrowExtension.GEOARROW_WKB);
     const resolvedGeometryCrs =
       geometryCrs ?? normalizeCrsName(GEO_CONSTANTS.WGS84_CRS);
     const geoArrowCrs = buildGeoArrowCrs(resolvedGeometryCrs);
@@ -595,20 +734,69 @@ export async function getArrowTableReprojected(
   Duck: DuckDBClientForArrow,
   targetCrs: string
 ): Promise<Table> {
-  const { table: baseTable, geomColumn } = await fetchArrowTableWithGeometry(
-    tableName,
-    Duck,
-    null,
-    targetCrs
-  );
+  try {
+    const { table: baseTable, geomColumn } = await fetchArrowTableWithGeometry(
+      tableName,
+      Duck,
+      null,
+      targetCrs
+    );
 
-  return addGeoArrowMetadataFromDuckDB(
-    baseTable,
-    tableName,
-    Duck,
-    undefined,
-    geomColumn
-  );
+    return addGeoArrowMetadataFromDuckDB(
+      baseTable,
+      tableName,
+      Duck,
+      undefined,
+      geomColumn
+    );
+  } catch (error) {
+    const normalizedTargetCrs = normalizeCrsName(targetCrs);
+    if (!normalizedTargetCrs) {
+      throw error;
+    }
+
+    const geomColumn = findGeometryColumn(
+      await getTableColumns(tableName, Duck)
+    );
+    const sourceCrs = geomColumn
+      ? extractGeometryColumnCrs(geomColumn.column_type)
+      : undefined;
+
+    if (
+      !geomColumn ||
+      !sourceCrs ||
+      !isProjectionSupported(sourceCrs) ||
+      !isProjectionSupported(normalizedTargetCrs)
+    ) {
+      throw error;
+    }
+
+    logger.warn(
+      'DuckDB ST_Transform failed, trying client-side proj4 fallback for Arrow reprojection',
+      LogCategory.DUCKDB,
+      {
+        tableName,
+        sourceCrs,
+        targetCrs: normalizedTargetCrs,
+        error: error instanceof Error ? error.message : String(error)
+      }
+    );
+
+    const geometryType = await resolveGeometryTypeForTable(
+      tableName,
+      geomColumn.column_name,
+      Duck
+    );
+
+    return reprojectArrowTableWithProj4(
+      tableName,
+      Duck,
+      geomColumn,
+      sourceCrs,
+      normalizedTargetCrs,
+      geometryType
+    );
+  }
 }
 
 export async function getRepresentativePointArrowTable(

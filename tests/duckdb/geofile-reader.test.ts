@@ -5,16 +5,12 @@ const {
   executeQueryMock,
   registerFilesMock,
   addRowIdMock,
-  convertGeoPackageToGeoJsonFileMock,
-  tryDuckDBReprojectionMock,
-  applyProj4ReprojectionMock
+  convertGeoPackageToGeoJsonFileMock
 } = vi.hoisted(() => ({
   executeQueryMock: vi.fn(),
   registerFilesMock: vi.fn(),
   addRowIdMock: vi.fn(),
-  convertGeoPackageToGeoJsonFileMock: vi.fn(),
-  tryDuckDBReprojectionMock: vi.fn(),
-  applyProj4ReprojectionMock: vi.fn()
+  convertGeoPackageToGeoJsonFileMock: vi.fn()
 }));
 
 vi.mock('$lib/features/commons/utils/logger', () => ({
@@ -45,11 +41,6 @@ vi.mock('$lib/features/duckdb/io/reader-utils', () => ({
 
 vi.mock('$lib/features/map/utils/geopackage-browser-fallback', () => ({
   convertGeoPackageToGeoJsonFile: convertGeoPackageToGeoJsonFileMock
-}));
-
-vi.mock('$lib/features/duckdb/io/geofile-reprojection', () => ({
-  tryDuckDBReprojection: tryDuckDBReprojectionMock,
-  applyProj4Reprojection: applyProj4ReprojectionMock
 }));
 
 import { readGeofile } from '$lib/features/duckdb/io/geofile-reader';
@@ -84,8 +75,6 @@ describe('readGeofile', () => {
     );
 
     addRowIdMock.mockResolvedValue(undefined);
-    tryDuckDBReprojectionMock.mockResolvedValue(true);
-    applyProj4ReprojectionMock.mockResolvedValue(undefined);
   });
 
   it('falls back to browser GeoJSON conversion for GeoPackage thread errors in mono-thread runtimes', async () => {
@@ -144,13 +133,11 @@ describe('readGeofile', () => {
     ).toBe(false);
   });
 
-  it('should reproject via proj4 fallback when DuckDB ST_Transform is unsupported (e.g. EPSG:2154)', async () => {
+  it('preserves projected geofile coordinates at ingest and skips eager reprojection', async () => {
     const ctx = createContext();
     const gpkgFile = new File(['gpkg'], 'test-l93.gpkg', {
       type: 'application/geopackage+sqlite3'
     });
-
-    tryDuckDBReprojectionMock.mockResolvedValue(false);
 
     executeQueryMock
       .mockResolvedValueOnce([
@@ -170,21 +157,12 @@ describe('readGeofile', () => {
     });
 
     expect(tableName).toBe('l93_table');
-    expect(tryDuckDBReprojectionMock).toHaveBeenCalledWith(
-      ctx,
-      'l93_table',
-      'registered:test-l93.gpkg',
-      'geom',
-      'EPSG:2154'
-    );
-    expect(applyProj4ReprojectionMock).toHaveBeenCalledWith(
-      ctx,
-      'l93_table',
-      'registered:test-l93.gpkg',
-      'geom',
-      'EPSG:2154'
-    );
     expect(addRowIdMock).toHaveBeenCalledWith(ctx.connection, 'l93_table');
+    expect(
+      executeQueryMock.mock.calls.some(([_, sql]) =>
+        String(sql).includes('ST_Transform')
+      )
+    ).toBe(false);
   });
 
   it('should call addRowId without reprojection for WGS84 geofiles', async () => {
@@ -211,8 +189,6 @@ describe('readGeofile', () => {
     });
 
     expect(tableName).toBe('wgs84_table');
-    expect(tryDuckDBReprojectionMock).not.toHaveBeenCalled();
-    expect(applyProj4ReprojectionMock).not.toHaveBeenCalled();
     expect(addRowIdMock).toHaveBeenCalledWith(ctx.connection, 'wgs84_table');
   });
 });

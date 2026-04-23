@@ -49,6 +49,13 @@ describe('FillSection — interface', () => {
     );
   });
 
+  it('lets consumers opt into Figma-style opacity bounds', () => {
+    expect(source).toContain('showOpacityBounds?: boolean;');
+    expect(source).toContain('opacityInputWidth?: string;');
+    expect(source).toContain('showMinMax={showOpacityBounds}');
+    expect(source).toContain('inputWidth={opacityInputWidth}');
+  });
+
   it('shows the missing-data section only for CLASSES or CATEGORIES', () => {
     expect(source).toContain(
       'fillMode === FillMode.CLASSES || fillMode === FillMode.CATEGORIES'

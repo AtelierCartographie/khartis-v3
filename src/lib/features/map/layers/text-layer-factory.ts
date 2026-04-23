@@ -3,7 +3,9 @@ import type { Color } from '@deck.gl/core';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { FeatureCollection } from 'geojson';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
+import { fontAssetsStore } from '$lib/features/commons/store/font-assets.store.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { clampFontSize } from '$lib/features/step-toolbar/constants/fonts.constants';
 import {
   ColorMode,
   DEFAULT_COLORS,
@@ -26,7 +28,6 @@ import {
   createThematicLayerId,
   DEFAULT_HALO_WIDTH,
   DEFAULT_TEXT_COLOR,
-  DEFAULT_TEXT_FONT,
   DEFAULT_TEXT_FONT_SETTINGS,
   DEFAULT_TEXT_MASK_PADDING,
   DEFAULT_TEXT_SIZE,
@@ -34,6 +35,7 @@ import {
   getCachedGeoJSON,
   getRepresentativePointSource,
   normalizeOpacity,
+  resolveDeckTextFontFamily,
   resolveDeckTextFontWeight,
   resolveEffectiveCategoryColorMap,
   resolveMissingTextLabel,
@@ -68,6 +70,9 @@ export function createTextOverlayLayers(
 ): ThematicLayer[] {
   const viz = ctx.viz;
   if (!viz?.mapping.labelColumn) {
+    return [];
+  }
+  if (!fontAssetsStore.ready) {
     return [];
   }
 
@@ -161,7 +166,7 @@ export function createTextOverlayLayers(
     hexToRgb(DEFAULT_COLORS.missingData)
   );
   const missingTextLabel = resolveMissingTextLabel(viz.missingData?.label);
-  const textBaseSize = viz.style.textSize ?? DEFAULT_TEXT_SIZE;
+  const textBaseSize = clampFontSize(viz.style.textSize, DEFAULT_TEXT_SIZE);
   const variableTextSizeColumn = viz.mapping.sizeColumn;
   const variableTextSizeVector = variableTextSizeColumn
     ? jsTable.getChild(variableTextSizeColumn)
@@ -301,7 +306,7 @@ export function createTextOverlayLayers(
           sizeUnits: 'pixels',
           getTextAnchor: resolveTextAnchor(viz.style.textAlign),
           getAlignmentBaseline: 'center',
-          fontFamily: DEFAULT_TEXT_FONT,
+          fontFamily: resolveDeckTextFontFamily(viz.style.textFontFamily),
           fontWeight: resolveDeckTextFontWeight(
             viz.style.textBold ? '700' : '400',
             viz.style.textItalic

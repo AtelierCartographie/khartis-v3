@@ -1,8 +1,8 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
+  import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
   import { Dropdown } from 'carbon-components-svelte';
   import { Globe } from 'carbon-icons-svelte';
-  import ColorDropdown from './color-dropdown.svelte';
   import { SliderWithInput } from '../shared';
   import DottedToggle from './dotted-toggle.svelte';
   import {
@@ -100,7 +100,11 @@
     />
   </div>
 
-  <ColorDropdown value={color} onchange={handleColorChange} />
+  <SingleColorPreview
+    label={m.basemap_config_color()}
+    color={color}
+    onchange={handleColorChange}
+  />
 
   <DottedToggle
     enabled={dotted}
@@ -134,7 +138,6 @@
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-05);
-    padding: var(--cds-spacing-04);
   }
 
   .control-group {

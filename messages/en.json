@@ -86,7 +86,7 @@
   "sidenav_language_portuguese": "Idioma: Português",
   "sidenav_theme_light": "Theme: light",
   "sidenav_theme_dark": "Theme: dark",
-  "sidenav_version": "Khartis v3.0.0",
+  "sidenav_version": "Khartis v{version}",
   "sidenav_copyright": "© {year} Sciences Po",
   "sidenav_install_help_title": "Install Khartis",
   "sidenav_install_help_intro_title": "Browser installation",

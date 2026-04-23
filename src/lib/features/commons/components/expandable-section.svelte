@@ -318,7 +318,7 @@
       --khartis-expandable-section-background,
       var(--cds-layer-01)
     );
-    padding: 8px 16px 16px 16px;
+    padding: var(--khartis-expandable-section-body-padding, 8px 16px 16px 16px);
   }
 
   .section-expand-btn:hover:not(:disabled) {

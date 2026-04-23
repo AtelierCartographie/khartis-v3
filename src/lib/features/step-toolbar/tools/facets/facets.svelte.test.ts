@@ -16,4 +16,13 @@ describe('facets tool scale mode UI', () => {
     expect(source).toContain('handleScaleModeChange');
     expect(source).toContain('facetsStore.toggleScaleMode()');
   });
+
+  it('uses dedicated text background stroke slots instead of fill slots', () => {
+    expect(source).toContain('FACET_SLOT.TEXT_BACKGROUND_STROKE_VALUE');
+    expect(source).toContain('FACET_SLOT.TEXT_BACKGROUND_STROKE_CATEGORY');
+    expect(source).toContain('return viz.text?.background?.strokeValueColumn;');
+    expect(source).toContain(
+      'return viz.text?.background?.strokeCategoryColumn;'
+    );
+  });
 });

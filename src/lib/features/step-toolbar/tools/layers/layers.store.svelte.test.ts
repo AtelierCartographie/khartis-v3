@@ -82,8 +82,12 @@ vi.mock('$lib/features/commons/store/visualization.store.svelte', () => {
     enabled: false,
     color: undefined,
     opacity: 0,
+    fontFamily: 'Cabin',
     secondaryLabels: {
-      color: undefined
+      color: undefined,
+      fontFamily: 'Cabin',
+      bold: false,
+      italic: false
     }
   });
 

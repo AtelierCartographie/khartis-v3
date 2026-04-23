@@ -31,6 +31,7 @@ import {
   isHiddenTechnicalColumnName,
   isIdLikeColumnName
 } from '$lib/features/commons/utils/visualization-columns.utils';
+import { joinLegendSubtitleParts } from '$lib/features/commons/utils/legend-subtitle.utils';
 import {
   getLegendState,
   legendActions
@@ -1303,33 +1304,32 @@ export function usePrimitivePanelController({
   ): string {
     switch (primitive) {
       case PrimitiveFilterType.POLYGON:
-        return (
-          getPrimitiveValueColumn(visualization, primitive) ??
-          getPrimitiveCategoryColumn(visualization, primitive) ??
-          ''
-        );
+        return joinLegendSubtitleParts([
+          getPrimitiveValueColumn(visualization, primitive),
+          getPrimitiveCategoryColumn(visualization, primitive)
+        ]);
 
       case PrimitiveFilterType.POINT:
-        return (
-          getPrimitiveValueColumn(visualization, primitive) ??
-          getPrimitiveSizeColumn(visualization, primitive) ??
-          getPrimitiveCategoryColumn(visualization, primitive) ??
-          ''
-        );
+        return joinLegendSubtitleParts([
+          getPrimitiveSizeColumn(visualization, primitive),
+          getPrimitiveValueColumn(visualization, primitive),
+          getPrimitiveCategoryColumn(visualization, primitive)
+        ]);
 
       case PrimitiveFilterType.LINE:
-        return (
-          getPrimitiveSizeColumn(visualization, primitive) ??
-          getPrimitiveValueColumn(visualization, primitive) ??
-          getPrimitiveCategoryColumn(visualization, primitive) ??
-          ''
-        );
+        return joinLegendSubtitleParts([
+          getPrimitiveSizeColumn(visualization, primitive),
+          getPrimitiveValueColumn(visualization, primitive),
+          getPrimitiveCategoryColumn(visualization, primitive)
+        ]);
 
       case PrimitiveFilterType.TEXT: {
         const text = getTextPrimitive(visualization);
-        return (
-          text?.valueColumn ?? text?.categoryColumn ?? text?.labelColumn ?? ''
-        );
+        return joinLegendSubtitleParts([
+          text?.valueColumn,
+          text?.categoryColumn,
+          text?.labelColumn
+        ]);
       }
     }
   }
