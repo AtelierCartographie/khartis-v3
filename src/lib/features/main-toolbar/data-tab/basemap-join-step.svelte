@@ -1512,6 +1512,7 @@
   });
 
   $effect(() => {
+    void duckDBDatasetsVersion;
     if (dataTabStore.hasCompletedStep[basemapStepIndex]) return;
     const id = datasetIdForOrchestrator;
     if (!id) return;
