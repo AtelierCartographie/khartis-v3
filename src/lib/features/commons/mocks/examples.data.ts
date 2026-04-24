@@ -33,7 +33,7 @@ export const EXAMPLE_PROJECTS: ExampleProject[] = [
     dataUrl: resolveExampleAssetPath(
       '/examples/data/countries-population-simple.csv'
     ),
-    baseMapId: 'world-countries',
+    baseMapId: 'monde-countries-2024-medium',
     visualizations: [
       {
         type: 'choropleth',
@@ -58,7 +58,7 @@ export const EXAMPLE_PROJECTS: ExampleProject[] = [
     category: ExampleCategory.SYMBOLS,
     thumbnail: resolveExampleAssetPath('/examples/european-cities-thumb.png'),
     dataUrl: resolveExampleAssetPath('/examples/data/european-cities.csv'),
-    baseMapId: 'europe-countries',
+    baseMapId: undefined,
     visualizations: [
       {
         type: 'proportional',
@@ -107,7 +107,7 @@ export const EXAMPLE_PROJECTS: ExampleProject[] = [
     category: ExampleCategory.HYBRIDS,
     thumbnail: resolveExampleAssetPath('/examples/gdp-evolution-thumb.png'),
     dataUrl: resolveExampleAssetPath('/examples/data/gdp-growth-2023.csv'),
-    baseMapId: 'world-countries',
+    baseMapId: 'monde-countries-2024-medium',
     visualizations: [
       {
         type: 'bivariate',
