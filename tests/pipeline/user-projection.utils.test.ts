@@ -26,6 +26,10 @@ const projectionPresets: ProjectionPresets = {
   }
 };
 
+function isProjectedPoint(value: unknown): value is [number, number] {
+  return Array.isArray(value);
+}
+
 describe('user projection utils', () => {
   it('encodes composite selection ids and keeps them on the mercator engine', () => {
     const selectionId = getCompositeProjectionSelectionId('FRANCE_DOM_TOM');
@@ -60,5 +64,63 @@ describe('user projection utils', () => {
         [-5.15, 41.33, 9.56, 51.09]
       )
     ).not.toBeNull();
+  });
+
+  it('resolves custom proj4 overrides to finite projected points', () => {
+    const projection = resolveUserProjectionOverride({
+      state: {
+        selected: 'mercator',
+        overrideActive: true,
+        customCode:
+          '+proj=laea +lat_0=52 +lon_0=10 +x_0=4321000 +y_0=3210000 +ellps=GRS80 +units=m +no_defs +type=crs',
+        center: undefined,
+        longitude: 0,
+        latitude: 0,
+        rotation: 0
+      },
+      fitBbox: [-63.09, -21.39, 55.84, 71.12],
+      viewportSize: { width: 789, height: 539 },
+      padding: 40,
+      projectionPresets
+    });
+    let projected: unknown = null;
+    const stream = projection?.stream({
+      point(x: number, y: number) {
+        projected = [x, y];
+      },
+      lineStart() {},
+      lineEnd() {},
+      polygonStart() {},
+      polygonEnd() {}
+    });
+
+    stream?.point(16.258, 47.245);
+
+    expect(isProjectedPoint(projected)).toBe(true);
+    if (!isProjectedPoint(projected)) {
+      throw new Error('Projection did not emit a point');
+    }
+    expect(projected.every(Number.isFinite)).toBe(true);
+  });
+
+  it('ignores custom proj4 overrides that produce invalid coordinates', () => {
+    const projection = resolveUserProjectionOverride({
+      state: {
+        selected: 'mercator',
+        overrideActive: true,
+        customCode:
+          '+proj=laea +lon_0=-3.63 +lat_0=24.86 +ellps=WGS84 +datum=WGS84 +units=m +no_defs',
+        center: undefined,
+        longitude: 0,
+        latitude: 0,
+        rotation: 0
+      },
+      fitBbox: [-63.09, -21.39, 55.84, 71.12],
+      viewportSize: { width: 789, height: 539 },
+      padding: 40,
+      projectionPresets
+    });
+
+    expect(projection).toBeUndefined();
   });
 });

@@ -743,13 +743,14 @@ export function resolveSuggestionBehavior(
         ...preset.modes,
         fill: FillMode.UNIQUE
       },
-      style: {},
+      style: { fillColor: DEFAULT_COLORS.fill },
       classification: undefined,
       symbols: baseSymbols,
       missingData: preset.missingData,
       polygon: {
         enabled: true,
         fillMode: FillMode.UNIQUE,
+        fillColor: DEFAULT_COLORS.fill,
         classification: undefined,
         missingData: preset.missingData
       },
@@ -810,7 +811,10 @@ export function resolveSuggestionBehavior(
           ? ThicknessMode.PROPORTIONAL
           : ThicknessMode.UNIQUE
       },
-      style: {},
+      style:
+        !isCategoricalLine && !isClassedLine
+          ? { lineColor: DEFAULT_COLORS.fill }
+          : {},
       classification: isCategoricalLine
         ? categoricalPreset.classification
         : isClassedLine
@@ -839,6 +843,10 @@ export function resolveSuggestionBehavior(
             : primaryTextColumn
           : undefined,
         sizeColumn: isProportionalLine ? primaryNumericColumn : undefined,
+        color:
+          !isCategoricalLine && !isClassedLine
+            ? DEFAULT_COLORS.fill
+            : undefined,
         classification: isCategoricalLine
           ? categoricalPreset.classification
           : isClassedLine

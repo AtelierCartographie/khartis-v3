@@ -471,6 +471,8 @@
   $effect(() => {
     if (isGeolocationConfigured) {
       dataTabStore.markStepComplete(1);
+    } else {
+      dataTabStore.resetStepCompletion(1);
     }
   });
 

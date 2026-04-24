@@ -337,8 +337,11 @@
     }
 
     const suggestionSignature = getSuggestionSignature(suggestions[0]);
+    const dataset = selectedDataset;
+    const joinSignature =
+      dataset?.joinedBasemap ?? (dataset?.geometry?.type ? 'native' : 'none');
 
-    return `${targetViz.datasetId}::${targetViz.id}::${suggestionSignature}`;
+    return `${targetViz.datasetId}::${targetViz.id}::${joinSignature}::${suggestionSignature}`;
   });
 
   function handleSelectViz(id: string) {

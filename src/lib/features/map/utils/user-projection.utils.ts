@@ -50,6 +50,22 @@ function isGeoProjection(
   );
 }
 
+function getBboxCenter(bbox: BBox): [number, number] {
+  return [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2];
+}
+
+function isUsableGeoProjection(
+  projection: GeoProjection,
+  fitBbox: BBox
+): boolean {
+  const projected = projection(getBboxCenter(fitBbox));
+  return (
+    Array.isArray(projected) &&
+    projected.length >= 2 &&
+    projected.every(Number.isFinite)
+  );
+}
+
 export function getCompositeProjectionSelectionId(presetId: string): string {
   return `${COMPOSITE_PROJECTION_PREFIX}${presetId}`;
 }
@@ -104,7 +120,9 @@ export function resolveUserProjectionOverride({
         viewportSize.height,
         padding
       );
-      return projection;
+      return isUsableGeoProjection(projection, fitBbox)
+        ? projection
+        : undefined;
     }
 
     const presetId = getCompositeProjectionPresetId(state.selected);
@@ -139,7 +157,7 @@ export function resolveUserProjectionOverride({
       padding
     );
 
-    return projection;
+    return isUsableGeoProjection(projection, fitBbox) ? projection : undefined;
   } catch (error) {
     logger.error(
       'Failed to resolve user projection override',

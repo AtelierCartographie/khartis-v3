@@ -38,12 +38,9 @@
 
   const fileHook = useEnrichmentFile();
   const basemapHook = useEnrichmentBasemap();
-  const overlayBasemapEnabled = $derived(basemapHook.hasActiveSelection);
-  const overlayBasemapSuggestionCount = $derived(
-    basemapHook.suggestedBasemaps.length
+  const overlayBasemapEnabled = $derived(
+    dataTabState.enrichData.overlayBasemapEnabled
   );
-  let overlayBasemapExpanded = $state(false);
-  let overlayBasemapDismissed = $state(false);
 
   const enrichGeoDetection = $derived(fileHook.enrichmentDataset?.geoDetection);
 
@@ -81,10 +78,12 @@
       previousDatasetId = currentId;
       enrichLinkedVariableId = undefined;
       geoFileColumnId = undefined;
-      dataTabActions.setEnrichDataState({ joinTabularEnabled: false });
+      dataTabActions.setEnrichDataState({
+        joinTabularEnabled: false,
+        overlayBasemapEnabled: false
+      });
       fileHook.handleRemoveFile();
       joinHook.resetJoinState();
-      overlayBasemapDismissed = false;
     }
   });
 
@@ -145,19 +144,8 @@
   $effect(() => {
     if (selectedDataset && selectedDataset.geometry) {
       dataTabStore.markStepComplete(1);
-    }
-  });
-
-  $effect(() => {
-    if (overlayBasemapDismissed) return;
-    if (overlayBasemapEnabled || overlayBasemapSuggestionCount > 0) {
-      overlayBasemapExpanded = true;
-      // Mirror the toggle's onToggleChange path: when the section opens because
-      // suggestions are available but no basemap is active yet, auto-pick the top one
-      // so the CDC default selection rule applies even on geo datasets.
-      if (!overlayBasemapEnabled && overlayBasemapSuggestionCount > 0) {
-        basemapHook.activatePreferredBasemap();
-      }
+    } else {
+      dataTabStore.resetStepCompletion(1);
     }
   });
 
@@ -239,16 +227,14 @@
       title={m.enrich_overlay_basemap_title()}
       description={m.enrich_overlay_basemap_description()}
       showToggle={true}
-      open={overlayBasemapExpanded}
-      toggleChecked={overlayBasemapExpanded}
+      open={overlayBasemapEnabled}
+      toggleChecked={overlayBasemapEnabled}
       onToggleChange={(checked) => {
-        overlayBasemapExpanded = checked;
+        dataTabActions.setEnrichDataState({ overlayBasemapEnabled: checked });
         if (!checked) {
-          overlayBasemapDismissed = true;
           basemapHook.clearSelectedBasemap();
           return;
         }
-        overlayBasemapDismissed = false;
         basemapHook.activatePreferredBasemap();
       }}
     >

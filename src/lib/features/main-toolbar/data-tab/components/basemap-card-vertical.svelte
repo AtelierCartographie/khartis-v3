@@ -13,6 +13,7 @@
     selected?: boolean;
     matchScore?: number;
     showMatchScore?: boolean;
+    showMetadata?: boolean;
     variant?: 'blue' | 'gray';
     disabled?: boolean;
     onclick?: () => void;
@@ -23,6 +24,7 @@
     selected = false,
     matchScore,
     showMatchScore = true,
+    showMetadata = true,
     variant = 'blue',
     disabled = false,
     onclick
@@ -133,13 +135,15 @@
       </div>
     </div>
 
-    <div class="metadata-row">
-      <span class="source">{basemap.source}</span>
-      <span class="date">
-        <Calendar size={16} />
-        {basemap.date}
-      </span>
-    </div>
+    {#if showMetadata}
+      <div class="metadata-row">
+        <span class="source">{basemap.source}</span>
+        <span class="date">
+          <Calendar size={16} />
+          {basemap.date}
+        </span>
+      </div>
+    {/if}
   </div>
 
   {#if showMatchScore && matchPercentage !== undefined}

@@ -41,7 +41,7 @@ function createVisualization(): VisualizationConfig {
       strokeDashed: true,
       valueColumn: 'population',
       categoryColumn: 'region',
-      classification: { method: 'jenks', numClasses: 5, classes: 5 },
+      classification: { method: 'kmeans', numClasses: 5, classes: 5 },
       missingData: { show: true, color: '#cccccc' }
     },
     symbol: {
@@ -86,7 +86,7 @@ function createVisualization(): VisualizationConfig {
       sizeColumn: 'size_flow',
       classification: { labels: ['Road', 'Rail'] },
       thicknessClassification: {
-        method: 'jenks',
+        method: 'kmeans',
         numClasses: 4,
         classes: 4,
         breaks: [10, 20, 30]

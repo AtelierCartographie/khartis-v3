@@ -8,10 +8,31 @@ export const DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX = 12;
 
 export const NESTED_MEANS_CLASS_COUNTS = [2, 4, 8, 16] as const;
 
+const CLASSIFICATION_METHOD = {
+  KMEANS: 'kmeans',
+  QUANTILES: 'quantiles',
+  EQUAL_INTERVAL: 'equal_interval',
+  MANUAL: 'manual',
+  Q6: 'q6',
+  NESTED_MEANS: 'nested_means',
+  HEAD_TAIL: 'head_tail'
+} as const;
+
 export function normalizeClassificationMethod(
-  method: ClassificationMethod
+  method: ClassificationMethod | string | null | undefined
 ): ClassificationMethod {
-  return method;
+  switch (method) {
+    case CLASSIFICATION_METHOD.KMEANS:
+    case CLASSIFICATION_METHOD.QUANTILES:
+    case CLASSIFICATION_METHOD.EQUAL_INTERVAL:
+    case CLASSIFICATION_METHOD.MANUAL:
+    case CLASSIFICATION_METHOD.Q6:
+    case CLASSIFICATION_METHOD.NESTED_MEANS:
+    case CLASSIFICATION_METHOD.HEAD_TAIL:
+      return method as ClassificationMethod;
+    default:
+      return CLASSIFICATION_METHOD.KMEANS as ClassificationMethod;
+  }
 }
 
 /**
@@ -61,8 +82,7 @@ export function resolveComputedClassCount(
   );
 
   if (
-    (normalizedMethod === 'head_tail' ||
-      normalizedMethod === 'standard_deviation') &&
+    normalizedMethod === CLASSIFICATION_METHOD.HEAD_TAIL &&
     Number.isFinite(actualClassCount) &&
     actualClassCount >= 2
   ) {
@@ -87,20 +107,20 @@ export function resolveHeadTailClassCountMax(
 }
 
 const METHOD_LABELS: Record<string, () => string> = {
-  jenks: m.discretization_method_jenks,
-  quantiles: m.discretization_method_quantile,
-  equal_interval: m.discretization_method_equal_interval,
-  standard_deviation: m.discretization_method_stddev,
-  manual: m.discretization_method_manual,
-  q6: m.discretization_method_q6,
-  nested_means: m.discretization_method_nested_means,
-  head_tail: m.discretization_method_head_tail
+  [CLASSIFICATION_METHOD.KMEANS]: m.discretization_method_kmeans,
+  [CLASSIFICATION_METHOD.QUANTILES]: m.discretization_method_quantile,
+  [CLASSIFICATION_METHOD.EQUAL_INTERVAL]:
+    m.discretization_method_equal_interval,
+  [CLASSIFICATION_METHOD.MANUAL]: m.discretization_method_manual,
+  [CLASSIFICATION_METHOD.Q6]: m.discretization_method_q6,
+  [CLASSIFICATION_METHOD.NESTED_MEANS]: m.discretization_method_nested_means,
+  [CLASSIFICATION_METHOD.HEAD_TAIL]: m.discretization_method_head_tail
 };
 
 export function resolveDiscretizationLabel(
   classification: ClassificationConfig | undefined
 ): string {
-  const method = classification?.method ?? 'jenks';
+  const method = normalizeClassificationMethod(classification?.method);
   const numClasses = classification?.numClasses ?? classification?.classes ?? 5;
   const methodLabel = METHOD_LABELS[method]?.() ?? String(method);
 

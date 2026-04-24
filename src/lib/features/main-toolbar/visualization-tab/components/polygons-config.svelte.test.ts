@@ -91,7 +91,7 @@ describe('PolygonsConfig — discretization routing', () => {
       'classification={activeDiscretizationClassification}'
     );
     expect(source).toContain('role={discretizationTarget}');
-    expect(source).toContain("valueColumn={discretizationTarget === 'stroke'");
+    expect(source).toContain('valueColumn={activeDiscretizationValueColumn}');
     expect(source).toContain('visualization?.polygon?.strokeValueColumn');
     expect(source).toContain('visualization?.polygon?.valueColumn');
   });

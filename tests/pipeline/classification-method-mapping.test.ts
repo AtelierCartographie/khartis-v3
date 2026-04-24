@@ -17,9 +17,8 @@ vi.mock('$lib/features/commons/store/visualization.store.svelte', () => ({
   ClassificationMethod: {
     EQUAL_INTERVAL: 'equal_interval',
     QUANTILES: 'quantiles',
-    JENKS: 'jenks',
+    KMEANS: 'kmeans',
     MANUAL: 'manual',
-    STANDARD_DEVIATION: 'standard_deviation',
     Q6: 'q6',
     NESTED_MEANS: 'nested_means',
     HEAD_TAIL: 'head_tail'
@@ -29,17 +28,20 @@ vi.mock('$lib/features/commons/store/visualization.store.svelte', () => ({
 import { mapMethodToMacro } from '$lib/features/commons/services/classification.service';
 
 const CDC_METHODS = [
+  'kmeans',
   'equal_interval',
   'quantiles',
-  'jenks',
   'manual',
-  'standard_deviation',
   'q6',
   'nested_means',
   'head_tail'
 ] as const;
 
 describe('mapMethodToMacro — CDC [VIZ-02d] guarantees', () => {
+  it('maps kmeans → kmeans (POC macro)', () => {
+    expect(mapMethodToMacro('kmeans' as never)).toBe('kmeans');
+  });
+
   it('maps quantiles → quantile (POC macro)', () => {
     expect(mapMethodToMacro('quantiles' as never)).toBe('quantile');
   });
@@ -60,12 +62,12 @@ describe('mapMethodToMacro — CDC [VIZ-02d] guarantees', () => {
     expect(mapMethodToMacro('head_tail' as never)).toBe('headtail2');
   });
 
-  it('returns null for jenks (handled by Fisher-Jenks TS implementation)', () => {
-    expect(mapMethodToMacro('jenks' as never)).toBeNull();
+  it('maps legacy jenks to kmeans', () => {
+    expect(mapMethodToMacro('jenks' as never)).toBe('kmeans');
   });
 
-  it('returns null for standard_deviation (handled by JS path)', () => {
-    expect(mapMethodToMacro('standard_deviation' as never)).toBeNull();
+  it('maps legacy standard_deviation to kmeans', () => {
+    expect(mapMethodToMacro('standard_deviation' as never)).toBe('kmeans');
   });
 
   it('returns null for manual (user-provided breaks)', () => {
@@ -73,7 +75,7 @@ describe('mapMethodToMacro — CDC [VIZ-02d] guarantees', () => {
   });
 
   it('covers every CDC method exactly once', () => {
-    expect(CDC_METHODS).toHaveLength(8);
+    expect(CDC_METHODS).toHaveLength(7);
     for (const method of CDC_METHODS) {
       expect(() => mapMethodToMacro(method as never)).not.toThrow();
     }
