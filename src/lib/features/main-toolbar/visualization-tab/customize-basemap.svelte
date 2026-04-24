@@ -5,6 +5,7 @@
 
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import { InfoPopover } from './components/shared';
+  import { MAP_PROJECTION_TYPE } from '$lib/features/commons/constants';
   import LayerConfigTerre from './components/basemap-layers/layer-config-terre.svelte';
   import LayerConfigSimple from './components/basemap-layers/layer-config-simple.svelte';
   import LayerConfigRelief from './components/basemap-layers/layer-config-relief.svelte';
@@ -20,6 +21,7 @@
     type BasemapLayerId
   } from '$lib/features/map/stores/basemap-layers.store.svelte';
   import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
+  import { mapProjectionStore } from '$lib/features/map/stores/map-projection.store.svelte';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
   import { resolveTiledStyleFromToggle } from './tiled-basemap-selection';
   import { BasemapStyle } from '$lib/features/map/constants/basemap-styles';
@@ -155,6 +157,10 @@
 
     if (!checked) {
       mapInstanceStore.clearPersistedViewState();
+    }
+
+    if (checked && mapProjectionStore.isGlobe) {
+      mapProjectionStore.setProjection(MAP_PROJECTION_TYPE.MERCATOR);
     }
 
     if (osmBasemapStore.isActive) {

@@ -24,6 +24,13 @@ describe('CustomizeBasemap', () => {
     );
   });
 
+  it('starts the reference basemap in the flat projection when the tool is enabled', () => {
+    expect(source).toContain('mapProjectionStore.isGlobe');
+    expect(source).toContain(
+      'mapProjectionStore.setProjection(MAP_PROJECTION_TYPE.MERCATOR)'
+    );
+  });
+
   it('switches imported basemaps to a reduced fill and stroke panel', () => {
     const customBranch = source.match(/{#if isCustomBasemap}([\s\S]*?){:else}/);
     expect(customBranch).not.toBeNull();

@@ -2,12 +2,14 @@
   import * as m from '$lib/paraglide/messages';
   import { InlineLoading, Link } from 'carbon-components-svelte';
   import { Earth, Launch, MapBoundary } from 'carbon-icons-svelte';
+  import { MAP_PROJECTION_TYPE } from '$lib/features/commons/constants';
   import SimpleCheckbox from '$lib/features/commons/components/simple-checkbox.svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import { BasemapCardVertical } from '$lib/features/main-toolbar/data-tab/components';
   import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
   import { BasemapStyle } from '$lib/features/map/constants/basemap-styles';
   import { mapLoadingStore } from '$lib/features/map/stores/map-loading.store.svelte';
+  import { mapProjectionStore } from '$lib/features/map/stores/map-projection.store.svelte';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
   import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
   import {
@@ -104,6 +106,13 @@
   const selectedZoneIndex = $derived(
     zoneOptions.findIndex((zone) => zone.id === selectedZone)
   );
+  const isGlobeProjectionEnabled = $derived(mapProjectionStore.isGlobe);
+
+  $effect(() => {
+    if (selectedZone === 'france' && mapProjectionStore.isGlobe) {
+      setFlatProjection();
+    }
+  });
 
   function getZoneLabel(zone: ZoneId): string {
     return zone === 'france'
@@ -163,7 +172,17 @@
     }
   }
 
+  function setFlatProjection(): void {
+    if (mapProjectionStore.isGlobe) {
+      mapProjectionStore.setProjection(MAP_PROJECTION_TYPE.MERCATOR);
+    }
+  }
+
   function handleZoneChange(zone: ZoneId): void {
+    if (zone === 'france') {
+      setFlatProjection();
+    }
+
     const stylesInNewZone = getStylesForZone(zone);
     const sameVariant = stylesInNewZone.find(
       (s) => s.style === currentConfig?.style
@@ -231,6 +250,15 @@
 
     handleZoneChange(zone.id);
   }
+
+  function handleGlobeProjectionToggle(checked: boolean): void {
+    if (!checked || selectedZone !== 'monde') {
+      setFlatProjection();
+      return;
+    }
+
+    mapProjectionStore.setProjection(MAP_PROJECTION_TYPE.GLOBE);
+  }
 </script>
 
 <div class="basemap-style-selector">
@@ -250,6 +278,17 @@
       hideInactiveLabel={true}
     />
   </div>
+
+  {#if selectedZone === 'monde'}
+    <div class="projection-option">
+      <span class="field-label">{m.map_projection_label()}</span>
+      <SimpleCheckbox
+        labelText={m.map_projection_globe()}
+        checked={isGlobeProjectionEnabled}
+        onchange={handleGlobeProjectionToggle}
+      />
+    </div>
+  {/if}
 
   <div class="styles-section">
     <div class="style-rail" role="list" aria-label={m.basemap_style_label()}>
@@ -320,6 +359,16 @@
 
   .scale-selector {
     position: relative;
+  }
+
+  .projection-option {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-03);
+  }
+
+  .projection-option :global(.kh-checkbox-native) {
+    width: fit-content;
   }
 
   .field-label {
