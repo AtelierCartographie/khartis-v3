@@ -866,7 +866,7 @@ describe('createLineLayers', () => {
         labels: ['A', 'B']
       },
       lineThicknessClassification: {
-        method: ClassificationMethod.JENKS,
+        method: ClassificationMethod.KMEANS,
         classes: 4,
         numClasses: 4,
         breaks: [10, 20, 30]
@@ -889,7 +889,7 @@ describe('createLineLayers', () => {
           labels: ['A', 'B']
         },
         thicknessClassification: {
-          method: ClassificationMethod.JENKS,
+          method: ClassificationMethod.KMEANS,
           classes: 4,
           numClasses: 4,
           breaks: [10, 20, 30]

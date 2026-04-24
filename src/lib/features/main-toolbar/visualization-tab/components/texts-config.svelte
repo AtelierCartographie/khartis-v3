@@ -210,7 +210,10 @@
     if (discretizationTarget === 'background-stroke') {
       return backgroundVisualization?.text?.background?.strokeValueColumn;
     }
-    return backgroundVisualization?.text?.background?.valueColumn;
+    return (
+      backgroundVisualization?.text?.background?.valueColumn ??
+      backgroundVisualization?.mapping.valueColumn
+    );
   });
 
   const backgroundDiscretizationLabel = $derived.by(() =>

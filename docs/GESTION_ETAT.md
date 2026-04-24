@@ -113,7 +113,7 @@ Datasets chargés, colonnes, statistiques.
 
 ### `visualizationStore`
 
-Configurations de visualisations. Types : `choropleth`, `proportional`, `categorical`, `bivariate`. Classifications : `equal-interval`, `quantile`, `jenks`, `stddev`, `manual`.
+Configurations de visualisations. Types : `choropleth`, `proportional`, `categorical`, `bivariate`. Classifications : `kmeans`, `quantiles`, `equal_interval`, `q6`, `nested_means`, `head_tail`, `manual`.
 
 ### `globalState` + `globalActions`
 

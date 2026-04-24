@@ -49,6 +49,14 @@ describe('LinesConfig — palette wiring', () => {
     expect(classesPalette).toContain('lineColorClassification');
   });
 
+  it('shows breakpoint controls only for line color discretization', () => {
+    const modalBlock = source.split('<DiscretizationModal')[1]?.split('/>')[0];
+
+    expect(modalBlock).toContain(
+      "showBreakpointControls={discretizationTarget === 'color'}"
+    );
+  });
+
   it('should pass paletteType=QUALITATIVE on the CATEGORIES branch PalettePreview', () => {
     const categoriesBlock = source.split(
       '{:else if colorMode === ColorMode.CATEGORIES}'

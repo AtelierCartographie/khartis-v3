@@ -39,6 +39,7 @@ import {
   VisualizationType,
   type VisualizationConfig
 } from '$lib/features/commons/store/visualization.store.svelte';
+import { ShapeType } from '$lib/features/main-toolbar/constants';
 
 function createVisualization(options?: {
   classification?: VisualizationConfig['classification'];
@@ -67,11 +68,13 @@ function createVisualization(options?: {
 }
 
 describe('DiscretizationModal', () => {
-  it('offers the full discretization method list, including standard deviation', () => {
+  it('offers the SQL discretization methods plus manual', () => {
     const visualization = createVisualization();
     const { container } = render(DiscretizationModal, {
       open: true,
-      visualization
+      visualization,
+      classification: visualization.classification,
+      valueColumn: visualization.mapping.valueColumn
     });
     const panel = container.querySelector('.discretization-floating-panel');
 
@@ -86,10 +89,9 @@ describe('DiscretizationModal', () => {
         option.textContent?.trim()
       )
     ).toEqual([
-      'Jenks',
+      'K-means (seuils naturels)',
       'Quantiles',
       'Intervalles égaux',
-      'Écarts-types',
       'Q6',
       'Moyennes emboîtées',
       'Head/Tail',
@@ -97,7 +99,7 @@ describe('DiscretizationModal', () => {
     ]);
   });
 
-  it('defaults the discretization select to Jenks when no method is configured', () => {
+  it('defaults the discretization select to K-means when no method is configured', () => {
     const visualization = createVisualization({ classification: undefined });
     const { container } = render(DiscretizationModal, {
       open: true,
@@ -109,19 +111,40 @@ describe('DiscretizationModal', () => {
     ) as HTMLSelectElement | null;
 
     expect(select).not.toBeNull();
-    expect(select?.value).toBe('jenks');
+    expect(select?.value).toBe('kmeans');
+  });
+
+  it('does not fall back to the root classification when a channel override is undefined', () => {
+    const visualization = createVisualization();
+    const { container } = render(DiscretizationModal, {
+      open: true,
+      visualization,
+      classification: undefined,
+      valueColumn: 'stroke_value',
+      role: 'stroke'
+    });
+
+    const select = container.querySelector(
+      '#classification-method'
+    ) as HTMLSelectElement | null;
+
+    expect(select).not.toBeNull();
+    expect(select?.value).toBe('kmeans');
   });
 
   it('persists the selected method immediately even before breaks can be recomputed', async () => {
     const onchange = vi.fn();
     const visualization = createVisualization({
       classification: {
-        method: ClassificationMethod.JENKS,
+        method: ClassificationMethod.KMEANS,
         classes: 5,
         numClasses: 5,
         breaks: [12, 24, 36, 48],
         counts: [1, 1, 1, 1, 1],
-        colors: ['#f7fbff', '#c6dbef', '#6baed6', '#2171b5', '#08519c']
+        colors: ['#f7fbff', '#c6dbef', '#6baed6', '#2171b5', '#08519c'],
+        labels: ['Category A'],
+        disabledLabels: ['Category A'],
+        categoryShapes: [ShapeType.CIRCLE]
       }
     });
     const { container } = render(DiscretizationModal, {
@@ -146,14 +169,17 @@ describe('DiscretizationModal', () => {
         classes: 5,
         numClasses: 5,
         breaks: undefined,
-        counts: undefined
+        counts: undefined,
+        labels: undefined,
+        disabledLabels: undefined,
+        categoryShapes: undefined
       })
     );
   });
 
   it('keeps the local method choice when the parent props have not caught up yet', async () => {
     const initialClassification = {
-      method: ClassificationMethod.JENKS,
+      method: ClassificationMethod.KMEANS,
       classes: 5,
       numClasses: 5,
       breaks: [12, 24, 36, 48],
@@ -205,7 +231,7 @@ describe('DiscretizationModal', () => {
   it('propagates the selected method change from the panel to the parent callback', async () => {
     const onmethodchange = vi.fn();
     const { container } = render(DiscretizationPanel, {
-      method: 'jenks',
+      method: 'kmeans',
       numClasses: 5,
       breaks: [
         { min: 0, max: 10, count: 1, color: '#111111' },
@@ -270,10 +296,12 @@ describe('DiscretizationModal', () => {
     );
   });
 
-  it('should allow a stroke-specific valueColumn override instead of always reading visualization.mapping.valueColumn', () => {
+  it('uses only the caller-provided value column for the active channel', () => {
     expect(modalSource).toContain('valueColumn?: string;');
-    expect(modalSource).toContain('const activeValueColumn = $derived(');
     expect(modalSource).toContain(
+      'const activeValueColumn = $derived(valueColumn);'
+    );
+    expect(modalSource).not.toContain(
       'valueColumn ?? visualization?.mapping.valueColumn'
     );
   });
@@ -326,5 +354,21 @@ describe('DiscretizationModal', () => {
         '.discretization-floating-panel[data-role="size"]'
       )
     ).not.toBeNull();
+  });
+
+  it('debounces breakpoint updates without recomputing DuckDB breaks', () => {
+    const breakpointHandlerBlock = modalSource
+      .split('function handleBreakpointChange(value: number | null) {')[1]
+      ?.split('function handleBreaksChange')[0];
+
+    expect(modalSource).toContain('const BREAKPOINT_APPLY_DEBOUNCE_MS = 250;');
+    expect(breakpointHandlerBlock).toContain(
+      'const nextClassification = buildBreakpointClassification(value);'
+    );
+    expect(breakpointHandlerBlock).toContain(
+      'scheduleBreakpointApply(nextClassification);'
+    );
+    expect(breakpointHandlerBlock).not.toContain('computeBreaks();');
+    expect(modalSource).toContain('flushPendingBreakpointChange();');
   });
 });

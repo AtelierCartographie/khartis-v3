@@ -197,7 +197,7 @@ Deck.gl SolidPolygonLayer                             →  upload GPU → rendu
 
 - `normalize_text()` — normalisation pour le matching flou (accents, casse, ponctuation).
 - `get_similarity()` — score Jaro-Winkler pour la jointure approximative.
-- `quantile()`, `q6()`, `equi_width()`, `nested_means()`, `headtail()`, `headtail2()` — méthodes de classification.
+- `kmeans()`, `quantile()`, `q6()`, `equi_width()`, `nested_means()`, `headtail2()` — méthodes de classification utilisées par l'interface.
 - 8 macros de simplification (voir [DUCKDB.md](./DUCKDB.md)).
 
 ---

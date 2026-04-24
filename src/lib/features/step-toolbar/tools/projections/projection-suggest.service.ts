@@ -74,6 +74,15 @@ const D3_FACTORY_MAP: Record<string, (() => GeoProjection) | undefined> = {
   geoRobinson: getD3ProjectionFactory('geoRobinson')
 };
 
+function isUsableProjection(projection: GeoProjection): boolean {
+  const projected = projection([0, 0]);
+  return (
+    Array.isArray(projected) &&
+    projected.length >= 2 &&
+    projected.every(Number.isFinite)
+  );
+}
+
 function nationalToSuggestion(country: MatchedCountry): ProjectionSuggestion {
   return {
     id: `national-${country.id}`,
@@ -144,10 +153,18 @@ export function buildProjectionFromSuggestion(
   // Prefer proj4 string when available (more precise for national projections)
   if (suggestion.proj4String) {
     try {
-      return {
-        projection: proj4d3(suggestion.proj4String),
-        source: 'proj4'
-      };
+      const projection = proj4d3(suggestion.proj4String);
+      if (isUsableProjection(projection)) {
+        return {
+          projection,
+          source: 'proj4'
+        };
+      }
+      logger.warn(
+        'Proj4 suggestion produced invalid coordinates, falling back to d3',
+        LogCategory.MAP,
+        { id: suggestion.id }
+      );
     } catch (err) {
       logger.warn(
         'Failed to build projection from proj4 string, falling back to d3',

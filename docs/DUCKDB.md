@@ -147,17 +147,17 @@ Utilisées dans `join_by_id` et `finalizeJoin` pour le matching approximatif des
 ### `breaks_macros`
 
 ```sql
-headtail(column, n)
-headtail2(column, n)
-  -- Méthode head-tail pour classification (head + tail de la distribution)
-
-quantile(column, n)         -- Quantiles
-equi_width(column, n)       -- Intervalles égaux
-nested_means(column, n)     -- Moyennes emboîtées
-q6(column)                  -- 6 quantiles fixes (5e, 27.5e, 50e, 72.5e, 95e)
+kmeans(table, column, n)        -- Seuils naturels par K-means
+quantile(table, column, n)      -- Quantiles
+equi_width(table, column, n)    -- Intervalles égaux
+nested_means(table, column, n)  -- Moyennes emboîtées
+q6(table, column)               -- 6 classes fixes (5e, 27.5e, 50e, 72.5e, 95e)
+headtail2(table, column, n)     -- Méthode head-tail pour distributions lourdes
 ```
 
 Ces macros sont **des MACROs DuckDB** (pas des fonctions) pour que `colname` soit substitué dynamiquement. Les tests vérifient qu'on n'utilise PAS `FUNCTION` (qui ne permet pas cette substitution).
+
+Les méthodes automatiques de discrétisation de l'interface passent par ces macros. Le mode manuel ne calcule pas de seuils : il recalcule seulement les effectifs de classes avec DuckDB à partir des bornes saisies.
 
 ### `analyse_macros`
 

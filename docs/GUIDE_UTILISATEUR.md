@@ -103,13 +103,13 @@ Chaque visualisation s'applique à un ou plusieurs types de géométrie : **symb
 
 Pour les variables quantitatives, vous choisissez une méthode de classification :
 
-- **Jenks** (seuils naturels) : minimise les écarts au sein de chaque classe.
+- **K-means** (seuils naturels) : détecte les groupes naturels dans la distribution.
 - **Quantiles** : chaque classe contient le même nombre d'entités.
 - **Intervalles égaux** : chaque classe a la même amplitude.
-- **Écart-type** : découpage basé sur la déviation par rapport à la moyenne.
-- **Q6** : variante en 6 classes équilibrées.
+- **Q6** : variante en 6 classes avec seuils prédéfinis.
 - **Moyennes emboîtées** : découpage récursif par la moyenne.
 - **Head-tail** : adapté aux distributions très déséquilibrées (loi de puissance).
+- **Manuel** : bornes de classes saisies directement.
 
 Vous pouvez ajuster le nombre de classes et déplacer les seuils manuellement.
 

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const storeMocks = vi.hoisted(() => ({
   ClassificationMethod: {
-    JENKS: 'jenks',
+    KMEANS: 'kmeans',
     MANUAL: 'manual'
   } as const,
   PrimitiveFilterType: {
@@ -127,6 +127,50 @@ describe('use-classification-breaks', () => {
     expect(serviceMocks.generateColorsForBreaks).not.toHaveBeenCalled();
   });
 
+  it('regenerates colors when the breakpoint moves', () => {
+    const colors = resolveClassificationBreakColors(
+      {
+        colors: ['#111111', '#222222', '#333333'],
+        breaks: [10, 20],
+        breakpointValue: 10,
+        inverted: false
+      } as ClassificationConfig,
+      3,
+      [10, 20],
+      20
+    );
+
+    expect(colors).toEqual(['#auto-0', '#auto-1', '#auto-2']);
+    expect(serviceMocks.computeDivergingSplit).toHaveBeenCalledWith(
+      3,
+      [10, 20],
+      20
+    );
+    expect(serviceMocks.generateColorsForBreaks).toHaveBeenCalled();
+  });
+
+  it('regenerates diverging colors when break values change', () => {
+    const colors = resolveClassificationBreakColors(
+      {
+        colors: ['#111111', '#222222', '#333333'],
+        breaks: [10, 20],
+        breakpointValue: 15,
+        inverted: false
+      } as ClassificationConfig,
+      3,
+      [12, 24],
+      15
+    );
+
+    expect(colors).toEqual(['#auto-0', '#auto-1', '#auto-2']);
+    expect(serviceMocks.computeDivergingSplit).toHaveBeenCalledWith(
+      3,
+      [12, 24],
+      15
+    );
+    expect(serviceMocks.generateColorsForBreaks).toHaveBeenCalled();
+  });
+
   it('compares color arrays without false positives', () => {
     expect(
       areClassificationColorsEqual(
@@ -151,7 +195,7 @@ describe('use-classification-breaks', () => {
       datasetSourceFileId: 'dataset-source',
       valueColumn: 'population',
       classification: {
-        method: ClassificationMethod.JENKS,
+        method: ClassificationMethod.KMEANS,
         numClasses: 4,
         classes: 4
       } as ClassificationConfig
@@ -160,7 +204,7 @@ describe('use-classification-breaks', () => {
     expect(serviceMocks.calculateBreaks).toHaveBeenCalledWith({
       datasetId: 'dataset-source',
       columnName: 'population',
-      method: ClassificationMethod.JENKS,
+      method: ClassificationMethod.KMEANS,
       numClasses: 4
     });
     expect(computation?.actualClassCount).toBe(4);
@@ -221,7 +265,7 @@ describe('use-classification-breaks', () => {
       datasetId: 'dataset-1',
       valueColumn: 'population',
       classification: {
-        method: ClassificationMethod.JENKS,
+        method: ClassificationMethod.KMEANS,
         numClasses: 3,
         classes: 3
       } as ClassificationConfig,

@@ -793,7 +793,7 @@
       return;
     }
 
-    const thisGeneration = loadGeneration;
+    const thisGeneration = ++loadGeneration;
 
     for (const dataset of enabledDatasets) {
       const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(
