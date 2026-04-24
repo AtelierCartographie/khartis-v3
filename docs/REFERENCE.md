@@ -37,9 +37,8 @@ enum VisualizationType {
 enum ClassificationMethod {
   EQUAL_INTERVAL = 'equal_interval',
   QUANTILES = 'quantiles',
-  JENKS = 'jenks',
+  KMEANS = 'kmeans',
   MANUAL = 'manual',
-  STANDARD_DEVIATION = 'standard_deviation',
   Q6 = 'q6',
   NESTED_MEANS = 'nested_means',
   HEAD_TAIL = 'head_tail'

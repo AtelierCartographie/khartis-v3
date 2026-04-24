@@ -42,6 +42,13 @@ describe('resolveNextTiledStyleSelection', () => {
 });
 
 describe('resolveTiledStyleFromToggle', () => {
+  it('uses Monde Couleurs as the default first activation style', () => {
+    expect(DEFAULT_TILED_BASEMAP_STYLE).toBe(BasemapStyle.MONDE_COULEURS);
+    expect(resolveTiledStyleFromToggle(true, BasemapStyle.BLANK_WHITE)).toBe(
+      BasemapStyle.MONDE_COULEURS
+    );
+  });
+
   it('activates the preferred tiled style when turning tiled basemaps on from blank', () => {
     expect(
       resolveTiledStyleFromToggle(

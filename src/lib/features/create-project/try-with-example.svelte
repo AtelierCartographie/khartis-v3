@@ -15,6 +15,18 @@
     createProjectState
   } from '$lib/features/commons/store/create-project.store.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
+  import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+  import { dataTabActions } from '$lib/features/commons/store/data-tab.store.svelte';
+  import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
+  import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
+  import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
+  import { Duck } from '$lib/features/duckdb';
+  import { BasemapSource } from '$lib/features/commons/constants/ui.constants';
+  import { PERSISTED_BASEMAP_TYPE } from '$lib/features/main-toolbar/data-tab/services/persisted-basemap';
+  import { persistTabularSourceSnapshot } from '$lib/features/main-toolbar/data-tab/services/tabular-source-snapshot';
+  import { dataTabStore } from '$lib/features/main-toolbar/data-tab/data-tab.store.svelte';
+  import type { ExampleProject } from '$lib/features/commons/store/create-project.types';
+  import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
   import { logger, LogCategory } from '$lib/features/commons/utils/logger';
   import { m } from '$lib/paraglide/messages';
   import { useProjectNavigation } from './hooks';
@@ -72,6 +84,101 @@
     return CATEGORY_LABELS[label]?.() ?? label;
   }
 
+  function resolveExampleGeoColumn(file: UploadedFile): string | undefined {
+    const detection = file.deepAnalysis?.geoDetection;
+    const suggested = detection?.suggestedPrimaryGeoColumn?.columnName;
+    const detected = detection?.geoColumns;
+    if (!detected || detected.length === 0) {
+      return suggested;
+    }
+    const sorted = [...detected].sort(
+      (a, b) => (b.confidence ?? 0) - (a.confidence ?? 0)
+    );
+    return sorted[0]?.columnName ?? suggested;
+  }
+
+  async function applyExamplePreset(
+    example: ExampleProject,
+    file: UploadedFile
+  ): Promise<void> {
+    if (!example.baseMapId) {
+      return;
+    }
+
+    await basemapCatalogService.loadCatalog();
+    const basemap = basemapCatalogService.getBasemapById(example.baseMapId);
+    if (!basemap) {
+      logger.warn(
+        'Example baseMapId not found in catalog',
+        LogCategory.PROJECT,
+        { exampleId: example.id, baseMapId: example.baseMapId }
+      );
+      return;
+    }
+
+    const dataset = datasetsStore.getDatasetBySourceFile(file.id);
+    if (!dataset) {
+      logger.warn(
+        'Example dataset not found after project creation',
+        LogCategory.PROJECT,
+        { exampleId: example.id, fileId: file.id }
+      );
+      return;
+    }
+
+    const geoColumn = resolveExampleGeoColumn(file) ?? '';
+
+    dataTabActions.setBasemapJoinState({
+      selectedBasemap: basemap.file,
+      basemapSource: BasemapSource.CATALOG
+    });
+    basemapStyleStore.setReferenceBasemap(basemap.file);
+    projectStore.updateProjectData({
+      basemap: {
+        id: basemap.file,
+        type: basemap.isCustom
+          ? PERSISTED_BASEMAP_TYPE.CUSTOM
+          : PERSISTED_BASEMAP_TYPE.CATALOG,
+        data: basemap.isCustom ? { ...basemap } : undefined
+      }
+    });
+
+    try {
+      await duckDBOrchestrator.finalizeJoin(dataset.id, basemap, geoColumn);
+
+      const duckColumns = await Duck.analyse(dataset.tableName, {
+        force: true
+      });
+      await persistTabularSourceSnapshot({
+        sourceFileId: file.id,
+        tableName: dataset.tableName,
+        duckColumns,
+        joinState: {
+          joinedBasemap: basemap.file,
+          geoColumn,
+          gpsMode: false,
+          gpsColumns: undefined
+        }
+      });
+
+      const basemapStepIndex = dataTabStore.basemapStepIndex;
+      for (let i = 0; i <= basemapStepIndex; i++) {
+        dataTabStore.markStepComplete(i);
+      }
+    } catch (joinError) {
+      logger.warn(
+        'Failed to auto-join example dataset to basemap',
+        LogCategory.PROJECT,
+        {
+          exampleId: example.id,
+          baseMapId: basemap.file,
+          geoColumn,
+          error: joinError
+        }
+      );
+    }
+  }
+
   function selectCategory(category: ExampleCategory) {
     selectedCategory = category;
   }
@@ -127,6 +234,7 @@
       createProjectActions.setProjectName(example.title);
 
       await projectStore.createProject(example.title, [processedExampleFile]);
+      await applyExamplePreset(example, processedExampleFile);
 
       await navigateAfterAction();
     } catch (err) {

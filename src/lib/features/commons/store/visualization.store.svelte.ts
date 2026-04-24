@@ -58,9 +58,8 @@ export enum VisualizationType {
 export enum ClassificationMethod {
   EQUAL_INTERVAL = 'equal_interval',
   QUANTILES = 'quantiles',
-  JENKS = 'jenks',
+  KMEANS = 'kmeans',
   MANUAL = 'manual',
-  STANDARD_DEVIATION = 'standard_deviation',
   Q6 = 'q6',
   NESTED_MEANS = 'nested_means',
   HEAD_TAIL = 'head_tail'
@@ -1350,7 +1349,7 @@ function getDefaultClassification(
     type === VisualizationType.BIVARIATE
   ) {
     return {
-      method: ClassificationMethod.JENKS,
+      method: ClassificationMethod.KMEANS,
       classes: DEFAULT_QUANTILES_CLASS_COUNT,
       colors: [...DEFAULT_CHOROPLETH_COLORS]
     };
@@ -2194,7 +2193,7 @@ function createVisualizationStore(): VisualizationStore {
   ): void {
     applyVisualizationUpdate(id, (visualization) => {
       const existing = visualization.classification ?? {
-        method: ClassificationMethod.JENKS,
+        method: ClassificationMethod.KMEANS,
         classes: DEFAULT_QUANTILES_CLASS_COUNT
       };
 
@@ -2231,7 +2230,7 @@ function createVisualizationStore(): VisualizationStore {
 
     applyVisualizationUpdate(id, (visualization) => {
       const fallback = visualization.classification ?? {
-        method: ClassificationMethod.JENKS,
+        method: ClassificationMethod.KMEANS,
         classes: DEFAULT_QUANTILES_CLASS_COUNT
       };
       const existing =
@@ -2271,7 +2270,7 @@ function createVisualizationStore(): VisualizationStore {
         line.classification ??
         visualization.lineClassification ??
         visualization.classification ?? {
-          method: ClassificationMethod.JENKS,
+          method: ClassificationMethod.KMEANS,
           classes: DEFAULT_QUANTILES_CLASS_COUNT
         };
 
@@ -2309,7 +2308,7 @@ function createVisualizationStore(): VisualizationStore {
           }
         ).strokeClassification ??
         ({
-          method: ClassificationMethod.JENKS,
+          method: ClassificationMethod.KMEANS,
           classes: DEFAULT_QUANTILES_CLASS_COUNT
         } as ClassificationConfig);
 

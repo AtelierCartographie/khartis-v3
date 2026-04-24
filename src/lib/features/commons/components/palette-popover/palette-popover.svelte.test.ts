@@ -46,4 +46,16 @@ describe('PalettePopover (Figma 930:114478 + 893:153398 alignment)', () => {
     expect(source).toContain('generateCategoricalColorsFromSeed(');
     expect(source).toContain('draftQualitativePreset');
   });
+
+  it('should keep nested color surfaces from closing the parent popover', () => {
+    expect(source).toContain('function isNestedColorSurface');
+    expect(source).toContain("target.id === 'khartis-color-picker-dropdown'");
+    expect(source).toContain(
+      "target.classList.contains('single-color-dropdown')"
+    );
+    expect(source).toContain("target.classList.contains('palette-popover')");
+    expect(source).toContain(
+      'if (isNestedColorSurface(e.composedPath())) return'
+    );
+  });
 });

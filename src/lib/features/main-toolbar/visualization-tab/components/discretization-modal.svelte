@@ -10,7 +10,7 @@
     type VisualizationConfig
   } from '$lib/features/commons/store/visualization.store.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
-  import { onMount, tick, untrack } from 'svelte';
+  import { onDestroy, onMount, tick, untrack } from 'svelte';
   import {
     DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX,
     normalizeClassificationMethod,
@@ -29,10 +29,9 @@
   } from '../use-classification-breaks.svelte';
 
   type PanelMethod =
-    | 'jenks'
+    | 'kmeans'
     | 'quantile'
     | 'equal-interval'
-    | 'standard-deviation'
     | 'manual'
     | 'q6'
     | 'nested-means'
@@ -68,17 +67,20 @@
   }: Props = $props();
 
   const activeClassification = $derived<ClassificationConfig | undefined>(
-    classificationOverride ?? visualization?.classification
+    classificationOverride
   );
-  const activeValueColumn = $derived(
-    valueColumn ?? visualization?.mapping.valueColumn
-  );
+  const activeValueColumn = $derived(valueColumn);
   const activeContextKey = $derived(
     `${visualization?.id ?? ''}:${role}:${activeValueColumn ?? ''}`
   );
+  const BREAKPOINT_APPLY_DEBOUNCE_MS = 250;
 
   let _isCalculating = $state(false);
   let breaksRequestId = 0;
+  let breakpointApplyTimeout: ReturnType<typeof setTimeout> | null = null;
+  let pendingBreakpointClassification:
+    | Partial<ClassificationConfig>
+    | undefined;
   let lastLocalClassification = $state<
     Partial<ClassificationConfig> | undefined
   >(undefined);
@@ -86,33 +88,31 @@
 
   function storeMethodToPanelMethod(method: ClassificationMethod): PanelMethod {
     const mapping: Record<ClassificationMethod, PanelMethod> = {
-      [ClassificationMethod.JENKS]: 'jenks',
+      [ClassificationMethod.KMEANS]: 'kmeans',
       [ClassificationMethod.QUANTILES]: 'quantile',
       [ClassificationMethod.EQUAL_INTERVAL]: 'equal-interval',
-      [ClassificationMethod.STANDARD_DEVIATION]: 'standard-deviation',
       [ClassificationMethod.MANUAL]: 'manual',
       [ClassificationMethod.Q6]: 'q6',
       [ClassificationMethod.NESTED_MEANS]: 'nested-means',
       [ClassificationMethod.HEAD_TAIL]: 'head-tail'
     };
-    return mapping[method] ?? 'jenks';
+    return mapping[method] ?? 'kmeans';
   }
 
   function panelMethodToStoreMethod(method: PanelMethod): ClassificationMethod {
     const mapping: Record<PanelMethod, ClassificationMethod> = {
-      jenks: ClassificationMethod.JENKS,
+      kmeans: ClassificationMethod.KMEANS,
       quantile: ClassificationMethod.QUANTILES,
       'equal-interval': ClassificationMethod.EQUAL_INTERVAL,
-      'standard-deviation': ClassificationMethod.STANDARD_DEVIATION,
       manual: ClassificationMethod.MANUAL,
       q6: ClassificationMethod.Q6,
       'nested-means': ClassificationMethod.NESTED_MEANS,
       'head-tail': ClassificationMethod.HEAD_TAIL
     };
-    return mapping[method] ?? ClassificationMethod.JENKS;
+    return mapping[method] ?? ClassificationMethod.KMEANS;
   }
 
-  let currentMethod = $state<PanelMethod>('jenks');
+  let currentMethod = $state<PanelMethod>('kmeans');
   let currentNumClasses = $state(5);
   let currentBreaks = $state<ClassBreak[]>([]);
   let currentBreakpoint = $state<number | null>(null);
@@ -161,7 +161,7 @@
     classification: ClassificationConfig | undefined
   ) {
     const method = normalizeClassificationMethod(
-      classification?.method ?? ClassificationMethod.JENKS
+      classification?.method ?? ClassificationMethod.KMEANS
     );
     const storedNumClasses =
       classification?.numClasses ?? classification?.classes ?? 5;
@@ -245,6 +245,100 @@
     return activeClassification?.breaks ?? [];
   }
 
+  function getCurrentCounts(): number[] {
+    if (currentBreaks.length > 0) {
+      return currentBreaks.map((breakItem) => breakItem.count);
+    }
+
+    return activeClassification?.counts ?? [];
+  }
+
+  function getLocalClassificationBase():
+    | Partial<ClassificationConfig>
+    | undefined {
+    return lastLocalContextKey === activeContextKey
+      ? (lastLocalClassification ?? activeClassification)
+      : activeClassification;
+  }
+
+  function cancelPendingBreakpointChange() {
+    if (breakpointApplyTimeout) {
+      clearTimeout(breakpointApplyTimeout);
+      breakpointApplyTimeout = null;
+    }
+    pendingBreakpointClassification = undefined;
+  }
+
+  function flushPendingBreakpointChange() {
+    if (breakpointApplyTimeout) {
+      clearTimeout(breakpointApplyTimeout);
+      breakpointApplyTimeout = null;
+    }
+    if (!pendingBreakpointClassification) {
+      return;
+    }
+    const classification = pendingBreakpointClassification;
+    pendingBreakpointClassification = undefined;
+    onchange?.(classification);
+  }
+
+  function scheduleBreakpointApply(
+    classification: Partial<ClassificationConfig>
+  ) {
+    pendingBreakpointClassification = classification;
+    if (breakpointApplyTimeout) {
+      clearTimeout(breakpointApplyTimeout);
+    }
+    breakpointApplyTimeout = setTimeout(() => {
+      flushPendingBreakpointChange();
+    }, BREAKPOINT_APPLY_DEBOUNCE_MS);
+  }
+
+  function buildBreakpointClassification(
+    breakpointValue: number | null
+  ): Partial<ClassificationConfig> | undefined {
+    const breakValues = getCurrentBreakValues();
+    const counts = getCurrentCounts();
+    const actualClassCount =
+      counts.length > 0 ? counts.length : currentBreaks.length;
+
+    if (actualClassCount <= 0 || breakValues.length !== actualClassCount - 1) {
+      return undefined;
+    }
+
+    currentNumClasses = actualClassCount;
+
+    const baseClassification = getLocalClassificationBase();
+    const colors = resolveClassificationBreakColors(
+      baseClassification as ClassificationConfig | undefined,
+      actualClassCount,
+      breakValues,
+      breakpointValue
+    );
+
+    if (currentBreaks.length === actualClassCount) {
+      currentBreaks = currentBreaks.map((breakItem, index) => ({
+        ...breakItem,
+        color: colors[index] ?? breakItem.color
+      }));
+    }
+
+    return {
+      method: panelMethodToStoreMethod(currentMethod),
+      classes: actualClassCount,
+      numClasses: actualClassCount,
+      breaks: breakValues,
+      counts,
+      colors,
+      breakpointValue,
+      paletteId: baseClassification?.paletteId,
+      inverted: baseClassification?.inverted ?? false,
+      labels: undefined,
+      disabledLabels: undefined,
+      categoryShapes: undefined
+    } satisfies Partial<ClassificationConfig>;
+  }
+
   function applyBreaksResult(
     computation: ClassificationBreaksComputation | null
   ) {
@@ -276,7 +370,10 @@
       colors,
       breakpointValue: currentBreakpoint,
       paletteId: activeClassification?.paletteId,
-      inverted: activeClassification?.inverted ?? false
+      inverted: activeClassification?.inverted ?? false,
+      labels: undefined,
+      disabledLabels: undefined,
+      categoryShapes: undefined
     } satisfies Partial<ClassificationConfig>;
 
     lastLocalClassification = cloneClassification(nextClassification);
@@ -425,7 +522,10 @@
       counts: undefined,
       breakpointValue,
       paletteId: activeClassification?.paletteId,
-      inverted: activeClassification?.inverted ?? false
+      inverted: activeClassification?.inverted ?? false,
+      labels: undefined,
+      disabledLabels: undefined,
+      categoryShapes: undefined
     } satisfies Partial<ClassificationConfig>;
 
     lastLocalClassification = cloneClassification({
@@ -439,6 +539,7 @@
   }
 
   function handleMethodChange(method: PanelMethod) {
+    cancelPendingBreakpointChange();
     currentMethod = method;
     currentNumClasses = resolveRequestedClassCount(
       panelMethodToStoreMethod(method),
@@ -455,6 +556,7 @@
   }
 
   function handleClassesChange(num: number) {
+    cancelPendingBreakpointChange();
     currentNumClasses = resolveRequestedClassCount(
       panelMethodToStoreMethod(currentMethod),
       num
@@ -465,20 +567,33 @@
 
   function handleBreakpointChange(value: number | null) {
     currentBreakpoint = value;
-    persistSelectionDraft({ breakpointValue: value });
-    computeBreaks();
+    const nextClassification = buildBreakpointClassification(value);
+    if (!nextClassification) {
+      persistSelectionDraft({ breakpointValue: value });
+      return;
+    }
+
+    lastLocalClassification = cloneClassification(nextClassification);
+    lastLocalContextKey = activeContextKey;
+    scheduleBreakpointApply(nextClassification);
   }
 
   function handleBreaksChange(breaks: ClassBreak[]) {
+    cancelPendingBreakpointChange();
     currentBreaks = breaks;
     computeBreaks();
   }
 
   function handleClose() {
+    flushPendingBreakpointChange();
     wasOpen = false;
     open = false;
     onclose?.();
   }
+
+  onDestroy(() => {
+    flushPendingBreakpointChange();
+  });
 </script>
 
 {#if open}

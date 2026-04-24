@@ -929,7 +929,7 @@ describe('visualizationStore LinePrimitiveConfig round-trip persistence', () => 
         paletteId: 'categorical-set1'
       },
       lineThicknessClassification: {
-        method: ClassificationMethod.JENKS,
+        method: ClassificationMethod.KMEANS,
         classes: 3,
         numClasses: 3,
         breaks: [10, 20],
@@ -958,7 +958,7 @@ describe('visualizationStore LinePrimitiveConfig round-trip persistence', () => 
           paletteId: 'categorical-set1'
         },
         thicknessClassification: {
-          method: ClassificationMethod.JENKS,
+          method: ClassificationMethod.KMEANS,
           classes: 3,
           numClasses: 3,
           breaks: [10, 20],
@@ -969,7 +969,7 @@ describe('visualizationStore LinePrimitiveConfig round-trip persistence', () => 
           [ColorMode.CLASSES]: {
             valueColumn: 'capacity',
             classification: {
-              method: ClassificationMethod.JENKS,
+              method: ClassificationMethod.KMEANS,
               classes: 5,
               numClasses: 5,
               breaks: [5, 10, 20, 30],

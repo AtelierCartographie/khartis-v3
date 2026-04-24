@@ -137,4 +137,23 @@ describe('[S06] buildProjectionFromSuggestion — proj4 fallback contract', () =
     expect(result).not.toBeNull();
     expect(result?.source).toBe('d3');
   });
+
+  it('falls back to d3 when proj4 returns invalid coordinates', () => {
+    const suggestion: ProjectionSuggestion = {
+      id: 'laea',
+      name: 'Lambert Azimuthal Equal Area',
+      type: 'generic',
+      proj4String:
+        '+proj=laea +lon_0=-3.63 +lat_0=24.87 +ellps=WGS84 +datum=WGS84 +units=m +no_defs',
+      d3Config: {
+        projection: 'geoAzimuthalEqualArea',
+        rotate: [3.63, -24.87]
+      }
+    };
+
+    const result = buildProjectionFromSuggestion(suggestion);
+
+    expect(result).not.toBeNull();
+    expect(result?.source).toBe('d3');
+  });
 });

@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   setBasemapJoinStateMock: vi.fn(),
   setReferenceBasemapMock: vi.fn(),
+  setStyleMock: vi.fn(),
+  requestViewportResetMock: vi.fn(),
   addCustomBasemapMock: vi.fn(),
   getBasemapByIdMock: vi.fn(),
   registerCustomBasemapMetadataMock: vi.fn(),
@@ -19,8 +21,12 @@ vi.mock('$lib/features/commons/store/data-tab.store.svelte', () => ({
 
 vi.mock('$lib/features/commons/store/basemap-style.store.svelte', () => ({
   basemapStyleStore: {
+    lastSelectedTiledStyle: undefined,
     setReferenceBasemap: (value: string | null) =>
-      mocks.setReferenceBasemapMock(value)
+      mocks.setReferenceBasemapMock(value),
+    setStyle: (value: unknown) => mocks.setStyleMock(value),
+    requestViewportReset: (value: unknown) =>
+      mocks.requestViewportResetMock(value)
   }
 }));
 
@@ -82,8 +88,13 @@ describe('restorePersistedBasemapSelection', () => {
       basemapSource: BasemapSource.OSM
     });
     expect(mocks.setReferenceBasemapMock).toHaveBeenCalledWith(null);
+    expect(mocks.setStyleMock).toHaveBeenCalledWith('monde-couleurs');
+    expect(mocks.requestViewportResetMock).toHaveBeenCalledWith(
+      'monde-couleurs'
+    );
     expect(mocks.addCustomBasemapMock).toHaveBeenCalledTimes(1);
-    expect(mocks.setOSMBasemapMock).toHaveBeenCalledTimes(1);
+    expect(mocks.clearOsmMock).toHaveBeenCalledTimes(1);
+    expect(mocks.setOSMBasemapMock).not.toHaveBeenCalled();
   });
 
   it('prefers the selected dataset joined basemap over an unrelated project basemap', () => {

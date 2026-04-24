@@ -133,7 +133,7 @@ Le service worker tente de précacher des fichiers inexistants. Vérifier `navig
 
 ### L'application ne se met pas à jour
 
-- Incrémenter la version dans `package.json` avant le build.
+- Déployer un nouveau build pour régénérer les assets précachés.
 - L'utilisateur doit cliquer sur **Mettre à jour**.
 - En dev, désinscription forcée :
 

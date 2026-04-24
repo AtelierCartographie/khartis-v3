@@ -5,13 +5,13 @@
 
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import { InfoPopover } from './components/shared';
+  import { MAP_PROJECTION_TYPE } from '$lib/features/commons/constants';
   import LayerConfigTerre from './components/basemap-layers/layer-config-terre.svelte';
   import LayerConfigSimple from './components/basemap-layers/layer-config-simple.svelte';
   import LayerConfigRelief from './components/basemap-layers/layer-config-relief.svelte';
   import LayerConfigMeridiens from './components/basemap-layers/layer-config-meridiens.svelte';
   import LayerConfigVilles from './components/basemap-layers/layer-config-villes.svelte';
   import BasemapStyleSelector from './basemap-style-selector.svelte';
-  import MapProjectionSelector from './map-projection-selector.svelte';
   import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
   import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
   import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
@@ -21,8 +21,10 @@
     type BasemapLayerId
   } from '$lib/features/map/stores/basemap-layers.store.svelte';
   import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
+  import { mapProjectionStore } from '$lib/features/map/stores/map-projection.store.svelte';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
   import { resolveTiledStyleFromToggle } from './tiled-basemap-selection';
+  import { BasemapStyle } from '$lib/features/map/constants/basemap-styles';
 
   // Single $derived: one array iteration instead of 9 separate .find() calls
   const layerConfigs = $derived(
@@ -145,14 +147,20 @@
   }
 
   function handleTiledBasemapToggle(checked: boolean) {
+    const preferredStyle =
+      basemapStyleStore.lastSelectedTiledStyle ?? BasemapStyle.MONDE_COULEURS;
     const nextStyle = resolveTiledStyleFromToggle(
       checked,
       basemapStyleStore.selectedStyle,
-      basemapStyleStore.preferredTiledStyle
+      preferredStyle
     );
 
     if (!checked) {
       mapInstanceStore.clearPersistedViewState();
+    }
+
+    if (checked && mapProjectionStore.isGlobe) {
+      mapProjectionStore.setProjection(MAP_PROJECTION_TYPE.MERCATOR);
     }
 
     if (osmBasemapStore.isActive) {
@@ -180,9 +188,11 @@
 <section id="customize-basemap">
   <MainToolBarHeader title={m.step3_title()} icon={PaintBrush} showDivider />
 
-  <div class="content-area">
-    <p class="kh-help">{m.step3_description()}</p>
-  </div>
+  {#if !isTiledBasemapEnabled}
+    <div class="content-area">
+      <p class="kh-help">{m.step3_description()}</p>
+    </div>
+  {/if}
 
   <div class="layers-list">
     {#if !isTiledBasemapEnabled}
@@ -420,9 +430,9 @@
       {#snippet icon()}
         <InfoPopover text={m.basemap_tiled_info()} />
       {/snippet}
-      <div class="tiled-basemap-config">
+      <div class="reference-basemap-tool">
+        <p class="kh-help">{m.basemap_tiled_helper()}</p>
         <BasemapStyleSelector />
-        <MapProjectionSelector />
       </div>
     </ExpandableSection>
   </div>
@@ -454,7 +464,7 @@
     border-bottom: 1px solid var(--cds-border-subtle-01, #c6c6c6);
   }
 
-  .tiled-basemap-config {
+  .reference-basemap-tool {
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-05);

@@ -186,6 +186,17 @@
     draftColors = [...draftColors].reverse();
   }
 
+  function isNestedColorSurface(path: EventTarget[]) {
+    return path.some((target) => {
+      if (!(target instanceof Element)) return false;
+      return (
+        target.id === 'khartis-color-picker-dropdown' ||
+        target.classList.contains('single-color-dropdown') ||
+        target.classList.contains('palette-popover')
+      );
+    });
+  }
+
   function handleQualitativeColorSelect(hex: string) {
     draftPaletteId = '__custom__';
     draftInverted = false;
@@ -223,10 +234,7 @@
       const target = e.target as Node;
       if (popoverRef && !popoverRef.contains(target)) {
         if (triggerElement && triggerElement.contains(target)) return;
-        const path = e.composedPath() as Element[];
-        if (path.some((el) => el.id === 'khartis-color-picker-dropdown')) {
-          return;
-        }
+        if (isNestedColorSurface(e.composedPath())) return;
         handleClose();
       }
     }

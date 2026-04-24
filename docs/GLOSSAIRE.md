@@ -38,11 +38,9 @@ Voir aussi le [Guide utilisateur](GUIDE_UTILISATEUR.md) pour la prise en main de
 
 ## Méthodes de classification
 
-**Écart-type** -- Méthode de discrétisation basée sur la déviation standard par rapport à la moyenne. Les seuils de classe correspondent à des multiples de l'écart-type.
-
 **Intervalles égaux** -- Méthode de discrétisation où l'amplitude totale des valeurs est divisée en classes de même taille. Simple mais sensible aux valeurs extrêmes.
 
-**Jenks (seuils naturels)** -- Méthode de discrétisation qui minimise la variance au sein de chaque classe et maximise la variance entre les classes. Détecte les "ruptures naturelles" dans la distribution des données.
+**K-means (seuils naturels)** -- Méthode de discrétisation qui groupe les valeurs autour de centres calculés par macro DuckDB. Détecte les ruptures naturelles dans la distribution des données sans charger toute la colonne en TypeScript.
 
 **Moyennes emboîtées** -- Méthode de discrétisation récursive : on calcule la moyenne, on coupe en deux, puis on répète l'opération sur chaque moitié. Produit 2, 4 ou 8 classes.
 
@@ -50,7 +48,7 @@ Voir aussi le [Guide utilisateur](GUIDE_UTILISATEUR.md) pour la prise en main de
 
 **Palette séquentielle** -- Gamme de couleurs allant du clair au foncé (ou inversement) pour représenter un ordre croissant de valeurs.
 
-**Q6** -- Méthode de discrétisation en 6 classes, combinant la médiane et les quartiles pour produire un découpage équilibré.
+**Q6** -- Méthode de discrétisation en 6 classes, fondée sur cinq seuils prédéfinis (5e, 27.5e, 50e, 72.5e, 95e percentiles).
 
 **Quantiles** -- Méthode de discrétisation où chaque classe contient le même nombre d'entités. Garantit un équilibre visuel sur la carte, mais peut regrouper des valeurs très différentes.
 

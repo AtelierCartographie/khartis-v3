@@ -42,6 +42,7 @@ const DEFAULT_STATE: DataTabState = {
     targetColumn: undefined,
     isEnrichmentActive: false,
     joinTabularEnabled: false,
+    overlayBasemapEnabled: false,
     basemapTabIndex: 0
   },
   notifications: {

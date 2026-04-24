@@ -105,7 +105,7 @@ function buildVisualization(): VisualizationConfig {
       proportionalType: ProportionalType.SINGLE,
       categoryShape: 'unique',
       classification: {
-        method: ClassificationMethod.JENKS,
+        method: ClassificationMethod.KMEANS,
         classes: 2,
         numClasses: 2,
         colors: ['#ff595e', '#1982c4'],

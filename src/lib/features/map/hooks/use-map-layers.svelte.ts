@@ -299,10 +299,21 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
   }
 
   function getDatasetTableName(datasetId: string): string | null {
-    return (
-      datasetsStore.datasets.find((dataset) => dataset.id === datasetId)
-        ?.tableName ?? null
+    const dataset = datasetsStore.datasets.find(
+      (item) => item.id === datasetId
     );
+    if (dataset?.tableName) {
+      return dataset.tableName;
+    }
+
+    if (dataset?.sourceFileId) {
+      return (
+        duckDBOrchestrator.getDatasetBySourceFile(dataset.sourceFileId)
+          ?.tableName ?? null
+      );
+    }
+
+    return duckDBOrchestrator.getDatasetById(datasetId)?.tableName ?? null;
   }
 
   function getDatasetJoinedBasemap(datasetId: string): string | null {

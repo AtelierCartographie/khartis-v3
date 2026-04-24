@@ -60,4 +60,23 @@ describe('ThematicMap projection mask overlay', () => {
     );
     expect(source).toContain("scheduleLayerUpdate('effect:canvasResize')");
   });
+
+  it('applies requested basemap viewport presets before fitting dataset bounds in MapLibre', () => {
+    const fitFunctionIndex = source.indexOf(
+      'function fitMapLibreViewportAfterViewModeSwitch'
+    );
+    const presetGuardIndex = source.indexOf(
+      "reason === 'basemap' && pendingMapLibreViewportPreset",
+      fitFunctionIndex
+    );
+    const datasetFitIndex = source.indexOf(
+      'const refBasemapId = basemapStyleStore.referenceBasemapId;',
+      fitFunctionIndex
+    );
+
+    expect(fitFunctionIndex).toBeGreaterThan(-1);
+    expect(presetGuardIndex).toBeGreaterThan(-1);
+    expect(datasetFitIndex).toBeGreaterThan(-1);
+    expect(presetGuardIndex).toBeLessThan(datasetFitIndex);
+  });
 });

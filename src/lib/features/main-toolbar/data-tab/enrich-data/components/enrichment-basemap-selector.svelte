@@ -1,6 +1,5 @@
 <script lang="ts">
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
-  import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
   import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
   import * as m from '$lib/paraglide/messages';
   import { Grid, List, Upload } from 'carbon-icons-svelte';
@@ -84,7 +83,7 @@
   {:else}
     <div class="basemap-section">
       <OSMSelector
-        isActive={osmBasemapStore.isActive}
+        isActive={Boolean(selectedBasemapId?.startsWith('osm_'))}
         onSelectOSM={onSelectOSM}
       />
     </div>

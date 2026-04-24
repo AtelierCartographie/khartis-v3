@@ -35,9 +35,8 @@ vi.mock('$lib/features/commons/store/visualization.store.svelte', () => ({
   ClassificationMethod: {
     EQUAL_INTERVAL: 'equal_interval',
     QUANTILES: 'quantiles',
-    JENKS: 'jenks',
+    KMEANS: 'kmeans',
     MANUAL: 'manual',
-    STANDARD_DEVIATION: 'standard_deviation',
     Q6: 'q6',
     NESTED_MEANS: 'nested_means',
     HEAD_TAIL: 'head_tail'
@@ -74,7 +73,8 @@ function makeTable(row: Record<string, unknown>) {
 }
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  mockedDuckQuery.mockReset();
+  mockedGetDatasetBySourceFile.mockReset();
 });
 
 describe('generateColorsForBreaks — sequential', () => {
@@ -179,23 +179,26 @@ describe('applyPaletteInversion', () => {
 });
 
 describe('calculateBreaks', () => {
-  it('computes standard deviation breaks without falling back to nested means', async () => {
+  it('computes K-means breaks through the DuckDB macro and rounds them', async () => {
     mockedGetDatasetBySourceFile.mockReturnValue({
-      tableName: 'vals_stddev_test'
+      tableName: 'vals_kmeans_test'
     } as never);
     mockedDuckQuery
       .mockResolvedValueOnce(
         makeTable({
           distinct_count: 9,
           min_val: 0,
-          max_val: 100,
-          mean_val: 50,
-          stddev_val: 10
+          max_val: 100
         }) as never
       )
       .mockResolvedValueOnce(
         makeTable({
-          rounded: [35, 45, 55, 65]
+          breaks: [33.2, 54.9, 77.1]
+        }) as never
+      )
+      .mockResolvedValueOnce(
+        makeTable({
+          rounded: [35, 55, 75]
         }) as never
       )
       .mockResolvedValueOnce(
@@ -203,26 +206,25 @@ describe('calculateBreaks', () => {
           cnt_0: 1,
           cnt_1: 2,
           cnt_2: 3,
-          cnt_3: 2,
-          cnt_4: 1
+          cnt_3: 4
         }) as never
       );
 
     const result = await calculateBreaks({
-      datasetId: 'source-stddev',
+      datasetId: 'source-kmeans',
       columnName: 'value',
-      method: 'standard_deviation' as never,
-      numClasses: 5
+      method: 'kmeans' as never,
+      numClasses: 4
     });
 
     expect(result).toEqual({
-      breaks: [35, 45, 55, 65],
-      counts: [1, 2, 3, 2, 1],
+      breaks: [35, 55, 75],
+      counts: [1, 2, 3, 4],
       min: 0,
       max: 100
     });
-    expect(mockedDuckQuery.mock.calls[0]?.[0]).toContain('STDDEV_SAMP');
-    expect(mockedDuckQuery.mock.calls[1]?.[0]).toContain('round_thresholds');
+    expect(mockedDuckQuery.mock.calls[1]?.[0]).toContain('kmeans');
+    expect(mockedDuckQuery.mock.calls[2]?.[0]).toContain('round_thresholds');
   });
 });
 
@@ -236,9 +238,7 @@ describe('calculateBreakCounts', () => {
         makeTable({
           distinct_count: 9,
           min_val: 0,
-          max_val: 100,
-          mean_val: 50,
-          stddev_val: 10
+          max_val: 100
         }) as never
       )
       .mockResolvedValueOnce(
@@ -380,7 +380,7 @@ describe('calculateBreaks — macro methods', () => {
     expect(result?.breaks).toEqual([20, 40, 60, 80]);
   });
 
-  it('should fall back to equal-interval breaks when the macro returns null', async () => {
+  it('should return null when the DuckDB macro returns null', async () => {
     arrangeMacroFlow(null, null);
 
     const result = await calculateBreaks({
@@ -390,20 +390,17 @@ describe('calculateBreaks — macro methods', () => {
       numClasses: 5
     });
 
-    expect(result?.breaks).toEqual([20, 40, 60, 80]);
-    expect(result?.min).toBe(0);
-    expect(result?.max).toBe(100);
+    expect(result).toBeNull();
+    expect(mockedDuckQuery).toHaveBeenCalledTimes(2);
   });
 
-  it('should fall back to equal-interval breaks when the macro throws', async () => {
+  it('should return null when the DuckDB macro throws', async () => {
     mockedGetDatasetBySourceFile.mockReturnValue({
       tableName: uniqueTable()
     } as never);
     mockedDuckQuery
       .mockResolvedValueOnce(makeStatsTable() as never)
-      .mockRejectedValueOnce(new Error('macro failure') as never)
-      .mockResolvedValueOnce(makeTable({ rounded: [20, 40, 60, 80] }) as never)
-      .mockResolvedValueOnce(makeCountsTable() as never);
+      .mockRejectedValueOnce(new Error('macro failure') as never);
 
     const result = await calculateBreaks({
       datasetId: 'src',
@@ -412,7 +409,8 @@ describe('calculateBreaks — macro methods', () => {
       numClasses: 5
     });
 
-    expect(result?.breaks).toEqual([20, 40, 60, 80]);
+    expect(result).toBeNull();
+    expect(mockedDuckQuery).toHaveBeenCalledTimes(2);
   });
 
   it('should filter out macro values outside the [min, max] range', async () => {
@@ -446,13 +444,11 @@ describe('calculateBreaks — macro methods', () => {
     expect(roundQuery).toContain('round_thresholds(');
   });
 
-  it('should not invoke any macro query for manual method (falls back to equal-interval inside calculateBreaks)', async () => {
+  it('should not invoke any macro query for manual method inside calculateBreaks', async () => {
     mockedGetDatasetBySourceFile.mockReturnValue({
       tableName: uniqueTable()
     } as never);
-    mockedDuckQuery
-      .mockResolvedValueOnce(makeStatsTable() as never)
-      .mockResolvedValueOnce(makeCountsTable() as never);
+    mockedDuckQuery.mockResolvedValueOnce(makeStatsTable() as never);
 
     const result = await calculateBreaks({
       datasetId: 'src',
@@ -461,7 +457,7 @@ describe('calculateBreaks — macro methods', () => {
       numClasses: 5
     });
 
-    expect(result?.breaks).toEqual([20, 40, 60, 80]);
+    expect(result).toBeNull();
     const queries = mockedDuckQuery.mock.calls.map((c) => c[0] as string);
     expect(queries.every((q) => !q.includes('quantile('))).toBe(true);
     expect(queries.every((q) => !q.includes('kmeans('))).toBe(true);
@@ -510,7 +506,7 @@ describe('calculateBreaks — Flechette edge cases', () => {
       .mockResolvedValueOnce(makeCountsTable() as never);
   }
 
-  it('should fall back to equal-interval when the macro returns an empty list (DirectBatch subarray of length 0)', async () => {
+  it('should return null when the macro returns an empty list (DirectBatch subarray of length 0)', async () => {
     arrangeMacroFlow(new Float64Array(0), new Float64Array(0));
 
     const result = await calculateBreaks({
@@ -520,7 +516,7 @@ describe('calculateBreaks — Flechette edge cases', () => {
       numClasses: 5
     });
 
-    expect(result?.breaks).toEqual([20, 40, 60, 80]);
+    expect(result).toBeNull();
   });
 
   it('should filter null entries when the macro returns an Array with nulls (Flechette fallback slice with null bitmap)', async () => {
@@ -578,7 +574,7 @@ describe('calculateBreaks — Flechette edge cases', () => {
       numClasses: 5
     });
 
-    expect(result?.breaks).toEqual([20, 40, 60, 80]);
+    expect(result).toBeNull();
   });
 
   it('should ignore unsupported scalar return (e.g. macro misconfigured to return a number)', async () => {
@@ -591,7 +587,7 @@ describe('calculateBreaks — Flechette edge cases', () => {
       numClasses: 5
     });
 
-    expect(result?.breaks).toEqual([20, 40, 60, 80]);
+    expect(result).toBeNull();
   });
 
   it('should coerce BigInt entries produced by Int64Batch-like lists', async () => {

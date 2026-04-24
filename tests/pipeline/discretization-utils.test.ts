@@ -4,9 +4,8 @@ vi.mock('$lib/features/commons/store/visualization.store.svelte', () => ({
   ClassificationMethod: {
     EQUAL_INTERVAL: 'equal_interval',
     QUANTILES: 'quantiles',
-    JENKS: 'jenks',
+    KMEANS: 'kmeans',
     MANUAL: 'manual',
-    STANDARD_DEVIATION: 'standard_deviation',
     Q6: 'q6',
     NESTED_MEANS: 'nested_means',
     HEAD_TAIL: 'head_tail'
@@ -25,13 +24,18 @@ import {
 // ─── normalizeClassificationMethod ────────────────────────────────────────
 
 describe('normalizeClassificationMethod', () => {
-  it('keeps standard_deviation unchanged', () => {
+  it('normalizes legacy standard_deviation to kmeans', () => {
     expect(normalizeClassificationMethod('standard_deviation' as never)).toBe(
-      'standard_deviation'
+      'kmeans'
     );
   });
 
+  it('normalizes legacy jenks to kmeans', () => {
+    expect(normalizeClassificationMethod('jenks' as never)).toBe('kmeans');
+  });
+
   it('passes through every other method unchanged', () => {
+    expect(normalizeClassificationMethod('kmeans' as never)).toBe('kmeans');
     expect(normalizeClassificationMethod('quantiles' as never)).toBe(
       'quantiles'
     );
@@ -82,7 +86,11 @@ describe('resolveRequestedClassCount', () => {
     expect(resolveRequestedClassCount('nested_means' as never, 10)).toBe(8);
   });
 
-  it('keeps requested class count for standard_deviation', () => {
+  it('keeps requested class count for kmeans', () => {
+    expect(resolveRequestedClassCount('kmeans' as never, 5)).toBe(5);
+  });
+
+  it('keeps requested class count for legacy standard_deviation after normalization', () => {
     expect(resolveRequestedClassCount('standard_deviation' as never, 5)).toBe(
       5
     );
@@ -116,9 +124,9 @@ describe('resolveComputedClassCount', () => {
     expect(resolveComputedClassCount('quantiles' as never, 7, 3)).toBe(7);
   });
 
-  it('uses the actual class count when standard_deviation yields fewer bins', () => {
+  it('returns requested for legacy standard_deviation after normalization', () => {
     expect(resolveComputedClassCount('standard_deviation' as never, 5, 4)).toBe(
-      4
+      5
     );
   });
 });

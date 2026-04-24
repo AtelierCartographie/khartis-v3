@@ -349,7 +349,7 @@ IDs stables — changer un ID force un re-upload GPU complet au lieu d'un prop d
 | `CATEGORICAL`  | QL / QLO            | Geometry layer — couleur par catégorie      |
 | `BIVARIATE`    | 2 variables         | `ScatterplotLayer` — taille + couleur       |
 
-Classification : 8 méthodes via macros SQL DuckDB (`classification.service.ts`). Détails dans [CARTOGRAPHIE.md](./CARTOGRAPHIE.md).
+Classification : 6 méthodes automatiques via macros SQL DuckDB, plus manuel (`classification.service.ts`). Détails dans [CARTOGRAPHIE.md](./CARTOGRAPHIE.md).
 
 ---
 

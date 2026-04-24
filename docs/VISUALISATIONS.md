@@ -125,20 +125,21 @@ Basée sur géométrie + semioTypes + nombre de colonnes. 3 suggestions max. Sco
 
 ### Discrétisation [VIZ-02d]
 
-Découpage de données continues en classes. 8 méthodes :
+Découpage de données continues en classes. 6 méthodes automatiques via DuckDB, plus le mode manuel :
 
-| Méthode              | Principe                                            |
-| -------------------- | --------------------------------------------------- |
-| `quantiles`          | Effectifs égaux par classe                          |
-| `equal_interval`     | Intervalles de même amplitude                       |
-| `jenks`              | Ruptures naturelles (k-means)                       |
-| `q6`                 | 6 quantiles prédéfinis (5e, 27.5e, 50e, 72.5e, 95e) |
-| `nested_means`       | Moyennes emboîtées récursives                       |
-| `head_tail`          | Head/tail breaks (distributions lourdes)            |
-| `standard_deviation` | Écart-type (classes centrées sur la moyenne)        |
-| `manual`             | Bornes saisies manuellement                         |
+| Méthode          | Principe                                            |
+| ---------------- | --------------------------------------------------- |
+| `kmeans`         | Seuils naturels par K-means                         |
+| `quantiles`      | Effectifs égaux par classe                          |
+| `equal_interval` | Intervalles de même amplitude                       |
+| `q6`             | 6 quantiles prédéfinis (5e, 27.5e, 50e, 72.5e, 95e) |
+| `nested_means`   | Moyennes emboîtées récursives                       |
+| `head_tail`      | Head/tail breaks (distributions lourdes)            |
+| `manual`         | Bornes saisies manuellement                         |
 
 Options : méthode + nombre de classes. **Valeur de rupture** : active la palette divergente, positionnable.
+
+Les méthodes automatiques passent par les macros `kmeans`, `quantile`, `equi_width`, `q6`, `nested_means` et `headtail2`. Le service ne charge pas les valeurs de colonne en TypeScript pour recalculer les seuils localement.
 
 ### Légende [VIZ-02e]
 
@@ -287,7 +288,7 @@ Fichier → validateFile() → DuckDB → DatasetResult
 
 - `dataPipeline.processFile()` — import de fichier
 - `vizSuggester.suggestVisualizations()` — suggestion de viz
-- `calculateBreaks()` — discrétisation (8 méthodes)
+- `calculateBreaks()` — discrétisation (macros DuckDB + manuel)
 - `generateColorsForBreaks()` — palette (séquentielle/divergente)
 - `duckDBOrchestrator` — jointures, filtres, stats
 

@@ -11,7 +11,6 @@ import {
 } from '@ateliercartographie/ok-palette';
 import type { WebGLColor, ContrastMode } from '@ateliercartographie/ok-palette';
 import type { Table } from '@uwdata/flechette';
-import { computeJenksBreaks } from './jenks';
 
 const SEQUENTIAL_COLOR_START = '#f7fbff';
 const SEQUENTIAL_COLOR_END = '#08519c';
@@ -49,22 +48,24 @@ interface ColumnStats {
   distinctCount: number;
   min: number;
   max: number;
-  mean: number;
-  stddev: number;
 }
 
 export type ClassificationMacro =
+  | 'kmeans'
   | 'quantile'
   | 'equi_width'
   | 'nested_means'
   | 'q6'
   | 'headtail2';
 
-// Returns null for JENKS, STANDARD_DEVIATION, and MANUAL — those are computed in TypeScript, not via DuckDB macros.
 export function mapMethodToMacro(
-  method: ClassificationMethod
+  method: ClassificationMethod | string
 ): ClassificationMacro | null {
   switch (method) {
+    case ClassificationMethod.KMEANS:
+    case 'jenks':
+    case 'standard_deviation':
+      return 'kmeans';
     case ClassificationMethod.QUANTILES:
       return 'quantile';
     case ClassificationMethod.EQUAL_INTERVAL:
@@ -75,9 +76,7 @@ export function mapMethodToMacro(
       return 'nested_means';
     case ClassificationMethod.HEAD_TAIL:
       return 'headtail2';
-    case ClassificationMethod.JENKS:
     case ClassificationMethod.MANUAL:
-    case ClassificationMethod.STANDARD_DEVIATION:
       return null;
     default:
       return 'quantile';
@@ -113,9 +112,7 @@ async function queryColumnStats(
       SELECT
         COUNT(DISTINCT "${context.escapedColumn}") as distinct_count,
         MIN("${context.escapedColumn}") as min_val,
-        MAX("${context.escapedColumn}") as max_val,
-        AVG("${context.escapedColumn}") as mean_val,
-        STDDEV_SAMP("${context.escapedColumn}") as stddev_val
+        MAX("${context.escapedColumn}") as max_val
       FROM "${context.escapedTable}"
       WHERE "${context.escapedColumn}" IS NOT NULL
     `)) as Table;
@@ -129,14 +126,11 @@ async function queryColumnStats(
   );
   const min = Number(result.getChild?.('min_val')?.get(0));
   const max = Number(result.getChild?.('max_val')?.get(0));
-  const mean = Number(result.getChild?.('mean_val')?.get(0));
-  const stddev = Number(result.getChild?.('stddev_val')?.get(0));
 
   if (
     !Number.isFinite(distinctCount) ||
     !Number.isFinite(min) ||
-    !Number.isFinite(max) ||
-    !Number.isFinite(mean)
+    !Number.isFinite(max)
   ) {
     return null;
   }
@@ -144,32 +138,8 @@ async function queryColumnStats(
   return {
     distinctCount,
     min,
-    max,
-    mean,
-    stddev: Number.isFinite(stddev) ? stddev : 0
+    max
   };
-}
-
-async function queryColumnValues(context: QueryContext): Promise<number[]> {
-  const result = (await Duck.query(
-    `SELECT "${context.escapedColumn}" AS value
-     FROM "${context.escapedTable}"
-     WHERE "${context.escapedColumn}" IS NOT NULL`,
-    { format: 'arrow-table' }
-  )) as Table;
-
-  const column = result.getChild?.('value');
-  if (!column) return [];
-
-  const values: number[] = [];
-  for (let i = 0; i < result.numRows; i++) {
-    const raw = column.get(i);
-    const value = Number(raw);
-    if (Number.isFinite(value)) {
-      values.push(value);
-    }
-  }
-  return values;
 }
 
 export function sanitizeBreaks(
@@ -196,41 +166,6 @@ function toIterableValues(raw: unknown): number[] | null {
     .filter((value) => value !== null && value !== undefined)
     .map((value) => Number(value))
     .filter((value) => !Number.isNaN(value));
-}
-
-export function getEqualIntervalBreaks(
-  min: number,
-  max: number,
-  numClasses: number
-): number[] {
-  const step = (max - min) / numClasses;
-  const breaks: number[] = [];
-
-  for (let i = 1; i < numClasses; i++) {
-    breaks.push(min + step * i);
-  }
-
-  return sanitizeBreaks(breaks, min, max);
-}
-
-export function getStandardDeviationBreaks(
-  mean: number,
-  stddev: number,
-  numClasses: number,
-  min: number,
-  max: number
-): number[] {
-  if (!Number.isFinite(stddev) || stddev <= 0) {
-    return [];
-  }
-
-  const midpoint = (numClasses - 2) / 2;
-  const breaks = Array.from(
-    { length: Math.max(numClasses - 1, 0) },
-    (_, index) => mean + (index - midpoint) * stddev
-  );
-
-  return sanitizeBreaks(breaks, min, max);
 }
 
 async function roundBreaks(
@@ -357,49 +292,45 @@ export async function calculateBreaks(
 
     let breaks: number[] = [];
 
-    if (method === ClassificationMethod.STANDARD_DEVIATION) {
-      breaks = getStandardDeviationBreaks(
-        stats.mean,
-        stats.stddev,
-        numClasses,
-        stats.min,
-        stats.max
-      );
-    } else if (method === ClassificationMethod.JENKS) {
-      const values = await queryColumnValues(context);
-      const jenksBreaks = computeJenksBreaks(values, numClasses);
-      breaks = sanitizeBreaks(jenksBreaks, stats.min, stats.max);
-    } else {
-      const macroName = mapMethodToMacro(method);
+    const macroName = mapMethodToMacro(method);
 
-      if (macroName) {
-        const query = `SELECT ${macroName}('${escapeSqlString(context.tableName)}', '${escapeSqlString(columnName)}', ${numClasses}) as breaks`;
-
-        try {
-          const result = (await Duck.query(query)) as Table;
-          const rawBreaks = result.getChild?.('breaks')?.get(0);
-          const extracted = toIterableValues(rawBreaks);
-
-          if (extracted) {
-            breaks = sanitizeBreaks(extracted, stats.min, stats.max);
-          }
-        } catch (macroError) {
-          logger.warn(
-            'DuckDB macro failed, falling back to equal interval',
-            LogCategory.DATA,
-            { macroName, numClasses, error: macroError }
-          );
+    if (!macroName) {
+      logger.warn(
+        'No DuckDB macro configured for classification method',
+        LogCategory.DATA,
+        {
+          method,
+          numClasses
         }
+      );
+      return null;
+    }
+
+    const query = `SELECT ${macroName}('${escapeSqlString(context.tableName)}', '${escapeSqlString(columnName)}', ${numClasses}) as breaks`;
+
+    try {
+      const result = (await Duck.query(query)) as Table;
+      const rawBreaks = result.getChild?.('breaks')?.get(0);
+      const extracted = toIterableValues(rawBreaks);
+
+      if (extracted) {
+        breaks = sanitizeBreaks(extracted, stats.min, stats.max);
       }
+    } catch (macroError) {
+      logger.warn('DuckDB macro failed to calculate breaks', LogCategory.DATA, {
+        macroName,
+        numClasses,
+        error: macroError
+      });
+      return null;
     }
 
     if (breaks.length === 0) {
-      logger.warn(
-        'No breaks calculated, using equal interval fallback',
-        LogCategory.DATA,
-        { method, numClasses }
-      );
-      breaks = getEqualIntervalBreaks(stats.min, stats.max, numClasses);
+      logger.warn('No breaks calculated by DuckDB macro', LogCategory.DATA, {
+        method,
+        numClasses
+      });
+      return null;
     }
 
     if (breaks.length > 0 && method !== ClassificationMethod.MANUAL) {

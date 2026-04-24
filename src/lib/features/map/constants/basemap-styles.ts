@@ -12,7 +12,7 @@ export enum BasemapStyle {
   MONDE_SATELLITE = 'monde-satellite'
 }
 
-export const DEFAULT_TILED_BASEMAP_STYLE = BasemapStyle.MONDE_NIVEAUX_DE_GRIS;
+export const DEFAULT_TILED_BASEMAP_STYLE = BasemapStyle.MONDE_COULEURS;
 
 type BasemapStyleResult = string | maplibregl.StyleSpecification;
 export type BasemapZone = 'france' | 'monde';

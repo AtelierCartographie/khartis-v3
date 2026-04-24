@@ -38,7 +38,7 @@ Khartis is a web application to create professional thematic maps without prior 
 ## Features
 
 - **Data**: import CSV, GeoJSON, GeoPackage, Shapefile, GPX, KML; variable typing, column operations, filters, join assistant, geolocation
-- **Visualization**: choropleth, proportional symbols, categorical, bivariate; classification methods (Jenks, quantiles, equal interval, Q6, nested means, head-tail); palette editor
+- **Visualization**: choropleth, proportional symbols, categorical, bivariate; classification methods (K-means, quantiles, equal interval, Q6, nested means, head-tail, manual); palette editor
 - **Map tools**: 150+ projection catalog, topology-aware simplification, layer manager, geographic search
 - **Layout**: legends, scale bar, north arrow, inset maps, annotations, color-blindness simulation, facets
 - **Export**: PNG/SVG/PDF; data exports (CSV, GeoJSON, GPKG, Shapefile, KML/KMZ); auto-save and project versions (`.kh`)

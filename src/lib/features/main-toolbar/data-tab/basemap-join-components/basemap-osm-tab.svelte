@@ -1,15 +1,16 @@
 <script lang="ts">
-  import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
   import * as m from '$lib/paraglide/messages';
   import { Button, InlineNotification, Link } from 'carbon-components-svelte';
 
   interface Props {
     hasGPSCoordinates: boolean;
+    isActive: boolean;
     onSelectOSM: () => void;
     onGoToVisualize: () => void;
   }
 
-  let { hasGPSCoordinates, onSelectOSM, onGoToVisualize }: Props = $props();
+  let { hasGPSCoordinates, isActive, onSelectOSM, onGoToVisualize }: Props =
+    $props();
 
   function handleLinkClick(event: Event): void {
     event.preventDefault();
@@ -30,7 +31,7 @@
       hideCloseButton={true}
       lowContrast
     />
-  {:else if osmBasemapStore.isActive}
+  {:else if isActive}
     <InlineNotification
       kind="success"
       title={m.osm_basemap_title()}

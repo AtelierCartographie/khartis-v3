@@ -11,7 +11,7 @@ function createClassification(
   overrides: Partial<ClassificationConfig> = {}
 ): ClassificationConfig {
   return {
-    method: ClassificationMethod.JENKS,
+    method: ClassificationMethod.KMEANS,
     classes: 5,
     ...overrides
   };

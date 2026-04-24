@@ -1,6 +1,7 @@
 function createMapLoadingStore() {
   const state = $state({
     isUpdatingLayers: false,
+    referenceBasemapLoadingCount: 0,
     isHoldingPreviewForSuggestedBasemap: false,
     shouldReleaseSuggestedPreviewAfterProcessing: false,
     isSuggestedPreviewViewportSettled: false,
@@ -72,6 +73,17 @@ function createMapLoadingStore() {
     tryReleaseSuggestedPreviewHold();
   }
 
+  function beginReferenceBasemapLoading(): void {
+    state.referenceBasemapLoadingCount += 1;
+  }
+
+  function endReferenceBasemapLoading(): void {
+    state.referenceBasemapLoadingCount = Math.max(
+      0,
+      state.referenceBasemapLoadingCount - 1
+    );
+  }
+
   function setHoldingPreviewForSuggestedBasemap(value: boolean): void {
     cancelSuggestedPreviewRelease();
     state.isHoldingPreviewForSuggestedBasemap = value;
@@ -107,10 +119,15 @@ function createMapLoadingStore() {
     get isUpdatingLayers(): boolean {
       return state.isUpdatingLayers;
     },
+    get isReferenceBasemapLoading(): boolean {
+      return state.referenceBasemapLoadingCount > 0;
+    },
     get isHoldingPreviewForSuggestedBasemap(): boolean {
       return state.isHoldingPreviewForSuggestedBasemap;
     },
     setUpdatingLayers,
+    beginReferenceBasemapLoading,
+    endReferenceBasemapLoading,
     setHoldingPreviewForSuggestedBasemap,
     armSuggestedPreviewRelease,
     markSuggestedPreviewViewportSettled

@@ -8,9 +8,9 @@ const source = readFileSync(
 );
 
 describe('resolveDiscretizationLabel', () => {
-  it('defaults the compact summary to Jenks and 5 classes', () => {
+  it('defaults the compact summary to K-means and 5 classes', () => {
     expect(source).toContain(
-      "const method = classification?.method ?? 'jenks';"
+      'const method = normalizeClassificationMethod(classification?.method);'
     );
     expect(source).toContain(
       'const numClasses = classification?.numClasses ?? classification?.classes ?? 5;'

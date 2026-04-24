@@ -51,7 +51,7 @@ Important :
 3. Dans `Joindre`, conserver le fond mondial suggéré.
 4. Dans `Visualisations`, choisir une choroplèthe.
 5. Utiliser la variable `Fossil-fuel subsidies (consumption and production) as a proportion of total GDP (%)`.
-6. Régler la discrétisation sur 5 classes, en `Jenks` ou en `Quantiles`.
+6. Régler la discrétisation sur 5 classes, en `K-means` ou en `Quantiles`.
 7. En option, tester la projection `Robinson` pour une lecture plus éditoriale du monde.
 
 ### Ce que cela montre

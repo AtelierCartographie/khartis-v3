@@ -51,26 +51,25 @@ Par défaut, les primitives de texte (`labels`, `texts`) démarrent avec une cou
 
 ---
 
-## Discrétisation (8 méthodes)
+## Discrétisation (6 méthodes automatiques + manuel)
 
 **Fichier** : `commons/services/classification.service.ts` + `duckdb/macros/breaks.ts`
 
 Implémentée via **macros SQL DuckDB** (appelées une fois à l'init, jamais rechargées) :
 
-| Méthode              | Macro DuckDB     | Principe cartographique                                                            |
-| -------------------- | ---------------- | ---------------------------------------------------------------------------------- |
-| `QUANTILES`          | `quantile()`     | Fréquences égales par classe — bonne distribution uniforme                         |
-| `EQUAL_INTERVAL`     | `equi_width()`   | Intervalles de même amplitude — lisibles mais sensibles aux outliers               |
-| `JENKS`              | `kmeans()`       | Seuils naturels (variance intra-classe min) — meilleur pour distributions clumpées |
-| `Q6`                 | `q6()`           | 6 quantiles fixes (5e, 27.5e, 50e, 72.5e, 95e percentiles) — standardisé           |
-| `NESTED_MEANS`       | `nested_means()` | Moyennes emboîtées récursivement — distributions asymétriques                      |
-| `HEAD_TAIL`          | `headtail2()`    | Head/Tail breaks — distributions à forte queue (power-law, exponentielles)         |
-| `MANUAL`             | (aucune)         | Bornes saisies manuellement — contrôle total                                       |
-| `STANDARD_DEVIATION` | calcul local     | Écart-type — seuils centrés sur la moyenne via `STDDEV_SAMP()`                     |
+| Méthode          | Macro DuckDB     | Principe cartographique                                                    |
+| ---------------- | ---------------- | -------------------------------------------------------------------------- |
+| `KMEANS`         | `kmeans()`       | Seuils naturels par K-means — meilleur pour distributions clumpées         |
+| `QUANTILES`      | `quantile()`     | Fréquences égales par classe — bonne distribution uniforme                 |
+| `EQUAL_INTERVAL` | `equi_width()`   | Intervalles de même amplitude — lisibles mais sensibles aux outliers       |
+| `Q6`             | `q6()`           | 6 quantiles fixes (5e, 27.5e, 50e, 72.5e, 95e percentiles) — standardisé   |
+| `NESTED_MEANS`   | `nested_means()` | Moyennes emboîtées récursivement — distributions asymétriques              |
+| `HEAD_TAIL`      | `headtail2()`    | Head/Tail breaks — distributions à forte queue (power-law, exponentielles) |
+| `MANUAL`         | (aucune)         | Bornes saisies manuellement — contrôle total                               |
 
 **Pipeline** : `calculateBreaks()` → récupère min/max via DuckDB → appelle la macro → `round_thresholds()` (arrondi lisible) → COUNT par classe via un seul `CASE WHEN` → `BreaksResult { breaks[], counts[], min, max }`.
 
-**Note** : `standard_deviation` n'utilise pas de macro DuckDB dédiée. Les seuils sont calculés localement à partir de `AVG()` et `STDDEV_SAMP()`, puis arrondis via `round_thresholds()`.
+**Règle de performance** : les méthodes automatiques ne calculent pas les seuils côté TypeScript et ne chargent pas toutes les valeurs de colonne en mémoire JS. Si une macro DuckDB échoue ou ne renvoie aucun seuil exploitable, `calculateBreaks()` retourne `null` au lieu de produire un fallback local.
 
 **Mémorisation** : `breaksCache` (Map, 50 entrées max) — évite les requêtes redondantes sur simple changement de style.
 
@@ -99,11 +98,11 @@ Ce dernier `slice()` dépend du type de la batch enfant :
 
 **Pièges déjà rencontrés dans cette zone** :
 
-1. **Fallback silencieux equal-interval** pour toute méthode macro (quantile, jenks, equi_width, q6, nested_means, headtail2) si le check `Array.isArray` rejette une `Float64Array` subarray.
+1. **Rejet incorrect des résultats DuckDB** pour toute méthode macro (`kmeans`, `quantile`, `equi_width`, `q6`, `nested_means`, `headtail2`) si le check `Array.isArray` rejette une `Float64Array` subarray.
 2. **Arrondis ignorés** par `round_thresholds` si son résultat passe le même check naïf — la carte affiche les breaks bruts non arrondis.
 3. **Breaks effacés** si `round_thresholds` retourne un tableau vide : il faut garder les breaks originaux plutôt que renvoyer `[]`.
 
-Ces trois pièges sont couverts par `tests/pipeline/classification.service.test.ts` (suites `macro methods` et `Flechette edge cases` — Array plain, TypedArray, Iterable générique, Array avec nulls, liste vide, scalaire, `undefined`, BigInt).
+Ces cas sont couverts par `tests/pipeline/classification.service.test.ts` (suites `macro methods` et `Flechette edge cases` — Array plain, TypedArray, Iterable générique, Array avec nulls, liste vide, scalaire, `undefined`, BigInt).
 
 ---
 
