@@ -18,7 +18,7 @@
 
   import { Duck } from '$lib/features/duckdb';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
-  import { DEFAULT_OSM_STYLE } from '$lib/features/map/constants';
+  import { BasemapStyle } from '$lib/features/map/constants';
   import {
     basemapCatalogService,
     rankBasemapsByJoinSynthesis,
@@ -27,6 +27,7 @@
   import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
   import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
+  import { projectionStore } from '$lib/features/map/stores/projection.store.svelte';
   import type {
     BasemapMetadata,
     BasemapSuggestion
@@ -128,35 +129,6 @@
       hasMultipleDatasets: datasetsStore.datasets.length > 1
     })
   );
-  const hasPersistedSelectedSourceFileJoin = $derived.by(() => {
-    const sourceFileId = selectedDataset?.sourceFileId;
-    if (!sourceFileId) {
-      return false;
-    }
-
-    const sourceFile = projectStore.currentProject?.data?.sourceFiles?.find(
-      (file) => file.id === sourceFileId
-    );
-
-    return Boolean(sourceFile?.joinedBasemap || sourceFile?.gpsMode);
-  });
-  const hasInvalidPersistedGPSCatalogJoin = $derived.by(() => {
-    const sourceFileId = selectedDataset?.sourceFileId;
-    if (!sourceFileId) {
-      return false;
-    }
-
-    const sourceFile = projectStore.currentProject?.data?.sourceFiles?.find(
-      (file) => file.id === sourceFileId
-    );
-
-    return Boolean(
-      sourceFile?.gpsMode &&
-      sourceFile.joinedBasemap &&
-      !isOSMBasemapId(sourceFile.joinedBasemap)
-    );
-  });
-
   let importFiles = $state<File[]>([]);
   let importUploading = $state(false);
   let importError = $state<string | null>(null);
@@ -180,11 +152,6 @@
     const columns = selectedDataset.columns || [];
     return hasGPSCoordinateColumns(columns, selectedDataset.geoDetection);
   });
-  const shouldAutoPreferOSMForGPS = $derived(
-    hasGPSCoordinates &&
-      (!hasPersistedSelectedSourceFileJoin || hasInvalidPersistedGPSCatalogJoin)
-  );
-
   const isGPSModeActive = $derived(hasGPSCoordinates);
 
   const suggestedBasemaps = $derived.by(() => {
@@ -630,6 +597,7 @@
     basemapStyleStore.setReferenceBasemap(null);
     dataTabStore.resetStepCompletion(basemapStepIndex);
     projectStore.updateProjectData({ basemap: undefined });
+    projectionStore.clear();
     previousJoinContext = null;
     previousLinkedVariableName = null;
   }
@@ -772,16 +740,20 @@
     dataTabActions.clearJoinStats();
     dataTabStore.resetStepCompletion(stepIndex);
 
-    const osmBasemap = createOSMBasemap(DEFAULT_OSM_STYLE);
+    const referenceStyle =
+      basemapStyleStore.lastSelectedTiledStyle ?? BasemapStyle.MONDE_COULEURS;
+    const osmBasemap = createOSMBasemap(referenceStyle);
 
     hasDismissedSuggestedBasemap = false;
     basemapCatalogService.addCustomBasemap(osmBasemap);
-    osmBasemapStore.setOSMBasemap(osmBasemap);
+    osmBasemapStore.clear();
     dataTabActions.setBasemapJoinState({
       selectedBasemap: osmBasemap.file,
       basemapSource: BasemapSource.OSM
     });
     basemapStyleStore.setReferenceBasemap(null);
+    basemapStyleStore.setStyle(referenceStyle);
+    basemapStyleStore.requestViewportReset(referenceStyle);
 
     projectStore.updateProjectData({
       basemap: {
@@ -1127,7 +1099,6 @@
     const hasGPSMode = hasGPSCoordinates;
     const selectedBasemapId = dataTabState.basemapJoin.selectedBasemap;
     const persistedBasemapId = runtimePersistedBasemap?.id;
-    const preferOSM = shouldAutoPreferOSMForGPS;
     const hasDatasetGeometry = Boolean(datasetSnapshot.geometry);
     const processedDataset = normalizeToProcessedDataset(datasetSnapshot);
 
@@ -1260,15 +1231,12 @@
         persistedBasemapId,
         selectedBasemapId,
         hasSelectedAvailableBasemap: hasAvailableBasemap(selectedBasemapId),
-        shouldRetryForDatasetChange: isDatasetChanged,
-        preferOSM
+        shouldRetryForDatasetChange: isDatasetChanged
       });
 
       if (controller.signal.aborted) return;
 
-      if (autoSelectionTarget === 'osm') {
-        await handleSelectOSM();
-      } else if (autoSelectionTarget === 'suggested') {
+      if (autoSelectionTarget === 'suggested') {
         await autoSelectFirstSuggestedBasemap();
       }
     } catch (error) {
@@ -1297,11 +1265,6 @@
 
         await loadSuggestions();
         if (controller.signal.aborted) return;
-
-        if (shouldAutoPreferOSMForGPS) {
-          await handleSelectOSM();
-          return;
-        }
 
         const savedBasemap = runtimePersistedBasemap;
         if (savedBasemap?.id) {
@@ -1365,11 +1328,6 @@
             } finally {
               joinLoading = false;
             }
-            return;
-          }
-
-          if (shouldAutoPreferOSMForGPS) {
-            await handleSelectOSM();
             return;
           }
 
@@ -1466,13 +1424,10 @@
       hasDatasetGeometry: Boolean(selectedDataset?.geometry),
       persistedBasemapId: runtimePersistedBasemap?.id,
       selectedBasemapId: basemapSelected,
-      hasSelectedAvailableBasemap: hasAvailableBasemap(basemapSelected),
-      preferOSM: shouldAutoPreferOSMForGPS
+      hasSelectedAvailableBasemap: hasAvailableBasemap(basemapSelected)
     });
 
-    if (autoSelectionTarget === 'osm') {
-      void handleSelectOSM();
-    } else if (autoSelectionTarget === 'suggested') {
+    if (autoSelectionTarget === 'suggested') {
       void autoSelectFirstSuggestedBasemap();
     }
   });
@@ -1610,7 +1565,10 @@
       osmBasemapStore.clear();
       dataTabActions.clearJoinStats();
       basemapAttributeValues = [];
-      dataTabActions.selectBasemap('');
+      dataTabActions.setBasemapJoinState({
+        selectedBasemap: '',
+        basemapSource: BasemapSource.CATALOG
+      });
       basemapStyleStore.setReferenceBasemap(null);
       dataTabStore.resetStepCompletion(basemapStepIndex);
       importedBasemap = null;
@@ -1665,6 +1623,8 @@
   {:else if activeTabIndex === OSM_TAB_INDEX}
     <BasemapOsmTab
       hasGPSCoordinates={hasGPSCoordinates}
+      isActive={dataTabState.basemapJoin.basemapSource === BasemapSource.OSM &&
+        isOSMBasemapId(basemapSelected)}
       onSelectOSM={handleSelectOSM}
       onGoToVisualize={handleGoToVisualize}
     />

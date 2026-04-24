@@ -1,6 +1,7 @@
 import { BasemapSource } from '$lib/features/commons/constants/ui.constants';
 import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
 import { dataTabActions } from '$lib/features/commons/store/data-tab.store.svelte';
+import { BasemapStyle } from '$lib/features/map/constants/basemap-styles';
 import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
 import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
 import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
@@ -70,6 +71,13 @@ export function resolveBasemapSource(
 
 function isOSMBasemapId(basemapId: string): boolean {
   return basemapId.startsWith(OSM_BASEMAP_PREFIX);
+}
+
+function activateReferenceTiledStyle(): void {
+  const referenceStyle =
+    basemapStyleStore.lastSelectedTiledStyle ?? BasemapStyle.MONDE_COULEURS;
+  basemapStyleStore.setStyle(referenceStyle);
+  basemapStyleStore.requestViewportReset(referenceStyle);
 }
 
 function resolvePersistedBasemapType(
@@ -179,9 +187,12 @@ export async function restorePersistedBasemapSelection(
     selectedBasemap: savedBasemap.id,
     basemapSource
   });
-  basemapStyleStore.setReferenceBasemap(
-    savedBasemap.type === PERSISTED_BASEMAP_TYPE.OSM ? null : savedBasemap.id
-  );
+  if (savedBasemap.type === PERSISTED_BASEMAP_TYPE.OSM) {
+    basemapStyleStore.setReferenceBasemap(null);
+    activateReferenceTiledStyle();
+  } else {
+    basemapStyleStore.setReferenceBasemap(savedBasemap.id);
+  }
 
   if (
     (savedBasemap.type === PERSISTED_BASEMAP_TYPE.CUSTOM ||
@@ -200,11 +211,13 @@ export async function restorePersistedBasemapSelection(
       return;
     }
 
-    osmBasemapStore.setOSMBasemap(basemapData);
+    if (isOSMBasemapId(basemapData.file)) {
+      osmBasemapStore.clear();
+    } else {
+      osmBasemapStore.setOSMBasemap(basemapData);
+    }
     return;
   }
 
-  if (savedBasemap.type !== PERSISTED_BASEMAP_TYPE.OSM) {
-    osmBasemapStore.clear();
-  }
+  osmBasemapStore.clear();
 }

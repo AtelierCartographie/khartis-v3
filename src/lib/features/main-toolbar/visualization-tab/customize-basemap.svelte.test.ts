@@ -8,6 +8,22 @@ const source = readFileSync(
 );
 
 describe('CustomizeBasemap', () => {
+  it('keeps the reference basemap tool inside the tiled expandable so it can be disabled again', () => {
+    expect(source).toContain('{#if !isTiledBasemapEnabled}');
+    expect(source).toContain('title={m.basemap_tiled_label()}');
+    expect(source).toContain('toggleChecked={isTiledBasemapEnabled}');
+    expect(source).toContain('onToggleChange={handleTiledBasemapToggle}');
+    expect(source).toContain('class="reference-basemap-tool"');
+    expect(source).toContain('{m.basemap_tiled_helper()}');
+    expect(source).not.toContain('{#if isTiledBasemapEnabled}');
+  });
+
+  it('uses the color reference style as the first activation fallback', () => {
+    expect(source).toContain(
+      'basemapStyleStore.lastSelectedTiledStyle ?? BasemapStyle.MONDE_COULEURS'
+    );
+  });
+
   it('switches imported basemaps to a reduced fill and stroke panel', () => {
     const customBranch = source.match(/{#if isCustomBasemap}([\s\S]*?){:else}/);
     expect(customBranch).not.toBeNull();

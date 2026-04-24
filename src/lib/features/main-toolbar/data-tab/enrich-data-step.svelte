@@ -39,9 +39,6 @@
   const fileHook = useEnrichmentFile();
   const basemapHook = useEnrichmentBasemap();
   const overlayBasemapEnabled = $derived(basemapHook.hasActiveSelection);
-  const overlayBasemapSuggestionCount = $derived(
-    basemapHook.suggestedBasemaps.length
-  );
   let overlayBasemapExpanded = $state(false);
   let overlayBasemapDismissed = $state(false);
 
@@ -150,14 +147,8 @@
 
   $effect(() => {
     if (overlayBasemapDismissed) return;
-    if (overlayBasemapEnabled || overlayBasemapSuggestionCount > 0) {
+    if (overlayBasemapEnabled) {
       overlayBasemapExpanded = true;
-      // Mirror the toggle's onToggleChange path: when the section opens because
-      // suggestions are available but no basemap is active yet, auto-pick the top one
-      // so the CDC default selection rule applies even on geo datasets.
-      if (!overlayBasemapEnabled && overlayBasemapSuggestionCount > 0) {
-        basemapHook.activatePreferredBasemap();
-      }
     }
   });
 

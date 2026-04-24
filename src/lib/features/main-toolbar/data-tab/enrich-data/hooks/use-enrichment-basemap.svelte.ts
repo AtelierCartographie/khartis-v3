@@ -11,7 +11,7 @@ import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type { DatasetResult } from '$lib/features/data-pipeline/types';
 import { normalizeToProcessedDataset } from '$lib/features/data-pipeline/utils/processed-dataset.utils';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
-import { DEFAULT_OSM_STYLE } from '$lib/features/map/constants';
+import { BasemapStyle } from '$lib/features/map/constants';
 import {
   basemapCatalogService,
   rankBasemapsByJoinSynthesis
@@ -321,11 +321,15 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
   }
 
   function handleSelectOSM(): void {
-    const osmBasemap = createOSMBasemap(DEFAULT_OSM_STYLE);
+    const referenceStyle =
+      basemapStyleStore.lastSelectedTiledStyle ?? BasemapStyle.MONDE_COULEURS;
+    const osmBasemap = createOSMBasemap(referenceStyle);
 
     hasDismissedSuggestedBasemap = false;
-    osmBasemapStore.setOSMBasemap(osmBasemap);
+    osmBasemapStore.clear();
     basemapStyleStore.setReferenceBasemap(null);
+    basemapStyleStore.setStyle(referenceStyle);
+    basemapStyleStore.requestViewportReset(referenceStyle);
     dataTabActions.setBasemapJoinState({
       selectedBasemap: osmBasemap.file,
       basemapSource: BasemapSource.OSM

@@ -20,7 +20,7 @@ function createOSMBasemap(file: string): BasemapMetadata {
 }
 
 describe('syncProjectOSMBasemap', () => {
-  it('restores the project OSM basemap from project data when the catalog copy is missing', () => {
+  it('keeps project OSM metadata available without restoring legacy OSM raster tiles', () => {
     const osmBasemap = createOSMBasemap('osm_standard_123');
     const basemapLookup = {
       getBasemapById: vi.fn(() => undefined),
@@ -43,11 +43,11 @@ describe('syncProjectOSMBasemap', () => {
     );
 
     expect(basemapLookup.addCustomBasemap).toHaveBeenCalledWith(osmBasemap);
-    expect(osmState.setOSMBasemap).toHaveBeenCalledWith(osmBasemap);
+    expect(osmState.setOSMBasemap).not.toHaveBeenCalled();
     expect(osmState.clear).not.toHaveBeenCalled();
   });
 
-  it('reuses the catalog OSM basemap when it is already available', () => {
+  it('does not reuse catalog OSM basemaps as legacy raster tiles', () => {
     const osmBasemap = createOSMBasemap('osm_standard_456');
     const basemapLookup = {
       getBasemapById: vi.fn(() => osmBasemap),
@@ -69,9 +69,36 @@ describe('syncProjectOSMBasemap', () => {
       osmState
     );
 
-    expect(osmState.setOSMBasemap).toHaveBeenCalledWith(osmBasemap);
+    expect(osmState.setOSMBasemap).not.toHaveBeenCalled();
     expect(basemapLookup.addCustomBasemap).not.toHaveBeenCalled();
     expect(osmState.clear).not.toHaveBeenCalled();
+  });
+
+  it('does not restore Carte Facile reference selections as legacy OSM raster tiles', () => {
+    const referenceBasemap = createOSMBasemap('osm_monde-couleurs_456');
+    const basemapLookup = {
+      getBasemapById: vi.fn(() => referenceBasemap),
+      addCustomBasemap: vi.fn()
+    };
+    const osmState = {
+      activeOSMBasemap: createOSMBasemap('osm_standard_789'),
+      setOSMBasemap: vi.fn(),
+      clear: vi.fn()
+    };
+
+    syncProjectOSMBasemap(
+      {
+        type: 'osm',
+        id: referenceBasemap.file,
+        data: undefined
+      },
+      basemapLookup,
+      osmState
+    );
+
+    expect(osmState.clear).toHaveBeenCalledOnce();
+    expect(osmState.setOSMBasemap).not.toHaveBeenCalled();
+    expect(basemapLookup.addCustomBasemap).not.toHaveBeenCalled();
   });
 
   it('clears a stale OSM state when the current project basemap is no longer OSM', () => {

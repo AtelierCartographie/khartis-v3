@@ -3,6 +3,7 @@ import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.sto
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { OSMSourceId } from '../constants';
 import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
+import { mapLoadingStore } from '../stores/map-loading.store.svelte';
 import { mapProjectionStore } from '../stores/map-projection.store.svelte';
 import {
   createOSMRasterSource,
@@ -28,6 +29,7 @@ export interface UseMapBasemapReturn {
 
 export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
   const { getMap, getIsMapLoaded, onProjectionChanged, onStyleLoaded } = props;
+  const REFERENCE_BASEMAP_LOAD_TIMEOUT_MS = 10_000;
 
   function getStyleKey(style: string | StyleSpecification): string {
     if (typeof style === 'string') {
@@ -38,9 +40,70 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
 
   const currentStyleKey = getStyleKey(basemapStyleStore.selectedStyleUrl);
   let lastAppliedStyleKey: string | null = currentStyleKey;
+  let loadingStyleKey: string | null = null;
+  let pendingStyleSync = false;
+  let pendingStyleSyncScheduled = false;
   let lastAppliedOSMRasterKey: string | null = null;
   let isStyleLoading = $state(false);
   let styleLoadHandler: (() => void) | null = null;
+  let styleSafetyTimeout: ReturnType<typeof setTimeout> | null = null;
+  let finishStyleLoading: (() => void) | null = null;
+  let rasterLoadMap: MapLibreMap | null = null;
+  let rasterIdleHandler: (() => void) | null = null;
+  let rasterSafetyTimeout: ReturnType<typeof setTimeout> | null = null;
+  let finishRasterLoading: (() => void) | null = null;
+
+  function beginReferenceBasemapLoading(): () => void {
+    let hasEnded = false;
+    mapLoadingStore.beginReferenceBasemapLoading();
+
+    return () => {
+      if (hasEnded) {
+        return;
+      }
+
+      hasEnded = true;
+      mapLoadingStore.endReferenceBasemapLoading();
+    };
+  }
+
+  function endStyleLoading(): void {
+    finishStyleLoading?.();
+    finishStyleLoading = null;
+  }
+
+  function completeRasterLoad(map: MapLibreMap | null = rasterLoadMap): void {
+    if (rasterSafetyTimeout) {
+      clearTimeout(rasterSafetyTimeout);
+      rasterSafetyTimeout = null;
+    }
+
+    if (map && rasterIdleHandler) {
+      map.off('idle', rasterIdleHandler);
+    }
+
+    rasterLoadMap = null;
+    rasterIdleHandler = null;
+    finishRasterLoading?.();
+    finishRasterLoading = null;
+  }
+
+  function beginRasterLoad(map: MapLibreMap, rasterKey: string): void {
+    completeRasterLoad(map);
+
+    rasterLoadMap = map;
+    finishRasterLoading = beginReferenceBasemapLoading();
+    rasterIdleHandler = () => completeRasterLoad(map);
+    map.once('idle', rasterIdleHandler);
+    rasterSafetyTimeout = setTimeout(() => {
+      logger.warn(
+        'OSM raster load timed out after 10s, unlocking',
+        LogCategory.MAP,
+        { rasterKey }
+      );
+      completeRasterLoad(map);
+    }, REFERENCE_BASEMAP_LOAD_TIMEOUT_MS);
+  }
 
   function getOSMRasterKey(): string | null {
     const osmBasemap = osmBasemapStore.activeOSMBasemap;
@@ -59,38 +122,67 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
     ].join('::');
   }
 
+  function schedulePendingStyleSync(): void {
+    if (pendingStyleSyncScheduled) {
+      return;
+    }
+
+    pendingStyleSyncScheduled = true;
+    queueMicrotask(() => {
+      pendingStyleSyncScheduled = false;
+      syncBasemapStyle();
+    });
+  }
+
   function syncBasemapStyle(): void {
     const map = getMap();
+    const style = basemapStyleStore.selectedStyleUrl;
+    const styleKey = getStyleKey(style);
 
     if (!map || !getIsMapLoaded()) return;
 
-    if (isStyleLoading) return;
-
-    const style = basemapStyleStore.selectedStyleUrl;
-    const styleKey = getStyleKey(style);
+    if (isStyleLoading) {
+      if (styleKey !== loadingStyleKey) {
+        pendingStyleSync = true;
+      }
+      return;
+    }
 
     if (styleKey === lastAppliedStyleKey) return;
 
     isStyleLoading = true;
+    loadingStyleKey = styleKey;
+    pendingStyleSync = false;
+    endStyleLoading();
+    completeRasterLoad(map);
+    finishStyleLoading = beginReferenceBasemapLoading();
 
     if (styleLoadHandler) {
       map.off('style.load', styleLoadHandler);
     }
 
-    let safetyTimeout: ReturnType<typeof setTimeout> | null = null;
-
     const completeStyleLoad = () => {
-      if (safetyTimeout) {
-        clearTimeout(safetyTimeout);
-        safetyTimeout = null;
+      if (styleSafetyTimeout) {
+        clearTimeout(styleSafetyTimeout);
+        styleSafetyTimeout = null;
       }
       isStyleLoading = false;
+      loadingStyleKey = null;
+      endStyleLoading();
       lastAppliedStyleKey = styleKey;
 
       if (styleLoadHandler) {
         map.off('style.load', styleLoadHandler);
         styleLoadHandler = null;
       }
+
+      const latestStyleKey = getStyleKey(basemapStyleStore.selectedStyleUrl);
+      if (pendingStyleSync && latestStyleKey !== lastAppliedStyleKey) {
+        pendingStyleSync = false;
+        schedulePendingStyleSync();
+        return;
+      }
+      pendingStyleSync = false;
 
       if (onStyleLoaded) {
         onStyleLoaded();
@@ -101,7 +193,7 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
 
     // Safety timeout: if style.load never fires (e.g. network error),
     // unlock the loading flag after 10s to avoid permanent deadlock.
-    safetyTimeout = setTimeout(() => {
+    styleSafetyTimeout = setTimeout(() => {
       if (isStyleLoading) {
         logger.warn(
           'Basemap style.load timed out after 10s, unlocking',
@@ -110,14 +202,14 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
         );
         completeStyleLoad();
       }
-    }, 10_000);
+    }, REFERENCE_BASEMAP_LOAD_TIMEOUT_MS);
 
     // `style.load` fires once when the full style graph is ready.
     // Using `styledata` can flip the loading flag too early.
     map.once('style.load', styleLoadHandler);
 
     try {
-      map.setStyle(style, { diff: true });
+      map.setStyle(style, { diff: false });
     } catch (error) {
       logger.error(
         'setStyle() threw, unlocking style loading',
@@ -140,6 +232,8 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
     const hasRasterLayer = Boolean(map.getLayer(osmLayerId));
 
     if (!nextRasterKey) {
+      completeRasterLoad(map);
+
       try {
         if (hasRasterLayer) map.removeLayer(osmLayerId);
         if (hasRasterSource) map.removeSource(OSMSourceId.RASTER);
@@ -172,8 +266,10 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
         if (!map.getLayer(osmLayerId)) {
           map.addLayer(rasterLayer);
         }
+        beginRasterLoad(map, nextRasterKey);
       } catch (error) {
         logger.warn('Failed to add OSM raster layer', LogCategory.MAP, error);
+        completeRasterLoad(map);
       }
 
       lastAppliedOSMRasterKey = nextRasterKey;
@@ -258,7 +354,16 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
       map.off('style.load', styleLoadHandler);
       styleLoadHandler = null;
     }
+    if (styleSafetyTimeout) {
+      clearTimeout(styleSafetyTimeout);
+      styleSafetyTimeout = null;
+    }
+    endStyleLoading();
+    completeRasterLoad(map);
     isStyleLoading = false;
+    loadingStyleKey = null;
+    pendingStyleSync = false;
+    pendingStyleSyncScheduled = false;
     lastAppliedStyleKey = null;
     lastAppliedOSMRasterKey = null;
   }

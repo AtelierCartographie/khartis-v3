@@ -67,18 +67,9 @@ export enum DeckLayerId {
   BASEMAP_META_CENTROID = 'basemap-meta-centroid'
 }
 
-export enum OSMTileServer {
-  STANDARD = 'osm-standard',
-  CARTO = 'osm-carto',
-  HUMANITARIAN = 'osm-humanitarian',
-  TRANSPORT = 'osm-transport'
-}
-
 export enum OSMSourceId {
   RASTER = 'osm-raster-source'
 }
-
-export const DEFAULT_OSM_STYLE = 'standard';
 
 export enum MapLibreLayerType {
   RASTER = 'raster',
