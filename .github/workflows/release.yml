@@ -11,8 +11,6 @@ env:
 
 permissions:
   contents: write
-  issues: write
-  pull-requests: write
 
 concurrency:
   group: release-${{ github.ref }}
@@ -73,26 +71,3 @@ jobs:
         run: pnpm exec semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  back-merge-to-staging:
-    name: Back-merge main into staging
-    needs: semantic-release
-    if: github.ref_name == 'main'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Configure git
-        run: |
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git config user.name "github-actions[bot]"
-
-      - name: Merge main into staging
-        run: |
-          git checkout -b staging origin/staging
-          git merge origin/main -X ours -m "chore: sync main into staging [skip ci]"
-          git push origin HEAD:staging

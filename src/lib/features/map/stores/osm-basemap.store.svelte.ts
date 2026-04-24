@@ -13,9 +13,15 @@ function createOSMBasemapStore() {
     tileConfig: null
   });
 
-  function clear(): void {
+  function clear(notify = true): void {
+    const wasActive =
+      state.activeOSMBasemap !== null || state.tileConfig !== null;
     state.activeOSMBasemap = null;
     state.tileConfig = null;
+
+    if (notify && wasActive) {
+      persistenceRegistry.notifyChange('osmBasemap');
+    }
   }
 
   function setOSMBasemap(basemap: BasemapMetadata | null): void {
@@ -30,12 +36,12 @@ function createOSMBasemapStore() {
   }
 
   function reset(): void {
-    clear();
+    clear(false);
   }
 
   function restoreFromSerialized(fileId: string | null): void {
     if (!fileId) {
-      clear();
+      clear(false);
       return;
     }
     const basemap = basemapCatalogService.getBasemapById(fileId);
@@ -43,7 +49,7 @@ function createOSMBasemapStore() {
       setOSMBasemap(basemap);
       return;
     }
-    clear();
+    clear(false);
   }
 
   return {

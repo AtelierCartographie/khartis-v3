@@ -204,10 +204,18 @@
         visualization?.polygon?.fillOpacity ??
         visualization?.style.fillOpacity ??
         1;
+      const updates: Partial<VisualizationConfig['style']> = {};
+      if (
+        visualization?.polygon?.fillColor === undefined &&
+        visualization?.style.fillColor === undefined
+      ) {
+        updates.fillColor = fillColor;
+      }
       if (currentOpacity <= 0) {
-        onStyleChange?.({
-          fillOpacity: VISUALIZATION_DEFAULTS.fillOpacity / 100
-        });
+        updates.fillOpacity = VISUALIZATION_DEFAULTS.fillOpacity / 100;
+      }
+      if (Object.keys(updates).length > 0) {
+        onStyleChange?.(updates);
       }
     }
     onModesChange?.({ fill: nextFillMode });
@@ -282,6 +290,12 @@
     discretizationTarget === 'stroke'
       ? visualization?.polygon?.strokeClassification
       : visualization?.classification
+  );
+  const activeDiscretizationValueColumn = $derived.by(() =>
+    discretizationTarget === 'stroke'
+      ? visualization?.polygon?.strokeValueColumn
+      : (visualization?.polygon?.valueColumn ??
+        visualization?.mapping.valueColumn)
   );
 
   const discretizationOnchange = $derived(
@@ -416,9 +430,7 @@
   bind:open={discretizationModalOpen}
   visualization={visualization}
   classification={activeDiscretizationClassification}
-  valueColumn={discretizationTarget === 'stroke'
-    ? visualization?.polygon?.strokeValueColumn
-    : visualization?.polygon?.valueColumn}
+  valueColumn={activeDiscretizationValueColumn}
   role={discretizationTarget}
   onchange={discretizationOnchange}
 />

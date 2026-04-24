@@ -9,11 +9,7 @@ export interface SuggestedBasemapAutoSelectionInput {
   shouldRetryForDatasetChange?: boolean;
 }
 
-export type SuggestedBasemapAutoSelectionTarget = 'none' | 'suggested' | 'osm';
-
-export interface ResolveSuggestedBasemapAutoSelectionTargetInput extends SuggestedBasemapAutoSelectionInput {
-  preferOSM?: boolean;
-}
+export type SuggestedBasemapAutoSelectionTarget = 'none' | 'suggested';
 
 /**
  * Per CDC [DATA-09b]: the best suggestion must be selected by default.
@@ -39,11 +35,11 @@ export function shouldAutoSelectSuggestedBasemap(
 }
 
 export function resolveSuggestedBasemapAutoSelectionTarget(
-  input: ResolveSuggestedBasemapAutoSelectionTargetInput
+  input: SuggestedBasemapAutoSelectionInput
 ): SuggestedBasemapAutoSelectionTarget {
   if (!shouldAutoSelectSuggestedBasemap(input)) {
     return 'none';
   }
 
-  return input.preferOSM ? 'osm' : 'suggested';
+  return 'suggested';
 }

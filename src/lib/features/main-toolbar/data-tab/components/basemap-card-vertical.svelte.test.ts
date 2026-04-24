@@ -35,4 +35,9 @@ describe('BasemapCardVertical', () => {
     expect(source).toContain('--kh-card-radio-color: #003a6d;');
     expect(source).toContain('--kh-card-radio-color: #161616;');
   });
+
+  it('can hide catalogue metadata for reused gray cards', () => {
+    expect(source).toContain('showMetadata = true');
+    expect(source).toContain('{#if showMetadata}');
+  });
 });

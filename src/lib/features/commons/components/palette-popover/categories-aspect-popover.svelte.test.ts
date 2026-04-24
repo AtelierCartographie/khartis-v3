@@ -1,11 +1,40 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor
+} from '@testing-library/svelte';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import * as m from '$lib/paraglide/messages';
+import { resetExclusiveContextualSurfaces } from '$lib/features/commons/utils/contextual-surface-coordinator';
+import CategoriesAspectPopover from './categories-aspect-popover.svelte';
+
+vi.hoisted(() => {
+  class WorkerMock {
+    postMessage(): void {}
+
+    terminate(): void {}
+
+    addEventListener(): void {}
+
+    removeEventListener(): void {}
+  }
+
+  vi.stubGlobal('Worker', WorkerMock);
+});
 
 const source = readFileSync(
   resolve(import.meta.dirname, 'categories-aspect-popover.svelte'),
   'utf8'
 );
+
+afterEach(() => {
+  cleanup();
+  resetExclusiveContextualSurfaces();
+});
 
 describe('CategoriesAspectPopover (Figma 952:156994 — Polygons variant)', () => {
   it('should render the "Aspect des catégories" header title', () => {
@@ -125,6 +154,57 @@ describe('CategoriesAspectPopover (Figma 952:156994 — Polygons variant)', () =
       'class:category-item--disabled={!category.enabled}'
     );
     expect(source).toContain('.category-item--disabled');
+  });
+
+  it('should keep nested color surfaces from closing the whole categories popover', () => {
+    expect(source).toContain('function isNestedColorSurface');
+    expect(source).toContain("target.id === 'khartis-color-picker-dropdown'");
+    expect(source).toContain(
+      "target.classList.contains('single-color-dropdown')"
+    );
+    expect(source).toContain("target.classList.contains('palette-popover')");
+    expect(source).toContain(
+      'if (isNestedColorSurface(e.composedPath())) return'
+    );
+  });
+});
+
+describe('CategoriesAspectPopover runtime', () => {
+  it('keeps the parent dialog open after selecting a category color preset', async () => {
+    render(CategoriesAspectPopover, {
+      open: true,
+      variant: 'polygons',
+      categories: [
+        {
+          id: 'category-a',
+          label: 'Category A',
+          color: '#ff595e',
+          enabled: true
+        }
+      ]
+    });
+
+    const dialog = await screen.findByRole('dialog', {
+      name: m.palette_categories_aspect_title()
+    });
+
+    expect(dialog).toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole('button', { name: m.color() }));
+
+    await waitFor(() => {
+      expect(
+        document.body.querySelector('.single-color-dropdown')
+      ).toBeInTheDocument();
+    });
+
+    await fireEvent.click(screen.getAllByRole('option')[0]);
+
+    expect(
+      screen.getByRole('dialog', {
+        name: m.palette_categories_aspect_title()
+      })
+    ).toBeInTheDocument();
   });
 });
 

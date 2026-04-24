@@ -69,9 +69,10 @@
   const enabledDatasets = $derived(datasetsStore.enabledDatasets);
   const duckDBDatasetsVersion = $derived(duckDBOrchestrator.datasetsVersion);
   const activeOSMBasemap = $derived(osmBasemapStore.activeOSMBasemap);
-  // Anti-flicker: only reveal the density loader after 300 ms of real work,
+  // Anti-flicker: only reveal map status loaders after 300 ms of real work,
   // so cached / fast (<300 ms) renders don't flash a spinner on screen.
   let showDensityLoader = $state(false);
+  let showReferenceBasemapLoader = $state(false);
   $effect(() => {
     if (!densityLoadingStore.isLoading) {
       showDensityLoader = false;
@@ -82,6 +83,22 @@
     }, 300);
     return () => clearTimeout(timer);
   });
+  $effect(() => {
+    if (!mapLoadingStore.isReferenceBasemapLoading) {
+      showReferenceBasemapLoader = false;
+      return;
+    }
+    const timer = setTimeout(() => {
+      showReferenceBasemapLoader = mapLoadingStore.isReferenceBasemapLoading;
+    }, 300);
+    return () => clearTimeout(timer);
+  });
+  const showMapStatusLoader = $derived(
+    showReferenceBasemapLoader || showDensityLoader
+  );
+  const mapStatusLoaderText = $derived(
+    showReferenceBasemapLoader ? m.basemap_loading() : m.density_loading()
+  );
   const usesTiledBasemap = $derived(
     Boolean(activeOSMBasemap) || basemapStyleStore.requiresMapLibre
   );
@@ -776,7 +793,7 @@
       return;
     }
 
-    const thisGeneration = loadGeneration;
+    const thisGeneration = ++loadGeneration;
 
     for (const dataset of enabledDatasets) {
       const duckDBDataset = duckDBOrchestrator.getDatasetBySourceFile(
@@ -1068,15 +1085,15 @@
           onReady={handleMapReady}
         />
       {/if}
-      {#if showDensityLoader}
+      {#if showMapStatusLoader}
         <div
-          class="density-loader"
+          class="map-status-loader"
           role="status"
           aria-live="polite"
           transition:fade={{ duration: 150 }}
         >
-          <span class="density-loader-spinner" aria-hidden="true"></span>
-          <span class="density-loader-text">{m.density_loading()}</span>
+          <span class="map-status-loader-spinner" aria-hidden="true"></span>
+          <span class="map-status-loader-text">{mapStatusLoaderText}</span>
         </div>
       {/if}
     </div>
@@ -1109,7 +1126,7 @@
 </div>
 
 <style>
-  .density-loader {
+  .map-status-loader {
     position: absolute;
     top: var(--cds-spacing-04);
     right: var(--cds-spacing-04);
@@ -1127,17 +1144,17 @@
     z-index: 3;
   }
 
-  .density-loader-spinner {
+  .map-status-loader-spinner {
     display: inline-block;
     width: 12px;
     height: 12px;
     border: 1.5px solid var(--cds-border-subtle-02, #c6c6c6);
     border-top-color: var(--cds-interactive-01, #0f62fe);
     border-radius: 50%;
-    animation: density-loader-spin 0.75s linear infinite;
+    animation: map-status-loader-spin 0.75s linear infinite;
   }
 
-  @keyframes density-loader-spin {
+  @keyframes map-status-loader-spin {
     to {
       transform: rotate(360deg);
     }

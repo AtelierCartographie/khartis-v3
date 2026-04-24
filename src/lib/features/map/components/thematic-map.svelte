@@ -1089,6 +1089,11 @@
       return;
     }
 
+    if (reason === 'basemap' && pendingMapLibreViewportPreset) {
+      applyPendingMapLibreViewportPreset();
+      return;
+    }
+
     const refBasemapId = basemapStyleStore.referenceBasemapId;
     const currentWorldBaseTable = worldBaseTable;
 

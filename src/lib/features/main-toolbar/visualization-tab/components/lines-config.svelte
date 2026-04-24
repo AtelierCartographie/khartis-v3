@@ -654,6 +654,7 @@
     : lineColorClassification}
   valueColumn={visualization?.mapping.valueColumn}
   role={discretizationTarget === 'thickness' ? 'size' : 'fill'}
+  showBreakpointControls={discretizationTarget === 'color'}
   onchange={discretizationTarget === 'thickness'
     ? handleThicknessClassificationChange
     : handleColorClassificationChange}

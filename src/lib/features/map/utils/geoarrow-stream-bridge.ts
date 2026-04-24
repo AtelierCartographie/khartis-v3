@@ -244,7 +244,10 @@ export function parseSolidPolygons(table: ArrowTable): BinaryPolygonData {
  * (1 endian + 4 type + 8 X + 8 Y), so we iterate all batches in one pass
  * and write straight into pre-allocated Float32/Uint32 output buffers.
  */
-function decodeWkbPointsAllBatches(table: ArrowTable): BinaryPointData | null {
+function decodeWkbPointsAllBatches(
+  table: ArrowTable,
+  projection?: ProjectionLike
+): BinaryPointData | null {
   const geomVector =
     table.getChild('geometry') ?? table.getChild('wkb_geometry');
   if (!geomVector) return null;
@@ -252,7 +255,11 @@ function decodeWkbPointsAllBatches(table: ArrowTable): BinaryPointData | null {
   const totalLength = table.numRows;
   const positions = new Float32Array(totalLength * 2);
   const featureIds = new Uint32Array(totalLength);
+  const projectPoint = projection
+    ? createProjectionPointSampler(projection)
+    : null;
   let outIdx = 0;
+  let featureId = 0;
 
   for (let b = 0; b < geomVector.data.length; b++) {
     const data = geomVector.data[b];
@@ -272,10 +279,18 @@ function decodeWkbPointsAllBatches(table: ArrowTable): BinaryPointData | null {
       // bytes 1-4 = type; 1 = Point (we only handle the Point case here)
       const type = view.getUint32(1, le);
       if (type !== 1) return null;
-      positions[outIdx * 2] = view.getFloat64(5, le);
-      positions[outIdx * 2 + 1] = view.getFloat64(13, le);
-      featureIds[outIdx] = outIdx;
+      const x = view.getFloat64(5, le);
+      const y = view.getFloat64(13, le);
+      const position = projectPoint ? projectPoint([x, y]) : [x, y];
+      if (!position) {
+        featureId++;
+        continue;
+      }
+      positions[outIdx * 2] = position[0];
+      positions[outIdx * 2 + 1] = position[1];
+      featureIds[outIdx] = featureId;
       outIdx++;
+      featureId++;
     }
   }
 
@@ -291,8 +306,11 @@ function parsePointsAllBatches(
   // library entirely and decode straight to binary buffers in one pass.
   const isIdentityProjection =
     !options.projection || options.projection === IDENTITY_OPTIONS.projection;
-  if (isIdentityProjection && normalized.batches.length > 0) {
-    const direct = decodeWkbPointsAllBatches(normalized);
+  if (normalized.batches.length > 0) {
+    const direct = decodeWkbPointsAllBatches(
+      normalized,
+      isIdentityProjection ? undefined : options.projection
+    );
     if (direct) return direct;
   }
 

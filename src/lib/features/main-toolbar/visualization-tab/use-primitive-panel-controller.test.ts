@@ -39,7 +39,7 @@ function createVisualization(): VisualizationConfig {
       strokeDashed: false,
       categoryColumn: 'region',
       classification: {
-        method: ClassificationMethod.JENKS,
+        method: ClassificationMethod.KMEANS,
         classes: 5,
         numClasses: 5
       }
@@ -66,34 +66,34 @@ function createVisualization(): VisualizationConfig {
       proportionalType: 'uniques',
       categoryShape: 'unique',
       classification: {
-        method: ClassificationMethod.JENKS,
+        method: ClassificationMethod.KMEANS,
         classes: 5,
         labels: ['Old']
       },
       fillClassification: {
-        method: ClassificationMethod.JENKS,
+        method: ClassificationMethod.KMEANS,
         classes: 5,
         labels: ['Fill old']
       },
       strokeClassification: {
-        method: ClassificationMethod.JENKS,
+        method: ClassificationMethod.KMEANS,
         classes: 5,
         labels: ['Stroke']
       }
     },
     symbolClassification: {
-      method: ClassificationMethod.JENKS,
+      method: ClassificationMethod.KMEANS,
       classes: 5,
       labels: ['Root']
     },
     lineClassification: {
-      method: ClassificationMethod.JENKS,
+      method: ClassificationMethod.KMEANS,
       classes: 5,
       labels: ['Root line'],
       disabledLabels: ['Root line']
     },
     lineThicknessClassification: {
-      method: ClassificationMethod.JENKS,
+      method: ClassificationMethod.KMEANS,
       classes: 4,
       numClasses: 4,
       breaks: [10, 20, 30],
@@ -109,13 +109,13 @@ function createVisualization(): VisualizationConfig {
       dashed: false,
       categoryColumn: 'region',
       classification: {
-        method: ClassificationMethod.JENKS,
+        method: ClassificationMethod.KMEANS,
         classes: 5,
         labels: ['Line'],
         disabledLabels: ['Line']
       },
       thicknessClassification: {
-        method: ClassificationMethod.JENKS,
+        method: ClassificationMethod.KMEANS,
         classes: 4,
         numClasses: 4,
         breaks: [10, 20, 30],
@@ -386,14 +386,14 @@ describe('use-primitive-panel-controller', () => {
           colorMode: ColorMode.CATEGORIES,
           categoryColumn: 'region',
           classification: {
-            method: ClassificationMethod.JENKS,
+            method: ClassificationMethod.KMEANS,
             classes: 5,
             labels: ['A', 'B'],
             disabledLabels: ['B']
           }
         },
         lineClassification: {
-          method: ClassificationMethod.JENKS,
+          method: ClassificationMethod.KMEANS,
           classes: 5,
           labels: ['Root A', 'Root B'],
           disabledLabels: ['Root A']
@@ -433,7 +433,7 @@ describe('use-primitive-panel-controller', () => {
           colorMode: ColorMode.CATEGORIES,
           thicknessMode: ThicknessMode.CLASSES,
           classification: {
-            method: ClassificationMethod.JENKS,
+            method: ClassificationMethod.KMEANS,
             classes: 5,
             numClasses: 5,
             paletteId: 'vif',
@@ -442,7 +442,7 @@ describe('use-primitive-panel-controller', () => {
           }
         },
         lineClassification: {
-          method: ClassificationMethod.JENKS,
+          method: ClassificationMethod.KMEANS,
           classes: 5,
           numClasses: 5,
           paletteId: 'vif',
@@ -486,7 +486,7 @@ describe('use-primitive-panel-controller', () => {
     expect(harness.lineThicknessClassificationUpdates).toEqual([
       {
         updates: {
-          method: ClassificationMethod.JENKS,
+          method: ClassificationMethod.KMEANS,
           classes: 5,
           numClasses: 5
         },
@@ -500,7 +500,7 @@ describe('use-primitive-panel-controller', () => {
       visualization: {
         ...createVisualization(),
         lineClassification: {
-          method: ClassificationMethod.JENKS,
+          method: ClassificationMethod.KMEANS,
           classes: 4,
           numClasses: 4,
           breaks: [10, 20, 30],
@@ -513,7 +513,7 @@ describe('use-primitive-panel-controller', () => {
           colorMode: ColorMode.CLASSES,
           thicknessMode: ThicknessMode.CLASSES,
           classification: {
-            method: ClassificationMethod.JENKS,
+            method: ClassificationMethod.KMEANS,
             classes: 4,
             numClasses: 4,
             breaks: [10, 20, 30],
@@ -531,7 +531,7 @@ describe('use-primitive-panel-controller', () => {
     expect(harness.lineThicknessClassificationUpdates).toEqual([
       {
         updates: {
-          method: ClassificationMethod.JENKS,
+          method: ClassificationMethod.KMEANS,
           classes: 5,
           numClasses: 5
         },
@@ -843,7 +843,7 @@ describe('use-primitive-panel-controller', () => {
     expect(harness.textPrimitiveUpdates[0]).toMatchObject({
       background: {
         classification: {
-          method: ClassificationMethod.JENKS,
+          method: ClassificationMethod.KMEANS,
           classes: 5,
           colors: ['#111111']
         }

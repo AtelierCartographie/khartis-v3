@@ -142,6 +142,12 @@
       fillColor = DEFAULT_COLORS.fill;
       onStyleChange?.({ symbolFillColor: DEFAULT_COLORS.fill });
       onFillClassificationChange?.(resetVisualClassification());
+    } else if (
+      fillMode === FillMode.UNIQUE &&
+      visualization?.symbol?.fillColor === undefined &&
+      visualization?.style.symbolFillColor === undefined
+    ) {
+      onStyleChange?.({ symbolFillColor: fillColor });
     }
   }
 

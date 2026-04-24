@@ -42,4 +42,12 @@ describe('MainMap density mode loading', () => {
     expect(source).toContain('logicalHeight={formatState.height}');
     expect(source).toContain('displayScale={renderedPageScale}');
   });
+
+  it('reuses the top-right map status loader for reference basemap loading', () => {
+    expect(source).toContain('showReferenceBasemapLoader');
+    expect(source).toContain('mapLoadingStore.isReferenceBasemapLoading');
+    expect(source).toContain('showMapStatusLoader');
+    expect(source).toContain('m.basemap_loading()');
+    expect(source).toContain('class="map-status-loader"');
+  });
 });

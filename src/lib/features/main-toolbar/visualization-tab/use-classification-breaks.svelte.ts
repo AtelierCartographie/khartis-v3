@@ -107,7 +107,20 @@ export function resolveClassificationBreakColors(
   breakpointValue: number | null | undefined
 ): string[] {
   const existingColors = classification?.colors;
-  if (existingColors && existingColors.length === actualClassCount) {
+  const hasSameBreakpoint =
+    (classification?.breakpointValue ?? null) === (breakpointValue ?? null);
+  const existingBreaks = classification?.breaks ?? [];
+  const hasSameBreaks =
+    existingBreaks.length === breakValues.length &&
+    existingBreaks.every(
+      (breakValue, index) => breakValue === breakValues[index]
+    );
+  const canReuseExistingColors =
+    existingColors &&
+    existingColors.length === actualClassCount &&
+    (breakpointValue == null || (hasSameBreakpoint && hasSameBreaks));
+
+  if (canReuseExistingColors) {
     return existingColors;
   }
 
@@ -235,7 +248,7 @@ export async function computeClassificationBreaks(
 ): Promise<ClassificationBreaksComputation | null> {
   const classification = options.classification;
   const storeMethod = normalizeClassificationMethod(
-    options.method ?? classification?.method ?? ClassificationMethod.JENKS
+    options.method ?? classification?.method ?? ClassificationMethod.KMEANS
   );
   const requestedClassCount = resolveRequestedClassCount(
     storeMethod,

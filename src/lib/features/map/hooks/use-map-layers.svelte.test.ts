@@ -18,4 +18,13 @@ describe('useMapLayers source', () => {
       'availableMetadataLayerTypes: metadataLayers.map('
     );
   });
+
+  it('falls back to DuckDB metadata when resolving source table names', () => {
+    expect(source).toContain(
+      'duckDBOrchestrator.getDatasetBySourceFile(dataset.sourceFileId)'
+    );
+    expect(source).toContain(
+      'duckDBOrchestrator.getDatasetById(datasetId)?.tableName'
+    );
+  });
 });

@@ -33,7 +33,7 @@ describe('shouldAutoSelectSuggestedBasemap', () => {
     ).toBe(true);
   });
 
-  it('prefers OSM for GPS datasets when auto-selection is allowed', () => {
+  it('keeps catalog suggestion auto-selection when GPS datasets have suggestions', () => {
     expect(
       resolveSuggestedBasemapAutoSelectionTarget({
         hasDismissedSuggestedBasemap: false,
@@ -41,10 +41,9 @@ describe('shouldAutoSelectSuggestedBasemap', () => {
         isOSMActive: false,
         hasDatasetGeometry: false,
         persistedBasemapId: undefined,
-        selectedBasemapId: undefined,
-        preferOSM: true
+        selectedBasemapId: undefined
       })
-    ).toBe('osm');
+    ).toBe('suggested');
   });
 
   it('keeps catalog suggestion auto-selection for non-GPS datasets', () => {
@@ -55,8 +54,7 @@ describe('shouldAutoSelectSuggestedBasemap', () => {
         isOSMActive: false,
         hasDatasetGeometry: false,
         persistedBasemapId: undefined,
-        selectedBasemapId: undefined,
-        preferOSM: false
+        selectedBasemapId: undefined
       })
     ).toBe('suggested');
   });

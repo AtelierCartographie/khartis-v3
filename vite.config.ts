@@ -196,49 +196,6 @@ export default defineConfig(({ mode }) => {
               }
             },
             {
-              urlPattern:
-                /^https:\/\/(tile\.openstreetmap\.org|tile-[abc]\.openstreetmap\.fr|tile\.thunderforest\.com)\/.*/,
-              handler: 'CacheFirst',
-              options: {
-                cacheName: 'osm-tiles',
-                expiration: {
-                  maxEntries: 500,
-                  maxAgeSeconds: 60 * 60 * 24 * 90
-                },
-                cacheableResponse: {
-                  statuses: [0, 200]
-                }
-              }
-            },
-            {
-              urlPattern: /^https:\/\/basemaps\.cartocdn\.com\/.*/,
-              handler: 'CacheFirst',
-              options: {
-                cacheName: 'carto-tiles',
-                expiration: {
-                  maxEntries: 500,
-                  maxAgeSeconds: 60 * 60 * 24 * 90
-                },
-                cacheableResponse: {
-                  statuses: [0, 200]
-                }
-              }
-            },
-            {
-              urlPattern: /^https:\/\/tiles\.openfreemap\.org\/.*/,
-              handler: 'CacheFirst',
-              options: {
-                cacheName: 'openfreemap-tiles',
-                expiration: {
-                  maxEntries: 500,
-                  maxAgeSeconds: 60 * 60 * 24 * 90
-                },
-                cacheableResponse: {
-                  statuses: [0, 200]
-                }
-              }
-            },
-            {
               urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp)$/,
               handler: 'CacheFirst',
               options: {

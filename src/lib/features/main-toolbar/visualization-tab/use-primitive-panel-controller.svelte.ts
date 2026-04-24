@@ -108,7 +108,7 @@ function mergeClassificationConfig(
   updates: Partial<ClassificationConfig>
 ): ClassificationConfig {
   return {
-    method: existing?.method ?? ClassificationMethod.JENKS,
+    method: existing?.method ?? ClassificationMethod.KMEANS,
     classes: existing?.classes ?? 5,
     ...existing,
     ...updates
@@ -740,7 +740,7 @@ export function usePrimitivePanelController({
         : {};
       if (!classification?.method || !classification?.numClasses) {
         updatePrimitiveClassification(primitive, {
-          method: ClassificationMethod.JENKS,
+          method: ClassificationMethod.KMEANS,
           classes: 5,
           numClasses: 5,
           ...resetPaletteFields
@@ -797,7 +797,7 @@ export function usePrimitivePanelController({
 
     if (!classification?.method || !classification?.numClasses) {
       updateLineThicknessClassification({
-        method: ClassificationMethod.JENKS,
+        method: ClassificationMethod.KMEANS,
         classes: 5,
         numClasses: 5,
         ...resetPaletteFields
@@ -899,7 +899,7 @@ export function usePrimitivePanelController({
         : {};
       if (!classification?.method || !classification?.numClasses) {
         updatePrimitiveStrokeClassification(primitive, {
-          method: ClassificationMethod.JENKS,
+          method: ClassificationMethod.KMEANS,
           classes: 5,
           numClasses: 5,
           ...resetPaletteFields
@@ -1008,7 +1008,7 @@ export function usePrimitivePanelController({
       if (!classification?.method || !classification?.numClasses) {
         updateSymbolFillClassificationState(
           {
-            method: ClassificationMethod.JENKS,
+            method: ClassificationMethod.KMEANS,
             classes: 5,
             numClasses: 5,
             ...resetPaletteFields
@@ -1106,7 +1106,7 @@ export function usePrimitivePanelController({
       if (!classification?.method || !classification?.numClasses) {
         updateTextBackgroundClassificationState(
           {
-            method: ClassificationMethod.JENKS,
+            method: ClassificationMethod.KMEANS,
             classes: 5,
             numClasses: 5,
             ...resetPaletteFields
@@ -1160,7 +1160,7 @@ export function usePrimitivePanelController({
       if (!classification?.method || !classification?.numClasses) {
         updateTextBackgroundStrokeClassificationState(
           {
-            method: ClassificationMethod.JENKS,
+            method: ClassificationMethod.KMEANS,
             classes: 5,
             numClasses: 5,
             ...resetPaletteFields
@@ -1430,7 +1430,7 @@ export function usePrimitivePanelController({
         const nextSymbolClassification = categoryColumnChanged
           ? {
               ...(symbol.classification ?? {
-                method: ClassificationMethod.JENKS,
+                method: ClassificationMethod.KMEANS,
                 classes: 5
               }),
               labels: [],

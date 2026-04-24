@@ -14,10 +14,9 @@
   import { CaretRight, Information, Launch } from 'carbon-icons-svelte';
 
   type ClassificationMethod =
-    | 'jenks'
+    | 'kmeans'
     | 'quantile'
     | 'equal-interval'
-    | 'standard-deviation'
     | 'manual'
     | 'q6'
     | 'nested-means'
@@ -46,7 +45,7 @@
   }
 
   let {
-    method = $bindable<ClassificationMethod>('jenks'),
+    method = $bindable<ClassificationMethod>('kmeans'),
     numClasses = $bindable(5),
     classCountMax = DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX,
     breaks = $bindable<ClassBreak[]>([
@@ -73,10 +72,9 @@
 
   function getMethodDescription(m_: ClassificationMethod): string {
     const descriptions: Record<ClassificationMethod, () => string> = {
-      jenks: m.discretization_desc_jenks,
+      kmeans: m.discretization_desc_kmeans,
       quantile: m.discretization_desc_quantile,
       'equal-interval': m.discretization_desc_equal_interval,
-      'standard-deviation': m.discretization_desc_stddev,
       manual: m.discretization_desc_manual,
       q6: m.discretization_desc_q6,
       'nested-means': m.discretization_desc_nested_means,
@@ -198,15 +196,11 @@
       selected={method}
       on:change={handleMethodChange}
     >
-      <SelectItem value="jenks" text={m.discretization_method_jenks()} />
+      <SelectItem value="kmeans" text={m.discretization_method_kmeans()} />
       <SelectItem value="quantile" text={m.discretization_method_quantile()} />
       <SelectItem
         value="equal-interval"
         text={m.discretization_method_equal_interval()}
-      />
-      <SelectItem
-        value="standard-deviation"
-        text={m.discretization_method_stddev()}
       />
       <SelectItem value="q6" text={m.discretization_method_q6()} />
       <SelectItem
