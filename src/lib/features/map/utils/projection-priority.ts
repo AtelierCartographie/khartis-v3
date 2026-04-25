@@ -1,9 +1,8 @@
 import type { ProjectionLike } from 'geoarrow-deck-stream';
 
 /**
- * Catalog basemap metadata remains authoritative when present.
- * Projection tool overrides are only a fallback for identity/custom basemaps
- * that do not expose a render projection.
+ * Manual projection tool choices override catalog metadata when allowed.
+ * Automatic suggestions only fill the gap when no catalog projection exists.
  */
 export function resolveProjectionForRender(
   defaultProjection: ProjectionLike | undefined,

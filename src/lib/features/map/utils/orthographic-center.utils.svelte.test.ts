@@ -20,7 +20,8 @@ const mocks = vi.hoisted(() => {
     buildProjectionForBasemap: vi.fn(() => projectionFn),
     buildCompositeProjectionFromPresetId: vi.fn(),
     getPreferredBasemapFile: vi.fn((_: unknown, file: string) => file),
-    initializeBasemap: vi.fn()
+    initializeBasemap: vi.fn(),
+    shouldUseBasemapReferenceInOrthographicView: vi.fn()
   };
 });
 
@@ -86,7 +87,8 @@ vi.mock('./geoarrow-stream-bridge', () => ({
 }));
 
 vi.mock('./orthographic-reference', () => ({
-  shouldUseBasemapReferenceInOrthographicView: vi.fn(() => true)
+  shouldUseBasemapReferenceInOrthographicView:
+    mocks.shouldUseBasemapReferenceInOrthographicView
 }));
 
 vi.mock('./proj4d3', () => ({
@@ -120,6 +122,8 @@ describe('resolveCenterCoordinates', () => {
     mocks.buildCompositeProjectionFromPresetId.mockReset();
     mocks.getPreferredBasemapFile.mockClear();
     mocks.initializeBasemap.mockReset();
+    mocks.shouldUseBasemapReferenceInOrthographicView.mockReset();
+    mocks.shouldUseBasemapReferenceInOrthographicView.mockReturnValue(true);
 
     mocks.getDatasetBySourceFile.mockReturnValue({
       id: 'dataset-1',
@@ -164,6 +168,30 @@ describe('resolveCenterCoordinates', () => {
     expect(center).toEqual({
       x: 1002.35,
       y: 2048.86
+    });
+  });
+
+  it('keeps standalone geofile centers in native coordinates', async () => {
+    mocks.getDuckDatasetBySourceFile.mockReturnValue({
+      sourceFileId: 'source-1',
+      joinedBasemap: null
+    });
+    mocks.shouldUseBasemapReferenceInOrthographicView.mockReturnValue(false);
+
+    const { resolveCenterCoordinates } =
+      await import('./orthographic-center.utils');
+
+    const center = await resolveCenterCoordinates({
+      lon: 2.35,
+      lat: 48.86,
+      sourceFileId: 'source-1'
+    });
+
+    expect(mocks.initializeBasemap).toHaveBeenCalled();
+    expect(mocks.buildProjectionForBasemap).not.toHaveBeenCalled();
+    expect(center).toEqual({
+      x: 2.35,
+      y: 48.86
     });
   });
 });

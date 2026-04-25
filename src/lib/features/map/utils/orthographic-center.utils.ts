@@ -52,13 +52,16 @@ function resolveDuckDataset(
   );
 }
 
-function resolveProjectionMetadata(duckDataset: DuckDBDataset | null) {
+function resolveProjectionMetadata(
+  dataset: DatasetResult | null,
+  duckDataset: DuckDBDataset | null
+) {
   if (basemapStyleStore.referenceBasemapId) {
     return basemapService.currentMetadata;
   }
 
   if (!duckDataset?.joinedBasemap) {
-    return basemapService.currentMetadata;
+    return dataset?.geometry ? null : basemapService.currentMetadata;
   }
 
   const preferredBasemapFile = getPreferredBasemapFile(
@@ -127,7 +130,7 @@ async function resolveOrthographicProjection(
 
   const dataset = resolveDataset(sourceFileId);
   const duckDataset = resolveDuckDataset(dataset);
-  const basemapMeta = resolveProjectionMetadata(duckDataset);
+  const basemapMeta = resolveProjectionMetadata(dataset, duckDataset);
   const fitBbox = resolveProjectionFitBbox(dataset, duckDataset, basemapMeta);
   const projectionState = getProjectionState();
 

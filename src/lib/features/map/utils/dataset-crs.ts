@@ -10,7 +10,11 @@ export function isWgs84LikeCrs(crs: string | null | undefined): boolean {
     return false;
   }
 
-  return /^epsg:4326$/i.test(normalized) || /^wgs\s*84$/i.test(normalized);
+  return (
+    /^epsg:4326$/i.test(normalized) ||
+    /^wgs\s*84$/i.test(normalized) ||
+    /(^|:)crs84$/i.test(normalized)
+  );
 }
 
 export function canUseBoundsForProjectionSuggestion(

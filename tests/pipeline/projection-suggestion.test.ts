@@ -117,6 +117,28 @@ describe('[S04] suggestProjectionsForBbox — Europe vs France disambiguation', 
     expect(result?.national ?? []).toEqual([]);
     expect(result?.generic.length).toBeGreaterThan(0);
   });
+
+  it('does not suggest orthographic for the full NUTS-2 bbox', () => {
+    const result = suggestProjectionsForBbox([-63.09, -21.39, 55.84, 71.12]);
+    expect(result).not.toBeNull();
+
+    const suggestions = [
+      ...(result?.national ?? []),
+      ...(result?.generic ?? [])
+    ];
+
+    expect(suggestions.map((suggestion) => suggestion.id)).not.toContain(
+      'orthographic'
+    );
+    expect(
+      suggestions.map((suggestion) => suggestion.d3Config?.projection)
+    ).not.toContain('geoOrthographic');
+    expect(
+      suggestions.some((suggestion) =>
+        /\+proj=ortho\b/i.test(suggestion.proj4String ?? '')
+      )
+    ).toBe(false);
+  });
 });
 
 describe('[S06] buildProjectionFromSuggestion — proj4 fallback contract', () => {
@@ -155,5 +177,21 @@ describe('[S06] buildProjectionFromSuggestion — proj4 fallback contract', () =
 
     expect(result).not.toBeNull();
     expect(result?.source).toBe('d3');
+  });
+
+  it('rejects orthographic suggestions', () => {
+    const suggestion: ProjectionSuggestion = {
+      id: 'orthographic',
+      name: 'Orthographic',
+      type: 'generic',
+      proj4String:
+        '+proj=ortho +lon_0=-3.63 +lat_0=24.87 +ellps=WGS84 +datum=WGS84 +units=m +no_defs',
+      d3Config: {
+        projection: 'geoOrthographic',
+        rotate: [3.63, -24.87]
+      }
+    };
+
+    expect(buildProjectionFromSuggestion(suggestion)).toBeNull();
   });
 });
