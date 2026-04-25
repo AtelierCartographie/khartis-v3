@@ -29,6 +29,17 @@ describe('BasemapCardVertical', () => {
     expect(source).not.toContain('use:stackCardHeader');
   });
 
+  it('routes radio clicks through the same selection callback as card clicks', () => {
+    const body = source.match(
+      /function handleRadioClick\(event: Event\)[\s\S]*?\n\s*\}/
+    )?.[0];
+
+    expect(source).toContain('onclickcapture={handleRadioClick}');
+    expect(body).toContain('event.preventDefault();');
+    expect(body).toContain('event.stopPropagation();');
+    expect(body).toContain('handleCardClick();');
+  });
+
   it('maps the radio theme to gray and suggestion card variables', () => {
     expect(source).toContain('--kh-card-radio-color');
     expect(source).toContain('--kh-card-radio-disabled-color');

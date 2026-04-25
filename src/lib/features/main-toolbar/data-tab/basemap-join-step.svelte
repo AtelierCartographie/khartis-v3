@@ -113,6 +113,15 @@
   const unknowns = $derived(dataTabState.basemapJoin.unrecognizedEntities);
   const joinedCount = $derived(dataTabState.basemapJoin.joinedEntities);
   const toVerifyCount = $derived(dataTabState.basemapJoin.entitiesToVerify);
+  const joinedEntitiesList = $derived(
+    dataTabState.basemapJoin.joinedEntitiesList
+  );
+  const ignoredEntities = $derived(
+    dataTabState.basemapJoin.ignoredEntities.map((entity) => ({
+      dataValue: entity.dataValue,
+      lines: [] as number[]
+    }))
+  );
 
   const allBasemaps = $derived(basemapCatalogService.catalogBasemaps);
   const allBasemapsForLookup = $derived(basemapCatalogService.basemaps);
@@ -797,7 +806,7 @@
     globalActions.setNavigationState(ToolbarStep.Visualizations);
   }
 
-  async function handleApplyCorrections() {
+  async function _handleApplyCorrections() {
     const resolvedDatasetId = datasetIdForOrchestrator;
     const linkedVariableName = dataTabState.geolocation.linkedVariableName;
     const selectedBasemapId = basemapSelected;
@@ -1009,6 +1018,31 @@
     } finally {
       joinLoading = false;
     }
+  }
+
+  function handleIgnoreEntity(
+    dataValue: string,
+    source: 'joined' | 'to_verify' | 'unrecognized',
+    basemapValue?: string
+  ): void {
+    dataTabActions.ignoreEntity({ dataValue, source, basemapValue });
+  }
+
+  function handleRestoreEntity(dataValue: string): void {
+    dataTabActions.restoreEntity(dataValue);
+  }
+
+  async function handleValidateEntity(
+    dataValue: string,
+    basemapValue: string
+  ): Promise<void> {
+    if (!basemapValue) return;
+    dataTabActions.promoteToJoined(dataValue, basemapValue);
+    if (dataValue !== basemapValue) {
+      await handleManualCorrection(dataValue, basemapValue);
+      return;
+    }
+    await handleFinalizeJoin();
   }
 
   async function handleFinalizeJoin() {
@@ -1643,9 +1677,13 @@
       basemapValues={basemapAttributeValues}
       loading={joinLoading}
       joinFinalized={dataTabStore.hasCompletedStep[basemapStepIndex]}
-      onApplyCorrections={handleApplyCorrections}
+      joinedEntitiesList={joinedEntitiesList}
+      ignoredEntities={ignoredEntities}
       onFinalizeJoin={handleFinalizeJoin}
       onManualCorrection={handleManualCorrection}
+      onIgnoreEntity={handleIgnoreEntity}
+      onRestoreEntity={handleRestoreEntity}
+      onValidateEntity={handleValidateEntity}
     />
   {/if}
 </section>
