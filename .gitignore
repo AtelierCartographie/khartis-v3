@@ -33,6 +33,7 @@ pnpm-debug.log*
 *-old
 .zed
 test-results
+dogfood-output/
 node_modules
 
 # Env
