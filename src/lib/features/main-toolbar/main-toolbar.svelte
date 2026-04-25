@@ -94,6 +94,13 @@
   });
 
   $effect(() => {
+    void globalState.selectedStep;
+    if (toolbarContent) {
+      toolbarContent.scrollTop = 0;
+    }
+  });
+
+  $effect(() => {
     const project = projectStore.currentProject;
 
     const hasFiles = (project?.data?.sourceFiles?.length ?? 0) > 0;

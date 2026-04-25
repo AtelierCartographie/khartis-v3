@@ -9,6 +9,7 @@
   import {
     Button,
     Dropdown,
+    InlineLoading,
     InlineNotification,
     RadioButton,
     RadioButtonGroup,
@@ -18,6 +19,7 @@
   import type { SimplificationResult } from './simplification.types';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
   import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
+  import { shouldUseMapLibreInterleaved } from '$lib/features/map/utils/render-engine.utils';
   import {
     basemapService,
     getAvailableBasemapSimplificationLevels,
@@ -35,8 +37,11 @@
   let applyTimeoutId: ReturnType<typeof setTimeout> | null = null;
   let selectedGeoDatasetId: string | undefined = $state(undefined);
   const simplState = $derived(getSimplificationState());
-  const isOsmBasemapActive = $derived(
-    osmBasemapStore.isActive || basemapStyleStore.requiresMapLibre
+  const usesMapLibreInterleaved = $derived(
+    shouldUseMapLibreInterleaved({
+      requiresMapLibre: basemapStyleStore.requiresMapLibre,
+      hasOSMBasemap: osmBasemapStore.isActive
+    })
   );
   const isImportedBasemap = $derived(
     basemapService.currentBasemap?.metadata.isCustom === true
@@ -96,7 +101,7 @@
   const hasBasemapVariants = $derived(availableBasemapLevels.length > 1);
   const isBasemapSourceBlocked = $derived(
     simplState.source === SimplificationSource.Basemap &&
-      (isOsmBasemapActive || (!isImportedBasemap && !hasBasemapVariants))
+      (usesMapLibreInterleaved || (!isImportedBasemap && !hasBasemapVariants))
   );
 
   const sourceIndex = $derived(
@@ -227,7 +232,7 @@
   />
 
   {#if simplState.source === SimplificationSource.Basemap}
-    {#if isOsmBasemapActive}
+    {#if usesMapLibreInterleaved}
       <InlineNotification
         kind="warning"
         lowContrast
@@ -243,7 +248,7 @@
       />
     {/if}
 
-    {#if isImportedBasemap && !isOsmBasemapActive}
+    {#if isImportedBasemap && !usesMapLibreInterleaved}
       <InlineNotification
         kind="warning"
         lowContrast
@@ -269,7 +274,7 @@
           />
         </div>
       </div>
-    {:else if !isOsmBasemapActive && hasBasemapVariants}
+    {:else if !usesMapLibreInterleaved && hasBasemapVariants}
       <div>
         <div class="form-label">{m.simplification_level_label()}</div>
         <RadioButtonGroup
@@ -336,7 +341,13 @@
     </div>
   {/if}
 
-  {#if lastResult?.simplified && lastResult.vertexReduction > 0}
+  {#if simplState.isProcessing}
+    <div class="simplification-loader">
+      <InlineLoading status="active" description={m.simplification_loading()} />
+    </div>
+  {/if}
+
+  {#if !simplState.isProcessing && lastResult?.simplified && lastResult.vertexReduction > 0}
     <InlineNotification
       kind="success"
       lowContrast
@@ -419,5 +430,20 @@
     ) {
     flex: 1 0 0;
     margin-right: 0;
+  }
+
+  .simplification-loader {
+    display: flex;
+    align-items: center;
+    min-height: 1.5rem;
+  }
+
+  .simplification-loader :global(.bx--inline-loading) {
+    min-height: 1.5rem;
+  }
+
+  .simplification-loader :global(.bx--inline-loading__text) {
+    font-size: 0.75rem;
+    color: var(--cds-text-helper);
   }
 </style>

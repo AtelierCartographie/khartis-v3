@@ -44,6 +44,7 @@ const DEFAULT_STATE: ProjectionState = {
 
 type ProjectionActions = {
   setSelected: (projectionId: string) => void;
+  toggleSelected: (projectionId: string) => void;
   setCustomCode: (code: string | null) => void;
   setViewMode: (mode: ViewMode) => void;
   setCenter: (longitude: number, latitude: number) => void;
@@ -181,12 +182,30 @@ const { actions, getState } = createToolStore<
       }
     };
 
+    const clearSelectedInternal = (applyToMap: boolean) => {
+      s.selected = DEFAULT_PROJECTION;
+      s.customCode = undefined;
+      s.overrideActive = false;
+      s.overrideSource = undefined;
+      if (applyToMap) {
+        mapProjectionStore.setProjection(MERCATOR_PROJECTION_TYPE);
+      }
+    };
+
     const setSelected = (projectionId: string) => {
       setSelectedInternal(projectionId, true);
     };
 
     return {
       setSelected,
+      toggleSelected: (projectionId: string) => {
+        if (s.overrideActive && !s.customCode && s.selected === projectionId) {
+          clearSelectedInternal(true);
+          return;
+        }
+
+        setSelectedInternal(projectionId, true);
+      },
       setCustomCode: (code: string | null) => {
         if (!supportsCustomProjectionCode(getProjectionAvailabilityContext())) {
           return;
@@ -277,7 +296,7 @@ const { actions, getState } = createToolStore<
 
       if (builtProjection?.source === 'proj4' && suggestion.proj4String) {
         s.customCode = suggestion.proj4String;
-        s.selected = 'mercator'; // proj4 projections render in orthographic/mercator view
+        s.selected = DEFAULT_PROJECTION;
         s.overrideActive = true;
         s.overrideSource = overrideSource;
         mapProjectionStore.setProjection(MERCATOR_PROJECTION_TYPE);
