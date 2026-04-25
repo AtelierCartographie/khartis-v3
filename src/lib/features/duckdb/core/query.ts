@@ -90,7 +90,14 @@ export async function executeQueryStreaming(
 
     await connection.useUnsafe(
       async (bindings: DuckDBStreamingBindings, conn: unknown) => {
-        const header = await bindings.startPendingQuery(conn, query, true);
+        let header = await bindings.startPendingQuery(conn, query, true);
+        while (header === null) {
+          if (bindings.isDetached?.()) {
+            throw new Error('DuckDB worker detached while streaming query');
+          }
+          header = await bindings.pollPendingQuery(conn);
+        }
+
         if (header && header.byteLength > 0) {
           const chunk = new Uint8Array(header);
           chunks.push(chunk);
@@ -99,8 +106,15 @@ export async function executeQueryStreaming(
 
         // Collect result batches until exhausted
         while (true) {
-          const result = await bindings.fetchQueryResults(conn);
-          if (!result || result.byteLength === 0) break;
+          let result = await bindings.fetchQueryResults(conn);
+          while (result === null) {
+            if (bindings.isDetached?.()) {
+              throw new Error('DuckDB worker detached while streaming results');
+            }
+            result = await bindings.fetchQueryResults(conn);
+          }
+
+          if (result.byteLength === 0) break;
           const chunk = new Uint8Array(result);
           chunks.push(chunk);
           totalLength += chunk.byteLength;
@@ -108,8 +122,9 @@ export async function executeQueryStreaming(
       }
     );
 
-    // Fast path: single chunk → return directly (no copy)
-    if (chunks.length === 1) return chunks[0];
+    if (chunks.length === 1 && ipcBufferHasRows(chunks[0])) {
+      return chunks[0];
+    }
 
     // Concatenate IPC chunks into a single contiguous buffer
     const combined = new Uint8Array(totalLength);
@@ -118,7 +133,15 @@ export async function executeQueryStreaming(
       combined.set(chunk, offset);
       offset += chunk.byteLength;
     }
-    return combined;
+
+    if (chunks.length > 1 || ipcBufferHasRows(combined)) {
+      return combined;
+    }
+
+    const fallbackBuffer = (await executeQuery(connection, query, {
+      format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC
+    })) as Uint8Array | ArrayBuffer;
+    return toUint8Array(fallbackBuffer);
   } catch (error) {
     const message =
       error instanceof Error ? error.message : 'Unknown DuckDB error';
@@ -129,5 +152,23 @@ export async function executeQueryStreaming(
       truncatedQuery,
       { originalError: error instanceof Error ? error.name : String(error) }
     );
+  }
+}
+
+function toUint8Array(buffer: Uint8Array | ArrayBuffer): Uint8Array {
+  return buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+}
+
+function ipcBufferHasRows(buffer: Uint8Array): boolean {
+  try {
+    const table = tableFromIPC(buffer, {
+      useBigInt: true,
+      useDate: true,
+      useDecimalInt: false,
+      useMap: true
+    });
+    return table.numRows > 0;
+  } catch {
+    return false;
   }
 }

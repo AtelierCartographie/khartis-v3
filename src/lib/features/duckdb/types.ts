@@ -76,8 +76,10 @@ export type DuckDBStreamingBindings = DuckDBUnsafeBindings & {
     query: string,
     allowStreamResult?: boolean
   ): Promise<Uint8Array | null>;
+  pollPendingQuery(conn: unknown): Promise<Uint8Array | null>;
   fetchQueryResults(conn: unknown): Promise<Uint8Array | null>;
   cancelPendingQuery(conn: unknown): Promise<boolean>;
+  isDetached?(): boolean;
 };
 
 export interface TableMetadata {
