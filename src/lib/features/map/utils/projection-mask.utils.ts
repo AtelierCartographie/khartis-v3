@@ -13,6 +13,10 @@ function isGeoProjection(
   return typeof (projection as GeoProjection).stream === 'function';
 }
 
+function hasNonFinitePathData(pathData: string): boolean {
+  return pathData.includes('NaN') || pathData.includes('Infinity');
+}
+
 export function buildProjectionMaskPath({
   projection,
   width,
@@ -32,7 +36,7 @@ export function buildProjectionMaskPath({
   }
 
   const spherePath = d3geo.geoPath(projection)(WORLD_SPHERE);
-  if (!spherePath) {
+  if (!spherePath || hasNonFinitePathData(spherePath)) {
     return null;
   }
 
