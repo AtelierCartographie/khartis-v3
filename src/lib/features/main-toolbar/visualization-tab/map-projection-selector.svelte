@@ -11,10 +11,14 @@
     resolveProjectionAvailabilityContext,
     resolveProjectionForBasemapZone
   } from './map-projection-availability';
+  import { shouldUseMapLibreInterleaved } from '$lib/features/map/utils/render-engine.utils';
 
   const isGlobe = $derived(mapProjectionStore.isGlobe);
   const usesMapLibre = $derived(
-    basemapStyleStore.requiresMapLibre || osmBasemapStore.isActive
+    shouldUseMapLibreInterleaved({
+      requiresMapLibre: basemapStyleStore.requiresMapLibre,
+      hasOSMBasemap: osmBasemapStore.isActive
+    })
   );
   const projectionContext = $derived(
     resolveProjectionAvailabilityContext({

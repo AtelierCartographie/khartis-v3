@@ -28,6 +28,7 @@ import {
 } from '$lib/features/map/utils/basemap-import.utils';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { shouldUseMapLibreInterleaved } from '$lib/features/map/utils/render-engine.utils';
 
 const DEFAULT_STATE: SimplificationState = {
   source: SimplificationSource.Basemap,
@@ -266,7 +267,12 @@ const { actions, getState } = createToolStore<
       datasetId?: string;
     }): Promise<SimplificationResult> => {
       if (s.source === SimplificationSource.Basemap) {
-        if (osmBasemapStore.isActive || basemapStyleStore.requiresMapLibre) {
+        if (
+          shouldUseMapLibreInterleaved({
+            requiresMapLibre: basemapStyleStore.requiresMapLibre,
+            hasOSMBasemap: osmBasemapStore.isActive
+          })
+        ) {
           return {
             type: SimplificationTarget.BASEMAP,
             level: s.level,
