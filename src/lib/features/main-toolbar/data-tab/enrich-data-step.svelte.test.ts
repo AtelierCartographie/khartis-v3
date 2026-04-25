@@ -8,10 +8,10 @@ const source = readFileSync(
 );
 
 describe('EnrichDataStep overlay basemap defaults', () => {
-  it('does not auto-open or auto-select the overlay basemap from suggestions', () => {
-    expect(source).not.toContain('overlayBasemapSuggestionCount');
-    expect(source).not.toContain('basemapHook.hasActiveSelection');
-    expect(source).not.toContain('suggestedBasemaps.length');
+  it('does not auto-open the overlay basemap when suggestions are available', () => {
+    expect(source).not.toContain('autoOverlayDatasetId');
+    expect(source).not.toContain('autoOverlaySuggestionSnapshot');
+    expect(source).not.toContain('overlayBasemapEnabled: true');
   });
 
   it('drives overlay state from the persisted store flag, not derived selection', () => {

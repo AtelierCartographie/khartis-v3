@@ -29,7 +29,6 @@ import {
 } from '$lib/features/map/utils/basemap-import.utils';
 import { mapLoadingStore } from '$lib/features/map/stores/map-loading.store.svelte';
 import * as m from '$lib/paraglide/messages';
-import { tick } from 'svelte';
 import { shouldAutoSelectSuggestedBasemap } from '../../services/basemap-auto-selection';
 import {
   PERSISTED_BASEMAP_TYPE,
@@ -177,18 +176,6 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
     }
 
     mapLoadingStore.setHoldingPreviewForSuggestedBasemap(value);
-  }
-
-  function shouldHoldPreviewWhileResolvingSuggestions(
-    dataset: DatasetResult | null | undefined
-  ): boolean {
-    return (
-      Boolean(dataset?.geometry) &&
-      !runtimePersistedBasemap?.id &&
-      !selectedBasemapId &&
-      !osmBasemapStore.isActive &&
-      basemapStyleStore.referenceBasemapId === null
-    );
   }
 
   function clearSelectedBasemap(): void {
@@ -357,9 +344,7 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
     if (datasetId !== previousDatasetId) {
       previousDatasetId = datasetId;
       hasDismissedSuggestedBasemap = false;
-      setPreviewHold(
-        shouldHoldPreviewWhileResolvingSuggestions(selectedDataset)
-      );
+      setPreviewHold(false);
     }
   });
 
@@ -425,10 +410,7 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
 
     async function refreshSuggestions() {
       const selectedDataset = datasetsStore.selectedDataset;
-      const shouldHoldPreview =
-        shouldHoldPreviewWhileResolvingSuggestions(selectedDataset);
-
-      setPreviewHold(shouldHoldPreview, resolutionRunId);
+      setPreviewHold(false, resolutionRunId);
 
       if (!selectedDataset) {
         if (!cancelled) {
@@ -499,10 +481,6 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
 
       suggestedBasemaps = mappedSuggestions;
 
-      if (shouldHoldPreview) {
-        await tick();
-      }
-
       if (cancelled || resolutionRunId !== suggestionResolutionRunId) {
         return;
       }
@@ -532,14 +510,6 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
       })
       .finally(() => {
         if (cancelled) return;
-        if (
-          shouldHoldPreviewWhileResolvingSuggestions(
-            datasetsStore.selectedDataset
-          ) &&
-          basemapStyleStore.referenceBasemapId !== null
-        ) {
-          return;
-        }
         setPreviewHold(false, resolutionRunId);
       });
 

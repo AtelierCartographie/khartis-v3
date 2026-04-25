@@ -43,6 +43,8 @@
 
   function handleRadioClick(event: Event) {
     event.preventDefault();
+    event.stopPropagation();
+    handleCardClick();
   }
 
   const isSuggestion = $derived(variant === 'blue');
@@ -110,12 +112,8 @@
   aria-disabled={disabled}
 >
   <div class="preview-section">
-    <div class="preview-radio kh-card-radio">
-      <RadioButton
-        checked={selected}
-        disabled={disabled}
-        onclick={handleRadioClick}
-      />
+    <div class="preview-radio kh-card-radio" onclickcapture={handleRadioClick}>
+      <RadioButton checked={selected} disabled={disabled} />
     </div>
 
     <TilePreview

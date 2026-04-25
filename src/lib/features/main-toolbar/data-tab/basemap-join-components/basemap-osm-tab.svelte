@@ -1,6 +1,8 @@
 <script lang="ts">
+  import { resolve } from '$app/paths';
+  import Button from '$lib/features/commons/components/carbon/button.svelte';
   import * as m from '$lib/paraglide/messages';
-  import { Button, InlineNotification, Link } from 'carbon-components-svelte';
+  import { InlineNotification } from 'carbon-components-svelte';
 
   interface Props {
     hasGPSCoordinates: boolean;
@@ -47,9 +49,9 @@
 
   <p class="osm-note">
     {m.osm_customization_note()}
-    <Link inline href="#" on:click={handleLinkClick}>
+    <a href={resolve('/')} class="bx--link" onclick={handleLinkClick}>
       {m.step_visualize()}
-    </Link>.
+    </a>.
   </p>
 </div>
 
