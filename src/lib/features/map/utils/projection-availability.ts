@@ -8,13 +8,19 @@ import {
   getBasemapZone,
   type BasemapZone
 } from '../constants/basemap-styles';
+import {
+  isDeckOrthographicEngine,
+  isMapLibreInterleavedEngine,
+  resolveMapRenderEngine,
+  type MapRenderEngine
+} from './render-engine.utils';
 
 export type GlobeProjectionDisableReason =
   | 'france-zone'
   | 'custom-reference-basemap';
 
 export interface ProjectionAvailabilityContext {
-  engine: 'orthographic' | 'maplibre';
+  engine: MapRenderEngine;
   zone: BasemapZone | null;
   referenceBasemapId?: string | null;
 }
@@ -104,15 +110,13 @@ export function resolveProjectionForBasemapZone(
 export function resolveProjectionAvailabilityContext(
   input: ProjectionAvailabilityInput
 ): ProjectionAvailabilityContext {
-  const engine =
-    input.requiresMapLibre || input.hasOSMBasemap ? 'maplibre' : 'orthographic';
+  const engine = resolveMapRenderEngine(input);
 
   return {
     engine,
-    zone:
-      engine === 'maplibre'
-        ? resolveMapLibreProjectionZone(input)
-        : resolvePreferredStyleZone(input),
+    zone: isMapLibreInterleavedEngine(engine)
+      ? resolveMapLibreProjectionZone(input)
+      : resolvePreferredStyleZone(input),
     referenceBasemapId: input.referenceBasemapId ?? null
   };
 }
@@ -120,20 +124,20 @@ export function resolveProjectionAvailabilityContext(
 export function supportsProjectionSuggestions(
   context: ProjectionAvailabilityContext
 ): boolean {
-  return context.engine === 'orthographic';
+  return isDeckOrthographicEngine(context.engine);
 }
 
 export function supportsCustomProjectionCode(
   context: ProjectionAvailabilityContext
 ): boolean {
-  return context.engine === 'orthographic';
+  return isDeckOrthographicEngine(context.engine);
 }
 
 export function getAvailableProjectionIds(
   context: ProjectionAvailabilityContext,
   projectionIds: readonly string[]
 ): string[] {
-  if (context.engine === 'orthographic') {
+  if (isDeckOrthographicEngine(context.engine)) {
     return [...projectionIds];
   }
 

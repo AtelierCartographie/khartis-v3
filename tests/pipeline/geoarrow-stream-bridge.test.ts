@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { GeoStream } from 'd3-geo';
 import type { ProjectionLike } from 'geoarrow-deck-stream';
-import type { FeatureCollection, Point } from 'geojson';
+import type { FeatureCollection, Point, Polygon } from 'geojson';
 import {
   computeProjectedBboxForProjection,
   projectGeoJSON
@@ -85,6 +85,90 @@ describe('computeProjectedBboxForProjection', () => {
           type: 'Feature',
           properties: { id: 'keep' },
           geometry: { type: 'Point', coordinates: [3, 5] }
+        }
+      ]
+    });
+  });
+
+  it('drops projected polygons when any ring coordinate is clipped', () => {
+    const streamOnlyProjection = {
+      stream(sink: GeoStream): GeoStream {
+        return {
+          point(x: number, y: number): void {
+            if (x < 0) {
+              return;
+            }
+            sink.point(x + 10, y + 20);
+          },
+          lineStart(): void {
+            sink.lineStart();
+          },
+          lineEnd(): void {
+            sink.lineEnd();
+          },
+          polygonStart(): void {
+            sink.polygonStart?.();
+          },
+          polygonEnd(): void {
+            sink.polygonEnd?.();
+          }
+        };
+      }
+    } as unknown as ProjectionLike;
+
+    const source: FeatureCollection<Polygon> = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: { id: 'keep' },
+          geometry: {
+            type: 'Polygon',
+            coordinates: [
+              [
+                [0, 0],
+                [2, 0],
+                [2, 2],
+                [0, 0]
+              ]
+            ]
+          }
+        },
+        {
+          type: 'Feature',
+          properties: { id: 'drop' },
+          geometry: {
+            type: 'Polygon',
+            coordinates: [
+              [
+                [-1, 0],
+                [1, 0],
+                [1, 1],
+                [-1, 0]
+              ]
+            ]
+          }
+        }
+      ]
+    };
+
+    expect(projectGeoJSON(source, streamOnlyProjection)).toEqual({
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: { id: 'keep' },
+          geometry: {
+            type: 'Polygon',
+            coordinates: [
+              [
+                [10, 20],
+                [12, 20],
+                [12, 22],
+                [10, 20]
+              ]
+            ]
+          }
         }
       ]
     });

@@ -8,16 +8,43 @@ import {
   resolveProjectionAvailabilityContext,
   resolveProjectionSuggestionBoundsFromBasemap
 } from '$lib/features/map/utils/projection-availability';
+import {
+  MAP_RENDER_ENGINE,
+  resolveMapRenderEngine,
+  shouldUseMapLibreInterleaved
+} from '$lib/features/map/utils/render-engine.utils';
 import { getCompositeProjectionSelectionId } from '$lib/features/map/utils/user-projection.utils';
 import { PROJECTIONS } from '$lib/features/step-toolbar/tools/projections/data';
 
 describe('projection availability', () => {
-  it('keeps the full catalogue in orthographic mode', () => {
+  it('uses explicit render engine names for Deck and MapLibre contexts', () => {
+    expect(
+      resolveMapRenderEngine({
+        requiresMapLibre: false,
+        hasOSMBasemap: false
+      })
+    ).toBe(MAP_RENDER_ENGINE.DECK_ORTHOGRAPHIC);
+    expect(
+      resolveMapRenderEngine({
+        requiresMapLibre: true,
+        hasOSMBasemap: false
+      })
+    ).toBe(MAP_RENDER_ENGINE.MAPLIBRE_INTERLEAVED);
+    expect(
+      shouldUseMapLibreInterleaved({
+        requiresMapLibre: false,
+        hasOSMBasemap: true
+      })
+    ).toBe(true);
+  });
+
+  it('keeps the full catalogue in Deck orthographic rendering mode', () => {
     const context = resolveProjectionAvailabilityContext({
       requiresMapLibre: false,
       currentStyle: BasemapStyle.BLANK_WHITE
     });
 
+    expect(context.engine).toBe(MAP_RENDER_ENGINE.DECK_ORTHOGRAPHIC);
     expect(
       getAvailableProjectionIds(context, [
         'mercator',
@@ -33,6 +60,7 @@ describe('projection availability', () => {
       currentStyle: BasemapStyle.FRANCE_COULEURS
     });
 
+    expect(context.engine).toBe(MAP_RENDER_ENGINE.MAPLIBRE_INTERLEAVED);
     expect(
       getAvailableProjectionIds(context, [
         'mercator',

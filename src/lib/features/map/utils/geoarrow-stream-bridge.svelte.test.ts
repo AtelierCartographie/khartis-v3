@@ -2,8 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { Binary, makeTable, vectorFromArray } from 'apache-arrow';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import { geoIdentity } from 'd3-geo';
-import type { BinaryPathData, BinaryPointData } from 'geoarrow-deck-stream';
+import type {
+  BinaryPathData,
+  BinaryPointData,
+  ProjectionLike
+} from 'geoarrow-deck-stream';
+import type { ProjectionPresets } from '../types/basemap.types';
 import {
+  buildCompositeProjectionFromPresetId,
   pathColorAttr,
   pathWidthAttr,
   pointColorAttr,
@@ -41,6 +47,30 @@ function wkbPoint(x: number, y: number): Uint8Array {
 
 function binaryVector(values: Uint8Array[]): Uint8Array {
   return vectorFromArray(values, new Binary()) as unknown as Uint8Array;
+}
+
+function collectStreamedPoints(
+  projection: ProjectionLike,
+  ring: [number, number][]
+): [number, number][] {
+  const points: [number, number][] = [];
+  const stream = projection.stream({
+    point(x: number, y: number): void {
+      points.push([x, y]);
+    },
+    lineStart(): void {},
+    lineEnd(): void {},
+    polygonStart(): void {},
+    polygonEnd(): void {}
+  });
+
+  stream.lineStart();
+  for (const point of ring) {
+    stream.point(point[0], point[1]);
+  }
+  stream.lineEnd();
+
+  return points;
 }
 
 describe('geoarrow stream bridge path attributes', () => {
@@ -89,5 +119,66 @@ describe('geoarrow stream bridge path attributes', () => {
       14, 6, 2, 10
     ]);
     expect(Array.from(data.featureIds.slice(0, data.length))).toEqual([0, 1]);
+  });
+
+  it('routes composite projection streams through the matching geographic inset only', () => {
+    const presets: ProjectionPresets = {
+      TEST_EUROPE_DOM_TOM: {
+        entries: [
+          {
+            id: 'mainland',
+            proj4:
+              '+proj=laea +lat_0=52 +lon_0=10 +x_0=4321000 +y_0=3210000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs',
+            bounds: [
+              [-11.0, 34.5],
+              [42.0, 71.6]
+            ],
+            layout: { x: 0, y: 0, width: 1, height: 1 }
+          },
+          {
+            id: 'madeira',
+            proj4:
+              '+proj=utm +zone=28 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs',
+            bounds: [
+              [-17.28, 32.62],
+              [-16.27, 33.14]
+            ],
+            layout: { x: 0.6, y: 0.8, width: 0.1, height: 0.1 },
+            scaleMultiplier: 1.3
+          }
+        ]
+      }
+    };
+
+    const projection = buildCompositeProjectionFromPresetId(
+      'TEST_EUROPE_DOM_TOM',
+      1000,
+      500,
+      presets
+    );
+
+    if (!projection) {
+      throw new Error('Expected test composite projection');
+    }
+
+    const ring: [number, number][] = [
+      [-16.905127652705204, 32.838495269525914],
+      [-16.818310560055068, 32.76911289942041],
+      [-16.744575495064538, 32.74876073752281],
+      [-16.82901403723111, 32.63959914189016],
+      [-16.94199518520047, 32.6312732574775],
+      [-17.21552849081049, 32.73673446003785],
+      [-17.270235151932496, 32.816292911092155],
+      [-17.197689362183752, 32.87272390544462],
+      [-17.051408507444478, 32.80981722321564],
+      [-16.905127652705204, 32.838495269525914]
+    ];
+
+    const points = collectStreamedPoints(projection, ring);
+
+    expect(points.length).toBeGreaterThan(0);
+    expect(
+      points.every(([x, y]) => x >= 602 && x <= 698 && y >= 402 && y <= 448)
+    ).toBe(true);
   });
 });

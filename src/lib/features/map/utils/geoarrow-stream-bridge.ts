@@ -28,16 +28,12 @@ import type {
   ParserOptions,
   ProjectionLike
 } from 'geoarrow-deck-stream';
-import { type GeoProjection } from 'd3-geo';
+import { type GeoProjection, type GeoStream } from 'd3-geo';
 // d3-geo-projection has no bundled type declarations — import via namespace cast
 import * as _d3GeoProjection from 'd3-geo-projection';
 
-const { geoNaturalEarth2, geoProject } = _d3GeoProjection as unknown as {
+const { geoNaturalEarth2 } = _d3GeoProjection as unknown as {
   geoNaturalEarth2: () => GeoProjection;
-  geoProject: (
-    object: GeoJSON.GeoJsonObject,
-    projection: ProjectionLike
-  ) => GeoJSON.GeoJsonObject | null;
 };
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type {
@@ -67,6 +63,20 @@ const projectedBboxCache = new WeakMap<
   BasemapMetadata,
   Map<string, [number, number, number, number] | null>
 >();
+
+type GeoBounds = [number, number, number, number];
+type CompositeSubProjection = {
+  id: string;
+  projection: ProjectionLike;
+  bounds: GeoBounds;
+  screenExtent: [[number, number], [number, number]];
+};
+
+type CompositeProjectionLike = ProjectionLike & {
+  getSubProjections: () => CompositeSubProjection[];
+  getInsetBorders?: () => unknown;
+  invert?: (coordinates: [number, number]) => [number, number] | null;
+};
 
 function createProjectionPointSampler(
   projection: ProjectionLike
@@ -167,6 +177,90 @@ function normalizeGeomColumnName(table: ArrowTable): ArrowTable {
   const result = new ArrowTableImpl(newSchema, newBatches);
   normalizedTableCache.set(table, result);
   return result;
+}
+
+function isWithinBounds(lon: number, lat: number, bounds: GeoBounds): boolean {
+  return (
+    lon >= bounds[0] && lon <= bounds[2] && lat >= bounds[1] && lat <= bounds[3]
+  );
+}
+
+function hasCompositeSubProjections(
+  projection: ProjectionLike
+): projection is CompositeProjectionLike {
+  return (
+    typeof (projection as { getSubProjections?: unknown }).getSubProjections ===
+    'function'
+  );
+}
+
+function withGeographicBoundsRouting(
+  projection: CompositeProjectionLike
+): CompositeProjectionLike {
+  let cachedSink: GeoStream | null = null;
+  let cachedStream: GeoStream | null = null;
+
+  const routed = ((coordinates: [number, number]) =>
+    projection(coordinates)) as CompositeProjectionLike;
+
+  routed.stream = (sink: GeoStream): GeoStream => {
+    if (cachedSink === sink && cachedStream) {
+      return cachedStream;
+    }
+
+    const entries = projection.getSubProjections();
+    const streams = entries.map((entry) => entry.projection.stream(sink));
+
+    cachedStream = {
+      point(lon: number, lat: number): void {
+        for (let index = 0; index < entries.length; index++) {
+          if (isWithinBounds(lon, lat, entries[index].bounds)) {
+            streams[index].point(lon, lat);
+          }
+        }
+      },
+      sphere(): void {
+        for (const stream of streams) {
+          stream.sphere?.();
+        }
+      },
+      lineStart(): void {
+        for (const stream of streams) {
+          stream.lineStart();
+        }
+      },
+      lineEnd(): void {
+        for (const stream of streams) {
+          stream.lineEnd();
+        }
+      },
+      polygonStart(): void {
+        for (const stream of streams) {
+          stream.polygonStart();
+        }
+      },
+      polygonEnd(): void {
+        for (const stream of streams) {
+          stream.polygonEnd();
+        }
+      }
+    };
+    cachedSink = sink;
+    return cachedStream;
+  };
+
+  routed.getSubProjections = () => projection.getSubProjections();
+
+  if (projection.getInsetBorders) {
+    routed.getInsetBorders = () => projection.getInsetBorders?.() ?? [];
+  }
+
+  if (projection.invert) {
+    routed.invert = (coordinates: [number, number]) =>
+      projection.invert?.(coordinates) ?? null;
+  }
+
+  return routed;
 }
 
 const IDENTITY_OPTIONS: ParserOptions = {
@@ -433,7 +527,7 @@ export function buildCompositeProjectionFromPresetId(
   }
 
   try {
-    return buildCompositeProjection({
+    const projection = buildCompositeProjection({
       width,
       height,
       entries: preset.entries.map((entry) => ({
@@ -449,6 +543,10 @@ export function buildCompositeProjectionFromPresetId(
         scaleMultiplier: entry.scaleMultiplier
       }))
     });
+
+    return hasCompositeSubProjections(projection)
+      ? withGeographicBoundsRouting(projection)
+      : projection;
   } catch (error) {
     logger.warn(
       'Failed to build composite projection, falling back to identity',
@@ -835,55 +933,130 @@ export function pointPositions(data: BinaryPointData): Float64Array {
   return result;
 }
 
-/**
- * Project GeoJSON coordinates through a d3-compatible projection.
- * Used when WKB data falls through to the GeoJSON path and needs to align
- * with basemap layers that are in projected coordinate space.
- *
- * Features where ANY vertex fails to project (outside basemap bounds) are
- * dropped entirely. This prevents mixed pixel-space / degree-space coordinates
- * which would produce diagonal streaks connecting correctly-projected vertices
- * to unprojectable ones.
- */
 export function projectGeoJSON(
   geojson: GeoJSON.FeatureCollection,
   projection: ProjectionLike
 ): GeoJSON.FeatureCollection {
-  function sanitizeGeometry(
+  const projectPoint = createProjectionPointSampler(projection);
+
+  function projectPosition(
+    coordinates: GeoJSON.Position
+  ): GeoJSON.Position | null {
+    const [lon, lat] = coordinates;
+    if (!Number.isFinite(lon) || !Number.isFinite(lat)) {
+      return null;
+    }
+
+    const projected = projectPoint([lon, lat]);
+    if (!projected) {
+      return null;
+    }
+
+    const [x, y] = projected;
+    return Number.isFinite(x) && Number.isFinite(y) ? [x, y] : null;
+  }
+
+  function projectLine(
+    coordinates: GeoJSON.Position[],
+    minimumLength: number
+  ): GeoJSON.Position[] | null {
+    const projected: GeoJSON.Position[] = [];
+
+    for (const coordinate of coordinates) {
+      const point = projectPosition(coordinate);
+      if (!point) {
+        return null;
+      }
+      projected.push(point);
+    }
+
+    return projected.length >= minimumLength ? projected : null;
+  }
+
+  function projectGeometry(
     geometry: GeoJSON.Geometry | null
   ): GeoJSON.Geometry | null {
     if (!geometry) {
       return null;
     }
 
-    if (geometry.type !== 'GeometryCollection') {
-      return geometry;
+    switch (geometry.type) {
+      case 'Point': {
+        const coordinates = projectPosition(geometry.coordinates);
+        return coordinates ? { ...geometry, coordinates } : null;
+      }
+
+      case 'MultiPoint': {
+        const coordinates = projectLine(geometry.coordinates, 1);
+        return coordinates ? { ...geometry, coordinates } : null;
+      }
+
+      case 'LineString': {
+        const coordinates = projectLine(geometry.coordinates, 2);
+        return coordinates ? { ...geometry, coordinates } : null;
+      }
+
+      case 'MultiLineString': {
+        const coordinates: GeoJSON.Position[][] = [];
+        for (const line of geometry.coordinates) {
+          const projectedLine = projectLine(line, 2);
+          if (!projectedLine) {
+            return null;
+          }
+          coordinates.push(projectedLine);
+        }
+        return coordinates.length > 0 ? { ...geometry, coordinates } : null;
+      }
+
+      case 'Polygon': {
+        const coordinates: GeoJSON.Position[][] = [];
+        for (const ring of geometry.coordinates) {
+          const projectedRing = projectLine(ring, 4);
+          if (!projectedRing) {
+            return null;
+          }
+          coordinates.push(projectedRing);
+        }
+        return coordinates.length > 0 ? { ...geometry, coordinates } : null;
+      }
+
+      case 'MultiPolygon': {
+        const coordinates: GeoJSON.Position[][][] = [];
+        for (const polygon of geometry.coordinates) {
+          const projectedPolygon: GeoJSON.Position[][] = [];
+          for (const ring of polygon) {
+            const projectedRing = projectLine(ring, 4);
+            if (!projectedRing) {
+              return null;
+            }
+            projectedPolygon.push(projectedRing);
+          }
+          if (projectedPolygon.length === 0) {
+            return null;
+          }
+          coordinates.push(projectedPolygon);
+        }
+        return coordinates.length > 0 ? { ...geometry, coordinates } : null;
+      }
+
+      case 'GeometryCollection': {
+        const geometries = geometry.geometries
+          .map((child) => projectGeometry(child))
+          .filter((child): child is GeoJSON.Geometry => child !== null);
+
+        return geometries.length > 0 ? { ...geometry, geometries } : null;
+      }
+
+      default:
+        return null;
     }
-
-    const geometries = geometry.geometries
-      .map((child) => sanitizeGeometry(child))
-      .filter((child): child is GeoJSON.Geometry => child !== null);
-
-    return geometries.length > 0 ? { ...geometry, geometries } : null;
-  }
-
-  const projected = geoProject(
-    geojson,
-    projection
-  ) as GeoJSON.FeatureCollection | null;
-
-  if (!projected) {
-    return {
-      ...geojson,
-      features: []
-    };
   }
 
   return {
-    ...projected,
-    features: projected.features
+    ...geojson,
+    features: geojson.features
       .map((f) => {
-        const geometry = sanitizeGeometry(f.geometry);
+        const geometry = projectGeometry(f.geometry);
         return geometry ? ({ ...f, geometry } as GeoJSON.Feature) : null;
       })
       .filter((f): f is GeoJSON.Feature => f !== null)

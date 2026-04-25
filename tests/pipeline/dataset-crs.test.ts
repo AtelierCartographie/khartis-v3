@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeBoundsForProjectionSuggestion } from '$lib/features/map/utils/dataset-crs';
+import {
+  isWgs84LikeCrs,
+  normalizeBoundsForProjectionSuggestion
+} from '$lib/features/map/utils/dataset-crs';
 
 describe('normalizeBoundsForProjectionSuggestion', () => {
+  it('recognizes CRS84 GeoJSON metadata as WGS84-like', () => {
+    expect(isWgs84LikeCrs('urn:ogc:def:crs:OGC:1.3:CRS84')).toBe(true);
+    expect(isWgs84LikeCrs('OGC:CRS84')).toBe(true);
+  });
+
   it('keeps WGS84 bounds unchanged', () => {
     expect(
       normalizeBoundsForProjectionSuggestion([2, 48, 3, 49], 'EPSG:4326')

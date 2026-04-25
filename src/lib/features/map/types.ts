@@ -121,6 +121,7 @@ export interface LayerContext {
   highlightedRowIds?: Set<number>;
   /** Scalar version counter for highlight changes (avoids Set ref in updateTriggers) */
   highlightVersion?: number;
+  /** Shared screen transform for Deck.gl OrthographicView layers */
   modelMatrix?: Matrix4 | null;
   projectionSuffix?: string;
   beforeId?: string;
@@ -132,7 +133,7 @@ export interface LayerContext {
   representativePointGeometryInfo?: GeometryInfo;
   /** GPU-side year filter via DataFilterExtension — avoids data prop changes on year switch */
   yearFilter?: YearFilterInfo;
-  /** Custom CRS projection (from proj4d3) for thematic layer binary parsing */
+  /** Cartographic projection applied before Deck.gl renders the geometry */
   customProjection?: ProjectionLike;
   /** Primitive sublayer render order (from viz store) */
   primitiveOrder?: import('$lib/features/commons/store/visualization.store.svelte').PrimitiveFilter[];
