@@ -74,6 +74,8 @@ const D3_FACTORY_MAP: Record<string, (() => GeoProjection) | undefined> = {
   geoRobinson: getD3ProjectionFactory('geoRobinson')
 };
 
+const UNSUPPORTED_SUGGESTION_IDS = new Set(['orthographic']);
+
 function isUsableProjection(projection: GeoProjection): boolean {
   const projected = projection([0, 0]);
   return (
@@ -106,6 +108,20 @@ function genericToSuggestion(proj: ResolvedProjection): ProjectionSuggestion {
     scale: proj.scale,
     shape: proj.shape
   };
+}
+
+function isSupportedProjectionSuggestion(
+  suggestion: ProjectionSuggestion
+): boolean {
+  if (UNSUPPORTED_SUGGESTION_IDS.has(suggestion.id.toLowerCase())) {
+    return false;
+  }
+
+  if (suggestion.d3Config?.projection === 'geoOrthographic') {
+    return false;
+  }
+
+  return !/\+proj=ortho\b/i.test(suggestion.proj4String ?? '');
 }
 
 /**
@@ -142,14 +158,25 @@ export function suggestProjectionsForBbox(
   const result = suggest_projections(bboxInput);
 
   return {
-    national: result.national.map(nationalToSuggestion),
-    generic: result.generic.map(genericToSuggestion)
+    national: result.national
+      .map(nationalToSuggestion)
+      .filter(isSupportedProjectionSuggestion),
+    generic: result.generic
+      .map(genericToSuggestion)
+      .filter(isSupportedProjectionSuggestion)
   };
 }
 
 export function buildProjectionFromSuggestion(
   suggestion: ProjectionSuggestion
 ): BuiltProjectionSuggestion | null {
+  if (!isSupportedProjectionSuggestion(suggestion)) {
+    logger.warn('Unsupported projection suggestion skipped', LogCategory.MAP, {
+      id: suggestion.id
+    });
+    return null;
+  }
+
   // Prefer proj4 string when available (more precise for national projections)
   if (suggestion.proj4String) {
     try {

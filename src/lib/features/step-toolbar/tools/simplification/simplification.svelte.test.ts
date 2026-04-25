@@ -192,6 +192,67 @@ describe('simplification tool — catalog basemap', () => {
       screen.getByText(m.simplification_no_variants())
     ).toBeInTheDocument();
   });
+
+  it('should display the inline loader while a simplification is being applied', () => {
+    mocks.currentMetadata = {
+      file: 'france-region-2025-medium',
+      simplification_level: 'medium'
+    };
+    mocks.availableLevels = [
+      SimplificationLevel.Medium as SimplLevelValue,
+      SimplificationLevel.High as SimplLevelValue
+    ];
+    mocks.preferredLevel = SimplificationLevel.Medium as SimplLevelValue;
+    mocks.simplState.isProcessing = true;
+
+    const { container } = render(SimplificationTool);
+
+    expect(screen.getByText(m.simplification_loading())).toBeInTheDocument();
+    expect(container.querySelector('.simplification-loader')).not.toBeNull();
+    expect(container.querySelector('.bx--inline-loading')).not.toBeNull();
+  });
+
+  it('should hide the inline loader when no simplification is in progress', () => {
+    mocks.currentMetadata = {
+      file: 'france-region-2025-medium',
+      simplification_level: 'medium'
+    };
+    mocks.availableLevels = [
+      SimplificationLevel.Medium as SimplLevelValue,
+      SimplificationLevel.High as SimplLevelValue
+    ];
+    mocks.preferredLevel = SimplificationLevel.Medium as SimplLevelValue;
+    mocks.simplState.isProcessing = false;
+
+    const { container } = render(SimplificationTool);
+
+    expect(
+      screen.queryByText(m.simplification_loading())
+    ).not.toBeInTheDocument();
+    expect(container.querySelector('.simplification-loader')).toBeNull();
+  });
+
+  it('should hide the success notification while loading is active', () => {
+    mocks.currentMetadata = {
+      file: 'france-region-2025-medium',
+      simplification_level: 'medium'
+    };
+    mocks.availableLevels = [
+      SimplificationLevel.Medium as SimplLevelValue,
+      SimplificationLevel.High as SimplLevelValue
+    ];
+    mocks.preferredLevel = SimplificationLevel.Medium as SimplLevelValue;
+    mocks.simplState.isProcessing = true;
+
+    render(SimplificationTool);
+
+    const successFragment = m.simplification_success({
+      originalVertices: 1000,
+      simplifiedVertices: 100,
+      reductionPercentage: 90
+    });
+    expect(screen.queryByText(successFragment)).not.toBeInTheDocument();
+  });
 });
 
 describe('simplification tool — imported basemap', () => {

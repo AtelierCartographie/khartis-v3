@@ -8,6 +8,13 @@ const source = readFileSync(
 );
 
 describe('ProjectionMain', () => {
+  it('lets a selected projection card clear the user projection override', () => {
+    expect(source).toContain(
+      'if (hasCustomProjection || !projectionState.overrideActive)'
+    );
+    expect(source).toContain('projectionActions.toggleSelected(projectionId);');
+  });
+
   it('renders expanded mode as a three-column css grid', () => {
     expect(source).toContain('const gridProjections = $derived(');
     expect(source).toContain('GROUPS.flatMap((group) =>');

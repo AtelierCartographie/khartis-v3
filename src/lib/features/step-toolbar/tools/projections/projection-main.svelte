@@ -102,7 +102,7 @@
   );
 
   const selectedCardId = $derived.by(() => {
-    if (hasCustomProjection) {
+    if (hasCustomProjection || !projectionState.overrideActive) {
       return null;
     }
 
@@ -118,7 +118,7 @@
   });
 
   function selectProjection(projectionId: string) {
-    projectionActions.setSelected(projectionId);
+    projectionActions.toggleSelected(projectionId);
   }
 
   function applySuggestion(suggestion: ProjectionSuggestion) {
