@@ -37,11 +37,11 @@ Khartis is a web application to create professional thematic maps without prior 
 
 ## Features
 
-- **Data**: import CSV, GeoJSON, GeoPackage, Shapefile, GPX, KML; variable typing, column operations, filters, join assistant, geolocation
+- **Data**: import CSV, TSV, GeoJSON, GeoPackage, GeoParquet, Shapefile, GPX, KML, KMZ, ZIP; variable typing, column operations, filters, join assistant, geolocation
 - **Visualization**: choropleth, proportional symbols, categorical, bivariate; classification methods (K-means, quantiles, equal interval, Q6, nested means, head-tail, manual); palette editor
-- **Map tools**: 150+ projection catalog, topology-aware simplification, layer manager, geographic search
+- **Map tools**: extensive projection catalog (d3-geo + d3-geo-projection + national projections via PROJ.4), topology-aware simplification, layer manager, geographic search
 - **Layout**: legends, scale bar, north arrow, inset maps, annotations, color-blindness simulation, facets
-- **Export**: PNG/SVG/PDF; data exports (CSV, GeoJSON, GPKG, Shapefile, KML/KMZ); auto-save and project versions (`.kh`)
+- **Export**: map (JPG, SVG); data (CSV, GeoJSON); project archive (`.kh`); auto-save in IndexedDB
 - **Accessibility and i18n**: keyboard shortcuts, French/English interface
 
 ## Screenshots
@@ -83,18 +83,19 @@ pnpm build && pnpm preview
 
 ## Commands
 
-| Command                       | Description                                |
-| ----------------------------- | ------------------------------------------ |
-| `pnpm dev`                    | Development server on :5176                |
-| `pnpm build`                  | Production build                           |
-| `pnpm check`                  | TypeScript + Svelte type check             |
-| `pnpm lint`                   | ESLint + Prettier check                    |
-| `pnpm format`                 | Auto-format code                           |
-| `vitest run --project client` | Unit tests (components, stores, utils)     |
-| `pnpm test:pipeline`          | Server-side pipeline tests (DuckDB-backed) |
-| `pnpm test:duckdb`            | DuckDB integration tests                   |
+| Command              | Description                                |
+| -------------------- | ------------------------------------------ |
+| `pnpm dev`           | Development server on :5176                |
+| `pnpm build`         | Production build                           |
+| `pnpm check`         | TypeScript + Svelte type check             |
+| `pnpm lint`          | ESLint + Prettier check                    |
+| `pnpm format`        | Auto-format code                           |
+| `pnpm test:unit`     | Unit tests (components, stores, utils)     |
+| `pnpm test:pipeline` | Server-side pipeline tests (DuckDB-backed) |
+| `pnpm test:duckdb`   | DuckDB integration tests                   |
+| `pnpm test:all`      | Full suite (unit + pipeline + DuckDB)      |
 
-> `pnpm test:unit` starts watch mode — use `vitest run --project client` for a single CI pass.
+> All `pnpm test:*` scripts use `vitest run` (single pass, no watch mode). Run `vitest --project client` directly if you want watch mode during development.
 
 **i18n**: Inlang Paraglide (English, French) — all user-facing strings via `m.key()` syntax.
 

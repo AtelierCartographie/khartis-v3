@@ -178,11 +178,11 @@ Collection : calques regroupés par facette.
 
 ### Projections [VIZ-TOOLS-c]
 
-12 projections d3-geo : Mercator, Robinson, Winkel Tripel, Orthographique, Natural Earth, Équirectangulaire, Albers, Conique Conforme, Stéréographique, Azimutale Équivalente, Aitoff, Mollweide.
+12 projections d3-geo intégrées : Mercator, Robinson, Winkel Tripel, Orthographique, Natural Earth, Équirectangulaire, Albers, Conique Conforme, Stéréographique, Azimutale Équivalente, Aitoff, Mollweide.
 
 Projections composites : FRANCE_DOM_TOM (Lambert-93 + encarts ultra-marins), EUROPE_DOM_TOM.
 
-Suggestions algorithmiques par emprise géographique. Catalogue exhaustif + code CRS WKT/PROJ.4 personnalisé. Paramètres : longitude, latitude, rotation.
+Suggestions algorithmiques par emprise géographique. Catalogue extensible de plus de 150 projections via code CRS WKT/PROJ.4 personnalisé. Paramètres : longitude, latitude, rotation.
 
 ### Simplification [VIZ-TOOLS-d]
 
