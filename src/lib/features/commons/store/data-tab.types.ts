@@ -23,6 +23,17 @@ export interface GeolocationState {
   autoDetected: boolean;
 }
 
+export interface JoinedEntity {
+  dataValue: string;
+  basemapValue: string;
+}
+
+export interface IgnoredEntity {
+  dataValue: string;
+  basemapValue?: string;
+  source: 'joined' | 'to_verify' | 'unrecognized';
+}
+
 export interface BasemapJoinState {
   selectedBasemap: string;
   basemapSource: BasemapSource;
@@ -30,6 +41,8 @@ export interface BasemapJoinState {
   entitiesToVerify: number;
   duplicateEntities: string[];
   unrecognizedEntities: string[];
+  joinedEntitiesList: JoinedEntity[];
+  ignoredEntities: IgnoredEntity[];
   joinMappings: Array<{
     dataValue: string;
     basemapOptions: string[];

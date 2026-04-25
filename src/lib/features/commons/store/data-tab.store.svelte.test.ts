@@ -59,6 +59,8 @@ describe('dataTab persistence', () => {
         entitiesToVerify: 3,
         duplicateEntities: ['Paris'],
         unrecognizedEntities: ['Lyon'],
+        ignoredEntities: [],
+        joinedEntitiesList: [],
         joinMappings: [
           {
             dataValue: 'Marseille',

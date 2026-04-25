@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { RadioButton } from 'carbon-components-svelte';
   import clsx from 'clsx';
   import type { Snippet } from 'svelte';
   import { KEY } from '../commons/constants/dom.constants';
@@ -8,7 +7,6 @@
     title: string;
     icon: Snippet;
     selected?: boolean;
-    name?: string;
     onclick?: (e: Event) => void | undefined;
     onkeydown?: (e: KeyboardEvent) => void | undefined;
     tabIndex?: number;
@@ -19,7 +17,6 @@
     title,
     icon,
     selected = false,
-    name = 'project-type',
     onclick,
     onkeydown,
     tabIndex = 0,
@@ -57,8 +54,8 @@
       {@render icon()}
     </div>
 
-    <div class="flex justify-end" aria-hidden="true">
-      <RadioButton name={name} checked={selected} />
+    <div class="flex justify-end">
+      <span class="project-card-indicator" aria-hidden="true"></span>
     </div>
   </div>
 
@@ -84,6 +81,35 @@
       rgba(230, 20, 45, 0.35) 0%,
       rgba(230, 20, 45, 0.05) 100%
     );
+  }
+
+  .project-card-indicator {
+    align-items: center;
+    background: var(--cds-field, #f4f4f4);
+    border: 1px solid var(--cds-border-strong, #8d8d8d);
+    border-radius: 50%;
+    box-sizing: border-box;
+    display: inline-flex;
+    height: 1rem;
+    justify-content: center;
+    width: 1rem;
+  }
+
+  .project-card-indicator::after {
+    background: var(--cds-icon-interactive, #0f62fe);
+    border-radius: 50%;
+    content: '';
+    height: 0.5rem;
+    opacity: 0;
+    width: 0.5rem;
+  }
+
+  .project-card.selected .project-card-indicator {
+    border-color: var(--cds-icon-interactive, #0f62fe);
+  }
+
+  .project-card.selected .project-card-indicator::after {
+    opacity: 1;
   }
 
   .tab-content {
