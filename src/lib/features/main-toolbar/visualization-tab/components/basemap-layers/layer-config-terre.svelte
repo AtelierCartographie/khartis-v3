@@ -123,6 +123,7 @@
           label={m.basemap_config_thickness()}
           min={BASEMAP_LAYER_CONFIG.thickness.min}
           max={BASEMAP_LAYER_CONFIG.thickness.max}
+          step={BASEMAP_LAYER_CONFIG.thickness.step}
           value={strokeThickness}
           onchange={handleStrokeThicknessChange}
         />

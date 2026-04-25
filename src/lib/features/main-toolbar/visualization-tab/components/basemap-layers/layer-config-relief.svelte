@@ -81,6 +81,9 @@
     min={BASEMAP_LAYER_CONFIG.opacity.min}
     max={BASEMAP_LAYER_CONFIG.opacity.max}
     value={opacity}
+    showMinMax
+    inputWidth="64px"
+    showSteppers={false}
     onchange={handleOpacityChange}
   />
 </div>

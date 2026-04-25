@@ -237,6 +237,11 @@ export enum BasemapRemarquables {
   MINOR = 'minor'
 }
 
+export enum BasemapGraticuleMode {
+  REMARKABLE = 'remarkable',
+  REGULAR = 'regular'
+}
+
 export enum BasemapRepresentation {
   SHADING = 'shading',
   ELEVATION = 'elevation',
@@ -288,8 +293,10 @@ export const BASEMAP_COLOR_VALUES: Record<BasemapColorId, string> = {
 
 export const BASEMAP_LAYER_CONFIG = {
   opacity: { min: 0, max: 100 },
-  thickness: { min: 1, max: 20 },
-  size: { min: 1, max: 100 }
+  thickness: { min: 0.25, max: 8, step: 0.25 },
+  graticuleSpacing: { min: 1, max: 90 },
+  size: { min: 1, max: 100 },
+  cityCount: { min: 1, max: 100 }
 } as const;
 
 export const UI_CONSTANTS = {

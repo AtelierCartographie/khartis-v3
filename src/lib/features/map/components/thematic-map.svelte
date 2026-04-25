@@ -89,6 +89,7 @@
     getBrowserMaxRenderBufferSizePx,
     resolveMapRenderPixelRatio
   } from '../utils/render-pixel-ratio';
+  import { shouldUseMapLibreInterleaved } from '../utils/render-engine.utils';
   import {
     type OrthographicInteractiveDeck,
     syncMapLibreInteractionMode,
@@ -176,9 +177,9 @@
       return null;
     }
 
-    return new Matrix4(modelMatrix).multiplyLeft(
-      new Matrix4().scale([pageDisplayScale, pageDisplayScale, 1])
-    );
+    return new Matrix4()
+      .scale([pageDisplayScale, pageDisplayScale, 1])
+      .multiplyRight(modelMatrix);
   });
   const pageStyle = $derived(
     `background-color: ${pageBackgroundColor}; padding: ${renderedPageMargins.top}px ${renderedPageMargins.right}px ${renderedPageMargins.bottom}px ${renderedPageMargins.left}px;`
@@ -197,9 +198,7 @@
       return null;
     }
 
-    const basemapMeta =
-      getProjectionMetadataForDataset(firstDatasetId) ??
-      basemapService.currentMetadata;
+    const basemapMeta = getProjectionMetadataForDataset(firstDatasetId);
     const renderProjection = getOrthographicRenderProjection(basemapMeta);
 
     return buildProjectionMaskPath({
@@ -477,8 +476,10 @@
 
   const mapInit = useMapInit({
     onMapLoaded: () => {
-      const shouldUseMapLibre =
-        osmBasemapStore.isActive || basemapStyleStore.requiresMapLibre;
+      const shouldUseMapLibre = shouldUseMapLibreInterleaved({
+        requiresMapLibre: basemapStyleStore.requiresMapLibre,
+        hasOSMBasemap: osmBasemapStore.isActive
+      });
 
       if (shouldUseMapLibre && mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
         isSwitchingViewMode = true;
@@ -541,13 +542,17 @@
   }
 
   function getProjectionMetadataForDataset(datasetId: string | undefined) {
+    if (!datasetId) {
+      return basemapService.currentMetadata;
+    }
+
     if (basemapStyleStore.referenceBasemapId) {
       return basemapService.currentMetadata;
     }
 
     const duckDataset = getRenderedDuckDBDataset(datasetId);
     if (!duckDataset?.joinedBasemap) {
-      return basemapService.currentMetadata;
+      return null;
     }
 
     const resolvedBasemapId = getPreferredBasemapFile(
@@ -1398,7 +1403,10 @@
         return;
       }
 
-      const shouldUseMapLibre = osmActive || requiresMapLibre;
+      const shouldUseMapLibre = shouldUseMapLibreInterleaved({
+        requiresMapLibre,
+        hasOSMBasemap: osmActive
+      });
 
       if (shouldUseMapLibre && mapInit.viewMode === ViewMode.ORTHOGRAPHIC) {
         isSwitchingViewMode = true;
@@ -1832,8 +1840,8 @@
 
     untrack(async () => {
       if (!mapInit.isMapLoaded) {
-        logger.warn(
-          'Map not loaded, skipping reference basemap load',
+        logger.debug(
+          'Map not loaded yet, deferring reference basemap load until ready',
           LogCategory.MAP,
           { refId }
         );
@@ -1983,7 +1991,10 @@
         ? `projection-mask-${crypto.randomUUID()}`
         : `projection-mask-${Math.random().toString(36).slice(2)}`;
 
-    const initialViewMode = basemapStyleStore.requiresMapLibre
+    const initialViewMode = shouldUseMapLibreInterleaved({
+      requiresMapLibre: basemapStyleStore.requiresMapLibre,
+      hasOSMBasemap: osmBasemapStore.isActive
+    })
       ? ViewMode.MAPLIBRE
       : ViewMode.ORTHOGRAPHIC;
     mapInit.initialize(container, initialViewMode);

@@ -16,6 +16,7 @@
     dottedDisabledReason?: string;
     thicknessLabel?: string;
     thicknessMax?: number;
+    thicknessStep?: number;
     color?: string;
     dotted?: boolean;
     dottedPattern?: BasemapDottedPattern;
@@ -32,6 +33,7 @@
     dottedDisabledReason,
     thicknessLabel = m.basemap_config_thickness(),
     thicknessMax = BASEMAP_LAYER_CONFIG.thickness.max,
+    thicknessStep = BASEMAP_LAYER_CONFIG.thickness.step,
     color = '#0072c3',
     dotted = false,
     dottedPattern = BasemapDottedPattern.DOTS,
@@ -87,7 +89,11 @@
       label={thicknessLabel}
       min={BASEMAP_LAYER_CONFIG.thickness.min}
       max={thicknessMax}
+      step={thicknessStep}
       value={thickness}
+      showMinMax
+      inputWidth="64px"
+      showSteppers={false}
       onchange={handleThicknessChange}
     />
   {/if}
@@ -97,6 +103,9 @@
     min={BASEMAP_LAYER_CONFIG.opacity.min}
     max={BASEMAP_LAYER_CONFIG.opacity.max}
     value={opacity}
+    showMinMax
+    inputWidth="64px"
+    showSteppers={false}
     onchange={handleOpacityChange}
   />
 </div>

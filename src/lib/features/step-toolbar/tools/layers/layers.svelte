@@ -8,6 +8,7 @@
   import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
   import { basemapLayersStore } from '$lib/features/map/stores/basemap-layers.store.svelte';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
+  import { shouldUseMapLibreInterleaved } from '$lib/features/map/utils/render-engine.utils';
   import {
     globalActions,
     globalState
@@ -25,7 +26,10 @@
   });
 
   const hasActiveTiledBasemap = $derived(
-    basemapStyleStore.requiresMapLibre || osmBasemapStore.isActive
+    shouldUseMapLibreInterleaved({
+      requiresMapLibre: basemapStyleStore.requiresMapLibre,
+      hasOSMBasemap: osmBasemapStore.isActive
+    })
   );
 
   const layers = $derived(currentState.layers as Layer[]);

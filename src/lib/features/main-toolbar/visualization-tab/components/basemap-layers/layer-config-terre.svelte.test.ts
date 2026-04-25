@@ -21,4 +21,8 @@ describe('LayerConfigTerre', () => {
     expect(source).toContain('color={strokeColor}');
     expect(source).not.toContain('<ColorDropdown');
   });
+
+  it('uses the shared subpixel thickness step for strokes', () => {
+    expect(source).toContain('step={BASEMAP_LAYER_CONFIG.thickness.step}');
+  });
 });

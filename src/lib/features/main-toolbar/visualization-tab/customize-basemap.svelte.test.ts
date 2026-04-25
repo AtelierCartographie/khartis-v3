@@ -6,6 +6,12 @@ const source = readFileSync(
   resolve(import.meta.dirname, 'customize-basemap.svelte'),
   'utf8'
 );
+const catalogMetadata = JSON.parse(
+  readFileSync(
+    resolve(process.cwd(), 'static/basemaps/all-basemaps-metadata.json'),
+    'utf8'
+  )
+) as Array<{ layers?: Array<{ type?: string }> }>;
 
 describe('CustomizeBasemap', () => {
   it('keeps the reference basemap tool inside the tiled expandable so it can be disabled again', () => {
@@ -69,5 +75,77 @@ describe('CustomizeBasemap', () => {
     expect(source).toContain('const supportsLakesRivers = $derived(');
     expect(source).toContain('const supportsCities = $derived(');
     expect(source).toContain('!isCustomBasemap &&');
+  });
+
+  it('derives overlay support from the selected reference basemap metadata', () => {
+    expect(source).toContain('getPreferredBasemapFile');
+    expect(source).toContain('getReferenceBasemapMetadata');
+    expect(source).toContain('basemapStyleStore.referenceBasemapId');
+    expect(source).toContain('basemapService.availableBasemaps.find');
+  });
+
+  it('enables city controls from catalog centroid or point metadata', () => {
+    const layerTypes = new Set(
+      catalogMetadata.flatMap((basemap) =>
+        (basemap.layers ?? []).map((layer) => layer.type)
+      )
+    );
+
+    expect(layerTypes.has('centroid')).toBe(true);
+    expect(source).toContain(
+      'availableMetadataLayerTypes.has(BasemapLayerType.CENTROID)'
+    );
+    expect(source).toContain(
+      'availableMetadataLayerTypes.has(BasemapLayerType.POINT)'
+    );
+  });
+
+  it('keeps lakes and rivers unavailable while the catalog has no hydrography layers', () => {
+    const layerTypes = new Set(
+      catalogMetadata.flatMap((basemap) =>
+        (basemap.layers ?? []).map((layer) => layer.type)
+      )
+    );
+
+    expect(layerTypes.has('polygon')).toBe(false);
+    expect(layerTypes.has('line')).toBe(false);
+    expect(source).toContain('toggleDisabled={!supportsLakesRivers}');
+    expect(source).toContain('disabled={!supportsLakesRivers}');
+    expect(source).toContain('disabledReason={!supportsLakesRivers');
+  });
+
+  it('connects meridiens controls to mode and spacing instead of the legacy selector', () => {
+    expect(source).toContain('<LayerConfigMeridiens');
+    expect(source).toContain("mode={getConfig('meridiens')?.mode}");
+    expect(source).toContain(
+      "spacingDegrees={getConfig('meridiens')?.spacingDegrees}"
+    );
+    expect(source).not.toContain("remarquables={getConfig('meridiens')");
+  });
+
+  it('keeps equator and graticule styling independent from catalog metadata availability', () => {
+    expect(source).not.toContain('supportsEquatorDotted');
+    expect(source).not.toContain('supportsMeridiansDotted');
+    expect(source).not.toContain('disableDotted={!supportsEquatorDotted}');
+    expect(source).not.toContain('disableDotted={!supportsMeridiansDotted}');
+  });
+
+  it('keeps the lakes and rivers toggle synchronized while styling rivers thickness only', () => {
+    expect(source).toContain(
+      "basemapLayersStore.setLayerVisibility('lacs', checked)"
+    );
+    expect(source).toContain(
+      "basemapLayersStore.setLayerVisibility('rivieres', checked)"
+    );
+    expect(source).toContain("basemapLayersStore.updateLayer('lacs', shared)");
+    expect(source).toContain(
+      "basemapLayersStore.updateLayer('rivieres', shared)"
+    );
+    expect(source).toContain("basemapLayersStore.updateLayer('rivieres', {");
+    expect(source).not.toContain("basemapLayersStore.updateLayer('lacs', {");
+  });
+
+  it('uses the shared basemap thickness limits instead of hardcoded wide bounds', () => {
+    expect(source).not.toContain('thicknessMax={20}');
   });
 });

@@ -2,10 +2,12 @@ import { deepClone } from '$lib/features/commons/utils/clone.utils';
 import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
 import {
   BasemapDottedPattern,
+  BasemapGraticuleMode,
   BasemapRepresentation,
   BasemapRemarquables,
   BasemapCityCategory,
-  BasemapCitySymbol
+  BasemapCitySymbol,
+  BASEMAP_LAYER_CONFIG
 } from '$lib/features/main-toolbar/constants';
 import {
   BASEMAP_LAYER_ID,
@@ -74,7 +76,8 @@ export interface EquateurLayerConfig extends BasemapLayerBase {
 
 export interface MeridiensLayerConfig extends BasemapLayerBase {
   id: 'meridiens';
-  remarquables: BasemapRemarquables;
+  mode: BasemapGraticuleMode;
+  spacingDegrees: number;
   color: string;
   dotted: boolean;
   dottedPattern: BasemapDottedPattern;
@@ -94,10 +97,14 @@ export interface FrontieresLayerConfig extends BasemapLayerBase {
 export interface VillesLayerConfig extends BasemapLayerBase {
   id: 'villes';
   category: BasemapCityCategory;
+  count?: number;
   symbol: BasemapCitySymbol;
   color: string;
   size: number;
   opacity: number;
+  labelFontFamily?: string;
+  labelSize?: number;
+  labelColor?: string;
 }
 
 export type BasemapLayerConfig =
@@ -157,10 +164,14 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
     id: 'villes',
     visible: false,
     category: BasemapCityCategory.CAPITALS,
+    count: 50,
     symbol: BasemapCitySymbol.POINT,
     color: '#525252',
     size: 8,
-    opacity: 100
+    opacity: 100,
+    labelFontFamily: 'Cabin',
+    labelSize: 12,
+    labelColor: '#161616'
   },
   {
     id: 'equateur',
@@ -174,7 +185,8 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
   {
     id: 'meridiens',
     visible: false,
-    remarquables: BasemapRemarquables.ALL,
+    mode: BasemapGraticuleMode.REMARKABLE,
+    spacingDegrees: 10,
     color: '#8d8d8d',
     dotted: true,
     dottedPattern: BasemapDottedPattern.DOTS,
@@ -187,13 +199,55 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
     color: '#8d8d8d',
     dotted: false,
     dottedPattern: BasemapDottedPattern.DOTS,
-    thickness: 1,
+    thickness: 0.5,
     opacity: 100
   }
 ];
 
 function cloneDefaults(): BasemapLayerConfig[] {
   return deepClone(DEFAULT_LAYERS);
+}
+
+function clampBasemapThickness(
+  value: unknown,
+  fallback: number,
+  min?: number
+): number {
+  const effectiveMin: number = min ?? BASEMAP_LAYER_CONFIG.thickness.min;
+  const parsed = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+
+  return Math.min(
+    BASEMAP_LAYER_CONFIG.thickness.max,
+    Math.max(effectiveMin, parsed)
+  );
+}
+
+function normalizeLayerThickness<T extends BasemapLayerConfig>(layer: T): T {
+  switch (layer.id) {
+    case 'lacs':
+      return {
+        ...layer,
+        thickness: clampBasemapThickness(layer.thickness, 0, 0)
+      };
+    case 'terre':
+      return {
+        ...layer,
+        strokeThickness: clampBasemapThickness(layer.strokeThickness, 0.5)
+      };
+    case 'rivieres':
+    case 'equateur':
+    case 'meridiens':
+    case 'frontieres':
+      return {
+        ...layer,
+        thickness: clampBasemapThickness(layer.thickness, 0.5)
+      };
+    default:
+      return layer;
+  }
 }
 
 function mergeLayerWithDefaults<T extends BasemapLayerConfig>(
@@ -208,10 +262,86 @@ function mergeLayerWithDefaults<T extends BasemapLayerConfig>(
     Object.entries(candidate).filter(([, value]) => value !== undefined)
   ) as Partial<T>;
 
-  return {
+  return normalizeLayerThickness({
     ...deepClone(defaults),
     ...sanitizedCandidate
-  } as T;
+  } as T);
+}
+
+type LegacyMeridiensLayerConfig = Partial<MeridiensLayerConfig> & {
+  remarquables?: BasemapRemarquables;
+};
+
+function clampGraticuleSpacing(value: unknown): number {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(parsed)) {
+    return 10;
+  }
+
+  return Math.min(
+    BASEMAP_LAYER_CONFIG.graticuleSpacing.max,
+    Math.max(BASEMAP_LAYER_CONFIG.graticuleSpacing.min, Math.round(parsed))
+  );
+}
+
+function isBasemapGraticuleMode(value: unknown): value is BasemapGraticuleMode {
+  return (
+    value === BasemapGraticuleMode.REMARKABLE ||
+    value === BasemapGraticuleMode.REGULAR
+  );
+}
+
+function normalizeLegacyMeridiensConfig(
+  defaults: MeridiensLayerConfig,
+  candidate: LegacyMeridiensLayerConfig | undefined
+): MeridiensLayerConfig {
+  const { remarquables, ...normalizedCandidate } = candidate ?? {};
+  const merged = mergeLayerWithDefaults(defaults, normalizedCandidate);
+
+  if (!candidate) {
+    return merged;
+  }
+
+  if (isBasemapGraticuleMode(candidate.mode)) {
+    return {
+      ...merged,
+      mode: candidate.mode,
+      spacingDegrees: clampGraticuleSpacing(candidate.spacingDegrees)
+    };
+  }
+
+  switch (remarquables) {
+    case BasemapRemarquables.ALL:
+      return {
+        ...merged,
+        mode: BasemapGraticuleMode.REGULAR,
+        spacingDegrees: 10
+      };
+    case BasemapRemarquables.MAJOR:
+      return {
+        ...merged,
+        mode: BasemapGraticuleMode.REGULAR,
+        spacingDegrees: 15
+      };
+    case BasemapRemarquables.MINOR:
+      return {
+        ...merged,
+        mode: BasemapGraticuleMode.REGULAR,
+        spacingDegrees: 5
+      };
+    case BasemapRemarquables.EQUATOR_TROPICS:
+      return {
+        ...merged,
+        mode: BasemapGraticuleMode.REMARKABLE,
+        spacingDegrees: 10
+      };
+    default:
+      return {
+        ...merged,
+        mode: isBasemapGraticuleMode(merged.mode) ? merged.mode : defaults.mode,
+        spacingDegrees: clampGraticuleSpacing(merged.spacingDegrees)
+      };
+  }
 }
 
 function normalizeSerializedLayers(
@@ -222,11 +352,19 @@ function normalizeSerializedLayers(
   }
 
   return DEFAULT_LAYERS.map((defaults) => {
-    const candidate = layers.find((layer) => layer?.id === defaults.id) as
-      | Partial<typeof defaults>
-      | undefined;
+    const candidate = layers.find((layer) => layer?.id === defaults.id);
 
-    return mergeLayerWithDefaults(defaults, candidate);
+    if (defaults.id === 'meridiens') {
+      return normalizeLegacyMeridiensConfig(
+        defaults,
+        candidate as LegacyMeridiensLayerConfig | undefined
+      );
+    }
+
+    return mergeLayerWithDefaults(
+      defaults,
+      candidate as Partial<typeof defaults> | undefined
+    );
   });
 }
 
@@ -272,7 +410,10 @@ function createBasemapLayersStore() {
     id: T,
     updates: Partial<Omit<Extract<BasemapLayerConfig, { id: T }>, 'id'>>
   ): void {
-    const layer = state.layers.find((currentLayer) => currentLayer.id === id);
+    const layerIndex = state.layers.findIndex(
+      (currentLayer) => currentLayer.id === id
+    );
+    const layer = state.layers[layerIndex];
     if (!layer) {
       return;
     }
@@ -286,6 +427,7 @@ function createBasemapLayersStore() {
     }
 
     Object.assign(layer, sanitizedUpdates);
+    state.layers[layerIndex] = normalizeLayerThickness(layer);
     incrementVersion();
   }
 

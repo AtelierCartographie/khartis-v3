@@ -1,31 +1,41 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
   import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
-  import {
-    RadioButtonGroup,
-    RadioButton,
-    Dropdown
-  } from 'carbon-components-svelte';
+  import { Dropdown } from 'carbon-components-svelte';
   import { SliderWithInput } from '../shared';
   import {
-    BASEMAP_LAYER_CONFIG,
-    BasemapCityCategory,
-    BasemapCitySymbol
-  } from '../../../constants';
+    AVAILABLE_FONTS,
+    DEFAULT_FONT_FAMILY,
+    FONT_SIZE_OPTIONS,
+    clampFontSize,
+    normalizeFontFamily
+  } from '$lib/features/step-toolbar/constants/fonts.constants';
+  import { BASEMAP_LAYER_CONFIG, BasemapCitySymbol } from '../../../constants';
 
   interface SymbolOption {
     id: BasemapCitySymbol;
     text: string;
   }
 
+  interface SelectOption {
+    id: string;
+    text: string;
+  }
+
   interface Props {
-    category?: BasemapCityCategory;
+    count?: number;
     symbol?: BasemapCitySymbol;
     color?: string;
     size?: number;
     opacity?: number;
+    labelFontFamily?: string;
+    labelSize?: number;
+    labelColor?: string;
     onchange?: (updates: Record<string, unknown>) => void;
   }
+
+  const DEFAULT_CITY_COUNT = 50;
+  const DEFAULT_LABEL_SIZE = 12;
 
   function getSymbolOptions(): SymbolOption[] {
     return [
@@ -39,23 +49,38 @@
     ];
   }
 
+  function getFontOptions(): SelectOption[] {
+    return AVAILABLE_FONTS.map((fontFamily) => ({
+      id: fontFamily,
+      text: fontFamily
+    }));
+  }
+
+  function getFontSizeOptions(): SelectOption[] {
+    return FONT_SIZE_OPTIONS.map((fontSize) => ({
+      id: fontSize,
+      text: fontSize
+    }));
+  }
+
   let {
-    category = BasemapCityCategory.CAPITALS,
+    count = DEFAULT_CITY_COUNT,
     symbol = BasemapCitySymbol.POINT,
     color = '#525252',
     size = 8,
     opacity = 100,
+    labelFontFamily = DEFAULT_FONT_FAMILY,
+    labelSize = DEFAULT_LABEL_SIZE,
+    labelColor = '#161616',
     onchange
   }: Props = $props();
 
-  function handleCategoryChange(e: CustomEvent<string | number>) {
-    const next = String(e.detail) as BasemapCityCategory;
-    if (next === category) return;
-    onchange?.({ category: next });
-  }
-
   function handleSymbolChange(e: CustomEvent<{ selectedId: string }>) {
     onchange?.({ symbol: e.detail.selectedId as BasemapCitySymbol });
+  }
+
+  function handleCountChange(value: number) {
+    onchange?.({ count: value });
   }
 
   function handleColorChange(value: string) {
@@ -69,33 +94,31 @@
   function handleOpacityChange(value: number) {
     onchange?.({ opacity: value });
   }
+
+  function handleLabelFontFamilyChange(e: CustomEvent<{ selectedId: string }>) {
+    onchange?.({ labelFontFamily: e.detail.selectedId });
+  }
+
+  function handleLabelSizeChange(e: CustomEvent<{ selectedId: string }>) {
+    onchange?.({ labelSize: clampFontSize(e.detail.selectedId) });
+  }
+
+  function handleLabelColorChange(value: string) {
+    onchange?.({ labelColor: value });
+  }
 </script>
 
 <div class="layer-config-content">
-  <div class="control-group">
-    <RadioButtonGroup
-      legendText={m.basemap_config_category()}
-      selected={category}
-      on:change={handleCategoryChange}
-    >
-      <RadioButton
-        labelText={m.basemap_config_category_capitals()}
-        value={BasemapCityCategory.CAPITALS}
-      />
-      <RadioButton
-        labelText={m.basemap_config_category_100k()}
-        value={BasemapCityCategory.POP_100K}
-      />
-      <RadioButton
-        labelText={m.basemap_config_category_250k()}
-        value={BasemapCityCategory.POP_250K}
-      />
-      <RadioButton
-        labelText={m.basemap_config_category_500k()}
-        value={BasemapCityCategory.POP_500K}
-      />
-    </RadioButtonGroup>
-  </div>
+  <SliderWithInput
+    label={m.basemap_config_city_count()}
+    min={BASEMAP_LAYER_CONFIG.cityCount.min}
+    max={BASEMAP_LAYER_CONFIG.cityCount.max}
+    value={count}
+    showMinMax
+    inputWidth="64px"
+    showSteppers={false}
+    onchange={handleCountChange}
+  />
 
   <div class="control-group">
     <span class="field-label">{m.basemap_config_symbol()}</span>
@@ -118,6 +141,9 @@
     min={BASEMAP_LAYER_CONFIG.size.min}
     max={BASEMAP_LAYER_CONFIG.size.max}
     value={size}
+    showMinMax
+    inputWidth="64px"
+    showSteppers={false}
     onchange={handleSizeChange}
   />
 
@@ -126,7 +152,43 @@
     min={BASEMAP_LAYER_CONFIG.opacity.min}
     max={BASEMAP_LAYER_CONFIG.opacity.max}
     value={opacity}
+    showMinMax
+    inputWidth="64px"
+    showSteppers={false}
     onchange={handleOpacityChange}
+  />
+
+  <div class="section-heading">
+    <span>{m.basemap_config_labels()}</span>
+    <span aria-hidden="true"></span>
+  </div>
+
+  <div class="label-style-row">
+    <div class="label-font-control">
+      <Dropdown
+        size="sm"
+        titleText={m.basemap_config_label_font()}
+        selectedId={normalizeFontFamily(labelFontFamily) ?? DEFAULT_FONT_FAMILY}
+        items={getFontOptions()}
+        on:select={handleLabelFontFamilyChange}
+      />
+    </div>
+
+    <div class="label-size-control">
+      <Dropdown
+        size="sm"
+        titleText={m.basemap_config_label_size()}
+        selectedId={String(clampFontSize(labelSize, DEFAULT_LABEL_SIZE))}
+        items={getFontSizeOptions()}
+        on:select={handleLabelSizeChange}
+      />
+    </div>
+  </div>
+
+  <SingleColorPreview
+    label={m.basemap_config_color()}
+    color={labelColor}
+    onchange={handleLabelColorChange}
   />
 </div>
 
@@ -148,9 +210,39 @@
     color: var(--cds-text-02);
   }
 
-  .layer-config-content :global(.cds--radio-button-group) {
+  .section-heading {
     display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-02);
+    align-items: center;
+    gap: var(--cds-spacing-03);
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.125rem;
+    letter-spacing: 0.16px;
+    color: var(--cds-text-primary);
+  }
+
+  .section-heading span:first-child {
+    flex: 0 0 auto;
+  }
+
+  .section-heading span:last-child {
+    flex: 1 1 auto;
+    height: 1px;
+    background: var(--cds-border-subtle-01);
+  }
+
+  .label-style-row {
+    display: flex;
+    gap: var(--cds-spacing-03);
+    align-items: flex-end;
+  }
+
+  .label-font-control {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .label-size-control {
+    flex: 0 0 64px;
   }
 </style>

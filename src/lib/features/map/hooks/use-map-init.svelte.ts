@@ -28,6 +28,7 @@ import {
   DEFAULT_MAP_BASE_ZOOM,
   resolveMapZoomBounds
 } from '../utils/map-zoom.utils';
+import { shouldUseMapLibreInterleaved } from '../utils/render-engine.utils';
 import { getBrowserMaxRenderBufferSizePx } from '../utils/render-pixel-ratio';
 import type {
   DeckOrthographicViewStateMap,
@@ -235,8 +236,10 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
   let isMapLoaded = $state(false);
   let renderPixelRatio = $state(getInitialRenderPixelRatio());
   const maxRenderBufferSizePx = getBrowserMaxRenderBufferSizePx();
-  const shouldUseMapLibre =
-    osmBasemapStore.isActive || basemapStyleStore.requiresMapLibre;
+  const shouldUseMapLibre = shouldUseMapLibreInterleaved({
+    requiresMapLibre: basemapStyleStore.requiresMapLibre,
+    hasOSMBasemap: osmBasemapStore.isActive
+  });
   const initialViewMode: ViewMode = shouldUseMapLibre
     ? ViewMode.MAPLIBRE
     : ViewMode.ORTHOGRAPHIC;
@@ -360,7 +363,10 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
   }
 
   function initializeOrthographic(container: HTMLDivElement): void {
-    logger.info('Initializing Deck.gl with OrthographicView', LogCategory.MAP);
+    logger.info(
+      'Initializing Deck.gl standalone render engine',
+      LogCategory.MAP
+    );
 
     containerRef = container;
     isMapLoaded = false;
@@ -380,7 +386,7 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
       mapInstanceStore.setDeckInstance(null);
       mapInstanceStore.setMapLoaded(true);
       logger.warn(
-        'WebGL2 unavailable: using static orthographic fallback canvas',
+        'WebGL2 unavailable: using static Deck.gl fallback canvas',
         LogCategory.MAP
       );
       onMapLoaded();
@@ -453,12 +459,15 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
 
             isMapLoaded = true;
             mapInstanceStore.setMapLoaded(true);
-            logger.success('Deck.gl OrthographicView ready', LogCategory.MAP);
+            logger.success(
+              'Deck.gl OrthographicView render engine ready',
+              LogCategory.MAP
+            );
             onMapLoaded();
           },
           onError: (error, layer) => {
             logger.error(
-              'Deck.gl orthographic runtime error',
+              'Deck.gl standalone render engine runtime error',
               LogCategory.MAP,
               {
                 error,
