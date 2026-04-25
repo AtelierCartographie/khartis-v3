@@ -4808,8 +4808,14 @@ export function createPolygonLayers(
     arrowExtension &&
     (arrowExtension === ArrowExtension.GEOARROW_POLYGON ||
       arrowExtension === ArrowExtension.GEOARROW_MULTIPOLYGON);
+  const preferProjectedGeoJsonFallback =
+    Boolean(ctx.customProjection) &&
+    (isNativeGeoArrow || isWkbEncoded || isGeoJsonEncoded);
 
-  if (isNativeGeoArrowPolygon || isNativeGeoArrow) {
+  if (
+    !preferProjectedGeoJsonFallback &&
+    (isNativeGeoArrowPolygon || isNativeGeoArrow)
+  ) {
     try {
       const polyData = resolvePolygonParser(ctx.customProjection)(jsTable);
       const outlineData = resolvePathParser(ctx.customProjection)(jsTable);
@@ -5330,7 +5336,7 @@ export function createPolygonLayers(
 
   const shouldSplitGeoJsonLayers = Boolean(patternLayer && showGeoJsonStroke);
 
-  let geoJsonLayers: Layer<DeckDataRow>[];
+  let geoJsonLayers: Layer<DeckDataRow>[] = [];
   if (shouldSplitGeoJsonLayers && patternLayer) {
     geoJsonLayers = [
       new GeoJsonLayer({
@@ -5409,7 +5415,7 @@ export function createPolygonLayers(
           ]
         : [])
     ];
-  } else {
+  } else if (showGeoJsonFill || showGeoJsonStroke) {
     geoJsonLayers = [
       new GeoJsonLayer({
         id: layerId,
@@ -5469,6 +5475,22 @@ export function createPolygonLayers(
     ];
   }
 
+  const pointLayers = createRepresentativePointSymbolLayers(jsTable, ctx);
+  const orderedLayers = [
+    ...geoJsonLayers.map((layer) => ({
+      primitive: PrimitiveFilterType.POLYGON as PrimitiveFilter,
+      layer
+    })),
+    ...pointLayers.map((layer) => ({
+      primitive: PrimitiveFilterType.POINT as PrimitiveFilter,
+      layer
+    }))
+  ].sort(
+    (left, right) =>
+      getOrderIndex(right.primitive) - getOrderIndex(left.primitive)
+  );
+  const layers = orderedLayers.map((entry) => entry.layer);
+
   const selectionOverlay = createHighlightedPolygonOverlay(
     layerId,
     jsTable,
@@ -5478,10 +5500,10 @@ export function createPolygonLayers(
     ctx
   );
   if (selectionOverlay) {
-    geoJsonLayers.push(selectionOverlay);
+    layers.push(selectionOverlay);
   }
 
-  return geoJsonLayers;
+  return layers;
 }
 
 export function createGeoJsonLayers(

@@ -16,4 +16,10 @@ describe('LayerConfigRelief', () => {
     expect(source).toContain('color={color}');
     expect(source).not.toContain('<ColorDropdown');
   });
+
+  it('renders the opacity slider with the compact Figma-style control', () => {
+    expect(source).toContain('showMinMax');
+    expect(source).toContain('inputWidth="64px"');
+    expect(source).toContain('showSteppers={false}');
+  });
 });

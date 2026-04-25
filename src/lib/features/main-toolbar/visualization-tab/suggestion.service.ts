@@ -262,9 +262,9 @@ function buildSupportPolygonConfig(
     getPolygonPrimitive(visualization) ?? preset.polygon ?? undefined;
 
   return {
-    enabled: false,
-    fillMode: polygon?.fillMode ?? FillMode.UNIQUE,
-    fillColor: polygon?.fillColor ?? DEFAULT_COLORS.fill,
+    enabled: true,
+    fillMode: FillMode.UNIQUE,
+    fillColor: DEFAULT_COLORS.gray,
     fillOpacity: polygon?.fillOpacity ?? 1,
     strokeMode: StrokeMode.UNIQUE,
     strokeColor: DEFAULT_COLORS.gray,
@@ -469,8 +469,12 @@ export function resolveSuggestionBehavior(
   const secondaryTextColumn = findPreferredTextColumn(dataset.columns, {
     preferred: suggestion.columns?.[1]
   });
-  const symbolPrimitiveFilters = [PrimitiveFilterType.POINT];
-  const textPrimitiveFilters: PrimitiveFilter[] = [];
+  const symbolPrimitiveFilters = isPolygonDataset
+    ? [PrimitiveFilterType.POINT, PrimitiveFilterType.POLYGON]
+    : [PrimitiveFilterType.POINT];
+  const textPrimitiveFilters: PrimitiveFilter[] = isPolygonDataset
+    ? [PrimitiveFilterType.POLYGON]
+    : [];
 
   const baseMapping = buildClearedMapping(preset.mapping.geometryColumn);
   const baseSymbols = preset.symbols
@@ -871,6 +875,22 @@ export function resolveSuggestionBehavior(
   const isProportionalSymbol = SYMBOL_PROPORTIONAL_SUGGESTION_IDS.has(
     suggestion.id
   );
+  const symbolValueColumn = isClassedSymbol
+    ? primaryNumericColumn
+    : suggestion.id === 'symbols_proportional_colorful_QTR' ||
+        suggestion.id === 'symbols_proportional_double'
+      ? secondaryNumericColumn
+      : undefined;
+  const symbolCategoryColumn = isCategoricalSymbol
+    ? isProportionalSymbol
+      ? secondaryTextColumn
+      : primaryTextColumn
+    : undefined;
+  const symbolFillClassification = isCategoricalSymbol
+    ? categoricalPreset.classification
+    : isClassedSymbol
+      ? choroplethPreset.classification
+      : undefined;
 
   return {
     visualizationType,
@@ -879,17 +899,8 @@ export function resolveSuggestionBehavior(
     forcedOffPrimitives: [PrimitiveFilterType.LINE, 'text', 'label'],
     primitiveFilters: symbolPrimitiveFilters,
     mapping: buildClearedMapping(preset.mapping.geometryColumn, {
-      valueColumn: isClassedSymbol
-        ? primaryNumericColumn
-        : suggestion.id === 'symbols_proportional_colorful_QTR' ||
-            suggestion.id === 'symbols_proportional_double'
-          ? secondaryNumericColumn
-          : undefined,
-      categoryColumn: isCategoricalSymbol
-        ? isProportionalSymbol
-          ? secondaryTextColumn
-          : primaryTextColumn
-        : undefined,
+      valueColumn: symbolValueColumn,
+      categoryColumn: symbolCategoryColumn,
       sizeColumn: isProportionalSymbol ? primaryNumericColumn : undefined
     }),
     modes: {
@@ -957,18 +968,13 @@ export function resolveSuggestionBehavior(
           : SymbolDoublePosition.OVERLAY,
       breakValueA: null,
       breakValueB: null,
-      valueColumn: isClassedSymbol
-        ? primaryNumericColumn
-        : suggestion.id === 'symbols_proportional_colorful_QTR' ||
-            suggestion.id === 'symbols_proportional_double'
-          ? secondaryNumericColumn
-          : undefined,
-      categoryColumn: isCategoricalSymbol
-        ? isProportionalSymbol
-          ? secondaryTextColumn
-          : primaryTextColumn
-        : undefined,
+      valueColumn: isClassedSymbol ? primaryNumericColumn : symbolValueColumn,
+      categoryColumn: symbolCategoryColumn,
       sizeColumn: isProportionalSymbol ? primaryNumericColumn : undefined,
+      fillValueColumn: isClassedSymbol ? symbolValueColumn : undefined,
+      fillCategoryColumn: isCategoricalSymbol
+        ? symbolCategoryColumn
+        : undefined,
       fillColor: visualization?.style.symbolFillColor ?? DEFAULT_COLORS.fill,
       fillColorB:
         suggestion.id === 'symbols_proportional_double'
@@ -979,6 +985,7 @@ export function resolveSuggestionBehavior(
         : isClassedSymbol
           ? choroplethPreset.classification
           : undefined,
+      fillClassification: symbolFillClassification,
       missingData: preset.missingData
     },
     ...(isPolygonDataset

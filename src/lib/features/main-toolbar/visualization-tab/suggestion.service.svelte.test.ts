@@ -289,6 +289,61 @@ describe('suggestion.service', () => {
     ).toBe(true);
   });
 
+  it('overwrites stale symbol fill state when applying a qualitative point suggestion', () => {
+    const dataset = {
+      ...createPointDataset(),
+      columns: [
+        { name: 'geometry', type: 'geometry', stats: {}, values: [] },
+        { name: 'place_name', type: 'text', stats: {}, values: [] },
+        { name: 'category', type: 'text', stats: {}, values: [] },
+        { name: 'population_total', type: 'number', stats: {}, values: [] }
+      ]
+    } as unknown as SuggestionTestDataset;
+    mocks.datasets = [dataset];
+    mocks.selectedDatasetId = dataset.id;
+
+    const visualization = visualizationStore.createVisualization(
+      VisualizationType.BIVARIATE,
+      dataset.id
+    );
+
+    visualizationStore.updateVisualization(visualization.id, {
+      symbol: {
+        ...visualization.symbol!,
+        fillMode: FillMode.CATEGORIES,
+        fillCategoryColumn: 'place_name',
+        fillClassification: {
+          method: ClassificationMethod.MANUAL,
+          classes: 2,
+          colors: ['#111111', '#222222'],
+          labels: ['Paris', 'Lyon']
+        }
+      }
+    });
+
+    const suggestion: Parameters<typeof applySuggestionToVisualization>[1] = {
+      id: 'symbols_uniques_colorful_QL',
+      label: 'Symboles colorés (qualitatif)',
+      nbColumns: 1,
+      semioTypes: ['QL'],
+      geometries: ['point'],
+      columns: ['category'],
+      score: 46
+    };
+
+    applySuggestionToVisualization(visualization.id, suggestion);
+
+    const updatedVisualization = visualizationStore.visualizations.find(
+      (item) => item.id === visualization.id
+    );
+
+    expect(updatedVisualization?.symbol?.categoryColumn).toBe('category');
+    expect(updatedVisualization?.symbol?.fillCategoryColumn).toBe('category');
+    expect(updatedVisualization?.symbol?.fillClassification?.labels).toBe(
+      undefined
+    );
+  });
+
   it('keeps matching a suggestion after derived classification metadata changes', () => {
     const dataset = createPointDataset();
     const visualization = visualizationStore.createVisualization(
@@ -387,7 +442,7 @@ describe('suggestion.service', () => {
     expect(isVisualizationBlank(updatedVisualization!, dataset)).toBe(true);
   });
 
-  it('keeps polygon text suggestions text-only by default', () => {
+  it('keeps polygon text suggestions text-only with neutral gray polygon support', () => {
     const dataset = createPolygonDataset();
     mocks.datasets = [dataset];
     mocks.selectedDatasetId = dataset.id;
@@ -419,7 +474,9 @@ describe('suggestion.service', () => {
     expect(updatedVisualization?.mapping.sizeColumn).toBeUndefined();
     expect(updatedVisualization?.modes?.size).toBeDefined();
     expect(updatedVisualization?.modes?.symbol).toBe(SymbolMode.UNIQUE);
-    expect(updatedVisualization?.primitiveFilters).toEqual([]);
+    expect(updatedVisualization?.primitiveFilters).toEqual([
+      PrimitiveFilterType.POLYGON
+    ]);
     expect(updatedVisualization?.style.textOpacity).toBe(1);
     expect(updatedVisualization?.text?.enabled).toBe(true);
     expect(updatedVisualization?.text?.opacity).toBe(1);
@@ -427,7 +484,9 @@ describe('suggestion.service', () => {
     expect(updatedVisualization?.text?.secondaryLabels.labelColumn).toBe(
       'population_total'
     );
-    expect(updatedVisualization?.polygon?.enabled).toBe(false);
+    expect(updatedVisualization?.polygon?.enabled).toBe(true);
+    expect(updatedVisualization?.polygon?.fillMode).toBe(FillMode.UNIQUE);
+    expect(updatedVisualization?.polygon?.fillColor).toBe(DEFAULT_COLORS.gray);
     expect(
       isVisualizationMatchingSuggestion(
         updatedVisualization!,
@@ -437,7 +496,7 @@ describe('suggestion.service', () => {
     ).toBe(true);
   });
 
-  it('keeps polygon symbol suggestions on points with neutral polygon support', () => {
+  it('keeps polygon symbol suggestions on points with neutral gray polygon support', () => {
     const dataset = createPolygonDataset();
     mocks.datasets = [dataset];
     mocks.selectedDatasetId = dataset.id;
@@ -455,10 +514,13 @@ describe('suggestion.service', () => {
     );
 
     expect(updatedVisualization?.primitiveFilters).toEqual([
-      PrimitiveFilterType.POINT
+      PrimitiveFilterType.POINT,
+      PrimitiveFilterType.POLYGON
     ]);
     expect(updatedVisualization?.modes?.symbol).toBe(SymbolMode.PROPORTIONAL);
-    expect(updatedVisualization?.polygon?.enabled).toBe(false);
+    expect(updatedVisualization?.polygon?.enabled).toBe(true);
+    expect(updatedVisualization?.polygon?.fillMode).toBe(FillMode.UNIQUE);
+    expect(updatedVisualization?.polygon?.fillColor).toBe(DEFAULT_COLORS.gray);
     expect(updatedVisualization?.symbols?.opacity).toBe(1);
     expect(
       isVisualizationMatchingSuggestion(

@@ -34,12 +34,6 @@ const CATALOG_SIMPLIFICATION_PRIORITY = [
   SimplificationLevel.High,
   SimplificationLevel.Low
 ] as const;
-const FRANCE_ADMINISTRATIVE_BASEMAP_PREFIXES = [
-  'france-canton-',
-  'france-commune-',
-  'france-departement-',
-  'france-region-'
-] as const;
 const SIMPLIFICATION_LEVEL_SUFFIX_REGEX = /-(low|medium|high)$/;
 
 function getGeometryParquetUrl(filename: string): string {
@@ -64,37 +58,8 @@ function getBasemapSimplificationLevel(
     : null;
 }
 
-function getBasemapFileSimplificationLevel(
-  file: string
-): SimplificationLevel | null {
-  const suffix = SIMPLIFICATION_LEVEL_SUFFIX_REGEX.exec(file)?.[1];
-  return isSimplificationLevel(suffix) ? suffix : null;
-}
-
 export function getBasemapVariantFamily(file: string): string {
   return file.replace(SIMPLIFICATION_LEVEL_SUFFIX_REGEX, '');
-}
-
-function isFranceAdministrativeBasemapFamily(family: string): boolean {
-  return FRANCE_ADMINISTRATIVE_BASEMAP_PREFIXES.some((prefix) =>
-    family.startsWith(prefix)
-  );
-}
-
-function isSupportedBasemapSimplificationLevel(
-  basemapFile: string,
-  level: SimplificationLevel
-): boolean {
-  const family = getBasemapVariantFamily(basemapFile);
-
-  if (
-    isFranceAdministrativeBasemapFamily(family) &&
-    level === SimplificationLevel.Medium
-  ) {
-    return false;
-  }
-
-  return true;
 }
 
 export function getAvailableBasemapSimplificationLevels(
@@ -110,7 +75,7 @@ export function getAvailableBasemapSimplificationLevels(
     }
 
     const level = getBasemapSimplificationLevel(basemap);
-    if (!level || !isSupportedBasemapSimplificationLevel(family, level)) {
+    if (!level) {
       continue;
     }
 
@@ -142,27 +107,7 @@ export function getPreferredBasemapFile(
   basemaps: BasemapMetadata[],
   basemapFile: string
 ): string {
-  const metadata =
-    basemaps.find((candidate) => candidate.file === basemapFile) ?? null;
-  const currentLevel = metadata
-    ? getBasemapSimplificationLevel(metadata)
-    : getBasemapFileSimplificationLevel(basemapFile);
-
-  if (!currentLevel) {
-    return basemapFile;
-  }
-
-  if (
-    metadata &&
-    isSupportedBasemapSimplificationLevel(metadata.file, currentLevel)
-  ) {
-    return basemapFile;
-  }
-
-  if (
-    !metadata &&
-    isSupportedBasemapSimplificationLevel(basemapFile, currentLevel)
-  ) {
+  if (basemaps.some((candidate) => candidate.file === basemapFile)) {
     return basemapFile;
   }
 
@@ -212,10 +157,6 @@ export function resolveBasemapVariantFile(
   nextLevel: SimplificationLevel
 ): string | null {
   if (!isSimplificationLevel(currentLevel)) {
-    return null;
-  }
-
-  if (!isSupportedBasemapSimplificationLevel(file, nextLevel)) {
     return null;
   }
 

@@ -14,7 +14,10 @@
   import BasemapStyleSelector from './basemap-style-selector.svelte';
   import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
   import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
-  import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
+  import {
+    basemapService,
+    getPreferredBasemapFile
+  } from '$lib/features/map/services/basemap.service.svelte';
   import {
     basemapLayersStore,
     type BasemapLayerConfig,
@@ -23,6 +26,7 @@
   import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
   import { mapProjectionStore } from '$lib/features/map/stores/map-projection.store.svelte';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
+  import { shouldUseMapLibreInterleaved } from '$lib/features/map/utils/render-engine.utils';
   import { resolveTiledStyleFromToggle } from './tiled-basemap-selection';
   import { BasemapStyle } from '$lib/features/map/constants/basemap-styles';
 
@@ -40,9 +44,32 @@
   }
 
   const isTiledBasemapEnabled = $derived(
-    basemapStyleStore.requiresMapLibre || osmBasemapStore.isActive
+    shouldUseMapLibreInterleaved({
+      requiresMapLibre: basemapStyleStore.requiresMapLibre,
+      hasOSMBasemap: osmBasemapStore.isActive
+    })
   );
-  const currentMetadata = $derived(basemapService.currentMetadata);
+
+  function getReferenceBasemapMetadata(referenceBasemapId: string | null) {
+    if (!referenceBasemapId) {
+      return basemapService.currentMetadata;
+    }
+
+    const resolvedBasemapId = getPreferredBasemapFile(
+      basemapService.availableBasemaps,
+      referenceBasemapId
+    );
+
+    return (
+      basemapService.availableBasemaps.find(
+        (basemap) => basemap.file === resolvedBasemapId
+      ) ?? basemapService.currentMetadata
+    );
+  }
+
+  const currentMetadata = $derived.by(() =>
+    getReferenceBasemapMetadata(basemapStyleStore.referenceBasemapId)
+  );
   const customBaseLayerType = $derived.by(
     () =>
       currentMetadata?.layers.find(
@@ -70,13 +97,9 @@
         availableMetadataLayerTypes.has(BasemapLayerType.LINE))
   );
   const supportsCities = $derived(
-    !isCustomBasemap && availableMetadataLayerTypes.has(BasemapLayerType.POINT)
-  );
-  const supportsEquatorDotted = $derived(
-    !availableMetadataLayerTypes.has(BasemapLayerType.GEOGRAPHIC_LINES)
-  );
-  const supportsMeridiansDotted = $derived(
-    !availableMetadataLayerTypes.has(BasemapLayerType.GRATICULE)
+    !isCustomBasemap &&
+      (availableMetadataLayerTypes.has(BasemapLayerType.CENTROID) ||
+        availableMetadataLayerTypes.has(BasemapLayerType.POINT))
   );
   const supportsFrontieresDotted = $derived(
     !availableMetadataLayerTypes.has(BasemapLayerType.LIMIT)
@@ -231,7 +254,6 @@
             showColor={true}
             showDotted={true}
             showThickness={true}
-            thicknessMax={20}
             color={getConfig('frontieres')?.color}
             dotted={getConfig('frontieres')?.dotted}
             dottedPattern={getConfig('frontieres')?.dottedPattern}
@@ -330,12 +352,7 @@
           <LayerConfigSimple
             showColor={true}
             showDotted={true}
-            disableDotted={!supportsEquatorDotted}
-            dottedDisabledReason={!supportsEquatorDotted
-              ? m.basemap_dotted_unavailable_reason()
-              : undefined}
             showThickness={true}
-            thicknessMax={20}
             color={getConfig('equateur')?.color}
             dotted={getConfig('equateur')?.dotted}
             dottedPattern={getConfig('equateur')?.dottedPattern}
@@ -353,14 +370,11 @@
           onToggleChange={(checked) => handleLayerToggle('meridiens', checked)}
         >
           <LayerConfigMeridiens
-            remarquables={getConfig('meridiens')?.remarquables}
+            mode={getConfig('meridiens')?.mode}
+            spacingDegrees={getConfig('meridiens')?.spacingDegrees}
             color={getConfig('meridiens')?.color}
             dotted={getConfig('meridiens')?.dotted}
             dottedPattern={getConfig('meridiens')?.dottedPattern}
-            disableDotted={!supportsMeridiansDotted}
-            dottedDisabledReason={!supportsMeridiansDotted
-              ? m.basemap_dotted_unavailable_reason()
-              : undefined}
             thickness={getConfig('meridiens')?.thickness}
             opacity={getConfig('meridiens')?.opacity}
             onchange={(updates) => handleLayerChange('meridiens', updates)}
@@ -382,7 +396,6 @@
               ? m.basemap_dotted_unavailable_reason()
               : undefined}
             showThickness={true}
-            thicknessMax={20}
             color={getConfig('frontieres')?.color}
             dotted={getConfig('frontieres')?.dotted}
             dottedPattern={getConfig('frontieres')?.dottedPattern}
@@ -408,11 +421,14 @@
           onToggleChange={(checked) => handleLayerToggle('villes', checked)}
         >
           <LayerConfigVilles
-            category={getConfig('villes')?.category}
+            count={getConfig('villes')?.count}
             symbol={getConfig('villes')?.symbol}
             color={getConfig('villes')?.color}
             size={getConfig('villes')?.size}
             opacity={getConfig('villes')?.opacity}
+            labelFontFamily={getConfig('villes')?.labelFontFamily}
+            labelSize={getConfig('villes')?.labelSize}
+            labelColor={getConfig('villes')?.labelColor}
             onchange={(updates) => handleLayerChange('villes', updates)}
           />
         </ExpandableSection>

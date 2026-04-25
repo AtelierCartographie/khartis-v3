@@ -571,6 +571,39 @@ describe('createPolygonLayers', () => {
     ).toEqual(['keep-projected']);
   });
 
+  it('uses the projected GeoJSON fallback for native polygons when a projection is active', () => {
+    const sourceGeoJson: FeatureCollection<Polygon> = {
+      type: 'FeatureCollection',
+      features: [createPolygonFeature('keep', 2024)]
+    };
+    const projectedGeoJson: FeatureCollection<Polygon> = {
+      type: 'FeatureCollection',
+      features: [createPolygonFeature('keep-projected', 2024)]
+    };
+
+    arrowTableToGeoJSONMock.mockReturnValue(sourceGeoJson);
+    projectGeoJSONMock.mockReturnValue(projectedGeoJson);
+
+    const layers = createPolygonLayers(
+      createTableWithFields([]),
+      {
+        ...createGeometryInfo(),
+        encoding: 'geoarrow.wkb',
+        isNativeGeoArrow: true,
+        isWkbEncoded: true,
+        isGeoJsonEncoded: false
+      },
+      createContext(createVisualization(FillMode.UNIQUE))
+    );
+
+    expect(parseSolidPolygonsMock).not.toHaveBeenCalled();
+    expect(projectGeoJSONMock).toHaveBeenCalledWith(
+      sourceGeoJson,
+      expect.objectContaining({ stream: expect.any(Function) })
+    );
+    expect(layers[0]).toBeInstanceOf(GeoJsonLayer);
+  });
+
   it('skips the pattern overlay when polygon fill is disabled', () => {
     arrowTableToGeoJSONMock.mockReturnValue({
       type: 'FeatureCollection',
@@ -584,6 +617,39 @@ describe('createPolygonLayers', () => {
     );
 
     expect(getPatternLayer(layers)).toBeUndefined();
+  });
+
+  it('renders representative point symbols in the projected GeoJSON polygon fallback', () => {
+    arrowTableToGeoJSONMock.mockReturnValue({
+      type: 'FeatureCollection',
+      features: [createPolygonFeature('keep', 2024)]
+    } satisfies FeatureCollection<Polygon>);
+
+    const layers = createPolygonLayers(
+      createTableWithFields([]),
+      createGeometryInfo(),
+      {
+        ...createContext(createSymbolVisualization()),
+        representativePointTable: createTableWithFields([]),
+        representativePointGeometryInfo: {
+          ...createPointGeometryInfo(),
+          type: 'POINT' as GeometryInfo['type']
+        }
+      }
+    );
+
+    expect(projectGeoJSONMock).toHaveBeenCalled();
+    expect(parsePointDataWithProjectionMock).toHaveBeenCalled();
+    expect(layers.some((layer) => layer instanceof ScatterplotLayer)).toBe(
+      true
+    );
+    expect(
+      layers.some(
+        (layer) =>
+          layer instanceof GeoJsonLayer &&
+          String(layer.props.id).startsWith('polygon-layer')
+      )
+    ).toBe(false);
   });
 
   it('renders the GeoJSON fallback pattern below the polygon stroke', () => {

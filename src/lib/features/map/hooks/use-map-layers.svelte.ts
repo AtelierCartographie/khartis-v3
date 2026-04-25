@@ -24,7 +24,7 @@ import {
 } from '../layers';
 import { extractGeometryInfo } from '../io';
 import { buildProjectionForBasemap } from '../utils/geoarrow-stream-bridge';
-import { GeometryType } from '../constants';
+import { DeckLayerId, GeometryType } from '../constants';
 import { PrimitiveFilterType } from '$lib/features/commons/store/visualization.store.svelte';
 import type { PrimitiveFilter } from '$lib/features/commons/store/visualization.store.svelte';
 import type {
@@ -64,6 +64,24 @@ const GEOMETRY_TO_PRIMITIVE: Partial<Record<GeometryType, PrimitiveFilter>> = {
   [GeometryType.POLYGON]: PrimitiveFilterType.POLYGON,
   [GeometryType.MULTIPOLYGON]: PrimitiveFilterType.POLYGON
 };
+
+const ORTHOGRAPHIC_BASEMAP_LAYER_PREFIXES = [
+  DeckLayerId.BASEMAP_TERRE,
+  DeckLayerId.BASEMAP_MERS,
+  DeckLayerId.BASEMAP_LACS,
+  DeckLayerId.BASEMAP_RIVIERES,
+  DeckLayerId.BASEMAP_RELIEF,
+  DeckLayerId.BASEMAP_EQUATEUR,
+  DeckLayerId.BASEMAP_MERIDIENS,
+  DeckLayerId.BASEMAP_FRONTIERES,
+  DeckLayerId.BASEMAP_VILLES,
+  DeckLayerId.BASEMAP_VILLES_LABELS,
+  DeckLayerId.BASEMAP_META_LAND,
+  DeckLayerId.BASEMAP_META_LIMIT,
+  DeckLayerId.BASEMAP_META_GRATICULE,
+  DeckLayerId.BASEMAP_META_GEO_LINES,
+  DeckLayerId.BASEMAP_META_CENTROID
+] as const;
 
 export interface UseMapLayersProps {
   getDeckOverlay: () => MapboxOverlay | null;
@@ -173,6 +191,24 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
   }
 
   let lastAppliedLayers: Layer<DeckDataRow>[] = [];
+
+  function isOrthographicBasemapLayer(layer: Layer<DeckDataRow>): boolean {
+    const layerId = String(layer.id);
+    return ORTHOGRAPHIC_BASEMAP_LAYER_PREFIXES.some(
+      (prefix) => layerId === prefix || layerId.startsWith(`${prefix}-`)
+    );
+  }
+
+  function getPreservablePreviousLayers(
+    shouldShowBasemapLayers: boolean
+  ): Layer<DeckDataRow>[] {
+    if (shouldShowBasemapLayers) {
+      return lastAppliedLayers;
+    }
+    return lastAppliedLayers.filter(
+      (layer) => !isOrthographicBasemapLayer(layer)
+    );
+  }
 
   const basemapProjectionCache = new WeakMap<
     NonNullable<BasemapMetadata>,
@@ -523,6 +559,22 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     );
   }
 
+  function getDatasetProjectionMetadata(
+    datasetId: string,
+    currentMetadata: BasemapMetadata | null
+  ): BasemapMetadata | null {
+    const metadata = getProjectionMetadataForDataset?.(datasetId);
+    const resolvedMetadata =
+      metadata === undefined ? currentMetadata : metadata;
+    if (
+      !basemapStyleStore.referenceBasemapId &&
+      !getDatasetJoinedBasemap(datasetId)
+    ) {
+      return null;
+    }
+    return resolvedMetadata;
+  }
+
   function getRequestedMetadataLayerTypes(
     worldBaseTable: ArrowTable | null
   ): BasemapLayerType[] {
@@ -545,13 +597,8 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           requestedTypes.add(BasemapLayerType.LINE);
           break;
         case 'villes':
+          requestedTypes.add(BasemapLayerType.CENTROID);
           requestedTypes.add(BasemapLayerType.POINT);
-          break;
-        case 'meridiens':
-          requestedTypes.add(BasemapLayerType.GRATICULE);
-          break;
-        case 'equateur':
-          requestedTypes.add(BasemapLayerType.GEOGRAPHIC_LINES);
           break;
       }
     }
@@ -587,14 +634,15 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       const hasRenderableUserData =
         tables.size > 0 || geoJSONs.size > 0 || Boolean(splitData?.size);
 
-      // Only apply modelMatrix in orthographic mode (Deck.gl standalone)
+      // Only apply modelMatrix in the Deck.gl OrthographicView engine.
       // In MapLibre mode (deckOverlay), the map handles projection including globe
       const isOrthographicMode = !deckOverlay && Boolean(deckInstance);
       const matrixToApply = isOrthographicMode
         ? (getModelMatrix?.() ?? projectionStore.modelMatrix)
         : null;
 
-      // In MapLibre mode, use projection suffix to force layer re-creation when projection changes
+      // In MapLibre mode, use projection suffix to force layer re-creation
+      // when projection changes.
       // This is a workaround for deck.gl issue #9466 where layers don't sync with globe projection
       const projectionSuffix = deckOverlay
         ? mapProjectionStore.projection
@@ -602,10 +650,8 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       const projectionFitBbox = getProjectionFitBbox?.() ?? null;
       const fitPaddingPx = projectionStore.fitPaddingPx;
 
-      // Only applies in orthographic mode — in MapLibre mode, the map handles
-      // projection natively (WebMercator/globe) and thematic data must stay in
-      // WGS84 lat/lng. Applying a d3-geo projection here would convert coordinates
-      // to metres, causing deck.gl "invalid latitude" errors.
+      // Only applies in the Deck.gl OrthographicView engine. In MapLibre mode,
+      // the map handles projection natively and data must stay in WGS84 lat/lng.
       //
       // Memoized: buildProjectionForBasemap() creates a new object each call,
       // defeating downstream WeakMap caches. We keep the same reference until
@@ -636,7 +682,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
 
       const layers: Layer<DeckDataRow>[] = [];
 
-      // Only show basemap layers in orthographic mode (Deck.gl standalone)
+      // Only show basemap layers in the Deck.gl OrthographicView engine.
       // In MapLibre mode, the tiled basemap provides the background (OSM, Carte Facile, etc.)
       const shouldShowBasemapLayers = shouldShowOrthographicBasemapLayers({
         isOrthographicMode,
@@ -657,7 +703,8 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           const basemapCtx = {
             modelMatrix: matrixToApply ?? undefined,
             projectionSuffix,
-            projection: activeBasemapProjection
+            projection: activeBasemapProjection,
+            bbox: currentMetadata?.bbox ?? projectionFitBbox
           };
 
           const metadataLayers: MetadataLayerEntry[] = [];
@@ -742,8 +789,10 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             ctx.densityGeometryInfo =
               extractGeometryInfo(densityTable) ?? undefined;
           }
-          const datasetProjectionMetadata =
-            getProjectionMetadataForDataset?.(datasetId) ?? currentMetadata;
+          const datasetProjectionMetadata = getDatasetProjectionMetadata(
+            datasetId,
+            currentMetadata
+          );
           const datasetGeometryCrs = getDatasetGeometryCrs(datasetId);
           const allowProjectionOverride =
             !shouldUseIdentityProjectionForDatasetCrs(datasetGeometryCrs);
@@ -889,8 +938,10 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           const table = tables.get(datasetId);
           const geojson = geoJSONs.get(datasetId);
           const fallbackCtx = buildDatasetFallbackContext(datasetId);
-          const datasetProjectionMetadata =
-            getProjectionMetadataForDataset?.(datasetId) ?? currentMetadata;
+          const datasetProjectionMetadata = getDatasetProjectionMetadata(
+            datasetId,
+            currentMetadata
+          );
           const datasetGeometryCrs = getDatasetGeometryCrs(datasetId);
           const allowProjectionOverride =
             !shouldUseIdentityProjectionForDatasetCrs(datasetGeometryCrs);
@@ -950,16 +1001,20 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         hasExpectedActiveViz ||
         hasExpectedDatasetFallbacks ||
         hasVisibleBasemapConfig;
+      const previousLayersToPreserve = getPreservablePreviousLayers(
+        shouldShowBasemapLayers
+      );
       const shouldPreservePreviousLayers =
         layers.length === 0 &&
-        lastAppliedLayers.length > 0 &&
+        previousLayersToPreserve.length > 0 &&
         hasExpectedVisibleLayers;
 
       if (shouldPreservePreviousLayers) {
-        const applied = setLayers(lastAppliedLayers);
+        const applied = setLayers(previousLayersToPreserve);
         if (!applied) {
           return;
         }
+        lastAppliedLayers = previousLayersToPreserve;
       } else {
         const applied = setLayers(layers);
         if (!applied) {
@@ -967,9 +1022,12 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         }
         if (layers.length > 0) {
           lastAppliedLayers = layers;
-        } else if (!hasExpectedVisibleLayers) {
-          // When emptiness is expected, drop fallback layers to avoid stale restores.
-          lastAppliedLayers = [];
+        } else if (
+          !hasExpectedVisibleLayers ||
+          previousLayersToPreserve.length !== lastAppliedLayers.length
+        ) {
+          // Keep the restore cache aligned with intentionally removed layers.
+          lastAppliedLayers = previousLayersToPreserve;
         }
       }
       logger.success('Deck.gl layers applied', LogCategory.MAP, {
