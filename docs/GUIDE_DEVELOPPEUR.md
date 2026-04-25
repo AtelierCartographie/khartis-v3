@@ -6,37 +6,18 @@
 
 ---
 
-## L'écosystème géospatial — concepts fondamentaux
+## Concepts géospatiaux spécifiques à Khartis
 
-### Coordonnées géographiques et systèmes de référence
-
-Une position sur Terre s'exprime avec deux valeurs : **longitude** (axe est-ouest, -180 à +180) et **latitude** (axe nord-sud, -90 à +90). La convention dans les APIs géo est `[lon, lat]` — longitude en premier.
-
-```
-Paris : lon = 2.35, lat = 48.86  →  [2.35, 48.86]
-```
-
-Le système de référence standard du web est **WGS 84 / EPSG:4326** : utilisé par le GPS, les fichiers GeoJSON et la quasi-totalité des données géographiques brutes. Dans les métadonnées des fonds de carte Khartis, `proj_source: "EPSG:4326"` indique que les coordonnées sources sont en degrés lon/lat WGS 84.
-
-Un **code EPSG** est l'identifiant numérique d'un système de référence de coordonnées (par exemple EPSG:2154 = Lambert-93, système officiel français).
+> Pour les définitions générales (projection, bbox, WKT, GeoJSON, etc.), voir le [Glossaire](GLOSSAIRE.md). Ce qui suit concentre les mécanismes propres au projet.
 
 ---
 
-### Projections cartographiques
+### Projections dans Khartis
 
-Une projection est une transformation mathématique `(lon, lat) → (x, y)` qui convertit les coordonnées sphériques en coordonnées planes. Chaque projection préserve certaines propriétés au détriment d'autres (surfaces, angles, distances).
-
-```
-Mercator         : lon/lat → x/y en mètres (déforme les surfaces aux pôles)
-Robinson         : compromis surface/forme
-Lambert-93       : optimisée pour la France (EPSG:2154)
-Natural Earth 2  : esthétique, planisphères
-```
-
-Dans Khartis, les projections sont résolues par deux librairies :
+Deux bibliothèques résolvent les projections :
 
 - **d3-geo** — projections intégrées (Robinson, Natural Earth, Mercator, etc.), interface `GeoProjection`.
-- **proj4.js** — projections exotiques via chaîne PROJ.4 (`"+proj=lcc +lat_1=49 +lon_0=3..."`).
+- **proj4.js** — projections exotiques via chaîne PROJ.4.
 
 **`proj4d3(proj4string)`** (`map/utils/proj4d3.ts`) crée un objet `GeoProjection` compatible d3-geo à partir d'une chaîne PROJ.4. Ce pont est nécessaire car `geoarrow-deck-stream` attend une interface d3-geo.
 
@@ -44,167 +25,19 @@ Les noms PROJ.4 sans équivalent dans proj4.js (par exemple `natearth2`) sont ma
 
 ---
 
-### Formats d'encodage des géométries
+### Formats de géométrie
 
-**WKT (Well-Known Text)** — représentation texte normalisée (ISO/OGC) :
+**GeoArrow** est le format pivot : coordonnées stockées dans des `TypedArray` continus (un `Float64Array` par dimension), permettant un upload GPU direct sans parsing côté CPU. Tous les fonds du catalogue sont au format **GeoParquet** (Parquet + colonne GeoArrow).
 
-```
-POINT(2.35 48.86)
-LINESTRING(0 0, 1 1, 2 0)
-POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))
-MULTIPOLYGON(...)
-```
+**WKB** est le format interne de DuckDB spatial (`ST_Read()`). DuckDB le convertit automatiquement en GeoArrow lors de l'export.
 
-**WKB (Well-Known Binary)** — version binaire de WKT. Compact, opaque. Format interne de DuckDB spatial (`ST_Read()`, `ST_AsWKB()`). Non manipulé directement dans Khartis — DuckDB le convertit en GeoArrow lors de l'export Parquet.
-
-**GeoJSON** — format JSON standard du web cartographique, avec objets Feature imbriqués. Simple à déboguer, coûteux en mémoire et lent à parser au-delà de quelques milliers d'entités. Utilisé dans Khartis pour les datasets GeoJSON importés par l'utilisateur.
-
-**GeoArrow** — extension d'Apache Arrow pour les géométries. Les coordonnées sont stockées dans des `TypedArray` continus (un `Float64Array` par dimension) plutôt que dans des objets JS imbriqués. Ce format permet un upload GPU direct sans parsing côté CPU.
-
-```
-GeoJSON  : N features → N objets Feature JS → parsing JS, beaucoup d'allocations
-GeoArrow : N features → Float64Array continu → un seul buffer, upload GPU direct
-```
-
-Tous les fonds de carte du catalogue Khartis sont au format **GeoParquet** (Parquet + colonne GeoArrow). L'extension Arrow de la colonne géométrique (`geoarrow.polygon`, `geoarrow.multipolygon`, etc.) est lue par `extractGeometryInfo()` depuis les métadonnées du schéma Arrow.
-
----
-
-### Bounding box (bbox)
-
-Une bbox est le rectangle englobant minimal d'une géométrie ou d'un dataset. Format standard GeoJSON : `[minLon, minLat, maxLon, maxLat]`.
-
-```ts
-// France métropolitaine
-const bbox: [number, number, number, number] = [-5.14, 41.33, 9.56, 51.09];
-//                                               minLon  minLat maxLon maxLat
-```
-
-Usages dans Khartis :
-
-- **`useMapBounds`** — calcule la bbox depuis une Arrow table ou un GeoJSON et appelle `fitBounds()` pour centrer la vue.
-- **`projectionStore`** — reçoit la bbox via `setReferenceBbox()` pour calculer la `modelMatrix` (viewport orthographique).
-- **Sélection de projection** — la bbox du dataset est comparée aux emprises des projections du catalogue pour scorer leur adéquation.
-- **`getMainlandBboxForBasemap()`** — extrait la bbox de la partie continentale d'un fond composite (France métropolitaine sans DOM-TOM) pour le centrage initial.
-
----
-
-### Fond de carte (basemap)
-
-Un fond de carte est un ensemble de géométries de référence (contours de pays, régions, communes) servant de support spatial aux données thématiques. Dans Khartis, **données et géométries sont séparées** :
-
-```
-Fond de carte = géométries (GeoParquet, colonne GeoArrow) + attributs (Parquet format long)
-Données user  = CSV / Excel avec valeurs par entité
-
-Jointure DuckDB : identifiant fond ↔ identifiant données → Arrow table combinée
-```
-
-Les **attributs** sont au format long (une ligne par variante d'identifiant : nom, code ISO, code INSEE...) pour permettre un matching flou insensible à la casse, aux accents et aux abréviations. Voir [FONDS_DE_CARTE.md](./FONDS_DE_CARTE.md) pour le détail du format.
-
-**`basemapService`** (`map/services/basemap.service.svelte.ts`) orchestre le chargement :
-
-1. `loadMetadata()` — lit `all-basemaps-metadata.json` (catalogue global).
-2. `loadBasemap(id)` — fetch le GeoParquet principal du fond sélectionné, le parse en Arrow table et le met en cache.
-3. `ensureCurrentLayersLoaded()` — charge à la demande les couches annexes visibles (limites, graticules, lignes géographiques).
-4. `ensureAttributesLoaded()` — enregistre `all-basemaps-attributes.parquet` dans DuckDB uniquement quand une jointure en a besoin.
-
----
-
-### WebGL
-
-WebGL est une API de rendu graphique du navigateur qui donne accès au GPU via JavaScript. Les données sont uploadées une fois dans la mémoire GPU sous forme de buffers binaires (`Float32Array`, `Uint8Array`), puis des programmes GPU (shaders) les transforment en pixels à chaque frame — sans repasser par le CPU.
-
-```
-CPU                                    GPU
--------------------------------------  ------------------------------------
-Float64Array positions  → upload  →    vertex shader    : [x,y] → pixel
-Uint8Array colors       → upload  →    fragment shader  : couleur / pixel
-                          draw()  →    60 fps, 100 000 polygones simultanés
-```
-
-Khartis cible **WebGL2** (`DECK_DEVICE_TYPE = 'webgl'`). Chaque instance Deck.gl et MapLibre crée son propre contexte WebGL2. Les navigateurs limitent les contextes actifs simultanément à 8–16 — contrainte directe sur le nombre de facettes utilisables.
-
----
-
-### Deck.gl
-
-Deck.gl est une librairie de visualisation de données géospatiales construite sur WebGL (et WebGPU). Elle fournit une abstraction de haut niveau : des `Layer` configurés via des props et des fonctions accesseurs, sans écrire de shaders directement.
-
-```ts
-new SolidPolygonLayer({
-  id: 'countries', // ID stable — critique pour le diff interne Deck.gl
-  data: binaryPolygonData, // BinaryPolygonData (Float64Array continu)
-  getFillColor: [220, 220, 220, 255], // constante — pas d'accessor, pas d'updateTrigger
-  pickable: true // active le hover/click GPU-side
-});
-```
-
-Deck.gl compare les props par référence à chaque appel `setProps()`. Un ID stable évite le re-upload GPU complet. Un accesseur constant (`[r,g,b,a]`) est plus performant qu'une fonction car Deck.gl n'a pas besoin d'itérer les features.
-
-**Deux modes d'intégration dans Khartis** (détail dans [MAP.md](./MAP.md)) :
-
-- **`Deck` standalone** (`OrthographicView`) — mode par défaut, Deck.gl contrôle le rendu complet (fond de carte + données).
-- **`MapboxOverlay`** (`@deck.gl/mapbox`) — mode OSM, Deck.gl s'intercale dans le pipeline WebGL de MapLibre.
-
-`useMapInit` (`map/hooks/use-map-init.svelte.ts`) initialise l'un ou l'autre mode et expose `switchToOrthographicMode()` / `switchToMapLibreMode()` pour basculer dynamiquement.
-
----
-
-### MapLibre GL
-
-MapLibre GL est un moteur de rendu de cartes tuilées (fork open-source de Mapbox GL JS). Il gère le chargement et le rendu des **tuiles vectorielles** (OpenStreetMap, WMTS, etc.) avec WebGL.
-
-Dans Khartis, MapLibre est utilisé **uniquement en mode OSM** pour afficher les fonds de carte tuilés. En mode orthographique (fond de carte du catalogue), MapLibre n'est pas instancié — Deck.gl gère l'intégralité du rendu.
-
-`useMapBasemap` (`map/hooks/use-map-basemap.svelte.ts`) synchronise le style MapLibre, la couche raster OSM, la visibilité des étiquettes et la projection (`mercator` / `globe`). `map.setStyle()` est une opération coûteuse (teardown + rebuild complet) — un garde de déduplication par clé de style évite les appels redondants.
-
----
-
-### Apache Arrow
-
-Apache Arrow est un format de données columnar en mémoire : les valeurs d'une même colonne sont stockées dans un `TypedArray` contigu plutôt que dans des objets row-oriented.
-
-```
-Row-oriented (tableau d'objets)             Column-oriented (Arrow)
-[                                           col "pays" : ["France", "Allemagne", "Italie"]
-  { pays: "France",    pib: 2800 },         col "pib"  : Float64Array([2800, 4260, 2100])
-  { pays: "Allemagne", pib: 4260 },
-  { pays: "Italie",    pib: 2100 }
-]
-```
-
-Arrow est le format pivot entre DuckDB (traitement SQL) et Deck.gl (rendu GPU). DuckDB retourne ses résultats en **Arrow IPC** (sérialisation binaire inter-process), désérialisée via `tableFromIPC()` d'`apache-arrow`.
-
----
-
-### DuckDB WASM
-
-DuckDB est un moteur SQL analytique OLAP compilé en WebAssembly, s'exécutant entièrement dans le navigateur. Il lit directement des fichiers Parquet, CSV, GeoJSON (via l'extension `spatial`) et retourne les résultats en Arrow IPC.
-
-Dans Khartis, DuckDB est le **seul moteur de traitement de données** : imports, jointures, agrégations, calculs de seuils de classification — tout passe par SQL.
-
-```
-DuckDB("SELECT * FROM read_parquet('data.parquet')")  →  Arrow IPC bytes
-tableFromIPC(bytes)                                   →  ArrowTable en mémoire
-geoarrow-deck-stream (parsePolygonsToSolid)           →  BinaryPolygonData
-Deck.gl SolidPolygonLayer                             →  upload GPU → rendu
-```
-
-**`duckDBOrchestrator`** (`duckdb/orchestrator/`) est la façade qui expose les opérations de haut niveau : `arrowOps` (lecture/écriture Arrow), `joinOps` (jointure fond / données), `columnOps`, `searchOps`, etc. Ne doit jamais être appelé avant `initialize()`.
-
-**Macros SQL** (`duckdb/macros/`) — enregistrées une seule fois à l'initialisation :
-
-- `normalize_text()` — normalisation pour le matching flou (accents, casse, ponctuation).
-- `get_similarity()` — score Jaro-Winkler pour la jointure approximative.
-- `kmeans()`, `quantile()`, `q6()`, `equi_width()`, `nested_means()`, `headtail2()` — méthodes de classification utilisées par l'interface.
-- 8 macros de simplification (voir [DUCKDB.md](./DUCKDB.md)).
+L'extension Arrow de la colonne géométrique (`geoarrow.polygon`, `geoarrow.multipolygon`, etc.) est lue par `extractGeometryInfo()` depuis les métadonnées du schéma Arrow pour choisir le parseur approprié.
 
 ---
 
 ### `featureId` — lien vertex / données
 
-Quand `geoarrow-deck-stream` parse une Arrow table en buffers binaires (`BinaryPolygonData`, `BinaryPathData`, `BinaryPointData`), chaque vertex reçoit un `featureId` — l'index de la ligne Arrow d'origine. Ce champ est un `Uint32Array` parallèle au tableau de positions.
+Quand `geoarrow-deck-stream` parse une Arrow table en buffers binaires, chaque vertex reçoit un `featureId` — l'index de la ligne Arrow d'origine. Ce champ est un `Uint32Array` parallèle au tableau de positions.
 
 ```ts
 // polyData.featureIds[i] = index ligne Arrow du vertex i
@@ -221,40 +54,41 @@ Sans `featureId`, il est impossible de retrouver à quelle entité appartient un
 
 ---
 
-### `GeometryInfo` — détection du format Arrow
-
-`extractGeometryInfo(table)` (`map/io/`) analyse les métadonnées du schéma Arrow pour identifier le format de la colonne géométrique :
-
-```ts
-interface GeometryInfo {
-  type: string; // 'POLYGON', 'MULTIPOLYGON', 'POINT', 'LINESTRING'...
-  encoding: string | null; // 'geoarrow.polygon', 'WKB', 'GEOJSON'...
-  geoColumn: string; // nom de la colonne géométrique
-  isNativeGeoArrow: boolean;
-  isWkbEncoded: boolean;
-  isGeoJsonEncoded: boolean;
-}
-```
-
-Selon ces flags, `createDeckLayers()` choisit le parseur approprié (`parseSolidPolygons` pour GeoArrow natif, `arrowTableToGeoJSON` puis `createGeoJsonLayers` pour WKB/GeoJSON).
-
----
-
 ### `modelMatrix` — viewport orthographique
 
-En mode orthographique, Deck.gl utilise une `OrthographicView` (coordonnées pixel, pas géographiques). Les géométries projetées par `geoarrow-deck-stream` sont en coordonnées de projection (par exemple `[0..960] × [0..600]` pour Natural Earth 2). La `modelMatrix` (Matrix4) appliquée à toutes les couches centre et met à l'échelle cette sortie dans le viewport Deck.gl.
+En mode orthographique, Deck.gl utilise une `OrthographicView` (coordonnées pixel). Les géométries projetées par `geoarrow-deck-stream` sont en coordonnées de projection (par exemple `[0..960] × [0..600]`). La `modelMatrix` (Matrix4) centre et met à l'échelle cette sortie dans le viewport Deck.gl.
 
-`projectionStore` (`map/stores/projection.store.svelte.ts`) calcule cette matrice via `get_model_matrix_from_bbox(bbox, canvasSize)` à chaque changement de bbox de référence ou de taille de canvas. Elle est transmise à chaque couche via `LayerContext.modelMatrix`.
+`projectionStore` (`map/stores/projection.store.svelte.ts`) calcule cette matrice via `get_model_matrix_from_bbox(bbox, canvasSize)` à chaque changement de bbox ou de taille de canvas.
 
 ---
 
 ### Filtrage des données Arrow — deux niveaux
 
-**`filterArrowTableByDataFilters(table, vizFilters, primitiveType)`** — filtre par les conditions de visualisation (`>=`, `<=`, `=`, `contains`, `between`, etc.) et par type de primitive (afficher uniquement les polygones, les lignes, etc.).
+**`filterArrowTableByDataFilters(table, vizFilters, primitiveType)`** — filtre par les conditions de visualisation (`>=`, `<=`, `=`, `contains`, `between`, etc.) et par type de primitive.
 
-**`filterArrowTableByTableFilters(table, tableFilters)`** — filtre par la sélection de lignes de la data table. Ces filtres sont cumulables avec les premiers.
+**`filterArrowTableByTableFilters(table, tableFilters)`** — filtre par la sélection de lignes de la data table. Cumulable avec le premier.
 
-Ces deux opérations se font **côté JavaScript sur la Arrow table en mémoire** (pas via DuckDB SQL) pour éviter un aller-retour DuckDB à chaque interaction. Le `DataFilterExtension` de Deck.gl prend en charge un troisième niveau de filtrage côté GPU (filtre par année, voir [MAP.md](./MAP.md)).
+Ces deux opérations se font **côté JavaScript sur la Arrow table en mémoire** (pas via DuckDB SQL) pour éviter un aller-retour à chaque interaction. Le `DataFilterExtension` de Deck.gl gère un troisième niveau côté GPU (voir [MAP.md](./MAP.md)).
+
+---
+
+### Fond de carte (basemap)
+
+Dans Khartis, **données et géométries sont séparées** :
+
+```
+Fond de carte = géométries (GeoParquet, colonne GeoArrow) + attributs (Parquet format long)
+Données user  = CSV avec valeurs par entité
+
+Jointure DuckDB : identifiant fond ↔ identifiant données → Arrow table combinée
+```
+
+**`basemapService`** (`map/services/basemap.service.svelte.ts`) orchestre le chargement :
+
+1. `loadMetadata()` — lit `all-basemaps-metadata.json`.
+2. `loadBasemap(id)` — fetch le GeoParquet principal, parse en Arrow table et met en cache.
+3. `ensureCurrentLayersLoaded()` — charge à la demande les couches annexes visibles.
+4. `ensureAttributesLoaded()` — enregistre `all-basemaps-attributes.parquet` dans DuckDB uniquement quand une jointure en a besoin.
 
 ---
 
@@ -270,7 +104,7 @@ git clone https://github.com/AtelierCartographie/khartis-v3.git
 cd khartis-v3
 cp .env.sample .env    # sample public, sans secrets
 pnpm install           # télécharge aussi les extensions DuckDB
-pnpm dev               # serveur de dev sur http://localhost:5176
+pnpm dev               # serveur de dev sur http://localhost:5176/cartographie/khartisnewpprd/
 ```
 
 Le `.env` local doit être en place avant de lancer le serveur. Le sample committé (`.env.sample`) reprend uniquement des valeurs non confidentielles. Par défaut, `BASE_PATH` pointe vers le chemin PPRD pour faciliter les tests de chemins déployés ; définissez `BASE_PATH=` dans votre `.env` pour servir l'application à la racine en local.
@@ -470,10 +304,10 @@ export const featureStore = createFeatureStore();
 
 ## URLs de développement
 
-| Environnement | URL                   | Usage                                              |
-| ------------- | --------------------- | -------------------------------------------------- |
-| Dev           | http://localhost:5176 | Développement avec hot-reload                      |
-| Preview       | http://localhost:4173 | Build de production (`pnpm build && pnpm preview`) |
+| Environnement | URL                                                | Usage                                              |
+| ------------- | -------------------------------------------------- | -------------------------------------------------- |
+| Dev           | http://localhost:5176/cartographie/khartisnewpprd/ | Développement avec hot-reload                      |
+| Preview       | http://localhost:4173                              | Build de production (`pnpm build && pnpm preview`) |
 
 ---
 
