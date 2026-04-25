@@ -23,6 +23,8 @@ import { Field, Schema, Table, Type, tableFromIPC } from 'apache-arrow/Arrow';
 // Plain Map — metadata is non-reactive data processing (no need for SvelteMap proxy)
 import { DUCK_CONST, GEO_CONSTANTS } from '../constants';
 
+let maximumInscribedCircleSupported = true;
+
 function escapeSqlLiteral(value: string): string {
   return value.replace(/'/g, "''");
 }
@@ -322,13 +324,20 @@ async function executeArrowIpcQuery(
 
 function getRepresentativePointExpression(
   geometryColumnName: string,
-  geometryType: string
+  geometryType: string,
+  options?: { simple?: boolean }
 ): string | null {
   const escapedGeometryColumn = `"${geometryColumnName}"`;
 
   switch (geometryType) {
     case GeometryType.POLYGON:
     case GeometryType.MULTIPOLYGON:
+      if (options?.simple) {
+        return `CASE
+          WHEN ST_IsEmpty(${escapedGeometryColumn}) THEN NULL
+          ELSE ST_PointOnSurface(${escapedGeometryColumn})
+        END`;
+      }
       return `CASE
         WHEN ST_IsEmpty(${escapedGeometryColumn}) THEN NULL
         WHEN NOT ST_IsValid(${escapedGeometryColumn}) THEN ST_PointOnSurface(${escapedGeometryColumn})
@@ -446,36 +455,78 @@ export async function fetchArrowRepresentativePointTable(
     };
   }
 
+  const useSimpleExpression = !maximumInscribedCircleSupported;
   const pointExpression = getRepresentativePointExpression(
     geomColumn.column_name,
-    geometryType
+    geometryType,
+    { simple: useSimpleExpression }
   );
 
   if (!pointExpression) {
     return fetchArrowTableWithGeometry(tableName, Duck, whereClause);
   }
 
-  let query = `SELECT * REPLACE (
-    CASE
-      WHEN "${geomColumn.column_name}" IS NULL THEN NULL
-      ELSE ${pointExpression}
-    END AS "${geomColumn.column_name}"
-  ) FROM "${tableName}"`;
-
-  if (whereClause) {
-    query += ` WHERE ${whereClause}`;
-  }
+  const buildQuery = (expression: string): string => {
+    let q = `SELECT * REPLACE (
+      CASE
+        WHEN "${geomColumn.column_name}" IS NULL THEN NULL
+        ELSE ${expression}
+      END AS "${geomColumn.column_name}"
+    ) FROM "${tableName}"`;
+    if (whereClause) {
+      q += ` WHERE ${whereClause}`;
+    }
+    return q;
+  };
 
   const geometryCrs = extractGeometryColumnCrs(geomColumn.column_type);
-  return {
-    table: await executeArrowIpcQuery(Duck, query, tableName),
-    geomColumn: {
-      ...geomColumn,
-      column_type: geometryCrs
-        ? `${GEOMETRY_COLUMN_TYPE}('${geometryCrs}')`
-        : GEOMETRY_COLUMN_TYPE
-    }
+  const finalGeomColumn = {
+    ...geomColumn,
+    column_type: geometryCrs
+      ? `${GEOMETRY_COLUMN_TYPE}('${geometryCrs}')`
+      : GEOMETRY_COLUMN_TYPE
   };
+
+  try {
+    return {
+      table: await executeArrowIpcQuery(
+        Duck,
+        buildQuery(pointExpression),
+        tableName
+      ),
+      geomColumn: finalGeomColumn
+    };
+  } catch (error) {
+    if (useSimpleExpression) {
+      throw error;
+    }
+    const fallbackExpression = getRepresentativePointExpression(
+      geomColumn.column_name,
+      geometryType,
+      { simple: true }
+    );
+    if (!fallbackExpression || fallbackExpression === pointExpression) {
+      throw error;
+    }
+    maximumInscribedCircleSupported = false;
+    logger.warn(
+      'Representative point query failed, falling back to ST_PointOnSurface for the rest of this session',
+      LogCategory.DUCKDB,
+      {
+        tableName,
+        geometryType,
+        error: error instanceof Error ? error.message : String(error)
+      }
+    );
+    return {
+      table: await executeArrowIpcQuery(
+        Duck,
+        buildQuery(fallbackExpression),
+        tableName
+      ),
+      geomColumn: finalGeomColumn
+    };
+  }
 }
 
 export async function addGeoArrowMetadataFromDuckDB(
