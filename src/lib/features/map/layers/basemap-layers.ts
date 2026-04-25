@@ -15,13 +15,13 @@ import {
   projectGeoJSON as _projectGeoJSON
 } from '../utils/geoarrow-stream-bridge';
 import type { ProjectionLike } from 'geoarrow-deck-stream';
-import * as d3 from 'd3-geo';
 import type {
   FeatureCollection,
   Feature,
   LineString,
   MultiLineString,
   Point,
+  MultiPoint,
   Polygon,
   MultiPolygon
 } from 'geojson';
@@ -51,11 +51,17 @@ import {
   type VillesLayerConfig
 } from '../stores/basemap-layers.store.svelte';
 import {
+  BASEMAP_LAYER_CONFIG,
+  BasemapGraticuleMode,
   BasemapRepresentation,
   BasemapCityCategory,
   BasemapCitySymbol
 } from '$lib/features/main-toolbar/constants';
-import type { DeckDataRow, GeometryInfo, RGBColor } from '../types';
+import {
+  DEFAULT_FONT_FAMILY,
+  resolveFontFamilyStack
+} from '$lib/features/step-toolbar/constants/fonts.constants';
+import type { BBox, DeckDataRow, GeometryInfo, RGBColor } from '../types';
 import type { StylePreset, StylePresets } from '../types/basemap.types';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import { withOpacity, dottedPatternToDashArray } from './layer-helpers';
@@ -66,6 +72,7 @@ const DASH_EXTENSION = new PathStyleExtension({
   dash: true,
   highPrecisionDash: true
 });
+const SOLID_DASH_ARRAY: [number, number] = [1, 0];
 
 /**
  * WeakMap cache for basemap GeoJSON conversions — avoids O(n) arrowTableToGeoJSON()
@@ -148,6 +155,8 @@ let cachedGraticuleKey: string | null = null;
 let cachedGraticuleData: FeatureCollection<
   LineString | MultiLineString
 > | null = null;
+let cachedEquatorKey: string | null = null;
+let cachedEquatorData: FeatureCollection<LineString> | null = null;
 
 let cachedCitiesKey: string | null = null;
 let cachedCitiesSource: FeatureCollection<Point> | null = null;
@@ -159,6 +168,8 @@ interface BasemapLayerContext {
   modelMatrix?: Matrix4 | null;
   projectionSuffix?: string;
   projection?: ProjectionLike;
+  bbox?: BBox | null;
+  excludeEquator?: boolean;
 }
 
 interface BaseLayerProps {
@@ -214,29 +225,27 @@ function canRenderViaGeoJsonFallback(geometryInfo: GeometryInfo): boolean {
   );
 }
 
-function isCompositeProjection(
-  projection: ProjectionLike | undefined
-): projection is ProjectionLike & { getSubProjections: () => unknown } {
-  return Boolean(
-    projection &&
-    typeof (projection as { getSubProjections?: unknown }).getSubProjections ===
-      'function'
-  );
-}
-
 function shouldPreferProjectedGeoJsonFallback(
   geometryInfo: GeometryInfo,
   projection: ProjectionLike | undefined
 ): boolean {
-  return (
-    canRenderViaGeoJsonFallback(geometryInfo) &&
-    isCompositeProjection(projection)
-  );
+  return canRenderViaGeoJsonFallback(geometryInfo) && Boolean(projection);
 }
 
 function toRgbColor(hex: string): RGBColor {
   const [r, g, b] = hexToRgb(hex);
   return [r, g, b];
+}
+
+function clampBasemapLayerThickness(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0.5;
+  }
+
+  return Math.min(
+    BASEMAP_LAYER_CONFIG.thickness.max,
+    Math.max(BASEMAP_LAYER_CONFIG.thickness.min, value)
+  );
 }
 
 function createStyledBasemapPathLayerProps(
@@ -245,12 +254,38 @@ function createStyledBasemapPathLayerProps(
   width: number
 ): ReturnType<typeof createPathLayerProps> {
   const pathProps = createPathLayerProps(lineData);
-  const pathBinaryData = pathProps.data as {
-    attributes: Record<string, unknown>;
+  const pathBinaryData = pathProps.data as typeof pathProps.data & {
+    attributes?: Record<string, unknown>;
   };
-  pathBinaryData.attributes.getColor = pathColorAttr(lineData, () => color);
-  pathBinaryData.attributes.getWidth = pathWidthAttr(lineData, () => width);
-  return pathProps;
+  const attributes: Record<string, unknown> = {
+    ...(pathBinaryData.attributes ?? {}),
+    getColor: pathColorAttr(lineData, () => color),
+    getWidth: pathWidthAttr(lineData, () => width)
+  };
+
+  return {
+    ...pathProps,
+    data: {
+      ...pathBinaryData,
+      attributes
+    } as typeof pathProps.data
+  };
+}
+
+function createDashedGeoJsonLineSubLayerProps(
+  dotted: boolean,
+  dashArray: [number, number]
+) {
+  const dashProps = {
+    extensions: dotted ? [DASH_EXTENSION] : [],
+    getDashArray: dashArray,
+    dashJustified: true
+  };
+
+  return {
+    'polygons-stroke': dashProps,
+    linestrings: dashProps
+  };
 }
 
 export function createTerreLayers(
@@ -520,9 +555,8 @@ export function createFrontieresLayer(
   const strokeColor = toRgbColor(config.color);
   const opacity = config.opacity / 100;
 
-  // Frontieres also draws polygon outlines, so borders are doubled at shared edges.
-  const effectiveThickness = Math.min(config.thickness, 0.5);
-  const effectiveOpacity = Math.min(opacity, 0.5);
+  const effectiveThickness = clampBasemapLayerThickness(config.thickness);
+  const effectiveOpacity = opacity;
 
   const layerId = buildLayerId(
     DeckLayerId.BASEMAP_FRONTIERES,
@@ -530,7 +564,7 @@ export function createFrontieresLayer(
   );
   const baseProps = getBaseLayerProps(ctx);
 
-  const dashArray = config.dotted
+  const dashArray: [number, number] = config.dotted
     ? dottedPatternToDashArray(config.dottedPattern)
     : [0, 0];
 
@@ -560,6 +594,7 @@ export function createFrontieresLayer(
       ),
       widthUnits: 'pixels',
       widthMinPixels: 0,
+      widthMaxPixels: BASEMAP_LAYER_CONFIG.thickness.max,
       extensions: config.dotted ? [DASH_EXTENSION] : [],
       getDashArray: dashArray,
       ...baseProps,
@@ -589,9 +624,13 @@ export function createFrontieresLayer(
         lineWidthUnits: 'pixels',
         getLineWidth: effectiveThickness,
         lineWidthMinPixels: 0,
-        lineWidthMaxPixels: 0.5,
+        lineWidthMaxPixels: BASEMAP_LAYER_CONFIG.thickness.max,
         extensions: config.dotted ? [DASH_EXTENSION] : [],
         getDashArray: dashArray,
+        _subLayerProps: createDashedGeoJsonLineSubLayerProps(
+          config.dotted,
+          dashArray
+        ),
         ...baseProps,
         updateTriggers: {
           ...updateTriggers,
@@ -622,7 +661,7 @@ export function createFrontieresLayer(
       ),
       widthUnits: 'pixels',
       widthMinPixels: 0,
-      widthMaxPixels: 0.5,
+      widthMaxPixels: BASEMAP_LAYER_CONFIG.thickness.max,
       extensions: config.dotted ? [DASH_EXTENSION] : [],
       getDashArray: dashArray,
       ...baseProps,
@@ -649,9 +688,13 @@ export function createFrontieresLayer(
         lineWidthUnits: 'pixels',
         getLineWidth: effectiveThickness,
         lineWidthMinPixels: 0,
-        lineWidthMaxPixels: 0.5,
+        lineWidthMaxPixels: BASEMAP_LAYER_CONFIG.thickness.max,
         extensions: config.dotted ? [DASH_EXTENSION] : [],
         getDashArray: dashArray,
+        _subLayerProps: createDashedGeoJsonLineSubLayerProps(
+          config.dotted,
+          dashArray
+        ),
         ...baseProps,
         updateTriggers: {
           ...updateTriggers,
@@ -668,6 +711,223 @@ export function createFrontieresLayer(
   return null;
 }
 
+const WORLD_BBOX: BBox = [-180, -90, 180, 90];
+const TROPIC_LATITUDE = 23.4366;
+const POLAR_CIRCLE_LATITUDE = 66.5634;
+const COORDINATE_PRECISION = 1_000_000;
+const LINE_SAMPLE_STEP_DEGREES = 1;
+const EQUATOR_EPSILON = 0.000001;
+
+function roundCoordinate(value: number): number {
+  return Math.round(value * COORDINATE_PRECISION) / COORDINATE_PRECISION;
+}
+
+function clampCoordinate(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function normalizeLineBbox(bbox: BBox | null | undefined): BBox {
+  if (
+    !bbox ||
+    bbox.length !== 4 ||
+    bbox.some((value) => !Number.isFinite(value))
+  ) {
+    return WORLD_BBOX;
+  }
+
+  const west = clampCoordinate(Math.min(bbox[0], bbox[2]), -180, 180);
+  const east = clampCoordinate(Math.max(bbox[0], bbox[2]), -180, 180);
+  const south = clampCoordinate(Math.min(bbox[1], bbox[3]), -90, 90);
+  const north = clampCoordinate(Math.max(bbox[1], bbox[3]), -90, 90);
+
+  if (west >= east || south >= north) {
+    return WORLD_BBOX;
+  }
+
+  return [
+    roundCoordinate(west),
+    roundCoordinate(south),
+    roundCoordinate(east),
+    roundCoordinate(north)
+  ];
+}
+
+function bboxToKey(bbox: BBox): string {
+  return bbox.map((value) => roundCoordinate(value)).join(',');
+}
+
+function isEquatorLatitude(latitude: number): boolean {
+  return Math.abs(latitude) <= EQUATOR_EPSILON;
+}
+
+function isWithin(value: number, min: number, max: number): boolean {
+  return value >= min - EQUATOR_EPSILON && value <= max + EQUATOR_EPSILON;
+}
+
+function createSampledRange(min: number, max: number): number[] {
+  const roundedMax = roundCoordinate(max);
+  const values: number[] = [roundCoordinate(min)];
+  let current = min;
+
+  while (current + LINE_SAMPLE_STEP_DEGREES < max) {
+    current += LINE_SAMPLE_STEP_DEGREES;
+    values.push(roundCoordinate(current));
+  }
+
+  if (values[values.length - 1] !== roundedMax) {
+    values.push(roundedMax);
+  }
+
+  return values;
+}
+
+function createDegreeSeries(
+  min: number,
+  max: number,
+  spacing: number
+): number[] {
+  const step = normalizeGraticuleSpacing(spacing);
+  const first = Math.ceil(min / step) * step;
+  const values: number[] = [];
+
+  for (let current = first; current <= max + EQUATOR_EPSILON; current += step) {
+    values.push(roundCoordinate(current));
+  }
+
+  return values;
+}
+
+function normalizeGraticuleSpacing(value: unknown): number {
+  const parsed = typeof value === 'number' ? value : Number(value);
+
+  if (!Number.isFinite(parsed)) {
+    return 10;
+  }
+
+  return clampCoordinate(
+    Math.round(parsed),
+    BASEMAP_LAYER_CONFIG.graticuleSpacing.min,
+    BASEMAP_LAYER_CONFIG.graticuleSpacing.max
+  );
+}
+
+function createLineFeature(
+  name: string,
+  coordinates: [number, number][]
+): Feature<LineString> {
+  return {
+    type: GEOJSON_TYPE.FEATURE,
+    properties: { name },
+    geometry: {
+      type: GEOJSON_TYPE.LINE_STRING,
+      coordinates
+    }
+  };
+}
+
+function createParallelFeature(
+  latitude: number,
+  bbox: BBox
+): Feature<LineString> {
+  const [west, , east] = bbox;
+  const coordinates = createSampledRange(west, east).map(
+    (longitude) => [longitude, roundCoordinate(latitude)] as [number, number]
+  );
+  return createLineFeature(
+    `parallel-${roundCoordinate(latitude)}`,
+    coordinates
+  );
+}
+
+function createMeridianFeature(
+  longitude: number,
+  bbox: BBox
+): Feature<LineString> {
+  const [, south, , north] = bbox;
+  const coordinates = createSampledRange(south, north).map(
+    (latitude) => [roundCoordinate(longitude), latitude] as [number, number]
+  );
+  return createLineFeature(
+    `meridian-${roundCoordinate(longitude)}`,
+    coordinates
+  );
+}
+
+function createEquatorGeoJSON(bbox: BBox): FeatureCollection<LineString> {
+  const key = bboxToKey(bbox);
+  if (cachedEquatorKey === key && cachedEquatorData) {
+    return cachedEquatorData;
+  }
+
+  cachedEquatorData = {
+    type: GEOJSON_TYPE.FEATURE_COLLECTION,
+    features: isWithin(0, bbox[1], bbox[3])
+      ? [createParallelFeature(0, bbox)]
+      : []
+  };
+  cachedEquatorKey = key;
+  return cachedEquatorData;
+}
+
+function createRegularGraticuleGeoJSON(
+  bbox: BBox,
+  spacingDegrees: number,
+  excludeEquator: boolean
+): FeatureCollection<LineString> {
+  const [west, south, east, north] = bbox;
+  const features: Feature<LineString>[] = [];
+
+  for (const longitude of createDegreeSeries(west, east, spacingDegrees)) {
+    features.push(createMeridianFeature(longitude, bbox));
+  }
+
+  for (const latitude of createDegreeSeries(south, north, spacingDegrees)) {
+    if (excludeEquator && isEquatorLatitude(latitude)) {
+      continue;
+    }
+    features.push(createParallelFeature(latitude, bbox));
+  }
+
+  return {
+    type: GEOJSON_TYPE.FEATURE_COLLECTION,
+    features
+  };
+}
+
+function createRemarkableGraticuleGeoJSON(
+  bbox: BBox,
+  excludeEquator: boolean
+): FeatureCollection<LineString> {
+  const features: Feature<LineString>[] = [];
+  const [west, south, east, north] = bbox;
+  const remarkableParallels = [
+    -POLAR_CIRCLE_LATITUDE,
+    -TROPIC_LATITUDE,
+    0,
+    TROPIC_LATITUDE,
+    POLAR_CIRCLE_LATITUDE
+  ];
+
+  if (isWithin(0, west, east)) {
+    features.push(createMeridianFeature(0, bbox));
+  }
+
+  for (const latitude of remarkableParallels) {
+    if (!isWithin(latitude, south, north)) {
+      continue;
+    }
+    if (excludeEquator && isEquatorLatitude(latitude)) {
+      continue;
+    }
+    features.push(createParallelFeature(latitude, bbox));
+  }
+
+  return {
+    type: GEOJSON_TYPE.FEATURE_COLLECTION,
+    features
+  };
+}
+
 export function createEquateurLayer(
   config: EquateurLayerConfig,
   ctx: BasemapLayerContext
@@ -681,27 +941,13 @@ export function createEquateurLayer(
     DeckLayerId.BASEMAP_EQUATEUR,
     ctx.projectionSuffix
   );
-
-  const equatorGeoJSON: FeatureCollection = {
-    type: GEOJSON_TYPE.FEATURE_COLLECTION,
-    features: [
-      {
-        type: GEOJSON_TYPE.FEATURE,
-        properties: { name: 'Equator' },
-        geometry: {
-          type: GEOJSON_TYPE.LINE_STRING,
-          coordinates: [
-            [-180, 0],
-            [180, 0]
-          ]
-        }
-      }
-    ]
-  };
+  const bbox = normalizeLineBbox(ctx.bbox);
+  const equatorKey = bboxToKey(bbox);
+  const equatorGeoJSON = createEquatorGeoJSON(bbox);
 
   const dashArray = config.dotted
     ? dottedPatternToDashArray(config.dottedPattern)
-    : [0, 0];
+    : SOLID_DASH_ARRAY;
 
   return new GeoJsonLayer({
     id: layerId,
@@ -712,13 +958,14 @@ export function createEquateurLayer(
     getLineWidth: config.thickness,
     lineWidthUnits: 'pixels',
     lineWidthMinPixels: 1,
-    extensions: config.dotted ? [DASH_EXTENSION] : [],
+    extensions: [DASH_EXTENSION],
     getDashArray: dashArray,
     ...getBaseLayerProps(ctx),
     updateTriggers: {
       getLineColor: [config.color, config.opacity],
       getLineWidth: [config.thickness],
-      getDashArray: [config.dotted, config.dottedPattern]
+      getDashArray: [config.dotted, config.dottedPattern],
+      data: [equatorKey]
     }
   });
 }
@@ -736,35 +983,22 @@ export function createMeridiensLayer(
     DeckLayerId.BASEMAP_MERIDIENS,
     ctx.projectionSuffix
   );
+  const bbox = normalizeLineBbox(ctx.bbox);
+  const spacingDegrees = normalizeGraticuleSpacing(config.spacingDegrees);
+  const mode = config.mode ?? BasemapGraticuleMode.REMARKABLE;
+  const excludeEquator = Boolean(ctx.excludeEquator);
 
-  const graticuleKey = config.remarquables;
+  const graticuleKey = [
+    mode,
+    spacingDegrees,
+    bboxToKey(bbox),
+    excludeEquator ? 'exclude-equator' : 'include-equator'
+  ].join(':');
   if (cachedGraticuleKey !== graticuleKey || !cachedGraticuleData) {
-    const stepMap: Record<string, [number, number]> = {
-      'equator-tropics': [30, 23.5],
-      major: [15, 15],
-      minor: [5, 5],
-      all: [10, 10]
-    };
-    const step = stepMap[config.remarquables] ?? [10, 10];
-
-    const graticule = d3
-      .geoGraticule()
-      .step(step)
-      .extent([
-        [-180, -90],
-        [180, 90]
-      ]);
-
-    const graticuleGeoJSON: Feature<MultiLineString> = {
-      type: GEOJSON_TYPE.FEATURE,
-      properties: {},
-      geometry: graticule()
-    };
-
-    cachedGraticuleData = {
-      type: GEOJSON_TYPE.FEATURE_COLLECTION,
-      features: [graticuleGeoJSON]
-    };
+    cachedGraticuleData =
+      mode === BasemapGraticuleMode.REGULAR
+        ? createRegularGraticuleGeoJSON(bbox, spacingDegrees, excludeEquator)
+        : createRemarkableGraticuleGeoJSON(bbox, excludeEquator);
     cachedGraticuleKey = graticuleKey;
   }
 
@@ -772,7 +1006,7 @@ export function createMeridiensLayer(
 
   const dashArray = config.dotted
     ? dottedPatternToDashArray(config.dottedPattern)
-    : [0, 0];
+    : SOLID_DASH_ARRAY;
 
   return new GeoJsonLayer({
     id: layerId,
@@ -783,14 +1017,14 @@ export function createMeridiensLayer(
     getLineWidth: config.thickness,
     lineWidthUnits: 'pixels',
     lineWidthMinPixels: 0.5,
-    extensions: config.dotted ? [DASH_EXTENSION] : [],
+    extensions: [DASH_EXTENSION],
     getDashArray: dashArray,
     ...getBaseLayerProps(ctx),
     updateTriggers: {
       getLineColor: [config.color, config.opacity],
       getLineWidth: [config.thickness],
       getDashArray: [config.dotted, config.dottedPattern],
-      data: [config.remarquables]
+      data: [graticuleKey]
     }
   });
 }
@@ -1116,6 +1350,99 @@ function filterCitiesByCategory(
   return { type: GEOJSON_TYPE.FEATURE_COLLECTION, features };
 }
 
+function clampBasemapCityCount(count: number | undefined): number | undefined {
+  if (count === undefined || !Number.isFinite(count)) {
+    return undefined;
+  }
+
+  return Math.max(
+    BASEMAP_LAYER_CONFIG.cityCount.min,
+    Math.min(BASEMAP_LAYER_CONFIG.cityCount.max, Math.round(count))
+  );
+}
+
+function getCityPopulation(feature: Feature<Point>): number {
+  const props = feature.properties ?? {};
+  const rawValue =
+    props.pop_max ?? props.population ?? props.pop ?? props.POP_MAX ?? 0;
+  const value = Number(rawValue);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function filterCitiesByCount(
+  cities: FeatureCollection<Point>,
+  count: number
+): FeatureCollection<Point> {
+  const features = cities.features
+    .map((feature, index) => ({
+      feature,
+      index,
+      population: getCityPopulation(feature)
+    }))
+    .sort((left, right) => {
+      const populationDelta = right.population - left.population;
+      return populationDelta === 0 ? left.index - right.index : populationDelta;
+    })
+    .slice(0, count)
+    .map(({ feature }) => feature);
+
+  return { type: GEOJSON_TYPE.FEATURE_COLLECTION, features };
+}
+
+function getCitiesFilterKey(config: VillesLayerConfig): string {
+  const count = clampBasemapCityCount(config.count);
+  return count === undefined ? `category:${config.category}` : `count:${count}`;
+}
+
+function getFilteredCitiesForConfig(
+  citiesData: FeatureCollection<Point>,
+  config: VillesLayerConfig
+): FeatureCollection<Point> {
+  const filterKey = getCitiesFilterKey(config);
+  const isNewSource = cachedCitiesSource !== citiesData;
+
+  if (isNewSource || cachedCitiesKey !== filterKey || !cachedFilteredCities) {
+    const count = clampBasemapCityCount(config.count);
+    cachedFilteredCities =
+      count === undefined
+        ? filterCitiesByCategory(citiesData, config.category)
+        : filterCitiesByCount(citiesData, count);
+    cachedCitiesKey = filterKey;
+    cachedCitiesSource = citiesData;
+    cachedPolygonCitiesKey = null;
+    cachedPolygonCities = null;
+  }
+
+  return cachedFilteredCities;
+}
+
+function resolveCityLabel(feature: Feature<Point>): string {
+  const props = feature.properties ?? {};
+  const keys = [
+    'label',
+    'name',
+    'name_fr',
+    'name_en',
+    'nameascii',
+    'NAME',
+    'NOM',
+    'nom',
+    'id'
+  ];
+
+  for (const key of keys) {
+    const value = props[key];
+    if (typeof value === 'string' && value.trim()) {
+      return value;
+    }
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return String(value);
+    }
+  }
+
+  return '';
+}
+
 export function createVillesLayer(
   citiesData: FeatureCollection<Point>,
   config: VillesLayerConfig,
@@ -1123,20 +1450,9 @@ export function createVillesLayer(
 ): Layer<DeckDataRow> | null {
   if (!config.visible) return null;
 
-  // Cache filtered cities by category and input source reference.
-  // This avoids stale data reuse if the caller provides a new cities dataset.
-  const filterKey = config.category;
-  const isNewSource = cachedCitiesSource !== citiesData;
-  if (isNewSource || cachedCitiesKey !== filterKey || !cachedFilteredCities) {
-    cachedFilteredCities = filterCitiesByCategory(citiesData, config.category);
-    cachedCitiesKey = filterKey;
-    cachedCitiesSource = citiesData;
-    // Invalidate polygon cache when filter changes
-    cachedPolygonCitiesKey = null;
-    cachedPolygonCities = null;
-  }
+  const filteredCities = getFilteredCitiesForConfig(citiesData, config);
 
-  if (cachedFilteredCities.features.length === 0) return null;
+  if (filteredCities.features.length === 0) return null;
 
   const fillColor = toRgbColor(config.color);
   const opacity = config.opacity / 100;
@@ -1146,9 +1462,10 @@ export function createVillesLayer(
     ctx.projectionSuffix
   );
   const projectedCities = projectFeatureCollectionIfNeeded(
-    cachedFilteredCities,
+    filteredCities,
     ctx
   ) as FeatureCollection<Point>;
+  const filterKey = getCitiesFilterKey(config);
 
   const isCircle = config.symbol === BasemapCitySymbol.POINT;
 
@@ -1170,13 +1487,13 @@ export function createVillesLayer(
       updateTriggers: {
         getFillColor: [config.color, config.opacity],
         getPointRadius: [config.size],
-        data: [config.category, Boolean(ctx.projection)]
+        data: [filterKey, Boolean(ctx.projection)]
       }
     });
   }
 
-  // Cache polygon conversion by (category, symbol, size)
-  const polygonKey = `${config.category}:${config.symbol}:${config.size}`;
+  // Cache polygon conversion by (filter, symbol, size)
+  const polygonKey = `${filterKey}:${config.symbol}:${config.size}`;
   const shouldUseProjectedSymbols = Boolean(ctx.projection);
   if (
     shouldUseProjectedSymbols ||
@@ -1204,12 +1521,59 @@ export function createVillesLayer(
     ...getBaseLayerProps(ctx),
     updateTriggers: {
       getFillColor: [config.color, config.opacity],
-      data: [
-        config.category,
-        config.symbol,
-        config.size,
-        Boolean(ctx.projection)
-      ]
+      data: [filterKey, config.symbol, config.size, Boolean(ctx.projection)]
+    }
+  });
+}
+
+function createVillesLabelLayer(
+  citiesData: FeatureCollection<Point>,
+  config: VillesLayerConfig,
+  ctx: BasemapLayerContext
+): Layer<DeckDataRow> | null {
+  if (!config.visible) return null;
+
+  const filteredCities = getFilteredCitiesForConfig(citiesData, config);
+  const labelledCities = {
+    type: GEOJSON_TYPE.FEATURE_COLLECTION,
+    features: filteredCities.features.filter((feature) =>
+      Boolean(resolveCityLabel(feature))
+    )
+  } satisfies FeatureCollection<Point>;
+
+  if (labelledCities.features.length === 0) return null;
+
+  const projectedCities = projectFeatureCollectionIfNeeded(
+    labelledCities,
+    ctx
+  ) as FeatureCollection<Point>;
+  const labelColor = toRgbColor(config.labelColor ?? '#161616');
+  const labelSize = config.labelSize ?? 12;
+  const labelFontFamily = config.labelFontFamily ?? DEFAULT_FONT_FAMILY;
+  const layerId = buildLayerId(
+    DeckLayerId.BASEMAP_VILLES_LABELS,
+    ctx.projectionSuffix
+  );
+
+  return new GeoJsonLayer({
+    id: layerId,
+    data: projectedCities,
+    pointType: 'text',
+    getText: resolveCityLabel,
+    getTextColor: withOpacity(labelColor, 1),
+    getTextSize: labelSize,
+    getTextAnchor: 'middle',
+    getTextAlignmentBaseline: 'top',
+    getTextPixelOffset: [0, Math.max(config.size, 1) + 4],
+    textFontFamily: resolveFontFamilyStack(labelFontFamily),
+    textSizeUnits: 'pixels',
+    ...getBaseLayerProps(ctx),
+    updateTriggers: {
+      getTextColor: [config.labelColor],
+      getTextSize: [labelSize],
+      getTextPixelOffset: [config.size],
+      textFontFamily: [labelFontFamily],
+      data: [getCitiesFilterKey(config), Boolean(ctx.projection)]
     }
   });
 }
@@ -1244,6 +1608,85 @@ function collectMetadataGeoJsonByGeometry<T extends MetadataGeometry>(
       }
 
       features.push(feature as Feature<T>);
+    }
+  }
+
+  if (features.length === 0) {
+    return null;
+  }
+
+  return {
+    type: GEOJSON_TYPE.FEATURE_COLLECTION,
+    features
+  };
+}
+
+function createPointFeatureFromCoordinates(
+  sourceFeature: Feature<MetadataGeometry>,
+  coordinates: [number, number]
+): Feature<Point> | null {
+  const [longitude, latitude] = coordinates;
+  if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) {
+    return null;
+  }
+
+  return {
+    type: GEOJSON_TYPE.FEATURE,
+    properties: sourceFeature.properties,
+    geometry: {
+      type: GEOJSON_TYPE.POINT,
+      coordinates
+    }
+  };
+}
+
+function collectMetadataPointGeoJson(
+  entries: MetadataLayerEntry[]
+): FeatureCollection<Point> | null {
+  const features: Feature<Point>[] = [];
+
+  for (const entry of entries) {
+    const geometryInfo = extractGeometryInfo(entry.table);
+    if (!geometryInfo) continue;
+
+    const geojson = getCachedBasemapGeoJSON(
+      entry.table,
+      geometryInfo.geoColumn
+    );
+    if (!geojson) continue;
+
+    for (const feature of geojson.features as Feature<
+      Point | MultiPoint | LineString
+    >[]) {
+      const geometry = feature.geometry;
+      if (!geometry) continue;
+
+      if (geometry.type === GEOJSON_TYPE.POINT) {
+        features.push(feature as Feature<Point>);
+        continue;
+      }
+
+      if (geometry.type === GEOJSON_TYPE.MULTI_POINT) {
+        for (const coordinates of geometry.coordinates) {
+          const pointFeature = createPointFeatureFromCoordinates(
+            feature as Feature<MetadataGeometry>,
+            coordinates as [number, number]
+          );
+          if (pointFeature) features.push(pointFeature);
+        }
+        continue;
+      }
+
+      if (
+        geometry.type === GEOJSON_TYPE.LINE_STRING &&
+        geometry.coordinates.length === 1
+      ) {
+        const pointFeature = createPointFeatureFromCoordinates(
+          feature as Feature<MetadataGeometry>,
+          geometry.coordinates[0] as [number, number]
+        );
+        if (pointFeature) features.push(pointFeature);
+      }
     }
   }
 
@@ -1354,13 +1797,15 @@ function createMetadataLimitLayers(
   const baseProps = getBaseLayerProps(ctx);
   const strokeColor = toRgbColor(config.color);
   const opacity = config.opacity / 100;
-  const effectiveThickness = config.dotted
-    ? Math.max(1, config.thickness)
-    : Math.min(config.thickness, 0.5);
-  const effectiveOpacity = config.dotted ? opacity : Math.min(opacity, 0.5);
-  const dashArray = config.dotted
+  const effectiveThickness = clampBasemapLayerThickness(config.thickness);
+  const effectiveOpacity = opacity;
+  const dashArray: [number, number] = config.dotted
     ? dottedPatternToDashArray(config.dottedPattern)
     : [0, 0];
+  const updateTriggers = {
+    getLineColor: [config.color, effectiveOpacity],
+    getDashArray: [config.dotted, config.dottedPattern]
+  };
 
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i];
@@ -1394,10 +1839,15 @@ function createMetadataLimitLayers(
           ),
           widthUnits: 'pixels',
           widthMinPixels: 0,
+          widthMaxPixels: BASEMAP_LAYER_CONFIG.thickness.max,
           extensions: config.dotted ? [DASH_EXTENSION] : [],
           getDashArray: dashArray,
           dashJustified: true,
-          ...baseProps
+          ...baseProps,
+          updateTriggers: {
+            ...updateTriggers,
+            getWidth: [effectiveThickness]
+          }
         })
       );
     } else if (
@@ -1422,10 +1872,15 @@ function createMetadataLimitLayers(
           ),
           widthUnits: 'pixels',
           widthMinPixels: 0,
+          widthMaxPixels: BASEMAP_LAYER_CONFIG.thickness.max,
           extensions: config.dotted ? [DASH_EXTENSION] : [],
           getDashArray: dashArray,
           dashJustified: true,
-          ...baseProps
+          ...baseProps,
+          updateTriggers: {
+            ...updateTriggers,
+            getWidth: [effectiveThickness]
+          }
         })
       );
     } else if (canRenderViaGeoJsonFallback(geometryInfo)) {
@@ -1445,176 +1900,19 @@ function createMetadataLimitLayers(
             lineWidthUnits: 'pixels',
             getLineWidth: effectiveThickness,
             lineWidthMinPixels: 0,
+            lineWidthMaxPixels: BASEMAP_LAYER_CONFIG.thickness.max,
             extensions: config.dotted ? [DASH_EXTENSION] : [],
             getDashArray: dashArray,
             dashJustified: true,
-            ...baseProps
-          })
-        );
-      }
-    }
-  }
-
-  return layers;
-}
-
-function createMetadataGraticuleLayers(
-  entries: MetadataLayerEntry[],
-  ctx: BasemapLayerContext,
-  config: MeridiensLayerConfig
-): Layer<DeckDataRow>[] {
-  if (!config.visible) return [];
-
-  const layers: Layer<DeckDataRow>[] = [];
-  const baseProps = getBaseLayerProps(ctx);
-  const strokeColor = toRgbColor(config.color);
-  const opacity = config.opacity / 100;
-  const dashArray = config.dotted
-    ? dottedPatternToDashArray(config.dottedPattern)
-    : [0, 0];
-
-  for (let i = 0; i < entries.length; i++) {
-    const entry = entries[i];
-    const geometryInfo = extractGeometryInfo(entry.table);
-    if (!geometryInfo) continue;
-
-    const layerId = buildLayerId(
-      DeckLayerId.BASEMAP_META_GRATICULE,
-      `${ctx.projectionSuffix}-${i}`
-    );
-
-    if (
-      isLineGeometry(geometryInfo) &&
-      (isGeoArrowLineEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow)
-    ) {
-      const lineData = ctx.projection
-        ? parsePathsWithProjection(entry.table, ctx.projection)
-        : parsePaths(entry.table);
-      layers.push(
-        new PathLayer({
-          id: layerId,
-          ...createStyledBasemapPathLayerProps(
-            lineData,
-            withOpacity(strokeColor, opacity) as [
-              number,
-              number,
-              number,
-              number
-            ],
-            config.thickness
-          ),
-          widthUnits: 'pixels',
-          widthMinPixels: 0,
-          extensions: config.dotted ? [DASH_EXTENSION] : [],
-          getDashArray: dashArray,
-          dashJustified: true,
-          ...baseProps
-        })
-      );
-    } else if (canRenderViaGeoJsonFallback(geometryInfo)) {
-      const geojson = getPreparedBasemapGeoJSON(
-        entry.table,
-        geometryInfo.geoColumn,
-        ctx
-      );
-      if (geojson) {
-        layers.push(
-          new GeoJsonLayer({
-            id: layerId,
-            data: geojson,
-            filled: false,
-            stroked: true,
-            getLineColor: withOpacity(strokeColor, opacity),
-            lineWidthUnits: 'pixels',
-            getLineWidth: config.thickness,
-            lineWidthMinPixels: 0.5,
-            extensions: config.dotted ? [DASH_EXTENSION] : [],
-            getDashArray: dashArray,
-            dashJustified: true,
-            ...baseProps
-          })
-        );
-      }
-    }
-  }
-
-  return layers;
-}
-
-function createMetadataGeoLinesLayers(
-  entries: MetadataLayerEntry[],
-  ctx: BasemapLayerContext,
-  config: EquateurLayerConfig
-): Layer<DeckDataRow>[] {
-  if (!config.visible) return [];
-
-  const layers: Layer<DeckDataRow>[] = [];
-  const baseProps = getBaseLayerProps(ctx);
-  const strokeColor = toRgbColor(config.color);
-  const opacity = config.opacity / 100;
-  const dashArray = config.dotted
-    ? dottedPatternToDashArray(config.dottedPattern)
-    : [0, 0];
-
-  for (let i = 0; i < entries.length; i++) {
-    const entry = entries[i];
-    const geometryInfo = extractGeometryInfo(entry.table);
-    if (!geometryInfo) continue;
-
-    const layerId = buildLayerId(
-      DeckLayerId.BASEMAP_META_GEO_LINES,
-      `${ctx.projectionSuffix}-${i}`
-    );
-
-    if (
-      isLineGeometry(geometryInfo) &&
-      (isGeoArrowLineEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow)
-    ) {
-      const lineData = ctx.projection
-        ? parsePathsWithProjection(entry.table, ctx.projection)
-        : parsePaths(entry.table);
-      layers.push(
-        new PathLayer({
-          id: layerId,
-          ...createStyledBasemapPathLayerProps(
-            lineData,
-            withOpacity(strokeColor, opacity) as [
-              number,
-              number,
-              number,
-              number
-            ],
-            config.thickness
-          ),
-          widthUnits: 'pixels',
-          widthMinPixels: 1,
-          extensions: config.dotted ? [DASH_EXTENSION] : [],
-          getDashArray: dashArray,
-          dashJustified: true,
-          ...baseProps
-        })
-      );
-    } else if (canRenderViaGeoJsonFallback(geometryInfo)) {
-      const geojson = getPreparedBasemapGeoJSON(
-        entry.table,
-        geometryInfo.geoColumn,
-        ctx
-      );
-      if (geojson) {
-        layers.push(
-          new GeoJsonLayer({
-            id: layerId,
-            data: geojson,
-            filled: false,
-            stroked: true,
-            getLineColor: withOpacity(strokeColor, opacity),
-            lineWidthUnits: 'pixels',
-            getLineWidth: config.thickness,
-            lineWidthMinPixels: 1,
-            extensions: config.dotted ? [DASH_EXTENSION] : [],
-            getDashArray: dashArray,
-            dashJustified: true,
-            ...baseProps
+            _subLayerProps: createDashedGeoJsonLineSubLayerProps(
+              config.dotted,
+              dashArray
+            ),
+            ...baseProps,
+            updateTriggers: {
+              ...updateTriggers,
+              getLineWidth: [effectiveThickness]
+            }
           })
         );
       }
@@ -1660,19 +1958,15 @@ export function createBasemapLayers(
   const polygonEntries = metaByType(BasemapLayerType.POLYGON);
   const lineEntries = metaByType(BasemapLayerType.LINE);
   const pointEntries = metaByType(BasemapLayerType.POINT);
-  const graticuleEntries = metaByType(BasemapLayerType.GRATICULE);
-  const geoLinesEntries = metaByType(BasemapLayerType.GEOGRAPHIC_LINES);
+  const centroidEntries = metaByType(BasemapLayerType.CENTROID);
   const hasMetadataLimits =
     availableMetadataLayerTypes.has(BasemapLayerType.LIMIT) ||
     limitEntries.length > 0;
-  const hasMetadataGraticule =
-    availableMetadataLayerTypes.has(BasemapLayerType.GRATICULE) ||
-    graticuleEntries.length > 0;
-  const hasMetadataGeoLines =
-    availableMetadataLayerTypes.has(BasemapLayerType.GEOGRAPHIC_LINES) ||
-    geoLinesEntries.length > 0;
   const isFrontieresVisible = basemapLayersStore.layers.some(
     (layer) => layer.id === BASEMAP_LAYER_ID.FRONTIERES && layer.visible
+  );
+  const isEquateurVisible = basemapLayersStore.layers.some(
+    (layer) => layer.id === BASEMAP_LAYER_ID.EQUATEUR && layer.visible
   );
 
   for (const config of basemapLayersStore.layers) {
@@ -1794,57 +2088,36 @@ export function createBasemapLayers(
         }
 
         case BASEMAP_LAYER_ID.EQUATEUR: {
-          // Use metadata geographic-lines when available (richer than hardcoded equator)
-          if (hasMetadataGeoLines) {
-            const geoLineLayers = createMetadataGeoLinesLayers(
-              geoLinesEntries,
-              ctx,
-              config as EquateurLayerConfig
-            );
-            if (geoLineLayers.length > 0) {
-              targetGroups.push(geoLineLayers);
-            }
-          } else {
-            const layer = createEquateurLayer(
-              config as EquateurLayerConfig,
-              ctx
-            );
-            if (layer) targetGroups.push([layer]);
-          }
+          const layer = createEquateurLayer(config as EquateurLayerConfig, ctx);
+          if (layer) targetGroups.push([layer]);
           break;
         }
 
         case BASEMAP_LAYER_ID.MERIDIENS: {
-          // Use metadata graticule when available (from parquet instead of d3-generated)
-          if (hasMetadataGraticule) {
-            const graticuleLayers = createMetadataGraticuleLayers(
-              graticuleEntries,
-              ctx,
-              config as MeridiensLayerConfig
-            );
-            if (graticuleLayers.length > 0) {
-              targetGroups.push(graticuleLayers);
-            }
-          } else {
-            const layer = createMeridiensLayer(
-              config as MeridiensLayerConfig,
-              ctx
-            );
-            if (layer) targetGroups.push([layer]);
-          }
+          const layer = createMeridiensLayer(config as MeridiensLayerConfig, {
+            ...ctx,
+            excludeEquator: isEquateurVisible
+          });
+          if (layer) targetGroups.push([layer]);
           break;
         }
 
         case BASEMAP_LAYER_ID.VILLES: {
-          const citiesData = collectMetadataGeoJsonByGeometry<Point>(
-            pointEntries,
-            new Set([GEOJSON_TYPE.POINT])
+          const citiesData = collectMetadataPointGeoJson(
+            centroidEntries.length > 0 ? centroidEntries : pointEntries
           );
-          const layer = citiesData
-            ? createVillesLayer(citiesData, config as VillesLayerConfig, ctx)
+          const villesConfig = config as VillesLayerConfig;
+          const symbolLayer = citiesData
+            ? createVillesLayer(citiesData, villesConfig, ctx)
             : null;
-          if (layer) {
-            targetGroups.push([layer]);
+          const labelLayer = citiesData
+            ? createVillesLabelLayer(citiesData, villesConfig, ctx)
+            : null;
+          const layers = [symbolLayer, labelLayer].filter(
+            (layer): layer is Layer<DeckDataRow> => layer !== null
+          );
+          if (layers.length > 0) {
+            targetGroups.push(layers);
           }
           break;
         }

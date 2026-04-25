@@ -49,6 +49,8 @@ describe('ThematicMap projection mask overlay', () => {
     expect(source).toContain('logicalMapCanvasWidth');
     expect(source).toContain('logicalMapCanvasHeight');
     expect(source).toContain('getModelMatrix: () => renderModelMatrix');
+    expect(source).toContain('.scale([pageDisplayScale, pageDisplayScale, 1])');
+    expect(source).toContain('.multiplyRight(modelMatrix)');
     expect(source).toContain(
       'projectionStore.setRenderScale(pageDisplayScale)'
     );
@@ -59,6 +61,18 @@ describe('ThematicMap projection mask overlay', () => {
       'const viewportSnapshot = `${logicalMapCanvasWidth}x${logicalMapCanvasHeight}-${logicalMapViewportFitPaddingPx}`;'
     );
     expect(source).toContain("scheduleLayerUpdate('effect:canvasResize')");
+  });
+
+  it('uses the shared render-engine helper for MapLibre switching', () => {
+    expect(source).toContain(
+      "import { shouldUseMapLibreInterleaved } from '../utils/render-engine.utils';"
+    );
+    expect(source).toContain(
+      'const shouldUseMapLibre = shouldUseMapLibreInterleaved({'
+    );
+    expect(source).toContain(
+      'const initialViewMode = shouldUseMapLibreInterleaved({'
+    );
   });
 
   it('applies requested basemap viewport presets before fitting dataset bounds in MapLibre', () => {
@@ -78,5 +92,14 @@ describe('ThematicMap projection mask overlay', () => {
     expect(presetGuardIndex).toBeGreaterThan(-1);
     expect(datasetFitIndex).toBeGreaterThan(-1);
     expect(presetGuardIndex).toBeLessThan(datasetFitIndex);
+  });
+
+  it('does not inherit catalog projection metadata for standalone geofiles', () => {
+    expect(source).toContain('if (!datasetId) {');
+    expect(source).toContain('if (!duckDataset?.joinedBasemap) {');
+    expect(source).toContain('return null;');
+    expect(source).not.toContain(
+      'getProjectionMetadataForDataset(firstDatasetId) ??'
+    );
   });
 });

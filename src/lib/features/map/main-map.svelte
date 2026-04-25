@@ -40,6 +40,7 @@
   import { basemapService } from './services/basemap.service.svelte';
   import type { SplitRenderingTable } from './types';
   import { INTERNAL_COLUMN } from '../commons/constants/data.constants';
+  import { shouldUseMapLibreInterleaved } from './utils/render-engine.utils';
 
   let thematicMapRef = $state<HTMLDivElement>(undefined!);
 
@@ -100,7 +101,10 @@
     showReferenceBasemapLoader ? m.basemap_loading() : m.density_loading()
   );
   const usesTiledBasemap = $derived(
-    Boolean(activeOSMBasemap) || basemapStyleStore.requiresMapLibre
+    shouldUseMapLibreInterleaved({
+      requiresMapLibre: basemapStyleStore.requiresMapLibre,
+      hasOSMBasemap: Boolean(activeOSMBasemap)
+    })
   );
   const shouldHideMapOutput = $derived(
     mapLoadingStore.isHoldingPreviewForSuggestedBasemap
@@ -113,10 +117,18 @@
   /** Incremented each time the main data-load $effect fires so stale async loads are discarded. */
   let loadGeneration = 0;
   const WORKSPACE_FIT_PADDING_PX = 30;
+  const STYLING_STEP_COVERAGE_RATIO = 0.85;
+  const DEFAULT_STEP_COVERAGE_RATIO = 1;
   let responsiveMapResizeObserver: ResizeObserver | null = null;
   let workspaceWidth = $state(0);
   let workspaceHeight = $state(0);
   let stepToolbarWidth = $state(0);
+
+  const fitCoverageRatio = $derived(
+    globalState.selectedStep === ToolbarStep.Styling
+      ? STYLING_STEP_COVERAGE_RATIO
+      : DEFAULT_STEP_COVERAGE_RATIO
+  );
 
   const fitScale = $derived(
     resolveWorkspaceFitScale({
@@ -125,7 +137,8 @@
       pageWidth: formatState.width,
       pageHeight: formatState.height,
       paddingPx: WORKSPACE_FIT_PADDING_PX,
-      reservedInlineStartPx: globalState.isMobileView ? 0 : stepToolbarWidth
+      reservedInlineStartPx: globalState.isMobileView ? 0 : stepToolbarWidth,
+      maxViewportCoverageRatio: fitCoverageRatio
     })
   );
   const renderedPageScale = $derived(
