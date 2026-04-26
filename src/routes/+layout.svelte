@@ -4,7 +4,6 @@
   import NotificationContainer from '$lib/features/commons/components/notification-container.svelte';
   import ConsentBanner from '$lib/features/commons/components/consent-banner.svelte';
   import PwaUpdatePrompt from '$lib/features/commons/components/pwa-update-prompt.svelte';
-  import { dataOrchestratorService } from '$lib/features/commons/services/data-orchestrator.service.svelte';
   import {
     globalActions,
     globalState,
@@ -17,10 +16,6 @@
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { initializeStores } from '$lib/features/commons/store/stores-init';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-  import CreateProject from '$lib/features/create-project/create-project.svelte';
-
-  import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
-  import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
   import { EVENT } from '$lib/features/commons/constants/dom.constants';
   import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
 
@@ -56,6 +51,7 @@
   import { Tag, Theme } from 'carbon-components-svelte';
   import { WarningAltFilled } from 'carbon-icons-svelte';
   import { onMount, untrack } from 'svelte';
+  import type { Component } from 'svelte';
   import * as m from '$lib/paraglide/messages';
   import ColorBlindnessNotification from '$lib/features/step-toolbar/tools/color-blindness/color-blindness-notification.svelte';
 
@@ -68,15 +64,28 @@
   import '$lib/features/commons/assets/styles/spacing.css';
   import '$lib/features/commons/assets/styles/theming.css';
 
+  type CreateProjectComponent = Component<{
+    open: boolean;
+    onClose: () => void;
+  }>;
+
   let { children } = $props();
   let isLoading = $state(true);
   let previousStep = $state<ToolbarStep | null>(null);
   let stylingElementsInitializedForProject = $state<string | null>(null);
+  let CreateProject = $state<CreateProjectComponent | null>(null);
   const ENABLE_BEFOREUNLOAD_CONFIRMATION = false;
 
   const handleResize = () => {
     globalActions.setMobileView(window.innerWidth < MOBILE_BREAKPOINT);
   };
+
+  async function loadCreateProject(): Promise<void> {
+    if (CreateProject) return;
+    const module =
+      await import('$lib/features/create-project/create-project.svelte');
+    CreateProject = module.default;
+  }
 
   onMount(() => {
     void fontAssetsStore.ensureLoaded();
@@ -138,30 +147,49 @@
     window.addEventListener(EVENT.KEYUP, handleGlobalKeyUp);
     window.addEventListener(WORKSPACE_FIT_EVENT, handleWorkspaceFitEvent);
 
+    const initializeDataServices = async () => {
+      const [{ duckDBOrchestrator }, { basemapService }] = await Promise.all([
+        import('$lib/features/duckdb/orchestrator/orchestrator.svelte'),
+        import('$lib/features/map/services/basemap.service.svelte')
+      ]);
+
+      await duckDBOrchestrator.initialize();
+      await basemapService.initialize();
+
+      const { dataOrchestratorService } =
+        await import('$lib/features/commons/services/data-orchestrator.service.svelte');
+      await dataOrchestratorService.initialize();
+    };
+
     const initApp = async () => {
-      // Start DuckDB in background — don't block UI on it (LCP optimization)
-      const duckDBReadyPromise = duckDBOrchestrator
-        .initialize()
-        .then(() => basemapService.initialize())
-        .catch((error) => {
-          logger.error(
-            'DuckDB initialization failed',
-            LogCategory.DUCKDB,
-            error
-          );
-        });
+      let dataServicesReadyPromise: Promise<void> | null = null;
+
+      const startDataServices = () => {
+        dataServicesReadyPromise ??= initializeDataServices();
+        return dataServicesReadyPromise;
+      };
 
       try {
-        // Project store uses IndexedDB only — fast (~100ms), independent of DuckDB
         await projectStore.waitForInit();
         isLoading = false;
 
         if (!projectStore.currentProject) {
           globalState.isCreateProjectModalOpen = true;
+          void loadCreateProject();
         }
 
+        startDataServices().catch((error) => {
+          logger.error(
+            'Background initialization failed',
+            LogCategory.SYSTEM,
+            error
+          );
+          globalState.isCreateProjectModalOpen = true;
+          void loadCreateProject();
+        });
+
         logger.debug(
-          'UI ready — DuckDB loading in background',
+          'UI ready — data services loading in background',
           LogCategory.SYSTEM
         );
       } catch (error) {
@@ -172,20 +200,7 @@
         );
         isLoading = false;
         globalState.isCreateProjectModalOpen = true;
-      }
-
-      try {
-        await duckDBReadyPromise;
-        await dataOrchestratorService.initialize();
-
-        logger.debug('Background initialization complete', LogCategory.SYSTEM);
-      } catch (error) {
-        logger.error(
-          'Background initialization failed',
-          LogCategory.SYSTEM,
-          error
-        );
-        globalState.isCreateProjectModalOpen = true;
+        void loadCreateProject();
       }
     };
 
@@ -229,6 +244,12 @@
       pageMutationObserver = null;
       stepToolbarResizeObserver = null;
     };
+  });
+
+  $effect(() => {
+    if (!isLoading && globalState.isCreateProjectModalOpen) {
+      void loadCreateProject();
+    }
   });
 
   function observeStepToolbar(): void {
@@ -562,10 +583,9 @@
   <KeyboardShortcuts />
 
   <main class:mobile-view={globalState.isMobileView}>
-    <CreateProject
-      open={!isLoading && globalState.isCreateProjectModalOpen}
-      onClose={handleCloseModal}
-    />
+    {#if CreateProject && globalState.isCreateProjectModalOpen}
+      <CreateProject open onClose={handleCloseModal} />
+    {/if}
 
     {#if !globalState.isMobileView}
       <StepToolbar />
