@@ -997,7 +997,7 @@
   "reset_data_modal_button": "Restore original data",
   "reset_data_modal_resetting": "Restoring...",
   "reset_data_modal_description": "This action will re-import the file {name} and restore the data to its original state.",
-  "reset_data_modal_warning": "All your modifications will be permanently lost: calculated columns, deleted rows, renamed columns, applied filters.",
+  "reset_data_modal_warning": "All your modifications and linked visualizations will be permanently lost: calculated columns, deleted rows, renamed columns, applied filters.",
   "reset_data_modal_no_modifications": "No modifications detected. The data is already in its original state.",
   "reset_data_modal_irreversible": "This action cannot be undone.",
   "reset_data_success_title": "Data reset",
