@@ -338,10 +338,17 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
 
   function syncProjection(): void {
     const map = getMap();
-    if (!map || !getIsMapLoaded()) return;
+    if (!map || !getIsMapLoaded() || isStyleLoading || !map.isStyleLoaded()) {
+      return;
+    }
 
     const projection = mapProjectionStore.projection;
-    map.setProjection({ type: projection });
+    try {
+      map.setProjection({ type: projection });
+    } catch (error) {
+      logger.warn('Failed to sync MapLibre projection', LogCategory.MAP, error);
+      return;
+    }
 
     if (onProjectionChanged) {
       setTimeout(() => onProjectionChanged(), 10);

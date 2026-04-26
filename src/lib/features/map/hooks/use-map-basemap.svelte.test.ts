@@ -30,4 +30,11 @@ describe('useMapBasemap loading state', () => {
   it('uses full MapLibre style replacement for tiled basemap switches', () => {
     expect(source).toContain('map.setStyle(style, { diff: false });');
   });
+
+  it('waits for the MapLibre style before syncing projection', () => {
+    expect(source).toContain('!map.isStyleLoaded()');
+    expect(source).toContain(
+      "logger.warn('Failed to sync MapLibre projection'"
+    );
+  });
 });

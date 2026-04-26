@@ -109,6 +109,26 @@
   const shouldHideMapOutput = $derived(
     mapLoadingStore.isHoldingPreviewForSuggestedBasemap
   );
+  const densityReloadSignature = $derived.by(() =>
+    visualizationStore.activeVisualizations
+      .map((viz) => {
+        const polygon = getPolygonPrimitive(viz);
+        const density = viz.density;
+        if (polygon?.fillMode !== FillMode.DENSITY || !density) {
+          return null;
+        }
+
+        return [
+          viz.id,
+          viz.datasetId,
+          density.valueColumn ?? '',
+          density.ratio ?? '',
+          density.seed ?? ''
+        ].join(':');
+      })
+      .filter((value): value is string => value !== null)
+      .join('|')
+  );
   const facetsEnabled = $derived(facetsStore.enabled);
   const facetsLayout = $derived(facetsStore.layout);
   const facetVisualizations = $derived(facetsStore.facetVisualizations);
@@ -742,8 +762,7 @@
 
   $effect(() => {
     void duckDBDatasetsVersion;
-    // Subscribe to visualization changes so density re-generates on config edits.
-    void visualizationStore.version;
+    void densityReloadSignature;
     const currentEnabledDatasets = enabledDatasets;
 
     if (isInitializing) {
