@@ -123,124 +123,124 @@
     <InlineNotification
       title={m.enrich_coordinates_only_title()}
       subtitle={m.enrich_coordinates_only_subtitle()}
-      kind="warning"
+      kind="error"
       lowContrast
       hideCloseButton={false}
     />
-  {/if}
+  {:else}
+    <h4 class="section-title">{m.enrich_geolocate_section_title()}</h4>
 
-  <h4 class="section-title">{m.enrich_geolocate_section_title()}</h4>
+    <p class="section-description">
+      {m.enrich_geolocate_description()}
+    </p>
 
-  <p class="section-description">
-    {m.enrich_geolocate_description()}
-  </p>
+    {#if enrichSuggestedColumn}
+      <InlineNotification
+        title={m.geo_column_detected_title()}
+        subtitle={m.geo_column_detected_subtitle({
+          column: enrichSuggestedColumn.columnName,
+          confidence: Math.round(
+            enrichSuggestedColumn.confidence * 100
+          ).toString()
+        })}
+        kind="success"
+        lowContrast
+        hideCloseButton={false}
+      />
+    {/if}
 
-  {#if enrichSuggestedColumn}
-    <InlineNotification
-      title={m.geo_column_detected_title()}
-      subtitle={m.geo_column_detected_subtitle({
-        column: enrichSuggestedColumn.columnName,
-        confidence: Math.round(
-          enrichSuggestedColumn.confidence * 100
-        ).toString()
-      })}
-      kind="success"
-      lowContrast
-      hideCloseButton={false}
-    />
-  {/if}
+    <div class="join-columns-section">
+      <h4 class="subsection-title">{m.enrich_geo_reference()}</h4>
+      <p class="section-description">{m.enrich_choose_multiple()}</p>
 
-  <div class="join-columns-section">
-    <h4 class="subsection-title">{m.enrich_geo_reference()}</h4>
-    <p class="section-description">{m.enrich_choose_multiple()}</p>
-
-    <div class="geo-columns-row">
-      <div class="geo-column-select">
-        <div class="combobox-with-badge">
-          <ComboBox
-            items={geoFileColumns}
-            selectedId={geoFileColumnId}
-            on:select={handleGeoColumnSelect}
-            placeholder={m.enrich_select_column()}
-            size="sm"
-          />
-          {#if geoFileColumns.find((c) => c.id === geoFileColumnId)?.columnName}
-            <div class="badge-overlay">
-              <VariableBadge
-                label={geoFileColumns.find((c) => c.id === geoFileColumnId)!
-                  .columnName}
-                type="geo-ref"
-              />
-            </div>
-          {/if}
+      <div class="geo-columns-row">
+        <div class="geo-column-select">
+          <div class="combobox-with-badge">
+            <ComboBox
+              items={geoFileColumns}
+              selectedId={geoFileColumnId}
+              on:select={handleGeoColumnSelect}
+              placeholder={m.enrich_select_column()}
+              size="sm"
+            />
+            {#if geoFileColumns.find((c) => c.id === geoFileColumnId)?.columnName}
+              <div class="badge-overlay">
+                <VariableBadge
+                  label={geoFileColumns.find((c) => c.id === geoFileColumnId)!
+                    .columnName}
+                  type="geo-ref"
+                />
+              </div>
+            {/if}
+          </div>
+          <span class="column-label">{m.enrich_geo_file_label()}</span>
         </div>
-        <span class="column-label">{m.enrich_geo_file_label()}</span>
-      </div>
 
-      <span class="column-separator">⇄</span>
+        <span class="column-separator">⇄</span>
 
-      <div class="geo-column-select">
-        <div class="combobox-with-badge">
-          <ComboBox
-            items={enrichDataFieldItems}
-            selectedId={enrichLinkedVariableId}
-            on:select={handleEnrichColumnSelect}
-            placeholder={m.enrich_select_column()}
-            size="sm"
-          />
-          {#if enrichDataFieldItems.find((c) => c.id === enrichLinkedVariableId)?.columnName}
-            <div class="badge-overlay">
-              <VariableBadge
-                label={enrichDataFieldItems.find(
-                  (c) => c.id === enrichLinkedVariableId
-                )!.columnName}
-                type="geo-ref"
-              />
-            </div>
-          {/if}
+        <div class="geo-column-select">
+          <div class="combobox-with-badge">
+            <ComboBox
+              items={enrichDataFieldItems}
+              selectedId={enrichLinkedVariableId}
+              on:select={handleEnrichColumnSelect}
+              placeholder={m.enrich_select_column()}
+              size="sm"
+            />
+            {#if enrichDataFieldItems.find((c) => c.id === enrichLinkedVariableId)?.columnName}
+              <div class="badge-overlay">
+                <VariableBadge
+                  label={enrichDataFieldItems.find(
+                    (c) => c.id === enrichLinkedVariableId
+                  )!.columnName}
+                  type="geo-ref"
+                />
+              </div>
+            {/if}
+          </div>
+          <span class="column-label">{m.enrich_tabular_data_label()}</span>
         </div>
-        <span class="column-label">{m.enrich_tabular_data_label()}</span>
       </div>
     </div>
-  </div>
 
-  <div class="join-assisted-section">
-    <h4 class="section-title">{m.enrich_verify_section_title()}</h4>
+    <div class="join-assisted-section">
+      <h4 class="section-title">{m.enrich_verify_section_title()}</h4>
 
-    {#if joinStats || isComputingJoin}
-      <SectionHeaderWithIcon
-        title={m.section_join_assisted()}
-        icon={MagicWand}
-      />
-
-      {#if isComputingJoin}
-        <div class="computing-join">
-          <span>{m.enrich_computing_join()}</span>
-        </div>
-      {:else if joinStats}
-        <JoinAccordion
-          stats={joinStats}
-          showCorrectionTable={true}
-          linkedVariableName={enrichDataFieldItems.find(
-            (i) => i.id === enrichLinkedVariableId
-          )?.columnName}
-          onMappingChange={onMappingChange}
-          onApplyCorrections={onApplyCorrections}
-          onFinalizeJoin={onFinalizeJoin}
+      {#if joinStats || isComputingJoin}
+        <SectionHeaderWithIcon
+          title={m.section_join_assisted()}
+          icon={MagicWand}
         />
 
-        {#if isFinalizingJoin}
-          <div class="finalizing-join">
-            <span>{m.enrich_finalizing_join()}</span>
+        {#if isComputingJoin}
+          <div class="computing-join">
+            <span>{m.enrich_computing_join()}</span>
           </div>
+        {:else if joinStats}
+          <JoinAccordion
+            stats={joinStats}
+            showCorrectionTable={true}
+            linkedVariableName={enrichDataFieldItems.find(
+              (i) => i.id === enrichLinkedVariableId
+            )?.columnName}
+            onMappingChange={onMappingChange}
+            onApplyCorrections={onApplyCorrections}
+            onFinalizeJoin={onFinalizeJoin}
+          />
+
+          {#if isFinalizingJoin}
+            <div class="finalizing-join">
+              <span>{m.enrich_finalizing_join()}</span>
+            </div>
+          {/if}
         {/if}
+      {:else}
+        <p class="placeholder-text">
+          {m.enrich_select_columns_to_join()}
+        </p>
       {/if}
-    {:else}
-      <p class="placeholder-text">
-        {m.enrich_select_columns_to_join()}
-      </p>
-    {/if}
-  </div>
+    </div>
+  {/if}
 </div>
 
 <style>

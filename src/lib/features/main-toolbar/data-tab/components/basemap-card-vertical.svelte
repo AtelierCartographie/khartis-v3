@@ -113,7 +113,12 @@
 >
   <div class="preview-section">
     <div class="preview-radio kh-card-radio" onclickcapture={handleRadioClick}>
-      <RadioButton checked={selected} disabled={disabled} />
+      <RadioButton
+        checked={selected}
+        disabled={disabled}
+        labelText={basemap.title_fr}
+        hideLabel
+      />
     </div>
 
     <TilePreview

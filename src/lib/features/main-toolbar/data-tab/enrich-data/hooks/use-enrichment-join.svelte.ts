@@ -28,6 +28,7 @@ export interface UseEnrichmentJoinProps {
   getGeoFileColumnId: () => number | undefined;
   getEnrichDataFieldItems: () => Array<{ id: number; columnName: string }>;
   getGeoFileColumns: () => Array<{ id: number; columnName: string }>;
+  isJoinBlocked?: () => boolean;
   onJoinFinalized: () => void;
 }
 
@@ -52,6 +53,7 @@ export function useEnrichmentJoin(
     getGeoFileColumnId,
     getEnrichDataFieldItems,
     getGeoFileColumns,
+    isJoinBlocked = () => false,
     onJoinFinalized
   } = props;
 
@@ -236,6 +238,11 @@ export function useEnrichmentJoin(
   }
 
   async function computeEnrichmentJoinStats(): Promise<void> {
+    if (isJoinBlocked()) {
+      joinStats = null;
+      return;
+    }
+
     const enrichmentDataset = getEnrichmentDataset();
     if (!enrichmentDataset || !selectedDataset) return;
 
@@ -326,6 +333,10 @@ export function useEnrichmentJoin(
   }
 
   async function handleApplyCorrections(): Promise<void> {
+    if (isJoinBlocked()) {
+      return;
+    }
+
     const enrichmentDataset = getEnrichmentDataset();
     if (!enrichmentDataset || !selectedDataset || !joinStats) return;
 
@@ -433,6 +444,10 @@ export function useEnrichmentJoin(
   }
 
   async function handleFinalizeEnrichment(): Promise<void> {
+    if (isJoinBlocked()) {
+      return;
+    }
+
     const enrichmentDataset = getEnrichmentDataset();
     if (!enrichmentDataset || !selectedDataset || !joinStats) return;
 

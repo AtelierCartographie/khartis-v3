@@ -64,6 +64,7 @@
     getGeoFileColumnId: () => geoFileColumnId,
     getEnrichDataFieldItems: () => enrichDataFieldItems,
     getGeoFileColumns: () => geoFileColumns,
+    isJoinBlocked: () => hasOnlyCoordinatesValue,
     onJoinFinalized: () => {
       dataTabActions.setEnrichDataState({ joinTabularEnabled: false });
       fileHook.handleRemoveFile();
@@ -98,12 +99,22 @@
   });
 
   $effect(() => {
-    if (enrichLinkedVariableId === undefined && enrichSuggestedColumn) {
+    if (
+      !hasOnlyCoordinatesValue &&
+      enrichLinkedVariableId === undefined &&
+      enrichSuggestedColumn
+    ) {
       enrichLinkedVariableId = enrichSuggestedColumn.id;
     }
   });
 
   $effect(() => {
+    if (hasOnlyCoordinatesValue) {
+      enrichLinkedVariableId = undefined;
+      joinHook.resetJoinState();
+      return;
+    }
+
     const hasEnrichCol = enrichLinkedVariableId !== undefined;
     const hasGeoCol = geoFileColumnId !== undefined;
     const hasDataset = fileHook.enrichmentDataset !== null;

@@ -15,4 +15,19 @@ describe('useEnrichmentBasemap preview hold', () => {
     expect(source).not.toContain('setPreviewHold(shouldHoldPreview');
     expect(source).not.toContain('await tick()');
   });
+
+  it('does not compute join suggestions for a stale DuckDB dataset', () => {
+    expect(source).toContain('function isCurrentSuggestionInput(');
+    expect(source).toContain(
+      'duckDBOrchestrator.findDatasetByIdOrSourceFile(datasetId)'
+    );
+    expect(source).toContain('function isMissingDuckTableError(');
+  });
+
+  it('starts the OSM reference path in the flat projection', () => {
+    expect(source).toContain('mapProjectionStore.isGlobe');
+    expect(source).toContain(
+      'mapProjectionStore.setProjection(MAP_PROJECTION_TYPE.MERCATOR)'
+    );
+  });
 });

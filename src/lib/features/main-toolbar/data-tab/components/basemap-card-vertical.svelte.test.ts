@@ -40,6 +40,11 @@ describe('BasemapCardVertical', () => {
     expect(body).toContain('handleCardClick();');
   });
 
+  it('keeps the preview radio accessible without showing duplicate card text', () => {
+    expect(source).toContain('labelText={basemap.title_fr}');
+    expect(source).toContain('hideLabel');
+  });
+
   it('maps the radio theme to gray and suggestion card variables', () => {
     expect(source).toContain('--kh-card-radio-color');
     expect(source).toContain('--kh-card-radio-disabled-color');
