@@ -39,17 +39,22 @@ function exportFilter(domNode: HTMLElement): boolean {
   return true;
 }
 
+function usesInterleavedDeckOverlay(): boolean {
+  return mapInstanceStore.deckOverlay !== null;
+}
+
 /**
- * Pre-renders the WebGL canvas at the requested pixel ratio, waits for the
- * first 'render' frame, then returns a cleanup function that restores the
- * original ratio.
+ * Pre-renders the MapLibre WebGL canvas at the requested pixel ratio, waits
+ * for the first 'render' frame, then returns a cleanup function that restores
+ * the original ratio.
  *
- * Uses 'render' (not 'idle') because in interleaved Deck.gl mode 'idle' can
- * be delayed indefinitely by continuous triggerRepaint() calls.
+ * In Deck.gl interleaved mode, MapLibre pixel-ratio resizes make the shared
+ * canvas capture Deck.gl layers with the wrong projection. Keep that canvas at
+ * screen pixel ratio and let html-to-image scale the aligned frame.
  */
 async function prerenderWebgl(pixelRatio: number): Promise<() => void> {
   const map = mapInstanceStore.map;
-  if (!map) return () => {};
+  if (!map || usesInterleavedDeckOverlay()) return () => {};
 
   const currentRatio = map.getPixelRatio();
   const scale = Math.max(pixelRatio, currentRatio);
