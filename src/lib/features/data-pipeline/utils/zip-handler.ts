@@ -21,8 +21,13 @@ export interface ZipExtractionResult {
   shapefileBaseName?: string;
 }
 
+export function isZipArchiveName(name: string): boolean {
+  const lowerName = name.toLowerCase();
+  return lowerName.endsWith('.zip') || lowerName.endsWith('.kmz');
+}
+
 export function isZipFile(file: File): boolean {
-  return file.name.toLowerCase().endsWith('.zip');
+  return isZipArchiveName(file.name);
 }
 
 function shouldIgnoreFile(path: string): boolean {
