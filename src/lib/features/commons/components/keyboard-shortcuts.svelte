@@ -5,7 +5,12 @@
   import { zoomModeStore } from '../store/zoom-mode.store.svelte';
   import { createProjectActions } from '../store/create-project.store.svelte';
   import { projectStore } from '../store/project.store.svelte';
-  import { StylingTools, ToolbarState, ToolbarStep } from '../types/global';
+  import {
+    StylingTools,
+    ToolbarState,
+    ToolbarStep,
+    VisualizationTools
+  } from '../types/global';
   import {
     detectApplePlatform,
     hasAnyPrimaryModifier,
@@ -28,6 +33,22 @@
     StylingTools.Annotations,
     StylingTools.ColorBlindness
   ];
+  const TOOL_SHORTCUTS_BY_STEP = {
+    [ToolbarStep.Visualizations]: {
+      '1': VisualizationTools.Search,
+      '2': VisualizationTools.Layers,
+      '3': VisualizationTools.Projection,
+      '4': VisualizationTools.Simplification,
+      '5': VisualizationTools.Facets
+    },
+    [ToolbarStep.Styling]: {
+      '1': StylingTools.Format,
+      '2': StylingTools.Legend,
+      '3': StylingTools.GeoIndications,
+      '4': StylingTools.Annotations,
+      '5': StylingTools.ColorBlindness
+    }
+  } as const;
 
   function isStylingTool(tool: string | undefined): boolean {
     return tool !== undefined && STYLING_TOOL_IDS.includes(tool);
@@ -132,6 +153,19 @@
 
     function handleZoomModeToggle(): void {
       zoomModeStore.toggle();
+    }
+
+    function handleToolShortcut(event: KeyboardEvent): boolean {
+      const shortcuts =
+        TOOL_SHORTCUTS_BY_STEP[
+          globalState.selectedStep as keyof typeof TOOL_SHORTCUTS_BY_STEP
+        ];
+      const tool = shortcuts?.[event.key as keyof typeof shortcuts];
+      if (!tool) return false;
+
+      event.preventDefault();
+      globalState.selectedTool = tool;
+      return true;
     }
 
     function handleNewProject(): void {
@@ -249,6 +283,16 @@
       if (!hasModifier && event.key in NAVIGATION_SHORTCUTS) {
         event.preventDefault();
         handleNavigationKey(event.key);
+        return;
+      }
+
+      if (
+        event.altKey &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.shiftKey &&
+        handleToolShortcut(event)
+      ) {
         return;
       }
 
