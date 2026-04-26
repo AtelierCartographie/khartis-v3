@@ -280,6 +280,112 @@ function backfillPrimitiveConfigs(
   return walk(data) as Record<string, unknown>;
 }
 
+const LEGACY_SLIDER_BOUNDS = {
+  symbolSize: { min: 1, max: 50 },
+  symbolMaxSize: { min: 2, max: 60 },
+  symbolMinSize: { min: 1, max: 50 },
+  strokeWidth: { min: 0, max: 12 },
+  lineWidth: { min: 0.5, max: 12 },
+  lineMaxWidth: { min: 1, max: 20 },
+  haloWidth: { min: 0, max: 6 }
+} as const;
+
+type BoundKey = keyof typeof LEGACY_SLIDER_BOUNDS;
+
+function clampNumber(value: unknown, bounds: BoundKey): unknown {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return value;
+  }
+  const { min, max } = LEGACY_SLIDER_BOUNDS[bounds];
+  if (value < min) return min;
+  if (value > max) return max;
+  return value;
+}
+
+function clampPrimitiveBag(
+  bag: Record<string, unknown>,
+  fieldMap: Partial<Record<string, BoundKey>>
+): Record<string, unknown> {
+  const clone: Record<string, unknown> = { ...bag };
+  for (const [field, bound] of Object.entries(fieldMap)) {
+    if (bound && field in clone) {
+      clone[field] = clampNumber(clone[field], bound);
+    }
+  }
+  return clone;
+}
+
+function clampLegacySliderValues(
+  data: Record<string, unknown>
+): Record<string, unknown> {
+  const walk = (node: unknown): unknown => {
+    if (Array.isArray(node)) {
+      return node.map((item) => walk(item));
+    }
+    if (!isRecord(node)) {
+      return node;
+    }
+    const clone: Record<string, unknown> = { ...node };
+
+    if (isRecord(clone.symbol)) {
+      clone.symbol = clampPrimitiveBag(clone.symbol, {
+        size: 'symbolSize',
+        maxSize: 'symbolMaxSize',
+        minSize: 'symbolMinSize',
+        strokeWidth: 'strokeWidth'
+      });
+    }
+    if (isRecord(clone.polygon)) {
+      clone.polygon = clampPrimitiveBag(clone.polygon, {
+        strokeWidth: 'strokeWidth'
+      });
+    }
+    if (isRecord(clone.line)) {
+      clone.line = clampPrimitiveBag(clone.line, {
+        width: 'lineWidth',
+        maxWidth: 'lineMaxWidth'
+      });
+    }
+    if (isRecord(clone.text)) {
+      const updatedText = clampPrimitiveBag(clone.text, {
+        haloWidth: 'haloWidth'
+      });
+      if (isRecord(updatedText.secondaryLabels)) {
+        updatedText.secondaryLabels = clampPrimitiveBag(
+          updatedText.secondaryLabels,
+          { haloWidth: 'haloWidth' }
+        );
+      }
+      clone.text = updatedText;
+    }
+    if (isRecord(clone.style)) {
+      clone.style = clampPrimitiveBag(clone.style, {
+        strokeWidth: 'strokeWidth',
+        lineWidth: 'lineWidth',
+        lineMaxWidth: 'lineMaxWidth',
+        textHaloWidth: 'haloWidth',
+        labelHaloWidth: 'haloWidth'
+      });
+    }
+
+    for (const key of Object.keys(clone)) {
+      if (
+        key === 'symbol' ||
+        key === 'polygon' ||
+        key === 'line' ||
+        key === 'text' ||
+        key === 'style'
+      ) {
+        continue;
+      }
+      clone[key] = walk(clone[key]);
+    }
+    return clone;
+  };
+
+  return walk(data) as Record<string, unknown>;
+}
+
 function normalizePersistenceSchema(
   data: Record<string, unknown>
 ): Record<string, unknown> {
@@ -335,7 +441,8 @@ const migrations: SchemaMigration[] = [
   { from: '3.2.0', to: '3.3.0', migrate: backfillSymbolFillColor },
   { from: '3.3.0', to: '3.4.0', migrate: backfillPrimitiveConfigs },
   { from: '3.4.0', to: '3.5.0', migrate: backfillSymbolDoubleFields },
-  { from: '3.5.0', to: '3.6.0', migrate: normalizePersistenceSchema }
+  { from: '3.5.0', to: '3.6.0', migrate: normalizePersistenceSchema },
+  { from: '3.6.0', to: '3.7.0', migrate: clampLegacySliderValues }
 ];
 
 export function migrateIfNeeded(
