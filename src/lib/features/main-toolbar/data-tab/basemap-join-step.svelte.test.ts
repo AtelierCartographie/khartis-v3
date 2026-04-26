@@ -27,6 +27,13 @@ describe('BasemapJoinStep reference basemap selection', () => {
     );
   });
 
+  it('starts the manual OSM reference path in the flat projection', () => {
+    expect(source).toContain('mapProjectionStore.isGlobe');
+    expect(source).toContain(
+      'mapProjectionStore.setProjection(MAP_PROJECTION_TYPE.MERCATOR)'
+    );
+  });
+
   it('does not treat a catalog basemap as an active reference basemap', () => {
     expect(source).toContain(
       'isActive={dataTabState.basemapJoin.basemapSource === BasemapSource.OSM &&'

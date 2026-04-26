@@ -179,4 +179,25 @@ describe('useEnrichmentJoin', () => {
     });
     expect(onJoinFinalized).toHaveBeenCalledTimes(1);
   });
+
+  it('does not compute join stats when enrichment is blocked', async () => {
+    const hook = useEnrichmentJoin({
+      getEnrichmentDataset: () =>
+        ({
+          tableName: 'enrichment_table',
+          columns: [{ name: 'id' }]
+        }) as never,
+      getEnrichLinkedVariableId: () => 1,
+      getGeoFileColumnId: () => 2,
+      getEnrichDataFieldItems: () => [{ id: 1, columnName: 'id' }],
+      getGeoFileColumns: () => [{ id: 2, columnName: 'id' }],
+      isJoinBlocked: () => true,
+      onJoinFinalized: vi.fn()
+    });
+
+    await hook.computeEnrichmentJoinStats();
+
+    expect(mocks.computeDatasetJoinStatsMock).not.toHaveBeenCalled();
+    expect(hook.joinStats).toBeNull();
+  });
 });
