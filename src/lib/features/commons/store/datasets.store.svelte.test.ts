@@ -13,9 +13,16 @@ const mocks = vi.hoisted(() => ({
   loggerErrorMock: vi.fn(),
   loggerInfoMock: vi.fn(),
   processUploadedFileMock: vi.fn(),
+  createFileFromUploadMock: vi.fn(),
   dropTableMock: vi.fn(),
+  registerExistingTableMock: vi.fn(),
+  clearFiltersMock: vi.fn(),
+  bumpDatasetsVersionMock: vi.fn(),
   setEnrichDataStateMock: vi.fn(),
   renameFileMock: vi.fn(),
+  clearColumnTransformationsMock: vi.fn(),
+  disableFacetsMock: vi.fn(),
+  getFacetsBaseVisualizationIdMock: vi.fn(),
   currentProject: undefined as
     | {
         data: {
@@ -53,7 +60,10 @@ vi.mock('$lib/features/commons/utils/logger', () => ({
 
 vi.mock('$lib/features/duckdb/orchestrator/orchestrator.svelte', () => ({
   duckDBOrchestrator: {
-    dropTable: mocks.dropTableMock
+    dropTable: mocks.dropTableMock,
+    registerExistingTable: mocks.registerExistingTableMock,
+    clearFilters: mocks.clearFiltersMock,
+    bumpDatasetsVersion: mocks.bumpDatasetsVersionMock
   }
 }));
 
@@ -62,7 +72,8 @@ vi.mock('$lib/features/commons/store/project.store.svelte', () => ({
     get currentProject() {
       return mocks.currentProject;
     },
-    renameFile: mocks.renameFileMock
+    renameFile: mocks.renameFileMock,
+    clearColumnTransformations: mocks.clearColumnTransformationsMock
   }
 }));
 
@@ -76,6 +87,7 @@ vi.mock('$lib/features/data-pipeline', () => ({
   ColumnType: {
     TEXT: 'text'
   },
+  createFileFromUpload: mocks.createFileFromUploadMock,
   computeCentroid: vi.fn(() => [0, 0]),
   dataPipeline: {
     processUploadedFile: mocks.processUploadedFileMock
@@ -86,6 +98,10 @@ vi.mock('$lib/features/data-pipeline', () => ({
 vi.mock('$lib/paraglide/messages', () => ({}));
 vi.mock('$lib/features/commons/utils/notification.utils.svelte', () => ({
   showWarning: vi.fn()
+}));
+vi.mock('$lib/features/step-toolbar/tools/facets/facets-access', () => ({
+  disableFacets: mocks.disableFacetsMock,
+  getFacetsBaseVisualizationId: mocks.getFacetsBaseVisualizationIdMock
 }));
 
 import { datasetsStore } from './datasets.store.svelte';
@@ -129,6 +145,13 @@ describe('datasetsStore persisted view state', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.currentProject = undefined;
+    mocks.registerExistingTableMock.mockResolvedValue(null);
+    mocks.clearColumnTransformationsMock.mockResolvedValue(undefined);
+    mocks.getFacetsBaseVisualizationIdMock.mockReturnValue(null);
+    mocks.createFileFromUploadMock.mockImplementation(
+      (file: { content?: string; name?: string; type?: string }) =>
+        Promise.resolve(new File([file.content ?? ''], file.name ?? 'data.csv'))
+    );
     datasetsStore.clear();
     datasetsStore.restorePersistedViewState(undefined);
   });
@@ -272,5 +295,48 @@ describe('datasetsStore persisted view state', () => {
       datasetsStore.renameDataset('dataset-1', 'Persisted name')
     ).rejects.toThrow('rename failed');
     expect(datasetsStore.datasets[0]?.name).toBe('Dataset dataset-1');
+  });
+
+  it('removes linked visualizations when resetting a dataset', async () => {
+    datasetsStore.addProcessedDataset(makeDataset('dataset-1', 'source-a'));
+    mocks.currentProject = {
+      data: {
+        sourceFiles: [
+          makeUploadedFile('source-a', 'data.geojson', {
+            originalFile: new File(['{}'], 'data.geojson', {
+              type: 'application/geo+json'
+            })
+          })
+        ]
+      }
+    };
+    mocks.processUploadedFileMock.mockResolvedValueOnce({
+      ...makeDataset('restored-dataset', 'source-a'),
+      tableName: 'restored_table'
+    });
+    mocks.getFacetsBaseVisualizationIdMock.mockReturnValue('viz-2');
+
+    const getVisualizationsByDataset = vi.fn(() => [
+      { id: 'viz-1', datasetId: 'dataset-1' },
+      { id: 'viz-2', datasetId: 'dataset-1' }
+    ]);
+    const removeVisualization = vi.fn();
+    datasetsStore.injectVisualizationStore({
+      getVisualizationsByDataset,
+      removeVisualization,
+      createVisualization: vi.fn()
+    });
+
+    const success = await datasetsStore.resetDataset('dataset-1');
+
+    expect(success).toBe(true);
+    expect(getVisualizationsByDataset).toHaveBeenCalledWith('dataset-1');
+    expect(removeVisualization).toHaveBeenCalledWith('viz-1');
+    expect(removeVisualization).toHaveBeenCalledWith('viz-2');
+    expect(mocks.disableFacetsMock).toHaveBeenCalledTimes(1);
+    expect(datasetsStore.datasets[0]).toMatchObject({
+      id: 'dataset-1',
+      tableName: 'restored_table'
+    });
   });
 });

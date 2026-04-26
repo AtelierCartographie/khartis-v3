@@ -14,6 +14,7 @@ import { DataSourceType, FileType } from '../create-project.types';
 import { FileStatus } from '../../constants/ui.constants';
 import type { DatasetsState } from './datasets-state.svelte';
 import { startProcessing, endProcessing } from './datasets-state.svelte';
+import type { VisualizationStoreOperations } from './datasets-processing';
 import { LogCategory, logger } from '../../utils/logger';
 import * as m from '$lib/paraglide/messages';
 import { projectStore } from '../project.store.svelte';
@@ -106,7 +107,8 @@ function buildStatisticsFromDataset(
 
 export async function resetDataset(
   state: DatasetsState,
-  datasetId: string
+  datasetId: string,
+  visualizationStoreOps?: VisualizationStoreOperations | null
 ): Promise<boolean> {
   const dataset = state.datasets.find((d) => d.id === datasetId);
   if (!dataset) {
@@ -211,6 +213,27 @@ export async function resetDataset(
 
     if (previousTableName !== resetDatasetResult.tableName) {
       await duckDBOrchestrator.dropTable(previousTableName);
+    }
+
+    if (visualizationStoreOps) {
+      const visualizations =
+        visualizationStoreOps.getVisualizationsByDataset(datasetId);
+      const { disableFacets, getFacetsBaseVisualizationId } =
+        await import('$lib/features/step-toolbar/tools/facets/facets-access');
+      const facetsBaseVizId = getFacetsBaseVisualizationId();
+      const facetsBaseBeingReset =
+        facetsBaseVizId !== null &&
+        visualizations.some(
+          (visualization) => visualization.id === facetsBaseVizId
+        );
+
+      for (const visualization of visualizations) {
+        visualizationStoreOps.removeVisualization(visualization.id);
+      }
+
+      if (facetsBaseBeingReset) {
+        disableFacets();
+      }
     }
 
     await projectStore.clearColumnTransformations(sourceFile.id, {

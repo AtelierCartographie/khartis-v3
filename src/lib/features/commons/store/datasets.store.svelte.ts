@@ -282,7 +282,7 @@ function createDatasetsStore() {
   }
 
   async function resetDataset(datasetId: string): Promise<boolean> {
-    return resetDatasetFn(datasetsState, datasetId);
+    return resetDatasetFn(datasetsState, datasetId, visualizationStoreOps);
   }
 
   function hasModifications(datasetId: string): boolean {

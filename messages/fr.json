@@ -997,7 +997,7 @@
   "reset_data_modal_button": "Restaurer les données d'origine",
   "reset_data_modal_resetting": "Restauration en cours...",
   "reset_data_modal_description": "Cette action va ré-importer le fichier {name} et restaurer les données à leur état d'origine.",
-  "reset_data_modal_warning": "Toutes vos modifications seront définitivement perdues : colonnes calculées, lignes supprimées, colonnes renommées, filtres appliqués.",
+  "reset_data_modal_warning": "Toutes vos modifications et visualisations liées seront définitivement perdues : colonnes calculées, lignes supprimées, colonnes renommées, filtres appliqués.",
   "reset_data_modal_no_modifications": "Aucune modification détectée. Les données sont déjà dans leur état d'origine.",
   "reset_data_modal_irreversible": "Cette action est irréversible.",
   "reset_data_success_title": "Données réinitialisées",
