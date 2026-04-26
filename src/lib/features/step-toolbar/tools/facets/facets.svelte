@@ -33,7 +33,7 @@
   import Switch from '$lib/features/commons/components/switch.svelte';
 
   const FACETS_HELP_URL =
-    'https://cartographie.sciencespo.fr/khartis/help/facets';
+    'https://www.sciencespo.fr/cartographie/khartis/docs/';
   const CONFIGURE_SECTION_ID = 'configure-visualization';
   const FACETS_COLUMNS_MIN = 1;
   const FACETS_COLUMNS_MAX = 4;

@@ -261,7 +261,7 @@
   );
 
   const GEO_LEARN_MORE_URL =
-    'https://cartographie.sciencespo.fr/khartis/help/geocoding';
+    'https://www.sciencespo.fr/cartographie/khartis/docs/importer-des-donnees/';
 
   const tabItems = [
     {

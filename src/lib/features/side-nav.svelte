@@ -480,7 +480,7 @@
               kind="ghost"
               icon={Launch}
               class="menu-bar-item"
-              href="https://github.com/sciencespo/khartis/issues/new?template=bug_report.md"
+              href="https://github.com/AtelierCartographie/Khartis/issues/new?template=bug_report.md"
               target="_blank"
               rel="noopener noreferrer">{m.sidenav_report_bug()}</Button
             >
@@ -489,7 +489,7 @@
               kind="ghost"
               icon={Launch}
               class="menu-bar-item"
-              href="https://github.com/sciencespo/khartis/issues/new?template=feature_request.md"
+              href="https://github.com/AtelierCartographie/Khartis/issues/new?template=feature_request.md"
               target="_blank"
               rel="noopener noreferrer">{m.sidenav_suggest_feature()}</Button
             >
@@ -522,7 +522,7 @@
               kind="ghost"
               icon={Launch}
               class="menu-bar-item"
-              href="https://github.com/sciencespo/khartis"
+              href="https://github.com/AtelierCartographie/Khartis"
               target="_blank"
               rel="noopener noreferrer">{m.sidenav_github()}</Button
             >
@@ -531,7 +531,7 @@
               kind="ghost"
               icon={Launch}
               class="menu-bar-item"
-              href="https://www.sciencespo.fr/cartographie/khartis/privacy/"
+              href="https://www.sciencespo.fr/cartographie/khartis/docs/FAQ/"
               target="_blank"
               rel="noopener noreferrer">{m.sidenav_data_privacy()}</Button
             >
@@ -540,7 +540,7 @@
               kind="ghost"
               icon={Launch}
               class="menu-bar-item"
-              href="https://www.sciencespo.fr/cartographie/khartis/v2/"
+              href="https://www.sciencespo.fr/cartographie/khartis/"
               target="_blank"
               rel="noopener noreferrer">{m.sidenav_khartis_v2()}</Button
             >
