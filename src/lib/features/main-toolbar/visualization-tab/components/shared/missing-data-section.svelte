@@ -12,6 +12,7 @@
     MissingDataShape,
     SLIDER_LIMITS
   } from '../../../constants';
+  import { coerceMissingDataShape } from '../../coerce.utils';
   import {
     ColorSelector,
     SliderWithInput,
@@ -51,7 +52,8 @@
 
   function handleShapeChange(e: Event) {
     const target = e.target as HTMLSelectElement;
-    onshapechange?.(target.value as MissingDataShape);
+    const next = coerceMissingDataShape(target.value);
+    if (next) onshapechange?.(next);
   }
 </script>
 
@@ -110,6 +112,7 @@
                 bind:value={size}
                 min={SLIDER_LIMITS.missingDataSize.min}
                 max={SLIDER_LIMITS.missingDataSize.max}
+                step={SLIDER_LIMITS.missingDataSize.step}
                 onchange={onsizechange}
               />
             </div>

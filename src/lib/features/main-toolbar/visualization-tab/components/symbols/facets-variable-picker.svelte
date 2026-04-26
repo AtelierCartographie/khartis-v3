@@ -1,6 +1,6 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
-  import { NONE_FIELD_ID } from './types';
+  import { NONE_FIELD_ID } from '../../use-field-selection.svelte';
   import {
     CharacterWholeNumber,
     Checkbox,

@@ -157,6 +157,7 @@
     label={m.basemap_config_opacity()}
     min={BASEMAP_LAYER_CONFIG.opacity.min}
     max={BASEMAP_LAYER_CONFIG.opacity.max}
+    step={BASEMAP_LAYER_CONFIG.opacity.step}
     value={opacity}
     showMinMax
     inputWidth="64px"

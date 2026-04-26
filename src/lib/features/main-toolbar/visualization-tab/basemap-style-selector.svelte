@@ -203,12 +203,14 @@
   }
 
   function handleStyleChange(styleId: string): void {
+    const hasActiveOSMBasemap = osmBasemapStore.isActive;
     const nextStyle = resolveNextTiledStyleSelection(
       basemapStyleStore.selectedStyle,
       styleId as BasemapStyle,
-      osmBasemapStore.isActive
+      hasActiveOSMBasemap
     );
-    if (osmBasemapStore.isActive) {
+    if (hasActiveOSMBasemap) {
+      setFlatProjection();
       osmBasemapStore.clear();
     }
     if (nextStyle === basemapStyleStore.selectedStyle) {

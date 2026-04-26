@@ -2,10 +2,15 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const source = readFileSync(
+const popoverSource = readFileSync(
   resolve(import.meta.dirname, 'text-style-popover.svelte'),
   'utf8'
 );
+const sectionSource = readFileSync(
+  resolve(import.meta.dirname, 'text-style-section.svelte'),
+  'utf8'
+);
+const source = `${popoverSource}\n${sectionSource}`;
 
 describe('TextStylePopover', () => {
   it('should support selecting which section is visible', () => {
@@ -29,63 +34,54 @@ describe('TextStylePopover', () => {
   });
 
   it('should gate primary and secondary editors independently', () => {
-    expect(source).toContain('{#if showPrimarySection}');
-    expect(source).toContain('class:text-style-section--disabled={!secondary}');
-    expect(source).toContain('<h4>{m.text_style_primary_title()}</h4>');
-    expect(source).toContain('<h4>{m.text_style_secondary_title()}</h4>');
+    expect(popoverSource).toContain('{#if showPrimarySection}');
+    expect(popoverSource).toContain('{#if showSecondarySection}');
+    expect(popoverSource).toContain('section={primary}');
+    expect(popoverSource).toContain('section={secondary}');
+    expect(sectionSource).toContain(
+      'class:text-style-section--disabled={!enabled}'
+    );
+    expect(popoverSource).toContain('m.text_style_primary_title()');
+    expect(popoverSource).toContain('m.text_style_secondary_title()');
   });
 
   it('should render the compact font and size controls from the design', () => {
-    expect(source).toContain('DEFAULT_FONT_FAMILY,');
-    expect(source).toContain('resolveFontSizeOptions');
-    expect(source).toContain('const primaryFontSizes = $derived(');
-    expect(source).toContain('const secondaryFontSizes = $derived(');
-    expect(source).toContain('function openSelectPicker(');
-    expect(source).toContain('function handleFontFamilySelect(');
-    expect(source).toContain('function handleSizeSelect(');
-    expect(source).toContain('class="text-style-grid"');
-    expect(source).toContain('{m.annotations_font()}');
-    expect(source).toContain('{m.annotations_size()}');
-    expect(source).toContain('bind:this={primaryFontSelectRef}');
-    expect(source).toContain('bind:this={primarySizeSelectRef}');
-    expect(source).toContain('bind:this={secondaryFontSelectRef}');
-    expect(source).toContain('bind:this={secondarySizeSelectRef}');
-    expect(source).toContain('normalizeFontFamily(primary.fontFamily)');
-    expect(source).toContain('normalizeFontFamily(secondary?.fontFamily)');
-    expect(source).toContain(
+    expect(sectionSource).toContain('DEFAULT_FONT_FAMILY,');
+    expect(sectionSource).toContain('resolveFontSizeOptions');
+    expect(sectionSource).toContain('const fontSizes = $derived(');
+    expect(sectionSource).toContain('function openSelectPicker(');
+    expect(sectionSource).toContain('function handleFontFamilySelect(');
+    expect(sectionSource).toContain('function handleSizeSelect(');
+    expect(sectionSource).toContain('class="text-style-grid"');
+    expect(sectionSource).toContain('{m.annotations_font()}');
+    expect(sectionSource).toContain('{m.annotations_size()}');
+    expect(sectionSource).toContain('bind:this={fontSelectRef}');
+    expect(sectionSource).toContain('bind:this={sizeSelectRef}');
+    expect(sectionSource).toContain('normalizeFontFamily(section?.fontFamily)');
+    expect(sectionSource).toContain(
       '{#each AVAILABLE_FONTS as fontFamily (fontFamily)}'
     );
-    expect(source).toContain('handleFontFamilySelect(');
-    expect(source).toContain('class="compact-field__picker-trigger"');
-    expect(source).toContain(
-      'onclick={() => openSelectPicker(primaryFontSelectRef)}'
+    expect(sectionSource).toContain('class="compact-field__picker-trigger"');
+    expect(sectionSource).toContain(
+      'onclick={() => openSelectPicker(fontSelectRef)}'
     );
-    expect(source).toContain(
-      'onclick={() => openSelectPicker(primarySizeSelectRef)}'
+    expect(sectionSource).toContain(
+      'onclick={() => openSelectPicker(sizeSelectRef)}'
     );
-    expect(source).toContain(
-      'onclick={() => openSelectPicker(secondaryFontSelectRef)}'
-    );
-    expect(source).toContain(
-      'onclick={() => openSelectPicker(secondarySizeSelectRef)}'
-    );
-    expect(source).toContain('height: 32px;');
+    expect(sectionSource).toContain('height: 32px;');
   });
 
   it('should expose the compact quick action toolbar', () => {
-    expect(source).toContain('class="quick-format-toolbar"');
-    expect(source).toContain('TextColor');
-    expect(source).toContain('TextUnderline');
-    expect(source).toContain('primaryQuickColorInput');
-    expect(source).toContain('primaryQuickHaloColorInput');
-    expect(source).toContain('secondaryQuickColorInput');
-    expect(source).toContain('secondaryQuickHaloColorInput');
-    expect(source).toContain('resolveAlignmentIcon');
-    expect(source).toContain('nextAlignment(primary.align)');
-    expect(source).toContain('nextAlignment(secondary.align)');
-    expect(source).toContain('class="outline-text-icon"');
-    expect(source).toContain('handleQuickHaloColorInput');
-    expect(source).toContain('width: 32px;');
+    expect(sectionSource).toContain('class="quick-format-toolbar"');
+    expect(sectionSource).toContain('TextColor');
+    expect(sectionSource).toContain('TextUnderline');
+    expect(sectionSource).toContain('quickColorInput');
+    expect(sectionSource).toContain('quickHaloColorInput');
+    expect(sectionSource).toContain('resolveAlignmentIcon');
+    expect(sectionSource).toContain('nextAlignment(align)');
+    expect(sectionSource).toContain('class="outline-text-icon"');
+    expect(sectionSource).toContain('handleQuickHaloColorInput');
+    expect(sectionSource).toContain('width: 32px;');
   });
 
   it('should keep the popover open for internal clicks after rerenders', () => {

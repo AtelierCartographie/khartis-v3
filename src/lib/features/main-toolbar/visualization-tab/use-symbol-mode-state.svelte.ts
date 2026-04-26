@@ -10,6 +10,7 @@ import {
   SymbolMode,
   VISUALIZATION_DEFAULTS
 } from '$lib/features/main-toolbar/constants';
+import { applyByKeys, snapshotByKeys } from './mode-snapshot.utils';
 
 const NON_PROPORTIONAL_SYMBOL_STATE_FIELDS = {
   proportionalType: ProportionalType.SINGLE,
@@ -18,38 +19,6 @@ const NON_PROPORTIONAL_SYMBOL_STATE_FIELDS = {
   breakValueA: null,
   breakValueB: null
 } as const satisfies Partial<SymbolPrimitiveConfig>;
-
-export function snapshotSymbolModeState(
-  symbol: SymbolPrimitiveConfig
-): SymbolModeState {
-  return {
-    size: symbol.size,
-    minSize: symbol.minSize,
-    maxSize: symbol.maxSize,
-    sizeScale: symbol.sizeScale,
-    valueColumn: symbol.valueColumn,
-    categoryColumn: symbol.categoryColumn,
-    sizeColumn: symbol.sizeColumn,
-    classification: symbol.classification,
-    fillValueColumn: symbol.fillValueColumn,
-    fillCategoryColumn: symbol.fillCategoryColumn,
-    fillClassification: symbol.fillClassification,
-    categoryShape: symbol.categoryShape,
-    proportionalType: symbol.proportionalType,
-    commonScale: symbol.commonScale,
-    positionMode: symbol.positionMode,
-    breakValueA: symbol.breakValueA,
-    breakValueB: symbol.breakValueB,
-    fillMode: symbol.fillMode,
-    strokeMode: symbol.strokeMode,
-    strokeWidth: symbol.strokeWidth,
-    strokeOpacity: symbol.strokeOpacity,
-    strokeDashed: symbol.strokeDashed,
-    strokeClassification: symbol.strokeClassification,
-    strokeValueColumn: symbol.strokeValueColumn,
-    strokeCategoryColumn: symbol.strokeCategoryColumn
-  };
-}
 
 export const SYMBOL_MODE_STATE_KEYS = [
   'size',
@@ -79,14 +48,16 @@ export const SYMBOL_MODE_STATE_KEYS = [
   'strokeCategoryColumn'
 ] as const satisfies readonly (keyof SymbolModeState)[];
 
+export function snapshotSymbolModeState(
+  symbol: SymbolPrimitiveConfig
+): SymbolModeState {
+  return snapshotByKeys(symbol, SYMBOL_MODE_STATE_KEYS) as SymbolModeState;
+}
+
 export function applySymbolModeStateFields(
   state: SymbolModeState | undefined
 ): Partial<SymbolPrimitiveConfig> {
-  const fields: Partial<SymbolPrimitiveConfig> = {};
-  for (const key of SYMBOL_MODE_STATE_KEYS) {
-    (fields as Record<string, unknown>)[key] = state?.[key];
-  }
-  return fields;
+  return applyByKeys<SymbolPrimitiveConfig>(state, SYMBOL_MODE_STATE_KEYS);
 }
 
 export function getDefaultSymbolModeStateFields(

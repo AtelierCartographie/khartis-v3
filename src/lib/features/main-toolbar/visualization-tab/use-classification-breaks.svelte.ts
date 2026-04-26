@@ -55,6 +55,46 @@ export function buildClassificationScopeKey(
   return `${role}:${target}`;
 }
 
+interface ClassificationColorParamsTarget {
+  classification: ClassificationConfig | undefined;
+  usesCategories: boolean;
+}
+
+export function buildClassificationColorParamsKey(
+  key: string,
+  target: ClassificationColorParamsTarget | null | undefined
+): string {
+  if (!target) {
+    return `${key}:none`;
+  }
+
+  const numColors = target.usesCategories
+    ? Math.max(target.classification?.labels?.length ?? 0, 0)
+    : (target.classification?.classes ?? 0);
+  const breakpointValue = target.classification?.breakpointValue;
+  const paletteType =
+    breakpointValue != null ? PALETTE_TYPE.DIVERGING : PALETTE_TYPE.SEQUENTIAL;
+  const breakpointKey =
+    paletteType === PALETTE_TYPE.DIVERGING && Number.isFinite(breakpointValue)
+      ? String(breakpointValue)
+      : '';
+  const breaksKey =
+    paletteType === PALETTE_TYPE.DIVERGING
+      ? (target.classification?.breaks ?? []).join(',')
+      : '';
+
+  return [
+    key,
+    target.classification?.paletteId ?? '',
+    String(target.classification?.inverted ?? false),
+    String(numColors),
+    paletteType,
+    breakpointKey,
+    breaksKey,
+    String(target.usesCategories)
+  ].join(':');
+}
+
 export interface ClassificationBreaksComputation {
   normalizedMethod: ClassificationMethod;
   requestedClassCount: number;
@@ -209,9 +249,11 @@ export function resolveClassificationColors({
     const resolvedBreakpointValue =
       breakpointValue ?? classification.breakpointValue;
     const paletteType =
-      resolvedBreakpointValue != null ? 'diverging' : 'sequential';
+      resolvedBreakpointValue != null
+        ? PALETTE_TYPE.DIVERGING
+        : PALETTE_TYPE.SEQUENTIAL;
     const divergingSplit =
-      paletteType === 'diverging'
+      paletteType === PALETTE_TYPE.DIVERGING
         ? computeDivergingSplit(
             resolvedClassCount,
             breakValues ?? classification.breaks ?? [],

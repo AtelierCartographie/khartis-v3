@@ -8,7 +8,28 @@ import {
 } from '$lib/features/commons/store/visualization.store.svelte';
 import { FillMode } from '../constants';
 
-export function buildPolygonPanelVisualization(
+type PanelBuilder = (
+  visualization: VisualizationConfig | undefined
+) => VisualizationConfig | undefined;
+
+function memoizePanelBuilder(builder: PanelBuilder): PanelBuilder {
+  const cache = new WeakMap<
+    VisualizationConfig,
+    VisualizationConfig | undefined
+  >();
+  return (visualization) => {
+    if (!visualization) return builder(visualization);
+    const cached = cache.get(visualization);
+    if (cached !== undefined || cache.has(visualization)) {
+      return cached;
+    }
+    const result = builder(visualization);
+    cache.set(visualization, result);
+    return result;
+  };
+}
+
+function buildPolygonPanelVisualizationImpl(
   visualization: VisualizationConfig | undefined
 ): VisualizationConfig | undefined {
   const polygon = getPolygonPrimitive(visualization);
@@ -46,7 +67,7 @@ export function buildPolygonPanelVisualization(
   };
 }
 
-export function buildSymbolPanelVisualization(
+function buildSymbolPanelVisualizationImpl(
   visualization: VisualizationConfig | undefined
 ): VisualizationConfig | undefined {
   const symbol = getSymbolPrimitive(visualization);
@@ -101,7 +122,7 @@ export function buildSymbolPanelVisualization(
   };
 }
 
-export function buildSymbolFillPanelVisualization(
+function buildSymbolFillPanelVisualizationImpl(
   visualization: VisualizationConfig | undefined
 ): VisualizationConfig | undefined {
   const symbol = getSymbolPrimitive(visualization);
@@ -131,7 +152,7 @@ export function buildSymbolFillPanelVisualization(
   };
 }
 
-export function buildLinePanelVisualization(
+function buildLinePanelVisualizationImpl(
   visualization: VisualizationConfig | undefined
 ): VisualizationConfig | undefined {
   const line = getLinePrimitive(visualization);
@@ -168,7 +189,7 @@ export function buildLinePanelVisualization(
   };
 }
 
-export function buildTextPanelVisualization(
+function buildTextPanelVisualizationImpl(
   visualization: VisualizationConfig | undefined
 ): VisualizationConfig | undefined {
   const text = getTextPrimitive(visualization);
@@ -223,7 +244,7 @@ export function buildTextPanelVisualization(
   };
 }
 
-export function buildTextBackgroundPanelVisualization(
+function buildTextBackgroundPanelVisualizationImpl(
   visualization: VisualizationConfig | undefined
 ): VisualizationConfig | undefined {
   const text = getTextPrimitive(visualization);
@@ -261,3 +282,22 @@ export function buildTextBackgroundPanelVisualization(
     missingData: undefined
   };
 }
+
+export const buildPolygonPanelVisualization = memoizePanelBuilder(
+  buildPolygonPanelVisualizationImpl
+);
+export const buildSymbolPanelVisualization = memoizePanelBuilder(
+  buildSymbolPanelVisualizationImpl
+);
+export const buildSymbolFillPanelVisualization = memoizePanelBuilder(
+  buildSymbolFillPanelVisualizationImpl
+);
+export const buildLinePanelVisualization = memoizePanelBuilder(
+  buildLinePanelVisualizationImpl
+);
+export const buildTextPanelVisualization = memoizePanelBuilder(
+  buildTextPanelVisualizationImpl
+);
+export const buildTextBackgroundPanelVisualization = memoizePanelBuilder(
+  buildTextBackgroundPanelVisualizationImpl
+);

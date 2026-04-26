@@ -203,18 +203,24 @@ export const VISUALIZATION_DEFAULTS = {
 } satisfies Record<string, number>;
 
 export const SLIDER_LIMITS = {
-  opacity: { min: 0, max: 100 },
-  strokeWidth: { min: 0, max: 20 },
-  lineWidth: { min: 1, max: 20 },
-  lineMaxWidth: { min: 1, max: 50 },
-  lineOpacity: { min: 0, max: 100 },
-  symbolSize: { min: 1, max: 100 },
-  symbolMaxSize: { min: 1, max: 100 },
-  textSize: { min: 8, max: 24 },
-  textOpacity: { min: 0, max: 100 },
-  labelOpacity: { min: 0, max: 100 },
-  haloWidth: { min: 0, max: 10 },
-  missingDataSize: { min: 1, max: 20 }
+  opacity: { min: 0, max: 100, step: 1 },
+  strokeWidth: { min: 0, max: 12, step: 0.5 },
+  lineWidth: { min: 0.5, max: 12, step: 0.5 },
+  lineMaxWidth: { min: 1, max: 20, step: 0.5 },
+  lineOpacity: { min: 0, max: 100, step: 1 },
+  symbolSize: { min: 1, max: 50, step: 1 },
+  symbolMaxSize: { min: 2, max: 60, step: 1 },
+  textSize: { min: 6, max: 24, step: 1 },
+  textOpacity: { min: 0, max: 100, step: 1 },
+  labelOpacity: { min: 0, max: 100, step: 1 },
+  haloWidth: { min: 0, max: 6, step: 0.5 },
+  missingDataSize: { min: 1, max: 12, step: 0.5 }
+} as const;
+
+export const MIN_VISIBLE_STROKE_WIDTH = 1;
+
+export const DOT_DENSITY = {
+  size: { min: 0.5, max: 4, step: 0.25 }
 } as const;
 
 export const DEFAULT_COLORS = {
@@ -292,11 +298,11 @@ export const BASEMAP_COLOR_VALUES: Record<BasemapColorId, string> = {
 } as const;
 
 export const BASEMAP_LAYER_CONFIG = {
-  opacity: { min: 0, max: 100 },
+  opacity: { min: 0, max: 100, step: 1 },
   thickness: { min: 0.25, max: 8, step: 0.25 },
-  graticuleSpacing: { min: 1, max: 90 },
-  size: { min: 1, max: 100 },
-  cityCount: { min: 1, max: 100 }
+  graticuleSpacing: { min: 1, max: 90, step: 1 },
+  size: { min: 1, max: 32, step: 1 },
+  cityCount: { min: 1, max: 100, step: 1 }
 } as const;
 
 export const UI_CONSTANTS = {

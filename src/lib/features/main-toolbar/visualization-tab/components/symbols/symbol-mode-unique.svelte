@@ -15,10 +15,10 @@
   import DiscretizationModal from '../discretization-modal.svelte';
   import type { SymbolModeProps } from './types';
   import { resolveDiscretizationLabel } from '../discretization.utils';
-  import { FACET_SLOT } from '../../facets-adapter.svelte';
+  import { FACET_SLOT } from '../../facets-adapter';
   import {
     NONE_FIELD_ID,
-    useFieldSelection
+    useFieldSelectionHandler
   } from '../../use-field-selection.svelte';
   import { useFacetsVariableSelection } from '../../use-facets-variable-selection.svelte';
   import { resetVisualClassification } from '../shared/classification-reset.utils';
@@ -26,6 +26,11 @@
     buildSymbolShapeDropdownItems,
     getSymbolShapeTypes
   } from './symbol-shape-options';
+  import {
+    coerceShapeType,
+    coerceString,
+    parseOpacityToSlider
+  } from '../../coerce.utils';
 
   let {
     dataFields = [],
@@ -56,8 +61,16 @@
   let categoryCount = $state<number>(4);
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
   const selectableDataFields = $derived([noneOption, ...dataFields]);
-  const classFieldSelection = useFieldSelection(() => dataFields);
-  const categoryFieldSelection = useFieldSelection(() => dataFields);
+  const classFieldSelection = useFieldSelectionHandler({
+    getDataFields: () => dataFields,
+    columnKey: 'valueColumn',
+    onMappingChange: (updates) => onFillMappingChange?.(updates)
+  });
+  const categoryFieldSelection = useFieldSelectionHandler({
+    getDataFields: () => dataFields,
+    columnKey: 'categoryColumn',
+    onMappingChange: (updates) => onFillMappingChange?.(updates)
+  });
   const facetsSelection = useFacetsVariableSelection({
     getVisualizationId: () => visualization?.id,
     getDataFields: () => dataFields
@@ -70,31 +83,30 @@
     const symbolConfig = visualization?.symbol;
     if (symbolConfig) {
       fillMode = symbolConfig.fillMode ?? FillMode.UNIQUE;
-      fillColor =
-        (symbolConfig.fillColor as string | undefined) ?? DEFAULT_COLORS.fill;
+      fillColor = coerceString(symbolConfig.fillColor) ?? DEFAULT_COLORS.fill;
       symbolSize = symbolConfig.size ?? VISUALIZATION_DEFAULTS.symbolSize;
-      shapeType = (symbolConfig.shape as ShapeType) ?? ShapeType.CIRCLE;
-      fillOpacity =
-        symbolConfig.opacity !== undefined
-          ? Math.round(symbolConfig.opacity * 100)
-          : VISUALIZATION_DEFAULTS.symbolOpacity;
+      shapeType = coerceShapeType(symbolConfig.shape) ?? ShapeType.CIRCLE;
+      fillOpacity = parseOpacityToSlider(
+        symbolConfig.opacity,
+        VISUALIZATION_DEFAULTS.symbolOpacity
+      );
     } else {
       if (visualization?.modes) {
         fillMode = visualization.modes.fill ?? FillMode.UNIQUE;
       }
       if (visualization?.style) {
         fillColor =
-          (visualization.style.symbolFillColor as string) ??
+          coerceString(visualization.style.symbolFillColor) ??
           DEFAULT_COLORS.fill;
       }
       if (visualization?.symbols) {
         symbolSize =
           visualization.symbols.size ?? VISUALIZATION_DEFAULTS.symbolSize;
         shapeType = visualization.symbols.type ?? ShapeType.CIRCLE;
-        fillOpacity =
-          visualization.symbols.opacity !== undefined
-            ? Math.round(visualization.symbols.opacity * 100)
-            : VISUALIZATION_DEFAULTS.symbolOpacity;
+        fillOpacity = parseOpacityToSlider(
+          visualization.symbols.opacity,
+          VISUALIZATION_DEFAULTS.symbolOpacity
+        );
       } else {
         fillOpacity = VISUALIZATION_DEFAULTS.symbolOpacity;
       }
@@ -181,32 +193,6 @@
     onMissingDataChange?.({ color: value });
   }
 
-  function handleClassFieldSelect(fieldId: number) {
-    classFieldSelection.set(fieldId);
-    if (fieldId === NONE_FIELD_ID) {
-      onFillMappingChange?.({ valueColumn: undefined });
-      return;
-    }
-
-    const field = dataFields.find((item) => item.id === fieldId);
-    if (field) {
-      onFillMappingChange?.({ valueColumn: field.text });
-    }
-  }
-
-  function handleCategoryFieldSelect(fieldId: number) {
-    categoryFieldSelection.set(fieldId);
-    if (fieldId === NONE_FIELD_ID) {
-      onFillMappingChange?.({ categoryColumn: undefined });
-      return;
-    }
-
-    const field = dataFields.find((item) => item.id === fieldId);
-    if (field) {
-      onFillMappingChange?.({ categoryColumn: field.text });
-    }
-  }
-
   const shapeTypes = getSymbolShapeTypes(SymbolMode.UNIQUE);
   const shapeDropdownItems = $derived(
     buildSymbolShapeDropdownItems(SymbolMode.UNIQUE)
@@ -224,6 +210,7 @@
   bind:value={symbolSize}
   min={SLIDER_LIMITS.symbolSize.min}
   max={SLIDER_LIMITS.symbolSize.max}
+  step={SLIDER_LIMITS.symbolSize.step}
   onchange={handleSymbolSizeChange}
 />
 
@@ -264,8 +251,8 @@
     handleFillModeChange(FILL_MODES_STANDARD.indexOf(mode))}
   onFillColorChange={handleFillColorChange}
   onFillOpacityChange={handleFillOpacityChange}
-  onValueFieldSelect={handleClassFieldSelect}
-  onCategoryFieldSelect={handleCategoryFieldSelect}
+  onValueFieldSelect={classFieldSelection.handleSelect}
+  onCategoryFieldSelect={categoryFieldSelection.handleSelect}
   onFacetsVariablesChange={facetsSelection.updateVariables}
   onFacetsToggle={facetsSelection.toggle}
   onOpenDiscretization={onOpenFillDiscretization ?? (() => {})}

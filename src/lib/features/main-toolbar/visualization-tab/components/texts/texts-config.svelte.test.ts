@@ -6,28 +6,44 @@ const source = readFileSync(
   resolve(import.meta.dirname, 'texts-config.svelte'),
   'utf8'
 );
+const backgroundSectionSource = readFileSync(
+  resolve(import.meta.dirname, 'text-background-section.svelte'),
+  'utf8'
+);
+const labelSectionSource = readFileSync(
+  resolve(import.meta.dirname, 'text-label-section.svelte'),
+  'utf8'
+);
 
 function getComponentBlock(name: string): string {
-  return source.split(`<${name}`)[1]?.split('/>')[0] ?? '';
+  return (
+    backgroundSectionSource.split(`<${name}`)[1]?.split('/>')[0] ??
+    source.split(`<${name}`)[1]?.split('/>')[0] ??
+    ''
+  );
 }
 
 describe('TextsConfig — FillSection wiring (background)', () => {
   it('delegates the background fill rendering to the shared FillSection', () => {
-    expect(source).toContain(
-      "import FillSection from './shared/fill-section.svelte'"
+    expect(backgroundSectionSource).toContain(
+      "import FillSection from '../shared/fill-section.svelte'"
     );
-    expect(source).toContain('<FillSection');
+    expect(backgroundSectionSource).toContain('<FillSection');
   });
 
   it('uses the standard 4-mode preset for the text background (no DENSITY)', () => {
-    expect(source).toContain('availableModes={FILL_MODES_STANDARD}');
-    expect(source).toContain(
-      "import { FILL_MODES_STANDARD } from './shared/fill-mode-presets'"
+    expect(backgroundSectionSource).toContain(
+      'availableModes={FILL_MODES_STANDARD}'
+    );
+    expect(backgroundSectionSource).toContain(
+      "import { FILL_MODES_STANDARD } from '../shared/fill-mode-presets'"
     );
   });
 
   it('sets categoriesVariant to texts without a redundant primitive tag', () => {
-    const fillBlock = source.split('<FillSection')[1]?.split('/>')[0];
+    const fillBlock = backgroundSectionSource
+      .split('<FillSection')[1]
+      ?.split('/>')[0];
     expect(fillBlock).toBeDefined();
     expect(fillBlock).not.toContain('primitive=');
     expect(fillBlock).toContain('categoriesVariant="texts"');
@@ -35,9 +51,7 @@ describe('TextsConfig — FillSection wiring (background)', () => {
 
   it('wires onBackgroundClassificationChange to the FillSection fill role', () => {
     const fillBlock = getComponentBlock('FillSection');
-    expect(fillBlock).toContain(
-      'onClassificationChange={onBackgroundClassificationChange'
-    );
+    expect(fillBlock).toContain('onClassificationChange={');
     expect(fillBlock).toContain(
       'facetsValueSlotPath={FACET_SLOT.TEXT_BACKGROUND_VALUE}'
     );
@@ -48,9 +62,9 @@ describe('TextsConfig — FillSection wiring (background)', () => {
   });
 
   it('keeps the StrokeSection branch for the background halo', () => {
-    expect(source).toContain('<StrokeSection');
-    expect(source).toContain(
-      'onStrokeClassificationChange={handleBackgroundStrokeClassificationChange}'
+    expect(backgroundSectionSource).toContain('<StrokeSection');
+    expect(backgroundSectionSource).toContain(
+      'onStrokeClassificationChange={onBackgroundStrokeClassificationChange}'
     );
   });
 });
@@ -58,7 +72,7 @@ describe('TextsConfig — FillSection wiring (background)', () => {
 describe('TextsConfig — Figma layout', () => {
   it('should delegate text styling to the TextStylePopover', () => {
     expect(source).toContain(
-      "import TextStylePopover from './text-style-popover.svelte'"
+      "import TextStylePopover from '../text-style-popover.svelte'"
     );
     expect(source).toContain('<TextStylePopover');
     expect(source).toContain(
@@ -112,8 +126,10 @@ describe('TextsConfig — Figma layout', () => {
   });
 
   it('should compact the Aa format trigger (no 64x64)', () => {
-    expect(source).toMatch(/width:\s*40px\s*!important;\s*height:\s*40px/);
-    expect(source).not.toMatch(/width:\s*64px;\s*height:\s*64px/);
+    expect(labelSectionSource).toMatch(
+      /width:\s*40px\s*!important;\s*height:\s*40px/
+    );
+    expect(labelSectionSource).not.toMatch(/width:\s*64px;\s*height:\s*64px/);
   });
 
   it('should route each Aa trigger to a single popover section', () => {
@@ -123,48 +139,58 @@ describe('TextsConfig — Figma layout', () => {
     expect(source).toContain(
       "toggleStylePopover('secondary', secondaryTriggerRef);"
     );
-    expect(source).toContain("activeStyleSection === 'primary'");
-    expect(source).toContain("activeStyleSection === 'secondary'");
+    expect(labelSectionSource).toContain("activeStyleSection === 'primary'");
+    expect(labelSectionSource).toContain("activeStyleSection === 'secondary'");
   });
 
   it('should wire Carbon Aa trigger clicks through component events', () => {
-    expect(source).toContain('on:click={togglePrimaryFormat}');
-    expect(source).toContain('on:click={toggleSecondaryFormat}');
-    expect(source).not.toContain('onclick={togglePrimaryFormat}');
-    expect(source).not.toContain('onclick={toggleSecondaryFormat}');
+    expect(labelSectionSource).toContain('on:click={onTogglePrimaryFormat}');
+    expect(labelSectionSource).toContain('on:click={onToggleSecondaryFormat}');
+    expect(source).toContain('onTogglePrimaryFormat={togglePrimaryFormat}');
+    expect(source).toContain('onToggleSecondaryFormat={toggleSecondaryFormat}');
   });
 
   it('should disable secondary controls until a primary text field is selected', () => {
     expect(source).toContain(
       'labelFieldSelection.selectedFieldId !== NONE_FIELD_ID'
     );
-    expect(source).toContain('disabled={!hasPrimaryField}');
-    expect(source).toContain(
+    expect(labelSectionSource).toContain('disabled={!hasPrimaryField}');
+    expect(labelSectionSource).toContain(
       'disabled={!hasPrimaryField || !hasSecondaryField}'
     );
     expect(source).toContain('if (!hasPrimaryField || !hasSecondaryField) {');
   });
 
   it('should render the Figma text size controls inline', () => {
-    expect(source).toContain(
+    const sizeSectionSource = readFileSync(
+      resolve(import.meta.dirname, 'text-size-section.svelte'),
+      'utf8'
+    );
+    expect(sizeSectionSource).toContain(
       "import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte'"
     );
-    expect(source).toContain('import { TextAllCaps, TextScale }');
+    expect(sizeSectionSource).toContain('import { TextScale, TextAllCaps }');
     expect(source).toContain('const TEXT_SIZE_SLIDER_MIN = MIN_FONT_SIZE;');
     expect(source).toContain('const TEXT_SIZE_SLIDER_MAX = MAX_FONT_SIZE;');
-    expect(source).toContain('<SectionHeading title={m.size_label()} />');
-    expect(source).toContain('<SliderWithInput');
-    expect(source).toContain('inputWidth="64px"');
+    expect(sizeSectionSource).toContain(
+      '<SectionHeading title={m.size_label()} />'
+    );
+    expect(sizeSectionSource).toContain('<SliderWithInput');
+    expect(sizeSectionSource).toContain('inputWidth="64px"');
     expect(source).toContain('onModesChange?.({ size: nextMode });');
-    expect(source).toContain('FACET_SLOT.TEXT_VALUE');
+    expect(sizeSectionSource).toContain('FACET_SLOT.TEXT_VALUE');
   });
 
   it('should use the shared palette preview for missing-data color', () => {
-    expect(source).toContain(
+    const missingDataSectionSource = readFileSync(
+      resolve(import.meta.dirname, 'text-missing-data-section.svelte'),
+      'utf8'
+    );
+    expect(missingDataSectionSource).toContain(
       "import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte'"
     );
-    expect(source).toContain('<SingleColorPreview');
-    expect(source).not.toContain('ColorSelector');
+    expect(missingDataSectionSource).toContain('<SingleColorPreview');
+    expect(missingDataSectionSource).not.toContain('ColorSelector');
   });
 });
 

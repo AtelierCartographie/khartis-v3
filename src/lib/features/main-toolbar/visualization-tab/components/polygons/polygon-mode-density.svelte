@@ -8,6 +8,8 @@
   import {
     DENSITY_DEFAULTS,
     DENSITY_LEVEL,
+    DOT_DENSITY,
+    SLIDER_LIMITS,
     type DensityConfig,
     type DensityLevelName,
     type DensityLevelOption
@@ -45,9 +47,6 @@
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
   const selectableDataFields = $derived([noneOption, ...dataFields]);
 
-  const DOT_SIZE_MIN = 0.1;
-  const DOT_SIZE_MAX = 4;
-  const DOT_SIZE_STEP = 0.1;
   const MAX_POINTS_BUDGET = 100_000;
 
   const dedupedLevelOptions = $derived.by(() => {
@@ -280,9 +279,9 @@
 <SliderWithInput
   label={m.density_dot_size()}
   bind:value={dotSize}
-  min={DOT_SIZE_MIN}
-  max={DOT_SIZE_MAX}
-  step={DOT_SIZE_STEP}
+  min={DOT_DENSITY.size.min}
+  max={DOT_DENSITY.size.max}
+  step={DOT_DENSITY.size.step}
   onchange={handleDotSizeChange}
 />
 
@@ -296,8 +295,9 @@
 <SliderWithInput
   label={m.opacity()}
   bind:value={fillOpacity}
-  min={0}
-  max={100}
+  min={SLIDER_LIMITS.opacity.min}
+  max={SLIDER_LIMITS.opacity.max}
+  step={SLIDER_LIMITS.opacity.step}
   onchange={handleFillOpacityChange}
 />
 

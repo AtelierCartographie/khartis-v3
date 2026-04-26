@@ -29,15 +29,16 @@
   import DiscretizationModal from './discretization-modal.svelte';
   import type { ClassificationConfig } from '$lib/features/commons/store/visualization.store.svelte';
   import { resolveDiscretizationLabel } from './discretization.utils';
-  import { FACET_SLOT } from '../facets-adapter.svelte';
+  import { FACET_SLOT } from '../facets-adapter';
   import { PolygonModeDensity } from './polygons';
   import {
     NONE_FIELD_ID,
-    useFieldSelection
+    useFieldSelectionHandler
   } from '../use-field-selection.svelte';
   import { useCategoryLabels } from '../use-category-labels.svelte';
   import { useFacetsVariableSelection } from '../use-facets-variable-selection.svelte';
   import { resetVisualClassification } from './shared/classification-reset.utils';
+  import { coerceString, parseOpacityToSlider } from '../coerce.utils';
 
   interface Props {
     dataFields?: Array<{ id: number; text: string; type?: string }>;
@@ -97,8 +98,16 @@
   let filterSectionVisible = $state(false);
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
   const selectableDataFields = $derived([noneOption, ...dataFields]);
-  const valueFieldSelection = useFieldSelection(() => dataFields);
-  const categoryFieldSelection = useFieldSelection(() => dataFields);
+  const valueFieldSelection = useFieldSelectionHandler({
+    getDataFields: () => dataFields,
+    columnKey: 'valueColumn',
+    onMappingChange: (updates) => onMappingChange?.(updates)
+  });
+  const categoryFieldSelection = useFieldSelectionHandler({
+    getDataFields: () => dataFields,
+    columnKey: 'categoryColumn',
+    onMappingChange: (updates) => onMappingChange?.(updates)
+  });
   const facetsSelection = useFacetsVariableSelection({
     getVisualizationId: () => visualization?.id,
     getDataFields: () => dataFields
@@ -108,32 +117,6 @@
     valueFieldSelection.sync(visualization?.mapping.valueColumn);
     categoryFieldSelection.sync(visualization?.mapping.categoryColumn);
   });
-
-  function handleValueFieldSelect(fieldId: number) {
-    valueFieldSelection.set(fieldId);
-    if (fieldId === NONE_FIELD_ID) {
-      onMappingChange?.({ valueColumn: undefined });
-      return;
-    }
-
-    const field = dataFields.find((item) => item.id === fieldId);
-    if (field && onMappingChange) {
-      onMappingChange({ valueColumn: field.text });
-    }
-  }
-
-  function handleCategoryFieldSelect(fieldId: number) {
-    categoryFieldSelection.set(fieldId);
-    if (fieldId === NONE_FIELD_ID) {
-      onMappingChange?.({ categoryColumn: undefined });
-      return;
-    }
-
-    const field = dataFields.find((item) => item.id === fieldId);
-    if (field && onMappingChange) {
-      onMappingChange({ categoryColumn: field.text });
-    }
-  }
 
   const categoryColumnName = $derived(
     categoryFieldSelection.selectedFieldName ?? ''
@@ -169,13 +152,13 @@
     const polygonConfig = visualization?.polygon;
     const fillOp =
       polygonConfig?.fillOpacity ?? visualization?.style.fillOpacity;
-    fillOpacity =
-      fillOp !== undefined
-        ? Math.round(fillOp * 100)
-        : VISUALIZATION_DEFAULTS.fillOpacity;
+    fillOpacity = parseOpacityToSlider(
+      fillOp,
+      VISUALIZATION_DEFAULTS.fillOpacity
+    );
     fillColor =
-      (polygonConfig?.fillColor as string | undefined) ??
-      (visualization?.style.fillColor as string | undefined) ??
+      coerceString(polygonConfig?.fillColor) ??
+      coerceString(visualization?.style.fillColor) ??
       DEFAULT_COLORS.fill;
     fillMode =
       polygonConfig?.fillMode ?? visualization?.modes?.fill ?? FillMode.UNIQUE;
@@ -369,8 +352,8 @@
         handleFillModeChange(FILL_MODE_ORDER.indexOf(mode))}
       onFillColorChange={handleFillColorChange}
       onFillOpacityChange={handleFillOpacityChange}
-      onValueFieldSelect={handleValueFieldSelect}
-      onCategoryFieldSelect={handleCategoryFieldSelect}
+      onValueFieldSelect={valueFieldSelection.handleSelect}
+      onCategoryFieldSelect={categoryFieldSelection.handleSelect}
       onFacetsVariablesChange={facetsSelection.updateVariables}
       onFacetsToggle={facetsSelection.toggle}
       onOpenDiscretization={handleOpenDiscretization}

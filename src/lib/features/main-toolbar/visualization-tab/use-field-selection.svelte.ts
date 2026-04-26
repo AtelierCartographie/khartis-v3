@@ -51,3 +51,35 @@ export function useFieldSelection(getDataFields: () => FieldSelectionItem[]) {
     set
   };
 }
+
+export type MappingColumnKey =
+  | 'valueColumn'
+  | 'sizeColumn'
+  | 'categoryColumn'
+  | 'labelColumn'
+  | 'secondaryLabelColumn'
+  | 'colorColumn';
+
+export interface UseFieldSelectionHandlerOptions {
+  getDataFields: () => FieldSelectionItem[];
+  columnKey: MappingColumnKey;
+  onMappingChange?: (
+    updates: Partial<Record<MappingColumnKey, string | undefined>>
+  ) => void;
+  onBeforeChange?: (next: string | undefined) => void;
+}
+
+export function useFieldSelectionHandler(
+  opts: UseFieldSelectionHandlerOptions
+) {
+  const selection = useFieldSelection(opts.getDataFields);
+
+  function handleSelect(fieldId: number): void {
+    selection.set(fieldId);
+    const next = resolveFieldName(opts.getDataFields(), fieldId);
+    opts.onBeforeChange?.(next);
+    opts.onMappingChange?.({ [opts.columnKey]: next });
+  }
+
+  return Object.assign(selection, { handleSelect });
+}
