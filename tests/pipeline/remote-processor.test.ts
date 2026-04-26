@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as m from '$lib/paraglide/messages';
 
-const { DuckMock } = vi.hoisted(() => ({
+const { DuckMock, processZipFileMock } = vi.hoisted(() => ({
   DuckMock: {
     read_link: vi.fn().mockResolvedValue(undefined),
     query: vi.fn().mockResolvedValue(undefined)
-  }
+  },
+  processZipFileMock: vi.fn()
 }));
 
 vi.mock('$lib/features/duckdb', () => ({
@@ -37,6 +38,10 @@ vi.mock('$lib/features/data-pipeline/processors/tabular-geo-detection', () => ({
   applyTabularGeoDetection: vi.fn().mockResolvedValue(undefined)
 }));
 
+vi.mock('$lib/features/data-pipeline/processors/zip-processor', () => ({
+  processZipFile: (...args: unknown[]) => processZipFileMock(...args)
+}));
+
 import {
   processRemoteFile,
   processRemoteZipFile
@@ -45,6 +50,17 @@ import {
 describe('remote-processor', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    processZipFileMock.mockResolvedValue({
+      id: 'zip-ds',
+      tableName: 'zip_table',
+      columns: [],
+      rowCount: 0,
+      geometry: null,
+      name: 'zip',
+      sourceFileId: 'zip',
+      format: 'kml',
+      metadata: { processedAt: new Date(), fileType: 'kml' }
+    });
   });
 
   it('rejects .shp URL with a standalone shapefile error', async () => {
@@ -69,6 +85,27 @@ describe('remote-processor', () => {
       expect.any(String),
       expect.objectContaining({ decimal_separator: ',' })
     );
+  });
+
+  it('processes remote KMZ as an archive instead of a direct DuckDB link', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8))
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await processRemoteFile('https://example.com/places.kmz');
+
+    expect(fetchMock).toHaveBeenCalledWith('https://example.com/places.kmz');
+    expect(processZipFileMock).toHaveBeenCalledOnce();
+    expect(DuckMock.read_link).not.toHaveBeenCalled();
+    expect('datasets' in result).toBe(false);
+    if ('datasets' in result) {
+      throw new Error('Expected a single KMZ dataset result');
+    }
+    expect(result.sourceFileId).toBe('https://example.com/places.kmz');
+
+    vi.unstubAllGlobals();
   });
 
   it('throws pipeline_error_fetch_failed when fetch returns 404', async () => {
