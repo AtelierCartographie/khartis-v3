@@ -1,4 +1,5 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { analyticsService } from '$lib/features/commons/services/analytics.service';
 
 const CONSENT_STORAGE_KEY = 'khartis_consent';
 const CURRENT_CONSENT_VERSION = 1;
@@ -31,6 +32,10 @@ function createConsentStore() {
       state.analytics = parsed.analytics;
       state.consentDate = parsed.consentDate;
       state.consentVersion = parsed.consentVersion;
+
+      if (state.analytics && state.consentVersion >= CURRENT_CONSENT_VERSION) {
+        analyticsService.enable();
+      }
     } catch (error) {
       logger.error(
         'Failed to load consent state from localStorage',
@@ -64,6 +69,8 @@ function createConsentStore() {
     state.consentDate = new Date().toISOString();
     state.consentVersion = CURRENT_CONSENT_VERSION;
     save();
+    analyticsService.enable();
+    analyticsService.trackEvent('analytics_consent_accept');
   }
 
   function declineAll(): void {
@@ -71,6 +78,7 @@ function createConsentStore() {
     state.consentDate = new Date().toISOString();
     state.consentVersion = CURRENT_CONSENT_VERSION;
     save();
+    analyticsService.disable();
   }
 
   return {
