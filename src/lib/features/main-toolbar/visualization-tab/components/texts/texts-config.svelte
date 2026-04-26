@@ -1,17 +1,10 @@
 <script lang="ts">
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
-  import Switch from '$lib/features/commons/components/switch.svelte';
-  import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
-  import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
-  import {
-    InfoPopover,
-    SectionHeading,
-    SliderWithInput,
-    StrokeSection,
-    VizFilterButton,
-    VizFilterPanel
-  } from './shared';
-  import FillSection from './shared/fill-section.svelte';
+  import { InfoPopover, VizFilterButton, VizFilterPanel } from '../shared';
+  import TextBackgroundSection from './text-background-section.svelte';
+  import TextLabelSection from './text-label-section.svelte';
+  import TextMissingDataSection from './text-missing-data-section.svelte';
+  import TextSizeSection from './text-size-section.svelte';
   import type {
     ClassificationConfig,
     MissingDataConfig,
@@ -26,7 +19,7 @@
     FillMode,
     SizeMode,
     VISUALIZATION_DEFAULTS
-  } from '../../constants';
+  } from '../../../constants';
   import {
     clampFontSize,
     DEFAULT_FONT_FAMILY,
@@ -34,20 +27,17 @@
     MIN_FONT_SIZE,
     normalizeFontFamily
   } from '$lib/features/step-toolbar/constants/fonts.constants';
-  import { FILL_MODES_STANDARD } from './shared/fill-mode-presets';
-  import { Button, Dropdown, TextInput } from 'carbon-components-svelte';
-  import { TextAllCaps, TextScale } from 'carbon-icons-svelte';
-  import DiscretizationModal from './discretization-modal.svelte';
-  import TextStylePopover from './text-style-popover.svelte';
-  import { resolveDiscretizationLabel } from './discretization.utils';
-  import { FACET_SLOT } from '../facets-adapter.svelte';
-  import FacetsVariablePicker from './symbols/facets-variable-picker.svelte';
+  import DiscretizationModal from '../discretization-modal.svelte';
+  import TextStylePopover from '../text-style-popover.svelte';
+  import { resolveDiscretizationLabel } from '../discretization.utils';
   import {
     NONE_FIELD_ID,
-    useFieldSelection
-  } from '../use-field-selection.svelte';
-  import { resetVisualClassification } from './shared/classification-reset.utils';
-  import { useFacetsVariableSelection } from '../use-facets-variable-selection.svelte';
+    useFieldSelection,
+    useFieldSelectionHandler
+  } from '../../use-field-selection.svelte';
+  import { resetVisualClassification } from '../shared/classification-reset.utils';
+  import { useFacetsVariableSelection } from '../../use-facets-variable-selection.svelte';
+  import { coerceString, parseOpacityToSlider } from '../../coerce.utils';
 
   interface Props {
     dataFields?: Array<{ id: number; text: string; type?: string }>;
@@ -132,8 +122,16 @@
 
   const labelFieldSelection = useFieldSelection(() => dataFields);
   const sizeFieldSelection = useFieldSelection(() => dataFields);
-  const backgroundValueFieldSelection = useFieldSelection(() => dataFields);
-  const backgroundCategoryFieldSelection = useFieldSelection(() => dataFields);
+  const backgroundValueFieldSelection = useFieldSelectionHandler({
+    getDataFields: () => dataFields,
+    columnKey: 'valueColumn',
+    onMappingChange: (updates) => onBackgroundMappingChange?.(updates)
+  });
+  const backgroundCategoryFieldSelection = useFieldSelectionHandler({
+    getDataFields: () => dataFields,
+    columnKey: 'categoryColumn',
+    onMappingChange: (updates) => onBackgroundMappingChange?.(updates)
+  });
   const secondaryLabelFieldSelection = useFieldSelection(() => dataFields);
   const textFacetsSelection = useFacetsVariableSelection({
     getVisualizationId: () => visualization?.id,
@@ -231,17 +229,6 @@
     )
   );
 
-  function parseOpacityToSlider(
-    value: number | undefined,
-    fallback: number
-  ): number {
-    if (value === undefined) {
-      return fallback;
-    }
-
-    return value <= 1 ? Math.round(value * 100) : value;
-  }
-
   $effect(() => {
     labelFieldSelection.sync(visualization?.mapping.labelColumn);
     sizeFieldSelection.sync(visualization?.mapping.valueColumn);
@@ -263,7 +250,7 @@
         VISUALIZATION_DEFAULTS.textOpacity
       );
       textColor =
-        (visualization.style.textColor as string) ?? DEFAULT_COLORS.text;
+        coerceString(visualization.style.textColor) ?? DEFAULT_COLORS.text;
       fontFamily =
         normalizeFontFamily(visualization.style.textFontFamily) ??
         DEFAULT_FONT_FAMILY;
@@ -283,7 +270,7 @@
       dxpMasking = visualization.style.textDxpMasking ?? false;
 
       secondaryColor =
-        (visualization.style.labelColor as string) ?? DEFAULT_COLORS.text;
+        coerceString(visualization.style.labelColor) ?? DEFAULT_COLORS.text;
       secondaryFontFamily =
         normalizeFontFamily(visualization.style.labelFontFamily) ??
         DEFAULT_FONT_FAMILY;
@@ -330,7 +317,7 @@
       VISUALIZATION_DEFAULTS.fillOpacity
     );
     fillColor =
-      (backgroundVisualization.style.fillColor as string) ??
+      coerceString(backgroundVisualization.style.fillColor) ??
       DEFAULT_COLORS.fill;
     fillMode =
       (backgroundVisualization.style.fillOpacity ?? 1) <= 0
@@ -387,34 +374,6 @@
     }
 
     onSecondaryLabelsChange?.(updates);
-  }
-
-  function handleBackgroundValueFieldSelect(fieldId: number) {
-    backgroundValueFieldSelection.set(fieldId);
-
-    if (fieldId === NONE_FIELD_ID) {
-      onBackgroundMappingChange?.({ valueColumn: undefined });
-      return;
-    }
-
-    const field = dataFields.find((item) => item.id === fieldId);
-    if (field) {
-      onBackgroundMappingChange?.({ valueColumn: field.text });
-    }
-  }
-
-  function handleBackgroundCategoryFieldSelect(fieldId: number) {
-    backgroundCategoryFieldSelection.set(fieldId);
-
-    if (fieldId === NONE_FIELD_ID) {
-      onBackgroundMappingChange?.({ categoryColumn: undefined });
-      return;
-    }
-
-    const field = dataFields.find((item) => item.id === fieldId);
-    if (field) {
-      onBackgroundMappingChange?.({ categoryColumn: field.text });
-    }
   }
 
   function handleTextColorChange(value: string) {
@@ -675,11 +634,6 @@
     toggleStylePopover('secondary', secondaryTriggerRef);
   }
 
-  const sizeModeItems = $derived([
-    { icon: TextAllCaps, label: m.unique(), iconSize: 16 },
-    { icon: TextScale, label: m.proportional(), iconSize: 16 }
-  ]);
-  const sizeModeIndex = $derived(TEXT_SIZE_MODES.indexOf(sizeMode));
   const sizeColumnName = $derived(sizeFieldSelection.selectedFieldName ?? '');
 </script>
 
@@ -708,216 +662,74 @@
     {/snippet}
 
     <div class="texts-config">
-      <SectionHeading title={m.text_label()} />
+      <TextLabelSection
+        selectableDataFields={selectableDataFields}
+        secondaryFieldItems={secondaryFieldItems}
+        primarySelectedId={labelFieldSelection.selectedFieldId}
+        secondarySelectedId={secondaryLabelFieldSelection.selectedFieldId}
+        hasPrimaryField={hasPrimaryField}
+        hasSecondaryField={hasSecondaryField}
+        showStylePopover={showStylePopover}
+        activeStyleSection={activeStyleSection}
+        bind:primaryTriggerRef={primaryTriggerRef}
+        bind:secondaryTriggerRef={secondaryTriggerRef}
+        onPrimarySelect={handleLabelFieldSelect}
+        onSecondarySelect={handleSecondaryFieldSelect}
+        onTogglePrimaryFormat={togglePrimaryFormat}
+        onToggleSecondaryFormat={toggleSecondaryFormat}
+      />
 
-      <div class="field-stack">
-        <div class="field-row">
-          <div class="field-row-dropdown field-picker">
-            <Dropdown
-              labelText={m.text_according()}
-              items={selectableDataFields}
-              selectedId={labelFieldSelection.selectedFieldId}
-              on:select={(event) =>
-                handleLabelFieldSelect(event.detail.selectedId)}
-              type="default"
-            />
-          </div>
+      <TextMissingDataSection
+        show={showMissingData}
+        bind:label={missingDataLabel}
+        color={missingDataColor}
+        onShowChange={handleMissingDataShowChange}
+        onLabelChange={handleMissingDataLabelChange}
+        onColorChange={handleMissingDataColorChange}
+      />
 
-          <Button
-            bind:ref={primaryTriggerRef}
-            class={`format-trigger ${showStylePopover && activeStyleSection === 'primary' ? 'format-trigger--active' : ''}`}
-            kind="ghost"
-            aria-pressed={showStylePopover && activeStyleSection === 'primary'}
-            iconDescription={m.text_format_button()}
-            on:click={togglePrimaryFormat}
-          >
-            Aa
-          </Button>
-        </div>
-
-        <div class="field-row">
-          <div class="field-row-dropdown field-picker">
-            <Dropdown
-              labelText={m.secondary_text()}
-              items={secondaryFieldItems}
-              selectedId={secondaryLabelFieldSelection.selectedFieldId}
-              disabled={!hasPrimaryField}
-              on:select={(event) =>
-                handleSecondaryFieldSelect(event.detail.selectedId)}
-              type="default"
-            />
-          </div>
-
-          <Button
-            bind:ref={secondaryTriggerRef}
-            class={`format-trigger ${showStylePopover && activeStyleSection === 'secondary' ? 'format-trigger--active' : ''}`}
-            kind="ghost"
-            aria-pressed={showStylePopover &&
-              activeStyleSection === 'secondary'}
-            iconDescription={m.text_format_button()}
-            disabled={!hasPrimaryField || !hasSecondaryField}
-            on:click={toggleSecondaryFormat}
-          >
-            Aa
-          </Button>
-        </div>
-      </div>
-
-      <div class="missing-data-block">
-        <div class="missing-data-heading">
-          <span class="missing-data-title">{m.show_missing_data()}</span>
-          <InfoPopover text={m.show_missing_data_info()} />
-        </div>
-
-        <div class="missing-data-toggle">
-          <Switch
-            toggled={showMissingData}
-            hideLabel
-            labelText={m.show_missing_data()}
-            onchange={handleMissingDataShowChange}
-          />
-          <span class="missing-data-toggle-state">
-            {showMissingData ? m.yes() : m.no()}
-          </span>
-        </div>
-
-        {#if showMissingData}
-          <div class="missing-data-fields">
-            <label class="field-group" for="texts-missing-data-label">
-              <span class="field-label">{m.text_label()}</span>
-              <div class="text-input-field">
-                <TextInput
-                  id="texts-missing-data-label"
-                  bind:value={missingDataLabel}
-                  placeholder={m.missing_data_text()}
-                  on:input={() =>
-                    handleMissingDataLabelChange(missingDataLabel)}
-                />
-              </div>
-            </label>
-
-            <div class="field-group">
-              <SingleColorPreview
-                exclusive
-                label={m.color()}
-                color={missingDataColor}
-                onchange={handleMissingDataColorChange}
-              />
-            </div>
-          </div>
-        {/if}
-      </div>
-
-      <SectionHeading title={m.size_label()} />
-
-      <div class="field-group">
-        <ToggleTabs
-          items={sizeModeItems}
-          activeIndex={sizeModeIndex}
-          onChange={handleSizeModeChange}
-          hideInactiveLabel={true}
-        />
-      </div>
-
-      {#if sizeMode === SizeMode.PROPORTIONAL}
-        <div class="field-group">
-          <FacetsVariablePicker
-            bind:open={sizePickerOpen}
-            titleText={m.size_according()}
-            dataFields={dataFields}
-            singleSelectItems={selectableDataFields}
-            selectedFieldId={sizeFieldSelection.selectedFieldId}
-            selectedFieldIds={textFacetsSelection.getSelectedFieldIds(
-              FACET_SLOT.TEXT_VALUE
-            )}
-            isCollectionEnabled={textFacetsSelection.isActiveForSlot(
-              FACET_SLOT.TEXT_VALUE
-            )}
-            onSelect={handleSizeFieldSelect}
-            onCollectionChange={(ids) =>
-              textFacetsSelection.updateVariables(
-                sizeColumnName,
-                FACET_SLOT.TEXT_VALUE,
-                ids
-              )}
-            onToggleCollection={(enabled) =>
-              textFacetsSelection.toggle(
-                sizeColumnName,
-                FACET_SLOT.TEXT_VALUE,
-                enabled
-              )}
-          />
-        </div>
-      {/if}
-
-      <SliderWithInput
-        label={m.size_label()}
-        min={TEXT_SIZE_SLIDER_MIN}
-        max={TEXT_SIZE_SLIDER_MAX}
-        value={size}
-        showMinMax
-        inputWidth="64px"
-        onchange={handleSizeChange}
+      <TextSizeSection
+        sizeMode={sizeMode}
+        size={size}
+        sizeMin={TEXT_SIZE_SLIDER_MIN}
+        sizeMax={TEXT_SIZE_SLIDER_MAX}
+        sizeColumnName={sizeColumnName}
+        bind:sizePickerOpen={sizePickerOpen}
+        dataFields={dataFields}
+        selectableDataFields={selectableDataFields}
+        sizeFieldSelection={sizeFieldSelection}
+        facetsSelection={textFacetsSelection}
+        onSizeModeChange={handleSizeModeChange}
+        onSizeChange={handleSizeChange}
+        onSizeFieldSelect={handleSizeFieldSelect}
       />
 
       {#if backgroundAvailable}
-        <FillSection
-          visualization={backgroundVisualization}
+        <TextBackgroundSection
+          backgroundVisualization={backgroundVisualization}
           dataFields={dataFields}
-          availableModes={FILL_MODES_STANDARD}
+          selectableDataFields={selectableDataFields}
           fillMode={fillMode}
           fillColor={fillColor}
           fillOpacity={fillOpacity}
-          selectedValueFieldId={backgroundValueFieldSelection.selectedFieldId}
-          selectedCategoryFieldId={backgroundCategoryFieldSelection.selectedFieldId}
-          discretizationLabel={backgroundDiscretizationLabel}
-          categoryCount={backgroundVisualization?.classification?.labels
-            ?.length ?? 0}
-          facetsValueSlotPath={FACET_SLOT.TEXT_BACKGROUND_VALUE}
-          facetsCategorySlotPath={FACET_SLOT.TEXT_BACKGROUND_CATEGORY}
-          categoriesVariant="texts"
-          showMissingDataSection={false}
-          showOpacityBounds={true}
-          opacityInputWidth="64px"
-          sectionTitle={m.background()}
-          selectableDataFields={selectableDataFields}
-          getFacetsSelectedFieldIds={backgroundFacetsSelection.getSelectedFieldIds}
-          isFacetsActiveForSlot={backgroundFacetsSelection.isActiveForSlot}
-          onFillModeChange={(mode: FillMode) =>
-            handleBackgroundFillModeChange(FILL_MODES_STANDARD.indexOf(mode))}
-          onFillColorChange={handleBackgroundFillColorChange}
-          onFillOpacityChange={handleBackgroundFillOpacityChange}
-          onValueFieldSelect={handleBackgroundValueFieldSelect}
-          onCategoryFieldSelect={handleBackgroundCategoryFieldSelect}
-          onFacetsVariablesChange={backgroundFacetsSelection.updateVariables}
-          onFacetsToggle={backgroundFacetsSelection.toggle}
-          onOpenDiscretization={openBackgroundDiscretization}
-          onClassificationChange={onBackgroundClassificationChange ??
-            (() => {})}
-          onInvertPalette={onBackgroundInvertPalette}
-        />
-
-        <StrokeSection
-          visualization={backgroundVisualization}
-          dataFields={dataFields}
-          discretizationLabel={backgroundStrokeDiscretizationLabel}
-          showDashed={false}
-          sliderInputWidth="64px"
-          onStyleChange={onBackgroundStyleChange}
-          onModesChange={onBackgroundModesChange}
-          onMappingChange={onBackgroundMappingChange}
-          onStrokeMappingChange={onBackgroundStrokeMappingChange}
-          onInvertPalette={onBackgroundStrokeInvertPalette}
-          onOpenDiscretization={openBackgroundStrokeDiscretization}
-          onStrokeClassificationChange={handleBackgroundStrokeClassificationChange}
-          strokeClassification={backgroundVisualization?.text?.background
-            ?.strokeClassification}
-          strokeValueColumn={backgroundVisualization?.text?.background
-            ?.strokeValueColumn}
-          strokeCategoryColumn={backgroundVisualization?.text?.background
-            ?.strokeCategoryColumn}
-          facetsValueSlotPath={FACET_SLOT.TEXT_BACKGROUND_STROKE_VALUE}
-          facetsCategorySlotPath={FACET_SLOT.TEXT_BACKGROUND_STROKE_CATEGORY}
+          backgroundDiscretizationLabel={backgroundDiscretizationLabel}
+          backgroundStrokeDiscretizationLabel={backgroundStrokeDiscretizationLabel}
+          backgroundValueFieldSelection={backgroundValueFieldSelection}
+          backgroundCategoryFieldSelection={backgroundCategoryFieldSelection}
+          backgroundFacetsSelection={backgroundFacetsSelection}
+          onBackgroundFillModeChange={handleBackgroundFillModeChange}
+          onBackgroundFillColorChange={handleBackgroundFillColorChange}
+          onBackgroundFillOpacityChange={handleBackgroundFillOpacityChange}
+          onBackgroundClassificationChange={onBackgroundClassificationChange}
+          onBackgroundInvertPalette={onBackgroundInvertPalette}
+          onBackgroundStrokeInvertPalette={onBackgroundStrokeInvertPalette}
+          onBackgroundStyleChange={onBackgroundStyleChange}
+          onBackgroundModesChange={onBackgroundModesChange}
+          onBackgroundMappingChange={onBackgroundMappingChange}
+          onBackgroundStrokeMappingChange={onBackgroundStrokeMappingChange}
+          onBackgroundStrokeClassificationChange={handleBackgroundStrokeClassificationChange}
+          openBackgroundDiscretization={openBackgroundDiscretization}
+          openBackgroundStrokeDiscretization={openBackgroundStrokeDiscretization}
         />
       {/if}
     </div>
@@ -1015,111 +827,6 @@
     padding: var(--cds-spacing-04) var(--cds-spacing-03) var(--cds-spacing-05);
   }
 
-  .field-stack {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-04);
-  }
-
-  .field-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: var(--cds-spacing-04);
-    align-items: end;
-  }
-
-  .field-row-dropdown {
-    min-width: 0;
-  }
-
-  .field-group {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-02);
-  }
-
-  .field-label {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--cds-spacing-02);
-    font-size: 0.75rem;
-    letter-spacing: 0.32px;
-    color: var(--cds-text-secondary);
-    font-weight: 400;
-  }
-
-  :global(.format-trigger.bx--btn) {
-    width: 40px !important;
-    height: 40px !important;
-    min-height: 40px !important;
-    max-height: 40px !important;
-    padding: 0 !important;
-    border: 1px solid var(--cds-border-subtle-01, #c6c6c6) !important;
-    background: var(--cds-layer-01, #ffffff) !important;
-    color: var(--cds-text-secondary, #6f6f6f) !important;
-    font-size: 0.875rem !important;
-    font-weight: 600 !important;
-    line-height: 1 !important;
-    cursor: pointer;
-    display: inline-flex !important;
-    align-items: center;
-    justify-content: center;
-    transition:
-      border-color 0.15s ease,
-      color 0.15s ease,
-      background-color 0.15s ease;
-  }
-
-  :global(.format-trigger.bx--btn:hover:not(:disabled)),
-  :global(.format-trigger.format-trigger--active.bx--btn) {
-    border-color: var(--cds-text-primary, #161616) !important;
-    color: var(--cds-text-primary, #161616) !important;
-    background: var(--cds-layer-hover-01, #e8e8e8) !important;
-  }
-
-  :global(.format-trigger:disabled) {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
-
-  .missing-data-block {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-04);
-    padding-top: var(--cds-spacing-04);
-    border-top: 1px solid var(--cds-border-subtle-01, #c6c6c6);
-  }
-
-  .missing-data-heading {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--cds-spacing-03);
-  }
-
-  .missing-data-title {
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: var(--cds-text-primary, #161616);
-  }
-
-  .missing-data-toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--cds-spacing-03);
-  }
-
-  .missing-data-toggle-state {
-    font-size: 0.875rem;
-    color: var(--cds-text-primary, #161616);
-    font-weight: 500;
-  }
-
-  .missing-data-fields {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--cds-spacing-04);
-  }
-
   :global(.text-input-field .bx--text-input) {
     height: 40px;
   }
@@ -1135,20 +842,5 @@
   :global(.texts-panel-shell .field-picker .bx--list-box__field) {
     min-height: 40px;
     background: var(--cds-field-01, #f4f4f4);
-  }
-
-  @media (max-width: 560px) {
-    .field-row {
-      grid-template-columns: 1fr;
-    }
-
-    :global(.format-trigger) {
-      width: 100%;
-      height: 48px;
-    }
-
-    .missing-data-fields {
-      grid-template-columns: 1fr;
-    }
   }
 </style>

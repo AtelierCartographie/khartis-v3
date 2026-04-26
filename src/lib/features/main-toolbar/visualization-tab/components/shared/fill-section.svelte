@@ -275,6 +275,7 @@
     label={m.opacity()}
     min={SLIDER_LIMITS.opacity.min}
     max={SLIDER_LIMITS.opacity.max}
+    step={SLIDER_LIMITS.opacity.step}
     value={fillOpacity}
     showMinMax={showOpacityBounds}
     inputWidth={opacityInputWidth}

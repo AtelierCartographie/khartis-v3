@@ -42,7 +42,12 @@ vi.mock('$lib/features/commons/services/classification.service', () => ({
 vi.mock(
   '$lib/features/commons/components/palette-popover/palette.constants',
   () => ({
-    PALETTE_TYPE: { PATTERN: 'pattern' },
+    PALETTE_TYPE: {
+      PATTERN: 'pattern',
+      SEQUENTIAL: 'sequential',
+      DIVERGING: 'diverging',
+      QUALITATIVE: 'qualitative'
+    },
     ...paletteMocks
   })
 );
@@ -70,6 +75,7 @@ import {
 import {
   CLASSIFICATION_BREAKS_TRIGGER,
   areClassificationColorsEqual,
+  buildClassificationColorParamsKey,
   buildClassificationScopeKey,
   computeClassificationBreaks,
   resolveClassificationColors,
@@ -94,6 +100,55 @@ describe('use-classification-breaks', () => {
       buildClassificationScopeKey('fill', PrimitiveFilterType.POLYGON)
     ).toBe('fill:polygon');
     expect(CLASSIFICATION_BREAKS_TRIGGER.MISSING_BREAKS).toBe('missing-breaks');
+  });
+
+  describe('buildClassificationColorParamsKey', () => {
+    it('returns a "<key>:none" sentinel when target is missing', () => {
+      expect(buildClassificationColorParamsKey('polygon', null)).toBe(
+        'polygon:none'
+      );
+      expect(buildClassificationColorParamsKey('polygon', undefined)).toBe(
+        'polygon:none'
+      );
+    });
+
+    it('encodes sequential params (no breakpoint) without break info', () => {
+      const key = buildClassificationColorParamsKey('polygon', {
+        usesCategories: false,
+        classification: {
+          paletteId: 'blues',
+          inverted: false,
+          classes: 5
+        } as ClassificationConfig
+      });
+      expect(key).toBe('polygon:blues:false:5:sequential:::false');
+    });
+
+    it('encodes diverging params with breakpoint and breaks joined', () => {
+      const key = buildClassificationColorParamsKey('polygon', {
+        usesCategories: false,
+        classification: {
+          paletteId: 'red-blue',
+          inverted: true,
+          classes: 4,
+          breakpointValue: 0,
+          breaks: [-1, 0, 1]
+        } as ClassificationConfig
+      });
+      expect(key).toBe('polygon:red-blue:true:4:diverging:0:-1,0,1:false');
+    });
+
+    it('uses label count when usesCategories is true', () => {
+      const key = buildClassificationColorParamsKey('symbol', {
+        usesCategories: true,
+        classification: {
+          paletteId: 'set1',
+          inverted: false,
+          labels: ['a', 'b', 'c']
+        } as ClassificationConfig
+      });
+      expect(key).toBe('symbol:set1:false:3:sequential:::true');
+    });
   });
 
   it('resolves categorical colors through the shared helper', () => {

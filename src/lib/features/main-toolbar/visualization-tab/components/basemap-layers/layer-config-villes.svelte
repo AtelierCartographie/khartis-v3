@@ -113,6 +113,7 @@
     label={m.basemap_config_city_count()}
     min={BASEMAP_LAYER_CONFIG.cityCount.min}
     max={BASEMAP_LAYER_CONFIG.cityCount.max}
+    step={BASEMAP_LAYER_CONFIG.cityCount.step}
     value={count}
     showMinMax
     inputWidth="64px"
@@ -140,6 +141,7 @@
     label={m.basemap_config_size()}
     min={BASEMAP_LAYER_CONFIG.size.min}
     max={BASEMAP_LAYER_CONFIG.size.max}
+    step={BASEMAP_LAYER_CONFIG.size.step}
     value={size}
     showMinMax
     inputWidth="64px"
@@ -151,6 +153,7 @@
     label={m.basemap_config_opacity()}
     min={BASEMAP_LAYER_CONFIG.opacity.min}
     max={BASEMAP_LAYER_CONFIG.opacity.max}
+    step={BASEMAP_LAYER_CONFIG.opacity.step}
     value={opacity}
     showMinMax
     inputWidth="64px"

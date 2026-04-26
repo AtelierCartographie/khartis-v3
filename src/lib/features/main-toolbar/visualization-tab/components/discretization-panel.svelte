@@ -364,7 +364,7 @@
     <p class="method-description">{getMethodDescription(method)}</p>
     <a
       class="learn-more"
-      href="https://observablehq.com/@d3/classification-methods"
+      href="https://pro.arcgis.com/en/pro-app/latest/help/mapping/layer-properties/data-classification-methods.htm"
       target="_blank"
       rel="noopener noreferrer"
     >

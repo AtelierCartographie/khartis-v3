@@ -92,6 +92,7 @@
           label={m.basemap_config_opacity()}
           min={BASEMAP_LAYER_CONFIG.opacity.min}
           max={BASEMAP_LAYER_CONFIG.opacity.max}
+          step={BASEMAP_LAYER_CONFIG.opacity.step}
           value={fillOpacity}
           onchange={handleFillOpacityChange}
         />
@@ -132,6 +133,7 @@
           label={m.basemap_config_opacity()}
           min={BASEMAP_LAYER_CONFIG.opacity.min}
           max={BASEMAP_LAYER_CONFIG.opacity.max}
+          step={BASEMAP_LAYER_CONFIG.opacity.step}
           value={strokeOpacity}
           onchange={handleStrokeOpacityChange}
         />

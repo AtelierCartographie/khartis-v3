@@ -374,7 +374,7 @@
 
     <a
       class="learn-more-link"
-      href="https://khartis.sciencespo.fr/faq"
+      href="https://www.sciencespo.fr/cartographie/khartis/docs/FAQ/"
       target="_blank"
       rel="noopener noreferrer"
     >

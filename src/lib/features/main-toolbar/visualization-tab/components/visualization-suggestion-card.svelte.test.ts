@@ -80,4 +80,9 @@ describe('VisualizationSuggestionCard', () => {
     expect(source).toContain('--khartis-additions-text-primary-suggestions');
     expect(source).toContain('--khartis-additions-icon-disabled-suggestions');
   });
+
+  it('keeps the card radio accessible without showing duplicate card text', () => {
+    expect(source).toContain('labelText={suggestion.label}');
+    expect(source).toContain('hideLabel');
+  });
 });

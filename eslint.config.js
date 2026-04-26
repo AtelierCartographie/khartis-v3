@@ -98,6 +98,7 @@ export default ts.config(
       'src/lib/features/main-toolbar/visualization-tab/components/palette-popover/**/*.svelte',
       'src/lib/features/main-toolbar/visualization-tab/components/shared/**/*.svelte',
       'src/lib/features/main-toolbar/visualization-tab/components/text-style-popover.svelte',
+      'src/lib/features/main-toolbar/visualization-tab/components/text-style-section.svelte',
       'src/lib/features/map/components/map-tooltip-overlay.svelte',
       'src/lib/features/map/components/zoom-toolbar.svelte',
       'src/lib/features/step-toolbar/step-toolbar.svelte',

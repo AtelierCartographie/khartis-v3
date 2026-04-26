@@ -6,24 +6,38 @@ const source = readFileSync(
   resolve(import.meta.dirname, 'lines-config.svelte'),
   'utf8'
 );
+const thicknessSectionSource = readFileSync(
+  resolve(import.meta.dirname, 'line-thickness-section.svelte'),
+  'utf8'
+);
+const colorSectionSource = readFileSync(
+  resolve(import.meta.dirname, 'line-color-section.svelte'),
+  'utf8'
+);
 
 describe('LinesConfig — palette wiring', () => {
   it('keeps the Figma section structure for thickness, color and global controls', () => {
-    expect(source).toContain('<SectionHeading title={m.thickness()} />');
-    expect(source).toContain('<SectionHeading title={m.color()} />');
+    expect(thicknessSectionSource).toContain(
+      '<SectionHeading title={m.thickness()} />'
+    );
+    expect(colorSectionSource).toContain(
+      '<SectionHeading title={m.color()} />'
+    );
     expect(source).toContain('<ToggleWithLabel');
     expect(source).toContain('<MissingDataSection');
+    expect(source).toContain('<LineThicknessSection');
+    expect(source).toContain('<LineColorSection');
   });
 
   it('renders the proportional and classes thickness branches with shared controls', () => {
-    const proportionalBlock = source.split(
+    const proportionalBlock = thicknessSectionSource.split(
       '{:else if thicknessMode === ThicknessMode.PROPORTIONAL}'
     )[1];
     expect(proportionalBlock).toBeDefined();
     expect(proportionalBlock).toContain('<FacetsVariablePicker');
     expect(proportionalBlock).toContain('label={m.max_thickness()}');
 
-    const classesBlock = source.split(
+    const classesBlock = thicknessSectionSource.split(
       '{:else if thicknessMode === ThicknessMode.CLASSES}'
     )[1];
     expect(classesBlock).toBeDefined();
@@ -32,21 +46,23 @@ describe('LinesConfig — palette wiring', () => {
   });
 
   it('should import PALETTE_TYPE from palette-popover/palette.constants', () => {
-    expect(source).toContain(
+    expect(colorSectionSource).toContain(
       "from '$lib/features/commons/components/palette-popover/palette.constants'"
     );
-    expect(source).toContain('PALETTE_TYPE');
+    expect(colorSectionSource).toContain('PALETTE_TYPE');
   });
 
   it('delegates the CLASSES branch PalettePreview paletteType to resolvePaletteTypeForBreakpoint', () => {
-    const classesBlock = source.split('colorMode === ColorMode.CLASSES')[1];
+    const classesBlock = colorSectionSource.split(
+      'colorMode === ColorMode.CLASSES'
+    )[1];
     expect(classesBlock).toBeDefined();
     const classesPalette = classesBlock
       .split('<PalettePreview')[1]
       ?.split('/>')[0];
     expect(classesPalette).toBeDefined();
     expect(classesPalette).toContain('resolvePaletteTypeForBreakpoint');
-    expect(classesPalette).toContain('lineColorClassification');
+    expect(classesPalette).toContain('classification');
   });
 
   it('shows breakpoint controls only for line color discretization', () => {
@@ -58,7 +74,7 @@ describe('LinesConfig — palette wiring', () => {
   });
 
   it('should pass paletteType=QUALITATIVE on the CATEGORIES branch PalettePreview', () => {
-    const categoriesBlock = source.split(
+    const categoriesBlock = colorSectionSource.split(
       '{:else if colorMode === ColorMode.CATEGORIES}'
     )[1];
     expect(categoriesBlock).toBeDefined();
@@ -72,10 +88,10 @@ describe('LinesConfig — palette wiring', () => {
   });
 
   it('should route ColorMode.UNIQUE through SingleColorPreview', () => {
-    expect(source).toContain(
+    expect(colorSectionSource).toContain(
       "import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte'"
     );
-    const uniqueBlock = source
+    const uniqueBlock = colorSectionSource
       .split('colorMode === ColorMode.UNIQUE')[1]
       ?.split('{:else if')[0];
     expect(uniqueBlock).toContain('<SingleColorPreview');
@@ -83,14 +99,14 @@ describe('LinesConfig — palette wiring', () => {
   });
 
   it('should enable Categories Aspect popover via categoriesMode + categoryLabels on CATEGORIES', () => {
-    const categoriesBlock = source.split(
+    const categoriesBlock = colorSectionSource.split(
       '{:else if colorMode === ColorMode.CATEGORIES}'
     )[1];
     const paletteBlock = categoriesBlock
       ?.split('<PalettePreview')[1]
       ?.split('/>')[0];
     expect(paletteBlock).toContain('categoriesMode={true}');
-    expect(paletteBlock).toContain('categoryLabels={categoryLabels.labels}');
+    expect(paletteBlock).toContain('categoryLabels={categoryLabels}');
   });
 
   it('does not hard-reset mappings or classification inside mode handlers', () => {

@@ -4,17 +4,12 @@
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
   import type { VariableBadgeType } from '$lib/features/commons/components/variable-badge.types';
-  import {
-    vizSuggester,
-    type GeometryType,
-    type VizSuggestion
-  } from '$lib/features/commons/services/viz-suggester.service';
+  import type { VizSuggestion } from '$lib/features/commons/services/viz-suggester.service';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import {
     getVisualizationOriginMode,
     visualizationStore
   } from '$lib/features/commons/store/visualization.store.svelte';
-  import { isNumericType } from '$lib/features/commons/utils/format.utils';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import * as m from '$lib/paraglide/messages';
   import { ComboBox, Link, Modal } from 'carbon-components-svelte';
@@ -36,8 +31,7 @@
     isVisualizationMatchingSuggestion,
     isVisualizationBlank,
     restoreVisualizationFromSuggestion,
-    resolveBlankVisualizationType,
-    resolveDatasetGeometryType
+    resolveBlankVisualizationType
   } from './suggestion.service';
   import {
     getSuggestionSignature,
@@ -47,6 +41,10 @@
   } from './suggestion-selection';
   import { UI_CONSTANTS } from '../constants';
   import { appendToBody } from '$lib/features/commons/utils/append-to-body';
+  import {
+    computeVisualizationSuggestions,
+    resolveColumnBadgeType
+  } from './compute-suggestions.utils';
 
   interface Props {
     onCreateVisualization?: () => void;
@@ -87,75 +85,14 @@
   const suggestions = $derived.by((): VizSuggestion[] => {
     // Track orchestrator version so suggestions re-evaluate after join completes
     void duckDBOrchestrator.datasetsVersion;
-
-    const dataset = selectedDataset;
-    if (!dataset?.columns) return [];
-    const geoColumnsByName = new Map(
-      (dataset.geoDetection?.geoColumns ?? []).map((column) => [
-        column.columnName,
-        column
-      ])
-    );
-
-    const columnAnalysis = dataset.columns.map((col) => {
-      const geoColumn = geoColumnsByName.get(col.name);
-
-      return {
-        ...(geoColumn
-          ? {
-              geo_type: geoColumn.type,
-              geo_confidence: geoColumn.confidence
-            }
-          : {}),
-        name: col.name,
-        type: col.type,
-        stats: {
-          count: col.stats?.count ?? 0,
-          nulls: col.stats?.nulls ?? 0,
-          uniques: col.stats?.uniques ?? 0,
-          min: col.stats?.min,
-          max: col.stats?.max,
-          mean: col.stats?.mean,
-          share_integers: col.stats?.share_integers,
-          share_floats: col.stats?.share_floats,
-          share_rank_interval: col.stats?.share_rank_interval,
-          extent_magnitude: col.stats?.extent_magnitude
-        }
-      };
-    });
-
-    const geometryType =
-      resolveDatasetGeometryType(
-        dataset as {
-          id?: string;
-          geometry?: { type?: string | null };
-          sourceFileId?: string;
-          joinedBasemap?: string;
-          gpsMode?: boolean;
-          geoDetection?: {
-            geoColumns?: Array<{ type?: string }>;
-          };
-        }
-      ) ||
-      (dataset.geometry?.type as GeometryType) ||
-      null;
-
-    return vizSuggester.suggestVisualizations(columnAnalysis, geometryType, {
-      maxSuggestions: UI_CONSTANTS.SUGGESTIONS_PER_PAGE
-    });
+    return computeVisualizationSuggestions(selectedDataset);
   });
 
   const visibleSuggestions = $derived(suggestions.slice(0, visibleCount));
   const hasMoreSuggestions = $derived(visibleCount < suggestions.length);
 
   function getColumnBadgeType(columnName: string): VariableBadgeType {
-    const col = datasetColumns.find((c) => c.name === columnName);
-    if (!col) return 'string';
-    const type = String(col.type || '').toLowerCase();
-    if (isNumericType(type)) return 'numeric';
-    if (type === 'boolean') return 'boolean';
-    if (type === 'date' || type === 'timestamp') return 'date';
-    return 'string';
+    return resolveColumnBadgeType(datasetColumns, columnName);
   }
 
   function handleShowMore() {

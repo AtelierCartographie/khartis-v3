@@ -19,7 +19,8 @@
     SLIDER_LIMITS,
     StrokeMode,
     SymbolMode,
-    DEFAULT_COLORS
+    DEFAULT_COLORS,
+    VISUALIZATION_DEFAULTS
   } from '../../../constants';
   import {
     DEFAULT_COMMON_ASPECT,
@@ -38,15 +39,16 @@
   import type { SymbolModeProps } from './types';
   import DiscretizationModal from '../discretization-modal.svelte';
   import { resolveDiscretizationLabel } from '../discretization.utils';
-  import { FACET_SLOT } from '../../facets-adapter.svelte';
+  import { FACET_SLOT } from '../../facets-adapter';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import FacetsVariablePicker from './facets-variable-picker.svelte';
   import { useCategoryLabels } from '../../use-category-labels.svelte';
   import {
     NONE_FIELD_ID,
-    useFieldSelection
+    useFieldSelectionHandler
   } from '../../use-field-selection.svelte';
   import { useFacetsVariableSelection } from '../../use-facets-variable-selection.svelte';
+  import { coerceShapeType, parseOpacityToSlider } from '../../coerce.utils';
   import { resetCategoryVisualClassification } from '../shared/classification-reset.utils';
   import {
     buildSymbolShapeDropdownItems,
@@ -97,7 +99,11 @@
   let missingDataColor = $state<string>(DEFAULT_COLORS.missingData);
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
   const selectableDataFields = $derived([noneOption, ...dataFields]);
-  const categoryFieldSelection = useFieldSelection(() => dataFields);
+  const categoryFieldSelection = useFieldSelectionHandler({
+    getDataFields: () => dataFields,
+    columnKey: 'categoryColumn',
+    onMappingChange: (updates) => onMappingChange?.(updates)
+  });
   const facetsSelection = useFacetsVariableSelection({
     getVisualizationId: () => visualization?.id,
     getDataFields: () => dataFields
@@ -191,22 +197,22 @@
 
     const symbolConfig = visualization?.symbol;
     if (symbolConfig) {
-      symbolOpacity =
-        symbolConfig.opacity !== undefined
-          ? Math.round(symbolConfig.opacity * 100)
-          : 100;
+      symbolOpacity = parseOpacityToSlider(
+        symbolConfig.opacity,
+        VISUALIZATION_DEFAULTS.symbolOpacity
+      );
       const persistedShape =
-        (symbolConfig.shape as ShapeType) ?? ShapeType.CIRCLE;
+        coerceShapeType(symbolConfig.shape) ?? ShapeType.CIRCLE;
       shapeType = availableShapes.includes(persistedShape)
         ? persistedShape
         : ShapeType.CIRCLE;
       categoryShapeMode =
         symbolConfig.categoryShape ?? untrack(() => categoryShapeMode);
     } else if (visualization?.symbols) {
-      symbolOpacity =
-        visualization.symbols.opacity !== undefined
-          ? Math.round(visualization.symbols.opacity * 100)
-          : 100;
+      symbolOpacity = parseOpacityToSlider(
+        visualization.symbols.opacity,
+        VISUALIZATION_DEFAULTS.symbolOpacity
+      );
       const persistedShape = visualization.symbols.type ?? ShapeType.CIRCLE;
       shapeType = availableShapes.includes(persistedShape)
         ? persistedShape
@@ -254,19 +260,6 @@
   function handleMissingDataColorChange(color: string) {
     missingDataColor = color;
     onMissingDataChange?.({ color });
-  }
-
-  function handleFieldSelect(fieldId: number) {
-    categoryFieldSelection.set(fieldId);
-    if (fieldId === NONE_FIELD_ID) {
-      onMappingChange?.({ categoryColumn: undefined });
-      return;
-    }
-
-    const field = dataFields.find((f) => f.id === fieldId);
-    if (field) {
-      onMappingChange?.({ categoryColumn: field.text });
-    }
   }
 
   function handleOpacityChange(value: number) {
@@ -380,7 +373,7 @@
     isCollectionEnabled={facetsSelection.isActiveForSlot(
       FACET_SLOT.SYMBOL_CATEGORY
     )}
-    onSelect={handleFieldSelect}
+    onSelect={categoryFieldSelection.handleSelect}
     onCollectionChange={handleFacetsVariablesChange}
     onToggleCollection={handleFacetsToggle}
   />
@@ -478,6 +471,7 @@
   bind:value={symbolOpacity}
   min={SLIDER_LIMITS.opacity.min}
   max={SLIDER_LIMITS.opacity.max}
+  step={SLIDER_LIMITS.opacity.step}
   onchange={handleOpacityChange}
 />
 
