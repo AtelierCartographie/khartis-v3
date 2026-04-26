@@ -77,4 +77,13 @@ describe('BasemapStyleSelector', () => {
     expect(source).toContain('BasemapStyle.MONDE_COULEURS');
     expect(source).toContain('!basemapStyleStore.lastSelectedTiledStyle');
   });
+
+  it('returns to the flat projection when replacing an OSM basemap with a tiled style', () => {
+    expect(source).toContain(
+      'const hasActiveOSMBasemap = osmBasemapStore.isActive'
+    );
+    expect(source).toContain('if (hasActiveOSMBasemap) {');
+    expect(source).toContain('setFlatProjection();');
+    expect(source).toContain('osmBasemapStore.clear();');
+  });
 });

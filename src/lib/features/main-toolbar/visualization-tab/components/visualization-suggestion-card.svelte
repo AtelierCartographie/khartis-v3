@@ -94,6 +94,8 @@
         <RadioButton
           checked={selected}
           disabled={disabled}
+          labelText={suggestion.label}
+          hideLabel
           onclick={handleRadioClick}
         />
       </div>

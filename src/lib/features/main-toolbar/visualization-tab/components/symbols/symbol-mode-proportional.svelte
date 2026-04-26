@@ -2,9 +2,9 @@
   import {
     Dropdown,
     RadioButton,
-    RadioButtonGroup,
-    TextInput
+    RadioButtonGroup
   } from 'carbon-components-svelte';
+  import DoubleModeControls from './proportional/double-mode-controls.svelte';
   import * as m from '$lib/paraglide/messages';
   import {
     MissingDataShape,
@@ -17,7 +17,6 @@
     DEFAULT_COLORS,
     FillMode
   } from '../../../constants';
-  import Switch from '$lib/features/commons/components/switch.svelte';
   import {
     DiscretizationRow,
     InfoPopover,
@@ -32,7 +31,7 @@
   import DiscretizationModal from '../discretization-modal.svelte';
   import type { ClassificationConfig } from '$lib/features/commons/store/visualization.store.svelte';
   import { resolveDiscretizationLabel } from '../discretization.utils';
-  import { FACET_SLOT } from '../../facets-adapter.svelte';
+  import { FACET_SLOT } from '../../facets-adapter';
   import FacetsVariablePicker from './facets-variable-picker.svelte';
   import {
     NONE_FIELD_ID,
@@ -44,6 +43,11 @@
     buildSymbolShapeDropdownItems,
     getSymbolShapeTypes
   } from './symbol-shape-options';
+  import {
+    coerceShapeType,
+    coerceString,
+    parseOpacityToSlider
+  } from '../../coerce.utils';
 
   interface Props extends SymbolModeProps {
     symbolMode: SymbolMode.PROPORTIONAL | SymbolMode.CLASSES;
@@ -127,19 +131,19 @@
     if (symbolConfig) {
       symbolMaxSize =
         symbolConfig.maxSize ?? VISUALIZATION_DEFAULTS.symbolMaxSize;
-      shapeType = (symbolConfig.shape as ShapeType) ?? ShapeType.CIRCLE;
-      fillOpacity =
-        symbolConfig.opacity !== undefined
-          ? Math.round(symbolConfig.opacity * 100)
-          : VISUALIZATION_DEFAULTS.symbolOpacity;
+      shapeType = coerceShapeType(symbolConfig.shape) ?? ShapeType.CIRCLE;
+      fillOpacity = parseOpacityToSlider(
+        symbolConfig.opacity,
+        VISUALIZATION_DEFAULTS.symbolOpacity
+      );
     } else if (visualization?.symbols) {
       symbolMaxSize =
         visualization.symbols.maxSize ?? VISUALIZATION_DEFAULTS.symbolMaxSize;
       shapeType = visualization.symbols.type ?? ShapeType.CIRCLE;
-      fillOpacity =
-        visualization.symbols.opacity !== undefined
-          ? Math.round(visualization.symbols.opacity * 100)
-          : VISUALIZATION_DEFAULTS.symbolOpacity;
+      fillOpacity = parseOpacityToSlider(
+        visualization.symbols.opacity,
+        VISUALIZATION_DEFAULTS.symbolOpacity
+      );
     } else {
       fillOpacity = VISUALIZATION_DEFAULTS.symbolOpacity;
     }
@@ -155,11 +159,9 @@
       fillMode = symbolConfig.fillMode ?? FillMode.UNIQUE;
       proportionalType =
         symbolConfig.proportionalType ?? ProportionalType.SINGLE;
-      fillColor =
-        (symbolConfig.fillColor as string | undefined) ?? DEFAULT_COLORS.fill;
+      fillColor = coerceString(symbolConfig.fillColor) ?? DEFAULT_COLORS.fill;
       fillColorB =
-        (symbolConfig.fillColorB as string | undefined) ??
-        DEFAULT_COLORS.secondary;
+        coerceString(symbolConfig.fillColorB) ?? DEFAULT_COLORS.secondary;
     } else {
       if (visualization?.modes) {
         fillMode = visualization.modes.fill ?? FillMode.UNIQUE;
@@ -168,7 +170,7 @@
       }
       if (visualization?.style) {
         fillColor =
-          (visualization.style.symbolFillColor as string) ??
+          coerceString(visualization.style.symbolFillColor) ??
           DEFAULT_COLORS.fill;
         fillColorB = visualization.style.fillColorB ?? DEFAULT_COLORS.secondary;
       }
@@ -528,143 +530,32 @@
   </div>
 
   {#if proportionalType === ProportionalType.DOUBLE}
-    <div class="field-group">
-      <span class="field-label">
-        {m.common_scale_label()}
-        <InfoPopover text={m.common_scale_info()} />
-      </span>
-      <Switch
-        toggled={commonScale}
-        labelText={m.common_scale_label()}
-        hideLabel
-        onchange={handleCommonScaleChange}
-      />
-    </div>
-
-    <div class="field-group">
-      <span class="field-label">
-        {m.symbol_a_size_according()}
-        <InfoPopover text={m.size_according_info()} />
-      </span>
-      <FacetsVariablePicker
-        bind:open={sizePickerOpen}
-        dataFields={dataFields}
-        singleSelectItems={selectableDataFields}
-        selectedFieldId={primaryFieldSelection.selectedFieldId}
-        selectedFieldIds={facetsSelection.getSelectedFieldIds(
-          FACET_SLOT.SYMBOL_SIZE
-        )}
-        isCollectionEnabled={facetsSelection.isActiveForSlot(
-          FACET_SLOT.SYMBOL_SIZE
-        )}
-        onSelect={handleFieldSelect}
-        onCollectionChange={(ids) =>
-          facetsSelection.updateVariables(
-            sizeColumnName,
-            FACET_SLOT.SYMBOL_SIZE,
-            ids
-          )}
-        onToggleCollection={(enabled) =>
-          facetsSelection.toggle(
-            sizeColumnName,
-            FACET_SLOT.SYMBOL_SIZE,
-            enabled
-          )}
-      />
-    </div>
-
-    <div class="field-group">
-      <span class="field-label">
-        {m.symbol_b_size_according()}
-      </span>
-      <FacetsVariablePicker
-        bind:open={fieldBPickerOpen}
-        dataFields={dataFields}
-        singleSelectItems={selectableDataFields}
-        selectedFieldId={secondaryValueFieldSelection.selectedFieldId}
-        isCollectionEnabled={false}
-        showCollectionFooter={false}
-        onSelect={handleFieldBSelect}
-      />
-    </div>
-
-    <SliderWithInput
-      label={m.max_size()}
-      infoText={m.max_size_info()}
-      bind:value={symbolMaxSize}
-      min={SLIDER_LIMITS.symbolMaxSize.min}
-      max={SLIDER_LIMITS.symbolMaxSize.max}
-      onchange={handleSymbolMaxSizeChange}
+    <DoubleModeControls
+      commonScale={commonScale}
+      bind:symbolMaxSize={symbolMaxSize}
+      shapeType={shapeType}
+      positionMode={positionMode}
+      breakValueA={breakValueA}
+      breakValueB={breakValueB}
+      sizeColumnName={sizeColumnName}
+      bind:sizePickerOpen={sizePickerOpen}
+      bind:fieldBPickerOpen={fieldBPickerOpen}
+      dataFields={dataFields}
+      selectableDataFields={selectableDataFields}
+      primaryFieldSelection={primaryFieldSelection}
+      secondaryValueFieldSelection={secondaryValueFieldSelection}
+      facetsSelection={facetsSelection}
+      shapeDropdownItems={shapeDropdownItems}
+      positionModeItems={positionModeItems}
+      onCommonScaleChange={handleCommonScaleChange}
+      onFieldSelect={handleFieldSelect}
+      onFieldBSelect={handleFieldBSelect}
+      onSymbolMaxSizeChange={handleSymbolMaxSizeChange}
+      onShapeDropdownSelect={handleShapeDropdownSelect}
+      onPositionModeChange={handlePositionModeChange}
+      onBreakValueAChange={handleBreakValueAChange}
+      onBreakValueBChange={handleBreakValueBChange}
     />
-
-    <div class="field-group">
-      <span class="field-label">
-        {m.shape()}
-        <InfoPopover text={m.shape_info()} />
-      </span>
-      <Dropdown
-        items={shapeDropdownItems}
-        selectedId={shapeType}
-        on:select={(e) => handleShapeDropdownSelect(e.detail.selectedId)}
-        type="default"
-      />
-    </div>
-
-    <div class="field-group">
-      <span class="field-label">
-        {m.symbol_position_mode()}
-        <InfoPopover text={m.position_mode_info()} />
-      </span>
-      <Dropdown
-        items={positionModeItems}
-        selectedId={positionMode}
-        on:select={(e) => handlePositionModeChange(e.detail.selectedId)}
-        type="default"
-      />
-    </div>
-
-    <div class="field-group">
-      <span class="field-label">
-        {m.symbol_a_break_value()}
-        <InfoPopover text={m.break_value_info()} />
-      </span>
-      <TextInput
-        labelText=""
-        hideLabel
-        type="number"
-        placeholder={m.break_value_placeholder()}
-        value={breakValueA === null ? '' : String(breakValueA)}
-        on:input={(e) => {
-          const detail = (e as CustomEvent).detail as number | null;
-          handleBreakValueAChange(
-            typeof detail === 'number' && Number.isFinite(detail)
-              ? detail
-              : null
-          );
-        }}
-      />
-    </div>
-
-    <div class="field-group">
-      <span class="field-label">
-        {m.symbol_b_break_value()}
-      </span>
-      <TextInput
-        labelText=""
-        hideLabel
-        type="number"
-        placeholder={m.break_value_placeholder()}
-        value={breakValueB === null ? '' : String(breakValueB)}
-        on:input={(e) => {
-          const detail = (e as CustomEvent).detail as number | null;
-          handleBreakValueBChange(
-            typeof detail === 'number' && Number.isFinite(detail)
-              ? detail
-              : null
-          );
-        }}
-      />
-    </div>
   {:else}
     <div class="field-group">
       <span class="field-label">
@@ -738,6 +629,7 @@
     bind:value={symbolMaxSize}
     min={SLIDER_LIMITS.symbolMaxSize.min}
     max={SLIDER_LIMITS.symbolMaxSize.max}
+    step={SLIDER_LIMITS.symbolMaxSize.step}
     onchange={handleSymbolMaxSizeChange}
   />
   <DiscretizationRow

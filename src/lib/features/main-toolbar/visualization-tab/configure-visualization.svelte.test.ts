@@ -6,6 +6,22 @@ const source = readFileSync(
   resolve(import.meta.dirname, 'configure-visualization.svelte'),
   'utf8'
 );
+const polygonHandlersSource = readFileSync(
+  resolve(import.meta.dirname, 'adapters/polygon-handlers.svelte.ts'),
+  'utf8'
+);
+const symbolHandlersSource = readFileSync(
+  resolve(import.meta.dirname, 'adapters/symbol-handlers.svelte.ts'),
+  'utf8'
+);
+const textHandlersSource = readFileSync(
+  resolve(import.meta.dirname, 'adapters/text-handlers.svelte.ts'),
+  'utf8'
+);
+const datasetAnalysisSource = readFileSync(
+  resolve(import.meta.dirname, 'use-dataset-analysis.svelte.ts'),
+  'utf8'
+);
 
 describe('ConfigureVisualization', () => {
   it('keeps primitive panels mounted and disables unsupported geometry tools', () => {
@@ -19,31 +35,37 @@ describe('ConfigureVisualization', () => {
   });
 
   it('treats joined basemaps as renderable geometry for text tools', () => {
-    expect(source).toContain('dataset.joinedBasemap');
-    expect(source).toContain('dataset.geoColumn');
-    expect(source).toContain('duckDBOrchestrator.getDatasetBySourceFile');
-    expect(source).toContain('duckDataset?.joinedBasemap');
-    expect(source).toContain('duckDataset?.gpsMode');
-    expect(source).toContain('column.type === GEO_COLUMN_TYPE.LATITUDE');
-    expect(source).toContain('column.type === GEO_COLUMN_TYPE.LONGITUDE');
+    expect(datasetAnalysisSource).toContain('dataset.joinedBasemap');
+    expect(datasetAnalysisSource).toContain('dataset.geoColumn');
+    expect(datasetAnalysisSource).toContain(
+      'duckDBOrchestrator.getDatasetBySourceFile'
+    );
+    expect(datasetAnalysisSource).toContain('duckDataset?.joinedBasemap');
+    expect(datasetAnalysisSource).toContain('duckDataset?.gpsMode');
+    expect(datasetAnalysisSource).toContain(
+      'column.type === GEO_COLUMN_TYPE.LATITUDE'
+    );
+    expect(datasetAnalysisSource).toContain(
+      'column.type === GEO_COLUMN_TYPE.LONGITUDE'
+    );
   });
 
   it('delegates break computation to the shared controller', () => {
     expect(source).toContain("from './use-classification-breaks.svelte';");
     expect(source).toContain('useClassificationBreaksController');
-    expect(source).toContain('CLASSIFICATION_BREAKS_TRIGGER');
-    expect(source).toContain('buildClassificationScopeKey');
+    expect(source).toContain('resolveBreaksTrigger');
     expect(source).toContain(
       'const classificationBreaks = useClassificationBreaksController({'
     );
-    expect(source).toContain('classificationBreaks.compute({');
+    expect(source).toContain('useClassificationBreaksOrchestrator');
   });
 
   it('clears pending break retries when a break slot points to a non-numeric field', () => {
-    expect(source).toContain('function isNumericDataField(');
-    expect(source).toContain('!isNumericDataField(valueColumn)');
-    expect(source).toContain('!isNumericDataField(target?.valueColumn)');
-    expect(source).toContain('classificationBreaks.clearRetry(scopeKey);');
+    expect(datasetAnalysisSource).toContain('function isNumericDataField(');
+    expect(source).toContain(
+      "from './use-classification-breaks-orchestrator.svelte'"
+    );
+    expect(source).toContain('useClassificationBreaksOrchestrator({');
   });
 
   it('delegates shared primitive orchestration to the dedicated controller', () => {
@@ -78,9 +100,8 @@ describe('ConfigureVisualization', () => {
   });
 
   it('propagates symbol strokeDashed through panel derivation and style updates', () => {
-    expect(source).toContain(
-      '? { strokeDashed: updates.strokeDashed ?? symbol.strokeDashed }'
-    );
+    expect(symbolHandlersSource).toContain("'strokeDashed'");
+    expect(symbolHandlersSource).toContain('pickOwnedKeys(');
     expect(source).toContain('buildLinePanelVisualization');
     expect(source).toContain('buildPolygonPanelVisualization');
     expect(source).toContain('buildSymbolFillPanelVisualization');
@@ -88,11 +109,11 @@ describe('ConfigureVisualization', () => {
   });
 
   it('routes polygon density edits through a dedicated handler instead of generic polygon mapping', () => {
-    expect(source).toContain(
+    expect(polygonHandlersSource).toContain(
       'function handlePolygonDensityChange(updates: Partial<DensityConfig>)'
     );
-    expect(source).toContain('density: {');
-    expect(source).toContain('...(selectedViz?.density ?? {}),');
+    expect(polygonHandlersSource).toContain('density: {');
+    expect(polygonHandlersSource).toContain('...(viz?.density ?? {}),');
     const polygonsConfigBlock = source.match(/<PolygonsConfig[\s\S]*?\/>/);
     expect(polygonsConfigBlock).not.toBeNull();
     expect(polygonsConfigBlock![0]).toContain(
@@ -143,19 +164,21 @@ describe('ConfigureVisualization', () => {
   });
 
   it('writes text background updates through the text primitive, not polygon', () => {
-    expect(source).toContain('updateTextBackground((background) => ({');
-    expect(source).toContain('handleTextChange({');
+    expect(textHandlersSource).toContain('deps.updateTextBackground(');
+    expect(textHandlersSource).toContain('handleTextChange({');
   });
 
   it('mounts the year filter only when the selected dataset exposes a real year dimension', () => {
     expect(source).toContain(
       "import YearFilter from './components/year-filter.svelte';"
     );
-    expect(source).toContain(
+    expect(datasetAnalysisSource).toContain(
       "import { isLikelyYearColumn } from './components/year-filter.utils';"
     );
-    expect(source).toContain('const hasYearDimension = $derived.by(() =>');
-    expect(source).toContain(
+    expect(datasetAnalysisSource).toContain(
+      'const hasYearDimension = $derived.by(() =>'
+    );
+    expect(datasetAnalysisSource).toContain(
       'return dataset.columns.some((column) => isLikelyYearColumn(column, rows));'
     );
     expect(source).toContain('{#if selectedViz && hasYearDimension}');
@@ -163,13 +186,19 @@ describe('ConfigureVisualization', () => {
   });
 
   it('delegates symbol mode snapshot/restore to the dedicated helper', () => {
-    expect(source).toContain(
-      "import { resolveSymbolModeTransition } from './use-symbol-mode-state.svelte';"
+    expect(symbolHandlersSource).toContain(
+      "import { resolveSymbolModeTransition } from '../use-symbol-mode-state.svelte';"
     );
-    expect(source).toContain('const modeTransition = modeChanging');
-    expect(source).toContain('resolveSymbolModeTransition(symbol, nextMode)');
-    expect(source).toContain('...(modeTransition?.restoredStateFields ?? {}),');
-    expect(source).toContain(
+    expect(symbolHandlersSource).toContain(
+      'const modeTransition = modeChanging'
+    );
+    expect(symbolHandlersSource).toContain(
+      'resolveSymbolModeTransition(symbol, nextMode)'
+    );
+    expect(symbolHandlersSource).toContain(
+      '...(modeTransition?.restoredStateFields ?? {}),'
+    );
+    expect(symbolHandlersSource).toContain(
       'modeStates: modeTransition?.nextModeStates ?? symbol.modeStates ?? {}'
     );
   });

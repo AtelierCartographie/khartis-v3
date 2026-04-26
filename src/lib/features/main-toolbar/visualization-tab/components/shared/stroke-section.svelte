@@ -17,7 +17,8 @@
     StrokeMode,
     SLIDER_LIMITS,
     VISUALIZATION_DEFAULTS,
-    DEFAULT_COLORS
+    DEFAULT_COLORS,
+    MIN_VISIBLE_STROKE_WIDTH
   } from '../../../constants';
   import type {
     VisualizationConfig,
@@ -34,9 +35,10 @@
     resolvePaletteTypeForBreakpoint
   } from '$lib/features/commons/components/palette-popover/palette.constants';
   import FacetsVariablePicker from '../symbols/facets-variable-picker.svelte';
-  import type { FacetSlotPath } from '../../facets-adapter.svelte';
+  import type { FacetSlotPath } from '../../facets-adapter';
   import { useCategoryLabels } from '../../use-category-labels.svelte';
   import { useFacetsVariableSelection } from '../../use-facets-variable-selection.svelte';
+  import { parseOpacityToSlider } from '../../coerce.utils';
   import { resetVisualClassification } from './classification-reset.utils';
 
   interface Props {
@@ -153,10 +155,10 @@
       strokeColor = visualization.style.strokeColor ?? DEFAULT_COLORS.stroke;
       strokeWidth =
         visualization.style.strokeWidth ?? VISUALIZATION_DEFAULTS.strokeWidth;
-      strokeOpacity =
-        visualization.style.strokeOpacity !== undefined
-          ? Math.round(visualization.style.strokeOpacity * 100)
-          : VISUALIZATION_DEFAULTS.strokeOpacity;
+      strokeOpacity = parseOpacityToSlider(
+        visualization.style.strokeOpacity,
+        VISUALIZATION_DEFAULTS.strokeOpacity
+      );
       strokeDashed = visualization.style.strokeDashed ?? false;
     }
     const mappedFieldName =
@@ -292,8 +294,9 @@
   <SliderWithInput
     label={m.thickness()}
     bind:value={strokeWidth}
-    min={1}
+    min={MIN_VISIBLE_STROKE_WIDTH}
     max={SLIDER_LIMITS.strokeWidth.max}
+    step={SLIDER_LIMITS.strokeWidth.step}
     showMinMax={showSliderBounds}
     inputWidth={sliderInputWidth}
     onchange={handleStrokeWidthChange}
@@ -411,6 +414,7 @@
     bind:value={strokeOpacity}
     min={SLIDER_LIMITS.opacity.min}
     max={SLIDER_LIMITS.opacity.max}
+    step={SLIDER_LIMITS.opacity.step}
     showMinMax={showSliderBounds}
     inputWidth={sliderInputWidth}
     onchange={handleStrokeOpacityChange}

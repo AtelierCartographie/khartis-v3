@@ -1,18 +1,15 @@
 <script lang="ts">
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
-  import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import {
-    DiscretizationRow,
     InfoPopover,
     MissingDataSection,
-    PalettePreview,
-    SectionHeading,
     SliderWithInput,
     ToggleWithLabel,
     VizFilterButton,
     VizFilterPanel
-  } from './shared';
-  import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
+  } from '../shared';
+  import LineThicknessSection from './line-thickness-section.svelte';
+  import LineColorSection from './line-color-section.svelte';
   import type {
     MissingDataConfig,
     VisualizationConfig,
@@ -27,11 +24,8 @@
   import * as m from '$lib/paraglide/messages';
   import {
     DEFAULT_SEQUENTIAL_PREVIEW,
-    DEFAULT_QUALITATIVE_PREVIEW,
-    PALETTE_TYPE,
-    resolvePaletteTypeForBreakpoint
+    DEFAULT_QUALITATIVE_PREVIEW
   } from '$lib/features/commons/components/palette-popover/palette.constants';
-  import { Category, Minimize, Subtract, Tag } from 'carbon-icons-svelte';
   import {
     ColorMode,
     DEFAULT_COLORS,
@@ -39,18 +33,21 @@
     ThicknessMode,
     SLIDER_LIMITS,
     VISUALIZATION_DEFAULTS
-  } from '../../constants';
-  import DiscretizationModal from './discretization-modal.svelte';
+  } from '../../../constants';
+  import DiscretizationModal from '../discretization-modal.svelte';
   import type { ClassificationConfig } from '$lib/features/commons/store/visualization.store.svelte';
-  import { resolveDiscretizationLabel } from './discretization.utils';
-  import { FACET_SLOT } from '../facets-adapter.svelte';
-  import FacetsVariablePicker from './symbols/facets-variable-picker.svelte';
+  import { resolveDiscretizationLabel } from '../discretization.utils';
   import {
     NONE_FIELD_ID,
-    useFieldSelection
-  } from '../use-field-selection.svelte';
-  import { useCategoryLabels } from '../use-category-labels.svelte';
-  import { useFacetsVariableSelection } from '../use-facets-variable-selection.svelte';
+    useFieldSelectionHandler
+  } from '../../use-field-selection.svelte';
+  import { useCategoryLabels } from '../../use-category-labels.svelte';
+  import { useFacetsVariableSelection } from '../../use-facets-variable-selection.svelte';
+  import {
+    coerceMissingDataShape,
+    coerceString,
+    parseOpacityToSlider
+  } from '../../coerce.utils';
 
   interface Props {
     dataFields?: Array<{ id: number; text: string; type?: string }>;
@@ -106,9 +103,21 @@
   let colorCategoriesPopoverOpen = $state(false);
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
   const selectableDataFields = $derived([noneOption, ...dataFields]);
-  const valueFieldSelection = useFieldSelection(() => dataFields);
-  const sizeFieldSelection = useFieldSelection(() => dataFields);
-  const categoryFieldSelection = useFieldSelection(() => dataFields);
+  const valueFieldSelection = useFieldSelectionHandler({
+    getDataFields: () => dataFields,
+    columnKey: 'valueColumn',
+    onMappingChange: (updates) => onMappingChange?.(updates)
+  });
+  const sizeFieldSelection = useFieldSelectionHandler({
+    getDataFields: () => dataFields,
+    columnKey: 'sizeColumn',
+    onMappingChange: (updates) => onMappingChange?.(updates)
+  });
+  const categoryFieldSelection = useFieldSelectionHandler({
+    getDataFields: () => dataFields,
+    columnKey: 'categoryColumn',
+    onMappingChange: (updates) => onMappingChange?.(updates)
+  });
   const facetsSelection = useFacetsVariableSelection({
     getVisualizationId: () => visualization?.id,
     getDataFields: () => dataFields
@@ -119,45 +128,6 @@
     sizeFieldSelection.sync(visualization?.mapping.sizeColumn);
     categoryFieldSelection.sync(visualization?.mapping.categoryColumn);
   });
-
-  function handleValueFieldSelect(fieldId: number) {
-    valueFieldSelection.set(fieldId);
-    if (fieldId === NONE_FIELD_ID) {
-      onMappingChange?.({ valueColumn: undefined });
-      return;
-    }
-
-    const field = dataFields.find((item) => item.id === fieldId);
-    if (field && onMappingChange) {
-      onMappingChange({ valueColumn: field.text });
-    }
-  }
-
-  function handleSizeFieldSelect(fieldId: number) {
-    sizeFieldSelection.set(fieldId);
-    if (fieldId === NONE_FIELD_ID) {
-      onMappingChange?.({ sizeColumn: undefined });
-      return;
-    }
-
-    const field = dataFields.find((item) => item.id === fieldId);
-    if (field && onMappingChange) {
-      onMappingChange({ sizeColumn: field.text });
-    }
-  }
-
-  function handleCategoryFieldSelect(fieldId: number) {
-    categoryFieldSelection.set(fieldId);
-    if (fieldId === NONE_FIELD_ID) {
-      onMappingChange?.({ categoryColumn: undefined });
-      return;
-    }
-
-    const field = dataFields.find((item) => item.id === fieldId);
-    if (field && onMappingChange) {
-      onMappingChange({ categoryColumn: field.text });
-    }
-  }
 
   const lineColorClassification = $derived.by(
     () =>
@@ -219,14 +189,12 @@
         visualization.style.lineWidth ?? VISUALIZATION_DEFAULTS.lineWidth;
       maxThickness =
         visualization.style.lineMaxWidth ?? VISUALIZATION_DEFAULTS.lineMaxWidth;
-      const lineOpacity = visualization.style.lineOpacity;
-      opacity =
-        lineOpacity !== undefined
-          ? lineOpacity <= 1
-            ? Math.round(lineOpacity * 100)
-            : lineOpacity
-          : VISUALIZATION_DEFAULTS.lineOpacity;
-      color = (visualization.style.lineColor as string) ?? DEFAULT_COLORS.line;
+      opacity = parseOpacityToSlider(
+        visualization.style.lineOpacity,
+        VISUALIZATION_DEFAULTS.lineOpacity
+      );
+      color =
+        coerceString(visualization.style.lineColor) ?? DEFAULT_COLORS.line;
       dashed = visualization.style.lineDashed ?? false;
     }
     if (visualization?.modes) {
@@ -241,18 +209,6 @@
         visualization.missingData.shape ?? MissingDataShape.CIRCLE;
     }
   });
-
-  const thicknessModeItems = [
-    { icon: Subtract, label: m.thickness_mode_unique(), iconSize: 16 },
-    { icon: Minimize, label: m.thickness_mode_proportional(), iconSize: 16 },
-    { icon: Category, label: m.thickness_mode_classes(), iconSize: 16 }
-  ];
-
-  const colorModeItems = [
-    { icon: Subtract, label: m.color_mode_unique(), iconSize: 16 },
-    { icon: Category, label: m.color_mode_classes(), iconSize: 16 },
-    { icon: Tag, label: m.color_mode_categories(), iconSize: 16 }
-  ];
 
   function handleThicknessModeChange(index: number) {
     const modes = [
@@ -314,23 +270,11 @@
   }
 
   function handleMissingDataShapeChange(shape: string) {
-    missingDataShape = shape as MissingDataShape;
-    onMissingDataChange?.({ shape: shape as MissingDataShape });
+    const coerced = coerceMissingDataShape(shape);
+    if (!coerced) return;
+    missingDataShape = coerced;
+    onMissingDataChange?.({ shape: coerced });
   }
-
-  const thicknessModeIndex = $derived(
-    [
-      ThicknessMode.UNIQUE,
-      ThicknessMode.PROPORTIONAL,
-      ThicknessMode.CLASSES
-    ].indexOf(thicknessMode)
-  );
-
-  const colorModeIndex = $derived(
-    [ColorMode.UNIQUE, ColorMode.CLASSES, ColorMode.CATEGORIES].indexOf(
-      colorMode
-    )
-  );
 
   function handleOpenColorDiscretization() {
     discretizationTarget = 'color';
@@ -397,216 +341,56 @@
   {/snippet}
 
   <div class="lines-config">
-    <SectionHeading title={m.thickness()} />
+    <LineThicknessSection
+      thicknessMode={thicknessMode}
+      thickness={thickness}
+      maxThickness={maxThickness}
+      thicknessDiscretizationLabel={thicknessDiscretizationLabel}
+      valueColumnName={valueColumnName}
+      sizeColumnName={sizeColumnName}
+      bind:pickerOpen={thicknessPickerOpen}
+      dataFields={dataFields}
+      selectableDataFields={selectableDataFields}
+      valueFieldSelection={valueFieldSelection}
+      sizeFieldSelection={sizeFieldSelection}
+      facetsSelection={facetsSelection}
+      onThicknessModeChange={handleThicknessModeChange}
+      onThicknessChange={handleThicknessChange}
+      onMaxThicknessChange={handleMaxThicknessChange}
+      onOpenThicknessDiscretization={handleOpenThicknessDiscretization}
+    />
 
-    <div class="field-group">
-      <ToggleTabs
-        items={thicknessModeItems}
-        activeIndex={thicknessModeIndex}
-        onChange={handleThicknessModeChange}
-        hideInactiveLabel={true}
-      />
-    </div>
-
-    {#if thicknessMode === ThicknessMode.UNIQUE}
-      <SliderWithInput
-        label={m.thickness()}
-        min={SLIDER_LIMITS.lineWidth.min}
-        max={SLIDER_LIMITS.lineWidth.max}
-        value={thickness}
-        showMinMax
-        inputWidth="128px"
-        onchange={handleThicknessChange}
-      />
-    {:else if thicknessMode === ThicknessMode.PROPORTIONAL}
-      <div class="field-group">
-        <FacetsVariablePicker
-          bind:open={thicknessPickerOpen}
-          titleText={m.thickness_according()}
-          dataFields={dataFields}
-          singleSelectItems={selectableDataFields}
-          selectedFieldId={sizeFieldSelection.selectedFieldId}
-          selectedFieldIds={facetsSelection.getSelectedFieldIds(
-            FACET_SLOT.LINE_SIZE
-          )}
-          isCollectionEnabled={facetsSelection.isActiveForSlot(
-            FACET_SLOT.LINE_SIZE
-          )}
-          onSelect={handleSizeFieldSelect}
-          onCollectionChange={(ids) =>
-            facetsSelection.updateVariables(
-              sizeColumnName,
-              FACET_SLOT.LINE_SIZE,
-              ids
-            )}
-          onToggleCollection={(en) =>
-            facetsSelection.toggle(sizeColumnName, FACET_SLOT.LINE_SIZE, en)}
-        />
-      </div>
-      <SliderWithInput
-        label={m.max_thickness()}
-        min={1}
-        max={SLIDER_LIMITS.lineMaxWidth.max}
-        value={maxThickness}
-        showMinMax
-        inputWidth="128px"
-        onchange={handleMaxThicknessChange}
-      />
-    {:else if thicknessMode === ThicknessMode.CLASSES}
-      <div class="field-group">
-        <FacetsVariablePicker
-          bind:open={thicknessPickerOpen}
-          titleText={m.thickness_according()}
-          dataFields={dataFields}
-          singleSelectItems={selectableDataFields}
-          selectedFieldId={valueFieldSelection.selectedFieldId}
-          selectedFieldIds={facetsSelection.getSelectedFieldIds(
-            FACET_SLOT.LINE_VALUE
-          )}
-          isCollectionEnabled={facetsSelection.isActiveForSlot(
-            FACET_SLOT.LINE_VALUE
-          )}
-          onSelect={handleValueFieldSelect}
-          onCollectionChange={(ids) =>
-            facetsSelection.updateVariables(
-              valueColumnName,
-              FACET_SLOT.LINE_VALUE,
-              ids
-            )}
-          onToggleCollection={(en) =>
-            facetsSelection.toggle(valueColumnName, FACET_SLOT.LINE_VALUE, en)}
-        />
-      </div>
-      <DiscretizationRow
-        label={m.discretization()}
-        value={thicknessDiscretizationLabel}
-        onsettings={handleOpenThicknessDiscretization}
-      />
-      <SliderWithInput
-        label={m.max_thickness()}
-        min={1}
-        max={SLIDER_LIMITS.lineMaxWidth.max}
-        value={maxThickness}
-        showMinMax
-        inputWidth="128px"
-        onchange={handleMaxThicknessChange}
-      />
-    {/if}
-
-    <SectionHeading title={m.color()} />
-
-    <div class="field-group">
-      <ToggleTabs
-        items={colorModeItems}
-        activeIndex={colorModeIndex}
-        onChange={handleColorModeChange}
-        hideInactiveLabel={true}
-      />
-    </div>
-
-    {#if colorMode === ColorMode.UNIQUE}
-      <SingleColorPreview
-        exclusive
-        label={m.color()}
-        color={color}
-        onchange={handleColorChange}
-      />
-    {:else if colorMode === ColorMode.CLASSES}
-      <div class="field-group">
-        <FacetsVariablePicker
-          bind:open={colorPickerOpen}
-          titleText={m.color_according()}
-          dataFields={dataFields}
-          singleSelectItems={selectableDataFields}
-          selectedFieldId={valueFieldSelection.selectedFieldId}
-          selectedFieldIds={facetsSelection.getSelectedFieldIds(
-            FACET_SLOT.LINE_VALUE
-          )}
-          isCollectionEnabled={facetsSelection.isActiveForSlot(
-            FACET_SLOT.LINE_VALUE
-          )}
-          onSelect={handleValueFieldSelect}
-          onCollectionChange={(ids) =>
-            facetsSelection.updateVariables(
-              valueColumnName,
-              FACET_SLOT.LINE_VALUE,
-              ids
-            )}
-          onToggleCollection={(en) =>
-            facetsSelection.toggle(valueColumnName, FACET_SLOT.LINE_VALUE, en)}
-        />
-      </div>
-      <DiscretizationRow
-        label={m.discretization()}
-        value={colorDiscretizationLabel}
-        onsettings={handleOpenColorDiscretization}
-      />
-      <PalettePreview
-        label={m.color_palette()}
-        colors={currentPalette}
-        selectedPaletteId={lineColorClassification?.paletteId}
-        inverted={lineColorClassification?.inverted ?? false}
-        paletteType={resolvePaletteTypeForBreakpoint(lineColorClassification)}
-        classification={lineColorClassification}
-        oninvert={onInvertPalette}
-        onClassificationChange={handleColorClassificationChange}
-      />
-    {:else if colorMode === ColorMode.CATEGORIES}
-      <div class="field-group">
-        <FacetsVariablePicker
-          bind:open={categoryPickerOpen}
-          titleText={m.color_according()}
-          dataFields={dataFields}
-          singleSelectItems={selectableDataFields}
-          selectedFieldId={categoryFieldSelection.selectedFieldId}
-          selectedFieldIds={facetsSelection.getSelectedFieldIds(
-            FACET_SLOT.LINE_CATEGORY
-          )}
-          isCollectionEnabled={facetsSelection.isActiveForSlot(
-            FACET_SLOT.LINE_CATEGORY
-          )}
-          onSelect={handleCategoryFieldSelect}
-          onCollectionChange={(ids) =>
-            facetsSelection.updateVariables(
-              categoryColumnName,
-              FACET_SLOT.LINE_CATEGORY,
-              ids
-            )}
-          onToggleCollection={(en) =>
-            facetsSelection.toggle(
-              categoryColumnName,
-              FACET_SLOT.LINE_CATEGORY,
-              en
-            )}
-        />
-      </div>
-      <DiscretizationRow
-        label={m.category_aspect()}
-        value={m.categories_count({ count: categoryCount })}
-        settingsIconDescription={m.palette_categories_aspect_title()}
-        onsettings={() => {
-          colorCategoriesPopoverOpen = true;
-        }}
-      />
-      <PalettePreview
-        label={m.color_palette()}
-        colors={categoriesPalette}
-        selectedPaletteId={lineColorClassification?.paletteId}
-        inverted={lineColorClassification?.inverted ?? false}
-        paletteType={PALETTE_TYPE.QUALITATIVE}
-        categoriesMode={true}
-        categoriesVariant="lines"
-        categoryLabels={categoryLabels.labels}
-        bind:categoriesPopoverOpen={colorCategoriesPopoverOpen}
-        oninvert={onInvertPalette}
-        onClassificationChange={handleColorClassificationChange}
-      />
-    {/if}
+    <LineColorSection
+      colorMode={colorMode}
+      color={color}
+      valueColumnName={valueColumnName}
+      categoryColumnName={categoryColumnName}
+      colorDiscretizationLabel={colorDiscretizationLabel}
+      classification={lineColorClassification}
+      palette={currentPalette}
+      categoriesPalette={categoriesPalette}
+      categoryLabels={categoryLabels.labels}
+      categoryCount={categoryCount}
+      bind:colorPickerOpen={colorPickerOpen}
+      bind:categoryPickerOpen={categoryPickerOpen}
+      bind:categoriesPopoverOpen={colorCategoriesPopoverOpen}
+      dataFields={dataFields}
+      selectableDataFields={selectableDataFields}
+      valueFieldSelection={valueFieldSelection}
+      categoryFieldSelection={categoryFieldSelection}
+      facetsSelection={facetsSelection}
+      onColorModeChange={handleColorModeChange}
+      onColorChange={handleColorChange}
+      onOpenColorDiscretization={handleOpenColorDiscretization}
+      onClassificationChange={handleColorClassificationChange}
+      onInvertPalette={onInvertPalette}
+    />
 
     <SliderWithInput
       label={m.opacity()}
       min={SLIDER_LIMITS.lineOpacity.min}
       max={SLIDER_LIMITS.lineOpacity.max}
+      step={SLIDER_LIMITS.lineOpacity.step}
       value={opacity}
       showMinMax
       inputWidth="128px"
@@ -668,7 +452,7 @@
     padding: var(--cds-spacing-04) var(--cds-spacing-03) var(--cds-spacing-05);
   }
 
-  .field-group {
+  :global(.field-group) {
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-02);
