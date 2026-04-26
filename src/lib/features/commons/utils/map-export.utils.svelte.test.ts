@@ -26,4 +26,12 @@ describe('map export DOM mutations', () => {
   it('waits for embedded fonts before exporting the page', () => {
     expect(source).toContain('await fontAssetsStore.ensureLoaded();');
   });
+
+  it('keeps MapLibre interleaved exports at the live canvas pixel ratio', () => {
+    expect(source).toContain('function usesInterleavedDeckOverlay');
+    expect(source).toContain('mapInstanceStore.deckOverlay !== null');
+    expect(source).toContain(
+      'if (!map || usesInterleavedDeckOverlay()) return () => {};'
+    );
+  });
 });
