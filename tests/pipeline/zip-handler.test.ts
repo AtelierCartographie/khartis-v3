@@ -57,6 +57,13 @@ describe('zip-handler', () => {
     expect(result.shapefileBaseName).toBe('roads');
   });
 
+  it('treats KMZ files as zip archives', async () => {
+    const { isZipFile, isZipArchiveName } = await loadHandler();
+
+    expect(isZipArchiveName('places.kmz')).toBe(true);
+    expect(isZipFile(new File([], 'places.kmz'))).toBe(true);
+  });
+
   it('returns isShapefileArchive=false when .shp has no companions', async () => {
     const { extractZip } = await loadHandler();
     const zip = makeZip({ 'roads.shp': 'shp-only' });

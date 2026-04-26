@@ -9,6 +9,7 @@ import { normalizeFormattedNumericColumns } from '../operations/tabular-numeric-
 import { applyTabularGeoDetection } from './tabular-geo-detection';
 import type { DatasetResult, ZipDatasetResult } from '../types';
 import { processZipFile } from './zip-processor';
+import { isZipArchiveName } from '../utils/zip-handler';
 
 export async function processRemoteFile(
   url: string,
@@ -22,7 +23,7 @@ export async function processRemoteFile(
     filename = url.split('/').pop() || 'remote_file';
   }
 
-  if (filename.toLowerCase().endsWith('.zip')) {
+  if (isZipArchiveName(filename)) {
     return processRemoteZipFile(url);
   }
 
