@@ -5,11 +5,11 @@
   <p>An open-source project by <a href="http://www.sciencespo.fr/cartographie/">Sciences Po – Cartography Workshop</a></p>
 
   <p>
-    <a href="https://github.com/AtelierCartographie/khartis-v3/actions/workflows/release.yml">
-      <img alt="Release" src="https://github.com/AtelierCartographie/khartis-v3/actions/workflows/release.yml/badge.svg?branch=staging">
+    <a href="https://github.com/AtelierCartographie/Khartis/actions/workflows/release.yml">
+      <img alt="Release" src="https://github.com/AtelierCartographie/Khartis/actions/workflows/release.yml/badge.svg?branch=staging">
     </a>
-    <a href="https://github.com/AtelierCartographie/khartis-v3/actions/workflows/pr-validation.yml">
-      <img alt="PR Validation" src="https://github.com/AtelierCartographie/khartis-v3/actions/workflows/pr-validation.yml/badge.svg">
+    <a href="https://github.com/AtelierCartographie/Khartis/actions/workflows/pr-validation.yml">
+      <img alt="PR Validation" src="https://github.com/AtelierCartographie/Khartis/actions/workflows/pr-validation.yml/badge.svg">
     </a>
     <a href="LICENSE">
       <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-green?style=flat">
@@ -33,7 +33,7 @@
 Khartis is a web application to create professional thematic maps without prior GIS expertise. It runs fully client-side — your data never leaves the browser.
 
 - Website: https://www.sciencespo.fr/cartographie/khartis
-- Issues and feature requests: [GitHub Issues](https://github.com/AtelierCartographie/khartis-v3/issues)
+- Issues and feature requests: [GitHub Issues](https://github.com/AtelierCartographie/Khartis/issues)
 
 ## Features
 
@@ -101,7 +101,7 @@ pnpm build && pnpm preview
 
 ## Privacy, security, and data
 
-- **Client-side only**: imported data never leaves the browser; no server, no tracking
+- **Client-side only**: imported data never leaves the browser; optional analytics only loads after user consent
 - All processing and persistence run in-browser via DuckDB WASM and IndexedDB (metadata + binary asset store)
 - Dependency scanning via Dependabot
 - To report a security vulnerability, see [SECURITY.md](SECURITY.md)
