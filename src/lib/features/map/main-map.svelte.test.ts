@@ -28,6 +28,12 @@ describe('MainMap density mode loading', () => {
     expect(source).not.toContain('return densityTable;');
   });
 
+  it('only reloads map data for density generation inputs, not every visualization edit', () => {
+    expect(source).toContain('const densityReloadSignature = $derived.by');
+    expect(source).toContain('void densityReloadSignature;');
+    expect(source).not.toContain('void visualizationStore.version;');
+  });
+
   it('does not apply a second color-blindness filter wrapper around ThematicMap', () => {
     expect(source).not.toContain('applyColorBlindnessFilter');
     expect(source).not.toContain('color-blindness-filters');
