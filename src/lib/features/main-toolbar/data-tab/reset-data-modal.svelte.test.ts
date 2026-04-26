@@ -71,4 +71,13 @@ describe('reset-data-modal', () => {
     expect(onSuccess).toHaveBeenCalledTimes(1);
     expect(mocks.showSuccessMock).toHaveBeenCalledTimes(1);
   });
+
+  it('warns that linked visualizations are lost', () => {
+    render(ResetDataModal, {
+      open: true,
+      datasetId: 'dataset-1'
+    });
+
+    expect(screen.getByText(m.reset_data_modal_warning())).toBeTruthy();
+  });
 });

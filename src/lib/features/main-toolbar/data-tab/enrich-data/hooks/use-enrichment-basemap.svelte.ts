@@ -1,5 +1,6 @@
 import { GEO_COLUMN_TYPE } from '$lib/features/commons/constants/data.constants';
 import { BasemapSource } from '$lib/features/commons/constants/ui.constants';
+import { MAP_PROJECTION_TYPE } from '$lib/features/commons/constants';
 import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
 import {
   dataTabActions,
@@ -17,6 +18,7 @@ import {
   rankBasemapsByJoinSynthesis
 } from '$lib/features/map/services/basemap-catalog.service.svelte';
 import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
+import { mapProjectionStore } from '$lib/features/map/stores/map-projection.store.svelte';
 import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
 import type {
   BasemapMetadata,
@@ -79,6 +81,15 @@ async function waitForDatasetAvailability(
   }
 
   return false;
+}
+
+function isMissingDuckTableError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    /Catalog Error:\s*Table with name .*?(does not exist|not found)/i.test(
+      error.message
+    )
+  );
 }
 
 export function pickAutoLinkedGeoColumn(
@@ -314,6 +325,9 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
 
     hasDismissedSuggestedBasemap = false;
     osmBasemapStore.clear();
+    if (mapProjectionStore.isGlobe) {
+      mapProjectionStore.setProjection(MAP_PROJECTION_TYPE.MERCATOR);
+    }
     basemapStyleStore.setReferenceBasemap(null);
     basemapStyleStore.setStyle(referenceStyle);
     basemapStyleStore.requestViewportReset(referenceStyle);
@@ -336,6 +350,21 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
 
   function clearBasemapImportError(): void {
     basemapImportError = null;
+  }
+
+  function isCurrentSuggestionInput(
+    selectedDataset: DatasetResult,
+    datasetId: string,
+    geoColumnName: string
+  ): boolean {
+    const currentDataset = datasetsStore.selectedDataset;
+    return (
+      currentDataset?.id === selectedDataset.id &&
+      currentDataset?.sourceFileId === selectedDataset.sourceFileId &&
+      currentDataset?.tableName === selectedDataset.tableName &&
+      resolveDatasetIdForOrchestrator(currentDataset) === datasetId &&
+      dataTabState.geolocation.linkedVariableName === geoColumnName
+    );
   }
 
   $effect(() => {
@@ -435,7 +464,12 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
           () => cancelled
         );
 
-        if (datasetReady) {
+        if (
+          datasetReady &&
+          !cancelled &&
+          isCurrentSuggestionInput(selectedDataset, datasetId, geoColumnName) &&
+          duckDBOrchestrator.findDatasetByIdOrSourceFile(datasetId)
+        ) {
           try {
             const synthesis = await duckDBOrchestrator.computeJoinSynthesis(
               datasetId,
@@ -447,11 +481,13 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
               3
             );
           } catch (error) {
-            logger.warn(
-              'Enrichment basemap suggestions fell back to heuristics',
-              LogCategory.MAP,
-              error
-            );
+            if (!cancelled && !isMissingDuckTableError(error)) {
+              logger.warn(
+                'Enrichment basemap suggestions fell back to heuristics',
+                LogCategory.MAP,
+                error
+              );
+            }
           }
         }
       }

@@ -26,4 +26,10 @@ describe('EnrichDataStep overlay basemap defaults', () => {
   it('resets the overlay flag when the selected dataset changes', () => {
     expect(source).toContain('overlayBasemapEnabled: false');
   });
+
+  it('blocks tabular enrichment when the imported file only has coordinates', () => {
+    expect(source).toContain('isJoinBlocked: () => hasOnlyCoordinatesValue');
+    expect(source).toContain('!hasOnlyCoordinatesValue');
+    expect(source).toContain('joinHook.resetJoinState();');
+  });
 });

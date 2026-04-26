@@ -8,6 +8,7 @@
   import { globalActions } from '$lib/features/commons/store/global.svelte';
   import { projectStore } from '$lib/features/commons/store/project.store.svelte';
   import { ToolbarStep } from '$lib/features/commons/types/global';
+  import { MAP_PROJECTION_TYPE } from '$lib/features/commons/constants';
   import { GEO_COLUMN_TYPE } from '$lib/features/commons/constants/data.constants';
   import { BasemapSource } from '$lib/features/commons/constants/ui.constants';
   import { PERSISTED_BASEMAP_TYPE } from './services/persisted-basemap';
@@ -26,6 +27,7 @@
   } from '$lib/features/map/services/basemap-catalog.service.svelte';
   import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
   import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
+  import { mapProjectionStore } from '$lib/features/map/stores/map-projection.store.svelte';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
   import { projectionStore } from '$lib/features/map/stores/projection.store.svelte';
   import type {
@@ -756,6 +758,9 @@
     hasDismissedSuggestedBasemap = false;
     basemapCatalogService.addCustomBasemap(osmBasemap);
     osmBasemapStore.clear();
+    if (mapProjectionStore.isGlobe) {
+      mapProjectionStore.setProjection(MAP_PROJECTION_TYPE.MERCATOR);
+    }
     dataTabActions.setBasemapJoinState({
       selectedBasemap: osmBasemap.file,
       basemapSource: BasemapSource.OSM
