@@ -61,8 +61,7 @@
   }
 
   function buildGitHubIssueUrl(): string {
-    const baseUrl =
-      'https://github.com/AtelierCartographie/khartis-v3/issues/new';
+    const baseUrl = 'https://github.com/AtelierCartographie/Khartis/issues/new';
 
     const levelLabel =
       geoLevelOptions.find((o) => o.value === geoLevel)?.label || geoLevel;
