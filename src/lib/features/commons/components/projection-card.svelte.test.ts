@@ -21,6 +21,11 @@ describe('ProjectionCard', () => {
     expect(source).not.toContain('class="radio-wrapper kh-card-radio"');
   });
 
+  it('keeps the preview radio accessible without showing duplicate card text', () => {
+    expect(source).toContain('labelText={title}');
+    expect(source).toContain('hideLabel');
+  });
+
   it('maps the radio theme to card-specific CSS variables', () => {
     expect(source).toContain('--kh-card-radio-color');
     expect(source).toContain('--kh-card-radio-focus-color');
