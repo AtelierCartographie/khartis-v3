@@ -48,6 +48,7 @@
   import OSMBasemapSelector from './components/osm-basemap-selector.svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import { dataTabStore } from './data-tab.store.svelte';
+  import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
   import { resolveSuggestedBasemapAutoSelectionTarget } from './services/basemap-auto-selection';
   import {
     getDatasetIdentity,
@@ -115,6 +116,7 @@
   let joinLoading = $state(false);
   let suggestionsDatasetIdentity = $state<string | null>(null);
   let basemapAttributeValues = $state<string[]>([]);
+  let basemapAliasesByValue = $state<Record<string, string[]>>({});
 
   let currentJoinAbortController: AbortController | null = null;
   let previousJoinContext: string | null = null;
@@ -272,6 +274,20 @@
         );
         basemapAttributeValues = [];
       });
+
+    duckDBOrchestrator
+      .getBasemapAttributeAliasesByValue(basemap)
+      .then((aliases) => {
+        basemapAliasesByValue = aliases;
+      })
+      .catch((error) => {
+        logger.error(
+          'Failed to fetch basemap attribute aliases',
+          LogCategory.MAP,
+          error
+        );
+        basemapAliasesByValue = {};
+      });
   }
 
   function abortLoadSuggestions(): void {
@@ -288,6 +304,7 @@
     geoColumn?: string;
     gpsMode?: boolean;
     gpsColumns?: { lat: string; lon: string };
+    joinCorrections?: Record<string, string>;
   };
 
   type SourceSnapshot = {
@@ -894,6 +911,36 @@
     }
   }
 
+  function getSourceFileForSnapshot(
+    sourceSnapshot: SourceSnapshot | null
+  ): UploadedFile | undefined {
+    if (!sourceSnapshot) return undefined;
+    return projectStore.currentProject?.data?.sourceFiles?.find(
+      (file) => file.id === sourceSnapshot.sourceFileId
+    );
+  }
+
+  function mergeJoinCorrections(
+    existing: Record<string, string> | undefined,
+    addition: Record<string, string>
+  ): Record<string, string> {
+    const merged: Record<string, string> = { ...(existing ?? {}) };
+    for (const [original, corrected] of Object.entries(addition)) {
+      const previous = merged[original];
+      if (previous && previous !== corrected) {
+        // The previous correction has already mutated the column to `previous`,
+        // so the row currently keyed by `previous` is the one being remapped.
+        merged[previous] = corrected;
+        delete merged[original];
+      } else if (corrected === original) {
+        delete merged[original];
+      } else {
+        merged[original] = corrected;
+      }
+    }
+    return merged;
+  }
+
   async function handleManualCorrection(
     dataValue: string,
     basemapValue: string
@@ -912,14 +959,19 @@
     currentJoinAbortController = new AbortController();
     const abortSignal = currentJoinAbortController.signal;
 
-    const corrections: Record<string, string> = { [dataValue]: basemapValue };
+    const correction: Record<string, string> = { [dataValue]: basemapValue };
+    const existingSourceFile = getSourceFileForSnapshot(sourceSnapshot);
+    const persistedCorrections = mergeJoinCorrections(
+      existingSourceFile?.joinCorrections,
+      correction
+    );
 
     try {
       joinLoading = true;
       await duckDBOrchestrator.applyJoinCorrections(
         resolvedDatasetId,
         linkedVariableName,
-        corrections
+        correction
       );
       if (abortSignal.aborted) return;
 
@@ -928,7 +980,8 @@
           joinedBasemap: selectedBasemapId || undefined,
           geoColumn: linkedVariableName,
           gpsMode: false,
-          gpsColumns: undefined
+          gpsColumns: undefined,
+          joinCorrections: persistedCorrections
         },
         sourceSnapshot
       );
@@ -970,7 +1023,8 @@
               joinedBasemap: basemap.file,
               geoColumn: linkedVariableName,
               gpsMode: false,
-              gpsColumns: undefined
+              gpsColumns: undefined,
+              joinCorrections: persistedCorrections
             },
             sourceSnapshot
           );
@@ -1347,6 +1401,20 @@
 
           joinLoading = true;
           try {
+            const persistedCorrections =
+              getSourceFileForSnapshot(sourceSnapshot)?.joinCorrections;
+            if (
+              persistedCorrections &&
+              Object.keys(persistedCorrections).length > 0
+            ) {
+              await duckDBOrchestrator.applyJoinCorrections(
+                resolvedDatasetId,
+                linkedVariableName,
+                persistedCorrections
+              );
+              if (controller.signal.aborted) return;
+            }
+
             const stats = await duckDBOrchestrator.computeJoinStats(
               resolvedDatasetId,
               basemap,
@@ -1628,6 +1696,7 @@
     joinedEntitiesList={joinedEntitiesList}
     ignoredEntities={ignoredEntities}
     duplicateLines={dataTabState.basemapJoin.duplicateLines}
+    basemapAliasesByValue={basemapAliasesByValue}
     onFinalizeJoin={handleFinalizeJoin}
     onManualCorrection={handleManualCorrection}
     onIgnoreEntity={handleIgnoreEntity}

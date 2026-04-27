@@ -60,6 +60,7 @@
     joinedEntitiesList?: JoinedEntityRow[];
     duplicateLines?: LineReference[];
     ignoredEntities?: LineReference[];
+    basemapAliasesByValue?: Record<string, string[]>;
     onFinalizeJoin: () => void;
     onManualCorrection?: (dataValue: string, basemapValue: string) => void;
     onIgnoreEntity?: (
@@ -84,6 +85,7 @@
     joinedEntitiesList = [],
     duplicateLines = [],
     ignoredEntities = [],
+    basemapAliasesByValue = {},
     onFinalizeJoin,
     onManualCorrection,
     onIgnoreEntity,
@@ -221,6 +223,7 @@
     if (!value) return;
     pendingUnrecognizedSelections.delete(entity);
     onManualCorrection?.(entity, value);
+    announce(m.join_announce_validated({ entity }));
   }
 
   function buildToVerifyOptions(suggestions: string[]): string[] {
@@ -241,18 +244,25 @@
     return merged;
   }
 
-  function formatOtherIdentifiers(otherIdentifiers: string[] | undefined): {
-    title: string | undefined;
-    label: string;
-  } {
-    if (!otherIdentifiers || otherIdentifiers.length === 0) {
-      return { title: undefined, label: '' };
+  interface RowTooltip {
+    tags: string[];
+    text: string;
+    disabled: boolean;
+  }
+
+  function buildRowTooltip(
+    selectedBasemapValue: string | undefined,
+    fallback: string
+  ): RowTooltip {
+    if (!selectedBasemapValue) {
+      return { tags: [], text: '', disabled: true };
     }
-    const ids = otherIdentifiers.join(', ');
-    return {
-      title: m.join_other_identifiers_tooltip({ ids }),
-      label: ids
-    };
+    const aliases = basemapAliasesByValue?.[selectedBasemapValue] ?? [];
+    const tags: string[] = [selectedBasemapValue];
+    for (const alias of aliases) {
+      if (alias && !tags.includes(alias)) tags.push(alias);
+    }
+    return { tags, text: fallback, disabled: false };
   }
 
   const duplicateLinesByValue = $derived<Record<string, number[]>>(
@@ -367,25 +377,53 @@
     }
   });
 
+  let ariaLiveMessage = $state('');
+  let ariaLiveResetTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function announce(message: string): void {
+    if (!message) return;
+    ariaLiveMessage = '';
+    if (ariaLiveResetTimer) clearTimeout(ariaLiveResetTimer);
+    ariaLiveResetTimer = setTimeout(() => {
+      ariaLiveMessage = message;
+    }, 50);
+  }
+
   function handleIgnore(
     dataValue: string,
     source: IgnoreSource,
     basemapValue?: string
   ): void {
     onIgnoreEntity?.(dataValue, source, basemapValue);
+    announce(
+      m.join_announce_ignored({
+        entity: dataValue,
+        count: ignoredCount + 1
+      })
+    );
   }
 
   function handleRestore(dataValue: string): void {
     onRestoreEntity?.(dataValue);
+    announce(m.join_announce_restored({ entity: dataValue }));
   }
 
   function handleValidate(dataValue: string, basemapValue: string): void {
     if (!basemapValue) return;
     onValidateEntity?.(dataValue, basemapValue);
+    announce(m.join_announce_validated({ entity: dataValue }));
   }
 </script>
 
 <div class="join-assisted-section">
+  <div
+    class="visually-hidden"
+    role="status"
+    aria-live="polite"
+    aria-atomic="true"
+  >
+    {ariaLiveMessage}
+  </div>
   <div class="section-header">
     <span class="section-title">{m.section_join_assisted()}</span>
     <span class="section-header-icon">
@@ -441,8 +479,9 @@
                 </div>
                 <div class="join-table-scroll" bind:this={joinedScrollEl}>
                   {#each joinedEntitiesList as row (row.dataValue)}
-                    {@const otherIds = formatOtherIdentifiers(
-                      row.otherIdentifiers
+                    {@const joinedTooltip = buildRowTooltip(
+                      row.basemapValue,
+                      m.join_entities_joined_desc()
                     )}
                     <div class="table-row" use:observeRow={row.dataValue}>
                       <div class="table-cell cell-data" title={row.dataValue}>
@@ -456,7 +495,10 @@
                           )}
                           <Select
                             id={`joined-${row.dataValue}`}
-                            labelText=""
+                            labelText={m.join_select_label_joined({
+                              entity: row.dataValue
+                            })}
+                            hideLabel
                             selected={row.basemapValue}
                             on:change={(e) => {
                               const target = e.target as HTMLSelectElement;
@@ -467,6 +509,11 @@
                                 onManualCorrection
                               ) {
                                 onManualCorrection(row.dataValue, nextValue);
+                                announce(
+                                  m.join_announce_remapped({
+                                    entity: row.dataValue
+                                  })
+                                );
                               }
                             }}
                             size="sm"
@@ -482,16 +529,13 @@
                         {/if}
                       </div>
                       <div class="row-actions">
-                        {#if otherIds.title}
-                          <span class="row-action row-action-info">
-                            <InfoPopover text={otherIds.title} />
-                          </span>
-                        {:else}
-                          <span
-                            class="row-action row-action-spacer"
-                            aria-hidden="true"
-                          ></span>
-                        {/if}
+                        <span class="row-action row-action-info">
+                          <InfoPopover
+                            text={joinedTooltip.text}
+                            tags={joinedTooltip.tags}
+                            disabled={joinedTooltip.disabled}
+                          />
+                        </span>
                         <button
                           type="button"
                           class="row-action"
@@ -568,9 +612,18 @@
               <div class="join-table-scroll" bind:this={toVerifyScrollEl}>
                 {#each deduplicatedJoinRows as row, i (i)}
                   {@const rowKey = `verify-${i}`}
+                  {@const verifyTooltip = buildRowTooltip(
+                    row.selectedMapping,
+                    m.join_to_verify_info_tooltip()
+                  )}
                   <div class="table-row" use:observeToVerifyRow={rowKey}>
                     <div class="table-cell cell-data">{row.dataValue}</div>
-                    <div class="table-cell cell-equals">=</div>
+                    <div
+                      class="table-cell cell-equals cell-equals-approx"
+                      aria-label="approximativement"
+                    >
+                      ≈
+                    </div>
                     <div class="table-cell cell-select">
                       {#if visibleToVerifyRows.has(rowKey)}
                         {@const toVerifyOptions = buildToVerifyOptions(
@@ -578,7 +631,10 @@
                         )}
                         <Select
                           id={`join-${i}`}
-                          labelText=""
+                          labelText={m.join_select_label_to_verify({
+                            entity: row.dataValue
+                          })}
+                          hideLabel
                           selected={row.selectedMapping}
                           on:change={(e) => {
                             const target = e.target as HTMLSelectElement;
@@ -600,7 +656,11 @@
                     </div>
                     <div class="row-actions">
                       <span class="row-action row-action-info">
-                        <InfoPopover text={m.join_to_verify_info_tooltip()} />
+                        <InfoPopover
+                          text={verifyTooltip.text}
+                          tags={verifyTooltip.tags}
+                          disabled={verifyTooltip.disabled}
+                        />
                       </span>
                       <button
                         type="button"
@@ -677,6 +737,10 @@
                 {#each unknowns as entity (entity)}
                   {@const hasPendingSelection =
                     pendingUnrecognizedSelections.has(entity)}
+                  {@const unrecognizedTooltip = buildRowTooltip(
+                    pendingUnrecognizedSelections.get(entity),
+                    m.join_unrecognized_info_tooltip()
+                  )}
                   <div class="table-row" use:observeUnrecognizedRow={entity}>
                     <div class="table-cell cell-data">{entity}</div>
                     <div class="table-cell cell-equals">=</div>
@@ -686,6 +750,10 @@
                           <ComboBox
                             items={basemapComboBoxItems}
                             placeholder={m.join_unrecognized_correction_placeholder()}
+                            labelText={m.join_select_label_unrecognized({
+                              entity
+                            })}
+                            hideLabel
                             size="sm"
                             on:select={(e) =>
                               handleUnrecognizedSelect(
@@ -698,7 +766,10 @@
                         {:else}
                           <Select
                             id={`unrecognized-${entity}`}
-                            labelText=""
+                            labelText={m.join_select_label_unrecognized({
+                              entity
+                            })}
+                            hideLabel
                             size="sm"
                             disabled
                           >
@@ -718,7 +789,9 @@
                     <div class="row-actions">
                       <span class="row-action row-action-info">
                         <InfoPopover
-                          text={m.join_unrecognized_info_tooltip()}
+                          text={unrecognizedTooltip.text}
+                          tags={unrecognizedTooltip.tags}
+                          disabled={unrecognizedTooltip.disabled}
                         />
                       </span>
                       <button
@@ -927,6 +1000,18 @@
     pointer-events: none;
   }
 
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
   .section-header {
     display: flex;
     align-items: center;
@@ -978,6 +1063,11 @@
     background-color: #f4f4f4;
   }
 
+  .category-row-header:focus-visible {
+    outline: 2px solid var(--cds-focus, #0f62fe);
+    outline-offset: -2px;
+  }
+
   .category-icon {
     display: flex;
     align-items: center;
@@ -985,12 +1075,15 @@
   }
 
   .icon-success :global(svg) {
-    fill: #198038;
+    fill: #24a148;
   }
 
-  .icon-warning :global(svg),
-  .icon-warning-alt :global(svg) {
+  .icon-warning :global(svg) {
     fill: #f1c21b;
+  }
+
+  .icon-warning-alt :global(svg) {
+    fill: #da1e28;
   }
 
   .icon-error :global(svg) {
@@ -1004,39 +1097,35 @@
   .category-count {
     display: inline-flex;
     align-items: center;
-    justify-content: flex-end;
-    min-width: 4.5ch;
-    width: 4.5ch;
-    padding: 2px 6px;
-    font-weight: 700;
-    font-size: 0.875rem;
-    line-height: 1.25rem;
-    border-bottom: 2.5px solid;
+    justify-content: center;
+    min-width: 4ch;
+    padding: 0 8px 2px 8px;
+    font-weight: 600;
+    font-size: 1rem;
+    line-height: 22px;
+    color: #161616;
+    border-bottom: 1px solid;
     flex-shrink: 0;
     font-variant-numeric: tabular-nums;
   }
 
   .count-success {
-    color: #198038;
     background-color: #defbe6;
-    border-bottom-color: #198038;
+    border-bottom-color: #24a148;
   }
 
   .count-warning {
-    color: #8e6a00;
     background-color: #fcf4d6;
-    border-bottom-color: #8e6a00;
+    border-bottom-color: #f1c21b;
   }
 
   .count-warning-alt,
   .count-error {
-    color: #da1e28;
     background-color: #fff1f1;
     border-bottom-color: #da1e28;
   }
 
   .count-ignored {
-    color: var(--cds-text-secondary, #525252);
     background-color: var(--cds-layer-01, #f4f4f4);
     border-bottom-color: var(--cds-border-strong-01, #8d8d8d);
   }
@@ -1044,17 +1133,17 @@
   .category-label {
     flex: 1;
     font-weight: 400;
-    font-size: 0.875rem;
-    line-height: 1.25rem;
-    color: #003a6d;
+    font-size: 1rem;
+    line-height: 22px;
+    color: #00539a;
   }
 
-  .label-success {
-    color: #044317;
-  }
-
-  .label-warning {
-    color: #8e6a00;
+  .label-success,
+  .label-warning,
+  .label-warning-alt,
+  .label-error,
+  .label-ignored {
+    color: #00539a;
   }
 
   .category-chevron {
@@ -1093,16 +1182,15 @@
   }
 
   .inline-banner-info {
-    background-color: var(--cds-layer-01, #f4f4f4);
-    border-left-color: var(--cds-border-strong-01, #8d8d8d);
-    color: var(--cds-text-primary, #161616);
+    background-color: #edf5ff;
+    border-left-color: #0043ce;
+    color: #161616;
   }
 
   .join-table {
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    border-radius: 4px;
   }
 
   .join-table-scroll {
@@ -1112,52 +1200,41 @@
     overflow-y: auto;
   }
 
-  .join-table-success {
+  .join-table-success .table-header {
     background-color: #defbe6;
+    border-bottom: 1px solid rgba(36, 161, 72, 0.3);
   }
-
-  .join-table-success .table-header,
-  .join-table-success .table-row {
-    background-color: #defbe6;
-    border-top-color: #a7f0ba;
-  }
-
-  .join-table-warning {
+  .join-table-warning .table-header {
     background-color: #fcf4d6;
+    border-bottom: 1px solid rgba(241, 194, 27, 0.3);
   }
-
-  .join-table-warning .table-header,
-  .join-table-warning .table-row {
-    background-color: #fcf4d6;
-    border-top-color: #f1c21b;
-  }
-
-  .join-table-error {
+  .join-table-error .table-header {
     background-color: #fff1f1;
+    border-bottom: 1px solid rgba(218, 30, 40, 0.3);
+  }
+  .join-table-info .table-header {
+    background-color: #edf5ff;
+    border-bottom: 1px solid rgba(0, 67, 206, 0.3);
   }
 
-  .join-table-error .table-header,
-  .join-table-error .table-row {
-    background-color: #fff1f1;
-    border-top-color: #ffb3b8;
+  .join-table .table-row {
+    background-color: #f4f4f4;
+    border-bottom: 1px solid #c6c6c6;
   }
-
-  .join-table-info {
-    background-color: var(--cds-layer-01, #f4f4f4);
-  }
-
-  .join-table-info .table-header,
-  .join-table-info .table-row {
-    background-color: var(--cds-layer-01, #f4f4f4);
-    border-top-color: var(--cds-border-subtle-01, #c6c6c6);
+  .join-table .table-row:last-child {
+    border-bottom: none;
   }
 
   .table-header {
     display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 16px;
+    align-items: stretch;
+    gap: 0;
     min-height: 40px;
+  }
+
+  .table-header-left,
+  .table-header-right {
+    padding: 8px;
   }
 
   .table-header-left {
@@ -1175,18 +1252,19 @@
 
   .table-header-label {
     font-weight: 600;
-    font-size: 0.875rem;
-    line-height: 1.125rem;
+    font-size: 14px;
+    line-height: 20px;
+    letter-spacing: 0.16px;
     color: #161616;
   }
 
   .table-row {
     display: flex;
     align-items: center;
-    border-top: 1px solid transparent;
-    padding: 8px 16px;
+    padding: 8px;
     min-height: 48px;
-    gap: 10px;
+    gap: 8px;
+    box-sizing: border-box;
   }
 
   .table-row-lines {
@@ -1195,8 +1273,9 @@
 
   .table-cell {
     font-weight: 400;
-    font-size: 0.875rem;
-    line-height: 1.25rem;
+    font-size: 14px;
+    line-height: 18px;
+    letter-spacing: 0.16px;
     color: #161616;
   }
 
@@ -1209,16 +1288,19 @@
 
   .cell-equals {
     flex-shrink: 0;
-    font-weight: 700;
-    font-size: 0.75rem;
-    color: #ffffff;
-    width: 20px;
-    height: 20px;
+    font-weight: 400;
+    font-size: 1rem;
+    line-height: 1;
+    color: var(--cds-text-secondary, #525252);
+    width: 24px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    background-color: #009d9a;
-    border-radius: 50%;
+  }
+
+  .cell-equals-approx {
+    color: #f1c21b;
+    font-weight: 600;
   }
 
   .cell-select {
@@ -1274,6 +1356,7 @@
     align-items: center;
     gap: 4px;
     flex-shrink: 0;
+    margin-left: 8px;
   }
 
   .row-actions-compact {
@@ -1295,6 +1378,15 @@
     transition: background-color 0.15s;
   }
 
+  .row-action.row-action-info {
+    margin-right: 4px;
+    padding-right: 8px;
+    width: auto;
+    min-width: 32px;
+    border-right: 1px solid #e0e0e0;
+    border-radius: 0;
+  }
+
   .row-action:hover:not(.row-action-disabled) {
     background-color: rgba(0, 0, 0, 0.05);
   }
@@ -1306,11 +1398,6 @@
 
   .row-action-info {
     cursor: default;
-  }
-
-  .row-action-spacer {
-    pointer-events: none;
-    background: none;
   }
 
   .row-action-info :global(.info-btn) {
