@@ -149,6 +149,9 @@
       "serialize-javascript": ">=7.0.3",
       "tar": ">=7.5.11",
       "cookie": ">=0.7.0"
+    },
+    "patchedDependencies": {
+      "carbon-components-svelte": "patches/carbon-components-svelte.patch"
     }
   },
   "lint-staged": {
