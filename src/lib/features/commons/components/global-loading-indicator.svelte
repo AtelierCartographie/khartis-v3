@@ -19,20 +19,11 @@
     right: var(--cds-spacing-03);
     z-index: var(--z-content);
     pointer-events: none;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 2rem;
-    height: 2rem;
-    background-color: var(--cds-ui-01);
-    border-radius: 50%;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
-    opacity: 0.9;
   }
 
   .spinner {
-    width: 1rem;
-    height: 1rem;
+    width: 1.25rem;
+    height: 1.25rem;
     border: 2px solid var(--cds-border-subtle-01);
     border-top-color: var(--cds-interactive-01);
     border-radius: 50%;
