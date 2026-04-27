@@ -41,7 +41,8 @@ const DEFAULT_STATE: DataTabState = {
     unrecognizedEntities: [],
     joinedEntitiesList: [],
     ignoredEntities: [],
-    joinMappings: []
+    joinMappings: [],
+    duplicateLines: []
   },
   enrichData: {
     enrichmentDatasetId: undefined,
@@ -189,16 +190,26 @@ export const dataTabActions = {
 
     dataTabState.basemapJoin.joinedEntitiesList = entities
       .filter((e) => e.status === JoinStatus.JOINED)
-      .map((e) => ({
-        dataValue: e.dataValue,
-        basemapValue:
+      .map((e) => {
+        const basemapValue =
           e.basemapValue ??
-          (e.matches && e.matches.length > 0 ? e.matches[0] : e.dataValue)
-      }));
+          (e.matches && e.matches.length > 0 ? e.matches[0] : e.dataValue);
+        const otherIdentifiers =
+          e.matches?.filter(
+            (match) => match !== basemapValue && match !== e.dataValue
+          ) ?? [];
+        return {
+          dataValue: e.dataValue,
+          basemapValue,
+          otherIdentifiers
+        };
+      });
 
     dataTabState.basemapJoin.duplicateEntities = entities
       .filter((e) => e.status === JoinStatus.DUPLICATE)
       .map((e) => e.dataValue);
+
+    dataTabState.basemapJoin.duplicateLines = stats.duplicateLines ?? [];
 
     dataTabState.basemapJoin.unrecognizedEntities = entities
       .filter((e) => e.status === JoinStatus.UNRECOGNIZED)

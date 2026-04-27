@@ -384,7 +384,8 @@ function buildJoinQualityFromRows(
       (e) => e.status === JoinStatus.UNRECOGNIZED
     ).length,
     entities,
-    totalEntities: entities.length
+    totalEntities: entities.length,
+    duplicateLines: []
   };
 }
 
@@ -625,7 +626,39 @@ export async function computeJoinStats(
   );
 
   // Derive per-basemap stats from the cached raw matches
-  return deriveJoinQualityFromCache(cacheTableName, basemapId, Duck);
+  const quality = await deriveJoinQualityFromCache(
+    cacheTableName,
+    basemapId,
+    Duck
+  );
+
+  if (quality.duplicateCount > 0) {
+    const escapedTable = escapeIdentifier(dataset.tableName);
+    const escapedGeoCol = escapeIdentifier(geoColumn);
+    const escapedFilter = filterClause ? ` AND (${filterClause})` : '';
+    const dupValues = quality.entities
+      .filter((e) => e.status === JoinStatus.DUPLICATE)
+      .map((e) => `'${escapeSqlString(e.dataValue)}'`)
+      .join(', ');
+
+    if (dupValues) {
+      const hasRowId = (await Duck.query(
+        `SELECT column_name FROM information_schema.columns WHERE table_name = '${escapeSqlString(dataset.tableName)}' AND column_name = '__id'`,
+        { format: 'array' }
+      )) as Array<{ column_name: string }>;
+
+      const idCol = hasRowId.length > 0 ? '"__id"' : 'rowid';
+
+      const dupRows = (await Duck.query(
+        `SELECT "${escapedGeoCol}" as dataValue, array_agg(${idCol} ORDER BY ${idCol}) as lines FROM "${escapedTable}" WHERE "${escapedGeoCol}" IN (${dupValues})${escapedFilter} GROUP BY "${escapedGeoCol}" HAVING COUNT(*) > 1`,
+        { format: 'array' }
+      )) as Array<{ dataValue: string; lines: number[] }>;
+
+      quality.duplicateLines = dupRows;
+    }
+  }
+
+  return quality;
 }
 
 /**

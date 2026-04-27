@@ -1,5 +1,4 @@
 <script lang="ts">
-  import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import {
     dataTabActions,
     dataTabState
@@ -40,13 +39,13 @@
     processBasemapImport
   } from '$lib/features/map/utils/basemap-import.utils';
   import * as m from '$lib/paraglide/messages';
-  import { Earth, Grid, List, Upload } from 'carbon-icons-svelte';
+  import { Earth } from 'carbon-icons-svelte';
   import BasemapCatalogTab from './basemap-join-components/basemap-catalog-tab.svelte';
   import BasemapImportTab from './basemap-join-components/basemap-import-tab.svelte';
-  import BasemapOsmTab from './basemap-join-components/basemap-osm-tab.svelte';
+  import BasemapPanelContent from './basemap-join-components/basemap-panel-content.svelte';
   import JoinAssistedSection from './basemap-join-components/join-assisted-section.svelte';
   import BasemapSuggestionModal from './components/basemap-suggestion-modal.svelte';
-  import { InfoPopover } from '$lib/features/commons/components/viz-controls';
+  import OSMBasemapSelector from './components/osm-basemap-selector.svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import { dataTabStore } from './data-tab.store.svelte';
   import { resolveSuggestedBasemapAutoSelectionTarget } from './services/basemap-auto-selection';
@@ -65,41 +64,9 @@
   import { persistTabularSourceSnapshot } from './services/tabular-source-snapshot';
   import { hasBlockingJoinIssues } from './services/join-validation';
 
-  const OSM_TAB_INDEX = 2;
-  const IMPORT_TAB_INDEX = 1;
-
-  function basemapSourceToTabIndex(source: BasemapSource): number {
-    switch (source) {
-      case BasemapSource.IMPORT:
-        return IMPORT_TAB_INDEX;
-      case BasemapSource.OSM:
-        return OSM_TAB_INDEX;
-      case BasemapSource.CATALOG:
-      default:
-        return 0;
-    }
+  function handleBasemapSourceChange(source: BasemapSource): void {
+    dataTabActions.setBasemapSource(source);
   }
-
-  function tabIndexToBasemapSource(index: number): BasemapSource {
-    switch (index) {
-      case IMPORT_TAB_INDEX:
-        return BasemapSource.IMPORT;
-      case OSM_TAB_INDEX:
-        return BasemapSource.OSM;
-      default:
-        return BasemapSource.CATALOG;
-    }
-  }
-
-  let activeTabIndex = $state(
-    basemapSourceToTabIndex(dataTabState.basemapJoin.basemapSource)
-  );
-
-  const tabItems = [
-    { icon: List, label: m.basemap_catalog(), iconSize: 16 },
-    { icon: Upload, label: m.basemap_import(), iconSize: 16 },
-    { icon: Grid, label: m.basemap_osm(), iconSize: 16 }
-  ];
 
   const basemapStepIndex = $derived(dataTabStore.basemapStepIndex);
   const basemapSelected = $derived(dataTabState.basemapJoin.selectedBasemap);
@@ -121,7 +88,7 @@
   const ignoredEntities = $derived(
     dataTabState.basemapJoin.ignoredEntities.map((entity) => ({
       dataValue: entity.dataValue,
-      lines: [] as number[]
+      lines: entity.lines ?? []
     }))
   );
 
@@ -430,7 +397,7 @@
 
       dataTabActions.setJoinStats(stats);
 
-      if (stats.unrecognizedCount > 0) {
+      if (stats.unrecognizedCount > 0 || stats.joinedCount > 0) {
         fetchBasemapAttributeValues(basemap);
       } else {
         basemapAttributeValues = [];
@@ -603,7 +570,7 @@
     basemapAttributeValues = [];
     dataTabActions.setBasemapJoinState({
       selectedBasemap: '',
-      basemapSource: tabIndexToBasemapSource(activeTabIndex)
+      basemapSource: dataTabState.basemapJoin.basemapSource
     });
     basemapStyleStore.setReferenceBasemap(null);
     dataTabStore.resetStepCompletion(basemapStepIndex);
@@ -873,7 +840,7 @@
 
         dataTabActions.setJoinStats(stats);
 
-        if (stats.unrecognizedCount > 0) {
+        if (stats.unrecognizedCount > 0 || stats.joinedCount > 0) {
           fetchBasemapAttributeValues(basemap);
         } else {
           basemapAttributeValues = [];
@@ -982,7 +949,7 @@
 
         dataTabActions.setJoinStats(stats);
 
-        if (stats.unrecognizedCount > 0) {
+        if (stats.unrecognizedCount > 0 || stats.joinedCount > 0) {
           fetchBasemapAttributeValues(basemap);
         } else {
           basemapAttributeValues = [];
@@ -1310,7 +1277,7 @@
           await restorePersistedBasemapSelection(savedBasemap);
           if (controller.signal.aborted) return;
 
-          activeTabIndex = basemapSourceToTabIndex(
+          dataTabActions.setBasemapSource(
             resolveBasemapSource(savedBasemap.type)
           );
 
@@ -1387,7 +1354,7 @@
             );
             if (controller.signal.aborted) return;
             dataTabActions.setJoinStats(stats);
-            if (stats.unrecognizedCount > 0) {
+            if (stats.unrecognizedCount > 0 || stats.joinedCount > 0) {
               fetchBasemapAttributeValues(basemap);
             }
             previousJoinContext = `${resolvedDatasetId}::${basemap.file}`;
@@ -1568,14 +1535,6 @@
   });
 
   let previousDatasetIdentity: string | null = null;
-  $effect(() => {
-    const persistedTabIndex = basemapSourceToTabIndex(
-      dataTabState.basemapJoin.basemapSource
-    );
-    if (persistedTabIndex !== activeTabIndex) {
-      activeTabIndex = persistedTabIndex;
-    }
-  });
 
   $effect(() => {
     const currentDatasetIdentity = getDatasetIdentity(selectedDataset);
@@ -1624,73 +1583,75 @@
   });
 </script>
 
+{#snippet catalogContent()}
+  <BasemapCatalogTab
+    suggestedBasemaps={suggestedBasemaps}
+    allBasemaps={allBasemaps}
+    basemapSelected={basemapSelected}
+    onSelectBasemap={handleSelectBasemap}
+    onSuggestBasemap={() => (showSuggestionModal = true)}
+  />
+{/snippet}
+
+{#snippet importContent()}
+  <BasemapImportTab
+    importedBasemap={importedBasemap}
+    importError={importError}
+    importUploading={importUploading}
+    onFileDrop={handleFileDrop}
+    onFileInputChange={handleFileInputChange}
+    onLoadUrl={handleLoadUrl}
+  />
+{/snippet}
+
+{#snippet osmContent()}
+  <OSMBasemapSelector
+    hasGPSCoordinates={hasGPSCoordinates}
+    isActive={dataTabState.basemapJoin.basemapSource === BasemapSource.OSM &&
+      isOSMBasemapId(basemapSelected)}
+    onSelectOSM={handleSelectOSM}
+    onGoToVisualize={handleGoToVisualize}
+  />
+{/snippet}
+
+{#snippet joinSection()}
+  <JoinAssistedSection
+    joinRows={joinRows}
+    duplicates={duplicates}
+    unknowns={unknowns}
+    joinedCount={joinedCount}
+    toVerifyCount={toVerifyCount}
+    linkedVariableName={dataTabState.geolocation.linkedVariableName}
+    basemapValues={basemapAttributeValues}
+    loading={joinLoading}
+    joinFinalized={dataTabStore.hasCompletedStep[basemapStepIndex]}
+    joinedEntitiesList={joinedEntitiesList}
+    ignoredEntities={ignoredEntities}
+    duplicateLines={dataTabState.basemapJoin.duplicateLines}
+    onFinalizeJoin={handleFinalizeJoin}
+    onManualCorrection={handleManualCorrection}
+    onIgnoreEntity={handleIgnoreEntity}
+    onRestoreEntity={handleRestoreEntity}
+    onValidateEntity={handleValidateEntity}
+  />
+{/snippet}
+
 <section id="basemap-join-step">
-  <MainToolBarHeader title={stepTitle} icon={Earth} />
+  <MainToolBarHeader title={stepTitle} icon={Earth} showDivider />
 
-  <p class="kh-help">
-    {m.basemap_step_description()}
-    <InfoPopover text={m.basemap_step_info()} />
-  </p>
+  <p class="kh-help">{m.basemap_step_description()}</p>
 
-  <div class="basemap-tabs-wrapper">
-    <ToggleTabs
-      activeIndex={activeTabIndex}
-      items={tabItems}
-      onChange={(index) => {
-        activeTabIndex = index;
-        dataTabActions.setBasemapSource(tabIndexToBasemapSource(index));
-      }}
+  <div class="step-content">
+    <BasemapPanelContent
+      selectedSource={dataTabState.basemapJoin.basemapSource}
+      onSourceChange={handleBasemapSourceChange}
+      catalogContent={catalogContent}
+      importContent={importContent}
+      osmContent={osmContent}
+      joinSection={joinSection}
+      showJoinSection={!!basemapSelected && !isGPSModeActive}
     />
   </div>
-
-  {#if activeTabIndex === 0}
-    <BasemapCatalogTab
-      suggestedBasemaps={suggestedBasemaps}
-      allBasemaps={allBasemaps}
-      basemapSelected={basemapSelected}
-      onSelectBasemap={handleSelectBasemap}
-      onSuggestBasemap={() => (showSuggestionModal = true)}
-    />
-  {:else if activeTabIndex === 1}
-    <BasemapImportTab
-      importedBasemap={importedBasemap}
-      importError={importError}
-      importUploading={importUploading}
-      onFileDrop={handleFileDrop}
-      onFileInputChange={handleFileInputChange}
-      onLoadUrl={handleLoadUrl}
-    />
-  {:else if activeTabIndex === OSM_TAB_INDEX}
-    <BasemapOsmTab
-      hasGPSCoordinates={hasGPSCoordinates}
-      isActive={dataTabState.basemapJoin.basemapSource === BasemapSource.OSM &&
-        isOSMBasemapId(basemapSelected)}
-      onSelectOSM={handleSelectOSM}
-      onGoToVisualize={handleGoToVisualize}
-    />
-  {/if}
-
-  {#if basemapSelected && !isGPSModeActive}
-    <hr class="join-separator" />
-    <JoinAssistedSection
-      joinRows={joinRows}
-      duplicates={duplicates}
-      unknowns={unknowns}
-      joinedCount={joinedCount}
-      toVerifyCount={toVerifyCount}
-      linkedVariableName={dataTabState.geolocation.linkedVariableName}
-      basemapValues={basemapAttributeValues}
-      loading={joinLoading}
-      joinFinalized={dataTabStore.hasCompletedStep[basemapStepIndex]}
-      joinedEntitiesList={joinedEntitiesList}
-      ignoredEntities={ignoredEntities}
-      onFinalizeJoin={handleFinalizeJoin}
-      onManualCorrection={handleManualCorrection}
-      onIgnoreEntity={handleIgnoreEntity}
-      onRestoreEntity={handleRestoreEntity}
-      onValidateEntity={handleValidateEntity}
-    />
-  {/if}
 </section>
 
 <BasemapSuggestionModal
@@ -1705,27 +1666,14 @@
   }
 
   .kh-help {
-    color: var(--cds-text-secondary);
-    margin-bottom: 12px;
+    color: var(--cds-text-helper, #6f6f6f);
+    margin: 0 16px 12px;
+    padding-top: 16px;
     font-size: 14px;
     line-height: 18px;
   }
 
-  .basemap-tabs-wrapper {
-    margin-bottom: 12px;
-  }
-
-  .basemap-tabs-wrapper :global(.toggle-tab) {
-    height: 32px;
-  }
-
-  .basemap-tabs-wrapper :global(.toggle-tab.active) {
-    background-color: var(--cds-border-subtle-01);
-  }
-
-  .join-separator {
-    border: none;
-    border-top: 1px solid var(--cds-border-subtle-00, #e0e0e0);
-    margin: 0;
+  .step-content {
+    padding: 0 16px 16px;
   }
 </style>

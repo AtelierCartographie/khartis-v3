@@ -153,7 +153,7 @@
 
     <footer
       class={clsx(
-        'toolbar-footer p-5 border-t z-50',
+        'toolbar-footer border-t z-50',
         globalState.toolbarState === ToolbarState.Collapsed && 'opacity-0'
       )}
     >
@@ -197,24 +197,23 @@
               : m.join_status_pending()}
           />
         {/if}
-
-        <li>
-          <Button
-            on:click={mainToolbarActions.navigateToVisualization}
-            disabled={!canVisualizeNow}
-            icon={ArrowRight}
-            class="visualize-button"
-            tooltipPosition="top"
-            tooltipAlignment="end"
-            iconDescription={!canVisualizeNow
-              ? isGeographicMode
-                ? m.data_step_status_clean()
-                : m.join_status_pending()
-              : m.go_to_visualization()}
-            size="small">{m.data_tab_visualize()}</Button
-          >
-        </li>
       </ProgressIndicator>
+
+      <Button
+        on:click={mainToolbarActions.navigateToVisualization}
+        disabled={!canVisualizeNow}
+        icon={ArrowRight}
+        hasIconOnly={!canVisualizeNow}
+        class="visualize-button"
+        tooltipPosition="top"
+        tooltipAlignment="end"
+        iconDescription={!canVisualizeNow
+          ? isGeographicMode
+            ? m.data_step_status_clean()
+            : m.join_status_pending()
+          : m.go_to_visualization()}
+        size="small">{m.data_tab_visualize()}</Button
+      >
     </footer>
   {/if}
 </nav>
@@ -275,10 +274,6 @@
     overflow: hidden;
   }
 
-  #khartis-main-toolbar :global(.visualize-button) {
-    margin-left: var(--cds-spacing-05);
-  }
-
   .main-toolbar-header {
     top: 1px !important;
     background-color: var(--cds-ui-01);
@@ -297,5 +292,41 @@
     flex-shrink: 0;
     background-color: var(--cds-ui-01);
     border-color: var(--cds-border-subtle-00);
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-04);
+    padding: var(--cds-spacing-04) var(--cds-spacing-05);
+  }
+
+  #khartis-main-toolbar :global(.toolbar-footer .bx--progress) {
+    flex: 1;
+    min-width: 0;
+  }
+
+  #khartis-main-toolbar :global(.toolbar-footer .bx--progress-optional) {
+    display: none;
+  }
+
+  #khartis-main-toolbar
+    :global(
+      .toolbar-footer
+        .bx--progress-step:not(.bx--progress-step--current)
+        .bx--progress-label
+    ) {
+    display: none;
+  }
+
+  #khartis-main-toolbar
+    :global(
+      .toolbar-footer .bx--progress-step:not(.bx--progress-step--current)
+    ) {
+    flex: 0 0 2.5rem;
+    overflow: hidden;
+    min-width: 0;
+  }
+
+  #khartis-main-toolbar :global(.toolbar-footer .bx--progress-step--current) {
+    flex: 1;
+    min-width: 0;
   }
 </style>

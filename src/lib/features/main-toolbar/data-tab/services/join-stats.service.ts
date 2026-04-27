@@ -174,7 +174,8 @@ export async function computeDatasetJoinStats(
       (e) => e.status === JoinStatus.UNRECOGNIZED
     ).length,
     entities,
-    totalEntities: entities.length
+    totalEntities: entities.length,
+    duplicateLines: []
   };
 
   return stats;

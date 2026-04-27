@@ -1,7 +1,5 @@
 <script lang="ts">
   import { GEOID_SCORE_THRESHOLD } from '$lib/features/commons/components/advanced-data-table/column-type-styles';
-  import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
-  import VariableBadge from '$lib/features/commons/components/variable-badge.svelte';
   import type { VariableBadgeType } from '$lib/features/commons/components/variable-badge.types';
   import { GeoreferenceType } from '$lib/features/commons/constants/ui.constants';
   import {
@@ -25,12 +23,10 @@
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { detectGPSColumns } from '$lib/features/duckdb/orchestrator/gps-ops';
   import * as m from '$lib/paraglide/messages';
-  import { ComboBox, InlineNotification, Link } from 'carbon-components-svelte';
-  import ChartTSne from 'carbon-icons-svelte/lib/ChartTSne.svelte';
-  import { Launch, List, Map as MapIcon } from 'carbon-icons-svelte';
-  import { InfoPopover } from '$lib/features/commons/components/viz-controls';
+  import { InlineNotification, Link } from 'carbon-components-svelte';
+  import { Launch, Map as MapIcon } from 'carbon-icons-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
-  import type { GeoComboBoxItem } from './data-tab.shared.types';
+  import GeocodeSettings from './components/geocode-settings.svelte';
   import { dataTabStore } from './data-tab.store.svelte';
 
   const isCompact = $derived(globalState.toolbarState === ToolbarState.Compact);
@@ -254,34 +250,32 @@
     return undefined;
   });
 
-  let activeTabIndex = $state(
-    dataTabState.geolocation.geoReference === GeoreferenceType.COORDINATES
-      ? 1
-      : 0
-  );
-
   const GEO_LEARN_MORE_URL =
     'https://www.sciencespo.fr/cartographie/khartis/docs/importer-des-donnees/';
 
-  const tabItems = [
-    {
-      icon: List,
-      label: m.geo_entities_tab(),
-      iconSize: 16
-    },
-    {
-      icon: ChartTSne,
-      label: m.geo_coordinates_tab(),
-      iconSize: 16
-    }
-  ];
+  const isCoordinatesMode = $derived(
+    dataTabState.geolocation.geoReference === GeoreferenceType.COORDINATES
+  );
 
-  function handleTabChange(index: number) {
-    activeTabIndex = index;
+  function handleReferenceModeChange(mode: GeoreferenceType): void {
+    dataTabActions.setGeolocationState({ geoReference: mode });
+  }
+
+  function handleLinkedVariableSelect(id: number, columnName: string): void {
     dataTabActions.setGeolocationState({
-      geoReference:
-        index === 1 ? GeoreferenceType.COORDINATES : GeoreferenceType.ENTITIES
+      linkedVariable: id,
+      linkedVariableName: columnName
     });
+  }
+
+  function handleLongitudeSelect(id: number, columnName: string): void {
+    longitudeFieldId = id;
+    dataTabActions.setGeolocationState({ longitudeColumn: columnName });
+  }
+
+  function handleLatitudeSelect(id: number, columnName: string): void {
+    latitudeFieldId = id;
+    dataTabActions.setGeolocationState({ latitudeColumn: columnName });
   }
 
   let latitudeFieldId = $state<number | undefined>(undefined);
@@ -296,7 +290,6 @@
       previousDatasetId = currentDatasetId;
       latitudeFieldId = undefined;
       longitudeFieldId = undefined;
-      activeTabIndex = 0;
       columnAnalysisLoaded = false;
       previousAutoSelectedColumn = null;
       hasAutoGeoreferenceInitialization = false;
@@ -342,9 +335,8 @@
     if (
       !hasAutoGeoreferenceInitialization &&
       hasLatLon &&
-      activeTabIndex === 0
+      dataTabState.geolocation.geoReference !== GeoreferenceType.COORDINATES
     ) {
-      activeTabIndex = 1;
       dataTabActions.setGeolocationState({
         geoReference: GeoreferenceType.COORDINATES
       });
@@ -490,7 +482,7 @@
     let cancelled = false;
 
     if (
-      activeTabIndex === 1 &&
+      isCoordinatesMode &&
       tableName &&
       geo.latitudeColumn &&
       geo.longitudeColumn &&
@@ -515,132 +507,57 @@
 </script>
 
 <section id="geolocation-step">
-  <MainToolBarHeader title={stepTitle} icon={MapIcon} />
+  <MainToolBarHeader title={stepTitle} icon={MapIcon} showDivider />
 
   <p class="kh-help">
     {m.geo_step_description()}
-    <InfoPopover text={m.geo_step_info()} />
   </p>
 
-  <div class="tab-content">
-    <div
-      class="geo-controls-grid"
-      class:coordinates-mode={activeTabIndex === 1}
-      class:compact-mode={isCompact}
-    >
-      <div class="form-field">
-        <div class="field-label">
-          {m.geo_reference()}
-          <InfoPopover text={m.geo_reference_info()} />
-        </div>
-        <div class="tab-container">
-          <ToggleTabs
-            activeIndex={activeTabIndex}
-            items={tabItems}
-            onChange={handleTabChange}
-            className="geo-tabs"
-          />
-        </div>
-      </div>
+  <div class="step-content">
+    <GeocodeSettings
+      referenceMode={isCoordinatesMode
+        ? GeoreferenceType.COORDINATES
+        : GeoreferenceType.ENTITIES}
+      onReferenceModeChange={handleReferenceModeChange}
+      layout="single"
+      isCompact={isCompact}
+      referenceInfoText={m.geo_reference_info()}
+      primary={{
+        label: m.geo_linked_variable(),
+        infoText: m.geo_linked_variable_info(),
+        items: dataFieldItems(),
+        selectedId: geoFieldId(),
+        selectedColumnName:
+          dataTabState.geolocation.linkedVariableName || undefined,
+        badgeType: linkedVariableBadgeType,
+        placeholder: m.geo_select_variable(),
+        onSelect: handleLinkedVariableSelect
+      }}
+      longitude={{
+        label: m.geo_longitude(),
+        infoText: m.geo_longitude_info(),
+        items:
+          longitudeColumns().length > 0 ? longitudeColumns() : dataFieldItems(),
+        selectedId: longitudeFieldId,
+        selectedColumnName: dataTabState.geolocation.longitudeColumn,
+        badgeType: longitudeBadgeType,
+        placeholder: m.geo_select_longitude(),
+        onSelect: handleLongitudeSelect
+      }}
+      latitude={{
+        label: m.geo_latitude(),
+        infoText: m.geo_latitude_info(),
+        items:
+          latitudeColumns().length > 0 ? latitudeColumns() : dataFieldItems(),
+        selectedId: latitudeFieldId,
+        selectedColumnName: dataTabState.geolocation.latitudeColumn,
+        badgeType: latitudeBadgeType,
+        placeholder: m.geo_select_latitude(),
+        onSelect: handleLatitudeSelect
+      }}
+    />
 
-      <div class="form-field" class:hidden={activeTabIndex !== 0}>
-        <div class="field-label">
-          {m.geo_linked_variable()}
-          <InfoPopover text={m.geo_linked_variable_info()} />
-        </div>
-        <div class="combobox-with-badge">
-          <ComboBox
-            items={dataFieldItems()}
-            selectedId={geoFieldId()}
-            on:select={(e) => {
-              if (!e.detail.selectedItem) return;
-              dataTabActions.setGeolocationState({
-                linkedVariable: e.detail.selectedId,
-                linkedVariableName:
-                  (e.detail.selectedItem as GeoComboBoxItem)?.columnName || ''
-              });
-            }}
-            placeholder={m.geo_select_variable()}
-          />
-          {#if dataTabState.geolocation.linkedVariableName}
-            <div class="badge-overlay">
-              <VariableBadge
-                label={dataTabState.geolocation.linkedVariableName}
-                type={linkedVariableBadgeType}
-              />
-            </div>
-          {/if}
-        </div>
-      </div>
-
-      <div class="form-field" class:hidden={activeTabIndex !== 1}>
-        <div class="field-label">
-          {m.geo_longitude()}
-          <InfoPopover text={m.geo_longitude_info()} />
-        </div>
-        <div class="combobox-with-badge">
-          <ComboBox
-            items={longitudeColumns().length > 0
-              ? longitudeColumns()
-              : dataFieldItems()}
-            selectedId={longitudeFieldId}
-            on:select={(e) => {
-              if (!e.detail.selectedItem) return;
-              longitudeFieldId = e.detail.selectedId;
-              dataTabActions.setGeolocationState({
-                longitudeColumn: (e.detail.selectedItem as GeoComboBoxItem)
-                  ?.columnName
-              });
-            }}
-            placeholder={m.geo_select_longitude()}
-            labelText=""
-          />
-          {#if dataTabState.geolocation.longitudeColumn}
-            <div class="badge-overlay">
-              <VariableBadge
-                label={dataTabState.geolocation.longitudeColumn}
-                type={longitudeBadgeType}
-              />
-            </div>
-          {/if}
-        </div>
-      </div>
-
-      <div class="form-field" class:hidden={activeTabIndex !== 1}>
-        <div class="field-label">
-          {m.geo_latitude()}
-          <InfoPopover text={m.geo_latitude_info()} />
-        </div>
-        <div class="combobox-with-badge">
-          <ComboBox
-            items={latitudeColumns().length > 0
-              ? latitudeColumns()
-              : dataFieldItems()}
-            selectedId={latitudeFieldId}
-            on:select={(e) => {
-              if (!e.detail.selectedItem) return;
-              latitudeFieldId = e.detail.selectedId;
-              dataTabActions.setGeolocationState({
-                latitudeColumn: (e.detail.selectedItem as GeoComboBoxItem)
-                  ?.columnName
-              });
-            }}
-            placeholder={m.geo_select_latitude()}
-            labelText=""
-          />
-          {#if dataTabState.geolocation.latitudeColumn}
-            <div class="badge-overlay">
-              <VariableBadge
-                label={dataTabState.geolocation.latitudeColumn}
-                type={latitudeBadgeType}
-              />
-            </div>
-          {/if}
-        </div>
-      </div>
-    </div>
-
-    {#if activeTabIndex === 0 && suggestedColumn()}
+    {#if !isCoordinatesMode && suggestedColumn()}
       <InlineNotification
         title={m.geo_notification_title()}
         subtitle={m.geo_notification_subtitle()}
@@ -650,7 +567,7 @@
       />
     {/if}
 
-    {#if activeTabIndex === 1 && latitudeColumns().length > 0 && longitudeColumns().length > 0}
+    {#if isCoordinatesMode && latitudeColumns().length > 0 && longitudeColumns().length > 0}
       <InlineNotification
         title={m.geo_notification_title()}
         subtitle={m.geo_coords_detected_subtitle()}
@@ -660,7 +577,7 @@
       />
     {/if}
 
-    {#if activeTabIndex === 0 && suggestedColumn() && hasCategorizedOrNonUnique}
+    {#if !isCoordinatesMode && suggestedColumn() && hasCategorizedOrNonUnique}
       <InlineNotification
         title={m.geo_attention_categorized_title()}
         subtitle={m.geo_attention_categorized_subtitle()}
@@ -670,7 +587,7 @@
       />
     {/if}
 
-    {#if activeTabIndex === 1 && gpsValidation?.warning}
+    {#if isCoordinatesMode && gpsValidation?.warning}
       <InlineNotification
         title={gpsValidation.possibleInversion
           ? m.geo_coords_inversion_detected()
@@ -696,108 +613,17 @@
   }
 
   .kh-help {
-    color: var(--cds-text-secondary);
-    margin-bottom: 12px;
+    color: var(--cds-text-helper, #6f6f6f);
+    margin: 0 16px 12px;
+    padding-top: 16px;
     font-size: 14px;
     line-height: 18px;
   }
 
-  .tab-content {
-    padding-top: 12px;
-  }
-
-  .form-field {
-    margin-bottom: 12px;
-  }
-
-  .field-label {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    margin-bottom: 4px;
-    font-size: 12px;
-    color: var(--cds-text-secondary);
-    font-weight: 500;
-  }
-
-  .geo-controls-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-    align-items: start;
-    margin-bottom: 12px;
-  }
-
-  .geo-controls-grid.coordinates-mode {
-    grid-template-columns: 1fr 1fr 1fr;
-  }
-
-  .geo-controls-grid.compact-mode {
-    grid-template-columns: 1fr;
-  }
-
-  .geo-controls-grid.compact-mode.coordinates-mode {
-    grid-template-columns: 1fr;
-  }
-
-  .geo-controls-grid .form-field.hidden {
-    display: none;
-  }
-
-  .combobox-with-badge {
-    position: relative;
-  }
-
-  .badge-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 40px;
-    height: 40px;
+  .step-content {
     display: flex;
-    align-items: center;
-    padding: 0 8px;
-    pointer-events: none;
-    z-index: var(--z-base);
-  }
-
-  /* Hide ComboBox text when badge is showing */
-  .combobox-with-badge:has(.badge-overlay) :global(.bx--text-input) {
-    color: transparent;
-  }
-
-  /* Hide the clear (X) button behind the badge */
-  .combobox-with-badge:has(.badge-overlay) :global(.bx--list-box__selection) {
-    opacity: 0;
-  }
-
-  /* When focused (typing/filtering), hide badge and restore ComboBox */
-  .combobox-with-badge:focus-within .badge-overlay {
-    display: none;
-  }
-
-  .combobox-with-badge:focus-within :global(.bx--text-input) {
-    color: inherit !important;
-  }
-
-  .combobox-with-badge:focus-within :global(.bx--list-box__selection) {
-    opacity: 1 !important;
-  }
-
-  .tab-container {
-    margin-bottom: 0;
-  }
-
-  :global(.geo-tabs) {
-    width: 100%;
-    max-width: none;
-  }
-
-  :global(.geo-tabs .toggle-tab) {
-    height: 32px;
-  }
-
-  :global(.geo-tabs .toggle-tab.active) {
-    background-color: var(--cds-border-subtle-01);
+    flex-direction: column;
+    gap: 12px;
+    padding: 0 16px 16px;
   }
 </style>

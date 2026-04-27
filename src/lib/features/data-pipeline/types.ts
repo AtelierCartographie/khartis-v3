@@ -73,6 +73,7 @@ export function fromDuckDBType(duckType: string): ColumnType {
     normalized.includes('int') ||
     normalized.includes('double') ||
     normalized.includes('float') ||
+    normalized.includes('decimal') ||
     normalized.includes('numeric')
   ) {
     return ColumnType.NUMBER;

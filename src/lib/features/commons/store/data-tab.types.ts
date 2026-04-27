@@ -26,12 +26,14 @@ export interface GeolocationState {
 export interface JoinedEntity {
   dataValue: string;
   basemapValue: string;
+  otherIdentifiers?: string[];
 }
 
 export interface IgnoredEntity {
   dataValue: string;
   basemapValue?: string;
   source: 'joined' | 'to_verify' | 'unrecognized';
+  lines?: number[];
 }
 
 export interface BasemapJoinState {
@@ -48,6 +50,7 @@ export interface BasemapJoinState {
     basemapOptions: string[];
     selectedMapping: string;
   }>;
+  duplicateLines: Array<{ dataValue: string; lines: number[] }>;
 }
 
 export interface EnrichDataState {
@@ -73,7 +76,7 @@ export interface DataTabState {
 
 export type SerializedBasemapJoinState = Omit<
   BasemapJoinState,
-  'selectedBasemap' | 'basemapSource'
+  'selectedBasemap' | 'basemapSource' | 'duplicateLines'
 >;
 
 export interface SerializedDataTabState extends Omit<
