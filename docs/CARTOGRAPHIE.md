@@ -1,8 +1,60 @@
-# Cartographie thématique — Guide développeur
+# Cartographie thématique
 
-> Concepts cartographiques appliqués dans Khartis v3. Lire ARCHITECTURE.md et MAP.md d'abord pour le pipeline technique.
+> Concepts cartographiques et leur implémentation dans Khartis v3 : sémiotique, discrétisation, couleurs, projections, jointures et formats de géométrie.
 
-**Voir aussi** : [ARCHITECTURE](./ARCHITECTURE.md) — [MAP](./MAP.md) — [PIPELINE_DONNEES](./PIPELINE_DONNEES.md) — [DUCKDB](./DUCKDB.md) — [GUIDE_DEVELOPPEUR](./GUIDE_DEVELOPPEUR.md) — [LEGENDES](./LEGENDES.md)
+**Voir aussi** : [ARCHITECTURE.md](ARCHITECTURE.md) · [MAP.md](MAP.md) · [DUCKDB.md](DUCKDB.md) · [VISUALISATIONS.md](VISUALISATIONS.md) · [FONDS_DE_CARTE.md](FONDS_DE_CARTE.md)
+
+---
+
+## Formats de géométrie
+
+Comprendre les formats de géométrie est indispensable pour naviguer dans le code de rendu.
+
+**GeoArrow** est le format pivot de Khartis. Les coordonnées sont stockées dans des `TypedArray` continus (un `Float64Array` par dimension), ce qui permet un upload GPU direct sans parsing côté CPU. Tous les fonds du catalogue sont en **GeoParquet** (Parquet + colonne GeoArrow).
+
+**WKB (Well-Known Binary)** est le format interne de DuckDB Spatial (`ST_Read()`). DuckDB le retourne dans les Arrow tables sous une colonne `BLOB`. `geoarrow-deck-stream` le convertit en GeoArrow lors du parsing.
+
+**GeoJSON** est le format d'export et de fallback. Il n'est jamais utilisé comme chemin de rendu principal car sa sérialisation/désérialisation JavaScript est coûteuse.
+
+L'extension Arrow de la colonne géométrique (`geoarrow.polygon`, `geoarrow.multipolygon`, etc.) est lue par `extractGeometryInfo()` depuis les métadonnées du schéma Arrow pour choisir le bon parseur.
+
+---
+
+## `featureId` — liaison vertex / données
+
+Quand `geoarrow-deck-stream` parse une Arrow table en buffers binaires, chaque vertex reçoit un `featureId` — l'index de la ligne Arrow d'origine. Ce champ est un `Uint32Array` parallèle au tableau de positions.
+
+```typescript
+// polyData.featureIds[i] = index de la ligne Arrow pour le vertex i
+new SolidPolygonLayer({
+  ...createSolidPolygonLayerProps(polyData),
+  getFillColor: createPolygonFillColorAttribute(polyData, (featureId) => {
+    const value = valueColumn.get(featureId); // accès O(1) dans Arrow
+    return colorScale(value); // → [r, g, b, a]
+  })
+});
+```
+
+Sans `featureId`, il est impossible de retrouver à quelle entité appartient un vertex après projection ou découpage géométrique multipart.
+
+---
+
+## `modelMatrix` — mode orthographique
+
+En mode orthographique, Deck.gl utilise une `OrthographicView` (coordonnées pixel). Les géométries projetées par `geoarrow-deck-stream` sont en coordonnées de projection (ex. `[0..960] × [0..600]`). La `modelMatrix` (Matrix4) centre et met à l'échelle cette sortie dans le viewport Deck.gl.
+
+`projectionStore` (`map/stores/projection.store.svelte.ts`) recalcule cette matrice via `get_model_matrix_from_bbox(bbox, canvasSize)` à chaque changement de bbox ou de taille de canvas.
+
+---
+
+## Filtrage des Arrow tables
+
+Deux niveaux de filtre JavaScript sur les Arrow tables en mémoire (pas via DuckDB SQL, pour éviter un aller-retour à chaque interaction) :
+
+- `filterArrowTableByDataFilters(table, vizFilters, primitiveType)` — conditions de visualisation (`>=`, `<=`, `=`, `contains`, `between`, etc.) et filtre par type de primitive.
+- `filterArrowTableByTableFilters(table, tableFilters)` — sélection de lignes de la data table (cumulable avec le premier).
+
+Un troisième niveau GPU (`DataFilterExtension`) gère le filtre temporel côté Deck.gl. Voir [MAP.md](MAP.md).
 
 ---
 
@@ -10,122 +62,80 @@
 
 **Fichier** : `commons/utils/semio-detector.utils.ts`
 
-Chaque colonne est classée selon son **type sémiotique** (semioType) à partir des statistiques DuckDB :
+Chaque colonne est classée selon son **type sémiotique** (semioType) à partir des statistiques DuckDB. Ce classement guide la suggestion de visualisation.
 
-| SemioType | Signification            | Détection                                         | Usage cartographique    |
-| --------- | ------------------------ | ------------------------------------------------- | ----------------------- |
-| `QTA`     | Quantitatif absolu       | Entiers élevés, grande étendue, mots pop./surface | Symboles proportionnels |
-| `QTR`     | Quantitatif ratio        | Floats, plage 0-100, mots ratio/percent           | Choroplèthe             |
-| `QL`      | Qualitatif               | Faible unicité, répétitions, texte                | Catégoriel              |
-| `QLO`     | Qualitatif ordonné       | Mots-clés rang, intervalles ordonnés              | Catégoriel ordonné      |
-| `geoid`   | Identifiant géographique | Haute unicité, mots ID/code                       | Jointure                |
-| `geolat`  | Latitude                 | Valeurs ±90, mots lat/latitude                    | Géolocalisation         |
-| `geolon`  | Longitude                | Valeurs ±180, mots lon/lng                        | Géolocalisation         |
+| SemioType | Signification            | Détection                                        | Usage cartographique    |
+| --------- | ------------------------ | ------------------------------------------------ | ----------------------- |
+| `QTA`     | Quantitatif absolu       | Entiers élevés, grande étendue, mots pop/surface | Symboles proportionnels |
+| `QTR`     | Quantitatif ratio        | Floats, plage 0–100, mots ratio/percent          | Choroplèthe             |
+| `QL`      | Qualitatif               | Faible unicité, répétitions, texte               | Catégoriel              |
+| `QLO`     | Qualitatif ordonné       | Mots-clés rang, intervalles ordonnés             | Catégoriel ordonné      |
+| `geoid`   | Identifiant géographique | Haute unicité, mots id/code                      | Jointure                |
+| `geolat`  | Latitude                 | Valeurs ±90, mots lat/latitude                   | Géolocalisation         |
+| `geolon`  | Longitude                | Valeurs ±180, mots lon/longitude                 | Géolocalisation         |
 
-**Score sémiotique** : chaque détecteur rend un score (0–6.5). La colonne prend le semioType du score le plus élevé. Les scores servent au suggesteur de viz pour classer les colonnes par pertinence.
-
-**Mots-clés détectés** : `id`, `code`, `iso` (geoid) · `lat`, `latitude` / `lon`, `lng`, `longitude` (geo) · `ratio`, `rate`, `percent`, `pct`, `%`, `pour`, `taux` (QTR) · `rank`, `order`, `niveau`, `level` (QLO)
+Chaque détecteur produit un score (0–6.5). La colonne prend le semioType du score le plus élevé. Les noms de colonnes contenant des mots-clés d'identifiant (`id`, `fid`, `gid`, `oid`, `pk`, `code`, `iso`, `objectid`, `object_id`, `rowid`) sont classés comme `geoid` et exclus du ranking de suggestion.
 
 ---
 
 ## Les 4 types de visualisation
 
-**Fichier** : `commons/store/visualization.store.svelte.ts`
+| Type           | Variable     | Géométries        | Layer Deck.gl                                          |
+| -------------- | ------------ | ----------------- | ------------------------------------------------------ |
+| `CHOROPLETH`   | QTR (ratio)  | Polygones, lignes | `SolidPolygonLayer` / `PathLayer` — couleur par classe |
+| `PROPORTIONAL` | QTA (absolu) | Points, polygones | `ScatterplotLayer` — taille proportionnelle            |
+| `CATEGORICAL`  | QL / QLO     | Toute             | Geometry layer — couleur par catégorie                 |
+| `BIVARIATE`    | QTA + QL/QTR | Points, polygones | `ScatterplotLayer` — taille + couleur                  |
 
-| Type           | Variable   | Géométries                   | Layer Deck.gl                         |
-| -------------- | ---------- | ---------------------------- | ------------------------------------- |
-| `CHOROPLETH`   | QTR        | Polygones, lignes            | `SolidPolygonLayer` / `PathLayer`     |
-| `PROPORTIONAL` | QTA        | Points, polygones (centroid) | `ScatterplotLayer`                    |
-| `CATEGORICAL`  | QL / QLO   | Toute                        | Geometry layer                        |
-| `BIVARIATE`    | 2 colonnes | Points, polygones            | `ScatterplotLayer` (taille + couleur) |
+**Choroplèthe** : entités colorées selon un ratio. Les couleurs des catégories doivent être résolues depuis les labels complets de classification (pas depuis le preview limité `dataset.data`) pour éviter des catégories manquantes après import URL ou restauration de projet.
 
-**Choroplèthe** : polygones colorés selon une variable de ratio (densité, taux, pourcentage). Classification en classes → palette séquentielle ou divergente.
+**Proportionnel** : la taille des symboles est proportionnelle à une valeur absolue. Sur polygones, les symboles sont rendus sur les centroïdes. L'échelle (linéaire, sqrt, log) est bornée entre `minSize` et `maxSize`.
 
-**Proportionnel** : symboles dont la taille est proportionnelle à une valeur absolue (QTA : population, surface). Échelle linéaire, sqrt ou log. Sur données polygonales, les symboles sont rendus sur les centroïdes des entités, avec les contours disponibles comme contexte sans réactiver un aplat polygonal par défaut. Le calcul de taille s’appuie sur les statistiques complètes de colonne et reste borné entre `minSize` et `maxSize` pour éviter les symboles hors gabarit.
+**Catégoriel** : couleurs distinctes par catégorie. Pas de classement ordre.
 
-**Catégoriel** : couleurs différentes par catégorie (QL : pays, régions). Palette qualitative. Pas de classement ordre. Les couleurs doivent être résolues à partir des labels complets de classification ou de la table Arrow complète, jamais depuis le simple preview `dataset.data`, pour éviter des catégories manquantes ou des couleurs incohérentes après import URL, restauration de projet ou changement de filtre.
-
-**Bivarié** : combinaison taille + couleur pour deux variables. Ex : taille = population, couleur = taux d'urbanisation. Le preset de suggestion `symbols_proportional_double` est un cas particulier : il réutilise le pipeline bivarié, mais bascule en mode `proportionalType = DOUBLE` pour rendre deux séries de symboles proportionnels superposées à partir de `sizeColumn` et `valueColumn`.
-
-Par défaut, les primitives de texte (`labels`, `texts`) démarrent avec une couleur noire. Une couleur thématique n'est appliquée que si l'utilisateur active explicitement un mode couleur piloté par les données.
+**Bivarié** : combinaison taille + couleur pour deux variables. Le preset `symbols_proportional_double` (`proportionalType = DOUBLE`) rend deux séries de symboles proportionnels superposées.
 
 ---
 
-## Discrétisation (6 méthodes automatiques + manuel)
+## Discrétisation (classification)
 
 **Fichier** : `commons/services/classification.service.ts` + `duckdb/macros/breaks.ts`
 
-Implémentée via **macros SQL DuckDB** (appelées une fois à l'init, jamais rechargées) :
+Les seuils sont calculés via des **macros SQL DuckDB** — pas de chargement des valeurs en JavaScript. Si une macro échoue, `calculateBreaks()` retourne `null` (pas de fallback local).
 
-| Méthode          | Macro DuckDB     | Principe cartographique                                                    |
-| ---------------- | ---------------- | -------------------------------------------------------------------------- |
-| `KMEANS`         | `kmeans()`       | Seuils naturels par K-means — meilleur pour distributions clumpées         |
-| `QUANTILES`      | `quantile()`     | Fréquences égales par classe — bonne distribution uniforme                 |
-| `EQUAL_INTERVAL` | `equi_width()`   | Intervalles de même amplitude — lisibles mais sensibles aux outliers       |
-| `Q6`             | `q6()`           | 6 quantiles fixes (5e, 27.5e, 50e, 72.5e, 95e percentiles) — standardisé   |
-| `NESTED_MEANS`   | `nested_means()` | Moyennes emboîtées récursivement — distributions asymétriques              |
-| `HEAD_TAIL`      | `headtail2()`    | Head/Tail breaks — distributions à forte queue (power-law, exponentielles) |
-| `MANUAL`         | (aucune)         | Bornes saisies manuellement — contrôle total                               |
+| Méthode          | Macro DuckDB     | Principe                                                 |
+| ---------------- | ---------------- | -------------------------------------------------------- |
+| `KMEANS`         | `kmeans()`       | Seuils naturels — distributions clumpées                 |
+| `QUANTILES`      | `quantile()`     | Effectifs égaux par classe                               |
+| `EQUAL_INTERVAL` | `equi_width()`   | Intervalles de même amplitude                            |
+| `Q6`             | `q6()`           | 6 classes fixes (5e, 27.5e, 50e, 72.5e, 95e percentiles) |
+| `NESTED_MEANS`   | `nested_means()` | Moyennes emboîtées récursives                            |
+| `HEAD_TAIL`      | `headtail2()`    | Head/tail breaks — distributions à forte queue           |
+| `MANUAL`         | (aucune)         | Bornes saisies manuellement                              |
 
-**Pipeline** : `calculateBreaks()` → récupère min/max via DuckDB → appelle la macro → `round_thresholds()` (arrondi lisible) → COUNT par classe via un seul `CASE WHEN` → `BreaksResult { breaks[], counts[], min, max }`.
+**Pipeline** : `calculateBreaks()` → min/max via DuckDB → macro → `round_thresholds()` (arrondi lisible) → COUNT par classe (un seul `CASE WHEN`) → `BreaksResult { breaks[], counts[], min, max }`.
 
-**Règle de performance** : les méthodes automatiques ne calculent pas les seuils côté TypeScript et ne chargent pas toutes les valeurs de colonne en mémoire JS. Si une macro DuckDB échoue ou ne renvoie aucun seuil exploitable, `calculateBreaks()` retourne `null` au lieu de produire un fallback local.
+**Extraction du résultat** : les macros retournent une `LIST<DOUBLE>` via la bibliothèque `@uwdata/flechette`. Utiliser le helper `toIterableValues(raw)` qui gère `Array`, `TypedArray`, et tout itérable. Ne jamais tester `Array.isArray()` seul : une `Float64Array.subarray()` (retour normal d'une `DirectBatch` sans null) retournerait `false` et serait à tort rejetée.
 
-**Mémorisation** : `breaksCache` (Map, 50 entrées max) — évite les requêtes redondantes sur simple changement de style.
-
-### Extraction des valeurs d'une colonne `LIST<…>` Flechette
-
-Le runtime DuckDB-WASM retourne les résultats via [`@uwdata/flechette`](https://github.com/uwdata/flechette) (équivalent léger d'Apache Arrow JS). Les macros de classification retournent toutes une colonne `LIST<DOUBLE>` ou `LIST<INT>`. L'extraction traverse cette chaîne :
-
-```
-Table.getChild('breaks')    → Column         (Flechette)
-Column.get(0) === Column.at(0)
-   → ListBatch.value(0)     (for Type.List)
-   → children[0].slice(offsets[0], offsets[1])
-```
-
-Ce dernier `slice()` dépend du type de la batch enfant :
-
-| Batch enfant               | Type DuckDB source     | `slice()` retourne                  | `Array.isArray()` |
-| -------------------------- | ---------------------- | ----------------------------------- | ----------------- |
-| `DirectBatch` (sans null)  | `INT32`, `DOUBLE`, …   | `TypedArray.subarray()` (zero-copy) | **`false`**       |
-| Batch avec nulls           | idem + validity bitmap | `Array` avec valeurs et `null`      | `true`            |
-| `Utf8Batch`, `DateBatch`…  | `VARCHAR`, `DATE`, …   | `Array` transformé                  | `true`            |
-| Liste vide (offsets égaux) | —                      | TypedArray ou Array de longueur 0   | selon batch       |
-| Ligne hors plage           | —                      | `undefined`                         | `false`           |
-
-**Règle** : ne **jamais** tester `Array.isArray(rawList)` seul. Passer par le helper interne `toIterableValues(raw)` qui reconnaît `Array`, `TypedArray` et tout itérable via `Symbol.iterator`, coerce avec `Number()`, puis filtre `NaN`/`null`. Le helper retourne `null` si la valeur n'est pas itérable (scalaire, undefined) et un tableau éventuellement vide sinon.
-
-**Pièges déjà rencontrés dans cette zone** :
-
-1. **Rejet incorrect des résultats DuckDB** pour toute méthode macro (`kmeans`, `quantile`, `equi_width`, `q6`, `nested_means`, `headtail2`) si le check `Array.isArray` rejette une `Float64Array` subarray.
-2. **Arrondis ignorés** par `round_thresholds` si son résultat passe le même check naïf — la carte affiche les breaks bruts non arrondis.
-3. **Breaks effacés** si `round_thresholds` retourne un tableau vide : il faut garder les breaks originaux plutôt que renvoyer `[]`.
-
-Ces cas sont couverts par `tests/pipeline/classification.service.test.ts` (suites `macro methods` et `Flechette edge cases` — Array plain, TypedArray, Iterable générique, Array avec nulls, liste vide, scalaire, `undefined`, BigInt).
+**Cache** : `breaksCache` (Map, 50 entrées max) évite les requêtes redondantes sur simple changement de style.
 
 ---
 
-## Génération de couleurs (Oklch)
+## Génération de couleurs (espace Oklch)
 
 **Fichier** : `commons/services/classification.service.ts` — `generateColorsForBreaks()`
 
-Couleur via `@ateliercartographie/ok-palette` en **espace Oklch** (perceptuellement uniforme) :
+Toutes les couleurs passent par `@ateliercartographie/ok-palette` en espace **Oklch** (perceptuellement uniforme). Ne jamais générer de rampes manuellement.
 
-| Type de palette  | Usage                              | Construction                                                |
-| ---------------- | ---------------------------------- | ----------------------------------------------------------- |
-| **Séquentielle** | Choroplèthe (QTR), proportionnel   | `sequential(colorStart, colorEnd, numClasses)`              |
-| **Divergente**   | Choroplèthe avec valeur de rupture | `divergentSequential(colorA, colorB, steps[half, half])`    |
-| **Qualitative**  | Catégoriel                         | Palette prédéfinie (set1, set2, pastel, dark) — pas générée |
+| Type de palette  | Usage                              | Construction                                   |
+| ---------------- | ---------------------------------- | ---------------------------------------------- |
+| **Séquentielle** | Choroplèthe (QTR), proportionnel   | `sequential(colorStart, colorEnd, numClasses)` |
+| **Divergente**   | Choroplèthe avec valeur de rupture | `divergentSequential(colorA, colorB, steps)`   |
+| **Qualitative**  | Catégoriel                         | Palette prédéfinie (set1, set2, pastel, dark)  |
 
-**Couleurs par défaut** :
+Les couleurs par défaut : séquentielle `#f7fbff` → `#08519c` ; divergente `#b2182b` ↔ `#2166ac`. L'option `contrast` active le mode accessibilité WCAG.
 
-- Séquentielle : `#f7fbff` (clair) → `#08519c` (foncé)
-- Divergente : `#b2182b` (rouge) ↔ `#2166ac` (bleu)
-
-**Options de contraste** : mode `contrast` (accessibilité WCAG) passé à `ok-palette`.
-
-**Motifs accessibles** : 10 formes hatchées via `@ateliercartographie/motif.js` + `RotatableFillStyleExtension`. Chaque motif = atlas texture SVG → texture WebGL → `SolidPolygonLayer.fillTexture`. Activé via `patternId` dans `ClassificationConfig`.
+**Motifs hatch accessibles** : 10 formes via `@ateliercartographie/motif.js` + `RotatableFillStyleExtension`. Chaque motif est un atlas texture SVG → texture WebGL → `fillTexture` du `SolidPolygonLayer`. Activé via `patternId` dans `ClassificationConfig`.
 
 ---
 
@@ -133,93 +143,49 @@ Couleur via `@ateliercartographie/ok-palette` en **espace Oklch** (perceptuellem
 
 **Fichier** : `commons/services/viz-suggester.service.ts`
 
-24 patterns de suggestion combinant géométrie + semioTypes + nombre de colonnes :
+24 patterns combinant géométrie, semioTypes et nombre de colonnes. Algorithme :
 
-| Pattern                            | Colonnes   | Géométries     | Résultat                      |
-| ---------------------------------- | ---------- | -------------- | ----------------------------- |
-| `choropleth`                       | 1 QTR      | polygon        | CHOROPLETH                    |
-| `symbols_proportional`             | 1 QTA      | point, polygon | PROPORTIONAL                  |
-| `polygons_colorful_QL`             | 1 QL       | polygon        | CATEGORICAL                   |
-| `symbols_proportional_colorful_QL` | 2 (QTA+QL) | point, polygon | BIVARIATE                     |
-| `symbols_uniques`                  | 0          | point, polygon | CATEGORICAL (géométrie seule) |
-| `lines_proportional`               | 1 QTA      | line           | PROPORTIONAL (lignes)         |
-| ... et 18 autres                   |            |                |                               |
+1. Enrichir chaque colonne avec son semioType + score.
+2. Trier par score décroissant, écarter `geoid`, `geolat`, `geolon`.
+3. Générer les suggestions 1-colonne (choroplèthe, proportionnel, catégoriel…) puis 2-colonnes (bivarié).
+4. Retourner les 3 meilleures par score (`avgScore / 6.5 * 100`).
 
-**Algorithme** :
+La sélection d'une suggestion applique le preset complet du type cible (modes, primitives, style, mapping, classification), puis des overrides spécifiques au pattern (`QTA+QL` → couleur catégorielle, `QTA+QTR` → couleur en classes, `QTA+QTA` → double proportionnel).
 
-1. Enrichir chaque colonne avec son semioType + score
-2. Trier par score décroissant, écarter geoid/geolat/geolon
-3. Générer les suggestions 1-colonne, puis 2-colonnes
-4. Retourner les 3 meilleures par score calculé (`avgScore / 6.5 * 100`)
-
-**Mapping** : `visualization-tab/suggestion.utils.ts::mapSuggestionToType()` fait la correspondance suggestion ID → `VisualizationType`.
-La sélection d'une suggestion réapplique le preset complet du type cible (modes, primitives, style, mapping, classification) avant d'affecter les colonnes proposées, puis applique des overrides spécifiques au pattern (`QTA+QL` → couleur catégorielle, `QTA+QTR` → couleur en classes, `QTA+QTA` → double proportionnel).
-Les suggestions `texts_*` réutilisent le type `BIVARIATE`, mais elles reconfigurent explicitement le rendu texte: `labelColumn` pour le contenu, `categoryColumn` ou `valueColumn` ou `sizeColumn` pour la variable secondaire, opacité texte activée, couches symboles rendues invisibles, et `texts_proportional` active `modes.size = proportional` afin que la taille des textes suive la variable quantitative.
-Les identifiants techniques de type SIG (`OGC_FID`, `FID`, `OBJECTID`, `GID`, `rowid`, etc.) doivent être classés comme identifiants et exclus du ranking final pour éviter de suggérer des cartes proportionnelles sur des clés auto-générées.
+Les suggestions `texts_*` reconfigurent explicitement le rendu texte : `labelColumn` pour le contenu, variable secondaire pour taille/couleur, couches symboles rendues invisibles.
 
 ---
 
 ## Projections cartographiques
 
-**Fichier** : `commons/utils/projection.utils.ts` + `map/utils/proj4d3.ts`
+**Fichiers** : `commons/utils/projection.utils.ts` + `map/utils/proj4d3.ts`
 
-12 projections intégrées via d3-geo + d3-geo-projection :
+19 projections intégrées via d3-geo + d3-geo-projection. 12 sont nommément référencées par le CDC :
 
-| Nom                   | Usage                     |
-| --------------------- | ------------------------- |
-| Mercator              | Web (OSM)                 |
-| Robinson              | Monde, usage général      |
-| Winkel Tripel         | Atlas mondial             |
-| Orthographique        | Globe                     |
-| Natural Earth         | Projection standard Atlas |
-| Équirectangulaire     | Plat, données brutes      |
-| Albers                | USA, thématiques          |
-| Conique Conforme      | Zones régionales          |
-| Stéréographique       | Pôles                     |
-| Azimutale Équivalente | Pôles                     |
-| Aitoff                | Atlas elliptique          |
-| Mollweide             | Monde, surfaces propor.   |
+| Nom                   | Usage                                   |
+| --------------------- | --------------------------------------- |
+| Mercator              | Web, fond OSM                           |
+| Robinson              | Monde, usage général                    |
+| Winkel Tripel         | Atlas mondial                           |
+| Natural Earth         | Projection standard Atlas               |
+| Équirectangulaire     | Données brutes, grille régulière        |
+| Orthographique        | Globe                                   |
+| Albers                | USA, projections thématiques régionales |
+| Lambert Conformal     | Zones régionales                        |
+| Stéréographique       | Pôles                                   |
+| Azimutale Équivalente | Pôles, surfaces proportionnelles        |
+| Aitoff                | Atlas elliptique                        |
+| Mollweide             | Monde, surfaces proportionnelles        |
 
-**Suggestion algorithmique** : selon Snyder 1987 / Savric 2016 via l'algo `proj-suggest` (repo privé AtelierCartographie). Khartis suggère la projection nationale (EPSG) ou générique (d3-geo pure).
+7 projections supplémentaires sont disponibles via le catalogue étendu : Gall-Peters, Equal Earth, Bonne, Armadillo, Atlantis, Bertin-1953, Interrupted Mollweide.
 
-**Projections composites** (DOM-TOM) : `FRANCE_DOM_TOM` = Lambert-93 principal + encarts ultra-marins. Bounds et layout prédéfinis dans `static/basemaps/projection-presets.json`.
+Une **catégorie « Nationale »** dans l'outil Projection associe chaque pays/zone à sa projection officielle via son code EPSG. Exemples : Europe → LAEA (EPSG:3035), France → Lambert-93 (EPSG:2154), Royaume-Uni → OSGB36 (EPSG:27700), Irlande → ITM (EPSG:2157), Suisse → Swiss Oblique Mercator (EPSG:2056). Le code complet vit dans `step-toolbar/tools/projections/data.ts` et `national-region-label.ts`.
 
-**Reprojection** :
+**`proj4d3(proj4string)`** (`map/utils/proj4d3.ts`) crée un objet `GeoProjection` compatible d3-geo à partir d'une chaîne PROJ.4. Ce pont est nécessaire car `geoarrow-deck-stream` attend une interface d3-geo. Les noms PROJ.4 sans équivalent dans proj4.js (ex. `natearth2`) sont mappés manuellement vers des constructeurs d3-geo dans `D3_GEO_PROJECTION_MAP`.
 
-- DuckDB natif : `ST_Transform(geom, fromCRS, 'EPSG:4326')` — fonctionne pour EPSG:3857, UTM, la plupart des EPSG
-- Fallback client proj4 : EPSG:2154, 27572, 3035 (CRS France non supportés par DuckDB spatial)
-  - Points : 5 000 / batch
-  - Polygones/lignes : 1 000 / batch
+**Projections composites** (DOM-TOM) : `FRANCE_DOM_TOM` = Lambert-93 principal + 6 encarts ultra-marins. Bounds et layout prédéfinis dans `static/basemaps/projection-presets.json`.
 
----
-
-## Fonds de carte
-
-### Catalogue GeoParquet
-
-111 fonds multi-resolution (low/medium/high). Architecture geoarrow natif :
-
-```mermaid
-flowchart LR
-    PQ["parquet<br/>(geoarrow)"] --> PW["parquet-wasm"] --> AT["Arrow table"] --> GAD["geoarrow-deck-stream"] --> DG["Deck.gl"]
-```
-
-**JAMAIS via DuckDB**.
-
-Métadonnées dans `all-basemaps-metadata.json`. Attributs (noms de régions) dans `all-basemaps-attributes.parquet` (chargé via DuckDB uniquement au moment d'une jointure). Les couches annexes de basemap (limites, graticules, lignes géographiques) sont chargées à la demande selon les couches visibles.
-
-### Carte Facile
-
-6 styles MapLibre GL JSON :
-
-- France / Monde × couleurs / niveaux-de-gris / satellite
-- Styles IGN (France) + OpenMapTiles (Monde)
-
-Catalogue des groupes de calques dans `carte-facile-layer-groups.ts` — chaque groupe affichable/masquable avec opacité, couleur, épaisseur, pointillés.
-
-### Fond importé
-
-Format GeoJSON ou Shapefile. Reprojection via DuckDB. Personnalisation limitée (pas de couches additionnelles).
+**Suggestion algorithmique** : Khartis suggère une projection selon l'emprise réelle des données (pas l'emprise du fond monde). Pour un dataset exclusivement ponctuel ou GPS, les suggestions sont calculées depuis les coordonnées des points, pas depuis l'emprise du fond.
 
 ---
 
@@ -227,101 +193,22 @@ Format GeoJSON ou Shapefile. Reprojection via DuckDB. Personnalisation limitée 
 
 **Fichier** : `duckdb/orchestrator/join-ops.ts`
 
-4 catégories de résultat (couleur dans l'UI) :
+La jointure associe les données tabulaires (colonne identifiant) aux géométries du fond de carte (attributs normalisés). Quatre catégories de résultat :
 
-| Status        | Signification                         | Couleur |
-| ------------- | ------------------------------------- | ------- |
-| Jointes       | Correspondance exacte ou fuzzy (vert) | Vert    |
-| À vérifier    | Score Jaro-Winkler 0.85–0.99 (jaune)  | Jaune   |
-| Non uniques   | Plusieurs correspondances (orange)    | Orange  |
-| Non reconnues | Aucune correspondance (rouge)         | Rouge   |
+| Statut           | Signification                        | Score Jaro-Winkler |
+| ---------------- | ------------------------------------ | ------------------ |
+| ✅ Jointes       | Correspondance exacte ou fuzzy haute | = 1.0              |
+| ⚠️ À vérifier    | Score partiel                        | 0.85 – 0.99        |
+| 🟠 Non uniques   | Plusieurs correspondances possibles  | —                  |
+| ❌ Non reconnues | Aucune correspondance                | < 0.85             |
 
 **Algorithme** :
 
-1. Construire similarity cache : cross-join source × basemap_attributes avec `jaro_winkler_similarity(normalize_text_join(), 0.85)` — filtrage précoce sur score > 0 (évite OOM)
-2. `normalize_text_join()` = normalize_text sans lowercase final (préserve la casse pour le matching)
-3. Catégories dérivées du cache : exact (=1), partial (0.85–0.99), no_match
+1. Construction du cache de similarité : cross-join source × attributs fond avec `jaro_winkler_similarity(normalize_text_join(), 0.85)`.
+2. `normalize_text_join()` normalise sans lowercase final (préserve la casse pour le matching).
+3. Catégories dérivées du cache : exact (=1), partial (0.85–0.99), no_match.
 
-**Attributs** : `basemap_attributes.parquet` — pré-normalisés (colonne `normalized`) pour éviter de re-normaliser à chaque requête.
-
-**Cache d'invalidation** : `invalidateSimilarityCache()` — appelé après toute correction utilisateur qui modifie les valeurs sources.
-
----
-
-## Annotations
-
-**Fichier** : `map/components/annotation-overlay.svelte` + `step-toolbar/tools/annotations/`
-
-SVG overlay (pas de canvas — annotations vectorielles). Ancrées page, non géolocalisées. 4 types :
-
-| Type      | Contenu                                    |
-| --------- | ------------------------------------------ |
-| `TEXT`    | Texte libre (police, taille, couleur)      |
-| `SHAPE`   | Flèche, ligne, cercle, rectangle, triangle |
-| `DRAWING` | Tracé Bézier libre (freehand)              |
-| `IMAGE`   | Image importée (URL ou upload)             |
-
-Stockées dans `annotations.store.svelte.ts` — synchronisées avec la config du projet (.kh export).
-
----
-
-## Légende
-
-**Fichier** : `step-toolbar/tools/legend/legend.store.svelte.ts`
-
-Génération automatique dès création de visualisation. Types de contenus :
-
-| Type viz / mode       | Contenu légende                                                                 |
-| --------------------- | ------------------------------------------------------------------------------- |
-| Choroplèthe           | Rampe de couleurs (classes + seuils)                                            |
-| Catégoriel            | Swatches discrètes, avec primitive cohérente avec la visualisation              |
-| Proportionnel         | Échelle de tailles (min, intermédiaire, max)                                    |
-| Symboles en classes   | Échelle discrète de tailles par classe                                          |
-| Lignes en couleur     | Swatches linéaires (classes ou catégories)                                      |
-| Lignes en épaisseur   | Échelle d’épaisseurs (proportionnelle ou par classes)                           |
-| Textes en couleur     | Swatches à symbole texte, qualitatifs ou quantitatifs                           |
-| Textes proportionnels | Échelle de tailles utilisant le symbole texte                                   |
-| Textes bivariés       | Combinaison compacte des segments couleur + taille                              |
-| Motif                 | Swatches avec motif hatch (accessibilité)                                       |
-| Données manquantes    | Entrée dédiée reflétant la représentation choisie (surface, rond, carré, croix) |
-
-Légendes synchronisées avec `visualizationStore` via `syncWithVisualizations()`. Items déplaçables (4 coins), personnalisables (police, taille, couleur texte, fond, opacité).
-
----
-
-## Indications géographiques
-
-**Fichier** : `step-toolbar/tools/geo-indications/`
-
-| Type                | Options                                                         |
-| ------------------- | --------------------------------------------------------------- |
-| **Échelle**         | Ligne ou boîte — km/miles                                       |
-| **Orientation**     | Flèche direction nord ou rose des vents                         |
-| **Carte en encart** | Globe ou planisphère — réutilise les couleurs du fond principal |
-
----
-
-## Simulation daltonisme
-
-**Fichier** : `step-toolbar/tools/color-blindness/`
-
-Filtres CSS sur la carte (simulation — n'affecte pas l'export) :
-
-- Protanopie (rouge absent)
-- Deutéranopie (vert absent)
-- Tritanopie (bleu absent)
-
-Implémentation via propriété CSS `filter` sur le conteneur de la carte.
-
----
-
-## Collections / Facettes
-
-**Fichier** : `step-toolbar/tools/facets/`
-
-Small multiples : chaque variable → une carte. Chaque facette = **full ThematicMap** (MapLibre + Deck.gl indépendant). Synchronisation du view state via `FacetSyncViewState`.
-
-Limite : 9 facettes = 9 contexts WebGL2 (browser max : 8–16 — monitorer GPU).
+`basemap_attributes.parquet` contient les attributs pré-normalisés (colonne `normalized`) pour éviter de re-normaliser à chaque requête. `invalidateSimilarityCache()` est appelé après toute correction utilisateur.
 
 ---
 
@@ -329,32 +216,66 @@ Limite : 9 facettes = 9 contexts WebGL2 (browser max : 8–16 — monitorer GPU)
 
 **Fichier** : `commons/store/visualization.store.svelte.ts` — `MissingDataConfig`
 
-Configurer l'affichage des entités sans valeur :
+Les entités sans valeur dans la colonne de mapping sont rendues avec une représentation distincte configurable :
 
-- Forme (carré, cercle, triangle, etc.)
-- Taille
-- Couleur
-- Opacité
-- Label texte optionnel
+| Propriété          | Options                                                   |
+| ------------------ | --------------------------------------------------------- |
+| `enabled` / `show` | Active la représentation et son affichage dans la légende |
+| `shape`            | carré, cercle, triangle, croix                            |
+| `size`             | en px                                                     |
+| `color`            | picker couleur                                            |
+| `opacity`          | 0–1                                                       |
+| `pattern`          | motif hatch optionnel                                     |
+| `label`            | texte affiché dans la légende                             |
 
----
-
-## Flux complet de creation de viz
-
-```mermaid
-flowchart TB
-    DR["DatasetResult<br/>(Arrow table)"]
-    SEMIO["Semio detection<br/>(par colonne)<br/>→ semioType + score"]
-    SUGG["vizSuggester<br/>.suggestVisualizations()<br/>→ 3 suggestions max"]
-    MAP["mapSuggestionToType()<br/>→ VisualizationType"]
-    CONF["VisualizationConfig<br/>{ type, mapping, style, modes }"]
-    BREAKS["calculateBreaks()<br/>(DuckDB macro)<br/>→ breaks[] + counts[]"]
-    COLORS["generateColorsForBreaks()<br/>(ok-palette)<br/>→ hex[]"]
-    DL["Arrow table<br/>→ createDeckLayers()<br/>→ GPU"]
-
-    DR --> SEMIO --> SUGG --> MAP --> CONF --> BREAKS --> COLORS --> DL
-```
+La légende inclut automatiquement une entrée "Données manquantes" quand des entités sans valeur sont présentes.
 
 ---
 
-**Voir aussi :** [ARCHITECTURE.md](./ARCHITECTURE.md) — [MAP.md](./MAP.md) — [PIPELINE_DONNEES.md](./PIPELINE_DONNEES.md) — [DUCKDB.md](./DUCKDB.md) — [GUIDE_DEVELOPPEUR.md](./GUIDE_DEVELOPPEUR.md)
+## Fonds de carte — vue d'ensemble
+
+Dans Khartis, **données et géométries sont séparées** :
+
+- **Fond de carte** = géométries (GeoParquet colonne GeoArrow) + attributs (Parquet format long).
+- **Données utilisateur** = CSV ou fichier géo avec valeurs par entité.
+- **Jointure DuckDB** : identifiant fond ↔ identifiant données → Arrow table combinée.
+
+**Catalogue** : 29 fonds (familles géographiques) multi-résolution (low/medium/high quand disponibles). Métadonnées dans `all-basemaps-metadata.json`. Attributs dans `all-basemaps-attributes.parquet` (chargé dans DuckDB uniquement lors d'une jointure).
+
+**Fonds personnalisés** : GeoJSON, Shapefile ou GeoPackage importés à l'exécution. Pipeline d'import : `ST_Read()` → nettoyage géométrie → couches POLYGON/LINE/POINT + CENTROID. Voir [FONDS_DE_CARTE.md](FONDS_DE_CARTE.md) pour le format détaillé.
+
+**Carte Facile (OSM)** : 6 styles MapLibre GL JSON (France/Monde × couleurs/niveaux-de-gris/satellite). Pour les données GPS, le fond OSM est superposé directement sans jointure.
+
+---
+
+## Annotations
+
+**Fichiers** : `map/components/annotation-overlay.svelte` + `step-toolbar/tools/annotations/`
+
+SVG overlay superposé à la carte (non géolocalisé — ancré à la page en coordonnées pixel). 4 types :
+
+| Type      | Contenu                                    |
+| --------- | ------------------------------------------ |
+| `TEXT`    | Texte libre, police, taille, couleur       |
+| `SHAPE`   | Flèche, ligne, cercle, rectangle, triangle |
+| `DRAWING` | Tracé Bézier freehand                      |
+| `IMAGE`   | Image importée (URL ou upload)             |
+
+Stockées dans `annotations.store.svelte.ts`, incluses dans le snapshot projet et exportées dans le SVG.
+
+---
+
+## Simulation daltonisme
+
+**Fichier** : `step-toolbar/tools/color-blindness/`
+
+Filtre CSS sur le conteneur de la carte. **Simulation seulement — n'affecte pas l'export** :
+
+| Mode (`ColorBlindnessType`) | Déficience simulée        |
+| --------------------------- | ------------------------- |
+| `PROTANOPIA`                | Insensibilité au rouge    |
+| `DEUTERANOPIA`              | Insensibilité au vert     |
+| `TRITANOPIA`                | Insensibilité au bleu     |
+| `ACHROMATOPSIA`             | Vision en niveaux de gris |
+
+Les palettes qualitatives proposent un filtre `Daltonisme` qui substitue les couleurs par des alternatives sûres, calculées via `COLORBLIND_SAFE_INDICES` dans `palette.constants.ts`.
