@@ -48,11 +48,10 @@
     type WorkspaceViewportBounds
   } from '$lib/features/commons/utils/workspace-viewport.utils';
   import StepToolbar from '$lib/features/step-toolbar/step-toolbar.svelte';
-  import { Tag, Theme } from 'carbon-components-svelte';
-  import { WarningAltFilled } from 'carbon-icons-svelte';
+  import { Theme } from 'carbon-components-svelte';
+  import GlobalLoadingIndicator from '$lib/features/commons/components/global-loading-indicator.svelte';
   import { onMount, untrack } from 'svelte';
   import type { Component } from 'svelte';
-  import * as m from '$lib/paraglide/messages';
   import ColorBlindnessNotification from '$lib/features/step-toolbar/tools/color-blindness/color-blindness-notification.svelte';
 
   import '$lib/features/commons/assets/styles/dimension.css';
@@ -617,13 +616,7 @@
 
       <MobileOpenPanelButton />
 
-      {#if projectStore.isDirty}
-        <div class="unsaved-indicator">
-          <Tag type="warm-gray" size="sm" icon={WarningAltFilled}>
-            {m.unsaved_changes_notice()}
-          </Tag>
-        </div>
-      {/if}
+      <GlobalLoadingIndicator />
 
       {#if showMobileColorBlindnessNotification}
         <div class="colorblind-notification">
@@ -765,15 +758,6 @@
   .workspace-panning :global(.page-grid),
   .workspace-panning :global(.page-container) {
     cursor: grabbing;
-  }
-
-  .unsaved-indicator {
-    position: absolute;
-    top: var(--cds-spacing-03);
-    right: var(--cds-spacing-03);
-    z-index: var(--z-content);
-    pointer-events: none;
-    opacity: 0.85;
   }
 
   .colorblind-notification {
