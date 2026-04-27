@@ -12,7 +12,14 @@
   } from '$lib/features/commons/types/global';
   import * as m from '$lib/paraglide/messages';
   import { ProgressIndicator, ProgressStep } from 'carbon-components-svelte';
-  import { ArrowRight, OpenPanelFilledRight } from 'carbon-icons-svelte';
+  import {
+    ArrowRight,
+    CheckmarkOutline,
+    ChevronLeft,
+    ChevronRight,
+    CircleDash,
+    OpenPanelFilledRight
+  } from 'carbon-icons-svelte';
   import clsx from 'clsx';
   import { tick } from 'svelte';
   import ToolbarTabs from './components/toolbar-tabs.svelte';
@@ -33,6 +40,18 @@
   const hasToolbarPanel = $derived(
     globalState.selectedStep !== ToolbarStep.Styling
   );
+
+  const isCompact = $derived(globalState.toolbarState === ToolbarState.Compact);
+
+  const totalSteps = $derived(dataTabStore.isGeographicMode ? 2 : 3);
+
+  const currentStepLabel = $derived.by(() => {
+    const idx = dataTabStore.activeStepIndex;
+    if (idx === 0) return m.data_tab_control();
+    if (dataTabStore.isGeographicMode) return m.data_tab_enrich();
+    if (idx === 1) return m.data_tab_geolocate();
+    return m.data_tab_join();
+  });
 
   const DATA_STEP_SECTION_IDS: Record<string, string[]> = {
     geo: ['data-control-step', 'enrich-data-step'],
@@ -157,47 +176,77 @@
         globalState.toolbarState === ToolbarState.Collapsed && 'opacity-0'
       )}
     >
-      <ProgressIndicator
-        currentIndex={activeStepIndex}
-        spaceEqually
-        on:change={(e) => handleBreadcrumbStep(e.detail)}
-      >
-        <ProgressStep
-          complete={dataTabStore.hasCompletedStep[0]}
-          label={m.data_tab_control()}
-          description={dataTabStore.hasCompletedStep[0]
-            ? m.data_step_status_controlled()
-            : m.data_step_status_clean()}
-        />
+      {#if isCompact}
+        <div class="compact-steps">
+          <IconButton
+            kind="ghost"
+            size="sm"
+            icon={ChevronLeft}
+            iconDescription={m.data_step_previous()}
+            disabled={activeStepIndex === 0}
+            on:click={() => handleBreadcrumbStep(activeStepIndex - 1)}
+          />
+          <span class="compact-step-label">
+            {#if dataTabStore.hasCompletedStep[activeStepIndex]}
+              <CheckmarkOutline size={16} class="step-icon" />
+            {:else}
+              <CircleDash size={16} class="step-icon" />
+            {/if}
+            {activeStepIndex +
+              1}&thinsp;/&thinsp;{totalSteps}&ensp;·&ensp;{currentStepLabel}
+          </span>
+          <IconButton
+            kind="ghost"
+            size="sm"
+            icon={ChevronRight}
+            iconDescription={m.data_step_next()}
+            disabled={!dataTabStore.canNavigateToStep[activeStepIndex + 1]}
+            on:click={() => handleBreadcrumbStep(activeStepIndex + 1)}
+          />
+        </div>
+      {:else}
+        <ProgressIndicator
+          currentIndex={activeStepIndex}
+          spaceEqually
+          on:change={(e) => handleBreadcrumbStep(e.detail)}
+        >
+          <ProgressStep
+            complete={dataTabStore.hasCompletedStep[0]}
+            label={m.data_tab_control()}
+            description={dataTabStore.hasCompletedStep[0]
+              ? m.data_step_status_controlled()
+              : m.data_step_status_clean()}
+          />
 
-        {#if isGeographicMode}
-          <ProgressStep
-            complete={dataTabStore.hasCompletedStep[1]}
-            disabled={!dataTabStore.canNavigateToStep[1]}
-            label={m.data_tab_enrich()}
-            description={dataTabStore.hasCompletedStep[1]
-              ? m.enrich_status_done()
-              : m.enrich_status_pending()}
-          />
-        {:else}
-          <ProgressStep
-            complete={dataTabStore.hasCompletedStep[1]}
-            disabled={!dataTabStore.canNavigateToStep[1]}
-            label={m.data_tab_geolocate()}
-            description={dataTabStore.hasCompletedStep[1]
-              ? m.geolocation_status_done()
-              : m.geolocation_status_pending()}
-          />
-          <ProgressStep
-            complete={dataTabStore.hasCompletedStep[2]}
-            disabled={!dataTabStore.canNavigateToStep[2]}
-            label={m.data_tab_join()}
-            description={dataTabStore.hasCompletedStep[2]
-              ? m.join_status_done()
-              : m.join_status_pending()}
-          />
-        {/if}
-      </ProgressIndicator>
+          {#if isGeographicMode}
+            <ProgressStep
+              complete={dataTabStore.hasCompletedStep[1]}
+              disabled={!dataTabStore.canNavigateToStep[1]}
+              label={m.data_tab_enrich()}
+              description={dataTabStore.hasCompletedStep[1]
+                ? m.enrich_status_done()
+                : m.enrich_status_pending()}
+            />
+          {:else}
+            <ProgressStep
+              complete={dataTabStore.hasCompletedStep[1]}
+              disabled={!dataTabStore.canNavigateToStep[1]}
+              label={m.data_tab_geolocate()}
+              description={dataTabStore.hasCompletedStep[1]
+                ? m.geolocation_status_done()
+                : m.geolocation_status_pending()}
+            />
+            <ProgressStep
+              complete={dataTabStore.hasCompletedStep[2]}
+              disabled={!dataTabStore.canNavigateToStep[2]}
+              label={m.data_tab_join()}
+              description={dataTabStore.hasCompletedStep[2]
+                ? m.join_status_done()
+                : m.join_status_pending()}
+            />
+          {/if}
+        </ProgressIndicator>
+      {/if}
 
       <Button
         on:click={mainToolbarActions.navigateToVisualization}
@@ -307,26 +356,29 @@
     display: none;
   }
 
-  #khartis-main-toolbar
-    :global(
-      .toolbar-footer
-        .bx--progress-step:not(.bx--progress-step--current)
-        .bx--progress-label
-    ) {
-    display: none;
-  }
-
-  #khartis-main-toolbar
-    :global(
-      .toolbar-footer .bx--progress-step:not(.bx--progress-step--current)
-    ) {
-    flex: 0 0 2.5rem;
-    overflow: hidden;
-    min-width: 0;
-  }
-
-  #khartis-main-toolbar :global(.toolbar-footer .bx--progress-step--current) {
+  .compact-steps {
+    display: flex;
+    align-items: center;
     flex: 1;
     min-width: 0;
+    gap: var(--cds-spacing-02);
+  }
+
+  .compact-step-label {
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-02);
+    flex: 1;
+    min-width: 0;
+    font-size: 0.875rem;
+    line-height: 1.125rem;
+    color: var(--cds-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  #khartis-main-toolbar :global(.step-icon) {
+    flex-shrink: 0;
   }
 </style>
