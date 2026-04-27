@@ -29,9 +29,7 @@ describe('JoinAssistedSection — otherIdentifiers tooltip (S1.1c.iii)', () => {
   });
 
   it('renders an InfoPopover with otherIds.title for joined entity rows', () => {
-    expect(source).toContain(
-      'text={otherIds.title ??\n                              m.join_no_other_identifiers_tooltip()}'
-    );
+    expect(source).toContain('text={otherIds.title}');
   });
 
   it('marks the validated action as a disabled button with validated aria-label', () => {
