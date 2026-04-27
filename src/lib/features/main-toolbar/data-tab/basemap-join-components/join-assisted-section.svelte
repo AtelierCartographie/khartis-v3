@@ -14,7 +14,6 @@
     ChevronDown,
     ChevronUp,
     ErrorFilled,
-    Information,
     MagicWand,
     Misuse,
     Renew,
@@ -22,7 +21,7 @@
     WarningFilled
   } from 'carbon-icons-svelte';
   import { InfoPopover } from '$lib/features/commons/components/viz-controls';
-  import { SvelteSet } from 'svelte/reactivity';
+  import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 
   type IgnoreSource = 'joined' | 'to_verify' | 'unrecognized';
 
@@ -204,6 +203,26 @@
   $effect(() => attachVirtualizer(toVerifyVirt, toVerifyScrollEl));
   $effect(() => attachVirtualizer(unrecognizedVirt, unrecognizedScrollEl));
 
+  const pendingUnrecognizedSelections = new SvelteMap<string, string>();
+
+  function handleUnrecognizedSelect(
+    entity: string,
+    item: ComboBoxItem | undefined
+  ): void {
+    if (item) {
+      pendingUnrecognizedSelections.set(entity, item.text);
+    } else {
+      pendingUnrecognizedSelections.delete(entity);
+    }
+  }
+
+  function handleUnrecognizedValidate(entity: string): void {
+    const value = pendingUnrecognizedSelections.get(entity);
+    if (!value) return;
+    pendingUnrecognizedSelections.delete(entity);
+    onManualCorrection?.(entity, value);
+  }
+
   function buildToVerifyOptions(suggestions: string[]): string[] {
     const merged: string[] = [];
     for (const suggestion of suggestions) {
@@ -316,6 +335,7 @@
   }
 
   let wasLoading = $state(false);
+  let hasInitializedExpanded = $state(false);
   let notificationSnapshot = $state<NotificationSnapshot>({
     hasBlockingErrors: false,
     showSuccessNotification: false,
@@ -327,8 +347,9 @@
   );
 
   $effect(() => {
-    if (loading && !wasLoading) {
+    if (loading && !wasLoading && !hasInitializedExpanded) {
       resetToDefaultExpanded();
+      hasInitializedExpanded = true;
     }
 
     wasLoading = loading;
@@ -461,16 +482,12 @@
                         {/if}
                       </div>
                       <div class="row-actions">
-                        <button
-                          type="button"
-                          class="row-action"
-                          class:row-action-disabled={!otherIds.title}
-                          aria-label={m.join_action_info()}
-                          title={otherIds.title ??
-                            m.join_no_other_identifiers_tooltip()}
-                        >
-                          <Information size={20} />
-                        </button>
+                        <span class="row-action row-action-info">
+                          <InfoPopover
+                            text={otherIds.title ??
+                              m.join_no_other_identifiers_tooltip()}
+                          />
+                        </span>
                         <button
                           type="button"
                           class="row-action"
@@ -484,12 +501,15 @@
                         >
                           <Misuse size={20} />
                         </button>
-                        <span
-                          class="row-action row-action-done"
+                        <button
+                          type="button"
+                          class="row-action row-action-validate row-action-disabled"
                           aria-label={m.join_action_validated()}
+                          title={m.join_action_validated()}
+                          disabled
                         >
                           <CheckmarkFilled size={20} />
-                        </span>
+                        </button>
                       </div>
                     </div>
                   {/each}
@@ -575,14 +595,9 @@
                       {/if}
                     </div>
                     <div class="row-actions">
-                      <button
-                        type="button"
-                        class="row-action"
-                        aria-label={m.join_action_info()}
-                        title={m.join_to_verify_info_tooltip()}
-                      >
-                        <Information size={20} />
-                      </button>
+                      <span class="row-action row-action-info">
+                        <InfoPopover text={m.join_to_verify_info_tooltip()} />
+                      </span>
                       <button
                         type="button"
                         class="row-action"
@@ -656,6 +671,8 @@
               </div>
               <div class="join-table-scroll" bind:this={unrecognizedScrollEl}>
                 {#each unknowns as entity (entity)}
+                  {@const hasPendingSelection =
+                    pendingUnrecognizedSelections.has(entity)}
                   <div class="table-row" use:observeUnrecognizedRow={entity}>
                     <div class="table-cell cell-data">{entity}</div>
                     <div class="table-cell cell-equals">=</div>
@@ -666,14 +683,13 @@
                             items={basemapComboBoxItems}
                             placeholder={m.join_unrecognized_correction_placeholder()}
                             size="sm"
-                            on:select={(e) => {
-                              const item = e.detail.selectedItem as
-                                | ComboBoxItem
-                                | undefined;
-                              if (item) {
-                                onManualCorrection?.(entity, item.text);
-                              }
-                            }}
+                            on:select={(e) =>
+                              handleUnrecognizedSelect(
+                                entity,
+                                e.detail.selectedItem as
+                                  | ComboBoxItem
+                                  | undefined
+                              )}
                           />
                         {:else}
                           <Select
@@ -696,14 +712,11 @@
                       {/if}
                     </div>
                     <div class="row-actions">
-                      <button
-                        type="button"
-                        class="row-action"
-                        aria-label={m.join_action_info()}
-                        title={m.join_unrecognized_info_tooltip()}
-                      >
-                        <Information size={20} />
-                      </button>
+                      <span class="row-action row-action-info">
+                        <InfoPopover
+                          text={m.join_unrecognized_info_tooltip()}
+                        />
+                      </span>
                       <button
                         type="button"
                         class="row-action"
@@ -712,12 +725,19 @@
                       >
                         <Misuse size={20} />
                       </button>
-                      <span
-                        class="row-action row-action-disabled"
-                        aria-label={m.join_action_validate_disabled()}
+                      <button
+                        type="button"
+                        class="row-action row-action-validate"
+                        class:row-action-disabled={!hasPendingSelection}
+                        aria-label={m.join_action_validate()}
+                        title={hasPendingSelection
+                          ? m.join_action_validate()
+                          : m.join_action_validate_disabled()}
+                        disabled={!hasPendingSelection}
+                        onclick={() => handleUnrecognizedValidate(entity)}
                       >
                         <CheckmarkFilled size={20} />
-                      </span>
+                      </button>
                     </div>
                   </div>
                 {/each}
@@ -727,143 +747,126 @@
         {/if}
       </div>
 
-      {#if duplicateCount > 0}
-        <div class="category-row category-row-duplicates">
-          <button
-            class="category-row-header"
-            onclick={() => (duplicatesExpanded = !duplicatesExpanded)}
-            aria-expanded={duplicatesExpanded}
+      <div class="category-row category-row-duplicates">
+        <button
+          class="category-row-header"
+          onclick={() => (duplicatesExpanded = !duplicatesExpanded)}
+          aria-expanded={duplicatesExpanded}
+        >
+          <span class="category-icon icon-warning-alt">
+            <WarningAltFilled size={20} />
+          </span>
+          <div class="category-count count-warning-alt">{duplicateCount}</div>
+          <span class="category-label label-warning-alt"
+            >{m.join_entities_duplicate({ count: duplicateCount })}</span
           >
-            <span class="category-icon icon-warning-alt">
-              <WarningAltFilled size={20} />
-            </span>
-            <div class="category-count count-warning-alt">{duplicateCount}</div>
-            <span class="category-label label-warning-alt"
-              >{m.join_entities_duplicate({ count: duplicateCount })}</span
-            >
-            <span class="category-chevron">
-              {#if duplicatesExpanded}
-                <ChevronUp size={20} />
-              {:else}
-                <ChevronDown size={20} />
-              {/if}
-            </span>
-          </button>
-          {#if duplicatesExpanded}
-            <div class="category-body">
-              <div class="inline-banner inline-banner-error">
-                {m.join_duplicates_explanation()}
+          <span class="category-chevron">
+            {#if duplicatesExpanded}
+              <ChevronUp size={20} />
+            {:else}
+              <ChevronDown size={20} />
+            {/if}
+          </span>
+        </button>
+        {#if duplicatesExpanded}
+          <div class="category-body">
+            <div class="inline-banner inline-banner-error">
+              {m.join_duplicates_explanation()}
+            </div>
+            <div class="join-table join-table-error">
+              <div class="table-header">
+                <div class="table-header-left">
+                  <span class="table-header-label">{m.join_data_column()}</span>
+                  {#if linkedVariableName}
+                    <VariableBadge label={linkedVariableName} type="geo-ref" />
+                  {/if}
+                </div>
+                <div class="table-header-right">
+                  <span class="table-header-label">{m.join_lines_column()}</span
+                  >
+                </div>
               </div>
-              <div class="join-table join-table-error">
-                <div class="table-header">
-                  <div class="table-header-left">
-                    <span class="table-header-label"
-                      >{m.join_data_column()}</span
-                    >
-                    {#if linkedVariableName}
-                      <VariableBadge
-                        label={linkedVariableName}
-                        type="geo-ref"
-                      />
+              {#each duplicates as entity (entity)}
+                <div class="table-row table-row-lines">
+                  <div class="table-cell cell-data">{entity}</div>
+                  <div class="table-cell cell-lines">
+                    {#if duplicateLinesByValue[entity]?.length}
+                      {duplicateLinesByValue[entity].join(', ')}
+                    {:else}
+                      &mdash;
                     {/if}
                   </div>
-                  <div class="table-header-right">
-                    <span class="table-header-label"
-                      >{m.join_lines_column()}</span
-                    >
-                  </div>
                 </div>
-                {#each duplicates as entity (entity)}
-                  <div class="table-row table-row-lines">
-                    <div class="table-cell cell-data">{entity}</div>
-                    <div class="table-cell cell-lines">
-                      {#if duplicateLinesByValue[entity]?.length}
-                        {duplicateLinesByValue[entity].join(', ')}
-                      {:else}
-                        &mdash;
-                      {/if}
-                    </div>
-                  </div>
-                {/each}
-              </div>
+              {/each}
             </div>
-          {/if}
-        </div>
-      {/if}
+          </div>
+        {/if}
+      </div>
 
-      {#if ignoredCount > 0}
-        <div class="category-row category-row-ignored">
-          <button
-            class="category-row-header"
-            onclick={() => (ignoredExpanded = !ignoredExpanded)}
-            aria-expanded={ignoredExpanded}
+      <div class="category-row category-row-ignored">
+        <button
+          class="category-row-header"
+          onclick={() => (ignoredExpanded = !ignoredExpanded)}
+          aria-expanded={ignoredExpanded}
+        >
+          <span class="category-icon icon-ignored">
+            <Misuse size={20} />
+          </span>
+          <div class="category-count count-ignored">{ignoredCount}</div>
+          <span class="category-label label-ignored"
+            >{m.join_entities_ignored({ count: ignoredCount })}</span
           >
-            <span class="category-icon icon-ignored">
-              <Misuse size={20} />
-            </span>
-            <div class="category-count count-ignored">{ignoredCount}</div>
-            <span class="category-label label-ignored"
-              >{m.join_entities_ignored({ count: ignoredCount })}</span
-            >
-            <span class="category-chevron">
-              {#if ignoredExpanded}
-                <ChevronUp size={20} />
-              {:else}
-                <ChevronDown size={20} />
-              {/if}
-            </span>
-          </button>
-          {#if ignoredExpanded}
-            <div class="category-body">
-              <div class="inline-banner inline-banner-info">
-                {m.join_ignored_explanation()}
+          <span class="category-chevron">
+            {#if ignoredExpanded}
+              <ChevronUp size={20} />
+            {:else}
+              <ChevronDown size={20} />
+            {/if}
+          </span>
+        </button>
+        {#if ignoredExpanded}
+          <div class="category-body">
+            <div class="inline-banner inline-banner-info">
+              {m.join_ignored_explanation()}
+            </div>
+            <div class="join-table join-table-info">
+              <div class="table-header">
+                <div class="table-header-left">
+                  <span class="table-header-label">{m.join_data_column()}</span>
+                  {#if linkedVariableName}
+                    <VariableBadge label={linkedVariableName} type="geo-ref" />
+                  {/if}
+                </div>
+                <div class="table-header-right">
+                  <span class="table-header-label">{m.join_line_column()}</span>
+                </div>
               </div>
-              <div class="join-table join-table-info">
-                <div class="table-header">
-                  <div class="table-header-left">
-                    <span class="table-header-label"
-                      >{m.join_data_column()}</span
-                    >
-                    {#if linkedVariableName}
-                      <VariableBadge
-                        label={linkedVariableName}
-                        type="geo-ref"
-                      />
+              {#each ignoredEntities as entry (entry.dataValue)}
+                <div class="table-row table-row-lines">
+                  <div class="table-cell cell-data">{entry.dataValue}</div>
+                  <div class="table-cell cell-lines">
+                    {#if entry.lines.length}
+                      {entry.lines.join(', ')}
+                    {:else}
+                      &mdash;
                     {/if}
                   </div>
-                  <div class="table-header-right">
-                    <span class="table-header-label"
-                      >{m.join_line_column()}</span
+                  <div class="row-actions row-actions-compact">
+                    <button
+                      type="button"
+                      class="row-action"
+                      aria-label={m.join_action_restore()}
+                      onclick={() => handleRestore(entry.dataValue)}
                     >
+                      <Renew size={20} />
+                    </button>
                   </div>
                 </div>
-                {#each ignoredEntities as entry (entry.dataValue)}
-                  <div class="table-row table-row-lines">
-                    <div class="table-cell cell-data">{entry.dataValue}</div>
-                    <div class="table-cell cell-lines">
-                      {#if entry.lines.length}
-                        {entry.lines.join(', ')}
-                      {:else}
-                        &mdash;
-                      {/if}
-                    </div>
-                    <div class="row-actions row-actions-compact">
-                      <button
-                        type="button"
-                        class="row-action"
-                        aria-label={m.join_action_restore()}
-                        onclick={() => handleRestore(entry.dataValue)}
-                      >
-                        <Renew size={20} />
-                      </button>
-                    </div>
-                  </div>
-                {/each}
-              </div>
+              {/each}
             </div>
-          {/if}
-        </div>
-      {/if}
+          </div>
+        {/if}
+      </div>
     </div>
 
     <div class="join-status-zone">
@@ -1288,13 +1291,28 @@
     transition: background-color 0.15s;
   }
 
-  .row-action:hover:not(.row-action-disabled):not(.row-action-done) {
+  .row-action:hover:not(.row-action-disabled) {
     background-color: rgba(0, 0, 0, 0.05);
   }
 
   .row-action:focus-visible {
     outline: 2px solid var(--cds-focus, #0f62fe);
     outline-offset: -2px;
+  }
+
+  .row-action-info {
+    cursor: default;
+  }
+
+  .row-action-info :global(.info-btn) {
+    width: 100%;
+    height: 100%;
+    color: var(--cds-icon-primary, #161616);
+  }
+
+  .row-action-info :global(.info-btn svg) {
+    width: 20px;
+    height: 20px;
   }
 
   .row-action-validate {
@@ -1308,15 +1326,6 @@
 
   .row-action[disabled] :global(svg) {
     fill: var(--cds-icon-on-color-disabled, #c6c6c6);
-  }
-
-  .row-action-done {
-    color: #161616;
-    cursor: default;
-  }
-
-  .row-action-done :global(svg) {
-    fill: #161616;
   }
 
   .row-action-disabled {
