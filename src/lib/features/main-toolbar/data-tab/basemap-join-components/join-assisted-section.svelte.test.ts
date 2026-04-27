@@ -28,17 +28,22 @@ describe('JoinAssistedSection — otherIdentifiers tooltip (S1.1c.iii)', () => {
     expect(source).toContain('row.otherIdentifiers');
   });
 
-  it('binds the info button title to otherIds.title', () => {
+  it('renders an InfoPopover with otherIds.title for joined entity rows', () => {
     expect(source).toContain(
-      'title={otherIds.title ??\n                            m.join_no_other_identifiers_tooltip()}'
+      'text={otherIds.title ??\n                              m.join_no_other_identifiers_tooltip()}'
     );
   });
 
-  it('disables the info button when there are no other identifiers', () => {
-    expect(source).toContain('class:row-action-disabled={!otherIds.title}');
+  it('marks the validated action as a disabled button with validated aria-label', () => {
+    expect(source).toContain('aria-label={m.join_action_validated()}');
+    expect(source).toContain(
+      'class="row-action row-action-validate row-action-disabled"'
+    );
+    expect(source).toContain('disabled');
   });
 
-  it('uses aria-label for the info button regardless of disabled state', () => {
-    expect(source).toContain('aria-label={m.join_action_info()}');
+  it('uses aria-label for ignore and validate actions', () => {
+    expect(source).toContain('aria-label={m.join_action_ignore()}');
+    expect(source).toContain('aria-label={m.join_action_validate()}');
   });
 });
