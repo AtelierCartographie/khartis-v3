@@ -1,80 +1,54 @@
-# DuckDB — Guide développeur
+# DuckDB
 
-> Comment le moteur DuckDB WASM fonctionne dans Khartis v3.
+> Architecture et API du moteur DuckDB WASM dans Khartis v3.
 
-**Prérequis** : lire [ARCHITECTURE.md](./ARCHITECTURE.md) et [PIPELINE_DONNEES.md](./PIPELINE_DONNEES.md) d'abord.
-
-**Voir aussi** : [FONDS_DE_CARTE.md](./FONDS_DE_CARTE.md) | [MAP.md](./MAP.md) | [CARTOGRAPHIE.md](./CARTOGRAPHIE.md)
+**Voir aussi** : [ARCHITECTURE.md](ARCHITECTURE.md) · [PIPELINE_DONNEES.md](PIPELINE_DONNEES.md) · [MAP.md](MAP.md) · [FONDS_DE_CARTE.md](FONDS_DE_CARTE.md)
 
 ---
 
 ## Architecture en 3 couches
 
-```mermaid
-flowchart TB
-    subgraph "Svelte 5 store"
-        ORCH["duckDBOrchestrator<br/>(orchestrator.svelte.ts)<br/>dataset/column/join/filter/search/GPS ops<br/>état datasets, filtres, Arrow tables"]
-    end
-
-    subgraph "Façade singleton"
-        DUCK["Duck (duck.ts)<br/>query, read_tabular, read_geofile<br/>analyse, searchInTable, join_by_id<br/>invalidateTableCache, cleanupTableResources"]
-    end
-
-    subgraph "Moteur + opérations"
-        CORE["duckdb/core/<br/>(engine, query)<br/>Initialisation WASM + exécution SQL"]
-        IO["duckdb/io/<br/>(readers, exporters)<br/>Lecture fichiers, Arrow, export"]
-        OPS["duckdb/operations/<br/>(analysis, join, search…)<br/>Logique métier SQL"]
-        CACHE["duckdb/cache/<br/>(cache-manager.ts)<br/>Cache mémoire describe/rowcount"]
-        MACROS["duckdb/macros/<br/>(breaks, join, search…)<br/>Macros SQL enregistrées à l'init"]
-    end
-
-    ORCH --> DUCK
-    DUCK --> CORE
-    DUCK --> IO
-    DUCK --> OPS
-    DUCK --> CACHE
-    DUCK --> MACROS
-
-    style ORCH fill:#e1f5fe
-    style DUCK fill:#fff3e0
-    style CORE fill:#f3e5f5
-    style IO fill:#f3e5f5
-    style OPS fill:#f3e5f5
-    style CACHE fill:#f3e5f5
-    style MACROS fill:#f3e5f5
+```
+duckDBOrchestrator          ← point d'entrée pour tout code applicatif
+        ↓
+    Duck (façade)           ← API publique bas niveau
+        ↓
+duckdb/core/   duckdb/io/   duckdb/operations/   duckdb/cache/   duckdb/macros/
 ```
 
-**Règle** : tout code applicatif appelle `duckDBOrchestrator`, jamais `Duck` directement. `Duck` est réservé au code de plus bas niveau.
+**Règle d'accès** : tout code applicatif passe par `duckDBOrchestrator`. La façade `Duck` est réservée au code de bas niveau (pipeline, orchestrateur lui-même). Ne jamais instancier `AsyncDuckDB` directement.
 
 ---
 
-## Initialisation (`initDuckDB`)
+## Initialisation
 
 ```typescript
-// duck.ts
+// Appelé une seule fois au démarrage dans +layout.svelte
 await initDuckDB();
 
 // Ce qui se passe :
-// 1. initEngine()        — charge DuckDB WASM, ouvre la connexion
-// 2. loadMacros()        — enregistre les macros SQL (breaks, analyse, join, search, simplification)
-// 3. Configure le repo d'extensions local (/duckdb-extensions)
+// 1. initEngine()    — charge DuckDB WASM (bundle mvp ou eh selon le navigateur),
+//                      ouvre la connexion via Web Worker
+// 2. loadMacros()    — enregistre les macros SQL (breaks, analyse, join, search, simplification)
+// 3. LOAD spatial    — chargé une seule fois à l'init, jamais dans le code feature
 ```
 
-L'init est **idempotente et dédupliquée** : les appels concurrents avant la première résolution réutilisent la même Promise. Après un échec, la promise est réinitialisée pour permettre un retry.
-
-En pratique côté navigateur, Khartis sert maintenant le document principal avec COOP/COEP pour obtenir un environnement réellement `crossOriginIsolated`, mais le cœur DuckDB WASM reste sur les bundles `mvp` ou `eh`. Cela garde le chemin d'extensions `spatial` compatible tout en laissant les imports géographiques lourds s'appuyer sur un document navigateur isolé quand des workers sont nécessaires.
+L'init est **idempotente** : les appels concurrents réutilisent la même Promise. Après un échec, la Promise est réinitialisée pour permettre un retry. DuckDB WASM utilise les bundles `mvp` (baseline) ou `eh` (exception handling) selon les capacités du navigateur, sélectionnés via `selectBundle()`.
 
 ---
 
-## `Duck` — API publique
+## Façade `Duck` — API publique
 
 ```typescript
 import { Duck } from '$lib/features/duckdb/duck';
 
-// Lecture
-await Duck.query('SELECT * FROM table', { format: 'array' | 'arrow' });
-await Duck.read_tabular(file); // CSV/TSV → DuckDB table
+// Requêtes
+await Duck.query('SELECT * FROM t', { format: 'array' | 'arrow' });
+
+// Lecture de fichiers (crée une table DuckDB)
+await Duck.read_tabular(file); // CSV/TSV/Parquet → table
 await Duck.read_geofile(file); // GeoJSON/SHP/GPX → table avec géométrie
+await Duck.read_geofile(file, { shapefile: true }); // Shapefile bundle
 await Duck.read_link(url); // Fichier distant → table
 
 // Analyse
@@ -84,202 +58,142 @@ await Duck.describeColumns(tableName); // Type + null_count par colonne
 // Cache
 Duck.invalidateTableCache(tableName); // Invalide describeCache + rowCountCache
 Duck.get_table_metadata(tableName); // → { analysis, join, filters }
-Duck.cleanupTableResources(tableName); // Supprime loaded_files + registered_files + metadata
+Duck.cleanupTableResources(tableName); // Supprime fichiers enregistrés + métadonnées
 ```
 
-**Attention** : `Duck.cleanupTableResources()` ne supprime la table DuckDB que si le préfixe est `tmp_` (fichiers éphémères importés). Les tables permanentes ne sont jamais supprimées par cleanup.
+> `Duck.cleanupTableResources()` **ne supprime jamais la table DuckDB** elle-même. Il nettoie uniquement les ressources associées : fichiers enregistrés (`registered_files`), entrées des caches (`describeCache`, `rowCountCache`, `table_metadata`). Pour supprimer la table, appeler `dropTable()` séparément via l'orchestrateur.
 
 ---
 
 ## Macros SQL
 
-Enregistrées une seule fois dans `loadMacros()`. Chaque macro définit des fonctions ou procédures SQL réutilisées dans tout le pipeline.
+Les macros sont enregistrées une fois dans `loadMacros()`. Elles définissent des fonctions SQL réutilisables dans tout le pipeline. Ne jamais les appeler manuellement en dehors des services qui les encapsulent.
 
-### `simplification_macros`
+### Macros de classification (`breaks_macros`)
 
-8 macros couvrant polygones et lignes (`duckdb/macros/simplification.ts`) :
+Ces macros calculent les seuils de discrétisation directement en SQL, sans charger les valeurs en JavaScript. Elles retournent une colonne `LIST<DOUBLE>`.
 
 ```sql
-snap_topology_normalized(table, geom_col, tolerance)
-  -- Snap des vertex proches (tolérance) pour corriger les micro-bords sur polygones
+kmeans(table, column, n)        -- Seuils naturels par K-means
+quantile(table, column, n)      -- Quantiles (effectifs égaux)
+equi_width(table, column, n)    -- Intervalles égaux
+nested_means(table, column, n)  -- Moyennes emboîtées récursives
+q6(table, column)               -- 6 classes prédéfinies (5e, 27.5e, 50e, 72.5e, 95e percentiles)
+headtail2(table, column, n)     -- Head/tail breaks (distributions à longue queue)
+```
 
-simplify_topology_normalized(table, geom_col, tolerance)
-  -- Douglas-Peucker après normalisation topologique sur polygones
+Ce sont des **MACROs** (pas des fonctions) pour que le nom de colonne soit substitué dynamiquement. Les tests vérifient explicitement qu'on n'utilise pas `FUNCTION`. Le résultat (`LIST<DOUBLE>`) est extrait via le helper `toIterableValues()` qui gère les cas `TypedArray`, `Array`, et tout itérable — ne jamais tester `Array.isArray()` seul sur ce résultat.
 
-prune_triangles(table)
-  -- Supprime les triangles artefacts de simplification
+### Macros de jointure (`join_macros`)
+
+```sql
+normalize_text_join(text)
+  -- Normalisation pour matching insensible casse/accents :
+  -- NFC normalize → strip accents → lowercase → trim → collapse spaces
+
+get_similarity(text1, text2)
+  -- Score Jaro-Winkler (0–1) entre deux chaînes normalisées
+```
+
+Utilisées dans `join_by_id` et `finalizeJoin` pour le matching approximatif des entités géographiques avec le fond de carte.
+
+### Macros de simplification (`simplification_macros`)
+
+8 macros couvrant polygones et lignes :
+
+```sql
+simplify_and_clean(table, geom_col, tolerance)
+  -- Pipeline complet polygones : snap → Douglas-Peucker → prune triangles
+
+simplify_and_clean_linestring(table, geom_col, tolerance)
+  -- Pipeline complet lignes : snap + Douglas-Peucker
 
 extract_innerlines(table)
   -- Extrait les limites partagées entre polygones adjacents
 
-simplify_and_clean(table, geom_col, tolerance)
-  -- Pipeline complet pour polygones : snap → simplify → prune_triangles
-
-snap_linestring_normalized(table, geom_col, tolerance)
-  -- Snap topologique pour LINESTRING / MULTILINESTRING
-
-simplify_linestring_normalized(table, geom_col, tolerance)
-  -- Simplification Douglas-Peucker pour LINESTRING / MULTILINESTRING
-
-simplify_and_clean_linestring(table, geom_col, tolerance)
-  -- Pipeline complet pour lignes : snap + simplify
+snap_topology_normalized(table, geom_col, tolerance)
+  -- Snap des vertex proches (correction micro-bords)
 ```
 
-Utilisées dans `simplifyGeometryTable()` (`operations/simplification.ts`) :
+### Macros d'analyse et de recherche
 
-- `createView: false` → crée une table `tableName_simplified`.
-- `createView: true` → crée une vue `vw_tableName_simplified`.
-- `geometryColumn` optionnel (défaut : `geom`).
-
-### `join_macros`
-
-```sql
-normalize_text_join(text)
-  -- Normalisation pour matching insensible à la casse et aux accents :
-  -- lower, strip accents, collapse spaces
-
-get_similarity(text1, text2)
-  -- Score Jaro-Winkler (0-1) entre deux chaînes normalisées
-```
-
-Utilisées dans `join_by_id` et `finalizeJoin` pour le matching approximatif des entités géographiques.
-
-### `breaks_macros`
-
-```sql
-kmeans(table, column, n)        -- Seuils naturels par K-means
-quantile(table, column, n)      -- Quantiles
-equi_width(table, column, n)    -- Intervalles égaux
-nested_means(table, column, n)  -- Moyennes emboîtées
-q6(table, column)               -- 6 classes fixes (5e, 27.5e, 50e, 72.5e, 95e)
-headtail2(table, column, n)     -- Méthode head-tail pour distributions lourdes
-```
-
-Ces macros sont **des MACROs DuckDB** (pas des fonctions) pour que `colname` soit substitué dynamiquement. Les tests vérifient qu'on n'utilise PAS `FUNCTION` (qui ne permet pas cette substitution).
-
-Les méthodes automatiques de discrétisation de l'interface passent par ces macros. Le mode manuel ne calcule pas de seuils : il recalcule seulement les effectifs de classes avec DuckDB à partir des bornes saisies.
-
-### `analyse_macros`
-
-Stats par colonne : min, max, null_count, unique_count, avg, median, std_dev, top_values, patterns.
-
-### `search_macros`
-
-Recherche textuelle full-text avec scoring de pertinence.
+- `analyse_macros` : stats par colonne (min, max, null_count, unique_count, avg, median, std_dev, top_values, patterns).
+- `search_macros` : recherche textuelle full-text avec scoring de pertinence.
 
 ---
 
-## Cache manager (`cache-manager.ts`)
+## Cache manager
 
-Trois caches en mémoire, tous indexés par **nom de table** :
+Trois caches en mémoire, indexés par nom de table :
 
-```typescript
-// describeCache   Map<tableName, ColumnInfo[]>
-// rowCountCache   Map<tableName, number>
-// table_metadata  Map<tableName, { analysis, join, filters }>
-```
+| Cache            | Type                                       | Contenu                          |
+| ---------------- | ------------------------------------------ | -------------------------------- |
+| `describeCache`  | `Map<string, ColumnInfo[]>`                | Résultats de `describeColumns()` |
+| `rowCountCache`  | `Map<string, number>`                      | Nombre de lignes                 |
+| `table_metadata` | `Map<string, { analysis, join, filters }>` | Résultats d'`analyse()`          |
 
-### Cycle de vie
-
-```mermaid
-flowchart LR
-    LOAD["Dataset chargé"]
-    ANALYSE["Duck.analyse()"]
-    META["table_metadata[table]<br/>.analysis = result"]
-    GET["getTableMetadata()"]
-    MARK["markTableMutated(ctx, table)"]
-    INV["invalidateTableCache()"]
-    DEL["supprime<br/>describeCache[table]<br/>+ rowCountCache[table]"]
-    READ["lecture depuis<br/>table_metadata"]
-
-    LOAD --> ANALYSE --> META
-
-    META --> GET
-    GET --> READ
-
-    META --> MARK
-    MARK --> INV
-    INV --> DEL
-```
-
-### Callback de mutation
-
-```typescript
-registerTableMutationCallback((tableName: string) => {
-  Duck.invalidateTableCache(tableName);
-});
-```
-
-Ce callback est enregistré **une seule fois** au démarrage de la façade `Duck`. Chaque mutation (DROP ROWS, ALTER COLUMN, etc.) appelle `markTableMutated()` qui notifie le callback. Les tests unitaires doivent enregistrer puis nettoyer ce callback dans `beforeEach` / `afterEach` quand ils mockent `Duck`.
+**Invalidation** : un callback enregistré au démarrage (`registerTableMutationCallback`) appelle `Duck.invalidateTableCache(tableName)` à chaque mutation. Toute opération qui passe par `duckDBOrchestrator` déclenche ce callback automatiquement. Si une table est modifiée directement via `Duck.query()`, appeler `Duck.invalidateTableCache()` manuellement.
 
 ---
 
-## Orchestrateur (`orchestrator.svelte.ts`)
+## Orchestrateur (`duckDBOrchestrator`)
 
-Le point d'entrée unique pour toute opération de données. Délègue à des sous-modules spécialisés.
+Point d'entrée unique pour toutes les opérations de données. Il délègue à des sous-modules spécialisés, gère le cache WeakMap des Arrow tables, et maintient l'état réactif Svelte 5.
 
 ### Datasets
 
 ```typescript
-await duckDBOrchestrator.processFile(fileDescriptor); // import + analyse
-await duckDBOrchestrator.registerExistingTable(table, fileId, name); // re-register
-await duckDBOrchestrator.updateDatasetTableName(sourceFileId, newName);
-await duckDBOrchestrator.updateDatasetJoinInfo(datasetId, joinInfo);
-await duckDBOrchestrator.updateDatasetColumns(datasetId, columns);
+await duckDBOrchestrator.processFile(fileDescriptor);
+await duckDBOrchestrator.registerExistingTable(table, fileId, name);
 await duckDBOrchestrator.dropTable(tableName);
-await duckDBOrchestrator.clear(); // drop all tables + reset state
+await duckDBOrchestrator.clear(); // drop toutes les tables + reset état
 ```
 
-### Arrow tables (lecture haut niveau)
+### Arrow tables (lecture)
 
 ```typescript
-await duckDBOrchestrator.getArrowTable(tableName); // avec cache WeakMap
-await duckDBOrchestrator.getArrowTableDirect(tableName, { column, value }); // filtre année
+await duckDBOrchestrator.getArrowTable(tableName); // cache WeakMap
+await duckDBOrchestrator.getArrowTableDirect(tableName); // ignore le cache (prefetch)
 await duckDBOrchestrator.getJoinedArrowTable(tableName, basemap);
 await duckDBOrchestrator.getGPSArrowTable(datasetId);
-await duckDBOrchestrator.createArrowTableWithMetadata(dataset);
 ```
 
-**Cache WeakMap** : `getArrowTableWithCache` retourne la **même référence ArrowTable** si ni les filtres ni la table n'ont changé. Cela préserve toute la chaîne de cache en aval (GeoArrow binaire, bounds, centroïdes de texte).
+**Cache WeakMap** : `getArrowTable()` retourne la **même référence** si les filtres et la table n'ont pas changé. Cela préserve toute la chaîne de caches en aval (GeoArrow binaire, bounds, centroïdes). Ne jamais utiliser `getArrowTableDirect()` sur le chemin de rendu : c'est uniquement pour le prefetch.
 
-### Colonnes
+### Mutations de colonnes
 
 ```typescript
-await duckDBOrchestrator.renameColumn(table, old, new, { skipAnalysis? });
+await duckDBOrchestrator.renameColumn(table, old, newName, { skipAnalysis? });
 await duckDBOrchestrator.changeColumnType(table, col, sqlType);
 await duckDBOrchestrator.dropColumn(table, col);
 await duckDBOrchestrator.dropRows(table, rowIds);
-await duckDBOrchestrator.refineColumn(table, col, operation, { skipAnalysis? });
-await duckDBOrchestrator.replaceInColumn(table, col, old, new);
+await duckDBOrchestrator.refineColumn(table, col, operation);
 await duckDBOrchestrator.addCalculatedColumn(table, name, expression);
-await duckDBOrchestrator.testExpression(table, expression);   // → valeur ou null
+await duckDBOrchestrator.testExpression(table, expression);  // → valeur ou null
 ```
 
-### Sécurité SQL
+> Sur les opérations en batch, passer `skipAnalysis: true` et appeler `analyzeTable()` une seule fois à la fin. Chaque mutation sans `skipAnalysis` déclenche un `Duck.analyse()` complet.
 
-`validateExpression()` dans `column-ops.ts` **rejette** :
+### Sécurité des expressions SQL
 
-- Requêtes multi-statements (`;`).
-- Sous-requêtes (`(SELECT…)`).
-- Appels de fonction dangereux (`read_csv('/tmp/…')`).
-- Projections non agrégées sur plusieurs colonnes.
+`validateExpression()` dans `column-ops.ts` rejette :
 
-```typescript
-validateExpression("coalesce(name, 'PARIS') || ' / ' || city"); // OK
-validateExpression('a + 1; DROP TABLE x'); // → DuckDBError
-```
+- Multi-statements (`;`)
+- Sous-requêtes (`(SELECT…)`)
+- Appels de fonctions dangereux (`read_csv('/tmp/…')`)
+- Projections non agrégées sur plusieurs colonnes
 
 ### Filtres
 
 ```typescript
 await duckDBOrchestrator.addFilter(tableName, { column, operator, value });
 await duckDBOrchestrator.removeFilter(tableName, filterId);
-await duckDBOrchestrator.deleteFilteredRows(tableName); // supprime les lignes exclues
+await duckDBOrchestrator.deleteFilteredRows(tableName);
 ```
 
-Les filtres sont stockés dans `state.svelte.ts` (Svelte 5 `$state`) sous `filtersByTable`. Chaque filtre a un `id` auto-incrémenté.
+Les filtres sont stockés dans `state.svelte.ts` sous `filtersByTable`. Chaque filtre a un `id` auto-incrémenté.
 
-### Jointures (`join-ops`)
+### Jointures
 
 ```typescript
 await duckDBOrchestrator.computeJoinStats(datasetId, basemap, geoColumn);
@@ -288,22 +202,29 @@ await duckDBOrchestrator.applyJoinCorrections(
   geoColumn,
   corrections
 );
-// corrections = { 'Armenia': 'Arménie' }  — mapping des entités à corriger
+// corrections = { 'Armenia': 'Arménie' }
 
 await duckDBOrchestrator.finalizeJoin(datasetId, basemap, geoColumn);
 // → { joinedBasemap, geoColumn, gpsMode, gpsColumns }
 ```
 
-**`finalizeJoin`** utilise le cache de similarité (table `__similarity_cache__`) quand le dataset a déjà été joint. Il n'appelle `join_by_id()` (legacy) que si le cache n'existe pas.
+`finalizeJoin` utilise le **cache de similarité** quand le dataset a déjà été joint. Il appelle `join_by_id()` (legacy) uniquement si le cache n'existe pas. `invalidateSimilarityCache()` est appelé après toute correction utilisateur.
+
+Le cache de similarité est une table DuckDB nommée avec le préfixe `__similarity_cache__` + l'identifiant du dataset. Elle est construite par `ensureSimilarityCached()` via un cross-join `dataset × basemap_attributes` filtré par `jaro_winkler_similarity(normalize_text_join(left), normalize_text_join(right), 0.85)`. La construction est coûteuse (O(N×M)) mais n'a lieu qu'une fois par dataset/fond ; les corrections utilisateur réutilisent cette table sans la recalculer.
 
 ### GPS
 
 ```typescript
 await duckDBOrchestrator.getGPSArrowTable(datasetId);
 // → { table: ArrowTable, latColumn, lonColumn }
+
 await duckDBOrchestrator.getGPSBounds(datasetId);
 // → { minLon, minLat, maxLon, maxLat } | null
 ```
+
+Un dataset est en mode GPS quand `gpsMode: true` et `gpsColumns: { lat, lon }`. La vue GPS est créée avec `ST_Point(lon, lat)` et permet d'afficher les points sur un fond OSM sans jointure avec le catalogue.
+
+`validateGPSColumns()` détecte les inversions lat/lon, les valeurs hors plage et les NULLs. `detectGPSColumns()` tente une résolution automatique depuis les noms de colonnes et les métadonnées sémiotiques.
 
 ### Recherche
 
@@ -312,154 +233,52 @@ await duckDBOrchestrator.searchInTable(tableName, query);
 // → { totalRows, matches: [{ row, column, snippet }] }
 ```
 
-### État interne
-
-```typescript
-await duckDBOrchestrator.waitForInitialization(); // init DuckDB si pas fait
-await duckDBOrchestrator.getRowCount(tableName);
-await duckDBOrchestrator.getRowPosition(tableName, rowId);
-await duckDBOrchestrator.getRowStats(tableName);
-await duckDBOrchestrator.analyzeTable(tableName); // Duck.analyse() + cache
-await duckDBOrchestrator.getBasicColumnInfo(tableName);
-await duckDBOrchestrator.getFullAnalysis(tableName);
-```
-
----
-
-## Mode GPS
-
-Un dataset est en **mode GPS** quand il possède `gpsMode: true` et `gpsColumns: { lat, lon }`. Lorsqu'un fond OSM est choisi pour un CSV GPS, ces informations sont également persistées sur le `sourceFile` afin qu'un refresh recharge directement les points sans repasser par l'étape de jointure.
-
-### Validation (`validateGPSColumns`)
-
-```typescript
-validateGPSColumns(table, latCol, lonCol, duckClient);
-// → { isValid, possibleInversion, latStats, lonStats, warning? }
-```
-
-Détecte :
-
-- **Inversion lat/lon** — les coordonnées ressemblent à des coordonnées inversées.
-- **Valeurs hors plage** — lat hors `[-90, 90]`, lon hors `[-180, 180]`.
-- **NULLs** — aucune coordonnée valide.
-
-### Détection automatique (`detectGPSColumns`)
-
-```typescript
-detectGPSColumns(columns: AnalysisResult[], geoDetection?);
-// → { lat: string, lon: string } | null
-```
-
-La résolution des colonnes GPS s'appuie d'abord sur la détection géographique du dataset (`geoDetection`, `geo_type`, `semioType`), puis sur les noms de colonnes.
-
-Exemples pris en charge :
-
-- `lat` / `lon`, `latitude` / `longitude`
-- `y_coord` / `x_coord`
-- variantes détectées comme `Latitude_WGS84` / `Longitude_WGS84`
-- autres noms personnalisés déjà reconnus comme latitude / longitude par l'analyse.
-
-### Création de la vue GPS
-
-```sql
-CREATE OR REPLACE VIEW "gps_tableName" AS
-SELECT *,
-  ST_Point(TRY_CAST("lon" AS DOUBLE), TRY_CAST("lat" AS DOUBLE)) AS geom
-FROM "tableName";
-```
-
-Puis `getArrowTableDirect('gps_tableName')` pour obtenir l'Arrow table avec colonne géométrique.
-
-### Bounds GPS
-
-```sql
-SELECT
-  MIN(TRY_CAST("lon" AS DOUBLE)) AS min_lon,
-  MAX(TRY_CAST("lon" AS DOUBLE)) AS max_lon,
-  MIN(TRY_CAST("lat" AS DOUBLE)) AS min_lat,
-  MAX(TRY_CAST("lat" AS DOUBLE)) AS max_lat,
-  COUNT(*) FILTER (WHERE "lon" IS NOT NULL AND "lat" IS NOT NULL) AS valid_count
-FROM "tableName";
-```
-
 ---
 
 ## Import de fond de carte (`basemap-import.utils.ts`)
 
-```typescript
-processBasemapImport(file: File);
-// → { basemap: BasemapMetadata, geometryTable: ArrowTable }
+Pipeline DuckDB déclenché quand un utilisateur importe un fichier géo comme fond de carte personnalisé.
+
+**Polygones** :
+
+```
+ST_Read() → table_raw
+    → simplify_and_clean()  → table_clean
+    → extract_innerlines()  → table_innerlines
+    → ST_MaximumInscribedCircle() → table_centroids
 ```
 
-### Pipeline polygones
+Résultat : 3 couches (POLYGON, LIMIT, CENTROID).
 
-```mermaid
-flowchart LR
-    ST["1. ST_Read()<br/>→ table_raw"] --> SC["2. simplify_and_clean()<br/>(snap + simplify)<br/>→ table_clean"]
-    --> EI["3. extract_innerlines()<br/>→ table_innerlines"]
-    --> MI["4. ST_MaximumInscribedCircle()<br/>.center → table_centroids"]
+**Lignes** (`LINESTRING` / `MULTILINESTRING`) :
 
-    style ST fill:#e3f2fd
-    style SC fill:#e8f5e9
-    style EI fill:#fff3e0
-    style MI fill:#fce4ec
+```
+Clone source
+    → simplify_and_clean_linestring(..., 0.0)  → géométries nettoyées
+    → ST_PointOnSurface()                      → table_centroids
 ```
 
-Résultat : 3 couches dans le basemap.
+Résultat : 2 couches (LINE, CENTROID).
 
-- `POLYGON` — géométries nettoyées.
-- `LIMIT` — innerlines (limites administratives).
-- `CENTROID` — centroïdes (pour labels).
+**Points** (`POINT` / `MULTIPOINT`) :
 
-### Pipeline lignes
+```
+Géométries source inchangées
+    → ST_PointOnSurface()  → table_centroids
+```
 
-Pour `LINESTRING` / `MULTILINESTRING` :
+Résultat : 2 couches (POINT, CENTROID).
 
-- Clone de la table source.
-- `simplify_and_clean_linestring(..., 0.0)` pour normaliser la géométrie sans simplification visuelle.
-- `ST_PointOnSurface()` pour produire une table de points représentatifs.
-
-Résultat : 2 couches dans le basemap.
-
-- `LINE` — géométries nettoyées.
-- `CENTROID` — points représentatifs (pour symboles / labels).
-
-### Pipeline points
-
-Pour `POINT` / `MULTIPOINT` :
-
-- Pas de simplification.
-- `ST_PointOnSurface()` pour produire une table de points représentatifs stable par entité.
-
-Résultat : 2 couches dans le basemap.
-
-- `POINT` — géométries source.
-- `CENTROID` — point représentatif par entité.
-
-Dans le rendu thématique, ces tables `CENTROID` sont maintenant le chemin nominal pour **Textes** et **Symboles** sur polygones, lignes et `MultiPoint`.
-
-### GeoParquet
-
-Si la géométrie est dans une colonne non-`geom` (par exemple `geometry`), le pipeline normalise vers `geom` avant simplification.
-
-### Fallback navigateur pour GeoPackage
-
-Dans le navigateur, si `ST_Read()` échoue sur un fond de carte `.gpkg`, Khartis bascule sur un fallback client-only :
-
-- lecture SQLite Wasm du GeoPackage,
-- sélection automatique de la couche spatiale par défaut avec la même heuristique que les autres imports multi-couches,
-- extraction de la géométrie GeoPackage binaire vers WKB,
-- reprojection éventuelle vers `EPSG:4326`,
-- conversion en GeoJSON temporaire, puis reprise du pipeline normal de fond de carte.
-
-Ce fallback est limité au parcours d'import de fond de carte GeoPackage et ne change pas le chemin DuckDB nominal des autres formats.
+Les tables CENTROID sont le chemin nominal pour le rendu des **Textes** et **Symboles** sur les primitives non-ponctuelles.
 
 ---
 
 ## Pièges courants
 
-1. **Utiliser `Duck` au lieu de `duckDBOrchestrator`** — `Duck` est bas niveau ; `duckDBOrchestrator` gère l'état, le cache et la coordination.
-2. **Modifier une table sans appeler `markTableMutated`** — le cache garde les anciennes métadonnées. Toujours passer par `Duck.invalidateTableCache()` ou `duckDBOrchestrator` qui le fait automatiquement.
-3. **Oublier `skipAnalysis: true`** sur les opérations en batch — chaque `refineColumn` / `renameColumn` déclenche un `Duck.analyse()` qui peut être coûteux. Grouper les opérations sans analyze, puis appeler `analyzeTable()` une fois à la fin.
-4. **Mocker `Duck` dans un test sans mimer le cycle d'invalidation** — le callback de mutation doit être enregistré dans `beforeEach` et nettoyé dans `afterEach`.
-5. **Confondre `getArrowTableDirect` et `getArrowTable`** — `Direct` ignore le cache WeakMap (utilisé pour le prefetching). `getArrowTable` utilise le cache (utilisé en rendu).
+| Piège                                                | Symptôme                                                   | Solution                                                                           |
+| ---------------------------------------------------- | ---------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Utiliser `Duck` au lieu de `duckDBOrchestrator`      | Cache pas invalidé, état désynchronisé                     | Toujours passer par `duckDBOrchestrator` depuis le code applicatif                 |
+| Modifier une table sans `markTableMutated`           | Cache garde les anciennes métadonnées                      | Appeler `Duck.invalidateTableCache()` explicitement si mutation via `Duck.query()` |
+| `getArrowTableDirect` sur le chemin de rendu         | Cache WeakMap invalidé, re-parsing GeoArrow à chaque frame | Utiliser `getArrowTable()` pour le rendu, `getArrowTableDirect()` pour le prefetch |
+| Batch sans `skipAnalysis: true`                      | N appels `analyse()` coûteux                               | Passer `skipAnalysis: true` + 1 seul `analyzeTable()` à la fin                     |
+| Mock `Duck` sans enregistrer le callback de mutation | Cache ne se nettoie pas entre tests                        | Enregistrer et nettoyer le callback dans `beforeEach` / `afterEach`                |

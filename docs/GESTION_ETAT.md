@@ -1,74 +1,62 @@
 # Gestion de l'état
 
-> Stores Svelte 5, persistance, undo/redo et patterns de features.
+> Stores Svelte 5, persistance IndexedDB, snapshot projet et undo/redo.
 
-**Voir aussi** : [Architecture](./ARCHITECTURE.md) | [Pipeline de données](./PIPELINE_DONNEES.md) | [Visualisations](./VISUALISATIONS.md)
+**Voir aussi** : [ARCHITECTURE.md](ARCHITECTURE.md) · [GUIDE_DEVELOPPEUR.md](GUIDE_DEVELOPPEUR.md) · [PIPELINE_DONNEES.md](PIPELINE_DONNEES.md)
 
 ---
 
 ## Les 4 couches d'état
 
-| Couche              | Rôle                               | Durée de vie      | Stockage                                                                                             |
-| ------------------- | ---------------------------------- | ----------------- | ---------------------------------------------------------------------------------------------------- |
-| **Composant local** | État UI éphémère (inputs, modales) | Montage composant | `$state` dans le `.svelte`                                                                           |
-| **Store feature**   | Modèle de domaine + actions        | Session           | `$state` dans le store `.svelte.ts`                                                                  |
-| **Store global**    | Coordination cross-feature         | Session           | Singleton `ProjectStore`                                                                             |
-| **IndexedDB**       | Projets, métadonnées et assets     | Persistant        | Object stores `projects`, `metadata`, `project_assets`, `project_asset_chunks`, `project_asset_refs` |
+| Couche              | Rôle                                           | Durée de vie              | Stockage                         |
+| ------------------- | ---------------------------------------------- | ------------------------- | -------------------------------- |
+| **Composant local** | État UI éphémère (inputs ouverts, toggles)     | Montage du composant      | `$state` dans le `.svelte`       |
+| **Store feature**   | Modèle de domaine + actions d'une feature      | Session navigateur        | `$state` dans `.store.svelte.ts` |
+| **Store global**    | Coordination cross-features                    | Session navigateur        | Singleton (`projectStore`, etc.) |
+| **IndexedDB**       | Projets, métadonnées et assets binaires source | Persistant entre sessions | Object stores dédiés             |
 
-**Flux** : Composant → Store feature → Store global → IndexedDB (debounce 5 s sur les métadonnées projet, persistance immédiate des nouveaux assets binaires).
+**Flux** : mutation dans un composant → store feature → store global → `persistenceRegistry` → sérialisation → IndexedDB. La sérialisation est debounce (750 ms par défaut, défini par `DEFAULT_DEBOUNCE_INTERVAL` dans `project-management/core/persistence-registry.ts`) sauf pour les opérations critiques.
 
 ---
 
-## Pattern de store Svelte 5 Runes
+## Pattern de store (factory Svelte 5)
 
-Chaque store est un **singleton fonctionnel** (factory, pas de classe) avec `$state` privé, getters publics et méthodes de mutation explicites.
+```typescript
+function createFeatureStore() {
+  const state = $state({ enabled: false, data: null as MyData | null });
 
-```ts
-export function createFeatureStore() {
-  const state = $state({
-    enabled: false,
-    data: null as MyData | null
-  });
-
-  // État dérivé — déclaré au top level, PAS dans un getter
-  const isValid = $derived(state.data !== null);
+  // $derived au top-level pour les calculs coûteux
+  const summary = $derived.by(() => computeSummary(state.data));
 
   return {
-    // Getters publics (lecture seule)
     get enabled() {
       return state.enabled;
     },
     get data() {
       return state.data;
     },
+    get summary() {
+      return summary;
+    }, // retourne la valeur, pas le rune
 
-    // Getter pour état dérivé (renvoie la valeur, ne recrée pas le $derived)
-    get isValid() {
-      return isValid;
-    },
-
-    // Actions (mutations explicites)
     enable() {
       state.enabled = true;
     },
-    disable() {
-      state.enabled = false;
-    },
-    setData(data: MyData) {
-      state.data = data;
+    setData(d: MyData) {
+      state.data = d;
     }
   };
 }
 
-// Export singleton
 export const featureStore = createFeatureStore();
 ```
 
 **Règles** :
 
-- Pas d'affectation directe (toujours via méthode), sauf pour les mutations UI éphémères (`set settingPanel()`, etc.).
-- `$derived` est optionnel pour les valeurs dérivées simples. Dans la pratique, le code utilise rarement `$derived` — les getters qui recalculent (par exemple `hasConsented`, `isMapMode`) sont acceptables pour des opérations peu coûteuses. Réserver `$derived` aux calculs coûteux (filtrage, mapping, etc.).
-- L'état UI éphémère reste local au composant ; seul l'état de domaine est persisté.
+- `$derived` pour les calculs coûteux (filtres, mappings larges). Pour des calculs simples, un getter qui recalcule est acceptable.
+- Pas d'affectation directe sur l'état de domaine depuis l'extérieur — toujours via méthode.
+- L'état UI éphémère (toggle panneau, valeur en cours de saisie) reste local au composant.
+- `datasetsState` et `datasetsInternals` (feature `duckdb/`) sont un état partagé exporté au niveau module — exception au pattern factory pour permettre à plusieurs sous-modules de partager le même `$state`.
 
 ---
 
@@ -76,237 +64,175 @@ export const featureStore = createFeatureStore();
 
 ### `projectStore`
 
-Cycle de vie projet, fichiers, historique.
+Cycle de vie des projets, gestion des fichiers, historique undo/redo.
 
-```ts
+```typescript
 // Cycle de vie
-createProject(name: string, files: UploadedFile[]): Promise<void>
-loadProject(id: string): Promise<void>
-duplicateProject(id: string, newName?: string): Promise<void>
-deleteProject(id: string): Promise<void>
+await projectStore.createProject(name, files);
+await projectStore.loadProject(id);
+await projectStore.duplicateProject(id, newName?);
+await projectStore.deleteProject(id);
 
 // Fichiers
-addFilesToProject(files: UploadedFile[]): Promise<void>
-removeFileFromProject(fileId: string): Promise<void>
+await projectStore.addFilesToProject(files);
+await projectStore.removeFileFromProject(fileId);
 
-// Mutations (créent un snapshot)
-updateProjectName(name: string): void
-updateVisualization(patch: Partial<VisualizationConfig>): void
-updateLayout(patch: Partial<LayoutConfig>): void
+// Mutations (créent un snapshot undo)
+projectStore.updateProjectName(name);
 
 // Historique
-undo(): void
-redo(): void
-canUndo: boolean  // appel à canUndoFn() — pas un $derived
-canRedo: boolean  // appel à canRedoFn() — pas un $derived
+projectStore.undo();
+projectStore.redo();
+projectStore.canUndo  // boolean (getter recalculé)
+projectStore.canRedo  // boolean (getter recalculé)
 
 // Archive .kh
-createProjectArchive(name?: string): Promise<Blob>
-importProjectArchive(file: File): Promise<void>
+await projectStore.exportProject(name?);   // → Blob
+await projectStore.importProject(file);
 ```
+
+> Les mutations de visualisation et de mise en page passent par leurs stores respectifs (`visualizationStore.updateXxx()`, `layoutStore.updateXxx()`), pas par `projectStore` directement. `projectStore` ne se charge que du cycle de vie projet et du snapshot global.
 
 ### `datasetsStore`
 
-Datasets chargés, colonnes, statistiques.
-
-> **Pattern avancé** : `datasetsState` et `datasetsInternals` sont exportés au niveau du module (`datasets-state.svelte.ts`) et non dans la factory du store. Ce pattern « état externe partagé » permet à plusieurs sous-modules du store de partager le même `$state`.
+Datasets chargés en session, avec colonnes enrichies et statistiques. Exposé principalement en lecture depuis les composants ; les mutations passent par `duckDBOrchestrator`.
 
 ### `visualizationStore`
 
-Configurations de visualisations. Types : `choropleth`, `proportional`, `categorical`, `bivariate`. Classifications : `kmeans`, `quantiles`, `equal_interval`, `q6`, `nested_means`, `head_tail`, `manual`.
+Configurations de visualisations actives. Types supportés : `choropleth`, `proportional`, `categorical`, `bivariate`. Chaque config contient `type`, `mapping` (colonnes), `style` (couleurs, épaisseurs), `classification` (méthode, breaks, counts).
 
 ### `globalState` + `globalActions`
 
-Zoom page, pan, étape active. `globalActions` est un export séparé contenant les mutations coordonnées (par exemple `setNavigationState`, `setToolbarState`).
+Zoom page, pan, étape active (Données / Visualisations / Habillage), outil actif. `globalActions` est un export séparé pour les mutations coordonnées. Ces valeurs sont persistées dans le snapshot projet via `uiSettings.globalUi`.
 
-Les choix de navigation et de zoom sont persistés dans le snapshot projet via `uiSettings.globalUi` :
+### Autres stores globaux
 
-- `selectedStep`, `selectedTool`, `toolbarState`
-- `projectionFilter`, `projectionViewMode`
-- `selectedSourceFileId`
-- `pageZoomLevel`, `pagePanOffset`
-
-### `projectsStore`
-
-Liste des projets, projet actif. Implémenté dans `projects.store.svelte.ts`.
-
-### `consentStore`
-
-Consentement utilisateur (RGPD). Utilise un getter `hasConsented` qui recalcule (pas de `$derived`).
-
-### `zoomModeStore`
-
-Mode zoom (carte vs page). Utilise un getter `isMapMode` qui recalcule (pas de `$derived`).
-
-Le mode est persisté dans le projet via `uiSettings.zoomMode`, plus seulement en mémoire de session.
+| Store              | Rôle                                                          |
+| ------------------ | ------------------------------------------------------------- |
+| `projectsStore`    | Liste des projets + projet actif                              |
+| `consentStore`     | Consentement RGPD (getter `hasConsented`)                     |
+| `zoomModeStore`    | Mode zoom carte vs page (persisté dans `uiSettings.zoomMode`) |
+| `mapStyleStore`    | Fond de carte actif + couches visibles                        |
+| `annotationsStore` | Annotations SVG overlay                                       |
+| `legendStore`      | Légendes actives + style                                      |
 
 ---
 
-## Snapshot projet
+## Persistance — snapshot projet
 
-```ts
+Le JSON projet ne contient que des **métadonnées légères**. Les octets source vivent dans IndexedDB.
+
+```typescript
 interface KhartisProject {
   id: string;
   manifest: {
-    version: string; // '3.0.0'
+    version: string;
     createdAt: Date;
     updatedAt: Date;
     name: string;
-    author?: string;
-    description?: string;
     format: 'kh';
   };
-  data: {
-    sourceFiles: UploadedFile[];
-    basemap?: { type: string; id: string; data?: any };
-  };
+  data: { sourceFiles: UploadedFile[]; basemap?: { type; id; data? } };
   visualization?: VisualizationConfig;
   layout?: LayoutConfig;
-  resources?: Record<string, any>;
+  resources?: Record<string, unknown>;
 }
 ```
 
-Le document projet persiste principalement des **métadonnées légères** :
+**Ce qui est persisté** : `datasetId`, `assetRef`, aperçu limité, statistiques, transformations, jointures, géolocalisation.
 
-- `datasetId`
-- `assetRef` / `companionAssetRefs`
-- aperçu (`parsedData`) limité
-- `statistics`, `deepAnalysis`
-- transformations, suppressions de lignes, informations de jointure ou de géolocalisation
+**Ce qui ne l'est pas** : les octets source (dans `project_asset_chunks`), les résultats de recherche, les sélections temporaires, les calculs en cours.
 
-Les octets source ne sont plus embarqués dans le JSON projet. Ils sont stockés à part dans IndexedDB, par chunks de 8 Mo, puis rejoués dans DuckDB à la réouverture.
+### Object stores IndexedDB
 
-### Asset store binaire
+| Store                  | Contenu                                                  |
+| ---------------------- | -------------------------------------------------------- |
+| `projects`             | Snapshot projet metadata-only                            |
+| `metadata`             | Liste des projets + dernier projet ouvert                |
+| `project_assets`       | Métadonnées d'assets (`assetId`, taille, MIME)           |
+| `project_asset_chunks` | Chunks binaires des fichiers source (8 Mo max par chunk) |
+| `project_asset_refs`   | Références `projectId → assetId` (cycle de vie assets)   |
 
-| Object store           | Contenu                                        |
-| ---------------------- | ---------------------------------------------- |
-| `projects`             | Snapshot projet metadata-only                  |
-| `metadata`             | Liste des projets + dernier projet ouvert      |
-| `project_assets`       | Métadonnées d'assets (`assetId`, taille, MIME) |
-| `project_asset_chunks` | Chunks binaires des fichiers source            |
-| `project_asset_refs`   | Références `projectId → assetId`               |
+### Registre de persistance
 
-### Couches persistées via le registre
+Le serializer ne lit pas les stores un par un. Chaque store s'enregistre dans `persistenceRegistry`, et le projet est sérialisé en 4 blocs stables :
 
-Le serializer ne lit pas les stores un par un. Chaque store s'enregistre dans `persistenceRegistry`, puis le projet est remappé vers quatre blocs stables :
-
-- `basemapSettings` : couches, style, labels, groupes, projection carte, vue carte
-- `visualizationSettings` : visualisations, sélection active
-- `layoutSettings` : format, annotations, légende, indications géographiques, projection
-- `uiSettings` : état UI durable cross-feature
-
-`uiSettings` couvre actuellement :
-
-- `globalUi`
-- `zoomMode`
-- `dataTab` (résumé statistique, tri courant, état de géolocalisation / jointure / enrichissement)
-- `dataWorkflow`
-- `dataTools` (outil ouvert, recherche/remplacement, calculatrice)
-- `datasetsView` (datasets visibles, colonnes masquées, simplification appliquée)
-- `tableFilters`
-- `colorBlindness`
-- `facets`
-- `search`
-- `simplification`
-
-Règle pratique : on persiste l'état UI qui doit survivre à un rechargement de projet, mais on exclut les états purement transitoires comme les résultats de recherche, les sélections temporaires d'annotation ou un calcul en cours.
+| Bloc                    | Contenu                                                                                                                                                                  |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `basemapSettings`       | Couches, style, labels, projection carte, vue carte                                                                                                                      |
+| `visualizationSettings` | Visualisations, sélection active                                                                                                                                         |
+| `layoutSettings`        | Format, annotations, légende, indications géographiques, projection                                                                                                      |
+| `uiSettings`            | État UI durable : `globalUi`, `zoomMode`, `dataTab`, `dataWorkflow`, `dataTools`, `datasetsView`, `tableFilters`, `colorBlindness`, `facets`, `search`, `simplification` |
 
 ---
 
 ## Auto-sauvegarde
 
-```mermaid
-flowchart LR
-    MUT["Mutation d'état"] --> FLAG["Flag dirty"]
-    --> TIMER["Démarrage / reset du timer<br/>(debounce 5 s)"]
-    --> JSON["Timer expiré<br/>→ Sérialisation metadata-only"]
-    --> VAL["Validation taille"]
-    --> IDB["IndexedDB"]
-
-    style MUT fill:#e3f2fd
-    style IDB fill:#e8f5e9
+```
+Mutation → flag dirty → reset timer 750 ms → sérialisation metadata-only → IndexedDB
 ```
 
-**Sauvegarde immédiate** (bypass debounce) : création de projet, fin d'import, ajout / suppression de fichier, export explicite. Les assets binaires, eux, sont persistés au moment de l'import et ne sont pas réécrits à chaque auto-save.
+**Sauvegarde immédiate** (bypass debounce) : création de projet, fin d'import, ajout/suppression de fichier, export explicite. Les assets binaires sont persistés une seule fois à l'import et ne sont pas réécrits à chaque auto-save.
 
 ### Limites de stockage
 
-| Limite produit                              | Valeur | Comportement         |
-| ------------------------------------------- | ------ | -------------------- |
-| CSV / TSV / GeoJSON / KML / KMZ / GPX       | 150 Mo | Erreur de validation |
-| GeoPackage / GeoParquet / Arrow / Shapefile | 200 Mo | Erreur de validation |
-| ZIP générique                               | 100 Mo | Erreur de validation |
-| Nombre max de projets                       | 50     | Avertissement à 80 % |
+| Type                                        | Limite | Comportement               |
+| ------------------------------------------- | ------ | -------------------------- |
+| CSV / TSV / GeoJSON / KML / KMZ / GPX       | 150 Mo | Erreur de validation       |
+| GeoPackage / GeoParquet / Arrow / Shapefile | 200 Mo | Erreur de validation       |
+| ZIP générique                               | 100 Mo | Erreur de validation       |
+| Nombre de projets                           | 50 max | Erreur de création au-delà |
 
 ---
 
 ## Undo / Redo
 
-### Déclencheurs de snapshot
+### Ce qui crée un snapshot
 
-**Crée un snapshot** : création de projet, renommage, mise à jour métadonnées, modification de visualisation ou de layout.
+Création de projet, renommage, modification d'une visualisation, changement de layout.
 
-**Pas de snapshot** : changements UI transitoires (toggle panel, sélection), saisie dans les inputs (avant commit debounce), ajout ou suppression de fichier.
+### Ce qui ne crée pas de snapshot
 
-### Historique
+Changements UI transitoires (toggle de panneau, sélection d'outil), saisie dans un input avant commit debounce, ajout ou suppression de fichier.
 
-| Paramètre     | Valeur             | Comportement                            |
-| ------------- | ------------------ | --------------------------------------- |
-| Max snapshots | 50                 | FIFO — le plus ancien est supprimé      |
-| Stockage      | Snapshots complets | Pas de diffs structurels                |
-| Timeline      | Linéaire           | Tronquée après undo + nouvelle mutation |
+### Paramètres de l'historique
 
----
-
-## Format d'archive (.kh)
-
-- **Export** : archive `.kh` autoportante avec `manifest.json`, `project.json` et `assets/<assetId>/...`
-- **Import** : restaure d'abord les assets IndexedDB, puis le projet metadata-only, puis rejoue les tables DuckDB
-- **Compatibilité** : pas de support legacy pre-release ; le format cible est directement l'archive `.kh` multi-entrées
+| Paramètre     | Valeur                                             |
+| ------------- | -------------------------------------------------- |
+| Max snapshots | 50 (FIFO)                                          |
+| Stockage      | Snapshots complets (pas de diffs structurels)      |
+| Timeline      | Linéaire — tronquée après undo + nouvelle mutation |
 
 ---
 
-## Métadonnées et références
+## Format d'archive `.kh`
 
-| Clé / store          | Type                     | Rôle                                        |
-| -------------------- | ------------------------ | ------------------------------------------- |
-| `CURRENT`            | `string`                 | Dernier projet ouvert                       |
-| `metadata`           | `SavedProjectMetadata[]` | Liste des projets (id, nom, taille, dates)  |
-| `project_asset_refs` | `projectId → assetId`    | Cycle de vie des assets et GC des orphelins |
-
----
-
-## Pattern pour ajouter un store feature
+Le format `.kh` est une archive autoportante contenant :
 
 ```
-src/lib/features/<nom-feature>/
-├── <nom-feature>.svelte              # Composant d'entrée
-├── <nom-feature>.store.svelte.ts     # État + actions
-├── <nom-feature>.types.ts            # Types
-├── components/                       # Sous-composants
-├── utils/                            # Utilitaires spécifiques
-└── tests/                            # Tests
+manifest.json        ← version, dates, nom du projet
+project.json         ← snapshot metadata-only
+assets/
+  <assetId>/         ← chunks du fichier source
+    chunk-0, chunk-1, …
 ```
 
-1. Créer le store avec `createFeatureStore()` (pattern ci-dessus).
-2. Créer le composant UI.
-3. Enregistrer dans la configuration de navigation du toolbar.
-4. Ajouter les clés i18n : `tool_<nom>_*`.
-5. Ajouter les tests.
+**Export** : `projectStore.exportProject()` → `Blob` → téléchargement navigateur.
+
+**Import** : `projectStore.importProject(file)` restaure dans l'ordre : assets IndexedDB → snapshot projet metadata-only → rejeu DuckDB des tables. Sans cet ordre, les références d'assets sont brisées.
+
+**Compatibilité** : le format cible est directement l'archive `.kh` multi-entrées. Pas de support legacy pre-release.
 
 ---
 
 ## Interactions cross-features
 
-| Déclencheur              | Features impactées           | Action                     |
-| ------------------------ | ---------------------------- | -------------------------- |
-| Changement de projection | Annotations, indications géo | Recalcul des positions     |
-| Simplification           | Couches, carte               | Rafraîchissement géométrie |
-| Édition légende          | Carte, export                | Re-rendu légende           |
-| Changement de format     | Mise en page, export         | Ajustement d'échelle       |
+| Déclencheur                  | Features impactées           | Mécanisme                                                      |
+| ---------------------------- | ---------------------------- | -------------------------------------------------------------- |
+| Changement de projection     | Annotations, indications géo | Les composants réagissent via `$derived` sur `projectionStore` |
+| Simplification               | Couches, carte               | Rafraîchissement des Arrow tables via `duckDBOrchestrator`     |
+| Édition de légende           | Carte, export                | `legendStore` ← sync avec `visualizationStore`                 |
+| Changement de format papier  | Mise en page, export         | `layoutStore` recalcule l'échelle                              |
+| Ajout/suppression de fichier | Pipeline, datasets           | `projectStore` → `duckDBOrchestrator`                          |
 
----
-
-## Gestion d'erreur
-
-Expression invalide : conserver la valeur précédente. Échec de simplification : revert de la géométrie. Projection manquante : fallback équirectangulaire. Quota dépassé : purge du plus ancien projet.
+Les features ne s'abonnent pas directement aux stores des autres features. Elles réagissent aux stores globaux (`projectStore`, `datasetsStore`, `visualizationStore`) ou aux hooks partagés dans `commons/`.

@@ -1,297 +1,303 @@
-# Visualisations et outils — Guide développeur
+# Visualisations et outils
 
-> Parcours utilisateur, outils de viz et habillage. Lire ARCHITECTURE.md, MAP.md et CARTOGRAPHIE.md d'abord.
+> Parcours utilisateur en 3 étapes, outils de la barre latérale droite, personnalisation du fond, et export. Ce fichier couvre le **workflow** et le **mapping vers le code** — pour les concepts cartographiques (discrétisation, semioTypes, projections, couleurs), voir [CARTOGRAPHIE.md](CARTOGRAPHIE.md).
 
-**Voir aussi** : [ARCHITECTURE](./ARCHITECTURE.md) — [CARTOGRAPHIE](./CARTOGRAPHIE.md) — [MAP](./MAP.md) — [PIPELINE_DONNEES](./PIPELINE_DONNEES.md) — [DUCKDB](./DUCKDB.md) — [LEGENDES](./LEGENDES.md)
+**Voir aussi** : [ARCHITECTURE.md](ARCHITECTURE.md) · [CARTOGRAPHIE.md](CARTOGRAPHIE.md) · [MAP.md](MAP.md) · [PIPELINE_DONNEES.md](PIPELINE_DONNEES.md) · [DUCKDB.md](DUCKDB.md) · [LEGENDES.md](LEGENDES.md)
 
 ---
 
 ## Les 3 étapes du parcours
 
 ```
-Données → Visualisations → Habillage
+Données  →  Visualisations  →  Habillage
 ```
 
-Navigation libre entre étapes via 3 boutons principaux (gauche). Chaque étape a ses outils dédiés dans la barre d'outils (droite).
+Navigation libre entre les 3 étapes via les boutons principaux (gauche). `globalState.activeStep` suit l'étape courante. Chaque étape affiche un ensemble d'outils différent dans la barre latérale droite (`step-toolbar.svelte`).
 
 ---
 
 ## Étape 1 — Données
 
-### Import tabulaire [DATA-01]
+### Import de fichier
 
-**Formats** : CSV, TSV. Trois méthodes :
+Trois méthodes d'entrée : fichier local, URL distante, copier-coller de texte tabulaire. Point d'entrée : `dataPipeline.processFile(file)` / `dataPipeline.processRemoteFile(url)` / `dataPipeline.processPastedData(csv)`.
 
-- Fichier local (upload)
-- URL vers fichier hébergé
-- Copier-coller
+Les formats supportés, la détection automatique CSV, et le routage vers DuckDB sont décrits dans [PIPELINE_DONNEES.md](PIPELINE_DONNEES.md).
 
-Détection automatique : séparateur, format numérique (virgule/point), en-tête (`csv-detector.ts`, 4 étapes).
+### Contrôle du tableau de données
 
-### Import géographique [DATA-02]
+Opérations disponibles sur un dataset chargé via `duckDBOrchestrator` :
 
-**Formats** : Shapefile, GeoJSON, GeoPackage, GeoParquet, KML, KMZ, GPX.
+| Action                        | Méthode orchestrateur                               |
+| ----------------------------- | --------------------------------------------------- |
+| Renommer une colonne          | `renameColumn(table, old, new)`                     |
+| Changer le type               | `changeColumnType(table, col, sqlType)`             |
+| Supprimer une colonne         | `dropColumn(table, col)`                            |
+| Supprimer des lignes          | `dropRows(table, rowIds)`                           |
+| Colonne calculée              | `addCalculatedColumn(table, name, expression)`      |
+| Tester une expression         | `testExpression(table, expression)`                 |
+| Ajouter un filtre             | `addFilter(tableName, { column, operator, value })` |
+| Supprimer les lignes filtrées | `deleteFilteredRows(tableName)`                     |
 
-Deux usages : (1) viz directe, ou (2) fond de carte pour données tabulaires.
+10 opérateurs de filtres sont supportés :
 
-### Typage des variables [DATA-04]
+| Opérateur    | Sémantique                      |
+| ------------ | ------------------------------- |
+| `gte`        | `≥`                             |
+| `lte`        | `≤`                             |
+| `equals`     | `=`                             |
+| `not_equals` | `≠`                             |
+| `contains`   | `ILIKE` (insensible à la casse) |
+| `between`    | encadrement `[a, b]`            |
+| `top_asc`    | N plus petites valeurs          |
+| `top_desc`   | N plus grandes valeurs          |
+| `empty`      | `IS NULL` ou chaîne vide        |
+| `not_empty`  | non vide                        |
 
-Détection automatique par colonne via `semio-detector.utils.ts` :
+`validateExpression()` dans `column-ops.ts` bloque les multi-statements, sous-requêtes et appels de fonctions dangereuses avant toute exécution.
 
-- **Texte** / **Numérique**
-- Sous-type géographique (geoid, geolat, geolon)
+### Géolocalisation
 
-L'utilisateur peut override manuellement.
+Deux modes détectés automatiquement puis sélectionnables manuellement :
 
-### Contrôle du tableau [DATA-05a–h]
+- **Entités géographiques** : colonne identifiant (`geoid` semioType) → jointure avec le catalogue. Pipeline : `computeJoinStats()` → `applyJoinCorrections()` → `finalizeJoin()`.
+- **Coordonnées GPS** : colonnes lat/lon (`geolat`/`geolon`) → mode OSM. `detectGPSColumns()` résout automatiquement depuis les noms de colonnes et les métadonnées sémiotiques.
 
-| Action                         | Description                                                           |
-| ------------------------------ | --------------------------------------------------------------------- |
-| Renommer / Masquer / Supprimer | Colonnes ou lignes                                                    |
-| Statistiques                   | Histogramme, min/max, nulls, uniques                                  |
-| Tri                            | Croissant / décroissant / alphabétique                                |
-| Recherche                      | Recherche + remplacement sur table et carte                           |
-| Filtres                        | `gte`, `lte`, `contains`, `equals`, `between`, `top_asc`, `empty`...  |
-| Calculatrice                   | Nouvelle colonne par formule (moyenne, puissance, arrondi, concat...) |
-| Corbeille                      | Suppression sélective                                                 |
-| Reset                          | Rétablissement des données initiales                                  |
+### Jointure assistée
 
-### Géolocalisation [DATA-06]
+`duckDBOrchestrator.computeJoinStats(datasetId, basemap, geoColumn)` calcule les 4 catégories via le cache de similarité Jaro-Winkler :
 
-Deux méthodes :
+| Catégorie     | Score         | Couleur UI |
+| ------------- | ------------- | ---------- |
+| Jointes       | = 1.0 (exact) | Vert       |
+| À vérifier    | 0.85 – 0.99   | Jaune      |
+| Non uniques   | multiple      | Orange     |
+| Non reconnues | < 0.85        | Rouge      |
 
-- **Entités géographiques** : codes ISO, noms administratifs reconnus
-- **Coordonnées** : colonnes lat/lon distinctes
-
-Détection automatique, correction manuelle.
-
-### Jointure [DATA-07]
-
-Liaison données tabulaires ↔ fond de carte via identifiant commun.
-
-**Suggestion** : proposition du fond le plus adapté selon taux de correspondance.
-
-**Catalogue** : 111 fonds GeoParquet multi-résolution (France, Europe, Monde).
-
-**Jointure assistée** [DATA-07c] : 4 catégories de résultat
-
-- ✅ Jointes (vert) — correspondance exacte
-- ⚠️ À vérifier (jaune) — Jaro-Winkler 0.85–0.99
-- 🟠 Non uniques (orange) — plusieurs correspondances
-- ❌ Non reconnues (rouge) — aucune correspondance
-
-Correction possible dans le tableau. `invalidateSimilarityCache()` après correction.
-
-**OpenStreetMap** [DATA-07e] : superposition OSM pour données GPS — pas de jointure, superposition directe.
-
-### Enrichir un geo [DATA-08]
-
-Workflow fichier geo importé en début : aperçu tabulaire → jointure assistée.
+Corrections saisies dans le tableau → `applyJoinCorrections(datasetId, geoColumn, corrections)` → `invalidateSimilarityCache()`. La finalisation `finalizeJoin()` retourne `{ joinedBasemap, geoColumn, gpsMode, gpsColumns }`.
 
 ---
 
 ## Étape 2 — Visualisations
 
-### Création [VIZ-01]
+### Création d'une visualisation
 
-Une ou plusieurs viz par projet. Chaque viz = un calque sur la carte.
+`visualizationStore` gère la liste des `VisualizationConfig` actives. Chaque config porte : `type`, `mapping` (colonnes), `style`, `classification`, et les primitives (`symbol`, `polygon`, `line`, `text`).
 
-### Suggestion [VIZ-02a]
+### Suggestion automatique
 
-Basée sur géométrie + semioTypes + nombre de colonnes. 3 suggestions max. Score de correspondance.
+`vizSuggester.suggestVisualizations(dataset)` retourne jusqu'à 3 suggestions classées par score. L'algorithme est décrit dans [CARTOGRAPHIE.md — Suggestion de visualisation](CARTOGRAPHIE.md). Fichier : `suggestion.service.ts`.
 
-**4 types de viz** :
+Sélectionner une suggestion (`suggestion-selection.ts`) applique un preset complet : type, modes, primitives, style, mapping initial, classification par défaut.
 
-| Type           | Usage                     | Variable            | Géométries     |
-| -------------- | ------------------------- | ------------------- | -------------- |
-| `choropleth`   | Aplats colorés            | QTR (ratio, 0–100%) | Polygon, Line  |
-| `proportional` | Symboles proportionnels   | QTA (absolu)        | Point, Polygon |
-| `categorical`  | Couleurs par catégorie    | QL / QLO            | Toute          |
-| `bivariate`    | Taille + couleur (2 vars) | QTA + QL/QTR        | Point, Polygon |
+### Personnalisation par primitive
 
-### Paramétrage [VIZ-02b]
+4 primitives indépendantes : `symbol`, `polygon`, `line`, `text`. Chacune est affichable/masquable/filtrable de façon indépendante. Les panels sont dans `visualization-tab/components/` :
 
-4 primitives (symbole, polygone, ligne, texte) : affichable, masquable, filtrable indépendamment. Réglages : taille, épaisseur, forme, couleur fond, couleur contour.
+| Primitive | Panel                    | Fichier       |
+| --------- | ------------------------ | ------------- |
+| Symboles  | `symbols-config.svelte`  | + `symbols/`  |
+| Polygones | `polygons-config.svelte` | + `polygons/` |
+| Lignes    | `lines-config.svelte`    |               |
+| Textes    | `texts-config.svelte`    |               |
 
-### Couleurs [VIZ-02c]
+**Règle dual-write** : chaque modification doit écrire à la fois sur la primitive (`symbol.classification`) et sur le miroir legacy (`symbolClassification`). Toujours utiliser `visualizationStore.updatePrimitiveClassification(id, primitive, updates)`. Ne jamais mutater directement. Voir `.claude/rules/viz-primitive-state.md`.
 
-| Type                     | Usage                      | Familles                                |
-| ------------------------ | -------------------------- | --------------------------------------- |
-| **Qualitatives**         | Catégoriel                 | set1, set2, pastel, dark                |
-| **Intensité**            | Nuances d'une teinte       | Teinte unique                           |
-| **Palette séquentielle** | Choroplèthe, proportionnel | monochrome, bicolore, sépia (5 chacune) |
-| **Palette divergente**   | Avec valeur de rupture     | rdbu, rdylgn, brbg, piyg, prgn          |
-| **Motifs hatch**         | Accessibilité daltonisme   | 10 formes (diagonal, dots, cross...)    |
+### Discrétisation
 
-### Discrétisation [VIZ-02d]
+La modale de discrétisation (`discretization-modal.svelte`) affiche les histogrammes et les seuils. Elle délègue le calcul à `calculateBreaks()` dans `classification.service.ts`, qui appelle les macros DuckDB et retourne un `BreaksResult { breaks[], counts[], min, max }`. Les 7 méthodes et leur macro SQL respective sont dans [CARTOGRAPHIE.md — Discrétisation](CARTOGRAPHIE.md).
 
-Découpage de données continues en classes. 6 méthodes automatiques via DuckDB, plus le mode manuel :
+### Filtre temporel (années)
 
-| Méthode          | Principe                                            |
-| ---------------- | --------------------------------------------------- |
-| `kmeans`         | Seuils naturels par K-means                         |
-| `quantiles`      | Effectifs égaux par classe                          |
-| `equal_interval` | Intervalles de même amplitude                       |
-| `q6`             | 6 quantiles prédéfinis (5e, 27.5e, 50e, 72.5e, 95e) |
-| `nested_means`   | Moyennes emboîtées récursives                       |
-| `head_tail`      | Head/tail breaks (distributions lourdes)            |
-| `manual`         | Bornes saisies manuellement                         |
-
-Options : méthode + nombre de classes. **Valeur de rupture** : active la palette divergente, positionnable.
-
-Les méthodes automatiques passent par les macros `kmeans`, `quantile`, `equi_width`, `q6`, `nested_means` et `headtail2`. Le service ne charge pas les valeurs de colonne en TypeScript pour recalculer les seuils localement.
-
-### Légende [VIZ-02e]
-
-Générée automatiquement :
-
-- Choroplèthe → rampe de couleurs + seuils
-- Catégoriel → swatches discrètes
-- Proportionnel → échelle de tailles
-- Lignes → swatches de couleur ou d’épaisseur
-- Textes → légendes de couleur et de taille dédiées
-- Bivarié → combinaison compacte des segments nécessaires
-- Motifs → swatches hatchées
+`year-filter.svelte` + `year-filter.utils.ts` gèrent le filtre par année. Les valeurs distinctes sont récupérées depuis DuckDB (`SELECT DISTINCT year FROM table`). Le filtre s'applique via `DataFilterExtension` côté GPU — la Arrow table complète est passée à `createDeckLayers()` pour préserver les caches WeakMap. Voir [MAP.md — DataFilterExtension](MAP.md).
 
 ---
 
-## Outils de visualisation [VIZ-TOOLS]
+## Outils de la barre latérale (step-toolbar)
 
-Barre d'outils disponible aux étapes Visualisations et Habillage.
+La barre `step-toolbar.svelte` affiche des outils contextuels selon l'étape. Chaque outil est implémenté dans `step-toolbar/tools/` via le pattern `createToolStore()`.
 
-### Recherche [VIZ-TOOLS-a]
+### Recherche
 
-Recherche d'entité ou valeur. Highlight sur la carte. Parcours des résultats. DuckDB `normalize_text()` pour la correspondance.
+**Dossier** : `step-toolbar/tools/search/`
 
-### Calques [VIZ-TOOLS-b]
+Recherche textuelle via `duckDBOrchestrator.searchInTable(tableName, query)` qui utilise les macros `search_macros`. Retourne `{ totalRows, matches: [{ row, column, snippet }] }`. Le highlight sur la carte est déclenché après 250 ms de debounce (constante locale dans `search.store.svelte.ts`).
 
-Chaque viz génère un calque avec sous-calques par primitive. Le fond de carte reste global et n'est plus dupliqué sous chaque visualisation.
+### Calques
 
-Actions : affichage/masquage, renommer, dupliquer, supprimer, déplacer. Sous-calques : mêmes options.
+**Dossier** : `step-toolbar/tools/layers/`
 
-Le panneau `Calques` expose explicitement 3 sections : `Fond de carte au-dessus`, `Visualisations`, `Fond de carte en dessous`.
-L'ordre de la liste est l'ordre visuel attendu à l'intérieur de chaque section : l'élément le plus haut dans une section se rend au-dessus des éléments placés en dessous dans cette même section.
-Les couches de fond sont séparées selon les groupes réellement respectés par le moteur : `foreground` du fond de carte en haut, visualisations au milieu, `background` du fond de carte en bas. Le drag-and-drop ne mélange pas ces groupes et l'interface doit l'expliquer clairement.
-Les primitives de texte (`labels`, `texts`) conservent l'ordre produit par chaque visualisation : à l'intérieur d'une même visualisation elles restent au-dessus de ses géométries, et entre visualisations elles suivent strictement l'ordre affiché dans `Calques`. Les collisions entre `labels` et `texts` d'un même jeu de données sont calculées ensemble pour limiter les recouvrements entre visualisations superposées.
+Chaque visualisation génère un calque avec sous-calques par primitive. Le panneau expose 3 sections ordonnées :
 
-Collection : calques regroupés par facette.
+```
+Fond de carte au-dessus   ← couches foreground du basemap
+Visualisations            ← viz dans l'ordre affiché
+Fond de carte en dessous  ← couches background du basemap
+```
 
-### Projections [VIZ-TOOLS-c]
+Le drag-and-drop ne mélange pas ces groupes. Actions disponibles : affichage/masquage, renommage, duplication, suppression, réordonnancement. L'ordre de la liste correspond à l'ordre de rendu GPU (du haut de la liste = rendu par-dessus).
 
-12 projections d3-geo intégrées : Mercator, Robinson, Winkel Tripel, Orthographique, Natural Earth, Équirectangulaire, Albers, Conique Conforme, Stéréographique, Azimutale Équivalente, Aitoff, Mollweide.
+### Projections
 
-Projections composites : FRANCE_DOM_TOM (Lambert-93 + encarts ultra-marins), EUROPE_DOM_TOM.
+**Dossier** : `step-toolbar/tools/projections/` + `visualization-tab/map-projection-selector.svelte`
 
-Suggestions algorithmiques par emprise géographique. Catalogue extensible de plus de 150 projections via code CRS WKT/PROJ.4 personnalisé. Paramètres : longitude, latitude, rotation.
+12 projections intégrées via d3-geo + d3-geo-projection. Suggestions algorithmiques par emprise des données (`map-projection-availability.ts`). Projections composites (France DOM-TOM, Europe DOM-TOM) définies dans `static/basemaps/projection-presets.json`.
 
-### Simplification [VIZ-TOOLS-d]
+`proj4d3(proj4string)` (`map/utils/proj4d3.ts`) crée un objet `GeoProjection` compatible d3-geo à partir d'une chaîne PROJ.4 — bridge nécessaire car `geoarrow-deck-stream` attend une interface d3-geo.
 
-| Type de fond | Approche                                                   |
-| ------------ | ---------------------------------------------------------- |
-| Catalogue    | 3 niveaux prédéfinis (fichiers GeoParquet low/medium/high) |
-| Importé      | Ratio utilisateur via `simplify_and_clean()`               |
-| OSM          | Impossible (tuiles vectorielles)                           |
+Un choix explicite de projection prend le dessus sur la projection par défaut du fond de carte. Ce changement invalide le cycle de refresh des layers même si la famille ne change pas.
 
-### Collection / Facettes [VIZ-TOOLS-e]
+### Simplification
 
-Small multiples : chaque variable → une carte distincte. Création via sélection de plusieurs variables dans une primitive.
+**Fichier** : `step-toolbar/tools/simplification/`
 
-Options : échelle commune ou propre, nombre de colonnes, distribution.
+| Type de fond | Comportement                                                                |
+| ------------ | --------------------------------------------------------------------------- |
+| Catalogue    | 3 niveaux prédéfinis (low/medium/high GeoParquet)                           |
+| Importé      | Ratio utilisateur → `simplify_and_clean(table, geom, tolerance)` via DuckDB |
+| OSM          | Non disponible (tuiles vectorielles)                                        |
 
-**Chaque facette = full ThematicMap** (MapLibre + Deck.gl). Limite ~9 facets (8–16 WebGL2 contexts).
+La simplification d'un fond importé crée une nouvelle Arrow table en DuckDB et rafraîchit tous les layers via `duckDBOrchestrator`.
+
+### Facettes (small multiples)
+
+**Dossier** : `step-toolbar/tools/facets/` + `visualization-tab/facets-adapter.svelte.ts`
+
+Chaque facette est une `ThematicMap` complète (MapLibre + Deck.gl indépendants). Chaque facette = un contexte WebGL2. Les navigateurs limitent à 8–16 contextes simultanés ; Khartis applique une borne `MAX_FACETS = 16` (`step-toolbar/tools/facets/facets.store.svelte.ts`). Le viewport partagé est géré par `FacetSyncViewState`.
+
+Options : échelle commune ou indépendante par facette, nombre de colonnes, distribution. `use-facets-variable-selection.svelte.ts` gère la sélection des variables par facette.
+
+### Daltonisme
+
+**Dossier** : `step-toolbar/tools/color-blindness/`
+
+Filtre CSS sur le conteneur de la carte. 4 modes (`ColorBlindnessType`) : `PROTANOPIA`, `DEUTERANOPIA`, `TRITANOPIA`, `ACHROMATOPSIA`. **Simulation uniquement — n'affecte pas l'export.** Les palettes qualitatives proposent un filtre `Daltonisme` qui substitue les couleurs par `COLORBLIND_SAFE_INDICES` dans `palette.constants.ts`.
+
+### Annotations
+
+**Dossier** : `step-toolbar/tools/annotations/` + `map/components/annotation-overlay.svelte`
+
+SVG overlay positionné `position: absolute` sur le conteneur viewer (non géolocalisé). 4 types :
+
+| Type      | Contenu                                    |
+| --------- | ------------------------------------------ |
+| `TEXT`    | Texte libre, police, taille, couleur       |
+| `SHAPE`   | Flèche, ligne, cercle, rectangle, triangle |
+| `DRAWING` | Tracé Bézier freehand                      |
+| `IMAGE`   | Image importée (URL ou upload)             |
+
+Stockées dans `annotationsStore`. Incluses dans le snapshot projet via `persistenceRegistry` et exportées dans le SVG.
+
+### Format de page
+
+**Dossier** : `step-toolbar/tools/format/`
+
+Sélection du format de page (A4, A3, écran, personnalisé en pixels), marges, couleur de fond de page, grille d'aide à l'alignement avec magnétisme. Les modifications déclenchent une redistribution automatique des éléments d'habillage.
+
+### Indications géographiques
+
+**Dossier** : `step-toolbar/tools/geo-indications/`
+
+Trois types d'indications, chacun configurable séparément :
+
+- **Échelle** : barre scalaire (ligne ou boîte), unité (km/miles), couleur. Calculée depuis la projection active.
+- **Orientation** : flèche nord ou rose des vents, taille, couleur.
+- **Carte en encart** : globe ou planisphère miniature indiquant la zone représentée. Réutilise les couleurs du fond principal.
+
+### Légende
+
+**Dossier** : `step-toolbar/tools/legend/`
+
+Affichage/masquage par légende, édition du titre, sous-titre, note. Style commun (police, taille, couleur du texte, arrière-plan, opacité) appliqué à toutes les légendes. Voir [LEGENDES.md](LEGENDES.md) pour l'architecture du rendu SVG.
 
 ---
 
 ## Étape 3 — Habillage
 
-Usage libre — pas de structure prédéfinie.
+### Format de page
 
-### Habillage prédéfini [HAB-01]
+`layoutStore` gère le format actif (A4, A3, écran, personnalisé en pixels) et les marges. `layoutStore.updateLayout(patch)` crée un snapshot undo. Le changement de format recalcule l'échelle de rendu.
 
-Dès création : titre, sous-titre, source, crédit, signature. Placeholder si vide (vierge = absent à l'export).
+### Légendes
 
-### Format [HAB-02a]
+`legendStore` synchronise les légendes visibles avec `visualizationStore`. Chaque légende peut avoir un titre, sous-titre, note. Style : police, taille, couleur du texte, arrière-plan. Les légendes sont générées SVG via les générateurs de `commons/components/legend/`. Voir [LEGENDES.md](LEGENDES.md) pour l'architecture SVG.
 
-Formats prédéfinis (A4, A3, écran) + personnalisé pixels. Marges, couleur de page, grille d'alignement magnétique.
+### Indications géographiques
 
-### Légende [HAB-02b]
+- **Échelle** : barre scalaire en km ou miles, calculée depuis la projection active.
+- **Orientation** : flèche nord ou rose des vents.
+- **Carte en encart** : globe ou planisphère miniature indiquant la zone représentée.
 
-Affichage/masquage par légende. Titre, sous-titre, note. Style : police, taille, couleur texte, arrière-plan.
+### Personnalisation du fond de carte
 
-### Indications géographiques [HAB-02c]
+#### Fonds catalogue
 
-- **Échelle** : ligne ou boîte, unité (km/miles), couleur
-- **Orientation** : flèche ou rose des vents
-- **Carte en encart** : globe ou planisphère, taille, réutilisation des couleurs du fond principal
+9 couches configurables en deux groupes :
 
-### Annotations [HAB-02d]
+| Groupe       | Couches                                           |
+| ------------ | ------------------------------------------------- |
+| `background` | Terre, mers, lacs, relief                         |
+| `foreground` | Frontières, rivières, équateur, méridiens, villes |
 
-SVG overlay, ancrées page (non géolocalisées). 4 types :
+Les sections Lacs/Rivières et Villes sont désactivées si le fond actif ne fournit pas les géométries correspondantes. Chaque couche expose : visible, couleur, opacité, épaisseur.
 
-- **Texte** : style prédéfini ou personnalisé
-- **Forme** : flèche, ligne, rond, rectangle, triangle
-- **Dessin** : tracé manuel Bézier
-- **Image** : import jpg/png, placement libre
+**Panel** : `visualization-tab/customize-basemap.svelte` + `visualization-tab/components/basemap-layers/`
 
-### Daltonisme [HAB-02e]
-
-Simulation CSS (n'affecte pas l'export) : protanopie, deutéranopie, tritanopie.
-
----
-
-## Personnalisation du fond [VIZ-07]
-
-### Catalogue [VIZ-07a]
-
-9 couches affichables/masquables/personnalisables : terre, mers, lacs, relief, frontières, villes, équateur, méridiens, graticules.
-
-### Importé [VIZ-07b]
+#### Fonds importés
 
 Personnalisation réduite : couleur de fond, contour (couleur, épaisseur, pointillés, opacité, ombre).
 
-### OpenStreetMap [VIZ-07c]
+#### OpenStreetMap
 
-6 styles MapLibre (France/Monde × couleurs/grayscale/satellite), sélectionnables via un rail horizontal de cartes. La bascule affiche `Monde` à gauche, `France` à droite, avec `Monde` sélectionné par défaut. Le changement France/Monde recadre la vue sur l'emprise correspondante. La désactivation du mode tuilé recentre la vue sur le fond de référence ou les données courantes. Calques toggleables : routes, étiquettes.
+6 styles MapLibre GL JSON (France/Monde × couleurs/niveaux-de-gris/satellite). La sélection est gérée par `tiled-basemap-selection.ts` + `osm-basemap-sync.ts`. Calques toggleables : routes, étiquettes. Le changement France ↔ Monde recadre la vue sur l'emprise correspondante. La désactivation du mode OSM recentre sur le fond de référence ou les données courantes.
 
----
-
-## Export [DL-01 à DL-03]
-
-| Format        | Contenu                                                         |
-| ------------- | --------------------------------------------------------------- |
-| JPG bitmap    | Full HD / 2K / 4K — carte complète, avec ratio de page conservé |
-| SVG vectoriel | Calques organisés par éléments et viz                           |
-| CSV           | Données tabulaires (géo exclue)                                 |
-| GeoJSON       | Données + géométrie                                             |
-| .kh projet    | Fichier réimportable pour reprise                               |
+**Synchronisation** : `osm-basemap-sync.ts` maintient la cohérence entre `mapStyleStore` et l'état MapLibre GL.
 
 ---
 
-## Flux d'intégration
+## Export
+
+| Format        | Contenu                                                        | Service                                                  |
+| ------------- | -------------------------------------------------------------- | -------------------------------------------------------- |
+| JPG bitmap    | Full HD / 2K / 4K, ratio de page conservé                      | `exportMapToJpg()` (`header/services/export.service.ts`) |
+| SVG vectoriel | Calques organisés par viz, annotations incluses                | `exportMapToSvg()`                                       |
+| CSV           | Données tabulaires (colonne géo exclue)                        | `exportData(format='csv')`                               |
+| GeoJSON       | Données + géométries jointes                                   | `exportData(format='geojson')`                           |
+| `.kh` projet  | Archive autoportante (voir [GESTION_ETAT.md](GESTION_ETAT.md)) | `projectStore.exportProject()`                           |
+
+L'export SVG inclut l'overlay annotations, les légendes, et les indications géographiques. Tous les textes SVG passent par `escapeSvgText()` avant injection `{@html}`.
+
+---
+
+## Flux complet de bout en bout
 
 ```
-Fichier → validateFile() → DuckDB → DatasetResult
-  → Semio detection → Viz suggestion → VisualizationConfig
-    → calculateBreaks() (DuckDB macros) → generateColorsForBreaks() (ok-palette)
-      → Arrow table → createDeckLayers() → MapboxOverlay → GPU
+Upload fichier
+  → dataPipeline.processFile()         (PIPELINE_DONNEES.md)
+  → DuckDB: analyse + stats            (DUCKDB.md)
+  → datasetsStore.addDataset()
+  → semio-detector: semioTypes/scores  (CARTOGRAPHIE.md)
+  → vizSuggester.suggest()             (CARTOGRAPHIE.md)
+  → VisualizationConfig créée
+  → calculateBreaks() [DuckDB macros]  (CARTOGRAPHIE.md)
+  → generateColorsForBreaks() [ok-palette]
+  → duckDBOrchestrator.getArrowTable() (DUCKDB.md)
+  → filterArrowTable()                 (MAP.md)
+  → createDeckLayers()                 (MAP.md)
+  → MapboxOverlay / OrthographicView   (MAP.md)
+  → GPU render
 ```
-
-**Stores principaux** :
-
-- `datasetsStore` — jeux de données importés
-- `visualizationStore` — configurations de viz (type, mapping, style, classification)
-- `mapStyleStore` — fond de carte actif
-- `annotationsStore` — annotations SVG overlay
-- `legendStore` — légendes
-
-**Points d'entrée** :
-
-- `dataPipeline.processFile()` — import de fichier
-- `vizSuggester.suggestVisualizations()` — suggestion de viz
-- `calculateBreaks()` — discrétisation (macros DuckDB + manuel)
-- `generateColorsForBreaks()` — palette (séquentielle/divergente)
-- `duckDBOrchestrator` — jointures, filtres, stats
 
 ---
 
-**Voir aussi :** [ARCHITECTURE.md](./ARCHITECTURE.md) — [CARTOGRAPHIE.md](./CARTOGRAPHIE.md) — [MAP.md](./MAP.md) — [PIPELINE_DONNEES.md](./PIPELINE_DONNEES.md) — [DUCKDB.md](./DUCKDB.md) — [GUIDE_DEVELOPPEUR.md](./GUIDE_DEVELOPPEUR.md)
+## Stores impliqués
+
+| Store                           | Rôle                                                       |
+| ------------------------------- | ---------------------------------------------------------- |
+| `datasetsStore`                 | Datasets chargés + colonnes enrichies                      |
+| `visualizationStore`            | Configs viz actives (type, mapping, style, classification) |
+| `mapStyleStore`                 | Fond de carte actif + couches visibles                     |
+| `annotationsStore`              | Annotations SVG overlay                                    |
+| `legendStore`                   | Légendes actives + style                                   |
+| `layoutStore`                   | Format de page, marges                                     |
+| `globalState` / `globalActions` | Étape active, outil actif, zoom                            |
