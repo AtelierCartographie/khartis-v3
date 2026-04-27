@@ -1176,7 +1176,7 @@ describe('basemap projection fallbacks', () => {
       dotted: false,
       dottedPattern: BasemapDottedPattern.DOTS,
       thickness: 100,
-      opacity: 80
+      opacity: 100
     });
 
     extractGeometryInfoMock.mockImplementation((table: ArrowTable) =>
@@ -1217,7 +1217,7 @@ describe('basemap projection fallbacks', () => {
       getDashArray: [number, number];
     };
 
-    expect(solidProps.getLineColor).toEqual([18, 52, 86, 204]);
+    expect(solidProps.getLineColor).toEqual([18, 52, 86, 255]);
     expect(solidProps.getLineWidth).toBe(BASEMAP_LAYER_CONFIG.thickness.max);
     expect(solidProps.lineWidthMaxPixels).toBe(
       BASEMAP_LAYER_CONFIG.thickness.max
@@ -1255,7 +1255,7 @@ describe('basemap projection fallbacks', () => {
     expect(dottedProps._subLayerProps.linestrings.getDashArray).toEqual([8, 4]);
     expect(dottedProps._subLayerProps.linestrings.extensions).toHaveLength(1);
     expect(dottedProps.updateTriggers).toMatchObject({
-      getLineColor: ['#123456', 0.8],
+      getLineColor: ['#123456', 1],
       getDashArray: [true, BasemapDottedPattern.DASHES],
       getLineWidth: [BASEMAP_LAYER_CONFIG.thickness.max]
     });
@@ -1318,8 +1318,8 @@ describe('basemap projection fallbacks', () => {
         color: '#123456',
         dotted: true,
         dottedPattern: BasemapDottedPattern.DASHES,
-        thickness: 4,
-        opacity: 80
+        thickness: 3,
+        opacity: 100
       },
       {}
     ) as GeoJsonLayer | null;
@@ -1338,7 +1338,7 @@ describe('basemap projection fallbacks', () => {
       >;
     };
 
-    expect(props.getLineWidth).toBe(4);
+    expect(props.getLineWidth).toBe(3);
     expect(props.lineWidthMaxPixels).toBe(BASEMAP_LAYER_CONFIG.thickness.max);
     expect(props.getDashArray).toEqual([8, 4]);
     expect(props.extensions).toHaveLength(1);
@@ -1348,9 +1348,9 @@ describe('basemap projection fallbacks', () => {
     expect(props._subLayerProps['polygons-stroke'].extensions).toHaveLength(1);
     expect(props._subLayerProps.linestrings.getDashArray).toEqual([8, 4]);
     expect(props.updateTriggers).toMatchObject({
-      getLineColor: ['#123456', 0.8],
+      getLineColor: ['#123456', 1],
       getDashArray: [true, BasemapDottedPattern.DASHES],
-      getLineWidth: [4]
+      getLineWidth: [3]
     });
   });
 
@@ -1372,7 +1372,7 @@ describe('basemap projection fallbacks', () => {
     basemapLayersStore.updateLayer(BASEMAP_LAYER_ID.RIVIERES, {
       color: '#00ff00',
       opacity: 40,
-      thickness: 4
+      thickness: 3
     });
 
     extractGeometryInfoMock.mockImplementation((table: ArrowTable) => {
@@ -1431,10 +1431,10 @@ describe('basemap projection fallbacks', () => {
 
     expect(riversLayer).toBeInstanceOf(GeoJsonLayer);
     expect(riversLayer?.props.getLineColor).toEqual([0, 255, 0, 102]);
-    expect(riversLayer?.props.getLineWidth).toBe(4);
+    expect(riversLayer?.props.getLineWidth).toBe(3);
     expect(riversLayer?.props.updateTriggers).toEqual({
       getLineColor: ['#00ff00', 40],
-      getLineWidth: [4],
+      getLineWidth: [3],
       getDashArray: [false, BasemapDottedPattern.DOTS]
     });
   });

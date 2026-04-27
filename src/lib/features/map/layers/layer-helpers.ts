@@ -207,13 +207,19 @@ export function createGeoJsonCategoricalColorAccessor(
   colorMap: Map<string, RGBColor> | null,
   defaultColor: RGBColor,
   missingColor: RGBColor = defaultColor,
-  showMissing = true
+  showMissing = true,
+  disabledLabels: string[] = []
 ) {
   const missingAlpha = showMissing ? 255 : 0;
+  const hiddenTuple: [number, number, number, number] = [0, 0, 0, 0];
+  const disabled = new Set(disabledLabels.map(String));
   return (feature: {
     properties?: Record<string, unknown>;
   }): [number, number, number, number] => {
     const value = feature.properties?.[categoryColumn];
+    if (disabled.has(String(value))) {
+      return hiddenTuple;
+    }
     if (value === null || value === undefined) {
       return [missingColor[0], missingColor[1], missingColor[2], missingAlpha];
     }

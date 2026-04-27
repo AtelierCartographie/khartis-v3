@@ -43,6 +43,7 @@ import {
 } from '$lib/features/commons/store/visualization.store.svelte';
 import {
   CATEGORY_SHAPE_CYCLE,
+  BasemapDottedPattern,
   CategoryShapeMode,
   ColorMode,
   DEFAULT_COLORS,
@@ -173,6 +174,23 @@ const SELECTED_POLYGON_STROKE_COLOR: [number, number, number, number] = [
 const SELECTED_POLYGON_STROKE_WIDTH = 3;
 const DASH_EXTENSION = new PathStyleExtension({ dash: true });
 const DEFAULT_DASH_ARRAY: [number, number] = [3, 2];
+
+function resolveThematicStrokeDashArray(
+  pattern: BasemapDottedPattern | undefined
+): [number, number] {
+  switch (pattern) {
+    case BasemapDottedPattern.DOTS:
+      return [2, 2];
+    case BasemapDottedPattern.DASHES:
+      return [6, 4];
+    case BasemapDottedPattern.DASH_DOT:
+      return [6, 4];
+    case BasemapDottedPattern.LONG_DASH:
+      return [12, 4];
+    default:
+      return DEFAULT_DASH_ARRAY;
+  }
+}
 
 export const DEFAULT_TEXT_MASK_PADDING: [number, number] = [3, 1];
 export const TEXT_COLLISION_SAFE_PADDING: [number, number] = [4, 4];
@@ -521,6 +539,9 @@ function createDoubleProportionalPointLayers(
   const pointStrokeWidth = pointConfig.strokeWidth ?? strokeWidth;
   const pointStrokeOpacity = pointConfig.strokeOpacity ?? rawStrokeOpacity;
   const pointStrokeDashed = pointConfig.strokeDashed ?? false;
+  const pointStrokeDashArray = resolveThematicStrokeDashArray(
+    pointConfig.strokeDashedPattern
+  );
   const showPointStroke =
     pointConfig.strokeMode !== StrokeMode.NONE &&
     pointStrokeOpacity > 0 &&
@@ -580,6 +601,10 @@ function createDoubleProportionalPointLayers(
   const disabledFillLabels = new Set(
     (pointFillClassification?.disabledLabels ?? []).map(String)
   );
+  const isDisabledFillCategory = (row: DeckDataRow): boolean =>
+    useFillCategorical &&
+    pointFillCategoryColumn !== undefined &&
+    disabledFillLabels.has(String(row[pointFillCategoryColumn]));
   const primaryStats = pointStatistics;
   const secondaryStats = pointSecondaryStatistics;
   const sharedMin = commonScale
@@ -612,6 +637,9 @@ function createDoubleProportionalPointLayers(
   const createRadiusAccessor =
     (columnName: string, accessor: (row: DeckDataRow) => number) =>
     (row: DeckDataRow): number => {
+      if (isDisabledFillCategory(row)) {
+        return 0;
+      }
       if (isMissingThematicValue(row[columnName])) {
         return showMissingPoints ? missingPointRadius : 0;
       }
@@ -725,6 +753,9 @@ function createDoubleProportionalPointLayers(
   const createLineAccessor =
     (columnName: string) =>
     (row: DeckDataRow): [number, number, number, number] => {
+      if (isDisabledFillCategory(row)) {
+        return [0, 0, 0, 0];
+      }
       if (isMissingThematicValue(row[columnName]) && !showMissingPoints) {
         return [0, 0, 0, 0];
       }
@@ -883,8 +914,8 @@ function createDoubleProportionalPointLayers(
       stroked: showPointStroke,
       filled: !hideSymbolFill,
       dashed: showPointStroke && pointStrokeDashed,
-      dashLength: DEFAULT_DASH_ARRAY[0],
-      gapLength: DEFAULT_DASH_ARRAY[1],
+      dashLength: pointStrokeDashArray[0],
+      gapLength: pointStrokeDashArray[1],
       opacity: 1,
       radiusScale: layoutProps.radiusScale,
       radiusUnits: 'pixels',
@@ -1048,6 +1079,9 @@ function createRepresentativePointSymbolLayers(
   const pointStrokeWidth = pointConfig.strokeWidth ?? strokeWidth;
   const pointStrokeOpacity = pointConfig.strokeOpacity ?? rawStrokeOpacity;
   const pointStrokeDashed = pointConfig.strokeDashed ?? false;
+  const pointStrokeDashArray = resolveThematicStrokeDashArray(
+    pointConfig.strokeDashedPattern
+  );
   const showPointStroke =
     pointConfig.strokeMode !== StrokeMode.NONE &&
     pointStrokeOpacity > 0 &&
@@ -1189,10 +1223,20 @@ function createRepresentativePointSymbolLayers(
     showMissing: showMissingPoints,
     hexToRgb
   });
+  const disabledPointCategoryLabels = new Set(
+    (pointColorClassification?.disabledLabels ?? []).map(String)
+  );
+  const isDisabledPointCategoryRow = (row: DeckDataRow): boolean =>
+    pointConfig.mode === SymbolMode.CATEGORIES &&
+    pointCategoryColumn !== undefined &&
+    disabledPointCategoryLabels.has(String(row[pointCategoryColumn]));
 
   const resolveFillColorForRow = (
     row: DeckDataRow
   ): [number, number, number, number] => {
+    if (isDisabledPointCategoryRow(row)) {
+      return [0, 0, 0, 0];
+    }
     const rowOpacity = resolveHighlightedOpacityForRow(
       row,
       pointFillOpacity,
@@ -1206,7 +1250,10 @@ function createRepresentativePointSymbolLayers(
     }
 
     if (baseFillAccessor) {
-      const [r, g, b] = baseFillAccessor(row);
+      const [r, g, b, sourceAlpha] = baseFillAccessor(row);
+      if (sourceAlpha === 0) {
+        return [r, g, b, 0];
+      }
       const alpha = Math.round(Math.min(Math.max(rowOpacity, 0), 1) * 255);
       return [r, g, b, alpha];
     }
@@ -1217,6 +1264,9 @@ function createRepresentativePointSymbolLayers(
   const resolveLineColorForRow = (
     row: DeckDataRow
   ): [number, number, number, number] => {
+    if (isDisabledPointCategoryRow(row)) {
+      return [0, 0, 0, 0];
+    }
     if (
       pointMissingColumn &&
       isMissingThematicValue(row[pointMissingColumn]) &&
@@ -1236,7 +1286,10 @@ function createRepresentativePointSymbolLayers(
     }
 
     if (strokeClassificationAccessor) {
-      const [r, g, b] = strokeClassificationAccessor(row);
+      const [r, g, b, sourceAlpha] = strokeClassificationAccessor(row);
+      if (sourceAlpha === 0) {
+        return [r, g, b, 0];
+      }
       const alpha = Math.round(
         Math.min(Math.max(rowStrokeOpacity, 0), 1) * 255
       );
@@ -1247,6 +1300,9 @@ function createRepresentativePointSymbolLayers(
   };
 
   const resolveRadiusForRow = (row: DeckDataRow): number => {
+    if (isDisabledPointCategoryRow(row)) {
+      return 0;
+    }
     if (pointMissingColumn && isMissingThematicValue(row[pointMissingColumn])) {
       return showMissingPoints ? missingPointRadius : 0;
     }
@@ -1404,6 +1460,10 @@ function createRepresentativePointSymbolLayers(
     for (let i = 0; i < length; i += 1) {
       const rowIdx = featureIds ? featureIds[i] : i;
       const row = jsTable.get(rowIdx) as DeckDataRow | null;
+      if (row && isDisabledPointCategoryRow(row)) {
+        radiusArr[i] = 0;
+        continue;
+      }
       if (
         pointMissingColumn &&
         row &&
@@ -1432,8 +1492,8 @@ function createRepresentativePointSymbolLayers(
       stroked: showPointStroke,
       filled: !hideSymbolFill,
       dashed: showPointStroke && pointStrokeDashed,
-      dashLength: DEFAULT_DASH_ARRAY[0],
-      gapLength: DEFAULT_DASH_ARRAY[1],
+      dashLength: pointStrokeDashArray[0],
+      gapLength: pointStrokeDashArray[1],
       opacity: 1,
       radiusScale: 1,
       radiusUnits: 'pixels',
@@ -3344,6 +3404,9 @@ export function createPointLayers(
   const pointStrokeWidth = pointConfig?.strokeWidth ?? strokeWidth;
   const pointStrokeOpacity = pointConfig?.strokeOpacity ?? rawStrokeOpacity;
   const pointStrokeDashed = pointConfig?.strokeDashed ?? false;
+  const pointStrokeDashArray = resolveThematicStrokeDashArray(
+    pointConfig?.strokeDashedPattern
+  );
   const showPointStroke =
     pointConfig?.strokeMode !== StrokeMode.NONE &&
     pointStrokeOpacity > 0 &&
@@ -3487,7 +3550,10 @@ export function createPointLayers(
           ? createGeoJsonCategoricalColorAccessor(
               pointCategoryColumn!,
               effectiveCategoryColorMap,
-              fillColor
+              fillColor,
+              fillColor,
+              true,
+              pointClassification?.disabledLabels ?? []
             )
           : fillColor;
     const pointStrokeColors = pointConfig?.strokeClassification?.colors;
@@ -3542,7 +3608,8 @@ export function createPointLayers(
                   pointStrokeGeoJsonColorMap,
                   pointStrokeColor,
                   missingPointColor,
-                  showMissingPoints
+                  showMissingPoints,
+                  pointConfig?.strokeClassification?.disabledLabels ?? []
                 )(feature),
                 pointStrokeOpacity
               ) as [number, number, number, number]
@@ -3594,6 +3661,17 @@ export function createPointLayers(
       pointMissingColumn
         ? isMissingThematicValue(feature.properties?.[pointMissingColumn])
         : false;
+    const disabledPointCategoryLabels = new Set(
+      (pointClassification?.disabledLabels ?? []).map(String)
+    );
+    const isDisabledGeoJsonPoint = (feature: {
+      properties?: Record<string, unknown>;
+    }): boolean =>
+      pointConfig?.mode === SymbolMode.CATEGORIES &&
+      pointCategoryColumn !== undefined &&
+      disabledPointCategoryLabels.has(
+        String(feature.properties?.[pointCategoryColumn])
+      );
 
     if (
       pointShape !== ShapeType.CIRCLE ||
@@ -3607,19 +3685,22 @@ export function createPointLayers(
           getIcon: (feature: { properties?: Record<string, unknown> }) =>
             createPointSymbolIcon(
               isMissingGeoJsonPoint(feature) ? missingPointShape : pointShape,
-              isMissingGeoJsonPoint(feature)
-                ? withOpacity(
-                    missingPointColor,
-                    hasHighlights ? 1 : pointFillOpacity
-                  )
-                : hideSymbolFill
-                  ? [0, 0, 0, 0]
-                  : resolveGeoJsonLayerColor(
-                      geoJsonFillColor,
-                      feature,
+              isDisabledGeoJsonPoint(feature)
+                ? [0, 0, 0, 0]
+                : isMissingGeoJsonPoint(feature)
+                  ? withOpacity(
+                      missingPointColor,
                       hasHighlights ? 1 : pointFillOpacity
-                    ),
-              isMissingGeoJsonPoint(feature) && !showMissingPoints
+                    )
+                  : hideSymbolFill
+                    ? [0, 0, 0, 0]
+                    : resolveGeoJsonLayerColor(
+                        geoJsonFillColor,
+                        feature,
+                        hasHighlights ? 1 : pointFillOpacity
+                      ),
+              isDisabledGeoJsonPoint(feature) ||
+                (isMissingGeoJsonPoint(feature) && !showMissingPoints)
                 ? [0, 0, 0, 0]
                 : !showPointStroke
                   ? [0, 0, 0, 0]
@@ -3632,6 +3713,9 @@ export function createPointLayers(
               showPointStroke && pointStrokeDashed
             ),
           getIconSize: (feature) => {
+            if (isDisabledGeoJsonPoint(feature)) {
+              return 0;
+            }
             if (isMissingGeoJsonPoint(feature)) {
               return showMissingPoints
                 ? Math.max(1, missingPointRadius * 2)
@@ -3712,6 +3796,9 @@ export function createPointLayers(
         filled: !hideSymbolFill,
         stroked: showPointStroke,
         getFillColor: (feature: { properties?: Record<string, unknown> }) => {
+          if (isDisabledGeoJsonPoint(feature)) {
+            return [0, 0, 0, 0];
+          }
           if (isMissingGeoJsonPoint(feature)) {
             return showMissingPoints
               ? withOpacity(
@@ -3726,6 +3813,9 @@ export function createPointLayers(
             : geoJsonFillColor;
         },
         getLineColor: (feature: { properties?: Record<string, unknown> }) => {
+          if (isDisabledGeoJsonPoint(feature)) {
+            return [0, 0, 0, 0];
+          }
           if (isMissingGeoJsonPoint(feature) && !showMissingPoints) {
             return [0, 0, 0, 0];
           }
@@ -3739,6 +3829,9 @@ export function createPointLayers(
             : geoJsonLineColor;
         },
         getPointRadius: (feature: { properties?: Record<string, unknown> }) => {
+          if (isDisabledGeoJsonPoint(feature)) {
+            return 0;
+          }
           if (isMissingGeoJsonPoint(feature)) {
             return showMissingPoints ? missingPointRadius : 0;
           }
@@ -3837,9 +3930,24 @@ export function createPointLayers(
           )
         : null;
 
+  const disabledPointCategoryLabels = new Set(
+    (pointClassification?.disabledLabels ?? []).map(String)
+  );
+  const isDisabledPointCategoryRow = (row: DeckDataRow): boolean =>
+    pointConfig?.mode === SymbolMode.CATEGORIES &&
+    pointCategoryColumn !== undefined &&
+    disabledPointCategoryLabels.has(String(row[pointCategoryColumn]));
+  const hasDisabledPointCategories =
+    pointConfig?.mode === SymbolMode.CATEGORIES &&
+    pointCategoryColumn !== undefined &&
+    disabledPointCategoryLabels.size > 0;
+
   const fillColorAccessor =
     pointMissingColumn || hasHighlights
       ? (row: DeckDataRow): [number, number, number, number] => {
+          if (isDisabledPointCategoryRow(row)) {
+            return [0, 0, 0, 0];
+          }
           const rowOpacity = resolveHighlightedOpacityForRow(
             row,
             pointFillOpacity,
@@ -3855,7 +3963,10 @@ export function createPointLayers(
           }
 
           if (baseFillAccessor) {
-            const [r, g, b] = baseFillAccessor(row);
+            const [r, g, b, sourceAlpha] = baseFillAccessor(row);
+            if (sourceAlpha === 0) {
+              return [r, g, b, 0];
+            }
             const alpha = Math.round(
               Math.min(Math.max(rowOpacity, 0), 1) * 255
             );
@@ -3884,8 +3995,14 @@ export function createPointLayers(
   });
 
   const lineColorAccessor =
-    strokeClassificationAccessor || pointMissingColumn || hasHighlights
+    strokeClassificationAccessor ||
+    pointMissingColumn ||
+    hasHighlights ||
+    hasDisabledPointCategories
       ? (row: DeckDataRow): [number, number, number, number] => {
+          if (isDisabledPointCategoryRow(row)) {
+            return [0, 0, 0, 0];
+          }
           if (
             pointMissingColumn &&
             isMissingThematicValue(row[pointMissingColumn]) &&
@@ -3899,7 +4016,10 @@ export function createPointLayers(
           }
 
           if (strokeClassificationAccessor) {
-            const [r, g, b] = strokeClassificationAccessor(row);
+            const [r, g, b, sourceAlpha] = strokeClassificationAccessor(row);
+            if (sourceAlpha === 0) {
+              return [r, g, b, 0];
+            }
             const alpha = Math.round(
               Math.min(
                 Math.max(
@@ -3954,8 +4074,11 @@ export function createPointLayers(
         : null;
 
   const radiusAccessor =
-    pointMissingColumn || baseRadiusAccessor
+    pointMissingColumn || baseRadiusAccessor || hasDisabledPointCategories
       ? (row: DeckDataRow): number => {
+          if (isDisabledPointCategoryRow(row)) {
+            return 0;
+          }
           if (
             pointMissingColumn &&
             isMissingThematicValue(row[pointMissingColumn])
@@ -4097,8 +4220,12 @@ export function createPointLayers(
     const radiusArr = new Float32Array(length);
     for (let i = 0; i < length; i += 1) {
       const rowIdx = featureIds ? featureIds[i] : i;
+      const row = jsTable.get(rowIdx) as DeckDataRow | null;
+      if (row && isDisabledPointCategoryRow(row)) {
+        radiusArr[i] = 0;
+        continue;
+      }
       if (pointMissingColumn) {
-        const row = jsTable.get(rowIdx) as DeckDataRow | null;
         if (row && isMissingThematicValue(row[pointMissingColumn])) {
           radiusArr[i] = showMissingPoints ? missingPointRadius : 0;
           continue;
@@ -4219,8 +4346,8 @@ export function createPointLayers(
       new MultiShapeLayer({
         ...baseLayerProps,
         dashed: showPointStroke && pointStrokeDashed,
-        dashLength: DEFAULT_DASH_ARRAY[0],
-        gapLength: DEFAULT_DASH_ARRAY[1]
+        dashLength: pointStrokeDashArray[0],
+        gapLength: pointStrokeDashArray[1]
       })
     ];
   }
