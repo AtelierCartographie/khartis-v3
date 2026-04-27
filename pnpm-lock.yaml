@@ -11,6 +11,11 @@ overrides:
   tar: '>=7.5.11'
   cookie: '>=0.7.0'
 
+patchedDependencies:
+  carbon-components-svelte:
+    hash: 37a70dca832aea677308975aef1543f547fd7906a42dc955b85b1811a0bcca7d
+    path: patches/carbon-components-svelte.patch
+
 importers:
 
   .:
@@ -80,7 +85,7 @@ importers:
         version: 10.58.15
       carbon-components-svelte:
         specifier: ^0.106.2
-        version: 0.106.2
+        version: 0.106.2(patch_hash=37a70dca832aea677308975aef1543f547fd7906a42dc955b85b1811a0bcca7d)
       carbon-icons-svelte:
         specifier: ^13.10.0
         version: 13.10.0
@@ -8285,7 +8290,7 @@ snapshots:
 
   caniuse-lite@1.0.30001790: {}
 
-  carbon-components-svelte@0.106.2:
+  carbon-components-svelte@0.106.2(patch_hash=37a70dca832aea677308975aef1543f547fd7906a42dc955b85b1811a0bcca7d):
     dependencies:
       '@ibm/telemetry-js': 1.11.0
       flatpickr: 4.6.9

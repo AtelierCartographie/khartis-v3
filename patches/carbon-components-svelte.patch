@@ -1,0 +1,31 @@
+diff --git a/src/Select/SelectItem.svelte b/src/Select/SelectItem.svelte
+index 5bcd32e6090a5329ac3482f23b1aff04f6a89fb6..016d4d05981dfd22512bd563060ad01a43189686 100644
+--- a/src/Select/SelectItem.svelte
++++ b/src/Select/SelectItem.svelte
+@@ -36,23 +36,15 @@
+    */
+   export let style = undefined;
+ 
+-  import { getContext, onMount } from "svelte";
++  import { getContext } from "svelte";
+ 
+   const id = `ccs-${Math.random().toString(36)}`;
+   const ctx =
+     getContext("carbon:Select") || getContext("carbon:TimePickerSelect");
++  const selectedValue = ctx.selectedValue;
+ 
+   $: ctx?.setDefaultValue?.(id, value);
+-
+-  let selected = false;
+-
+-  const unsubscribe = ctx.selectedValue.subscribe((currentValue) => {
+-    selected = currentValue === value;
+-  });
+-
+-  onMount(() => {
+-    return () => unsubscribe();
+-  });
++  $: selected = $selectedValue === value;
+ </script>
+ 
+ <option
