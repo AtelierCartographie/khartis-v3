@@ -1258,6 +1258,8 @@
   "toolbar_compact": "Réduire",
   "data_step_status_controlled": "Données contrôlées",
   "data_step_status_clean": "Vérifiez et nettoyez vos données",
+  "data_step_previous": "Étape précédente",
+  "data_step_next": "Étape suivante",
   "geolocation_status_done": "Géolocalisation effectuée",
   "geolocation_status_pending": "Sélectionnez les colonnes géographiques",
   "join_status_done": "Jointure réalisée",

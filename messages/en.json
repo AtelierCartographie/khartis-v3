@@ -1258,6 +1258,8 @@
   "toolbar_compact": "Collapse",
   "data_step_status_controlled": "Data checked",
   "data_step_status_clean": "Check and clean your data",
+  "data_step_previous": "Previous step",
+  "data_step_next": "Next step",
   "geolocation_status_done": "Geolocation completed",
   "geolocation_status_pending": "Select geographic columns",
   "join_status_done": "Join completed",
