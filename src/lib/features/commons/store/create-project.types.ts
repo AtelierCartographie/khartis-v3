@@ -104,6 +104,7 @@ export interface UploadedFile {
   geoColumn?: string;
   gpsMode?: boolean;
   gpsColumns?: { lat: string; lon: string };
+  joinCorrections?: Record<string, string>;
   sourceArchive?: string;
   duckdbTableName?: string;
   shapefileBaseName?: string;
