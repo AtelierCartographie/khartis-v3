@@ -5,25 +5,23 @@
   import { InlineNotification } from 'carbon-components-svelte';
 
   interface Props {
-    hasGPSCoordinates: boolean;
     isActive: boolean;
+    hasGPSCoordinates: boolean;
     onSelectOSM: () => void;
-    onGoToVisualize: () => void;
+    onGoToVisualize?: () => void;
   }
 
-  let { hasGPSCoordinates, isActive, onSelectOSM, onGoToVisualize }: Props =
+  const { isActive, hasGPSCoordinates, onSelectOSM, onGoToVisualize }: Props =
     $props();
 
   function handleLinkClick(event: Event): void {
     event.preventDefault();
-    onGoToVisualize();
+    onGoToVisualize?.();
   }
 </script>
 
-<div class="tab-content">
-  <p class="osm-description">
-    {m.osm_description()}
-  </p>
+<div class="osm-basemap-selector">
+  <p class="osm-description">{m.osm_description()}</p>
 
   {#if !hasGPSCoordinates}
     <InlineNotification
@@ -49,14 +47,16 @@
 
   <p class="osm-note">
     {m.osm_customization_note()}
-    <a href={resolve('/')} class="bx--link" onclick={handleLinkClick}>
-      {m.step_visualize()}
-    </a>.
+    {#if onGoToVisualize}
+      <a href={resolve('/')} class="bx--link" onclick={handleLinkClick}>
+        {m.step_visualize()}
+      </a>.
+    {/if}
   </p>
 </div>
 
 <style>
-  .tab-content {
+  .osm-basemap-selector {
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-04);

@@ -12,7 +12,7 @@ export async function refreshDatasetMetadata(
   const snapshot = await readDatasetTableSnapshot(tableName, options);
 
   datasetsStore.updateDataset(datasetId, {
-    columns: snapshot.enrichedColumns
+    columns: [...snapshot.enrichedColumns]
   });
   datasetsStore.updateDatasetRowCount(datasetId, snapshot.rowCount);
 

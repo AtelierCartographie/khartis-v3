@@ -2,10 +2,7 @@ import { JoinStatus } from '$lib/features/commons/constants/ui.constants';
 import { dataTabActions } from '$lib/features/commons/store/data-tab.store.svelte';
 import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
 import { projectStore } from '$lib/features/commons/store/project.store.svelte';
-import {
-  escapeIdentifier,
-  escapeSqlString
-} from '$lib/features/commons/utils/sanitize.utils';
+import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
 import { sanitizePreparedGeoJSON } from '$lib/features/commons/utils/persisted-geojson.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type {
@@ -39,7 +36,6 @@ export interface UseEnrichmentJoinReturn {
   readonly joinMappings: SvelteMap<number, string>;
   computeEnrichmentJoinStats: () => Promise<void>;
   handleMappingChange: (index: number, value: string) => void;
-  handleApplyCorrections: () => Promise<void>;
   handleFinalizeEnrichment: () => Promise<void>;
   resetJoinState: () => void;
 }
@@ -332,117 +328,6 @@ export function useEnrichmentJoin(
     }
   }
 
-  async function handleApplyCorrections(): Promise<void> {
-    if (isJoinBlocked()) {
-      return;
-    }
-
-    const enrichmentDataset = getEnrichmentDataset();
-    if (!enrichmentDataset || !selectedDataset || !joinStats) return;
-
-    const enrichCol = getEnrichDataFieldItems().find(
-      (item) => item.id === getEnrichLinkedVariableId()
-    );
-    const geoCol = getGeoFileColumns().find(
-      (item) => item.id === getGeoFileColumnId()
-    );
-
-    if (!enrichCol || !geoCol) return;
-
-    try {
-      const corrections: Record<string, string> = {};
-      joinStats.entities
-        .filter((e) => e.status === JoinStatus.TO_VERIFY && e.selectedMapping)
-        .forEach((entity) => {
-          corrections[entity.dataValue] = entity.selectedMapping!;
-        });
-
-      logger.info('Applying enrichment corrections', LogCategory.DATA, {
-        count: Object.keys(corrections).length
-      });
-
-      const geoTableName = getGeoTableName();
-      if (!geoTableName) return;
-      const escapedEnrichmentTableName = escapeIdentifier(
-        enrichmentDataset.tableName
-      );
-      const escapedEnrichmentColumn = escapeIdentifier(enrichCol.columnName);
-      const escapedGeoTableName = escapeIdentifier(geoTableName);
-      const escapedGeoColumn = escapeIdentifier(geoCol.columnName);
-
-      const correctionEntries = Object.entries(corrections);
-      if (correctionEntries.length > 0) {
-        const valueRows = correctionEntries
-          .map(
-            ([original, corrected]) =>
-              `('${escapeSqlString(original)}', '${escapeSqlString(corrected)}')`
-          )
-          .join(', ');
-
-        const tempTable = `enrich_corrections_${Date.now()}`;
-        await Duck.query(
-          `CREATE TEMP TABLE "${tempTable}" (original VARCHAR, corrected VARCHAR)`
-        );
-        await Duck.query(`INSERT INTO "${tempTable}" VALUES ${valueRows}`);
-        await Duck.query(
-          `UPDATE "${escapedEnrichmentTableName}"
-           SET "${escapedEnrichmentColumn}" = c.corrected
-           FROM "${tempTable}" c
-           WHERE "${escapedEnrichmentColumn}" = c.original`,
-          { format: 'array' }
-        );
-        await Duck.query(`DROP TABLE "${tempTable}"`);
-        Duck.invalidateTableCache(enrichmentDataset.tableName);
-      }
-
-      const stats = await computeDatasetJoinStats({
-        sourceTableName: enrichmentDataset.tableName,
-        sourceColumn: enrichCol.columnName,
-        targetTableName: geoTableName,
-        targetColumn: geoCol.columnName
-      });
-
-      const targetValues = (await Duck.query(
-        `SELECT DISTINCT CAST("${escapedGeoColumn}" AS VARCHAR) as val
-         FROM "${escapedGeoTableName}"
-         WHERE "${escapedGeoColumn}" IS NOT NULL
-         ORDER BY val`,
-        { format: 'array' }
-      )) as Array<{ val: string }>;
-
-      const allTargetOptions = targetValues.map((v) => v.val).filter(Boolean);
-
-      stats.entities = stats.entities.map((entity) => {
-        if (entity.status === JoinStatus.TO_VERIFY) {
-          return {
-            ...entity,
-            basemapOptions: entity.matches?.length
-              ? entity.matches
-              : allTargetOptions.slice(0, 20),
-            selectedMapping: entity.matches?.[0] || undefined
-          };
-        }
-        return entity;
-      });
-
-      joinStats = stats;
-      joinMappings = new SvelteMap<number, string>();
-
-      logger.success('Corrections applied', LogCategory.DATA);
-
-      if (
-        joinStats.toVerifyCount === 0 &&
-        joinStats.duplicateCount === 0 &&
-        joinStats.unrecognizedCount === 0 &&
-        joinStats.joinedCount > 0
-      ) {
-        await handleFinalizeEnrichment();
-      }
-    } catch (error) {
-      logger.error('Failed to apply corrections', LogCategory.DATA, error);
-    }
-  }
-
   async function handleFinalizeEnrichment(): Promise<void> {
     if (isJoinBlocked()) {
       return;
@@ -629,7 +514,6 @@ export function useEnrichmentJoin(
     },
     computeEnrichmentJoinStats,
     handleMappingChange,
-    handleApplyCorrections,
     handleFinalizeEnrichment,
     resetJoinState
   };

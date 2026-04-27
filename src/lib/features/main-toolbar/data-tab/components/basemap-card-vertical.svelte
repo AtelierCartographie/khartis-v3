@@ -6,7 +6,6 @@
   import { RadioButton } from 'carbon-components-svelte';
   import { Calendar } from 'carbon-icons-svelte';
   import clsx from 'clsx';
-  import { UI_CONSTANTS } from '../../constants';
 
   interface BasemapCardVerticalProps {
     basemap: BasemapMetadata;
@@ -60,14 +59,6 @@
 
   const matchPercentage = $derived(
     matchScore !== undefined ? Math.round(matchScore) : undefined
-  );
-
-  const filledSegments = $derived(
-    matchPercentage !== undefined
-      ? Math.round(
-          (matchPercentage / 100) * UI_CONSTANTS.BASEMAP_JOIN_TOTAL_SEGMENTS
-        )
-      : 0
   );
 
   const subtitle = $derived((basemap.subtitle_fr ?? '').trim());
@@ -153,15 +144,13 @@
     <div class="match-section">
       <span class="match-label">{m.basemap_match_score()}</span>
       <div
-        class="segmented-bar"
+        class="progress-bar"
         role="progressbar"
         aria-valuenow={matchPercentage}
         aria-valuemin={0}
         aria-valuemax={100}
       >
-        {#each Array(UI_CONSTANTS.BASEMAP_JOIN_TOTAL_SEGMENTS) as _, i (i)}
-          <div class="segment" class:filled={i < filledSegments}></div>
-        {/each}
+        <div class="progress-fill" style="width: {matchPercentage}%"></div>
       </div>
       <span class="match-value">{matchPercentage} %</span>
     </div>
@@ -428,28 +417,23 @@
     color: var(--khartis-additions-text-primary-suggestions, #003a6d);
   }
 
-  .segmented-bar {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 4px;
+  .progress-bar {
     width: 100%;
     height: 4px;
-  }
-
-  .segment {
-    height: 4px;
     background: var(--cds-border-subtle-01, #c6c6c6);
+    overflow: hidden;
   }
 
-  .segment.filled {
+  .progress-fill {
+    height: 100%;
     background: var(--cds-interactive-03, #726e6e);
   }
 
-  .basemap-card--suggestion .segment {
+  .basemap-card--suggestion .progress-bar {
     background: var(--khartis-additions-border-subtle-01-suggestions, #82cfff);
   }
 
-  .basemap-card--suggestion .segment.filled {
+  .basemap-card--suggestion .progress-fill {
     background: var(
       --khartis-additions-border-interactive-suggestions,
       #0072c3

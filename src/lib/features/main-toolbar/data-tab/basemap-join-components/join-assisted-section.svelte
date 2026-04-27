@@ -22,6 +22,7 @@
     WarningFilled
   } from 'carbon-icons-svelte';
   import { InfoPopover } from '$lib/features/commons/components/viz-controls';
+  import { SvelteSet } from 'svelte/reactivity';
 
   type IgnoreSource = 'joined' | 'to_verify' | 'unrecognized';
 
@@ -39,6 +40,7 @@
   interface JoinedEntityRow {
     dataValue: string;
     basemapValue: string;
+    otherIdentifiers?: string[];
   }
 
   interface LineReference {
@@ -90,8 +92,16 @@
     onValidateEntity
   }: Props = $props();
 
+  const joinedBasemapValues = $derived(
+    joinedEntitiesList.map((row) => row.basemapValue)
+  );
+
+  const availableBasemapValues = $derived(
+    basemapValues.filter((value) => !joinedBasemapValues.includes(value))
+  );
+
   const basemapComboBoxItems = $derived<ComboBoxItem[]>(
-    basemapValues.map((value) => ({ id: value, text: value }))
+    availableBasemapValues.map((value) => ({ id: value, text: value }))
   );
 
   const duplicateCount = $derived(duplicates.length);
@@ -99,15 +109,173 @@
   const ignoredCount = $derived(ignoredEntities.length);
 
   const deduplicatedJoinRows = $derived(
-    joinRows.map((row) => ({
-      ...row,
-      basemapOptions: [...new Set(row.basemapOptions)]
-    }))
+    joinRows.map((row) => {
+      const seen: string[] = [];
+      const dedupedOptions = row.basemapOptions.filter((option) => {
+        if (seen.includes(option)) return false;
+        seen.push(option);
+        return true;
+      });
+      return { ...row, basemapOptions: dedupedOptions };
+    })
   );
+
+  function buildJoinedRowOptions(currentValue: string): string[] {
+    const options: string[] = [currentValue];
+    for (const value of availableBasemapValues) {
+      if (!options.includes(value)) {
+        options.push(value);
+      }
+    }
+    return options;
+  }
+
+  interface RowVirtualizer {
+    visibleRows: SvelteSet<string>;
+    pendingRows: Map<Element, string>;
+    observer: IntersectionObserver | undefined;
+  }
+
+  function createRowVirtualizer(): RowVirtualizer {
+    return {
+      visibleRows: new SvelteSet<string>(),
+      pendingRows: new Map<Element, string>(),
+      observer: undefined
+    };
+  }
+
+  function attachVirtualizer(
+    virt: RowVirtualizer,
+    root: HTMLElement | undefined
+  ): (() => void) | void {
+    if (!root) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          const id = virt.pendingRows.get(entry.target);
+          if (id) virt.visibleRows.add(id);
+        }
+      },
+      { root, rootMargin: '200px 0px' }
+    );
+    virt.observer = observer;
+    for (const node of virt.pendingRows.keys()) {
+      observer.observe(node);
+    }
+    return () => {
+      observer.disconnect();
+      if (virt.observer === observer) {
+        virt.observer = undefined;
+      }
+    };
+  }
+
+  function makeObserveAction(virt: RowVirtualizer) {
+    return (node: HTMLElement, id: string) => {
+      virt.pendingRows.set(node, id);
+      virt.observer?.observe(node);
+      return {
+        destroy() {
+          virt.observer?.unobserve(node);
+          virt.pendingRows.delete(node);
+        }
+      };
+    };
+  }
+
+  let joinedScrollEl = $state<HTMLDivElement | undefined>(undefined);
+  let toVerifyScrollEl = $state<HTMLDivElement | undefined>(undefined);
+  let unrecognizedScrollEl = $state<HTMLDivElement | undefined>(undefined);
+
+  const joinedVirt = createRowVirtualizer();
+  const toVerifyVirt = createRowVirtualizer();
+  const unrecognizedVirt = createRowVirtualizer();
+
+  const visibleJoinedRows = joinedVirt.visibleRows;
+  const visibleToVerifyRows = toVerifyVirt.visibleRows;
+  const visibleUnrecognizedRows = unrecognizedVirt.visibleRows;
+
+  const observeRow = makeObserveAction(joinedVirt);
+  const observeToVerifyRow = makeObserveAction(toVerifyVirt);
+  const observeUnrecognizedRow = makeObserveAction(unrecognizedVirt);
+
+  $effect(() => attachVirtualizer(joinedVirt, joinedScrollEl));
+  $effect(() => attachVirtualizer(toVerifyVirt, toVerifyScrollEl));
+  $effect(() => attachVirtualizer(unrecognizedVirt, unrecognizedScrollEl));
+
+  function buildToVerifyOptions(suggestions: string[]): string[] {
+    const merged: string[] = [];
+    for (const suggestion of suggestions) {
+      if (
+        !joinedBasemapValues.includes(suggestion) &&
+        !merged.includes(suggestion)
+      ) {
+        merged.push(suggestion);
+      }
+    }
+    for (const value of availableBasemapValues) {
+      if (!merged.includes(value)) {
+        merged.push(value);
+      }
+    }
+    return merged;
+  }
+
+  function formatOtherIdentifiers(otherIdentifiers: string[] | undefined): {
+    title: string | undefined;
+    label: string;
+  } {
+    if (!otherIdentifiers || otherIdentifiers.length === 0) {
+      return { title: undefined, label: '' };
+    }
+    const ids = otherIdentifiers.join(', ');
+    return {
+      title: m.join_other_identifiers_tooltip({ ids }),
+      label: ids
+    };
+  }
 
   const duplicateLinesByValue = $derived<Record<string, number[]>>(
     Object.fromEntries(duplicateLines.map((d) => [d.dataValue, d.lines]))
   );
+
+  $effect(() => {
+    const targets: Array<[string, string]> = [];
+    deduplicatedJoinRows.forEach((row, i) => {
+      if (row.selectedMapping) targets.push([`join-${i}`, row.selectedMapping]);
+    });
+    joinedEntitiesList.forEach((row) => {
+      if (row.basemapValue) {
+        targets.push([`joined-${row.dataValue}`, row.basemapValue]);
+      }
+    });
+
+    if (targets.length === 0) return;
+
+    let cancelled = false;
+    requestAnimationFrame(() => {
+      if (cancelled) return;
+      requestAnimationFrame(() => {
+        if (cancelled) return;
+        for (const [id, expected] of targets) {
+          const node = document.getElementById(id);
+          if (!(node instanceof HTMLSelectElement)) continue;
+          if (node.value === expected) continue;
+          const hasOption = Array.from(node.options).some(
+            (opt) => opt.value === expected
+          );
+          if (!hasOption) continue;
+          node.value = expected;
+          node.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  });
 
   let joinedExpanded = $state(false);
   let toVerifyExpanded = $state(true);
@@ -250,32 +418,56 @@
                     >
                   </div>
                 </div>
-                <div class="join-table-scroll">
+                <div class="join-table-scroll" bind:this={joinedScrollEl}>
                   {#each joinedEntitiesList as row (row.dataValue)}
-                    <div class="table-row">
+                    {@const otherIds = formatOtherIdentifiers(
+                      row.otherIdentifiers
+                    )}
+                    <div class="table-row" use:observeRow={row.dataValue}>
                       <div class="table-cell cell-data" title={row.dataValue}>
                         {row.dataValue}
                       </div>
                       <div class="table-cell cell-equals">=</div>
                       <div class="table-cell cell-select">
-                        <Select
-                          id={`joined-${row.dataValue}`}
-                          labelText=""
-                          selected={row.basemapValue}
-                          size="sm"
-                          disabled
-                        >
-                          <SelectItem
-                            value={row.basemapValue}
-                            text={row.basemapValue}
-                          />
-                        </Select>
+                        {#if visibleJoinedRows.has(row.dataValue)}
+                          {@const joinedRowOptions = buildJoinedRowOptions(
+                            row.basemapValue
+                          )}
+                          <Select
+                            id={`joined-${row.dataValue}`}
+                            labelText=""
+                            selected={row.basemapValue}
+                            on:change={(e) => {
+                              const target = e.target as HTMLSelectElement;
+                              const nextValue = target?.value;
+                              if (
+                                nextValue &&
+                                nextValue !== row.basemapValue &&
+                                onManualCorrection
+                              ) {
+                                onManualCorrection(row.dataValue, nextValue);
+                              }
+                            }}
+                            size="sm"
+                          >
+                            {#each joinedRowOptions as opt (opt)}
+                              <SelectItem value={opt} text={opt} />
+                            {/each}
+                          </Select>
+                        {:else}
+                          <div class="select-placeholder" aria-hidden="true">
+                            {row.basemapValue}
+                          </div>
+                        {/if}
                       </div>
                       <div class="row-actions">
                         <button
                           type="button"
                           class="row-action"
+                          class:row-action-disabled={!otherIds.title}
                           aria-label={m.join_action_info()}
+                          title={otherIds.title ??
+                            m.join_no_other_identifiers_tooltip()}
                         >
                           <Information size={20} />
                         </button>
@@ -349,62 +541,75 @@
                   >
                 </div>
               </div>
-              {#each deduplicatedJoinRows as row, i (i)}
-                <div class="table-row">
-                  <div class="table-cell cell-data">{row.dataValue}</div>
-                  <div class="table-cell cell-equals">=</div>
-                  <div class="table-cell cell-select">
-                    <Select
-                      id={`join-${i}`}
-                      labelText=""
-                      selected={row.selectedMapping}
-                      on:change={(e) => {
-                        const target = e.target as HTMLSelectElement;
-                        const selectedValue =
-                          target?.value || row.selectedMapping;
-                        dataTabActions.updateJoinMapping(i, selectedValue);
-                      }}
-                      size="sm"
-                    >
-                      {#each row.basemapOptions as opt (opt)}
-                        <SelectItem value={opt} text={opt} />
-                      {/each}
-                    </Select>
-                  </div>
-                  <div class="row-actions">
-                    <button
-                      type="button"
-                      class="row-action"
-                      aria-label={m.join_action_info()}
-                    >
-                      <Information size={20} />
-                    </button>
-                    <button
-                      type="button"
-                      class="row-action"
-                      aria-label={m.join_action_ignore()}
-                      onclick={() =>
-                        handleIgnore(
-                          row.dataValue,
-                          'to_verify',
-                          row.selectedMapping
+              <div class="join-table-scroll" bind:this={toVerifyScrollEl}>
+                {#each deduplicatedJoinRows as row, i (i)}
+                  {@const rowKey = `verify-${i}`}
+                  <div class="table-row" use:observeToVerifyRow={rowKey}>
+                    <div class="table-cell cell-data">{row.dataValue}</div>
+                    <div class="table-cell cell-equals">=</div>
+                    <div class="table-cell cell-select">
+                      {#if visibleToVerifyRows.has(rowKey)}
+                        {@const toVerifyOptions = buildToVerifyOptions(
+                          row.basemapOptions
                         )}
-                    >
-                      <Misuse size={20} />
-                    </button>
-                    <button
-                      type="button"
-                      class="row-action row-action-validate"
-                      aria-label={m.join_action_validate()}
-                      disabled={!row.selectedMapping}
-                      onclick={() =>
-                        handleValidate(row.dataValue, row.selectedMapping)}
-                    >
-                      <CheckmarkFilled size={20} />
-                    </button>
+                        <Select
+                          id={`join-${i}`}
+                          labelText=""
+                          selected={row.selectedMapping}
+                          on:change={(e) => {
+                            const target = e.target as HTMLSelectElement;
+                            const selectedValue =
+                              target?.value || row.selectedMapping;
+                            dataTabActions.updateJoinMapping(i, selectedValue);
+                          }}
+                          size="sm"
+                        >
+                          {#each toVerifyOptions as opt (opt)}
+                            <SelectItem value={opt} text={opt} />
+                          {/each}
+                        </Select>
+                      {:else}
+                        <div class="select-placeholder" aria-hidden="true">
+                          {row.selectedMapping ?? ''}
+                        </div>
+                      {/if}
+                    </div>
+                    <div class="row-actions">
+                      <button
+                        type="button"
+                        class="row-action"
+                        aria-label={m.join_action_info()}
+                        title={m.join_to_verify_info_tooltip()}
+                      >
+                        <Information size={20} />
+                      </button>
+                      <button
+                        type="button"
+                        class="row-action"
+                        aria-label={m.join_action_ignore()}
+                        onclick={() =>
+                          handleIgnore(
+                            row.dataValue,
+                            'to_verify',
+                            row.selectedMapping
+                          )}
+                      >
+                        <Misuse size={20} />
+                      </button>
+                      <button
+                        type="button"
+                        class="row-action row-action-validate"
+                        aria-label={m.join_action_validate()}
+                        disabled={!row.selectedMapping}
+                        onclick={() =>
+                          handleValidate(row.dataValue, row.selectedMapping)}
+                      >
+                        <CheckmarkFilled size={20} />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              {/each}
+                {/each}
+              </div>
             </div>
           </div>
         {/if}
@@ -449,64 +654,74 @@
                   >
                 </div>
               </div>
-              {#each unknowns as entity (entity)}
-                <div class="table-row">
-                  <div class="table-cell cell-data">{entity}</div>
-                  <div class="table-cell cell-equals">=</div>
-                  <div class="table-cell cell-select">
-                    {#if basemapComboBoxItems.length > 0 && onManualCorrection}
-                      <ComboBox
-                        items={basemapComboBoxItems}
-                        placeholder={m.join_unrecognized_correction_placeholder()}
-                        size="sm"
-                        on:select={(e) => {
-                          const item = e.detail.selectedItem as
-                            | ComboBoxItem
-                            | undefined;
-                          if (item) {
-                            onManualCorrection?.(entity, item.text);
-                          }
-                        }}
-                      />
-                    {:else}
-                      <Select
-                        id={`unrecognized-${entity}`}
-                        labelText=""
-                        size="sm"
-                        disabled
+              <div class="join-table-scroll" bind:this={unrecognizedScrollEl}>
+                {#each unknowns as entity (entity)}
+                  <div class="table-row" use:observeUnrecognizedRow={entity}>
+                    <div class="table-cell cell-data">{entity}</div>
+                    <div class="table-cell cell-equals">=</div>
+                    <div class="table-cell cell-select">
+                      {#if visibleUnrecognizedRows.has(entity)}
+                        {#if basemapComboBoxItems.length > 0 && onManualCorrection}
+                          <ComboBox
+                            items={basemapComboBoxItems}
+                            placeholder={m.join_unrecognized_correction_placeholder()}
+                            size="sm"
+                            on:select={(e) => {
+                              const item = e.detail.selectedItem as
+                                | ComboBoxItem
+                                | undefined;
+                              if (item) {
+                                onManualCorrection?.(entity, item.text);
+                              }
+                            }}
+                          />
+                        {:else}
+                          <Select
+                            id={`unrecognized-${entity}`}
+                            labelText=""
+                            size="sm"
+                            disabled
+                          >
+                            <SelectItem
+                              value=""
+                              text={m.join_unrecognized_correction_placeholder()}
+                            />
+                          </Select>
+                        {/if}
+                      {:else}
+                        <div
+                          class="select-placeholder"
+                          aria-hidden="true"
+                        ></div>
+                      {/if}
+                    </div>
+                    <div class="row-actions">
+                      <button
+                        type="button"
+                        class="row-action"
+                        aria-label={m.join_action_info()}
+                        title={m.join_unrecognized_info_tooltip()}
                       >
-                        <SelectItem
-                          value=""
-                          text={m.join_unrecognized_correction_placeholder()}
-                        />
-                      </Select>
-                    {/if}
+                        <Information size={20} />
+                      </button>
+                      <button
+                        type="button"
+                        class="row-action"
+                        aria-label={m.join_action_ignore()}
+                        onclick={() => handleIgnore(entity, 'unrecognized')}
+                      >
+                        <Misuse size={20} />
+                      </button>
+                      <span
+                        class="row-action row-action-disabled"
+                        aria-label={m.join_action_validate_disabled()}
+                      >
+                        <CheckmarkFilled size={20} />
+                      </span>
+                    </div>
                   </div>
-                  <div class="row-actions">
-                    <button
-                      type="button"
-                      class="row-action"
-                      aria-label={m.join_action_info()}
-                    >
-                      <Information size={20} />
-                    </button>
-                    <button
-                      type="button"
-                      class="row-action"
-                      aria-label={m.join_action_ignore()}
-                      onclick={() => handleIgnore(entity, 'unrecognized')}
-                    >
-                      <Misuse size={20} />
-                    </button>
-                    <span
-                      class="row-action row-action-disabled"
-                      aria-label={m.join_action_validate_disabled()}
-                    >
-                      <CheckmarkFilled size={20} />
-                    </span>
-                  </div>
-                </div>
-              {/each}
+                {/each}
+              </div>
             </div>
           </div>
         {/if}
@@ -814,9 +1029,9 @@
   }
 
   .count-ignored {
-    color: #0043ce;
-    background-color: #edf5ff;
-    border-bottom-color: #0043ce;
+    color: var(--cds-text-secondary, #525252);
+    background-color: var(--cds-layer-01, #f4f4f4);
+    border-bottom-color: var(--cds-border-strong-01, #8d8d8d);
   }
 
   .category-label {
@@ -871,9 +1086,9 @@
   }
 
   .inline-banner-info {
-    background-color: #edf5ff;
-    border-left-color: #0043ce;
-    color: #161616;
+    background-color: var(--cds-layer-01, #f4f4f4);
+    border-left-color: var(--cds-border-strong-01, #8d8d8d);
+    color: var(--cds-text-primary, #161616);
   }
 
   .join-table {
@@ -921,13 +1136,13 @@
   }
 
   .join-table-info {
-    background-color: #edf5ff;
+    background-color: var(--cds-layer-01, #f4f4f4);
   }
 
   .join-table-info .table-header,
   .join-table-info .table-row {
-    background-color: #edf5ff;
-    border-top-color: #a6c8ff;
+    background-color: var(--cds-layer-01, #f4f4f4);
+    border-top-color: var(--cds-border-subtle-01, #c6c6c6);
   }
 
   .table-header {
@@ -1025,6 +1240,20 @@
 
   .cell-select :global(.bx--label) {
     display: none;
+  }
+
+  .select-placeholder {
+    height: 32px;
+    padding: 0 2rem 0 0.75rem;
+    font-size: 0.875rem;
+    background-color: var(--cds-field-01, #ffffff);
+    border-bottom: 1px solid var(--cds-border-strong-01, #8d8d8d);
+    display: flex;
+    align-items: center;
+    color: var(--cds-text-secondary, #525252);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .cell-lines {

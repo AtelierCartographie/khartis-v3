@@ -3,7 +3,6 @@
   import {
     Button,
     InlineNotification,
-    NotificationActionButton,
     Select,
     SelectItem,
     Tag
@@ -25,7 +24,6 @@
     linkedVariableName?: string;
     showCorrectionTable?: boolean;
     onMappingChange?: (index: number, value: string) => void;
-    onApplyCorrections?: () => void;
     onFinalizeJoin?: () => void;
   }
 
@@ -34,7 +32,6 @@
     linkedVariableName,
     showCorrectionTable = false,
     onMappingChange,
-    onApplyCorrections,
     onFinalizeJoin
   }: Props = $props();
 
@@ -60,10 +57,6 @@
     stats.toVerifyCount > 0 ||
       stats.duplicateCount > 0 ||
       stats.unrecognizedCount > 0
-  );
-
-  const showCorrectionNotification = $derived(
-    hasErrors && stats.toVerifyCount > 0
   );
 
   const canFinalize = $derived(canFinalizeJoin(stats));
@@ -254,34 +247,12 @@
 
   <div class="join-status-zone">
     {#if hasErrors}
-      <div class="notifications-row">
-        <div class="notification-slot">
-          <InlineNotification
-            title={m.join_error_detected_title()}
-            subtitle={m.join_error_detected_subtitle()}
-            kind="warning"
-            lowContrast
-          />
-        </div>
-        <div class="notification-slot">
-          {#if showCorrectionNotification && onApplyCorrections}
-            <InlineNotification
-              title={m.join_correction_title()}
-              subtitle={m.join_correction_desc()}
-              kind="info"
-              lowContrast
-            >
-              <svelte:fragment slot="actions">
-                <NotificationActionButton on:click={onApplyCorrections}>
-                  {m.join_correction_button()}
-                </NotificationActionButton>
-              </svelte:fragment>
-            </InlineNotification>
-          {:else}
-            <div class="notification-placeholder" aria-hidden="true"></div>
-          {/if}
-        </div>
-      </div>
+      <InlineNotification
+        title={m.join_error_detected_title()}
+        subtitle={m.join_error_detected_subtitle()}
+        kind="warning"
+        lowContrast
+      />
     {:else if canFinalize && onFinalizeJoin}
       <div class="notification-validation">
         <div class="notification-title">{m.join_validation_title()}</div>
@@ -577,34 +548,15 @@
   /* Notifications */
   .join-status-zone {
     flex-shrink: 0;
-    min-height: 128px;
     padding-top: 12px;
-  }
-
-  .notifications-row {
     display: flex;
-    gap: 12px;
-    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
   }
 
-  .notification-slot {
-    flex: 1;
-    min-width: 0;
-    min-height: 108px;
-    display: flex;
-  }
-
-  .notifications-row :global(.bx--inline-notification) {
-    flex: 1 1 auto;
+  .join-status-zone :global(.bx--inline-notification) {
     max-width: none;
     margin: 0;
-    min-height: 108px;
-  }
-
-  .notification-placeholder {
-    width: 100%;
-    min-height: 108px;
-    background: transparent;
   }
 
   .notification-validation {

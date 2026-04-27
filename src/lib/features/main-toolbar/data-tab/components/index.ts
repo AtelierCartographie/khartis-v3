@@ -9,6 +9,11 @@ export { default as ExpandedTableModal } from './expanded-table-modal.svelte';
 export { default as FiltersPanel } from './filters-panel.svelte';
 export { default as JoinAccordion } from './join-accordion.svelte';
 export type { JoinEntity, JoinStats } from './join-accordion.types';
-export { default as OSMSelector } from './osm-selector.svelte';
+export { default as GeocodeSettings } from './geocode-settings.svelte';
+export type {
+  GeocodeColumnItem,
+  GeocodeFieldProps
+} from './geocode-settings.types';
+export { default as OSMBasemapSelector } from './osm-basemap-selector.svelte';
 export { default as SearchPanel } from './search-panel.svelte';
 export { default as SectionHeaderWithIcon } from './section-header-with-icon.svelte';

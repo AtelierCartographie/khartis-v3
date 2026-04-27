@@ -169,7 +169,7 @@
 </script>
 
 <section id="enrich-data-step">
-  <MainToolBarHeader title={stepTitle} icon={DataEnrichment} />
+  <MainToolBarHeader title={stepTitle} icon={DataEnrichment} showDivider />
 
   <p class="kh-help">
     {m.enrich_step_description()}
@@ -216,7 +216,6 @@
             onEnrichLinkedVariableChange={handleEnrichLinkedVariableChange}
             onGeoFileColumnChange={handleGeoFileColumnChange}
             onMappingChange={joinHook.handleMappingChange}
-            onApplyCorrections={joinHook.handleApplyCorrections}
             onFinalizeJoin={joinHook.handleFinalizeEnrichment}
           />
         {/if}

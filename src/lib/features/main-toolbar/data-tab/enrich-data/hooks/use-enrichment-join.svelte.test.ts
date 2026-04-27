@@ -180,6 +180,46 @@ describe('useEnrichmentJoin', () => {
     expect(onJoinFinalized).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps a fresh dataset columns reference after finalizing enrichment', async () => {
+    const previousColumns = mocks.selectedDataset.columns;
+    const enrichedColumns = [
+      { name: 'id', type: 'TEXT' },
+      { name: '2020', type: 'number' }
+    ];
+    mocks.refreshDatasetMetadataMock.mockImplementationOnce(
+      async (datasetId: string) => {
+        mocks.updateDatasetMock(datasetId, {
+          columns: [...enrichedColumns]
+        });
+        return {
+          duckColumns: [],
+          enrichedColumns,
+          rowCount: 3
+        };
+      }
+    );
+
+    const hook = useEnrichmentJoin({
+      getEnrichmentDataset: () =>
+        ({
+          tableName: 'enrichment_table',
+          columns: [{ name: 'id' }, { name: '2020' }]
+        }) as never,
+      getEnrichLinkedVariableId: () => 1,
+      getGeoFileColumnId: () => 2,
+      getEnrichDataFieldItems: () => [{ id: 1, columnName: 'id' }],
+      getGeoFileColumns: () => [{ id: 2, columnName: 'id' }],
+      onJoinFinalized: vi.fn()
+    });
+
+    await hook.computeEnrichmentJoinStats();
+    await hook.handleFinalizeEnrichment();
+
+    expect(mocks.selectedDataset.columns).not.toBe(previousColumns);
+    expect(mocks.selectedDataset.columns).not.toBe(enrichedColumns);
+    expect(mocks.selectedDataset.columns).toEqual(enrichedColumns);
+  });
+
   it('does not compute join stats when enrichment is blocked', async () => {
     const hook = useEnrichmentJoin({
       getEnrichmentDataset: () =>
