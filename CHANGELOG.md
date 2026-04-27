@@ -6,6 +6,8 @@
 
 # [1.6.0-staging.1](https://github.com/AtelierCartographie/khartis-v3/compare/v1.5.0...v1.6.0-staging.1) (2026-04-23)
 
+## [1.5.1](https://github.com/AtelierCartographie/khartis-v3/compare/v1.5.0...v1.5.1) (2026-04-22)
+
 ### Bug Fixes
 
 - **ci:** disable semantic-release github success comments ([dad8548](https://github.com/AtelierCartographie/khartis-v3/commit/dad85488b01c020594efd15f561f0ba965c8f242))
@@ -13,6 +15,7 @@
 ### Features
 
 - **facets:** improve map focus and shared facets ([0ae5644](https://github.com/AtelierCartographie/khartis-v3/commit/0ae5644a64e08a1ce055ccdbb018d967c83371d5))
+
 
 # [1.5.0](https://github.com/AtelierCartographie/khartis-v3/compare/v1.4.0...v1.5.0) (2026-04-22)
 
