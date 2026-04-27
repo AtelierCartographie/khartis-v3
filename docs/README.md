@@ -1,6 +1,6 @@
 # Khartis v3 — Documentation développeur
 
-Khartis est un outil de cartographie thématique open source développé par Sciences Po (Atelier de cartographie). Il fonctionne **entièrement dans le navigateur** : les données ne quittent jamais l'appareil de l'utilisateur. Le traitement SQL, la projection cartographique et le rendu GPU s'exécutent tous côté client.
+Khartis est un outil de cartographie thématique open source pour créer des cartes de qualité publication. Développé par l'Atelier de cartographie de Sciences Po, il fonctionne **entièrement dans le navigateur** : vos données ne quittent jamais votre ordinateur. Le traitement SQL, la projection et le rendu GPU s'exécutent côté client, garantissant performance et confidentialité.
 
 ---
 
@@ -21,21 +21,21 @@ L'application est accessible à `http://localhost:5176/cartographie/khartisnewpp
 
 ## Stack technique
 
-| Technologie                         | Version   | Rôle                                                               |
-| ----------------------------------- | --------- | ------------------------------------------------------------------ |
-| SvelteKit + Svelte 5 Runes          | 2.x / 5.x | Framework SPA, adaptateur statique, réactivité par runes           |
-| TypeScript                          | 6.x       | Typage strict — jamais `any`                                       |
-| DuckDB WASM                         | 1.x       | Moteur SQL analytique en mémoire, chargé dans un Web Worker        |
-| Deck.gl                             | 9.x       | Rendu cartographique GPU, couches thématiques sur buffers GeoArrow |
-| MapLibre GL                         | 5.x       | Rendu des fonds de carte en tuiles vectorielles (OSM)              |
-| Apache Arrow + geoarrow-deck-stream | —         | Passerelle binaire DuckDB → Deck.gl                                |
-| Carbon Components Svelte            | 0.106.x   | Composants UI (IBM Design System) — Svelte 4 source                |
-| d3-geo + d3-geo-projection          | —         | Projections intégrées (Robinson, Natural Earth, Mercator…)         |
-| proj4                               | —         | Fallback reprojection pour EPSG:2154 et variantes françaises       |
-| parquet-wasm                        | —         | Lecture GeoParquet côté client sans DuckDB                         |
-| Paraglide JS                        | 2.x       | i18n compile-time, deux locales (FR/EN)                            |
-| IndexedDB                           | —         | Persistance locale des projets et assets source (chunks 8 Mo)      |
-| Vitest                              | 4.x       | Tests unitaires (jsdom) et intégration (Node)                      |
+| Technologie                         | Version   | Rôle                                                                |
+| ----------------------------------- | --------- | ------------------------------------------------------------------- |
+| SvelteKit + Svelte 5 Runes          | 2.x / 5.x | Framework SPA, adaptateur statique, réactivité par runes            |
+| TypeScript                          | 6.x       | Typage strict — jamais `any`                                        |
+| DuckDB WASM                         | 1.x       | Moteur SQL analytique en mémoire, chargé dans un Web Worker         |
+| Deck.gl                             | 9.x       | Rendu cartographique GPU, couches thématiques sur buffers GeoArrow  |
+| MapLibre GL                         | 5.x       | Rendu des fonds de carte en tuiles vectorielles (OSM)               |
+| Apache Arrow + geoarrow-deck-stream | —         | Passerelle binaire DuckDB → Deck.gl pour un rendu haute performance |
+| Carbon Components Svelte            | 0.106.x   | Composants UI (IBM Design System) — Svelte 4 source                 |
+| d3-geo + d3-geo-projection          | —         | Projections intégrées (Robinson, Natural Earth, Mercator…)          |
+| proj4                               | —         | Fallback reprojection pour EPSG:2154 et variantes françaises        |
+| parquet-wasm                        | —         | Lecture GeoParquet côté client sans DuckDB                          |
+| Paraglide JS                        | 2.x       | i18n compile-time, deux locales (FR/EN)                             |
+| IndexedDB                           | —         | Persistance locale des projets et assets source (chunks 8 Mo)       |
+| Vitest                              | 4.x       | Tests unitaires (jsdom) et intégration (Node)                       |
 
 > Versions exactes au moment de la rédaction : SvelteKit 2.58, Svelte 5.55, TypeScript 6.0, DuckDB WASM 1.33-dev, Deck.gl 9.x, MapLibre GL 5.24, Carbon 0.106.2, Paraglide 2.16, Vitest 4.1. Vérifier `package.json` pour la valeur exacte avant toute mise à niveau.
 
@@ -82,8 +82,8 @@ L'application est accessible à `http://localhost:5176/cartographie/khartisnewpp
 
 ## Principes fondamentaux
 
-- **Client-only** : aucune donnée utilisateur n'est transmise à un serveur.
-- **DuckDB-first** : tout traitement de données (jointure, classification, reprojection, agrégation) passe par SQL — pas de parsers JavaScript maison.
-- **GPU-first** : le rendu thématique utilise Deck.gl sur des buffers GeoArrow binaires. GeoJSON est un format d'export ou de fallback, jamais le chemin de visualisation principal.
-- **Svelte 5 Runes** : `$state`, `$derived`, `$effect` exclusivement — aucun store Svelte 4 (`writable`, `$:`, `export let`).
-- **Feature-based layout** : chaque feature dans `src/lib/features/` est autonome (store, composants, types, services). Les features ne s'importent pas directement entre elles — elles passent par `commons/` ou des APIs explicites.
+- **Client-only** : Aucune donnée utilisateur n'est transmise à un serveur. Tout s'exécute dans le navigateur, garantissant une confidentialité totale.
+- **DuckDB-first** : Tout traitement de données (jointure, classification, reprojection, agrégation) passe par le moteur **SQL** DuckDB WASM. Pas de parseurs JavaScript lents et faillibles pour les formats supportés.
+- **GPU-first** : Le rendu thématique utilise **Deck.gl** sur des buffers binaires **GeoArrow**. Le format GeoJSON n'est utilisé qu'en fallback ou pour l'export, jamais sur le chemin critique du rendu.
+- **Svelte 5 Runes** : L'état est géré via les runes (`$state`, `$derived`, `$effect`), offrant une réactivité prédictible et performante sans l'overhead des stores Svelte 4.
+- **Feature-based layout** : Le code est organisé en _features_ autonomes (`src/lib/features/`). Elles ne communiquent que via des stores ou des APIs partagées, limitant le couplage.
