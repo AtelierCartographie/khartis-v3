@@ -956,7 +956,7 @@ export function projectGeoJSON(
     return Number.isFinite(x) && Number.isFinite(y) ? [x, y] : null;
   }
 
-  function projectLine(
+  function projectRing(
     coordinates: GeoJSON.Position[],
     minimumLength: number
   ): GeoJSON.Position[] | null {
@@ -973,6 +973,32 @@ export function projectGeoJSON(
     return projected.length >= minimumLength ? projected : null;
   }
 
+  function projectLineToSegments(
+    coordinates: GeoJSON.Position[],
+    minimumLength: number
+  ): GeoJSON.Position[][] {
+    const segments: GeoJSON.Position[][] = [];
+    let current: GeoJSON.Position[] = [];
+
+    for (const coordinate of coordinates) {
+      const point = projectPosition(coordinate);
+      if (point) {
+        current.push(point);
+      } else {
+        if (current.length >= minimumLength) {
+          segments.push(current);
+        }
+        current = [];
+      }
+    }
+
+    if (current.length >= minimumLength) {
+      segments.push(current);
+    }
+
+    return segments;
+  }
+
   function projectGeometry(
     geometry: GeoJSON.Geometry | null
   ): GeoJSON.Geometry | null {
@@ -987,31 +1013,39 @@ export function projectGeoJSON(
       }
 
       case 'MultiPoint': {
-        const coordinates = projectLine(geometry.coordinates, 1);
+        const coordinates = projectRing(geometry.coordinates, 1);
         return coordinates ? { ...geometry, coordinates } : null;
       }
 
       case 'LineString': {
-        const coordinates = projectLine(geometry.coordinates, 2);
-        return coordinates ? { ...geometry, coordinates } : null;
+        const segments = projectLineToSegments(geometry.coordinates, 2);
+        if (segments.length === 0) {
+          return null;
+        }
+        if (segments.length === 1) {
+          return { ...geometry, coordinates: segments[0] };
+        }
+        return { type: 'MultiLineString', coordinates: segments };
       }
 
       case 'MultiLineString': {
-        const coordinates: GeoJSON.Position[][] = [];
+        const allSegments: GeoJSON.Position[][] = [];
         for (const line of geometry.coordinates) {
-          const projectedLine = projectLine(line, 2);
-          if (!projectedLine) {
-            return null;
-          }
-          coordinates.push(projectedLine);
+          allSegments.push(...projectLineToSegments(line, 2));
         }
-        return coordinates.length > 0 ? { ...geometry, coordinates } : null;
+        if (allSegments.length === 0) {
+          return null;
+        }
+        if (allSegments.length === 1) {
+          return { type: 'LineString', coordinates: allSegments[0] };
+        }
+        return { ...geometry, coordinates: allSegments };
       }
 
       case 'Polygon': {
         const coordinates: GeoJSON.Position[][] = [];
         for (const ring of geometry.coordinates) {
-          const projectedRing = projectLine(ring, 4);
+          const projectedRing = projectRing(ring, 4);
           if (!projectedRing) {
             return null;
           }
@@ -1025,7 +1059,7 @@ export function projectGeoJSON(
         for (const polygon of geometry.coordinates) {
           const projectedPolygon: GeoJSON.Position[][] = [];
           for (const ring of polygon) {
-            const projectedRing = projectLine(ring, 4);
+            const projectedRing = projectRing(ring, 4);
             if (!projectedRing) {
               return null;
             }

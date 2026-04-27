@@ -124,7 +124,7 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
     visible: false,
     color: '#a6c8ff',
     thickness: 0,
-    opacity: 80
+    opacity: 100
   },
   {
     id: 'rivieres',
@@ -133,14 +133,14 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
     dotted: false,
     dottedPattern: BasemapDottedPattern.DOTS,
     thickness: 1,
-    opacity: 80
+    opacity: 100
   },
   {
     id: 'relief',
     visible: false,
     representation: BasemapRepresentation.SHADING,
     color: '#e0e0e0',
-    opacity: 50
+    opacity: 100
   },
   {
     id: 'terre',
@@ -152,7 +152,7 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
     strokeDotted: false,
     strokeDottedPattern: BasemapDottedPattern.DOTS,
     strokeThickness: 0.5,
-    strokeOpacity: 40
+    strokeOpacity: 100
   },
   {
     id: 'mers',
@@ -180,7 +180,7 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
     dotted: false,
     dottedPattern: BasemapDottedPattern.DOTS,
     thickness: 1,
-    opacity: 80
+    opacity: 100
   },
   {
     id: 'meridiens',
@@ -191,7 +191,7 @@ const DEFAULT_LAYERS: BasemapLayerConfig[] = [
     dotted: true,
     dottedPattern: BasemapDottedPattern.DOTS,
     thickness: 1,
-    opacity: 80
+    opacity: 100
   },
   {
     id: 'frontieres',

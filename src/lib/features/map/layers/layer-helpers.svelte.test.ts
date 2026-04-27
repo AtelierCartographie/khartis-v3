@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import {
   createCategoricalColorAccessor,
+  createGeoJsonCategoricalColorAccessor,
   createStrokeClassificationAccessor
 } from './layer-helpers';
 
@@ -54,5 +55,26 @@ describe('layer-helpers — disabled category labels', () => {
     expect(accessor).not.toBeNull();
     expect(accessor?.({ segment: 'Actif' })).toEqual([242, 135, 172, 255]);
     expect(accessor?.({ segment: 'Pause' })).toEqual([0, 0, 0, 0]);
+  });
+
+  it('hides disabled GeoJSON categorical labels', () => {
+    const accessor = createGeoJsonCategoricalColorAccessor(
+      'segment',
+      new Map([
+        ['Actif', [242, 135, 172]],
+        ['Pause', [0, 173, 146]]
+      ]),
+      [12, 34, 56],
+      [12, 34, 56],
+      true,
+      ['Pause']
+    );
+
+    expect(accessor({ properties: { segment: 'Actif' } })).toEqual([
+      242, 135, 172, 255
+    ]);
+    expect(accessor({ properties: { segment: 'Pause' } })).toEqual([
+      0, 0, 0, 0
+    ]);
   });
 });
