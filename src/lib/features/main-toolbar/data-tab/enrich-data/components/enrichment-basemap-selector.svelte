@@ -1,10 +1,9 @@
 <script lang="ts">
-  import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
+  import { BasemapSource } from '$lib/features/commons/constants/ui.constants';
   import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
-  import * as m from '$lib/paraglide/messages';
-  import { Grid, List, Upload } from 'carbon-icons-svelte';
-  import { BasemapImportDropzone, OSMSelector } from '../../components';
   import BasemapCatalogTab from '../../basemap-join-components/basemap-catalog-tab.svelte';
+  import BasemapPanelContent from '../../basemap-join-components/basemap-panel-content.svelte';
+  import { BasemapImportDropzone, OSMBasemapSelector } from '../../components';
   import { ACCEPTED_BASEMAP_EXTENSIONS } from '../utils/enrichment.utils';
 
   interface BasemapSuggestionItem {
@@ -44,73 +43,57 @@
     onSelectOSM
   }: Props = $props();
 
-  const basemapTabItems = [
-    { icon: List, label: m.basemap_catalog(), iconSize: 16 },
-    { icon: Upload, label: m.basemap_import(), iconSize: 16 },
-    { icon: Grid, label: m.basemap_osm(), iconSize: 16 }
+  const TAB_INDEX_TO_SOURCE: readonly BasemapSource[] = [
+    BasemapSource.CATALOG,
+    BasemapSource.IMPORT,
+    BasemapSource.OSM
   ];
+
+  const selectedSource = $derived(
+    TAB_INDEX_TO_SOURCE[basemapTabIndex] ?? BasemapSource.CATALOG
+  );
+
+  function handleSourceChange(source: BasemapSource): void {
+    const nextIndex = TAB_INDEX_TO_SOURCE.indexOf(source);
+    if (nextIndex < 0 || nextIndex === basemapTabIndex) return;
+    onTabChange(nextIndex);
+  }
 </script>
 
-<div class="basemap-selector">
-  <ToggleTabs
-    activeIndex={basemapTabIndex}
-    items={basemapTabItems}
-    onChange={onTabChange}
-    className="basemap-tabs"
+{#snippet catalogContent()}
+  <BasemapCatalogTab
+    suggestedBasemaps={suggestedBasemaps}
+    allBasemaps={basemaps}
+    basemapSelected={selectedBasemapId ?? ''}
+    onSelectBasemap={(basemap) => onSelectBasemap(basemap.file)}
   />
+{/snippet}
 
-  {#if basemapTabIndex === 0}
-    <div class="basemap-section">
-      <BasemapCatalogTab
-        suggestedBasemaps={suggestedBasemaps}
-        allBasemaps={basemaps}
-        basemapSelected={selectedBasemapId ?? ''}
-        onSelectBasemap={(basemap) => onSelectBasemap(basemap.file)}
-      />
-    </div>
-  {:else if basemapTabIndex === 1}
-    <div class="basemap-section">
-      <BasemapImportDropzone
-        acceptedExtensions={ACCEPTED_BASEMAP_EXTENSIONS}
-        isUploading={basemapImportUploading}
-        error={basemapImportError}
-        importedBasemap={importedCustomBasemap}
-        onFileSelect={onBasemapImportFile}
-        onUrlLoad={onBasemapUrlLoad}
-        onClearError={onClearError}
-      />
-    </div>
-  {:else}
-    <div class="basemap-section">
-      <OSMSelector
-        isActive={Boolean(selectedBasemapId?.startsWith('osm_'))}
-        onSelectOSM={onSelectOSM}
-      />
-    </div>
-  {/if}
-</div>
+{#snippet importContent()}
+  <BasemapImportDropzone
+    acceptedExtensions={ACCEPTED_BASEMAP_EXTENSIONS}
+    isUploading={basemapImportUploading}
+    error={basemapImportError}
+    importedBasemap={importedCustomBasemap}
+    onFileSelect={onBasemapImportFile}
+    onUrlLoad={onBasemapUrlLoad}
+    onClearError={onClearError}
+  />
+{/snippet}
 
-<style>
-  .basemap-selector {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-04);
-  }
+{#snippet osmContent()}
+  <OSMBasemapSelector
+    isActive={Boolean(selectedBasemapId?.startsWith('osm_'))}
+    hasGPSCoordinates={true}
+    onSelectOSM={onSelectOSM}
+  />
+{/snippet}
 
-  .basemap-section {
-    margin-top: var(--cds-spacing-04);
-  }
-
-  :global(.basemap-tabs) {
-    width: 100%;
-    max-width: none;
-  }
-
-  :global(.basemap-tabs .toggle-tab) {
-    height: 32px;
-  }
-
-  :global(.basemap-tabs .toggle-tab.active) {
-    background-color: var(--cds-border-subtle-01);
-  }
-</style>
+<BasemapPanelContent
+  selectedSource={selectedSource}
+  onSourceChange={handleSourceChange}
+  catalogContent={catalogContent}
+  importContent={importContent}
+  osmContent={osmContent}
+  showJoinSection={false}
+/>

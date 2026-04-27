@@ -18,4 +18,5 @@ export interface JoinStats {
   unrecognizedCount: number;
   entities: JoinEntity[];
   totalEntities: number;
+  duplicateLines: Array<{ dataValue: string; lines: number[] }>;
 }

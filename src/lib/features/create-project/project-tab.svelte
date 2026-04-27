@@ -86,7 +86,7 @@
   .project-card-indicator {
     align-items: center;
     background: var(--cds-field, #f4f4f4);
-    border: 1px solid var(--cds-border-strong, #8d8d8d);
+    border: 1px solid var(--cds-icon-primary, #161616);
     border-radius: 50%;
     box-sizing: border-box;
     display: inline-flex;
@@ -96,7 +96,7 @@
   }
 
   .project-card-indicator::after {
-    background: var(--cds-icon-interactive, #0f62fe);
+    background: var(--cds-icon-primary, #161616);
     border-radius: 50%;
     content: '';
     height: 0.5rem;
@@ -105,7 +105,7 @@
   }
 
   .project-card.selected .project-card-indicator {
-    border-color: var(--cds-icon-interactive, #0f62fe);
+    border-color: var(--cds-icon-primary, #161616);
   }
 
   .project-card.selected .project-card-indicator::after {

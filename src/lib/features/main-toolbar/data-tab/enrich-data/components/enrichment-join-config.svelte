@@ -1,18 +1,17 @@
 <script lang="ts">
   import AdvancedDataTable from '$lib/features/commons/components/advanced-data-table/advanced-data-table.svelte';
-  import VariableBadge from '$lib/features/commons/components/variable-badge.svelte';
+  import { GeoreferenceType } from '$lib/features/commons/constants/ui.constants';
   import { dataTabActions } from '$lib/features/commons/store/data-tab.store.svelte';
   import type { DatasetResult } from '$lib/features/data-pipeline';
   import * as m from '$lib/paraglide/messages';
-  import {
-    Button,
-    ComboBox,
-    InlineNotification
-  } from 'carbon-components-svelte';
+  import { Button, InlineNotification } from 'carbon-components-svelte';
   import { Close, MagicWand } from 'carbon-icons-svelte';
-  import { JoinAccordion, type JoinStats } from '../../components';
-  import SectionHeaderWithIcon from '../../components/section-header-with-icon.svelte';
-  import type { GeoComboBoxItem } from '../../data-tab.shared.types';
+  import {
+    GeocodeSettings,
+    JoinAccordion,
+    SectionHeaderWithIcon,
+    type JoinStats
+  } from '../../components';
   import type {
     EnrichDataFieldItem,
     GeoFileColumnItem
@@ -40,7 +39,6 @@
       columnName?: string
     ) => void;
     onMappingChange: (index: number, value: string) => void;
-    onApplyCorrections: () => void;
     onFinalizeJoin: () => void;
   }
 
@@ -60,33 +58,31 @@
     onEnrichLinkedVariableChange,
     onGeoFileColumnChange,
     onMappingChange,
-    onApplyCorrections,
     onFinalizeJoin
   }: Props = $props();
 
-  function handleEnrichColumnSelect(
-    e: CustomEvent<{ selectedId: number; selectedItem: unknown }>
-  ) {
-    const item = e.detail.selectedItem as GeoComboBoxItem | null;
-    onEnrichLinkedVariableChange(e.detail.selectedId, item?.columnName);
-    if (item?.columnName) {
-      dataTabActions.setEnrichDataState({
-        enrichmentColumn: item.columnName
-      });
+  function handleEnrichColumnSelect(id: number, columnName: string): void {
+    onEnrichLinkedVariableChange(id, columnName);
+    if (columnName) {
+      dataTabActions.setEnrichDataState({ enrichmentColumn: columnName });
     }
   }
 
-  function handleGeoColumnSelect(
-    e: CustomEvent<{ selectedId: number; selectedItem: unknown }>
-  ) {
-    const item = e.detail.selectedItem as { columnName: string } | null;
-    onGeoFileColumnChange(e.detail.selectedId, item?.columnName);
-    if (item?.columnName) {
-      dataTabActions.setEnrichDataState({
-        targetColumn: item.columnName
-      });
+  function handleGeoColumnSelect(id: number, columnName: string): void {
+    onGeoFileColumnChange(id, columnName);
+    if (columnName) {
+      dataTabActions.setEnrichDataState({ targetColumn: columnName });
     }
   }
+
+  const enrichmentSelectedColumnName = $derived(
+    enrichDataFieldItems.find((c) => c.id === enrichLinkedVariableId)
+      ?.columnName
+  );
+
+  const geoFileSelectedColumnName = $derived(
+    geoFileColumns.find((c) => c.id === geoFileColumnId)?.columnName
+  );
 </script>
 
 <div class="join-config">
@@ -153,54 +149,30 @@
       <h4 class="subsection-title">{m.enrich_geo_reference()}</h4>
       <p class="section-description">{m.enrich_choose_multiple()}</p>
 
-      <div class="geo-columns-row">
-        <div class="geo-column-select">
-          <div class="combobox-with-badge">
-            <ComboBox
-              items={geoFileColumns}
-              selectedId={geoFileColumnId}
-              on:select={handleGeoColumnSelect}
-              placeholder={m.enrich_select_column()}
-              size="sm"
-            />
-            {#if geoFileColumns.find((c) => c.id === geoFileColumnId)?.columnName}
-              <div class="badge-overlay">
-                <VariableBadge
-                  label={geoFileColumns.find((c) => c.id === geoFileColumnId)!
-                    .columnName}
-                  type="geo-ref"
-                />
-              </div>
-            {/if}
-          </div>
-          <span class="column-label">{m.enrich_geo_file_label()}</span>
-        </div>
-
-        <span class="column-separator">⇄</span>
-
-        <div class="geo-column-select">
-          <div class="combobox-with-badge">
-            <ComboBox
-              items={enrichDataFieldItems}
-              selectedId={enrichLinkedVariableId}
-              on:select={handleEnrichColumnSelect}
-              placeholder={m.enrich_select_column()}
-              size="sm"
-            />
-            {#if enrichDataFieldItems.find((c) => c.id === enrichLinkedVariableId)?.columnName}
-              <div class="badge-overlay">
-                <VariableBadge
-                  label={enrichDataFieldItems.find(
-                    (c) => c.id === enrichLinkedVariableId
-                  )!.columnName}
-                  type="geo-ref"
-                />
-              </div>
-            {/if}
-          </div>
-          <span class="column-label">{m.enrich_tabular_data_label()}</span>
-        </div>
-      </div>
+      <GeocodeSettings
+        referenceMode={GeoreferenceType.ENTITIES}
+        onReferenceModeChange={() => {}}
+        layout="paired"
+        showCoordinatesTab={false}
+        primary={{
+          label: m.enrich_geo_file_label(),
+          items: geoFileColumns,
+          selectedId: geoFileColumnId,
+          selectedColumnName: geoFileSelectedColumnName,
+          badgeType: 'geo-ref',
+          placeholder: m.enrich_select_column(),
+          onSelect: handleGeoColumnSelect
+        }}
+        paired={{
+          label: m.enrich_tabular_data_label(),
+          items: enrichDataFieldItems,
+          selectedId: enrichLinkedVariableId,
+          selectedColumnName: enrichmentSelectedColumnName,
+          badgeType: 'geo-ref',
+          placeholder: m.enrich_select_column(),
+          onSelect: handleEnrichColumnSelect
+        }}
+      />
     </div>
 
     <div class="join-assisted-section">
@@ -224,7 +196,6 @@
               (i) => i.id === enrichLinkedVariableId
             )?.columnName}
             onMappingChange={onMappingChange}
-            onApplyCorrections={onApplyCorrections}
             onFinalizeJoin={onFinalizeJoin}
           />
 
@@ -319,59 +290,6 @@
     font-weight: 600;
     color: var(--cds-text-01);
     margin-bottom: var(--cds-spacing-02);
-  }
-
-  .geo-columns-row {
-    display: flex;
-    align-items: center;
-    gap: var(--cds-spacing-03);
-  }
-
-  .geo-column-select {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-02);
-  }
-
-  .combobox-with-badge {
-    position: relative;
-  }
-
-  .badge-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 40px;
-    height: 32px;
-    display: flex;
-    align-items: center;
-    padding: 0 8px;
-    pointer-events: none;
-    z-index: var(--z-base);
-  }
-
-  .combobox-with-badge:has(.badge-overlay) :global(.bx--text-input) {
-    color: transparent;
-  }
-
-  .combobox-with-badge:focus-within .badge-overlay {
-    display: none;
-  }
-
-  .combobox-with-badge:focus-within :global(.bx--text-input) {
-    color: inherit !important;
-  }
-
-  .column-label {
-    font-size: 0.75rem;
-    color: var(--cds-text-02);
-  }
-
-  .column-separator {
-    font-size: 1.25rem;
-    color: var(--cds-text-02);
-    margin-top: -1rem;
   }
 
   .join-assisted-section {
