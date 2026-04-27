@@ -264,7 +264,7 @@ describe('layers color helpers', () => {
       strokeDotted: false,
       strokeDottedPattern: BasemapDottedPattern.DOTS,
       strokeThickness: 1,
-      strokeOpacity: 40
+      strokeOpacity: 100
     } satisfies BasemapLayerConfig;
     const mers = {
       id: 'mers',

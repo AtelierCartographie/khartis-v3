@@ -394,6 +394,16 @@ function getLayerIds(layers: ReturnType<typeof createPolygonLayers>): string[] {
   return layers.map((layer) => String(layer.props.id));
 }
 
+type ScatterBinaryTestData = {
+  attributes: Record<string, { value: Uint8Array } | undefined>;
+};
+
+function hasScatterBinaryTestData(
+  data: unknown
+): data is ScatterBinaryTestData {
+  return typeof data === 'object' && data !== null && 'attributes' in data;
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   projectGeoJSONMock.mockImplementation((geojson) => geojson);
@@ -867,6 +877,51 @@ describe('createPointLayers', () => {
     expect(pointLayer.props.stroked).toBe(false);
     expect(pointLayer.props.lineWidthScale).toBe(0);
     expect(pointLayer.props.getLineColor).toEqual([0, 0, 0, 0]);
+  });
+
+  it('builds binary point color attributes when a symbol category is disabled', () => {
+    parsePointDataWithProjectionMock.mockReturnValue({
+      length: 1,
+      featureIds: new Uint32Array([0])
+    });
+
+    const visualization = createSymbolVisualization();
+    visualization.symbol = {
+      ...visualization.symbol!,
+      mode: SymbolMode.CATEGORIES,
+      categoryColumn: 'category',
+      classification: {
+        method: ClassificationMethod.MANUAL,
+        classes: 1,
+        labels: ['Pause'],
+        colors: ['#3366cc'],
+        disabledLabels: ['Pause']
+      }
+    };
+
+    const layers = createPointLayers(
+      createTableWithRows([{ category: 'Pause' }], ['category']),
+      createPointGeometryInfo(),
+      createContext(visualization)
+    );
+
+    const pointLayer = layers[0] as ScatterplotLayer;
+    const layerData = pointLayer.props.data;
+
+    expect(pointLayer).toBeInstanceOf(ScatterplotLayer);
+    expect(hasScatterBinaryTestData(layerData)).toBe(true);
+
+    if (!hasScatterBinaryTestData(layerData)) {
+      return;
+    }
+
+    const fillColorAttribute = layerData.attributes.getFillColor;
+    if (!fillColorAttribute) {
+      expect(fillColorAttribute).toBeDefined();
+      return;
+    }
+
+    expect(Array.from(fillColorAttribute.value)).toEqual([0, 0, 0, 0]);
   });
 });
 
