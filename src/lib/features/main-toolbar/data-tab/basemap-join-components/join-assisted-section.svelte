@@ -482,12 +482,16 @@
                         {/if}
                       </div>
                       <div class="row-actions">
-                        <span class="row-action row-action-info">
-                          <InfoPopover
-                            text={otherIds.title ??
-                              m.join_no_other_identifiers_tooltip()}
-                          />
-                        </span>
+                        {#if otherIds.title}
+                          <span class="row-action row-action-info">
+                            <InfoPopover text={otherIds.title} />
+                          </span>
+                        {:else}
+                          <span
+                            class="row-action row-action-spacer"
+                            aria-hidden="true"
+                          ></span>
+                        {/if}
                         <button
                           type="button"
                           class="row-action"
@@ -1302,6 +1306,11 @@
 
   .row-action-info {
     cursor: default;
+  }
+
+  .row-action-spacer {
+    pointer-events: none;
+    background: none;
   }
 
   .row-action-info :global(.info-btn) {
