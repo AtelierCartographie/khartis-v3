@@ -728,6 +728,56 @@ export async function getBasemapAttributeValues(
   return rows.map((r) => r.raw);
 }
 
+/**
+ * Returns a map from each raw attribute value to the list of all other raw
+ * values that share the same entity (id + label). Used to enrich tooltips
+ * with the alternative identifiers of a basemap entity.
+ */
+export async function getBasemapAttributeAliasesByValue(
+  basemap: BasemapMetadata,
+  Duck: DuckDBClientForJoin
+): Promise<Record<string, string[]>> {
+  const basemapId = getBasemapAttributesId(basemap);
+  await ensureBasemapHasAttributes(basemapId, Duck);
+
+  const escapedBasemapId = escapeSqlString(basemapId);
+  const rows = (await Duck.query(
+    `SELECT id, label, raw
+     FROM basemap_attributes
+     WHERE basemap = '${escapedBasemapId}'
+       AND raw IS NOT NULL`,
+    { format: 'array' }
+  )) as Array<{ id: string; label: string | null; raw: string }>;
+
+  const groups = new Map<string, Set<string>>();
+  for (const row of rows) {
+    if (!row.id) continue;
+    let bucket = groups.get(row.id);
+    if (!bucket) {
+      bucket = new Set<string>();
+      groups.set(row.id, bucket);
+    }
+    if (row.label) bucket.add(row.label);
+    if (row.raw) bucket.add(row.raw);
+  }
+
+  const result: Record<string, string[]> = {};
+  for (const row of rows) {
+    if (!row.raw) continue;
+    if (row.raw in result) continue;
+    const bucket = groups.get(row.id);
+    if (!bucket) continue;
+    const aliases: string[] = [];
+    for (const value of bucket) {
+      if (value !== row.raw && !aliases.includes(value)) {
+        aliases.push(value);
+      }
+    }
+    if (aliases.length > 0) result[row.raw] = aliases;
+  }
+  return result;
+}
+
 export async function applyJoinCorrections(
   dataset: DuckDBDataset,
   geoColumn: string,

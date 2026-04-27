@@ -392,6 +392,15 @@ export const duckDBOrchestrator = {
     return joinOps.getBasemapAttributeValues(basemap, Duck);
   },
 
+  async getBasemapAttributeAliasesByValue(
+    basemap: BasemapMetadata
+  ): Promise<Record<string, string[]>> {
+    await ensureInitialized();
+    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+
+    return joinOps.getBasemapAttributeAliasesByValue(basemap, Duck);
+  },
+
   async computeJoinStats(
     datasetId: string,
     basemap: BasemapMetadata,
