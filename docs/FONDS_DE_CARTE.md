@@ -1,36 +1,30 @@
 # Fonds de carte
 
-> Préparation, stockage et rendu des fonds de carte vectoriels dans Khartis v3.
+> Format, préparation et runtime des fonds vectoriels. Les fonds du catalogue sont des GeoParquet + Parquet attributs préparés hors-ligne ; les fonds personnalisés sont importés à l'exécution via DuckDB.
 
-**Voir aussi** : [MAP.md](./MAP.md) (pipeline runtime) — [ARCHITECTURE.md](./ARCHITECTURE.md) — [DUCKDB.md](./DUCKDB.md)
-
----
-
-## Deux types de fonds
-
-- **Fonds inclus** — préparés en amont par l'Atelier de cartographie, au format GeoParquet + attributs Parquet long. Ce document décrit leur préparation.
-- **Fonds personnalisés** — importés à l'exécution par l'utilisateur (GeoJSON, Shapefile, GeoPackage). Reprojection et pipeline d'import détaillés dans [DUCKDB.md](./DUCKDB.md) (`basemap-import.utils.ts`).
+**Voir aussi** : [ARCHITECTURE.md](ARCHITECTURE.md) · [DUCKDB.md](DUCKDB.md) · [MAP.md](MAP.md) · [CARTOGRAPHIE.md](CARTOGRAPHIE.md)
 
 ---
 
-## Principe de séparation
+## Deux familles de fonds
 
-Les fonds inclus séparent géométrie et attributs pour optimiser le rendu :
+| Famille          | Source                                                  | Pipeline                                                                     |
+| ---------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| **Catalogue**    | Préparé par l'Atelier de cartographie, livré avec l'app | GeoParquet → parquet-wasm → Arrow IPC → geoarrow-deck-stream (jamais DuckDB) |
+| **Personnalisé** | Importé à l'exécution par l'utilisateur                 | DuckDB `ST_Read()` → nettoyage → couches POLYGON/LINE/POINT + CENTROID       |
 
-- **Géométrie** — GeoParquet encodé en GeoArrow (pas WKB), lu directement par Deck.gl sans passer par DuckDB.
-- **Attributs** — table Parquet au format long, importée dans DuckDB uniquement pour les jointures avec les données utilisateur.
-- **Métadonnées** — JSON décrivant le fond (bbox, projection, couches d'habillage).
-
-Le pipeline runtime de lecture et de rendu (`geoarrow-deck-stream`, caches WeakMap, parsing par projection) est documenté dans [MAP.md](./MAP.md). Ce document se concentre sur la **préparation** et le **format** des fichiers livrés.
+Le pipeline runtime (WeakMap caches, projections, picking) est dans [MAP.md](MAP.md). Ce document se concentre sur la **préparation des fichiers** et leur **format sur disque**.
 
 ---
 
-## Format de la géométrie
+## Format de géométrie — GeoArrow via GDAL
 
-Un seul attribut dans le fichier GeoParquet : l'identifiant. Conversion via GDAL :
+Les fichiers de géométrie du catalogue sont des **GeoParquet encodés en GeoArrow** (pas WKB). Cela permet un upload GPU direct sans parsing côté CPU.
+
+Commandes de conversion :
 
 ```bash
-# Depuis un GeoJSON
+# Depuis GeoJSON
 ogr2ogr export.parquet input.json \
     -lco GEOMETRY_NAME=geom \
     -lco GEOMETRY_ENCODING=GEOARROW \
@@ -39,7 +33,7 @@ ogr2ogr export.parquet input.json \
     -lco WRITE_COVERING_BBOX=NO \
     -nlt PROMOTE_TO_MULTI
 
-# Depuis un Shapefile (pas de SORT_BY_BBOX, déjà trié spatialement)
+# Depuis Shapefile (pas de SORT_BY_BBOX — déjà trié spatialement)
 ogr2ogr export.parquet input.shp \
     -lco GEOMETRY_NAME=geom \
     -lco GEOMETRY_ENCODING=GEOARROW \
@@ -48,32 +42,36 @@ ogr2ogr export.parquet input.shp \
     -nlt PROMOTE_TO_MULTI
 ```
 
-| Option                   | Rôle                                                    |
-| ------------------------ | ------------------------------------------------------- |
-| `GEOMETRY_NAME=geom`     | Cohérence avec DuckDB                                   |
-| `SORT_BY_BBOX=YES`       | Fichier plus léger (GeoJSON uniquement)                 |
-| `COMPRESSION=ZSTD`       | Bon compromis compression / décompression               |
-| `WRITE_COVERING_BBOX=NO` | Pas besoin de bbox par entité                           |
-| `-nlt PROMOTE_TO_MULTI`  | Force un seul type de géométrie (requis par GeoParquet) |
+| Option GDAL                  | Effet                                                           |
+| ---------------------------- | --------------------------------------------------------------- |
+| `GEOMETRY_NAME=geom`         | Cohérence avec le nom attendu par DuckDB Spatial                |
+| `GEOMETRY_ENCODING=GEOARROW` | Colonnes Float64Array contiguës au lieu de WKB BLOB             |
+| `SORT_BY_BBOX=YES`           | Tri spatial pour meilleure compressibilité (GeoJSON uniquement) |
+| `COMPRESSION=ZSTD`           | Bon ratio compression / décompression navigateur                |
+| `WRITE_COVERING_BBOX=NO`     | Bbox par entité inutile côté client                             |
+| `-nlt PROMOTE_TO_MULTI`      | Type de géométrie homogène (requis par GeoParquet)              |
 
-> Référence : https://gdal.org/en/stable/drivers/vector/parquet.html
+Prérequis : GDAL 3.9+.
 
 ---
 
-## Format des attributs
+## Format des attributs — Parquet long
 
-Les attributs sont stockés au **format long** :
+Les attributs sont séparés de la géométrie et stockés en **format long** (une ligne par variante d'identifiant) :
 
-| raw   | id    | variant  | normalized | basemap | basemap_count |
-| ----- | ----- | -------- | ---------- | ------- | ------------- |
-| FR101 | FR101 | ign_code | fr101      | FR_DPT  | 101           |
-| Ain   | FR101 | name     | ain        | FR_DPT  | 101           |
+```
+raw     | id    | variant   | normalized | basemap | basemap_count
+--------|-------|-----------|------------|---------|---------------
+FR101   | FR101 | ign_code  | fr101      | FR_DPT  | 101
+Ain     | FR101 | name      | ain        | FR_DPT  | 101
+01      | FR101 | insee     | 01         | FR_DPT  | 101
+```
 
-Chaque variante d'identifiant (nom, code ISO, code officiel) occupe une ligne distincte. `basemap_count` sert au calcul du taux de réussite de jointure.
+Chaque variante (nom officiel, code ISO, code IGN, etc.) occupe une ligne distincte. `basemap_count` est le nombre total d'entités du fond — utilisé pour calculer le taux de réussite de jointure.
 
-### Normalisation des identifiants
+### Macro de normalisation
 
-Macro SQL DuckDB pour le matching flou :
+Les valeurs `normalized` sont précalculées avec cette macro SQL DuckDB :
 
 ```sql
 CREATE OR REPLACE MACRO normalize_text(string) AS (
@@ -85,35 +83,29 @@ CREATE OR REPLACE MACRO normalize_text(string) AS (
 );
 ```
 
-### Passage format large → long
+### Macro de reshape (large → long)
 
 ```sql
 CREATE OR REPLACE MACRO reshape_attributes(table_name, basemap_name, id_col) AS TABLE (
   WITH
-    nb AS (FROM query_table(table_name) SELECT basemap_count: count(*)),
-    attr_with_id AS (FROM query_table(table_name) SELECT id: id_col, *),
-    attr_long AS (
-      UNPIVOT attr_with_id ON COLUMNS(* EXCLUDE id)
-        INTO NAME variant VALUE raw
-    )
-  FROM attr_long, nb
-  SELECT
-    raw,
-    id,
-    variant,
-    normalized: normalize_text(raw),
-    basemap: basemap_name,
-    basemap_count
+    nb       AS (FROM query_table(table_name) SELECT basemap_count: count(*)),
+    with_id  AS (FROM query_table(table_name) SELECT id: id_col, *),
+    long     AS (UNPIVOT with_id ON COLUMNS(* EXCLUDE id) INTO NAME variant VALUE raw)
+  FROM long, nb
+  SELECT raw, id, variant,
+         normalized: normalize_text(raw),
+         basemap: basemap_name,
+         basemap_count
 );
 ```
 
-`query_table()` est la fonction table DuckDB permettant de paramétrer dynamiquement un nom de table dans une macro — pratique pour re-shaper plusieurs fonds via la même macro.
+`query_table()` (DuckDB) permet de paramétrer le nom de table dynamiquement dans une macro — nécessaire pour reshaper plusieurs fonds via la même macro.
 
 ---
 
-## Métadonnées
+## Métadonnées — JSON par fond
 
-Chaque fond inclut un fichier JSON de métadonnées :
+Chaque fond est décrit par un fichier JSON de métadonnées :
 
 ```json
 {
@@ -121,7 +113,6 @@ Chaque fond inclut un fichier JSON de métadonnées :
   "title_fr": "France > communes",
   "title_en": "France > communes",
   "description_fr": "Communes françaises — ADMIN EXPRESS COG CARTO 2025",
-  "description_en": "French communes — ADMIN EXPRESS COG CARTO 2025",
   "source": "IGN — ADMIN EXPRESS COG CARTO",
   "date": "2025",
   "bbox": [-61.81, -21.39, 55.84, 51.09],
@@ -133,113 +124,143 @@ Chaque fond inclut un fichier JSON de métadonnées :
 
 ### Types de projection (`proj_to`)
 
-| Type        | Description                                                                             | `proj_source`                   |
-| ----------- | --------------------------------------------------------------------------------------- | ------------------------------- |
-| `composite` | Projection composite avec encarts DOM-TOM. `preset` référence `projection-presets.json` | `EPSG:4326`                     |
-| `simple`    | Projection unique via `proj4d3(proj_to.proj4)`                                          | `EPSG:4326`                     |
-| `identity`  | Données pré-projetées, pas de reprojection → `geoIdentity()`                            | CRS effectif (ex : `EPSG:2154`) |
+| Type        | Comportement                                                                    | `proj_source`                  |
+| ----------- | ------------------------------------------------------------------------------- | ------------------------------ |
+| `composite` | Projection composite avec encarts. `preset` référence `projection-presets.json` | `EPSG:4326`                    |
+| `simple`    | Projection unique via `proj4d3(proj_to.proj4)`                                  | `EPSG:4326`                    |
+| `identity`  | Données pré-projetées, pas de reprojection → `geoIdentity()`                    | CRS effectif (ex. `EPSG:2154`) |
 
 ### Types de couches (`layers`)
 
-| Type               | Source          | Description                                      |
-| ------------------ | --------------- | ------------------------------------------------ |
-| `centroid`         | fichier Parquet | Points centroïdes des entités                    |
-| `limit`            | fichier Parquet | Lignes de frontières / limites                   |
-| `land`             | fichier Parquet | Polygone de territoire (fond)                    |
-| `graticule`        | fichier Parquet | Méridiens et parallèles (générés avec mapshaper) |
-| `geographic-lines` | fichier Parquet | Équateur, tropiques, cercles polaires, Greenwich |
+| Type               | Source  | Contenu                                                      |
+| ------------------ | ------- | ------------------------------------------------------------ |
+| `centroid`         | Parquet | Points centroïdes des entités (pour textes et symboles)      |
+| `limit`            | Parquet | Lignes de frontières / limites                               |
+| `land`             | Parquet | Polygones de territoire                                      |
+| `graticule`        | Parquet | Méridiens et parallèles                                      |
+| `geographic-lines` | Parquet | Équateur, tropiques, cercles polaires, méridien de Greenwich |
 
-### Variantes de simplification
+Les couches `centroid` sont le chemin nominal pour les primitives Textes et Symboles sur les géométries non-ponctuelles — ce sont des tables DuckDB distinctes, pas un fallback JS.
 
-- Le catalogue n'expose qu'une variante par famille de fond, choisie parmi les niveaux réellement supportés.
-- Par défaut, Khartis préfère `medium`, puis `high`, puis `low`.
-- Les fonds administratifs France (`canton`, `commune`, `departement`, `region`) excluent `medium` de la sélection interactive : le catalogue pointe donc vers `high` et l'outil de simplification n'affiche que les niveaux réellement disponibles, voire uniquement un message s'il n'existe pas d'alternative.
-- Les couches annexes suivent les métadonnées de la variante active. Une couche partagée entre plusieurs niveaux — par exemple un graticule — peut garder le même fichier sans détection implicite côté code.
+---
 
-Génération d'un fichier graticule :
+## Variantes de simplification
 
-```bash
-mapshaper -graticule interval=10 -o tmp/graticule-10.json
-ogr2ogr graticule-10.parquet tmp/graticule-10.json \
-    -lco GEOMETRY_NAME=geom -lco GEOMETRY_ENCODING=GEOARROW \
-    -lco COMPRESSION=ZSTD -lco WRITE_COVERING_BBOX=NO -nlt PROMOTE_TO_MULTI
-```
+Chaque fond du catalogue peut exister en 3 niveaux : `low`, `medium`, `high`. Comportements :
+
+- Khartis préfère `medium`, puis `high`, puis `low`.
+- Les fonds administratifs France (canton, commune, département, région) **incluent `medium` et `high` mais excluent `low`** : l'outil de simplification n'affiche que les niveaux réellement disponibles, ou un message si une seule variante existe.
+- Les couches annexes (graticule, geographic-lines) peuvent partager le même fichier entre niveaux.
 
 ---
 
 ## Presets
 
-Les presets sont dans `presets/` et exportés à la racine d'`export/`.
-
 ### `projection-presets.json`
 
-Projections composites avec encarts. Chaque entrée contient :
+Projections composites avec encarts DOM-TOM. Chaque entrée :
 
-| Champ             | Description                                                   |
-| ----------------- | ------------------------------------------------------------- |
-| `id`              | Identifiant de l'entrée                                       |
-| `proj4`           | Chaîne proj4 pour `proj4d3()`                                 |
-| `bounds`          | Étendue géographique `[[minLon, minLat], [maxLon, maxLat]]`   |
-| `layout`          | Position et taille relatives `{ x, y, width, height }` (0–1)  |
-| `scaleMultiplier` | Facteur de grossissement (optionnel, pour petits territoires) |
+| Champ             | Type                                   | Description                                      |
+| ----------------- | -------------------------------------- | ------------------------------------------------ |
+| `id`              | string                                 | Identifiant (`FRANCE_DOM_TOM`, `EUROPE_DOM_TOM`) |
+| `proj4`           | string                                 | Chaîne PROJ.4 pour `proj4d3()`                   |
+| `bounds`          | `[[minLon, minLat], [maxLon, maxLat]]` | Étendue géographique                             |
+| `layout`          | `{ x, y, width, height }` (0–1)        | Position et taille relatives                     |
+| `scaleMultiplier` | number?                                | Facteur d'agrandissement pour petits territoires |
 
-Presets disponibles : **FRANCE_DOM_TOM** (Lambert-93 + 6 encarts), **EUROPE_DOM_TOM** (ETRS89-LAEA + 6 encarts).
+Presets actuels : **FRANCE_DOM_TOM** (Lambert-93 + 6 encarts) et **EUROPE_DOM_TOM** (ETRS89-LAEA + 6 encarts).
 
 ### `style-presets.json`
 
-Styles visuels des couches d'habillage. Clés : `limit-level-0/1/2`, `land`, `nuts-land`, `graticule`, `geographic-lines`. Les styles `path` exposent `width`, `color` (RGBA). Les styles `solid-polygon` exposent `fillColor`, `stroked`.
+Styles par défaut des 9 couches d'habillage : `limit-level-0/1/2`, `land`, `nuts-land`, `graticule`, `geographic-lines`. Styles `path` : `{ width, color: RGBA }`. Styles `solid-polygon` : `{ fillColor, stroked }`.
 
 ---
 
-## Structure finale
+## Structure du catalogue sur disque
 
 ```
-basemaps/
+static/basemaps/
 ├── presets/
 │   ├── projection-presets.json
 │   └── style-presets.json
 ├── france/ europe/ monde/
-│   └── .../3-processed/*.json            ← métadonnées individuelles
-└── export/                               ← généré par script-export.sh
-    ├── all-basemaps-metadata.json        ← catalogue global
-    ├── all-basemaps-attributes.parquet   ← attributs concaténés
+│   └── .../3-processed/*.json        ← métadonnées individuelles
+└── export/                           ← généré par script-export.sh
+    ├── all-basemaps-metadata.json    ← catalogue global (29 fonds)
+    ├── all-basemaps-attributes.parquet ← attributs concaténés tous fonds
     ├── projection-presets.json
     ├── style-presets.json
-    └── geometry/*.parquet                ← fichiers GeoParquet
+    └── geometry/*.parquet            ← GeoParquet par couche
 ```
+
+`all-basemaps-metadata.json` est chargé au démarrage et popule le catalogue UI. Le catalogue actuel compte **29 entrées** (un fond = une famille géographique avec ses variantes de simplification). `all-basemaps-attributes.parquet` n'est **pas** chargé au démarrage — il est enregistré dans DuckDB par `basemapService.ensureAttributesLoaded()` uniquement quand l'utilisateur déclenche une jointure.
+
+---
+
+## Génération d'un graticule
+
+Outils requis : mapshaper + GDAL.
+
+```bash
+mapshaper -graticule interval=10 -o tmp/graticule-10.json
+ogr2ogr graticule-10.parquet tmp/graticule-10.json \
+    -lco GEOMETRY_NAME=geom \
+    -lco GEOMETRY_ENCODING=GEOARROW \
+    -lco COMPRESSION=ZSTD \
+    -lco WRITE_COVERING_BBOX=NO \
+    -nlt PROMOTE_TO_MULTI
+```
+
+---
+
+## Pipeline d'import de fond personnalisé (runtime)
+
+Quand un utilisateur importe un fichier géo comme fond personnalisé, `basemap-import.utils.ts` déclenche un pipeline DuckDB :
+
+**Polygones** :
+
+```
+ST_Read() → table_raw
+  → simplify_and_clean(table, geom, tolerance)   → table_clean
+  → extract_innerlines(table_clean)              → table_innerlines
+  → ST_MaximumInscribedCircle(table_clean)       → table_centroids
+```
+
+Résultat : 3 couches (POLYGON, LIMIT, CENTROID).
+
+**Lignes** :
+
+```
+Clone source
+  → simplify_and_clean_linestring(table, geom, 0.0)  → géométries nettoyées
+  → ST_PointOnSurface()                              → table_centroids
+```
+
+Résultat : 2 couches (LINE, CENTROID).
+
+**Points** :
+
+```
+Géométries source inchangées
+  → ST_PointOnSurface()  → table_centroids
+```
+
+Résultat : 2 couches (POINT, CENTROID).
+
+Les fonds personnalisés importés ne passent jamais par le cache GeoParquet → parquet-wasm. Ils restent dans DuckDB et sont consommés via `getArrowTable()` comme les données utilisateur.
 
 ---
 
 ## Jointure runtime
 
-Les attributs concaténés (`all-basemaps-attributes.parquet`) ne sont **pas chargés au démarrage**. Ils sont enregistrés dans DuckDB par `basemapService.ensureAttributesLoaded()` uniquement quand l'utilisateur déclenche une jointure. L'orchestration de la jointure (cache de similarité, corrections, finalisation) est implémentée dans `duckdb/orchestrator/join-ops.ts` et détaillée dans [DUCKDB.md](./DUCKDB.md#jointures-join-ops).
-
-Le mapping pick → ligne source côté rendu s'appuie sur `featureIds` (voir [MAP.md](./MAP.md#picking-et-tooltip)) :
-
-```typescript
-const geoKeys = table.getChild('code');
-const userDataMap = new Map(userRows.map((row) => [row.code, row.value]));
-
-new SolidPolygonLayer({
-  ...createSolidPolygonLayerProps(data),
-  getFillColor: (_, { index }) => {
-    const key = geoKeys.get(data.featureIds[index]);
-    return userDataMap.get(key)
-      ? colorScale(userDataMap.get(key))
-      : [200, 200, 200];
-  },
-  updateTriggers: { getFillColor: [userDataMap] }
-});
-```
+`basemapService.ensureAttributesLoaded()` enregistre `all-basemaps-attributes.parquet` dans DuckDB si ce n'est pas déjà fait. La jointure et son cache de similarité sont orchestrés par `join-ops.ts`. Voir [DUCKDB.md — Jointures](DUCKDB.md).
 
 ---
 
-## Prérequis
+## Prérequis de préparation
 
-- GDAL 3.9+
-- DuckDB 1.1+ (`INSTALL spatial; LOAD spatial;`)
-- mapshaper (pour les graticules)
-
----
-
-**Voir aussi :** [MAP.md](./MAP.md) — [DUCKDB.md](./DUCKDB.md) — [ARCHITECTURE.md](./ARCHITECTURE.md) — [GLOSSAIRE.md](./GLOSSAIRE.md)
+| Outil     | Version                                 | Usage                               |
+| --------- | --------------------------------------- | ----------------------------------- |
+| GDAL      | 3.9+                                    | Conversion GeoJSON/SHP → GeoParquet |
+| DuckDB    | 1.1+ (`INSTALL spatial; LOAD spatial;`) | Reshaping des attributs             |
+| mapshaper | Dernière stable                         | Génération des graticules           |
