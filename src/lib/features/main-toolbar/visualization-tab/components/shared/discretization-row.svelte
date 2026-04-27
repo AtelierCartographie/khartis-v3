@@ -1,5 +1,5 @@
 <script lang="ts">
-  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
+  import Button from '$lib/features/commons/components/carbon/button.svelte';
   import { Settings } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
 
@@ -22,11 +22,12 @@
   <span class="field-label">{label}</span>
   <div class="discretization-value">
     <span>{value}</span>
-    <IconButton
-      kind="ghost"
+    <Button
+      kind="tertiary"
       size="small"
       icon={Settings}
       iconDescription={settingsIconDescription}
+      aria-label={settingsIconDescription}
       onclick={onsettings}
     />
   </div>
@@ -39,7 +40,6 @@
     justify-content: space-between;
     align-items: center;
     padding: var(--cds-spacing-03) 0;
-    border-bottom: 1px solid var(--cds-border-subtle);
     gap: var(--cds-spacing-02);
   }
 

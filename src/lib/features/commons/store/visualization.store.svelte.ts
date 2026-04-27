@@ -8,6 +8,7 @@ import {
   type SavePriorityType
 } from '$lib/features/project-management/core/persistence-registry';
 import {
+  BasemapDottedPattern,
   CategoryShapeMode,
   ColorMode,
   DEFAULT_COLORS,
@@ -87,6 +88,7 @@ export interface VisualizationModes {
   size?: import('$lib/features/main-toolbar/constants').SizeMode;
   proportionalType?: ProportionalType;
   categoryShape?: import('$lib/features/main-toolbar/constants').CategoryShapeMode;
+  strokeShowMissing?: boolean;
 }
 
 export interface PatternParams {
@@ -110,6 +112,9 @@ export interface ClassificationConfig {
   patternId?: string;
   patternParams?: PatternParams;
   categoryShapes?: ShapeType[];
+  categorySizes?: number[];
+  categoryStrokeColors?: string[];
+  categoryStrokeWidths?: number[];
 }
 
 export interface MissingDataConfig {
@@ -133,6 +138,7 @@ export interface PolygonPrimitiveConfig {
   strokeWidth: number;
   strokeOpacity: number;
   strokeDashed: boolean;
+  strokeDashedPattern?: BasemapDottedPattern;
   strokeValueColumn?: string;
   strokeCategoryColumn?: string;
   valueColumn?: string;
@@ -165,6 +171,7 @@ export interface SymbolModeState {
   strokeWidth?: number;
   strokeOpacity?: number;
   strokeDashed?: boolean;
+  strokeDashedPattern?: BasemapDottedPattern;
   strokeClassification?: ClassificationConfig;
   strokeValueColumn?: string;
   strokeCategoryColumn?: string;
@@ -202,6 +209,7 @@ export interface SymbolPrimitiveConfig {
   strokeWidth: number;
   strokeOpacity: number;
   strokeDashed: boolean;
+  strokeDashedPattern?: BasemapDottedPattern;
   strokeValueColumn?: string;
   strokeCategoryColumn?: string;
   strokeClassification?: ClassificationConfig;
@@ -267,6 +275,7 @@ export interface TextBackgroundConfig {
   strokeWidth: number;
   strokeOpacity: number;
   strokeDashed: boolean;
+  strokeDashedPattern?: BasemapDottedPattern;
   strokeValueColumn?: string;
   strokeCategoryColumn?: string;
   valueColumn?: string;
@@ -405,6 +414,7 @@ export interface VisualizationConfig {
     strokeWidth?: number;
     strokeOpacity?: number;
     strokeDashed?: boolean;
+    strokeDashedPattern?: BasemapDottedPattern;
     lineWidth?: number;
     lineMaxWidth?: number;
     lineColor?: string | string[];
@@ -613,6 +623,8 @@ function buildPolygonPrimitiveConfig(
       existing?.strokeOpacity ?? visualization.style.strokeOpacity ?? 1,
     strokeDashed:
       existing?.strokeDashed ?? visualization.style.strokeDashed ?? false,
+    strokeDashedPattern:
+      existing?.strokeDashedPattern ?? visualization.style.strokeDashedPattern,
     valueColumn: existing?.valueColumn ?? visualization.mapping.valueColumn,
     categoryColumn:
       existing?.categoryColumn ?? visualization.mapping.categoryColumn,
@@ -685,6 +697,8 @@ function buildSymbolPrimitiveConfig(
       existing?.strokeOpacity ?? visualization.style.strokeOpacity ?? 1,
     strokeDashed:
       existing?.strokeDashed ?? visualization.style.strokeDashed ?? false,
+    strokeDashedPattern:
+      existing?.strokeDashedPattern ?? visualization.style.strokeDashedPattern,
     proportionalType:
       existing?.proportionalType ??
       visualization.modes?.proportionalType ??
@@ -784,6 +798,7 @@ function buildTextBackgroundConfig(
     strokeWidth: existing?.strokeWidth ?? VISUALIZATION_DEFAULTS.strokeWidth,
     strokeOpacity: existing?.strokeOpacity ?? 1,
     strokeDashed: existing?.strokeDashed ?? false,
+    strokeDashedPattern: existing?.strokeDashedPattern,
     valueColumn: existing?.valueColumn,
     categoryColumn: existing?.categoryColumn,
     classification: existing?.classification,

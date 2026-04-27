@@ -6,6 +6,43 @@ export interface FieldSelectionItem {
 
 export const NONE_FIELD_ID = -1;
 
+export type FieldSelectionKind = 'numeric' | 'textual' | 'any';
+
+function matchesFieldSelectionKind(
+  item: FieldSelectionItem,
+  kind: FieldSelectionKind
+): boolean {
+  if (kind === 'any' || item.id === NONE_FIELD_ID) {
+    return true;
+  }
+
+  if (kind === 'numeric') {
+    return item.type === 'number';
+  }
+
+  return (
+    item.type === 'text' || item.type === 'date' || item.type === 'boolean'
+  );
+}
+
+export function filterFieldsByKind(
+  items: FieldSelectionItem[],
+  kind: FieldSelectionKind,
+  selectedFieldId?: number
+): FieldSelectionItem[] {
+  const filtered = items.filter(
+    (item) =>
+      matchesFieldSelectionKind(item, kind) || item.id === selectedFieldId
+  );
+  const noneOption = items.find((item) => item.id === NONE_FIELD_ID);
+
+  if (!noneOption) {
+    return filtered;
+  }
+
+  return [noneOption, ...filtered.filter((item) => item.id !== NONE_FIELD_ID)];
+}
+
 export function resolveFieldId(
   dataFields: FieldSelectionItem[],
   columnName: string | undefined

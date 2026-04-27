@@ -55,7 +55,8 @@ function buildPolygonPanelVisualizationImpl(
           : polygon.strokeColor) ?? visualization.style.strokeColor,
       strokeWidth: polygon.strokeWidth,
       strokeOpacity: polygon.strokeOpacity,
-      strokeDashed: polygon.strokeDashed
+      strokeDashed: polygon.strokeDashed,
+      strokeDashedPattern: polygon.strokeDashedPattern
     },
     mapping: {
       ...visualization.mapping,
@@ -95,7 +96,8 @@ function buildSymbolPanelVisualizationImpl(
         : symbol.strokeColor,
       strokeWidth: symbol.strokeWidth,
       strokeOpacity: symbol.strokeOpacity,
-      strokeDashed: symbol.strokeDashed
+      strokeDashed: symbol.strokeDashed,
+      strokeDashedPattern: symbol.strokeDashedPattern
     },
     mapping: {
       ...visualization.mapping,
@@ -271,7 +273,8 @@ function buildTextBackgroundPanelVisualizationImpl(
         : background.strokeColor,
       strokeWidth: background.strokeWidth,
       strokeOpacity: background.strokeOpacity,
-      strokeDashed: background.strokeDashed
+      strokeDashed: background.strokeDashed,
+      strokeDashedPattern: background.strokeDashedPattern
     },
     mapping: {
       ...visualization.mapping,

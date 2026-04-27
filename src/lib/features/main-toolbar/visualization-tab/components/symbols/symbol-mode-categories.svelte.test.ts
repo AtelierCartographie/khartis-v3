@@ -25,8 +25,8 @@ describe('SymbolModeCategories (en categorie.png alignment)', () => {
     expect(source).toContain('items={shapeDropdownItems}');
   });
 
-  it('uses the Taille selon label for the category variable picker', () => {
-    expect(source).toContain('{m.size_according()}');
+  it('uses the Aspect selon label for the category variable picker', () => {
+    expect(source).toContain('{m.aspect_according()}');
   });
 
   it('propagates categoryShape choices through onModesChange', () => {

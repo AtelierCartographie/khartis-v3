@@ -27,6 +27,7 @@
   import { buildFillModeItems } from './fill-mode-presets';
   import type { CategoriesAspectVariant } from '$lib/features/commons/components/palette-popover/categories-aspect-popover.types';
   import { useCategoryLabels } from '../../use-category-labels.svelte';
+  import { filterFieldsByKind } from '../../use-field-selection.svelte';
 
   interface Props {
     visualization?: VisualizationConfig;
@@ -155,6 +156,12 @@
     fallbackCount: () => categoryCount || 4
   });
   const resolvedCategoryCount = $derived(categoryLabels.count);
+  const selectableValueFields = $derived(
+    filterFieldsByKind(selectableDataFields, 'numeric', selectedValueFieldId)
+  );
+  const selectableCategoryFields = $derived(
+    filterFieldsByKind(selectableDataFields, 'textual', selectedCategoryFieldId)
+  );
 
   function handleToggleChange(index: number) {
     const nextMode = availableModes[index] ?? FillMode.NONE;
@@ -200,7 +207,7 @@
       bind:open={valuePickerOpen}
       titleText={m.color_according()}
       dataFields={dataFields}
-      singleSelectItems={selectableDataFields}
+      singleSelectItems={selectableValueFields}
       selectedFieldId={selectedValueFieldId}
       selectedFieldIds={getFacetsSelectedFieldIds(facetsValueSlotPath)}
       isCollectionEnabled={isFacetsActiveForSlot(facetsValueSlotPath)}
@@ -232,7 +239,7 @@
       bind:open={categoryPickerOpen}
       titleText={m.color_according()}
       dataFields={dataFields}
-      singleSelectItems={selectableDataFields}
+      singleSelectItems={selectableCategoryFields}
       selectedFieldId={selectedCategoryFieldId}
       selectedFieldIds={getFacetsSelectedFieldIds(facetsCategorySlotPath)}
       isCollectionEnabled={isFacetsActiveForSlot(facetsCategorySlotPath)}

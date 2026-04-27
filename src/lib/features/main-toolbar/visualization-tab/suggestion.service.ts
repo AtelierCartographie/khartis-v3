@@ -46,6 +46,7 @@ import {
   legendActions
 } from '$lib/features/step-toolbar/tools/legend/legend.store.svelte';
 import {
+  findLatestYearNumericColumn,
   findPreferredNumericColumn,
   findPreferredTextColumn
 } from '$lib/features/commons/utils/visualization-columns.utils';
@@ -463,6 +464,8 @@ export function resolveSuggestionBehavior(
     allowIdLikeFallback: true,
     excludeLikelyCoordinates: true
   });
+  const proportionalSizeColumn =
+    findLatestYearNumericColumn(dataset.columns) ?? primaryNumericColumn;
   const primaryTextColumn = findPreferredTextColumn(dataset.columns, {
     preferred: suggestion.columns?.[0]
   });
@@ -801,7 +804,7 @@ export function resolveSuggestionBehavior(
             ? secondaryTextColumn
             : primaryTextColumn
           : undefined,
-        sizeColumn: isProportionalLine ? primaryNumericColumn : undefined
+        sizeColumn: isProportionalLine ? proportionalSizeColumn : undefined
       }),
       modes: {
         ...preset.modes,
@@ -846,7 +849,7 @@ export function resolveSuggestionBehavior(
             ? secondaryTextColumn
             : primaryTextColumn
           : undefined,
-        sizeColumn: isProportionalLine ? primaryNumericColumn : undefined,
+        sizeColumn: isProportionalLine ? proportionalSizeColumn : undefined,
         color:
           !isCategoricalLine && !isClassedLine
             ? DEFAULT_COLORS.fill
@@ -901,7 +904,7 @@ export function resolveSuggestionBehavior(
     mapping: buildClearedMapping(preset.mapping.geometryColumn, {
       valueColumn: symbolValueColumn,
       categoryColumn: symbolCategoryColumn,
-      sizeColumn: isProportionalSymbol ? primaryNumericColumn : undefined
+      sizeColumn: isProportionalSymbol ? proportionalSizeColumn : undefined
     }),
     modes: {
       ...preset.modes,
@@ -970,7 +973,7 @@ export function resolveSuggestionBehavior(
       breakValueB: null,
       valueColumn: isClassedSymbol ? primaryNumericColumn : symbolValueColumn,
       categoryColumn: symbolCategoryColumn,
-      sizeColumn: isProportionalSymbol ? primaryNumericColumn : undefined,
+      sizeColumn: isProportionalSymbol ? proportionalSizeColumn : undefined,
       fillValueColumn: isClassedSymbol ? symbolValueColumn : undefined,
       fillCategoryColumn: isCategoricalSymbol
         ? symbolCategoryColumn
