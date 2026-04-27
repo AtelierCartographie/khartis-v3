@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte';
   import { Slider } from 'carbon-components-svelte';
   import CompactNumberInput from './compact-number-input.svelte';
 
@@ -16,6 +17,7 @@
     id?: string;
     showLabel?: boolean;
     showSteppers?: boolean;
+    debounceMs?: number;
     onchange?: (value: number) => void;
   }
 
@@ -33,6 +35,7 @@
     id,
     showLabel = true,
     showSteppers = true,
+    debounceMs = 120,
     onchange
   }: Props = $props();
 
@@ -43,11 +46,51 @@
   const sliderId = $derived(`${id ?? fallbackSliderId}-control`);
   const accessibleLabel = $derived(label || 'Slider');
 
-  function handleChange(newValue: number | null) {
+  let pendingTimer: ReturnType<typeof setTimeout> | null = null;
+  let pendingValue: number | null = null;
+
+  function flushPending() {
+    if (pendingTimer !== null) {
+      clearTimeout(pendingTimer);
+      pendingTimer = null;
+    }
+    if (pendingValue !== null) {
+      const next = pendingValue;
+      pendingValue = null;
+      onchange?.(next);
+    }
+  }
+
+  function handleSliderChange(newValue: number | null) {
     if (newValue === null) return;
+    value = newValue;
+    if (debounceMs > 0) {
+      pendingValue = newValue;
+      if (pendingTimer !== null) clearTimeout(pendingTimer);
+      pendingTimer = setTimeout(flushPending, debounceMs);
+      return;
+    }
+    onchange?.(newValue);
+  }
+
+  function handleInputChange(newValue: number | null) {
+    if (newValue === null) return;
+    if (pendingTimer !== null) {
+      clearTimeout(pendingTimer);
+      pendingTimer = null;
+    }
+    pendingValue = null;
     value = newValue;
     onchange?.(newValue);
   }
+
+  function handleCommit() {
+    if (debounceMs > 0) flushPending();
+  }
+
+  onDestroy(() => {
+    flushPending();
+  });
 </script>
 
 <div class="slider-with-input-wrapper">
@@ -62,7 +105,13 @@
       <span class="slider-bound">{minLabel ?? min}</span>
     {/if}
 
-    <div class="slider-container">
+    <div
+      class="slider-container"
+      role="presentation"
+      onpointerupcapture={handleCommit}
+      onkeyupcapture={handleCommit}
+      onpointerleave={handleCommit}
+    >
       <Slider
         id={sliderId}
         min={min}
@@ -74,7 +123,7 @@
         hideLabel
         hideTextInput
         fullWidth
-        on:input={(e) => handleChange(e.detail)}
+        on:input={(e) => handleSliderChange(e.detail)}
       />
     </div>
 
@@ -93,7 +142,7 @@
       valueMinWidth="3.5rem"
       disabled={disabled}
       showSteppers={showSteppers}
-      onchange={handleChange}
+      onchange={handleInputChange}
     />
   </div>
 </div>

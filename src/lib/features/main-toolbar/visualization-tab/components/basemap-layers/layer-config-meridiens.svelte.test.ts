@@ -31,11 +31,12 @@ describe('LayerConfigMeridiens', () => {
     expect(source).toContain(
       "import { Star, Wikis } from 'carbon-icons-svelte';"
     );
-    expect(source).toContain('role="tablist"');
-    expect(source).toContain('role="tab"');
+    expect(source).toContain(
+      "import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';"
+    );
+    expect(source).toContain('<ToggleTabs');
     expect(source).toContain('BasemapGraticuleMode.REMARKABLE');
     expect(source).toContain('BasemapGraticuleMode.REGULAR');
-    expect(source).toContain('aria-label={m.basemap_config_graticule_mode()}');
     expect(source).toContain('m.basemap_config_graticule_remarkable()');
     expect(source).toContain('m.basemap_config_graticule_regular()');
     expect(source).toContain('<CompactNumberInput');
@@ -44,7 +45,6 @@ describe('LayerConfigMeridiens', () => {
     expect(source).toContain('m.basemap_config_spacing_degrees_increment()');
     expect(source).toContain('min={BASEMAP_LAYER_CONFIG.graticuleSpacing.min}');
     expect(source).toContain('max={BASEMAP_LAYER_CONFIG.graticuleSpacing.max}');
-    expect(source).toContain('onchange?.({ mode: nextMode })');
     expect(source).toContain('onchange?.({ spacingDegrees: value })');
     expect(source).not.toContain('<Dropdown');
   });

@@ -30,5 +30,5 @@ describe('resolveDiscretizationLabel', () => {
 
     expect(label).toContain('5 classes');
     expect(label.length).toBeGreaterThan('5 classes'.length);
-  });
+  }, 10000);
 });

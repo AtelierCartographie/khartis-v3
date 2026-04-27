@@ -50,23 +50,29 @@ describe('SymbolModeProportional (proportionnels.png + en classes.png)', () => {
     expect(source).toContain('categoriesVariant="symbols-unique"');
   });
 
-  it('overrides FillMode.UNIQUE with a custom uniqueSnippet for SINGLE/DOUBLE variants', () => {
+  it('overrides FillMode.UNIQUE with a custom uniqueSnippet for the single color', () => {
     expect(source).toContain('{#snippet uniqueSnippet()}');
-    expect(source).toContain('symbolMode === SymbolMode.PROPORTIONAL &&');
-    expect(source).toContain('proportionalType === ProportionalType.DOUBLE');
     const uniqueSnippet = source
       .split('{#snippet uniqueSnippet()}')[1]
       ?.split('{/snippet}')[0];
     expect(uniqueSnippet).toBeDefined();
     const count = (uniqueSnippet?.match(/<SingleColorPreview/g) ?? []).length;
-    expect(count).toBeGreaterThanOrEqual(3);
+    expect(count).toBe(1);
+    expect(uniqueSnippet).toContain('label={m.color()}');
   });
 
-  it('never shows the double fill background controls inside CLASSES mode', () => {
+  it('renders DOUBLE colors outside the shared FillSection', () => {
     const uniqueSnippet = source
       .split('{#snippet uniqueSnippet()}')[1]
       ?.split('{/snippet}')[0];
-    expect(uniqueSnippet).toContain('symbolMode === SymbolMode.PROPORTIONAL');
+    expect(uniqueSnippet).not.toContain(
+      'symbolMode === SymbolMode.PROPORTIONAL'
+    );
+    expect(source).toContain(
+      'symbolMode === SymbolMode.PROPORTIONAL && proportionalType === ProportionalType.DOUBLE'
+    );
+    expect(source).toContain('label={m.symbol_color_a()}');
+    expect(source).toContain('label={m.symbol_color_b()}');
   });
 
   it('exposes commonScale switch in DOUBLE branch (Figma 697:76546)', () => {

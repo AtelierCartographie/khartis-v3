@@ -590,6 +590,77 @@ describe('use-primitive-panel-controller', () => {
     });
   });
 
+  it('auto-selects a symbol value column when columns become available after initialization', () => {
+    const dataFields: Array<{ id: number; text: string; type?: string }> = [];
+    const harness = createHarness({
+      visualization: {
+        ...createVisualization(),
+        symbol: {
+          ...createVisualization().symbol,
+          mode: SymbolMode.CLASSES,
+          valueColumn: undefined
+        }
+      } as VisualizationConfig,
+      dataFields
+    });
+
+    harness.controller.ensureAutoColumns(
+      PrimitiveFilterType.POINT,
+      harness.visualization
+    );
+    expect(harness.visualizationUpdates).toHaveLength(0);
+
+    dataFields.push(
+      { id: 0, text: 'code', type: 'text' },
+      { id: 1, text: '2020', type: 'number' }
+    );
+
+    harness.controller.ensureAutoColumns(
+      PrimitiveFilterType.POINT,
+      harness.visualization
+    );
+
+    expect(harness.visualizationUpdates[0]).toMatchObject({
+      symbol: { valueColumn: '2020' }
+    });
+  });
+
+  it('preserves the next proportional symbol mode while auto-selecting the default size column', () => {
+    const initialVisualization = {
+      ...createVisualization(),
+      symbol: {
+        ...createVisualization().symbol,
+        mode: SymbolMode.UNIQUE,
+        sizeColumn: undefined,
+        valueColumn: undefined,
+        categoryColumn: 'region'
+      }
+    } as VisualizationConfig;
+    const harness = createStaleAfterUpdateHarness({
+      visualization: initialVisualization
+    });
+    const nextVisualization = {
+      ...initialVisualization,
+      symbol: {
+        ...initialVisualization.symbol,
+        mode: SymbolMode.PROPORTIONAL
+      }
+    } as VisualizationConfig;
+
+    harness.controller.ensureAutoColumns(
+      PrimitiveFilterType.POINT,
+      nextVisualization
+    );
+
+    expect(harness.visualization.symbol).toMatchObject({
+      mode: SymbolMode.PROPORTIONAL,
+      sizeColumn: 'population'
+    });
+    expect(harness.visualization.mapping).toMatchObject({
+      sizeColumn: 'population'
+    });
+  });
+
   it('auto-selects a numeric value column for line classes without reusing category and size fields', () => {
     const harness = createHarness({
       visualization: {

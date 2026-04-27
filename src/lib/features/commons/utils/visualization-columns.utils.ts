@@ -35,6 +35,42 @@ export function isHiddenTechnicalColumnName(name: string): boolean {
   return /^__/.test(name.trim());
 }
 
+function resolveYearColumnName(name: string): number | undefined {
+  const normalized = name.trim().replace(/^_+/, '');
+  if (!/^\d{4}$/.test(normalized)) {
+    return undefined;
+  }
+  const year = Number(normalized);
+  return year >= 1800 && year <= 2200 ? year : undefined;
+}
+
+export function findLatestYearNumericColumn(
+  columns: ColumnLike[],
+  exclude: Array<string | undefined> = []
+): string | undefined {
+  const reserved = new Set(
+    exclude.filter((name): name is string => Boolean(name))
+  );
+  const latest = columns.reduce<{ name: string; year: number } | undefined>(
+    (acc, column) => {
+      const name = resolveColumnName(column);
+      if (
+        !name ||
+        !isNumericColumn(column) ||
+        reserved.has(name) ||
+        isHiddenTechnicalColumnName(name)
+      ) {
+        return acc;
+      }
+      const year = resolveYearColumnName(name);
+      if (year === undefined) return acc;
+      return acc && acc.year >= year ? acc : { name, year };
+    },
+    undefined
+  );
+  return latest?.name;
+}
+
 export function findPreferredNumericColumn(
   columns: ColumnLike[],
   {

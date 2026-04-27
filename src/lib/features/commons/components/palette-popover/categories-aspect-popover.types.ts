@@ -8,12 +8,22 @@ export type CategoriesAspectVariant =
   | 'lines'
   | 'texts';
 
+export enum PatternType {
+  DOTS = 'dots',
+  LINES = 'lines',
+  CROSSHATCH = 'crosshatch',
+  DASHES = 'dashes'
+}
+
 export interface CategoryDraft {
   id: string;
   label: string;
   color: string;
   enabled: boolean;
   shape?: ShapeType;
+  customSize?: number;
+  strokeColor?: string;
+  customStrokeWidth?: number;
 }
 
 export interface CategoriesCommonAspect {
@@ -23,6 +33,8 @@ export interface CategoriesCommonAspect {
   autoColor: boolean;
   strokeSize: number;
   pattern: boolean;
+  patternType?: PatternType;
+  strokeUnique?: boolean;
   shape?: ShapeType;
   color?: string;
   thickness?: number;
@@ -36,8 +48,10 @@ export const DEFAULT_COMMON_ASPECT: CategoriesCommonAspect = {
   size: 2,
   stroke: true,
   autoColor: true,
+  strokeUnique: true,
   strokeSize: 1,
   pattern: false,
+  patternType: PatternType.DOTS,
   shape: ShapeType.CIRCLE,
   color: '#f287ac',
   thickness: 1,

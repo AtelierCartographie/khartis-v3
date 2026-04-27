@@ -2,12 +2,11 @@
   import * as m from '$lib/paraglide/messages';
   import { NONE_FIELD_ID } from '../../use-field-selection.svelte';
   import {
-    CharacterWholeNumber,
     Checkbox,
     CheckboxCheckedFilled,
     ChevronDown,
     Checkmark,
-    StringText
+    Table
   } from 'carbon-icons-svelte';
   import Switch from '$lib/features/commons/components/switch.svelte';
   import { clickOutside } from '$lib/features/commons/utils/click-outside';
@@ -150,11 +149,7 @@
           class:string={!isNumeric(triggerLabel)}
         >
           <span class="tag-text">{triggerLabel.text}</span>
-          {#if isNumeric(triggerLabel)}
-            <CharacterWholeNumber size={16} />
-          {:else}
-            <StringText size={16} />
-          {/if}
+          <Table size={16} />
         </span>
       {:else if selectedField && selectedFieldId !== NONE_FIELD_ID}
         <span
@@ -163,11 +158,7 @@
           class:string={!isNumeric(selectedField)}
         >
           <span class="tag-text">{selectedField.text}</span>
-          {#if isNumeric(selectedField)}
-            <CharacterWholeNumber size={16} />
-          {:else}
-            <StringText size={16} />
-          {/if}
+          <Table size={16} />
         </span>
       {:else}
         <span class="placeholder">{m.none()}</span>
@@ -208,11 +199,7 @@
                 class:string={!isNumeric(field)}
               >
                 <span class="tag-text">{field.text}</span>
-                {#if isNumeric(field)}
-                  <CharacterWholeNumber size={16} />
-                {:else}
-                  <StringText size={16} />
-                {/if}
+                <Table size={16} />
               </span>
             {/if}
             {#if !isCollectionEnabled && isSelected(field.id)}

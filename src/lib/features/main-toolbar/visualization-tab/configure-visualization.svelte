@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy } from 'svelte';
+  import { onDestroy, untrack } from 'svelte';
   import * as m from '$lib/paraglide/messages';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import {
@@ -555,6 +555,39 @@
     ensureTextBackgroundAutoColumns(visualization);
     ensureTextBackgroundStrokeClassificationDefaults(visualization);
     ensureTextBackgroundStrokeAutoColumns(visualization);
+  });
+
+  let autoColumnsFieldSignature = '';
+
+  $effect(() => {
+    const visualization = selectedViz;
+    const fieldSignature = dataFieldItems
+      .map((field) => `${field.id}:${field.text}:${field.type ?? ''}`)
+      .join('|');
+    const nextSignature = `${visualization?.id ?? ''}:${fieldSignature}`;
+
+    if (!visualization || nextSignature === autoColumnsFieldSignature) {
+      return;
+    }
+
+    autoColumnsFieldSignature = nextSignature;
+    if (dataFieldItems.length === 0) {
+      return;
+    }
+
+    untrack(() => {
+      for (const primitive of CLASSIFIABLE_PRIMITIVES) {
+        ensureAutoColumns(primitive, visualization);
+      }
+
+      for (const primitive of STROKE_CLASSIFIABLE_PRIMITIVES) {
+        ensurePrimitiveStrokeAutoColumns(primitive, visualization);
+      }
+
+      ensureSymbolFillAutoColumns(visualization);
+      ensureTextBackgroundAutoColumns(visualization);
+      ensureTextBackgroundStrokeAutoColumns(visualization);
+    });
   });
 
   $effect(() => {

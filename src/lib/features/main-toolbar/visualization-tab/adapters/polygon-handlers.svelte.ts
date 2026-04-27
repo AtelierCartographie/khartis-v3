@@ -90,7 +90,8 @@ export function createPolygonHandlers(deps: PolygonHandlersDeps) {
       'fillOpacity',
       'strokeWidth',
       'strokeOpacity',
-      'strokeDashed'
+      'strokeDashed',
+      'strokeDashedPattern'
     ] as const;
     const withFallback = pickOwnedKeys(updates, fallbackKeys, polygon);
 

@@ -33,6 +33,12 @@ describe('PalettePreview — shell + popover routing', () => {
   it('uses the shared palette swatch border token', () => {
     expect(source).toContain('--khartis-palette-swatch-border-color');
   });
+
+  it('hides the invert action for qualitative palettes', () => {
+    expect(source).toContain(
+      'showInvertButton && paletteType !== PALETTE_TYPE.QUALITATIVE'
+    );
+  });
 });
 
 describe('PalettePreview — categoriesMode routing (Fill Categories)', () => {

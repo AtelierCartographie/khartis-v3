@@ -17,7 +17,7 @@
     PaletteType,
     PatternParams
   } from './palette.constants';
-  import { normalizePaletteId } from './palette.constants';
+  import { PALETTE_TYPE, normalizePaletteId } from './palette.constants';
   import type { ClassificationConfig } from '$lib/features/commons/store/visualization.store.svelte';
 
   interface Props {
@@ -123,7 +123,10 @@
         id: String(i),
         label,
         color,
-        enabled: !disabledCategoryLabels.includes(label)
+        enabled: !disabledCategoryLabels.includes(label),
+        customSize: classification?.categorySizes?.[i],
+        strokeColor: classification?.categoryStrokeColors?.[i],
+        customStrokeWidth: classification?.categoryStrokeWidths?.[i]
       };
     })
   );
@@ -220,6 +223,23 @@
         .filter((category) => !category.enabled)
         .map((category) => category.label),
       categoryShapes,
+      categorySizes: normalizedCategories.some(
+        (category) => category.customSize !== undefined
+      )
+        ? normalizedCategories.map((category) => category.customSize ?? 0)
+        : undefined,
+      categoryStrokeColors: normalizedCategories.some(
+        (category) => category.strokeColor !== undefined
+      )
+        ? normalizedCategories.map((category) => category.strokeColor ?? '')
+        : undefined,
+      categoryStrokeWidths: normalizedCategories.some(
+        (category) => category.customStrokeWidth !== undefined
+      )
+        ? normalizedCategories.map(
+            (category) => category.customStrokeWidth ?? 0
+          )
+        : undefined,
       paletteId,
       inverted: false,
       patternId: undefined,
@@ -281,7 +301,7 @@
       </div>
       <ChevronDown size={16} />
     </button>
-    {#if showInvertButton}
+    {#if showInvertButton && paletteType !== PALETTE_TYPE.QUALITATIVE}
       <IconButton
         kind="ghost"
         size="small"

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { dragHandle, dragHandleZone } from 'svelte-dnd-action';
+  import { Dropdown } from 'carbon-components-svelte';
   import Button from '$lib/features/commons/components/carbon/button.svelte';
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import CompactNumberInput from '$lib/features/commons/components/compact-number-input.svelte';
@@ -24,6 +25,7 @@
   import { PALETTE_TYPE, type Palette } from './palette.constants';
   import {
     DEFAULT_COMMON_ASPECT,
+    PatternType,
     type CategoriesAspectVariant,
     type CategoriesCommonAspect,
     type CategoryDraft
@@ -61,6 +63,7 @@
     ...DEFAULT_COMMON_ASPECT
   });
   let expandedCategoryId = $state<string | null>(null);
+  let sortMode = $state<'manual' | 'az' | 'za'>('manual');
   const contextualSurfaceId = createExclusiveContextualSurfaceId(
     'categories-aspect-popover'
   );
@@ -93,6 +96,17 @@
     { id: ShapeType.CROSS, label: m.shape_cross() },
     { id: ShapeType.STAR, label: m.shape_star() },
     { id: ShapeType.RECTANGLE, label: m.shape_rectangle() }
+  ]);
+  const patternTypeItems = $derived([
+    { id: PatternType.DOTS, text: m.pattern_dots() },
+    { id: PatternType.LINES, text: m.pattern_lines() },
+    { id: PatternType.CROSSHATCH, text: m.pattern_crosshatch() },
+    { id: PatternType.DASHES, text: m.pattern_dashes() }
+  ]);
+  const sortItems = $derived([
+    { id: 'manual', text: m.palette_categories_sort_manual() },
+    { id: 'az', text: m.palette_categories_sort_az() },
+    { id: 'za', text: m.palette_categories_sort_za() }
   ]);
 
   const toolbarWidth = $derived.by(() => {
@@ -145,6 +159,7 @@
     draftCommonAspect = commonAspect
       ? { ...DEFAULT_COMMON_ASPECT, ...commonAspect }
       : { ...DEFAULT_COMMON_ASPECT };
+    sortMode = 'manual';
     popoverRight = toolbarWidth;
   }
 
@@ -190,6 +205,24 @@
   function handleCategoryColor(id: string, hex: string) {
     draftCategories = draftCategories.map((category) =>
       category.id === id ? { ...category, color: hex } : category
+    );
+  }
+
+  function handleCategorySize(id: string, size: number) {
+    draftCategories = draftCategories.map((category) =>
+      category.id === id ? { ...category, customSize: size } : category
+    );
+  }
+
+  function handleCategoryStrokeColor(id: string, hex: string) {
+    draftCategories = draftCategories.map((category) =>
+      category.id === id ? { ...category, strokeColor: hex } : category
+    );
+  }
+
+  function handleCategoryStrokeWidth(id: string, width: number) {
+    draftCategories = draftCategories.map((category) =>
+      category.id === id ? { ...category, customStrokeWidth: width } : category
     );
   }
 
@@ -246,7 +279,21 @@
 
   function handleCategoryListReorder(e: Event) {
     const { items } = (e as CustomEvent<{ items: CategoryDraft[] }>).detail;
+    sortMode = 'manual';
     applyVisibleCategoryOrder(items);
+  }
+
+  function handleSortSelect(value: string | number) {
+    const next =
+      value === 'az' || value === 'za' || value === 'manual' ? value : 'manual';
+    sortMode = next;
+    if (next === 'manual') return;
+
+    draftCategories = [...draftCategories].sort((a, b) =>
+      next === 'az'
+        ? a.label.localeCompare(b.label)
+        : b.label.localeCompare(a.label)
+    );
   }
 
   function handleSuggestionPaletteSelect(_palette: Palette) {}
@@ -260,7 +307,7 @@
   }
 
   function resolveOrderedRankPreviewSize(index: number, total: number): number {
-    const clampedBaseSize = Math.min(Math.max(draftCommonAspect.size, 1), 20);
+    const clampedBaseSize = Math.min(Math.max(draftCommonAspect.size, 1), 100);
     const minSize = Math.max(1, Math.round(clampedBaseSize * 0.75));
     const maxSize = Math.max(minSize + 1, Math.round(clampedBaseSize * 1.75));
 
@@ -287,9 +334,14 @@
       return `--marker-color: ${markerColor}; --marker-size: 18px;`;
     }
 
-    const rankSize = isSymbolsDifferentRank
-      ? resolveOrderedRankPreviewSize(index, visibleDraftCategories.length)
-      : 14;
+    const rankSize =
+      primitiveKind === 'symbols' &&
+      !draftCommonAspect.sizeUnique &&
+      category.customSize !== undefined
+        ? category.customSize
+        : isSymbolsDifferentRank
+          ? resolveOrderedRankPreviewSize(index, visibleDraftCategories.length)
+          : 14;
 
     return `--marker-color: ${markerColor}; --marker-size: ${rankSize}px;`;
   }
@@ -432,7 +484,7 @@
                   <span class="field-label">{m.size()}</span>
                   <SliderWithInput
                     min={1}
-                    max={20}
+                    max={100}
                     value={draftCommonAspect.size}
                     showMinMax
                     inputWidth="96px"
@@ -468,7 +520,7 @@
                     <CompactNumberInput
                       value={draftCommonAspect.size}
                       min={1}
-                      max={20}
+                      max={100}
                       width="100%"
                       height="32px"
                       showSteppers={false}
@@ -549,6 +601,31 @@
                         </span>
                       </div>
                     </div>
+
+                    <div class="common-paired-row">
+                      <div class="common-field common-field--toggle">
+                        <span class="field-label"
+                          >{m.aspect_common_stroke_unique()}</span
+                        >
+                        <div class="common-toggle-value">
+                          <div class="toggle-control">
+                            <Switch
+                              toggled={draftCommonAspect.strokeUnique ?? true}
+                              hideLabel
+                              labelText={m.aspect_common_stroke_unique()}
+                              disabled={!draftCommonAspect.stroke}
+                              onchange={(value) =>
+                                handleCommonAspectChange('strokeUnique', value)}
+                            />
+                            <span class="toggle-state">
+                              {(draftCommonAspect.strokeUnique ?? true)
+                                ? m.yes()
+                                : m.no()}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
                   <div class="common-field common-field--input">
@@ -587,6 +664,20 @@
                     </div>
                   </div>
                 </div>
+                {#if draftCommonAspect.pattern}
+                  <Dropdown
+                    titleText={m.pattern()}
+                    items={patternTypeItems}
+                    selectedId={draftCommonAspect.patternType ??
+                      PatternType.DOTS}
+                    on:select={(e) =>
+                      handleCommonAspectChange(
+                        'patternType',
+                        e.detail.selectedId as PatternType
+                      )}
+                    type="default"
+                  />
+                {/if}
               </div>
             {:else if primitiveKind === 'polygons'}
               <div class="common-grid">
@@ -620,11 +711,12 @@
 
           <div class="field-stack">
             <span class="field-label">{m.palette_categories_sort()}</span>
-            <select class="common-select sort-select">
-              <option value="manual"
-                >{m.palette_categories_sort_manual()}</option
-              >
-            </select>
+            <Dropdown
+              items={sortItems}
+              selectedId={sortMode}
+              on:select={(e) => handleSortSelect(e.detail.selectedId)}
+              type="default"
+            />
           </div>
 
           <div class="field-stack">
@@ -745,6 +837,56 @@
                               handleCategoryColor(category.id, hex)}
                           />
                         </div>
+
+                        {#if primitiveKind === 'symbols' && !draftCommonAspect.sizeUnique}
+                          <div class="field-stack">
+                            <span class="field-label"
+                              >{m.per_category_size()}</span
+                            >
+                            <SliderWithInput
+                              min={1}
+                              max={100}
+                              value={category.customSize ??
+                                draftCommonAspect.size}
+                              showMinMax
+                              inputWidth="96px"
+                              onchange={(value) =>
+                                handleCategorySize(category.id, value)}
+                            />
+                          </div>
+                        {/if}
+
+                        {#if primitiveKind === 'symbols' && draftCommonAspect.stroke && !draftCommonAspect.autoColor}
+                          <div class="field-stack">
+                            <span class="field-label"
+                              >{m.per_category_stroke_color()}</span
+                            >
+                            <SingleColorPreview
+                              color={category.strokeColor ?? '#000000'}
+                              onchange={(hex) =>
+                                handleCategoryStrokeColor(category.id, hex)}
+                            />
+                          </div>
+
+                          {#if !(draftCommonAspect.strokeUnique ?? true)}
+                            <div class="field-stack">
+                              <span class="field-label"
+                                >{m.per_category_stroke_width()}</span
+                              >
+                              <CompactNumberInput
+                                value={category.customStrokeWidth ??
+                                  draftCommonAspect.strokeSize}
+                                min={1}
+                                max={20}
+                                width="100%"
+                                height="32px"
+                                showSteppers={false}
+                                onchange={(value) =>
+                                  handleCategoryStrokeWidth(category.id, value)}
+                              />
+                            </div>
+                          {/if}
+                        {/if}
                       </div>
                     {/if}
                   {/if}
@@ -1004,10 +1146,6 @@
       5px 5px;
     background-repeat: no-repeat;
     padding-right: 32px;
-  }
-
-  .sort-select {
-    cursor: pointer;
   }
 
   .category-list {

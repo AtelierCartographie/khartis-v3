@@ -16,6 +16,7 @@
     disabled?: boolean;
     id?: string;
     showSteppers?: boolean;
+    debounceMs?: number;
     onchange?: (value: number) => void;
   }
 
@@ -33,6 +34,7 @@
     disabled = false,
     id,
     showSteppers = true,
+    debounceMs = 0,
     onchange
   }: Props = $props();
 </script>
@@ -61,6 +63,7 @@
     id={id}
     showSteppers={showSteppers}
     showLabel={false}
+    debounceMs={debounceMs}
     onchange={onchange}
   />
 </div>

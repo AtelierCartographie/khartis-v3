@@ -5,7 +5,10 @@ import {
   type SymbolPrimitiveConfig,
   type VisualizationConfig,
   type VisualizationModes,
-  getSymbolPrimitive
+  getSymbolPrimitive,
+  getPolygonPrimitive,
+  getLinePrimitive,
+  getTextPrimitive
 } from '$lib/features/commons/store/visualization.store.svelte';
 import { SymbolMode } from '$lib/features/main-toolbar/constants';
 import { resolveSymbolModeTransition } from '../use-symbol-mode-state.svelte';
@@ -71,7 +74,8 @@ export interface SymbolHandlersDeps {
 
 export function createSymbolHandlers(deps: SymbolHandlersDeps) {
   function handleSymbolChange(updates: Partial<SymbolPrimitiveConfig>): void {
-    const symbol = getSymbolPrimitive(deps.getSelectedVisualization());
+    const viz = deps.getSelectedVisualization();
+    const symbol = getSymbolPrimitive(viz);
     if (!symbol) return;
 
     const enabledHasUpdate = Object.prototype.hasOwnProperty.call(
@@ -84,7 +88,13 @@ export function createSymbolHandlers(deps: SymbolHandlersDeps) {
       ...(enabledHasUpdate
         ? {
             primitiveFilters: deps.buildNextPrimitiveFilters({
-              [PrimitiveFilterType.POINT]: updates.enabled ?? symbol.enabled
+              [PrimitiveFilterType.POINT]: updates.enabled ?? symbol.enabled,
+              [PrimitiveFilterType.POLYGON]:
+                getPolygonPrimitive(viz)?.enabled ?? false,
+              [PrimitiveFilterType.LINE]:
+                getLinePrimitive(viz)?.enabled ?? false,
+              [PrimitiveFilterType.TEXT]:
+                getTextPrimitive(viz)?.enabled ?? false
             })
           }
         : {})
@@ -107,7 +117,12 @@ export function createSymbolHandlers(deps: SymbolHandlersDeps) {
     ] as const);
     const withFallback = pickOwnedKeys(
       updates,
-      ['strokeWidth', 'strokeOpacity', 'strokeDashed'] as const,
+      [
+        'strokeWidth',
+        'strokeOpacity',
+        'strokeDashed',
+        'strokeDashedPattern'
+      ] as const,
       symbol
     );
 
