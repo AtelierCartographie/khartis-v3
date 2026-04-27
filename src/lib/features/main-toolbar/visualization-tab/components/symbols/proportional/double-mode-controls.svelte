@@ -37,6 +37,11 @@
     fieldBPickerOpen: boolean;
     dataFields: Array<{ id: number; text: string; type?: string }>;
     selectableDataFields: Array<{ id: number; text: string; type?: string }>;
+    selectableSecondaryDataFields?: Array<{
+      id: number;
+      text: string;
+      type?: string;
+    }>;
     primaryFieldSelection: FieldSelection;
     secondaryValueFieldSelection: FieldSelection;
     facetsSelection: FacetsSelection;
@@ -64,6 +69,7 @@
     fieldBPickerOpen = $bindable(),
     dataFields,
     selectableDataFields,
+    selectableSecondaryDataFields = selectableDataFields,
     primaryFieldSelection,
     secondaryValueFieldSelection,
     facetsSelection,
@@ -128,7 +134,7 @@
   <FacetsVariablePicker
     bind:open={fieldBPickerOpen}
     dataFields={dataFields}
-    singleSelectItems={selectableDataFields}
+    singleSelectItems={selectableSecondaryDataFields}
     selectedFieldId={secondaryValueFieldSelection.selectedFieldId}
     isCollectionEnabled={false}
     showCollectionFooter={false}

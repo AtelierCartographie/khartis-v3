@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { Dropdown } from 'carbon-components-svelte';
   import {
     MisuseOutline,
     SquareOutline,
@@ -18,16 +19,17 @@
     SLIDER_LIMITS,
     VISUALIZATION_DEFAULTS,
     DEFAULT_COLORS,
-    MIN_VISIBLE_STROKE_WIDTH
+    MIN_VISIBLE_STROKE_WIDTH,
+    BasemapDottedPattern
   } from '../../../constants';
   import type {
     VisualizationConfig,
     VisualizationModes,
     ClassificationConfig
   } from '$lib/features/commons/store/visualization.store.svelte';
-  import ColorSelector from './color-selector.svelte';
   import DiscretizationRow from './discretization-row.svelte';
   import PalettePreview from '$lib/features/commons/components/palette-popover/palette-preview.svelte';
+  import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
   import {
     DEFAULT_SEQUENTIAL_PREVIEW,
     DEFAULT_QUALITATIVE_PREVIEW,
@@ -38,12 +40,13 @@
   import type { FacetSlotPath } from '../../facets-adapter';
   import { useCategoryLabels } from '../../use-category-labels.svelte';
   import { useFacetsVariableSelection } from '../../use-facets-variable-selection.svelte';
+  import { filterFieldsByKind } from '../../use-field-selection.svelte';
   import { parseOpacityToSlider } from '../../coerce.utils';
   import { resetVisualClassification } from './classification-reset.utils';
 
   interface Props {
     visualization?: VisualizationConfig;
-    dataFields?: Array<{ id: number; text: string }>;
+    dataFields?: Array<{ id: number; text: string; type?: string }>;
     infoText?: string;
     showDashed?: boolean;
     discretizationLabel?: string;
@@ -112,11 +115,21 @@
   let strokeColor = $state<string>(DEFAULT_COLORS.stroke);
   let strokeOpacity = $state<number>(VISUALIZATION_DEFAULTS.strokeOpacity);
   let strokeDashed = $state<boolean>(false);
+  let strokeDashedPattern = $state<BasemapDottedPattern>(
+    BasemapDottedPattern.DOTS
+  );
+  let strokeShowMissing = $state<boolean>(true);
   let colorFieldId = $state<number>(NONE_FIELD_ID);
   let facetsPickerOpen = $state(false);
   let categoriesPopoverOpen = $state(false);
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
   const selectableDataFields = $derived([noneOption, ...dataFields]);
+  const selectableValueDataFields = $derived(
+    filterFieldsByKind(selectableDataFields, 'numeric', colorFieldId)
+  );
+  const selectableCategoryDataFields = $derived(
+    filterFieldsByKind(selectableDataFields, 'textual', colorFieldId)
+  );
   const facetsSelection = useFacetsVariableSelection({
     getVisualizationId: () => visualization?.id,
     getDataFields: () => dataFields
@@ -160,7 +173,10 @@
         VISUALIZATION_DEFAULTS.strokeOpacity
       );
       strokeDashed = visualization.style.strokeDashed ?? false;
+      strokeDashedPattern =
+        visualization.style.strokeDashedPattern ?? BasemapDottedPattern.DOTS;
     }
+    strokeShowMissing = visualization?.modes?.strokeShowMissing ?? true;
     const mappedFieldName =
       strokeMode === StrokeMode.CATEGORIES
         ? (strokeCategoryColumn ?? visualization?.mapping.categoryColumn)
@@ -193,6 +209,15 @@
   ];
 
   const strokeModeIndex = $derived(STROKE_MODES.indexOf(strokeMode));
+  const dashedPatternItems = $derived([
+    { id: BasemapDottedPattern.DOTS, text: m.dashed_pattern_dots() },
+    { id: BasemapDottedPattern.DASHES, text: m.dashed_pattern_dashes() },
+    { id: BasemapDottedPattern.DASH_DOT, text: m.dashed_pattern_dash_dot() },
+    {
+      id: BasemapDottedPattern.LONG_DASH,
+      text: m.dashed_pattern_long_dash()
+    }
+  ]);
 
   function handleStrokeModeChange(index: number) {
     strokeMode = STROKE_MODES[index] || StrokeMode.NONE;
@@ -232,7 +257,24 @@
 
   function handleStrokeDashedChange(value: boolean) {
     strokeDashed = value;
-    onStyleChange?.({ strokeDashed: value });
+    onStyleChange?.({
+      strokeDashed: value,
+      ...(value ? { strokeDashedPattern } : {})
+    });
+  }
+
+  function handleStrokeDashedPatternSelect(value: string | number) {
+    const next =
+      Object.values(BasemapDottedPattern).find(
+        (pattern) => pattern === value
+      ) ?? BasemapDottedPattern.DOTS;
+    strokeDashedPattern = next;
+    onStyleChange?.({ strokeDashedPattern: next });
+  }
+
+  function handleStrokeShowMissingChange(value: boolean) {
+    strokeShowMissing = value;
+    onModesChange?.({ strokeShowMissing: value });
   }
 
   function ensureVisibleStrokeWidth() {
@@ -291,23 +333,22 @@
 </div>
 
 {#if strokeMode !== StrokeMode.NONE}
-  <SliderWithInput
-    label={m.thickness()}
-    bind:value={strokeWidth}
-    min={MIN_VISIBLE_STROKE_WIDTH}
-    max={SLIDER_LIMITS.strokeWidth.max}
-    step={SLIDER_LIMITS.strokeWidth.step}
-    showMinMax={showSliderBounds}
-    inputWidth={sliderInputWidth}
-    onchange={handleStrokeWidthChange}
-  />
-
   {#if strokeMode === StrokeMode.UNIQUE}
-    <ColorSelector
+    <SingleColorPreview
       exclusive
       label={m.color()}
-      value={strokeColor}
+      color={strokeColor}
       onchange={handleStrokeColorChange}
+    />
+    <SliderWithInput
+      label={m.thickness()}
+      bind:value={strokeWidth}
+      min={MIN_VISIBLE_STROKE_WIDTH}
+      max={SLIDER_LIMITS.strokeWidth.max}
+      step={SLIDER_LIMITS.strokeWidth.step}
+      showMinMax={showSliderBounds}
+      inputWidth={sliderInputWidth}
+      onchange={handleStrokeWidthChange}
     />
   {:else if strokeMode === StrokeMode.CLASSES}
     <div class="field-group">
@@ -315,7 +356,7 @@
         bind:open={facetsPickerOpen}
         titleText={m.color_according()}
         dataFields={dataFields}
-        singleSelectItems={selectableDataFields}
+        singleSelectItems={selectableValueDataFields}
         selectedFieldId={colorFieldId}
         selectedFieldIds={facetsSelection.getSelectedFieldIds(
           facetsValueSlotPath
@@ -349,13 +390,28 @@
       oninvert={onInvertPalette}
       onClassificationChange={onStrokeClassificationChange}
     />
+    <SliderWithInput
+      label={m.thickness()}
+      bind:value={strokeWidth}
+      min={MIN_VISIBLE_STROKE_WIDTH}
+      max={SLIDER_LIMITS.strokeWidth.max}
+      step={SLIDER_LIMITS.strokeWidth.step}
+      showMinMax={showSliderBounds}
+      inputWidth={sliderInputWidth}
+      onchange={handleStrokeWidthChange}
+    />
+    <ToggleWithLabel
+      label={m.show_no_data()}
+      toggled={strokeShowMissing}
+      ontoggle={handleStrokeShowMissingChange}
+    />
   {:else if strokeMode === StrokeMode.CATEGORIES}
     <div class="field-group">
       <FacetsVariablePicker
         bind:open={facetsPickerOpen}
         titleText={m.color_according()}
         dataFields={dataFields}
-        singleSelectItems={selectableDataFields}
+        singleSelectItems={selectableCategoryDataFields}
         selectedFieldId={colorFieldId}
         selectedFieldIds={facetsSelection.getSelectedFieldIds(
           facetsCategorySlotPath
@@ -399,6 +455,16 @@
       oninvert={onInvertPalette}
       onClassificationChange={onStrokeClassificationChange}
     />
+    <SliderWithInput
+      label={m.thickness()}
+      bind:value={strokeWidth}
+      min={MIN_VISIBLE_STROKE_WIDTH}
+      max={SLIDER_LIMITS.strokeWidth.max}
+      step={SLIDER_LIMITS.strokeWidth.step}
+      showMinMax={showSliderBounds}
+      inputWidth={sliderInputWidth}
+      onchange={handleStrokeWidthChange}
+    />
   {/if}
 
   {#if showDashed}
@@ -407,6 +473,15 @@
       toggled={strokeDashed}
       ontoggle={handleStrokeDashedChange}
     />
+    {#if strokeDashed}
+      <Dropdown
+        titleText={m.stroke_dashed_pattern()}
+        items={dashedPatternItems}
+        selectedId={strokeDashedPattern}
+        on:select={(e) => handleStrokeDashedPatternSelect(e.detail.selectedId)}
+        type="default"
+      />
+    {/if}
   {/if}
 
   <SliderWithInput

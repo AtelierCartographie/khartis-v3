@@ -155,6 +155,46 @@ export function usePrimitivePanelController({
     });
   }
 
+  function resolveYearColumnName(name: string): number | undefined {
+    const normalized = name.trim().replace(/^_+/, '');
+    if (!/^\d{4}$/.test(normalized)) {
+      return undefined;
+    }
+
+    const year = Number(normalized);
+    return year >= 1800 && year <= 2200 ? year : undefined;
+  }
+
+  function findLatestYearNumericColumn(
+    reservedColumns: Array<string | undefined>
+  ): string | undefined {
+    const reserved = new Set(
+      reservedColumns.filter((name): name is string => Boolean(name))
+    );
+    const latestYearColumn = getDataFields().reduce<
+      { name: string; year: number } | undefined
+    >((latest, column) => {
+      const name = column.text;
+      if (
+        !name ||
+        column.type !== 'number' ||
+        reserved.has(name) ||
+        isHiddenTechnicalColumnName(name)
+      ) {
+        return latest;
+      }
+
+      const year = resolveYearColumnName(name);
+      if (year === undefined) {
+        return latest;
+      }
+
+      return latest && latest.year >= year ? latest : { name, year };
+    }, undefined);
+
+    return latestYearColumn?.name;
+  }
+
   function findAutoCategoryColumn(
     reservedColumns: Array<string | undefined>
   ): string | undefined {
@@ -852,6 +892,39 @@ export function usePrimitivePanelController({
           },
           { visualization }
         );
+      }
+    }
+
+    if (primitive === PrimitiveFilterType.POINT && !sizeColumn) {
+      const symbol = getSymbolPrimitive(visualization);
+      if (symbol?.mode === SymbolMode.PROPORTIONAL) {
+        const reusableValueColumn =
+          symbol.valueColumn &&
+          !isHiddenTechnicalColumnName(symbol.valueColumn) &&
+          (!isIdLikeColumnName(symbol.valueColumn) ||
+            symbol.valueColumn === 'id')
+            ? symbol.valueColumn
+            : undefined;
+        const latestYearColumn = findLatestYearNumericColumn([
+          symbol.categoryColumn
+        ]);
+        const nextSizeColumn =
+          latestYearColumn ??
+          reusableValueColumn ??
+          findAutoValueColumn([symbol.categoryColumn, symbol.valueColumn]) ??
+          findFallbackNumericColumn([
+            symbol.categoryColumn,
+            symbol.valueColumn
+          ]);
+        if (nextSizeColumn) {
+          applyPrimitiveMappingUpdate(
+            primitive,
+            {
+              sizeColumn: nextSizeColumn
+            },
+            { visualization }
+          );
+        }
       }
     }
 

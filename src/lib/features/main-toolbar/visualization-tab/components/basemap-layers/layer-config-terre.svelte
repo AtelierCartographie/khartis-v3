@@ -32,7 +32,7 @@
     strokeDotted = false,
     strokeDottedPattern = BasemapDottedPattern.DOTS,
     strokeThickness = 0.5,
-    strokeOpacity = 40,
+    strokeOpacity = 100,
     onchange
   }: Props = $props();
 

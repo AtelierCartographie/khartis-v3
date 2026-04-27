@@ -9,6 +9,7 @@
     type ClassificationConfig,
     type VisualizationConfig
   } from '$lib/features/commons/store/visualization.store.svelte';
+  import type { ShapeType } from '$lib/features/main-toolbar/constants';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import { onDestroy, onMount, tick, untrack } from 'svelte';
   import {
@@ -44,6 +45,17 @@
     color: string;
   }
 
+  interface SizePreview {
+    shape: ShapeType;
+    minSize: number;
+    maxSize: number;
+  }
+
+  interface BinFillStrategy {
+    mode: 'unique' | 'classes';
+    colors: string[];
+  }
+
   interface Props {
     open?: boolean;
     visualization?: VisualizationConfig;
@@ -51,6 +63,8 @@
     valueColumn?: string;
     showBreakpointControls?: boolean;
     role?: 'fill' | 'stroke' | 'size';
+    sizePreview?: SizePreview;
+    binFillStrategy?: BinFillStrategy;
     onclose?: () => void;
     onchange?: (classification: Partial<ClassificationConfig>) => void;
   }
@@ -62,6 +76,8 @@
     valueColumn,
     showBreakpointControls = true,
     role = 'fill',
+    sizePreview,
+    binFillStrategy,
     onclose,
     onchange
   }: Props = $props();
@@ -622,6 +638,8 @@
           bind:breakpointValue={currentBreakpoint}
           showBreakpointControls={showBreakpointControls}
           divergingPreviewColors={divergingPreview}
+          sizePreview={role === 'size' ? sizePreview : undefined}
+          binFillStrategy={binFillStrategy}
           classCountMax={currentMethod === 'head-tail'
             ? headTailClassCountMax
             : DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX}

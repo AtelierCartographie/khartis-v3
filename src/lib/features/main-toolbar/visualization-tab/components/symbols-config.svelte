@@ -209,6 +209,35 @@
       visualization?.symbol?.valueColumn ?? visualization?.mapping.valueColumn
     );
   });
+  const activeSizePreview = $derived.by(() => {
+    const symbol = getSymbolPrimitive(visualization);
+    if (!symbol || discretizationTarget !== 'size') {
+      return undefined;
+    }
+
+    return {
+      shape: symbol.shape,
+      minSize: symbol.minSize,
+      maxSize: symbol.maxSize
+    };
+  });
+  const activeBinFillStrategy = $derived.by(() => {
+    const symbol = getSymbolPrimitive(visualization);
+    const classColors =
+      symbol?.fillClassification?.colors ??
+      fillVisualization?.classification?.colors ??
+      [];
+
+    if (symbol?.fillMode === FillMode.CLASSES && classColors.length > 0) {
+      return { mode: 'classes' as const, colors: classColors };
+    }
+
+    if (typeof symbol?.fillColor === 'string') {
+      return { mode: 'unique' as const, colors: [symbol.fillColor] };
+    }
+
+    return { mode: 'unique' as const, colors: [] };
+  });
 </script>
 
 <ExpandableSection
@@ -341,6 +370,8 @@
   valueColumn={activeDiscretizationValueColumn}
   showBreakpointControls={discretizationTarget === 'fill'}
   role={discretizationTarget === 'fill' ? 'fill' : 'size'}
+  sizePreview={activeSizePreview}
+  binFillStrategy={activeBinFillStrategy}
   onchange={handleClassificationChange}
 />
 

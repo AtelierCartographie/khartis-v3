@@ -45,6 +45,7 @@
   import { useCategoryLabels } from '../../use-category-labels.svelte';
   import {
     NONE_FIELD_ID,
+    filterFieldsByKind,
     useFieldSelectionHandler
   } from '../../use-field-selection.svelte';
   import { useFacetsVariableSelection } from '../../use-facets-variable-selection.svelte';
@@ -54,6 +55,10 @@
     buildSymbolShapeDropdownItems,
     getSymbolShapeTypes
   } from './symbol-shape-options';
+  import { getDefaultScaleForShape } from './scale-by-shape.utils';
+
+  const AUTO_CATEGORY_STROKE_COLOR = '#000000';
+  const AUTO_CATEGORY_STROKE_OPACITY = 0.6;
 
   let {
     dataFields = [],
@@ -111,6 +116,13 @@
   const categoryColumnName = $derived(
     categoryFieldSelection.selectedFieldName ?? ''
   );
+  const selectableCategoryFields = $derived(
+    filterFieldsByKind(
+      selectableDataFields,
+      'textual',
+      categoryFieldSelection.selectedFieldId
+    )
+  );
   const categoryLabels = useCategoryLabels({
     getDataset: () => dataset,
     getColumnName: () =>
@@ -145,7 +157,10 @@
     const next =
       availableShapes.find((type) => type === value) ?? ShapeType.CIRCLE;
     shapeType = next;
-    onSymbolsChange?.({ type: next });
+    onSymbolsChange?.({
+      type: next,
+      sizeScale: getDefaultScaleForShape(next)
+    });
   }
 
   function handleCategoryShapeModeChange(next: CategoryShapeMode) {
@@ -180,7 +195,9 @@
         StrokeMode.NONE && (visualization?.symbol?.strokeWidth ?? 0) > 0,
     autoColor:
       (visualization?.symbol?.strokeMode ?? StrokeMode.NONE) ===
-      StrokeMode.CATEGORIES,
+      StrokeMode.UNIQUE,
+    strokeUnique:
+      !visualization?.symbol?.strokeClassification?.categoryStrokeWidths,
     strokeSize: Math.max(
       1,
       visualization?.symbol?.strokeWidth ?? DEFAULT_COMMON_ASPECT.strokeSize
@@ -311,8 +328,12 @@
 
     if (commonAspect.stroke) {
       symbolUpdates.strokeMode = commonAspect.autoColor
-        ? StrokeMode.CATEGORIES
-        : StrokeMode.UNIQUE;
+        ? StrokeMode.UNIQUE
+        : StrokeMode.CATEGORIES;
+      if (commonAspect.autoColor) {
+        symbolUpdates.strokeColor = AUTO_CATEGORY_STROKE_COLOR;
+        symbolUpdates.strokeOpacity = AUTO_CATEGORY_STROKE_OPACITY;
+      }
       symbolUpdates.strokeWidth = Math.max(1, commonAspect.strokeSize);
     } else {
       symbolUpdates.strokeMode = StrokeMode.NONE;
@@ -323,13 +344,22 @@
       onSymbolPrimitiveChange?.(symbolUpdates);
     }
 
-    if (commonAspect.stroke && commonAspect.autoColor) {
+    if (commonAspect.stroke && !commonAspect.autoColor) {
       onStrokeClassificationChange?.({
-        colors: nextCategories.map((category) => category.color),
+        colors: nextCategories.map(
+          (category) => category.strokeColor ?? AUTO_CATEGORY_STROKE_COLOR
+        ),
         labels: nextCategories.map((category) => category.label),
         disabledLabels: nextCategories
           .filter((category) => !category.enabled)
           .map((category) => category.label),
+        categoryStrokeWidths:
+          commonAspect.strokeUnique === false
+            ? nextCategories.map(
+                (category) =>
+                  category.customStrokeWidth ?? commonAspect.strokeSize
+              )
+            : undefined,
         paletteId: undefined,
         inverted: false,
         patternId: undefined,
@@ -359,13 +389,13 @@
 
 <div class="field-group">
   <span class="field-label">
-    {m.size_according()}
+    {m.aspect_according()}
     <InfoPopover text={m.category_variable_info()} />
   </span>
   <FacetsVariablePicker
     bind:open={categoryPickerOpen}
     dataFields={dataFields}
-    singleSelectItems={selectableDataFields}
+    singleSelectItems={selectableCategoryFields}
     selectedFieldId={categoryFieldSelection.selectedFieldId}
     selectedFieldIds={facetsSelection.getSelectedFieldIds(
       FACET_SLOT.SYMBOL_CATEGORY

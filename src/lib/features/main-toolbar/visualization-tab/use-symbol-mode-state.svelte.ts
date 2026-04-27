@@ -43,6 +43,7 @@ export const SYMBOL_MODE_STATE_KEYS = [
   'strokeWidth',
   'strokeOpacity',
   'strokeDashed',
+  'strokeDashedPattern',
   'strokeClassification',
   'strokeValueColumn',
   'strokeCategoryColumn'
@@ -74,10 +75,11 @@ export function getDefaultSymbolModeStateFields(
   return {
     ...NON_PROPORTIONAL_SYMBOL_STATE_FIELDS,
     fillMode: FillMode.CATEGORIES,
-    strokeMode: StrokeMode.NONE,
+    strokeMode: StrokeMode.UNIQUE,
     strokeWidth: VISUALIZATION_DEFAULTS.strokeWidth,
     strokeOpacity: 1,
     strokeDashed: false,
+    strokeDashedPattern: undefined,
     strokeClassification: undefined,
     strokeValueColumn: undefined,
     strokeCategoryColumn: undefined

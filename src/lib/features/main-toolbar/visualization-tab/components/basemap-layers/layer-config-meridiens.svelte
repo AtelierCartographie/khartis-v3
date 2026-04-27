@@ -2,7 +2,7 @@
   import * as m from '$lib/paraglide/messages';
   import SingleColorPreview from '$lib/features/commons/components/palette-popover/single-color-preview.svelte';
   import CompactNumberInput from '$lib/features/commons/components/compact-number-input.svelte';
-  import Button from '$lib/features/commons/components/carbon/button.svelte';
+  import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import { Star, Wikis } from 'carbon-icons-svelte';
   import { SliderWithInput } from '../shared';
   import DottedToggle from './dotted-toggle.svelte';
@@ -34,7 +34,7 @@
     disableDotted = false,
     dottedDisabledReason,
     thickness = 1,
-    opacity = 50,
+    opacity = 100,
     onchange
   }: Props = $props();
 
@@ -70,42 +70,23 @@
 </script>
 
 <div class="layer-config-content">
-  <div
-    class="mode-switcher"
-    role="tablist"
-    aria-label={m.basemap_config_graticule_mode()}
-  >
-    <Button
-      type="button"
-      kind="ghost"
-      size="small"
-      class={[
-        'mode-switcher-button',
-        mode === BasemapGraticuleMode.REMARKABLE && 'active'
-      ]}
-      role="tab"
-      aria-selected={mode === BasemapGraticuleMode.REMARKABLE}
-      on:click={() => handleModeChange(BasemapGraticuleMode.REMARKABLE)}
-    >
-      <Star size={16} />
-      <span>{m.basemap_config_graticule_remarkable()}</span>
-    </Button>
-    <Button
-      type="button"
-      kind="ghost"
-      size="small"
-      class={[
-        'mode-switcher-button',
-        mode === BasemapGraticuleMode.REGULAR && 'active'
-      ]}
-      role="tab"
-      aria-selected={mode === BasemapGraticuleMode.REGULAR}
-      on:click={() => handleModeChange(BasemapGraticuleMode.REGULAR)}
-    >
-      <Wikis size={16} />
-      <span>{m.basemap_config_graticule_regular()}</span>
-    </Button>
-  </div>
+  <ToggleTabs
+    activeIndex={mode === BasemapGraticuleMode.REGULAR ? 1 : 0}
+    items={[
+      {
+        icon: Star,
+        label: m.basemap_config_graticule_remarkable(),
+        iconSize: 16
+      },
+      { icon: Wikis, label: m.basemap_config_graticule_regular(), iconSize: 16 }
+    ]}
+    onchange={(index) =>
+      handleModeChange(
+        index === 1
+          ? BasemapGraticuleMode.REGULAR
+          : BasemapGraticuleMode.REMARKABLE
+      )}
+  />
 
   {#if mode === BasemapGraticuleMode.REGULAR}
     <div class="control-group">
@@ -177,53 +158,6 @@
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-02);
-  }
-
-  .mode-switcher {
-    display: flex;
-    align-items: stretch;
-    width: 100%;
-    border: 1px solid #cac5c4;
-    border-radius: 4px;
-    overflow: hidden;
-  }
-
-  .mode-switcher :global(.mode-switcher-button) {
-    flex: 1;
-    min-width: 0;
-    min-height: 32px;
-    display: flex;
-    align-items: center;
-    gap: var(--cds-spacing-03);
-    padding: 7px 16px;
-    border: 0;
-    border-right: 1px solid #cac5c4;
-    background: transparent;
-    color: var(--cds-text-secondary);
-    font-size: 0.875rem;
-    line-height: 1.125rem;
-    letter-spacing: 0.01rem;
-    cursor: pointer;
-  }
-
-  .mode-switcher :global(.mode-switcher-button:last-child) {
-    border-right: 0;
-  }
-
-  .mode-switcher :global(.mode-switcher-button:hover:not(.active)) {
-    background: var(--cds-layer-hover);
-  }
-
-  .mode-switcher :global(.mode-switcher-button.active) {
-    background: #cac5c4;
-    color: var(--cds-text-primary);
-  }
-
-  .mode-switcher :global(.mode-switcher-button span) {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   .field-label {

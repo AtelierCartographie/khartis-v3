@@ -31,6 +31,7 @@
     coerceString,
     parseOpacityToSlider
   } from '../../coerce.utils';
+  import { getDefaultScaleForShape } from './scale-by-shape.utils';
 
   let {
     dataFields = [],
@@ -149,7 +150,14 @@
       FillMode.CATEGORIES
     ];
     fillMode = modes[index] || FillMode.NONE;
-    onModesChange?.({ fill: fillMode });
+    if (fillMode === FillMode.CATEGORIES) {
+      onModesChange?.({
+        fill: FillMode.CATEGORIES,
+        symbol: SymbolMode.CATEGORIES
+      });
+    } else {
+      onModesChange?.({ fill: fillMode });
+    }
     if (fillMode === FillMode.NONE) {
       fillColor = DEFAULT_COLORS.fill;
       onStyleChange?.({ symbolFillColor: DEFAULT_COLORS.fill });
@@ -170,7 +178,10 @@
 
   function handleShapeTypeChange(value: ShapeType) {
     shapeType = value;
-    onSymbolsChange?.({ type: value });
+    onSymbolsChange?.({
+      type: value,
+      sizeScale: getDefaultScaleForShape(value)
+    });
   }
 
   function handleFillColorChange(value: string) {

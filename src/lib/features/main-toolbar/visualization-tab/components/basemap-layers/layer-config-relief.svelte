@@ -40,7 +40,7 @@
   let {
     representation = BasemapRepresentation.SHADING,
     color = '#e0e0e0',
-    opacity = 50,
+    opacity = 100,
     onchange
   }: Props = $props();
 

@@ -1,6 +1,8 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte';
   import * as m from '$lib/paraglide/messages';
   import CompactNumberInput from '$lib/features/commons/components/compact-number-input.svelte';
+  import { SLIDER_DEBOUNCE_MS } from '$lib/features/main-toolbar/constants';
   import {
     DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX,
     NESTED_MEANS_CLASS_COUNTS
@@ -12,6 +14,7 @@
     TextInput
   } from 'carbon-components-svelte';
   import { CaretRight, Information, Launch } from 'carbon-icons-svelte';
+  import type { ShapeType } from '$lib/features/main-toolbar/constants';
 
   type ClassificationMethod =
     | 'kmeans'
@@ -29,6 +32,17 @@
     color: string;
   }
 
+  interface SizePreview {
+    shape: ShapeType;
+    minSize: number;
+    maxSize: number;
+  }
+
+  interface BinFillStrategy {
+    mode: 'unique' | 'classes';
+    colors: string[];
+  }
+
   interface Props {
     method?: ClassificationMethod;
     numClasses?: number;
@@ -38,6 +52,8 @@
     showBreakpointControls?: boolean;
     divergingPreviewColors?: string[];
     showHistogram?: boolean;
+    sizePreview?: SizePreview;
+    binFillStrategy?: BinFillStrategy;
     onmethodchange?: (method: ClassificationMethod) => void;
     onclasseschange?: (num: number) => void;
     onbreakpointchange?: (value: number | null) => void;
@@ -59,6 +75,8 @@
     showBreakpointControls = true,
     divergingPreviewColors = [],
     showHistogram = true,
+    sizePreview,
+    binFillStrategy = { mode: 'unique', colors: [] },
     onmethodchange,
     onclasseschange,
     onbreakpointchange,
@@ -105,6 +123,33 @@
 
   let validationErrors = $state<string[]>([]);
 
+  let breakpointTimer: ReturnType<typeof setTimeout> | null = null;
+  let breakpointPending: number | null = null;
+
+  function flushBreakpoint() {
+    if (breakpointTimer !== null) {
+      clearTimeout(breakpointTimer);
+      breakpointTimer = null;
+    }
+    if (breakpointPending !== null) {
+      const next = breakpointPending;
+      breakpointPending = null;
+      onbreakpointchange?.(next);
+    }
+  }
+
+  function scheduleBreakpoint(next: number) {
+    breakpointValue = next;
+    breakpointPending = next;
+    if (breakpointTimer !== null) clearTimeout(breakpointTimer);
+    breakpointTimer = setTimeout(
+      flushBreakpoint,
+      SLIDER_DEBOUNCE_MS.CLASSIFICATION
+    );
+  }
+
+  onDestroy(flushBreakpoint);
+
   function handleMethodChange(e: Event) {
     validationErrors = [];
     const target = e.currentTarget as HTMLSelectElement;
@@ -136,6 +181,36 @@
 
   function canEditBreakRow(index: number): boolean {
     return index > 0 && index < breaks.length;
+  }
+
+  function resolveHistogramColor(breakItem: ClassBreak, index: number): string {
+    if (binFillStrategy.colors.length === 0) {
+      return breakItem.color;
+    }
+
+    if (binFillStrategy.mode === 'unique') {
+      return binFillStrategy.colors[0] ?? breakItem.color;
+    }
+
+    return (
+      binFillStrategy.colors[index] ??
+      binFillStrategy.colors[0] ??
+      breakItem.color
+    );
+  }
+
+  function resolveSizePreviewStyle(index: number): string {
+    if (!sizePreview) {
+      return '';
+    }
+
+    const total = Math.max(1, breaks.length - 1);
+    const ratio = index / total;
+    const size = Math.round(
+      sizePreview.minSize + (sizePreview.maxSize - sizePreview.minSize) * ratio
+    );
+
+    return `--preview-size: ${Math.max(1, size)}px;`;
   }
 
   function validateBreaks(breaksToValidate: ClassBreak[]): string[] {
@@ -264,18 +339,23 @@
         </div>
         <div class="breakpoint-slider-col">
           <p class="input-label">{m.discretization_position()}</p>
-          <Slider
-            min={dataMin}
-            max={dataMax}
-            value={breakpointSliderValue}
-            hideTextInput
-            minLabel=""
-            maxLabel=""
-            on:input={(e) => {
-              breakpointValue = e.detail;
-              onbreakpointchange?.(e.detail);
-            }}
-          />
+          <div
+            class="breakpoint-slider-host"
+            role="presentation"
+            onpointerupcapture={flushBreakpoint}
+            onkeyupcapture={flushBreakpoint}
+            onpointerleave={flushBreakpoint}
+          >
+            <Slider
+              min={dataMin}
+              max={dataMax}
+              value={breakpointSliderValue}
+              hideTextInput
+              minLabel=""
+              maxLabel=""
+              on:input={(e) => scheduleBreakpoint(e.detail)}
+            />
+          </div>
           <div class="palette-strip">
             {#each paletteStripColors as color, index (`${index}-${color}`)}
               <div
@@ -295,6 +375,7 @@
       <div class="histogram-rows">
         {#each breaks as breakItem, index (index)}
           {@const widthPercent = (breakItem.count / maxHistogramCount) * 100}
+          {@const histogramColor = resolveHistogramColor(breakItem, index)}
           <div class="histogram-row">
             <div class="histogram-label">
               {#if index === 0}{m.discretization_min_abbrev()}{/if}
@@ -319,10 +400,17 @@
             <div class="histogram-caret">
               <CaretRight size={16} />
             </div>
+            {#if sizePreview}
+              <div
+                class="break-preview"
+                data-shape={sizePreview.shape}
+                style={resolveSizePreviewStyle(index)}
+              ></div>
+            {/if}
             <div class="histogram-bar-wrapper">
               <div
                 class="histogram-bar"
-                style="width: {widthPercent}%; background-color: {breakItem.color}"
+                style="width: {widthPercent}%; background-color: {histogramColor}"
                 title="{breakItem.min} - {breakItem.max}: {breakItem.count} {m.discretization_values()}"
               ></div>
             </div>
@@ -492,6 +580,37 @@
     display: flex;
     align-items: center;
     justify-content: center;
+  }
+
+  .break-preview {
+    width: var(--preview-size);
+    height: var(--preview-size);
+    max-width: 28px;
+    max-height: 28px;
+    min-width: 4px;
+    min-height: 4px;
+    flex-shrink: 0;
+    background: var(--cds-icon-primary, #161616);
+  }
+
+  .break-preview[data-shape='circle'] {
+    border-radius: 50%;
+  }
+
+  .break-preview[data-shape='triangle'] {
+    width: 0;
+    height: 0;
+    background: transparent;
+    border-left: calc(var(--preview-size) / 2) solid transparent;
+    border-right: calc(var(--preview-size) / 2) solid transparent;
+    border-bottom: var(--preview-size) solid var(--cds-icon-primary, #161616);
+  }
+
+  .break-preview[data-shape='bar'],
+  .break-preview[data-shape='spike'],
+  .break-preview[data-shape='line'] {
+    width: calc(var(--preview-size) * 0.45);
+    height: var(--preview-size);
   }
 
   .histogram-bar-wrapper {

@@ -179,7 +179,8 @@ export function createTextHandlers(deps: TextHandlersDeps) {
           'fillOpacity',
           'strokeWidth',
           'strokeOpacity',
-          'strokeDashed'
+          'strokeDashed',
+          'strokeDashedPattern'
         ] as const,
         background
       );

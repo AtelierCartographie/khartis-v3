@@ -35,6 +35,7 @@
   import FacetsVariablePicker from './facets-variable-picker.svelte';
   import {
     NONE_FIELD_ID,
+    filterFieldsByKind,
     useFieldSelection
   } from '../../use-field-selection.svelte';
   import { useFacetsVariableSelection } from '../../use-facets-variable-selection.svelte';
@@ -48,6 +49,7 @@
     coerceString,
     parseOpacityToSlider
   } from '../../coerce.utils';
+  import { getDefaultScaleForShape } from './scale-by-shape.utils';
 
   interface Props extends SymbolModeProps {
     symbolMode: SymbolMode.PROPORTIONAL | SymbolMode.CLASSES;
@@ -101,6 +103,20 @@
   const secondaryValueFieldSelection = useFieldSelection(() => dataFields);
   const fillClassFieldSelection = useFieldSelection(() => dataFields);
   const fillCategoryFieldSelection = useFieldSelection(() => dataFields);
+  const selectableNumericDataFields = $derived(
+    filterFieldsByKind(
+      selectableDataFields,
+      'numeric',
+      primaryFieldSelection.selectedFieldId
+    )
+  );
+  const selectableSecondaryNumericDataFields = $derived(
+    filterFieldsByKind(
+      selectableDataFields,
+      'numeric',
+      secondaryValueFieldSelection.selectedFieldId
+    )
+  );
   const facetsSelection = useFacetsVariableSelection({
     getVisualizationId: () => visualization?.id,
     getDataFields: () => dataFields
@@ -284,7 +300,10 @@
       return;
     }
     shapeType = value;
-    onSymbolsChange?.({ type: value });
+    onSymbolsChange?.({
+      type: value,
+      sizeScale: getDefaultScaleForShape(value)
+    });
   }
 
   function handleShapeDropdownSelect(value: string | number) {
@@ -335,7 +354,14 @@
       FillMode.CATEGORIES
     ];
     fillMode = modes[index] || FillMode.NONE;
-    onModesChange?.({ fill: fillMode });
+    if (fillMode === FillMode.CATEGORIES) {
+      onModesChange?.({
+        fill: FillMode.CATEGORIES,
+        symbol: SymbolMode.CATEGORIES
+      });
+    } else {
+      onModesChange?.({ fill: fillMode });
+    }
     if (fillMode === FillMode.NONE) {
       fillColor = DEFAULT_COLORS.fill;
       fillColorB = DEFAULT_COLORS.secondary;
@@ -519,7 +545,7 @@
       <RadioButton
         id="prop-single"
         value={ProportionalType.SINGLE}
-        labelText={m.unique()}
+        labelText={m.proportional_type_single()}
       />
       <RadioButton
         id="prop-double"
@@ -541,7 +567,8 @@
       bind:sizePickerOpen={sizePickerOpen}
       bind:fieldBPickerOpen={fieldBPickerOpen}
       dataFields={dataFields}
-      selectableDataFields={selectableDataFields}
+      selectableDataFields={selectableNumericDataFields}
+      selectableSecondaryDataFields={selectableSecondaryNumericDataFields}
       primaryFieldSelection={primaryFieldSelection}
       secondaryValueFieldSelection={secondaryValueFieldSelection}
       facetsSelection={facetsSelection}
@@ -565,7 +592,7 @@
       <FacetsVariablePicker
         bind:open={sizePickerOpen}
         dataFields={dataFields}
-        singleSelectItems={selectableDataFields}
+        singleSelectItems={selectableNumericDataFields}
         selectedFieldId={primaryFieldSelection.selectedFieldId}
         selectedFieldIds={facetsSelection.getSelectedFieldIds(
           FACET_SLOT.SYMBOL_SIZE
@@ -588,6 +615,27 @@
           )}
       />
     </div>
+    <SliderWithInput
+      label={m.max_size()}
+      infoText={m.max_size_info()}
+      bind:value={symbolMaxSize}
+      min={SLIDER_LIMITS.symbolMaxSize.min}
+      max={SLIDER_LIMITS.symbolMaxSize.max}
+      step={SLIDER_LIMITS.symbolMaxSize.step}
+      onchange={handleSymbolMaxSizeChange}
+    />
+    <div class="field-group">
+      <span class="field-label">
+        {m.shape()}
+        <InfoPopover text={m.shape_info()} />
+      </span>
+      <Dropdown
+        items={shapeDropdownItems}
+        selectedId={shapeType}
+        on:select={(e) => handleShapeDropdownSelect(e.detail.selectedId)}
+        type="default"
+      />
+    </div>
   {/if}
 {/if}
 
@@ -600,7 +648,7 @@
     <FacetsVariablePicker
       bind:open={classesPickerOpen}
       dataFields={dataFields}
-      singleSelectItems={selectableDataFields}
+      singleSelectItems={selectableNumericDataFields}
       selectedFieldId={primaryFieldSelection.selectedFieldId}
       selectedFieldIds={facetsSelection.getSelectedFieldIds(
         FACET_SLOT.SYMBOL_VALUE
@@ -664,71 +712,79 @@
   oncolorchange={handleMissingDataColorChange}
 />
 
-<FillSection
-  visualization={fillVisualization}
-  dataFields={dataFields}
-  availableModes={FILL_MODES_STANDARD}
-  fillMode={fillMode}
-  fillColor={fillColor}
-  fillOpacity={fillOpacity}
-  selectedValueFieldId={fillClassFieldSelection.selectedFieldId}
-  selectedCategoryFieldId={fillCategoryFieldSelection.selectedFieldId}
-  discretizationLabel={fillDiscretizationLabel}
-  categoryCount={categoryCount}
-  facetsValueSlotPath={FACET_SLOT.SYMBOL_FILL_VALUE}
-  facetsCategorySlotPath={FACET_SLOT.SYMBOL_FILL_CATEGORY}
-  categoriesVariant="symbols-unique"
-  showMissingData={showMissingData}
-  missingDataColor={missingDataColor}
-  sectionTitle={m.background()}
-  sectionInfoText={m.fill_section_info()}
-  selectableDataFields={selectableDataFields}
-  getFacetsSelectedFieldIds={facetsSelection.getSelectedFieldIds}
-  isFacetsActiveForSlot={facetsSelection.isActiveForSlot}
-  onFillModeChange={(mode: FillMode) =>
-    handleFillModeChange(FILL_MODES_STANDARD.indexOf(mode))}
-  onFillColorChange={handleFillColorChange}
-  onFillOpacityChange={handleFillOpacityChange}
-  onValueFieldSelect={handleFillClassFieldSelect}
-  onCategoryFieldSelect={handleFillCategoryFieldSelect}
-  onFacetsVariablesChange={facetsSelection.updateVariables}
-  onFacetsToggle={facetsSelection.toggle}
-  onOpenDiscretization={onOpenFillDiscretization ?? (() => {})}
-  onClassificationChange={onFillClassificationChange ?? (() => {})}
-  onMissingDataShowChange={handleMissingDataShowChange}
-  onMissingDataColorChange={handleMissingDataColorChange}
-  onInvertPalette={onFillInvertPalette}
->
-  {#snippet uniqueSnippet()}
-    {#if symbolMode === SymbolMode.PROPORTIONAL && proportionalType === ProportionalType.DOUBLE}
-      <div class="double-color-row">
-        <div class="double-color-item double-color-a">
-          <SingleColorPreview
-            exclusive
-            label={m.symbol_color_a()}
-            color={fillColor}
-            onchange={handleFillColorChange}
-          />
-        </div>
-        <div class="double-color-item double-color-b">
-          <SingleColorPreview
-            exclusive
-            label={m.symbol_color_b()}
-            color={fillColorB}
-            onchange={handleFillColorBChange}
-          />
-        </div>
-      </div>
-    {:else}
+{#if symbolMode === SymbolMode.PROPORTIONAL && proportionalType === ProportionalType.DOUBLE}
+  <div class="double-color-row">
+    <div class="double-color-item double-color-a">
+      <SingleColorPreview
+        exclusive
+        label={m.symbol_color_a()}
+        color={fillColor}
+        onchange={handleFillColorChange}
+      />
+    </div>
+    <div class="double-color-item double-color-b">
+      <SingleColorPreview
+        exclusive
+        label={m.symbol_color_b()}
+        color={fillColorB}
+        onchange={handleFillColorBChange}
+      />
+    </div>
+  </div>
+  <SliderWithInput
+    label={m.opacity()}
+    bind:value={fillOpacity}
+    min={SLIDER_LIMITS.opacity.min}
+    max={SLIDER_LIMITS.opacity.max}
+    step={SLIDER_LIMITS.opacity.step}
+    onchange={handleFillOpacityChange}
+  />
+{:else}
+  <FillSection
+    visualization={fillVisualization}
+    dataFields={dataFields}
+    availableModes={FILL_MODES_STANDARD}
+    fillMode={fillMode}
+    fillColor={fillColor}
+    fillOpacity={fillOpacity}
+    selectedValueFieldId={fillClassFieldSelection.selectedFieldId}
+    selectedCategoryFieldId={fillCategoryFieldSelection.selectedFieldId}
+    discretizationLabel={fillDiscretizationLabel}
+    categoryCount={categoryCount}
+    facetsValueSlotPath={FACET_SLOT.SYMBOL_FILL_VALUE}
+    facetsCategorySlotPath={FACET_SLOT.SYMBOL_FILL_CATEGORY}
+    categoriesVariant="symbols-unique"
+    showMissingData={showMissingData}
+    missingDataColor={missingDataColor}
+    sectionTitle={m.background()}
+    sectionInfoText={m.fill_section_info()}
+    selectableDataFields={selectableDataFields}
+    getFacetsSelectedFieldIds={facetsSelection.getSelectedFieldIds}
+    isFacetsActiveForSlot={facetsSelection.isActiveForSlot}
+    onFillModeChange={(mode: FillMode) =>
+      handleFillModeChange(FILL_MODES_STANDARD.indexOf(mode))}
+    onFillColorChange={handleFillColorChange}
+    onFillOpacityChange={handleFillOpacityChange}
+    onValueFieldSelect={handleFillClassFieldSelect}
+    onCategoryFieldSelect={handleFillCategoryFieldSelect}
+    onFacetsVariablesChange={facetsSelection.updateVariables}
+    onFacetsToggle={facetsSelection.toggle}
+    onOpenDiscretization={onOpenFillDiscretization ?? (() => {})}
+    onClassificationChange={onFillClassificationChange ?? (() => {})}
+    onMissingDataShowChange={handleMissingDataShowChange}
+    onMissingDataColorChange={handleMissingDataColorChange}
+    onInvertPalette={onFillInvertPalette}
+  >
+    {#snippet uniqueSnippet()}
       <SingleColorPreview
         exclusive
         label={m.color()}
         color={fillColor}
         onchange={handleFillColorChange}
       />
-    {/if}
-  {/snippet}
-</FillSection>
+    {/snippet}
+  </FillSection>
+{/if}
 
 <StrokeSection
   visualization={visualization}
