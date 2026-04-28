@@ -4,6 +4,7 @@ import {
   escapeIdentifier,
   escapeSqlString
 } from '$lib/features/commons/utils/sanitize.utils';
+import * as m from '$lib/paraglide/messages';
 import * as duckdb from '@duckdb/duckdb-wasm';
 import { DUCK_CONST } from '../constants';
 import { executeQuery } from '../core/query';
@@ -46,7 +47,7 @@ export async function readLink(
       ctx.connection,
       async () => {
         if (!finalTablename) {
-          throw new DuckDBError('Unable to determine target table name');
+          throw new DuckDBError(m.error_unable_determine_table());
         }
         const escapedFilename = escapeSqlString(filename);
         const escapedTable = escapeIdentifier(finalTablename);
@@ -85,7 +86,7 @@ export async function readLink(
     );
 
     if (!tablename) {
-      throw new DuckDBError('Unable to determine target table name');
+      throw new DuckDBError(m.error_unable_determine_table());
     }
 
     ctx.loaded_files.set(tablename, filename);

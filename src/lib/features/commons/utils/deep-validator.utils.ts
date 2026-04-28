@@ -367,9 +367,10 @@ export const DeepDataValidator = {
         issues.push({
           severity: 'warning',
           column: column.name,
-          message: `${column.nullPercentage.toFixed(1)}% missing values`,
-          suggestion:
-            'Check if this column is needed or fill in the missing data'
+          message: m.column_validation_missing_values({
+            percentage: column.nullPercentage.toFixed(1)
+          }),
+          suggestion: m.column_validation_missing_values_hint()
         });
       }
 
@@ -377,8 +378,8 @@ export const DeepDataValidator = {
         issues.push({
           severity: 'info',
           column: column.name,
-          message: 'All values are unique',
-          suggestion: 'This column could be an identifier'
+          message: m.column_validation_all_unique(),
+          suggestion: m.column_validation_identifier_hint()
         });
       }
 
@@ -386,15 +387,15 @@ export const DeepDataValidator = {
         issues.push({
           severity: 'warning',
           column: column.name,
-          message: 'Column is empty - no unique value found',
-          suggestion: 'This column can be removed as it provides no information'
+          message: m.column_validation_empty(),
+          suggestion: m.column_validation_empty_hint()
         });
       } else if (column.uniqueCount === 1) {
         issues.push({
           severity: 'warning',
           column: column.name,
-          message: 'Only one unique value in the entire column',
-          suggestion: 'This column can be removed as it provides no information'
+          message: m.column_validation_single_value(),
+          suggestion: m.column_validation_single_value_hint()
         });
       }
 
@@ -408,8 +409,8 @@ export const DeepDataValidator = {
           issues.push({
             severity: 'warning',
             column: column.name,
-            message: 'All numeric values are identical',
-            suggestion: 'Check if this column is correct'
+            message: m.column_validation_identical_numeric(),
+            suggestion: m.column_validation_identical_hint()
           });
         }
       }
@@ -439,9 +440,11 @@ export const DeepDataValidator = {
             issues.push({
               severity: 'warning',
               column: columns[cellIndex]?.name,
-              message: `Cell with ${cell.length} characters detected`,
+              message: m.column_validation_long_cell({
+                count: String(cell.length)
+              }),
               affectedRows: [currentRow],
-              suggestion: 'Very long cells may affect performance'
+              suggestion: m.column_validation_long_cell_hint()
             });
             break;
           }

@@ -620,7 +620,7 @@
                     <div class="table-cell cell-data">{row.dataValue}</div>
                     <div
                       class="table-cell cell-equals cell-equals-approx"
-                      aria-label="approximativement"
+                      aria-label={m.join_approximate_indicator()}
                     >
                       ≈
                     </div>

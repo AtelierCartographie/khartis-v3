@@ -1,6 +1,7 @@
 import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
+import * as m from '$lib/paraglide/messages';
 import { PIPELINE_CONST } from '$lib/features/data-pipeline/constants';
 import { DUCK_CONST } from '../constants';
 import { executeQuery } from '../core/query';
@@ -17,9 +18,7 @@ export async function exportToCsv(
   ]);
   const delimiter = options?.delimiter || PIPELINE_CONST.CSV.DEFAULT_DELIMITER;
   if (delimiter.length !== 1 || !SAFE_DELIMITERS.has(delimiter)) {
-    throw new DuckDBError(
-      `Invalid CSV delimiter: must be one of , ; \\t | (space)`
-    );
+    throw new DuckDBError(m.error_invalid_csv_delimiter());
   }
   const header = options?.header !== false;
   const filename = `export_${Date.now()}.csv`;

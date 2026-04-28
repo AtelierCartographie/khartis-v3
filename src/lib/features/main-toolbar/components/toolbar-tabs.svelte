@@ -441,7 +441,7 @@
     maxLength: number = UI_CONSTANTS.TRUNCATE_FILE_NAME_MAX_LENGTH
   ): string => {
     if (name.length <= maxLength) return name;
-    return name.slice(0, maxLength - 3) + '...';
+    return name.slice(0, maxLength - 3) + m.toolbar_tab_ellipsis();
   };
 </script>
 

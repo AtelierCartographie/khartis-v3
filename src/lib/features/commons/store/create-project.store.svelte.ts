@@ -665,7 +665,11 @@ export const createProjectActions = {
 
       if (!response.ok) {
         throw new Error(
-          `HTTP ${response.status} (${response.statusText}) for ${url}`
+          m.error_http_fetch({
+            status: String(response.status),
+            statusText: response.statusText,
+            url
+          })
         );
       }
 

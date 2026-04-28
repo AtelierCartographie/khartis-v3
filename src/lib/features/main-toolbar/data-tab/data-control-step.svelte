@@ -454,7 +454,11 @@
       if (totalReplaced > 0) {
         datasetsStore.recordTransformation(
           selectedDataset.id,
-          `Replaced "${searchValue}" with "${replaceValue}" (${totalReplaced} occurrences)`
+          m.history_replaced_values({
+            searchValue,
+            replaceValue,
+            totalReplaced
+          })
         );
 
         const timestamp = new Date().toISOString();
@@ -527,7 +531,7 @@
 
       datasetsStore.recordTransformation(
         selectedDataset.id,
-        `Deleted ${count} rows (new total: ${newRowCount})`
+        m.history_deleted_rows({ count, newRowCount })
       );
 
       await projectStore.addDeletedRows(
@@ -570,7 +574,7 @@
 
         datasetsStore.recordTransformation(
           selectedDataset.id,
-          `Deleted ${count} filtered rows (new total: ${newRowCount})`
+          m.history_deleted_filtered_rows({ count, newRowCount })
         );
         await projectStore.addDeletedRows(selectedDataset.sourceFileId, rowIds);
 

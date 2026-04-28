@@ -69,7 +69,7 @@ export async function createProject(
   container._state.isDirty = false;
   container._state.lastSaved = new Date();
 
-  addToHistory(container, 'Project created', project);
+  addToHistory(container, m.history_project_created(), project);
 
   await saveCurrentProject(container);
   await projectStorage.save(ProjectStorageKey.CURRENT, project.id);
@@ -92,7 +92,7 @@ export async function loadProject(
     container._state.lastSaved = new Date();
     resetHistory(container);
 
-    addToHistory(container, 'Project loaded', project);
+    addToHistory(container, m.history_project_loaded(), project);
 
     await projectStorage.save(ProjectStorageKey.CURRENT, project.id);
     await dataOrchestratorService.onProjectChanged();
@@ -129,7 +129,7 @@ export async function duplicateProject(
     const originalProject = await projectRepository.load(id);
 
     if (!originalProject) {
-      throw new Error('Project not found');
+      throw new Error(m.history_project_not_found());
     }
 
     const projects = await listProjects();

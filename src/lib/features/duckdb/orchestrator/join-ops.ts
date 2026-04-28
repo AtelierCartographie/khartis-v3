@@ -4,6 +4,7 @@ import {
   escapeIdentifier,
   escapeSqlString
 } from '$lib/features/commons/utils/sanitize.utils';
+import * as m from '$lib/paraglide/messages';
 import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
 import { isOSMBasemap } from '$lib/features/map/services/osm-tile.service';
 import type {
@@ -483,9 +484,7 @@ async function ensureBasemapAttributesLoaded(
     )) as Array<{ table_name: string }>;
 
     if (!recheck || recheck.length === 0) {
-      throw new Error(
-        'basemap_attributes table could not be loaded. Check network connectivity and basemap files.'
-      );
+      throw new Error(m.error_basemap_attributes_load());
     }
   }
 }
@@ -686,9 +685,7 @@ async function ensureBasemapHasAttributes(
 
     const generated = await generateAttributesForBasemap(basemapId, Duck);
     if (!generated) {
-      throw new Error(
-        `No attributes found for basemap '${basemapId}'. The basemap may not be properly indexed in basemap_attributes.`
-      );
+      throw new Error(m.error_no_attributes_basemap({ basemapId }));
     }
 
     const recheck = (await Duck.query(
@@ -697,9 +694,7 @@ async function ensureBasemapHasAttributes(
     )) as Array<{ cnt: number }>;
 
     if (!recheck?.[0]?.cnt || recheck[0].cnt === 0) {
-      throw new Error(
-        `No attributes found for basemap '${basemapId}' even after generation from geometry.`
-      );
+      throw new Error(m.error_no_attributes_basemap_generated({ basemapId }));
     }
 
     // New basemap attributes were added — invalidate cache so they're included
@@ -913,7 +908,10 @@ export async function finalizeJoin(
     const columnExists = dataset.columns.some((c) => c.name === geoColumn);
     if (!columnExists) {
       throw new Error(
-        `Column '${geoColumn}' not found in dataset. Available columns: ${dataset.columns.map((c) => c.name).join(', ')}`
+        m.error_column_not_found({
+          geoColumn,
+          columns: dataset.columns.map((c) => c.name).join(', ')
+        })
       );
     }
   }
@@ -982,7 +980,7 @@ function finalizeGPSJoin(
 
   const gpsColumns = detectGPSColumns(dataset.columns, dataset.geoDetection);
   if (!gpsColumns) {
-    throw new Error('GPS columns (latitude/longitude) not found in dataset');
+    throw new Error(m.error_gps_columns_not_found());
   }
 
   logger.success('GPS join finalized', LogCategory.DATA, {
@@ -1031,9 +1029,7 @@ export async function getJoinedArrowTable(
   );
 
   if (!geometryColumn) {
-    throw new Error(
-      `No geometry column found in basemap geometry table "${geometryTable}".`
-    );
+    throw new Error(m.error_no_geometry_column({ geometryTable }));
   }
 
   const featureIdColumn = geometryTableColumns.find(

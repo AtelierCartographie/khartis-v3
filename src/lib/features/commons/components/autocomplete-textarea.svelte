@@ -1,5 +1,6 @@
 <script lang="ts">
   import { KEY } from '../constants/dom.constants';
+  import { m } from '$lib/paraglide/messages.js';
 
   export interface Suggestion {
     label: string;
@@ -199,7 +200,9 @@
             class:variable={suggestion.type === 'variable'}
             class:function={suggestion.type === 'function'}
           >
-            {suggestion.type === 'variable' ? 'var' : 'fn'}
+            {suggestion.type === 'variable'
+              ? m.autocomplete_type_variable()
+              : m.autocomplete_type_function()}
           </span>
           <span class="suggestion-label">{suggestion.label}</span>
           {#if suggestion.description}

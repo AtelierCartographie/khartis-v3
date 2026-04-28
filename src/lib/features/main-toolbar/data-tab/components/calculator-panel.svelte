@@ -81,7 +81,7 @@
       label: col.name,
       value: escapeIdentifier(col.name),
       type: 'variable' as const,
-      description: col.type || 'colonne'
+      description: col.type || m.calculator_column_description()
     }));
 
     const functionSuggestions: Suggestion[] = [
@@ -268,7 +268,7 @@
       if (selectedDataset?.id) {
         datasetsStore.recordTransformation(
           selectedDataset.id,
-          `Calculated column created: ${effectiveName}`
+          m.calculated_column_created({ name: effectiveName })
         );
       }
 

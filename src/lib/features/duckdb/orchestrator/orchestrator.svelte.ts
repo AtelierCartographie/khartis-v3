@@ -206,7 +206,7 @@ async function createArrowTableWithMetadata(tableName: string): Promise<{
   geoArrowMetadata: GeoArrowMetadata | null;
 }> {
   if (!Duck) {
-    throw new DuckDBError('DuckDB not initialized');
+    throw new DuckDBError(m.error_duckdb_not_initialized());
   }
 
   return arrowOps.createArrowTableWithMetadata(tableName, Duck, (table) =>
@@ -215,7 +215,7 @@ async function createArrowTableWithMetadata(tableName: string): Promise<{
 }
 
 async function getRowCountInternal(tableName: string): Promise<number> {
-  if (!Duck) throw new DuckDBError('DuckDB not initialized');
+  if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
   return tableDataOps.getRowCount(tableName, Duck);
 }
 
@@ -307,7 +307,7 @@ export const duckDBOrchestrator = {
 
   async invalidateAndReanalyse(tableName: string): Promise<void> {
     await ensureInitialized();
-    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
     invalidateDatasetCache(tableName);
     await Duck.analyse(tableName, { force: true });
     state.bumpDatasetsVersion();
@@ -330,7 +330,7 @@ export const duckDBOrchestrator = {
     }
   ): Promise<DuckDBDataset | null> {
     await ensureInitialized();
-    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
     return datasetOps.registerExistingTable(
       tableName,
@@ -351,7 +351,7 @@ export const duckDBOrchestrator = {
     newTableName: string
   ): Promise<DuckDBDataset | null> {
     await ensureInitialized();
-    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
     return datasetOps.updateDatasetTableName(sourceFileId, newTableName, Duck, {
       getRowCount: getRowCountInternal,
@@ -362,7 +362,7 @@ export const duckDBOrchestrator = {
 
   async processFile(file: UploadedFile): Promise<DuckDBDataset | null> {
     await ensureInitialized();
-    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
     try {
       const dataset = await datasetOps.processFile(file, Duck, {
@@ -387,7 +387,7 @@ export const duckDBOrchestrator = {
 
   async getBasemapAttributeValues(basemap: BasemapMetadata): Promise<string[]> {
     await ensureInitialized();
-    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
     return joinOps.getBasemapAttributeValues(basemap, Duck);
   },
@@ -396,7 +396,7 @@ export const duckDBOrchestrator = {
     basemap: BasemapMetadata
   ): Promise<Record<string, string[]>> {
     await ensureInitialized();
-    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
     return joinOps.getBasemapAttributeAliasesByValue(basemap, Duck);
   },
@@ -407,10 +407,10 @@ export const duckDBOrchestrator = {
     geoColumn: string
   ): Promise<JoinQuality> {
     await ensureInitialized();
-    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
     const dataset = state.findDatasetByIdOrSourceFile(datasetId);
-    if (!dataset) throw new Error('Dataset not found');
+    if (!dataset) throw new Error(m.error_dataset_not_found());
 
     const filterClause = buildFilterWhereClause(
       state.getFiltersMap().get(dataset.tableName)
@@ -429,10 +429,10 @@ export const duckDBOrchestrator = {
     geoColumn: string
   ): Promise<joinOps.JoinSynthesisResult[]> {
     await ensureInitialized();
-    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
     const dataset = state.findDatasetByIdOrSourceFile(datasetId);
-    if (!dataset) throw new Error('Dataset not found');
+    if (!dataset) throw new Error(m.error_dataset_not_found());
 
     const filterClause = buildFilterWhereClause(
       state.getFiltersMap().get(dataset.tableName)
@@ -446,10 +446,10 @@ export const duckDBOrchestrator = {
     corrections: Record<string, string>
   ): Promise<void> {
     await ensureInitialized();
-    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
     const dataset = state.findDatasetByIdOrSourceFile(datasetId);
-    if (!dataset) throw new Error('Dataset not found');
+    if (!dataset) throw new Error(m.error_dataset_not_found());
 
     await joinOps.applyJoinCorrections(dataset, geoColumn, corrections, Duck);
 
@@ -465,10 +465,10 @@ export const duckDBOrchestrator = {
     options?: joinOps.FinalizeJoinOptions
   ): Promise<void> {
     await ensureInitialized();
-    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
     const dataset = state.findDatasetByIdOrSourceFile(datasetId);
-    if (!dataset) throw new Error('Dataset not found');
+    if (!dataset) throw new Error(m.error_dataset_not_found());
 
     try {
       const result = await joinOps.finalizeJoin(
@@ -578,7 +578,7 @@ export const duckDBOrchestrator = {
     basemapId: string
   ): Promise<Table> {
     await ensureInitialized();
-    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
     const cacheKey = joinedArrowCacheKey(datasetTableName, basemapId);
     const cached = joinedArrowCache.get(cacheKey);
@@ -603,11 +603,11 @@ export const duckDBOrchestrator = {
     lonColumn: string;
   }> {
     await ensureInitialized();
-    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
     const dataset = state.findDatasetByIdOrSourceFile(datasetId);
     if (!dataset) {
-      throw new Error(`Dataset ${datasetId} not found`);
+      throw new Error(m.error_dataset_not_found_id({ datasetId }));
     }
 
     return gpsOps.getGPSArrowTable(dataset, Duck, (tn) =>
@@ -617,7 +617,7 @@ export const duckDBOrchestrator = {
 
   async getGPSBounds(datasetId: string): Promise<gpsOps.GPSBounds | null> {
     await ensureInitialized();
-    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
     const dataset = state.findDatasetByIdOrSourceFile(datasetId);
     if (!dataset) return null;
@@ -630,14 +630,14 @@ export const duckDBOrchestrator = {
     options?: tableDataOps.GetTableDataOptions
   ): Promise<ArrowTableLike> {
     await ensureInitialized();
-    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
     return tableDataOps.getTableData(tableName, Duck, options);
   },
 
   async getRowCount(tableName: string): Promise<number> {
     await ensureInitialized();
-    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
     return tableDataOps.getRowCount(tableName, Duck);
   },
@@ -652,28 +652,28 @@ export const duckDBOrchestrator = {
     }
   ): Promise<number> {
     await ensureInitialized();
-    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
     return tableDataOps.getRowPosition(tableName, rowId, Duck, options);
   },
 
   async getRowStats(tableName: string): Promise<FilterStats> {
     await ensureInitialized();
-    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
     return tableDataOps.getRowStats(tableName, Duck);
   },
 
   async analyzeTable(tableName: string): Promise<Record<string, unknown>[]> {
     await ensureInitialized();
-    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
     return tableDataOps.analyzeTable(tableName, Duck);
   },
 
   async getBasicColumnInfo(tableName: string): Promise<AnalysisResult[]> {
     await ensureInitialized();
-    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
     return tableDataOps.getBasicColumnInfo(tableName, Duck);
   },
@@ -683,7 +683,7 @@ export const duckDBOrchestrator = {
     force = false
   ): Promise<AnalysisResult[]> {
     await ensureInitialized();
-    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
     return tableDataOps.getFullAnalysis(
       tableName,
@@ -700,7 +700,7 @@ export const duckDBOrchestrator = {
     options?: { skipAnalysis?: boolean }
   ): Promise<void> {
     await ensureInitialized();
-    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
     await columnOps.renameColumn(tableName, oldName, newName, Duck, options);
 
@@ -726,7 +726,7 @@ export const duckDBOrchestrator = {
     options?: { skipAnalysis?: boolean }
   ): Promise<void> {
     await ensureInitialized();
-    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
     await columnOps.changeColumnType(
       tableName,
@@ -747,7 +747,7 @@ export const duckDBOrchestrator = {
     options?: { skipAnalysis?: boolean }
   ): Promise<void> {
     await ensureInitialized();
-    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
     await columnOps.dropColumn(tableName, columnName, Duck, options);
     if (!options?.skipAnalysis) {
@@ -762,7 +762,7 @@ export const duckDBOrchestrator = {
     options?: { skipAnalysis?: boolean }
   ): Promise<void> {
     await ensureInitialized();
-    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
     await columnOps.dropRows(tableName, rowIds, Duck, options);
     if (!options?.skipAnalysis) {
@@ -776,7 +776,7 @@ export const duckDBOrchestrator = {
     rowIds: number[];
   }> {
     await ensureInitialized();
-    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
     const rowIds = await tableDataOps.getExcludedRowIds(tableName, Duck);
     if (rowIds.length === 0) return { count: 0, rowIds: [] };
@@ -794,7 +794,7 @@ export const duckDBOrchestrator = {
     options?: { skipAnalysis?: boolean }
   ): Promise<void> {
     await ensureInitialized();
-    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
     await columnOps.refineColumn(
       tableName,
@@ -817,7 +817,7 @@ export const duckDBOrchestrator = {
     options?: { skipAnalysis?: boolean }
   ): Promise<number> {
     await ensureInitialized();
-    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
     const count = await columnOps.replaceInColumn(
       tableName,
@@ -841,7 +841,7 @@ export const duckDBOrchestrator = {
     options?: { skipAnalysis?: boolean }
   ): Promise<void> {
     await ensureInitialized();
-    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
     const updatedColumns = await columnOps.addCalculatedColumn(
       tableName,
@@ -866,14 +866,14 @@ export const duckDBOrchestrator = {
     expression: string
   ): Promise<unknown> {
     await ensureInitialized();
-    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
     return columnOps.testExpression(tableName, expression, Duck);
   },
 
   async runQuery(query: string): Promise<ArrowTableLike> {
     await ensureInitialized();
-    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
     return tableDataOps.runQuery(query, Duck);
   },
@@ -917,7 +917,7 @@ export const duckDBOrchestrator = {
     yearFilter?: { column: string; value: number | string }
   ): Promise<Table> {
     await ensureInitialized();
-    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
     const whereClause = yearFilter
       ? arrowOps.buildYearFilterWhereClause(yearFilter)
@@ -944,14 +944,14 @@ export const duckDBOrchestrator = {
 
   async getArrowTableReprojectedToWGS84(tableName: string): Promise<Table> {
     await ensureInitialized();
-    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
     return arrowOps.getArrowTableReprojected(tableName, Duck, 'EPSG:4326');
   },
 
   async getArrowTable(tableName: string): Promise<Table> {
     await ensureInitialized();
-    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
     try {
       return await arrowOps.getArrowTableWithCache(
@@ -981,7 +981,7 @@ export const duckDBOrchestrator = {
       );
     } catch (error) {
       logger.error('Error getting Arrow table', LogCategory.DUCKDB, error);
-      throw new DuckDBError(`Failed to get Arrow table for ${tableName}`);
+      throw new DuckDBError(m.error_failed_get_arrow_table({ tableName }));
     }
   },
 
@@ -999,7 +999,7 @@ export const duckDBOrchestrator = {
 
   async dropTable(tableName: string): Promise<void> {
     if (!state.isInitialized()) return;
-    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
     await datasetOps.dropTable(tableName, Duck);
     state.clearFiltersForTable(tableName);
@@ -1036,7 +1036,7 @@ export const duckDBOrchestrator = {
     basemapColumnName: string
   ): Promise<string> {
     await ensureInitialized();
-    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 
     return joinOps.joinDataWithBasemap(
       dataTableName,
@@ -1053,7 +1053,7 @@ export const duckDBOrchestrator = {
     options: { threshold?: number; column?: string } = {}
   ): Promise<SearchStats> {
     await ensureInitialized();
-    if (!Duck) throw new DuckDBError('DuckDB not initialized');
+    if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
     return Duck.searchInTable(tableName, query, options);
   }
 };

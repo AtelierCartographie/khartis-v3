@@ -1,6 +1,7 @@
 import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { resolveStaticAssetUrl } from '$lib/features/commons/utils/static-asset-url';
+import * as m from '$lib/paraglide/messages';
 import type { DuckDBBundles } from '@duckdb/duckdb-wasm';
 import * as duckdb from '@duckdb/duckdb-wasm';
 import eh_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url';
@@ -40,7 +41,7 @@ export function isInitialized(): boolean {
 
 export function getContext(): DuckDBContext {
   if (!db || !connection) {
-    throw new DuckDBError('DuckDB not initialized. Call initEngine() first.');
+    throw new DuckDBError(m.error_duckdb_not_initialized());
   }
   return {
     db,
@@ -267,7 +268,7 @@ export async function initEngine(): Promise<void> {
 
 export async function loadMacros(macrosSql: string): Promise<void> {
   if (!connection) {
-    throw new DuckDBError('Connection not established');
+    throw new DuckDBError(m.error_connection_not_established());
   }
   await executeQuery(connection, macrosSql, {
     format: DUCK_CONST.QUERY_FORMAT.ARROW_IPC

@@ -1,5 +1,6 @@
 import type { SavedProjectMetadata } from '$lib/features/project-management';
 import { projectRepository } from '$lib/features/project-management';
+import * as m from '$lib/paraglide/messages';
 import { sanitizeProjectName } from '../utils/sanitize.utils';
 import { ProjectValidator } from '../utils/validation.utils';
 import { projectStore } from './project.store.svelte';
@@ -39,7 +40,9 @@ function createProjectsStore() {
         : undefined;
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : 'Failed to load projects';
+        error instanceof Error
+          ? error.message
+          : m.history_failed_load_projects();
       state.error = message;
     } finally {
       state.isLoading = false;
@@ -65,7 +68,7 @@ function createProjectsStore() {
     const project = await projectRepository.load(id);
 
     if (!project) {
-      throw new Error('Project not found');
+      throw new Error(m.history_project_not_found());
     }
 
     if (updates.name !== undefined) {

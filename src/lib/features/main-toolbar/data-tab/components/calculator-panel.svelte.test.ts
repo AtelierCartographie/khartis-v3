@@ -173,7 +173,7 @@ describe('calculator-panel', () => {
 
     expect(mocks.recordTransformationMock).toHaveBeenCalledWith(
       'dataset-1',
-      'Calculated column created: helper_ratio'
+      m.calculated_column_created({ name: 'helper_ratio' })
     );
     expect(mocks.addColumnTransformationMock).toHaveBeenCalledTimes(1);
     expect(mocks.refreshDatasetMetadataMock).toHaveBeenCalledWith(

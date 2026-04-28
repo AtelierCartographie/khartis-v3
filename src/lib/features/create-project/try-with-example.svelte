@@ -306,7 +306,7 @@
         >
           {#snippet footer()}
             <span class="text-xs text-grey"
-              >{example.tags?.join(' • ') || ''}</span
+              >{example.tags?.join(m.separator_bullet_space()) || ''}</span
             >
           {/snippet}
         </ProjectCard>

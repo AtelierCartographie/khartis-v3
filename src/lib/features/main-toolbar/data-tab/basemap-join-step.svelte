@@ -189,7 +189,7 @@
       return false;
     }
 
-    if (error.message === 'Dataset not found') {
+    if (error.message === m.error_dataset_not_found()) {
       return true;
     }
 

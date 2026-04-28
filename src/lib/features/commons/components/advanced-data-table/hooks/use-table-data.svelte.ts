@@ -1,3 +1,4 @@
+import * as m from '$lib/paraglide/messages';
 import type { ProcessedDataset } from '$lib/features/data-pipeline';
 import { type AnalysisResult } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
@@ -230,7 +231,8 @@ export function useTableData(props: UseTableDataProps): UseTableDataReturn {
       }
 
       logger.error('Error loading columns info', LogCategory.UI, err);
-      error = err instanceof Error ? err.message : 'Failed to load columns';
+      error =
+        err instanceof Error ? err.message : m.history_failed_load_columns();
       columns = [];
       columnAnalysis = new SvelteMap();
       numRows = 0;
@@ -344,7 +346,7 @@ export function useTableData(props: UseTableDataProps): UseTableDataReturn {
       }
 
       logger.error('Error loading row data', LogCategory.UI, err);
-      error = err instanceof Error ? err.message : 'Failed to load data';
+      error = err instanceof Error ? err.message : m.history_failed_load_data();
       tableData = [];
     } finally {
       if (requestId === rowsRequestId) {

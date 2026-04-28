@@ -412,7 +412,7 @@ export async function processFiles(
           }
 
           if (!file.content && !file.originalFile) {
-            throw new Error(`File ${file.name} has no content or originalFile`);
+            throw new Error(m.error_file_no_content({ fileName: file.name }));
           }
 
           const result = await dataPipeline.processUploadedFile(
@@ -450,7 +450,8 @@ export async function processFiles(
       error: error instanceof Error ? error.message : 'Unknown error'
     });
 
-    state.error = error instanceof Error ? error.message : 'Processing failed';
+    state.error =
+      error instanceof Error ? error.message : m.history_processing_failed();
     throw error;
   } finally {
     endProcessing();
@@ -495,7 +496,7 @@ export async function addFile(
       }
 
       if (!hasRestorableBinarySource) {
-        throw new Error(`File ${file.name} has no content or originalFile`);
+        throw new Error(m.error_file_no_content({ fileName: file.name }));
       }
 
       return await dataPipeline.processUploadedFile(file, file.originalFile);
@@ -557,7 +558,8 @@ export async function addFile(
       error
     );
 
-    state.error = error instanceof Error ? error.message : 'Processing failed';
+    state.error =
+      error instanceof Error ? error.message : m.history_processing_failed();
     throw error;
   } finally {
     endProcessing();

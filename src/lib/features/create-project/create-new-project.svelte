@@ -328,7 +328,7 @@
         <InlineNotification
           kind="error"
           title={m.create_project_validation_errors()}
-          subtitle={globalValidationErrors.join(', ')}
+          subtitle={globalValidationErrors.join(m.separator_comma_space())}
           lowContrast
           hideCloseButton
         />
@@ -338,7 +338,7 @@
         <div class="files-header">
           <span class="files-count">
             {createProjectState.newProject.uploadedFiles.length}
-            {m.create_project_files_label()} -
+            {m.create_project_files_label()}{m.separator_dash_space()}
             {formatFileSize(createProjectActions.getTotalFileSize())}
           </span>
           {#if createProjectState.newProject.uploadedFiles.length > 1}
@@ -475,13 +475,13 @@
                   {#each requiredExts as ext (ext)}
                     {@const isPresent = presentExts.includes(ext)}
                     <Tag size="sm" type={isPresent ? 'teal' : 'gray'}
-                      >{ext}{isPresent ? ' ✓' : ''}</Tag
+                      >{ext}{isPresent ? m.separator_check_mark() : ''}</Tag
                     >
                   {/each}
                   {#each optionalExts as ext (ext)}
                     {@const isPresent = presentExts.includes(ext)}
                     <Tag size="sm" type={isPresent ? 'teal' : 'gray'}
-                      >{ext}{isPresent ? ' ✓' : ''}</Tag
+                      >{ext}{isPresent ? m.separator_check_mark() : ''}</Tag
                     >
                   {/each}
                 </div>
@@ -502,10 +502,10 @@
                         {formatFileSize(file.size)}
                         {#if rowCount > 0}
                           <span class="file-stats">
-                            · <span data-testid="file-row-count"
-                              >{rowCount}</span
+                            {m.separator_middle_dot_space()}<span
+                              data-testid="file-row-count">{rowCount}</span
                             >
-                            {m.rows()} ·
+                            {m.rows()}{m.separator_middle_dot_space()}
                             <span data-testid="file-column-count"
                               >{columnCount}</span
                             >
@@ -545,13 +545,13 @@
                     {#each requiredExts as ext (ext)}
                       {@const isPresent = presentExts.includes(ext)}
                       <Tag size="sm" type={isPresent ? 'teal' : 'gray'}
-                        >{ext}{isPresent ? ' ✓' : ''}</Tag
+                        >{ext}{isPresent ? m.separator_check_mark() : ''}</Tag
                       >
                     {/each}
                     {#each optionalExts as ext (ext)}
                       {@const isPresent = presentExts.includes(ext)}
                       <Tag size="sm" type={isPresent ? 'teal' : 'gray'}
-                        >{ext}{isPresent ? ' ✓' : ''}</Tag
+                        >{ext}{isPresent ? m.separator_check_mark() : ''}</Tag
                       >
                     {/each}
                   </div>
@@ -562,7 +562,9 @@
                     lowContrast
                     kind="error"
                     title={m.create_project_error_status()}
-                    subtitle={file.validation.errors.join(', ')}
+                    subtitle={file.validation.errors.join(
+                      m.separator_comma_space()
+                    )}
                     hideCloseButton
                   />
                 {/if}
@@ -572,7 +574,9 @@
                     lowContrast
                     kind="warning"
                     title={m.create_project_validation_errors()}
-                    subtitle={file.validation.warnings.join(', ')}
+                    subtitle={file.validation.warnings.join(
+                      m.separator_comma_space()
+                    )}
                     hideCloseButton
                   />
                 {/if}

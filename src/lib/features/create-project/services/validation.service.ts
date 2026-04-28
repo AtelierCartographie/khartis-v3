@@ -59,13 +59,13 @@ function validateURL(urlInput: string): ValidationResult {
 
     if (!result.isValid) {
       result.errors.forEach((error) => {
-        errors.push(`${url} — ${error}`);
+        errors.push(`${url}${m.separator_em_dash()}${error}`);
       });
     }
 
     if (result.warnings.length > 0) {
       result.warnings.forEach((warning) => {
-        warnings.push(`${url} — ${warning}`);
+        warnings.push(`${url}${m.separator_em_dash()}${warning}`);
       });
     }
   });
