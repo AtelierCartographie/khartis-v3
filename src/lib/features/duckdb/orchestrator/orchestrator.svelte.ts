@@ -394,7 +394,7 @@ export const duckDBOrchestrator = {
 
   async getBasemapAttributeAliasesByValue(
     basemap: BasemapMetadata
-  ): Promise<Record<string, string[]>> {
+  ): Promise<Record<string, joinOps.BasemapAlias[]>> {
     await ensureInitialized();
     if (!Duck) throw new DuckDBError(m.error_duckdb_not_initialized());
 

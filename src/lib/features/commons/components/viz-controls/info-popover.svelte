@@ -271,6 +271,9 @@
     flex-wrap: wrap;
     gap: 4px;
     margin-bottom: 6px;
+    max-height: 220px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
 
   :global(.info-tooltip-tags:last-child) {

@@ -1301,7 +1301,7 @@
 
   .cell-equals {
     flex-shrink: 0;
-    font-weight: 400;
+    font-weight: 700;
     font-size: 1rem;
     line-height: 1;
     color: var(--cds-text-secondary, #525252);
@@ -1311,9 +1311,18 @@
     justify-content: center;
   }
 
+  .join-table-success .cell-equals {
+    color: #24a148;
+  }
+  .join-table-warning .cell-equals {
+    color: #f1c21b;
+  }
+  .join-table-error .cell-equals {
+    color: #da1e28;
+  }
+
   .cell-equals-approx {
     color: #f1c21b;
-    font-weight: 600;
   }
 
   .cell-select {
