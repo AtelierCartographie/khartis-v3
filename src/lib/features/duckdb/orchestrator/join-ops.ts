@@ -729,22 +729,88 @@ export interface BasemapAlias {
 }
 
 /**
- * Stub kept for API stability.
+ * Returns alias rows grouped by basemap entity.
  *
- * The current `basemap_attributes` parquet schema is
- * `(raw, id, variant, normalized, basemap, basemap_count)` — `id`
- * stores the source column name (e.g. `iso3_code`), not a shared
- * entity identifier, so we cannot reliably group "all the labels that
- * describe the same feature" without modifying the parquet source
- * (out of scope for this client). Tooltip enrichment falls back to
- * the similarity matches surfaced via
- * `joinedEntitiesList[].otherIdentifiers`.
+ * The `basemap_attributes` parquet does NOT carry a shared entity id;
+ * instead, rows for the same feature are emitted consecutively, with
+ * the pivot variant (e.g. `iso3_code`) appearing once per entity.
+ * We reconstruct entity groups by counting pivot occurrences with a
+ * cumulative window and gathering every other row that shares the
+ * same group index.
+ *
+ * For monde-countries-2024-medium this surfaces, for `raw='BRA'`,
+ * the alternative labels {Brazil, Brésil, Brasilien, BR} with their
+ * source variant (name_engl, name_fren, name_germ, cntr_id).
  */
 export async function getBasemapAttributeAliasesByValue(
-  _basemap: BasemapMetadata,
-  _Duck: DuckDBClientForJoin
+  basemap: BasemapMetadata,
+  Duck: DuckDBClientForJoin
 ): Promise<Record<string, BasemapAlias[]>> {
-  return {};
+  const basemapId = getBasemapAttributesId(basemap);
+  await ensureBasemapHasAttributes(basemapId, Duck);
+
+  const escapedBasemapId = escapeSqlString(basemapId);
+
+  const firstVariantRows = (await Duck.query(
+    `SELECT variant
+     FROM basemap_attributes
+     WHERE basemap = '${escapedBasemapId}'
+     LIMIT 1`,
+    { format: 'array' }
+  )) as Array<{ variant: string | null }>;
+  const pivotVariant = firstVariantRows[0]?.variant;
+  if (!pivotVariant) return {};
+
+  const escapedPivot = escapeSqlString(pivotVariant);
+
+  const rows = (await Duck.query(
+    `WITH numbered AS (
+       SELECT raw, variant, ROW_NUMBER() OVER () AS rn
+       FROM basemap_attributes
+       WHERE basemap = '${escapedBasemapId}'
+     ),
+     grouped AS (
+       SELECT
+         raw,
+         variant,
+         rn,
+         SUM(CASE WHEN variant = '${escapedPivot}' THEN 1 ELSE 0 END)
+           OVER (ORDER BY rn ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+           AS group_id
+       FROM numbered
+     )
+     SELECT raw, variant, group_id, rn
+     FROM grouped
+     ORDER BY group_id, rn`,
+    { format: 'array' }
+  )) as Array<{
+    raw: string;
+    variant: string | null;
+    group_id: number;
+    rn: number;
+  }>;
+
+  const groups = new Map<number, BasemapAlias[]>();
+  for (const row of rows) {
+    if (!row.raw || row.group_id == null) continue;
+    let bucket = groups.get(row.group_id);
+    if (!bucket) {
+      bucket = [];
+      groups.set(row.group_id, bucket);
+    }
+    bucket.push({ value: row.raw, variant: row.variant ?? null });
+  }
+
+  const result: Record<string, BasemapAlias[]> = {};
+  for (const row of rows) {
+    if (!row.raw) continue;
+    if (row.raw in result) continue;
+    const bucket = groups.get(row.group_id);
+    if (!bucket) continue;
+    const aliases = bucket.filter((entry) => entry.value !== row.raw);
+    if (aliases.length > 0) result[row.raw] = aliases;
+  }
+  return result;
 }
 
 export async function applyJoinCorrections(

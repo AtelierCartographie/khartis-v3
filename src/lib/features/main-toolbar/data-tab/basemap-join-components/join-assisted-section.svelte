@@ -21,6 +21,7 @@
     WarningFilled
   } from 'carbon-icons-svelte';
   import { InfoPopover } from '$lib/features/commons/components/viz-controls';
+  import type { BasemapAlias } from '$lib/features/duckdb/orchestrator/join-ops';
   import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 
   type IgnoreSource = 'joined' | 'to_verify' | 'unrecognized';
@@ -60,6 +61,7 @@
     joinedEntitiesList?: JoinedEntityRow[];
     duplicateLines?: LineReference[];
     ignoredEntities?: LineReference[];
+    basemapAliasesByValue?: Record<string, BasemapAlias[]>;
     onFinalizeJoin: () => void;
     onManualCorrection?: (dataValue: string, basemapValue: string) => void;
     onIgnoreEntity?: (
@@ -84,6 +86,7 @@
     joinedEntitiesList = [],
     duplicateLines = [],
     ignoredEntities = [],
+    basemapAliasesByValue = {},
     onFinalizeJoin,
     onManualCorrection,
     onIgnoreEntity,
@@ -242,6 +245,11 @@
     disabled: boolean;
   }
 
+  function formatAliasTag(value: string, variant: string | null): string {
+    if (!variant || variant.length === 0) return value;
+    return `${variant} : ${value}`;
+  }
+
   function buildRowTooltip(
     selectedBasemapValue: string | undefined,
     extraIdentifiers: string[] | undefined = undefined
@@ -249,18 +257,32 @@
     if (!selectedBasemapValue) {
       return { tags: [], text: '', disabled: true };
     }
-    const seen = new SvelteSet<string>();
+    const seenValues = new SvelteSet<string>();
     const tags: string[] = [];
-    const push = (value: string) => {
+    const push = (value: string, variant: string | null) => {
       const trimmed = value?.trim();
-      if (!trimmed || seen.has(trimmed)) return;
-      seen.add(trimmed);
-      tags.push(trimmed);
+      if (!trimmed || seenValues.has(trimmed)) return;
+      seenValues.add(trimmed);
+      tags.push(formatAliasTag(trimmed, variant));
     };
-    push(selectedBasemapValue);
-    if (extraIdentifiers) {
-      for (const id of extraIdentifiers) push(id);
+
+    const aliases = basemapAliasesByValue?.[selectedBasemapValue];
+    const sourceVariant =
+      aliases?.find((a) => a.value === selectedBasemapValue)?.variant ?? null;
+    push(selectedBasemapValue, sourceVariant);
+
+    if (aliases) {
+      for (const alias of aliases) {
+        if (alias.value !== selectedBasemapValue) {
+          push(alias.value, alias.variant);
+        }
+      }
     }
+
+    if (extraIdentifiers) {
+      for (const id of extraIdentifiers) push(id, null);
+    }
+
     return { tags, text: '', disabled: false };
   }
 
