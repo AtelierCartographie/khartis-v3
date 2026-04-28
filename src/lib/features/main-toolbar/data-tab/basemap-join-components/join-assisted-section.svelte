@@ -103,6 +103,10 @@
     availableBasemapValues.map((value) => ({ id: value, text: value }))
   );
 
+  const allBasemapComboBoxItems = $derived<ComboBoxItem[]>(
+    basemapValues.map((value) => ({ id: value, text: value }))
+  );
+
   const duplicateCount = $derived(duplicates.length);
   const unrecognizedCount = $derived(unknowns.length);
   const ignoredCount = $derived(ignoredEntities.length);
@@ -118,16 +122,6 @@
       return { ...row, basemapOptions: dedupedOptions };
     })
   );
-
-  function buildJoinedRowOptions(currentValue: string): string[] {
-    const options: string[] = [currentValue];
-    for (const value of availableBasemapValues) {
-      if (!options.includes(value)) {
-        options.push(value);
-      }
-    }
-    return options;
-  }
 
   interface RowVirtualizer {
     visibleRows: SvelteSet<string>;
@@ -495,19 +489,20 @@
                       <div class="table-cell cell-equals">=</div>
                       <div class="table-cell cell-select">
                         {#if visibleJoinedRows.has(row.dataValue)}
-                          {@const joinedRowOptions = buildJoinedRowOptions(
-                            row.basemapValue
-                          )}
-                          <Select
-                            id={`joined-${row.dataValue}`}
+                          <ComboBox
+                            items={allBasemapComboBoxItems}
+                            selectedId={row.basemapValue}
+                            placeholder={row.basemapValue}
                             labelText={m.join_select_label_joined({
                               entity: row.dataValue
                             })}
                             hideLabel
-                            selected={row.basemapValue}
-                            on:change={(e) => {
-                              const target = e.target as HTMLSelectElement;
-                              const nextValue = target?.value;
+                            size="sm"
+                            on:select={(e) => {
+                              const item = e.detail.selectedItem as
+                                | ComboBoxItem
+                                | undefined;
+                              const nextValue = item?.text;
                               if (
                                 nextValue &&
                                 nextValue !== row.basemapValue &&
@@ -521,12 +516,7 @@
                                 );
                               }
                             }}
-                            size="sm"
-                          >
-                            {#each joinedRowOptions as opt (opt)}
-                              <SelectItem value={opt} text={opt} />
-                            {/each}
-                          </Select>
+                          />
                         {:else}
                           <div class="select-placeholder" aria-hidden="true">
                             {row.basemapValue}

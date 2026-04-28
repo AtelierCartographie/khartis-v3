@@ -729,11 +729,16 @@ export interface BasemapAlias {
 }
 
 /**
- * Stub kept for API stability — the underlying `basemap_attributes`
- * table stores `id` as the source column name (e.g. `iso3_code`), not
- * a shared entity id, so cross-alias grouping is unreliable. Tooltip
- * enrichment relies on `joinedEntitiesList[].otherIdentifiers` (which
- * comes from the similarity matches) instead.
+ * Stub kept for API stability.
+ *
+ * The current `basemap_attributes` parquet schema is
+ * `(raw, id, variant, normalized, basemap, basemap_count)` — `id`
+ * stores the source column name (e.g. `iso3_code`), not a shared
+ * entity identifier, so we cannot reliably group "all the labels that
+ * describe the same feature" without modifying the parquet source
+ * (out of scope for this client). Tooltip enrichment falls back to
+ * the similarity matches surfaced via
+ * `joinedEntitiesList[].otherIdentifiers`.
  */
 export async function getBasemapAttributeAliasesByValue(
   _basemap: BasemapMetadata,
