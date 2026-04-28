@@ -709,7 +709,6 @@
   "create_visualization_button": "Create your visualization",
   "learn_more_visualizations": "Learn more about possible visualizations",
   "data_join_errors_detected": "Khartis detected errors during the join. Check the joined entities above.",
-  "replace_incorrect_entities_question": "Replace incorrect entities from the data table with those from the basemap?",
   "no_data_loaded": "No data loaded. Please import a file from the previous tab.",
   "loading": "Loading...",
   "error_prefix": "Error: ",

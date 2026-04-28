@@ -709,7 +709,6 @@
   "create_visualization_button": "Créer sa visualisation",
   "learn_more_visualizations": "En savoir plus sur les visualisations possibles",
   "data_join_errors_detected": "Khartis a détecté des erreurs lors de la jointure. Vérifier les entités jointes ci‑dessus.",
-  "replace_incorrect_entities_question": "Remplacer les entités incorrectes du tableau de données par celles du fond de carte ?",
   "no_data_loaded": "Aucune donnée chargée. Veuillez importer un fichier depuis l'onglet précédent.",
   "loading": "Chargement...",
   "error_prefix": "Erreur: ",
