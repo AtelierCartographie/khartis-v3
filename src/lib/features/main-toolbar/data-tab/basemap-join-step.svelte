@@ -116,7 +116,6 @@
   let joinLoading = $state(false);
   let suggestionsDatasetIdentity = $state<string | null>(null);
   let basemapAttributeValues = $state<string[]>([]);
-  let basemapAliasesByValue = $state<Record<string, string[]>>({});
 
   let currentJoinAbortController: AbortController | null = null;
   let previousJoinContext: string | null = null;
@@ -273,20 +272,6 @@
           error
         );
         basemapAttributeValues = [];
-      });
-
-    duckDBOrchestrator
-      .getBasemapAttributeAliasesByValue(basemap)
-      .then((aliases) => {
-        basemapAliasesByValue = aliases;
-      })
-      .catch((error) => {
-        logger.error(
-          'Failed to fetch basemap attribute aliases',
-          LogCategory.MAP,
-          error
-        );
-        basemapAliasesByValue = {};
       });
   }
 
@@ -1696,7 +1681,6 @@
     joinedEntitiesList={joinedEntitiesList}
     ignoredEntities={ignoredEntities}
     duplicateLines={dataTabState.basemapJoin.duplicateLines}
-    basemapAliasesByValue={basemapAliasesByValue}
     onFinalizeJoin={handleFinalizeJoin}
     onManualCorrection={handleManualCorrection}
     onIgnoreEntity={handleIgnoreEntity}

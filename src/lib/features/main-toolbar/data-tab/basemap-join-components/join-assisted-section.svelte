@@ -60,7 +60,6 @@
     joinedEntitiesList?: JoinedEntityRow[];
     duplicateLines?: LineReference[];
     ignoredEntities?: LineReference[];
-    basemapAliasesByValue?: Record<string, string[]>;
     onFinalizeJoin: () => void;
     onManualCorrection?: (dataValue: string, basemapValue: string) => void;
     onIgnoreEntity?: (
@@ -85,7 +84,6 @@
     joinedEntitiesList = [],
     duplicateLines = [],
     ignoredEntities = [],
-    basemapAliasesByValue = {},
     onFinalizeJoin,
     onManualCorrection,
     onIgnoreEntity,
@@ -252,17 +250,24 @@
 
   function buildRowTooltip(
     selectedBasemapValue: string | undefined,
-    fallback: string
+    extraIdentifiers: string[] | undefined = undefined
   ): RowTooltip {
     if (!selectedBasemapValue) {
       return { tags: [], text: '', disabled: true };
     }
-    const aliases = basemapAliasesByValue?.[selectedBasemapValue] ?? [];
-    const tags: string[] = [selectedBasemapValue];
-    for (const alias of aliases) {
-      if (alias && !tags.includes(alias)) tags.push(alias);
+    const seen = new SvelteSet<string>();
+    const tags: string[] = [];
+    const push = (value: string) => {
+      const trimmed = value?.trim();
+      if (!trimmed || seen.has(trimmed)) return;
+      seen.add(trimmed);
+      tags.push(trimmed);
+    };
+    push(selectedBasemapValue);
+    if (extraIdentifiers) {
+      for (const id of extraIdentifiers) push(id);
     }
-    return { tags, text: fallback, disabled: false };
+    return { tags, text: '', disabled: false };
   }
 
   const duplicateLinesByValue = $derived<Record<string, number[]>>(
@@ -481,7 +486,7 @@
                   {#each joinedEntitiesList as row (row.dataValue)}
                     {@const joinedTooltip = buildRowTooltip(
                       row.basemapValue,
-                      m.join_entities_joined_desc()
+                      row.otherIdentifiers
                     )}
                     <div class="table-row" use:observeRow={row.dataValue}>
                       <div class="table-cell cell-data" title={row.dataValue}>
@@ -612,10 +617,7 @@
               <div class="join-table-scroll" bind:this={toVerifyScrollEl}>
                 {#each deduplicatedJoinRows as row, i (i)}
                   {@const rowKey = `verify-${i}`}
-                  {@const verifyTooltip = buildRowTooltip(
-                    row.selectedMapping,
-                    m.join_to_verify_info_tooltip()
-                  )}
+                  {@const verifyTooltip = buildRowTooltip(row.selectedMapping)}
                   <div class="table-row" use:observeToVerifyRow={rowKey}>
                     <div class="table-cell cell-data">{row.dataValue}</div>
                     <div
@@ -738,8 +740,7 @@
                   {@const hasPendingSelection =
                     pendingUnrecognizedSelections.has(entity)}
                   {@const unrecognizedTooltip = buildRowTooltip(
-                    pendingUnrecognizedSelections.get(entity),
-                    m.join_unrecognized_info_tooltip()
+                    pendingUnrecognizedSelections.get(entity)
                   )}
                   <div class="table-row" use:observeUnrecognizedRow={entity}>
                     <div class="table-cell cell-data">{entity}</div>
