@@ -11,7 +11,9 @@ describe('JoinAssistedSection — selected-basemap tooltip (S1.1c.iii)', () => {
   it('defines buildRowTooltip with selectedBasemapValue and fallback inputs', () => {
     expect(source).toContain('function buildRowTooltip(');
     expect(source).toContain('selectedBasemapValue: string | undefined');
-    expect(source).toContain('fallback: string');
+    expect(source).toContain(
+      'extraIdentifiers: string[] | undefined = undefined'
+    );
   });
 
   it('disables the tooltip when no basemap value is selected', () => {
@@ -19,10 +21,8 @@ describe('JoinAssistedSection — selected-basemap tooltip (S1.1c.iii)', () => {
   });
 
   it('feeds the basemap aliases of the selected value as tags', () => {
-    expect(source).toContain(
-      'basemapAliasesByValue?.[selectedBasemapValue] ?? []'
-    );
-    expect(source).toContain('const tags: string[] = [selectedBasemapValue];');
+    expect(source).toContain('basemapAliasesByValue?.[selectedBasemapValue];');
+    expect(source).toContain('const tags: string[] = [];');
   });
 
   it('builds the joined-row tooltip from the selected basemap value', () => {

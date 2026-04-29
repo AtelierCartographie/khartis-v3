@@ -360,7 +360,9 @@
         delimiter: options.delimiter
       });
 
+      Duck.invalidateTableCache(currentDuckTable);
       await normalizeFormattedNumericColumns(currentDuckTable, Duck);
+      Duck.invalidateTableCache(currentDuckTable);
 
       const snapshot = await syncDatasetMetadataFromDuck({ force: true });
       const newRowCount = snapshot?.rowCount ?? 0;
@@ -375,6 +377,10 @@
         thousandsSeparator: options.thousandsSeparator,
         delimiter: options.delimiter
       });
+      datasetsStore.recordTransformation(
+        selectedDataset.id,
+        m.csv_options_reimport_success()
+      );
 
       currentCsvOptions = options;
       duckDBOrchestrator.bumpDatasetsVersion();
