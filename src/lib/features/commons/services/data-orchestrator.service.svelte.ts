@@ -139,15 +139,11 @@ function createDataOrchestratorService() {
         parsedData: parsedGeoJSON
       };
     } catch (error) {
-      throw new ParseError(
-        'Failed to convert KML/KMZ to GeoJSON',
-        file.fileType,
-        {
-          fileId: file.id,
-          fileName: file.name,
-          originalError: error instanceof Error ? error.message : String(error)
-        }
-      );
+      throw new ParseError(m.error_kml_conversion_failed(), file.fileType, {
+        fileId: file.id,
+        fileName: file.name,
+        originalError: error instanceof Error ? error.message : String(error)
+      });
     }
   }
 
@@ -201,7 +197,7 @@ function createDataOrchestratorService() {
   ): Promise<void> {
     try {
       if (!Duck) {
-        throw new Error('DuckDB not initialized');
+        throw new Error(m.error_duckdb_not_initialized());
       }
 
       logger.info(
@@ -330,11 +326,7 @@ function createDataOrchestratorService() {
           geometryDatasetsVersion++;
         }
       } catch (error) {
-        logger.error(
-          'Failed to process Geo file via DuckDB orchestrator',
-          LogCategory.DUCKDB,
-          error
-        );
+        logger.error(m.error_process_geo_file(), LogCategory.DUCKDB, error);
         throw error;
       }
       return;

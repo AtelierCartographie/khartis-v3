@@ -3,6 +3,7 @@ import type {
   UploadedFile
 } from '$lib/features/commons/store/create-project.types';
 import { combineUint8Arrays } from '$lib/features/commons/utils/array.utils';
+import { m } from '$lib/paraglide/messages.js';
 
 import { PROJECT_CONST } from '../constants';
 
@@ -91,7 +92,7 @@ export async function assetExists(assetId: string): Promise<boolean> {
 
     request.onsuccess = () => resolve(request.result !== undefined);
     request.onerror = () =>
-      reject(request.error || new Error('Failed to check asset presence'));
+      reject(request.error || new Error(m.error_failed_check_asset()));
   });
 }
 
@@ -116,7 +117,7 @@ async function writeAssetChunks(
       } satisfies StoredAssetChunk);
       tx.oncomplete = () => resolve();
       tx.onerror = () =>
-        reject(tx.error || new Error('Failed to write asset chunk'));
+        reject(tx.error || new Error(m.error_failed_write_asset_chunk()));
     });
   }
 }
@@ -131,7 +132,7 @@ export async function persistAssetBlob(
   if (!alreadyExists) {
     const hasHeadroom = await estimateStorageHeadroom(blob.size);
     if (!hasHeadroom) {
-      throw new Error('Insufficient browser storage for this file');
+      throw new Error(m.error_insufficient_storage());
     }
 
     await writeAssetChunks(db, ref.assetId, blob);
@@ -148,7 +149,7 @@ export async function persistAssetBlob(
       } satisfies StoredAssetMetadata);
       tx.oncomplete = () => resolve();
       tx.onerror = () =>
-        reject(tx.error || new Error('Failed to create asset metadata'));
+        reject(tx.error || new Error(m.error_failed_create_asset_metadata()));
     });
   }
 
@@ -320,7 +321,7 @@ async function loadAssetMetadata(
     request.onsuccess = () =>
       resolve((request.result as StoredAssetMetadata | undefined) ?? null);
     request.onerror = () =>
-      reject(request.error || new Error('Failed to load asset metadata'));
+      reject(request.error || new Error(m.error_failed_load_asset_metadata()));
   });
 }
 
@@ -329,7 +330,7 @@ export async function readAssetBytes(assetId: string): Promise<Uint8Array> {
   const metadata = await loadAssetMetadata(assetId);
 
   if (!metadata) {
-    throw new Error(`Missing asset metadata for ${assetId}`);
+    throw new Error(m.error_missing_asset_metadata({ assetId }));
   }
 
   const chunks = await new Promise<StoredAssetChunk[]>((resolve, reject) => {
@@ -345,12 +346,16 @@ export async function readAssetBytes(assetId: string): Promise<Uint8Array> {
         )
       );
     request.onerror = () =>
-      reject(request.error || new Error('Failed to read asset chunks'));
+      reject(request.error || new Error(m.error_failed_read_asset_chunks()));
   });
 
   if (chunks.length !== metadata.chunkCount) {
     throw new Error(
-      `Corrupted asset ${assetId}: expected ${metadata.chunkCount} chunks, got ${chunks.length}`
+      m.error_corrupted_asset({
+        assetId,
+        expectedChunks: String(metadata.chunkCount),
+        actualChunks: String(chunks.length)
+      })
     );
   }
 
@@ -400,7 +405,7 @@ async function loadProjectAssetIds(projectId: string): Promise<string[]> {
       resolve(refs);
     };
     request.onerror = () =>
-      reject(request.error || new Error('Failed to read project asset refs'));
+      reject(request.error || new Error(m.error_failed_read_project_refs()));
   });
 }
 
@@ -442,7 +447,7 @@ export async function syncProjectAssetRefs(
 
     tx.oncomplete = () => resolve();
     tx.onerror = () =>
-      reject(tx.error || new Error('Failed to sync project asset refs'));
+      reject(tx.error || new Error(m.error_failed_sync_project_refs()));
   });
 
   await deleteOrphanAssets(idsToRemove);
@@ -487,7 +492,8 @@ async function deleteAsset(assetId: string): Promise<void> {
     };
 
     tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error || new Error('Failed to delete asset'));
+    tx.onerror = () =>
+      reject(tx.error || new Error(m.error_failed_delete_asset()));
   });
 }
 
@@ -519,7 +525,7 @@ export async function removeProjectAssetRefs(projectId: string): Promise<void> {
 
     tx.oncomplete = () => resolve();
     tx.onerror = () =>
-      reject(tx.error || new Error('Failed to remove project asset refs'));
+      reject(tx.error || new Error(m.error_failed_remove_project_refs()));
   });
 
   await deleteOrphanAssets(assetIds);

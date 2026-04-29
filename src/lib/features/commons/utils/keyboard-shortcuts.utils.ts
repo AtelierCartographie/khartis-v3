@@ -29,8 +29,10 @@ export const PROJECT_SHORTCUT_TIMEOUT_MS = 2000;
 
 const APPLE_PLATFORM_PATTERN = /(mac|iphone|ipad|ipod|ios)/i;
 const CHORD_SEPARATOR = ' ';
-const PROJECT_SHORTCUT_PREFIX_LABEL_APPLE = '⌃K';
-const PROJECT_SHORTCUT_PREFIX_LABEL_OTHER = 'Ctrl+K';
+import { m } from '$lib/paraglide/messages';
+
+const PROJECT_SHORTCUT_PREFIX_LABEL_APPLE = m.shortcut_prefix_apple();
+const PROJECT_SHORTCUT_PREFIX_LABEL_OTHER = m.shortcut_prefix_other();
 
 const SIDE_NAV_SHORTCUT_LETTER: Record<SideNavShortcutKey, string> = {
   newProject: 'N',

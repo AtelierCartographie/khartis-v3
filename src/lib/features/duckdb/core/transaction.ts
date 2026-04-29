@@ -1,5 +1,6 @@
 import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import * as m from '$lib/paraglide/messages';
 import type { AsyncDuckDBConnection } from '@duckdb/duckdb-wasm';
 
 function createTransactionMutex() {
@@ -39,7 +40,7 @@ export async function runInTransaction(
   context = 'transaction'
 ): Promise<void> {
   if (!connection) {
-    throw new DuckDBError('Connection not established');
+    throw new DuckDBError(m.error_connection_not_established());
   }
   const start = performance.now();
 

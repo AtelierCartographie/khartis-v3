@@ -5,6 +5,7 @@ import {
   escapeSqlString
 } from '$lib/features/commons/utils/sanitize.utils';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
+import * as m from '$lib/paraglide/messages';
 import type { Table as ArrowTable } from 'apache-arrow';
 import { convertGeoPackageToGeoJsonFile } from '$lib/features/map/utils/geopackage-browser-fallback';
 import {
@@ -422,7 +423,7 @@ export async function readGeofile(
     }
 
     if (!tablename) {
-      throw new DuckDBError('Unable to determine target table name');
+      throw new DuckDBError(m.error_unable_determine_table());
     }
 
     if (!usedGeoPackageBrowserFallback) {

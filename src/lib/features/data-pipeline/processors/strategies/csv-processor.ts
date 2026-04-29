@@ -5,6 +5,7 @@ import {
   type UploadedFile
 } from '$lib/features/commons/store/create-project.types';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import * as m from '$lib/paraglide/messages';
 import type {
   FileProcessor,
   ProcessContext,
@@ -114,14 +115,10 @@ export const csvProcessor: FileProcessor = {
   ): Promise<ProcessorDataset> {
     const start = performance.now();
     if (!file.parsedData || !isTabularData(file.parsedData)) {
-      throw new ParseError(
-        'Invalid or missing parsed data for CSV file',
-        FileType.CSV,
-        {
-          fileId: file.id,
-          fileName: file.name
-        }
-      );
+      throw new ParseError(m.error_csv_invalid_data(), FileType.CSV, {
+        fileId: file.id,
+        fileName: file.name
+      });
     }
 
     return (

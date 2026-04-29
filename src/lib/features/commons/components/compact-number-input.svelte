@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Subtract, Add } from 'carbon-icons-svelte';
+  import { m } from '$lib/paraglide/messages.js';
 
   interface Props {
     value: number;
@@ -28,8 +29,8 @@
     disabled = false,
     id,
     showSteppers = true,
-    ariaDecrement = 'Decrement',
-    ariaIncrement = 'Increment',
+    ariaDecrement = m.compact_number_decrement(),
+    ariaIncrement = m.compact_number_increment(),
     onchange
   }: Props = $props();
 

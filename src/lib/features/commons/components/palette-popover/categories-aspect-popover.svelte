@@ -895,8 +895,7 @@
             </ul>
             {#if hiddenCategoryCount > 0}
               <p class="hidden-count-note">
-                + {hiddenCategoryCount} autres catégories (couleurs/formes générées
-                automatiquement)
+                {m.categories_hidden_count({ count: hiddenCategoryCount })}
               </p>
             {/if}
           </div>

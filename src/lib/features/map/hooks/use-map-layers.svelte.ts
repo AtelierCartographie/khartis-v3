@@ -517,6 +517,19 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       return cachedTable;
     }
 
+    if (joinedBasemapId) {
+      const loadedCentroidTable = basemapService.getBasemapLayerTableByType(
+        joinedBasemapId,
+        BasemapLayerType.CENTROID
+      );
+
+      if (loadedCentroidTable) {
+        representativePointTableCache.set(sourceTable, loadedCentroidTable);
+        getCachedRepresentativeGeometryInfo(loadedCentroidTable);
+        return loadedCentroidTable;
+      }
+    }
+
     if (representativePointLoadFailures.has(sourceTable)) {
       return null;
     }
@@ -631,8 +644,6 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       const activeVisualizations = getActiveVisualizations();
       const visualizationsToRender =
         getVisualizationRenderOrder(activeVisualizations);
-      const hasRenderableUserData =
-        tables.size > 0 || geoJSONs.size > 0 || Boolean(splitData?.size);
 
       // Only apply modelMatrix in the Deck.gl OrthographicView engine.
       // In MapLibre mode (deckOverlay), the map handles projection including globe
@@ -686,9 +697,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       // In MapLibre mode, the tiled basemap provides the background (OSM, Carte Facile, etc.)
       const shouldShowBasemapLayers = shouldShowOrthographicBasemapLayers({
         isOrthographicMode,
-        isOSMActive,
-        hasReferenceBasemap: Boolean(basemapStyleStore.referenceBasemapId),
-        hasUserData: hasRenderableUserData
+        isOSMActive
       });
 
       // Basemap layers are split into background (terre, mers, lacs, relief)
@@ -911,7 +920,8 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
 
       if (shouldRenderDatasetFallbacks) {
         for (const [datasetId, table] of tables) {
-          if (!getDatasetJoinedBasemap(datasetId)) {
+          const joinedBasemapId = getDatasetJoinedBasemap(datasetId);
+          if (!joinedBasemapId) {
             continue;
           }
 
@@ -920,7 +930,12 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             continue;
           }
 
-          prefetchRepresentativePointTable(datasetId, table, geometryInfo);
+          prefetchRepresentativePointTable(
+            datasetId,
+            table,
+            geometryInfo,
+            joinedBasemapId
+          );
         }
       }
 

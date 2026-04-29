@@ -264,7 +264,7 @@
   </div>
 {:else if loadingLevels}
   <div class="field-group">
-    <span class="field-label">…</span>
+    <span class="field-label">{m.ellipsis_indicator()}</span>
   </div>
 {/if}
 

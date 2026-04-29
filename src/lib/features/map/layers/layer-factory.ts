@@ -147,14 +147,24 @@ import { createCompatibleSolidPolygonLayerProps } from '../utils/solid-polygon-l
 function ctxRowAccessor<T>(
   ctx: LayerContext,
   jsTable: ArrowTable,
-  accessor: (row: Record<string, unknown>) => T
+  accessor: (row: Record<string, unknown>) => T,
+  geometryTable = jsTable
 ): (featureId: number) => T {
   const { splitDatasetTable, splitFeatureIdColumn } = ctx;
   if (splitDatasetTable && splitFeatureIdColumn) {
+    const featureIdColumn = resolveSplitMappingFeatureIdColumn(
+      geometryTable,
+      splitFeatureIdColumn
+    );
+
+    if (!featureIdColumn) {
+      return rowAccessor(jsTable, accessor);
+    }
+
     return splitRowAccessor(
-      jsTable,
+      geometryTable,
       splitDatasetTable,
-      splitFeatureIdColumn,
+      featureIdColumn,
       'basemap_id',
       (row) => accessor((row ?? {}) as Record<string, unknown>)
     );
@@ -358,14 +368,21 @@ function attachBinaryPickingMetadata(
   ctx?: LayerContext
 ): void {
   if (ctx?.splitDatasetTable && ctx.splitFeatureIdColumn) {
+    const featureIdColumn = resolveSplitMappingFeatureIdColumn(
+      sourceTable,
+      ctx.splitFeatureIdColumn
+    );
+
     target.khartisSourceTable = ctx.splitDatasetTable;
     target.khartisSplitDatasetTable = ctx.splitDatasetTable;
-    target.khartisSplitDatasetRowByGeomRow = buildSplitDatasetRowMapping(
-      sourceTable,
-      ctx.splitDatasetTable,
-      ctx.splitFeatureIdColumn,
-      'basemap_id'
-    );
+    if (featureIdColumn) {
+      target.khartisSplitDatasetRowByGeomRow = buildSplitDatasetRowMapping(
+        sourceTable,
+        ctx.splitDatasetTable,
+        featureIdColumn,
+        'basemap_id'
+      );
+    }
   } else {
     target.khartisSourceTable = sourceTable;
   }
@@ -1317,18 +1334,30 @@ function createRepresentativePointSymbolLayers(
   const fillColorByFeatureId = ctxRowAccessor(
     ctx,
     jsTable,
-    resolveFillColorForRow
+    resolveFillColorForRow,
+    representativePointSource.table
   );
   const lineColorByFeatureId = ctxRowAccessor(
     ctx,
     jsTable,
-    resolveLineColorForRow
+    resolveLineColorForRow,
+    representativePointSource.table
   );
-  const radiusByFeatureId = ctxRowAccessor(ctx, jsTable, resolveRadiusForRow);
+  const radiusByFeatureId = ctxRowAccessor(
+    ctx,
+    jsTable,
+    resolveRadiusForRow,
+    representativePointSource.table
+  );
 
   const scatterProps = createScatterplotLayerProps(pointData);
   const scatterBinaryData = cloneScatterBinaryData(scatterProps);
-  attachBinaryPickingMetadata(scatterBinaryData, jsTable, pointData, ctx);
+  attachBinaryPickingMetadata(
+    scatterBinaryData,
+    representativePointSource.table,
+    pointData,
+    ctx
+  );
   scatterBinaryData.attributes.getFillColor = pointColorAttr(
     pointData,
     fillColorByFeatureId
@@ -1362,9 +1391,10 @@ function createRepresentativePointSymbolLayers(
     pointConfig.mode === SymbolMode.CATEGORIES &&
     categoryShapeMode !== CategoryShapeMode.UNIQUE &&
     !!pointCategoryColumn;
+  const symbolAttributeTable = ctx.splitDatasetTable ?? jsTable;
   const categoryShapeVector =
     useCategoryShape && pointCategoryColumn
-      ? jsTable.getChild(pointCategoryColumn)
+      ? symbolAttributeTable.getChild(pointCategoryColumn)
       : null;
   const orderedCategoryLabels = (() => {
     if (!useCategoryShape || !categoryShapeVector) return null;
@@ -1372,7 +1402,7 @@ function createRepresentativePointSymbolLayers(
     if (labels && labels.length > 0) return labels;
     const seen = new Set<string>();
     const out: string[] = [];
-    for (let i = 0; i < jsTable.numRows; i += 1) {
+    for (let i = 0; i < symbolAttributeTable.numRows; i += 1) {
       const raw = categoryShapeVector.get(i);
       if (raw === null || raw === undefined) continue;
       const key = String(raw);
@@ -1424,20 +1454,28 @@ function createRepresentativePointSymbolLayers(
     return map;
   })();
 
-  const shapeByFeatureId = ctxRowAccessor(ctx, jsTable, (row) => {
-    if (pointMissingColumn && isMissingThematicValue(row[pointMissingColumn])) {
-      return missingShapeOrdinal;
-    }
-    if (useCategoryShape && categoryShapeMap && pointCategoryColumn) {
-      const raw = row[pointCategoryColumn];
-      if (raw !== null && raw !== undefined) {
-        const key = String(raw);
-        const mapped = categoryShapeMap.get(key);
-        if (mapped !== undefined) return mapped;
+  const shapeByFeatureId = ctxRowAccessor(
+    ctx,
+    jsTable,
+    (row) => {
+      if (
+        pointMissingColumn &&
+        isMissingThematicValue(row[pointMissingColumn])
+      ) {
+        return missingShapeOrdinal;
       }
-    }
-    return shapeOrdinal;
-  });
+      if (useCategoryShape && categoryShapeMap && pointCategoryColumn) {
+        const raw = row[pointCategoryColumn];
+        if (raw !== null && raw !== undefined) {
+          const key = String(raw);
+          const mapped = categoryShapeMap.get(key);
+          if (mapped !== undefined) return mapped;
+        }
+      }
+      return shapeOrdinal;
+    },
+    representativePointSource.table
+  );
   scatterBinaryData.attributes.getShape = {
     value: (() => {
       const featureIds = scatterBinaryData.featureIds;
@@ -1454,33 +1492,39 @@ function createRepresentativePointSymbolLayers(
   };
 
   if (categoryRankRadiusMap && pointCategoryColumn) {
+    const categoryRankRadiusByFeatureId = ctxRowAccessor(
+      ctx,
+      jsTable,
+      (row) => {
+        if (isDisabledPointCategoryRow(row)) {
+          return 0;
+        }
+        if (
+          pointMissingColumn &&
+          isMissingThematicValue(row[pointMissingColumn])
+        ) {
+          return showMissingPoints ? missingPointRadius : 0;
+        }
+        const raw = row[pointCategoryColumn];
+        if (raw !== null && raw !== undefined) {
+          const mapped = categoryRankRadiusMap.get(String(raw));
+          if (mapped !== undefined) {
+            return mapped;
+          }
+        }
+        return uniquePointRadius;
+      },
+      representativePointSource.table
+    );
     const featureIds = scatterBinaryData.featureIds;
-    const length = featureIds ? featureIds.length : jsTable.numRows;
+    const length = featureIds
+      ? featureIds.length
+      : symbolAttributeTable.numRows;
     const radiusArr = new Float32Array(length);
     for (let i = 0; i < length; i += 1) {
-      const rowIdx = featureIds ? featureIds[i] : i;
-      const row = jsTable.get(rowIdx) as DeckDataRow | null;
-      if (row && isDisabledPointCategoryRow(row)) {
-        radiusArr[i] = 0;
-        continue;
-      }
-      if (
-        pointMissingColumn &&
-        row &&
-        isMissingThematicValue(row[pointMissingColumn])
-      ) {
-        radiusArr[i] = showMissingPoints ? missingPointRadius : 0;
-        continue;
-      }
-      const raw = row ? row[pointCategoryColumn] : null;
-      if (raw !== null && raw !== undefined) {
-        const mapped = categoryRankRadiusMap.get(String(raw));
-        if (mapped !== undefined) {
-          radiusArr[i] = mapped;
-          continue;
-        }
-      }
-      radiusArr[i] = uniquePointRadius;
+      radiusArr[i] = categoryRankRadiusByFeatureId(
+        featureIds ? featureIds[i] : i
+      );
     }
     scatterBinaryData.attributes.getRadius = { value: radiusArr, size: 1 };
   }

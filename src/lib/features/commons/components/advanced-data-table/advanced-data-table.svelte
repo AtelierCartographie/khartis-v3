@@ -341,7 +341,9 @@
         newName: trimmedNewName
       });
 
-      recordTransformation(`Colonne renommée: ${oldName} → ${trimmedNewName}`);
+      recordTransformation(
+        m.history_column_renamed({ oldName, newName: trimmedNewName })
+      );
 
       if (dataset?.sourceFileId) {
         await projectStore.addColumnTransformation(dataset.sourceFileId, {
@@ -589,11 +591,7 @@
             sortColumnType: currentSortColumnType,
             sortOrder: currentSortOrder
           }).catch((error) => {
-            logger.error(
-              'Error scrolling to current search result',
-              LogCategory.UI,
-              error
-            );
+            logger.error(m.error_scroll_search_result(), LogCategory.UI, error);
           });
         });
       }, SCROLL_TO_CELL_DEBOUNCE_MS);

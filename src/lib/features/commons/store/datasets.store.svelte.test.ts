@@ -254,6 +254,66 @@ describe('datasetsStore persisted view state', () => {
     expect(datasetsStore.datasets[0]?.tableName).toBe('table_dataset-asset');
   });
 
+  it('reuses an in-memory preprocessed DuckDB table during project creation', async () => {
+    await datasetsStore.addFile(
+      makeUploadedFile('source-preprocessed', 'data.csv', {
+        type: 'text/csv',
+        fileType: FileType.CSV,
+        duckdbTableName: 'data_csv_123',
+        parsedData: [{ country: 'France' }],
+        statistics: {
+          country: {
+            type: 'text',
+            count: 1
+          }
+        }
+      }),
+      true
+    );
+
+    expect(mocks.processUploadedFileMock).not.toHaveBeenCalled();
+    expect(datasetsStore.datasets[0]).toMatchObject({
+      id: 'source-preprocessed',
+      sourceFileId: 'source-preprocessed',
+      tableName: 'data_csv_123',
+      rowCount: 1
+    });
+  });
+
+  it('reuses a fresh preprocessed table when project save already created an asset ref', async () => {
+    await datasetsStore.addFile(
+      makeUploadedFile('source-fresh-asset', 'data.csv', {
+        content: 'country\nFrance',
+        type: 'text/csv',
+        fileType: FileType.CSV,
+        duckdbTableName: 'fresh_data_csv_123',
+        parsedData: [{ country: 'France' }],
+        statistics: {
+          country: {
+            type: 'text',
+            count: 1
+          }
+        },
+        assetRef: {
+          assetId: 'asset-fresh',
+          originalName: 'data.csv',
+          mimeType: 'text/csv',
+          size: 16,
+          kind: 'primary'
+        }
+      }),
+      true
+    );
+
+    expect(mocks.processUploadedFileMock).not.toHaveBeenCalled();
+    expect(datasetsStore.datasets[0]).toMatchObject({
+      id: 'source-fresh-asset',
+      sourceFileId: 'source-fresh-asset',
+      tableName: 'fresh_data_csv_123',
+      rowCount: 1
+    });
+  });
+
   it('treats persisted source-file row deletions and column transformations as modifications after restore', () => {
     datasetsStore.addProcessedDataset(makeDataset('dataset-1', 'source-a'));
     mocks.currentProject = {

@@ -18,6 +18,7 @@ import { Duck } from '$lib/features/duckdb';
 import * as m from '$lib/paraglide/messages';
 
 const TABULAR_TEXT_EXTENSION = 'txt';
+const DUPLICATE_SCAN_ROW_LIMIT = 10_000;
 
 function detectFileTypeFromName(filename: string): FileType {
   const ext = getFileExtension(filename);
@@ -282,6 +283,7 @@ function createCsvProcessor(callbacks: ProcessingCallbacks): FileProcessor {
     callbacks.onDataUpdate(uploadedFile.id, {
       parsedData: tabularData,
       content: originalContent,
+      duckdbTableName: tableName,
       statistics
     });
 
@@ -296,7 +298,19 @@ function createCsvProcessor(callbacks: ProcessingCallbacks): FileProcessor {
     }
 
     callbacks.onStatusChange(uploadedFile.id, FileStatus.COMPLETE);
-    computeDuplicatesAsync(uploadedFile.id, tableName, Duck);
+    if (rowCount <= DUPLICATE_SCAN_ROW_LIMIT) {
+      void computeDuplicatesAsync(uploadedFile.id, tableName, Duck);
+    } else {
+      logger.info(
+        'Skipping duplicate scan for large CSV import',
+        LogCategory.FILE,
+        {
+          fileId: uploadedFile.id,
+          fileName: file.name,
+          rowCount
+        }
+      );
+    }
   }
 
   return { process };

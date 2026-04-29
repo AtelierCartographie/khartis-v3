@@ -124,5 +124,5 @@ export function resolveDiscretizationLabel(
   const numClasses = classification?.numClasses ?? classification?.classes ?? 5;
   const methodLabel = METHOD_LABELS[method]?.() ?? String(method);
 
-  return `${methodLabel}, ${numClasses} classes`;
+  return `${methodLabel}, ${numClasses} ${m.discretization_classes_suffix()}`;
 }

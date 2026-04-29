@@ -91,6 +91,7 @@
         )
       )
   );
+  const supportsCatalogGeometry = $derived(Boolean(currentMetadata));
   const supportsLakesRivers = $derived(
     !isCustomBasemap &&
       (availableMetadataLayerTypes.has(BasemapLayerType.POLYGON) ||
@@ -265,9 +266,18 @@
       {:else}
         <ExpandableSection
           title={m.basemap_layer_terre()}
+          description={!supportsCatalogGeometry
+            ? m.basemap_layer_unavailable()
+            : undefined}
           showToggle={true}
           toggleVariant="suggestions"
-          toggleChecked={getConfig('terre')?.visible ?? true}
+          toggleChecked={supportsCatalogGeometry &&
+            (getConfig('terre')?.visible ?? true)}
+          toggleDisabled={!supportsCatalogGeometry}
+          disabled={!supportsCatalogGeometry}
+          disabledReason={!supportsCatalogGeometry
+            ? m.basemap_layer_unavailable_reason()
+            : undefined}
           onToggleChange={(checked) => handleLayerToggle('terre', checked)}
         >
           <LayerConfigTerre
@@ -329,9 +339,18 @@
 
         <ExpandableSection
           title={m.basemap_layer_relief()}
+          description={!supportsCatalogGeometry
+            ? m.basemap_layer_unavailable()
+            : undefined}
           showToggle={true}
           toggleVariant="suggestions"
-          toggleChecked={getConfig('relief')?.visible ?? true}
+          toggleChecked={supportsCatalogGeometry &&
+            (getConfig('relief')?.visible ?? true)}
+          toggleDisabled={!supportsCatalogGeometry}
+          disabled={!supportsCatalogGeometry}
+          disabledReason={!supportsCatalogGeometry
+            ? m.basemap_layer_unavailable_reason()
+            : undefined}
           onToggleChange={(checked) => handleLayerToggle('relief', checked)}
         >
           <LayerConfigRelief
@@ -383,18 +402,30 @@
 
         <ExpandableSection
           title={m.basemap_layer_frontieres()}
+          description={!supportsCatalogGeometry
+            ? m.basemap_layer_unavailable()
+            : undefined}
           showToggle={true}
           toggleVariant="suggestions"
-          toggleChecked={getConfig('frontieres')?.visible ?? true}
+          toggleChecked={supportsCatalogGeometry &&
+            (getConfig('frontieres')?.visible ?? true)}
+          toggleDisabled={!supportsCatalogGeometry}
+          disabled={!supportsCatalogGeometry}
+          disabledReason={!supportsCatalogGeometry
+            ? m.basemap_layer_unavailable_reason()
+            : undefined}
           onToggleChange={(checked) => handleLayerToggle('frontieres', checked)}
         >
           <LayerConfigSimple
             showColor={true}
             showDotted={true}
-            disableDotted={!supportsFrontieresDotted}
-            dottedDisabledReason={!supportsFrontieresDotted
-              ? m.basemap_dotted_unavailable_reason()
-              : undefined}
+            disableDotted={!supportsCatalogGeometry ||
+              !supportsFrontieresDotted}
+            dottedDisabledReason={!supportsCatalogGeometry
+              ? m.basemap_layer_unavailable_reason()
+              : !supportsFrontieresDotted
+                ? m.basemap_dotted_unavailable_reason()
+                : undefined}
             showThickness={true}
             color={getConfig('frontieres')?.color}
             dotted={getConfig('frontieres')?.dotted}

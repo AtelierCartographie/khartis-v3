@@ -36,6 +36,10 @@
     globalState.isMobileView ? 'start' : 'center'
   );
 
+  const zoomButtonTooltipPosition = $derived(
+    globalState.isMobileView ? 'bottom' : 'top'
+  );
+
   const zoomItems = $derived([
     {
       icon: Earth,
@@ -352,7 +356,7 @@
           class="zoom-button"
           icon={Subtract}
           iconDescription={m.zoom_out()}
-          tooltipPosition="top"
+          tooltipPosition={zoomButtonTooltipPosition}
           on:click={handleZoomOut}
         />
 
@@ -362,7 +366,7 @@
           class="zoom-button"
           icon={Add}
           iconDescription={m.zoom_in()}
-          tooltipPosition="top"
+          tooltipPosition={zoomButtonTooltipPosition}
           on:click={handleZoomIn}
         />
       </div>
@@ -705,13 +709,23 @@
 
   @media (max-width: 1023px) {
     .zoom-toolbar-shell {
-      bottom: calc(60px + env(safe-area-inset-bottom, 0px) + 70px);
+      top: calc(var(--cds-header-height) + var(--cds-spacing-03));
       left: var(--cds-spacing-03);
+      bottom: auto;
       gap: 6px;
+      z-index: var(--z-mobile-toolbar);
     }
 
     .zoom-toolbar {
-      width: 172px;
+      width: 100px;
+    }
+
+    .zoom-section {
+      grid-template-columns: auto;
+    }
+
+    .zoom-value {
+      display: none;
     }
 
     #khartis-zoom-toolbar :global(.zoom-mode-tabs .toggle-tab.full-width) {
@@ -730,8 +744,10 @@
     .zoom-debug-panel {
       position: fixed;
       top: calc(var(--cds-header-height) + var(--cds-spacing-03));
-      left: var(--cds-spacing-03);
+      left: auto;
       right: var(--cds-spacing-03);
+      width: auto;
+      min-width: 0;
       height: 56px;
       padding: 0 0.65rem;
       background: rgba(244, 244, 244, 0.9);

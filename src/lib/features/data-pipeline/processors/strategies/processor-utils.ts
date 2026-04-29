@@ -1,5 +1,6 @@
 import { ParseError } from '$lib/features/commons/errors/pipeline.errors';
 import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
+import * as m from '$lib/paraglide/messages';
 
 export function isTabularData(
   data: unknown
@@ -49,11 +50,10 @@ export function getFileForDuckDB(
     return new File([file.content], file.name, { type: fallbackMime });
   }
 
-  throw new ParseError(
-    'Missing original file content for DuckDB ingestion',
-    file.fileType,
-    { fileId: file.id, fileName: file.name }
-  );
+  throw new ParseError(m.error_missing_file_content_duckdb(), file.fileType, {
+    fileId: file.id,
+    fileName: file.name
+  });
 }
 
 export async function getArrayBuffer(file: UploadedFile): Promise<ArrayBuffer> {
@@ -69,7 +69,7 @@ export async function getArrayBuffer(file: UploadedFile): Promise<ArrayBuffer> {
     return new TextEncoder().encode(file.content).buffer;
   }
 
-  throw new ParseError('Missing file content for processing', file.fileType, {
+  throw new ParseError(m.error_missing_file_content(), file.fileType, {
     fileId: file.id,
     fileName: file.name
   });
