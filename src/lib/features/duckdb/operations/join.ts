@@ -6,6 +6,7 @@ import {
   escapeIdentifier,
   escapeSqlString
 } from '$lib/features/commons/utils/sanitize.utils';
+import * as m from '$lib/paraglide/messages';
 import { getTableMetadata, markTableMutated } from '../cache/cache-manager';
 import { DUCK_CONST, TABLE_PATTERNS } from '../constants';
 import { executeQuery } from '../core/query';
@@ -39,17 +40,15 @@ export async function joinById(
 
   if (!basemaps_table && !basemap_table) {
     throw new DataValidationError(
-      'Either basemaps_table or basemap_table must be provided in options.',
+      m.error_basemaps_table_required(),
       undefined,
       { options }
     );
   }
   if (basemap_table && !basemap_id) {
-    throw new DataValidationError(
-      'basemap_id must be provided when using basemap_table.',
-      'basemap_id',
-      { basemap_table }
-    );
+    throw new DataValidationError(m.error_basemap_id_required(), 'basemap_id', {
+      basemap_table
+    });
   }
 
   const escapedBasemapTable = basemap_table
@@ -143,7 +142,7 @@ export async function joinById(
 
     join_across_query = buildJoinAcrossSQL(basemap_join_ref_name);
   } else {
-    throw new DataValidationError('Invalid options configuration', undefined, {
+    throw new DataValidationError(m.error_invalid_options_config(), undefined, {
       options
     });
   }
@@ -187,14 +186,10 @@ export async function applyJoinAssociation(
 ): Promise<void> {
   const { join } = getTableMetadata(ctx, table);
   if (!join) {
-    throw new DuckDBError(
-      'No join association found for the specified table',
-      undefined,
-      {
-        table,
-        basemap
-      }
-    );
+    throw new DuckDBError(m.error_no_join_association(), undefined, {
+      table,
+      basemap
+    });
   }
   const { id, join_results_name } = join;
   const escapedTable = escapeIdentifier(table);

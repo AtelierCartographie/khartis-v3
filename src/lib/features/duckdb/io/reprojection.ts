@@ -1,4 +1,5 @@
 import proj4 from 'proj4';
+import * as m from '$lib/paraglide/messages';
 import { GEO_CONSTANTS } from '../constants';
 
 export const EPSG_DEFINITIONS: Record<string, string> = {
@@ -54,7 +55,7 @@ export function reprojectPoint(
     if (!isProjectionSupported(fromNormalized)) {
       return {
         success: false,
-        error: `Unsupported source projection: ${fromCRS}`
+        error: m.error_unsupported_source_projection({ fromCRS })
       };
     }
 
@@ -63,7 +64,7 @@ export function reprojectPoint(
     if (!result || !isFinite(result[0]) || !isFinite(result[1])) {
       return {
         success: false,
-        error: 'Reprojection produced invalid coordinates'
+        error: m.error_reprojection_invalid()
       };
     }
 

@@ -1,3 +1,4 @@
+import * as m from '$lib/paraglide/messages';
 import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
 import {
   visualizationStore,
@@ -83,7 +84,7 @@ export function useColumnOperations(
       }
 
       props.onRecordTransformation?.(
-        `Affinage (${operation}) sur ${columnName}`
+        m.history_column_refinement({ operation, columnName })
       );
     } catch (err) {
       logger.error('Error refining column', LogCategory.UI, err);
@@ -108,7 +109,7 @@ export function useColumnOperations(
     await duckDBOrchestrator.changeColumnType(tableName, columnName, duckType);
     await props.onColumnsChange();
     props.onRecordTransformation?.(
-      `Type changé (${newType}) sur ${columnName}`
+      m.history_column_type_changed({ newType, columnName })
     );
   }
 
@@ -133,7 +134,7 @@ export function useColumnOperations(
       await duckDBOrchestrator.dropColumn(tableName, columnName);
       await props.onColumnsChange();
       props.onColumnDeleted?.(columnName);
-      props.onRecordTransformation?.(`Colonne supprimée: ${columnName}`);
+      props.onRecordTransformation?.(m.history_column_deleted({ columnName }));
     } catch (err) {
       logger.error('Error deleting column', LogCategory.UI, err);
     }

@@ -50,7 +50,7 @@ describe('[D-06][D-07] collectGPSRangeWarnings', () => {
       ]
     });
     expect(warnings.length).toBeGreaterThan(0);
-    expect(warnings[0]).toMatch(/swapped/i);
+    expect(warnings[0]).toMatch(/swapped|invers/i);
   });
 
   it('flags latitude out of range when only latitude contains bad values', () => {
@@ -112,6 +112,6 @@ describe('[D-06][D-07] GeoColumnDetector.detectGeoColumns surfaces range warning
       sampleSize: rows.length
     });
     const joined = result.warnings.join(' | ');
-    expect(joined).toMatch(/outside|range/i);
+    expect(joined).toMatch(/outside|range|hors/i);
   });
 });

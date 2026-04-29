@@ -1,17 +1,13 @@
 export function shouldShowOrthographicBasemapLayers({
   isOrthographicMode,
-  isOSMActive,
-  hasReferenceBasemap,
-  hasUserData
+  isOSMActive
 }: {
   isOrthographicMode: boolean;
   isOSMActive: boolean;
-  hasReferenceBasemap: boolean;
-  hasUserData: boolean;
 }): boolean {
   if (isOSMActive || !isOrthographicMode) {
     return false;
   }
 
-  return hasReferenceBasemap || !hasUserData;
+  return true;
 }

@@ -1,3 +1,4 @@
+import { m } from '$lib/paraglide/messages.js';
 import Textbox from '@borgar/textbox';
 import { extent, ticks as d3_ticks } from 'd3-array';
 import { draw_categorical_legend } from './categorical';
@@ -118,7 +119,7 @@ export function draw_symbols_legend(
     .map((d) => Textbox.measureText(d.toLocaleString(), font));
   const max_label_width = Math.max(...label_widths) + label_safety_padding;
   const nodata_dash_width = 6;
-  const nodata_label = options.nodataLabel ?? 'No data';
+  const nodata_label = options.nodataLabel ?? m.legend_no_data_label();
   const nodata_dash_x = type === 'circle' ? y_max + margin : margin;
   const nodata_label_x = nodata_dash_x + nodata_dash_width + 15;
   const nodata_label_width = nodata

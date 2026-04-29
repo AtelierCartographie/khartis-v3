@@ -1,3 +1,4 @@
+import { m } from '$lib/paraglide/messages.js';
 import type { VisualizationConfig } from '../store/visualization.store.svelte';
 import { datasetsStore } from '../store/datasets.store.svelte';
 import { deepClone } from './clone.utils';
@@ -470,7 +471,7 @@ export async function generateFacetVisualizations(
   const tableName = baseViz.datasetId;
 
   if (!tableName) {
-    throw new Error('Base visualization has no dataset');
+    throw new Error(m.error_facet_base_viz_no_dataset());
   }
 
   const facetConfigs: VisualizationConfig[] = [];

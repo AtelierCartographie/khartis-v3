@@ -1,3 +1,4 @@
+import { m } from '$lib/paraglide/messages';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -295,6 +296,6 @@ describe('generateFacetVisualizations', () => {
         SCALE_MODE.SHARED,
         FACET_SLOT.POLYGON_VALUE
       )
-    ).rejects.toThrow('Base visualization has no dataset');
+    ).rejects.toThrow(m.error_facet_base_viz_no_dataset());
   });
 });

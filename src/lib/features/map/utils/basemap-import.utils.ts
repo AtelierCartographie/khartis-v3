@@ -361,8 +361,8 @@ function buildBasemapLayers(
 
   if (isPolygonBasemapLayerType(layerType)) {
     layers.push({
-      title_fr: 'Limites',
-      title_en: 'Limits',
+      title_fr: m.layer_title_limits(),
+      title_en: m.layer_title_limits(),
       type: BasemapLayerType.LIMIT,
       file: getBasemapInnerlinesTableName(tableName),
       style: null
@@ -374,8 +374,8 @@ function buildBasemapLayers(
   }
 
   layers.push({
-    title_fr: 'Centroïdes',
-    title_en: 'Centroids',
+    title_fr: m.layer_title_centroids(),
+    title_en: m.layer_title_centroids(),
     type: BasemapLayerType.CENTROID,
     file: getBasemapCentroidsTableName(tableName),
     style: null
@@ -494,7 +494,15 @@ async function rebuildPolygonDerivedTables(
   try {
     await duck.query(`
       CREATE OR REPLACE TABLE "${escapeIdentifier(innerlinesTableName)}" AS
-      FROM extract_innerlines('${escapeSqlString(tableName)}')
+      WITH extracted AS (
+        SELECT ST_CollectionExtract(geom, 2) AS geom
+        FROM extract_innerlines('${escapeSqlString(tableName)}')
+        WHERE geom IS NOT NULL
+      )
+      SELECT geom
+      FROM extracted
+      WHERE NOT ST_IsEmpty(geom)
+        AND CAST(ST_GeometryType(geom) AS VARCHAR) IN ('LINESTRING', 'MULTILINESTRING')
     `);
   } catch (error) {
     logger.warn(
@@ -708,8 +716,8 @@ export function createOSMBasemap(
     proj_to: { type: 'identity' },
     layers: [
       {
-        title_fr: 'base',
-        title_en: 'base',
+        title_fr: m.layer_title_base(),
+        title_en: m.layer_title_base(),
         type: BasemapLayerType.POLYGON,
         style: null
       }

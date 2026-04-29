@@ -138,17 +138,14 @@ export async function readFileContent(
         if (onProgress) onProgress(100);
         resolve(reader.result);
       } else {
-        reject(new ParseError('Failed to read file', detectFileType(file)));
+        reject(
+          new ParseError(m.error_file_read_failed(), detectFileType(file))
+        );
       }
     };
 
     reader.onerror = () => {
-      reject(
-        new ParseError(
-          `Error reading file: ${reader.error?.message}`,
-          detectFileType(file)
-        )
-      );
+      reject(new ParseError(m.error_file_read_failed(), detectFileType(file)));
     };
 
     reader.onprogress = (event) => {

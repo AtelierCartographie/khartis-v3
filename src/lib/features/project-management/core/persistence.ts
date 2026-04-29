@@ -1,5 +1,6 @@
 import { estimateProjectStorageSize } from '$lib/features/commons/utils/size-estimation.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { m } from '$lib/paraglide/messages.js';
 import type { SerializedProject } from '$lib/types/serialization.types';
 import { PROJECT_CONST } from '../constants';
 import type { KhartisProject, SavedProjectMetadata } from '../types';
@@ -42,7 +43,7 @@ export async function openDatabase(): Promise<IDBDatabase> {
       PROJECT_CONST.DB.VERSION
     );
 
-    request.onerror = () => reject(new Error('Failed to open IndexedDB'));
+    request.onerror = () => reject(new Error(m.error_failed_open_indexeddb()));
 
     request.onsuccess = () => resolve(request.result);
 
@@ -199,7 +200,7 @@ export async function saveProject(project: KhartisProject): Promise<void> {
     store.put(serialized);
     transaction.oncomplete = () => resolve();
     transaction.onerror = () =>
-      reject(transaction.error || new Error('Failed to save project'));
+      reject(transaction.error || new Error(m.error_failed_save_project()));
   });
 
   await syncProjectAssetRefs(project.id, project.data?.sourceFiles ?? []);
@@ -261,7 +262,8 @@ export async function loadSerializedProject(
       }
     };
 
-    request.onerror = () => reject(new Error('Failed to load project'));
+    request.onerror = () =>
+      reject(new Error(m.error_failed_load_project_persistence()));
   });
 }
 
@@ -285,7 +287,10 @@ export async function removeProject(id: string): Promise<void> {
     store.delete(id);
     transaction.oncomplete = () => resolve();
     transaction.onerror = () =>
-      reject(transaction.error || new Error('Failed to delete project'));
+      reject(
+        transaction.error ||
+          new Error(m.error_failed_delete_project_persistence())
+      );
   });
 
   await removeProjectAssetRefs(id);

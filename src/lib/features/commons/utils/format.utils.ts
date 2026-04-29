@@ -9,10 +9,18 @@ function resolveLocale(): string {
   return LOCALE_MAP[getLocale()] ?? 'en-US';
 }
 
-export function formatFileSize(bytes: number): string {
-  if (bytes === 0) return '0 B';
+import { m } from '$lib/paraglide/messages.js';
 
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+export function formatFileSize(bytes: number): string {
+  if (bytes === 0) return m.file_size_zero();
+
+  const units = [
+    m.file_size_unit_b(),
+    m.file_size_unit_kb(),
+    m.file_size_unit_mb(),
+    m.file_size_unit_gb(),
+    m.file_size_unit_tb()
+  ];
   const k = 1024;
   const i = Math.floor(Math.log(bytes) / Math.log(k));
 

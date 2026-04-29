@@ -103,7 +103,9 @@
   );
   const scaleDistanceHelperText = $derived.by(() => {
     const unitLabel =
-      geoState.scale.units === DistanceUnit.KILOMETERS ? 'km' : 'mi';
+      geoState.scale.units === DistanceUnit.KILOMETERS
+        ? m.scale_unit_km()
+        : m.scale_unit_mi();
 
     return m.geo_scale_max_distance_current_view({
       distance: formatScaleDistance(scaleDistanceLimit),

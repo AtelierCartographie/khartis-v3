@@ -63,7 +63,7 @@ async function prerenderWebgl(pixelRatio: number): Promise<() => void> {
 
   await new Promise<void>((resolve, reject) => {
     const timeout = setTimeout(
-      () => reject(new Error('Map render timeout during export')),
+      () => reject(new Error(m.error_map_render_timeout())),
       10000
     );
     // Register BEFORE setPixelRatio — JS is single-threaded, no rAF can fire between
@@ -573,7 +573,7 @@ export async function exportMapToJpg(
   })();
 
   if (!pageCanvas) {
-    return Promise.reject(new Error('Failed to capture page'));
+    return Promise.reject(new Error(m.error_capture_page_failed()));
   }
 
   // Step 2 — composite into an exact opts.width × opts.height canvas.
@@ -582,9 +582,7 @@ export async function exportMapToJpg(
   const offscreen = new OffscreenCanvas(opts.width, opts.height);
   const ctx = offscreen.getContext('2d');
   if (!ctx) {
-    return Promise.reject(
-      new Error('Failed to get 2D context for export canvas')
-    );
+    return Promise.reject(new Error(m.error_export_canvas_context_failed()));
   }
 
   ctx.fillStyle = '#ffffff';

@@ -1,3 +1,4 @@
+import { m } from '$lib/paraglide/messages.js';
 import Textbox from '@borgar/textbox';
 import { bisectLeft, bisectRight } from 'd3-array';
 import {
@@ -77,7 +78,7 @@ export function draw_quanti_color_legend(
   const nodata_gap = 10;
   const nodata_box_h = box_height;
   const nodata_box_w = Math.round(fontSize * 2);
-  const nodata_label = options.nodataLabel ?? 'No data';
+  const nodata_label = options.nodataLabel ?? m.legend_no_data_label();
   const nodata_body_width = nodata
     ? margin_left +
       nodata_box_w +

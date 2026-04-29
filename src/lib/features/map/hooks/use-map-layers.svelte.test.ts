@@ -85,4 +85,16 @@ describe('useMapLayers source', () => {
     expect(source).toContain('!basemapStyleStore.referenceBasemapId');
     expect(source).toContain('!getDatasetJoinedBasemap(datasetId)');
   });
+
+  it('preloads joined-basemap centroid tables before symbol visualizations request them', () => {
+    expect(source).toContain('const joinedBasemapId = getDatasetJoinedBasemap');
+    expect(source).toContain('prefetchRepresentativePointTable(');
+    expect(source).toContain('joinedBasemapId');
+    expect(source).toContain(
+      'basemapService.getBasemapLayerTableByType(\n        joinedBasemapId,\n        BasemapLayerType.CENTROID'
+    );
+    expect(source).toContain(
+      'representativePointTableCache.set(sourceTable, loadedCentroidTable)'
+    );
+  });
 });

@@ -22,7 +22,7 @@ import {
   ExportError
 } from '../services/export.service';
 
-const DEFAULT_FILE_NAME = 'untitled';
+const DEFAULT_FILE_NAME = m.export_default_filename();
 
 export interface UseExportModalReturn {
   readonly isOpen: boolean;

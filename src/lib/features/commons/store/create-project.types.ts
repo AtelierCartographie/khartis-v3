@@ -104,6 +104,7 @@ export interface UploadedFile {
   geoColumn?: string;
   gpsMode?: boolean;
   gpsColumns?: { lat: string; lon: string };
+  joinCorrections?: Record<string, string>;
   sourceArchive?: string;
   duckdbTableName?: string;
   shapefileBaseName?: string;
@@ -123,9 +124,43 @@ export interface ExampleProject {
   thumbnail?: string;
   dataUrl?: string;
   baseMapId?: string;
-  visualizations?: Record<string, unknown>[];
+  visualizations?: ExampleVisualizationPreset[];
   tags?: string[];
 }
+
+export type ExampleVisualizationPreset =
+  | {
+      type: 'choropleth';
+      variable: string;
+      classification?: string;
+      classes?: number;
+      palette?: string;
+    }
+  | {
+      type: 'proportional';
+      variable: string;
+      symbol?: string;
+      minSize?: number;
+      maxSize?: number;
+      color?: string;
+    }
+  | {
+      type: 'simple';
+      fillColor?: string;
+      strokeColor?: string;
+      strokeWidth?: number;
+    }
+  | {
+      type: 'bivariate';
+      variable1: string;
+      variable2: string;
+      palette?: string;
+    }
+  | {
+      type: 'flow';
+      variable: string;
+      curved?: boolean;
+    };
 
 export { ExampleCategory, FileStatus };
 

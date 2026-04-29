@@ -28,28 +28,25 @@ export interface OrthographicInteractionController {
 }
 
 export interface OrthographicInteractiveDeck {
-  setProps: (props: { controller: OrthographicInteractionController }) => void;
+  setProps: (props: {
+    controller: OrthographicInteractionController | false;
+  }) => void;
   redraw: (reason?: string) => void;
 }
 
 export function resolveOrthographicInteractionController(
   isPageMode: boolean
-): OrthographicInteractionController {
-  return isPageMode
-    ? {
-        dragPan: false,
-        scrollZoom: false,
-        doubleClickZoom: false,
-        touchZoom: false,
-        keyboard: false
-      }
-    : {
-        dragPan: true,
-        scrollZoom: false,
-        doubleClickZoom: false,
-        touchZoom: true,
-        keyboard: true
-      };
+): OrthographicInteractionController | false {
+  if (isPageMode) {
+    return false;
+  }
+  return {
+    dragPan: true,
+    scrollZoom: false,
+    doubleClickZoom: false,
+    touchZoom: true,
+    keyboard: true
+  };
 }
 
 export function syncMapLibreInteractionMode(

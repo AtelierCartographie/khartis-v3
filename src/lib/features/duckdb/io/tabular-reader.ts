@@ -4,6 +4,7 @@ import {
 } from '$lib/features/commons/errors/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
+import * as m from '$lib/paraglide/messages';
 import { DUCK_CONST } from '../constants';
 import { executeQuery } from '../core/query';
 import { runInTransaction } from '../core/transaction';
@@ -65,11 +66,9 @@ export async function readTabular(
       await registerFiles(ctx.db, ctx.registered_files, [input]);
       fileid = (input as FileWithId).id;
     } else {
-      throw new DataValidationError(
-        'Invalid input type. Expected a string or a File.',
-        undefined,
-        { receivedType: typeof input }
-      );
+      throw new DataValidationError(m.error_invalid_input_type(), undefined, {
+        receivedType: typeof input
+      });
     }
 
     const finalTablename = tablename;
@@ -86,7 +85,7 @@ export async function readTabular(
         ctx.connection,
         async () => {
           if (!finalTablename) {
-            throw new DuckDBError('Unable to determine target table name');
+            throw new DuckDBError(m.error_unable_determine_table());
           }
 
           if (format === DUCK_CONST.DEFAULT.FORMAT_TABULAR) {
@@ -196,7 +195,7 @@ export async function readTabular(
     }
 
     if (!tablename) {
-      throw new DuckDBError('Unable to determine target table name');
+      throw new DuckDBError(m.error_unable_determine_table());
     }
 
     ctx.loaded_files.set(tablename, filename);

@@ -25,23 +25,23 @@ vi.mock('$lib/features/commons/utils/logger', () => ({
 
 describe('formatFileSize', () => {
   it('returns "0 B" for 0 bytes', () => {
-    expect(formatFileSize(0)).toBe('0 B');
+    expect(formatFileSize(0)).toMatch(/^0 (B|o)$/);
   });
 
   it('formats bytes', () => {
-    expect(formatFileSize(512)).toBe('512.00 B');
+    expect(formatFileSize(512)).toMatch(/^512\.00 (B|o)$/);
   });
 
   it('formats kilobytes', () => {
-    expect(formatFileSize(1024)).toBe('1.00 KB');
+    expect(formatFileSize(1024)).toMatch(/^1\.00 (KB|Ko)$/);
   });
 
   it('formats megabytes', () => {
-    expect(formatFileSize(1024 * 1024)).toBe('1.00 MB');
+    expect(formatFileSize(1024 * 1024)).toMatch(/^1\.00 (MB|Mo)$/);
   });
 
   it('formats gigabytes', () => {
-    expect(formatFileSize(1024 ** 3)).toBe('1.00 GB');
+    expect(formatFileSize(1024 ** 3)).toMatch(/^1\.00 (GB|Go)$/);
   });
 });
 

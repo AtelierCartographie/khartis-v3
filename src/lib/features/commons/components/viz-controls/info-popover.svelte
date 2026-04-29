@@ -6,9 +6,11 @@
   interface Props {
     text: string;
     align?: 'top' | 'bottom';
+    tags?: string[];
+    disabled?: boolean;
   }
 
-  let { text, align = 'bottom' }: Props = $props();
+  let { text, align = 'bottom', tags = [], disabled = false }: Props = $props();
 
   let open = $state(false);
   let pinned = $state(false);
@@ -45,6 +47,7 @@
   }
 
   function show() {
+    if (disabled) return;
     updatePosition();
     open = true;
   }
@@ -56,6 +59,7 @@
   }
 
   function toggle() {
+    if (disabled) return;
     if (pinned) {
       pinned = false;
       open = false;
@@ -124,8 +128,11 @@
   <button
     type="button"
     class="info-btn"
+    class:info-btn-disabled={disabled}
     bind:this={btnRef}
     aria-label={m.more_info()}
+    aria-disabled={disabled ? 'true' : undefined}
+    disabled={disabled}
     onclick={toggle}
     onmouseenter={handleMouseEnter}
     onmouseleave={handleMouseLeave}
@@ -149,7 +156,16 @@
       onmouseleave={handleTooltipMouseLeave}
     >
       <div class="info-tooltip-arrow"></div>
-      <p class="info-tooltip-text">{text}</p>
+      {#if tags.length > 0}
+        <div class="info-tooltip-tags">
+          {#each tags as tag (tag)}
+            <span class="info-tooltip-tag">{tag}</span>
+          {/each}
+        </div>
+      {/if}
+      {#if text}
+        <p class="info-tooltip-text">{text}</p>
+      {/if}
     </div>
   </div>
 {/if}
@@ -165,6 +181,8 @@
     align-items: center;
     justify-content: center;
     padding: 0;
+    min-width: 24px;
+    min-height: 24px;
     background: transparent;
     border: none;
     cursor: pointer;
@@ -179,6 +197,12 @@
       outline: 2px solid var(--cds-focus);
       outline-offset: 2px;
     }
+  }
+
+  .info-btn-disabled,
+  .info-btn-disabled:hover {
+    color: var(--cds-icon-disabled, #c6c6c6);
+    cursor: not-allowed;
   }
 
   :global(.info-portal-container) {
@@ -240,5 +264,35 @@
     margin: 0;
     font-size: 0.75rem;
     line-height: 1.4;
+  }
+
+  :global(.info-tooltip-tags) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 6px;
+    max-height: 220px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  :global(.info-tooltip-tags:last-child) {
+    margin-bottom: 0;
+  }
+
+  :global(.info-tooltip-tag) {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 12px;
+    background-color: rgba(255, 255, 255, 0.16);
+    color: var(--cds-inverse-02, #fff);
+    font-size: 0.6875rem;
+    line-height: 1rem;
+    font-weight: 500;
+    white-space: nowrap;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 </style>

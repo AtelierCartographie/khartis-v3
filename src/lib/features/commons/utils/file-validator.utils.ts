@@ -486,7 +486,7 @@ export const FileValidator = {
       }
     } catch (error) {
       logger.error(
-        'GeoJSON content validation failed',
+        m.error_geojson_content_validation(),
         LogCategory.FILE,
         error
       );
@@ -632,22 +632,22 @@ export const SUPPORTED_FILE_TYPES = {
   tabular: {
     extensions: ['.csv', '.tsv', '.txt'],
     mimeTypes: ['text/csv', 'text/tab-separated-values', 'text/plain'],
-    description: 'Tabular data (CSV, TSV)'
+    description: m.file_type_tabular()
   },
   geojson: {
     extensions: ['.geojson', '.json'],
     mimeTypes: ['application/geo+json', 'application/json'],
-    description: 'GeoJSON'
+    description: m.file_type_geojson()
   },
   shapefile: {
     extensions: ['.shp', '.shx', '.dbf', '.prj', '.cpg'],
     mimeTypes: ['application/x-shapefile', 'application/octet-stream'],
-    description: 'Shapefile (all components)'
+    description: m.file_type_shapefile()
   },
   geopackage: {
     extensions: ['.gpkg'],
     mimeTypes: ['application/geopackage+sqlite3'],
-    description: 'GeoPackage'
+    description: m.file_type_geopackage()
   },
   geoparquet: {
     extensions: ['.geoparquet', '.gpq', '.parquet'],
@@ -656,7 +656,7 @@ export const SUPPORTED_FILE_TYPES = {
       'application/x-parquet',
       'application/parquet'
     ],
-    description: 'GeoParquet'
+    description: m.file_type_geoparquet()
   },
   kml: {
     extensions: ['.kml', '.kmz'],
@@ -664,16 +664,16 @@ export const SUPPORTED_FILE_TYPES = {
       'application/vnd.google-earth.kml+xml',
       'application/vnd.google-earth.kmz'
     ],
-    description: 'KML / KMZ'
+    description: m.file_type_kml()
   },
   gpx: {
     extensions: ['.gpx'],
     mimeTypes: ['application/gpx+xml'],
-    description: 'GPX (GPS Exchange)'
+    description: m.file_type_gpx()
   },
   zip: {
     extensions: ['.zip'],
     mimeTypes: ['application/zip', 'application/x-zip-compressed'],
-    description: 'ZIP archive'
+    description: m.file_type_zip()
   }
 };

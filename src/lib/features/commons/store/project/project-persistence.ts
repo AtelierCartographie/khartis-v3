@@ -225,7 +225,7 @@ export async function importProject(
     container._state.lastSaved = new Date();
     resetHistory(container);
 
-    addToHistory(container, 'Project imported', project);
+    addToHistory(container, m.history_project_imported(), project);
 
     await projectStorage.save(ProjectStorageKey.CURRENT, project.id);
     await dataOrchestratorService.onProjectChanged();

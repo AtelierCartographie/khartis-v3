@@ -3,6 +3,7 @@ import { DataValidationError } from '$lib/features/commons/errors/pipeline.error
 import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { Duck, initDuckDB } from '$lib/features/duckdb';
+import * as m from '$lib/paraglide/messages';
 import { validateFile } from './core/validators';
 import {
   createCompanionFilesFromUpload,
@@ -152,7 +153,8 @@ const Pipeline = {
     content: string,
     options: { name?: string; type?: string } = {}
   ): Promise<DatasetResult> {
-    const name = options.name ?? `pasted-data-${Date.now()}.csv`;
+    const name =
+      options.name ?? `${m.pipeline_pasted_data_filename()}-${Date.now()}.csv`;
     const file = await createFileFromUploadContent(
       content,
       name,

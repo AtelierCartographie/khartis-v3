@@ -131,6 +131,9 @@ export function deserializeUploadedFile(
   if (data.gpsColumns) {
     file.gpsColumns = data.gpsColumns;
   }
+  if (data.joinCorrections) {
+    file.joinCorrections = data.joinCorrections;
+  }
   if (data.sourceArchive) {
     file.sourceArchive = data.sourceArchive;
   }

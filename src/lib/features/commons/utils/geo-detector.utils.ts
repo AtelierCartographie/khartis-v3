@@ -597,7 +597,10 @@ export function collectGPSRangeWarnings(
 
   if (bothLookSwapped || magnitudeSwap) {
     warnings.push(
-      `GPS columns "${latColumn!.columnName}" and "${lonColumn!.columnName}" appear to be swapped (lat values in longitude range and vice versa)`
+      m.gps_warning_columns_swapped({
+        latColumn: latColumn!.columnName,
+        lonColumn: lonColumn!.columnName
+      })
     );
   } else {
     if (
@@ -606,7 +609,11 @@ export function collectGPSRangeWarnings(
       !latValidation.looksSwapped
     ) {
       warnings.push(
-        `Latitude column "${latColumn!.columnName}" has ${latValidation.outOfRange}/${latValidation.totalChecked} values outside [-90, 90]`
+        m.gps_warning_lat_values_out_of_range({
+          columnName: latColumn!.columnName,
+          outOfRange: String(latValidation.outOfRange),
+          totalChecked: String(latValidation.totalChecked)
+        })
       );
     }
     if (
@@ -615,17 +622,21 @@ export function collectGPSRangeWarnings(
       !lonValidation.looksSwapped
     ) {
       warnings.push(
-        `Longitude column "${lonColumn!.columnName}" has ${lonValidation.outOfRange}/${lonValidation.totalChecked} values outside [-180, 180]`
+        m.gps_warning_lon_values_out_of_range({
+          columnName: lonColumn!.columnName,
+          outOfRange: String(lonValidation.outOfRange),
+          totalChecked: String(lonValidation.totalChecked)
+        })
       );
     }
     if (latValidation && latValidation.looksSwapped && !bothLookSwapped) {
       warnings.push(
-        `Latitude column "${latColumn!.columnName}" contains values that look like longitudes — please verify`
+        m.gps_warning_lat_looks_lon({ columnName: latColumn!.columnName })
       );
     }
     if (lonValidation && lonValidation.looksSwapped && !bothLookSwapped) {
       warnings.push(
-        `Longitude column "${lonColumn!.columnName}" contains values that look like latitudes — please verify`
+        m.gps_warning_lon_looks_lat({ columnName: lonColumn!.columnName })
       );
     }
   }
@@ -678,7 +689,11 @@ function collectFallbackGPSWarnings(context: FallbackGPSContext): string[] {
       ).length;
       if (outOfRange > 0) {
         warnings.push(
-          `Latitude column "${headers[latIndex]}" has ${outOfRange}/${values.length} values outside [-90, 90]`
+          m.gps_warning_lat_values_out_of_range({
+            columnName: headers[latIndex],
+            outOfRange: String(outOfRange),
+            totalChecked: String(values.length)
+          })
         );
       }
     }
@@ -692,7 +707,11 @@ function collectFallbackGPSWarnings(context: FallbackGPSContext): string[] {
       ).length;
       if (outOfRange > 0) {
         warnings.push(
-          `Longitude column "${headers[lonIndex]}" has ${outOfRange}/${values.length} values outside [-180, 180]`
+          m.gps_warning_lon_values_out_of_range({
+            columnName: headers[lonIndex],
+            outOfRange: String(outOfRange),
+            totalChecked: String(values.length)
+          })
         );
       }
     }
@@ -746,9 +765,9 @@ export const GeoColumnDetector = {
     const latColumn = results.find((r) => r.type === GEO_COLUMN_TYPE.LATITUDE);
     const lonColumn = results.find((r) => r.type === GEO_COLUMN_TYPE.LONGITUDE);
     if (latColumn && !lonColumn) {
-      warnings.push('Latitude column detected without corresponding longitude');
+      warnings.push(m.geo_detector_latitude_only());
     } else if (!latColumn && lonColumn) {
-      warnings.push('Longitude column detected without corresponding latitude');
+      warnings.push(m.geo_detector_longitude_only());
     }
 
     const rangeWarnings = collectGPSRangeWarnings(latColumn, lonColumn, {

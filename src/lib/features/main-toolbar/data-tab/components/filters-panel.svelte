@@ -1,12 +1,12 @@
 <script lang="ts">
   import {
-    Button,
     Select,
     SelectItem,
     TextInput,
     Tag,
     InlineNotification
   } from 'carbon-components-svelte';
+  import Button from '$lib/features/commons/components/button-native.svelte';
   import TrashCan from 'carbon-icons-svelte/lib/TrashCan.svelte';
   import CompactNumberInput from '$lib/features/commons/components/compact-number-input.svelte';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
@@ -19,6 +19,7 @@
     type FilterStats
   } from '$lib/features/duckdb';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
+  import { dataToolsStore } from '../data-tools.store.svelte';
   import * as m from '$lib/paraglide/messages';
 
   interface Props {
@@ -65,6 +66,10 @@
     filters.length > 0 && filterStats.filtered === 0 && filterStats.total > 0
   );
   const rowsToDelete = $derived(filterStats.total - filterStats.filtered);
+
+  $effect(() => {
+    dataToolsStore.setHasActiveFilters(hasActiveFilters);
+  });
 
   interface FilterOperatorDef {
     value: FilterOperator;
@@ -362,7 +367,7 @@
           <Button
             kind={hasNoResults ? 'danger-ghost' : 'ghost'}
             size="small"
-            on:click={clearAllFilters}>{m.filter_clear_all()}</Button
+            onclick={clearAllFilters}>{m.filter_clear_all()}</Button
           >
         </div>
         <ul class="filters-list">
@@ -372,7 +377,7 @@
                 size="sm"
                 type="gray"
                 filter
-                on:close={() => removeFilter(filter.id)}
+                onclose={() => removeFilter(filter.id)}
               >
                 {filter.label}
               </Tag>
@@ -395,7 +400,7 @@
               kind="danger-tertiary"
               size="small"
               icon={TrashCan}
-              on:click={() => onDeleteFilteredRows(rowsToDelete)}
+              onclick={() => onDeleteFilteredRows(rowsToDelete)}
             >
               {m.delete_filtered_rows({ count: rowsToDelete })}
             </Button>

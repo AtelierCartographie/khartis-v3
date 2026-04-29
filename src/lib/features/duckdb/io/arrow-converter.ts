@@ -1,6 +1,7 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { Table, tableToIPC, vectorFromArray, type Vector } from 'apache-arrow';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
+import * as m from '$lib/paraglide/messages';
 import { getContext, isInitialized } from '../core/engine';
 
 export function convertTabularDataToArrow(
@@ -31,13 +32,13 @@ export async function insertArrowTableIntoDuckDB(
   tableName: string
 ): Promise<void> {
   if (!isInitialized()) {
-    throw new Error('DuckDB not initialized - call initDuckDB() first');
+    throw new Error(m.error_duckdb_not_initialized_arrow());
   }
 
   const ctx = getContext();
 
   if (!ctx.connection) {
-    throw new Error('DuckDB connection not established - connection is null');
+    throw new Error(m.error_duckdb_connection_null());
   }
 
   try {

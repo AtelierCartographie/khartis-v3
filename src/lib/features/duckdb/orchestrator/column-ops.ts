@@ -107,7 +107,7 @@ export async function changeColumnType(
     !ALLOWED_TYPES.includes(normalizedType) &&
     !/^DECIMAL\s*\(\s*\d+\s*,\s*\d+\s*\)$/i.test(newType.trim())
   ) {
-    throw new DuckDBError(`Unsupported column type: ${newType}`);
+    throw new DuckDBError(m.error_unsupported_column_type({ newType }));
   }
 
   await Duck.query(
@@ -326,7 +326,7 @@ const BLOCKED_FUNCTIONS_PATTERN = new RegExp(
 
 export function validateExpression(expression: string): void {
   if (!expression.trim()) {
-    throw new DuckDBError('Expression cannot be empty');
+    throw new DuckDBError(m.error_expression_empty());
   }
 
   if (expression.includes(';')) {
@@ -373,7 +373,7 @@ export async function addCalculatedColumn(
 
   const trimmedName = columnName.trim();
   if (!trimmedName) {
-    throw new DuckDBError('Invalid column name for calculator');
+    throw new DuckDBError(m.error_invalid_column_name_calc());
   }
 
   validateExpression(expression);

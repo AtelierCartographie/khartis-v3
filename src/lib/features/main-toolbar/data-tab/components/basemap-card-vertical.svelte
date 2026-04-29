@@ -63,33 +63,7 @@
 
   const subtitle = $derived((basemap.subtitle_fr ?? '').trim());
 
-  const STANDARD_RATIOS: [number, string][] = [
-    [1, '1:1'],
-    [4 / 3, '4:3'],
-    [3 / 2, '3:2'],
-    [16 / 10, '16:10'],
-    [16 / 9, '16:9'],
-    [2, '2:1']
-  ];
-
-  const aspectRatio = $derived.by(() => {
-    if (!basemap.bbox || basemap.bbox.length < 4) return null;
-    const [minX, minY, maxX, maxY] = basemap.bbox;
-    const width = Math.abs(maxX - minX);
-    const height = Math.abs(maxY - minY);
-    if (height === 0) return '2:1';
-    const ratio = width / height;
-    let closest = STANDARD_RATIOS[0];
-    let minDiff = Math.abs(ratio - closest[0]);
-    for (const entry of STANDARD_RATIOS) {
-      const diff = Math.abs(ratio - entry[0]);
-      if (diff < minDiff) {
-        minDiff = diff;
-        closest = entry;
-      }
-    }
-    return closest[1];
-  });
+  const aspectRatio = '16:9';
 </script>
 
 <div
@@ -142,7 +116,10 @@
 
   {#if showMatchScore && matchPercentage !== undefined}
     <div class="match-section">
-      <span class="match-label">{m.basemap_match_score()}</span>
+      <div class="match-header">
+        <span class="match-label">{m.basemap_match_score()}</span>
+        <span class="match-value">{matchPercentage} %</span>
+      </div>
       <div
         class="progress-bar"
         role="progressbar"
@@ -152,7 +129,6 @@
       >
         <div class="progress-fill" style="width: {matchPercentage}%"></div>
       </div>
-      <span class="match-value">{matchPercentage} %</span>
     </div>
   {/if}
 </div>
@@ -263,7 +239,8 @@
 
   .preview-section {
     position: relative;
-    height: var(--basemap-card-preview-height, 104px);
+    aspect-ratio: 16/9;
+    overflow: hidden;
     padding: 1px;
     box-sizing: border-box;
     --tile-preview-background: var(--cds-layer-02, #ffffff);
@@ -398,6 +375,13 @@
     border-top: 1px solid var(--cds-border-subtle-01, #c6c6c6);
   }
 
+  .match-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
   .basemap-card--suggestion .match-section {
     border-top-color: var(
       --khartis-additions-border-tile-01-suggestions,
@@ -411,6 +395,8 @@
     line-height: 18px;
     letter-spacing: 0.16px;
     color: var(--cds-text-primary, #161616);
+    flex: 1;
+    overflow-wrap: break-word;
   }
 
   .basemap-card--suggestion .match-label {
@@ -446,6 +432,8 @@
     line-height: 16px;
     letter-spacing: 0.32px;
     color: var(--cds-text-secondary, #525252);
+    flex-shrink: 0;
+    white-space: nowrap;
   }
 
   .basemap-card--suggestion .match-value {

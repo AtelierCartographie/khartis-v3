@@ -12,12 +12,14 @@ export function slugify(text: string): string {
     .replace(/-{2,}/g, '-');
 }
 
+import { m } from '$lib/paraglide/messages.js';
+
 export function generateFilename(
   name: string,
   extension: string,
   includeTimestamp: boolean = true
 ): string {
-  const slugifiedName = slugify(name || 'untitled');
+  const slugifiedName = slugify(name || m.untitled_file());
 
   if (includeTimestamp) {
     const timestamp = new Date().toISOString().slice(0, 10);
@@ -31,7 +33,7 @@ export function generateProjectFilename(
   projectName: string,
   extension: string = 'kh'
 ): string {
-  return generateFilename(projectName || 'untitled-project', extension, true);
+  return generateFilename(projectName || m.untitled_project(), extension, true);
 }
 
 export function sanitizeDisplayName(filename: string): string {

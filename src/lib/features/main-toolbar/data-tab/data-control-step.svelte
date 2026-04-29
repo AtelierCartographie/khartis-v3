@@ -360,7 +360,9 @@
         delimiter: options.delimiter
       });
 
+      Duck.invalidateTableCache(currentDuckTable);
       await normalizeFormattedNumericColumns(currentDuckTable, Duck);
+      Duck.invalidateTableCache(currentDuckTable);
 
       const snapshot = await syncDatasetMetadataFromDuck({ force: true });
       const newRowCount = snapshot?.rowCount ?? 0;
@@ -375,6 +377,10 @@
         thousandsSeparator: options.thousandsSeparator,
         delimiter: options.delimiter
       });
+      datasetsStore.recordTransformation(
+        selectedDataset.id,
+        m.csv_options_reimport_success()
+      );
 
       currentCsvOptions = options;
       duckDBOrchestrator.bumpDatasetsVersion();
@@ -454,7 +460,11 @@
       if (totalReplaced > 0) {
         datasetsStore.recordTransformation(
           selectedDataset.id,
-          `Replaced "${searchValue}" with "${replaceValue}" (${totalReplaced} occurrences)`
+          m.history_replaced_values({
+            searchValue,
+            replaceValue,
+            totalReplaced
+          })
         );
 
         const timestamp = new Date().toISOString();
@@ -527,7 +537,7 @@
 
       datasetsStore.recordTransformation(
         selectedDataset.id,
-        `Deleted ${count} rows (new total: ${newRowCount})`
+        m.history_deleted_rows({ count, newRowCount })
       );
 
       await projectStore.addDeletedRows(
@@ -570,7 +580,7 @@
 
         datasetsStore.recordTransformation(
           selectedDataset.id,
-          `Deleted ${count} filtered rows (new total: ${newRowCount})`
+          m.history_deleted_filtered_rows({ count, newRowCount })
         );
         await projectStore.addDeletedRows(selectedDataset.sourceFileId, rowIds);
 

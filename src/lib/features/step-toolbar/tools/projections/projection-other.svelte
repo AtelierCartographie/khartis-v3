@@ -69,11 +69,11 @@
   const otherSearchPlaceholder = m.projection_other_search_placeholder();
 
   const codeIntro = m.projection_code_intro?.() ?? '';
-  const codeLabel = m.projection_code_label?.() ?? 'Code CRS';
+  const codeLabel = m.projection_code_label();
   const codePlaceholder = m.projection_code_placeholder?.() ?? '';
   const codeHelper = m.projection_code_helper?.() ?? '';
-  const resetLabel = m.projection_code_reset?.() ?? 'Reset';
-  const submitLabel = m.projection_code_submit?.() ?? 'Validate';
+  const resetLabel = m.projection_code_reset();
+  const submitLabel = m.projection_code_submit();
 
   const viewTabs = $derived.by(() => {
     const tabs = [

@@ -1,4 +1,5 @@
 import { PROJECT_CONST } from '../constants';
+import * as m from '$lib/paraglide/messages';
 import {
   clampFontSize,
   DEFAULT_FONT_FAMILY,
@@ -461,7 +462,10 @@ export function migrateIfNeeded(
         currentVersion = migration.to;
       } catch (error) {
         throw new Error(
-          `Schema migration ${migration.from} → ${migration.to} failed`,
+          m.error_schema_migration_failed({
+            fromVersion: migration.from,
+            toVersion: migration.to
+          }),
           {
             cause: error
           }

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
+  import IconButton from '$lib/features/commons/components/icon-button-native.svelte';
   import {
     Search,
     Filter,
@@ -11,7 +11,7 @@
     ChartHistogram,
     View
   } from 'carbon-icons-svelte';
-  import { Button } from 'carbon-components-svelte';
+  import Button from '$lib/features/commons/components/button-native.svelte';
   import * as m from '$lib/paraglide/messages';
   import { dataToolsStore, DataToolType } from '../data-tools.store.svelte';
 
@@ -56,6 +56,7 @@
   const isFiltersActive = $derived(
     dataToolsStore.activeTool === DataToolType.Filters
   );
+  const hasActiveFilters = $derived(dataToolsStore.hasActiveFilters);
   const isCalculatorActive = $derived(
     dataToolsStore.activeTool === DataToolType.Calculator
   );
@@ -70,7 +71,7 @@
       iconDescription={m.data_toggle_summary_plots()}
       tooltipPosition="bottom"
       class={showSummaryPlots ? 'active' : ''}
-      on:click={() => onToggleSummaryPlots?.()}
+      onclick={() => onToggleSummaryPlots?.()}
     />
     <IconButton
       kind="ghost"
@@ -79,17 +80,22 @@
       iconDescription={m.data_tool_search_icon()}
       tooltipPosition="bottom"
       class={isSearchActive ? 'active' : ''}
-      on:click={() => dataToolsStore.toggleTool(DataToolType.Search)}
+      onclick={() => dataToolsStore.toggleTool(DataToolType.Search)}
     />
-    <IconButton
-      kind="ghost"
-      size="small"
-      icon={Filter}
-      iconDescription={m.data_tool_filters_icon()}
-      tooltipPosition="bottom"
-      class={isFiltersActive ? 'active' : ''}
-      on:click={() => dataToolsStore.toggleTool(DataToolType.Filters)}
-    />
+    <div class="filter-button-wrapper">
+      <IconButton
+        kind="ghost"
+        size="small"
+        icon={Filter}
+        iconDescription={m.data_tool_filters_icon()}
+        tooltipPosition="bottom"
+        class={isFiltersActive ? 'active' : ''}
+        onclick={() => dataToolsStore.toggleTool(DataToolType.Filters)}
+      />
+      {#if hasActiveFilters}
+        <span class="filter-active-dot" aria-hidden="true"></span>
+      {/if}
+    </div>
     <IconButton
       kind="ghost"
       size="small"
@@ -97,7 +103,7 @@
       iconDescription={m.data_tool_calculator_icon()}
       tooltipPosition="bottom"
       class={isCalculatorActive ? 'active' : ''}
-      on:click={() => dataToolsStore.toggleTool(DataToolType.Calculator)}
+      onclick={() => dataToolsStore.toggleTool(DataToolType.Calculator)}
     />
     <IconButton
       kind="ghost"
@@ -107,7 +113,7 @@
       tooltipPosition="bottom"
       disabled={effectiveDeleteDisabled}
       class={deleteActive ? 'active' : ''}
-      on:click={() => onDelete?.()}
+      onclick={() => onDelete?.()}
     />
     {#if hasSelection}
       <span class="selection-count">
@@ -121,7 +127,7 @@
         icon={View}
         iconDescription={m.column_show()}
         tooltipPosition="bottom"
-        on:click={() => onShowHiddenColumns?.()}
+        onclick={() => onShowHiddenColumns?.()}
       />
     {/if}
     {#if showCsvOptions}
@@ -131,7 +137,7 @@
         icon={Settings}
         iconDescription={m.csv_options_button()}
         tooltipPosition="bottom"
-        on:click={() => onCsvOptions?.()}
+        onclick={() => onCsvOptions?.()}
       />
     {/if}
     <IconButton
@@ -141,7 +147,7 @@
       iconDescription={m.data_tool_reset_icon()}
       tooltipPosition="bottom"
       disabled={resetDisabled}
-      on:click={() => onReset?.()}
+      onclick={() => onReset?.()}
     />
   </div>
   <div class="tools-right">
@@ -150,7 +156,7 @@
       size="small"
       icon={Maximize}
       iconDescription={m.data_tool_expand_icon()}
-      on:click={() => onExpand?.()}
+      onclick={() => onExpand?.()}
     >
       {m.data_tool_expand_label()}
     </Button>
@@ -183,6 +189,23 @@
 
   .data-tools-bar :global(.bx--btn.active svg) {
     fill: var(--cds-interactive-01);
+  }
+
+  .filter-button-wrapper {
+    position: relative;
+    display: inline-flex;
+  }
+
+  .filter-active-dot {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: var(--cds-support-error, #da1e28);
+    border: 1.5px solid var(--cds-layer-01, #f4f4f4);
+    box-sizing: border-box;
   }
 
   .selection-count {

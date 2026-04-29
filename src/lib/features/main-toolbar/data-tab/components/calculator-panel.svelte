@@ -1,6 +1,6 @@
 <script lang="ts">
-  import Button from '$lib/features/commons/components/carbon/button.svelte';
-  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
+  import Button from '$lib/features/commons/components/button-native.svelte';
+  import IconButton from '$lib/features/commons/components/icon-button-native.svelte';
   import {
     Link,
     Select,
@@ -81,7 +81,7 @@
       label: col.name,
       value: escapeIdentifier(col.name),
       type: 'variable' as const,
-      description: col.type || 'colonne'
+      description: col.type || m.calculator_column_description()
     }));
 
     const functionSuggestions: Suggestion[] = [
@@ -268,7 +268,7 @@
       if (selectedDataset?.id) {
         datasetsStore.recordTransformation(
           selectedDataset.id,
-          `Calculated column created: ${effectiveName}`
+          m.calculated_column_created({ name: effectiveName })
         );
       }
 
@@ -363,7 +363,7 @@
           icon={ArrowRight}
           iconDescription={m.calc_insert_variable()}
           disabled={!selectedVariable}
-          on:click={insertVariable}
+          onclick={insertVariable}
         />
       </div>
     </div>
@@ -375,7 +375,7 @@
           <Button
             kind="tertiary"
             size="small"
-            on:click={() => insertOperator(op.value)}
+            onclick={() => insertOperator(op.value)}
           >
             {op.label}
           </Button>
@@ -399,7 +399,7 @@
           size="small"
           icon={ArrowRight}
           iconDescription={m.calc_insert_function()}
-          on:click={insertFunction}
+          onclick={insertFunction}
         />
       </div>
     </div>
@@ -441,7 +441,7 @@
         kind="ghost"
         size="small"
         disabled={isTesting || isCalculating || !formula}
-        on:click={handleTest}
+        onclick={handleTest}
       >
         {m.calc_test()}
       </Button>
@@ -449,7 +449,7 @@
         kind="primary"
         size="small"
         disabled={isCalculating || !formula || !!columnNameError}
-        on:click={handleCalculate}
+        onclick={handleCalculate}
       >
         {isCalculating ? m.calc_calculating() : m.calc_calculate()}
       </Button>

@@ -4,6 +4,7 @@ import {
   escapeIdentifier,
   escapeSqlString
 } from '$lib/features/commons/utils/sanitize.utils';
+import * as m from '$lib/paraglide/messages';
 import type { Table as ArrowTable } from 'apache-arrow';
 import { DUCK_CONST, GEO_CONSTANTS, READER_CONSTANTS } from '../constants';
 import { executeQuery } from '../core/query';
@@ -286,7 +287,7 @@ export async function applyProj4Reprojection(
   )) as ArrowTable;
 
   if (!result || result.numRows === 0) {
-    throw new Error('No data found in geofile');
+    throw new Error(m.error_no_data_geofile());
   }
 
   const geomType = result.getChild('geom_type')?.get(0);

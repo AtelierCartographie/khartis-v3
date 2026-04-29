@@ -18,6 +18,7 @@ import {
   fetchArrowTableWithGeometry
 } from '../../duckdb/orchestrator/arrow-ops';
 import { INTERNAL_COLUMN } from '../../commons/constants/data.constants';
+import { GEOMETRY_WKT_TYPES } from '../../commons/constants/geometry.constants';
 
 const BASEMAP_METADATA_PATH = '/basemaps/all-basemaps-metadata.json';
 const BASEMAP_ATTRIBUTES_PATH = '/basemaps/all-basemaps-attributes.parquet';
@@ -235,6 +236,23 @@ export function findBasemapLayerByType(
   return metadata.layers.find((layer) => layer.type === layerType) ?? null;
 }
 
+export function getCustomBasemapLayerGeometryTypeOverride(
+  layerType: BasemapLayerType | null | undefined
+): string | undefined {
+  switch (layerType) {
+    case BasemapLayerType.LIMIT:
+    case BasemapLayerType.LINE:
+      return GEOMETRY_WKT_TYPES.MULTI_LINE_STRING;
+    case BasemapLayerType.CENTROID:
+    case BasemapLayerType.POINT:
+      return GEOMETRY_WKT_TYPES.POINT;
+    case BasemapLayerType.POLYGON:
+      return GEOMETRY_WKT_TYPES.MULTI_POLYGON;
+    default:
+      return undefined;
+  }
+}
+
 function createLoadedBasemapVariant(
   metadata: BasemapMetadata,
   geometryTable: ArrowTable,
@@ -308,13 +326,45 @@ function createBasemapService() {
 
       const escapedFileId = escapeSqlString(fileId);
 
+      // The shipped `all-basemaps-attributes.parquet` (regenerated in commit
+      // 3b831061) stores the source variant name in the `id` column instead
+      // of the per-entity identifier (e.g. `id = "iso3_code"` for every
+      // monde-countries row). Joins downstream rely on `id` resolving to the
+      // polygon-table primary key (e.g. `"FRA"`), so we repair the column
+      // here using the parquet's natural row order: each entity is a run of
+      // variants whose first row carries the primary identifier (variant ==
+      // id literal). Idempotent for parquets where `id` is already correct.
       const result = await Duck.query(`
         CREATE OR REPLACE TABLE basemap_attributes AS
-        SELECT * FROM parquet_scan('${escapedFileId}',
-          hive_partitioning=false,
-          union_by_name=false,
-          filename=false
+        WITH ordered AS (
+          SELECT *, row_number() OVER () AS __row_idx__
+          FROM parquet_scan('${escapedFileId}',
+            hive_partitioning=false,
+            union_by_name=false,
+            filename=false
+          )
+        ),
+        grouped AS (
+          SELECT *,
+            SUM(CASE WHEN variant = id THEN 1 ELSE 0 END)
+              OVER (PARTITION BY basemap ORDER BY __row_idx__) AS __group_id__
+          FROM ordered
+        ),
+        real_ids AS (
+          SELECT basemap, __group_id__,
+            MAX(CASE WHEN variant = id THEN raw END) AS __real_id__
+          FROM grouped
+          GROUP BY basemap, __group_id__
         )
+        SELECT
+          g.raw,
+          COALESCE(r.__real_id__, g.id) AS id,
+          g.variant,
+          g.normalized,
+          g.basemap,
+          g.basemap_count
+        FROM grouped g
+        LEFT JOIN real_ids r USING (basemap, __group_id__)
       `);
 
       if (!result) {
@@ -391,7 +441,8 @@ function createBasemapService() {
 
   async function loadGeometryFromDuckTable(
     tableName: string,
-    projectColumns?: readonly string[] | null
+    projectColumns?: readonly string[] | null,
+    geometryTypeOverride?: string
   ): Promise<ArrowTable> {
     if (!Duck) {
       throw new Error('DuckDB not initialized');
@@ -409,7 +460,8 @@ function createBasemapService() {
       tableName,
       Duck,
       undefined,
-      geomColumn
+      geomColumn,
+      geometryTypeOverride ? { geometryType: geometryTypeOverride } : undefined
     );
   }
 
@@ -430,8 +482,15 @@ function createBasemapService() {
   ): Promise<ArrowTable> {
     const shouldReadFromDuck =
       metadata.isCustom && (await doesDuckTableExist(layerFile));
+    const customLayerType = shouldReadFromDuck
+      ? metadata.layers.find((layer) => layer.file === layerFile)?.type
+      : null;
     return shouldReadFromDuck
-      ? loadGeometryFromDuckTable(layerFile, [INTERNAL_COLUMN.FEATURE_ID])
+      ? loadGeometryFromDuckTable(
+          layerFile,
+          [INTERNAL_COLUMN.FEATURE_ID],
+          getCustomBasemapLayerGeometryTypeOverride(customLayerType)
+        )
       : loadGeometryFromParquet(layerFile);
   }
 

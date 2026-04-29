@@ -246,7 +246,7 @@
       onclick={openQuickHaloColorInput}
     >
       <span class="outline-text-icon" aria-hidden="true">
-        <span class="outline-text-icon__glyph">A</span>
+        <span class="outline-text-icon__glyph">{m.text_style_glyph()}</span>
         <span class="outline-text-icon__underline"></span>
       </span>
     </button>

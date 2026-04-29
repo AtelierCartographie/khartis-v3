@@ -72,9 +72,21 @@ describe('CustomizeBasemap', () => {
   });
 
   it('stops advertising catalog-only metadata layers on imported basemaps', () => {
+    expect(source).toContain('const supportsCatalogGeometry = $derived(');
     expect(source).toContain('const supportsLakesRivers = $derived(');
     expect(source).toContain('const supportsCities = $derived(');
     expect(source).toContain('!isCustomBasemap &&');
+  });
+
+  it('disables catalog geometry layers when no basemap geometry is active', () => {
+    expect(source).toContain('toggleDisabled={!supportsCatalogGeometry}');
+    expect(source).toContain('disabled={!supportsCatalogGeometry}');
+    expect(source).toMatch(
+      /supportsCatalogGeometry &&\s+\(getConfig\('terre'\)\?\.visible \?\? true\)/
+    );
+    expect(source).toMatch(
+      /supportsCatalogGeometry &&\s+\(getConfig\('frontieres'\)\?\.visible \?\? true\)/
+    );
   });
 
   it('derives overlay support from the selected reference basemap metadata', () => {

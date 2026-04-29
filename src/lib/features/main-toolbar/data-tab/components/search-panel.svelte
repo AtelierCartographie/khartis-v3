@@ -1,6 +1,6 @@
 <script lang="ts">
-  import Button from '$lib/features/commons/components/carbon/button.svelte';
-  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
+  import Button from '$lib/features/commons/components/button-native.svelte';
+  import IconButton from '$lib/features/commons/components/icon-button-native.svelte';
   import {
     Search,
     Select,
@@ -392,7 +392,7 @@
           icon={ChevronLeft}
           iconDescription={m.search_prev_result()}
           disabled={!hasResults}
-          on:click={handlePrevResult}
+          onclick={handlePrevResult}
         />
         <IconButton
           kind="ghost"
@@ -400,7 +400,7 @@
           icon={ChevronRight}
           iconDescription={m.search_next_result()}
           disabled={!hasResults}
-          on:click={handleNextResult}
+          onclick={handleNextResult}
         />
       </div>
     </div>
@@ -420,7 +420,7 @@
         kind="secondary"
         size="small"
         disabled={!searchQuery || !hasExactMatches}
-        on:click={handleReplace}
+        onclick={handleReplace}
       >
         {m.search_replace_button()}
       </Button>

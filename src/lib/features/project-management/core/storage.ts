@@ -3,6 +3,7 @@ import {
   safeJsonStringify
 } from '$lib/features/commons/utils/clone.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { m } from '$lib/paraglide/messages.js';
 import { PROJECT_CONST } from '../constants';
 
 async function getDb(): Promise<IDBDatabase> {
@@ -39,7 +40,7 @@ export async function saveToStorage<T>(key: string, data: T): Promise<void> {
       LogCategory.PERSISTENCE,
       { key, error }
     );
-    throw new Error('Storage quota exceeded or storage unavailable', {
+    throw new Error(m.error_storage_quota_exceeded(), {
       cause: error
     });
   }

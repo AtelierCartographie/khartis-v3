@@ -1700,6 +1700,11 @@ function collectMetadataPointGeoJson(
   };
 }
 
+function hasArrowRows(table: ArrowTable): boolean {
+  const numRows = (table as ArrowTable & { numRows?: unknown }).numRows;
+  return typeof numRows === 'number' ? numRows > 0 : true;
+}
+
 export interface MetadataLayerEntry {
   table: ArrowTable;
   style: string | null;
@@ -1811,6 +1816,7 @@ function createMetadataLimitLayers(
     const entry = entries[i];
     const geometryInfo = extractGeometryInfo(entry.table);
     if (!geometryInfo) continue;
+    if (!hasArrowRows(entry.table)) continue;
 
     const layerId = buildLayerId(
       DeckLayerId.BASEMAP_META_LIMIT,

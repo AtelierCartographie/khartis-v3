@@ -1165,6 +1165,49 @@ describe('basemap projection fallbacks', () => {
     expect(metaLimitLayer?.props.data).toBe(projectedGeoJSON);
   });
 
+  it('skips empty metadata limit helper tables', () => {
+    const metadataTable = { numRows: 0 } as unknown as ArrowTable;
+
+    basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.MERS, false);
+    basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.TERRE, false);
+
+    extractGeometryInfoMock.mockImplementation((table: ArrowTable) =>
+      table === metadataTable
+        ? ({
+            type: 'MultiLineString',
+            encoding: 'geoarrow.wkb',
+            geoColumn: 'geometry',
+            isNativeGeoArrow: true,
+            isWkbEncoded: true,
+            isGeoJsonEncoded: false
+          } satisfies GeometryInfo)
+        : null
+    );
+
+    const layers = createBasemapLayers(
+      null,
+      {},
+      {
+        metadataLayers: [
+          {
+            table: metadataTable,
+            style: null,
+            type: BasemapLayerType.LIMIT,
+            file: 'empty-innerlines'
+          } satisfies MetadataLayerEntry
+        ],
+        availableMetadataLayerTypes: [BasemapLayerType.LIMIT],
+        stylePresets: null
+      }
+    );
+
+    expect(
+      layers.foreground.some((layer) =>
+        String(layer.props.id).includes('basemap-meta-limit')
+      )
+    ).toBe(false);
+  });
+
   it('connects metadata limit frontieres thickness and dotted styling to Deck.gl layers', () => {
     const metadataTable = { id: 'limit-style' } as unknown as ArrowTable;
     const sourceGeoJSON = createLineGeoJSON('styled-meta-limit');

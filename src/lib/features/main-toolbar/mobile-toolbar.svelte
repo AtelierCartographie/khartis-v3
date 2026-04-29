@@ -518,7 +518,7 @@
     display: flex;
     align-items: stretch;
     justify-content: space-around;
-    background: var(--cds-ui-01);
+    background: var(--cds-background);
     border-top: 1px solid var(--cds-ui-03);
     padding-bottom: env(safe-area-inset-bottom, 0px);
     z-index: var(--z-toolbar);

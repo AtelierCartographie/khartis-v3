@@ -4,6 +4,7 @@ import type {
   ProjectHistoryEntry,
   SavedProjectMetadata
 } from '$lib/features/project-management';
+import * as m from '$lib/paraglide/messages';
 import { persistenceRegistry } from '$lib/features/project-management';
 import type {
   ColumnTransformation,
@@ -174,7 +175,7 @@ function createProjectStore() {
     state.currentProject.manifest.name = name;
     state.currentProject.manifest.updatedAt = new Date();
     markAsDirty();
-    addToHistoryFn(container, 'Project name updated');
+    addToHistoryFn(container, m.history_project_name_updated());
   }
 
   function updateProjectData(data: Partial<ProjectData>): void {
@@ -188,7 +189,7 @@ function createProjectStore() {
     };
     state.currentProject.manifest.updatedAt = new Date();
     markAsDirty();
-    addToHistoryFn(container, 'Project data updated');
+    addToHistoryFn(container, m.history_project_data_updated());
   }
 
   function undo(): void {

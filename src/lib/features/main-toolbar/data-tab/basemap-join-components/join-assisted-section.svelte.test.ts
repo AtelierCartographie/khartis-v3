@@ -7,29 +7,46 @@ const source = readFileSync(
   'utf8'
 );
 
-describe('JoinAssistedSection — otherIdentifiers tooltip (S1.1c.iii)', () => {
-  it('defines formatOtherIdentifiers that returns undefined title when otherIdentifiers is empty', () => {
-    expect(source).toContain('function formatOtherIdentifiers(');
+describe('JoinAssistedSection — selected-basemap tooltip (S1.1c.iii)', () => {
+  it('defines buildRowTooltip with selectedBasemapValue and fallback inputs', () => {
+    expect(source).toContain('function buildRowTooltip(');
+    expect(source).toContain('selectedBasemapValue: string | undefined');
     expect(source).toContain(
-      'if (!otherIdentifiers || otherIdentifiers.length === 0) {'
-    );
-    expect(source).toContain("return { title: undefined, label: '' }");
-  });
-
-  it('defines formatOtherIdentifiers that builds a title from join_other_identifiers_tooltip when otherIdentifiers is present', () => {
-    expect(source).toContain("const ids = otherIdentifiers.join(', ');");
-    expect(source).toContain(
-      'title: m.join_other_identifiers_tooltip({ ids })'
+      'extraIdentifiers: string[] | undefined = undefined'
     );
   });
 
-  it('computes otherIds from row.otherIdentifiers for each joined entity row', () => {
-    expect(source).toContain('{@const otherIds = formatOtherIdentifiers(');
-    expect(source).toContain('row.otherIdentifiers');
+  it('disables the tooltip when no basemap value is selected', () => {
+    expect(source).toContain("return { tags: [], text: '', disabled: true };");
   });
 
-  it('renders an InfoPopover with otherIds.title for joined entity rows', () => {
-    expect(source).toContain('text={otherIds.title}');
+  it('feeds the basemap aliases of the selected value as tags', () => {
+    expect(source).toContain('basemapAliasesByValue?.[selectedBasemapValue];');
+    expect(source).toContain('const tags: string[] = [];');
+  });
+
+  it('builds the joined-row tooltip from the selected basemap value', () => {
+    expect(source).toContain('{@const joinedTooltip = buildRowTooltip(');
+    expect(source).toContain('row.basemapValue');
+  });
+
+  it('builds the verify-row tooltip from the selected mapping', () => {
+    expect(source).toContain('{@const verifyTooltip = buildRowTooltip(');
+    expect(source).toContain('row.selectedMapping');
+  });
+
+  it('builds the unrecognized-row tooltip from the pending selection', () => {
+    expect(source).toContain('{@const unrecognizedTooltip = buildRowTooltip(');
+    expect(source).toContain('pendingUnrecognizedSelections.get(entity)');
+  });
+
+  it('passes tags and disabled props to InfoPopover for each category', () => {
+    expect(source).toContain('tags={joinedTooltip.tags}');
+    expect(source).toContain('disabled={joinedTooltip.disabled}');
+    expect(source).toContain('tags={verifyTooltip.tags}');
+    expect(source).toContain('disabled={verifyTooltip.disabled}');
+    expect(source).toContain('tags={unrecognizedTooltip.tags}');
+    expect(source).toContain('disabled={unrecognizedTooltip.disabled}');
   });
 
   it('marks the validated action as a disabled button with validated aria-label', () => {

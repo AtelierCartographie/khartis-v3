@@ -1,6 +1,7 @@
 import type { AsyncDuckDBConnection } from '@duckdb/duckdb-wasm';
 import { tableFromIPC } from '@uwdata/flechette';
 import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
+import * as m from '$lib/paraglide/messages';
 import { DUCK_CONST } from '../constants';
 import type {
   DuckDBStreamingBindings,
@@ -35,11 +36,11 @@ export async function executeQuery(
     );
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : 'Unknown DuckDB error';
+      error instanceof Error ? error.message : m.error_unknown_duckdb();
     const truncatedQuery =
       query.length > 200 ? query.substring(0, 200) + '...' : query;
     throw new DuckDBError(
-      `Query execution failed: ${message}`,
+      m.error_query_execution_failed({ message }),
       truncatedQuery,
       {
         originalError: error instanceof Error ? error.name : String(error)
@@ -93,7 +94,7 @@ export async function executeQueryStreaming(
         let header = await bindings.startPendingQuery(conn, query, true);
         while (header === null) {
           if (bindings.isDetached?.()) {
-            throw new Error('DuckDB worker detached while streaming query');
+            throw new Error(m.error_worker_detached_query());
           }
           header = await bindings.pollPendingQuery(conn);
         }
@@ -109,7 +110,7 @@ export async function executeQueryStreaming(
           let result = await bindings.fetchQueryResults(conn);
           while (result === null) {
             if (bindings.isDetached?.()) {
-              throw new Error('DuckDB worker detached while streaming results');
+              throw new Error(m.error_worker_detached_results());
             }
             result = await bindings.fetchQueryResults(conn);
           }
@@ -144,11 +145,11 @@ export async function executeQueryStreaming(
     return toUint8Array(fallbackBuffer);
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : 'Unknown DuckDB error';
+      error instanceof Error ? error.message : m.error_unknown_duckdb();
     const truncatedQuery =
       query.length > 200 ? query.substring(0, 200) + '...' : query;
     throw new DuckDBError(
-      `Streaming query failed: ${message}`,
+      m.error_streaming_query_failed({ message }),
       truncatedQuery,
       { originalError: error instanceof Error ? error.name : String(error) }
     );

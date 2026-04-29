@@ -1,5 +1,6 @@
 <script lang="ts">
   import Calendar from 'carbon-icons-svelte/lib/Calendar.svelte';
+  import { m } from '$lib/paraglide/messages.js';
   import LocationFilled from 'carbon-icons-svelte/lib/LocationFilled.svelte';
   import LocationStarFilled from 'carbon-icons-svelte/lib/LocationStarFilled.svelte';
   import {
@@ -70,11 +71,11 @@
       <Calendar size={16} />
     </span>
   {:else if type === 'numeric'}
-    <span class="badge-icon-text">123</span>
+    <span class="badge-icon-text">{m.variable_badge_number_example()}</span>
   {:else if type === 'boolean'}
-    <span class="badge-icon-text">T/F</span>
+    <span class="badge-icon-text">{m.variable_badge_boolean_example()}</span>
   {:else if type === 'string'}
-    <span class="badge-icon-text">ABC</span>
+    <span class="badge-icon-text">{m.variable_badge_text_example()}</span>
   {/if}
 </svelte:element>
 

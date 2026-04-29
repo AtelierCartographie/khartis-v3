@@ -1,11 +1,12 @@
 <script lang="ts">
   import { loadingStore } from '$lib/features/commons/store/loading.store.svelte';
+  import { m } from '$lib/paraglide/messages.js';
 </script>
 
 {#if loadingStore.isLoading}
   <div
     class="global-loading-indicator"
-    aria-label="Chargement en cours"
+    aria-label={m.loading_indicator_label()}
     role="status"
   >
     <div class="spinner"></div>

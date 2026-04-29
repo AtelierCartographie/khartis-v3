@@ -72,13 +72,7 @@ describe('map interaction mode utils', () => {
   });
 
   it('returns the expected orthographic controller for each zoom mode', () => {
-    expect(resolveOrthographicInteractionController(true)).toEqual({
-      dragPan: false,
-      scrollZoom: false,
-      doubleClickZoom: false,
-      touchZoom: false,
-      keyboard: false
-    });
+    expect(resolveOrthographicInteractionController(true)).toBe(false);
     expect(resolveOrthographicInteractionController(false)).toEqual({
       dragPan: true,
       scrollZoom: false,

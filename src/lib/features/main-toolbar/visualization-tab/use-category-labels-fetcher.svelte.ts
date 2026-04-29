@@ -6,13 +6,14 @@ import {
   type ResolveCategoryLabelsOptions
 } from './use-category-labels.svelte';
 
+import { m } from '$lib/paraglide/messages.js';
+
 export const CATEGORY_LABEL_FETCH_ERROR = {
-  FILL: 'Failed to fetch category labels',
-  STROKE: 'Failed to fetch stroke category labels',
-  SYMBOL_FILL: 'Failed to fetch symbol fill category labels',
-  TEXT_BACKGROUND: 'Failed to fetch text background category labels',
-  TEXT_BACKGROUND_STROKE:
-    'Failed to fetch text background stroke category labels'
+  FILL: m.error_category_labels_fill(),
+  STROKE: m.error_category_labels_stroke(),
+  SYMBOL_FILL: m.error_category_labels_symbol_fill(),
+  TEXT_BACKGROUND: m.error_category_labels_text_background(),
+  TEXT_BACKGROUND_STROKE: m.error_category_labels_text_background_stroke()
 } as const;
 
 export type CategoryLabelFetchError =

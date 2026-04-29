@@ -512,7 +512,8 @@
 
   const scaleLabel = $derived.by(() => {
     const units = geoIndicationsState.scale.units;
-    const unitLabel = units === DistanceUnit.KILOMETERS ? 'km' : 'mi';
+    const unitLabel =
+      units === DistanceUnit.KILOMETERS ? m.scale_unit_km() : m.scale_unit_mi();
     return `${formatScaleDistance(effectiveScaleDistance)} ${unitLabel}`;
   });
   const scaleRenderedWidth = $derived(Math.max(8, Math.round(scaleWidth)));
@@ -1251,7 +1252,7 @@
             fill={orientationColor}
             font-family={orientationFontFamily}
           >
-            N
+            {m.orientation_north()}
           </text>
         {:else}
           <circle
@@ -1286,7 +1287,7 @@
             fill={orientationColor}
             font-family={orientationFontFamily}
           >
-            N
+            {m.orientation_north()}
           </text>
         {/if}
       </svg>

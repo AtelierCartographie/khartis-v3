@@ -4,6 +4,7 @@ import {
   escapeIdentifier,
   escapeSqlString
 } from '$lib/features/commons/utils/sanitize.utils';
+import * as m from '$lib/paraglide/messages';
 import {
   DENSITY_LEVEL,
   type DensityLevelOption
@@ -198,9 +199,7 @@ export async function generateDotDensityFromJoin(
       ? 'id'
       : null;
   if (!joinColumn) {
-    throw new Error(
-      `Basemap geometry table "${geometryTableName}" has no __feature_id__ or id column for density join`
-    );
+    throw new Error(m.error_density_no_feature_id({ geometryTableName }));
   }
 
   const geometryColumn = geomCols.find((c) => {
@@ -213,9 +212,7 @@ export async function generateDotDensityFromJoin(
     );
   });
   if (!geometryColumn) {
-    throw new Error(
-      `Basemap geometry table "${geometryTableName}" has no geometry column`
-    );
+    throw new Error(m.error_density_no_geometry({ geometryTableName }));
   }
 
   const cacheTableId = `${datasetTableName}+${geometryTableName}`;
@@ -344,9 +341,7 @@ export async function generateDotDensityFromGeoTable(
     );
   });
   if (!geometryColumn) {
-    throw new Error(
-      `Table "${tableName}" has no geometry column for density generation`
-    );
+    throw new Error(m.error_table_no_geometry_density({ tableName }));
   }
 
   const arrow = await generateDotDensityArrow(

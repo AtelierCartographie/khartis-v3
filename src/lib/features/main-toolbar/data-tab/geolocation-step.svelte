@@ -83,7 +83,7 @@
       let displayText = columnName;
       if (geoCol) {
         const description = GeoColumnDetector.getGeoColumnDescription(geoCol);
-        displayText = `${columnName} – ${description}`;
+        displayText = `${columnName} ${m.separator_en_dash()} ${description}`;
       }
 
       return {
@@ -338,7 +338,9 @@
       dataTabState.geolocation.geoReference !== GeoreferenceType.COORDINATES
     ) {
       dataTabActions.setGeolocationState({
-        geoReference: GeoreferenceType.COORDINATES
+        geoReference: GeoreferenceType.COORDINATES,
+        linkedVariable: null,
+        linkedVariableName: ''
       });
     }
 
@@ -419,6 +421,10 @@
     const linkedName = dataTabState.geolocation.linkedVariableName;
     const suggested = suggestedColumn();
     const geoid = bestGeoidColumn();
+
+    if (isCoordinatesMode) {
+      return;
+    }
 
     if (linkedVar === null && !linkedName && suggested) {
       if (

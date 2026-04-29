@@ -68,7 +68,7 @@
       iconDescription={m.text_format_button()}
       on:click={onTogglePrimaryFormat}
     >
-      Aa
+      {m.text_preview_glyph()}
     </Button>
   </div>
 
@@ -93,7 +93,7 @@
       disabled={!hasPrimaryField || !hasSecondaryField}
       on:click={onToggleSecondaryFormat}
     >
-      Aa
+      {m.text_preview_glyph()}
     </Button>
   </div>
 </div>

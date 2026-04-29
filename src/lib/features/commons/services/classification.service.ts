@@ -2,6 +2,7 @@ import { Duck } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { ClassificationMethod } from '$lib/features/commons/store/visualization.store.svelte';
 import { LogCategory, logger } from '../utils/logger';
+import * as m from '$lib/paraglide/messages';
 import { escapeIdentifier, escapeSqlString } from '../utils/sanitize.utils';
 import { webglToHex } from '../utils/color-utils';
 import {
@@ -274,14 +275,10 @@ export async function calculateBreaks(
     }
 
     if (stats.min === stats.max) {
-      logger.warn(
-        'Insufficient data range for classification',
-        LogCategory.DATA,
-        {
-          min: stats.min,
-          max: stats.max
-        }
-      );
+      logger.warn(m.error_insufficient_data_range(), LogCategory.DATA, {
+        min: stats.min,
+        max: stats.max
+      });
       return {
         breaks: [stats.min],
         counts: [0],
@@ -295,14 +292,10 @@ export async function calculateBreaks(
     const macroName = mapMethodToMacro(method);
 
     if (!macroName) {
-      logger.warn(
-        'No DuckDB macro configured for classification method',
-        LogCategory.DATA,
-        {
-          method,
-          numClasses
-        }
-      );
+      logger.warn(m.error_no_classification_macro(), LogCategory.DATA, {
+        method,
+        numClasses
+      });
       return null;
     }
 

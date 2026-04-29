@@ -69,20 +69,22 @@
       geoAreaOptions.find((o) => o.value === geoArea)?.label || geoArea;
 
     const bodyLines = [
-      '## Basemap Suggestion',
+      m.basemap_suggestion_markdown_title(),
       '',
-      `**Name:** ${name}`,
-      description ? `**Description:** ${description}` : '',
-      `**Data Source:** ${source}`,
-      dataLink ? `**Data Link:** ${dataLink}` : '',
-      geoLevel ? `**Geographic Level:** ${levelLabel}` : '',
-      geoArea ? `**Geographic Area:** ${areaLabel}` : '',
-      year ? `**Data Year:** ${year}` : '',
-      comments ? `\n**Additional Comments:**\n${comments}` : ''
+      m.basemap_suggestion_markdown_name({ name }),
+      description
+        ? m.basemap_suggestion_markdown_description({ description })
+        : '',
+      m.basemap_suggestion_markdown_source({ source }),
+      dataLink ? m.basemap_suggestion_markdown_link({ dataLink }) : '',
+      geoLevel ? m.basemap_suggestion_markdown_level({ levelLabel }) : '',
+      geoArea ? m.basemap_suggestion_markdown_area({ areaLabel }) : '',
+      year ? m.basemap_suggestion_markdown_year({ year }) : '',
+      comments ? m.basemap_suggestion_markdown_comments({ comments }) : ''
     ].filter(Boolean);
 
     const body = bodyLines.join('\n');
-    const title = `[Basemap Suggestion] ${name}`;
+    const title = m.basemap_suggestion_issue_title({ name });
 
     const params = new URLSearchParams({
       labels: 'basemap-suggestion',
@@ -166,7 +168,7 @@
       <div class="form-group half">
         <TextInput
           labelText={m.basemap_suggestion_year()}
-          placeholder="2024"
+          placeholder={m.year_placeholder()}
           bind:value={year}
         />
       </div>

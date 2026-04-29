@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { SimplifiedGeometryType } from '$lib/features/commons/services/viz-suggester.service';
   import { VisualizationType } from '$lib/features/commons/store/visualization.store.svelte';
+  import * as m from '$lib/paraglide/messages';
   import { mapSuggestionToType } from '../suggestion.service';
 
   interface Props {
@@ -24,7 +25,7 @@
         y="28"
         font-size="16"
         font-weight="700"
-        fill="var(--preview-accent)">Aa</text
+        fill="var(--preview-accent)">{m.suggestion_preview_text_a()}</text
       >
       <circle
         cx="30"
@@ -38,7 +39,7 @@
         y="50"
         font-size="11"
         font-weight="600"
-        fill="var(--preview-mid)">Bb</text
+        fill="var(--preview-mid)">{m.suggestion_preview_text_b()}</text
       >
       <circle cx="60" cy="55" r="2.5" fill="var(--preview-mid)" opacity="0.5" />
       <text
@@ -46,7 +47,7 @@
         y="68"
         font-size="13"
         font-weight="600"
-        fill="var(--preview-dark)">Cc</text
+        fill="var(--preview-dark)">{m.suggestion_preview_text_c()}</text
       >
       <circle cx="38" cy="72" r="2" fill="var(--preview-dark)" opacity="0.5" />
       <text
@@ -54,7 +55,7 @@
         y="30"
         font-size="9"
         font-weight="600"
-        fill="var(--preview-light)">Dd</text
+        fill="var(--preview-light)">{m.suggestion_preview_text_d()}</text
       >
       <circle cx="76" cy="34" r="2" fill="var(--preview-light)" opacity="0.5" />
     </svg>
