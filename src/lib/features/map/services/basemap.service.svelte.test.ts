@@ -4,6 +4,7 @@ import { SimplificationLevel } from '$lib/features/commons/types/enums';
 import type { BasemapMetadata } from '../types/basemap.types';
 import {
   findBasemapLayerByType,
+  getCustomBasemapLayerGeometryTypeOverride,
   getAvailableBasemapSimplificationLevels,
   getBasemapVariantFamily,
   getPreferredBasemapFile,
@@ -100,6 +101,23 @@ describe('findBasemapLayerByType', () => {
     );
 
     expect(layer).toBeNull();
+  });
+});
+
+describe('getCustomBasemapLayerGeometryTypeOverride', () => {
+  it('uses line metadata for custom limit helper tables', () => {
+    expect(
+      getCustomBasemapLayerGeometryTypeOverride(BasemapLayerType.LIMIT)
+    ).toBe('MULTILINESTRING');
+    expect(
+      getCustomBasemapLayerGeometryTypeOverride(BasemapLayerType.LINE)
+    ).toBe('MULTILINESTRING');
+  });
+
+  it('uses point metadata for custom centroid helper tables', () => {
+    expect(
+      getCustomBasemapLayerGeometryTypeOverride(BasemapLayerType.CENTROID)
+    ).toBe('POINT');
   });
 });
 

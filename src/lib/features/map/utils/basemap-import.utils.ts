@@ -494,7 +494,15 @@ async function rebuildPolygonDerivedTables(
   try {
     await duck.query(`
       CREATE OR REPLACE TABLE "${escapeIdentifier(innerlinesTableName)}" AS
-      FROM extract_innerlines('${escapeSqlString(tableName)}')
+      WITH extracted AS (
+        SELECT ST_CollectionExtract(geom, 2) AS geom
+        FROM extract_innerlines('${escapeSqlString(tableName)}')
+        WHERE geom IS NOT NULL
+      )
+      SELECT geom
+      FROM extracted
+      WHERE NOT ST_IsEmpty(geom)
+        AND CAST(ST_GeometryType(geom) AS VARCHAR) IN ('LINESTRING', 'MULTILINESTRING')
     `);
   } catch (error) {
     logger.warn(

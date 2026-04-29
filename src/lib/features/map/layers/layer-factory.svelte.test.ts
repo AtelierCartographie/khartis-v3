@@ -166,11 +166,23 @@ function createTableWithRows(
   fieldNames: string[]
 ): ArrowTable {
   return {
+    numRows: rows.length,
     schema: {
       fields: fieldNames.map((name) => ({ name }))
     },
     get(index: number) {
       return rows[index];
+    },
+    getChild(name: string) {
+      if (!fieldNames.includes(name)) {
+        return null;
+      }
+
+      return {
+        get(index: number) {
+          return rows[index]?.[name];
+        }
+      };
     }
   } as unknown as ArrowTable;
 }
@@ -660,6 +672,79 @@ describe('createPolygonLayers', () => {
           String(layer.props.id).startsWith('polygon-layer')
       )
     ).toBe(false);
+  });
+
+  it('maps split representative point symbols through representative feature ids', () => {
+    arrowTableToGeoJSONMock.mockReturnValue({
+      type: 'FeatureCollection',
+      features: [createPolygonFeature('keep', 2024)]
+    } satisfies FeatureCollection<Polygon>);
+    parsePointDataWithProjectionMock.mockReturnValue({
+      length: 2,
+      featureIds: new Uint32Array([0, 1]),
+      positions: new Float64Array([0, 0, 1, 1])
+    });
+    createScatterplotLayerPropsMock.mockImplementation((pointData) => ({
+      data: {
+        length: pointData.length,
+        featureIds: pointData.featureIds,
+        attributes: {}
+      }
+    }));
+
+    const visualization = createSymbolVisualization();
+    visualization.symbol = {
+      ...visualization.symbol!,
+      mode: SymbolMode.PROPORTIONAL,
+      sizeColumn: 'population_2023',
+      minSize: 2,
+      maxSize: 20
+    };
+    const geometryTable = createTableWithRows(
+      [
+        { id: 'DEU', geometry: null },
+        { id: 'FRA', geometry: null }
+      ],
+      ['id', 'geometry']
+    );
+    const representativeTable = createTableWithRows(
+      [
+        { id: 'FRA', geometry: null },
+        { id: 'DEU', geometry: null }
+      ],
+      ['id', 'geometry']
+    );
+    const datasetTable = createTableWithRows(
+      [
+        { basemap_id: 'FRA', population_2023: 10 },
+        { basemap_id: 'DEU', population_2023: 100 }
+      ],
+      ['basemap_id', 'population_2023']
+    );
+
+    const layers = createPolygonLayers(geometryTable, createGeometryInfo(), {
+      ...createContext(visualization),
+      statistics: { min: 10, max: 100 },
+      representativePointTable: representativeTable,
+      representativePointGeometryInfo: {
+        ...createPointGeometryInfo(),
+        type: 'POINT' as GeometryInfo['type']
+      },
+      splitDatasetTable: datasetTable,
+      splitFeatureIdColumn: 'id'
+    });
+
+    const pointLayer = layers.find((layer) =>
+      String(layer.props.id).includes('point-layer')
+    );
+    const radii = (
+      pointLayer?.props.data as {
+        attributes?: { getRadius?: { value?: Float32Array } };
+      }
+    )?.attributes?.getRadius?.value;
+
+    expect(radii).toBeDefined();
+    expect(radii![0]).toBeLessThan(radii![1]);
   });
 
   it('renders the GeoJSON fallback pattern below the polygon stroke', () => {

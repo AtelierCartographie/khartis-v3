@@ -18,6 +18,7 @@ import {
   fetchArrowTableWithGeometry
 } from '../../duckdb/orchestrator/arrow-ops';
 import { INTERNAL_COLUMN } from '../../commons/constants/data.constants';
+import { GEOMETRY_WKT_TYPES } from '../../commons/constants/geometry.constants';
 
 const BASEMAP_METADATA_PATH = '/basemaps/all-basemaps-metadata.json';
 const BASEMAP_ATTRIBUTES_PATH = '/basemaps/all-basemaps-attributes.parquet';
@@ -235,6 +236,23 @@ export function findBasemapLayerByType(
   return metadata.layers.find((layer) => layer.type === layerType) ?? null;
 }
 
+export function getCustomBasemapLayerGeometryTypeOverride(
+  layerType: BasemapLayerType | null | undefined
+): string | undefined {
+  switch (layerType) {
+    case BasemapLayerType.LIMIT:
+    case BasemapLayerType.LINE:
+      return GEOMETRY_WKT_TYPES.MULTI_LINE_STRING;
+    case BasemapLayerType.CENTROID:
+    case BasemapLayerType.POINT:
+      return GEOMETRY_WKT_TYPES.POINT;
+    case BasemapLayerType.POLYGON:
+      return GEOMETRY_WKT_TYPES.MULTI_POLYGON;
+    default:
+      return undefined;
+  }
+}
+
 function createLoadedBasemapVariant(
   metadata: BasemapMetadata,
   geometryTable: ArrowTable,
@@ -423,7 +441,8 @@ function createBasemapService() {
 
   async function loadGeometryFromDuckTable(
     tableName: string,
-    projectColumns?: readonly string[] | null
+    projectColumns?: readonly string[] | null,
+    geometryTypeOverride?: string
   ): Promise<ArrowTable> {
     if (!Duck) {
       throw new Error('DuckDB not initialized');
@@ -441,7 +460,8 @@ function createBasemapService() {
       tableName,
       Duck,
       undefined,
-      geomColumn
+      geomColumn,
+      geometryTypeOverride ? { geometryType: geometryTypeOverride } : undefined
     );
   }
 
@@ -462,8 +482,15 @@ function createBasemapService() {
   ): Promise<ArrowTable> {
     const shouldReadFromDuck =
       metadata.isCustom && (await doesDuckTableExist(layerFile));
+    const customLayerType = shouldReadFromDuck
+      ? metadata.layers.find((layer) => layer.file === layerFile)?.type
+      : null;
     return shouldReadFromDuck
-      ? loadGeometryFromDuckTable(layerFile, [INTERNAL_COLUMN.FEATURE_ID])
+      ? loadGeometryFromDuckTable(
+          layerFile,
+          [INTERNAL_COLUMN.FEATURE_ID],
+          getCustomBasemapLayerGeometryTypeOverride(customLayerType)
+        )
       : loadGeometryFromParquet(layerFile);
   }
 
