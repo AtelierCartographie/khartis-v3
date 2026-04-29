@@ -1,3 +1,4 @@
+import * as m from '$lib/paraglide/messages';
 import { dataOrchestratorService } from '../../services/data-orchestrator.service.svelte';
 import { LogCategory, logger } from '../../utils/logger';
 import type { UploadedFile } from '../create-project.types';
@@ -60,7 +61,7 @@ export async function addFilesToProject(
   newFiles: UploadedFile[]
 ): Promise<void> {
   if (!container._state.currentProject) {
-    throw new Error('No project loaded');
+    throw new Error(m.history_no_project_loaded());
   }
 
   if (!container._state.currentProject.data) {

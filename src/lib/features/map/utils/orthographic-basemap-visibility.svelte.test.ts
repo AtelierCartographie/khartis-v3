@@ -7,31 +7,16 @@ describe('shouldShowOrthographicBasemapLayers', () => {
     expect(
       shouldShowOrthographicBasemapLayers({
         isOrthographicMode: true,
-        isOSMActive: false,
-        hasReferenceBasemap: false,
-        hasUserData: false
+        isOSMActive: false
       })
     ).toBe(true);
   });
 
-  it('hides orthographic basemap layers when user data is present without a selected basemap', () => {
+  it('keeps configurable orthographic background layers visible with standalone data', () => {
     expect(
       shouldShowOrthographicBasemapLayers({
         isOrthographicMode: true,
-        isOSMActive: false,
-        hasReferenceBasemap: false,
-        hasUserData: true
-      })
-    ).toBe(false);
-  });
-
-  it('keeps the basemap visible when a reference basemap has been selected', () => {
-    expect(
-      shouldShowOrthographicBasemapLayers({
-        isOrthographicMode: true,
-        isOSMActive: false,
-        hasReferenceBasemap: true,
-        hasUserData: true
+        isOSMActive: false
       })
     ).toBe(true);
   });
@@ -40,18 +25,14 @@ describe('shouldShowOrthographicBasemapLayers', () => {
     expect(
       shouldShowOrthographicBasemapLayers({
         isOrthographicMode: true,
-        isOSMActive: true,
-        hasReferenceBasemap: true,
-        hasUserData: false
+        isOSMActive: true
       })
     ).toBe(false);
 
     expect(
       shouldShowOrthographicBasemapLayers({
         isOrthographicMode: false,
-        isOSMActive: false,
-        hasReferenceBasemap: true,
-        hasUserData: false
+        isOSMActive: false
       })
     ).toBe(false);
   });

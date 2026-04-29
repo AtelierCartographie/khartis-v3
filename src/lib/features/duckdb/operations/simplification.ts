@@ -1,5 +1,6 @@
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeIdentifier } from '$lib/features/commons/utils/sanitize.utils';
+import * as m from '$lib/paraglide/messages';
 import { DUCK_CONST } from '../constants';
 import type { DuckDBClientForArrow } from '../orchestrator/arrow-ops';
 
@@ -94,7 +95,7 @@ export async function simplifyGeometryTable(
   );
 
   if (!Number.isFinite(tolerance) || tolerance < 0) {
-    throw new Error(`Invalid simplification tolerance: ${tolerance}`);
+    throw new Error(m.error_invalid_simplification({ tolerance }));
   }
 
   const escapedInput = escapeIdentifier(inputTableName);

@@ -67,8 +67,8 @@ export async function extractZip(file: File): Promise<ZipExtractionResult> {
       totalSize += content.byteLength;
       if (totalSize > MAX_DECOMPRESSED_SIZE) {
         throw new Error(
-          m.pipeline_error_zip_extract_failed({
-            error: `Decompressed size exceeds ${MAX_DECOMPRESSED_SIZE / (1024 * 1024)}MB limit`
+          m.error_zip_size_exceeded({
+            limit: MAX_DECOMPRESSED_SIZE / (1024 * 1024)
           })
         );
       }

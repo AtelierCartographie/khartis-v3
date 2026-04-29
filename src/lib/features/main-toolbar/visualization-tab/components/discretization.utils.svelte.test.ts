@@ -18,9 +18,8 @@ describe('resolveDiscretizationLabel', () => {
   });
 
   it('formats the compact summary as "<method>, <count> classes"', () => {
-    expect(source).toContain('return `${methodLabel}, ${numClasses} classes`;');
-    expect(source).not.toContain(
-      'm.discretization_num_classes().toLowerCase()'
+    expect(source).toContain(
+      'return `${methodLabel}, ${numClasses} ${m.discretization_classes_suffix()}`;'
     );
   });
 

@@ -6,6 +6,7 @@ import {
 } from '$lib/features/commons/store/create-project.types';
 import type { GeoJSONFeatureCollection } from '$lib/types/data';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import * as m from '$lib/paraglide/messages';
 import type {
   FileProcessor,
   ProcessContext,
@@ -117,7 +118,7 @@ function parseGpxToGeoJson(content: string): GeoJSONFeatureCollection {
   }
 
   if (features.length === 0) {
-    throw new ParseError('Unable to extract GPX points', FileType.GPX);
+    throw new ParseError(m.error_gpx_extraction_failed(), FileType.GPX);
   }
 
   return {
@@ -147,7 +148,7 @@ async function readGpxContent(file: UploadedFile): Promise<string> {
     return new TextDecoder().decode(file.content);
   }
 
-  throw new ParseError('Missing GPX content', FileType.GPX, {
+  throw new ParseError(m.error_gpx_missing_content(), FileType.GPX, {
     fileId: file.id,
     fileName: file.name
   });

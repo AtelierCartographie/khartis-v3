@@ -18,9 +18,10 @@ export async function processRemoteFile(
   const { tableName: providedTableName, decimalSeparator } = options;
   let filename: string;
   try {
-    filename = new URL(url).pathname.split('/').pop() || 'remote_file';
+    filename =
+      new URL(url).pathname.split('/').pop() || m.remote_file_default_name();
   } catch {
-    filename = url.split('/').pop() || 'remote_file';
+    filename = url.split('/').pop() || m.remote_file_default_name();
   }
 
   if (isZipArchiveName(filename)) {
@@ -73,7 +74,7 @@ export async function processRemoteZipFile(
     }
 
     const arrayBuffer = await response.arrayBuffer();
-    const filename = url.split('/').pop() || 'remote.zip';
+    const filename = url.split('/').pop() || m.remote_zip_default_name();
     const file = new File([arrayBuffer], filename, { type: MIME.ZIP });
     const result = await processZipFile(file);
 

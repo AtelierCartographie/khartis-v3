@@ -20,7 +20,7 @@ type DuckDatasetJoinState = Pick<
 interface ResolvePersistedJoinStateOptions {
   file: Pick<
     UploadedFile,
-    'joinedBasemap' | 'geoColumn' | 'gpsMode' | 'gpsColumns'
+    'joinedBasemap' | 'geoColumn' | 'gpsMode' | 'gpsColumns' | 'joinCorrections'
   >;
   duckDataset?: DuckDatasetJoinState | null;
   selectedBasemapId?: string | null;
@@ -34,6 +34,7 @@ interface PersistedJoinState {
   geoColumn?: string;
   gpsMode?: boolean;
   gpsColumns?: GPSColumns;
+  joinCorrections?: Record<string, string>;
 }
 
 function isOSMBasemapId(basemapId?: string | null): basemapId is string {
@@ -77,7 +78,11 @@ export function resolvePersistedJoinState(
     joinedBasemap: file.joinedBasemap,
     geoColumn: file.geoColumn,
     gpsMode: file.gpsMode,
-    gpsColumns: file.gpsColumns
+    gpsColumns: file.gpsColumns,
+    joinCorrections:
+      file.joinCorrections && Object.keys(file.joinCorrections).length > 0
+        ? file.joinCorrections
+        : undefined
   };
 
   if (duckDataset?.joinedBasemap) {

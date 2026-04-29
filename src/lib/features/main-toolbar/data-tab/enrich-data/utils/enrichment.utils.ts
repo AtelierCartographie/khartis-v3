@@ -8,6 +8,7 @@ import {
   INTERNAL_COLUMN
 } from '$lib/features/commons/constants/data.constants';
 import type { DatasetResult } from '$lib/features/data-pipeline';
+import * as m from '$lib/paraglide/messages.js';
 
 export interface EnrichDataFieldItem {
   id: number;
@@ -39,7 +40,7 @@ export function buildEnrichDataFieldItems(
       let displayText = col.name;
       if (geoCol) {
         const description = GeoColumnDetector.getGeoColumnDescription(geoCol);
-        displayText = `${col.name} – ${description}`;
+        displayText = `${col.name} ${m.separator_en_dash()} ${description}`;
       }
 
       return {

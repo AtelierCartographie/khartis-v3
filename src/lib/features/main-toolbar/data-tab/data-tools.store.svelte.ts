@@ -20,6 +20,7 @@ export interface DataToolsState {
   calculatorFormula: string;
   calculatorTestResult: unknown;
   calculatorError: string | null;
+  hasActiveFilters: boolean;
 }
 
 const state = $state<DataToolsState>({
@@ -30,7 +31,8 @@ const state = $state<DataToolsState>({
   calculatorName: '',
   calculatorFormula: '',
   calculatorTestResult: null,
-  calculatorError: null
+  calculatorError: null,
+  hasActiveFilters: false
 });
 
 function notifyPersistence(
@@ -117,6 +119,10 @@ function resetSearch() {
   notifyPersistence('IMMEDIATE');
 }
 
+function setHasActiveFilters(value: boolean) {
+  state.hasActiveFilters = value;
+}
+
 function reset() {
   restoreFromSerialized(undefined);
 }
@@ -149,6 +155,9 @@ export const dataToolsStore = {
   get calculatorError() {
     return state.calculatorError;
   },
+  get hasActiveFilters() {
+    return state.hasActiveFilters;
+  },
   openTool,
   closeTool,
   toggleTool,
@@ -159,6 +168,7 @@ export const dataToolsStore = {
   setCalculatorFormula,
   setCalculatorTestResult,
   setCalculatorError,
+  setHasActiveFilters,
   resetCalculator,
   resetSearch,
   reset
@@ -172,7 +182,8 @@ persistenceRegistry.register({
     searchSource: state.searchSource,
     replaceValue: state.replaceValue,
     calculatorName: state.calculatorName,
-    calculatorFormula: state.calculatorFormula
+    calculatorFormula: state.calculatorFormula,
+    hasActiveFilters: state.hasActiveFilters
   }),
   deserialize: (data: unknown) => restoreFromSerialized(data),
   reset,

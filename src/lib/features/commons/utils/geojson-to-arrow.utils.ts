@@ -1,3 +1,4 @@
+import * as m from '$lib/paraglide/messages';
 import type { GeoJSONFeature, GeoJSONFeatureCollection } from '$lib/types/data';
 import {
   Bool,
@@ -25,9 +26,7 @@ export function convertGeoJSONToArrow(
   const features = geojson.features;
 
   if (!features || features.length === 0) {
-    throw new Error(
-      'GeoJSON must contain at least one feature for Arrow conversion'
-    );
+    throw new Error(m.error_geojson_conversion_failed());
   }
 
   const schemaInfo = inferGeoJSONSchema(features);

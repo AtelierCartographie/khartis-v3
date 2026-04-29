@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
+  import { m } from '$lib/paraglide/messages.js';
   import { Slider } from 'carbon-components-svelte';
   import CompactNumberInput from './compact-number-input.svelte';
 
@@ -44,7 +45,7 @@
 
   const inputId = $derived(id ?? fallbackInputId);
   const sliderId = $derived(`${id ?? fallbackSliderId}-control`);
-  const accessibleLabel = $derived(label || 'Slider');
+  const accessibleLabel = $derived(label || m.slider_default_aria_label());
 
   let pendingTimer: ReturnType<typeof setTimeout> | null = null;
   let pendingValue: number | null = null;

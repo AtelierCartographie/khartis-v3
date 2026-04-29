@@ -112,14 +112,19 @@ async function buildPreparedGeoJsonSnapshot(
   return sanitizePreparedGeoJSON(serialized) ?? serialized;
 }
 
+type JoinSnapshotUpdates = Partial<
+  Pick<
+    UploadedFile,
+    'joinedBasemap' | 'geoColumn' | 'gpsMode' | 'gpsColumns' | 'joinCorrections'
+  >
+>;
+
 function updateSourceFileSnapshot(
   sourceFile: UploadedFile,
   tableName: string,
   rows: Record<string, JsonValue>[],
   statistics: Record<string, unknown>,
-  updates: Partial<
-    Pick<UploadedFile, 'joinedBasemap' | 'geoColumn' | 'gpsMode' | 'gpsColumns'>
-  >,
+  updates: JoinSnapshotUpdates,
   preparedGeoJSON?: string
 ): void {
   sourceFile.duckdbTableName = tableName;
@@ -142,15 +147,16 @@ function updateSourceFileSnapshot(
   if ('gpsColumns' in updates) {
     sourceFile.gpsColumns = updates.gpsColumns;
   }
+  if ('joinCorrections' in updates) {
+    sourceFile.joinCorrections = updates.joinCorrections;
+  }
 }
 
 export async function persistTabularSourceSnapshot(input: {
   sourceFileId: string;
   tableName: string;
   duckColumns: DuckAnalyticsColumn[];
-  joinState?: Partial<
-    Pick<UploadedFile, 'joinedBasemap' | 'geoColumn' | 'gpsMode' | 'gpsColumns'>
-  >;
+  joinState?: JoinSnapshotUpdates;
 }): Promise<void> {
   const { sourceFileId, tableName, duckColumns, joinState = {} } = input;
   const sourceFile = projectStore.currentProject?.data?.sourceFiles?.find(

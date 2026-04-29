@@ -4,6 +4,7 @@ import {
   escapeIdentifier,
   escapeSqlString
 } from '$lib/features/commons/utils/sanitize.utils';
+import * as m from '$lib/paraglide/messages';
 import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
 import { isOSMBasemap } from '$lib/features/map/services/osm-tile.service';
 import type {
@@ -483,9 +484,7 @@ async function ensureBasemapAttributesLoaded(
     )) as Array<{ table_name: string }>;
 
     if (!recheck || recheck.length === 0) {
-      throw new Error(
-        'basemap_attributes table could not be loaded. Check network connectivity and basemap files.'
-      );
+      throw new Error(m.error_basemap_attributes_load());
     }
   }
 }
@@ -686,9 +685,7 @@ async function ensureBasemapHasAttributes(
 
     const generated = await generateAttributesForBasemap(basemapId, Duck);
     if (!generated) {
-      throw new Error(
-        `No attributes found for basemap '${basemapId}'. The basemap may not be properly indexed in basemap_attributes.`
-      );
+      throw new Error(m.error_no_attributes_basemap({ basemapId }));
     }
 
     const recheck = (await Duck.query(
@@ -697,9 +694,7 @@ async function ensureBasemapHasAttributes(
     )) as Array<{ cnt: number }>;
 
     if (!recheck?.[0]?.cnt || recheck[0].cnt === 0) {
-      throw new Error(
-        `No attributes found for basemap '${basemapId}' even after generation from geometry.`
-      );
+      throw new Error(m.error_no_attributes_basemap_generated({ basemapId }));
     }
 
     // New basemap attributes were added — invalidate cache so they're included
@@ -726,6 +721,96 @@ export async function getBasemapAttributeValues(
   )) as Array<{ raw: string }>;
 
   return rows.map((r) => r.raw);
+}
+
+export interface BasemapAlias {
+  value: string;
+  variant: string | null;
+}
+
+/**
+ * Returns alias rows grouped by basemap entity.
+ *
+ * The `basemap_attributes` parquet does NOT carry a shared entity id;
+ * instead, rows for the same feature are emitted consecutively, with
+ * the pivot variant (e.g. `iso3_code`) appearing once per entity.
+ * We reconstruct entity groups by counting pivot occurrences with a
+ * cumulative window and gathering every other row that shares the
+ * same group index.
+ *
+ * For monde-countries-2024-medium this surfaces, for `raw='BRA'`,
+ * the alternative labels {Brazil, Brésil, Brasilien, BR} with their
+ * source variant (name_engl, name_fren, name_germ, cntr_id).
+ */
+export async function getBasemapAttributeAliasesByValue(
+  basemap: BasemapMetadata,
+  Duck: DuckDBClientForJoin
+): Promise<Record<string, BasemapAlias[]>> {
+  const basemapId = getBasemapAttributesId(basemap);
+  await ensureBasemapHasAttributes(basemapId, Duck);
+
+  const escapedBasemapId = escapeSqlString(basemapId);
+
+  const firstVariantRows = (await Duck.query(
+    `SELECT variant
+     FROM basemap_attributes
+     WHERE basemap = '${escapedBasemapId}'
+     LIMIT 1`,
+    { format: 'array' }
+  )) as Array<{ variant: string | null }>;
+  const pivotVariant = firstVariantRows[0]?.variant;
+  if (!pivotVariant) return {};
+
+  const escapedPivot = escapeSqlString(pivotVariant);
+
+  const rows = (await Duck.query(
+    `WITH numbered AS (
+       SELECT raw, variant, ROW_NUMBER() OVER () AS rn
+       FROM basemap_attributes
+       WHERE basemap = '${escapedBasemapId}'
+     ),
+     grouped AS (
+       SELECT
+         raw,
+         variant,
+         rn,
+         SUM(CASE WHEN variant = '${escapedPivot}' THEN 1 ELSE 0 END)
+           OVER (ORDER BY rn ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+           AS group_id
+       FROM numbered
+     )
+     SELECT raw, variant, group_id, rn
+     FROM grouped
+     ORDER BY group_id, rn`,
+    { format: 'array' }
+  )) as Array<{
+    raw: string;
+    variant: string | null;
+    group_id: number;
+    rn: number;
+  }>;
+
+  const groups = new Map<number, BasemapAlias[]>();
+  for (const row of rows) {
+    if (!row.raw || row.group_id == null) continue;
+    let bucket = groups.get(row.group_id);
+    if (!bucket) {
+      bucket = [];
+      groups.set(row.group_id, bucket);
+    }
+    bucket.push({ value: row.raw, variant: row.variant ?? null });
+  }
+
+  const result: Record<string, BasemapAlias[]> = {};
+  for (const row of rows) {
+    if (!row.raw) continue;
+    if (row.raw in result) continue;
+    const bucket = groups.get(row.group_id);
+    if (!bucket) continue;
+    const aliases = bucket.filter((entry) => entry.value !== row.raw);
+    if (aliases.length > 0) result[row.raw] = aliases;
+  }
+  return result;
 }
 
 export async function applyJoinCorrections(
@@ -863,7 +948,10 @@ export async function finalizeJoin(
     const columnExists = dataset.columns.some((c) => c.name === geoColumn);
     if (!columnExists) {
       throw new Error(
-        `Column '${geoColumn}' not found in dataset. Available columns: ${dataset.columns.map((c) => c.name).join(', ')}`
+        m.error_column_not_found({
+          geoColumn,
+          columns: dataset.columns.map((c) => c.name).join(', ')
+        })
       );
     }
   }
@@ -932,7 +1020,7 @@ function finalizeGPSJoin(
 
   const gpsColumns = detectGPSColumns(dataset.columns, dataset.geoDetection);
   if (!gpsColumns) {
-    throw new Error('GPS columns (latitude/longitude) not found in dataset');
+    throw new Error(m.error_gps_columns_not_found());
   }
 
   logger.success('GPS join finalized', LogCategory.DATA, {
@@ -981,9 +1069,7 @@ export async function getJoinedArrowTable(
   );
 
   if (!geometryColumn) {
-    throw new Error(
-      `No geometry column found in basemap geometry table "${geometryTable}".`
-    );
+    throw new Error(m.error_no_geometry_column({ geometryTable }));
   }
 
   const featureIdColumn = geometryTableColumns.find(
