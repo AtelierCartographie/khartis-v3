@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Button from '$lib/features/commons/components/carbon/button.svelte';
+  import Button from '$lib/features/commons/components/button-native.svelte';
   import { FileStatus } from '$lib/features/commons/constants/ui.constants';
   import {
     createProjectActions,
@@ -235,14 +235,14 @@
           <Button
             size="field"
             kind="secondary"
-            on:click={() => (pastedDataValue = '')}
+            onclick={() => (pastedDataValue = '')}
           >
             {m.create_project_clear_button()}
           </Button>
           <Button
             size="field"
             disabled={!!(pastedDataValidation && !pastedDataValidation.isValid)}
-            on:click={handlePasteData}
+            onclick={handlePasteData}
           >
             {m.create_project_process_button()}
           </Button>
@@ -273,7 +273,7 @@
           disabled={!onlineUrlValue.trim() ||
             (urlValidation && !urlValidation.isValid) ||
             createProjectState.newProject.isLoading}
-          on:click={handleLoadOnlineFile}
+          onclick={handleLoadOnlineFile}
         >
           <div class="button-with-loader">
             {#if createProjectState.newProject.isLoading}
@@ -347,7 +347,7 @@
               kind="ghost"
               icon={isDeletingAll ? undefined : TrashCan}
               disabled={isDeletingAll}
-              on:click={handleClearAllFiles}
+              onclick={handleClearAllFiles}
             >
               {#if isDeletingAll}
                 <div class="button-with-loader">
@@ -398,7 +398,7 @@
                 iconDescription={m.cancel()}
                 icon={deletingFileIds.has(file.id) ? undefined : TrashCan}
                 disabled={deletingFileIds.has(file.id)}
-                on:click={() => handleRemoveFile(file.id)}
+                onclick={() => handleRemoveFile(file.id)}
               >
                 {#if deletingFileIds.has(file.id)}
                   <Loading small withOverlay={false} />
@@ -421,7 +421,7 @@
                 iconDescription={m.remove_file_action()}
                 icon={deletingFileIds.has(file.id) ? undefined : TrashCan}
                 disabled={deletingFileIds.has(file.id)}
-                on:click={() => handleRemoveFile(file.id)}
+                onclick={() => handleRemoveFile(file.id)}
               >
                 {#if deletingFileIds.has(file.id)}
                   <Loading small withOverlay={false} />
@@ -457,7 +457,7 @@
                     iconDescription={m.remove_file_action()}
                     icon={deletingFileIds.has(file.id) ? undefined : TrashCan}
                     disabled={deletingFileIds.has(file.id)}
-                    on:click={() => handleRemoveFile(file.id)}
+                    onclick={() => handleRemoveFile(file.id)}
                   >
                     {#if deletingFileIds.has(file.id)}
                       <Loading small withOverlay={false} />
@@ -526,7 +526,7 @@
                     iconDescription={m.remove_file_action()}
                     icon={deletingFileIds.has(file.id) ? undefined : TrashCan}
                     disabled={deletingFileIds.has(file.id)}
-                    on:click={() => handleRemoveFile(file.id)}
+                    onclick={() => handleRemoveFile(file.id)}
                   >
                     {#if deletingFileIds.has(file.id)}
                       <Loading small withOverlay={false} />
