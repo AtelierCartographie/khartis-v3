@@ -483,7 +483,15 @@ export async function addFile(
         return dataPipeline.processUploadedFile(restorableGeoSnapshot);
       }
 
-      if (file.duckdbTableName && !hasRestorableBinarySource) {
+      const hasPersistedAssetSource = Boolean(
+        file.assetRef || file.companionAssetRefs?.length
+      );
+      const hasInlineReplaySource = Boolean(file.content || file.originalFile);
+
+      if (
+        file.duckdbTableName &&
+        (!hasPersistedAssetSource || hasInlineReplaySource)
+      ) {
         return createDatasetFromPreprocessedFile(file);
       }
 

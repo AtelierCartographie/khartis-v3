@@ -24,9 +24,11 @@ import { saveCurrentProject } from './project-persistence';
 import { globalActions } from '../global.svelte';
 import { dataTabStore } from '$lib/features/main-toolbar/data-tab/data-tab.store.svelte';
 import { dataToolsStore } from '$lib/features/main-toolbar/data-tab/data-tools.store.svelte';
+import { projectionStore } from '$lib/features/map/stores/projection.store.svelte';
 
 export function resetAllStores(): void {
   persistenceRegistry.resetAll();
+  projectionStore.reset();
   globalActions.resetNavigationState();
   dataTabStore.reset();
   dataToolsStore.reset();

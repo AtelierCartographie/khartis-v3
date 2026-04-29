@@ -135,6 +135,7 @@ import {
   createProjectActions,
   createProjectState
 } from './create-project.store.svelte';
+import { projectStore } from './project.store.svelte';
 
 function makeUploadedFile(
   id: string,
@@ -161,6 +162,13 @@ describe('createProjectActions.removeUploadedFile', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     createProjectActions.reset();
+    (
+      projectStore as unknown as {
+        currentProject:
+          | { data?: { sourceFiles?: Array<{ name: string }> } }
+          | undefined;
+      }
+    ).currentProject = undefined;
     createProjectState.tryExample.selectedCategory = ExampleCategory.ALL;
   });
 
@@ -225,5 +233,29 @@ describe('createProjectActions.removeUploadedFile', () => {
     expect(createProjectState.newProject.validationErrors).toEqual([]);
     expect(createProjectState.tryExample.selectedExampleId).toBeUndefined();
     expect(createProjectState.tryExample.error).toBeUndefined();
+  });
+
+  it('checks duplicates only inside the pending new-project import session', () => {
+    (
+      projectStore as unknown as {
+        currentProject: { data: { sourceFiles: Array<{ name: string }> } };
+      }
+    ).currentProject = {
+      data: {
+        sourceFiles: [{ name: 'existing.csv' }]
+      }
+    };
+
+    expect(createProjectActions.isFileDuplicate('existing.csv')).toBe(false);
+
+    createProjectState.newProject.uploadedFiles = [
+      {
+        ...makeUploadedFile('pending', 1),
+        name: 'existing.csv',
+        status: FileStatus.COMPLETE
+      }
+    ];
+
+    expect(createProjectActions.isFileDuplicate('existing.csv')).toBe(true);
   });
 });

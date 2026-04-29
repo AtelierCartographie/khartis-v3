@@ -74,18 +74,9 @@ function hasDuplicateFileName(fileName: string): boolean {
   const uploadingFiles = $state.snapshot(
     createProjectState.newProject.uploadedFiles
   );
-  const existsInSession = uploadingFiles.some(
+  return uploadingFiles.some(
     (file) => file.name === fileName && file.status !== FileStatus.ERROR
   );
-
-  if (existsInSession) {
-    return true;
-  }
-
-  const projectFiles = $state.snapshot(
-    projectStore.currentProject?.data?.sourceFiles ?? []
-  );
-  return projectFiles.some((file) => file.name === fileName);
 }
 
 export const createProjectActions = {

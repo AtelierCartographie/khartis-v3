@@ -1,7 +1,8 @@
 <script lang="ts">
   import {
     ExampleCategory,
-    FileStatus
+    FileStatus,
+    GeoreferenceType
   } from '$lib/features/commons/constants/ui.constants';
   import ProjectCard from '$lib/features/commons/components/project-card.svelte';
   import {
@@ -21,10 +22,12 @@
   import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { Duck } from '$lib/features/duckdb';
+  import { detectGPSColumns } from '$lib/features/duckdb/orchestrator/gps-ops';
   import { BasemapSource } from '$lib/features/commons/constants/ui.constants';
   import { PERSISTED_BASEMAP_TYPE } from '$lib/features/main-toolbar/data-tab/services/persisted-basemap';
   import { persistTabularSourceSnapshot } from '$lib/features/main-toolbar/data-tab/services/tabular-source-snapshot';
   import { dataTabStore } from '$lib/features/main-toolbar/data-tab/data-tab.store.svelte';
+  import { applyExampleVisualizationPresets } from './services/example-visualization-preset.service';
   import type { ExampleProject } from '$lib/features/commons/store/create-project.types';
   import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
   import { logger, LogCategory } from '$lib/features/commons/utils/logger';
@@ -179,6 +182,80 @@
     }
   }
 
+  async function applyExampleGPSPreset(file: UploadedFile): Promise<void> {
+    const dataset = datasetsStore.getDatasetBySourceFile(file.id);
+    if (!dataset) {
+      return;
+    }
+
+    const duckDataset =
+      duckDBOrchestrator.getDatasetBySourceFile(file.id) ??
+      duckDBOrchestrator.getDataset(dataset.id);
+    if (!duckDataset) {
+      return;
+    }
+
+    const gpsColumns = detectGPSColumns(
+      duckDataset.columns,
+      duckDataset.geoDetection
+    );
+    if (!gpsColumns) {
+      return;
+    }
+
+    dataTabActions.setGeolocationState({
+      geoReference: GeoreferenceType.COORDINATES,
+      linkedVariable: null,
+      linkedVariableName: '',
+      latitudeColumn: gpsColumns.lat,
+      longitudeColumn: gpsColumns.lon,
+      autoDetected: false
+    });
+    duckDBOrchestrator.updateDatasetJoinInfo(duckDataset.id, {
+      joinedBasemap: undefined,
+      geoColumn: undefined,
+      gpsMode: true,
+      gpsColumns
+    });
+
+    const duckColumns = await Duck.analyse(dataset.tableName, {
+      force: true
+    });
+    await persistTabularSourceSnapshot({
+      sourceFileId: file.id,
+      tableName: dataset.tableName,
+      duckColumns,
+      joinState: {
+        joinedBasemap: undefined,
+        geoColumn: undefined,
+        gpsMode: true,
+        gpsColumns
+      }
+    });
+
+    const basemapStepIndex = dataTabStore.basemapStepIndex;
+    for (let i = 0; i <= basemapStepIndex; i++) {
+      dataTabStore.markStepComplete(i);
+    }
+  }
+
+  function applyExampleVisualizations(
+    example: ExampleProject,
+    file: UploadedFile
+  ): void {
+    const dataset = datasetsStore.getDatasetBySourceFile(file.id);
+    if (!dataset) {
+      logger.warn(
+        'Example dataset not found while applying visualization presets',
+        LogCategory.PROJECT,
+        { exampleId: example.id, fileId: file.id }
+      );
+      return;
+    }
+
+    applyExampleVisualizationPresets(example, dataset);
+  }
+
   function selectCategory(category: ExampleCategory) {
     selectedCategory = category;
   }
@@ -235,6 +312,10 @@
 
       await projectStore.createProject(example.title, [processedExampleFile]);
       await applyExamplePreset(example, processedExampleFile);
+      if (!example.baseMapId) {
+        await applyExampleGPSPreset(processedExampleFile);
+      }
+      applyExampleVisualizations(example, processedExampleFile);
 
       await navigateAfterAction();
     } catch (err) {
