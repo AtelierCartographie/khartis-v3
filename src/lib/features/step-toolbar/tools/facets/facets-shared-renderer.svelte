@@ -966,6 +966,8 @@
     void projectionState.overrideSource;
     void projectionState.selected;
     void projectionState.customCode;
+    void projectionState.suggestionD3Config;
+    void projectionState.activeSuggestionId;
     void projectionState.longitude;
     void projectionState.latitude;
     void projectionState.rotation;

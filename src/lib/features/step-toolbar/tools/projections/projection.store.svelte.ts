@@ -12,12 +12,14 @@ import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store
 import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
 import { mapProjectionStore } from '$lib/features/map/stores/map-projection.store.svelte';
 import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
+import { projectionStore as mapRenderProjectionStore } from '$lib/features/map/stores/projection.store.svelte';
 import type { ProjectionState } from './projections.types';
 import {
   suggestProjectionsForBbox,
   buildProjectionFromSuggestion,
   type ProjectionSuggestion
 } from './projection-suggest.service';
+import type { D3Usage } from 'proj-suggest';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
 import { normalizeBoundsForProjectionSuggestion } from '$lib/features/map/utils/dataset-crs';
@@ -56,6 +58,16 @@ type ProjectionActions = {
 };
 
 const MERCATOR_PROJECTION_TYPE = 'mercator';
+
+function cloneD3UsageConfig(config: D3Usage): D3Usage {
+  return {
+    projection: config.projection,
+    ...(config.rotate ? { rotate: [...config.rotate] } : {}),
+    ...(config.center ? { center: [...config.center] } : {}),
+    ...(config.parallels ? { parallels: [...config.parallels] } : {}),
+    ...(config.snippet ? { snippet: config.snippet } : {})
+  };
+}
 
 function toBoundsFromGpsBounds(gpsBounds: {
   minLon: number;
@@ -108,7 +120,14 @@ function getProjectionAvailabilityContext() {
     currentStyle: basemapStyleStore.selectedStyle,
     preferredStyle: basemapStyleStore.preferredTiledStyle,
     referenceBasemapId: basemapStyleStore.referenceBasemapId,
-    osmBasemapBbox: osmBasemapStore.activeOSMBasemap?.bbox ?? null
+    referenceProjectionPresetId: basemapStyleStore.referenceBasemapId
+      ? (basemapService.currentMetadata?.proj_to?.preset ?? null)
+      : null,
+    osmBasemapBbox: osmBasemapStore.activeOSMBasemap?.bbox ?? null,
+    projectionBbox: mapRenderProjectionStore.isProjectedCoordinates
+      ? null
+      : mapRenderProjectionStore.referenceBbox,
+    projectionPresets: basemapService.projectionPresets
   });
 }
 
@@ -175,6 +194,8 @@ const { actions, getState } = createToolStore<
     ) => {
       s.selected = projectionId;
       s.customCode = undefined;
+      s.suggestionD3Config = undefined;
+      s.activeSuggestionId = undefined;
       s.overrideActive = overrideSource !== undefined;
       s.overrideSource = overrideSource;
       if (applyToMap) {
@@ -185,6 +206,8 @@ const { actions, getState } = createToolStore<
     const clearSelectedInternal = (applyToMap: boolean) => {
       s.selected = DEFAULT_PROJECTION;
       s.customCode = undefined;
+      s.suggestionD3Config = undefined;
+      s.activeSuggestionId = undefined;
       s.overrideActive = false;
       s.overrideSource = undefined;
       if (applyToMap) {
@@ -212,6 +235,8 @@ const { actions, getState } = createToolStore<
         }
 
         s.customCode = code?.trim() || undefined;
+        s.suggestionD3Config = undefined;
+        s.activeSuggestionId = undefined;
         s.overrideActive = Boolean(s.customCode);
         s.overrideSource = s.customCode ? 'manual' : undefined;
       },
@@ -292,10 +317,23 @@ const { actions, getState } = createToolStore<
       suggestion: ProjectionSuggestion,
       overrideSource: ProjectionState['overrideSource']
     ) {
+      if (
+        overrideSource === 'manual' &&
+        s.overrideActive &&
+        s.activeSuggestionId === suggestion.id
+      ) {
+        clearSelectedInternal(true);
+        return;
+      }
+
       const builtProjection = buildProjectionFromSuggestion(suggestion);
+      const activeSuggestionId =
+        overrideSource === 'manual' ? suggestion.id : undefined;
 
       if (builtProjection?.source === 'proj4' && suggestion.proj4String) {
         s.customCode = suggestion.proj4String;
+        s.suggestionD3Config = undefined;
+        s.activeSuggestionId = activeSuggestionId;
         s.selected = DEFAULT_PROJECTION;
         s.overrideActive = true;
         s.overrideSource = overrideSource;
@@ -305,26 +343,34 @@ const { actions, getState } = createToolStore<
           LogCategory.MAP,
           {
             id: suggestion.id,
-            epsg: suggestion.epsg
+            epsg: suggestion.epsg,
+            bbox: suggestion.bbox
           }
         );
         return;
       }
 
-      // Suggestions that fell back to d3 must stay on the preset-projection path.
+      // Suggestions that fell back to d3 must preserve the suggester's native
+      // rotation/parallels instead of collapsing to a generic internal preset.
       if (builtProjection?.source === 'd3' && suggestion.d3Config) {
-        const internalId = mapD3FactoryToInternalId(
-          suggestion.d3Config.projection
+        s.selected = DEFAULT_PROJECTION;
+        s.customCode = undefined;
+        s.suggestionD3Config = cloneD3UsageConfig(suggestion.d3Config);
+        s.activeSuggestionId = activeSuggestionId;
+        s.overrideActive = true;
+        s.overrideSource = overrideSource;
+        mapProjectionStore.setProjection(MERCATOR_PROJECTION_TYPE);
+        logger.info(
+          'Applied projection suggestion via d3 mapping',
+          LogCategory.MAP,
+          {
+            id: suggestion.id,
+            epsg: suggestion.epsg,
+            bbox: suggestion.bbox,
+            d3Projection: suggestion.d3Config.projection
+          }
         );
-        if (internalId) {
-          setSelectedInternal(internalId, true, overrideSource);
-          logger.info(
-            'Applied projection suggestion via d3 mapping',
-            LogCategory.MAP,
-            { id: suggestion.id, internalId }
-          );
-          return;
-        }
+        return;
       }
 
       logger.warn('Could not apply projection suggestion', LogCategory.MAP, {
@@ -334,34 +380,13 @@ const { actions, getState } = createToolStore<
   },
   {
     key: 'projection',
-    serializeFilter: ({ suggestions: _suggestions, ...persisted }) => persisted
+    serializeFilter: ({
+      suggestions: _suggestions,
+      activeSuggestionId: _activeSuggestionId,
+      ...persisted
+    }) => persisted
   }
 );
-
-/** Maps d3 factory names from proj-suggest to internal projection IDs. */
-function mapD3FactoryToInternalId(factoryName: string): string | null {
-  const mapping: Record<string, string> = {
-    geoMercator: 'mercator',
-    geoEquirectangular: 'equirectangular',
-    geoNaturalEarth1: 'natural-earth',
-    geoOrthographic: 'orthographic',
-    geoAlbers: 'albers',
-    geoConicConformal: 'lambert-conformal',
-    geoRobinson: 'robinson',
-    geoStereographic: 'stereographic',
-    geoAzimuthalEqualArea: 'azimuthal-equal-area',
-    geoEqualEarth: 'equal-earth',
-    geoMollweide: 'mollweide',
-    geoAitoff: 'aitoff',
-    geoWinkel3: 'winkel-tripel',
-    geoCylindricalEqualArea: 'gall-peters',
-    geoBonne: 'bonne',
-    geoArmadillo: 'armadillo',
-    geoBertin1953: 'bertin-1953',
-    geoInterruptedMollweide: 'interrupted-mollweide'
-  };
-  return mapping[factoryName] ?? null;
-}
 
 export const projectionActions = actions;
 export const getProjectionState = getState;

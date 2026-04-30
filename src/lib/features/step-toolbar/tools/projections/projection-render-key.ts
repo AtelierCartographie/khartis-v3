@@ -11,6 +11,7 @@ export function buildProjectionRenderKey(state: ProjectionState): string {
   return [
     state.selected,
     state.customCode ?? '',
+    JSON.stringify(state.suggestionD3Config ?? null),
     state.overrideActive ? 'override' : 'default',
     state.overrideSource ?? 'none',
     center,

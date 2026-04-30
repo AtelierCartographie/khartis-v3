@@ -110,6 +110,7 @@ function sampleProjectedBbox(
 ): BBoxTuple | null {
   const [west, south, east, north] = bbox;
   const steps = 32;
+  const interiorSteps = 8;
   const xs: number[] = [];
   const ys: number[] = [];
   const projectPoint = createProjectionPointSampler(projection);
@@ -132,6 +133,14 @@ function sampleProjectedBbox(
     tryProject(east, lat);
   }
   tryProject((west + east) / 2, (south + north) / 2);
+
+  for (let xStep = 1; xStep < interiorSteps; xStep++) {
+    const lon = west + (xStep / interiorSteps) * (east - west);
+    for (let yStep = 1; yStep < interiorSteps; yStep++) {
+      const lat = south + (yStep / interiorSteps) * (north - south);
+      tryProject(lon, lat);
+    }
+  }
 
   return xs.length === 0
     ? null

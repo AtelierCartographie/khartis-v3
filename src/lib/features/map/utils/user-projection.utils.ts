@@ -4,6 +4,7 @@ import {
   fitProjectionToBbox,
   getProjectionById
 } from '$lib/features/commons/utils/projection.utils';
+import { buildD3ProjectionFromConfig } from '$lib/features/commons/utils/d3-projection-config.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type { ProjectionState } from '$lib/features/step-toolbar/tools/projections/projections.types';
 import type { BBox, CanvasSize } from '../types';
@@ -27,6 +28,7 @@ type ProjectionOverrideState = Pick<
   | 'selected'
   | 'overrideActive'
   | 'customCode'
+  | 'suggestionD3Config'
   | 'center'
   | 'longitude'
   | 'latitude'
@@ -178,6 +180,30 @@ export function resolveUserProjectionOverride({
         : undefined;
     }
 
+    if (state.suggestionD3Config) {
+      if (!fitBbox) {
+        return undefined;
+      }
+
+      const projection = buildD3ProjectionFromConfig(state.suggestionD3Config);
+      if (!projection || !isGeoProjection(projection)) {
+        return undefined;
+      }
+
+      applyUserProjectionTransform(projection, state);
+      fitProjectionToBbox(
+        projection,
+        fitBbox,
+        viewportSize.width,
+        viewportSize.height,
+        padding
+      );
+
+      return isUsableGeoProjection(projection, fitBbox)
+        ? projection
+        : undefined;
+    }
+
     const presetId = getCompositeProjectionPresetId(state.selected);
     if (presetId) {
       if (
@@ -187,6 +213,15 @@ export function resolveUserProjectionOverride({
           projectionPresets
         )
       ) {
+        logger.warn(
+          'Composite projection is incompatible with current bbox',
+          LogCategory.MAP,
+          {
+            selected: state.selected,
+            presetId,
+            fitBbox
+          }
+        );
         return undefined;
       }
 

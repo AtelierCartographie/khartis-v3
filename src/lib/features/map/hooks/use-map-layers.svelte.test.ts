@@ -9,7 +9,7 @@ const source = readFileSync(
 
 describe('useMapLayers source', () => {
   it('keeps file-backed custom basemap metadata layers available to the renderer', () => {
-    expect(source).toContain('if (currentMetadata) {');
+    expect(source).toContain('if (shouldShowBasemapLayers && currentMetadata)');
     expect(source).not.toContain(
       'if (currentMetadata && !currentMetadata.isCustom && worldBaseTable) {'
     );
@@ -56,9 +56,9 @@ describe('useMapLayers source', () => {
   });
 
   it('passes the active basemap bbox to generated basemap layers', () => {
-    expect(source).toContain(
-      'bbox: currentMetadata?.bbox ?? projectionFitBbox'
-    );
+    expect(source).toContain('bbox: shouldShowBasemapLayers');
+    expect(source).toContain('? (currentMetadata?.bbox ?? projectionFitBbox)');
+    expect(source).toContain(': projectionFitBbox');
   });
 
   it('only applies modelMatrix in the Deck.gl OrthographicView engine', () => {
@@ -89,20 +89,35 @@ describe('useMapLayers source', () => {
     expect(source).toContain('hasJoinedBasemapReference');
   });
 
-  it('limits split basemap geometry to joined rows while a manual projection is active', () => {
-    expect(source).toContain('function getManualProjectionSplitReferenceTable');
+  it('keeps generated ocean and graticule layers renderable without a catalog basemap', () => {
+    expect(source).toContain('GENERATED_ORTHOGRAPHIC_BASEMAP_LAYER_IDS');
+    expect(source).toContain('function hasVisibleGeneratedBasemapLayer()');
+    expect(source).toContain('const shouldShowGeneratedBasemapLayers =');
+    expect(source).toContain('hasVisibleGeneratedBasemapLayer();');
+    expect(source).toContain(
+      'shouldShowBasemapLayers || shouldShowGeneratedBasemapLayers'
+    );
+  });
+
+  it('does not attach catalog basemap tables to generated-only layers', () => {
+    expect(source).toContain('if (shouldShowBasemapLayers && currentMetadata)');
+    expect(source).toContain('shouldShowBasemapLayers ? worldBaseTable : null');
+    expect(source).toContain('projection: shouldShowBasemapLayers');
+    expect(source).toContain('stylePresets: shouldShowBasemapLayers');
+  });
+
+  it('keeps split dataset geometry out of catalog basemap rendering', () => {
+    expect(source).not.toContain(
+      'function getManualProjectionSplitReferenceTable'
+    );
     expect(source).toContain('getSplitMatchedGeometryRowIndices(');
     expect(source).toContain(
       'selectRowsByIndices(split.geometry, matchedRows)'
     );
+    expect(source).not.toContain('manualProjectionBasemapTable');
+    expect(source).toContain('getRequestedMetadataLayerTypes(worldBaseTable)');
     expect(source).toContain(
-      'const basemapGeometryTable =\n        manualProjectionBasemapTable ?? worldBaseTable;'
-    );
-    expect(source).toContain(
-      'getRequestedMetadataLayerTypes(basemapGeometryTable)'
-    );
-    expect(source).toContain(
-      'createBasemapLayers(\n            basemapGeometryTable,'
+      'createBasemapLayers(\n            shouldShowBasemapLayers ? worldBaseTable : null,'
     );
   });
 
