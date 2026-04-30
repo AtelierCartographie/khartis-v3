@@ -4,8 +4,11 @@ import {
   DEFAULT_MAP_BASE_ZOOM,
   MAX_MAP_ZOOM_PERCENT,
   MIN_MAP_ZOOM_PERCENT,
+  ORTHOGRAPHIC_MAP_BASE_ZOOM,
   resolveMapZoomBounds,
-  resolveMapZoomLevel
+  resolveMapZoomLevel,
+  resolveOrthographicZoomBounds,
+  resolveOrthographicZoomLevel
 } from '$lib/features/map/utils/map-zoom.utils';
 
 const mocks = vi.hoisted(() => ({
@@ -153,17 +156,62 @@ describe('mapInstanceStore map zoom bounds', () => {
 
   it('clamps direct orthographic zoom assignments to the configured UI range', () => {
     const { deck } = createDeckMock();
-    const maxZoom = resolveMapZoomLevel(
-      DEFAULT_MAP_BASE_ZOOM,
-      MAX_MAP_ZOOM_PERCENT
-    );
+    const maxZoom = resolveOrthographicZoomLevel(MAX_MAP_ZOOM_PERCENT);
 
     mapInstanceStore.setDeckInstance(deck as never);
     mapInstanceStore.setMapLoaded(true);
-    mapInstanceStore.setZoom(resolveMapZoomLevel(DEFAULT_MAP_BASE_ZOOM, 9000));
+    mapInstanceStore.setZoom(resolveOrthographicZoomLevel(9000));
 
     expect(mapInstanceStore.deckViewState.zoom).toBeCloseTo(maxZoom, 10);
     expect(mapInstanceStore.zoomLevel).toBe(MAX_MAP_ZOOM_PERCENT);
+  });
+
+  it('converts orthographic zoom percents against neutral Deck zoom', () => {
+    const { deck } = createDeckMock();
+
+    mapInstanceStore.setDeckInstance(deck as never);
+    mapInstanceStore.setMapLoaded(true);
+    mapInstanceStore.setZoomPercent(200);
+
+    expect(mapInstanceStore.deckViewState.zoom).toBeCloseTo(
+      resolveOrthographicZoomLevel(200),
+      10
+    );
+    expect(mapInstanceStore.zoomLevel).toBe(200);
+  });
+
+  it('keeps orthographic auto-fit at neutral zoom after MapLibre base zoom changes', () => {
+    const { deck, setPropsMock } = createDeckMock();
+    const zoomBounds = resolveOrthographicZoomBounds();
+
+    mapInstanceStore.setDeckInstance(deck as never);
+    mapInstanceStore.setMapLoaded(true);
+    mapInstanceStore.setBaseZoomLevel(4.8);
+
+    mapInstanceStore.fitToOrthographicBounds('dataset');
+
+    expect(mapInstanceStore.deckViewState.zoom).toBe(
+      ORTHOGRAPHIC_MAP_BASE_ZOOM
+    );
+    expect(mapInstanceStore.zoomLevel).toBe(100);
+    expect(setPropsMock).toHaveBeenLastCalledWith({
+      viewState: {
+        main: {
+          target: [0, 0, 0],
+          zoom: ORTHOGRAPHIC_MAP_BASE_ZOOM,
+          minZoom: zoomBounds.minZoom,
+          maxZoom: zoomBounds.maxZoom
+        }
+      },
+      initialViewState: {
+        main: {
+          target: [0, 0, 0],
+          zoom: ORTHOGRAPHIC_MAP_BASE_ZOOM,
+          minZoom: zoomBounds.minZoom,
+          maxZoom: zoomBounds.maxZoom
+        }
+      }
+    });
   });
 
   it('stops zooming in once the map hits the supported max percent', () => {
@@ -255,7 +303,7 @@ describe('mapInstanceStore map zoom bounds', () => {
 
   it('waits for projection bounds before applying a restored orthographic view', () => {
     const { deck, setPropsMock } = createDeckMock();
-    const zoomBounds = resolveMapZoomBounds(DEFAULT_MAP_BASE_ZOOM);
+    const zoomBounds = resolveOrthographicZoomBounds();
 
     mapInstanceStore.setDeckInstance(deck as never);
     mapInstanceStore.setMapLoaded(true);
@@ -298,7 +346,7 @@ describe('mapInstanceStore map zoom bounds', () => {
 
   it('drops an implausible restored orthographic target and recenters the view', () => {
     const { deck, setPropsMock } = createDeckMock();
-    const zoomBounds = resolveMapZoomBounds(DEFAULT_MAP_BASE_ZOOM);
+    const zoomBounds = resolveOrthographicZoomBounds();
 
     mapInstanceStore.setDeckInstance(deck as never);
     mapInstanceStore.setMapLoaded(true);
@@ -315,7 +363,7 @@ describe('mapInstanceStore map zoom bounds', () => {
       viewState: {
         main: {
           target: [0, 0, 0],
-          zoom: DEFAULT_MAP_BASE_ZOOM,
+          zoom: ORTHOGRAPHIC_MAP_BASE_ZOOM,
           minZoom: zoomBounds.minZoom,
           maxZoom: zoomBounds.maxZoom
         }
@@ -323,7 +371,7 @@ describe('mapInstanceStore map zoom bounds', () => {
       initialViewState: {
         main: {
           target: [0, 0, 0],
-          zoom: DEFAULT_MAP_BASE_ZOOM,
+          zoom: ORTHOGRAPHIC_MAP_BASE_ZOOM,
           minZoom: zoomBounds.minZoom,
           maxZoom: zoomBounds.maxZoom
         }
@@ -358,7 +406,7 @@ describe('mapInstanceStore map zoom bounds', () => {
   it('uses the orthographic view-state adapter when one is registered', () => {
     const { deck, setPropsMock } = createDeckMock();
     const applyViewStateMock = vi.fn();
-    const zoomBounds = resolveMapZoomBounds(DEFAULT_MAP_BASE_ZOOM);
+    const zoomBounds = resolveOrthographicZoomBounds();
 
     mapInstanceStore.setDeckInstance(deck as never);
     mapInstanceStore.setMapLoaded(true);
