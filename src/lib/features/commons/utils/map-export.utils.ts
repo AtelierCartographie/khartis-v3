@@ -15,6 +15,25 @@ interface RelativeRect {
   height: number;
 }
 
+const SVG_EXPORT_STYLE_PROPERTIES = [
+  'color',
+  'fill',
+  'stroke',
+  'stroke-width',
+  'stroke-dasharray',
+  'stroke-linecap',
+  'stroke-linejoin',
+  'font-family',
+  'font-size',
+  'font-style',
+  'font-weight',
+  'font-variant',
+  'text-anchor',
+  'dominant-baseline',
+  'opacity',
+  'vector-effect'
+] as const;
+
 const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   width: 1920,
   height: 1080
@@ -177,11 +196,56 @@ function roundSvgValue(value: number): string {
   return Number.isFinite(value) ? Number(value.toFixed(3)).toString() : '0';
 }
 
+function parseCssPixels(value: string): number {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getSvgComputedStyle(element: SVGElement): string {
+  const computed = getComputedStyle(element);
+
+  return SVG_EXPORT_STYLE_PROPERTIES.map((property) => {
+    if (property !== 'color' && element.hasAttribute(property)) {
+      return '';
+    }
+
+    const value = computed.getPropertyValue(property).trim();
+    return value ? `${property}: ${value}` : '';
+  })
+    .filter(Boolean)
+    .join('; ');
+}
+
+function inlineSvgComputedStyles(source: SVGElement, clone: SVGElement): void {
+  const computedStyle = getSvgComputedStyle(source);
+  const existingStyle = clone.getAttribute('style')?.trim();
+  const style = [existingStyle, computedStyle].filter(Boolean).join('; ');
+
+  if (style) {
+    clone.setAttribute('style', style);
+  }
+
+  const sourceChildren = Array.from(source.children).filter(
+    (child): child is SVGElement => child instanceof SVGElement
+  );
+  const cloneChildren = Array.from(clone.children).filter(
+    (child): child is SVGElement => child instanceof SVGElement
+  );
+
+  sourceChildren.forEach((sourceChild, index) => {
+    const cloneChild = cloneChildren[index];
+    if (cloneChild) {
+      inlineSvgComputedStyles(sourceChild, cloneChild);
+    }
+  });
+}
+
 function serializeSvgNode(
   element: SVGElement,
   position?: Partial<RelativeRect>
 ): string {
   const clone = element.cloneNode(true) as SVGElement;
+  inlineSvgComputedStyles(element, clone);
 
   if (position?.x !== undefined) {
     clone.setAttribute('x', roundSvgValue(position.x));
@@ -197,6 +261,49 @@ function serializeSvgNode(
   }
 
   return new XMLSerializer().serializeToString(clone);
+}
+
+function buildElementBackgroundRect(
+  element: HTMLElement,
+  width: number,
+  height: number
+): string {
+  const styles = getComputedStyle(element);
+  const backgroundColor = styles.backgroundColor;
+  const borderWidth = Math.max(
+    parseCssPixels(styles.borderTopWidth),
+    parseCssPixels(styles.borderRightWidth),
+    parseCssPixels(styles.borderBottomWidth),
+    parseCssPixels(styles.borderLeftWidth)
+  );
+  const hasBorder =
+    borderWidth > 0 &&
+    styles.borderStyle !== 'none' &&
+    !isTransparentColor(styles.borderColor);
+
+  if (isTransparentColor(backgroundColor) && !hasBorder) {
+    return '';
+  }
+
+  const radius = parseCssPixels(styles.borderTopLeftRadius);
+  const fill = isTransparentColor(backgroundColor) ? 'none' : backgroundColor;
+  const strokeAttributes = hasBorder
+    ? `stroke="${escapeXml(styles.borderColor)}" stroke-width="${roundSvgValue(borderWidth)}"`
+    : 'stroke="none"';
+
+  return `
+    <rect
+      x="0"
+      y="0"
+      width="${roundSvgValue(width)}"
+      height="${roundSvgValue(height)}"
+      rx="${roundSvgValue(radius)}"
+      ry="${roundSvgValue(radius)}"
+      fill="${escapeXml(fill)}"
+      ${strokeAttributes}
+      opacity="${escapeXml(styles.opacity || '1')}"
+    />
+  `;
 }
 
 function getTextForeignObjectStyle(element: HTMLElement): string {
@@ -354,6 +461,85 @@ function buildLegendLayer(pageContainer: HTMLElement): string {
   `;
 }
 
+function getGeoIndicationId(element: HTMLElement, index: number): string {
+  if (element.classList.contains('scale-bar')) {
+    return 'scale';
+  }
+
+  if (element.classList.contains('north-arrow')) {
+    return 'orientation';
+  }
+
+  if (element.classList.contains('inset-map-panel')) {
+    return 'inset-map';
+  }
+
+  return `item-${index + 1}`;
+}
+
+function buildGeoIndicationsLayer(pageContainer: HTMLElement): string {
+  const geoItems = pageContainer.querySelectorAll<HTMLElement>(
+    '.geo-indications-overlay .scale-bar, .geo-indications-overlay .north-arrow, .geo-indications-overlay .inset-map-panel'
+  );
+
+  if (geoItems.length === 0) {
+    return '';
+  }
+
+  const parts: string[] = [];
+
+  geoItems.forEach((item, index) => {
+    const itemRect = getRelativeRect(item, pageContainer);
+    if (itemRect.width <= 0 || itemRect.height <= 0) {
+      return;
+    }
+
+    const itemParts = [
+      buildElementBackgroundRect(item, itemRect.width, itemRect.height)
+    ];
+
+    const svgs = item.querySelectorAll<SVGSVGElement>('svg');
+    svgs.forEach((svg, svgIndex) => {
+      const svgRect = getRelativeRect(svg, item);
+      itemParts.push(
+        serializeSvgNode(svg, {
+          x: svgRect.x,
+          y: svgRect.y,
+          width: svgRect.width,
+          height: svgRect.height
+        }).replace(
+          '<svg',
+          `<svg id="khartis-geo-indication-${getGeoIndicationId(item, index)}-${svgIndex + 1}"`
+        )
+      );
+    });
+
+    const itemMarkup = itemParts.filter(Boolean).join('');
+    if (!itemMarkup) {
+      return;
+    }
+
+    parts.push(`
+      <g
+        id="khartis-geo-indication-${getGeoIndicationId(item, index)}"
+        transform="translate(${roundSvgValue(itemRect.x)}, ${roundSvgValue(itemRect.y)})"
+      >
+        ${itemMarkup}
+      </g>
+    `);
+  });
+
+  if (parts.length === 0) {
+    return '';
+  }
+
+  return `
+    <g id="khartis-layer-geo-indications">
+      ${parts.join('')}
+    </g>
+  `;
+}
+
 function buildAnnotationLayer(pageContainer: HTMLElement): string {
   const annotationItems = pageContainer.querySelectorAll<HTMLElement>(
     '.annotation-overlay .annotation-item'
@@ -485,6 +671,7 @@ function buildStructuredSvgMarkup(
   const layers = [
     buildVisualizationLayer(pageContainer),
     buildLegendLayer(pageContainer),
+    buildGeoIndicationsLayer(pageContainer),
     buildAnnotationLayer(pageContainer)
   ].filter(Boolean);
 
