@@ -171,6 +171,7 @@ export interface SymbolModeState {
   breakValueB?: number | null;
   fillMode?: FillMode;
   strokeMode?: StrokeMode;
+  strokeColor?: string | string[];
   strokeWidth?: number;
   strokeOpacity?: number;
   strokeDashed?: boolean;

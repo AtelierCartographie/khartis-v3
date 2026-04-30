@@ -19,8 +19,7 @@
   import {
     MAP_ZOOM_INPUT_STEP,
     MAX_MAP_ZOOM_PERCENT,
-    MIN_MAP_ZOOM_PERCENT,
-    resolveMapZoomLevel
+    MIN_MAP_ZOOM_PERCENT
   } from '../utils/map-zoom.utils';
 
   type DebugMetricTone = 'neutral' | 'good' | 'warn' | 'bad';
@@ -115,9 +114,7 @@
       Math.min(activeMaxZoomPercent, value)
     );
     if (activeTabIndex === 0) {
-      mapInstanceStore.setZoom(
-        resolveMapZoomLevel(mapInstanceStore.baseZoomLevel, clamped)
-      );
+      mapInstanceStore.setZoomPercent(clamped);
     } else {
       globalActions.setPageZoom(clamped);
     }

@@ -316,4 +316,17 @@ describe('common legend generators', () => {
     expect(svg).toHaveAttribute('aria-label', 'Legend');
     expect(container.querySelector('.safe')).toBeInTheDocument();
   });
+
+  it('keeps text color on the SVG root for DOM image exports', () => {
+    const { container } = render(LegendSvg, {
+      markup: '<g><text x="0" y="10">Legend</text></g>',
+      width: 42,
+      height: 16,
+      textColor: '#ffffff'
+    });
+    const svg = container.querySelector('svg.legend-svg');
+
+    expect(svg).toHaveAttribute('fill', 'currentColor');
+    expect(svg).toHaveStyle({ color: '#ffffff' });
+  });
 });

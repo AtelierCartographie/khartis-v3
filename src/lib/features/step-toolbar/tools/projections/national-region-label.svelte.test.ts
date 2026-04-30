@@ -13,7 +13,8 @@ function nationalSuggestion(id: string): ProjectionSuggestion {
     epsg: '0000',
     share: 1,
     proj4String: '+proj=test',
-    d3Config: null
+    d3Config: null,
+    bbox: [-5, 41, 10, 51]
   };
 }
 
@@ -23,7 +24,8 @@ function genericSuggestion(id: string): ProjectionSuggestion {
     name: 'test',
     type: 'generic',
     proj4String: '+proj=test',
-    d3Config: null
+    d3Config: null,
+    bbox: [-5, 41, 10, 51]
   };
 }
 

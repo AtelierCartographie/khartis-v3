@@ -7,10 +7,9 @@ import {
   type ResolvedProjection
 } from 'proj-suggest';
 import type { GeoProjection } from 'd3-geo';
-import * as d3geo from 'd3-geo';
-import * as d3geoProjection from 'd3-geo-projection';
 import { proj4d3 } from '$lib/features/map/utils/proj4d3';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
+import { buildD3ProjectionFromConfig } from '$lib/features/commons/utils/d3-projection-config.utils';
 
 export interface ProjectionSuggestion {
   id: string;
@@ -21,6 +20,7 @@ export interface ProjectionSuggestion {
   share?: number;
   proj4String: string | null;
   d3Config: D3Usage | null;
+  bbox: [number, number, number, number];
   scale?: string[];
   shape?: string;
 }
@@ -29,50 +29,6 @@ export interface BuiltProjectionSuggestion {
   projection: GeoProjection;
   source: 'proj4' | 'd3';
 }
-
-type GeoProjectionFactory = () => GeoProjection;
-
-const d3ProjectionFactories = d3geoProjection as Record<string, unknown>;
-
-function getD3ProjectionFactory(
-  name: string
-): GeoProjectionFactory | undefined {
-  const candidate = d3ProjectionFactories[name];
-  return typeof candidate === 'function'
-    ? (candidate as GeoProjectionFactory)
-    : undefined;
-}
-
-const D3_FACTORY_MAP: Record<string, (() => GeoProjection) | undefined> = {
-  geoMercator: d3geo.geoMercator,
-  geoEquirectangular: d3geo.geoEquirectangular,
-  geoAlbers: d3geo.geoAlbers,
-  geoOrthographic: d3geo.geoOrthographic,
-  geoStereographic: d3geo.geoStereographic,
-  geoEqualEarth: d3geo.geoEqualEarth,
-  geoAzimuthalEqualArea: d3geo.geoAzimuthalEqualArea,
-  geoAzimuthalEquidistant: d3geo.geoAzimuthalEquidistant,
-  geoConicConformal: d3geo.geoConicConformal,
-  geoConicEqualArea: d3geo.geoConicEqualArea,
-  geoConicEquidistant: d3geo.geoConicEquidistant,
-  geoTransverseMercator: d3geo.geoTransverseMercator,
-  geoNaturalEarth1: d3geo.geoNaturalEarth1,
-  geoGnomonic: d3geo.geoGnomonic,
-  geoBonne: getD3ProjectionFactory('geoBonne'),
-  geoCassini: getD3ProjectionFactory('geoCassini'),
-  geoTimes: getD3ProjectionFactory('geoTimes'),
-  geoBertin1953: getD3ProjectionFactory('geoBertin1953'),
-  geoArmadillo: getD3ProjectionFactory('geoArmadillo'),
-  geoMollweide: getD3ProjectionFactory('geoMollweide'),
-  geoInterruptedMollweide: getD3ProjectionFactory('geoInterruptedMollweide'),
-  geoInterruptedMollweideHemispheres: getD3ProjectionFactory(
-    'geoInterruptedMollweideHemispheres'
-  ),
-  geoAirocean: getD3ProjectionFactory('geoAirocean'),
-  geoImago: getD3ProjectionFactory('geoImago'),
-  geoCylindricalEqualArea: getD3ProjectionFactory('geoCylindricalEqualArea'),
-  geoRobinson: getD3ProjectionFactory('geoRobinson')
-};
 
 const UNSUPPORTED_SUGGESTION_IDS = new Set(['orthographic']);
 
@@ -85,7 +41,10 @@ function isUsableProjection(projection: GeoProjection): boolean {
   );
 }
 
-function nationalToSuggestion(country: MatchedCountry): ProjectionSuggestion {
+function nationalToSuggestion(
+  country: MatchedCountry,
+  bbox: [number, number, number, number]
+): ProjectionSuggestion {
   return {
     id: `national-${country.id}`,
     name: country.projection,
@@ -93,11 +52,15 @@ function nationalToSuggestion(country: MatchedCountry): ProjectionSuggestion {
     epsg: country.epsg,
     share: country.share,
     proj4String: country.proj4,
-    d3Config: country.d3
+    d3Config: country.d3,
+    bbox
   };
 }
 
-function genericToSuggestion(proj: ResolvedProjection): ProjectionSuggestion {
+function genericToSuggestion(
+  proj: ResolvedProjection,
+  bbox: [number, number, number, number]
+): ProjectionSuggestion {
   return {
     id: proj.id,
     name: proj.name ?? proj.id,
@@ -105,6 +68,7 @@ function genericToSuggestion(proj: ResolvedProjection): ProjectionSuggestion {
     equalArea: proj.equalarea,
     proj4String: proj.proj4?.string ?? null,
     d3Config: proj.d3 ?? null,
+    bbox,
     scale: proj.scale,
     shape: proj.shape
   };
@@ -122,6 +86,29 @@ function isSupportedProjectionSuggestion(
   }
 
   return !/\+proj=ortho\b/i.test(suggestion.proj4String ?? '');
+}
+
+function buildD3SuggestionProjection(
+  suggestion: ProjectionSuggestion
+): BuiltProjectionSuggestion | null {
+  if (!suggestion.d3Config) {
+    return null;
+  }
+
+  const projection = buildD3ProjectionFromConfig(suggestion.d3Config);
+  if (!projection) {
+    logger.warn('Unknown d3 projection factory', LogCategory.MAP, {
+      id: suggestion.id,
+      bbox: suggestion.bbox,
+      d3Projection: suggestion.d3Config.projection
+    });
+    return null;
+  }
+
+  return {
+    projection,
+    source: 'd3'
+  };
 }
 
 /**
@@ -159,10 +146,10 @@ export function suggestProjectionsForBbox(
 
   return {
     national: result.national
-      .map(nationalToSuggestion)
+      .map((country) => nationalToSuggestion(country, bbox))
       .filter(isSupportedProjectionSuggestion),
     generic: result.generic
-      .map(genericToSuggestion)
+      .map((projection) => genericToSuggestion(projection, bbox))
       .filter(isSupportedProjectionSuggestion)
   };
 }
@@ -175,6 +162,13 @@ export function buildProjectionFromSuggestion(
       id: suggestion.id
     });
     return null;
+  }
+
+  if (suggestion.type === 'generic') {
+    const d3Projection = buildD3SuggestionProjection(suggestion);
+    if (d3Projection) {
+      return d3Projection;
+    }
   }
 
   // Prefer proj4 string when available (more precise for national projections)
@@ -190,60 +184,32 @@ export function buildProjectionFromSuggestion(
       logger.warn(
         'Proj4 suggestion produced invalid coordinates, falling back to d3',
         LogCategory.MAP,
-        { id: suggestion.id }
+        {
+          id: suggestion.id,
+          epsg: suggestion.epsg,
+          bbox: suggestion.bbox,
+          d3Projection: suggestion.d3Config?.projection
+        }
       );
     } catch (err) {
       logger.warn(
         'Failed to build projection from proj4 string, falling back to d3',
         LogCategory.MAP,
-        { id: suggestion.id, error: err }
+        {
+          id: suggestion.id,
+          epsg: suggestion.epsg,
+          bbox: suggestion.bbox,
+          d3Projection: suggestion.d3Config?.projection,
+          error: err
+        }
       );
     }
   }
 
-  if (suggestion.d3Config) {
-    const projection = buildD3Projection(suggestion.d3Config);
-    if (projection) {
-      return {
-        projection,
-        source: 'd3'
-      };
-    }
+  const d3Projection = buildD3SuggestionProjection(suggestion);
+  if (d3Projection) {
+    return d3Projection;
   }
 
   return null;
-}
-
-function buildD3Projection(config: D3Usage): GeoProjection | null {
-  const factory = D3_FACTORY_MAP[config.projection];
-  if (!factory) {
-    logger.warn('Unknown d3 projection factory', LogCategory.MAP, {
-      factory: config.projection
-    });
-    return null;
-  }
-
-  const projection = factory();
-
-  if (config.rotate && 'rotate' in projection) {
-    (projection as GeoProjection).rotate(
-      config.rotate as [number, number, number]
-    );
-  }
-
-  if (config.center && 'center' in projection) {
-    (projection as GeoProjection).center(config.center);
-  }
-
-  if (
-    config.parallels &&
-    'parallels' in projection &&
-    typeof (projection as Record<string, unknown>).parallels === 'function'
-  ) {
-    (
-      projection as unknown as { parallels: (p: [number, number]) => void }
-    ).parallels(config.parallels);
-  }
-
-  return projection;
 }

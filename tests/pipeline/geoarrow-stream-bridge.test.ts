@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { geoOrthographic } from 'd3-geo';
 import type { GeoStream } from 'd3-geo';
 import type { ProjectionLike } from 'geoarrow-deck-stream';
 import type { FeatureCollection, Point, Polygon } from 'geojson';
@@ -34,6 +35,27 @@ describe('computeProjectedBboxForProjection', () => {
     expect(
       computeProjectedBboxForProjection(streamOnlyProjection, [0, 0, 10, 10])
     ).toEqual([1, 2, 11, 12]);
+  });
+
+  it('samples clipped projection interiors so world orthographic bboxes stay non-degenerate', () => {
+    const projection = geoOrthographic()
+      .fitExtent(
+        [
+          [40, 40],
+          [920, 560]
+        ],
+        { type: 'Sphere' }
+      )
+      .clipAngle(90);
+
+    const bbox = computeProjectedBboxForProjection(
+      projection,
+      [-180, -90, 180, 90]
+    );
+
+    expect(bbox).not.toBeNull();
+    expect(bbox![2] - bbox![0]).toBeGreaterThan(0);
+    expect(bbox![3] - bbox![1]).toBeGreaterThan(0);
   });
 
   it('projects GeoJSON through stream() and drops clipped features', () => {

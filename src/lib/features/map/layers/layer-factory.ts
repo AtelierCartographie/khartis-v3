@@ -80,6 +80,7 @@ import {
   getClassedSizeForValue,
   getColorForValue,
   getSizeForValue,
+  getProportionalSymbolSizeForValue,
   shouldApplyLineCategorical,
   shouldApplyLineChoropleth,
   shouldApplyCategorical,
@@ -97,8 +98,10 @@ import {
   createGeoJsonCategoricalColorAccessor,
   createGeoJsonChoroplethColorAccessor,
   createGeoJsonProportionalSizeAccessor,
+  createGeoJsonProportionalSymbolSizeAccessor,
   HIGHLIGHT_FILL_COLOR,
   createProportionalSizeAccessor,
+  createProportionalSymbolSizeAccessor,
   resolveMissingDataRenderProps,
   withGeoJsonRowHighlight,
   withGeoJsonRowHighlightAccessor,
@@ -316,8 +319,123 @@ type BinaryLayerInteractionData = {
 type ScatterBinaryData = {
   attributes: Record<string, unknown>;
   khartisSourceTable?: ArrowTable;
+  length?: number;
   featureIds?: Uint32Array;
 };
+
+type NumericArray =
+  | number[]
+  | Float32Array
+  | Float64Array
+  | Int8Array
+  | Uint8Array
+  | Uint8ClampedArray
+  | Int16Array
+  | Uint16Array
+  | Int32Array
+  | Uint32Array;
+
+function createNumericArrayClone(
+  source: NumericArray,
+  length: number
+): NumericArray {
+  if (Array.isArray(source)) return new Array<number>(length).fill(0);
+  if (source instanceof Float32Array) return new Float32Array(length);
+  if (source instanceof Float64Array) return new Float64Array(length);
+  if (source instanceof Int8Array) return new Int8Array(length);
+  if (source instanceof Uint8Array) return new Uint8Array(length);
+  if (source instanceof Uint8ClampedArray) return new Uint8ClampedArray(length);
+  if (source instanceof Int16Array) return new Int16Array(length);
+  if (source instanceof Uint16Array) return new Uint16Array(length);
+  if (source instanceof Int32Array) return new Int32Array(length);
+  return new Uint32Array(length);
+}
+
+function isNumericArray(value: unknown): value is NumericArray {
+  return (
+    Array.isArray(value) ||
+    value instanceof Float32Array ||
+    value instanceof Float64Array ||
+    value instanceof Int8Array ||
+    value instanceof Uint8Array ||
+    value instanceof Uint8ClampedArray ||
+    value instanceof Int16Array ||
+    value instanceof Uint16Array ||
+    value instanceof Int32Array ||
+    value instanceof Uint32Array
+  );
+}
+
+function reorderNumericArray(
+  source: NumericArray,
+  order: number[],
+  itemSize: number
+): NumericArray {
+  const out = createNumericArrayClone(source, source.length);
+  for (let targetIndex = 0; targetIndex < order.length; targetIndex += 1) {
+    const sourceIndex = order[targetIndex];
+    for (let component = 0; component < itemSize; component += 1) {
+      const from = sourceIndex * itemSize + component;
+      const to = targetIndex * itemSize + component;
+      out[to] = source[from] ?? 0;
+    }
+  }
+  return out;
+}
+
+function reorderBinaryAttribute(
+  attribute: unknown,
+  order: number[],
+  length: number
+): unknown {
+  if (typeof attribute !== 'object' || attribute === null) return attribute;
+  const record = attribute as { value?: unknown; size?: unknown };
+  const itemSize = typeof record.size === 'number' ? record.size : 1;
+  if (itemSize <= 0 || !isNumericArray(record.value)) return attribute;
+  if (record.value.length !== length * itemSize) return attribute;
+
+  return {
+    ...record,
+    value: reorderNumericArray(record.value, order, itemSize)
+  };
+}
+
+function sortScatterBinaryDataByRadius(scatterBinaryData: ScatterBinaryData) {
+  const featureIds = scatterBinaryData.featureIds;
+  const radiusAttribute = scatterBinaryData.attributes.getRadius as
+    | { value?: unknown; size?: unknown }
+    | undefined;
+  const radiusValues = radiusAttribute?.value;
+  if (
+    !featureIds ||
+    !radiusAttribute ||
+    radiusAttribute.size !== 1 ||
+    !isNumericArray(radiusValues) ||
+    radiusValues.length !== featureIds.length
+  ) {
+    return;
+  }
+
+  const order = Array.from({ length: featureIds.length }, (_, index) => index);
+  order.sort((a, b) => {
+    const radiusDelta =
+      Number(radiusValues[b] ?? 0) - Number(radiusValues[a] ?? 0);
+    return radiusDelta === 0 ? a - b : radiusDelta;
+  });
+
+  scatterBinaryData.featureIds = reorderNumericArray(
+    featureIds,
+    order,
+    1
+  ) as Uint32Array;
+  for (const [key, attribute] of Object.entries(scatterBinaryData.attributes)) {
+    scatterBinaryData.attributes[key] = reorderBinaryAttribute(
+      attribute,
+      order,
+      featureIds.length
+    );
+  }
+}
 
 function cloneScatterBinaryData(
   scatterProps: ReturnType<typeof createScatterplotLayerProps>
@@ -333,6 +451,10 @@ function cloneScatterBinaryData(
     }
   ).data = clonedData;
   return clonedData;
+}
+
+function resolveProportionalSymbolScale(shape: ShapeType): ScaleType {
+  return isLinearShape(shape) ? ScaleType.LINEAR : ScaleType.SQRT;
 }
 
 function attachBinaryPickingMetadata(
@@ -480,10 +602,8 @@ function createDoubleProportionalPointLayers(
   const pointShape = pointConfig.shape ?? ShapeType.CIRCLE;
   const pointBarWidth = pointConfig.barWidth ?? DEFAULT_LINEAR_SYMBOL_BAR_WIDTH;
   const minPointRadius = Math.max(1, pointConfig.minSize ?? 1);
-  const maxPointRadius = Math.max(
-    minPointRadius,
-    pointConfig.maxSize ?? minPointRadius
-  );
+  const maxPointRadius = Math.max(0, pointConfig.maxSize ?? minPointRadius);
+  const proportionalSymbolScale = resolveProportionalSymbolScale(pointShape);
   const missingPointRadius = Math.max(
     1,
     pointConfig.missingData?.size ?? minPointRadius
@@ -537,31 +657,22 @@ function createDoubleProportionalPointLayers(
     disabledFillLabels.has(String(row[pointFillCategoryColumn]));
   const primaryStats = pointStatistics;
   const secondaryStats = pointSecondaryStatistics;
-  const sharedMin = commonScale
-    ? Math.min(primaryStats.min, secondaryStats.min)
-    : primaryStats.min;
   const sharedMax = commonScale
     ? Math.max(primaryStats.max, secondaryStats.max)
     : primaryStats.max;
-  const primaryScaleMin = commonScale ? sharedMin : primaryStats.min;
   const primaryScaleMax = commonScale ? sharedMax : primaryStats.max;
-  const secondaryScaleMin = commonScale ? sharedMin : secondaryStats.min;
   const secondaryScaleMax = commonScale ? sharedMax : secondaryStats.max;
-  const primaryRadiusAccessor = createProportionalSizeAccessor(
+  const primaryRadiusAccessor = createProportionalSymbolSizeAccessor(
     pointSizeColumn,
-    primaryScaleMin,
     primaryScaleMax,
-    minPointRadius,
     maxPointRadius,
-    pointConfig.sizeScale
+    proportionalSymbolScale
   );
-  const secondaryRadiusAccessor = createProportionalSizeAccessor(
+  const secondaryRadiusAccessor = createProportionalSymbolSizeAccessor(
     pointValueColumn,
-    secondaryScaleMin,
     secondaryScaleMax,
-    minPointRadius,
     maxPointRadius,
-    pointConfig.sizeScale
+    proportionalSymbolScale
   );
 
   const createRadiusAccessor =
@@ -763,6 +874,8 @@ function createDoubleProportionalPointLayers(
     SHAPE_ORDINAL[pointShape] ?? SHAPE_ORDINAL[ShapeType.CIRCLE];
   const missingShapeOrdinal =
     SHAPE_ORDINAL[missingPointShape] ?? SHAPE_ORDINAL[ShapeType.CIRCLE];
+  const juxtapositionOffset = 0.5;
+  const juxtapositionShapeScale = 0.7;
 
   const offsetForRole = (
     role: 'primary' | 'secondary'
@@ -771,13 +884,16 @@ function createDoubleProportionalPointLayers(
     offsetY: number;
     halfMask: 0 | 1 | 2;
     radiusScale: number;
+    shapeScale: number;
   } => {
     if (positionMode === 'juxtaposition') {
       return {
-        offsetX: role === 'primary' ? 0.35 : -0.35,
+        offsetX:
+          role === 'primary' ? juxtapositionOffset : -juxtapositionOffset,
         offsetY: 0,
         halfMask: 0,
-        radiusScale: 2
+        radiusScale: 2,
+        shapeScale: juxtapositionShapeScale
       };
     }
     if (positionMode === 'division') {
@@ -785,10 +901,17 @@ function createDoubleProportionalPointLayers(
         offsetX: 0,
         offsetY: 0,
         halfMask: role === 'primary' ? 2 : 1,
-        radiusScale: 1
+        radiusScale: 1,
+        shapeScale: 1
       };
     }
-    return { offsetX: 0, offsetY: 0, halfMask: 0, radiusScale: 1 };
+    return {
+      offsetX: 0,
+      offsetY: 0,
+      halfMask: 0,
+      radiusScale: 1,
+      shapeScale: 1
+    };
   };
 
   const createScatterLayer = (
@@ -823,10 +946,15 @@ function createDoubleProportionalPointLayers(
       shapeOrdinal,
       missingShapeOrdinal
     );
+    sortScatterBinaryDataByRadius(scatterBinaryData);
+    const yearFilterBinaryData = {
+      length: scatterBinaryData.length ?? pointData.length,
+      featureIds: scatterBinaryData.featureIds ?? pointData.featureIds
+    };
 
     const yearFilterProps = ctx.yearFilter
       ? buildYearFilterProps(
-          pointData,
+          yearFilterBinaryData,
           scatterBinaryData,
           jsTable,
           ctx.yearFilter
@@ -839,7 +967,8 @@ function createDoubleProportionalPointLayers(
       ...({
         offsetX: layoutProps.offsetX,
         offsetY: layoutProps.offsetY,
-        halfMask: layoutProps.halfMask
+        halfMask: layoutProps.halfMask,
+        shapeScale: layoutProps.shapeScale
       } as Record<string, unknown>),
       stroked: showPointStroke,
       filled: !hideSymbolFill,
@@ -894,13 +1023,11 @@ function createDoubleProportionalPointLayers(
         ],
         getRadius: [
           triggerColumn,
-          primaryScaleMin,
           primaryScaleMax,
-          secondaryScaleMin,
           secondaryScaleMax,
           pointConfig.minSize,
           pointConfig.maxSize,
-          pointConfig.sizeScale,
+          proportionalSymbolScale,
           pointConfig.missingData?.show,
           pointConfig.missingData?.size,
           commonScale,
@@ -1064,7 +1191,7 @@ function createRepresentativePointSymbolLayers(
     PrimitiveFilterType.POINT
   );
   const useChoropleth = shouldApplyChoropleth(viz, PrimitiveFilterType.POINT);
-  const { min: minValue, max: maxValue } = pointStatistics;
+  const { max: maxValue } = pointStatistics;
   const pointFillOpacity = pointConfig.opacity ?? rawFillOpacity;
   const pointMissingColumn = resolvePointMissingColumn(
     viz,
@@ -1085,6 +1212,11 @@ function createRepresentativePointSymbolLayers(
     minPointRadius,
     pointConfig.maxSize ?? uniquePointRadius
   );
+  const proportionalMaxPointRadius = Math.max(
+    0,
+    pointConfig.maxSize ?? uniquePointRadius
+  );
+  const proportionalSymbolScale = resolveProportionalSymbolScale(pointShape);
   const missingPointRadius = Math.max(
     1,
     pointConfig.missingData?.size ?? uniquePointRadius
@@ -1116,9 +1248,6 @@ function createRepresentativePointSymbolLayers(
           pointColorClassification?.disabledLabels ?? []
         )
       : null;
-  const linearShapeOverrideScale = isLinearShape(pointShape)
-    ? ScaleType.LINEAR
-    : pointConfig.sizeScale;
   const baseRadiusAccessor = useClassedSymbols
     ? createClassedSizeAccessor(
         pointValueColumn!,
@@ -1128,13 +1257,11 @@ function createRepresentativePointSymbolLayers(
         pointClassification?.numClasses ?? pointClassification?.colors?.length
       )
     : useProportionalSymbols
-      ? createProportionalSizeAccessor(
+      ? createProportionalSymbolSizeAccessor(
           pointSizeColumn!,
-          minValue,
           maxValue,
-          minPointRadius,
-          maxPointRadius,
-          linearShapeOverrideScale ?? pointConfig.sizeScale
+          proportionalMaxPointRadius,
+          proportionalSymbolScale
         )
       : null;
 
@@ -1286,15 +1413,6 @@ function createRepresentativePointSymbolLayers(
     radiusByFeatureId
   );
 
-  const yearFilterProps = ctx.yearFilter
-    ? buildYearFilterProps(
-        pointData,
-        scatterBinaryData,
-        jsTable,
-        ctx.yearFilter
-      )
-    : null;
-
   const shapeOrdinal =
     SHAPE_ORDINAL[pointShape] ?? SHAPE_ORDINAL[ShapeType.CIRCLE];
   const missingShapeOrdinal =
@@ -1444,6 +1562,23 @@ function createRepresentativePointSymbolLayers(
     scatterBinaryData.attributes.getRadius = { value: radiusArr, size: 1 };
   }
 
+  if (useProportionalSymbols) {
+    sortScatterBinaryDataByRadius(scatterBinaryData);
+  }
+
+  const yearFilterBinaryData = {
+    length: scatterBinaryData.length ?? pointData.length,
+    featureIds: scatterBinaryData.featureIds ?? pointData.featureIds
+  };
+  const yearFilterProps = ctx.yearFilter
+    ? buildYearFilterProps(
+        yearFilterBinaryData,
+        scatterBinaryData,
+        jsTable,
+        ctx.yearFilter
+      )
+    : null;
+
   return [
     new MultiShapeLayer({
       id: `${pointLayerId}-centroids`,
@@ -1503,13 +1638,12 @@ function createRepresentativePointSymbolLayers(
           useClassedSymbols,
           pointSizeColumn,
           pointValueColumn,
-          minValue,
           maxValue,
           pointClassification?.breaks,
           pointConfig.size,
           pointConfig.minSize,
           pointConfig.maxSize,
-          pointConfig.sizeScale,
+          proportionalSymbolScale,
           pointMissingColumn,
           pointConfig.missingData?.show,
           pointConfig.missingData?.size
@@ -2707,6 +2841,13 @@ function createTextOverlayLayers(
     minPointRadius,
     pointConfig?.maxSize ?? uniquePointRadius
   );
+  const proportionalMaxPointRadius = Math.max(
+    0,
+    pointConfig?.maxSize ?? uniquePointRadius
+  );
+  const proportionalSymbolScale = resolveProportionalSymbolScale(
+    pointConfig?.shape ?? ShapeType.CIRCLE
+  );
   const missingPointRadius = Math.max(
     1,
     pointConfig?.missingData?.size ?? uniquePointRadius
@@ -2869,16 +3010,14 @@ function createTextOverlayLayers(
       const numericValue =
         typeof rawValue === 'number' ? rawValue : Number(rawValue);
       if (!Number.isFinite(numericValue)) {
-        return minPointRadius;
+        return 0;
       }
 
-      return getSizeForValue(
+      return getProportionalSymbolSizeForValue(
         numericValue,
-        pointStatistics.min,
         pointStatistics.max,
-        minPointRadius,
-        maxPointRadius,
-        pointConfig?.sizeScale ?? ScaleType.LINEAR
+        proportionalMaxPointRadius,
+        proportionalSymbolScale
       );
     }
 
@@ -2974,7 +3113,7 @@ function createTextOverlayLayers(
             pointConfig?.maxSize,
             pointConfig?.sizeColumn,
             pointConfig?.valueColumn,
-            pointConfig?.sizeScale,
+            proportionalSymbolScale,
             pointConfig?.categoryColumn,
             pointMissingColumn,
             pointStatistics.min,
@@ -2994,7 +3133,7 @@ function createTextOverlayLayers(
             pointConfig?.maxSize,
             pointConfig?.sizeColumn,
             pointConfig?.valueColumn,
-            pointConfig?.sizeScale,
+            proportionalSymbolScale,
             pointConfig?.categoryColumn,
             pointMissingColumn,
             pointStatistics.min,
@@ -3154,7 +3293,7 @@ function createTextOverlayLayers(
               pointConfig?.maxSize,
               pointConfig?.sizeColumn,
               pointConfig?.valueColumn,
-              pointConfig?.sizeScale,
+              proportionalSymbolScale,
               pointConfig?.categoryColumn,
               pointMissingColumn,
               pointStatistics.min,
@@ -3174,7 +3313,7 @@ function createTextOverlayLayers(
               pointConfig?.maxSize,
               pointConfig?.sizeColumn,
               pointConfig?.valueColumn,
-              pointConfig?.sizeScale,
+              proportionalSymbolScale,
               pointConfig?.categoryColumn,
               pointMissingColumn,
               pointStatistics.min,
@@ -3309,7 +3448,6 @@ function createDotDensityLayers(
     getFillColor: fillColor,
     getRadius: dotSize,
     radiusUnits: 'pixels',
-    radiusMinPixels: 1,
     pickable: false,
     ...(modelMatrix && { modelMatrix }),
     ...(beforeId && { beforeId }),
@@ -3400,7 +3538,7 @@ export function createPointLayers(
   const useChoropleth =
     viz && shouldApplyChoropleth(viz, PrimitiveFilterType.POINT);
   const hideSymbolFill = shouldHideSymbolFill(viz);
-  const { min: minValue, max: maxValue } = pointStatistics;
+  const { max: maxValue } = pointStatistics;
   const pointMissingColumn = resolvePointMissingColumn(
     viz,
     Boolean(useProportionalSymbols),
@@ -3423,6 +3561,11 @@ export function createPointLayers(
     minPointRadius,
     pointConfig?.maxSize ?? uniquePointRadius
   );
+  const proportionalMaxPointRadius = Math.max(
+    0,
+    pointConfig?.maxSize ?? uniquePointRadius
+  );
+  const proportionalSymbolScale = resolveProportionalSymbolScale(pointShape);
   const missingPointRadius = Math.max(
     1,
     pointConfig?.missingData?.size ?? uniquePointRadius
@@ -3606,18 +3749,15 @@ export function createPointLayers(
             uniquePointRadius
           )
         : useProportionalSymbols && viz
-          ? createGeoJsonProportionalSizeAccessor(
+          ? createGeoJsonProportionalSymbolSizeAccessor(
               pointSizeColumn!,
-              minValue,
               maxValue,
-              minPointRadius,
-              maxPointRadius,
-              pointConfig?.sizeScale ?? ScaleType.LINEAR,
-              uniquePointRadius
+              proportionalMaxPointRadius,
+              proportionalSymbolScale
             )
           : uniquePointRadius;
     const isMissingGeoJsonPoint = (feature: {
-      properties?: Record<string, unknown>;
+      properties?: Record<string, unknown> | null;
     }): boolean =>
       pointMissingColumn
         ? isMissingThematicValue(feature.properties?.[pointMissingColumn])
@@ -3626,13 +3766,27 @@ export function createPointLayers(
       (pointClassification?.disabledLabels ?? []).map(String)
     );
     const isDisabledGeoJsonPoint = (feature: {
-      properties?: Record<string, unknown>;
+      properties?: Record<string, unknown> | null;
     }): boolean =>
       pointConfig?.mode === SymbolMode.CATEGORIES &&
       pointCategoryColumn !== undefined &&
       disabledPointCategoryLabels.has(
         String(feature.properties?.[pointCategoryColumn])
       );
+    const getGeoJsonPointRadius = (feature: {
+      properties?: Record<string, unknown> | null;
+    }): number =>
+      typeof geoJsonRadius === 'function'
+        ? geoJsonRadius(feature)
+        : geoJsonRadius;
+    const sortedGeoJsonData = useProportionalSymbols
+      ? {
+          ...filteredGeoJsonData,
+          features: [...filteredGeoJsonData.features].sort(
+            (a, b) => getGeoJsonPointRadius(b) - getGeoJsonPointRadius(a)
+          )
+        }
+      : filteredGeoJsonData;
 
     if (
       pointShape !== ShapeType.CIRCLE ||
@@ -3641,7 +3795,7 @@ export function createPointLayers(
       return [
         new GeoJsonLayer({
           id: layerId,
-          data: filteredGeoJsonData,
+          data: sortedGeoJsonData,
           pointType: 'icon',
           getIcon: (feature: { properties?: Record<string, unknown> }) =>
             createPointSymbolIcon(
@@ -3682,15 +3836,13 @@ export function createPointLayers(
                 ? Math.max(1, missingPointRadius * 2)
                 : 0;
             }
-            const radius =
-              typeof geoJsonRadius === 'function'
-                ? geoJsonRadius(feature)
-                : geoJsonRadius;
-            return Math.max(1, radius * 2);
+            const radius = getGeoJsonPointRadius(feature);
+            return useProportionalSymbols
+              ? Math.max(0, radius * 2)
+              : Math.max(1, radius * 2);
           },
           iconSizeUnits: 'pixels',
           iconSizeScale: 1,
-          iconSizeMinPixels: 1,
           iconBillboard: true,
           iconAlphaCutoff: 0,
           pickable: true,
@@ -3733,13 +3885,12 @@ export function createPointLayers(
               usesVariablePointSize,
               pointSizeColumn,
               pointValueColumn,
-              minValue,
               maxValue,
               pointClassification?.breaks,
               pointConfig?.size,
               pointConfig?.minSize,
               pointConfig?.maxSize,
-              pointConfig?.sizeScale,
+              proportionalSymbolScale,
               pointMissingColumn,
               pointConfig?.missingData?.show,
               pointConfig?.missingData?.size
@@ -3752,7 +3903,7 @@ export function createPointLayers(
     return [
       new GeoJsonLayer({
         id: layerId,
-        data: filteredGeoJsonData,
+        data: sortedGeoJsonData,
         pointType: 'circle',
         filled: !hideSymbolFill,
         stroked: showPointStroke,
@@ -3797,9 +3948,7 @@ export function createPointLayers(
             return showMissingPoints ? missingPointRadius : 0;
           }
 
-          return typeof geoJsonRadius === 'function'
-            ? geoJsonRadius(feature)
-            : geoJsonRadius;
+          return getGeoJsonPointRadius(feature);
         },
         pointRadiusUnits: 'pixels',
         lineWidthUnits: 'pixels',
@@ -3828,12 +3977,11 @@ export function createPointLayers(
             usesVariablePointSize,
             pointSizeColumn,
             pointValueColumn,
-            minValue,
             maxValue,
             pointClassification?.breaks,
             pointConfig?.minSize,
             pointConfig?.maxSize,
-            pointConfig?.sizeScale,
+            proportionalSymbolScale,
             pointMissingColumn,
             pointConfig?.missingData?.show,
             pointConfig?.missingData?.size
@@ -4024,13 +4172,11 @@ export function createPointLayers(
           pointClassification?.numClasses ?? pointClassification?.colors?.length
         )
       : useProportionalSymbols && viz
-        ? createProportionalSizeAccessor(
+        ? createProportionalSymbolSizeAccessor(
             pointSizeColumn!,
-            minValue,
             maxValue,
-            minPointRadius,
-            maxPointRadius,
-            pointConfig?.sizeScale ?? ScaleType.LINEAR
+            proportionalMaxPointRadius,
+            proportionalSymbolScale
           )
         : null;
 
@@ -4206,9 +4352,17 @@ export function createPointLayers(
     scatterBinaryData.attributes.getRadius = { value: radiusArr, size: 1 };
   }
 
+  if (useProportionalSymbols) {
+    sortScatterBinaryDataByRadius(scatterBinaryData);
+  }
+
+  const yearFilterBinaryData = {
+    length: scatterBinaryData.length ?? pointData.length,
+    featureIds: scatterBinaryData.featureIds ?? pointData.featureIds
+  };
   const yearFilterProps = ctx.yearFilter
     ? buildYearFilterProps(
-        pointData,
+        yearFilterBinaryData,
         scatterBinaryData,
         jsTable,
         ctx.yearFilter
@@ -4265,13 +4419,12 @@ export function createPointLayers(
         usesVariablePointSize,
         pointSizeColumn,
         pointValueColumn,
-        minValue,
         maxValue,
         pointClassification?.breaks,
         pointConfig?.size,
         pointConfig?.minSize,
         pointConfig?.maxSize,
-        pointConfig?.sizeScale,
+        proportionalSymbolScale,
         pointMissingColumn,
         pointConfig?.missingData?.show,
         pointConfig?.missingData?.size
@@ -4835,6 +4988,7 @@ export function createPolygonLayers(
   const strokeDashed = polygonConfig?.strokeDashed ?? false;
   const strokeDashArray = strokeDashed ? DEFAULT_DASH_ARRAY : [0, 0];
   const layerId = createThematicLayerId(DeckLayerId.POLYGON_LAYER, ctx);
+  const projectedGeoJsonLayerId = `${layerId}-projected-geojson`;
   const patternProps = buildPatternProps(ctx);
   const { color: polygonMissingColor, show: showMissingPolygons } =
     resolveMissingDataRenderProps(
@@ -5501,7 +5655,7 @@ export function createPolygonLayers(
   if (shouldSplitGeoJsonLayers && patternLayer) {
     geoJsonLayers = [
       new GeoJsonLayer({
-        id: layerId,
+        id: projectedGeoJsonLayerId,
         data: filteredPolygonGeojsonData,
         getFillColor: geoJsonFillColor,
         filled: showGeoJsonFill,
@@ -5579,7 +5733,7 @@ export function createPolygonLayers(
   } else if (showGeoJsonFill || showGeoJsonStroke) {
     geoJsonLayers = [
       new GeoJsonLayer({
-        id: layerId,
+        id: projectedGeoJsonLayerId,
         data: filteredPolygonGeojsonData,
         getFillColor: geoJsonFillColor,
         getLineColor: geoJsonStrokeColor,

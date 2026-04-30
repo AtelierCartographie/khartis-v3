@@ -51,6 +51,8 @@ function isGeometryColumnName(columnName: string): boolean {
 }
 
 const SIMILARITY_CACHE_PREFIX = '__similarity_cache__';
+const MAX_FUZZY_JOIN_CANDIDATES = 1000;
+const MAX_EXACT_MATCHES_PER_CANDIDATE_BASEMAP = 50;
 
 interface SimilarityCacheEntry {
   tableName: string;
@@ -141,10 +143,12 @@ async function ensureSimilarityCached(
     const escapedCacheTable = escapeIdentifier(cacheTableName);
 
     // Build the similarity cache in two phases:
-    // Phase 1: exact match via equi-join on pre-normalized text (hash join, O(n+m))
-    //          — handles the vast majority of matches for code-based datasets (INSEE, ISO…).
+    // Phase 1: exact match via equi-join on pre-normalized text (hash join, O(n+m)).
+    //          Cap rows per source value and basemap so broad codes such as
+    //          department ids cannot cache every commune sharing the same attribute.
     // Phase 2: fuzzy Jaro-Winkler (score_cutoff=0.85) only on residual unmatched candidates
-    //          — the candidate set is typically tiny after phase 1, keeping the cross-join fast.
+    //          — bounded because unmatched large code datasets would otherwise cross-join every
+    //          source value with every basemap attribute on the browser main thread.
     // Normalization is pre-computed once in the candidates CTE (like the get_similarity macro)
     // to avoid redundant computation inside the join/cross-join.
     await Duck.query(`
@@ -168,7 +172,7 @@ async function ensureSimilarityCached(
         FROM source_data
       ),
       -- Phase 1: exact match via equi-join (hash join)
-      exact_matches AS (
+      exact_raw AS (
         SELECT
           c.original_name,
           c.source_dup_count,
@@ -178,9 +182,27 @@ async function ensureSimilarityCached(
           ba.raw AS match_raw,
           ba.variant AS match_variant,
           ba.basemap AS match_basemap,
-          ba.basemap_count AS match_basemap_count
+          ba.basemap_count AS match_basemap_count,
+          ROW_NUMBER() OVER (
+            PARTITION BY c.original_name, ba.basemap
+            ORDER BY ba.id
+          ) AS exact_rank
         FROM candidates c
         JOIN basemap_attributes ba ON c.normalized_name = ba.normalized
+      ),
+      exact_matches AS (
+        SELECT
+          original_name,
+          source_dup_count,
+          match_score,
+          typo_match,
+          match_id,
+          match_raw,
+          match_variant,
+          match_basemap,
+          match_basemap_count
+        FROM exact_raw
+        WHERE exact_rank <= ${MAX_EXACT_MATCHES_PER_CANDIDATE_BASEMAP}
       ),
       -- Phase 2: fuzzy Jaro-Winkler only for candidates without any exact match
       unmatched AS (
@@ -189,6 +211,14 @@ async function ensureSimilarityCached(
         WHERE NOT EXISTS (
           SELECT 1 FROM exact_matches e WHERE e.original_name = c.original_name
         )
+      ),
+      unmatched_count AS (
+        SELECT COUNT(*) AS count FROM unmatched
+      ),
+      bounded_unmatched AS (
+        SELECT u.*
+        FROM unmatched u, unmatched_count c
+        WHERE c.count <= ${MAX_FUZZY_JOIN_CANDIDATES}
       ),
       fuzzy_raw AS (
         SELECT
@@ -200,7 +230,7 @@ async function ensureSimilarityCached(
           ba.variant AS match_variant,
           ba.basemap AS match_basemap,
           ba.basemap_count AS match_basemap_count
-        FROM unmatched u, basemap_attributes ba
+        FROM bounded_unmatched u, basemap_attributes ba
       ),
       fuzzy_matches AS (
         SELECT
