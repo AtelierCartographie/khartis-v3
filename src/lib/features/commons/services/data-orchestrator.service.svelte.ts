@@ -49,6 +49,7 @@ import { basemapCatalogService } from '$lib/features/map/services/basemap-catalo
 import { importRollbackService } from './import-rollback.service';
 import {
   applyPaletteInversion,
+  calculateDivergingBreaks,
   calculateBreaks,
   computeDivergingSplit,
   generateColorsForBreaks
@@ -65,6 +66,7 @@ import {
 } from '$lib/features/commons/components/palette-popover/palette.constants';
 import {
   normalizeClassificationMethod,
+  resolveBreakpointLowerClassCount,
   resolveComputedClassCount,
   resolveRequestedClassCount
 } from '../../main-toolbar/visualization-tab/components/discretization.utils';
@@ -918,14 +920,40 @@ function createDataOrchestratorService() {
         normalizedMethod,
         numClasses
       );
+      const breakpointValue = viz.classification?.breakpointValue;
+      const breakpointLowerClassCount =
+        breakpointValue != null
+          ? resolveBreakpointLowerClassCount(
+              requestedClassCount,
+              viz.classification?.breakpointLowerClassCount
+            )
+          : undefined;
+      const breakpointUpperClassCount =
+        breakpointLowerClassCount != null
+          ? requestedClassCount - breakpointLowerClassCount
+          : undefined;
 
       try {
-        const result = await calculateBreaks({
-          datasetId: dataset.sourceFileId,
-          columnName: viz.mapping.valueColumn!,
-          method: normalizedMethod,
-          numClasses: requestedClassCount
-        });
+        const result =
+          breakpointValue != null &&
+          Number.isFinite(breakpointValue) &&
+          breakpointLowerClassCount != null &&
+          breakpointUpperClassCount != null &&
+          breakpointUpperClassCount > 0
+            ? await calculateDivergingBreaks({
+                datasetId: dataset.sourceFileId,
+                columnName: viz.mapping.valueColumn!,
+                method: normalizedMethod,
+                breakpointValue,
+                lowerClassCount: breakpointLowerClassCount,
+                upperClassCount: breakpointUpperClassCount
+              })
+            : await calculateBreaks({
+                datasetId: dataset.sourceFileId,
+                columnName: viz.mapping.valueColumn!,
+                method: normalizedMethod,
+                numClasses: requestedClassCount
+              });
 
         if (!result) continue;
 
@@ -983,6 +1011,11 @@ function createDataOrchestratorService() {
           breaks: result.breaks,
           counts: result.counts,
           colors,
+          ...(result.breakpointLowerClassCount != null
+            ? {
+                breakpointLowerClassCount: result.breakpointLowerClassCount
+              }
+            : {}),
           ...(normalizedMethod !== method ||
           actualNumClasses !== numClasses ||
           viz.classification?.classes !== actualNumClasses

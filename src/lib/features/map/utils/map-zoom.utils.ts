@@ -1,7 +1,7 @@
 export const DEFAULT_MAP_BASE_ZOOM = 1.5;
 export const DEFAULT_MAP_ZOOM_PERCENT = 100;
 export const MIN_MAP_ZOOM_PERCENT = 10;
-export const MAX_MAP_ZOOM_PERCENT = 500;
+export const MAX_MAP_ZOOM_PERCENT = 2000;
 export const MAP_ZOOM_INPUT_STEP = 10;
 export const MAP_ZOOM_FACTOR_STEP = 1.1;
 export const MIN_MAPLIBRE_ZOOM = -2;

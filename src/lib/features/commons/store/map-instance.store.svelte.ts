@@ -37,11 +37,8 @@ interface DeckViewState {
 const DEFAULT_DECK_VIEW_STATE: DeckViewState = {
   target: [0, 0, 0],
   zoom: 0,
-  minZoom: -10,
-  maxZoom: 10
+  ...resolveMapZoomBounds(DEFAULT_MAP_BASE_ZOOM)
 };
-
-const DECK_ZOOM_STEP = 0.1375;
 
 export interface ProjectionContext {
   referenceBbox: [number, number, number, number] | null;
@@ -279,7 +276,26 @@ function createMapInstanceStore() {
   function setBaseZoomLevel(zoom: number) {
     state.baseZoomLevel = Number.isFinite(zoom) ? zoom : DEFAULT_MAP_BASE_ZOOM;
     applyMapZoomBounds();
+    applyDeckZoomBounds();
     updateZoomFromMap();
+  }
+
+  function resolveDeckViewState(
+    nextViewState: Partial<DeckViewState> = {}
+  ): DeckViewState {
+    const bounds = resolveMapZoomBounds(state.baseZoomLevel);
+    const nextZoom = nextViewState.zoom ?? state.deckViewState.zoom;
+
+    return {
+      ...state.deckViewState,
+      ...nextViewState,
+      ...bounds,
+      zoom: clampMapZoomLevel(state.baseZoomLevel, nextZoom)
+    };
+  }
+
+  function applyDeckZoomBounds(): void {
+    state.deckViewState = resolveDeckViewState();
   }
 
   function markViewportAutoFit(reason: ViewportFitReason): void {
@@ -302,7 +318,7 @@ function createMapInstanceStore() {
 
     if (state.deckInstance) {
       const deckZoom = state.deckViewState.zoom;
-      const percent = 100 * Math.pow(2, deckZoom);
+      const percent = resolveMapZoomPercent(state.baseZoomLevel, deckZoom);
       state.zoomLevel = Math.round(percent);
     }
   }
@@ -311,10 +327,7 @@ function createMapInstanceStore() {
     viewState: Partial<DeckViewState>,
     fromUserInteraction = false
   ) {
-    state.deckViewState = {
-      ...state.deckViewState,
-      ...viewState
-    };
+    state.deckViewState = resolveDeckViewState(viewState);
     updateZoomFromMap();
     if (fromUserInteraction) {
       markViewportManual();
@@ -411,14 +424,11 @@ function createMapInstanceStore() {
     if (state.deckInstance) {
       markViewportManual();
       pendingOrthographicRestore = null;
-      const newZoom = Math.min(
-        state.deckViewState.zoom + DECK_ZOOM_STEP,
-        state.deckViewState.maxZoom
+      const newZoom = clampMapZoomLevel(
+        state.baseZoomLevel,
+        nudgeMapZoomLevel(state.baseZoomLevel, state.deckViewState.zoom, 1)
       );
-      state.deckViewState = {
-        ...state.deckViewState,
-        zoom: newZoom
-      };
+      state.deckViewState = resolveDeckViewState({ zoom: newZoom });
       applyDeckViewState();
       updateZoomFromMap();
       consumePendingRestore();
@@ -447,14 +457,11 @@ function createMapInstanceStore() {
     if (state.deckInstance) {
       markViewportManual();
       pendingOrthographicRestore = null;
-      const newZoom = Math.max(
-        state.deckViewState.zoom - DECK_ZOOM_STEP,
-        state.deckViewState.minZoom
+      const newZoom = clampMapZoomLevel(
+        state.baseZoomLevel,
+        nudgeMapZoomLevel(state.baseZoomLevel, state.deckViewState.zoom, -1)
       );
-      state.deckViewState = {
-        ...state.deckViewState,
-        zoom: newZoom
-      };
+      state.deckViewState = resolveDeckViewState({ zoom: newZoom });
       applyDeckViewState();
       updateZoomFromMap();
       consumePendingRestore();
@@ -481,14 +488,7 @@ function createMapInstanceStore() {
     if (state.deckInstance) {
       markViewportManual();
       pendingOrthographicRestore = null;
-      const clampedZoom = Math.max(
-        state.deckViewState.minZoom,
-        Math.min(zoom, state.deckViewState.maxZoom)
-      );
-      state.deckViewState = {
-        ...state.deckViewState,
-        zoom: clampedZoom
-      };
+      state.deckViewState = resolveDeckViewState({ zoom });
       applyDeckViewState();
       updateZoomFromMap();
       consumePendingRestore();
@@ -535,10 +535,9 @@ function createMapInstanceStore() {
     if (state.deckInstance) {
       markViewportManual();
       pendingOrthographicRestore = null;
-      state.deckViewState = {
-        ...state.deckViewState,
-        zoom: 0
-      };
+      state.deckViewState = resolveDeckViewState({
+        zoom: state.baseZoomLevel
+      });
       applyDeckViewState();
       updateZoomFromMap();
       consumePendingRestore();
@@ -592,22 +591,20 @@ function createMapInstanceStore() {
           return;
         }
 
-        state.deckViewState = {
-          ...state.deckViewState,
+        state.deckViewState = resolveDeckViewState({
           target: dataToWorld(pendingOrthographicRestore.target),
           zoom: pendingOrthographicRestore.zoom
-        };
+        });
         markViewportManual();
         restoredViewApplied = true;
       }
     }
 
     if (!restoredViewApplied) {
-      state.deckViewState = {
-        ...state.deckViewState,
+      state.deckViewState = resolveDeckViewState({
         target: [0, 0, 0],
-        zoom: 0
-      };
+        zoom: state.baseZoomLevel
+      });
       if (reason) {
         markViewportAutoFit(reason);
       }

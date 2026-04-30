@@ -581,7 +581,24 @@
         );
         tableName = duckDBDataset?.tableName;
 
-        if (duckDBDataset?.joinedBasemap && duckDBDataset.tableName) {
+        if (
+          duckDBDataset?.gpsMode &&
+          duckDBDataset.gpsColumns &&
+          duckDBDataset.joinedBasemap &&
+          duckDBDataset.tableName
+        ) {
+          densityTable =
+            await duckDBOrchestrator.generateDotDensityArrowFromGpsJoin(
+              duckDBDataset.joinedBasemap,
+              duckDBDataset.tableName,
+              densityViz.density.valueColumn,
+              duckDBDataset.gpsColumns,
+              densityViz.density.ratio,
+              densityViz.density.seed !== undefined
+                ? { seed: densityViz.density.seed }
+                : undefined
+            );
+        } else if (duckDBDataset?.joinedBasemap && duckDBDataset.tableName) {
           densityTable =
             await duckDBOrchestrator.generateDotDensityArrowFromJoin(
               duckDBDataset.joinedBasemap,
@@ -736,6 +753,7 @@
 
       if (duckDBDataset?.gpsMode && duckDBDataset.gpsColumns) {
         await loadGPSData(datasetId, duckDBDataset.id, generation);
+        await loadDensityTableForDisplay(dataset, generation);
       } else if (duckDBDataset?.joinedBasemap && duckDBDataset.tableName) {
         await loadJoinedBasemap(
           dataset,
@@ -763,6 +781,7 @@
   $effect(() => {
     void duckDBDatasetsVersion;
     void densityReloadSignature;
+    void basemapService.simplificationVersion;
     const currentEnabledDatasets = enabledDatasets;
 
     if (isInitializing) {

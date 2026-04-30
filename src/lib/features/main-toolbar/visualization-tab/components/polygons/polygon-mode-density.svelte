@@ -139,18 +139,27 @@
           levelOptions = [];
           return;
         }
-        const fresh = basemapId
-          ? await duckDBOrchestrator.computeDensityLevelsFromJoin(
-              basemapId,
-              tableName,
-              column,
-              MAX_POINTS_BUDGET
-            )
-          : await duckDBOrchestrator.computeDensityLevels(
-              tableName,
-              column,
-              MAX_POINTS_BUDGET
-            );
+        const fresh =
+          basemapId && duckDataset?.gpsMode && duckDataset.gpsColumns
+            ? await duckDBOrchestrator.computeDensityLevelsFromGpsJoin(
+                basemapId,
+                tableName,
+                column,
+                duckDataset.gpsColumns,
+                MAX_POINTS_BUDGET
+              )
+            : basemapId
+              ? await duckDBOrchestrator.computeDensityLevelsFromJoin(
+                  basemapId,
+                  tableName,
+                  column,
+                  MAX_POINTS_BUDGET
+                )
+              : await duckDBOrchestrator.computeDensityLevels(
+                  tableName,
+                  column,
+                  MAX_POINTS_BUDGET
+                );
         if (!fresh || fresh.length === 0) {
           levelOptions = [];
           return;

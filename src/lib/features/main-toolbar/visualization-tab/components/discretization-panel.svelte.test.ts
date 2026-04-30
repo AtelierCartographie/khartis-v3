@@ -66,6 +66,15 @@ describe('DiscretizationPanel — break edition policy', () => {
     expect(source).toContain('{#if showBreakpointControls}');
   });
 
+  it('uses the breakpoint slider to split class counts, not to edit the breakpoint value', () => {
+    expect(source).toContain('breakpointLowerClassCount?: number | null;');
+    expect(source).toContain('onbreakpointpositionchange?:');
+    expect(source).toContain('min={1}');
+    expect(source).toContain('max={breakpointLowerClassCountMax}');
+    expect(source).toContain('disabled={!isBreakpointValueValid}');
+    expect(source).toContain('scheduleBreakpointPosition(e.detail)');
+  });
+
   it('exposes classification edge safety: guards empty breaks, NaN min/max', () => {
     expect(source).toContain('maxHistogramCount');
     expect(source).toContain('Math.max(...breaks.map');

@@ -23,6 +23,7 @@ export interface BreaksResult {
   counts: number[];
   min: number;
   max: number;
+  breakpointLowerClassCount?: number;
 }
 
 export interface ClassificationOptions {
@@ -30,12 +31,27 @@ export interface ClassificationOptions {
   columnName: string;
   method: ClassificationMethod;
   numClasses: number;
+  valueFilter?: ClassificationValueFilter;
 }
 
 export interface BreakCountOptions {
   datasetId: string;
   columnName: string;
   breaks: number[];
+}
+
+export interface ClassificationValueFilter {
+  operator: '<' | '>=';
+  value: number;
+}
+
+export interface DivergingClassificationOptions {
+  datasetId: string;
+  columnName: string;
+  method: ClassificationMethod;
+  breakpointValue: number;
+  lowerClassCount: number;
+  upperClassCount: number;
 }
 
 interface QueryContext {
@@ -46,6 +62,7 @@ interface QueryContext {
 }
 
 interface ColumnStats {
+  rowCount: number;
   distinctCount: number;
   min: number;
   max: number;
@@ -111,6 +128,7 @@ async function queryColumnStats(
 ): Promise<ColumnStats | null> {
   const result = (await Duck.query(`
       SELECT
+        COUNT(*) as row_count,
         COUNT(DISTINCT "${context.escapedColumn}") as distinct_count,
         MIN("${context.escapedColumn}") as min_val,
         MAX("${context.escapedColumn}") as max_val
@@ -122,6 +140,11 @@ async function queryColumnStats(
     return null;
   }
 
+  const rowCount = Number(
+    result.getChild?.('row_count')?.get(0) ??
+      result.getChild?.('distinct_count')?.get(0) ??
+      0
+  );
   const distinctCount = Number(
     result.getChild?.('distinct_count')?.get(0) ?? 0
   );
@@ -129,6 +152,7 @@ async function queryColumnStats(
   const max = Number(result.getChild?.('max_val')?.get(0));
 
   if (
+    !Number.isFinite(rowCount) ||
     !Number.isFinite(distinctCount) ||
     !Number.isFinite(min) ||
     !Number.isFinite(max)
@@ -137,6 +161,7 @@ async function queryColumnStats(
   }
 
   return {
+    rowCount,
     distinctCount,
     min,
     max
@@ -232,6 +257,56 @@ async function queryBreakCounts(
 const breaksCache = new Map<string, BreaksResult>();
 const BREAKS_CACHE_MAX = 50;
 let breaksCacheVersion = 0;
+let temporaryClassificationTableSequence = 0;
+
+function getValueFilterKey(
+  filter: ClassificationValueFilter | undefined
+): string {
+  return filter ? `${filter.operator}:${filter.value}` : 'all';
+}
+
+async function prepareClassificationContext(
+  context: QueryContext,
+  filter: ClassificationValueFilter | undefined
+): Promise<{ context: QueryContext; cleanup: () => Promise<void> }> {
+  if (!filter) {
+    return {
+      context,
+      cleanup: async () => {}
+    };
+  }
+
+  const filterValue = Number(filter.value);
+  if (!Number.isFinite(filterValue)) {
+    return {
+      context,
+      cleanup: async () => {}
+    };
+  }
+
+  temporaryClassificationTableSequence += 1;
+  const tableName = `kh_classification_${Date.now()}_${temporaryClassificationTableSequence}`;
+  const escapedTable = escapeIdentifier(tableName);
+
+  await Duck.query(`
+    CREATE TEMP TABLE "${escapedTable}" AS
+    SELECT "${context.escapedColumn}" AS "${context.escapedColumn}"
+    FROM "${context.escapedTable}"
+    WHERE "${context.escapedColumn}" IS NOT NULL
+      AND "${context.escapedColumn}" ${filter.operator} ${filterValue}
+  `);
+
+  return {
+    context: {
+      ...context,
+      tableName,
+      escapedTable
+    },
+    cleanup: async () => {
+      await Duck.query(`DROP TABLE IF EXISTS "${escapedTable}"`);
+    }
+  };
+}
 
 export async function calculateBreaks(
   options: ClassificationOptions
@@ -250,20 +325,34 @@ export async function calculateBreaks(
   }
   breaksCacheVersion = currentVersion;
 
-  const cacheKey = `${context.tableName}:${columnName}:${method}:${numClasses}`;
+  const cacheKey = `${context.tableName}:${columnName}:${method}:${numClasses}:${getValueFilterKey(options.valueFilter)}`;
   const cached = breaksCache.get(cacheKey);
   if (cached) {
     return cached;
   }
 
+  const prepared = await prepareClassificationContext(
+    context,
+    options.valueFilter
+  );
+
   try {
-    const stats = await queryColumnStats(context);
+    const stats = await queryColumnStats(prepared.context);
     if (!stats) {
       logger.warn('No valid data for classification', LogCategory.DATA, {
-        tableName: context.tableName,
+        tableName: prepared.context.tableName,
         columnName
       });
       return null;
+    }
+
+    if (numClasses <= 1) {
+      return {
+        breaks: [],
+        counts: [stats.rowCount],
+        min: stats.min,
+        max: stats.max
+      };
     }
 
     if (stats.distinctCount <= 1) {
@@ -299,7 +388,7 @@ export async function calculateBreaks(
       return null;
     }
 
-    const query = `SELECT ${macroName}('${escapeSqlString(context.tableName)}', '${escapeSqlString(columnName)}', ${numClasses}) as breaks`;
+    const query = `SELECT ${macroName}('${escapeSqlString(prepared.context.tableName)}', '${escapeSqlString(columnName)}', ${numClasses}) as breaks`;
 
     try {
       const result = (await Duck.query(query)) as Table;
@@ -327,11 +416,16 @@ export async function calculateBreaks(
     }
 
     if (breaks.length > 0 && method !== ClassificationMethod.MANUAL) {
-      breaks = await roundBreaks(context, breaks, stats.min, stats.max);
+      breaks = await roundBreaks(
+        prepared.context,
+        breaks,
+        stats.min,
+        stats.max
+      );
     }
 
     const allBreaks = [stats.min, ...breaks, stats.max];
-    const counts = await queryBreakCounts(context, allBreaks);
+    const counts = await queryBreakCounts(prepared.context, allBreaks);
 
     const result: BreaksResult = {
       breaks,
@@ -350,14 +444,68 @@ export async function calculateBreaks(
   } catch (error) {
     logger.error('Failed to calculate breaks', LogCategory.DATA, {
       datasetId,
-      tableName: context.tableName,
+      tableName: prepared.context.tableName,
       columnName,
       method,
       numClasses,
       error
     });
     return null;
+  } finally {
+    await prepared.cleanup();
   }
+}
+
+export async function calculateDivergingBreaks(
+  options: DivergingClassificationOptions
+): Promise<BreaksResult | null> {
+  if (!Number.isFinite(options.breakpointValue)) {
+    return null;
+  }
+
+  const lowerClassCount = Math.max(1, Math.floor(options.lowerClassCount));
+  const upperClassCount = Math.max(1, Math.floor(options.upperClassCount));
+  const lowerResult = await calculateBreaks({
+    datasetId: options.datasetId,
+    columnName: options.columnName,
+    method: options.method,
+    numClasses: lowerClassCount,
+    valueFilter: {
+      operator: '<',
+      value: options.breakpointValue
+    }
+  });
+
+  if (!lowerResult) {
+    return null;
+  }
+
+  const upperResult = await calculateBreaks({
+    datasetId: options.datasetId,
+    columnName: options.columnName,
+    method: options.method,
+    numClasses: upperClassCount,
+    valueFilter: {
+      operator: '>=',
+      value: options.breakpointValue
+    }
+  });
+
+  if (!upperResult) {
+    return null;
+  }
+
+  return {
+    breaks: [
+      ...lowerResult.breaks,
+      options.breakpointValue,
+      ...upperResult.breaks
+    ],
+    counts: [...lowerResult.counts, ...upperResult.counts],
+    min: lowerResult.min,
+    max: upperResult.max,
+    breakpointLowerClassCount: lowerResult.counts.length
+  };
 }
 
 export async function calculateBreakCounts(

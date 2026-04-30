@@ -11,10 +11,11 @@
   } from '$lib/features/commons/store/visualization.store.svelte';
   import type { ShapeType } from '$lib/features/main-toolbar/constants';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
-  import { onDestroy, onMount, tick, untrack } from 'svelte';
+  import { onMount, tick, untrack } from 'svelte';
   import {
     DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX,
     normalizeClassificationMethod,
+    resolveBreakpointLowerClassCount,
     resolveComputedClassCount,
     resolveHeadTailClassCountMax,
     resolveRequestedClassCount
@@ -89,14 +90,9 @@
   const activeContextKey = $derived(
     `${visualization?.id ?? ''}:${role}:${activeValueColumn ?? ''}`
   );
-  const BREAKPOINT_APPLY_DEBOUNCE_MS = 250;
 
   let _isCalculating = $state(false);
   let breaksRequestId = 0;
-  let breakpointApplyTimeout: ReturnType<typeof setTimeout> | null = null;
-  let pendingBreakpointClassification:
-    | Partial<ClassificationConfig>
-    | undefined;
   let lastLocalClassification = $state<
     Partial<ClassificationConfig> | undefined
   >(undefined);
@@ -132,6 +128,7 @@
   let currentNumClasses = $state(5);
   let currentBreaks = $state<ClassBreak[]>([]);
   let currentBreakpoint = $state<number | null>(null);
+  let currentBreakpointLowerClassCount = $state<number | null>(null);
   let headTailClassCountMax = $state(DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX);
   let panelRenderKey = $state(0);
   const MAIN_TOOLBAR_ID = 'khartis-main-toolbar';
@@ -190,6 +187,10 @@
       actualClassCount ?? storedNumClasses
     );
     currentBreakpoint = classification?.breakpointValue ?? null;
+    currentBreakpointLowerClassCount = resolveBreakpointLowerClassCount(
+      currentNumClasses,
+      classification?.breakpointLowerClassCount
+    );
     headTailClassCountMax =
       method === ClassificationMethod.HEAD_TAIL
         ? resolveHeadTailClassCountMax(actualClassCount ?? storedNumClasses)
@@ -277,39 +278,6 @@
       : activeClassification;
   }
 
-  function cancelPendingBreakpointChange() {
-    if (breakpointApplyTimeout) {
-      clearTimeout(breakpointApplyTimeout);
-      breakpointApplyTimeout = null;
-    }
-    pendingBreakpointClassification = undefined;
-  }
-
-  function flushPendingBreakpointChange() {
-    if (breakpointApplyTimeout) {
-      clearTimeout(breakpointApplyTimeout);
-      breakpointApplyTimeout = null;
-    }
-    if (!pendingBreakpointClassification) {
-      return;
-    }
-    const classification = pendingBreakpointClassification;
-    pendingBreakpointClassification = undefined;
-    onchange?.(classification);
-  }
-
-  function scheduleBreakpointApply(
-    classification: Partial<ClassificationConfig>
-  ) {
-    pendingBreakpointClassification = classification;
-    if (breakpointApplyTimeout) {
-      clearTimeout(breakpointApplyTimeout);
-    }
-    breakpointApplyTimeout = setTimeout(() => {
-      flushPendingBreakpointChange();
-    }, BREAKPOINT_APPLY_DEBOUNCE_MS);
-  }
-
   function buildBreakpointClassification(
     breakpointValue: number | null
   ): Partial<ClassificationConfig> | undefined {
@@ -347,6 +315,13 @@
       counts,
       colors,
       breakpointValue,
+      breakpointLowerClassCount:
+        breakpointValue !== null
+          ? resolveBreakpointLowerClassCount(
+              actualClassCount,
+              currentBreakpointLowerClassCount
+            )
+          : undefined,
       paletteId: baseClassification?.paletteId,
       inverted: baseClassification?.inverted ?? false,
       labels: undefined,
@@ -365,6 +340,10 @@
     const { actualClassCount, colors, normalizedMethod, result } = computation;
 
     currentNumClasses = actualClassCount;
+    currentBreakpointLowerClassCount = resolveBreakpointLowerClassCount(
+      actualClassCount,
+      computation.breakpointLowerClassCount ?? currentBreakpointLowerClassCount
+    );
     currentBreaks = toClassBreaks(
       result.min,
       result.max,
@@ -385,6 +364,10 @@
       counts: result.counts,
       colors,
       breakpointValue: currentBreakpoint,
+      breakpointLowerClassCount:
+        currentBreakpoint !== null
+          ? currentBreakpointLowerClassCount
+          : undefined,
       paletteId: activeClassification?.paletteId,
       inverted: activeClassification?.inverted ?? false,
       labels: undefined,
@@ -479,16 +462,16 @@
     };
   });
 
-  async function computeBreaks() {
+  async function computeBreaks(): Promise<boolean> {
     if (!visualization?.datasetId || !activeValueColumn) {
-      return;
+      return false;
     }
 
     const dataset = datasetsStore.datasets.find(
       (d) => d.id === visualization.datasetId
     );
     if (!dataset?.sourceFileId) {
-      return;
+      return false;
     }
 
     const myRequestId = ++breaksRequestId;
@@ -502,22 +485,31 @@
         method: storeMethod,
         numClasses: currentNumClasses,
         breakValues: getCurrentBreakValues(),
-        breakpointValue: currentBreakpoint
+        breakpointValue: currentBreakpoint,
+        breakpointLowerClassCount:
+          currentBreakpoint !== null
+            ? currentBreakpointLowerClassCount
+            : undefined
       });
 
-      if (myRequestId !== breaksRequestId) return;
+      if (myRequestId !== breaksRequestId) return false;
 
       applyBreaksResult(computation);
+      return Boolean(computation);
     } finally {
       _isCalculating = false;
     }
   }
 
-  function persistSelectionDraft(options?: {
-    method?: PanelMethod;
-    numClasses?: number;
-    breakpointValue?: number | null;
-  }) {
+  function persistSelectionDraft(
+    options?: {
+      method?: PanelMethod;
+      numClasses?: number;
+      breakpointValue?: number | null;
+      breakpointLowerClassCount?: number | null;
+    },
+    emit = true
+  ) {
     const method = options?.method ?? currentMethod;
     const storeMethod = panelMethodToStoreMethod(method);
     const requestedClassCount = resolveRequestedClassCount(
@@ -529,6 +521,14 @@
       Object.prototype.hasOwnProperty.call(options, 'breakpointValue')
         ? (options.breakpointValue ?? null)
         : currentBreakpoint;
+    const breakpointLowerClassCount =
+      breakpointValue !== null
+        ? resolveBreakpointLowerClassCount(
+            requestedClassCount,
+            options?.breakpointLowerClassCount ??
+              currentBreakpointLowerClassCount
+          )
+        : undefined;
 
     const nextClassification = {
       method: storeMethod,
@@ -537,6 +537,7 @@
       breaks: undefined,
       counts: undefined,
       breakpointValue,
+      breakpointLowerClassCount,
       paletteId: activeClassification?.paletteId,
       inverted: activeClassification?.inverted ?? false,
       labels: undefined,
@@ -551,65 +552,96 @@
       ...nextClassification
     });
     lastLocalContextKey = activeContextKey;
-    onchange?.(nextClassification);
+    if (emit) {
+      onchange?.(nextClassification);
+    }
   }
 
   function handleMethodChange(method: PanelMethod) {
-    cancelPendingBreakpointChange();
     currentMethod = method;
     currentNumClasses = resolveRequestedClassCount(
       panelMethodToStoreMethod(method),
-      currentNumClasses
+      method === 'head-tail'
+        ? DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX
+        : currentNumClasses
+    );
+    currentBreakpointLowerClassCount = resolveBreakpointLowerClassCount(
+      currentNumClasses,
+      currentBreakpointLowerClassCount
     );
     if (method !== 'head-tail') {
       headTailClassCountMax = DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX;
     }
-    persistSelectionDraft({
-      method,
-      numClasses: currentNumClasses
-    });
-    computeBreaks();
+    persistSelectionDraft(
+      {
+        method,
+        numClasses: currentNumClasses
+      },
+      false
+    );
+    void computeBreaks();
   }
 
   function handleClassesChange(num: number) {
-    cancelPendingBreakpointChange();
     currentNumClasses = resolveRequestedClassCount(
       panelMethodToStoreMethod(currentMethod),
       num
     );
-    persistSelectionDraft({ numClasses: currentNumClasses });
-    computeBreaks();
+    currentBreakpointLowerClassCount = resolveBreakpointLowerClassCount(
+      currentNumClasses,
+      currentBreakpointLowerClassCount
+    );
+    persistSelectionDraft({ numClasses: currentNumClasses }, false);
+    void computeBreaks();
   }
 
   function handleBreakpointChange(value: number | null) {
     currentBreakpoint = value;
-    const nextClassification = buildBreakpointClassification(value);
-    if (!nextClassification) {
-      persistSelectionDraft({ breakpointValue: value });
+    currentBreakpointLowerClassCount =
+      value !== null
+        ? resolveBreakpointLowerClassCount(
+            currentNumClasses,
+            currentBreakpointLowerClassCount
+          )
+        : null;
+    void computeBreaks().then((computed) => {
+      if (computed) {
+        return;
+      }
+
+      const nextClassification = buildBreakpointClassification(value);
+      if (!nextClassification) {
+        persistSelectionDraft({ breakpointValue: value });
+        return;
+      }
+
+      lastLocalClassification = cloneClassification(nextClassification);
+      lastLocalContextKey = activeContextKey;
+      onchange?.(nextClassification);
+    });
+  }
+
+  function handleBreakpointPositionChange(lowerClassCount: number) {
+    currentBreakpointLowerClassCount = resolveBreakpointLowerClassCount(
+      currentNumClasses,
+      lowerClassCount
+    );
+    if (currentBreakpoint === null) {
       return;
     }
-
-    lastLocalClassification = cloneClassification(nextClassification);
-    lastLocalContextKey = activeContextKey;
-    scheduleBreakpointApply(nextClassification);
+    void computeBreaks();
   }
 
   function handleBreaksChange(breaks: ClassBreak[]) {
-    cancelPendingBreakpointChange();
     currentBreaks = breaks;
-    computeBreaks();
+    void computeBreaks();
   }
 
   function handleClose() {
-    flushPendingBreakpointChange();
     wasOpen = false;
     open = false;
     onclose?.();
   }
-
-  onDestroy(() => {
-    flushPendingBreakpointChange();
-  });
 </script>
 
 {#if open}
@@ -636,6 +668,7 @@
           bind:numClasses={currentNumClasses}
           bind:breaks={currentBreaks}
           bind:breakpointValue={currentBreakpoint}
+          bind:breakpointLowerClassCount={currentBreakpointLowerClassCount}
           showBreakpointControls={showBreakpointControls}
           divergingPreviewColors={divergingPreview}
           sizePreview={role === 'size' ? sizePreview : undefined}
@@ -646,6 +679,7 @@
           onmethodchange={handleMethodChange}
           onclasseschange={handleClassesChange}
           onbreakpointchange={handleBreakpointChange}
+          onbreakpointpositionchange={handleBreakpointPositionChange}
           onbreakschange={handleBreaksChange}
         />
       {/key}

@@ -51,10 +51,12 @@ describe('BasemapStyleSelector', () => {
     expect(source).toContain('mapProjectionStore.isGlobe');
     expect(source).toContain("selectedZone === 'france'");
     expect(source).toContain('MAP_PROJECTION_TYPE.MERCATOR');
+    expect(source).toContain('mapProjectionStore.isGlobeExplicitlyEnabled');
     expect(source).toContain("selectedZone === 'monde'");
     expect(source).toContain('labelText={m.map_projection_globe()}');
     expect(source).toContain('checked={isGlobeProjectionEnabled}');
     expect(source).toContain('onchange={handleGlobeProjectionToggle}');
+    expect(source).toContain('explicit: true');
   });
 
   it('filters layer controls to the groups available in the active Carte Facile style', () => {

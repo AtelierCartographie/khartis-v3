@@ -74,6 +74,29 @@ export async function clearColumnTransformations(
   await markDirtyAndSave(container);
 }
 
+export async function updateFileJoinedBasemap(
+  container: ProjectStateContainer,
+  fileId: string,
+  joinedBasemap: string
+): Promise<void> {
+  const fileIndex = getSourceFileIndex(container, fileId);
+  if (fileIndex === -1) return;
+
+  const project = container._state.currentProject!;
+  const updatedFiles = [...project.data.sourceFiles];
+  updatedFiles[fileIndex] = {
+    ...updatedFiles[fileIndex],
+    joinedBasemap
+  };
+
+  container._state.currentProject = {
+    ...project,
+    data: { ...project.data, sourceFiles: updatedFiles }
+  };
+
+  await markDirtyAndSave(container);
+}
+
 export async function addDeletedRows(
   container: ProjectStateContainer,
   fileId: string,
