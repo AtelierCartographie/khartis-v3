@@ -199,7 +199,14 @@ export function createSymbolHandlers(deps: SymbolHandlersDeps) {
     >(updates, [{ from: 'type', to: 'shape' }], symbol);
     const withFallback = pickOwnedKeys(
       updates as Partial<SymbolPrimitiveConfig>,
-      ['size', 'minSize', 'maxSize', 'sizeScale', 'opacity'] as const,
+      [
+        'size',
+        'minSize',
+        'maxSize',
+        'barWidth',
+        'sizeScale',
+        'opacity'
+      ] as const,
       symbol
     );
 

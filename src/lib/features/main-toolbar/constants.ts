@@ -126,6 +126,7 @@ export const LINEAR_SHAPES: readonly ShapeType[] = [
   ShapeType.BAR,
   ShapeType.SPIKE
 ];
+export const DEFAULT_LINEAR_SYMBOL_BAR_WIDTH = 6;
 
 export function isLinearShape(shape: ShapeType): boolean {
   return LINEAR_SHAPES.includes(shape);
@@ -210,6 +211,7 @@ export const SLIDER_LIMITS = {
   lineOpacity: { min: 0, max: 100, step: 1 },
   symbolSize: { min: 1, max: 30, step: 1 },
   symbolMaxSize: { min: 2, max: 40, step: 1 },
+  symbolBarWidth: { min: 1, max: 30, step: 1 },
   textSize: { min: 6, max: 24, step: 1 },
   textOpacity: { min: 0, max: 100, step: 1 },
   labelOpacity: { min: 0, max: 100, step: 1 },

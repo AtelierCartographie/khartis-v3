@@ -126,9 +126,10 @@ describe('createSymbolHandlers', () => {
 
   it('handleSymbolsChange renames type → shape', () => {
     const bag = makeBag();
-    bag.handlers.handleSymbolsChange({ type: 'square' } as never);
+    bag.handlers.handleSymbolsChange({ type: 'square', barWidth: 9 } as never);
     const arg = bag.updateSelectedVisualization.mock.calls[0][0];
     expect(arg.symbol.shape).toBe('square');
+    expect(arg.symbol.barWidth).toBe(9);
   });
 
   it('handleSymbolFillClassificationChange delegates to symbol fill setter', () => {
