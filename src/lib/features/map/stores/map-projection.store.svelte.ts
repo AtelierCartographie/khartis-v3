@@ -12,27 +12,38 @@ export type MapProjectionType = MapProjectionTypeValue;
 const DEFAULT_MAP_PROJECTION: MapProjectionType = MAP_PROJECTION_TYPE.MERCATOR;
 const PROJECTION_MERCATOR: MapProjectionType = MAP_PROJECTION_TYPE.MERCATOR;
 const PROJECTION_GLOBE: MapProjectionType = MAP_PROJECTION_TYPE.GLOBE;
+type SetProjectionOptions = {
+  explicit?: boolean;
+};
 
 function createMapProjectionStore() {
   const state = $state({
-    projection: DEFAULT_MAP_PROJECTION as MapProjectionType
+    projection: DEFAULT_MAP_PROJECTION as MapProjectionType,
+    explicitGlobe: false
   });
 
-  function setProjection(projection: MapProjectionType): void {
+  function setProjection(
+    projection: MapProjectionType,
+    options: SetProjectionOptions = {}
+  ): void {
     state.projection = projection;
+    state.explicitGlobe =
+      projection === PROJECTION_GLOBE ? (options.explicit ?? false) : false;
     persistenceRegistry.notifyChange('mapProjection', SavePriority.IMMEDIATE);
   }
 
   function toggle(): void {
-    state.projection =
+    setProjection(
       state.projection === PROJECTION_MERCATOR
         ? PROJECTION_GLOBE
-        : PROJECTION_MERCATOR;
-    persistenceRegistry.notifyChange('mapProjection', SavePriority.IMMEDIATE);
+        : PROJECTION_MERCATOR,
+      { explicit: true }
+    );
   }
 
   function reset(): void {
     state.projection = DEFAULT_MAP_PROJECTION;
+    state.explicitGlobe = false;
   }
 
   function restoreFromSerialized(projection: MapProjectionType): void {
@@ -44,6 +55,7 @@ function createMapProjectionStore() {
       return;
     }
     state.projection = projection;
+    state.explicitGlobe = projection === PROJECTION_GLOBE;
   }
 
   return {
@@ -52,6 +64,9 @@ function createMapProjectionStore() {
     },
     get isGlobe(): boolean {
       return state.projection === PROJECTION_GLOBE;
+    },
+    get isGlobeExplicitlyEnabled(): boolean {
+      return state.explicitGlobe;
     },
     setProjection,
     toggle,
