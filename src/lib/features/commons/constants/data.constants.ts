@@ -7,6 +7,18 @@ export const INTERNAL_COLUMN = {
   THE_GEOM: 'the_geom'
 } as const;
 
+export const CANONICAL_ID_COLUMN = 'id' as const;
+
+export const JOINED_BASEMAP_COLUMN = {
+  ID: 'basemap_id',
+  LABEL: 'basemap_label',
+  TYPO_MATCH: 'typo_match'
+} as const;
+
+export const JOINED_BASEMAP_COLUMNS = Object.values(
+  JOINED_BASEMAP_COLUMN
+) as readonly string[];
+
 // Ordered by frequency — auto-detection stops at first match.
 export const GEO_COLUMN_NAMES = [
   INTERNAL_COLUMN.GEOM,
