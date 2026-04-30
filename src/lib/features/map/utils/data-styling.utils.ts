@@ -114,6 +114,38 @@ export function getSizeForValue(
   }
 }
 
+export function getProportionalSymbolSizeForValue(
+  value: number,
+  max: number,
+  maxSize: number,
+  scale: ScaleType = ScaleType.SQRT
+): number {
+  if (
+    !Number.isFinite(value) ||
+    !Number.isFinite(max) ||
+    !Number.isFinite(maxSize) ||
+    value <= 0 ||
+    max <= 0 ||
+    maxSize <= 0
+  ) {
+    return 0;
+  }
+
+  const normalized = Math.min(1, Math.max(0, value / max));
+
+  switch (scale) {
+    case ScaleType.LINEAR:
+      return normalized * maxSize;
+
+    case ScaleType.LOG:
+      return (Math.log1p(normalized) / Math.log1p(1)) * maxSize;
+
+    case ScaleType.SQRT:
+    default:
+      return Math.sqrt(normalized) * maxSize;
+  }
+}
+
 export function getClassedSizeForValue(
   value: number,
   breaks: number[],

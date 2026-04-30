@@ -11,6 +11,8 @@
   import type { ProjectionFilterId } from '$lib/features/commons/types/global';
   import { mapProjectionStore } from '$lib/features/map/stores/map-projection.store.svelte';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
+  import { projectionStore as mapRenderProjectionStore } from '$lib/features/map/stores/projection.store.svelte';
+  import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
   import {
     getAvailableProjectionIds,
     resolveDisplayedProjectionId,
@@ -40,7 +42,14 @@
       currentStyle: basemapStyleStore.selectedStyle,
       preferredStyle: basemapStyleStore.preferredTiledStyle,
       referenceBasemapId: basemapStyleStore.referenceBasemapId,
-      osmBasemapBbox: osmBasemapStore.activeOSMBasemap?.bbox ?? null
+      referenceProjectionPresetId: basemapStyleStore.referenceBasemapId
+        ? (basemapService.currentMetadata?.proj_to?.preset ?? null)
+        : null,
+      osmBasemapBbox: osmBasemapStore.activeOSMBasemap?.bbox ?? null,
+      projectionBbox: mapRenderProjectionStore.isProjectedCoordinates
+        ? null
+        : mapRenderProjectionStore.referenceBbox,
+      projectionPresets: basemapService.projectionPresets
     })
   );
   const suggestionCardsEnabled = $derived(
@@ -102,7 +111,12 @@
   );
 
   const selectedCardId = $derived.by(() => {
-    if (hasCustomProjection || !projectionState.overrideActive) {
+    if (
+      hasCustomProjection ||
+      projectionState.activeSuggestionId ||
+      !projectionState.overrideActive ||
+      projectionState.overrideSource !== 'manual'
+    ) {
       return null;
     }
 
@@ -116,6 +130,13 @@
     );
     return matchingCard?.id ?? null;
   });
+
+  function isSuggestionSelected(suggestion: ProjectionSuggestion) {
+    return (
+      projectionState.overrideSource === 'manual' &&
+      projectionState.activeSuggestionId === suggestion.id
+    );
+  }
 
   function selectProjection(projectionId: string) {
     projectionActions.toggleSelected(projectionId);
@@ -187,7 +208,7 @@
                     s,
                     m.projection_tag_national()
                   )}
-                  selected={projectionState.customCode === s.proj4String}
+                  selected={isSuggestionSelected(s)}
                   variant="blue"
                   equalArea={s.equalArea}
                   onclick={() => applySuggestion(s)}
@@ -210,7 +231,7 @@
                     ? m.projection_equal_area()
                     : (s.shape ?? '')}
                   tag={s.scale?.[0] ?? ''}
-                  selected={false}
+                  selected={isSuggestionSelected(s)}
                   variant="default"
                   equalArea={s.equalArea}
                   onclick={() => applySuggestion(s)}

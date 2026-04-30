@@ -102,4 +102,21 @@ describe('ThematicMap projection mask overlay', () => {
       'getProjectionMetadataForDataset(firstDatasetId) ??'
     );
   });
+
+  it('prefers rendered dataset bounds for manual projection fits even when a joined basemap is referenced', () => {
+    const helperStart = source.indexOf(
+      'function shouldPreferDatasetProjectionBbox'
+    );
+    const helperEnd = source.indexOf(
+      'function resolveRenderedReferenceBounds',
+      helperStart
+    );
+    const helperSource = source.slice(helperStart, helperEnd);
+
+    expect(helperSource).toContain(
+      "projectionState.overrideSource === 'manual'"
+    );
+    expect(helperSource).toContain('Boolean(datasetBbox)');
+    expect(helperSource).not.toContain('!basemapStyleStore.referenceBasemapId');
+  });
 });

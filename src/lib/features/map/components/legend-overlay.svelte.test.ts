@@ -293,7 +293,10 @@ describe('legend overlay visibility', () => {
     mockVisualizationStore.visualizations = [buildClassedPolygonViz()];
     legendActions.reset();
     legendActions.setVisibility(true);
-    legendActions.updateStyle({ fontFamily: 'Inter' });
+    legendActions.updateStyle({
+      fontFamily: 'Inter',
+      textColor: { hue: 0, saturation: 0, lightness: 100 }
+    });
     legendActions.updateBackground({
       enabled: true,
       color: { hue: 210, saturation: 10, lightness: 98 },
@@ -303,12 +306,18 @@ describe('legend overlay visibility', () => {
     const { container } = render(LegendOverlay);
     const legend = container.querySelector('.legend-container');
     const quantitative = container.querySelector('.quantitative_legend');
+    const quantitativeSvg = container.querySelector(
+      '.legend-svg--quantitative'
+    );
     const style = legend?.getAttribute('style');
 
     expect(style).toContain('background-color: rgba(249, 250, 250, 0.6)');
+    expect(legend).toHaveStyle({ color: '#ffffff' });
     expect(style).toContain('--legend-padding-inline: 6px');
     expect(style).toContain('--legend-padding-block: 4px');
     expect(style).toContain('border-radius: 0px');
+    expect(quantitativeSvg).toHaveAttribute('fill', 'currentColor');
+    expect(quantitativeSvg).toHaveStyle({ color: '#ffffff' });
     expect(quantitative?.getAttribute('font-family')).toContain('Inter');
     expect(
       container.querySelector('.quantitative_legend > rect[fill="transparent"]')

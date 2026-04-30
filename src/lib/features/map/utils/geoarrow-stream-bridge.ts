@@ -38,9 +38,12 @@ const { geoNaturalEarth2 } = _d3GeoProjection as unknown as {
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type {
   BasemapMetadata,
+  ProjectionPresetEntry,
   ProjectionPresets
 } from '../types/basemap.types';
 import { proj4d3 } from './proj4d3';
+
+type BBoxTuple = [number, number, number, number];
 
 // Proj4 projection names not supported by proj4.js — mapped to d3-geo equivalents
 const D3_GEO_PROJECTION_MAP: Record<string, () => GeoProjection> = {
@@ -61,7 +64,7 @@ const EXPECTED_GEOM_COL = 'geometry';
 const normalizedTableCache = new WeakMap<ArrowTable, ArrowTable>();
 const projectedBboxCache = new WeakMap<
   BasemapMetadata,
-  Map<string, [number, number, number, number] | null>
+  Map<string, BBoxTuple | null>
 >();
 
 type GeoBounds = [number, number, number, number];
@@ -103,10 +106,11 @@ function createProjectionPointSampler(
 
 function sampleProjectedBbox(
   projection: ProjectionLike,
-  bbox: [number, number, number, number]
-): [number, number, number, number] | null {
+  bbox: BBoxTuple
+): BBoxTuple | null {
   const [west, south, east, north] = bbox;
   const steps = 32;
+  const interiorSteps = 8;
   const xs: number[] = [];
   const ys: number[] = [];
   const projectPoint = createProjectionPointSampler(projection);
@@ -130,9 +134,63 @@ function sampleProjectedBbox(
   }
   tryProject((west + east) / 2, (south + north) / 2);
 
+  for (let xStep = 1; xStep < interiorSteps; xStep++) {
+    const lon = west + (xStep / interiorSteps) * (east - west);
+    for (let yStep = 1; yStep < interiorSteps; yStep++) {
+      const lat = south + (yStep / interiorSteps) * (north - south);
+      tryProject(lon, lat);
+    }
+  }
+
   return xs.length === 0
     ? null
     : [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+}
+
+function projectionPresetEntryToBbox(entry: ProjectionPresetEntry): BBoxTuple {
+  return [
+    entry.bounds[0][0],
+    entry.bounds[0][1],
+    entry.bounds[1][0],
+    entry.bounds[1][1]
+  ];
+}
+
+function unionBboxes(bboxes: BBoxTuple[]): BBoxTuple | null {
+  if (bboxes.length === 0) {
+    return null;
+  }
+
+  return [
+    Math.min(...bboxes.map((bbox) => bbox[0])),
+    Math.min(...bboxes.map((bbox) => bbox[1])),
+    Math.max(...bboxes.map((bbox) => bbox[2])),
+    Math.max(...bboxes.map((bbox) => bbox[3]))
+  ];
+}
+
+function computeCompositeProjectedBbox(
+  projection: ProjectionLike,
+  metadata: BasemapMetadata,
+  projectionPresets: ProjectionPresets | null
+): BBoxTuple | null {
+  const presetId = metadata.proj_to?.preset;
+  if (!presetId || !projectionPresets) {
+    return null;
+  }
+
+  const preset = projectionPresets[presetId];
+  if (!preset?.entries?.length) {
+    return null;
+  }
+
+  const projectedEntryBboxes = preset.entries
+    .map((entry) =>
+      sampleProjectedBbox(projection, projectionPresetEntryToBbox(entry))
+    )
+    .filter((bbox): bbox is BBoxTuple => bbox !== null);
+
+  return unionBboxes(projectedEntryBboxes);
 }
 
 function normalizeGeomColumnName(table: ArrowTable): ArrowTable {
@@ -328,15 +386,11 @@ export function parseSolidPolygons(table: ArrowTable): BinaryPolygonData {
 }
 
 /**
- * Fast WKB Point decoder for multi-batch Arrow tables (e.g. dot-density output).
+ * Fast WKB Point decoder for Arrow tables (e.g. dot-density output).
  *
- * The `geoarrow-deck-stream` library's `parsePoints` only reads the first
- * RecordBatch via `getFirstDataChunk`, so tables with N batches drop
- * (N-1) / N of their rows. Instead of calling the library 58 times and
- * concatenating (which re-allocates + re-runs WKB → native conversion per
- * batch), we decode WKB Points directly: each point is a fixed 21 bytes
- * (1 endian + 4 type + 8 X + 8 Y), so we iterate all batches in one pass
- * and write straight into pre-allocated Float32/Uint32 output buffers.
+ * WKB Points have a fixed 21-byte layout (1 endian + 4 type + 8 X + 8 Y),
+ * so this path can write directly into pre-allocated binary buffers and avoid
+ * native GeoArrow conversion when the geometry is plain Point WKB.
  */
 function decodeWkbPointsAllBatches(
   table: ArrowTable,
@@ -408,39 +462,7 @@ function parsePointsAllBatches(
     if (direct) return direct;
   }
 
-  // Library's parsePoints only reads the first RecordBatch; for multi-batch
-  // tables we parse each batch as a single-batch table and concat the result.
-  if (normalized.batches.length <= 1) {
-    return parsePoints(normalized, options);
-  }
-
-  const perBatch = normalized.batches.map((batch) => {
-    const singleBatchTable = new ArrowTableImpl(normalized.schema, [batch]);
-    return parsePoints(singleBatchTable, options);
-  });
-
-  let totalLength = 0;
-  for (const r of perBatch) totalLength += r.length;
-
-  const positions = new Float32Array(totalLength * 2);
-  const featureIds = new Uint32Array(totalLength);
-  let posOffset = 0;
-  let idOffset = 0;
-  let featureIdBase = 0;
-  for (const r of perBatch) {
-    const posSlice = r.positions.subarray(0, r.length * 2);
-    positions.set(posSlice, posOffset);
-    posOffset += posSlice.length;
-
-    const idSlice = r.featureIds.subarray(0, r.length);
-    for (let i = 0; i < idSlice.length; i++) {
-      featureIds[idOffset + i] = idSlice[i] + featureIdBase;
-    }
-    idOffset += idSlice.length;
-    featureIdBase += r.length;
-  }
-
-  return { length: totalLength, positions, featureIds, size: 2 };
+  return parsePoints(normalized, options);
 }
 
 export function parsePointData(table: ArrowTable): BinaryPointData {
@@ -595,15 +617,15 @@ export function computeProjectedBboxForBasemap(
   width = 960,
   height = 600,
   /** Override the WGS84 bbox to project (e.g., mainland-only bounds for composites) */
-  overrideBbox?: [number, number, number, number]
-): [number, number, number, number] | null {
+  overrideBbox?: BBoxTuple
+): BBoxTuple | null {
   const projTo = metadata.proj_to;
   if (!projTo || projTo.type === 'identity') return null;
 
   const wgs84Bbox = overrideBbox ?? metadata.bbox;
   if (!wgs84Bbox) return null;
 
-  const cacheKey = `${width}x${height}:${wgs84Bbox.join(',')}`;
+  const cacheKey = `${width}x${height}:${overrideBbox ? 'override' : 'auto'}:${wgs84Bbox.join(',')}`;
   let metadataCache = projectedBboxCache.get(metadata);
   if (metadataCache?.has(cacheKey)) {
     return metadataCache.get(cacheKey) ?? null;
@@ -615,7 +637,14 @@ export function computeProjectedBboxForBasemap(
     height,
     projectionPresets
   );
-  const result = sampleProjectedBbox(projection, wgs84Bbox);
+  const result =
+    !overrideBbox && projTo.type === 'composite'
+      ? (computeCompositeProjectedBbox(
+          projection,
+          metadata,
+          projectionPresets
+        ) ?? sampleProjectedBbox(projection, wgs84Bbox))
+      : sampleProjectedBbox(projection, wgs84Bbox);
 
   if (!metadataCache) {
     metadataCache = new Map();
@@ -628,8 +657,8 @@ export function computeProjectedBboxForBasemap(
 
 export function computeProjectedBboxForProjection(
   projection: ProjectionLike,
-  bbox: [number, number, number, number]
-): [number, number, number, number] | null {
+  bbox: BBoxTuple
+): BBoxTuple | null {
   return sampleProjectedBbox(projection, bbox);
 }
 
