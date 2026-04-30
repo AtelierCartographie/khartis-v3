@@ -12,12 +12,22 @@ export function sanitizeProjectName(name: string): string {
   return sanitized;
 }
 
-export function sanitizeTextInput(input: string): string {
+type SanitizeTextInputOptions = {
+  trim?: boolean;
+};
+
+export function sanitizeTextInput(
+  input: string,
+  options: SanitizeTextInputOptions = {}
+): string {
   if (!input || typeof input !== 'string') {
     return '';
   }
 
-  return input.replace(/\s+/g, ' ').trim().substring(0, 500);
+  const boundedInput =
+    options.trim === false ? input : input.replace(/\s+/g, ' ').trim();
+
+  return boundedInput.substring(0, 500);
 }
 
 export function escapeSqlString(value: string): string {
