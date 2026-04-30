@@ -628,6 +628,38 @@ describe('createPolygonLayers', () => {
     expect(layers[0]).toBeInstanceOf(GeoJsonLayer);
   });
 
+  it('uses a distinct layer id for the projected GeoJSON fallback', () => {
+    arrowTableToGeoJSONMock.mockReturnValue({
+      type: 'FeatureCollection',
+      features: [createPolygonFeature('keep', 2024)]
+    } satisfies FeatureCollection<Polygon>);
+
+    const table = createTableWithFields([]);
+    const geometryInfo = {
+      ...createGeometryInfo(),
+      encoding: 'geoarrow.wkb',
+      isNativeGeoArrow: true,
+      isWkbEncoded: true,
+      isGeoJsonEncoded: false
+    };
+    const projectedLayers = createPolygonLayers(
+      table,
+      geometryInfo,
+      createContext(createVisualization(FillMode.UNIQUE))
+    );
+    const binaryLayers = createPolygonLayers(table, geometryInfo, {
+      ...createContext(createVisualization(FillMode.UNIQUE)),
+      customProjection: undefined
+    });
+
+    const projectedLayer = projectedLayers.find(
+      (layer) => layer instanceof GeoJsonLayer
+    );
+
+    expect(projectedLayer?.props.id).toMatch(/-projected-geojson$/);
+    expect(binaryLayers[0]?.props.id).not.toBe(projectedLayer?.props.id);
+  });
+
   it('renders GeoJSON polygon fallbacks without a visualization context', () => {
     arrowTableToGeoJSONMock.mockReturnValue({
       type: 'FeatureCollection',
@@ -764,12 +796,16 @@ describe('createPolygonLayers', () => {
     );
     const radii = (
       pointLayer?.props.data as {
+        featureIds?: Uint32Array;
         attributes?: { getRadius?: { value?: Float32Array } };
       }
     )?.attributes?.getRadius?.value;
+    const featureIds = (pointLayer?.props.data as { featureIds?: Uint32Array })
+      ?.featureIds;
 
     expect(radii).toBeDefined();
-    expect(radii![0]).toBeLessThan(radii![1]);
+    expect(Array.from(featureIds ?? [])).toEqual([1, 0]);
+    expect(radii![0]).toBeGreaterThan(radii![1]);
   });
 
   it('renders the GeoJSON fallback pattern below the polygon stroke', () => {
@@ -1106,6 +1142,15 @@ describe('createPolygonLayers', () => {
           String(layer.props.id).includes('-density')
       )
     ).toBe(true);
+    const densityLayer = layers.find(
+      (layer) =>
+        layer instanceof ScatterplotLayer &&
+        String(layer.props.id).includes('-density')
+    ) as ScatterplotLayer | undefined;
+    expect(densityLayer).toBeDefined();
+    expect(
+      (densityLayer?.props as Record<string, unknown>).radiusMinPixels
+    ).toBe(0);
     expect(arrowTableToGeoJSONMock).not.toHaveBeenCalled();
   });
 });
@@ -1174,6 +1219,205 @@ describe('createPointLayers', () => {
     }
 
     expect(Array.from(fillColorAttribute.value)).toEqual([0, 0, 0, 0]);
+  });
+
+  it('uses zero-based square-root radii and sorts proportional point buffers by descending radius', () => {
+    parsePointDataWithProjectionMock.mockReturnValue({
+      length: 3,
+      featureIds: new Uint32Array([0, 1, 2])
+    });
+    createScatterplotLayerPropsMock.mockImplementation((pointData) => ({
+      data: {
+        length: pointData.length,
+        featureIds: pointData.featureIds,
+        attributes: {
+          getPosition: {
+            value: new Float32Array([0, 0, 10, 10, 20, 20]),
+            size: 2
+          }
+        }
+      }
+    }));
+
+    const visualization = createSymbolVisualization();
+    visualization.symbol = {
+      ...visualization.symbol!,
+      mode: SymbolMode.PROPORTIONAL,
+      shape: ShapeType.CIRCLE,
+      sizeColumn: 'population',
+      minSize: 8,
+      maxSize: 40,
+      sizeScale: ScaleType.LINEAR
+    };
+
+    const layers = createPointLayers(
+      createTableWithRows(
+        [{ population: 25 }, { population: 100 }, { population: 0 }],
+        ['population']
+      ),
+      createPointGeometryInfo(),
+      {
+        ...createContext(visualization),
+        statistics: { min: 25, max: 100 }
+      }
+    );
+
+    const pointLayer = layers[0] as ScatterplotLayer;
+    const layerData = pointLayer.props.data as {
+      featureIds?: Uint32Array;
+      attributes?: {
+        getPosition?: { value?: Float32Array };
+        getRadius?: { value?: Float32Array };
+      };
+    };
+
+    expect(Array.from(layerData.featureIds ?? [])).toEqual([1, 0, 2]);
+    expect(Array.from(layerData.attributes?.getRadius?.value ?? [])).toEqual([
+      40, 20, 0
+    ]);
+    expect(Array.from(layerData.attributes?.getPosition?.value ?? [])).toEqual([
+      10, 10, 0, 0, 20, 20
+    ]);
+  });
+
+  it('sorts GeoJSON proportional point fallbacks by descending zero-based radius without pixel clamps', () => {
+    arrowTableToGeoJSONMock.mockReturnValue({
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          properties: { id: 'mid', population: 25 },
+          geometry: { type: 'Point', coordinates: [0, 0] }
+        },
+        {
+          type: 'Feature',
+          properties: { id: 'max', population: 100 },
+          geometry: { type: 'Point', coordinates: [1, 1] }
+        },
+        {
+          type: 'Feature',
+          properties: { id: 'zero', population: 0 },
+          geometry: { type: 'Point', coordinates: [2, 2] }
+        }
+      ]
+    } satisfies FeatureCollection<Point, { id: string; population: number }>);
+
+    const visualization = createSymbolVisualization();
+    visualization.symbol = {
+      ...visualization.symbol!,
+      mode: SymbolMode.PROPORTIONAL,
+      shape: ShapeType.CIRCLE,
+      sizeColumn: 'population',
+      minSize: 8,
+      maxSize: 40
+    };
+
+    const layers = createPointLayers(
+      createTableWithFields(['geometry', 'population']),
+      {
+        type: 'Point',
+        encoding: 'geojson',
+        geoColumn: 'geometry',
+        isNativeGeoArrow: false,
+        isWkbEncoded: false,
+        isGeoJsonEncoded: true
+      },
+      {
+        ...createContext(visualization),
+        customProjection: undefined,
+        statistics: { min: 25, max: 100 }
+      }
+    );
+
+    const pointLayer = layers[0] as GeoJsonLayer;
+    const layerData = pointLayer.props.data as FeatureCollection<
+      Point,
+      { id: string; population: number }
+    >;
+    const getPointRadius = pointLayer.props.getPointRadius as (feature: {
+      properties?: Record<string, unknown>;
+    }) => number;
+
+    expect(pointLayer).toBeInstanceOf(GeoJsonLayer);
+    expect(layerData.features.map((feature) => feature.properties.id)).toEqual([
+      'max',
+      'mid',
+      'zero'
+    ]);
+    expect(
+      layerData.features.map((feature) => getPointRadius(feature))
+    ).toEqual([40, 20, 0]);
+    expect(
+      (pointLayer.props as Record<string, unknown>).pointRadiusMinPixels
+    ).toBe(0);
+    expect(source).not.toContain('radiusMinPixels');
+    expect(source).not.toContain('pointRadiusMinPixels');
+  });
+
+  it('sorts each double proportional symbol layer by its own descending radius while preserving feature ids', () => {
+    parsePointDataWithProjectionMock.mockReturnValue({
+      length: 3,
+      featureIds: new Uint32Array([0, 1, 2])
+    });
+    createScatterplotLayerPropsMock.mockImplementation((pointData) => ({
+      data: {
+        length: pointData.length,
+        featureIds: pointData.featureIds,
+        attributes: {
+          getPosition: {
+            value: new Float32Array([0, 0, 10, 10, 20, 20]),
+            size: 2
+          }
+        }
+      }
+    }));
+
+    const visualization = createSymbolVisualization();
+    visualization.symbol = {
+      ...visualization.symbol!,
+      mode: SymbolMode.PROPORTIONAL,
+      proportionalType: ProportionalType.DOUBLE,
+      shape: ShapeType.CIRCLE,
+      sizeColumn: 'population',
+      valueColumn: 'income',
+      minSize: 8,
+      maxSize: 40
+    };
+
+    const layers = createPointLayers(
+      createTableWithRows(
+        [
+          { population: 25, income: 100 },
+          { population: 100, income: 25 },
+          { population: 0, income: 0 }
+        ],
+        ['population', 'income']
+      ),
+      createPointGeometryInfo(),
+      {
+        ...createContext(visualization),
+        statistics: { min: 25, max: 100 },
+        secondaryStatistics: { min: 25, max: 100 }
+      }
+    );
+
+    const primaryData = layers[0].props.data as {
+      featureIds?: Uint32Array;
+      attributes?: { getRadius?: { value?: Float32Array } };
+    };
+    const secondaryData = layers[1].props.data as {
+      featureIds?: Uint32Array;
+      attributes?: { getRadius?: { value?: Float32Array } };
+    };
+
+    expect(Array.from(primaryData.featureIds ?? [])).toEqual([1, 0, 2]);
+    expect(Array.from(primaryData.attributes?.getRadius?.value ?? [])).toEqual([
+      40, 20, 0
+    ]);
+    expect(Array.from(secondaryData.featureIds ?? [])).toEqual([0, 1, 2]);
+    expect(
+      Array.from(secondaryData.attributes?.getRadius?.value ?? [])
+    ).toEqual([40, 20, 0]);
   });
 
   it('separates double proportional symbols in juxtaposition without overlap', () => {
