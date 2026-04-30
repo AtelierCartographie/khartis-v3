@@ -92,6 +92,27 @@ export function resolveComputedClassCount(
   return safeRequested;
 }
 
+export function resolveBreakpointLowerClassCount(
+  totalClassCount: number,
+  requestedLowerClassCount?: number | null
+): number {
+  const safeTotalClassCount = Math.max(2, Math.floor(totalClassCount));
+  const maxLowerClassCount = safeTotalClassCount - 1;
+  const fallbackClassCount = Math.max(1, Math.floor(safeTotalClassCount / 2));
+
+  if (
+    typeof requestedLowerClassCount !== 'number' ||
+    !Number.isFinite(requestedLowerClassCount)
+  ) {
+    return fallbackClassCount;
+  }
+
+  return Math.min(
+    maxLowerClassCount,
+    Math.max(1, Math.floor(requestedLowerClassCount))
+  );
+}
+
 export function resolveHeadTailClassCountMax(
   actualClassCount?: number | null
 ): number {
