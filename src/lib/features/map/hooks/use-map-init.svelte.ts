@@ -26,7 +26,8 @@ import {
 import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
 import {
   DEFAULT_MAP_BASE_ZOOM,
-  resolveMapZoomBounds
+  resolveMapZoomBounds,
+  resolveOrthographicZoomBounds
 } from '../utils/map-zoom.utils';
 import { shouldUseMapLibreInterleaved } from '../utils/render-engine.utils';
 import { getBrowserMaxRenderBufferSizePx } from '../utils/render-pixel-ratio';
@@ -80,6 +81,7 @@ export interface UseMapInitReturn {
 }
 
 const DEFAULT_MAP_ZOOM_BOUNDS = resolveMapZoomBounds(DEFAULT_MAP_BASE_ZOOM);
+const DEFAULT_ORTHOGRAPHIC_ZOOM_BOUNDS = resolveOrthographicZoomBounds();
 const DEFAULT_CONFIG: MapInitConfig = {
   center: [0, 20],
   zoom: DEFAULT_MAP_BASE_ZOOM,
@@ -437,8 +439,8 @@ export function useMapInit(props: UseMapInitProps): UseMapInitReturn {
             main: {
               target: [0, 0, 0],
               zoom: 0,
-              minZoom: -10,
-              maxZoom: 10
+              minZoom: DEFAULT_ORTHOGRAPHIC_ZOOM_BOUNDS.minZoom,
+              maxZoom: DEFAULT_ORTHOGRAPHIC_ZOOM_BOUNDS.maxZoom
             }
           },
           width: '100%',

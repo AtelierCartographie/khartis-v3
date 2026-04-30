@@ -38,9 +38,12 @@ const { geoNaturalEarth2 } = _d3GeoProjection as unknown as {
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type {
   BasemapMetadata,
+  ProjectionPresetEntry,
   ProjectionPresets
 } from '../types/basemap.types';
 import { proj4d3 } from './proj4d3';
+
+type BBoxTuple = [number, number, number, number];
 
 // Proj4 projection names not supported by proj4.js — mapped to d3-geo equivalents
 const D3_GEO_PROJECTION_MAP: Record<string, () => GeoProjection> = {
@@ -61,7 +64,7 @@ const EXPECTED_GEOM_COL = 'geometry';
 const normalizedTableCache = new WeakMap<ArrowTable, ArrowTable>();
 const projectedBboxCache = new WeakMap<
   BasemapMetadata,
-  Map<string, [number, number, number, number] | null>
+  Map<string, BBoxTuple | null>
 >();
 
 type GeoBounds = [number, number, number, number];
@@ -103,8 +106,8 @@ function createProjectionPointSampler(
 
 function sampleProjectedBbox(
   projection: ProjectionLike,
-  bbox: [number, number, number, number]
-): [number, number, number, number] | null {
+  bbox: BBoxTuple
+): BBoxTuple | null {
   const [west, south, east, north] = bbox;
   const steps = 32;
   const xs: number[] = [];
@@ -133,6 +136,52 @@ function sampleProjectedBbox(
   return xs.length === 0
     ? null
     : [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+}
+
+function projectionPresetEntryToBbox(entry: ProjectionPresetEntry): BBoxTuple {
+  return [
+    entry.bounds[0][0],
+    entry.bounds[0][1],
+    entry.bounds[1][0],
+    entry.bounds[1][1]
+  ];
+}
+
+function unionBboxes(bboxes: BBoxTuple[]): BBoxTuple | null {
+  if (bboxes.length === 0) {
+    return null;
+  }
+
+  return [
+    Math.min(...bboxes.map((bbox) => bbox[0])),
+    Math.min(...bboxes.map((bbox) => bbox[1])),
+    Math.max(...bboxes.map((bbox) => bbox[2])),
+    Math.max(...bboxes.map((bbox) => bbox[3]))
+  ];
+}
+
+function computeCompositeProjectedBbox(
+  projection: ProjectionLike,
+  metadata: BasemapMetadata,
+  projectionPresets: ProjectionPresets | null
+): BBoxTuple | null {
+  const presetId = metadata.proj_to?.preset;
+  if (!presetId || !projectionPresets) {
+    return null;
+  }
+
+  const preset = projectionPresets[presetId];
+  if (!preset?.entries?.length) {
+    return null;
+  }
+
+  const projectedEntryBboxes = preset.entries
+    .map((entry) =>
+      sampleProjectedBbox(projection, projectionPresetEntryToBbox(entry))
+    )
+    .filter((bbox): bbox is BBoxTuple => bbox !== null);
+
+  return unionBboxes(projectedEntryBboxes);
 }
 
 function normalizeGeomColumnName(table: ArrowTable): ArrowTable {
@@ -595,15 +644,15 @@ export function computeProjectedBboxForBasemap(
   width = 960,
   height = 600,
   /** Override the WGS84 bbox to project (e.g., mainland-only bounds for composites) */
-  overrideBbox?: [number, number, number, number]
-): [number, number, number, number] | null {
+  overrideBbox?: BBoxTuple
+): BBoxTuple | null {
   const projTo = metadata.proj_to;
   if (!projTo || projTo.type === 'identity') return null;
 
   const wgs84Bbox = overrideBbox ?? metadata.bbox;
   if (!wgs84Bbox) return null;
 
-  const cacheKey = `${width}x${height}:${wgs84Bbox.join(',')}`;
+  const cacheKey = `${width}x${height}:${overrideBbox ? 'override' : 'auto'}:${wgs84Bbox.join(',')}`;
   let metadataCache = projectedBboxCache.get(metadata);
   if (metadataCache?.has(cacheKey)) {
     return metadataCache.get(cacheKey) ?? null;
@@ -615,7 +664,14 @@ export function computeProjectedBboxForBasemap(
     height,
     projectionPresets
   );
-  const result = sampleProjectedBbox(projection, wgs84Bbox);
+  const result =
+    !overrideBbox && projTo.type === 'composite'
+      ? (computeCompositeProjectedBbox(
+          projection,
+          metadata,
+          projectionPresets
+        ) ?? sampleProjectedBbox(projection, wgs84Bbox))
+      : sampleProjectedBbox(projection, wgs84Bbox);
 
   if (!metadataCache) {
     metadataCache = new Map();
@@ -628,8 +684,8 @@ export function computeProjectedBboxForBasemap(
 
 export function computeProjectedBboxForProjection(
   projection: ProjectionLike,
-  bbox: [number, number, number, number]
-): [number, number, number, number] | null {
+  bbox: BBoxTuple
+): BBoxTuple | null {
   return sampleProjectedBbox(projection, bbox);
 }
 

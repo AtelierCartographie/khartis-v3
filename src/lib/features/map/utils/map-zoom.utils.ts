@@ -1,4 +1,5 @@
 export const DEFAULT_MAP_BASE_ZOOM = 1.5;
+export const ORTHOGRAPHIC_MAP_BASE_ZOOM = 0;
 export const DEFAULT_MAP_ZOOM_PERCENT = 100;
 export const MIN_MAP_ZOOM_PERCENT = 10;
 export const MAX_MAP_ZOOM_PERCENT = 2000;
@@ -61,6 +62,19 @@ export function resolveMapZoomBounds(baseZoomLevel: number): MapZoomBounds {
   };
 }
 
+export function resolveOrthographicZoomBounds(): MapZoomBounds {
+  return {
+    minZoom: resolveMapZoomLevel(
+      ORTHOGRAPHIC_MAP_BASE_ZOOM,
+      MIN_MAP_ZOOM_PERCENT
+    ),
+    maxZoom: resolveMapZoomLevel(
+      ORTHOGRAPHIC_MAP_BASE_ZOOM,
+      MAX_MAP_ZOOM_PERCENT
+    )
+  };
+}
+
 export function clampMapZoomLevel(
   baseZoomLevel: number,
   zoomLevel: number
@@ -71,6 +85,23 @@ export function clampMapZoomLevel(
     : normalizeBaseZoomLevel(baseZoomLevel);
 
   return Math.max(minZoom, Math.min(maxZoom, normalizedZoomLevel));
+}
+
+export function clampOrthographicZoomLevel(zoomLevel: number): number {
+  const { minZoom, maxZoom } = resolveOrthographicZoomBounds();
+  const normalizedZoomLevel = Number.isFinite(zoomLevel)
+    ? zoomLevel
+    : ORTHOGRAPHIC_MAP_BASE_ZOOM;
+
+  return Math.max(minZoom, Math.min(maxZoom, normalizedZoomLevel));
+}
+
+export function resolveOrthographicZoomPercent(zoomLevel: number): number {
+  return resolveMapZoomPercent(ORTHOGRAPHIC_MAP_BASE_ZOOM, zoomLevel);
+}
+
+export function resolveOrthographicZoomLevel(percent: number): number {
+  return resolveMapZoomLevel(ORTHOGRAPHIC_MAP_BASE_ZOOM, percent);
 }
 
 export function nudgeMapZoomLevel(
@@ -84,4 +115,11 @@ export function nudgeMapZoomLevel(
       : resolveMapZoomPercent(baseZoomLevel, zoomLevel) / MAP_ZOOM_FACTOR_STEP;
 
   return resolveMapZoomLevel(baseZoomLevel, nextPercent);
+}
+
+export function nudgeOrthographicZoomLevel(
+  zoomLevel: number,
+  direction: 1 | -1
+): number {
+  return nudgeMapZoomLevel(ORTHOGRAPHIC_MAP_BASE_ZOOM, zoomLevel, direction);
 }
