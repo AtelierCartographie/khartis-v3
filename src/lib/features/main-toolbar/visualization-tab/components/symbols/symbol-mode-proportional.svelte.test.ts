@@ -92,6 +92,17 @@ describe('SymbolModeProportional (proportionnels.png + en classes.png)', () => {
     expect(doubleControlsSource).toContain('items={positionModeItems}');
   });
 
+  it('exposes bar/spike width control for linear symbol shapes', () => {
+    expect(source).toContain('DEFAULT_LINEAR_SYMBOL_BAR_WIDTH');
+    expect(source).toContain(
+      'const showBarWidthControl = $derived(isLinearShape(shapeType));'
+    );
+    expect(source).toContain('{#if showBarWidthControl}');
+    expect(source).toContain('min={SLIDER_LIMITS.symbolBarWidth.min}');
+    expect(source).toContain('onchange={handleBarWidthChange}');
+    expect(source).toContain('onSymbolsChange?.({ barWidth: value })');
+  });
+
   it('exposes breakValue A/B TextInputs bound to handleBreakValue*Change', () => {
     expect(doubleControlsSource).toContain('m.symbol_a_break_value()');
     expect(doubleControlsSource).toContain('m.symbol_b_break_value()');

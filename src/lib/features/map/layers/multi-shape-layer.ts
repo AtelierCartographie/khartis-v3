@@ -139,7 +139,7 @@ float getDistance(vec2 uv, float radiusPixels, int shapeType, float radius) {
         case 3: // SPIKE
             {
                 float w = multiShape.barWidth * 1.5;
-                vec2 pos = uv * outerRadiusPixels;
+                vec2 pos = vec2(uv.x, -uv.y) * outerRadiusPixels;
                 pos.y += outerRadiusPixels;
                 return sdIsoscelesTriangle(pos, vec2(w / 2.0, 2.0 * outerRadiusPixels)) + outerRadiusPixels;
             }
@@ -248,7 +248,7 @@ export type MultiShapeLayerProps<DataT = unknown> = {
 const defaultProps = {
   ...ScatterplotLayer.defaultProps,
   getShape: { type: 'accessor', value: 0 },
-  barWidth: { type: 'number', value: 24 },
+  barWidth: { type: 'number', value: 6 },
   offsetX: { type: 'number', value: 0 },
   offsetY: { type: 'number', value: 0 },
   halfMask: { type: 'number', value: 0 },
