@@ -89,6 +89,7 @@
     getBrowserMaxRenderBufferSizePx,
     resolveMapRenderPixelRatio
   } from '../utils/render-pixel-ratio';
+  import { resolveMapZoomBounds } from '../utils/map-zoom.utils';
   import { shouldUseMapLibreInterleaved } from '../utils/render-engine.utils';
   import {
     type OrthographicInteractiveDeck,
@@ -154,9 +155,13 @@
   const showPageGrid = $derived(
     fmtState.gridEnabled && globalState.selectedStep === ToolbarStep.Styling
   );
+  const isVisualizationMode = $derived(
+    globalState.selectedStep === ToolbarStep.Visualizations
+  );
   const isStylingMode = $derived(
     globalState.selectedStep === ToolbarStep.Styling
   );
+  const showLegendPreview = $derived(isVisualizationMode || isStylingMode);
   const logicalMapCanvasWidth = $derived(
     Math.max(1, logicalWidth - pageMargins.left - pageMargins.right)
   );
@@ -1961,8 +1966,14 @@
     if (!sv) return;
 
     if (sv.type === 'orthographic' && sv.target && deck) {
+      const zoomBounds = resolveMapZoomBounds(mapInstanceStore.baseZoomLevel);
       const orthographicViewState: DeckOrthographicViewStateMap = {
-        main: { target: sv.target, zoom: sv.zoom, minZoom: -10, maxZoom: 10 }
+        main: {
+          target: sv.target,
+          zoom: sv.zoom,
+          minZoom: zoomBounds.minZoom,
+          maxZoom: zoomBounds.maxZoom
+        }
       };
       deck.setProps({
         viewState: orthographicViewState as Parameters<
@@ -2181,7 +2192,7 @@
       {/if}
 
       {#if showLegendOverlay}
-        <LegendOverlay hidden={!isStylingMode} />
+        <LegendOverlay hidden={!showLegendPreview} />
       {/if}
 
       {#if showGeoIndicationsOverlay}

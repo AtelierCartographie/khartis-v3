@@ -40,7 +40,7 @@ describe('legend tool', () => {
     render(Legend);
 
     await fireEvent.input(screen.getByLabelText(/^Titre$/i), {
-      target: { value: 'Titre édité' }
+      target: { value: 'Titre   édité   ' }
     });
     await fireEvent.input(screen.getByLabelText(/^Sous-titre$/i), {
       target: { value: 'Sous-titre édité' }
@@ -50,7 +50,7 @@ describe('legend tool', () => {
     });
 
     expect(getLegendState().items[0]).toMatchObject({
-      title: 'Titre édité',
+      title: 'Titre   édité   ',
       titleMode: 'custom',
       subtitle: 'Sous-titre édité',
       subtitleMode: 'custom',
