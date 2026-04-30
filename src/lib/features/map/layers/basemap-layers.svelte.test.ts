@@ -1,3 +1,4 @@
+import { COORDINATE_SYSTEM } from '@deck.gl/core';
 import { GeoJsonLayer, SolidPolygonLayer } from '@deck.gl/layers';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { ProjectionLike } from 'geoarrow-deck-stream';
@@ -308,6 +309,23 @@ describe('basemap projection fallbacks', () => {
         {}
       )
     ).toBeNull();
+  });
+
+  it('renders projected mers in cartesian coordinates so projected ocean color stays visible', () => {
+    const layer = createMersLayer(
+      {
+        id: 'mers',
+        visible: true,
+        color: '#006dff',
+        opacity: 100
+      },
+      createProjectionContext()
+    ) as GeoJsonLayer | null;
+
+    expect(layer).toBeInstanceOf(GeoJsonLayer);
+    expect(layer?.props.coordinateSystem).toBe(COORDINATE_SYSTEM.CARTESIAN);
+    expect(layer?.props.getFillColor).toEqual([0, 109, 255, 255]);
+    expect(JSON.stringify(layer?.props.data)).toContain('1000000');
   });
 
   it('projects terre GeoJSON fallback layers with the active projection', () => {

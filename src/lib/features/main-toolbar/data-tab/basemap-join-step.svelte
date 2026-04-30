@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import {
     dataTabActions,
     dataTabState
@@ -1095,12 +1096,14 @@
     }
   }
 
-  function handleIgnoreEntity(
+  async function handleIgnoreEntity(
     dataValue: string,
     source: 'joined' | 'to_verify' | 'unrecognized',
     basemapValue?: string
-  ): void {
+  ): Promise<void> {
     dataTabActions.ignoreEntity({ dataValue, source, basemapValue });
+    await tick();
+    await handleFinalizeJoin();
   }
 
   function handleRestoreEntity(dataValue: string): void {
