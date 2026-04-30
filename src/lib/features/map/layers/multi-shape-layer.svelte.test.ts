@@ -50,7 +50,7 @@ describe('MultiShapeLayer — class contract', () => {
   it('declares getShape, barWidth, offsetX, offsetY, halfMask and dash defaults', () => {
     const props = MultiShapeLayer.defaultProps as Record<string, unknown>;
     expect(props.getShape).toMatchObject({ type: 'accessor', value: 0 });
-    expect(props.barWidth).toMatchObject({ type: 'number', value: 24 });
+    expect(props.barWidth).toMatchObject({ type: 'number', value: 6 });
     expect(props.offsetX).toMatchObject({ type: 'number', value: 0 });
     expect(props.offsetY).toMatchObject({ type: 'number', value: 0 });
     expect(props.halfMask).toMatchObject({ type: 'number', value: 0 });
@@ -81,6 +81,12 @@ describe('MultiShapeLayer — source invariants (keep SDF shader consistent)', (
     expect(source).toContain('float dashLength;');
     expect(source).toContain('float gapLength;');
     expect(source).toContain('lineMask *= getDashMask(uv);');
+  });
+
+  it('orients spike symbols upward in shader space', () => {
+    expect(source).toContain(
+      'vec2 pos = vec2(uv.x, -uv.y) * outerRadiusPixels;'
+    );
   });
 
   it('calls super.draw after setting shaderInputs to avoid GPU state leaks', () => {

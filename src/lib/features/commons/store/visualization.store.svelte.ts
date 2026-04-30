@@ -12,6 +12,7 @@ import {
   CategoryShapeMode,
   ColorMode,
   DEFAULT_COLORS,
+  DEFAULT_LINEAR_SYMBOL_BAR_WIDTH,
   type DensityConfig,
   FillMode,
   MissingDataShape,
@@ -109,6 +110,7 @@ export interface ClassificationConfig {
   labels?: string[];
   disabledLabels?: string[];
   breakpointValue?: number | null;
+  breakpointLowerClassCount?: number;
   patternId?: string;
   patternParams?: PatternParams;
   categoryShapes?: ShapeType[];
@@ -152,6 +154,7 @@ export interface SymbolModeState {
   size?: number;
   minSize?: number;
   maxSize?: number;
+  barWidth?: number;
   sizeScale?: ScaleType;
   valueColumn?: string;
   categoryColumn?: string;
@@ -199,6 +202,7 @@ export interface SymbolPrimitiveConfig {
   size: number;
   minSize: number;
   maxSize: number;
+  barWidth?: number;
   sizeScale: ScaleType;
   opacity: number;
   fillMode: FillMode;
@@ -464,6 +468,7 @@ export interface VisualizationConfig {
     size?: number;
     minSize: number;
     maxSize: number;
+    barWidth?: number;
     sizeScale: ScaleType;
     opacity?: number;
   };
@@ -669,6 +674,10 @@ function buildSymbolPrimitiveConfig(
       existing?.minSize ?? legacySymbols?.minSize ?? DEFAULT_SYMBOL_MIN_SIZE,
     maxSize:
       existing?.maxSize ?? legacySymbols?.maxSize ?? DEFAULT_SYMBOL_MAX_SIZE,
+    barWidth:
+      existing?.barWidth ??
+      legacySymbols?.barWidth ??
+      DEFAULT_LINEAR_SYMBOL_BAR_WIDTH,
     sizeScale:
       existing?.sizeScale ?? legacySymbols?.sizeScale ?? ScaleType.LINEAR,
     opacity:
@@ -1485,6 +1494,7 @@ function getDefaultSymbols(
     size: DEFAULT_SYMBOL_SIZE,
     minSize,
     maxSize: densityAdjustedMaxSize,
+    barWidth: DEFAULT_LINEAR_SYMBOL_BAR_WIDTH,
     sizeScale:
       type === VisualizationType.PROPORTIONAL
         ? ScaleType.SQRT
@@ -2146,6 +2156,9 @@ function createVisualizationStore(): VisualizationStore {
             : {}),
           ...(symbolUpdates?.maxSize !== undefined
             ? { maxSize: symbolUpdates.maxSize }
+            : {}),
+          ...(symbolUpdates?.barWidth !== undefined
+            ? { barWidth: symbolUpdates.barWidth }
             : {}),
           ...(symbolUpdates?.sizeScale !== undefined
             ? { sizeScale: symbolUpdates.sizeScale }

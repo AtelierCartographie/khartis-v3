@@ -420,11 +420,7 @@ function buildAnnotationLayer(pageContainer: HTMLElement): string {
 }
 
 function buildVisualizationLayer(pageContainer: HTMLElement): string {
-  const mapCanvas =
-    mapInstanceStore.getMapCanvas() ??
-    (pageContainer.querySelector(
-      '.map-canvas canvas'
-    ) as HTMLCanvasElement | null);
+  const mapCanvas = resolveMapCanvas(pageContainer);
 
   if (!mapCanvas) {
     return '';
@@ -465,6 +461,17 @@ function buildVisualizationLayer(pageContainer: HTMLElement): string {
       ${parts.join('')}
     </g>
   `;
+}
+
+function resolveMapCanvas(
+  pageContainer: HTMLElement
+): HTMLCanvasElement | null {
+  return (
+    mapInstanceStore.getMapCanvas() ??
+    (pageContainer.querySelector(
+      '.map-canvas canvas, .shared-facets-canvas canvas, canvas'
+    ) as HTMLCanvasElement | null)
+  );
 }
 
 function buildStructuredSvgMarkup(

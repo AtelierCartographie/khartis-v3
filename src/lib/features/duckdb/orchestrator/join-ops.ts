@@ -1,4 +1,10 @@
 import { JoinStatus } from '$lib/features/commons/constants/ui.constants';
+import {
+  CANONICAL_ID_COLUMN,
+  INTERNAL_COLUMN,
+  JOINED_BASEMAP_COLUMN,
+  JOINED_BASEMAP_COLUMNS
+} from '$lib/features/commons/constants/data.constants';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import {
   escapeIdentifier,
@@ -493,7 +499,7 @@ async function getJoinColumnExcludeClause(
   tableName: string,
   Duck: DuckDBClientForJoin
 ): Promise<string> {
-  const columnsToExclude = ['basemap_id', 'basemap_label', 'typo_match'];
+  const columnsToExclude = [...JOINED_BASEMAP_COLUMNS];
   const existingColumns = (await Duck.query(
     `SELECT column_name FROM information_schema.columns
      WHERE table_name = '${escapeSqlString(tableName)}'
@@ -909,12 +915,12 @@ async function applyCachedJoinAssociation(
         PARTITION BY geoname
         ORDER BY score DESC, id
       ) = 1
-    )
+      )
     SELECT
       t.* ${excludeClause},
-      j.id AS basemap_id,
-      j.label AS basemap_label,
-      j.typo_match
+      j.id AS "${JOINED_BASEMAP_COLUMN.ID}",
+      j.label AS "${JOINED_BASEMAP_COLUMN.LABEL}",
+      j.typo_match AS "${JOINED_BASEMAP_COLUMN.TYPO_MATCH}"
     FROM "${escapedDatasetTable}" t
     LEFT JOIN ranked_join j
       ON t."${escapedGeoColumn}" = j.geoname
@@ -970,7 +976,7 @@ export async function finalizeJoin(
   );
 
   const joinedCountResult = (await Duck.query(
-    `SELECT COUNT(*) as cnt FROM "${dataset.tableName}" WHERE basemap_id IS NOT NULL`,
+    `SELECT COUNT(*) as cnt FROM "${dataset.tableName}" WHERE "${JOINED_BASEMAP_COLUMN.ID}" IS NOT NULL`,
     { format: 'array' }
   )) as Array<{ cnt: number }>;
 
@@ -1073,14 +1079,15 @@ export async function getJoinedArrowTable(
   }
 
   const featureIdColumn = geometryTableColumns.find(
-    (column) => column.column_name === '__feature_id__'
+    (column) => column.column_name === INTERNAL_COLUMN.FEATURE_ID
   );
   const nativeIdColumn = geometryTableColumns.find(
     (column) =>
-      column.column_name.toLowerCase() === 'id' &&
+      column.column_name.toLowerCase() === CANONICAL_ID_COLUMN &&
       !isGeometryColumnName(column.column_name)
   );
   const escapedGeomCol = escapeIdentifier(geometryColumn.column_name);
+  const escapedBasemapIdCol = escapeIdentifier(JOINED_BASEMAP_COLUMN.ID);
 
   if (featureIdColumn || nativeIdColumn) {
     const joinColumn = featureIdColumn ?? nativeIdColumn;
@@ -1093,7 +1100,7 @@ export async function getJoinedArrowTable(
       SELECT d.*, g."${escapedGeomCol}" AS geometry
       FROM "${escapedDataset}" d
       INNER JOIN "${escapedGeometry}" g
-        ON CAST(d.basemap_id AS VARCHAR) = CAST(g."${escapedJoinCol}" AS VARCHAR)
+        ON CAST(d."${escapedBasemapIdCol}" AS VARCHAR) = CAST(g."${escapedJoinCol}" AS VARCHAR)
       WHERE g."${escapedGeomCol}" IS NOT NULL
     `);
   } else {
@@ -1121,7 +1128,7 @@ export async function getJoinedArrowTable(
         SELECT DISTINCT _attr_val, "${escapedGeomCol}" AS _geom_value
         FROM geom_unpivot
       ) gu
-      ON CAST(d.basemap_id AS VARCHAR) = CAST(gu._attr_val AS VARCHAR)
+      ON CAST(d."${escapedBasemapIdCol}" AS VARCHAR) = CAST(gu._attr_val AS VARCHAR)
       WHERE gu._geom_value IS NOT NULL
     `);
   }

@@ -11,6 +11,7 @@ import type {
 import { Duck, duckDBOrchestrator } from '$lib/features/duckdb';
 import {
   basemapService,
+  getBasemapVariantFamily,
   getPreferredBasemapSimplificationLevel,
   resolveBasemapVariantFile
 } from '$lib/features/map/services/basemap.service.svelte';
@@ -160,6 +161,9 @@ const { actions, getState } = createToolStore<
           simplifiedVertices: 0
         };
       }
+
+      persistReferenceCatalogBasemapVariant(basemapId, variantFile);
+      await persistJoinedCatalogBasemapVariant(basemapId, variantFile);
 
       return {
         type: SimplificationTarget.BASEMAP,
@@ -463,4 +467,69 @@ function trimDatasetSimplificationSuffix(tableName: string): string {
   return tableName.endsWith(DATASET_SIMPLIFICATION_SUFFIX)
     ? tableName.slice(0, -DATASET_SIMPLIFICATION_SUFFIX.length)
     : tableName;
+}
+
+async function persistJoinedCatalogBasemapVariant(
+  currentBasemapId: string,
+  variantBasemapId: string
+): Promise<void> {
+  if (currentBasemapId === variantBasemapId) {
+    return;
+  }
+
+  const currentFamily = getBasemapVariantFamily(currentBasemapId);
+  const variantFamily = getBasemapVariantFamily(variantBasemapId);
+
+  if (currentFamily !== variantFamily) {
+    return;
+  }
+
+  for (const dataset of datasetsStore.datasets) {
+    const joinedBasemap =
+      dataset.joinedBasemap ??
+      (dataset.sourceFileId
+        ? duckDBOrchestrator.getDatasetBySourceFile(dataset.sourceFileId)
+            ?.joinedBasemap
+        : undefined);
+
+    if (
+      !joinedBasemap ||
+      getBasemapVariantFamily(joinedBasemap) !== currentFamily
+    ) {
+      continue;
+    }
+
+    duckDBOrchestrator.updateDatasetJoinInfo(dataset.id, {
+      joinedBasemap: variantBasemapId
+    });
+    datasetsStore.updateDatasetJoinBasemap(dataset.id, variantBasemapId);
+
+    if (dataset.sourceFileId) {
+      await projectStore.updateFileJoinedBasemap(
+        dataset.sourceFileId,
+        variantBasemapId
+      );
+    }
+  }
+}
+
+function persistReferenceCatalogBasemapVariant(
+  currentBasemapId: string,
+  variantBasemapId: string
+): void {
+  if (currentBasemapId === variantBasemapId) {
+    return;
+  }
+
+  const referenceBasemapId = basemapStyleStore.referenceBasemapId;
+  if (!referenceBasemapId) {
+    return;
+  }
+
+  const currentFamily = getBasemapVariantFamily(currentBasemapId);
+  if (getBasemapVariantFamily(referenceBasemapId) !== currentFamily) {
+    return;
+  }
+
+  basemapStyleStore.setReferenceBasemap(variantBasemapId);
 }

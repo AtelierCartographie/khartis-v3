@@ -10,17 +10,26 @@ const mocks = vi.hoisted(() => ({
   simplifyGeometryTable: vi.fn(),
   calculateToleranceFromRate: vi.fn(),
   updateDuckDatasetTableName: vi.fn(),
+  updateDuckDatasetJoinInfo: vi.fn(),
+  getDuckDatasetBySourceFile: vi.fn(),
   refreshImportedBasemapHelperTables: vi.fn(),
   refreshCustomBasemap: vi.fn(),
   loadVariant: vi.fn(),
   updateDataset: vi.fn(),
+  updateDatasetJoinBasemap: vi.fn(),
   updateDatasetTableName: vi.fn(),
+  updateFileJoinedBasemap: vi.fn(),
+  setReferenceBasemap: vi.fn(),
   resolveBasemapVariantFile: vi.fn(),
+  getBasemapVariantFamily: vi.fn((file: string) =>
+    file.replace(/-(low|medium|high)(\.[^.]+)?$/, '')
+  ),
   getPreferredBasemapSimplificationLevel: vi.fn(),
   currentBasemap: { metadata: null as unknown },
   availableBasemaps: [] as unknown[],
   osmIsActive: false,
   requiresMapLibre: false,
+  referenceBasemapId: null as string | null,
   currentProject: undefined as
     | {
         data?: {
@@ -38,7 +47,9 @@ const mocks = vi.hoisted(() => ({
 vi.mock('$lib/features/duckdb', () => ({
   Duck: { query: mocks.duckQuery },
   duckDBOrchestrator: {
-    updateDatasetTableName: mocks.updateDuckDatasetTableName
+    updateDatasetTableName: mocks.updateDuckDatasetTableName,
+    updateDatasetJoinInfo: mocks.updateDuckDatasetJoinInfo,
+    getDatasetBySourceFile: mocks.getDuckDatasetBySourceFile
   }
 }));
 
@@ -63,6 +74,7 @@ vi.mock('$lib/features/map/services/basemap.service.svelte', () => ({
     refreshCustomBasemap: mocks.refreshCustomBasemap,
     loadVariant: mocks.loadVariant
   },
+  getBasemapVariantFamily: mocks.getBasemapVariantFamily,
   resolveBasemapVariantFile: mocks.resolveBasemapVariantFile,
   getPreferredBasemapSimplificationLevel:
     mocks.getPreferredBasemapSimplificationLevel
@@ -77,6 +89,7 @@ vi.mock('$lib/features/commons/store/datasets.store.svelte', () => ({
       return mocks.datasets;
     },
     updateDataset: mocks.updateDataset,
+    updateDatasetJoinBasemap: mocks.updateDatasetJoinBasemap,
     updateDatasetTableName: mocks.updateDatasetTableName
   }
 }));
@@ -85,7 +98,8 @@ vi.mock('$lib/features/commons/store/project.store.svelte', () => ({
   projectStore: {
     get currentProject() {
       return mocks.currentProject;
-    }
+    },
+    updateFileJoinedBasemap: mocks.updateFileJoinedBasemap
   }
 }));
 
@@ -101,7 +115,11 @@ vi.mock('$lib/features/commons/store/basemap-style.store.svelte', () => ({
   basemapStyleStore: {
     get requiresMapLibre() {
       return mocks.requiresMapLibre;
-    }
+    },
+    get referenceBasemapId() {
+      return mocks.referenceBasemapId;
+    },
+    setReferenceBasemap: mocks.setReferenceBasemap
   }
 }));
 
@@ -120,9 +138,13 @@ describe('simplification store — synchronous actions', () => {
     mocks.availableBasemaps = [];
     mocks.osmIsActive = false;
     mocks.requiresMapLibre = false;
+    mocks.referenceBasemapId = null;
     mocks.currentProject = undefined;
     mocks.selectedDataset = null;
     mocks.datasets = [];
+    mocks.getBasemapVariantFamily.mockImplementation((file: string) =>
+      file.replace(/-(low|medium|high)(\.[^.]+)?$/, '')
+    );
     mocks.getPreferredBasemapSimplificationLevel.mockReturnValue(undefined);
     resetStore();
   });
@@ -245,6 +267,81 @@ describe('simplification store — applySimplification dispatch', () => {
     expect(result?.level).toBe(SimplificationLevel.Medium);
     expect(getSimplificationState().lastApplied?.basemapId).toBe(
       'europe.parquet'
+    );
+  });
+
+  it('should persist catalog variant selection on joined datasets', async () => {
+    mocks.currentBasemap = {
+      metadata: {
+        file: 'france-region-2025-medium',
+        simplification_level: 'medium',
+        isCustom: false
+      }
+    };
+    mocks.datasets = [
+      {
+        id: 'dataset-1',
+        sourceFileId: 'source-1',
+        joinedBasemap: 'france-region-2025-medium'
+      },
+      {
+        id: 'dataset-2',
+        sourceFileId: 'source-2',
+        joinedBasemap: 'monde-countries-2024-medium'
+      }
+    ];
+    mocks.getPreferredBasemapSimplificationLevel.mockReturnValue(
+      SimplificationLevel.High
+    );
+    mocks.resolveBasemapVariantFile.mockReturnValue('france-region-2025-high');
+    mocks.loadVariant.mockResolvedValue({ name: 'variantTable' });
+
+    simplificationActions.setSource(SimplificationSource.Basemap);
+    simplificationActions.setLevel(SimplificationLevel.High);
+
+    const result = await simplificationActions.applySimplification();
+
+    expect(result?.simplified).toBe(true);
+    expect(mocks.updateDuckDatasetJoinInfo).toHaveBeenCalledWith('dataset-1', {
+      joinedBasemap: 'france-region-2025-high'
+    });
+    expect(mocks.updateDatasetJoinBasemap).toHaveBeenCalledWith(
+      'dataset-1',
+      'france-region-2025-high'
+    );
+    expect(mocks.updateFileJoinedBasemap).toHaveBeenCalledWith(
+      'source-1',
+      'france-region-2025-high'
+    );
+    expect(mocks.updateDuckDatasetJoinInfo).not.toHaveBeenCalledWith(
+      'dataset-2',
+      expect.anything()
+    );
+  });
+
+  it('should persist the active reference basemap variant when it belongs to the same family', async () => {
+    mocks.currentBasemap = {
+      metadata: {
+        file: 'france-region-2025-medium',
+        simplification_level: 'medium',
+        isCustom: false
+      }
+    };
+    mocks.referenceBasemapId = 'france-region-2025-medium';
+    mocks.getPreferredBasemapSimplificationLevel.mockReturnValue(
+      SimplificationLevel.High
+    );
+    mocks.resolveBasemapVariantFile.mockReturnValue('france-region-2025-high');
+    mocks.loadVariant.mockResolvedValue({ name: 'variantTable' });
+
+    simplificationActions.setSource(SimplificationSource.Basemap);
+    simplificationActions.setLevel(SimplificationLevel.High);
+
+    const result = await simplificationActions.applySimplification();
+
+    expect(result?.simplified).toBe(true);
+    expect(mocks.setReferenceBasemap).toHaveBeenCalledWith(
+      'france-region-2025-high'
     );
   });
 

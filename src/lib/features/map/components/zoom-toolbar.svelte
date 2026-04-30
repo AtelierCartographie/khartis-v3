@@ -101,12 +101,18 @@
       ? mapInstanceStore.zoomLevel
       : globalState.zoom.pageZoomLevel
   );
+  const activeMinZoomPercent = $derived(
+    activeTabIndex === 0 ? MIN_MAP_ZOOM_PERCENT : globalState.zoom.minPageZoom
+  );
+  const activeMaxZoomPercent = $derived(
+    activeTabIndex === 0 ? MAX_MAP_ZOOM_PERCENT : globalState.zoom.maxPageZoom
+  );
   let zoomInputValue = $derived(String(currentZoomValue));
 
   function handleZoomValueChange(value: number): void {
     const clamped = Math.max(
-      MIN_MAP_ZOOM_PERCENT,
-      Math.min(MAX_MAP_ZOOM_PERCENT, value)
+      activeMinZoomPercent,
+      Math.min(activeMaxZoomPercent, value)
     );
     if (activeTabIndex === 0) {
       mapInstanceStore.setZoom(
@@ -118,7 +124,9 @@
   }
 
   function sanitizeZoomValue(value: string): string {
-    return value.replace(/\D/g, '').slice(0, 3);
+    return value
+      .replace(/\D/g, '')
+      .slice(0, String(activeMaxZoomPercent).length);
   }
 
   function commitZoomValue(rawValue: string): void {
@@ -130,8 +138,8 @@
     }
 
     const clamped = Math.max(
-      MIN_MAP_ZOOM_PERCENT,
-      Math.min(MAX_MAP_ZOOM_PERCENT, nextValue)
+      activeMinZoomPercent,
+      Math.min(activeMaxZoomPercent, nextValue)
     );
     zoomInputValue = String(clamped);
     handleZoomValueChange(clamped);
@@ -339,8 +347,8 @@
           type="number"
           inputmode="numeric"
           aria-label={m.zoom_value_input_label()}
-          min={MIN_MAP_ZOOM_PERCENT}
-          max={MAX_MAP_ZOOM_PERCENT}
+          min={activeMinZoomPercent}
+          max={activeMaxZoomPercent}
           step={MAP_ZOOM_INPUT_STEP}
           value={zoomInputValue}
           oninput={handleZoomInput}

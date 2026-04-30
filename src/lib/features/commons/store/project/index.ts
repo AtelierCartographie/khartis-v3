@@ -45,5 +45,6 @@ export {
 export {
   addColumnTransformation,
   clearColumnTransformations,
+  updateFileJoinedBasemap,
   addDeletedRows
 } from './project-transformations';

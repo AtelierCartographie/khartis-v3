@@ -338,7 +338,7 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
 
   function syncProjection(): void {
     const map = getMap();
-    if (!map || !getIsMapLoaded() || isStyleLoading || !map.isStyleLoaded()) {
+    if (!map || !getIsMapLoaded()) {
       return;
     }
 

@@ -28,10 +28,24 @@ describe('MainMap density mode loading', () => {
     expect(source).not.toContain('return densityTable;');
   });
 
+  it('loads density tables for GPS datasets joined to a catalog basemap', () => {
+    expect(source).toContain('generateDotDensityArrowFromGpsJoin');
+    expect(source).toContain('duckDBDataset?.gpsMode');
+    expect(source).toContain(
+      'await loadDensityTableForDisplay(dataset, generation);'
+    );
+  });
+
   it('only reloads map data for density generation inputs, not every visualization edit', () => {
     expect(source).toContain('const densityReloadSignature = $derived.by');
     expect(source).toContain('void densityReloadSignature;');
     expect(source).not.toContain('void visualizationStore.version;');
+  });
+
+  it('reloads joined basemap split rendering when the active simplification variant changes', () => {
+    expect(source).toContain('void basemapService.simplificationVersion;');
+    expect(source).toContain('basemapService.getBasemapGeometryArrow');
+    expect(source).toContain('setDisplaySplitTable');
   });
 
   it('does not apply a second color-blindness filter wrapper around ThematicMap', () => {

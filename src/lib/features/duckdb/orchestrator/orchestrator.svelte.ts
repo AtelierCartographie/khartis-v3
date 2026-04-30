@@ -36,6 +36,7 @@ import {
   type DuckDBDataset,
   type FilterOperator,
   type FilterStats,
+  type GPSColumns,
   type SearchStats
 } from '../types';
 
@@ -522,6 +523,26 @@ export const duckDBOrchestrator = {
     );
   },
 
+  async computeDensityLevelsFromGpsJoin(
+    basemapId: string,
+    datasetTableName: string,
+    dataColumn: string,
+    gpsColumns: GPSColumns,
+    maxPoints: number = 100000
+  ) {
+    await ensureInitialized();
+    const geometryTableName =
+      await basemapService.loadGeometryIntoDuckDB(basemapId);
+    return densityOps.computeDensityLevelsFromGpsJoin(
+      geometryTableName,
+      datasetTableName,
+      dataColumn,
+      gpsColumns.lat,
+      gpsColumns.lon,
+      maxPoints
+    );
+  },
+
   async generateDotDensityArrow(
     tableName: string,
     geomColumn: string,
@@ -553,6 +574,28 @@ export const duckDBOrchestrator = {
       geometryTableName,
       datasetTableName,
       dataColumn,
+      ratio,
+      options
+    );
+  },
+
+  async generateDotDensityArrowFromGpsJoin(
+    basemapId: string,
+    datasetTableName: string,
+    dataColumn: string,
+    gpsColumns: GPSColumns,
+    ratio: number,
+    options?: { seed?: number }
+  ): Promise<Table> {
+    await ensureInitialized();
+    const geometryTableName =
+      await basemapService.loadGeometryIntoDuckDB(basemapId);
+    return densityOps.generateDotDensityFromGpsJoin(
+      geometryTableName,
+      datasetTableName,
+      dataColumn,
+      gpsColumns.lat,
+      gpsColumns.lon,
       ratio,
       options
     );
