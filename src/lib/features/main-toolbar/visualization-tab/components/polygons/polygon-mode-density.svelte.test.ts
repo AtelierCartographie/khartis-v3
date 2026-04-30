@@ -31,4 +31,9 @@ describe('PolygonModeDensity', () => {
     expect(source).toContain('onDensityChange?.({ color: value })');
     expect(source).not.toContain('visualizationStore.updateVisualization');
   });
+
+  it('computes density levels from GPS points when the dataset is joined to a basemap', () => {
+    expect(source).toContain('computeDensityLevelsFromGpsJoin');
+    expect(source).toContain('duckDataset?.gpsMode && duckDataset.gpsColumns');
+  });
 });

@@ -1,5 +1,9 @@
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
-import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
+import {
+  CANONICAL_ID_COLUMN,
+  INTERNAL_COLUMN,
+  JOINED_BASEMAP_COLUMN
+} from '$lib/features/commons/constants/data.constants';
 import {
   escapeIdentifier,
   escapeSqlString
@@ -24,6 +28,46 @@ const densityCacheTableIndex = new Map<string, Set<string>>();
 interface GeometryColumnInfo {
   column_name: string;
   data_type: string;
+}
+
+async function getTableColumns(
+  tableName: string
+): Promise<GeometryColumnInfo[]> {
+  return (await Duck.query(
+    `SELECT column_name, data_type FROM information_schema.columns
+     WHERE table_name = '${escapeSqlString(tableName)}'`,
+    { format: 'array', useProxy: false }
+  )) as GeometryColumnInfo[];
+}
+
+function findGeometryColumn(
+  columns: GeometryColumnInfo[]
+): GeometryColumnInfo | undefined {
+  return columns.find((c) => {
+    const name = c.column_name.toLowerCase();
+    return (
+      name === INTERNAL_COLUMN.GEOM ||
+      name === INTERNAL_COLUMN.GEOMETRY ||
+      name === INTERNAL_COLUMN.WKB_GEOMETRY ||
+      name === INTERNAL_COLUMN.THE_GEOM
+    );
+  });
+}
+
+function findJoinColumn(columns: GeometryColumnInfo[]): string | null {
+  const hasFeatureIdCol = columns.some(
+    (c) => c.column_name === INTERNAL_COLUMN.FEATURE_ID
+  );
+  if (hasFeatureIdCol) return INTERNAL_COLUMN.FEATURE_ID;
+
+  const nativeIdColumn = columns.find(
+    (c) => c.column_name.toLowerCase() === CANONICAL_ID_COLUMN
+  );
+  return nativeIdColumn?.column_name ?? null;
+}
+
+function getSafeTempName(prefix: string, tableName: string): string {
+  return `${prefix}_${tableName.replace(/[^a-zA-Z0-9_]/g, '_')}`;
 }
 
 function buildDensityCacheKey(
@@ -168,10 +212,10 @@ export async function generateDotDensityArrow(
 
 /**
  * Builds a `(geom, data_value)` view by joining the basemap geometry table with
- * the dataset on `basemap_id`, then runs `generate_dot_density` on that view.
+ * the dataset on the joined basemap id, then runs `generate_dot_density` on that view.
  *
  * Catalog basemaps expose an `id` column ; custom basemaps expose
- * `__feature_id__` (both indexed by `applyCachedJoinAssociation.basemap_id`).
+ * `__feature_id__` (both indexed by the join association output id).
  * Returns an Arrow Table whose `geometry` column is encoded as `geoarrow.wkb`.
  */
 export async function generateDotDensityFromJoin(
@@ -181,36 +225,13 @@ export async function generateDotDensityFromJoin(
   ratio: number,
   options: { seed?: number } = {}
 ): Promise<ArrowTable> {
-  const geomCols = (await Duck.query(
-    `SELECT column_name, data_type FROM information_schema.columns
-     WHERE table_name = '${escapeSqlString(geometryTableName)}'`,
-    { format: 'array', useProxy: false }
-  )) as GeometryColumnInfo[];
-
-  const hasFeatureIdCol = geomCols.some(
-    (c) => c.column_name === INTERNAL_COLUMN.FEATURE_ID
-  );
-  const hasNativeIdCol = geomCols.some(
-    (c) => c.column_name.toLowerCase() === 'id'
-  );
-  const joinColumn = hasFeatureIdCol
-    ? INTERNAL_COLUMN.FEATURE_ID
-    : hasNativeIdCol
-      ? 'id'
-      : null;
+  const geomCols = await getTableColumns(geometryTableName);
+  const joinColumn = findJoinColumn(geomCols);
   if (!joinColumn) {
     throw new Error(m.error_density_no_feature_id({ geometryTableName }));
   }
 
-  const geometryColumn = geomCols.find((c) => {
-    const name = c.column_name.toLowerCase();
-    return (
-      name === INTERNAL_COLUMN.GEOM ||
-      name === INTERNAL_COLUMN.GEOMETRY ||
-      name === INTERNAL_COLUMN.WKB_GEOMETRY ||
-      name === INTERNAL_COLUMN.THE_GEOM
-    );
-  });
+  const geometryColumn = findGeometryColumn(geomCols);
   if (!geometryColumn) {
     throw new Error(m.error_density_no_geometry({ geometryTableName }));
   }
@@ -225,22 +246,123 @@ export async function generateDotDensityFromJoin(
   const cached = densityCache.get(cacheKey);
   if (cached) return cached;
 
-  const viewName = `density_src_${datasetTableName.replace(/[^a-zA-Z0-9_]/g, '_')}`;
+  const viewName = getSafeTempName('density_src', datasetTableName);
   const escapedDataset = escapeIdentifier(datasetTableName);
   const escapedGeometry = escapeIdentifier(geometryTableName);
   const escapedJoinCol = escapeIdentifier(joinColumn);
   const escapedGeomCol = escapeIdentifier(geometryColumn.column_name);
   const escapedDataCol = escapeIdentifier(dataColumn);
+  const escapedBasemapIdCol = escapeIdentifier(JOINED_BASEMAP_COLUMN.ID);
 
   await Duck.query(`
     CREATE OR REPLACE TEMP VIEW "${viewName}" AS
     SELECT g."${escapedGeomCol}" AS geom, d."${escapedDataCol}" AS value
     FROM "${escapedDataset}" d
     INNER JOIN "${escapedGeometry}" g
-      ON CAST(d.basemap_id AS VARCHAR) = CAST(g."${escapedJoinCol}" AS VARCHAR)
+      ON CAST(d."${escapedBasemapIdCol}" AS VARCHAR) = CAST(g."${escapedJoinCol}" AS VARCHAR)
     WHERE g."${escapedGeomCol}" IS NOT NULL
       AND d."${escapedDataCol}" IS NOT NULL
   `);
+
+  try {
+    const arrow = await generateDotDensityArrow(
+      viewName,
+      'geom',
+      'value',
+      ratio,
+      options
+    );
+    setDensityCacheEntry(cacheTableId, cacheKey, arrow);
+    return arrow;
+  } finally {
+    await Duck.query(`DROP VIEW IF EXISTS "${viewName}"`, { useProxy: false });
+  }
+}
+
+async function createGpsDensitySourceView(
+  viewName: string,
+  geometryTableName: string,
+  datasetTableName: string,
+  dataColumn: string,
+  latColumn: string,
+  lonColumn: string
+): Promise<void> {
+  const geomCols = await getTableColumns(geometryTableName);
+  const geometryColumn = findGeometryColumn(geomCols);
+  if (!geometryColumn) {
+    throw new Error(m.error_density_no_geometry({ geometryTableName }));
+  }
+
+  const escapedView = escapeIdentifier(viewName);
+  const escapedDataset = escapeIdentifier(datasetTableName);
+  const escapedGeometry = escapeIdentifier(geometryTableName);
+  const escapedGeomCol = escapeIdentifier(geometryColumn.column_name);
+  const escapedDataCol = escapeIdentifier(dataColumn);
+  const escapedLatCol = escapeIdentifier(latColumn);
+  const escapedLonCol = escapeIdentifier(lonColumn);
+
+  await Duck.query(`
+    CREATE OR REPLACE TEMP VIEW "${escapedView}" AS
+    WITH points AS (
+      SELECT
+        ST_Point(
+          TRY_CAST("${escapedLonCol}" AS DOUBLE),
+          TRY_CAST("${escapedLatCol}" AS DOUBLE)
+        ) AS point_geom,
+        COALESCE(TRY_CAST("${escapedDataCol}" AS DOUBLE), 1.0) AS point_value
+      FROM "${escapedDataset}"
+      WHERE "${escapedDataCol}" IS NOT NULL
+        AND TRY_CAST("${escapedLatCol}" AS DOUBLE) BETWEEN -90 AND 90
+        AND TRY_CAST("${escapedLonCol}" AS DOUBLE) BETWEEN -180 AND 180
+    ),
+    geometry_rows AS (
+      SELECT
+        ROW_NUMBER() OVER () AS feature_key,
+        "${escapedGeomCol}" AS geom
+      FROM "${escapedGeometry}"
+      WHERE "${escapedGeomCol}" IS NOT NULL
+    )
+    SELECT
+      g.geom AS geom,
+      SUM(p.point_value) AS value
+    FROM geometry_rows g
+    INNER JOIN points p
+      ON ST_X(p.point_geom) BETWEEN ST_XMin(g.geom) AND ST_XMax(g.geom)
+     AND ST_Y(p.point_geom) BETWEEN ST_YMin(g.geom) AND ST_YMax(g.geom)
+     AND ST_Intersects(g.geom, p.point_geom)
+    GROUP BY g.feature_key, g.geom
+    HAVING SUM(p.point_value) > 0
+  `);
+}
+
+export async function generateDotDensityFromGpsJoin(
+  geometryTableName: string,
+  datasetTableName: string,
+  dataColumn: string,
+  latColumn: string,
+  lonColumn: string,
+  ratio: number,
+  options: { seed?: number } = {}
+): Promise<ArrowTable> {
+  const cacheTableId = `${datasetTableName}+${geometryTableName}+gps:${latColumn}:${lonColumn}`;
+  const cacheKey = buildDensityCacheKey(
+    cacheTableId,
+    dataColumn,
+    ratio,
+    options.seed
+  );
+  const cached = densityCache.get(cacheKey);
+  if (cached) return cached;
+
+  const viewName = getSafeTempName('density_gps_src', datasetTableName);
+  await createGpsDensitySourceView(
+    viewName,
+    geometryTableName,
+    datasetTableName,
+    dataColumn,
+    latColumn,
+    lonColumn
+  );
 
   try {
     const arrow = await generateDotDensityArrow(
@@ -267,41 +389,52 @@ export async function computeDensityLevelsFromJoin(
   dataColumn: string,
   maxPoints: number = 100000
 ): Promise<DensityLevelOption[]> {
-  const geomCols = (await Duck.query(
-    `SELECT column_name, data_type FROM information_schema.columns
-     WHERE table_name = '${escapeSqlString(geometryTableName)}'`,
-    { format: 'array', useProxy: false }
-  )) as GeometryColumnInfo[];
-
-  const hasFeatureIdCol = geomCols.some(
-    (c) => c.column_name === INTERNAL_COLUMN.FEATURE_ID
-  );
-  const hasNativeIdCol = geomCols.some(
-    (c) => c.column_name.toLowerCase() === 'id'
-  );
-  const joinColumn = hasFeatureIdCol
-    ? INTERNAL_COLUMN.FEATURE_ID
-    : hasNativeIdCol
-      ? 'id'
-      : null;
+  const geomCols = await getTableColumns(geometryTableName);
+  const joinColumn = findJoinColumn(geomCols);
   if (!joinColumn) {
     return computeDensityLevels(datasetTableName, dataColumn, maxPoints);
   }
 
-  const viewName = `density_levels_${datasetTableName.replace(/[^a-zA-Z0-9_]/g, '_')}`;
+  const viewName = getSafeTempName('density_levels', datasetTableName);
   const escapedDataset = escapeIdentifier(datasetTableName);
   const escapedGeometry = escapeIdentifier(geometryTableName);
   const escapedJoinCol = escapeIdentifier(joinColumn);
   const escapedDataCol = escapeIdentifier(dataColumn);
+  const escapedBasemapIdCol = escapeIdentifier(JOINED_BASEMAP_COLUMN.ID);
 
   await Duck.query(`
     CREATE OR REPLACE TEMP VIEW "${viewName}" AS
     SELECT d."${escapedDataCol}" AS value
     FROM "${escapedDataset}" d
     INNER JOIN "${escapedGeometry}" g
-      ON CAST(d.basemap_id AS VARCHAR) = CAST(g."${escapedJoinCol}" AS VARCHAR)
+      ON CAST(d."${escapedBasemapIdCol}" AS VARCHAR) = CAST(g."${escapedJoinCol}" AS VARCHAR)
     WHERE d."${escapedDataCol}" IS NOT NULL
   `);
+
+  try {
+    return await computeDensityLevels(viewName, 'value', maxPoints);
+  } finally {
+    await Duck.query(`DROP VIEW IF EXISTS "${viewName}"`, { useProxy: false });
+  }
+}
+
+export async function computeDensityLevelsFromGpsJoin(
+  geometryTableName: string,
+  datasetTableName: string,
+  dataColumn: string,
+  latColumn: string,
+  lonColumn: string,
+  maxPoints: number = 100000
+): Promise<DensityLevelOption[]> {
+  const viewName = getSafeTempName('density_gps_levels', datasetTableName);
+  await createGpsDensitySourceView(
+    viewName,
+    geometryTableName,
+    datasetTableName,
+    dataColumn,
+    latColumn,
+    lonColumn
+  );
 
   try {
     return await computeDensityLevels(viewName, 'value', maxPoints);
@@ -325,21 +458,8 @@ export async function generateDotDensityFromGeoTable(
   const cached = densityCache.get(cacheKey);
   if (cached) return cached;
 
-  const cols = (await Duck.query(
-    `SELECT column_name, data_type FROM information_schema.columns
-     WHERE table_name = '${escapeSqlString(tableName)}'`,
-    { format: 'array', useProxy: false }
-  )) as GeometryColumnInfo[];
-
-  const geometryColumn = cols.find((c) => {
-    const name = c.column_name.toLowerCase();
-    return (
-      name === INTERNAL_COLUMN.GEOM ||
-      name === INTERNAL_COLUMN.GEOMETRY ||
-      name === INTERNAL_COLUMN.WKB_GEOMETRY ||
-      name === INTERNAL_COLUMN.THE_GEOM
-    );
-  });
+  const cols = await getTableColumns(tableName);
+  const geometryColumn = findGeometryColumn(cols);
   if (!geometryColumn) {
     throw new Error(m.error_table_no_geometry_density({ tableName }));
   }

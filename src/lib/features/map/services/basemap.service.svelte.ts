@@ -4,7 +4,10 @@ import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import { type Table as ArrowTable } from 'apache-arrow/Arrow';
 import { LogCategory, logger } from '../../commons/utils/logger';
 import { resolveStaticAssetUrl } from '../../commons/utils/static-asset-url';
-import { escapeSqlString } from '../../commons/utils/sanitize.utils';
+import {
+  escapeIdentifier,
+  escapeSqlString
+} from '../../commons/utils/sanitize.utils';
 import { projectionStore } from '../stores/projection.store.svelte';
 import type {
   BasemapMetadata,
@@ -37,9 +40,534 @@ const CATALOG_SIMPLIFICATION_PRIORITY = [
   SimplificationLevel.Low
 ] as const;
 const SIMPLIFICATION_LEVEL_SUFFIX_REGEX = /-(low|medium|high)$/;
+const CATALOG_ROW_ID_COLUMN = '__khartis_catalog_rowid__';
+
+type CatalogGeometryKind =
+  | 'point'
+  | 'linestring'
+  | 'polygon'
+  | 'multipoint'
+  | 'multilinestring'
+  | 'multipolygon';
 
 function getGeometryParquetUrl(filename: string): string {
   return resolveStaticAssetUrl(`${GEOMETRY_BASE_PATH}/${filename}.parquet`);
+}
+
+function getCatalogDuckDBFilename(basemapId: string): string {
+  const safeBasemapId = basemapId.replace(/[^a-zA-Z0-9_]/g, '_');
+  return `khartis_basemap_${safeBasemapId}.parquet`;
+}
+
+async function ensureCatalogParquetRegistered(
+  resolvedBasemapId: string,
+  arrayBuffer: ArrayBuffer
+): Promise<string> {
+  const db = Duck.db;
+  if (!db) {
+    throw new Error('DuckDB not initialized');
+  }
+
+  const duckDBFilename = getCatalogDuckDBFilename(resolvedBasemapId);
+  if (!Duck.registered_files.has(duckDBFilename)) {
+    await db.registerFileBuffer(
+      duckDBFilename,
+      new Uint8Array(arrayBuffer.slice(0))
+    );
+    Duck.registered_files.add(duckDBFilename);
+  }
+
+  return duckDBFilename;
+}
+
+async function materializeCatalogParquetWithSTRead(
+  resolvedBasemapId: string,
+  arrayBuffer: ArrayBuffer,
+  tempTableName: string
+): Promise<void> {
+  const duckDBFilename = await ensureCatalogParquetRegistered(
+    resolvedBasemapId,
+    arrayBuffer
+  );
+
+  await Duck.query(
+    `CREATE OR REPLACE TEMP TABLE "${escapeIdentifier(tempTableName)}" AS SELECT * FROM ST_Read('${escapeSqlString(duckDBFilename)}')`
+  );
+}
+
+function getCatalogLayerGeometryKind(
+  layerType: BasemapLayerType | null | undefined
+): CatalogGeometryKind | null {
+  switch (layerType) {
+    case BasemapLayerType.CENTROID:
+    case BasemapLayerType.POINT:
+      return 'point';
+    case BasemapLayerType.LIMIT:
+    case BasemapLayerType.LINE:
+    case BasemapLayerType.GRATICULE:
+    case BasemapLayerType.GEOGRAPHIC_LINES:
+      return 'multilinestring';
+    case BasemapLayerType.POLYGON:
+    case BasemapLayerType.LAND:
+      return 'multipolygon';
+    default:
+      return null;
+  }
+}
+
+function getCatalogGeometryKind(
+  basemaps: BasemapMetadata[],
+  resolvedBasemapId: string
+): CatalogGeometryKind {
+  if (basemaps.some((basemap) => basemap.file === resolvedBasemapId)) {
+    return 'multipolygon';
+  }
+
+  for (const basemap of basemaps) {
+    const layer = basemap.layers.find(
+      (candidate) => candidate.file === resolvedBasemapId
+    );
+    const layerKind = getCatalogLayerGeometryKind(layer?.type);
+    if (layerKind) {
+      return layerKind;
+    }
+  }
+
+  if (/-centroids?-/i.test(resolvedBasemapId)) {
+    return 'point';
+  }
+  if (/-limites?-|graticule|geographic-lines/i.test(resolvedBasemapId)) {
+    return 'multilinestring';
+  }
+
+  return 'multipolygon';
+}
+
+function getNativeGeoArrowGeometryKind(
+  geometryColumn: DuckTableColumnInfo,
+  expectedKind: CatalogGeometryKind
+): CatalogGeometryKind {
+  const dataType = geometryColumn.data_type.replace(/\s+/g, ' ').toUpperCase();
+
+  if (dataType.endsWith('[][][]')) {
+    return 'multipolygon';
+  }
+  if (dataType.endsWith('[][]')) {
+    return expectedKind === 'multilinestring' ? 'multilinestring' : 'polygon';
+  }
+  if (dataType.endsWith('[]')) {
+    if (expectedKind === 'point' || expectedKind === 'multipoint') {
+      return expectedKind;
+    }
+    return 'linestring';
+  }
+
+  return 'point';
+}
+
+function pointExpression(pointAlias: string): string {
+  return `CAST(${pointAlias}.x AS VARCHAR) || ' ' || CAST(${pointAlias}.y AS VARCHAR)`;
+}
+
+function buildPointGeometrySql(
+  rawTableName: string,
+  tempTableName: string,
+  geometryColumnName: string,
+  isListEncoded: boolean
+): string {
+  const escapedRawTableName = escapeIdentifier(rawTableName);
+  const escapedTempTableName = escapeIdentifier(tempTableName);
+  const escapedGeometryColumnName = escapeIdentifier(geometryColumnName);
+  const sourcePoint = isListEncoded
+    ? `"${escapedGeometryColumnName}"[1]`
+    : `"${escapedGeometryColumnName}"`;
+
+  return `
+    CREATE OR REPLACE TEMP TABLE "${escapedTempTableName}" AS
+    SELECT
+      * EXCLUDE ("${escapedGeometryColumnName}"),
+      ST_GeomFromText('POINT (' || ${pointExpression(sourcePoint)} || ')') AS ${INTERNAL_COLUMN.GEOM}
+    FROM "${escapedRawTableName}"
+  `;
+}
+
+function buildLineStringGeometrySql(
+  rawTableName: string,
+  tempTableName: string,
+  geometryColumnName: string
+): string {
+  const escapedRawTableName = escapeIdentifier(rawTableName);
+  const escapedTempTableName = escapeIdentifier(tempTableName);
+  const escapedGeometryColumnName = escapeIdentifier(geometryColumnName);
+
+  return `
+    CREATE OR REPLACE TEMP TABLE "${escapedTempTableName}" AS
+    WITH source AS (
+      SELECT row_number() OVER () AS ${CATALOG_ROW_ID_COLUMN}, *
+      FROM "${escapedRawTableName}"
+    ),
+    points AS (
+      SELECT ${CATALOG_ROW_ID_COLUMN}, point, point_index
+      FROM source,
+      unnest("${escapedGeometryColumnName}") WITH ORDINALITY AS pt(point, point_index)
+    ),
+    geom_wkt AS (
+      SELECT
+        ${CATALOG_ROW_ID_COLUMN},
+        'LINESTRING (' || string_agg(${pointExpression('point')}, ', ' ORDER BY point_index) || ')' AS wkt
+      FROM points
+      GROUP BY ${CATALOG_ROW_ID_COLUMN}
+    )
+    SELECT
+      source.* EXCLUDE ("${escapedGeometryColumnName}", ${CATALOG_ROW_ID_COLUMN}),
+      CASE WHEN geom_wkt.wkt IS NULL THEN NULL ELSE ST_GeomFromText(geom_wkt.wkt) END AS ${INTERNAL_COLUMN.GEOM}
+    FROM source
+    LEFT JOIN geom_wkt USING (${CATALOG_ROW_ID_COLUMN})
+  `;
+}
+
+function buildPolygonGeometrySql(
+  rawTableName: string,
+  tempTableName: string,
+  geometryColumnName: string
+): string {
+  const escapedRawTableName = escapeIdentifier(rawTableName);
+  const escapedTempTableName = escapeIdentifier(tempTableName);
+  const escapedGeometryColumnName = escapeIdentifier(geometryColumnName);
+
+  return `
+    CREATE OR REPLACE TEMP TABLE "${escapedTempTableName}" AS
+    WITH source AS (
+      SELECT row_number() OVER () AS ${CATALOG_ROW_ID_COLUMN}, *
+      FROM "${escapedRawTableName}"
+    ),
+    rings AS (
+      SELECT ${CATALOG_ROW_ID_COLUMN}, ring, ring_index
+      FROM source,
+      unnest("${escapedGeometryColumnName}") WITH ORDINALITY AS r(ring, ring_index)
+    ),
+    points AS (
+      SELECT ${CATALOG_ROW_ID_COLUMN}, ring_index, point, point_index
+      FROM rings,
+      unnest(ring) WITH ORDINALITY AS pt(point, point_index)
+    ),
+    ring_wkt AS (
+      SELECT
+        ${CATALOG_ROW_ID_COLUMN},
+        ring_index,
+        '(' || string_agg(${pointExpression('point')}, ', ' ORDER BY point_index) || ')' AS wkt
+      FROM points
+      GROUP BY ${CATALOG_ROW_ID_COLUMN}, ring_index
+    ),
+    geom_wkt AS (
+      SELECT
+        ${CATALOG_ROW_ID_COLUMN},
+        'POLYGON (' || string_agg(wkt, ', ' ORDER BY ring_index) || ')' AS wkt
+      FROM ring_wkt
+      GROUP BY ${CATALOG_ROW_ID_COLUMN}
+    )
+    SELECT
+      source.* EXCLUDE ("${escapedGeometryColumnName}", ${CATALOG_ROW_ID_COLUMN}),
+      CASE WHEN geom_wkt.wkt IS NULL THEN NULL ELSE ST_GeomFromText(geom_wkt.wkt) END AS ${INTERNAL_COLUMN.GEOM}
+    FROM source
+    LEFT JOIN geom_wkt USING (${CATALOG_ROW_ID_COLUMN})
+  `;
+}
+
+function buildMultiPointGeometrySql(
+  rawTableName: string,
+  tempTableName: string,
+  geometryColumnName: string
+): string {
+  const escapedRawTableName = escapeIdentifier(rawTableName);
+  const escapedTempTableName = escapeIdentifier(tempTableName);
+  const escapedGeometryColumnName = escapeIdentifier(geometryColumnName);
+
+  return `
+    CREATE OR REPLACE TEMP TABLE "${escapedTempTableName}" AS
+    WITH source AS (
+      SELECT row_number() OVER () AS ${CATALOG_ROW_ID_COLUMN}, *
+      FROM "${escapedRawTableName}"
+    ),
+    points AS (
+      SELECT ${CATALOG_ROW_ID_COLUMN}, point, point_index
+      FROM source,
+      unnest("${escapedGeometryColumnName}") WITH ORDINALITY AS pt(point, point_index)
+    ),
+    geom_wkt AS (
+      SELECT
+        ${CATALOG_ROW_ID_COLUMN},
+        'MULTIPOINT (' || string_agg('(' || ${pointExpression('point')} || ')', ', ' ORDER BY point_index) || ')' AS wkt
+      FROM points
+      GROUP BY ${CATALOG_ROW_ID_COLUMN}
+    )
+    SELECT
+      source.* EXCLUDE ("${escapedGeometryColumnName}", ${CATALOG_ROW_ID_COLUMN}),
+      CASE WHEN geom_wkt.wkt IS NULL THEN NULL ELSE ST_GeomFromText(geom_wkt.wkt) END AS ${INTERNAL_COLUMN.GEOM}
+    FROM source
+    LEFT JOIN geom_wkt USING (${CATALOG_ROW_ID_COLUMN})
+  `;
+}
+
+function buildMultiLineStringGeometrySql(
+  rawTableName: string,
+  tempTableName: string,
+  geometryColumnName: string
+): string {
+  const escapedRawTableName = escapeIdentifier(rawTableName);
+  const escapedTempTableName = escapeIdentifier(tempTableName);
+  const escapedGeometryColumnName = escapeIdentifier(geometryColumnName);
+
+  return `
+    CREATE OR REPLACE TEMP TABLE "${escapedTempTableName}" AS
+    WITH source AS (
+      SELECT row_number() OVER () AS ${CATALOG_ROW_ID_COLUMN}, *
+      FROM "${escapedRawTableName}"
+    ),
+    lines AS (
+      SELECT ${CATALOG_ROW_ID_COLUMN}, line, line_index
+      FROM source,
+      unnest("${escapedGeometryColumnName}") WITH ORDINALITY AS l(line, line_index)
+    ),
+    points AS (
+      SELECT ${CATALOG_ROW_ID_COLUMN}, line_index, point, point_index
+      FROM lines,
+      unnest(line) WITH ORDINALITY AS pt(point, point_index)
+    ),
+    line_wkt AS (
+      SELECT
+        ${CATALOG_ROW_ID_COLUMN},
+        line_index,
+        '(' || string_agg(${pointExpression('point')}, ', ' ORDER BY point_index) || ')' AS wkt
+      FROM points
+      GROUP BY ${CATALOG_ROW_ID_COLUMN}, line_index
+    ),
+    geom_wkt AS (
+      SELECT
+        ${CATALOG_ROW_ID_COLUMN},
+        'MULTILINESTRING (' || string_agg(wkt, ', ' ORDER BY line_index) || ')' AS wkt
+      FROM line_wkt
+      GROUP BY ${CATALOG_ROW_ID_COLUMN}
+    )
+    SELECT
+      source.* EXCLUDE ("${escapedGeometryColumnName}", ${CATALOG_ROW_ID_COLUMN}),
+      CASE WHEN geom_wkt.wkt IS NULL THEN NULL ELSE ST_GeomFromText(geom_wkt.wkt) END AS ${INTERNAL_COLUMN.GEOM}
+    FROM source
+    LEFT JOIN geom_wkt USING (${CATALOG_ROW_ID_COLUMN})
+  `;
+}
+
+function buildMultiPolygonGeometrySql(
+  rawTableName: string,
+  tempTableName: string,
+  geometryColumnName: string
+): string {
+  const escapedRawTableName = escapeIdentifier(rawTableName);
+  const escapedTempTableName = escapeIdentifier(tempTableName);
+  const escapedGeometryColumnName = escapeIdentifier(geometryColumnName);
+
+  return `
+    CREATE OR REPLACE TEMP TABLE "${escapedTempTableName}" AS
+    WITH source AS (
+      SELECT row_number() OVER () AS ${CATALOG_ROW_ID_COLUMN}, *
+      FROM "${escapedRawTableName}"
+    ),
+    polygons AS (
+      SELECT ${CATALOG_ROW_ID_COLUMN}, polygon, polygon_index
+      FROM source,
+      unnest("${escapedGeometryColumnName}") WITH ORDINALITY AS p(polygon, polygon_index)
+    ),
+    rings AS (
+      SELECT ${CATALOG_ROW_ID_COLUMN}, polygon_index, ring, ring_index
+      FROM polygons,
+      unnest(polygon) WITH ORDINALITY AS r(ring, ring_index)
+    ),
+    points AS (
+      SELECT ${CATALOG_ROW_ID_COLUMN}, polygon_index, ring_index, point, point_index
+      FROM rings,
+      unnest(ring) WITH ORDINALITY AS pt(point, point_index)
+    ),
+    ring_wkt AS (
+      SELECT
+        ${CATALOG_ROW_ID_COLUMN},
+        polygon_index,
+        ring_index,
+        '(' || string_agg(${pointExpression('point')}, ', ' ORDER BY point_index) || ')' AS wkt
+      FROM points
+      GROUP BY ${CATALOG_ROW_ID_COLUMN}, polygon_index, ring_index
+    ),
+    polygon_wkt AS (
+      SELECT
+        ${CATALOG_ROW_ID_COLUMN},
+        polygon_index,
+        '(' || string_agg(wkt, ', ' ORDER BY ring_index) || ')' AS wkt
+      FROM ring_wkt
+      GROUP BY ${CATALOG_ROW_ID_COLUMN}, polygon_index
+    ),
+    geom_wkt AS (
+      SELECT
+        ${CATALOG_ROW_ID_COLUMN},
+        'MULTIPOLYGON (' || string_agg(wkt, ', ' ORDER BY polygon_index) || ')' AS wkt
+      FROM polygon_wkt
+      GROUP BY ${CATALOG_ROW_ID_COLUMN}
+    )
+    SELECT
+      source.* EXCLUDE ("${escapedGeometryColumnName}", ${CATALOG_ROW_ID_COLUMN}),
+      CASE WHEN geom_wkt.wkt IS NULL THEN NULL ELSE ST_GeomFromText(geom_wkt.wkt) END AS ${INTERNAL_COLUMN.GEOM}
+    FROM source
+    LEFT JOIN geom_wkt USING (${CATALOG_ROW_ID_COLUMN})
+  `;
+}
+
+function buildNativeGeoArrowGeometrySql(
+  rawTableName: string,
+  tempTableName: string,
+  geometryColumn: DuckTableColumnInfo,
+  expectedKind: CatalogGeometryKind
+): string {
+  const geometryKind = getNativeGeoArrowGeometryKind(
+    geometryColumn,
+    expectedKind
+  );
+  const dataType = geometryColumn.data_type.replace(/\s+/g, ' ').toUpperCase();
+
+  switch (geometryKind) {
+    case 'point':
+      return buildPointGeometrySql(
+        rawTableName,
+        tempTableName,
+        geometryColumn.column_name,
+        dataType.endsWith('[]')
+      );
+    case 'linestring':
+      return buildLineStringGeometrySql(
+        rawTableName,
+        tempTableName,
+        geometryColumn.column_name
+      );
+    case 'polygon':
+      return buildPolygonGeometrySql(
+        rawTableName,
+        tempTableName,
+        geometryColumn.column_name
+      );
+    case 'multipoint':
+      return buildMultiPointGeometrySql(
+        rawTableName,
+        tempTableName,
+        geometryColumn.column_name
+      );
+    case 'multilinestring':
+      return buildMultiLineStringGeometrySql(
+        rawTableName,
+        tempTableName,
+        geometryColumn.column_name
+      );
+    case 'multipolygon':
+      return buildMultiPolygonGeometrySql(
+        rawTableName,
+        tempTableName,
+        geometryColumn.column_name
+      );
+    default:
+      throw new Error(`Unsupported catalog geometry kind: ${geometryKind}`);
+  }
+}
+
+function buildWkbGeometrySql(
+  rawTableName: string,
+  tempTableName: string,
+  geometryColumnName: string
+): string {
+  const escapedRawTableName = escapeIdentifier(rawTableName);
+  const escapedTempTableName = escapeIdentifier(tempTableName);
+  const escapedGeometryColumnName = escapeIdentifier(geometryColumnName);
+
+  return `
+    CREATE OR REPLACE TEMP TABLE "${escapedTempTableName}" AS
+    SELECT
+      * EXCLUDE ("${escapedGeometryColumnName}"),
+      ST_GeomFromWKB("${escapedGeometryColumnName}") AS ${INTERNAL_COLUMN.GEOM}
+    FROM "${escapedRawTableName}"
+  `;
+}
+
+async function materializeCatalogParquetWithReadParquet(
+  resolvedBasemapId: string,
+  arrayBuffer: ArrayBuffer,
+  tempTableName: string,
+  geometryKind: CatalogGeometryKind
+): Promise<void> {
+  const duckDBFilename = await ensureCatalogParquetRegistered(
+    resolvedBasemapId,
+    arrayBuffer
+  );
+  const rawTableName = `${tempTableName}_raw`;
+  const escapedRawTableName = escapeIdentifier(rawTableName);
+  const escapedTempTableName = escapeIdentifier(tempTableName);
+
+  await Duck.query(
+    `CREATE OR REPLACE TEMP TABLE "${escapedRawTableName}" AS SELECT * FROM read_parquet('${escapeSqlString(duckDBFilename)}')`
+  );
+
+  try {
+    const columns = (await Duck.query(
+      `SELECT column_name, data_type FROM information_schema.columns
+       WHERE table_name = '${escapeSqlString(rawTableName)}'`,
+      { format: 'array' }
+    )) as DuckTableColumnInfo[];
+    const geometryColumn = columns.find(isGeometryColumnCandidate);
+
+    if (!geometryColumn) {
+      throw new Error(
+        `No geometry column found in native GeoParquet table: ${resolvedBasemapId}`
+      );
+    }
+
+    const dataType = geometryColumn.data_type.toUpperCase();
+    const geometryColumnName = escapeIdentifier(geometryColumn.column_name);
+
+    if (dataType.startsWith('GEOMETRY')) {
+      const canonicalGeometrySelect =
+        geometryColumn.column_name === INTERNAL_COLUMN.GEOM
+          ? '*'
+          : `* EXCLUDE ("${geometryColumnName}"), "${geometryColumnName}" AS ${INTERNAL_COLUMN.GEOM}`;
+
+      await Duck.query(
+        `CREATE OR REPLACE TEMP TABLE "${escapedTempTableName}" AS SELECT ${canonicalGeometrySelect} FROM "${escapedRawTableName}"`
+      );
+      return;
+    }
+
+    if (dataType === 'BLOB' || dataType.includes('WKB')) {
+      await Duck.query(
+        buildWkbGeometrySql(
+          rawTableName,
+          tempTableName,
+          geometryColumn.column_name
+        )
+      );
+      return;
+    }
+
+    if (dataType.includes('STRUCT(X DOUBLE, Y DOUBLE)')) {
+      await Duck.query(
+        buildNativeGeoArrowGeometrySql(
+          rawTableName,
+          tempTableName,
+          geometryColumn,
+          geometryKind
+        )
+      );
+      return;
+    }
+
+    throw new Error(
+      `Unsupported catalog GeoParquet geometry type: ${geometryColumn.data_type}`
+    );
+  } finally {
+    await Duck.query(`DROP TABLE IF EXISTS "${escapedRawTableName}"`);
+  }
 }
 
 function isSimplificationLevel(
@@ -186,6 +714,11 @@ interface LoadedBasemap extends LoadedBasemapVariantState {
   activeSimplificationLevel?: SimplificationLevel | null;
 }
 
+interface DuckTableColumnInfo {
+  column_name: string;
+  data_type: string;
+}
+
 export function getResolvedBasemapVariant(
   loadedBasemap: LoadedBasemapVariantContainer | null,
   level?: SimplificationLevel
@@ -220,6 +753,19 @@ function getResolvedBasemapVariantState(
   }
 
   return loadedBasemap.simplifiedVariants?.get(targetLevel) ?? loadedBasemap;
+}
+
+function isGeometryColumnCandidate(column: DuckTableColumnInfo): boolean {
+  const columnName = column.column_name.toLowerCase();
+  const dataType = column.data_type.toUpperCase();
+
+  return (
+    dataType.startsWith('GEOMETRY') ||
+    columnName === INTERNAL_COLUMN.GEOM ||
+    columnName === INTERNAL_COLUMN.GEOMETRY ||
+    columnName === INTERNAL_COLUMN.WKB_GEOMETRY ||
+    columnName === INTERNAL_COLUMN.THE_GEOM
+  );
 }
 
 function findBasemapMetadataByFile(
@@ -272,6 +818,7 @@ function createBasemapService() {
   let isInitialized = false;
   let initializePromise: Promise<void> | null = null;
   let currentBasemap: LoadedBasemap | null = null;
+  let simplificationVersion = $state(0);
   let attributesLoaded = false;
   let projectionPresetsData: ProjectionPresets | null = null;
   let stylePresetsData: StylePresets | null = null;
@@ -331,17 +878,20 @@ function createBasemapService() {
       // of the per-entity identifier (e.g. `id = "iso3_code"` for every
       // monde-countries row). Joins downstream rely on `id` resolving to the
       // polygon-table primary key (e.g. `"FRA"`), so we repair the column
-      // here using the parquet's natural row order: each entity is a run of
+      // here using the parquet's physical row number: each entity is a run of
       // variants whose first row carries the primary identifier (variant ==
       // id literal). Idempotent for parquets where `id` is already correct.
+      // This must not rely on `row_number() OVER ()` because DuckDB WASM is
+      // configured with `preserve_insertion_order=false`.
       const result = await Duck.query(`
         CREATE OR REPLACE TABLE basemap_attributes AS
         WITH ordered AS (
-          SELECT *, row_number() OVER () AS __row_idx__
+          SELECT *, file_row_number AS __row_idx__
           FROM parquet_scan('${escapedFileId}',
             hive_partitioning=false,
             union_by_name=false,
-            filename=false
+            filename=false,
+            file_row_number=true
           )
         ),
         grouped AS (
@@ -616,19 +1166,67 @@ function createBasemapService() {
       }
 
       const arrayBuffer = await response.arrayBuffer();
-      const blob = new Blob([arrayBuffer]);
-      const geometryFile = new File([blob], `${resolvedBasemapId}.parquet`, {
-        type: 'application/octet-stream'
-      });
-
-      await Duck.register_files([geometryFile]);
-      const fileId = (geometryFile as File & { id: string }).id;
-      const escapedFileId = escapeSqlString(fileId);
-      await Duck.query(
-        `CREATE OR REPLACE TABLE "${tableName}" AS SELECT * FROM read_parquet('${escapedFileId}')`
+      const escapedTableName = escapeIdentifier(tableName);
+      const tempTableName = `tmp_${tableName}_${Date.now()}`;
+      const escapedTempTableName = escapeIdentifier(tempTableName);
+      const catalogGeometryKind = getCatalogGeometryKind(
+        availableBasemaps,
+        resolvedBasemapId
       );
 
-      geometryTablesInDuckDB.add(tableName);
+      try {
+        await materializeCatalogParquetWithSTRead(
+          resolvedBasemapId,
+          arrayBuffer,
+          tempTableName
+        );
+      } catch (error) {
+        logger.warn(
+          'Catalog GeoParquet ST_Read failed, using DuckDB read_parquet materialization',
+          LogCategory.MAP,
+          {
+            basemapId: normalizedBasemapId,
+            resolvedBasemapId,
+            error
+          }
+        );
+        await Duck.query(`DROP TABLE IF EXISTS "${escapedTempTableName}"`);
+        await materializeCatalogParquetWithReadParquet(
+          resolvedBasemapId,
+          arrayBuffer,
+          tempTableName,
+          catalogGeometryKind
+        );
+      }
+
+      try {
+        const columns = (await Duck.query(
+          `SELECT column_name, data_type FROM information_schema.columns
+           WHERE table_name = '${escapeSqlString(tempTableName)}'`,
+          { format: 'array' }
+        )) as DuckTableColumnInfo[];
+        const geometryColumn = columns.find(isGeometryColumnCandidate);
+
+        if (!geometryColumn) {
+          throw new Error(
+            `No geometry column found in basemap table: ${resolvedBasemapId}`
+          );
+        }
+
+        const geometryColumnName = escapeIdentifier(geometryColumn.column_name);
+        const canonicalGeometrySelect =
+          geometryColumn.column_name === INTERNAL_COLUMN.GEOM
+            ? '*'
+            : `* EXCLUDE ("${geometryColumnName}"), "${geometryColumnName}" AS ${INTERNAL_COLUMN.GEOM}`;
+
+        await Duck.query(
+          `CREATE OR REPLACE TABLE "${escapedTableName}" AS SELECT ${canonicalGeometrySelect} FROM "${escapedTempTableName}"`
+        );
+
+        geometryTablesInDuckDB.add(tableName);
+      } finally {
+        await Duck.query(`DROP TABLE IF EXISTS "${escapedTempTableName}"`);
+      }
 
       return tableName;
     } catch (error) {
@@ -818,13 +1416,20 @@ function createBasemapService() {
     }
 
     const baseLevel = getBasemapSimplificationLevel(loadedBasemap.metadata);
+    const previousLevel = loadedBasemap.activeSimplificationLevel ?? baseLevel;
     if (variantFile === loadedBasemap.metadata.file || level === baseLevel) {
       loadedBasemap.activeSimplificationLevel = level;
+      if (previousLevel !== level) {
+        simplificationVersion += 1;
+      }
       return loadedBasemap.geometryTable;
     }
 
     if (loadedBasemap.simplifiedVariants.has(level)) {
       loadedBasemap.activeSimplificationLevel = level;
+      if (previousLevel !== level) {
+        simplificationVersion += 1;
+      }
       return loadedBasemap.simplifiedVariants.get(level)?.geometryTable ?? null;
     }
 
@@ -854,6 +1459,9 @@ function createBasemapService() {
 
     loadedBasemap.simplifiedVariants.set(level, variant);
     loadedBasemap.activeSimplificationLevel = level;
+    if (previousLevel !== level) {
+      simplificationVersion += 1;
+    }
     updateProjectionFromTable(geometryTable);
 
     return geometryTable;
@@ -1130,6 +1738,9 @@ function createBasemapService() {
     },
     get currentGeometryTable(): ArrowTable | null {
       return getResolvedGeometryTable(currentBasemap);
+    },
+    get simplificationVersion(): number {
+      return simplificationVersion;
     },
     get currentLayers(): Map<string, ArrowTable> {
       return getResolvedLayerTables(currentBasemap);
