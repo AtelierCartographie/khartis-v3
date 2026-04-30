@@ -21,8 +21,10 @@ import { parseGeoJsonGeometry } from '$lib/features/map/io/geometry-parser';
 import type { ProcessedDataset } from '$lib/features/data-pipeline/types';
 import {
   COLUMN_TYPE_GEOMETRY,
+  CANONICAL_ID_COLUMN,
   GEO_COLUMN_NAMES,
-  INTERNAL_COLUMN
+  INTERNAL_COLUMN,
+  JOINED_BASEMAP_COLUMN
 } from '$lib/features/commons/constants/data.constants';
 import {
   escapeIdentifier,
@@ -36,6 +38,11 @@ export interface ExportError extends Error {
 interface ExportErrorConstructor {
   new (title: string, message: string): ExportError;
   readonly prototype: ExportError;
+}
+
+interface JoinedGeometryExportSource {
+  joinedBasemap: string;
+  tableName?: string;
 }
 
 export const ExportError: ExportErrorConstructor = function ExportError(
@@ -113,13 +120,26 @@ export async function exportData(
 }
 
 function validateMapExportPrerequisites(): void {
-  if (!mapInstanceStore.isMapLoaded) {
+  if (!mapInstanceStore.isMapLoaded && !hasRenderableMapOutput()) {
     throw new ExportError(m.export_map_error(), m.export_map_not_loaded());
   }
 
   if (datasetsStore.datasets.length === 0) {
     throw new ExportError(m.export_map_error(), m.export_map_no_data());
   }
+}
+
+function hasRenderableMapOutput(): boolean {
+  if (typeof document === 'undefined') {
+    return false;
+  }
+
+  const pageContainer = document.querySelector('.page-container');
+  const canvas = pageContainer?.querySelector('canvas');
+
+  return (
+    canvas instanceof HTMLCanvasElement && canvas.width > 0 && canvas.height > 0
+  );
 }
 
 function getDataFormatConfig(format: DataExportFormat): {
@@ -151,6 +171,67 @@ function resolveDatasetGeometryColumn(
   );
 }
 
+function resolveJoinedGeometryExportSource(
+  dataset: ProcessedDataset
+): JoinedGeometryExportSource | null {
+  const candidates = [
+    dataset.sourceFileId
+      ? duckDBOrchestrator.getDatasetBySourceFile(dataset.sourceFileId)
+      : undefined,
+    duckDBOrchestrator.getDatasetById(dataset.id),
+    duckDBOrchestrator.getDataset(dataset.id),
+    dataset.duckdbTableName
+      ? duckDBOrchestrator.getDatasetByTable(dataset.duckdbTableName)
+      : undefined
+  ];
+
+  const duckDataset = candidates.find((candidate) =>
+    Boolean(candidate?.joinedBasemap)
+  );
+  if (!duckDataset?.joinedBasemap) {
+    return null;
+  }
+
+  return {
+    joinedBasemap: duckDataset.joinedBasemap,
+    tableName: duckDataset.tableName
+  };
+}
+
+async function getDuckDBColumnType(
+  tableName: string,
+  columnName: string
+): Promise<string | null> {
+  const rows = (await Duck.query(
+    `SELECT data_type
+     FROM information_schema.columns
+     WHERE table_name = '${escapeSqlString(tableName)}'
+       AND column_name = '${escapeSqlString(columnName)}'
+     LIMIT 1`,
+    { format: 'array' }
+  )) as Array<{ data_type: string }>;
+
+  return rows[0]?.data_type ?? null;
+}
+
+function buildGeometryExportSelect(
+  columnName: string,
+  duckDBType: string | null
+): string {
+  const escapedName = escapeIdentifier(columnName);
+  const normalizedType = duckDBType?.replace(/\s+/g, ' ').toUpperCase() ?? '';
+
+  if (normalizedType.startsWith('GEOMETRY')) {
+    return `ST_AsGeoJSON("${escapedName}") AS "${escapedName}"`;
+  }
+
+  if (normalizedType === 'BLOB' || normalizedType.includes('WKB')) {
+    return `ST_AsGeoJSON(ST_GeomFromWKB("${escapedName}")) AS "${escapedName}"`;
+  }
+
+  return `"${escapedName}"`;
+}
+
 async function fetchJoinedDatasetWithGeometry(
   dataset: ProcessedDataset,
   joinedBasemapId: string,
@@ -170,25 +251,30 @@ async function fetchJoinedDatasetWithGeometry(
     { format: 'array' }
   )) as Array<{ column_name: string; data_type: string }>;
 
-  const hasFeatureIdColumn = geomColumnsFull.some(
+  const featureIdColumn = geomColumnsFull.find(
     (c) => c.column_name === INTERNAL_COLUMN.FEATURE_ID
   );
-  const hasNativeIdColumn = geomColumnsFull.some(
-    (c) => c.column_name.toLowerCase() === 'id'
+  const nativeIdColumn = geomColumnsFull.find(
+    (c) => c.column_name.toLowerCase() === CANONICAL_ID_COLUMN
   );
   const escapedDataset = escapeIdentifier(datasetTableName);
   const escapedGeometry = escapeIdentifier(geometryTable);
+  const escapedBasemapIdCol = escapeIdentifier(JOINED_BASEMAP_COLUMN.ID);
   const viewName = `export_joined_${datasetTableName.replace(/[^a-zA-Z0-9_]/g, '_')}`;
 
-  if (hasFeatureIdColumn || hasNativeIdColumn) {
-    const joinColumn = hasFeatureIdColumn ? INTERNAL_COLUMN.FEATURE_ID : 'id';
+  if (featureIdColumn || nativeIdColumn) {
+    const joinColumn =
+      featureIdColumn?.column_name ?? nativeIdColumn?.column_name;
+    if (!joinColumn) {
+      throw new Error('Unreachable: join column presence already verified');
+    }
     const escapedJoinCol = escapeIdentifier(joinColumn);
     await Duck.query(`
       CREATE OR REPLACE TEMP VIEW "${viewName}" AS
       SELECT d.*, ST_AsGeoJSON(g.geom::GEOMETRY) AS geom
       FROM "${escapedDataset}" d
       INNER JOIN "${escapedGeometry}" g
-        ON CAST(d.basemap_id AS VARCHAR) = CAST(g."${escapedJoinCol}" AS VARCHAR)
+        ON CAST(d."${escapedBasemapIdCol}" AS VARCHAR) = CAST(g."${escapedJoinCol}" AS VARCHAR)
       WHERE g.geom IS NOT NULL
     `);
   } else {
@@ -220,10 +306,10 @@ async function fetchJoinedDatasetWithGeometry(
       SELECT d.*, ST_AsGeoJSON(gu.geom::GEOMETRY) AS geom
       FROM "${escapedDataset}" d
       INNER JOIN (
-        SELECT DISTINCT _attr_val, geom
-        FROM geom_unpivot
-      ) gu
-      ON CAST(d.basemap_id AS VARCHAR) = CAST(gu._attr_val AS VARCHAR)
+      SELECT DISTINCT _attr_val, geom
+      FROM geom_unpivot
+    ) gu
+      ON CAST(d."${escapedBasemapIdCol}" AS VARCHAR) = CAST(gu._attr_val AS VARCHAR)
       WHERE gu.geom IS NOT NULL
     `);
   }
@@ -277,54 +363,54 @@ async function fetchDatasetsWithGeometry(
   const results: ProcessedDataset[] = [];
 
   for (const dataset of datasets) {
+    const geomColumn = resolveDatasetGeometryColumn(dataset);
+    const joinedGeometrySource = resolveJoinedGeometryExportSource(dataset);
+    if (joinedGeometrySource && !geomColumn) {
+      try {
+        const joinedDataset = await fetchJoinedDatasetWithGeometry(
+          dataset,
+          joinedGeometrySource.joinedBasemap,
+          joinedGeometrySource.tableName
+        );
+        results.push(joinedDataset);
+      } catch (error) {
+        logger.error(
+          'Failed to fetch joined geometry for export',
+          LogCategory.EXPORT,
+          {
+            datasetId: dataset.id,
+            joinedBasemap: joinedGeometrySource.joinedBasemap,
+            error: error instanceof Error ? error.message : String(error)
+          }
+        );
+        results.push(dataset);
+      }
+      continue;
+    }
+
     if (
       !dataset.duckdbTableName ||
       (!dataset.geometry && !dataset.analysis.hasGeoData)
     ) {
-      if (dataset.sourceFileId) {
-        const duckDataset = duckDBOrchestrator.getDatasetBySourceFile(
-          dataset.sourceFileId
-        );
-        if (duckDataset?.joinedBasemap) {
-          try {
-            const joinedDataset = await fetchJoinedDatasetWithGeometry(
-              dataset,
-              duckDataset.joinedBasemap,
-              duckDataset.tableName
-            );
-            results.push(joinedDataset);
-          } catch (error) {
-            logger.error(
-              'Failed to fetch joined geometry for export',
-              LogCategory.EXPORT,
-              {
-                datasetId: dataset.id,
-                joinedBasemap: duckDataset.joinedBasemap,
-                error: error instanceof Error ? error.message : String(error)
-              }
-            );
-            results.push(dataset);
-          }
-          continue;
-        }
-      }
-
       results.push(dataset);
       continue;
     }
 
-    const geomColumn = resolveDatasetGeometryColumn(dataset);
     if (!geomColumn) {
       results.push(dataset);
       continue;
     }
 
     try {
+      const geometryDuckDBType = await getDuckDBColumnType(
+        dataset.duckdbTableName,
+        geomColumn.name
+      );
       const selectList = dataset.columns
         .map((column) => {
           const escapedName = escapeIdentifier(column.name);
           if (column.name === geomColumn.name) {
-            return `ST_AsGeoJSON("${escapedName}"::GEOMETRY) AS "${escapedName}"`;
+            return buildGeometryExportSelect(column.name, geometryDuckDBType);
           }
           return `"${escapedName}"`;
         })

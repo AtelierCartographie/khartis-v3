@@ -24,6 +24,7 @@ export const SYMBOL_MODE_STATE_KEYS = [
   'size',
   'minSize',
   'maxSize',
+  'barWidth',
   'sizeScale',
   'valueColumn',
   'categoryColumn',

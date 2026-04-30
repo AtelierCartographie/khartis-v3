@@ -8,9 +8,12 @@ on:
 
 env:
   NODE_VERSION: '22'
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 permissions:
   contents: write
+  issues: write
+  pull-requests: write
 
 concurrency:
   group: release-${{ github.ref }}
@@ -25,6 +28,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          fetch-tags: true
 
       - name: Setup SSH for private dependencies
         run: |
@@ -48,6 +52,11 @@ jobs:
           EOF
           git config --global url."git@github-geoarrow:AtelierCartographie/geoarrow-deck-stream".insteadOf "git@github.com:AtelierCartographie/geoarrow-deck-stream"
           git config --global url."git@github-proj:AtelierCartographie/proj-suggest".insteadOf "git@github.com:AtelierCartographie/proj-suggest"
+
+      - name: Configure git identity
+        run: |
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4

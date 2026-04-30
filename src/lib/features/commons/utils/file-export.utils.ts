@@ -125,6 +125,28 @@ export async function exportDatasetToCsv(
   return exportToCsv(data, headers);
 }
 
+function getExportableColumnNames(dataset: ProcessedDataset): string[] {
+  return dataset.columns
+    .filter((col) => !isDatasetGeometryColumn(dataset, col))
+    .map((col) => col.name);
+}
+
+function buildAlignedUnionSelect(
+  dataset: ProcessedDataset,
+  allHeaders: string[]
+): string {
+  const exportableColumns = new Set(getExportableColumnNames(dataset));
+  const selectColumns = allHeaders.map((columnName) => {
+    const escapedColumnName = escapeIdentifier(columnName);
+    return exportableColumns.has(columnName)
+      ? `"${escapedColumnName}"`
+      : `NULL AS "${escapedColumnName}"`;
+  });
+  const escapedName = escapeSqlString(dataset.name);
+
+  return `SELECT ${selectColumns.join(', ')}, '${escapedName}' as _source_dataset FROM "${escapeIdentifier(dataset.duckdbTableName!)}"`;
+}
+
 export function exportToGeoJson(data: unknown): Blob {
   const dataObj = data as Record<string, unknown>;
 
@@ -311,13 +333,11 @@ export async function exportProcessedDatasets(
       const unionViewName = `export_union_${Date.now()}`;
 
       try {
+        const allHeaders = Array.from(
+          new Set(datasets.flatMap(getExportableColumnNames))
+        );
         const unionParts = datasets.map((dataset) => {
-          const nonGeomColumns = dataset.columns
-            .filter((col) => !isDatasetGeometryColumn(dataset, col))
-            .map((col) => `"${escapeIdentifier(col.name)}"`)
-            .join(', ');
-          const escapedName = escapeSqlString(dataset.name);
-          return `SELECT ${nonGeomColumns}, '${escapedName}' as _source_dataset FROM "${escapeIdentifier(dataset.duckdbTableName!)}"`;
+          return buildAlignedUnionSelect(dataset, allHeaders);
         });
 
         const unionQuery = `

@@ -40,6 +40,7 @@ import {
   removeDataset as removeDatasetFn,
   deleteDataset as deleteDatasetFn,
   updateDataset as updateDatasetFn,
+  updateDatasetJoinBasemap as updateDatasetJoinBasemapFn,
   updateDatasetRowCount as updateDatasetRowCountFn,
   updateDatasetTableName as updateDatasetTableNameFn,
   updateDatasetCsvOptions as updateDatasetCsvOptionsFn,
@@ -247,6 +248,13 @@ function createDatasetsStore() {
     }
   }
 
+  function updateDatasetJoinBasemap(
+    datasetId: string,
+    joinedBasemap: string
+  ): void {
+    updateDatasetJoinBasemapFn(datasetsState, datasetId, joinedBasemap);
+  }
+
   function getAllDatasets(): DatasetResult[] {
     return getAllDatasetsFn(datasetsState);
   }
@@ -398,6 +406,7 @@ function createDatasetsStore() {
     removeDataset,
     deleteDataset,
     updateDataset,
+    updateDatasetJoinBasemap,
     getAllDatasets,
     getDatasetBySourceFile,
     waitForDatasetBySourceFile,

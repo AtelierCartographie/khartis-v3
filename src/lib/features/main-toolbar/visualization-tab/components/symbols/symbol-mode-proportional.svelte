@@ -15,7 +15,9 @@
     SymbolMode,
     VISUALIZATION_DEFAULTS,
     DEFAULT_COLORS,
-    FillMode
+    FillMode,
+    DEFAULT_LINEAR_SYMBOL_BAR_WIDTH,
+    isLinearShape
   } from '../../../constants';
   import {
     DiscretizationRow,
@@ -82,6 +84,7 @@
   let classesPickerOpen = $state(false);
   let proportionalType = $state<ProportionalType>(ProportionalType.SINGLE);
   let symbolMaxSize = $state<number>(VISUALIZATION_DEFAULTS.symbolMaxSize);
+  let barWidth = $state<number>(DEFAULT_LINEAR_SYMBOL_BAR_WIDTH);
   let shapeType = $state<ShapeType>(ShapeType.CIRCLE);
   let showMissingData = $state<boolean>(true);
   let missingDataShape = $state<MissingDataShape>(MissingDataShape.CIRCLE);
@@ -147,6 +150,7 @@
     if (symbolConfig) {
       symbolMaxSize =
         symbolConfig.maxSize ?? VISUALIZATION_DEFAULTS.symbolMaxSize;
+      barWidth = symbolConfig.barWidth ?? DEFAULT_LINEAR_SYMBOL_BAR_WIDTH;
       shapeType = coerceShapeType(symbolConfig.shape) ?? ShapeType.CIRCLE;
       fillOpacity = parseOpacityToSlider(
         symbolConfig.opacity,
@@ -155,6 +159,8 @@
     } else if (visualization?.symbols) {
       symbolMaxSize =
         visualization.symbols.maxSize ?? VISUALIZATION_DEFAULTS.symbolMaxSize;
+      barWidth =
+        visualization.symbols.barWidth ?? DEFAULT_LINEAR_SYMBOL_BAR_WIDTH;
       shapeType = visualization.symbols.type ?? ShapeType.CIRCLE;
       fillOpacity = parseOpacityToSlider(
         visualization.symbols.opacity,
@@ -294,6 +300,7 @@
   const shapeDropdownItems = $derived(
     buildSymbolShapeDropdownItems(symbolMode)
   );
+  const showBarWidthControl = $derived(isLinearShape(shapeType));
 
   function handleShapeTypeChange(value: ShapeType) {
     if (isSyncingFromVisualization) {
@@ -302,7 +309,8 @@
     shapeType = value;
     onSymbolsChange?.({
       type: value,
-      sizeScale: getDefaultScaleForShape(value)
+      sizeScale: getDefaultScaleForShape(value),
+      ...(isLinearShape(value) ? { barWidth } : {})
     });
   }
 
@@ -395,6 +403,14 @@
     }
     symbolMaxSize = value;
     onSymbolsChange?.({ maxSize: value });
+  }
+
+  function handleBarWidthChange(value: number) {
+    if (isSyncingFromVisualization) {
+      return;
+    }
+    barWidth = value;
+    onSymbolsChange?.({ barWidth: value });
   }
 
   function handleFieldSelect(fieldId: number) {
@@ -697,6 +713,17 @@
       type="default"
     />
   </div>
+{/if}
+
+{#if showBarWidthControl}
+  <SliderWithInput
+    label={m.format_width()}
+    bind:value={barWidth}
+    min={SLIDER_LIMITS.symbolBarWidth.min}
+    max={SLIDER_LIMITS.symbolBarWidth.max}
+    step={SLIDER_LIMITS.symbolBarWidth.step}
+    onchange={handleBarWidthChange}
+  />
 {/if}
 
 <MissingDataSection

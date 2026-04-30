@@ -45,6 +45,12 @@ describe('sanitizeTextInput', () => {
     expect(sanitizeTextInput('  hello   world  ')).toBe('hello world');
   });
 
+  it('can preserve spaces without trimming while typing', () => {
+    expect(sanitizeTextInput('  hello   world  ', { trim: false })).toBe(
+      '  hello   world  '
+    );
+  });
+
   it('truncates to 500 characters', () => {
     const long = 'x'.repeat(600);
     expect(sanitizeTextInput(long).length).toBeLessThanOrEqual(500);

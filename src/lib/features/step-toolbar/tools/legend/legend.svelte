@@ -98,7 +98,7 @@
     field: LegendItemTextField,
     value: string
   ): void {
-    const sanitizedValue = sanitizeTextInput(value);
+    const sanitizedValue = sanitizeTextInput(value, { trim: false });
     legendActions.updateLegendItem(id, {
       [field]: sanitizedValue,
       ...(field === 'title' ? { titleMode: 'custom' } : {}),

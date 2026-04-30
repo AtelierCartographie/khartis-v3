@@ -15,6 +15,7 @@ vi.mock('$lib/features/commons/store/visualization.store.svelte', () => ({
 import {
   DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX,
   normalizeClassificationMethod,
+  resolveBreakpointLowerClassCount,
   resolveComputedClassCount,
   resolveHeadTailClassCountMax,
   resolveNestedMeansClassCount,
@@ -128,6 +129,24 @@ describe('resolveComputedClassCount', () => {
     expect(resolveComputedClassCount('standard_deviation' as never, 5, 4)).toBe(
       5
     );
+  });
+});
+
+// ─── resolveBreakpointLowerClassCount ────────────────────────────────────
+
+describe('resolveBreakpointLowerClassCount', () => {
+  it('defaults to the lower half of the total class count', () => {
+    expect(resolveBreakpointLowerClassCount(5)).toBe(2);
+    expect(resolveBreakpointLowerClassCount(4)).toBe(2);
+  });
+
+  it('clamps the split to one class on each side', () => {
+    expect(resolveBreakpointLowerClassCount(5, 0)).toBe(1);
+    expect(resolveBreakpointLowerClassCount(5, 9)).toBe(4);
+  });
+
+  it('floors non-integer lower class requests', () => {
+    expect(resolveBreakpointLowerClassCount(5, 3.9)).toBe(3);
   });
 });
 
