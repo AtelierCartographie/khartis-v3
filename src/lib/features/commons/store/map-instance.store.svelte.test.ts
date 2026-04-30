@@ -143,12 +143,27 @@ describe('mapInstanceStore map zoom bounds', () => {
     mapInstanceStore.setMapInstance(mapMock.map);
 
     vi.clearAllMocks();
-    mapInstanceStore.setZoom(resolveMapZoomLevel(DEFAULT_MAP_BASE_ZOOM, 900));
+    mapInstanceStore.setZoom(resolveMapZoomLevel(DEFAULT_MAP_BASE_ZOOM, 9000));
 
     expect(mapMock.state.currentZoom).toBeCloseTo(
       resolveMapZoomLevel(DEFAULT_MAP_BASE_ZOOM, MAX_MAP_ZOOM_PERCENT),
       10
     );
+  });
+
+  it('clamps direct orthographic zoom assignments to the configured UI range', () => {
+    const { deck } = createDeckMock();
+    const maxZoom = resolveMapZoomLevel(
+      DEFAULT_MAP_BASE_ZOOM,
+      MAX_MAP_ZOOM_PERCENT
+    );
+
+    mapInstanceStore.setDeckInstance(deck as never);
+    mapInstanceStore.setMapLoaded(true);
+    mapInstanceStore.setZoom(resolveMapZoomLevel(DEFAULT_MAP_BASE_ZOOM, 9000));
+
+    expect(mapInstanceStore.deckViewState.zoom).toBeCloseTo(maxZoom, 10);
+    expect(mapInstanceStore.zoomLevel).toBe(MAX_MAP_ZOOM_PERCENT);
   });
 
   it('stops zooming in once the map hits the supported max percent', () => {
@@ -240,6 +255,7 @@ describe('mapInstanceStore map zoom bounds', () => {
 
   it('waits for projection bounds before applying a restored orthographic view', () => {
     const { deck, setPropsMock } = createDeckMock();
+    const zoomBounds = resolveMapZoomBounds(DEFAULT_MAP_BASE_ZOOM);
 
     mapInstanceStore.setDeckInstance(deck as never);
     mapInstanceStore.setMapLoaded(true);
@@ -264,16 +280,16 @@ describe('mapInstanceStore map zoom bounds', () => {
         main: {
           target: [-80, -60, 0],
           zoom: 2,
-          minZoom: -10,
-          maxZoom: 10
+          minZoom: zoomBounds.minZoom,
+          maxZoom: zoomBounds.maxZoom
         }
       },
       initialViewState: {
         main: {
           target: [-80, -60, 0],
           zoom: 2,
-          minZoom: -10,
-          maxZoom: 10
+          minZoom: zoomBounds.minZoom,
+          maxZoom: zoomBounds.maxZoom
         }
       }
     });
@@ -282,6 +298,7 @@ describe('mapInstanceStore map zoom bounds', () => {
 
   it('drops an implausible restored orthographic target and recenters the view', () => {
     const { deck, setPropsMock } = createDeckMock();
+    const zoomBounds = resolveMapZoomBounds(DEFAULT_MAP_BASE_ZOOM);
 
     mapInstanceStore.setDeckInstance(deck as never);
     mapInstanceStore.setMapLoaded(true);
@@ -298,17 +315,17 @@ describe('mapInstanceStore map zoom bounds', () => {
       viewState: {
         main: {
           target: [0, 0, 0],
-          zoom: 0,
-          minZoom: -10,
-          maxZoom: 10
+          zoom: DEFAULT_MAP_BASE_ZOOM,
+          minZoom: zoomBounds.minZoom,
+          maxZoom: zoomBounds.maxZoom
         }
       },
       initialViewState: {
         main: {
           target: [0, 0, 0],
-          zoom: 0,
-          minZoom: -10,
-          maxZoom: 10
+          zoom: DEFAULT_MAP_BASE_ZOOM,
+          minZoom: zoomBounds.minZoom,
+          maxZoom: zoomBounds.maxZoom
         }
       }
     });
@@ -341,6 +358,7 @@ describe('mapInstanceStore map zoom bounds', () => {
   it('uses the orthographic view-state adapter when one is registered', () => {
     const { deck, setPropsMock } = createDeckMock();
     const applyViewStateMock = vi.fn();
+    const zoomBounds = resolveMapZoomBounds(DEFAULT_MAP_BASE_ZOOM);
 
     mapInstanceStore.setDeckInstance(deck as never);
     mapInstanceStore.setMapLoaded(true);
@@ -353,8 +371,8 @@ describe('mapInstanceStore map zoom bounds', () => {
     expect(applyViewStateMock).toHaveBeenCalledWith({
       target: [0, 0, 0],
       zoom: 1.25,
-      minZoom: -10,
-      maxZoom: 10
+      minZoom: zoomBounds.minZoom,
+      maxZoom: zoomBounds.maxZoom
     });
     expect(setPropsMock).not.toHaveBeenCalled();
   });
