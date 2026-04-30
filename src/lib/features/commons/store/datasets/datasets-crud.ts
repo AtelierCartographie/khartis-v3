@@ -108,6 +108,31 @@ export function updateDataset(
   state.datasets = replaceAtIndex(state.datasets, datasetIndex, updatedDataset);
 }
 
+export function updateDatasetJoinBasemap(
+  state: DatasetsState,
+  datasetId: string,
+  joinedBasemap: string
+): void {
+  const datasetIndex = state.datasets.findIndex((d) => d.id === datasetId);
+
+  if (datasetIndex === -1) {
+    logger.warn(
+      'Dataset not found for join basemap update',
+      LogCategory.STORE,
+      {
+        datasetId,
+        joinedBasemap
+      }
+    );
+    return;
+  }
+
+  state.datasets = replaceAtIndex(state.datasets, datasetIndex, {
+    ...state.datasets[datasetIndex],
+    joinedBasemap
+  });
+}
+
 export function updateDatasetRowCount(
   state: DatasetsState,
   datasetId: string,

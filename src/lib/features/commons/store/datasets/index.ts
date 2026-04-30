@@ -58,6 +58,7 @@ export {
   removeDataset,
   deleteDataset,
   updateDataset,
+  updateDatasetJoinBasemap,
   updateDatasetRowCount,
   updateDatasetTableName,
   updateDatasetCsvOptions,
