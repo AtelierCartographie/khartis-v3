@@ -35,6 +35,7 @@ import {
   markDirty as markDirtyFn,
   addColumnTransformation as addColumnTransformationFn,
   clearColumnTransformations as clearColumnTransformationsFn,
+  updateFileJoinedBasemap as updateFileJoinedBasemapFn,
   addDeletedRows as addDeletedRowsFn
 } from './project';
 
@@ -116,6 +117,13 @@ function createProjectStore() {
     >
   ): Promise<void> {
     return clearColumnTransformationsFn(container, fileId, options);
+  }
+
+  async function updateFileJoinedBasemap(
+    fileId: string,
+    joinedBasemap: string
+  ): Promise<void> {
+    return updateFileJoinedBasemapFn(container, fileId, joinedBasemap);
   }
 
   async function addDeletedRows(
@@ -252,6 +260,7 @@ function createProjectStore() {
     renameFile,
     addColumnTransformation,
     clearColumnTransformations,
+    updateFileJoinedBasemap,
     addDeletedRows,
     createProject,
     loadProject,
