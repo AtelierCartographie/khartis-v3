@@ -572,8 +572,13 @@ export function createFrontieresLayer(
     getLineColor: [config.color, effectiveOpacity],
     getDashArray: [config.dotted, config.dottedPattern]
   };
+  const preferProjectedGeoJsonFallback = shouldPreferProjectedGeoJsonFallback(
+    geometryInfo,
+    ctx.projection
+  );
 
   if (
+    !preferProjectedGeoJsonFallback &&
     isLineGeometry(geometryInfo) &&
     (isGeoArrowLineEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow)
   ) {
@@ -641,8 +646,8 @@ export function createFrontieresLayer(
   }
 
   if (
-    isGeoArrowPolygonEncoding(geometryInfo) ||
-    geometryInfo.isNativeGeoArrow
+    !preferProjectedGeoJsonFallback &&
+    (isGeoArrowPolygonEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow)
   ) {
     const outlineData = ctx.projection
       ? parsePathsWithProjection(frontieresTable, ctx.projection)
@@ -1142,10 +1147,14 @@ export function createReliefLayers(
     getFillColor: [config.color, config.opacity, config.representation],
     getLineColor: [config.color, config.opacity, config.representation]
   };
+  const preferProjectedGeoJsonFallback = shouldPreferProjectedGeoJsonFallback(
+    geometryInfo,
+    ctx.projection
+  );
 
   if (
-    isGeoArrowPolygonEncoding(geometryInfo) ||
-    geometryInfo.isNativeGeoArrow
+    !preferProjectedGeoJsonFallback &&
+    (isGeoArrowPolygonEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow)
   ) {
     const result: Layer<DeckDataRow>[] = [];
     const outlineData = ctx.projection
@@ -1189,7 +1198,7 @@ export function createReliefLayers(
     return result;
   }
 
-  if (geometryInfo.isWkbEncoded || geometryInfo.isGeoJsonEncoded) {
+  if (canRenderViaGeoJsonFallback(geometryInfo)) {
     const geojson = getPreparedBasemapGeoJSON(
       worldBaseTable,
       geometryInfo.geoColumn,
@@ -1822,8 +1831,13 @@ function createMetadataLimitLayers(
       DeckLayerId.BASEMAP_META_LIMIT,
       `${ctx.projectionSuffix}-${i}`
     );
+    const preferProjectedGeoJsonFallback = shouldPreferProjectedGeoJsonFallback(
+      geometryInfo,
+      ctx.projection
+    );
 
     if (
+      !preferProjectedGeoJsonFallback &&
       isLineGeometry(geometryInfo) &&
       (isGeoArrowLineEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow)
     ) {
@@ -1857,8 +1871,8 @@ function createMetadataLimitLayers(
         })
       );
     } else if (
-      isGeoArrowPolygonEncoding(geometryInfo) ||
-      geometryInfo.isNativeGeoArrow
+      !preferProjectedGeoJsonFallback &&
+      (isGeoArrowPolygonEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow)
     ) {
       const outlineData = ctx.projection
         ? parsePathsWithProjection(entry.table, ctx.projection)

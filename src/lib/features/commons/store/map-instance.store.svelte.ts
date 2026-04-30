@@ -7,10 +7,17 @@ import {
 } from '$lib/features/project-management/core/persistence-registry';
 import type { SerializedMapViewState } from '$lib/types/serialization.types';
 import {
+  clampOrthographicZoomLevel,
   clampMapZoomLevel,
   DEFAULT_MAP_BASE_ZOOM,
   nudgeMapZoomLevel,
+  nudgeOrthographicZoomLevel,
+  ORTHOGRAPHIC_MAP_BASE_ZOOM,
   resolveMapZoomBounds,
+  resolveMapZoomLevel,
+  resolveOrthographicZoomBounds,
+  resolveOrthographicZoomLevel,
+  resolveOrthographicZoomPercent,
   resolveMapZoomPercent
 } from '$lib/features/map/utils/map-zoom.utils';
 import {
@@ -36,8 +43,8 @@ interface DeckViewState {
 
 const DEFAULT_DECK_VIEW_STATE: DeckViewState = {
   target: [0, 0, 0],
-  zoom: 0,
-  ...resolveMapZoomBounds(DEFAULT_MAP_BASE_ZOOM)
+  zoom: ORTHOGRAPHIC_MAP_BASE_ZOOM,
+  ...resolveOrthographicZoomBounds()
 };
 
 export interface ProjectionContext {
@@ -283,14 +290,14 @@ function createMapInstanceStore() {
   function resolveDeckViewState(
     nextViewState: Partial<DeckViewState> = {}
   ): DeckViewState {
-    const bounds = resolveMapZoomBounds(state.baseZoomLevel);
+    const bounds = resolveOrthographicZoomBounds();
     const nextZoom = nextViewState.zoom ?? state.deckViewState.zoom;
 
     return {
       ...state.deckViewState,
       ...nextViewState,
       ...bounds,
-      zoom: clampMapZoomLevel(state.baseZoomLevel, nextZoom)
+      zoom: clampOrthographicZoomLevel(nextZoom)
     };
   }
 
@@ -318,7 +325,7 @@ function createMapInstanceStore() {
 
     if (state.deckInstance) {
       const deckZoom = state.deckViewState.zoom;
-      const percent = resolveMapZoomPercent(state.baseZoomLevel, deckZoom);
+      const percent = resolveOrthographicZoomPercent(deckZoom);
       state.zoomLevel = Math.round(percent);
     }
   }
@@ -424,9 +431,8 @@ function createMapInstanceStore() {
     if (state.deckInstance) {
       markViewportManual();
       pendingOrthographicRestore = null;
-      const newZoom = clampMapZoomLevel(
-        state.baseZoomLevel,
-        nudgeMapZoomLevel(state.baseZoomLevel, state.deckViewState.zoom, 1)
+      const newZoom = clampOrthographicZoomLevel(
+        nudgeOrthographicZoomLevel(state.deckViewState.zoom, 1)
       );
       state.deckViewState = resolveDeckViewState({ zoom: newZoom });
       applyDeckViewState();
@@ -457,9 +463,8 @@ function createMapInstanceStore() {
     if (state.deckInstance) {
       markViewportManual();
       pendingOrthographicRestore = null;
-      const newZoom = clampMapZoomLevel(
-        state.baseZoomLevel,
-        nudgeMapZoomLevel(state.baseZoomLevel, state.deckViewState.zoom, -1)
+      const newZoom = clampOrthographicZoomLevel(
+        nudgeOrthographicZoomLevel(state.deckViewState.zoom, -1)
       );
       state.deckViewState = resolveDeckViewState({ zoom: newZoom });
       applyDeckViewState();
@@ -504,6 +509,13 @@ function createMapInstanceStore() {
     setZoomLocal(zoom);
   }
 
+  function setZoomPercent(percent: number) {
+    const zoom = state.map
+      ? resolveMapZoomLevel(state.baseZoomLevel, percent)
+      : resolveOrthographicZoomLevel(percent);
+    setZoom(zoom);
+  }
+
   function centerOnDataPoint(dataLon: number, dataLat: number): void {
     if (state.map) {
       markViewportManual();
@@ -536,7 +548,7 @@ function createMapInstanceStore() {
       markViewportManual();
       pendingOrthographicRestore = null;
       state.deckViewState = resolveDeckViewState({
-        zoom: state.baseZoomLevel
+        zoom: ORTHOGRAPHIC_MAP_BASE_ZOOM
       });
       applyDeckViewState();
       updateZoomFromMap();
@@ -603,7 +615,7 @@ function createMapInstanceStore() {
     if (!restoredViewApplied) {
       state.deckViewState = resolveDeckViewState({
         target: [0, 0, 0],
-        zoom: state.baseZoomLevel
+        zoom: ORTHOGRAPHIC_MAP_BASE_ZOOM
       });
       if (reason) {
         markViewportAutoFit(reason);
@@ -774,6 +786,7 @@ function createMapInstanceStore() {
     zoomOut,
     setZoomLocal,
     setZoom,
+    setZoomPercent,
     resetZoomLocal,
     resetZoom,
     centerOnDataPoint,

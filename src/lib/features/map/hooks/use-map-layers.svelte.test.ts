@@ -79,6 +79,16 @@ describe('useMapLayers source', () => {
     expect(source).toContain('lastAppliedLayers = previousLayersToPreserve;');
   });
 
+  it('only shows orthographic basemap layers for an explicit basemap reference or joined data', () => {
+    expect(source).toContain('const datasetContentIds = new Set<string>();');
+    expect(source).toContain('let hasJoinedBasemapReference = false;');
+    expect(source).toContain('hasDatasetContent: datasetContentIds.size > 0');
+    expect(source).toContain(
+      'Boolean(basemapStyleStore.referenceBasemapId) ||'
+    );
+    expect(source).toContain('hasJoinedBasemapReference');
+  });
+
   it('preserves explicit null projection metadata for standalone geofiles', () => {
     expect(source).toContain('function getDatasetProjectionMetadata(');
     expect(source).toContain('metadata === undefined ? currentMetadata');

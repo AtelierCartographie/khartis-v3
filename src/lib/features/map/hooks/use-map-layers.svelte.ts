@@ -693,11 +693,42 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
 
       const layers: Layer<DeckDataRow>[] = [];
 
+      const datasetContentIds = new Set<string>();
+      for (const datasetId of tables.keys()) datasetContentIds.add(datasetId);
+      for (const datasetId of geoJSONs.keys()) datasetContentIds.add(datasetId);
+      for (const viz of activeVisualizations)
+        datasetContentIds.add(viz.datasetId);
+      for (const dataset of datasetsStore.datasets) {
+        datasetContentIds.add(dataset.id);
+      }
+      if (splitData) {
+        for (const datasetId of splitData.keys()) {
+          datasetContentIds.add(datasetId);
+        }
+      }
+      if (densityTables) {
+        for (const datasetId of densityTables.keys()) {
+          datasetContentIds.add(datasetId);
+        }
+      }
+
+      let hasJoinedBasemapReference = false;
+      for (const datasetId of datasetContentIds) {
+        if (getDatasetJoinedBasemap(datasetId)) {
+          hasJoinedBasemapReference = true;
+          break;
+        }
+      }
+
       // Only show basemap layers in the Deck.gl OrthographicView engine.
       // In MapLibre mode, the tiled basemap provides the background (OSM, Carte Facile, etc.)
       const shouldShowBasemapLayers = shouldShowOrthographicBasemapLayers({
         isOrthographicMode,
-        isOSMActive
+        isOSMActive,
+        hasDatasetContent: datasetContentIds.size > 0,
+        hasBasemapReference:
+          Boolean(basemapStyleStore.referenceBasemapId) ||
+          hasJoinedBasemapReference
       });
 
       // Basemap layers are split into background (terre, mers, lacs, relief)
