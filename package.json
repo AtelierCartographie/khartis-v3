@@ -30,9 +30,6 @@
         "name": "staging",
         "prerelease": true
       }
-    ],
-    "plugins": [
-      "@semantic-release/commit-analyzer"
     ]
   },
   "scripts": {
