@@ -62,7 +62,6 @@ export function createDotDensityLayers(
     getFillColor: fillColor,
     getRadius: dotSize,
     radiusUnits: 'pixels',
-    radiusMinPixels: 1,
     pickable: false,
     ...(modelMatrix && { modelMatrix }),
     ...(beforeId && { beforeId }),

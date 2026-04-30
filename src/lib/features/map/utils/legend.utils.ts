@@ -21,13 +21,17 @@ import {
   DEFAULT_COLORS,
   DENSITY_DEFAULTS,
   FillMode,
+  isLinearShape,
   MissingDataShape,
   ProportionalType,
   ShapeType,
   SymbolMode,
   ThicknessMode
 } from '$lib/features/main-toolbar/constants';
-import { getSizeForValue } from './data-styling.utils';
+import {
+  getProportionalSymbolSizeForValue,
+  getSizeForValue
+} from './data-styling.utils';
 
 export type LegendSwatchPrimitive = 'area' | 'point' | 'line';
 
@@ -265,6 +269,64 @@ function buildContinuousLegendSteps(
   ];
 }
 
+function buildProportionalSymbolLegendSteps(
+  maxValue: number,
+  maxSize: number,
+  scale: ScaleType
+): LegendContinuousStep[] {
+  if (maxValue <= 0) {
+    return [
+      {
+        kind: 'continuous',
+        value: 0,
+        size: 0
+      }
+    ];
+  }
+
+  const maxLegendSize = getProportionalSymbolSizeForValue(
+    maxValue,
+    maxValue,
+    maxSize,
+    scale
+  );
+
+  const minValue = 0;
+  const midValue = maxValue / 2;
+
+  return [
+    {
+      kind: 'continuous',
+      value: maxValue,
+      size: maxLegendSize
+    },
+    {
+      kind: 'continuous',
+      value: midValue,
+      size: getProportionalSymbolSizeForValue(
+        midValue,
+        maxValue,
+        maxSize,
+        scale
+      )
+    },
+    {
+      kind: 'continuous',
+      value: minValue,
+      size: getProportionalSymbolSizeForValue(
+        minValue,
+        maxValue,
+        maxSize,
+        scale
+      )
+    }
+  ];
+}
+
+function resolveProportionalSymbolScale(shape: ShapeType): ScaleType {
+  return isLinearShape(shape) ? ScaleType.LINEAR : ScaleType.SQRT;
+}
+
 function buildClassedLegendSteps(
   classCount: number,
   minSize: number,
@@ -443,6 +505,7 @@ export function getPointSizeLegendScale(
 
   const minSize = Math.max(1, symbol.minSize ?? 1);
   const maxSize = Math.max(minSize, symbol.maxSize ?? minSize);
+  const proportionalMaxSize = Math.max(0, symbol.maxSize ?? maxSize);
   const fillOpacity = Math.max(0.2, normalizeOpacity(symbol.opacity, 1));
 
   if (symbol.mode === SymbolMode.PROPORTIONAL && !!symbol.sizeColumn) {
@@ -469,12 +532,10 @@ export function getPointSizeLegendScale(
 
     return {
       kind: 'proportional',
-      steps: buildContinuousLegendSteps(
-        minValue,
+      steps: buildProportionalSymbolLegendSteps(
         maxValue,
-        minSize,
-        maxSize,
-        symbol.sizeScale ?? ScaleType.LINEAR
+        proportionalMaxSize,
+        resolveProportionalSymbolScale(symbol.shape ?? ShapeType.CIRCLE)
       ),
       fillColor: resolveSymbolFillColor(viz),
       strokeColor: resolveStyleColor(symbol.strokeColor, DEFAULT_COLORS.stroke),
