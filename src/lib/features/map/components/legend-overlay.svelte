@@ -1938,6 +1938,7 @@
                 width={segment.svg.width}
                 height={segment.svg.height}
                 class={segment.className}
+                textColor={textHex}
               />
             {/each}
           {:else}
