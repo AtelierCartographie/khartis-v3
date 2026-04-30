@@ -38,8 +38,10 @@ import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import {
   filterArrowTableByYear,
   filterArrowTableByDataFilters,
-  filterArrowTableByTableFilters
+  filterArrowTableByTableFilters,
+  selectRowsByIndices
 } from '../utils/arrow-filter.utils';
+import { getSplitMatchedGeometryRowIndices } from '../layers/split-rendering-accessors';
 import {
   getMapLayerRenderOrder,
   getVisualizationRenderOrder
@@ -588,6 +590,57 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     return resolvedMetadata;
   }
 
+  function shouldRenderOnlyJoinedSplitGeometry(
+    split: SplitRenderingTable | undefined,
+    projectionState: ReturnType<typeof getProjectionState>
+  ): boolean {
+    return Boolean(
+      split &&
+      projectionState.overrideActive &&
+      projectionState.overrideSource === 'manual'
+    );
+  }
+
+  function getRenderableSplitGeometryTable(
+    split: SplitRenderingTable | undefined,
+    projectionState: ReturnType<typeof getProjectionState>
+  ): ArrowTable | undefined {
+    if (!split) {
+      return undefined;
+    }
+
+    if (!shouldRenderOnlyJoinedSplitGeometry(split, projectionState)) {
+      return split.geometry;
+    }
+
+    const matchedRows = getSplitMatchedGeometryRowIndices(
+      split.geometry,
+      split.dataset,
+      split.featureIdColumn
+    );
+
+    return selectRowsByIndices(split.geometry, matchedRows);
+  }
+
+  function getManualProjectionSplitReferenceTable(
+    splitData: Map<string, SplitRenderingTable> | undefined,
+    projectionState: ReturnType<typeof getProjectionState>
+  ): ArrowTable | null {
+    if (
+      !splitData ||
+      !projectionState.overrideActive ||
+      projectionState.overrideSource !== 'manual'
+    ) {
+      return null;
+    }
+
+    for (const split of splitData.values()) {
+      return getRenderableSplitGeometryTable(split, projectionState) ?? null;
+    }
+
+    return null;
+  }
+
   function getRequestedMetadataLayerTypes(
     worldBaseTable: ArrowTable | null
   ): BasemapLayerType[] {
@@ -679,6 +732,10 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         isOrthographicMode,
         projectionFitBbox
       );
+      const manualProjectionBasemapTable =
+        getManualProjectionSplitReferenceTable(splitData, projectionState);
+      const basemapGeometryTable =
+        manualProjectionBasemapTable ?? worldBaseTable;
       // Catalog basemap metadata remains the default. An explicit user choice
       // in the Projection tool must still override it immediately.
       const activeBasemapProjection = resolveProjectionForRender(
@@ -750,7 +807,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           const metadataLayers: MetadataLayerEntry[] = [];
           if (currentMetadata) {
             const requestedLayerTypes =
-              getRequestedMetadataLayerTypes(worldBaseTable);
+              getRequestedMetadataLayerTypes(basemapGeometryTable);
             if (requestedLayerTypes.length > 0) {
               void basemapService
                 .ensureCurrentLayersLoaded(requestedLayerTypes)
@@ -773,7 +830,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
                 ? basemapService.currentLayers.get(layer.file)
                 : currentMetadata.isCustom
                   ? null
-                  : worldBaseTable;
+                  : basemapGeometryTable;
               if (!table) continue;
               metadataLayers.push({
                 table,
@@ -795,7 +852,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             stylePresets: basemapService.stylePresets
           };
           const basemapGroups = createBasemapLayers(
-            worldBaseTable,
+            basemapGeometryTable,
             basemapCtx,
             additionalData
           );
@@ -815,7 +872,9 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         try {
           const datasetId = viz.datasetId;
           const split = splitData?.get(datasetId);
-          const table = split?.geometry ?? tables.get(datasetId);
+          const table =
+            getRenderableSplitGeometryTable(split, projectionState) ??
+            tables.get(datasetId);
           const densityTable = densityTables?.get(datasetId);
           const geojson = geoJSONs.get(datasetId);
 

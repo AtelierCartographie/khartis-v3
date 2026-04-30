@@ -54,6 +54,38 @@ describe('projection availability', () => {
     ).toEqual(['mercator', 'orthographic', 'robinson']);
   });
 
+  it('hides the France inset composite outside a France context', () => {
+    const context = resolveProjectionAvailabilityContext({
+      requiresMapLibre: false,
+      currentStyle: BasemapStyle.BLANK_WHITE,
+      preferredStyle: BasemapStyle.MONDE_COULEURS
+    });
+
+    expect(
+      getAvailableProjectionIds(context, [
+        getCompositeProjectionSelectionId('FRANCE_DOM_TOM'),
+        getCompositeProjectionSelectionId('EUROPE_DOM_TOM')
+      ])
+    ).toEqual([getCompositeProjectionSelectionId('EUROPE_DOM_TOM')]);
+  });
+
+  it('keeps the France inset composite available in a France context', () => {
+    const context = resolveProjectionAvailabilityContext({
+      requiresMapLibre: false,
+      currentStyle: BasemapStyle.FRANCE_COULEURS
+    });
+
+    expect(
+      getAvailableProjectionIds(context, [
+        getCompositeProjectionSelectionId('FRANCE_DOM_TOM'),
+        getCompositeProjectionSelectionId('EUROPE_DOM_TOM')
+      ])
+    ).toEqual([
+      getCompositeProjectionSelectionId('FRANCE_DOM_TOM'),
+      getCompositeProjectionSelectionId('EUROPE_DOM_TOM')
+    ]);
+  });
+
   it('limits France tiled basemaps to mercator only', () => {
     const context = resolveProjectionAvailabilityContext({
       requiresMapLibre: true,

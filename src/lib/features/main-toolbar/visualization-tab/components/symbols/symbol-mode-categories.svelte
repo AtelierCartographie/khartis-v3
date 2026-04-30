@@ -72,7 +72,6 @@
     onMissingDataChange,
     onClassificationChange,
     onStrokeClassificationChange,
-    onInvertPalette,
     onStrokeInvertPalette
   }: SymbolModeProps = $props();
 
@@ -492,7 +491,6 @@
     []}
   categoriesCommonAspect={categoriesCommonAspect}
   bind:categoriesPopoverOpen={categoriesAspectOpen}
-  oninvert={onInvertPalette}
   onClassificationChange={onClassificationChange}
   onCategoriesCommonAspectChange={handleCategoriesCommonAspectChange}
 />

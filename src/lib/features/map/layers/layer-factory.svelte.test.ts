@@ -19,6 +19,7 @@ import {
   ProportionalType,
   ShapeType,
   StrokeMode,
+  SymbolDoublePosition,
   SymbolMode,
   ThicknessMode
 } from '$lib/features/main-toolbar/constants';
@@ -146,6 +147,7 @@ import {
   resolveEffectiveCategoryColorMap,
   resolveSplitMappingFeatureIdColumn
 } from './layer-factory';
+import { MultiShapeLayer } from './multi-shape-layer';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 
 const source = readFileSync(
@@ -1172,6 +1174,50 @@ describe('createPointLayers', () => {
     }
 
     expect(Array.from(fillColorAttribute.value)).toEqual([0, 0, 0, 0]);
+  });
+
+  it('separates double proportional symbols in juxtaposition without overlap', () => {
+    parsePointDataWithProjectionMock.mockReturnValue({
+      length: 1,
+      featureIds: new Uint32Array([0])
+    });
+    createScatterplotLayerPropsMock.mockReturnValue({
+      data: {
+        attributes: {},
+        featureIds: new Uint32Array([0])
+      }
+    });
+
+    const visualization = createSymbolVisualization();
+    visualization.symbol = {
+      ...visualization.symbol!,
+      mode: SymbolMode.PROPORTIONAL,
+      proportionalType: ProportionalType.DOUBLE,
+      positionMode: SymbolDoublePosition.JUXTAPOSITION,
+      sizeColumn: 'population',
+      valueColumn: 'income',
+      minSize: 4,
+      maxSize: 20
+    };
+
+    const layers = createPointLayers(
+      createTableWithRows(
+        [{ population: 10, income: 20 }],
+        ['population', 'income']
+      ),
+      createPointGeometryInfo(),
+      createContext(visualization)
+    );
+
+    expect(layers).toHaveLength(2);
+    expect(layers[0]).toBeInstanceOf(MultiShapeLayer);
+    expect(layers[1]).toBeInstanceOf(MultiShapeLayer);
+    expect(layers[0].props.offsetX).toBe(0.5);
+    expect(layers[1].props.offsetX).toBe(-0.5);
+    expect(layers[0].props.shapeScale).toBe(0.7);
+    expect(layers[1].props.shapeScale).toBe(0.7);
+    expect(layers[0].props.radiusScale).toBe(2);
+    expect(layers[1].props.radiusScale).toBe(2);
   });
 });
 
