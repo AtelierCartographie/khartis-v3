@@ -3,6 +3,7 @@ import type { DeckDataRow, RGBColor } from '../types';
 import {
   getClassedSizeForValue,
   getColorForValue,
+  getProportionalSymbolSizeForValue,
   getSizeForValue
 } from '../utils/data-styling.utils';
 import { BasemapDottedPattern } from '$lib/features/main-toolbar/constants';
@@ -80,6 +81,25 @@ export function createProportionalSizeAccessor(
       minValue,
       maxValue,
       minSize,
+      maxSize,
+      sizeScale
+    );
+  };
+}
+
+export function createProportionalSymbolSizeAccessor(
+  sizeColumn: string,
+  maxValue: number,
+  maxSize: number,
+  sizeScale: ScaleType
+) {
+  return (object: DeckDataRow): number => {
+    const rawValue = object[sizeColumn];
+    const numericValue =
+      typeof rawValue === 'number' ? rawValue : Number(rawValue);
+    return getProportionalSymbolSizeForValue(
+      numericValue,
+      maxValue,
       maxSize,
       sizeScale
     );
@@ -214,7 +234,7 @@ export function createGeoJsonCategoricalColorAccessor(
   const hiddenTuple: [number, number, number, number] = [0, 0, 0, 0];
   const disabled = new Set(disabledLabels.map(String));
   return (feature: {
-    properties?: Record<string, unknown>;
+    properties?: Record<string, unknown> | null;
   }): [number, number, number, number] => {
     const value = feature.properties?.[categoryColumn];
     if (disabled.has(String(value))) {
@@ -238,7 +258,7 @@ export function createGeoJsonProportionalSizeAccessor(
   sizeScale: ScaleType,
   defaultSize = 5
 ) {
-  return (feature: { properties?: Record<string, unknown> }) => {
+  return (feature: { properties?: Record<string, unknown> | null }) => {
     const value = feature.properties?.[sizeColumn];
     if (value === null || value === undefined) return defaultSize;
     const numValue =
@@ -255,6 +275,25 @@ export function createGeoJsonProportionalSizeAccessor(
   };
 }
 
+export function createGeoJsonProportionalSymbolSizeAccessor(
+  sizeColumn: string,
+  maxValue: number,
+  maxSize: number,
+  sizeScale: ScaleType
+) {
+  return (feature: { properties?: Record<string, unknown> | null }) => {
+    const value = feature.properties?.[sizeColumn];
+    const numericValue =
+      typeof value === 'number' ? value : parseFloat(String(value));
+    return getProportionalSymbolSizeForValue(
+      numericValue,
+      maxValue,
+      maxSize,
+      sizeScale
+    );
+  };
+}
+
 export function createGeoJsonClassedSizeAccessor(
   valueColumn: string,
   breaks: number[],
@@ -263,7 +302,7 @@ export function createGeoJsonClassedSizeAccessor(
   classCountHint?: number,
   defaultSize = 5
 ) {
-  return (feature: { properties?: Record<string, unknown> }) => {
+  return (feature: { properties?: Record<string, unknown> | null }) => {
     const value = feature.properties?.[valueColumn];
     if (value === null || value === undefined) return defaultSize;
     const numericValue =
