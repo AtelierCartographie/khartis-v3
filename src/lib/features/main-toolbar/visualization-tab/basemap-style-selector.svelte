@@ -112,6 +112,13 @@
     if (selectedZone === 'france' && mapProjectionStore.isGlobe) {
       setFlatProjection();
     }
+    if (
+      selectedZone === 'monde' &&
+      mapProjectionStore.isGlobe &&
+      !mapProjectionStore.isGlobeExplicitlyEnabled
+    ) {
+      setFlatProjection();
+    }
   });
 
   function getZoneLabel(zone: ZoneId): string {
@@ -259,7 +266,9 @@
       return;
     }
 
-    mapProjectionStore.setProjection(MAP_PROJECTION_TYPE.GLOBE);
+    mapProjectionStore.setProjection(MAP_PROJECTION_TYPE.GLOBE, {
+      explicit: true
+    });
   }
 </script>
 

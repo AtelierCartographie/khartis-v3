@@ -73,7 +73,9 @@
       return;
     }
 
-    mapProjectionStore.setProjection(isGlobe ? 'globe' : 'mercator');
+    mapProjectionStore.setProjection(isGlobe ? 'globe' : 'mercator', {
+      explicit: isGlobe
+    });
   }
 </script>
 

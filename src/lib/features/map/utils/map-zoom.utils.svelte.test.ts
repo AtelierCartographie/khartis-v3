@@ -16,9 +16,9 @@ describe('map zoom utils', () => {
     );
   });
 
-  it('maps 500% to the expected MapLibre zoom delta', () => {
-    expect(resolveMapZoomLevel(DEFAULT_MAP_BASE_ZOOM, 500)).toBeCloseTo(
-      DEFAULT_MAP_BASE_ZOOM + 2 * Math.log2(5),
+  it('maps 2000% to the expected MapLibre zoom delta', () => {
+    expect(resolveMapZoomLevel(DEFAULT_MAP_BASE_ZOOM, 2000)).toBeCloseTo(
+      DEFAULT_MAP_BASE_ZOOM + 2 * Math.log2(20),
       10
     );
   });
@@ -33,12 +33,12 @@ describe('map zoom utils', () => {
     const bounds = resolveMapZoomBounds(4.8);
 
     expect(bounds.minZoom).toBeCloseTo(resolveMapZoomLevel(4.8, 10), 10);
-    expect(bounds.maxZoom).toBeCloseTo(resolveMapZoomLevel(4.8, 500), 10);
+    expect(bounds.maxZoom).toBeCloseTo(resolveMapZoomLevel(4.8, 2000), 10);
   });
 
   it('clamps non-finite or out-of-range percents to the supported UI range', () => {
     expect(clampMapZoomPercent(Number.NaN)).toBe(100);
     expect(clampMapZoomPercent(-1)).toBe(MIN_MAP_ZOOM_PERCENT);
-    expect(clampMapZoomPercent(999)).toBe(MAX_MAP_ZOOM_PERCENT);
+    expect(clampMapZoomPercent(9999)).toBe(MAX_MAP_ZOOM_PERCENT);
   });
 });
