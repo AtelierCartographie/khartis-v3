@@ -377,15 +377,11 @@ export function parseSolidPolygons(table: ArrowTable): BinaryPolygonData {
 }
 
 /**
- * Fast WKB Point decoder for multi-batch Arrow tables (e.g. dot-density output).
+ * Fast WKB Point decoder for Arrow tables (e.g. dot-density output).
  *
- * The `geoarrow-deck-stream` library's `parsePoints` only reads the first
- * RecordBatch via `getFirstDataChunk`, so tables with N batches drop
- * (N-1) / N of their rows. Instead of calling the library 58 times and
- * concatenating (which re-allocates + re-runs WKB → native conversion per
- * batch), we decode WKB Points directly: each point is a fixed 21 bytes
- * (1 endian + 4 type + 8 X + 8 Y), so we iterate all batches in one pass
- * and write straight into pre-allocated Float32/Uint32 output buffers.
+ * WKB Points have a fixed 21-byte layout (1 endian + 4 type + 8 X + 8 Y),
+ * so this path can write directly into pre-allocated binary buffers and avoid
+ * native GeoArrow conversion when the geometry is plain Point WKB.
  */
 function decodeWkbPointsAllBatches(
   table: ArrowTable,
@@ -457,39 +453,7 @@ function parsePointsAllBatches(
     if (direct) return direct;
   }
 
-  // Library's parsePoints only reads the first RecordBatch; for multi-batch
-  // tables we parse each batch as a single-batch table and concat the result.
-  if (normalized.batches.length <= 1) {
-    return parsePoints(normalized, options);
-  }
-
-  const perBatch = normalized.batches.map((batch) => {
-    const singleBatchTable = new ArrowTableImpl(normalized.schema, [batch]);
-    return parsePoints(singleBatchTable, options);
-  });
-
-  let totalLength = 0;
-  for (const r of perBatch) totalLength += r.length;
-
-  const positions = new Float32Array(totalLength * 2);
-  const featureIds = new Uint32Array(totalLength);
-  let posOffset = 0;
-  let idOffset = 0;
-  let featureIdBase = 0;
-  for (const r of perBatch) {
-    const posSlice = r.positions.subarray(0, r.length * 2);
-    positions.set(posSlice, posOffset);
-    posOffset += posSlice.length;
-
-    const idSlice = r.featureIds.subarray(0, r.length);
-    for (let i = 0; i < idSlice.length; i++) {
-      featureIds[idOffset + i] = idSlice[i] + featureIdBase;
-    }
-    idOffset += idSlice.length;
-    featureIdBase += r.length;
-  }
-
-  return { length: totalLength, positions, featureIds, size: 2 };
+  return parsePoints(normalized, options);
 }
 
 export function parsePointData(table: ArrowTable): BinaryPointData {

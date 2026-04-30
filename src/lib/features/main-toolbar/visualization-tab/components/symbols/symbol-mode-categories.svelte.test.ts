@@ -131,6 +131,7 @@ describe('SymbolModeCategories — anti-leak classification routing', () => {
     expect(paletteBlock).toContain(
       'onClassificationChange={onClassificationChange}'
     );
+    expect(paletteBlock).not.toContain('oninvert=');
     expect(paletteBlock).not.toMatch(
       /onClassificationChange\s*\?\?\s*onStrokeClassificationChange/
     );

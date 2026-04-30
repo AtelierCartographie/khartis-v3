@@ -62,6 +62,7 @@
     duplicateLines?: LineReference[];
     ignoredEntities?: LineReference[];
     basemapAliasesByValue?: Record<string, BasemapAlias[]>;
+    onRequestBasemapValues?: () => void;
     onFinalizeJoin: () => void;
     onManualCorrection?: (dataValue: string, basemapValue: string) => void;
     onIgnoreEntity?: (
@@ -87,6 +88,7 @@
     duplicateLines = [],
     ignoredEntities = [],
     basemapAliasesByValue = {},
+    onRequestBasemapValues,
     onFinalizeJoin,
     onManualCorrection,
     onIgnoreEntity,
@@ -94,12 +96,12 @@
     onValidateEntity
   }: Props = $props();
 
-  const joinedBasemapValues = $derived(
-    joinedEntitiesList.map((row) => row.basemapValue)
+  const joinedBasemapValueSet = $derived(
+    new Set(joinedEntitiesList.map((row) => row.basemapValue))
   );
 
   const availableBasemapValues = $derived(
-    basemapValues.filter((value) => !joinedBasemapValues.includes(value))
+    basemapValues.filter((value) => !joinedBasemapValueSet.has(value))
   );
 
   const basemapComboBoxItems = $derived<ComboBoxItem[]>(
@@ -225,7 +227,7 @@
     const merged: string[] = [];
     for (const suggestion of suggestions) {
       if (
-        !joinedBasemapValues.includes(suggestion) &&
+        !joinedBasemapValueSet.has(suggestion) &&
         !merged.includes(suggestion)
       ) {
         merged.push(suggestion);
@@ -292,14 +294,22 @@
 
   $effect(() => {
     const targets: Array<[string, string]> = [];
-    deduplicatedJoinRows.forEach((row, i) => {
-      if (row.selectedMapping) targets.push([`join-${i}`, row.selectedMapping]);
-    });
-    joinedEntitiesList.forEach((row) => {
-      if (row.basemapValue) {
-        targets.push([`joined-${row.dataValue}`, row.basemapValue]);
-      }
-    });
+
+    if (toVerifyExpanded) {
+      deduplicatedJoinRows.forEach((row, i) => {
+        if (row.selectedMapping) {
+          targets.push([`join-${i}`, row.selectedMapping]);
+        }
+      });
+    }
+
+    if (joinedExpanded) {
+      joinedEntitiesList.forEach((row) => {
+        if (row.basemapValue) {
+          targets.push([`joined-${row.dataValue}`, row.basemapValue]);
+        }
+      });
+    }
 
     if (targets.length === 0) return;
 
@@ -363,6 +373,22 @@
     duplicatesExpanded = false;
     unrecognizedExpanded = false;
     ignoredExpanded = false;
+  }
+
+  function toggleJoined(): void {
+    const nextExpanded = !joinedExpanded;
+    joinedExpanded = nextExpanded;
+    if (nextExpanded && basemapValues.length === 0) {
+      onRequestBasemapValues?.();
+    }
+  }
+
+  function toggleUnrecognized(): void {
+    const nextExpanded = !unrecognizedExpanded;
+    unrecognizedExpanded = nextExpanded;
+    if (nextExpanded && basemapValues.length === 0) {
+      onRequestBasemapValues?.();
+    }
   }
 
   let wasLoading = $state(false);
@@ -458,7 +484,7 @@
       <div class="category-row category-row-joined">
         <button
           class="category-row-header"
-          onclick={() => (joinedExpanded = !joinedExpanded)}
+          onclick={toggleJoined}
           aria-expanded={joinedExpanded}
         >
           <span class="category-icon icon-success">
@@ -711,7 +737,7 @@
       <div class="category-row category-row-unrecognized">
         <button
           class="category-row-header"
-          onclick={() => (unrecognizedExpanded = !unrecognizedExpanded)}
+          onclick={toggleUnrecognized}
           aria-expanded={unrecognizedExpanded}
         >
           <span class="category-icon icon-error">

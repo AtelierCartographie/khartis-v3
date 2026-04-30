@@ -1,4 +1,5 @@
 import type { GeoProjection } from 'd3-geo';
+import * as d3Geo from 'd3-geo';
 import * as d3GeoProjection from 'd3-geo-projection';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -64,5 +65,21 @@ describe('fitProjectionToBbox', () => {
     expect(farCorner).not.toBeNull();
     expect(Math.abs(farCorner![0] - origin![0])).toBeGreaterThan(600);
     expect(Math.abs(farCorner![1] - origin![1])).toBeGreaterThan(100);
+  });
+
+  it('fits conic projections to Europe without a degenerate projected extent', async () => {
+    const { fitProjectionToBbox, getProjectedBboxForBbox } =
+      await import('./projection.utils');
+    const projection = d3Geo.geoConicConformal();
+    const europeBbox: [number, number, number, number] = [
+      -24.6, 34.8, 45.8, 71.2
+    ];
+
+    fitProjectionToBbox(projection, europeBbox, 800, 600, 40);
+    const projectedBbox = getProjectedBboxForBbox(projection, europeBbox);
+
+    expect(projectedBbox.every(Number.isFinite)).toBe(true);
+    expect(projectedBbox[2] - projectedBbox[0]).toBeGreaterThan(600);
+    expect(projectedBbox[3] - projectedBbox[1]).toBeGreaterThan(250);
   });
 });

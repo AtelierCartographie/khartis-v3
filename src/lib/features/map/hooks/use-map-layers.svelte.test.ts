@@ -89,6 +89,23 @@ describe('useMapLayers source', () => {
     expect(source).toContain('hasJoinedBasemapReference');
   });
 
+  it('limits split basemap geometry to joined rows while a manual projection is active', () => {
+    expect(source).toContain('function getManualProjectionSplitReferenceTable');
+    expect(source).toContain('getSplitMatchedGeometryRowIndices(');
+    expect(source).toContain(
+      'selectRowsByIndices(split.geometry, matchedRows)'
+    );
+    expect(source).toContain(
+      'const basemapGeometryTable =\n        manualProjectionBasemapTable ?? worldBaseTable;'
+    );
+    expect(source).toContain(
+      'getRequestedMetadataLayerTypes(basemapGeometryTable)'
+    );
+    expect(source).toContain(
+      'createBasemapLayers(\n            basemapGeometryTable,'
+    );
+  });
+
   it('preserves explicit null projection metadata for standalone geofiles', () => {
     expect(source).toContain('function getDatasetProjectionMetadata(');
     expect(source).toContain('metadata === undefined ? currentMetadata');

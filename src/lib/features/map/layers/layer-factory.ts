@@ -763,6 +763,8 @@ function createDoubleProportionalPointLayers(
     SHAPE_ORDINAL[pointShape] ?? SHAPE_ORDINAL[ShapeType.CIRCLE];
   const missingShapeOrdinal =
     SHAPE_ORDINAL[missingPointShape] ?? SHAPE_ORDINAL[ShapeType.CIRCLE];
+  const juxtapositionOffset = 0.5;
+  const juxtapositionShapeScale = 0.7;
 
   const offsetForRole = (
     role: 'primary' | 'secondary'
@@ -771,13 +773,16 @@ function createDoubleProportionalPointLayers(
     offsetY: number;
     halfMask: 0 | 1 | 2;
     radiusScale: number;
+    shapeScale: number;
   } => {
     if (positionMode === 'juxtaposition') {
       return {
-        offsetX: role === 'primary' ? 0.35 : -0.35,
+        offsetX:
+          role === 'primary' ? juxtapositionOffset : -juxtapositionOffset,
         offsetY: 0,
         halfMask: 0,
-        radiusScale: 2
+        radiusScale: 2,
+        shapeScale: juxtapositionShapeScale
       };
     }
     if (positionMode === 'division') {
@@ -785,10 +790,17 @@ function createDoubleProportionalPointLayers(
         offsetX: 0,
         offsetY: 0,
         halfMask: role === 'primary' ? 2 : 1,
-        radiusScale: 1
+        radiusScale: 1,
+        shapeScale: 1
       };
     }
-    return { offsetX: 0, offsetY: 0, halfMask: 0, radiusScale: 1 };
+    return {
+      offsetX: 0,
+      offsetY: 0,
+      halfMask: 0,
+      radiusScale: 1,
+      shapeScale: 1
+    };
   };
 
   const createScatterLayer = (
@@ -839,7 +851,8 @@ function createDoubleProportionalPointLayers(
       ...({
         offsetX: layoutProps.offsetX,
         offsetY: layoutProps.offsetY,
-        halfMask: layoutProps.halfMask
+        halfMask: layoutProps.halfMask,
+        shapeScale: layoutProps.shapeScale
       } as Record<string, unknown>),
       stroked: showPointStroke,
       filled: !hideSymbolFill,

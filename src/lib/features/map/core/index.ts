@@ -1,5 +1,6 @@
 export {
   calculateBoundsFromGeoArrow,
+  calculateBoundsFromGeoArrowRows,
   calculateBoundsFromGeoJSON
 } from './bounds';
 
