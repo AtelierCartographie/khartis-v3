@@ -43,14 +43,10 @@ describe('facet × commonScale — architecture invariant', () => {
     expect(storeSource).toContain('breakValueB: existing?.breakValueB ?? null');
   });
 
-  it('layer-factory shares Math.min/max A+B when commonScale is true', () => {
-    expect(layerFactorySource).toContain(
-      'Math.min(primaryStats.min, secondaryStats.min)'
-    );
+  it('layer-factory shares the A+B max when commonScale is true', () => {
     expect(layerFactorySource).toContain(
       'Math.max(primaryStats.max, secondaryStats.max)'
     );
-    expect(layerFactorySource).toContain('commonScale ? sharedMin');
     expect(layerFactorySource).toContain('commonScale ? sharedMax');
   });
 

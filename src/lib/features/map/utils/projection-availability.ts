@@ -14,6 +14,9 @@ import {
   resolveMapRenderEngine,
   type MapRenderEngine
 } from './render-engine.utils';
+import type { BBox } from '../types';
+import type { ProjectionPresets } from '../types/basemap.types';
+import { getCompositeProjectionPresetId } from './user-projection.utils';
 
 export type GlobeProjectionDisableReason =
   | 'france-zone'
@@ -23,6 +26,9 @@ export interface ProjectionAvailabilityContext {
   engine: MapRenderEngine;
   zone: BasemapZone | null;
   referenceBasemapId?: string | null;
+  referenceProjectionPresetId?: string | null;
+  projectionBbox?: BBox | null;
+  projectionPresets?: ProjectionPresets | null;
 }
 
 export interface ProjectionAvailabilityInput {
@@ -31,7 +37,10 @@ export interface ProjectionAvailabilityInput {
   currentStyle: BasemapStyle;
   preferredStyle?: BasemapStyle;
   referenceBasemapId?: string | null;
+  referenceProjectionPresetId?: string | null;
   osmBasemapBbox?: [number, number, number, number] | null;
+  projectionBbox?: BBox | null;
+  projectionPresets?: ProjectionPresets | null;
 }
 
 export interface ProjectionSuggestionBasemapBoundsInput {
@@ -118,7 +127,10 @@ export function resolveProjectionAvailabilityContext(
     zone: isMapLibreInterleavedEngine(engine)
       ? resolveMapLibreProjectionZone(input)
       : resolvePreferredStyleZone(input),
-    referenceBasemapId: input.referenceBasemapId ?? null
+    referenceBasemapId: input.referenceBasemapId ?? null,
+    referenceProjectionPresetId: input.referenceProjectionPresetId ?? null,
+    projectionBbox: input.projectionBbox ?? null,
+    projectionPresets: input.projectionPresets ?? null
   };
 }
 
@@ -160,11 +172,20 @@ function isDeckProjectionCompatibleWithContext(
   projectionId: string,
   context: ProjectionAvailabilityContext
 ): boolean {
-  if (projectionId !== FRANCE_COMPOSITE_PROJECTION_ID) {
+  const presetId = getCompositeProjectionPresetId(projectionId);
+  if (!presetId) {
     return true;
   }
 
-  return context.zone === 'france';
+  if (projectionId === FRANCE_COMPOSITE_PROJECTION_ID) {
+    return (
+      (context.zone === 'france' ||
+        context.referenceProjectionPresetId === presetId) &&
+      isCompositeCompatibleWithContext(presetId, context)
+    );
+  }
+
+  return isCompositeCompatibleWithContext(presetId, context);
 }
 
 export function isProjectionAvailable(
@@ -291,4 +312,39 @@ function isBboxInsideBounds(
     bbox[2] <= bounds[1][0] &&
     bbox[3] <= bounds[1][1]
   );
+}
+
+function isCompositeCompatibleWithContext(
+  presetId: string,
+  context: ProjectionAvailabilityContext
+): boolean {
+  if (
+    context.referenceBasemapId &&
+    context.referenceProjectionPresetId !== presetId
+  ) {
+    return false;
+  }
+
+  const projectionBbox = context.projectionBbox;
+  if (!projectionBbox || !context.projectionPresets) {
+    return true;
+  }
+
+  const preset = context.projectionPresets[presetId];
+  if (!preset?.entries?.length) {
+    return false;
+  }
+
+  return preset.entries.some((entry) =>
+    bboxesIntersect(projectionBbox, [
+      entry.bounds[0][0],
+      entry.bounds[0][1],
+      entry.bounds[1][0],
+      entry.bounds[1][1]
+    ])
+  );
+}
+
+function bboxesIntersect(a: BBox, b: BBox): boolean {
+  return a[0] <= b[2] && a[2] >= b[0] && a[1] <= b[3] && a[3] >= b[1];
 }

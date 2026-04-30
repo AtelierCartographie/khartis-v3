@@ -9,10 +9,19 @@ const source = readFileSync(
 
 describe('ProjectionMain', () => {
   it('lets a selected projection card clear the user projection override', () => {
-    expect(source).toContain(
-      'if (hasCustomProjection || !projectionState.overrideActive)'
-    );
+    expect(source).toContain("projectionState.overrideSource !== 'manual'");
+    expect(source).toContain('projectionState.activeSuggestionId');
     expect(source).toContain('projectionActions.toggleSelected(projectionId);');
+  });
+
+  it('binds suggestion card selection to the active suggestion id', () => {
+    expect(source).toContain(
+      'function isSuggestionSelected(suggestion: ProjectionSuggestion)'
+    );
+    expect(source).toContain(
+      'projectionState.activeSuggestionId === suggestion.id'
+    );
+    expect(source).toContain('selected={isSuggestionSelected(s)}');
   });
 
   it('renders expanded mode as a three-column css grid', () => {

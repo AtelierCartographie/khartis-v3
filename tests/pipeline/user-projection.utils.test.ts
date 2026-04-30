@@ -1,6 +1,11 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { GeoProjection } from 'd3-geo';
 import type { ProjectionPresets } from '$lib/features/map/types/basemap.types';
+import type { BBox } from '$lib/features/map/types';
+import type { D3Usage } from 'proj-suggest';
+import { PROJECTIONS } from '$lib/features/commons/utils/projection.utils';
 import { computeProjectedBboxForProjection } from '$lib/features/map/utils/geoarrow-stream-bridge';
 import {
   getCompositeProjectionPresetId,
@@ -26,6 +31,20 @@ const projectionPresets: ProjectionPresets = {
     ]
   }
 };
+
+const europeLaeaD3Config: D3Usage = {
+  projection: 'geoAzimuthalEqualArea',
+  rotate: [-10, -52]
+};
+
+const catalogBboxes = (
+  JSON.parse(
+    readFileSync(
+      resolve(process.cwd(), 'static/basemaps/all-basemaps-metadata.json'),
+      'utf8'
+    )
+  ) as Array<{ file: string; bbox: BBox }>
+).map(({ file, bbox }) => ({ file, bbox }));
 
 function isProjectedPoint(value: unknown): value is [number, number] {
   return Array.isArray(value);
@@ -172,6 +191,54 @@ describe('user projection utils', () => {
     expect(projection.rotate()[1]).toBeCloseTo(-45);
   });
 
+  it('preserves d3 suggestion rotation when proj4 fallback is used', () => {
+    const projection = asGeoProjection(
+      resolveUserProjectionOverride({
+        state: {
+          selected: 'mercator',
+          overrideActive: true,
+          customCode: undefined,
+          suggestionD3Config: europeLaeaD3Config,
+          center: undefined,
+          longitude: 0,
+          latitude: 0,
+          rotation: 0
+        },
+        fitBbox: [-24.6, 34.8, 45.8, 71.2],
+        viewportSize: { width: 960, height: 600 },
+        padding: 40,
+        projectionPresets
+      })
+    );
+
+    expect(projection.rotate()[0]).toBeCloseTo(-10);
+    expect(projection.rotate()[1]).toBeCloseTo(-52);
+  });
+
+  it('applies user rotation relative to a d3 suggestion rotation', () => {
+    const projection = asGeoProjection(
+      resolveUserProjectionOverride({
+        state: {
+          selected: 'mercator',
+          overrideActive: true,
+          customCode: undefined,
+          suggestionD3Config: europeLaeaD3Config,
+          center: undefined,
+          longitude: 0,
+          latitude: 0,
+          rotation: 15
+        },
+        fitBbox: [-24.6, 34.8, 45.8, 71.2],
+        viewportSize: { width: 960, height: 600 },
+        padding: 40,
+        projectionPresets
+      })
+    );
+
+    expect(projection.rotate()[0]).toBeCloseTo(5);
+    expect(projection.rotate()[1]).toBeCloseTo(-52);
+  });
+
   it('ignores custom proj4 overrides that produce invalid coordinates', () => {
     const projection = resolveUserProjectionOverride({
       state: {
@@ -191,5 +258,57 @@ describe('user projection utils', () => {
     });
 
     expect(projection).toBeUndefined();
+  });
+
+  it('fits every built-in projection to every catalog basemap bbox with finite coordinates', () => {
+    expect(catalogBboxes.length).toBeGreaterThan(0);
+
+    for (const projectionInfo of PROJECTIONS) {
+      for (const { file, bbox } of catalogBboxes) {
+        const projection = resolveUserProjectionOverride({
+          state: {
+            selected: projectionInfo.id,
+            overrideActive: true,
+            customCode: undefined,
+            center: undefined,
+            longitude: 0,
+            latitude: 0,
+            rotation: 0
+          },
+          fitBbox: bbox,
+          viewportSize: { width: 960, height: 600 },
+          padding: 40,
+          projectionPresets
+        });
+
+        expect(
+          projection,
+          `${projectionInfo.id} should resolve for ${file}`
+        ).toBeDefined();
+
+        const projectedBbox = computeProjectedBboxForProjection(
+          projection!,
+          bbox
+        );
+        expect(
+          projectedBbox,
+          `${projectionInfo.id} should project ${file} bbox`
+        ).not.toBeNull();
+        expect(
+          projectedBbox?.every(Number.isFinite),
+          `${projectionInfo.id} should produce finite bbox values for ${file}`
+        ).toBe(true);
+        const width = projectedBbox![2] - projectedBbox![0];
+        const height = projectedBbox![3] - projectedBbox![1];
+        expect(
+          width,
+          `${projectionInfo.id} should produce positive projected width for ${file}: ${projectedBbox?.join(',')}`
+        ).toBeGreaterThan(0);
+        expect(
+          height,
+          `${projectionInfo.id} should produce positive projected height for ${file}: ${projectedBbox?.join(',')}`
+        ).toBeGreaterThan(0);
+      }
+    }
   });
 });

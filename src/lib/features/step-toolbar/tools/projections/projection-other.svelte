@@ -1,7 +1,9 @@
 <script lang="ts">
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
+  import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
+  import { projectionStore as mapRenderProjectionStore } from '$lib/features/map/stores/projection.store.svelte';
   import {
     getAvailableProjectionIds,
     resolveProjectionAvailabilityContext,
@@ -32,7 +34,14 @@
       currentStyle: basemapStyleStore.selectedStyle,
       preferredStyle: basemapStyleStore.preferredTiledStyle,
       referenceBasemapId: basemapStyleStore.referenceBasemapId,
-      osmBasemapBbox: osmBasemapStore.activeOSMBasemap?.bbox ?? null
+      referenceProjectionPresetId: basemapStyleStore.referenceBasemapId
+        ? (basemapService.currentMetadata?.proj_to?.preset ?? null)
+        : null,
+      osmBasemapBbox: osmBasemapStore.activeOSMBasemap?.bbox ?? null,
+      projectionBbox: mapRenderProjectionStore.isProjectedCoordinates
+        ? null
+        : mapRenderProjectionStore.referenceBbox,
+      projectionPresets: basemapService.projectionPresets
     })
   );
   const customCodeEnabled = $derived(

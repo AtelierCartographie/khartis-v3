@@ -81,6 +81,7 @@ describe('[S04] suggestProjectionsForBbox — shape', () => {
       const hasProjectionBackend =
         suggestion.proj4String !== null || suggestion.d3Config !== null;
       expect(hasProjectionBackend).toBe(true);
+      expect(suggestion.bbox).toEqual([-5, 41, 10, 51]);
     }
   });
 });
@@ -142,6 +143,28 @@ describe('[S04] suggestProjectionsForBbox — Europe vs France disambiguation', 
 });
 
 describe('[S06] buildProjectionFromSuggestion — proj4 fallback contract', () => {
+  it('uses the native d3 backend for generic suggestions before proj4', () => {
+    const suggestion: ProjectionSuggestion = {
+      id: 'azimuthal_equidistant',
+      name: 'Azimuthal Equidistant',
+      type: 'generic',
+      proj4String:
+        '+proj=aeqd +lon_0=-3.66 +lat_0=24.9 +ellps=WGS84 +datum=WGS84 +units=m +no_defs',
+      bbox: [-63.09, -21.39, 55.84, 71.12],
+      d3Config: {
+        projection: 'geoAzimuthalEquidistant',
+        rotate: [3.66, -24.9]
+      }
+    };
+
+    const result = buildProjectionFromSuggestion(suggestion);
+
+    expect(result).not.toBeNull();
+    expect(result?.source).toBe('d3');
+    expect(result?.projection.rotate()[0]).toBeCloseTo(3.66);
+    expect(result?.projection.rotate()[1]).toBeCloseTo(-24.9);
+  });
+
   it('reports d3 when proj4 fails but d3 fallback succeeds', () => {
     const suggestion: ProjectionSuggestion = {
       id: 'transverse_cylindrical_equal_area',
@@ -149,6 +172,7 @@ describe('[S06] buildProjectionFromSuggestion — proj4 fallback contract', () =
       type: 'generic',
       proj4String:
         '+proj=tcea +lon_0=48.69 +ellps=WGS84 +datum=WGS84 +units=m +no_defs',
+      bbox: [-5, 41, 10, 51],
       d3Config: {
         projection: 'geoCylindricalEqualArea'
       }
@@ -167,6 +191,7 @@ describe('[S06] buildProjectionFromSuggestion — proj4 fallback contract', () =
       type: 'generic',
       proj4String:
         '+proj=laea +lon_0=-3.63 +lat_0=24.87 +ellps=WGS84 +datum=WGS84 +units=m +no_defs',
+      bbox: [-5, 41, 10, 51],
       d3Config: {
         projection: 'geoAzimuthalEqualArea',
         rotate: [3.63, -24.87]
@@ -177,6 +202,8 @@ describe('[S06] buildProjectionFromSuggestion — proj4 fallback contract', () =
 
     expect(result).not.toBeNull();
     expect(result?.source).toBe('d3');
+    expect(result?.projection.rotate()[0]).toBeCloseTo(3.63);
+    expect(result?.projection.rotate()[1]).toBeCloseTo(-24.87);
   });
 
   it('rejects orthographic suggestions', () => {
@@ -186,6 +213,7 @@ describe('[S06] buildProjectionFromSuggestion — proj4 fallback contract', () =
       type: 'generic',
       proj4String:
         '+proj=ortho +lon_0=-3.63 +lat_0=24.87 +ellps=WGS84 +datum=WGS84 +units=m +no_defs',
+      bbox: [-5, 41, 10, 51],
       d3Config: {
         projection: 'geoOrthographic',
         rotate: [3.63, -24.87]
