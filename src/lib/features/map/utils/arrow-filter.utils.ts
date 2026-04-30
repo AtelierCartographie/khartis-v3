@@ -56,7 +56,10 @@ function buildFilterCacheKey(
  * Build a new Arrow table containing only the rows at the given indices.
  * Uses table.slice() to preserve the original schema (including GeoArrow metadata).
  */
-function selectRowsByIndices(table: ArrowTable, indices: number[]): ArrowTable {
+export function selectRowsByIndices(
+  table: ArrowTable,
+  indices: number[]
+): ArrowTable {
   if (indices.length === 0) {
     return table.slice(0, 0) as ArrowTable;
   }

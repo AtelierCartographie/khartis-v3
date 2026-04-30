@@ -8,9 +8,11 @@ import {
   withOpacity,
   createCategoricalColorAccessor,
   createProportionalSizeAccessor,
+  createProportionalSymbolSizeAccessor,
   createClassedSizeAccessor,
   createChoroplethColorAccessor,
   createGeoJsonCategoricalColorAccessor,
+  createGeoJsonProportionalSymbolSizeAccessor,
   HIGHLIGHT_FILL_COLOR
 } from '$lib/features/map/layers/layer-helpers';
 import { ScaleType } from '$lib/features/commons/store/visualization.store.svelte';
@@ -106,6 +108,43 @@ describe('createProportionalSizeAccessor', () => {
 
   it('returns maxSize for value at max', () => {
     expect(accessor({ pop: 100 } as never)).toBe(50);
+  });
+});
+
+describe('createProportionalSymbolSizeAccessor', () => {
+  const accessor = createProportionalSymbolSizeAccessor(
+    'pop',
+    100,
+    50,
+    ScaleType.SQRT
+  );
+
+  it('returns zero for a zero value instead of applying a minimum radius', () => {
+    expect(accessor({ pop: 0 } as never)).toBe(0);
+  });
+
+  it('uses square-root scaling over a zero-to-max domain', () => {
+    expect(accessor({ pop: 25 } as never)).toBeCloseTo(25);
+  });
+
+  it('returns zero for null or non-finite values', () => {
+    expect(accessor({ pop: null } as never)).toBe(0);
+    expect(accessor({ pop: 'abc' } as never)).toBe(0);
+  });
+});
+
+describe('createGeoJsonProportionalSymbolSizeAccessor', () => {
+  const accessor = createGeoJsonProportionalSymbolSizeAccessor(
+    'pop',
+    100,
+    50,
+    ScaleType.LINEAR
+  );
+
+  it('keeps GeoJSON symbol fallback on the same zero-based proportional contract', () => {
+    expect(accessor({ properties: { pop: 0 } })).toBe(0);
+    expect(accessor({ properties: { pop: 50 } })).toBe(25);
+    expect(accessor({ properties: { pop: null } })).toBe(0);
   });
 });
 

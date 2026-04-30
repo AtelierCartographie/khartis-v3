@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { MAP_PROJECTION_TYPE } from '$lib/features/commons/constants';
 import { BasemapStyle } from '$lib/features/map/constants/basemap-styles';
@@ -15,6 +17,68 @@ import {
 } from '$lib/features/map/utils/render-engine.utils';
 import { getCompositeProjectionSelectionId } from '$lib/features/map/utils/user-projection.utils';
 import { PROJECTIONS } from '$lib/features/step-toolbar/tools/projections/data';
+import type { ProjectionPresets } from '$lib/features/map/types/basemap.types';
+import { PROJECTIONS as FULL_PROJECTION_CATALOG } from '$lib/features/commons/utils/projection.utils';
+
+interface CatalogBasemapMetadata {
+  file: string;
+  bbox: [number, number, number, number];
+  proj_to?: {
+    type?: string;
+    preset?: string | null;
+  };
+}
+
+const catalogMetadata = JSON.parse(
+  readFileSync(
+    resolve(process.cwd(), 'static/basemaps/all-basemaps-metadata.json'),
+    'utf8'
+  )
+) as CatalogBasemapMetadata[];
+
+const catalogProjectionPresets = JSON.parse(
+  readFileSync(
+    resolve(process.cwd(), 'static/basemaps/projection-presets.json'),
+    'utf8'
+  )
+) as ProjectionPresets;
+
+const builtInProjectionIds = FULL_PROJECTION_CATALOG.map(
+  (projection) => projection.id
+);
+const compositeProjectionIds = [
+  getCompositeProjectionSelectionId('FRANCE_DOM_TOM'),
+  getCompositeProjectionSelectionId('EUROPE_DOM_TOM')
+];
+
+const projectionPresets: ProjectionPresets = {
+  FRANCE_DOM_TOM: {
+    entries: [
+      {
+        id: 'mainland',
+        proj4: '+proj=longlat +datum=WGS84 +no_defs',
+        bounds: [
+          [-5.8, 41],
+          [10.2, 51.8]
+        ],
+        layout: { x: 0, y: 0, width: 1, height: 1 }
+      }
+    ]
+  },
+  EUROPE_DOM_TOM: {
+    entries: [
+      {
+        id: 'mainland',
+        proj4: '+proj=longlat +datum=WGS84 +no_defs',
+        bounds: [
+          [-25, 35],
+          [45, 72]
+        ],
+        layout: { x: 0, y: 0, width: 1, height: 1 }
+      }
+    ]
+  }
+};
 
 describe('projection availability', () => {
   it('uses explicit render engine names for Deck and MapLibre contexts', () => {
@@ -52,6 +116,90 @@ describe('projection availability', () => {
         'robinson'
       ])
     ).toEqual(['mercator', 'orthographic', 'robinson']);
+  });
+
+  it('hides the France inset composite outside a France context', () => {
+    const context = resolveProjectionAvailabilityContext({
+      requiresMapLibre: false,
+      currentStyle: BasemapStyle.BLANK_WHITE,
+      preferredStyle: BasemapStyle.MONDE_COULEURS
+    });
+
+    expect(
+      getAvailableProjectionIds(context, [
+        getCompositeProjectionSelectionId('FRANCE_DOM_TOM'),
+        getCompositeProjectionSelectionId('EUROPE_DOM_TOM')
+      ])
+    ).toEqual([getCompositeProjectionSelectionId('EUROPE_DOM_TOM')]);
+  });
+
+  it('keeps the France inset composite available in a France context', () => {
+    const context = resolveProjectionAvailabilityContext({
+      requiresMapLibre: false,
+      currentStyle: BasemapStyle.FRANCE_COULEURS
+    });
+
+    expect(
+      getAvailableProjectionIds(context, [
+        getCompositeProjectionSelectionId('FRANCE_DOM_TOM'),
+        getCompositeProjectionSelectionId('EUROPE_DOM_TOM')
+      ])
+    ).toEqual([
+      getCompositeProjectionSelectionId('FRANCE_DOM_TOM'),
+      getCompositeProjectionSelectionId('EUROPE_DOM_TOM')
+    ]);
+  });
+
+  it('hides composites whose preset does not intersect the current projection bbox', () => {
+    const context = resolveProjectionAvailabilityContext({
+      requiresMapLibre: false,
+      currentStyle: BasemapStyle.FRANCE_COULEURS,
+      projectionBbox: [120, -10, 130, 0],
+      projectionPresets
+    });
+
+    expect(
+      getAvailableProjectionIds(context, [
+        getCompositeProjectionSelectionId('FRANCE_DOM_TOM'),
+        getCompositeProjectionSelectionId('EUROPE_DOM_TOM')
+      ])
+    ).toEqual([]);
+  });
+
+  it('hides composites when the active reference basemap uses another projection preset', () => {
+    const context = resolveProjectionAvailabilityContext({
+      requiresMapLibre: false,
+      currentStyle: BasemapStyle.BLANK_WHITE,
+      referenceBasemapId: 'monde-countries-2024-medium',
+      referenceProjectionPresetId: null,
+      projectionBbox: [-25, 35, 45, 72],
+      projectionPresets
+    });
+
+    expect(
+      getAvailableProjectionIds(context, [
+        getCompositeProjectionSelectionId('FRANCE_DOM_TOM'),
+        getCompositeProjectionSelectionId('EUROPE_DOM_TOM')
+      ])
+    ).toEqual([]);
+  });
+
+  it('keeps a composite available when the active reference basemap uses the same preset', () => {
+    const context = resolveProjectionAvailabilityContext({
+      requiresMapLibre: false,
+      currentStyle: BasemapStyle.BLANK_WHITE,
+      referenceBasemapId: 'europe-nuts2-2024-medium',
+      referenceProjectionPresetId: 'EUROPE_DOM_TOM',
+      projectionBbox: [-25, 35, 45, 72],
+      projectionPresets
+    });
+
+    expect(
+      getAvailableProjectionIds(context, [
+        getCompositeProjectionSelectionId('FRANCE_DOM_TOM'),
+        getCompositeProjectionSelectionId('EUROPE_DOM_TOM')
+      ])
+    ).toEqual([getCompositeProjectionSelectionId('EUROPE_DOM_TOM')]);
   });
 
   it('limits France tiled basemaps to mercator only', () => {
@@ -142,6 +290,46 @@ describe('projection availability', () => {
     expect(
       getAvailableProjectionIds(context, ['mercator', 'orthographic'])
     ).toEqual(['mercator']);
+  });
+
+  it('keeps every built-in projection available for every catalog basemap in Deck mode', () => {
+    expect(catalogMetadata.length).toBeGreaterThan(0);
+
+    for (const basemap of catalogMetadata) {
+      const referenceProjectionPresetId =
+        basemap.proj_to?.type === 'composite'
+          ? (basemap.proj_to.preset ?? null)
+          : null;
+      const context = resolveProjectionAvailabilityContext({
+        requiresMapLibre: false,
+        currentStyle: BasemapStyle.BLANK_WHITE,
+        referenceBasemapId: basemap.file,
+        referenceProjectionPresetId,
+        projectionBbox: basemap.bbox,
+        projectionPresets: catalogProjectionPresets
+      });
+      const availableIds = getAvailableProjectionIds(context, [
+        ...builtInProjectionIds,
+        ...compositeProjectionIds
+      ]);
+
+      expect(
+        builtInProjectionIds.every((projectionId) =>
+          availableIds.includes(projectionId)
+        ),
+        `${basemap.file} should keep built-in projections available`
+      ).toBe(true);
+
+      const expectedCompositeIds = referenceProjectionPresetId
+        ? [getCompositeProjectionSelectionId(referenceProjectionPresetId)]
+        : [];
+      expect(
+        availableIds.filter((projectionId) =>
+          projectionId.startsWith('composite:')
+        ),
+        `${basemap.file} should only expose compatible composite projections`
+      ).toEqual(expectedCompositeIds);
+    }
   });
 });
 

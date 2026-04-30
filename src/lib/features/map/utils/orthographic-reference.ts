@@ -27,6 +27,15 @@ interface ResolveOrthographicReferenceBboxOptions {
   shouldUseBasemapReference: boolean;
   basemapProjectedBbox?: BBox | null;
   basemapMainlandBbox?: BBox | null;
+  preferDatasetBbox?: boolean;
+}
+
+interface ResolveOrthographicProjectionFitBboxOptions {
+  datasetBbox: BBox | null;
+  shouldUseBasemapReference: boolean;
+  basemapMainlandBbox?: BBox | null;
+  basemapBbox?: BBox | null;
+  preferDatasetBbox?: boolean;
 }
 
 type OrthographicBounds = [[number, number], [number, number]];
@@ -75,9 +84,10 @@ export function resolveOrthographicReferenceBbox({
   datasetProjectedBbox = null,
   shouldUseBasemapReference,
   basemapProjectedBbox = null,
-  basemapMainlandBbox = null
+  basemapMainlandBbox = null,
+  preferDatasetBbox = false
 }: ResolveOrthographicReferenceBboxOptions): BBox | null {
-  if (!shouldUseBasemapReference) {
+  if (!shouldUseBasemapReference || preferDatasetBbox) {
     return datasetProjectedBbox ?? datasetBounds;
   }
 
@@ -87,6 +97,24 @@ export function resolveOrthographicReferenceBbox({
     datasetProjectedBbox ??
     datasetBounds
   );
+}
+
+export function resolveOrthographicProjectionFitBbox({
+  datasetBbox,
+  shouldUseBasemapReference,
+  basemapMainlandBbox = null,
+  basemapBbox = null,
+  preferDatasetBbox = false
+}: ResolveOrthographicProjectionFitBboxOptions): BBox | null {
+  if (preferDatasetBbox && datasetBbox) {
+    return datasetBbox;
+  }
+
+  if (shouldUseBasemapReference) {
+    return basemapMainlandBbox ?? basemapBbox ?? datasetBbox;
+  }
+
+  return datasetBbox ?? basemapMainlandBbox ?? basemapBbox;
 }
 
 export function resolveOrthographicDatasetBounds(

@@ -30,6 +30,14 @@ describe('JoinAssistedSection — selected-basemap tooltip (S1.1c.iii)', () => {
     expect(source).toContain('row.basemapValue');
   });
 
+  it('uses a Set for joined basemap membership checks on large basemaps', () => {
+    expect(source).toContain('const joinedBasemapValueSet = $derived(');
+    expect(source).toContain('new Set(joinedEntitiesList.map(');
+    expect(source).toContain('!joinedBasemapValueSet.has(value)');
+    expect(source).toContain('!joinedBasemapValueSet.has(suggestion)');
+    expect(source).not.toContain('joinedBasemapValues.includes');
+  });
+
   it('builds the verify-row tooltip from the selected mapping', () => {
     expect(source).toContain('{@const verifyTooltip = buildRowTooltip(');
     expect(source).toContain('row.selectedMapping');

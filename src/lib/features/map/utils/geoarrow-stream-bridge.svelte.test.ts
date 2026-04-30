@@ -7,9 +7,14 @@ import type {
   BinaryPointData,
   ProjectionLike
 } from 'geoarrow-deck-stream';
-import type { ProjectionPresets } from '../types/basemap.types';
+import type {
+  BasemapMetadata,
+  ProjectionPresets
+} from '../types/basemap.types';
 import {
   buildCompositeProjectionFromPresetId,
+  computeProjectedBboxForBasemap,
+  computeProjectedBboxForProjection,
   pathColorAttr,
   pathWidthAttr,
   pointColorAttr,
@@ -180,5 +185,73 @@ describe('geoarrow stream bridge path attributes', () => {
     expect(
       points.every(([x, y]) => x >= 602 && x <= 698 && y >= 402 && y <= 448)
     ).toBe(true);
+  });
+
+  it('computes composite basemap reference bounds from every inset', () => {
+    const presets: ProjectionPresets = {
+      TEST_EUROPE_DOM_TOM: {
+        entries: [
+          {
+            id: 'mainland',
+            proj4:
+              '+proj=laea +lat_0=52 +lon_0=10 +x_0=4321000 +y_0=3210000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs',
+            bounds: [
+              [-11.0, 34.5],
+              [42.0, 71.6]
+            ],
+            layout: { x: 0, y: 0, width: 1, height: 0.65 }
+          },
+          {
+            id: 'madeira',
+            proj4:
+              '+proj=utm +zone=28 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs',
+            bounds: [
+              [-17.28, 32.62],
+              [-16.27, 33.14]
+            ],
+            layout: { x: 0.6, y: 0.8, width: 0.1, height: 0.1 },
+            scaleMultiplier: 1.3
+          }
+        ]
+      }
+    };
+    const metadata = {
+      file: 'europe-test',
+      title_fr: 'Europe',
+      title_en: 'Europe',
+      source: 'test',
+      date: '2024',
+      bbox: [-17.28, 32.62, 42, 71.6],
+      proj_source: 'EPSG:4326',
+      proj_to: { type: 'composite', preset: 'TEST_EUROPE_DOM_TOM' },
+      layers: []
+    } as BasemapMetadata;
+    const projection = buildCompositeProjectionFromPresetId(
+      'TEST_EUROPE_DOM_TOM',
+      1000,
+      500,
+      presets
+    );
+
+    if (!projection) {
+      throw new Error('Expected test composite projection');
+    }
+
+    const mainlandProjectedBbox = computeProjectedBboxForProjection(
+      projection,
+      [-11.0, 34.5, 42.0, 71.6]
+    );
+    const compositeProjectedBbox = computeProjectedBboxForBasemap(
+      metadata,
+      presets,
+      1000,
+      500
+    );
+
+    expect(mainlandProjectedBbox).not.toBeNull();
+    expect(compositeProjectedBbox).not.toBeNull();
+    expect(compositeProjectedBbox?.[3]).toBeGreaterThan(
+      mainlandProjectedBbox?.[3] ?? 0
+    );
   });
 });

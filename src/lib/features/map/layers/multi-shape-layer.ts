@@ -37,6 +37,7 @@ const multiShapeModule = {
       float offsetX;
       float offsetY;
       float halfMask;
+      float shapeScale;
       float dashed;
       float dashLength;
       float gapLength;
@@ -47,6 +48,7 @@ const multiShapeModule = {
     offsetX: 'f32',
     offsetY: 'f32',
     halfMask: 'f32',
+    shapeScale: 'f32',
     dashed: 'f32',
     dashLength: 'f32',
     gapLength: 'f32'
@@ -197,11 +199,12 @@ float getDashMask(vec2 uv) {
 void main(void) {
     geometry.uv = unitPosition;
     vec2 uv = unitPosition - vec2(multiShape.offsetX, multiShape.offsetY);
+    vec2 scaledUv = uv / max(multiShape.shapeScale, 0.0001);
 
     if (multiShape.halfMask > 0.5 && multiShape.halfMask < 1.5 && uv.y < 0.0) discard;
     if (multiShape.halfMask > 1.5 && uv.y > 0.0) discard;
 
-    float distToCenter = getDistance(uv, outerRadiusPixels, int(vShape), vRadius);
+    float distToCenter = getDistance(scaledUv, outerRadiusPixels, int(vShape), vRadius);
 
     float inShape = scatterplot.antialiasing
         ? smoothedge(distToCenter, outerRadiusPixels)
@@ -213,7 +216,7 @@ void main(void) {
         float lineMask = scatterplot.antialiasing
             ? smoothedge(innerUnitRadius * outerRadiusPixels, distToCenter)
             : step(innerUnitRadius * outerRadiusPixels, distToCenter);
-        lineMask *= getDashMask(uv);
+        lineMask *= getDashMask(scaledUv);
 
         if (scatterplot.filled > 0.5) {
             fragColor = mix(vFillColor, vLineColor, lineMask);
@@ -240,6 +243,7 @@ export type MultiShapeLayerProps<DataT = unknown> = {
   offsetX?: number;
   offsetY?: number;
   halfMask?: HalfMaskMode;
+  shapeScale?: number;
   dashed?: boolean;
   dashLength?: number;
   gapLength?: number;
@@ -252,6 +256,7 @@ const defaultProps = {
   offsetX: { type: 'number', value: 0 },
   offsetY: { type: 'number', value: 0 },
   halfMask: { type: 'number', value: 0 },
+  shapeScale: { type: 'number', value: 1 },
   dashed: { type: 'boolean', value: false },
   dashLength: { type: 'number', value: 3 },
   gapLength: { type: 'number', value: 2 }
@@ -323,6 +328,7 @@ vRadius = instanceRadius;
       offsetX,
       offsetY,
       halfMask,
+      shapeScale,
       dashed,
       dashLength,
       gapLength
@@ -336,6 +342,7 @@ vRadius = instanceRadius;
           offsetX: offsetX ?? 0,
           offsetY: offsetY ?? 0,
           halfMask: halfMask ?? 0,
+          shapeScale: shapeScale ?? 1,
           dashed: dashed ? 1 : 0,
           dashLength: dashLength ?? 3,
           gapLength: gapLength ?? 2

@@ -15,7 +15,10 @@ import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
 import { projectionStore } from '../stores/projection.store.svelte';
 import { mapHighlightStore } from '../stores/map-highlight.store.svelte';
 import { basemapService } from '../services/basemap.service.svelte';
-import { basemapLayersStore } from '../stores/basemap-layers.store.svelte';
+import {
+  BASEMAP_LAYER_ID,
+  basemapLayersStore
+} from '../stores/basemap-layers.store.svelte';
 import {
   createBasemapLayers,
   createDeckLayers,
@@ -38,8 +41,10 @@ import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import {
   filterArrowTableByYear,
   filterArrowTableByDataFilters,
-  filterArrowTableByTableFilters
+  filterArrowTableByTableFilters,
+  selectRowsByIndices
 } from '../utils/arrow-filter.utils';
+import { getSplitMatchedGeometryRowIndices } from '../layers/split-rendering-accessors';
 import {
   getMapLayerRenderOrder,
   getVisualizationRenderOrder
@@ -82,6 +87,12 @@ const ORTHOGRAPHIC_BASEMAP_LAYER_PREFIXES = [
   DeckLayerId.BASEMAP_META_GEO_LINES,
   DeckLayerId.BASEMAP_META_CENTROID
 ] as const;
+
+const GENERATED_ORTHOGRAPHIC_BASEMAP_LAYER_IDS = new Set<string>([
+  BASEMAP_LAYER_ID.MERS,
+  BASEMAP_LAYER_ID.EQUATEUR,
+  BASEMAP_LAYER_ID.MERIDIENS
+]);
 
 export interface UseMapLayersProps {
   getDeckOverlay: () => MapboxOverlay | null;
@@ -300,7 +311,9 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     const overrideKey = [
       projState.customCode
         ? `custom:${projState.customCode}`
-        : `preset:${projState.selected}`,
+        : projState.suggestionD3Config
+          ? `d3:${JSON.stringify(projState.suggestionD3Config)}`
+          : `preset:${projState.selected}`,
       `bbox:${fitBbox.join(',')}`,
       `viewport:${viewportSize.width}x${viewportSize.height}`,
       `padding:${fitPaddingPx}`,
@@ -588,6 +601,38 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     return resolvedMetadata;
   }
 
+  function shouldRenderOnlyJoinedSplitGeometry(
+    split: SplitRenderingTable | undefined,
+    projectionState: ReturnType<typeof getProjectionState>
+  ): boolean {
+    return Boolean(
+      split &&
+      projectionState.overrideActive &&
+      projectionState.overrideSource === 'manual'
+    );
+  }
+
+  function getRenderableSplitGeometryTable(
+    split: SplitRenderingTable | undefined,
+    projectionState: ReturnType<typeof getProjectionState>
+  ): ArrowTable | undefined {
+    if (!split) {
+      return undefined;
+    }
+
+    if (!shouldRenderOnlyJoinedSplitGeometry(split, projectionState)) {
+      return split.geometry;
+    }
+
+    const matchedRows = getSplitMatchedGeometryRowIndices(
+      split.geometry,
+      split.dataset,
+      split.featureIdColumn
+    );
+
+    return selectRowsByIndices(split.geometry, matchedRows);
+  }
+
   function getRequestedMetadataLayerTypes(
     worldBaseTable: ArrowTable | null
   ): BasemapLayerType[] {
@@ -617,6 +662,13 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     }
 
     return [...requestedTypes];
+  }
+
+  function hasVisibleGeneratedBasemapLayer(): boolean {
+    return basemapLayersStore.layers.some(
+      (layer) =>
+        layer.visible && GENERATED_ORTHOGRAPHIC_BASEMAP_LAYER_IDS.has(layer.id)
+    );
   }
 
   function updateLayers(
@@ -693,12 +745,50 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
 
       const layers: Layer<DeckDataRow>[] = [];
 
+      const datasetContentIds = new Set<string>();
+      for (const datasetId of tables.keys()) datasetContentIds.add(datasetId);
+      for (const datasetId of geoJSONs.keys()) datasetContentIds.add(datasetId);
+      for (const viz of activeVisualizations)
+        datasetContentIds.add(viz.datasetId);
+      for (const dataset of datasetsStore.datasets) {
+        datasetContentIds.add(dataset.id);
+      }
+      if (splitData) {
+        for (const datasetId of splitData.keys()) {
+          datasetContentIds.add(datasetId);
+        }
+      }
+      if (densityTables) {
+        for (const datasetId of densityTables.keys()) {
+          datasetContentIds.add(datasetId);
+        }
+      }
+
+      let hasJoinedBasemapReference = false;
+      for (const datasetId of datasetContentIds) {
+        if (getDatasetJoinedBasemap(datasetId)) {
+          hasJoinedBasemapReference = true;
+          break;
+        }
+      }
+
       // Only show basemap layers in the Deck.gl OrthographicView engine.
       // In MapLibre mode, the tiled basemap provides the background (OSM, Carte Facile, etc.)
       const shouldShowBasemapLayers = shouldShowOrthographicBasemapLayers({
         isOrthographicMode,
-        isOSMActive
+        isOSMActive,
+        hasDatasetContent: datasetContentIds.size > 0,
+        hasBasemapReference:
+          Boolean(basemapStyleStore.referenceBasemapId) ||
+          hasJoinedBasemapReference
       });
+      const shouldShowGeneratedBasemapLayers =
+        !shouldShowBasemapLayers &&
+        isOrthographicMode &&
+        !isOSMActive &&
+        hasVisibleGeneratedBasemapLayer();
+      const shouldKeepOrthographicBasemapLayers =
+        shouldShowBasemapLayers || shouldShowGeneratedBasemapLayers;
 
       // Basemap layers are split into background (terre, mers, lacs, relief)
       // and foreground (frontières, rivières, graticules, villes).
@@ -707,17 +797,21 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       let basemapBackgroundLayers: Layer<DeckDataRow>[] = [];
       let basemapForegroundLayers: Layer<DeckDataRow>[] = [];
 
-      if (shouldShowBasemapLayers) {
+      if (shouldKeepOrthographicBasemapLayers) {
         try {
           const basemapCtx = {
             modelMatrix: matrixToApply ?? undefined,
             projectionSuffix,
-            projection: activeBasemapProjection,
-            bbox: currentMetadata?.bbox ?? projectionFitBbox
+            projection: shouldShowBasemapLayers
+              ? activeBasemapProjection
+              : projectionOverride,
+            bbox: shouldShowBasemapLayers
+              ? (currentMetadata?.bbox ?? projectionFitBbox)
+              : projectionFitBbox
           };
 
           const metadataLayers: MetadataLayerEntry[] = [];
-          if (currentMetadata) {
+          if (shouldShowBasemapLayers && currentMetadata) {
             const requestedLayerTypes =
               getRequestedMetadataLayerTypes(worldBaseTable);
             if (requestedLayerTypes.length > 0) {
@@ -754,17 +848,20 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
           }
 
           const additionalData = {
-            frontieresTable:
-              basemapService.getLayerTableByType(BasemapLayerType.LIMIT) ??
-              undefined,
+            frontieresTable: shouldShowBasemapLayers
+              ? (basemapService.getLayerTableByType(BasemapLayerType.LIMIT) ??
+                undefined)
+              : undefined,
             availableMetadataLayerTypes: metadataLayers.map(
               (layer) => layer.type
             ),
             metadataLayers,
-            stylePresets: basemapService.stylePresets
+            stylePresets: shouldShowBasemapLayers
+              ? basemapService.stylePresets
+              : null
           };
           const basemapGroups = createBasemapLayers(
-            worldBaseTable,
+            shouldShowBasemapLayers ? worldBaseTable : null,
             basemapCtx,
             additionalData
           );
@@ -784,7 +881,9 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
         try {
           const datasetId = viz.datasetId;
           const split = splitData?.get(datasetId);
-          const table = split?.geometry ?? tables.get(datasetId);
+          const table =
+            getRenderableSplitGeometryTable(split, projectionState) ??
+            tables.get(datasetId);
           const densityTable = densityTables?.get(datasetId);
           const geojson = geoJSONs.get(datasetId);
 
@@ -1011,13 +1110,14 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
       const hasExpectedDatasetFallbacks =
         shouldRenderDatasetFallbacks && (tables.size > 0 || geoJSONs.size > 0);
       const hasVisibleBasemapConfig =
-        shouldShowBasemapLayers && basemapLayersStore.visibleLayers.length > 0;
+        shouldKeepOrthographicBasemapLayers &&
+        basemapLayersStore.visibleLayers.length > 0;
       const hasExpectedVisibleLayers =
         hasExpectedActiveViz ||
         hasExpectedDatasetFallbacks ||
         hasVisibleBasemapConfig;
       const previousLayersToPreserve = getPreservablePreviousLayers(
-        shouldShowBasemapLayers
+        shouldKeepOrthographicBasemapLayers
       );
       const shouldPreservePreviousLayers =
         layers.length === 0 &&

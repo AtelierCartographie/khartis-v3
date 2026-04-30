@@ -142,6 +142,29 @@ export function buildSplitDatasetRowMapping(
   return out;
 }
 
+export function getSplitMatchedGeometryRowIndices(
+  geometry: ArrowTable,
+  dataset: ArrowTable,
+  featureIdColumn: string,
+  basemapIdColumn: string = JOINED_BASEMAP_COLUMN.ID
+): number[] {
+  const rowMapping = buildSplitDatasetRowMapping(
+    geometry,
+    dataset,
+    featureIdColumn,
+    basemapIdColumn
+  );
+  const indices: number[] = [];
+
+  for (let rowIndex = 0; rowIndex < rowMapping.length; rowIndex += 1) {
+    if (rowMapping[rowIndex] !== -1) {
+      indices.push(rowIndex);
+    }
+  }
+
+  return indices;
+}
+
 function buildSplitDatasetRowLookup(
   dataset: ArrowTable,
   basemapIdColumn: string

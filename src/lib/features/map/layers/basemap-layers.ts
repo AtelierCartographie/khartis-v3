@@ -1,4 +1,4 @@
-import type { Layer } from '@deck.gl/core';
+import { COORDINATE_SYSTEM, type Layer } from '@deck.gl/core';
 import type { Matrix4 } from '@math.gl/core';
 import { GeoJsonLayer } from '@deck.gl/layers';
 import { PathStyleExtension } from '@deck.gl/extensions';
@@ -73,6 +73,7 @@ const DASH_EXTENSION = new PathStyleExtension({
   highPrecisionDash: true
 });
 const SOLID_DASH_ARRAY: [number, number] = [1, 0];
+const PROJECTED_OCEAN_EXTENT = 1_000_000;
 
 /**
  * WeakMap cache for basemap GeoJSON conversions — avoids O(n) arrowTableToGeoJSON()
@@ -503,8 +504,7 @@ export function createMersLayer(
     ]
   };
 
-  // When a projection is active, basemap layers are in d3-projected pixel space
-  // (~0-960, ~0-500). Create the ocean rectangle in that same space.
+  // Projected basemap layers are already in cartesian D3 output space, not lon/lat.
   const oceanData = ctx.projection
     ? {
         type: GEOJSON_TYPE.FEATURE_COLLECTION,
@@ -516,11 +516,11 @@ export function createMersLayer(
               type: GEOJSON_TYPE.POLYGON,
               coordinates: [
                 [
-                  [-1000, -1000],
-                  [2000, -1000],
-                  [2000, 2000],
-                  [-1000, 2000],
-                  [-1000, -1000]
+                  [-PROJECTED_OCEAN_EXTENT, -PROJECTED_OCEAN_EXTENT],
+                  [PROJECTED_OCEAN_EXTENT, -PROJECTED_OCEAN_EXTENT],
+                  [PROJECTED_OCEAN_EXTENT, PROJECTED_OCEAN_EXTENT],
+                  [-PROJECTED_OCEAN_EXTENT, PROJECTED_OCEAN_EXTENT],
+                  [-PROJECTED_OCEAN_EXTENT, -PROJECTED_OCEAN_EXTENT]
                 ]
               ]
             }
@@ -535,6 +535,9 @@ export function createMersLayer(
     filled: true,
     stroked: false,
     getFillColor: withOpacity(fillColor, opacity),
+    ...(ctx.projection
+      ? { coordinateSystem: COORDINATE_SYSTEM.CARTESIAN }
+      : {}),
     ...getBaseLayerProps(ctx),
     updateTriggers: {
       getFillColor: [config.color, config.opacity]
@@ -572,8 +575,13 @@ export function createFrontieresLayer(
     getLineColor: [config.color, effectiveOpacity],
     getDashArray: [config.dotted, config.dottedPattern]
   };
+  const preferProjectedGeoJsonFallback = shouldPreferProjectedGeoJsonFallback(
+    geometryInfo,
+    ctx.projection
+  );
 
   if (
+    !preferProjectedGeoJsonFallback &&
     isLineGeometry(geometryInfo) &&
     (isGeoArrowLineEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow)
   ) {
@@ -641,8 +649,8 @@ export function createFrontieresLayer(
   }
 
   if (
-    isGeoArrowPolygonEncoding(geometryInfo) ||
-    geometryInfo.isNativeGeoArrow
+    !preferProjectedGeoJsonFallback &&
+    (isGeoArrowPolygonEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow)
   ) {
     const outlineData = ctx.projection
       ? parsePathsWithProjection(frontieresTable, ctx.projection)
@@ -1142,10 +1150,14 @@ export function createReliefLayers(
     getFillColor: [config.color, config.opacity, config.representation],
     getLineColor: [config.color, config.opacity, config.representation]
   };
+  const preferProjectedGeoJsonFallback = shouldPreferProjectedGeoJsonFallback(
+    geometryInfo,
+    ctx.projection
+  );
 
   if (
-    isGeoArrowPolygonEncoding(geometryInfo) ||
-    geometryInfo.isNativeGeoArrow
+    !preferProjectedGeoJsonFallback &&
+    (isGeoArrowPolygonEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow)
   ) {
     const result: Layer<DeckDataRow>[] = [];
     const outlineData = ctx.projection
@@ -1189,7 +1201,7 @@ export function createReliefLayers(
     return result;
   }
 
-  if (geometryInfo.isWkbEncoded || geometryInfo.isGeoJsonEncoded) {
+  if (canRenderViaGeoJsonFallback(geometryInfo)) {
     const geojson = getPreparedBasemapGeoJSON(
       worldBaseTable,
       geometryInfo.geoColumn,
@@ -1822,8 +1834,13 @@ function createMetadataLimitLayers(
       DeckLayerId.BASEMAP_META_LIMIT,
       `${ctx.projectionSuffix}-${i}`
     );
+    const preferProjectedGeoJsonFallback = shouldPreferProjectedGeoJsonFallback(
+      geometryInfo,
+      ctx.projection
+    );
 
     if (
+      !preferProjectedGeoJsonFallback &&
       isLineGeometry(geometryInfo) &&
       (isGeoArrowLineEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow)
     ) {
@@ -1857,8 +1874,8 @@ function createMetadataLimitLayers(
         })
       );
     } else if (
-      isGeoArrowPolygonEncoding(geometryInfo) ||
-      geometryInfo.isNativeGeoArrow
+      !preferProjectedGeoJsonFallback &&
+      (isGeoArrowPolygonEncoding(geometryInfo) || geometryInfo.isNativeGeoArrow)
     ) {
       const outlineData = ctx.projection
         ? parsePathsWithProjection(entry.table, ctx.projection)

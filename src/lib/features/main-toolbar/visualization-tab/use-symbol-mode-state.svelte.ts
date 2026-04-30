@@ -3,6 +3,7 @@ import type {
   SymbolPrimitiveConfig
 } from '$lib/features/commons/store/visualization.store.svelte';
 import {
+  DEFAULT_COLORS,
   FillMode,
   ProportionalType,
   StrokeMode,
@@ -41,6 +42,7 @@ export const SYMBOL_MODE_STATE_KEYS = [
   'breakValueB',
   'fillMode',
   'strokeMode',
+  'strokeColor',
   'strokeWidth',
   'strokeOpacity',
   'strokeDashed',
@@ -75,10 +77,12 @@ export function getDefaultSymbolModeStateFields(
 
   return {
     ...NON_PROPORTIONAL_SYMBOL_STATE_FIELDS,
+    classification: undefined,
     fillMode: FillMode.CATEGORIES,
     strokeMode: StrokeMode.UNIQUE,
+    strokeColor: DEFAULT_COLORS.black,
     strokeWidth: VISUALIZATION_DEFAULTS.strokeWidth,
-    strokeOpacity: 1,
+    strokeOpacity: 0.6,
     strokeDashed: false,
     strokeDashedPattern: undefined,
     strokeClassification: undefined,

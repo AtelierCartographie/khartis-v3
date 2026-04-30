@@ -14,6 +14,7 @@ const MAX_LNG = 180;
 const DEGENERATE_BOUNDS_PADDING_DEGREES = 0.01;
 const BOUNDS_READ_WARNING_LIMIT = 3;
 const boundsReadWarnings = new Map<string, number>();
+type RowInclusionPredicate = (rowIndex: number) => boolean;
 
 function warnBoundsReadFailureOnce(
   geoColumn: string,
@@ -194,7 +195,8 @@ function extractCoordFromValue(value: unknown): [number, number] | null {
 
 function calculateBoundsFromGeometryData(
   jsTable: ArrowTable,
-  geoColumn: string
+  geoColumn: string,
+  includeRow?: RowInclusionPredicate
 ): LngLatBoundsLike | null {
   const geomVector = jsTable.getChild(geoColumn);
   if (!geomVector) {
@@ -205,10 +207,16 @@ function calculateBoundsFromGeometryData(
   let minLat = Infinity;
   let maxLng = -Infinity;
   let maxLat = -Infinity;
-  const maxSamples = Math.min(jsTable.numRows, 10000);
+  const maxSamples = includeRow
+    ? jsTable.numRows
+    : Math.min(jsTable.numRows, 10000);
   const step = Math.max(1, Math.floor(jsTable.numRows / maxSamples));
 
   for (let i = 0; i < jsTable.numRows; i += step) {
+    if (includeRow && !includeRow(i)) {
+      continue;
+    }
+
     const geom = safeReadGeometryValue(geomVector, geoColumn, i);
 
     const parsed = parseGeoJsonGeometry(geom);
@@ -267,6 +275,69 @@ function calculateBoundsFromGeometryData(
     [safeMinLng, safeMinLat],
     [safeMaxLng, safeMaxLat]
   ];
+}
+
+export function calculateBoundsFromGeoArrowRows(
+  jsTable: ArrowTable,
+  includeRow: RowInclusionPredicate
+): LngLatBoundsLike | null {
+  try {
+    if (jsTable.numRows === 0) {
+      return null;
+    }
+
+    const geoMetadata = jsTable.schema.metadata.get(GeoArrowMetadataKey.GEO);
+    let primaryColumn: string | null = null;
+
+    if (geoMetadata) {
+      const jsonMeta = JSON.parse(geoMetadata);
+      primaryColumn = jsonMeta.primary_column ?? null;
+    }
+
+    if (primaryColumn) {
+      const bounds = calculateBoundsFromGeometryData(
+        jsTable,
+        primaryColumn,
+        includeRow
+      );
+      if (bounds) {
+        return bounds;
+      }
+    }
+
+    const geoColumn = findGeoColumn(jsTable);
+    if (geoColumn && geoColumn !== primaryColumn) {
+      const bounds = calculateBoundsFromGeometryData(
+        jsTable,
+        geoColumn,
+        includeRow
+      );
+      if (bounds) {
+        return bounds;
+      }
+    }
+
+    for (const field of jsTable.schema.fields) {
+      if (field.name === primaryColumn || field.name === geoColumn) continue;
+      const bounds = calculateBoundsFromGeometryData(
+        jsTable,
+        field.name,
+        includeRow
+      );
+      if (bounds) {
+        return bounds;
+      }
+    }
+
+    return null;
+  } catch (error) {
+    logger.warn(
+      'Failed to calculate filtered bounds from GeoArrow',
+      LogCategory.MAP,
+      error
+    );
+    return null;
+  }
 }
 
 export function calculateBoundsFromGeoArrow(

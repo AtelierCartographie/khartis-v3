@@ -13,8 +13,22 @@ describe('projection store', () => {
     expect(source).toContain('const clearSelectedInternal =');
     expect(source).toContain('s.overrideActive = false;');
     expect(source).toContain('s.overrideSource = undefined;');
+    expect(source).toContain('s.activeSuggestionId = undefined;');
+    expect(source).toContain('s.suggestionD3Config = undefined;');
     expect(source).toContain(
       'mapProjectionStore.setProjection(MERCATOR_PROJECTION_TYPE);'
     );
+  });
+
+  it('toggles the active suggestion and preserves d3 fallback config', () => {
+    expect(source).toContain('activeSuggestionId: _activeSuggestionId');
+    expect(source).toContain(
+      "overrideSource === 'manual' &&\n        s.overrideActive &&\n        s.activeSuggestionId === suggestion.id"
+    );
+    expect(source).toContain('function cloneD3UsageConfig(config: D3Usage)');
+    expect(source).toContain(
+      's.suggestionD3Config = cloneD3UsageConfig(suggestion.d3Config);'
+    );
+    expect(source).toContain('d3Projection: suggestion.d3Config.projection');
   });
 });

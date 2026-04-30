@@ -345,7 +345,6 @@ function createDataOrchestratorService() {
             preferredDatasetId: dataset.id
           }
         );
-
         if (registered !== null) {
           await restoreJoinState(registered.id, file);
         }

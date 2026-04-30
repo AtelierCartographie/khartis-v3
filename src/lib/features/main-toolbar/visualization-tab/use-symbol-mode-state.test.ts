@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DEFAULT_COLORS,
   FillMode,
   ProportionalType,
   StrokeMode,
@@ -13,7 +14,10 @@ import {
   resolveSymbolModeTransition,
   snapshotSymbolModeState
 } from './use-symbol-mode-state.svelte';
-import type { SymbolPrimitiveConfig } from '$lib/features/commons/store/visualization.store.svelte';
+import {
+  ClassificationMethod,
+  type SymbolPrimitiveConfig
+} from '$lib/features/commons/store/visualization.store.svelte';
 
 function createSymbol(): SymbolPrimitiveConfig {
   return {
@@ -104,7 +108,7 @@ describe('use-symbol-mode-state', () => {
     });
   });
 
-  it('defaults categories mode to a borderless configuration when no snapshot exists', () => {
+  it('defaults categories mode to automatic black 60% stroke when no snapshot exists', () => {
     const symbol = { ...createSymbol(), modeStates: undefined };
     const transition = resolveSymbolModeTransition(
       symbol,
@@ -116,11 +120,34 @@ describe('use-symbol-mode-state', () => {
     expect(transition.restoredStateFields.strokeWidth).toBe(
       VISUALIZATION_DEFAULTS.strokeWidth
     );
+    expect(transition.restoredStateFields.strokeColor).toBe(
+      DEFAULT_COLORS.black
+    );
+    expect(transition.restoredStateFields.strokeOpacity).toBe(0.6);
     expect(transition.restoredStateFields.proportionalType).toBe(
       ProportionalType.SINGLE
     );
     expect(transition.restoredStateFields.breakValueA).toBeNull();
     expect(transition.restoredStateFields.breakValueB).toBeNull();
+  });
+
+  it('clears stale quantitative classification when entering categories without a snapshot', () => {
+    const symbol = {
+      ...createSymbol(),
+      mode: SymbolMode.CLASSES,
+      modeStates: undefined,
+      classification: {
+        method: ClassificationMethod.KMEANS,
+        classes: 1,
+        labels: ['0-10']
+      }
+    };
+    const transition = resolveSymbolModeTransition(
+      symbol,
+      SymbolMode.CATEGORIES
+    );
+
+    expect(transition.restoredStateFields.classification).toBeUndefined();
   });
 
   it('sanitizes proportional-only fields when switching to a non-proportional mode', () => {

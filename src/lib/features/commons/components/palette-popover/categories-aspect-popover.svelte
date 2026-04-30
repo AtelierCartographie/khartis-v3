@@ -181,6 +181,16 @@
     key: K,
     value: CategoriesCommonAspect[K]
   ) {
+    if (key === 'stroke' && value === false) {
+      draftCommonAspect = {
+        ...draftCommonAspect,
+        stroke: false,
+        autoColor: false,
+        strokeUnique: false
+      };
+      return;
+    }
+
     draftCommonAspect = { ...draftCommonAspect, [key]: value };
   }
 
@@ -564,6 +574,7 @@
                           toggled={draftCommonAspect.autoColor}
                           hideLabel
                           labelText={m.aspect_common_auto_color()}
+                          disabled={!draftCommonAspect.stroke}
                           onchange={(value) =>
                             handleCommonAspectChange('autoColor', value)}
                         />
@@ -586,6 +597,7 @@
                           toggled={draftCommonAspect.strokeSize > 0}
                           hideLabel
                           labelText={m.aspect_common_stroke_size()}
+                          disabled={!draftCommonAspect.stroke}
                           onchange={(value) =>
                             handleCommonAspectToggle(
                               'strokeSize',
@@ -636,7 +648,8 @@
                       width="100%"
                       height="32px"
                       showSteppers={false}
-                      disabled={draftCommonAspect.strokeSize <= 0}
+                      disabled={!draftCommonAspect.stroke ||
+                        draftCommonAspect.strokeSize <= 0}
                       onchange={(value) =>
                         handleCommonAspectChange('strokeSize', value)}
                     />

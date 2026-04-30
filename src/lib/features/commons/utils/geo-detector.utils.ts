@@ -336,6 +336,16 @@ function hasHeaderKeyword(
   );
 }
 
+function isCityCodeHeader(tokens: string[], collapsedHeader: string): boolean {
+  return (
+    tokens.includes('commune') &&
+    (tokens.includes('code') ||
+      tokens.includes('insee') ||
+      collapsedHeader.includes('codecommune') ||
+      collapsedHeader.includes('inseecommune'))
+  );
+}
+
 function getStringValues(values: unknown[]): string[] {
   return values
     .filter((value) => value != null)
@@ -988,7 +998,11 @@ export const GeoColumnDetector = {
       if (
         (matcher.type === GEO_COLUMN_TYPE.COUNTRY_NAME ||
           matcher.type === GEO_COLUMN_TYPE.CITY) &&
-        numericLikeShare > 0.8
+        numericLikeShare > 0.8 &&
+        !(
+          matcher.type === GEO_COLUMN_TYPE.CITY &&
+          isCityCodeHeader(tokens, collapsedHeader)
+        )
       ) {
         continue;
       }
@@ -1197,8 +1211,8 @@ export const GeoColumnDetector = {
       GEO_COLUMN_TYPE.ISO2,
       GEO_COLUMN_TYPE.NUTS,
       GEO_COLUMN_TYPE.COUNTRY_NAME,
-      GEO_COLUMN_TYPE.REGION,
       GEO_COLUMN_TYPE.CITY,
+      GEO_COLUMN_TYPE.REGION,
       GEO_COLUMN_TYPE.COORDINATES,
       GEO_COLUMN_TYPE.LATITUDE
     ];

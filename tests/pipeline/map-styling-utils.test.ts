@@ -179,6 +179,7 @@ vi.mock('$lib/features/commons/store/visualization.store.svelte', () => ({
 import {
   getColorForValue,
   getSizeForValue,
+  getProportionalSymbolSizeForValue,
   getClassedSizeForValue,
   getCategoricalColorMap,
   hasCompleteCategoricalColorMap,
@@ -280,6 +281,38 @@ describe('getSizeForValue — LOG scale', () => {
     const size = getSizeForValue(50, 0, 100, 0, 100, ScaleType.LOG);
     expect(size).toBeGreaterThan(0);
     expect(size).toBeLessThan(100);
+  });
+});
+
+describe('getProportionalSymbolSizeForValue', () => {
+  it('uses a zero-based square-root domain for circular proportional symbols', () => {
+    expect(getProportionalSymbolSizeForValue(0, 100, 40, ScaleType.SQRT)).toBe(
+      0
+    );
+    expect(
+      getProportionalSymbolSizeForValue(25, 100, 40, ScaleType.SQRT)
+    ).toBeCloseTo(20);
+    expect(
+      getProportionalSymbolSizeForValue(100, 100, 40, ScaleType.SQRT)
+    ).toBe(40);
+  });
+
+  it('keeps bar and spike symbols on a zero-based linear scale', () => {
+    expect(
+      getProportionalSymbolSizeForValue(25, 100, 40, ScaleType.LINEAR)
+    ).toBe(10);
+  });
+
+  it('returns zero for absent, negative, or unusable proportional values', () => {
+    expect(
+      getProportionalSymbolSizeForValue(Number.NaN, 100, 40, ScaleType.SQRT)
+    ).toBe(0);
+    expect(
+      getProportionalSymbolSizeForValue(-10, 100, 40, ScaleType.SQRT)
+    ).toBe(0);
+    expect(getProportionalSymbolSizeForValue(10, 0, 40, ScaleType.SQRT)).toBe(
+      0
+    );
   });
 });
 

@@ -10,6 +10,7 @@ import {
   buildSplitDatasetRowMapping,
   createSplitAwareRowAccessor,
   createSplitGeoJsonFeatureAccessor,
+  getSplitMatchedGeometryRowIndices,
   resolveSplitMappingFeatureIdColumn
 } from './split-rendering-accessors';
 
@@ -138,5 +139,28 @@ describe('split rendering accessors', () => {
         buildSplitDatasetRowMapping(geometry, dataset, CANONICAL_ID_COLUMN)
       )
     ).toEqual([1, 0, -1]);
+  });
+
+  it('lists only geometry rows that have a joined dataset row', () => {
+    const geometry = createTableWithRows(
+      [
+        { [CANONICAL_ID_COLUMN]: 'DEU' },
+        { [CANONICAL_ID_COLUMN]: 'FRA' },
+        { [CANONICAL_ID_COLUMN]: 'ESP' },
+        { [CANONICAL_ID_COLUMN]: 'ITA' }
+      ],
+      [CANONICAL_ID_COLUMN]
+    );
+    const dataset = createTableWithRows(
+      [
+        { [JOINED_BASEMAP_COLUMN.ID]: 'FRA' },
+        { [JOINED_BASEMAP_COLUMN.ID]: 'ITA' }
+      ],
+      [JOINED_BASEMAP_COLUMN.ID]
+    );
+
+    expect(
+      getSplitMatchedGeometryRowIndices(geometry, dataset, CANONICAL_ID_COLUMN)
+    ).toEqual([1, 3]);
   });
 });

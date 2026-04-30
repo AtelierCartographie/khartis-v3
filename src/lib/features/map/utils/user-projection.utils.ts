@@ -4,6 +4,7 @@ import {
   fitProjectionToBbox,
   getProjectionById
 } from '$lib/features/commons/utils/projection.utils';
+import { buildD3ProjectionFromConfig } from '$lib/features/commons/utils/d3-projection-config.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import type { ProjectionState } from '$lib/features/step-toolbar/tools/projections/projections.types';
 import type { BBox, CanvasSize } from '../types';
@@ -20,12 +21,14 @@ const MERCATOR_ENGINE_SELECTION_IDS = new Set([
   'lambert-conformal',
   'gall-peters'
 ]);
+const NEUTRAL_TRANSFORM_EPSILON = 1e-9;
 
 type ProjectionOverrideState = Pick<
   ProjectionState,
   | 'selected'
   | 'overrideActive'
   | 'customCode'
+  | 'suggestionD3Config'
   | 'center'
   | 'longitude'
   | 'latitude'
@@ -52,6 +55,60 @@ function isGeoProjection(
 
 function getBboxCenter(bbox: BBox): [number, number] {
   return [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2];
+}
+
+function hasUserCenterOverride(state: ProjectionOverrideState): boolean {
+  const center = state.center ?? [state.longitude, state.latitude];
+  return (
+    Math.abs(center[0]) > NEUTRAL_TRANSFORM_EPSILON ||
+    Math.abs(center[1]) > NEUTRAL_TRANSFORM_EPSILON
+  );
+}
+
+function hasUserRotationOverride(state: ProjectionOverrideState): boolean {
+  return Math.abs(state.rotation) > NEUTRAL_TRANSFORM_EPSILON;
+}
+
+function applyUserProjectionTransform(
+  projection: GeoProjection,
+  state: ProjectionOverrideState
+): void {
+  if (hasUserCenterOverride(state)) {
+    projection.center(state.center ?? [state.longitude, state.latitude]);
+  }
+
+  if (hasUserRotationOverride(state)) {
+    const [lambda = 0, phi = 0, gamma = 0] = projection.rotate();
+    projection.rotate([lambda + state.rotation, phi, gamma]);
+  }
+}
+
+function bboxesIntersect(a: BBox, b: BBox): boolean {
+  return a[0] <= b[2] && a[2] >= b[0] && a[1] <= b[3] && a[3] >= b[1];
+}
+
+function isCompositeProjectionCompatibleWithBbox(
+  presetId: string,
+  fitBbox: BBox | null,
+  projectionPresets: ProjectionPresets | null
+): boolean {
+  if (!fitBbox || !projectionPresets) {
+    return true;
+  }
+
+  const preset = projectionPresets[presetId];
+  if (!preset?.entries?.length) {
+    return false;
+  }
+
+  return preset.entries.some((entry) =>
+    bboxesIntersect(fitBbox, [
+      entry.bounds[0][0],
+      entry.bounds[0][1],
+      entry.bounds[1][0],
+      entry.bounds[1][1]
+    ])
+  );
 }
 
 function isUsableGeoProjection(
@@ -110,9 +167,7 @@ export function resolveUserProjectionOverride({
       }
 
       const projection = proj4d3(state.customCode);
-      const center = state.center ?? [state.longitude, state.latitude];
-      projection.center(center);
-      projection.rotate([state.rotation, 0, 0]);
+      applyUserProjectionTransform(projection, state);
       fitProjectionToBbox(
         projection,
         fitBbox,
@@ -125,8 +180,51 @@ export function resolveUserProjectionOverride({
         : undefined;
     }
 
+    if (state.suggestionD3Config) {
+      if (!fitBbox) {
+        return undefined;
+      }
+
+      const projection = buildD3ProjectionFromConfig(state.suggestionD3Config);
+      if (!projection || !isGeoProjection(projection)) {
+        return undefined;
+      }
+
+      applyUserProjectionTransform(projection, state);
+      fitProjectionToBbox(
+        projection,
+        fitBbox,
+        viewportSize.width,
+        viewportSize.height,
+        padding
+      );
+
+      return isUsableGeoProjection(projection, fitBbox)
+        ? projection
+        : undefined;
+    }
+
     const presetId = getCompositeProjectionPresetId(state.selected);
     if (presetId) {
+      if (
+        !isCompositeProjectionCompatibleWithBbox(
+          presetId,
+          fitBbox,
+          projectionPresets
+        )
+      ) {
+        logger.warn(
+          'Composite projection is incompatible with current bbox',
+          LogCategory.MAP,
+          {
+            selected: state.selected,
+            presetId,
+            fitBbox
+          }
+        );
+        return undefined;
+      }
+
       return (
         buildCompositeProjectionFromPresetId(
           presetId,
@@ -146,9 +244,7 @@ export function resolveUserProjectionOverride({
       return undefined;
     }
 
-    const center = state.center ?? [state.longitude, state.latitude];
-    projection.center(center);
-    projection.rotate([state.rotation, 0, 0]);
+    applyUserProjectionTransform(projection, state);
     fitProjectionToBbox(
       projection,
       fitBbox,

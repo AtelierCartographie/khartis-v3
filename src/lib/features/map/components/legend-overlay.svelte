@@ -361,6 +361,10 @@
     scale: PointSizeLegendScale,
     size: number
   ): number {
+    if (size <= 0) {
+      return 0;
+    }
+
     const sizes = scale.steps.map((step) => step.size);
     const minSize = Math.min(...sizes);
     const maxSize = Math.max(...sizes);
@@ -1938,6 +1942,7 @@
                 width={segment.svg.width}
                 height={segment.svg.height}
                 class={segment.className}
+                textColor={textHex}
               />
             {/each}
           {:else}

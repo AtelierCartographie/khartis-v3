@@ -6,6 +6,7 @@
     ariaLabel?: string;
     decorative?: boolean;
     class?: string;
+    textColor?: string;
   }
 
   let {
@@ -14,7 +15,8 @@
     height,
     ariaLabel,
     decorative = true,
-    class: className = ''
+    class: className = '',
+    textColor
   }: Props = $props();
 </script>
 
@@ -27,6 +29,8 @@
   aria-label={decorative ? undefined : ariaLabel}
   aria-hidden={decorative ? 'true' : undefined}
   focusable="false"
+  fill="currentColor"
+  style:color={textColor}
 >
   <!-- eslint-disable-next-line svelte/no-at-html-tags -- Markup is produced by escaped legend generators. -->
   {@html markup}

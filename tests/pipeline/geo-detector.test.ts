@@ -136,6 +136,34 @@ describe('GeoColumnDetector.detectByHeader', () => {
     const result = GeoColumnDetector.detectByHeader('iso2', values);
     expect(result?.type).toBe('iso2');
   });
+
+  it('detects numeric commune code headers as city-level geography', () => {
+    const values = ['97212', '10268', '10305', '10350'];
+    const result = GeoColumnDetector.detectByHeader(
+      'Code INSEE Commune',
+      values
+    );
+    expect(result?.type).toBe('city');
+  });
+
+  it('prefers city-level columns over region-level columns as the primary geography', async () => {
+    const result = await GeoColumnDetector.detectGeoColumns(
+      ['Code INSEE Commune', 'Code Département'],
+      [
+        ['97212', '972'],
+        ['10268', '10'],
+        ['10305', '10'],
+        ['10350', '10']
+      ]
+    );
+
+    expect(result.geoColumns.map((column) => column.columnName)).toContain(
+      'Code INSEE Commune'
+    );
+    expect(result.suggestedPrimaryGeoColumn?.columnName).toBe(
+      'Code INSEE Commune'
+    );
+  });
 });
 
 describe('resolveGPSCoordinateColumns', () => {
