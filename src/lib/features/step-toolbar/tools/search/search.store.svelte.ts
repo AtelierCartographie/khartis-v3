@@ -3,7 +3,10 @@ import {
   visualizationStore,
   type VisualizationConfig
 } from '$lib/features/commons/store/visualization.store.svelte';
-import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
+import {
+  INTERNAL_COLUMN,
+  JOINED_BASEMAP_COLUMN
+} from '$lib/features/commons/constants/data.constants';
 import type { DatasetResult } from '$lib/features/data-pipeline';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { formatValue } from '$lib/features/commons/utils/format.utils';
@@ -238,12 +241,12 @@ async function performRegexSearch(
   }));
 }
 
-const TOOLTIP_EXCLUDED_COLUMNS = new Set([
+const TOOLTIP_EXCLUDED_COLUMNS = new Set<string>([
   INTERNAL_COLUMN.ID,
   INTERNAL_COLUMN.GEOM,
   INTERNAL_COLUMN.GEOMETRY,
-  'basemap_id',
-  'typo_match'
+  JOINED_BASEMAP_COLUMN.ID,
+  JOINED_BASEMAP_COLUMN.TYPO_MATCH
 ]);
 
 async function showTooltipForResult(

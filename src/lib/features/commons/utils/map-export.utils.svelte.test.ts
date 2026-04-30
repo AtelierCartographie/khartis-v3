@@ -34,4 +34,9 @@ describe('map export DOM mutations', () => {
       'if (!map || usesInterleavedDeckOverlay()) return () => {};'
     );
   });
+
+  it('exports the shared facets WebGL canvas when a map collection is active', () => {
+    expect(source).toContain('function resolveMapCanvas');
+    expect(source).toContain('.shared-facets-canvas canvas');
+  });
 });

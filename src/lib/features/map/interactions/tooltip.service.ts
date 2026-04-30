@@ -1,6 +1,9 @@
 import { formatValue } from '$lib/features/commons/utils/format.utils';
 import { projectHtmlLikeText } from '$lib/features/commons/utils/html-like-text.utils';
-import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
+import {
+  INTERNAL_COLUMN,
+  JOINED_BASEMAP_COLUMNS
+} from '$lib/features/commons/constants/data.constants';
 import type { VisualizationConfig } from '$lib/features/commons/store/visualization.store.svelte';
 import { globalState } from '$lib/features/commons/store/global.svelte';
 import { ToolbarStep } from '$lib/features/commons/types/global';
@@ -18,19 +21,13 @@ export function formatTooltipValue(value: unknown): string {
   return formatValue(value);
 }
 
-const JOIN_INTERNAL_COLUMNS = [
-  'basemap_id',
-  'basemap_label',
-  'typo_match'
-] as const;
-
 function isReservedColumn(columnName: string): boolean {
   return (
     columnName === INTERNAL_COLUMN.GEOM ||
     columnName === INTERNAL_COLUMN.GEOMETRY ||
     columnName === INTERNAL_COLUMN.ID ||
     columnName === INTERNAL_COLUMN.FEATURE_ID ||
-    (JOIN_INTERNAL_COLUMNS as readonly string[]).includes(columnName)
+    JOINED_BASEMAP_COLUMNS.includes(columnName)
   );
 }
 
