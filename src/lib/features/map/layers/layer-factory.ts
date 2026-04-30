@@ -47,6 +47,7 @@ import {
   CategoryShapeMode,
   ColorMode,
   DEFAULT_COLORS,
+  DEFAULT_LINEAR_SYMBOL_BAR_WIDTH,
   DENSITY_DEFAULTS,
   FillMode,
   isLinearShape,
@@ -128,7 +129,6 @@ import {
   pointColorAttr,
   pointRadiusAttr,
   rowAccessor,
-  splitRowAccessor,
   filterValueAttr,
   pointPositions,
   projectGeoJSON
@@ -137,40 +137,14 @@ import { resolveHoverHighlightProps } from '../utils/hover-highlight-props';
 import { resolveMissingDataPointShape as resolveMissingPointShape } from '../utils/legend.utils';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 import { createCompatibleSolidPolygonLayerProps } from '../utils/solid-polygon-layer-props';
+import {
+  buildSplitDatasetRowMapping,
+  createSplitAwareRowAccessor as ctxRowAccessor,
+  createSplitGeoJsonFeatureAccessor,
+  resolveSplitMappingFeatureIdColumn
+} from './split-rendering-accessors';
 
-/**
- * Split-rendering aware row accessor (issue #87). When `ctx.splitDatasetTable`
- * is set, the `jsTable` is the basemap geometry Arrow and the dataset
- * attributes live in a separate Arrow keyed by `basemap_id`; rows are resolved
- * via `splitRowAccessor`. Otherwise the legacy single-table accessor is used.
- */
-function ctxRowAccessor<T>(
-  ctx: LayerContext,
-  jsTable: ArrowTable,
-  accessor: (row: Record<string, unknown>) => T,
-  geometryTable = jsTable
-): (featureId: number) => T {
-  const { splitDatasetTable, splitFeatureIdColumn } = ctx;
-  if (splitDatasetTable && splitFeatureIdColumn) {
-    const featureIdColumn = resolveSplitMappingFeatureIdColumn(
-      geometryTable,
-      splitFeatureIdColumn
-    );
-
-    if (!featureIdColumn) {
-      return rowAccessor(jsTable, accessor);
-    }
-
-    return splitRowAccessor(
-      geometryTable,
-      splitDatasetTable,
-      featureIdColumn,
-      'basemap_id',
-      (row) => accessor((row ?? {}) as Record<string, unknown>)
-    );
-  }
-  return rowAccessor(jsTable, accessor);
-}
+export { resolveSplitMappingFeatureIdColumn } from './split-rendering-accessors';
 
 const HIGHLIGHT_DIMMING_FACTOR = 0.3;
 
@@ -379,8 +353,7 @@ function attachBinaryPickingMetadata(
       target.khartisSplitDatasetRowByGeomRow = buildSplitDatasetRowMapping(
         sourceTable,
         ctx.splitDatasetTable,
-        featureIdColumn,
-        'basemap_id'
+        featureIdColumn
       );
     }
   } else {
@@ -389,67 +362,6 @@ function attachBinaryPickingMetadata(
   if (sourceData.featureIds instanceof Uint32Array) {
     target.featureIds = sourceData.featureIds;
   }
-}
-
-/**
- * Builds an Int32Array `[geometryRowIndex] → datasetRowIndex` for split
- * rendering tooltip resolution. -1 means no matching dataset row.
- */
-function buildSplitDatasetRowMapping(
-  geometry: ArrowTable,
-  dataset: ArrowTable,
-  featureIdColumn: string,
-  basemapIdColumn: string
-): Int32Array {
-  const datasetIdVector = dataset.getChild(basemapIdColumn);
-  const geomIdVector = geometry.getChild(featureIdColumn);
-  const out = new Int32Array(geometry.numRows);
-  out.fill(-1);
-  if (!datasetIdVector || !geomIdVector) return out;
-
-  const datasetRowByKey = new Map<string, number>();
-  const datasetRowCount = dataset.numRows;
-  for (let datasetRow = 0; datasetRow < datasetRowCount; datasetRow += 1) {
-    const id = datasetIdVector.get(datasetRow);
-    if (id === null || id === undefined) continue;
-    datasetRowByKey.set(String(id), datasetRow);
-  }
-
-  const geomRowCount = geometry.numRows;
-  for (let geomRow = 0; geomRow < geomRowCount; geomRow += 1) {
-    const featureId = geomIdVector.get(geomRow);
-    if (featureId === null || featureId === undefined) continue;
-    const datasetRow = datasetRowByKey.get(String(featureId));
-    if (datasetRow !== undefined) {
-      out[geomRow] = datasetRow;
-    }
-  }
-  return out;
-}
-
-export function resolveSplitMappingFeatureIdColumn(
-  table: ArrowTable,
-  preferredFeatureIdColumn?: string
-): string | undefined {
-  const fields = table.schema.fields ?? [];
-
-  if (
-    preferredFeatureIdColumn &&
-    fields.some((field) => field.name === preferredFeatureIdColumn)
-  ) {
-    return preferredFeatureIdColumn;
-  }
-
-  if (fields.some((field) => field.name === 'basemap_id')) {
-    return 'basemap_id';
-  }
-
-  if (fields.some((field) => field.name === INTERNAL_COLUMN.FEATURE_ID)) {
-    return INTERNAL_COLUMN.FEATURE_ID;
-  }
-
-  const idField = fields.find((field) => field.name.toLowerCase() === 'id');
-  return idField?.name;
 }
 
 export function getRepresentativePointSource(
@@ -566,6 +478,7 @@ function createDoubleProportionalPointLayers(
   const pointFillOpacity = pointConfig.opacity ?? rawFillOpacity;
   const secondaryFillColor = hexToRgb(pointConfig.fillColorB ?? '#ff832b');
   const pointShape = pointConfig.shape ?? ShapeType.CIRCLE;
+  const pointBarWidth = pointConfig.barWidth ?? DEFAULT_LINEAR_SYMBOL_BAR_WIDTH;
   const minPointRadius = Math.max(1, pointConfig.minSize ?? 1);
   const maxPointRadius = Math.max(
     minPointRadius,
@@ -933,6 +846,7 @@ function createDoubleProportionalPointLayers(
       dashed: showPointStroke && pointStrokeDashed,
       dashLength: pointStrokeDashArray[0],
       gapLength: pointStrokeDashArray[1],
+      barWidth: pointBarWidth,
       opacity: 1,
       radiusScale: layoutProps.radiusScale,
       radiusUnits: 'pixels',
@@ -1164,6 +1078,7 @@ function createRepresentativePointSymbolLayers(
     pointConfig.missingData?.color ?? DEFAULT_COLORS.missingData
   );
   const pointShape = pointConfig.shape ?? ShapeType.CIRCLE;
+  const pointBarWidth = pointConfig.barWidth ?? DEFAULT_LINEAR_SYMBOL_BAR_WIDTH;
   const uniquePointRadius = Math.max(1, (pointConfig.size ?? 10) / 2);
   const minPointRadius = Math.max(1, pointConfig.minSize ?? 1);
   const maxPointRadius = Math.max(
@@ -1538,6 +1453,7 @@ function createRepresentativePointSymbolLayers(
       dashed: showPointStroke && pointStrokeDashed,
       dashLength: pointStrokeDashArray[0],
       gapLength: pointStrokeDashArray[1],
+      barWidth: pointBarWidth,
       opacity: 1,
       radiusScale: 1,
       radiusUnits: 'pixels',
@@ -2563,8 +2479,7 @@ function createTextOverlayLayers(
       ? buildSplitDatasetRowMapping(
           textPointSource.table,
           ctx.splitDatasetTable,
-          textFeatureIdColumn,
-          'basemap_id'
+          textFeatureIdColumn
         )
       : undefined;
 
@@ -3500,6 +3415,8 @@ export function createPointLayers(
 
   const layerId = createThematicLayerId(DeckLayerId.POINT_LAYER, ctx);
   const pointShape = pointConfig?.shape ?? ShapeType.CIRCLE;
+  const pointBarWidth =
+    pointConfig?.barWidth ?? DEFAULT_LINEAR_SYMBOL_BAR_WIDTH;
   const uniquePointRadius = Math.max(1, (pointConfig?.size ?? 10) / 2);
   const minPointRadius = Math.max(1, pointConfig?.minSize ?? 1);
   const maxPointRadius = Math.max(
@@ -4299,7 +4216,10 @@ export function createPointLayers(
     : null;
 
   const useMultiShapeLayer =
-    useCategoryShape || (pointStrokeDashed && showPointStroke);
+    pointShape !== ShapeType.CIRCLE ||
+    missingPointShape !== ShapeType.CIRCLE ||
+    useCategoryShape ||
+    (pointStrokeDashed && showPointStroke);
   const baseLayerProps = {
     id: layerId,
     ...(scatterProps as unknown as Record<string, unknown>),
@@ -4391,7 +4311,8 @@ export function createPointLayers(
         ...baseLayerProps,
         dashed: showPointStroke && pointStrokeDashed,
         dashLength: pointStrokeDashArray[0],
-        gapLength: pointStrokeDashArray[1]
+        gapLength: pointStrokeDashArray[1],
+        barWidth: pointBarWidth
       })
     ];
   }
@@ -4875,6 +4796,9 @@ export function createPolygonLayers(
     isGeoJsonEncoded
   } = geometryInfo;
   const polygonConfig = viz ? getPolygonPrimitive(viz) : undefined;
+  const polygonEnabled = polygonConfig?.enabled ?? true;
+  const polygonFillMode = polygonConfig?.fillMode ?? FillMode.UNIQUE;
+  const polygonStrokeMode = polygonConfig?.strokeMode ?? StrokeMode.UNIQUE;
   const polygonValueColumn = polygonConfig?.valueColumn;
   const polygonCategoryColumn = polygonConfig?.categoryColumn;
   const polygonStrokeValueColumn =
@@ -4918,7 +4842,7 @@ export function createPolygonLayers(
       hexToRgb(DEFAULT_COLORS.missingData)
     );
   const densityRequested =
-    polygonConfig?.fillMode === FillMode.DENSITY && Boolean(viz?.density);
+    polygonFillMode === FillMode.DENSITY && Boolean(viz?.density);
   const densityTable = ctx.densityTable;
   const densityGeometryInfo = ctx.densityGeometryInfo;
   const DEFAULT_PRIMITIVE_ORDER: PrimitiveFilter[] = [
@@ -4991,7 +4915,7 @@ export function createPolygonLayers(
       const polyData = resolvePolygonParser(ctx.customProjection)(jsTable);
       const outlineData = resolvePathParser(ctx.customProjection)(jsTable);
       const effectiveCategoryColorMap = resolveEffectiveCategoryColorMap(
-        jsTable,
+        ctx.splitDatasetTable ?? jsTable,
         viz,
         polygonCategoryColorMap,
         polygonCategoryColumn,
@@ -5047,7 +4971,6 @@ export function createPolygonLayers(
           )
         : null;
 
-      const polygonStrokeMode = polygonConfig?.strokeMode ?? StrokeMode.UNIQUE;
       const polygonStrokeClassification = polygonConfig?.strokeClassification;
       const strokeColorsArray =
         polygonStrokeClassification?.colors &&
@@ -5282,11 +5205,11 @@ export function createPolygonLayers(
       const pointLayers = createRepresentativePointSymbolLayers(jsTable, ctx);
       const showFill =
         polygonPrimitiveAllowed &&
-        polygonConfig?.fillMode !== FillMode.NONE &&
+        polygonFillMode !== FillMode.NONE &&
         polygonFillOpacity > 0;
       const showStroke =
         polygonPrimitiveAllowed &&
-        polygonConfig?.strokeMode !== StrokeMode.NONE &&
+        polygonStrokeMode !== StrokeMode.NONE &&
         polygonStrokeOpacity > 0 &&
         polygonStrokeWidth > 0;
       const orderedLayers = [
@@ -5369,15 +5292,43 @@ export function createPolygonLayers(
   }
 
   const effectiveCategoryColorMap = resolveEffectiveCategoryColorMap(
-    jsTable,
+    ctx.splitDatasetTable ?? jsTable,
     viz,
     polygonCategoryColorMap,
     polygonCategoryColumn,
     PrimitiveFilterType.POLYGON
   );
 
-  const baseGeoJsonFillColor =
+  const splitGeoJsonFillColor =
     useChoropleth && viz
+      ? createSplitGeoJsonFeatureAccessor(
+          ctx,
+          jsTable,
+          createChoroplethColorAccessor(
+            polygonValueColumn!,
+            polygonClassification!.breaks!,
+            polygonClassification!.colors!,
+            polygonMissingColor,
+            showMissingPolygons
+          )
+        )
+      : useCategoricalColor && viz
+        ? createSplitGeoJsonFeatureAccessor(
+            ctx,
+            jsTable,
+            createCategoricalColorAccessor(
+              polygonCategoryColumn!,
+              effectiveCategoryColorMap,
+              polygonMissingColor,
+              showMissingPolygons,
+              polygonClassification?.disabledLabels ?? []
+            )
+          )
+        : null;
+
+  const baseGeoJsonFillColor =
+    splitGeoJsonFillColor ??
+    (useChoropleth && viz
       ? createGeoJsonChoroplethColorAccessor(
           polygonValueColumn!,
           polygonClassification!.breaks!,
@@ -5394,7 +5345,7 @@ export function createPolygonLayers(
             polygonMissingColor,
             showMissingPolygons
           )
-        : null;
+        : null);
 
   const geoJsonFillColor =
     hasPolyHighlights && polyHighlightedRowIds
@@ -5427,11 +5378,50 @@ export function createPolygonLayers(
       polygonClassification?.labels,
     polygonConfig?.strokeClassification?.colors
   );
-  const baseGeoJsonStrokeColor =
-    polygonConfig?.strokeMode === StrokeMode.CLASSES &&
+  const splitGeoJsonStrokeColor =
+    polygonStrokeMode === StrokeMode.CLASSES &&
     polygonStrokeValueColumn &&
     polygonStrokeBreaks &&
     polygonStrokeColors?.length
+      ? createSplitGeoJsonFeatureAccessor(
+          ctx,
+          jsTable,
+          createChoroplethColorAccessor(
+            polygonStrokeValueColumn,
+            polygonStrokeBreaks,
+            polygonStrokeColors,
+            polygonMissingColor,
+            showMissingPolygons
+          )
+        )
+      : polygonStrokeMode === StrokeMode.CATEGORIES &&
+          polygonStrokeCategoryColumn &&
+          polygonStrokeColors?.length
+        ? createSplitGeoJsonFeatureAccessor(
+            ctx,
+            jsTable,
+            createCategoricalColorAccessor(
+              polygonStrokeCategoryColumn,
+              polygonStrokeGeoJsonColorMap,
+              polygonMissingColor,
+              showMissingPolygons,
+              polygonConfig?.strokeClassification?.disabledLabels ?? []
+            )
+          )
+        : null;
+
+  const baseGeoJsonStrokeColor = splitGeoJsonStrokeColor
+    ? (feature: { properties?: Record<string, unknown> }) =>
+        withOpacity(splitGeoJsonStrokeColor(feature), polygonStrokeOpacity) as [
+          number,
+          number,
+          number,
+          number
+        ]
+    : polygonStrokeMode === StrokeMode.CLASSES &&
+        polygonStrokeValueColumn &&
+        polygonStrokeBreaks &&
+        polygonStrokeColors?.length
       ? (feature: { properties?: Record<string, unknown> }) =>
           withOpacity(
             createGeoJsonChoroplethColorAccessor(
@@ -5444,7 +5434,7 @@ export function createPolygonLayers(
             )(feature),
             polygonStrokeOpacity
           ) as [number, number, number, number]
-      : polygonConfig?.strokeMode === StrokeMode.CATEGORIES &&
+      : polygonStrokeMode === StrokeMode.CATEGORIES &&
           polygonStrokeCategoryColumn &&
           polygonStrokeColors?.length
         ? (feature: { properties?: Record<string, unknown> }) =>
@@ -5461,12 +5451,12 @@ export function createPolygonLayers(
         : null;
 
   const showGeoJsonFill =
-    polygonConfig?.enabled &&
-    polygonConfig.fillMode !== FillMode.NONE &&
+    polygonEnabled &&
+    polygonFillMode !== FillMode.NONE &&
     polygonFillOpacity > 0;
   const showGeoJsonStroke =
-    polygonConfig?.enabled &&
-    polygonConfig.strokeMode !== StrokeMode.NONE &&
+    polygonEnabled &&
+    polygonStrokeMode !== StrokeMode.NONE &&
     polygonStrokeOpacity > 0 &&
     polygonStrokeWidth > 0;
   const geoJsonStrokeColor = showGeoJsonStroke

@@ -626,6 +626,29 @@ describe('createPolygonLayers', () => {
     expect(layers[0]).toBeInstanceOf(GeoJsonLayer);
   });
 
+  it('renders GeoJSON polygon fallbacks without a visualization context', () => {
+    arrowTableToGeoJSONMock.mockReturnValue({
+      type: 'FeatureCollection',
+      features: [createPolygonFeature('keep', 2024)]
+    } satisfies FeatureCollection<Polygon>);
+
+    const layers = createPolygonLayers(
+      createTableWithFields([]),
+      createGeometryInfo(),
+      {
+        ...createContext(createVisualization(FillMode.UNIQUE)),
+        viz: null
+      }
+    );
+
+    const polygonLayer = layers.find(
+      (layer) => layer instanceof GeoJsonLayer
+    ) as GeoJsonLayer | undefined;
+
+    expect(polygonLayer).toBeDefined();
+    expect(polygonLayer?.props.filled).toBe(true);
+  });
+
   it('skips the pattern overlay when polygon fill is disabled', () => {
     arrowTableToGeoJSONMock.mockReturnValue({
       type: 'FeatureCollection',
@@ -871,6 +894,148 @@ describe('createPolygonLayers', () => {
     expect(fillLayer?.props.updateTriggers?.getFillColor).toEqual(
       expect.arrayContaining(['#ff00ff', true])
     );
+  });
+
+  it('maps split polygon choropleth fills through geometry ids and dataset basemap ids', () => {
+    createPolygonFillColorAttributeMock.mockImplementation(
+      (
+        polyData: { featureIds?: Uint32Array },
+        getFillColor: (featureId: number) => [number, number, number, number]
+      ) => {
+        const featureIds = Array.from(polyData.featureIds ?? new Uint32Array());
+        return {
+          value: new Uint8ClampedArray(
+            featureIds.flatMap((featureId) =>
+              Array.from(getFillColor(featureId))
+            )
+          ),
+          size: 4
+        };
+      }
+    );
+    parseSolidPolygonsMock.mockReturnValue({
+      featureIds: new Uint32Array([0, 1])
+    });
+
+    const visualization = createVisualization(FillMode.CLASSES);
+    visualization.mapping = { valueColumn: 'growth_rate' };
+    visualization.polygon = {
+      ...visualization.polygon!,
+      enabled: true,
+      fillMode: FillMode.CLASSES,
+      valueColumn: 'growth_rate',
+      classification: {
+        method: ClassificationMethod.MANUAL,
+        classes: 3,
+        numClasses: 3,
+        breaks: [1, 2],
+        colors: ['#2166ac', '#f7f7f7', '#b2182b']
+      }
+    };
+
+    const geometryTable = createTableWithRows(
+      [
+        { id: 'DEU', geometry: null },
+        { id: 'FRA', geometry: null }
+      ],
+      ['id', 'geometry']
+    );
+    const datasetTable = createTableWithRows(
+      [
+        { basemap_id: 'FRA', growth_rate: 2.5 },
+        { basemap_id: 'DEU', growth_rate: 0.5 }
+      ],
+      ['basemap_id', 'growth_rate']
+    );
+
+    const layers = createPolygonLayers(
+      geometryTable,
+      {
+        ...createGeometryInfo(),
+        encoding: 'geoarrow.polygon',
+        isNativeGeoArrow: true,
+        isGeoJsonEncoded: false
+      },
+      {
+        ...createContext(visualization),
+        customProjection: undefined,
+        splitDatasetTable: datasetTable,
+        splitFeatureIdColumn: 'id'
+      }
+    );
+
+    const fillLayer = layers[0];
+    const fillColorAttribute = (
+      fillLayer?.props.data as {
+        attributes: { getFillColor?: { value: Uint8ClampedArray } };
+      }
+    ).attributes.getFillColor;
+
+    expect(fillColorAttribute?.value).toEqual(
+      new Uint8ClampedArray([33, 102, 172, 255, 178, 24, 43, 255])
+    );
+  });
+
+  it('maps split projected GeoJSON choropleth fills through geometry ids and dataset basemap ids', () => {
+    const visualization = createVisualization(FillMode.CLASSES);
+    visualization.mapping = { valueColumn: 'growth_rate' };
+    visualization.polygon = {
+      ...visualization.polygon!,
+      enabled: true,
+      fillMode: FillMode.CLASSES,
+      valueColumn: 'growth_rate',
+      classification: {
+        method: ClassificationMethod.MANUAL,
+        classes: 3,
+        numClasses: 3,
+        breaks: [1, 2],
+        colors: ['#2166ac', '#f7f7f7', '#b2182b']
+      }
+    };
+
+    const geometryTable = createTableWithRows(
+      [
+        { id: 'DEU', geometry: null },
+        { id: 'FRA', geometry: null }
+      ],
+      ['id', 'geometry']
+    );
+    const datasetTable = createTableWithRows(
+      [
+        { basemap_id: 'FRA', growth_rate: 2.5 },
+        { basemap_id: 'DEU', growth_rate: 0.5 }
+      ],
+      ['basemap_id', 'growth_rate']
+    );
+    const geojson = {
+      type: 'FeatureCollection',
+      features: [
+        createPolygonFeature('DEU', 2024),
+        createPolygonFeature('FRA', 2024)
+      ]
+    } satisfies FeatureCollection<Polygon>;
+    arrowTableToGeoJSONMock.mockReturnValue(geojson);
+
+    const layers = createPolygonLayers(geometryTable, createGeometryInfo(), {
+      ...createContext(visualization),
+      splitDatasetTable: datasetTable,
+      splitFeatureIdColumn: 'id'
+    });
+
+    const fillLayer = layers.find((layer) => layer instanceof GeoJsonLayer) as
+      | GeoJsonLayer
+      | undefined;
+    const getFillColor = fillLayer?.props.getFillColor as
+      | ((feature: Feature<Polygon, { id: string; year: number }>) => number[])
+      | undefined;
+
+    expect(projectGeoJSONMock).toHaveBeenCalled();
+    expect(getFillColor?.(createPolygonFeature('DEU', 2024))).toEqual([
+      33, 102, 172, 255
+    ]);
+    expect(getFillColor?.(createPolygonFeature('FRA', 2024))).toEqual([
+      178, 24, 43, 255
+    ]);
   });
 
   it('renders the binary polygon pattern below the stroke layer', () => {
