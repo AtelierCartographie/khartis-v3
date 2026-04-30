@@ -1,6 +1,7 @@
 import {
   applyPaletteInversion,
   calculateBreakCounts,
+  calculateDivergingBreaks,
   calculateBreaks,
   computeDivergingSplit,
   generateColorsForBreaks
@@ -27,6 +28,7 @@ import {
 } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
 import {
   normalizeClassificationMethod,
+  resolveBreakpointLowerClassCount,
   resolveComputedClassCount,
   resolveRequestedClassCount
 } from './components/discretization.utils';
@@ -100,6 +102,7 @@ export interface ClassificationBreaksComputation {
   requestedClassCount: number;
   actualClassCount: number;
   result: NonNullable<BreaksResult>;
+  breakpointLowerClassCount?: number;
   colors: string[];
 }
 
@@ -111,6 +114,7 @@ interface ComputeClassificationBreaksOptions {
   numClasses?: number;
   breakValues?: number[];
   breakpointValue?: number | null;
+  breakpointLowerClassCount?: number | null;
 }
 
 interface BreaksRetryState {
@@ -158,7 +162,8 @@ export function resolveClassificationBreakColors(
   const canReuseExistingColors =
     existingColors &&
     existingColors.length === actualClassCount &&
-    (breakpointValue == null || (hasSameBreakpoint && hasSameBreaks));
+    hasSameBreakpoint &&
+    (breakpointValue == null || hasSameBreaks);
 
   if (canReuseExistingColors) {
     return existingColors;
@@ -299,6 +304,19 @@ export async function computeClassificationBreaks(
       classification?.classes ??
       5
   );
+  const breakpointValue = Object.prototype.hasOwnProperty.call(
+    options,
+    'breakpointValue'
+  )
+    ? options.breakpointValue
+    : classification?.breakpointValue;
+  const breakpointLowerClassCount = resolveBreakpointLowerClassCount(
+    requestedClassCount,
+    options.breakpointLowerClassCount ??
+      classification?.breakpointLowerClassCount
+  );
+  const breakpointUpperClassCount =
+    requestedClassCount - breakpointLowerClassCount;
 
   const result: BreaksResult =
     storeMethod === ClassificationMethod.MANUAL
@@ -308,12 +326,23 @@ export async function computeClassificationBreaks(
           requestedClassCount,
           breakValues: options.breakValues ?? classification?.breaks ?? []
         })
-      : await calculateBreaks({
-          datasetId: options.datasetSourceFileId,
-          columnName: options.valueColumn,
-          method: storeMethod,
-          numClasses: requestedClassCount
-        });
+      : breakpointValue != null &&
+          Number.isFinite(breakpointValue) &&
+          breakpointUpperClassCount > 0
+        ? await calculateDivergingBreaks({
+            datasetId: options.datasetSourceFileId,
+            columnName: options.valueColumn,
+            method: storeMethod,
+            breakpointValue,
+            lowerClassCount: breakpointLowerClassCount,
+            upperClassCount: breakpointUpperClassCount
+          })
+        : await calculateBreaks({
+            datasetId: options.datasetSourceFileId,
+            columnName: options.valueColumn,
+            method: storeMethod,
+            numClasses: requestedClassCount
+          });
 
   if (!result) {
     return null;
@@ -328,7 +357,7 @@ export async function computeClassificationBreaks(
     classification,
     actualClassCount,
     result.breaks,
-    options.breakpointValue ?? classification?.breakpointValue
+    breakpointValue
   );
 
   return {
@@ -336,6 +365,7 @@ export async function computeClassificationBreaks(
     requestedClassCount,
     actualClassCount,
     result,
+    breakpointLowerClassCount: result.breakpointLowerClassCount,
     colors
   };
 }
@@ -537,6 +567,11 @@ export function useClassificationBreaksController({
         counts: computation.result.counts,
         colors: computation.colors
       };
+
+      if (computation.breakpointLowerClassCount != null) {
+        classificationUpdate.breakpointLowerClassCount =
+          computation.breakpointLowerClassCount;
+      }
 
       if (
         computation.normalizedMethod !== method ||

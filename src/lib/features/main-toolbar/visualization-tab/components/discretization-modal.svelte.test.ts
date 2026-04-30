@@ -132,7 +132,7 @@ describe('DiscretizationModal', () => {
     expect(select?.value).toBe('kmeans');
   });
 
-  it('persists the selected method immediately even before breaks can be recomputed', async () => {
+  it('keeps method changes local until breaks can be recomputed', async () => {
     const onchange = vi.fn();
     const visualization = createVisualization({
       classification: {
@@ -163,18 +163,8 @@ describe('DiscretizationModal', () => {
       target: { value: 'quantile' }
     });
 
-    expect(onchange).toHaveBeenCalledWith(
-      expect.objectContaining({
-        method: ClassificationMethod.QUANTILES,
-        classes: 5,
-        numClasses: 5,
-        breaks: undefined,
-        counts: undefined,
-        labels: undefined,
-        disabledLabels: undefined,
-        categoryShapes: undefined
-      })
-    );
+    expect(onchange).not.toHaveBeenCalled();
+    expect(select?.value).toBe('quantile');
   });
 
   it('keeps the local method choice when the parent props have not caught up yet', async () => {
@@ -356,19 +346,18 @@ describe('DiscretizationModal', () => {
     ).not.toBeNull();
   });
 
-  it('debounces breakpoint updates without recomputing DuckDB breaks', () => {
+  it('recomputes breakpoint updates through DuckDB breaks', () => {
     const breakpointHandlerBlock = modalSource
       .split('function handleBreakpointChange(value: number | null) {')[1]
       ?.split('function handleBreaksChange')[0];
 
-    expect(modalSource).toContain('const BREAKPOINT_APPLY_DEBOUNCE_MS = 250;');
-    expect(breakpointHandlerBlock).toContain(
-      'const nextClassification = buildBreakpointClassification(value);'
+    expect(breakpointHandlerBlock).toContain('void computeBreaks()');
+    expect(modalSource).toContain(
+      'function handleBreakpointPositionChange(lowerClassCount: number)'
     );
-    expect(breakpointHandlerBlock).toContain(
-      'scheduleBreakpointApply(nextClassification);'
+    expect(modalSource).toContain(
+      'bind:breakpointLowerClassCount={currentBreakpointLowerClassCount}'
     );
-    expect(breakpointHandlerBlock).not.toContain('computeBreaks();');
-    expect(modalSource).toContain('flushPendingBreakpointChange();');
+    expect(modalSource).not.toContain('BREAKPOINT_APPLY_DEBOUNCE_MS');
   });
 });

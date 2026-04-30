@@ -51,6 +51,7 @@ vi.mock('$lib/features/commons/utils/logger', () => ({
 import {
   applyPaletteInversion,
   calculateBreakCounts,
+  calculateDivergingBreaks,
   calculateBreaks,
   generateColorsForBreaks
 } from '$lib/features/commons/services/classification.service';
@@ -264,6 +265,63 @@ describe('calculateBreakCounts', () => {
     expect(mockedDuckQuery.mock.calls[1]?.[0]).toContain('cnt_0');
     expect(mockedDuckQuery.mock.calls[1]?.[0]).not.toContain('-10');
     expect(mockedDuckQuery.mock.calls[1]?.[0]).not.toContain('150');
+  });
+});
+
+describe('calculateDivergingBreaks', () => {
+  it('runs the selected macro independently below and above the breakpoint', async () => {
+    mockedGetDatasetBySourceFile.mockReturnValue({
+      tableName: 'vals_diverging_test'
+    } as never);
+    mockedDuckQuery
+      .mockResolvedValueOnce({ numRows: 0 } as never)
+      .mockResolvedValueOnce(
+        makeTable({
+          row_count: 3,
+          distinct_count: 3,
+          min_val: 0,
+          max_val: 49
+        }) as never
+      )
+      .mockResolvedValueOnce(makeTable({ breaks: [20] }) as never)
+      .mockResolvedValueOnce(makeTable({ rounded: [25] }) as never)
+      .mockResolvedValueOnce(makeTable({ cnt_0: 1, cnt_1: 2 }) as never)
+      .mockResolvedValueOnce({ numRows: 0 } as never)
+      .mockResolvedValueOnce({ numRows: 0 } as never)
+      .mockResolvedValueOnce(
+        makeTable({
+          row_count: 7,
+          distinct_count: 4,
+          min_val: 50,
+          max_val: 100
+        }) as never
+      )
+      .mockResolvedValueOnce(makeTable({ breaks: [80] }) as never)
+      .mockResolvedValueOnce(makeTable({ rounded: [75] }) as never)
+      .mockResolvedValueOnce(makeTable({ cnt_0: 3, cnt_1: 4 }) as never)
+      .mockResolvedValueOnce({ numRows: 0 } as never);
+
+    const result = await calculateDivergingBreaks({
+      datasetId: 'src-diverging',
+      columnName: 'value',
+      method: 'quantiles' as never,
+      breakpointValue: 50,
+      lowerClassCount: 2,
+      upperClassCount: 2
+    });
+
+    expect(result).toEqual({
+      breaks: [25, 50, 75],
+      counts: [1, 2, 3, 4],
+      min: 0,
+      max: 100,
+      breakpointLowerClassCount: 2
+    });
+    const queries = mockedDuckQuery.mock.calls.map((call) => call[0] as string);
+    expect(queries[0]).toContain('< 50');
+    expect(queries[6]).toContain('>= 50');
+    expect(queries[2]).toContain('quantile(');
+    expect(queries[8]).toContain('quantile(');
   });
 });
 

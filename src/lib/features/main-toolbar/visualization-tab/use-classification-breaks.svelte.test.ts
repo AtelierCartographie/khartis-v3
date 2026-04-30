@@ -3,7 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const storeMocks = vi.hoisted(() => ({
   ClassificationMethod: {
     KMEANS: 'kmeans',
-    MANUAL: 'manual'
+    MANUAL: 'manual',
+    QUANTILES: 'quantiles',
+    EQUAL_INTERVAL: 'equal_interval',
+    Q6: 'q6',
+    NESTED_MEANS: 'nested_means',
+    HEAD_TAIL: 'head_tail'
   } as const,
   PrimitiveFilterType: {
     POLYGON: 'polygon'
@@ -13,6 +18,7 @@ const storeMocks = vi.hoisted(() => ({
 const serviceMocks = vi.hoisted(() => ({
   applyPaletteInversion: vi.fn((colors: string[]) => colors),
   calculateBreakCounts: vi.fn(),
+  calculateDivergingBreaks: vi.fn(),
   calculateBreaks: vi.fn(),
   computeDivergingSplit: vi.fn(() => ({
     hasCenterClass: false,
@@ -87,6 +93,7 @@ describe('use-classification-breaks', () => {
   beforeEach(() => {
     serviceMocks.applyPaletteInversion.mockClear();
     serviceMocks.calculateBreakCounts.mockReset();
+    serviceMocks.calculateDivergingBreaks.mockReset();
     serviceMocks.calculateBreaks.mockReset();
     serviceMocks.computeDivergingSplit.mockClear();
     serviceMocks.generateColorsForBreaks.mockClear();
@@ -226,6 +233,23 @@ describe('use-classification-breaks', () => {
     expect(serviceMocks.generateColorsForBreaks).toHaveBeenCalled();
   });
 
+  it('regenerates sequential colors when a breakpoint is cleared', () => {
+    const colors = resolveClassificationBreakColors(
+      {
+        colors: ['#111111', '#222222', '#333333'],
+        breaks: [10, 20],
+        breakpointValue: 15,
+        inverted: false
+      } as ClassificationConfig,
+      3,
+      [10, 20],
+      null
+    );
+
+    expect(colors).toEqual(['#auto-0', '#auto-1', '#auto-2']);
+    expect(serviceMocks.generateColorsForBreaks).toHaveBeenCalled();
+  });
+
   it('compares color arrays without false positives', () => {
     expect(
       areClassificationColorsEqual(
@@ -269,6 +293,40 @@ describe('use-classification-breaks', () => {
       '#auto-2',
       '#auto-3'
     ]);
+  });
+
+  it('computes left and right breakpoint classes independently', async () => {
+    serviceMocks.calculateDivergingBreaks.mockResolvedValue({
+      min: 0,
+      max: 100,
+      breaks: [25, 50, 75],
+      counts: [1, 2, 3, 4],
+      breakpointLowerClassCount: 2
+    });
+
+    const computation = await computeClassificationBreaks({
+      datasetSourceFileId: 'dataset-source',
+      valueColumn: 'population',
+      classification: {
+        method: ClassificationMethod.KMEANS,
+        numClasses: 4,
+        classes: 4,
+        breakpointValue: 50,
+        breakpointLowerClassCount: 2
+      } as ClassificationConfig
+    });
+
+    expect(serviceMocks.calculateDivergingBreaks).toHaveBeenCalledWith({
+      datasetId: 'dataset-source',
+      columnName: 'population',
+      method: ClassificationMethod.KMEANS,
+      breakpointValue: 50,
+      lowerClassCount: 2,
+      upperClassCount: 2
+    });
+    expect(serviceMocks.calculateBreaks).not.toHaveBeenCalled();
+    expect(computation?.breakpointLowerClassCount).toBe(2);
+    expect(computation?.actualClassCount).toBe(4);
   });
 
   it('uses break counts for manual mode when thresholds are already defined', async () => {
