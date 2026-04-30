@@ -130,6 +130,13 @@ describe('CategoriesAspectPopover (Figma 952:156994 — Polygons variant)', () =
     expect(source).toContain('handleCommonAspectChange');
   });
 
+  it('disables automatic stroke options when the common stroke is disabled', () => {
+    expect(source).toContain("key === 'stroke' && value === false");
+    expect(source).toContain('autoColor: false');
+    expect(source).toContain('strokeUnique: false');
+    expect(source).toContain('disabled={!draftCommonAspect.stroke}');
+  });
+
   it('should suppress the per-category accordion for the ranked symbols variant', () => {
     expect(source).toContain(
       'const showPerCategoryAspect = $derived(!isSymbolsDifferentRank)'

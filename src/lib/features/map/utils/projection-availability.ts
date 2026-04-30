@@ -58,6 +58,7 @@ export const CDC_PRIMARY_PROJECTION_IDS = [
 ] as const;
 
 const MAPLIBRE_GLOBE_PROJECTION_IDS = new Set(['mercator', 'orthographic']);
+const FRANCE_COMPOSITE_PROJECTION_ID = 'composite:FRANCE_DOM_TOM';
 
 const FRANCE_PRESET_BOUNDS =
   getBasemapViewportPreset(BasemapStyle.FRANCE_COULEURS)?.bounds ?? null;
@@ -138,7 +139,9 @@ export function getAvailableProjectionIds(
   projectionIds: readonly string[]
 ): string[] {
   if (isDeckOrthographicEngine(context.engine)) {
-    return [...projectionIds];
+    return projectionIds.filter((projectionId) =>
+      isDeckProjectionCompatibleWithContext(projectionId, context)
+    );
   }
 
   const allowGlobe = isGlobeProjectionAvailable(
@@ -151,6 +154,17 @@ export function getAvailableProjectionIds(
       ? MAPLIBRE_GLOBE_PROJECTION_IDS.has(projectionId)
       : projectionId === 'mercator'
   );
+}
+
+function isDeckProjectionCompatibleWithContext(
+  projectionId: string,
+  context: ProjectionAvailabilityContext
+): boolean {
+  if (projectionId !== FRANCE_COMPOSITE_PROJECTION_ID) {
+    return true;
+  }
+
+  return context.zone === 'france';
 }
 
 export function isProjectionAvailable(

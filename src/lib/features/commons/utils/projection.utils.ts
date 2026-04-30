@@ -328,13 +328,26 @@ function createProjectionFitTarget(bbox: [number, number, number, number]) {
         type: GEOJSON_TYPE.FEATURE,
         geometry: {
           type: 'MultiPoint' as const,
-          coordinates: [
-            [west, south],
-            [east, south],
-            [east, north],
-            [west, north]
-          ]
+          coordinates: createBboxBoundaryCoordinates(bbox)
         },
         properties: {}
       };
+}
+
+function createBboxBoundaryCoordinates(
+  bbox: [number, number, number, number]
+): [number, number][] {
+  const [west, south, east, north] = bbox;
+  const steps = 32;
+  const coordinates: [number, number][] = [];
+
+  for (let index = 0; index <= steps; index += 1) {
+    const ratio = index / steps;
+    const lon = west + (east - west) * ratio;
+    const lat = south + (north - south) * ratio;
+    coordinates.push([lon, south], [lon, north], [west, lat], [east, lat]);
+  }
+
+  coordinates.push([(west + east) / 2, (south + north) / 2]);
+  return coordinates;
 }
