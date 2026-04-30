@@ -5,7 +5,8 @@
   import { SLIDER_DEBOUNCE_MS } from '$lib/features/main-toolbar/constants';
   import {
     DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX,
-    NESTED_MEANS_CLASS_COUNTS
+    NESTED_MEANS_CLASS_COUNTS,
+    resolveBreakpointLowerClassCount
   } from './discretization.utils';
   import {
     Select,
@@ -49,6 +50,7 @@
     classCountMax?: number;
     breaks?: ClassBreak[];
     breakpointValue?: number | null;
+    breakpointLowerClassCount?: number | null;
     showBreakpointControls?: boolean;
     divergingPreviewColors?: string[];
     showHistogram?: boolean;
@@ -57,6 +59,7 @@
     onmethodchange?: (method: ClassificationMethod) => void;
     onclasseschange?: (num: number) => void;
     onbreakpointchange?: (value: number | null) => void;
+    onbreakpointpositionchange?: (lowerClassCount: number) => void;
     onbreakschange?: (breaks: ClassBreak[]) => void;
   }
 
@@ -72,6 +75,7 @@
       { min: 80, max: 100, count: 29, color: '#08519c' }
     ]),
     breakpointValue = $bindable<number | null>(null),
+    breakpointLowerClassCount = $bindable<number | null>(null),
     showBreakpointControls = true,
     divergingPreviewColors = [],
     showHistogram = true,
@@ -80,6 +84,7 @@
     onmethodchange,
     onclasseschange,
     onbreakpointchange,
+    onbreakpointpositionchange,
     onbreakschange
   }: Props = $props();
 
@@ -113,42 +118,50 @@
     const max = breaks[breaks.length - 1]?.max ?? 100;
     return max > dataMin ? max : dataMin + 1;
   });
-  const breakpointSliderValue = $derived.by(() => {
-    if (breakpointValue !== null) {
-      return breakpointValue;
-    }
-
-    return dataMin + (dataMax - dataMin) / 2;
-  });
+  const breakpointLowerClassCountMax = $derived(
+    Math.max(1, Math.floor(numClasses) - 1)
+  );
+  const isBreakpointValueValid = $derived(
+    breakpointValue !== null &&
+      Number.isFinite(breakpointValue) &&
+      breakpointValue > dataMin &&
+      breakpointValue < dataMax
+  );
+  const breakpointSliderValue = $derived(
+    resolveBreakpointLowerClassCount(numClasses, breakpointLowerClassCount)
+  );
 
   let validationErrors = $state<string[]>([]);
 
-  let breakpointTimer: ReturnType<typeof setTimeout> | null = null;
-  let breakpointPending: number | null = null;
+  let breakpointPositionTimer: ReturnType<typeof setTimeout> | null = null;
+  let breakpointPositionPending: number | null = null;
 
-  function flushBreakpoint() {
-    if (breakpointTimer !== null) {
-      clearTimeout(breakpointTimer);
-      breakpointTimer = null;
+  function flushBreakpointPosition() {
+    if (breakpointPositionTimer !== null) {
+      clearTimeout(breakpointPositionTimer);
+      breakpointPositionTimer = null;
     }
-    if (breakpointPending !== null) {
-      const next = breakpointPending;
-      breakpointPending = null;
-      onbreakpointchange?.(next);
+    if (breakpointPositionPending !== null) {
+      const next = breakpointPositionPending;
+      breakpointPositionPending = null;
+      onbreakpointpositionchange?.(next);
     }
   }
 
-  function scheduleBreakpoint(next: number) {
-    breakpointValue = next;
-    breakpointPending = next;
-    if (breakpointTimer !== null) clearTimeout(breakpointTimer);
-    breakpointTimer = setTimeout(
-      flushBreakpoint,
+  function scheduleBreakpointPosition(next: number) {
+    const lowerClassCount = resolveBreakpointLowerClassCount(numClasses, next);
+    breakpointLowerClassCount = lowerClassCount;
+    breakpointPositionPending = lowerClassCount;
+    if (breakpointPositionTimer !== null) {
+      clearTimeout(breakpointPositionTimer);
+    }
+    breakpointPositionTimer = setTimeout(
+      flushBreakpointPosition,
       SLIDER_DEBOUNCE_MS.CLASSIFICATION
     );
   }
 
-  onDestroy(flushBreakpoint);
+  onDestroy(flushBreakpointPosition);
 
   function handleMethodChange(e: Event) {
     validationErrors = [];
@@ -331,9 +344,21 @@
             placeholder={m.discretization_none_placeholder()}
             value={breakpointValue !== null ? String(breakpointValue) : ''}
             on:input={(e) => {
-              const parsed = parseFloat(String(e.detail ?? ''));
-              breakpointValue = isNaN(parsed) ? null : parsed;
-              onbreakpointchange?.(breakpointValue);
+              const rawValue = String(e.detail ?? '');
+              const parsed = Number(rawValue);
+              if (rawValue.trim() === '') {
+                breakpointValue = null;
+                onbreakpointchange?.(null);
+                return;
+              }
+              if (
+                Number.isFinite(parsed) &&
+                parsed > dataMin &&
+                parsed < dataMax
+              ) {
+                breakpointValue = parsed;
+                onbreakpointchange?.(parsed);
+              }
             }}
           />
         </div>
@@ -342,18 +367,20 @@
           <div
             class="breakpoint-slider-host"
             role="presentation"
-            onpointerupcapture={flushBreakpoint}
-            onkeyupcapture={flushBreakpoint}
-            onpointerleave={flushBreakpoint}
+            onpointerupcapture={flushBreakpointPosition}
+            onkeyupcapture={flushBreakpointPosition}
+            onpointerleave={flushBreakpointPosition}
           >
             <Slider
-              min={dataMin}
-              max={dataMax}
+              min={1}
+              max={breakpointLowerClassCountMax}
               value={breakpointSliderValue}
+              step={1}
+              disabled={!isBreakpointValueValid}
               hideTextInput
               minLabel=""
               maxLabel=""
-              on:input={(e) => scheduleBreakpoint(e.detail)}
+              on:input={(e) => scheduleBreakpointPosition(e.detail)}
             />
           </div>
           <div class="palette-strip">
