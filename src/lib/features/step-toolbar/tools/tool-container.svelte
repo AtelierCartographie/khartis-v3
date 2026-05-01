@@ -139,7 +139,7 @@
 
   .tool-body {
     background-color: inherit;
-    padding: 0 var(--cds-spacing-05) var(--cds-spacing-05);
+    padding: var(--cds-spacing-05);
   }
 
   .tool-body :global(.expandable-stack) {
