@@ -235,6 +235,8 @@ export function resolveClassificationColors({
       (!ignorePatternPalette || userPalette.type !== PALETTE_TYPE.PATTERN)
     ) {
       colors = generatePaletteColors(userPalette, resolvedColorCount, contrast);
+    } else if (classification.colors?.length === resolvedColorCount) {
+      colors = classification.colors;
     } else if (resolvedColorCount <= DEFAULT_CATEGORICAL_COLORS.length) {
       colors = DEFAULT_CATEGORICAL_COLORS.slice(0, resolvedColorCount);
     } else {

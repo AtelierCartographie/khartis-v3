@@ -64,6 +64,19 @@ describe('SymbolModeUnique — anti-leak fill ↔ stroke palette', () => {
     );
   });
 
+  it('passes symbol missing-data state to the stroke section', () => {
+    const strokeBlock = source.split('<StrokeSection')[1]?.split('/>')[0];
+    expect(strokeBlock).toBeDefined();
+    expect(strokeBlock).toContain('showMissingData={showMissingData}');
+    expect(strokeBlock).toContain('missingDataColor={missingDataColor}');
+    expect(strokeBlock).toContain(
+      'onMissingDataShowChange={handleMissingDataShowChange}'
+    );
+    expect(strokeBlock).toContain(
+      'onMissingDataColorChange={handleMissingDataColorChange}'
+    );
+  });
+
   it('routes FillSection strictly to onClassificationChange (fill role)', () => {
     const fillBlock = source.split('<FillSection')[1]?.split('/>')[0];
     expect(fillBlock).toBeDefined();

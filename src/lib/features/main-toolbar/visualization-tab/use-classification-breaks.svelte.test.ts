@@ -174,6 +174,24 @@ describe('use-classification-breaks', () => {
     ).not.toHaveBeenCalled();
   });
 
+  it('preserves custom categorical colors when no named palette resolves', () => {
+    const colors = resolveClassificationColors({
+      classification: {
+        paletteId: '__custom__',
+        labels: ['A', 'B', 'C'],
+        colors: ['#custom-a', '#custom-b', '#custom-c'],
+        inverted: false
+      } as ClassificationConfig,
+      usesCategories: true
+    });
+
+    expect(colors).toEqual(['#custom-a', '#custom-b', '#custom-c']);
+    expect(paletteMocks.generatePaletteColors).not.toHaveBeenCalled();
+    expect(
+      paletteMocks.generateCategoricalColorsFromSeed
+    ).not.toHaveBeenCalled();
+  });
+
   it('reuses existing colors when the class count already matches', () => {
     const colors = resolveClassificationBreakColors(
       {

@@ -621,15 +621,57 @@
     });
   }
 
+  function resolveBreakpointFromLowerClassCount(
+    lowerClassCount: number
+  ): number | null {
+    const breakValues = getCurrentBreakValues();
+    if (breakValues.length === 0) {
+      return null;
+    }
+
+    const index = Math.max(
+      0,
+      Math.min(breakValues.length - 1, lowerClassCount - 1)
+    );
+    const value = breakValues[index];
+
+    return Number.isFinite(value) ? value : null;
+  }
+
   function handleBreakpointPositionChange(lowerClassCount: number) {
     currentBreakpointLowerClassCount = resolveBreakpointLowerClassCount(
       currentNumClasses,
       lowerClassCount
     );
     if (currentBreakpoint === null) {
+      currentBreakpoint = resolveBreakpointFromLowerClassCount(
+        currentBreakpointLowerClassCount
+      );
+    }
+
+    if (currentBreakpoint === null) {
       return;
     }
-    void computeBreaks();
+
+    void computeBreaks().then((computed) => {
+      if (computed) {
+        return;
+      }
+
+      const nextClassification =
+        buildBreakpointClassification(currentBreakpoint);
+      if (!nextClassification) {
+        persistSelectionDraft({
+          breakpointValue: currentBreakpoint,
+          breakpointLowerClassCount: currentBreakpointLowerClassCount
+        });
+        return;
+      }
+
+      lastLocalClassification = cloneClassification(nextClassification);
+      lastLocalContextKey = activeContextKey;
+      onchange?.(nextClassification);
+    });
   }
 
   function handleBreaksChange(breaks: ClassBreak[]) {
@@ -701,6 +743,9 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    box-shadow:
+      0 4px 16px rgba(0, 0, 0, 0.12),
+      0 0 1px rgba(0, 0, 0, 0.15);
   }
 
   .panel-header {

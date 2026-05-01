@@ -43,6 +43,7 @@
   import { filterFieldsByKind } from '../../use-field-selection.svelte';
   import { parseOpacityToSlider } from '../../coerce.utils';
   import { resetVisualClassification } from './classification-reset.utils';
+  import MissingDataSection from './missing-data-section.svelte';
 
   interface Props {
     visualization?: VisualizationConfig;
@@ -67,10 +68,15 @@
     strokeClassification?: ClassificationConfig;
     strokeValueColumn?: string;
     strokeCategoryColumn?: string;
+    showMissingData?: boolean;
+    missingDataColor?: string;
+    showMissingDataSection?: boolean;
     showSliderBounds?: boolean;
     sliderInputWidth?: string;
     facetsValueSlotPath?: FacetSlotPath;
     facetsCategorySlotPath?: FacetSlotPath;
+    onMissingDataShowChange?: (show: boolean) => void;
+    onMissingDataColorChange?: (color: string) => void;
   }
 
   let {
@@ -90,10 +96,15 @@
     strokeClassification,
     strokeValueColumn,
     strokeCategoryColumn,
+    showMissingData,
+    missingDataColor,
+    showMissingDataSection = true,
     showSliderBounds = true,
     sliderInputWidth = '128px',
     facetsValueSlotPath,
-    facetsCategorySlotPath
+    facetsCategorySlotPath,
+    onMissingDataShowChange,
+    onMissingDataColorChange
   }: Props = $props();
 
   const resolvedClassesPalette = $derived(
@@ -118,10 +129,21 @@
   let strokeDashedPattern = $state<BasemapDottedPattern>(
     BasemapDottedPattern.DOTS
   );
-  let strokeShowMissing = $state<boolean>(true);
   let colorFieldId = $state<number>(NONE_FIELD_ID);
   let facetsPickerOpen = $state(false);
   let categoriesPopoverOpen = $state(false);
+  const resolvedShowMissingData = $derived(
+    showMissingData ??
+      visualization?.missingData?.show ??
+      visualization?.modes?.strokeShowMissing ??
+      true
+  );
+  const resolvedMissingDataColor = $derived(
+    missingDataColor ??
+      visualization?.missingData?.color ??
+      DEFAULT_COLORS.missingData
+  );
+  let strokeShowMissing = $derived(resolvedShowMissingData);
   const noneOption = $derived({ id: NONE_FIELD_ID, text: m.none() });
   const selectableDataFields = $derived([noneOption, ...dataFields]);
   const selectableValueDataFields = $derived(
@@ -176,7 +198,6 @@
       strokeDashedPattern =
         visualization.style.strokeDashedPattern ?? BasemapDottedPattern.DOTS;
     }
-    strokeShowMissing = visualization?.modes?.strokeShowMissing ?? true;
     const mappedFieldName =
       strokeMode === StrokeMode.CATEGORIES
         ? (strokeCategoryColumn ?? visualization?.mapping.categoryColumn)
@@ -274,6 +295,7 @@
 
   function handleStrokeShowMissingChange(value: boolean) {
     strokeShowMissing = value;
+    onMissingDataShowChange?.(value);
     onModesChange?.({ strokeShowMissing: value });
   }
 
@@ -400,11 +422,6 @@
       inputWidth={sliderInputWidth}
       onchange={handleStrokeWidthChange}
     />
-    <ToggleWithLabel
-      label={m.show_no_data()}
-      toggled={strokeShowMissing}
-      ontoggle={handleStrokeShowMissingChange}
-    />
   {:else if strokeMode === StrokeMode.CATEGORIES}
     <div class="field-group">
       <FacetsVariablePicker
@@ -464,6 +481,17 @@
       showMinMax={showSliderBounds}
       inputWidth={sliderInputWidth}
       onchange={handleStrokeWidthChange}
+    />
+  {/if}
+
+  {#if showMissingDataSection && (strokeMode === StrokeMode.CLASSES || strokeMode === StrokeMode.CATEGORIES)}
+    <MissingDataSection
+      bind:show={strokeShowMissing}
+      color={resolvedMissingDataColor}
+      showShapeSelector={false}
+      showSizeSlider={false}
+      onshowchange={handleStrokeShowMissingChange}
+      oncolorchange={onMissingDataColorChange ?? (() => {})}
     />
   {/if}
 
