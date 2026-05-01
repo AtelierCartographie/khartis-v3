@@ -425,7 +425,7 @@ describe('legend overlay visibility', () => {
     expect(
       container.querySelector('.legend-svg--missing-data')
     ).not.toBeInTheDocument();
-    expect(screen.getByText('Absence de données')).toBeInTheDocument();
+    expect(screen.getByText('Données manquantes')).toBeInTheDocument();
   });
 
   it('renders point classed fill legends with the active fill value column and class count', () => {
@@ -616,7 +616,7 @@ describe('legend overlay visibility', () => {
 
     render(LegendOverlay);
 
-    expect(screen.getAllByText('Absence de données')).toHaveLength(1);
+    expect(screen.getAllByText('Données manquantes')).toHaveLength(1);
   });
 
   it('renders proportional text size legends through the original symbol legend generator', () => {
@@ -631,7 +631,7 @@ describe('legend overlay visibility', () => {
       container.querySelector('.legend-svg--text-size')
     ).toBeInTheDocument();
     expect(container.querySelector('.symbol_legend')).toBeInTheDocument();
-    expect(screen.getByText('Absence de données')).toBeInTheDocument();
+    expect(screen.getByText('Données manquantes')).toBeInTheDocument();
   });
 
   it('renders bivariate text legends as compact color and size blocks', () => {
