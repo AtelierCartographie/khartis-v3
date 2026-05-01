@@ -73,7 +73,7 @@ export function draw_categorical_legend(
     h: box_dim,
     w: footerType === 'line' ? box_dim * 1.5 : box_dim
   };
-  const gap = Math.max(6, Math.round(fontSize * 0.5));
+  const gap = Math.max(8, Math.round(fontSize * 0.6));
   const gutter = 24;
   let label_width = Math.round(fontSize * 15);
   const items_nb = raw_categories.length;
