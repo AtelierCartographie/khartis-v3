@@ -110,7 +110,7 @@ import {
   withRowHighlightAccessor
 } from './layer-helpers';
 import {
-  getPatternAtlas,
+  getPatternAtlasForPattern,
   isValidPatternId,
   PATTERN_TYPE_MAP
 } from './pattern-texture';
@@ -2051,14 +2051,24 @@ function buildPatternProps(ctx: LayerContext): {
     ? getPrimitiveClassification(ctx.viz, PrimitiveFilterType.POLYGON)
         ?.patternId
     : undefined;
+  const patternParams = ctx.viz
+    ? getPrimitiveClassification(ctx.viz, PrimitiveFilterType.POLYGON)
+        ?.patternParams
+    : undefined;
   if (!isValidPatternId(patternId)) {
     return null;
   }
 
-  const { atlas, mapping } = getPatternAtlas();
+  const { atlas, mapping } = getPatternAtlasForPattern(
+    patternId,
+    patternParams
+  );
   if (Object.keys(mapping).length === 0) {
     return null;
   }
+  const patternScale = Math.max(1, patternParams?.scale ?? 8) * 25;
+  const patternRotation =
+    patternParams?.angle ?? PATTERN_TYPE_MAP[patternId]?.angle ?? 0;
 
   return {
     extensions: [getFillStyleExtension()],
@@ -2066,8 +2076,8 @@ function buildPatternProps(ctx: LayerContext): {
     fillPatternMapping: mapping,
     fillPatternMask: true,
     getFillPattern: () => patternId,
-    getFillPatternScale: 200,
-    getFillPatternRotation: PATTERN_TYPE_MAP[patternId]?.angle ?? 0
+    getFillPatternScale: patternScale,
+    getFillPatternRotation: patternRotation
   };
 }
 
@@ -2098,8 +2108,8 @@ function createPolygonPatternOverlayLayer(
     ...(beforeId && { beforeId }),
     updateTriggers: {
       getFillPattern: [polygonPatternId],
-      getFillPatternScale: [polygonPatternId],
-      getFillPatternRotation: [polygonPatternId]
+      getFillPatternScale: [patternProps.getFillPatternScale],
+      getFillPatternRotation: [patternProps.getFillPatternRotation]
     },
     dataComparator: (newData, oldData) => newData === oldData
   });

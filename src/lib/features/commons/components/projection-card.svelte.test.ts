@@ -13,12 +13,10 @@ describe('ProjectionCard', () => {
     expect(source).toContain('--khartis-additions-layer-hover-02-suggestions');
   });
 
-  it('positions the radio in the preview area for all card layouts', () => {
-    expect(source).toContain('class="preview-radio kh-card-radio"');
-    expect(source).toContain('position: absolute;');
-    expect(source).toContain('top: 8px;');
-    expect(source).toContain('left: 8px;');
-    expect(source).not.toContain('class="radio-wrapper kh-card-radio"');
+  it('positions the radio in the title area to match the projection card design', () => {
+    expect(source).toContain('class="title-radio kh-card-radio"');
+    expect(source).toContain('.title-radio {');
+    expect(source).not.toContain('class="preview-radio kh-card-radio"');
   });
 
   it('keeps the preview radio accessible without showing duplicate card text', () => {
@@ -31,5 +29,23 @@ describe('ProjectionCard', () => {
     expect(source).toContain('--kh-card-radio-focus-color');
     expect(source).toContain('--kh-card-radio-color: #003a6d;');
     expect(source).toContain('--kh-card-radio-color: #161616;');
+  });
+
+  it('renders the equal-area affordance as Figma surface metadata', () => {
+    expect(source).toContain('class="surface-indicator"');
+    expect(source).toContain('<CheckmarkFilled size={16} />');
+    expect(source).toContain('class="projection-tag-pill"');
+  });
+
+  it('draws the selected state above the card content so previews cannot clip it', () => {
+    expect(source).toContain('.projection-card.selected::after');
+    expect(source).toContain('z-index: 2;');
+    expect(source).toContain(
+      'border: 3px solid var(--projection-card-focus-color);'
+    );
+  });
+
+  it('uses a neutral preview glyph instead of a static globe icon', () => {
+    expect(source).toContain('icon="none"');
   });
 });

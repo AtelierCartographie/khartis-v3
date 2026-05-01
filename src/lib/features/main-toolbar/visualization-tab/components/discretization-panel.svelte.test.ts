@@ -71,8 +71,21 @@ describe('DiscretizationPanel — break edition policy', () => {
     expect(source).toContain('onbreakpointpositionchange?:');
     expect(source).toContain('min={1}');
     expect(source).toContain('max={breakpointLowerClassCountMax}');
-    expect(source).toContain('disabled={!isBreakpointValueValid}');
+    expect(source).toContain('disabled={!canUseBreakpointPosition}');
     expect(source).toContain('scheduleBreakpointPosition(e.detail)');
+  });
+
+  it('keeps a local breakpoint input draft so partial values can be typed before becoming valid', () => {
+    expect(source).toContain('let breakpointInputValue = $derived(');
+    expect(source).toContain('function handleBreakpointValueInput(e: Event)');
+    expect(source).toContain('breakpointInputValue = rawValue;');
+    expect(source).toContain('value={breakpointInputValue}');
+    expect(source).toContain('on:input={handleBreakpointValueInput}');
+  });
+
+  it('enables the breakpoint position slider when computed class breaks are available even before a breakpoint is selected', () => {
+    expect(source).toContain('const canUseBreakpointPosition = $derived(');
+    expect(source).toContain('isBreakpointValueValid || breaks.length > 1');
   });
 
   it('exposes classification edge safety: guards empty breaks, NaN min/max', () => {

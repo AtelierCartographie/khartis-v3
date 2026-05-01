@@ -3,6 +3,7 @@
   import { KEY } from '$lib/features/commons/constants/dom.constants';
   import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
   import * as m from '$lib/paraglide/messages';
+  import { getLocale } from '$lib/paraglide/runtime';
   import { RadioButton } from 'carbon-components-svelte';
   import { Calendar } from 'carbon-icons-svelte';
   import clsx from 'clsx';
@@ -28,6 +29,14 @@
     disabled = false,
     onclick
   }: BasemapCardVerticalProps = $props();
+
+  const lang = getLocale();
+  const title = $derived(lang === 'fr' ? basemap.title_fr : basemap.title_en);
+  const subtitle = $derived(
+    lang === 'fr'
+      ? (basemap.subtitle_fr ?? '').trim()
+      : (basemap.subtitle_en ?? '').trim()
+  );
 
   function handleCardClick() {
     if (!disabled && onclick) onclick();
@@ -61,8 +70,6 @@
     matchScore !== undefined ? Math.round(matchScore) : undefined
   );
 
-  const subtitle = $derived((basemap.subtitle_fr ?? '').trim());
-
   const aspectRatio = '16:9';
 </script>
 
@@ -72,7 +79,9 @@
   tabindex={disabled ? -1 : 0}
   onclick={handleCardClick}
   onkeydown={handleKeyDown}
-  aria-label={subtitle ? `${basemap.title_fr} · ${subtitle}` : basemap.title_fr}
+  aria-label={subtitle
+    ? `${title}${m.aria_label_separator()}${subtitle}`
+    : title}
   aria-pressed={selected}
   aria-disabled={disabled}
 >
@@ -81,7 +90,7 @@
       <RadioButton
         checked={selected}
         disabled={disabled}
-        labelText={basemap.title_fr}
+        labelText={title}
         hideLabel
       />
     </div>
@@ -96,7 +105,7 @@
   <div class="content-section">
     <div class="title-row">
       <div class="title-copy">
-        <p class="card-title">{basemap.title_fr}</p>
+        <p class="card-title">{title}</p>
         {#if subtitle}
           <p class="card-subtitle">{subtitle}</p>
         {/if}

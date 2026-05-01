@@ -21,6 +21,14 @@ describe('buildProjectionMaskPath', () => {
 
     expect(result).toMatch(/^M/);
     expect(result).not.toContain('H800V600H0Z');
+    expect(result).not.toContain('NaN');
+    expect(result).not.toContain('Infinity');
+
+    const [[minX, minY], [maxX, maxY]] = d3geo.geoPath(projection).bounds({
+      type: 'Sphere'
+    });
+    expect(maxX - minX).toBeGreaterThan(0);
+    expect(maxY - minY).toBeGreaterThan(0);
   });
 
   it('returns null when no projection is available', () => {

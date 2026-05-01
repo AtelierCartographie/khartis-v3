@@ -18,10 +18,10 @@ describe('projection priority', () => {
     ).toBe(catalogProjection);
   });
 
-  it('uses the user projection when no catalog projection exists', () => {
-    expect(resolveProjectionForRender(undefined, userProjection, 'auto')).toBe(
-      userProjection
-    );
+  it('ignores automatic suggestions when no catalog projection exists', () => {
+    expect(
+      resolveProjectionForRender(undefined, userProjection, 'auto')
+    ).toBeUndefined();
   });
 
   it('falls back to the catalog projection when manual overrides are blocked', () => {

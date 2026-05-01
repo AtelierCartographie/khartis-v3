@@ -187,6 +187,11 @@ const { actions, getState } = createToolStore<
 >(
   DEFAULT_STATE,
   (s) => {
+    const activateManualProjectionOverride = () => {
+      s.overrideActive = true;
+      s.overrideSource = 'manual';
+    };
+
     const setSelectedInternal = (
       projectionId: string,
       applyToMap: boolean,
@@ -239,6 +244,9 @@ const { actions, getState } = createToolStore<
         s.activeSuggestionId = undefined;
         s.overrideActive = Boolean(s.customCode);
         s.overrideSource = s.customCode ? 'manual' : undefined;
+        if (s.customCode) {
+          mapProjectionStore.setProjection(MERCATOR_PROJECTION_TYPE);
+        }
       },
       setViewMode: (mode: ViewMode) => {
         s.viewMode = mode;
@@ -248,6 +256,7 @@ const { actions, getState } = createToolStore<
         s.center = [longitude, latitude];
         s.longitude = longitude;
         s.latitude = latitude;
+        activateManualProjectionOverride();
 
         const map = mapInstanceStore.map;
         if (map) {
@@ -256,6 +265,7 @@ const { actions, getState } = createToolStore<
       },
       setRotation: (rotation: number) => {
         s.rotation = rotation;
+        activateManualProjectionOverride();
 
         const map = mapInstanceStore.map;
         if (map) {
@@ -289,13 +299,8 @@ const { actions, getState } = createToolStore<
             bbox: bounds
           });
 
-          // National projections trump generic ones because "Nationale" gathers
-          // officially endorsed CRSes per zone (Lambert-93 for France, etc.).
-          // Ties inside each list have already been broken by the upstream
-          // suggester, so picking the first item is the canonical default.
-          const best = result.national[0] ?? result.generic[0];
-          if (best) {
-            applyProjectionSuggestion(best, 'auto');
+          if (s.overrideSource === 'auto') {
+            clearSelectedInternal(true);
           }
         })();
       },
@@ -327,8 +332,7 @@ const { actions, getState } = createToolStore<
       }
 
       const builtProjection = buildProjectionFromSuggestion(suggestion);
-      const activeSuggestionId =
-        overrideSource === 'manual' ? suggestion.id : undefined;
+      const activeSuggestionId = suggestion.id;
 
       if (builtProjection?.source === 'proj4' && suggestion.proj4String) {
         s.customCode = suggestion.proj4String;

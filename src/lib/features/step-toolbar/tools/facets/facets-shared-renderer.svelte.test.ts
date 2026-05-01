@@ -23,6 +23,12 @@ describe('facets shared renderer structure', () => {
     expect(source).not.toContain('void projectionStore.referenceBbox;');
   });
 
+  it('ignores persisted non-manual projection overrides in facet rendering', () => {
+    expect(source).toContain('function getProjectionOverrideForRender(');
+    expect(source).toContain("projectionState.overrideSource !== 'manual'");
+    expect(source).toContain('resolveProjectionForRender(');
+  });
+
   it('prefers rendered dataset bounds for manual projection fits even when a joined basemap is referenced', () => {
     const helperStart = source.indexOf(
       'function shouldPreferDatasetProjectionBbox'

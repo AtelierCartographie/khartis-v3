@@ -11,10 +11,14 @@
     CategoriesCommonAspect,
     CategoryDraft
   } from './categories-aspect-popover.types';
-  import { DEFAULT_COMMON_ASPECT } from './categories-aspect-popover.types';
+  import {
+    DEFAULT_COMMON_ASPECT,
+    PatternType
+  } from './categories-aspect-popover.types';
   import type {
     Palette,
     PaletteType,
+    PatternId,
     PatternParams
   } from './palette.constants';
   import { PALETTE_TYPE, normalizePaletteId } from './palette.constants';
@@ -33,6 +37,7 @@
     categoryLabels?: string[];
     disabledCategoryLabels?: string[];
     categoriesCommonAspect?: CategoriesCommonAspect;
+    showCategoriesCommonAspect?: boolean;
     categoriesPopoverOpen?: boolean;
     classification?: ClassificationConfig;
     onexpand?: () => void;
@@ -58,6 +63,7 @@
     categoryLabels = [],
     disabledCategoryLabels = [],
     categoriesCommonAspect = DEFAULT_COMMON_ASPECT,
+    showCategoriesCommonAspect,
     categoriesPopoverOpen = $bindable(false),
     classification,
     onexpand,
@@ -70,6 +76,25 @@
   let dropdownOpen = $state(false);
   let popoverOpen = $state(false);
   let triggerRef = $state<HTMLDivElement>();
+
+  const CATEGORY_PATTERN_IDS_BY_TYPE: Record<PatternType, PatternId> = {
+    [PatternType.DOTS]: 'dots',
+    [PatternType.LINES]: 'horizontal',
+    [PatternType.CROSSHATCH]: 'cross',
+    [PatternType.DASHES]: 'diagonal'
+  };
+  const CATEGORY_PATTERN_IDS = new Set<string>([
+    'diagonal',
+    'diagonal-reverse',
+    'horizontal',
+    'vertical',
+    'dots',
+    'cross',
+    'triangle',
+    'square',
+    'diamond',
+    'plus'
+  ]);
 
   const MAX_PREVIEW_SWATCHES = 20;
   const displayColors = $derived.by(() => {
@@ -130,6 +155,11 @@
       };
     })
   );
+  const resolvedShowCategoriesCommonAspect = $derived(
+    showCategoriesCommonAspect ??
+      (categoriesVariant === 'polygons' ||
+        Boolean(onCategoriesCommonAspectChange))
+  );
 
   function handleClick() {
     dropdownOpen = !dropdownOpen;
@@ -183,6 +213,35 @@
     return next.map((category) => category.color);
   }
 
+  function resolveValidatedCategoryPatternId(
+    commonAspect: CategoriesCommonAspect
+  ): PatternId | undefined {
+    if (categoriesVariant !== 'polygons' || !commonAspect.pattern) {
+      return undefined;
+    }
+
+    const existingPatternId = coerceCategoryPatternId(
+      classification?.patternId
+    );
+    if (existingPatternId) {
+      return existingPatternId;
+    }
+
+    return (
+      CATEGORY_PATTERN_IDS_BY_TYPE[
+        commonAspect.patternType ?? PatternType.DOTS
+      ] ?? 'dots'
+    );
+  }
+
+  function coerceCategoryPatternId(
+    patternId: string | undefined
+  ): PatternId | undefined {
+    return patternId && CATEGORY_PATTERN_IDS.has(patternId)
+      ? (patternId as PatternId)
+      : undefined;
+  }
+
   function handleCategoriesValidateWithAspect(
     next: CategoryDraft[],
     commonAspect: CategoriesCommonAspect
@@ -215,6 +274,7 @@
       resolvedColors.every((color, index) => color === colors[index])
         ? (selectedPaletteId ?? '__custom__')
         : '__custom__';
+    const patternId = resolveValidatedCategoryPatternId(commonAspect);
 
     onClassificationChange?.({
       colors: resolvedColors,
@@ -242,8 +302,8 @@
         : undefined,
       paletteId,
       inverted: false,
-      patternId: undefined,
-      patternParams: undefined
+      patternId,
+      patternParams: patternId ? classification?.patternParams : undefined
     });
     onCategoriesCommonAspectChange?.(commonAspect, normalizedCategories);
     categoriesPopoverOpen = false;
@@ -346,6 +406,7 @@
   triggerElement={triggerRef}
   categories={categoryDrafts}
   variant={categoriesVariant}
+  showCommonAspect={resolvedShowCategoriesCommonAspect}
   commonAspect={categoriesCommonAspect}
   onclose={handleCategoriesClose}
   onvalidate={handleCategoriesValidateWithAspect}

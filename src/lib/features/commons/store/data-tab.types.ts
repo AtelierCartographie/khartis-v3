@@ -61,6 +61,15 @@ export interface EnrichDataState {
   joinTabularEnabled: boolean;
   overlayBasemapEnabled: boolean;
   basemapTabIndex: number;
+  preferredOverlayBasemapId?: string;
+  preferredOverlayBasemapSource?: BasemapSource;
+}
+
+export interface DataTabUiPanelsState {
+  enrichJoinTabularOpen: boolean;
+  enrichOverlayBasemapOpen: boolean;
+  enrichBasemapSuggestionsOpen?: boolean;
+  enrichBasemapCatalogOpen?: boolean;
 }
 
 export interface DataTabState {
@@ -68,6 +77,7 @@ export interface DataTabState {
   geolocation: GeolocationState;
   basemapJoin: BasemapJoinState;
   enrichData: EnrichDataState;
+  uiPanels: DataTabUiPanelsState;
   notifications: {
     variableTypes: boolean;
     warnings: boolean;

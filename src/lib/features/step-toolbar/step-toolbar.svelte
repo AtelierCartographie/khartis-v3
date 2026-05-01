@@ -109,6 +109,7 @@
 <nav
   id={DOM_IDS.STEP_TOOLBAR}
   class="app-shadow"
+  class:tool-open={!!globalState.selectedTool}
   data-outline
   aria-label={m.toolbar_nav_aria()}
 >
@@ -205,6 +206,10 @@
     box-shadow:
       0 4px 16px rgba(0, 0, 0, 0.1),
       0 1px 4px rgba(0, 0, 0, 0.06);
+  }
+
+  :global(#khartis-step-toolbar.tool-open) {
+    z-index: calc(var(--z-toolbar) + 1);
   }
 
   .scroll-viewport {

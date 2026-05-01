@@ -35,7 +35,3 @@ export function hasGeometryType(
 ): boolean {
   return types.some((t) => isGeometryType(t, geometryType));
 }
-
-export function isPointGeometry(type: string): boolean {
-  return isGeometryType(type, 'POINT') || isGeometryType(type, 'MULTI_POINT');
-}

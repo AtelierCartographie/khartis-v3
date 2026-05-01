@@ -109,6 +109,7 @@ describe('SymbolModeCategories (en categorie.png alignment)', () => {
     expect(source).toContain(
       'aria-label={m.palette_categories_aspect_title()}'
     );
+    expect(source).toContain('on:click={(event: MouseEvent) => {');
     expect(source).toContain('event.stopPropagation();');
     expect(source).toContain('categoriesAspectOpen = true;');
   });
@@ -159,6 +160,19 @@ describe('SymbolModeCategories — anti-leak classification routing', () => {
     expect(strokeBlock).toContain('onInvertPalette={onStrokeInvertPalette}');
     expect(strokeBlock).not.toContain(
       'onClassificationChange={onClassificationChange}'
+    );
+  });
+
+  it('passes category-symbol missing-data state to the stroke section', () => {
+    const strokeBlock = source.split('<StrokeSection')[1]?.split('/>')[0];
+    expect(strokeBlock).toBeDefined();
+    expect(strokeBlock).toContain('showMissingData={showMissingData}');
+    expect(strokeBlock).toContain('missingDataColor={missingDataColor}');
+    expect(strokeBlock).toContain(
+      'onMissingDataShowChange={handleMissingDataShowChange}'
+    );
+    expect(strokeBlock).toContain(
+      'onMissingDataColorChange={handleMissingDataColorChange}'
     );
   });
 

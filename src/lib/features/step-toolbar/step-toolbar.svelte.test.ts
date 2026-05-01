@@ -61,6 +61,12 @@ describe('StepToolbar', () => {
     expect(source).not.toContain('backdrop-filter: blur(10px) saturate(1.2);');
   });
 
+  it('raises the step toolbar above map controls while a tool popover is open', () => {
+    expect(source).toContain('class:tool-open={!!globalState.selectedTool}');
+    expect(source).toContain(':global(#khartis-step-toolbar.tool-open)');
+    expect(source).toContain('z-index: calc(var(--z-toolbar) + 1);');
+  });
+
   it('keeps tool popover contents opaque', () => {
     expect(toolPopoverSource).toContain(
       'background: var(--khartis-control-surface-background);'
@@ -71,8 +77,13 @@ describe('StepToolbar', () => {
     expect(toolContainerSource).toContain('position: sticky;');
     expect(toolContainerSource).toContain('top: 0;');
     expect(toolContainerSource).toContain(
-      'box-shadow: 0 -1px 0 var(--cds-background, white);'
+      'background: var(--cds-background, white);'
     );
+    expect(toolContainerSource).toContain(
+      '0 1px 0 var(--cds-border-subtle-01, #e0e0e0)'
+    );
+    expect(toolContainerSource).toContain('z-index: 4;');
+    expect(toolContainerSource).toContain('.tool-header::before');
   });
 
   it('dims the tool popover while a styling element is being dragged', () => {
@@ -102,7 +113,7 @@ describe('StepToolbar', () => {
   });
 
   it('uses a narrower dedicated width for the projection grid popover', () => {
-    expect(POPOVER_DIMENSIONS.PROJECTION_GRID_WIDTH).toBe('570px');
+    expect(POPOVER_DIMENSIONS.PROJECTION_GRID_WIDTH).toBe('648px');
     expect(source).toContain(
       'gridWidth={POPOVER_DIMENSIONS.PROJECTION_GRID_WIDTH}'
     );

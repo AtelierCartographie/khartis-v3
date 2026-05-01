@@ -106,9 +106,23 @@
       var(--cds-spacing-05);
     position: sticky;
     top: 0;
-    background-color: var(--cds-background, white);
-    box-shadow: 0 -1px 0 var(--cds-background, white);
-    z-index: 2;
+    box-sizing: border-box;
+    width: 100%;
+    isolation: isolate;
+    background: var(--cds-background, white);
+    box-shadow:
+      0 1px 0 var(--cds-border-subtle-01, #e0e0e0),
+      0 -1px 0 var(--cds-background, white);
+    z-index: 4;
+  }
+
+  .tool-header::before {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: var(--cds-background, white);
+    content: '';
+    pointer-events: none;
   }
 
   .tool-title {
@@ -125,7 +139,7 @@
 
   .tool-body {
     background-color: inherit;
-    padding: 0 var(--cds-spacing-05) var(--cds-spacing-05);
+    padding: var(--cds-spacing-05);
   }
 
   .tool-body :global(.expandable-stack) {

@@ -82,18 +82,42 @@ describe('useMapLayers source', () => {
   it('only shows orthographic basemap layers for an explicit basemap reference or joined data', () => {
     expect(source).toContain('const datasetContentIds = new Set<string>();');
     expect(source).toContain('let hasJoinedBasemapReference = false;');
-    expect(source).toContain('hasDatasetContent: datasetContentIds.size > 0');
+    expect(source).toContain(
+      'const hasDatasetContent = datasetContentIds.size > 0;'
+    );
+    expect(source).toContain('hasDatasetContent,');
     expect(source).toContain(
       'Boolean(basemapStyleStore.referenceBasemapId) ||'
     );
     expect(source).toContain('hasJoinedBasemapReference');
   });
 
-  it('keeps generated ocean and graticule layers renderable without a catalog basemap', () => {
+  it('does not apply persisted auto projection overrides to generated layers', () => {
+    expect(source).toContain(
+      "if (!projState.overrideActive || projState.overrideSource !== 'manual')"
+    );
+    expect(source).toContain(
+      'const projectionOverride = getProjectionOverride('
+    );
+  });
+
+  it('keeps generated ocean off imported data until a manual projection needs it', () => {
     expect(source).toContain('GENERATED_ORTHOGRAPHIC_BASEMAP_LAYER_IDS');
-    expect(source).toContain('function hasVisibleGeneratedBasemapLayer()');
+    expect(source).toContain('GENERATED_ORTHOGRAPHIC_OCEAN_LAYER_IDS');
+    expect(source).toContain('function hasVisibleGeneratedBasemapLayer(');
+    expect(source).toContain('const hasManualProjectionOverride =');
+    expect(source).toContain('const shouldShowGeneratedOceanLayer =');
+    expect(source).toContain(
+      '(!hasDatasetContent || hasManualProjectionOverride)'
+    );
+    expect(source).toContain('function isGeneratedOceanLayer(');
+    expect(source).toContain('basemapGroups.background.filter');
+  });
+
+  it('keeps generated graticule layers renderable without a catalog basemap', () => {
+    expect(source).toContain('GENERATED_ORTHOGRAPHIC_CONTEXT_LAYER_IDS');
+    expect(source).toContain('const shouldShowGeneratedContextLayers =');
     expect(source).toContain('const shouldShowGeneratedBasemapLayers =');
-    expect(source).toContain('hasVisibleGeneratedBasemapLayer();');
     expect(source).toContain(
       'shouldShowBasemapLayers || shouldShowGeneratedBasemapLayers'
     );

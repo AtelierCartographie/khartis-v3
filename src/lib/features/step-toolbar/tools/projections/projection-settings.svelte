@@ -2,6 +2,15 @@
   import { m } from '$lib/paraglide/messages';
   import { Button, InlineNotification, Slider } from 'carbon-components-svelte';
   import Switch from '$lib/features/commons/components/switch.svelte';
+  import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
+  import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
+  import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
+  import { projectionStore as mapRenderProjectionStore } from '$lib/features/map/stores/projection.store.svelte';
+  import {
+    resolveProjectionAvailabilityContext,
+    supportsCustomProjectionCode
+  } from '$lib/features/map/utils/projection-availability';
+  import { getCompositeProjectionPresetId } from '$lib/features/map/utils/user-projection.utils';
   import { Renew } from 'carbon-icons-svelte';
   import {
     getProjectionState,
@@ -12,6 +21,37 @@
 
   let showInfo = $state<boolean>(true);
 
+  const projectionContext = $derived(
+    resolveProjectionAvailabilityContext({
+      requiresMapLibre: basemapStyleStore.requiresMapLibre,
+      hasOSMBasemap: osmBasemapStore.isActive,
+      currentStyle: basemapStyleStore.selectedStyle,
+      preferredStyle: basemapStyleStore.preferredTiledStyle,
+      referenceBasemapId: basemapStyleStore.referenceBasemapId,
+      referenceProjectionPresetId: basemapStyleStore.referenceBasemapId
+        ? (basemapService.currentMetadata?.proj_to?.preset ?? null)
+        : null,
+      osmBasemapBbox: osmBasemapStore.activeOSMBasemap?.bbox ?? null,
+      projectionBbox: mapRenderProjectionStore.isProjectedCoordinates
+        ? null
+        : mapRenderProjectionStore.referenceBbox,
+      projectionPresets: basemapService.projectionPresets
+    })
+  );
+  const renderEngineSupportsSettings = $derived(
+    supportsCustomProjectionCode(projectionContext)
+  );
+  const selectedCompositePresetId = $derived(
+    getCompositeProjectionPresetId(projectionState.selected)
+  );
+  const canApplyProjectionSettings = $derived(
+    renderEngineSupportsSettings && selectedCompositePresetId === null
+  );
+  const settingsDisabledReason = $derived(
+    renderEngineSupportsSettings
+      ? m.projection_settings_unavailable_projection()
+      : m.projection_settings_unavailable_render_engine()
+  );
   const simplifiedPreview = $derived(projectionState.simplifiedPreview ?? true);
 
   const isDirty = $derived(
@@ -22,22 +62,27 @@
   const deg = (n: number) => `${n}°`;
 
   function handleLongitudeChange(event: CustomEvent<number>): void {
+    if (!canApplyProjectionSettings) return;
     projectionActions.setCenter(event.detail, projectionState.latitude);
   }
 
   function handleLatitudeChange(event: CustomEvent<number>): void {
+    if (!canApplyProjectionSettings) return;
     projectionActions.setCenter(projectionState.longitude, event.detail);
   }
 
   function handleRotationChange(event: CustomEvent<number>): void {
+    if (!canApplyProjectionSettings) return;
     projectionActions.setRotation(event.detail);
   }
 
   function handleSimplifiedPreviewChange(checked: boolean): void {
+    if (!canApplyProjectionSettings) return;
     projectionActions.setSimplifiedPreview(checked);
   }
 
   function resetAll() {
+    if (!canApplyProjectionSettings) return;
     projectionActions.setCenter(0, 0);
     projectionActions.setRotation(0);
   }
@@ -46,6 +91,16 @@
 <div id="khartis-projection-settings-tool">
   <div class="projection-settings">
     <div class="controls">
+      {#if !canApplyProjectionSettings}
+        <InlineNotification
+          kind="warning"
+          lowContrast
+          hideCloseButton
+          title={m.projection_settings_unavailable_title()}
+          subtitle={settingsDisabledReason}
+        />
+      {/if}
+
       <Slider
         labelText={m.projection_settings_longitude()}
         value={projectionState.longitude}
@@ -55,6 +110,7 @@
         minLabel={deg(-180)}
         maxLabel={deg(180)}
         hideTextInput={false}
+        disabled={!canApplyProjectionSettings}
         fullWidth
         on:input={handleLongitudeChange}
       />
@@ -68,6 +124,7 @@
         minLabel={deg(-90)}
         maxLabel={deg(90)}
         hideTextInput={false}
+        disabled={!canApplyProjectionSettings}
         fullWidth
         on:input={handleLatitudeChange}
       />
@@ -81,6 +138,7 @@
         minLabel={deg(-180)}
         maxLabel={deg(180)}
         hideTextInput={false}
+        disabled={!canApplyProjectionSettings}
         fullWidth
         on:input={handleRotationChange}
       />
@@ -93,6 +151,7 @@
           labelB={m.projection_settings_yes()}
           showStateLabel
           toggled={simplifiedPreview}
+          disabled={!canApplyProjectionSettings}
           onchange={handleSimplifiedPreviewChange}
         />
       </div>
@@ -113,7 +172,7 @@
         class="reset"
         kind="tertiary"
         size="small"
-        disabled={!isDirty}
+        disabled={!isDirty || !canApplyProjectionSettings}
         icon={Renew}
         on:click={resetAll}>{m.projection_settings_reset()}</Button
       >

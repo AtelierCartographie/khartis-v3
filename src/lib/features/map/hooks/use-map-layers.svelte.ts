@@ -94,6 +94,15 @@ const GENERATED_ORTHOGRAPHIC_BASEMAP_LAYER_IDS = new Set<string>([
   BASEMAP_LAYER_ID.MERIDIENS
 ]);
 
+const GENERATED_ORTHOGRAPHIC_OCEAN_LAYER_IDS = new Set<string>([
+  BASEMAP_LAYER_ID.MERS
+]);
+
+const GENERATED_ORTHOGRAPHIC_CONTEXT_LAYER_IDS = new Set<string>([
+  BASEMAP_LAYER_ID.EQUATEUR,
+  BASEMAP_LAYER_ID.MERIDIENS
+]);
+
 export interface UseMapLayersProps {
   getDeckOverlay: () => MapboxOverlay | null;
   getDeckInstance: () => DeckInstance | null;
@@ -300,7 +309,7 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     const projState = getProjectionState();
     const viewportSize = getProjectionViewportSize();
     const fitPaddingPx = projectionStore.fitPaddingPx;
-    if (!projState.overrideActive) {
+    if (!projState.overrideActive || projState.overrideSource !== 'manual') {
       return undefined;
     }
 
@@ -664,11 +673,16 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
     return [...requestedTypes];
   }
 
-  function hasVisibleGeneratedBasemapLayer(): boolean {
+  function hasVisibleGeneratedBasemapLayer(
+    layerIds: ReadonlySet<string> = GENERATED_ORTHOGRAPHIC_BASEMAP_LAYER_IDS
+  ): boolean {
     return basemapLayersStore.layers.some(
-      (layer) =>
-        layer.visible && GENERATED_ORTHOGRAPHIC_BASEMAP_LAYER_IDS.has(layer.id)
+      (layer) => layer.visible && layerIds.has(layer.id)
     );
+  }
+
+  function isGeneratedOceanLayer(layer: Layer<DeckDataRow>): boolean {
+    return String(layer.id).startsWith(DeckLayerId.BASEMAP_MERS);
   }
 
   function updateLayers(
@@ -774,19 +788,33 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
 
       // Only show basemap layers in the Deck.gl OrthographicView engine.
       // In MapLibre mode, the tiled basemap provides the background (OSM, Carte Facile, etc.)
+      const hasDatasetContent = datasetContentIds.size > 0;
       const shouldShowBasemapLayers = shouldShowOrthographicBasemapLayers({
         isOrthographicMode,
         isOSMActive,
-        hasDatasetContent: datasetContentIds.size > 0,
+        hasDatasetContent,
         hasBasemapReference:
           Boolean(basemapStyleStore.referenceBasemapId) ||
           hasJoinedBasemapReference
       });
+      const hasManualProjectionOverride =
+        projectionState.overrideActive === true &&
+        projectionState.overrideSource === 'manual';
+      const canShowGeneratedBasemapLayers =
+        !shouldShowBasemapLayers && isOrthographicMode && !isOSMActive;
+      const shouldShowGeneratedOceanLayer =
+        canShowGeneratedBasemapLayers &&
+        hasVisibleGeneratedBasemapLayer(
+          GENERATED_ORTHOGRAPHIC_OCEAN_LAYER_IDS
+        ) &&
+        (!hasDatasetContent || hasManualProjectionOverride);
+      const shouldShowGeneratedContextLayers =
+        canShowGeneratedBasemapLayers &&
+        hasVisibleGeneratedBasemapLayer(
+          GENERATED_ORTHOGRAPHIC_CONTEXT_LAYER_IDS
+        );
       const shouldShowGeneratedBasemapLayers =
-        !shouldShowBasemapLayers &&
-        isOrthographicMode &&
-        !isOSMActive &&
-        hasVisibleGeneratedBasemapLayer();
+        shouldShowGeneratedOceanLayer || shouldShowGeneratedContextLayers;
       const shouldKeepOrthographicBasemapLayers =
         shouldShowBasemapLayers || shouldShowGeneratedBasemapLayers;
 
@@ -865,7 +893,12 @@ export function useMapLayers(props: UseMapLayersProps): UseMapLayersReturn {
             basemapCtx,
             additionalData
           );
-          basemapBackgroundLayers = basemapGroups.background;
+          basemapBackgroundLayers =
+            shouldShowBasemapLayers || shouldShowGeneratedOceanLayer
+              ? basemapGroups.background
+              : basemapGroups.background.filter(
+                  (layer) => !isGeneratedOceanLayer(layer)
+                );
           basemapForegroundLayers = basemapGroups.foreground;
         } catch (error) {
           logger.error(

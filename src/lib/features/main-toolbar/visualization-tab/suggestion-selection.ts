@@ -19,6 +19,12 @@ interface ResolveDisplayedSuggestionKeyOptions {
   originMode?: VisualizationOriginMode;
 }
 
+interface ResolveSuggestionCardActionOptions {
+  displayedSuggestionKey?: string;
+  originSuggestionKey?: string;
+  hasRestoreState?: boolean;
+}
+
 export function getSuggestionSignature(
   suggestion: SuggestionSignatureSource
 ): string {
@@ -32,12 +38,28 @@ export function getSuggestionSignature(
 }
 
 export function resolveSuggestionCardAction(
-  currentSuggestionKey: string | undefined,
+  currentSuggestion: string | ResolveSuggestionCardActionOptions | undefined,
   nextSuggestion: SuggestionSignatureSource
 ): 'apply' | 'clear' {
-  return currentSuggestionKey === getSuggestionSignature(nextSuggestion)
-    ? 'clear'
-    : 'apply';
+  const nextSuggestionKey = getSuggestionSignature(nextSuggestion);
+  const displayedSuggestionKey =
+    typeof currentSuggestion === 'string'
+      ? currentSuggestion
+      : currentSuggestion?.displayedSuggestionKey;
+
+  if (displayedSuggestionKey === nextSuggestionKey) {
+    return 'clear';
+  }
+
+  if (
+    typeof currentSuggestion !== 'string' &&
+    currentSuggestion?.hasRestoreState &&
+    currentSuggestion.originSuggestionKey === nextSuggestionKey
+  ) {
+    return 'clear';
+  }
+
+  return 'apply';
 }
 
 export function shouldAutoApplySuggestion({
