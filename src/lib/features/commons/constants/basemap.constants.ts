@@ -22,14 +22,6 @@ export const BASEMAP_BACKGROUND_LAYER_IDS: readonly BasemapLayerId[] = [
   BASEMAP_LAYER_ID.RELIEF
 ] as const;
 
-export const BASEMAP_FOREGROUND_LAYER_IDS: readonly BasemapLayerId[] = [
-  BASEMAP_LAYER_ID.FRONTIERES,
-  BASEMAP_LAYER_ID.RIVIERES,
-  BASEMAP_LAYER_ID.EQUATEUR,
-  BASEMAP_LAYER_ID.MERIDIENS,
-  BASEMAP_LAYER_ID.VILLES
-] as const;
-
 export function getBasemapRenderGroup(
   layerId: BasemapLayerId
 ): BasemapRenderGroup {

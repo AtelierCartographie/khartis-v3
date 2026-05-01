@@ -1,6 +1,7 @@
 import { paraglideMiddleware } from '$lib/paraglide/server';
 import type { Handle } from '@sveltejs/kit';
 import { sequence } from '@sveltejs/kit/hooks';
+import * as m from '$lib/paraglide/messages';
 
 function withCrossOriginIsolationHeaders(response: Response): Response {
   const headers = new Headers(response.headers);
@@ -33,7 +34,11 @@ const handleParaglide: Handle = ({ event, resolve }) =>
     event.request = request;
 
     const response = resolve(event, {
-      transformPageChunk: ({ html }) => html.replace('%paraglide.lang%', locale)
+      transformPageChunk: ({ html }) =>
+        html
+          .replace('%paraglide.lang%', locale)
+          .replace(/%app\.name%/g, m.app_name())
+          .replace(/%app\.description%/g, m.app_description())
     });
 
     if (response instanceof Promise) {

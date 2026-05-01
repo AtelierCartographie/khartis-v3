@@ -138,7 +138,9 @@
                 {#if entity.basemapOptions}
                   <div class="table-row">
                     <div class="table-cell cell-data">{entity.dataValue}</div>
-                    <div class="table-cell cell-equals">=</div>
+                    <div class="table-cell cell-equals">
+                      {m.symbol_equals()}
+                    </div>
                     <div class="table-cell cell-select">
                       <Select
                         id={`join-${i}`}
@@ -169,7 +171,9 @@
                   <span class="entity-value">{entity.dataValue}</span>
                   {#if entity.matches && entity.matches.length > 0}
                     <span class="entity-matches"
-                      >→ {entity.matches.join(', ')}</span
+                      >{m.separator_arrow()}{entity.matches.join(
+                        m.separator_comma_space()
+                      )}</span
                     >
                   {/if}
                 </li>

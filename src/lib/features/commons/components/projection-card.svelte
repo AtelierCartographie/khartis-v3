@@ -2,7 +2,8 @@
   import TilePreview from '$lib/features/commons/components/tile-preview.svelte';
   import { InfoPopover } from '$lib/features/commons/components/viz-controls';
   import * as m from '$lib/paraglide/messages';
-  import { RadioButton, Tag } from 'carbon-components-svelte';
+  import { RadioButton } from 'carbon-components-svelte';
+  import { CheckmarkFilled } from 'carbon-icons-svelte';
   import clsx from 'clsx';
   import { KEY } from '../constants/dom.constants';
 
@@ -19,6 +20,7 @@
     fullWidth?: boolean;
     onclick?: () => void;
     showInfo?: boolean;
+    showTag?: boolean;
     equalArea?: boolean;
     description?: string;
   }
@@ -36,6 +38,7 @@
     fullWidth = false,
     onclick,
     showInfo = true,
+    showTag = true,
     equalArea = false,
     description
   }: ProjectionCardProps = $props();
@@ -95,16 +98,6 @@
   aria-disabled={disabled}
 >
   <div class="preview-section">
-    <div class="preview-radio kh-card-radio">
-      <RadioButton
-        checked={selected}
-        disabled={disabled}
-        labelText={title}
-        hideLabel
-        onclick={handleRadioClick}
-      />
-    </div>
-
     <TilePreview
       ratio={ratio}
       label={previewLabel}
@@ -120,15 +113,28 @@
           <p class="subtitle">{subtitle}</p>
         {/if}
       </div>
+
+      <div class="title-radio kh-card-radio">
+        <RadioButton
+          checked={selected}
+          disabled={disabled}
+          labelText={title}
+          hideLabel
+          onclick={handleRadioClick}
+        />
+      </div>
     </div>
 
     <div class="footer">
-      <div class="tag-group">
-        {#if tag}
-          <Tag size="sm" type={useSuggestionTheme ? 'blue' : 'gray'}>{tag}</Tag>
-        {/if}
+      <div class="meta-group">
         {#if equalArea}
-          <Tag size="sm" type="green">{m.projection_equal_area()}</Tag>
+          <span class="surface-indicator">
+            {m.card_subtitle_surfaces()}
+            <CheckmarkFilled size={16} />
+          </span>
+        {/if}
+        {#if showTag && tag}
+          <span class="projection-tag-pill">{tag}</span>
         {/if}
       </div>
 
@@ -162,6 +168,7 @@
     --kh-card-radio-color: #003a6d;
     --kh-card-radio-disabled-color: rgba(0, 58, 109, 0.25);
     --kh-card-radio-focus-color: var(--projection-card-focus-color);
+    position: relative;
     width: 100%;
     box-sizing: border-box;
     overflow: hidden;
@@ -187,7 +194,7 @@
 
   .projection-card.projection-card--vertical {
     flex-direction: column;
-    min-height: 216px;
+    min-height: 176px;
   }
 
   .projection-card.projection-card--full-width {
@@ -195,8 +202,16 @@
   }
 
   .projection-card.selected {
-    --projection-card-border-width: 4px;
     --projection-card-border-color: var(--projection-card-focus-color);
+  }
+
+  .projection-card.selected::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    border: 3px solid var(--projection-card-focus-color);
+    pointer-events: none;
   }
 
   .projection-card.projection-card--default.selected {
@@ -242,13 +257,6 @@
     height: 104px;
   }
 
-  .preview-radio {
-    position: absolute;
-    top: 8px;
-    left: 8px;
-    z-index: 1;
-  }
-
   .projection-card--suggestion .preview-section {
     --tile-preview-background: var(
       --khartis-additions-layer-02-suggestions,
@@ -276,9 +284,8 @@
     flex: 1 1 auto;
     flex-direction: column;
     justify-content: space-between;
-    gap: 12px;
+    gap: 0;
     min-width: 0;
-    padding: 16px;
     box-sizing: border-box;
   }
 
@@ -287,6 +294,11 @@
     justify-content: space-between;
     align-items: flex-start;
     gap: 8px;
+    padding: 16px 8px 8px 16px;
+  }
+
+  .projection-card--vertical .header {
+    padding-bottom: 8px;
   }
 
   .title-copy {
@@ -307,7 +319,9 @@
     font-weight: 600;
     line-height: 1.125rem;
     letter-spacing: 0.16px;
-    overflow-wrap: break-word;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     color: var(--khartis-additions-text-primary-suggestions, #003a6d);
   }
 
@@ -332,27 +346,63 @@
     align-items: center;
     justify-content: space-between;
     gap: 8px;
+    padding: 0 16px 16px;
   }
 
-  .tag-group {
+  .meta-group {
     display: inline-flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 4px;
     min-width: 0;
   }
 
-  .footer :global(.bx--tag) {
+  .surface-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--khartis-additions-text-secondary-suggestions, #00539a);
+    font-size: 0.75rem;
+    line-height: 1rem;
+    letter-spacing: 0.32px;
+    white-space: nowrap;
+  }
+
+  .surface-indicator :global(svg) {
+    fill: var(--khartis-additions-text-secondary-suggestions, #00539a);
+  }
+
+  .projection-tag-pill {
+    display: inline-flex;
+    align-items: center;
     max-width: 100%;
+    height: 18px;
+    padding: 1px 8px;
+    border-radius: 9px;
+    background: var(--tag-background, #bae6ff);
+    color: var(--tag-color, #00539a);
+    font-size: 0.75rem;
+    line-height: 1rem;
+    letter-spacing: 0.32px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .title-radio {
+    flex-shrink: 0;
+    padding-right: 8px;
   }
 
   .info-slot {
     display: inline-flex;
     align-items: center;
     flex-shrink: 0;
+  }
+
+  .info-slot :global(.info-btn) {
+    min-width: 16px;
+    min-height: 16px;
   }
 
   .projection-card--suggestion .info-slot {

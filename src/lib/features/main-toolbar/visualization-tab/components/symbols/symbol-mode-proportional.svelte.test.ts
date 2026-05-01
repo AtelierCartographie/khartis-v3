@@ -6,13 +6,27 @@ const source = readFileSync(
   resolve(import.meta.dirname, 'symbol-mode-proportional.svelte'),
   'utf8'
 );
+const frenchMessages = JSON.parse(
+  readFileSync(
+    resolve(import.meta.dirname, '../../../../../../../messages/fr.json'),
+    'utf8'
+  )
+) as Record<string, string>;
 const doubleControlsSource = readFileSync(
   resolve(import.meta.dirname, 'proportional/double-mode-controls.svelte'),
   'utf8'
 );
 
 describe('SymbolModeProportional (proportionnels.png + en classes.png)', () => {
-  it('gates the max-size slider on CLASSES mode only', () => {
+  it('uses the FR plural label for the proportional single mode', () => {
+    expect(frenchMessages.proportional_type_single).toBe('Uniques');
+  });
+
+  it('shows the max-size slider for proportional single and classes modes', () => {
+    const proportionalSingleBlock = source
+      .split('{:else}')[1]
+      ?.split('{/if}')[0];
+    expect(proportionalSingleBlock).toContain('label={m.max_size()}');
     expect(source).toContain('{#if symbolMode === SymbolMode.CLASSES}');
     const classesBlock = source.split(
       '{#if symbolMode === SymbolMode.CLASSES}'
@@ -25,9 +39,17 @@ describe('SymbolModeProportional (proportionnels.png + en classes.png)', () => {
     expect(source).not.toContain('{m.scale_linear()}');
   });
 
-  it('gates the shape selector on CLASSES mode only and uses Dropdown', () => {
+  it('shows the shape selector with Dropdown in proportional single and classes modes', () => {
     expect(source).not.toContain('items={shapeItems}');
     expect(source).toContain('items={shapeDropdownItems}');
+    const proportionalSingleBlock = source
+      .split('{:else}')[1]
+      ?.split('{/if}')[0];
+    expect(proportionalSingleBlock).toContain('{m.shape()}');
+    const classesBlock = source.split(
+      '{#if symbolMode === SymbolMode.CLASSES}'
+    )[1];
+    expect(classesBlock).toContain('{m.shape()}');
   });
 
   it('keeps the Uniques/Doubles radio group in PROPORTIONAL', () => {

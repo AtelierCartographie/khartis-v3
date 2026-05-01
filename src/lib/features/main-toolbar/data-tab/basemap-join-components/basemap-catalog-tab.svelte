@@ -12,6 +12,7 @@
   } from 'carbon-components-svelte';
   import { Add, List, MagicWand } from 'carbon-icons-svelte';
   import BasemapCardVertical from '../components/basemap-card-vertical.svelte';
+  import { getLocale } from '$lib/paraglide/runtime.js';
 
   interface SuggestedBasemap {
     basemap: BasemapMetadata;
@@ -57,12 +58,16 @@
     const trimmedQuery = searchQuery.trim();
     if (trimmedQuery) {
       const query = trimmedQuery.toLowerCase();
-      results = results.filter(
-        (b) =>
-          b.title_fr.toLowerCase().includes(query) ||
-          (b.subtitle_fr ?? '').toLowerCase().includes(query) ||
+      const lang = getLocale();
+      results = results.filter((b) => {
+        const title = lang === 'fr' ? b.title_fr : b.title_en;
+        const subtitle = lang === 'fr' ? b.subtitle_fr : b.subtitle_en;
+        return (
+          title.toLowerCase().includes(query) ||
+          (subtitle ?? '').toLowerCase().includes(query) ||
           b.source.toLowerCase().includes(query)
-      );
+        );
+      });
     }
 
     if (selectedYear !== 'all') {
@@ -93,20 +98,34 @@
   });
 
   const searchComboBoxItems = $derived.by((): SearchComboBoxItem[] => {
-    return allBasemaps.map((b, index) => ({
-      id: `basemap-${index}`,
-      text: b.subtitle_fr
-        ? `${b.title_fr} — ${b.subtitle_fr} (${b.date})`
-        : `${b.title_fr} (${b.date})`,
-      basemap: b
-    }));
+    const lang = getLocale();
+    return allBasemaps.map((b, index) => {
+      const title = lang === 'fr' ? b.title_fr : b.title_en;
+      const subtitle = lang === 'fr' ? b.subtitle_fr : b.subtitle_en;
+      return {
+        id: `basemap-${index}`,
+        text: subtitle
+          ? m.basemap_search_item_with_subtitle({
+              title,
+              subtitle,
+              date: b.date
+            })
+          : m.basemap_search_item({ title, date: b.date }),
+        basemap: b
+      };
+    });
   });
 
   function handleSearchSelect(
     e: CustomEvent<{ selectedId: string; selectedItem: SearchComboBoxItem }>
   ) {
     if (e.detail.selectedItem) {
-      searchQuery = e.detail.selectedItem.basemap.title_fr;
+      const lang = getLocale();
+      const title =
+        lang === 'fr'
+          ? e.detail.selectedItem.basemap.title_fr
+          : e.detail.selectedItem.basemap.title_en;
+      searchQuery = title;
       // Selecting from the ComboBox must trigger the same flow as clicking a card.
       onSelectBasemap(e.detail.selectedItem.basemap);
     } else {
@@ -179,9 +198,13 @@
             if (!value) return true;
             const query = value.toLowerCase();
             const basemap = (item as SearchComboBoxItem).basemap;
+            const lang = getLocale();
+            const title = lang === 'fr' ? basemap.title_fr : basemap.title_en;
+            const subtitle =
+              lang === 'fr' ? basemap.subtitle_fr : basemap.subtitle_en;
             return (
-              basemap.title_fr.toLowerCase().includes(query) ||
-              (basemap.subtitle_fr ?? '').toLowerCase().includes(query) ||
+              title.toLowerCase().includes(query) ||
+              (subtitle ?? '').toLowerCase().includes(query) ||
               basemap.source.toLowerCase().includes(query)
             );
           }}
@@ -204,7 +227,10 @@
               interactive
               on:click={() => (selectedYear = year)}
             >
-              {year} ({yearCounts[year] || 0})
+              {m.basemap_year_count({
+                year,
+                count: yearCounts[year] || 0
+              })}
             </Tag>
           {/each}
         </div>
