@@ -80,7 +80,7 @@ describe('legend tool', () => {
       target: { value: '42' }
     });
     await fireEvent.click(
-      screen.getByRole('switch', { name: /arrière plan/i })
+      screen.getByRole('switch', { name: /arrière.plan/i })
     );
 
     expect(getLegendState().style.fontFamily).toBe('Inter');
