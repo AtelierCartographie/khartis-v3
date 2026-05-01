@@ -17,14 +17,25 @@ describe('EnrichDataStep overlay basemap defaults', () => {
   it('drives overlay state from the persisted store flag, not derived selection', () => {
     expect(source).toContain('dataTabState.enrichData.overlayBasemapEnabled');
     expect(source).toContain(
-      'dataTabActions.setEnrichDataState({ overlayBasemapEnabled: checked })'
+      'dataTabActions.setEnrichDataState({ overlayBasemapEnabled: checked });'
     );
+    expect(source).toContain('dataTabState.uiPanels.enrichOverlayBasemapOpen');
     expect(source).toContain('basemapHook.activatePreferredBasemap();');
     expect(source).toContain('basemapHook.clearSelectedBasemap();');
   });
 
   it('resets the overlay flag when the selected dataset changes', () => {
     expect(source).toContain('overlayBasemapEnabled: false');
+    expect(source).toContain('enrichOverlayBasemapOpen: false');
+  });
+
+  it('keeps expandable open state independent from feature enabled state', () => {
+    expect(source).toContain('const joinTabularOpen = $derived(');
+    expect(source).toContain('const overlayBasemapOpen = $derived(');
+    expect(source).toContain('open={joinTabularOpen}');
+    expect(source).toContain('open={overlayBasemapOpen}');
+    expect(source).toContain('onToggleChange={handleJoinTabularToggle}');
+    expect(source).toContain('onToggleChange={handleOverlayBasemapToggle}');
   });
 
   it('blocks tabular enrichment when the imported file only has coordinates', () => {

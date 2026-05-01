@@ -41,7 +41,7 @@ describe('BasemapCardVertical', () => {
   });
 
   it('keeps the preview radio accessible without showing duplicate card text', () => {
-    expect(source).toContain('labelText={basemap.title_fr}');
+    expect(source).toContain('labelText={title}');
     expect(source).toContain('hideLabel');
   });
 
