@@ -2,12 +2,9 @@ import * as m from '$lib/paraglide/messages';
 import type { GeoProjection } from 'd3-geo';
 import * as d3geo from 'd3-geo';
 import * as d3geoProjection from 'd3-geo-projection';
+import { GEOJSON_TYPE } from '$lib/features/commons/constants/geojson.constants';
 
 type D3GeoProjectionModule = Record<string, (() => GeoProjection) | undefined>;
-import type { Feature, FeatureCollection } from 'geojson';
-import { GEOJSON_TYPE } from '$lib/features/commons/constants';
-import { proj4d3 } from '$lib/features/map/utils/proj4d3';
-import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
 export interface ProjectionInfo {
   id: string;
@@ -18,12 +15,6 @@ export interface ProjectionInfo {
   recommended?: boolean;
   bounds?: [[number, number], [number, number]];
 }
-
-type FeatureWithPath = Feature & { svgPath?: string };
-type FeatureCollectionWithPath = FeatureCollection & {
-  features: FeatureWithPath[];
-};
-type ProjectableGeoJSON = FeatureWithPath | FeatureCollectionWithPath;
 
 export const PROJECTIONS: ProjectionInfo[] = [
   {
@@ -170,120 +161,6 @@ export const PROJECTIONS: ProjectionInfo[] = [
 
 export function getProjectionById(id: string): ProjectionInfo | undefined {
   return PROJECTIONS.find((p) => p.id === id);
-}
-
-export function projectGeoJSON(
-  geojson: ProjectableGeoJSON,
-  projectionId: string,
-  options?: {
-    scale?: number;
-    translate?: [number, number];
-    rotate?: [number, number, number];
-    center?: [number, number];
-    clipExtent?: [[number, number], [number, number]];
-    customCode?: string;
-  }
-): ProjectableGeoJSON {
-  let projection: GeoProjection;
-
-  if (options?.customCode) {
-    try {
-      projection = proj4d3(options.customCode);
-    } catch (error) {
-      logger.error(
-        'Custom CRS code failed, falling back to built-in projection',
-        LogCategory.MAP,
-        { customCode: options.customCode, error }
-      );
-      const fallback = getProjectionById(projectionId);
-      if (!fallback) {
-        throw new Error(`Unknown projection: ${projectionId}`, {
-          cause: error
-        });
-      }
-      projection = fallback.projection();
-    }
-  } else {
-    const projectionInfo = getProjectionById(projectionId);
-    if (!projectionInfo) {
-      throw new Error(`Unknown projection: ${projectionId}`);
-    }
-    projection = projectionInfo.projection();
-  }
-
-  if (options?.scale) projection.scale(options.scale);
-  if (options?.translate) projection.translate(options.translate);
-  if (options?.rotate) projection.rotate(options.rotate);
-  if (options?.center) projection.center(options.center);
-  if (options?.clipExtent) projection.clipExtent(options.clipExtent);
-
-  const path = d3geo.geoPath(projection);
-
-  if (geojson.type === GEOJSON_TYPE.FEATURE_COLLECTION) {
-    const featuresWithPaths: FeatureWithPath[] = geojson.features.map(
-      (feature) => ({
-        ...feature,
-        svgPath: path(feature) ?? undefined
-      })
-    );
-
-    return {
-      ...geojson,
-      features: featuresWithPaths
-    };
-  } else if (geojson.type === GEOJSON_TYPE.FEATURE) {
-    return {
-      ...geojson,
-      svgPath: path(geojson) ?? undefined
-    };
-  }
-
-  return geojson;
-}
-
-export function fitProjectionToGeoJSON(
-  geojson: FeatureCollection,
-  projectionId: string,
-  width: number,
-  height: number,
-  padding: number = 20,
-  customCode?: string
-): GeoProjection {
-  let projection: GeoProjection;
-
-  if (customCode) {
-    try {
-      projection = proj4d3(customCode);
-    } catch (error) {
-      logger.error(
-        'Custom CRS code failed in fitProjection, falling back to built-in projection',
-        LogCategory.MAP,
-        { customCode, error }
-      );
-      const fallback = getProjectionById(projectionId);
-      if (!fallback) {
-        throw new Error(`Unknown projection: ${projectionId}`, {
-          cause: error
-        });
-      }
-      projection = fallback.projection();
-    }
-  } else {
-    const projectionInfo = getProjectionById(projectionId);
-    if (!projectionInfo) {
-      throw new Error(`Unknown projection: ${projectionId}`);
-    }
-    projection = projectionInfo.projection();
-  }
-
-  projection.fitSize([width - padding * 2, height - padding * 2], geojson);
-
-  projection.translate([
-    projection.translate()[0] + padding,
-    projection.translate()[1] + padding
-  ]);
-
-  return projection;
 }
 
 export function fitProjectionToBbox(

@@ -327,8 +327,7 @@ const { actions, getState } = createToolStore<
       }
 
       const builtProjection = buildProjectionFromSuggestion(suggestion);
-      const activeSuggestionId =
-        overrideSource === 'manual' ? suggestion.id : undefined;
+      const activeSuggestionId = suggestion.id;
 
       if (builtProjection?.source === 'proj4' && suggestion.proj4String) {
         s.customCode = suggestion.proj4String;

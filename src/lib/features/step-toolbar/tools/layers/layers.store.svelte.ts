@@ -357,7 +357,7 @@ function buildLayers(): Layer[] {
       facetIndex += 1;
       layerName = `${m.layers_carte_title()} ${facetIndex} (${viz.name})`;
     } else {
-      layerName = viz.name || `${m.viz_tab_label()} (${vizOrder + 1})`;
+      layerName = viz.name || m.viz_tab_label({ number: vizOrder + 1 });
     }
 
     const parentLayer: Layer = {

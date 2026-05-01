@@ -294,17 +294,6 @@ export enum BasemapColorId {
   BLACK = 'black'
 }
 
-export const BASEMAP_COLOR_VALUES: Record<BasemapColorId, string> = {
-  [BasemapColorId.GRAY_LIGHT]: '#e0e0e0',
-  [BasemapColorId.GRAY]: '#8d8d8d',
-  [BasemapColorId.GRAY_DARK]: '#525252',
-  [BasemapColorId.BLUE_LIGHT]: '#a6c8ff',
-  [BasemapColorId.BLUE]: '#0072c3',
-  [BasemapColorId.BEIGE]: '#f5e6d3',
-  [BasemapColorId.WHITE]: '#ffffff',
-  [BasemapColorId.BLACK]: '#161616'
-} as const;
-
 export const BASEMAP_LAYER_CONFIG = {
   opacity: { min: 0, max: 100, step: 1 },
   thickness: { min: 0.25, max: 3, step: 0.25 },

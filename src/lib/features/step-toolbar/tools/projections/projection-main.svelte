@@ -9,31 +9,25 @@
     globalState
   } from '$lib/features/commons/store/global.svelte';
   import type { ProjectionFilterId } from '$lib/features/commons/types/global';
-  import { mapProjectionStore } from '$lib/features/map/stores/map-projection.store.svelte';
+  import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
   import { projectionStore as mapRenderProjectionStore } from '$lib/features/map/stores/projection.store.svelte';
-  import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
   import {
-    getAvailableProjectionIds,
-    resolveDisplayedProjectionId,
     resolveProjectionAvailabilityContext,
     supportsProjectionSuggestions
   } from '$lib/features/map/utils/projection-availability';
   import { m } from '$lib/paraglide/messages';
   import { Grid, List, MagicWandFilled } from 'carbon-icons-svelte';
-  import clsx from 'clsx';
-  import { GROUPS, PROJECTIONS } from './data';
+  import { getNationalProjectionBadge } from './national-region-label';
   import {
     getProjectionState,
     projectionActions
   } from './projection.store.svelte';
   import type { ProjectionSuggestion } from './projection-suggest.service';
-  import { getNationalProjectionBadge } from './national-region-label';
+
+  type ProjectionShapeFilterId = Exclude<ProjectionFilterId, 'all'>;
 
   const description = m.projection_description();
-
-  const projections = PROJECTIONS;
-
   const projectionState = $derived(getProjectionState());
   const projectionContext = $derived(
     resolveProjectionAvailabilityContext({
@@ -55,18 +49,14 @@
   const suggestionCardsEnabled = $derived(
     supportsProjectionSuggestions(projectionContext)
   );
-  const suggestions = $derived(
-    suggestionCardsEnabled ? projectionState.suggestions : undefined
-  );
-  const hasSuggestions = $derived(
-    Boolean(
-      suggestions &&
-      (suggestions.national.length > 0 || suggestions.generic.length > 0)
-    )
-  );
-  const hasCustomProjection = $derived(
-    Boolean(projectionState.customCode?.trim())
-  );
+  const suggestions = $derived(projectionState.suggestions);
+  const suggestionItems = $derived.by(() => {
+    if (!suggestions) {
+      return [] satisfies ProjectionSuggestion[];
+    }
+
+    return [...suggestions.national, ...suggestions.generic];
+  });
   const filterOptions: ReadonlyArray<{
     id: ProjectionFilterId;
     label: string;
@@ -76,24 +66,34 @@
     { id: 'Arrondie', label: m.projection_filter_rounded() },
     { id: 'Discontinue', label: m.projection_filter_discontinuous() }
   ];
-  const availableProjectionIds = $derived(
-    new Set(
-      getAvailableProjectionIds(
-        projectionContext,
-        projections.map((projection) => projection.projectionId)
-      )
-    )
-  );
-  const compatibleProjections = $derived(
-    projections.filter((projection) =>
-      availableProjectionIds.has(projection.projectionId)
-    )
-  );
+  const projectionGroups: ReadonlyArray<{
+    id: ProjectionShapeFilterId;
+    label: string;
+    shape: string;
+  }> = [
+    {
+      id: 'Rectangulaire',
+      label: m.projection_group_rectangular(),
+      shape: 'rectangular'
+    },
+    {
+      id: 'Arrondie',
+      label: m.projection_group_rounded(),
+      shape: 'round'
+    },
+    {
+      id: 'Discontinue',
+      label: m.projection_group_discontinuous(),
+      shape: 'discontinuous'
+    }
+  ];
   const availableFilterOptions = $derived(
     filterOptions.filter(
       (option) =>
         option.id === 'all' ||
-        compatibleProjections.some((projection) => projection.tag === option.id)
+        suggestionItems.some(
+          (suggestion) => getSuggestionFilterId(suggestion) === option.id
+        )
     )
   );
   const activeFilter = $derived.by(() => {
@@ -104,42 +104,36 @@
       ? requestedFilter
       : 'all';
   });
-  const visibleProjections = $derived(
-    compatibleProjections.filter(
-      (projection) => activeFilter === 'all' || projection.tag === activeFilter
-    )
+  const visibleListSuggestions = $derived(
+    suggestionItems
+      .filter(
+        (suggestion) =>
+          activeFilter === 'all' ||
+          getSuggestionFilterId(suggestion) === activeFilter
+      )
+      .slice(0, 3)
+  );
+  const unclassifiedGridSuggestions = $derived(
+    suggestionItems.filter((suggestion) => !getSuggestionFilterId(suggestion))
+  );
+  const gridSuggestionGroups = $derived(
+    projectionGroups
+      .map((group) => ({
+        ...group,
+        suggestions: suggestionItems.filter(
+          (suggestion) => getSuggestionFilterId(suggestion) === group.id
+        )
+      }))
+      .filter((group) => group.suggestions.length > 0)
   );
 
-  const selectedCardId = $derived.by(() => {
-    if (
-      hasCustomProjection ||
-      projectionState.activeSuggestionId ||
-      !projectionState.overrideActive ||
-      projectionState.overrideSource !== 'manual'
-    ) {
-      return null;
-    }
-
-    const selectedProjection = resolveDisplayedProjectionId({
-      context: projectionContext,
-      selectedProjectionId: projectionState.selected,
-      mapProjection: mapProjectionStore.projection
-    });
-    const matchingCard = projections.find(
-      (projection) => projection.projectionId === selectedProjection
-    );
-    return matchingCard?.id ?? null;
-  });
+  let viewMode = $derived(globalState.projectionViewMode ?? ViewMode.LIST);
 
   function isSuggestionSelected(suggestion: ProjectionSuggestion) {
     return (
-      projectionState.overrideSource === 'manual' &&
+      projectionState.overrideActive === true &&
       projectionState.activeSuggestionId === suggestion.id
     );
-  }
-
-  function selectProjection(projectionId: string) {
-    projectionActions.toggleSelected(projectionId);
   }
 
   function applySuggestion(suggestion: ProjectionSuggestion) {
@@ -150,29 +144,89 @@
     globalActions.setProjectionFilter(id);
   }
 
-  let viewMode = $derived(globalState.projectionViewMode ?? ViewMode.LIST);
+  function getSuggestionFilterId(
+    suggestion: ProjectionSuggestion
+  ): ProjectionShapeFilterId | undefined {
+    switch (suggestion.shape) {
+      case 'rectangular':
+        return 'Rectangulaire';
+      case 'round':
+        return 'Arrondie';
+      case 'discontinuous':
+        return 'Discontinue';
+      default:
+        return undefined;
+    }
+  }
 
-  const headerClass = $derived(
-    clsx('projection-header', 'mt-3', 'color-blue', {
-      'mb-5': viewMode === ViewMode.GRID
-    })
-  );
+  function getSuggestionTag(suggestion: ProjectionSuggestion): string {
+    if (suggestion.type === 'national') {
+      return getNationalProjectionBadge(
+        suggestion,
+        m.projection_tag_national()
+      );
+    }
 
-  const gridProjections = $derived(
-    GROUPS.flatMap((group) =>
-      compatibleProjections.filter((projection) => projection.tag === group.id)
-    )
-  );
+    const filterId = getSuggestionFilterId(suggestion);
+    return (
+      projectionGroups.find((group) => group.id === filterId)?.label ??
+      suggestion.shape ??
+      ''
+    );
+  }
+
+  function getSuggestionTitle(suggestion: ProjectionSuggestion): string {
+    switch (suggestion.id.toLowerCase()) {
+      case 'peters':
+        return m.projection_name_gall_peters();
+      case 'equalearth':
+        return m.projection_name_equal_earth();
+      case 'equirectangular':
+        return m.projection_name_equirectangular();
+      case 'mercator':
+        return m.projection_name_mercator();
+      case 'atlantis':
+        return m.projection_name_atlantis();
+      case 'bonne':
+        return m.projection_name_bonne();
+      case 'armadillo':
+        return m.projection_name_armadillo();
+      case 'bertin1953':
+        return m.projection_name_bertin_1953();
+      case 'mollweide_interrupted':
+      case 'mollweide_2_hemisphere':
+      case 'mollweide_ocean':
+        return m.projection_name_interrupted_mollweide();
+      case 'laea':
+        return m.projection_name_azimuthal_equal_area();
+      default:
+        return suggestion.name;
+    }
+  }
+
+  function getSuggestionDescription(suggestion: ProjectionSuggestion): string {
+    if (suggestion.type === 'national' && suggestion.epsg) {
+      return `${m.projection_tag_national()} · EPSG:${suggestion.epsg}`;
+    }
+
+    return description;
+  }
 </script>
 
-<div class="projection-content">
-  <div class={headerClass}>
-    <div><span>{description}</span></div>
+<div
+  class="projection-content"
+  class:projection-content--grid={viewMode === ViewMode.GRID}
+>
+  <div class="projection-header">
+    <p class="projection-helper">{description}</p>
     <div class="projection-buttons">
       <IconButton
         kind="ghost"
         icon={List}
         size="small"
+        class={viewMode === ViewMode.LIST
+          ? 'projection-view-button projection-view-button--active'
+          : 'projection-view-button'}
         iconDescription={m.view_list()}
         isSelected={viewMode === ViewMode.LIST}
         aria-pressed={viewMode === ViewMode.LIST}
@@ -183,6 +237,9 @@
         kind="ghost"
         icon={Grid}
         size="small"
+        class={viewMode === ViewMode.GRID
+          ? 'projection-view-button projection-view-button--active'
+          : 'projection-view-button'}
         iconDescription={m.view_grid()}
         isSelected={viewMode === ViewMode.GRID}
         aria-pressed={viewMode === ViewMode.GRID}
@@ -192,60 +249,10 @@
   </div>
 
   {#if viewMode === ViewMode.LIST}
-    {#if hasSuggestions}
-      <div class="suggestions-section">
-        {#if suggestions && suggestions.national.length > 0}
-          <div class="suggestions-group">
-            <div class="suggestions-title">
-              {m.projection_suggestions_national()}
-            </div>
-            <div class="projection-cards">
-              {#each suggestions.national as s (s.id)}
-                <ProjectionCard
-                  title={s.name}
-                  subtitle={s.epsg ? `EPSG:${s.epsg}` : ''}
-                  tag={getNationalProjectionBadge(
-                    s,
-                    m.projection_tag_national()
-                  )}
-                  selected={isSuggestionSelected(s)}
-                  variant="blue"
-                  equalArea={s.equalArea}
-                  onclick={() => applySuggestion(s)}
-                />
-              {/each}
-            </div>
-          </div>
-        {/if}
-
-        {#if suggestions && suggestions.generic.length > 0}
-          <div class="suggestions-group">
-            <div class="suggestions-title">
-              {m.projection_suggestions_generic()}
-            </div>
-            <div class="projection-cards">
-              {#each suggestions.generic.slice(0, 3) as s (s.id)}
-                <ProjectionCard
-                  title={s.name}
-                  subtitle={s.equalArea
-                    ? m.projection_equal_area()
-                    : (s.shape ?? '')}
-                  tag={s.scale?.[0] ?? ''}
-                  selected={isSuggestionSelected(s)}
-                  variant="default"
-                  equalArea={s.equalArea}
-                  onclick={() => applySuggestion(s)}
-                />
-              {/each}
-            </div>
-          </div>
-        {/if}
-      </div>
-    {/if}
-
     <div class="projection-tags">
       {#each availableFilterOptions as opt (opt.id)}
         <button
+          type="button"
           class="projection-tag"
           class:projection-tag--selected={activeFilter === opt.id}
           onclick={() => setFilter(opt.id)}>{opt.label}</button
@@ -254,19 +261,18 @@
     </div>
 
     <div class="projection-cards">
-      {#each visibleProjections as p (p.id)}
+      {#each visibleListSuggestions as suggestion (suggestion.id)}
         <ProjectionCard
-          title={p.title}
-          subtitle={p.subtitle}
-          tag={p.tag}
-          ratio={p.ratio}
-          previewLabel={p.previewLabel}
-          selected={selectedCardId === p.id}
-          disabled={p.disabled}
-          variant={p.variant}
-          equalArea={p.equalArea}
-          description={p.description}
-          onclick={() => selectProjection(p.projectionId)}
+          title={getSuggestionTitle(suggestion)}
+          subtitle=""
+          tag={getSuggestionTag(suggestion)}
+          ratio="1:1"
+          previewLabel={m.projection_preview_label()}
+          selected={isSuggestionSelected(suggestion)}
+          variant="blue"
+          equalArea={suggestion.equalArea}
+          description={getSuggestionDescription(suggestion)}
+          onclick={() => applySuggestion(suggestion)}
         />
       {/each}
     </div>
@@ -276,27 +282,56 @@
       size="small"
       icon={MagicWandFilled}
       class="show-more-btn"
+      disabled={!suggestionCardsEnabled}
       on:click={() => projectionActions.suggestProjectionForCurrentData()}
       >{m.show_other_suggestions()}</Button
     >
   {:else}
+    {#if unclassifiedGridSuggestions.length > 0}
+      <div class="projection-grid-featured">
+        {#each unclassifiedGridSuggestions as suggestion (suggestion.id)}
+          <ProjectionCard
+            title={getSuggestionTitle(suggestion)}
+            subtitle=""
+            tag={getSuggestionTag(suggestion)}
+            ratio="16:9"
+            previewLabel={m.projection_preview_label()}
+            selected={isSuggestionSelected(suggestion)}
+            variant="blue"
+            equalArea={suggestion.equalArea}
+            description={getSuggestionDescription(suggestion)}
+            layout="vertical"
+            fullWidth
+            onclick={() => applySuggestion(suggestion)}
+          />
+        {/each}
+      </div>
+    {/if}
+
     <div class="projection-grid">
-      {#each gridProjections as p (p.id + '-grid')}
-        <ProjectionCard
-          title={p.title}
-          subtitle={p.subtitle}
-          tag={p.tag}
-          ratio={p.ratio}
-          previewLabel={p.previewLabel}
-          selected={selectedCardId === p.id}
-          disabled={p.disabled}
-          variant={p.variant}
-          equalArea={p.equalArea}
-          description={p.description}
-          layout="vertical"
-          fullWidth
-          onclick={() => selectProjection(p.projectionId)}
-        />
+      {#each gridSuggestionGroups as group (group.id)}
+        <section class="projection-grid-column" aria-label={group.label}>
+          <h3>{group.label}</h3>
+          <div class="projection-grid-cards">
+            {#each group.suggestions as suggestion (suggestion.id)}
+              <ProjectionCard
+                title={getSuggestionTitle(suggestion)}
+                subtitle=""
+                tag={getSuggestionTag(suggestion)}
+                ratio="16:9"
+                previewLabel={m.projection_preview_label()}
+                selected={isSuggestionSelected(suggestion)}
+                variant="blue"
+                equalArea={suggestion.equalArea}
+                description={getSuggestionDescription(suggestion)}
+                layout="vertical"
+                fullWidth
+                showTag={false}
+                onclick={() => applySuggestion(suggestion)}
+              />
+            {/each}
+          </div>
+        </section>
       {/each}
     </div>
   {/if}
@@ -306,99 +341,135 @@
   .projection-content {
     display: flex;
     flex-direction: column;
-    margin-top: var(--cds-spacing-02);
+    gap: var(--cds-spacing-04);
+    width: 100%;
+    min-width: 0;
+  }
+
+  .projection-content--grid {
+    gap: var(--cds-spacing-05);
   }
 
   .projection-header {
     display: flex;
+    align-items: flex-start;
     justify-content: space-between;
+    gap: var(--cds-spacing-03);
+  }
+
+  .projection-helper {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    color: var(--khartis-additions-text-helper-suggestions, #0072c3);
+    font-size: 0.75rem;
+    line-height: 1rem;
+    letter-spacing: 0.32px;
   }
 
   .projection-buttons {
     display: flex;
-    align-items: flex-start;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 2px;
   }
 
-  .suggestions-section {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-04);
-    padding-top: var(--cds-spacing-04);
-    padding-bottom: var(--cds-spacing-04);
-    border-bottom: 1px solid var(--cds-border-subtle-01);
-    margin-bottom: var(--cds-spacing-03);
+  .projection-buttons :global(.projection-view-button.bx--btn) {
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    min-height: 32px;
+    padding: 8px;
+    color: var(--cds-icon-primary, #161616);
   }
 
-  .suggestions-group {
-    display: flex;
-    flex-direction: column;
-    gap: var(--cds-spacing-03);
-  }
-
-  .suggestions-title {
-    font-size: 0.75rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.32px;
-    color: var(--cds-text-secondary);
+  .projection-buttons
+    :global(.projection-view-button.projection-view-button--active.bx--btn) {
+    background: var(--cds-background-active, rgba(141, 141, 141, 0.5));
   }
 
   .projection-tags {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--cds-spacing-03);
-    padding-top: var(--cds-spacing-05);
-    padding-bottom: var(--cds-spacing-05);
+    gap: 4px;
   }
 
   .projection-tag {
     display: inline-flex;
     align-items: center;
-    padding: 2px 8px;
+    padding: 1px 8px;
     border-radius: 9px;
     font-size: 0.75rem;
     line-height: 1rem;
     letter-spacing: 0.32px;
     cursor: pointer;
     border: 1px solid
-      var(--khartis-additions-border-tile-01-suggestions, #82cfff);
+      var(--khartis-additions-border-inverse-suggestions, #82cfff);
     background-color: var(--khartis-additions-layer-01-suggestions, #e5f6ff);
     color: var(--khartis-additions-text-primary-suggestions, #003a6d);
-    transition: background-color 0.1s ease;
   }
 
   .projection-tag:hover:not(.projection-tag--selected) {
-    background-color: var(--cds-medium-blue, #a8e2ff);
+    background-color: var(
+      --khartis-additions-layer-hover-01-suggestions,
+      #cceeff
+    );
   }
 
   .projection-tag--selected {
     border-color: transparent;
     background-color: var(--khartis-additions-focus-suggestions, #0072c3);
-    color: #ffffff;
+    color: var(--khartis-additions-text-inverse-suggestions, #ffffff);
   }
 
   .projection-cards {
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-03);
+    width: 100%;
+    align-items: stretch;
   }
 
   .projection-content :global(.show-more-btn) {
     width: 100%;
     max-width: 100%;
-    margin-top: var(--cds-spacing-05);
+    min-height: 40px;
+    margin-top: 0;
   }
 
+  .projection-grid-featured,
   .projection-grid {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    grid-auto-rows: 19rem;
-    gap: var(--cds-spacing-03);
+    grid-template-columns: repeat(3, 184px);
+    gap: var(--cds-spacing-05);
     width: 100%;
-    align-items: stretch;
+    align-items: start;
   }
 
-  .projection-grid :global(.projection-card) {
-    height: 100%;
+  .projection-grid-column {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-03);
+    min-width: 0;
+  }
+
+  .projection-grid-column h3 {
+    margin: 0;
+    color: var(--khartis-additions-text-primary-suggestions, #003a6d);
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1rem;
+  }
+
+  .projection-grid-cards {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-03);
+  }
+
+  .projection-grid-featured :global(.projection-card),
+  .projection-grid-cards :global(.projection-card) {
+    width: 184px;
+    height: 176px;
   }
 </style>

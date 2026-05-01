@@ -4,15 +4,10 @@ import {
   type UploadedFile
 } from '$lib/features/commons/store/create-project.types';
 
-const { isGeoJSONFeatureCollectionMock, convertGeoJSONToArrowMock } =
-  vi.hoisted(() => ({
-    isGeoJSONFeatureCollectionMock: vi.fn(),
-    convertGeoJSONToArrowMock: vi.fn()
-  }));
-
-vi.mock('$lib/features/commons/utils/geojson-to-arrow.utils', () => ({
-  convertGeoJSONToArrow: convertGeoJSONToArrowMock
+const { isGeoJSONFeatureCollectionMock } = vi.hoisted(() => ({
+  isGeoJSONFeatureCollectionMock: vi.fn()
 }));
+
 vi.mock('$lib/types/data', () => ({
   isGeoJSONFeatureCollection: isGeoJSONFeatureCollectionMock
 }));
