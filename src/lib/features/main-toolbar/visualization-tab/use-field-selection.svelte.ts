@@ -21,7 +21,10 @@ function matchesFieldSelectionKind(
   }
 
   return (
-    item.type === 'text' || item.type === 'date' || item.type === 'boolean'
+    item.type === 'text' ||
+    item.type === 'string' ||
+    item.type === 'date' ||
+    item.type === 'boolean'
   );
 }
 

@@ -2,6 +2,7 @@
   import Button from '$lib/features/commons/components/carbon/button.svelte';
   import type { BasemapMetadata } from '$lib/features/map/types/basemap.types';
   import * as m from '$lib/paraglide/messages';
+  import { getLocale } from '$lib/paraglide/runtime';
   import { InlineNotification, TextInput } from 'carbon-components-svelte';
   import {
     CheckmarkFilled,
@@ -37,6 +38,8 @@
     onUrlLoad,
     onClearError
   }: Props = $props();
+
+  const lang = getLocale();
 
   let isDragging = $state(false);
   let urlInput = $state('');
@@ -135,7 +138,11 @@
     <div class="imported-file">
       <span class="file-label">{m.basemap_import_file_imported()}</span>
       <div class="file-row">
-        <span class="file-name">{importedBasemap.title_fr}</span>
+        <span class="file-name"
+          >{lang === 'fr'
+            ? importedBasemap.title_fr
+            : importedBasemap.title_en}</span
+        >
         <CheckmarkFilled size={20} class="icon-success" />
       </div>
     </div>

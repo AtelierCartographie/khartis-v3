@@ -77,7 +77,9 @@
       data-column={col.name}
     >
       {#if isNull}
-        <span class="null-value" title={m.cell_null_value_tooltip()}>—</span>
+        <span class="null-value" title={m.cell_null_value_tooltip()}
+          >{m.cell_null_value_symbol()}</span
+        >
       {:else}
         {formatValueByType(displayValue, col.type)}
       {/if}

@@ -10,7 +10,8 @@ const items: FieldSelectionItem[] = [
   { id: 1, text: 'population', type: 'number' },
   { id: 2, text: 'country', type: 'text' },
   { id: 3, text: 'updated_at', type: 'date' },
-  { id: 4, text: 'active', type: 'boolean' }
+  { id: 4, text: 'active', type: 'boolean' },
+  { id: 5, text: 'country_name', type: 'string' }
 ];
 
 describe('filterFieldsByKind', () => {
@@ -23,7 +24,8 @@ describe('filterFieldsByKind', () => {
       items[0],
       items[2],
       items[3],
-      items[4]
+      items[4],
+      items[5]
     ]);
   });
 

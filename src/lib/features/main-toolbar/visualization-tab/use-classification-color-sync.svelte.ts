@@ -1,8 +1,5 @@
 import { untrack } from 'svelte';
-import {
-  PrimitiveFilterType,
-  type ClassificationConfig
-} from '$lib/features/commons/store/visualization.store.svelte';
+import { type ClassificationConfig } from '$lib/features/commons/store/visualization.store.svelte';
 import {
   getColorBlindnessState,
   isColorBlindnessActive
@@ -195,5 +192,3 @@ export function syncStrokeColors(deps: UseClassificationColorSyncDeps): void {
     }
   });
 }
-
-export const PRIMITIVE_LINE_FILTER = PrimitiveFilterType.LINE;

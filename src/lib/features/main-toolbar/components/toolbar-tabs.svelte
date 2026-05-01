@@ -392,7 +392,7 @@
     const vizs = visualizationStore.visualizations;
     return vizs.map((viz, idx) => ({
       id: viz.id,
-      label: `${m.viz_tab_label()} (${idx + 1})`,
+      label: m.viz_tab_label({ number: idx + 1 }),
       isSelected: visualizationStore.selectedVisualization?.id === viz.id
     }));
   });

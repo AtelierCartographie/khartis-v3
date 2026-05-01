@@ -22,6 +22,7 @@ describe('projection store', () => {
 
   it('toggles the active suggestion and preserves d3 fallback config', () => {
     expect(source).toContain('activeSuggestionId: _activeSuggestionId');
+    expect(source).toContain('const activeSuggestionId = suggestion.id;');
     expect(source).toContain(
       "overrideSource === 'manual' &&\n        s.overrideActive &&\n        s.activeSuggestionId === suggestion.id"
     );

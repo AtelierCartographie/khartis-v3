@@ -151,12 +151,3 @@ export const PROJECTIONS: ProjectionItem[] = [
     description: m.projection_desc_azimuthal_equal_area()
   }
 ];
-
-export const GROUPS = [
-  { id: m.tag_rectangular(), labelKey: 'projection_group_rectangular' },
-  { id: m.projection_group_rounded(), labelKey: 'projection_group_rounded' },
-  {
-    id: m.projection_group_discontinuous(),
-    labelKey: 'projection_group_discontinuous'
-  }
-] as const;

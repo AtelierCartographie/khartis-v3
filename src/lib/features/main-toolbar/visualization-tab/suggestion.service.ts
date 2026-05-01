@@ -1356,35 +1356,6 @@ function mergeTextPrimitiveConfig(
   } as TextPrimitiveConfig;
 }
 
-export function isVisualizationUsingPreset(
-  visualization: VisualizationConfig,
-  preset: VisualizationPreset
-): boolean {
-  return (
-    visualization.type === preset.type &&
-    areVisualizationPresetValuesEqual(visualization.modes, preset.modes) &&
-    areVisualizationPresetValuesEqual(
-      visualization.primitiveFilters,
-      preset.primitiveFilters
-    ) &&
-    areVisualizationPresetValuesEqual(visualization.style, preset.style) &&
-    areVisualizationPresetValuesEqual(visualization.mapping, preset.mapping) &&
-    areVisualizationPresetValuesEqual(visualization.polygon, preset.polygon) &&
-    areVisualizationPresetValuesEqual(visualization.symbol, preset.symbol) &&
-    areVisualizationPresetValuesEqual(visualization.line, preset.line) &&
-    areVisualizationPresetValuesEqual(visualization.text, preset.text) &&
-    areVisualizationPresetValuesEqual(
-      normalizeClassificationForPresetComparison(visualization.classification),
-      normalizeClassificationForPresetComparison(preset.classification)
-    ) &&
-    areVisualizationPresetValuesEqual(visualization.symbols, preset.symbols) &&
-    areVisualizationPresetValuesEqual(
-      visualization.missingData,
-      preset.missingData
-    )
-  );
-}
-
 export function isVisualizationBlank(
   visualization: VisualizationConfig,
   dataset: DatasetGeometrySource
@@ -1413,15 +1384,6 @@ export function isVisualizationBlank(
     matchesExpectedSubset(visualization.symbols, blankPreset.symbols) &&
     matchesExpectedSubset(visualization.missingData, blankPreset.missingData)
   );
-}
-
-export function resolveNextSuggestionSelection(
-  currentSuggestionId: string | undefined,
-  nextSuggestionId: string
-): string | undefined {
-  return currentSuggestionId === nextSuggestionId
-    ? undefined
-    : nextSuggestionId;
 }
 
 function getLegendSubtitleForVisualization(
