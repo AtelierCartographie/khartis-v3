@@ -357,7 +357,7 @@
   .map-tooltip.interactive {
     width: min(18rem, calc(100vw - 24px));
     max-width: min(18rem, calc(100vw - 24px));
-    height: var(--tooltip-interactive-height, 22rem);
+    max-height: var(--tooltip-interactive-height, 22rem);
     overflow: hidden;
     pointer-events: auto;
     user-select: text;

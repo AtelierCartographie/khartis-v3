@@ -16,6 +16,7 @@ import {
   sequentialPatterns
 } from '@ateliercartographie/ok-palette';
 import type { PatternParams as OkPatternParams } from '@ateliercartographie/ok-palette';
+import type { PatternParams } from '$lib/features/commons/store/visualization.store.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
 const PATTERN_NAMES = [
@@ -121,6 +122,7 @@ const PATTERN_CONFIGS: Record<PatternName, PatternOptions> = {
 };
 
 let cachedResult: AtlasResult | null = null;
+const customAtlasCache = new Map<string, AtlasResult>();
 
 /**
  * Builds the static pattern texture atlas and mapping via motif.js.
@@ -140,6 +142,59 @@ export function getPatternAtlas(): {
   cachedResult = motifAtlas(PATTERN_CONFIGS);
 
   return { atlas: cachedResult.canvas, mapping: cachedResult.mapping };
+}
+
+function createParameterizedPatternOptions(
+  patternId: PatternName,
+  params: PatternParams
+): PatternOptions {
+  const config = PATTERN_CONFIGS[patternId];
+  const scale = Math.max(1, params.scale ?? 8);
+  const size = Math.max(1, params.size ?? 4);
+
+  return {
+    ...config,
+    angle: params.angle ?? config.angle,
+    size: Math.round((size / scale) * 100),
+    scale: scale / 10,
+    background: 'transparent'
+  };
+}
+
+export function getPatternAtlasForPattern(
+  patternId: PatternName,
+  params?: PatternParams
+): {
+  atlas: HTMLCanvasElement;
+  mapping: Record<
+    string,
+    { x: number; y: number; width: number; height: number }
+  >;
+} {
+  if (!params) {
+    return getPatternAtlas();
+  }
+
+  const cacheKey = JSON.stringify({
+    patternId,
+    angle: params.angle,
+    size: params.size,
+    scale: params.scale
+  });
+  const cachedCustomResult = customAtlasCache.get(cacheKey);
+  if (cachedCustomResult) {
+    return {
+      atlas: cachedCustomResult.canvas,
+      mapping: cachedCustomResult.mapping
+    };
+  }
+
+  const result = motifAtlas({
+    [patternId]: createParameterizedPatternOptions(patternId, params)
+  });
+  customAtlasCache.set(cacheKey, result);
+
+  return { atlas: result.canvas, mapping: result.mapping };
 }
 
 /**
