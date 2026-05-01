@@ -17,6 +17,17 @@ function hasNonFinitePathData(pathData: string): boolean {
   return pathData.includes('NaN') || pathData.includes('Infinity');
 }
 
+function hasDegenerateBounds(
+  bounds: [[number, number], [number, number]]
+): boolean {
+  const [[minX, minY], [maxX, maxY]] = bounds;
+  return (
+    ![minX, minY, maxX, maxY].every(Number.isFinite) ||
+    maxX <= minX ||
+    maxY <= minY
+  );
+}
+
 export function buildProjectionMaskPath({
   projection,
   width,
@@ -35,8 +46,13 @@ export function buildProjectionMaskPath({
     return null;
   }
 
-  const spherePath = d3geo.geoPath(projection)(WORLD_SPHERE);
-  if (!spherePath || hasNonFinitePathData(spherePath)) {
+  const path = d3geo.geoPath(projection);
+  const spherePath = path(WORLD_SPHERE);
+  if (
+    !spherePath ||
+    hasNonFinitePathData(spherePath) ||
+    hasDegenerateBounds(path.bounds(WORLD_SPHERE))
+  ) {
     return null;
   }
 

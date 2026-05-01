@@ -44,8 +44,8 @@
     }
 
     crsError = false;
-    projectionActions.setCustomCode(parsed.normalizedCode);
     projectionActions.setSelected(parsed.projectionId);
+    projectionActions.setCustomCode(parsed.normalizedCode);
   }
 
   const DEFAULT_PROJECTION = 'mercator';

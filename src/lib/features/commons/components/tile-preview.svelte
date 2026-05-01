@@ -6,7 +6,7 @@
     ratio: string;
     label: string;
     theme?: 'default' | 'suggestion';
-    icon?: 'earth' | 'palette';
+    icon?: 'earth' | 'palette' | 'none';
     className?: string;
   }
 
@@ -24,11 +24,17 @@
     })
   );
 
-  const Icon = $derived(icon === 'palette' ? ColorPalette : Earth);
+  const Icon = $derived(
+    icon === 'palette' ? ColorPalette : icon === 'earth' ? Earth : undefined
+  );
 </script>
 
 <div class={previewClasses}>
-  <Icon size={32} />
+  {#if Icon}
+    <Icon size={32} />
+  {:else}
+    <span class="neutral-preview-glyph" aria-hidden="true"></span>
+  {/if}
 
   <div class="preview-copy">
     <p class="preview-ratio">{ratio}</p>
@@ -67,6 +73,14 @@
       --khartis-additions-interactive-suggestions,
       #0072c3
     );
+  }
+
+  .neutral-preview-glyph {
+    display: block;
+    width: 32px;
+    height: 24px;
+    border: 2px solid currentColor;
+    box-sizing: border-box;
   }
 
   .preview-copy {

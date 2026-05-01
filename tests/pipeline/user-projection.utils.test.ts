@@ -191,6 +191,49 @@ describe('user projection utils', () => {
     expect(projection.rotate()[1]).toBeCloseTo(-45);
   });
 
+  it('applies non-neutral user center values to finite projected coordinates', () => {
+    const baseProjection = asGeoProjection(
+      resolveUserProjectionOverride({
+        state: {
+          selected: 'natural-earth',
+          overrideActive: true,
+          customCode: undefined,
+          center: undefined,
+          longitude: 0,
+          latitude: 0,
+          rotation: 0
+        },
+        fitBbox: [-24.6, 34.8, 45.8, 71.2],
+        viewportSize: { width: 960, height: 600 },
+        padding: 40,
+        projectionPresets
+      })
+    );
+    const centeredProjection = asGeoProjection(
+      resolveUserProjectionOverride({
+        state: {
+          selected: 'natural-earth',
+          overrideActive: true,
+          customCode: undefined,
+          center: [12, 8],
+          longitude: 12,
+          latitude: 8,
+          rotation: 0
+        },
+        fitBbox: [-24.6, 34.8, 45.8, 71.2],
+        viewportSize: { width: 960, height: 600 },
+        padding: 40,
+        projectionPresets
+      })
+    );
+
+    const basePoint = baseProjection([10, 45]);
+    const centeredPoint = centeredProjection([10, 45]);
+
+    expect(centeredPoint?.every(Number.isFinite)).toBe(true);
+    expect(centeredPoint).not.toEqual(basePoint);
+  });
+
   it('preserves d3 suggestion rotation when proj4 fallback is used', () => {
     const projection = asGeoProjection(
       resolveUserProjectionOverride({
