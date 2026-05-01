@@ -102,6 +102,7 @@
       ratio={ratio}
       label={previewLabel}
       theme={useSuggestionTheme ? 'suggestion' : 'default'}
+      icon="none"
     />
   </div>
 

@@ -18,6 +18,7 @@ describe('ProjectionMain', () => {
     expect(source).toContain(
       'function isSuggestionSelected(suggestion: ProjectionSuggestion)'
     );
+    expect(source).toContain("projectionState.overrideSource === 'manual'");
     expect(source).toContain(
       'projectionState.activeSuggestionId === suggestion.id'
     );
@@ -31,6 +32,33 @@ describe('ProjectionMain', () => {
     expect(source).not.toContain(
       'suggestionCardsEnabled ? projectionState.suggestions : undefined'
     );
+  });
+
+  it('paginates suggestion cards locally without recomputing projections', () => {
+    expect(source).toContain('const INITIAL_VISIBLE_SUGGESTIONS = 3;');
+    expect(source).toContain('let suggestionLimitState = $state({');
+    expect(source).toContain('const visibleSuggestionLimit = $derived(');
+    expect(source).toContain(
+      'filteredListSuggestions.slice(0, visibleSuggestionLimit)'
+    );
+    expect(source).toContain('function showMoreSuggestions()');
+    expect(source).not.toContain(
+      'on:click={() => projectionActions.suggestProjectionForCurrentData()}'
+    );
+  });
+
+  it('resets local pagination only when suggestions or filters change', () => {
+    expect(source).toContain('const suggestionResetSignature = $derived(');
+    expect(source).toContain(
+      'suggestionLimitState.signature === suggestionResetSignature'
+    );
+    expect(source).toContain(': INITIAL_VISIBLE_SUGGESTIONS');
+  });
+
+  it('renders an explicit empty state instead of a blank suggestion area', () => {
+    expect(source).toContain('projection-empty-state');
+    expect(source).toContain('m.projection_suggestions_empty_title()');
+    expect(source).toContain('m.projection_suggestions_unavailable_title()');
   });
 
   it('renders expanded mode as Figma grouped suggestion columns', () => {

@@ -44,4 +44,8 @@ describe('ProjectionCard', () => {
       'border: 3px solid var(--projection-card-focus-color);'
     );
   });
+
+  it('uses a neutral preview glyph instead of a static globe icon', () => {
+    expect(source).toContain('icon="none"');
+  });
 });

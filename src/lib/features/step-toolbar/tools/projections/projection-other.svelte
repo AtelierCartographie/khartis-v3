@@ -10,12 +10,26 @@
     supportsCustomProjectionCode
   } from '$lib/features/map/utils/projection-availability';
   import { m } from '$lib/paraglide/messages';
-  import { Button, ComboBox, TextArea } from 'carbon-components-svelte';
+  import {
+    Button,
+    ComboBox,
+    InlineNotification,
+    TextArea
+  } from 'carbon-components-svelte';
   import { Code, List } from 'carbon-icons-svelte';
   import { createEventDispatcher } from 'svelte';
   import { PROJECTIONS as PROJECTION_CATALOG } from '$lib/features/commons/utils/projection.utils';
   import { getCompositeProjectionSelectionId } from '$lib/features/map/utils/user-projection.utils';
-  import { projectionActions } from './projection.store.svelte';
+  import {
+    getProjectionState,
+    projectionActions
+  } from './projection.store.svelte';
+
+  type ProjectionCatalogueItem = {
+    id: string;
+    projectionId: string;
+    text: string;
+  };
 
   const dispatch = createEventDispatcher<{
     apply: { code: string };
@@ -27,6 +41,7 @@
   let crsCode = $state('');
   let catalogueQuery = $state('');
 
+  const projectionState = $derived(getProjectionState());
   const projectionContext = $derived(
     resolveProjectionAvailabilityContext({
       requiresMapLibre: basemapStyleStore.requiresMapLibre,
@@ -59,7 +74,7 @@
       text: m.projection_name_europe_dom_tom()
     }
   ]);
-  const items = $derived(
+  const items = $derived.by((): ProjectionCatalogueItem[] =>
     [
       ...PROJECTION_CATALOG.map((projection) => ({
         id: projection.id,
@@ -83,6 +98,17 @@
   const codeHelper = m.projection_code_helper?.() ?? '';
   const resetLabel = m.projection_code_reset();
   const submitLabel = m.projection_code_submit();
+  const activeCatalogueSelectionId = $derived.by(() => {
+    if (!isCatalogueProjectionActive()) {
+      return undefined;
+    }
+
+    return items.find((item) => item.projectionId === projectionState.selected)
+      ?.id;
+  });
+  const selectedCatalogueUnavailable = $derived(
+    isCatalogueProjectionActive() && activeCatalogueSelectionId === undefined
+  );
 
   const viewTabs = $derived.by(() => {
     const tabs = [
@@ -134,13 +160,23 @@
   }
 
   function handleCatalogueSelect(
-    event: CustomEvent<{ selectedItem?: { projectionId?: string; id: string } }>
+    event: CustomEvent<{ selectedItem?: ProjectionCatalogueItem }>
   ): void {
     const selectedProjectionId =
       event.detail.selectedItem?.projectionId ?? event.detail.selectedItem?.id;
     if (!selectedProjectionId) return;
 
     projectionActions.setSelected(selectedProjectionId);
+  }
+
+  function isCatalogueProjectionActive(): boolean {
+    return (
+      projectionState.overrideActive === true &&
+      projectionState.overrideSource === 'manual' &&
+      !projectionState.customCode &&
+      !projectionState.activeSuggestionId &&
+      !projectionState.suggestionD3Config
+    );
   }
 
   function shouldFilterProjectionItem(
@@ -169,8 +205,19 @@
 
     {#if !isCodeView}
       <div class="catalog-search">
+        {#if selectedCatalogueUnavailable}
+          <InlineNotification
+            kind="warning"
+            lowContrast
+            hideCloseButton
+            title={m.projection_catalog_unavailable_title()}
+            subtitle={m.projection_catalog_unavailable_subtitle()}
+          />
+        {/if}
+
         <ComboBox
           items={items}
+          selectedId={activeCatalogueSelectionId}
           bind:value={catalogueQuery}
           size="sm"
           placeholder={otherSearchPlaceholder}
