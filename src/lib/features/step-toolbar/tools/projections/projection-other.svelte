@@ -1,6 +1,15 @@
 <script lang="ts">
+  import ButtonNative from '$lib/features/commons/components/button-native.svelte';
+  import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
+  import ProjectionCard from '$lib/features/commons/components/projection-card.svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
+  import { ViewMode } from '$lib/features/commons/constants/ui.constants';
   import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
+  import {
+    globalActions,
+    globalState
+  } from '$lib/features/commons/store/global.svelte';
+  import type { ProjectionFilterId } from '$lib/features/commons/types/global';
   import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
   import { projectionStore as mapRenderProjectionStore } from '$lib/features/map/stores/projection.store.svelte';
@@ -12,36 +21,111 @@
   import { m } from '$lib/paraglide/messages';
   import {
     Button,
-    ComboBox,
     InlineNotification,
     TextArea
   } from 'carbon-components-svelte';
-  import { Code, List } from 'carbon-icons-svelte';
+  import { Code, Grid, List as ListIcon } from 'carbon-icons-svelte';
   import { createEventDispatcher } from 'svelte';
-  import { PROJECTIONS as PROJECTION_CATALOG } from '$lib/features/commons/utils/projection.utils';
+  import {
+    PROJECTIONS as PROJECTION_CATALOG,
+    type ProjectionInfo
+  } from '$lib/features/commons/utils/projection.utils';
   import { getCompositeProjectionSelectionId } from '$lib/features/map/utils/user-projection.utils';
   import {
     getProjectionState,
     projectionActions
   } from './projection.store.svelte';
+  import type { ProjectionSuggestion } from './projection-suggest.service';
+
+  type ProjectionShapeFilterId = Exclude<ProjectionFilterId, 'all'>;
 
   type ProjectionCatalogueItem = {
     id: string;
     projectionId: string;
-    text: string;
+    title: string;
+    tag: string;
+    description?: string;
+    equalArea?: boolean;
+    shapeFilterId?: ProjectionShapeFilterId;
   };
+
+  const EQUAL_AREA_PROJECTION_IDS = new Set([
+    'albers',
+    'azimuthal-equal-area',
+    'gall-peters',
+    'equal-earth',
+    'mollweide',
+    'bonne',
+    'interrupted-mollweide'
+  ]);
+  const SUGGESTION_ID_TO_PROJECTION_ID = new Map([
+    ['aitoff', 'aitoff'],
+    ['albers', 'albers'],
+    ['armadillo', 'armadillo'],
+    ['atlantis', 'atlantis'],
+    ['azimuthalequalarea', 'azimuthal-equal-area'],
+    ['bertin1953', 'bertin-1953'],
+    ['bonne', 'bonne'],
+    ['equalearth', 'equal-earth'],
+    ['equirectangular', 'equirectangular'],
+    ['gallpeters', 'gall-peters'],
+    ['interruptedmollweide', 'interrupted-mollweide'],
+    ['laea', 'azimuthal-equal-area'],
+    ['lambertconformal', 'lambert-conformal'],
+    ['mercator', 'mercator'],
+    ['mollweide', 'mollweide'],
+    ['mollweide2hemisphere', 'interrupted-mollweide'],
+    ['mollweideinterrupted', 'interrupted-mollweide'],
+    ['mollweideocean', 'interrupted-mollweide'],
+    ['naturalearth', 'natural-earth'],
+    ['peters', 'gall-peters'],
+    ['robinson', 'robinson'],
+    ['stereographic', 'stereographic'],
+    ['winkel3', 'winkel-tripel'],
+    ['winkeltripel', 'winkel-tripel']
+  ]);
+  const SUGGESTION_D3_TO_PROJECTION_ID = new Map([
+    ['geoAitoff', 'aitoff'],
+    ['geoAlbers', 'albers'],
+    ['geoArmadillo', 'armadillo'],
+    ['geoAzimuthalEqualArea', 'azimuthal-equal-area'],
+    ['geoBertin1953', 'bertin-1953'],
+    ['geoBonne', 'bonne'],
+    ['geoConicConformal', 'lambert-conformal'],
+    ['geoCylindricalEqualArea', 'gall-peters'],
+    ['geoEqualEarth', 'equal-earth'],
+    ['geoEquirectangular', 'equirectangular'],
+    ['geoInterruptedMollweide', 'interrupted-mollweide'],
+    ['geoMercator', 'mercator'],
+    ['geoMollweide', 'mollweide'],
+    ['geoNaturalEarth1', 'natural-earth'],
+    ['geoRobinson', 'robinson'],
+    ['geoStereographic', 'stereographic'],
+    ['geoWinkel3', 'winkel-tripel']
+  ]);
 
   const dispatch = createEventDispatcher<{
     apply: { code: string };
     reset: void;
   }>();
 
-  let activeTabIndex = $state(0);
-  let isCodeView = $state(false);
+  let requestedTabIndex = $state(0);
   let crsCode = $state('');
-  let catalogueQuery = $state('');
 
   const projectionState = $derived(getProjectionState());
+  const suggestionProjectionIds = $derived.by(() => {
+    const suggestions = projectionState.suggestions;
+    if (!suggestions) {
+      return new Set<string>();
+    }
+
+    return new Set(
+      [...suggestions.national, ...suggestions.generic]
+        .map(getCatalogueProjectionIdForSuggestion)
+        .filter((projectionId): projectionId is string => Boolean(projectionId))
+    );
+  });
+  const viewMode = $derived(globalState.projectionViewMode ?? ViewMode.LIST);
   const projectionContext = $derived(
     resolveProjectionAvailabilityContext({
       requiresMapLibre: basemapStyleStore.requiresMapLibre,
@@ -62,36 +146,91 @@
   const customCodeEnabled = $derived(
     supportsCustomProjectionCode(projectionContext)
   );
+  const activeTabIndex = $derived(customCodeEnabled ? requestedTabIndex : 0);
+  const isCodeView = $derived(customCodeEnabled && activeTabIndex === 1);
   const compositeItems = $derived([
     {
       id: getCompositeProjectionSelectionId('FRANCE_DOM_TOM'),
       projectionId: getCompositeProjectionSelectionId('FRANCE_DOM_TOM'),
-      text: m.projection_name_france_dom_tom()
+      title: m.projection_name_france_dom_tom(),
+      tag: m.projection_group_discontinuous(),
+      shapeFilterId: 'Discontinue' as ProjectionShapeFilterId
     },
     {
       id: getCompositeProjectionSelectionId('EUROPE_DOM_TOM'),
       projectionId: getCompositeProjectionSelectionId('EUROPE_DOM_TOM'),
-      text: m.projection_name_europe_dom_tom()
+      title: m.projection_name_europe_dom_tom(),
+      tag: m.projection_group_discontinuous(),
+      shapeFilterId: 'Discontinue' as ProjectionShapeFilterId
     }
   ]);
+
+  const filterOptions: ReadonlyArray<{
+    id: ProjectionFilterId;
+    label: string;
+  }> = [
+    { id: 'all', label: m.projection_filter_all() },
+    { id: 'Rectangulaire', label: m.projection_filter_rectangular() },
+    { id: 'Arrondie', label: m.projection_filter_rounded() },
+    { id: 'Discontinue', label: m.projection_filter_discontinuous() }
+  ];
+
+  const projectionGroups: ReadonlyArray<{
+    id: ProjectionShapeFilterId;
+    label: string;
+  }> = [
+    { id: 'Rectangulaire', label: m.projection_group_rectangular() },
+    { id: 'Arrondie', label: m.projection_group_rounded() },
+    { id: 'Discontinue', label: m.projection_group_discontinuous() }
+  ];
+
   const items = $derived.by((): ProjectionCatalogueItem[] =>
     [
-      ...PROJECTION_CATALOG.map((projection) => ({
-        id: projection.id,
-        projectionId: projection.id,
-        text: projection.name
-      })),
+      ...PROJECTION_CATALOG.map(createProjectionCatalogueItem),
       ...compositeItems
     ].filter(
       (projection) =>
+        !suggestionProjectionIds.has(projection.projectionId) &&
         getAvailableProjectionIds(projectionContext, [projection.projectionId])
           .length > 0
     )
   );
+  const availableFilterOptions = $derived(
+    filterOptions.filter(
+      (option) =>
+        option.id === 'all' ||
+        items.some((item) => item.shapeFilterId === option.id)
+    )
+  );
+  const activeFilter = $derived.by(() => {
+    const requestedFilter = globalState.projectionFilter ?? 'all';
+
+    return availableFilterOptions.some(
+      (option) => option.id === requestedFilter
+    )
+      ? requestedFilter
+      : 'all';
+  });
+  const filteredItems = $derived(
+    items.filter(
+      (item) => activeFilter === 'all' || item.shapeFilterId === activeFilter
+    )
+  );
+  const unclassifiedGridItems = $derived(
+    items.filter((item) => !item.shapeFilterId)
+  );
+  const gridGroups = $derived(
+    projectionGroups
+      .map((group) => ({
+        ...group,
+        items: items.filter((item) => item.shapeFilterId === group.id)
+      }))
+      .filter((group) => group.items.length > 0)
+  );
   const catalogueLabel = m.projection_catalog_label();
   const viewCodeLabel = m.projection_view_code();
-  const otherSearchPlaceholder = m.projection_other_search_placeholder();
 
+  const description = m.projection_description();
   const codeIntro = m.projection_code_intro?.() ?? '';
   const codeLabel = m.projection_code_label();
   const codePlaceholder = m.projection_code_placeholder?.() ?? '';
@@ -113,7 +252,7 @@
   const viewTabs = $derived.by(() => {
     const tabs = [
       {
-        icon: List,
+        icon: ListIcon,
         label: catalogueLabel,
         iconSize: 16
       }
@@ -130,20 +269,8 @@
     return tabs;
   });
 
-  $effect(() => {
-    if (customCodeEnabled) {
-      return;
-    }
-
-    if (activeTabIndex !== 0 || isCodeView) {
-      activeTabIndex = 0;
-      isCodeView = false;
-    }
-  });
-
   function handleViewChange(index: number): void {
-    activeTabIndex = index;
-    isCodeView = index === 1;
+    requestedTabIndex = customCodeEnabled ? index : 0;
   }
 
   const isEmpty = () => crsCode.trim().length === 0;
@@ -159,14 +286,23 @@
     dispatch('apply', { code: crsCode.trim() });
   }
 
-  function handleCatalogueSelect(
-    event: CustomEvent<{ selectedItem?: ProjectionCatalogueItem }>
-  ): void {
-    const selectedProjectionId =
-      event.detail.selectedItem?.projectionId ?? event.detail.selectedItem?.id;
-    if (!selectedProjectionId) return;
+  function setFilter(id: ProjectionFilterId): void {
+    globalActions.setProjectionFilter(id);
+  }
 
-    projectionActions.setSelected(selectedProjectionId);
+  function selectCatalogueProjection(item: ProjectionCatalogueItem): void {
+    projectionActions.setSelected(item.projectionId);
+  }
+
+  function setViewMode(mode: ViewMode): void {
+    projectionActions.setViewMode(mode);
+  }
+
+  function isCatalogueItemSelected(item: ProjectionCatalogueItem): boolean {
+    return (
+      isCatalogueProjectionActive() &&
+      projectionState.selected === item.projectionId
+    );
   }
 
   function isCatalogueProjectionActive(): boolean {
@@ -179,16 +315,76 @@
     );
   }
 
-  function shouldFilterProjectionItem(
-    item: { text?: string; projectionId?: string },
-    value: string
-  ): boolean {
-    if (!value) return true;
+  function createProjectionCatalogueItem(
+    projection: ProjectionInfo
+  ): ProjectionCatalogueItem {
+    const shapeFilterId = getProjectionShapeFilterId(projection);
 
-    const query = value.trim().toLowerCase();
+    return {
+      id: projection.id,
+      projectionId: projection.id,
+      title: projection.name,
+      tag: getProjectionTag(shapeFilterId),
+      description: projection.description,
+      equalArea: EQUAL_AREA_PROJECTION_IDS.has(projection.id),
+      shapeFilterId
+    };
+  }
+
+  function getCatalogueProjectionIdForSuggestion(
+    suggestion: ProjectionSuggestion
+  ): string | undefined {
+    if (suggestion.type !== 'generic') {
+      return undefined;
+    }
+
+    const normalizedSuggestionId = normalizeSuggestionId(suggestion.id);
+    const projectionId = SUGGESTION_ID_TO_PROJECTION_ID.get(
+      normalizedSuggestionId
+    );
+    if (projectionId) {
+      return projectionId;
+    }
+
+    const d3Projection = suggestion.d3Config?.projection;
+    return d3Projection
+      ? SUGGESTION_D3_TO_PROJECTION_ID.get(d3Projection)
+      : undefined;
+  }
+
+  function normalizeSuggestionId(id: string): string {
+    return id.toLowerCase().replace(/[^a-z0-9]/g, '');
+  }
+
+  function getProjectionShapeFilterId(
+    projection: ProjectionInfo
+  ): ProjectionShapeFilterId | undefined {
+    if (projection.id === 'interrupted-mollweide') {
+      return 'Discontinue';
+    }
+
+    if (
+      projection.category === 'cylindrical' ||
+      projection.category === 'conic'
+    ) {
+      return 'Rectangulaire';
+    }
+
+    if (
+      projection.category === 'azimuthal' ||
+      projection.category === 'other'
+    ) {
+      return 'Arrondie';
+    }
+
+    return undefined;
+  }
+
+  function getProjectionTag(
+    shapeFilterId: ProjectionShapeFilterId | undefined
+  ): string {
     return (
-      item.text?.toLowerCase().includes(query) === true ||
-      item.projectionId?.toLowerCase().includes(query) === true
+      projectionGroups.find((group) => group.id === shapeFilterId)?.label ?? ''
     );
   }
 </script>
@@ -204,7 +400,10 @@
     />
 
     {#if !isCodeView}
-      <div class="catalog-search">
+      <div
+        class="projection-content"
+        class:projection-content--grid={viewMode === ViewMode.GRID}
+      >
         {#if selectedCatalogueUnavailable}
           <InlineNotification
             kind="warning"
@@ -215,15 +414,137 @@
           />
         {/if}
 
-        <ComboBox
-          items={items}
-          selectedId={activeCatalogueSelectionId}
-          bind:value={catalogueQuery}
-          size="sm"
-          placeholder={otherSearchPlaceholder}
-          shouldFilterItem={shouldFilterProjectionItem}
-          on:select={handleCatalogueSelect}
-        />
+        <div class="projection-header">
+          <p class="projection-helper">{description}</p>
+          <div class="projection-buttons">
+            <IconButton
+              kind="ghost"
+              icon={ListIcon}
+              size="small"
+              class={viewMode === ViewMode.LIST
+                ? 'projection-view-button projection-view-button--active'
+                : 'projection-view-button'}
+              iconDescription={m.view_list()}
+              isSelected={viewMode === ViewMode.LIST}
+              aria-pressed={viewMode === ViewMode.LIST}
+              on:click={() => setViewMode(ViewMode.LIST)}
+            />
+
+            <IconButton
+              kind="ghost"
+              icon={Grid}
+              size="small"
+              class={viewMode === ViewMode.GRID
+                ? 'projection-view-button projection-view-button--active'
+                : 'projection-view-button'}
+              iconDescription={m.view_grid()}
+              isSelected={viewMode === ViewMode.GRID}
+              aria-pressed={viewMode === ViewMode.GRID}
+              on:click={() => setViewMode(ViewMode.GRID)}
+            />
+          </div>
+        </div>
+
+        {#if viewMode === ViewMode.LIST}
+          <div class="projection-tags">
+            {#each availableFilterOptions as opt (opt.id)}
+              <ButtonNative
+                type="button"
+                class="projection-tag {activeFilter === opt.id
+                  ? 'projection-tag--selected'
+                  : ''}"
+                kind="ghost"
+                size="small"
+                onclick={() => setFilter(opt.id)}>{opt.label}</ButtonNative
+              >
+            {/each}
+          </div>
+
+          {#if filteredItems.length > 0}
+            <div class="projection-cards">
+              {#each filteredItems as item (item.id)}
+                <ProjectionCard
+                  title={item.title}
+                  subtitle=""
+                  tag={item.tag}
+                  ratio="1:1"
+                  previewLabel={m.projection_preview_label()}
+                  selected={isCatalogueItemSelected(item)}
+                  variant="gray"
+                  equalArea={item.equalArea}
+                  description={item.description}
+                  onclick={() => selectCatalogueProjection(item)}
+                />
+              {/each}
+            </div>
+          {:else}
+            <div class="projection-empty-state">
+              <p class="projection-empty-title">
+                {m.projection_catalog_unavailable_title()}
+              </p>
+              <p class="projection-empty-subtitle">
+                {m.projection_catalog_unavailable_subtitle()}
+              </p>
+            </div>
+          {/if}
+        {:else if items.length > 0}
+          {#if unclassifiedGridItems.length > 0}
+            <div class="projection-grid-featured">
+              {#each unclassifiedGridItems as item (item.id)}
+                <ProjectionCard
+                  title={item.title}
+                  subtitle=""
+                  tag={item.tag}
+                  ratio="16:9"
+                  previewLabel={m.projection_preview_label()}
+                  selected={isCatalogueItemSelected(item)}
+                  variant="gray"
+                  equalArea={item.equalArea}
+                  description={item.description}
+                  layout="vertical"
+                  fullWidth
+                  onclick={() => selectCatalogueProjection(item)}
+                />
+              {/each}
+            </div>
+          {/if}
+
+          <div class="projection-grid">
+            {#each gridGroups as group (group.id)}
+              <section class="projection-grid-column" aria-label={group.label}>
+                <h3>{group.label}</h3>
+                <div class="projection-grid-cards">
+                  {#each group.items as item (item.id)}
+                    <ProjectionCard
+                      title={item.title}
+                      subtitle=""
+                      tag={item.tag}
+                      ratio="16:9"
+                      previewLabel={m.projection_preview_label()}
+                      selected={isCatalogueItemSelected(item)}
+                      variant="gray"
+                      equalArea={item.equalArea}
+                      description={item.description}
+                      layout="vertical"
+                      fullWidth
+                      showTag={false}
+                      onclick={() => selectCatalogueProjection(item)}
+                    />
+                  {/each}
+                </div>
+              </section>
+            {/each}
+          </div>
+        {:else}
+          <div class="projection-empty-state">
+            <p class="projection-empty-title">
+              {m.projection_catalog_unavailable_title()}
+            </p>
+            <p class="projection-empty-subtitle">
+              {m.projection_catalog_unavailable_subtitle()}
+            </p>
+          </div>
+        {/if}
       </div>
     {:else}
       <div class="code-view">
@@ -262,17 +583,8 @@
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-05);
-  }
-
-  .catalog-search {
     width: 100%;
-    position: relative;
-    overflow: visible;
-  }
-
-  #khartis-projection-other-tool
-    :global(.other-proj .catalog-search:has(.bx--list-box--expanded)) {
-    min-height: 14.2rem;
+    min-width: 0;
   }
 
   .code-view {
@@ -316,5 +628,156 @@
   #khartis-projection-other-tool :global(.projection-view-tabs .toggle-icon) {
     width: 16px;
     height: 16px;
+  }
+
+  .projection-content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-04);
+    width: 100%;
+    min-width: 0;
+  }
+
+  .projection-content--grid {
+    gap: var(--cds-spacing-05);
+  }
+
+  .projection-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--cds-spacing-03);
+  }
+
+  .projection-helper {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    color: var(--cds-text-secondary, #525252);
+    font-size: 0.75rem;
+    line-height: 1rem;
+    letter-spacing: 0.32px;
+  }
+
+  .projection-buttons {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .projection-buttons :global(.projection-view-button.bx--btn) {
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    min-height: 32px;
+    padding: 8px;
+    color: var(--cds-icon-primary, #161616);
+  }
+
+  .projection-buttons
+    :global(.projection-view-button.projection-view-button--active.bx--btn) {
+    background: var(--cds-background-active, rgba(141, 141, 141, 0.5));
+  }
+
+  .projection-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .projection-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 8px;
+    border: 1px solid var(--cds-border-subtle-01, #c6c6c6);
+    border-radius: 9px;
+    background-color: var(--cds-layer-01, #f4f4f4);
+    color: var(--cds-text-primary, #161616);
+    cursor: pointer;
+    font-size: 0.75rem;
+    line-height: 1rem;
+    letter-spacing: 0.32px;
+  }
+
+  .projection-tag:hover:not(.projection-tag--selected) {
+    background-color: var(--cds-layer-hover-01, #e8e8e8);
+  }
+
+  .projection-tag--selected {
+    border-color: transparent;
+    background-color: var(--cds-text-primary, #161616);
+    color: var(--cds-text-inverse, #ffffff);
+  }
+
+  .projection-cards {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--cds-spacing-03);
+    width: 100%;
+  }
+
+  .projection-empty-state {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-02);
+    padding: var(--cds-spacing-05);
+    border: 1px solid var(--cds-border-subtle-01, #c6c6c6);
+    background: var(--cds-layer-01, #f4f4f4);
+    color: var(--cds-text-primary, #161616);
+  }
+
+  .projection-empty-title,
+  .projection-empty-subtitle {
+    margin: 0;
+  }
+
+  .projection-empty-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.125rem;
+  }
+
+  .projection-empty-subtitle {
+    color: var(--cds-text-secondary, #525252);
+    font-size: 0.75rem;
+    line-height: 1rem;
+  }
+
+  .projection-grid-featured,
+  .projection-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 184px);
+    gap: var(--cds-spacing-05);
+    width: 100%;
+    align-items: start;
+  }
+
+  .projection-grid-column {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-03);
+    min-width: 0;
+  }
+
+  .projection-grid-column h3 {
+    margin: 0;
+    color: var(--cds-text-primary, #161616);
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1rem;
+  }
+
+  .projection-grid-cards {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-03);
+  }
+
+  .projection-grid-featured :global(.projection-card),
+  .projection-grid-cards :global(.projection-card) {
+    width: 184px;
+    height: 176px;
   }
 </style>
