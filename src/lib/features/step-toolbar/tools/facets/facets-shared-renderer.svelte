@@ -385,6 +385,7 @@
     const viewportSize = getProjectionViewportSize();
     if (
       !projectionState.overrideActive ||
+      projectionState.overrideSource !== 'manual' ||
       (requiredSource && projectionState.overrideSource !== requiredSource)
     ) {
       return undefined;
