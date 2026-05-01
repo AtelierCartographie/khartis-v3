@@ -54,32 +54,6 @@ export const GEO_CONSTANTS = {
   WEB_MERCATOR_CRS: 'EPSG:3857'
 } as const;
 
-export const READER_CONSTANTS = {
-  /**
-   * Batch size for point geometry reprojection.
-   * 5,000 points balances memory usage with processing efficiency.
-   * Points are simple (2-3 coords) so larger batches are efficient.
-   */
-  POINT_REPROJECTION_BATCH_SIZE: 5_000,
-
-  /**
-   * Batch size for complex geometry (polygon/line) reprojection.
-   * 1,000 geometries balances memory with throughput.
-   * Lower than points because polygons have many vertices.
-   */
-  COMPLEX_GEOMETRY_REPROJECTION_BATCH_SIZE: 1_000,
-
-  /**
-   * Projections not natively supported by DuckDB spatial extension.
-   * These require client-side reprojection via proj4.
-   */
-  DUCKDB_UNSUPPORTED_PROJECTIONS: new Set([
-    'EPSG:2154', // Lambert-93 (France)
-    'EPSG:27572', // Lambert II etendu (France)
-    'EPSG:3035' // ETRS89-LAEA (Europe)
-  ])
-} as const;
-
 /**
  * DuckDB extension names.
  */

@@ -25,7 +25,12 @@
   import MissingDataSection from './missing-data-section.svelte';
   import FacetsVariablePicker from '../symbols/facets-variable-picker.svelte';
   import { buildFillModeItems } from './fill-mode-presets';
-  import type { CategoriesAspectVariant } from '$lib/features/commons/components/palette-popover/categories-aspect-popover.types';
+  import {
+    DEFAULT_COMMON_ASPECT,
+    PatternType,
+    type CategoriesAspectVariant,
+    type CategoriesCommonAspect
+  } from '$lib/features/commons/components/palette-popover/categories-aspect-popover.types';
   import { useCategoryLabels } from '../../use-category-labels.svelte';
   import { filterFieldsByKind } from '../../use-field-selection.svelte';
 
@@ -156,6 +161,16 @@
     fallbackCount: () => categoryCount || 4
   });
   const resolvedCategoryCount = $derived(categoryLabels.count);
+  const categoriesCommonAspect = $derived<CategoriesCommonAspect>({
+    ...DEFAULT_COMMON_ASPECT,
+    pattern:
+      categoriesVariant === 'polygons' &&
+      Boolean(visualization?.classification?.patternId),
+    patternType:
+      categoriesVariant === 'polygons'
+        ? resolvePatternType(visualization?.classification?.patternId)
+        : DEFAULT_COMMON_ASPECT.patternType
+  });
   const selectableValueFields = $derived(
     filterFieldsByKind(selectableDataFields, 'numeric', selectedValueFieldId)
   );
@@ -170,6 +185,26 @@
     }
 
     onFillModeChange(nextMode);
+  }
+
+  function resolvePatternType(patternId: string | undefined): PatternType {
+    switch (patternId) {
+      case 'dots':
+        return PatternType.DOTS;
+      case 'cross':
+      case 'square':
+      case 'diamond':
+      case 'plus':
+      case 'triangle':
+        return PatternType.CROSSHATCH;
+      case 'horizontal':
+      case 'vertical':
+      case 'diagonal':
+      case 'diagonal-reverse':
+        return PatternType.LINES;
+      default:
+        return DEFAULT_COMMON_ASPECT.patternType ?? PatternType.DOTS;
+    }
   }
 
   let missingDataShow = $derived(showMissingData);
@@ -270,6 +305,8 @@
     paletteType={PALETTE_TYPE.QUALITATIVE}
     categoriesMode={true}
     categoriesVariant={categoriesVariant}
+    categoriesCommonAspect={categoriesCommonAspect}
+    showCategoriesCommonAspect={categoriesVariant === 'polygons'}
     categoryLabels={categoryLabels.labels}
     bind:categoriesPopoverOpen={categoriesPopoverOpen}
     oninvert={onInvertPalette}

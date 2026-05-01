@@ -1,10 +1,22 @@
-import { dataTabActions } from '$lib/features/commons/store/data-tab.store.svelte';
+import {
+  dataTabActions,
+  dataTabState
+} from '$lib/features/commons/store/data-tab.store.svelte';
 import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
 import { FileValidator } from '$lib/features/commons/utils/file-validator.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import type { DatasetResult } from '$lib/features/data-pipeline';
-import { dataPipeline, isZipDatasetResult } from '$lib/features/data-pipeline';
+import type {
+  DatasetResult,
+  EnrichedColumn
+} from '$lib/features/data-pipeline';
+import {
+  ColumnType,
+  dataPipeline,
+  isZipDatasetResult
+} from '$lib/features/data-pipeline';
 import { Duck } from '$lib/features/duckdb';
+import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
+import type { DuckDBDataset } from '$lib/features/duckdb/types';
 import * as m from '$lib/paraglide/messages';
 
 export interface UseEnrichmentFileReturn {
@@ -22,14 +34,14 @@ export interface UseEnrichmentFileReturn {
   setOnlineUrlValue: (value: string) => void;
 }
 
-export function useEnrichmentFile(): UseEnrichmentFileReturn {
-  let enrichmentFile = $state<File | null>(null);
-  let enrichmentDataset = $state<DatasetResult | null>(null);
-  let isUploading = $state(false);
-  let uploadError = $state<string | null>(null);
-  let pastedDataValue = $state('');
-  let onlineUrlValue = $state('');
+let enrichmentFile = $state<File | null>(null);
+let enrichmentDataset = $state<DatasetResult | null>(null);
+let isUploading = $state(false);
+let uploadError = $state<string | null>(null);
+let pastedDataValue = $state('');
+let onlineUrlValue = $state('');
 
+export function useEnrichmentFile(): UseEnrichmentFileReturn {
   function validateOnlineUrl(url: string): string | null {
     const trimmedUrl = url.trim();
 
@@ -62,6 +74,78 @@ export function useEnrichmentFile(): UseEnrichmentFileReturn {
     }
 
     return error.message;
+  }
+
+  function toColumnType(typeSimple: unknown): ColumnType {
+    switch (typeSimple) {
+      case 'numeric':
+        return ColumnType.NUMBER;
+      case 'boolean':
+        return ColumnType.BOOLEAN;
+      case 'date':
+        return ColumnType.DATE;
+      case 'geometry':
+        return ColumnType.GEOMETRY;
+      default:
+        return ColumnType.TEXT;
+    }
+  }
+
+  function toEnrichedColumn(
+    column: DuckDBDataset['columns'][number],
+    rowCount: number
+  ): EnrichedColumn {
+    const type = toColumnType(column.type_simple);
+    return {
+      name: column.name,
+      type,
+      values: [],
+      stats: {
+        name: column.name,
+        type,
+        count: column.count ?? rowCount,
+        nulls: column.nulls ?? 0,
+        uniques: column.uniques ?? 0,
+        min: column.min,
+        max: column.max
+      }
+    };
+  }
+
+  function toDatasetResult(dataset: DuckDBDataset): DatasetResult {
+    return {
+      id: dataset.id,
+      name: dataset.name,
+      sourceFileId: dataset.sourceFileId,
+      tableName: dataset.tableName,
+      columns: dataset.columns.map((column) =>
+        toEnrichedColumn(column, dataset.rowCount)
+      ),
+      rowCount: dataset.rowCount,
+      metadata: {
+        processedAt: dataset.metadata.processedAt,
+        fileType: String(dataset.metadata.fileType),
+        parserUsed: 'duckdb'
+      },
+      geoDetection: dataset.geoDetection,
+      joinedBasemap: dataset.joinedBasemap,
+      geoColumn: dataset.geoColumn
+    };
+  }
+
+  function findRuntimeDataset(datasetId: string): DatasetResult | null {
+    const storedDataset =
+      datasetsStore.datasets.find((dataset) => dataset.id === datasetId) ??
+      null;
+    if (storedDataset) {
+      return storedDataset;
+    }
+
+    const duckDataset =
+      duckDBOrchestrator.getDataset(datasetId) ??
+      duckDBOrchestrator.getDatasetBySourceFile(datasetId);
+
+    return duckDataset ? toDatasetResult(duckDataset) : null;
   }
 
   async function cleanupEnrichmentTable(
@@ -217,6 +301,21 @@ export function useEnrichmentFile(): UseEnrichmentFileReturn {
       uploadError = null;
     }
   }
+
+  $effect(() => {
+    const persistedDatasetId = dataTabState.enrichData.enrichmentDatasetId;
+    if (!persistedDatasetId || enrichmentDataset?.id === persistedDatasetId) {
+      return;
+    }
+
+    const restoredDataset = findRuntimeDataset(persistedDatasetId);
+    if (!restoredDataset) {
+      return;
+    }
+
+    enrichmentDataset = restoredDataset;
+    enrichmentFile = null;
+  });
 
   return {
     get enrichmentFile() {

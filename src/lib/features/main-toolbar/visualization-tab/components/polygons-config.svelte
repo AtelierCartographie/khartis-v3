@@ -387,8 +387,12 @@
         strokeClassification={visualization?.polygon?.strokeClassification}
         strokeValueColumn={visualization?.polygon?.strokeValueColumn}
         strokeCategoryColumn={visualization?.polygon?.strokeCategoryColumn}
+        showMissingData={showMissingData}
+        missingDataColor={missingDataColor}
         facetsValueSlotPath={FACET_SLOT.POLYGON_VALUE}
         facetsCategorySlotPath={FACET_SLOT.POLYGON_CATEGORY}
+        onMissingDataShowChange={handleMissingDataShowChange}
+        onMissingDataColorChange={handleMissingDataColorChange}
       />
     {/if}
   </div>

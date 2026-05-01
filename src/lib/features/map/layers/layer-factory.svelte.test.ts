@@ -31,6 +31,7 @@ const {
   createPathLayerPropsMock,
   createPolygonFillColorAttributeMock,
   createScatterplotLayerPropsMock,
+  getPatternAtlasForPatternMock,
   parsePathsMock,
   parsePointDataMock,
   parsePointDataWithProjectionMock,
@@ -59,6 +60,7 @@ const {
     createPathLayerPropsMock: vi.fn(),
     createPolygonFillColorAttributeMock: vi.fn(),
     createScatterplotLayerPropsMock: vi.fn(),
+    getPatternAtlasForPatternMock: vi.fn(),
     parsePathsMock: vi.fn(),
     parsePointDataMock: vi.fn(),
     parsePointDataWithProjectionMock: vi.fn(),
@@ -136,7 +138,8 @@ vi.mock('./pattern-texture', async () => {
       mapping: {
         diagonal: { x: 0, y: 0, width: 8, height: 8 }
       }
-    }))
+    })),
+    getPatternAtlasForPattern: getPatternAtlasForPatternMock
   };
 });
 
@@ -420,6 +423,13 @@ function hasScatterBinaryTestData(
 
 beforeEach(() => {
   vi.clearAllMocks();
+  getPatternAtlasForPatternMock.mockReturnValue({
+    atlas: {} as HTMLCanvasElement,
+    mapping: {
+      diagonal: { x: 0, y: 0, width: 8, height: 8 },
+      dots: { x: 8, y: 0, width: 8, height: 8 }
+    }
+  });
   projectGeoJSONMock.mockImplementation((geojson) => geojson);
   parseSolidPolygonsMock.mockReturnValue({
     featureIds: new Uint32Array([0])
@@ -1115,6 +1125,49 @@ describe('createPolygonLayers', () => {
     expect(fillLayerIndex).toBeGreaterThanOrEqual(0);
     expect(patternLayerIndex).toBeGreaterThan(fillLayerIndex);
     expect(strokeLayerIndex).toBeGreaterThan(patternLayerIndex);
+  });
+
+  it('applies polygon pattern params to the rendered pattern layer', () => {
+    const visualization = createVisualization(FillMode.UNIQUE);
+    visualization.polygon = {
+      ...visualization.polygon!,
+      classification: {
+        ...visualization.polygon!.classification!,
+        patternId: 'diagonal',
+        patternParams: {
+          angle: 315,
+          size: 9,
+          scale: 16
+        }
+      }
+    };
+
+    arrowTableToGeoJSONMock.mockReturnValue({
+      type: 'FeatureCollection',
+      features: [createPolygonFeature('patterned', 2024)]
+    });
+
+    const layers = createPolygonLayers(
+      createTableWithFields([]),
+      createGeometryInfo(),
+      createContext(visualization)
+    );
+    const patternLayer = getPatternLayer(layers);
+    const patternLayerProps = patternLayer?.props as
+      | Record<string, unknown>
+      | undefined;
+
+    expect(getPatternAtlasForPatternMock).toHaveBeenCalledWith('diagonal', {
+      angle: 315,
+      size: 9,
+      scale: 16
+    });
+    expect(patternLayerProps?.getFillPatternScale).toBe(400);
+    expect(patternLayerProps?.getFillPatternRotation).toBe(315);
+    expect(patternLayer?.props.updateTriggers).toMatchObject({
+      getFillPatternScale: [400],
+      getFillPatternRotation: [315]
+    });
   });
 
   it('renders density from the dedicated density table without falling back to polygon fill', () => {

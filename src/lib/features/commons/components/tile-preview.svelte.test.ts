@@ -15,4 +15,9 @@ describe('TilePreview', () => {
       '.tile-preview.suggestion {\n    --tile-preview-background'
     );
   });
+
+  it('supports a neutral non-cartographic glyph for projection previews', () => {
+    expect(source).toContain("icon?: 'earth' | 'palette' | 'none';");
+    expect(source).toContain('class="neutral-preview-glyph"');
+  });
 });

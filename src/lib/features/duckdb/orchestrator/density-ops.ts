@@ -125,11 +125,6 @@ function invalidateDensityCacheForTable(tableName: string): void {
   densityCacheTableIndex.delete(tableName);
 }
 
-export function clearDensityCache(): void {
-  densityCache.clear();
-  densityCacheTableIndex.clear();
-}
-
 registerTableMutationCallback((table: string) => {
   invalidateDensityCacheForTable(table);
 });

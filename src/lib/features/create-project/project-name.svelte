@@ -182,7 +182,9 @@
       />
       {#if hasValidName && !hasTriedSubmit && projectName.trim().length > 0}
         <div class="character-count">
-          {projectName.trim().length}{m.character_count_separator()}100
+          {m.project_name_character_count({
+            count: projectName.trim().length
+          })}
         </div>
       {/if}
     </div>

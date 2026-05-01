@@ -320,11 +320,13 @@
     if (partialCount > 0) {
       parts.push(m.search_partial_results({ count: partialCount }));
     }
-    return parts.join(', ');
+    return parts.join(m.separator_comma_space());
   });
 
   const navigationText = $derived(
-    hasResults ? `${currentResultIndex + 1} / ${searchStats.totalCount}` : ''
+    hasResults
+      ? `${currentResultIndex + 1}${m.search_navigation_separator()}${searchStats.totalCount}`
+      : ''
   );
 </script>
 

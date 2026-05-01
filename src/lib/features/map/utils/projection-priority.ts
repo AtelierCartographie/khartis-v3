@@ -14,9 +14,5 @@ export function resolveProjectionForRender(
     return allowManualOverride ? userOverride : defaultProjection;
   }
 
-  if (defaultProjection) {
-    return defaultProjection;
-  }
-
-  return userOverride;
+  return defaultProjection;
 }

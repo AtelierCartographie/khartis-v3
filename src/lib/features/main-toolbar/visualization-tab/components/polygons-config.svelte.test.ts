@@ -61,6 +61,19 @@ describe('PolygonsConfig — FillSection wiring', () => {
     );
   });
 
+  it('passes polygon missing-data state to StrokeSection for contour classes/categories', () => {
+    const strokeBlock = source.split('<StrokeSection')[1]?.split('/>')[0];
+    expect(strokeBlock).toBeDefined();
+    expect(strokeBlock).toContain('showMissingData={showMissingData}');
+    expect(strokeBlock).toContain('missingDataColor={missingDataColor}');
+    expect(strokeBlock).toContain(
+      'onMissingDataShowChange={handleMissingDataShowChange}'
+    );
+    expect(strokeBlock).toContain(
+      'onMissingDataColorChange={handleMissingDataColorChange}'
+    );
+  });
+
   it('exposes FillMode.DENSITY through PolygonModeDensity in the density snippet', () => {
     expect(source).toContain('FillMode.DENSITY');
     expect(source).toContain('<PolygonModeDensity');
