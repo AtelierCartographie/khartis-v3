@@ -51,7 +51,15 @@ const DEFAULT_STATE: DataTabState = {
     isEnrichmentActive: false,
     joinTabularEnabled: false,
     overlayBasemapEnabled: false,
-    basemapTabIndex: 0
+    basemapTabIndex: 0,
+    preferredOverlayBasemapId: undefined,
+    preferredOverlayBasemapSource: undefined
+  },
+  uiPanels: {
+    enrichJoinTabularOpen: false,
+    enrichOverlayBasemapOpen: false,
+    enrichBasemapSuggestionsOpen: undefined,
+    enrichBasemapCatalogOpen: undefined
   },
   notifications: {
     variableTypes: false,
@@ -113,6 +121,9 @@ function restoreFromSerialized(data: unknown): void {
   if (restored?.enrichData) {
     Object.assign(nextState.enrichData, restored.enrichData);
   }
+  if (restored?.uiPanels) {
+    Object.assign(nextState.uiPanels, restored.uiPanels);
+  }
   if (restored?.notifications) {
     Object.assign(nextState.notifications, restored.notifications);
   }
@@ -142,6 +153,7 @@ function serializeDataTabState(): SerializedDataTabState {
       }))
     },
     enrichData: { ...dataTabState.enrichData },
+    uiPanels: { ...dataTabState.uiPanels },
     notifications: { ...dataTabState.notifications }
   };
 }
@@ -176,6 +188,11 @@ export const dataTabActions = {
 
   setEnrichDataState(updates: Partial<DataTabState['enrichData']>): void {
     Object.assign(dataTabState.enrichData, updates);
+    notifyPersistence('IMMEDIATE');
+  },
+
+  setUiPanelsState(updates: Partial<DataTabState['uiPanels']>): void {
+    Object.assign(dataTabState.uiPanels, updates);
     notifyPersistence('IMMEDIATE');
   },
 
