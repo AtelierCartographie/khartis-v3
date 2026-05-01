@@ -99,6 +99,32 @@ describe('usePrimitiveVisibility', () => {
     });
   });
 
+  it('handlePrimitiveVisibilityChange POINT preserves category color palettes when re-enabled', () => {
+    const handleSymbolChange = vi.fn();
+    const viz = {
+      symbol: {
+        enabled: false,
+        opacity: 0.5,
+        fillColor: ['#111111', '#222222'],
+        strokeColor: ['#333333', '#444444']
+      }
+    } as never;
+    const { handlePrimitiveVisibilityChange } = usePrimitiveVisibility({
+      getSelectedVisualization: () => viz,
+      handleSymbolChange,
+      handleLineChange: vi.fn(),
+      handlePolygonChange: vi.fn(),
+      handleTextChange: vi.fn()
+    });
+    handlePrimitiveVisibilityChange('point' as never, true);
+    expect(handleSymbolChange).toHaveBeenCalledWith({
+      enabled: true,
+      opacity: 0.5,
+      fillColor: ['#111111', '#222222'],
+      strokeColor: ['#333333', '#444444']
+    });
+  });
+
   it('handlePrimitiveVisibilityChange POINT skips when state matches', () => {
     const handleSymbolChange = vi.fn();
     const viz = { symbol: { enabled: true } } as never;

@@ -54,14 +54,8 @@ export function usePrimitiveVisibility(deps: UsePrimitiveVisibilityDeps) {
             visible && symbol.opacity <= 0
               ? VISUALIZATION_DEFAULTS.symbolOpacity / 100
               : symbol.opacity,
-          fillColor:
-            (Array.isArray(symbol.fillColor)
-              ? symbol.fillColor[0]
-              : symbol.fillColor) ?? DEFAULT_COLORS.fill,
-          strokeColor:
-            (Array.isArray(symbol.strokeColor)
-              ? symbol.strokeColor[0]
-              : symbol.strokeColor) ?? DEFAULT_COLORS.gray
+          fillColor: symbol.fillColor ?? DEFAULT_COLORS.fill,
+          strokeColor: symbol.strokeColor ?? DEFAULT_COLORS.gray
         });
         return;
       }

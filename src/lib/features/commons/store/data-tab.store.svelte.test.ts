@@ -70,6 +70,7 @@ describe('dataTab persistence', () => {
         ]
       },
       enrichData: expect.any(Object),
+      uiPanels: expect.any(Object),
       notifications: expect.any(Object)
     });
     expect(dataTabPersistenceEntry?.serialize()).not.toMatchObject({
@@ -98,5 +99,54 @@ describe('dataTab persistence', () => {
     expect(dataTabState.basemapJoin.joinedEntities).toBe(7);
     expect(dataTabState.basemapJoin.entitiesToVerify).toBe(1);
     expect(dataTabState.basemapJoin.unrecognizedEntities).toEqual(['Lyon']);
+  });
+
+  it('persists Data Tab panel state separately from feature state', () => {
+    dataTabActions.setEnrichDataState({
+      joinTabularEnabled: true,
+      overlayBasemapEnabled: true,
+      preferredOverlayBasemapId: 'nuts2.geojson',
+      preferredOverlayBasemapSource: BasemapSource.CATALOG
+    });
+    dataTabActions.setUiPanelsState({
+      enrichJoinTabularOpen: false,
+      enrichOverlayBasemapOpen: true,
+      enrichBasemapSuggestionsOpen: false,
+      enrichBasemapCatalogOpen: true
+    });
+
+    expect(dataTabPersistenceEntry?.serialize()).toMatchObject({
+      enrichData: {
+        joinTabularEnabled: true,
+        overlayBasemapEnabled: true,
+        preferredOverlayBasemapId: 'nuts2.geojson',
+        preferredOverlayBasemapSource: BasemapSource.CATALOG
+      },
+      uiPanels: {
+        enrichJoinTabularOpen: false,
+        enrichOverlayBasemapOpen: true,
+        enrichBasemapSuggestionsOpen: false,
+        enrichBasemapCatalogOpen: true
+      }
+    });
+  });
+
+  it('restores new panel state with safe defaults for legacy projects', () => {
+    dataTabPersistenceEntry?.deserialize({
+      enrichData: {
+        joinTabularEnabled: true,
+        overlayBasemapEnabled: true
+      },
+      uiPanels: {
+        enrichJoinTabularOpen: true
+      }
+    });
+
+    expect(dataTabState.enrichData.joinTabularEnabled).toBe(true);
+    expect(dataTabState.enrichData.overlayBasemapEnabled).toBe(true);
+    expect(dataTabState.uiPanels.enrichJoinTabularOpen).toBe(true);
+    expect(dataTabState.uiPanels.enrichOverlayBasemapOpen).toBe(false);
+    expect(dataTabState.uiPanels.enrichBasemapSuggestionsOpen).toBeUndefined();
+    expect(dataTabState.uiPanels.enrichBasemapCatalogOpen).toBeUndefined();
   });
 });

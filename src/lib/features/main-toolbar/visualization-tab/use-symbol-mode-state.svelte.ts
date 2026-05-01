@@ -91,6 +91,23 @@ export function getDefaultSymbolModeStateFields(
   };
 }
 
+function getDefaultSymbolModeTransitionFields(
+  symbol: SymbolPrimitiveConfig,
+  nextMode: SymbolMode
+): Partial<SymbolPrimitiveConfig> {
+  const defaults = getDefaultSymbolModeStateFields(nextMode);
+
+  if (nextMode !== SymbolMode.CLASSES) {
+    return defaults;
+  }
+
+  return {
+    ...defaults,
+    valueColumn: symbol.sizeColumn ?? symbol.valueColumn,
+    sizeColumn: undefined
+  };
+}
+
 export function resolveSymbolModeTransition(
   symbol: SymbolPrimitiveConfig,
   nextMode: SymbolMode
@@ -116,6 +133,6 @@ export function resolveSymbolModeTransition(
           ...applySymbolModeStateFields(nextModeState),
           ...sanitizedNextModeState
         }
-      : getDefaultSymbolModeStateFields(nextMode)
+      : getDefaultSymbolModeTransitionFields(symbol, nextMode)
   };
 }

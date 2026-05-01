@@ -466,7 +466,7 @@
       icon={Settings}
       iconDescription={m.palette_categories_aspect_title()}
       aria-label={m.palette_categories_aspect_title()}
-      onclick={(event: MouseEvent) => {
+      on:click={(event: MouseEvent) => {
         event.stopPropagation();
         categoriesAspectOpen = true;
       }}
@@ -532,8 +532,12 @@
   strokeClassification={visualization?.symbol?.strokeClassification}
   strokeValueColumn={visualization?.symbol?.strokeValueColumn}
   strokeCategoryColumn={visualization?.symbol?.strokeCategoryColumn}
+  showMissingData={showMissingData}
+  missingDataColor={missingDataColor}
   facetsValueSlotPath={FACET_SLOT.SYMBOL_VALUE}
   facetsCategorySlotPath={FACET_SLOT.SYMBOL_CATEGORY}
+  onMissingDataShowChange={handleMissingDataShowChange}
+  onMissingDataColorChange={handleMissingDataColorChange}
 />
 
 <DiscretizationModal

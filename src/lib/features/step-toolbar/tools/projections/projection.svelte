@@ -44,8 +44,8 @@
     }
 
     crsError = false;
-    projectionActions.setCustomCode(parsed.normalizedCode);
     projectionActions.setSelected(parsed.projectionId);
+    projectionActions.setCustomCode(parsed.normalizedCode);
   }
 
   const DEFAULT_PROJECTION = 'mercator';
@@ -58,7 +58,11 @@
 
 <div id="khartis-projection-tool">
   <div class="expandable-stack">
-    <ExpandableSection title={title} defaultOpen={true}>
+    <ExpandableSection
+      title={title}
+      defaultOpen={true}
+      titleClass="projection-suggestions-title"
+    >
       {#snippet icon()}
         <MagicWandFilled size={20} />
       {/snippet}
@@ -96,6 +100,16 @@
 </div>
 
 <style lang="scss">
+  #khartis-projection-tool {
+    --khartis-expandable-section-body-padding: 8px 16px 24px 16px;
+  }
+
+  #khartis-projection-tool
+    .expandable-stack
+    :global(.section-title.projection-suggestions-title) {
+    color: var(--khartis-additions-text-primary-suggestions, #003a6d);
+  }
+
   #khartis-projection-tool .expandable-stack :global(.section-container) {
     margin-bottom: 0;
   }
@@ -103,6 +117,6 @@
   #khartis-projection-tool
     .expandable-stack
     :global(.section-container + .section-container) {
-    border-top: 0;
+    border-top: 1px solid var(--cds-border-subtle-00, #e0e0e0);
   }
 </style>

@@ -36,6 +36,15 @@ describe('ChooseVisualization', () => {
     expect(source).toContain("originMode !== 'custom'");
   });
 
+  it('uses the origin restore state when deciding whether a suggestion card clears', () => {
+    expect(source).toContain(
+      'originSuggestionKey: targetViz.origin?.suggestionKey'
+    );
+    expect(source).toContain(
+      'hasRestoreState: Boolean(targetViz.origin?.restoreState)'
+    );
+  });
+
   it('commits visualization renames through the immediate rename action', () => {
     expect(source).toContain(
       'visualizationStore.renameVisualization(id, trimmed);'

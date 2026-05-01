@@ -1012,17 +1012,6 @@ export function getEnabledPrimitiveFilters(
   return enabledFilters;
 }
 
-export function isPrimitiveEnabled(
-  visualization: VisualizationConfig | null | undefined,
-  primitive: PrimitiveFilter
-): boolean {
-  if (!visualization) {
-    return false;
-  }
-
-  return getEnabledPrimitiveFilters(visualization).includes(primitive);
-}
-
 export function getPrimitiveValueColumn(
   visualization: VisualizationConfig | null | undefined,
   primitive: PrimitiveFilter
@@ -1053,26 +1042,6 @@ export function getPrimitiveSizeColumn(
     default:
       return undefined;
   }
-}
-
-export function getTextLabelColumn(
-  visualization: VisualizationConfig | null | undefined
-): string | undefined {
-  return getTextPrimitive(visualization)?.labelColumn;
-}
-
-export function getTextSecondaryLabelColumn(
-  visualization: VisualizationConfig | null | undefined
-): string | undefined {
-  return getTextPrimitive(visualization)?.secondaryLabels.labelColumn;
-}
-
-export function getPrimitiveMissingData(
-  visualization: VisualizationConfig | null | undefined,
-  primitive: PrimitiveFilter
-): MissingDataConfig | undefined {
-  const resolved = getPrimitive(visualization, primitive);
-  return 'missingData' in (resolved ?? {}) ? resolved?.missingData : undefined;
 }
 
 export function getPrimitiveClassification(

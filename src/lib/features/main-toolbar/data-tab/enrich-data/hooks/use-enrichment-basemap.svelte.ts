@@ -194,10 +194,55 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
     osmBasemapStore.clear();
     dataTabActions.setBasemapJoinState({
       selectedBasemap: '',
-      basemapSource: lastSelectedBasemapSource ?? BasemapSource.CATALOG
+      basemapSource:
+        dataTabState.enrichData.preferredOverlayBasemapSource ??
+        lastSelectedBasemapSource ??
+        BasemapSource.CATALOG
     });
     basemapStyleStore.setReferenceBasemap(null);
     projectStore.updateProjectData({ basemap: undefined });
+  }
+
+  function rememberPreferredBasemap(
+    basemapId: string,
+    source: BasemapSource
+  ): void {
+    lastSelectedBasemapId = basemapId;
+    lastSelectedBasemapSource = source;
+    dataTabActions.setEnrichDataState({
+      preferredOverlayBasemapId: basemapId,
+      preferredOverlayBasemapSource: source
+    });
+  }
+
+  function applyReferenceBasemap(
+    basemap: BasemapMetadata,
+    source: BasemapSource
+  ): void {
+    hasDismissedSuggestedBasemap = false;
+    selectedBasemapId = basemap.file;
+    rememberPreferredBasemap(basemap.file, source);
+    osmBasemapStore.clear();
+    dataTabActions.setBasemapJoinState({
+      selectedBasemap: basemap.file,
+      basemapSource: source
+    });
+
+    basemapStyleStore.setReferenceBasemap(basemap.file);
+
+    projectStore.updateProjectData({
+      basemap:
+        source === BasemapSource.IMPORT
+          ? {
+              id: basemap.file,
+              type: PERSISTED_BASEMAP_TYPE.CUSTOM,
+              data: { ...basemap }
+            }
+          : {
+              id: basemap.file,
+              type: PERSISTED_BASEMAP_TYPE.CATALOG
+            }
+    });
   }
 
   function activatePreferredBasemap(): void {
@@ -205,21 +250,27 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
       return;
     }
 
-    if (
-      lastSelectedBasemapSource === BasemapSource.OSM &&
-      lastSelectedBasemapId
-    ) {
+    const preferredBasemapId =
+      dataTabState.enrichData.preferredOverlayBasemapId ??
+      lastSelectedBasemapId;
+    const preferredBasemapSource =
+      dataTabState.enrichData.preferredOverlayBasemapSource ??
+      lastSelectedBasemapSource;
+
+    if (preferredBasemapSource === BasemapSource.OSM && preferredBasemapId) {
       handleSelectOSM();
       return;
     }
 
-    if (lastSelectedBasemapId) {
-      const preferredBasemap = basemapCatalogService.getBasemapById(
-        lastSelectedBasemapId
-      );
+    if (preferredBasemapId) {
+      const preferredBasemap =
+        basemapCatalogService.getBasemapById(preferredBasemapId);
 
       if (preferredBasemap) {
-        handleSelectBasemap(preferredBasemap.file);
+        applyReferenceBasemap(
+          preferredBasemap,
+          preferredBasemapSource ?? BasemapSource.CATALOG
+        );
         return;
       }
     }
@@ -246,23 +297,11 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
     }
 
     hasDismissedSuggestedBasemap = false;
-    selectedBasemapId = nextBasemapId;
-    lastSelectedBasemapId = nextBasemapId;
-    lastSelectedBasemapSource = BasemapSource.CATALOG;
-    osmBasemapStore.clear();
-    dataTabActions.setBasemapJoinState({
-      selectedBasemap: nextBasemapId,
-      basemapSource: BasemapSource.CATALOG
-    });
-
-    basemapStyleStore.setReferenceBasemap(nextBasemapId);
-
-    projectStore.updateProjectData({
-      basemap: {
-        id: nextBasemapId,
-        type: PERSISTED_BASEMAP_TYPE.CATALOG
-      }
-    });
+    const basemap = basemapCatalogService.getBasemapById(nextBasemapId);
+    applyReferenceBasemap(
+      basemap ?? ({ file: nextBasemapId } as BasemapMetadata),
+      BasemapSource.CATALOG
+    );
   }
 
   async function handleBasemapImportFile(file: File): Promise<void> {
@@ -283,8 +322,7 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
       basemapStyleStore.setReferenceBasemap(customBasemap.file);
       importedCustomBasemap = customBasemap;
       selectedBasemapId = customBasemap.file;
-      lastSelectedBasemapId = customBasemap.file;
-      lastSelectedBasemapSource = BasemapSource.IMPORT;
+      rememberPreferredBasemap(customBasemap.file, BasemapSource.IMPORT);
 
       projectStore.updateProjectData({
         basemap: {
@@ -336,8 +374,7 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
       basemapSource: BasemapSource.OSM
     });
     selectedBasemapId = osmBasemap.file;
-    lastSelectedBasemapId = osmBasemap.file;
-    lastSelectedBasemapSource = BasemapSource.OSM;
+    rememberPreferredBasemap(osmBasemap.file, BasemapSource.OSM);
 
     projectStore.updateProjectData({
       basemap: {
@@ -386,23 +423,23 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
     if (projectBasemap?.id) {
       void restorePersistedBasemapSelection(projectBasemap).then(() => {
         selectedBasemapId = projectBasemap.id;
-        lastSelectedBasemapId = projectBasemap.id;
-        lastSelectedBasemapSource = resolveBasemapSource(projectBasemap.type);
+        rememberPreferredBasemap(
+          projectBasemap.id,
+          resolveBasemapSource(projectBasemap.type)
+        );
       });
       return;
     }
 
     selectedBasemapId = basemapStyleStore.referenceBasemapId ?? undefined;
     if (selectedBasemapId) {
-      lastSelectedBasemapId = selectedBasemapId;
-      lastSelectedBasemapSource = BasemapSource.CATALOG;
+      rememberPreferredBasemap(selectedBasemapId, BasemapSource.CATALOG);
       return;
     }
 
     if (osmBasemapStore.activeOSMBasemap) {
       selectedBasemapId = osmBasemapStore.activeOSMBasemap.file;
-      lastSelectedBasemapId = selectedBasemapId;
-      lastSelectedBasemapSource = BasemapSource.OSM;
+      rememberPreferredBasemap(selectedBasemapId, BasemapSource.OSM);
       return;
     }
 
@@ -522,6 +559,7 @@ export function useEnrichmentBasemap(): UseEnrichmentBasemapReturn {
       }
 
       if (
+        dataTabState.enrichData.overlayBasemapEnabled &&
         shouldAutoSelectSuggestedBasemap({
           hasDismissedSuggestedBasemap,
           suggestionCount: mappedSuggestions.length,
