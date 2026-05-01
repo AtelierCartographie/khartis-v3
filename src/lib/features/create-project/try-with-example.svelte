@@ -33,11 +33,7 @@
   import { logger, LogCategory } from '$lib/features/commons/utils/logger';
   import { m } from '$lib/paraglide/messages';
   import { useProjectNavigation } from './hooks';
-  import {
-    InlineNotification,
-    SkeletonPlaceholder,
-    Tag
-  } from 'carbon-components-svelte';
+  import { InlineNotification, Tag } from 'carbon-components-svelte';
 
   interface Props {
     onClose?: () => void;
@@ -366,13 +362,7 @@
   </div>
 
   <div class="flex gap-5 overflow-x-auto pb-3">
-    {#if isLoading}
-      {#each Array(3) as _item, idx (idx)}
-        <div class="example-card-skeleton">
-          <SkeletonPlaceholder style="width: 200px; height: 150px;" />
-        </div>
-      {/each}
-    {:else if filteredExamples.length === 0}
+    {#if filteredExamples.length === 0}
       <div class="no-examples">
         <p class="text-grey">{m.create_project_no_examples_category()}</p>
       </div>
@@ -383,10 +373,11 @@
           subtitle={example.subtitle}
           variant={selectedExample === example.id ? 'blue' : 'gray'}
           selected={selectedExample === example.id}
+          disabled={isLoading && selectedExample !== example.id}
           onclick={() => handleExampleClick(example.id)}
         >
           {#snippet footer()}
-            <span class="text-xs text-grey"
+            <span class="example-tags text-xs text-grey"
               >{example.tags?.join(m.separator_bullet_space()) || ''}</span
             >
           {/snippet}
@@ -399,5 +390,14 @@
 <style>
   #khartis-try-with-example :global(.bx--file-browse-btn) {
     min-width: 100%;
+  }
+
+  .example-tags {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+    min-height: 2lh;
   }
 </style>
