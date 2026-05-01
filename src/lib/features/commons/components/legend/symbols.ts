@@ -110,7 +110,7 @@ export function draw_symbols_legend(
   const is_min_alone = values[values.length - 1] <= 1.5;
   const margin = 10;
   const header_gap = 3;
-  const label_gap = 5;
+  const label_gap = 10;
   const label_safety_padding = Math.max(6, Math.round(fontSize * 0.6));
   const font = createLegendFont({ fontSize, fontFamily: resolvedFontFamily });
   const max_symbol_width =
