@@ -10,6 +10,7 @@ import {
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as m from '$lib/paraglide/messages';
 import { resetExclusiveContextualSurfaces } from '$lib/features/commons/utils/contextual-surface-coordinator';
+import { generateCategoricalColorsFromSeed } from './palette.constants';
 import CategoriesAspectPopover from './categories-aspect-popover.svelte';
 
 vi.hoisted(() => {
@@ -24,6 +25,26 @@ vi.hoisted(() => {
   }
 
   vi.stubGlobal('Worker', WorkerMock);
+});
+
+vi.mock('@ateliercartographie/ok-palette', async () => {
+  const actual = await vi.importActual<
+    typeof import('@ateliercartographie/ok-palette')
+  >('@ateliercartographie/ok-palette');
+
+  return {
+    ...actual,
+    resolvePalette: (colors: string[]) =>
+      colors.map((_, i) => {
+        const v = (i * 37) % 256;
+        return [v, (v + 40) % 256, (v + 80) % 256, 255] as [
+          number,
+          number,
+          number,
+          number
+        ];
+      })
+  };
 });
 
 const source = readFileSync(
@@ -54,6 +75,9 @@ describe('CategoriesAspectPopover (Figma 952:156994 — Polygons variant)', () =
     expect(source).toContain('<PaletteSuggestions');
     expect(source).toContain('paletteType={PALETTE_TYPE.QUALITATIVE}');
     expect(source).toContain('onColorSelect={handleSuggestionColor}');
+    expect(source).toContain(
+      'onQualitativePresetChange={handleQualitativePresetChange}'
+    );
   });
 
   it('should render the "Aspect personnalisé" section with the categories list heading', () => {
@@ -79,9 +103,14 @@ describe('CategoriesAspectPopover (Figma 952:156994 — Polygons variant)', () =
     expect(source).toContain('handleCategoryListReorder');
   });
 
-  it('should apply a suggestion color only to the selected category', () => {
-    expect(source).toContain('if (!selectedCategoryId) return');
-    expect(source).toContain('category.id === selectedCategoryId');
+  it('should apply a Khartis suggestion as a full categorical palette', () => {
+    expect(source).toContain('function applySuggestionPalette');
+    expect(source).toContain('generateCategoricalColorsFromSeed(');
+    expect(source).toContain('draftQualitativePreset');
+    expect(source).toContain('draftSuggestionSeedColor = seedHex');
+    expect(source).toContain(
+      'draftCategories = draftCategories.map((category, index)'
+    );
   });
 
   it('should expose the Annuler / Valider footer pair with the divider shell', () => {
@@ -107,12 +136,19 @@ describe('CategoriesAspectPopover (Figma 952:156994 — Polygons variant)', () =
     expect(source).toContain("variant === 'symbols-unique' ||");
     expect(source).toContain("variant === 'symbols-different-rank' ||");
     expect(source).toContain("variant === 'polygons'");
-    expect(source).toContain('{#if showCommonAspect}');
+    expect(source).toContain('const supportsCommonAspect = $derived(');
+    expect(source).toContain('{#if showCommonAspectSection}');
     expect(source).toContain('{m.aspect_common_section()}');
     expect(source).toContain('{m.aspect_common_size_unique()}');
     expect(source).toContain('{m.aspect_common_stroke_yesno()}');
     expect(source).toContain('{m.aspect_common_auto_color()}');
     expect(source).toContain('{m.aspect_common_pattern()}');
+  });
+
+  it('should gate the common section by opener capability', () => {
+    expect(source).toContain('showCommonAspect?: boolean');
+    expect(source).toContain('showCommonAspect: commonAspectEnabled = true');
+    expect(source).toContain('commonAspectEnabled && supportsCommonAspect');
   });
 
   it('should match the Figma common symbols layout instead of a flat two-column grid', () => {
@@ -177,6 +213,124 @@ describe('CategoriesAspectPopover (Figma 952:156994 — Polygons variant)', () =
 });
 
 describe('CategoriesAspectPopover runtime', () => {
+  it('shows only the common pattern control for the polygons variant', async () => {
+    render(CategoriesAspectPopover, {
+      open: true,
+      variant: 'polygons',
+      categories: [
+        {
+          id: 'category-a',
+          label: 'Category A',
+          color: '#ff595e',
+          enabled: true
+        }
+      ]
+    });
+
+    expect(screen.getByText(m.aspect_common_section())).toBeInTheDocument();
+    expect(screen.getByText(m.aspect_common_pattern())).toBeInTheDocument();
+    expect(
+      screen.queryByText(m.aspect_common_size_unique())
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(m.aspect_common_stroke_yesno())
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(m.aspect_common_auto_color())
+    ).not.toBeInTheDocument();
+  });
+
+  it('does not show a common section for line and text variants', async () => {
+    for (const variant of ['lines', 'texts'] as const) {
+      const { unmount } = render(CategoriesAspectPopover, {
+        open: true,
+        variant,
+        categories: [
+          {
+            id: 'category-a',
+            label: 'Category A',
+            color: '#ff595e',
+            enabled: true
+          }
+        ]
+      });
+
+      expect(
+        screen.queryByText(m.aspect_common_section())
+      ).not.toBeInTheDocument();
+      expect(
+        screen.getByText(m.palette_categories_custom_section())
+      ).toBeInTheDocument();
+
+      unmount();
+    }
+  });
+
+  it('hides the common section when the opener does not support it', async () => {
+    render(CategoriesAspectPopover, {
+      open: true,
+      variant: 'symbols-unique',
+      showCommonAspect: false,
+      categories: [
+        {
+          id: 'category-a',
+          label: 'Category A',
+          color: '#ff595e',
+          enabled: true
+        }
+      ]
+    });
+
+    expect(
+      screen.queryByText(m.aspect_common_section())
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(m.palette_categories_custom_section())
+    ).toBeInTheDocument();
+  });
+
+  it('applies a Khartis suggestion to every category before validation', async () => {
+    const onvalidate = vi.fn();
+
+    render(CategoriesAspectPopover, {
+      open: true,
+      variant: 'polygons',
+      categories: [
+        {
+          id: 'category-a',
+          label: 'Category A',
+          color: '#111111',
+          enabled: true
+        },
+        {
+          id: 'category-b',
+          label: 'Category B',
+          color: '#222222',
+          enabled: true
+        },
+        {
+          id: 'category-c',
+          label: 'Category C',
+          color: '#333333',
+          enabled: true
+        }
+      ],
+      onvalidate
+    });
+
+    await fireEvent.click(screen.getByRole('radio', { name: '#00ad92' }));
+    await fireEvent.click(
+      screen.getByRole('button', { name: m.button_validate() })
+    );
+
+    expect(onvalidate).toHaveBeenCalledOnce();
+    const [nextCategories] = onvalidate.mock.calls[0];
+
+    expect(
+      nextCategories.map((category: { color: string }) => category.color)
+    ).toEqual(generateCategoricalColorsFromSeed('#00ad92', 3));
+  });
+
   it('keeps the parent dialog open after selecting a category color preset', async () => {
     render(CategoriesAspectPopover, {
       open: true,

@@ -56,6 +56,36 @@ describe('resolveSuggestionCardAction', () => {
       )
     ).toBe('apply');
   });
+
+  it('clears in one click when a custom visualization still has a suggestion restore state', () => {
+    const suggestion = createSuggestion();
+
+    expect(
+      resolveSuggestionCardAction(
+        {
+          displayedSuggestionKey: undefined,
+          originSuggestionKey: getSuggestionSignature(suggestion),
+          hasRestoreState: true
+        },
+        suggestion
+      )
+    ).toBe('clear');
+  });
+
+  it('re-applies the same origin suggestion when no restore state is available', () => {
+    const suggestion = createSuggestion();
+
+    expect(
+      resolveSuggestionCardAction(
+        {
+          displayedSuggestionKey: undefined,
+          originSuggestionKey: getSuggestionSignature(suggestion),
+          hasRestoreState: false
+        },
+        suggestion
+      )
+    ).toBe('apply');
+  });
 });
 
 describe('shouldAutoApplySuggestion', () => {

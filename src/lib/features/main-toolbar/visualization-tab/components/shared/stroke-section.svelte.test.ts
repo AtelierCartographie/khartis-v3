@@ -119,3 +119,39 @@ describe('StrokeSection — anti-leak fill↔stroke', () => {
     expect(source).toContain('categoriesPopoverOpen = true;');
   });
 });
+
+describe('StrokeSection — missing data controls', () => {
+  it('renders the shared MissingDataSection for classes and categories stroke modes', () => {
+    expect(source).toContain(
+      "import MissingDataSection from './missing-data-section.svelte'"
+    );
+    expect(source).toContain('showMissingDataSection?: boolean;');
+    expect(source).toContain('showMissingDataSection = true');
+    expect(source).toContain(
+      'strokeMode === StrokeMode.CLASSES || strokeMode === StrokeMode.CATEGORIES'
+    );
+    const missingDataBlock = source
+      .split('<MissingDataSection')[1]
+      ?.split('/>')[0];
+    expect(missingDataBlock).toBeDefined();
+    expect(missingDataBlock).toContain('bind:show={strokeShowMissing}');
+    expect(missingDataBlock).toContain('color={resolvedMissingDataColor}');
+    expect(missingDataBlock).toContain('showShapeSelector={false}');
+    expect(missingDataBlock).toContain('showSizeSlider={false}');
+    expect(missingDataBlock).toContain(
+      'onshowchange={handleStrokeShowMissingChange}'
+    );
+    expect(missingDataBlock).toContain(
+      'oncolorchange={onMissingDataColorChange'
+    );
+  });
+
+  it('routes the stroke missing-data toggle to primitive missingData state and keeps the legacy mode mirror in sync', () => {
+    expect(source).toContain('showMissingData?: boolean;');
+    expect(source).toContain('missingDataColor?: string;');
+    expect(source).toContain('onMissingDataShowChange?:');
+    expect(source).toContain('onMissingDataColorChange?:');
+    expect(source).toContain('onMissingDataShowChange?.(value);');
+    expect(source).toContain('onModesChange?.({ strokeShowMissing: value });');
+  });
+});
