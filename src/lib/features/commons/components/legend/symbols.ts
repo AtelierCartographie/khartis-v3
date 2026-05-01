@@ -45,7 +45,7 @@ export function draw_symbols_legend(
   const {
     type = 'circle',
     size = 40,
-    bar_width: initial_bar_width = 12,
+    bar_width: initial_bar_width = 8,
     title = null,
     subtitle = null,
     note = null,
@@ -58,7 +58,7 @@ export function draw_symbols_legend(
     nodata = false
   } = options;
   const bar_width =
-    type === 'spike' ? initial_bar_width * 2 : initial_bar_width;
+    type === 'spike' ? Math.round(initial_bar_width * 1.5) : initial_bar_width;
   const resolvedFontFamily = resolveLegendFontFamily(fontFamily);
   const titleSize = title ? Math.round(fontSize * 1.16) : 0;
   const subtitleSize = subtitle ? fontSize : 0;
@@ -113,12 +113,15 @@ export function draw_symbols_legend(
   const label_gap = 5;
   const label_safety_padding = Math.max(6, Math.round(fontSize * 0.6));
   const font = createLegendFont({ fontSize, fontFamily: resolvedFontFamily });
-  const max_symbol_width = margin + x_max * 2 + 20;
+  const max_symbol_width =
+    type !== 'bar' && type !== 'spike'
+      ? margin + x_max * 2 + 20
+      : margin + x_max + 20;
   const label_widths = ticks
     .map((d) => d * label_sign)
     .map((d) => Textbox.measureText(d.toLocaleString(), font));
   const max_label_width = Math.max(...label_widths) + label_safety_padding;
-  const nodata_dash_width = 6;
+  const nodata_dash_width = 10;
   const nodata_label = options.nodataLabel ?? m.legend_no_data_label();
   const nodata_dash_x = type === 'circle' ? y_max + margin : margin;
   const nodata_label_x = nodata_dash_x + nodata_dash_width + 15;
@@ -248,7 +251,7 @@ export function draw_symbols_legend(
       const dash_y = nodata_y - fontSize / 2;
       nodata_markup = `<g class="nodata">
         <line x1="${nodata_dash_x - nodata_dash_width / 2}" y1="${dash_y}" x2="${nodata_dash_x + nodata_dash_width / 2}" y2="${dash_y}" stroke="black" stroke-width="1"/>
-        <path d="M${nodata_dash_x + nodata_dash_width / 2},${dash_y}L${nodata_label_x - label_gap},${dash_y}" fill="none" stroke="currentColor" stroke-width="0.5" stroke-dasharray="3,2"/>
+        <path d="M${nodata_dash_x + nodata_dash_width / 2},${dash_y}L${nodata_label_x - label_gap},${dash_y}" fill="none" stroke="currentColor" stroke-width="0.75" stroke-dasharray="3,2"/>
         <text x="${nodata_label_x}" y="${dash_y}" text-anchor="start" font-size="${fontSize}" font-variant="tabular-nums">${escapeSvgText(nodata_label)}</text>
       </g>`;
     }
@@ -269,7 +272,7 @@ export function draw_symbols_legend(
       <g class="symbols" fill="${escapeSvgAttribute(fill)}" stroke="${escapeSvgAttribute(stroke)}">
         ${symbols.join('')}
       </g>
-      <g class="links" fill="none" stroke="currentColor" stroke-width="0.5" stroke-miterlimit="1" stroke-dasharray="3,2">
+      <g class="links" fill="none" stroke="currentColor" stroke-width="0.75" stroke-miterlimit="1" stroke-dasharray="3,2">
         ${links.join('')}
       </g>
       <g class="labels" text-anchor="end" font-size="${fontSize}" font-variant="tabular-nums">

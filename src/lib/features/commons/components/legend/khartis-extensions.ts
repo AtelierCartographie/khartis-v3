@@ -243,8 +243,8 @@ function draw_row_legend<T>(options: RowLegendOptions<T>): string {
   const noteSize = options.note ? Math.round(fontSize * 0.92) : 0;
   const lineHeight = fontSize * 1.2;
   const font = createLegendFont({ fontSize, lineHeight, fontFamily });
-  const margin = Math.max(5, Math.round(fontSize * 0.3));
-  const gap = Math.max(3, Math.round(fontSize * 0.3));
+  const margin = Math.max(7, Math.round(fontSize * 0.4));
+  const gap = Math.max(4, Math.round(fontSize * 0.35));
   const shapeSize = Math.round(fontSize * 1.25);
   const footerType = options.footerType ?? 'box';
   const footerItems = options.footerItems ?? [];
