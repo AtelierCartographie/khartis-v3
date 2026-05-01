@@ -122,7 +122,11 @@
     if (!dataset || !targetViz) return;
 
     const action = resolveSuggestionCardAction(
-      appliedSuggestionKey,
+      {
+        displayedSuggestionKey: appliedSuggestionKey,
+        originSuggestionKey: targetViz.origin?.suggestionKey,
+        hasRestoreState: Boolean(targetViz.origin?.restoreState)
+      },
       suggestion
     );
 

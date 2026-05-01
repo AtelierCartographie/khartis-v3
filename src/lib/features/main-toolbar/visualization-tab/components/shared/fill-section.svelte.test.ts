@@ -38,9 +38,20 @@ describe('FillSection — interface', () => {
   it('renders PalettePreview with QUALITATIVE paletteType + categoriesMode for FillMode.CATEGORIES', () => {
     expect(source).toContain('paletteType={PALETTE_TYPE.QUALITATIVE}');
     expect(source).toContain('categoriesMode={true}');
+    expect(source).toContain(
+      "showCategoriesCommonAspect={categoriesVariant === 'polygons'}"
+    );
     expect(source).toMatch(
       /fillMode === FillMode\.CATEGORIES[\s\S]{0,2000}?PalettePreview/
     );
+  });
+
+  it('derives a polygon-only common aspect from the fill classification pattern', () => {
+    expect(source).toContain('const categoriesCommonAspect = $derived');
+    expect(source).toContain("categoriesVariant === 'polygons'");
+    expect(source).toContain('visualization?.classification?.patternId');
+    expect(source).toContain('function resolvePatternType');
+    expect(source).toContain('categoriesCommonAspect={categoriesCommonAspect}');
   });
 
   it('hides the opacity slider for FillMode.NONE and FillMode.DENSITY', () => {

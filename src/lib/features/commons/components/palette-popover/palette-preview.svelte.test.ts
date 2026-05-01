@@ -1,11 +1,33 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { cleanup, render, screen } from '@testing-library/svelte';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import * as m from '$lib/paraglide/messages';
+import PalettePreview from './palette-preview.svelte';
+import { PALETTE_TYPE } from './palette.constants';
+
+vi.hoisted(() => {
+  class WorkerMock {
+    postMessage(): void {}
+
+    terminate(): void {}
+
+    addEventListener(): void {}
+
+    removeEventListener(): void {}
+  }
+
+  vi.stubGlobal('Worker', WorkerMock);
+});
 
 const source = readFileSync(
   resolve(import.meta.dirname, 'palette-preview.svelte'),
   'utf8'
 );
+
+afterEach(() => {
+  cleanup();
+});
 
 describe('PalettePreview — shell + popover routing', () => {
   it('should render PaletteDropdown with oncustomize wired to handleCustomize', () => {
@@ -41,12 +63,39 @@ describe('PalettePreview — shell + popover routing', () => {
   });
 });
 
+describe('PalettePreview runtime — categories common aspect routing', () => {
+  it('does not expose common symbol controls for symbol fill categories', () => {
+    render(PalettePreview, {
+      colors: ['#111111', '#222222'],
+      categoriesMode: true,
+      categoriesVariant: 'symbols-unique',
+      showCategoriesCommonAspect: false,
+      categoriesPopoverOpen: true,
+      categoryLabels: ['Category A', 'Category B'],
+      paletteType: PALETTE_TYPE.QUALITATIVE
+    });
+
+    expect(
+      screen.getByRole('dialog', {
+        name: m.palette_categories_aspect_title()
+      })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(m.aspect_common_section())
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(m.palette_categories_custom_section())
+    ).toBeInTheDocument();
+  });
+});
+
 describe('PalettePreview — categoriesMode routing (Fill Categories)', () => {
   it('should accept categoriesMode + categoryLabels props', () => {
     expect(source).toContain('categoriesMode?: boolean');
     expect(source).toContain('categoryLabels?: string[]');
     expect(source).toContain('disabledCategoryLabels?: string[]');
     expect(source).toContain('categoriesCommonAspect?: CategoriesCommonAspect');
+    expect(source).toContain('showCategoriesCommonAspect?: boolean');
     expect(source).toContain('categoriesMode = false');
     expect(source).toContain('categoryLabels = []');
     expect(source).toContain('disabledCategoryLabels = []');
@@ -64,6 +113,9 @@ describe('PalettePreview — categoriesMode routing (Fill Categories)', () => {
     expect(source).toContain('bind:open={categoriesPopoverOpen}');
     expect(source).toContain('categories={categoryDrafts}');
     expect(source).toContain('commonAspect={categoriesCommonAspect}');
+    expect(source).toContain(
+      'showCommonAspect={resolvedShowCategoriesCommonAspect}'
+    );
     expect(source).toContain('onvalidate={handleCategoriesValidateWithAspect}');
   });
 
@@ -107,6 +159,29 @@ describe('PalettePreview — categoriesMode routing (Fill Categories)', () => {
   it('should expose normalized categories to the symbol-specific common aspect callback', () => {
     expect(source).toContain(
       'onCategoriesCommonAspectChange?.(commonAspect, normalizedCategories)'
+    );
+  });
+
+  it('should only enable the common aspect block for polygon fill or explicit common-aspect handlers', () => {
+    expect(source).toContain('const resolvedShowCategoriesCommonAspect');
+    expect(source).toContain("categoriesVariant === 'polygons'");
+    expect(source).toContain('Boolean(onCategoriesCommonAspectChange)');
+  });
+
+  it('should persist the polygon common pattern as a classification pattern id', () => {
+    expect(source).toContain('function resolveValidatedCategoryPatternId');
+    expect(source).toContain("categoriesVariant !== 'polygons'");
+    expect(source).toContain('function coerceCategoryPatternId');
+    expect(source).toContain(
+      'const existingPatternId = coerceCategoryPatternId'
+    );
+    expect(source).toContain('CATEGORY_PATTERN_IDS_BY_TYPE');
+    expect(source).toContain(
+      'const patternId = resolveValidatedCategoryPatternId'
+    );
+    expect(source).toContain('patternId,');
+    expect(source).toContain(
+      'patternParams: patternId ? classification?.patternParams : undefined'
     );
   });
 });

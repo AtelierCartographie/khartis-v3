@@ -329,6 +329,59 @@ describe('DiscretizationModal', () => {
     expect(breakpointInput.value).toBe('');
   });
 
+  it('allows typing a breakpoint value incrementally before the full value is valid', async () => {
+    const onbreakpointchange = vi.fn();
+    const { container } = render(DiscretizationPanel, {
+      breakpointValue: null,
+      breaks: [
+        { min: 14, max: 7600, count: 4, color: '#f7fbff' },
+        { min: 7600, max: 30000, count: 8, color: '#c6dbef' },
+        { min: 30000, max: 80000, count: 3, color: '#6baed6' },
+        { min: 80000, max: 200000, count: 2, color: '#2171b5' },
+        { min: 200000, max: 227119, count: 1, color: '#08519c' }
+      ],
+      onbreakpointchange
+    });
+
+    const breakpointInput = container.querySelector(
+      '#breakpoint-value'
+    ) as HTMLInputElement;
+
+    await fireEvent.input(breakpointInput, {
+      target: { value: '2' }
+    });
+
+    expect(breakpointInput.value).toBe('2');
+    expect(onbreakpointchange).not.toHaveBeenCalledWith(2);
+
+    await fireEvent.input(breakpointInput, {
+      target: { value: '200000' }
+    });
+
+    expect(breakpointInput.value).toBe('200000');
+    expect(onbreakpointchange).toHaveBeenLastCalledWith(200000);
+  });
+
+  it('keeps the breakpoint slider enabled when class breaks exist and no break value has been selected yet', () => {
+    const { container } = render(DiscretizationPanel, {
+      breakpointValue: null,
+      breaks: [
+        { min: 14, max: 7600, count: 4, color: '#f7fbff' },
+        { min: 7600, max: 30000, count: 8, color: '#c6dbef' },
+        { min: 30000, max: 80000, count: 3, color: '#6baed6' },
+        { min: 80000, max: 200000, count: 2, color: '#2171b5' },
+        { min: 200000, max: 227119, count: 1, color: '#08519c' }
+      ]
+    });
+
+    const breakpointSlider = container.querySelector(
+      '.breakpoint-slider-host input'
+    ) as HTMLInputElement | null;
+
+    expect(breakpointSlider).not.toBeNull();
+    expect(breakpointSlider?.disabled).toBe(false);
+  });
+
   it('can hide breakpoint controls for non-color discretizations', () => {
     const { container } = render(DiscretizationModal, {
       open: true,
@@ -357,6 +410,12 @@ describe('DiscretizationModal', () => {
     );
     expect(modalSource).toContain(
       'bind:breakpointLowerClassCount={currentBreakpointLowerClassCount}'
+    );
+    expect(modalSource).toContain(
+      'function resolveBreakpointFromLowerClassCount'
+    );
+    expect(modalSource).toContain(
+      'currentBreakpoint = resolveBreakpointFromLowerClassCount'
     );
     expect(modalSource).not.toContain('BREAKPOINT_APPLY_DEBOUNCE_MS');
   });

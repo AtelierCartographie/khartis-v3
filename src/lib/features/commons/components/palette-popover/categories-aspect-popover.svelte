@@ -22,7 +22,12 @@
   import { ToolbarState } from '$lib/features/commons/types/global';
   import PaletteSuggestions from './palette-suggestions.svelte';
   import SingleColorPreview from './single-color-preview.svelte';
-  import { PALETTE_TYPE, type Palette } from './palette.constants';
+  import {
+    PALETTE_TYPE,
+    type QualitativePreset,
+    DEFAULT_QUALITATIVE_PRESET,
+    generateCategoricalColorsFromSeed
+  } from './palette.constants';
   import {
     DEFAULT_COMMON_ASPECT,
     PatternType,
@@ -36,6 +41,7 @@
     triggerElement?: HTMLElement;
     categories: CategoryDraft[];
     variant?: CategoriesAspectVariant;
+    showCommonAspect?: boolean;
     commonAspect?: CategoriesCommonAspect;
     onclose?: () => void;
     onvalidate?: (
@@ -49,6 +55,7 @@
     triggerElement,
     categories,
     variant = 'symbols-unique',
+    showCommonAspect: commonAspectEnabled = true,
     commonAspect,
     onclose,
     onvalidate
@@ -59,6 +66,10 @@
   let draftCategories = $state<CategoryDraft[]>([]);
   let selectedCategoryId = $state<string | null>(null);
   let draftColorBlindFilter = $state(false);
+  let draftQualitativePreset = $state<QualitativePreset>(
+    DEFAULT_QUALITATIVE_PRESET
+  );
+  let draftSuggestionSeedColor = $state<string | undefined>(undefined);
   let draftCommonAspect = $state<CategoriesCommonAspect>({
     ...DEFAULT_COMMON_ASPECT
   });
@@ -69,11 +80,14 @@
   );
 
   const showSuggestions = $derived(variant !== 'symbols-different-rank');
-  const showCommonAspect = $derived(
+  const supportsCommonAspect = $derived(
     variant === 'symbols-unique' ||
       variant === 'symbols-different' ||
       variant === 'symbols-different-rank' ||
       variant === 'polygons'
+  );
+  const showCommonAspectSection = $derived(
+    commonAspectEnabled && supportsCommonAspect
   );
   const showCategoryShapePicker = $derived(variant === 'symbols-different');
   const isSymbolsDifferentRank = $derived(variant === 'symbols-different-rank');
@@ -156,6 +170,8 @@
       ? (draftCategories[0]?.id ?? null)
       : null;
     draftColorBlindFilter = false;
+    draftQualitativePreset = DEFAULT_QUALITATIVE_PRESET;
+    draftSuggestionSeedColor = draftCategories[0]?.color;
     draftCommonAspect = commonAspect
       ? { ...DEFAULT_COMMON_ASPECT, ...commonAspect }
       : { ...DEFAULT_COMMON_ASPECT };
@@ -203,13 +219,26 @@
     handleCommonAspectChange(key, enabled ? enabledValue : disabledValue);
   }
 
-  function handleSuggestionColor(hex: string) {
-    if (!selectedCategoryId) return;
-    draftCategories = draftCategories.map((category) =>
-      category.id === selectedCategoryId
-        ? { ...category, color: hex }
-        : category
+  function applySuggestionPalette(seedHex: string) {
+    const nextColors = generateCategoricalColorsFromSeed(
+      seedHex,
+      draftCategories.length,
+      draftQualitativePreset
     );
+
+    draftSuggestionSeedColor = seedHex;
+    draftCategories = draftCategories.map((category, index) => ({
+      ...category,
+      color: nextColors[index] ?? category.color
+    }));
+  }
+
+  function handleSuggestionColor(hex: string) {
+    applySuggestionPalette(hex);
+  }
+
+  function handleQualitativePresetChange(preset: QualitativePreset) {
+    draftQualitativePreset = preset;
   }
 
   function handleCategoryColor(id: string, hex: string) {
@@ -305,8 +334,6 @@
         : b.label.localeCompare(a.label)
     );
   }
-
-  function handleSuggestionPaletteSelect(_palette: Palette) {}
 
   function categoryShape(category: CategoryDraft): ShapeType {
     if (variant === 'symbols-different') {
@@ -445,14 +472,14 @@
             qualitativeMode="categories"
             bind:colorBlindFilter={draftColorBlindFilter}
             selectedPaletteId="__custom__"
-            selectedColor={selectedCategory?.color}
+            selectedColor={draftSuggestionSeedColor ?? selectedCategory?.color}
             numClasses={draftCategories.length}
-            onSelect={handleSuggestionPaletteSelect}
             onColorSelect={handleSuggestionColor}
+            onQualitativePresetChange={handleQualitativePresetChange}
           />
         {/if}
 
-        {#if showCommonAspect}
+        {#if showCommonAspectSection}
           <section class="aspect-section">
             <div class="section-heading">
               <span class="section-heading-text"

@@ -829,8 +829,12 @@
   strokeClassification={visualization?.symbol?.strokeClassification}
   strokeValueColumn={visualization?.symbol?.strokeValueColumn}
   strokeCategoryColumn={visualization?.symbol?.strokeCategoryColumn}
+  showMissingData={showMissingData}
+  missingDataColor={missingDataColor}
   facetsValueSlotPath={FACET_SLOT.SYMBOL_VALUE}
   facetsCategorySlotPath={FACET_SLOT.SYMBOL_CATEGORY}
+  onMissingDataShowChange={handleMissingDataShowChange}
+  onMissingDataColorChange={handleMissingDataColorChange}
 />
 
 <DiscretizationModal

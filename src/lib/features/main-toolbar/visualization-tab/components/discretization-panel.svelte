@@ -127,11 +127,19 @@
       breakpointValue > dataMin &&
       breakpointValue < dataMax
   );
+  const canUseBreakpointPosition = $derived(
+    isBreakpointValueValid || breaks.length > 1
+  );
   const breakpointSliderValue = $derived(
     resolveBreakpointLowerClassCount(numClasses, breakpointLowerClassCount)
   );
 
   let validationErrors = $state<string[]>([]);
+  let breakpointInputValue = $derived(
+    breakpointValue !== null && Number.isFinite(breakpointValue)
+      ? String(breakpointValue)
+      : ''
+  );
 
   let breakpointPositionTimer: ReturnType<typeof setTimeout> | null = null;
   let breakpointPositionPending: number | null = null;
@@ -183,6 +191,28 @@
 
   function handleClassesChange() {
     onclasseschange?.(numClasses);
+  }
+
+  function handleBreakpointValueInput(e: Event) {
+    const detail = (e as CustomEvent<string>).detail;
+    const rawValue =
+      typeof detail === 'string'
+        ? detail
+        : ((e.target as HTMLInputElement | null)?.value ?? '');
+
+    breakpointInputValue = rawValue;
+
+    if (rawValue.trim() === '') {
+      breakpointValue = null;
+      onbreakpointchange?.(null);
+      return;
+    }
+
+    const parsed = Number(rawValue);
+    if (Number.isFinite(parsed) && parsed > dataMin && parsed < dataMax) {
+      breakpointValue = parsed;
+      onbreakpointchange?.(parsed);
+    }
   }
 
   function handleNestedMeansChange(e: Event) {
@@ -342,24 +372,8 @@
             hideLabel
             labelText={m.discretization_breakpoint_value()}
             placeholder={m.discretization_none_placeholder()}
-            value={breakpointValue !== null ? String(breakpointValue) : ''}
-            on:input={(e) => {
-              const rawValue = String(e.detail ?? '');
-              const parsed = Number(rawValue);
-              if (rawValue.trim() === '') {
-                breakpointValue = null;
-                onbreakpointchange?.(null);
-                return;
-              }
-              if (
-                Number.isFinite(parsed) &&
-                parsed > dataMin &&
-                parsed < dataMax
-              ) {
-                breakpointValue = parsed;
-                onbreakpointchange?.(parsed);
-              }
-            }}
+            value={breakpointInputValue}
+            on:input={handleBreakpointValueInput}
           />
         </div>
         <div class="breakpoint-slider-col">
@@ -376,7 +390,7 @@
               max={breakpointLowerClassCountMax}
               value={breakpointSliderValue}
               step={1}
-              disabled={!isBreakpointValueValid}
+              disabled={!canUseBreakpointPosition}
               hideTextInput
               minLabel=""
               maxLabel=""
