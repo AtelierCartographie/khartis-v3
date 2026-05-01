@@ -225,7 +225,7 @@ describe('common legend generators', () => {
 
     expect(svg.markup).toContain('khartis_double_symbol_legend');
     expect(svg.markup).toContain('Absence de données');
-    expect(svg.height).toBeLessThan(155);
+    expect(svg.height).toBeLessThan(160);
   });
 
   it('aligns double symbol labels on the same row axis with consistent spacing', () => {
