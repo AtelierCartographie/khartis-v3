@@ -30,4 +30,20 @@ describe('useEnrichmentBasemap preview hold', () => {
       'mapProjectionStore.setProjection(MAP_PROJECTION_TYPE.MERCATOR)'
     );
   });
+
+  it('keeps preferred overlay basemap separate from the active selection', () => {
+    expect(source).toContain('function rememberPreferredBasemap(');
+    expect(source).toContain('preferredOverlayBasemapId: basemapId');
+    expect(source).toContain('preferredOverlayBasemapSource: source');
+    expect(source).toContain(
+      'dataTabState.enrichData.preferredOverlayBasemapId'
+    );
+  });
+
+  it('does not auto-select suggestions while the overlay toggle is disabled', () => {
+    expect(source).toContain(
+      'dataTabState.enrichData.overlayBasemapEnabled &&'
+    );
+    expect(source).toContain('shouldAutoSelectSuggestedBasemap({');
+  });
 });

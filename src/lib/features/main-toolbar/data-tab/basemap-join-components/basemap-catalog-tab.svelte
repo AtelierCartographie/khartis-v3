@@ -31,6 +31,10 @@
     basemapSelected: string;
     onSelectBasemap: (basemap: BasemapMetadata) => void;
     onSuggestBasemap?: () => void;
+    suggestionsOpen?: boolean;
+    catalogOpen?: boolean;
+    onSuggestionsToggle?: (expanded: boolean) => void;
+    onCatalogToggle?: (expanded: boolean) => void;
   }
 
   let {
@@ -38,7 +42,11 @@
     allBasemaps,
     basemapSelected,
     onSelectBasemap,
-    onSuggestBasemap
+    onSuggestBasemap,
+    suggestionsOpen,
+    catalogOpen,
+    onSuggestionsToggle,
+    onCatalogToggle
   }: Props = $props();
 
   const isCompact = $derived(globalState.toolbarState === ToolbarState.Compact);
@@ -97,6 +105,13 @@
     return counts;
   });
 
+  const suggestionsPanelOpen = $derived(
+    suggestionsOpen ?? suggestedBasemaps.length > 0
+  );
+  const catalogPanelOpen = $derived(
+    catalogOpen ?? suggestedBasemaps.length === 0
+  );
+
   const searchComboBoxItems = $derived.by((): SearchComboBoxItem[] => {
     const lang = getLocale();
     return allBasemaps.map((b, index) => {
@@ -144,7 +159,8 @@
   <div class="suggestions-section" class:compact-mode={isCompact}>
     <ExpandableSection
       title={m.section_suggestions()}
-      open={suggestedBasemaps.length > 0}
+      open={suggestionsPanelOpen}
+      onToggle={onSuggestionsToggle}
     >
       {#snippet icon()}
         <MagicWand size={16} />
@@ -182,7 +198,8 @@
   <div class="catalogue-section" class:compact-mode={isCompact}>
     <ExpandableSection
       title={m.basemap_other()}
-      open={suggestedBasemaps.length === 0}
+      open={catalogPanelOpen}
+      onToggle={onCatalogToggle}
     >
       {#snippet icon()}
         <List size={16} />

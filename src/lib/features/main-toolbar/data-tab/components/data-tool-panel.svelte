@@ -120,6 +120,9 @@
     display: flex;
     flex-direction: column;
     transition: right 0.2s ease-out;
+    box-shadow:
+      0 4px 16px rgba(0, 0, 0, 0.12),
+      0 0 1px rgba(0, 0, 0, 0.15);
   }
 
   .panel-header {

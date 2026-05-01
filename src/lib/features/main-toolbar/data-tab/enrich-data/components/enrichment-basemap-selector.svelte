@@ -25,6 +25,10 @@
     onBasemapUrlLoad: (url: string) => void;
     onClearError: () => void;
     onSelectOSM: () => void;
+    suggestionsOpen?: boolean;
+    catalogOpen?: boolean;
+    onSuggestionsToggle?: (expanded: boolean) => void;
+    onCatalogToggle?: (expanded: boolean) => void;
   }
 
   let {
@@ -40,7 +44,11 @@
     onBasemapImportFile,
     onBasemapUrlLoad,
     onClearError,
-    onSelectOSM
+    onSelectOSM,
+    suggestionsOpen,
+    catalogOpen,
+    onSuggestionsToggle,
+    onCatalogToggle
   }: Props = $props();
 
   const TAB_INDEX_TO_SOURCE: readonly BasemapSource[] = [
@@ -66,6 +74,10 @@
     allBasemaps={basemaps}
     basemapSelected={selectedBasemapId ?? ''}
     onSelectBasemap={(basemap) => onSelectBasemap(basemap.file)}
+    suggestionsOpen={suggestionsOpen}
+    catalogOpen={catalogOpen}
+    onSuggestionsToggle={onSuggestionsToggle}
+    onCatalogToggle={onCatalogToggle}
   />
 {/snippet}
 

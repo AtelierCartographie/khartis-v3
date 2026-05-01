@@ -30,16 +30,23 @@
   const joinTabularEnabled = $derived(
     dataTabState.enrichData.joinTabularEnabled
   );
+  const joinTabularOpen = $derived(
+    joinTabularEnabled && dataTabState.uiPanels.enrichJoinTabularOpen
+  );
 
   let enrichLinkedVariableId = $state<number | undefined>(undefined);
   let geoFileColumnId = $state<number | undefined>(undefined);
   let previousDatasetId: string | undefined = undefined;
+  let hasObservedDataset = false;
   let previousEnrichmentDatasetId: string | undefined = undefined;
 
   const fileHook = useEnrichmentFile();
   const basemapHook = useEnrichmentBasemap();
   const overlayBasemapEnabled = $derived(
     dataTabState.enrichData.overlayBasemapEnabled
+  );
+  const overlayBasemapOpen = $derived(
+    overlayBasemapEnabled && dataTabState.uiPanels.enrichOverlayBasemapOpen
   );
 
   const enrichGeoDetection = $derived(fileHook.enrichmentDataset?.geoDetection);
@@ -67,6 +74,7 @@
     isJoinBlocked: () => hasOnlyCoordinatesValue,
     onJoinFinalized: () => {
       dataTabActions.setEnrichDataState({ joinTabularEnabled: false });
+      dataTabActions.setUiPanelsState({ enrichJoinTabularOpen: false });
       fileHook.handleRemoveFile();
       enrichLinkedVariableId = undefined;
       geoFileColumnId = undefined;
@@ -75,15 +83,30 @@
 
   $effect(() => {
     const currentId = selectedDataset?.id;
+    if (!hasObservedDataset) {
+      previousDatasetId = currentId;
+      hasObservedDataset = currentId !== undefined;
+      return;
+    }
+
     if (currentId !== previousDatasetId) {
       previousDatasetId = currentId;
       enrichLinkedVariableId = undefined;
       geoFileColumnId = undefined;
       dataTabActions.setEnrichDataState({
         joinTabularEnabled: false,
-        overlayBasemapEnabled: false
+        overlayBasemapEnabled: false,
+        preferredOverlayBasemapId: undefined,
+        preferredOverlayBasemapSource: undefined
+      });
+      dataTabActions.setUiPanelsState({
+        enrichJoinTabularOpen: false,
+        enrichOverlayBasemapOpen: false,
+        enrichBasemapSuggestionsOpen: undefined,
+        enrichBasemapCatalogOpen: undefined
       });
       fileHook.handleRemoveFile();
+      basemapHook.clearSelectedBasemap();
       joinHook.resetJoinState();
     }
   });
@@ -105,6 +128,31 @@
       enrichSuggestedColumn
     ) {
       enrichLinkedVariableId = enrichSuggestedColumn.id;
+    }
+  });
+
+  $effect(() => {
+    if (
+      enrichLinkedVariableId === undefined &&
+      dataTabState.enrichData.enrichmentColumn
+    ) {
+      const item = enrichDataFieldItems.find(
+        (field) => field.columnName === dataTabState.enrichData.enrichmentColumn
+      );
+      if (item) {
+        enrichLinkedVariableId = item.id;
+      }
+    }
+  });
+
+  $effect(() => {
+    if (geoFileColumnId === undefined && dataTabState.enrichData.targetColumn) {
+      const item = geoFileColumns.find(
+        (field) => field.columnName === dataTabState.enrichData.targetColumn
+      );
+      if (item) {
+        geoFileColumnId = item.id;
+      }
     }
   });
 
@@ -160,6 +208,21 @@
     }
   });
 
+  function handleJoinTabularToggle(checked: boolean): void {
+    dataTabActions.setEnrichDataState({ joinTabularEnabled: checked });
+    dataTabActions.setUiPanelsState({ enrichJoinTabularOpen: checked });
+  }
+
+  function handleOverlayBasemapToggle(checked: boolean): void {
+    dataTabActions.setEnrichDataState({ overlayBasemapEnabled: checked });
+    dataTabActions.setUiPanelsState({ enrichOverlayBasemapOpen: checked });
+    if (!checked) {
+      basemapHook.clearSelectedBasemap();
+      return;
+    }
+    basemapHook.activatePreferredBasemap();
+  }
+
   const stepTitle = $derived.by(() => {
     const stepNumber = dataTabStore.getDisplayedStepNumber('enrich');
     const title = m.enrich_step_title();
@@ -181,11 +244,13 @@
       title={m.enrich_join_tabular_title()}
       description={m.enrich_join_tabular_description()}
       showToggle={true}
-      open={joinTabularEnabled}
+      open={joinTabularOpen}
       toggleChecked={joinTabularEnabled}
-      onToggleChange={(checked) => {
-        dataTabActions.setEnrichDataState({ joinTabularEnabled: checked });
-      }}
+      onToggle={(expanded) =>
+        dataTabActions.setUiPanelsState({
+          enrichJoinTabularOpen: expanded
+        })}
+      onToggleChange={handleJoinTabularToggle}
     >
       <div class="section-content">
         {#if !fileHook.enrichmentDataset}
@@ -237,16 +302,13 @@
       title={m.enrich_overlay_basemap_title()}
       description={m.enrich_overlay_basemap_description()}
       showToggle={true}
-      open={overlayBasemapEnabled}
+      open={overlayBasemapOpen}
       toggleChecked={overlayBasemapEnabled}
-      onToggleChange={(checked) => {
-        dataTabActions.setEnrichDataState({ overlayBasemapEnabled: checked });
-        if (!checked) {
-          basemapHook.clearSelectedBasemap();
-          return;
-        }
-        basemapHook.activatePreferredBasemap();
-      }}
+      onToggle={(expanded) =>
+        dataTabActions.setUiPanelsState({
+          enrichOverlayBasemapOpen: expanded
+        })}
+      onToggleChange={handleOverlayBasemapToggle}
     >
       <EnrichmentBasemapSelector
         basemapTabIndex={basemapHook.basemapTabIndex}
@@ -262,6 +324,16 @@
         onBasemapUrlLoad={basemapHook.handleBasemapUrlLoad}
         onClearError={basemapHook.clearBasemapImportError}
         onSelectOSM={basemapHook.handleSelectOSM}
+        suggestionsOpen={dataTabState.uiPanels.enrichBasemapSuggestionsOpen}
+        catalogOpen={dataTabState.uiPanels.enrichBasemapCatalogOpen}
+        onSuggestionsToggle={(expanded) =>
+          dataTabActions.setUiPanelsState({
+            enrichBasemapSuggestionsOpen: expanded
+          })}
+        onCatalogToggle={(expanded) =>
+          dataTabActions.setUiPanelsState({
+            enrichBasemapCatalogOpen: expanded
+          })}
       />
     </ExpandableSection>
   </div>
