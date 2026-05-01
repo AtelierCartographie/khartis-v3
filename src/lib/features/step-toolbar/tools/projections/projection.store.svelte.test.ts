@@ -32,4 +32,29 @@ describe('projection store', () => {
     );
     expect(source).toContain('d3Projection: suggestion.d3Config.projection');
   });
+
+  it('computes projection suggestions without auto-selecting the first one', () => {
+    expect(source).toContain('s.suggestions = result;');
+    expect(source).toContain("if (s.overrideSource === 'auto')");
+    expect(source).toContain('clearSelectedInternal(true);');
+    expect(source).not.toContain("applyProjectionSuggestion(best, 'auto')");
+  });
+
+  it('turns projection settings into manual overrides without clearing the active projection', () => {
+    expect(source).toContain('const activateManualProjectionOverride = () =>');
+    expect(source).toContain("s.overrideSource = 'manual';");
+    expect(source).toContain(
+      'setCenter: (longitude: number, latitude: number) =>'
+    );
+    expect(source).toContain('setRotation: (rotation: number) =>');
+    expect(source).toContain('activateManualProjectionOverride();');
+  });
+
+  it('keeps custom CRS code active after catalogue metadata has been selected', () => {
+    expect(source).toContain('setCustomCode: (code: string | null) =>');
+    expect(source).toContain('s.customCode = code?.trim() || undefined;');
+    expect(source).toContain(
+      'mapProjectionStore.setProjection(MERCATOR_PROJECTION_TYPE);'
+    );
+  });
 });

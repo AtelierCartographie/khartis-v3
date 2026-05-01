@@ -22,4 +22,12 @@ describe('Projection tool shell', () => {
       'border-top: 1px solid var(--cds-border-subtle-00, #e0e0e0);'
     );
   });
+
+  it('applies parsed CRS metadata before storing the custom code', () => {
+    expect(
+      source.indexOf('projectionActions.setSelected(parsed.projectionId);')
+    ).toBeLessThan(
+      source.indexOf('projectionActions.setCustomCode(parsed.normalizedCode);')
+    );
+  });
 });

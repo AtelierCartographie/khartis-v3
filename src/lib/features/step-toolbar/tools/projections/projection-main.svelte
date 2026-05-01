@@ -27,6 +27,9 @@
 
   type ProjectionShapeFilterId = Exclude<ProjectionFilterId, 'all'>;
 
+  const INITIAL_VISIBLE_SUGGESTIONS = 3;
+  const SUGGESTION_INCREMENT = 3;
+
   const description = m.projection_description();
   const projectionState = $derived(getProjectionState());
   const projectionContext = $derived(
@@ -104,14 +107,43 @@
       ? requestedFilter
       : 'all';
   });
+  const filteredListSuggestions = $derived(
+    suggestionItems.filter(
+      (suggestion) =>
+        activeFilter === 'all' ||
+        getSuggestionFilterId(suggestion) === activeFilter
+    )
+  );
+  const suggestionResetSignature = $derived(
+    `${activeFilter}:${suggestionItems
+      .map((suggestion) => suggestion.id)
+      .join('|')}`
+  );
+  let suggestionLimitState = $state({
+    signature: '',
+    limit: INITIAL_VISIBLE_SUGGESTIONS
+  });
+  const visibleSuggestionLimit = $derived(
+    suggestionLimitState.signature === suggestionResetSignature
+      ? suggestionLimitState.limit
+      : INITIAL_VISIBLE_SUGGESTIONS
+  );
   const visibleListSuggestions = $derived(
-    suggestionItems
-      .filter(
-        (suggestion) =>
-          activeFilter === 'all' ||
-          getSuggestionFilterId(suggestion) === activeFilter
-      )
-      .slice(0, 3)
+    filteredListSuggestions.slice(0, visibleSuggestionLimit)
+  );
+  const hasMoreListSuggestions = $derived(
+    filteredListSuggestions.length > visibleSuggestionLimit
+  );
+  const hasSuggestionItems = $derived(suggestionItems.length > 0);
+  const suggestionEmptyTitle = $derived(
+    suggestionCardsEnabled
+      ? m.projection_suggestions_empty_title()
+      : m.projection_suggestions_unavailable_title()
+  );
+  const suggestionEmptySubtitle = $derived(
+    suggestionCardsEnabled
+      ? m.projection_suggestions_empty_subtitle()
+      : m.projection_suggestions_unavailable_subtitle()
   );
   const unclassifiedGridSuggestions = $derived(
     suggestionItems.filter((suggestion) => !getSuggestionFilterId(suggestion))
@@ -132,6 +164,7 @@
   function isSuggestionSelected(suggestion: ProjectionSuggestion) {
     return (
       projectionState.overrideActive === true &&
+      projectionState.overrideSource === 'manual' &&
       projectionState.activeSuggestionId === suggestion.id
     );
   }
@@ -142,6 +175,16 @@
 
   function setFilter(id: ProjectionFilterId) {
     globalActions.setProjectionFilter(id);
+  }
+
+  function showMoreSuggestions() {
+    suggestionLimitState = {
+      signature: suggestionResetSignature,
+      limit: Math.min(
+        visibleSuggestionLimit + SUGGESTION_INCREMENT,
+        filteredListSuggestions.length
+      )
+    };
   }
 
   function getSuggestionFilterId(
@@ -260,33 +303,41 @@
       {/each}
     </div>
 
-    <div class="projection-cards">
-      {#each visibleListSuggestions as suggestion (suggestion.id)}
-        <ProjectionCard
-          title={getSuggestionTitle(suggestion)}
-          subtitle=""
-          tag={getSuggestionTag(suggestion)}
-          ratio="1:1"
-          previewLabel={m.projection_preview_label()}
-          selected={isSuggestionSelected(suggestion)}
-          variant="blue"
-          equalArea={suggestion.equalArea}
-          description={getSuggestionDescription(suggestion)}
-          onclick={() => applySuggestion(suggestion)}
-        />
-      {/each}
-    </div>
+    {#if filteredListSuggestions.length > 0}
+      <div class="projection-cards">
+        {#each visibleListSuggestions as suggestion (suggestion.id)}
+          <ProjectionCard
+            title={getSuggestionTitle(suggestion)}
+            subtitle=""
+            tag={getSuggestionTag(suggestion)}
+            ratio="1:1"
+            previewLabel={m.projection_preview_label()}
+            selected={isSuggestionSelected(suggestion)}
+            variant="blue"
+            equalArea={suggestion.equalArea}
+            description={getSuggestionDescription(suggestion)}
+            onclick={() => applySuggestion(suggestion)}
+          />
+        {/each}
+      </div>
+    {:else}
+      <div class="projection-empty-state">
+        <p class="projection-empty-title">{suggestionEmptyTitle}</p>
+        <p class="projection-empty-subtitle">{suggestionEmptySubtitle}</p>
+      </div>
+    {/if}
 
-    <Button
-      kind="tertiary"
-      size="small"
-      icon={MagicWandFilled}
-      class="show-more-btn"
-      disabled={!suggestionCardsEnabled}
-      on:click={() => projectionActions.suggestProjectionForCurrentData()}
-      >{m.show_other_suggestions()}</Button
-    >
-  {:else}
+    {#if hasMoreListSuggestions}
+      <Button
+        kind="tertiary"
+        size="small"
+        icon={MagicWandFilled}
+        class="show-more-btn"
+        disabled={!suggestionCardsEnabled}
+        on:click={showMoreSuggestions}>{m.show_other_suggestions()}</Button
+      >
+    {/if}
+  {:else if hasSuggestionItems}
     {#if unclassifiedGridSuggestions.length > 0}
       <div class="projection-grid-featured">
         {#each unclassifiedGridSuggestions as suggestion (suggestion.id)}
@@ -333,6 +384,11 @@
           </div>
         </section>
       {/each}
+    </div>
+  {:else}
+    <div class="projection-empty-state">
+      <p class="projection-empty-title">{suggestionEmptyTitle}</p>
+      <p class="projection-empty-subtitle">{suggestionEmptySubtitle}</p>
     </div>
   {/if}
 </div>
@@ -435,6 +491,33 @@
     max-width: 100%;
     min-height: 40px;
     margin-top: 0;
+  }
+
+  .projection-empty-state {
+    display: flex;
+    flex-direction: column;
+    gap: var(--cds-spacing-02);
+    padding: var(--cds-spacing-05);
+    border: 1px solid
+      var(--khartis-additions-border-tile-01-suggestions, #82cfff);
+    background: var(--khartis-additions-layer-01-suggestions, #e5f6ff);
+    color: var(--khartis-additions-text-primary-suggestions, #003a6d);
+  }
+
+  .projection-empty-title,
+  .projection-empty-subtitle {
+    margin: 0;
+  }
+
+  .projection-empty-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.125rem;
+  }
+
+  .projection-empty-subtitle {
+    font-size: 0.75rem;
+    line-height: 1rem;
   }
 
   .projection-grid-featured,
