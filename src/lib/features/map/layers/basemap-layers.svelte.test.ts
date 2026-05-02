@@ -650,6 +650,290 @@ describe('basemap projection fallbacks', () => {
     expect(layer?.spacingDegrees).toBe(90);
   });
 
+  it('returns null when meridiens layer is not visible', () => {
+    const layer = createMeridiensLayer(
+      {
+        id: 'meridiens',
+        visible: false,
+        mode: BasemapGraticuleMode.REMARKABLE,
+        spacingDegrees: 10,
+        color: '#666666',
+        dotted: true,
+        dottedPattern: BasemapDottedPattern.DOTS,
+        thickness: 1,
+        opacity: 100
+      },
+      {}
+    );
+
+    expect(layer).toBeNull();
+  });
+
+  it('applies color and opacity correctly to graticule lines', () => {
+    const layer = createMeridiensLayer(
+      {
+        id: 'meridiens',
+        visible: true,
+        mode: BasemapGraticuleMode.REGULAR,
+        spacingDegrees: 30,
+        color: '#ff0000',
+        dotted: false,
+        dottedPattern: BasemapDottedPattern.DOTS,
+        thickness: 1,
+        opacity: 50
+      },
+      {}
+    ) as GeoJsonLayer | null;
+
+    expect(layer).toBeInstanceOf(GeoJsonLayer);
+    expect(layer?.props.getLineColor).toEqual([255, 0, 0, 128]);
+    expect(layer?.props.updateTriggers.getLineColor).toEqual(['#ff0000', 50]);
+  });
+
+  it('transmits thickness to getLineWidth', () => {
+    const layer = createMeridiensLayer(
+      {
+        id: 'meridiens',
+        visible: true,
+        mode: BasemapGraticuleMode.REMARKABLE,
+        spacingDegrees: 10,
+        color: '#666666',
+        dotted: false,
+        dottedPattern: BasemapDottedPattern.DOTS,
+        thickness: 2.5,
+        opacity: 100
+      },
+      {}
+    ) as GeoJsonLayer | null;
+
+    expect(layer).toBeInstanceOf(GeoJsonLayer);
+    expect(layer?.props.getLineWidth).toBe(2.5);
+    expect(layer?.props.updateTriggers.getLineWidth).toEqual([2.5]);
+  });
+
+  it('maps dotted patterns to correct dash arrays', () => {
+    const testCases: Array<{
+      pattern: BasemapDottedPattern;
+      expected: number[];
+    }> = [
+      { pattern: BasemapDottedPattern.DOTS, expected: [2, 4] },
+      { pattern: BasemapDottedPattern.DASHES, expected: [8, 4] },
+      { pattern: BasemapDottedPattern.DASH_DOT, expected: [8, 2] },
+      { pattern: BasemapDottedPattern.LONG_DASH, expected: [16, 4] }
+    ];
+
+    for (const { pattern, expected } of testCases) {
+      const layer = createMeridiensLayer(
+        {
+          id: 'meridiens',
+          visible: true,
+          mode: BasemapGraticuleMode.REGULAR,
+          spacingDegrees: 30,
+          color: '#666666',
+          dotted: true,
+          dottedPattern: pattern,
+          thickness: 1,
+          opacity: 100
+        },
+        {}
+      ) as GeoJsonLayer | null;
+
+      expect(Reflect.get(layer?.props ?? {}, 'getDashArray')).toEqual(expected);
+    }
+  });
+
+  it('caches graticule data for identical config and regenerates on change', () => {
+    const config = {
+      id: 'meridiens' as const,
+      visible: true,
+      mode: BasemapGraticuleMode.REGULAR,
+      spacingDegrees: 15,
+      color: '#666666',
+      dotted: true,
+      dottedPattern: BasemapDottedPattern.DOTS,
+      thickness: 1,
+      opacity: 100
+    };
+
+    const layer1 = createMeridiensLayer(config, { bbox: [-10, -10, 10, 10] });
+    const data1 = (layer1 as GeoJsonLayer)?.props.data;
+
+    const layer2 = createMeridiensLayer(config, { bbox: [-10, -10, 10, 10] });
+    const data2 = (layer2 as GeoJsonLayer)?.props.data;
+
+    expect(data1).toBe(data2);
+
+    const layer3 = createMeridiensLayer(
+      { ...config, spacingDegrees: 30 },
+      { bbox: [-10, -10, 10, 10] }
+    );
+    const data3 = (layer3 as GeoJsonLayer)?.props.data;
+
+    expect(data1).not.toBe(data3);
+  });
+
+  it('clips graticule to the active bbox', () => {
+    const layerWorld = createMeridiensLayer(
+      {
+        id: 'meridiens',
+        visible: true,
+        mode: BasemapGraticuleMode.REGULAR,
+        spacingDegrees: 30,
+        color: '#666666',
+        dotted: false,
+        dottedPattern: BasemapDottedPattern.DOTS,
+        thickness: 1,
+        opacity: 100
+      },
+      { bbox: [-180, -90, 180, 90] }
+    ) as GeoJsonLayer | null;
+
+    const dataWorld = layerWorld?.props.data as FeatureCollection<LineString>;
+    const worldFeatureCount = dataWorld.features.length;
+
+    const layerEurope = createMeridiensLayer(
+      {
+        id: 'meridiens',
+        visible: true,
+        mode: BasemapGraticuleMode.REGULAR,
+        spacingDegrees: 30,
+        color: '#666666',
+        dotted: false,
+        dottedPattern: BasemapDottedPattern.DOTS,
+        thickness: 1,
+        opacity: 100
+      },
+      { bbox: [-10, 35, 30, 70] }
+    ) as GeoJsonLayer | null;
+
+    const dataEurope = layerEurope?.props.data as FeatureCollection<LineString>;
+    const europeFeatureCount = dataEurope.features.length;
+
+    expect(europeFeatureCount).toBeLessThan(worldFeatureCount);
+    expect(europeFeatureCount).toBeGreaterThan(0);
+  });
+
+  it('enforces lineWidthMinPixels of 0.5 for meridiens', () => {
+    const layer = createMeridiensLayer(
+      {
+        id: 'meridiens',
+        visible: true,
+        mode: BasemapGraticuleMode.REMARKABLE,
+        spacingDegrees: 10,
+        color: '#666666',
+        dotted: false,
+        dottedPattern: BasemapDottedPattern.DOTS,
+        thickness: 0.25,
+        opacity: 100
+      },
+      {}
+    ) as GeoJsonLayer | null;
+
+    expect(layer).toBeInstanceOf(GeoJsonLayer);
+    expect(layer?.props.lineWidthMinPixels).toBe(0.5);
+  });
+
+  it('uses a stable layer id for meridiens', () => {
+    const layer = createMeridiensLayer(
+      {
+        id: 'meridiens',
+        visible: true,
+        mode: BasemapGraticuleMode.REMARKABLE,
+        spacingDegrees: 10,
+        color: '#666666',
+        dotted: false,
+        dottedPattern: BasemapDottedPattern.DOTS,
+        thickness: 1,
+        opacity: 100
+      },
+      {}
+    ) as GeoJsonLayer | null;
+
+    expect(layer?.props.id).toBe('basemap-meridiens-basemap-default');
+  });
+
+  it('includes equator in remarkable mode when excludeEquator is false', () => {
+    const layer = createMeridiensLayer(
+      {
+        id: 'meridiens',
+        visible: true,
+        mode: BasemapGraticuleMode.REMARKABLE,
+        spacingDegrees: 10,
+        color: '#666666',
+        dotted: true,
+        dottedPattern: BasemapDottedPattern.DOTS,
+        thickness: 1,
+        opacity: 100
+      },
+      { bbox: [-180, -90, 180, 90], excludeEquator: false }
+    ) as GeoJsonLayer | null;
+
+    const data = layer?.props.data as FeatureCollection<
+      LineString,
+      { name: string }
+    >;
+    const names = data.features.map((feature) => feature.properties.name);
+
+    expect(names).toContain('parallel-0');
+  });
+
+  it('normalizes legacy remarquables ALL to regular spacing 10', () => {
+    basemapLayersStore.restoreFromSerialized([
+      {
+        id: 'meridiens',
+        visible: true,
+        remarquables: BasemapRemarquables.ALL,
+        color: '#abcdef'
+      }
+    ] as unknown as Parameters<
+      typeof basemapLayersStore.restoreFromSerialized
+    >[0]);
+
+    const layer = basemapLayersStore.getLayer(BASEMAP_LAYER_ID.MERIDIENS);
+
+    expect(layer?.mode).toBe(BasemapGraticuleMode.REGULAR);
+    expect(layer?.spacingDegrees).toBe(10);
+    expect(layer?.color).toBe('#abcdef');
+  });
+
+  it('normalizes legacy remarquables MINOR to regular spacing 5', () => {
+    basemapLayersStore.restoreFromSerialized([
+      {
+        id: 'meridiens',
+        visible: true,
+        remarquables: BasemapRemarquables.MINOR,
+        color: '#fedcba'
+      }
+    ] as unknown as Parameters<
+      typeof basemapLayersStore.restoreFromSerialized
+    >[0]);
+
+    const layer = basemapLayersStore.getLayer(BASEMAP_LAYER_ID.MERIDIENS);
+
+    expect(layer?.mode).toBe(BasemapGraticuleMode.REGULAR);
+    expect(layer?.spacingDegrees).toBe(5);
+    expect(layer?.color).toBe('#fedcba');
+  });
+
+  it('normalizes legacy remarquables EQUATOR_TROPICS to remarkable', () => {
+    basemapLayersStore.restoreFromSerialized([
+      {
+        id: 'meridiens',
+        visible: true,
+        remarquables: BasemapRemarquables.EQUATOR_TROPICS,
+        color: '#00ff00'
+      }
+    ] as unknown as Parameters<
+      typeof basemapLayersStore.restoreFromSerialized
+    >[0]);
+
+    const layer = basemapLayersStore.getLayer(BASEMAP_LAYER_ID.MERIDIENS);
+
+    expect(layer?.mode).toBe(BasemapGraticuleMode.REMARKABLE);
+    expect(layer?.spacingDegrees).toBe(10);
+    expect(layer?.color).toBe('#00ff00');
+  });
+
   it('projects city point overlays before rendering them', () => {
     const sourceCities = createPointGeoJSON('raw-city');
     const projectedCities = createPointGeoJSON('projected-city');
@@ -1280,6 +1564,127 @@ describe('basemap projection fallbacks', () => {
         String(layer.props.id).includes('basemap-meta-limit')
       )
     ).toBe(false);
+  });
+
+  it('suppresses terre GeoJSON fallback stroke when metadata limits are present and frontieres is visible', () => {
+    const worldBaseTable = { id: 'world-base' } as unknown as ArrowTable;
+    const metadataTable = { id: 'limit-suppress' } as unknown as ArrowTable;
+    const worldGeoJSON = createPolygonGeoJSON('raw-world-land');
+    const limitGeoJSON = createLineGeoJSON('raw-meta-limit');
+    const ctx = createProjectionContext();
+
+    basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.MERS, false);
+    basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.TERRE, true);
+    basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.FRONTIERES, true);
+
+    extractGeometryInfoMock.mockImplementation((table: ArrowTable) => {
+      if (table === worldBaseTable) return createPolygonGeometryInfo();
+      if (table === metadataTable) return createLineGeometryInfo();
+      return null;
+    });
+    arrowTableToGeoJSONMock.mockImplementation((table: ArrowTable) => {
+      if (table === worldBaseTable) return worldGeoJSON;
+      if (table === metadataTable) return limitGeoJSON;
+      return null;
+    });
+
+    const layers = createBasemapLayers(worldBaseTable, ctx, {
+      metadataLayers: [
+        {
+          table: metadataTable,
+          style: null,
+          type: BasemapLayerType.LIMIT,
+          file: 'limits.geojson'
+        } satisfies MetadataLayerEntry
+      ],
+      availableMetadataLayerTypes: [BasemapLayerType.LIMIT],
+      stylePresets: null
+    });
+
+    const terreLayer = layers.background.find(
+      (layer) =>
+        layer instanceof GeoJsonLayer &&
+        String(layer.props.id) === 'basemap-terre-basemap-default'
+    ) as GeoJsonLayer | undefined;
+
+    expect(terreLayer).toBeDefined();
+    expect(terreLayer?.props.stroked).toBe(false);
+    expect(terreLayer?.props.getLineWidth).toBe(0);
+    expect(terreLayer?.props.getLineColor).toEqual([0, 0, 0, 0]);
+  });
+
+  it('restores Terre stroke when frontieres are toggled OFF with metadata LIMIT active', () => {
+    const worldBaseTable = {
+      id: 'world-base-restore'
+    } as unknown as ArrowTable;
+    const metadataTable = { id: 'limit-restore' } as unknown as ArrowTable;
+    const worldGeoJSON = createPolygonGeoJSON('raw-world-land-restore');
+    const limitGeoJSON = createLineGeoJSON('raw-meta-limit-restore');
+    const ctx = createProjectionContext();
+
+    basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.MERS, false);
+    basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.TERRE, true);
+    basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.FRONTIERES, true);
+
+    extractGeometryInfoMock.mockImplementation((table: ArrowTable) => {
+      if (table === worldBaseTable) return createPolygonGeometryInfo();
+      if (table === metadataTable) return createLineGeometryInfo();
+      return null;
+    });
+    arrowTableToGeoJSONMock.mockImplementation((table: ArrowTable) => {
+      if (table === worldBaseTable) return worldGeoJSON;
+      if (table === metadataTable) return limitGeoJSON;
+      return null;
+    });
+
+    // First call with frontieres ON - Terre stroke should be suppressed
+    const layersOn = createBasemapLayers(worldBaseTable, ctx, {
+      metadataLayers: [
+        {
+          table: metadataTable,
+          style: null,
+          type: BasemapLayerType.LIMIT,
+          file: 'limits.geojson'
+        } satisfies MetadataLayerEntry
+      ],
+      availableMetadataLayerTypes: [BasemapLayerType.LIMIT],
+      stylePresets: null
+    });
+
+    const terreLayerOn = layersOn.background.find(
+      (layer) =>
+        layer instanceof GeoJsonLayer &&
+        String(layer.props.id) === 'basemap-terre-basemap-default'
+    ) as GeoJsonLayer | undefined;
+
+    expect(terreLayerOn?.props.stroked).toBe(false);
+
+    // Toggle frontieres OFF - Terre stroke should be restored
+    basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.FRONTIERES, false);
+
+    const layersOff = createBasemapLayers(worldBaseTable, ctx, {
+      metadataLayers: [
+        {
+          table: metadataTable,
+          style: null,
+          type: BasemapLayerType.LIMIT,
+          file: 'limits.geojson'
+        } satisfies MetadataLayerEntry
+      ],
+      availableMetadataLayerTypes: [BasemapLayerType.LIMIT],
+      stylePresets: null
+    });
+
+    const terreLayerOff = layersOff.background.find(
+      (layer) =>
+        layer instanceof GeoJsonLayer &&
+        String(layer.props.id) === 'basemap-terre-basemap-default'
+    ) as GeoJsonLayer | undefined;
+
+    expect(terreLayerOff).toBeDefined();
+    expect(terreLayerOff?.props.stroked).toBe(true);
+    expect(terreLayerOff?.props.getLineWidth).toBeGreaterThan(0);
+    expect(terreLayerOff?.props.getLineColor).not.toEqual([0, 0, 0, 0]);
   });
 
   it('connects metadata limit frontieres thickness and dotted styling to Deck.gl layers', () => {
