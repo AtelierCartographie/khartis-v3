@@ -85,13 +85,13 @@
     const handler = (event: Event) => event.stopPropagation();
 
     events.forEach((eventName) => {
-      node.addEventListener(eventName, handler, { capture: true });
+      node.addEventListener(eventName, handler);
     });
 
     return {
       destroy() {
         events.forEach((eventName) => {
-          node.removeEventListener(eventName, handler, { capture: true });
+          node.removeEventListener(eventName, handler);
         });
       }
     };
