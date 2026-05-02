@@ -443,15 +443,18 @@ export function createTerreLayers(
           id: layerId,
           data: geojson,
           filled: true,
-          stroked: effectiveStrokeThickness > 0,
+          stroked: shouldRenderStroke,
           getFillColor: withOpacity(fillColor, fillOpacity),
-          getLineColor: withOpacity(strokeColor, effectiveStrokeOpacity),
+          getLineColor: shouldRenderStroke
+            ? withOpacity(strokeColor, effectiveStrokeOpacity)
+            : [0, 0, 0, 0],
           lineWidthUnits: 'pixels',
-          getLineWidth: effectiveStrokeThickness,
+          getLineWidth: shouldRenderStroke ? effectiveStrokeThickness : 0,
           lineWidthMinPixels: 0,
           lineWidthMaxPixels: 0.5,
-          extensions: config.strokeDotted ? [DASH_EXTENSION] : [],
-          getDashArray: dashArray,
+          extensions:
+            shouldRenderStroke && config.strokeDotted ? [DASH_EXTENSION] : [],
+          getDashArray: shouldRenderStroke ? dashArray : [0, 0],
           ...baseProps,
           updateTriggers: {
             ...updateTriggers,
