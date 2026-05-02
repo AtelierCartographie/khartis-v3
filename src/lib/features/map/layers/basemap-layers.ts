@@ -227,10 +227,16 @@ function canRenderViaGeoJsonFallback(geometryInfo: GeometryInfo): boolean {
 }
 
 function shouldPreferProjectedGeoJsonFallback(
-  geometryInfo: GeometryInfo,
-  projection: ProjectionLike | undefined
+  _geometryInfo: GeometryInfo,
+  _projection: ProjectionLike | undefined
 ): boolean {
-  return canRenderViaGeoJsonFallback(geometryInfo) && Boolean(projection);
+  // Always use the Arrow native path for native GeoArrow data, even when
+  // a projection is active. geoarrow-deck-stream supports composite and
+  // cartographic projections natively via d3-geo streaming.
+  //
+  // WKB and GeoJSON-encoded data still fall back to GeoJsonLayer because
+  // they are not native GeoArrow and the condition below gates on that.
+  return false;
 }
 
 function toRgbColor(hex: string): RGBColor {
