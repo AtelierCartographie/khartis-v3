@@ -3,9 +3,9 @@
   import * as m from '$lib/paraglide/messages';
   import { Dropdown } from 'carbon-components-svelte';
   import { InfoPopover, SliderWithInput } from '../../shared';
-  import FacetsVariablePicker from '../facets-variable-picker.svelte';
+  import FacetsVariablePicker from '../../shared/facets-variable-picker.svelte';
   import { SLIDER_LIMITS } from '../../../../constants';
-  import type { FacetSlotPath } from '../../../facets-adapter';
+  import type { FacetSlotPath } from '../../../utils/facets-adapter';
 
   interface FieldSelection {
     selectedFieldId: number;

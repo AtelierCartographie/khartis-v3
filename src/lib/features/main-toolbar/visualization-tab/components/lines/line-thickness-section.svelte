@@ -7,9 +7,9 @@
     SectionHeading,
     SliderWithInput
   } from '../shared';
-  import FacetsVariablePicker from '../symbols/facets-variable-picker.svelte';
+  import FacetsVariablePicker from '../shared/facets-variable-picker.svelte';
   import { SLIDER_LIMITS, ThicknessMode } from '../../../constants';
-  import { FACET_SLOT, type FacetSlotPath } from '../../facets-adapter';
+  import { FACET_SLOT, type FacetSlotPath } from '../../utils/facets-adapter';
 
   interface FieldSelection {
     selectedFieldId: number;

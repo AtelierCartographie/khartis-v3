@@ -19,7 +19,7 @@ describe('ChooseVisualization', () => {
 
   it('renders suggestion cards through the reusable card component', () => {
     expect(source).toContain(
-      "import VisualizationSuggestionCard from './components/visualization-suggestion-card.svelte';"
+      "import VisualizationSuggestionCard from './components/suggestion/visualization-suggestion-card.svelte';"
     );
     expect(source).toContain('<VisualizationSuggestionCard');
     expect(source).toContain(

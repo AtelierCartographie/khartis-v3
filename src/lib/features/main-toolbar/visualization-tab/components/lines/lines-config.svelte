@@ -34,20 +34,20 @@
     SLIDER_LIMITS,
     VISUALIZATION_DEFAULTS
   } from '../../../constants';
-  import DiscretizationModal from '../discretization-modal.svelte';
+  import DiscretizationModal from '../discretization/discretization-modal.svelte';
   import type { ClassificationConfig } from '$lib/features/commons/store/visualization.store.svelte';
-  import { resolveDiscretizationLabel } from '../discretization.utils';
+  import { resolveDiscretizationLabel } from '../discretization/discretization.utils';
   import {
     NONE_FIELD_ID,
     useFieldSelectionHandler
-  } from '../../use-field-selection.svelte';
-  import { useCategoryLabels } from '../../use-category-labels.svelte';
-  import { useFacetsVariableSelection } from '../../use-facets-variable-selection.svelte';
+  } from '../../hooks/use-field-selection.svelte';
+  import { useCategoryLabels } from '../../hooks/use-category-labels.svelte';
+  import { useFacetsVariableSelection } from '../../hooks/use-facets-variable-selection.svelte';
   import {
     coerceMissingDataShape,
     coerceString,
     parseOpacityToSlider
-  } from '../../coerce.utils';
+  } from '../../utils/coerce.utils';
 
   interface Props {
     dataFields?: Array<{ id: number; text: string; type?: string }>;

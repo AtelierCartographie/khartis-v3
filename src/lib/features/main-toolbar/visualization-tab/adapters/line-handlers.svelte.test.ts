@@ -14,7 +14,7 @@ vi.mock('$lib/features/commons/store/visualization.store.svelte', () => ({
   getLinePrimitive: vi.fn((viz) => viz?.line)
 }));
 
-vi.mock('../use-line-mode-state.svelte', () => ({
+vi.mock('../hooks/use-line-mode-state.svelte', () => ({
   resolveLineModeTransition: vi.fn(() => ({
     nextLineUpdates: { colorMode: 'classes' },
     nextMappingUpdates: { valueColumn: 'next-col' },
