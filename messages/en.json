@@ -1676,7 +1676,7 @@
   "stroke_dashed": "Dashed",
   "missing_data_dashed": "Dashed",
   "texts_title": "Texts",
-  "basemap_tiled_label": "Reference background (IGN & OpenStreetMap)",
+  "basemap_tiled_label": "OpenStreetMap",
   "basemap_tiled_enabled_desc": "The IGN & OpenStreetMap reference background is active. Choose a style below.",
   "basemap_tiled_disabled_desc": "Orthographic view (Deck.gl only). All layers are superimposed without a reference background.",
   "basemap_style_label": "Basemap style",
