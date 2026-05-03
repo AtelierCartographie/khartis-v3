@@ -11,7 +11,7 @@
   import LayerConfigRelief from './components/basemap-layers/layer-config-relief.svelte';
   import LayerConfigMeridiens from './components/basemap-layers/layer-config-meridiens.svelte';
   import LayerConfigVilles from './components/basemap-layers/layer-config-villes.svelte';
-  import BasemapStyleSelector from './basemap-style-selector.svelte';
+  import BasemapStyleSelector from './components/basemap-layers/basemap-style-selector.svelte';
   import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
   import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
   import {
@@ -27,7 +27,7 @@
   import { mapProjectionStore } from '$lib/features/map/stores/map-projection.store.svelte';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
   import { shouldUseMapLibreInterleaved } from '$lib/features/map/utils/render-engine.utils';
-  import { resolveTiledStyleFromToggle } from './tiled-basemap-selection';
+  import { resolveTiledStyleFromToggle } from './utils/tiled-basemap-selection';
   import { BasemapStyle } from '$lib/features/map/constants/basemap-styles';
 
   // Single $derived: one array iteration instead of 9 separate .find() calls
@@ -171,8 +171,15 @@
   }
 
   function handleTiledBasemapToggle(checked: boolean) {
-    const preferredStyle =
-      basemapStyleStore.lastSelectedTiledStyle ?? BasemapStyle.MONDE_COULEURS;
+    // When activating from blank white, always default to Monde (world).
+    // Last-selected style history is only meaningful once the user has
+    // explicitly interacted with the zone/style selector.
+    const isFirstActivation =
+      checked && basemapStyleStore.selectedStyle === BasemapStyle.BLANK_WHITE;
+    const preferredStyle = isFirstActivation
+      ? BasemapStyle.MONDE_COULEURS
+      : (basemapStyleStore.lastSelectedTiledStyle ??
+        BasemapStyle.MONDE_COULEURS);
     const nextStyle = resolveTiledStyleFromToggle(
       checked,
       basemapStyleStore.selectedStyle,
@@ -199,6 +206,12 @@
     }
 
     basemapStyleStore.setStyle(nextStyle);
+
+    // Always fit the viewport to the newly-activated basemap so the user
+    // sees the correct geographic context (world for Monde, France for France).
+    if (checked) {
+      basemapStyleStore.requestViewportReset(nextStyle);
+    }
   }
 
   function handleLayerChange<T extends BasemapLayerId>(

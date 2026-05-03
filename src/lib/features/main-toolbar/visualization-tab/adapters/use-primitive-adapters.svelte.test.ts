@@ -13,14 +13,14 @@ vi.mock('$lib/features/commons/store/visualization.store.svelte', () => ({
   getTextPrimitive: vi.fn((viz) => viz?.text)
 }));
 
-vi.mock('../use-symbol-mode-state.svelte', () => ({
+vi.mock('../hooks/use-symbol-mode-state.svelte', () => ({
   resolveSymbolModeTransition: vi.fn(() => ({
     restoredStateFields: {},
     nextModeStates: {}
   }))
 }));
 
-vi.mock('../use-line-mode-state.svelte', () => ({
+vi.mock('../hooks/use-line-mode-state.svelte', () => ({
   resolveLineModeTransition: vi.fn(() => ({
     nextLineUpdates: {},
     nextMappingUpdates: {},

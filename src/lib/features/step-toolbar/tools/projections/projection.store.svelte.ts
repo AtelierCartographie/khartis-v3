@@ -41,8 +41,16 @@ const DEFAULT_STATE: ProjectionState = {
   longitude: 0,
   latitude: 0,
   rotation: 0,
-  simplifiedPreview: true
+  center: undefined,
+  customCode: undefined,
+  activeSuggestionId: undefined,
+  suggestionD3Config: undefined,
+  simplifiedPreview: true,
+  suggestions: undefined
 };
+
+/** Counter to discard stale async suggestion results. */
+let suggestionRequestId = 0;
 
 type ProjectionActions = {
   setSelected: (projectionId: string) => void;
@@ -204,7 +212,9 @@ const { actions, getState } = createToolStore<
       s.overrideActive = overrideSource !== undefined;
       s.overrideSource = overrideSource;
       if (applyToMap) {
-        mapProjectionStore.setProjection(toMapProjectionType(projectionId));
+        mapProjectionStore.setProjection(toMapProjectionType(projectionId), {
+          explicit: true
+        });
       }
     };
 
@@ -276,11 +286,14 @@ const { actions, getState } = createToolStore<
         s.simplifiedPreview = value;
       },
       suggestProjectionForCurrentData: () => {
+        const requestId = ++suggestionRequestId;
         void (async () => {
           if (
             !supportsProjectionSuggestions(getProjectionAvailabilityContext())
           ) {
-            s.suggestions = undefined;
+            if (requestId === suggestionRequestId) {
+              s.suggestions = undefined;
+            }
             return;
           }
 
@@ -290,6 +303,16 @@ const { actions, getState } = createToolStore<
           const result = suggestProjectionsForBbox(bounds);
 
           if (!result) return;
+
+          // Ignore stale results from superseded calls.
+          if (requestId !== suggestionRequestId) {
+            logger.info(
+              'Stale projection suggestions discarded',
+              LogCategory.MAP,
+              { requestId, current: suggestionRequestId }
+            );
+            return;
+          }
 
           s.suggestions = result;
 

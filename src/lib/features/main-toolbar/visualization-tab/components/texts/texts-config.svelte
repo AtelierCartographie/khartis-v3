@@ -27,17 +27,17 @@
     MIN_FONT_SIZE,
     normalizeFontFamily
   } from '$lib/features/step-toolbar/constants/fonts.constants';
-  import DiscretizationModal from '../discretization-modal.svelte';
-  import TextStylePopover from '../text-style-popover.svelte';
-  import { resolveDiscretizationLabel } from '../discretization.utils';
+  import DiscretizationModal from '../discretization/discretization-modal.svelte';
+  import TextStylePopover from './text-style-popover.svelte';
+  import { resolveDiscretizationLabel } from '../discretization/discretization.utils';
   import {
     NONE_FIELD_ID,
     useFieldSelection,
     useFieldSelectionHandler
-  } from '../../use-field-selection.svelte';
+  } from '../../hooks/use-field-selection.svelte';
   import { resetVisualClassification } from '../shared/classification-reset.utils';
-  import { useFacetsVariableSelection } from '../../use-facets-variable-selection.svelte';
-  import { coerceString, parseOpacityToSlider } from '../../coerce.utils';
+  import { useFacetsVariableSelection } from '../../hooks/use-facets-variable-selection.svelte';
+  import { coerceString, parseOpacityToSlider } from '../../utils/coerce.utils';
 
   interface Props {
     dataFields?: Array<{ id: number; text: string; type?: string }>;

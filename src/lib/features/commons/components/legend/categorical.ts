@@ -66,15 +66,15 @@ export function draw_categorical_legend(
     lineHeight: line_height,
     fontFamily: resolvedFontFamily
   });
-  const margin = { top: 10, right: 10, bottom: 10, left: 10 };
+  const margin = { top: 12, right: 12, bottom: 12, left: 12 };
   const box_dim = Math.round(fontSize * 1.25);
   const box = { h: box_dim, w: type === 'line' ? box_dim * 1.5 : box_dim };
   const footerBox = {
     h: box_dim,
     w: footerType === 'line' ? box_dim * 1.5 : box_dim
   };
-  const gap = Math.round(fontSize * 0.42);
-  const gutter = 20;
+  const gap = Math.max(8, Math.round(fontSize * 0.6));
+  const gutter = 24;
   let label_width = Math.round(fontSize * 15);
   const items_nb = raw_categories.length;
   const column_nb = items_nb <= 4 ? 1 : items_nb <= 8 ? 2 : 3;

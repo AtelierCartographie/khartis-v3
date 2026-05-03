@@ -22,9 +22,12 @@
     searchActions.setSearchValue(target.value);
   }
 
-  function handleReplaceInput(e: Event) {
-    const target = e.target as HTMLInputElement;
-    searchActions.setReplaceValue(target.value);
+  function handleReplaceInput(e: CustomEvent<string | number | null>) {
+    const value =
+      typeof e.detail === 'string'
+        ? e.detail
+        : ((e.target as HTMLInputElement)?.value ?? '');
+    searchActions.setReplaceValue(value);
   }
 
   function navigateResults(direction: 'prev' | 'next') {
@@ -113,6 +116,12 @@
   </div>
 
   <p class="helper-text">{m.search_helper_text()}</p>
+
+  {#if searchState.isSampled}
+    <p class="helper-text helper-text--warning">
+      {m.search_large_table_warning()}
+    </p>
+  {/if}
 
   {#if showResults}
     <div class="results-navigation">
@@ -223,6 +232,10 @@
     letter-spacing: 0.32px;
     color: var(--cds-text-helper, #6f6f6f);
     margin: 0;
+  }
+
+  .helper-text--warning {
+    color: var(--cds-text-error, #da1e28);
   }
 
   .search-options {

@@ -33,9 +33,11 @@ const {
   createScatterplotLayerPropsMock,
   getPatternAtlasForPatternMock,
   parsePathsMock,
+  parsePathsWithProjectionMock,
   parsePointDataMock,
   parsePointDataWithProjectionMock,
   parseSolidPolygonsMock,
+  parseSolidPolygonsWithProjectionMock,
   pathColorAttrMock,
   pathWidthAttrMock,
   projectGeoJSONMock
@@ -62,9 +64,11 @@ const {
     createScatterplotLayerPropsMock: vi.fn(),
     getPatternAtlasForPatternMock: vi.fn(),
     parsePathsMock: vi.fn(),
+    parsePathsWithProjectionMock: vi.fn(),
     parsePointDataMock: vi.fn(),
     parsePointDataWithProjectionMock: vi.fn(),
     parseSolidPolygonsMock: vi.fn(),
+    parseSolidPolygonsWithProjectionMock: vi.fn(),
     pathColorAttrMock: vi.fn(),
     pathWidthAttrMock: vi.fn(),
     projectGeoJSONMock: vi.fn()
@@ -101,9 +105,11 @@ vi.mock('../utils/geoarrow-stream-bridge', async () => {
   return {
     ...actual,
     parsePaths: parsePathsMock,
+    parsePathsWithProjection: parsePathsWithProjectionMock,
     parsePointData: parsePointDataMock,
     parsePointDataWithProjection: parsePointDataWithProjectionMock,
     parseSolidPolygons: parseSolidPolygonsMock,
+    parseSolidPolygonsWithProjection: parseSolidPolygonsWithProjectionMock,
     pathColorAttr: pathColorAttrMock,
     pathWidthAttr: pathWidthAttrMock,
     projectGeoJSON: projectGeoJSONMock,
@@ -434,8 +440,20 @@ beforeEach(() => {
   parseSolidPolygonsMock.mockReturnValue({
     featureIds: new Uint32Array([0])
   });
+  parseSolidPolygonsWithProjectionMock.mockReturnValue({
+    featureIds: new Uint32Array([0]),
+    positions: new Float32Array([0, 0, 1, 0, 1, 1]),
+    polygonIndices: new Uint32Array([0, 3]),
+    size: 2
+  });
   parsePathsMock.mockReturnValue({
     featureIds: new Uint32Array([0])
+  });
+  parsePathsWithProjectionMock.mockReturnValue({
+    featureIds: new Uint32Array([0]),
+    positions: new Float32Array([0, 0, 1, 0, 1, 1]),
+    startIndices: new Uint32Array([0, 3]),
+    size: 2
   });
   createCompatibleSolidPolygonLayerPropsMock.mockImplementation((polyData) => ({
     data: {

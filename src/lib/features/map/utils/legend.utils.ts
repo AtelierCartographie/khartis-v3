@@ -113,10 +113,17 @@ function resolveStyleColor(
 }
 
 function resolveSymbolFillColor(viz: VisualizationConfig): string {
-  return resolveStyleColor(
-    getSymbolPrimitive(viz)?.fillColor,
-    DEFAULT_COLORS.fill
-  );
+  const symbolFill = getSymbolPrimitive(viz)?.fillColor;
+  if (symbolFill) {
+    return resolveStyleColor(symbolFill, DEFAULT_COLORS.fill);
+  }
+
+  const line = getLinePrimitive(viz);
+  if (line?.enabled) {
+    return resolveStyleColor(line.color, DEFAULT_COLORS.fill);
+  }
+
+  return DEFAULT_COLORS.fill;
 }
 
 function normalizeOpacity(value: number | undefined, fallback: number): number {

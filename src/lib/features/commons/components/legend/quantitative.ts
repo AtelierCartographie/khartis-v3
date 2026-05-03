@@ -45,7 +45,7 @@ export function draw_quanti_color_legend(
   const labels_length = thresholds.map((d) =>
     Textbox.measureText(d.toLocaleString(), font)
   );
-  const label_gap = 5;
+  const label_gap = 10;
   const label_safety_padding = Math.max(6, Math.round(fontSize * 0.6));
   const overlap_test = (i: number, positions: number[]) =>
     labels_length[i] / 2 + labels_length[i + 1] / 2 + label_gap <

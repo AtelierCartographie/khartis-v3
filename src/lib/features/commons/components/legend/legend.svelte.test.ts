@@ -83,7 +83,7 @@ describe('common legend generators', () => {
 
     expect(svg.markup).toContain('categorical_legend');
     expect(svg.markup).toContain('Absence de données');
-    expect(svg.height).toBeLessThan(135);
+    expect(svg.height).toBeLessThan(140);
   });
 
   it('draws nested proportional symbol legends from numeric data', () => {
@@ -225,7 +225,7 @@ describe('common legend generators', () => {
 
     expect(svg.markup).toContain('khartis_double_symbol_legend');
     expect(svg.markup).toContain('Absence de données');
-    expect(svg.height).toBeLessThan(155);
+    expect(svg.height).toBeLessThan(165);
   });
 
   it('aligns double symbol labels on the same row axis with consistent spacing', () => {

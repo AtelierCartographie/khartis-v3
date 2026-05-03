@@ -11,12 +11,12 @@
   import ChooseVisualization from './choose-visualization.svelte';
   import ConfigureVisualization from './configure-visualization.svelte';
   import CustomizeBasemap from './customize-basemap.svelte';
-  import { syncProjectOSMBasemap } from './osm-basemap-sync';
+  import { syncProjectOSMBasemap } from './utils/osm-basemap-sync';
   import ToolbarTabLayout from '../components/toolbar-tab-layout.svelte';
   import {
     applyBlankVisualizationPreset,
     resolveBlankVisualizationType
-  } from './suggestion.service';
+  } from './utils/suggestion.service';
   import {
     resolveRelevantPersistedBasemap,
     type PersistedProjectBasemap

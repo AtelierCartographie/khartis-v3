@@ -412,13 +412,13 @@
                   role="radiogroup"
                   aria-label={slot.label}
                 >
-                  {#each variables as variable (section.id + slot.path + slotIdx + variable)}
+                  {#each variables as variable (section.id + '-' + slot.path + '-' + variable)}
                     {@const isNumeric = numericDataFields.includes(variable)}
                     <li class="variable-item">
                       <label class="variable-label">
                         <input
                           type="radio"
-                          name={`facet-slot-${section.id}-${slot.path}-${slotIdx}`}
+                          name={`facet-slot-${section.id}-${slot.path}`}
                           class="variable-radio"
                           value={variable}
                           checked={getSlotVariable(safeMapIndex, slot.path) ===

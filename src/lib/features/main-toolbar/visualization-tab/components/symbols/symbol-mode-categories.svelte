@@ -37,19 +37,22 @@
   } from '../shared';
   import { resolveCategoryPreviewCount } from '../shared/categorical-preview.utils';
   import type { SymbolModeProps } from './types';
-  import DiscretizationModal from '../discretization-modal.svelte';
-  import { resolveDiscretizationLabel } from '../discretization.utils';
-  import { FACET_SLOT } from '../../facets-adapter';
+  import DiscretizationModal from '../discretization/discretization-modal.svelte';
+  import { resolveDiscretizationLabel } from '../discretization/discretization.utils';
+  import { FACET_SLOT } from '../../utils/facets-adapter';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
-  import FacetsVariablePicker from './facets-variable-picker.svelte';
-  import { useCategoryLabels } from '../../use-category-labels.svelte';
+  import FacetsVariablePicker from '../shared/facets-variable-picker.svelte';
+  import { useCategoryLabels } from '../../hooks/use-category-labels.svelte';
   import {
     NONE_FIELD_ID,
     filterFieldsByKind,
     useFieldSelectionHandler
-  } from '../../use-field-selection.svelte';
-  import { useFacetsVariableSelection } from '../../use-facets-variable-selection.svelte';
-  import { coerceShapeType, parseOpacityToSlider } from '../../coerce.utils';
+  } from '../../hooks/use-field-selection.svelte';
+  import { useFacetsVariableSelection } from '../../hooks/use-facets-variable-selection.svelte';
+  import {
+    coerceShapeType,
+    parseOpacityToSlider
+  } from '../../utils/coerce.utils';
   import { resetCategoryVisualClassification } from '../shared/classification-reset.utils';
   import {
     buildSymbolShapeDropdownItems,

@@ -1,4 +1,8 @@
-import type { Map as MapLibreMap, StyleSpecification } from 'maplibre-gl';
+import type {
+  Map as MapLibreMap,
+  StyleSpecification,
+  TransformStyleFunction
+} from 'maplibre-gl';
 import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { OSMSourceId } from '../constants';
@@ -148,7 +152,12 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
       return;
     }
 
-    if (styleKey === lastAppliedStyleKey) return;
+    if (styleKey === lastAppliedStyleKey) {
+      // Style hasn't changed, but projection may be out of sync
+      // (e.g. after a zone switch changed mapProjectionStore without reloading the style)
+      syncProjection();
+      return;
+    }
 
     isStyleLoading = true;
     loadingStyleKey = styleKey;
@@ -161,7 +170,7 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
       map.off('style.load', styleLoadHandler);
     }
 
-    const completeStyleLoad = () => {
+    const completeStyleLoad = (wasTimeout = false) => {
       if (styleSafetyTimeout) {
         clearTimeout(styleSafetyTimeout);
         styleSafetyTimeout = null;
@@ -184,12 +193,14 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
       }
       pendingStyleSync = false;
 
-      if (onStyleLoaded) {
+      if (onStyleLoaded && !wasTimeout) {
         onStyleLoaded();
       }
     };
 
-    styleLoadHandler = completeStyleLoad;
+    // MapLibre passes the event object to the handler; wrap it so
+    // `wasTimeout` stays a boolean and `onStyleLoaded` is not skipped.
+    styleLoadHandler = () => completeStyleLoad(false);
 
     // Safety timeout: if style.load never fires (e.g. network error),
     // unlock the loading flag after 10s to avoid permanent deadlock.
@@ -200,7 +211,7 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
           LogCategory.MAP,
           { styleKey }
         );
-        completeStyleLoad();
+        completeStyleLoad(true);
       }
     }, REFERENCE_BASEMAP_LOAD_TIMEOUT_MS);
 
@@ -208,8 +219,19 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
     // Using `styledata` can flip the loading flag too early.
     map.once('style.load', styleLoadHandler);
 
+    const stripStyleProjection: TransformStyleFunction = (previous, next) => {
+      if ('projection' in next) {
+        const { projection: _, ...rest } = next;
+        return rest as StyleSpecification;
+      }
+      return next;
+    };
+
     try {
-      map.setStyle(style, { diff: false });
+      map.setStyle(style, {
+        diff: false,
+        transformStyle: stripStyleProjection
+      });
     } catch (error) {
       logger.error(
         'setStyle() threw, unlocking style loading',
@@ -222,7 +244,8 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
 
   function syncOSMRasterLayer(): void {
     const map = getMap();
-    if (!map || !getIsMapLoaded() || isStyleLoading) return;
+    if (!map || !getIsMapLoaded() || isStyleLoading || !map.isStyleLoaded())
+      return;
 
     const osmBasemap = osmBasemapStore.activeOSMBasemap;
     const tileConfig = osmBasemapStore.tileConfig;
@@ -278,7 +301,8 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
 
   function syncLabelsVisibility(): void {
     const map = getMap();
-    if (!map || !getIsMapLoaded() || isStyleLoading) return;
+    if (!map || !getIsMapLoaded() || isStyleLoading || !map.isStyleLoaded())
+      return;
 
     const show = basemapStyleStore.showLabels;
     const visibility = show ? 'visible' : 'none';
@@ -311,7 +335,8 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
 
   function syncGroupVisibility(): void {
     const map = getMap();
-    if (!map || !getIsMapLoaded() || isStyleLoading) return;
+    if (!map || !getIsMapLoaded() || isStyleLoading || !map.isStyleLoaded())
+      return;
 
     const groupVisibility = basemapStyleStore.groupVisibility;
 
