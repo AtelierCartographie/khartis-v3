@@ -161,7 +161,7 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
       map.off('style.load', styleLoadHandler);
     }
 
-    const completeStyleLoad = () => {
+    const completeStyleLoad = (wasTimeout = false) => {
       if (styleSafetyTimeout) {
         clearTimeout(styleSafetyTimeout);
         styleSafetyTimeout = null;
@@ -184,7 +184,7 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
       }
       pendingStyleSync = false;
 
-      if (onStyleLoaded) {
+      if (onStyleLoaded && !wasTimeout) {
         onStyleLoaded();
       }
     };
@@ -200,7 +200,7 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
           LogCategory.MAP,
           { styleKey }
         );
-        completeStyleLoad();
+        completeStyleLoad(true);
       }
     }, REFERENCE_BASEMAP_LOAD_TIMEOUT_MS);
 
@@ -222,7 +222,8 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
 
   function syncOSMRasterLayer(): void {
     const map = getMap();
-    if (!map || !getIsMapLoaded() || isStyleLoading) return;
+    if (!map || !getIsMapLoaded() || isStyleLoading || !map.isStyleLoaded())
+      return;
 
     const osmBasemap = osmBasemapStore.activeOSMBasemap;
     const tileConfig = osmBasemapStore.tileConfig;
@@ -278,7 +279,8 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
 
   function syncLabelsVisibility(): void {
     const map = getMap();
-    if (!map || !getIsMapLoaded() || isStyleLoading) return;
+    if (!map || !getIsMapLoaded() || isStyleLoading || !map.isStyleLoaded())
+      return;
 
     const show = basemapStyleStore.showLabels;
     const visibility = show ? 'visible' : 'none';
@@ -311,7 +313,8 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
 
   function syncGroupVisibility(): void {
     const map = getMap();
-    if (!map || !getIsMapLoaded() || isStyleLoading) return;
+    if (!map || !getIsMapLoaded() || isStyleLoading || !map.isStyleLoaded())
+      return;
 
     const groupVisibility = basemapStyleStore.groupVisibility;
 
@@ -338,7 +341,7 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
 
   function syncProjection(): void {
     const map = getMap();
-    if (!map || !getIsMapLoaded()) {
+    if (!map || !getIsMapLoaded() || !map.isStyleLoaded()) {
       return;
     }
 
