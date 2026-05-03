@@ -25,7 +25,22 @@ const mocks = vi.hoisted(() => ({
     file.replace(/-(low|medium|high)(\.[^.]+)?$/, '')
   ),
   getPreferredBasemapSimplificationLevel: vi.fn(),
-  currentBasemap: { metadata: null as unknown },
+  getBasemapSimplificationLevel: vi.fn(
+    (metadata: { simplification_level?: string }) => {
+      if (
+        metadata.simplification_level === 'low' ||
+        metadata.simplification_level === 'medium' ||
+        metadata.simplification_level === 'high'
+      ) {
+        return metadata.simplification_level;
+      }
+      return null;
+    }
+  ),
+  currentBasemap: {
+    metadata: null as unknown,
+    activeSimplificationLevel: undefined as string | undefined
+  } as { metadata: unknown; activeSimplificationLevel?: string | undefined },
   availableBasemaps: [] as unknown[],
   osmIsActive: false,
   requiresMapLibre: false,
@@ -77,7 +92,8 @@ vi.mock('$lib/features/map/services/basemap.service.svelte', () => ({
   getBasemapVariantFamily: mocks.getBasemapVariantFamily,
   resolveBasemapVariantFile: mocks.resolveBasemapVariantFile,
   getPreferredBasemapSimplificationLevel:
-    mocks.getPreferredBasemapSimplificationLevel
+    mocks.getPreferredBasemapSimplificationLevel,
+  getBasemapSimplificationLevel: mocks.getBasemapSimplificationLevel
 }));
 
 vi.mock('$lib/features/commons/store/datasets.store.svelte', () => ({
@@ -561,5 +577,117 @@ describe('simplification store — undo', () => {
       simplificationApplied: undefined
     });
     expect(getSimplificationState().lastApplied).toBeUndefined();
+  });
+
+  it('should restore the original custom basemap table and clear lastApplied after undoLastSimplification', async () => {
+    simplificationActions.setSource(SimplificationSource.Basemap);
+    await simplificationActions.applySimplification();
+    expect(getSimplificationState().lastApplied).toBeDefined();
+
+    mocks.duckQuery.mockClear();
+    mocks.refreshImportedBasemapHelperTables.mockClear();
+    mocks.refreshCustomBasemap.mockClear();
+
+    const undone = await simplificationActions.undoLastSimplification();
+
+    expect(undone).toBe(true);
+    expect(mocks.duckQuery).toHaveBeenCalledWith(
+      expect.stringContaining('CREATE OR REPLACE TABLE')
+    );
+    expect(mocks.refreshImportedBasemapHelperTables).toHaveBeenCalledWith(
+      expect.anything(),
+      'custom-map',
+      'polygon'
+    );
+    expect(mocks.refreshCustomBasemap).toHaveBeenCalledWith('custom-map');
+    expect(getSimplificationState().lastApplied).toBeUndefined();
+  });
+
+  it('should restore the previous catalog basemap variant after undoLastSimplification', async () => {
+    mocks.currentBasemap = {
+      metadata: {
+        file: 'france-region-2025-medium',
+        simplification_level: 'medium',
+        isCustom: false
+      },
+      activeSimplificationLevel: SimplificationLevel.Low
+    };
+    mocks.availableBasemaps = [
+      { file: 'france-region-2025-medium', simplification_level: 'medium' },
+      { file: 'france-region-2025-low', simplification_level: 'low' }
+    ];
+    mocks.getPreferredBasemapSimplificationLevel.mockReturnValue(
+      SimplificationLevel.High
+    );
+    mocks.resolveBasemapVariantFile.mockImplementation(
+      (file: string, currentLevel: string | undefined, nextLevel: string) => {
+        if (!currentLevel) return null;
+        return file.replace(`-${currentLevel}`, `-${nextLevel}`);
+      }
+    );
+    mocks.loadVariant.mockResolvedValue({ numRows: 100 });
+    mocks.referenceBasemapId = 'france-region-2025-low';
+
+    simplificationActions.setSource(SimplificationSource.Basemap);
+    simplificationActions.setLevel(SimplificationLevel.High);
+    await simplificationActions.applySimplification();
+
+    expect(getSimplificationState().lastApplied?.previousBasemapLevel).toBe(
+      SimplificationLevel.Low
+    );
+
+    mocks.loadVariant.mockClear();
+    mocks.setReferenceBasemap.mockClear();
+
+    const undone = await simplificationActions.undoLastSimplification();
+
+    expect(undone).toBe(true);
+    expect(mocks.loadVariant).toHaveBeenCalledWith(
+      'france-region-2025-medium',
+      'france-region-2025-low',
+      SimplificationLevel.Low
+    );
+    expect(mocks.setReferenceBasemap).toHaveBeenCalledWith(
+      'france-region-2025-medium'
+    );
+    expect(getSimplificationState().lastApplied).toBeUndefined();
+  });
+
+  it('should await updateDatasetJoinInfo when persisting joined catalog basemap variant', async () => {
+    const dataset = {
+      id: 'ds-1',
+      sourceFileId: 'src-1',
+      tableName: 'dataset_table',
+      joinedBasemap: 'france-region-2025'
+    };
+    mocks.datasets = [dataset];
+    mocks.currentBasemap = {
+      metadata: {
+        file: 'france-region-2025',
+        simplification_level: 'medium',
+        isCustom: false
+      }
+    };
+    mocks.availableBasemaps = [
+      { file: 'france-region-2025', simplification_level: 'medium' },
+      { file: 'france-region-2025-high', simplification_level: 'high' }
+    ];
+    mocks.getPreferredBasemapSimplificationLevel.mockReturnValue(
+      SimplificationLevel.High
+    );
+    mocks.resolveBasemapVariantFile.mockReturnValue('france-region-2025-high');
+    mocks.loadVariant.mockResolvedValue({ numRows: 100 });
+
+    simplificationActions.setSource(SimplificationSource.Basemap);
+    simplificationActions.setLevel(SimplificationLevel.High);
+    await simplificationActions.applySimplification();
+
+    expect(mocks.updateDuckDatasetJoinInfo).toHaveBeenCalledWith('ds-1', {
+      joinedBasemap: 'france-region-2025-high'
+    });
+    expect(mocks.updateDatasetJoinBasemap).toHaveBeenCalledWith(
+      'ds-1',
+      'france-region-2025-high'
+    );
   });
 });

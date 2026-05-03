@@ -11,6 +11,7 @@ import type {
 import { Duck, duckDBOrchestrator } from '$lib/features/duckdb';
 import {
   basemapService,
+  getBasemapSimplificationLevel,
   getBasemapVariantFamily,
   getPreferredBasemapSimplificationLevel,
   resolveBasemapVariantFile
@@ -106,7 +107,9 @@ const { actions, getState } = createToolStore<
         simplified: true,
         vertexReduction: metrics.reductionPercentage,
         originalVertices: metrics.originalVertices,
-        simplifiedVertices: metrics.simplifiedVertices
+        simplifiedVertices: metrics.simplifiedVertices,
+        previousBasemapTableName: rawBasemapTableName,
+        primaryLayerType
       };
     }
 
@@ -145,6 +148,11 @@ const { actions, getState } = createToolStore<
         };
       }
 
+      const previousLevel =
+        currentBasemap.activeSimplificationLevel ??
+        getBasemapSimplificationLevel(metadata) ??
+        undefined;
+
       const variantTable = await basemapService.loadVariant(
         basemapId,
         variantFile,
@@ -171,7 +179,8 @@ const { actions, getState } = createToolStore<
         simplified: true,
         vertexReduction: 0,
         originalVertices: 0,
-        simplifiedVertices: 0
+        simplifiedVertices: 0,
+        previousBasemapLevel: previousLevel
       };
     }
 
@@ -371,6 +380,9 @@ const { actions, getState } = createToolStore<
                 s.source === SimplificationSource.Geo
                   ? result?.datasetSimplifiedTableName
                   : undefined,
+              previousBasemapLevel: result?.previousBasemapLevel,
+              previousBasemapTableName: result?.previousBasemapTableName,
+              primaryLayerType: result?.primaryLayerType,
               timestamp: Date.now()
             };
           }
@@ -385,47 +397,131 @@ const { actions, getState } = createToolStore<
           return false;
         }
 
-        if (
-          lastApplied.source !== SimplificationSource.Geo ||
-          !lastApplied.datasetBaseTableName
-        ) {
-          s.lastApplied = undefined;
-          return true;
+        if (lastApplied.source === SimplificationSource.Geo) {
+          if (!lastApplied.datasetBaseTableName) {
+            s.lastApplied = undefined;
+            return false;
+          }
+
+          const dataset = lastApplied.datasetId
+            ? datasetsStore.datasets.find((d) => d.id === lastApplied.datasetId)
+            : datasetsStore.selectedDataset;
+
+          if (!dataset) {
+            logger.warn(
+              'Cannot undo dataset simplification: dataset not found',
+              LogCategory.DUCKDB,
+              lastApplied
+            );
+            return false;
+          }
+
+          try {
+            if (lastApplied.datasetSourceFileId) {
+              await duckDBOrchestrator.updateDatasetTableName(
+                lastApplied.datasetSourceFileId,
+                lastApplied.datasetBaseTableName
+              );
+            }
+
+            datasetsStore.updateDatasetTableName(
+              dataset.id,
+              lastApplied.datasetBaseTableName
+            );
+            datasetsStore.updateDataset(dataset.id, {
+              simplificationApplied: undefined
+            });
+            s.lastApplied = undefined;
+            return true;
+          } catch (error) {
+            logger.error(
+              'Failed to undo dataset simplification',
+              LogCategory.DUCKDB,
+              { lastApplied, error }
+            );
+            return false;
+          }
         }
 
-        const dataset = lastApplied.datasetId
-          ? datasetsStore.datasets.find((d) => d.id === lastApplied.datasetId)
-          : datasetsStore.selectedDataset;
-
-        if (!dataset) {
-          logger.warn(
-            'Cannot undo dataset simplification: dataset not found',
-            LogCategory.DUCKDB,
-            lastApplied
-          );
+        // Basemap undo
+        if (!lastApplied.basemapId) {
+          s.lastApplied = undefined;
           return false;
         }
 
         try {
-          if (lastApplied.datasetSourceFileId) {
-            await duckDBOrchestrator.updateDatasetTableName(
-              lastApplied.datasetSourceFileId,
-              lastApplied.datasetBaseTableName
+          const currentBasemap = basemapService.currentBasemap;
+          if (
+            !currentBasemap ||
+            currentBasemap.metadata.file !== lastApplied.basemapId
+          ) {
+            logger.warn(
+              'Cannot undo basemap simplification: basemap changed or not loaded',
+              LogCategory.DUCKDB,
+              lastApplied
             );
+            s.lastApplied = undefined;
+            return false;
           }
 
-          datasetsStore.updateDatasetTableName(
-            dataset.id,
-            lastApplied.datasetBaseTableName
-          );
-          datasetsStore.updateDataset(dataset.id, {
-            simplificationApplied: undefined
-          });
+          const isCustom = currentBasemap.metadata.isCustom === true;
+
+          if (isCustom) {
+            const tableName = lastApplied.basemapId;
+            const rawTableName =
+              lastApplied.previousBasemapTableName ??
+              getBasemapRawTableName(tableName);
+
+            await Duck.query(
+              `CREATE OR REPLACE TABLE "${escapeSqlString(tableName)}" AS SELECT * FROM "${escapeSqlString(rawTableName)}"`
+            );
+
+            if (lastApplied.primaryLayerType) {
+              await refreshImportedBasemapHelperTables(
+                Duck,
+                tableName,
+                lastApplied.primaryLayerType
+              );
+            }
+
+            await basemapService.refreshCustomBasemap(tableName);
+          } else {
+            const metadata = currentBasemap.metadata;
+            const basemapId = metadata.file;
+            const baseLevel =
+              getBasemapSimplificationLevel(metadata) ?? undefined;
+            const previousLevel = lastApplied.previousBasemapLevel ?? baseLevel;
+
+            if (previousLevel && previousLevel !== baseLevel) {
+              const previousFile = resolveBasemapVariantFile(
+                basemapId,
+                baseLevel,
+                previousLevel
+              );
+              if (previousFile) {
+                await basemapService.loadVariant(
+                  basemapId,
+                  previousFile,
+                  previousLevel
+                );
+              }
+            } else {
+              await basemapService.loadVariant(
+                basemapId,
+                basemapId,
+                baseLevel ?? SimplificationLevel.Medium
+              );
+            }
+
+            restoreReferenceCatalogBasemapVariant(basemapId);
+            await restoreJoinedCatalogBasemapToOriginal(basemapId);
+          }
+
           s.lastApplied = undefined;
           return true;
         } catch (error) {
           logger.error(
-            'Failed to undo dataset simplification',
+            'Failed to undo basemap simplification',
             LogCategory.DUCKDB,
             { lastApplied, error }
           );
@@ -469,20 +565,11 @@ function trimDatasetSimplificationSuffix(tableName: string): string {
     : tableName;
 }
 
-async function persistJoinedCatalogBasemapVariant(
-  currentBasemapId: string,
-  variantBasemapId: string
+async function updateDatasetJoinsForBasemapFamily(
+  familyBasemapId: string,
+  targetJoinedBasemapId: string
 ): Promise<void> {
-  if (currentBasemapId === variantBasemapId) {
-    return;
-  }
-
-  const currentFamily = getBasemapVariantFamily(currentBasemapId);
-  const variantFamily = getBasemapVariantFamily(variantBasemapId);
-
-  if (currentFamily !== variantFamily) {
-    return;
-  }
+  const family = getBasemapVariantFamily(familyBasemapId);
 
   for (const dataset of datasetsStore.datasets) {
     const joinedBasemap =
@@ -492,25 +579,41 @@ async function persistJoinedCatalogBasemapVariant(
             ?.joinedBasemap
         : undefined);
 
-    if (
-      !joinedBasemap ||
-      getBasemapVariantFamily(joinedBasemap) !== currentFamily
-    ) {
+    if (!joinedBasemap || getBasemapVariantFamily(joinedBasemap) !== family) {
       continue;
     }
 
-    duckDBOrchestrator.updateDatasetJoinInfo(dataset.id, {
-      joinedBasemap: variantBasemapId
+    await duckDBOrchestrator.updateDatasetJoinInfo(dataset.id, {
+      joinedBasemap: targetJoinedBasemapId
     });
-    datasetsStore.updateDatasetJoinBasemap(dataset.id, variantBasemapId);
+    datasetsStore.updateDatasetJoinBasemap(dataset.id, targetJoinedBasemapId);
 
     if (dataset.sourceFileId) {
       await projectStore.updateFileJoinedBasemap(
         dataset.sourceFileId,
-        variantBasemapId
+        targetJoinedBasemapId
       );
     }
   }
+}
+
+async function persistJoinedCatalogBasemapVariant(
+  currentBasemapId: string,
+  variantBasemapId: string
+): Promise<void> {
+  if (currentBasemapId === variantBasemapId) {
+    return;
+  }
+  await updateDatasetJoinsForBasemapFamily(currentBasemapId, variantBasemapId);
+}
+
+async function restoreJoinedCatalogBasemapToOriginal(
+  originalBasemapId: string
+): Promise<void> {
+  await updateDatasetJoinsForBasemapFamily(
+    originalBasemapId,
+    originalBasemapId
+  );
 }
 
 function persistReferenceCatalogBasemapVariant(
@@ -532,4 +635,20 @@ function persistReferenceCatalogBasemapVariant(
   }
 
   basemapStyleStore.setReferenceBasemap(variantBasemapId);
+}
+
+function restoreReferenceCatalogBasemapVariant(
+  originalBasemapId: string
+): void {
+  const referenceBasemapId = basemapStyleStore.referenceBasemapId;
+  if (!referenceBasemapId) {
+    return;
+  }
+
+  const currentFamily = getBasemapVariantFamily(originalBasemapId);
+  if (getBasemapVariantFamily(referenceBasemapId) !== currentFamily) {
+    return;
+  }
+
+  basemapStyleStore.setReferenceBasemap(originalBasemapId);
 }
