@@ -10,14 +10,14 @@
     type VisualizationConfig
   } from '$lib/features/commons/store/visualization.store.svelte';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
-  import { useDatasetAnalysis } from './use-dataset-analysis.svelte';
-  import { useDataFilters } from './use-data-filters.svelte';
-  import { usePrimitiveVisibility } from './use-primitive-visibility.svelte';
+  import { useDatasetAnalysis } from './hooks/use-dataset-analysis.svelte';
+  import { useDataFilters } from './hooks/use-data-filters.svelte';
+  import { usePrimitiveVisibility } from './hooks/use-primitive-visibility.svelte';
   import { SettingsAdjust } from 'carbon-icons-svelte';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import LinesConfig from './components/lines/lines-config.svelte';
-  import PolygonsConfig from './components/polygons-config.svelte';
-  import SymbolsConfig from './components/symbols-config.svelte';
+  import PolygonsConfig from './components/polygons/polygons-config.svelte';
+  import SymbolsConfig from './components/symbols/symbols-config.svelte';
   import TextsConfig from './components/texts/texts-config.svelte';
   import YearFilter from './components/year-filter.svelte';
   import {
@@ -27,12 +27,12 @@
     buildSymbolPanelVisualization,
     buildTextBackgroundPanelVisualization,
     buildTextPanelVisualization
-  } from './primitive-panel-visualization';
+  } from './utils/primitive-panel-visualization';
   import {
     type ClassifiablePrimitive,
     type StrokeClassifiablePrimitive,
     usePrimitivePanelController
-  } from './use-primitive-panel-controller.svelte';
+  } from './hooks/use-primitive-panel-controller.svelte';
   import {
     buildLineThicknessTarget,
     buildPrimitiveClassificationTargets,
@@ -40,19 +40,19 @@
     buildSymbolFillTarget,
     buildTextBackgroundStrokeTarget,
     buildTextBackgroundTarget
-  } from './classification-targets.utils';
+  } from './utils/classification-targets.utils';
   import {
     CATEGORY_LABEL_FETCH_ERROR,
     createCategoryLabelsFetcher
-  } from './use-category-labels-fetcher.svelte';
-  import { useClassificationBreaksController } from './use-classification-breaks.svelte';
-  import { useClassificationBreaksOrchestrator } from './use-classification-breaks-orchestrator.svelte';
+  } from './hooks/use-category-labels-fetcher.svelte';
+  import { useClassificationBreaksController } from './hooks/use-classification-breaks.svelte';
+  import { useClassificationBreaksOrchestrator } from './hooks/use-classification-breaks-orchestrator.svelte';
   import {
     buildPrimitiveColorParamsKey,
     buildStrokeColorParamsKey
-  } from './use-classification-color-sync.svelte';
+  } from './hooks/use-classification-color-sync.svelte';
   import { usePrimitiveAdapters } from './adapters/use-primitive-adapters.svelte';
-  import { useVisualizationOrchestration } from './use-visualization-orchestration.svelte';
+  import { useVisualizationOrchestration } from './hooks/use-visualization-orchestration.svelte';
 
   let selectedViz = $derived(visualizationStore.selectedVisualization);
   const classificationBreaks = useClassificationBreaksController({

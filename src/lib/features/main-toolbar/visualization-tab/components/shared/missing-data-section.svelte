@@ -12,7 +12,7 @@
     MissingDataShape,
     SLIDER_LIMITS
   } from '../../../constants';
-  import { coerceMissingDataShape } from '../../coerce.utils';
+  import { coerceMissingDataShape } from '../../utils/coerce.utils';
   import {
     ColorSelector,
     SliderWithInput,
