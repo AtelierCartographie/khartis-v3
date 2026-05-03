@@ -24,7 +24,6 @@
     splitData?: Map<string, SplitRenderingTable>;
     geoJSONs: Map<string, FeatureCollection>;
     layout: FacetsLayout;
-    syncPanZoom?: boolean;
     width: number;
     height: number;
     logicalWidth?: number;
@@ -40,7 +39,6 @@
     splitData,
     geoJSONs,
     layout,
-    syncPanZoom = false,
     width,
     height,
     logicalWidth = width,
@@ -113,7 +111,6 @@
       splitData={splitData}
       geoJSONs={geoJSONs}
       layout={layout}
-      syncPanZoom={syncPanZoom}
       containerWidth={mapStageWidth}
       containerHeight={mapStageHeight}
       pageAspectRatio={pageAspectRatio}

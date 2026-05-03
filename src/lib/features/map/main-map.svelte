@@ -132,7 +132,6 @@
   const facetsEnabled = $derived(facetsStore.enabled);
   const facetsLayout = $derived(facetsStore.layout);
   const facetVisualizations = $derived(facetsStore.facetVisualizations);
-  const facetsSyncPanZoom = $derived(facetsStore.syncPanZoom);
 
   /** Incremented each time the main data-load $effect fires so stale async loads are discarded. */
   let loadGeneration = 0;
@@ -1113,7 +1112,6 @@
           splitData={displaySplitData}
           geoJSONs={displayGeoJSONs}
           layout={facetsLayout}
-          syncPanZoom={facetsSyncPanZoom}
           width={renderedPageWidth}
           height={renderedPageHeight}
           logicalWidth={formatState.width}
