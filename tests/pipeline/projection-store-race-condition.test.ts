@@ -72,6 +72,77 @@ import {
   getProjectionState
 } from '$lib/features/step-toolbar/tools/projections/projection.store.svelte';
 
+describe('projection store — core actions', () => {
+  beforeEach(() => {
+    projectionActions.reset();
+  });
+
+  it('setSelected updates the selected projection', () => {
+    projectionActions.setSelected('robinson');
+    expect(getProjectionState().selected).toBe('robinson');
+  });
+
+  it('toggleSelected resets to default when already selected', () => {
+    projectionActions.setSelected('robinson');
+    projectionActions.toggleSelected('robinson');
+    expect(getProjectionState().selected).toBe('mercator');
+  });
+
+  it('toggleSelected selects when different projection is active', () => {
+    projectionActions.setSelected('mercator');
+    projectionActions.toggleSelected('robinson');
+    expect(getProjectionState().selected).toBe('robinson');
+  });
+
+  it('setCustomCode stores the CRS code', () => {
+    projectionActions.setCustomCode('+proj=robin');
+    expect(getProjectionState().customCode).toBe('+proj=robin');
+  });
+
+  it('setCustomCode stores code without touching selection', () => {
+    projectionActions.setSelected('mercator');
+    projectionActions.setCustomCode('+proj=robin');
+    expect(getProjectionState().selected).toBe('mercator');
+    expect(getProjectionState().customCode).toBe('+proj=robin');
+  });
+
+  it('setCenter updates longitude and latitude', () => {
+    projectionActions.setCenter(10, 45);
+    expect(getProjectionState().longitude).toBe(10);
+    expect(getProjectionState().latitude).toBe(45);
+  });
+
+  it('setRotation updates rotation', () => {
+    projectionActions.setRotation(30);
+    expect(getProjectionState().rotation).toBe(30);
+  });
+
+  it('setSimplifiedPreview toggles the flag', () => {
+    projectionActions.setSimplifiedPreview(false);
+    expect(getProjectionState().simplifiedPreview).toBe(false);
+    projectionActions.setSimplifiedPreview(true);
+    expect(getProjectionState().simplifiedPreview).toBe(true);
+  });
+
+  it('reset restores default state', () => {
+    projectionActions.setSelected('robinson');
+    projectionActions.setCustomCode('+proj=robin');
+    projectionActions.setCenter(10, 45);
+    projectionActions.setRotation(30);
+    projectionActions.setSimplifiedPreview(false);
+
+    projectionActions.reset();
+
+    const state = getProjectionState();
+    expect(state.selected).toBe('mercator');
+    expect(state.customCode).toBeUndefined();
+    expect(state.longitude).toBe(0);
+    expect(state.latitude).toBe(0);
+    expect(state.rotation).toBe(0);
+    expect(state.simplifiedPreview).toBe(true);
+  });
+});
+
 describe('projection store — race condition in suggestions', () => {
   beforeEach(() => {
     projectionActions.reset();

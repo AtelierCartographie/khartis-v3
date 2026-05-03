@@ -41,7 +41,12 @@ const DEFAULT_STATE: ProjectionState = {
   longitude: 0,
   latitude: 0,
   rotation: 0,
-  simplifiedPreview: true
+  center: undefined,
+  customCode: undefined,
+  activeSuggestionId: undefined,
+  suggestionD3Config: undefined,
+  simplifiedPreview: true,
+  suggestions: undefined
 };
 
 /** Counter to discard stale async suggestion results. */
