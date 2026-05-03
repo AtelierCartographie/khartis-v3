@@ -580,7 +580,7 @@ function isSimplificationLevel(
   );
 }
 
-function getBasemapSimplificationLevel(
+export function getBasemapSimplificationLevel(
   metadata: BasemapMetadata
 ): SimplificationLevel | null {
   return isSimplificationLevel(metadata.simplification_level)
