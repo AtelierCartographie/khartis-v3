@@ -33,7 +33,8 @@ const DEFAULT_STATE: SearchState = {
   caseSensitive: false,
   wholeWord: false,
   useRegex: false,
-  replaceValue: ''
+  replaceValue: '',
+  isSampled: false
 };
 
 type SearchActions = {
@@ -335,6 +336,7 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
         s.results = [];
         s.currentResultIndex = -1;
         s.isSearching = false;
+        s.isSampled = false;
         clearMapHighlights();
         mapTooltipStore.unpin();
         return;
@@ -392,13 +394,8 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
               score: result.score
             };
           })
-          .filter((result) => matcher(result.value))
-          .map((result) => ({
-            rowId: result.rowId,
-            columnName: result.columnName,
-            value: result.value,
-            score: result.score
-          }));
+          .filter((result) => matcher(result.value));
+        s.isSampled = stats.isSampled ?? false;
         s.currentResultIndex = s.results.length > 0 ? 0 : -1;
 
         if (s.results.length > 0) {
@@ -416,6 +413,7 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
         });
         s.results = [];
         s.currentResultIndex = -1;
+        s.isSampled = false;
         clearMapHighlights();
         mapTooltipStore.unpin();
       } finally {
@@ -458,6 +456,7 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
         } else {
           s.results = [];
           s.currentResultIndex = -1;
+          s.isSampled = false;
           clearMapHighlights();
           mapTooltipStore.unpin();
         }
@@ -506,6 +505,7 @@ const { state, actions } = createToolStore<SearchState, SearchActions>(
         s.results = [];
         s.currentResultIndex = -1;
         s.isSearching = false;
+        s.isSampled = false;
         clearMapHighlights();
         mapTooltipStore.unpin();
       },
