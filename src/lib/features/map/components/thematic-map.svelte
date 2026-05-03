@@ -1266,7 +1266,9 @@
       mapBasemap.syncOSMRasterLayer();
       mapBasemap.syncLabelsVisibility();
       mapBasemap.syncGroupVisibility();
-      // setStyle() resets the MapLibre projection to mercator — re-apply the stored projection
+      // The loaded style may specify a default projection (e.g. monde styles use globe).
+      // transformStyle strips it so the store remains the single source of truth.
+      // Re-apply the stored projection to stay in sync.
       mapBasemap.syncProjection();
       applyPendingMapLibreViewportPreset();
       waitingForStyleIdle = false;
@@ -1903,10 +1905,13 @@
     untrack(() => {
       mapBasemap.syncProjection();
 
+      // Avoid fitting to the old viewport while a basemap style is loading;
+      // the correct viewport preset will be applied via onStyleLoaded.
       if (
         mapInit.isMapLoaded &&
         mapInit.viewMode === ViewMode.MAPLIBRE &&
-        !isSwitchingViewMode
+        !isSwitchingViewMode &&
+        !mapBasemap.isStyleLoading
       ) {
         fitMapLibreViewportAfterViewModeSwitch('projection');
       }

@@ -171,8 +171,15 @@
   }
 
   function handleTiledBasemapToggle(checked: boolean) {
-    const preferredStyle =
-      basemapStyleStore.lastSelectedTiledStyle ?? BasemapStyle.MONDE_COULEURS;
+    // When activating from blank white, always default to Monde (world).
+    // Last-selected style history is only meaningful once the user has
+    // explicitly interacted with the zone/style selector.
+    const isFirstActivation =
+      checked && basemapStyleStore.selectedStyle === BasemapStyle.BLANK_WHITE;
+    const preferredStyle = isFirstActivation
+      ? BasemapStyle.MONDE_COULEURS
+      : (basemapStyleStore.lastSelectedTiledStyle ??
+        BasemapStyle.MONDE_COULEURS);
     const nextStyle = resolveTiledStyleFromToggle(
       checked,
       basemapStyleStore.selectedStyle,
@@ -199,6 +206,12 @@
     }
 
     basemapStyleStore.setStyle(nextStyle);
+
+    // Always fit the viewport to the newly-activated basemap so the user
+    // sees the correct geographic context (world for Monde, France for France).
+    if (checked) {
+      basemapStyleStore.requestViewportReset(nextStyle);
+    }
   }
 
   function handleLayerChange<T extends BasemapLayerId>(

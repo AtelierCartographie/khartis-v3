@@ -24,10 +24,17 @@ describe('CustomizeBasemap', () => {
     expect(source).not.toContain('{#if isTiledBasemapEnabled}');
   });
 
-  it('uses the color reference style as the first activation fallback', () => {
+  it('defaults to Monde on first activation from blank white', () => {
+    expect(source).toContain('const isFirstActivation =');
     expect(source).toContain(
-      'basemapStyleStore.lastSelectedTiledStyle ?? BasemapStyle.MONDE_COULEURS'
+      'checked && basemapStyleStore.selectedStyle === BasemapStyle.BLANK_WHITE'
     );
+    expect(source).toContain('? BasemapStyle.MONDE_COULEURS');
+  });
+
+  it('falls back to last selected tiled style after the first activation', () => {
+    expect(source).toContain('basemapStyleStore.lastSelectedTiledStyle ??');
+    expect(source).toContain('BasemapStyle.MONDE_COULEURS');
   });
 
   it('starts the reference basemap in the flat projection when the tool is enabled', () => {
