@@ -150,8 +150,6 @@
     const newSource =
       index === 0 ? SimplificationSource.Basemap : SimplificationSource.Geo;
     store.setSource(newSource);
-
-    scheduleSimplificationApply('source-change');
   }
 
   function clearApplyTimeout(): void {
