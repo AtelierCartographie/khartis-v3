@@ -207,6 +207,7 @@
           <div class="sublayers-line"></div>
           <div
             class="sublayers-list"
+            role="list"
             use:dragHandleZone={{
               items: getChildren(parentLayer.id),
               flipDurationMs: FLIP_DURATION_MS,
