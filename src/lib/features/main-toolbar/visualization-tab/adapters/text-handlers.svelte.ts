@@ -12,7 +12,7 @@ import { ColorMode, SizeMode } from '$lib/features/main-toolbar/constants';
 import {
   resolveTextColorModeTransition,
   resolveTextSizeModeTransition
-} from '../use-text-mode-state.svelte';
+} from '../hooks/use-text-mode-state.svelte';
 import { pickOwnedKeys, pickRenamedKeys } from './pick-owned.utils';
 
 type TextBackgroundUpdater = (

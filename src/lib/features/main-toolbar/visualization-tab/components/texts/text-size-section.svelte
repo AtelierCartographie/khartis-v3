@@ -3,9 +3,9 @@
   import { TextScale, TextAllCaps } from 'carbon-icons-svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import { SectionHeading, SliderWithInput } from '../shared';
-  import FacetsVariablePicker from '../symbols/facets-variable-picker.svelte';
+  import FacetsVariablePicker from '../shared/facets-variable-picker.svelte';
   import { SizeMode } from '../../../constants';
-  import { FACET_SLOT, type FacetSlotPath } from '../../facets-adapter';
+  import { FACET_SLOT, type FacetSlotPath } from '../../utils/facets-adapter';
 
   interface FieldSelection {
     selectedFieldId: number;

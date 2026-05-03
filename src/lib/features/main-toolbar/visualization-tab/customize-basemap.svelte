@@ -11,7 +11,7 @@
   import LayerConfigRelief from './components/basemap-layers/layer-config-relief.svelte';
   import LayerConfigMeridiens from './components/basemap-layers/layer-config-meridiens.svelte';
   import LayerConfigVilles from './components/basemap-layers/layer-config-villes.svelte';
-  import BasemapStyleSelector from './basemap-style-selector.svelte';
+  import BasemapStyleSelector from './components/basemap-layers/basemap-style-selector.svelte';
   import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
   import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
   import {
@@ -27,7 +27,7 @@
   import { mapProjectionStore } from '$lib/features/map/stores/map-projection.store.svelte';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
   import { shouldUseMapLibreInterleaved } from '$lib/features/map/utils/render-engine.utils';
-  import { resolveTiledStyleFromToggle } from './tiled-basemap-selection';
+  import { resolveTiledStyleFromToggle } from './utils/tiled-basemap-selection';
   import { BasemapStyle } from '$lib/features/map/constants/basemap-styles';
 
   // Single $derived: one array iteration instead of 9 separate .find() calls

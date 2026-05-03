@@ -69,7 +69,7 @@ import {
   resolveBreakpointLowerClassCount,
   resolveComputedClassCount,
   resolveRequestedClassCount
-} from '../../main-toolbar/visualization-tab/components/discretization.utils';
+} from '../../main-toolbar/visualization-tab/components/discretization/discretization.utils';
 import * as m from '$lib/paraglide/messages';
 
 function createDataOrchestratorService() {

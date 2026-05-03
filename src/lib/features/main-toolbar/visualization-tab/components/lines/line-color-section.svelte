@@ -8,9 +8,9 @@
     PALETTE_TYPE,
     resolvePaletteTypeForBreakpoint
   } from '$lib/features/commons/components/palette-popover/palette.constants';
-  import FacetsVariablePicker from '../symbols/facets-variable-picker.svelte';
+  import FacetsVariablePicker from '../shared/facets-variable-picker.svelte';
   import { ColorMode } from '../../../constants';
-  import { FACET_SLOT, type FacetSlotPath } from '../../facets-adapter';
+  import { FACET_SLOT, type FacetSlotPath } from '../../utils/facets-adapter';
   import type { ClassificationConfig } from '$lib/features/commons/store/visualization.store.svelte';
 
   interface FieldSelection {

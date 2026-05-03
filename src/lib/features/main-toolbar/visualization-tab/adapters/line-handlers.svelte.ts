@@ -7,7 +7,7 @@ import {
   type VisualizationModes,
   getLinePrimitive
 } from '$lib/features/commons/store/visualization.store.svelte';
-import { resolveLineModeTransition } from '../use-line-mode-state.svelte';
+import { resolveLineModeTransition } from '../hooks/use-line-mode-state.svelte';
 import { pickOwnedKeys, pickRenamedKeys } from './pick-owned.utils';
 
 export interface LineHandlersDeps {

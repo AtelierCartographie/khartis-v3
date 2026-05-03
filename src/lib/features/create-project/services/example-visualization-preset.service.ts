@@ -27,8 +27,8 @@ import {
   applySuggestionToVisualization,
   buildSuggestionOrigin,
   mapSuggestionToType
-} from '$lib/features/main-toolbar/visualization-tab/suggestion.service';
-import { getSuggestionSignature } from '$lib/features/main-toolbar/visualization-tab/suggestion-selection';
+} from '$lib/features/main-toolbar/visualization-tab/utils/suggestion.service';
+import { getSuggestionSignature } from '$lib/features/main-toolbar/visualization-tab/utils/suggestion-selection';
 
 type ExampleSuggestionId =
   | 'choropleth'
