@@ -13,4 +13,5 @@ export interface SearchState {
   wholeWord: boolean;
   useRegex: boolean;
   replaceValue: string;
+  isSampled: boolean;
 }

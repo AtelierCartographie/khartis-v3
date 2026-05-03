@@ -20,7 +20,7 @@ import {
   resolveHeadTailClassCountMax,
   resolveNestedMeansClassCount,
   resolveRequestedClassCount
-} from '$lib/features/main-toolbar/visualization-tab/components/discretization.utils';
+} from '$lib/features/main-toolbar/visualization-tab/components/discretization/discretization.utils';
 
 // ─── normalizeClassificationMethod ────────────────────────────────────────
 

@@ -1632,7 +1632,7 @@
       `--legend-padding-inline: ${shellPaddingInline}px`,
       `--legend-padding-block: ${shellPaddingBlock}px`,
       `--legend-max-width: ${layoutTokens.legend.maxWidth}px`,
-      `--legend-item-gap: ${Math.max(4, Math.round(layoutTokens.legend.fontSize * 0.45))}px`,
+      `--legend-item-gap: ${Math.max(8, Math.round(layoutTokens.legend.fontSize * 0.7))}px`,
       `font-family: ${resolveFontFamilyStack(legendState.style.fontFamily)}`,
       `font-size: ${clampFontSize(legendState.style.fontSize, layoutTokens.legend.fontSize)}px`,
       `color: ${textHex}`,
@@ -2047,6 +2047,13 @@
 
   .legend-item {
     min-width: 0;
+    padding-bottom: var(--legend-item-gap);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  }
+
+  .legend-item:last-child {
+    padding-bottom: 0;
+    border-bottom: none;
   }
 
   .legend-title {

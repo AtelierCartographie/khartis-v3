@@ -1,4 +1,7 @@
-import { SimplificationTarget } from '$lib/features/commons/constants/ui.constants';
+import {
+  BasemapLayerType,
+  SimplificationTarget
+} from '$lib/features/commons/constants/ui.constants';
 import {
   SimplificationLevel,
   SimplificationSource
@@ -16,6 +19,12 @@ export interface SimplificationResult {
   datasetSourceFileId?: string;
   datasetBaseTableName?: string;
   datasetSimplifiedTableName?: string;
+  /** Level active before applying a catalog basemap variant (for undo). */
+  previousBasemapLevel?: SimplificationLevel;
+  /** Raw table name containing the original custom basemap geometry (for undo). */
+  previousBasemapTableName?: string;
+  /** Primary layer type of the custom basemap (for undo helper table refresh). */
+  primaryLayerType?: BasemapLayerType;
 }
 
 export interface SimplificationState {
@@ -33,5 +42,11 @@ export interface SimplificationState {
     datasetBaseTableName?: string;
     datasetSimplifiedTableName?: string;
     timestamp: number;
+    /** Level active before applying a catalog basemap variant (for undo). */
+    previousBasemapLevel?: SimplificationLevel;
+    /** Raw table name containing the original custom basemap geometry (for undo). */
+    previousBasemapTableName?: string;
+    /** Primary layer type of the custom basemap (for undo helper table refresh). */
+    primaryLayerType?: BasemapLayerType;
   };
 }

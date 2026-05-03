@@ -20,10 +20,10 @@
     SliderWithInput
   } from '$lib/features/commons/components/viz-controls';
   import { DEFAULT_COLORS, FillMode, SLIDER_LIMITS } from '../../../constants';
-  import type { FacetSlotPath } from '../../facets-contract';
+  import type { FacetSlotPath } from '../../utils/facets-contract';
   import DiscretizationRow from './discretization-row.svelte';
   import MissingDataSection from './missing-data-section.svelte';
-  import FacetsVariablePicker from '../symbols/facets-variable-picker.svelte';
+  import FacetsVariablePicker from './facets-variable-picker.svelte';
   import { buildFillModeItems } from './fill-mode-presets';
   import {
     DEFAULT_COMMON_ASPECT,
@@ -31,8 +31,8 @@
     type CategoriesAspectVariant,
     type CategoriesCommonAspect
   } from '$lib/features/commons/components/palette-popover/categories-aspect-popover.types';
-  import { useCategoryLabels } from '../../use-category-labels.svelte';
-  import { filterFieldsByKind } from '../../use-field-selection.svelte';
+  import { useCategoryLabels } from '../../hooks/use-category-labels.svelte';
+  import { filterFieldsByKind } from '../../hooks/use-field-selection.svelte';
 
   interface Props {
     visualization?: VisualizationConfig;

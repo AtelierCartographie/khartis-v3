@@ -196,6 +196,19 @@ export interface LineThicknessModeState {
   thicknessClassification?: ClassificationConfig;
 }
 
+export interface TextColorModeState {
+  color?: string | string[];
+  valueColumn?: string;
+  categoryColumn?: string;
+  classification?: ClassificationConfig;
+}
+
+export interface TextSizeModeState {
+  size?: number;
+  valueColumn?: string;
+  classification?: ClassificationConfig;
+}
+
 export interface SymbolPrimitiveConfig {
   enabled: boolean;
   mode: SymbolMode;
@@ -312,6 +325,8 @@ export interface TextPrimitiveConfig {
   missingData?: MissingDataConfig;
   secondaryLabels: TextSecondaryLabelsConfig;
   background: TextBackgroundConfig;
+  colorModeStates?: Partial<Record<ColorMode, TextColorModeState>>;
+  sizeModeStates?: Partial<Record<SizeMode, TextSizeModeState>>;
 }
 
 export type PrimitiveFilter =

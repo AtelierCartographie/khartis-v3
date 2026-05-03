@@ -72,7 +72,7 @@ describe('TextsConfig — FillSection wiring (background)', () => {
 describe('TextsConfig — Figma layout', () => {
   it('should delegate text styling to the TextStylePopover', () => {
     expect(source).toContain(
-      "import TextStylePopover from '../text-style-popover.svelte'"
+      "import TextStylePopover from './text-style-popover.svelte'"
     );
     expect(source).toContain('<TextStylePopover');
     expect(source).toContain(

@@ -269,11 +269,25 @@ function withGeographicBoundsRouting(
     const entries = projection.getSubProjections();
     const streams = entries.map((entry) => entry.projection.stream(sink));
 
+    // Ring-level buffers — one per sub-projection. When non-null we are
+    // inside a ring (between lineStart and lineEnd) and collect points
+    // so that empty rings can be suppressed per stream.  d3-geo crashes
+    // if lineEnd (ringEnd) is called on a ring that received no points.
+    let ringBuffers: [number, number][][] | null = null;
+
     cachedStream = {
       point(lon: number, lat: number): void {
-        for (let index = 0; index < entries.length; index++) {
-          if (isWithinBounds(lon, lat, entries[index].bounds)) {
-            streams[index].point(lon, lat);
+        if (ringBuffers) {
+          for (let index = 0; index < entries.length; index++) {
+            if (isWithinBounds(lon, lat, entries[index].bounds)) {
+              ringBuffers[index].push([lon, lat]);
+            }
+          }
+        } else {
+          for (let index = 0; index < entries.length; index++) {
+            if (isWithinBounds(lon, lat, entries[index].bounds)) {
+              streams[index].point(lon, lat);
+            }
           }
         }
       },
@@ -283,14 +297,21 @@ function withGeographicBoundsRouting(
         }
       },
       lineStart(): void {
-        for (const stream of streams) {
-          stream.lineStart();
-        }
+        ringBuffers = entries.map(() => []);
       },
       lineEnd(): void {
-        for (const stream of streams) {
-          stream.lineEnd();
+        if (!ringBuffers) return;
+        for (let index = 0; index < streams.length; index++) {
+          const points = ringBuffers[index];
+          if (points.length > 0) {
+            streams[index].lineStart();
+            for (const [lon, lat] of points) {
+              streams[index].point(lon, lat);
+            }
+            streams[index].lineEnd();
+          }
         }
+        ringBuffers = null;
       },
       polygonStart(): void {
         for (const stream of streams) {

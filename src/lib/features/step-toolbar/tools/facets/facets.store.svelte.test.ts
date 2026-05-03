@@ -103,7 +103,6 @@ describe('facetsStore', () => {
       variables: ['a', 'b', 'c'],
       layout: { columns: 3, gap: 16 },
       scaleMode: SCALE_MODE.SHARED,
-      syncPanZoom: false,
       generatedVisualizationIds: ['facet-a', 'facet-b', 'facet-c']
     });
 
@@ -135,7 +134,6 @@ describe('facetsStore', () => {
         variables: ['a', 'b', 'c'],
         layout: { columns: 3, gap: 16 },
         scaleMode: SCALE_MODE.SHARED,
-        syncPanZoom: false,
         generatedVisualizationIds: ['facet-a', 'facet-b', 'facet-c']
       });
 
@@ -267,7 +265,6 @@ describe('facetsStore', () => {
         variables: ['a', 'b'],
         layout: { columns: 2, gap: 16 },
         scaleMode: SCALE_MODE.SHARED,
-        syncPanZoom: false,
         generatedVisualizationIds: ['facet-a', 'facet-b']
       });
 
@@ -302,7 +299,6 @@ describe('facetsStore', () => {
         variables: ['a', 'b'],
         layout: { columns: 2, gap: 16 },
         scaleMode: SCALE_MODE.SHARED,
-        syncPanZoom: false,
         generatedVisualizationIds: ['facet-a', 'facet-b']
       });
 
@@ -365,7 +361,6 @@ describe('facetsStore', () => {
         variables: ['a', 'b'],
         layout: { columns: 2, gap: 16 },
         scaleMode: SCALE_MODE.INDEPENDENT,
-        syncPanZoom: false,
         generatedVisualizationIds: ['facet-a', 'facet-b']
       });
 
@@ -410,7 +405,6 @@ describe('facetsStore', () => {
         variables: ['a'],
         layout: { columns: 1, gap: 16 },
         scaleMode: SCALE_MODE.INDEPENDENT,
-        syncPanZoom: false,
         generatedVisualizationIds: ['facet-a']
       });
 
@@ -432,7 +426,6 @@ describe('facetsStore', () => {
         variables: ['a'],
         layout: { columns: 1, gap: 16 },
         scaleMode: SCALE_MODE.INDEPENDENT,
-        syncPanZoom: false,
         generatedVisualizationIds: ['facet-a']
       });
 
@@ -482,7 +475,6 @@ describe('facetsStore', () => {
         variables: ['a', 'b'],
         layout: { columns: 2, gap: 16 },
         scaleMode: SCALE_MODE.INDEPENDENT,
-        syncPanZoom: false,
         generatedVisualizationIds: ['facet-a', 'facet-b']
       });
 
@@ -515,30 +507,12 @@ describe('facetsStore', () => {
         variables: ['a'],
         layout: { columns: 1, gap: 16 },
         scaleMode: SCALE_MODE.SHARED,
-        syncPanZoom: false,
         generatedVisualizationIds: ['facet-a']
       });
 
       await facetsStore.toggleScaleMode();
 
       expect(facetsStore.scaleMode).toBe(SCALE_MODE.INDEPENDENT);
-    });
-  });
-
-  describe('toggleSyncPanZoom', () => {
-    it('should toggle syncPanZoom state', () => {
-      expect(facetsStore.syncPanZoom).toBe(true);
-
-      facetsStore.toggleSyncPanZoom();
-      expect(facetsStore.syncPanZoom).toBe(false);
-
-      facetsStore.toggleSyncPanZoom();
-      expect(facetsStore.syncPanZoom).toBe(true);
-    });
-
-    it('should notify persistence on toggle', () => {
-      facetsStore.toggleSyncPanZoom();
-      expect(mocks.notifyChangeMock).toHaveBeenCalledWith('facets');
     });
   });
 
@@ -574,7 +548,6 @@ describe('facetsStore', () => {
       expect(facetsStore.variables).toEqual([]);
       expect(facetsStore.layout.columns).toBe(3);
       expect(facetsStore.scaleMode).toBe(SCALE_MODE.INDEPENDENT);
-      expect(facetsStore.syncPanZoom).toBe(true);
     });
 
     it('should fall back to defaults when given a non-object', () => {
@@ -582,7 +555,6 @@ describe('facetsStore', () => {
 
       expect(facetsStore.enabled).toBe(false);
       expect(facetsStore.variables).toEqual([]);
-      expect(facetsStore.syncPanZoom).toBe(true);
     });
 
     it('should clamp columns to valid range', () => {
@@ -657,7 +629,6 @@ describe('facetsStore', () => {
         variables: ['a', 'b'],
         layout: { columns: 2, gap: 16 },
         scaleMode: SCALE_MODE.SHARED,
-        syncPanZoom: false,
         generatedVisualizationIds: ['facet-a', 'facet-b']
       });
 

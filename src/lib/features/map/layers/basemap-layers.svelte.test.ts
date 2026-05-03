@@ -1,5 +1,5 @@
 import { COORDINATE_SYSTEM } from '@deck.gl/core';
-import { GeoJsonLayer, SolidPolygonLayer } from '@deck.gl/layers';
+import { GeoJsonLayer, PathLayer, SolidPolygonLayer } from '@deck.gl/layers';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { ProjectionLike } from 'geoarrow-deck-stream';
 import type { FeatureCollection, LineString, Point, Polygon } from 'geojson';
@@ -20,28 +20,35 @@ import {
 } from '../stores/basemap-layers.store.svelte';
 import type { GeometryInfo } from '../types';
 
-const { arrowTableToGeoJSONMock, extractGeometryInfoMock, projectGeoJSONMock } =
-  vi.hoisted(() => {
-    class WorkerStub {
-      terminate() {}
+const {
+  arrowTableToGeoJSONMock,
+  extractGeometryInfoMock,
+  projectGeoJSONMock,
+  parseSolidPolygonsWithProjectionMock,
+  parsePathsWithProjectionMock
+} = vi.hoisted(() => {
+  class WorkerStub {
+    terminate() {}
 
-      postMessage() {}
+    postMessage() {}
 
-      addEventListener() {}
+    addEventListener() {}
 
-      removeEventListener() {}
-    }
+    removeEventListener() {}
+  }
 
-    Object.assign(globalThis, {
-      Worker: WorkerStub
-    });
-
-    return {
-      arrowTableToGeoJSONMock: vi.fn(),
-      extractGeometryInfoMock: vi.fn(),
-      projectGeoJSONMock: vi.fn()
-    };
+  Object.assign(globalThis, {
+    Worker: WorkerStub
   });
+
+  return {
+    arrowTableToGeoJSONMock: vi.fn(),
+    extractGeometryInfoMock: vi.fn(),
+    projectGeoJSONMock: vi.fn(),
+    parseSolidPolygonsWithProjectionMock: vi.fn(),
+    parsePathsWithProjectionMock: vi.fn()
+  };
+});
 
 vi.mock('../io', async () => {
   const actual = await vi.importActual<typeof import('../io')>('../io');
@@ -60,7 +67,9 @@ vi.mock('../utils/geoarrow-stream-bridge', async () => {
 
   return {
     ...actual,
-    projectGeoJSON: projectGeoJSONMock
+    projectGeoJSON: projectGeoJSONMock,
+    parseSolidPolygonsWithProjection: parseSolidPolygonsWithProjectionMock,
+    parsePathsWithProjection: parsePathsWithProjectionMock
   };
 });
 
@@ -248,6 +257,21 @@ beforeEach(() => {
   vi.clearAllMocks();
   basemapLayersStore.resetToDefaults();
   projectGeoJSONMock.mockImplementation((geojson) => geojson);
+  parseSolidPolygonsWithProjectionMock.mockReturnValue({
+    length: 1,
+    positions: new Float32Array([0, 0, 1, 0, 1, 1, 0, 1]),
+    polygonIndices: new Uint32Array([0, 4]),
+    holeIndices: new Uint32Array([]),
+    featureIds: new Uint32Array([0]),
+    size: 2
+  });
+  parsePathsWithProjectionMock.mockReturnValue({
+    length: 1,
+    positions: new Float32Array([0, 0, 1, 0, 1, 1]),
+    startIndices: new Uint32Array([0, 3]),
+    featureIds: new Uint32Array([0]),
+    size: 2
+  });
 });
 
 describe('basemap projection fallbacks', () => {
@@ -349,25 +373,20 @@ describe('basemap projection fallbacks', () => {
     expect(layer?.props.data).toBe(projectedGeoJSON);
   });
 
-  it('uses the GeoJSON fallback for terre when a composite projection is active', () => {
-    const sourceGeoJSON = createPolygonGeoJSON('raw-composite-land');
-    const projectedGeoJSON = createPolygonGeoJSON('projected-composite-land');
+  it('uses Arrow native path for terre when a composite projection is active', () => {
     const table = {} as ArrowTable;
     const ctx = createCompositeProjectionContext();
 
     extractGeometryInfoMock.mockReturnValue(createNativePolygonGeometryInfo());
-    arrowTableToGeoJSONMock.mockReturnValue(sourceGeoJSON);
-    projectGeoJSONMock.mockReturnValue(projectedGeoJSON);
 
     const layers = createTerreLayers(table, createTerreConfig(), ctx);
     const layer = layers[0];
 
-    expect(projectGeoJSONMock).toHaveBeenCalledWith(
-      sourceGeoJSON,
+    expect(parseSolidPolygonsWithProjectionMock).toHaveBeenCalledWith(
+      table,
       ctx.projection
     );
-    expect(layer).toBeInstanceOf(GeoJsonLayer);
-    expect(layer).not.toBeInstanceOf(SolidPolygonLayer);
+    expect(layer).toBeInstanceOf(SolidPolygonLayer);
   });
 
   it('projects generated equator lines when a custom projection is active', () => {
@@ -648,6 +667,290 @@ describe('basemap projection fallbacks', () => {
 
     expect(layer?.mode).toBe(BasemapGraticuleMode.REMARKABLE);
     expect(layer?.spacingDegrees).toBe(90);
+  });
+
+  it('returns null when meridiens layer is not visible', () => {
+    const layer = createMeridiensLayer(
+      {
+        id: 'meridiens',
+        visible: false,
+        mode: BasemapGraticuleMode.REMARKABLE,
+        spacingDegrees: 10,
+        color: '#666666',
+        dotted: true,
+        dottedPattern: BasemapDottedPattern.DOTS,
+        thickness: 1,
+        opacity: 100
+      },
+      {}
+    );
+
+    expect(layer).toBeNull();
+  });
+
+  it('applies color and opacity correctly to graticule lines', () => {
+    const layer = createMeridiensLayer(
+      {
+        id: 'meridiens',
+        visible: true,
+        mode: BasemapGraticuleMode.REGULAR,
+        spacingDegrees: 30,
+        color: '#ff0000',
+        dotted: false,
+        dottedPattern: BasemapDottedPattern.DOTS,
+        thickness: 1,
+        opacity: 50
+      },
+      {}
+    ) as GeoJsonLayer | null;
+
+    expect(layer).toBeInstanceOf(GeoJsonLayer);
+    expect(layer?.props.getLineColor).toEqual([255, 0, 0, 128]);
+    expect(layer?.props.updateTriggers.getLineColor).toEqual(['#ff0000', 50]);
+  });
+
+  it('transmits thickness to getLineWidth', () => {
+    const layer = createMeridiensLayer(
+      {
+        id: 'meridiens',
+        visible: true,
+        mode: BasemapGraticuleMode.REMARKABLE,
+        spacingDegrees: 10,
+        color: '#666666',
+        dotted: false,
+        dottedPattern: BasemapDottedPattern.DOTS,
+        thickness: 2.5,
+        opacity: 100
+      },
+      {}
+    ) as GeoJsonLayer | null;
+
+    expect(layer).toBeInstanceOf(GeoJsonLayer);
+    expect(layer?.props.getLineWidth).toBe(2.5);
+    expect(layer?.props.updateTriggers.getLineWidth).toEqual([2.5]);
+  });
+
+  it('maps dotted patterns to correct dash arrays', () => {
+    const testCases: Array<{
+      pattern: BasemapDottedPattern;
+      expected: number[];
+    }> = [
+      { pattern: BasemapDottedPattern.DOTS, expected: [2, 4] },
+      { pattern: BasemapDottedPattern.DASHES, expected: [8, 4] },
+      { pattern: BasemapDottedPattern.DASH_DOT, expected: [8, 2] },
+      { pattern: BasemapDottedPattern.LONG_DASH, expected: [16, 4] }
+    ];
+
+    for (const { pattern, expected } of testCases) {
+      const layer = createMeridiensLayer(
+        {
+          id: 'meridiens',
+          visible: true,
+          mode: BasemapGraticuleMode.REGULAR,
+          spacingDegrees: 30,
+          color: '#666666',
+          dotted: true,
+          dottedPattern: pattern,
+          thickness: 1,
+          opacity: 100
+        },
+        {}
+      ) as GeoJsonLayer | null;
+
+      expect(Reflect.get(layer?.props ?? {}, 'getDashArray')).toEqual(expected);
+    }
+  });
+
+  it('caches graticule data for identical config and regenerates on change', () => {
+    const config = {
+      id: 'meridiens' as const,
+      visible: true,
+      mode: BasemapGraticuleMode.REGULAR,
+      spacingDegrees: 15,
+      color: '#666666',
+      dotted: true,
+      dottedPattern: BasemapDottedPattern.DOTS,
+      thickness: 1,
+      opacity: 100
+    };
+
+    const layer1 = createMeridiensLayer(config, { bbox: [-10, -10, 10, 10] });
+    const data1 = (layer1 as GeoJsonLayer)?.props.data;
+
+    const layer2 = createMeridiensLayer(config, { bbox: [-10, -10, 10, 10] });
+    const data2 = (layer2 as GeoJsonLayer)?.props.data;
+
+    expect(data1).toBe(data2);
+
+    const layer3 = createMeridiensLayer(
+      { ...config, spacingDegrees: 30 },
+      { bbox: [-10, -10, 10, 10] }
+    );
+    const data3 = (layer3 as GeoJsonLayer)?.props.data;
+
+    expect(data1).not.toBe(data3);
+  });
+
+  it('clips graticule to the active bbox', () => {
+    const layerWorld = createMeridiensLayer(
+      {
+        id: 'meridiens',
+        visible: true,
+        mode: BasemapGraticuleMode.REGULAR,
+        spacingDegrees: 30,
+        color: '#666666',
+        dotted: false,
+        dottedPattern: BasemapDottedPattern.DOTS,
+        thickness: 1,
+        opacity: 100
+      },
+      { bbox: [-180, -90, 180, 90] }
+    ) as GeoJsonLayer | null;
+
+    const dataWorld = layerWorld?.props.data as FeatureCollection<LineString>;
+    const worldFeatureCount = dataWorld.features.length;
+
+    const layerEurope = createMeridiensLayer(
+      {
+        id: 'meridiens',
+        visible: true,
+        mode: BasemapGraticuleMode.REGULAR,
+        spacingDegrees: 30,
+        color: '#666666',
+        dotted: false,
+        dottedPattern: BasemapDottedPattern.DOTS,
+        thickness: 1,
+        opacity: 100
+      },
+      { bbox: [-10, 35, 30, 70] }
+    ) as GeoJsonLayer | null;
+
+    const dataEurope = layerEurope?.props.data as FeatureCollection<LineString>;
+    const europeFeatureCount = dataEurope.features.length;
+
+    expect(europeFeatureCount).toBeLessThan(worldFeatureCount);
+    expect(europeFeatureCount).toBeGreaterThan(0);
+  });
+
+  it('enforces lineWidthMinPixels of 0.5 for meridiens', () => {
+    const layer = createMeridiensLayer(
+      {
+        id: 'meridiens',
+        visible: true,
+        mode: BasemapGraticuleMode.REMARKABLE,
+        spacingDegrees: 10,
+        color: '#666666',
+        dotted: false,
+        dottedPattern: BasemapDottedPattern.DOTS,
+        thickness: 0.25,
+        opacity: 100
+      },
+      {}
+    ) as GeoJsonLayer | null;
+
+    expect(layer).toBeInstanceOf(GeoJsonLayer);
+    expect(layer?.props.lineWidthMinPixels).toBe(0.5);
+  });
+
+  it('uses a stable layer id for meridiens', () => {
+    const layer = createMeridiensLayer(
+      {
+        id: 'meridiens',
+        visible: true,
+        mode: BasemapGraticuleMode.REMARKABLE,
+        spacingDegrees: 10,
+        color: '#666666',
+        dotted: false,
+        dottedPattern: BasemapDottedPattern.DOTS,
+        thickness: 1,
+        opacity: 100
+      },
+      {}
+    ) as GeoJsonLayer | null;
+
+    expect(layer?.props.id).toBe('basemap-meridiens-basemap-default');
+  });
+
+  it('includes equator in remarkable mode when excludeEquator is false', () => {
+    const layer = createMeridiensLayer(
+      {
+        id: 'meridiens',
+        visible: true,
+        mode: BasemapGraticuleMode.REMARKABLE,
+        spacingDegrees: 10,
+        color: '#666666',
+        dotted: true,
+        dottedPattern: BasemapDottedPattern.DOTS,
+        thickness: 1,
+        opacity: 100
+      },
+      { bbox: [-180, -90, 180, 90], excludeEquator: false }
+    ) as GeoJsonLayer | null;
+
+    const data = layer?.props.data as FeatureCollection<
+      LineString,
+      { name: string }
+    >;
+    const names = data.features.map((feature) => feature.properties.name);
+
+    expect(names).toContain('parallel-0');
+  });
+
+  it('normalizes legacy remarquables ALL to regular spacing 10', () => {
+    basemapLayersStore.restoreFromSerialized([
+      {
+        id: 'meridiens',
+        visible: true,
+        remarquables: BasemapRemarquables.ALL,
+        color: '#abcdef'
+      }
+    ] as unknown as Parameters<
+      typeof basemapLayersStore.restoreFromSerialized
+    >[0]);
+
+    const layer = basemapLayersStore.getLayer(BASEMAP_LAYER_ID.MERIDIENS);
+
+    expect(layer?.mode).toBe(BasemapGraticuleMode.REGULAR);
+    expect(layer?.spacingDegrees).toBe(10);
+    expect(layer?.color).toBe('#abcdef');
+  });
+
+  it('normalizes legacy remarquables MINOR to regular spacing 5', () => {
+    basemapLayersStore.restoreFromSerialized([
+      {
+        id: 'meridiens',
+        visible: true,
+        remarquables: BasemapRemarquables.MINOR,
+        color: '#fedcba'
+      }
+    ] as unknown as Parameters<
+      typeof basemapLayersStore.restoreFromSerialized
+    >[0]);
+
+    const layer = basemapLayersStore.getLayer(BASEMAP_LAYER_ID.MERIDIENS);
+
+    expect(layer?.mode).toBe(BasemapGraticuleMode.REGULAR);
+    expect(layer?.spacingDegrees).toBe(5);
+    expect(layer?.color).toBe('#fedcba');
+  });
+
+  it('normalizes legacy remarquables EQUATOR_TROPICS to remarkable', () => {
+    basemapLayersStore.restoreFromSerialized([
+      {
+        id: 'meridiens',
+        visible: true,
+        remarquables: BasemapRemarquables.EQUATOR_TROPICS,
+        color: '#00ff00'
+      }
+    ] as unknown as Parameters<
+      typeof basemapLayersStore.restoreFromSerialized
+    >[0]);
+
+    const layer = basemapLayersStore.getLayer(BASEMAP_LAYER_ID.MERIDIENS);
+
+    expect(layer?.mode).toBe(BasemapGraticuleMode.REMARKABLE);
+    expect(layer?.spacingDegrees).toBe(10);
+    expect(layer?.color).toBe('#00ff00');
   });
 
   it('projects city point overlays before rendering them', () => {
@@ -1112,10 +1415,8 @@ describe('basemap projection fallbacks', () => {
     expect(terreLayer).toBeDefined();
   });
 
-  it('uses the GeoJSON fallback for native metadata land with composite projections', () => {
+  it('uses Arrow native path for metadata land with composite projections', () => {
     const metadataTable = { id: 'native-land' } as unknown as ArrowTable;
-    const sourceGeoJSON = createPolygonGeoJSON('raw-native-meta-land');
-    const projectedGeoJSON = createPolygonGeoJSON('projected-native-meta-land');
     const ctx = createCompositeProjectionContext();
 
     basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.MERS, false);
@@ -1124,10 +1425,6 @@ describe('basemap projection fallbacks', () => {
     extractGeometryInfoMock.mockImplementation((table: ArrowTable) =>
       table === metadataTable ? createNativePolygonGeometryInfo() : null
     );
-    arrowTableToGeoJSONMock.mockImplementation((table: ArrowTable) =>
-      table === metadataTable ? sourceGeoJSON : null
-    );
-    projectGeoJSONMock.mockReturnValue(projectedGeoJSON);
 
     const layers = createBasemapLayers(null, ctx, {
       metadataLayers: [
@@ -1144,15 +1441,15 @@ describe('basemap projection fallbacks', () => {
 
     const metaLandLayer = layers.background.find(
       (layer) =>
-        layer instanceof GeoJsonLayer &&
+        layer instanceof SolidPolygonLayer &&
         String(layer.props.id).includes('basemap-meta-land')
     );
 
-    expect(projectGeoJSONMock).toHaveBeenCalledWith(
-      sourceGeoJSON,
+    expect(parseSolidPolygonsWithProjectionMock).toHaveBeenCalledWith(
+      metadataTable,
       ctx.projection
     );
-    expect(metaLandLayer).toBeInstanceOf(GeoJsonLayer);
+    expect(metaLandLayer).toBeInstanceOf(SolidPolygonLayer);
   });
 
   it('projects metadata limit fallbacks inside createBasemapLayers', () => {
@@ -1194,12 +1491,10 @@ describe('basemap projection fallbacks', () => {
     expect(metaLimitLayer?.props.data).toBe(projectedGeoJSON);
   });
 
-  it('uses projected GeoJSON for native metadata limits under composite projections', () => {
+  it('uses Arrow native path for metadata limits under composite projections', () => {
     const metadataTable = {
       id: 'native-meta-limit-composite'
     } as unknown as ArrowTable;
-    const sourceGeoJSON = createLineGeoJSON('raw-native-meta-limit');
-    const projectedGeoJSON = createLineGeoJSON('projected-native-meta-limit');
     const ctx = createCompositeProjectionContext();
 
     basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.MERS, false);
@@ -1208,10 +1503,6 @@ describe('basemap projection fallbacks', () => {
     extractGeometryInfoMock.mockImplementation((table: ArrowTable) =>
       table === metadataTable ? createNativeLineGeometryInfo() : null
     );
-    arrowTableToGeoJSONMock.mockImplementation((table: ArrowTable) =>
-      table === metadataTable ? sourceGeoJSON : null
-    );
-    projectGeoJSONMock.mockReturnValue(projectedGeoJSON);
 
     const layers = createBasemapLayers(null, ctx, {
       metadataLayers: [
@@ -1228,15 +1519,15 @@ describe('basemap projection fallbacks', () => {
 
     const metaLimitLayer = layers.foreground.find(
       (layer) =>
-        layer instanceof GeoJsonLayer &&
+        layer instanceof PathLayer &&
         String(layer.props.id).includes('basemap-meta-limit')
-    ) as GeoJsonLayer | undefined;
+    ) as PathLayer | undefined;
 
-    expect(projectGeoJSONMock).toHaveBeenCalledWith(
-      sourceGeoJSON,
+    expect(parsePathsWithProjectionMock).toHaveBeenCalledWith(
+      metadataTable,
       ctx.projection
     );
-    expect(metaLimitLayer?.props.data).toBe(projectedGeoJSON);
+    expect(metaLimitLayer).toBeInstanceOf(PathLayer);
   });
 
   it('skips empty metadata limit helper tables', () => {
@@ -1280,6 +1571,127 @@ describe('basemap projection fallbacks', () => {
         String(layer.props.id).includes('basemap-meta-limit')
       )
     ).toBe(false);
+  });
+
+  it('suppresses terre GeoJSON fallback stroke when metadata limits are present and frontieres is visible', () => {
+    const worldBaseTable = { id: 'world-base' } as unknown as ArrowTable;
+    const metadataTable = { id: 'limit-suppress' } as unknown as ArrowTable;
+    const worldGeoJSON = createPolygonGeoJSON('raw-world-land');
+    const limitGeoJSON = createLineGeoJSON('raw-meta-limit');
+    const ctx = createProjectionContext();
+
+    basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.MERS, false);
+    basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.TERRE, true);
+    basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.FRONTIERES, true);
+
+    extractGeometryInfoMock.mockImplementation((table: ArrowTable) => {
+      if (table === worldBaseTable) return createPolygonGeometryInfo();
+      if (table === metadataTable) return createLineGeometryInfo();
+      return null;
+    });
+    arrowTableToGeoJSONMock.mockImplementation((table: ArrowTable) => {
+      if (table === worldBaseTable) return worldGeoJSON;
+      if (table === metadataTable) return limitGeoJSON;
+      return null;
+    });
+
+    const layers = createBasemapLayers(worldBaseTable, ctx, {
+      metadataLayers: [
+        {
+          table: metadataTable,
+          style: null,
+          type: BasemapLayerType.LIMIT,
+          file: 'limits.geojson'
+        } satisfies MetadataLayerEntry
+      ],
+      availableMetadataLayerTypes: [BasemapLayerType.LIMIT],
+      stylePresets: null
+    });
+
+    const terreLayer = layers.background.find(
+      (layer) =>
+        layer instanceof GeoJsonLayer &&
+        String(layer.props.id) === 'basemap-terre-basemap-default'
+    ) as GeoJsonLayer | undefined;
+
+    expect(terreLayer).toBeDefined();
+    expect(terreLayer?.props.stroked).toBe(false);
+    expect(terreLayer?.props.getLineWidth).toBe(0);
+    expect(terreLayer?.props.getLineColor).toEqual([0, 0, 0, 0]);
+  });
+
+  it('restores Terre stroke when frontieres are toggled OFF with metadata LIMIT active', () => {
+    const worldBaseTable = {
+      id: 'world-base-restore'
+    } as unknown as ArrowTable;
+    const metadataTable = { id: 'limit-restore' } as unknown as ArrowTable;
+    const worldGeoJSON = createPolygonGeoJSON('raw-world-land-restore');
+    const limitGeoJSON = createLineGeoJSON('raw-meta-limit-restore');
+    const ctx = createProjectionContext();
+
+    basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.MERS, false);
+    basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.TERRE, true);
+    basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.FRONTIERES, true);
+
+    extractGeometryInfoMock.mockImplementation((table: ArrowTable) => {
+      if (table === worldBaseTable) return createPolygonGeometryInfo();
+      if (table === metadataTable) return createLineGeometryInfo();
+      return null;
+    });
+    arrowTableToGeoJSONMock.mockImplementation((table: ArrowTable) => {
+      if (table === worldBaseTable) return worldGeoJSON;
+      if (table === metadataTable) return limitGeoJSON;
+      return null;
+    });
+
+    // First call with frontieres ON - Terre stroke should be suppressed
+    const layersOn = createBasemapLayers(worldBaseTable, ctx, {
+      metadataLayers: [
+        {
+          table: metadataTable,
+          style: null,
+          type: BasemapLayerType.LIMIT,
+          file: 'limits.geojson'
+        } satisfies MetadataLayerEntry
+      ],
+      availableMetadataLayerTypes: [BasemapLayerType.LIMIT],
+      stylePresets: null
+    });
+
+    const terreLayerOn = layersOn.background.find(
+      (layer) =>
+        layer instanceof GeoJsonLayer &&
+        String(layer.props.id) === 'basemap-terre-basemap-default'
+    ) as GeoJsonLayer | undefined;
+
+    expect(terreLayerOn?.props.stroked).toBe(false);
+
+    // Toggle frontieres OFF - Terre stroke should be restored
+    basemapLayersStore.setLayerVisibility(BASEMAP_LAYER_ID.FRONTIERES, false);
+
+    const layersOff = createBasemapLayers(worldBaseTable, ctx, {
+      metadataLayers: [
+        {
+          table: metadataTable,
+          style: null,
+          type: BasemapLayerType.LIMIT,
+          file: 'limits.geojson'
+        } satisfies MetadataLayerEntry
+      ],
+      availableMetadataLayerTypes: [BasemapLayerType.LIMIT],
+      stylePresets: null
+    });
+
+    const terreLayerOff = layersOff.background.find(
+      (layer) =>
+        layer instanceof GeoJsonLayer &&
+        String(layer.props.id) === 'basemap-terre-basemap-default'
+    ) as GeoJsonLayer | undefined;
+
+    expect(terreLayerOff).toBeDefined();
+    expect(terreLayerOff?.props.stroked).toBe(true);
+    expect(terreLayerOff?.props.getLineWidth).toBeGreaterThan(0);
+    expect(terreLayerOff?.props.getLineColor).not.toEqual([0, 0, 0, 0]);
   });
 
   it('connects metadata limit frontieres thickness and dotted styling to Deck.gl layers', () => {
@@ -1414,21 +1826,15 @@ describe('basemap projection fallbacks', () => {
     expect(layer?.props.data).toBe(projectedGeoJSON);
   });
 
-  it('uses projected GeoJSON for native frontieres under composite projections', () => {
+  it('uses Arrow native path for frontieres under composite projections', () => {
     const table = {
       id: 'native-frontieres-composite'
     } as unknown as ArrowTable;
-    const sourceGeoJSON = createLineGeoJSON('raw-native-frontieres');
-    const projectedGeoJSON = createLineGeoJSON('projected-native-frontieres');
     const ctx = createCompositeProjectionContext();
 
     extractGeometryInfoMock.mockImplementation((candidate: ArrowTable) =>
       candidate === table ? createNativeLineGeometryInfo() : null
     );
-    arrowTableToGeoJSONMock.mockImplementation((candidate: ArrowTable) =>
-      candidate === table ? sourceGeoJSON : null
-    );
-    projectGeoJSONMock.mockReturnValue(projectedGeoJSON);
 
     const layer = createFrontieresLayer(
       table,
@@ -1442,14 +1848,13 @@ describe('basemap projection fallbacks', () => {
         opacity: 100
       },
       ctx
-    ) as GeoJsonLayer | null;
+    ) as PathLayer | null;
 
-    expect(projectGeoJSONMock).toHaveBeenCalledWith(
-      sourceGeoJSON,
+    expect(parsePathsWithProjectionMock).toHaveBeenCalledWith(
+      table,
       ctx.projection
     );
-    expect(layer).toBeInstanceOf(GeoJsonLayer);
-    expect(layer?.props.data).toBe(projectedGeoJSON);
+    expect(layer).toBeInstanceOf(PathLayer);
   });
 
   it('connects imported frontieres thickness and dotted styling to fallback outlines', () => {
@@ -1661,19 +2066,13 @@ describe('basemap projection fallbacks', () => {
     });
   });
 
-  it('uses projected GeoJSON for native relief under composite projections', () => {
+  it('uses Arrow native path for relief under composite projections', () => {
     const table = { id: 'native-relief-composite' } as unknown as ArrowTable;
-    const sourceGeoJSON = createPolygonGeoJSON('raw-native-relief');
-    const projectedGeoJSON = createPolygonGeoJSON('projected-native-relief');
     const ctx = createCompositeProjectionContext();
 
     extractGeometryInfoMock.mockImplementation((candidate: ArrowTable) =>
       candidate === table ? createNativePolygonGeometryInfo() : null
     );
-    arrowTableToGeoJSONMock.mockImplementation((candidate: ArrowTable) =>
-      candidate === table ? sourceGeoJSON : null
-    );
-    projectGeoJSONMock.mockReturnValue(projectedGeoJSON);
 
     const layer = createReliefLayers(
       table,
@@ -1685,13 +2084,12 @@ describe('basemap projection fallbacks', () => {
         opacity: 50
       },
       ctx
-    )[0] as GeoJsonLayer | undefined;
+    )[0] as SolidPolygonLayer | undefined;
 
-    expect(projectGeoJSONMock).toHaveBeenCalledWith(
-      sourceGeoJSON,
+    expect(parseSolidPolygonsWithProjectionMock).toHaveBeenCalledWith(
+      table,
       ctx.projection
     );
-    expect(layer).toBeInstanceOf(GeoJsonLayer);
-    expect(layer?.props.data).toBe(projectedGeoJSON);
+    expect(layer).toBeInstanceOf(SolidPolygonLayer);
   });
 });

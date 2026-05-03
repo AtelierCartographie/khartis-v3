@@ -168,7 +168,7 @@ import {
   isVisualizationMatchingSuggestion,
   resolveBlankVisualizationType,
   resolveDatasetGeometryType
-} from '$lib/features/main-toolbar/visualization-tab/suggestion.service';
+} from '$lib/features/main-toolbar/visualization-tab/utils/suggestion.service';
 import {
   shouldApplyCategorical,
   shouldApplyChoropleth,

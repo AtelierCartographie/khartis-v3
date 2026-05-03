@@ -227,10 +227,16 @@ function canRenderViaGeoJsonFallback(geometryInfo: GeometryInfo): boolean {
 }
 
 function shouldPreferProjectedGeoJsonFallback(
-  geometryInfo: GeometryInfo,
-  projection: ProjectionLike | undefined
+  _geometryInfo: GeometryInfo,
+  _projection: ProjectionLike | undefined
 ): boolean {
-  return canRenderViaGeoJsonFallback(geometryInfo) && Boolean(projection);
+  // Always use the Arrow native path for native GeoArrow data, even when
+  // a projection is active. geoarrow-deck-stream supports composite and
+  // cartographic projections natively via d3-geo streaming.
+  //
+  // WKB and GeoJSON-encoded data still fall back to GeoJsonLayer because
+  // they are not native GeoArrow and the condition below gates on that.
+  return false;
 }
 
 function toRgbColor(hex: string): RGBColor {
@@ -443,15 +449,18 @@ export function createTerreLayers(
           id: layerId,
           data: geojson,
           filled: true,
-          stroked: effectiveStrokeThickness > 0,
+          stroked: shouldRenderStroke,
           getFillColor: withOpacity(fillColor, fillOpacity),
-          getLineColor: withOpacity(strokeColor, effectiveStrokeOpacity),
+          getLineColor: shouldRenderStroke
+            ? withOpacity(strokeColor, effectiveStrokeOpacity)
+            : [0, 0, 0, 0],
           lineWidthUnits: 'pixels',
-          getLineWidth: effectiveStrokeThickness,
+          getLineWidth: shouldRenderStroke ? effectiveStrokeThickness : 0,
           lineWidthMinPixels: 0,
           lineWidthMaxPixels: 0.5,
-          extensions: config.strokeDotted ? [DASH_EXTENSION] : [],
-          getDashArray: dashArray,
+          extensions:
+            shouldRenderStroke && config.strokeDotted ? [DASH_EXTENSION] : [],
+          getDashArray: shouldRenderStroke ? dashArray : [0, 0],
           ...baseProps,
           updateTriggers: {
             ...updateTriggers,

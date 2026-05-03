@@ -1,10 +1,8 @@
 <script lang="ts">
-  import {
-    Dropdown,
-    RadioButton,
-    RadioButtonGroup
-  } from 'carbon-components-svelte';
+  import { RadioButton, RadioButtonGroup } from 'carbon-components-svelte';
   import DoubleModeControls from './proportional/double-mode-controls.svelte';
+  import ProportionalScaleSection from './proportional/proportional-scale-section.svelte';
+  import ProportionalDoubleSection from './proportional/proportional-double-section.svelte';
   import * as m from '$lib/paraglide/messages';
   import {
     MissingDataShape,
@@ -30,17 +28,16 @@
   import type { SymbolModeProps } from './types';
   import FillSection from '../shared/fill-section.svelte';
   import { FILL_MODES_STANDARD } from '../shared/fill-mode-presets';
-  import DiscretizationModal from '../discretization-modal.svelte';
+  import DiscretizationModal from '../discretization/discretization-modal.svelte';
   import type { ClassificationConfig } from '$lib/features/commons/store/visualization.store.svelte';
-  import { resolveDiscretizationLabel } from '../discretization.utils';
-  import { FACET_SLOT } from '../../facets-adapter';
-  import FacetsVariablePicker from './facets-variable-picker.svelte';
+  import { resolveDiscretizationLabel } from '../discretization/discretization.utils';
+  import { FACET_SLOT } from '../../utils/facets-adapter';
   import {
     NONE_FIELD_ID,
     filterFieldsByKind,
     useFieldSelection
-  } from '../../use-field-selection.svelte';
-  import { useFacetsVariableSelection } from '../../use-facets-variable-selection.svelte';
+  } from '../../hooks/use-field-selection.svelte';
+  import { useFacetsVariableSelection } from '../../hooks/use-facets-variable-selection.svelte';
   import { resetVisualClassification } from '../shared/classification-reset.utils';
   import {
     buildSymbolShapeDropdownItems,
@@ -50,7 +47,7 @@
     coerceShapeType,
     coerceString,
     parseOpacityToSlider
-  } from '../../coerce.utils';
+  } from '../../utils/coerce.utils';
   import { getDefaultScaleForShape } from './scale-by-shape.utils';
 
   interface Props extends SymbolModeProps {
@@ -600,119 +597,48 @@
       onBreakValueBChange={handleBreakValueBChange}
     />
   {:else}
-    <div class="field-group">
-      <span class="field-label">
-        {m.size_according()}
-        <InfoPopover text={m.size_according_info()} />
-      </span>
-      <FacetsVariablePicker
-        bind:open={sizePickerOpen}
-        dataFields={dataFields}
-        singleSelectItems={selectableNumericDataFields}
-        selectedFieldId={primaryFieldSelection.selectedFieldId}
-        selectedFieldIds={facetsSelection.getSelectedFieldIds(
-          FACET_SLOT.SYMBOL_SIZE
-        )}
-        isCollectionEnabled={facetsSelection.isActiveForSlot(
-          FACET_SLOT.SYMBOL_SIZE
-        )}
-        onSelect={handleFieldSelect}
-        onCollectionChange={(ids) =>
-          facetsSelection.updateVariables(
-            sizeColumnName,
-            FACET_SLOT.SYMBOL_SIZE,
-            ids
-          )}
-        onToggleCollection={(enabled) =>
-          facetsSelection.toggle(
-            sizeColumnName,
-            FACET_SLOT.SYMBOL_SIZE,
-            enabled
-          )}
-      />
-    </div>
-    <SliderWithInput
-      label={m.max_size()}
-      infoText={m.max_size_info()}
-      bind:value={symbolMaxSize}
-      min={SLIDER_LIMITS.symbolMaxSize.min}
-      max={SLIDER_LIMITS.symbolMaxSize.max}
-      step={SLIDER_LIMITS.symbolMaxSize.step}
-      onchange={handleSymbolMaxSizeChange}
+    <ProportionalScaleSection
+      bind:pickerOpen={sizePickerOpen}
+      bind:symbolMaxSize={symbolMaxSize}
+      dataFields={dataFields}
+      selectableNumericDataFields={selectableNumericDataFields}
+      primaryFieldSelection={primaryFieldSelection}
+      facetsSelection={facetsSelection}
+      facetSlot={FACET_SLOT.SYMBOL_SIZE}
+      columnName={sizeColumnName}
+      shapeDropdownItems={shapeDropdownItems}
+      shapeType={shapeType}
+      onFieldSelect={handleFieldSelect}
+      onMaxSizeChange={handleSymbolMaxSizeChange}
+      onShapeDropdownSelect={handleShapeDropdownSelect}
     />
-    <div class="field-group">
-      <span class="field-label">
-        {m.shape()}
-        <InfoPopover text={m.shape_info()} />
-      </span>
-      <Dropdown
-        items={shapeDropdownItems}
-        selectedId={shapeType}
-        on:select={(e) => handleShapeDropdownSelect(e.detail.selectedId)}
-        type="default"
-      />
-    </div>
   {/if}
 {/if}
 
 {#if symbolMode === SymbolMode.CLASSES}
-  <div class="field-group">
-    <span class="field-label">
-      {m.size_according()}
-      <InfoPopover text={m.size_according_info()} />
-    </span>
-    <FacetsVariablePicker
-      bind:open={classesPickerOpen}
-      dataFields={dataFields}
-      singleSelectItems={selectableNumericDataFields}
-      selectedFieldId={primaryFieldSelection.selectedFieldId}
-      selectedFieldIds={facetsSelection.getSelectedFieldIds(
-        FACET_SLOT.SYMBOL_VALUE
-      )}
-      isCollectionEnabled={facetsSelection.isActiveForSlot(
-        FACET_SLOT.SYMBOL_VALUE
-      )}
-      onSelect={handleFieldSelect}
-      onCollectionChange={(ids) =>
-        facetsSelection.updateVariables(
-          valueColumnName,
-          FACET_SLOT.SYMBOL_VALUE,
-          ids
-        )}
-      onToggleCollection={(enabled) =>
-        facetsSelection.toggle(
-          valueColumnName,
-          FACET_SLOT.SYMBOL_VALUE,
-          enabled
-        )}
-    />
-  </div>
-  <SliderWithInput
-    label={m.max_size()}
-    infoText={m.max_size_info()}
-    bind:value={symbolMaxSize}
-    min={SLIDER_LIMITS.symbolMaxSize.min}
-    max={SLIDER_LIMITS.symbolMaxSize.max}
-    step={SLIDER_LIMITS.symbolMaxSize.step}
-    onchange={handleSymbolMaxSizeChange}
-  />
-  <DiscretizationRow
-    label={m.discretization()}
-    value={discretizationLabel}
-    onsettings={onOpenSizeDiscretization}
-  />
-  <div class="field-group">
-    <span class="field-label">
-      {m.shape()}
-      <InfoPopover text={m.shape_info()} />
-    </span>
-    <Dropdown
-      items={shapeDropdownItems}
-      selectedId={shapeType}
-      on:select={(e) => handleShapeDropdownSelect(e.detail.selectedId)}
-      type="default"
-    />
-  </div>
+  <ProportionalScaleSection
+    bind:pickerOpen={classesPickerOpen}
+    bind:symbolMaxSize={symbolMaxSize}
+    dataFields={dataFields}
+    selectableNumericDataFields={selectableNumericDataFields}
+    primaryFieldSelection={primaryFieldSelection}
+    facetsSelection={facetsSelection}
+    facetSlot={FACET_SLOT.SYMBOL_VALUE}
+    columnName={valueColumnName}
+    shapeDropdownItems={shapeDropdownItems}
+    shapeType={shapeType}
+    onFieldSelect={handleFieldSelect}
+    onMaxSizeChange={handleSymbolMaxSizeChange}
+    onShapeDropdownSelect={handleShapeDropdownSelect}
+  >
+    {#snippet midContent()}
+      <DiscretizationRow
+        label={m.discretization()}
+        value={discretizationLabel}
+        onsettings={onOpenSizeDiscretization}
+      />
+    {/snippet}
+  </ProportionalScaleSection>
 {/if}
 
 {#if showBarWidthControl}
@@ -740,31 +666,13 @@
 />
 
 {#if symbolMode === SymbolMode.PROPORTIONAL && proportionalType === ProportionalType.DOUBLE}
-  <div class="double-color-row">
-    <div class="double-color-item double-color-a">
-      <SingleColorPreview
-        exclusive
-        label={m.symbol_color_a()}
-        color={fillColor}
-        onchange={handleFillColorChange}
-      />
-    </div>
-    <div class="double-color-item double-color-b">
-      <SingleColorPreview
-        exclusive
-        label={m.symbol_color_b()}
-        color={fillColorB}
-        onchange={handleFillColorBChange}
-      />
-    </div>
-  </div>
-  <SliderWithInput
-    label={m.opacity()}
-    bind:value={fillOpacity}
-    min={SLIDER_LIMITS.opacity.min}
-    max={SLIDER_LIMITS.opacity.max}
-    step={SLIDER_LIMITS.opacity.step}
-    onchange={handleFillOpacityChange}
+  <ProportionalDoubleSection
+    fillColor={fillColor}
+    fillColorB={fillColorB}
+    bind:fillOpacity={fillOpacity}
+    onColorAChange={handleFillColorChange}
+    onColorBChange={handleFillColorBChange}
+    onOpacityChange={handleFillOpacityChange}
   />
 {:else}
   <FillSection
@@ -851,24 +759,6 @@
     display: flex;
     flex-direction: column;
     gap: var(--cds-spacing-02);
-  }
-
-  .double-color-row {
-    display: flex;
-    gap: var(--cds-spacing-03);
-  }
-
-  .double-color-item {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .double-color-a :global(.color-selector-label) {
-    color: var(--cds-interactive);
-  }
-
-  .double-color-b :global(.color-selector-label) {
-    color: #ff832b;
   }
 
   .field-label {
