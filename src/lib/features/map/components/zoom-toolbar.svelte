@@ -79,7 +79,7 @@
   function fitActiveMode(): void {
     if (activeTabIndex === 0) {
       mapInstanceStore.clearPersistedViewState();
-      mapInstanceStore.fitToOrthographicBounds('reset');
+      mapInstanceStore.resetZoom();
     } else {
       dispatchWorkspaceFit();
     }

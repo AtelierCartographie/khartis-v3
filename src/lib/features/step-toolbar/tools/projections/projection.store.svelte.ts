@@ -212,7 +212,9 @@ const { actions, getState } = createToolStore<
       s.overrideActive = overrideSource !== undefined;
       s.overrideSource = overrideSource;
       if (applyToMap) {
-        mapProjectionStore.setProjection(toMapProjectionType(projectionId));
+        mapProjectionStore.setProjection(toMapProjectionType(projectionId), {
+          explicit: true
+        });
       }
     };
 
