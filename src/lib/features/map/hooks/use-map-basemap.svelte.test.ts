@@ -31,9 +31,9 @@ describe('useMapBasemap loading state', () => {
     expect(source).toContain('map.setStyle(style, { diff: false });');
   });
 
-  it('syncs projection even while a MapLibre style is still loading', () => {
-    expect(source).not.toContain('!map.isStyleLoaded()');
-    expect(source).not.toContain('isStyleLoading ||');
+  it('guards sync helpers when MapLibre style is not loaded', () => {
+    expect(source).toContain('!map.isStyleLoaded()');
+    expect(source).toContain('isStyleLoading ||');
     expect(source).toContain(
       "logger.warn('Failed to sync MapLibre projection'"
     );
