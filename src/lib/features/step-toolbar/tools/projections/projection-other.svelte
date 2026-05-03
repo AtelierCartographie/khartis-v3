@@ -686,7 +686,7 @@
     gap: 4px;
   }
 
-  .projection-tag {
+  .projection-tags :global(.projection-tag) {
     display: inline-flex;
     align-items: center;
     padding: 1px 8px;
@@ -700,11 +700,12 @@
     letter-spacing: 0.32px;
   }
 
-  .projection-tag:hover:not(.projection-tag--selected) {
+  .projection-tags
+    :global(.projection-tag:hover:not(.projection-tag--selected)) {
     background-color: var(--cds-layer-hover-01, #e8e8e8);
   }
 
-  .projection-tag--selected {
+  .projection-tags :global(.projection-tag--selected) {
     border-color: transparent;
     background-color: var(--cds-text-primary, #161616);
     color: var(--cds-text-inverse, #ffffff);
