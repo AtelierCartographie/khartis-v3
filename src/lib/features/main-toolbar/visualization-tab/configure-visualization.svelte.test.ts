@@ -19,7 +19,7 @@ const textHandlersSource = readFileSync(
   'utf8'
 );
 const datasetAnalysisSource = readFileSync(
-  resolve(import.meta.dirname, 'use-dataset-analysis.svelte.ts'),
+  resolve(import.meta.dirname, 'hooks/use-dataset-analysis.svelte.ts'),
   'utf8'
 );
 
@@ -51,26 +51,36 @@ describe('ConfigureVisualization', () => {
   });
 
   it('delegates break computation to the shared controller', () => {
-    expect(source).toContain("from './use-classification-breaks.svelte';");
+    expect(source).toContain(
+      "from './hooks/use-classification-breaks.svelte';"
+    );
     expect(source).toContain('useClassificationBreaksController');
-    expect(source).toContain('resolveBreaksTrigger');
     expect(source).toContain(
       'const classificationBreaks = useClassificationBreaksController({'
     );
     expect(source).toContain('useClassificationBreaksOrchestrator');
+    const orchestrationSource = readFileSync(
+      resolve(
+        import.meta.dirname,
+        'hooks/use-visualization-orchestration.svelte.ts'
+      ),
+      'utf8'
+    );
+    expect(orchestrationSource).toContain('resolveBreaksTrigger');
+    expect(orchestrationSource).toContain('computeBreaksForPrimitive');
   });
 
   it('clears pending break retries when a break slot points to a non-numeric field', () => {
     expect(datasetAnalysisSource).toContain('function isNumericDataField(');
     expect(source).toContain(
-      "from './use-classification-breaks-orchestrator.svelte'"
+      "from './hooks/use-classification-breaks-orchestrator.svelte'"
     );
     expect(source).toContain('useClassificationBreaksOrchestrator({');
   });
 
   it('delegates shared primitive orchestration to the dedicated controller', () => {
     expect(source).toContain(
-      "  } from './use-primitive-panel-controller.svelte';"
+      "  } from './hooks/use-primitive-panel-controller.svelte';"
     );
     expect(source).toContain(
       'const primitivePanelController = usePrimitivePanelController({'
@@ -94,9 +104,17 @@ describe('ConfigureVisualization', () => {
     expect(source).toContain(
       'updatePrimitiveStrokeClassificationState(primitive, { labels })'
     );
-    expect(source).toMatch(
-      /for \(const target of primitiveStrokeClassificationTargets\)[\s\S]*fetchStrokeCategoryLabels\(/
+    const orchestrationSource = readFileSync(
+      resolve(
+        import.meta.dirname,
+        'hooks/use-visualization-orchestration.svelte.ts'
+      ),
+      'utf8'
     );
+    expect(orchestrationSource).toContain(
+      'getPrimitiveStrokeClassificationTargets'
+    );
+    expect(orchestrationSource).toContain('fetchStrokeCategoryLabels(');
   });
 
   it('propagates symbol strokeDashed through panel derivation and style updates', () => {
@@ -173,7 +191,7 @@ describe('ConfigureVisualization', () => {
       "import YearFilter from './components/year-filter.svelte';"
     );
     expect(datasetAnalysisSource).toContain(
-      "import { isLikelyYearColumn } from './components/year-filter.utils';"
+      "import { isLikelyYearColumn } from '../components/year-filter.utils';"
     );
     expect(datasetAnalysisSource).toContain(
       'const hasYearDimension = $derived.by(() =>'
@@ -187,7 +205,7 @@ describe('ConfigureVisualization', () => {
 
   it('delegates symbol mode snapshot/restore to the dedicated helper', () => {
     expect(symbolHandlersSource).toContain(
-      "import { resolveSymbolModeTransition } from '../use-symbol-mode-state.svelte';"
+      "import { resolveSymbolModeTransition } from '../hooks/use-symbol-mode-state.svelte';"
     );
     expect(symbolHandlersSource).toContain(
       'const modeTransition = modeChanging'

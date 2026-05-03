@@ -36,12 +36,12 @@
     PALETTE_TYPE,
     resolvePaletteTypeForBreakpoint
   } from '$lib/features/commons/components/palette-popover/palette.constants';
-  import FacetsVariablePicker from '../symbols/facets-variable-picker.svelte';
-  import type { FacetSlotPath } from '../../facets-adapter';
-  import { useCategoryLabels } from '../../use-category-labels.svelte';
-  import { useFacetsVariableSelection } from '../../use-facets-variable-selection.svelte';
-  import { filterFieldsByKind } from '../../use-field-selection.svelte';
-  import { parseOpacityToSlider } from '../../coerce.utils';
+  import FacetsVariablePicker from './facets-variable-picker.svelte';
+  import type { FacetSlotPath } from '../../utils/facets-adapter';
+  import { useCategoryLabels } from '../../hooks/use-category-labels.svelte';
+  import { useFacetsVariableSelection } from '../../hooks/use-facets-variable-selection.svelte';
+  import { filterFieldsByKind } from '../../hooks/use-field-selection.svelte';
+  import { parseOpacityToSlider } from '../../utils/coerce.utils';
   import { resetVisualClassification } from './classification-reset.utils';
   import MissingDataSection from './missing-data-section.svelte';
 

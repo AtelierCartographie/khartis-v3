@@ -11,7 +11,7 @@ import {
   getTextPrimitive
 } from '$lib/features/commons/store/visualization.store.svelte';
 import { SymbolMode } from '$lib/features/main-toolbar/constants';
-import { resolveSymbolModeTransition } from '../use-symbol-mode-state.svelte';
+import { resolveSymbolModeTransition } from '../hooks/use-symbol-mode-state.svelte';
 import { pickOwnedKeys, pickRenamedKeys } from './pick-owned.utils';
 
 export interface SymbolHandlersDeps {

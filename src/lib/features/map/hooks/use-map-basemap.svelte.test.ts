@@ -28,14 +28,28 @@ describe('useMapBasemap loading state', () => {
   });
 
   it('uses full MapLibre style replacement for tiled basemap switches', () => {
-    expect(source).toContain('map.setStyle(style, { diff: false });');
+    expect(source).toContain('map.setStyle(style, {');
+    expect(source).toContain('diff: false,');
+    expect(source).toContain('transformStyle: stripStyleProjection');
   });
 
-  it('syncs projection even while a MapLibre style is still loading', () => {
-    expect(source).not.toContain('!map.isStyleLoaded()');
-    expect(source).not.toContain('isStyleLoading ||');
+  it('strips the projection property from loaded styles to keep store authority', () => {
+    expect(source).toContain('TransformStyleFunction');
+    expect(source).toContain("if ('projection' in next)");
+    expect(source).toContain('const { projection: _, ...rest } = next;');
+    expect(source).toContain('return rest as StyleSpecification;');
+  });
+
+  it('guards sync helpers when MapLibre style is not loaded', () => {
+    expect(source).toContain('!map.isStyleLoaded()');
+    expect(source).toContain('isStyleLoading ||');
     expect(source).toContain(
       "logger.warn('Failed to sync MapLibre projection'"
+    );
+    // syncProjection is intentionally NOT guarded by !map.isStyleLoaded()
+    // so it can override a style's default projection in onStyleLoaded.
+    expect(source).not.toContain(
+      'if (!map || !getIsMapLoaded() || !map.isStyleLoaded())'
     );
   });
 });

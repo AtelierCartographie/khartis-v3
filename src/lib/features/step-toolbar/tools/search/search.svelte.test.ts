@@ -16,7 +16,8 @@ const mocks = vi.hoisted(() => ({
     caseSensitive: false,
     wholeWord: false,
     useRegex: false,
-    replaceValue: ''
+    replaceValue: '',
+    isSampled: false
   },
   searchActions: {
     setSearchValue: vi.fn(),
@@ -89,7 +90,7 @@ describe('visualization search tool', () => {
     expect(screen.getByText('region')).toBeInTheDocument();
     expect(screen.getByText('Sevilla')).toBeInTheDocument();
     expect(
-      screen.getByRole('textbox', { name: m.search_replace_with() })
+      screen.getByRole('textbox', { name: m.search_replace_by() })
     ).toBeInTheDocument();
   });
 

@@ -12,15 +12,15 @@
   import { InfoPopover, SliderWithInput, StrokeSection } from '../shared';
   import FillSection from '../shared/fill-section.svelte';
   import { FILL_MODES_STANDARD } from '../shared/fill-mode-presets';
-  import DiscretizationModal from '../discretization-modal.svelte';
+  import DiscretizationModal from '../discretization/discretization-modal.svelte';
   import type { SymbolModeProps } from './types';
-  import { resolveDiscretizationLabel } from '../discretization.utils';
-  import { FACET_SLOT } from '../../facets-adapter';
+  import { resolveDiscretizationLabel } from '../discretization/discretization.utils';
+  import { FACET_SLOT } from '../../utils/facets-adapter';
   import {
     NONE_FIELD_ID,
     useFieldSelectionHandler
-  } from '../../use-field-selection.svelte';
-  import { useFacetsVariableSelection } from '../../use-facets-variable-selection.svelte';
+  } from '../../hooks/use-field-selection.svelte';
+  import { useFacetsVariableSelection } from '../../hooks/use-facets-variable-selection.svelte';
   import { resetVisualClassification } from '../shared/classification-reset.utils';
   import {
     buildSymbolShapeDropdownItems,
@@ -30,7 +30,7 @@
     coerceShapeType,
     coerceString,
     parseOpacityToSlider
-  } from '../../coerce.utils';
+  } from '../../utils/coerce.utils';
   import { getDefaultScaleForShape } from './scale-by-shape.utils';
 
   let {

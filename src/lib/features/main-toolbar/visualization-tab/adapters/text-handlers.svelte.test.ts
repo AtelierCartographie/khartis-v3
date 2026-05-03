@@ -129,6 +129,50 @@ describe('createTextHandlers', () => {
     );
   });
 
+  it('handleTextModesChange snapshots the current color state when mode changes', () => {
+    const bag = makeBag();
+    bag.handlers.handleTextModesChange({ color: 'classes' } as never);
+    const [updates] = bag.updateSelectedVisualization.mock.calls[0];
+    expect(updates.text.colorMode).toBe('classes');
+    expect(updates.text.colorModeStates?.unique).toMatchObject({
+      color: '#abc'
+    });
+  });
+
+  it('handleTextModesChange restores saved color state for a previously visited mode', () => {
+    const bag = makeBag();
+    (bag.visualization.text as Record<string, unknown>).colorModeStates = {
+      classes: {
+        valueColumn: 'my_column',
+        classification: { method: 'kmeans', classes: 5 }
+      }
+    };
+    bag.handlers.handleTextModesChange({ color: 'classes' } as never);
+    const [updates] = bag.updateSelectedVisualization.mock.calls[0];
+    expect(updates.text.valueColumn).toBe('my_column');
+    expect(updates.text.classification).toEqual({
+      method: 'kmeans',
+      classes: 5
+    });
+  });
+
+  it('handleTextModesChange snapshots size state and applies defaults when mode changes', () => {
+    const bag = makeBag();
+    bag.handlers.handleTextModesChange({ size: 'proportional' } as never);
+    const [updates] = bag.updateSelectedVisualization.mock.calls[0];
+    expect(updates.text.sizeMode).toBe('proportional');
+    expect(updates.text.sizeModeStates?.fixed).toMatchObject({ size: 12 });
+  });
+
+  it('handleTextModesChange does not update modeStates when mode is unchanged', () => {
+    const bag = makeBag();
+    bag.handlers.handleTextModesChange({ color: 'unique' } as never);
+    const calls = bag.updateSelectedVisualization.mock.calls;
+    if (calls.length > 0) {
+      expect(calls[0][0].text.colorModeStates).toBeUndefined();
+    }
+  });
+
   it('handleTextBackgroundStyleChange uses updateTextBackground updater', () => {
     const bag = makeBag();
     bag.handlers.handleTextBackgroundStyleChange({

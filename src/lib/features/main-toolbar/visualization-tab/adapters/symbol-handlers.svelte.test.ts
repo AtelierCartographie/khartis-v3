@@ -14,7 +14,7 @@ vi.mock('$lib/features/commons/store/visualization.store.svelte', () => ({
   getSymbolPrimitive: vi.fn((viz) => viz?.symbol)
 }));
 
-vi.mock('../use-symbol-mode-state.svelte', () => ({
+vi.mock('../hooks/use-symbol-mode-state.svelte', () => ({
   resolveSymbolModeTransition: vi.fn(() => ({
     restoredStateFields: { size: 12 },
     nextModeStates: { unique: { size: 8 } }

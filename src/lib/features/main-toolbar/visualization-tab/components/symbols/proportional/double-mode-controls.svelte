@@ -3,10 +3,13 @@
   import { Dropdown } from 'carbon-components-svelte';
   import Switch from '$lib/features/commons/components/switch.svelte';
   import { InfoPopover, SliderWithInput } from '../../shared';
-  import FacetsVariablePicker from '../facets-variable-picker.svelte';
+  import FacetsVariablePicker from '../../shared/facets-variable-picker.svelte';
   import BreakValueInput from './break-value-input.svelte';
   import { SLIDER_LIMITS, type ShapeType } from '../../../../constants';
-  import { FACET_SLOT, type FacetSlotPath } from '../../../facets-adapter';
+  import {
+    FACET_SLOT,
+    type FacetSlotPath
+  } from '../../../utils/facets-adapter';
 
   interface FieldSelection {
     selectedFieldId: number;

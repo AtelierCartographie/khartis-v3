@@ -21,7 +21,7 @@
     TrashCan,
     Copy
   } from 'carbon-icons-svelte';
-  import VisualizationSuggestionCard from './components/visualization-suggestion-card.svelte';
+  import VisualizationSuggestionCard from './components/suggestion/visualization-suggestion-card.svelte';
   import { InfoPopover } from './components/shared';
   import MainToolBarHeader from '../components/main-toolbar-header.svelte';
   import {
@@ -32,19 +32,19 @@
     isVisualizationBlank,
     restoreVisualizationFromSuggestion,
     resolveBlankVisualizationType
-  } from './suggestion.service';
+  } from './utils/suggestion.service';
   import {
     getSuggestionSignature,
     resolveDisplayedSuggestionKey,
     resolveSuggestionCardAction,
     shouldAutoApplySuggestion
-  } from './suggestion-selection';
+  } from './utils/suggestion-selection';
   import { UI_CONSTANTS } from '../constants';
   import { appendToBody } from '$lib/features/commons/utils/append-to-body';
   import {
     computeVisualizationSuggestions,
     resolveColumnBadgeType
-  } from './compute-suggestions.utils';
+  } from './utils/compute-suggestions.utils';
 
   interface Props {
     onCreateVisualization?: () => void;

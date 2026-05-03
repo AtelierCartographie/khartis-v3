@@ -3,7 +3,7 @@
   import { StrokeSection } from '../shared';
   import FillSection from '../shared/fill-section.svelte';
   import { FILL_MODES_STANDARD } from '../shared/fill-mode-presets';
-  import { FACET_SLOT, type FacetSlotPath } from '../../facets-adapter';
+  import { FACET_SLOT, type FacetSlotPath } from '../../utils/facets-adapter';
   import { FillMode } from '../../../constants';
   import type {
     ClassificationConfig,

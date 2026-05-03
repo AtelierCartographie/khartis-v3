@@ -75,7 +75,7 @@ describe('SymbolModeCategories (en categorie.png alignment)', () => {
       "import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte'"
     );
     expect(source).toContain(
-      "import { useCategoryLabels } from '../../use-category-labels.svelte';"
+      "import { useCategoryLabels } from '../../hooks/use-category-labels.svelte';"
     );
     expect(source).toContain('syncFetchedCategoryLabels(');
     expect(source).toContain('const categoryLabels = useCategoryLabels({');

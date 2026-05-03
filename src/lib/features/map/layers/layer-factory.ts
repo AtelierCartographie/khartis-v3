@@ -5068,8 +5068,7 @@ export function createPolygonLayers(
     (arrowExtension === ArrowExtension.GEOARROW_POLYGON ||
       arrowExtension === ArrowExtension.GEOARROW_MULTIPOLYGON);
   const preferProjectedGeoJsonFallback =
-    Boolean(ctx.customProjection) &&
-    (isNativeGeoArrow || isWkbEncoded || isGeoJsonEncoded);
+    Boolean(ctx.customProjection) && (isWkbEncoded || isGeoJsonEncoded);
 
   if (
     !preferProjectedGeoJsonFallback &&

@@ -190,6 +190,7 @@ export const VISUALIZATION_DEFAULTS = {
   symbolMaxSize: 24,
   symbolSize: 12,
   symbolOpacity: 100,
+  symbolCategoriesStrokeOpacity: 0.6,
   strokeWidth: 1,
   strokeOpacity: 100,
   fillOpacity: 100,

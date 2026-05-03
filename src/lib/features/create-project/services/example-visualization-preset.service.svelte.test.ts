@@ -38,7 +38,7 @@ vi.mock('$lib/features/main-toolbar/constants', () => ({
 }));
 
 vi.mock(
-  '$lib/features/main-toolbar/visualization-tab/suggestion.service',
+  '$lib/features/main-toolbar/visualization-tab/utils/suggestion.service',
   () => ({
     applySuggestionToVisualization: vi.fn(),
     buildSuggestionOrigin: vi.fn((_visualization, origin) => origin),
@@ -47,7 +47,7 @@ vi.mock(
 );
 
 vi.mock(
-  '$lib/features/main-toolbar/visualization-tab/suggestion-selection',
+  '$lib/features/main-toolbar/visualization-tab/utils/suggestion-selection',
   () => ({
     getSuggestionSignature: vi.fn((suggestion) => suggestion.id)
   })
@@ -63,7 +63,7 @@ import type { VisualizationConfig } from '$lib/features/commons/store/visualizat
 import {
   applySuggestionToVisualization,
   buildSuggestionOrigin
-} from '$lib/features/main-toolbar/visualization-tab/suggestion.service';
+} from '$lib/features/main-toolbar/visualization-tab/utils/suggestion.service';
 
 function buildDataset(columns: Array<{ name: string; type: ColumnType }>) {
   return {

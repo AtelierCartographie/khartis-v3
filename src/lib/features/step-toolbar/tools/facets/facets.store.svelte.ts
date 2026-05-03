@@ -404,7 +404,6 @@ export interface FacetsState {
   variables: string[];
   layout: FacetsLayout;
   scaleMode: ScaleMode;
-  syncPanZoom: boolean;
   generatedVisualizationIds: string[];
 }
 
@@ -418,7 +417,6 @@ const DEFAULT_STATE: FacetsState = {
     gap: 16
   },
   scaleMode: SCALE_MODE.INDEPENDENT,
-  syncPanZoom: true,
   generatedVisualizationIds: []
 };
 
@@ -518,11 +516,6 @@ function createFacetsStore() {
         restored.scaleMode === SCALE_MODE.INDEPENDENT
           ? (restored.scaleMode as ScaleMode)
           : DEFAULT_STATE.scaleMode;
-
-      nextState.syncPanZoom =
-        typeof restored.syncPanZoom === 'boolean'
-          ? restored.syncPanZoom
-          : DEFAULT_STATE.syncPanZoom;
 
       const restoredLayout =
         restored.layout != null && typeof restored.layout === 'object'
@@ -802,11 +795,6 @@ function createFacetsStore() {
     notifyPersistence();
   }
 
-  function toggleSyncPanZoom(): void {
-    state.syncPanZoom = !state.syncPanZoom;
-    notifyPersistence();
-  }
-
   async function toggleScaleMode(): Promise<void> {
     if (isRegenerating) return;
 
@@ -908,9 +896,6 @@ function createFacetsStore() {
     get scaleMode() {
       return state.scaleMode;
     },
-    get syncPanZoom() {
-      return state.syncPanZoom;
-    },
     get generatedVisualizationIds() {
       return state.generatedVisualizationIds;
     },
@@ -926,7 +911,6 @@ function createFacetsStore() {
     setColumns,
     setGap,
     toggleScaleMode,
-    toggleSyncPanZoom,
     restoreFromSerialized
   };
 }
@@ -942,7 +926,6 @@ persistenceRegistry.register({
     variables: [...facetsStore.variables],
     layout: { ...facetsStore.layout },
     scaleMode: facetsStore.scaleMode,
-    syncPanZoom: facetsStore.syncPanZoom,
     generatedVisualizationIds: [...facetsStore.generatedVisualizationIds]
   }),
   deserialize: (data: unknown) => facetsStore.restoreFromSerialized(data),
