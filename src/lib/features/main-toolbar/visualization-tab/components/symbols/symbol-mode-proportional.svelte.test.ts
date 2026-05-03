@@ -16,6 +16,20 @@ const doubleControlsSource = readFileSync(
   resolve(import.meta.dirname, 'proportional/double-mode-controls.svelte'),
   'utf8'
 );
+const scaleSource = readFileSync(
+  resolve(
+    import.meta.dirname,
+    'proportional/proportional-scale-section.svelte'
+  ),
+  'utf8'
+);
+const doubleSource = readFileSync(
+  resolve(
+    import.meta.dirname,
+    'proportional/proportional-double-section.svelte'
+  ),
+  'utf8'
+);
 
 describe('SymbolModeProportional (proportionnels.png + en classes.png)', () => {
   it('uses the FR plural label for the proportional single mode', () => {
@@ -23,15 +37,12 @@ describe('SymbolModeProportional (proportionnels.png + en classes.png)', () => {
   });
 
   it('shows the max-size slider for proportional single and classes modes', () => {
-    const proportionalSingleBlock = source
-      .split('{:else}')[1]
-      ?.split('{/if}')[0];
-    expect(proportionalSingleBlock).toContain('label={m.max_size()}');
+    expect(scaleSource).toContain('label={m.max_size()}');
     expect(source).toContain('{#if symbolMode === SymbolMode.CLASSES}');
     const classesBlock = source.split(
       '{#if symbolMode === SymbolMode.CLASSES}'
     )[1];
-    expect(classesBlock).toContain('label={m.max_size()}');
+    expect(classesBlock).toContain('ProportionalScaleSection');
   });
 
   it('removes the linear/sqrt/log scale selector from PROPORTIONAL UI', () => {
@@ -41,15 +52,12 @@ describe('SymbolModeProportional (proportionnels.png + en classes.png)', () => {
 
   it('shows the shape selector with Dropdown in proportional single and classes modes', () => {
     expect(source).not.toContain('items={shapeItems}');
-    expect(source).toContain('items={shapeDropdownItems}');
-    const proportionalSingleBlock = source
-      .split('{:else}')[1]
-      ?.split('{/if}')[0];
-    expect(proportionalSingleBlock).toContain('{m.shape()}');
+    expect(scaleSource).toContain('items={shapeDropdownItems}');
+    expect(scaleSource).toContain('{m.shape()}');
     const classesBlock = source.split(
       '{#if symbolMode === SymbolMode.CLASSES}'
     )[1];
-    expect(classesBlock).toContain('{m.shape()}');
+    expect(classesBlock).toContain('ProportionalScaleSection');
   });
 
   it('keeps the Uniques/Doubles radio group in PROPORTIONAL', () => {
@@ -93,8 +101,8 @@ describe('SymbolModeProportional (proportionnels.png + en classes.png)', () => {
     expect(source).toContain(
       'symbolMode === SymbolMode.PROPORTIONAL && proportionalType === ProportionalType.DOUBLE'
     );
-    expect(source).toContain('label={m.symbol_color_a()}');
-    expect(source).toContain('label={m.symbol_color_b()}');
+    expect(doubleSource).toContain('label={m.symbol_color_a()}');
+    expect(doubleSource).toContain('label={m.symbol_color_b()}');
   });
 
   it('exposes commonScale switch in DOUBLE branch (Figma 697:76546)', () => {

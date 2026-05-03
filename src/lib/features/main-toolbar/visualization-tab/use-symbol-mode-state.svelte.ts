@@ -82,7 +82,7 @@ export function getDefaultSymbolModeStateFields(
     strokeMode: StrokeMode.UNIQUE,
     strokeColor: DEFAULT_COLORS.black,
     strokeWidth: VISUALIZATION_DEFAULTS.strokeWidth,
-    strokeOpacity: 0.6,
+    strokeOpacity: VISUALIZATION_DEFAULTS.symbolCategoriesStrokeOpacity,
     strokeDashed: false,
     strokeDashedPattern: undefined,
     strokeClassification: undefined,

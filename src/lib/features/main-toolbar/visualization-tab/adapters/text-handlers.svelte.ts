@@ -8,6 +8,11 @@ import {
   type VisualizationModes,
   getTextPrimitive
 } from '$lib/features/commons/store/visualization.store.svelte';
+import { ColorMode, SizeMode } from '$lib/features/main-toolbar/constants';
+import {
+  resolveTextColorModeTransition,
+  resolveTextSizeModeTransition
+} from '../use-text-mode-state.svelte';
 import { pickOwnedKeys, pickRenamedKeys } from './pick-owned.utils';
 
 type TextBackgroundUpdater = (
@@ -108,18 +113,37 @@ export function createTextHandlers(deps: TextHandlersDeps) {
     const text = getTextPrimitive(deps.getSelectedVisualization());
     if (!text) return;
 
-    const renamed = pickRenamedKeys<VisualizationModes, TextPrimitiveConfig>(
-      updates,
-      [
-        { from: 'color', to: 'colorMode' },
-        { from: 'size', to: 'sizeMode' }
-      ],
-      text
-    );
+    const colorChanging =
+      Object.prototype.hasOwnProperty.call(updates, 'color') &&
+      updates.color !== undefined &&
+      updates.color !== text.colorMode;
+    const sizeChanging =
+      Object.prototype.hasOwnProperty.call(updates, 'size') &&
+      updates.size !== undefined &&
+      updates.size !== text.sizeMode;
+
+    const colorTransition = colorChanging
+      ? resolveTextColorModeTransition(text, updates.color as ColorMode)
+      : null;
+    const sizeTransition = sizeChanging
+      ? resolveTextSizeModeTransition(text, updates.size as SizeMode)
+      : null;
 
     deps.updateSelectedVisualization(
       {
-        text: { ...text, ...renamed }
+        text: {
+          ...text,
+          ...(colorChanging ? { colorMode: updates.color as ColorMode } : {}),
+          ...(sizeChanging ? { sizeMode: updates.size as SizeMode } : {}),
+          ...(colorTransition?.restoredColorFields ?? {}),
+          ...(sizeTransition?.restoredSizeFields ?? {}),
+          ...(colorTransition
+            ? { colorModeStates: colorTransition.nextColorModeStates }
+            : {}),
+          ...(sizeTransition
+            ? { sizeModeStates: sizeTransition.nextSizeModeStates }
+            : {})
+        }
       },
       (next) => {
         deps.ensurePrimitiveClassificationDefaults(

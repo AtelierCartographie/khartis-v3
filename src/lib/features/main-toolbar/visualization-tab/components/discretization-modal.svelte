@@ -11,7 +11,7 @@
   } from '$lib/features/commons/store/visualization.store.svelte';
   import type { ShapeType } from '$lib/features/main-toolbar/constants';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
-  import { onMount, tick, untrack } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import {
     DEFAULT_DISCRETIZATION_CLASS_COUNT_MAX,
     normalizeClassificationMethod,
@@ -409,16 +409,16 @@
     });
   });
 
-  onMount(() => {
+  $effect(() => {
     if (typeof window === 'undefined') {
       return;
     }
 
-    function handleKeydown(e: KeyboardEvent) {
-      if (open && e.key === KEY.ESCAPE) {
+    const handleKeydown = (e: KeyboardEvent) => {
+      if (untrack(() => open) && e.key === KEY.ESCAPE) {
         handleClose();
       }
-    }
+    };
 
     document.addEventListener(EVENT.KEYDOWN, handleKeydown);
 
