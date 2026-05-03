@@ -108,15 +108,11 @@
   );
   const isGlobeProjectionEnabled = $derived(mapProjectionStore.isGlobe);
 
+  // Defensive guard: force flat projection when the user is on the France zone
+  // and the globe is somehow active (e.g. project restore with mismatched state).
+  // The Monde zone never auto-reverts here; that is handled by explicit toggles.
   $effect(() => {
     if (selectedZone === 'france' && mapProjectionStore.isGlobe) {
-      setFlatProjection();
-    }
-    if (
-      selectedZone === 'monde' &&
-      mapProjectionStore.isGlobe &&
-      !mapProjectionStore.isGlobeExplicitlyEnabled
-    ) {
       setFlatProjection();
     }
   });

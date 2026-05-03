@@ -1,4 +1,8 @@
-import type { Map as MapLibreMap, StyleSpecification } from 'maplibre-gl';
+import type {
+  Map as MapLibreMap,
+  StyleSpecification,
+  TransformStyleFunction
+} from 'maplibre-gl';
 import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { OSMSourceId } from '../constants';
@@ -148,7 +152,12 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
       return;
     }
 
-    if (styleKey === lastAppliedStyleKey) return;
+    if (styleKey === lastAppliedStyleKey) {
+      // Style hasn't changed, but projection may be out of sync
+      // (e.g. after a zone switch changed mapProjectionStore without reloading the style)
+      syncProjection();
+      return;
+    }
 
     isStyleLoading = true;
     loadingStyleKey = styleKey;
@@ -189,7 +198,9 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
       }
     };
 
-    styleLoadHandler = completeStyleLoad;
+    // MapLibre passes the event object to the handler; wrap it so
+    // `wasTimeout` stays a boolean and `onStyleLoaded` is not skipped.
+    styleLoadHandler = () => completeStyleLoad(false);
 
     // Safety timeout: if style.load never fires (e.g. network error),
     // unlock the loading flag after 10s to avoid permanent deadlock.
@@ -208,8 +219,19 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
     // Using `styledata` can flip the loading flag too early.
     map.once('style.load', styleLoadHandler);
 
+    const stripStyleProjection: TransformStyleFunction = (previous, next) => {
+      if ('projection' in next) {
+        const { projection: _, ...rest } = next;
+        return rest as StyleSpecification;
+      }
+      return next;
+    };
+
     try {
-      map.setStyle(style, { diff: false });
+      map.setStyle(style, {
+        diff: false,
+        transformStyle: stripStyleProjection
+      });
     } catch (error) {
       logger.error(
         'setStyle() threw, unlocking style loading',
@@ -341,7 +363,7 @@ export function useMapBasemap(props: UseMapBasemapProps): UseMapBasemapReturn {
 
   function syncProjection(): void {
     const map = getMap();
-    if (!map || !getIsMapLoaded() || !map.isStyleLoaded()) {
+    if (!map || !getIsMapLoaded()) {
       return;
     }
 

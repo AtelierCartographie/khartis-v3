@@ -51,8 +51,10 @@ describe('BasemapStyleSelector', () => {
     expect(source).toContain('mapProjectionStore.isGlobe');
     expect(source).toContain("selectedZone === 'france'");
     expect(source).toContain('MAP_PROJECTION_TYPE.MERCATOR');
-    expect(source).toContain('mapProjectionStore.isGlobeExplicitlyEnabled');
-    expect(source).toContain("selectedZone === 'monde'");
+    // Monde no longer auto-flattens non-explicit globe here; only France forces flat
+    expect(source).not.toContain(
+      "selectedZone === 'monde' &&\n      mapProjectionStore.isGlobe &&\n      !mapProjectionStore.isGlobeExplicitlyEnabled"
+    );
     expect(source).toContain('labelText={m.map_projection_globe()}');
     expect(source).toContain('checked={isGlobeProjectionEnabled}');
     expect(source).toContain('onchange={handleGlobeProjectionToggle}');
