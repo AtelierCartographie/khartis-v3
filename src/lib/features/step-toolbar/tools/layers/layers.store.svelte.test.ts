@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { VisualizationConfig } from '$lib/features/commons/store/visualization.store.svelte';
 import type { BasemapLayerConfig } from '$lib/features/map/stores/basemap-layers.store.svelte';
 
-const { mockVisualizationStore } = vi.hoisted(() => ({
+const { mockVisualizationStore, mockFacetsStore } = vi.hoisted(() => ({
   mockVisualizationStore: {
     activeVisualizations: [] as VisualizationConfig[],
     visualizations: [] as VisualizationConfig[],
@@ -14,6 +14,11 @@ const { mockVisualizationStore } = vi.hoisted(() => ({
     duplicateVisualization: vi.fn(),
     updateVisualization: vi.fn(),
     renameVisualization: vi.fn()
+  },
+  mockFacetsStore: {
+    enabled: false,
+    baseVisualizationId: null as string | null,
+    generatedVisualizationIds: [] as string[]
   }
 }));
 
@@ -119,11 +124,7 @@ vi.mock('$lib/features/commons/store/visualization.store.svelte', () => {
 });
 
 vi.mock('$lib/features/step-toolbar/tools/facets/facets.store.svelte', () => ({
-  facetsStore: {
-    enabled: false,
-    baseVisualizationId: null,
-    generatedVisualizationIds: []
-  }
+  facetsStore: mockFacetsStore
 }));
 
 vi.mock('$lib/features/map/stores/basemap-layers.store.svelte', () => ({
@@ -339,5 +340,147 @@ describe('layers color helpers', () => {
       'Renamed layer'
     );
     expect(mockVisualizationStore.updateVisualization).not.toHaveBeenCalled();
+  });
+
+  it('removes parent visualization layers', () => {
+    const visualization = createVisualization();
+
+    mockVisualizationStore.visualizations = [visualization];
+    mockVisualizationStore.activeVisualizations = [visualization];
+
+    layersActions.syncWithVisualizations();
+    layersActions.removeLayer('viz-1');
+
+    expect(mockVisualizationStore.removeVisualization).toHaveBeenCalledWith(
+      'viz-1'
+    );
+  });
+
+  it('does not remove sublayers directly', () => {
+    const visualization = createVisualization();
+
+    mockVisualizationStore.visualizations = [visualization];
+    mockVisualizationStore.activeVisualizations = [visualization];
+
+    layersActions.syncWithVisualizations();
+    layersActions.removeLayer('viz-1::point');
+
+    expect(mockVisualizationStore.removeVisualization).not.toHaveBeenCalled();
+  });
+
+  it('reorders visualization layers', () => {
+    const viz1 = createVisualization({ id: 'viz-1', name: 'Viz 1' });
+    const viz2 = createVisualization({ id: 'viz-2', name: 'Viz 2' });
+
+    mockVisualizationStore.visualizations = [viz1, viz2];
+    mockVisualizationStore.activeVisualizations = [viz1, viz2];
+
+    layersActions.syncWithVisualizations();
+    layersActions.reorderLayers('visualization', 0, 1);
+
+    expect(mockVisualizationStore.setVisualizationOrder).toHaveBeenCalledWith([
+      'viz-2',
+      'viz-1'
+    ]);
+  });
+
+  it('duplicates parent visualization layers', () => {
+    const visualization = createVisualization();
+    const duplicated = createVisualization({
+      id: 'viz-2',
+      name: 'Visualization (1)'
+    });
+
+    mockVisualizationStore.visualizations = [visualization];
+    mockVisualizationStore.activeVisualizations = [visualization];
+    mockVisualizationStore.duplicateVisualization.mockImplementation(() => {
+      mockVisualizationStore.visualizations = [visualization, duplicated];
+      return duplicated;
+    });
+
+    layersActions.syncWithVisualizations();
+    const result = layersActions.duplicateLayer('viz-1');
+
+    expect(mockVisualizationStore.duplicateVisualization).toHaveBeenCalledWith(
+      'viz-1'
+    );
+    expect(result).not.toBeNull();
+    expect(result?.id).toBe('viz-2');
+  });
+
+  it('toggles visualization parent visibility', () => {
+    const visualization = createVisualization();
+
+    mockVisualizationStore.visualizations = [visualization];
+    mockVisualizationStore.activeVisualizations = [visualization];
+
+    layersActions.syncWithVisualizations();
+    layersActions.toggleLayerVisibility('viz-1');
+
+    expect(mockVisualizationStore.toggleVisualization).toHaveBeenCalledWith(
+      'viz-1'
+    );
+  });
+
+  it('toggles primitive sublayer visibility', () => {
+    const visualization = createVisualization();
+
+    mockVisualizationStore.visualizations = [visualization];
+    mockVisualizationStore.activeVisualizations = [visualization];
+
+    layersActions.syncWithVisualizations();
+    layersActions.toggleLayerVisibility('viz-1::point');
+
+    expect(mockVisualizationStore.togglePrimitiveFilter).toHaveBeenCalledWith(
+      'viz-1',
+      PrimitiveFilterType.POINT
+    );
+  });
+
+  it('builds facet layers when facets mode is enabled', () => {
+    const baseViz = createVisualization({ id: 'viz-1', name: 'Base' });
+    const facetViz = createVisualization({ id: 'viz-2', name: 'Facet' });
+
+    mockVisualizationStore.visualizations = [baseViz, facetViz];
+    mockVisualizationStore.activeVisualizations = [baseViz, facetViz];
+
+    mockFacetsStore.enabled = true;
+    mockFacetsStore.baseVisualizationId = 'viz-1';
+    mockFacetsStore.generatedVisualizationIds = ['viz-2'];
+
+    layersActions.syncWithVisualizations();
+
+    const layers = layersState.layers;
+    const parentLayers = layers.filter((l) => !l.isSubLayer);
+
+    expect(parentLayers).toHaveLength(1);
+    expect(parentLayers[0].id).toBe('viz-2');
+    expect(parentLayers[0].name).toContain('Facet');
+
+    mockFacetsStore.enabled = false;
+    mockFacetsStore.baseVisualizationId = null;
+    mockFacetsStore.generatedVisualizationIds = [];
+  });
+
+  it('shows base visualization name in facet layer title', () => {
+    const baseViz = createVisualization({ id: 'viz-1', name: 'Monde' });
+    const facetViz = createVisualization({ id: 'viz-2', name: 'Monde' });
+
+    mockVisualizationStore.visualizations = [baseViz, facetViz];
+    mockVisualizationStore.activeVisualizations = [baseViz, facetViz];
+
+    mockFacetsStore.enabled = true;
+    mockFacetsStore.baseVisualizationId = 'viz-1';
+    mockFacetsStore.generatedVisualizationIds = ['viz-2'];
+
+    layersActions.syncWithVisualizations();
+
+    const parentLayers = layersState.layers.filter((l) => !l.isSubLayer);
+    expect(parentLayers[0].name).toContain('1');
+    expect(parentLayers[0].name).toContain('Monde');
+
+    mockFacetsStore.enabled = false;
+    mockFacetsStore.baseVisualizationId = null;
+    mockFacetsStore.generatedVisualizationIds = [];
   });
 });

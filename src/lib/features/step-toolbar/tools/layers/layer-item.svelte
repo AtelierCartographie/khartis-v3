@@ -47,7 +47,7 @@
 </script>
 
 {#if layer.isSubLayer}
-  <div class="sublayer-card">
+  <div class="sublayer-card" role="listitem">
     <div class="color-bar" style:background-color={layer.color}></div>
     <div
       class="drag-handle"
@@ -82,7 +82,7 @@
     </div>
   </div>
 {:else}
-  <div class="layer-card">
+  <div class="layer-card" role="listitem">
     <div
       class="drag-handle"
       use:dragHandle

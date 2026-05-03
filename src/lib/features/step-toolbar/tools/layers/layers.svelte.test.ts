@@ -138,4 +138,157 @@ describe('layers', () => {
     expect(toggles[1]).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByText('Textes PIB')).toBeInTheDocument();
   });
+
+  it('toggles parent visibility via the eye button', async () => {
+    render(Layers);
+
+    const hideButtons = screen.getAllByRole('button', {
+      name: m.layers_hide()
+    });
+    await fireEvent.click(hideButtons[0]);
+
+    expect(mockLayersActions.toggleLayerVisibility).toHaveBeenCalledWith(
+      'viz-1'
+    );
+  });
+
+  it('toggles sublayer visibility via the eye button', async () => {
+    render(Layers);
+
+    const hideButtons = screen.getAllByRole('button', {
+      name: m.layers_hide()
+    });
+    await fireEvent.click(hideButtons[1]);
+
+    expect(mockLayersActions.toggleLayerVisibility).toHaveBeenCalledWith(
+      'viz-1::text'
+    );
+  });
+
+  it('confirms rename and calls updateLayer with trimmed name', async () => {
+    render(Layers);
+
+    const menus = screen.getAllByRole('button', { name: 'menu' });
+    await fireEvent.click(menus[0]);
+
+    const renameButton = screen.getByRole('menuitem', {
+      name: m.layers_rename()
+    });
+    await fireEvent.click(renameButton);
+
+    const input = screen.getByLabelText(m.layers_rename_prompt());
+    await fireEvent.input(input, { target: { value: '  Nouveau nom  ' } });
+
+    const confirmButton = screen.getByRole('button', {
+      name: m.layers_rename()
+    });
+    await fireEvent.click(confirmButton);
+
+    expect(mockLayersActions.updateLayer).toHaveBeenCalledWith('viz-1', {
+      name: 'Nouveau nom'
+    });
+  });
+
+  it('cancels rename without calling updateLayer', async () => {
+    render(Layers);
+
+    const menus = screen.getAllByRole('button', { name: 'menu' });
+    await fireEvent.click(menus[0]);
+
+    const renameButton = screen.getByRole('menuitem', {
+      name: m.layers_rename()
+    });
+    await fireEvent.click(renameButton);
+
+    const cancelButtons = screen.getAllByRole('button', { name: m.cancel() });
+    await fireEvent.click(cancelButtons[0]);
+
+    expect(mockLayersActions.updateLayer).not.toHaveBeenCalled();
+  });
+
+  it('opens delete modal and confirms removal', async () => {
+    render(Layers);
+
+    const menus = screen.getAllByRole('button', { name: 'menu' });
+    await fireEvent.click(menus[0]);
+
+    const deleteButton = screen.getByRole('menuitem', {
+      name: m.layers_delete()
+    });
+    await fireEvent.click(deleteButton);
+
+    const confirmButton = screen.getByRole('button', {
+      name: m.layers_delete()
+    });
+    await fireEvent.click(confirmButton);
+
+    expect(mockLayersActions.removeLayer).toHaveBeenCalledWith('viz-1');
+  });
+
+  it('cancels delete without calling removeLayer', async () => {
+    render(Layers);
+
+    const menus = screen.getAllByRole('button', { name: 'menu' });
+    await fireEvent.click(menus[0]);
+
+    const deleteButton = screen.getByRole('menuitem', {
+      name: m.layers_delete()
+    });
+    await fireEvent.click(deleteButton);
+
+    const cancelButtons = screen.getAllByRole('button', { name: m.cancel() });
+    await fireEvent.click(cancelButtons[1]);
+
+    expect(mockLayersActions.removeLayer).not.toHaveBeenCalled();
+  });
+
+  it('calls duplicateLayer when duplicating via overflow menu', async () => {
+    render(Layers);
+
+    const menus = screen.getAllByRole('button', { name: 'menu' });
+    await fireEvent.click(menus[0]);
+
+    const duplicateButton = screen.getByRole('menuitem', {
+      name: m.layers_duplicate()
+    });
+    await fireEvent.click(duplicateButton);
+
+    expect(mockLayersActions.duplicateLayer).toHaveBeenCalledWith('viz-1');
+  });
+
+  it('calls reorderLayers when moving up via overflow menu', async () => {
+    render(Layers);
+
+    const menus = screen.getAllByRole('button', { name: 'menu' });
+    await fireEvent.click(menus[1]);
+
+    const moveUpButton = screen.getByRole('menuitem', {
+      name: m.layers_move_up()
+    });
+    await fireEvent.click(moveUpButton);
+
+    expect(mockLayersActions.reorderLayers).toHaveBeenCalledWith(
+      'visualization',
+      1,
+      0
+    );
+  });
+
+  it('calls reorderLayers when moving down via overflow menu', async () => {
+    render(Layers);
+
+    const menus = screen.getAllByRole('button', { name: 'menu' });
+    await fireEvent.click(menus[0]);
+
+    const moveDownButton = screen.getByRole('menuitem', {
+      name: m.layers_move_down()
+    });
+    await fireEvent.click(moveDownButton);
+
+    expect(mockLayersActions.reorderLayers).toHaveBeenCalledWith(
+      'visualization',
+      0,
+      1
+    );
+  });
 });
