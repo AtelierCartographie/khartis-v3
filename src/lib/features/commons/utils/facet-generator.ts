@@ -398,7 +398,9 @@ function buildFacetClassification(
     !('min' in stats) ||
     !('max' in stats) ||
     typeof stats.min !== 'number' ||
-    typeof stats.max !== 'number'
+    typeof stats.max !== 'number' ||
+    !Number.isFinite(stats.min) ||
+    !Number.isFinite(stats.max)
   ) {
     return { ...baseClassification };
   }
