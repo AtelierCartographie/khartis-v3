@@ -1676,7 +1676,7 @@
   "stroke_dashed": "Pointillés",
   "missing_data_dashed": "Pointillés",
   "texts_title": "Textes",
-  "basemap_tiled_label": "Fond de référence (IGN & OpenStreetMap)",
+  "basemap_tiled_label": "OpenStreetMap",
   "basemap_tiled_enabled_desc": "Le fond de référence IGN & OpenStreetMap est actif. Choisissez un style ci-dessous.",
   "basemap_tiled_disabled_desc": "Vue orthographique (Deck.gl uniquement). Toutes les couches sont superposées sans fond de référence.",
   "basemap_style_label": "Style du fond de carte",
