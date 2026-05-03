@@ -15,9 +15,25 @@ import {
   ThicknessMode,
   VISUALIZATION_DEFAULTS
 } from '../constants';
+import { snapshotByKeys } from './mode-snapshot.utils';
 
 type LineModeUpdates = Pick<VisualizationModes, 'color' | 'thickness'>;
 type MappingUpdates = Partial<VisualizationConfig['mapping']>;
+
+const LINE_COLOR_MODE_STATE_KEYS = [
+  'color',
+  'valueColumn',
+  'categoryColumn',
+  'classification'
+] as const satisfies readonly (keyof LineColorModeState)[];
+
+const LINE_THICKNESS_MODE_STATE_KEYS = [
+  'width',
+  'maxWidth',
+  'valueColumn',
+  'sizeColumn',
+  'thicknessClassification'
+] as const satisfies readonly (keyof LineThicknessModeState)[];
 
 function hasOwnKey<T extends object>(value: T, key: PropertyKey): boolean {
   return Object.prototype.hasOwnProperty.call(value, key);
@@ -34,24 +50,16 @@ function isReusableSharedValueColumn(value?: string): value is string {
 export function snapshotLineColorModeState(
   line: LinePrimitiveConfig
 ): LineColorModeState {
-  return {
-    color: line.color,
-    valueColumn: line.valueColumn,
-    categoryColumn: line.categoryColumn,
-    classification: line.classification
-  };
+  return snapshotByKeys(line, LINE_COLOR_MODE_STATE_KEYS) as LineColorModeState;
 }
 
 export function snapshotLineThicknessModeState(
   line: LinePrimitiveConfig
 ): LineThicknessModeState {
-  return {
-    width: line.width,
-    maxWidth: line.maxWidth,
-    valueColumn: line.valueColumn,
-    sizeColumn: line.sizeColumn,
-    thicknessClassification: line.thicknessClassification
-  };
+  return snapshotByKeys(
+    line,
+    LINE_THICKNESS_MODE_STATE_KEYS
+  ) as LineThicknessModeState;
 }
 
 function getDefaultLineColorModeState(mode: ColorMode): LineColorModeState {

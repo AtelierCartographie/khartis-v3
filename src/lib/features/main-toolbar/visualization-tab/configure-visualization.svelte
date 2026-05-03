@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onDestroy, untrack } from 'svelte';
   import * as m from '$lib/paraglide/messages';
   import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
   import {
@@ -30,8 +29,6 @@
     buildTextPanelVisualization
   } from './primitive-panel-visualization';
   import {
-    CLASSIFIABLE_PRIMITIVES,
-    STROKE_CLASSIFIABLE_PRIMITIVES,
     type ClassifiablePrimitive,
     type StrokeClassifiablePrimitive,
     usePrimitivePanelController
@@ -49,18 +46,13 @@
     createCategoryLabelsFetcher
   } from './use-category-labels-fetcher.svelte';
   import { useClassificationBreaksController } from './use-classification-breaks.svelte';
-  import {
-    resolveBreaksTrigger,
-    shouldFetchCategoryLabels
-  } from './breaks-trigger.utils';
   import { useClassificationBreaksOrchestrator } from './use-classification-breaks-orchestrator.svelte';
   import {
     buildPrimitiveColorParamsKey,
-    buildStrokeColorParamsKey,
-    syncPrimitiveColors,
-    syncStrokeColors
+    buildStrokeColorParamsKey
   } from './use-classification-color-sync.svelte';
   import { usePrimitiveAdapters } from './adapters/use-primitive-adapters.svelte';
+  import { useVisualizationOrchestration } from './use-visualization-orchestration.svelte';
 
   let selectedViz = $derived(visualizationStore.selectedVisualization);
   const classificationBreaks = useClassificationBreaksController({
@@ -172,7 +164,7 @@
     typeof categoryLabelsFetcher.fetchClassificationLabels
   >[0]['dataset'];
 
-  onDestroy(() => {
+  $effect(() => () => {
     categoryLabelsFetcher.abort();
   });
 
@@ -374,7 +366,7 @@
     };
   });
 
-  onDestroy(() => {
+  $effect(() => () => {
     classificationBreaks.destroy();
   });
 
@@ -531,160 +523,44 @@
     });
   }
 
-  $effect(() => {
-    const visualization = selectedViz;
-    if (!visualization) {
-      return;
-    }
-
-    for (const primitive of CLASSIFIABLE_PRIMITIVES) {
-      ensurePrimitiveClassificationDefaults(primitive, visualization);
-      ensureAutoColumns(primitive, visualization);
-    }
-
-    ensureLineThicknessClassificationDefaults(visualization);
-
-    for (const primitive of STROKE_CLASSIFIABLE_PRIMITIVES) {
-      ensurePrimitiveStrokeClassificationDefaults(primitive, visualization);
-      ensurePrimitiveStrokeAutoColumns(primitive, visualization);
-    }
-
-    ensureSymbolFillClassificationDefaults(visualization);
-    ensureSymbolFillAutoColumns(visualization);
-    ensureTextBackgroundClassificationDefaults(visualization);
-    ensureTextBackgroundAutoColumns(visualization);
-    ensureTextBackgroundStrokeClassificationDefaults(visualization);
-    ensureTextBackgroundStrokeAutoColumns(visualization);
-  });
-
-  let autoColumnsFieldSignature = '';
-
-  $effect(() => {
-    const visualization = selectedViz;
-    const fieldSignature = dataFieldItems
-      .map((field) => `${field.id}:${field.text}:${field.type ?? ''}`)
-      .join('|');
-    const nextSignature = `${visualization?.id ?? ''}:${fieldSignature}`;
-
-    if (!visualization || nextSignature === autoColumnsFieldSignature) {
-      return;
-    }
-
-    autoColumnsFieldSignature = nextSignature;
-    if (dataFieldItems.length === 0) {
-      return;
-    }
-
-    untrack(() => {
-      for (const primitive of CLASSIFIABLE_PRIMITIVES) {
-        ensureAutoColumns(primitive, visualization);
-      }
-
-      for (const primitive of STROKE_CLASSIFIABLE_PRIMITIVES) {
-        ensurePrimitiveStrokeAutoColumns(primitive, visualization);
-      }
-
-      ensureSymbolFillAutoColumns(visualization);
-      ensureTextBackgroundAutoColumns(visualization);
-      ensureTextBackgroundStrokeAutoColumns(visualization);
-    });
-  });
-
-  $effect(() => {
-    const _duckVersion = duckDBOrchestrator.datasetsVersion;
-
-    for (const target of primitiveClassificationTargets) {
-      const trigger = resolveBreaksTrigger(target);
-      if (trigger) {
-        computeBreaksForPrimitive(target.primitive, trigger);
-      }
-    }
-
-    for (const target of primitiveStrokeClassificationTargets) {
-      const trigger = resolveBreaksTrigger(target);
-      if (trigger) {
-        computeBreaksForStrokePrimitive(target.primitive, trigger);
-      }
-    }
-
-    if (lineThicknessTarget) {
-      const trigger = resolveBreaksTrigger(lineThicknessTarget);
-      if (trigger) computeLineThicknessBreaks(trigger);
-    }
-
-    if (symbolFillTarget) {
-      const trigger = resolveBreaksTrigger(symbolFillTarget);
-      if (trigger) computeSymbolFillBreaks(trigger);
-    }
-
-    if (textBackgroundTarget) {
-      const trigger = resolveBreaksTrigger(textBackgroundTarget);
-      if (trigger) computeTextBackgroundBreaks(trigger);
-    }
-
-    if (textBackgroundStrokeTarget) {
-      const trigger = resolveBreaksTrigger(textBackgroundStrokeTarget);
-      if (trigger) computeTextBackgroundStrokeBreaks(trigger);
-    }
-  });
-
-  $effect(() => {
-    const visualization = selectedViz;
-    if (!visualization) {
-      return;
-    }
-
-    const dataset =
-      datasetsStore.datasets.find(
-        (datasetItem) => datasetItem.id === visualization.datasetId
-      ) ?? datasetsStore.selectedDataset;
-    if (!dataset) {
-      return;
-    }
-
-    for (const target of primitiveClassificationTargets) {
-      if (shouldFetchCategoryLabels(target)) {
-        fetchCategoryLabels(
-          target.primitive,
-          target.categoryColumn,
-          dataset,
-          true
-        );
-      }
-    }
-
-    for (const target of primitiveStrokeClassificationTargets) {
-      if (shouldFetchCategoryLabels(target)) {
-        fetchStrokeCategoryLabels(
-          target.primitive,
-          target.categoryColumn,
-          dataset,
-          true
-        );
-      }
-    }
-
-    if (shouldFetchCategoryLabels(symbolFillTarget)) {
-      fetchSymbolFillCategoryLabels(symbolFillTarget.categoryColumn, dataset);
-    }
-
-    if (shouldFetchCategoryLabels(textBackgroundTarget)) {
-      fetchTextBackgroundCategoryLabels(
-        textBackgroundTarget.categoryColumn,
-        dataset
-      );
-    }
-
-    if (shouldFetchCategoryLabels(textBackgroundStrokeTarget)) {
-      fetchTextBackgroundStrokeCategoryLabels(
-        textBackgroundStrokeTarget.categoryColumn,
-        dataset
-      );
-    }
-  });
-
-  function getColorSyncDeps() {
-    return {
+  useVisualizationOrchestration({
+    getSelectedVisualization: () => selectedViz,
+    getDataFieldItems: () => dataFieldItems,
+    getDatasetsVersion: () => duckDBOrchestrator.datasetsVersion,
+    getDatasets: () => datasetsStore.datasets,
+    getSelectedDataset: () => datasetsStore.selectedDataset,
+    getPrimitiveClassificationTargets: () => primitiveClassificationTargets,
+    getPrimitiveStrokeClassificationTargets: () =>
+      primitiveStrokeClassificationTargets,
+    getLineThicknessTarget: () => lineThicknessTarget,
+    getSymbolFillTarget: () => symbolFillTarget,
+    getTextBackgroundTarget: () => textBackgroundTarget,
+    getTextBackgroundStrokeTarget: () => textBackgroundStrokeTarget,
+    getPrimitiveColorParamsKey: () => primitiveColorParamsKey,
+    getStrokeColorParamsKey: () => strokeColorParamsKey,
+    ensurePrimitiveClassificationDefaults,
+    ensureAutoColumns,
+    ensureLineThicknessClassificationDefaults,
+    ensurePrimitiveStrokeClassificationDefaults,
+    ensurePrimitiveStrokeAutoColumns,
+    ensureSymbolFillClassificationDefaults,
+    ensureSymbolFillAutoColumns,
+    ensureTextBackgroundClassificationDefaults,
+    ensureTextBackgroundAutoColumns,
+    ensureTextBackgroundStrokeClassificationDefaults,
+    ensureTextBackgroundStrokeAutoColumns,
+    computeBreaksForPrimitive,
+    computeBreaksForStrokePrimitive,
+    computeLineThicknessBreaks,
+    computeSymbolFillBreaks,
+    computeTextBackgroundBreaks,
+    computeTextBackgroundStrokeBreaks,
+    fetchCategoryLabels,
+    fetchStrokeCategoryLabels,
+    fetchSymbolFillCategoryLabels,
+    fetchTextBackgroundCategoryLabels,
+    fetchTextBackgroundStrokeCategoryLabels,
+    getColorSyncDeps: () => ({
       getSelectedVisualizationId: () => selectedViz?.id,
       getPrimitiveTargets: () => primitiveClassificationTargets,
       getStrokeTargets: () => primitiveStrokeClassificationTargets,
@@ -697,17 +573,7 @@
       applyTextBackgroundUpdate: handleTextBackgroundClassificationChange,
       applyTextBackgroundStrokeUpdate:
         handleTextBackgroundStrokeClassificationChange
-    };
-  }
-
-  $effect(() => {
-    void primitiveColorParamsKey;
-    syncPrimitiveColors(getColorSyncDeps());
-  });
-
-  $effect(() => {
-    void strokeColorParamsKey;
-    syncStrokeColors(getColorSyncDeps());
+    })
   });
 </script>
 

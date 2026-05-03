@@ -53,11 +53,16 @@ describe('ConfigureVisualization', () => {
   it('delegates break computation to the shared controller', () => {
     expect(source).toContain("from './use-classification-breaks.svelte';");
     expect(source).toContain('useClassificationBreaksController');
-    expect(source).toContain('resolveBreaksTrigger');
     expect(source).toContain(
       'const classificationBreaks = useClassificationBreaksController({'
     );
     expect(source).toContain('useClassificationBreaksOrchestrator');
+    const orchestrationSource = readFileSync(
+      resolve(import.meta.dirname, 'use-visualization-orchestration.svelte.ts'),
+      'utf8'
+    );
+    expect(orchestrationSource).toContain('resolveBreaksTrigger');
+    expect(orchestrationSource).toContain('computeBreaksForPrimitive');
   });
 
   it('clears pending break retries when a break slot points to a non-numeric field', () => {
@@ -94,9 +99,14 @@ describe('ConfigureVisualization', () => {
     expect(source).toContain(
       'updatePrimitiveStrokeClassificationState(primitive, { labels })'
     );
-    expect(source).toMatch(
-      /for \(const target of primitiveStrokeClassificationTargets\)[\s\S]*fetchStrokeCategoryLabels\(/
+    const orchestrationSource = readFileSync(
+      resolve(import.meta.dirname, 'use-visualization-orchestration.svelte.ts'),
+      'utf8'
     );
+    expect(orchestrationSource).toContain(
+      'getPrimitiveStrokeClassificationTargets'
+    );
+    expect(orchestrationSource).toContain('fetchStrokeCategoryLabels(');
   });
 
   it('propagates symbol strokeDashed through panel derivation and style updates', () => {

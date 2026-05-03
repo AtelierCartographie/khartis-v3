@@ -3,41 +3,17 @@ import {
   getLinePrimitive,
   getPolygonPrimitive,
   getSymbolPrimitive,
-  getTextPrimitive,
-  type VisualizationConfig
+  getTextPrimitive
 } from '$lib/features/commons/store/visualization.store.svelte';
-import { FillMode } from '../constants';
+import {
+  applyFillModeOpacity,
+  createPanelBuilder,
+  extractStrokeColor
+} from './panel-builder.factory';
 
-type PanelBuilder = (
-  visualization: VisualizationConfig | undefined
-) => VisualizationConfig | undefined;
-
-function memoizePanelBuilder(builder: PanelBuilder): PanelBuilder {
-  const cache = new WeakMap<
-    VisualizationConfig,
-    VisualizationConfig | undefined
-  >();
-  return (visualization) => {
-    if (!visualization) return builder(visualization);
-    const cached = cache.get(visualization);
-    if (cached !== undefined || cache.has(visualization)) {
-      return cached;
-    }
-    const result = builder(visualization);
-    cache.set(visualization, result);
-    return result;
-  };
-}
-
-function buildPolygonPanelVisualizationImpl(
-  visualization: VisualizationConfig | undefined
-): VisualizationConfig | undefined {
-  const polygon = getPolygonPrimitive(visualization);
-  if (!visualization || !polygon) {
-    return undefined;
-  }
-
-  return {
+export const buildPolygonPanelVisualization = createPanelBuilder({
+  getPrimitive: getPolygonPrimitive,
+  build: (visualization, polygon) => ({
     ...visualization,
     primitiveFilters: getEnabledPrimitiveFilters(visualization),
     modes: {
@@ -48,11 +24,10 @@ function buildPolygonPanelVisualizationImpl(
     style: {
       ...visualization.style,
       fillColor: polygon.fillColor,
-      fillOpacity: polygon.fillMode === FillMode.NONE ? 0 : polygon.fillOpacity,
+      fillOpacity: applyFillModeOpacity(polygon.fillMode, polygon.fillOpacity),
       strokeColor:
-        (Array.isArray(polygon.strokeColor)
-          ? polygon.strokeColor[0]
-          : polygon.strokeColor) ?? visualization.style.strokeColor,
+        extractStrokeColor(polygon.strokeColor) ??
+        visualization.style.strokeColor,
       strokeWidth: polygon.strokeWidth,
       strokeOpacity: polygon.strokeOpacity,
       strokeDashed: polygon.strokeDashed,
@@ -65,18 +40,12 @@ function buildPolygonPanelVisualizationImpl(
     },
     classification: polygon.classification,
     missingData: polygon.missingData
-  };
-}
+  })
+});
 
-function buildSymbolPanelVisualizationImpl(
-  visualization: VisualizationConfig | undefined
-): VisualizationConfig | undefined {
-  const symbol = getSymbolPrimitive(visualization);
-  if (!visualization || !symbol) {
-    return undefined;
-  }
-
-  return {
+export const buildSymbolPanelVisualization = createPanelBuilder({
+  getPrimitive: getSymbolPrimitive,
+  build: (visualization, symbol) => ({
     ...visualization,
     primitiveFilters: getEnabledPrimitiveFilters(visualization),
     modes: {
@@ -91,9 +60,7 @@ function buildSymbolPanelVisualizationImpl(
       ...visualization.style,
       symbolFillColor: symbol.fillColor,
       fillColorB: symbol.fillColorB,
-      strokeColor: Array.isArray(symbol.strokeColor)
-        ? symbol.strokeColor[0]
-        : symbol.strokeColor,
+      strokeColor: extractStrokeColor(symbol.strokeColor),
       strokeWidth: symbol.strokeWidth,
       strokeOpacity: symbol.strokeOpacity,
       strokeDashed: symbol.strokeDashed,
@@ -121,18 +88,12 @@ function buildSymbolPanelVisualizationImpl(
       opacity: symbol.opacity
     },
     missingData: symbol.missingData
-  };
-}
+  })
+});
 
-function buildSymbolFillPanelVisualizationImpl(
-  visualization: VisualizationConfig | undefined
-): VisualizationConfig | undefined {
-  const symbol = getSymbolPrimitive(visualization);
-  if (!visualization || !symbol) {
-    return undefined;
-  }
-
-  return {
+export const buildSymbolFillPanelVisualization = createPanelBuilder({
+  getPrimitive: getSymbolPrimitive,
+  build: (visualization, symbol) => ({
     ...visualization,
     primitiveFilters: getEnabledPrimitiveFilters(visualization),
     modes: {
@@ -151,18 +112,12 @@ function buildSymbolFillPanelVisualizationImpl(
     },
     classification: symbol.fillClassification,
     missingData: symbol.missingData
-  };
-}
+  })
+});
 
-function buildLinePanelVisualizationImpl(
-  visualization: VisualizationConfig | undefined
-): VisualizationConfig | undefined {
-  const line = getLinePrimitive(visualization);
-  if (!visualization || !line) {
-    return undefined;
-  }
-
-  return {
+export const buildLinePanelVisualization = createPanelBuilder({
+  getPrimitive: getLinePrimitive,
+  build: (visualization, line) => ({
     ...visualization,
     primitiveFilters: getEnabledPrimitiveFilters(visualization),
     modes: {
@@ -188,18 +143,12 @@ function buildLinePanelVisualizationImpl(
     lineClassification: line.classification,
     lineThicknessClassification: line.thicknessClassification,
     missingData: line.missingData
-  };
-}
+  })
+});
 
-function buildTextPanelVisualizationImpl(
-  visualization: VisualizationConfig | undefined
-): VisualizationConfig | undefined {
-  const text = getTextPrimitive(visualization);
-  if (!visualization || !text) {
-    return undefined;
-  }
-
-  return {
+export const buildTextPanelVisualization = createPanelBuilder({
+  getPrimitive: getTextPrimitive,
+  build: (visualization, text) => ({
     ...visualization,
     primitiveFilters: getEnabledPrimitiveFilters(visualization),
     modes: {
@@ -243,64 +192,41 @@ function buildTextPanelVisualizationImpl(
     },
     classification: text.classification,
     missingData: text.missingData
-  };
-}
+  })
+});
 
-function buildTextBackgroundPanelVisualizationImpl(
-  visualization: VisualizationConfig | undefined
-): VisualizationConfig | undefined {
-  const text = getTextPrimitive(visualization);
-  if (!visualization || !text) {
-    return undefined;
+export const buildTextBackgroundPanelVisualization = createPanelBuilder({
+  getPrimitive: getTextPrimitive,
+  build: (visualization, text) => {
+    const { background } = text;
+    return {
+      ...visualization,
+      primitiveFilters: getEnabledPrimitiveFilters(visualization),
+      modes: {
+        ...visualization.modes,
+        fill: background.fillMode,
+        stroke: background.strokeMode
+      },
+      style: {
+        ...visualization.style,
+        fillColor: background.fillColor,
+        fillOpacity: applyFillModeOpacity(
+          background.fillMode,
+          background.fillOpacity
+        ),
+        strokeColor: extractStrokeColor(background.strokeColor),
+        strokeWidth: background.strokeWidth,
+        strokeOpacity: background.strokeOpacity,
+        strokeDashed: background.strokeDashed,
+        strokeDashedPattern: background.strokeDashedPattern
+      },
+      mapping: {
+        ...visualization.mapping,
+        valueColumn: background.valueColumn,
+        categoryColumn: background.categoryColumn
+      },
+      classification: background.classification,
+      missingData: undefined
+    };
   }
-
-  const background = text.background;
-  return {
-    ...visualization,
-    primitiveFilters: getEnabledPrimitiveFilters(visualization),
-    modes: {
-      ...visualization.modes,
-      fill: background.fillMode,
-      stroke: background.strokeMode
-    },
-    style: {
-      ...visualization.style,
-      fillColor: background.fillColor,
-      fillOpacity:
-        background.fillMode === FillMode.NONE ? 0 : background.fillOpacity,
-      strokeColor: Array.isArray(background.strokeColor)
-        ? background.strokeColor[0]
-        : background.strokeColor,
-      strokeWidth: background.strokeWidth,
-      strokeOpacity: background.strokeOpacity,
-      strokeDashed: background.strokeDashed,
-      strokeDashedPattern: background.strokeDashedPattern
-    },
-    mapping: {
-      ...visualization.mapping,
-      valueColumn: background.valueColumn,
-      categoryColumn: background.categoryColumn
-    },
-    classification: background.classification,
-    missingData: undefined
-  };
-}
-
-export const buildPolygonPanelVisualization = memoizePanelBuilder(
-  buildPolygonPanelVisualizationImpl
-);
-export const buildSymbolPanelVisualization = memoizePanelBuilder(
-  buildSymbolPanelVisualizationImpl
-);
-export const buildSymbolFillPanelVisualization = memoizePanelBuilder(
-  buildSymbolFillPanelVisualizationImpl
-);
-export const buildLinePanelVisualization = memoizePanelBuilder(
-  buildLinePanelVisualizationImpl
-);
-export const buildTextPanelVisualization = memoizePanelBuilder(
-  buildTextPanelVisualizationImpl
-);
-export const buildTextBackgroundPanelVisualization = memoizePanelBuilder(
-  buildTextBackgroundPanelVisualizationImpl
-);
+});
