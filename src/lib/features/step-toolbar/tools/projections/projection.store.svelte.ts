@@ -44,6 +44,9 @@ const DEFAULT_STATE: ProjectionState = {
   simplifiedPreview: true
 };
 
+/** Counter to discard stale async suggestion results. */
+let suggestionRequestId = 0;
+
 type ProjectionActions = {
   setSelected: (projectionId: string) => void;
   toggleSelected: (projectionId: string) => void;
@@ -276,11 +279,14 @@ const { actions, getState } = createToolStore<
         s.simplifiedPreview = value;
       },
       suggestProjectionForCurrentData: () => {
+        const requestId = ++suggestionRequestId;
         void (async () => {
           if (
             !supportsProjectionSuggestions(getProjectionAvailabilityContext())
           ) {
-            s.suggestions = undefined;
+            if (requestId === suggestionRequestId) {
+              s.suggestions = undefined;
+            }
             return;
           }
 
@@ -290,6 +296,16 @@ const { actions, getState } = createToolStore<
           const result = suggestProjectionsForBbox(bounds);
 
           if (!result) return;
+
+          // Ignore stale results from superseded calls.
+          if (requestId !== suggestionRequestId) {
+            logger.info(
+              'Stale projection suggestions discarded',
+              LogCategory.MAP,
+              { requestId, current: suggestionRequestId }
+            );
+            return;
+          }
 
           s.suggestions = result;
 
