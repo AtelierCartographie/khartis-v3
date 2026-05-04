@@ -39,8 +39,8 @@
 <style>
   .consent-banner-container {
     position: fixed;
-    bottom: 1rem;
-    right: 1rem;
+    bottom: calc(1rem + var(--safe-area-bottom));
+    right: calc(1rem + var(--safe-area-right));
     z-index: var(--z-overlay);
     max-width: 400px;
   }

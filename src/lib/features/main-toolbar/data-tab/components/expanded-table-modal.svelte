@@ -230,6 +230,10 @@
     background-color: var(--cds-ui-01);
     display: flex;
     flex-direction: column;
+    padding-top: var(--safe-area-top);
+    padding-bottom: var(--safe-area-bottom);
+    padding-left: var(--safe-area-left);
+    padding-right: var(--safe-area-right);
   }
 
   .overlay-header {

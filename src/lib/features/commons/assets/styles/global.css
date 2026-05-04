@@ -1,6 +1,10 @@
 :root {
   --cds-main-toolbar-width: 50vw;
-  --cds-header-height: 47px;
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
+  --cds-header-height: calc(47px + var(--safe-area-top));
   --kh-text-size-control-width: 80px;
   --khartis-floating-panel-background: rgba(255, 255, 255, 0.78);
   --khartis-data-table-header-background: var(--cds-ui-03);
@@ -352,5 +356,9 @@ label {
     max-height: 100%;
     margin: 0;
     border-radius: 0;
+    padding-top: var(--safe-area-top);
+    padding-bottom: var(--safe-area-bottom);
+    padding-left: var(--safe-area-left);
+    padding-right: var(--safe-area-right);
   }
 }

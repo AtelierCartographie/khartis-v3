@@ -771,8 +771,8 @@
 
   .colorblind-notification {
     position: absolute;
-    bottom: var(--cds-spacing-05);
-    right: var(--cds-spacing-05);
+    bottom: calc(var(--cds-spacing-05) + var(--safe-area-bottom));
+    right: calc(var(--cds-spacing-05) + var(--safe-area-right));
     z-index: var(--z-content);
     max-width: 320px;
   }
@@ -784,8 +784,8 @@
 
   @media (max-width: 672px) {
     .colorblind-notification {
-      left: var(--cds-spacing-05);
-      right: var(--cds-spacing-05);
+      left: calc(var(--cds-spacing-05) + var(--safe-area-left));
+      right: calc(var(--cds-spacing-05) + var(--safe-area-right));
       max-width: none;
     }
   }

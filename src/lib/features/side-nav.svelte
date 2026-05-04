@@ -672,6 +672,7 @@
   #khartis-side-nav :global(.bx--side-nav) {
     top: var(--khartis-side-nav-top);
     height: calc(100dvh - var(--khartis-side-nav-top)) !important;
+    padding-left: var(--safe-area-left);
   }
 
   #khartis-side-nav :global(.bx--side-nav__overlay) {
