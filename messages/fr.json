@@ -1128,6 +1128,7 @@
   "error_example_load_failed": "Échec du chargement de l'exemple",
   "error_catalogue_not_found": "Catalogue « {catalogueId} » introuvable",
   "mobile_viz_tab_choose": "Choisir",
+  "mobile_viz_tab_configure": "Paramétrer",
   "mobile_viz_tab_customize": "Personnaliser",
   "mobile_tools_aria": "Outils",
   "csv_options_button": "Options CSV",

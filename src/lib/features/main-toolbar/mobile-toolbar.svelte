@@ -49,6 +49,12 @@
 
   let activeVizSubTab = $state<VizSubTab>(VizSubTab.CHOOSE);
 
+  const vizSubTabs = [
+    { id: VizSubTab.CHOOSE, label: m.mobile_viz_tab_choose() },
+    { id: VizSubTab.CONFIGURE, label: m.mobile_viz_tab_configure() },
+    { id: VizSubTab.CUSTOMIZE, label: m.mobile_viz_tab_customize() }
+  ] as const;
+
   const stepLabels = {
     [ToolbarStep.Data]: m.step_data(),
     [ToolbarStep.Visualizations]: m.step_visualizations(),
@@ -177,22 +183,18 @@
 
     {#if globalState.selectedStep === ToolbarStep.Visualizations}
       <div class="viz-sub-tabs">
-        <button
-          class={clsx('sub-tab', {
-            selected: activeVizSubTab === VizSubTab.CHOOSE
-          })}
-          onclick={() => (activeVizSubTab = VizSubTab.CHOOSE)}
-        >
-          {m.mobile_viz_tab_choose()}
-        </button>
-        <button
-          class={clsx('sub-tab', {
-            selected: activeVizSubTab === VizSubTab.CONFIGURE
-          })}
-          onclick={() => (activeVizSubTab = VizSubTab.CONFIGURE)}
-        >
-          {m.mobile_viz_tab_customize()}
-        </button>
+        {#each vizSubTabs as tab (tab.id)}
+          <button
+            type="button"
+            class={clsx('sub-tab', {
+              selected: activeVizSubTab === tab.id
+            })}
+            onclick={() => (activeVizSubTab = tab.id)}
+            aria-pressed={activeVizSubTab === tab.id}
+          >
+            {tab.label}
+          </button>
+        {/each}
       </div>
     {/if}
   </div>

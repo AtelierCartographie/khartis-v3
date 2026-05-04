@@ -1128,6 +1128,7 @@
   "error_example_load_failed": "Failed to load the example",
   "error_catalogue_not_found": "Catalog '{catalogueId}' not found",
   "mobile_viz_tab_choose": "Choose",
+  "mobile_viz_tab_configure": "Configure",
   "mobile_viz_tab_customize": "Customize",
   "mobile_tools_aria": "Tools",
   "csv_options_button": "CSV options",

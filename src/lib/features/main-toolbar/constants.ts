@@ -11,7 +11,8 @@ export enum SearchSource {
 
 export enum VizSubTab {
   CHOOSE = 'choose',
-  CONFIGURE = 'configure'
+  CONFIGURE = 'configure',
+  CUSTOMIZE = 'customize'
 }
 
 export enum SymbolMode {
