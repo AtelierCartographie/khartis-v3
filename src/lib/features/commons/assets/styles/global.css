@@ -339,3 +339,18 @@ label {
   width: var(--slider-input-width);
   flex-shrink: 0;
 }
+
+/* Fullscreen Carbon modals on mobile */
+html.mobile-view .bx--modal-container {
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: none !important;
+  max-height: none !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
+}
+
+html.mobile-view #khartis-create-project .fixed-modal-body {
+  height: calc(100vh - 120px);
+  padding: var(--cds-spacing-04);
+}

@@ -285,28 +285,7 @@
     line-height: var(--cds-body-short-01-line-height, 1.28572);
   }
 
-  @media (max-width: 1024px) {
-    #khartis-create-project :global(.bx--modal-container) {
-      width: 95vw;
-      height: 90vh;
-    }
-
-    #khartis-create-project :global(.fixed-modal-body) {
-      height: calc(90vh - 120px);
-    }
-  }
-
   @media (max-width: 768px) {
-    #khartis-create-project :global(.bx--modal-container) {
-      width: 98vw;
-      height: 95vh;
-    }
-
-    #khartis-create-project :global(.fixed-modal-body) {
-      height: calc(95vh - 120px);
-      padding: var(--cds-spacing-04);
-    }
-
     .project-type-selector {
       flex-direction: column;
       gap: var(--cds-spacing-03);

@@ -79,6 +79,15 @@
     globalActions.setMobileView(window.innerWidth < MOBILE_BREAKPOINT);
   };
 
+  $effect(() => {
+    if (typeof document !== 'undefined') {
+      document.documentElement.classList.toggle(
+        'mobile-view',
+        globalState.isMobileView
+      );
+    }
+  });
+
   async function loadCreateProject(): Promise<void> {
     if (CreateProject) return;
     const module =
