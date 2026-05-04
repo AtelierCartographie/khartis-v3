@@ -176,11 +176,24 @@
     display: flex;
     align-items: center;
     gap: var(--cds-spacing-01);
+    flex-wrap: wrap;
   }
 
   .tools-right {
     display: flex;
     align-items: center;
+    flex-shrink: 0;
+  }
+
+  @media (max-width: 480px) {
+    .data-tools-bar {
+      flex-wrap: wrap;
+      gap: var(--cds-spacing-02);
+    }
+
+    .tools-right {
+      margin-left: auto;
+    }
   }
 
   .data-tools-bar :global(.bx--btn.active) {

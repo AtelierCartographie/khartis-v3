@@ -196,7 +196,7 @@
     </span>
   </header>
 
-  <div class="grid grid-cols-2 gap-5">
+  <div class="import-grid">
     <div>
       {#key uploaderKey}
         <FileUploaderDropContainer
@@ -252,7 +252,7 @@
   </div>
 
   <div class="grid grid-cols-1 gap-7">
-    <div class="flex items-end gap-3">
+    <div class="url-input-row">
       <TextInput
         bind:value={onlineUrlValue}
         labelText={m.create_project_online_file_link()}
@@ -790,6 +790,32 @@
     clip: rect(0, 0, 0, 0);
     white-space: nowrap;
     border: 0;
+  }
+
+  .import-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--cds-spacing-05);
+  }
+
+  @media (max-width: 672px) {
+    .import-grid {
+      grid-template-columns: 1fr;
+      gap: var(--cds-spacing-04);
+    }
+  }
+
+  .url-input-row {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--cds-spacing-03);
+  }
+
+  @media (max-width: 672px) {
+    .url-input-row {
+      flex-direction: column;
+      align-items: stretch;
+    }
   }
 
   .processing-overlay {

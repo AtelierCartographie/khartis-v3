@@ -229,8 +229,8 @@
 
   @media (max-width: 1023px) {
     #khartis-create-project :global(.fixed-modal-body) {
-      height: calc(100vh - 120px);
-      overflow: hidden;
+      height: calc(100dvh - 120px);
+      overflow-y: auto;
       padding: var(--cds-spacing-04);
     }
   }

@@ -162,14 +162,14 @@
 </script>
 
 <div class="project-name-footer">
-  <div class="flex items-center gap-5 p-4 border-t bg-white">
+  <div class="project-name-row">
     <div class="flex items-center gap-2">
       <span class="text-grey whitespace-nowrap">
         {m.project_name_label()}
       </span>
     </div>
 
-    <div class="flex-1 relative">
+    <div class="flex-1 relative project-name-input-wrapper">
       <TextInput
         data-testid="project-name-input"
         placeholder={m.project_name_placeholder()}
@@ -195,6 +195,7 @@
       disabled={!canCreateProject}
       on:click={handleCreate}
       kind="primary"
+      class="create-project-btn"
     >
       {#if isCreating}
         <div class="button-with-loader">
@@ -213,6 +214,28 @@
     width: 100%;
     margin-top: var(--cds-spacing-05);
     border-radius: 0 0 var(--cds-border-radius) var(--cds-border-radius);
+  }
+
+  .project-name-row {
+    display: flex;
+    align-items: center;
+    gap: var(--cds-spacing-05);
+    padding: var(--cds-spacing-04);
+    background: var(--cds-background);
+    border-top: 1px solid var(--cds-border-subtle);
+  }
+
+  @media (max-width: 672px) {
+    .project-name-row {
+      flex-direction: column;
+      align-items: stretch;
+      gap: var(--cds-spacing-03);
+    }
+
+    .project-name-row :global(.create-project-btn) {
+      width: 100%;
+      justify-content: center;
+    }
   }
 
   .character-count {

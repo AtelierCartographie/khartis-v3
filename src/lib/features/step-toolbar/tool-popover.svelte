@@ -231,6 +231,33 @@
     padding: 0;
   }
 
+  @media (max-width: 1023px) {
+    :global(#khartis-tool-popover .bx--popover) {
+      position: fixed !important;
+      inset: auto 0 0 0 !important;
+      top: auto !important;
+      left: 0 !important;
+      right: 0 !important;
+      bottom: calc(60px + env(safe-area-inset-bottom, 0px)) !important;
+      transform: none !important;
+      width: 100vw !important;
+      max-width: 100vw !important;
+      margin: 0 !important;
+    }
+
+    :global(#khartis-tool-popover .bx--popover-contents) {
+      width: 100vw !important;
+      max-width: 100vw !important;
+      max-height: 70vh;
+      border-radius: 8px 8px 0 0;
+      box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .popover-scroll {
+      max-height: 70vh;
+    }
+  }
+
   .popover-scroll {
     max-height: var(--popover-max-height);
     overflow-y: auto;

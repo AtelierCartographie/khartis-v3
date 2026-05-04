@@ -238,47 +238,91 @@
 
   {#if showToolsBar && hasProject}
     <nav class="mobile-tools-bar app-shadow" aria-label={m.mobile_tools_aria()}>
-      <IconButton
-        kind="ghost"
-        size="small"
-        icon={Search}
-        iconDescription={m.tool_search()}
-        isSelected={globalState.selectedTool === VisualizationTools.Search}
-        on:click={() => handleToolSelect(VisualizationTools.Search)}
-      />
-      <IconButton
-        kind="ghost"
-        size="small"
-        icon={Layers}
-        iconDescription={m.tool_layers()}
-        isSelected={globalState.selectedTool === VisualizationTools.Layers}
-        on:click={() => handleToolSelect(VisualizationTools.Layers)}
-      />
-      <IconButton
-        kind="ghost"
-        size="small"
-        icon={Earth}
-        iconDescription={m.tool_projection()}
-        isSelected={globalState.selectedTool === VisualizationTools.Projection}
-        on:click={() => handleToolSelect(VisualizationTools.Projection)}
-      />
-      <IconButton
-        kind="ghost"
-        size="small"
-        icon={EdgeNode}
-        iconDescription={m.tool_simplification()}
-        isSelected={globalState.selectedTool ===
-          VisualizationTools.Simplification}
-        on:click={() => handleToolSelect(VisualizationTools.Simplification)}
-      />
-      <IconButton
-        kind="ghost"
-        size="small"
-        icon={GridIcon}
-        iconDescription={m.tool_facets()}
-        isSelected={globalState.selectedTool === VisualizationTools.Facets}
-        on:click={() => handleToolSelect(VisualizationTools.Facets)}
-      />
+      {#if globalState.selectedStep === ToolbarStep.Visualizations}
+        <IconButton
+          kind="ghost"
+          size="small"
+          icon={Search}
+          iconDescription={m.tool_search()}
+          isSelected={globalState.selectedTool === VisualizationTools.Search}
+          on:click={() => handleToolSelect(VisualizationTools.Search)}
+        />
+        <IconButton
+          kind="ghost"
+          size="small"
+          icon={Layers}
+          iconDescription={m.tool_layers()}
+          isSelected={globalState.selectedTool === VisualizationTools.Layers}
+          on:click={() => handleToolSelect(VisualizationTools.Layers)}
+        />
+        <IconButton
+          kind="ghost"
+          size="small"
+          icon={Earth}
+          iconDescription={m.tool_projection()}
+          isSelected={globalState.selectedTool ===
+            VisualizationTools.Projection}
+          on:click={() => handleToolSelect(VisualizationTools.Projection)}
+        />
+        <IconButton
+          kind="ghost"
+          size="small"
+          icon={EdgeNode}
+          iconDescription={m.tool_simplification()}
+          isSelected={globalState.selectedTool ===
+            VisualizationTools.Simplification}
+          on:click={() => handleToolSelect(VisualizationTools.Simplification)}
+        />
+        <IconButton
+          kind="ghost"
+          size="small"
+          icon={GridIcon}
+          iconDescription={m.tool_facets()}
+          isSelected={globalState.selectedTool === VisualizationTools.Facets}
+          on:click={() => handleToolSelect(VisualizationTools.Facets)}
+        />
+      {:else if globalState.selectedStep === ToolbarStep.Styling}
+        <IconButton
+          kind="ghost"
+          size="small"
+          icon={Document}
+          iconDescription={m.tool_format()}
+          isSelected={globalState.selectedTool === StylingTools.Format}
+          on:click={() => handleStylingToolSelect(StylingTools.Format)}
+        />
+        <IconButton
+          kind="ghost"
+          size="small"
+          icon={ListBoxes}
+          iconDescription={m.tool_legend()}
+          isSelected={globalState.selectedTool === StylingTools.Legend}
+          on:click={() => handleStylingToolSelect(StylingTools.Legend)}
+        />
+        <IconButton
+          kind="ghost"
+          size="small"
+          icon={Earth}
+          iconDescription={m.tool_geo_indications()}
+          isSelected={globalState.selectedTool === StylingTools.GeoIndications}
+          on:click={() => handleStylingToolSelect(StylingTools.GeoIndications)}
+        />
+        <IconButton
+          kind="ghost"
+          size="small"
+          icon={Pen}
+          iconDescription={m.tool_annotations()}
+          isSelected={globalState.selectedTool === StylingTools.Annotations}
+          on:click={() => handleStylingToolSelect(StylingTools.Annotations)}
+        />
+        <IconButton
+          kind="ghost"
+          size="small"
+          icon={View}
+          iconDescription={m.tool_color_blindness()}
+          isSelected={globalState.selectedTool === StylingTools.ColorBlindness}
+          on:click={() => handleStylingToolSelect(StylingTools.ColorBlindness)}
+        />
+      {/if}
 
       <ToolPopover
         light
