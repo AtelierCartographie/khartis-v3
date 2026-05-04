@@ -336,5 +336,6 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--cds-spacing-03);
+    flex-wrap: wrap;
   }
 </style>

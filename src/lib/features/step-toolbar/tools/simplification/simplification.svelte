@@ -419,6 +419,7 @@
     :global(.bx--radio-button-group:not(.bx--radio-button-group--vertical)) {
     gap: var(--cds-spacing-05);
     width: 100%;
+    flex-wrap: wrap;
   }
 
   #khartis-simplification-tool
@@ -426,8 +427,9 @@
       .bx--radio-button-group:not(.bx--radio-button-group--vertical)
         .bx--radio-button-wrapper
     ) {
-    flex: 1 0 0;
+    flex: 1 0 auto;
     margin-right: 0;
+    min-width: fit-content;
   }
 
   .simplification-loader {

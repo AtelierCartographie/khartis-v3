@@ -103,6 +103,12 @@
     width: 100%;
   }
 
+  @media (max-width: 480px) {
+    .margins-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
   .margin-input {
     display: flex;
     flex-direction: column;

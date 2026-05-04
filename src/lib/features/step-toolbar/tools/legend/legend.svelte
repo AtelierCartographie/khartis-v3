@@ -441,6 +441,17 @@
     align-items: end;
   }
 
+  @media (max-width: 480px) {
+    .legend-text-style-row {
+      grid-template-columns: 1fr;
+    }
+
+    .legend-background-row {
+      grid-template-columns: 1fr;
+      gap: var(--cds-spacing-03);
+    }
+  }
+
   .legend-background-toggle {
     display: flex;
     flex-direction: column;

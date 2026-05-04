@@ -755,6 +755,27 @@
     align-items: start;
   }
 
+  @media (max-width: 1023px) {
+    .projection-grid-featured,
+    .projection-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .projection-grid-featured :global(.projection-card),
+    .projection-grid-cards :global(.projection-card) {
+      width: 100%;
+      height: auto;
+      min-height: 140px;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .projection-grid-featured,
+    .projection-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
   .projection-grid-column {
     display: flex;
     flex-direction: column;
