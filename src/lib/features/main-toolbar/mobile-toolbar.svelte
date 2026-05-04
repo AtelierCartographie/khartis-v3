@@ -208,6 +208,7 @@
           size="small"
           icon={Search}
           iconDescription={m.tool_search()}
+          hideTooltip={true}
           isSelected={globalState.selectedTool === VisualizationTools.Search}
           on:click={() => handleToolSelect(VisualizationTools.Search)}
         />
@@ -216,6 +217,7 @@
           size="small"
           icon={Layers}
           iconDescription={m.tool_layers()}
+          hideTooltip={true}
           isSelected={globalState.selectedTool === VisualizationTools.Layers}
           on:click={() => handleToolSelect(VisualizationTools.Layers)}
         />
@@ -224,6 +226,7 @@
           size="small"
           icon={Earth}
           iconDescription={m.tool_projection()}
+          hideTooltip={true}
           isSelected={globalState.selectedTool ===
             VisualizationTools.Projection}
           on:click={() => handleToolSelect(VisualizationTools.Projection)}
@@ -233,6 +236,7 @@
           size="small"
           icon={EdgeNode}
           iconDescription={m.tool_simplification()}
+          hideTooltip={true}
           isSelected={globalState.selectedTool ===
             VisualizationTools.Simplification}
           on:click={() => handleToolSelect(VisualizationTools.Simplification)}
@@ -242,6 +246,7 @@
           size="small"
           icon={GridIcon}
           iconDescription={m.tool_facets()}
+          hideTooltip={true}
           isSelected={globalState.selectedTool === VisualizationTools.Facets}
           on:click={() => handleToolSelect(VisualizationTools.Facets)}
         />
@@ -316,20 +321,20 @@
           <View size={20} />
         </button>
       {/if}
-
-      <ToolPopover
-        light
-        open={!!globalState.selectedTool}
-        align="top"
-        viewMode={globalState.projectionViewMode ?? 'list'}
-        listWidth={320}
-        gridWidth="100vw"
-      >
-        {#snippet content()}
-          <ToolContainer />
-        {/snippet}
-      </ToolPopover>
     </nav>
+
+    <ToolPopover
+      light
+      open={!!globalState.selectedTool}
+      align="top"
+      viewMode={globalState.projectionViewMode ?? 'list'}
+      listWidth={320}
+      gridWidth="100vw"
+    >
+      {#snippet content()}
+        <ToolContainer />
+      {/snippet}
+    </ToolPopover>
   {/if}
 
   <nav
