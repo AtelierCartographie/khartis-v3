@@ -17,15 +17,16 @@
     ChevronDown,
     ColorPalette,
     DataBase,
-    Document,
     Earth,
     EdgeNode,
+    Edit,
     Grid as GridIcon,
     Layers,
-    ListBoxes,
-    Pen,
+    Legend,
+    Location,
     RulerAlt,
     Search,
+    TextFont,
     View
   } from 'carbon-icons-svelte';
   import clsx from 'clsx';
@@ -65,7 +66,11 @@
       globalActions.closeMobileToolbar();
     } else {
       globalActions.setNavigationState(step);
-      globalActions.openMobileToolbar();
+      if (step === ToolbarStep.Styling) {
+        globalActions.closeMobileToolbar();
+      } else {
+        globalActions.openMobileToolbar();
+      }
     }
     closeSelectedToolPanel();
   };
@@ -164,52 +169,8 @@
           {/if}
         </div>
       {:else if globalState.selectedStep === ToolbarStep.Styling}
-        <div class="styling-tools-grid">
-          <p class="styling-intro">{m.styling_tools_intro()}</p>
-          <div class="tools-grid">
-            <button
-              class="tool-btn"
-              onclick={() => handleStylingToolSelect(StylingTools.Format)}
-            >
-              <Document size={32} />
-              <span>{m.tool_format()}</span>
-            </button>
-            <div class="tool-button-wrapper">
-              <button
-                class="tool-btn"
-                onclick={() => handleStylingToolSelect(StylingTools.Legend)}
-              >
-                <ListBoxes size={32} />
-                <span>{m.tool_legend()}</span>
-              </button>
-              {#if showLegendBadge}
-                <span class="notification-badge"></span>
-              {/if}
-            </div>
-            <button
-              class="tool-btn"
-              onclick={() =>
-                handleStylingToolSelect(StylingTools.GeoIndications)}
-            >
-              <Earth size={32} />
-              <span>{m.tool_geo_indications()}</span>
-            </button>
-            <button
-              class="tool-btn"
-              onclick={() => handleStylingToolSelect(StylingTools.Annotations)}
-            >
-              <Pen size={32} />
-              <span>{m.tool_annotations()}</span>
-            </button>
-            <button
-              class="tool-btn"
-              onclick={() =>
-                handleStylingToolSelect(StylingTools.ColorBlindness)}
-            >
-              <View size={32} />
-              <span>{m.tool_color_blindness()}</span>
-            </button>
-          </div>
+        <div class="styling-empty-state">
+          <p class="styling-hint">{m.styling_tools_hint()}</p>
         </div>
       {/if}
     </article>
@@ -282,46 +243,75 @@
           on:click={() => handleToolSelect(VisualizationTools.Facets)}
         />
       {:else if globalState.selectedStep === ToolbarStep.Styling}
-        <IconButton
-          kind="ghost"
-          size="small"
-          icon={Document}
-          iconDescription={m.tool_format()}
-          isSelected={globalState.selectedTool === StylingTools.Format}
-          on:click={() => handleStylingToolSelect(StylingTools.Format)}
-        />
-        <IconButton
-          kind="ghost"
-          size="small"
-          icon={ListBoxes}
-          iconDescription={m.tool_legend()}
-          isSelected={globalState.selectedTool === StylingTools.Legend}
-          on:click={() => handleStylingToolSelect(StylingTools.Legend)}
-        />
-        <IconButton
-          kind="ghost"
-          size="small"
-          icon={Earth}
-          iconDescription={m.tool_geo_indications()}
-          isSelected={globalState.selectedTool === StylingTools.GeoIndications}
-          on:click={() => handleStylingToolSelect(StylingTools.GeoIndications)}
-        />
-        <IconButton
-          kind="ghost"
-          size="small"
-          icon={Pen}
-          iconDescription={m.tool_annotations()}
-          isSelected={globalState.selectedTool === StylingTools.Annotations}
-          on:click={() => handleStylingToolSelect(StylingTools.Annotations)}
-        />
-        <IconButton
-          kind="ghost"
-          size="small"
-          icon={View}
-          iconDescription={m.tool_color_blindness()}
-          isSelected={globalState.selectedTool === StylingTools.ColorBlindness}
-          on:click={() => handleStylingToolSelect(StylingTools.ColorBlindness)}
-        />
+        <button
+          type="button"
+          class="mobile-tool-btn"
+          class:active={globalState.selectedTool === StylingTools.Format}
+          aria-pressed={globalState.selectedTool === StylingTools.Format}
+          onclick={() => handleStylingToolSelect(StylingTools.Format)}
+        >
+          {#if globalState.selectedTool === StylingTools.Format}
+            <span class="tool-active-indicator"></span>
+          {/if}
+          <TextFont size={20} />
+        </button>
+        <div class="mobile-tool-wrapper">
+          <button
+            type="button"
+            class="mobile-tool-btn"
+            class:active={globalState.selectedTool === StylingTools.Legend}
+            aria-pressed={globalState.selectedTool === StylingTools.Legend}
+            onclick={() => handleStylingToolSelect(StylingTools.Legend)}
+          >
+            {#if globalState.selectedTool === StylingTools.Legend}
+              <span class="tool-active-indicator"></span>
+            {/if}
+            <Legend size={20} />
+          </button>
+          {#if showLegendBadge}
+            <span class="notification-badge"></span>
+          {/if}
+        </div>
+        <button
+          type="button"
+          class="mobile-tool-btn"
+          class:active={globalState.selectedTool ===
+            StylingTools.GeoIndications}
+          aria-pressed={globalState.selectedTool ===
+            StylingTools.GeoIndications}
+          onclick={() => handleStylingToolSelect(StylingTools.GeoIndications)}
+        >
+          {#if globalState.selectedTool === StylingTools.GeoIndications}
+            <span class="tool-active-indicator"></span>
+          {/if}
+          <Location size={20} />
+        </button>
+        <button
+          type="button"
+          class="mobile-tool-btn"
+          class:active={globalState.selectedTool === StylingTools.Annotations}
+          aria-pressed={globalState.selectedTool === StylingTools.Annotations}
+          onclick={() => handleStylingToolSelect(StylingTools.Annotations)}
+        >
+          {#if globalState.selectedTool === StylingTools.Annotations}
+            <span class="tool-active-indicator"></span>
+          {/if}
+          <Edit size={20} />
+        </button>
+        <button
+          type="button"
+          class="mobile-tool-btn"
+          class:active={globalState.selectedTool ===
+            StylingTools.ColorBlindness}
+          aria-pressed={globalState.selectedTool ===
+            StylingTools.ColorBlindness}
+          onclick={() => handleStylingToolSelect(StylingTools.ColorBlindness)}
+        >
+          {#if globalState.selectedTool === StylingTools.ColorBlindness}
+            <span class="tool-active-indicator"></span>
+          {/if}
+          <View size={20} />
+        </button>
       {/if}
 
       <ToolPopover
@@ -470,67 +460,68 @@
     border-bottom-color: var(--cds-interactive-01);
   }
 
-  .styling-tools-grid {
+  .styling-empty-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
     padding: var(--cds-spacing-05);
   }
 
-  .styling-intro {
+  .styling-hint {
     color: var(--cds-text-02);
     font-size: 0.875rem;
-    margin-bottom: var(--cds-spacing-05);
     text-align: center;
   }
 
-  .tools-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: var(--cds-spacing-04);
-  }
-
-  .tool-btn {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: var(--cds-spacing-02);
-    padding: var(--cds-spacing-04);
-    background: var(--cds-ui-01);
-    border: 1px solid var(--cds-ui-03);
-    border-radius: 8px;
-    color: var(--cds-text-01);
-    cursor: pointer;
-    transition: all 0.15s ease;
-  }
-
-  .tool-btn:hover {
-    background: var(--cds-hover-ui);
-  }
-
-  .tool-btn:active {
-    background: var(--cds-active-ui);
-  }
-
-  .tool-btn :global(svg) {
-    fill: var(--cds-text-01);
-  }
-
-  .tool-btn span {
-    font-size: 0.75rem;
-    font-weight: 500;
-    text-align: center;
-  }
-
-  .tool-button-wrapper {
+  .mobile-tool-wrapper {
     position: relative;
   }
 
-  .tool-button-wrapper .tool-btn {
-    width: 100%;
+  .mobile-tool-btn {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--cds-text-01);
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+  }
+
+  .mobile-tool-btn:hover {
+    background: var(--cds-hover-ui);
+  }
+
+  .mobile-tool-btn:active {
+    background: var(--cds-active-ui);
+  }
+
+  .mobile-tool-btn :global(svg) {
+    fill: var(--cds-text-01);
+  }
+
+  .tool-active-indicator {
+    position: absolute;
+    top: 2px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 6px;
+    height: 6px;
+    background-color: var(--cds-support-error, #da1e28);
+    border-radius: 50%;
+    pointer-events: none;
   }
 
   .notification-badge {
     position: absolute;
-    top: 8px;
-    right: 8px;
+    top: 2px;
+    right: 2px;
     width: 8px;
     height: 8px;
     background-color: var(--cds-support-error, #da1e28);
@@ -547,10 +538,11 @@
     transform: translateX(-50%);
     display: flex;
     align-items: center;
-    gap: var(--cds-spacing-02);
+    gap: var(--cds-spacing-01);
     padding: var(--cds-spacing-02) var(--cds-spacing-03);
     background: var(--cds-ui-01);
     border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
     z-index: var(--z-mobile-overlay);
   }
 

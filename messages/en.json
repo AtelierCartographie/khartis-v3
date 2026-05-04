@@ -1291,6 +1291,7 @@
   "navigation_primary_aria": "Primary navigation",
   "aria_label_separator": " · ",
   "styling_tools_intro": "Select a tool to customize your map",
+  "styling_tools_hint": "Use the toolbar below to customize your map",
   "layer_show": "Show layer",
   "layer_hide": "Hide layer",
   "file_options": "File options",
