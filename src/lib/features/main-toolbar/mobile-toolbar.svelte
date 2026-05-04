@@ -596,11 +596,12 @@
   }
 
   .nav-tab.selected {
-    color: var(--cds-interactive-01);
+    color: var(--cds-text-primary);
+    background: var(--cds-layer-selected);
   }
 
   .nav-tab.selected :global(svg) {
-    fill: var(--cds-interactive-01);
+    fill: var(--cds-text-primary);
   }
 
   .nav-tab :global(svg) {
