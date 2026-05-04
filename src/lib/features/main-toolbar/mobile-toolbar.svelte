@@ -398,7 +398,7 @@
     bottom: calc(60px + env(safe-area-inset-bottom, 0px));
     background: var(--cds-ui-01);
     z-index: var(--z-mobile-toolbar);
-    transform: translateY(100%);
+    transform: translateY(calc(100% + 80px));
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     display: flex;
     flex-direction: column;
