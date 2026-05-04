@@ -96,9 +96,24 @@
     onValidateEntity
   }: Props = $props();
 
-  const joinedBasemapValueSet = $derived(
-    new Set(joinedEntitiesList.map((row) => row.basemapValue))
-  );
+  // `basemap_attributes` is a long-format table: each entity exposes several
+  // `raw` variants (e.g. "Afghanistan", "AFG", "AF") for the same feature.
+  // The set below collects every variant of every joined entity so dropdowns
+  // never offer an alias for an entity that is already linked elsewhere.
+  // Per issue #102 (TomBor, 2026-05-04).
+  const joinedBasemapValueSet = $derived.by(() => {
+    const set = new SvelteSet<string>();
+    for (const row of joinedEntitiesList) {
+      if (!row.basemapValue) continue;
+      set.add(row.basemapValue);
+      const aliases = basemapAliasesByValue?.[row.basemapValue];
+      if (!aliases) continue;
+      for (const alias of aliases) {
+        if (alias.value) set.add(alias.value);
+      }
+    }
+    return set;
+  });
 
   const availableBasemapValues = $derived(
     basemapValues.filter((value) => !joinedBasemapValueSet.has(value))
@@ -108,9 +123,24 @@
     availableBasemapValues.map((value) => ({ id: value, text: value }))
   );
 
-  const allBasemapComboBoxItems = $derived<ComboBoxItem[]>(
-    basemapValues.map((value) => ({ id: value, text: value }))
-  );
+  // For the manual-correction dropdown of an already-joined row, keep the
+  // current entity's own variants selectable while still excluding variants
+  // of OTHER joined entities.
+  function buildJoinedRowOptions(currentBasemapValue: string): ComboBoxItem[] {
+    const ownVariants = new SvelteSet<string>();
+    ownVariants.add(currentBasemapValue);
+    const aliases = basemapAliasesByValue?.[currentBasemapValue];
+    if (aliases) {
+      for (const alias of aliases) {
+        if (alias.value) ownVariants.add(alias.value);
+      }
+    }
+    return basemapValues
+      .filter(
+        (value) => ownVariants.has(value) || !joinedBasemapValueSet.has(value)
+      )
+      .map((value) => ({ id: value, text: value }));
+  }
 
   const duplicateCount = $derived(duplicates.length);
   const unrecognizedCount = $derived(unknowns.length);
@@ -537,8 +567,11 @@
                       <div class="table-cell cell-equals">=</div>
                       <div class="table-cell cell-select">
                         {#if visibleJoinedRows.has(row.dataValue)}
+                          {@const joinedRowOptions = buildJoinedRowOptions(
+                            row.basemapValue
+                          )}
                           <ComboBox
-                            items={allBasemapComboBoxItems}
+                            items={joinedRowOptions}
                             selectedId={row.basemapValue}
                             placeholder={row.basemapValue}
                             labelText={m.join_select_label_joined({

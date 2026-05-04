@@ -65,7 +65,6 @@
   import { resolveNextBasemapSelectionId } from './services/basemap-selection';
   import { resolveDatasetIdForOrchestrator } from './services/dataset-resolution';
   import { persistTabularSourceSnapshot } from './services/tabular-source-snapshot';
-  import { hasBlockingJoinIssues } from './services/join-validation';
 
   function handleBasemapSourceChange(source: BasemapSource): void {
     dataTabActions.setBasemapSource(source);
@@ -469,9 +468,7 @@
         basemapAliasesByValue = {};
       }
 
-      const hasBlocking = hasBlockingJoinIssues(stats);
-
-      if (hasBlocking || stats.joinedCount === 0) {
+      if (stats.joinedCount === 0) {
         dataTabStore.resetStepCompletion(stepIndex);
         return false;
       }
@@ -913,11 +910,9 @@
           basemapAttributeValues = [];
         }
 
-        const hasBlocking = hasBlockingJoinIssues(stats);
-
-        if (hasBlocking || stats.joinedCount === 0) {
+        if (stats.joinedCount === 0) {
           logger.info(
-            'Corrections applied but join still requires manual validation',
+            'Corrections applied but no entities are joined yet',
             LogCategory.MAP,
             {
               toVerify: stats.toVerifyCount,
@@ -1058,9 +1053,7 @@
           basemapAttributeValues = [];
         }
 
-        const hasBlocking = hasBlockingJoinIssues(stats);
-
-        if (!hasBlocking && stats.joinedCount > 0) {
+        if (stats.joinedCount > 0) {
           await duckDBOrchestrator.finalizeJoin(
             resolvedDatasetId,
             basemap,
@@ -1137,23 +1130,6 @@
     );
     if (!basemap) {
       logger.warn('No basemap selected for join finalization', LogCategory.MAP);
-      return;
-    }
-
-    const hasBlocking = hasBlockingJoinIssues({
-      joinedCount,
-      toVerifyCount,
-      duplicateCount: duplicates.length
-    });
-    if (hasBlocking) {
-      logger.warn(
-        'Cannot finalize join with unresolved entities',
-        LogCategory.MAP,
-        {
-          toVerify: toVerifyCount,
-          duplicates: duplicates.length
-        }
-      );
       return;
     }
 
@@ -1492,7 +1468,7 @@
             previousJoinContext = `${resolvedDatasetId}::${basemap.file}`;
             previousLinkedVariableName = linkedVariableName;
 
-            if (hasBlockingJoinIssues(stats) || stats.joinedCount === 0) {
+            if (stats.joinedCount === 0) {
               dataTabStore.resetStepCompletion(stepIndex);
               return;
             }

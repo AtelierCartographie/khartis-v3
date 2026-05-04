@@ -31,11 +31,27 @@ describe('JoinAssistedSection — selected-basemap tooltip (S1.1c.iii)', () => {
   });
 
   it('uses a Set for joined basemap membership checks on large basemaps', () => {
-    expect(source).toContain('const joinedBasemapValueSet = $derived(');
-    expect(source).toContain('new Set(joinedEntitiesList.map(');
+    expect(source).toContain('const joinedBasemapValueSet = $derived.by(');
     expect(source).toContain('!joinedBasemapValueSet.has(value)');
     expect(source).toContain('!joinedBasemapValueSet.has(suggestion)');
     expect(source).not.toContain('joinedBasemapValues.includes');
+  });
+
+  it('extends the joined set with every variant of each joined entity', () => {
+    expect(source).toContain('basemapAliasesByValue?.[row.basemapValue]');
+    expect(source).toContain('set.add(alias.value)');
+  });
+
+  it('builds joined-row dropdown options that exclude variants of OTHER joined entities', () => {
+    expect(source).toContain(
+      'function buildJoinedRowOptions(currentBasemapValue: string)'
+    );
+    expect(source).toContain('ownVariants.has(value)');
+    expect(source).toContain('!joinedBasemapValueSet.has(value)');
+    expect(source).toContain(
+      '{@const joinedRowOptions = buildJoinedRowOptions('
+    );
+    expect(source).not.toContain('items={allBasemapComboBoxItems}');
   });
 
   it('builds the verify-row tooltip from the selected mapping', () => {
