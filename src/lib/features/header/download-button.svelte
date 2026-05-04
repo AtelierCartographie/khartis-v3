@@ -413,10 +413,12 @@
     background: var(--cds-background, #ffffff);
   }
 
-  :global(.download-modal .bx--modal-container) {
-    width: min(38rem, calc(100vw - 2rem));
-    max-height: calc(100vh - 3rem);
-    border-radius: 0;
+  @media (min-width: 1024px) {
+    :global(.download-modal .bx--modal-container) {
+      width: min(38rem, calc(100vw - 2rem));
+      max-height: calc(100vh - 3rem);
+      border-radius: 0;
+    }
   }
 
   :global(.download-modal .bx--modal-header) {
@@ -605,10 +607,6 @@
   }
 
   @media (max-width: 671px) {
-    :global(.download-modal .bx--modal-container) {
-      width: calc(100vw - 1rem);
-    }
-
     :global(.download-modal .bx--modal-content) {
       padding-inline: var(--cds-spacing-05);
       padding-block-end: var(--cds-spacing-05);

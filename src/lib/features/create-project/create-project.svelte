@@ -212,17 +212,27 @@
     }
   }
 
-  #khartis-create-project :global(.bx--modal-container) {
-    width: 90vw;
-    max-width: 700px;
-    height: 85vh;
-    background: var(--cds-background);
+  @media (min-width: 1024px) {
+    #khartis-create-project :global(.bx--modal-container) {
+      width: 90vw;
+      max-width: 700px;
+      height: 85vh;
+      background: var(--cds-background);
+    }
+
+    #khartis-create-project :global(.fixed-modal-body) {
+      height: calc(85vh - 120px);
+      overflow: hidden;
+      padding: var(--cds-spacing-05);
+    }
   }
 
-  #khartis-create-project :global(.fixed-modal-body) {
-    height: calc(85vh - 120px);
-    overflow: hidden;
-    padding: var(--cds-spacing-05);
+  @media (max-width: 1023px) {
+    #khartis-create-project :global(.fixed-modal-body) {
+      height: calc(100vh - 120px);
+      overflow: hidden;
+      padding: var(--cds-spacing-04);
+    }
   }
 
   #khartis-create-project :global(.no-close-button .bx--modal-close) {
