@@ -124,7 +124,8 @@
 {#if globalState.isMobileView}
   <div
     class={clsx('mobile-toolbar-overlay', {
-      open: globalState.isMobileToolbarOpen
+      open: globalState.isMobileToolbarOpen,
+      'with-tools-bar': showToolsBar
     })}
     role="dialog"
     aria-modal="true"
@@ -380,6 +381,13 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+  }
+
+  .mobile-toolbar-overlay.with-tools-bar {
+    bottom: calc(
+      60px + env(safe-area-inset-bottom, 0px) + var(--cds-spacing-10) +
+        var(--cds-spacing-03)
+    );
   }
 
   .mobile-toolbar-overlay.open {
