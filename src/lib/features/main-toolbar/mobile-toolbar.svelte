@@ -203,53 +203,70 @@
   {#if showToolsBar && hasProject}
     <nav class="mobile-tools-bar app-shadow" aria-label={m.mobile_tools_aria()}>
       {#if globalState.selectedStep === ToolbarStep.Visualizations}
-        <IconButton
-          kind="ghost"
-          size="small"
-          icon={Search}
-          iconDescription={m.tool_search()}
-          hideTooltip={true}
-          isSelected={globalState.selectedTool === VisualizationTools.Search}
-          on:click={() => handleToolSelect(VisualizationTools.Search)}
-        />
-        <IconButton
-          kind="ghost"
-          size="small"
-          icon={Layers}
-          iconDescription={m.tool_layers()}
-          hideTooltip={true}
-          isSelected={globalState.selectedTool === VisualizationTools.Layers}
-          on:click={() => handleToolSelect(VisualizationTools.Layers)}
-        />
-        <IconButton
-          kind="ghost"
-          size="small"
-          icon={Earth}
-          iconDescription={m.tool_projection()}
-          hideTooltip={true}
-          isSelected={globalState.selectedTool ===
+        <button
+          type="button"
+          class="mobile-tool-btn"
+          class:active={globalState.selectedTool === VisualizationTools.Search}
+          aria-pressed={globalState.selectedTool === VisualizationTools.Search}
+          onclick={() => handleToolSelect(VisualizationTools.Search)}
+        >
+          {#if globalState.selectedTool === VisualizationTools.Search}
+            <span class="tool-active-indicator"></span>
+          {/if}
+          <Search size={20} />
+        </button>
+        <button
+          type="button"
+          class="mobile-tool-btn"
+          class:active={globalState.selectedTool === VisualizationTools.Layers}
+          aria-pressed={globalState.selectedTool === VisualizationTools.Layers}
+          onclick={() => handleToolSelect(VisualizationTools.Layers)}
+        >
+          {#if globalState.selectedTool === VisualizationTools.Layers}
+            <span class="tool-active-indicator"></span>
+          {/if}
+          <Layers size={20} />
+        </button>
+        <button
+          type="button"
+          class="mobile-tool-btn"
+          class:active={globalState.selectedTool ===
             VisualizationTools.Projection}
-          on:click={() => handleToolSelect(VisualizationTools.Projection)}
-        />
-        <IconButton
-          kind="ghost"
-          size="small"
-          icon={EdgeNode}
-          iconDescription={m.tool_simplification()}
-          hideTooltip={true}
-          isSelected={globalState.selectedTool ===
+          aria-pressed={globalState.selectedTool ===
+            VisualizationTools.Projection}
+          onclick={() => handleToolSelect(VisualizationTools.Projection)}
+        >
+          {#if globalState.selectedTool === VisualizationTools.Projection}
+            <span class="tool-active-indicator"></span>
+          {/if}
+          <Earth size={20} />
+        </button>
+        <button
+          type="button"
+          class="mobile-tool-btn"
+          class:active={globalState.selectedTool ===
             VisualizationTools.Simplification}
-          on:click={() => handleToolSelect(VisualizationTools.Simplification)}
-        />
-        <IconButton
-          kind="ghost"
-          size="small"
-          icon={GridIcon}
-          iconDescription={m.tool_facets()}
-          hideTooltip={true}
-          isSelected={globalState.selectedTool === VisualizationTools.Facets}
-          on:click={() => handleToolSelect(VisualizationTools.Facets)}
-        />
+          aria-pressed={globalState.selectedTool ===
+            VisualizationTools.Simplification}
+          onclick={() => handleToolSelect(VisualizationTools.Simplification)}
+        >
+          {#if globalState.selectedTool === VisualizationTools.Simplification}
+            <span class="tool-active-indicator"></span>
+          {/if}
+          <EdgeNode size={20} />
+        </button>
+        <button
+          type="button"
+          class="mobile-tool-btn"
+          class:active={globalState.selectedTool === VisualizationTools.Facets}
+          aria-pressed={globalState.selectedTool === VisualizationTools.Facets}
+          onclick={() => handleToolSelect(VisualizationTools.Facets)}
+        >
+          {#if globalState.selectedTool === VisualizationTools.Facets}
+            <span class="tool-active-indicator"></span>
+          {/if}
+          <GridIcon size={20} />
+        </button>
       {:else if globalState.selectedStep === ToolbarStep.Styling}
         <button
           type="button"
@@ -515,6 +532,10 @@
 
   .mobile-tool-btn:active {
     background: var(--cds-active-ui);
+  }
+
+  .mobile-tool-btn.active {
+    background: var(--cds-layer-selected);
   }
 
   .mobile-tool-btn :global(svg) {
