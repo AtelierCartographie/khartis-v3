@@ -40,6 +40,19 @@ export function withOpacity(color: number[], opacity = 1): Color {
   return [color[0] ?? 0, color[1] ?? 0, color[2] ?? 0, alpha];
 }
 
+export function sortBySizeDescending<T>(
+  items: readonly T[],
+  sizeFn: (item: T) => number
+): T[] {
+  return items
+    .map((item, index) => ({ item, size: sizeFn(item), index }))
+    .sort((a, b) => {
+      if (b.size !== a.size) return b.size - a.size;
+      return a.index - b.index;
+    })
+    .map(({ item }) => item);
+}
+
 export function createCategoricalColorAccessor(
   categoryColumn: string,
   colorMap: Map<string, RGBColor> | null,
