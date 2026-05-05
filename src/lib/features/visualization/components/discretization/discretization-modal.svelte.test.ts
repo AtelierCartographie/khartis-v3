@@ -74,16 +74,16 @@ function createVisualization(options?: {
 describe('DiscretizationModal', () => {
   it('offers the SQL discretization methods plus manual', () => {
     const visualization = createVisualization();
-    const { container } = render(DiscretizationModal, {
+    render(DiscretizationModal, {
       open: true,
       visualization,
       classification: visualization.classification,
       valueColumn: visualization.mapping.valueColumn
     });
-    const panel = container.querySelector('.discretization-floating-panel');
+    const panel = document.body.querySelector('.discretization-floating-panel');
 
     expect(panel).not.toBeNull();
-    const select = container.querySelector(
+    const select = document.body.querySelector(
       '#classification-method'
     ) as HTMLSelectElement | null;
 
@@ -105,12 +105,12 @@ describe('DiscretizationModal', () => {
 
   it('defaults the discretization select to K-means when no method is configured', () => {
     const visualization = createVisualization({ classification: undefined });
-    const { container } = render(DiscretizationModal, {
+    render(DiscretizationModal, {
       open: true,
       visualization
     });
 
-    const select = container.querySelector(
+    const select = document.body.querySelector(
       '#classification-method'
     ) as HTMLSelectElement | null;
 
@@ -120,7 +120,7 @@ describe('DiscretizationModal', () => {
 
   it('does not fall back to the root classification when a channel override is undefined', () => {
     const visualization = createVisualization();
-    const { container } = render(DiscretizationModal, {
+    render(DiscretizationModal, {
       open: true,
       visualization,
       classification: undefined,
@@ -128,7 +128,7 @@ describe('DiscretizationModal', () => {
       role: 'stroke'
     });
 
-    const select = container.querySelector(
+    const select = document.body.querySelector(
       '#classification-method'
     ) as HTMLSelectElement | null;
 
@@ -151,13 +151,13 @@ describe('DiscretizationModal', () => {
         categoryShapes: [ShapeType.CIRCLE]
       }
     });
-    const { container } = render(DiscretizationModal, {
+    render(DiscretizationModal, {
       open: true,
       visualization,
       onchange
     });
 
-    const select = container.querySelector(
+    const select = document.body.querySelector(
       '#classification-method'
     ) as HTMLSelectElement | null;
 
@@ -184,14 +184,14 @@ describe('DiscretizationModal', () => {
       classification: initialClassification
     });
     const onchange = vi.fn();
-    const { container, rerender } = render(DiscretizationModal, {
+    const { rerender } = render(DiscretizationModal, {
       open: true,
       visualization,
       classification: initialClassification,
       onchange
     });
 
-    const select = container.querySelector(
+    const select = document.body.querySelector(
       '#classification-method'
     ) as HTMLSelectElement | null;
 
@@ -214,7 +214,7 @@ describe('DiscretizationModal', () => {
       onchange
     });
 
-    const reopenedSelect = container.querySelector(
+    const reopenedSelect = document.body.querySelector(
       '#classification-method'
     ) as HTMLSelectElement | null;
 
@@ -387,17 +387,17 @@ describe('DiscretizationModal', () => {
   });
 
   it('can hide breakpoint controls for non-color discretizations', () => {
-    const { container } = render(DiscretizationModal, {
+    render(DiscretizationModal, {
       open: true,
       visualization: createVisualization(),
       showBreakpointControls: false,
       role: 'size'
     });
 
-    expect(container.querySelector('.breakpoint-section')).toBeNull();
-    expect(container.querySelector('#breakpoint-value')).toBeNull();
+    expect(document.body.querySelector('.breakpoint-section')).toBeNull();
+    expect(document.body.querySelector('#breakpoint-value')).toBeNull();
     expect(
-      container.querySelector(
+      document.body.querySelector(
         '.discretization-floating-panel[data-role="size"]'
       )
     ).not.toBeNull();
