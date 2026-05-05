@@ -38,6 +38,23 @@ const mocks = vi.hoisted(() => {
   };
 });
 
+vi.mock('@duckdb/duckdb-wasm', () => ({
+  default: {},
+  createWorker: vi.fn(),
+  selectBundle: vi.fn()
+}));
+
+vi.mock('$lib/features/duckdb', () => ({
+  Duck: {},
+  duckDBOrchestrator: {
+    initialize: vi.fn(),
+    executeQuery: vi.fn(),
+    getConnection: vi.fn()
+  },
+  validateGPSColumns: vi.fn(),
+  GEO_CONSTANTS: { WGS84_CRS: 'EPSG:4326' }
+}));
+
 vi.mock('$lib/features/commons/stores/create-project.store.svelte', () => ({
   createProjectState: mocks.createProjectState,
   createProjectActions: {
