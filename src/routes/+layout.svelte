@@ -733,6 +733,12 @@
     padding: var(--cds-spacing-03) var(--cds-spacing-05);
   }
 
+  @media (max-width: 1023px) {
+    .page-content-wrapper {
+      padding: var(--cds-spacing-02) var(--cds-spacing-03);
+    }
+  }
+
   .workspace-panning .workspace-camera {
     transition: none;
   }

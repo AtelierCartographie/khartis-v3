@@ -144,7 +144,8 @@
   let stepToolbarWidth = $state(0);
 
   const fitCoverageRatio = $derived(
-    globalState.selectedStep === ToolbarStep.Styling
+    globalState.selectedStep === ToolbarStep.Styling &&
+      !globalState.isMobileView
       ? STYLING_STEP_COVERAGE_RATIO
       : DEFAULT_STEP_COVERAGE_RATIO
   );

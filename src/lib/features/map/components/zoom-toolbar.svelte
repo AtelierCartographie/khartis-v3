@@ -691,7 +691,7 @@
 
   #khartis-zoom-toolbar :global(.zoom-button.bx--btn) {
     min-width: 50px;
-    min-height: 28px;
+    min-height: 42px;
     width: 50px;
     height: 100%;
     padding: 0;

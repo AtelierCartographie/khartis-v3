@@ -137,11 +137,11 @@
 
 <style lang="scss">
   .compact-number-input {
-    --compact-number-input-stepper-width: 32px;
+    --compact-number-input-stepper-width: 40px;
 
     width: var(--compact-number-input-width, 100%);
     min-width: 64px;
-    height: var(--compact-number-input-height, 32px);
+    height: var(--compact-number-input-height, 40px);
     display: flex;
     align-items: stretch;
     background-color: var(--cds-field-01, #f4f4f4);

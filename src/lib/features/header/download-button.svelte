@@ -441,6 +441,7 @@
   @media (max-width: 1023px) {
     #khartis-download-button :global(.bx--btn) {
       min-width: 3rem;
+      min-height: 3rem;
       padding-inline: 0.75rem;
       font-size: 0;
     }

@@ -452,6 +452,7 @@
     flex: 1;
     overflow-y: auto;
     padding: 0;
+    padding-bottom: calc(var(--cds-spacing-10) + var(--cds-spacing-03));
     -webkit-overflow-scrolling: touch;
   }
 

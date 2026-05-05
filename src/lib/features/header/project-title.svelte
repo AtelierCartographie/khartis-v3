@@ -56,6 +56,7 @@
   id="khartis-project-title"
   class="project-title"
   data-testid="project-title"
+  title={inputValue || m.project_placeholder()}
 >
   <TextInput
     light

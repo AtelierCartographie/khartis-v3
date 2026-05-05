@@ -106,6 +106,7 @@
   @media (max-width: 480px) {
     .margins-grid {
       grid-template-columns: 1fr;
+      gap: var(--cds-spacing-04);
     }
   }
 

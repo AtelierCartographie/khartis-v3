@@ -53,6 +53,11 @@
     padding-top: var(--safe-area-top);
   }
 
+  #khartis-header :global(.bx--header__menu-trigger) {
+    min-width: 48px;
+    min-height: 48px;
+  }
+
   #khartis-header :global(.bx--header__menu-trigger > svg) {
     fill: var(--cds-icon-01) !important;
   }
@@ -79,6 +84,7 @@
   @media (max-width: 1023px) {
     #khartis-header :global(.header-help-button.bx--btn) {
       min-width: 3rem;
+      min-height: 3rem;
       padding-inline: 0.75rem;
       font-size: 0;
     }
