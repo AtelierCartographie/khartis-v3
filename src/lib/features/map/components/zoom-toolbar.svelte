@@ -11,7 +11,6 @@
     globalState
   } from '../../commons/store/global.svelte';
   import { mapInstanceStore } from '../../commons/store/map-instance.store.svelte';
-  import { EnvironmentUtils } from '../../commons/utils/environment.utils';
   import { ViewMode } from '../constants/map.constants';
   import { deckDebugStore } from '../stores/deck-debug.store.svelte';
   import { zoomModeStore } from '../../commons/store/zoom-mode.store.svelte';
@@ -53,7 +52,7 @@
   ]);
 
   function isDeckDebugEnabled(): boolean {
-    return import.meta.env.DEV || EnvironmentUtils.hasPreproductionUrlMarker();
+    return import.meta.env.DEV;
   }
 
   function handleZoomModeChange(index: number): void {
