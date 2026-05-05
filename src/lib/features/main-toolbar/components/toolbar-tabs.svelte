@@ -1,12 +1,12 @@
 <script lang="ts">
   import Button from '$lib/features/commons/components/carbon/button.svelte';
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
-  import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+  import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import {
     globalActions,
     globalState
-  } from '$lib/features/commons/store/global.svelte';
-  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
+  } from '$lib/features/commons/stores/global.svelte';
+  import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
   import { ButtonKind } from '$lib/features/commons/types/enums';
   import {
     ToolbarState,
@@ -29,14 +29,14 @@
   import clsx from 'clsx';
   import { SvelteMap } from 'svelte/reactivity';
   import AddDataModal from './add-data-modal.svelte';
-  import { dataTabStore } from '../data-tab/data-tab.store.svelte';
-  import { dataToolsStore } from '../data-tab/data-tools.store.svelte';
+  import { dataTabStore } from '$lib/features/data-tab/data-tab.store.svelte';
+  import { dataToolsStore } from '$lib/features/data-tab/data-tools.store.svelte';
   import { KEY } from '$lib/features/commons/constants/dom.constants';
-  import { UI_CONSTANTS } from '../constants';
+  import { UI_CONSTANTS } from '$lib/features/commons/constants/visualization.constants';
   import {
     visualizationStore,
     VisualizationType
-  } from '$lib/features/commons/store/visualization.store.svelte';
+  } from '$lib/features/commons/stores/visualization.store.svelte';
 
   const isVizStep = $derived(
     globalState.selectedStep === ToolbarStep.Visualizations

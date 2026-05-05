@@ -56,11 +56,11 @@ import {
   BasemapRepresentation,
   BasemapCityCategory,
   BasemapCitySymbol
-} from '$lib/features/main-toolbar/constants';
+} from '$lib/features/commons/constants/visualization.constants';
 import {
   DEFAULT_FONT_FAMILY,
   resolveFontFamilyStack
-} from '$lib/features/step-toolbar/constants/fonts.constants';
+} from '$lib/features/step-toolbar/fonts.constants';
 import type { BBox, DeckDataRow, GeometryInfo, RGBColor } from '../types';
 import type { StylePreset, StylePresets } from '../types/basemap.types';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';

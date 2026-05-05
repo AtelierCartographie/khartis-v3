@@ -16,7 +16,7 @@ import {
   shouldUseMapLibreInterleaved
 } from '$lib/features/map/utils/render-engine.utils';
 import { getCompositeProjectionSelectionId } from '$lib/features/map/utils/user-projection.utils';
-import { PROJECTIONS } from '$lib/features/step-toolbar/tools/projections/data';
+import { PROJECTIONS } from '$lib/features/step-toolbar/tools/projections/projections.data';
 import type { ProjectionPresets } from '$lib/features/map/types/basemap.types';
 import { PROJECTIONS as FULL_PROJECTION_CATALOG } from '$lib/features/commons/utils/projection.utils';
 

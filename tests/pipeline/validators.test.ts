@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import * as m from '$lib/paraglide/messages';
-import { FileType } from '$lib/features/commons/store/create-project.types';
+import { FileType } from '$lib/features/commons/stores/create-project.types';
 import {
   getMaxFileSizeForType,
   getWarningFileSizeForType
-} from '$lib/features/commons/configs/validation.config';
+} from '$lib/features/commons/validation.config';
 import { validateFile } from '$lib/features/data-pipeline/core/validators';
 
 function fakeFile(name: string, size: number): File {

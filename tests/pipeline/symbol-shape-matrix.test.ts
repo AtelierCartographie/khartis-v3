@@ -7,7 +7,7 @@ import {
   SymbolMode,
   availableShapesForSymbolMode,
   isLinearShape
-} from '$lib/features/main-toolbar/constants';
+} from '$lib/features/commons/constants/visualization.constants';
 import { ShapeTypeOrdinal } from '$lib/features/map/layers/multi-shape-layer';
 
 describe('symbol shape matrix (issue #92)', () => {

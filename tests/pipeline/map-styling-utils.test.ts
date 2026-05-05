@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('$lib/features/commons/store/visualization.store.svelte', () => ({
+vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({
   VisualizationType: {
     CHOROPLETH: 'choropleth',
     PROPORTIONAL: 'proportional',
@@ -197,8 +197,8 @@ import {
   ColorMode,
   FillMode,
   SymbolMode
-} from '$lib/features/main-toolbar/constants';
-import { ScaleType } from '$lib/features/commons/store/visualization.store.svelte';
+} from '$lib/features/commons/constants/visualization.constants';
+import { ScaleType } from '$lib/features/commons/stores/visualization.store.svelte';
 
 // ─── getColorForValue ──────────────────────────────────────────────────────
 

@@ -3,7 +3,7 @@ import type {
   StyleSpecification,
   TransformStyleFunction
 } from 'maplibre-gl';
-import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
+import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { OSMSourceId } from '../constants';
 import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';

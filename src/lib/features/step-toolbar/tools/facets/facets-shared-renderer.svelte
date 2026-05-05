@@ -4,14 +4,14 @@
   import type { FeatureCollection } from 'geojson';
   import type { LngLatBoundsLike } from 'maplibre-gl';
   import { onMount, untrack } from 'svelte';
-  import { globalState } from '$lib/features/commons/store/global.svelte';
-  import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
-  import { zoomModeStore } from '$lib/features/commons/store/zoom-mode.store.svelte';
+  import { globalState } from '$lib/features/commons/stores/global.svelte';
+  import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
+  import { zoomModeStore } from '$lib/features/commons/stores/zoom-mode.store.svelte';
   import {
     visualizationStore,
     type VisualizationConfig
-  } from '$lib/features/commons/store/visualization.store.svelte';
-  import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+  } from '$lib/features/commons/stores/visualization.store.svelte';
+  import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { getFiltersMap } from '$lib/features/duckdb/orchestrator/state.svelte';
   import {
@@ -32,7 +32,7 @@
   } from '$lib/features/map/core';
   import { DECK_DEVICE_TYPE } from '$lib/features/map/constants';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-  import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
+  import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
   import {
     basemapService,
     getPreferredBasemapFile

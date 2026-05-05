@@ -1,6 +1,6 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
-  import { consentStore } from '$lib/features/commons/store/consent.store.svelte';
+  import { consentStore } from '$lib/features/commons/stores/consent.store.svelte';
   import {
     InlineNotification,
     NotificationActionButton
@@ -39,8 +39,8 @@
 <style>
   .consent-banner-container {
     position: fixed;
-    bottom: 1rem;
-    right: 1rem;
+    bottom: calc(1rem + var(--safe-area-bottom));
+    right: calc(1rem + var(--safe-area-right));
     z-index: var(--z-overlay);
     max-width: 400px;
   }

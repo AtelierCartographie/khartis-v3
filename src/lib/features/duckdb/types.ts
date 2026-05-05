@@ -1,4 +1,4 @@
-import { FileType } from '$lib/features/commons/store/create-project.types';
+import { FileType } from '$lib/features/commons/stores/create-project.types';
 import type { GeoArrowMetadata } from '$lib/features/commons/types/geoarrow.types';
 import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
 import type * as duckdb from '@duckdb/duckdb-wasm';

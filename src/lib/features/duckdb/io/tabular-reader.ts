@@ -1,7 +1,7 @@
 import {
   DataValidationError,
   DuckDBError
-} from '$lib/features/commons/errors/pipeline.errors';
+} from '$lib/features/commons/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { escapeSqlString } from '$lib/features/commons/utils/sanitize.utils';
 import * as m from '$lib/paraglide/messages';

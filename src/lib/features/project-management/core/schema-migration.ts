@@ -4,7 +4,7 @@ import {
   clampFontSize,
   DEFAULT_FONT_FAMILY,
   normalizeFontFamily
-} from '$lib/features/step-toolbar/constants/fonts.constants';
+} from '$lib/features/step-toolbar/fonts.constants';
 
 export interface SchemaMigration {
   from: string;

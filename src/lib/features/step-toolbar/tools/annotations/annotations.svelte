@@ -108,6 +108,12 @@
     margin-bottom: var(--cds-spacing-06);
   }
 
+  @media (max-width: 480px) {
+    .tool-picker {
+      grid-template-columns: 1fr;
+    }
+  }
+
   .tool-picker > div {
     min-width: 0;
   }

@@ -1,6 +1,6 @@
 <script lang="ts">
   import ExpandableSection from '$lib/features/commons/components/expandable-section.svelte';
-  import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
+  import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
   import {
     resolveProjectionAvailabilityContext,

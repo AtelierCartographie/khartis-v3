@@ -1,4 +1,4 @@
-import { ShapeType } from '$lib/features/main-toolbar/constants';
+import { ShapeType } from '$lib/features/commons/constants/visualization.constants';
 
 export type CategoriesAspectVariant =
   | 'symbols-unique'

@@ -82,7 +82,7 @@ vi.mock('$lib/features/map/stores/osm-basemap.store.svelte', () => ({
   }
 }));
 
-vi.mock('$lib/features/commons/store/basemap-style.store.svelte', () => ({
+vi.mock('$lib/features/commons/stores/basemap-style.store.svelte', () => ({
   basemapStyleStore: {
     get requiresMapLibre() {
       return mocks.requiresMapLibre;
@@ -90,7 +90,7 @@ vi.mock('$lib/features/commons/store/basemap-style.store.svelte', () => ({
   }
 }));
 
-vi.mock('$lib/features/commons/store/datasets.store.svelte', () => ({
+vi.mock('$lib/features/commons/stores/datasets.store.svelte', () => ({
   datasetsStore: {
     get selectedDataset() {
       return mocks.selectedDataset;

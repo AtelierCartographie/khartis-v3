@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('$lib/features/commons/store/visualization.store.svelte', () => ({
+vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({
   ScaleType: { LINEAR: 'linear', SQRT: 'sqrt', LOG: 'log' }
 }));
 
@@ -13,9 +13,10 @@ import {
   createChoroplethColorAccessor,
   createGeoJsonCategoricalColorAccessor,
   createGeoJsonProportionalSymbolSizeAccessor,
-  HIGHLIGHT_FILL_COLOR
+  HIGHLIGHT_FILL_COLOR,
+  sortBySizeDescending
 } from '$lib/features/map/layers/layer-helpers';
-import { ScaleType } from '$lib/features/commons/store/visualization.store.svelte';
+import { ScaleType } from '$lib/features/commons/stores/visualization.store.svelte';
 
 // ─── withOpacity ───────────────────────────────────────────────────────────
 
@@ -233,5 +234,44 @@ describe('createGeoJsonCategoricalColorAccessor', () => {
 
   it('returns defaultColor for missing properties', () => {
     expect(accessor({})).toEqual([128, 128, 128, 255]);
+  });
+});
+
+// ─── sortBySizeDescending ─────────────────────────────────────────────────
+
+describe('sortBySizeDescending', () => {
+  it('orders items from largest to smallest', () => {
+    const items = [
+      { id: 'a', size: 5 },
+      { id: 'b', size: 12 },
+      { id: 'c', size: 1 }
+    ];
+    const sorted = sortBySizeDescending(items, (item) => item.size);
+    expect(sorted.map((item) => item.id)).toEqual(['b', 'a', 'c']);
+  });
+
+  it('keeps a stable order for equal sizes', () => {
+    const items = [
+      { id: 'a', size: 4 },
+      { id: 'b', size: 4 },
+      { id: 'c', size: 9 },
+      { id: 'd', size: 4 }
+    ];
+    const sorted = sortBySizeDescending(items, (item) => item.size);
+    expect(sorted.map((item) => item.id)).toEqual(['c', 'a', 'b', 'd']);
+  });
+
+  it('does not mutate the input array', () => {
+    const items = [
+      { id: 'a', size: 1 },
+      { id: 'b', size: 9 }
+    ];
+    const snapshot = [...items];
+    sortBySizeDescending(items, (item) => item.size);
+    expect(items).toEqual(snapshot);
+  });
+
+  it('returns an empty array when given an empty input', () => {
+    expect(sortBySizeDescending<unknown>([], () => 0)).toEqual([]);
   });
 });

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { globalState } from '$lib/features/commons/store/global.svelte';
+  import { globalState } from '$lib/features/commons/stores/global.svelte';
   import { ToolbarState } from '$lib/features/commons/types/global';
   import clsx from 'clsx';
   import type { Snippet } from 'svelte';

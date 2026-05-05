@@ -15,7 +15,7 @@ import {
   VisualizationType,
   type ClassificationConfig,
   type VisualizationConfig
-} from '$lib/features/commons/store/visualization.store.svelte';
+} from '$lib/features/commons/stores/visualization.store.svelte';
 import {
   ColorMode,
   DEFAULT_COLORS,
@@ -27,7 +27,7 @@ import {
   ShapeType,
   SymbolMode,
   ThicknessMode
-} from '$lib/features/main-toolbar/constants';
+} from '$lib/features/commons/constants/visualization.constants';
 import {
   getProportionalSymbolSizeForValue,
   getSizeForValue

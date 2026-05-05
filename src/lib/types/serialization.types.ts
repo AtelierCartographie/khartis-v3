@@ -2,10 +2,10 @@ import type {
   AssetRef,
   ColumnTransformation,
   UploadedFile
-} from '$lib/features/commons/store/create-project.types';
-import type { SerializedDataTabState } from '$lib/features/commons/store/data-tab.types';
-import type { VisualizationConfig } from '$lib/features/commons/store/visualization.store.svelte';
-import type { ZoomMode } from '$lib/features/commons/store/zoom-mode.store.svelte';
+} from '$lib/features/commons/stores/create-project.types';
+import type { SerializedDataTabState } from '$lib/features/commons/stores/data-tab.types';
+import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
+import type { ZoomMode } from '$lib/features/commons/stores/zoom-mode.store.svelte';
 import type {
   ProjectionFilterId,
   ProjectionViewMode,
@@ -29,8 +29,8 @@ import type { ProjectionState } from '$lib/features/step-toolbar/tools/projectio
 import type { SearchState } from '$lib/features/step-toolbar/tools/search/search.types';
 import type { SimplificationState } from '$lib/features/step-toolbar/tools/simplification/simplification.types';
 import type { DataTableFilterInput } from '$lib/features/duckdb';
-import type { DataToolsState } from '$lib/features/main-toolbar/data-tab/data-tools.store.svelte';
-import type { DataTabWorkflowState } from '$lib/features/main-toolbar/data-tab/data-tab.store.svelte';
+import type { DataToolsState } from '$lib/features/data-tab/data-tools.store.svelte';
+import type { DataTabWorkflowState } from '$lib/features/data-tab/data-tab.store.svelte';
 
 export interface SerializedProject {
   id: string;

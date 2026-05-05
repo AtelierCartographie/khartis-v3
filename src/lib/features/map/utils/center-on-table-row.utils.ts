@@ -1,5 +1,5 @@
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
-import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
+import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
 import {
   escapeIdentifier,
   escapeSqlString

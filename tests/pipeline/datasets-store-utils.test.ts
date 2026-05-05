@@ -3,11 +3,11 @@ import {
   getColumnValues,
   getColumnStatistics,
   getUniqueValues
-} from '$lib/features/commons/store/datasets/datasets-statistics';
+} from '$lib/features/commons/stores/datasets/datasets-statistics';
 import {
   getSourceFileIndex,
   cleanFileForStorage
-} from '$lib/features/commons/store/project/project-files';
+} from '$lib/features/commons/stores/project/project-files';
 
 vi.mock('$lib/features/commons/utils/logger', () => ({
   logger: { warn: vi.fn(), debug: vi.fn(), error: vi.fn() },
@@ -23,7 +23,7 @@ vi.mock('$lib/features/project-management/core/persistence-registry', () => ({
   persistenceRegistry: { notifyChange: vi.fn(), register: vi.fn() },
   SavePriority: { DEBOUNCED: 'DEBOUNCED', IMMEDIATE: 'IMMEDIATE' }
 }));
-vi.mock('$lib/features/commons/store/project/project-persistence', () => ({
+vi.mock('$lib/features/commons/stores/project/project-persistence', () => ({
   markDirtyAndSave: vi.fn().mockResolvedValue(undefined)
 }));
 

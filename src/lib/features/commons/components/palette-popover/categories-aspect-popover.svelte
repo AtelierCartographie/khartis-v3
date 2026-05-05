@@ -11,14 +11,14 @@
   import {
     CATEGORY_SHAPE_CYCLE,
     ShapeType
-  } from '$lib/features/main-toolbar/constants';
+  } from '$lib/features/commons/constants/visualization.constants';
   import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
   import {
     createExclusiveContextualSurfaceId,
     engageExclusiveContextualSurface
   } from '$lib/features/commons/utils/contextual-surface-coordinator';
   import { SliderWithInput } from '$lib/features/commons/components/viz-controls';
-  import { globalState } from '$lib/features/commons/store/global.svelte';
+  import { globalState } from '$lib/features/commons/stores/global.svelte';
   import { ToolbarState } from '$lib/features/commons/types/global';
   import PaletteSuggestions from './palette-suggestions.svelte';
   import SingleColorPreview from './single-color-preview.svelte';
@@ -990,6 +990,27 @@
       0 0 1px rgba(0, 0, 0, 0.15);
     z-index: var(--z-popover);
     overflow: hidden;
+  }
+
+  @media (max-width: 1023px) {
+    :global(.categories-aspect-popover) {
+      right: 0 !important;
+      left: 0;
+      top: auto;
+      bottom: calc(
+        60px + env(safe-area-inset-bottom, 0px) + var(--cds-spacing-03) + 48px +
+          var(--cds-spacing-03)
+      );
+      transform: none;
+      width: 100vw;
+      max-height: calc(
+        100dvh - var(--cds-header-height, 48px) -
+          60px - env(safe-area-inset-bottom, 0px) - var(--cds-spacing-03) -
+          48px - var(--cds-spacing-03) - var(--cds-spacing-05)
+      );
+      border-radius: 8px 8px 0 0;
+      box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
+    }
   }
 
   .popover-header {

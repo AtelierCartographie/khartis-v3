@@ -1,10 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { globalActions, globalState } from '../store/global.svelte';
-  import { mapInstanceStore } from '../store/map-instance.store.svelte';
-  import { zoomModeStore } from '../store/zoom-mode.store.svelte';
-  import { createProjectActions } from '../store/create-project.store.svelte';
-  import { projectStore } from '../store/project.store.svelte';
+  import { globalActions, globalState } from '../stores/global.svelte';
+  import { mapInstanceStore } from '../stores/map-instance.store.svelte';
+  import { zoomModeStore } from '../stores/zoom-mode.store.svelte';
+  import { createProjectActions } from '../stores/create-project.store.svelte';
+  import { projectStore } from '../stores/project.store.svelte';
   import {
     StylingTools,
     ToolbarState,

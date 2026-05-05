@@ -58,6 +58,13 @@
     width: 100%;
   }
 
+  @media (max-width: 480px) {
+    .size-grid {
+      grid-template-columns: 1fr;
+      gap: var(--cds-spacing-05);
+    }
+  }
+
   .size-input {
     display: flex;
     flex-direction: column;

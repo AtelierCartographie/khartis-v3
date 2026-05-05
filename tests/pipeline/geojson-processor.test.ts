@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   FileType,
   type UploadedFile
-} from '$lib/features/commons/store/create-project.types';
+} from '$lib/features/commons/stores/create-project.types';
 
 const { isGeoJSONFeatureCollectionMock } = vi.hoisted(() => ({
   isGeoJSONFeatureCollectionMock: vi.fn()

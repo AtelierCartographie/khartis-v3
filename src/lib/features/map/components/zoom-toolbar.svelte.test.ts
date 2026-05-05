@@ -8,12 +8,15 @@ const source = readFileSync(
 );
 
 describe('ZoomToolbar debug panel', () => {
-  it('renders a compact deck panel for dev or preproduction URLs with a stacked mode header and a mobile top bar layout', () => {
+  it('renders a compact deck panel for dev URLs with a stacked mode header and a mobile top bar layout', () => {
     expect(source).toContain('showDeckDebugPanel && deckDebugViewMode');
     expect(source).toContain(
       'const showDeckDebugPanel = $derived(isDeckDebugEnabled());'
     );
-    expect(source).toContain('EnvironmentUtils.hasPreproductionUrlMarker()');
+    expect(source).not.toContain(
+      'EnvironmentUtils.hasPreproductionUrlMarker()'
+    );
+    expect(source).toContain('return import.meta.env.DEV;');
     expect(source).toContain('class="zoom-toolbar-shell"');
     expect(source).toContain('class="zoom-debug-panel"');
     expect(source).toContain('class="zoom-debug-content"');

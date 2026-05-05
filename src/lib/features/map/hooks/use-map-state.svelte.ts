@@ -1,4 +1,4 @@
-import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import {
   getLinePrimitive,
   getPolygonPrimitive,
@@ -12,12 +12,12 @@ import {
   PrimitiveFilterType,
   visualizationStore,
   type VisualizationConfig
-} from '$lib/features/commons/store/visualization.store.svelte';
+} from '$lib/features/commons/stores/visualization.store.svelte';
 import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import {
   ProportionalType,
   SymbolMode
-} from '$lib/features/main-toolbar/constants';
+} from '$lib/features/commons/constants/visualization.constants';
 import { HIGHLIGHT_FILL_COLOR } from '../layers';
 import { mapHighlightStore } from '../stores/map-highlight.store.svelte';
 import { getCategoricalColorMap, shouldApplyCategorical } from '../styling';

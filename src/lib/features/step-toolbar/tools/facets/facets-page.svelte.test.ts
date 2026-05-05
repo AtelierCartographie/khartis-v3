@@ -3,9 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   globalActions,
   globalState
-} from '$lib/features/commons/store/global.svelte';
+} from '$lib/features/commons/stores/global.svelte';
 import { ToolbarStep } from '$lib/features/commons/types/global';
-import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
+import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
 import { annotationsActions } from '$lib/features/step-toolbar/tools/annotations/annotations.store.svelte';
 import { formatActions } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
 import { geoIndicationsActions } from '$lib/features/step-toolbar/tools/geo-indications/geo-indications.store.svelte';

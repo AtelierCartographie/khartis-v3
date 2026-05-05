@@ -1,14 +1,14 @@
 import { ViewMode } from '$lib/features/commons/constants/ui.constants';
 import type { DatasetResult } from '$lib/features/data-pipeline';
-import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
-import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
-import { globalActions } from '$lib/features/commons/store/global.svelte';
+import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
+import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
+import { globalActions } from '$lib/features/commons/stores/global.svelte';
 import {
   getProjectionById,
   type ProjectionInfo
 } from '$lib/features/commons/utils/projection.utils';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
-import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
+import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
 import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
 import { mapProjectionStore } from '$lib/features/map/stores/map-projection.store.svelte';
 import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';

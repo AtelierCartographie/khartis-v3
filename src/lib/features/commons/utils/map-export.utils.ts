@@ -1,6 +1,6 @@
 import * as m from '$lib/paraglide/messages';
-import { mapInstanceStore } from '$lib/features/commons/store/map-instance.store.svelte';
-import { fontAssetsStore } from '$lib/features/commons/store/font-assets.store.svelte';
+import { mapInstanceStore } from '$lib/features/commons/stores/map-instance.store.svelte';
+import { fontAssetsStore } from '$lib/features/commons/stores/font-assets.store.svelte';
 import { toCanvas as htmlToImageCanvas } from 'html-to-image';
 
 interface ExportOptions {

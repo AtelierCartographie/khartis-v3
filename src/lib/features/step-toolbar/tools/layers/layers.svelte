@@ -4,15 +4,15 @@
   import LayersList from './layers-list.svelte';
   import { layersActions, layersState } from './layers.store.svelte';
   import type { Layer, LayerReorderScope } from './layers.types.js';
-  import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
-  import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
+  import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
+  import { visualizationStore } from '$lib/features/commons/stores/visualization.store.svelte';
   import { basemapLayersStore } from '$lib/features/map/stores/basemap-layers.store.svelte';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
   import { shouldUseMapLibreInterleaved } from '$lib/features/map/utils/render-engine.utils';
   import {
     globalActions,
     globalState
-  } from '$lib/features/commons/store/global.svelte';
+  } from '$lib/features/commons/stores/global.svelte';
   import { ToolbarStep } from '$lib/features/commons/types/global';
   import { tick } from 'svelte';
 

@@ -1,6 +1,6 @@
 <script lang="ts">
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
-  import { globalState } from '$lib/features/commons/store/global.svelte';
+  import { globalState } from '$lib/features/commons/stores/global.svelte';
   import { VisualizationTools } from '$lib/features/commons/types/global';
   import { m } from '$lib/paraglide/messages.js';
   import { Column, Grid, Row } from 'carbon-components-svelte';

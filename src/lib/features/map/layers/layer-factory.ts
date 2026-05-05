@@ -11,7 +11,7 @@ import RotatableFillStyleExtension from './rotatable-fill-style-extension';
 import type { Table as ArrowTable } from 'apache-arrow/Arrow';
 import type { FeatureCollection, Geometry } from 'geojson';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import { fontAssetsStore } from '$lib/features/commons/store/font-assets.store.svelte';
+import { fontAssetsStore } from '$lib/features/commons/stores/font-assets.store.svelte';
 import { showWarning } from '$lib/features/commons/utils/notification.utils.svelte';
 import { PRINT_STANDARD_TOKENS } from '$lib/features/commons/utils/layout-sizing.utils';
 import * as m from '$lib/paraglide/messages';
@@ -22,7 +22,7 @@ import {
   GeometryType
 } from '../constants';
 import { arrowTableToGeoJSON, extractGeometryInfo } from '../io';
-import type { PrimitiveFilter } from '$lib/features/commons/store/visualization.store.svelte';
+import type { PrimitiveFilter } from '$lib/features/commons/stores/visualization.store.svelte';
 import {
   getEnabledPrimitiveFilters,
   getLinePrimitive,
@@ -40,7 +40,7 @@ import {
   PrimitiveFilterType,
   ScaleType,
   VisualizationType
-} from '$lib/features/commons/store/visualization.store.svelte';
+} from '$lib/features/commons/stores/visualization.store.svelte';
 import {
   CATEGORY_SHAPE_CYCLE,
   BasemapDottedPattern,
@@ -59,7 +59,7 @@ import {
   SymbolMode,
   ThicknessMode,
   StrokeMode
-} from '$lib/features/main-toolbar/constants';
+} from '$lib/features/commons/constants/visualization.constants';
 import { MultiShapeLayer } from './multi-shape-layer';
 import type {
   DeckDataRow,
@@ -73,13 +73,12 @@ import { hexToRgb } from '$lib/features/commons/utils/color-utils';
 import {
   DEFAULT_FONT_FAMILY,
   resolveFontFamilyStack
-} from '$lib/features/step-toolbar/constants/fonts.constants';
+} from '$lib/features/step-toolbar/fonts.constants';
 import {
   getCategoricalColorMap,
   hasCompleteCategoricalColorMap,
   getClassedSizeForValue,
   getColorForValue,
-  getSizeForValue,
   getProportionalSymbolSizeForValue,
   shouldApplyLineCategorical,
   shouldApplyLineChoropleth,
@@ -103,6 +102,7 @@ import {
   createProportionalSizeAccessor,
   createProportionalSymbolSizeAccessor,
   resolveMissingDataRenderProps,
+  sortBySizeDescending,
   withGeoJsonRowHighlight,
   withGeoJsonRowHighlightAccessor,
   withOpacity,
@@ -2713,10 +2713,9 @@ function createTextOverlayLayers(
     sizeMode === SizeMode.PROPORTIONAL &&
     !!variableTextSizeColumn &&
     !!variableTextSizeVector;
-  const { minSize: minLabelSize, maxSize: maxLabelSize } =
+  const { maxSize: maxLabelSize } =
     resolveVariableTextSizeBounds(labelBaseSize);
-  const { minSize: minTextSize, maxSize: maxTextSize } =
-    resolveVariableTextSizeBounds(textBaseSize);
+  const { maxSize: maxTextSize } = resolveVariableTextSizeBounds(textBaseSize);
   const thematicValueVector = textValueColumn
     ? textAttributeTable.getChild(textValueColumn)
     : null;
@@ -2778,12 +2777,12 @@ function createTextOverlayLayers(
       return defaultSize;
     }
 
-    const { minSize, maxSize } =
-      defaultSize === labelBaseSize
-        ? { minSize: minLabelSize, maxSize: maxLabelSize }
-        : { minSize: minTextSize, maxSize: maxTextSize };
+    const maxSize = defaultSize === labelBaseSize ? maxLabelSize : maxTextSize;
 
     return (datum: TextLayerDatum): number => {
+      if (datum.isMissingData) {
+        return defaultSize;
+      }
       const rawValue = variableTextSizeVector.get(datum.rowIndex);
       const numericValue =
         typeof rawValue === 'number' ? rawValue : Number(rawValue);
@@ -2792,11 +2791,9 @@ function createTextOverlayLayers(
         return defaultSize;
       }
 
-      return getSizeForValue(
+      return getProportionalSymbolSizeForValue(
         numericValue,
-        textStatistics.min,
         textStatistics.max,
-        minSize,
         maxSize,
         ScaleType.SQRT
       );
@@ -3058,10 +3055,13 @@ function createTextOverlayLayers(
     });
 
   if (shouldRenderLabelLayer && secondaryLabelLayerData) {
-    const labelData = filterTextLayerDataByYear(
+    const labelDataFiltered = filterTextLayerDataByYear(
       secondaryLabelLayerData.filter((datum) => !datum.isMissingData),
       textAttributeTable,
       ctx.yearFilter
+    );
+    const labelData = sortBySizeDescending(labelDataFiltered, (datum) =>
+      resolveAccessorValue(labelSizeAccessor, datum)
     );
     if (labelData.length > 0) {
       const labelLayerId = createThematicLayerId(DeckLayerId.LABEL_LAYER, ctx);
@@ -3111,7 +3111,6 @@ function createTextOverlayLayers(
             secondaryLabelsConfig.size,
             sizeMode,
             variableTextSizeColumn,
-            textStatistics.min,
             textStatistics.max
           ],
           getTextAnchor: [secondaryLabelsConfig.align],
@@ -3195,13 +3194,16 @@ function createTextOverlayLayers(
   }
 
   if (shouldRenderTextLayer) {
-    const textData = filterTextLayerDataByYear(
+    const textDataFiltered = filterTextLayerDataByYear(
       textLayerData.filter(
         (datum) =>
           !datum.isMissingData || (textConfig.missingData?.show ?? true)
       ),
       textAttributeTable,
       ctx.yearFilter
+    );
+    const textData = sortBySizeDescending(textDataFiltered, (datum) =>
+      resolveAccessorValue(textSizeAccessor, datum)
     );
     if (textData.length > 0) {
       const textLayerId = createThematicLayerId(DeckLayerId.TEXT_LAYER, ctx);
@@ -3291,7 +3293,6 @@ function createTextOverlayLayers(
               textConfig.size,
               sizeMode,
               variableTextSizeColumn,
-              textStatistics.min,
               textStatistics.max
             ],
             getTextAnchor: [textConfig.align],

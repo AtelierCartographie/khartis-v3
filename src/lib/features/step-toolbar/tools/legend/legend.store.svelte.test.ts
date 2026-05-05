@@ -12,9 +12,9 @@ import {
   StrokeMode,
   SymbolMode,
   ThicknessMode
-} from '$lib/features/main-toolbar/constants';
+} from '$lib/features/commons/constants/visualization.constants';
 import { formatActions } from '../format/format.store.svelte';
-import type { VisualizationConfig } from '$lib/features/commons/store/visualization.store.svelte';
+import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
 
 const { mockVisualizationStore } = vi.hoisted(() => ({
   mockVisualizationStore: {
@@ -23,7 +23,7 @@ const { mockVisualizationStore } = vi.hoisted(() => ({
   }
 }));
 
-vi.mock('$lib/features/commons/store/visualization.store.svelte', () => ({
+vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({
   visualizationStore: mockVisualizationStore
 }));
 

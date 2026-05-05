@@ -1,5 +1,5 @@
 import { Duck } from '$lib/features/duckdb';
-import { loadingStore } from '$lib/features/commons/store/loading.store.svelte';
+import { loadingStore } from '$lib/features/commons/stores/loading.store.svelte';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import { type Table as ArrowTable } from 'apache-arrow/Arrow';
 import { LogCategory, logger } from '../../commons/utils/logger';
@@ -873,49 +873,9 @@ function createBasemapService() {
 
       const escapedFileId = escapeSqlString(fileId);
 
-      // The shipped `all-basemaps-attributes.parquet` (regenerated in commit
-      // 3b831061) stores the source variant name in the `id` column instead
-      // of the per-entity identifier (e.g. `id = "iso3_code"` for every
-      // monde-countries row). Joins downstream rely on `id` resolving to the
-      // polygon-table primary key (e.g. `"FRA"`), so we repair the column
-      // here using the parquet's physical row number: each entity is a run of
-      // variants whose first row carries the primary identifier (variant ==
-      // id literal). Idempotent for parquets where `id` is already correct.
-      // This must not rely on `row_number() OVER ()` because DuckDB WASM is
-      // configured with `preserve_insertion_order=false`.
-      const result = await Duck.query(`
-        CREATE OR REPLACE TABLE basemap_attributes AS
-        WITH ordered AS (
-          SELECT *, file_row_number AS __row_idx__
-          FROM parquet_scan('${escapedFileId}',
-            hive_partitioning=false,
-            union_by_name=false,
-            filename=false,
-            file_row_number=true
-          )
-        ),
-        grouped AS (
-          SELECT *,
-            SUM(CASE WHEN variant = id THEN 1 ELSE 0 END)
-              OVER (PARTITION BY basemap ORDER BY __row_idx__) AS __group_id__
-          FROM ordered
-        ),
-        real_ids AS (
-          SELECT basemap, __group_id__,
-            MAX(CASE WHEN variant = id THEN raw END) AS __real_id__
-          FROM grouped
-          GROUP BY basemap, __group_id__
-        )
-        SELECT
-          g.raw,
-          COALESCE(r.__real_id__, g.id) AS id,
-          g.variant,
-          g.normalized,
-          g.basemap,
-          g.basemap_count
-        FROM grouped g
-        LEFT JOIN real_ids r USING (basemap, __group_id__)
-      `);
+      const result = await Duck.query(
+        `CREATE OR REPLACE TABLE basemap_attributes AS SELECT * FROM parquet_scan('${escapedFileId}')`
+      );
 
       if (!result) {
         throw new Error('Failed to create basemap_attributes table');

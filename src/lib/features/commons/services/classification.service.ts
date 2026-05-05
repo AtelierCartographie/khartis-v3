@@ -1,6 +1,6 @@
 import { Duck } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
-import { ClassificationMethod } from '$lib/features/commons/store/visualization.store.svelte';
+import { ClassificationMethod } from '$lib/features/commons/stores/visualization.store.svelte';
 import { LogCategory, logger } from '../utils/logger';
 import * as m from '$lib/paraglide/messages';
 import { escapeIdentifier, escapeSqlString } from '../utils/sanitize.utils';

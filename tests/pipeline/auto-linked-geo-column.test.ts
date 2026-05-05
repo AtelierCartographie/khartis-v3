@@ -20,7 +20,7 @@ vi.mock('$lib/features/map/services/basemap-catalog.service.svelte', () => ({
 vi.mock('$lib/features/map/services/basemap.service.svelte', () => ({
   basemapService: { ensureCurrentLayersLoaded: vi.fn() }
 }));
-vi.mock('$lib/features/commons/store/datasets.store.svelte', () => ({
+vi.mock('$lib/features/commons/stores/datasets.store.svelte', () => ({
   datasetsStore: {
     get selectedDataset() {
       return null;
@@ -28,7 +28,7 @@ vi.mock('$lib/features/commons/store/datasets.store.svelte', () => ({
     datasets: []
   }
 }));
-vi.mock('$lib/features/commons/store/data-tab.store.svelte', () => ({
+vi.mock('$lib/features/commons/stores/data-tab.store.svelte', () => ({
   dataTabActions: {
     setGeolocationState: vi.fn(),
     setBasemapJoinState: vi.fn()
@@ -39,17 +39,17 @@ vi.mock('$lib/features/commons/store/data-tab.store.svelte', () => ({
     enrichData: {}
   }
 }));
-vi.mock('$lib/features/commons/store/basemap-style.store.svelte', () => ({
+vi.mock('$lib/features/commons/stores/basemap-style.store.svelte', () => ({
   basemapStyleStore: { referenceBasemapId: null, setReferenceBasemap: vi.fn() }
 }));
-vi.mock('$lib/features/commons/store/project.store.svelte', () => ({
+vi.mock('$lib/features/commons/stores/project.store.svelte', () => ({
   projectStore: { currentProject: null, updateProjectData: vi.fn() }
 }));
 vi.mock('$lib/features/map/stores/osm-basemap.store.svelte', () => ({
   osmBasemapStore: { isActive: false, activeOSMBasemap: null, clear: vi.fn() }
 }));
 
-import { pickAutoLinkedGeoColumn } from '$lib/features/main-toolbar/data-tab/enrich-data/hooks/use-enrichment-basemap.svelte';
+import { pickAutoLinkedGeoColumn } from '$lib/features/data-tab/enrich-data/hooks/use-enrichment-basemap.svelte';
 
 function makeDataset(overrides: Partial<DatasetResult> = {}): DatasetResult {
   return {

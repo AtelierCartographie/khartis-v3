@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock dependencies before importing the store module
-vi.mock('$lib/features/commons/store/basemap-style.store.svelte', () => ({
+vi.mock('$lib/features/commons/stores/basemap-style.store.svelte', () => ({
   basemapStyleStore: {
     requiresMapLibre: false,
     selectedStyle: 'blank_white',
@@ -26,7 +26,7 @@ vi.mock('$lib/features/map/stores/projection.store.svelte', () => ({
   projectionStore: { isProjectedCoordinates: false, referenceBbox: null }
 }));
 
-vi.mock('$lib/features/commons/store/global.svelte', () => ({
+vi.mock('$lib/features/commons/stores/global.svelte', () => ({
   globalActions: {
     setProjectionViewMode: vi.fn(),
     setProjectionFilter: vi.fn()
@@ -34,7 +34,7 @@ vi.mock('$lib/features/commons/store/global.svelte', () => ({
   globalState: {}
 }));
 
-vi.mock('$lib/features/commons/store/datasets.store.svelte', () => ({
+vi.mock('$lib/features/commons/stores/datasets.store.svelte', () => ({
   datasetsStore: {
     selectedDataset: null,
     getDatasetsByType: () => [],
@@ -43,7 +43,7 @@ vi.mock('$lib/features/commons/store/datasets.store.svelte', () => ({
   }
 }));
 
-vi.mock('$lib/features/commons/store/map-instance.store.svelte', () => ({
+vi.mock('$lib/features/commons/stores/map-instance.store.svelte', () => ({
   mapInstanceStore: { map: null }
 }));
 

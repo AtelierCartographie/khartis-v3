@@ -10,7 +10,7 @@ import {
   ScaleType,
   VisualizationType,
   type VisualizationConfig
-} from '$lib/features/commons/store/visualization.store.svelte';
+} from '$lib/features/commons/stores/visualization.store.svelte';
 import {
   CategoryShapeMode,
   FillMode,
@@ -22,7 +22,7 @@ import {
   SymbolDoublePosition,
   SymbolMode,
   ThicknessMode
-} from '$lib/features/main-toolbar/constants';
+} from '$lib/features/commons/constants/visualization.constants';
 import type { GeometryInfo, LayerContext } from '../types';
 
 const {

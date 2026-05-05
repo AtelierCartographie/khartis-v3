@@ -10,29 +10,29 @@
     EXAMPLE_PROJECTS,
     getExamplesByCategory,
     loadExampleData
-  } from '$lib/features/commons/mocks/examples.data';
+  } from '$lib/features/commons/examples.data';
   import {
     createProjectActions,
     createProjectState
-  } from '$lib/features/commons/store/create-project.store.svelte';
-  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
-  import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
-  import { dataTabActions } from '$lib/features/commons/store/data-tab.store.svelte';
-  import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
+  } from '$lib/features/commons/stores/create-project.store.svelte';
+  import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
+  import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
+  import { dataTabActions } from '$lib/features/commons/stores/data-tab.store.svelte';
+  import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
   import { basemapCatalogService } from '$lib/features/map/services/basemap-catalog.service.svelte';
   import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
   import { Duck } from '$lib/features/duckdb';
   import { detectGPSColumns } from '$lib/features/duckdb/orchestrator/gps-ops';
   import { BasemapSource } from '$lib/features/commons/constants/ui.constants';
-  import { PERSISTED_BASEMAP_TYPE } from '$lib/features/main-toolbar/data-tab/services/persisted-basemap';
-  import { persistTabularSourceSnapshot } from '$lib/features/main-toolbar/data-tab/services/tabular-source-snapshot';
-  import { dataTabStore } from '$lib/features/main-toolbar/data-tab/data-tab.store.svelte';
+  import { PERSISTED_BASEMAP_TYPE } from '$lib/features/data-tab/services/persisted-basemap';
+  import { persistTabularSourceSnapshot } from '$lib/features/data-tab/services/tabular-source-snapshot';
+  import { dataTabStore } from '$lib/features/data-tab/data-tab.store.svelte';
   import { applyExampleVisualizationPresets } from './services/example-visualization-preset.service';
-  import type { ExampleProject } from '$lib/features/commons/store/create-project.types';
-  import type { UploadedFile } from '$lib/features/commons/store/create-project.types';
+  import type { ExampleProject } from '$lib/features/commons/stores/create-project.types';
+  import type { UploadedFile } from '$lib/features/commons/stores/create-project.types';
   import { logger, LogCategory } from '$lib/features/commons/utils/logger';
   import { m } from '$lib/paraglide/messages';
-  import { useProjectNavigation } from './hooks';
+  import { useProjectNavigation } from './use-project-navigation';
   import { InlineNotification, Tag } from 'carbon-components-svelte';
 
   interface Props {
