@@ -2,10 +2,10 @@ import { unzipSync } from 'fflate';
 import { m } from '$lib/paraglide/messages.js';
 import type { AssetRef } from '$lib/features/commons/stores/create-project.types';
 import type { SerializedProject } from '$lib/types/serialization.types';
-import { persistAssetBytes } from '../core/asset-store';
-import { saveProject } from '../core/persistence';
+import { persistAssetBytes } from '../services/asset-store.service';
+import { saveProject } from '../services/persistence.service';
 import { migrateIfNeeded } from '../core/schema-migration';
-import { deserialize } from '../core/serializer';
+import { deserialize } from '../services/serializer.service';
 import type { KhartisProject } from '../types';
 
 interface ProjectArchiveAssetEntry extends AssetRef {

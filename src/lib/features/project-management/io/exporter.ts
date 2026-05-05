@@ -4,8 +4,11 @@ import type {
   UploadedFile
 } from '$lib/features/commons/stores/create-project.types';
 import { PROJECT_CONST } from '../constants';
-import { ensureUploadedFileAssets, readAssetBytes } from '../core/asset-store';
-import { serialize } from '../core/serializer';
+import {
+  ensureUploadedFileAssets,
+  readAssetBytes
+} from '../services/asset-store.service';
+import { serialize } from '../services/serializer.service';
 import type { KhartisProject } from '../types';
 
 interface ProjectArchiveAssetEntry extends AssetRef {

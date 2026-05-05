@@ -129,7 +129,7 @@ import {
   convertRowsToTabular,
   createDataMatrix,
   type ColumnInfo
-} from './file-processor.utils';
+} from '../file-processor.utils';
 
 export interface ProcessingCallbacks {
   onProgress: (fileId: string, progress: number) => void;

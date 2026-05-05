@@ -30,7 +30,7 @@ import {
   resolveOrthographicZoomBounds
 } from '../utils/map-zoom.utils';
 import { shouldUseMapLibreInterleaved } from '../utils/render-engine.utils';
-import { getBrowserMaxRenderBufferSizePx } from '../utils/render-pixel-ratio';
+import { getBrowserMaxRenderBufferSizePx } from '../utils/render-pixel-ratio.utils';
 import type {
   DeckOrthographicViewStateMap,
   OrthographicMainViewState

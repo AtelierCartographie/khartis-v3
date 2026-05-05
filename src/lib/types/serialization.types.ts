@@ -29,8 +29,8 @@ import type { ProjectionState } from '$lib/features/step-toolbar/tools/projectio
 import type { SearchState } from '$lib/features/step-toolbar/tools/search/search.types';
 import type { SimplificationState } from '$lib/features/step-toolbar/tools/simplification/simplification.types';
 import type { DataTableFilterInput } from '$lib/features/duckdb';
-import type { DataToolsState } from '$lib/features/data-tab/data-tools.store.svelte';
-import type { DataTabWorkflowState } from '$lib/features/data-tab/data-tab.store.svelte';
+import type { DataToolsState } from '$lib/features/data-tab/stores/data-tools.store.svelte';
+import type { DataTabWorkflowState } from '$lib/features/data-tab/stores/data-tab.store.svelte';
 
 export interface SerializedProject {
   id: string;

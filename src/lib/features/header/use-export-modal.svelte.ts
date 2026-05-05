@@ -13,7 +13,7 @@ import {
   DATA_FORMAT,
   EXPORT_RESOLUTION,
   getExportDimensionsForPage
-} from './header.types';
+} from './types';
 import {
   exportProject,
   exportMapAsSvg,

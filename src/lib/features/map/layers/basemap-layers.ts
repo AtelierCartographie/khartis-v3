@@ -13,7 +13,7 @@ import {
   pathColorAttr,
   pathWidthAttr,
   projectGeoJSON as _projectGeoJSON
-} from '../utils/geoarrow-stream-bridge';
+} from '../utils/geoarrow-stream-bridge.utils';
 import type { ProjectionLike } from 'geoarrow-deck-stream';
 import type {
   FeatureCollection,
@@ -65,7 +65,7 @@ import type { BBox, DeckDataRow, GeometryInfo, RGBColor } from '../types';
 import type { StylePreset, StylePresets } from '../types/basemap.types';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import { withOpacity, dottedPatternToDashArray } from './layer-helpers';
-import { createCompatibleSolidPolygonLayerProps } from '../utils/solid-polygon-layer-props';
+import { createCompatibleSolidPolygonLayerProps } from '../utils/solid-polygon-layer-props.utils';
 
 // Shared extension instance — avoids re-allocation per layer per frame
 const DASH_EXTENSION = new PathStyleExtension({

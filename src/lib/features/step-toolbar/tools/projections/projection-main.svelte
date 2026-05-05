@@ -15,7 +15,7 @@
   import {
     resolveProjectionAvailabilityContext,
     supportsProjectionSuggestions
-  } from '$lib/features/map/utils/projection-availability';
+  } from '$lib/features/map/utils/projection-availability.utils';
   import { m } from '$lib/paraglide/messages';
   import { Grid, List, MagicWandFilled } from 'carbon-icons-svelte';
   import { getNationalProjectionBadge } from './national-region-label';

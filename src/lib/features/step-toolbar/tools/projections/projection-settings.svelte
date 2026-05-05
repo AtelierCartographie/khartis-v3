@@ -9,7 +9,7 @@
   import {
     resolveProjectionAvailabilityContext,
     supportsCustomProjectionCode
-  } from '$lib/features/map/utils/projection-availability';
+  } from '$lib/features/map/utils/projection-availability.utils';
   import { getCompositeProjectionPresetId } from '$lib/features/map/utils/user-projection.utils';
   import { Renew } from 'carbon-icons-svelte';
   import {

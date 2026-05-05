@@ -87,7 +87,7 @@ import {
   shouldApplyProportionalSymbols,
   shouldHideSymbolFill
 } from '../utils/data-styling.utils';
-import { resolveTextLabelPlacement } from '../utils/text-label-placement';
+import { resolveTextLabelPlacement } from '../utils/text-label-placement.utils';
 import {
   createClassedSizeAccessor,
   createCategoricalColorAccessor,
@@ -135,11 +135,11 @@ import {
   filterValueAttr,
   pointPositions,
   projectGeoJSON
-} from '../utils/geoarrow-stream-bridge';
-import { resolveHoverHighlightProps } from '../utils/hover-highlight-props';
+} from '../utils/geoarrow-stream-bridge.utils';
+import { resolveHoverHighlightProps } from '../utils/hover-highlight-props.utils';
 import { resolveMissingDataPointShape as resolveMissingPointShape } from '../utils/legend.utils';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
-import { createCompatibleSolidPolygonLayerProps } from '../utils/solid-polygon-layer-props';
+import { createCompatibleSolidPolygonLayerProps } from '../utils/solid-polygon-layer-props.utils';
 import {
   buildSplitDatasetRowMapping,
   createSplitAwareRowAccessor as ctxRowAccessor,

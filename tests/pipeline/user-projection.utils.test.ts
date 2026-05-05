@@ -6,7 +6,7 @@ import type { ProjectionPresets } from '$lib/features/map/types/basemap.types';
 import type { BBox } from '$lib/features/map/types';
 import type { D3Usage } from 'proj-suggest';
 import { PROJECTIONS } from '$lib/features/commons/utils/projection.utils';
-import { computeProjectedBboxForProjection } from '$lib/features/map/utils/geoarrow-stream-bridge';
+import { computeProjectedBboxForProjection } from '$lib/features/map/utils/geoarrow-stream-bridge.utils';
 import {
   getCompositeProjectionPresetId,
   getCompositeProjectionSelectionId,
