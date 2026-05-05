@@ -1,7 +1,7 @@
 import type {
   AssetRef,
   UploadedFile
-} from '$lib/features/commons/store/create-project.types';
+} from '$lib/features/commons/stores/create-project.types';
 import { combineUint8Arrays } from '$lib/features/commons/utils/array.utils';
 import { m } from '$lib/paraglide/messages.js';
 

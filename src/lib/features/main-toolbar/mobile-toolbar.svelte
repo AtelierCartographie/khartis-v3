@@ -3,9 +3,9 @@
   import {
     globalActions,
     globalState
-  } from '$lib/features/commons/store/global.svelte';
-  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
-  import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
+  } from '$lib/features/commons/stores/global.svelte';
+  import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
+  import { visualizationStore } from '$lib/features/commons/stores/visualization.store.svelte';
   import {
     StylingTools,
     ToolbarStep,
@@ -31,21 +31,21 @@
   } from 'carbon-icons-svelte';
   import clsx from 'clsx';
   import ToolPopover from '../step-toolbar/tool-popover.svelte';
-  import { annotationsActions } from '../step-toolbar/tools/annotations/annotations.store.svelte';
+  import { annotationsActions } from '$lib/features/step-toolbar/tools/annotations';
   import {
     getLegendState,
     legendActions
-  } from '../step-toolbar/tools/legend/legend.store.svelte';
+  } from '$lib/features/step-toolbar/tools/legend';
   import {
     closeSelectedToolPanel,
     selectTool
   } from '../step-toolbar/tools-list/tool-list.utils.svelte';
   import ToolContainer from '../step-toolbar/tools/tool-container.svelte';
-  import { VizSubTab } from './constants';
-  import DataTab from './data-tab/data-tab.svelte';
-  import ChooseVisualization from './visualization-tab/choose-visualization.svelte';
-  import ConfigureVisualization from './visualization-tab/configure-visualization.svelte';
-  import CustomizeBasemap from './visualization-tab/customize-basemap.svelte';
+  import { VizSubTab } from './main-toolbar.constants';
+  import DataTab from '$lib/features/data-tab/data-tab.svelte';
+  import ChooseVisualization from '$lib/features/visualization/choose-visualization.svelte';
+  import ConfigureVisualization from '$lib/features/visualization/configure-visualization.svelte';
+  import CustomizeBasemap from '$lib/features/visualization/customize-basemap.svelte';
 
   let activeVizSubTab = $state<VizSubTab>(VizSubTab.CHOOSE);
 

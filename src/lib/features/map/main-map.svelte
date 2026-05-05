@@ -10,31 +10,31 @@
 
   import { SvelteMap } from 'svelte/reactivity';
   import { fade } from 'svelte/transition';
-  import { datasetsStore } from '../commons/store/datasets.store.svelte';
-  import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
+  import { datasetsStore } from '../commons/stores/datasets.store.svelte';
+  import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
   import { isWgs84LikeCrs } from './utils/dataset-crs';
-  import { globalActions, globalState } from '../commons/store/global.svelte';
+  import { globalActions, globalState } from '../commons/stores/global.svelte';
   import { ToolbarStep } from '../commons/types/global';
   import { LogCategory, logger } from '../commons/utils/logger';
   import { FormatMode } from '../commons/constants/ui.constants';
   import {
     formatActions,
     formatState
-  } from '../step-toolbar/tools/format/format.store.svelte';
+  } from '$lib/features/step-toolbar/tools/format';
   import { EVENT } from '../commons/constants/dom.constants';
   import MapSkeleton from './components/map-skeleton.svelte';
   import ThematicMap from './components/thematic-map.svelte';
   import { osmBasemapStore } from './stores/osm-basemap.store.svelte';
-  import { facetsStore } from '../step-toolbar/tools/facets/facets.store.svelte';
-  import FacetsPage from '../step-toolbar/tools/facets/facets-page.svelte';
+  import { facetsStore } from '$lib/features/step-toolbar/tools/facets';
+  import FacetsPage from '$lib/features/step-toolbar/tools/facets/facets-page.svelte';
   import { loadDatasetsSequentially } from './utils/load-datasets-sequentially';
   import { resolveWorkspaceFitScale } from '../commons/utils/workspace-viewport.utils';
   import {
     getPolygonPrimitive,
     visualizationStore,
     type VisualizationConfig
-  } from '../commons/store/visualization.store.svelte';
-  import { FillMode } from '../main-toolbar/constants';
+  } from '../commons/stores/visualization.store.svelte';
+  import { FillMode } from '$lib/features/commons/constants/visualization.constants';
   import { densityLoadingStore } from './stores/density-loading.store.svelte';
   import { mapLoadingStore } from './stores/map-loading.store.svelte';
   import { basemapService } from './services/basemap.service.svelte';

@@ -10,9 +10,12 @@ import {
   type PrimitiveFilter,
   visualizationStore,
   type VisualizationConfig
-} from '$lib/features/commons/store/visualization.store.svelte';
+} from '$lib/features/commons/stores/visualization.store.svelte';
 import { createToolStore } from '$lib/features/commons/utils/store.utils.svelte';
-import { FillMode, SymbolMode } from '$lib/features/main-toolbar/constants';
+import {
+  FillMode,
+  SymbolMode
+} from '$lib/features/commons/constants/visualization.constants';
 import {
   basemapLayersStore,
   BASEMAP_LAYER_ID,

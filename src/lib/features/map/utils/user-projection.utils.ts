@@ -6,7 +6,7 @@ import {
 } from '$lib/features/commons/utils/projection.utils';
 import { buildD3ProjectionFromConfig } from '$lib/features/commons/utils/d3-projection-config.utils';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
-import type { ProjectionState } from '$lib/features/step-toolbar/tools/projections/projections.types';
+import type { ProjectionState } from '$lib/features/step-toolbar/tools/projections';
 import type { BBox, CanvasSize } from '../types';
 import type { ProjectionPresets } from '../types/basemap.types';
 import { buildCompositeProjectionFromPresetId } from './geoarrow-stream-bridge';

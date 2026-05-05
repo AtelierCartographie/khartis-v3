@@ -23,7 +23,7 @@ const { mockGlobalState, mockMapTooltipStore } = vi.hoisted(() => ({
   }
 }));
 
-vi.mock('$lib/features/commons/store/global.svelte', () => ({
+vi.mock('$lib/features/commons/stores/global.svelte', () => ({
   globalState: mockGlobalState
 }));
 
@@ -39,7 +39,7 @@ import {
 import type {
   VisualizationConfig,
   VisualizationType
-} from '$lib/features/commons/store/visualization.store.svelte';
+} from '$lib/features/commons/stores/visualization.store.svelte';
 
 function createArrowTable(rows: Array<Record<string, unknown>>): ArrowTable {
   const fieldNames = Object.keys(rows[0] ?? {});

@@ -8,19 +8,19 @@
     globalActions,
     globalState,
     MOBILE_BREAKPOINT
-  } from '$lib/features/commons/store/global.svelte';
-  import { fontAssetsStore } from '$lib/features/commons/store/font-assets.store.svelte';
-  import { createProjectActions } from '$lib/features/commons/store/create-project.store.svelte';
+  } from '$lib/features/commons/stores/global.svelte';
+  import { fontAssetsStore } from '$lib/features/commons/stores/font-assets.store.svelte';
+  import { createProjectActions } from '$lib/features/commons/stores/create-project.store.svelte';
   import '$lib/features/commons/utils/uuid.utils';
   import { ToolbarStep } from '$lib/features/commons/types/global';
-  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
-  import { initializeStores } from '$lib/features/commons/store/stores-init';
+  import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
+  import { initializeStores } from '$lib/features/commons/stores/stores-init';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { EVENT } from '$lib/features/commons/constants/dom.constants';
   import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
 
   initializeStores();
-  import '$lib/features/commons/store/locale.store.svelte';
+  import '$lib/features/commons/stores/locale.store.svelte';
   import { setLocale, locales, cookieName } from '$lib/paraglide/runtime.js';
   import Header from '$lib/features/header/header.svelte';
   import MainToolbar from '$lib/features/main-toolbar/main-toolbar.svelte';
@@ -28,7 +28,7 @@
   import MobileOpenPanelButton from '$lib/features/map/components/mobile-open-panel-button.svelte';
   import MapTooltipOverlay from '$lib/features/map/components/map-tooltip-overlay.svelte';
   import ZoomToolbar from '$lib/features/map/components/zoom-toolbar.svelte';
-  import Sidenav from '$lib/features/side-nav.svelte';
+  import Sidenav from '$lib/features/side-nav/side-nav.svelte';
   import {
     annotationsActions,
     getAnnotationsState
@@ -38,7 +38,7 @@
     getColorBlindnessState,
     isColorBlindnessActive
   } from '$lib/features/step-toolbar/tools/color-blindness/color-blindness.store.svelte';
-  import { zoomModeStore } from '$lib/features/commons/store/zoom-mode.store.svelte';
+  import { zoomModeStore } from '$lib/features/commons/stores/zoom-mode.store.svelte';
   import {
     DEFAULT_WORKSPACE_VIEWPORT_BOUNDS,
     WORKSPACE_FIT_EVENT,

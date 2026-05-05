@@ -2,8 +2,8 @@
   import {
     createProjectActions,
     createProjectState
-  } from '$lib/features/commons/store/create-project.store.svelte';
-  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
+  } from '$lib/features/commons/stores/create-project.store.svelte';
+  import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
   import { m } from '$lib/paraglide/messages';
   import {
     ComposedModal,

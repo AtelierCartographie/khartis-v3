@@ -4,8 +4,8 @@
   import {
     createProjectActions,
     createProjectState
-  } from '$lib/features/commons/store/create-project.store.svelte';
-  import { FileType } from '$lib/features/commons/store/create-project.types';
+  } from '$lib/features/commons/stores/create-project.store.svelte';
+  import { FileType } from '$lib/features/commons/stores/create-project.types';
   import { debounce } from '$lib/features/commons/utils/debounce.utils';
   import { formatFileSize } from '$lib/features/commons/utils/file-import.utils';
   import { SUPPORTED_FILE_TYPES } from '$lib/features/commons/utils/file-validator.utils';

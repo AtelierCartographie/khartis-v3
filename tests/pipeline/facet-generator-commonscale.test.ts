@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 const storeSource = readFileSync(
   resolve(
     import.meta.dirname,
-    '../../src/lib/features/commons/store/visualization.store.svelte.ts'
+    '../../src/lib/features/commons/stores/visualization.store.svelte.ts'
   ),
   'utf8'
 );

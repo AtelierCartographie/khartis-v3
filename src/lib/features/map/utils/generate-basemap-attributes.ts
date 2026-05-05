@@ -1,5 +1,5 @@
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
-import { DuckDBError } from '$lib/features/commons/errors/pipeline.errors';
+import { DuckDBError } from '$lib/features/commons/pipeline.errors';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import {
   escapeIdentifier,

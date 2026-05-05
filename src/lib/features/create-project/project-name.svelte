@@ -2,9 +2,9 @@
   import {
     createProjectActions,
     createProjectState
-  } from '$lib/features/commons/store/create-project.store.svelte';
-  import { projectStore } from '$lib/features/commons/store/project.store.svelte';
-  import { projectsStore } from '$lib/features/commons/store/projects.store.svelte';
+  } from '$lib/features/commons/stores/create-project.store.svelte';
+  import { projectStore } from '$lib/features/commons/stores/project.store.svelte';
+  import { projectsStore } from '$lib/features/commons/stores/projects.store.svelte';
   import { LogCategory, logger } from '$lib/features/commons/utils/logger';
   import { showError } from '$lib/features/commons/utils/notification.utils.svelte';
   import { sanitizeProjectName } from '$lib/features/commons/utils/sanitize.utils';
@@ -19,7 +19,7 @@
   import { Button, Loading, TextInput } from 'carbon-components-svelte';
   import { Add } from 'carbon-icons-svelte';
   import { KEY } from '$lib/features/commons/constants/dom.constants';
-  import { useProjectNavigation } from './hooks';
+  import { useProjectNavigation } from './use-project-navigation';
   import { CreateProjectValidationService } from './services/validation.service';
 
   interface Props {

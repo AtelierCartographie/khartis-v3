@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { globalState } from '$lib/features/commons/store/global.svelte';
+  import { globalState } from '$lib/features/commons/stores/global.svelte';
   import type { ProjectionViewMode } from '$lib/features/commons/types/global';
   import { clickOutside } from '$lib/features/commons/utils/click-outside';
   import { Popover } from 'carbon-components-svelte';

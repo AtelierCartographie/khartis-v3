@@ -38,7 +38,7 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock('$lib/features/commons/store/create-project.store.svelte', () => ({
+vi.mock('$lib/features/commons/stores/create-project.store.svelte', () => ({
   createProjectState: mocks.createProjectState,
   createProjectActions: {
     processFiles: mocks.processFilesMock,
@@ -66,13 +66,13 @@ vi.mock('$lib/features/commons/store/create-project.store.svelte', () => ({
   }
 }));
 
-vi.mock('$lib/features/commons/store/project.store.svelte', () => ({
+vi.mock('$lib/features/commons/stores/project.store.svelte', () => ({
   projectStore: {
     createProject: mocks.createProjectMock
   }
 }));
 
-vi.mock('$lib/features/commons/store/projects.store.svelte', () => ({
+vi.mock('$lib/features/commons/stores/projects.store.svelte', () => ({
   projectsStore: {
     projects: [],
     refresh: mocks.refreshProjectsMock

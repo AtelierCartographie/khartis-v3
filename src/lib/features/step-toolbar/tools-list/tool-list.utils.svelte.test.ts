@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
   }
 }));
 
-vi.mock('$lib/features/commons/store/global.svelte', () => ({
+vi.mock('$lib/features/commons/stores/global.svelte', () => ({
   globalState: mocks.globalState,
   globalActions: mocks.globalActions
 }));

@@ -1,6 +1,6 @@
 <script lang="ts">
   import * as m from '$lib/paraglide/messages';
-  import { consentStore } from '$lib/features/commons/store/consent.store.svelte';
+  import { consentStore } from '$lib/features/commons/stores/consent.store.svelte';
   import {
     InlineNotification,
     NotificationActionButton

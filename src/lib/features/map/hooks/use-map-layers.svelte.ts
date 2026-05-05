@@ -7,9 +7,9 @@ import type { FeatureCollection } from 'geojson';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { Duck } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
-import type { VisualizationConfig } from '$lib/features/commons/store/visualization.store.svelte';
-import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
-import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
+import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
+import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import { mapProjectionStore } from '../stores/map-projection.store.svelte';
 import { osmBasemapStore } from '../stores/osm-basemap.store.svelte';
 import { projectionStore } from '../stores/projection.store.svelte';
@@ -28,8 +28,8 @@ import {
 import { extractGeometryInfo } from '../io';
 import { buildProjectionForBasemap } from '../utils/geoarrow-stream-bridge';
 import { DeckLayerId, GeometryType } from '../constants';
-import { PrimitiveFilterType } from '$lib/features/commons/store/visualization.store.svelte';
-import type { PrimitiveFilter } from '$lib/features/commons/store/visualization.store.svelte';
+import { PrimitiveFilterType } from '$lib/features/commons/stores/visualization.store.svelte';
+import type { PrimitiveFilter } from '$lib/features/commons/stores/visualization.store.svelte';
 import type {
   BBox,
   DeckDataRow,
@@ -50,7 +50,7 @@ import {
   getVisualizationRenderOrder
 } from '../utils/layer-order.utils';
 import type { DataTableFilter } from '$lib/features/duckdb/types';
-import { getProjectionState } from '$lib/features/step-toolbar/tools/projections/projection.store.svelte';
+import { getProjectionState } from '$lib/features/step-toolbar/tools/projections';
 import type { ProjectionLike } from 'geoarrow-deck-stream';
 import type { BasemapMetadata } from '../types/basemap.types';
 import { shouldUseIdentityProjectionForDatasetCrs } from '../utils/dataset-crs';

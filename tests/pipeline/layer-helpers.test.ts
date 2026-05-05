@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('$lib/features/commons/store/visualization.store.svelte', () => ({
+vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({
   ScaleType: { LINEAR: 'linear', SQRT: 'sqrt', LOG: 'log' }
 }));
 
@@ -16,7 +16,7 @@ import {
   HIGHLIGHT_FILL_COLOR,
   sortBySizeDescending
 } from '$lib/features/map/layers/layer-helpers';
-import { ScaleType } from '$lib/features/commons/store/visualization.store.svelte';
+import { ScaleType } from '$lib/features/commons/stores/visualization.store.svelte';
 
 // ─── withOpacity ───────────────────────────────────────────────────────────
 

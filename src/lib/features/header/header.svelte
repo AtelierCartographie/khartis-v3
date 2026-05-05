@@ -1,6 +1,6 @@
 <script lang="ts">
   import Button from '$lib/features/commons/components/carbon/button.svelte';
-  import { globalState } from '$lib/features/commons/store/global.svelte';
+  import { globalState } from '$lib/features/commons/stores/global.svelte';
   import { m } from '$lib/paraglide/messages.js';
   import {
     Header as CbsHeader,

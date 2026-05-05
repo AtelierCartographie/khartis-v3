@@ -1,6 +1,6 @@
 import { unzipSync } from 'fflate';
 import { m } from '$lib/paraglide/messages.js';
-import type { AssetRef } from '$lib/features/commons/store/create-project.types';
+import type { AssetRef } from '$lib/features/commons/stores/create-project.types';
 import type { SerializedProject } from '$lib/types/serialization.types';
 import { persistAssetBytes } from '../core/asset-store';
 import { saveProject } from '../core/persistence';

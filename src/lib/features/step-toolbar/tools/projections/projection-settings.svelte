@@ -2,7 +2,7 @@
   import { m } from '$lib/paraglide/messages';
   import { Button, InlineNotification, Slider } from 'carbon-components-svelte';
   import Switch from '$lib/features/commons/components/switch.svelte';
-  import { basemapStyleStore } from '$lib/features/commons/store/basemap-style.store.svelte';
+  import { basemapStyleStore } from '$lib/features/commons/stores/basemap-style.store.svelte';
   import { basemapService } from '$lib/features/map/services/basemap.service.svelte';
   import { osmBasemapStore } from '$lib/features/map/stores/osm-basemap.store.svelte';
   import { projectionStore as mapRenderProjectionStore } from '$lib/features/map/stores/projection.store.svelte';

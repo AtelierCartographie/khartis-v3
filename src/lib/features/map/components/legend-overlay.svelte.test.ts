@@ -28,16 +28,16 @@ import {
   SymbolDoublePosition,
   SymbolMode,
   ThicknessMode
-} from '$lib/features/main-toolbar/constants';
+} from '$lib/features/commons/constants/visualization.constants';
 import {
   globalActions,
   globalState
-} from '$lib/features/commons/store/global.svelte';
+} from '$lib/features/commons/stores/global.svelte';
 import { StylingTools, ToolbarStep } from '$lib/features/commons/types/global';
 import {
   ClassificationMethod,
   type VisualizationConfig
-} from '$lib/features/commons/store/visualization.store.svelte';
+} from '$lib/features/commons/stores/visualization.store.svelte';
 import { formatActions } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
 import { DRAGGING_STYLING_TARGET_BODY_CLASS } from '../utils/tool-popover-drag-visibility.utils';
 
@@ -61,11 +61,11 @@ const { mockVisualizationStore, mockDatasetsStore } = vi.hoisted(() => ({
 }));
 
 vi.mock(
-  '$lib/features/commons/store/visualization.store.svelte',
+  '$lib/features/commons/stores/visualization.store.svelte',
   async (importOriginal) => {
     const actual =
       await importOriginal<
-        typeof import('$lib/features/commons/store/visualization.store.svelte')
+        typeof import('$lib/features/commons/stores/visualization.store.svelte')
       >();
 
     return {
@@ -75,7 +75,7 @@ vi.mock(
   }
 );
 
-vi.mock('$lib/features/commons/store/datasets.store.svelte', () => ({
+vi.mock('$lib/features/commons/stores/datasets.store.svelte', () => ({
   datasetsStore: {
     getColumnStatistics: (_datasetId: string, columnName?: string) =>
       mockDatasetsStore.getColumnStatistics(columnName)

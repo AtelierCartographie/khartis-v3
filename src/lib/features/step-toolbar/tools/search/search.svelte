@@ -2,8 +2,8 @@
   import Button from '$lib/features/commons/components/carbon/button.svelte';
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
-  import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
-  import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
+  import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
+  import { visualizationStore } from '$lib/features/commons/stores/visualization.store.svelte';
   import { m } from '$lib/paraglide/messages';
   import {
     Checkbox,

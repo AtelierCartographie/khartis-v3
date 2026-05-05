@@ -5,7 +5,7 @@
   import Switch from '$lib/features/commons/components/switch.svelte';
   import ToggleTabs from '$lib/features/commons/components/toggle-tabs.svelte';
   import { LegendTab } from '$lib/features/commons/constants/ui.constants';
-  import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
+  import { visualizationStore } from '$lib/features/commons/stores/visualization.store.svelte';
   import { hslToHex } from '$lib/features/commons/utils/color-utils';
   import { sanitizeTextInput } from '$lib/features/commons/utils/sanitize.utils';
   import * as m from '$lib/paraglide/messages';
@@ -18,7 +18,7 @@
     DEFAULT_FONT_FAMILY,
     FONT_SIZE_OPTIONS,
     normalizeFontFamily
-  } from '$lib/features/step-toolbar/constants/fonts.constants';
+  } from '$lib/features/step-toolbar/fonts.constants';
   import { CSS_CLASSES, DOM_IDS, LEGEND_DEFAULTS } from './legend.constants';
   import { getLegendState, legendActions } from './legend.store.svelte';
   import type { LegendItem } from './legend.types';

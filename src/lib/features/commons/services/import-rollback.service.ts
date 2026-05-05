@@ -1,8 +1,8 @@
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
-import type { UploadedFile } from '../store/create-project.types';
-import { datasetsStore } from '../store/datasets.store.svelte';
-import { projectStore } from '../store/project.store.svelte';
-import { visualizationStore } from '../store/visualization.store.svelte';
+import type { UploadedFile } from '../stores/create-project.types';
+import { datasetsStore } from '../stores/datasets.store.svelte';
+import { projectStore } from '../stores/project.store.svelte';
+import { visualizationStore } from '../stores/visualization.store.svelte';
 import { cleanupDuckDBResources } from '../utils/duckdb-cleanup.utils';
 import { LogCategory, logger } from '../utils/logger';
 

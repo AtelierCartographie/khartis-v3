@@ -33,13 +33,13 @@ vi.mock('./layers.store.svelte', () => ({
   layersState: mockLayersState
 }));
 
-vi.mock('$lib/features/commons/store/basemap-style.store.svelte', () => ({
+vi.mock('$lib/features/commons/stores/basemap-style.store.svelte', () => ({
   basemapStyleStore: {
     requiresMapLibre: false
   }
 }));
 
-vi.mock('$lib/features/commons/store/visualization.store.svelte', () => ({
+vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({
   visualizationStore: mockVisualizationStore
 }));
 
@@ -55,7 +55,7 @@ vi.mock('$lib/features/map/stores/osm-basemap.store.svelte', () => ({
   }
 }));
 
-vi.mock('$lib/features/commons/store/global.svelte', () => ({
+vi.mock('$lib/features/commons/stores/global.svelte', () => ({
   globalActions: {
     setNavigationState: vi.fn()
   },

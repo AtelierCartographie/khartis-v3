@@ -1,5 +1,5 @@
 import { Duck } from '$lib/features/duckdb';
-import { loadingStore } from '$lib/features/commons/store/loading.store.svelte';
+import { loadingStore } from '$lib/features/commons/stores/loading.store.svelte';
 import { BasemapLayerType } from '$lib/features/commons/constants/ui.constants';
 import { type Table as ArrowTable } from 'apache-arrow/Arrow';
 import { LogCategory, logger } from '../../commons/utils/logger';

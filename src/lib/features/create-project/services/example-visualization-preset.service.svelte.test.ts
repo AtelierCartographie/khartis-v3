@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ColumnType, type DatasetResult } from '$lib/features/data-pipeline';
-import type { ExampleVisualizationPreset } from '$lib/features/commons/store/create-project.types';
+import type { ExampleVisualizationPreset } from '$lib/features/commons/stores/create-project.types';
 import { ExampleCategory } from '$lib/features/commons/constants/ui.constants';
 
-vi.mock('$lib/features/commons/store/visualization.store.svelte', () => ({
+vi.mock('$lib/features/commons/stores/visualization.store.svelte', () => ({
   ClassificationMethod: {
     KMEANS: 'kmeans',
     QUANTILES: 'quantiles',
@@ -22,7 +22,7 @@ vi.mock('$lib/features/commons/store/visualization.store.svelte', () => ({
   }
 }));
 
-vi.mock('$lib/features/main-toolbar/constants', () => ({
+vi.mock('$lib/features/commons/constants/visualization.constants', () => ({
   FillMode: {
     UNIQUE: 'unique'
   },
@@ -37,33 +37,27 @@ vi.mock('$lib/features/main-toolbar/constants', () => ({
   }
 }));
 
-vi.mock(
-  '$lib/features/main-toolbar/visualization-tab/utils/suggestion.service',
-  () => ({
-    applySuggestionToVisualization: vi.fn(),
-    buildSuggestionOrigin: vi.fn((_visualization, origin) => origin),
-    mapSuggestionToType: vi.fn(() => 'choropleth')
-  })
-);
+vi.mock('$lib/features/visualization/utils/suggestion.service', () => ({
+  applySuggestionToVisualization: vi.fn(),
+  buildSuggestionOrigin: vi.fn((_visualization, origin) => origin),
+  mapSuggestionToType: vi.fn(() => 'choropleth')
+}));
 
-vi.mock(
-  '$lib/features/main-toolbar/visualization-tab/utils/suggestion-selection',
-  () => ({
-    getSuggestionSignature: vi.fn((suggestion) => suggestion.id)
-  })
-);
+vi.mock('$lib/features/visualization/utils/suggestion-selection', () => ({
+  getSuggestionSignature: vi.fn((suggestion) => suggestion.id)
+}));
 
 import {
   applyExampleVisualizationPresets,
   buildExampleVisualizationSuggestion,
   resolveExampleColumnName
 } from './example-visualization-preset.service';
-import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
-import type { VisualizationConfig } from '$lib/features/commons/store/visualization.store.svelte';
+import { visualizationStore } from '$lib/features/commons/stores/visualization.store.svelte';
+import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
 import {
   applySuggestionToVisualization,
   buildSuggestionOrigin
-} from '$lib/features/main-toolbar/visualization-tab/utils/suggestion.service';
+} from '$lib/features/visualization/utils/suggestion.service';
 
 function buildDataset(columns: Array<{ name: string; type: ColumnType }>) {
   return {

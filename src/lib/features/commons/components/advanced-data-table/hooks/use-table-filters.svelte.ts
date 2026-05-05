@@ -1,7 +1,7 @@
 import type { ProcessedDataset } from '$lib/features/data-pipeline';
 import { type DataTableFilter, type FilterStats } from '$lib/features/duckdb';
 import { duckDBOrchestrator } from '$lib/features/duckdb/orchestrator/orchestrator.svelte';
-import { datasetsStore } from '../../../store/datasets.store.svelte';
+import { datasetsStore } from '../../../stores/datasets.store.svelte';
 
 export interface UseTableFiltersProps {
   tableName?: string | (() => string | undefined);

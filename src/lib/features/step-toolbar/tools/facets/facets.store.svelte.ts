@@ -1,6 +1,6 @@
-import type { VisualizationConfig } from '$lib/features/commons/store/visualization.store.svelte';
-import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
-import { visualizationStore } from '$lib/features/commons/store/visualization.store.svelte';
+import type { VisualizationConfig } from '$lib/features/commons/stores/visualization.store.svelte';
+import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
+import { visualizationStore } from '$lib/features/commons/stores/visualization.store.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 import { persistenceRegistry } from '$lib/features/project-management/core/persistence-registry';
 import {

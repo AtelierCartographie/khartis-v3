@@ -6,8 +6,8 @@ import {
   getProportionalSymbolSizeForValue,
   getSizeForValue
 } from '../utils/data-styling.utils';
-import { BasemapDottedPattern } from '$lib/features/main-toolbar/constants';
-import { ScaleType } from '$lib/features/commons/store/visualization.store.svelte';
+import { BasemapDottedPattern } from '$lib/features/commons/constants/visualization.constants';
+import { ScaleType } from '$lib/features/commons/stores/visualization.store.svelte';
 import { INTERNAL_COLUMN } from '$lib/features/commons/constants/data.constants';
 
 export const HIGHLIGHT_FILL_COLOR: RGBColor = [180, 180, 180];

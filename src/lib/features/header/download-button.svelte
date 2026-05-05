@@ -4,7 +4,7 @@
     FormatMode,
     PageModel
   } from '$lib/features/commons/constants/ui.constants';
-  import { getFormatState } from '$lib/features/step-toolbar/tools/format/format.store.svelte';
+  import { getFormatState } from '$lib/features/step-toolbar/tools/format';
   import { m } from '$lib/paraglide/messages.js';
   import {
     Modal,
@@ -18,7 +18,7 @@
     Download,
     Image
   } from 'carbon-icons-svelte';
-  import { useExportModal } from './hooks';
+  import { useExportModal } from './use-export-modal.svelte';
   import {
     ExportTab,
     MAP_FORMAT,
@@ -26,13 +26,13 @@
     EXPORT_RESOLUTION,
     formatExportDimensions,
     getExportDimensionsForPage
-  } from './types';
+  } from './header.types';
   import type {
     MapExportFormat,
     DataExportFormat,
     ExportTabType,
     ExportResolution
-  } from './types';
+  } from './header.types';
 
   const modal = useExportModal();
   const currentFormat = $derived(getFormatState());

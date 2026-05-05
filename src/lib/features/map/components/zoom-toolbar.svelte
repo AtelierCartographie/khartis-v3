@@ -9,11 +9,11 @@
   import {
     globalActions,
     globalState
-  } from '../../commons/store/global.svelte';
-  import { mapInstanceStore } from '../../commons/store/map-instance.store.svelte';
+  } from '../../commons/stores/global.svelte';
+  import { mapInstanceStore } from '../../commons/stores/map-instance.store.svelte';
   import { ViewMode } from '../constants/map.constants';
   import { deckDebugStore } from '../stores/deck-debug.store.svelte';
-  import { zoomModeStore } from '../../commons/store/zoom-mode.store.svelte';
+  import { zoomModeStore } from '../../commons/stores/zoom-mode.store.svelte';
   import { dispatchWorkspaceFit } from '../../commons/utils/workspace-viewport.utils';
   import {
     MAP_ZOOM_INPUT_STEP,

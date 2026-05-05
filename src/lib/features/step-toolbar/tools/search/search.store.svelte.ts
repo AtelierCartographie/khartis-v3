@@ -1,8 +1,8 @@
-import { datasetsStore } from '$lib/features/commons/store/datasets.store.svelte';
+import { datasetsStore } from '$lib/features/commons/stores/datasets.store.svelte';
 import {
   visualizationStore,
   type VisualizationConfig
-} from '$lib/features/commons/store/visualization.store.svelte';
+} from '$lib/features/commons/stores/visualization.store.svelte';
 import {
   INTERNAL_COLUMN,
   JOINED_BASEMAP_COLUMN

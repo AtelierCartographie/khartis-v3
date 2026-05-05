@@ -1,5 +1,5 @@
 import type { DataAnalysisResult } from '$lib/features/commons/utils/deep-validator.utils';
-import type { AssetRef } from '$lib/features/commons/store/create-project.types';
+import type { AssetRef } from '$lib/features/commons/stores/create-project.types';
 import type { GeoColumnTypeValue } from '$lib/features/commons/constants/data.constants';
 import type { GeoDetectionResult } from '$lib/features/commons/utils/geo-detector.utils';
 

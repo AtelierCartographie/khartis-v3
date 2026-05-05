@@ -16,7 +16,7 @@ import {
   sequentialPatterns
 } from '@ateliercartographie/ok-palette';
 import type { PatternParams as OkPatternParams } from '@ateliercartographie/ok-palette';
-import type { PatternParams } from '$lib/features/commons/store/visualization.store.svelte';
+import type { PatternParams } from '$lib/features/commons/stores/visualization.store.svelte';
 import { LogCategory, logger } from '$lib/features/commons/utils/logger';
 
 const PATTERN_NAMES = [
