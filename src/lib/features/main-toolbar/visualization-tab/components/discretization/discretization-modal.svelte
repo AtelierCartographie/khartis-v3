@@ -1,6 +1,7 @@
 <script lang="ts">
   import IconButton from '$lib/features/commons/components/carbon/icon-button.svelte';
   import { EVENT, KEY } from '$lib/features/commons/constants/dom.constants';
+  import { portal } from '$lib/features/commons/utils/portal';
   import { Close } from 'carbon-icons-svelte';
   import * as m from '$lib/paraglide/messages';
   import DiscretizationPanel from './discretization-panel.svelte';
@@ -688,6 +689,7 @@
 
 {#if open}
   <aside
+    use:portal
     class="discretization-floating-panel"
     style:right={panelRight}
     aria-label={m.discretization()}
@@ -746,6 +748,28 @@
     box-shadow:
       0 4px 16px rgba(0, 0, 0, 0.12),
       0 0 1px rgba(0, 0, 0, 0.15);
+  }
+
+  @media (max-width: 1023px) {
+    .discretization-floating-panel {
+      right: 0 !important;
+      left: 0;
+      top: auto;
+      bottom: calc(
+        60px + env(safe-area-inset-bottom, 0px) + var(--cds-spacing-03) + 48px +
+          var(--cds-spacing-03)
+      );
+      transform: none;
+      width: 100vw;
+      max-height: calc(
+        100dvh - var(--cds-header-height, 48px) -
+          60px - env(safe-area-inset-bottom, 0px) - var(--cds-spacing-03) -
+          48px - var(--cds-spacing-03) - var(--cds-spacing-05)
+      );
+      z-index: calc(var(--z-mobile-toolbar) + 2);
+      border-radius: 8px 8px 0 0;
+      box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
+    }
   }
 
   .panel-header {

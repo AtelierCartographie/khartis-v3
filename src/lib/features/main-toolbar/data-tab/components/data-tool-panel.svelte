@@ -125,6 +125,24 @@
       0 0 1px rgba(0, 0, 0, 0.15);
   }
 
+  @media (max-width: 1023px) {
+    .data-tool-panel {
+      right: 0 !important;
+      left: 0;
+      top: auto;
+      bottom: calc(60px + env(safe-area-inset-bottom, 0px));
+      transform: none;
+      width: 100vw;
+      max-height: calc(
+        100dvh - var(--cds-header-height, 48px) - 60px -
+          env(safe-area-inset-bottom, 0px) - var(--cds-spacing-05)
+      );
+      z-index: calc(var(--z-mobile-toolbar) + 2);
+      border-radius: 8px 8px 0 0;
+      box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
+    }
+  }
+
   .panel-header {
     display: flex;
     justify-content: space-between;
