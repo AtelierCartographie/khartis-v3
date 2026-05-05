@@ -14,7 +14,7 @@ import { cleanupDuckDBResources } from '$lib/features/commons/utils/duckdb-clean
 import { toJsonValue } from '$lib/features/commons/utils/json.utils';
 import type { SerializedProjectData } from '$lib/types/serialization.types';
 import { persistenceRegistry } from '$lib/features/project-management';
-import { createCompanionFilesFromAssetRefs } from '$lib/features/project-management/core/asset-store';
+import { createCompanionFilesFromAssetRefs } from '$lib/features/project-management/services/asset-store.service';
 import { layersActions } from '$lib/features/step-toolbar/tools/layers';
 import { legendActions } from '$lib/features/step-toolbar/tools/legend';
 import { projectionActions } from '$lib/features/step-toolbar/tools/projections';
@@ -65,7 +65,7 @@ import {
   resolveBreakpointLowerClassCount,
   resolveComputedClassCount,
   resolveRequestedClassCount
-} from '$lib/features/visualization/components/discretization/discretization.utils';
+} from '$lib/features/visualization-tab/components/discretization/discretization.utils';
 import * as m from '$lib/paraglide/messages';
 
 function createDataOrchestratorService() {
