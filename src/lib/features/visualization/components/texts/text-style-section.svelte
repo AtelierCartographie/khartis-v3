@@ -1,5 +1,4 @@
 <script lang="ts">
-   
   import {
     AVAILABLE_FONTS,
     clampFontSize,

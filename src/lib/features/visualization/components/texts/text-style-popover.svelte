@@ -1,5 +1,4 @@
 <script lang="ts">
-   
   import { KEY, EVENT } from '$lib/features/commons/constants/dom.constants';
   import {
     createExclusiveContextualSurfaceId,
