@@ -103,7 +103,16 @@
       return;
     }
 
-    if (!toolbar || !toolbar.contains(target)) {
+    const mobileToolsBar = document.querySelector('.mobile-tools-bar');
+    const mobileBottomNav = document.querySelector('.mobile-bottom-nav');
+
+    const insideStepToolbar = !!toolbar && toolbar.contains(target);
+    const insideMobileToolsBar =
+      !!mobileToolsBar && mobileToolsBar.contains(target);
+    const insideMobileBottomNav =
+      !!mobileBottomNav && mobileBottomNav.contains(target);
+
+    if (!insideStepToolbar && !insideMobileToolsBar && !insideMobileBottomNav) {
       closeSelectedToolPanel();
     }
   }
@@ -182,7 +191,9 @@
     excludeSelectors: [
       `#${DOM_IDS.STEP_TOOLBAR}`,
       `#${DOM_IDS.COLOR_PICKER}`,
-      `#${DOM_IDS.COLOR_PICKER_DROPDOWN}`
+      `#${DOM_IDS.COLOR_PICKER_DROPDOWN}`,
+      '.mobile-tools-bar',
+      '.mobile-bottom-nav'
     ]
   }}
   onoutsideclick={handleOutsideClick}
@@ -238,7 +249,10 @@
       top: auto !important;
       left: 0 !important;
       right: 0 !important;
-      bottom: calc(60px + env(safe-area-inset-bottom, 0px)) !important;
+      bottom: calc(
+        60px + env(safe-area-inset-bottom, 0px) + var(--cds-spacing-03) + 48px +
+          var(--cds-spacing-03)
+      ) !important;
       transform: none !important;
       width: 100vw !important;
       max-width: 100vw !important;

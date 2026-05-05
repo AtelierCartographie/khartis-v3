@@ -90,6 +90,7 @@
   };
 
   const handleToolSelect = (tool: VisualizationTools) => {
+    globalActions.closeMobileToolbar();
     selectTool(tool);
   };
 
@@ -110,6 +111,7 @@
       });
     }
 
+    globalActions.closeMobileToolbar();
     selectTool(tool);
   };
 
@@ -577,8 +579,7 @@
     align-items: center;
     gap: var(--cds-spacing-01);
     padding: var(--cds-spacing-02) var(--cds-spacing-03);
-    background: var(--cds-ui-01);
-    border-radius: 8px;
+    background: var(--cds-background);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
     z-index: calc(var(--z-mobile-toolbar) + 1);
   }
